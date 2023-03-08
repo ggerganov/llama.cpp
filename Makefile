@@ -31,7 +31,7 @@ endif
 #
 
 CFLAGS   = -I.              -O3 -DNDEBUG -std=c11   -fPIC
-CXXFLAGS = -I. -Ideps/sentencepiece-0.1.97/src/ -O3 -DNDEBUG -std=c++11 -fPIC
+CXXFLAGS = -I. -Ideps/sentencepiece-0.1.97/src/ -O3 -DNDEBUG -std=c++17 -fPIC
 LDFLAGS  = 
 # OS specific
 # TODO: support Windows

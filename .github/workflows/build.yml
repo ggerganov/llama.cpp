@@ -12,7 +12,7 @@ jobs:
       - name: Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential cmake
+          sudo apt-get install build-essential
 
       - name: Build
         run: |
