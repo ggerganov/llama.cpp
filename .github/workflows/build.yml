@@ -16,7 +16,7 @@ jobs:
 
       - name: Build
         run: |
-          make
+          build.sh
 
   macOS-latest:
     runs-on: macOS-latest
@@ -31,7 +31,7 @@ jobs:
 
       - name: Build
         run: |
-          make
+          build.sh
 
 #  ubuntu-latest-gcc:
 #    runs-on: ubuntu-latest
