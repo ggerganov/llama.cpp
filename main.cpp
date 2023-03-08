@@ -823,6 +823,7 @@ int main(int argc, char ** argv) {
 
         if (i >= embd_inp.size()) {
             // sample next token
+            const float top_k = params.top_k;
             const float top_p = params.top_p;
             const float temp  = params.temp;
             const float repeat_penalty = params.repeat_penalty;
@@ -834,7 +835,7 @@ int main(int argc, char ** argv) {
             {
                 const int64_t t_start_sample_us = ggml_time_us();
 
-                id = llama_sample_top_p(vocab, logits.data() + (logits.size() - n_vocab), last_n_tokens, repeat_penalty, top_p, temp, rng);
+                id = llama_sample_top_p_top_k(vocab, logits.data() + (logits.size() - n_vocab), last_n_tokens, repeat_penalty, top_k, top_p, temp, rng);
 
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(id);
