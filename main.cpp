@@ -14,6 +14,12 @@
 #include <signal.h>
 #include <unistd.h>
 
+#include <sentencepiece_processor.h>
+
+
+//Tokenizer object
+sentencepiece::SentencePieceProcessor processor;
+
 #define ANSI_COLOR_RED     "\x1b[31m"
 #define ANSI_COLOR_GREEN   "\x1b[32m"
 #define ANSI_COLOR_YELLOW  "\x1b[33m"
@@ -758,6 +764,11 @@ void sigint_handler(int signo) {
 }
 
 int main(int argc, char ** argv) {
+    const auto status = processor.Load("models/tokenizer.model");
+    if (!status.ok()) {
+       printf("%s", status.ToString().c_str());
+       // error
+    }
     ggml_time_init();
     const int64_t t_main_start_us = ggml_time_us();
 
@@ -807,7 +818,8 @@ int main(int argc, char ** argv) {
     std::vector<float> logits;
 
     // tokenize the prompt
-    std::vector<gpt_vocab::id> embd_inp = ::llama_tokenize(vocab, params.prompt, true);
+    std::vector<gpt_vocab::id> embd_inp;
+    processor.Encode(params.prompt, &embd_inp);
 
     params.n_predict = std::min(params.n_predict, model.hparams.n_ctx - (int) embd_inp.size());
 
@@ -935,14 +947,20 @@ int main(int argc, char ** argv) {
 
         // display text
         if (!input_noecho) {
-            for (auto id : embd) {
-                printf("%s", vocab.id_to_token[id].c_str());
+            std::string check = processor.IdToPiece(all_tokens.at(all_tokens.size()-1));
+            if(check != "�") {  // ensure a multi-byte token is finished generating before outputting the text
+                std::string text;
+                processor.Decode(all_tokens, &text);
+                std::string chunk = text.substr(full_text.length());
+                printf("%s", chunk.c_str());
+                full_text += chunk;
+
+                // reset color to default if we there is no pending user input
+                if (params.use_color && embd_inp.size() <= input_consumed) {
+                    printf(ANSI_COLOR_RESET);
+                }
+                fflush(stdout);
             }
-            // reset color to default if we there is no pending user input
-            if (params.use_color && embd_inp.size() <= input_consumed) {
-                printf(ANSI_COLOR_RESET);
-            }
-            fflush(stdout);
         }
 
         // in interactive mode, and not currently processing queued inputs;

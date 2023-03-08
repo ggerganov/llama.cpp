@@ -31,9 +31,8 @@ endif
 #
 
 CFLAGS   = -I.              -O3 -DNDEBUG -std=c11   -fPIC
-CXXFLAGS = -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC
-LDFLAGS  =
-
+CXXFLAGS = -I. -I../../sentencepiece/src/ -O3 -DNDEBUG -std=c++11 -fPIC
+LDFLAGS  = 
 # OS specific
 # TODO: support Windows
 ifeq ($(UNAME_S),Linux)
@@ -188,7 +187,7 @@ clean:
 	rm -f *.o main quantize
 
 main: main.cpp ggml.o utils.o
-	$(CXX) $(CXXFLAGS) main.cpp ggml.o utils.o -o main $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) main.cpp ggml.o utils.o /Users/billhamilton/src/sentencepiece/build/src/libsentencepiece.a -o main $(LDFLAGS)
 	./main -h
 
 quantize: quantize.cpp ggml.o utils.o
