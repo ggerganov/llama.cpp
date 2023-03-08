@@ -824,7 +824,8 @@ int main(int argc, char ** argv) {
     params.n_predict = std::min(params.n_predict, model.hparams.n_ctx - (int) embd_inp.size());
 
     // tokenize the reverse prompt
-    std::vector<gpt_vocab::id> antiprompt_inp = ::llama_tokenize(vocab, params.antiprompt, false);
+    std::vector<gpt_vocab::id> antiprompt_inp;
+    processor.Encode(params.antiprompt, &antiprompt_inp);
 
     printf("\n");
     printf("%s: prompt: '%s'\n", __func__, params.prompt.c_str());
@@ -951,29 +952,28 @@ int main(int argc, char ** argv) {
 
         // display text
         if (!input_noecho) {
-            
-            // std::string check = processor.IdToPiece(all_tokens.at(all_tokens.size()-1));
-            // printf("[%s]", check.c_str());
-            // if(check != "�") {  // ensure a multi-byte token is finished generating before outputting the text
-            //     std::string text;
-            //     processor.Decode(all_tokens, &text);
-            //     std::string chunk = text.substr(full_text.length());
-            //     printf("%s", chunk.c_str());
-            //     full_text.reserve (text.size());
-            //     full_text += chunk;
+            // check if last token is unprintable token
+            std::string check;
+            std::vector<gpt_vocab::id> check_token;
+            check_token.push_back(all_tokens.at(all_tokens.size()-1));
+            processor.Decode(check_token, &check);
+            if(check != "�") { 
+                // If the token is printable we wont attempt to print unprintable tokens
+                std::string text;
+                processor.Decode(all_tokens, &text);
+                if(full_text.length() < text.length()) {
+                    std::string chunk = text.substr(full_text.length());
+                    printf("%s", chunk.c_str());
+                    full_text.empty();
+                    processor.Decode(all_tokens, &full_text);                    
+                    // reset color to default if we there is no pending user input
+                    if (params.use_color && embd_inp.size() <= input_consumed) {
+                        printf(ANSI_COLOR_RESET);
+                    }
+                    fflush(stdout);
+                }
 
-            //     // reset color to default if we there is no pending user input
-            //     if (params.use_color && embd_inp.size() <= input_consumed) {
-            //         printf(ANSI_COLOR_RESET);
-            //     }
-            //     fflush(stdout);
-            // }
-
-            // The code above crashes and is WIP any help appreciated
-            std::string text;
-            processor.Decode(all_tokens, &text);
-            printf("%s\n", text.c_str());
-            fflush(stdout);
+            }
         }
 
         // in interactive mode, and not currently processing queued inputs;
