@@ -951,20 +951,29 @@ int main(int argc, char ** argv) {
 
         // display text
         if (!input_noecho) {
-            std::string check = processor.IdToPiece(all_tokens.at(all_tokens.size()-1));
-            if(check != "�") {  // ensure a multi-byte token is finished generating before outputting the text
-                std::string text;
-                processor.Decode(all_tokens, &text);
-                std::string chunk = text.substr(full_text.length());
-                printf("%s", chunk.c_str());
-                full_text += chunk;
+            
+            // std::string check = processor.IdToPiece(all_tokens.at(all_tokens.size()-1));
+            // printf("[%s]", check.c_str());
+            // if(check != "�") {  // ensure a multi-byte token is finished generating before outputting the text
+            //     std::string text;
+            //     processor.Decode(all_tokens, &text);
+            //     std::string chunk = text.substr(full_text.length());
+            //     printf("%s", chunk.c_str());
+            //     full_text.reserve (text.size());
+            //     full_text += chunk;
 
-                // reset color to default if we there is no pending user input
-                if (params.use_color && embd_inp.size() <= input_consumed) {
-                    printf(ANSI_COLOR_RESET);
-                }
-                fflush(stdout);
-            }
+            //     // reset color to default if we there is no pending user input
+            //     if (params.use_color && embd_inp.size() <= input_consumed) {
+            //         printf(ANSI_COLOR_RESET);
+            //     }
+            //     fflush(stdout);
+            // }
+
+            // The code above crashes and is WIP any help appreciated
+            std::string text;
+            processor.Decode(all_tokens, &text);
+            printf("%s\n", text.c_str());
+            fflush(stdout);
         }
 
         // in interactive mode, and not currently processing queued inputs;
