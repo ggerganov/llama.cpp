@@ -1004,7 +1004,8 @@ int main(int argc, char ** argv) {
                         buf[n_read+1] = 0;
                     }
 
-                    std::vector<gpt_vocab::id> line_inp = ::llama_tokenize(vocab, buf, false);
+                    std::vector<gpt_vocab::id> line_inp;
+                    processor.Encode(buf, &antiprompt_inp);
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
 
                     input_noecho = true; // do not echo this again
