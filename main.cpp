@@ -855,6 +855,8 @@ int main(int argc, char ** argv) {
     printf("\n\n");
 
     std::vector<gpt_vocab::id> embd;
+    std::vector<gpt_vocab::id> all_tokens;
+    std::string full_text = "";
 
     // determine the required inference memory per token:
     size_t mem_per_token = 0;
@@ -920,6 +922,7 @@ int main(int argc, char ** argv) {
 
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(id);
+                all_tokens.push_back(id);
 
                 t_sample_us += ggml_time_us() - t_start_sample_us;
             }
@@ -938,6 +941,7 @@ int main(int argc, char ** argv) {
                 embd.push_back(embd_inp[input_consumed]);
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(embd_inp[input_consumed]);
+                all_tokens.push_back(embd_inp[input_consumed]);
                 ++input_consumed;
                 if (embd.size() > params.n_batch) {
                     break;

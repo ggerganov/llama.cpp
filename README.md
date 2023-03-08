@@ -132,7 +132,7 @@ Here are the step for the LLaMA-7B model:
 # build this repo
 git clone https://github.com/ggerganov/llama.cpp
 cd llama.cpp
-make
+./build.sh
 
 # obtain the original LLaMA model weights and place them in ./models
 ls ./models

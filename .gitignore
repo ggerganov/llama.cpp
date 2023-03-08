@@ -21,3 +21,4 @@ models/*
 
 arm_neon.h
 compile_commands.json
+deps
