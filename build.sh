@@ -13,7 +13,8 @@ if [ ! -f libsentencepiece.a ]
 then
     tar xzvf v0.1.97.tar.gz
     cd sentencepiece-0.1.97/ && rm -rf build && mkdir build && cd build
-    cmake -E env CXXFLAGS="-std=c++17" cmake ..
+    cmake --version
+    cmake ..
     make sentencepiece-static -j $(nproc)
     cd ../..
     cp sentencepiece-0.1.97/build/src/libsentencepiece.a ./
