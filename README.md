@@ -2,6 +2,9 @@
 
 Inference of [Facebook's LLaMA](https://github.com/facebookresearch/llama) model in pure C/C++
 
+**TEMPORARY NOTICE:**
+If you observe garbage results, make sure to update to latest master. There was a bug and it was fixed here: https://github.com/ggerganov/llama.cpp/commit/70bc0b8b15b98dca23b28f0c8f5e34b27e424cda
+
 ## Description
 
 The main goal is to run the model using 4-bit quantization on a MacBook.
