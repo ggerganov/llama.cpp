@@ -15,7 +15,7 @@ The main goal is to run the model using 4-bit quantization on a MacBook.
 This was hacked in an evening - I have no idea if it works correctly.
 
 So far, I've tested just the 7B model and the generated text starts coherently, but typically degrades significanlty after ~30-40 tokens.
-Here is a "typicaly" run:
+Here is a "typical" run:
 
 ```java
 make -j && ./main -m ./models/7B/ggml-model-q4_0.bin -t 8 -n 128
@@ -73,7 +73,7 @@ sampling parameters: temp = 0.800000, top_k = 40, top_p = 0.950000
 
 If you are a fan of the original Star Wars trilogy, then you'll want to see this.
 If you don't know your Star Wars lore, this will be a huge eye-opening and you will be a little confusing.
-Awesome movie.(end of text)
+Awesome movie. [end of text]
 
 
 main: mem per token = 14434244 bytes
