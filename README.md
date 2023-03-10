@@ -17,11 +17,11 @@ The main goal is to run the model using 4-bit quantization on a MacBook.
 
 This was hacked in an evening - I have no idea if it works correctly.
 
-So far, I've tested just the 7B model and the generated text starts coherently, but typically degrades significanlty after ~30-40 tokens.
+So far, I've tested just the 7B model.
 Here is a "typical" run:
 
 ```java
-make -j && ./main -m ./models/7B/ggml-model-q4_0.bin -t 8 -n 128
+make -j && ./main -m ../LLaMA-4bit/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -t 8 -n 512
 I llama.cpp build info: 
 I UNAME_S:  Darwin
 I UNAME_P:  arm
@@ -32,33 +32,16 @@ I LDFLAGS:   -framework Accelerate
 I CC:       Apple clang version 14.0.0 (clang-1400.0.29.202)
 I CXX:      Apple clang version 14.0.0 (clang-1400.0.29.202)
 
-c++ -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC -pthread main.cpp ggml.o utils.o -o main  -framework Accelerate
-./main -h
-usage: ./main [options]
-
-options:
-  -h, --help            show this help message and exit
-  -s SEED, --seed SEED  RNG seed (default: -1)
-  -t N, --threads N     number of threads to use during computation (default: 4)
-  -p PROMPT, --prompt PROMPT
-                        prompt to start generation with (default: random)
-  -n N, --n_predict N   number of tokens to predict (default: 128)
-  --top_k N             top-k sampling (default: 40)
-  --top_p N             top-p sampling (default: 0.9)
-  --temp N              temperature (default: 0.8)
-  -b N, --batch_size N  batch size for prompt processing (default: 8)
-  -m FNAME, --model FNAME
-                        model path (default: models/llama-7B/ggml-model.bin)
-
-main: seed = 1678476633
-llama_model_load: loading model from './models/7B/ggml-model-q4_0.bin' - please wait ...
+make: Nothing to be done for `default'.
+main: seed = 1678486056
+llama_model_load: loading model from '../LLaMA-4bit/7B/ggml-model-q4_0.bin' - please wait ...
 llama_model_load: n_vocab = 32000
 llama_model_load: n_ctx   = 512
 llama_model_load: n_embd  = 4096
 llama_model_load: n_mult  = 256
 llama_model_load: n_head  = 32
 llama_model_load: n_layer = 32
-llama_model_load: n_rot   = 64
+llama_model_load: n_rot   = 128
 llama_model_load: f16     = 2
 llama_model_load: n_ff    = 11008
 llama_model_load: ggml ctx size = 4529.34 MB
@@ -66,24 +49,59 @@ llama_model_load: memory_size =   512.00 MB, n_mem = 16384
 llama_model_load: .................................... done
 llama_model_load: model size =  4017.27 MB / num tensors = 291
 
-main: prompt: 'If'
-main: number of tokens in prompt = 2
+main: prompt: 'Building a website can be done in 10 simple steps:'
+main: number of tokens in prompt = 15
      1 -> ''
-  3644 -> 'If'
+  8893 -> 'Build'
+   292 -> 'ing'
+   263 -> ' a'
+  4700 -> ' website'
+   508 -> ' can'
+   367 -> ' be'
+  2309 -> ' done'
+   297 -> ' in'
+ 29871 -> ' '
+ 29896 -> '1'
+ 29900 -> '0'
+  2560 -> ' simple'
+  6576 -> ' steps'
+ 29901 -> ':'
 
 sampling parameters: temp = 0.800000, top_k = 40, top_p = 0.950000
 
 
-If you are a fan of the original Star Wars trilogy, then you'll want to see this.
-If you don't know your Star Wars lore, this will be a huge eye-opening and you will be a little confusing.
-Awesome movie. [end of text]
-
+Building a website can be done in 10 simple steps:
+1) Select a domain name and web hosting plan
+2) Complete a sitemap
+3) List your products
+4) Write product descriptions
+5) Create a user account
+6) Build the template
+7) Start building the website
+8) Advertise the website
+9) Provide email support
+10) Submit the website to search engines
+A website is a collection of web pages that are formatted with HTML. HTML is the code that defines what the website looks like and how it behaves.
+The HTML code is formatted into a template or a format. Once this is done, it is displayed on the user's browser.
+The web pages are stored in a web server. The web server is also called a host. When the website is accessed, it is retrieved from the server and displayed on the user's computer.
+A website is known as a website when it is hosted. This means that it is displayed on a host. The host is usually a web server.
+A website can be displayed on different browsers. The browsers are basically the software that renders the website on the user's screen.
+A website can also be viewed on different devices such as desktops, tablets and smartphones.
+Hence, to have a website displayed on a browser, the website must be hosted.
+A domain name is an address of a website. It is the name of the website.
+The website is known as a website when it is hosted. This means that it is displayed on a host. The host is usually a web server.
+A website can be displayed on different browsers. The browsers are basically the software that renders the website on the user’s screen.
+A website can also be viewed on different devices such as desktops, tablets and smartphones. Hence, to have a website displayed on a browser, the website must be hosted.
+A domain name is an address of a website. It is the name of the website.
+A website is an address of a website. It is a collection of web pages that are formatted with HTML. HTML is the code that defines what the website looks like and how it behaves.
+The HTML code is formatted into a template or a format. Once this is done, it is displayed on the user’s browser.
+A website is known as a website when it is hosted
 
 main: mem per token = 14434244 bytes
-main:     load time =  1313.77 ms
-main:   sample time =     6.17 ms
-main:  predict time =  3271.53 ms / 54.53 ms per token
-main:    total time =  4797.98 ms
+main:     load time =  1332.48 ms
+main:   sample time =  1081.40 ms
+main:  predict time = 31378.77 ms / 61.41 ms per token
+main:    total time = 34036.74 ms
 ```
 
 ## Usage
