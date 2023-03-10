@@ -3,9 +3,7 @@
 Inference of [Facebook's LLaMA](https://github.com/facebookresearch/llama) model in pure C/C++
 
 **TEMPORARY NOTICE:**
-If you observe garbage results, make sure to update to latest master. There was a bug and it was fixed here: https://github.com/ggerganov/llama.cpp/commit/70bc0b8b15b98dca23b28f0c8f5e34b27e424cda
-
-Also, currently the quantized models run **only** on Apple Silicon. On other architectures, you can [use the F16 models](https://github.com/ggerganov/llama.cpp/issues/2#issuecomment-1464615286), but they will be much slower. Support will be [added later](https://github.com/ggerganov/ggml/pull/27)
+Currently the quantized models run **only** on Apple Silicon. On other architectures, you can [use the F16 models](https://github.com/ggerganov/llama.cpp/issues/2#issuecomment-1464615286), but they will be much slower. Support will be [added later](https://github.com/ggerganov/ggml/pull/27)
 
 ## Description
 
