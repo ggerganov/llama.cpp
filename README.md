@@ -114,6 +114,5 @@ python3 convert-pth-to-ggml.py models/7B/ 1
   In general, it seems to work, but I think it fails for unicode character support. Hopefully, someone can help with that
 - I don't know yet how much the quantization affects the quality of the generated text
 - Probably the token sampling can be improved
-- No Windows support
 - x86 quantization support [not yet ready](https://github.com/ggerganov/ggml/pull/27). Basically, you want to run this on Apple Silicon
-  
+

@@ -728,6 +728,7 @@ int main(int argc, char ** argv) {
 
         // end of text token
         if (embd.back() == 2) {
+            printf(" [end of text]\n");
             break;
         }
     }
