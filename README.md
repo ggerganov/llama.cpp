@@ -104,6 +104,10 @@ main:  predict time = 31378.77 ms / 61.41 ms per token
 main:    total time = 34036.74 ms
 ```
 
+And here is another demo of running both LLaMA-7B and [whisper.cpp](https://github.com/ggerganov/whisper.cpp) on a single M1 Pro MacBook:
+
+https://user-images.githubusercontent.com/1991296/224442907-7693d4be-acaa-4e01-8b4f-add84093ffff.mp4
+
 ## Usage
 
 ```bash
