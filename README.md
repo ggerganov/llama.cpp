@@ -18,7 +18,7 @@ The main goal is to run the model using 4-bit quantization on a MacBook.
 This was hacked in an evening - I have no idea if it works correctly.
 
 So far, I've tested just the 7B model.
-Here is a "typical" run:
+Here is a typical run:
 
 ```java
 make -j && ./main -m ../LLaMA-4bit/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -t 8 -n 512
