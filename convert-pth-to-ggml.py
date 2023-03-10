@@ -73,7 +73,7 @@ fout.write(struct.pack("i", hparams["dim"]))
 fout.write(struct.pack("i", hparams["multiple_of"]))
 fout.write(struct.pack("i", hparams["n_heads"]))
 fout.write(struct.pack("i", hparams["n_layers"]))
-fout.write(struct.pack("i", 64)) # rot
+fout.write(struct.pack("i", hparams["dim"] // hparams["n_heads"])) # rot (obsolete)
 fout.write(struct.pack("i", ftype))
 
 # Is this correct??

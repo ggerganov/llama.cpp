@@ -18,7 +18,7 @@ struct gpt_params {
     int32_t n_predict = 128; // new tokens to predict
 
     // sampling parameters
-    int32_t top_k = 40;
+    int32_t top_k = 40; // unused
     float   top_p = 0.95f;
     float   temp  = 0.80f;
 
@@ -82,6 +82,13 @@ gpt_vocab::id gpt_sample_top_k_top_p(
         const gpt_vocab & vocab,
         const float * logits,
         int    top_k,
+        double top_p,
+        double temp,
+        std::mt19937 & rng);
+
+gpt_vocab::id llama_sample_top_p(
+        const gpt_vocab & vocab,
+        const float * logits,
         double top_p,
         double temp,
         std::mt19937 & rng);
