@@ -392,7 +392,7 @@ gpt_vocab::id llama_sample_top_p(
         const double scale = 1.0/temp;
         for (int i = 0; i < n_logits; ++i) {
             if ( std::find(last_n_tokens.begin(), last_n_tokens.end(), i) != last_n_tokens.end() ) {
-               logits_id.push_back(std::make_pair(logits[i]*(1/repeat_penalty), i));
+               logits_id.push_back(std::make_pair(logits[i]*scale*(1/repeat_penalty), i));
             } else {
                 logits_id.push_back(std::make_pair(logits[i]*scale, i));
             }
