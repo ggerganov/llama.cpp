@@ -10,6 +10,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <unordered_set>
 
 // determine number of model parts based on the dimension
 static const std::map<int, int> LLAMA_N_PARTS = {
@@ -123,6 +124,9 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
     }
 
     // load vocab
+
+    std::unordered_set<std::string> unprintable_characters = {"￼", "�", "��"};
+
     {
         const int32_t n_vocab = model.hparams.n_vocab;
 
@@ -139,6 +143,10 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
 
             word.resize(len);
             fin.read((char *) word.data(), len);
+
+            if(unprintable_characters.find(word) != unprintable_characters.end()) {
+                continue;
+            }
 
             vocab.token_to_id[word] = i;
             vocab.id_to_token[i] = word;
