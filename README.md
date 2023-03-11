@@ -180,5 +180,11 @@ When running the larger models, make sure you have enough disk space to store al
   In general, it seems to work, but I think it fails for unicode character support. Hopefully, someone can help with that
 - I don't know yet how much the quantization affects the quality of the generated text
 - Probably the token sampling can be improved
-- x86 quantization support [not yet ready](https://github.com/ggerganov/ggml/pull/27). Basically, you want to run this on Apple Silicon. For now, on Linux and Windows you can use the F16 `ggml-model-f16.bin` model, but it will be much slower.
+- x86 quantization support [not yet ready](https://github.com/ggerganov/ggml/pull/27). Basically, you want to run this
+  on Apple Silicon. For now, on Linux and Windows you can use the F16 `ggml-model-f16.bin` model, but it will be much
+  slower.
+- The Accelerate framework is actually currently unused since I found that for tensors shapes typical for the Decoder,
+  there is no benefit compared to the ARM_NEON intrinsics implementation. Of course, it's possible that I simlpy don't
+  know how to utilize it properly. But in any case, you can even disable it with `LLAMA_NO_ACCELERATE=1 make` and the
+  performance will be the same, since no BLAS calls are invoked by the current implementation
 
