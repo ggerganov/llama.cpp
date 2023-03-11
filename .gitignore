@@ -14,6 +14,8 @@ build-no-accel/
 build-sanitize-addr/
 build-sanitize-thread/
 
+models/*
+
 /main
 /quantize
 
