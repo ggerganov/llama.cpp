@@ -22,6 +22,11 @@ The main goal is to run the model using 4-bit quantization on a MacBook.
 - Runs on the CPU
 
 This was hacked in an evening - I have no idea if it works correctly.
+Please do not make conclusions about the models based on the results from this implementation.
+For all I know, it can be completely wrong. This project is for educational purposes and is not going to be maintained properly.
+New features will probably be added mostly through community contributions, if any.
+
+---
 
 Here is a typical run using LLaMA-7B:
 
@@ -183,7 +188,7 @@ When running the larger models, make sure you have enough disk space to store al
 - x86 quantization support [not yet ready](https://github.com/ggerganov/ggml/pull/27). Basically, you want to run this
   on Apple Silicon. For now, on Linux and Windows you can use the F16 `ggml-model-f16.bin` model, but it will be much
   slower.
-- The Accelerate framework is actually currently unused since I found that for tensors shapes typical for the Decoder,
+- The Accelerate framework is actually currently unused since I found that for tensor shapes typical for the Decoder,
   there is no benefit compared to the ARM_NEON intrinsics implementation. Of course, it's possible that I simlpy don't
   know how to utilize it properly. But in any case, you can even disable it with `LLAMA_NO_ACCELERATE=1 make` and the
   performance will be the same, since no BLAS calls are invoked by the current implementation
