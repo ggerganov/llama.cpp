@@ -33,11 +33,22 @@ if len(sys.argv) < 3:
 
 # output in the same directory as the model
 dir_model = sys.argv[1]
-fname_out = sys.argv[1] + "/ggml-model.bin"
 
 fname_hparams   = sys.argv[1] + "/params.json"
-fname_model     = sys.argv[1] + "/consolidated.00.pth"
 fname_tokenizer = sys.argv[1] + "/../tokenizer.model"
+
+def get_n_parts(dim):
+    if dim == 4096:
+        return 1
+    elif dim == 5120:
+        return 2
+    elif dim == 6656:
+        return 4
+    elif dim == 8192:
+        return 8
+    else:
+        print("Invalid dim: " + str(dim))
+        sys.exit(1)
 
 # possible data types
 #   ftype == 0 -> float32
@@ -61,76 +72,91 @@ tokenizer = SentencePieceProcessor(fname_tokenizer)
 
 hparams.update({"vocab_size": tokenizer.vocab_size()})
 
+n_parts = get_n_parts(hparams["dim"])
+
 print(hparams)
+print('n_parts = ', n_parts)
 
-model = torch.load(fname_model, map_location="cpu")
+for p in range(n_parts):
+    print('Processing part ', p)
 
-fout = open(fname_out, "wb")
+    #fname_model = sys.argv[1] + "/consolidated.00.pth"
+    fname_model = sys.argv[1] + "/consolidated.0" + str(p) + ".pth"
+    fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".bin"
+    if (p > 0):
+        fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".bin" + "." + str(p)
 
-fout.write(struct.pack("i", 0x67676d6c)) # magic: ggml in hex
-fout.write(struct.pack("i", hparams["vocab_size"]))
-fout.write(struct.pack("i", hparams["dim"]))
-fout.write(struct.pack("i", hparams["multiple_of"]))
-fout.write(struct.pack("i", hparams["n_heads"]))
-fout.write(struct.pack("i", hparams["n_layers"]))
-fout.write(struct.pack("i", hparams["dim"] // hparams["n_heads"])) # rot (obsolete)
-fout.write(struct.pack("i", ftype))
+    model = torch.load(fname_model, map_location="cpu")
 
-# Is this correct??
-for i in range(32000):
-    # TODO: this is probably wrong - not sure how this tokenizer works
-    text = tokenizer.decode([29889, i]).encode('utf-8')
-    # remove the first byte (it's always '.')
-    text = text[1:]
-    fout.write(struct.pack("i", len(text)))
-    fout.write(text)
+    fout = open(fname_out, "wb")
 
-for k, v in model.items():
-    name = k
-    shape = v.shape
+    fout.write(struct.pack("i", 0x67676d6c)) # magic: ggml in hex
+    fout.write(struct.pack("i", hparams["vocab_size"]))
+    fout.write(struct.pack("i", hparams["dim"]))
+    fout.write(struct.pack("i", hparams["multiple_of"]))
+    fout.write(struct.pack("i", hparams["n_heads"]))
+    fout.write(struct.pack("i", hparams["n_layers"]))
+    fout.write(struct.pack("i", hparams["dim"] // hparams["n_heads"])) # rot (obsolete)
+    fout.write(struct.pack("i", ftype))
 
-    # skip layers.X.attention.inner_attention.rope.freqs
-    if name[-5:] == "freqs":
-        continue
+    # Is this correct??
+    for i in range(32000):
+        # TODO: this is probably wrong - not sure how this tokenizer works
+        text = tokenizer.decode([29889, i]).encode('utf-8')
+        # remove the first byte (it's always '.')
+        text = text[1:]
+        fout.write(struct.pack("i", len(text)))
+        fout.write(text)
 
-    print("Processing variable: " + name + " with shape: ", shape, " and type: ", v.dtype)
+    for k, v in model.items():
+        name = k
+        shape = v.shape
 
-    #data = tf.train.load_variable(dir_model, name).squeeze()
-    data = v.numpy().squeeze()
-    n_dims = len(data.shape);
+        # skip layers.X.attention.inner_attention.rope.freqs
+        if name[-5:] == "freqs":
+            continue
 
-    # for efficiency - transpose some matrices
-    # "model/h.*/attn/c_attn/w"
-    # "model/h.*/attn/c_proj/w"
-    # "model/h.*/mlp/c_fc/w"
-    # "model/h.*/mlp/c_proj/w"
-    #if name[-14:] == "/attn/c_attn/w" or \
-    #   name[-14:] == "/attn/c_proj/w" or \
-    #   name[-11:] == "/mlp/c_fc/w" or \
-    #   name[-13:] == "/mlp/c_proj/w":
-    #    print("  Transposing")
-    #    data = data.transpose()
+        print("Processing variable: " + name + " with shape: ", shape, " and type: ", v.dtype)
 
-    dshape = data.shape
+        #data = tf.train.load_variable(dir_model, name).squeeze()
+        data = v.numpy().squeeze()
+        n_dims = len(data.shape);
 
-    # default type is fp16
-    ftype_cur = 1
-    if ftype == 0 or n_dims == 1:
-        print("  Converting to float32")
-        data = data.astype(np.float32)
-        ftype_cur = 0
+        # for efficiency - transpose some matrices
+        # "model/h.*/attn/c_attn/w"
+        # "model/h.*/attn/c_proj/w"
+        # "model/h.*/mlp/c_fc/w"
+        # "model/h.*/mlp/c_proj/w"
+        #if name[-14:] == "/attn/c_attn/w" or \
+        #   name[-14:] == "/attn/c_proj/w" or \
+        #   name[-11:] == "/mlp/c_fc/w" or \
+        #   name[-13:] == "/mlp/c_proj/w":
+        #    print("  Transposing")
+        #    data = data.transpose()
 
-    # header
-    str = name.encode('utf-8')
-    fout.write(struct.pack("iii", n_dims, len(str), ftype_cur))
-    for i in range(n_dims):
-        fout.write(struct.pack("i", dshape[n_dims - 1 - i]))
-    fout.write(str);
+        dshape = data.shape
 
-    # data
-    data.tofile(fout)
+        # default type is fp16
+        ftype_cur = 1
+        if ftype == 0 or n_dims == 1:
+            print("  Converting to float32")
+            data = data.astype(np.float32)
+            ftype_cur = 0
 
-fout.close()
+        # header
+        sname = name.encode('utf-8')
+        fout.write(struct.pack("iii", n_dims, len(sname), ftype_cur))
+        for i in range(n_dims):
+            fout.write(struct.pack("i", dshape[n_dims - 1 - i]))
+        fout.write(sname);
 
-print("Done. Output file: " + fname_out)
-print("")
+        # data
+        data.tofile(fout)
+
+    # I hope this deallocates the memory ..
+    model = None
+
+    fout.close()
+
+    print("Done. Output file: " + fname_out + ", (part ", p, ")")
+    print("")

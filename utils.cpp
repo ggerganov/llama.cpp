@@ -448,7 +448,8 @@ gpt_vocab::id llama_sample_top_p(
 
 size_t ggml_quantize_q4_0(float * src, void * dst, int n, int k, int qk, int64_t * hist) {
     const int nb = k / qk;
-    const size_t row_size = nb*(sizeof(float) + sizeof(uint8_t)*qk/2);
+    const size_t bs = (sizeof(float) + sizeof(uint8_t)*qk/2);
+    const size_t row_size = nb*bs;
 
     assert(k % qk == 0);
 
@@ -457,8 +458,8 @@ size_t ggml_quantize_q4_0(float * src, void * dst, int n, int k, int qk, int64_t
     char * pdst = (char *) dst;
 
     for (int j = 0; j < n; j += k) {
-        float   * pd = (float *)   (pdst + (j/k)*row_size);
-        uint8_t * pb = (uint8_t *) (pd + nb);
+        uint8_t * pd = (uint8_t *) (pdst + (j/k)*row_size + 0*bs);
+        uint8_t * pb = (uint8_t *) (pdst + (j/k)*row_size + 0*bs + sizeof(float));
 
         for (int i = 0; i < nb; i++) {
             float amax = 0.0f; // absolute max
@@ -472,7 +473,8 @@ size_t ggml_quantize_q4_0(float * src, void * dst, int n, int k, int qk, int64_t
                 const float d = amax / ((1 << 3) - 1);
                 const float id = d ? 1.0f/d : 0.0f;
 
-                pd[i] = d;
+                *(float *) pd = d;
+                pd += bs;
 
                 for (int l = 0; l < qk; l += 2) {
                     const float v0 = (src[j + i*qk + l + 0])*id;
@@ -490,7 +492,8 @@ size_t ggml_quantize_q4_0(float * src, void * dst, int n, int k, int qk, int64_t
                     pp[l/2] = vi0 | (vi1 << 4);
                 }
 
-                memcpy(pb + i*qk/2, pp, sizeof(pp));
+                memcpy(pb, pp, sizeof(pp));
+                pb += bs;
             }
         }
     }
