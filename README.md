@@ -6,11 +6,6 @@ Inference of [Facebook's LLaMA](https://github.com/facebookresearch/llama) model
 
 Commit [007a8f6f459c6eb56678fdee4c09219ddb85b640](https://github.com/ggerganov/llama.cpp/commit/007a8f6f459c6eb56678fdee4c09219ddb85b640) added support for all LLaMA models, but introduced breaking changes. If you generated any models before that commit, you must regenerate them after updating to latest master.
 
-
-**TEMPORARY NOTICE:**
-Currently the quantized models run **only** on Apple Silicon. On other architectures, you can [use the F16 models](https://github.com/ggerganov/llama.cpp/issues/2#issuecomment-1464615286), but they will be much slower. Support will be [added later](https://github.com/ggerganov/ggml/pull/27)
-
-
 ## Description
 
 The main goal is to run the model using 4-bit quantization on a MacBook.
