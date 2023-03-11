@@ -156,6 +156,12 @@ You need to quantize each of them separately like this:
 ./quantize ./models/13B/ggml-model-f16.bin.1 ./models/13B/ggml-model-q4_0.bin.1 2
 ```
 
+which can be scripted like this if you are lazy (for 65B model):
+
+```bash
+for i in models/65B/ggml-model-f16.bin*;do quantized=`echo "$i" | sed -e 's/f16/q4_0/'`; ./quantize "$i" "$quantized" 2 ;done
+```
+
 Everything else is the same. Simply run:
 
 ```bash
