@@ -2,9 +2,9 @@
 
 Inference of [Facebook's LLaMA](https://github.com/facebookresearch/llama) model in pure C/C++
 
-**!!! IMPORTANT !!!**
+**Hot topics**
 
-Commit [007a8f6f459c6eb56678fdee4c09219ddb85b640](https://github.com/ggerganov/llama.cpp/commit/007a8f6f459c6eb56678fdee4c09219ddb85b640) added support for all LLaMA models, but introduced breaking changes. If you generated any models before that commit, you must regenerate them after updating to latest master.
+- Running on Windows: https://github.com/ggerganov/llama.cpp/issues/22
 
 ## Description
 
