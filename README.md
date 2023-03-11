@@ -167,7 +167,7 @@ The number of files generated for each model is as follows:
 ```
 7B  -> 1 file
 13B -> 2 files
-33B -> 4 files
+30B -> 4 files
 65B -> 8 files
 ```
 
