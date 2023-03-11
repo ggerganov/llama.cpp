@@ -139,6 +139,12 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
 
             word.resize(len);
             fin.read((char *) word.data(), len);
+            
+            if(i >= 131 && i <= 258) {
+                // seems to be unprintable characters list in this range
+                // TODO maybe they are supposed to be byte reversed or some magic
+                continue;
+            }
 
             vocab.token_to_id[word] = i;
             vocab.id_to_token[i] = word;
