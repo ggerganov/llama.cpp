@@ -1,4 +1,5 @@
 #include "utils.h"
+#define QK 32
 
 #include <cassert>
 #include <cstring>
@@ -453,7 +454,7 @@ size_t ggml_quantize_q4_0(float * src, void * dst, int n, int k, int qk, int64_t
 
     assert(k % qk == 0);
 
-    uint8_t pp[qk/2];
+    uint8_t pp[QK/2];
 
     char * pdst = (char *) dst;
 
@@ -507,7 +508,7 @@ size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t
 
     assert(k % qk == 0);
 
-    uint8_t pp[qk/2];
+    uint8_t pp[QK/2];
 
     char * pdst = (char *) dst;
 
