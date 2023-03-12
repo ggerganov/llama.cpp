@@ -296,7 +296,7 @@ bool gpt_vocab_init(const std::string & fname, gpt_vocab & vocab) {
 }
 
 
-void sample_top_k(std::vector<std::pair<double, gpt_vocab::id>> &logits_id, int top_k) {
+void sample_top_k(std::vector<std::pair<double, gpt_vocab::id>> & logits_id, int top_k) {
     // find the top K tokens
     std::partial_sort(
             logits_id.begin(),
