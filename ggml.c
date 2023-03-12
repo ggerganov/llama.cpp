@@ -1,4 +1,6 @@
-#define _POSIX_C_SOURCE 200809L
+// Defines CLOCK_MONOTONIC on Linux
+#define _POSIX_C_SOURCE 199309L
+
 #include "ggml.h"
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
