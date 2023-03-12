@@ -28,6 +28,9 @@ struct gpt_params {
 
     std::string model = "models/lamma-7B/ggml-model.bin"; // model path
     std::string prompt;
+
+    bool interactive = false; // interactive mode
+    std::string antiprompt = "User: "; // string upon seeing which more user input is prompted
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);

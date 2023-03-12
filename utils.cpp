@@ -49,6 +49,10 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.n_batch = std::stoi(argv[++i]);
         } else if (arg == "-m" || arg == "--model") {
             params.model = argv[++i];
+        } else if (arg == "-i" || arg == "--interactive") {
+            params.interactive = true;
+        } else if (arg == "-r" || arg == "--reverse-prompt") {
+            params.antiprompt = argv[++i];
         } else if (arg == "-h" || arg == "--help") {
             gpt_print_usage(argc, argv, params);
             exit(0);
@@ -67,6 +71,7 @@ void gpt_print_usage(int argc, char ** argv, const gpt_params & params) {
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -h, --help            show this help message and exit\n");
+    fprintf(stderr, "  -i, --interactive     run in interactive mode\n");
     fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1)\n");
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
     fprintf(stderr, "  -p PROMPT, --prompt PROMPT\n");
