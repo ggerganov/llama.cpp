@@ -16,11 +16,13 @@ struct gpt_params {
     int32_t seed      = -1; // RNG seed
     int32_t n_threads = std::min(4, (int32_t) std::thread::hardware_concurrency());
     int32_t n_predict = 128; // new tokens to predict
+    int32_t repeat_last_n = 64;  // last n tokens to penalize
 
     // sampling parameters
     int32_t top_k = 40; // unused
     float   top_p = 0.95f;
     float   temp  = 0.80f;
+    float   repeat_penalty  = 1.30f;
 
     int32_t n_batch = 8; // batch size for prompt processing
 
@@ -89,6 +91,8 @@ gpt_vocab::id gpt_sample_top_k_top_p(
 gpt_vocab::id llama_sample_top_p(
         const gpt_vocab & vocab,
         const float * logits,
+        std::vector<gpt_vocab::id> & last_n_tokens,
+        double repeat_penalty,
         double top_p,
         double temp,
         std::mt19937 & rng);
