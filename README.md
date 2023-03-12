@@ -5,10 +5,11 @@ Inference of [Facebook's LLaMA](https://github.com/facebookresearch/llama) model
 **Hot topics**
 
 - Running on Windows: https://github.com/ggerganov/llama.cpp/issues/22
+- Fix Tokenizer / Unicode support: https://github.com/ggerganov/llama.cpp/issues/11
 
 ## Description
 
-The main goal is to run the model using 4-bit quantization on a MacBook.
+The main goal is to run the model using 4-bit quantization on a MacBook
 
 - Plain C/C++ implementation without dependencies
 - Apple silicon first-class citizen - optimized via Arm Neon and Accelerate framework
@@ -21,6 +22,12 @@ This was hacked in an evening - I have no idea if it works correctly.
 Please do not make conclusions about the models based on the results from this implementation.
 For all I know, it can be completely wrong. This project is for educational purposes and is not going to be maintained properly.
 New features will probably be added mostly through community contributions, if any.
+
+Supported platformst:
+
+- [X] Mac OS
+- [X] Linux
+- [ ] Windows (soon)
 
 ---
 
