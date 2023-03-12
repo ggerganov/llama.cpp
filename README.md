@@ -183,6 +183,29 @@ The number of files generated for each model is as follows:
 
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
 
+### Interactive mode
+
+If you want a more ChatGPT-like experience, you can run in interactive mode by passing `-i` as a parameter.
+In this mode, you can always interrupt generation by pressing Ctrl+C and enter one or more lines of text which will be converted into tokens and appended to the current context. You can also specify a *reverse prompt* with the parameter `-r "reverse prompt string"`. This will result in user input being prompted whenever the exact tokens of the reverse prompt string are encountered in the generation. A typical use is to use a prompt which makes LLaMa emulate a chat between multiple users, say Alice and Bob, and pass `-r "Alice:"`.
+
+Here is an example few-shot interaction, invoked with the command
+```
+./main -m ./models/13B/ggml-model-q4_0.bin -t 8 --repeat_penalty 1.2 --temp 0.9 --top_p 0.9 -n 256 \
+                                           --color -i -r "User:" \
+                                           -p \
+"Transcript of a dialog, where the User interacts with an Assistant named Bob. Bob is helpful, kind, honest, good at writing, and never fails to answer the User's requests immediately and with precision.
+
+User: Hello, Bob.
+Bob: Hello. How may I help you today?
+User: Please tell me the largest city in Europe.
+Bob: Sure. The largest city in Europe is London, the capital of the United Kingdom.
+User:"
+```
+Note the use of `--color` to distinguish between user input and generated text.
+
+![image](https://user-images.githubusercontent.com/401380/224572787-d418782f-47b2-49c4-a04e-65bfa7ad4ec0.png)
+
+
 ## Limitations
 
 - Not sure if my tokenizer is correct. There are a few places where we might have a mistake:
