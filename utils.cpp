@@ -453,10 +453,11 @@ size_t ggml_quantize_q4_0(float * src, void * dst, int n, int k, int qk, int64_t
 
     assert(k % qk == 0);
 
+    size_t const pp_size = (qk / 2);
 #if _MSC_VER
-    uint8_t* pp = (uint8_t*)_alloca(qk / 2);
+    uint8_t* pp = (uint8_t*)_alloca(pp_size);
 #else
-    uint8_t pp[qk/2];
+    uint8_t pp[pp_size];
 #endif
 
     char * pdst = (char *) dst;
@@ -496,7 +497,7 @@ size_t ggml_quantize_q4_0(float * src, void * dst, int n, int k, int qk, int64_t
                     pp[l/2] = vi0 | (vi1 << 4);
                 }
 
-                memcpy(pb, pp, sizeof(pp));
+                memcpy(pb, pp, pp_size);
                 pb += bs;
             }
         }
@@ -511,10 +512,11 @@ size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t
 
     assert(k % qk == 0);
 
+    size_t const pp_size = (qk / 2);
 #if _MSC_VER
-    uint8_t* pp = (uint8_t*)_alloca(qk / 2);
+    uint8_t* pp = (uint8_t*)_alloca(pp_size);
 #else
-    uint8_t pp[qk/2];
+    uint8_t pp[pp_size];
 #endif
 
     char * pdst = (char *) dst;
@@ -559,7 +561,7 @@ size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t
                     pp[l/2] = vi0 | (vi1 << 4);
                 }
 
-                memcpy(pb + i*qk/2, pp, sizeof(pp));
+                memcpy(pb + i*qk/2, pp, pp_size);
             }
         }
     }
