@@ -23,7 +23,7 @@ Please do not make conclusions about the models based on the results from this i
 For all I know, it can be completely wrong. This project is for educational purposes and is not going to be maintained properly.
 New features will probably be added mostly through community contributions, if any.
 
-Supported platformst:
+Supported platforms:
 
 - [X] Mac OS
 - [X] Linux
