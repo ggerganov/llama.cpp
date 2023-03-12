@@ -86,6 +86,7 @@ for p in range(n_parts):
     if (p > 0):
         fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".bin" + "." + str(p)
 
+    # weights_only requires torch 1.13.1, remove this param or update if you get an "invalid keyword argument" error
     model = torch.load(fname_model, map_location="cpu", weights_only=True)
 
     fout = open(fname_out, "wb")
