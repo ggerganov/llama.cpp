@@ -209,8 +209,8 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
     // create the ggml context
     {
         struct ggml_init_params params = {
-            .mem_size   = ctx_size,
-            .mem_buffer = NULL,
+            /*.mem_size   =*/ ctx_size,
+            /*.mem_buffer =*/ NULL,
         };
 
         model.ctx = ggml_init(params);
@@ -546,12 +546,13 @@ bool llama_eval(
     }
 
     struct ggml_init_params params = {
-        .mem_size   = buf_size,
-        .mem_buffer = buf,
+        /*.mem_size   =*/ buf_size,
+        /*.mem_buffer =*/ buf,
     };
 
     struct ggml_context * ctx0 = ggml_init(params);
-    struct ggml_cgraph gf = { .n_threads = n_threads };
+    ggml_cgraph gf = {};
+    gf.n_threads = n_threads;
 
     struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
     memcpy(embd->data, embd_inp.data(), N*ggml_element_size(embd));
@@ -733,6 +734,7 @@ bool llama_eval(
 }
 
 int main(int argc, char ** argv) {
+    ggml_time_init();
     const int64_t t_main_start_us = ggml_time_us();
 
     gpt_params params;
