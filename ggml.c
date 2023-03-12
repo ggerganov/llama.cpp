@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include "ggml.h"
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
