@@ -18,7 +18,7 @@ The main goal is to run the model using 4-bit quantization on a MacBook
 - 4-bit quantization support
 - Runs on the CPU
 
-This was hacked in an evening - I have no idea if it works correctly.
+This was [hacked in an evening](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022) - I have no idea if it works correctly.
 Please do not make conclusions about the models based on the results from this implementation.
 For all I know, it can be completely wrong. This project is for educational purposes and is not going to be maintained properly.
 New features will probably be added mostly through community contributions, if any.
