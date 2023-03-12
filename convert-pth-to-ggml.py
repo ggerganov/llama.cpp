@@ -86,7 +86,7 @@ for p in range(n_parts):
     if (p > 0):
         fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".bin" + "." + str(p)
 
-    model = torch.load(fname_model, map_location="cpu")
+    model = torch.load(fname_model, map_location="cpu", weights_only=True)
 
     fout = open(fname_out, "wb")
 
