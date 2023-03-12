@@ -219,6 +219,8 @@ $(info )
 endif
 !endif :
 
+# Common Unix/Windows code.
+
 default: main$(EXE) quantize$(EXE)
 
 #
