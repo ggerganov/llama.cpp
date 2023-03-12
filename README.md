@@ -135,6 +135,11 @@ make
 ls ./models
 65B 30B 13B 7B tokenizer_checklist.chk tokenizer.model
 
+# install Python (osx)
+brew install pyenv
+pyenv install 3.10.10
+pyenv local 3.10.10
+
 # install Python dependencies
 # preferred versions: python 3.10 (not 3.11), torch 1.13.1+
 python3 -m pip install torch numpy sentencepiece
