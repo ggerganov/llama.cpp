@@ -11,7 +11,7 @@ ifdef MAKEDIR:
 CXX = cl
 # C++20 for designated initializers
 # TODO: Detect AVX.
-CXXFLAGS = /MD /Gy /Z7 /EHsc /O2 /arch:AVX2 /std:c++20
+CXXFLAGS = /MD /Gy /Z7 /EHsc /O2 /arch:AVX2 /std:c++20 /GL
 CC = $(CXX)
 CFLAGS = $(CXXFLAGS)
 LDFLAGS=/incremental:no

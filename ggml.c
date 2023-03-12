@@ -285,8 +285,9 @@ ggml_fp16_t ggml_fp32_to_fp16(float x) {
 // timing
 //
 
-#if defined(_MSC_VER) || defined(__MINGW32__)
+#if _WIN32
 static int64_t timer_freq;
+
 void ggml_time_init(void) {
     LARGE_INTEGER frequency;
     QueryPerformanceFrequency(&frequency);
