@@ -1,3 +1,47 @@
+# This one Makefile works with Microsoft nmake and Unix make.
+# They use different conditional syntax, but each can be nested and inverted within the other.
+
+all: default
+
+ifdef MAKEDIR:
+!ifdef MAKEDIR
+
+# Windows code.
+
+CXX = cl
+# C++20 for designated initializers
+# TODO: Detect AVX.
+CXXFLAGS = /MD /Gy /Z7 /EHsc /O2 /arch:AVX2 /std:c++20
+CC = $(CXX)
+CFLAGS = $(CXXFLAGS)
+LDFLAGS=/incremental:no
+LINK_OUT = /out:
+CC_OUT = /Fo
+O = obj
+EXE = .exe
+RM_F = del 2>nul /f
+UNIX_SPACE =
+START_LINK_FLAGS = /link
+
+# The need for this is surprising but otherwise there is an access violation
+# running main -h.
+SLASH=^\
+
+!else
+else
+
+# Unix code.
+
+O = o
+EXE=
+UNIX_SPACE = " "
+UNIX_SPACE := $(UNIX_SPACE:"=)
+LINK_OUT = -o$(UNIX_SPACE)
+CC_OUT=-o$(UNIX_SPACE)
+RM_F = rm -f
+START_LINK_FLAGS=
+SLASH=/
+
 ifndef UNAME_S
 UNAME_S := $(shell uname -s)
 endif
@@ -172,27 +216,30 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: main quantize
+endif
+!endif :
+
+default: main$(EXE) quantize$(EXE)
 
 #
 # Build library
 #
 
-ggml.o: ggml.c ggml.h
-	$(CC)  $(CFLAGS)   -c ggml.c -o ggml.o
+ggml.$O: ggml.c ggml.h
+	$(CC)  $(CFLAGS) -c ggml.c $(CC_OUT)ggml.$O
 
-utils.o: utils.cpp utils.h
-	$(CXX) $(CXXFLAGS) -c utils.cpp -o utils.o
+utils.$O: utils.cpp utils.h
+	$(CXX) $(CXXFLAGS) -c utils.cpp $(CC_OUT)utils.$O
 
 clean:
-	rm -f *.o main quantize
+	$(RM_F) *.$O main$(EXE) quantize$(EXE)
 
-main: main.cpp ggml.o utils.o
-	$(CXX) $(CXXFLAGS) main.cpp ggml.o utils.o -o main $(LDFLAGS)
-	./main -h
+main$(EXE): main.cpp ggml.$O utils.$O
+	$(CXX) $(CXXFLAGS) main.cpp $(START_LINK_FLAGS) ggml.$O utils.$O $(LINK_OUT)main$(EXE) $(LDFLAGS)
+	.$(SLASH)main.exe -h
 
-quantize: quantize.cpp ggml.o utils.o
-	$(CXX) $(CXXFLAGS) quantize.cpp ggml.o utils.o -o quantize $(LDFLAGS)
+quantize$(EXE): quantize.cpp ggml.$O utils.$O
+	$(CXX) $(CXXFLAGS) quantize.cpp $(START_LINK_FLAGS) ggml.$O utils.$O $(LINK_OUT)quantize$(EXE) $(LDFLAGS)
 
 #
 # Tests

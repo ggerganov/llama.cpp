@@ -453,7 +453,11 @@ size_t ggml_quantize_q4_0(float * src, void * dst, int n, int k, int qk, int64_t
 
     assert(k % qk == 0);
 
+#if _MSC_VER
+    uint8_t* pp = (uint8_t*)_alloca(qk / 2);
+#else
     uint8_t pp[qk/2];
+#endif
 
     char * pdst = (char *) dst;
 
@@ -507,7 +511,11 @@ size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t
 
     assert(k % qk == 0);
 
+#if _MSC_VER
+    uint8_t* pp = (uint8_t*)_alloca(qk / 2);
+#else
     uint8_t pp[qk/2];
+#endif
 
     char * pdst = (char *) dst;
 
