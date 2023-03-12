@@ -869,6 +869,7 @@ int main(int argc, char ** argv) {
         is_interacting = true;
     }
 
+    // set the color for the prompt which will be output initially
     if (params.use_color) {
         printf(ANSI_COLOR_YELLOW);
     }
@@ -890,7 +891,7 @@ int main(int argc, char ** argv) {
         embd.clear();
 
         if (embd_inp.size() <= input_consumed) {
-            // out of input, sample next token
+            // out of user input, sample next token
             const float top_k = params.top_k;
             const float top_p = params.top_p;
             const float temp  = params.temp;
@@ -920,7 +921,7 @@ int main(int argc, char ** argv) {
             // decrement remaining sampling budget
             --remaining_tokens;
         } else {
-            // if here, it means we are still processing the input prompt
+            // some user input remains from prompt or interaction, forward it to processing
             while (embd_inp.size() > input_consumed) {
                 embd.push_back(embd_inp[input_consumed]);
                 last_n_tokens.erase(last_n_tokens.begin());
@@ -930,16 +931,16 @@ int main(int argc, char ** argv) {
                     break;
                 }
             }
-
-            if (params.use_color && embd_inp.size() <= input_consumed) {
-                printf(ANSI_COLOR_RESET);
-            }
         }
 
         // display text
         if (!input_noecho) {
             for (auto id : embd) {
                 printf("%s", vocab.id_to_token[id].c_str());
+            }
+            // reset color to default if we there is no pending user input
+            if (params.use_color && embd_inp.size() <= input_consumed) {
+                printf(ANSI_COLOR_RESET);
             }
             fflush(stdout);
         }
