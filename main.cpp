@@ -19,6 +19,7 @@
 #define ANSI_COLOR_MAGENTA "\x1b[35m"
 #define ANSI_COLOR_CYAN    "\x1b[36m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
+#define ANSI_BOLD          "\x1b[1m"
 
 // determine number of model parts based on the dimension
 static const std::map<int, int> LLAMA_N_PARTS = {
@@ -808,7 +809,7 @@ int main(int argc, char ** argv) {
 
     params.n_predict = std::min(params.n_predict, model.hparams.n_ctx - (int) embd_inp.size());
 
-    // tokenzie the reverse prompt
+    // tokenize the reverse prompt
     std::vector<gpt_vocab::id> antiprompt_inp = ::llama_tokenize(vocab, params.antiprompt, false);
 
     printf("\n");
@@ -826,12 +827,15 @@ int main(int argc, char ** argv) {
         sigaction(SIGINT, &sigint_action, NULL);
 
         printf("%s: interactive mode on.\n", __func__);
-        printf("%s: reverse prompt: '%s'\n", __func__, params.antiprompt.c_str());
-        printf("%s: number of tokens in reverse prompt = %zu\n", __func__, antiprompt_inp.size());
-        for (int i = 0; i < (int) antiprompt_inp.size(); i++) {
-            printf("%6d -> '%s'\n", antiprompt_inp[i], vocab.id_to_token.at(antiprompt_inp[i]).c_str());
+
+        if(antiprompt_inp.size()) {
+            printf("%s: reverse prompt: '%s'\n", __func__, params.antiprompt.c_str());
+            printf("%s: number of tokens in reverse prompt = %zu\n", __func__, antiprompt_inp.size());
+            for (int i = 0; i < (int) antiprompt_inp.size(); i++) {
+                printf("%6d -> '%s'\n", antiprompt_inp[i], vocab.id_to_token.at(antiprompt_inp[i]).c_str());
+            }
+            printf("\n");
         }
-        printf("\n");
     }
     printf("sampling parameters: temp = %f, top_k = %d, top_p = %f, repeat_last_n = %i, repeat_penalty = %f\n", params.temp, params.top_k, params.top_p, params.repeat_last_n, params.repeat_penalty);
     printf("\n\n");
@@ -848,12 +852,25 @@ int main(int argc, char ** argv) {
 
 
     if (params.interactive) {
-        printf("== Running in interactive mode. Press Ctrl+C to interject at any time. ==\n");
+        printf("== Running in interactive mode. ==\n"
+               " - Press Ctrl+C to interject at any time.\n"
+               " - Press Return to return control to LLaMa.\n"
+               " - If you want to submit another line, end your input in '\\'.\n");
     }
 
     int remaining_tokens = params.n_predict;
     int input_consumed = 0;
     bool input_noecho = false;
+
+    // prompt user immediately after the starting prompt has been loaded
+    if (params.interactive_start) {
+        is_interacting = true;
+    }
+
+    if (params.use_color) {
+        printf(ANSI_COLOR_YELLOW);
+    }
+
     while (remaining_tokens > 0) {
         // predict
         if (embd.size() > 0) {
@@ -911,6 +928,10 @@ int main(int argc, char ** argv) {
                     break;
                 }
             }
+
+            if (params.use_color && embd_inp.size() <= input_consumed) {
+                printf(ANSI_COLOR_RESET);
+            }
         }
 
         // display text
@@ -925,7 +946,7 @@ int main(int argc, char ** argv) {
         // check if we should prompt the user for more
         if (params.interactive && embd_inp.size() <= input_consumed) {
             // check for reverse prompt
-            if (std::equal(antiprompt_inp.rbegin(), antiprompt_inp.rend(), last_n_tokens.rbegin())) {
+            if (antiprompt_inp.size() && std::equal(antiprompt_inp.rbegin(), antiprompt_inp.rend(), last_n_tokens.rbegin())) {
                 // reverse prompt found
                 is_interacting = true;
             }
@@ -935,9 +956,9 @@ int main(int argc, char ** argv) {
                 while (another_line) {
                     char buf[256] = {0};
                     size_t n_read;
-                    printf(ANSI_COLOR_YELLOW);
+                    if(params.use_color) printf(ANSI_BOLD ANSI_COLOR_GREEN);
                     scanf("%255[^\n]%n%*c", buf, &n_read);
-                    printf(ANSI_COLOR_RESET);
+                    if(params.use_color) printf(ANSI_COLOR_RESET);
 
                     if (n_read > 0 && buf[n_read-1]=='\\') {
                         another_line = true;
