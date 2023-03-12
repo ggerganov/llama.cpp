@@ -190,21 +190,20 @@ In this mode, you can always interrupt generation by pressing Ctrl+C and enter o
 
 Here is an example few-shot interaction, invoked with the command
 ```
-./main -m ./models/13B/ggml-model-q4_0.bin -t 8 --repeat_penalty 1.2 --temp 0.9 --top_p 0.9 -n 256 \
-                                           --color -i -r "User:" \
+./main -m ./models/13B/ggml-model-q4_0.bin -t 8 -n 256 --repeat_penalty 1.0 --color -i -r "User:" \
                                            -p \
 "Transcript of a dialog, where the User interacts with an Assistant named Bob. Bob is helpful, kind, honest, good at writing, and never fails to answer the User's requests immediately and with precision.
 
 User: Hello, Bob.
 Bob: Hello. How may I help you today?
 User: Please tell me the largest city in Europe.
-Bob: Sure. The largest city in Europe is London, the capital of the United Kingdom.
+Bob: Sure. The largest city in Europe is Moscow, the capital of Russia.
 User:"
+
 ```
 Note the use of `--color` to distinguish between user input and generated text.
 
-![image](https://user-images.githubusercontent.com/401380/224572787-d418782f-47b2-49c4-a04e-65bfa7ad4ec0.png)
-
+![image](https://user-images.githubusercontent.com/1991296/224575029-2af3c7dc-5a65-4f64-a6bb-517a532aea38.png)
 
 ## Limitations
 
