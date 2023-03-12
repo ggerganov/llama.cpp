@@ -1,5 +1,4 @@
 #include "utils.h"
-#define QK 32
 
 #include <cassert>
 #include <cstring>
@@ -454,7 +453,8 @@ size_t ggml_quantize_q4_0(float * src, void * dst, int n, int k, int qk, int64_t
 
     assert(k % qk == 0);
 
-    uint8_t pp[QK/2];
+    std::vector<uint8_t> pp;
+    pp.reserve(qk/2);
 
     char * pdst = (char *) dst;
 
@@ -493,7 +493,7 @@ size_t ggml_quantize_q4_0(float * src, void * dst, int n, int k, int qk, int64_t
                     pp[l/2] = vi0 | (vi1 << 4);
                 }
 
-                memcpy(pb, pp, sizeof(pp));
+                memcpy(pb, pp.data(), pp.size());
                 pb += bs;
             }
         }
@@ -508,7 +508,8 @@ size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t
 
     assert(k % qk == 0);
 
-    uint8_t pp[QK/2];
+    std::vector<uint8_t> pp;
+    pp.reserve(qk/2);
 
     char * pdst = (char *) dst;
 
@@ -552,7 +553,7 @@ size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t
                     pp[l/2] = vi0 | (vi1 << 4);
                 }
 
-                memcpy(pb + i*qk/2, pp, sizeof(pp));
+                memcpy(pb + i*qk/2, pp.data(), pp.size());
             }
         }
     }
