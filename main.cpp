@@ -976,6 +976,8 @@ int main(int argc, char ** argv) {
                     std::vector<gpt_vocab::id> line_inp = ::llama_tokenize(vocab, buf, false);
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
 
+                    remaining_tokens -= line_inp.size();
+
                     input_noecho = true; // do not echo this again
                 }
 
