@@ -10,7 +10,9 @@
 #include <map>
 #include <string>
 #include <vector>
+
 #include <signal.h>
+#include <unistd.h>
 
 #define ANSI_COLOR_RED     "\x1b[31m"
 #define ANSI_COLOR_GREEN   "\x1b[32m"
@@ -955,7 +957,7 @@ int main(int argc, char ** argv) {
                 bool another_line=true;
                 while (another_line) {
                     char buf[256] = {0};
-                    size_t n_read;
+                    int n_read;
                     if(params.use_color) printf(ANSI_BOLD ANSI_COLOR_GREEN);
                     scanf("%255[^\n]%n%*c", buf, &n_read);
                     if(params.use_color) printf(ANSI_COLOR_RESET);
