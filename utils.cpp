@@ -544,6 +544,9 @@ size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t
 
 void untokenize(sentencepiece::SentencePieceProcessor & sp, std::vector<gpt_vocab::id> & embd)
 {
+    // std::string output = sp.DecodeIds(embd);
+    // printf("%s", output.c_str());
+    // return;
             // Convert the IDs in embd to tokens using SentencePiece
     // std::vector<gpt_vocab::id> pieces;
     // for (const auto& id : embd) {
@@ -575,6 +578,7 @@ void untokenize(sentencepiece::SentencePieceProcessor & sp, std::vector<gpt_voca
     // sp.DecodeIds(pieces);
 
     //     printf("%s", text.c_str());
+    std::string buff;
         for (auto id : embd) {
             std::string s = sp.IdToPiece(id); //vocab.id_to_token[id];
             
@@ -589,16 +593,27 @@ void untokenize(sentencepiece::SentencePieceProcessor & sp, std::vector<gpt_voca
                 std::bitset<8> binary_value(decimal_value);
                 
                 char* bytes = reinterpret_cast<char*>(&decimal_value);
-                printf("%s", bytes);
+                buff = buff + std::string(bytes);
+                //printf("bufferring %s, total buffer: %s\n", s.c_str(), buff.c_str());
             }
             else if(s.find("▁") == 0)
             {
+                if(!buff.empty())
+                {
+                    printf("%s", buff.c_str());
+                    buff = "";
+                }
                 s = std::regex_replace(s, std::regex("▁"), " ");
                 //s.replace(0, 2, 1, ' ');
                 printf("%s", s.c_str());
             }
             else
             {
+                if(!buff.empty())
+                {
+                    printf("%s", buff.c_str());
+                    buff = "";
+                }
                 printf("%s", s.c_str());
             }
         }
