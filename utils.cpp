@@ -32,7 +32,11 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             std::copy(std::istreambuf_iterator<char>(file),
                     std::istreambuf_iterator<char>(),
                     back_inserter(params.prompt));
-                
+
+            std::string& p = params.prompt;
+            p.erase(std::find_if(p.rbegin(), p.rend(), [](unsigned char ch) {
+                return !std::isspace(ch);
+            }).base(), p.end());
         } else if (arg == "-n" || arg == "--n_predict") {
             params.n_predict = std::stoi(argv[++i]);
         } else if (arg == "--top_k") {
@@ -367,7 +371,7 @@ gpt_vocab::id llama_sample_top_p_top_k(
                     logits_id.push_back(std::make_pair(logits[i]*scale*repeat_penalty, i));
                 } else {
                     logits_id.push_back(std::make_pair(logits[i]*scale/repeat_penalty, i));
-                }                
+                }
             } else {
                 logits_id.push_back(std::make_pair(logits[i]*scale, i));
             }
