@@ -542,85 +542,38 @@ size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t
     return (n/k)*row_size;
 }
 
-void untokenize(sentencepiece::SentencePieceProcessor & sp, std::vector<gpt_vocab::id> & buffids, std::vector<gpt_vocab::id> & embd)
+void untokenize(sentencepiece::SentencePieceProcessor &sp, std::vector<gpt_vocab::id> &buffids, std::vector<gpt_vocab::id> &embd)
 {
-    // std::string output = sp.DecodeIds(embd);
-    // printf("%s", output.c_str());
-    // return;
-            // Convert the IDs in embd to tokens using SentencePiece
-    // std::vector<gpt_vocab::id> pieces;
-    // for (const auto& id : embd) {
-    //    //std::string s = sp.DecodeIds(id);
+    for (auto id : embd)
+    {
+        std::string s = sp.IdToPiece(id); // vocab.id_to_token[id];
 
-    //     //s = std::regex_replace(s, std::regex("▁"), " ");
-
-    //     // if (s.find("<0x") == 0 && s[s.length() - 1] == '>')
-    //     // {
-    //     //     s = sp.IdToPiece(id);
-    //     // }
-    //     //printf("%s", s.c_str());
-
-    //     pieces.push_back(id);
-    //     // if(s.length() > 1)
-    //     //     tokens.push_back(" ");
-    // }
-    // // Insert spaces between tokens
-    // // std::string text;
-    // // for (const auto& token : tokens) {
-    // //     // Add a space before the token if it is not the first token and it doesn't start with a special character
-    // //     if (!text.empty() && !(token[0] == '\0x25' && token[1] == '\0x81') && token[0] != ' ') {
-    // //         text += ' ';
-    // //     }
-    // //     text += sp.DecodePieces(tokens);
-    // // }
-    // //sp.DecodeIds(embd);
-    // std::string text =
-    // sp.DecodeIds(pieces);
-
-    //     printf("%s", text.c_str());
-    
-    std::string buff;
-        for (auto id : embd) {
-            std::string s = sp.IdToPiece(id); //vocab.id_to_token[id];
-             
-            if (s.find("<0x") == 0 && s[s.length() - 1] == '>')
-            {
-                buffids.push_back(id);
-                // Extract the hexadecimal value from the token
-                std::string hex_value = s.substr(s.find("0x"));
-
-                // Convert the hexadecimal value to binary and print it
-                int decimal_value;
-                std::stringstream(hex_value) >> std::hex >> decimal_value;
-                std::bitset<8> binary_value(decimal_value);
-                
-                char* bytes = reinterpret_cast<char*>(&decimal_value);
-                buff = buff + std::string(bytes);
-                //printf("bufferring %s, total buffer: %s\n", s.c_str(), buff.c_str());
-            }
-            else if(s.find("▁") == 0)
-            {
-                if(!buff.empty())
-                {
-                    std::string txt = sp.DecodeIds(buffids);
-                    printf("%s", txt.c_str());
-                    buffids.clear();
-                    buff = "";
-                }
-                s = std::regex_replace(s, std::regex("▁"), " ");
-                //s.replace(0, 2, 1, ' ');
-                printf("%s", s.c_str());
-            }
-            else
-            {
-                if(!buff.empty())
-                {
-                    std::string txt = sp.DecodeIds(buffids);
-                    printf("%s", txt.c_str());
-                    buffids.clear();
-                    buff = "";
-                }
-                printf("%s", s.c_str());
-            }
+        if (s.find("<0x") == 0 && s[s.length() - 1] == '>')
+        {
+            buffids.push_back(id);
+            std::string txt = sp.DecodeIds(buffids);
+            // printf("bufferring %s, total buffer: %s\n", s.c_str(), txt.c_str());
         }
+        else if (s.find("▁") == 0)
+        {
+            if (!buffids.empty())
+            {
+                std::string txt = sp.DecodeIds(buffids);
+                printf("%s", txt.c_str());
+                buffids.clear();
+            }
+            s = std::regex_replace(s, std::regex("▁"), " ");
+            printf("%s", s.c_str());
+        }
+        else
+        {
+            if (!buffids.empty())
+            {
+                std::string txt = sp.DecodeIds(buffids);
+                printf("%s", txt.c_str());
+                buffids.clear();
+            }
+            printf("%s", s.c_str());
+        }
+    }
 }

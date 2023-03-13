@@ -886,6 +886,7 @@ int main(int argc, char ** argv) {
         printf(ANSI_COLOR_YELLOW);
     }
 
+    // buffering UTF-8 tokens like <0xE6>,<0xAC><0xA2> spanning across multiple output to make it complete.
     std::vector<gpt_vocab::id> buffids = {};
     while (remaining_tokens > 0) {
         // predict
@@ -949,9 +950,7 @@ int main(int argc, char ** argv) {
         // display text
         if (!input_noecho) {
             untokenize(sp, buffids, embd);
-            // for (auto id : embd) {
-            //     printf("%s", vocab.id_to_token[id].c_str());
-            // }
+
             // reset color to default if we there is no pending user input
             if (params.use_color && embd_inp.size() <= input_consumed) {
                 printf(ANSI_COLOR_RESET);
