@@ -42,11 +42,7 @@ ARG_PARSER.add_argument("--output",
                         help="Model to write")
 ARGS = ARG_PARSER.parse_args()
 
-FTYPE_IDX = -1
-if ARGS.ftype == "f16":
-    FTYPE_IDX = 1
-elif ARGS.ftype == "f32":
-    FTYPE_IDX = 0
+FTYPE_IDX = {"f16": 1, "f32": 0}[ARGS.ftype]
 
 fname_hparams   = ARGS.model + "/params.json"
 fname_tokenizer = ARGS.model + "/../tokenizer.model"
