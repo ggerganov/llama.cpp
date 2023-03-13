@@ -51,6 +51,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.n_batch = std::stoi(argv[++i]);
         } else if (arg == "-m" || arg == "--model") {
             params.model = argv[++i];
+        } else if (arg == "--tokenizer") {
+            params.tokenizer = argv[++i];
         } else if (arg == "-i" || arg == "--interactive") {
             params.interactive = true;
         } else if (arg == "--interactive-start") {
@@ -98,6 +100,8 @@ void gpt_print_usage(int argc, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -b N, --batch_size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
     fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
+    fprintf(stderr, "  --tokenizer FNAME\n");
+    fprintf(stderr, "                        tokenizer path (default: %s)\n", params.model.c_str());
     fprintf(stderr, "\n");
 }
 
@@ -274,39 +278,11 @@ std::vector<gpt_vocab::id> gpt_tokenize(const gpt_vocab & vocab, const std::stri
     return tokens;
 }
 
-std::vector<gpt_vocab::id> llama_tokenize(const gpt_vocab & vocab, const std::string & text, bool bos) {
-    //auto res = gpt_tokenize(vocab, text);
-
-    //if (bos) {
-    //    res.insert(res.begin(), 1); // TODO: replace with vocab.bos
-    //}
-
+std::vector<gpt_vocab::id> llama_tokenize(sentencepiece::SentencePieceProcessor & sp, const gpt_vocab & vocab, const std::string & text, bool bos) {
     std::vector<gpt_vocab::id> res;
-
-    // if (bos) {
-    //     res.push_back(1); // TODO: replace with vocab.bos
-    // }
-
-    sentencepiece::SentencePieceProcessor sp;
-    sp.Load("./models/tokenizer.model");
 
     std::vector<std::string> pieces;
     return sp.EncodeAsIds(text);
-/*
-    for (const auto & piece : pieces) {
-        printf("piece: %s\n", piece.c_str());
-        if (vocab.token_to_id.count(piece) > 0) {
-            res.push_back(vocab.token_to_id.at(piece));
-        } else {
-            // handle unknown token
-        }
-    }
-
-    for (const auto& id : res) {
-        printf("%d\n", id);
-    }
-
-    return res;*/
 }
 
 bool gpt_vocab_init(const std::string & fname, gpt_vocab & vocab) {

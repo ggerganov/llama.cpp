@@ -776,13 +776,14 @@ int main(int argc, char ** argv) {
 
     gpt_params params;
     params.model = "models/llama-7B/ggml-model.bin";
-
-    sentencepiece::SentencePieceProcessor sp;
-    sp.Load("./models/tokenizer.model");
+    params.tokenizer = "models/tokenizer.model";
 
     if (gpt_params_parse(argc, argv, params) == false) {
         return 1;
     }
+
+    sentencepiece::SentencePieceProcessor sp;
+    sp.Load(params.tokenizer);
 
     if (params.seed < 0) {
         params.seed = time(NULL);
@@ -823,12 +824,12 @@ int main(int argc, char ** argv) {
     std::vector<float> logits;
 
     // tokenize the prompt
-    std::vector<gpt_vocab::id> embd_inp = ::llama_tokenize(vocab, params.prompt, true);
+    std::vector<gpt_vocab::id> embd_inp = ::llama_tokenize(sp, vocab, params.prompt, true);
 
     params.n_predict = std::min(params.n_predict, model.hparams.n_ctx - (int) embd_inp.size());
 
     // tokenize the reverse prompt
-    std::vector<gpt_vocab::id> antiprompt_inp = ::llama_tokenize(vocab, params.antiprompt, false);
+    std::vector<gpt_vocab::id> antiprompt_inp = ::llama_tokenize(sp, vocab, params.antiprompt, false);
 
     printf("\n");
     printf("%s: prompt: '%s'\n", __func__, params.prompt.c_str());
@@ -999,7 +1000,7 @@ int main(int argc, char ** argv) {
                         buf[n_read+1] = 0;
                     }
 
-                    std::vector<gpt_vocab::id> line_inp = ::llama_tokenize(vocab, buf, false);
+                    std::vector<gpt_vocab::id> line_inp = ::llama_tokenize(sp, vocab, buf, false);
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
 
                     remaining_tokens -= line_inp.size();

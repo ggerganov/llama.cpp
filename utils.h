@@ -29,6 +29,7 @@ struct gpt_params {
     int32_t n_batch = 8; // batch size for prompt processing
 
     std::string model = "models/lamma-7B/ggml-model.bin"; // model path
+    std::string tokenizer = "models/tokenizer.model";   // tokenizer path
     std::string prompt;
 
     bool use_color = false; // use color to distinguish generations and inputs
@@ -75,7 +76,7 @@ std::vector<gpt_vocab::id> gpt_tokenize(const gpt_vocab & vocab, const std::stri
 
 // TODO: this is probably wrong, but I cannot figure out how this tokenizer works ..
 // ref: https://github.com/google/sentencepiece
-std::vector<gpt_vocab::id> llama_tokenize(const gpt_vocab & vocab, const std::string & text, bool bos);
+std::vector<gpt_vocab::id> llama_tokenize(sentencepiece::SentencePieceProcessor & sp, const gpt_vocab & vocab, const std::string & text, bool bos);
 
 // load the tokens from encoder.json
 bool gpt_vocab_init(const std::string & fname, gpt_vocab & vocab);
