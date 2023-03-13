@@ -947,9 +947,10 @@ int main(int argc, char ** argv) {
 
         // display text
         if (!input_noecho) {
-            for (auto id : embd) {
-                printf("%s", vocab.id_to_token[id].c_str());
-            }
+            untokenize(sp, embd);
+            // for (auto id : embd) {
+            //     printf("%s", vocab.id_to_token[id].c_str());
+            // }
             // reset color to default if we there is no pending user input
             if (params.use_color && embd_inp.size() <= input_consumed) {
                 printf(ANSI_COLOR_RESET);

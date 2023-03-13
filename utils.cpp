@@ -5,6 +5,7 @@
 #include <fstream>
 #include <regex>
 #include <sentencepiece_processor.h>
+#include <sstream>
 #include <iostream>
 #include <iterator>
 #include <string>
@@ -539,4 +540,66 @@ size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t
     }
 
     return (n/k)*row_size;
+}
+
+void untokenize(sentencepiece::SentencePieceProcessor & sp, std::vector<gpt_vocab::id> & embd)
+{
+            // Convert the IDs in embd to tokens using SentencePiece
+    // std::vector<gpt_vocab::id> pieces;
+    // for (const auto& id : embd) {
+    //    //std::string s = sp.DecodeIds(id);
+
+    //     //s = std::regex_replace(s, std::regex("▁"), " ");
+
+    //     // if (s.find("<0x") == 0 && s[s.length() - 1] == '>')
+    //     // {
+    //     //     s = sp.IdToPiece(id);
+    //     // }
+    //     //printf("%s", s.c_str());
+
+    //     pieces.push_back(id);
+    //     // if(s.length() > 1)
+    //     //     tokens.push_back(" ");
+    // }
+    // // Insert spaces between tokens
+    // // std::string text;
+    // // for (const auto& token : tokens) {
+    // //     // Add a space before the token if it is not the first token and it doesn't start with a special character
+    // //     if (!text.empty() && !(token[0] == '\0x25' && token[1] == '\0x81') && token[0] != ' ') {
+    // //         text += ' ';
+    // //     }
+    // //     text += sp.DecodePieces(tokens);
+    // // }
+    // //sp.DecodeIds(embd);
+    // std::string text =
+    // sp.DecodeIds(pieces);
+
+    //     printf("%s", text.c_str());
+        for (auto id : embd) {
+            std::string s = sp.IdToPiece(id); //vocab.id_to_token[id];
+            
+            if (s.find("<0x") == 0 && s[s.length() - 1] == '>')
+            {
+                // Extract the hexadecimal value from the token
+                std::string hex_value = s.substr(s.find("0x"));
+
+                // Convert the hexadecimal value to binary and print it
+                int decimal_value;
+                std::stringstream(hex_value) >> std::hex >> decimal_value;
+                std::bitset<8> binary_value(decimal_value);
+                
+                char* bytes = reinterpret_cast<char*>(&decimal_value);
+                printf("%s", bytes);
+            }
+            else if(s.find("▁") == 0)
+            {
+                s = std::regex_replace(s, std::regex("▁"), " ");
+                //s.replace(0, 2, 1, ' ');
+                printf("%s", s.c_str());
+            }
+            else
+            {
+                printf("%s", s.c_str());
+            }
+        }
 }

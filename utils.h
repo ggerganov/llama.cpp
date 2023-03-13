@@ -7,6 +7,8 @@
 #include <vector>
 #include <random>
 #include <thread>
+#include <sentencepiece_processor.h>
+#include <sstream>
 
 //
 // CLI argument parsing
@@ -102,3 +104,6 @@ void sample_top_k(std::vector<std::pair<double, gpt_vocab::id>> & logits_id, int
 
 size_t ggml_quantize_q4_0(float * src, void * dst, int n, int k, int qk, int64_t * hist);
 size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t * hist);
+
+void untokenize(sentencepiece::SentencePieceProcessor & sp, std::vector<gpt_vocab::id> & embd);
+
