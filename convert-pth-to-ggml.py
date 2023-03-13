@@ -33,8 +33,8 @@ if len(sys.argv) < 3:
 # output in the same directory as the model
 dir_model = sys.argv[1]
 
-fname_hparams   = sys.argv[1] + "/params.json"
-fname_tokenizer = sys.argv[1] + "/../tokenizer.model"
+fname_hparams   = f"{dir_model}/params.json"
+fname_tokenizer = f"{dir_model}/../tokenizer.model"
 
 def get_n_parts(dim):
     mappings = {
@@ -59,9 +59,9 @@ ftype = 1
 if len(sys.argv) > 2:
     ftype = int(sys.argv[2])
     if ftype < 0 or ftype > 1:
-        print("Invalid ftype: " + str(ftype))
+        print(f"Invalid ftype: {ftype}")
         sys.exit(1)
-    fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".bin"
+    fname_out = f"{dir_model}/ggml-model-{ftype_str[ftype]}.bin"
 
 with open(fname_hparams, "r") as f:
     hparams = json.load(f)
@@ -73,16 +73,16 @@ hparams.update({"vocab_size": tokenizer.vocab_size()})
 n_parts = get_n_parts(hparams["dim"])
 
 print(hparams)
-print('n_parts = ', n_parts)
+print(f"n_parts = {n_parts}\n")
 
 for p in range(n_parts):
-    print('Processing part ', p)
+    print(f"Processing part {p}\n")
 
     #fname_model = sys.argv[1] + "/consolidated.00.pth"
-    fname_model = sys.argv[1] + "/consolidated.0" + str(p) + ".pth"
-    fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".bin"
+    fname_model = f"{dir_model}/consolidated.0{p}.pth"
+    fname_out = f"{dir_model}/ggml-model-{ftype_str[ftype]}.bin"
     if (p > 0):
-        fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".bin" + "." + str(p)
+        fname_out = f"{dir_model}/ggml-model-{ftype_str[ftype]}.bin.{p}"
 
     model = torch.load(fname_model, map_location="cpu")
 
@@ -111,7 +111,7 @@ for p in range(n_parts):
             # "<U+XX>" tokens (which may be invalid UTF-8)
             piece = tokenizer.id_to_piece(i)
             if len(piece) != 6:
-                print("Invalid token: " + piece)
+                print(f"Invalid token: {piece}")
                 sys.exit(1)
             byte_value = int(piece[3:-1], 16)
             fout.write(struct.pack("i", 1))
@@ -130,7 +130,7 @@ for p in range(n_parts):
         if name[-5:] == "freqs":
             continue
 
-        print("Processing variable: " + name + " with shape: ", shape, " and type: ", v.dtype)
+        print(f"Processing variable: {name} with shape: {data.shape} and type: {data.dtype}\n")
 
         #data = tf.train.load_variable(dir_model, name).squeeze()
         data = v.numpy().squeeze()
@@ -172,5 +172,4 @@ for p in range(n_parts):
 
     fout.close()
 
-    print("Done. Output file: " + fname_out + ", (part ", p, ")")
-    print("")
+    print(f"Done. Output file: {fname_out}, (part {p})\n")
