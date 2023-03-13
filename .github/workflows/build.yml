@@ -33,6 +33,20 @@ jobs:
         run: |
           make
 
+  windows-latest:
+    runs-on: windows-latest
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v1
+
+      - name: Build
+        run: |
+          mkdir build
+          cd build
+          cmake ..
+          cmake --build . --config Release
+
 #  ubuntu-latest-gcc:
 #    runs-on: ubuntu-latest
 #
