@@ -17,8 +17,10 @@
 #include <sstream>
 #include <regex>
 
+#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 #include <signal.h>
 #include <unistd.h>
+#endif
 
 #define ANSI_COLOR_RED     "\x1b[31m"
 #define ANSI_COLOR_GREEN   "\x1b[32m"
@@ -756,6 +758,7 @@ bool llama_eval(
 
 static bool is_interacting = false;
 
+#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 void sigint_handler(int signo) {
     if (signo == SIGINT) {
         if (!is_interacting) {
@@ -765,6 +768,7 @@ void sigint_handler(int signo) {
         }
     }
 }
+#endif
 
 int main(int argc, char ** argv) {
     ggml_time_init();
@@ -834,11 +838,13 @@ int main(int argc, char ** argv) {
     }
     printf("\n");
     if (params.interactive) {
+#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
         struct sigaction sigint_action;
         sigint_action.sa_handler = sigint_handler;
         sigemptyset (&sigint_action.sa_mask);
         sigint_action.sa_flags = 0; 
         sigaction(SIGINT, &sigint_action, NULL);
+#endif
 
         printf("%s: interactive mode on.\n", __func__);
 
@@ -867,7 +873,9 @@ int main(int argc, char ** argv) {
 
     if (params.interactive) {
         printf("== Running in interactive mode. ==\n"
+#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
                " - Press Ctrl+C to interject at any time.\n"
+#endif
                " - Press Return to return control to LLaMa.\n"
                " - If you want to submit another line, end your input in '\\'.\n");
     }
@@ -970,10 +978,15 @@ int main(int argc, char ** argv) {
                 // currently being interactive 
                 bool another_line=true;
                 while (another_line) {
+                    fflush(stdout);
                     char buf[256] = {0};
                     int n_read;
                     if(params.use_color) printf(ANSI_BOLD ANSI_COLOR_GREEN);
-                    scanf("%255[^\n]%n%*c", buf, &n_read);
+                    if (scanf("%255[^\n]%n%*c", buf, &n_read) <= 0) {
+                        // presumable empty line, consume the newline
+                        scanf("%*c");
+                        n_read=0;
+                    }
                     if(params.use_color) printf(ANSI_COLOR_RESET);
 
                     if (n_read > 0 && buf[n_read-1]=='\\') {
