@@ -73,11 +73,10 @@ struct llama_model {
 bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab & vocab, int n_ctx) {
     printf("%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
-    const size_t f_buf_size = 1024*1024;
-    std::vector<char> f_buf(f_buf_size);
+    std::vector<char> f_buf(1024*1024);
 
     auto fin = std::ifstream(fname, std::ios::binary);
-    fin.rdbuf()->pubsetbuf(f_buf.data(), f_buf_size);
+    fin.rdbuf()->pubsetbuf(f_buf.data(), f_buf.size());
     if (!fin) {
         fprintf(stderr, "%s: failed to open '%s'\n", __func__, fname.c_str());
         return false;
@@ -315,7 +314,7 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
         printf("%s: loading model part %d/%d from '%s'\n", __func__, i+1, n_parts, fname_part.c_str());
 
         fin = std::ifstream(fname_part, std::ios::binary);
-        fin.rdbuf()->pubsetbuf(f_buf.data(), f_buf_size);
+        fin.rdbuf()->pubsetbuf(f_buf.data(), f_buf.size());
         fin.seekg(file_offset);
 
         // load weights
