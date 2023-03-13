@@ -218,3 +218,18 @@ Note the use of `--color` to distinguish between user input and generated text.
   know how to utilize it properly. But in any case, you can even disable it with `LLAMA_NO_ACCELERATE=1 make` and the
   performance will be the same, since no BLAS calls are invoked by the current implementation
 
+### Contributing
+
+- There are 2 git branches: [master](https://github.com/ggerganov/llama.cpp/commits/master) and [dev](https://github.com/ggerganov/llama.cpp/commits/dev)
+- Contributors can open PRs to either one
+- Collaborators can push straight into `dev`, but need to open a PR to get stuff to `master`
+- Collaborators will be invited based on contributions
+- `dev` branch is considered unstable
+- `master` branch is considered stable and approved. 3-rd party projects should use the `master` branch
+
+General principles to follow when writing code:
+
+- Avoid adding third-party dependencies, extra files, extra headers, etc.
+- Always consider cross-compatibility with other operating systems and architectures
+- Avoid fancy looking modern STL constructs, use basic for loops, avoid templates, keep it simple
+- There are no strict rules for the code style, but try to follow the patterns in the code (indentation, spaces, etc.). Vertical alignment makes things more readable and easier to batch edit
