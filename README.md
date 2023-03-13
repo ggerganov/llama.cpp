@@ -145,7 +145,7 @@ python3 -m pip install torch numpy sentencepiece
 python3 convert-pth-to-ggml.py models/7B/ 1
 
 # quantize the model to 4-bits
-./quantize 7B
+./quantize.sh 7B
 
 # run the inference
 ./main -m ./models/7B/ggml-model-q4_0.bin -t 8 -n 128
