@@ -10,6 +10,12 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <sentencepiece_processor.h>
+#include <stdexcept>
+#include <iostream>
+#include <bitset>
+#include <sstream>
+#include <regex>
 
 #include <signal.h>
 #include <unistd.h>
@@ -82,7 +88,7 @@ struct llama_model {
 };
 
 // load the model's weights from a file
-bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab & vocab, int n_ctx) {
+bool llama_model_load(const std::string & fname, llama_model & model, sentencepiece::SentencePieceProcessor & sp, gpt_vocab & vocab, int n_ctx) {
     printf("%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
     auto fin = std::ifstream(fname, std::ios::binary);
@@ -144,6 +150,8 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
             return false;
         }
 
+        printf("total pieces: %d", sp.GetPieceSize());
+
         std::string word;
         for (int i = 0; i < n_vocab; i++) {
             uint32_t len;
@@ -152,8 +160,9 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
             word.resize(len);
             fin.read((char *) word.data(), len);
 
-            vocab.token_to_id[word] = i;
-            vocab.id_to_token[i] = word;
+            std::string wordx = sp.IdToPiece(i);
+            vocab.token_to_id[wordx] = i;
+            vocab.id_to_token[i] = wordx;
 
             //if (i < 30000) {
             //    printf("%s: vocab[%d] = '%s'\n", __func__, i, word.c_str());
@@ -764,6 +773,9 @@ int main(int argc, char ** argv) {
     gpt_params params;
     params.model = "models/llama-7B/ggml-model.bin";
 
+    sentencepiece::SentencePieceProcessor sp;
+    sp.Load("./models/tokenizer.model");
+
     if (gpt_params_parse(argc, argv, params) == false) {
         return 1;
     }
@@ -791,7 +803,7 @@ int main(int argc, char ** argv) {
     {
         const int64_t t_start_us = ggml_time_us();
 
-        if (!llama_model_load(params.model, model, vocab, 512)) {  // TODO: set context from user input ??
+        if (!llama_model_load(params.model, model, sp, vocab, 512)) {  // TODO: set context from user input ??
             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
             return 1;
         }

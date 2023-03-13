@@ -30,9 +30,9 @@ endif
 # Compile flags
 #
 
-CFLAGS   = -I.              -O3 -DNDEBUG -std=c11   -fPIC
-CXXFLAGS = -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC
-LDFLAGS  =
+CFLAGS   = -I.              -O3 -DNDEBUG -std=c11   -fPIC -g -I/opt/homebrew/include
+CXXFLAGS = -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC -g -I/opt/homebrew/include
+LDFLAGS  = -L/opt/homebrew/lib -lsentencepiece
 
 # OS specific
 # TODO: support Windows

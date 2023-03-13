@@ -4,6 +4,7 @@
 #include <cstring>
 #include <fstream>
 #include <regex>
+#include <sentencepiece_processor.h>
 #include <iostream>
 #include <iterator>
 #include <string>
@@ -281,33 +282,30 @@ std::vector<gpt_vocab::id> llama_tokenize(const gpt_vocab & vocab, const std::st
 
     std::vector<gpt_vocab::id> res;
 
-    if (bos) {
-        res.push_back(1); // TODO: replace with vocab.bos
+    // if (bos) {
+    //     res.push_back(1); // TODO: replace with vocab.bos
+    // }
+
+    sentencepiece::SentencePieceProcessor sp;
+    sp.Load("./models/tokenizer.model");
+
+    std::vector<std::string> pieces;
+    return sp.EncodeAsIds(text);
+/*
+    for (const auto & piece : pieces) {
+        printf("piece: %s\n", piece.c_str());
+        if (vocab.token_to_id.count(piece) > 0) {
+            res.push_back(vocab.token_to_id.at(piece));
+        } else {
+            // handle unknown token
+        }
     }
 
-     //find the longest token that matches the text
-    int pos = 0;
-    while (true) {
-        int l = 0;
-        int t = 0;
-        for (const auto & kv : vocab.id_to_token) {
-            if (kv.second.size() < l) continue;
-            if (kv.second.size() > text.size() - pos) continue;
-            if (text.substr(pos, kv.second.size()) == kv.second) {
-                l = kv.second.size();
-                t = kv.first;
-            }
-        }
-
-        if (l == 0) {
-            break;
-        }
-
-        res.push_back(t);
-        pos += l;
+    for (const auto& id : res) {
+        printf("%d\n", id);
     }
 
-    return res;
+    return res;*/
 }
 
 bool gpt_vocab_init(const std::string & fname, gpt_vocab & vocab) {
