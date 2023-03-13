@@ -11,11 +11,6 @@
 #include <string>
 #include <vector>
 #include <sentencepiece_processor.h>
-#include <stdexcept>
-#include <iostream>
-#include <bitset>
-#include <sstream>
-#include <regex>
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 #include <signal.h>

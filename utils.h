@@ -8,7 +8,6 @@
 #include <random>
 #include <thread>
 #include <sentencepiece_processor.h>
-#include <sstream>
 
 //
 // CLI argument parsing
