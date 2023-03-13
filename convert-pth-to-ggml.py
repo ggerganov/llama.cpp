@@ -23,7 +23,7 @@ import struct
 import numpy as np
 import torch
 
-from sentencepiece import SentencePieceProcessor
+import sentencepiece_model_pb2
 
 if len(sys.argv) < 3:
     print("Usage: convert-ckpt-to-ggml.py dir-model ftype\n")
@@ -68,9 +68,11 @@ if len(sys.argv) > 2:
 with open(fname_hparams, "r") as f:
     hparams = json.load(f)
 
-tokenizer = SentencePieceProcessor(fname_tokenizer)
+tokenizer = sentencepiece_model_pb2.ModelProto()
+with open(fname_tokenizer, "rb") as f:
+    tokenizer.ParseFromString(f.read())
 
-hparams.update({"vocab_size": tokenizer.vocab_size()})
+hparams.update({"vocab_size": len(tokenizer.pieces)})
 
 n_parts = get_n_parts(hparams["dim"])
 
@@ -100,13 +102,28 @@ for p in range(n_parts):
     fout.write(struct.pack("i", ftype))
 
     # Is this correct??
-    for i in range(32000):
-        # TODO: this is probably wrong - not sure how this tokenizer works
-        text = tokenizer.decode([29889, i]).encode('utf-8')
-        # remove the first byte (it's always '.')
-        text = text[1:]
-        fout.write(struct.pack("i", len(text)))
-        fout.write(text)
+    for token in tokenizer.pieces:
+        if token.type == 1:
+            # normal token. Uses U+2581 (LOWER ONE EIGHTH BLOCK) to represent spaces.
+            text = token.piece.replace("\u2581", " ").encode("utf-8")
+            fout.write(struct.pack("i", len(text)))
+            fout.write(text)
+        elif token.type == 2:
+            # "<unk>" token (translated as ??)
+            text = " \u2047 ".encode("utf-8")
+            fout.write(struct.pack("i", len(text)))
+            fout.write(text)
+        elif token.type == 3:
+            # "<s>"/"</s>" tokens
+            fout.write(struct.pack("i", 0))
+        elif token.type == 6:
+            # "<U+XX>" tokens (which may be invalid UTF-8)
+            if len(token.piece) != 6:
+                print("Invalid token: " + token.piece)
+                sys.exit(1)
+            byte_value = int(token.piece[3:-1], 16)
+            fout.write(struct.pack("i", 1))
+            fout.write(struct.pack("B", byte_value))
 
     for k, v in model.items():
         name = k
