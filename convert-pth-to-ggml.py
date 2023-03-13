@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # Convert a LLaMA model checkpoint to a ggml compatible file
 #
 # Load the model using Torch
