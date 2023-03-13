@@ -124,6 +124,8 @@ And here is another demo of running both LLaMA-7B and [whisper.cpp](https://gith
 
 https://user-images.githubusercontent.com/1991296/224442907-7693d4be-acaa-4e01-8b4f-add84093ffff.mp4
 
+If you have a M1 Max you can run LLAMA 60B and it will use approximately 41GB of RAM.
+
 ## Usage
 
 Here are the step for the LLaMA-7B model:
