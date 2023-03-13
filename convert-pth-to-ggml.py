@@ -22,20 +22,34 @@ import json
 import struct
 import numpy as np
 import torch
+import argparse
 
 from sentencepiece import SentencePieceProcessor
 
-if len(sys.argv) < 3:
-    print("Usage: convert-ckpt-to-ggml.py dir-model ftype\n")
-    print("  ftype == 0 -> float32")
-    print("  ftype == 1 -> float16")
-    sys.exit(1)
+ARG_PARSER = argparse.ArgumentParser()
+ARG_PARSER.add_argument("--model",
+                        type=str,
+                        required=True,
+                        help="Model to convert")
+ARG_PARSER.add_argument("--ftype",
+                        type=str,
+                        required=True,
+                        choices=["f16", "f32"],
+                        help="Either f16 or f32")
+ARG_PARSER.add_argument("--output",
+                        type=str,
+                        required=True,
+                        help="Model to write")
+ARGS = ARG_PARSER.parse_args()
 
-# output in the same directory as the model
-dir_model = sys.argv[1]
+FTYPE_IDX = -1
+if ARGS.ftype == "f16":
+    FTYPE_IDX = 1
+elif ARGS.ftype == "f32":
+    FTYPE_IDX = 0
 
-fname_hparams   = sys.argv[1] + "/params.json"
-fname_tokenizer = sys.argv[1] + "/../tokenizer.model"
+fname_hparams   = ARGS.model + "/params.json"
+fname_tokenizer = ARGS.model + "/../tokenizer.model"
 
 def get_n_parts(dim):
     if dim == 4096:
@@ -50,20 +64,7 @@ def get_n_parts(dim):
         print("Invalid dim: " + str(dim))
         sys.exit(1)
 
-# possible data types
-#   ftype == 0 -> float32
-#   ftype == 1 -> float16
-#
-# map from ftype to string
-ftype_str = ["f32", "f16"]
-
-ftype = 1
-if len(sys.argv) > 2:
-    ftype = int(sys.argv[2])
-    if ftype < 0 or ftype > 1:
-        print("Invalid ftype: " + str(ftype))
-        sys.exit(1)
-    fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".bin"
+fname_out = ARGS.output + "/ggml-model-" + ARGS.ftype + ".bin"
 
 with open(fname_hparams, "r") as f:
     hparams = json.load(f)
@@ -79,14 +80,14 @@ print('n_parts = ', n_parts)
 
 for p in range(n_parts):
     print('Processing part ', p)
+    fname_out = ARGS.output + "/ggml-model-" + ARGS.ftype + ".bin"
 
-    #fname_model = sys.argv[1] + "/consolidated.00.pth"
-    fname_model = sys.argv[1] + "/consolidated.0" + str(p) + ".pth"
-    fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".bin"
     if (p > 0):
-        fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".bin" + "." + str(p)
+        fname_out = ARGS.output + "/ggml-model-" + ARGS.ftype + ".bin" + "." + str(p)
 
-    model = torch.load(fname_model, map_location="cpu")
+    model = torch.load(
+        ARGS.model + "/consolidated.0" + str(p) + ".pth", map_location="cpu"
+    )
 
     fout = open(fname_out, "wb")
 
@@ -97,7 +98,7 @@ for p in range(n_parts):
     fout.write(struct.pack("i", hparams["n_heads"]))
     fout.write(struct.pack("i", hparams["n_layers"]))
     fout.write(struct.pack("i", hparams["dim"] // hparams["n_heads"])) # rot (obsolete)
-    fout.write(struct.pack("i", ftype))
+    fout.write(struct.pack("i", FTYPE_IDX))
 
     # Is this correct??
     for i in range(32000):
@@ -118,7 +119,7 @@ for p in range(n_parts):
 
         print("Processing variable: " + name + " with shape: ", shape, " and type: ", v.dtype)
 
-        #data = tf.train.load_variable(dir_model, name).squeeze()
+        #data = tf.train.load_variable(ARGS.output, name).squeeze()
         data = v.numpy().squeeze()
         n_dims = len(data.shape);
 
@@ -136,16 +137,13 @@ for p in range(n_parts):
 
         dshape = data.shape
 
-        # default type is fp16
-        ftype_cur = 1
-        if ftype == 0 or n_dims == 1:
+        if ARGS.ftype == "f32" or n_dims == 1:
             print("  Converting to float32")
             data = data.astype(np.float32)
-            ftype_cur = 0
 
         # header
         sname = name.encode('utf-8')
-        fout.write(struct.pack("iii", n_dims, len(sname), ftype_cur))
+        fout.write(struct.pack("iii", n_dims, len(sname), FTYPE_IDX))
         for i in range(n_dims):
             fout.write(struct.pack("i", dshape[n_dims - 1 - i]))
         fout.write(sname);

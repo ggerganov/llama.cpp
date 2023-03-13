@@ -142,7 +142,7 @@ ls ./models
 python3 -m pip install torch numpy sentencepiece
 
 # convert the 7B model to ggml FP16 format
-python3 convert-pth-to-ggml.py models/7B/ 1
+python3 convert-pth-to-ggml.py --model models/7B/ --ftype 'f16' --output out/
 
 # quantize the model to 4-bits
 ./quantize ./models/7B/ggml-model-f16.bin ./models/7B/ggml-model-q4_0.bin 2
