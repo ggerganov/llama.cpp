@@ -18,7 +18,7 @@
       {
         packages.default = pkgs.stdenv.mkDerivation {
           name = "llama.cpp";
-          buildInputs = [
+          buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [
             pkgs.darwin.apple_sdk.frameworks.Accelerate
           ];
           src = ./.;
