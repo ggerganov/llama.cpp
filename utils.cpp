@@ -542,7 +542,7 @@ size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t
     return (n/k)*row_size;
 }
 
-void untokenize(sentencepiece::SentencePieceProcessor & sp, std::vector<gpt_vocab::id> & embd)
+void untokenize(sentencepiece::SentencePieceProcessor & sp, std::vector<gpt_vocab::id> & buffids, std::vector<gpt_vocab::id> & embd)
 {
     // std::string output = sp.DecodeIds(embd);
     // printf("%s", output.c_str());
@@ -578,12 +578,14 @@ void untokenize(sentencepiece::SentencePieceProcessor & sp, std::vector<gpt_voca
     // sp.DecodeIds(pieces);
 
     //     printf("%s", text.c_str());
+    
     std::string buff;
         for (auto id : embd) {
             std::string s = sp.IdToPiece(id); //vocab.id_to_token[id];
-            
+             
             if (s.find("<0x") == 0 && s[s.length() - 1] == '>')
             {
+                buffids.push_back(id);
                 // Extract the hexadecimal value from the token
                 std::string hex_value = s.substr(s.find("0x"));
 
@@ -600,7 +602,9 @@ void untokenize(sentencepiece::SentencePieceProcessor & sp, std::vector<gpt_voca
             {
                 if(!buff.empty())
                 {
-                    printf("%s", buff.c_str());
+                    std::string txt = sp.DecodeIds(buffids);
+                    printf("%s", txt.c_str());
+                    buffids.clear();
                     buff = "";
                 }
                 s = std::regex_replace(s, std::regex("▁"), " ");
@@ -611,7 +615,9 @@ void untokenize(sentencepiece::SentencePieceProcessor & sp, std::vector<gpt_voca
             {
                 if(!buff.empty())
                 {
-                    printf("%s", buff.c_str());
+                    std::string txt = sp.DecodeIds(buffids);
+                    printf("%s", txt.c_str());
+                    buffids.clear();
                     buff = "";
                 }
                 printf("%s", s.c_str());

@@ -886,6 +886,7 @@ int main(int argc, char ** argv) {
         printf(ANSI_COLOR_YELLOW);
     }
 
+    std::vector<gpt_vocab::id> buffids = {};
     while (remaining_tokens > 0) {
         // predict
         if (embd.size() > 0) {
@@ -947,7 +948,7 @@ int main(int argc, char ** argv) {
 
         // display text
         if (!input_noecho) {
-            untokenize(sp, embd);
+            untokenize(sp, buffids, embd);
             // for (auto id : embd) {
             //     printf("%s", vocab.id_to_token[id].c_str());
             // }
