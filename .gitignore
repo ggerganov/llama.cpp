@@ -15,9 +15,12 @@ build-sanitize-addr/
 build-sanitize-thread/
 
 models/*
+*.bin*
 
 /main
 /quantize
 
 arm_neon.h
 compile_commands.json
+.venv
+__pycache__
