@@ -145,43 +145,15 @@ python3 -m pip install torch numpy sentencepiece
 python3 convert-pth-to-ggml.py models/7B/ 1
 
 # quantize the model to 4-bits
-./quantize ./models/7B/ggml-model-f16.bin ./models/7B/ggml-model-q4_0.bin 2
+./quantize 7B
 
 # run the inference
 ./main -m ./models/7B/ggml-model-q4_0.bin -t 8 -n 128
 ```
 
-For the bigger models, there are a few extra quantization steps. For example, for LLaMA-13B, converting to FP16 format
-will create 2 ggml files, instead of one:
-
-```bash
-ggml-model-f16.bin
-ggml-model-f16.bin.1
-```
-
-You need to quantize each of them separately like this:
-
-```bash
-./quantize ./models/13B/ggml-model-f16.bin   ./models/13B/ggml-model-q4_0.bin 2
-./quantize ./models/13B/ggml-model-f16.bin.1 ./models/13B/ggml-model-q4_0.bin.1 2
-```
-
-Everything else is the same. Simply run:
-
-```bash
-./main -m ./models/13B/ggml-model-q4_0.bin -t 8 -n 128
-```
-
-The number of files generated for each model is as follows:
-
-```
-7B  -> 1 file
-13B -> 2 files
-30B -> 4 files
-65B -> 8 files
-```
-
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
+
+TODO: add model disk/mem requirements
 
 ### Interactive mode
 
