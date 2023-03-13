@@ -3,8 +3,27 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <memory>
 
 #include "utils.h"
+#include "ggml.h"
+
+#ifdef LLAMA_SHARED
+#    ifdef _WIN32
+#        ifdef LLAMA_BUILD
+#            define LLAMA_API __declspec(dllexport)
+#        else
+#            define LLAMA_API __declspec(dllimport)
+#        endif
+#    else
+#        define LLAMA_API __attribute__ ((visibility ("default")))
+#    endif
+#else
+#    define LLAMA_API
+#endif
+
+
+
 
 // default hparams (LLaMA 7B)
 struct llama_hparams {
@@ -18,50 +37,28 @@ struct llama_hparams {
     int32_t f16     = 1;
 };
 
-struct llama_layer {
-    // normalization
-    struct ggml_tensor * attention_norm;
+struct llama_context;
 
-    // attention
-    struct ggml_tensor * wq;
-    struct ggml_tensor * wk;
-    struct ggml_tensor * wv;
-    struct ggml_tensor * wo;
+void llama_free_context(llama_context* ctx);
 
-    // normalization
-    struct ggml_tensor * ffn_norm;
+const std::vector<gpt_vocab::id>& llama_context_get_embd(const llama_context& ctx);
+gpt_vocab& llama_context_get_vocab(llama_context& ctx);
+bool llama_context_not_finished(const llama_context& ctx);
+const std::vector<gpt_vocab::id> llama_tokenize_text(const llama_context& ctx, const std::string& text);
 
-    // ff
-    struct ggml_tensor * w1;
-    struct ggml_tensor * w2;
-    struct ggml_tensor * w3;
-};
+const std::vector<gpt_vocab::id>& llama_context_get_last_n_tokens(const llama_context& ctx);
+bool llama_init_context_with_prompt(llama_context& ctx, const std::string& text, bool clear_existing = true);
 
-struct llama_model {
-    llama_hparams hparams;
+// Various functions for loading a ggml LLaMA model.
+llama_context* llama_init_from_params(const gpt_params& params);
 
-    struct ggml_tensor * tok_embeddings;
+// Run inference on a LLaMA model using llama_context.
+std::vector<float> llama_eval(llama_context& ctx, const gpt_params& params, std::string& text);
 
-    struct ggml_tensor * norm;
-    struct ggml_tensor * output;
-
-    std::vector<llama_layer> layers;
-
-    // key + value memory
-    struct ggml_tensor * memory_k;
-    struct ggml_tensor * memory_v;
-
-    //
-    struct ggml_context * ctx;
-    std::map<std::string, struct ggml_tensor *> tensors;
-};
-
-bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab & vocab, int n_ctx);
-bool llama_eval(
-        const llama_model & model,
-        const int n_threads,
-        const int n_past,
-        const std::vector<gpt_vocab::id> & embd_inp,
-              std::vector<float>         & embd_w,
-              size_t                     & mem_per_token);
 bool llama_model_quantize(const std::string & fname_inp, const std::string & fname_out, int itype);
+
+bool llama_injest_input(llama_context& ctx, const std::string& text, bool clear_existing = true);
+
+bool llama_inference(llama_context& ctx, gpt_vocab::id& model_output);
+void llama_print_context_info(const llama_context& ctx);
+void llama_print_end_stats(const llama_context& ctx);
