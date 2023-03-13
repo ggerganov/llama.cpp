@@ -11,7 +11,7 @@
 
  #if defined(_MSC_VER) || defined(__MINGW32__)
  #include <malloc.h> // using malloc.h with MSC/MINGW
- #elif !defined(__FreeBSD__)
+ #elif !defined(__FreeBSD__) && !defined(__NetBSD__)
  #include <alloca.h>
  #endif
 
