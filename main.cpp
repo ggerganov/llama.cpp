@@ -931,16 +931,17 @@ int main(int argc, char ** argv) {
                     break;
                 }
             }
+
+            // reset color to default if we there is no pending user input
+            if (!input_noecho && params.use_color && embd_inp.size() == input_consumed) {
+                printf(ANSI_COLOR_RESET);
+            }
         }
 
         // display text
         if (!input_noecho) {
             for (auto id : embd) {
                 printf("%s", vocab.id_to_token[id].c_str());
-            }
-            // reset color to default if we there is no pending user input
-            if (params.use_color && embd_inp.size() <= input_consumed) {
-                printf(ANSI_COLOR_RESET);
             }
             fflush(stdout);
         }
