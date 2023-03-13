@@ -198,8 +198,8 @@ main: main.cpp ggml.o utils.o llama.o
 	$(CXX) $(CXXFLAGS) main.cpp ggml.o llama.o utils.o -o main $(LDFLAGS)
 	./main -h
 
-quantize: quantize.cpp ggml.o utils.o
-	$(CXX) $(CXXFLAGS) quantize.cpp ggml.o utils.o -o quantize $(LDFLAGS)
+quantize: quantize.cpp ggml.o utils.o llama.o
+	$(CXX) $(CXXFLAGS) quantize.cpp ggml.o llama.o utils.o -o quantize $(LDFLAGS)
 
 #
 # Tests

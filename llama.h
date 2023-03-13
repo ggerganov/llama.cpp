@@ -64,3 +64,4 @@ bool llama_eval(
         const std::vector<gpt_vocab::id> & embd_inp,
               std::vector<float>         & embd_w,
               size_t                     & mem_per_token);
+bool llama_model_quantize(const std::string & fname_inp, const std::string & fname_out, int itype);
