@@ -3,6 +3,7 @@
 .cache/
 .vs/
 .vscode/
+.direnv/
 .DS_Store
 
 build/
@@ -18,6 +19,7 @@ models/*
 
 /main
 /quantize
+/result
 
 arm_neon.h
 compile_commands.json
