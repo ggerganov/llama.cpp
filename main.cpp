@@ -961,15 +961,15 @@ int main(int argc, char ** argv) {
             --remaining_tokens;
         } else {
             // some user input remains from prompt or interaction, forward it to processing
-            while (embd_inp.size() > input_consumed) {
-                embd.push_back(embd_inp[input_consumed]);
-                last_n_tokens.erase(last_n_tokens.begin());
-                last_n_tokens.push_back(embd_inp[input_consumed]);
-                ++input_consumed;
-                if (embd.size() > params.n_batch) {
-                    break;
-                }
-            }
+            // Copy at most n_batch elements from embd_inp to embd
+            size_t num_copied = std::min((size_t) params.n_batch, embd_inp.size() - input_consumed);
+            std::copy(embd_inp.begin() + input_consumed, embd_inp.begin() + input_consumed + num_copied, std::back_inserter(embd));
+            input_consumed += num_copied;
+ 
+            // Copy the last `last_n_size` elements copied into embd to last_n_tokens
+            size_t num_copied_last_n = std::min(num_copied, (size_t) last_n_size);
+            last_n_tokens.erase(last_n_tokens.begin(), last_n_tokens.begin()+num_copied_last_n);
+            last_n_tokens.insert(last_n_tokens.end(), embd.end() - num_copied_last_n, embd.end());
 
             // reset color to default if we there is no pending user input
             if (!input_noecho && params.use_color && embd_inp.size() == input_consumed) {
