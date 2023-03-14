@@ -3,7 +3,6 @@
 .cache/
 .vs/
 .vscode/
-.direnv/
 .DS_Store
 
 build/
@@ -23,3 +22,6 @@ models/*
 
 arm_neon.h
 compile_commands.json
+
+.envrc
+.direnv/
