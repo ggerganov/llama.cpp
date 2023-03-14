@@ -1595,7 +1595,77 @@ inline static void ggml_vec_dot_q4_1(const int n, float * restrict s, const void
 
     float sumf = 0.0;
 
-#if 1
+#if defined(__AVX2__)
+#if QK == 32
+    // Initialize accumulator with zeros
+    __m256 acc = _mm256_setzero_ps();
+    // Accumulator for constant offsets
+    float acc_offset = 0.0f;
+
+    // Main loop
+    for (int i = 0; i < nb; ++i) {
+        const float * m0 = (const float *) (pm0 + i);
+        const float * m1 = (const float *) (pm1 + i);
+
+        const float * d0 = (const float *) (pd0 + i);
+        const float * d1 = (const float *) (pd1 + i);
+
+        const uint8_t * restrict p0 = pb0 + i*QK/2;
+        const uint8_t * restrict p1 = pb1 + i*QK/2;
+
+        // Compute combined scale for the block
+        const __m256 scale_01 = _mm256_mul_ps( _mm256_broadcast_ss( d0 ), _mm256_broadcast_ss( d1 ) );
+
+        // Compute cross scales for the block
+        const __m256 scale_0 = _mm256_mul_ps( _mm256_broadcast_ss( d0 ), _mm256_broadcast_ss( m1 ) );
+        const __m256 scale_1 = _mm256_mul_ps( _mm256_broadcast_ss( m0 ), _mm256_broadcast_ss( d1 ) );
+
+        // Load 16 bytes, and unpack 4 bit fields into bytes, making 32 bytes
+        __m256i bx = bytesFromNibbles( p0 );
+        __m256i by = bytesFromNibbles( p1 );
+
+        // Now we have a vector with bytes in [ 0 .. 15 ] interval.
+
+        // Sign-extend first 16 signed bytes into int16_t
+        __m256i x16 = _mm256_cvtepi8_epi16( _mm256_castsi256_si128( bx ) );
+        __m256i y16 = _mm256_cvtepi8_epi16( _mm256_castsi256_si128( by ) );
+        // Compute products of int16_t integers, add pairwise
+        __m256i i32 = _mm256_madd_epi16( x16, y16 );
+
+        // Sign-extend last 16 signed bytes into int16_t vectors
+        __m256i x16_h = _mm256_cvtepi8_epi16( _mm256_extracti128_si256( bx, 1 ) );
+        __m256i y16_h = _mm256_cvtepi8_epi16( _mm256_extracti128_si256( by, 1 ) );
+        // Accumulate products of int16_t integers
+        i32 = _mm256_add_epi32( i32, _mm256_madd_epi16( x16_h, y16_h ) );
+
+        // compute sums of unsigned bytes in bx, by in blocks of 8.
+        // This results in a layout like S100 0000 S200 0000 S300 0000 S400 0000,
+        // so if we then cast to 8 singles, we get 8 floats like [ s0_7, 0.0, s8_15, 0.0, s16_23, 0.0, s24_31, 0.0 ]
+        __m256 xsum = _mm256_cvtepi32_ps( _mm256_sad_epu8( bx, _mm256_setzero_si256() ) );
+        __m256 ysum = _mm256_cvtepi32_ps( _mm256_sad_epu8( by, _mm256_setzero_si256() ) );
+
+        // Convert int32_t to float
+        __m256 p = _mm256_cvtepi32_ps( i32 );
+        // Apply the scale, and accumulate
+        // acc += d0*d1*x*y + d0*m1*x + d1*m0*y
+        acc = _mm256_fmadd_ps( scale_01, p, acc );
+        acc = _mm256_fmadd_ps( scale_0, xsum, acc );
+        acc = _mm256_fmadd_ps( scale_1, ysum, acc );
+        // acc_offset += m0*m1 (for each entry in the block)
+        acc_offset += (*m0)*(*m1)*QK;
+    }
+
+    // Return horizontal sum of the acc vector
+    __m128 res = _mm256_extractf128_ps( acc, 1 );
+    res = _mm_add_ps( res, _mm256_castps256_ps128( acc ) );
+    res = _mm_add_ps( res, _mm_movehl_ps( res, res ) );
+    res = _mm_add_ss( res, _mm_movehdup_ps( res ) );
+
+    sumf = _mm_cvtss_f32( res ) + acc_offset;
+#else
+#error "not implemented for QK"
+#endif
+#else
     // scalar
     for (int i = 0; i < nb; i++) {
         const float m0 = pm0[i];
