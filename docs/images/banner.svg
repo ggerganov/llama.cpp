@@ -31,7 +31,7 @@
      units="px"
      inkscape:zoom="0.77771465"
      inkscape:cx="225.66117"
-     inkscape:cy="560.61693"
+     inkscape:cy="354.88595"
      inkscape:window-width="1920"
      inkscape:window-height="1043"
      inkscape:window-x="2560"
@@ -164,21 +164,21 @@
        inkscape:export-ydpi="96"><tspan
          x="245.97461"
          y="190.29198"
-         id="tspan927"><tspan
+         id="tspan19162"><tspan
            style="font-family:'Verlag Compressed';-inkscape-font-specification:'Verlag Compressed';fill:#ffffff"
-           id="tspan925">LLaMA C++</tspan></tspan></text>
+           id="tspan19160">LLaMA C++</tspan></tspan></text>
     <text
        xml:space="preserve"
-       transform="matrix(0.26458333,0,0,0.26458333,-0.64482195,1.8247772)"
+       transform="matrix(0.26458333,0,0,0.26458333,-0.88718361,0.19347361)"
        id="text178188"
-       style="font-style:normal;font-weight:normal;font-size:24px;line-height:1.25;font-family:sans-serif;white-space:pre;shape-inside:url(#rect178190);fill:#000000;fill-opacity:1;stroke:none"
+       style="font-style:normal;font-weight:normal;font-size:33.3333px;line-height:1.25;font-family:sans-serif;white-space:pre;shape-inside:url(#rect178190);fill:#000000;fill-opacity:1;stroke:none"
        inkscape:export-filename="/home/leszek/Desktop/llama/banner.png"
        inkscape:export-xdpi="96"
        inkscape:export-ydpi="96"><tspan
          x="256.31641"
-         y="209.7207"
-         id="tspan931"><tspan
+         y="217.97849"
+         id="tspan19166"><tspan
            style="fill:#ffffff"
-           id="tspan929">Inference of Facebook's LLaMA model in pure C/C++</tspan></tspan></text>
+           id="tspan19164">It really whips the llama's ass!</tspan></tspan></text>
   </g>
 </svg>
