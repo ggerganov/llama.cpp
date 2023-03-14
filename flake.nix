@@ -13,7 +13,7 @@
         pkgs = import nixpkgs {
           inherit system;
         };
-        llama-python = with pkgs; python310.withPackages (ps: with python310Packages; [
+        llama-python = pkgs.python310.withPackages (ps: with ps; [
           torch
           numpy
           sentencepiece
