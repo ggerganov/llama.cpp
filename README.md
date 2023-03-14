@@ -177,6 +177,23 @@ Note the use of `--color` to distinguish between user input and generated text.
 
 ![image](https://user-images.githubusercontent.com/1991296/224575029-2af3c7dc-5a65-4f64-a6bb-517a532aea38.png)
 
+### Android
+
+You can easily run `llama.cpp` on Android device with [termux](https://play.google.com/store/apps/details?id=com.termux).
+First, obtain the [Android NDK](https://developer.android.com/ndk) and then build with CMake:
+```
+$ mkdir build-android
+$ cd build-android
+$ export NDK=<your_ndk_directory>
+$ cmake -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-23 -DCMAKE_C_FLAGS=-march=armv8.4a+dotprod ..
+$ make
+```
+Install [termux](https://play.google.com/store/apps/details?id=com.termux) on your device and run `termux-setup-storage` to get access to your SD card.
+Finally, copy the `llama` binary and the model files to your device storage. Here is a demo of an interactive session running on Pixel 5 phone:
+
+https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b050-55b0b3b9274c.mp4
+
+
 ## Limitations
 
 - We don't know yet how much the quantization affects the quality of the generated text
