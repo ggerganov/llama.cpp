@@ -14,6 +14,9 @@
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 #include <signal.h>
 #include <unistd.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #endif
 
 #define ANSI_COLOR_RED     "\x1b[31m"
@@ -83,11 +86,130 @@ struct llama_model {
     std::map<std::string, struct ggml_tensor *> tensors;
 };
 
+
+#define USE_MMAP 1
+
+#ifndef USE_MMAP
+#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
+#define USE_MMAP 1
+#else
+#define USE_MMAP 0
+#endif
+#endif
+
+#if USE_MMAP
+// since std::istrstream is deprecated, reimplement it.
+struct membuf : std::streambuf {
+    membuf(char const* base, size_t size) {
+        char* gptr(const_cast<char*>(base));
+        this->setg(gptr, gptr, gptr + size);
+    }
+};
+struct llama_istream: virtual membuf, std::istream {
+    size_t mapped_size;
+
+    llama_istream(const std::string & fname, std::ios::openmode mode = std::ios::binary) :
+        llama_istream(mmap_file(fname)) {}
+
+    llama_istream(std::tuple<char const*, size_t, size_t> t) :
+        llama_istream(std::get<0>(t), std::get<1>(t), std::get<2>(t)) {}
+
+    llama_istream(char const* base, size_t size, size_t mapped_size) :
+        membuf(base, size),
+        std::istream(static_cast<std::streambuf*>(this)),
+        mapped_size(mapped_size) {
+            if (base == errcontent)
+                setstate(std::ios::failbit);
+    }
+
+    std::char_traits<char>::pos_type seekoff(
+                     std::char_traits<char>::off_type off,
+                     std::ios_base::seekdir dir,
+                     std::ios_base::openmode which = std::ios_base::in) override {
+        if (dir == std::ios_base::cur)
+            gbump(off);
+        else if (dir == std::ios_base::end)
+            setg(eback(), egptr() + off, egptr());
+        else if (dir == std::ios_base::beg)
+            setg(eback(), eback() + off, egptr());
+        return gptr() - eback();
+    }
+
+    std::char_traits<char>::pos_type seekpos(
+                     std::char_traits<char>::pos_type sp,
+                     std::ios_base::openmode which = std::ios_base::binary) override {
+        return seekoff(sp - std::char_traits<char>::pos_type(std::char_traits<char>::off_type(0)), std::ios_base::beg, which);
+    }
+
+    void close() {
+        char* gptr = const_cast<char*>(this->gptr());
+        if (gptr == errcontent) {
+            fprintf(stderr, "Closing an invalid llama_istream.\n");
+            return;
+        }
+        munmap(gptr, mapped_size);
+    }
+  private:
+    constexpr static char const* errcontent = "";
+
+    static std::tuple<char const*, size_t, size_t> mmap_file(const std::string & fname) {
+        static long pagesize;
+        if (!pagesize)
+            pagesize = sysconf(_SC_PAGESIZE);
+        if (pagesize == -1 || pagesize == 0) {
+            fprintf(stderr, "%s: could not get the OS page size.\n", __func__);
+            return {errcontent, 1, 0};
+        }
+
+        int fd = open(fname.c_str(), O_RDONLY);
+        if (fd == -1) {
+            fprintf(stderr, "%s: failed to open() '%s'\n", __func__, fname.c_str());
+            return {errcontent, 1, 0};
+        }
+
+        struct stat st;
+        if (fstat(fd, &st) == -1) {
+            fprintf(stderr, "%s: failed to stat '%s'\n", __func__, fname.c_str());
+            return {errcontent, 1, 0};
+        }
+
+        size_t file_size = st.st_size;
+        size_t map_size = (file_size + pagesize - 1) & -pagesize;
+        int prot = PROT_READ;
+        int map = MAP_SHARED;
+        char* file_contents = (char*)mmap(NULL, map_size, prot, map, fd, 0);
+        if (!file_contents || file_contents == MAP_FAILED) {
+            fprintf(stderr, "%s: failed to mmap '%s'\n", __func__, fname.c_str());
+            return {errcontent, 1, 0};
+        }
+
+#if 1
+        int advice = MADV_SEQUENTIAL | MADV_WILLNEED;
+        #if defined(MADV_HUGEPAGE)
+        advice |= MADV_HUGEPAGE;
+        #endif
+        if (madvise(file_contents, map_size, advice) == -1) {
+            fprintf(stderr, "%s: failed to madvise '%s'\n", __func__, fname.c_str());
+            return {errcontent, 1, 0};
+        }
+#endif
+
+        ::close(fd);
+
+        return std::make_tuple(file_contents, file_size, map_size);
+    }
+
+};
+#else
+using llama_istream = std::ifstream;
+#endif
+
+
 // load the model's weights from a file
 bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab & vocab, int n_ctx) {
     printf("%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
-    auto fin = std::ifstream(fname, std::ios::binary);
+    llama_istream fin{fname};
     if (!fin) {
         fprintf(stderr, "%s: failed to open '%s'\n", __func__, fname.c_str());
         return false;
@@ -324,7 +446,7 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
 
         printf("%s: loading model part %d/%d from '%s'\n", __func__, i+1, n_parts, fname_part.c_str());
 
-        fin = std::ifstream(fname_part, std::ios::binary);
+        llama_istream fin{fname_part};
         fin.seekg(file_offset);
 
         // load weights
@@ -830,7 +952,7 @@ int main(int argc, char ** argv) {
         struct sigaction sigint_action;
         sigint_action.sa_handler = sigint_handler;
         sigemptyset (&sigint_action.sa_mask);
-        sigint_action.sa_flags = 0; 
+        sigint_action.sa_flags = 0;
         sigaction(SIGINT, &sigint_action, NULL);
 #endif
 
@@ -963,7 +1085,7 @@ int main(int argc, char ** argv) {
                 is_interacting = true;
             }
             if (is_interacting) {
-                // currently being interactive 
+                // currently being interactive
                 bool another_line=true;
                 while (another_line) {
                     fflush(stdout);
@@ -995,7 +1117,7 @@ int main(int argc, char ** argv) {
                     input_noecho = true; // do not echo this again
                 }
 
-                is_interacting = false;            
+                is_interacting = false;
             }
         }
 
