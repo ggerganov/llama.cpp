@@ -10,12 +10,6 @@ RUN pip install --upgrade pip setuptools wheel \
 
 WORKDIR /app
 
-COPY . .
+COPY ./convert-pth-to-ggml.py .
 
-RUN make
-
-FROM ubuntu:$UBUNTU_VERSION as runtime
-
-COPY --from=build /app/main /main
-
-ENTRYPOINT [ "/main" ]
+ENTRYPOINT ["python3", "convert-pth-to-ggml.py"]
