@@ -18,21 +18,26 @@
       {
         packages.default = pkgs.stdenv.mkDerivation {
           name = "llama.cpp";
+          src = ./.;
+          nativeBuildInputs = with pkgs; [ cmake ];
           buildInputs = with pkgs; lib.optionals stdenv.isDarwin [
             darwin.apple_sdk.frameworks.Accelerate
           ];
-          src = ./.;
+          cmakeFlags = with pkgs; lib.optionals (system == "aarch64-darwin") [
+            "-DCMAKE_C_FLAGS=-D__ARM_FEATURE_DOTPROD=1"
+          ];
           installPhase = ''
             mkdir -p $out/bin
-            mv main $out/bin/llama-cpp
-            mv quantize $out/bin/llama-cpp-quantize
+            mv llama $out/bin/llama
+            mv quantize $out/bin/quantize
             echo "#!${llama-python}/bin/python" > $out/bin/convert-pth-to-ggml
-            cat convert-pth-to-ggml.py >> $out/bin/convert-pth-to-ggml
+            cat ${./convert-pth-to-ggml.py} >> $out/bin/convert-pth-to-ggml
             chmod +x $out/bin/convert-pth-to-ggml
           '';
         };
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
+            cmake
             llama-python
           ] ++ lib.optionals stdenv.isDarwin [
             darwin.apple_sdk.frameworks.Accelerate
