@@ -10,6 +10,8 @@ RUN pip install --upgrade pip setuptools wheel \
 
 WORKDIR /app
 
-COPY ./convert-pth-to-ggml.py .
+COPY . .
 
-ENTRYPOINT ["python3", "convert-pth-to-ggml.py"]
+RUN make
+
+ENTRYPOINT ["/app/.devops/tools.sh"]
