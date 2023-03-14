@@ -843,8 +843,10 @@ int main(int argc, char ** argv) {
 
     // tokenize the prompt
     std::vector<gpt_vocab::id> embd_inp = ::llama_tokenize(vocab, params.prompt, true);
-
-    params.n_predict = std::min(params.n_predict, model.hparams.n_ctx - (int) embd_inp.size());
+    if (embd_inp.size() + params.n_predict > model.hparams.n_ctx) {
+        int offset = embd_inp.size() - model.hparams.n_ctx + params.n_predict;
+        embd_inp = std::vector<gpt_vocab::id>(embd_inp.begin() + offset, embd_inp.end());
+    }
 
     // tokenize the reverse prompt
     std::vector<gpt_vocab::id> antiprompt_inp = ::llama_tokenize(vocab, params.antiprompt, false);
