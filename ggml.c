@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "ggml.h"
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
