@@ -14,6 +14,8 @@
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 #include <signal.h>
 #include <unistd.h>
+#elif defined (_WIN32)
+#include <signal.h>
 #endif
 
 #define ANSI_COLOR_RED     "\x1b[31m"
@@ -755,7 +757,7 @@ bool llama_eval(
 
 static bool is_interacting = false;
 
-#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
+#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
 void sigint_handler(int signo) {
     printf(ANSI_COLOR_RESET);
     if (signo == SIGINT) {
@@ -865,6 +867,8 @@ int main(int argc, char ** argv) {
         sigemptyset (&sigint_action.sa_mask);
         sigint_action.sa_flags = 0;
         sigaction(SIGINT, &sigint_action, NULL);
+#elif defined (_WIN32)
+        signal(SIGINT, sigint_handler);
 #endif
 
         fprintf(stderr, "%s: interactive mode on.\n", __func__);
@@ -894,7 +898,7 @@ int main(int argc, char ** argv) {
 
     if (params.interactive) {
         fprintf(stderr, "== Running in interactive mode. ==\n"
-#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
+#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
                " - Press Ctrl+C to interject at any time.\n"
 #endif
                " - Press Return to return control to LLaMa.\n"
@@ -1039,6 +1043,9 @@ int main(int argc, char ** argv) {
         }
     }
 
+#if defined (_WIN32)
+    signal(SIGINT, SIG_DFL);
+#endif
 
     // report timing
     {
