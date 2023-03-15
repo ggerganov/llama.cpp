@@ -153,7 +153,7 @@ def process_part(p):
     fout.write(struct.pack("i", ftype))
 
     # Is this correct??
-    for i in range(32000):
+    for i in range(tokenizer.vocab_size()):
         if tokenizer.is_unknown(i):
             # "<unk>" token (translated as ??)
             text = " \u2047 ".encode("utf-8")
