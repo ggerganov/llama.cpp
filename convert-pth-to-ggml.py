@@ -184,12 +184,15 @@ def process_part(p):
     def writer():
         while True:
             item = q.get()
+            if item is None:
+                q.task_done()
+                break
             fout.write(item.getvalue())
             q.task_done()
 
     threading.Thread(target=writer, daemon=True).start()
 
-    for k, v in (t := tqdm(model.items())):
+    for k, v in (t := tqdm(model.items(), bar_format="{r_bar} {percentage:3.0f}% |{bar:50} | {desc}")):
         t.set_description(f"Processing {k} with shape {tuple(v.shape)} and type {np.dtype(v.dtype)}")
         name = k
         shape = v.shape
@@ -235,6 +238,7 @@ def process_part(p):
         memout.write(data.tobytes())
         q.put(memout)
 
+    q.put(None)
     q.join()
 
     model = None
