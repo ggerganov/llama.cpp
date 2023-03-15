@@ -84,6 +84,50 @@ print(f'Model params.json: {hparams}')
 print(f'Parts to process: {n_parts}')
 
 
+def load_model(fname):
+    class Tensor():
+        def __init__(self, shape, dtype, loadinfo):
+            self.shape = shape
+            self.dtype = dtype
+            self.loadinfo = loadinfo
+
+        def numpy(self):
+            myzip, base_name, storage_offset, k, shape, dtype = self.loadinfo
+            with myzip.open(f'{base_name}/data/{k}') as myfile:
+                bytes_size = np.dtype(self.dtype).itemsize
+                myfile.seek(storage_offset * bytes_size, 1)
+                ret = np.empty(shape, dtype=dtype)
+                myfile.readinto(ret.data)
+                return ret
+
+    def my_unpickle(datapkl, myzip, base_name):
+        def my_rebuild_tensor(storage, storage_offset, size, stride, requires_grad, backward_hooks, metadata=None):
+            storage_type = storage[1]
+            obj_key = storage[2]
+            return Tensor(shape=size, dtype=storage_type, loadinfo=(
+                myzip, base_name, storage_offset,
+                obj_key, size, storage_type
+            ))
+
+        class MyUnpickler(pickle.Unpickler):
+            def find_class(self, *p):
+                if p == ('torch', 'HalfStorage'): return np.float16
+                if p == ('torch', 'FloatStorage'): return np.float32
+                if p == ('torch._utils', '_rebuild_tensor_v2'): return my_rebuild_tensor
+                if p == ('collections', 'OrderedDict'): return dict
+                raise ValueError(f'Unrecognized pickle {p}')
+
+            def persistent_load(self, pid):
+                return pid
+
+        return MyUnpickler(datapkl).load()
+
+    myzip =  zipfile.ZipFile(fname, 'r')
+    base_name = myzip.namelist()[0].split('/', 1)[0]
+    with myzip.open(f'{base_name}/data.pkl') as myfile:
+        model = my_unpickle(myfile, myzip, base_name)
+    return model
+
 def get_fname(p):
     fname = "/consolidated.0" + str(p) + ".pth"
     return fname
@@ -132,51 +176,6 @@ def process_part(p):
             text = tokenizer.id_to_piece(i).replace("\u2581", " ").encode("utf-8")
             fout.write(struct.pack("i", len(text)))
             fout.write(text)
-
-
-    def load_model(fname):
-        class Tensor():
-            def __init__(self, shape, dtype, loadinfo):
-                self.shape = shape
-                self.dtype = dtype
-                self.loadinfo = loadinfo
-
-            def numpy(self):
-                myzip, base_name, storage_offset, k, shape, dtype = self.loadinfo
-                with myzip.open(f'{base_name}/data/{k}') as myfile:
-                    bytes_size = np.dtype(self.dtype).itemsize
-                    myfile.seek(storage_offset * bytes_size, 1)
-                    ret = np.empty(shape, dtype=dtype)
-                    myfile.readinto(ret.data)
-                    return ret
-
-        def my_unpickle(datapkl, myzip, base_name):
-            def my_rebuild_tensor(storage, storage_offset, size, stride, requires_grad, backward_hooks, metadata=None):
-                storage_type = storage[1]
-                obj_key = storage[2]
-                return Tensor(shape=size, dtype=storage_type, loadinfo=(
-                    myzip, base_name, storage_offset,
-                    obj_key, size, storage_type
-                ))
-
-            class MyUnpickler(pickle.Unpickler):
-                def find_class(self, *p):
-                    if p == ('torch', 'HalfStorage'): return np.float16
-                    if p == ('torch', 'FloatStorage'): return np.float32
-                    if p == ('torch._utils', '_rebuild_tensor_v2'): return my_rebuild_tensor
-                    if p == ('collections', 'OrderedDict'): return dict
-                    raise ValueError(f'Unrecognized pickle {p}')
-
-                def persistent_load(self, pid):
-                    return pid
-
-            return MyUnpickler(datapkl).load()
-
-        myzip =  zipfile.ZipFile(fname, 'r')
-        base_name = myzip.namelist()[0].split('/', 1)[0]
-        with myzip.open(f'{base_name}/data.pkl') as myfile:
-            model = my_unpickle(myfile, myzip, base_name)
-        return model
 
     model = load_model(fname_model)
 
@@ -234,7 +233,6 @@ def process_part(p):
 
         # data
         memout.write(data.tobytes())
-        # data.tofile(memout)
         q.put(memout)
 
     q.join()
