@@ -124,6 +124,10 @@ And here is another demo of running both LLaMA-7B and [whisper.cpp](https://gith
 
 https://user-images.githubusercontent.com/1991296/224442907-7693d4be-acaa-4e01-8b4f-add84093ffff.mp4
 
+## Downloading Model Files
+
+You can obtain the model files using this BitTorrent link: [magnet:?xt=urn:btih:ZXXDAUWYLRUXXBHUYEMS6Q5CE5WA3LVA&dn=LLaMA](magnet:?xt=urn:btih:ZXXDAUWYLRUXXBHUYEMS6Q5CE5WA3LVA&dn=LLaMA)
+
 ## Usage
 
 Here are the step for the LLaMA-7B model:
