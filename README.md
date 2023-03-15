@@ -144,7 +144,7 @@ python3 -m pip install torch numpy sentencepiece
 # torch: pip3 install torch -f https://download.pytorch.org/whl/torch_stable.html
 # sentencepiece
 # 1.) https://github.com/google/sentencepiece/actions - Select the lastest passing build and download the artifact file (At the bottom)
-# 2.) Copy \wheelhouse\sentencepiece-{Latest}-cp310-cp310-{YourOS_Architecture}.whl to your local folder
+# 2.) Copy \wheelhouse\sentencepiece-{Latest}-cp{PythonVersion}-cp{PythonVersion}-{YourOS_Architecture}.whl to your local folder
 # 3.) pip3 install .\sentencepiece-from-above.whl
 
 # convert the 7B model to ggml FP16 format
