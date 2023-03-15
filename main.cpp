@@ -1052,5 +1052,7 @@ int main(int argc, char ** argv) {
 
     ggml_free(model.ctx);
 
+    if(params.use_color) printf(ANSI_COLOR_RESET);
+
     return 0;
 }
