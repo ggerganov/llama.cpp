@@ -38,8 +38,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         } else if (arg == "--top_k") {
             params.top_k = std::stoi(argv[++i]);
         } else if (arg == "-c" || arg == "--ctx_size") {
-	    params.n_ctx = std::stoi(argv[++i]);
-	} else if (arg == "--top_p") {
+            params.n_ctx = std::stoi(argv[++i]);
+        } else if (arg == "--top_p") {
             params.top_p = std::stof(argv[++i]);
         } else if (arg == "--temp") {
             params.temp = std::stof(argv[++i]);
