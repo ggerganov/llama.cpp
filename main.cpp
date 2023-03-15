@@ -150,7 +150,7 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
         }
 
         std::string word;
-        for (int i = 0; i < n_vocab; i++) {
+        for (register int i = 0; i < n_vocab; i++) {
             uint32_t len;
             fin.read((char *) &len, sizeof(len));
 
@@ -316,7 +316,7 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
 
     std::vector<uint8_t> tmp;
 
-    for (int i = 0; i < n_parts; ++i) {
+    for (register int i = 0; i < n_parts; ++i) {
         const int part_id = i;
         //const int part_id = n_parts - i - 1;
 
@@ -755,11 +755,11 @@ static bool is_interacting = false;
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 void sigint_handler(int signo) {
-    if (signo == SIGINT) {
-        if (!is_interacting) {
+    if (!(signo == SIGINT)) {
+        _exit(130);
+       } else {
+             if (!is_interacting) {
             is_interacting=true;
-        } else {
-            _exit(130);
         }
     }
 }
@@ -929,8 +929,17 @@ int main(int argc, char ** argv) {
         n_past += embd.size();
         embd.clear();
 
-        if (embd_inp.size() <= input_consumed) {
-            // out of user input, sample next token
+        if (!(embd_inp.size() <= input_consumed)) {
+           // some user input remains from prompt or interaction, forward it to processing
+            while (embd_inp.size() > input_consumed) {
+                embd.push_back(embd_inp[input_consumed]);
+                last_n_tokens.erase(last_n_tokens.begin());
+                last_n_tokens.push_back(embd_inp[input_consumed]);
+                ++input_consumed;
+                if (embd.size() > params.n_batch) {
+                    break;
+        } else {
+             // out of user input, sample next token
             const float top_k = params.top_k;
             const float top_p = params.top_p;
             const float temp  = params.temp;
@@ -959,15 +968,6 @@ int main(int argc, char ** argv) {
 
             // decrement remaining sampling budget
             --remaining_tokens;
-        } else {
-            // some user input remains from prompt or interaction, forward it to processing
-            while (embd_inp.size() > input_consumed) {
-                embd.push_back(embd_inp[input_consumed]);
-                last_n_tokens.erase(last_n_tokens.begin());
-                last_n_tokens.push_back(embd_inp[input_consumed]);
-                ++input_consumed;
-                if (embd.size() > params.n_batch) {
-                    break;
                 }
             }
 
