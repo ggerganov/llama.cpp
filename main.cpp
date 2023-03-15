@@ -588,7 +588,7 @@ bool llama_eval(
 
         // norm
         {
-            cur = ggml_norm(ctx0, inpL);
+            cur = ggml_rms_norm(ctx0, inpL);
 
             // cur = attention_norm*cur
             cur = ggml_mul(ctx0,
@@ -678,7 +678,7 @@ bool llama_eval(
         {
             // norm
             {
-                cur = ggml_norm(ctx0, inpFF);
+                cur = ggml_rms_norm(ctx0, inpFF);
 
                 // cur = ffn_norm*cur
                 cur = ggml_mul(ctx0,
@@ -713,7 +713,7 @@ bool llama_eval(
 
     // norm
     {
-        inpL = ggml_norm(ctx0, inpL);
+        inpL = ggml_rms_norm(ctx0, inpL);
 
         // inpL = norm*inpL
         inpL = ggml_mul(ctx0,
