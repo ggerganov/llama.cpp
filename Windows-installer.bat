@@ -1,5 +1,5 @@
 @echo off
-::Install Llama.cpp depencidies, such as Python and CMake (for building llama.exe and quantize.exe)
+::Install Llama.cpp dependencies, such as Python and CMake (for future building of llama.exe and quantize.exe)
 
 if not defined PYTHON (set PYTHON=python)
 if not defined VENV_DIR (set "VENV_DIR=%~dp0%venv")
@@ -19,21 +19,25 @@ goto :create_venv
 :create_venv
 :: Check if venv already exists
 dir "%VENV_DIR%\Scripts\Python.exe" -V
-if %ERRORLEVEL% == 0 goto :ititiate_venv
+if %ERRORLEVEL% == 0 goto :initiate_venv
 
 :: Otherwise create new venv
 echo Creating venv in %VENV_DIR%
 %PYTHON% -m venv "%VENV_DIR%"
-if %ERRORLEVEL% == 0 goto :ititiate_venv
+if %ERRORLEVEL% == 0 goto :initiate_venv
 echo Unable to create venv in "%VENV_DIR%"
 pause
+exit
 
-:ititiate_venv
+:: Activate venv
+:initiate_venv
 set PYTHON="%VENV_DIR%\Scripts\Python.exe"
 echo venv %PYTHON%
-goto :install_depencidies
+goto :install_dependencies
 
-:install_depencidies
+:install_dependencies
 %PYTHON% -m pip install cmake torch numpy sentencepiece %*
-echo Llama depencidies are now installed!
+echo Llama.cpp dependencies are now installed!
+echo Put your LLaMA models into the models folder, and run model_conversion to convert and quantize them.
 pause
+exit
