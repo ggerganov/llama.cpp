@@ -1684,11 +1684,11 @@ inline static void ggml_vec_dot_q4_1(const int n, float * restrict s, const void
 #else
     // scalar
     for (int i = 0; i < nb; i++) {
-        const float * m0 = (const float *) (pm0 + i*bs);
-        const float * m1 = (const float *) (pm1 + i*bs);
+        const float m0 = *(const float *) (pm0 + i*bs);
+        const float m1 = *(const float *) (pm1 + i*bs);
 
-        const float * d0 = (const float *) (pd0 + i*bs);
-        const float * d1 = (const float *) (pd1 + i*bs);
+        const float d0 = *(const float *) (pd0 + i*bs);
+        const float d1 = *(const float *) (pd1 + i*bs);
 
         const uint8_t * restrict p0 = pb0 + i*bs;
         const uint8_t * restrict p1 = pb1 + i*bs;
