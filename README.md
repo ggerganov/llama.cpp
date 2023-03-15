@@ -139,7 +139,7 @@ ls ./models
 65B 30B 13B 7B tokenizer_checklist.chk tokenizer.model
 
 # install Python dependencies
-python3 -m pip install torch numpy sentencepiece
+python3 -m pip install tqdm numpy sentencepiece
 
 # convert the 7B model to ggml FP16 format
 python3 convert-pth-to-ggml.py models/7B/ 1
