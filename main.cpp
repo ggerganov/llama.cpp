@@ -547,6 +547,8 @@ bool llama_eval(
 
     const int d_key = n_embd/n_head;
 
+     // TODO: check if this size scales with n_ctx linearly and remove constant. somehow I feel it wasn't the case
+    // static size_t buf_size = hparams.n_ctx*1024*1024;
     static size_t buf_size = 512u*1024*1024;
     static void * buf = malloc(buf_size);
 
@@ -819,8 +821,7 @@ int main(int argc, char ** argv) {
     // load the model
     {
         const int64_t t_start_us = ggml_time_us();
-
-        if (!llama_model_load(params.model, model, vocab, 512)) {  // TODO: set context from user input ??
+        if (!llama_model_load(params.model, model, vocab, params.n_ctx)) {  
             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
             return 1;
         }
