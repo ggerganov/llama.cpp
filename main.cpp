@@ -218,7 +218,7 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
         ctx_size += n_ctx*n_layer*n_embd*ggml_type_sizef(GGML_TYPE_F32); // memory_k
         ctx_size += n_ctx*n_layer*n_embd*ggml_type_sizef(GGML_TYPE_F32); // memory_v
 
-        ctx_size += (5 + 10*n_layer)*256; // object overhead
+        ctx_size += (5 + 10*n_layer)*hparams.n_ctx; // object overhead
 
         fprintf(stderr, "%s: ggml ctx size = %6.2f MB\n", __func__, ctx_size/(1024.0*1024.0));
     }
@@ -547,7 +547,7 @@ bool llama_eval(
 
     const int d_key = n_embd/n_head;
 
-    static size_t buf_size = 512u*1024*1024;
+    static size_t buf_size = hparams.n_ctx*1024*1024;
     static void * buf = malloc(buf_size);
 
     if (mem_per_token > 0 && mem_per_token*N > buf_size) {
