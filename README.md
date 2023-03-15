@@ -199,7 +199,7 @@ https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b0
 - We don't know yet how much the quantization affects the quality of the generated text
 - Probably the token sampling can be improved
 - The Accelerate framework is actually currently unused since I found that for tensor shapes typical for the Decoder,
-  there is no benefit compared to the ARM_NEON intrinsics implementation. Of course, it's possible that I simlpy don't
+  there is no benefit compared to the ARM_NEON intrinsics implementation. Of course, it's possible that I simply don't
   know how to utilize it properly. But in any case, you can even disable it with `LLAMA_NO_ACCELERATE=1 make` and the
   performance will be the same, since no BLAS calls are invoked by the current implementation
 
