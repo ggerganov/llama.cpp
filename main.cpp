@@ -755,6 +755,7 @@ static bool is_interacting = false;
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 void sigint_handler(int signo) {
+    printf(ANSI_COLOR_RESET);
     if (signo == SIGINT) {
         if (!is_interacting) {
             is_interacting=true;
@@ -1051,6 +1052,10 @@ int main(int argc, char ** argv) {
     }
 
     ggml_free(model.ctx);
+
+    if (params.use_color) {
+        printf(ANSI_COLOR_RESET);
+    }
 
     return 0;
 }
