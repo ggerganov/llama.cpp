@@ -9314,6 +9314,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                         node->n_tasks = n_threads;
                     } break;
                 case GGML_OP_NORM:
+                case GGML_OP_RMS_NORM:
                     {
                         node->n_tasks = n_threads;
                     } break;
