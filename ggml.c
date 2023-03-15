@@ -364,7 +364,7 @@ static const size_t CACHE_LINE_SIZE_F32 = CACHE_LINE_SIZE/sizeof(float);
 #if __AVX2__
 // Unpack 32 4-bit fields into 32 bytes
 // The output vector contains 32 bytes, each one in [ 0 .. 15 ] interval
-inline __m256i bytesFromNibbles( const uint8_t* rsi )
+static inline __m256i bytesFromNibbles( const uint8_t* rsi )
 {
     // Load 16 bytes from memory
     __m128i tmp = _mm_loadu_si128( ( const __m128i* )rsi );
@@ -381,7 +381,7 @@ inline __m256i bytesFromNibbles( const uint8_t* rsi )
     return bytes;
 }
 
-inline __m128i packNibbles( __m256i bytes )
+static inline __m128i packNibbles( __m256i bytes )
 {
     // Move bits within 16-bit lanes from 0000_abcd_0000_efgh into 0000_0000_abcd_efgh
     const __m256i lowByte = _mm256_set1_epi16( 0xFF );
