@@ -15,6 +15,17 @@
 // TODO: move somewhere else
 #define QK 32
 
+// Define std::make_unique if it's not available
+// (e.g. on C++11)
+#ifndef __cpp_lib_make_unique
+template<typename T, typename... Args>
+std::unique_ptr<T> make_unique(Args&&... args) {
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+}
+#else
+using std::make_unique;
+#endif
+
 // determine number of model parts based on the dimension
 static const std::map<int, int> LLAMA_N_PARTS = {
     { 4096, 1 },
@@ -106,7 +117,7 @@ struct llama_context
         model(std::move(model)),
         vocab(std::move(vocab)),
         params(params),
-        state(std::make_unique<llama_state>())
+        state(make_unique<llama_state>())
     {
     }
     ~llama_context(){
