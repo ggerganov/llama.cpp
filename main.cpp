@@ -89,19 +89,23 @@ struct llama_model {
 bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab & vocab, int n_ctx) {
     fprintf(stderr, "%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
-    std::vector<char> f_buf(1024*1024);
 
-    auto fin = std::ifstream(fname, std::ios::binary);
-    fin.rdbuf()->pubsetbuf(f_buf.data(), f_buf.size());
+    FILE *fin = fopen(fname.data(), "rb");
+
     if (!fin) {
         fprintf(stderr, "%s: failed to open '%s'\n", __func__, fname.c_str());
         return false;
     }
 
+    // Having a large buffer helps to accelerate load considerably (old buffer was 1024 * 1024).
+    // Though I am not sure if it's okay for edge devices like Raspberry Pi.
+    std::vector<char> f_buf(128 * 1024 * 1024);
+    setvbuf(fin, f_buf.data(), _IOFBF, f_buf.size());
+
     // verify magic
     {
         uint32_t magic;
-        fin.read((char *) &magic, sizeof(magic));
+        fread((char *) &magic, 1, sizeof(magic), fin);
         if (magic != 0x67676d6c) {
             fprintf(stderr, "%s: invalid model file '%s' (bad magic)\n", __func__, fname.c_str());
             return false;
@@ -115,14 +119,14 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
     {
         auto & hparams = model.hparams;
 
-        fin.read((char *) &hparams.n_vocab, sizeof(hparams.n_vocab));
+        fread((char *) &hparams.n_vocab, 1, sizeof(hparams.n_vocab), fin);
         //fin.read((char *) &hparams.n_ctx,   sizeof(hparams.n_ctx));
-        fin.read((char *) &hparams.n_embd,  sizeof(hparams.n_embd));
-        fin.read((char *) &hparams.n_mult,  sizeof(hparams.n_mult));
-        fin.read((char *) &hparams.n_head,  sizeof(hparams.n_head));
-        fin.read((char *) &hparams.n_layer, sizeof(hparams.n_layer));
-        fin.read((char *) &hparams.n_rot,   sizeof(hparams.n_rot));
-        fin.read((char *) &hparams.f16,     sizeof(hparams.f16));
+        fread((char *) &hparams.n_embd,  1, sizeof(hparams.n_embd), fin);
+        fread((char *) &hparams.n_mult,  1, sizeof(hparams.n_mult), fin);
+        fread((char *) &hparams.n_head,  1, sizeof(hparams.n_head), fin);
+        fread((char *) &hparams.n_layer, 1, sizeof(hparams.n_layer), fin);
+        fread((char *) &hparams.n_rot,   1, sizeof(hparams.n_rot), fin);
+        fread((char *) &hparams.f16,     1, sizeof(hparams.f16), fin);
 
         hparams.n_ctx = n_ctx;
 
@@ -154,10 +158,10 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
         std::string word;
         for (int i = 0; i < n_vocab; i++) {
             uint32_t len;
-            fin.read((char *) &len, sizeof(len));
+            fread((char *) &len, 1, sizeof(len), fin);
 
             word.resize(len);
-            fin.read((char *) word.data(), len);
+            fread((char *) word.data(), 1, len, fin);
 
             vocab.token_to_id[word] = i;
             vocab.id_to_token[i] = word;
@@ -312,9 +316,9 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
         fprintf(stderr, "%s: memory_size = %8.2f MB, n_mem = %d\n", __func__, memory_size/1024.0/1024.0, n_mem);
     }
 
-    const size_t file_offset = fin.tellg();
+    const size_t file_offset = ftell(fin);
 
-    fin.close();
+    fclose(fin);
 
     std::vector<uint8_t> tmp;
 
@@ -329,10 +333,9 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
 
         fprintf(stderr, "%s: loading model part %d/%d from '%s'\n", __func__, i+1, n_parts, fname_part.c_str());
 
-        fin = std::ifstream(fname_part, std::ios::binary);
-        fin.rdbuf()->pubsetbuf(f_buf.data(), f_buf.size());
-        fin.seekg(file_offset);
-
+        fin = fopen(fname_part.data(), "rb");
+        setvbuf(fin, f_buf.data(), _IOFBF, f_buf.size());
+        fseek(fin, file_offset, SEEK_CUR);
         // load weights
         {
             int n_tensors = 0;
@@ -345,23 +348,24 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
                 int32_t length;
                 int32_t ftype;
 
-                fin.read(reinterpret_cast<char *>(&n_dims), sizeof(n_dims));
-                fin.read(reinterpret_cast<char *>(&length), sizeof(length));
-                fin.read(reinterpret_cast<char *>(&ftype),  sizeof(ftype));
+                fread(reinterpret_cast<char *>(&n_dims), 1, sizeof(n_dims), fin);
+                fread(reinterpret_cast<char *>(&length), 1, sizeof(length), fin);
+                fread(reinterpret_cast<char *>(&ftype),  1, sizeof(ftype), fin);
 
-                if (fin.eof()) {
+                
+                if (feof(fin)) {
                     break;
                 }
 
                 int32_t nelements = 1;
                 int32_t ne[2] = { 1, 1 };
                 for (int i = 0; i < n_dims; ++i) {
-                    fin.read(reinterpret_cast<char *>(&ne[i]), sizeof(ne[i]));
+                    fread(reinterpret_cast<char *>(&ne[i]), 1, sizeof(ne[i]), fin);
                     nelements *= ne[i];
                 }
 
                 std::string name(length, 0);
-                fin.read(&name[0], length);
+                fread(&name[0], 1, length, fin);
 
                 if (model.tensors.find(name.data()) == model.tensors.end()) {
                     fprintf(stderr, "%s: unknown tensor '%s' in model file\n", __func__, name.data());
@@ -463,9 +467,9 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
                     }
 
                     if (part_id == 0) {
-                        fin.read(reinterpret_cast<char *>(tensor->data), ggml_nbytes(tensor));
+                        fread(reinterpret_cast<char *>(tensor->data), 1, ggml_nbytes(tensor), fin);
                     } else {
-                        fin.seekg(ggml_nbytes(tensor), std::ios::cur);
+                        fseek(fin, ggml_nbytes(tensor), SEEK_CUR);
                     }
 
                     total_size += ggml_nbytes(tensor);
@@ -485,7 +489,7 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
                         for (int i1 = 0; i1 < ne[1]; ++i1) {
                             const size_t offset_row = i1*row_size;
                             const size_t offset = offset_row + ((part_id*np0)/ggml_blck_size(tensor->type))*ggml_type_size(tensor->type);
-                            fin.read(reinterpret_cast<char *>(tensor->data) + offset, row_size/n_parts);
+                            fread(reinterpret_cast<char *>(tensor->data) + offset, 1, row_size/n_parts, fin);
                         }
                     } else {
                         const int np1 = ne[1];
@@ -494,7 +498,7 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
 
                         for (int i1 = 0; i1 < ne[1]; ++i1) {
                             const size_t offset_row = (i1 + part_id*np1)*row_size;
-                            fin.read(reinterpret_cast<char *>(tensor->data) + offset_row, row_size);
+                            fread(reinterpret_cast<char *>(tensor->data) + offset_row, 1, row_size, fin);
                         }
                     }
 
@@ -513,12 +517,11 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
             fprintf(stderr, "%s: model size = %8.2f MB / num tensors = %d\n", __func__, total_size/1024.0/1024.0, n_tensors);
         }
 
-        fin.close();
+        fclose(fin);
     }
 
     return true;
 }
-
 // evaluate the transformer
 //
 //   - model:     the model
