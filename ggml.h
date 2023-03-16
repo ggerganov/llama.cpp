@@ -230,6 +230,7 @@ enum ggml_op {
     GGML_OP_GELU,
     GGML_OP_SILU,
     GGML_OP_NORM, // normalize
+    GGML_OP_RMS_NORM,
 
     GGML_OP_MUL_MAT,
 
@@ -479,6 +480,10 @@ struct ggml_tensor * ggml_silu(
 // normalize along rows
 // TODO: eps is hardcoded to 1e-5 for now
 struct ggml_tensor * ggml_norm(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a);
+
+struct ggml_tensor * ggml_rms_norm(
         struct ggml_context * ctx,
         struct ggml_tensor  * a);
 
