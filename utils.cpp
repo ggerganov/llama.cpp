@@ -649,6 +649,21 @@ gpt_vocab::id sample_top_k_top_p(
     return sampled_tok_id;
 }
 
+gpt_vocab::id print_output(
+        const gpt_vocab & vocab,
+        const float * logits,
+        double temp) {
+    SoftMaxSampler probs;
+    probs.reset(vocab, logits, temp);
+    probs.top_k_sort();
+    probs.soft_max();
+
+    probs.print(log_file, vocab, logits, 16);
+
+    return probs.top();
+}
+
+
 
 size_t ggml_quantize_q4_0(float * src, void * dst, int n, int k, int qk, int64_t * hist) {
     const int nb = k / qk;

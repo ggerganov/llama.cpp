@@ -1017,6 +1017,11 @@ int main(int argc, char ** argv) {
             // decrement remaining sampling budget
             --remaining_tokens;
         } else {
+            if(log_file) {
+                const int n_vocab = model.hparams.n_vocab;
+                const float temp  = params.temp;
+                print_output(vocab, logits.data() + (logits.size() - n_vocab), temp);
+            }
             // some user input remains from prompt or interaction, forward it to processing
             while (embd_inp.size() > input_consumed) {
                 embd.push_back(embd_inp[input_consumed]);

@@ -106,6 +106,12 @@ gpt_vocab::id sample_top_k_top_p(
         double temp,
         std::mt19937 & rng);
 
+// Print would-be output after prompt samples
+gpt_vocab::id print_output(
+        const gpt_vocab & vocab,
+        const float * logits,
+        double temp);
+
 //
 // Quantization
 //
