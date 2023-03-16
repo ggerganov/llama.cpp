@@ -152,9 +152,19 @@ python3 convert-pth-to-ggml.py models/7B/ 1
 ./main -m ./models/7B/ggml-model-q4_0.bin -t 8 -n 128
 ```
 
-When running the larger models, make sure you have enough disk space to store all the intermediate files.
+### Disk Space Requirements
 
-TODO: add model disk/mem requirements
+The table below details the space requirements for each model. You may optionally remove the full model after quantization to save space.
+
+| Model name | Size full (GB) | Size Quantized (GB) | Total (GB) |
+| ---------- | -------------- | ------------------- | ---------- |
+| 7B | 31.17 | 4.21 | 35.38 | 
+| 13B | 60.21 | 8.14 | 68.35 |
+| 30B | 150.48 | 20.36 | 170.84 |
+| 65B | 432.64 | 40.88 | 473.52 |
+
+
+TODO: add mem requirements
 
 ### Interactive mode
 
