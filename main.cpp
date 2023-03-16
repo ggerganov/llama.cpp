@@ -86,7 +86,7 @@ struct llama_model {
 };
 
 // load the model's weights from a file
-bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab & vocab, int n_ctx)  {
+bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab & vocab, int n_ctx) {
     fprintf(stderr, "%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
 
@@ -97,6 +97,8 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
         return false;
     }
 
+    // Having a large buffer helps to accelerate load considerably (old buffer was 1024 * 1024).
+    // Though I am not sure if it's okay for edge devices like Raspberry Pi.
     std::vector<char> f_buf(128 * 1024 * 1024);
     setvbuf(fin, f_buf.data(), _IOFBF, f_buf.size());
 
