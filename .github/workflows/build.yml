@@ -17,6 +17,10 @@ jobs:
       - name: Build
         run: |
           make
+          mkdir build
+          cd build
+          cmake ..
+          cmake --build . --config Release
 
   macOS-latest:
     runs-on: macOS-latest
@@ -32,6 +36,10 @@ jobs:
       - name: Build
         run: |
           make
+          mkdir build
+          cd build
+          cmake ..
+          cmake --build . --config Release
 
   windows-latest:
     runs-on: windows-latest
