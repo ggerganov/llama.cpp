@@ -24,18 +24,8 @@ jobs:
     strategy:
       matrix:
         config:
-          - { tag: "latest", dockerfile: ".devops/main.Dockerfile" }
+          - { tag: "light", dockerfile: ".devops/main.Dockerfile" }
           - { tag: "full", dockerfile: ".devops/full.Dockerfile" }
-          - {
-              tag: "light",
-              dockerfile: ".devops/main.Dockerfile",
-              include_hash: true,
-            }
-          - {
-              tag: "full",
-              dockerfile: ".devops/full.Dockerfile",
-              include_hash: true,
-            }
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
@@ -49,14 +39,23 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
-          registry: docker.pkg.github.com
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image (versioned)
+        if: github.event_name == 'push'
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: "ghcr.io/ggerganov/llama.cpp:${{ matrix.config.tag }}-${{ env.COMMIT_SHA }}"
+          file: ${{ matrix.config.dockerfile }}
 
       - name: Build and push Docker image (tagged)
         uses: docker/build-push-action@v4
         with:
           context: .
-          push: true
-          tags: "ghcr.io/ggerganov/llama.cpp:{{ matrix.config.tag }}{{ matrix.config.include_hash && '-{{ env.COMMIT_SHA }}' || '' }}"
+          push: github.event_name == 'push'
+          tags: "ghcr.io/ggerganov/llama.cpp:${{ matrix.config.tag }}"
           file: ${{ matrix.config.dockerfile }}
