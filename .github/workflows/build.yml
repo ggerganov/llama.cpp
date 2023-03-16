@@ -19,7 +19,7 @@ jobs:
           make
 
   macOS-latest:
-    runs-on: macOS-latest
+    runs-on: macos-latest
 
     steps:
       - name: Clone
