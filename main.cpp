@@ -1003,7 +1003,7 @@ int main(int argc, char ** argv) {
                     if(params.use_color) printf(ANSI_BOLD ANSI_COLOR_GREEN);
                     if (scanf("%255[^\n]%n%*c", buf, &n_read) <= 0) {
                         // presumable empty line, consume the newline
-			std::ignore = scanf("%*c");
+                        std::ignore = scanf("%*c");
                         n_read=0;
                     }
                     if(params.use_color) printf(ANSI_COLOR_RESET);
