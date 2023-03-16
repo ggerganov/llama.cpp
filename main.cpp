@@ -880,7 +880,7 @@ int main(int argc, char ** argv) {
 
     // tokenize the reverse prompt
     std::vector<std::vector<gpt_vocab::id>> antipromptv_inp;
-    
+
     for (auto antiprompt : params.antiprompt) {
         antipromptv_inp.push_back(::llama_tokenize(vocab, antiprompt, false));
     }
@@ -990,7 +990,7 @@ int main(int argc, char ** argv) {
                     logits[logits.size() - n_vocab + EOS_TOKEN_ID] = 0;
                 }
 
-                id = llama_sample_top_p_top_k(vocab, logits.data() + (logits.size() - n_vocab), last_n_tokens, repeat_penalty, top_k, top_p, temp, rng);
+                id = sample_top_k_top_p(vocab, logits.data() + (logits.size() - n_vocab), last_n_tokens, repeat_penalty, top_k, top_p, temp, rng);
 
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(id);

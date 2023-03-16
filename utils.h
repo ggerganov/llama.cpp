@@ -90,7 +90,7 @@ bool gpt_vocab_init(const std::string & fname, gpt_vocab & vocab);
 //   - consider only the top K tokens
 //   - from them, consider only the top tokens with cumulative probability > P
 //
-gpt_vocab::id llama_sample_top_p_top_k(
+gpt_vocab::id sample_top_k_top_p(
         const gpt_vocab & vocab,
         const float * logits,
         std::vector<gpt_vocab::id> & last_n_tokens,
@@ -99,9 +99,6 @@ gpt_vocab::id llama_sample_top_p_top_k(
         double top_p,
         double temp,
         std::mt19937 & rng);
-
-// filer to top K tokens from list of logits
-void sample_top_k(std::vector<std::pair<double, gpt_vocab::id>> & logits_id, int top_k);
 
 //
 // Quantization

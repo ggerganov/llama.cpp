@@ -456,102 +456,162 @@ bool gpt_vocab_init(const std::string & fname, gpt_vocab & vocab) {
     return true;
 }
 
+struct SoftMaxSampler {
+    std::vector<std::pair<double, gpt_vocab::id>> logits_id; // Set by reset, sorted by soft_max
+    std::vector<double> probs; // Set by compute_probs
 
-void sample_top_k(std::vector<std::pair<double, gpt_vocab::id>> & logits_id, int top_k) {
-    // find the top K tokens
-    std::partial_sort(
-            logits_id.begin(),
-            logits_id.begin() + top_k, logits_id.end(),
-            [](const std::pair<double, gpt_vocab::id> & a, const std::pair<double, gpt_vocab::id> & b) {
-        return a.first > b.first;
-    });
-
-    logits_id.resize(top_k);
-}
-
-gpt_vocab::id llama_sample_top_p_top_k(
+    // Scales loggits (temp, repeat penalty), then computes probas and sort them.
+    void reset(
         const gpt_vocab & vocab,
         const float * logits,
-        std::vector<gpt_vocab::id> & last_n_tokens,
-        double repeat_penalty,
-        int top_k,
-        double top_p,
         double temp,
-        std::mt19937 & rng) {
-    int n_logits = vocab.id_to_token.size();
+        const std::vector<gpt_vocab::id> & last_n_tokens,
+        double repeat_penalty
+    ) {
+        const int n_logits = vocab.id_to_token.size();
+        if (repeat_penalty == 1 || n_logits == 0) {
+            reset(vocab, logits, temp);
+            return;
+        }
+        logits_id.clear();
+        logits_id.reserve(n_logits);
 
-    std::vector<std::pair<double, gpt_vocab::id>> logits_id;
-    logits_id.reserve(n_logits);
-
-    {
-        const double scale = 1.0/temp;
+        const double scale_norepeat = 1 / temp;
+        const double scale_repeat_neg = scale_norepeat * repeat_penalty;
+        const double scale_repeat_pos = scale_norepeat / repeat_penalty;
         for (int i = 0; i < n_logits; ++i) {
             // repetition penalty from CTRL paper (https://arxiv.org/abs/1909.05858)
             // credit https://github.com/facebookresearch/llama/compare/main...shawwn:llama:main
+            double scale = scale_norepeat;
             if (std::find(last_n_tokens.begin(), last_n_tokens.end(), i) != last_n_tokens.end()) {
                 // if score < 0 then repetition penalty has to multiplied to reduce the previous token probability
-                if (logits[i] < 0.0) {
-                    logits_id.push_back(std::make_pair(logits[i]*scale*repeat_penalty, i));
-                } else {
-                    logits_id.push_back(std::make_pair(logits[i]*scale/repeat_penalty, i));
-                }
-            } else {
-                logits_id.push_back(std::make_pair(logits[i]*scale, i));
+                scale = logits[i] > 0. ? scale_repeat_pos : scale_repeat_neg;
             }
+            logits_id.push_back(std::make_pair(logits[i] * scale, i));
         }
     }
 
-    sample_top_k(logits_id, top_k);
+    void reset(
+        const gpt_vocab & vocab,
+        const float * logits,
+        double temp
+    ) {
+        const int n_logits = vocab.id_to_token.size();
 
-    double maxl = -INFINITY;
-    for (const auto & kv : logits_id) {
-        maxl = std::max(maxl, kv.first);
+        logits_id.clear();
+        logits_id.reserve(n_logits);
+
+        const double scale = 1.0 / temp;
+        for (int i = 0; i < n_logits; ++i) {
+            logits_id.push_back(std::make_pair(logits[i]*scale, i));
+        }
     }
 
-    // compute probs for the top K tokens
-    std::vector<double> probs;
-    probs.reserve(logits_id.size());
+    void soft_max() {
+        const size_t n = logits_id.size();
+        probs.clear();
+        probs.reserve(n);
 
-    double sum = 0.0;
-    for (const auto & kv : logits_id) {
-        double p = exp(kv.first - maxl);
-        probs.push_back(p);
-        sum += p;
+        double maxl = -INFINITY;
+        for (const auto & kv : logits_id) {
+            maxl = std::max(maxl, kv.first);
+        }
+
+        // compute probs for the tokens
+        double sum_p = 0.0;
+        for (const auto & kv : logits_id) {
+            double logp = kv.first - maxl;
+            double p = exp(logp);
+            probs.push_back(p);
+            sum_p += p;
+        }
+
+        // normalize the probs
+        const double scale = 1.0 / sum_p;
+        for (auto & p : probs) {
+            p *= scale;
+        }
     }
 
-    // normalize the probs
-    for (auto & p : probs) {
-        p /= sum;
+
+    // Finds and computes the probabilities of the top K tokens
+    void top_k_sort(int top_k=0) {
+        if (top_k > 0 && top_k < logits_id.size()) {
+            // find the top K tokens
+            std::partial_sort(
+                    logits_id.begin(),
+                    logits_id.begin() + top_k, logits_id.end(),
+                    [](const std::pair<double, gpt_vocab::id> & a, const std::pair<double, gpt_vocab::id> & b) {
+                return a.first > b.first;
+            });
+            logits_id.resize(top_k);
+        } else {
+            std::sort(
+                    logits_id.begin(),
+                    logits_id.end(),
+                    [](const std::pair<double, gpt_vocab::id> & a, const std::pair<double, gpt_vocab::id> & b) {
+                return a.first > b.first;
+            });
+        }
     }
 
-    if (top_p < 1.0f) {
+    int size() const {
+        return logits_id.size();
+    }
+
+    std::discrete_distribution<> top_k() const {
+        return std::discrete_distribution<>(probs.begin(), probs.end());
+    }
+
+    std::discrete_distribution<> top_p(double top_p) const {
+        if (top_p >= 1.0f) {
+            return top_k();
+        }
+        int n = 1;
         double cumsum = 0.0f;
-        for (int i = 0; i < (int) probs.size(); i++) {
+        for (int i = 0; i < probs.size(); i++) {
             cumsum += probs[i];
             if (cumsum >= top_p) {
-                probs.resize(i + 1);
-                logits_id.resize(i + 1);
+                n = i + 1;
                 break;
             }
         }
 
-        cumsum = 1.0/cumsum;
-        for (int i = 0; i < (int) probs.size(); i++) {
-            probs[i] *= cumsum;
-        }
+        // discrete_distribution renormalizes the subset of probabilities to sum to 1.0
+        return std::discrete_distribution<>(probs.begin(), probs.begin() + n);
     }
 
-    //printf("\n");
-    //for (int i = 0; i < (int) 10; i++) {
-    //    printf("%d: '%s' %f\n", i, vocab.id_to_token.at(logits_id[i].second).c_str(), probs[i]);
-    //}
-    //printf("\n\n");
-    //exit(0);
+    gpt_vocab::id top() {
+        return logits_id[0].second;
+    }
 
-    std::discrete_distribution<> dist(probs.begin(), probs.end());
-    int idx = dist(rng);
+    gpt_vocab::id sample(
+        std::discrete_distribution<> & dist,
+        std::mt19937 & rng
+    ) const {
+        return logits_id[dist(rng)].second;
+    }
+};
 
-    return logits_id[idx].second;
+gpt_vocab::id sample_top_k_top_p(
+        const gpt_vocab & vocab,
+        const float * logits,
+        std::vector<gpt_vocab::id> & last_n_tokens,
+        double repeat_penalty,
+        int    top_k,
+        double top_p,
+        double temp,
+        std::mt19937 & rng) {
+
+    SoftMaxSampler probs;
+    probs.reset(vocab, logits, temp, last_n_tokens, repeat_penalty);
+    probs.top_k_sort(top_k);
+    probs.soft_max();
+    auto dist = probs.top_p(top_p);
+    int sampled_tok_id = probs.sample(dist, rng);
+
+
+    return sampled_tok_id;
 }
 
 
@@ -623,7 +683,7 @@ size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t
 
     char * pdst = (char *) dst;
 
-    for (int j = 0; j < n; j += k) { 
+    for (int j = 0; j < n; j += k) {
         uint8_t * pd = (uint8_t *) (pdst + (j/k)*row_size + 0*bs);
         uint8_t * pm = (uint8_t *) (pdst + (j/k)*row_size + 0*bs +   sizeof(float));
         uint8_t * pb = (uint8_t *) (pdst + (j/k)*row_size + 0*bs + 2*sizeof(float));
@@ -646,7 +706,7 @@ size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t
 
                 *(float *) pd = d;
                 *(float *) pm = min;
-                pd += bs; 
+                pd += bs;
                 pm += bs;
 
                 for (int l = 0; l < qk; l += 2) {
