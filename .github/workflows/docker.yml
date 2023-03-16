@@ -56,6 +56,6 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          push: github.event_name == 'push'
+          push: ${{ github.event_name == 'push' }}
           tags: "ghcr.io/ggerganov/llama.cpp:${{ matrix.config.tag }}"
           file: ${{ matrix.config.dockerfile }}
