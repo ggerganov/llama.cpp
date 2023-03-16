@@ -207,8 +207,9 @@ https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b0
 ### Contributing
 
 - Contributors can open PRs
-- Collaborators can push to branches in the `llama.cpp` repo
+- Collaborators can push to branches in the `llama.cpp` repo and merge PRs into the `master` branch
 - Collaborators will be invited based on contributions
+- Any help with managing issues and PRs is very appreciated!
 
 ### Coding guidelines
 
