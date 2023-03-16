@@ -10,6 +10,7 @@
 name: Publish Docker image
 
 on:
+  pull_request:
   push:
     branches:
       - master
@@ -18,13 +19,23 @@ jobs:
   push_to_registry:
     name: Push Docker image to Docker Hub
     runs-on: ubuntu-latest
-
+    env:
+      COMMIT_SHA: ${{ github.sha }}
     strategy:
       matrix:
         config:
           - { tag: "latest", dockerfile: ".devops/main.Dockerfile" }
           - { tag: "full", dockerfile: ".devops/full.Dockerfile" }
-
+          - {
+              tag: "light",
+              dockerfile: ".devops/main.Dockerfile",
+              include_hash: true,
+            }
+          - {
+              tag: "full",
+              dockerfile: ".devops/full.Dockerfile",
+              include_hash: true,
+            }
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
@@ -40,12 +51,12 @@ jobs:
         with:
           registry: docker.pkg.github.com
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}  
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image
+      - name: Build and push Docker image (tagged)
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
-          tags: "ghcr.io/ggerganov/llama.cpp:${{ matrix.config.tag }}"
+          tags: "ghcr.io/ggerganov/llama.cpp:{{ matrix.config.tag }}{{ matrix.config.include_hash && '-{{ env.COMMIT_SHA }}' || '' }}"
           file: ${{ matrix.config.dockerfile }}
