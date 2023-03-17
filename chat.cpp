@@ -915,7 +915,7 @@ int main(int argc, char ** argv) {
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
                " - Press Ctrl+C to interject at any time.\n"
 #endif
-               " - Press Return to return control to LLaMa.\n"
+               " - Press Return to return control to LLaMA.\n"
                " - If you want to submit another line, end your input in '\\'.\n");
     }
 
