@@ -98,8 +98,6 @@ int main(int argc, char ** argv) {
 
     // Add a space in front of the first character to match OG llama tokenizer behavior
     params.prompt.insert(0, 1, ' ');
-    // tokenize the prompt
-    std::vector<gpt_vocab::id> embd_inp = llama_tokenize_text(ctx, params.prompt);
 
     // prefix & suffix for instruct mode
     const std::vector<gpt_vocab::id> inp_pfx = ::llama_tokenize(vocab, "\n\n### Instruction:\n\n", true);
@@ -161,15 +159,15 @@ int main(int argc, char ** argv) {
         printf(ANSI_COLOR_YELLOW);
     }
 
-    if(!llama_injest_input(ctx, params.prompt))
+    if(!llama_ingest_input(ctx, params.prompt))
     {
-        fprintf(stderr, "Failed to injest prompt\n");
+        fprintf(stderr, "Failed to ingest prompt\n");
         return 1;
     };
 
     // display text
     input_noecho = false;
-    const std::vector<gpt_vocab::id>& embd = llama_context_get_embd(ctx);
+    const std::vector<gpt_vocab::id>& embd = llama_context_get_embedding(ctx);
     if (!input_noecho) {
             for (auto id : embd) {
             printf("%s", vocab.id_to_token[id].c_str());
@@ -183,9 +181,9 @@ int main(int argc, char ** argv) {
 
     const std::vector<gpt_vocab::id>& last_n_tokens = llama_context_get_last_n_tokens(ctx);
 
-    while (llama_context_not_finished(ctx) > 0) {        
+    while (llama_context_is_finished(ctx) != true) {
         gpt_vocab::id model_output = 0;
-        bool response = llama_inference(ctx, model_output);
+        bool response = llama_infer(ctx, model_output);
         if (response) {
             printf("%s", vocab.id_to_token[model_output].c_str());
             fflush(stdout);
@@ -194,7 +192,6 @@ int main(int argc, char ** argv) {
         if (!input_noecho && params.use_color && (int)embd_inp.size() == input_consumed) {
             printf(ANSI_COLOR_RESET);
         }
-
 
         // in interactive mode, and not currently processing queued inputs;
         // check if we should prompt the user for more
@@ -228,7 +225,7 @@ int main(int argc, char ** argv) {
                         line.pop_back(); // Remove the continue character
                     }
                     // Do not clear existing context in interactive mode
-                    llama_init_context_with_prompt(ctx, buf, false);
+                    llama_update_context_with_prompt(ctx, buf, false);
                 }
 
                 remaining_tokens -= line_inp.size();
