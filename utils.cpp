@@ -16,6 +16,18 @@
  #endif
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
+    // determine sensible default number of threads.
+    // std::thread::hardware_concurrency may not be equal to the number of cores, or may return 0.
+#ifdef __linux__
+    std::ifstream cpuinfo("/proc/cpuinfo");
+    params.n_threads = std::count(std::istream_iterator<std::string>(cpuinfo),
+                                  std::istream_iterator<std::string>(),
+                                  std::string("processor"));
+#endif
+    if (params.n_threads == 0) {
+        params.n_threads = std::max(1, (int32_t) std::thread::hardware_concurrency());
+    }
+
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
 

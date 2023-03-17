@@ -34,7 +34,7 @@ else
     echo "Unknown command: $arg1"
     echo "Available commands: "
     echo "  --run (-r): Run a model previously converted into ggml"
-    echo "              ex: -m /models/7B/ggml-model-q4_0.bin -p \"Building a website can be done in 10 simple steps:\" -t 8 -n 512"
+    echo "              ex: -m /models/7B/ggml-model-q4_0.bin -p \"Building a website can be done in 10 simple steps:\" -n 512"
     echo "  --convert (-c): Convert a llama model into ggml"
     echo "              ex: \"/models/7B/\" 1"
     echo "  --quantize (-q): Optimize with quantization process ggml"
