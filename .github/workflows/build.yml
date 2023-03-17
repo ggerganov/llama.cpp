@@ -2,7 +2,7 @@ name: CI
 on: [push, pull_request]
 
 jobs:
-  ubuntu-latest:
+  ubuntu-latest-make:
     runs-on: ubuntu-latest
 
     steps:
@@ -17,12 +17,27 @@ jobs:
       - name: Build
         run: |
           make
+
+  ubuntu-latest-cmake:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v1
+
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential
+
+      - name: Build
+        run: |
           mkdir build
           cd build
           cmake ..
           cmake --build . --config Release
 
-  macOS-latest:
+  macOS-latest-make:
     runs-on: macOS-latest
 
     steps:
@@ -36,12 +51,26 @@ jobs:
       - name: Build
         run: |
           make
+
+  macOS-latest-cmake:
+    runs-on: macOS-latest
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v1
+
+      - name: Dependencies
+        run: |
+          brew update
+
+      - name: Build
+        run: |
           mkdir build
           cd build
           cmake ..
           cmake --build . --config Release
 
-  windows-latest:
+  windows-latest-cmake:
     runs-on: windows-latest
 
     steps:
