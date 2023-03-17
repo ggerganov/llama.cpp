@@ -242,6 +242,7 @@ docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models
 - Collaborators can push to branches in the `llama.cpp` repo and merge PRs into the `master` branch
 - Collaborators will be invited based on contributions
 - Any help with managing issues and PRs is very appreciated!
+- Make sure to read this: [Inference at the edge](https://github.com/ggerganov/llama.cpp/discussions/205)
 
 ### Coding guidelines
 
