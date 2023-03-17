@@ -38,7 +38,7 @@ jobs:
           cmake --build . --config Release
 
   macOS-latest-make:
-    runs-on: macOS-latest
+    runs-on: macos-latest
 
     steps:
       - name: Clone
