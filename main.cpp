@@ -1013,7 +1013,7 @@ int main(int argc, char ** argv) {
                     else {
                         line.pop_back(); // Remove the continue character
                     }
-                    buffer += line; // Append the line to the result
+                    buffer += line + '\n'; // Append the line to the result
                 } while (another_line);
                 if (params.use_color) printf(ANSI_COLOR_RESET);
 
