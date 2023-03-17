@@ -26,12 +26,16 @@ ifeq ($(UNAME_S),Darwin)
 	endif
 endif
 
+ifneq ($(CC), gcc)
+	CC=gcc
+endif
+
 #
 # Compile flags
 #
 
-CFLAGS   = -I.              -O3 -DNDEBUG -std=c11   -fPIC
-CXXFLAGS = -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC
+CFLAGS   = -I.              -O3 -DNDEBUG -std=c11   -fPIC -D_POSIX_C_SOURCE=199309L
+CXXFLAGS = -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC -D_POSIX_C_SOURCE=199309L
 LDFLAGS  =
 
 # OS specific
