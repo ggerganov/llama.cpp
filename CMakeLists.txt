@@ -112,17 +112,17 @@ endif()
 # endif()
 add_executable(llama
     main.cpp
-    llama.cpp
-    utils.cpp
-    utils.h)
+)
 
 add_executable(quantize
     quantize.cpp
-    utils.cpp
-    utils.h)
+)
 
 add_library(llamalib
-    llama.cpp)
+    llama.cpp
+    llama.h
+    utils.cpp
+    utils.h)
 
 add_library(ggml
     ggml.c
