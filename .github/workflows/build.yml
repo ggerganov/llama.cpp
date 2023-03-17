@@ -14,37 +14,37 @@ on:
     paths: ['CMakeLists.txt', 'Makefile', '**.h', '*.c', '**.cpp']
 
 jobs:
-#  ubuntu-latest:
-#    runs-on: ubuntu-latest
-#
-#    steps:
-#      - name: Clone
-#        uses: actions/checkout@v1
-#
-#      - name: Dependencies
-#        run: |
-#          sudo apt-get update
-#          sudo apt-get install build-essential
-#
-#      - name: Build
-#        run: |
-#          make
-#
-#  macOS-latest:
-#    runs-on: macOS-latest
-#
-#    steps:
-#      - name: Clone
-#        uses: actions/checkout@v1
-#
-#      - name: Dependencies
-#        run: |
-#          brew update
-#
-#      - name: Build
-#        run: |
-#          make
-#
+  ubuntu-latest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v1
+
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential
+
+      - name: Build
+        run: |
+          make
+
+  macOS-latest:
+    runs-on: macOS-latest
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v1
+
+      - name: Dependencies
+        run: |
+          brew update
+
+      - name: Build
+        run: |
+          make
+
   windows-latest:
     runs-on: windows-latest
 
