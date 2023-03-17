@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <iostream>
 #include <map>
 #include <string>
 #include <vector>
@@ -976,11 +977,6 @@ int main(int argc, char ** argv) {
                     break;
                 }
             }
-
-            // reset color to default if we there is no pending user input
-            if (!input_noecho && params.use_color && embd_inp.size() == input_consumed) {
-                printf(ANSI_COLOR_RESET);
-            }
         }
 
         // display text
@@ -989,6 +985,10 @@ int main(int argc, char ** argv) {
                 printf("%s", vocab.id_to_token[id].c_str());
             }
             fflush(stdout);
+        }
+        // reset color to default if we there is no pending user input
+        if (!input_noecho && params.use_color && embd_inp.size() == input_consumed) {
+            printf(ANSI_COLOR_RESET);
         }
 
         // in interactive mode, and not currently processing queued inputs;
@@ -1001,39 +1001,30 @@ int main(int argc, char ** argv) {
             }
             if (is_interacting) {
                 // currently being interactive
-                bool another_line=true;
-                while (another_line) {
-                    fflush(stdout);
-                    char buf[256] = {0};
-                    int n_read;
-                    if(params.use_color) printf(ANSI_BOLD ANSI_COLOR_GREEN);
-                    if (scanf("%255[^\n]%n%*c", buf, &n_read) <= 0) {
-                        // presumable empty line, consume the newline
-                        scanf("%*c");
-                        n_read=0;
-                    }
-                    if(params.use_color) printf(ANSI_COLOR_RESET);
-
-                    if (n_read > 0 && buf[n_read-1]=='\\') {
-                        another_line = true;
-                        buf[n_read-1] = '\n';
-                        buf[n_read] = 0;
-                    } else {
+                if (params.use_color) printf(ANSI_BOLD ANSI_COLOR_GREEN);
+                std::string buffer;
+                std::string line;
+                bool another_line = true;
+                do {
+                    std::getline(std::cin, line);
+                    if (line.empty() || line.back() != '\\') {
                         another_line = false;
-                        buf[n_read] = '\n';
-                        buf[n_read+1] = 0;
                     }
+                    else {
+                        line.pop_back(); // Remove the continue character
+                    }
+                    buffer += line; // Append the line to the result
+                } while (another_line);
+                if (params.use_color) printf(ANSI_COLOR_RESET);
 
-                    std::vector<gpt_vocab::id> line_inp = ::llama_tokenize(vocab, buf, false);
-                    embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
+                std::vector<gpt_vocab::id> line_inp = ::llama_tokenize(vocab, buffer, false);
+                embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
 
-                    remaining_tokens -= line_inp.size();
+                remaining_tokens -= line_inp.size();
 
-                    input_noecho = true; // do not echo this again
-                }
-
-                is_interacting = false;
+                input_noecho = true; // do not echo this again
             }
+            is_interacting = false;
         }
 
         // end of text token
