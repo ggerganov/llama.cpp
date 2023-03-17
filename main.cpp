@@ -950,6 +950,9 @@ int main(int argc, char ** argv) {
             {
                 const int64_t t_start_sample_us = ggml_time_us();
 
+                // set the logit of the eos token (2) to zero to avoid sampling it
+                logits[logits.size() - n_vocab + 2] = 0;
+
                 id = llama_sample_top_p_top_k(vocab, logits.data() + (logits.size() - n_vocab), last_n_tokens, repeat_penalty, top_k, top_p, temp, rng);
 
                 last_n_tokens.erase(last_n_tokens.begin());
