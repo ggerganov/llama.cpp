@@ -39,7 +39,7 @@ Supported platforms:
 Here is a typical run using LLaMA-7B:
 
 ```java
-make -j && ./main -m ./models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -t 8 -n 512
+make -j && ./main -m ./models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
 I llama.cpp build info:
 I UNAME_S:  Darwin
 I UNAME_P:  arm
@@ -150,7 +150,7 @@ python3 convert-pth-to-ggml.py models/7B/ 1
 ./quantize.sh 7B
 
 # run the inference
-./main -m ./models/7B/ggml-model-q4_0.bin -t 8 -n 128
+./main -m ./models/7B/ggml-model-q4_0.bin -n 128
 ```
 
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
@@ -164,7 +164,7 @@ In this mode, you can always interrupt generation by pressing Ctrl+C and enter o
 
 Here is an example few-shot interaction, invoked with the command
 ```
-./main -m ./models/13B/ggml-model-q4_0.bin -t 8 -n 256 --repeat_penalty 1.0 --color -i -r "User:" \
+./main -m ./models/13B/ggml-model-q4_0.bin -n 256 --repeat_penalty 1.0 --color -i -r "User:" \
                                            -p \
 "Transcript of a dialog, where the User interacts with an Assistant named Bob. Bob is helpful, kind, honest, good at writing, and never fails to answer the User's requests immediately and with precision.
 
@@ -218,13 +218,13 @@ docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:full --all-in-on
 On complete, you are ready to play!
 
 ```bash
-docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:full --run -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -t 8 -n 512
+docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:full --run -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
 ```
 
 or with light image:
 
 ```bash
-docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -t 8 -n 512
+docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
 ```
 
 ## Limitations
