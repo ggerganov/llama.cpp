@@ -3,14 +3,19 @@
 [![Actions Status](https://github.com/ggerganov/llama.cpp/workflows/CI/badge.svg)](https://github.com/ggerganov/llama.cpp/actions)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-Inference of [Facebook's LLaMA](https://github.com/facebookresearch/llama) model in pure C/C++
+Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
+
+**Hot topics:**
+
+- Cache input prompts for faster initialization: https://github.com/ggerganov/llama.cpp/issues/64
+- Create a `llama.cpp` logo: https://github.com/ggerganov/llama.cpp/issues/105
 
 ## Description
 
 The main goal is to run the model using 4-bit quantization on a MacBook
 
 - Plain C/C++ implementation without dependencies
-- Apple silicon first-class citizen - optimized via Arm Neon and Accelerate framework
+- Apple silicon first-class citizen - optimized via ARM NEON
 - AVX2 support for x86 architectures
 - Mixed F16 / F32 precision
 - 4-bit quantization support
@@ -172,12 +177,29 @@ Note the use of `--color` to distinguish between user input and generated text.
 
 ![image](https://user-images.githubusercontent.com/1991296/224575029-2af3c7dc-5a65-4f64-a6bb-517a532aea38.png)
 
+### Android
+
+You can easily run `llama.cpp` on Android device with [termux](https://play.google.com/store/apps/details?id=com.termux).
+First, obtain the [Android NDK](https://developer.android.com/ndk) and then build with CMake:
+```
+$ mkdir build-android
+$ cd build-android
+$ export NDK=<your_ndk_directory>
+$ cmake -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-23 -DCMAKE_C_FLAGS=-march=armv8.4a+dotprod ..
+$ make
+```
+Install [termux](https://play.google.com/store/apps/details?id=com.termux) on your device and run `termux-setup-storage` to get access to your SD card.
+Finally, copy the `llama` binary and the model files to your device storage. Here is a demo of an interactive session running on Pixel 5 phone:
+
+https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b050-55b0b3b9274c.mp4
+
+
 ## Limitations
 
-- I don't know yet how much the quantization affects the quality of the generated text
+- We don't know yet how much the quantization affects the quality of the generated text
 - Probably the token sampling can be improved
 - The Accelerate framework is actually currently unused since I found that for tensor shapes typical for the Decoder,
-  there is no benefit compared to the ARM_NEON intrinsics implementation. Of course, it's possible that I simlpy don't
+  there is no benefit compared to the ARM_NEON intrinsics implementation. Of course, it's possible that I simply don't
   know how to utilize it properly. But in any case, you can even disable it with `LLAMA_NO_ACCELERATE=1 make` and the
   performance will be the same, since no BLAS calls are invoked by the current implementation
 
@@ -187,11 +209,15 @@ Note the use of `--color` to distinguish between user input and generated text.
 - Collaborators can push to branches in the `llama.cpp` repo
 - Collaborators will be invited based on contributions
 
-### Coding guide-lines
+### Coding guidelines
 
 - Avoid adding third-party dependencies, extra files, extra headers, etc.
 - Always consider cross-compatibility with other operating systems and architectures
-- Avoid fancy looking modern STL constructs, use basic for loops, avoid templates, keep it simple
+- Avoid fancy looking modern STL constructs, use basic `for` loops, avoid templates, keep it simple
 - There are no strict rules for the code style, but try to follow the patterns in the code (indentation, spaces, etc.). Vertical alignment makes things more readable and easier to batch edit
-- Clean-up any tailing whitespaces, use 4 spaces indentation, brackets on same line, `int * var`
-- Look at the [good first issues](https://github.com/ggerganov/llama.cpp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for tasks
+- Clean-up any trailing whitespaces, use 4 spaces indentation, brackets on same line, `void * ptr`, `int & a`
+- See [good first issues](https://github.com/ggerganov/llama.cpp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for tasks suitable for first contributions
+
+### Misc
+
+- Practice your C++ typing skills: https://typing-battles.ggerganov.com
