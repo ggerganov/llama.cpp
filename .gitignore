@@ -15,9 +15,22 @@ build-sanitize-addr/
 build-sanitize-thread/
 
 models/*
+*.bin
 
 /main
 /quantize
 
 arm_neon.h
 compile_commands.json
+
+# Windows CMake files
+*.vcxproj
+*.filters
+*.cmake
+*.sln
+x64/
+Debug/
+Release/
+CMakeFiles/
+CMakeCache.txt
+*.dir/
