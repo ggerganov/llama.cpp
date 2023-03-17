@@ -30,7 +30,9 @@ from sentencepiece import SentencePieceProcessor
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='Convert ckpt models to ggml models.')
+        description=
+        'Convert ckpt models to ggml models. For example: python3 convert-pth-to-ggml.py ../llama-models/7B/  f32 models/llama-7B '
+    )
     parser.add_argument('dir_model',
                         type=str,
                         help='Directory path of the checkpoint model')
