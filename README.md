@@ -32,6 +32,7 @@ Supported platforms:
 - [X] Mac OS
 - [X] Linux
 - [X] Windows (via CMake)
+- [X] Docker
 
 ---
 
@@ -194,6 +195,37 @@ Finally, copy the `llama` binary and the model files to your device storage. Her
 
 https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b050-55b0b3b9274c.mp4
 
+### Docker
+
+#### Prerequisites
+* Docker must be installed and running on your system.
+* Create a folder to store big models & intermediate files (in ex. im using /llama/models)
+
+#### Images
+We have two Docker images available for this project:
+
+1. `ghcr.io/ggerganov/llama.cpp:full`: This image includes both the main executable file and the tools to convert LLaMA models into ggml and convert into 4-bit quantization.
+2. `ghcr.io/ggerganov/llama.cpp:light`: This image only includes the main executable file.
+
+#### Usage
+
+The easiest way to download the models, convert them to ggml and optimize them is with the --all-in-one command which includes the full docker image.
+
+ ```bash
+docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:full --all-in-one "/models/" 7B
+```
+
+On complete, you are ready to play!
+
+```bash
+docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:full --run -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -t 8 -n 512
+```
+
+or with light image:
+
+```bash
+docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -t 8 -n 512
+```
 
 ## Limitations
 
