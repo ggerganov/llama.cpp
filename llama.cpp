@@ -810,15 +810,15 @@ bool llama_model_quantize(const std::string & fname_inp, const std::string & fna
 
 /* External API */
 
-const std::vector<gpt_vocab::id>& llama_context_get_embd(const llama_context& ctx) {
+const std::vector<gpt_vocab::id>& llama_context_get_embedding(const llama_context& ctx) {
     return ctx.state->embd;
 }
 gpt_vocab& llama_context_get_vocab(llama_context& ctx) {
     return ctx.vocab;
 }
-bool llama_context_not_finished(const llama_context& ctx)
+bool llama_context_is_finished(const llama_context& ctx)
 {
-    return ctx.state->remaining_tokens > 0;
+    return ctx.state->remaining_tokens <= 0;
 }
 const std::vector<gpt_vocab::id> llama_tokenize_text(const llama_context& ctx, const std::string& text) {
     return llama_tokenize(ctx.vocab, text, true);
@@ -1129,7 +1129,7 @@ bool llama_eval(
     return true;
 }
 
-bool llama_init_context_with_prompt(llama_context& ctx, const std::string& text, bool clear_existing) {
+bool llama_update_context_with_prompt(llama_context& ctx, const std::string& text, bool clear_existing) {
     llama_state& state = *ctx.state;
     llama_model& model = ctx.model;
     const gpt_params& params = ctx.params;
@@ -1165,9 +1165,9 @@ bool llama_init_context_with_prompt(llama_context& ctx, const std::string& text,
     return true;
 }
 
-/// @brief  Injests a batch of input tokens into the context
+/// @brief  Ingests a batch of input tokens into the context
 /// @param ctx 
-void llama_injest_input_batch(llama_context& ctx)
+void llama_ingest_input_batch(llama_context& ctx)
 {
     llama_state& state = *ctx.state;
     const gpt_params& params = ctx.params;
@@ -1233,22 +1233,22 @@ gpt_vocab::id llama_sample_token(llama_context& ctx)
     }
     return id;
 }
-/// @brief Injest all input (in multiple batches) into model and run call predict()
+/// @brief Ingest all input (in multiple batches) into model and run call predict()
 /// @param ctx  
-bool llama_injest_input(llama_context& ctx, const std::string& text, bool clear_existing)
+bool llama_ingest_input(llama_context& ctx, const std::string& text, bool clear_existing)
 {
     llama_state& state = *ctx.state;
 
     // Initialize context, tokenize text and clear existing state if necessary
-    if(!state.is_initialized && !llama_init_context_with_prompt(ctx, text, clear_existing))
+    if(!state.is_initialized && !llama_update_context_with_prompt(ctx, text, clear_existing))
     {
         return false;
     }
 
-    // Injest the tokens into the model one batch at a time
+    // ingest the tokens into the model one batch at a time
     while (state.has_more_input()) 
     {
-        llama_injest_input_batch(ctx);
+        llama_ingest_input_batch(ctx);
         if (state.embd.size() >= 0) {
             if(!llama_predict(ctx))
             {
@@ -1260,7 +1260,7 @@ bool llama_injest_input(llama_context& ctx, const std::string& text, bool clear_
     }
     return true;
 }
-bool llama_inference(llama_context& ctx, gpt_vocab::id& id) {
+bool llama_infer(llama_context& ctx, gpt_vocab::id& id) {
     llama_state& state = *ctx.state;
 
     // Tokenize text if we are starting out

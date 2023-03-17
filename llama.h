@@ -39,26 +39,27 @@ struct llama_hparams {
 
 struct llama_context;
 
-void llama_free_context(llama_context* ctx);
-
-const std::vector<gpt_vocab::id>& llama_context_get_embd(const llama_context& ctx);
-gpt_vocab& llama_context_get_vocab(llama_context& ctx);
-bool llama_context_not_finished(const llama_context& ctx);
-const std::vector<gpt_vocab::id> llama_tokenize_text(const llama_context& ctx, const std::string& text);
-
-const std::vector<gpt_vocab::id>& llama_context_get_last_n_tokens(const llama_context& ctx);
-bool llama_init_context_with_prompt(llama_context& ctx, const std::string& text, bool clear_existing = true);
-
-// Various functions for loading a ggml LLaMA model.
+// Startup
 llama_context* llama_init_from_params(const gpt_params& params);
 
-// Run inference on a LLaMA model using llama_context.
-std::vector<float> llama_eval(llama_context& ctx, const gpt_params& params, std::string& text);
+// Input processing and inference
+bool llama_ingest_input(llama_context& ctx, const std::string& text, bool clear_existing = true);
+bool llama_context_is_finished(const llama_context& ctx);
+bool llama_update_context_with_prompt(llama_context& ctx, const std::string& text, bool clear_existing = true);
+const std::vector<gpt_vocab::id> llama_tokenize_text(const llama_context& ctx, const std::string& text);
+bool llama_infer(llama_context& ctx, gpt_vocab::id& model_output);
 
+// Teardown
+void llama_free_context(llama_context* ctx);
+
+// Getters and setters
+gpt_vocab& llama_context_get_vocab(llama_context& ctx);
+const std::vector<gpt_vocab::id>& llama_context_get_embedding(const llama_context& ctx);
+const std::vector<gpt_vocab::id>& llama_context_get_last_n_tokens(const llama_context& ctx);
+
+// Other
 bool llama_model_quantize(const std::string & fname_inp, const std::string & fname_out, int itype);
 
-bool llama_injest_input(llama_context& ctx, const std::string& text, bool clear_existing = true);
-
-bool llama_inference(llama_context& ctx, gpt_vocab::id& model_output);
+// Stats
 void llama_print_context_info(const llama_context& ctx);
 void llama_print_end_stats(const llama_context& ctx);
