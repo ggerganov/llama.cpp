@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __linux__
+#define _POSIX_C_SOURCE 199309L
+#endif
+
 //
 // GGML Tensor Library
 //
