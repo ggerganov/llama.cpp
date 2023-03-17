@@ -3,6 +3,7 @@
 #include "utils.h"
 
 #include <cassert>
+#include <cerrno>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -10,11 +11,23 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <atomic>
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
+#include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #endif
+
+#define ROUNDUP(X, K) (((X) + (K)-1) & -(K))
+#define IS2POW(X) (!((X) & ((X)-1)))
+
+#define MAGIC_PATH "magic.dat"
+#define MAGIC_ADDR (char *)0x330000000000
+#define MAGIC_GRAN 2097152
+#define MAGIC_ALGN (sizeof(size_t) * 2)
 
 #define ANSI_COLOR_RED     "\x1b[31m"
 #define ANSI_COLOR_GREEN   "\x1b[32m"
@@ -82,6 +95,173 @@ struct llama_model {
     struct ggml_context * ctx;
     std::map<std::string, struct ggml_tensor *> tensors;
 };
+
+struct magic {
+    uint32_t magic;
+    std::atomic<unsigned> lock;
+    int fd;
+    size_t commit;
+    size_t offset;
+    size_t capacity;
+    gpt_vocab *vocab;
+    llama_model *model;
+};
+
+static struct magic *mag;
+
+static inline void spin_lock(std::atomic<unsigned> &lock) {
+    while (!lock.exchange(1, std::memory_order_acquire));
+}
+
+static inline void spin_unlock(std::atomic<unsigned> &lock) {
+    lock.store(0, std::memory_order_release);
+}
+
+static void *Mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
+    void *res;
+    res = mmap(addr, length, prot, flags, fd, offset);
+    if (res != MAP_FAILED) return res;
+    perror("mmap");
+    exit(77);
+}
+
+static void magic_commit(void) {
+    mag->offset = mag->capacity;
+    mag->commit = mag->capacity;
+    mag->magic = 0xFEEDABEE;
+    msync(mag, mag->commit, MS_ASYNC);
+}
+
+static void magic_init(void) {
+    int fd;
+    size_t n;
+    struct stat st;
+    if (mag) return;
+    n = ROUNDUP(sizeof(struct magic), MAGIC_GRAN);
+    if ((fd = open(MAGIC_PATH, O_RDWR)) != -1) {
+        fstat(fd, &st);
+        if (st.st_size >= n) {
+            mag = (struct magic *)Mmap(MAGIC_ADDR, n,
+                                       PROT_READ | PROT_WRITE,
+                                       MAP_PRIVATE | MAP_FIXED, fd, 0);
+            if (mag->magic == 0xFEEDABEE) {
+                mag = (struct magic *)Mmap(MAGIC_ADDR, mag->capacity,
+                                           PROT_READ | PROT_WRITE,
+                                           MAP_PRIVATE | MAP_FIXED, fd, 0);
+                madvise(MAGIC_ADDR, mag->capacity, MADV_WILLNEED);
+                ftruncate(fd, mag->commit);
+                mag->offset = mag->commit;
+                mag->capacity = mag->commit;
+                mag->fd = -1;
+                return;
+            }
+        }
+        ftruncate(fd, 0);
+    } else if ((fd = open(MAGIC_PATH, O_RDWR | O_CREAT | O_TRUNC, 0644)) == -1) {
+        perror(MAGIC_PATH);
+        exit(77);
+    }
+    ftruncate(fd, n);
+    mag = (struct magic *)Mmap(MAGIC_ADDR, n,
+                               PROT_READ | PROT_WRITE,
+                               MAP_SHARED | MAP_FIXED, fd, 0);
+    mag->offset = MAGIC_GRAN;
+    mag->fd = fd;
+}
+
+void *memalign(size_t a, size_t n) {
+    void *p;
+    size_t i, j, k, m;
+    static int count;
+    magic_init();
+    if (a < MAGIC_ALGN) a = MAGIC_ALGN;
+    while (!IS2POW(a)) ++a;
+    m = n ? n : 1;
+    spin_lock(mag->lock);
+    i = mag->offset;
+    i = i + sizeof(size_t);
+    i = ROUNDUP(i, a);
+    j = ROUNDUP(i + m, MAGIC_GRAN);
+    if (j > mag->capacity) {
+        if (!mag->magic) {
+            ftruncate(mag->fd, j);
+            p = mmap(MAGIC_ADDR + mag->capacity,
+                     j - mag->capacity, PROT_READ | PROT_WRITE,
+                     MAP_SHARED | MAP_FIXED, mag->fd, mag->capacity);
+        } else {
+            p = mmap(MAGIC_ADDR + mag->capacity,
+                     j - mag->capacity, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,  -1, 0);
+        }
+        if (p != MAP_FAILED) {
+            mag->capacity = j;
+        } else {
+            spin_unlock(mag->lock);
+            return 0;
+        }
+    }
+    mag->offset = i + m;
+    spin_unlock(mag->lock);
+    p = MAGIC_ADDR + i;
+    ((size_t *)p)[-1] = n;
+    return p;
+}
+
+int posix_memalign(void **pp, size_t a, size_t n) {
+    int e;
+    void *m;
+    size_t q, r;
+    q = a / sizeof(void *);
+    r = a % sizeof(void *);
+    if (!r && q && IS2POW(q)) {
+        e = errno;
+        m = memalign(a, n);
+        if (m) {
+            *pp = m;
+            return 0;
+        } else {
+            errno = e;
+            return ENOMEM;
+        }
+    } else {
+        return EINVAL;
+    }
+}
+
+void *malloc(size_t n) {
+    return memalign(MAGIC_ALGN, n);
+}
+
+size_t malloc_usable_size(const void *p) {
+    return ((const size_t *)p)[-1];
+}
+
+void *calloc(size_t n, size_t z) {
+    void *p;
+    if ((p = malloc((n *= z)))) {
+        memset(p, 0, n);
+    }
+    return p;
+}
+
+void free(void *p) {
+    // do nothing
+}
+
+void *realloc(void *p, size_t n) {
+    void *q;
+    if (!p) {
+        return malloc(n);
+    }
+    if (!n) {
+        free(p);
+        return 0;
+    }
+    if ((q = malloc(n))) {
+        memcpy(q, p, ((const size_t *)p)[-1]);
+    }
+    return q;
+}
 
 // load the model's weights from a file
 bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab & vocab, int n_ctx) {
@@ -786,6 +966,8 @@ const char * llama_print_system_info(void) {
 }
 
 int main(int argc, char ** argv) {
+    magic_init();
+
     ggml_time_init();
     const int64_t t_main_start_us = ggml_time_us();
 
@@ -812,19 +994,24 @@ int main(int argc, char ** argv) {
 
     int64_t t_load_us = 0;
 
-    gpt_vocab vocab;
-    llama_model model;
-
     // load the model
-    {
+    gpt_vocab *vocab;
+    llama_model *model;
+    if (!mag->magic) {
+        vocab = new gpt_vocab;
+        model = new llama_model;
         const int64_t t_start_us = ggml_time_us();
-
-        if (!llama_model_load(params.model, model, vocab, 512)) {  // TODO: set context from user input ??
+        if (!llama_model_load(params.model, *model, *vocab, 512)) {  // TODO: set context from user input ??
             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
             return 1;
         }
-
         t_load_us = ggml_time_us() - t_start_us;
+        mag->vocab = vocab;
+        mag->model = model;
+        magic_commit();
+    } else {
+        vocab = mag->vocab;
+        model = mag->model;
     }
 
     // print system information
@@ -842,18 +1029,18 @@ int main(int argc, char ** argv) {
     std::vector<float> logits;
 
     // tokenize the prompt
-    std::vector<gpt_vocab::id> embd_inp = ::llama_tokenize(vocab, params.prompt, true);
+    std::vector<gpt_vocab::id> embd_inp = ::llama_tokenize(*vocab, params.prompt, true);
 
-    params.n_predict = std::min(params.n_predict, model.hparams.n_ctx - (int) embd_inp.size());
+    params.n_predict = std::min(params.n_predict, model->hparams.n_ctx - (int) embd_inp.size());
 
     // tokenize the reverse prompt
-    std::vector<gpt_vocab::id> antiprompt_inp = ::llama_tokenize(vocab, params.antiprompt, false);
+    std::vector<gpt_vocab::id> antiprompt_inp = ::llama_tokenize(*vocab, params.antiprompt, false);
 
     fprintf(stderr, "\n");
     fprintf(stderr, "%s: prompt: '%s'\n", __func__, params.prompt.c_str());
     fprintf(stderr, "%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
     for (int i = 0; i < (int) embd_inp.size(); i++) {
-        fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], vocab.id_to_token.at(embd_inp[i]).c_str());
+        fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], vocab->id_to_token.at(embd_inp[i]).c_str());
     }
     fprintf(stderr, "\n");
     if (params.interactive) {
@@ -871,7 +1058,7 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "%s: reverse prompt: '%s'\n", __func__, params.antiprompt.c_str());
             fprintf(stderr, "%s: number of tokens in reverse prompt = %zu\n", __func__, antiprompt_inp.size());
             for (int i = 0; i < (int) antiprompt_inp.size(); i++) {
-                fprintf(stderr, "%6d -> '%s'\n", antiprompt_inp[i], vocab.id_to_token.at(antiprompt_inp[i]).c_str());
+                fprintf(stderr, "%6d -> '%s'\n", antiprompt_inp[i], vocab->id_to_token.at(antiprompt_inp[i]).c_str());
             }
             fprintf(stderr, "\n");
         }
@@ -883,7 +1070,7 @@ int main(int argc, char ** argv) {
 
     // determine the required inference memory per token:
     size_t mem_per_token = 0;
-    llama_eval(model, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);
+    llama_eval(*model, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);
 
     int last_n_size = params.repeat_last_n;
     std::vector<gpt_vocab::id> last_n_tokens(last_n_size);
@@ -918,7 +1105,7 @@ int main(int argc, char ** argv) {
         if (embd.size() > 0) {
             const int64_t t_start_us = ggml_time_us();
 
-            if (!llama_eval(model, params.n_threads, n_past, embd, logits, mem_per_token)) {
+            if (!llama_eval(*model, params.n_threads, n_past, embd, logits, mem_per_token)) {
                 fprintf(stderr, "Failed to predict\n");
                 return 1;
             }
@@ -936,14 +1123,14 @@ int main(int argc, char ** argv) {
             const float temp  = params.temp;
             const float repeat_penalty = params.repeat_penalty;
 
-            const int n_vocab = model.hparams.n_vocab;
+            const int n_vocab = model->hparams.n_vocab;
 
             gpt_vocab::id id = 0;
 
             {
                 const int64_t t_start_sample_us = ggml_time_us();
 
-                id = llama_sample_top_p_top_k(vocab, logits.data() + (logits.size() - n_vocab), last_n_tokens, repeat_penalty, top_k, top_p, temp, rng);
+                id = llama_sample_top_p_top_k(*vocab, logits.data() + (logits.size() - n_vocab), last_n_tokens, repeat_penalty, top_k, top_p, temp, rng);
 
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(id);
@@ -980,7 +1167,7 @@ int main(int argc, char ** argv) {
         // display text
         if (!input_noecho) {
             for (auto id : embd) {
-                printf("%s", vocab.id_to_token[id].c_str());
+                printf("%s", vocab->id_to_token[id].c_str());
             }
             fflush(stdout);
         }
@@ -1018,7 +1205,7 @@ int main(int argc, char ** argv) {
                         buf[n_read+1] = 0;
                     }
 
-                    std::vector<gpt_vocab::id> line_inp = ::llama_tokenize(vocab, buf, false);
+                    std::vector<gpt_vocab::id> line_inp = ::llama_tokenize(*vocab, buf, false);
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
 
                     remaining_tokens -= line_inp.size();
@@ -1050,7 +1237,7 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "%s:    total time = %8.2f ms\n", __func__, (t_main_end_us - t_main_start_us)/1000.0f);
     }
 
-    ggml_free(model.ctx);
+    ggml_free(model->ctx);
 
     return 0;
 }

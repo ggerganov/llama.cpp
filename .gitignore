@@ -18,6 +18,7 @@ models/*
 
 /main
 /quantize
+/magic.dat
 
 arm_neon.h
 compile_commands.json
