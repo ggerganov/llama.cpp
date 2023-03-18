@@ -2,6 +2,8 @@
 #include "utils.h"
 #include "llama.h"
 
+#include <iostream>
+
 const char * llama_print_system_info(void) {
     static std::string s;
 
@@ -63,5 +65,5 @@ int main(int argc, char ** argv) {
                 params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
     }
 
-    return llama_main(params, vocab, model, t_main_start_us, t_load_us);
+    return llama_main(params, vocab, model, t_main_start_us, t_load_us, std::cin, stdout, stderr);
 }
