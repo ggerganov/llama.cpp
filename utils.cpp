@@ -302,7 +302,7 @@ std::vector<gpt_vocab::id> llama_tokenize(const gpt_vocab & vocab, const std::st
     // Forward pass
     for (int i = 0; i < len; i++) {
         int max_len = std::min(len - i, MAX_TOKEN_LEN);
-        for (int sub_len = 1; sub_len <= len - i; sub_len++) {
+        for (int sub_len = 1; sub_len <= max_len; sub_len++) {
             auto sub = text.substr(i, sub_len);
             auto token = vocab.token_to_id.find(sub);
             if (token != vocab.token_to_id.end()) {
