@@ -16,6 +16,18 @@
  #endif
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
+    // determine sensible default number of threads.
+    // std::thread::hardware_concurrency may not be equal to the number of cores, or may return 0.
+#ifdef __linux__
+    std::ifstream cpuinfo("/proc/cpuinfo");
+    params.n_threads = std::count(std::istream_iterator<std::string>(cpuinfo),
+                                  std::istream_iterator<std::string>(),
+                                  std::string("processor"));
+#endif
+    if (params.n_threads == 0) {
+        params.n_threads = std::max(1, (int32_t) std::thread::hardware_concurrency());
+    }
+
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
 
@@ -275,40 +287,56 @@ std::vector<gpt_vocab::id> gpt_tokenize(const gpt_vocab & vocab, const std::stri
     return tokens;
 }
 
+// TODO: Calculate this constant from the vocabulary
+#define MAX_TOKEN_LEN 18
+// SentencePiece implementation after https://guillaume-be.github.io/2020-05-30/sentence_piece
 std::vector<gpt_vocab::id> llama_tokenize(const gpt_vocab & vocab, const std::string & text, bool bos) {
-    //auto res = gpt_tokenize(vocab, text);
-
-    //if (bos) {
-    //    res.insert(res.begin(), 1); // TODO: replace with vocab.bos
-    //}
-
     std::vector<gpt_vocab::id> res;
+    std::vector<int> score;
+    std::vector<gpt_vocab::id> prev;
+    int len = text.length();
+
+    score.resize(len + 1);
+    prev.resize(len + 1);
+
+    // Forward pass
+    for (int i = 0; i < len; i++) {
+        int max_len = std::min(len - i, MAX_TOKEN_LEN);
+        for (int sub_len = 1; sub_len <= len - i; sub_len++) {
+            auto sub = text.substr(i, sub_len);
+            auto token = vocab.token_to_id.find(sub);
+            if (token != vocab.token_to_id.end()) {
+                int token_score = sub.length() * sub.length();
+                int local_score = score[i] + token_score;
+                int next = i + sub_len;
+                if (score[next] < local_score) {
+                    score[next] = local_score;
+                    prev[next] = (*token).second;
+                }
+            }
+        }
+    }
+
+    // Backward pass
+    int i = len;
+    while (i > 0) {
+        gpt_vocab::id token_id = prev[i];
+        if (token_id == 0) {
+	    // TODO: Return error or something more meaningful
+            printf("failed to tokenize string!\n");
+	    break;
+        }
+        res.push_back(token_id);
+        auto token = (*vocab.id_to_token.find(token_id)).second;
+        i -= token.length();
+    }
 
     if (bos) {
         res.push_back(1); // TODO: replace with vocab.bos
     }
 
-     //find the longest token that matches the text
-    int pos = 0;
-    while (true) {
-        int l = 0;
-        int t = 0;
-        for (const auto & kv : vocab.id_to_token) {
-            if (kv.second.size() < l) continue;
-            if (kv.second.size() > text.size() - pos) continue;
-            if (text.substr(pos, kv.second.size()) == kv.second) {
-                l = kv.second.size();
-                t = kv.first;
-            }
-        }
-
-        if (l == 0) {
-            break;
-        }
-
-        res.push_back(t);
-        pos += l;
-    }
+    // Pieces are in reverse order so correct that
+    std::reverse(res.begin(), res.end());
 
     return res;
 }
@@ -489,7 +517,8 @@ size_t ggml_quantize_q4_0(float * src, void * dst, int n, int k, int qk, int64_t
 
 size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t * hist) {
     const int nb = k / qk;
-    const size_t row_size = nb*(2*sizeof(float) + sizeof(uint8_t)*qk/2);
+    const size_t bs = (2*sizeof(float) + sizeof(uint8_t)*qk/2);
+    const size_t row_size = nb*bs;
 
     assert(k % qk == 0);
 
@@ -498,10 +527,10 @@ size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t
 
     char * pdst = (char *) dst;
 
-    for (int j = 0; j < n; j += k) {
-        float   * pm = (float *)   (pdst + (j/k)*row_size);
-        float   * pd = (float *)   (pm + nb);
-        uint8_t * pb = (uint8_t *) (pd + nb);
+    for (int j = 0; j < n; j += k) { 
+        uint8_t * pd = (uint8_t *) (pdst + (j/k)*row_size + 0*bs);
+        uint8_t * pm = (uint8_t *) (pdst + (j/k)*row_size + 0*bs +   sizeof(float));
+        uint8_t * pb = (uint8_t *) (pdst + (j/k)*row_size + 0*bs + 2*sizeof(float));
 
         //printf("n = %d, k = %d, nb = %d, row_size = %d, j = %d, pm = %p, pd = %p, pb = %p\n", n, k, nb, row_size, j, pm, pd, pb);
 
@@ -519,8 +548,10 @@ size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t
                 const float d = (max - min) / ((1 << 4) - 1);
                 const float id = d ? 1.0f/d : 0.0f;
 
-                pm[i] = min;
-                pd[i] = d;
+                *(float *) pd = d;
+                *(float *) pm = min;
+                pd += bs; 
+                pm += bs;
 
                 for (int l = 0; l < qk; l += 2) {
                     const float v0 = (src[j + i*qk + l + 0] - min)*id;
@@ -538,7 +569,8 @@ size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t
                     pp[l/2] = vi0 | (vi1 << 4);
                 }
 
-                memcpy(pb + i*qk/2, pp, pp_size);
+                memcpy(pb, pp, pp_size);
+                pb += bs;
             }
         }
     }
