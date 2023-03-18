@@ -12,3 +12,8 @@ If you care, **please contribute to [this discussion](https://github.com/ggergan
 - Leave main.cpp UNTOUCHED, We want to be able to update the repo and pull any changes automatically.
 - No dynamic memory allocation! Setup structs with FIXED (known) shapes and sizes for ALL output fields. Python will ALWAYS provide the memory, we just write to it.
 - No external libraries or dependencies. That means no Flask, Pybind and whatever. All You Need Is Python.
+
+## Usage
+- Windows binaries are provided in the form of **llamalib.dll** but if you feel worried go ahead and rebuild it yourself.
+- Weights are not included, you can use the llama.cpp quantize.exe to generate them from your official weight files (or download them from...places).
+- To run, simply clone the repo and run `llama_for_kobold.py [ggml_quant_model.bin] [port]`, and then connect with Kobold or Kobold Lite.
