@@ -59,7 +59,7 @@ cmake --build . --config Release
 
 TODO
 
-Torrent: `magnet:?xt=urn:btih:f3cf71b172129d6b5abccab393bc32253fac8159&dn=ggml-alpaca-13b-q4.bin&tr=udp%3A%2F%http://2Ftracker.opentrackr.org%3A1337%2Fannounce&tr=udp%3A%2F%https://t.co/zenhelfwRd%3A6969%2Fannounce&tr=https%3A%2F%https://t.co/zenhelfwRd%3A443%2Fannounce&tr=udp%3A%2F%https://t.co/RRAn1X65wE%3A6969%2Fannounce&tr=udp%3A%2F%https://t.co/uTXBeTLUMa%3A2810%2Fannounce`
+Torrent: `magnet:?xt=urn:btih:053b3d54d2e77ff020ebddf51dad681f2a651071&dn=ggml-alpaca-13b-q4.bin&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce&tr=udp%3A%2F%2Fopentracker.i2p.rocks%3A6969%2Fannounce&tr=udp%3A%2F%2Ftracker.openbittorrent.com%3A6969%2Fannounce&tr=udp%3A%2F%2F9.rarbg.com%3A2810%2Fannounce`
 
 ## Credit
 
