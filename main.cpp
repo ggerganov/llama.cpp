@@ -1,9 +1,9 @@
 #include "ggml.h"
 
 #include "utils.h"
+#include "mmap.h"
 
 #include <cassert>
-#include <cerrno>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -205,27 +205,6 @@ void *memalign(size_t a, size_t n) {
     p = MAGIC_ADDR + i;
     ((size_t *)p)[-1] = n;
     return p;
-}
-
-int posix_memalign(void **pp, size_t a, size_t n) {
-    int e;
-    void *m;
-    size_t q, r;
-    q = a / sizeof(void *);
-    r = a % sizeof(void *);
-    if (!r && q && IS2POW(q)) {
-        e = errno;
-        m = memalign(a, n);
-        if (m) {
-            *pp = m;
-            return 0;
-        } else {
-            errno = e;
-            return ENOMEM;
-        }
-    } else {
-        return EINVAL;
-    }
 }
 
 void *malloc(size_t n) {
