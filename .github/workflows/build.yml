@@ -1,5 +1,20 @@
 name: CI
-on: [push, pull_request]
+
+on:
+  workflow_dispatch: # allows manual triggering
+    inputs:
+      create_release:
+        description: 'Create new release'
+        required: true
+        type: boolean
+  push:
+    paths: ['.github/workflows/**', 'CMakeLists.txt', 'Makefile', '**.h', '*.c', '**.cpp']
+  pull_request:
+    types: [opened, synchronize, edited, reopened, review_requested, ready_for_review]
+    paths: ['CMakeLists.txt', 'Makefile', '**.h', '*.c', '**.cpp']
+
+env:
+ BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
 
 jobs:
   ubuntu-latest-make:
@@ -7,14 +22,17 @@ jobs:
 
     steps:
       - name: Clone
+        id: checkout
         uses: actions/checkout@v1
 
       - name: Dependencies
+        id: depends
         run: |
           sudo apt-get update
           sudo apt-get install build-essential
 
       - name: Build
+        id: make_build
         run: |
           make
 
@@ -42,13 +60,16 @@ jobs:
 
     steps:
       - name: Clone
+        id: checkout
         uses: actions/checkout@v1
 
       - name: Dependencies
+        id: depends
         run: |
           brew update
 
       - name: Build
+        id: make_build
         run: |
           make
 
@@ -75,14 +96,48 @@ jobs:
 
     steps:
       - name: Clone
+        id: checkout
         uses: actions/checkout@v1
 
       - name: Build
+        id: cmake_build
         run: |
           mkdir build
           cd build
           cmake ..
           cmake --build . --config Release
+
+      - name: Get commit hash
+        id: commit
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: pr-mpt/actions-commit-hash@v2
+
+      - name: Pack artifacts
+        id: pack_artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        run: |
+          7z a llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-x64.zip .\build\Release\*
+
+      - name: Create release
+        id: create_release
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: zendesk/action-create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}
+
+      - name: Upload release
+        id: upload_release
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} 
+          asset_path: .\llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-x64.zip
+          asset_name: llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-x64.zip
+          asset_content_type: application/octet-stream
 
 #  ubuntu-latest-gcc:
 #    runs-on: ubuntu-latest
