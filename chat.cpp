@@ -16,6 +16,7 @@
 #include <unistd.h>
 #elif defined (_WIN32)
 #include <signal.h>
+#include <Windows.h>
 #endif
 
 #define ANSI_COLOR_RED     "\x1b[31m"
@@ -886,6 +887,11 @@ int main(int argc, char ** argv) {
         sigaction(SIGINT, &sigint_action, NULL);
 #elif defined (_WIN32)
         signal(SIGINT, sigint_handler);
+		//Windows console ANSI color fix 
+		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		DWORD mode;
+		GetConsoleMode(hConsole, &mode);
+		SetConsoleMode(hConsole, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
 #endif
 
         fprintf(stderr, "%s: interactive mode on.\n", __func__);
