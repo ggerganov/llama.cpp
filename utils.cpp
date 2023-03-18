@@ -347,6 +347,16 @@ std::vector<gpt_vocab::id> llama_tokenize(const gpt_vocab & vocab, const std::st
 
     return res;
 }
+std::string llama_tokens_to_string(const gpt_vocab & vocab, const std::vector<gpt_vocab::id> & tokens) {
+    std::string res;
+    for (auto t : tokens) {
+        res += vocab.id_to_token.at(t);
+    }
+    return res;
+}
+std::string single_llama_token_to_string(const gpt_vocab & vocab, const gpt_vocab::id & tokens) {
+    return vocab.id_to_token.at(tokens);
+}
 
 bool gpt_vocab_init(const std::string & fname, gpt_vocab & vocab) {
     printf("%s: loading vocab from '%s'\n", __func__, fname.c_str());

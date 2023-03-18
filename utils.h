@@ -81,6 +81,11 @@ std::vector<gpt_vocab::id> gpt_tokenize(const gpt_vocab & vocab, const std::stri
 // ref: https://github.com/google/sentencepiece
 std::vector<gpt_vocab::id> llama_tokenize(const gpt_vocab & vocab, const std::string & text, bool bos);
 
+// convert tokens to string
+// opposite llama_tokenize
+std::string llama_tokens_to_string(const gpt_vocab & vocab, const std::vector<gpt_vocab::id> & tokens);
+inline std::string single_llama_token_to_string(const gpt_vocab & vocab, const gpt_vocab::id & tokens);
+
 // load the tokens from encoder.json
 bool gpt_vocab_init(const std::string & fname, gpt_vocab & vocab);
 
