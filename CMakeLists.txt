@@ -107,8 +107,9 @@ endif()
 # endif()
 
 add_executable(llama
-    llama.cpp
+    main.cpp
     utils.cpp
+    llama.cpp
     utils.h)
 
 add_executable(quantize
