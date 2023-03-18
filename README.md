@@ -4,7 +4,7 @@ A hacky little script from Concedo that exposes llama.cpp function bindings, all
 
 It's not very usable as there is a fundamental flaw with llama.cpp, which causes generation delay to scale linearly with original prompt length. Nobody knows why or really cares much, so I'm just going to publish whatever I have at this point.
 
-If you care, please contribute to [this discussion](https://github.com/ggerganov/llama.cpp/discussions/229) which, if resolved, will actually make this viable.
+If you care, **please contribute to [this discussion](https://github.com/ggerganov/llama.cpp/discussions/229)** which, if resolved, will actually make this viable.
 
 ## Considerations
 - Don't want to use pybind11 due to dependencies on MSVCC
