@@ -57,3 +57,5 @@ struct llama_model {
     struct ggml_context * ctx;
     std::map<std::string, struct ggml_tensor *> tensors;
 };
+
+int llama_main(int argc, char ** argv);
