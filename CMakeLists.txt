@@ -129,3 +129,11 @@ target_include_directories(ggml PUBLIC .)
 target_link_libraries(quantize PRIVATE ggml)
 target_link_libraries(llama PRIVATE ggml)
 target_link_libraries(ggml PRIVATE Threads::Threads)
+
+add_subdirectory(extern/pybind11)
+pybind11_add_module(_core src/inference.cpp src/inference.h utils.cpp utils.h ggml.c ggml.h)
+target_compile_definitions(_core PUBLIC ${LLAMA_EXTRA_FLAGS})
+target_compile_definitions(_core PRIVATE VERSION_INFO=${PROJECT_VERSION})
+target_link_libraries(_core PRIVATE ggml)
+
+install(TARGETS _core DESTINATION llamacpypy)

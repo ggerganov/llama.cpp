@@ -1,0 +1,33 @@
+[project]
+name = "llamacpypy"
+version = "0.1.0"
+description = ""
+authors = [{name = "Emanuel Seemann", email = "github@emanuelseemann.ch"}]
+readme = "README.md"
+
+[tool.poetry]
+name = "llamacpypy"
+version = "0.1.0"
+description = ""
+authors = ["Emanuel Seemann <github@emanuelseemann.ch>"]
+readme = "README.md"
+packages = [{include = "./src"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+pybind11 = "^2.10.4"
+
+
+[build-system]
+requires = ["scikit-build-core>=0.2.1", "pybind11"]
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+wheel.expand-macos-universal-tags = true
+
+
+[tool.cibuildwheel]
+test-command = "pytest {project}/tests"
+test-extras = ["test"]
+test-skip = ["*universal2:arm64"]
+build-verbosity = 1
