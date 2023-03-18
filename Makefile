@@ -176,7 +176,7 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: main quantize
+default: main llamalib quantize
 
 #
 # Build library
@@ -194,6 +194,9 @@ clean:
 main: main.cpp ggml.o utils.o
 	$(CXX) $(CXXFLAGS) main.cpp ggml.o utils.o -o main $(LDFLAGS)
 	./main -h
+	
+llamalib: expose.cpp ggml.o utils.o
+	$(CXX) $(CXXFLAGS) expose.cpp ggml.o utils.o -shared -o llamalib.dll $(LDFLAGS)
 
 quantize: quantize.cpp ggml.o utils.o
 	$(CXX) $(CXXFLAGS) quantize.cpp ggml.o utils.o -o quantize $(LDFLAGS)
