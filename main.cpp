@@ -56,5 +56,5 @@ int main(int argc, char ** argv) {
                 params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
     }
 
-    return llama_main(params, vocab, model, t_main_start_us, t_load_us);
+    return llama_main(params, vocab, model, t_main_start_us, t_load_us, stdin, stdout, stderr);
 }
