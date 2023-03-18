@@ -6,6 +6,7 @@
 #include <string>
 
 #include "ggml.h"
+#include "utils.h"
 
 
 // default hparams (LLaMA 7B)
@@ -58,4 +59,10 @@ struct llama_model {
     std::map<std::string, struct ggml_tensor *> tensors;
 };
 
-int llama_main(int argc, char ** argv);
+int llama_main(
+    gpt_params params,
+    gpt_vocab vocab,
+    llama_model model,
+    int64_t t_load_us,
+    int64_t t_main_start_us);
+bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab & vocab, int n_ctx);
