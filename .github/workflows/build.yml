@@ -13,6 +13,9 @@ on:
     types: [opened, synchronize, edited, reopened, review_requested, ready_for_review]
     paths: ['CMakeLists.txt', 'Makefile', '**.h', '*.c', '**.cpp']
 
+env:
+ BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+
 jobs:
   ubuntu-latest:
     runs-on: ubuntu-latest
@@ -76,7 +79,7 @@ jobs:
         id: pack_artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
-          7z a alpaca-bin-win-x64-${{ steps.commit.outputs.short }}.zip .\build\Release\*
+          7z a alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-x64.zip .\build\Release\*
 
       - name: Create release
         id: create_release
@@ -85,7 +88,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ steps.commit.outputs.short }}
+          tag_name: ${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}
 
       - name: Upload release
         id: upload_release
@@ -95,8 +98,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} 
-          asset_path: .\alpaca-bin-win-x64-${{ steps.commit.outputs.short }}.zip
-          asset_name: alpaca-bin-win-x64-${{ steps.commit.outputs.short }}.zip
+          asset_path: .\alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-x64.zip
+          asset_name: alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-x64.zip
           asset_content_type: application/octet-stream
 
 #  ubuntu-latest-gcc:
