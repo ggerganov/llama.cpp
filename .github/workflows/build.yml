@@ -69,30 +69,30 @@ jobs:
           path: |
             chat
 
-  macos-arm64:
-    runs-on: macos-arm64
+  # macos-arm64:
+  #   runs-on: macos-arm64
 
-    steps:
-      - name: Clone
-        id: checkout
-        uses: actions/checkout@v1
+  #   steps:
+  #     - name: Clone
+  #       id: checkout
+  #       uses: actions/checkout@v1
 
-      - name: Dependencies
-        id: depends
-        run: |
-          brew update
+  #     - name: Dependencies
+  #       id: depends
+  #       run: |
+  #         brew update
 
-      - name: Build
-        id: make_build
-        run: |
-          make
+  #     - name: Build
+  #       id: make_build
+  #       run: |
+  #         make
 
-      - name: Archive production artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: macos
-          path: |
-            chat
+  #     - name: Archive production artifacts
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: macos
+  #         path: |
+  #           chat
 
   windows-latest:
     runs-on: windows-latest
