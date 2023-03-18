@@ -1,3 +1,5 @@
+/chat
+
 *.o
 *.a
 .cache/
