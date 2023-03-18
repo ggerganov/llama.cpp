@@ -889,7 +889,7 @@ int main(int argc, char ** argv) {
         signal(SIGINT, sigint_handler);
 
         // Windows console ANSI color fix
-        DWORD mode;
+        DWORD mode = 0;
         HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
         if (hConsole && hConsole != INVALID_HANDLE_VALUE && GetConsoleMode(hConsole, &mode))
             SetConsoleMode(hConsole, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
