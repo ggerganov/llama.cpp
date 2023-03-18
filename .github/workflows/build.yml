@@ -69,8 +69,8 @@ jobs:
           path: |
             chat
 
-  macOS-arm64:
-    runs-on: macOS-arm64
+  macos-arm64:
+    runs-on: macos-arm64
 
     steps:
       - name: Clone
