@@ -1,9 +1,19 @@
 [project]
 name = "llamacpypy"
 version = "0.1.0"
-description = ""
+description = "Python bindings for llama.cpp"
 authors = [{name = "Emanuel Seemann", email = "github@emanuelseemann.ch"}]
 readme = "README.md"
+license = { file = "LICENSE" }
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C++"
+]
+dependencies = [
+    "pybind11 >= 2.10.4",
+]
 
 [tool.poetry]
 name = "llamacpypy"
@@ -31,3 +41,6 @@ test-command = "pytest {project}/tests"
 test-extras = ["test"]
 test-skip = ["*universal2:arm64"]
 build-verbosity = 1
+
+[project.urls]
+Homepage = "https://github.com/seemanne/llamacpypy"
