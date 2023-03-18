@@ -143,16 +143,8 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
 
     // load vocab
     {
-        const int32_t n_vocab = model.hparams.n_vocab;
-
-        if (n_vocab != model.hparams.n_vocab) {
-            fprintf(stderr, "%s: invalid model file '%s' (bad vocab size %d != %d)\n",
-                    __func__, fname.c_str(), n_vocab, model.hparams.n_vocab);
-            return false;
-        }
-
         std::string word;
-        for (int i = 0; i < n_vocab; i++) {
+        for (int i = 0; i < model.hparams.n_vocab; i++) {
             uint32_t len;
             fin.read((char *) &len, sizeof(len));
 
