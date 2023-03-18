@@ -41,6 +41,15 @@ jobs:
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
           zip alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-linux-x64.zip chat
+      
+      - name: Create release
+        id: create_release
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: zendesk/action-create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}
 
       - name: Upload release
         id: upload_release
@@ -72,11 +81,21 @@ jobs:
         run: |
           make
 
+
       - name: Pack artifacts
         id: pack_artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
           zip alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-mac-x64.zip chat
+      
+      - name: Create release
+        id: create_release
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: zendesk/action-create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}
 
       - name: Upload release
         id: upload_release
