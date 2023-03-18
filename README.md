@@ -11,6 +11,9 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 - Cache input prompts for faster initialization: https://github.com/ggerganov/llama.cpp/issues/64
 - Create a `llama.cpp` logo: https://github.com/ggerganov/llama.cpp/issues/105
 
+**TEMPORARY NOTICE:**
+If you're updating to the latest master, you will need to regenerate your model files as the format has changed.
+
 ## Description
 
 The main goal is to run the model using 4-bit quantization on a MacBook
