@@ -721,6 +721,25 @@ bool llama_eval(
                     inpL);
     }
 
+    // run the computation
+    ggml_build_forward_expand(&gf, inpL);
+    ggml_graph_compute       (ctx0, &gf);
+
+    // capture input sentence embedding
+    {
+        std::vector<float> embedding_representation;    
+        embedding_representation.resize(n_embd);
+        memcpy(embedding_representation.data(), (float *) ggml_get_data(inpL) + (n_embd * (N - 2)), sizeof(float) * n_embd);
+        fprintf(stdout, "\n[\n");
+        for (int j = 0; j < embedding_representation.size()-1 ; j++){
+            fprintf(stdout, "%f, ", embedding_representation[j]);
+        }
+        fprintf(stdout, "%f", embedding_representation[embedding_representation.size()-1]);
+        fprintf(stdout, "\n]\n");
+
+    }
+    
+
     // lm_head
     {
         inpL = ggml_mul_mat(ctx0, model.output, inpL);
@@ -729,9 +748,7 @@ bool llama_eval(
     // logits -> probs
     //inpL = ggml_soft_max(ctx0, inpL);
 
-    // run the computation
-    ggml_build_forward_expand(&gf, inpL);
-    ggml_graph_compute       (ctx0, &gf);
+    
 
     //if (n_past%100 == 0) {
     //    ggml_graph_print   (&gf);
