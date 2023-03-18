@@ -44,7 +44,6 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             std::copy(std::istreambuf_iterator<char>(file),
                     std::istreambuf_iterator<char>(),
                     back_inserter(params.prompt));
-                
         } else if (arg == "-n" || arg == "--n_predict") {
             params.n_predict = std::stoi(argv[++i]);
         } else if (arg == "--top_k") {
@@ -72,6 +71,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.use_color = true;
         } else if (arg == "-r" || arg == "--reverse-prompt") {
             params.antiprompt = argv[++i];
+        } else if (arg == "--perplexity") {
+            params.perplexity = true;
         } else if (arg == "-h" || arg == "--help") {
             gpt_print_usage(argc, argv, params);
             exit(0);
@@ -109,6 +110,7 @@ void gpt_print_usage(int argc, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -c N, --ctx_size N    size of the prompt context (default: %d)\n", params.n_ctx);
     fprintf(stderr, "  --temp N              temperature (default: %.1f)\n", params.temp);
     fprintf(stderr, "  -b N, --batch_size N  batch size for prompt processing (default: %d)\n", params.n_batch);
+    fprintf(stderr, "  --perplexity          compute perplexity over the prompt\n");
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
     fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
     fprintf(stderr, "\n");
@@ -322,9 +324,9 @@ std::vector<gpt_vocab::id> llama_tokenize(const gpt_vocab & vocab, const std::st
     while (i > 0) {
         gpt_vocab::id token_id = prev[i];
         if (token_id == 0) {
-	    // TODO: Return error or something more meaningful
-            printf("failed to tokenize string!\n");
-	    break;
+            // TODO: Return error or something more meaningful
+            printf("failed to tokenize string at %d!\n", i);
+            break;
         }
         res.push_back(token_id);
         auto token = (*vocab.id_to_token.find(token_id)).second;
@@ -398,7 +400,7 @@ gpt_vocab::id llama_sample_top_p_top_k(
                     logits_id.push_back(std::make_pair(logits[i]*scale*repeat_penalty, i));
                 } else {
                     logits_id.push_back(std::make_pair(logits[i]*scale/repeat_penalty, i));
-                }                
+                }
             } else {
                 logits_id.push_back(std::make_pair(logits[i]*scale, i));
             }
@@ -527,7 +529,7 @@ size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t
 
     char * pdst = (char *) dst;
 
-    for (int j = 0; j < n; j += k) { 
+    for (int j = 0; j < n; j += k) {
         uint8_t * pd = (uint8_t *) (pdst + (j/k)*row_size + 0*bs);
         uint8_t * pm = (uint8_t *) (pdst + (j/k)*row_size + 0*bs +   sizeof(float));
         uint8_t * pb = (uint8_t *) (pdst + (j/k)*row_size + 0*bs + 2*sizeof(float));
@@ -550,7 +552,7 @@ size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t
 
                 *(float *) pd = d;
                 *(float *) pm = min;
-                pd += bs; 
+                pd += bs;
                 pm += bs;
 
                 for (int l = 0; l < qk; l += 2) {
