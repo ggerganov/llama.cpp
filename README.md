@@ -165,7 +165,7 @@ and sufficient RAM to load them. At the moment, memory and disk requirements are
 | model | original size | quantized size (4-bit) |
 |-------|---------------|------------------------|
 | 7B    | 13 GB         | 3.9 GB                 |
-| 15B   | 24 GB         | 7.8 GB                 |
+| 13B   | 24 GB         | 7.8 GB                 |
 | 30B   | 60 GB         | 19.5 GB                |
 | 65B   | 120 GB        | 38.5 GB                |
 
