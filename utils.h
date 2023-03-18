@@ -18,7 +18,7 @@ struct gpt_params {
     int32_t n_predict = 128; // new tokens to predict
     int32_t repeat_last_n = 64;  // last n tokens to penalize
     int32_t n_ctx = 512; //context size
-    
+
     // sampling parameters
     int32_t top_k = 40;
     float   top_p = 0.95f;

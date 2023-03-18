@@ -16,7 +16,7 @@
 # At the start of the ggml file we write the model parameters
 # and vocabulary.
 #
-
+import os
 import sys
 import json
 import struct
@@ -58,7 +58,6 @@ def get_n_parts(dim):
     else:
         print("Invalid dim: " + str(dim))
         sys.exit(1)
-
 
 def main():
     args = parse_args()
