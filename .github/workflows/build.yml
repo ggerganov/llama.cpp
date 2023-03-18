@@ -36,37 +36,13 @@ jobs:
         run: |
           make
 
-      - name: Set commit hash variables
-        id: commit
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: pr-mpt/actions-commit-hash@v2
-        
-      - name: Pack artifacts
-        id: pack_artifacts
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        run: |
-          zip alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-linux-x64.zip chat
-      
-      - name: Create release
-        id: create_release
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: zendesk/action-create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v3
         with:
-          tag_name: ${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}
+          name: ubuntu
+          path: |
+            chat
 
-      - name: Upload release
-        id: upload_release
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }} 
-          asset_path: .\alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-linux-x64.zip
-          asset_name: alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-linux-x64.zip
-          asset_content_type: application/octet-stream
 
   macOS-latest:
     runs-on: macOS-latest
@@ -86,37 +62,37 @@ jobs:
         run: |
           make
 
-      - name: Set commit hash variables
-        id: commit
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: pr-mpt/actions-commit-hash@v2
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos
+          path: |
+            chat
 
-      - name: Pack artifacts
-        id: pack_artifacts
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+  macOS-arm64:
+    runs-on: macOS-arm64
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v1
+
+      - name: Dependencies
+        id: depends
         run: |
-          zip alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-mac-x64.zip chat
-      
-      - name: Create release
-        id: create_release
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: zendesk/action-create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}
+          brew update
 
-      - name: Upload release
-        id: upload_release
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build
+        id: make_build
+        run: |
+          make
+
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v3
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }} 
-          asset_path: .\alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-mac-x64.zip
-          asset_name: alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-mac-x64.zip
-          asset_content_type: application/octet-stream
+          name: macos
+          path: |
+            chat
 
   windows-latest:
     runs-on: windows-latest
