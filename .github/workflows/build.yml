@@ -36,6 +36,24 @@ jobs:
         run: |
           make
 
+      - name: Pack artifacts
+        id: pack_artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        run: |
+          zip alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-linux-x64.zip chat
+
+      - name: Upload release
+        id: upload_release
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} 
+          asset_path: .\alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-linux-x64.zip
+          asset_name: alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-linux-x64.zip
+          asset_content_type: application/octet-stream
+
   macOS-latest:
     runs-on: macOS-latest
 
@@ -53,6 +71,24 @@ jobs:
         id: make_build
         run: |
           make
+
+      - name: Pack artifacts
+        id: pack_artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        run: |
+          zip alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-mac-x64.zip chat
+
+      - name: Upload release
+        id: upload_release
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} 
+          asset_path: .\alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-mac-x64.zip
+          asset_name: alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-mac-x64.zip
+          asset_content_type: application/octet-stream
 
   windows-latest:
     runs-on: windows-latest
