@@ -104,7 +104,7 @@ def __run_quantize_script(script_path, f16_model_part_path):
     f16 model to quantize.
     """
 
-    new_quantized_model_path = f16_model_part_path.replace("16", "q4_0")
+    new_quantized_model_path = f16_model_part_path.replace("f16", "q4_0")
     subprocess.run(
         [script_path, f16_model_part_path, new_quantized_model_path, "2"],
         shell=True, check=True
