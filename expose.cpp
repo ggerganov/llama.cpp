@@ -33,7 +33,7 @@ extern "C" {
     };
     struct generation_outputs
     {
-        int status;
+        int status = -1;
         char text[16384]; //16kb should be enough for any response
     };
 
@@ -63,7 +63,7 @@ extern "C" {
         return true;
     }
 
-    generation_outputs generate(const generation_inputs inputs, generation_outputs output)
+    generation_outputs generate(const generation_inputs inputs, generation_outputs & output)
     {
         api_params.prompt = inputs.prompt;
         api_params.seed = inputs.seed;

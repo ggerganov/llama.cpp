@@ -48,7 +48,7 @@ def load_model(model_filename,batch_size=8,max_context_length=512,threads=4,n_pa
 
 def generate(prompt,max_length=20,temperature=0.8,top_k=100,top_p=0.85,rep_pen=1.1,rep_pen_range=128,seed=-1,reset_state=True):
     inputs = generation_inputs()
-    outputs = generation_outputs()
+    outputs = ctypes.create_unicode_buffer(ctypes.sizeof(generation_outputs))
     inputs.prompt = prompt.encode("UTF-8")
     inputs.max_length = max_length
     inputs.temperature = temperature
