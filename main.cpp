@@ -977,7 +977,7 @@ int main(int argc, char ** argv) {
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(embd_inp[input_consumed]);
                 ++input_consumed;
-                if ((int) embd.size() > params.n_batch) {
+                if ((int) embd.size() >= params.n_batch) {
                     break;
                 }
             }
