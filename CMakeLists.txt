@@ -112,6 +112,10 @@ add_executable(llama
     llama.cpp
     utils.h)
 
+if(NOT WIN32)
+    target_sources(llama PRIVATE tcp_server.cpp)
+endif()
+
 add_executable(quantize
     quantize.cpp
     utils.cpp

@@ -191,11 +191,14 @@ utils.o: utils.cpp utils.h
 llama.o: llama.cpp llama.h
 	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
 
+tcp_server.o: tcp_server.cpp tcp_server.h
+	$(CXX) $(CXXFLAGS) -c tcp_server.cpp -o tcp_server.o
+
 clean:
 	rm -f *.o main quantize
 
-main: main.cpp ggml.o utils.o llama.o
-	$(CXX) $(CXXFLAGS) main.cpp ggml.o utils.o llama.o -o main $(LDFLAGS)
+main: main.cpp ggml.o utils.o llama.o tcp_server.o
+	$(CXX) $(CXXFLAGS) main.cpp ggml.o utils.o llama.o tcp_server.o -o main $(LDFLAGS)
 	./main -h
 
 quantize: quantize.cpp ggml.o utils.o

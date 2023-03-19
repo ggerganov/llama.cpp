@@ -74,6 +74,10 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.antiprompt.push_back(argv[++i]);
         } else if (arg == "--ignore-eos") {
             params.ignore_eos = true;
+#ifndef _WIN32
+        } else if (arg == "-l" || arg == "--listen") {
+            params.listen_port = argv[++i];
+#endif
         } else if (arg == "-h" || arg == "--help") {
             gpt_print_usage(argc, argv, params);
             exit(0);
@@ -119,6 +123,10 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -b N, --batch_size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
     fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
+#ifndef _WIN32
+    fprintf(stderr, "  -l PORT, --listen PORT\n");
+    fprintf(stderr, "                        Run in TCP mode, listening on PORT\n");
+#endif
     fprintf(stderr, "\n");
 }
 

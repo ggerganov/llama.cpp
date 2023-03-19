@@ -1,6 +1,7 @@
 #include "ggml.h"
 #include "utils.h"
 #include "llama.h"
+#include "tcp_server.h"
 
 #include <iostream>
 
@@ -64,6 +65,12 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "system_info: n_threads = %d / %d | %s\n",
                 params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
     }
+
+#ifndef _WIN32
+    if (params.listen_port != "") {
+      return listen_tcp(params, vocab, model, t_main_start_us, t_load_us);
+    }
+#endif
 
     return llama_main(params, vocab, model, t_main_start_us, t_load_us, std::cin, stdout, stderr);
 }

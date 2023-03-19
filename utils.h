@@ -40,6 +40,10 @@ struct gpt_params {
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
     bool instruct    = false; // instruction mode (used for Alpaca models)
     bool ignore_eos = false; // do not stop generating after eos
+
+#ifndef _WIN32
+    std::string listen_port = "";  // TCP port for when running in server mode
+#endif
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
