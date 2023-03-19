@@ -5556,7 +5556,7 @@ static void ggml_compute_forward_rms_norm_f32(
     const size_t nb2 = dst->nb[2];
     const size_t nb3 = dst->nb[3];
 
-    const ggml_float eps = 1e-5f; // TODO: make this a parameter
+    const ggml_float eps = 1e-6f; // TODO: make this a parameter
 
     // TODO: optimize
     for (int i03 = 0; i03 < ne03; i03++) {
@@ -5572,7 +5572,7 @@ static void ggml_compute_forward_rms_norm_f32(
                 mean /= ne00;
 
                 float * y = (float *) ((char *) dst->data + i01*nb1 + i02*nb2 + i03*nb3);
-                
+
                 memcpy(y, x, ne00 * sizeof(float));
                 // for (int i00 = 0; i00 < ne00; i00++) {
                 //     y[i00] = x[i00];
