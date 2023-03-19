@@ -4,6 +4,7 @@
 
 import subprocess
 import argparse
+import glob
 import sys
 import os
 
@@ -54,22 +55,32 @@ def main():
         sys.exit(1)
 
     for model in args.models:
-        f16_model_path = os.path.join(
+        # The model is separated in various parts (ggml-model-f16.bin.0...)
+        f16_model_path_base = os.path.join(
             args.models_path, model, "ggml-model-f16.bin"
         )
 
-        if not os.path.isfile(f16_model_path):
-            print(
-                "The f16 model (ggml-model-f16.bin) was not found in "
-                f"models/{model}. If you want to use it from another location,"
-                " set the --models-path argument from the command line."
+        f16_model_parts_paths = map(
+            lambda x: os.path.join(f16_model_path_base, x),
+            glob.glob(f"{f16_model_path_base}*")
+        )
+
+        for f16_model_part_path in f16_model_parts_paths:
+            if not os.path.isfile(f16_model_part_path):
+                print(
+                    f"The f16 model {os.path.basename(f16_model_part_path)} "
+                    f"was not found in models/{model}. If you want to use it "
+                    "from another location, set the --models-path argument "
+                    "from the command line."
+                )
+                sys.exit(1)
+
+            __run_quantize_script(
+                args.quantize_script_path, f16_model_part_path
             )
-            sys.exit(1)
 
-        __run_quantize_script(args.quantize_script_path, f16_model_path)
-
-        if args.remove_f16:
-            os.remove(f16_model_path)
+            if args.remove_f16:
+                os.remove(f16_model_part_path)
 
 
 # This was extracted to a top-level function for parallelization, if
