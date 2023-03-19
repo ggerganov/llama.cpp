@@ -21,7 +21,8 @@ class generation_inputs(ctypes.Structure):
                 ("top_k", ctypes.c_int),
                 ("top_p", ctypes.c_float),
                 ("rep_pen", ctypes.c_float),
-                ("rep_pen_range", ctypes.c_int)]
+                ("rep_pen_range", ctypes.c_int),
+                ("reset_state", ctypes.c_bool)]
 
 class generation_outputs(ctypes.Structure):
     _fields_ = [("status", ctypes.c_int),
@@ -45,7 +46,7 @@ def load_model(model_filename,batch_size=8,max_context_length=512,threads=4,n_pa
     ret = handle.load_model(inputs)
     return ret
 
-def generate(prompt,max_length=20,temperature=0.8,top_k=100,top_p=0.85,rep_pen=1.1,rep_pen_range=128,seed=-1):
+def generate(prompt,max_length=20,temperature=0.8,top_k=100,top_p=0.85,rep_pen=1.1,rep_pen_range=128,seed=-1,reset_state=True):
     inputs = generation_inputs()
     outputs = generation_outputs()
     inputs.prompt = prompt.encode("UTF-8")
@@ -56,6 +57,7 @@ def generate(prompt,max_length=20,temperature=0.8,top_k=100,top_p=0.85,rep_pen=1
     inputs.rep_pen = rep_pen
     inputs.rep_pen_range = rep_pen_range
     inputs.seed = seed
+    inputs.reset_state = reset_state
     ret = handle.generate(inputs,outputs)
     if(ret.status==1):
         return ret.text.decode("UTF-8")
@@ -75,6 +77,7 @@ maxctx = 1024
 maxlen = 256
 modelbusy = False
 port = 5001
+last_context = ""
 
 class ServerRequestHandler(http.server.BaseHTTPRequestHandler):
 
@@ -120,7 +123,8 @@ class ServerRequestHandler(http.server.BaseHTTPRequestHandler):
         content_length = int(self.headers['Content-Length'])
         body = self.rfile.read(content_length)
         if self.path.endswith('/api/v1/generate/') or self.path.endswith('/api/latest/generate/'):
-            global modelbusy  
+            global modelbusy
+            global last_context
             if modelbusy:
                 self.send_response(503)
                 self.end_headers()
@@ -140,17 +144,26 @@ class ServerRequestHandler(http.server.BaseHTTPRequestHandler):
                     return                
                  
                 print("\nInput: " + json.dumps(genparams))
+                fresh_state = True
+                fullprompt = genparams.get('prompt', "")
+                newprompt = fullprompt
+                if last_context!="" and newprompt.startswith(last_context):
+                    fresh_state = False
+                    newprompt = newprompt[len(last_context):]
+                    #print("trimmed: " + newprompt)
                 recvtxt = generate(
-                    prompt=genparams.get('prompt', ""),
+                    prompt=newprompt,
                     max_length=genparams.get('max_length', 50),
                     temperature=genparams.get('temperature', 0.8),
                     top_k=genparams.get('top_k', 100),
                     top_p=genparams.get('top_p', 0.85),
                     rep_pen=genparams.get('rep_pen', 1.1),
                     rep_pen_range=genparams.get('rep_pen_range', 128),
-                    seed=-1
+                    seed=-1,
+                    reset_state=fresh_state
                     )
                 print("\nOutput: " + recvtxt)
+                last_context = fullprompt + recvtxt
                 res = {"results": [{"text": recvtxt}]}
                 self.send_response(200)
                 self.end_headers()
@@ -241,7 +254,7 @@ if __name__ == '__main__':
             mdl_nparts += 1
     modelname = os.path.abspath(sys.argv[1])
     print("Loading model: " + modelname)
-    loadok = load_model(modelname,128,maxctx,4,mdl_nparts)
+    loadok = load_model(modelname,24,maxctx,4,mdl_nparts)
     print("Load Model OK: " + str(loadok))
 
     if loadok:
