@@ -17,6 +17,7 @@ extern "C" {
         const int max_context_length;
         const int batch_size;
         const char * model_filename;
+        const int n_parts_overwrite = -1;
     };
     struct generation_inputs
     {
@@ -48,7 +49,9 @@ extern "C" {
         api_params.n_batch = inputs.batch_size;
         api_params.model = inputs.model_filename;
 
-         if (!llama_model_load(api_params.model, api_model, api_vocab, api_params.n_ctx)) {  
+        int n_parts_overwrite =  inputs.n_parts_overwrite;
+
+        if (!llama_model_load(api_params.model, api_model, api_vocab, api_params.n_ctx, n_parts_overwrite)) {  
             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, api_params.model.c_str());
             return false;
         }
@@ -67,10 +70,23 @@ extern "C" {
         api_params.repeat_last_n = inputs.rep_pen_range;
         api_params.repeat_penalty = inputs.rep_pen;
       
+        if(api_params.repeat_last_n<1)
+        {
+            api_params.repeat_last_n = 1;
+        }
+        if(api_params.top_k<1)
+        {
+            api_params.top_k = 300; //to disable top_k we actually need to increase this value to a very high number
+        }
         if (api_params.seed < 0)
         {
             api_params.seed = time(NULL);
         }
+
+        //display usage
+        // std::string tst = " ";
+        // char * tst2 = (char*)tst.c_str();
+        // gpt_print_usage(1,&tst2,api_params);
         
         api_params.prompt.insert(0, 1, ' ');
         // tokenize the prompt
@@ -157,7 +173,7 @@ extern "C" {
             
         }
 
-        printf("output: %s",concat_output.c_str());
+        //printf("output: %s",concat_output.c_str());
         output.status = 1;
         _snprintf_s(output.text,sizeof(output.text),_TRUNCATE,"%s",concat_output.c_str());
         return output;

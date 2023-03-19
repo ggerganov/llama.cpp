@@ -196,7 +196,7 @@ main: main.cpp ggml.o utils.o
 	./main -h
 	
 llamalib: expose.cpp ggml.o utils.o
-	$(CXX) $(CXXFLAGS) expose.cpp ggml.o utils.o -shared -o llamalib.dll $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) expose.cpp ggml.o utils.o -shared -o llamacpp.dll $(LDFLAGS)
 
 quantize: quantize.cpp ggml.o utils.o
 	$(CXX) $(CXXFLAGS) quantize.cpp ggml.o utils.o -o quantize $(LDFLAGS)
