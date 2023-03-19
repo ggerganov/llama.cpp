@@ -110,7 +110,7 @@ endif()
 # if (LLAMA_PERF)
 # set(LLAMA_EXTRA_FLAGS ${LLAMA_EXTRA_FLAGS} -DGGML_PERF)
 # endif()
-add_executable(llama
+add_executable(main
     main.cpp
 )
 
@@ -118,7 +118,7 @@ add_executable(quantize
     quantize.cpp
 )
 
-add_library(llamalib
+add_library(llama
     llama.cpp
     llama.h
     utils.cpp
@@ -133,10 +133,10 @@ target_compile_definitions(llama PUBLIC ${LLAMA_EXTRA_FLAGS})
 target_compile_definitions(quantize PUBLIC ${LLAMA_EXTRA_FLAGS})
 
 target_link_libraries(ggml PRIVATE ${LLAMA_EXTRA_LIBS})
-target_link_libraries(llamalib PRIVATE ggml ${LLAMA_EXTRA_LIBS})
+target_link_libraries(llama PRIVATE ggml ${LLAMA_EXTRA_LIBS})
 
 target_include_directories(ggml PUBLIC .)
 
-target_link_libraries(quantize PRIVATE ggml llamalib)
-target_link_libraries(llama PRIVATE ggml llamalib)
+target_link_libraries(quantize PRIVATE ggml llama)
+target_link_libraries(main PRIVATE ggml llama)
 target_link_libraries(ggml PRIVATE Threads::Threads)
