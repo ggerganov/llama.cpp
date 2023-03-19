@@ -867,7 +867,7 @@ int main(int argc, char ** argv) {
     }
 
     // enable interactive mode if reverse prompt is specified
-    if (!antipromptv_inp.size()) {
+    if (antipromptv_inp.size() != 0) {
         params.interactive = true;
     }
 
