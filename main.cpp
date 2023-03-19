@@ -1054,7 +1054,7 @@ int main(int argc, char ** argv) {
                     embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
                 }
 
-                remaining_tokens = params.n_predict - line_inp.size();
+                remaining_tokens = std::min(params.n_predict, model.hparams.n_ctx - (int)embd_inp.size());
 
                 input_noecho = true; // do not echo this again
                 is_interacting = false;
@@ -1073,7 +1073,7 @@ int main(int argc, char ** argv) {
 
         // In interactive mode, respect the maximum number of tokens and drop back to user input when reached.
         if (params.interactive && remaining_tokens <= 0) {
-            remaining_tokens = params.n_predict;
+            remaining_tokens = std::min(params.n_predict, model.hparams.n_ctx - (int)embd_inp.size()); // Will get overriden when we get to user input, but we need it to not be 0 when this iteration ends.
             is_interacting = true;
         }
     }
