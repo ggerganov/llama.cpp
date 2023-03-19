@@ -114,7 +114,16 @@ int main(int argc, char ** argv) {
     }
 
     // tokenize the reverse prompt
-    std::vector<gpt_vocab::id> antiprompt_inp = llama_tokenize_text(ctx, params.antiprompt);
+    std::vector<std::vector<gpt_vocab::id>> antipromptv_inp;
+    
+    for (auto antiprompt : params.antiprompt) {
+        antipromptv_inp.push_back(::llama_tokenize(vocab, antiprompt, false));
+    }
+
+    // enable interactive mode if reverse prompt is specified
+    if (!antipromptv_inp.size()) {
+        params.interactive = true;
+    }
 
     // Setup interactive mode
     if (params.interactive) {
@@ -182,10 +191,6 @@ int main(int argc, char ** argv) {
 
         if (llama_has_unconsumed_input(ctx)) {
             llama_ingest_all_pending_input(ctx, !input_noecho);
-            // reset color to default if we there is no pending user input
-            if (!input_noecho && params.use_color) {
-                printf(ANSI_COLOR_RESET);
-            }
         }else{
             // Run inference if we don't have any pending input
             llama_infer(ctx, model_output, is_end_of_text);
@@ -193,15 +198,16 @@ int main(int argc, char ** argv) {
             printf("%s", model_output.c_str());
             input_noecho = false;
         }
-        // reset color to default if we there is no pending user input
-        if (!input_noecho && params.use_color && (int)embd_inp.size() == input_consumed) {
+        // reset color to default (all input will be ingested already at this point)
+        if (!input_noecho && params.use_color) {
             printf(ANSI_COLOR_RESET);
         }
 
         // in interactive mode, and not currently processing queued inputs;
         // check if we should prompt the user for more
         if (params.interactive && !llama_has_unconsumed_input(ctx)) {
-                // check for reverse prompt
+            // check for reverse prompt
+            for (auto antiprompt_inp : antipromptv_inp) {
                 if (antiprompt_inp.size() && llama_is_anti_prompt_present(ctx, antiprompt_inp)) {
                     // reverse prompt found
                     is_interacting = true;
