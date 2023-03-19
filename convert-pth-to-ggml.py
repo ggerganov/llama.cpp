@@ -16,7 +16,7 @@
 # At the start of the ggml file we write the model parameters
 # and vocabulary.
 #
-
+import os
 import sys
 import json
 import struct
@@ -63,6 +63,10 @@ if len(sys.argv) > 2:
         print("Invalid ftype: " + str(ftype))
         sys.exit(1)
     fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".bin"
+
+if os.path.exists(fname_out):
+    print(f"Skip conversion, it already exists: {fname_out}")
+    sys.exit(0)
 
 with open(fname_hparams, "r") as f:
     hparams = json.load(f)
