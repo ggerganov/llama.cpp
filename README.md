@@ -10,6 +10,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 - RMSNorm implementation / fixes: https://github.com/ggerganov/llama.cpp/issues/173
 - Cache input prompts for faster initialization: https://github.com/ggerganov/llama.cpp/issues/64
 - Create a `llama.cpp` logo: https://github.com/ggerganov/llama.cpp/issues/105
+- Ohter language fine-tuning: https://github.com/gyunggyung/OpenMLLM
 
 ## Description
 
