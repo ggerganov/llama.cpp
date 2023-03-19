@@ -71,7 +71,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         } else if (arg == "--color") {
             params.use_color = true;
         } else if (arg == "-r" || arg == "--reverse-prompt") {
-            params.antiprompt = argv[++i];
+            params.antiprompt.push_back(argv[++i]);
         } else if (arg == "-h" || arg == "--help") {
             gpt_print_usage(argc, argv, params);
             exit(0);
@@ -93,7 +93,8 @@ void gpt_print_usage(int argc, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -i, --interactive     run in interactive mode\n");
     fprintf(stderr, "  --interactive-start   run in interactive mode and poll user input at startup\n");
     fprintf(stderr, "  -r PROMPT, --reverse-prompt PROMPT\n");
-    fprintf(stderr, "                        in interactive mode, poll user input upon seeing PROMPT\n");
+    fprintf(stderr, "                        in interactive mode, poll user input upon seeing PROMPT (can be\n");
+    fprintf(stderr, "                        specified more than once for multiple prompts).\n");
     fprintf(stderr, "  --color               colorise output to distinguish prompt and user input from generations\n");
     fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1)\n");
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
