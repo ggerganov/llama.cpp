@@ -210,13 +210,16 @@ int main(int argc, char ** argv) {
             }
             if (is_interacting) {
                 if (params.instruct) {
-                    llama_update_input(ctx, "\n\n### Instruction:\n\n");
-
+                    llama_update_input(ctx, inp_pfx);
                     printf("\n> ");
                 }
 
                 // currently being interactive
                 process_interactive_input(ctx, params);
+
+                if (params.instruct) {
+                    llama_update_input(ctx, inp_sfx);
+                }
                 input_noecho = true; // do not echo this input again
                 is_interacting = false;
             }
