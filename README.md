@@ -32,13 +32,14 @@ Supported platforms:
 - [X] Mac OS
 - [X] Linux
 - [X] Windows (via CMake)
+- [X] Docker
 
 ---
 
 Here is a typical run using LLaMA-7B:
 
 ```java
-make -j && ./main -m ./models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -t 8 -n 512
+make -j && ./main -m ./models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
 I llama.cpp build info:
 I UNAME_S:  Darwin
 I UNAME_P:  arm
@@ -149,12 +150,24 @@ python3 convert-pth-to-ggml.py models/7B/ 1
 ./quantize.sh 7B
 
 # run the inference
-./main -m ./models/7B/ggml-model-q4_0.bin -t 8 -n 128
+./main -m ./models/7B/ggml-model-q4_0.bin -n 128
 ```
+
+Currently, it's best to use Python 3.9 or Python 3.10, as `sentencepiece` has not yet published a wheel for Python 3.11.
 
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
 
-TODO: add model disk/mem requirements
+### Memory/Disk Requirements
+
+As the models are currently fully loaded into memory, you will need adequate disk space to save them
+and sufficient RAM to load them. At the moment, memory and disk requirements are the same.
+
+| model | original size | quantized size (4-bit) |
+|-------|---------------|------------------------|
+| 7B    | 13 GB         | 3.9 GB                 |
+| 13B   | 24 GB         | 7.8 GB                 |
+| 30B   | 60 GB         | 19.5 GB                |
+| 65B   | 120 GB        | 38.5 GB                |
 
 ### Interactive mode
 
@@ -163,7 +176,7 @@ In this mode, you can always interrupt generation by pressing Ctrl+C and enter o
 
 Here is an example few-shot interaction, invoked with the command
 ```
-./main -m ./models/13B/ggml-model-q4_0.bin -t 8 -n 256 --repeat_penalty 1.0 --color -i -r "User:" \
+./main -m ./models/13B/ggml-model-q4_0.bin -n 256 --repeat_penalty 1.0 --color -i -r "User:" \
                                            -p \
 "Transcript of a dialog, where the User interacts with an Assistant named Bob. Bob is helpful, kind, honest, good at writing, and never fails to answer the User's requests immediately and with precision.
 
@@ -194,6 +207,37 @@ Finally, copy the `llama` binary and the model files to your device storage. Her
 
 https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b050-55b0b3b9274c.mp4
 
+### Docker
+
+#### Prerequisites
+* Docker must be installed and running on your system.
+* Create a folder to store big models & intermediate files (in ex. im using /llama/models)
+
+#### Images
+We have two Docker images available for this project:
+
+1. `ghcr.io/ggerganov/llama.cpp:full`: This image includes both the main executable file and the tools to convert LLaMA models into ggml and convert into 4-bit quantization.
+2. `ghcr.io/ggerganov/llama.cpp:light`: This image only includes the main executable file.
+
+#### Usage
+
+The easiest way to download the models, convert them to ggml and optimize them is with the --all-in-one command which includes the full docker image.
+
+ ```bash
+docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:full --all-in-one "/models/" 7B
+```
+
+On complete, you are ready to play!
+
+```bash
+docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:full --run -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
+```
+
+or with light image:
+
+```bash
+docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
+```
 
 ## Limitations
 
@@ -210,6 +254,7 @@ https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b0
 - Collaborators can push to branches in the `llama.cpp` repo and merge PRs into the `master` branch
 - Collaborators will be invited based on contributions
 - Any help with managing issues and PRs is very appreciated!
+- Make sure to read this: [Inference at the edge](https://github.com/ggerganov/llama.cpp/discussions/205)
 
 ### Coding guidelines
 

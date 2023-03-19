@@ -143,16 +143,8 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
 
     // load vocab
     {
-        const int32_t n_vocab = model.hparams.n_vocab;
-
-        if (n_vocab != model.hparams.n_vocab) {
-            fprintf(stderr, "%s: invalid model file '%s' (bad vocab size %d != %d)\n",
-                    __func__, fname.c_str(), n_vocab, model.hparams.n_vocab);
-            return false;
-        }
-
         std::string word;
-        for (int i = 0; i < n_vocab; i++) {
+        for (int i = 0; i < model.hparams.n_vocab; i++) {
             uint32_t len;
             fin.read((char *) &len, sizeof(len));
 
@@ -825,6 +817,11 @@ int main(int argc, char ** argv) {
     if (gpt_params_parse(argc, argv, params) == false) {
         return 1;
     }
+    
+    if (params.n_ctx > 2048) {
+        fprintf(stderr, "%s: warning: model does not support context sizes greater than 2048 tokens (%d specified);"
+                "expect poor results\n", __func__, params.n_ctx);
+    }
 
     if (params.seed < 0) {
         params.seed = time(NULL);
@@ -870,6 +867,8 @@ int main(int argc, char ** argv) {
 
     std::vector<float> logits;
 
+    // Add a space in front of the first character to match OG llama tokenizer behavior
+    params.prompt.insert(0, 1, ' ');
     // tokenize the prompt
     std::vector<gpt_vocab::id> embd_inp = ::llama_tokenize(vocab, params.prompt, true);
 
@@ -1048,7 +1047,7 @@ int main(int argc, char ** argv) {
                     if(params.use_color) printf(ANSI_BOLD ANSI_COLOR_GREEN);
                     if (scanf("%255[^\n]%n%*c", buf, &n_read) <= 0) {
                         // presumable empty line, consume the newline
-                        scanf("%*c");
+                        std::ignore = scanf("%*c");
                         n_read=0;
                     }
                     if(params.use_color) printf(ANSI_COLOR_RESET);
