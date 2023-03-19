@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd "$(dirname "$0")/.." || exit
+
 MODEL="./models/13B/ggml-model-q4_0.bin"
 USER_NAME="${USER_NAME:-User}"
 AI_NAME="${AI_NAME:-ChatLLaMa}"
@@ -22,7 +24,7 @@ GEN_OPTIONS="${GEN_OPTIONS:---ctx_size 4096 --temp 0.7 --top_k 40 --top_p 0.5 --
   --reverse-prompt "${USER_NAME}:" \
   --prompt "
 Text transcript of a never ending dialog, where ${USER_NAME} interacts with an AI assistant named ${AI_NAME}.
-${AI_NAME} is helpful, kind, honest, friendly, good at writing and never fails to answer ${USER_NAME}’s requests immediately and with precision.
+${AI_NAME} is helpful, kind, honest, friendly, good at writing and never fails to answer ${USER_NAME}’s requests immediately and with details and precision.
 There are no annotations like (30 seconds passed...) or (to himself), just what ${USER_NAME} and ${AI_NAME} say alound to each other.
 The dialog lasts for years, the entirety of it is shared below. It's 10000 pages long.
 The transcript only includes text, it does not include markup like HTML and Markdown.
