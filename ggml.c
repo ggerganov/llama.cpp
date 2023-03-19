@@ -76,6 +76,8 @@ static int sched_yield (void) {
 typedef void* thread_ret_t;
 #endif
 
+#include <sched.h>
+
 #ifdef __HAIKU__
 #define static_assert(cond, msg) _Static_assert(cond, msg)
 #endif
@@ -1425,7 +1427,58 @@ inline static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void
     __m256 acc = _mm256_setzero_ps();
 
     // Main loop
-    for (int i = 0; i < nb; ++i) {
+    const int unroll_count = 4;
+    const int loop_count = nb / unroll_count;
+    for (int j = 0; j < loop_count; ++j) {
+        #pragma unroll
+        for (int idx = 0; idx < unroll_count; ++idx) {
+            // determin the actual index in the loop
+            const int i = j * unroll_count + idx;
+            const float * d0_0 = (const float *) (pd0 + i*bs);
+            const float * d1_0 = (const float *) (pd1 + i*bs);
+
+            const uint8_t * restrict p0 = pb0 + i*bs;
+            const uint8_t * restrict p1 = pb1 + i*bs;
+
+            // Prefetch data used later in the loop
+            // TODO these numbersi are device dependent shouldn't be hard coded derive
+            _mm_prefetch (d0_0 + 32*bs, 1);
+            _mm_prefetch (d1_0 + 32*bs, 1);
+            _mm_prefetch (p0 + 32*bs, 1);
+            _mm_prefetch (p1 + 32*bs, 1);
+
+            // Compute combined scale for the block
+            const __m256 scale = _mm256_mul_ps( _mm256_broadcast_ss( d0_0 ), _mm256_broadcast_ss( d1_0 ) );
+
+            // Load 16 bytes, and unpack 4 bit fields into bytes, making 32 bytes
+            __m256i bx = bytesFromNibbles( p0 );
+            __m256i by = bytesFromNibbles( p1 );
+
+            // Now we have a vector with bytes in [ 0 .. 15 ] interval. Offset them into [ -8 .. +7 ] interval.
+            const __m256i off = _mm256_set1_epi8( 8 );
+            bx = _mm256_sub_epi8( bx, off );
+            by = _mm256_sub_epi8( by, off );
+
+            // Sign-extend first 16 signed bytes into int16_t
+            __m256i x16 = _mm256_cvtepi8_epi16( _mm256_castsi256_si128( bx ) );
+            __m256i y16 = _mm256_cvtepi8_epi16( _mm256_castsi256_si128( by ) );
+            // Compute products of int16_t integers, add pairwise
+            __m256i i32 = _mm256_madd_epi16( x16, y16 );
+
+            // Sign-extend last 16 signed bytes into int16_t vectors
+            x16 = _mm256_cvtepi8_epi16( _mm256_extracti128_si256( bx, 1 ) );
+            y16 = _mm256_cvtepi8_epi16( _mm256_extracti128_si256( by, 1 ) );
+            // Accumulate products of int16_t integers
+            i32 = _mm256_add_epi32( i32, _mm256_madd_epi16( x16, y16 ) );
+
+            // Convert int32_t to float
+            __m256 p = _mm256_cvtepi32_ps( i32 );
+            // Apply the scale, and accumulate
+           acc = _mm256_fmadd_ps( scale, p, acc );
+        }
+    }
+    // TODO  extract the loop here to eliminate duplicated code
+    for (int i = loop_count * unroll_count; i < nb; ++i) {
         const float * d0_0 = (const float *) (pd0 + i*bs);
         const float * d1_0 = (const float *) (pd1 + i*bs);
 
@@ -1928,7 +1981,7 @@ inline static void ggml_vec_mad_q4_1(const int n, float * restrict y, void * res
     const size_t bs = 2*sizeof(float) + QK/2;
 
     const uint8_t * restrict pd = ((const uint8_t *)x + 0*bs);
-    const uint8_t * restrict pm = ((const uint8_t *)x + 0*bs +   sizeof(float)); 
+    const uint8_t * restrict pm = ((const uint8_t *)x + 0*bs +   sizeof(float));
     const uint8_t * restrict pb = ((const uint8_t *)x + 0*bs + 2*sizeof(float));
 
     for (int i = 0; i < nb; i++) {
@@ -5572,7 +5625,7 @@ static void ggml_compute_forward_rms_norm_f32(
                 mean /= ne00;
 
                 float * y = (float *) ((char *) dst->data + i01*nb1 + i02*nb2 + i03*nb3);
-                
+
                 memcpy(y, x, ne00 * sizeof(float));
                 // for (int i00 = 0; i00 < ne00; i00++) {
                 //     y[i00] = x[i00];
@@ -9271,7 +9324,6 @@ struct ggml_compute_state {
 
 static thread_ret_t ggml_graph_compute_thread(void * data) {
     struct ggml_compute_state * state = (struct ggml_compute_state *) data;
-
     const int n_threads = state->shared->n_threads;
 
     while (true) {
@@ -9350,10 +9402,24 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
             };
 
             int rc = ggml_thread_create(&workers[j].thrd, NULL, ggml_graph_compute_thread, &workers[j]);
+
+            // pin threads to cpu
+            cpu_set_t cpuset;
+            CPU_ZERO(&cpuset);
+            // TODO this assumes n_threads is the same as n_cpu which is not always true
+            CPU_SET(j+1, &cpuset);
+            pthread_setaffinity_np(workers[j].thrd, sizeof(cpu_set_t), &cpuset);
+
             GGML_ASSERT(rc == 0);
             UNUSED(rc);
         }
     }
+
+    // set main thread affinity to 0
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(0, &cpuset);
+    sched_setaffinity(0, sizeof(cpu_set_t), &cpuset);
 
     // initialize tasks + work buffer
     {
