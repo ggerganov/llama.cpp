@@ -850,7 +850,6 @@ int main(int argc, char ** argv) {
 
     // in instruct mode, we inject a prefix and a suffix to each input by the user
     if (params.instruct) {
-        fprintf(stderr, "== Instruction mode enabled ==\n");
         params.interactive = true;
         params.antiprompt = "### Instruction:\n\n";
     }
