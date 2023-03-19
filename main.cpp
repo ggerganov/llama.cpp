@@ -1035,10 +1035,20 @@ int main(int argc, char ** argv) {
             }
         }
 
-        // end of text token
-        if (embd.back() == 2) {
-            fprintf(stderr, " [end of text]\n");
-            break;
+        if (params.interactive) {
+            if (embd.size() && embd.back() == 2) {
+                is_interacting = true;
+            }
+            if (remaining_tokens == 0) {
+                remaining_tokens = params.n_predict;
+                is_interacting = true;
+            }
+        } else {
+            // end of text token
+            if (embd.size() && embd.back() == 2) {
+                fprintf(stderr, " [end of text]\n");
+                break;
+            }
         }
     }
 
