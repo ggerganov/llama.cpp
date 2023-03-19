@@ -1062,7 +1062,6 @@ int main(int argc, char ** argv) {
         }
 
         // end of text token
-
         if (embd.back() == EOS_TOKEN_ID) {
             if (params.interactive) {
                 is_interacting = true;
@@ -1070,6 +1069,12 @@ int main(int argc, char ** argv) {
                 fprintf(stderr, " [end of text]\n");
                 break;
             }
+        }
+
+        // In interactive mode, respect the maximum number of tokens and drop back to user input when reached.
+        if (params.interactive && remaining_tokens <= 0) {
+            remaining_tokens = params.n_predict;
+            is_interacting = true;
         }
     }
 
