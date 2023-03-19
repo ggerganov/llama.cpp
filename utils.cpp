@@ -53,6 +53,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.model = argv[++i];
         } else if (arg == "-i" || arg == "--interactive") {
             params.interactive = true;
+        } else if (arg == "--embedding") {
+            params.embedding = true;
         } else if (arg == "--interactive-start") {
             params.interactive = true;
             params.interactive_start = true;

@@ -31,7 +31,7 @@ struct gpt_params {
     std::string prompt;
 
     bool use_color = false; // use color to distinguish generations and inputs
-
+    bool embedding = false; // get only sentence embedding
     bool interactive = false; // interactive mode
     bool interactive_start = false; // reverse prompt immediately
     std::string antiprompt = ""; // string upon seeing which more user input is prompted
