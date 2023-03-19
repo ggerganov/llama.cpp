@@ -30,6 +30,8 @@ struct gpt_params {
     std::string model = "models/lamma-7B/ggml-model.bin"; // model path
     std::string prompt;
 
+    bool random_prompt = false;
+
     bool use_color = false; // use color to distinguish generations and inputs
 
     bool interactive = false; // interactive mode

@@ -805,7 +805,7 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "%s: seed = %d\n", __func__, params.seed);
 
     std::mt19937 rng(params.seed);
-    if (params.prompt.empty()) {
+    if (params.random_prompt) {
         params.prompt = gpt_random_prompt(rng);
     }
 
