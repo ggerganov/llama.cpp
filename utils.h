@@ -36,6 +36,8 @@ struct gpt_params {
 
     bool interactive = false; // interactive mode
     bool instruct    = false; // instruction mode (used for Alpaca models)
+    
+    bool ignore_eos = false; // do not stop generating after eos
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
