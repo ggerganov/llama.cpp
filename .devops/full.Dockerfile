@@ -6,7 +6,7 @@ RUN apt-get update && \
     apt-get install -y build-essential python3 python3-pip
 
 RUN pip install --upgrade pip setuptools wheel \
-    && pip install torch torchvision torchaudio sentencepiece numpy
+    && pip install torch torchvision torchaudio sentencepiece numpy tqdm
 
 WORKDIR /app
 
