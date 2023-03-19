@@ -1054,11 +1054,11 @@ int main(int argc, char ** argv) {
                     embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
                 }
 
-                remaining_tokens -= line_inp.size();
+                remaining_tokens = params.n_predict - line_inp.size();
 
                 input_noecho = true; // do not echo this again
+                is_interacting = false;
             }
-            is_interacting = false;
         }
 
         // end of text token
