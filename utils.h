@@ -30,15 +30,15 @@ struct gpt_params {
 
     std::string model      = "models/lamma-7B/ggml-model.bin"; // model path
     std::string prompt     = "";
-    std::string antiprompt = ""; // string upon seeing which more user input is prompted
 
     bool random_prompt = false;
 
     bool use_color = false; // use color to distinguish generations and inputs
 
     bool interactive = false; // interactive mode
+    bool interactive_start = false; // reverse prompt immediately
+    std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
     bool instruct    = false; // instruction mode (used for Alpaca models)
-    
     bool ignore_eos = false; // do not stop generating after eos
 };
 
