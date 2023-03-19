@@ -38,18 +38,19 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         } else if (arg == "-p" || arg == "--prompt") {
             params.prompt = argv[++i];
         } else if (arg == "-f" || arg == "--file") {
-
             std::ifstream file(argv[++i]);
-
-            std::copy(std::istreambuf_iterator<char>(file),
-                    std::istreambuf_iterator<char>(),
-                    back_inserter(params.prompt));
+            std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(params.prompt));
+            if (params.prompt.back() == '\n') {
+                params.prompt.pop_back();
+            }
         } else if (arg == "-n" || arg == "--n_predict") {
             params.n_predict = std::stoi(argv[++i]);
         } else if (arg == "--top_k") {
             params.top_k = std::stoi(argv[++i]);
         } else if (arg == "-c" || arg == "--ctx_size") {
             params.n_ctx = std::stoi(argv[++i]);
+        } else if (arg == "--memory_f16") {
+            params.memory_f16 = true;
         } else if (arg == "--top_p") {
             params.top_p = std::stof(argv[++i]);
         } else if (arg == "--temp") {
@@ -64,18 +65,21 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.model = argv[++i];
         } else if (arg == "-i" || arg == "--interactive") {
             params.interactive = true;
-        } else if (arg == "--interactive-start") {
-            params.interactive = true;
-            params.interactive_start = true;
+        } else if (arg == "-ins" || arg == "--instruct") {
+            params.instruct = true;
         } else if (arg == "--color") {
             params.use_color = true;
         } else if (arg == "-r" || arg == "--reverse-prompt") {
-            params.antiprompt = argv[++i];
+            params.antiprompt.push_back(argv[++i]);
         } else if (arg == "--perplexity") {
             params.perplexity = true;
+        } else if (arg == "--ignore-eos") {
+            params.ignore_eos = true;
         } else if (arg == "-h" || arg == "--help") {
             gpt_print_usage(argc, argv, params);
             exit(0);
+        } else if (arg == "--random-prompt") {
+            params.random_prompt = true;
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             gpt_print_usage(argc, argv, params);
@@ -86,20 +90,22 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     return true;
 }
 
-void gpt_print_usage(int argc, char ** argv, const gpt_params & params) {
+void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "usage: %s [options]\n", argv[0]);
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -h, --help            show this help message and exit\n");
     fprintf(stderr, "  -i, --interactive     run in interactive mode\n");
-    fprintf(stderr, "  --interactive-start   run in interactive mode and poll user input at startup\n");
+    fprintf(stderr, "  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
     fprintf(stderr, "  -r PROMPT, --reverse-prompt PROMPT\n");
-    fprintf(stderr, "                        in interactive mode, poll user input upon seeing PROMPT\n");
+    fprintf(stderr, "                        in interactive mode, poll user input upon seeing PROMPT (can be\n");
+    fprintf(stderr, "                        specified more than once for multiple prompts).\n");
     fprintf(stderr, "  --color               colorise output to distinguish prompt and user input from generations\n");
     fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1)\n");
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
     fprintf(stderr, "  -p PROMPT, --prompt PROMPT\n");
-    fprintf(stderr, "                        prompt to start generation with (default: random)\n");
+    fprintf(stderr, "                        prompt to start generation with (default: empty)\n");
+    fprintf(stderr, "  --random-prompt       start with a randomized prompt.\n");
     fprintf(stderr, "  -f FNAME, --file FNAME\n");
     fprintf(stderr, "                        prompt file to start generation.\n");
     fprintf(stderr, "  -n N, --n_predict N   number of tokens to predict (default: %d)\n", params.n_predict);
@@ -108,6 +114,8 @@ void gpt_print_usage(int argc, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  --repeat_last_n N     last n tokens to consider for penalize (default: %d)\n", params.repeat_last_n);
     fprintf(stderr, "  --repeat_penalty N    penalize repeat sequence of tokens (default: %.1f)\n", params.repeat_penalty);
     fprintf(stderr, "  -c N, --ctx_size N    size of the prompt context (default: %d)\n", params.n_ctx);
+    fprintf(stderr, "  --ignore-eos          ignore end of stream token and continue generating\n");
+    fprintf(stderr, "  --memory_f16          use f16 instead of f32 for memory key+value\n");
     fprintf(stderr, "  --temp N              temperature (default: %.1f)\n", params.temp);
     fprintf(stderr, "  -b N, --batch_size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     fprintf(stderr, "  --perplexity          compute perplexity over the prompt\n");

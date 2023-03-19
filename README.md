@@ -7,7 +7,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
-- RMSNorm implementation / fixes: https://github.com/ggerganov/llama.cpp/issues/173
+- [Added Alpaca support](https://github.com/ggerganov/llama.cpp#instruction-mode-with-alpaca)
 - Cache input prompts for faster initialization: https://github.com/ggerganov/llama.cpp/issues/64
 - Create a `llama.cpp` logo: https://github.com/ggerganov/llama.cpp/issues/105
 
@@ -147,15 +147,27 @@ python3 -m pip install torch numpy sentencepiece
 python3 convert-pth-to-ggml.py models/7B/ 1
 
 # quantize the model to 4-bits
-./quantize.sh 7B
+python3 quantize.py 7B
 
 # run the inference
 ./main -m ./models/7B/ggml-model-q4_0.bin -n 128
 ```
 
+Currently, it's best to use Python 3.9 or Python 3.10, as `sentencepiece` has not yet published a wheel for Python 3.11.
+
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
 
-TODO: add model disk/mem requirements
+### Memory/Disk Requirements
+
+As the models are currently fully loaded into memory, you will need adequate disk space to save them
+and sufficient RAM to load them. At the moment, memory and disk requirements are the same.
+
+| model | original size | quantized size (4-bit) |
+|-------|---------------|------------------------|
+| 7B    | 13 GB         | 3.9 GB                 |
+| 13B   | 24 GB         | 7.8 GB                 |
+| 30B   | 60 GB         | 19.5 GB                |
+| 65B   | 120 GB        | 38.5 GB                |
 
 ### Interactive mode
 
@@ -164,20 +176,50 @@ In this mode, you can always interrupt generation by pressing Ctrl+C and enter o
 
 Here is an example few-shot interaction, invoked with the command
 ```
-./main -m ./models/13B/ggml-model-q4_0.bin -n 256 --repeat_penalty 1.0 --color -i -r "User:" \
-                                           -p \
-"Transcript of a dialog, where the User interacts with an Assistant named Bob. Bob is helpful, kind, honest, good at writing, and never fails to answer the User's requests immediately and with precision.
-
-User: Hello, Bob.
-Bob: Hello. How may I help you today?
-User: Please tell me the largest city in Europe.
-Bob: Sure. The largest city in Europe is Moscow, the capital of Russia.
-User:"
+./main -m ./models/13B/ggml-model-q4_0.bin -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
 
 ```
 Note the use of `--color` to distinguish between user input and generated text.
 
 ![image](https://user-images.githubusercontent.com/1991296/224575029-2af3c7dc-5a65-4f64-a6bb-517a532aea38.png)
+
+### Instruction mode with Alpaca
+
+First, download the `ggml` Alpaca model into the `./models` folder:
+
+```
+# use one of these
+# NOTE: these are copied from the alpaca.cpp repo - not sure how long these will work
+# TODO: add a script to simplify the download
+curl -o ggml-alpaca-7b-q4.bin -C - https://gateway.estuary.tech/gw/ipfs/QmQ1bf2BTnYxq73MFJWu1B7bQ2UD6qG7D7YDCxhTndVkPC
+curl -o ggml-alpaca-7b-q4.bin -C - https://ipfs.io/ipfs/QmQ1bf2BTnYxq73MFJWu1B7bQ2UD6qG7D7YDCxhTndVkPC
+curl -o ggml-alpaca-7b-q4.bin -C - https://cloudflare-ipfs.com/ipfs/QmQ1bf2BTnYxq73MFJWu1B7bQ2UD6qG7D7YDCxhTndVkPC
+```
+
+Now run the `main` tool like this:
+
+```
+./main -m ./models/ggml-alpaca-7b-q4.bin --color -f ./prompts/alpaca.txt -ins
+```
+
+Sample run:
+
+```
+== Running in interactive mode. ==
+ - Press Ctrl+C to interject at any time.
+ - Press Return to return control to LLaMa.
+ - If you want to submit another line, end your input in '\'.
+
+ Below is an instruction that describes a task. Write a response that appropriately completes the request.
+
+> How many letters are there in the English alphabet?
+There 26 letters in the English Alphabet
+> What is the most common way of transportation in Amsterdam?
+The majority (54%) are using public transit. This includes buses, trams and metros with over 100 lines throughout the city which make it very accessible for tourists to navigate around town as well as locals who commute by tram or metro on a daily basis
+> List 5 words that start with "ca".                                                                       
+cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
+> 
+```
 
 ### Android
 
