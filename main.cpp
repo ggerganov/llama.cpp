@@ -19,6 +19,13 @@
 #include <signal.h>
 #endif
 
+#if defined (_WIN32)
+#pragma comment(lib,"kernel32.lib")
+extern "C" __declspec(dllimport) void* __stdcall GetStdHandle(unsigned long nStdHandle);
+extern "C" __declspec(dllimport) int __stdcall GetConsoleMode(void* hConsoleHandle, unsigned long* lpMode);
+extern "C" __declspec(dllimport) int __stdcall SetConsoleMode(void* hConsoleHandle, unsigned long dwMode);
+#endif
+
 #define ANSI_COLOR_RED     "\x1b[31m"
 #define ANSI_COLOR_GREEN   "\x1b[32m"
 #define ANSI_COLOR_YELLOW  "\x1b[33m"
@@ -933,6 +940,13 @@ int main(int argc, char ** argv) {
 
     // set the color for the prompt which will be output initially
     if (params.use_color) {
+#if defined (_WIN32)
+        // Enable ANSI colors on Windows 10+
+        unsigned long dwMode = 0;
+        void* hConOut = GetStdHandle((unsigned long)-11); // STD_OUTPUT_HANDLE (-11)
+        if (hConOut && hConOut != (void*)-1 && GetConsoleMode(hConOut, &dwMode))
+            SetConsoleMode(hConOut, dwMode | 0x4); // ENABLE_VIRTUAL_TERMINAL_PROCESSING (0x4)
+#endif
         printf(ANSI_COLOR_YELLOW);
     }
 
