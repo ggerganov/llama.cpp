@@ -32,7 +32,7 @@ def parse_args():
     return parser.parse_args()
 
 def get_n_parts(dim):
-    
+
     mappings = {4096: 1, 5120: 2, 6656: 4, 8192: 8}
     n_parts = mappings.get(dim)
     if n_parts is None:
@@ -43,7 +43,7 @@ def get_n_parts(dim):
     return n_parts
 
 def load_hparams_and_tokenizer(dir_model):
-    
+
     fname_hparams = f"{dir_model}/params.json"
     fname_tokenizer = f"{dir_model}/../tokenizer.model"
 
@@ -57,7 +57,7 @@ def load_hparams_and_tokenizer(dir_model):
     return hparams, tokenizer
 
 def write_header(fout, hparams, ftype):
-    
+
     keys = ["vocab_size", "dim", "multiple_of", "n_heads", "n_layers"]
     values = [
         0x67676d6c,  # magic: ggml in hex
@@ -88,26 +88,17 @@ def write_tokens(fout, tokenizer):
 
 def process_and_write_variables(fout, model, ftype):
 
-    for name, data in model.items():
-    
+    for name, datao in model.items():
+
         if name.endswith("freqs"):
             continue
-        
-        shape = data.shape
-        
-        print(f"Processing variable: {name} with shape: {shape} and type: {data.dtype}\n")
-        
-        data = np.squeeze(data)
-        n_dims = len(shape)
 
-        # for efficiency - transpose some matrices
-        # "model/h.*/attn/c_attn/w"
-        # "model/h.*/attn/c_proj/w"
-        # "model/h.*/mlp/c_fc/w"
-        # "model/h.*/mlp/c_proj/w"
-        #if name.endswith(("/attn/c_attn/w", "/attn/c_proj/w", "/mlp/c_fc/w", "/mlp/c_proj/w")):
-        #    print("Transposing")
-        #    data = data.transpose()
+        shape = datao.shape
+
+        print(f"Processing variable: {name} with shape: {shape} and type: {datao.dtype}")
+
+        data = datao.numpy().squeeze()
+        n_dims = len(shape)
 
         # default type is fp16
         ftype_cur = 1
@@ -122,8 +113,8 @@ def process_and_write_variables(fout, model, ftype):
         for dim in reversed(data.shape):
             fout.write(struct.pack("i", dim))
         fout.write(sname)
-        
-        # data
+
+        # data output to file
         data.tofile(fout)
 
 def main():
@@ -139,7 +130,7 @@ def main():
     for p in range(n_parts):
 
         print(f"Processing part {p}\n")
-        
+
         fname_model = f"{dir_model}/consolidated.0{p}.pth"
         fname_out = f"{dir_model}/ggml-model-{ftype_str[ftype]}.bin{'' if p == 0 else '.' + str(p)}"
 
