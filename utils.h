@@ -32,6 +32,8 @@ struct gpt_params {
     std::string prompt     = "";
     std::string antiprompt = ""; // string upon seeing which more user input is prompted
 
+    bool random_prompt = false;
+
     bool use_color = false; // use color to distinguish generations and inputs
 
     bool interactive = false; // interactive mode

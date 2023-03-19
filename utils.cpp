@@ -76,6 +76,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         } else if (arg == "-h" || arg == "--help") {
             gpt_print_usage(argc, argv, params);
             exit(0);
+        } else if (arg == "--random-prompt") {
+            params.random_prompt = true;
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             gpt_print_usage(argc, argv, params);
@@ -99,7 +101,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1)\n");
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
     fprintf(stderr, "  -p PROMPT, --prompt PROMPT\n");
-    fprintf(stderr, "                        prompt to start generation with (default: random)\n");
+    fprintf(stderr, "                        prompt to start generation with (default: empty)\n");
+    fprintf(stderr, "  --random-prompt       start with a randomized prompt.\n");
     fprintf(stderr, "  -f FNAME, --file FNAME\n");
     fprintf(stderr, "                        prompt file to start generation.\n");
     fprintf(stderr, "  -n N, --n_predict N   number of tokens to predict (default: %d)\n", params.n_predict);
