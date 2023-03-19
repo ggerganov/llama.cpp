@@ -107,7 +107,7 @@ def __run_quantize_script(script_path, f16_model_part_path):
     new_quantized_model_path = f16_model_part_path.replace("f16", "q4_0")
     subprocess.run(
         [script_path, f16_model_part_path, new_quantized_model_path, "2"],
-        shell=True, check=True
+        check=True
     )
 
 
