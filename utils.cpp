@@ -148,8 +148,8 @@ void replace(std::string & str, const std::string & needle, const std::string & 
     }
 }
 
-std::map<std::string, int32_t> json_parse(const std::string & fname) {
-    std::map<std::string, int32_t> result;
+std::unordered_map<std::string, int32_t> json_parse(const std::string & fname) {
+    std::unordered_map<std::string, int32_t> result;
 
     // read file into string
     std::string json;
@@ -334,7 +334,7 @@ std::vector<gpt_vocab::id> llama_tokenize(const gpt_vocab & vocab, const std::st
 	    break;
         }
         res.push_back(token_id);
-        auto token = (*vocab.id_to_token.find(token_id)).second;
+        const auto &token = vocab.id_to_token.at(token_id);
         i -= token.length();
     }
 

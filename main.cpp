@@ -31,7 +31,7 @@
 static const int EOS_TOKEN_ID = 2;
 
 // determine number of model parts based on the dimension
-static const std::map<int, int> LLAMA_N_PARTS = {
+static const std::unordered_map<int, int> LLAMA_N_PARTS = {
     { 4096, 1 },
     { 5120, 2 },
     { 6656, 4 },
@@ -85,7 +85,7 @@ struct llama_model {
 
     //
     struct ggml_context * ctx;
-    std::map<std::string, struct ggml_tensor *> tensors;
+    std::unordered_map<std::string, struct ggml_tensor *> tensors;
 };
 
 // load the model's weights from a file
@@ -147,6 +147,7 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
     // load vocab
     {
         std::string word;
+        vocab.id_to_token.resize(model.hparams.n_vocab);
         for (int i = 0; i < model.hparams.n_vocab; i++) {
             uint32_t len;
             fin.read((char *) &len, sizeof(len));

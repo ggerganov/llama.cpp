@@ -113,6 +113,7 @@ bool llama_model_quantize(const std::string & fname_inp, const std::string & fna
         }
 
         std::string word;
+        vocab.id_to_token.resize(n_vocab);
         for (int i = 0; i < n_vocab; i++) {
             uint32_t len;
             finp.read ((char *) &len, sizeof(len));
