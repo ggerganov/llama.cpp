@@ -1176,6 +1176,18 @@ void llama_update_input(llama_context& ctx, const std::string& text)
     state.embd_inp.insert(state.embd_inp.end(), line_inp.begin(), line_inp.end());
     state.remaining_tokens -= line_inp.size();
 }
+/// @brief Updates the context and appends new input tokens (overloaded version)
+/// @param ctx
+/// @param tokens
+void llama_update_input(llama_context& ctx, const std::vector<gpt_vocab::id>& tokens)
+{
+    llama_state& state = *ctx.state;
+    llama_model& model = ctx.model;
+    const gpt_params& params = ctx.params;
+
+    state.embd_inp.insert(state.embd_inp.end(), tokens.begin(), tokens.end());
+    state.remaining_tokens -= tokens.size();
+}
 
 /// @brief  Ingests a batch of input tokens into the context
 /// @param ctx 

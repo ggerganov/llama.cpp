@@ -50,6 +50,8 @@ const std::vector<gpt_vocab::id> llama_tokenize_text(const llama_context& ctx, c
 void llama_add_bos(llama_context& ctx);
 // Queues up input text to the model input
 void llama_update_input(llama_context& ctx, const std::string& text);
+// Queues up input tokens to the model input
+void llama_update_input(llama_context& ctx, const std::vector<gpt_vocab::id>& tokens);
 // Ingests input previously added using llama_update_input()
 void llama_ingest_input_batch(llama_context& ctx);
 // Ingests all input previously added using llama_update_input() in multiple batches
