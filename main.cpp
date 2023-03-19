@@ -539,7 +539,7 @@ bool llama_eval(
         const std::vector<gpt_vocab::id> & embd_inp,
               std::vector<float>         & embd_w,
               size_t                     & mem_per_token,
-        const bool embeding_mode) {
+        const bool embedding_mode) {
     const int N = embd_inp.size();
 
     const auto & hparams = model.hparams;
@@ -725,7 +725,7 @@ bool llama_eval(
                     inpL);
     }
     
-    if(!embeding_mode){
+    if(!embedding_mode){
         // lm_head
         {
             inpL = ggml_mul_mat(ctx0, model.output, inpL);
