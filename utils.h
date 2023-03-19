@@ -30,11 +30,13 @@ struct gpt_params {
     std::string model = "models/lamma-7B/ggml-model.bin"; // model path
     std::string prompt;
 
+    bool random_prompt = false;
+
     bool use_color = false; // use color to distinguish generations and inputs
 
     bool interactive = false; // interactive mode
     bool interactive_start = false; // reverse prompt immediately
-    std::string antiprompt = ""; // string upon seeing which more user input is prompted
+    std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
