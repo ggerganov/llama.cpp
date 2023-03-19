@@ -1055,13 +1055,19 @@ int main(int argc, char ** argv) {
         }
 
         // end of text token
-        if (embd.back() == 2) {
+        if (embd.size() && embd.back() == 2) {
             if (params.interactive) {
                 is_interacting = true;
             } else {
                 fprintf(stderr, " [end of text]\n");
                 break;
             }
+        }
+
+        // In interactive mode, respect the maximum number of tokens and drop back to user input when reached.
+        if (params.interactive && remaining_tokens <= 0) {
+            remaining_tokens = params.n_predict;
+            is_interacting = true;
         }
     }
 
