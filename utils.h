@@ -17,6 +17,7 @@ struct gpt_params {
     int32_t n_threads = std::min(4, (int32_t) std::thread::hardware_concurrency());
     int32_t n_predict = 128; // new tokens to predict
     int32_t repeat_last_n = 64;  // last n tokens to penalize
+    int32_t n_ctx = 512; //context size
 
     // sampling parameters
     int32_t top_k = 40;
@@ -26,14 +27,14 @@ struct gpt_params {
 
     int32_t n_batch = 8; // batch size for prompt processing
 
-    std::string model = "models/lamma-7B/ggml-model.bin"; // model path
-    std::string prompt;
+    std::string model      = "models/lamma-7B/ggml-model.bin"; // model path
+    std::string prompt     = "";
+    std::string antiprompt = ""; // string upon seeing which more user input is prompted
 
     bool use_color = false; // use color to distinguish generations and inputs
 
     bool interactive = false; // interactive mode
-    bool interactive_start = false; // reverse prompt immediately
-    std::string antiprompt = ""; // string upon seeing which more user input is prompted
+    bool instruct    = false; // instruction mode (used for Alpaca models)
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);

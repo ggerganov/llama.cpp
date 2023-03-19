@@ -6,6 +6,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED true)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED true)
 
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
+
 if (NOT XCODE AND NOT MSVC AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
@@ -200,6 +204,7 @@ add_executable(llama main.cpp)
 add_executable(quantize quantize.cpp)
 
 target_link_libraries(ggml PUBLIC Threads::Threads)
+target_link_libraries(ggml PRIVATE ${LLAMA_EXTRA_LIBS})
 target_include_directories(ggml PUBLIC .)
 target_link_libraries(llama ggml utils)
 target_link_libraries(quantize ggml utils)
