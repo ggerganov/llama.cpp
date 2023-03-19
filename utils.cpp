@@ -353,6 +353,7 @@ bool gpt_vocab_init(const std::string & fname, gpt_vocab & vocab) {
 
     vocab.token_to_id = ::json_parse(fname);
 
+    vocab.id_to_token.resize(vocab.token_to_id.size());
     for (const auto & kv : vocab.token_to_id) {
         vocab.id_to_token[kv.second] = kv.first;
     }
