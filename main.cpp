@@ -27,6 +27,8 @@
 #define ANSI_COLOR_RESET   "\x1b[0m"
 #define ANSI_BOLD          "\x1b[1m"
 
+static const int EOS_TOKEN_ID = 2;
+
 // determine number of model parts based on the dimension
 static const std::map<int, int> LLAMA_N_PARTS = {
     { 4096, 1 },
@@ -86,7 +88,7 @@ struct llama_model {
 };
 
 // load the model's weights from a file
-bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab & vocab, int n_ctx) {
+bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab & vocab, int n_ctx, ggml_type memory_type = GGML_TYPE_F32) {
     fprintf(stderr, "%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
     std::vector<char> f_buf(1024*1024);
@@ -176,8 +178,6 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
                 }
     }
 
-    const ggml_type wtype2 = GGML_TYPE_F32;
-
     auto & ctx = model.ctx;
 
     size_t ctx_size = 0;
@@ -209,8 +209,8 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
         ctx_size += n_layer*(n_ff*n_embd*ggml_type_sizef(wtype)); // w2
         ctx_size += n_layer*(n_ff*n_embd*ggml_type_sizef(wtype)); // w3
 
-        ctx_size += n_ctx*n_layer*n_embd*ggml_type_sizef(GGML_TYPE_F32); // memory_k
-        ctx_size += n_ctx*n_layer*n_embd*ggml_type_sizef(GGML_TYPE_F32); // memory_v
+        ctx_size += n_ctx*n_layer*n_embd*ggml_type_sizef(memory_type); // memory_k
+        ctx_size += n_ctx*n_layer*n_embd*ggml_type_sizef(memory_type); // memory_v
 
         ctx_size += (5 + 10*n_layer)*256; // object overhead
 
@@ -237,7 +237,6 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
 
         const int n_embd  = hparams.n_embd;
         const int n_layer = hparams.n_layer;
-        const int n_ctx   = hparams.n_ctx;
         const int n_vocab = hparams.n_vocab;
 
         model.layers.resize(n_layer);
@@ -296,8 +295,8 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
         const int n_mem      = n_layer*n_ctx;
         const int n_elements = n_embd*n_mem;
 
-        model.memory_k = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_elements);
-        model.memory_v = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_elements);
+        model.memory_k = ggml_new_tensor_1d(ctx, memory_type, n_elements);
+        model.memory_v = ggml_new_tensor_1d(ctx, memory_type, n_elements);
 
         const size_t memory_size = ggml_nbytes(model.memory_k) + ggml_nbytes(model.memory_v);
 
@@ -539,9 +538,7 @@ bool llama_eval(
     const int n_vocab = hparams.n_vocab;
     const int n_rot   = hparams.n_embd/hparams.n_head;
 
-    const int d_key = n_embd/n_head;
-
-     // TODO: check if this size scales with n_ctx linearly and remove constant. somehow I feel it wasn't the case
+    // TODO: check if this size scales with n_ctx linearly and remove constant. somehow I feel it wasn't the case
     // static size_t buf_size = hparams.n_ctx*1024*1024;
     static size_t buf_size = 512u*1024*1024;
     static void * buf = malloc(buf_size);
@@ -752,6 +749,7 @@ static bool is_interacting = false;
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
 void sigint_handler(int signo) {
     printf(ANSI_COLOR_RESET);
+    printf("\n"); // this also force flush stdout.
     if (signo == SIGINT) {
         if (!is_interacting) {
             is_interacting=true;
@@ -792,7 +790,7 @@ int main(int argc, char ** argv) {
     if (gpt_params_parse(argc, argv, params) == false) {
         return 1;
     }
-    
+
     if (params.n_ctx > 2048) {
         fprintf(stderr, "%s: warning: model does not support context sizes greater than 2048 tokens (%d specified);"
                 "expect poor results\n", __func__, params.n_ctx);
@@ -805,7 +803,7 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "%s: seed = %d\n", __func__, params.seed);
 
     std::mt19937 rng(params.seed);
-    if (params.prompt.empty()) {
+    if (params.random_prompt) {
         params.prompt = gpt_random_prompt(rng);
     }
 
@@ -819,8 +817,9 @@ int main(int argc, char ** argv) {
 
     // load the model
     {
+        const ggml_type memory_type = params.memory_f16 ? GGML_TYPE_F16 : GGML_TYPE_F32;
         const int64_t t_start_us = ggml_time_us();
-        if (!llama_model_load(params.model, model, vocab, params.n_ctx)) {  
+        if (!llama_model_load(params.model, model, vocab, params.n_ctx, memory_type)) {
             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
             return 1;
         }
@@ -849,11 +848,26 @@ int main(int argc, char ** argv) {
 
     params.n_predict = std::min(params.n_predict, model.hparams.n_ctx - (int) embd_inp.size());
 
+    // prefix & suffix for instruct mode
+    const std::vector<gpt_vocab::id> inp_pfx = ::llama_tokenize(vocab, "\n\n### Instruction:\n\n", true);
+    const std::vector<gpt_vocab::id> inp_sfx = ::llama_tokenize(vocab, "\n\n### Response:\n\n", false);
+
+    // in instruct mode, we inject a prefix and a suffix to each input by the user
+    if (params.instruct) {
+        params.interactive = true;
+        params.antiprompt.push_back("### Instruction:\n\n");
+    }
+
     // tokenize the reverse prompt
     std::vector<std::vector<gpt_vocab::id>> antipromptv_inp;
     
     for (auto antiprompt : params.antiprompt) {
         antipromptv_inp.push_back(::llama_tokenize(vocab, antiprompt, false));
+    }
+
+    // enable interactive mode if reverse prompt is specified
+    if (!antipromptv_inp.size()) {
+        params.interactive = true;
     }
 
     fprintf(stderr, "\n");
@@ -901,31 +915,27 @@ int main(int argc, char ** argv) {
     std::vector<gpt_vocab::id> last_n_tokens(last_n_size);
     std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
 
-
     if (params.interactive) {
         fprintf(stderr, "== Running in interactive mode. ==\n"
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
                " - Press Ctrl+C to interject at any time.\n"
 #endif
                " - Press Return to return control to LLaMa.\n"
-               " - If you want to submit another line, end your input in '\\'.\n");
+               " - If you want to submit another line, end your input in '\\'.\n\n");
+        is_interacting = true;
     }
 
-    int remaining_tokens = params.n_predict;
     int input_consumed = 0;
     bool input_noecho = false;
 
-    // prompt user immediately after the starting prompt has been loaded
-    if (params.interactive_start) {
-        is_interacting = true;
-    }
+    int remaining_tokens = params.n_predict;
 
     // set the color for the prompt which will be output initially
     if (params.use_color) {
         printf(ANSI_COLOR_YELLOW);
     }
 
-    while (remaining_tokens > 0) {
+    while (remaining_tokens > 0 || params.interactive) {
         // predict
         if (embd.size() > 0) {
             const int64_t t_start_us = ggml_time_us();
@@ -955,6 +965,11 @@ int main(int argc, char ** argv) {
             {
                 const int64_t t_start_sample_us = ggml_time_us();
 
+                if (params.ignore_eos) {
+                    // set the logit of the eos token to zero to avoid sampling it
+                    logits[logits.size() - n_vocab + EOS_TOKEN_ID] = 0;
+                }
+
                 id = llama_sample_top_p_top_k(vocab, logits.data() + (logits.size() - n_vocab), last_n_tokens, repeat_penalty, top_k, top_p, temp, rng);
 
                 last_n_tokens.erase(last_n_tokens.begin());
@@ -978,13 +993,13 @@ int main(int argc, char ** argv) {
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(embd_inp[input_consumed]);
                 ++input_consumed;
-                if (embd.size() > params.n_batch) {
+                if ((int) embd.size() >= params.n_batch) {
                     break;
                 }
             }
 
             // reset color to default if we there is no pending user input
-            if (!input_noecho && params.use_color && embd_inp.size() == input_consumed) {
+            if (!input_noecho && params.use_color && (int) embd_inp.size() == input_consumed) {
                 printf(ANSI_COLOR_RESET);
             }
         }
@@ -1009,19 +1024,26 @@ int main(int argc, char ** argv) {
                 }
             }
             if (is_interacting) {
+                if (params.instruct) {
+                    input_consumed = embd_inp.size();
+                    embd_inp.insert(embd_inp.end(), inp_pfx.begin(), inp_pfx.end());
+
+                    printf("\n> ");
+                }
+
                 // currently being interactive
-                bool another_line=true;
+                bool another_line = true;
                 while (another_line) {
                     fflush(stdout);
                     char buf[256] = {0};
                     int n_read;
-                    if(params.use_color) printf(ANSI_BOLD ANSI_COLOR_GREEN);
+                    if (params.use_color) printf(ANSI_BOLD ANSI_COLOR_GREEN);
                     if (scanf("%255[^\n]%n%*c", buf, &n_read) <= 0) {
                         // presumable empty line, consume the newline
                         std::ignore = scanf("%*c");
                         n_read=0;
                     }
-                    if(params.use_color) printf(ANSI_COLOR_RESET);
+                    if (params.use_color) printf(ANSI_COLOR_RESET);
 
                     if (n_read > 0 && buf[n_read-1]=='\\') {
                         another_line = true;
@@ -1036,6 +1058,10 @@ int main(int argc, char ** argv) {
                     std::vector<gpt_vocab::id> line_inp = ::llama_tokenize(vocab, buf, false);
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
 
+                    if (params.instruct) {
+                        embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
+                    }
+
                     remaining_tokens -= line_inp.size();
 
                     input_noecho = true; // do not echo this again
@@ -1046,9 +1072,19 @@ int main(int argc, char ** argv) {
         }
 
         // end of text token
-        if (embd.back() == 2) {
-            fprintf(stderr, " [end of text]\n");
-            break;
+        if (embd.back() == EOS_TOKEN_ID) {
+            if (params.interactive) {
+                is_interacting = true;
+            } else {
+                fprintf(stderr, " [end of text]\n");
+                break;
+            }
+        }
+
+        // In interactive mode, respect the maximum number of tokens and drop back to user input when reached.
+        if (params.interactive && remaining_tokens <= 0) {
+            remaining_tokens = params.n_predict;
+            is_interacting = true;
         }
     }
 
