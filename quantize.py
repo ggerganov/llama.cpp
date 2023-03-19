@@ -25,7 +25,7 @@ def main():
         quantize_script_binary = "quantize"
 
     parser = argparse.ArgumentParser(
-        prog='Quantization Script',
+        prog='python3 quantize.py',
         description='This script quantizes the given models by applying the '
         f'"{quantize_script_binary}" script on them.'
     )
