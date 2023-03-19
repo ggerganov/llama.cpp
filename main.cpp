@@ -144,15 +144,15 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
     // load vocab
     {
         std::string word;
+        uint32_t len;
         for (int i = 0; i < model.hparams.n_vocab; i++) {
-            uint32_t len;
             fin.read((char *) &len, sizeof(len));
-
             word.resize(len);
             fin.read((char *) word.data(), len);
 
-            vocab.token_to_id[word] = i;
-            vocab.id_to_token[i] = word;
+            // force make a new std::string, some compiler may share inner data.
+            vocab.token_to_id[std::string(word.data(), len)] = i;
+            vocab.id_to_token[i] = std::string(word.data(), len);
 
             //if (i < 30000) {
             //    fprintf(stderr, "%s: vocab[%d] = '%s'\n", __func__, i, word.c_str());
