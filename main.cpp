@@ -792,6 +792,11 @@ int main(int argc, char ** argv) {
     if (gpt_params_parse(argc, argv, params) == false) {
         return 1;
     }
+    
+    if (params.n_ctx > 2048) {
+        fprintf(stderr, "%s: warning: model does not support context sizes greater than 2048 tokens (%d specified);"
+                "expect poor results\n", __func__, params.n_ctx);
+    }
 
     if (params.seed < 0) {
         params.seed = time(NULL);
