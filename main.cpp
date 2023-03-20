@@ -30,7 +30,6 @@
 #define ANSI_BOLD          "\x1b[1m"
 
 static const int EOS_TOKEN_ID = 2;
-static const int NEWLINE_TOKEN_ID = 13;
 
 // determine number of model parts based on the dimension
 static const std::map<int, int> LLAMA_N_PARTS = {
@@ -177,6 +176,9 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
             vocab.id_to_token[i] = word;
             vocab.score[i] = score;
 
+            // dynamically determine the newline token
+            const auto NEWLINE_TOKEN_ID = vocab.token_to_id["\n"];
+            
             //if (i < 30000) {
             //    fprintf(stderr, "%s: vocab[%d] = '%s'\n", __func__, i, word.c_str());
             //}
