@@ -1001,6 +1001,12 @@ int main(int argc, char ** argv) {
                 t_sample_us += ggml_time_us() - t_start_sample_us;
             }
 
+            // replace end of text token with newline token when in interactive mode
+            if (id == EOS_TOKEN_ID && params.interactive) {
+                id = NEWLINE_TOKEN_ID;
+                is_interacting = true;
+            }
+
             // add it to the context
             embd.push_back(id);
 
@@ -1086,12 +1092,12 @@ int main(int argc, char ** argv) {
         // end of text token
         if (embd.back() == EOS_TOKEN_ID) {
             if (params.interactive) {
-                is_interacting = true;
-                embd.back() = NEWLINE_TOKEN_ID;
-                last_n_tokens.back() = NEWLINE_TOKEN_ID;
-                if (params.antiprompt.size() != 0) {
-                   fprintf(stderr, "\n");
-            }
+//                is_interacting = true;
+//                embd.back() = NEWLINE_TOKEN_ID;
+//                last_n_tokens.back() = NEWLINE_TOKEN_ID;
+//                if (params.antiprompt.size() != 0) {
+//                   fprintf(stderr, "\n");
+//                }
             } else {
                 fprintf(stderr, " [end of text]\n");
                 break;
