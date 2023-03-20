@@ -49,6 +49,14 @@ void gpt_print_usage(int argc, char ** argv, const gpt_params & params);
 std::string gpt_random_prompt(std::mt19937 & rng);
 
 //
+// Model file parsing
+//
+
+#define FILE_MAGIC_UNVERSIONED 0x67676d6c // pre-versioned files
+#define FILE_MAGIC 0x67676d66 // 'ggmf' in hex
+#define FILE_VERSION 1
+
+//
 // Vocab utils
 //
 
