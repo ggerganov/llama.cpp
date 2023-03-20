@@ -1,13 +1,6 @@
 cmake_minimum_required(VERSION 3.9)
 project("llama.cpp" C CXX)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED true)
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_C_STANDARD_REQUIRED true)
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-find_package(Threads REQUIRED)
-
 if (NOT XCODE AND NOT MSVC AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
@@ -44,6 +37,11 @@ option(LLAMA_OPENBLAS               "llama: use OpenBLAS"                       
 #
 # Compile flags
 #
+
+set(CMAKE_CXX_STANDARD_REQUIRED true)
+set(CMAKE_C_STANDARD_REQUIRED true)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
 
 if (NOT MSVC)
     if (LLAMA_SANITIZE_THREAD)
@@ -198,6 +196,12 @@ add_library(utils OBJECT
             utils.h)
 
 target_include_directories(ggml PUBLIC .)
+target_compile_features(ggml PUBLIC c_std_11)
+target_compile_features(utils PUBLIC cxx_std_17)
+
+#
+# Linking
+#
 
 target_link_libraries(ggml PRIVATE Threads::Threads ${LLAMA_EXTRA_LIBS})
 target_link_libraries(llama PRIVATE ggml utils)
