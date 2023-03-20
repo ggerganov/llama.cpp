@@ -30,6 +30,7 @@
 #define ANSI_BOLD          "\x1b[1m"
 
 static const int EOS_TOKEN_ID = 2;
+static const int NEWLINE_TOKEN_ID = 13;
 
 // determine number of model parts based on the dimension
 static const std::map<int, int> LLAMA_N_PARTS = {
@@ -1084,8 +1085,8 @@ int main(int argc, char ** argv) {
         if (embd.back() == EOS_TOKEN_ID) {
             if (params.interactive) {
                 is_interacting = true;
-                embd.back() = 13;
-                last_n_tokens.back() = 13;
+                embd.back() = NEWLINE_TOKEN_ID;
+                last_n_tokens.back() = NEWLINE_TOKEN_ID;
             } else {
                 fprintf(stderr, " [end of text]\n");
                 break;
