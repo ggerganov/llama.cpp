@@ -19,3 +19,8 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+===================================
+
+Note that the above license applies ONLY to the GGML library and llama.cpp by ggerganov which are licensed under the MIT License
+Kobold Lite by Concedo and the provided python ctypes bindings in llamacpp.dll are licensed under the AGPL v3.0 License

@@ -16,4 +16,10 @@ If you care, **please contribute to [this discussion](https://github.com/ggergan
 ## Usage
 - Windows binaries are provided in the form of **llamacpp.dll** but if you feel worried go ahead and rebuild it yourself.
 - Weights are not included, you can use the llama.cpp quantize.exe to generate them from your official weight files (or download them from...places).
-- To run, simply clone the repo and run `llama_for_kobold.py [ggml_quant_model.bin] [port]`, and then connect with Kobold or Kobold Lite (for example, https://lite.koboldai.net/?local=1&port=5001).
+- To run, simply clone the repo and run `llama_for_kobold.py [ggml_quant_model.bin] [port]`, and then connect with Kobold or Kobold Lite. 
+- By default, you can connect to http://localhost:5001 (you can also use https://lite.koboldai.net/?local=1&port=5001).
+
+## License
+- The original GGML library and llama.cpp by ggerganov are licensed under the MIT License
+- However, Kobold Lite is licensed under the AGPL v3.0 License
+- The provided python ctypes bindings in llamacpp.dll are also under the AGPL v3.0 License

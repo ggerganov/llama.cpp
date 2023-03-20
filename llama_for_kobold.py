@@ -74,8 +74,8 @@ import json, http.server, threading, socket, sys, time
 # global vars
 global friendlymodelname 
 friendlymodelname = ""
-maxctx = 1024
-maxlen = 256
+maxctx = 512
+maxlen = 128
 modelbusy = False
 port = 5001
 last_context = ""
@@ -151,6 +151,7 @@ class ServerRequestHandler(http.server.BaseHTTPRequestHandler):
                 if last_context!="" and newprompt.startswith(last_context):
                     fresh_state = False
                     newprompt = newprompt[len(last_context):]
+                    print("Resuming state, new input len: " + str(len(newprompt)))
                     #print("trimmed: " + newprompt)
                 recvtxt = generate(
                     prompt=newprompt,

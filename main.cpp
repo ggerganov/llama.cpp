@@ -89,8 +89,8 @@ struct llama_model {
     std::map<std::string, struct ggml_tensor *> tensors;
 };
 
-// load the model's weights from a file
-bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab & vocab, int n_ctx, ggml_type memory_type = GGML_TYPE_F32, int n_parts_overwrite=-1) {
+// load the model's weights from a file. return val: 0=fail, 1=newformat, 2=legacy
+int llama_model_load(const std::string & fname, llama_model & model, gpt_vocab & vocab, int n_ctx, ggml_type memory_type = GGML_TYPE_F32, int n_parts_overwrite=-1) {
     fprintf(stderr, "%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
     std::vector<char> f_buf(1024*1024);
@@ -102,6 +102,7 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
         return false;
     }
 
+    bool legacy_file_format = false;
     // verify magic
     {
         uint32_t magic;
@@ -109,8 +110,10 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
         if (magic == 0x67676d6c) {
             fprintf(stderr, "%s: invalid model file '%s' (too old, regenerate your model files!)\n",
                     __func__, fname.c_str());
-            return false;
+            legacy_file_format = true;
         }
+        else
+        {
         if (magic != 0x67676d66) {
             fprintf(stderr, "%s: invalid model file '%s' (bad magic)\n", __func__, fname.c_str());
             return false;
@@ -123,6 +126,7 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
             fprintf(stderr, "%s: invalid model file '%s' (unsupported format version %" PRIu32 ")\n",
                     __func__, fname.c_str(), format_version);
             return false;
+        }
         }
     }
 
@@ -173,12 +177,16 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
             word.resize(len);
             fin.read((char *) word.data(), len);
 
+            if(!legacy_file_format)
+            {
             float score;
             fin.read((char *) &score, sizeof(score));
+            vocab.score[i] = score;
+            }
 
             vocab.token_to_id[word] = i;
             vocab.id_to_token[i] = word;
-            vocab.score[i] = score;
+            
 
             //if (i < 30000) {
             //    fprintf(stderr, "%s: vocab[%d] = '%s'\n", __func__, i, word.c_str());
@@ -531,7 +539,7 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
         fin.close();
     }
 
-    return true;
+    return (legacy_file_format?2:true);
 }
 
 // evaluate the transformer

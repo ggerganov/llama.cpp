@@ -8,6 +8,7 @@
 //Python will ALWAYS provide the memory, we just write to it.
 
 #include "main.cpp"
+#include "extra.h"
 
 extern "C" {
 
@@ -45,6 +46,7 @@ extern "C" {
     std::vector<float> api_logits;
     std::vector<gpt_vocab::id> last_n_tokens;
     size_t mem_per_token = 0;
+    bool legacy_format = false;
 
     bool load_model(const load_model_inputs inputs)
     {
@@ -55,9 +57,15 @@ extern "C" {
 
         int n_parts_overwrite =  inputs.n_parts_overwrite;
 
-        if (!llama_model_load(api_params.model, api_model, api_vocab, api_params.n_ctx, GGML_TYPE_F16, n_parts_overwrite)) {  
+        int loadresult = llama_model_load(api_params.model, api_model, api_vocab, api_params.n_ctx, GGML_TYPE_F16, n_parts_overwrite);
+        if (!loadresult) {  
             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, api_params.model.c_str());
             return false;
+        }
+        legacy_format = (loadresult==2?true:false);
+        if(legacy_format)
+        {
+            printf("\n---\nWarning: Your model is using an OUTDATED format. Please reconvert it for better results!\n");
         }
 
         return true;
@@ -103,8 +111,20 @@ extern "C" {
             api_params.prompt.insert(0, 1, ' ');
         }
         // tokenize the prompt
-        std::vector<gpt_vocab::id> embd_inp = ::llama_tokenize(api_vocab, api_params.prompt, true);
-        api_params.n_predict = std::min(api_params.n_predict, api_model.hparams.n_ctx - (int)embd_inp.size());
+        std::vector<gpt_vocab::id> embd_inp;
+        if(legacy_format)
+        {
+            embd_inp = ::legacy_llama_tokenize(api_vocab, api_params.prompt, true);
+        }else{
+            embd_inp = ::llama_tokenize(api_vocab, api_params.prompt, true);
+        }
+         
+        //api_params.n_predict = std::min(api_params.n_predict, api_model.hparams.n_ctx - (int)embd_inp.size());
+        //truncate to front of the prompt if its too long
+        if (embd_inp.size() + api_params.n_predict > api_model.hparams.n_ctx) {
+            int offset = embd_inp.size() - api_model.hparams.n_ctx + api_params.n_predict;
+            embd_inp = std::vector<gpt_vocab::id>(embd_inp.begin() + offset, embd_inp.end());
+        }
         std::vector<gpt_vocab::id> embd;
         
         int last_n_size = api_params.repeat_last_n;
@@ -131,6 +151,7 @@ extern "C" {
         std::mt19937 api_rng(api_params.seed);
         std::string concat_output = "";        
        
+        printf("\nProcessing: ");
         while (remaining_tokens > 0)
         {
             gpt_vocab::id id = 0;
@@ -141,6 +162,7 @@ extern "C" {
                 //     std::cout << i << ',';
                 // }
                 //printf("\nnp:%d embd:%d mem:%d",api_n_past,embd.size(),mem_per_token);
+                printf("|");
                 if (!llama_eval(api_model, api_params.n_threads, api_n_past, embd, api_logits, mem_per_token))
                 {
                     fprintf(stderr, "Failed to predict\n");

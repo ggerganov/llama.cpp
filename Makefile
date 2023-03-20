@@ -188,15 +188,18 @@ ggml.o: ggml.c ggml.h
 utils.o: utils.cpp utils.h
 	$(CXX) $(CXXFLAGS) -c utils.cpp -o utils.o
 
+extra.o: extra.cpp extra.h
+	$(CXX) $(CXXFLAGS) -c extra.cpp -o extra.o
+
 clean:
 	rm -f *.o main quantize
 
-main: main.cpp ggml.o utils.o
-	$(CXX) $(CXXFLAGS) main.cpp ggml.o utils.o -o main $(LDFLAGS)
+main: main.cpp ggml.o utils.o extra.o
+	$(CXX) $(CXXFLAGS) main.cpp ggml.o utils.o extra.o -o main $(LDFLAGS)
 	./main -h
 	
-llamalib: expose.cpp ggml.o utils.o
-	$(CXX) $(CXXFLAGS) expose.cpp ggml.o utils.o -shared -o llamacpp.dll $(LDFLAGS)
+llamalib: expose.cpp ggml.o utils.o extra.o
+	$(CXX) $(CXXFLAGS) expose.cpp ggml.o utils.o extra.o -shared -o llamacpp.dll $(LDFLAGS)
 
 quantize: quantize.cpp ggml.o utils.o
 	$(CXX) $(CXXFLAGS) quantize.cpp ggml.o utils.o -o quantize $(LDFLAGS)
