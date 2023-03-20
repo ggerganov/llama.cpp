@@ -95,6 +95,38 @@ ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 		ifneq (,$(findstring sse3,$(SSE3_M)))
 			CFLAGS += -msse3
 		endif
+		AVX512F_M := $(shell grep "avx512f " /proc/cpuinfo)
+		ifneq (,$(findstring avx512f,$(AVX512F_M)))
+			CFLAGS += -mavx512f
+		endif
+		AVX512BW_M := $(shell grep "avx512bw " /proc/cpuinfo)
+		ifneq (,$(findstring avx512bw,$(AVX512BW_M)))
+			CFLAGS += -mavx512bw
+		endif
+		AVX512DQ_M := $(shell grep "avx512dq " /proc/cpuinfo)
+		ifneq (,$(findstring avx512dq,$(AVX512DQ_M)))
+			CFLAGS += -mavx512dq
+		endif
+		AVX512VL_M := $(shell grep "avx512vl " /proc/cpuinfo)
+		ifneq (,$(findstring avx512vl,$(AVX512VL_M)))
+			CFLAGS += -mavx512vl
+		endif
+		AVX512CD_M := $(shell grep "avx512cd " /proc/cpuinfo)
+		ifneq (,$(findstring avx512cd,$(AVX512CD_M)))
+			CFLAGS += -mavx512cd
+		endif
+		AVX512ER_M := $(shell grep "avx512er " /proc/cpuinfo)
+		ifneq (,$(findstring avx512er,$(AVX512ER_M)))
+			CFLAGS += -mavx512er
+		endif
+		AVX512IFMA_M := $(shell grep "avx512ifma " /proc/cpuinfo)
+		ifneq (,$(findstring avx512ifma,$(AVX512IFMA_M)))
+			CFLAGS += -mavx512ifma
+		endif
+		AVX512PF_M := $(shell grep "avx512pf " /proc/cpuinfo)
+		ifneq (,$(findstring avx512pf,$(AVX512PF_M)))
+			CFLAGS += -mavx512pf
+		endif
 	else ifeq ($(UNAME_S),Haiku)
 		AVX1_M := $(shell sysinfo -cpu | grep "AVX ")
 		ifneq (,$(findstring avx,$(AVX1_M)))
