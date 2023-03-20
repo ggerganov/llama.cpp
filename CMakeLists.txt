@@ -5,10 +5,8 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED true)
-
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
-
 
 if (NOT XCODE AND NOT MSVC AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -46,10 +44,6 @@ option(LLAMA_OPENBLAS               "llama: use OpenBLAS"                       
 #
 # Compile flags
 #
-
-# OS specific
-find_package(Threads REQUIRED)
-set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 if (NOT MSVC)
     if (LLAMA_SANITIZE_THREAD)
@@ -122,7 +116,7 @@ if (LLAMA_ALL_WARNINGS)
 
 endif()
 
-if (LLAMA_LTO AND ${CMAKE_BUILD_TYPE} STREQUAL "Release")
+if (LLAMA_LTO)
     include(CheckIPOSupported)
     check_ipo_supported(RESULT result OUTPUT output)
     if (result)
@@ -191,6 +185,10 @@ endif()
 # Build library
 #
 
+add_executable(llama main.cpp)
+
+add_executable(quantize quantize.cpp)
+
 add_library(ggml OBJECT
             ggml.c
             ggml.h)
@@ -199,12 +197,8 @@ add_library(utils OBJECT
             utils.cpp
             utils.h)
 
-add_executable(llama main.cpp)
-
-add_executable(quantize quantize.cpp)
-
-target_link_libraries(ggml PUBLIC Threads::Threads)
-target_link_libraries(ggml PRIVATE ${LLAMA_EXTRA_LIBS})
 target_include_directories(ggml PUBLIC .)
-target_link_libraries(llama ggml utils)
-target_link_libraries(quantize ggml utils)
+
+target_link_libraries(ggml PRIVATE Threads::Threads ${LLAMA_EXTRA_LIBS})
+target_link_libraries(llama PRIVATE ggml utils)
+target_link_libraries(quantize PRIVATE ggml utils)
