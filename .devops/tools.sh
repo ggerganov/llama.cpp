@@ -21,15 +21,17 @@ elif [[ $arg1 == '--download' || $arg1 == '-d' ]]; then
 elif [[ $arg1 == '--all-in-one' || $arg1 == '-a' ]]; then
     echo "Downloading model..."
     python3 ./download-pth.py "$1" "$2"
-    echo "Converting PTH to GGML..."
-    for i in `ls $1/$2/ggml-model-f16.bin*`; do
-        if [ -f "${i/f16/q4_0}" ]; then
-            echo "Skip model quantization, it already exists: ${i/f16/q4_0}"
-        else
-            echo "Converting PTH to GGML: $i into ${i/f16/q4_0}..."
-            ./quantize "$i" "${i/f16/q4_0}" 2
-        fi
-    done
+    if [[ $2 != 'alpaca' ]]; then
+        echo "Converting PTH to GGML..."
+        for i in `ls $1/$2/ggml-model-f16.bin*`; do
+            if [ -f "${i/f16/q4_0}" ]; then
+                echo "Skip model quantization, it already exists: ${i/f16/q4_0}"
+            else
+                echo "Converting PTH to GGML: $i into ${i/f16/q4_0}..."
+                ./quantize "$i" "${i/f16/q4_0}" 2
+            fi
+        done
+    fi;
 else
     echo "Unknown command: $arg1"
     echo "Available commands: "
