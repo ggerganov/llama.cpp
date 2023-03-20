@@ -2,7 +2,7 @@
 #include "ggml.h"
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
-#include <malloc.h> // using malloc.h with MSC/MINGW
+//#include <malloc.h> // using malloc.h with MSC/MINGW
 #elif !defined(__FreeBSD__) && !defined(__NetBSD__)
 #include <alloca.h>
 #endif
@@ -2437,7 +2437,7 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
 
     *ctx = (struct ggml_context) {
         /*.mem_size         =*/ params.mem_size,
-        /*.mem_buffer       =*/ params.mem_buffer ? params.mem_buffer : malloc(params.mem_size),
+        /*.mem_buffer       =*/ params.mem_buffer ? params.mem_buffer : _malloc(params.mem_size),
         /*.mem_buffer_owned =*/ params.mem_buffer ? false : true,
         /*.n_objects        =*/ 0,
         /*.objects_begin    =*/ NULL,
@@ -2469,7 +2469,7 @@ void ggml_free(struct ggml_context * ctx) {
                     __func__, i, ctx->n_objects, ctx->objects_end->offs + ctx->objects_end->size);
 
             if (ctx->mem_buffer_owned) {
-                free(ctx->mem_buffer);
+                _free(ctx->mem_buffer);
             }
 
             found = true;
