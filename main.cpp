@@ -1089,7 +1089,9 @@ int main(int argc, char ** argv) {
                 is_interacting = true;
                 embd.back() = NEWLINE_TOKEN_ID;
                 last_n_tokens.back() = NEWLINE_TOKEN_ID;
-                fprintf(stderr, "\n");
+                if (params.antiprompt.size() != 0) {
+                   fprintf(stderr, "\n");
+            }
             } else {
                 fprintf(stderr, " [end of text]\n");
                 break;
