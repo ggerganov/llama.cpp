@@ -906,7 +906,7 @@ int main(int argc, char ** argv) {
 
         if(params.antiprompt.size()) {
             for (auto antiprompt : params.antiprompt) {
-                fprintf(stderr, "Reverse prompt: %s\n", antiprompt);
+                fprintf(stderr, "Reverse prompt: '%s'\n", antiprompt.c_str());
             }
         }
     }
@@ -1023,23 +1023,18 @@ int main(int argc, char ** argv) {
         // check if we should prompt the user for more
         if (params.interactive && embd_inp.size() <= input_consumed) {
             // check for reverse prompt
-
             std::stringstream last_output_ss;
             for (auto id : last_n_tokens) {
                 last_output_ss << vocab.id_to_token[id];
             }
             std::string last_output = last_output_ss.str();
 
+            // Check if each of the reverse prompts appears at the end of the output.
             for (std::string antiprompt : params.antiprompt) {
                 if (last_output.find(antiprompt.c_str(), last_output.length() - antiprompt.length(), antiprompt.length()) != std::string::npos) {
                     is_interacting = true;
                     break;
                 }
-                /*if (antiprompt_inp.size() && std::equal(antiprompt_inp.rbegin(), antiprompt_inp.rend(), last_n_tokens.rbegin())) {
-                    // reverse prompt found
-                    is_interacting = true;
-                    break;
-                }*/
             }
             if (is_interacting) {
                 if (params.instruct) {
