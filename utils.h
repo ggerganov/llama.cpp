@@ -59,6 +59,7 @@ struct gpt_vocab {
 
     std::map<token, id> token_to_id;
     std::map<id, token> id_to_token;
+    std::map<id, float> score;
 };
 
 void replace(std::string & str, const std::string & needle, const std::string & replacement);
@@ -80,7 +81,7 @@ std::vector<gpt_vocab::id> gpt_tokenize(const gpt_vocab & vocab, const std::stri
 
 // TODO: this is probably wrong, but I cannot figure out how this tokenizer works ..
 // ref: https://github.com/google/sentencepiece
-std::vector<gpt_vocab::id> llama_tokenize(const gpt_vocab & vocab, const std::string & text, bool bos);
+std::vector<gpt_vocab::id> llama_tokenize(const gpt_vocab & vocab, std::string_view text, bool bos);
 
 // load the tokens from encoder.json
 bool gpt_vocab_init(const std::string & fname, gpt_vocab & vocab);
