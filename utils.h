@@ -8,6 +8,12 @@
 #include <random>
 #include <thread>
 
+#include <stdio.h>
+
+extern FILE * log_file;
+
+#define logprintf(...) { if (log_file) fprintf(log_file, __VA_ARGS__); }
+
 //
 // CLI argument parsing
 //

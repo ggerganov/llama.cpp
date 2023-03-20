@@ -803,6 +803,7 @@ const char * llama_print_system_info(void) {
 int main(int argc, char ** argv) {
     ggml_time_init();
     const int64_t t_main_start_us = ggml_time_us();
+    log_file = fopen("out.log", "w");
 
     gpt_params params;
     params.model = "models/llama-7B/ggml-model.bin";
@@ -960,6 +961,15 @@ int main(int argc, char ** argv) {
         if (embd.size() > 0) {
             const int64_t t_start_us = ggml_time_us();
 
+            if(log_file) {
+                std::string intokdbg = vocab.id_to_token.at(embd[0]);
+                for(int i = 1; i < embd.size(); i++) {
+                    intokdbg += '|';
+                    intokdbg += vocab.id_to_token.at(embd[i]);
+                }
+                logprintf("\nin:'%s' n_past=%d, remaining_tokens=%d, embd.size()=%zu, embd_inp.size()=%zu\n",
+                intokdbg.c_str(), n_past, remaining_tokens, embd.size(), embd_inp.size());
+            }
             if (!llama_eval(model, params.n_threads, n_past, embd, logits, mem_per_token)) {
                 fprintf(stderr, "Failed to predict\n");
                 return 1;
@@ -1079,6 +1089,7 @@ int main(int argc, char ** argv) {
             }
             is_interacting = false;
         }
+        if (log_file) fflush(log_file);
 
         // end of text token
         if (embd.back() == EOS_TOKEN_ID) {
@@ -1096,6 +1107,7 @@ int main(int argc, char ** argv) {
             is_interacting = true;
         }
     }
+    logprintf("exit: remaining_tokens=%d n_past=%d goal=%lu n_predict=%d\n", remaining_tokens, n_past, embd_inp.size() + params.n_predict, params.n_predict);
 
 #if defined (_WIN32)
     signal(SIGINT, SIG_DFL);
@@ -1114,6 +1126,7 @@ int main(int argc, char ** argv) {
     }
 
     ggml_free(model.ctx);
+    if (log_file) fclose(log_file);
 
     if (params.use_color) {
         printf(ANSI_COLOR_RESET);

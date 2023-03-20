@@ -16,6 +16,8 @@
  #include <alloca.h>
  #endif
 
+FILE * log_file = NULL;
+
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     // determine sensible default number of threads.
     // std::thread::hardware_concurrency may not be equal to the number of cores, or may return 0.
@@ -576,6 +578,7 @@ struct SoftMaxSampler {
                 break;
             }
         }
+        logprintf("%s: n: %d sum: %f\n", __func__, n, cumsum);
 
         // discrete_distribution renormalizes the subset of probabilities to sum to 1.0
         return std::discrete_distribution<>(probs.begin(), probs.begin() + n);
@@ -633,6 +636,7 @@ gpt_vocab::id sample_top_k_top_p(
     auto dist = probs.top_p(top_p);
     int sampled_tok_id = probs.sample(dist, rng);
 
+    probs.print(log_file, vocab, logits, 16, sampled_tok_id);
 
     return sampled_tok_id;
 }
