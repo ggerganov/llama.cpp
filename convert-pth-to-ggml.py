@@ -17,6 +17,7 @@
 # and vocabulary.
 #
 import argparse
+import os
 import sys
 import json
 import struct
@@ -44,8 +45,14 @@ def get_n_parts(dim):
 
 def load_hparams_and_tokenizer(dir_model):
 
+    # `dir_model` is something like `models/7B` or `models/7B/`.
+    # "tokenizer.model" is expected under model's parent dir.
+    # When `dir_model` is a symlink, f"{dir_model}/../tokenizer.model" would not be found.
+    # Let's use the model's parent dir directly.
+    model_parent_dir = os.path.dirname(os.path.normpath(dir_model))
+
     fname_hparams = f"{dir_model}/params.json"
-    fname_tokenizer = f"{dir_model}/../tokenizer.model"
+    fname_tokenizer = f"{model_parent_dir}/tokenizer.model"
 
     with open(fname_hparams, "r") as f:
         hparams = json.load(f)
