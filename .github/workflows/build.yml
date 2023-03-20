@@ -36,15 +36,18 @@ jobs:
         run: |
           make
 
+      - name: Zip executables
+        run: zip alpaca-linux.zip chat
+
       - name: Archive production artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: ubuntu
+          name: linux
           path: |
-            chat
+            alpaca-linux.zip
 
 
-  macOS-latest:
+  macos-latest:
     runs-on: macOS-latest
 
     steps:
@@ -60,39 +63,45 @@ jobs:
       - name: Build
         id: make_build
         run: |
-          make
+          make chat_mac
+
+      - name: Codesign executable
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        env: 
+          MACOS_CERTIFICATE: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PWD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          MACOS_CERT_ID: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_ID }}
+
+        run: |
+          echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
+          security create-keychain -p $KEYCHAIN_PWD build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p $KEYCHAIN_PWD build.keychain
+          security import certificate.p12 -k build.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k $KEYCHAIN_PWD build.keychain
+          /usr/bin/codesign --options runtime --force -s $MACOS_CERT_ID ./chat_mac -v
+
+      - name: Zip executables
+        run: zip alpaca-mac.zip chat_mac
+
+      - name: Notarize executables
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        env: 
+          PROD_MACOS_NOTARIZATION_APPLE_ID: ${{ secrets.AC_USERNAME }}
+          PROD_MACOS_NOTARIZATION_PWD: ${{ secrets.AC_PASSWORD }}
+          PROD_MACOS_NOTARIZATION_TEAM_ID: ${{ secrets.PROD_MACOS_NOTARIZATION_TEAM_ID }}
+        run: |
+          xcrun notarytool store-credentials "notarytool-profile" --apple-id "$PROD_MACOS_NOTARIZATION_APPLE_ID" --team-id "$PROD_MACOS_NOTARIZATION_TEAM_ID" --password "$PROD_MACOS_NOTARIZATION_PWD"
+          xcrun notarytool submit "alpaca-mac.zip" --keychain-profile "notarytool-profile" --wait
 
       - name: Archive production artifacts
         uses: actions/upload-artifact@v3
         with:
           name: macos
           path: |
-            chat
+            alpaca-mac.zip
 
-  # macos-arm64:
-  #   runs-on: macos-arm64
-
-  #   steps:
-  #     - name: Clone
-  #       id: checkout
-  #       uses: actions/checkout@v1
-
-  #     - name: Dependencies
-  #       id: depends
-  #       run: |
-  #         brew update
-
-  #     - name: Build
-  #       id: make_build
-  #       run: |
-  #         make
-
-  #     - name: Archive production artifacts
-  #       uses: actions/upload-artifact@v3
-  #       with:
-  #         name: macos
-  #         path: |
-  #           chat
 
   windows-latest:
     runs-on: windows-latest
@@ -110,227 +119,70 @@ jobs:
           cmake ..
           cmake --build . --config Release
 
-      - name: Set commit hash variables
-        id: commit
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: pr-mpt/actions-commit-hash@v2
-
       - name: Pack artifacts
         id: pack_artifacts
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
-          7z a alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-x64.zip .\build\Release\*
+          7z a alpaca-win.zip .\build\Release\*
+
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows
+          path: |
+            alpaca-win.zip
+
+
+  release:
+    runs-on: ubuntu-latest
+    if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+    needs: 
+      - windows-latest
+      - macos-latest
+      - ubuntu-latest
+
+    steps:
+      - name: Download all workflow run artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Set commit hash variables
+        id: commit
+        uses: pr-mpt/actions-commit-hash@v2
 
       - name: Create release
         id: create_release
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         uses: zendesk/action-create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}
+          tag_name: ${{ steps.commit.outputs.short }}
 
-      - name: Upload release
-        id: upload_release
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+      - name: Upload windows release
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} 
-          asset_path: .\alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-x64.zip
-          asset_name: alpaca-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-x64.zip
+          asset_path: windows/alpaca-win.zip
+          asset_name: alpaca-win.zip
           asset_content_type: application/octet-stream
 
-#  ubuntu-latest-gcc:
-#    runs-on: ubuntu-latest
-#
-#    strategy:
-#      matrix:
-#        build: [Debug, Release]
-#
-#    steps:
-#      - name: Clone
-#        uses: actions/checkout@v1
-#
-#      - name: Dependencies
-#        run: |
-#          sudo apt-get update
-#          sudo apt-get install build-essential
-#          sudo apt-get install cmake
-#
-#      - name: Configure
-#        run: cmake . -DCMAKE_BUILD_TYPE=${{ matrix.build }}
-#
-#      - name: Build
-#        run: |
-#          make
-#
-#  ubuntu-latest-clang:
-#    runs-on: ubuntu-latest
-#
-#    strategy:
-#      matrix:
-#        build: [Debug, Release]
-#
-#    steps:
-#      - name: Clone
-#        uses: actions/checkout@v1
-#
-#      - name: Dependencies
-#        run: |
-#          sudo apt-get update
-#          sudo apt-get install build-essential
-#          sudo apt-get install cmake
-#
-#      - name: Configure
-#        run: cmake . -DCMAKE_BUILD_TYPE=${{ matrix.build }} -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang
-#
-#      - name: Build
-#        run: |
-#          make
-#
-#  ubuntu-latest-gcc-sanitized:
-#    runs-on: ubuntu-latest
-#
-#    strategy:
-#      matrix:
-#        sanitizer: [ADDRESS, THREAD, UNDEFINED]
-#
-#    steps:
-#      - name: Clone
-#        uses: actions/checkout@v1
-#
-#      - name: Dependencies
-#        run: |
-#          sudo apt-get update
-#          sudo apt-get install build-essential
-#          sudo apt-get install cmake
-#
-#      - name: Configure
-#        run: cmake . -DCMAKE_BUILD_TYPE=Debug -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON
-#
-#      - name: Build
-#        run: |
-#          make
-#
-#  windows:
-#    runs-on: windows-latest
-#
-#    strategy:
-#      matrix:
-#        build: [Release]
-#        arch: [Win32, x64]
-#        include:
-#          - arch: Win32
-#            s2arc: x86
-#          - arch: x64
-#            s2arc: x64
-#
-#    steps:
-#      - name: Clone
-#        uses: actions/checkout@v1
-#
-#      - name: Add msbuild to PATH
-#        uses: microsoft/setup-msbuild@v1
-#
-#      - name: Configure
-#        run: >
-#          cmake -S . -B ./build -A ${{ matrix.arch }}
-#          -DCMAKE_BUILD_TYPE=${{ matrix.build }}
-#
-#      - name: Build
-#        run: |
-#          cd ./build
-#          msbuild ALL_BUILD.vcxproj -t:build -p:configuration=${{ matrix.build }} -p:platform=${{ matrix.arch }}
-#
-#      - name: Upload binaries
-#        uses: actions/upload-artifact@v1
-#        with:
-#          name: llama-bin-${{ matrix.arch }}
-#          path: build/bin/${{ matrix.build }}
-#
-#  windows-blas:
-#    runs-on: windows-latest
-#
-#    strategy:
-#      matrix:
-#        build: [Release]
-#        arch: [Win32, x64]
-#        blas: [ON]
-#        include:
-#          - arch: Win32
-#            obzip: https://github.com/xianyi/OpenBLAS/releases/download/v0.3.21/OpenBLAS-0.3.21-x86.zip
-#            s2arc: x86
-#          - arch: x64
-#            obzip: https://github.com/xianyi/OpenBLAS/releases/download/v0.3.21/OpenBLAS-0.3.21-x64.zip
-#            s2arc: x64
-#
-#    steps:
-#      - name: Clone
-#        uses: actions/checkout@v1
-#
-#      - name: Add msbuild to PATH
-#        uses: microsoft/setup-msbuild@v1
-#
-#      - name: Fetch OpenBLAS
-#        if: matrix.blas == 'ON'
-#        run: |
-#          C:/msys64/usr/bin/wget.exe -qO blas.zip ${{ matrix.obzip }}
-#          7z x blas.zip -oblas -y
-#          copy blas/include/cblas.h .
-#          copy blas/include/openblas_config.h .
-#          echo "blasdir=$env:GITHUB_WORKSPACE/blas" >> $env:GITHUB_ENV
-#
-#      - name: Configure
-#        run: >
-#          cmake -S . -B ./build -A ${{ matrix.arch }}
-#          -DCMAKE_BUILD_TYPE=${{ matrix.build }}
-#          -DLLAMA_SUPPORT_OPENBLAS=${{ matrix.blas }}
-#          -DCMAKE_LIBRARY_PATH="$env:blasdir/lib"
-#
-#      - name: Build
-#        run: |
-#          cd ./build
-#          msbuild ALL_BUILD.vcxproj -t:build -p:configuration=${{ matrix.build }} -p:platform=${{ matrix.arch }}
-#
-#      - name: Copy libopenblas.dll
-#        if: matrix.blas == 'ON'
-#        run: copy "$env:blasdir/bin/libopenblas.dll" build/bin/${{ matrix.build }}
-#
-#      - name: Upload binaries
-#        if: matrix.blas == 'ON'
-#        uses: actions/upload-artifact@v1
-#        with:
-#          name: llama-blas-bin-${{ matrix.arch }}
-#          path: build/bin/${{ matrix.build }}
-#
-#  emscripten:
-#    runs-on: ubuntu-latest
-#
-#    strategy:
-#      matrix:
-#        build: [Release]
-#
-#    steps:
-#      - name: Clone
-#        uses: actions/checkout@v1
-#
-#      - name: Dependencies
-#        run: |
-#          wget -q https://github.com/emscripten-core/emsdk/archive/master.tar.gz
-#          tar -xvf master.tar.gz
-#          emsdk-master/emsdk update
-#          emsdk-master/emsdk install latest
-#          emsdk-master/emsdk activate latest
-#
-#      - name: Configure
-#        run: echo "tmp"
-#
-#      - name: Build
-#        run: |
-#          pushd emsdk-master
-#          source ./emsdk_env.sh
-#          popd
-#          emcmake cmake . -DCMAKE_BUILD_TYPE=${{ matrix.build }}
-#          make
+      - name: Upload mac release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} 
+          asset_path: macos/alpaca-mac.zip
+          asset_name: alpaca-mac.zip
+          asset_content_type: application/octet-stream
+
+      - name: Upload linux release
+        
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} 
+          asset_path: linux/alpaca-linux.zip
+          asset_name: alpaca-linux.zip
+          asset_content_type: application/octet-stream
