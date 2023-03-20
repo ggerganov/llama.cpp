@@ -5,6 +5,7 @@
 
 import ctypes
 import os
+#from pathlib import Path
 
 class load_model_inputs(ctypes.Structure):
     _fields_ = [("threads", ctypes.c_int),
@@ -33,7 +34,7 @@ handle = ctypes.CDLL(dir_path + "/llamacpp.dll")
 
 handle.load_model.argtypes = [load_model_inputs] 
 handle.load_model.restype = ctypes.c_bool
-handle.generate.argtypes = [generation_inputs]
+handle.generate.argtypes = [generation_inputs, ctypes.c_wchar_p] #apparently needed for osx to work. i duno why they need to interpret it that way but whatever
 handle.generate.restype = generation_outputs
   
 def load_model(model_filename,batch_size=8,max_context_length=512,threads=4,n_parts_overwrite=-1):
@@ -71,8 +72,8 @@ def generate(prompt,max_length=20,temperature=0.8,top_k=100,top_p=0.85,rep_pen=1
 import json, http.server, threading, socket, sys, time
 
 # global vars
-global modelname 
-modelname = ""
+global friendlymodelname 
+friendlymodelname = ""
 maxctx = 1024
 maxlen = 256
 modelbusy = False
@@ -95,8 +96,8 @@ class ServerRequestHandler(http.server.BaseHTTPRequestHandler):
         if self.path.endswith('/api/v1/model/') or self.path.endswith('/api/latest/model/'):
             self.send_response(200)
             self.end_headers()
-            global modelname
-            self.wfile.write(json.dumps({"result": modelname }).encode())
+            global friendlymodelname
+            self.wfile.write(json.dumps({"result": friendlymodelname }).encode())
             return
 
         if self.path.endswith('/api/v1/config/max_length/') or self.path.endswith('/api/latest/config/max_length/'):
@@ -122,7 +123,7 @@ class ServerRequestHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         content_length = int(self.headers['Content-Length'])
         body = self.rfile.read(content_length)
-        if self.path.endswith('/api/v1/generate/') or self.path.endswith('/api/latest/generate/'):
+        if self.path.endswith('/api/v1/generate/') or self.path.endswith('/api/latest/generate/') or self.path.endswith('/api/v1/generate') or self.path.endswith('/api/latest/generate'):
             global modelbusy
             global last_context
             if modelbusy:
@@ -257,6 +258,9 @@ if __name__ == '__main__':
     loadok = load_model(modelname,24,maxctx,4,mdl_nparts)
     print("Load Model OK: " + str(loadok))
 
+    #friendlymodelname = Path(modelname).stem   ### this wont work on local kobold api, so we must hardcode a known HF model name
+    friendlymodelname = "concedo/llamacpp" 
+    
     if loadok:
         print("Starting Kobold HTTP Server on port " + str(port))
         print("Please connect to custom endpoint at http://localhost:"+str(port))
