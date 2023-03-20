@@ -521,18 +521,26 @@ struct SoftMaxSampler {
 
         // compute probs for the tokens
         double sum_p = 0.0;
+        double sum_act = 0.0;
+        double entropy = 0.0;
         for (const auto & kv : logits_id) {
+            sum_act += kv.first;
             double logp = kv.first - maxl;
             double p = exp(logp);
             probs.push_back(p);
             sum_p += p;
+            entropy -= p * logp;
         }
 
         // normalize the probs
         const double scale = 1.0 / sum_p;
+        entropy = entropy * scale + log(sum_p);
         for (auto & p : probs) {
             p *= scale;
         }
+
+        // Scaled activations stats & distribution info
+        logprintf( "%s: top_sact=%f mean_sact=%f top_p=%f entropy=%f\n", __func__, logits_id[0].first, sum_act / n, probs[0], entropy);
     }
 
 
