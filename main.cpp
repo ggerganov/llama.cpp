@@ -1,3 +1,7 @@
+#if defined(_MSC_VER) || defined(__MINGW32__)
+#define NOMINMAX
+#endif
+
 #include "ggml.h"
 
 #include "utils.h"
@@ -19,6 +23,10 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#else
+#include <errno.h>
+#define msync(addr, len_bytes, flag) winMSync
+#define MS_ASYNC 0
 #endif
 
 #define ROUNDUP(X, K) (((X) + (K)-1) & -(K))
@@ -96,6 +104,7 @@ struct llama_model {
     std::map<std::string, struct ggml_tensor *> tensors;
 };
 
+
 struct magic {
     uint32_t magic;
     std::atomic<unsigned> lock;
@@ -103,9 +112,36 @@ struct magic {
     size_t commit;
     size_t offset;
     size_t capacity;
-    gpt_vocab *vocab;
-    llama_model *model;
+    gpt_vocab* vocab;
+    llama_model* model;
 };
+
+static void winMSync(magic* addr, size_t len_bytes) {
+    bool success = FlushViewOfFile((void*)addr, len_bytes);
+    if (!success) {
+        LPVOID lpMsgBuf;
+        LPVOID lpDisplayBuf;
+        DWORD error_code = GetLastError();
+        FormatMessage(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER |
+            FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL,
+            error_code,
+            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+            (LPTSTR)&lpMsgBuf,
+            0, NULL);
+        lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT,
+            (lstrlen((LPCTSTR)lpMsgBuf) + 40) * sizeof(TCHAR));
+        StringCchPrintf((LPTSTR)lpDisplayBuf,
+            LocalSize(lpDisplayBuf) / sizeof(TCHAR),
+            TEXT("failed with error %d: %s"),
+            error_code, lpMsgBuf);
+    }
+    HANDLE hFile = (HANDLE)_get_osfhandle(addr->fd);
+    FlushFileBuffers(hFile);
+}
+
 
 static struct magic *mag;
 
@@ -129,17 +165,26 @@ static void magic_commit(void) {
     mag->offset = mag->capacity;
     mag->commit = mag->capacity;
     mag->magic = 0xFEEDABEE;
-    msync(mag, mag->commit, MS_ASYNC);
+    bool success = msync(mag, mag->commit, MS_ASYNC);   
 }
 
 static void magic_init(void) {
     int fd;
     size_t n;
+#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
     struct stat st;
+#else
+    struct _stat64 st;
+#endif
     if (mag) return;
     n = ROUNDUP(sizeof(struct magic), MAGIC_GRAN);
     if ((fd = open(MAGIC_PATH, O_RDWR)) != -1) {
-        fstat(fd, &st);
+        int result = fstat(fd, &st);
+        int error = errno;
+        if (errno == EBADF)
+            fprintf(stderr, "Bad file descriptor.\n");
+        else if (errno == EINVAL)
+            fprintf(stderr, "Invalid argument to _fstat.\n");
         if (st.st_size >= n) {
             mag = (struct magic *)Mmap(MAGIC_ADDR, n,
                                        PROT_READ | PROT_WRITE,
@@ -182,9 +227,9 @@ void *memalign(size_t a, size_t n) {
     i = i + sizeof(size_t);
     i = ROUNDUP(i, a);
     j = ROUNDUP(i + m, MAGIC_GRAN);
-    if (j > mag->capacity) {
+    //if (j > mag->capacity) {
         if (!mag->magic) {
-            ftruncate(mag->fd, j);
+            int result = ftruncate(mag->fd, j);
             p = mmap(MAGIC_ADDR + mag->capacity,
                      j - mag->capacity, PROT_READ | PROT_WRITE,
                      MAP_SHARED | MAP_FIXED, mag->fd, mag->capacity);
@@ -199,7 +244,7 @@ void *memalign(size_t a, size_t n) {
             spin_unlock(mag->lock);
             return 0;
         }
-    }
+    //}
     mag->offset = i + m;
     spin_unlock(mag->lock);
     p = MAGIC_ADDR + i;
@@ -207,7 +252,7 @@ void *memalign(size_t a, size_t n) {
     return p;
 }
 
-void *malloc(size_t n) {
+void *_malloc(size_t n) {
     return memalign(MAGIC_ALGN, n);
 }
 
@@ -215,32 +260,52 @@ size_t malloc_usable_size(const void *p) {
     return ((const size_t *)p)[-1];
 }
 
-void *calloc(size_t n, size_t z) {
+void *_calloc(size_t n, size_t z) {
     void *p;
-    if ((p = malloc((n *= z)))) {
+    if ((p = _malloc((n *= z)))) {
         memset(p, 0, n);
     }
     return p;
 }
 
-void free(void *p) {
+void _free(void *p) {
     // do nothing
 }
 
-void *realloc(void *p, size_t n) {
+void *_realloc(void *p, size_t n) {
     void *q;
     if (!p) {
-        return malloc(n);
+        return _malloc(n);
     }
     if (!n) {
-        free(p);
+        _free(p);
         return 0;
     }
-    if ((q = malloc(n))) {
+    if ((q = _malloc(n))) {
         memcpy(q, p, ((const size_t *)p)[-1]);
     }
     return q;
 }
+
+#if defined(malloc)
+# undef malloc
+#endif
+#define malloc(x) _malloc(x)
+
+#if defined(calloc)
+# undef calloc
+#endif
+#define calloc(x) _calloc(x)
+
+#if defined(realloc)
+# undef realloc
+#endif
+#define realloc(x) _realloc(x)
+
+#if defined(free)
+# undef free
+#endif
+#define free(x) _free(x)
 
 // load the model's weights from a file
 bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab & vocab, int n_ctx) {
@@ -707,7 +772,7 @@ bool llama_eval(
     const int d_key = n_embd/n_head;
 
     static size_t buf_size = 512u*1024*1024;
-    static void * buf = malloc(buf_size);
+    static void * buf = _malloc(buf_size);
 
     if (mem_per_token > 0 && mem_per_token*N > buf_size) {
         const size_t buf_size_new = 1.1*(mem_per_token*N); // add 10% to account for ggml object overhead
@@ -715,7 +780,7 @@ bool llama_eval(
 
         // reallocate
         buf_size = buf_size_new;
-        buf = realloc(buf, buf_size);
+        buf = _realloc(buf, buf_size);
         if (buf == nullptr) {
             fprintf(stderr, "%s: failed to allocate %zu bytes\n", __func__, buf_size);
             return false;

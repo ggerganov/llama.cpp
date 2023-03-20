@@ -20,6 +20,7 @@
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #ifndef __MINGW32__
 #include <Windows.h>
+#include <strsafe.h>
 #else
 #include <windows.h>
 #endif
@@ -101,7 +102,7 @@
 #define close _close
 #endif
 #ifndef fstat
-#define fstat _fstat
+#define fstat _fstati64
 #endif
 #ifndef madvise
 #define madvise WinMadvise
@@ -113,6 +114,7 @@
 static std::atomic<unsigned> g_winlock;
 static std::map<LPVOID, HANDLE> g_winmap;
 
+
 static void WinLock(void) {
     while (!g_winlock.exchange(1, std::memory_order_acquire));
 }
@@ -121,7 +123,30 @@ static void WunLock(void) {
     g_winlock.store(0, std::memory_order_release);
 }
 
-static int WinMadvise(int fd, size_t length, int flags) {
+static int WinMadvise(char* fd, size_t length, int flags) {
+    auto p_handle = GetCurrentProcess();
+    struct _WIN32_MEMORY_RANGE_ENTRY entry((void*)fd, length);
+    bool success = PrefetchVirtualMemory(p_handle, 1, &entry, 0);
+    if (!success) {
+        LPVOID lpMsgBuf;
+        LPVOID lpDisplayBuf;
+        DWORD error_code = GetLastError();
+        FormatMessage(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER |
+            FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL,
+            error_code,
+            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+            (LPTSTR)&lpMsgBuf,
+            0, NULL);
+        lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT,
+            (lstrlen((LPCTSTR)lpMsgBuf) + 256) * sizeof(TCHAR));
+        StringCchPrintf((LPTSTR)lpDisplayBuf,
+            LocalSize(lpDisplayBuf) / sizeof(TCHAR),
+            TEXT("%s failed with error %d: %s"),
+            error_code, lpMsgBuf);
+    }
     return 0;
 }
 
@@ -215,11 +240,52 @@ static void *WinMap(void *addr, size_t length, int prot,
                              (offset + length) >> 32,
                              (offset + length), 0);
     if (!hand) {
+        LPVOID lpMsgBuf;
+        LPVOID lpDisplayBuf;
+        DWORD error_code = GetLastError();
+        FormatMessage(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER |
+            FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL,
+            error_code,
+            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+            (LPTSTR)&lpMsgBuf,
+            0, NULL);
+        lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT,
+            (lstrlen((LPCTSTR)lpMsgBuf) + 256) * sizeof(TCHAR));
+        StringCchPrintf((LPTSTR)lpDisplayBuf,
+            LocalSize(lpDisplayBuf) / sizeof(TCHAR),
+            TEXT("%s failed with error %d: %s"),
+            error_code, lpMsgBuf);
         return MAP_FAILED;
     }
+    if (winprot == PAGE_WRITECOPY) {
+        access = FILE_MAP_COPY;
+    }
+
     res = MapViewOfFileEx(hand, access, offset >> 32,
                           offset, length, addr);
     if (!res) {
+        LPVOID lpMsgBuf;
+        LPVOID lpDisplayBuf;
+        DWORD error_code = GetLastError();
+        FormatMessage(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER |
+            FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL,
+            error_code,
+            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+            (LPTSTR)&lpMsgBuf,
+            0, NULL);
+        lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT,
+            (lstrlen((LPCTSTR)lpMsgBuf) + 40) * sizeof(TCHAR));
+        StringCchPrintf((LPTSTR)lpDisplayBuf,
+            LocalSize(lpDisplayBuf) / sizeof(TCHAR),
+            TEXT("failed with error %d: %s"),
+            error_code, lpMsgBuf);
+        fprintf(stderr, (char*)lpDisplayBuf);
         CloseHandle(hand);
         return MAP_FAILED;
     }
