@@ -3,6 +3,7 @@
 #include "utils.h"
 
 #include <cassert>
+#include <cinttypes>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -104,8 +105,22 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
     {
         uint32_t magic;
         fin.read((char *) &magic, sizeof(magic));
-        if (magic != 0x67676d6c) {
+        if (magic == 0x67676d6c) {
+            fprintf(stderr, "%s: invalid model file '%s' (too old, regenerate your model files!)\n",
+                    __func__, fname.c_str());
+            return false;
+        }
+        if (magic != 0x67676d66) {
             fprintf(stderr, "%s: invalid model file '%s' (bad magic)\n", __func__, fname.c_str());
+            return false;
+        }
+
+        uint32_t format_version;
+        fin.read((char *) &format_version, sizeof(format_version));
+
+        if (format_version != 1) {
+            fprintf(stderr, "%s: invalid model file '%s' (unsupported format version %" PRIu32 ")\n",
+                    __func__, fname.c_str(), format_version);
             return false;
         }
     }
@@ -154,8 +169,14 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
             word.resize(len);
             fin.read((char *) word.data(), len);
 
+            float score;
+            fin.read((char *) &score, sizeof(score));
+
             vocab.token_to_id[word] = i;
-            vocab.id_to_token[i] = word;
+
+            auto &tok_score = vocab.id_to_token[i];
+            tok_score.token = word;
+            tok_score.score = score;
 
             //if (i < 30000) {
             //    fprintf(stderr, "%s: vocab[%d] = '%s'\n", __func__, i, word.c_str());
@@ -867,7 +888,7 @@ int main(int argc, char ** argv) {
     }
 
     // enable interactive mode if reverse prompt is specified
-    if (!antipromptv_inp.size()) {
+    if (antipromptv_inp.size() != 0) {
         params.interactive = true;
     }
 
@@ -875,7 +896,7 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "%s: prompt: '%s'\n", __func__, params.prompt.c_str());
     fprintf(stderr, "%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
     for (int i = 0; i < (int) embd_inp.size(); i++) {
-        fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], vocab.id_to_token.at(embd_inp[i]).c_str());
+        fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], vocab.id_to_token.at(embd_inp[i]).token.c_str());
     }
     fprintf(stderr, "\n");
     if (params.interactive) {
@@ -897,7 +918,7 @@ int main(int argc, char ** argv) {
                 fprintf(stderr, "%s: reverse prompt: '%s'\n", __func__, params.antiprompt.at(apindex).c_str());
                 fprintf(stderr, "%s: number of tokens in reverse prompt = %zu\n", __func__, antiprompt_inp.size());
                 for (int i = 0; i < (int) antiprompt_inp.size(); i++) {
-                    fprintf(stderr, "%6d -> '%s'\n", antiprompt_inp[i], vocab.id_to_token.at(antiprompt_inp[i]).c_str());
+                    fprintf(stderr, "%6d -> '%s'\n", antiprompt_inp[i], vocab.id_to_token.at(antiprompt_inp[i]).token.c_str());
                 }
                 fprintf(stderr, "\n");
             }
@@ -1003,7 +1024,7 @@ int main(int argc, char ** argv) {
         // display text
         if (!input_noecho) {
             for (auto id : embd) {
-                printf("%s", vocab.id_to_token[id].c_str());
+                printf("%s", vocab.id_to_token[id].token.c_str());
             }
             fflush(stdout);
         }
