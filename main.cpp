@@ -12,7 +12,6 @@
 #include <map>
 #include <string>
 #include <vector>
-#include <sstream>
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 #include <signal.h>
@@ -1023,11 +1022,10 @@ int main(int argc, char ** argv) {
         // check if we should prompt the user for more
         if (params.interactive && embd_inp.size() <= input_consumed) {
             // check for reverse prompt
-            std::stringstream last_output_ss;
+            std::string last_output;
             for (auto id : last_n_tokens) {
-                last_output_ss << vocab.id_to_token[id];
+                last_output += vocab.id_to_token[id];
             }
-            std::string last_output = last_output_ss.str();
 
             // Check if each of the reverse prompts appears at the end of the output.
             for (std::string antiprompt : params.antiprompt) {
