@@ -361,7 +361,7 @@ static const size_t CACHE_LINE_SIZE_F32 = CACHE_LINE_SIZE/sizeof(float);
 
 // AVX routines provided by GH user Const-me
 // ref: https://github.com/ggerganov/ggml/pull/27#issuecomment-1464934600
-#if __AVX2__
+#if __AVX2__ || __AVX512F__
 // Unpack 32 4-bit fields into 32 bytes
 // The output vector contains 32 bytes, each one in [ 0 .. 15 ] interval
 static inline __m256i bytesFromNibbles( const uint8_t* rsi )
@@ -1418,21 +1418,6 @@ inline static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void
 #error "not implemented for QK"
 #endif
 #elif defined(__AVX512F__)
-inline __m256i bytesFromNibbles( const uint8_t* rsi ){
-    // Load 16 bytes from memory
-    __m128i tmp = _mm_loadu_si128( ( const __m128i* )rsi );
-
-    // Expand bytes into uint16_t values
-    __m256i bytes = _mm256_cvtepu8_epi16( tmp );
-
-    // Unpack values into individual bytes
-    const __m256i lowMask = _mm256_set1_epi8( 0xF );
-    __m256i high = _mm256_andnot_si256( lowMask, bytes );
-    __m256i low = _mm256_and_si256( lowMask, bytes );
-    high = _mm256_slli_epi16( high, 4 );
-    bytes = _mm256_or_si256( low, high );
-    return bytes;
-}
 
 inline __m512 process_one_block(
     __m512 acc,
@@ -2015,7 +2000,7 @@ inline static void ggml_vec_mad_q4_1(const int n, float * restrict y, void * res
     const size_t bs = 2*sizeof(float) + QK/2;
 
     const uint8_t * restrict pd = ((const uint8_t *)x + 0*bs);
-    const uint8_t * restrict pm = ((const uint8_t *)x + 0*bs +   sizeof(float)); 
+    const uint8_t * restrict pm = ((const uint8_t *)x + 0*bs +   sizeof(float));
     const uint8_t * restrict pb = ((const uint8_t *)x + 0*bs + 2*sizeof(float));
 
     for (int i = 0; i < nb; i++) {
