@@ -906,7 +906,7 @@ int main(int argc, char ** argv) {
 
         if(params.antiprompt.size()) {
             for (auto antiprompt : params.antiprompt) {
-                fprintf(stderr, "Antiprompt: %s\n", antiprompt);
+                fprintf(stderr, "Reverse prompt: %s\n", antiprompt);
             }
         }
     }
