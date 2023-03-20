@@ -1084,6 +1084,8 @@ int main(int argc, char ** argv) {
         if (embd.back() == EOS_TOKEN_ID) {
             if (params.interactive) {
                 is_interacting = true;
+                embd.back() = 13;
+                last_n_tokens.back() = 13;
             } else {
                 fprintf(stderr, " [end of text]\n");
                 break;
