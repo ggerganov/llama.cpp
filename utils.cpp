@@ -6,6 +6,7 @@
 #include <regex>
 #include <iostream>
 #include <iterator>
+#include <queue>
 #include <string>
 #include <math.h>
 
@@ -38,19 +39,19 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         } else if (arg == "-p" || arg == "--prompt") {
             params.prompt = argv[++i];
         } else if (arg == "-f" || arg == "--file") {
-
             std::ifstream file(argv[++i]);
-
-            std::copy(std::istreambuf_iterator<char>(file),
-                    std::istreambuf_iterator<char>(),
-                    back_inserter(params.prompt));
-                
+            std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(params.prompt));
+            if (params.prompt.back() == '\n') {
+                params.prompt.pop_back();
+            }
         } else if (arg == "-n" || arg == "--n_predict") {
             params.n_predict = std::stoi(argv[++i]);
         } else if (arg == "--top_k") {
             params.top_k = std::stoi(argv[++i]);
         } else if (arg == "-c" || arg == "--ctx_size") {
             params.n_ctx = std::stoi(argv[++i]);
+        } else if (arg == "--memory_f16") {
+            params.memory_f16 = true;
         } else if (arg == "--top_p") {
             params.top_p = std::stof(argv[++i]);
         } else if (arg == "--temp") {
@@ -65,16 +66,19 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.model = argv[++i];
         } else if (arg == "-i" || arg == "--interactive") {
             params.interactive = true;
-        } else if (arg == "--interactive-start") {
-            params.interactive = true;
-            params.interactive_start = true;
+        } else if (arg == "-ins" || arg == "--instruct") {
+            params.instruct = true;
         } else if (arg == "--color") {
             params.use_color = true;
         } else if (arg == "-r" || arg == "--reverse-prompt") {
-            params.antiprompt = argv[++i];
+            params.antiprompt.push_back(argv[++i]);
+        } else if (arg == "--ignore-eos") {
+            params.ignore_eos = true;
         } else if (arg == "-h" || arg == "--help") {
             gpt_print_usage(argc, argv, params);
             exit(0);
+        } else if (arg == "--random-prompt") {
+            params.random_prompt = true;
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             gpt_print_usage(argc, argv, params);
@@ -85,20 +89,22 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     return true;
 }
 
-void gpt_print_usage(int argc, char ** argv, const gpt_params & params) {
+void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "usage: %s [options]\n", argv[0]);
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -h, --help            show this help message and exit\n");
     fprintf(stderr, "  -i, --interactive     run in interactive mode\n");
-    fprintf(stderr, "  --interactive-start   run in interactive mode and poll user input at startup\n");
+    fprintf(stderr, "  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
     fprintf(stderr, "  -r PROMPT, --reverse-prompt PROMPT\n");
-    fprintf(stderr, "                        in interactive mode, poll user input upon seeing PROMPT\n");
+    fprintf(stderr, "                        in interactive mode, poll user input upon seeing PROMPT (can be\n");
+    fprintf(stderr, "                        specified more than once for multiple prompts).\n");
     fprintf(stderr, "  --color               colorise output to distinguish prompt and user input from generations\n");
     fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1)\n");
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
     fprintf(stderr, "  -p PROMPT, --prompt PROMPT\n");
-    fprintf(stderr, "                        prompt to start generation with (default: random)\n");
+    fprintf(stderr, "                        prompt to start generation with (default: empty)\n");
+    fprintf(stderr, "  --random-prompt       start with a randomized prompt.\n");
     fprintf(stderr, "  -f FNAME, --file FNAME\n");
     fprintf(stderr, "                        prompt file to start generation.\n");
     fprintf(stderr, "  -n N, --n_predict N   number of tokens to predict (default: %d)\n", params.n_predict);
@@ -107,6 +113,8 @@ void gpt_print_usage(int argc, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  --repeat_last_n N     last n tokens to consider for penalize (default: %d)\n", params.repeat_last_n);
     fprintf(stderr, "  --repeat_penalty N    penalize repeat sequence of tokens (default: %.1f)\n", params.repeat_penalty);
     fprintf(stderr, "  -c N, --ctx_size N    size of the prompt context (default: %d)\n", params.n_ctx);
+    fprintf(stderr, "  --ignore-eos          ignore end of stream token and continue generating\n");
+    fprintf(stderr, "  --memory_f16          use f16 instead of f32 for memory key+value\n");
     fprintf(stderr, "  --temp N              temperature (default: %.1f)\n", params.temp);
     fprintf(stderr, "  -b N, --batch_size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
@@ -287,58 +295,146 @@ std::vector<gpt_vocab::id> gpt_tokenize(const gpt_vocab & vocab, const std::stri
     return tokens;
 }
 
-// TODO: Calculate this constant from the vocabulary
-#define MAX_TOKEN_LEN 18
-// SentencePiece implementation after https://guillaume-be.github.io/2020-05-30/sentence_piece
-std::vector<gpt_vocab::id> llama_tokenize(const gpt_vocab & vocab, const std::string & text, bool bos) {
-    std::vector<gpt_vocab::id> res;
-    std::vector<int> score;
-    std::vector<gpt_vocab::id> prev;
-    int len = text.length();
+static size_t utf8_len(char src) {
+    const size_t lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4 };
+    uint8_t highbits = static_cast<uint8_t>(src) >> 4;
+    return lookup[highbits];
+}
 
-    score.resize(len + 1);
-    prev.resize(len + 1);
+struct llama_sp_symbol {
+    using index = int;
+    index prev;
+    index next;
+    std::string_view text;
+};
 
-    // Forward pass
-    for (int i = 0; i < len; i++) {
-        int max_len = std::min(len - i, MAX_TOKEN_LEN);
-        for (int sub_len = 1; sub_len <= max_len; sub_len++) {
-            auto sub = text.substr(i, sub_len);
-            auto token = vocab.token_to_id.find(sub);
-            if (token != vocab.token_to_id.end()) {
-                int token_score = sub.length() * sub.length();
-                int local_score = score[i] + token_score;
-                int next = i + sub_len;
-                if (score[next] < local_score) {
-                    score[next] = local_score;
-                    prev[next] = (*token).second;
+struct llama_sp_bigram {
+    struct comparator {
+        bool operator()(llama_sp_bigram & l, llama_sp_bigram & r) {
+            return (l.score < r.score) || (l.score == r.score && l.left > r.left);
+        }
+    };
+    using queue_storage = std::vector<llama_sp_bigram>;
+    using queue = std::priority_queue<llama_sp_bigram, queue_storage, comparator>;
+    llama_sp_symbol::index left;
+    llama_sp_symbol::index right;
+    float score;
+    size_t size;
+};
+
+struct llama_tokenizer {
+    llama_tokenizer(const gpt_vocab & vocab): vocab_(vocab) {}
+
+    void tokenize(std::string_view text, std::vector<gpt_vocab::id> & output) {
+        // split string into utf8 chars
+        int index = 0;
+        while (!text.empty()) {
+            llama_sp_symbol sym;
+            size_t char_len = std::min(text.size(), utf8_len(text.data()[0]));
+            sym.text = std::string_view(text.data(), char_len);
+            sym.prev = index - 1;
+            text.remove_prefix(char_len);
+            sym.next = text.empty() ? -1 : index + 1;
+            index++;
+            symbols_.emplace_back(std::move(sym));
+        }
+
+        // seed the work queue with all possible 2-character tokens.
+        for (size_t i = 1; i < symbols_.size(); ++i) {
+            try_add_bigram(i - 1, i);
+        }
+
+        // keep substituting the highest frequency pairs for as long as we can.
+        while (!work_queue_.empty()) {
+            auto bigram = work_queue_.top();
+            work_queue_.pop();
+
+            auto & left_sym = symbols_[bigram.left];
+            auto & right_sym = symbols_[bigram.right];
+
+            // if one of the symbols already got merged, skip it.
+            if (left_sym.text.empty() || right_sym.text.empty() ||
+                left_sym.text.size() + right_sym.text.size() != bigram.size) {
+                continue;
+            }
+
+            // merge the right sym into the left one
+            left_sym.text = std::string_view(left_sym.text.data(), left_sym.text.size() + right_sym.text.size());
+            right_sym.text = std::string_view("");
+
+            // remove the right sym from the chain
+            left_sym.next = right_sym.next;
+            if (right_sym.next >= 0) {
+                symbols_[right_sym.next].prev = bigram.left;
+            }
+
+            // find more substitutions
+            try_add_bigram(left_sym.prev, bigram.left);
+            try_add_bigram(bigram.left, left_sym.next);
+        }
+
+        for (int i = 0; i != -1; i = symbols_[i].next) {
+            auto& symbol = symbols_[i];
+            auto token = vocab_.token_to_id.find(std::string(symbol.text));
+
+            if (token == vocab_.token_to_id.end()) {
+                // output any symbols that did not form tokens as bytes.
+                for (int j = 0; j < symbol.text.size(); ++j) {
+                    gpt_vocab::id token_id = static_cast<uint8_t>(symbol.text[j]) + 3;
+                    output.push_back(token_id);
                 }
+            } else {
+                output.push_back((*token).second);
             }
         }
     }
 
-    // Backward pass
-    int i = len;
-    while (i > 0) {
-        gpt_vocab::id token_id = prev[i];
-        if (token_id == 0) {
-	    // TODO: Return error or something more meaningful
-            printf("failed to tokenize string!\n");
-	    break;
+private:
+    void try_add_bigram(int left, int right) {
+        if (left == -1 || right == -1) {
+            return;
         }
-        res.push_back(token_id);
-        auto token = (*vocab.id_to_token.find(token_id)).second;
-        i -= token.length();
+
+        std::string_view text(symbols_[left].text.data(), symbols_[left].text.size() + symbols_[right].text.size());
+        auto token = vocab_.token_to_id.find(std::string(text));
+
+        if (token == vocab_.token_to_id.end()) {
+            return;
+        }
+
+        auto score = vocab_.score.find((*token).second);
+
+        if (score == vocab_.score.end()) {
+            return;
+        }
+
+        llama_sp_bigram bigram;
+        bigram.left = left;
+        bigram.right = right;
+        bigram.score = (*score).second;
+        bigram.size = text.size();
+        work_queue_.push(bigram);
+    }
+
+    const gpt_vocab & vocab_;
+    std::vector<llama_sp_symbol> symbols_;
+    llama_sp_bigram::queue work_queue_;
+};
+
+std::vector<gpt_vocab::id> llama_tokenize(const gpt_vocab & vocab, std::string_view text, bool bos) {
+    llama_tokenizer tokenizer(vocab);
+    std::vector<gpt_vocab::id> output;
+
+    if (text.size() == 0) {
+        return output;
     }
 
     if (bos) {
-        res.push_back(1); // TODO: replace with vocab.bos
+        output.push_back(1);
     }
 
-    // Pieces are in reverse order so correct that
-    std::reverse(res.begin(), res.end());
-
-    return res;
+    tokenizer.tokenize(text, output);
+    return output;
 }
 
 bool gpt_vocab_init(const std::string & fname, gpt_vocab & vocab) {
@@ -398,7 +494,7 @@ gpt_vocab::id llama_sample_top_p_top_k(
                     logits_id.push_back(std::make_pair(logits[i]*scale*repeat_penalty, i));
                 } else {
                     logits_id.push_back(std::make_pair(logits[i]*scale/repeat_penalty, i));
-                }                
+                }
             } else {
                 logits_id.push_back(std::make_pair(logits[i]*scale, i));
             }

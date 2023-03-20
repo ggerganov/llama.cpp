@@ -55,7 +55,7 @@ extern "C" {
 
         int n_parts_overwrite =  inputs.n_parts_overwrite;
 
-        if (!llama_model_load(api_params.model, api_model, api_vocab, api_params.n_ctx, n_parts_overwrite)) {  
+        if (!llama_model_load(api_params.model, api_model, api_vocab, api_params.n_ctx, GGML_TYPE_F16, n_parts_overwrite)) {  
             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, api_params.model.c_str());
             return false;
         }
@@ -101,7 +101,6 @@ extern "C" {
         if(reset_state)
         {
             api_params.prompt.insert(0, 1, ' ');
-            mem_per_token = 0;
         }
         // tokenize the prompt
         std::vector<gpt_vocab::id> embd_inp = ::llama_tokenize(api_vocab, api_params.prompt, true);
@@ -164,7 +163,7 @@ extern "C" {
                 
                 {
                     // set the logit of the eos token (2) to zero to avoid sampling it
-                    api_logits[api_logits.size() - n_vocab + 2] = 0;
+                    api_logits[api_logits.size() - n_vocab + EOS_TOKEN_ID] = 0;
                     //set logits of opening square bracket to zero.
                     api_logits[api_logits.size() - n_vocab + 518] = 0;
                     api_logits[api_logits.size() - n_vocab + 29961] = 0;
