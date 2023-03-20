@@ -17,7 +17,7 @@ CXXV := $(shell $(CXX) --version | head -n 1)
 # ref: https://github.com/ggerganov/whisper.cpp/issues/66#issuecomment-1282546789
 ifeq ($(UNAME_S),Darwin)
 	ifneq ($(UNAME_P),arm)
-		SYSCTL_M := $(shell sysctl -n hw.optional.arm64)
+		SYSCTL_M := $(shell sysctl -n hw.optional.arm64 2>/dev/null)
 		ifeq ($(SYSCTL_M),1)
 			# UNAME_P := arm
 			# UNAME_M := arm64
@@ -116,9 +116,6 @@ ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 		CFLAGS += -mfma -mf16c -mavx -mavx2
 	endif
 endif
-ifeq ($(UNAME_M),amd64)
-	CFLAGS += -mavx -mavx2 -mfma -mf16c
-endif
 ifneq ($(filter ppc64%,$(UNAME_M)),)
 	POWER9_M := $(shell grep "POWER9" /proc/cpuinfo)
 	ifneq (,$(findstring POWER9,$(POWER9_M)))
@@ -130,7 +127,8 @@ ifneq ($(filter ppc64%,$(UNAME_M)),)
 	endif
 endif
 ifndef LLAMA_NO_ACCELERATE
-	# Mac M1 - include Accelerate framework
+	# Mac M1 - include Accelerate framework.
+	# `-framework Accelerate` works on Mac Intel as well, with negliable performance boost (as of the predict time).
 	ifeq ($(UNAME_S),Darwin)
 		CFLAGS  += -DGGML_USE_ACCELERATE
 		LDFLAGS += -framework Accelerate
@@ -193,7 +191,7 @@ clean:
 
 main: main.cpp ggml.o utils.o
 	$(CXX) $(CXXFLAGS) main.cpp ggml.o utils.o -o main $(LDFLAGS)
-	./main -h
+	@echo "\x1b[36mrun ./main -h for help\x1b[0m"
 
 quantize: quantize.cpp ggml.o utils.o
 	$(CXX) $(CXXFLAGS) quantize.cpp ggml.o utils.o -o quantize $(LDFLAGS)
