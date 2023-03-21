@@ -5,14 +5,20 @@
 
 Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
+---
+
+**TEMPORARY NOTICE:**
+Big code change incoming: https://github.com/ggerganov/llama.cpp/pull/370
+
+Do not merge stuff until we merge this. Probably merge will happen on March 22 ~6:00am UTC
+
+---
+
 **Hot topics:**
 
 - [Added Alpaca support](https://github.com/ggerganov/llama.cpp#instruction-mode-with-alpaca)
 - Cache input prompts for faster initialization: https://github.com/ggerganov/llama.cpp/issues/64
 - Create a `llama.cpp` logo: https://github.com/ggerganov/llama.cpp/issues/105
-
-**TEMPORARY NOTICE:**
-If you're updating to the latest master, you will need to regenerate your model files as the format has changed.
 
 ## Description
 
