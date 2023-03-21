@@ -9,7 +9,6 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
-#include <map>
 #include <string>
 #include <vector>
 
@@ -69,7 +68,7 @@ void set_console_state(console_state new_st)
 static const int EOS_TOKEN_ID = 2;
 
 // determine number of model parts based on the dimension
-static const std::map<int, int> LLAMA_N_PARTS = {
+static const std::unordered_map<int, int> LLAMA_N_PARTS = {
     { 4096, 1 },
     { 5120, 2 },
     { 6656, 4 },
@@ -123,7 +122,7 @@ struct llama_model {
 
     //
     struct ggml_context * ctx;
-    std::map<std::string, struct ggml_tensor *> tensors;
+    std::unordered_map<std::string, struct ggml_tensor *> tensors;
 };
 
 // load the model's weights from a file
@@ -208,6 +207,7 @@ bool llama_model_load(const std::string & fname, llama_model & model, llama_voca
     // load vocab
     {
         std::string word;
+        vocab.id_to_token.resize(model.hparams.n_vocab);
         std::vector<char> tmp(64);
 
         for (int i = 0; i < model.hparams.n_vocab; i++) {
@@ -227,8 +227,10 @@ bool llama_model_load(const std::string & fname, llama_model & model, llama_voca
             fin.read((char *) &score, sizeof(score));
 
             vocab.token_to_id[word] = i;
-            vocab.id_to_token[i] = word;
-            vocab.score[i] = score;
+
+            auto &tok_score = vocab.id_to_token[i];
+            tok_score.tok = word;
+            tok_score.score = score;
         }
     }
 
@@ -1028,7 +1030,7 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "%s: prompt: '%s'\n", __func__, params.prompt.c_str());
     fprintf(stderr, "%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
     for (int i = 0; i < (int) embd_inp.size(); i++) {
-        fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], vocab.id_to_token.at(embd_inp[i]).c_str());
+        fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], vocab.id_to_token.at(embd_inp[i]).tok.c_str());
     }
     fprintf(stderr, "\n");
     if (params.interactive) {
@@ -1154,7 +1156,7 @@ int main(int argc, char ** argv) {
         // display text
         if (!input_noecho) {
             for (auto id : embd) {
-                printf("%s", vocab.id_to_token[id].c_str());
+                printf("%s", vocab.id_to_token[id].tok.c_str());
             }
             fflush(stdout);
         }
@@ -1169,7 +1171,7 @@ int main(int argc, char ** argv) {
             // check for reverse prompt
             std::string last_output;
             for (auto id : last_n_tokens) {
-                last_output += vocab.id_to_token[id];
+                last_output += vocab.id_to_token[id].tok;
             }
 
             // Check if each of the reverse prompts appears at the end of the output.

@@ -3,7 +3,7 @@
 #pragma once
 
 #include <string>
-#include <map>
+#include <unordered_map>
 #include <vector>
 #include <random>
 #include <thread>
@@ -65,15 +65,19 @@ struct llama_vocab {
     using id    = int32_t;
     using token = std::string;
 
-    std::map<token, id> token_to_id;
-    std::map<id, token> id_to_token;
-    std::map<id, float> score;
+    struct token_score {
+        token tok;
+        float score;
+    };
+
+    std::unordered_map<token, id> token_to_id;
+    std::vector<token_score> id_to_token;
 };
 
 void replace(std::string & str, const std::string & needle, const std::string & replacement);
 
 // poor-man's JSON parsing
-std::map<std::string, int32_t> json_parse(const std::string & fname);
+std::unordered_map<std::string, int32_t> json_parse(const std::string & fname);
 
 // TODO: temporary until #77 is merged, need this now for some tokenizer tests
 bool llama_vocab_load(const std::string & fname, llama_vocab & vocab);

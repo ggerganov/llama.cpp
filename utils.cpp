@@ -155,8 +155,8 @@ void replace(std::string & str, const std::string & needle, const std::string & 
     }
 }
 
-std::map<std::string, int32_t> json_parse(const std::string & fname) {
-    std::map<std::string, int32_t> result;
+std::unordered_map<std::string, int32_t> json_parse(const std::string & fname) {
+    std::unordered_map<std::string, int32_t> result;
 
     // read file into string
     std::string json;
@@ -360,16 +360,16 @@ private:
             return;
         }
 
-        auto score = vocab_.score.find((*token).second);
-
-        if (score == vocab_.score.end()) {
+        if (static_cast<size_t>((*token).second) >= vocab_.id_to_token.size()) {
             return;
         }
+
+        const auto &tok_score = vocab_.id_to_token[(*token).second];
 
         llama_sp_bigram bigram;
         bigram.left = left;
         bigram.right = right;
-        bigram.score = (*score).second;
+        bigram.score = tok_score.score;
         bigram.size = text.size();
         work_queue_.push(bigram);
     }
@@ -393,6 +393,8 @@ bool llama_vocab_load(const std::string & fname, llama_vocab & vocab) {
     std::string word;
     std::vector<char> tmp(64);
 
+    vocab.id_to_token.resize(n_vocab);
+
     for (int i = 0; i < n_vocab; i++) {
         uint32_t len;
         fin.read((char *) &len, sizeof(len));
@@ -410,8 +412,10 @@ bool llama_vocab_load(const std::string & fname, llama_vocab & vocab) {
         fin.read((char *) &score, sizeof(score));
 
         vocab.token_to_id[word] = i;
-        vocab.id_to_token[i] = word;
-        vocab.score[i] = score;
+
+        auto &tok_score = vocab.id_to_token[i];
+        tok_score.tok = word;
+        tok_score.score = score;
     }
 
     return true;

@@ -8,7 +8,6 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
-#include <map>
 #include <string>
 #include <vector>
 #include <regex>
@@ -130,6 +129,7 @@ bool llama_model_quantize(const std::string & fname_inp, const std::string & fna
         }
 
         std::string word;
+        vocab.id_to_token.resize(n_vocab);
         for (int i = 0; i < n_vocab; i++) {
             uint32_t len;
             finp.read ((char *) &len, sizeof(len));
@@ -144,8 +144,10 @@ bool llama_model_quantize(const std::string & fname_inp, const std::string & fna
             fout.write((char *) &score, sizeof(score));
 
             vocab.token_to_id[word] = i;
-            vocab.id_to_token[i] = word;
-            vocab.score[i] = score;
+
+            auto &tok_score = vocab.id_to_token[i];
+            tok_score.tok = word;
+            tok_score.score = score;
         }
     }
 
