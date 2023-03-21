@@ -1005,14 +1005,9 @@ int main(int argc, char ** argv) {
             if (id == EOS_TOKEN_ID && params.interactive) {
                 id = NEWLINE_TOKEN_ID;
                 if (params.antiprompt.size() != 0) {
-                    // tokenize the reverse prompt to inject
-                    std::vector<std::vector<llama_vocab::id>> antipromptv_inp;
-                    for (auto antiprompt : params.antiprompt){
-                         antipromptv_inp.push_back(::llama_tokenize(vocab, antiprompt, false));
-                    }
-                    // inject the reverse prompt to return control to the user
-                    auto& ap_inp = antipromptv_inp.front();
-                    embd_inp.insert(embd_inp.end(), ap_inp.begin(), ap_inp.end());
+                    // tokenize the first reverse prompt and inject on the newline
+                    std::vector<llama_vocab::id> first_antiprompt = ::llama_tokenize(vocab, params.antiprompt.front(), false);
+                    embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
                 }
             }
 
