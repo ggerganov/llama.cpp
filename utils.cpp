@@ -12,7 +12,7 @@
 
  #if defined(_MSC_VER) || defined(__MINGW32__)
  #include <malloc.h> // using malloc.h with MSC/MINGW
- #elif !defined(__FreeBSD__) && !defined(__NetBSD__)
+ #elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__)
  #include <alloca.h>
  #endif
 
@@ -76,6 +76,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.perplexity = true;
         } else if (arg == "--ignore-eos") {
             params.ignore_eos = true;
+        } else if (arg == "--n_parts") {
+            params.n_parts = std::stoi(argv[++i]);
         } else if (arg == "-h" || arg == "--help") {
             gpt_print_usage(argc, argv, params);
             exit(0);
@@ -118,6 +120,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  --ignore-eos          ignore end of stream token and continue generating\n");
     fprintf(stderr, "  --memory_f16          use f16 instead of f32 for memory key+value\n");
     fprintf(stderr, "  --temp N              temperature (default: %.1f)\n", params.temp);
+    fprintf(stderr, "  --n_parts N           number of model parts (default: -1 = determine from dimensions)\n");
     fprintf(stderr, "  -b N, --batch_size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     fprintf(stderr, "  --perplexity          compute perplexity over the prompt\n");
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
@@ -243,61 +246,6 @@ std::map<std::string, int32_t> json_parse(const std::string & fname) {
     return result;
 }
 
-std::vector<gpt_vocab::id> gpt_tokenize(const gpt_vocab & vocab, const std::string & text) {
-    std::vector<std::string> words;
-
-    // first split the text into words
-    {
-        std::string str = text;
-        std::string pat = R"('s|'t|'re|'ve|'m|'ll|'d| ?[[:alpha:]]+| ?[[:digit:]]+| ?[^\s[:alpha:][:digit:]]+|\s+(?!\S)|\s+)";
-
-        std::regex re(pat);
-        std::smatch m;
-
-        while (std::regex_search(str, m, re)) {
-            for (auto x : m) {
-                words.push_back(x);
-            }
-            str = m.suffix();
-        }
-    }
-
-    // find the longest tokens that form the words:
-    std::vector<gpt_vocab::id> tokens;
-    for (const auto & word : words) {
-        if (word.size() == 0) continue;
-
-        int i = 0;
-        int n = word.size();
-        while (i < n) {
-            int j = n;
-            while (j > i) {
-                auto it = vocab.token_to_id.find(word.substr(i, j-i));
-                if (it != vocab.token_to_id.end()) {
-                    tokens.push_back(it->second);
-                    i = j;
-                    break;
-                }
-                --j;
-            }
-            if (i == n) {
-                break;
-            }
-            if (j == i) {
-                auto sub = word.substr(i, 1);
-                if (vocab.token_to_id.find(sub) != vocab.token_to_id.end()) {
-                    tokens.push_back(vocab.token_to_id.at(sub));
-                } else {
-                    fprintf(stderr, "%s: unknown token '%s'\n", __func__, sub.data());
-                }
-                ++i;
-            }
-        }
-    }
-
-    return tokens;
-}
-
 static size_t utf8_len(char src) {
     const size_t lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4 };
     uint8_t highbits = static_cast<uint8_t>(src) >> 4;
@@ -308,7 +256,8 @@ struct llama_sp_symbol {
     using index = int;
     index prev;
     index next;
-    std::string_view text;
+    const char * text;
+    size_t n;
 };
 
 struct llama_sp_bigram {
@@ -325,19 +274,23 @@ struct llama_sp_bigram {
     size_t size;
 };
 
+// original implementation:
+// https://github.com/ggerganov/llama.cpp/commit/074bea2eb1f1349a0118239c4152914aecaa1be4
 struct llama_tokenizer {
-    llama_tokenizer(const gpt_vocab & vocab): vocab_(vocab) {}
+    llama_tokenizer(const llama_vocab & vocab): vocab_(vocab) {}
 
-    void tokenize(std::string_view text, std::vector<gpt_vocab::id> & output) {
+    void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
         // split string into utf8 chars
         int index = 0;
-        while (!text.empty()) {
+        size_t offs = 0;
+        while (offs < text.size()) {
             llama_sp_symbol sym;
-            size_t char_len = std::min(text.size(), utf8_len(text.data()[0]));
-            sym.text = std::string_view(text.data(), char_len);
+            size_t char_len = std::min(text.size() - offs, utf8_len(text[offs]));
+            sym.text = text.c_str() + offs;
+            sym.n = char_len;
+            offs += char_len;
             sym.prev = index - 1;
-            text.remove_prefix(char_len);
-            sym.next = text.empty() ? -1 : index + 1;
+            sym.next = offs == text.size() ? -1 : index + 1;
             index++;
             symbols_.emplace_back(std::move(sym));
         }
@@ -356,14 +309,16 @@ struct llama_tokenizer {
             auto & right_sym = symbols_[bigram.right];
 
             // if one of the symbols already got merged, skip it.
-            if (left_sym.text.empty() || right_sym.text.empty() ||
-                left_sym.text.size() + right_sym.text.size() != bigram.size) {
+            if (left_sym.n == 0 || right_sym.n == 0 ||
+                left_sym.n + right_sym.n != bigram.size) {
                 continue;
             }
 
             // merge the right sym into the left one
-            left_sym.text = std::string_view(left_sym.text.data(), left_sym.text.size() + right_sym.text.size());
-            right_sym.text = std::string_view("");
+            left_sym.n += right_sym.n;
+            right_sym.n = 0;
+
+            //printf("left = '%*s' size = %zu\n", (int) left_sym.n, left_sym.text, bigram.size);
 
             // remove the right sym from the chain
             left_sym.next = right_sym.next;
@@ -377,13 +332,13 @@ struct llama_tokenizer {
         }
 
         for (int i = 0; i != -1; i = symbols_[i].next) {
-            auto& symbol = symbols_[i];
-            auto token = vocab_.token_to_id.find(std::string(symbol.text));
+            auto & symbol = symbols_[i];
+            auto token = vocab_.token_to_id.find(std::string(symbol.text, symbol.n));
 
             if (token == vocab_.token_to_id.end()) {
                 // output any symbols that did not form tokens as bytes.
-                for (int j = 0; j < symbol.text.size(); ++j) {
-                    gpt_vocab::id token_id = static_cast<uint8_t>(symbol.text[j]) + 3;
+                for (int j = 0; j < (int) symbol.n; ++j) {
+                    llama_vocab::id token_id = static_cast<uint8_t>(symbol.text[j]) + 3;
                     output.push_back(token_id);
                 }
             } else {
@@ -398,8 +353,8 @@ private:
             return;
         }
 
-        std::string_view text(symbols_[left].text.data(), symbols_[left].text.size() + symbols_[right].text.size());
-        auto token = vocab_.token_to_id.find(std::string(text));
+        const std::string text = std::string(symbols_[left].text, symbols_[left].n + symbols_[right].n);
+        auto token = vocab_.token_to_id.find(text);
 
         if (token == vocab_.token_to_id.end()) {
             return;
@@ -419,14 +374,52 @@ private:
         work_queue_.push(bigram);
     }
 
-    const gpt_vocab & vocab_;
+    const llama_vocab & vocab_;
     std::vector<llama_sp_symbol> symbols_;
     llama_sp_bigram::queue work_queue_;
 };
 
-std::vector<gpt_vocab::id> llama_tokenize(const gpt_vocab & vocab, std::string_view text, bool bos) {
+// TODO: temporary code duplication with llama.cpp
+//       will resolve after #77 is merged
+bool llama_vocab_load(const std::string & fname, llama_vocab & vocab) {
+    std::ifstream fin(fname, std::ios::binary);
+    if (!fin.is_open()) {
+        return false;
+    }
+
+    int n_vocab = 0;
+    fin.read((char *) &n_vocab, sizeof(n_vocab));
+
+    std::string word;
+    std::vector<char> tmp(64);
+
+    for (int i = 0; i < n_vocab; i++) {
+        uint32_t len;
+        fin.read((char *) &len, sizeof(len));
+
+        word.resize(len);
+        if (len > 0) {
+            tmp.resize(len);
+            fin.read(tmp.data(), len);
+            word.assign(tmp.data(), len);
+        } else {
+            word.clear();
+        }
+
+        float score;
+        fin.read((char *) &score, sizeof(score));
+
+        vocab.token_to_id[word] = i;
+        vocab.id_to_token[i] = word;
+        vocab.score[i] = score;
+    }
+
+    return true;
+}
+
+std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, const std::string & text, bool bos) {
     llama_tokenizer tokenizer(vocab);
-    std::vector<gpt_vocab::id> output;
+    std::vector<llama_vocab::id> output;
 
     if (text.size() == 0) {
         return output;
@@ -440,42 +433,22 @@ std::vector<gpt_vocab::id> llama_tokenize(const gpt_vocab & vocab, std::string_v
     return output;
 }
 
-bool gpt_vocab_init(const std::string & fname, gpt_vocab & vocab) {
-    printf("%s: loading vocab from '%s'\n", __func__, fname.c_str());
-
-    vocab.token_to_id = ::json_parse(fname);
-
-    for (const auto & kv : vocab.token_to_id) {
-        vocab.id_to_token[kv.second] = kv.first;
-    }
-
-    printf("%s: vocab size = %d\n", __func__, (int) vocab.token_to_id.size());
-
-    // print the vocabulary
-    //for (auto kv : vocab.token_to_id) {
-    //    printf("'%s' -> %d\n", kv.first.data(), kv.second);
-    //}
-
-    return true;
-}
-
-
-void sample_top_k(std::vector<std::pair<double, gpt_vocab::id>> & logits_id, int top_k) {
+void sample_top_k(std::vector<std::pair<double, llama_vocab::id>> & logits_id, int top_k) {
     // find the top K tokens
     std::partial_sort(
             logits_id.begin(),
             logits_id.begin() + top_k, logits_id.end(),
-            [](const std::pair<double, gpt_vocab::id> & a, const std::pair<double, gpt_vocab::id> & b) {
+            [](const std::pair<double, llama_vocab::id> & a, const std::pair<double, llama_vocab::id> & b) {
         return a.first > b.first;
     });
 
     logits_id.resize(top_k);
 }
 
-gpt_vocab::id llama_sample_top_p_top_k(
-        const gpt_vocab & vocab,
+llama_vocab::id llama_sample_top_p_top_k(
+        const llama_vocab & vocab,
         const float * logits,
-        std::vector<gpt_vocab::id> & last_n_tokens,
+        std::vector<llama_vocab::id> & last_n_tokens,
         double repeat_penalty,
         int top_k,
         double top_p,
@@ -483,7 +456,7 @@ gpt_vocab::id llama_sample_top_p_top_k(
         std::mt19937 & rng) {
     int n_logits = vocab.id_to_token.size();
 
-    std::vector<std::pair<double, gpt_vocab::id>> logits_id;
+    std::vector<std::pair<double, llama_vocab::id>> logits_id;
     logits_id.reserve(n_logits);
 
     {
