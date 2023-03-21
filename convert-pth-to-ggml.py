@@ -29,7 +29,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Convert a LLaMA model checkpoint to a ggml compatible file')
     parser.add_argument('dir_model', help='directory containing the model checkpoint')
     parser.add_argument('ftype', type=int, choices=[0, 1], default=1, help='file type (0: float32, 1: float16)')
-    parser.add_argument('vocab_only', type=bool, default=False, help='only write vocab to file')
+    parser.add_argument('vocab_only', type=bool, nargs='?', default=False, help='only write vocab to file')
     return parser.parse_args()
 
 def get_n_parts(dim):
