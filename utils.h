@@ -19,6 +19,7 @@ struct gpt_params {
     int32_t repeat_last_n = 64;  // last n tokens to penalize
     int32_t n_ctx = 512; //context size
     bool memory_f16 = false; // use f16 instead of f32 for memory kv
+    int32_t n_parts = -1; // amount of model parts (-1 = determine from model dimensions)
 
     // sampling parameters
     int32_t top_k = 40;
