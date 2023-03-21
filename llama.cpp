@@ -929,7 +929,7 @@ int llama_main(
         }
         // reset color to default if we there is no pending user input
         if (!input_noecho && params.use_color && (int)embd_inp.size() == input_consumed) {
-            printf(ANSI_COLOR_RESET);
+            fprintf(outstream, ANSI_COLOR_RESET);
         }
 
         // in interactive mode, and not currently processing queued inputs;
@@ -948,11 +948,12 @@ int llama_main(
                     input_consumed = embd_inp.size();
                     embd_inp.insert(embd_inp.end(), inp_pfx.begin(), inp_pfx.end());
 
-                    printf("\n> ");
+                    fprintf(outstream, "\n> ");
+                    fflush(outstream);
                 }
 
                 // currently being interactive
-                if (params.use_color) printf(ANSI_BOLD ANSI_COLOR_GREEN);
+                if (params.use_color) fprintf(outstream, ANSI_BOLD ANSI_COLOR_GREEN);
                 std::string buffer;
                 std::string line;
                 bool another_line = true;
@@ -965,7 +966,7 @@ int llama_main(
                     }
                     buffer += line + '\n'; // Append the line to the result
                 } while (another_line);
-                if (params.use_color) printf(ANSI_COLOR_RESET);
+                if (params.use_color) fprintf(outstream, ANSI_COLOR_RESET);
 
                 std::vector<gpt_vocab::id> line_inp = ::llama_tokenize(vocab, buffer, false);
                 embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
