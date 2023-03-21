@@ -560,7 +560,8 @@ bool llama_eval(
         const int n_past,
         const std::vector<llama_vocab::id> & embd_inp,
               std::vector<float>           & embd_w,
-              size_t                       & mem_per_token) {
+              size_t                       & mem_per_token,
+              bool return_all_logits = false) {
     const int N = embd_inp.size();
 
     const auto & hparams = model.hparams;
@@ -578,7 +579,7 @@ bool llama_eval(
     static void * buf = malloc(buf_size);
 
     if (mem_per_token > 0 && mem_per_token*N > buf_size) {
-        const size_t buf_size_new = 1.1*(mem_per_token*N); // add 10% to account for ggml object overhead
+        const size_t buf_size_new = 1.3*(mem_per_token*N); // add 30% to account for ggml object overhead
         //fprintf(stderr, "\n%s: reallocating buffer from %zu to %zu bytes\n", __func__, buf_size, buf_size_new);
 
         // reallocate
@@ -764,9 +765,14 @@ bool llama_eval(
     //embd_w.resize(n_vocab*N);
     //memcpy(embd_w.data(), ggml_get_data(inpL), sizeof(float)*n_vocab*N);
 
-    // return result for just the last token
-    embd_w.resize(n_vocab);
-    memcpy(embd_w.data(), (float *) ggml_get_data(inpL) + (n_vocab*(N-1)), sizeof(float)*n_vocab);
+    if (return_all_logits) {
+        embd_w.resize(n_vocab * N);
+        memcpy(embd_w.data(), (float *) ggml_get_data(inpL), sizeof(float)*n_vocab*N);
+    } else {
+        // return result for just the last token
+        embd_w.resize(n_vocab);
+        memcpy(embd_w.data(), (float *) ggml_get_data(inpL) + (n_vocab*(N-1)), sizeof(float)*n_vocab);
+    }
 
     if (mem_per_token == 0) {
         mem_per_token = ggml_used_mem(ctx0)/N;
@@ -776,6 +782,76 @@ bool llama_eval(
     ggml_free(ctx0);
 
     return true;
+}
+
+std::vector<double> softmax(const std::vector<float>& logits) {
+    std::vector<double> probs(logits.size());
+    float max_logit = logits[0];
+    for (float v : logits) max_logit = std::max(max_logit, v);
+    double sum_exp = 0.0;
+    for (size_t i = 0; i < logits.size(); i++) {
+        // Subtract the maximum logit value from the current logit value for numerical stability
+        float logit = logits[i] - max_logit;
+        double exp_logit = std::exp(logit);
+        sum_exp += exp_logit;
+        probs[i] = exp_logit;
+    }
+    for (size_t i = 0; i < probs.size(); i++) probs[i] /= sum_exp;
+    return probs;
+}
+
+void perplexity(const llama_vocab &vocab, const llama_model &model, const gpt_params &params, size_t mem_per_token) {
+    // Download: https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip?ref=salesforce-research
+    // Run `./main --perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
+    // Output: `perplexity: 13.5106 [114/114]`
+    std::vector<llama_vocab::id> tokens = ::llama_tokenize(vocab, params.prompt, true);
+
+    int count = 0;
+    double nll = 0.0;
+    int seq_count = tokens.size() / params.n_ctx;
+    printf("Calculating perplexity over %d chunks\n", seq_count);
+    for (int i = 0; i < seq_count; ++i) {
+        int start = i * params.n_ctx;
+        int end = start + params.n_ctx - 1;
+        std::vector<llama_vocab::id> embd(tokens.begin() + start, tokens.begin() + end);
+        std::vector<float> logits;
+        auto start_t = std::chrono::high_resolution_clock::now();
+        if (!llama_eval(model, params.n_threads, 0, embd, logits, mem_per_token, true)) {
+            fprintf(stderr, "Failed to predict\n");
+            return;
+        }
+        auto end_t = std::chrono::high_resolution_clock::now();
+        if (i == 0) {
+            double seconds = std::chrono::duration<double>(end_t - start_t).count();
+            printf("%.2f seconds per pass - ETA %.2f hours\n", seconds, (seconds * seq_count) / (60.0*60.0));
+        }
+        // We get the logits for all the tokens in the context window (params.n_ctx)
+        // from llama_eval above.  Now, based on https://huggingface.co/docs/transformers/perplexity,
+        // calculate the perplexity over the last half the window (so the model always has
+        // some context to predict the token).
+        //
+        // We rely on the fact that attention in the forward pass only looks at previous
+        // tokens here, so the logits returned for each token are an accurate representation
+        // of what the model would have predicted at that point.
+        //
+        // Example, we have a context window of 512, we will compute perplexity for each of the
+        // last 256 tokens.  Then, we split the input up into context window size chunks to
+        // process the entire prompt.
+        for (int j = params.n_ctx / 2; j < params.n_ctx - 1; ++j) {
+            // Calculate probability of next token, given the previous ones.
+            int n_vocab = model.hparams.n_vocab;
+            std::vector<float> tok_logits(
+                logits.begin() + j * n_vocab,
+                logits.begin() + (j + 1) * n_vocab);
+            double prob = softmax(tok_logits)[tokens[start + j + 1]];
+            nll += -std::log(prob);
+            ++count;
+        }
+        // perplexity is e^(average negative log-likelihood)
+        printf("[%d]%.4lf,", i + 1, std::exp(nll / count));
+        fflush(stdout);
+    }
+    printf("\n");
 }
 
 static bool is_interacting = false;
@@ -868,12 +944,21 @@ int main(int argc, char ** argv) {
                 params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
     }
 
+    std::vector<float> logits;
+
+    // determine the required inference memory per token:
+    size_t mem_per_token = 0;
+    llama_eval(model, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);
+
+    if (params.perplexity) {
+        perplexity(vocab, model, params, mem_per_token);
+        exit(0);
+    }
+
     int n_past = 0;
 
     int64_t t_sample_us  = 0;
     int64_t t_predict_us = 0;
-
-    std::vector<float> logits;
 
     // Add a space in front of the first character to match OG llama tokenizer behavior
     params.prompt.insert(0, 1, ' ');
@@ -927,10 +1012,6 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "\n\n");
 
     std::vector<llama_vocab::id> embd;
-
-    // determine the required inference memory per token:
-    size_t mem_per_token = 0;
-    llama_eval(model, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);
 
     int last_n_size = params.repeat_last_n;
     std::vector<llama_vocab::id> last_n_tokens(last_n_size);

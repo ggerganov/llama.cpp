@@ -40,6 +40,7 @@ struct gpt_params {
     bool interactive_start = false; // reverse prompt immediately
     bool instruct          = false; // instruction mode (used for Alpaca models)
     bool ignore_eos        = false; // do not stop generating after eos
+    bool perplexity        = false; // compute perplexity over the prompt
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
