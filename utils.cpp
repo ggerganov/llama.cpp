@@ -72,6 +72,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.use_color = true;
         } else if (arg == "-r" || arg == "--reverse-prompt") {
             params.antiprompt.push_back(argv[++i]);
+        } else if (arg == "--stop") {
+            params.stop_keyword.push_back(argv[++i]);
         } else if (arg == "--perplexity") {
             params.perplexity = true;
         } else if (arg == "--ignore-eos") {

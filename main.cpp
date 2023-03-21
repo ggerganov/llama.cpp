@@ -1016,6 +1016,13 @@ int main(int argc, char ** argv) {
             }
         }
     }
+
+    if(params.stop_keyword.size()) {
+      for (auto stop_keyword : params.stop_keyword) {
+        fprintf(stderr, "Stop keyword: '%s'\n", stop_keyword.c_str());
+      }
+    }
+
     fprintf(stderr, "sampling parameters: temp = %f, top_k = %d, top_p = %f, repeat_last_n = %i, repeat_penalty = %f\n", params.temp, params.top_k, params.top_p, params.repeat_last_n, params.repeat_penalty);
     fprintf(stderr, "\n\n");
 
@@ -1129,58 +1136,75 @@ int main(int argc, char ** argv) {
             printf(ANSI_COLOR_RESET);
         }
 
-        // in interactive mode, and not currently processing queued inputs;
-        // check if we should prompt the user for more
-        if (params.interactive && (int) embd_inp.size() <= input_consumed) {
-            // check for reverse prompt
+        // If we are not processing queued inputs, check for reverse prompt and stop keywords
+        if((int) embd_inp.size() <= input_consumed) {
+            // Build the output string
+            // TODO - Recomputing this whole string every iteration is not efficient
             std::string last_output;
             for (auto id : last_n_tokens) {
                 last_output += vocab.id_to_token[id];
             }
 
-            // Check if each of the reverse prompts appears at the end of the output.
-            for (std::string antiprompt : params.antiprompt) {
-                if (last_output.find(antiprompt.c_str(), last_output.length() - antiprompt.length(), antiprompt.length()) != std::string::npos) {
-                    is_interacting = true;
+            // Check for stop keywords
+            bool stop = false;
+            for (std::string stop_keyword : params.stop_keyword) {
+                if (last_output.find(stop_keyword.c_str(), last_output.length() - stop_keyword.length(), stop_keyword.length()) != std::string::npos) {
+                    stop = true;
                     break;
                 }
             }
-            if (is_interacting) {
-                if (params.instruct) {
-                    input_consumed = embd_inp.size();
-                    embd_inp.insert(embd_inp.end(), inp_pfx.begin(), inp_pfx.end());
-
-                    printf("\n> ");
-                }
-
-                // currently being interactive
-                if (params.use_color) printf(ANSI_BOLD ANSI_COLOR_GREEN);
-                std::string buffer;
-                std::string line;
-                bool another_line = true;
-                do {
-                    std::getline(std::cin, line);
-                    if (line.empty() || line.back() != '\\') {
-                        another_line = false;
-                    } else {
-                        line.pop_back(); // Remove the continue character
-                    }
-                    buffer += line + '\n'; // Append the line to the result
-                } while (another_line);
-                if (params.use_color) printf(ANSI_COLOR_RESET);
-
-                std::vector<llama_vocab::id> line_inp = ::llama_tokenize(vocab, buffer, false);
-                embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
-
-                if (params.instruct) {
-                    embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
-                }
-
-                remaining_tokens -= line_inp.size();
-
-                input_noecho = true; // do not echo this again
+            if(stop) {
+                break;
             }
-            is_interacting = false;
+            
+            // in interactive mode, and not currently processing queued inputs;
+            // check if we should prompt the user for more
+            if (params.interactive) {
+    
+                // Check if each of the reverse prompts appears at the end of the output.
+                for (std::string antiprompt : params.antiprompt) {
+                    if (last_output.find(antiprompt.c_str(), last_output.length() - antiprompt.length(), antiprompt.length()) != std::string::npos) {
+                        is_interacting = true;
+                        break;
+                    }
+                }
+                if (is_interacting) {
+                    if (params.instruct) {
+                        input_consumed = embd_inp.size();
+                        embd_inp.insert(embd_inp.end(), inp_pfx.begin(), inp_pfx.end());
+    
+                        printf("\n> ");
+                    }
+    
+                    // currently being interactive
+                    if (params.use_color) printf(ANSI_BOLD ANSI_COLOR_GREEN);
+                    std::string buffer;
+                    std::string line;
+                    bool another_line = true;
+                    do {
+                        std::getline(std::cin, line);
+                        if (line.empty() || line.back() != '\\') {
+                            another_line = false;
+                        } else {
+                            line.pop_back(); // Remove the continue character
+                        }
+                        buffer += line + '\n'; // Append the line to the result
+                    } while (another_line);
+                    if (params.use_color) printf(ANSI_COLOR_RESET);
+    
+                    std::vector<llama_vocab::id> line_inp = ::llama_tokenize(vocab, buffer, false);
+                    embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
+    
+                    if (params.instruct) {
+                      embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
+                    }
+    
+                    remaining_tokens -= line_inp.size();
+    
+                    input_noecho = true; // do not echo this again
+                }
+                is_interacting = false;
+            }
         }
 
         // end of text token
