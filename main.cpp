@@ -165,12 +165,20 @@ bool llama_model_load(const std::string & fname, llama_model & model, llama_voca
     // load vocab
     {
         std::string word;
+        std::vector<char> tmp(64);
+
         for (int i = 0; i < model.hparams.n_vocab; i++) {
             uint32_t len;
             fin.read((char *) &len, sizeof(len));
 
             word.resize(len);
-            fin.read((char *) word.data(), len);
+            if (len > 0) {
+                tmp.resize(len);
+                fin.read(tmp.data(), len);
+                word.assign(tmp.data(), len);
+            } else {
+                word.clear();
+            }
 
             float score;
             fin.read((char *) &score, sizeof(score));
@@ -178,10 +186,6 @@ bool llama_model_load(const std::string & fname, llama_model & model, llama_voca
             vocab.token_to_id[word] = i;
             vocab.id_to_token[i] = word;
             vocab.score[i] = score;
-
-            //if (i < 30000) {
-            //    fprintf(stderr, "%s: vocab[%d] = '%s'\n", __func__, i, word.c_str());
-            //}
         }
     }
 
@@ -974,7 +978,7 @@ int main(int argc, char ** argv) {
         n_past += embd.size();
         embd.clear();
 
-        if (embd_inp.size() <= input_consumed) {
+        if ((int) embd_inp.size() <= input_consumed) {
             // out of user input, sample next token
             const float top_k = params.top_k;
             const float top_p = params.top_p;
@@ -1011,7 +1015,7 @@ int main(int argc, char ** argv) {
             --remaining_tokens;
         } else {
             // some user input remains from prompt or interaction, forward it to processing
-            while (embd_inp.size() > input_consumed) {
+            while ((int) embd_inp.size() > input_consumed) {
                 embd.push_back(embd_inp[input_consumed]);
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(embd_inp[input_consumed]);
@@ -1036,7 +1040,7 @@ int main(int argc, char ** argv) {
 
         // in interactive mode, and not currently processing queued inputs;
         // check if we should prompt the user for more
-        if (params.interactive && embd_inp.size() <= input_consumed) {
+        if (params.interactive && (int) embd_inp.size() <= input_consumed) {
             // check for reverse prompt
             for (auto antiprompt_inp : antipromptv_inp) {
                 if (antiprompt_inp.size() && std::equal(antiprompt_inp.rbegin(), antiprompt_inp.rend(), last_n_tokens.rbegin())) {
