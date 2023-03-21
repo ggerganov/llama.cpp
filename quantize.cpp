@@ -3,6 +3,7 @@
 #include "utils.h"
 
 #include <cassert>
+#include <cinttypes>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -43,7 +44,7 @@ bool llama_model_quantize(const std::string & fname_inp, const std::string & fna
         return false;
     }
 
-    gpt_vocab vocab;
+    llama_vocab vocab;
 
     printf("%s: loading model from '%s'\n", __func__, fname_inp.c_str());
 
@@ -63,12 +64,28 @@ bool llama_model_quantize(const std::string & fname_inp, const std::string & fna
     {
         uint32_t magic;
         finp.read((char *) &magic, sizeof(magic));
-        if (magic != 0x67676d6c) {
+        if (magic == FILE_MAGIC_UNVERSIONED) {
+            fprintf(stderr, "%s: invalid model file '%s' (too old, regenerate your model files!)\n",
+                    __func__, fname_inp.c_str());
+            return false;
+        }
+        if (magic != FILE_MAGIC) {
             fprintf(stderr, "%s: invalid model file '%s' (bad magic)\n", __func__, fname_inp.c_str());
             return false;
         }
 
         fout.write((char *) &magic, sizeof(magic));
+
+        uint32_t format_version;
+        finp.read((char *) &format_version, sizeof(format_version));
+
+        if (format_version != FILE_VERSION) {
+            fprintf(stderr, "%s: invalid model file '%s' (unsupported format version %" PRIu32 ", expected %d)\n",
+                    __func__, fname_inp.c_str(), format_version, FILE_VERSION);
+            return false;
+        }
+
+        fout.write((char *) &format_version, sizeof(format_version));
     }
 
     llama_hparams hparams;
@@ -122,8 +139,13 @@ bool llama_model_quantize(const std::string & fname_inp, const std::string & fna
             finp.read ((char *) word.data(), len);
             fout.write((char *) word.data(), len);
 
+            float score;
+            finp.read ((char *) &score, sizeof(score));
+            fout.write((char *) &score, sizeof(score));
+
             vocab.token_to_id[word] = i;
             vocab.id_to_token[i] = word;
+            vocab.score[i] = score;
         }
     }
 
