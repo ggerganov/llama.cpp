@@ -79,7 +79,7 @@ bool llama_vocab_load(const std::string & fname, llama_vocab & vocab);
 
 // TODO: this is probably wrong, but I cannot figure out how this tokenizer works ..
 // ref: https://github.com/google/sentencepiece
-std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, std::string_view text, bool bos);
+std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, const std::string & text, bool bos);
 
 // sample next token given probabilities for each embedding
 //
