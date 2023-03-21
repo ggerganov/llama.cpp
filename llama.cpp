@@ -1345,7 +1345,7 @@ static llama_vocab::id llama_sample_top_p_top_k(
 //
 
 // TODO: reuse code from the llama_model_load() somehow
-bool llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, int itype, int qk) {
+static bool llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, int itype) {
     ggml_type type = GGML_TYPE_Q4_1;
 
     switch (itype) {
@@ -1568,11 +1568,11 @@ bool llama_model_quantize_internal(const std::string & fname_inp, const std::str
                 switch (type) {
                     case GGML_TYPE_Q4_0:
                         {
-                            cur_size = ggml_quantize_q4_0(data_f32.data(), work.data(), nelements, ne[0], qk, hist_cur.data());
+                            cur_size = ggml_quantize_q4_0(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                         } break;
                     case GGML_TYPE_Q4_1:
                         {
-                            cur_size = ggml_quantize_q4_1(data_f32.data(), work.data(), nelements, ne[0], qk, hist_cur.data());
+                            cur_size = ggml_quantize_q4_1(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                         } break;
                     default:
                         {
@@ -1711,9 +1711,8 @@ void llama_free(struct llama_context * ctx) {
 int llama_model_quantize(
         const char * fname_inp,
         const char * fname_out,
-               int   itype,
-               int   qk) {
-    if (!llama_model_quantize_internal(fname_inp, fname_out, itype, qk)) {
+               int   itype) {
+    if (!llama_model_quantize_internal(fname_inp, fname_out, itype)) {
         fprintf(stderr, "%s: failed to quantize\n", __func__);
         return 1;
     }

@@ -81,8 +81,7 @@ extern "C" {
     LLAMA_API int llama_model_quantize(
             const char * fname_inp,
             const char * fname_out,
-                   int   itype,
-                   int   qk);
+                   int   itype);
 
     // Run the llama inference to obtain the logits and probabilities for the next token.
     // tokens + n_tokens is the provided batch of new tokens to process
