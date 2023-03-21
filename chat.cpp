@@ -32,8 +32,8 @@
 static const std::map<int, int> LLAMA_N_PARTS = {
     { 4096, 1 },
     { 5120, 1 },
-    { 6656, 4 },
-    { 8192, 8 },
+    { 6656, 1 },
+    { 8192, 1 },
 };
 
 // default hparams (LLaMA 7B)
