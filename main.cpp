@@ -944,8 +944,9 @@ int main(int argc, char ** argv) {
         // Enable ANSI colors on Windows 10+
         unsigned long dwMode = 0;
         void* hConOut = GetStdHandle((unsigned long)-11); // STD_OUTPUT_HANDLE (-11)
-        if (hConOut && hConOut != (void*)-1 && GetConsoleMode(hConOut, &dwMode) && !(dwMode & 0x4))
+        if (hConOut && hConOut != (void*)-1 && GetConsoleMode(hConOut, &dwMode) && !(dwMode & 0x4)) {
             SetConsoleMode(hConOut, dwMode | 0x4); // ENABLE_VIRTUAL_TERMINAL_PROCESSING (0x4)
+        }
 #endif
         printf(ANSI_COLOR_YELLOW);
     }
