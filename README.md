@@ -179,8 +179,11 @@ In this mode, you can always interrupt generation by pressing Ctrl+C and enter o
 
 Here is an example few-shot interaction, invoked with the command
 ```
-./main -m ./models/13B/ggml-model-q4_0.bin -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
+# default arguments using 7B model
+./chat.sh
 
+# custom arguments using 13B model
+./main -m ./models/13B/ggml-model-q4_0.bin -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
 ```
 Note the use of `--color` to distinguish between user input and generated text.
 
