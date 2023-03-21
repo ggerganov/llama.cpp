@@ -5,6 +5,7 @@
 #include <fstream>
 #include <string>
 #include <iterator>
+#include <algorithm>
 
  #if defined(_MSC_VER) || defined(__MINGW32__)
  #include <malloc.h> // using malloc.h with MSC/MINGW
