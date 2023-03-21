@@ -24,8 +24,16 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         } else if (arg == "-t" || arg == "--threads") {
             params.n_threads = std::stoi(argv[++i]);
         } else if (arg == "-p" || arg == "--prompt") {
+            params.interactive = false;
+            params.interactive_start = false;
+            params.use_color = false;
+
             params.prompt = argv[++i];
         } else if (arg == "-f" || arg == "--file") {
+
+            params.interactive = false;
+            params.interactive_start = false;
+            params.use_color = false;
 
             std::ifstream file(argv[++i]);
 
