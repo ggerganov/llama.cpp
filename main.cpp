@@ -90,7 +90,8 @@ struct llama_model {
 };
 
 // load the model's weights from a file
-bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab & vocab, int n_ctx, ggml_type memory_type = GGML_TYPE_F32) {
+
+bool llama_model_load(const std::string & fname, llama_model & model, llama_vocab & vocab, int n_ctx, int n_parts, ggml_type memory_type = GGML_TYPE_F32) {
     fprintf(stderr, "%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
     std::vector<char> f_buf(1024*1024);
@@ -106,12 +107,12 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
     {
         uint32_t magic;
         fin.read((char *) &magic, sizeof(magic));
-        if (magic == 0x67676d6c) {
+        if (magic == FILE_MAGIC_UNVERSIONED) {
             fprintf(stderr, "%s: invalid model file '%s' (too old, regenerate your model files!)\n",
                     __func__, fname.c_str());
             return false;
         }
-        if (magic != 0x67676d66) {
+        if (magic != FILE_MAGIC) {
             fprintf(stderr, "%s: invalid model file '%s' (bad magic)\n", __func__, fname.c_str());
             return false;
         }
@@ -119,15 +120,14 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
         uint32_t format_version;
         fin.read((char *) &format_version, sizeof(format_version));
 
-        if (format_version != 1) {
-            fprintf(stderr, "%s: invalid model file '%s' (unsupported format version %" PRIu32 ")\n",
-                    __func__, fname.c_str(), format_version);
+        if (format_version != FILE_VERSION) {
+            fprintf(stderr, "%s: invalid model file '%s' (unsupported format version %" PRIu32 ", expected %d)\n",
+                    __func__, fname.c_str(), format_version, FILE_VERSION);
             return false;
         }
     }
 
     int n_ff = 0;
-    int n_parts = 0;
 
     // load hparams
     {
@@ -145,7 +145,10 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
         hparams.n_ctx = n_ctx;
 
         n_ff = ((2*(4*hparams.n_embd)/3 + hparams.n_mult - 1)/hparams.n_mult)*hparams.n_mult;
-        n_parts = LLAMA_N_PARTS.at(hparams.n_embd);
+
+        if (n_parts < 1) {
+            n_parts = LLAMA_N_PARTS.at(hparams.n_embd);
+        }
 
         fprintf(stderr, "%s: n_vocab = %d\n", __func__, hparams.n_vocab);
         fprintf(stderr, "%s: n_ctx   = %d\n", __func__, hparams.n_ctx);
@@ -162,12 +165,20 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
     // load vocab
     {
         std::string word;
+        std::vector<char> tmp(64);
+
         for (int i = 0; i < model.hparams.n_vocab; i++) {
             uint32_t len;
             fin.read((char *) &len, sizeof(len));
 
             word.resize(len);
-            fin.read((char *) word.data(), len);
+            if (len > 0) {
+                tmp.resize(len);
+                fin.read(tmp.data(), len);
+                word.assign(tmp.data(), len);
+            } else {
+                word.clear();
+            }
 
             float score;
             fin.read((char *) &score, sizeof(score));
@@ -175,10 +186,6 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
             vocab.token_to_id[word] = i;
             vocab.id_to_token[i] = word;
             vocab.score[i] = score;
-
-            //if (i < 30000) {
-            //    fprintf(stderr, "%s: vocab[%d] = '%s'\n", __func__, i, word.c_str());
-            //}
         }
     }
 
@@ -544,9 +551,9 @@ bool llama_eval(
         const llama_model & model,
         const int n_threads,
         const int n_past,
-        const std::vector<gpt_vocab::id> & embd_inp,
-              std::vector<float>         & embd_w,
-              size_t                     & mem_per_token) {
+        const std::vector<llama_vocab::id> & embd_inp,
+              std::vector<float>           & embd_w,
+              size_t                       & mem_per_token) {
     const int N = embd_inp.size();
 
     const auto & hparams = model.hparams;
@@ -832,14 +839,14 @@ int main(int argc, char ** argv) {
 
     int64_t t_load_us = 0;
 
-    gpt_vocab vocab;
+    llama_vocab vocab;
     llama_model model;
 
     // load the model
     {
         const ggml_type memory_type = params.memory_f16 ? GGML_TYPE_F16 : GGML_TYPE_F32;
         const int64_t t_start_us = ggml_time_us();
-        if (!llama_model_load(params.model, model, vocab, params.n_ctx, memory_type)) {
+        if (!llama_model_load(params.model, model, vocab, params.n_ctx, params.n_parts, memory_type)) {
             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
             return 1;
         }
@@ -864,20 +871,20 @@ int main(int argc, char ** argv) {
     // Add a space in front of the first character to match OG llama tokenizer behavior
     params.prompt.insert(0, 1, ' ');
     // tokenize the prompt
-    std::vector<gpt_vocab::id> embd_inp = ::llama_tokenize(vocab, params.prompt, true);
+    std::vector<llama_vocab::id> embd_inp = ::llama_tokenize(vocab, params.prompt, true);
 
     params.n_predict = std::min(params.n_predict, model.hparams.n_ctx - (int) embd_inp.size());
 
     // prefix & suffix for instruct mode
-    const std::vector<gpt_vocab::id> inp_pfx = ::llama_tokenize(vocab, "\n\n### Instruction:\n\n", true);
-    const std::vector<gpt_vocab::id> inp_sfx = ::llama_tokenize(vocab, "\n\n### Response:\n\n", false);
+    const std::vector<llama_vocab::id> inp_pfx = ::llama_tokenize(vocab, "\n\n### Instruction:\n\n", true);
+    const std::vector<llama_vocab::id> inp_sfx = ::llama_tokenize(vocab, "\n\n### Response:\n\n", false);
 
     // in instruct mode, we inject a prefix and a suffix to each input by the user
     if (params.instruct) {
         params.interactive = true;
         params.antiprompt.push_back("### Instruction:\n\n");
     }
-    
+
     // enable interactive mode if reverse prompt is specified
     if (params.antiprompt.size() != 0) {
         params.interactive = true;
@@ -912,14 +919,14 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "sampling parameters: temp = %f, top_k = %d, top_p = %f, repeat_last_n = %i, repeat_penalty = %f\n", params.temp, params.top_k, params.top_p, params.repeat_last_n, params.repeat_penalty);
     fprintf(stderr, "\n\n");
 
-    std::vector<gpt_vocab::id> embd;
+    std::vector<llama_vocab::id> embd;
 
     // determine the required inference memory per token:
     size_t mem_per_token = 0;
     llama_eval(model, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);
 
     int last_n_size = params.repeat_last_n;
-    std::vector<gpt_vocab::id> last_n_tokens(last_n_size);
+    std::vector<llama_vocab::id> last_n_tokens(last_n_size);
     std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
 
     if (params.interactive) {
@@ -958,7 +965,7 @@ int main(int argc, char ** argv) {
         n_past += embd.size();
         embd.clear();
 
-        if (embd_inp.size() <= input_consumed) {
+        if ((int) embd_inp.size() <= input_consumed) {
             // out of user input, sample next token
             const float top_k = params.top_k;
             const float top_p = params.top_p;
@@ -967,7 +974,7 @@ int main(int argc, char ** argv) {
 
             const int n_vocab = model.hparams.n_vocab;
 
-            gpt_vocab::id id = 0;
+            llama_vocab::id id = 0;
 
             {
                 const int64_t t_start_sample_us = ggml_time_us();
@@ -995,7 +1002,7 @@ int main(int argc, char ** argv) {
             --remaining_tokens;
         } else {
             // some user input remains from prompt or interaction, forward it to processing
-            while (embd_inp.size() > input_consumed) {
+            while ((int) embd_inp.size() > input_consumed) {
                 embd.push_back(embd_inp[input_consumed]);
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(embd_inp[input_consumed]);
@@ -1020,7 +1027,7 @@ int main(int argc, char ** argv) {
 
         // in interactive mode, and not currently processing queued inputs;
         // check if we should prompt the user for more
-        if (params.interactive && embd_inp.size() <= input_consumed) {
+        if (params.interactive && (int) embd_inp.size() <= input_consumed) {
             // check for reverse prompt
             std::string last_output;
             for (auto id : last_n_tokens) {
@@ -1058,7 +1065,7 @@ int main(int argc, char ** argv) {
                 } while (another_line);
                 if (params.use_color) printf(ANSI_COLOR_RESET);
 
-                std::vector<gpt_vocab::id> line_inp = ::llama_tokenize(vocab, buffer, false);
+                std::vector<llama_vocab::id> line_inp = ::llama_tokenize(vocab, buffer, false);
                 embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
 
                 if (params.instruct) {

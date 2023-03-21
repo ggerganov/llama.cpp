@@ -54,6 +54,7 @@ jobs:
           cd build
           cmake ..
           cmake --build . --config Release
+          ctest --output-on-failure
 
   macOS-latest-make:
     runs-on: macos-latest
@@ -90,6 +91,7 @@ jobs:
           cd build
           cmake ..
           cmake --build . --config Release
+          ctest --output-on-failure
 
   windows-latest-cmake:
     runs-on: windows-latest
@@ -106,6 +108,7 @@ jobs:
           cd build
           cmake ..
           cmake --build . --config Release
+          ctest --output-on-failure
 
       - name: Get commit hash
         id: commit
