@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <queue>
 #include <regex>
+#include <cassert>
 
 // determine number of model parts based on the dimension
 static const std::unordered_map<int, int> LLAMA_N_PARTS = {
