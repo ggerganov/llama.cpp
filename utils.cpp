@@ -66,6 +66,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.model = argv[++i];
         } else if (arg == "-i" || arg == "--interactive") {
             params.interactive = true;
+        } else if (arg == "--interactive-first") {
+            params.interactive_start = true;
         } else if (arg == "-ins" || arg == "--instruct") {
             params.instruct = true;
         } else if (arg == "--color") {
