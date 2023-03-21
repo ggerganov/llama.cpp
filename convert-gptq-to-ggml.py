@@ -93,7 +93,7 @@ def convert_non_q4(src_name, dst_name):
     # data
     v.numpy().tofile(fout)
 
-def convert_q4(src_name, dst_name):
+def convert_q4(src_name, dst_name, permute=False):
     zeros = model[f"{src_name}.zeros"].numpy()
     scales = model[f"{src_name}.scales"].numpy()
     bias = model[f"{src_name}.bias"].numpy()
@@ -135,6 +135,13 @@ def convert_q4(src_name, dst_name):
 
     blob = np.concatenate([scales_rep, addends_rep, grouped], axis=2, casting='no')
 
+    if permute:
+        # Permute some rows to undo the permutation done by convert_llama_weights_to_hf.py.
+        # This can be done after the above conversion because it doesn't affect column order/layout.
+        blob = (blob.reshape(n_head, 2, shape[0] // n_head // 2, *blob.shape[1:])
+                    .swapaxes(1, 2)
+                    .reshape(blob.shape))
+
     # header
     write_header(shape, dst_name, 3) # ftype = Q4_1
 
@@ -146,8 +153,8 @@ convert_non_q4("model.norm.weight", "norm.weight")
 convert_non_q4("lm_head.weight", "output.weight")
 
 for i in range(n_layer):
-    convert_q4(f"model.layers.{i}.self_attn.q_proj", f"layers.{i}.attention.wq.weight")
-    convert_q4(f"model.layers.{i}.self_attn.k_proj", f"layers.{i}.attention.wk.weight")
+    convert_q4(f"model.layers.{i}.self_attn.q_proj", f"layers.{i}.attention.wq.weight", permute=True)
+    convert_q4(f"model.layers.{i}.self_attn.k_proj", f"layers.{i}.attention.wk.weight", permute=True)
     convert_q4(f"model.layers.{i}.self_attn.v_proj", f"layers.{i}.attention.wv.weight")
     convert_q4(f"model.layers.{i}.self_attn.o_proj", f"layers.{i}.attention.wo.weight")
 
