@@ -80,34 +80,31 @@ modelbusy = False
 port = 5001
 last_context = ""
 
-class ServerRequestHandler(http.server.BaseHTTPRequestHandler):
+class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     sys_version = ""
     server_version = "ConcedoLlamaForKoboldServer"
 
     def do_GET(self):
-        if not self.path.endswith('/'):
-            # redirect browser
-            self.send_response(301)
-            self.send_header("Location", self.path + "/")
-            self.end_headers()
-            return
-
-        if self.path.endswith('/api/v1/model/') or self.path.endswith('/api/latest/model/'):
+        if self.path=="/":
+            self.path = "/klite.embd"
+            return http.server.SimpleHTTPRequestHandler.do_GET(self)
+                       
+        if self.path.endswith('/api/v1/model/') or self.path.endswith('/api/latest/model/') or self.path.endswith('/api/v1/model') or self.path.endswith('/api/latest/model'):
             self.send_response(200)
             self.end_headers()
             global friendlymodelname
             self.wfile.write(json.dumps({"result": friendlymodelname }).encode())
             return
 
-        if self.path.endswith('/api/v1/config/max_length/') or self.path.endswith('/api/latest/config/max_length/'):
+        if self.path.endswith('/api/v1/config/max_length/') or self.path.endswith('/api/latest/config/max_length/') or self.path.endswith('/api/v1/config/max_length') or self.path.endswith('/api/latest/config/max_length'):
             self.send_response(200)
             self.end_headers()
             global maxlen
             self.wfile.write(json.dumps({"value":maxlen}).encode())
             return
 
-        if self.path.endswith('/api/v1/config/max_context_length/') or self.path.endswith('/api/latest/config/max_context_length/'):
+        if self.path.endswith('/api/v1/config/max_context_length/') or self.path.endswith('/api/latest/config/max_context_length/') or self.path.endswith('/api/v1/config/max_context_length') or self.path.endswith('/api/latest/config/max_context_length'):
             self.send_response(200)
             self.end_headers()
             global maxctx
@@ -187,7 +184,10 @@ class ServerRequestHandler(http.server.BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', '*')
         self.send_header('Access-Control-Allow-Headers', '*')
-        self.send_header('Content-type', 'application/json')
+        if "/klite.embd" in self.path:
+            self.send_header('Content-type', 'text/html')
+        else:
+            self.send_header('Content-type', 'application/json')
         return super(ServerRequestHandler, self).end_headers()
 
 
