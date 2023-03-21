@@ -90,7 +90,7 @@ struct llama_model {
 };
 
 // load the model's weights from a file
-bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab & vocab, int n_ctx, ggml_type memory_type = GGML_TYPE_F32) {
+bool llama_model_load(const std::string & fname, llama_model & model, llama_vocab & vocab, int n_ctx, ggml_type memory_type = GGML_TYPE_F32) {
     fprintf(stderr, "%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
     std::vector<char> f_buf(1024*1024);
@@ -544,9 +544,9 @@ bool llama_eval(
         const llama_model & model,
         const int n_threads,
         const int n_past,
-        const std::vector<gpt_vocab::id> & embd_inp,
-              std::vector<float>         & embd_w,
-              size_t                     & mem_per_token) {
+        const std::vector<llama_vocab::id> & embd_inp,
+              std::vector<float>           & embd_w,
+              size_t                       & mem_per_token) {
     const int N = embd_inp.size();
 
     const auto & hparams = model.hparams;
@@ -832,7 +832,7 @@ int main(int argc, char ** argv) {
 
     int64_t t_load_us = 0;
 
-    gpt_vocab vocab;
+    llama_vocab vocab;
     llama_model model;
 
     // load the model
@@ -864,13 +864,13 @@ int main(int argc, char ** argv) {
     // Add a space in front of the first character to match OG llama tokenizer behavior
     params.prompt.insert(0, 1, ' ');
     // tokenize the prompt
-    std::vector<gpt_vocab::id> embd_inp = ::llama_tokenize(vocab, params.prompt, true);
+    std::vector<llama_vocab::id> embd_inp = ::llama_tokenize(vocab, params.prompt, true);
 
     params.n_predict = std::min(params.n_predict, model.hparams.n_ctx - (int) embd_inp.size());
 
     // prefix & suffix for instruct mode
-    const std::vector<gpt_vocab::id> inp_pfx = ::llama_tokenize(vocab, "\n\n### Instruction:\n\n", true);
-    const std::vector<gpt_vocab::id> inp_sfx = ::llama_tokenize(vocab, "\n\n### Response:\n\n", false);
+    const std::vector<llama_vocab::id> inp_pfx = ::llama_tokenize(vocab, "\n\n### Instruction:\n\n", true);
+    const std::vector<llama_vocab::id> inp_sfx = ::llama_tokenize(vocab, "\n\n### Response:\n\n", false);
 
     // in instruct mode, we inject a prefix and a suffix to each input by the user
     if (params.instruct) {
@@ -879,8 +879,8 @@ int main(int argc, char ** argv) {
     }
 
     // tokenize the reverse prompt
-    std::vector<std::vector<gpt_vocab::id>> antipromptv_inp;
-    
+    std::vector<std::vector<llama_vocab::id>> antipromptv_inp;
+
     for (auto antiprompt : params.antiprompt) {
         antipromptv_inp.push_back(::llama_tokenize(vocab, antiprompt, false));
     }
@@ -925,14 +925,14 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "sampling parameters: temp = %f, top_k = %d, top_p = %f, repeat_last_n = %i, repeat_penalty = %f\n", params.temp, params.top_k, params.top_p, params.repeat_last_n, params.repeat_penalty);
     fprintf(stderr, "\n\n");
 
-    std::vector<gpt_vocab::id> embd;
+    std::vector<llama_vocab::id> embd;
 
     // determine the required inference memory per token:
     size_t mem_per_token = 0;
     llama_eval(model, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);
 
     int last_n_size = params.repeat_last_n;
-    std::vector<gpt_vocab::id> last_n_tokens(last_n_size);
+    std::vector<llama_vocab::id> last_n_tokens(last_n_size);
     std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
 
     if (params.interactive) {
@@ -980,7 +980,7 @@ int main(int argc, char ** argv) {
 
             const int n_vocab = model.hparams.n_vocab;
 
-            gpt_vocab::id id = 0;
+            llama_vocab::id id = 0;
 
             {
                 const int64_t t_start_sample_us = ggml_time_us();
@@ -1066,7 +1066,7 @@ int main(int argc, char ** argv) {
                 } while (another_line);
                 if (params.use_color) printf(ANSI_COLOR_RESET);
 
-                std::vector<gpt_vocab::id> line_inp = ::llama_tokenize(vocab, buffer, false);
+                std::vector<llama_vocab::id> line_inp = ::llama_tokenize(vocab, buffer, false);
                 embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
 
                 if (params.instruct) {
