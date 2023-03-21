@@ -157,6 +157,12 @@ bool llama_model_load(const std::string & fname, llama_model & model, llama_voca
             n_parts = LLAMA_N_PARTS.at(hparams.n_embd);
         }
 
+        // temp warning to tell the user to use "--n_parts"
+        if (hparams.f16 == 4 && n_parts != 1) {
+            fprintf(stderr, "%s: GPTQ model detected - are you sure n_parts should be %d? we normally expect it to be 1\n", __func__, n_parts);
+            fprintf(stderr, "%s: use '--n_parts 1' if necessary\n", __func__);
+        }
+
         fprintf(stderr, "%s: n_vocab = %d\n", __func__, hparams.n_vocab);
         fprintf(stderr, "%s: n_ctx   = %d\n", __func__, hparams.n_ctx);
         fprintf(stderr, "%s: n_embd  = %d\n", __func__, hparams.n_embd);
@@ -198,12 +204,14 @@ bool llama_model_load(const std::string & fname, llama_model & model, llama_voca
 
     // for the big tensors, we have the option to store the data in 16-bit floats or quantized
     // in order to save memory and also to speed up the computation
-    ggml_type wtype = GGML_TYPE_COUNT;
+    // wtype is for per-layer weights, while vtype is for other weights
+    ggml_type wtype, vtype;
     switch (model.hparams.f16) {
-        case 0: wtype = GGML_TYPE_F32;  break;
-        case 1: wtype = GGML_TYPE_F16;  break;
-        case 2: wtype = GGML_TYPE_Q4_0; break;
-        case 3: wtype = GGML_TYPE_Q4_1; break;
+        case 0: wtype = vtype = GGML_TYPE_F32;  break;
+        case 1: wtype = vtype = GGML_TYPE_F16;  break;
+        case 2: wtype = vtype = GGML_TYPE_Q4_0; break;
+        case 3: wtype = vtype = GGML_TYPE_Q4_1; break;
+        case 4: wtype = GGML_TYPE_Q4_1; vtype = GGML_TYPE_F16; break;
         default:
                 {
                     fprintf(stderr, "%s: invalid model file '%s' (bad f16 value %d)\n",
@@ -224,11 +232,11 @@ bool llama_model_load(const std::string & fname, llama_model & model, llama_voca
         const int n_ctx   = hparams.n_ctx;
         const int n_vocab = hparams.n_vocab;
 
-        ctx_size += n_embd*n_vocab*ggml_type_sizef(wtype); // tok_embeddings
+        ctx_size += n_embd*n_vocab*ggml_type_sizef(vtype); // tok_embeddings
 
         ctx_size += n_embd*ggml_type_sizef(GGML_TYPE_F32); // norm
 
-        ctx_size += n_embd*n_vocab*ggml_type_sizef(wtype); // output
+        ctx_size += n_embd*n_vocab*ggml_type_sizef(vtype); // output
 
         ctx_size += n_layer*(n_embd*ggml_type_sizef(GGML_TYPE_F32)); // attention_norm
 
@@ -275,10 +283,10 @@ bool llama_model_load(const std::string & fname, llama_model & model, llama_voca
 
         model.layers.resize(n_layer);
 
-        model.tok_embeddings = ggml_new_tensor_2d(ctx, wtype, n_embd, n_vocab);
+        model.tok_embeddings = ggml_new_tensor_2d(ctx, vtype, n_embd, n_vocab);
 
         model.norm   = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_embd);
-        model.output = ggml_new_tensor_2d(ctx, wtype,         n_embd, n_vocab);
+        model.output = ggml_new_tensor_2d(ctx, vtype,         n_embd, n_vocab);
 
         // map by name
         model.tensors["tok_embeddings.weight"] = model.tok_embeddings;
