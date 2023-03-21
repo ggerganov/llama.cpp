@@ -251,13 +251,13 @@ if __name__ == '__main__':
 
     if argc<2:
         print("Usage: " + sys.argv[0] + " model_file_q4_0.bin [port]")
-        exit()
+        sys.exit(0)
     if argc>=3:
         port = int(sys.argv[2])
 
     if not os.path.exists(sys.argv[1]):
         print("Cannot find model file: " + sys.argv[1])
-        exit()
+        sys.exit(0)
 
     mdl_nparts = 1
     for n in range(1,9):
