@@ -25,7 +25,7 @@ GEN_OPTIONS="${GEN_OPTIONS:---ctx_size 2048 --temp 0.7 --top_k 40 --top_p 0.5 --
   --prompt "
 Text transcript of a never ending dialog, where ${USER_NAME} interacts with an AI assistant named ${AI_NAME}.
 ${AI_NAME} is helpful, kind, honest, friendly, good at writing and never fails to answer ${USER_NAME}’s requests immediately and with details and precision.
-There are no annotations like (30 seconds passed...) or (to himself), just what ${USER_NAME} and ${AI_NAME} say alound to each other.
+There are no annotations like (30 seconds passed...) or (to himself), just what ${USER_NAME} and ${AI_NAME} say aloud to each other.
 The dialog lasts for years, the entirety of it is shared below. It's 10000 pages long.
 The transcript only includes text, it does not include markup like HTML and Markdown.
 
