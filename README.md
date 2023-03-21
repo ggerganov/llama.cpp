@@ -45,6 +45,20 @@ Once you've downloaded the weights, you can run the following command to enter c
 ./chat -m ggml-alpaca-13b-q4.bin
 ```
 
+## Getting Started (30B)
+
+If you have more than 32GB of RAM (and a beefy CPU), you can use the higher quality 30B `alpaca-30B-ggml.bin` model. To download the weights, you can use
+
+```
+git clone https://huggingface.co/Pi3141/alpaca-30B-ggml
+```
+
+Once you've downloaded the weights, you can run the following command to enter chat
+
+```
+./chat -m ggml-model-q4_0.bin
+```
+
 
 ## Building from Source (MacOS/Linux)
 
