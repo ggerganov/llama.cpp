@@ -801,9 +801,15 @@ void perplexity(const gpt_vocab &vocab, const llama_model &model, const gpt_para
         int end = start + params.n_ctx - 1;
         std::vector<gpt_vocab::id> embd(tokens.begin() + start, tokens.begin() + end);
         std::vector<float> logits;
+        auto start_t = std::chrono::high_resolution_clock::now();
         if (!llama_eval(model, params.n_threads, 0, embd, logits, mem_per_token, true)) {
             fprintf(stderr, "Failed to predict\n");
             return;
+        }
+        auto end_t = std::chrono::high_resolution_clock::now();
+        if (i == 0) {
+            double seconds = std::chrono::duration<double>(end_t - start_t).count();
+            printf("%.2f seconds per pass - ETA %.2f hours\n", seconds, (seconds * seq_count) / (60.0*60.0));
         }
         // We get the logits for all the tokens in the context window (params.n_ctx)
         // from llama_eval above.  Now, based on https://huggingface.co/docs/transformers/perplexity,
