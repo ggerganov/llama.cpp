@@ -108,7 +108,7 @@ jobs:
           cd build
           cmake ..
           cmake --build . --config Release
-          ctest --output-on-failure
+          ctest -C Release --output-on-failure
 
       - name: Get commit hash
         id: commit
