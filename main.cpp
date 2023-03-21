@@ -1004,7 +1004,11 @@ int main(int argc, char ** argv) {
             // replace end of text token with newline token when in interactive mode
             if (id == EOS_TOKEN_ID && params.interactive) {
                 id = NEWLINE_TOKEN_ID;
-                is_interacting = true;
+                if (!antipromptv_inp.empty()) {
+                    // inject the reverse prompt to return control to the user
+                    auto& ap_inp = antipromptv_inp.front();
+                    embd_inp.insert(embd_inp.end(), ap_inp.begin(), ap_inp.end());
+                }
             }
 
             // add it to the context
@@ -1091,17 +1095,8 @@ int main(int argc, char ** argv) {
 
         // end of text token
         if (embd.back() == EOS_TOKEN_ID) {
-            if (params.interactive) {
-//                is_interacting = true;
-//                embd.back() = NEWLINE_TOKEN_ID;
-//                last_n_tokens.back() = NEWLINE_TOKEN_ID;
-//                if (params.antiprompt.size() != 0) {
-//                   fprintf(stderr, "\n");
-//                }
-            } else {
-                fprintf(stderr, " [end of text]\n");
-                break;
-            }
+            fprintf(stderr, " [end of text]\n");
+            break;
         }
 
         // In interactive mode, respect the maximum number of tokens and drop back to user input when reached.
