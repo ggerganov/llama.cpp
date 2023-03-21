@@ -34,6 +34,7 @@
             cat ${./convert-pth-to-ggml.py} >> $out/bin/convert-pth-to-ggml
             chmod +x $out/bin/convert-pth-to-ggml
           '';
+          meta.mainProgram = "llama";
         };
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
