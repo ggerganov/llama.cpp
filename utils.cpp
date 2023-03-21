@@ -105,6 +105,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -r PROMPT, --reverse-prompt PROMPT\n");
     fprintf(stderr, "                        in interactive mode, poll user input upon seeing PROMPT (can be\n");
     fprintf(stderr, "                        specified more than once for multiple prompts).\n");
+    fprintf(stderr, "  --stop KEYWORD        a string that, when output by the model, will stop generation\n");
+    fprintf(stderr, "                        (can be specified more than once for multiple keywords).\n");
     fprintf(stderr, "  --color               colorise output to distinguish prompt and user input from generations\n");
     fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1)\n");
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
