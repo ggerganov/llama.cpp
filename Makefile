@@ -53,6 +53,10 @@ ifeq ($(UNAME_S),NetBSD)
 	CFLAGS   += -pthread
 	CXXFLAGS += -pthread
 endif
+ifeq ($(UNAME_S),OpenBSD)
+	CFLAGS   += -pthread
+	CXXFLAGS += -pthread
+endif
 ifeq ($(UNAME_S),Haiku)
 	CFLAGS   += -pthread
 	CXXFLAGS += -pthread
