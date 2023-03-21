@@ -52,15 +52,14 @@ std::string gpt_random_prompt(std::mt19937 & rng);
 // Vocab utils
 //
 
-struct token_score {
-    using token_t = std::string;
-    token_t token;
-    float score;
-};
-
 struct gpt_vocab {
     using id    = int32_t;
     using token = std::string;
+
+    struct token_score {
+        token token;
+        float score;
+    };
 
     std::unordered_map<token, id> token_to_id;
     std::vector<token_score> id_to_token;
