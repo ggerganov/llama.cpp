@@ -101,9 +101,10 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -h, --help            show this help message and exit\n");
     fprintf(stderr, "  -i, --interactive     run in interactive mode\n");
+    fprintf(stderr, "  --interactive-first   run in interactive mode and wait for input right away\n");
     fprintf(stderr, "  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
     fprintf(stderr, "  -r PROMPT, --reverse-prompt PROMPT\n");
-    fprintf(stderr, "                        in interactive mode, poll user input upon seeing PROMPT (can be\n");
+    fprintf(stderr, "                        run in interactive mode and poll user input upon seeing PROMPT (can be\n");
     fprintf(stderr, "                        specified more than once for multiple prompts).\n");
     fprintf(stderr, "  --color               colorise output to distinguish prompt and user input from generations\n");
     fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1)\n");
