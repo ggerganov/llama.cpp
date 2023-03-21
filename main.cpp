@@ -795,6 +795,7 @@ void perplexity(const gpt_vocab &vocab, const llama_model &model, const gpt_para
     int count = 0;
     double nll = 0.0;
     int seq_count = tokens.size() / params.n_ctx;
+    printf("Calculating perplexity over %d chunks\n", seq_count);
     for (int i = 0; i < seq_count; ++i) {
         int start = i * params.n_ctx;
         int end = start + params.n_ctx - 1;
@@ -827,7 +828,7 @@ void perplexity(const gpt_vocab &vocab, const llama_model &model, const gpt_para
             ++count;
         }
         // perplexity is e^(average negative log-likelihood)
-        printf("perplexity: %.4lf [%d/%d]    \r", std::exp(nll / count), i + 1, seq_count);
+        printf("[%d]%.4lf,", i + 1, std::exp(nll / count));
         fflush(stdout);
     }
     printf("\n");
