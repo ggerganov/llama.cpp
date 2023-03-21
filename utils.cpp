@@ -444,7 +444,7 @@ bool gpt_vocab_init(const std::string & fname, gpt_vocab & vocab) {
 
     vocab.id_to_token.resize(vocab.token_to_id.size());
     for (const auto & kv : vocab.token_to_id) {
-        vocab.id_to_token[kv.second].token = kv.first;
+        vocab.id_to_token[kv.second].tok = kv.first;
     }
 
     printf("%s: vocab size = %d\n", __func__, (int) vocab.token_to_id.size());

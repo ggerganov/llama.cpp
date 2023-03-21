@@ -146,7 +146,7 @@ bool llama_model_quantize(const std::string & fname_inp, const std::string & fna
             vocab.token_to_id[word] = i;
 
             auto &tok_score = vocab.id_to_token[i];
-            tok_score.token = word;
+            tok_score.tok = word;
             tok_score.score = score;
         }
     }

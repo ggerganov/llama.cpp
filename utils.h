@@ -57,7 +57,7 @@ struct gpt_vocab {
     using token = std::string;
 
     struct token_score {
-        token token;
+        token tok;
         float score;
     };
 

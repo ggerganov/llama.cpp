@@ -175,7 +175,7 @@ bool llama_model_load(const std::string & fname, llama_model & model, gpt_vocab 
             vocab.token_to_id[word] = i;
 
             auto &tok_score = vocab.id_to_token[i];
-            tok_score.token = word;
+            tok_score.tok = word;
             tok_score.score = score;
 
             //if (i < 30000) {
@@ -896,7 +896,7 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "%s: prompt: '%s'\n", __func__, params.prompt.c_str());
     fprintf(stderr, "%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
     for (int i = 0; i < (int) embd_inp.size(); i++) {
-        fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], vocab.id_to_token.at(embd_inp[i]).token.c_str());
+        fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], vocab.id_to_token.at(embd_inp[i]).tok.c_str());
     }
     fprintf(stderr, "\n");
     if (params.interactive) {
@@ -918,7 +918,7 @@ int main(int argc, char ** argv) {
                 fprintf(stderr, "%s: reverse prompt: '%s'\n", __func__, params.antiprompt.at(apindex).c_str());
                 fprintf(stderr, "%s: number of tokens in reverse prompt = %zu\n", __func__, antiprompt_inp.size());
                 for (int i = 0; i < (int) antiprompt_inp.size(); i++) {
-                    fprintf(stderr, "%6d -> '%s'\n", antiprompt_inp[i], vocab.id_to_token.at(antiprompt_inp[i]).token.c_str());
+                    fprintf(stderr, "%6d -> '%s'\n", antiprompt_inp[i], vocab.id_to_token.at(antiprompt_inp[i]).tok.c_str());
                 }
                 fprintf(stderr, "\n");
             }
@@ -1024,7 +1024,7 @@ int main(int argc, char ** argv) {
         // display text
         if (!input_noecho) {
             for (auto id : embd) {
-                printf("%s", vocab.id_to_token[id].token.c_str());
+                printf("%s", vocab.id_to_token[id].tok.c_str());
             }
             fflush(stdout);
         }
