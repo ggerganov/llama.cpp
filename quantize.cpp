@@ -44,7 +44,7 @@ bool llama_model_quantize(const std::string & fname_inp, const std::string & fna
         return false;
     }
 
-    gpt_vocab vocab;
+    llama_vocab vocab;
 
     printf("%s: loading model from '%s'\n", __func__, fname_inp.c_str());
 

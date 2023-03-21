@@ -1,10 +1,36 @@
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.12) # Don't bump this version for no reason
 project("llama.cpp" C CXX)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if (NOT XCODE AND NOT MSVC AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    set(LLAMA_STANDALONE ON)
+
+    # configure project version
+    # TODO
+else()
+    set(LLAMA_STANDALONE OFF)
+endif()
+
+if (EMSCRIPTEN)
+    set(BUILD_SHARED_LIBS_DEFAULT OFF)
+
+    option(LLAMA_WASM_SINGLE_FILE "llama: embed WASM inside the generated llama.js" ON)
+else()
+    if (MINGW)
+        set(BUILD_SHARED_LIBS_DEFAULT OFF)
+    else()
+        set(BUILD_SHARED_LIBS_DEFAULT ON)
+    endif()
+endif()
+
 
 #
 # Option list
@@ -33,6 +59,9 @@ option(LLAMA_FMA                    "llama: enable FMA"                         
 # 3rd party libs
 option(LLAMA_ACCELERATE             "llama: enable Accelerate framework"                    ON)
 option(LLAMA_OPENBLAS               "llama: use OpenBLAS"                                   OFF)
+
+option(LLAMA_BUILD_TESTS            "llama: build tests"    ${LLAMA_STANDALONE})
+option(LLAMA_BUILD_EXAMPLES         "llama: build examples" ${LLAMA_STANDALONE})
 
 #
 # Compile flags
@@ -187,17 +216,19 @@ add_executable(llama main.cpp)
 
 add_executable(quantize quantize.cpp)
 
-add_library(ggml OBJECT
-            ggml.c
-            ggml.h)
-
 add_library(utils OBJECT
             utils.cpp
             utils.h)
 
+target_include_directories(utils PUBLIC .)
+target_compile_features(utils PUBLIC cxx_std_11)
+
+add_library(ggml OBJECT
+            ggml.c
+            ggml.h)
+
 target_include_directories(ggml PUBLIC .)
-target_compile_features(ggml PUBLIC c_std_11)
-target_compile_features(utils PUBLIC cxx_std_17)
+target_compile_features(ggml PUBLIC c_std_17)
 
 #
 # Linking
@@ -206,3 +237,16 @@ target_compile_features(utils PUBLIC cxx_std_17)
 target_link_libraries(ggml PRIVATE Threads::Threads ${LLAMA_EXTRA_LIBS})
 target_link_libraries(llama PRIVATE ggml utils)
 target_link_libraries(quantize PRIVATE ggml utils)
+
+#
+# programs, examples and tests
+#
+
+if (LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
+    enable_testing()
+    add_subdirectory(tests)
+endif ()
+
+#if (LLAMA_BUILD_EXAMPLES)
+#    add_subdirectory(examples)
+#endif()
