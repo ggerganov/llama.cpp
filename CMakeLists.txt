@@ -221,14 +221,14 @@ add_library(utils OBJECT
             utils.h)
 
 target_include_directories(utils PUBLIC .)
-target_compile_features(utils PUBLIC cxx_std_11)
+target_compile_features(utils PUBLIC cxx_std_11) # don't bump
 
 add_library(ggml OBJECT
             ggml.c
             ggml.h)
 
 target_include_directories(ggml PUBLIC .)
-target_compile_features(ggml PUBLIC c_std_17)
+target_compile_features(ggml PUBLIC c_std_11) # don't bump
 
 #
 # Linking

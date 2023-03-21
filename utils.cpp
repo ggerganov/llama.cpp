@@ -250,7 +250,7 @@ struct llama_sp_symbol {
     using index = int;
     index prev;
     index next;
-    std::string_view text;
+    std::string text;
 };
 
 struct llama_sp_bigram {
@@ -270,15 +270,17 @@ struct llama_sp_bigram {
 struct llama_tokenizer {
     llama_tokenizer(const llama_vocab & vocab): vocab_(vocab) {}
 
-    void tokenize(std::string_view text, std::vector<llama_vocab::id> & output) {
+    void tokenize(std::string text, std::vector<llama_vocab::id> & output) {
         // split string into utf8 chars
         int index = 0;
         while (!text.empty()) {
             llama_sp_symbol sym;
             size_t char_len = std::min(text.size(), utf8_len(text.data()[0]));
-            sym.text = std::string_view(text.data(), char_len);
+            //sym.text = std::string_view(text.data(), char_len);
+            sym.text = text.substr(0, char_len);
             sym.prev = index - 1;
-            text.remove_prefix(char_len);
+            //text.remove_prefix(char_len);
+            text = text.substr(char_len);
             sym.next = text.empty() ? -1 : index + 1;
             index++;
             symbols_.emplace_back(std::move(sym));
@@ -304,8 +306,9 @@ struct llama_tokenizer {
             }
 
             // merge the right sym into the left one
-            left_sym.text = std::string_view(left_sym.text.data(), left_sym.text.size() + right_sym.text.size());
-            right_sym.text = std::string_view("");
+            //left_sym.text = std::string_view(left_sym.text.data(), left_sym.text.size() + right_sym.text.size());
+            //right_sym.text = std::string_view("");
+            left_sym.text += right_sym.text;
 
             // remove the right sym from the chain
             left_sym.next = right_sym.next;
@@ -319,12 +322,12 @@ struct llama_tokenizer {
         }
 
         for (int i = 0; i != -1; i = symbols_[i].next) {
-            auto& symbol = symbols_[i];
+            auto & symbol = symbols_[i];
             auto token = vocab_.token_to_id.find(std::string(symbol.text));
 
             if (token == vocab_.token_to_id.end()) {
                 // output any symbols that did not form tokens as bytes.
-                for (int j = 0; j < symbol.text.size(); ++j) {
+                for (int j = 0; j < (int) symbol.text.size(); ++j) {
                     llama_vocab::id token_id = static_cast<uint8_t>(symbol.text[j]) + 3;
                     output.push_back(token_id);
                 }
@@ -340,8 +343,11 @@ private:
             return;
         }
 
-        std::string_view text(symbols_[left].text.data(), symbols_[left].text.size() + symbols_[right].text.size());
-        auto token = vocab_.token_to_id.find(std::string(text));
+        //std::string_view text(symbols_[left].text.data(), symbols_[left].text.size() + symbols_[right].text.size());
+        //auto token = vocab_.token_to_id.find(std::string(text));
+
+        const std::string text = symbols_[left].text + symbols_[right].text;
+        auto token = vocab_.token_to_id.find(text);
 
         if (token == vocab_.token_to_id.end()) {
             return;
@@ -408,7 +414,7 @@ bool llama_vocab_load(const std::string & fname, llama_vocab & vocab) {
     return true;
 }
 
-std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, std::string_view text, bool bos) {
+std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, const std::string & text, bool bos) {
     llama_tokenizer tokenizer(vocab);
     std::vector<llama_vocab::id> output;
 
