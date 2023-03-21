@@ -133,20 +133,20 @@ ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 			CFLAGS += -mavx512pf
 		endif
 	else ifeq ($(UNAME_S),Haiku)
-		AVX1_M := $(shell sysinfo -cpu | grep "AVX ")
-		ifneq (,$(findstring avx,$(AVX1_M)))
+		AVX1_M := $(shell sysinfo -cpu | grep -w "AVX")
+		ifneq (,$(findstring AVX,$(AVX1_M)))
 			CFLAGS += -mavx
 		endif
-		AVX2_M := $(shell sysinfo -cpu | grep "AVX2 ")
-		ifneq (,$(findstring avx2,$(AVX2_M)))
+		AVX2_M := $(shell sysinfo -cpu | grep -w "AVX2")
+		ifneq (,$(findstring AVX2,$(AVX2_M)))
 			CFLAGS += -mavx2
 		endif
-		FMA_M := $(shell sysinfo -cpu | grep "FMA ")
-		ifneq (,$(findstring fma,$(FMA_M)))
+		FMA_M := $(shell sysinfo -cpu | grep -w "FMA")
+		ifneq (,$(findstring FMA,$(FMA_M)))
 			CFLAGS += -mfma
 		endif
-		F16C_M := $(shell sysinfo -cpu | grep "F16C ")
-		ifneq (,$(findstring f16c,$(F16C_M)))
+		F16C_M := $(shell sysinfo -cpu | grep -w "F16C")
+		ifneq (,$(findstring F16C,$(F16C_M)))
 			CFLAGS += -mf16c
 		endif
 	else
