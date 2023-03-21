@@ -885,6 +885,9 @@ int main(int argc, char ** argv) {
         antipromptv_inp.push_back(::llama_tokenize(vocab, antiprompt, false));
     }
 
+    // tokenize the first reverse prompt
+    std::vector<llama_vocab::id> first_antiprompt = ::llama_tokenize(vocab, params.antiprompt.front(), false);
+
     // enable interactive mode if reverse prompt is specified
     if (antipromptv_inp.size() != 0) {
         params.interactive = true;
@@ -1005,8 +1008,7 @@ int main(int argc, char ** argv) {
             if (id == EOS_TOKEN_ID && params.interactive) {
                 id = NEWLINE_TOKEN_ID;
                 if (params.antiprompt.size() != 0) {
-                    // tokenize the first reverse prompt and inject on the newline
-                    std::vector<llama_vocab::id> first_antiprompt = ::llama_tokenize(vocab, params.antiprompt.front(), false);
+                    // inject first reverse prompt
                     embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
                 }
             }
