@@ -300,7 +300,7 @@ int main(int argc, char ** argv) {
 #endif
                " - Press Return to return control to LLaMa.\n"
                " - If you want to submit another line, end your input in '\\'.\n\n");
-        is_interacting = params.interactive_start;
+        is_interacting = params.interactive_start || params.instruct;
     }
 
     int input_consumed = 0;
