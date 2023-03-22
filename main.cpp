@@ -1,5 +1,6 @@
 #include "run.h"
 #include "ggml.h"
+#include "tcp_server.h"
 
 #include <iostream>
 
@@ -124,6 +125,12 @@ int main(int argc, char ** argv) {
         perplexity(ctx, params);
         exit(0);
     }
+
+#ifndef _WIN32
+    if (params.listen_port != "") {
+      return listen_tcp(ctx, params);
+    }
+#endif
 
     return run(ctx, params, std::cin, stdout, stderr);
 }

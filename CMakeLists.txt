@@ -244,6 +244,10 @@ add_executable(main
                run.cpp)
 target_link_libraries(main PRIVATE llama ggml utils)
 
+if(NOT WIN32)
+    target_sources(main PRIVATE tcp_server.cpp)
+endif()
+
 add_executable(quantize quantize.cpp)
 target_link_libraries(quantize PRIVATE llama ggml utils)
 

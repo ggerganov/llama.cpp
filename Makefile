@@ -229,11 +229,14 @@ utils.o: utils.cpp utils.h
 run.o: run.cpp run.h
 	$(CXX) $(CXXFLAGS) -c run.cpp -o run.o
 
+tcp_server.o: tcp_server.cpp tcp_server.h
+	$(CXX) $(CXXFLAGS) -c tcp_server.cpp -o tcp_server.o
+
 clean:
 	rm -f *.o main quantize
 
-main: main.cpp ggml.o llama.o utils.o run.o
-	$(CXX) $(CXXFLAGS) main.cpp ggml.o llama.o utils.o run.o -o main $(LDFLAGS)
+main: main.cpp ggml.o llama.o utils.o run.o tcp_server.o
+	$(CXX) $(CXXFLAGS) main.cpp ggml.o llama.o utils.o run.o tcp_server.o -o main $(LDFLAGS)
 	@echo "\x1b[36mrun ./main -h for help\x1b[0m"
 
 quantize: quantize.cpp ggml.o llama.o utils.o
