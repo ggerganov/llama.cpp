@@ -836,8 +836,11 @@ static bool llama_eval_internal(
 
     ggml_free(ctx0);
 
-    lctx.t_eval_us += ggml_time_us() - t_start_us;
-    lctx.n_eval++;
+    // measure the performance only for the single-token evals
+    if (N == 1) {
+        lctx.t_eval_us += ggml_time_us() - t_start_us;
+        lctx.n_eval++;
+    }
 
     return true;
 }
