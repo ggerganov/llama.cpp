@@ -1,8 +1,16 @@
 # llama-for-kobold
 
-A self contained distributable from Concedo that exposes llama.cpp function bindings, allowing it to be used via a simulated Kobold API endpoint.
+A self contained distributable from Concedo that exposes llama.cpp function bindings, allowing it to be used via a simulated Kobold API endpoint. 
+
+What does it mean? You get llama.cpp with a fancy UI, persistent stories, editing tools, save formats, memory, world info, author's note, characters, scenarios and everything Kobold and Kobold Lite have to offer. In a tiny package under 1 MB in size, excluding model weights.
 
 ![Preview](preview.png)
+
+## Usage
+- Windows binaries are provided in the form of **llamacpp.dll** but if you feel worried go ahead and rebuild it yourself.
+- Weights are not included, you can use the llama.cpp quantize.exe to generate them from your official weight files (or download them from...places).
+- To run, simply clone the repo and run `llama_for_kobold.py [ggml_quant_model.bin] [port]`, and then connect with Kobold or Kobold Lite. 
+- By default, you can connect to http://localhost:5001 (you can also use https://lite.koboldai.net/?local=1&port=5001).
 
 ## Considerations
 - Don't want to use pybind11 due to dependencies on MSVCC
@@ -10,12 +18,6 @@ A self contained distributable from Concedo that exposes llama.cpp function bind
 - Leave main.cpp UNTOUCHED, We want to be able to update the repo and pull any changes automatically.
 - No dynamic memory allocation! Setup structs with FIXED (known) shapes and sizes for ALL output fields. Python will ALWAYS provide the memory, we just write to it.
 - No external libraries or dependencies. That means no Flask, Pybind and whatever. All You Need Is Python.
-
-## Usage
-- Windows binaries are provided in the form of **llamacpp.dll** but if you feel worried go ahead and rebuild it yourself.
-- Weights are not included, you can use the llama.cpp quantize.exe to generate them from your official weight files (or download them from...places).
-- To run, simply clone the repo and run `llama_for_kobold.py [ggml_quant_model.bin] [port]`, and then connect with Kobold or Kobold Lite. 
-- By default, you can connect to http://localhost:5001 (you can also use https://lite.koboldai.net/?local=1&port=5001).
 
 ## License
 - The original GGML library and llama.cpp by ggerganov are licensed under the MIT License
