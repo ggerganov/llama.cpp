@@ -114,6 +114,7 @@ extern "C" {
     // Special tokens
     LLAMA_API llama_token llama_token_bos();
     LLAMA_API llama_token llama_token_eos();
+    LLAMA_API llama_token llama_token_newline();
 
     // TODO: improve the last_n_tokens interface ?
     LLAMA_API llama_token llama_sample_top_p_top_k(
