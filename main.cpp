@@ -85,7 +85,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
     // Download: https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip?ref=salesforce-research
     // Run `./main --perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
     // Output: `perplexity: 13.5106 [114/114]`
-    auto tokens = ::llama_tokenize(ctx, params.prompt.c_str(), true);
+    auto tokens = ::llama_tokenize(ctx, params.prompt, true);
 
     int count = 0;
     double nll = 0.0;
