@@ -55,6 +55,11 @@ extern "C" {
         bool vocab_only; // only load the vocabulary, no weights
     };
 
+    struct llama_progress_handler {
+        void (*handler)(double progress, void *ctx);
+        void *ctx;
+    };
+
     LLAMA_API struct llama_context_params llama_context_default_params();
 
     // Various functions for loading a ggml llama model.
@@ -62,7 +67,8 @@ extern "C" {
     // Return NULL on failure
     LLAMA_API struct llama_context * llama_init_from_file(
                              const char * path_model,
-            struct llama_context_params   params);
+            struct llama_context_params   params,
+          struct llama_progress_handler   progress);
 
     // Frees all allocated memory
     LLAMA_API void llama_free(struct llama_context * ctx);
