@@ -1,3 +1,6 @@
 #pragma once
 
-int run(int argc, char ** argv);
+#include "llama.h"
+#include "utils.h"
+
+int run(llama_context * ctx, gpt_params params);
