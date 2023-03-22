@@ -1496,9 +1496,6 @@ llama_token llama_token_bos() {
 llama_token llama_token_eos() {
     return 2;
 }
-llama_token llama_token_newline() {
-    return 13;
-}
 
 llama_token llama_sample_top_p_top_k(
           llama_context * ctx,
