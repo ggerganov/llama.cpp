@@ -194,7 +194,10 @@ int main(int argc, char ** argv) {
     {
         auto lparams = llama_context_default_params();
 
-        lparams.f16_kv = params.memory_f16;
+        lparams.n_ctx      = params.n_ctx;
+        lparams.n_parts    = params.n_parts;
+        lparams.seed       = params.seed;
+        lparams.f16_kv     = params.memory_f16;
         lparams.logits_all = params.perplexity;
 
         ctx = llama_init_from_file(params.model.c_str(), lparams);

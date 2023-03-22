@@ -1398,6 +1398,10 @@ struct llama_context * llama_init_from_file(
 
     llama_context * ctx = new llama_context;
 
+    if (params.seed <= 0) {
+        params.seed = time(NULL);
+    }
+
     ctx->rng = std::mt19937(params.seed);
     ctx->logits_all = params.logits_all;
 
