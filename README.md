@@ -250,6 +250,9 @@ see https://huggingface.co/docs/transformers/perplexity.  However, in general, l
 https://github.com/ggerganov/llama.cpp/pull/270 is the unofficial tracking page for now.  llama.cpp is measuring very well
 compared to the baseline implementations.  Quantization has a small negative impact to quality, but, as you can see, running
 13B at q4_0 beats the 7B f16 model by a significant amount.
+
+All measurements are done against wikitext2 test dataset (https://paperswithcode.com/dataset/wikitext-2), with default options (512 length context).
+Note that the changing the context length will have a significant impact on perplexity (longer context = better perplexity).
 ```
 Perplexity - model options
 5.5985 - 13B, q4_0
