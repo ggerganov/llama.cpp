@@ -89,7 +89,7 @@ extern "C" {
     // Convert the provided text into tokens.
     // The tokens pointer must be large enough to hold the resulting tokens.
     // Returns the number of tokens on success, no more than n_max_tokens
-    // Returns -1 on failure
+    // Returns a negative number on failure - the number of tokens that would have been returned
     // TODO: not sure if correct
     LLAMA_API int llama_tokenize(
             struct llama_context * ctx,

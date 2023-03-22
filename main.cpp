@@ -155,6 +155,7 @@ void sigint_handler(int signo) {
 #endif
 
 int main(int argc, char ** argv) {
+    // has to be called once at the start of the program to init ggml stuff
     ggml_time_init();
 
     gpt_params params;
