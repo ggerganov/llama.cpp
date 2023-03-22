@@ -24,6 +24,7 @@ extern "C" {
     {
         const int seed;                
         const char * prompt;
+        const int max_context_length;
         const int max_length;
         const float temperature;
         const int top_k;
@@ -81,6 +82,7 @@ extern "C" {
         api_params.temp = inputs.temperature;
         api_params.repeat_last_n = inputs.rep_pen_range;
         api_params.repeat_penalty = inputs.rep_pen;
+        api_params.n_ctx = inputs.max_context_length;
 
         bool reset_state = inputs.reset_state;
         if(api_n_past==0)
@@ -151,7 +153,8 @@ extern "C" {
         std::mt19937 api_rng(api_params.seed);
         std::string concat_output = "";        
        
-        printf("\nProcessing: ");
+        bool startedsampling = false;
+        printf("\nProcessing Prompt: ");
         while (remaining_tokens > 0)
         {
             gpt_vocab::id id = 0;
@@ -183,6 +186,12 @@ extern "C" {
                 const float repeat_penalty = api_params.repeat_penalty;
                 const int n_vocab = api_model.hparams.n_vocab;
                 
+                if(!startedsampling)
+                {
+                    startedsampling = true;
+                    printf("\nGenerating: ");
+                }
+
                 {
                     // set the logit of the eos token (2) to zero to avoid sampling it
                     api_logits[api_logits.size() - n_vocab + EOS_TOKEN_ID] = 0;
