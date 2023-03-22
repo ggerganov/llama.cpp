@@ -249,12 +249,6 @@ int main(int argc, char ** argv) {
         params.antiprompt.push_back("### Instruction:\n\n");
     }
 
-    // tokenize the first reverse prompt
-    auto first_antiprompt = ::llama_tokenize(ctx, params.prompt,false);
-    if (!params.antiprompt.empty()) {
-       auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false);
-    }
-
     // enable interactive mode if reverse prompt is specified
     if (params.antiprompt.size() != 0) {
         params.interactive = true;
@@ -365,7 +359,9 @@ int main(int argc, char ** argv) {
             if (id == llama_token_eos() && params.interactive) {
                 id = llama_token_newline();
                 if (params.antiprompt.size() != 0) {
-                    // inject first reverse prompt
+                    // tokenize and inject first reverse prompt
+                    auto first_antiprompt = ::llama_tokenize(ctx, "", false);
+                    first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false);
                     embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
                 }
             }
