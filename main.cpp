@@ -250,10 +250,10 @@ int main(int argc, char ** argv) {
     }
 
     // tokenize the first reverse prompt
-//    std::vector<llama_vocab::id> first_antiprompt;
-//    if (!params.antiprompt.empty()) {
-//        first_antiprompt = ::llama_tokenize(vocab, params.antiprompt.front(), false);
-//    }
+    auto first_antiprompt = ::llama_tokenize(ctx, params.prompt,false);
+    if (!params.antiprompt.empty()) {
+       auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false);
+    }
 
     // enable interactive mode if reverse prompt is specified
     if (params.antiprompt.size() != 0) {
@@ -364,10 +364,10 @@ int main(int argc, char ** argv) {
             // replace end of text token with newline token when in interactive mode
             if (id == llama_token_eos() && params.interactive) {
                 id = llama_token_newline();
-//                if (params.antiprompt.size() != 0) {
+                if (params.antiprompt.size() != 0) {
                     // inject first reverse prompt
-//                    embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
-//                }
+                    embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
+                }
             }
 
             // add it to the context
