@@ -107,8 +107,7 @@ jobs:
           mkdir build
           cd build
           cmake ..
-          cmake --build . --config Release
-          ctest -C Release --output-on-failure
+          cmake --build . --config Release && ctest -C Release --output-on-failure
 
       - name: Get commit hash
         id: commit
