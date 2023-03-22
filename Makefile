@@ -226,11 +226,14 @@ llama.o: llama.cpp llama.h
 utils.o: utils.cpp utils.h
 	$(CXX) $(CXXFLAGS) -c utils.cpp -o utils.o
 
+run.o: run.cpp run.h
+	$(CXX) $(CXXFLAGS) -c run.cpp -o run.o
+
 clean:
 	rm -f *.o main quantize
 
-main: run.cpp ggml.o llama.o utils.o
-	$(CXX) $(CXXFLAGS) run.cpp ggml.o llama.o utils.o -o main $(LDFLAGS)
+main: main.cpp ggml.o llama.o utils.o run.o
+	$(CXX) $(CXXFLAGS) main.cpp ggml.o llama.o utils.o run.o -o main $(LDFLAGS)
 	@echo "\x1b[36mrun ./main -h for help\x1b[0m"
 
 quantize: quantize.cpp ggml.o llama.o utils.o

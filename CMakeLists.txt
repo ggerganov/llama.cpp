@@ -239,7 +239,9 @@ target_link_libraries(llama PRIVATE utils ggml ${LLAMA_EXTRA_LIBS})
 # Executables
 #
 
-add_executable(main run.cpp)
+add_executable(main
+               main.cpp
+               run.cpp)
 target_link_libraries(main PRIVATE llama ggml utils)
 
 add_executable(quantize quantize.cpp)
