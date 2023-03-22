@@ -220,18 +220,21 @@ default: main quantize
 ggml.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS)   -c ggml.c -o ggml.o
 
+llama.o: llama.cpp llama.h
+	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
+
 utils.o: utils.cpp utils.h
 	$(CXX) $(CXXFLAGS) -c utils.cpp -o utils.o
 
 clean:
 	rm -f *.o main quantize
 
-main: main.cpp ggml.o utils.o
-	$(CXX) $(CXXFLAGS) main.cpp ggml.o utils.o -o main $(LDFLAGS)
+main: main.cpp ggml.o llama.o utils.o
+	$(CXX) $(CXXFLAGS) main.cpp ggml.o llama.o utils.o -o main $(LDFLAGS)
 	@echo "\x1b[36mrun ./main -h for help\x1b[0m"
 
-quantize: quantize.cpp ggml.o utils.o
-	$(CXX) $(CXXFLAGS) quantize.cpp ggml.o utils.o -o quantize $(LDFLAGS)
+quantize: quantize.cpp ggml.o llama.o utils.o
+	$(CXX) $(CXXFLAGS) quantize.cpp ggml.o llama.o utils.o -o quantize $(LDFLAGS)
 
 #
 # Tests

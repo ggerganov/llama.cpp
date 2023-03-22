@@ -10702,6 +10702,127 @@ enum ggml_opt_result ggml_opt(
 
 ////////////////////////////////////////////////////////////////////////////////
 
+size_t ggml_quantize_q4_0(float * src, void * dst, int n, int k, int qk, int64_t * hist) {
+    const int nb = k / qk;
+    const size_t bs = (sizeof(float) + sizeof(uint8_t)*qk/2);
+    const size_t row_size = nb*bs;
+
+    assert(k % qk == 0);
+
+    const size_t pp_size = qk / 2;
+    uint8_t * pp = (uint8_t *) alloca(pp_size);
+
+    char * pdst = (char *) dst;
+
+    for (int j = 0; j < n; j += k) {
+        uint8_t * pd = (uint8_t *) (pdst + (j/k)*row_size + 0*bs);
+        uint8_t * pb = (uint8_t *) (pdst + (j/k)*row_size + 0*bs + sizeof(float));
+
+        for (int i = 0; i < nb; i++) {
+            float amax = 0.0f; // absolute max
+
+            {
+                for (int l = 0; l < qk; l++) {
+                    const float v = src[j + i*qk + l];
+                    amax = MAX(amax, fabsf(v));
+                }
+
+                const float d = amax / ((1 << 3) - 1);
+                const float id = d ? 1.0f/d : 0.0f;
+
+                *(float *) pd = d;
+                pd += bs;
+
+                for (int l = 0; l < qk; l += 2) {
+                    const float v0 = (src[j + i*qk + l + 0])*id;
+                    const float v1 = (src[j + i*qk + l + 1])*id;
+
+                    const uint8_t vi0 = ((int8_t) (round(v0))) + 8;
+                    const uint8_t vi1 = ((int8_t) (round(v1))) + 8;
+
+                    assert(vi0 >= 0 && vi0 < 16);
+                    assert(vi1 >= 0 && vi1 < 16);
+
+                    hist[vi0]++;
+                    hist[vi1]++;
+
+                    pp[l/2] = vi0 | (vi1 << 4);
+                }
+
+                memcpy(pb, pp, pp_size);
+                pb += bs;
+            }
+        }
+    }
+
+    return (n/k)*row_size;
+}
+
+size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t * hist) {
+    const int nb = k / qk;
+    const size_t bs = (2*sizeof(float) + sizeof(uint8_t)*qk/2);
+    const size_t row_size = nb*bs;
+
+    assert(k % qk == 0);
+
+    const size_t pp_size = qk / 2;
+    uint8_t * pp = (uint8_t *) alloca(pp_size);
+
+    char * pdst = (char *) dst;
+
+    for (int j = 0; j < n; j += k) {
+        uint8_t * pd = (uint8_t *) (pdst + (j/k)*row_size + 0*bs);
+        uint8_t * pm = (uint8_t *) (pdst + (j/k)*row_size + 0*bs +   sizeof(float));
+        uint8_t * pb = (uint8_t *) (pdst + (j/k)*row_size + 0*bs + 2*sizeof(float));
+
+        //printf("n = %d, k = %d, nb = %d, row_size = %d, j = %d, pm = %p, pd = %p, pb = %p\n", n, k, nb, row_size, j, pm, pd, pb);
+
+        for (int i = 0; i < nb; i++) {
+            float min = FLT_MAX;
+            float max = -FLT_MAX;
+
+            {
+                for (int l = 0; l < qk; l++) {
+                    const float v = src[j + i*qk + l];
+                    if (v < min) min = v;
+                    if (v > max) max = v;
+                }
+
+                const float d = (max - min) / ((1 << 4) - 1);
+                const float id = d ? 1.0f/d : 0.0f;
+
+                *(float *) pd = d;
+                *(float *) pm = min;
+                pd += bs;
+                pm += bs;
+
+                for (int l = 0; l < qk; l += 2) {
+                    const float v0 = (src[j + i*qk + l + 0] - min)*id;
+                    const float v1 = (src[j + i*qk + l + 1] - min)*id;
+
+                    const uint8_t vi0 = round(v0);
+                    const uint8_t vi1 = round(v1);
+
+                    assert(vi0 >= 0 && vi0 < 16);
+                    assert(vi1 >= 0 && vi1 < 16);
+
+                    hist[vi0]++;
+                    hist[vi1]++;
+
+                    pp[l/2] = vi0 | (vi1 << 4);
+                }
+
+                memcpy(pb, pp, pp_size);
+                pb += bs;
+            }
+        }
+    }
+
+    return (n/k)*row_size;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
 int ggml_cpu_has_avx(void) {
 #if defined(__AVX__)
     return 1;
