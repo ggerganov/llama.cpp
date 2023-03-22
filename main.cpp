@@ -250,9 +250,9 @@ int main(int argc, char ** argv) {
     }
 
     // tokenize the first reverse prompt
-    auto first_antiprompt = ::llama_tokenize(ctx,"",false);
+    auto first_antiprompt = ::llama_tokenize(ctx, params.prompt, true);
     if (!params.antiprompt.empty()) {
-       auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false);
+       auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), true);
     }
 
     // enable interactive mode if reverse prompt is specified
