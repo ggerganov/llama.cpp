@@ -22,7 +22,7 @@ elif [[ $arg1 == '--all-in-one' || $arg1 == '-a' ]]; then
     echo "Downloading model..."
     python3 ./download-pth.py "$1" "$2"
     echo "Converting PTH to GGML..."
-    for i in `ls $1/$2/ggml-model-f16.bin*`; do
+    for i in `ls $1/$2/consolidated.*.pth`; do
         if [ -f "${i/f16/q4_0}" ]; then
             echo "Skip model quantization, it already exists: ${i/f16/q4_0}"
         else
