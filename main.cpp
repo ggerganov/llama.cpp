@@ -759,13 +759,10 @@ bool llama_eval(
         // capture input sentence embedding
             ggml_build_forward_expand(&gf, inpL);
             ggml_graph_compute       (ctx0, &gf);
-            printf("Compute went ok\n");
             std::vector<float> embedding_representation;    
             embedding_representation.resize(n_embd);
             memcpy(embedding_representation.data(), (float *) ggml_get_data(inpL) + (n_embd * (N - 1)), sizeof(float) * n_embd);
-            printf("About to display\n");
             display_embedding(embedding_representation);
-            printf("About to free\n");
             ggml_free(ctx0);
             return true;
     }
@@ -943,13 +940,14 @@ int main(int argc, char ** argv) {
     }
 
     if (params.embedding){
-        printf("got right before second call.\n");
-        const int64_t t_start_us = ggml_time_us(); //HERE
-        if (!llama_eval(model, params.n_threads, n_past, embd, logits, mem_per_token, true)) {
-                fprintf(stderr, "Failed to predict\n");
-                return 1;
+        embd = embd_inp;
+        if (embd.size() > 0) {
+            const int64_t t_start_us = ggml_time_us(); 
+            if (!llama_eval(model, params.n_threads, n_past, embd, logits, mem_per_token, true)) {
+                    fprintf(stderr, "Failed to predict\n");
+                    return 1;
+            }
         }
-        //ggml_free(model.ctx);
 
         if (params.use_color) {
             printf(ANSI_COLOR_RESET);
