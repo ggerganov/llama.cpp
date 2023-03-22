@@ -10720,7 +10720,7 @@ enum ggml_opt_result ggml_opt(
 
 ////////////////////////////////////////////////////////////////////////////////
 
-size_t ggml_quantize_q4_0(float * src, void * dst, int n, int k, int qk, int64_t * hist) {
+size_t ggml_quantize_q4_0(const float * src, void * dst, int n, int k, int qk, int64_t * hist) {
     const int nb = k / qk;
     const size_t bs = (sizeof(float) + sizeof(uint8_t)*qk/2);
     const size_t row_size = nb*bs;
@@ -10750,7 +10750,7 @@ size_t ggml_quantize_q4_0(float * src, void * dst, int n, int k, int qk, int64_t
     return (n/k)*row_size;
 }
 
-size_t ggml_quantize_q4_1(float * src, void * dst, int n, int k, int qk, int64_t * hist) {
+size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int qk, int64_t * hist) {
     const int nb = k / qk;
     const size_t bs = (2*sizeof(float) + sizeof(uint8_t)*qk/2);
     const size_t row_size = nb*bs;
