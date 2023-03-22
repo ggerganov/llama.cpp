@@ -1,10 +1,11 @@
 #include "utils.h"
+#include "llama.h"
 
 #include <cstdio>
 #include <string>
 #include <map>
 
-static const std::map<std::string, std::vector<llama_vocab::id>> k_tests = {
+static const std::map<std::string, std::vector<llama_token>> k_tests = {
     { "Hello World",        { 1,  10994,   2787, }, },
     { " Hello World",       { 1,  15043,   2787, }, },
     { " Hello World!",      { 1,  15043,   2787,  29991, }, },
@@ -23,14 +24,23 @@ int main(int argc, char **argv) {
 
     fprintf(stderr, "%s : reading vocab from: '%s'\n", __func__, fname.c_str());
 
-    llama_vocab vocab;
+    llama_context * ctx;
 
-    if (!llama_vocab_load(fname, vocab)) {
-        fprintf(stderr, "%s : failed to load vocab from: '%s'\n", __func__, fname.c_str());
-        return 1;
+    // load the vocab
+    {
+        auto lparams = llama_context_default_params();
+
+        lparams.vocab_only = true;
+
+        ctx = llama_init_from_file(fname.c_str(), lparams);
+
+        if (ctx == NULL) {
+            fprintf(stderr, "%s: error: failed to load vocab '%s'\n", __func__, fname.c_str());
+            return 1;
+        }
     }
 
-    const int n_vocab = vocab.id_to_token.size();
+    const int n_vocab = llama_n_vocab(ctx);
 
     if (n_vocab != 32000) {
         fprintf(stderr, "%s : expected 32000 tokens, got %d\n", __func__, n_vocab);
@@ -38,7 +48,7 @@ int main(int argc, char **argv) {
     }
 
     for (const auto & test_kv : k_tests) {
-        const auto res = llama_tokenize(vocab, test_kv.first, true);
+        const auto res = ::llama_tokenize(ctx, test_kv.first, true);
 
         bool correct = res.size() == test_kv.second.size();
 
