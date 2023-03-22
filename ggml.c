@@ -87,6 +87,9 @@ typedef void* thread_ret_t;
 #ifndef __F16C__
 #define __F16C__
 #endif
+#ifndef __SSE3__
+#define __SSE3__
+#endif
 #endif
 
 #ifdef __HAIKU__
