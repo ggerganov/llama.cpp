@@ -207,14 +207,9 @@ else()
     message(STATUS "Unknown architecture")
 endif()
 
-
 #
-# Build library
+# Build libraries
 #
-
-add_executable(llama main.cpp)
-
-add_executable(quantize quantize.cpp)
 
 add_library(utils OBJECT
             utils.cpp
@@ -229,14 +224,24 @@ add_library(ggml OBJECT
 
 target_include_directories(ggml PUBLIC .)
 target_compile_features(ggml PUBLIC c_std_11) # don't bump
-
-#
-# Linking
-#
-
 target_link_libraries(ggml PRIVATE Threads::Threads ${LLAMA_EXTRA_LIBS})
-target_link_libraries(llama PRIVATE ggml utils)
-target_link_libraries(quantize PRIVATE ggml utils)
+
+add_library(llama OBJECT
+            llama.cpp
+            llama.h)
+
+target_include_directories(llama PUBLIC .)
+target_compile_features(llama PUBLIC cxx_std_11) # don't bump
+
+#
+# Executables
+#
+
+add_executable(main main.cpp)
+target_link_libraries(main PRIVATE llama ggml utils)
+
+add_executable(quantize quantize.cpp)
+target_link_libraries(quantize PRIVATE llama ggml utils)
 
 #
 # programs, examples and tests

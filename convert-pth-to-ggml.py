@@ -148,7 +148,7 @@ def main():
         model = torch.load(fname_model, map_location="cpu")
 
         with open(fname_out, "wb") as fout:
-            fout.write(struct.pack("i", hparams["vocab_size"]))
+            write_header(fout, hparams, ftype)
             write_tokens(fout, tokenizer)
 
         del model
