@@ -611,6 +611,8 @@ static bool llama_eval_internal(
             const int   n_tokens,
             const int   n_past,
             const int   n_threads) {
+    const int64_t t_start_us = ggml_time_us();
+
     const int N = n_tokens;
 
     const auto & model   = lctx.model;
@@ -833,6 +835,9 @@ static bool llama_eval_internal(
     //fprintf(stderr, "used_mem = %zu\n", ggml_used_mem(ctx0));
 
     ggml_free(ctx0);
+
+    lctx.t_eval_us += ggml_time_us() - t_start_us;
+    lctx.n_eval++;
 
     return true;
 }
@@ -1509,6 +1514,7 @@ llama_token llama_sample_top_p_top_k(
             repeat_penalty);
 
     ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    ctx->n_sample++;
 
     return result;
 }

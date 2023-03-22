@@ -156,7 +156,6 @@ void sigint_handler(int signo) {
 
 int main(int argc, char ** argv) {
     ggml_time_init();
-    const int64_t t_main_start_us = ggml_time_us();
 
     gpt_params params;
     params.model = "models/llama-7B/ggml-model.bin";
@@ -225,9 +224,6 @@ int main(int argc, char ** argv) {
     }
 
     int n_past = 0;
-
-    int64_t t_sample_us  = 0;
-    int64_t t_predict_us = 0;
 
     // Add a space in front of the first character to match OG llama tokenizer behavior
     params.prompt.insert(0, 1, ' ');
@@ -320,14 +316,10 @@ int main(int argc, char ** argv) {
     while (remaining_tokens > 0 || params.interactive) {
         // predict
         if (embd.size() > 0) {
-            const int64_t t_start_us = ggml_time_us();
-
             if (llama_eval(ctx, embd.data(), embd.size(), n_past, params.n_threads)) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return 1;
             }
-
-            t_predict_us += ggml_time_us() - t_start_us;
         }
 
         n_past += embd.size();
@@ -343,8 +335,6 @@ int main(int argc, char ** argv) {
             llama_token id = 0;
 
             {
-                const int64_t t_start_sample_us = ggml_time_us();
-
                 auto logits = llama_get_logits(ctx);
 
                 if (params.ignore_eos) {
@@ -359,8 +349,6 @@ int main(int argc, char ** argv) {
 
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(id);
-
-                t_sample_us += ggml_time_us() - t_start_sample_us;
             }
 
             // add it to the context
