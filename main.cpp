@@ -170,7 +170,7 @@ int main(int argc, char ** argv) {
                 "expect poor results\n", __func__, params.n_ctx);
     }
 
-    if (params.seed < 0) {
+    if (params.seed <= 0) {
         params.seed = time(NULL);
     }
 
