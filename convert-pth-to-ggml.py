@@ -10,150 +10,104 @@
 #   - Name (char[name_length])
 #   - Data (float[n_dims])
 #
-# By default, the bigger matrices are converted to 16-bit floats.
-# This can be disabled by adding the "use-f32" CLI argument.
-#
 # At the start of the ggml file we write the model parameters
 # and vocabulary.
 #
+
+import argparse
 import os
 import sys
 import json
 import struct
 import numpy as np
 import torch
+
 from sentencepiece import SentencePieceProcessor
 
-if len(sys.argv) < 3:
-    print("Usage: convert-ckpt-to-ggml.py dir-model ftype\n")
-    print("  ftype == 0 -> float32")
-    print("  ftype == 1 -> float16")
-    sys.exit(1)
+def parse_args():
 
-# output in the same directory as the model
-dir_model = sys.argv[1]
-
-fname_hparams   = sys.argv[1] + "/params.json"
-fname_tokenizer = sys.argv[1] + "/../tokenizer.model"
+    parser = argparse.ArgumentParser(description='Convert a LLaMA model checkpoint to a ggml compatible file')
+    parser.add_argument('dir_model',  help='directory containing the model checkpoint')
+    parser.add_argument('ftype',      help='file type (0: float32, 1: float16)', type=int, choices=[0, 1], default=1)
+    parser.add_argument('vocab_only', help='only write vocab to file', type=int, default=0, nargs='?')
+    return parser.parse_args()
 
 def get_n_parts(dim):
-    if dim == 4096:
-        return 1
-    elif dim == 5120:
-        return 2
-    elif dim == 6656:
-        return 4
-    elif dim == 8192:
-        return 8
-    else:
-        print("Invalid dim: " + str(dim))
+
+    mappings = {4096: 1, 5120: 2, 6656: 4, 8192: 8}
+    n_parts = mappings.get(dim)
+    if n_parts is None:
+        print(f"Invalid dim: {dim}")
         sys.exit(1)
 
-# possible data types
-#   ftype == 0 -> float32
-#   ftype == 1 -> float16
-#
-# map from ftype to string
-ftype_str = ["f32", "f16"]
+    print(f"n_parts = {n_parts}\n")
+    return n_parts
 
-ftype = 1
-if len(sys.argv) > 2:
-    ftype = int(sys.argv[2])
-    if ftype < 0 or ftype > 1:
-        print("Invalid ftype: " + str(ftype))
-        sys.exit(1)
-    fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".bin"
+def load_hparams_and_tokenizer(dir_model):
 
-if os.path.exists(fname_out):
-    print(f"Skip conversion, it already exists: {fname_out}")
-    sys.exit(0)
+    # `dir_model` is something like `models/7B` or `models/7B/`.
+    # "tokenizer.model" is expected under model's parent dir.
+    # When `dir_model` is a symlink, f"{dir_model}/../tokenizer.model" would not be found.
+    # Let's use the model's parent dir directly.
+    model_parent_dir = os.path.dirname(os.path.normpath(dir_model))
 
-with open(fname_hparams, "r") as f:
-    hparams = json.load(f)
+    fname_hparams = f"{dir_model}/params.json"
+    fname_tokenizer = f"{model_parent_dir}/tokenizer.model"
 
-tokenizer = SentencePieceProcessor(fname_tokenizer)
+    with open(fname_hparams, "r") as f:
+        hparams = json.load(f)
+        print(hparams)
 
-hparams.update({"vocab_size": tokenizer.vocab_size()})
+    tokenizer = SentencePieceProcessor(fname_tokenizer)
+    hparams.update({"vocab_size": tokenizer.vocab_size()})
 
-n_parts = get_n_parts(hparams["dim"])
+    return hparams, tokenizer
 
-print(hparams)
-print('n_parts = ', n_parts)
+def write_header(fout, hparams, ftype):
 
-for p in range(n_parts):
-    print('Processing part ', p)
+    keys = ["vocab_size", "dim", "multiple_of", "n_heads", "n_layers"]
+    values = [
+        0x67676d66,  # magic: ggmf in hex
+        1, # file version
+        *[hparams[key] for key in keys],
+        hparams["dim"] // hparams["n_heads"],  # rot (obsolete)
+        ftype
+    ]
+    fout.write(struct.pack("i" * len(values), *values))
 
-    #fname_model = sys.argv[1] + "/consolidated.00.pth"
-    fname_model = sys.argv[1] + "/consolidated.0" + str(p) + ".pth"
-    fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".bin"
-    if (p > 0):
-        fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".bin" + "." + str(p)
+def write_tokens(fout, tokenizer):
 
-    model = torch.load(fname_model, map_location="cpu")
-
-    fout = open(fname_out, "wb")
-
-    fout.write(struct.pack("i", 0x67676d6c)) # magic: ggml in hex
-    fout.write(struct.pack("i", hparams["vocab_size"]))
-    fout.write(struct.pack("i", hparams["dim"]))
-    fout.write(struct.pack("i", hparams["multiple_of"]))
-    fout.write(struct.pack("i", hparams["n_heads"]))
-    fout.write(struct.pack("i", hparams["n_layers"]))
-    fout.write(struct.pack("i", hparams["dim"] // hparams["n_heads"])) # rot (obsolete)
-    fout.write(struct.pack("i", ftype))
-
-    # Is this correct??
     for i in range(tokenizer.vocab_size()):
         if tokenizer.is_unknown(i):
-            # "<unk>" token (translated as ??)
             text = " \u2047 ".encode("utf-8")
-            fout.write(struct.pack("i", len(text)))
-            fout.write(text)
         elif tokenizer.is_control(i):
-            # "<s>"/"</s>" tokens
-            fout.write(struct.pack("i", 0))
+            text = b""
         elif tokenizer.is_byte(i):
-            # "<U+XX>" tokens (which may be invalid UTF-8)
             piece = tokenizer.id_to_piece(i)
             if len(piece) != 6:
-                print("Invalid token: " + piece)
+                print(f"Invalid token: {piece}")
                 sys.exit(1)
             byte_value = int(piece[3:-1], 16)
-            fout.write(struct.pack("i", 1))
-            fout.write(struct.pack("B", byte_value))
+            text = struct.pack("B", byte_value)
         else:
-            # normal token. Uses U+2581 (LOWER ONE EIGHTH BLOCK) to represent spaces.
             text = tokenizer.id_to_piece(i).replace("\u2581", " ").encode("utf-8")
-            fout.write(struct.pack("i", len(text)))
-            fout.write(text)
+        fout.write(struct.pack("i", len(text)))
+        fout.write(text)
+        fout.write(struct.pack("f", tokenizer.get_score(i)))
 
-    for k, v in model.items():
-        name = k
-        shape = v.shape
+def process_and_write_variables(fout, model, ftype):
 
-        # skip layers.X.attention.inner_attention.rope.freqs
-        if name[-5:] == "freqs":
+    for name, datao in model.items():
+
+        if name.endswith("freqs"):
             continue
 
-        print("Processing variable: " + name + " with shape: ", shape, " and type: ", v.dtype)
+        shape = datao.shape
 
-        #data = tf.train.load_variable(dir_model, name).squeeze()
-        data = v.numpy().squeeze()
-        n_dims = len(data.shape);
+        print(f"Processing variable: {name} with shape: {shape} and type: {datao.dtype}")
 
-        # for efficiency - transpose some matrices
-        # "model/h.*/attn/c_attn/w"
-        # "model/h.*/attn/c_proj/w"
-        # "model/h.*/mlp/c_fc/w"
-        # "model/h.*/mlp/c_proj/w"
-        #if name[-14:] == "/attn/c_attn/w" or \
-        #   name[-14:] == "/attn/c_proj/w" or \
-        #   name[-11:] == "/mlp/c_fc/w" or \
-        #   name[-13:] == "/mlp/c_proj/w":
-        #    print("  Transposing")
-        #    data = data.transpose()
-
-        dshape = data.shape
+        data = datao.numpy().squeeze()
+        n_dims = len(shape)
 
         # default type is fp16
         ftype_cur = 1
@@ -164,18 +118,64 @@ for p in range(n_parts):
 
         # header
         sname = name.encode('utf-8')
-        fout.write(struct.pack("iii", n_dims, len(sname), ftype_cur))
-        for i in range(n_dims):
-            fout.write(struct.pack("i", dshape[n_dims - 1 - i]))
-        fout.write(sname);
+        fout.write(struct.pack("iii", len(data.shape), len(sname), ftype_cur))
+        for dim in reversed(data.shape):
+            fout.write(struct.pack("i", dim))
+        fout.write(sname)
 
-        # data
+        # data output to file
         data.tofile(fout)
 
-    # I hope this deallocates the memory ..
-    model = None
+def main():
 
-    fout.close()
+    args = parse_args()
+    dir_model = args.dir_model
+    ftype = args.ftype
+    ftype_str = ["f32", "f16"]
 
-    print("Done. Output file: " + fname_out + ", (part ", p, ")")
-    print("")
+    hparams, tokenizer = load_hparams_and_tokenizer(dir_model)
+
+    print(args)
+
+    # if only writing vocab to file
+    if args.vocab_only:
+
+        fname_model = f"{dir_model}/consolidated.00.pth"
+        fname_out = f"{dir_model}/ggml-vocab.bin"
+
+        print(f"Extracting only the vocab from '{fname_model}'\n")
+
+        model = torch.load(fname_model, map_location="cpu")
+
+        with open(fname_out, "wb") as fout:
+            fout.write(struct.pack("i", hparams["vocab_size"]))
+            write_tokens(fout, tokenizer)
+
+        del model
+
+        print(f"Done. Output file: {fname_out}\n")
+
+        return
+
+    n_parts = get_n_parts(hparams["dim"])
+
+    for p in range(n_parts):
+
+        print(f"Processing part {p}\n")
+
+        fname_model = f"{dir_model}/consolidated.0{p}.pth"
+        fname_out = f"{dir_model}/ggml-model-{ftype_str[ftype]}.bin{'' if p == 0 else '.' + str(p)}"
+
+        model = torch.load(fname_model, map_location="cpu")
+
+        with open(fname_out, "wb") as fout:
+            write_header(fout, hparams, ftype)
+            write_tokens(fout, tokenizer)
+            process_and_write_variables(fout, model, ftype)
+
+        del model
+
+        print(f"Done. Output file: {fname_out}, (part {p})\n")
+
+if __name__ == "__main__":
+    main()
