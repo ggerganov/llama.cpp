@@ -254,6 +254,10 @@ int main(int argc, char ** argv) {
         params.interactive = true;
     }
 
+    if (params.interactive_start) {
+        params.interactive = true;
+    }
+
     fprintf(stderr, "\n");
     fprintf(stderr, "%s: prompt: '%s'\n", __func__, params.prompt.c_str());
     fprintf(stderr, "%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
@@ -296,7 +300,7 @@ int main(int argc, char ** argv) {
 #endif
                " - Press Return to return control to LLaMa.\n"
                " - If you want to submit another line, end your input in '\\'.\n\n");
-        is_interacting = true;
+        is_interacting = params.interactive_start;
     }
 
     int input_consumed = 0;
