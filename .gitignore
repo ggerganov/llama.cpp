@@ -5,6 +5,7 @@
 .vscode/
 .DS_Store
 
+.build/
 build/
 build-em/
 build-debug/
@@ -25,3 +26,7 @@ compile_commands.json
 
 .envrc
 .direnv/
+
+.venv
+__pycache__
+.swiftpm
