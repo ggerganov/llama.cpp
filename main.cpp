@@ -1,6 +1,8 @@
 #include "run.h"
 #include "ggml.h"
 
+#include <iostream>
+
 
 std::vector<double> softmax(const std::vector<float>& logits) {
     std::vector<double> probs(logits.size());
@@ -123,5 +125,5 @@ int main(int argc, char ** argv) {
         exit(0);
     }
 
-    return run(ctx, params);
+    return run(ctx, params, std::cin, stdout, stderr);
 }
