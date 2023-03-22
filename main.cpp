@@ -1117,8 +1117,7 @@ int main(int argc, char ** argv) {
     if (params.embedding){
         embd = embd_inp;
         if (embd.size() > 0) {
-            const int64_t t_start_us = ggml_time_us(); 
-            if (!llama_eval(model, params.n_threads, n_past, embd, logits, mem_per_token, true)) {
+            if (!llama_eval(model, params.n_threads, n_past, embd, logits, mem_per_token, params.embedding)) {
                     fprintf(stderr, "Failed to predict\n");
                     return 1;
             }
@@ -1135,7 +1134,7 @@ int main(int argc, char ** argv) {
         if (embd.size() > 0) {
             const int64_t t_start_us = ggml_time_us();
 
-            if (!llama_eval(model, params.n_threads, n_past, embd, logits, mem_per_token, false)) {
+            if (!llama_eval(model, params.n_threads, n_past, embd, logits, mem_per_token, params.embedding)) {
                 fprintf(stderr, "Failed to predict\n");
                 return 1;
             }
