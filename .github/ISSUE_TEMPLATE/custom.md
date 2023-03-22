@@ -1,6 +1,6 @@
 ---
 name: Issue and enhancement template
-about: Used to report issues and request enhancemments for llama.cpp
+about: Used to report issues and request enhancements for llama.cpp
 title: "[User] Insert summary of your issue or enhancement.."
 labels: ''
 assignees: ''
