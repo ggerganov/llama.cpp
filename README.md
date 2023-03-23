@@ -191,17 +191,8 @@ Note the use of `--color` to distinguish between user input and generated text.
 
 ### Instruction mode with Alpaca
 
-First, download the `ggml` Alpaca model into the `./models` folder:
-
-```
-# use one of these
-# TODO: add a script to simplify the download
-curl -o ./models/ggml-alpaca-7b-q4.bin -C - https://gateway.estuary.tech/gw/ipfs/QmUp1UGeQFDqJKvtjbSYPBiZZKRjLp8shVP9hT8ZB9Ynv1
-curl -o ./models/ggml-alpaca-7b-q4.bin -C - https://ipfs.io/ipfs/QmUp1UGeQFDqJKvtjbSYPBiZZKRjLp8shVP9hT8ZB9Ynv1
-curl -o ./models/ggml-alpaca-7b-q4.bin -C - https://cloudflare-ipfs.com/ipfs/QmUp1UGeQFDqJKvtjbSYPBiZZKRjLp8shVP9hT8ZB9Ynv1
-```
-
-Now run the `main` tool like this:
+1. First, download the `ggml` Alpaca model into the `./models` folder
+2. Run the `main` tool like this:
 
 ```
 ./main -m ./models/ggml-alpaca-7b-q4.bin --color -f ./prompts/alpaca.txt -ins
@@ -228,26 +219,34 @@ cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
 
 ### Obtaining and verifying the Facebook LLaMA original model and Stanford Alpaca model data
 
-* The LLaMA models are officially distributed by Facebook and will never be provided through this repository. See this [Pull Request in Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to obtain access to the model data.
-
+* The LLaMA models are officially distributed by Facebook and will never be provided through this repository. See this [pull request in Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to obtain access to the model data.
 * Please verify the sha256 checksums of all of your `consolidated*.pth` and corresponding converted `ggml-model-*.bin` model files to confirm that you have the correct model data files before creating an issue relating to your model files.
+* The following command will verify if you have all possible latest files in your self-installed `./models` subdirectory:
 
-The following command will verify if you have all possible latest files in your self-installed `./models` subdirectory:
+  `sha256sum --ignore-missing -c SHA256SUMS` on Linux
 
-`sha256sum --ignore-missing -c SHA256SUMS` on Linux
+  or
 
-or
+  `shasum -a 256 --ignore-missing -c SHA256SUMS` on macOS
 
-`shasum -a 256 --ignore-missing -c SHA256SUMS` on macOS
-
+* If your issue is with model generation quality then please at least scan the following links and papers to understand the limitations of LLaMA models. This is especially important when choosing an appropriate model size and appreciating both the significant and subtle differences between LLaMA models and ChatGPT:
+  * LLaMA:
+    * [Introducing LLaMA: A foundational, 65-billion-parameter large language model](https://ai.facebook.com/blog/large-language-model-llama-meta-ai/)
+    * [LLaMA: Open and Efficient Foundation Language Models](https://arxiv.org/abs/2302.13971)
+  * GPT-3
+    * [Language Models are Few-Shot Learners](https://arxiv.org/abs/2005.14165)
+  * GPT-3.5 / InstructGPT / ChatGPT:
+    * [Aligning language models to follow instructions](https://openai.com/research/instruction-following)
+    * [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
+    
 ### Perplexity (Measuring model quality)
 
 You can pass `--perplexity` as a command line option to measure perplexity over the given prompt.  For more background,
 see https://huggingface.co/docs/transformers/perplexity.  However, in general, lower perplexity is better for LLMs.
 
-#### Measurements
+#### Latest measurements
 
-https://github.com/ggerganov/llama.cpp/pull/270 is the unofficial tracking page for now.  llama.cpp is measuring very well
+The latest perplexity scores for the various model sizes and quantizations are being tracked in [discussion #406](https://github.com/ggerganov/llama.cpp/discussions/406).  `llama.cpp` is measuring very well
 compared to the baseline implementations.  Quantization has a small negative impact to quality, but, as you can see, running
 13B at q4_0 beats the 7B f16 model by a significant amount.
 
@@ -347,3 +346,4 @@ docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models
 - There are no strict rules for the code style, but try to follow the patterns in the code (indentation, spaces, etc.). Vertical alignment makes things more readable and easier to batch edit
 - Clean-up any trailing whitespaces, use 4 spaces indentation, brackets on same line, `void * ptr`, `int & a`
 - See [good first issues](https://github.com/ggerganov/llama.cpp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for tasks suitable for first contributions
+
