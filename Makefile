@@ -234,7 +234,9 @@ clean:
 
 main: main.cpp ggml.o extra.o utils.o
 	$(CXX) $(CXXFLAGS) main.cpp ggml.o extra.o utils.o -o main $(LDFLAGS)
-	@echo "\x1b[36mrun ./main -h for help\x1b[0m"
+	@echo
+	@echo '====  Run ./main -h for help.  ===='
+	@echo
 
 llamalib: expose.cpp ggml.o utils.o extra.o
 	$(CXX) $(CXXFLAGS) expose.cpp ggml.o utils.o extra.o -shared -o llamacpp.dll $(LDFLAGS)
