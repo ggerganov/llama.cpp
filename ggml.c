@@ -1700,12 +1700,19 @@ inline static void ggml_vec_dot_q4_1(const int n, float * restrict s, const void
 #if defined(__AVX2__)
 #if QK == 32
     // Initialize accumulator with zeros
-    __m256 acc = _mm256_setzero_ps();
+    __m256 acc;
     // Accumulator for constant offsets
-    __m128 acc_offset = _mm_setzero_ps(); //0.0f;
+    __m128 acc_offset;
 
+    int i = 0;
+#define LOOP_SPLITS 2
+#pragma GCC unroll 999
+    for(int j = 1; j <= LOOP_SPLITS; ++j) {
+    acc = _mm256_setzero_ps();
+    acc_offset = _mm_setzero_ps();
+    
     // Main loop
-    for (int i = 0; i < nb; ++i) {
+    for (; i < (j*nb)/LOOP_SPLITS; ++i) {
         const float * m0 = (const float *) (pm0 + i*bs);
         const float * m1 = (const float *) (pm1 + i*bs);
 
@@ -1775,7 +1782,8 @@ inline static void ggml_vec_dot_q4_1(const int n, float * restrict s, const void
     res = _mm_add_ps( res, _mm_movehl_ps( res, res ) );
     res = _mm_add_ss( res, _mm_movehdup_ps( res ) );
 
-    sumf = _mm_cvtss_f32( res ) + _mm_cvtss_f32( acc_offset )* QK;
+    sumf += _mm_cvtss_f32( res ) + _mm_cvtss_f32( acc_offset )* QK;
+    }
 #else
 #error "not implemented for QK"
 #endif
