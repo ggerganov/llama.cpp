@@ -240,6 +240,40 @@ or
 
 `shasum -a 256 --ignore-missing -c SHA256SUMS` on macOS
 
+### Perplexity (Measuring model quality)
+
+You can pass `--perplexity` as a command line option to measure perplexity over the given prompt.  For more background,
+see https://huggingface.co/docs/transformers/perplexity.  However, in general, lower perplexity is better for LLMs.
+
+#### Measurements
+
+https://github.com/ggerganov/llama.cpp/pull/270 is the unofficial tracking page for now.  llama.cpp is measuring very well
+compared to the baseline implementations.  Quantization has a small negative impact to quality, but, as you can see, running
+13B at q4_0 beats the 7B f16 model by a significant amount.
+
+All measurements are done against wikitext2 test dataset (https://paperswithcode.com/dataset/wikitext-2), with default options (512 length context).
+Note that the changing the context length will have a significant impact on perplexity (longer context = better perplexity).
+```
+Perplexity - model options
+5.5985 - 13B, q4_0
+5.9565 - 7B, f16
+6.3001 - 7B, q4_1
+6.5949 - 7B, q4_0
+6.5995 - 7B, q4_0, --memory_f16
+```
+
+#### How to run
+
+1. Download/extract: https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip?ref=salesforce-research
+2. Run `./main --perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
+3. Output:
+```
+Calculating perplexity over 655 chunks
+24.43 seconds per pass - ETA 4.45 hours
+[1]4.5970,[2]5.1807,[3]6.0382,...
+```
+And after 4.45 hours, you will have the final perplexity.
+
 ### Android
 
 You can easily run `llama.cpp` on Android device with [termux](https://play.google.com/store/apps/details?id=com.termux).
@@ -290,7 +324,6 @@ docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models
 
 ## Limitations
 
-- We don't know yet how much the quantization affects the quality of the generated text
 - Probably the token sampling can be improved
 - The Accelerate framework is actually currently unused since I found that for tensor shapes typical for the Decoder,
   there is no benefit compared to the ARM_NEON intrinsics implementation. Of course, it's possible that I simply don't

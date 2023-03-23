@@ -1,7 +1,7 @@
 ---
-name: Custom issue template
-about: Used to report user-related issues with the software
-title: "[User] I encountered a problem .."
+name: Issue and enhancement template
+about: Used to report issues and request enhancements for llama.cpp
+title: "[User] Insert summary of your issue or enhancement.."
 labels: ''
 assignees: ''
 
@@ -18,11 +18,11 @@ Please answer the following questions for yourself before submitting an issue.
 
 # Expected Behavior
 
-Please provide a detailed written description of what you were trying to do, and what you expected `lamma.cpp` to do.
+Please provide a detailed written description of what you were trying to do, and what you expected `llama.cpp` to do.
 
 # Current Behavior
 
-Please provide a detailed written description of what `lamma.cpp` did, instead. 
+Please provide a detailed written description of what `llama.cpp` did, instead. 
 
 # Environment and Context 
 

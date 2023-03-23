@@ -85,7 +85,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
     // Download: https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip?ref=salesforce-research
     // Run `./main --perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
     // Output: `perplexity: 13.5106 [114/114]`
-    auto tokens = ::llama_tokenize(ctx, params.prompt.c_str(), true);
+    auto tokens = ::llama_tokenize(ctx, params.prompt, true);
 
     int count = 0;
     double nll = 0.0;
@@ -254,6 +254,10 @@ int main(int argc, char ** argv) {
         params.interactive = true;
     }
 
+    if (params.interactive_start) {
+        params.interactive = true;
+    }
+
     fprintf(stderr, "\n");
     fprintf(stderr, "%s: prompt: '%s'\n", __func__, params.prompt.c_str());
     fprintf(stderr, "%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
@@ -297,7 +301,7 @@ int main(int argc, char ** argv) {
 #endif
                " - Press Return to return control to LLaMa.\n"
                " - If you want to submit another line, end your input in '\\'.\n\n");
-        is_interacting = true;
+        is_interacting = params.interactive_start;
     }
 
     int input_consumed = 0;
