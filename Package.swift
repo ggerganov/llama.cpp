@@ -11,7 +11,7 @@ let package = Package(
         .target(
             name: "llama",
             path: ".",
-            exclude: ["main.cpp", "tests", "quantize.cpp"],
+            sources: ["ggml.c", "llama.cpp"],
             publicHeadersPath: "spm-headers",
             cSettings: [.unsafeFlags(["-Wno-shorten-64-to-32"])]
         ),
