@@ -1848,12 +1848,13 @@ inline static void ggml_vec_dot_q4_1(const int n, float * restrict s, const void
 
         // Apply the scales, and accumulate
         // acc += d0*m1*x + d1*m0*y
-        acc = _mm256_fmadd_ps( cross_scales, sums, acc );
+        __m256 delta = _mm256_mul_ps( cross_scales, sums );
 
         // Convert int32_t to float
         __m256 p = _mm256_cvtepi32_ps( i32 );
         // acc += d0*d1*x*y
-        acc = _mm256_fmadd_ps( scale_01, p, acc );
+        delta = _mm256_fmadd_ps( scale_01, p, delta );
+        acc = _mm256_add_ps( acc, delta );
 
         // acc_offset += m0*m1 (avoid reloading from RAM)
         acc_offset = _mm_fmadd_ss( _mm256_castps256_ps128( m0v ), _mm256_castps256_ps128( m1v ), acc_offset );
