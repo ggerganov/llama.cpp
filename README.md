@@ -3,10 +3,12 @@
 [![Actions Status](https://github.com/ggerganov/llama.cpp/workflows/CI/badge.svg)](https://github.com/ggerganov/llama.cpp/actions)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-Inference of [Facebook's LLaMA](https://github.com/facebookresearch/llama) model in pure C/C++
+Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
+- New C-style API is now available: https://github.com/ggerganov/llama.cpp/pull/370
+- [Added Alpaca support](https://github.com/ggerganov/llama.cpp#instruction-mode-with-alpaca)
 - Cache input prompts for faster initialization: https://github.com/ggerganov/llama.cpp/issues/64
 - Create a `llama.cpp` logo: https://github.com/ggerganov/llama.cpp/issues/105
 
@@ -31,13 +33,14 @@ Supported platforms:
 - [X] Mac OS
 - [X] Linux
 - [X] Windows (via CMake)
+- [X] Docker
 
 ---
 
 Here is a typical run using LLaMA-7B:
 
 ```java
-make -j && ./main -m ./models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -t 8 -n 512
+make -j && ./main -m ./models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
 I llama.cpp build info:
 I UNAME_S:  Darwin
 I UNAME_P:  arm
@@ -145,15 +148,27 @@ python3 -m pip install torch numpy sentencepiece
 python3 convert-pth-to-ggml.py models/7B/ 1
 
 # quantize the model to 4-bits
-./quantize.sh 7B
+python3 quantize.py 7B
 
 # run the inference
-./main -m ./models/7B/ggml-model-q4_0.bin -t 8 -n 128
+./main -m ./models/7B/ggml-model-q4_0.bin -n 128
 ```
+
+Currently, it's best to use Python 3.9 or Python 3.10, as `sentencepiece` has not yet published a wheel for Python 3.11.
 
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
 
-TODO: add model disk/mem requirements
+### Memory/Disk Requirements
+
+As the models are currently fully loaded into memory, you will need adequate disk space to save them
+and sufficient RAM to load them. At the moment, memory and disk requirements are the same.
+
+| model | original size | quantized size (4-bit) |
+|-------|---------------|------------------------|
+| 7B    | 13 GB         | 3.9 GB                 |
+| 13B   | 24 GB         | 7.8 GB                 |
+| 30B   | 60 GB         | 19.5 GB                |
+| 65B   | 120 GB        | 38.5 GB                |
 
 ### Interactive mode
 
@@ -161,21 +176,103 @@ If you want a more ChatGPT-like experience, you can run in interactive mode by p
 In this mode, you can always interrupt generation by pressing Ctrl+C and enter one or more lines of text which will be converted into tokens and appended to the current context. You can also specify a *reverse prompt* with the parameter `-r "reverse prompt string"`. This will result in user input being prompted whenever the exact tokens of the reverse prompt string are encountered in the generation. A typical use is to use a prompt which makes LLaMa emulate a chat between multiple users, say Alice and Bob, and pass `-r "Alice:"`.
 
 Here is an example few-shot interaction, invoked with the command
-```
-./main -m ./models/13B/ggml-model-q4_0.bin -t 8 -n 256 --repeat_penalty 1.0 --color -i -r "User:" \
-                                           -p \
-"Transcript of a dialog, where the User interacts with an Assistant named Bob. Bob is helpful, kind, honest, good at writing, and never fails to answer the User's requests immediately and with precision.
 
-User: Hello, Bob.
-Bob: Hello. How may I help you today?
-User: Please tell me the largest city in Europe.
-Bob: Sure. The largest city in Europe is Moscow, the capital of Russia.
-User:"
+```bash
+# default arguments using 7B model
+./chat.sh
 
+# custom arguments using 13B model
+./main -m ./models/13B/ggml-model-q4_0.bin -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
 ```
+
 Note the use of `--color` to distinguish between user input and generated text.
 
 ![image](https://user-images.githubusercontent.com/1991296/224575029-2af3c7dc-5a65-4f64-a6bb-517a532aea38.png)
+
+### Instruction mode with Alpaca
+
+First, download the `ggml` Alpaca model into the `./models` folder:
+
+```
+# use one of these
+# TODO: add a script to simplify the download
+curl -o ./models/ggml-alpaca-7b-q4.bin -C - https://gateway.estuary.tech/gw/ipfs/QmUp1UGeQFDqJKvtjbSYPBiZZKRjLp8shVP9hT8ZB9Ynv1
+curl -o ./models/ggml-alpaca-7b-q4.bin -C - https://ipfs.io/ipfs/QmUp1UGeQFDqJKvtjbSYPBiZZKRjLp8shVP9hT8ZB9Ynv1
+curl -o ./models/ggml-alpaca-7b-q4.bin -C - https://cloudflare-ipfs.com/ipfs/QmUp1UGeQFDqJKvtjbSYPBiZZKRjLp8shVP9hT8ZB9Ynv1
+```
+
+Now run the `main` tool like this:
+
+```
+./main -m ./models/ggml-alpaca-7b-q4.bin --color -f ./prompts/alpaca.txt -ins
+```
+
+Sample run:
+
+```
+== Running in interactive mode. ==
+ - Press Ctrl+C to interject at any time.
+ - Press Return to return control to LLaMa.
+ - If you want to submit another line, end your input in '\'.
+
+ Below is an instruction that describes a task. Write a response that appropriately completes the request.
+
+> How many letters are there in the English alphabet?
+There 26 letters in the English Alphabet
+> What is the most common way of transportation in Amsterdam?
+The majority (54%) are using public transit. This includes buses, trams and metros with over 100 lines throughout the city which make it very accessible for tourists to navigate around town as well as locals who commute by tram or metro on a daily basis
+> List 5 words that start with "ca".
+cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
+> 
+```
+
+### Obtaining and verifying the Facebook LLaMA original model and Stanford Alpaca model data
+
+* The LLaMA models are officially distributed by Facebook and will never be provided through this repository. See this [Pull Request in Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to obtain access to the model data.
+
+* Please verify the sha256 checksums of all of your `consolidated*.pth` and corresponding converted `ggml-model-*.bin` model files to confirm that you have the correct model data files before creating an issue relating to your model files.
+
+The following command will verify if you have all possible latest files in your self-installed `./models` subdirectory:
+
+`sha256sum --ignore-missing -c SHA256SUMS` on Linux
+
+or
+
+`shasum -a 256 --ignore-missing -c SHA256SUMS` on macOS
+
+### Perplexity (Measuring model quality)
+
+You can pass `--perplexity` as a command line option to measure perplexity over the given prompt.  For more background,
+see https://huggingface.co/docs/transformers/perplexity.  However, in general, lower perplexity is better for LLMs.
+
+#### Measurements
+
+https://github.com/ggerganov/llama.cpp/pull/270 is the unofficial tracking page for now.  llama.cpp is measuring very well
+compared to the baseline implementations.  Quantization has a small negative impact to quality, but, as you can see, running
+13B at q4_0 beats the 7B f16 model by a significant amount.
+
+All measurements are done against wikitext2 test dataset (https://paperswithcode.com/dataset/wikitext-2), with default options (512 length context).
+Note that the changing the context length will have a significant impact on perplexity (longer context = better perplexity).
+```
+Perplexity - model options
+5.5985 - 13B, q4_0
+5.9565 - 7B, f16
+6.3001 - 7B, q4_1
+6.5949 - 7B, q4_0
+6.5995 - 7B, q4_0, --memory_f16
+```
+
+#### How to run
+
+1. Download/extract: https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip?ref=salesforce-research
+2. Run `./main --perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
+3. Output:
+```
+Calculating perplexity over 655 chunks
+24.43 seconds per pass - ETA 4.45 hours
+[1]4.5970,[2]5.1807,[3]6.0382,...
+```
+And after 4.45 hours, you will have the final perplexity.
 
 ### Android
 
@@ -193,21 +290,53 @@ Finally, copy the `llama` binary and the model files to your device storage. Her
 
 https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b050-55b0b3b9274c.mp4
 
+### Docker
+
+#### Prerequisites
+* Docker must be installed and running on your system.
+* Create a folder to store big models & intermediate files (in ex. im using /llama/models)
+
+#### Images
+We have two Docker images available for this project:
+
+1. `ghcr.io/ggerganov/llama.cpp:full`: This image includes both the main executable file and the tools to convert LLaMA models into ggml and convert into 4-bit quantization.
+2. `ghcr.io/ggerganov/llama.cpp:light`: This image only includes the main executable file.
+
+#### Usage
+
+The easiest way to download the models, convert them to ggml and optimize them is with the --all-in-one command which includes the full docker image.
+
+ ```bash
+docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:full --all-in-one "/models/" 7B
+```
+
+On complete, you are ready to play!
+
+```bash
+docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:full --run -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
+```
+
+or with light image:
+
+```bash
+docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
+```
 
 ## Limitations
 
-- We don't know yet how much the quantization affects the quality of the generated text
 - Probably the token sampling can be improved
 - The Accelerate framework is actually currently unused since I found that for tensor shapes typical for the Decoder,
-  there is no benefit compared to the ARM_NEON intrinsics implementation. Of course, it's possible that I simlpy don't
+  there is no benefit compared to the ARM_NEON intrinsics implementation. Of course, it's possible that I simply don't
   know how to utilize it properly. But in any case, you can even disable it with `LLAMA_NO_ACCELERATE=1 make` and the
   performance will be the same, since no BLAS calls are invoked by the current implementation
 
 ### Contributing
 
 - Contributors can open PRs
-- Collaborators can push to branches in the `llama.cpp` repo
+- Collaborators can push to branches in the `llama.cpp` repo and merge PRs into the `master` branch
 - Collaborators will be invited based on contributions
+- Any help with managing issues and PRs is very appreciated!
+- Make sure to read this: [Inference at the edge](https://github.com/ggerganov/llama.cpp/discussions/205)
 
 ### Coding guidelines
 
@@ -217,7 +346,3 @@ https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b0
 - There are no strict rules for the code style, but try to follow the patterns in the code (indentation, spaces, etc.). Vertical alignment makes things more readable and easier to batch edit
 - Clean-up any trailing whitespaces, use 4 spaces indentation, brackets on same line, `void * ptr`, `int & a`
 - See [good first issues](https://github.com/ggerganov/llama.cpp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for tasks suitable for first contributions
-
-### Misc
-
-- Practice your C++ typing skills: https://typing-battles.ggerganov.com
