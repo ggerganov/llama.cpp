@@ -12,7 +12,7 @@ This combines the [LLaMA foundation model](https://github.com/facebookresearch/l
 
 Download the zip file corresponding to your operating system from the [latest release](https://github.com/antimatter15/alpaca.cpp/releases/latest). On Windows, download `alpaca-win.zip`, on Mac (both Intel or ARM) download `alpaca-mac.zip`, and on Linux (x64) download `alpaca-linux.zip`. 
 
-Download [ggml-alpaca-7b-q4.bin](https://huggingface.co/Sosaka/Alpaca-native-4bit-ggml/blob/main/ggml-alpaca-7b-q4.bin) and place it in the same folder as the `chat` executable in the zip file. There are several options: 
+Download `ggml-alpaca-7b-q4.bin` and place it in the same folder as the `chat` executable in the zip file. There are several options: 
 
 Once you've downloaded the model weights and placed them into the same directory as the `chat` or `chat.exe` executable, run:
 
@@ -21,31 +21,6 @@ Once you've downloaded the model weights and placed them into the same directory
 ```
 
 The weights are based on the published fine-tunes from `alpaca-lora`, converted back into a pytorch checkpoint with a [modified script](https://github.com/tloen/alpaca-lora/pull/19) and then quantized with llama.cpp the regular way. 
-
-## Getting Started (13B)
-
-If you have more than 10GB of RAM, you can use the higher quality 13B `ggml-alpaca-13b-q4.bin` model. 
-
-Once you've downloaded the weights, you can run the following command to enter chat
-
-```
-./chat -m ggml-alpaca-13b-q4.bin
-```
-
-## Getting Started (30B)
-
-If you have more than 32GB of RAM (and a beefy CPU), you can use the higher quality 30B `alpaca-30B-ggml.bin` model. To download the weights, you can use
-
-```
-git clone https://huggingface.co/Pi3141/alpaca-30B-ggml
-```
-
-Once you've downloaded the weights, you can run the following command to enter chat
-
-```
-./chat -m ggml-model-q4_0.bin
-```
-
 
 ## Building from Source (MacOS/Linux)
 
