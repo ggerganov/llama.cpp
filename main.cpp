@@ -174,7 +174,7 @@ void win32_console_init(void) {
         // Set console output codepage to UTF8
         SetConsoleOutputCP(65001); // CP_UTF8
     }
-    void* hConIn = GetStdHandle((unsigned long)-10); // STD_INPUT_HANDLE (-11)
+    void* hConIn = GetStdHandle((unsigned long)-10); // STD_INPUT_HANDLE (-10)
     if (hConIn && hConIn != (void*)-1 && GetConsoleMode(hConIn, &dwMode)) {
         // Set console input codepage to UTF8
         SetConsoleCP(65001); // CP_UTF8
