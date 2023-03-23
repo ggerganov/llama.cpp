@@ -147,13 +147,13 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             gpt_print_usage(argc, argv, params);
-            exit(0);
+            exit(1);
         }
     }
     if (invalid_param) {
         fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
         gpt_print_usage(argc, argv, params);
-        exit(0);
+        exit(1);
     }
 
     return true;
