@@ -337,6 +337,7 @@ docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models
 - Collaborators will be invited based on contributions
 - Any help with managing issues and PRs is very appreciated!
 - Make sure to read this: [Inference at the edge](https://github.com/ggerganov/llama.cpp/discussions/205)
+- A bit of backstory for those who are interested interested: [Changelog podcast](https://changelog.com/podcast/532)
 
 ### Coding guidelines
 
