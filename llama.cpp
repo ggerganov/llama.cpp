@@ -101,6 +101,8 @@ struct llama_context {
 
     // decode output (2-dimensional array: [n_tokens][n_vocab])
     std::vector<float> logits;
+    // input embedding (1-dimensional array: [n_embd])
+    std::vector<float> embedding;
     bool logits_all = false;
 };
 
@@ -112,6 +114,7 @@ struct llama_context_params llama_context_default_params() {
         /*.f16_kv     =*/ false,
         /*.logits_all =*/ false,
         /*.vocab_only =*/ false,
+        /*.embedding =*/ false,
     };
 
     return result;
@@ -127,7 +130,8 @@ static bool llama_model_load(
         int n_ctx,
         int n_parts,
         ggml_type memory_type,
-        bool vocab_only) {
+        bool vocab_only,
+        bool embedding) {
     fprintf(stderr, "%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
     const int64_t t_start_us = ggml_time_us();
@@ -593,6 +597,10 @@ static bool llama_model_load(
     }
 
     lctx.logits.reserve(lctx.model.hparams.n_ctx);
+
+    if (embedding){
+        lctx.embedding.reserve(lctx.model.hparams.n_embd);
+    }
 
     lctx.t_load_us = ggml_time_us() - t_start_us;
 
@@ -1433,7 +1441,7 @@ struct llama_context * llama_init_from_file(
 
     ggml_type type_memory = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
-    if (!llama_model_load(path_model, *ctx, params.n_ctx, params.n_parts, type_memory, params.vocab_only)) {
+    if (!llama_model_load(path_model, *ctx, params.n_ctx, params.n_parts, type_memory, params.vocab_only, params.embedding)) {
         fprintf(stderr, "%s: failed to load model\n", __func__);
         delete ctx;
         return nullptr;
@@ -1506,6 +1514,10 @@ int llama_n_ctx(struct llama_context * ctx) {
 
 float * llama_get_logits(struct llama_context * ctx) {
     return ctx->logits.data();
+}
+
+float * llama_get_embeddings(struct llama_context * ctx) {
+    return ctx->embedding.data();
 }
 
 const char * llama_token_to_str(struct llama_context * ctx, llama_token token) {
