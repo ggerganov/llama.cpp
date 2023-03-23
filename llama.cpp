@@ -97,7 +97,9 @@ struct llama_context {
     llama_model model;
     llama_vocab vocab;
 
-    size_t mem_per_token = 0;
+    // used to estimate memory requirements experimentally
+    size_t mem_at_token0 = 0; // first time
+    size_t mem_at_token1 = 0; // second time
 
     // decode output (2-dimensional array: [n_tokens][n_vocab])
     std::vector<float> logits;
@@ -626,14 +628,24 @@ static bool llama_eval_internal(
     const int n_vocab = hparams.n_vocab;
     const int n_rot   = hparams.n_embd/hparams.n_head;
 
-    auto & mem_per_token = lctx.mem_per_token;
+    auto & mem_at_token0 = lctx.mem_at_token0;
+    auto & mem_at_token1 = lctx.mem_at_token1;
 
     // TODO: fix this hardcoded size
-    static size_t buf_size = 512u*1024*1024;
+    static size_t buf_size = size_t(n_ctx)*1024*1024;
     static void * buf = malloc(buf_size);
 
-    if (mem_per_token > 0 && mem_per_token*N > buf_size) {
-        const size_t buf_size_new = 1.3*(mem_per_token*N); // add 30% to account for ggml object overhead
+    const size_t C0 = mem_at_token0; // ~base
+    const int64_t C1 = mem_at_token1 - mem_at_token0; // delta 0,1
+
+    // TODO(Green-Sky): determine relation to N (batch size)
+    //const size_t size_estimate = C0 + size_t(C1 * (n_past + N));
+    const size_t size_estimate = C0 + C1 * n_past;
+
+    //fprintf(stderr, "\n%s: size_estimate %zu bytes (%zu | %zu)\n", __func__, size_estimate, mem_per_token0, mem_per_token1);
+
+    if (mem_at_token0 > 0 && mem_at_token1 > 0 && size_estimate > buf_size) {
+        const size_t buf_size_new = 1.1*size_estimate; // just grow by 10%
         //fprintf(stderr, "\n%s: reallocating buffer from %zu to %zu bytes\n", __func__, buf_size, buf_size_new);
 
         // reallocate
@@ -830,10 +842,13 @@ static bool llama_eval_internal(
         memcpy(logits_out.data(), (float *) ggml_get_data(inpL) + (n_vocab*(N-1)), sizeof(float)*n_vocab);
     }
 
-    if (mem_per_token == 0) {
-        mem_per_token = ggml_used_mem(ctx0)/N;
+    if (mem_at_token0 == 0) {
+        mem_at_token0 = ggml_used_mem(ctx0);
+    } else if (mem_at_token1 == 0) {
+        mem_at_token1 = ggml_used_mem(ctx0);
     }
     //fprintf(stderr, "used_mem = %zu\n", ggml_used_mem(ctx0));
+    //fprintf(stderr, "estimate/used_mem = %f\n", double(size_estimate) / ggml_used_mem(ctx0));
 
     ggml_free(ctx0);
 

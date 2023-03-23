@@ -216,10 +216,16 @@ int main(int argc, char ** argv) {
     }
 
     // determine the required inference memory per token:
+    // (fill in mem_at_token0 and mem_at_token1)
     // TODO: better way to do that
+    // TODO(Green-Sky): move to internal and detect first time usage
     {
-        const std::vector<llama_token> tmp = { 0, 1, 2, 3 };
-        llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads);
+        // we make 2 evals, of batchsize to take 2 measurements, to determine base and growth
+        std::vector<llama_token> tmp(params.n_batch*2, 2);
+        tmp[0] = llama_token_bos();
+
+        llama_eval(ctx,                tmp.data(), params.n_batch,              0, params.n_threads);
+        llama_eval(ctx, tmp.data()+params.n_batch, params.n_batch, params.n_batch, params.n_threads);
     }
 
     if (params.perplexity) {
