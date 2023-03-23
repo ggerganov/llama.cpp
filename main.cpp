@@ -254,6 +254,9 @@ int main(int argc, char ** argv) {
         params.interactive = true;
     }
 
+    //determine newline token
+    auto llama_token_newline = ::llama_tokenize(ctx, "\n", false);
+
     fprintf(stderr, "\n");
     fprintf(stderr, "%s: prompt: '%s'\n", __func__, params.prompt.c_str());
     fprintf(stderr, "%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
@@ -357,7 +360,7 @@ int main(int argc, char ** argv) {
 
             // replace end of text token with newline token when in interactive mode
             if (id == llama_token_eos() && params.interactive) {
-                id = llama_token_newline();
+                id = llama_token_newline.front();
                 if (params.antiprompt.size() != 0) {
                     // tokenize and inject first reverse prompt
                     first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false);
