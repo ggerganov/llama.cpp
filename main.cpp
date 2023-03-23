@@ -219,7 +219,7 @@ int main(int argc, char ** argv) {
     // (fill in mem_at_token0 and mem_at_token1)
     // TODO: better way to do that
     // TODO(Green-Sky): move to internal and detect first time usage
-    {
+    if (!params.perplexity) { // perplexity does not grow over time
         // we make 2 evals, of batchsize to take 2 measurements, to determine base and growth
         std::vector<llama_token> tmp(params.n_batch*2, 2);
         tmp[0] = llama_token_bos();

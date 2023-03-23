@@ -632,7 +632,7 @@ static bool llama_eval_internal(
     auto & mem_at_token1 = lctx.mem_at_token1;
 
     // TODO: fix this hardcoded size
-    static size_t buf_size = size_t(n_ctx)*1024*1024;
+    static size_t buf_size = size_t(n_ctx)*size_t(N)*128*1024;
     static void * buf = malloc(buf_size);
 
     const size_t C0 = mem_at_token0; // ~base
