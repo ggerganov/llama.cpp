@@ -592,7 +592,7 @@ static bool llama_model_load(
                 //fprintf(stderr, "%42s - [%5d, %5d], type = %6s, %6.2f MB\n", name.data(), ne[0], ne[1], ftype == 0 ? "float" : "f16", ggml_nbytes(tensor)/1024.0/1024.0);
                 if (++n_tensors % 8 == 0) {
                     if (progress_callback) {
-                        double current_progress = (double(i) + (double(fin.tellg()) / double(file_size))) / double(n_parts);
+                        double current_progress = (double(i) + (double(size_t(fin.tellg()) - file_offset) / double(file_size - file_offset))) / double(n_parts);
                         progress_callback(current_progress, progress_callback_user_data);
                     }
                     fprintf(stderr, ".");
