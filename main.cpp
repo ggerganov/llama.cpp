@@ -98,7 +98,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
         int end = start + params.n_ctx - 1;
         std::vector<llama_token> embd(tokens.begin() + start, tokens.begin() + end);
         auto start_t = std::chrono::high_resolution_clock::now();
-        if (llama_eval(ctx, embd.data(), embd.size(), 0, params.n_threads, false)) {
+        if (llama_eval(ctx, embd.data(), embd.size(), 0, params.n_threads)) {
             fprintf(stderr, "%s : failed to eval\n", __func__);
             return;
         }
@@ -220,7 +220,7 @@ int main(int argc, char ** argv) {
     // TODO: better way to do that
     {
         const std::vector<llama_token> tmp = { 0, 1, 2, 3 };
-        llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads, false);
+        llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads);
     }
 
     if (params.perplexity) {
@@ -302,7 +302,7 @@ int main(int argc, char ** argv) {
 #endif
                " - Press Return to return control to LLaMa.\n"
                " - If you want to submit another line, end your input in '\\'.\n\n");
-        is_interacting = params.interactive_start;
+        is_interacting = params.interactive_start || params.instruct;
     }
 
     int input_consumed = 0;
@@ -325,23 +325,29 @@ int main(int argc, char ** argv) {
 
     if (params.embedding){
         embd = embd_inp;
+
         if (embd.size() > 0) {
-            if (llama_eval(ctx, embd.data(), embd.size(), n_past, params.n_threads, params.embedding)) {
+            if (llama_eval(ctx, embd.data(), embd.size(), n_past, params.n_threads)) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return 1;
             }
         }
 
+        const auto embeddings = llama_get_embeddings(ctx);
+
+        // TODO: print / use the embeddings
+
         if (params.use_color) {
             printf(ANSI_COLOR_RESET);
         }
+
         return 0;
     }
 
     while (remaining_tokens > 0 || params.interactive) {
         // predict
         if (embd.size() > 0) {
-            if (llama_eval(ctx, embd.data(), embd.size(), n_past, params.n_threads, params.embedding)) {
+            if (llama_eval(ctx, embd.data(), embd.size(), n_past, params.n_threads)) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return 1;
             }
