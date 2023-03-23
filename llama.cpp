@@ -2,8 +2,6 @@
 
 #include "ggml.h"
 
-#include <sys/stat.h>
-
 #include <cinttypes>
 #include <fstream>
 #include <random>
@@ -417,12 +415,11 @@ static bool llama_model_load(
 
         fin = std::ifstream(fname_part, std::ios::binary);
         fin.rdbuf()->pubsetbuf(f_buf.data(), f_buf.size());
-        fin.seekg(file_offset);
 
-        // stat the file for file size
-        struct stat st;
-        stat(fname_part.c_str(), &st);
-        const size_t file_size = st.st_size;
+        fin.seekg(0, fin.end);
+        const size_t file_size = fin.tellg();
+
+        fin.seekg(file_offset);
 
         // load weights
         {
