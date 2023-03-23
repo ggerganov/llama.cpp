@@ -220,7 +220,7 @@ cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
 ### Obtaining and verifying the Facebook LLaMA original model and Stanford Alpaca model data
 
 * The LLaMA models are officially distributed by Facebook and will never be provided through this repository. See this [pull request in Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to obtain access to the model data.
-* Please verify the sha256 checksums of all of your `consolidated*.pth` and corresponding converted `ggml-model-*.bin` model files to confirm that you have the correct model data files before creating an issue relating to your model files.
+* Please verify the sha256 checksums of all downloaded model files to confirm that you have the correct model data files before creating an issue relating to your model files.
 * The following command will verify if you have all possible latest files in your self-installed `./models` subdirectory:
 
   `sha256sum --ignore-missing -c SHA256SUMS` on Linux
