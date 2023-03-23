@@ -7,9 +7,10 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 ![Preview](preview.png)
 
 ## Usage
+- [Download the latest release here](https://github.com/LostRuins/llamacpp-for-kobold/releases/latest) or clone the repo.
 - Windows binaries are provided in the form of **llamacpp.dll** but if you feel worried go ahead and rebuild it yourself.
 - Weights are not included, you can use the llama.cpp quantize.exe to generate them from your official weight files (or download them from...places).
-- To run, simply clone the repo and run `llama_for_kobold.py [ggml_quant_model.bin] [port]`, and then connect with Kobold or Kobold Lite. 
+- To run, execute the script providing the model as a parameter `llama_for_kobold.py [ggml_quant_model.bin] [port]`, and then connect with Kobold or Kobold Lite. 
 - By default, you can connect to http://localhost:5001 (you can also use https://lite.koboldai.net/?local=1&port=5001).
 
 ## Considerations
