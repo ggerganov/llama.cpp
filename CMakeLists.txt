@@ -215,6 +215,7 @@ add_library(utils OBJECT
             utils.cpp
             utils.h)
 
+set_target_properties(utils PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(utils PUBLIC .)
 target_compile_features(utils PUBLIC cxx_std_11) # don't bump
 target_link_libraries(utils PRIVATE ${LLAMA_EXTRA_LIBS})
@@ -223,6 +224,7 @@ add_library(ggml OBJECT
             ggml.c
             ggml.h)
 
+set_target_properties(ggml PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(ggml PUBLIC .)
 target_compile_features(ggml PUBLIC c_std_11) # don't bump
 target_link_libraries(ggml PRIVATE Threads::Threads ${LLAMA_EXTRA_LIBS})
@@ -234,6 +236,9 @@ add_library(llama
 target_include_directories(llama PUBLIC .)
 target_compile_features(llama PUBLIC cxx_std_11) # don't bump
 target_link_libraries(llama PRIVATE utils ggml ${LLAMA_EXTRA_LIBS})
+if (BUILD_SHARED_LIBS)
+    target_compile_definitions(llama PRIVATE LLAMA_SHARED LLAMA_BUILD)
+endif()
 
 #
 # Executables
