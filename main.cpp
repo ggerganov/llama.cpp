@@ -258,7 +258,7 @@ int main(int argc, char ** argv) {
         params.interactive = true;
     }
 
-    //determine newline token
+    // determine newline token
     auto llama_token_newline = ::llama_tokenize(ctx, "\n", false);
 
     fprintf(stderr, "\n");
