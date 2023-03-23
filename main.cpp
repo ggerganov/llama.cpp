@@ -367,7 +367,7 @@ int main(int argc, char ** argv) {
                 id = llama_token_newline.front();
                 if (params.antiprompt.size() != 0) {
                     // tokenize and inject first reverse prompt
-                    first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false);
+                    const auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false);
                     embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
                 }
             }
