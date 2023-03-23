@@ -108,12 +108,14 @@ struct llama_context {
 
 struct llama_context_params llama_context_default_params() {
     struct llama_context_params result = {
-        /*.n_ctx      =*/ 512,
-        /*.n_parts    =*/ -1,
-        /*.seed       =*/ 0,
-        /*.f16_kv     =*/ false,
-        /*.logits_all =*/ false,
-        /*.vocab_only =*/ false,
+        /*.n_ctx             =*/ 512,
+        /*.n_parts           =*/ -1,
+        /*.seed              =*/ 0,
+        /*.f16_kv            =*/ false,
+        /*.logits_all        =*/ false,
+        /*.vocab_only        =*/ false,
+        /*.progress_callback =*/ nullptr,
+        /*.progress_ctx      =*/ nullptr,
     };
 
     return result;
@@ -130,7 +132,8 @@ static bool llama_model_load(
         int n_parts,
         ggml_type memory_type,
         bool vocab_only,
-        llama_progress_handler progress) {
+        llama_progress_handler progress_callback,
+        void *progress_ctx) {
     fprintf(stderr, "%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
     const int64_t t_start_us = ggml_time_us();
@@ -397,8 +400,8 @@ static bool llama_model_load(
 
     std::vector<uint8_t> tmp;
 
-    if (progress.handler) {
-        progress.handler(0, progress.ctx);
+    if (progress_callback) {
+        progress_callback(0.0, progress_ctx);
     }
 
     for (int i = 0; i < n_parts; ++i) {
@@ -591,9 +594,9 @@ static bool llama_model_load(
 
                 //fprintf(stderr, "%42s - [%5d, %5d], type = %6s, %6.2f MB\n", name.data(), ne[0], ne[1], ftype == 0 ? "float" : "f16", ggml_nbytes(tensor)/1024.0/1024.0);
                 if (++n_tensors % 8 == 0) {
-                    if (progress.handler) {
+                    if (progress_callback) {
                         double current_progress = (double(i) + (double(fin.tellg()) / double(file_size))) / double(n_parts);
-                        progress.handler(current_progress, progress.ctx);
+                        progress_callback(current_progress, progress_ctx);
                     }
                     fprintf(stderr, ".");
                     fflush(stderr);
@@ -612,8 +615,8 @@ static bool llama_model_load(
 
     lctx.t_load_us = ggml_time_us() - t_start_us;
 
-    if (progress.handler) {
-        progress.handler(1, progress.ctx);
+    if (progress_callback) {
+        progress_callback(1.0, progress_ctx);
     }
 
     return true;
@@ -1414,8 +1417,7 @@ bool llama_model_quantize_internal(const std::string & fname_inp, const std::str
 
 struct llama_context * llama_init_from_file(
                              const char * path_model,
-            struct llama_context_params   params,
-                 llama_progress_handler   progress) {
+            struct llama_context_params   params) {
     ggml_time_init();
 
     llama_context * ctx = new llama_context;
@@ -1429,7 +1431,7 @@ struct llama_context * llama_init_from_file(
 
     ggml_type type_memory = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
-    if (!llama_model_load(path_model, *ctx, params.n_ctx, params.n_parts, type_memory, params.vocab_only, progress)) {
+    if (!llama_model_load(path_model, *ctx, params.n_ctx, params.n_parts, type_memory, params.vocab_only, params.progress_callback, params.progress_ctx)) {
         fprintf(stderr, "%s: failed to load model\n", __func__);
         delete ctx;
         return nullptr;

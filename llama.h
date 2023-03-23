@@ -45,6 +45,8 @@ extern "C" {
 
     } llama_token_data;
 
+    typedef void (*llama_progress_handler)(double progress, void *ctx);
+
     struct llama_context_params {
         int n_ctx;   // text context
         int n_parts; // -1 for default
@@ -53,11 +55,9 @@ extern "C" {
         bool f16_kv;     // use fp16 for KV cache
         bool logits_all; // the llama_eval() call computes all logits, not just the last one
         bool vocab_only; // only load the vocabulary, no weights
-    };
 
-    struct llama_progress_handler {
-        void (*handler)(double progress, void *ctx);
-        void *ctx;
+        llama_progress_handler   progress_callback; // called with a progress value between 0 and 1, pass NULL to disable
+                          void * progress_ctx;      // context pointer passed to the progress callback
     };
 
     LLAMA_API struct llama_context_params llama_context_default_params();
@@ -67,8 +67,7 @@ extern "C" {
     // Return NULL on failure
     LLAMA_API struct llama_context * llama_init_from_file(
                              const char * path_model,
-            struct llama_context_params   params,
-          struct llama_progress_handler   progress);
+            struct llama_context_params   params);
 
     // Frees all allocated memory
     LLAMA_API void llama_free(struct llama_context * ctx);

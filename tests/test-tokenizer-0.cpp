@@ -32,7 +32,7 @@ int main(int argc, char **argv) {
 
         lparams.vocab_only = true;
 
-        ctx = llama_init_from_file(fname.c_str(), lparams, {NULL, NULL});
+        ctx = llama_init_from_file(fname.c_str(), lparams);
 
         if (ctx == NULL) {
             fprintf(stderr, "%s: error: failed to load vocab '%s'\n", __func__, fname.c_str());
