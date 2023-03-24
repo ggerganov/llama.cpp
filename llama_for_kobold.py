@@ -289,7 +289,7 @@ if __name__ == '__main__':
             mdl_nparts += 1
     modelname = os.path.abspath(sys.argv[1])
     print("Loading model: " + modelname)
-    loadok = load_model(modelname,16,maxctx,mdl_nparts)
+    loadok = load_model(modelname,8,maxctx,mdl_nparts)
     print("Load Model OK: " + str(loadok))
 
     #friendlymodelname = Path(modelname).stem   ### this wont work on local kobold api, so we must hardcode a known HF model name

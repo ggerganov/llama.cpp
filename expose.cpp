@@ -161,25 +161,28 @@ extern "C" {
         std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
         n_past = 0;
 
-        //fast forward the past based on identical tokens, stop once a divergence is noted        
+        //fast forward the past based on identical tokens, stop once a divergence is noted
+        int embd_inp_len = embd_inp.size(); 
         for(int i=0;i<current_context_tokens.size();++i)
         {
-            if(current_context_tokens[i]==embd_inp[0])
+            if(current_context_tokens[i]==embd_inp[i])
             {
-                n_past += 1;
-                embd_inp.erase(embd_inp.begin());
-                last_n_tokens.erase(last_n_tokens.begin());
+                n_past += 1;                
                 last_n_tokens.push_back(current_context_tokens[i]);
             }
             else
             {
                 break;
             }
-            if(embd_inp.size()<=1)
+            if((i+2)>=embd_inp_len)
             {
                 break;
             }
         }
+       
+        last_n_tokens.erase(last_n_tokens.begin(),last_n_tokens.begin()+n_past);
+        embd_inp.erase(embd_inp.begin(),embd_inp.begin()+n_past);
+        
         current_context_tokens.resize(n_past);
 		
  		int remaining_tokens = params.n_predict;
