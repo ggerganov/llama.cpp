@@ -217,11 +217,23 @@ int main(int argc, char ** argv) {
                 params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
     }
 
-    // determine the required inference memory per token:
-    // TODO: better way to do that
-    {
-        const std::vector<llama_token> tmp = { 0, 1, 2, 3 };
-        llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads);
+    // determine the maximum memory usage needed to do inference for the given n_batch and n_predict parameters
+    // uncomment the "used_mem" line in llama.cpp to see the results
+    if (params.mem_test) {
+        {
+            const std::vector<llama_token> tmp(params.n_batch, 0);
+            llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads);
+        }
+
+        {
+            const std::vector<llama_token> tmp = { 0, };
+            llama_eval(ctx, tmp.data(), tmp.size(), params.n_predict - 1, params.n_threads);
+        }
+
+        llama_print_timings(ctx);
+        llama_free(ctx);
+
+        return 0;
     }
 
     if (params.perplexity) {
@@ -508,7 +520,6 @@ int main(int argc, char ** argv) {
 #endif
 
     llama_print_timings(ctx);
-
     llama_free(ctx);
 
     set_console_state(CONSOLE_STATE_DEFAULT);
