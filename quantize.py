@@ -57,6 +57,7 @@ def main():
     # )
 
     args = parser.parse_args()
+    args.models_path = os.path.abspath(args.models_path)
 
     if not os.path.isfile(args.quantize_script_path):
         print(

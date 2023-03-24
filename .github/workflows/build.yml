@@ -41,19 +41,27 @@ jobs:
 
     steps:
       - name: Clone
+        id: checkout
         uses: actions/checkout@v1
 
       - name: Dependencies
+        id: depends
         run: |
           sudo apt-get update
           sudo apt-get install build-essential
 
       - name: Build
+        id: cmake_build
         run: |
           mkdir build
           cd build
           cmake ..
           cmake --build . --config Release
+
+      - name: Test
+        id: cmake_test
+        run: |
+          cd build
           ctest --output-on-failure
 
   macOS-latest-make:
@@ -79,18 +87,26 @@ jobs:
 
     steps:
       - name: Clone
+        id: checkout
         uses: actions/checkout@v1
 
       - name: Dependencies
+        id: depends
         run: |
           brew update
 
       - name: Build
+        id: cmake_build
         run: |
           mkdir build
           cd build
-          cmake ..
+          cmake -DLLAMA_AVX2=OFF ..
           cmake --build . --config Release
+
+      - name: Test
+        id: cmake_test
+        run: |
+          cd build
           ctest --output-on-failure
 
   windows-latest-cmake:
@@ -108,6 +124,11 @@ jobs:
           cd build
           cmake ..
           cmake --build . --config Release
+
+      - name: Test
+        id: cmake_test
+        run: |
+          cd build
           ctest -C Release --output-on-failure
 
       - name: Get commit hash
