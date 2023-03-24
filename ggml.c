@@ -5846,7 +5846,8 @@ static bool ggml_compute_forward_mul_mat_use_blas(
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
               struct ggml_tensor * dst) {
-    UNUSED(src0);
+    const int ne00 = src0->ne[0];
+    const int ne01 = src0->ne[1];
 
     const int ne10 = src1->ne[0];
 
@@ -5856,7 +5857,14 @@ static bool ggml_compute_forward_mul_mat_use_blas(
     // TODO: find the optimal values for these
     if (ggml_is_contiguous(src0) &&
         ggml_is_contiguous(src1) && ((ne0 >= 32 && ne1 >= 32 && ne10 >= 32))) {
-        //printf("BLAS: %d %d %d\n", ne0, ne1, ne10);
+
+        //// disable BLAS for Q4_0 and Q4_1
+        //// looks like there is no benefit and we only waste a lot of memory
+        //if (src0->type == GGML_TYPE_Q4_0 || src0->type == GGML_TYPE_Q4_1) {
+        //    return false;
+        //}
+
+        //printf("BLAS: %d %d %d %d %d\n", ne0, ne1, ne10, ne00, ne01);
         return true;
     }
 
