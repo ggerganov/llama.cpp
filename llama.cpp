@@ -115,6 +115,7 @@ struct llama_context_params llama_context_default_params() {
         /*.f16_kv     =*/ false,
         /*.logits_all =*/ false,
         /*.vocab_only =*/ false,
+        /*.use_mlock  =*/ false,
     };
 
     return result;
@@ -130,7 +131,8 @@ static bool llama_model_load(
         int n_ctx,
         int n_parts,
         ggml_type memory_type,
-        bool vocab_only) {
+        bool vocab_only,
+        bool use_mlock) {
     fprintf(stderr, "%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
     const int64_t t_start_us = ggml_time_us();
@@ -594,6 +596,15 @@ static bool llama_model_load(
 
         fin.close();
     }
+
+    if (use_mlock) {
+        char *err;
+        if (!ggml_mlock(ctx, &err)) {
+            fprintf(stderr, "%s\n", err);
+            free(err);
+            return false;
+        }
+     }
 
     lctx.logits.reserve(lctx.model.hparams.n_ctx);
 
@@ -1406,7 +1417,8 @@ struct llama_context * llama_init_from_file(
 
     ggml_type type_memory = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
-    if (!llama_model_load(path_model, *ctx, params.n_ctx, params.n_parts, type_memory, params.vocab_only)) {
+    if (!llama_model_load(path_model, *ctx, params.n_ctx, params.n_parts, type_memory,
+                          params.vocab_only, params.use_mlock)) {
         fprintf(stderr, "%s: failed to load model\n", __func__);
         delete ctx;
         return nullptr;
