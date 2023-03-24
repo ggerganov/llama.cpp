@@ -776,11 +776,12 @@ static bool llama_model_load(
                 model.n_loaded++;
 
                 // progress
+                if (progress_callback) {
+                    double current_file_progress = double(size_t(fin.tellg()) - file_offset) / double(file_size - file_offset);
+                    double current_progress = (double(i) + current_file_progress) / double(n_parts);
+                    progress_callback(current_progress, progress_callback_user_data);
+                }
                 if (model.n_loaded % 8 == 0) {
-                    if (progress_callback) {
-                        double current_progress = (double(i) + (double(size_t(fin.tellg()) - file_offset) / double(file_size - file_offset))) / double(n_parts);
-                        progress_callback(current_progress, progress_callback_user_data);
-                    }
                     fprintf(stderr, ".");
                     fflush(stderr);
                 }
