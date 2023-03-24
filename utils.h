@@ -46,6 +46,7 @@ struct gpt_params {
     bool instruct          = false; // instruction mode (used for Alpaca models)
     bool ignore_eos        = false; // do not stop generating after eos
     bool perplexity        = false; // compute perplexity over the prompt
+    bool use_mlock         = false; // use mlock to keep model in memory
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);

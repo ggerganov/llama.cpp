@@ -1,3 +1,5 @@
+#include "ggml.h"
+
 #include "utils.h"
 
 #include <cassert>
@@ -127,6 +129,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.instruct = true;
         } else if (arg == "--color") {
             params.use_color = true;
+        } else if (arg == "--mlock") {
+            params.use_mlock = true;
         } else if (arg == "-r" || arg == "--reverse-prompt") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -194,6 +198,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  --n_parts N           number of model parts (default: -1 = determine from dimensions)\n");
     fprintf(stderr, "  -b N, --batch_size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     fprintf(stderr, "  --perplexity          compute perplexity over the prompt\n");
+    if (ggml_mlock_supported()) {
+        fprintf(stderr, "  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
+    }
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
     fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
     fprintf(stderr, "\n");

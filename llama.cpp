@@ -115,6 +115,7 @@ struct llama_context_params llama_context_default_params() {
         /*.f16_kv     =*/ false,
         /*.logits_all =*/ false,
         /*.vocab_only =*/ false,
+        /*.use_mlock  =*/ false,
         /*.embedding  =*/ false,
     };
 
@@ -1428,10 +1429,21 @@ struct llama_context * llama_init_from_file(
 
     ggml_type type_memory = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
-    if (!llama_model_load(path_model, *ctx, params.n_ctx, params.n_parts, type_memory, params.vocab_only)) {
+    if (!llama_model_load(path_model, *ctx, params.n_ctx, params.n_parts, type_memory,
+                          params.vocab_only)) {
         fprintf(stderr, "%s: failed to load model\n", __func__);
         delete ctx;
         return nullptr;
+    }
+    
+    if (params.use_mlock) {
+        char *err;
+        if (!ggml_mlock(ctx->model.ctx, &err)) {
+            fprintf(stderr, "%s\n", err);
+            free(err);
+            delete ctx;
+            return nullptr;
+        }
     }
 
     // reserve memory for context buffers

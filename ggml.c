@@ -1,5 +1,5 @@
-// Defines CLOCK_MONOTONIC on Linux
-#define _POSIX_C_SOURCE 199309L
+// Defines CLOCK_MONOTONIC and asprintf on Linux
+#define _GNU_SOURCE
 
 #include "ggml.h"
 
@@ -10,6 +10,7 @@
 #endif
 
 #include <assert.h>
+#include <errno.h>
 #include <time.h>
 #include <math.h>
 #include <stdlib.h>
@@ -31,7 +32,6 @@
 #else
 // ref: https://github.com/ggerganov/whisper.cpp/issues/168
 #include <windows.h>
-#include <errno.h>
 #endif
 
 typedef volatile LONG atomic_int;
@@ -82,6 +82,17 @@ typedef void* thread_ret_t;
 #ifdef __HAIKU__
 #define static_assert(cond, msg) _Static_assert(cond, msg)
 #endif
+
+#define GGML_MLOCK_SUPPORT 0
+
+#ifdef __has_include
+    #if __has_include(<sys/mman.h>)
+        #undef GGML_MLOCK_SUPPORT
+        #define GGML_MLOCK_SUPPORT 1
+        #include <sys/mman.h>
+    #endif
+#endif
+
 
 /*#define GGML_PERF*/
 #define GGML_DEBUG 0
@@ -2344,6 +2355,7 @@ struct ggml_context {
     size_t mem_size;
     void * mem_buffer;
     bool   mem_buffer_owned;
+    bool   mem_buffer_mlocked;
 
     int n_objects;
 
@@ -2619,15 +2631,18 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
     }
 
     *ctx = (struct ggml_context) {
-        /*.mem_size         =*/ params.mem_size,
-        /*.mem_buffer       =*/ params.mem_buffer ? params.mem_buffer : malloc(params.mem_size),
-        /*.mem_buffer_owned =*/ params.mem_buffer ? false : true,
-        /*.n_objects        =*/ 0,
-        /*.objects_begin    =*/ NULL,
-        /*.objects_end      =*/ NULL,
-        /*.scratch          =*/ { 0, 0, NULL, },
-        /*.scratch_save     =*/ { 0, 0, NULL, },
+        /*.mem_size           =*/ params.mem_size,
+        /*.mem_buffer         =*/ params.mem_buffer ? params.mem_buffer : malloc(params.mem_size),
+        /*.mem_buffer_owned   =*/ params.mem_buffer ? false : true,
+        /*.mem_buffer_mlocked =*/ false,
+        /*.n_objects          =*/ 0,
+        /*.objects_begin      =*/ NULL,
+        /*.objects_end        =*/ NULL,
+        /*.scratch            =*/ { 0, 0, NULL, },
+        /*.scratch_save       =*/ { 0, 0, NULL, },
     };
+
+    GGML_ASSERT(ctx->mem_buffer != NULL); // check for allocation failure
 
     ggml_assert_aligned(ctx->mem_buffer);
 
@@ -2650,6 +2665,14 @@ void ggml_free(struct ggml_context * ctx) {
 
             GGML_PRINT_DEBUG("%s: context %d with %d objects has been freed. memory used = %zu\n",
                     __func__, i, ctx->n_objects, ctx->objects_end->offs + ctx->objects_end->size);
+
+#if GGML_MLOCK_SUPPORT
+            if (ctx->mem_buffer_mlocked) {
+                if (munlock(ctx->mem_buffer, ctx->mem_size)) {
+                    fprintf(stderr, "%s: failed to munlock buffer: %s\n", __func__, strerror(errno));
+                }
+            }
+#endif
 
             if (ctx->mem_buffer_owned) {
                 free(ctx->mem_buffer);
@@ -2678,6 +2701,37 @@ size_t ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch) 
 
     return result;
 }
+
+bool ggml_mlock_supported(void) {
+    return GGML_MLOCK_SUPPORT;
+}
+
+#if GGML_MLOCK_SUPPORT
+#ifdef __APPLE__
+    #define MLOCK_SUGGESTION "Try increasing the sysctl values 'vm.user_wire_limit' and 'vm.global_user_wire_limit' and/or\n" \
+                             "decreasing 'vm.global_no_user_wire_amount'.  Also try increasing RLIMIT_MLOCK (ulimit -l)."
+#else
+    #define MLOCK_SUGGESTION "Try increasing RLIMIT_MLOCK (ulimit -l)."
+#endif
+bool ggml_mlock(struct ggml_context * ctx, char ** err_p) {
+    if (ctx->mem_buffer_mlocked) {
+        return true;
+    }
+    if (mlock(ctx->mem_buffer, ctx->mem_size)) {
+        int ret = asprintf(err_p, "failed to mlock %zu-byte buffer: %s\n" MLOCK_SUGGESTION,
+                           ctx->mem_size, strerror(errno));
+        GGML_ASSERT(ret >= 0);
+        return false;
+    }
+    ctx->mem_buffer_mlocked = true;
+    return true;
+}
+#else // GGML_MLOCK_SUPPORT
+bool ggml_mlock(struct ggml_context * ctx, char ** err_p) {
+    *err_p = strdup("can't mlock because it's not supported on this system");
+    return false;
+}
+#endif // GGML_MLOCK_SUPPORT
 
 ////////////////////////////////////////////////////////////////////////////////
 
