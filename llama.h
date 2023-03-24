@@ -53,6 +53,8 @@ extern "C" {
         bool f16_kv;     // use fp16 for KV cache
         bool logits_all; // the llama_eval() call computes all logits, not just the last one
         bool vocab_only; // only load the vocabulary, no weights
+        bool use_mlock;  // force system to keep model in RAM
+        bool embedding;  // embedding mode only
     };
 
     LLAMA_API struct llama_context_params llama_context_default_params();
@@ -107,6 +109,10 @@ extern "C" {
     // Rows: n_tokens
     // Cols: n_vocab
     LLAMA_API float * llama_get_logits(struct llama_context * ctx);
+
+    // Get the embeddings for the input
+    // shape: [n_embd] (1-dimensional)
+    LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 
     // Token Id -> String. Uses the vocabulary in the provided context
     LLAMA_API const char * llama_token_to_str(struct llama_context * ctx, llama_token token);

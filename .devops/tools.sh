@@ -16,11 +16,7 @@ elif [[ $arg1 == '--quantize' || $arg1 == '-q' ]]; then
     ./quantize $arg2
 elif [[ $arg1 == '--run' || $arg1 == '-r' ]]; then
     ./main $arg2
-elif [[ $arg1 == '--download' || $arg1 == '-d' ]]; then
-    python3 ./download-pth.py $arg2
 elif [[ $arg1 == '--all-in-one' || $arg1 == '-a' ]]; then
-    echo "Downloading model..."
-    python3 ./download-pth.py "$1" "$2"
     echo "Converting PTH to GGML..."
     for i in `ls $1/$2/ggml-model-f16.bin*`; do
         if [ -f "${i/f16/q4_0}" ]; then
@@ -39,8 +35,6 @@ else
     echo "              ex: \"/models/7B/\" 1"
     echo "  --quantize (-q): Optimize with quantization process ggml"
     echo "              ex: \"/models/7B/ggml-model-f16.bin\" \"/models/7B/ggml-model-q4_0.bin\" 2"
-    echo "  --download (-d): Download original llama model from CDN: https://agi.gpt4.org/llama/"
-    echo "              ex: \"/models/\" 7B"
-    echo "  --all-in-one (-a): Execute --download, --convert & --quantize"
+    echo "  --all-in-one (-a): Execute --convert & --quantize"
     echo "              ex: \"/models/\" 7B"
 fi

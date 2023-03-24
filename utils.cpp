@@ -1,3 +1,5 @@
+#include "ggml.h"
+
 #include "utils.h"
 
 #include <cassert>
@@ -26,42 +28,101 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         params.n_threads = std::max(1, (int32_t) std::thread::hardware_concurrency());
     }
 
+    bool invalid_param = false;
+    std::string arg;
     for (int i = 1; i < argc; i++) {
-        std::string arg = argv[i];
+        arg = argv[i];
 
         if (arg == "-s" || arg == "--seed") {
-            params.seed = std::stoi(argv[++i]);
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.seed = std::stoi(argv[i]);
         } else if (arg == "-t" || arg == "--threads") {
-            params.n_threads = std::stoi(argv[++i]);
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_threads = std::stoi(argv[i]);
         } else if (arg == "-p" || arg == "--prompt") {
-            params.prompt = argv[++i];
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.prompt = argv[i];
         } else if (arg == "-f" || arg == "--file") {
-            std::ifstream file(argv[++i]);
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            std::ifstream file(argv[i]);
             std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(params.prompt));
             if (params.prompt.back() == '\n') {
                 params.prompt.pop_back();
             }
         } else if (arg == "-n" || arg == "--n_predict") {
-            params.n_predict = std::stoi(argv[++i]);
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_predict = std::stoi(argv[i]);
         } else if (arg == "--top_k") {
-            params.top_k = std::stoi(argv[++i]);
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.top_k = std::stoi(argv[i]);
         } else if (arg == "-c" || arg == "--ctx_size") {
-            params.n_ctx = std::stoi(argv[++i]);
-        } else if (arg == "--memory_f16") {
-            params.memory_f16 = true;
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_ctx = std::stoi(argv[i]);
+        } else if (arg == "--memory_f32") {
+            params.memory_f16 = false;
         } else if (arg == "--top_p") {
-            params.top_p = std::stof(argv[++i]);
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.top_p = std::stof(argv[i]);
         } else if (arg == "--temp") {
-            params.temp = std::stof(argv[++i]);
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.temp = std::stof(argv[i]);
         } else if (arg == "--repeat_last_n") {
-            params.repeat_last_n = std::stoi(argv[++i]);
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.repeat_last_n = std::stoi(argv[i]);
         } else if (arg == "--repeat_penalty") {
-            params.repeat_penalty = std::stof(argv[++i]);
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.repeat_penalty = std::stof(argv[i]);
         } else if (arg == "-b" || arg == "--batch_size") {
-            params.n_batch = std::stoi(argv[++i]);
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_batch = std::stoi(argv[i]);
+            params.n_batch = std::min(512, params.n_batch);
         } else if (arg == "-m" || arg == "--model") {
-            params.model = argv[++i];
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.model = argv[i];
         } else if (arg == "-i" || arg == "--interactive") {
+            params.interactive = true;
+        } else if (arg == "--embedding") {
+            params.embedding = true;
+        } else if (arg == "--interactive-start") {
             params.interactive = true;
         } else if (arg == "--interactive-first") {
             params.interactive_start = true;
@@ -69,14 +130,26 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.instruct = true;
         } else if (arg == "--color") {
             params.use_color = true;
+        } else if (arg == "--mlock") {
+            params.use_mlock = true;
+        } else if (arg == "--mtest") {
+            params.mem_test = true;
         } else if (arg == "-r" || arg == "--reverse-prompt") {
-            params.antiprompt.push_back(argv[++i]);
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.antiprompt.push_back(argv[i]);
         } else if (arg == "--perplexity") {
             params.perplexity = true;
         } else if (arg == "--ignore-eos") {
             params.ignore_eos = true;
         } else if (arg == "--n_parts") {
-            params.n_parts = std::stoi(argv[++i]);
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_parts = std::stoi(argv[i]);
         } else if (arg == "-h" || arg == "--help") {
             gpt_print_usage(argc, argv, params);
             exit(0);
@@ -85,8 +158,13 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             gpt_print_usage(argc, argv, params);
-            exit(0);
+            exit(1);
         }
+    }
+    if (invalid_param) {
+        fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
+        gpt_print_usage(argc, argv, params);
+        exit(1);
     }
 
     return true;
@@ -118,11 +196,15 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  --repeat_penalty N    penalize repeat sequence of tokens (default: %.1f)\n", params.repeat_penalty);
     fprintf(stderr, "  -c N, --ctx_size N    size of the prompt context (default: %d)\n", params.n_ctx);
     fprintf(stderr, "  --ignore-eos          ignore end of stream token and continue generating\n");
-    fprintf(stderr, "  --memory_f16          use f16 instead of f32 for memory key+value\n");
+    fprintf(stderr, "  --memory_f32          use f32 instead of f16 for memory key+value\n");
     fprintf(stderr, "  --temp N              temperature (default: %.1f)\n", params.temp);
     fprintf(stderr, "  --n_parts N           number of model parts (default: -1 = determine from dimensions)\n");
     fprintf(stderr, "  -b N, --batch_size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     fprintf(stderr, "  --perplexity          compute perplexity over the prompt\n");
+    if (ggml_mlock_supported()) {
+        fprintf(stderr, "  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
+    }
+    fprintf(stderr, "  --mtest               compute maximum memory usage\n");
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
     fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
     fprintf(stderr, "\n");
