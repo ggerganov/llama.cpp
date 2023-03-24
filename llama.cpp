@@ -44,7 +44,7 @@ enum e_model {
 static const size_t MB = 1024*1024;
 
 // computed for n_ctx == 2048
-// TODO: dynamically determine thess sizes
+// TODO: dynamically determine these sizes
 //       needs modifications in ggml
 
 static const std::map<e_model, size_t> MEM_REQ_SCRATCH0 = {
@@ -69,11 +69,13 @@ static const std::map<e_model, size_t> MEM_REQ_KV_SELF = {
     { MODEL_65B,  5120ull*MB },
 };
 
+// this is mostly needed for temporary mul_mat buffers to dequantize the data
+// not actually needed if BLAS is disabled
 static const std::map<e_model, size_t> MEM_REQ_EVAL = {
-    { MODEL_7B,   128ull*MB },
-    { MODEL_13B,  128ull*MB },
-    { MODEL_30B,  128ull*MB },
-    { MODEL_65B,  128ull*MB },
+    { MODEL_7B,   768ull*MB },
+    { MODEL_13B, 1024ull*MB },
+    { MODEL_30B, 1280ull*MB },
+    { MODEL_65B, 1536ull*MB },
 };
 
 // default hparams (LLaMA 7B)
@@ -1034,7 +1036,7 @@ static bool llama_eval_internal(
     }
 
 #if 0
-    printf("\n%s: used_mem = %.3f MB, scratch -- %.3f MB, %.3f MB %.3f MB %.3f %.3f %.3f MB\n", __func__,
+    printf("\n%s: used_mem = %.3f MB, scratch -- %.3f MB %.3f MB\n", __func__,
             ggml_used_mem(ctx0)/1024.0/1024.0,
             lctx.get_buf_max_mem(0)/1024.0/1024.0,
             lctx.get_buf_max_mem(1)/1024.0/1024.0);
