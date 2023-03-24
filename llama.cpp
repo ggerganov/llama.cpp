@@ -1430,7 +1430,7 @@ struct llama_context * llama_init_from_file(
     ggml_type type_memory = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
     if (!llama_model_load(path_model, *ctx, params.n_ctx, params.n_parts, type_memory,
-                          params.vocab_only, params.use_mlock)) {
+                          params.vocab_only)) {
         fprintf(stderr, "%s: failed to load model\n", __func__);
         delete ctx;
         return nullptr;
