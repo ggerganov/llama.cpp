@@ -25,3 +25,5 @@ compile_commands.json
 
 .envrc
 .direnv/
+
+dist/
