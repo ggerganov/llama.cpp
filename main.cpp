@@ -387,7 +387,7 @@ int main(int argc, char ** argv) {
             }
 
             // replace end of text token with newline token when in interactive mode
-            if (id == llama_token_eos() && params.interactive) {
+            if (id == llama_token_eos() && params.interactive && !params.instruct) {
                 id = llama_token_newline.front();
                 if (params.antiprompt.size() != 0) {
                     // tokenize and inject first reverse prompt
@@ -488,8 +488,12 @@ int main(int argc, char ** argv) {
 
         // end of text token
         if (embd.back() == llama_token_eos()) {
-            fprintf(stderr, " [end of text]\n");
-            break;
+            if (params.instruct) {
+                is_interacting = true;
+            } else {
+                fprintf(stderr, " [end of text]\n");
+                break;
+            }
         }
 
         // In interactive mode, respect the maximum number of tokens and drop back to user input when reached.
