@@ -150,6 +150,13 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             exit(1);
         }
     }
+
+    if (params.instruct && params.interactive) {
+        fprintf(stderr, "error: Do not use instruct mode (-ins) and interactive mode (-i) at the same time to avoid output being cut off.\n");
+        gpt_print_usage(argc, argv, params);
+        exit(1);
+    }
+
     if (invalid_param) {
         fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
         gpt_print_usage(argc, argv, params);
