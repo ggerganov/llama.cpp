@@ -169,6 +169,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.input_prefix = argv[i];
+        } else if (arg == "--trace") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.trace_fn = argv[i];
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             gpt_print_usage(argc, argv, params);
@@ -224,6 +230,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  --verbose-prompt      print prompt before generation\n");
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
     fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
+    fprintf(stderr, "  --trace FNAME         save the the model logits during evaluation to a binary file\n");
     fprintf(stderr, "\n");
 }
 
@@ -255,4 +262,44 @@ std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::s
     res.resize(n);
 
     return res;
+}
+
+// Open the trace file and write the header in the binary format: magic:int version:int n_vocab:int
+std::ofstream trace_open(const gpt_params & params, struct llama_context * ctx) {
+    std::ofstream trace_ofs;
+
+    const uint32_t n_vocab = llama_n_vocab(ctx);
+    if(n_vocab <= 0) {
+        return trace_ofs;
+    }
+    const auto& trace_fn = params.trace_fn;
+    trace_ofs.open(trace_fn, std::ios::binary);
+    if(trace_ofs.is_open() && trace_ofs.good()) {
+        fprintf(stderr, "Tracing evaluation to: '%s'\n", trace_fn.c_str());
+        trace_ofs.write(reinterpret_cast<const char*>(&LLAMA_TRACE_MAGIC), sizeof(uint32_t));
+        trace_ofs.write(reinterpret_cast<const char*>(&LLAMA_TRACE_VERSION), sizeof(uint32_t));
+        trace_ofs.write(reinterpret_cast<const char*>(&n_vocab), sizeof(uint32_t));
+    } else {
+        fprintf(stderr, "Could not open trace file: '%s'\n", trace_fn.c_str());
+        trace_ofs.close();
+    }
+    return trace_ofs;
+}
+
+// Write a record using the binary format: N:int {N}token_id:int {N*n_vocab}logits:float
+void trace_write_record(
+                     std::ofstream & out,
+    const std::vector<llama_token> & embd,
+              struct llama_context * ctx) {
+
+    const uint32_t       N = embd.size();
+    const      int n_vocab = llama_n_vocab(ctx);
+    const float *   logits = llama_get_logits(ctx);
+    if(!out.is_open() || out.bad() || N == 0 || n_vocab <= 0) {
+        return;
+    }
+
+    out.write(reinterpret_cast<const char*>(&N), sizeof(uint32_t));
+    out.write(reinterpret_cast<const char*>(embd.data()), sizeof(llama_token)*N);
+    out.write(reinterpret_cast<const char*>(logits), sizeof(float)*N*n_vocab);
 }

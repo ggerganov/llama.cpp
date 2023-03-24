@@ -169,6 +169,7 @@ int main(int argc, char ** argv) {
         lparams.n_parts    = params.n_parts;
         lparams.seed       = params.seed;
         lparams.f16_kv     = params.memory_f16;
+        lparams.logits_all = !params.trace_fn.empty();
         lparams.use_mlock  = params.use_mlock;
 
         ctx = llama_init_from_file(params.model.c_str(), lparams);
@@ -204,6 +205,8 @@ int main(int argc, char ** argv) {
 
         return 0;
     }
+
+    std::ofstream trace_ofs = trace_open(params, ctx);
 
     // Add a space in front of the first character to match OG llama tokenizer behavior
     params.prompt.insert(0, 1, ' ');
@@ -339,6 +342,7 @@ int main(int argc, char ** argv) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return 1;
             }
+            trace_write_record(trace_ofs, embd, ctx);
         }
 
         n_past += embd.size();
@@ -502,6 +506,7 @@ int main(int argc, char ** argv) {
 
     llama_print_timings(ctx);
     llama_free(ctx);
+    trace_ofs.close();
 
     set_console_state(CONSOLE_STATE_DEFAULT);
 

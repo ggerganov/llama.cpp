@@ -1,6 +1,8 @@
 #include "common.h"
 #include "llama.h"
 
+#include <fstream>
+
 std::vector<double> softmax(const std::vector<float>& logits) {
     std::vector<double> probs(logits.size());
     float max_logit = logits[0];
@@ -27,6 +29,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
     double nll = 0.0;
     int seq_count = tokens.size() / params.n_ctx;
 
+    std::ofstream trace_ofs = trace_open(params, ctx);
     fprintf(stderr, "%s : calculating perplexity over %d chunks\n", __func__, seq_count);
 
     for (int i = 0; i < seq_count; ++i) {
@@ -57,6 +60,8 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
         // process the entire prompt.
 
         auto logits = llama_get_logits(ctx);
+        trace_write_record(trace_ofs, embd, ctx);
+
         for (int j = params.n_ctx / 2; j < params.n_ctx - 1; ++j) {
             // Calculate probability of next token, given the previous ones.
             int n_vocab = llama_n_vocab(ctx);
@@ -72,6 +77,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
         fflush(stdout);
     }
     printf("\n");
+    trace_ofs.close();
 }
 
 int main(int argc, char ** argv) {

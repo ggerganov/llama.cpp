@@ -32,6 +32,7 @@ struct gpt_params {
     std::string model  = "models/lamma-7B/ggml-model.bin"; // model path
     std::string prompt = "";
     std::string input_prefix = ""; // string to prefix user inputs with
+    std::string trace_fn = "";
 
 
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
@@ -63,3 +64,19 @@ std::string gpt_random_prompt(std::mt19937 & rng);
 //
 
 std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::string & text, bool add_bos);
+
+//
+// Trace utils
+//
+
+static constexpr uint32_t LLAMA_TRACE_VERSION = 0;
+static constexpr uint32_t LLAMA_TRACE_MAGIC = 0x67676d74; // 'ggmt' in hex
+
+// Open format: magic:int version:int n_vocab:int
+std::ofstream trace_open(const gpt_params & params, struct llama_context * ctx);
+
+// Write a record using the binary format: N:int {N}token_id:int {N*n_vocab}logits:float
+void trace_write_record(
+                     std::ofstream & out,
+    const std::vector<llama_token> & embd,
+              struct llama_context * ctx);

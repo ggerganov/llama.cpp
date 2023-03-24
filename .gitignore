@@ -4,6 +4,7 @@
 .vs/
 .vscode/
 .DS_Store
+__pycache__
 
 build/
 build-em/
