@@ -372,7 +372,7 @@ int main(int argc, char ** argv) {
         n_past += embd.size();
         embd.clear();
 
-        if ((int) embd_inp.size() <= input_consumed) {
+        if ((int) embd_inp.size() <= input_consumed && !is_interacting) {
             // out of user input, sample next token
             const float top_k          = params.top_k;
             const float top_p          = params.top_p;
@@ -451,13 +451,16 @@ int main(int argc, char ** argv) {
             }
 
             // Check if each of the reverse prompts appears at the end of the output.
-            for (std::string antiprompt : params.antiprompt) {
+            for (std::string & antiprompt : params.antiprompt) {
                 if (last_output.find(antiprompt.c_str(), last_output.length() - antiprompt.length(), antiprompt.length()) != std::string::npos) {
                     is_interacting = true;
+                    set_console_state(CONSOLE_STATE_USER_INPUT);
+                    fflush(stdout);
                     break;
                 }
             }
-            if (is_interacting) {
+
+            if (n_past > 0 && is_interacting) {
                 // potentially set color to indicate we are taking user input
                 set_console_state(CONSOLE_STATE_USER_INPUT);
 
@@ -495,7 +498,10 @@ int main(int argc, char ** argv) {
 
                 input_noecho = true; // do not echo this again
             }
-            is_interacting = false;
+
+            if (n_past > 0) {
+                is_interacting = false;
+            }
         }
 
         // end of text token
