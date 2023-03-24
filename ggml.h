@@ -205,8 +205,10 @@ enum ggml_type {
     GGML_TYPE_Q4_0 = 2,
     GGML_TYPE_Q4_1 = 3,
     GGML_TYPE_Q4_2 = 4,
-    GGML_TYPE_Q4_3 = 5,
-    GGML_TYPE_Q8_0 = 6,
+    GGML_TYPE_Q2_0 = 5,
+    GGML_TYPE_Q3_0 = 6,
+    GGML_TYPE_Q4_3,
+    GGML_TYPE_Q8_0,
     GGML_TYPE_I8,
     GGML_TYPE_I16,
     GGML_TYPE_I32,
@@ -808,10 +810,12 @@ enum ggml_opt_result ggml_opt(
 // quantization
 //
 
-size_t ggml_quantize_q4_0(const float * src, void * dst, int n, int k, int64_t * hist);
-size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t * hist);
-size_t ggml_quantize_q4_2(const float * src, void * dst, int n, int k, int64_t * hist);
-size_t ggml_quantize_q4_3(const float * src, void * dst, int n, int k, int64_t * hist);
+size_t ggml_quantize_q2_0(const float * src, void * dst, int n, int k, int64_t hist[1<<2]);
+size_t ggml_quantize_q3_0(const float * src, void * dst, int n, int k, int64_t hist[1<<3]);
+size_t ggml_quantize_q4_0(const float * src, void * dst, int n, int k, int64_t hist[1<<4]);
+size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t hist[1<<4]);
+size_t ggml_quantize_q4_2(const float * src, void * dst, int n, int k, int64_t hist[1<<4]);
+size_t ggml_quantize_q4_3(const float * src, void * dst, int n, int k, int64_t hist[1<<4]);
 
 size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, int start, int n, int64_t * hist);
 
