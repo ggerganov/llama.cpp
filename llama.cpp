@@ -371,11 +371,11 @@ static bool llama_model_load(
             model.type = e_model::MODEL_13B;
         }
 
-        if (hparams.n_layer == 52) {
+        if (hparams.n_layer == 60) {
             model.type = e_model::MODEL_30B;
         }
 
-        if (hparams.n_layer == 64) {
+        if (hparams.n_layer == 80) {
             model.type = e_model::MODEL_65B;
         }
 
