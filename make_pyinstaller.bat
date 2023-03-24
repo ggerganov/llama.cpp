@@ -1,0 +1,1 @@
+pyinstaller --noconfirm --onefile --console --icon "./niko.ico" --add-data "./klite.embd;." --add-data "./llamacpp.dll;."  "./llama_for_kobold.py"

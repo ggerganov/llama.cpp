@@ -7,6 +7,7 @@ import ctypes
 import os
 #from pathlib import Path
 
+
 class load_model_inputs(ctypes.Structure):
     _fields_ = [("threads", ctypes.c_int),
                 ("max_context_length", ctypes.c_int),
@@ -249,10 +250,12 @@ def RunServerMultiThreaded(port, HandlerClass = ServerRequestHandler,
                 except (KeyboardInterrupt,SystemExit):
                     #print("Thread %s - Server Closing" % (self.i))
                     self.httpd.server_close()
+                    time.sleep(2)
                     sys.exit(0)
                 finally:
                     # Clean-up server (close socket, etc.)
                     self.httpd.server_close()
+                    time.sleep(2)
                     sys.exit(0)
         def stop(self):
             self.httpd.server_close()
@@ -263,31 +266,44 @@ def RunServerMultiThreaded(port, HandlerClass = ServerRequestHandler,
         threadArr.append(Thread(i))
     while 1:
         try:
-            time.sleep(2000)
+            time.sleep(2)
         except KeyboardInterrupt:
             for i in range(numThreads):
                 threadArr[i].stop()
+            time.sleep(2)
             sys.exit(0)
 
 if __name__ == '__main__':
     # total arguments
     argc = len(sys.argv)
 
+    ggml_selected_file = None
     if argc<2:
-        print("Usage: " + sys.argv[0] + " model_file_q4_0.bin [port]")
-        sys.exit(0)
+        print("Command line usage: " + sys.argv[0] + " model_file_q4_0.bin [port]")
+        #give them a chance to pick a file
+        print("Alternative, please manually select ggml file:")
+        from tkinter.filedialog import askopenfilename
+        ggml_selected_file = askopenfilename (title="Select ggml model .bin files")
+        if not ggml_selected_file:
+            print("\nNo ggml model file was selected. Exiting.")
+            time.sleep(2)
+            sys.exit(0)
+    else:
+        ggml_selected_file = sys.argv[1]
+       
     if argc>=3:
         port = int(sys.argv[2])
 
-    if not os.path.exists(sys.argv[1]):
-        print("Cannot find model file: " + sys.argv[1])
+    if not os.path.exists(ggml_selected_file):
+        print("Cannot find model file: " + ggml_selected_file)
+        time.sleep(2)
         sys.exit(0)
 
     mdl_nparts = 1
     for n in range(1,9):
-        if os.path.exists(sys.argv[1]+"."+str(n)):
+        if os.path.exists(ggml_selected_file+"."+str(n)):
             mdl_nparts += 1
-    modelname = os.path.abspath(sys.argv[1])
+    modelname = os.path.abspath(ggml_selected_file)
     print("Loading model: " + modelname)
     loadok = load_model(modelname,8,maxctx,mdl_nparts)
     print("Load Model OK: " + str(loadok))
