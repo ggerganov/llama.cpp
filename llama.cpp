@@ -922,7 +922,7 @@ static bool llama_eval_internal(
             struct ggml_tensor * KQ_scaled =
                 ggml_scale(ctx0,
                         KQ,
-                        ggml_new_f32(ctx0, 1.0f/sqrt(float(n_embd)/n_head)));
+                        ggml_new_f32(ctx0, 1.0f/sqrtf(float(n_embd)/n_head)));
 
             // KQ_masked = mask_past(KQ_scaled)
             struct ggml_tensor * KQ_masked = ggml_diag_mask_inf(ctx0, KQ_scaled, n_past);
@@ -1276,13 +1276,13 @@ static llama_vocab::id llama_sample_top_p_top_k(
             // credit https://github.com/facebookresearch/llama/compare/main...shawwn:llama:main
             if (std::find(last_n_tokens.begin(), last_n_tokens.end(), i) != last_n_tokens.end()) {
                 // if score < 0 then repetition penalty has to multiplied to reduce the previous token probability
-                if (plogits[i] < 0.0) {
-                    logits_id.push_back(std::make_pair(plogits[i]*scale*repeat_penalty, i));
+                if (plogits[i] < 0.0f) {
+                    logits_id.push_back(std::make_pair((double)plogits[i]*scale*repeat_penalty, i));
                 } else {
-                    logits_id.push_back(std::make_pair(plogits[i]*scale/repeat_penalty, i));
+                    logits_id.push_back(std::make_pair((double)plogits[i]*scale/repeat_penalty, i));
                 }
             } else {
-                logits_id.push_back(std::make_pair(plogits[i]*scale, i));
+                logits_id.push_back(std::make_pair((double)plogits[i]*scale, i));
             }
         }
     }
@@ -1310,8 +1310,8 @@ static llama_vocab::id llama_sample_top_p_top_k(
         p /= sum;
     }
 
-    if (top_p < 1.0f) {
-        double cumsum = 0.0f;
+    if (top_p < 1.0) {
+        double cumsum = 0.0;
         for (int i = 0; i < (int) probs.size(); i++) {
             cumsum += probs[i];
             if (cumsum >= top_p) {
@@ -1590,7 +1590,7 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
                 }
 
                 for (int i = 0; i < (int) hist_cur.size(); ++i) {
-                    printf("%5.3f ", hist_cur[i] / (float)nelements);
+                    printf("%5.3f ", hist_cur[i] / (double)nelements);
                 }
                 printf("\n");
             } else {
@@ -1613,7 +1613,7 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
 
             printf("%s: hist: ", __func__);
             for (int i = 0; i < (int) hist_all.size(); ++i) {
-                printf("%5.3f ", hist_all[i] / (float)sum_all);
+                printf("%5.3f ", hist_all[i] / (double)sum_all);
             }
             printf("\n");
         }
@@ -1828,11 +1828,11 @@ void llama_print_timings(struct llama_context * ctx) {
     const int32_t n_p_eval = std::max(1, ctx->n_p_eval);
 
     fprintf(stderr, "\n");
-    fprintf(stderr, "%s:        load time = %8.2f ms\n", __func__, ctx->t_load_us / 1000.0f);
-    fprintf(stderr, "%s:      sample time = %8.2f ms / %5d runs   (%8.2f ms per run)\n",   __func__, 1e-3f * ctx->t_sample_us, n_sample, 1e-3f * ctx->t_sample_us / n_sample);
-    fprintf(stderr, "%s: prompt eval time = %8.2f ms / %5d tokens (%8.2f ms per token)\n", __func__, 1e-3f * ctx->t_p_eval_us, n_p_eval, 1e-3f * ctx->t_p_eval_us / n_p_eval);
-    fprintf(stderr, "%s:        eval time = %8.2f ms / %5d runs   (%8.2f ms per run)\n",   __func__, 1e-3f * ctx->t_eval_us,   n_eval,   1e-3f * ctx->t_eval_us   / n_eval);
-    fprintf(stderr, "%s:       total time = %8.2f ms\n", __func__, (t_end_us - ctx->t_start_us)/1000.0f);
+    fprintf(stderr, "%s:        load time = %8.2f ms\n", __func__, ctx->t_load_us / 1000.0);
+    fprintf(stderr, "%s:      sample time = %8.2f ms / %5d runs   (%8.2f ms per run)\n",   __func__, 1e-3 * ctx->t_sample_us, n_sample, 1e-3 * ctx->t_sample_us / n_sample);
+    fprintf(stderr, "%s: prompt eval time = %8.2f ms / %5d tokens (%8.2f ms per token)\n", __func__, 1e-3 * ctx->t_p_eval_us, n_p_eval, 1e-3 * ctx->t_p_eval_us / n_p_eval);
+    fprintf(stderr, "%s:        eval time = %8.2f ms / %5d runs   (%8.2f ms per run)\n",   __func__, 1e-3 * ctx->t_eval_us,   n_eval,   1e-3 * ctx->t_eval_us   / n_eval);
+    fprintf(stderr, "%s:       total time = %8.2f ms\n", __func__, (t_end_us - ctx->t_start_us)/1000.0);
 }
 
 void llama_reset_timings(struct llama_context * ctx) {

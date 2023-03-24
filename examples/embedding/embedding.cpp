@@ -89,7 +89,7 @@ int main(int argc, char ** argv) {
         const auto embeddings = llama_get_embeddings(ctx);
 
         for (int i = 0; i < n_embd; i++) {
-            printf("%f ", embeddings[i]);
+            printf("%f ", (double)embeddings[i]);
         }
         printf("\n");
     }

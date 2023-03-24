@@ -124,17 +124,18 @@ if (LLAMA_ALL_WARNINGS)
             -Wall
             -Wextra
             -Wpedantic
-            -Wshadow
             -Wcast-qual
+            -Wdouble-promotion
+            -Wshadow
             -Wstrict-prototypes
             -Wpointer-arith
-            -Wno-unused-function
         )
         set(cxx_flags
             -Wall
             -Wextra
             -Wpedantic
             -Wcast-qual
+            -Wdouble-promotion
         )
     else()
         # todo : msvc
