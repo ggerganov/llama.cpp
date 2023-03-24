@@ -12,11 +12,15 @@ from ctypes import (
 )
 
 import pathlib
+from itertools import chain
 
 # Load the library
-libfile = pathlib.Path(__file__).parent / "libllama.so"
-_lib = ctypes.CDLL(str(libfile))
-
+# TODO: fragile, should fix
+_base_path = pathlib.Path(__file__).parent
+(_lib_path,) = chain(
+    _base_path.glob("*.so"), _base_path.glob("*.dylib"), _base_path.glob("*.dll")
+)
+_lib = ctypes.CDLL(str(_lib_path))
 
 # C types
 llama_context_p = c_void_p
