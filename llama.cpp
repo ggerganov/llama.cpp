@@ -1432,16 +1432,16 @@ struct llama_context * llama_init_from_file(
     if (!llama_model_load(path_model, *ctx, params.n_ctx, params.n_parts, type_memory,
                           params.vocab_only)) {
         fprintf(stderr, "%s: failed to load model\n", __func__);
-        delete ctx;
+        llama_free(ctx);
         return nullptr;
     }
-    
+
     if (params.use_mlock) {
         char *err;
         if (!ggml_mlock(ctx->model.ctx, &err)) {
             fprintf(stderr, "%s\n", err);
             free(err);
-            delete ctx;
+            llama_free(ctx);
             return nullptr;
         }
     }
@@ -1464,7 +1464,9 @@ struct llama_context * llama_init_from_file(
 }
 
 void llama_free(struct llama_context * ctx) {
-    ggml_free(ctx->model.ctx);
+    if (ctx->model.ctx) {
+        ggml_free(ctx->model.ctx);
+    }
 
     delete ctx;
 }
