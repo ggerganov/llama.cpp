@@ -5858,11 +5858,11 @@ static bool ggml_compute_forward_mul_mat_use_blas(
     if (ggml_is_contiguous(src0) &&
         ggml_is_contiguous(src1) && ((ne0 >= 32 && ne1 >= 32 && ne10 >= 32))) {
 
-        //// disable BLAS for Q4_0 and Q4_1
-        //// looks like there is no benefit and we only waste a lot of memory
-        //if (src0->type == GGML_TYPE_Q4_0 || src0->type == GGML_TYPE_Q4_1) {
-        //    return false;
-        //}
+        // disable BLAS for Q4_0 and Q4_1
+        // there is a bug that has to be fixed before enabling
+        if (src0->type == GGML_TYPE_Q4_0 || src0->type == GGML_TYPE_Q4_1) {
+            return false;
+        }
 
         //printf("BLAS: %d %d %d %d %d\n", ne0, ne1, ne10, ne00, ne01);
         return true;
