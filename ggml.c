@@ -5854,6 +5854,9 @@ static bool ggml_compute_forward_mul_mat_use_blas(
     const int ne0 = dst->ne[0];
     const int ne1 = dst->ne[1];
 
+    // TMP: disable BLAS for now there is definitely a bug
+    return false;
+
     // TODO: find the optimal values for these
     if (ggml_is_contiguous(src0) &&
         ggml_is_contiguous(src1) && ((ne0 >= 32 && ne1 >= 32 && ne10 >= 32))) {
