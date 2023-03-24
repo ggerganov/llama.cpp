@@ -7,8 +7,8 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
+- [Roadmap (short-term)](https://github.com/ggerganov/llama.cpp/discussions/457)
 - New C-style API is now available: https://github.com/ggerganov/llama.cpp/pull/370
-- [Added Alpaca support](https://github.com/ggerganov/llama.cpp#instruction-mode-with-alpaca)
 - Cache input prompts for faster initialization: https://github.com/ggerganov/llama.cpp/issues/64
 - Create a `llama.cpp` logo: https://github.com/ggerganov/llama.cpp/issues/105
 
