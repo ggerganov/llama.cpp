@@ -27,3 +27,4 @@ compile_commands.json
 .direnv/
 
 dist/
+llama_for_kobold.spec
