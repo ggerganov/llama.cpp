@@ -118,6 +118,12 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             global maxctx
             self.wfile.write(json.dumps({"value":maxctx}).encode())
             return
+
+        if self.path.endswith('/api/v1/config/soft_prompt') or self.path.endswith('/api/v1/config/soft_prompt/') or self.path.endswith('/api/latest/config/soft_prompt') or self.path.endswith('/api/latest/config/soft_prompt/'):
+            self.send_response(200)
+            self.end_headers()           
+            self.wfile.write(json.dumps({"value":""}).encode())
+            return
         
         self.send_response(404)
         self.end_headers()
