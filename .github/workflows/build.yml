@@ -137,6 +137,7 @@ jobs:
 
       - name: Test
         id: cmake_test
+        if: ${{ matrix.build != 'avx512' }} # todo: check whether runner support avx512
         run: |
           cd build
           ctest -C Release --output-on-failure
