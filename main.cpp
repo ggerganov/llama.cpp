@@ -300,6 +300,10 @@ int main(int argc, char ** argv) {
                 fprintf(stderr, "Reverse prompt: '%s'\n", antiprompt.c_str());
             }
         }
+
+        if (!params.input_prefix.empty()) {
+            fprintf(stderr, "Input prefix: '%s'\n", params.input_prefix.c_str());
+        }
     }
     fprintf(stderr, "sampling parameters: temp = %f, top_k = %d, top_p = %f, repeat_last_n = %i, repeat_penalty = %f\n", params.temp, params.top_k, params.top_p, params.repeat_last_n, params.repeat_penalty);
     fprintf(stderr, "\n\n");
@@ -472,6 +476,11 @@ int main(int argc, char ** argv) {
                 }
 
                 std::string buffer;
+                if (!params.input_prefix.empty()) {
+                    buffer += params.input_prefix;
+                    printf(buffer.c_str());
+                }
+
                 std::string line;
                 bool another_line = true;
                 do {
