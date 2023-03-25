@@ -179,7 +179,10 @@ Here is an example few-shot interaction, invoked with the command
 
 ```bash
 # default arguments using 7B model
-./chat.sh
+./examples/chat.sh
+
+# advanced chat with 13B model
+./examples/chat-13B.sh
 
 # custom arguments using 13B model
 ./main -m ./models/13B/ggml-model-q4_0.bin -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
@@ -195,7 +198,7 @@ Note the use of `--color` to distinguish between user input and generated text.
 2. Run the `main` tool like this:
 
 ```
-./main -m ./models/ggml-alpaca-7b-q4.bin --color -f ./prompts/alpaca.txt -ins
+./examples/alpaca.sh
 ```
 
 Sample run:
