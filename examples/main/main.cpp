@@ -23,6 +23,8 @@
 extern "C" __declspec(dllimport) void* __stdcall GetStdHandle(unsigned long nStdHandle);
 extern "C" __declspec(dllimport) int __stdcall GetConsoleMode(void* hConsoleHandle, unsigned long* lpMode);
 extern "C" __declspec(dllimport) int __stdcall SetConsoleMode(void* hConsoleHandle, unsigned long dwMode);
+extern "C" __declspec(dllimport) int __stdcall SetConsoleCP(unsigned int wCodePageID);
+extern "C" __declspec(dllimport) int __stdcall SetConsoleOutputCP(unsigned int wCodePageID);
 #endif
 
 #define ANSI_COLOR_RED     "\x1b[31m"
@@ -43,17 +45,6 @@ enum console_state {
 
 static console_state con_st = CONSOLE_STATE_DEFAULT;
 static bool con_use_color = false;
-
-void enable_console_colors() {
-#if defined (_WIN32)
-    // Enable ANSI colors on Windows 10+
-    unsigned long dwMode = 0;
-    void* hConOut = GetStdHandle((unsigned long)-11); // STD_OUTPUT_HANDLE (-11)
-    if (hConOut && hConOut != (void*)-1 && GetConsoleMode(hConOut, &dwMode) && !(dwMode & 0x4)) {
-        SetConsoleMode(hConOut, dwMode | 0x4); // ENABLE_VIRTUAL_TERMINAL_PROCESSING (0x4)
-    }
-#endif
-}
 
 void set_console_state(console_state new_st) {
     if (!con_use_color) return;
@@ -90,6 +81,32 @@ void sigint_handler(int signo) {
 }
 #endif
 
+#if defined (_WIN32)
+void win32_console_init(void) {
+    unsigned long dwMode = 0;
+    void* hConOut = GetStdHandle((unsigned long)-11); // STD_OUTPUT_HANDLE (-11)
+    if (!hConOut || hConOut == (void*)-1 || !GetConsoleMode(hConOut, &dwMode)) {
+        hConOut = GetStdHandle((unsigned long)-12); // STD_ERROR_HANDLE (-12)
+        if (hConOut && (hConOut == (void*)-1 || !GetConsoleMode(hConOut, &dwMode))) {
+            hConOut = 0;
+        }
+    }
+    if (hConOut) {
+        // Enable ANSI colors on Windows 10+
+        if (con_use_color && !(dwMode & 0x4)) {
+            SetConsoleMode(hConOut, dwMode | 0x4); // ENABLE_VIRTUAL_TERMINAL_PROCESSING (0x4)
+        }
+        // Set console output codepage to UTF8
+        SetConsoleOutputCP(65001); // CP_UTF8
+    }
+    void* hConIn = GetStdHandle((unsigned long)-10); // STD_INPUT_HANDLE (-10)
+    if (hConIn && hConIn != (void*)-1 && GetConsoleMode(hConIn, &dwMode)) {
+        // Set console input codepage to UTF8
+        SetConsoleCP(65001); // CP_UTF8
+    }
+}
+#endif
+
 int main(int argc, char ** argv) {
     gpt_params params;
     params.model = "models/llama-7B/ggml-model.bin";
@@ -97,6 +114,15 @@ int main(int argc, char ** argv) {
     if (gpt_params_parse(argc, argv, params) == false) {
         return 1;
     }
+
+
+    // save choice to use color for later
+    // (note for later: this is a slightly awkward choice)
+    con_use_color = params.use_color;
+
+#if defined (_WIN32)
+    win32_console_init();
+#endif
 
     if (params.perplexity) {
         printf("\n************\n");
@@ -129,10 +155,6 @@ int main(int argc, char ** argv) {
     if (params.random_prompt) {
         params.prompt = gpt_random_prompt(rng);
     }
-
-    // save choice to use color for later
-    // (note for later: this is a slightly awkward choice)
-    con_use_color = params.use_color;
 
 //    params.prompt = R"(// this function checks if the number n is prime
 //bool is_prime(int n) {)";
@@ -285,9 +307,6 @@ int main(int argc, char ** argv) {
     int n_consumed = 0;
 
     // the first thing we will do is to output the prompt, so set color accordingly
-    if (params.use_color) {
-        enable_console_colors();
-    }
     set_console_state(CONSOLE_STATE_PROMPT);
 
     std::vector<llama_token> embd;

@@ -161,7 +161,7 @@ def main():
 
     for p in range(n_parts):
 
-        print(f"Processing part {p}\n")
+        print(f"Processing part {p+1} of {n_parts}\n")
 
         fname_model = f"{dir_model}/consolidated.0{p}.pth"
         fname_out = f"{dir_model}/ggml-model-{ftype_str[ftype]}.bin{'' if p == 0 else '.' + str(p)}"
