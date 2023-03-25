@@ -1,14 +1,6 @@
 #include "common.h"
 #include "llama.h"
 
-#include <cassert>
-#include <cinttypes>
-#include <cmath>
-#include <cstdio>
-#include <cstring>
-#include <string>
-#include <vector>
-
 std::vector<double> softmax(const std::vector<float>& logits) {
     std::vector<double> probs(logits.size());
     float max_logit = logits[0];

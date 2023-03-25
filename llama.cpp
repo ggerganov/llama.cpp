@@ -1261,10 +1261,10 @@ static llama_vocab::id llama_sample_top_p_top_k(
         double repeat_penalty) {
     auto & rng = lctx.rng;
 
-    const auto & vocab = lctx.vocab;
-    const auto & logits = lctx.logits;
+    const int n_logits = lctx.model.hparams.n_vocab;
 
-    int n_logits = vocab.id_to_token.size();
+    const auto & logits = lctx.logits;
+    const auto * plogits = logits.data() + logits.size() - n_logits;
 
     std::vector<std::pair<double, llama_vocab::id>> logits_id;
     logits_id.reserve(n_logits);
@@ -1276,13 +1276,13 @@ static llama_vocab::id llama_sample_top_p_top_k(
             // credit https://github.com/facebookresearch/llama/compare/main...shawwn:llama:main
             if (std::find(last_n_tokens.begin(), last_n_tokens.end(), i) != last_n_tokens.end()) {
                 // if score < 0 then repetition penalty has to multiplied to reduce the previous token probability
-                if (logits[i] < 0.0) {
-                    logits_id.push_back(std::make_pair(logits[i]*scale*repeat_penalty, i));
+                if (plogits[i] < 0.0) {
+                    logits_id.push_back(std::make_pair(plogits[i]*scale*repeat_penalty, i));
                 } else {
-                    logits_id.push_back(std::make_pair(logits[i]*scale/repeat_penalty, i));
+                    logits_id.push_back(std::make_pair(plogits[i]*scale/repeat_penalty, i));
                 }
             } else {
-                logits_id.push_back(std::make_pair(logits[i]*scale, i));
+                logits_id.push_back(std::make_pair(plogits[i]*scale, i));
             }
         }
     }
@@ -1677,6 +1677,8 @@ struct llama_context * llama_init_from_file(
         }
 
         const auto & hparams = ctx->model.hparams;
+
+        // resized during inference
         if (params.logits_all) {
             ctx->logits.reserve(hparams.n_ctx*hparams.n_vocab);
         } else {
@@ -1684,7 +1686,7 @@ struct llama_context * llama_init_from_file(
         }
 
         if (params.embedding){
-            ctx->embedding.reserve(hparams.n_embd);
+            ctx->embedding.resize(hparams.n_embd);
         }
 
         ctx->buf_compute.resize(MEM_REQ_EVAL.at(ctx->model.type));
@@ -1759,6 +1761,10 @@ int llama_n_vocab(struct llama_context * ctx) {
 
 int llama_n_ctx(struct llama_context * ctx) {
     return ctx->model.hparams.n_ctx;
+}
+
+int llama_n_embd(struct llama_context * ctx) {
+    return ctx->model.hparams.n_embd;
 }
 
 float * llama_get_logits(struct llama_context * ctx) {

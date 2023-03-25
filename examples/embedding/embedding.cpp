@@ -1,15 +1,6 @@
 #include "common.h"
 #include "llama.h"
 
-#include <cassert>
-#include <cinttypes>
-#include <cmath>
-#include <cstdio>
-#include <cstring>
-#include <fstream>
-#include <string>
-#include <vector>
-
 int main(int argc, char ** argv) {
     gpt_params params;
     params.model = "models/llama-7B/ggml-model.bin";
@@ -94,9 +85,13 @@ int main(int argc, char ** argv) {
             }
         }
 
+        const int n_embd = llama_n_embd(ctx);
         const auto embeddings = llama_get_embeddings(ctx);
 
-        // TODO: print / use the embeddings
+        for (int i = 0; i < n_embd; i++) {
+            printf("%f ", embeddings[i]);
+        }
+        printf("\n");
     }
 
     llama_print_timings(ctx);
