@@ -1262,9 +1262,8 @@ static llama_vocab::id llama_sample_top_p_top_k(
     auto & rng = lctx.rng;
 
     const auto & vocab = lctx.vocab;
-    const auto & logits = lctx.logits;
-
-    int n_logits = vocab.id_to_token.size();
+    const int  n_logits = vocab.id_to_token.size();
+    const auto logits = lctx.logits.end() - n_logits;
 
     std::vector<std::pair<double, llama_vocab::id>> logits_id;
     logits_id.reserve(n_logits);
