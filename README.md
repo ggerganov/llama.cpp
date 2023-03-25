@@ -7,8 +7,8 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
+- [Roadmap (short-term)](https://github.com/ggerganov/llama.cpp/discussions/457)
 - New C-style API is now available: https://github.com/ggerganov/llama.cpp/pull/370
-- [Added Alpaca support](https://github.com/ggerganov/llama.cpp#instruction-mode-with-alpaca)
 - Cache input prompts for faster initialization: https://github.com/ggerganov/llama.cpp/issues/64
 - Create a `llama.cpp` logo: https://github.com/ggerganov/llama.cpp/issues/105
 
@@ -17,7 +17,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 The main goal is to run the model using 4-bit quantization on a MacBook
 
 - Plain C/C++ implementation without dependencies
-- Apple silicon first-class citizen - optimized via ARM NEON
+- Apple silicon first-class citizen - optimized via ARM NEON and Accelerate framework
 - AVX2 support for x86 architectures
 - Mixed F16 / F32 precision
 - 4-bit quantization support
@@ -179,7 +179,10 @@ Here is an example few-shot interaction, invoked with the command
 
 ```bash
 # default arguments using 7B model
-./chat.sh
+./examples/chat.sh
+
+# advanced chat with 13B model
+./examples/chat-13B.sh
 
 # custom arguments using 13B model
 ./main -m ./models/13B/ggml-model-q4_0.bin -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
@@ -191,20 +194,11 @@ Note the use of `--color` to distinguish between user input and generated text.
 
 ### Instruction mode with Alpaca
 
-First, download the `ggml` Alpaca model into the `./models` folder:
+1. First, download the `ggml` Alpaca model into the `./models` folder
+2. Run the `main` tool like this:
 
 ```
-# use one of these
-# TODO: add a script to simplify the download
-curl -o ./models/ggml-alpaca-7b-q4.bin -C - https://gateway.estuary.tech/gw/ipfs/QmUp1UGeQFDqJKvtjbSYPBiZZKRjLp8shVP9hT8ZB9Ynv1
-curl -o ./models/ggml-alpaca-7b-q4.bin -C - https://ipfs.io/ipfs/QmUp1UGeQFDqJKvtjbSYPBiZZKRjLp8shVP9hT8ZB9Ynv1
-curl -o ./models/ggml-alpaca-7b-q4.bin -C - https://cloudflare-ipfs.com/ipfs/QmUp1UGeQFDqJKvtjbSYPBiZZKRjLp8shVP9hT8ZB9Ynv1
-```
-
-Now run the `main` tool like this:
-
-```
-./main -m ./models/ggml-alpaca-7b-q4.bin --color -f ./prompts/alpaca.txt -ins
+./examples/alpaca.sh
 ```
 
 Sample run:
@@ -228,26 +222,36 @@ cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
 
 ### Obtaining and verifying the Facebook LLaMA original model and Stanford Alpaca model data
 
-* The LLaMA models are officially distributed by Facebook and will never be provided through this repository. See this [Pull Request in Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to obtain access to the model data.
+- **Under no circumstances share IPFS, magnet links, or any other links to model downloads anywhere in this respository, including in issues, discussions or pull requests. They will be immediately deleted.**
+- The LLaMA models are officially distributed by Facebook and will **never** be provided through this repository. 
+- Refer to [Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to request access to the model data.
+- Please verify the sha256 checksums of all downloaded model files to confirm that you have the correct model data files before creating an issue relating to your model files.
+- The following command will verify if you have all possible latest files in your self-installed `./models` subdirectory:
 
-* Please verify the sha256 checksums of all of your `consolidated*.pth` and corresponding converted `ggml-model-*.bin` model files to confirm that you have the correct model data files before creating an issue relating to your model files.
+  `sha256sum --ignore-missing -c SHA256SUMS` on Linux
 
-The following command will verify if you have all possible latest files in your self-installed `./models` subdirectory:
+  or
 
-`sha256sum --ignore-missing -c SHA256SUMS` on Linux
+  `shasum -a 256 --ignore-missing -c SHA256SUMS` on macOS
 
-or
-
-`shasum -a 256 --ignore-missing -c SHA256SUMS` on macOS
-
+- If your issue is with model generation quality then please at least scan the following links and papers to understand the limitations of LLaMA models. This is especially important when choosing an appropriate model size and appreciating both the significant and subtle differences between LLaMA models and ChatGPT:
+  - LLaMA:
+    - [Introducing LLaMA: A foundational, 65-billion-parameter large language model](https://ai.facebook.com/blog/large-language-model-llama-meta-ai/)
+    - [LLaMA: Open and Efficient Foundation Language Models](https://arxiv.org/abs/2302.13971)
+  - GPT-3
+    - [Language Models are Few-Shot Learners](https://arxiv.org/abs/2005.14165)
+  - GPT-3.5 / InstructGPT / ChatGPT:
+    - [Aligning language models to follow instructions](https://openai.com/research/instruction-following)
+    - [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
+    
 ### Perplexity (Measuring model quality)
 
 You can pass `--perplexity` as a command line option to measure perplexity over the given prompt.  For more background,
 see https://huggingface.co/docs/transformers/perplexity.  However, in general, lower perplexity is better for LLMs.
 
-#### Measurements
+#### Latest measurements
 
-https://github.com/ggerganov/llama.cpp/pull/270 is the unofficial tracking page for now.  llama.cpp is measuring very well
+The latest perplexity scores for the various model sizes and quantizations are being tracked in [discussion #406](https://github.com/ggerganov/llama.cpp/discussions/406).  `llama.cpp` is measuring very well
 compared to the baseline implementations.  Quantization has a small negative impact to quality, but, as you can see, running
 13B at q4_0 beats the 7B f16 model by a significant amount.
 
@@ -322,14 +326,6 @@ or with light image:
 docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
 ```
 
-## Limitations
-
-- Probably the token sampling can be improved
-- The Accelerate framework is actually currently unused since I found that for tensor shapes typical for the Decoder,
-  there is no benefit compared to the ARM_NEON intrinsics implementation. Of course, it's possible that I simply don't
-  know how to utilize it properly. But in any case, you can even disable it with `LLAMA_NO_ACCELERATE=1 make` and the
-  performance will be the same, since no BLAS calls are invoked by the current implementation
-
 ### Contributing
 
 - Contributors can open PRs
@@ -347,3 +343,4 @@ docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models
 - There are no strict rules for the code style, but try to follow the patterns in the code (indentation, spaces, etc.). Vertical alignment makes things more readable and easier to batch edit
 - Clean-up any trailing whitespaces, use 4 spaces indentation, brackets on same line, `void * ptr`, `int & a`
 - See [good first issues](https://github.com/ggerganov/llama.cpp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for tasks suitable for first contributions
+

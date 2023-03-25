@@ -156,7 +156,8 @@ endif
 ifneq ($(filter ppc64%,$(UNAME_M)),)
 	POWER9_M := $(shell grep "POWER9" /proc/cpuinfo)
 	ifneq (,$(findstring POWER9,$(POWER9_M)))
-		CFLAGS += -mpower9-vector
+		CFLAGS += -mcpu=power9
+		CXXFLAGS += -mcpu=power9
 	endif
 	# Require c++23's std::byteswap for big-endian support.
 	ifeq ($(UNAME_M),ppc64)
@@ -211,7 +212,7 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: main quantize
+default: main quantize perplexity
 
 #
 # Build library
@@ -223,18 +224,23 @@ ggml.o: ggml.c ggml.h
 llama.o: llama.cpp llama.h
 	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
 
-utils.o: utils.cpp utils.h
-	$(CXX) $(CXXFLAGS) -c utils.cpp -o utils.o
+common.o: examples/common.cpp examples/common.h
+	$(CXX) $(CXXFLAGS) -c examples/common.cpp -o common.o
 
 clean:
-	rm -f *.o main quantize
+	rm -vf *.o main quantize perplexity
 
-main: main.cpp ggml.o llama.o utils.o
-	$(CXX) $(CXXFLAGS) main.cpp ggml.o llama.o utils.o -o main $(LDFLAGS)
-	@echo "\x1b[36mrun ./main -h for help\x1b[0m"
+main: examples/main/main.cpp ggml.o llama.o common.o
+	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
+	@echo
+	@echo '====  Run ./main -h for help.  ===='
+	@echo
 
-quantize: quantize.cpp ggml.o llama.o utils.o
-	$(CXX) $(CXXFLAGS) quantize.cpp ggml.o llama.o utils.o -o quantize $(LDFLAGS)
+quantize: examples/quantize/quantize.cpp ggml.o llama.o
+	$(CXX) $(CXXFLAGS) examples/quantize/quantize.cpp ggml.o llama.o -o quantize $(LDFLAGS)
+
+perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o
+	$(CXX) $(CXXFLAGS) examples/perplexity/perplexity.cpp ggml.o llama.o common.o -o perplexity $(LDFLAGS)
 
 #
 # Tests

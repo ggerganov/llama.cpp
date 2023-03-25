@@ -44,20 +44,6 @@ $ make --version
 $ g++ --version
 ```
 
-# Models
-
-* The LLaMA models are officially distributed by Facebook and will never be provided through this repository. See this [pull request in Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to obtain access to the model data.
-* If your issue is with model conversion please verify the `sha256sum` of each of your `consolidated*.pth` and `ggml-model-XXX.bin` files to confirm that you have the correct model data files before logging an issue. [Latest sha256 sums for your reference](https://github.com/ggerganov/llama.cpp/issues/238).
-* If your issue is with model generation quality then please at least scan the following links and papers to understand the limitations of LLaMA models. This is especially important when choosing an appropriate model size and appreciating both the significant and subtle differences between LLaMA models and ChatGPT:
-  * LLaMA:
-    * [Introducing LLaMA: A foundational, 65-billion-parameter large language model](https://ai.facebook.com/blog/large-language-model-llama-meta-ai/)
-    * [LLaMA: Open and Efficient Foundation Language Models](https://arxiv.org/abs/2302.13971)
-  * GPT-3
-    * [Language Models are Few-Shot Learners](https://arxiv.org/abs/2005.14165)
-  * GPT-3.5 / InstructGPT / ChatGPT:
-    * [Aligning language models to follow instructions](https://openai.com/research/instruction-following)
-    * [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
-
 # Failure Information (for bugs)
 
 Please help provide information about the failure if this is a bug. If it is not a bug, please remove the rest of this template.
@@ -75,8 +61,9 @@ Please provide detailed steps for reproducing the issue. We are not sitting in f
 
 Please include any relevant log snippets or files. If it works under one configuration but not under another, please provide logs for both configurations and their corresponding outputs so it is easy to see where behavior changes.
 
-Also, please try to **avoid using screenshots** if at all possible. Instead, copy/paste the console output and use [Github's markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax) to cleanly format your logs for easy readability. e.g.
+Also, please try to **avoid using screenshots** if at all possible. Instead, copy/paste the console output and use [Github's markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax) to cleanly format your logs for easy readability.
 
+Example environment info:
 ```
 llama.cpp$ git log | head -1
 commit 2af23d30434a677c6416812eea52ccc0af65119c
@@ -103,8 +90,8 @@ GNU Make 4.3
 $ md5sum ./models/65B/ggml-model-q4_0.bin
 dbdd682cce80e2d6e93cefc7449df487  ./models/65B/ggml-model-q4_0.bin
 ```
-Here's a run with the Linux command [perf](https://www.brendangregg.com/perf.html)
 
+Example run with the Linux command [perf](https://www.brendangregg.com/perf.html)
 ```
 llama.cpp$ perf stat ./main -m ./models/65B/ggml-model-q4_0.bin -t 16 -n 1024 -p "Please close your issue when it has been answered."
 main: seed = 1679149377

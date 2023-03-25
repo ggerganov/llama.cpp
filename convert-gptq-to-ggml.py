@@ -36,7 +36,8 @@ fname_out = sys.argv[3]
 
 fout = open(fname_out, "wb")
 
-fout.write(struct.pack("i", 0x67676d6c)) # magic: ggml in hex
+fout.write(struct.pack("i", 0x67676d66)) # magic: ggmf in hex
+fout.write(struct.pack("i", 1)) # file version
 fout.write(struct.pack("i", n_vocab))
 fout.write(struct.pack("i", n_embd))
 fout.write(struct.pack("i", n_mult))
@@ -49,27 +50,21 @@ fout.write(struct.pack("i", 4))
 # This loop unchanged from convert-pth-to-ggml.py:
 for i in range(tokenizer.vocab_size()):
     if tokenizer.is_unknown(i):
-        # "<unk>" token (translated as ??)
         text = " \u2047 ".encode("utf-8")
-        fout.write(struct.pack("i", len(text)))
-        fout.write(text)
     elif tokenizer.is_control(i):
-        # "<s>"/"</s>" tokens
-        fout.write(struct.pack("i", 0))
+        text = b""
     elif tokenizer.is_byte(i):
-        # "<U+XX>" tokens (which may be invalid UTF-8)
         piece = tokenizer.id_to_piece(i)
         if len(piece) != 6:
-            print("Invalid token: " + piece)
+            print(f"Invalid token: {piece}")
             sys.exit(1)
         byte_value = int(piece[3:-1], 16)
-        fout.write(struct.pack("i", 1))
-        fout.write(struct.pack("B", byte_value))
+        text = struct.pack("B", byte_value)
     else:
-        # normal token. Uses U+2581 (LOWER ONE EIGHTH BLOCK) to represent spaces.
         text = tokenizer.id_to_piece(i).replace("\u2581", " ").encode("utf-8")
-        fout.write(struct.pack("i", len(text)))
-        fout.write(text)
+    fout.write(struct.pack("i", len(text)))
+    fout.write(text)
+    fout.write(struct.pack("f", tokenizer.get_score(i)))
 
 def write_header(shape, dst_name, ftype_cur):
     sname = dst_name.encode('utf-8')
