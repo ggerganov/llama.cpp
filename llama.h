@@ -123,7 +123,7 @@ extern "C" {
 
     // TODO: improve the last_n_tokens interface ?
     LLAMA_API llama_token llama_sample_top_p_top_k(
-              llama_context * ctx,
+       struct llama_context * ctx,
           const llama_token * last_n_tokens_data,
                         int   last_n_tokens_size,
                         int   top_k,
