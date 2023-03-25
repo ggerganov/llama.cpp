@@ -45,6 +45,8 @@ extern "C" {
 
     } llama_token_data;
 
+    typedef void (*llama_progress_callback)(double progress, void *ctx);
+
     struct llama_context_params {
         int n_ctx;   // text context
         int n_parts; // -1 for default
@@ -55,6 +57,11 @@ extern "C" {
         bool vocab_only; // only load the vocabulary, no weights
         bool use_mlock;  // force system to keep model in RAM
         bool embedding;  // embedding mode only
+
+        // called with a progress value between 0 and 1, pass NULL to disable
+        llama_progress_callback progress_callback;
+        // context pointer passed to the progress callback
+        void * progress_callback_user_data;
     };
 
     LLAMA_API struct llama_context_params llama_context_default_params();
