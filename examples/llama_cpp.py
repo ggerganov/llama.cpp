@@ -40,6 +40,7 @@ class llama_token_data(Structure):
 
 llama_token_data_p = POINTER(llama_token_data)
 
+llama_progress_callback = ctypes.CFUNCTYPE(None, c_double, c_void_p)
 
 class llama_context_params(Structure):
     _fields_ = [
@@ -54,6 +55,10 @@ class llama_context_params(Structure):
         ("vocab_only", c_bool),  # only load the vocabulary, no weights
         ("use_mlock", c_bool),  # force system to keep model in RAM
         ("embedding", c_bool),  # embedding mode only
+        # called with a progress value between 0 and 1, pass NULL to disable
+        ("progress_callback", llama_progress_callback),
+        # context pointer passed to the progress callback
+        ("progress_callback_user_data", c_void_p),
     ]
 
 
