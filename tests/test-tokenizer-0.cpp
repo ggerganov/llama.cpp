@@ -1,9 +1,9 @@
-#include "utils.h"
 #include "llama.h"
 
 #include <cstdio>
 #include <string>
 #include <map>
+#include <vector>
 
 static const std::map<std::string, std::vector<llama_token>> k_tests = {
     { "Hello World",        { 1,  10994,   2787, }, },
@@ -48,7 +48,9 @@ int main(int argc, char **argv) {
     }
 
     for (const auto & test_kv : k_tests) {
-        const auto res = ::llama_tokenize(ctx, test_kv.first, true);
+        std::vector<llama_token> res(test_kv.first.size());
+        const int n = llama_tokenize(ctx, test_kv.first.c_str(), res.data(), res.size(), true);
+        res.resize(n);
 
         bool correct = res.size() == test_kv.second.size();
 

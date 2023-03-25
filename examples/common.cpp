@@ -1,6 +1,6 @@
-#include "ggml.h"
+#include "common.h"
 
-#include "utils.h"
+#include "ggml.h"
 
 #include <cassert>
 #include <cstring>
