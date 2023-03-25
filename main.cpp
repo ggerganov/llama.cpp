@@ -478,7 +478,7 @@ int main(int argc, char ** argv) {
                 std::string buffer;
                 if (!params.input_prefix.empty()) {
                     buffer += params.input_prefix;
-                    printf(buffer.c_str());
+                    printf("%s", buffer.c_str());
                 }
 
                 std::string line;

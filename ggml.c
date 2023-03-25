@@ -6317,8 +6317,6 @@ static void ggml_compute_forward_mul_mat_f16_f32(
 
             float * dst_col = (float *) ((char *) dst->data + (i0*nb0 + 0*nb1 + i2*nb2 + i3*nb3));
 
-            assert(ne00 % 32 == 0);
-
             for (int ic = 0; ic < ne11; ++ic) {
                 ggml_vec_dot_f16(ne00, &dst_col[ic*ne0], src0_row, src1_col + ic*ne00);
             }
