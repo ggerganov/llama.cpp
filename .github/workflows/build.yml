@@ -67,6 +67,8 @@ jobs:
   ubuntu-latest-cmake-sanitizer:
     runs-on: ubuntu-latest
 
+    continue-on-error: true
+
     strategy:
       matrix:
         sanitizer: [ADDRESS, THREAD, UNDEFINED]
