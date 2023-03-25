@@ -168,9 +168,11 @@ struct llama_context {
 
     int64_t t_sample_us = 0;
     int64_t t_eval_us   = 0;
+    int64_t t_p_eval_us = 0;
 
     int32_t n_sample = 0; // number of tokens sampled
     int32_t n_eval   = 0; // number of eval calls
+    int32_t n_p_eval = 0; // number of tokens in eval calls for the prompt (with batch size > 1)
 
     llama_model model;
     llama_vocab vocab;
@@ -1070,6 +1072,10 @@ static bool llama_eval_internal(
         lctx.t_eval_us += ggml_time_us() - t_start_us;
         lctx.n_eval++;
     }
+    else if (N > 1) {
+        lctx.t_p_eval_us += ggml_time_us() - t_start_us;
+        lctx.n_p_eval += N;
+    }
 
     return true;
 }
@@ -1811,12 +1817,14 @@ void llama_print_timings(struct llama_context * ctx) {
 
     const int32_t n_sample = std::max(1, ctx->n_sample);
     const int32_t n_eval   = std::max(1, ctx->n_eval);
+    const int32_t n_p_eval = std::max(1, ctx->n_p_eval);
 
     fprintf(stderr, "\n");
-    fprintf(stderr, "%s:     load time = %8.2f ms\n", __func__, ctx->t_load_us / 1000.0f);
-    fprintf(stderr, "%s:   sample time = %8.2f ms / %5d runs (%8.2f ms per run)\n", __func__, 1e-3f * ctx->t_sample_us, n_sample, 1e-3f * ctx->t_sample_us / n_sample);
-    fprintf(stderr, "%s:     eval time = %8.2f ms / %5d runs (%8.2f ms per run)\n", __func__, 1e-3f * ctx->t_eval_us,   n_eval,   1e-3f * ctx->t_eval_us   / n_eval);
-    fprintf(stderr, "%s:    total time = %8.2f ms\n", __func__, (t_end_us - ctx->t_start_us)/1000.0f);
+    fprintf(stderr, "%s:        load time = %8.2f ms\n", __func__, ctx->t_load_us / 1000.0f);
+    fprintf(stderr, "%s:      sample time = %8.2f ms / %5d runs   (%8.2f ms per run)\n",   __func__, 1e-3f * ctx->t_sample_us, n_sample, 1e-3f * ctx->t_sample_us / n_sample);
+    fprintf(stderr, "%s: prompt eval time = %8.2f ms / %5d tokens (%8.2f ms per token)\n", __func__, 1e-3f * ctx->t_p_eval_us, n_p_eval, 1e-3f * ctx->t_p_eval_us / n_p_eval);
+    fprintf(stderr, "%s:        eval time = %8.2f ms / %5d runs   (%8.2f ms per run)\n",   __func__, 1e-3f * ctx->t_eval_us,   n_eval,   1e-3f * ctx->t_eval_us   / n_eval);
+    fprintf(stderr, "%s:       total time = %8.2f ms\n", __func__, (t_end_us - ctx->t_start_us)/1000.0f);
 }
 
 void llama_reset_timings(struct llama_context * ctx) {
@@ -1824,6 +1832,7 @@ void llama_reset_timings(struct llama_context * ctx) {
 
     ctx->t_sample_us = ctx->n_sample = 0;
     ctx->t_eval_us   = ctx->n_eval   = 0;
+    ctx->t_p_eval_us = ctx->n_p_eval = 0;
 }
 
 const char * llama_print_system_info(void) {
