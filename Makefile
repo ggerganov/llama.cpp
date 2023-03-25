@@ -81,8 +81,12 @@ ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 		endif
 	else ifeq ($(UNAME_S),Linux)
 		AVX1_M := $(shell grep "avx " /proc/cpuinfo)
-		ifneq (,$(findstring avx,$(AVX1_M)))
-			CFLAGS += -mavx
+		F16C_M := $(shell grep "f16c " /proc/cpuinfo)
+		ifneq (,$(findstring f16c,$(F16C_M)))
+			CFLAGS += -mf16c
+			ifneq (,$(findstring avx,$(AVX1_M)))
+				CFLAGS += -mavx
+			endif
 		endif
 		AVX2_M := $(shell grep "avx2 " /proc/cpuinfo)
 		ifneq (,$(findstring avx2,$(AVX2_M)))
@@ -91,10 +95,6 @@ ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 		FMA_M := $(shell grep "fma " /proc/cpuinfo)
 		ifneq (,$(findstring fma,$(FMA_M)))
 			CFLAGS += -mfma
-		endif
-		F16C_M := $(shell grep "f16c " /proc/cpuinfo)
-		ifneq (,$(findstring f16c,$(F16C_M)))
-			CFLAGS += -mf16c
 		endif
 		SSE3_M := $(shell grep "sse3 " /proc/cpuinfo)
 		ifneq (,$(findstring sse3,$(SSE3_M)))
