@@ -32,6 +32,7 @@ extern "C" {
         const int threads;
         const int max_context_length;
         const int batch_size;
+        const bool f16_kv;
         const char * model_filename;
         const int n_parts_overwrite = -1;
     };
@@ -75,7 +76,7 @@ extern "C" {
         ctx_params.n_ctx      = inputs.max_context_length;
         ctx_params.n_parts    = inputs.n_parts_overwrite;
         ctx_params.seed       = -1;
-        ctx_params.f16_kv     = true;
+        ctx_params.f16_kv     = inputs.f16_kv;
         ctx_params.logits_all = false;
 
         ctx = llama_init_from_file(model.c_str(), ctx_params);

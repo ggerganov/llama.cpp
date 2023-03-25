@@ -12,6 +12,7 @@ class load_model_inputs(ctypes.Structure):
     _fields_ = [("threads", ctypes.c_int),
                 ("max_context_length", ctypes.c_int),
                 ("batch_size", ctypes.c_int),
+                ("f16_kv", ctypes.c_bool),
                 ("model_filename", ctypes.c_char_p),
                 ("n_parts_overwrite", ctypes.c_int)]
 
@@ -43,8 +44,9 @@ def load_model(model_filename,batch_size=8,max_context_length=512,n_parts_overwr
     inputs.model_filename = model_filename.encode("UTF-8")
     inputs.batch_size = batch_size
     inputs.max_context_length = max_context_length #initial value to use for ctx, can be overwritten
-    inputs.threads = os.cpu_count()
+    inputs.threads = 4 #seems to outperform os.cpu_count(), it's memory bottlenecked 
     inputs.n_parts_overwrite = n_parts_overwrite
+    inputs.f16_kv = False
     ret = handle.load_model(inputs)
     return ret
 
