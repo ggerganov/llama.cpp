@@ -256,12 +256,10 @@ def RunServerMultiThreaded(port, HandlerClass = ServerRequestHandler,
                 except (KeyboardInterrupt,SystemExit):
                     #print("Thread %s - Server Closing" % (self.i))
                     self.httpd.server_close()
-                    time.sleep(2)
                     sys.exit(0)
                 finally:
                     # Clean-up server (close socket, etc.)
                     self.httpd.server_close()
-                    time.sleep(2)
                     sys.exit(0)
         def stop(self):
             self.httpd.server_close()
@@ -272,11 +270,10 @@ def RunServerMultiThreaded(port, HandlerClass = ServerRequestHandler,
         threadArr.append(Thread(i))
     while 1:
         try:
-            time.sleep(2)
+            time.sleep(99999)
         except KeyboardInterrupt:
             for i in range(numThreads):
                 threadArr[i].stop()
-            time.sleep(2)
             sys.exit(0)
 
 if __name__ == '__main__':
@@ -292,7 +289,7 @@ if __name__ == '__main__':
         ggml_selected_file = askopenfilename (title="Select ggml model .bin files")
         if not ggml_selected_file:
             print("\nNo ggml model file was selected. Exiting.")
-            time.sleep(2)
+            time.sleep(1)
             sys.exit(0)
     else:
         ggml_selected_file = sys.argv[1]
@@ -302,7 +299,7 @@ if __name__ == '__main__':
 
     if not os.path.exists(ggml_selected_file):
         print("Cannot find model file: " + ggml_selected_file)
-        time.sleep(2)
+        time.sleep(1)
         sys.exit(0)
 
     mdl_nparts = 1

@@ -35,6 +35,10 @@ CFLAGS   = -I.              -O3 -DNDEBUG -std=c11   -fPIC
 CXXFLAGS = -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC
 LDFLAGS  =
 
+#lets try enabling everything
+CFLAGS   += -pthread -mf16c -mfma -mavx2 -mavx -msse3 
+CXXFLAGS += -pthread
+
 # OS specific
 # TODO: support Windows
 ifeq ($(UNAME_S),Linux)
