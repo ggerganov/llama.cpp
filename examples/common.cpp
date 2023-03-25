@@ -1,6 +1,6 @@
-#include "ggml.h"
+#include "common.h"
 
-#include "utils.h"
+#include "ggml.h"
 
 #include <cassert>
 #include <cstring>
@@ -112,6 +112,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             }
             params.n_batch = std::stoi(argv[i]);
             params.n_batch = std::min(512, params.n_batch);
+        } else if (arg == "--keep") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_keep = std::stoi(argv[i]);
         } else if (arg == "-m" || arg == "--model") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -134,7 +140,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.use_mlock = true;
         } else if (arg == "--mtest") {
             params.mem_test = true;
-        } else if (arg == "--verbose_prompt") {
+        } else if (arg == "--verbose-prompt") {
             params.verbose_prompt = true;
         } else if (arg == "-r" || arg == "--reverse-prompt") {
             if (++i >= argc) {
@@ -198,7 +204,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  --in-prefix STRING    string to prefix user inputs with (default: empty)\n");
     fprintf(stderr, "  -f FNAME, --file FNAME\n");
     fprintf(stderr, "                        prompt file to start generation.\n");
-    fprintf(stderr, "  -n N, --n_predict N   number of tokens to predict (default: %d)\n", params.n_predict);
+    fprintf(stderr, "  -n N, --n_predict N   number of tokens to predict (default: %d, -1 - infinity)\n", params.n_predict);
     fprintf(stderr, "  --top_k N             top-k sampling (default: %d)\n", params.top_k);
     fprintf(stderr, "  --top_p N             top-p sampling (default: %.1f)\n", params.top_p);
     fprintf(stderr, "  --repeat_last_n N     last n tokens to consider for penalize (default: %d)\n", params.repeat_last_n);
@@ -210,6 +216,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  --n_parts N           number of model parts (default: -1 = determine from dimensions)\n");
     fprintf(stderr, "  -b N, --batch_size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     fprintf(stderr, "  --perplexity          compute perplexity over the prompt\n");
+    fprintf(stderr, "  --keep                number of tokens to keep from the initial prompt\n");
     if (ggml_mlock_supported()) {
         fprintf(stderr, "  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
     }

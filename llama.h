@@ -109,6 +109,7 @@ extern "C" {
 
     LLAMA_API int llama_n_vocab(struct llama_context * ctx);
     LLAMA_API int llama_n_ctx  (struct llama_context * ctx);
+    LLAMA_API int llama_n_embd (struct llama_context * ctx);
 
     // Token logits obtained from the last call to llama_eval()
     // The logits for the last token are stored in the last row
