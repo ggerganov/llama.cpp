@@ -275,13 +275,16 @@ int main(int argc, char ** argv) {
     // determine newline token
     auto llama_token_newline = ::llama_tokenize(ctx, "\n", false);
 
-    fprintf(stderr, "\n");
-    fprintf(stderr, "%s: prompt: '%s'\n", __func__, params.prompt.c_str());
-    fprintf(stderr, "%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
-    for (int i = 0; i < (int) embd_inp.size(); i++) {
-        fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], llama_token_to_str(ctx, embd_inp[i]));
+    if (params.verbose_prompt) {
+        fprintf(stderr, "\n");
+        fprintf(stderr, "%s: prompt: '%s'\n", __func__, params.prompt.c_str());
+        fprintf(stderr, "%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
+        for (int i = 0; i < (int) embd_inp.size(); i++) {
+            fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], llama_token_to_str(ctx, embd_inp[i]));
+        }
+        fprintf(stderr, "\n");
     }
-    fprintf(stderr, "\n");
+
     if (params.interactive) {
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
         struct sigaction sigint_action;

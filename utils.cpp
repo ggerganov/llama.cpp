@@ -134,6 +134,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.use_mlock = true;
         } else if (arg == "--mtest") {
             params.mem_test = true;
+        } else if (arg == "--verbose_prompt") {
+            params.verbose_prompt = true;
         } else if (arg == "-r" || arg == "--reverse-prompt") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -212,6 +214,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
         fprintf(stderr, "  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
     }
     fprintf(stderr, "  --mtest               compute maximum memory usage\n");
+    fprintf(stderr, "  --verbose-prompt      print prompt before generation\n");
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
     fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
     fprintf(stderr, "\n");
