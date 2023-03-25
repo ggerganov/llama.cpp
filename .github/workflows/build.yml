@@ -122,14 +122,14 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake ..
-          cmake --build . --config Release
+          mkdir avx2 & mkdir avx & mkdir avx512
+          cmake -S .. -B ./avx2 && cmake -S .. -B ./avx -DLLAMA_AVX2=OFF && cmake -S .. -B ./avx512 -DLLAMA_AVX512=ON
+          cmake --build ./avx2 --config Release && cmake --build ./avx --config Release && cmake --build ./avx512 --config Release 
 
       - name: Test
         id: cmake_test
         run: |
-          cd build
-          ctest -C Release --output-on-failure
+          cd build/avx2 && ctest -C Release --output-on-failure && cd ../avx && ctest -C Release --output-on-failure && cd ../avx512 && ctest -C Release --output-on-failure
 
       - name: Get commit hash
         id: commit
@@ -140,12 +140,15 @@ jobs:
         id: pack_artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
-          7z a llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-x64.zip .\build\bin\Release\*
+          mkdir artifacts
+          7z a .\artifacts\llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-avx2-x64.zip .\build\avx2\bin\Release\*
+          7z a .\artifacts\llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-avx-x64.zip .\build\avx\bin\Release\*
+          7z a .\artifacts\llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-avx512-x64.zip .\build\avx512\bin\Release\*
 
       - name: Create release
         id: create_release
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: zendesk/action-create-release@v1
+        uses: anzz1/action-create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -154,14 +157,25 @@ jobs:
       - name: Upload release
         id: upload_release
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/github-script@v3
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }} 
-          asset_path: .\llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-x64.zip
-          asset_name: llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-x64.zip
-          asset_content_type: application/octet-stream
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const path = require('path');
+            const fs = require('fs');
+            const release_id = '${{ steps.create_release.outputs.id }}';
+            for (let file of await fs.readdirSync('./artifacts')) {
+              if (path.extname(file) === '.zip') {
+                console.log('uploadReleaseAsset', file);
+                await github.repos.uploadReleaseAsset({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: release_id,
+                  name: file,
+                  data: await fs.readFileSync(`./artifacts/${file}`)
+                });
+              }
+            }
 
 #  ubuntu-latest-gcc:
 #    runs-on: ubuntu-latest
