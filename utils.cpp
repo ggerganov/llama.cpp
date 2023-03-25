@@ -156,7 +156,11 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         } else if (arg == "--random-prompt") {
             params.random_prompt = true;
         } else if (arg == "--in-prefix") {
-            params.input_prefix = argv[++i];
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.input_prefix = argv[i];
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             gpt_print_usage(argc, argv, params);
