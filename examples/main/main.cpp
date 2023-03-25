@@ -44,8 +44,20 @@ enum console_state {
 static console_state con_st = CONSOLE_STATE_DEFAULT;
 static bool con_use_color = false;
 
-void set_console_state(console_state new_st)
-{
+void enable_console_colors() {
+#if defined (_WIN32)
+    if (params.use_color) {
+        // Enable ANSI colors on Windows 10+
+        unsigned long dwMode = 0;
+        void* hConOut = GetStdHandle((unsigned long)-11); // STD_OUTPUT_HANDLE (-11)
+        if (hConOut && hConOut != (void*)-1 && GetConsoleMode(hConOut, &dwMode) && !(dwMode & 0x4)) {
+            SetConsoleMode(hConOut, dwMode | 0x4); // ENABLE_VIRTUAL_TERMINAL_PROCESSING (0x4)
+        }
+    }
+#endif
+}
+
+void set_console_state(console_state new_st) {
     if (!con_use_color) return;
     // only emit color code if state changed
     if (new_st != con_st) {
@@ -91,6 +103,14 @@ int main(int argc, char ** argv) {
     if (params.perplexity) {
         printf("\n************\n");
         printf("%s: please use the 'perplexity' tool for perplexity calculations\n", __func__);
+        printf("************\n\n");
+
+        return 0;
+    }
+
+    if (params.embedding) {
+        printf("\n************\n");
+        printf("%s: please use the 'embedding' tool for embedding calculations\n", __func__);
         printf("************\n\n");
 
         return 0;
@@ -165,8 +185,6 @@ int main(int argc, char ** argv) {
         return 0;
     }
 
-    int n_past = 0;
-
     // Add a space in front of the first character to match OG llama tokenizer behavior
     params.prompt.insert(0, 1, ' ');
 
@@ -175,7 +193,13 @@ int main(int argc, char ** argv) {
 
     const int n_ctx = llama_n_ctx(ctx);
 
-    params.n_predict = std::min(params.n_predict, n_ctx - (int) embd_inp.size());
+    if ((int) embd_inp.size() > n_ctx - 4) {
+        fprintf(stderr, "%s: error: prompt is too long (%d tokens, max %d)\n", __func__, (int) embd_inp.size(), n_ctx - 4);
+        return 1;
+    }
+
+    params.n_keep    = std::min(params.n_keep,    (int) embd_inp.size());
+    //params.n_predict = std::min(params.n_predict, n_ctx - (int) embd_inp.size());
 
     // prefix & suffix for instruct mode
     const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", true);
@@ -206,6 +230,13 @@ int main(int argc, char ** argv) {
         for (int i = 0; i < (int) embd_inp.size(); i++) {
             fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], llama_token_to_str(ctx, embd_inp[i]));
         }
+        if (params.n_keep > 0) {
+        fprintf(stderr, "%s: static prompt based on n_keep: '", __func__);
+            for (int i = 0; i < params.n_keep; i++) {
+                fprintf(stderr, "%s", llama_token_to_str(ctx, embd_inp[i]));
+            }
+            fprintf(stderr, "'\n");
+        }
         fprintf(stderr, "\n");
     }
 
@@ -222,7 +253,7 @@ int main(int argc, char ** argv) {
 
         fprintf(stderr, "%s: interactive mode on.\n", __func__);
 
-        if(params.antiprompt.size()) {
+        if (params.antiprompt.size()) {
             for (auto antiprompt : params.antiprompt) {
                 fprintf(stderr, "Reverse prompt: '%s'\n", antiprompt.c_str());
             }
@@ -232,14 +263,12 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "Input prefix: '%s'\n", params.input_prefix.c_str());
         }
     }
-    fprintf(stderr, "sampling parameters: temp = %f, top_k = %d, top_p = %f, repeat_last_n = %i, repeat_penalty = %f\n", params.temp, params.top_k, params.top_p, params.repeat_last_n, params.repeat_penalty);
+    fprintf(stderr, "sampling: temp = %f, top_k = %d, top_p = %f, repeat_last_n = %i, repeat_penalty = %f\n", params.temp, params.top_k, params.top_p, params.repeat_last_n, params.repeat_penalty);
+    fprintf(stderr, "generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
     fprintf(stderr, "\n\n");
 
-    std::vector<llama_token> embd;
-
-
-    int last_n_size = params.repeat_last_n;
-    std::vector<llama_token> last_n_tokens(last_n_size);
+    // TODO: replace with ring-buffer
+    std::vector<llama_token> last_n_tokens(n_ctx);
     std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
 
     if (params.interactive) {
@@ -252,27 +281,42 @@ int main(int argc, char ** argv) {
         is_interacting = params.interactive_start || params.instruct;
     }
 
-    int input_consumed = 0;
     bool input_noecho = false;
 
-    int remaining_tokens = params.n_predict;
+    int n_past     = 0;
+    int n_remain   = params.n_predict;
+    int n_consumed = 0;
 
-#if defined (_WIN32)
-  if (params.use_color) {
-        // Enable ANSI colors on Windows 10+
-        unsigned long dwMode = 0;
-        void* hConOut = GetStdHandle((unsigned long)-11); // STD_OUTPUT_HANDLE (-11)
-        if (hConOut && hConOut != (void*)-1 && GetConsoleMode(hConOut, &dwMode) && !(dwMode & 0x4)) {
-            SetConsoleMode(hConOut, dwMode | 0x4); // ENABLE_VIRTUAL_TERMINAL_PROCESSING (0x4)
-        }
-    }
-#endif
     // the first thing we will do is to output the prompt, so set color accordingly
+    enable_console_colors();
     set_console_state(CONSOLE_STATE_PROMPT);
 
-    while (remaining_tokens > 0 || params.interactive) {
+    std::vector<llama_token> embd;
+
+    while (n_remain > 0 || params.interactive) {
         // predict
         if (embd.size() > 0) {
+            // infinite text generation via context swapping
+            // if we run out of context:
+            // - take the n_keep first tokens from the original prompt (via n_past)
+            // - take half of the last (n_ctx - n_keep) tokens and recompute the logits in a batch
+            if (n_past + (int) embd.size() > n_ctx) {
+                const int n_left = n_past - params.n_keep;
+
+                n_past = params.n_keep;
+
+                // insert n_left/2 tokens at the start of embd from last_n_tokens
+                embd.insert(embd.begin(), last_n_tokens.begin() + n_ctx - n_left/2 - embd.size(), last_n_tokens.end() - embd.size());
+
+                //printf("\n---\n");
+                //printf("resetting: '");
+                //for (int i = 0; i < (int) embd.size(); i++) {
+                //    printf("%s", llama_token_to_str(ctx, embd[i]));
+                //}
+                //printf("'\n");
+                //printf("\n---\n");
+            }
+
             if (llama_eval(ctx, embd.data(), embd.size(), n_past, params.n_threads)) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return 1;
@@ -282,7 +326,7 @@ int main(int argc, char ** argv) {
         n_past += embd.size();
         embd.clear();
 
-        if ((int) embd_inp.size() <= input_consumed && !is_interacting) {
+        if ((int) embd_inp.size() <= n_consumed && !is_interacting) {
             // out of user input, sample next token
             const float top_k          = params.top_k;
             const float top_p          = params.top_p;
@@ -298,7 +342,9 @@ int main(int argc, char ** argv) {
                     logits[llama_token_eos()] = 0;
                 }
 
-                id = llama_sample_top_p_top_k(ctx, last_n_tokens.data(), last_n_tokens.size(), top_k, top_p, temp, repeat_penalty);
+                id = llama_sample_top_p_top_k(ctx,
+                        last_n_tokens.data() + n_ctx - params.repeat_last_n,
+                        params.repeat_last_n, top_k, top_p, temp, repeat_penalty);
 
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(id);
@@ -321,14 +367,14 @@ int main(int argc, char ** argv) {
             input_noecho = false;
 
             // decrement remaining sampling budget
-            --remaining_tokens;
+            --n_remain;
         } else {
             // some user input remains from prompt or interaction, forward it to processing
-            while ((int) embd_inp.size() > input_consumed) {
-                embd.push_back(embd_inp[input_consumed]);
+            while ((int) embd_inp.size() > n_consumed) {
+                embd.push_back(embd_inp[n_consumed]);
                 last_n_tokens.erase(last_n_tokens.begin());
-                last_n_tokens.push_back(embd_inp[input_consumed]);
-                ++input_consumed;
+                last_n_tokens.push_back(embd_inp[n_consumed]);
+                ++n_consumed;
                 if ((int) embd.size() >= params.n_batch) {
                     break;
                 }
@@ -343,13 +389,13 @@ int main(int argc, char ** argv) {
             fflush(stdout);
         }
         // reset color to default if we there is no pending user input
-        if (!input_noecho && (int)embd_inp.size() == input_consumed) {
+        if (!input_noecho && (int)embd_inp.size() == n_consumed) {
             set_console_state(CONSOLE_STATE_DEFAULT);
         }
 
         // in interactive mode, and not currently processing queued inputs;
         // check if we should prompt the user for more
-        if (params.interactive && (int) embd_inp.size() <= input_consumed) {
+        if (params.interactive && (int) embd_inp.size() <= n_consumed) {
             // check for reverse prompt
             std::string last_output;
             for (auto id : last_n_tokens) {
@@ -371,7 +417,7 @@ int main(int argc, char ** argv) {
                 set_console_state(CONSOLE_STATE_USER_INPUT);
 
                 if (params.instruct) {
-                    input_consumed = embd_inp.size();
+                    n_consumed = embd_inp.size();
                     embd_inp.insert(embd_inp.end(), inp_pfx.begin(), inp_pfx.end());
 
                     printf("\n> ");
@@ -405,7 +451,7 @@ int main(int argc, char ** argv) {
                     embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
                 }
 
-                remaining_tokens -= line_inp.size();
+                n_remain -= line_inp.size();
 
                 input_noecho = true; // do not echo this again
             }
@@ -426,8 +472,8 @@ int main(int argc, char ** argv) {
         }
 
         // In interactive mode, respect the maximum number of tokens and drop back to user input when reached.
-        if (params.interactive && remaining_tokens <= 0) {
-            remaining_tokens = params.n_predict;
+        if (params.interactive && n_remain <= 0) {
+            n_remain = params.n_predict;
             is_interacting = true;
         }
     }
