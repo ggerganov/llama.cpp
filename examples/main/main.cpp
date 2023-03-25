@@ -199,7 +199,6 @@ int main(int argc, char ** argv) {
     }
 
     params.n_keep    = std::min(params.n_keep,    (int) embd_inp.size());
-    //params.n_predict = std::min(params.n_predict, n_ctx - (int) embd_inp.size());
 
     // prefix & suffix for instruct mode
     const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", true);
@@ -293,7 +292,7 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd;
 
-    while (n_remain > 0 || params.interactive) {
+    while (n_remain != 0 || params.interactive) {
         // predict
         if (embd.size() > 0) {
             // infinite text generation via context swapping
