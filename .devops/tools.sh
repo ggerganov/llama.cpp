@@ -10,6 +10,8 @@ shift
 # Join the remaining arguments into a single string
 arg2="$@"
 
+modelname="ggml-model-f16.bin"
+
 if [[ $arg1 == '--convert' || $arg1 == '-c' ]]; then
     python3 ./convert-pth-to-ggml.py $arg2
 elif [[ $arg1 == '--quantize' || $arg1 == '-q' ]]; then
@@ -18,7 +20,14 @@ elif [[ $arg1 == '--run' || $arg1 == '-r' ]]; then
     ./main $arg2
 elif [[ $arg1 == '--all-in-one' || $arg1 == '-a' ]]; then
     echo "Converting PTH to GGML..."
-    for i in `ls $1/$2/consolidated.*.pth`; do
+    if [ -f "$1/$2/$modelname" ]; then
+        echo "Skip model conversion, it already exists: ${i/f16/q4_0}"
+    else
+        echo "Converting PTH to GGML: $i into ${i/f16/q4_0}..."
+        python3 ./convert-pth-to-ggml.py $1/$2 1
+    fi
+    echo "Quantizing f16 to q4_0..."
+    for i in `ls $1/$2/$modelname*`; do
         if [ -f "${i/f16/q4_0}" ]; then
             echo "Skip model quantization, it already exists: ${i/f16/q4_0}"
         else
