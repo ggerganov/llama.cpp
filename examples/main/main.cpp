@@ -46,13 +46,11 @@ static bool con_use_color = false;
 
 void enable_console_colors() {
 #if defined (_WIN32)
-    if (params.use_color) {
-        // Enable ANSI colors on Windows 10+
-        unsigned long dwMode = 0;
-        void* hConOut = GetStdHandle((unsigned long)-11); // STD_OUTPUT_HANDLE (-11)
-        if (hConOut && hConOut != (void*)-1 && GetConsoleMode(hConOut, &dwMode) && !(dwMode & 0x4)) {
-            SetConsoleMode(hConOut, dwMode | 0x4); // ENABLE_VIRTUAL_TERMINAL_PROCESSING (0x4)
-        }
+    // Enable ANSI colors on Windows 10+
+    unsigned long dwMode = 0;
+    void* hConOut = GetStdHandle((unsigned long)-11); // STD_OUTPUT_HANDLE (-11)
+    if (hConOut && hConOut != (void*)-1 && GetConsoleMode(hConOut, &dwMode) && !(dwMode & 0x4)) {
+        SetConsoleMode(hConOut, dwMode | 0x4); // ENABLE_VIRTUAL_TERMINAL_PROCESSING (0x4)
     }
 #endif
 }
@@ -287,7 +285,9 @@ int main(int argc, char ** argv) {
     int n_consumed = 0;
 
     // the first thing we will do is to output the prompt, so set color accordingly
-    enable_console_colors();
+    if (params.use_color) {
+        enable_console_colors();
+    }
     set_console_state(CONSOLE_STATE_PROMPT);
 
     std::vector<llama_token> embd;
