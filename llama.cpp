@@ -239,7 +239,7 @@ static bool kv_cache_init(
     const int n_mem      = n_layer*n_ctx;
     const int n_elements = n_embd*n_mem;
 
-    cache.buf.resize(2*n_elements*ggml_type_size(wtype) + 2u*MB);
+    cache.buf.resize(2u*n_elements*ggml_type_size(wtype) + 2u*MB);
 
     struct ggml_init_params params;
     params.mem_size   = cache.buf.size();
