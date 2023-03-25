@@ -192,7 +192,7 @@ extern "C" {
 		std::string concat_output = "";  
     	
 		bool startedsampling = false;
-        printf("\nProcessing Prompt: ");
+        printf("\nProcessing Prompt (%d tokens): ",embd_inp.size());
 
 		while (remaining_tokens > 0) 
 		{
@@ -224,7 +224,7 @@ extern "C" {
             	if(!startedsampling)
                 {
                     startedsampling = true;
-                    printf("\nGenerating: ");
+                    printf("\nGenerating (%d tokens): ",params.n_predict);
                 }
 
 	            {
