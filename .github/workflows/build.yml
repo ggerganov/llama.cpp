@@ -55,7 +55,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake ..
+          cmake .. -DLLAMA_SANITIZE_ADDRESS=ON -DLLAMA_SANITIZE_UNDEFINED=ON
           cmake --build . --config Release
 
       - name: Test
