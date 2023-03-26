@@ -314,27 +314,26 @@ static bool llama_model_load(
         fprintf(stderr, "%s: failed to open '%s'\n", __func__, fname.c_str());
         return false;
     }
+    uint32_t format_version = 0;
 
     // verify magic
     {
         uint32_t magic;
         fin.read((char *) &magic, sizeof(magic));
         if (magic == LLAMA_FILE_MAGIC_UNVERSIONED) {
-            fprintf(stderr, "%s: invalid model file '%s' (too old, regenerate your model files!)\n",
+            fprintf(stderr, "%s: model '%s' is too old, continuing in compatibility mode with degraded performance\n",
                     __func__, fname.c_str());
-            return false;
-        }
-        if (magic != LLAMA_FILE_MAGIC) {
-            fprintf(stderr, "%s: invalid model file '%s' (bad magic)\n", __func__, fname.c_str());
-            return false;
-        }
+            format_version = 0;
+        } else if (magic == LLAMA_FILE_MAGIC) {
+            fin.read((char *) &format_version, sizeof(format_version));
 
-        uint32_t format_version;
-        fin.read((char *) &format_version, sizeof(format_version));
-
-        if (format_version != LLAMA_FILE_VERSION) {
-            fprintf(stderr, "%s: invalid model file '%s' (unsupported format version %" PRIu32 ", expected %d)\n",
-                    __func__, fname.c_str(), format_version, LLAMA_FILE_VERSION);
+            if (format_version > LLAMA_FILE_VERSION) {
+                fprintf(stderr, "%s: invalid model file '%s' (unsupported format version %" PRIu32 ", expected %d)\n",
+                        __func__, fname.c_str(), format_version, LLAMA_FILE_VERSION);
+                return false;
+            }
+        } else {
+            fprintf(stderr, "%s: invalid model file '%s' (bad magic %08x)\n", __func__, fname.c_str(), magic);
             return false;
         }
     }
@@ -417,7 +416,14 @@ static bool llama_model_load(
             }
 
             float score;
-            fin.read((char *) &score, sizeof(score));
+            if (format_version == 0) {
+                // Older version doesn't have embedded token score, use approximation: length^2
+                // TODO: Maybe read it from tokenizer.model as a fallback?
+                score = word.length();
+                score *= score;
+            } else {
+                fin.read((char *) &score, sizeof(score));
+            }
 
             vocab.token_to_id[word] = i;
 
