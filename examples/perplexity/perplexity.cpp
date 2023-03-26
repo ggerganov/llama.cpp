@@ -19,7 +19,7 @@ std::vector<double> softmax(const std::vector<float>& logits) {
 
 void perplexity(llama_context * ctx, const gpt_params & params) {
     // Download: https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip?ref=salesforce-research
-    // Run `./main --perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
+    // Run `./perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
     // Output: `perplexity: 13.5106 [114/114]`
     auto tokens = ::llama_tokenize(ctx, params.prompt, true);
 
