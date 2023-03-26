@@ -9,7 +9,7 @@ std::vector<double> softmax(const std::vector<float>& logits) {
     for (size_t i = 0; i < logits.size(); i++) {
         // Subtract the maximum logit value from the current logit value for numerical stability
         float logit = logits[i] - max_logit;
-        double exp_logit = std::exp(logit);
+        double exp_logit = std::exp((double)logit);
         sum_exp += exp_logit;
         probs[i] = exp_logit;
     }
