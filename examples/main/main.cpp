@@ -493,7 +493,7 @@ int main(int argc, char ** argv) {
         }
 
         // In interactive mode, respect the maximum number of tokens and drop back to user input when reached.
-        if (params.interactive && n_remain <= 0) {
+        if (params.interactive && n_remain <= 0 && params.n_predict != -1) {
             n_remain = params.n_predict;
             is_interacting = true;
         }
