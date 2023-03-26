@@ -320,7 +320,7 @@ static bool llama_model_load(
         uint32_t magic;
         fin.read((char *) &magic, sizeof(magic));
         if (magic == LLAMA_FILE_MAGIC_UNVERSIONED) {
-            fprintf(stderr, "%s: invalid model file '%s' (too old, regenerate your model files!)\n",
+            fprintf(stderr, "%s: invalid model file '%s' (too old, regenerate your model files or convert them with convert-unversioned-ggml-to-ggml.py!)\n",
                     __func__, fname.c_str());
             return false;
         }
