@@ -465,14 +465,19 @@ int main(int argc, char ** argv) {
                 // done taking input, reset color
                 set_console_state(CONSOLE_STATE_DEFAULT);
 
-                auto line_inp = ::llama_tokenize(ctx, buffer, false);
-                embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
+                // Add tokens to buffer only if the line is non-empty.
+                // This let's the user make the chat continue if it was stopped
+                // on a reverse prompt.
+                if (buffer.length() > 1) {
+                    auto line_inp = ::llama_tokenize(ctx, buffer, false);
+                    embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
 
-                if (params.instruct) {
-                    embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
-                }
+                    if (params.instruct) {
+                        embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
+                    }
 
-                n_remain -= line_inp.size();
+                    n_remain -= line_inp.size();
+		}
 
                 input_noecho = true; // do not echo this again
             }
