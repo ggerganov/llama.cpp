@@ -228,27 +228,29 @@ ggml.o: ggml.c ggml.h
 llama.o: llama.cpp llama.h
 	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
 
-utils.o: utils.cpp utils.h
-	$(CXX) $(CXXFLAGS) -c utils.cpp -o utils.o
+common.o: examples/common.cpp examples/common.h
+	$(CXX) $(CXXFLAGS) -c examples/common.cpp -o common.o
 
 extra.o: extra.cpp extra.h
 	$(CXX) $(CXXFLAGS) -c extra.cpp -o extra.o
 
 clean:
-	rm -f *.o main quantize
+	rm -vf *.o main quantize perplexity
 
-main: main.cpp ggml.o extra.o utils.o
-	$(CXX) $(CXXFLAGS) main.cpp ggml.o extra.o utils.o -o main $(LDFLAGS)
+main: examples/main/main.cpp ggml.o llama.o common.o
+	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
 
-llamalib: expose.cpp ggml.o utils.o extra.o
-	$(CXX) $(CXXFLAGS) expose.cpp ggml.o utils.o extra.o -shared -o llamacpp.dll $(LDFLAGS)
+llamalib: expose.cpp ggml.o common.o extra.o
+	$(CXX) $(CXXFLAGS) expose.cpp ggml.o common.o extra.o -shared -o llamacpp.dll $(LDFLAGS)
 
+quantize: examples/quantize/quantize.cpp ggml.o llama.o
+	$(CXX) $(CXXFLAGS) examples/quantize/quantize.cpp ggml.o llama.o -o quantize $(LDFLAGS)
 
-quantize: quantize.cpp ggml.o llama.o utils.o
-	$(CXX) $(CXXFLAGS) quantize.cpp ggml.o llama.o utils.o -o quantize $(LDFLAGS)
+perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o
+	$(CXX) $(CXXFLAGS) examples/perplexity/perplexity.cpp ggml.o llama.o common.o -o perplexity $(LDFLAGS)
 
 #
 # Tests

@@ -168,9 +168,11 @@ struct llama_context {
 
     int64_t t_sample_us = 0;
     int64_t t_eval_us   = 0;
+    int64_t t_p_eval_us = 0;
 
     int32_t n_sample = 0; // number of tokens sampled
     int32_t n_eval   = 0; // number of eval calls
+    int32_t n_p_eval = 0; // number of tokens in eval calls for the prompt (with batch size > 1)
 
     llama_model model;
     llama_vocab vocab;
@@ -239,7 +241,7 @@ static bool kv_cache_init(
     const int n_mem      = n_layer*n_ctx;
     const int n_elements = n_embd*n_mem;
 
-    cache.buf.resize(2*n_elements*ggml_type_size(wtype) + 2u*MB);
+    cache.buf.resize(2u*n_elements*ggml_type_size(wtype) + 2u*MB);
 
     struct ggml_init_params params;
     params.mem_size   = cache.buf.size();
@@ -267,14 +269,16 @@ static void kv_cache_free(struct llama_kv_cache & cache) {
 
 struct llama_context_params llama_context_default_params() {
     struct llama_context_params result = {
-        /*.n_ctx      =*/ 512,
-        /*.n_parts    =*/ -1,
-        /*.seed       =*/ 0,
-        /*.f16_kv     =*/ false,
-        /*.logits_all =*/ false,
-        /*.vocab_only =*/ false,
-        /*.use_mlock  =*/ false,
-        /*.embedding  =*/ false,
+        /*.n_ctx                       =*/ 512,
+        /*.n_parts                     =*/ -1,
+        /*.seed                        =*/ 0,
+        /*.f16_kv                      =*/ false,
+        /*.logits_all                  =*/ false,
+        /*.vocab_only                  =*/ false,
+        /*.use_mlock                   =*/ false,
+        /*.embedding                   =*/ false,
+        /*.progress_callback           =*/ nullptr,
+        /*.progress_callback_user_data =*/ nullptr,
     };
 
     return result;
@@ -290,7 +294,9 @@ static bool llama_model_load(
         int n_ctx,
         int n_parts,
         ggml_type memory_type,
-        bool vocab_only) {
+        bool vocab_only,
+        llama_progress_callback progress_callback,
+        void *progress_callback_user_data) {
     fprintf(stderr, "%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
     const int64_t t_start_us = ggml_time_us();
@@ -583,6 +589,10 @@ static bool llama_model_load(
 
     std::vector<uint8_t> tmp;
 
+    if (progress_callback) {
+        progress_callback(0.0, progress_callback_user_data);
+    }
+
     for (int i = 0; i < n_parts; ++i) {
         const int part_id = i;
         //const int part_id = n_parts - i - 1;
@@ -596,6 +606,10 @@ static bool llama_model_load(
 
         fin = std::ifstream(fname_part, std::ios::binary);
         fin.rdbuf()->pubsetbuf(f_buf.data(), f_buf.size());
+
+        fin.seekg(0, fin.end);
+        const size_t file_size = fin.tellg();
+
         fin.seekg(file_offset);
 
         // load weights
@@ -771,6 +785,11 @@ static bool llama_model_load(
                 model.n_loaded++;
 
                 // progress
+                if (progress_callback) {
+                    double current_file_progress = double(size_t(fin.tellg()) - file_offset) / double(file_size - file_offset);
+                    double current_progress = (double(i) + current_file_progress) / double(n_parts);
+                    progress_callback(current_progress, progress_callback_user_data);
+                }
                 if (model.n_loaded % 8 == 0) {
                     fprintf(stderr, ".");
                     fflush(stderr);
@@ -792,6 +811,10 @@ static bool llama_model_load(
     }
 
     lctx.t_load_us = ggml_time_us() - t_start_us;
+
+    if (progress_callback) {
+        progress_callback(1.0, progress_callback_user_data);
+    }
 
     return true;
 }
@@ -836,8 +859,11 @@ static bool llama_eval_internal(
     };
 
     struct ggml_context * ctx0 = ggml_init(params);
+
+    // for big prompts, if BLAS is enabled, it is better to use only one thread
+    // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
     ggml_cgraph gf = {};
-    gf.n_threads = n_threads;
+    gf.n_threads = N > 255 && ggml_cpu_has_blas() ? 1 : n_threads;
 
     struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
     memcpy(embd->data, tokens, N*ggml_element_size(embd));
@@ -903,8 +929,7 @@ static bool llama_eval_internal(
             struct ggml_tensor * KQ_scaled =
                 ggml_scale(ctx0,
                         KQ,
-                        ggml_new_f32(ctx0, 1.0f/sqrt(float(n_embd)/n_head))
-                        );
+                        ggml_new_f32(ctx0, 1.0f/sqrt(float(n_embd)/n_head)));
 
             // KQ_masked = mask_past(KQ_scaled)
             struct ggml_tensor * KQ_masked = ggml_diag_mask_inf(ctx0, KQ_scaled, n_past);
@@ -920,7 +945,7 @@ static bool llama_eval_internal(
                                 ggml_view_1d(ctx0, kv_self.v, (n_past + N)*n_embd, il*n_ctx*ggml_element_size(kv_self.v)*n_embd),
                                 n_embd/n_head, n_head, n_past + N),
                             1, 2, 0, 3),
-                    ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_past + N, n_embd/n_head, n_head));
+                    ggml_new_tensor_3d(ctx0, kv_self.v->type, n_past + N, n_embd/n_head, n_head));
 
             // KQV = transpose(V) * KQ_soft_max
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V_trans, KQ_soft_max);
@@ -1056,6 +1081,10 @@ static bool llama_eval_internal(
     if (N == 1) {
         lctx.t_eval_us += ggml_time_us() - t_start_us;
         lctx.n_eval++;
+    }
+    else if (N > 1) {
+        lctx.t_p_eval_us += ggml_time_us() - t_start_us;
+        lctx.n_p_eval += N;
     }
 
     return true;
@@ -1239,10 +1268,10 @@ static llama_vocab::id llama_sample_top_p_top_k(
         double repeat_penalty) {
     auto & rng = lctx.rng;
 
-    const auto & vocab = lctx.vocab;
-    const auto & logits = lctx.logits;
+    const int n_logits = lctx.model.hparams.n_vocab;
 
-    int n_logits = vocab.id_to_token.size();
+    const auto & logits = lctx.logits;
+    const auto * plogits = logits.data() + logits.size() - n_logits;
 
     std::vector<std::pair<double, llama_vocab::id>> logits_id;
     logits_id.reserve(n_logits);
@@ -1254,13 +1283,13 @@ static llama_vocab::id llama_sample_top_p_top_k(
             // credit https://github.com/facebookresearch/llama/compare/main...shawwn:llama:main
             if (std::find(last_n_tokens.begin(), last_n_tokens.end(), i) != last_n_tokens.end()) {
                 // if score < 0 then repetition penalty has to multiplied to reduce the previous token probability
-                if (logits[i] < 0.0) {
-                    logits_id.push_back(std::make_pair(logits[i]*scale*repeat_penalty, i));
+                if (plogits[i] < 0.0) {
+                    logits_id.push_back(std::make_pair(plogits[i]*scale*repeat_penalty, i));
                 } else {
-                    logits_id.push_back(std::make_pair(logits[i]*scale/repeat_penalty, i));
+                    logits_id.push_back(std::make_pair(plogits[i]*scale/repeat_penalty, i));
                 }
             } else {
-                logits_id.push_back(std::make_pair(logits[i]*scale, i));
+                logits_id.push_back(std::make_pair(plogits[i]*scale, i));
             }
         }
     }
@@ -1624,7 +1653,8 @@ struct llama_context * llama_init_from_file(
     ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
     if (!llama_model_load(path_model, *ctx, params.n_ctx, params.n_parts, memory_type,
-                          params.vocab_only)) {
+                          params.vocab_only, params.progress_callback,
+                          params.progress_callback_user_data)) {
         fprintf(stderr, "%s: failed to load model\n", __func__);
         llama_free(ctx);
         return nullptr;
@@ -1654,6 +1684,8 @@ struct llama_context * llama_init_from_file(
         }
 
         const auto & hparams = ctx->model.hparams;
+
+        // resized during inference
         if (params.logits_all) {
             ctx->logits.reserve(hparams.n_ctx*hparams.n_vocab);
         } else {
@@ -1661,7 +1693,7 @@ struct llama_context * llama_init_from_file(
         }
 
         if (params.embedding){
-            ctx->embedding.reserve(hparams.n_embd);
+            ctx->embedding.resize(hparams.n_embd);
         }
 
         ctx->buf_compute.resize(MEM_REQ_EVAL.at(ctx->model.type));
@@ -1738,6 +1770,10 @@ int llama_n_ctx(struct llama_context * ctx) {
     return ctx->model.hparams.n_ctx;
 }
 
+int llama_n_embd(struct llama_context * ctx) {
+    return ctx->model.hparams.n_embd;
+}
+
 float * llama_get_logits(struct llama_context * ctx) {
     return ctx->logits.data();
 }
@@ -1797,12 +1833,14 @@ void llama_print_timings(struct llama_context * ctx) {
 
     const int32_t n_sample = std::max(1, ctx->n_sample);
     const int32_t n_eval   = std::max(1, ctx->n_eval);
+    const int32_t n_p_eval = std::max(1, ctx->n_p_eval);
 
     fprintf(stderr, "\n");
-    fprintf(stderr, "%s:     load time = %8.2f ms\n", __func__, ctx->t_load_us / 1000.0f);
-    fprintf(stderr, "%s:   sample time = %8.2f ms / %5d runs (%8.2f ms per run)\n", __func__, 1e-3f * ctx->t_sample_us, n_sample, 1e-3f * ctx->t_sample_us / n_sample);
-    fprintf(stderr, "%s:     eval time = %8.2f ms / %5d runs (%8.2f ms per run)\n", __func__, 1e-3f * ctx->t_eval_us,   n_eval,   1e-3f * ctx->t_eval_us   / n_eval);
-    fprintf(stderr, "%s:    total time = %8.2f ms\n", __func__, (t_end_us - ctx->t_start_us)/1000.0f);
+    fprintf(stderr, "%s:        load time = %8.2f ms\n", __func__, ctx->t_load_us / 1000.0f);
+    fprintf(stderr, "%s:      sample time = %8.2f ms / %5d runs   (%8.2f ms per run)\n",   __func__, 1e-3f * ctx->t_sample_us, n_sample, 1e-3f * ctx->t_sample_us / n_sample);
+    fprintf(stderr, "%s: prompt eval time = %8.2f ms / %5d tokens (%8.2f ms per token)\n", __func__, 1e-3f * ctx->t_p_eval_us, n_p_eval, 1e-3f * ctx->t_p_eval_us / n_p_eval);
+    fprintf(stderr, "%s:        eval time = %8.2f ms / %5d runs   (%8.2f ms per run)\n",   __func__, 1e-3f * ctx->t_eval_us,   n_eval,   1e-3f * ctx->t_eval_us   / n_eval);
+    fprintf(stderr, "%s:       total time = %8.2f ms\n", __func__, (t_end_us - ctx->t_start_us)/1000.0f);
 }
 
 void llama_reset_timings(struct llama_context * ctx) {
@@ -1810,6 +1848,7 @@ void llama_reset_timings(struct llama_context * ctx) {
 
     ctx->t_sample_us = ctx->n_sample = 0;
     ctx->t_eval_us   = ctx->n_eval   = 0;
+    ctx->t_p_eval_us = ctx->n_p_eval = 0;
 }
 
 const char * llama_print_system_info(void) {

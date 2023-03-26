@@ -7,7 +7,7 @@
 //No dynamic memory allocation! Setup structs with FIXED (known) shapes and sizes for ALL output fields
 //Python will ALWAYS provide the memory, we just write to it.
 
-#include "main.cpp"
+#include "./examples/main/main.cpp"
 #include "extra.h"
 
 void print_tok_vec(std::vector<llama_token> & embd)

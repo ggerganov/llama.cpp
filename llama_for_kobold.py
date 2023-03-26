@@ -44,9 +44,9 @@ def load_model(model_filename,batch_size=8,max_context_length=512,n_parts_overwr
     inputs.model_filename = model_filename.encode("UTF-8")
     inputs.batch_size = batch_size
     inputs.max_context_length = max_context_length #initial value to use for ctx, can be overwritten
-    inputs.threads = 4 #seems to outperform os.cpu_count(), it's memory bottlenecked 
+    inputs.threads = min(6,os.cpu_count()) #seems to outperform os.cpu_count(), it's memory bottlenecked 
     inputs.n_parts_overwrite = n_parts_overwrite
-    inputs.f16_kv = False
+    inputs.f16_kv = True
     ret = handle.load_model(inputs)
     return ret
 
