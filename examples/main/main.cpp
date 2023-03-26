@@ -450,7 +450,10 @@ int main(int argc, char ** argv) {
                 std::string line;
                 bool another_line = true;
                 do {
-                    std::getline(std::cin, line);
+                    if (!std::getline(std::cin, line)) {
+                        // input stream is bad or EOF received
+                        return 0;
+                    }
                     if (line.empty() || line.back() != '\\') {
                         another_line = false;
                     } else {
