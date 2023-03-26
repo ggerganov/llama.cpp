@@ -755,7 +755,7 @@ void dequantize_row_q4_0(const void * restrict x, float * restrict y, int k) {
     const uint8_t * restrict pd = ((const uint8_t *)x + 0*bs);
     const uint8_t * restrict pb = ((const uint8_t *)x + 0*bs + sizeof(float));
 
-#if defined(__AVX2__)    
+#if defined(__AVX2__)
     for (int i = 0; i < nb; i++) {
         // scale factor
         const __m256 d_v = _mm256_broadcast_ss((const float *) (pd + i*bs));
