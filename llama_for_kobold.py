@@ -89,7 +89,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
     server_version = "ConcedoLlamaForKoboldServer"
 
     def do_GET(self):
-        if self.path=="/":
+        if self.path=="/" or self.path.startswith('/?') or self.path.startswith('?'):
             if embedded_kailite is None:
                 self.send_response(200)
                 self.end_headers()
