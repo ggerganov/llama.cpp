@@ -65,7 +65,7 @@ void set_console_state(console_state new_st) {
     }
 }
 
-static bool is_interacting = false;
+static bool is_interacting = true;
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
 void sigint_handler(int signo) {
@@ -139,14 +139,6 @@ int main(int argc, char ** argv) {
         return 0;
     }
 
-    if (params.instruct) {
-        printf("\n************\n");
-        printf("%s: please use the 'instruct' tool for instruction-response operation\n", __func__);
-        printf("************\n\n");
-
-        return 0;
-    }
-
     if (params.n_ctx > 2048) {
         fprintf(stderr, "%s: warning: model does not support context sizes greater than 2048 tokens (%d specified);"
                 "expect poor results\n", __func__, params.n_ctx);
@@ -162,9 +154,6 @@ int main(int argc, char ** argv) {
     if (params.random_prompt) {
         params.prompt = gpt_random_prompt(rng);
     }
-
-//    params.prompt = R"(// this function checks if the number n is prime
-//bool is_prime(int n) {)";
 
     llama_context * ctx;
 
@@ -225,17 +214,13 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    // number of tokens to keep when resetting context
-    params.n_keep = (params.n_keep < 0) ? (int)embd_inp.size() : std::min(params.n_keep, (int)embd_inp.size());
+    // always keep the prompt in instruct mode
+    params.n_keep      = (int)embd_inp.size(); 
 
-    // enable interactive mode if reverse prompt is specified
-    if (params.antiprompt.size() != 0) {
-        params.interactive = true;
-    }
-
-    if (params.interactive_start) {
-        params.interactive = true;
-    }
+    // in instruct mode, we inject a prefix and a suffix to each input by the user
+    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", true);
+    const auto inp_sfx = ::llama_tokenize(ctx, "\n\n### Response:\n\n", false);
+    params.antiprompt.push_back("### Instruction:\n\n");
 
     // determine newline token
     auto llama_token_newline = ::llama_tokenize(ctx, "\n", false);
@@ -257,29 +242,26 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "\n");
     }
 
-    if (params.interactive) {
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
-        struct sigaction sigint_action;
-        sigint_action.sa_handler = sigint_handler;
-        sigemptyset (&sigint_action.sa_mask);
-        sigint_action.sa_flags = 0;
-        sigaction(SIGINT, &sigint_action, NULL);
+    struct sigaction sigint_action;
+    sigint_action.sa_handler = sigint_handler;
+    sigemptyset (&sigint_action.sa_mask);
+    sigint_action.sa_flags = 0;
+    sigaction(SIGINT, &sigint_action, NULL);
 #elif defined (_WIN32)
-        signal(SIGINT, sigint_handler);
+    signal(SIGINT, sigint_handler);
 #endif
 
-        fprintf(stderr, "%s: interactive mode on.\n", __func__);
+    fprintf(stderr, "%s: interactive mode on.\n", __func__);
 
-        if (params.antiprompt.size()) {
-            for (auto antiprompt : params.antiprompt) {
-                fprintf(stderr, "Reverse prompt: '%s'\n", antiprompt.c_str());
-            }
-        }
-
-        if (!params.input_prefix.empty()) {
-            fprintf(stderr, "Input prefix: '%s'\n", params.input_prefix.c_str());
-        }
+    for (auto antiprompt : params.antiprompt) {
+        fprintf(stderr, "Reverse prompt: '%s'\n", antiprompt.c_str());
     }
+
+    if (!params.input_prefix.empty()) {
+        fprintf(stderr, "Input prefix: '%s'\n", params.input_prefix.c_str());
+    }
+
     fprintf(stderr, "sampling: temp = %f, top_k = %d, top_p = %f, repeat_last_n = %i, repeat_penalty = %f\n", params.temp, params.top_k, params.top_p, params.repeat_last_n, params.repeat_penalty);
     fprintf(stderr, "generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
     fprintf(stderr, "\n\n");
@@ -288,17 +270,15 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> last_n_tokens(n_ctx);
     std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
 
-    if (params.interactive) {
-        fprintf(stderr, "== Running in interactive mode. ==\n"
+    fprintf(stderr, "== Running in interactive mode. ==\n"
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
-               " - Press Ctrl+C to interject at any time.\n"
+           " - Press Ctrl+C to interject at any time.\n"
 #endif
-               " - Press Return to return control to LLaMa.\n"
-               " - If you want to submit another line, end your input in '\\'.\n\n");
-        is_interacting = params.interactive_start;
-    }
+           " - Press Return to return control to LLaMa.\n"
+           " - If you want to submit another line, end your input in '\\'.\n\n");
 
-    bool input_noecho = false;
+    bool is_antiprompt    = false;
+    bool input_noecho     = false;
 
     int n_past     = 0;
     int n_remain   = params.n_predict;
@@ -309,7 +289,7 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd;
 
-    while (n_remain != 0 || params.interactive) {
+    while (1) {
         // predict
         if (embd.size() > 0) {
             // infinite text generation via context swapping
@@ -366,16 +346,6 @@ int main(int argc, char ** argv) {
                 last_n_tokens.push_back(id);
             }
 
-            // replace end of text token with newline token when in interactive mode
-            if (id == llama_token_eos() && params.interactive) {
-                id = llama_token_newline.front();
-                if (params.antiprompt.size() != 0) {
-                    // tokenize and inject first reverse prompt
-                    const auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false);
-                    embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
-                }
-            }
-
             // add it to the context
             embd.push_back(id);
 
@@ -411,23 +381,24 @@ int main(int argc, char ** argv) {
 
         // in interactive mode, and not currently processing queued inputs;
         // check if we should prompt the user for more
-        if (params.interactive && (int) embd_inp.size() <= n_consumed) {
+        if ((int) embd_inp.size() <= n_consumed) {
 
             // check for reverse prompt
-            if (params.antiprompt.size()) {
-                std::string last_output;
-                for (auto id : last_n_tokens) {
-                    last_output += llama_token_to_str(ctx, id);
-                }
+            std::string last_output;
+            for (auto id : last_n_tokens) {
+                last_output += llama_token_to_str(ctx, id);
+            }
 
-                // Check if each of the reverse prompts appears at the end of the output.
-                for (std::string & antiprompt : params.antiprompt) {
-                    if (last_output.find(antiprompt.c_str(), last_output.length() - antiprompt.length(), antiprompt.length()) != std::string::npos) {
-                        is_interacting = true;
-                        set_console_state(CONSOLE_STATE_USER_INPUT);
-                        fflush(stdout);
-                        break;
-                    }
+            is_antiprompt = false;
+
+            // Check if each of the reverse prompts appears at the end of the output.
+            for (std::string & antiprompt : params.antiprompt) {
+                if (last_output.find(antiprompt.c_str(), last_output.length() - antiprompt.length(), antiprompt.length()) != std::string::npos) {
+                    is_interacting = true;
+                    is_antiprompt = true;
+                    set_console_state(CONSOLE_STATE_USER_INPUT);
+                    fflush(stdout);
+                    break;
                 }
             }
 
@@ -435,6 +406,8 @@ int main(int argc, char ** argv) {
 
                 // potentially set color to indicate we are taking user input
                 set_console_state(CONSOLE_STATE_USER_INPUT);
+
+                printf("\n> ");
 
                 std::string buffer;
                 if (!params.input_prefix.empty()) {
@@ -463,8 +436,20 @@ int main(int argc, char ** argv) {
                 // Add tokens to embd only if the input buffer is non-empty
                 // Entering a empty line lets the user pass control back
                 if (buffer.length() > 1) {
+                    // consume, consume
+                    n_consumed = embd_inp.size();
+
+                    // insert instruction prefix
+                    // only if it wasn't already found as antiprompt
+                    if (!is_antiprompt) {
+                        embd_inp.insert(embd_inp.end(), inp_pfx.begin(), inp_pfx.end());
+                    }
+
                     auto line_inp = ::llama_tokenize(ctx, buffer, false);
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
+
+                    // insert response suffix
+                    embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
 
                     n_remain -= line_inp.size();
                 }
@@ -479,12 +464,11 @@ int main(int argc, char ** argv) {
 
         // end of text token
         if (embd.back() == llama_token_eos()) {
-            fprintf(stderr, " [end of text]\n");
-            break;
+            is_interacting = true;
         }
 
         // In interactive mode, respect the maximum number of tokens and drop back to user input when reached.
-        if (params.interactive && n_remain <= 0 && params.n_predict != -1) {
+        if (n_remain <= 0 && params.n_predict != -1) {
             n_remain = params.n_predict;
             is_interacting = true;
         }
