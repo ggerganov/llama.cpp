@@ -732,7 +732,7 @@ static void quantize_row_q4_1_reference(const float * restrict x, void * restric
 void quantize_row_q4_1(const float * restrict x, void * restrict vy, int k) {
     assert(k % QK == 0);
 
-#if defined(__AVX2__) && 0
+#if defined(__AVX2__)
     const int nb = k / QK;
 
     block_q4_1 * restrict y = vy;
