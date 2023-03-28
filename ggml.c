@@ -449,18 +449,18 @@ static inline __m128i packNibbles( __m256i bytes )
 // blocks of QK elements
 // represented with a single float (delta) and QK/2 8-bit ints (i.e QK 4-bit signed integer factors)
 typedef struct {
-    float   scale;
-    uint8_t nibbles[QK / 2];
+    float   d; // delta
+    uint8_t qs[QK / 2]; // nibbles / quants
 } block_q4_0;
 static_assert(sizeof(block_q4_0) == sizeof(float) + QK / 2, "wrong q4_0 block size/padding");
 
 // method 4
 // blocks of QK elements
-// represented with 2 floats (min + delta) and QK/2 8-bit ints (i.e QK 4-bit unsigned integer factors)
+// represented with 2 floats (delta + min) and QK/2 8-bit ints (i.e QK 4-bit unsigned integer factors)
 typedef struct {
-    float   scale_delta;
-    float   scale_min;
-    uint8_t nibbles[QK / 2];
+    float   d;
+    float   m;
+    uint8_t qs[QK / 2]; // nibbles / quants
 } block_q4_1;
 static_assert(sizeof(block_q4_1) == sizeof(float) * 2 + QK / 2, "wrong q4_1 block size/padding");
 
@@ -482,7 +482,7 @@ static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * r
         const float d = amax / ((1 << 3) - 1);
         const float id = d ? 1.0f/d : 0.0f;
 
-        y[i].scale = d;
+        y[i].d = d;
 
         for (int l = 0; l < QK; l += 2) {
             const float v0 = x[i*QK + l + 0]*id;
@@ -497,7 +497,7 @@ static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * r
             pp[l/2] = vi0 | (vi1 << 4);
         }
 
-        memcpy(y[i].nibbles, pp, sizeof(pp));
+        memcpy(y[i].qs, pp, sizeof(pp));
     }
 }
 
@@ -533,10 +533,10 @@ static void quantize_row_q4_0(const float * restrict x, void * restrict vy, int 
         const float d = amax / ((1 << 3) - 1);
         const float id = d ? 1.0/d : 0.0;
 
-        y[i].scale = d;
+        y[i].d = d;
 
         const vector float vid = vec_splats(id);
-        uint8_t * restrict pb = y[i].nibbles;
+        uint8_t * restrict pb = y[i].qs;
         for (int l = 0; l < 8; l++) {
             const vector float vf  = vec_madd(srcv[l], vid, v85);
             const vector signed int vi = vec_signed(vf);
@@ -568,7 +568,7 @@ static void quantize_row_q4_0(const float * restrict x, void * restrict vy, int 
         const float d = amax / ((1 << 3) - 1);
         const float id = d ? 1.0/d : 0.0;
 
-        y[i].scale = d;
+        y[i].d = d;
 
         for (int l = 0; l < 8; l++) {
             const float32x4_t v  = vmulq_n_f32(srcv[l], id);
@@ -579,7 +579,7 @@ static void quantize_row_q4_0(const float * restrict x, void * restrict vy, int 
             pp[2*l + 1] = vgetq_lane_s32(vi, 2) | (vgetq_lane_s32(vi, 3) << 4);
         }
 
-        memcpy(y[i].nibbles, pp, sizeof(pp));
+        memcpy(y[i].qs, pp, sizeof(pp));
     }
 #elif defined(__AVX2__)
     for (int i = 0; i < nb; i++) {
@@ -604,7 +604,7 @@ static void quantize_row_q4_0(const float * restrict x, void * restrict vy, int 
 
         // Quantize these floats
         const float d = maxScalar / 7.0f;
-        y[i].scale = d;
+        y[i].d = d;
         const float id = ( maxScalar != 0.0f ) ? 7.0f / maxScalar : 0.0f;
         const __m256 mul = _mm256_set1_ps( id );
 
@@ -644,7 +644,7 @@ static void quantize_row_q4_0(const float * restrict x, void * restrict vy, int 
 
         // Compress the vector into 4 bit/value, and store
         __m128i res = packNibbles( i0 );
-        _mm_storeu_si128( ( __m128i* )y[i].nibbles, res );
+        _mm_storeu_si128( ( __m128i* )y[i].qs, res );
     }
 #elif defined(__wasm_simd128__)
     uint8_t pp[QK/2];
@@ -669,7 +669,7 @@ static void quantize_row_q4_0(const float * restrict x, void * restrict vy, int 
         const float d = amax / ((1 << 3) - 1);
         const float id = d ? 1.0/d : 0.0;
 
-        y[i].scale = d;
+        y[i].d = d;
 
         for (int l = 0; l < 8; l++) {
             const v128_t v  = wasm_f32x4_mul(srcv[l], wasm_f32x4_splat(id));
@@ -680,7 +680,7 @@ static void quantize_row_q4_0(const float * restrict x, void * restrict vy, int 
             pp[2*l + 1] = wasm_i32x4_extract_lane(vi, 2) | (wasm_i32x4_extract_lane(vi, 3) << 4);
         }
 
-        memcpy(y[i].nibbles, pp, sizeof(pp));
+        memcpy(y[i].qs, pp, sizeof(pp));
     }
 #else
     // scalar
@@ -709,8 +709,8 @@ static void quantize_row_q4_1(const float * restrict x, void * restrict vy, int 
         const float d = (max - min) / ((1 << 4) - 1);
         const float id = d ? 1.0f/d : 0.0f;
 
-        y[i].scale_delta = d;
-        y[i].scale_min = min;
+        y[i].d = d;
+        y[i].m = min;
 
         for (int l = 0; l < QK; l += 2) {
             const float v0 = (x[i*QK + l + 0] - min)*id;
@@ -725,7 +725,7 @@ static void quantize_row_q4_1(const float * restrict x, void * restrict vy, int 
             pp[l/2] = vi0 | (vi1 << 4);
         }
 
-        memcpy(y[i].nibbles, pp, sizeof(pp));
+        memcpy(y[i].qs, pp, sizeof(pp));
     }
 }
 
@@ -738,9 +738,9 @@ static void dequantize_row_q4_0(const void * restrict vx, float * restrict y, in
 #if defined(__AVX2__)
     for (int i = 0; i < nb; i++) {
         // scale factor
-        const __m256 d_v = _mm256_broadcast_ss(&x[i].scale);
+        const __m256 d_v = _mm256_broadcast_ss(&x[i].d);
 
-        const uint8_t * restrict pp = x[i].nibbles;
+        const uint8_t * restrict pp = x[i].qs;
 
         for (int l = 0; l < QK; l += 32) {
             // Load 32x4-bit integers into 32x8-bit integers
@@ -770,15 +770,15 @@ static void dequantize_row_q4_0(const void * restrict vx, float * restrict y, in
     }
 #elif defined(__ARM_NEON)
     for (int i = 0; i < nb; i++) {
-        const float32x4_t vd = vdupq_n_f32(x[i].scale);
+        const float32x4_t vd = vdupq_n_f32(x[i].d);
 
-        const uint8_t * restrict pp = x[i].nibbles;
+        const uint8_t * restrict pp = x[i].qs;
 
         for (int l = 0; l < QK; l += 16) {
             // Load 16x4-bit integers into 8x8-bit integers
             const uint8x8_t v8 = vld1_u8(pp + l/2);
 
-            // Expand 4-bit nibbles to 8-bit bytes
+            // Expand 4-bit qs to 8-bit bytes
             const uint8x8_t v0 = vand_u8(v8, vdup_n_u8(0x0f));
             const uint8x8_t v1 = vshr_n_u8(v8, 4);
 
@@ -822,9 +822,9 @@ static void dequantize_row_q4_0(const void * restrict vx, float * restrict y, in
 #else
     // scalar
     for (int i = 0; i < nb; i++) {
-        const float d = x[i].scale;
+        const float d = x[i].d;
 
-        const uint8_t * restrict pp = x[i].nibbles;
+        const uint8_t * restrict pp = x[i].qs;
 
         for (int l = 0; l < QK; l += 2) {
             const uint8_t vi = pp[l/2];
@@ -855,10 +855,10 @@ static void dequantize_row_q4_1(const void * restrict vx, float * restrict y, in
 
 #if defined(__AVX2__)
     for (int i = 0; i < nb; i++) {
-        const __m256 d_v = _mm256_broadcast_ss(&x[i].scale_delta);
-        const __m256 d_m = _mm256_broadcast_ss(&x[i].scale_min);
+        const __m256 d_v = _mm256_broadcast_ss(&x[i].d);
+        const __m256 d_m = _mm256_broadcast_ss(&x[i].m);
 
-        const uint8_t * restrict pp = x[i].nibbles;
+        const uint8_t * restrict pp = x[i].qs;
 
         for (int l = 0; l < QK; l += 32) {
             // Load 32x4-bit integers into 32x8-bit integers
@@ -885,10 +885,10 @@ static void dequantize_row_q4_1(const void * restrict vx, float * restrict y, in
     }
 #else
     for (int i = 0; i < nb; i++) {
-        const float d = x[i].scale_delta;
-        const float m = x[i].scale_min;
+        const float d = x[i].d;
+        const float m = x[i].m;
 
-        const uint8_t * restrict pp = x[i].nibbles;
+        const uint8_t * restrict pp = x[i].qs;
 
         for (int l = 0; l < QK; l += 2) {
             const uint8_t vi = pp[l/2];
@@ -1458,10 +1458,10 @@ static inline __m512 dot_q4_0_oneblock_avx512(
     int i
 ) {
     // Compute combined scale for the block
-    __m512 scale = _mm512_set1_ps( x[i].scale * y[i].scale );
+    __m512 d = _mm512_set1_ps( x[i].d * y[i].d );
 
-    __m256i bx = bytesFromNibbles( x[i].nibbles );
-    __m256i by = bytesFromNibbles( y[i].nibbles );
+    __m256i bx = bytesFromNibbles( x[i].qs );
+    __m256i by = bytesFromNibbles( y[i].qs );
 
     // Now we have a vector with bytes in [ 0 .. 15 ] interval. Offset them into [ -8 .. +7 ] interval.
     const __m256i off = _mm256_set1_epi8( 8 );
@@ -1477,7 +1477,7 @@ static inline __m512 dot_q4_0_oneblock_avx512(
     // Convert int32_t to float
     __m512 p = _mm512_cvtepi32_ps( i64 );
     // Apply the scale, and accumulate
-    return _mm512_fmadd_ps( scale, p, acc );
+    return _mm512_fmadd_ps( d, p, acc );
 }
 #endif
 
@@ -1533,18 +1533,18 @@ inline static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void
     float sum1 = 0.0f;
 
     for (int i = 0; i < nb; i += 2) {
-        const block_q4_0 * restrict x0 = x[i + 0];
-        const block_q4_0 * restrict y0 = y[i + 0];
-        const block_q4_0 * restrict x1 = x[i + 1];
-        const block_q4_0 * restrict y1 = y[i + 1];
+        const block_q4_0 * restrict x0 = &x[i + 0];
+        const block_q4_0 * restrict y0 = &y[i + 0];
+        const block_q4_0 * restrict x1 = &x[i + 1];
+        const block_q4_0 * restrict y1 = &y[i + 1];
 
         const uint8x16_t m4b = vdupq_n_u8(0xf);
         const int8x16_t  s8b = vdupq_n_s8(0x8);
 
-        const uint8x16_t v0_0 = vld1q_u8(x0->nibbles);
-        const uint8x16_t v1_0 = vld1q_u8(y0->nibbles);
-        const uint8x16_t v0_1 = vld1q_u8(x1->nibbles);
-        const uint8x16_t v1_1 = vld1q_u8(y1->nibbles);
+        const uint8x16_t v0_0 = vld1q_u8(x0->qs);
+        const uint8x16_t v1_0 = vld1q_u8(y0->qs);
+        const uint8x16_t v0_1 = vld1q_u8(x1->qs);
+        const uint8x16_t v1_1 = vld1q_u8(y1->qs);
 
         // 4-bit -> 8-bit
         const int8x16_t v0_0l = vreinterpretq_s8_u8(vandq_u8(v0_0, m4b));
@@ -1582,11 +1582,11 @@ inline static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void
 
         // scalar
 #if defined(__ARM_FEATURE_QRDMX)
-        sum0 += x0->scale * y0->scale * vaddvq_s32(p_0);
-        sum1 += x1->scale * y1->scale * vaddvq_s32(p_1);
+        sum0 += x0->d * y0->d * vaddvq_s32(p_0);
+        sum1 += x1->d * y1->d * vaddvq_s32(p_1);
 #else
-        sum0 += x0->scale * y0->scale * (vgetq_lane_s32(p_0, 0) + vgetq_lane_s32(p_0, 1) + vgetq_lane_s32(p_0, 2) + vgetq_lane_s32(p_0, 3));
-        sum1 += x1->scale * y1->scale * (vgetq_lane_s32(p_1, 0) + vgetq_lane_s32(p_1, 1) + vgetq_lane_s32(p_1, 2) + vgetq_lane_s32(p_1, 3));
+        sum0 += x0->d * y0->d * (vgetq_lane_s32(p_0, 0) + vgetq_lane_s32(p_0, 1) + vgetq_lane_s32(p_0, 2) + vgetq_lane_s32(p_0, 3));
+        sum1 += x1->d * y1->d * (vgetq_lane_s32(p_1, 0) + vgetq_lane_s32(p_1, 1) + vgetq_lane_s32(p_1, 2) + vgetq_lane_s32(p_1, 3));
 #endif
 #else
 	    const int16x8_t pl0l = vmull_s8(vget_low_s8 (v0_0ls), vget_low_s8 (v1_0ls));
@@ -1612,11 +1612,11 @@ inline static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void
 
         // scalar
 #if defined(__ARM_FEATURE_QRDMX)
-        sum0 += x0->scale * y0->scale * vaddvq_s16(p_0);
-        sum1 += x1->scale * y1->scale * vaddvq_s16(p_1);
+        sum0 += x0->d * y0->d * vaddvq_s16(p_0);
+        sum1 += x1->d * y1->d * vaddvq_s16(p_1);
 #else
-        sum0 += x0->scale * y0->scale * (vgetq_lane_s16(p_0, 0) + vgetq_lane_s16(p_0, 1) + vgetq_lane_s16(p_0, 2) + vgetq_lane_s16(p_0, 3) + vgetq_lane_s16(p_0, 4) + vgetq_lane_s16(p_0, 5) + vgetq_lane_s16(p_0, 6) + vgetq_lane_s16(p_0, 7));
-        sum1 += x1->scale * y1->scale * (vgetq_lane_s16(p_1, 0) + vgetq_lane_s16(p_1, 1) + vgetq_lane_s16(p_1, 2) + vgetq_lane_s16(p_1, 3) + vgetq_lane_s16(p_1, 4) + vgetq_lane_s16(p_1, 5) + vgetq_lane_s16(p_1, 6) + vgetq_lane_s16(p_1, 7));
+        sum0 += x0->d * y0->d * (vgetq_lane_s16(p_0, 0) + vgetq_lane_s16(p_0, 1) + vgetq_lane_s16(p_0, 2) + vgetq_lane_s16(p_0, 3) + vgetq_lane_s16(p_0, 4) + vgetq_lane_s16(p_0, 5) + vgetq_lane_s16(p_0, 6) + vgetq_lane_s16(p_0, 7));
+        sum1 += x1->d * y1->d * (vgetq_lane_s16(p_1, 0) + vgetq_lane_s16(p_1, 1) + vgetq_lane_s16(p_1, 2) + vgetq_lane_s16(p_1, 3) + vgetq_lane_s16(p_1, 4) + vgetq_lane_s16(p_1, 5) + vgetq_lane_s16(p_1, 6) + vgetq_lane_s16(p_1, 7));
 #endif
 #endif
     }
@@ -1658,11 +1658,11 @@ inline static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void
     // Main loop
     for (int i = 0; i < nb; ++i) {
         // Compute combined scale for the block
-        const __m256 scale = _mm256_mul_ps( _mm256_broadcast_ss( &x[i].scale ), _mm256_broadcast_ss( &y[i].scale ) );
+        const __m256 d = _mm256_mul_ps( _mm256_broadcast_ss( &x[i].d ), _mm256_broadcast_ss( &y[i].d ) );
 
         // Load 16 bytes, and unpack 4 bit fields into bytes, making 32 bytes
-        __m256i bx = bytesFromNibbles( x[i].nibbles );
-        __m256i by = bytesFromNibbles( y[i].nibbles );
+        __m256i bx = bytesFromNibbles( x[i].qs );
+        __m256i by = bytesFromNibbles( y[i].qs );
 
         // Now we have a vector with bytes in [ 0 .. 15 ] interval. Offset them into [ -8 .. +7 ] interval.
         const __m256i off = _mm256_set1_epi8( 8 );
@@ -1684,7 +1684,7 @@ inline static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void
         // Convert int32_t to float
         __m256 p = _mm256_cvtepi32_ps( i32 );
         // Apply the scale, and accumulate
-        acc = _mm256_fmadd_ps( scale, p, acc );
+        acc = _mm256_fmadd_ps( d, p, acc );
     }
 
     // Return horizontal sum of the acc vector
@@ -1700,18 +1700,18 @@ inline static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void
     float sum1 = 0.0f;
 
     for (int i = 0; i < nb; i += 2) {
-        const block_q4_0 * restrict x0 = px[i + 0];
-        const block_q4_0 * restrict y0 = py[i + 0];
-        const block_q4_0 * restrict x1 = px[i + 1];
-        const block_q4_0 * restrict y1 = py[i + 1];
+        const block_q4_0 * restrict x0 = &px[i + 0];
+        const block_q4_0 * restrict y0 = &py[i + 0];
+        const block_q4_0 * restrict x1 = &px[i + 1];
+        const block_q4_0 * restrict y1 = &py[i + 1];
 
         const v128_t m4b = wasm_u8x16_splat(0xf);
         const v128_t s8b = wasm_i8x16_splat(0x8);
 
-        const v128_t v0_0 = wasm_v128_load(x0.nibbles);
-        const v128_t v0_1 = wasm_v128_load(y0.nibbles);
-        const v128_t v1_0 = wasm_v128_load(x1.nibbles);
-        const v128_t v1_1 = wasm_v128_load(y1.nibbles);
+        const v128_t v0_0 = wasm_v128_load(x0.qs);
+        const v128_t v0_1 = wasm_v128_load(y0.qs);
+        const v128_t v1_0 = wasm_v128_load(x1.qs);
+        const v128_t v1_1 = wasm_v128_load(y1.qs);
 
         // 4-bit -> 8-bit
         const v128_t v0_0l = wasm_v128_and(v0_0, m4b);
@@ -1761,12 +1761,12 @@ inline static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void
         const v128_t p_0 = wasm_i16x8_add(pl_0, ph_0);
         const v128_t p_1 = wasm_i16x8_add(pl_1, ph_1);
 
-        sum0 += x0->scale * y0->scale * (
+        sum0 += x0->d * y0->d * (
                 wasm_i16x8_extract_lane(p_0, 0) + wasm_i16x8_extract_lane(p_0, 1) +
                 wasm_i16x8_extract_lane(p_0, 2) + wasm_i16x8_extract_lane(p_0, 3) +
                 wasm_i16x8_extract_lane(p_0, 4) + wasm_i16x8_extract_lane(p_0, 5) +
                 wasm_i16x8_extract_lane(p_0, 6) + wasm_i16x8_extract_lane(p_0, 7));
-        sum1 += x1->scale * y1->scale * (
+        sum1 += x1->d * y1->d * (
                 wasm_i16x8_extract_lane(p_1, 0) + wasm_i16x8_extract_lane(p_1, 1) +
                 wasm_i16x8_extract_lane(p_1, 2) + wasm_i16x8_extract_lane(p_1, 3) +
                 wasm_i16x8_extract_lane(p_1, 4) + wasm_i16x8_extract_lane(p_1, 5) +
@@ -1777,11 +1777,11 @@ inline static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void
 #else
     // scalar
     for (int i = 0; i < nb; i++) {
-        const float d0 = x[i].scale;
-        const float d1 = y[i].scale;
+        const float d0 = x[i].d;
+        const float d1 = y[i].d;
 
-        const uint8_t * restrict p0 = x[i].nibbles;
-        const uint8_t * restrict p1 = y[i].nibbles;
+        const uint8_t * restrict p0 = x[i].qs;
+        const uint8_t * restrict p1 = y[i].qs;
 
         for (int j = 0; j < QK/2; j++) {
             const uint8_t v0 = p0[j];
@@ -1817,11 +1817,11 @@ inline static void ggml_vec_dot_q4_1(const int n, float * restrict s, const void
 
     // Main loop
     for (int i = 0; i < nb; ++i) {
-        const float * d0 = &x[i].scale_delta;
-        const float * d1 = &y[i].scale_delta;
+        const float * d0 = &x[i].d;
+        const float * d1 = &y[i].d;
 
-        const float * m0 = &x[i].scale_min;
-        const float * m1 = &y[i].scale_min;
+        const float * m0 = &x[i].m;
+        const float * m1 = &y[i].m;
 
         const __m256 d0v = _mm256_broadcast_ss( d0 );
         const __m256 d1v = _mm256_broadcast_ss( d1 );
@@ -1837,8 +1837,8 @@ inline static void ggml_vec_dot_q4_1(const int n, float * restrict s, const void
         const __m256 cross_scales = _mm256_blend_ps( scale_0, scale_1, 0b10101010 );
 
         // Load 16 bytes, and unpack 4 bit fields into bytes, making 32 bytes
-        __m256i bx = bytesFromNibbles( x[i].nibbles );
-        __m256i by = bytesFromNibbles( y[i].nibbles );
+        __m256i bx = bytesFromNibbles( x[i].qs );
+        __m256i by = bytesFromNibbles( y[i].qs );
 
         // Now we have a vector with bytes in [ 0 .. 15 ] interval.
 
@@ -1883,14 +1883,14 @@ inline static void ggml_vec_dot_q4_1(const int n, float * restrict s, const void
 #else
     // scalar
     for (int i = 0; i < nb; i++) {
-        const float d0 = x[i].scale_delta;
-        const float d1 = y[i].scale_delta;
+        const float d0 = x[i].d;
+        const float d1 = y[i].d;
 
-        const float m0 = x[i].scale_min;
-        const float m1 = y[i].scale_min;
+        const float m0 = x[i].m;
+        const float m1 = y[i].m;
 
-        const uint8_t * restrict p0 = x[i].nibbles;
-        const uint8_t * restrict p1 = y[i].nibbles;
+        const uint8_t * restrict p0 = x[i].qs;
+        const uint8_t * restrict p1 = y[i].qs;
 
         for (int j = 0; j < QK/2; j++) {
             const uint8_t v0 = p0[j];
@@ -10297,8 +10297,8 @@ size_t ggml_quantize_q4_0(const float * src, void * dst, int n, int k, int64_t *
 
         for (int i = 0; i < nb; i++) {
             for (int l = 0; l < QK; l += 2) {
-                const uint8_t vi0 = y[i].nibbles[l/2] & 0xF;
-                const uint8_t vi1 = y[i].nibbles[l/2] >> 4;
+                const uint8_t vi0 = y[i].qs[l/2] & 0xF;
+                const uint8_t vi1 = y[i].qs[l/2] >> 4;
 
                 hist[vi0]++;
                 hist[vi1]++;
@@ -10320,8 +10320,8 @@ size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t *
 
         for (int i = 0; i < nb; i++) {
             for (int l = 0; l < QK; l += 2) {
-                const uint8_t vi0 = y[i].nibbles[l/2] & 0xF;
-                const uint8_t vi1 = y[i].nibbles[l/2] >> 4;
+                const uint8_t vi0 = y[i].qs[l/2] & 0xF;
+                const uint8_t vi1 = y[i].qs[l/2] >> 4;
 
                 hist[vi0]++;
                 hist[vi1]++;
