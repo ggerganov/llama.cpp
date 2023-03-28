@@ -235,7 +235,7 @@ extra.o: extra.cpp extra.h
 	$(CXX) $(CXXFLAGS) -c extra.cpp -o extra.o
 
 clean:
-	rm -vf *.o main quantize perplexity
+	rm -vf *.o main quantize perplexity embedding
 
 main: examples/main/main.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
@@ -251,6 +251,9 @@ quantize: examples/quantize/quantize.cpp ggml.o llama.o
 
 perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/perplexity/perplexity.cpp ggml.o llama.o common.o -o perplexity $(LDFLAGS)
+
+embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
+	$(CXX) $(CXXFLAGS) examples/embedding/embedding.cpp ggml.o llama.o common.o -o embedding $(LDFLAGS)
 
 #
 # Tests
