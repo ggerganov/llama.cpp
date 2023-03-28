@@ -34,7 +34,7 @@
 #ifdef NEED_POSIX_MMAP
 #include <stdlib.h>
 
-static void *PosixMmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
+void *PosixMmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
     int tfd;
     void* res;
     char path[] = "/tmp/llama.dat.XXXXXX";
