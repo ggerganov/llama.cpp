@@ -209,7 +209,8 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "Input prefix: '%s'\n", params.input_prefix.c_str());
         }
     }
-    fprintf(stderr, "sampling: temp = %f, top_k = %d, top_p = %f, repeat_last_n = %i, repeat_penalty = %f\n", params.temp, params.top_k, params.top_p, params.repeat_last_n, params.repeat_penalty);
+    fprintf(stderr, "sampling: temp = %f, top_k = %d, top_p = %f, repeat_last_n = %i, repeat_penalty = %f\n",
+        params.temp, params.top_k, params.top_p, params.repeat_last_n, params.repeat_penalty);
     fprintf(stderr, "generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
     fprintf(stderr, "\n\n");
 
@@ -274,10 +275,10 @@ int main(int argc, char ** argv) {
 
         if ((int) embd_inp.size() <= n_consumed && !is_interacting) {
             // out of user input, sample next token
-            const float top_k          = params.top_k;
-            const float top_p          = params.top_p;
-            const float temp           = params.temp;
-            const float repeat_penalty = params.repeat_penalty;
+            const int32_t top_k          = params.top_k;
+            const float   top_p          = params.top_p;
+            const float   temp           = params.temp;
+            const float   repeat_penalty = params.repeat_penalty;
 
             llama_token id = 0;
 
