@@ -1698,8 +1698,6 @@ inline static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void
     // Horizontal sum of all lanes of the accumulator
     sumf = _mm512_reduce_add_ps( acc0 ) + _mm512_reduce_add_ps( acc1 );
 #elif defined(__AVX2__)
-    const size_t countBlocks = nb;
-
     // Initialize accumulator with zeros
     __m256 acc = _mm256_setzero_ps();
 
@@ -5806,23 +5804,28 @@ static void ggml_compute_forward_mul_mat_f32(
     const int ne02 = src0->ne[2];
     const int ne03 = src0->ne[3];
 
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
     const int ne10 = src1->ne[0];
+#endif
     const int ne11 = src1->ne[1];
-    //const int ne12 = src1->ne[2];
-    //const int ne13 = src1->ne[3];
+#ifndef NDEBUG
+    const int ne12 = src1->ne[2];
+    const int ne13 = src1->ne[3];
 
-    //const int ne0  = dst->ne[0];
-    //const int ne1  = dst->ne[1];
-    //const int ne2  = dst->ne[2];
-    //const int ne3  = dst->ne[3];
-    //const int ne   = ne0*ne1*ne2*ne3;
+    const int ne0  = dst->ne[0];
+    const int ne1  = dst->ne[1];
+    const int ne2  = dst->ne[2];
+    const int ne3  = dst->ne[3];
 
-    //const int nb00 = src0->nb[0];
+    const int nb00 = src0->nb[0];
+#endif
     const int nb01 = src0->nb[1];
     const int nb02 = src0->nb[2];
     const int nb03 = src0->nb[3];
 
+#ifndef NDEBUG
     const int nb10 = src1->nb[0];
+#endif
     const int nb11 = src1->nb[1];
     const int nb12 = src1->nb[2];
     const int nb13 = src1->nb[3];
@@ -5840,8 +5843,9 @@ static void ggml_compute_forward_mul_mat_f32(
     assert(ne2  == ne12);
     assert(ne3  == ne13);
 
-    // TODO: we don't support permuted src0
+    // we don't support permuted src0 or src1
     assert(nb00 == sizeof(float));
+    assert(nb10 == sizeof(float));
 
     // dst cannot be transposed or permuted
     assert(nb0 == sizeof(float));
@@ -5859,8 +5863,6 @@ static void ggml_compute_forward_mul_mat_f32(
 
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
     if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
-        GGML_ASSERT(nb10 == sizeof(float));
-
         if (params->ith != 0) {
             return;
         }
@@ -5902,9 +5904,6 @@ static void ggml_compute_forward_mul_mat_f32(
     if (params->type == GGML_TASK_FINALIZE) {
         return;
     }
-
-    // TODO: do not support transposed src1
-    assert(nb10 == sizeof(float));
 
     // parallelize by src0 rows using ggml_vec_dot_f32
 
@@ -6169,7 +6168,6 @@ static void ggml_compute_forward_mul_mat_q4_0_f32(
     const int ne1  = dst->ne[1];
     const int ne2  = dst->ne[2];
     const int ne3  = dst->ne[3];
-    //const int ne   = ne0*ne1*ne2*ne3;
 
     const int nb00 = src0->nb[0];
     const int nb01 = src0->nb[1];
@@ -6194,8 +6192,9 @@ static void ggml_compute_forward_mul_mat_q4_0_f32(
     GGML_ASSERT(ne2  == ne12);
     GGML_ASSERT(ne3  == ne13);
 
-    // TODO: we don't support permuted src0
+    // we don't support permuted src0 or src1
     GGML_ASSERT(nb00 == (int) GGML_TYPE_SIZE[GGML_TYPE_Q4_0]);
+    GGML_ASSERT(nb10 == sizeof(float));
 
     // dst cannot be transposed or permuted
     GGML_ASSERT(nb0 == sizeof(float));
@@ -6213,8 +6212,6 @@ static void ggml_compute_forward_mul_mat_q4_0_f32(
 
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
     if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
-        GGML_ASSERT(nb10 == sizeof(float));
-
         if (params->ith != 0) {
             return;
         }
@@ -6277,8 +6274,6 @@ static void ggml_compute_forward_mul_mat_q4_0_f32(
     if (params->type == GGML_TASK_FINALIZE) {
         return;
     }
-
-    // TODO: do not support transposed src1
 
     // parallelize by src0 rows using ggml_vec_dot_q4_0
 
@@ -6354,7 +6349,6 @@ static void ggml_compute_forward_mul_mat_q4_1_f32(
     const int ne1  = dst->ne[1];
     const int ne2  = dst->ne[2];
     const int ne3  = dst->ne[3];
-    //const int ne   = ne0*ne1*ne2*ne3;
 
     const int nb00 = src0->nb[0];
     const int nb01 = src0->nb[1];
@@ -6379,8 +6373,9 @@ static void ggml_compute_forward_mul_mat_q4_1_f32(
     GGML_ASSERT(ne2  == ne12);
     GGML_ASSERT(ne3  == ne13);
 
-    // TODO: we don't support permuted src0
+    // we don't support permuted src0 or src1
     GGML_ASSERT(nb00 == (int) GGML_TYPE_SIZE[GGML_TYPE_Q4_1]);
+    GGML_ASSERT(nb10 == sizeof(float));
 
     // dst cannot be transposed or permuted
     GGML_ASSERT(nb0 == sizeof(float));
@@ -6398,8 +6393,6 @@ static void ggml_compute_forward_mul_mat_q4_1_f32(
 
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
     if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
-        GGML_ASSERT(nb10 == sizeof(float));
-
         if (params->ith != 0) {
             return;
         }
@@ -6465,8 +6458,6 @@ static void ggml_compute_forward_mul_mat_q4_1_f32(
     if (params->type == GGML_TASK_FINALIZE) {
         return;
     }
-
-    // TODO: do not support transposed src1
 
     // parallelize by src0 rows using ggml_vec_dot_q4_1
 
