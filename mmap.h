@@ -8,11 +8,12 @@
 #include <stdint.h>
 #include <fcntl.h>
 
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#ifdef _MSC_VER
+#if defined (_MSC_VER) && !(defined (_POSIX_MAPPED_FILES))
 #define NEED_WIN32_MMAP
 #include <Windows.h>
 #include <io.h>
