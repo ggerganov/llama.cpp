@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 
-#if defined(_MSC_VER) || defined(__MINGW32__)
+#if defined(_MSC_VER) || defined(__MINGW32__) && !(defined (_POSIX_MAPPED_FILES))
 #ifndef __MINGW32__
 #include <Windows.h>
 #else

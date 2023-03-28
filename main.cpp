@@ -19,6 +19,8 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#elif defined (_POSIX_MAPPED_FILES)
+#include <sys/mman.h>
 #endif
 
 #define ROUNDUP(X, K) (((X) + (K)-1) & -(K))
