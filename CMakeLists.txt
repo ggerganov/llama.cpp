@@ -129,13 +129,14 @@ if (LLAMA_ALL_WARNINGS)
             -Wshadow
             -Wstrict-prototypes
             -Wpointer-arith
+            -Wno-unused-function
         )
         set(cxx_flags
             -Wall
             -Wextra
             -Wpedantic
             -Wcast-qual
-            -Wdouble-promotion
+            -Wno-unused-function
         )
     else()
         # todo : msvc
