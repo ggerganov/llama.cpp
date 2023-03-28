@@ -350,6 +350,7 @@ int main(int argc, char ** argv) {
                     last_output += llama_token_to_str(ctx, id);
                 }
 
+                is_antiprompt = false;
                 // Check if each of the reverse prompts appears at the end of the output.
                 for (std::string & antiprompt : params.antiprompt) {
                     if (last_output.find(antiprompt.c_str(), last_output.length() - antiprompt.length(), antiprompt.length()) != std::string::npos) {
