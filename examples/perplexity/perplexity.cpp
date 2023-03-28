@@ -1,6 +1,8 @@
 #include "common.h"
 #include "llama.h"
 
+#include <cmath>
+
 std::vector<float> softmax(const std::vector<float>& logits) {
     std::vector<float> probs(logits.size());
     float max_logit = logits[0];
@@ -9,7 +11,7 @@ std::vector<float> softmax(const std::vector<float>& logits) {
     for (size_t i = 0; i < logits.size(); i++) {
         // Subtract the maximum logit value from the current logit value for numerical stability
         const float logit = logits[i] - max_logit;
-        const float exp_logit = std::expf(logit);
+        const float exp_logit = expf(logit);
         sum_exp += exp_logit;
         probs[i] = exp_logit;
     }
