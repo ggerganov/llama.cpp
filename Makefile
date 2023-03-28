@@ -212,7 +212,7 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: main quantize perplexity
+default: main quantize perplexity embedding
 
 #
 # Build library
@@ -228,7 +228,7 @@ common.o: examples/common.cpp examples/common.h
 	$(CXX) $(CXXFLAGS) -c examples/common.cpp -o common.o
 
 clean:
-	rm -vf *.o main quantize perplexity
+	rm -vf *.o main quantize perplexity embedding
 
 main: examples/main/main.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
@@ -241,6 +241,9 @@ quantize: examples/quantize/quantize.cpp ggml.o llama.o
 
 perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/perplexity/perplexity.cpp ggml.o llama.o common.o -o perplexity $(LDFLAGS)
+
+embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
+	$(CXX) $(CXXFLAGS) examples/embedding/embedding.cpp ggml.o llama.o common.o -o embedding $(LDFLAGS)
 
 #
 # Tests
