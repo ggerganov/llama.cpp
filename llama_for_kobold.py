@@ -5,8 +5,8 @@
 
 import ctypes
 import os
-#from pathlib import Path
-
+import argparse
+import json, http.server, threading, socket, sys, time
 
 class load_model_inputs(ctypes.Structure):
     _fields_ = [("threads", ctypes.c_int),
@@ -32,7 +32,7 @@ class generation_outputs(ctypes.Structure):
                 ("text", ctypes.c_char * 16384)]
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
-handle = ctypes.CDLL(dir_path + "/llamacpp.dll")     
+handle = ctypes.CDLL(os.path.join(dir_path, "llamacpp.dll"))
 
 handle.load_model.argtypes = [load_model_inputs] 
 handle.load_model.restype = ctypes.c_bool
@@ -44,7 +44,7 @@ def load_model(model_filename,batch_size=8,max_context_length=512,n_parts_overwr
     inputs.model_filename = model_filename.encode("UTF-8")
     inputs.batch_size = batch_size
     inputs.max_context_length = max_context_length #initial value to use for ctx, can be overwritten
-    inputs.threads = min(6,os.cpu_count()) #seems to outperform os.cpu_count(), it's memory bottlenecked 
+    inputs.threads = os.cpu_count()
     inputs.n_parts_overwrite = n_parts_overwrite
     inputs.f16_kv = True
     ret = handle.load_model(inputs)
@@ -68,36 +68,34 @@ def generate(prompt,max_length=20, max_context_length=512,temperature=0.8,top_k=
     return ""
 
 
-#################################################################
-### A hacky simple HTTP server simulating a kobold api by Concedo
-### we are intentionally NOT using flask, because we want MINIMAL dependencies
-#################################################################
-import json, http.server, threading, socket, sys, time
-
-# global vars
-global friendlymodelname 
-friendlymodelname = ""
+friendlymodelname = "concedo/llamacpp"  # local kobold api apparently needs a hardcoded known HF model name
 maxctx = 2048
 maxlen = 128
 modelbusy = False
-port = 5001
-embedded_kailite = None
+
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
-
     sys_version = ""
     server_version = "ConcedoLlamaForKoboldServer"
 
+    def __init__(self, addr, port, embedded_kailite):
+        self.addr = addr
+        self.port = port
+        self.embedded_kailite = embedded_kailite
+
+    def __call__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
     def do_GET(self):
         if self.path=="/" or self.path.startswith('/?') or self.path.startswith('?'):
-            if embedded_kailite is None:
+            if self.embedded_kailite is None:
                 self.send_response(200)
                 self.end_headers()
-                self.wfile.write(b'Embedded Kobold Lite is not found.<br>You will have to connect via the main KoboldAI client, or <a href=\'https://lite.koboldai.net?local=1&port='+str(port).encode()+b'\'>use this URL</a> to connect.')
+                self.wfile.write(b'Embedded Kobold Lite is not found.<br>You will have to connect via the main KoboldAI client, or <a href=\'https://lite.koboldai.net?local=1&port='+str(self.port).encode()+b'\'>use this URL</a> to connect.')
             else:
                 self.send_response(200)
                 self.end_headers()
-                self.wfile.write(embedded_kailite)
+                self.wfile.write(self.embedded_kailite)
             return
                        
         if self.path.endswith('/api/v1/model/') or self.path.endswith('/api/latest/model/') or self.path.endswith('/api/v1/model') or self.path.endswith('/api/latest/model'):
@@ -233,34 +231,30 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         return super(ServerRequestHandler, self).end_headers()
 
 
-def RunServerMultiThreaded(port, HandlerClass = ServerRequestHandler,
-         ServerClass = http.server.HTTPServer):
-    addr = ('', port)
-    sock = socket.socket (socket.AF_INET, socket.SOCK_STREAM)
+def RunServerMultiThreaded(addr, port, embedded_kailite = None):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind(addr)
+    sock.bind((addr, port))
     sock.listen(5)
 
-    # Start listener threads.
     class Thread(threading.Thread):
         def __init__(self, i):
             threading.Thread.__init__(self)
             self.i = i
             self.daemon = True
             self.start()
+
         def run(self):
-            with http.server.HTTPServer(addr, HandlerClass, False) as self.httpd:
-                #print("Thread %s - Web Server is running at http://0.0.0.0:%s" % (self.i, port))
+            handler = ServerRequestHandler(addr, port, embedded_kailite)
+            with http.server.HTTPServer((addr, port), handler, False) as self.httpd:
                 try:
                     self.httpd.socket = sock
                     self.httpd.server_bind = self.server_close = lambda self: None
                     self.httpd.serve_forever()
                 except (KeyboardInterrupt,SystemExit):
-                    #print("Thread %s - Server Closing" % (self.i))
                     self.httpd.server_close()
                     sys.exit(0)
                 finally:
-                    # Clean-up server (close socket, etc.)
                     self.httpd.server_close()
                     sys.exit(0)
         def stop(self):
@@ -272,60 +266,45 @@ def RunServerMultiThreaded(port, HandlerClass = ServerRequestHandler,
         threadArr.append(Thread(i))
     while 1:
         try:
-            time.sleep(99999)
+            time.sleep(10)
         except KeyboardInterrupt:
             for i in range(numThreads):
                 threadArr[i].stop()
             sys.exit(0)
 
-if __name__ == '__main__':
-    # total arguments
-    argc = len(sys.argv)
-
-    ggml_selected_file = None
-    if argc<2:
-        print("Command line usage: " + sys.argv[0] + " model_file_q4_0.bin [port]")
-        #give them a chance to pick a file
-        print("Alternative, please manually select ggml file:")
-        from tkinter.filedialog import askopenfilename
-        ggml_selected_file = askopenfilename (title="Select ggml model .bin files")
-        if not ggml_selected_file:
-            print("\nNo ggml model file was selected. Exiting.")
-            time.sleep(1)
-            sys.exit(0)
-    else:
-        ggml_selected_file = sys.argv[1]
-       
-    if argc>=3:
-        port = int(sys.argv[2])
+def main(args): 
+    ggml_selected_file = args.model_file
 
     if not os.path.exists(ggml_selected_file):
-        print("Cannot find model file: " + ggml_selected_file)
+        print(f"Cannot find model file: {ggml_selected_file}")
         time.sleep(1)
-        sys.exit(0)
+        sys.exit(2)
 
-    mdl_nparts = 1
-    for n in range(1,9):
-        if os.path.exists(ggml_selected_file+"."+str(n)):
-            mdl_nparts += 1
+    mdl_nparts = sum(1 for n in range(1, 9) if os.path.exists(f"{ggml_selected_file}.{n}")) + 1
     modelname = os.path.abspath(ggml_selected_file)
     print("Loading model: " + modelname)
     loadok = load_model(modelname,8,maxctx,mdl_nparts)
     print("Load Model OK: " + str(loadok))
 
-    #friendlymodelname = Path(modelname).stem   ### this wont work on local kobold api, so we must hardcode a known HF model name
-    friendlymodelname = "concedo/llamacpp" 
-    
-    if loadok:
-        try:
-            basepath = os.path.abspath(os.path.dirname(__file__))
-            with open(basepath+"/klite.embd", mode="rb") as emb_kai:                
-                embedded_kailite = emb_kai.read()
-                print("Embedded Kobold Lite loaded.")
-        except:
-            print("Could not find Kobold Lite. Embedded Kobold Lite will not be available.")
+    if not loadok:
+        print("Could not load model: " + modelname)
+        sys.exit(3)
+    try:
+        basepath = os.path.abspath(os.path.dirname(__file__))
+        with open(os.path.join(basepath, "klite.embd"), mode='rb') as f:
+            embedded_kailite = f.read().decode().replace('var localmodehost = "127.0.0.1";' , f'var localmodehost = "{args.host}";').encode()
+        print("Embedded Kobold Lite loaded.")
+    except:
+        print("Could not find Kobold Lite. Embedded Kobold Lite will not be available.")
 
-        print("Starting Kobold HTTP Server on port " + str(port))
-        print("Please connect to custom endpoint at http://localhost:"+str(port))
-        RunServerMultiThreaded(port)
-       
+    print(f"Starting Kobold HTTP Server on port {args.port}") 
+    print(f"Please connect to custom endpoint at http://{args.host}:{args.port}")
+    RunServerMultiThreaded(args.host, args.port, embedded_kailite)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Kobold llama.cpp server')
+    parser.add_argument("model_file", help="Model file to load")
+    parser.add_argument("--port", help="Port to listen on", default=5001)
+    parser.add_argument("--host", help="Host IP to listen on", default="127.0.0.1")
+    args = parser.parse_args()
+    main(args)
