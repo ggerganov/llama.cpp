@@ -20,6 +20,7 @@ models/*
 /quantize
 /result
 /perplexity
+/embedding
 
 arm_neon.h
 compile_commands.json
