@@ -24,7 +24,7 @@ static bool is_interacting = false;
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
 void sigint_handler(int signo) {
-    set_console_color(&con_st, CONSOLE_COLOR_DEFAULT);
+    set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
     printf("\n"); // this also force flush stdout.
     if (signo == SIGINT) {
         if (!is_interacting) {
@@ -235,7 +235,7 @@ int main(int argc, char ** argv) {
     int n_consumed = 0;
 
     // the first thing we will do is to output the prompt, so set color accordingly
-    set_console_color(&con_st, CONSOLE_COLOR_PROMPT);
+    set_console_color(con_st, CONSOLE_COLOR_PROMPT);
 
     std::vector<llama_token> embd;
 
@@ -336,7 +336,7 @@ int main(int argc, char ** argv) {
         }
         // reset color to default if we there is no pending user input
         if (!input_noecho && (int)embd_inp.size() == n_consumed) {
-            set_console_color(&con_st, CONSOLE_COLOR_DEFAULT);
+            set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
         }
 
         // in interactive mode, and not currently processing queued inputs;
@@ -356,7 +356,7 @@ int main(int argc, char ** argv) {
                     if (last_output.find(antiprompt.c_str(), last_output.length() - antiprompt.length(), antiprompt.length()) != std::string::npos) {
                         is_interacting = true;
                         is_antiprompt = true;
-                        set_console_color(&con_st, CONSOLE_COLOR_USER_INPUT);
+                        set_console_color(con_st, CONSOLE_COLOR_USER_INPUT);
                         fflush(stdout);
                         break;
                     }
@@ -365,7 +365,7 @@ int main(int argc, char ** argv) {
 
             if (n_past > 0 && is_interacting) {
                 // potentially set color to indicate we are taking user input
-                set_console_color(&con_st, CONSOLE_COLOR_USER_INPUT);
+                set_console_color(con_st, CONSOLE_COLOR_USER_INPUT);
 
                 if (params.instruct) {
                     printf("\n> ");
@@ -393,7 +393,7 @@ int main(int argc, char ** argv) {
                 } while (another_line);
 
                 // done taking input, reset color
-                set_console_color(&con_st, CONSOLE_COLOR_DEFAULT);
+                set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
 
                 // Add tokens to embd only if the input buffer is non-empty
                 // Entering a empty line lets the user pass control back
@@ -448,7 +448,7 @@ int main(int argc, char ** argv) {
     llama_print_timings(ctx);
     llama_free(ctx);
 
-    set_console_color(&con_st, CONSOLE_COLOR_DEFAULT);
+    set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
 
     return 0;
 }

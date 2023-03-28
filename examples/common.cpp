@@ -267,8 +267,8 @@ std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::s
 }
 
 /* Keep track of current color of output, and emit ANSI code if it changes. */
-void set_console_color(console_state* con_st, console_color_t color) {
-    if (con_st->use_color && con_st->color != color) {
+void set_console_color(console_state & con_st, console_color_t color) {
+    if (con_st.use_color && con_st.color != color) {
         switch(color) {
             case CONSOLE_COLOR_DEFAULT:
                 printf(ANSI_COLOR_RESET);
@@ -280,7 +280,7 @@ void set_console_color(console_state* con_st, console_color_t color) {
                 printf(ANSI_BOLD ANSI_COLOR_GREEN);
                 break;
         }
-        con_st->color = color;
+        con_st.color = color;
     }
 }
 
