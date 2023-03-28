@@ -1132,7 +1132,7 @@ void dequantize_row_q4_1(const void * restrict x, float * restrict y, int k) {
 #define GGML_F32Cx8_LOAD(x)     _mm256_cvtph_ps(_mm_loadu_si128((__m128i *)(x)))
 #define GGML_F32Cx8_STORE(x, y) _mm_storeu_si128((__m128i *)(x), _mm256_cvtps_ph(y, 0))
 #else
-static inline __m256 __sse_f16x8_load(ggml_fp16_t *x) {
+static inline __m256 __avx_f32cx8_load(ggml_fp16_t *x) {
     float tmp[8];
 
     for (int i = 0; i < 8; i++)
@@ -1140,8 +1140,7 @@ static inline __m256 __sse_f16x8_load(ggml_fp16_t *x) {
 
     return _mm256_loadu_ps(tmp);
 }
-
-static inline void __sse_f16x8_store(ggml_fp16_t *x, __m256 y) {
+static inline void __avx_f32cx8_store(ggml_fp16_t *x, __m256 y) {
     float arr[8];
 
     _mm256_storeu_ps(arr, y);
@@ -1149,8 +1148,8 @@ static inline void __sse_f16x8_store(ggml_fp16_t *x, __m256 y) {
     for (int i = 0; i < 8; i++)
         x[i] = GGML_FP16_TO_FP32(arr[i]);
 }
-#define GGML_F32Cx8_LOAD(x)     __sse_f16x8_load(x)
-#define GGML_F32Cx8_STORE(x, y) __sse_f16x8_store(x, y)
+#define GGML_F32Cx8_LOAD(x)     __avx_f32cx8_load(x)
+#define GGML_F32Cx8_STORE(x, y) __avx_f32cx8_store(x, y)
 #endif
 
 #define GGML_F32Cx8_FMA         GGML_F32x8_FMA
