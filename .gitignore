@@ -22,3 +22,5 @@ models/*
 
 arm_neon.h
 compile_commands.json
+CMakeFiles/
+CMakeCache.txt

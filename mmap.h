@@ -1,31 +1,22 @@
 #pragma once
 
-// portable mmap() implementation
-//
-// - supports win32 (needs vista+)
-// - supports posix.1 (no map_anonymous)
-//
-// notes on windows
-//
-// - no errno support
-// - not designed to support mprotect()
-// - very poor support for memory intervals
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 
-#include <fcntl.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdlib.h>
-#include <sys/stat.h>
+#include <fcntl.h>
 
-#if defined(_MSC_VER) || defined(__MINGW32__) && !(defined (_POSIX_MAPPED_FILES))
-#ifndef __MINGW32__
-#include <Windows.h>
-#else
-#include <windows.h>
+
+#ifdef __cplusplus
+extern "C" {
 #endif
+
+#if defined (_MSC_VER) && !(defined (_POSIX_MAPPED_FILES))
+#define NEED_WIN32_MMAP
+#include <Windows.h>
 #include <io.h>
-#include <atomic>
-#include <map>
 
 #ifndef PROT_READ
 #define PROT_READ 1
@@ -88,6 +79,26 @@
 #define MADV_WILLNEED 3
 #endif
 
+#ifndef MS_ASYNC
+#define MS_ASYNC 1
+#endif
+#ifndef MS_INVALIDATE
+#define MS_INVALIDATE 2
+#endif
+#ifndef MS_SYNC
+#define MS_SYNC 4
+#endif
+
+#ifndef SEEK_SET
+#define SEEK_SET 0
+#endif
+#ifndef SEEK_CUR
+#define SEEK_CUR 1
+#endif
+#ifndef SEEK_END
+#define SEEK_END 2
+#endif
+
 #ifndef mmap
 #define mmap WinMap
 #endif
@@ -100,8 +111,11 @@
 #ifndef close
 #define close _close
 #endif
-#ifndef fstat
-#define fstat _fstat
+#ifndef lseek
+#define lseek WinSeek
+#endif
+#ifndef msync
+#define msync WinMsync
 #endif
 #ifndef madvise
 #define madvise WinMadvise
@@ -110,154 +124,27 @@
 #define ftruncate WinFtruncate
 #endif
 
-static std::atomic<unsigned> g_winlock;
-static std::map<LPVOID, HANDLE> g_winmap;
+uint64_t WinSeek(int, uint64_t, int);
+int WinMsync(void *, uintptr_t, int);
+int WinMadvise(void *, uintptr_t, int);
+int WinFtruncate(int, uint64_t);
+int WinUnmap(void *, uintptr_t);
+void *WinMap(void *, uintptr_t, int, int, int, uint64_t);
 
-static void WinLock(void) {
-    while (!g_winlock.exchange(1, std::memory_order_acquire));
-}
+#else // _MSC_VER
 
-static void WunLock(void) {
-    g_winlock.store(0, std::memory_order_release);
-}
-
-static int WinMadvise(int fd, size_t length, int flags) {
-    return 0;
-}
-
-static int WinFtruncate(int fd, uint64_t length) {
-    return _chsize_s(fd, length) ? -1 : 0;
-}
-
-static int WinUnmap(void *addr, size_t length) {
-    HANDLE hand;
-    WinLock();
-    hand = g_winmap[addr];
-    g_winmap[addr] = 0;
-    WunLock();
-    if (hand) {
-        UnmapViewOfFile(addr);
-        CloseHandle(hand);
-        return 0;
-    } else {
-        return -1;
-    }
-}
-
-static void *WinMap(void *addr, size_t length, int prot,
-                    int flags, int fd, uint64_t offset) {
-    HANDLE hFile;
-    DWORD winprot;
-    DWORD access = 0;
-    HANDLE hand = NULL;
-    LPVOID res = NULL;
-    if (prot & PROT_READ) {
-        access |= FILE_MAP_READ;
-    }
-    if (prot & PROT_WRITE) {
-        access |= FILE_MAP_WRITE;
-    }
-    if (prot & PROT_EXEC) {
-        access |= FILE_MAP_EXECUTE;
-    }
-    if (flags & MAP_PRIVATE) {
-        // private mapping
-        if (prot & PROT_EXEC) {
-            if (prot & PROT_WRITE) {
-                if (flags & MAP_ANONYMOUS) {
-                    winprot = PAGE_EXECUTE_READWRITE;
-                } else {
-                    winprot = PAGE_EXECUTE_WRITECOPY;
-                }
-            } else {
-                winprot = PAGE_EXECUTE_READ;
-            }
-        } else if (prot & PROT_WRITE) {
-            if (flags & MAP_ANONYMOUS) {
-                winprot = PAGE_READWRITE;
-            } else {
-                winprot = PAGE_WRITECOPY;
-            }
-        } else {
-            winprot = PAGE_READONLY;
-        }
-    } else {
-        // shared mapping
-        if (prot & PROT_EXEC) {
-            if (prot & PROT_WRITE) {
-                winprot = PAGE_EXECUTE_READWRITE;
-            } else {
-                winprot = PAGE_EXECUTE_READ;
-            }
-        } else if (prot & PROT_WRITE) {
-            winprot = PAGE_READWRITE;
-        } else {
-            winprot = PAGE_READONLY;
-        }
-    }
-    if (flags & MAP_ANONYMOUS) {
-        hFile = INVALID_HANDLE_VALUE;
-        offset = 0;
-    } else {
-        hFile = (HANDLE)_get_osfhandle(fd);
-        if (hFile == INVALID_HANDLE_VALUE) {
-            return MAP_FAILED;
-        }
-    }
-    if (flags & MAP_FIXED) {
-        if (!addr) {
-            return MAP_FAILED;
-        } else {
-            WinUnmap(addr, length);
-        }
-    }
-    hand = CreateFileMapping(hFile, 0, winprot,
-                             (offset + length) >> 32,
-                             (offset + length), 0);
-    if (!hand) {
-        return MAP_FAILED;
-    }
-    res = MapViewOfFileEx(hand, access, offset >> 32,
-                          offset, length, addr);
-    if (!res) {
-        CloseHandle(hand);
-        return MAP_FAILED;
-    }
-    WinLock();
-    g_winmap[res] = hand;
-    WunLock();
-    return res;
-}
-
-#else
 #include <unistd.h>
 #include <sys/mman.h>
+
 #ifndef MAP_ANONYMOUS
-#define MAP_ANONYMOUS 0x10000000
-
-static void *PosixMmap(void *addr, size_t length, int prot,
-                       int flags, int fd, uint64_t offset) {
-    int tfd;
-    void *res;
-    char path[] = "/tmp/llama.dat.XXXXXX";
-    if (~flags & MAP_ANONYMOUS) {
-        res = mmap(addr, length, prot, flags, fd, offset);
-    } else if ((tfd = mkstemp(path)) != -1) {
-        unlink(path);
-        if (!ftruncate(tfd, length)) {
-            res = mmap(addr, length, prot, flags & ~MAP_ANONYMOUS, tfd, 0);
-        } else {
-            res = MAP_FAILED;
-        }
-        close(tfd);
-    } else {
-        res = MAP_FAILED;
-    }
-    return res;
-}
-
-#ifndef mmap
+#define NEED_POSIX_MMAP
 #define mmap PosixMmap
-#endif
+#define MAP_ANONYMOUS 0x10000000
+void *PosixMmap(void*, size_t, int, int, int, off_t);
 #endif // MAP_ANONYMOUS
+
 #endif // _MSC_VER
+
+#ifdef __cplusplus
+}
+#endif
