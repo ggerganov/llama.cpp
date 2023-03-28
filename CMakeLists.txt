@@ -107,7 +107,9 @@ endif()
 add_executable(llama
     main.cpp
     utils.cpp
-    utils.h)
+    utils.h
+    mmap.c
+    mmap.h)
 
 add_executable(quantize
     quantize.cpp

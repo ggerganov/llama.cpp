@@ -183,9 +183,6 @@ extern "C" {
 #define GGML_MAX_CONTEXTS 64
 #define GGML_MAX_OPT      4
 
-void* _malloc(size_t n);
-void _free(void* p);
-
 #ifdef __ARM_NEON
 // we use the built-in 16-bit float type
 typedef __fp16 ggml_fp16_t;
