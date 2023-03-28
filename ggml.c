@@ -729,7 +729,7 @@ static void quantize_row_q4_1_reference(const float * restrict x, void * restric
     }
 }
 
-void quantize_row_q4_1(const float * restrict x, void * restrict vy, int k) {
+static void quantize_row_q4_1(const float * restrict x, void * restrict vy, int k) {
     assert(k % QK == 0);
 
 #if defined(__AVX2__)
