@@ -45,7 +45,7 @@ extern "C" {
 
     } llama_token_data;
 
-    typedef void (*llama_progress_callback)(double progress, void *ctx);
+    typedef void (*llama_progress_callback)(float progress, void *ctx);
 
     struct llama_context_params {
         int n_ctx;   // text context
@@ -134,9 +134,9 @@ extern "C" {
           const llama_token * last_n_tokens_data,
                         int   last_n_tokens_size,
                         int   top_k,
-                     double   top_p,
-                     double   temp,
-                     double   repeat_penalty);
+                      float   top_p,
+                      float   temp,
+                      float   repeat_penalty);
 
     // Performance information
     LLAMA_API void llama_print_timings(struct llama_context * ctx);

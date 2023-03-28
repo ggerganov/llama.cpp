@@ -779,8 +779,8 @@ static bool llama_model_load(
 
                 // progress
                 if (progress_callback) {
-                    double current_file_progress = double(size_t(fin.tellg()) - file_offset) / double(file_size - file_offset);
-                    double current_progress = (double(i) + current_file_progress) / double(n_parts);
+                    float current_file_progress = float(size_t(fin.tellg()) - file_offset) / float(file_size - file_offset);
+                    float current_progress = (float(i) + current_file_progress) / float(n_parts);
                     progress_callback(current_progress, progress_callback_user_data);
                 }
                 if (model.n_loaded % 8 == 0) {
@@ -1240,12 +1240,12 @@ static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, co
 // sampling
 //
 
-static void sample_top_k(std::vector<std::pair<double, llama_vocab::id>> & logits_id, int top_k) {
+static void sample_top_k(std::vector<std::pair<float, llama_vocab::id>> & logits_id, int top_k) {
     // find the top k tokens
     std::partial_sort(
             logits_id.begin(),
             logits_id.begin() + top_k, logits_id.end(),
-            [](const std::pair<double, llama_vocab::id> & a, const std::pair<double, llama_vocab::id> & b) {
+            [](const std::pair<float, llama_vocab::id> & a, const std::pair<float, llama_vocab::id> & b) {
         return a.first > b.first;
     });
 
@@ -1256,9 +1256,9 @@ static llama_vocab::id llama_sample_top_p_top_k(
         llama_context & lctx,
         const std::vector<llama_vocab::id> & last_n_tokens,
         int top_k,
-        double top_p,
-        double temp,
-        double repeat_penalty) {
+        float top_p,
+        float temp,
+        float repeat_penalty) {
     auto & rng = lctx.rng;
 
     const int n_logits = lctx.model.hparams.n_vocab;
@@ -1266,41 +1266,41 @@ static llama_vocab::id llama_sample_top_p_top_k(
     const auto & logits = lctx.logits;
     const auto * plogits = logits.data() + logits.size() - n_logits;
 
-    std::vector<std::pair<double, llama_vocab::id>> logits_id;
+    std::vector<std::pair<float, llama_vocab::id>> logits_id;
     logits_id.reserve(n_logits);
 
     {
-        const double scale = 1.0/temp;
+        const float scale = 1.0f/temp;
         for (int i = 0; i < n_logits; ++i) {
             // repetition penalty from ctrl paper (https://arxiv.org/abs/1909.05858)
             // credit https://github.com/facebookresearch/llama/compare/main...shawwn:llama:main
             if (std::find(last_n_tokens.begin(), last_n_tokens.end(), i) != last_n_tokens.end()) {
                 // if score < 0 then repetition penalty has to multiplied to reduce the previous token probability
                 if (plogits[i] < 0.0f) {
-                    logits_id.push_back(std::make_pair((double)plogits[i]*scale*repeat_penalty, i));
+                    logits_id.push_back(std::make_pair(plogits[i]*scale*repeat_penalty, i));
                 } else {
-                    logits_id.push_back(std::make_pair((double)plogits[i]*scale/repeat_penalty, i));
+                    logits_id.push_back(std::make_pair(plogits[i]*scale/repeat_penalty, i));
                 }
             } else {
-                logits_id.push_back(std::make_pair((double)plogits[i]*scale, i));
+                logits_id.push_back(std::make_pair(plogits[i]*scale, i));
             }
         }
     }
 
     sample_top_k(logits_id, top_k);
 
-    double maxl = -std::numeric_limits<double>::infinity();
+    float maxl = -std::numeric_limits<float>::infinity();
     for (const auto & kv : logits_id) {
         maxl = std::max(maxl, kv.first);
     }
 
     // compute probs for the top k tokens
-    std::vector<double> probs;
+    std::vector<float> probs;
     probs.reserve(logits_id.size());
 
     double sum = 0.0;
     for (const auto & kv : logits_id) {
-        double p = exp(kv.first - maxl);
+        const float p = expf(kv.first - maxl);
         probs.push_back(p);
         sum += p;
     }
@@ -1590,7 +1590,7 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
                 }
 
                 for (int i = 0; i < (int) hist_cur.size(); ++i) {
-                    printf("%5.3f ", hist_cur[i] / (double)nelements);
+                    printf("%5.3f ", hist_cur[i] / float(nelements));
                 }
                 printf("\n");
             } else {
@@ -1613,7 +1613,7 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
 
             printf("%s: hist: ", __func__);
             for (int i = 0; i < (int) hist_all.size(); ++i) {
-                printf("%5.3f ", hist_all[i] / (double)sum_all);
+                printf("%5.3f ", hist_all[i] / float(sum_all));
             }
             printf("\n");
         }
@@ -1795,9 +1795,9 @@ llama_token llama_sample_top_p_top_k(
       const llama_token * last_n_tokens_data,
                     int   last_n_tokens_size,
                     int   top_k,
-                 double   top_p,
-                 double   temp,
-                 double   repeat_penalty) {
+                  float   top_p,
+                  float   temp,
+                  float   repeat_penalty) {
     const int64_t t_start_sample_us = ggml_time_us();
 
     llama_token result = 0;
