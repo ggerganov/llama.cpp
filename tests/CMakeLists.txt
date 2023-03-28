@@ -5,5 +5,6 @@ function(llama_add_test source)
     add_test(NAME ${TEST_TARGET} COMMAND $<TARGET_FILE:${TEST_TARGET}> ${ARGN})
 endfunction()
 
+# llama_add_test(test-double-float.c) # SLOW
 llama_add_test(test-quantize.c)
 llama_add_test(test-tokenizer-0.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab.bin)

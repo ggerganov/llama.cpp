@@ -145,13 +145,11 @@ def main():
 
         print(f"Extracting only the vocab from '{fname_model}'\n")
 
-        model = torch.load(fname_model, map_location="cpu")
 
         with open(fname_out, "wb") as fout:
             write_header(fout, hparams, ftype)
             write_tokens(fout, tokenizer)
 
-        del model
 
         print(f"Done. Output file: {fname_out}\n")
 
