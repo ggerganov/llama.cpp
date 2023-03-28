@@ -74,6 +74,10 @@ def main():
             args.models_path, model, "ggml-model-f16.bin"
         )
 
+        if not os.path.isfile(f16_model_path_base):
+            print(f'The file %s was not found' % f16_model_path_base)
+            sys.exit(1)
+
         f16_model_parts_paths = map(
             lambda filename: os.path.join(f16_model_path_base, filename),
             glob.glob(f"{f16_model_path_base}*")
