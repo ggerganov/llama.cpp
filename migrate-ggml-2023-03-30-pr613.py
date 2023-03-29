@@ -272,13 +272,11 @@ def main():
         tokens = read_tokens(fin, hparams)
 
     if hparams['magic'] == 0x67676a74:  # ggjt
-        print("%s: input ggml has already been converted to 'ggjt' magic\n" %
-              (args.fin_path))
+        print(f"{args.fin_path}: input ggml has already been converted to 'ggjt' magic\n")
         sys.exit(1)
 
     if hparams['magic'] != 0x67676d66:  # ggmf
-        print("%s: input ggml file doesn't have expected 'ggmf' magic: %#x\n" %
-              (args.fin_path, hparams['magic']))
+        print(f"{args.fin_path}: input ggml file doesn't have expected 'ggmf' magic: {hparams['magic']:#x}\n")
         sys.exit(1)
 
     hparams['magic'] = 0x67676a74  # ggjt
@@ -286,7 +284,7 @@ def main():
     # count number of multipart files by convention
     n_parts = 1
     while True:
-        if os.path.exists("%s.%d" % (args.fin_path, n_parts)):
+        if os.path.exists(f"{args.fin_path}.{n_parts}"):
             n_parts += 1
         else:
             break
@@ -302,7 +300,7 @@ def main():
             print(f"Processing part {part_id+1} of {n_parts}\n")
             fin_path = args.fin_path
             if part_id > 0:
-                fin_path += ".%d" % (part_id)
+                fin_path += f".{part_id}"
             with open(fin_path, "rb") as fin:
                 read_tokens(fin, read_hparams(fin))
                 copy_tensors(fin, fout, part_id, n_parts)
