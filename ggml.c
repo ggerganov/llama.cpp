@@ -2419,8 +2419,9 @@ struct ggml_context {
     void * mem_buffer;
     bool   mem_buffer_owned;
     bool   mem_buffer_mlocked;
+    bool   no_alloc;
 
-    int n_objects;
+    int    n_objects;
 
     struct ggml_object * objects_begin;
     struct ggml_object * objects_end;
@@ -2702,6 +2703,7 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         /*.mem_buffer         =*/ params.mem_buffer ? params.mem_buffer : malloc(params.mem_size),
         /*.mem_buffer_owned   =*/ params.mem_buffer ? false : true,
         /*.mem_buffer_mlocked =*/ false,
+        /*.no_alloc           =*/ params.no_alloc,
         /*.n_objects          =*/ 0,
         /*.objects_begin      =*/ NULL,
         /*.objects_end        =*/ NULL,
@@ -2817,7 +2819,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
 
     size_t size_needed = 0;
 
-    if (data == NULL) {
+    if (data == NULL && !ctx->no_alloc) {
         size_needed += GGML_TYPE_SIZE[type]*(ne[0]/GGML_BLCK_SIZE[type]);
         for (int i = 1; i < n_dims; i++) {
             size_needed *= ne[i];
@@ -2901,7 +2903,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
         /*.perf_runs    =*/ 0,
         /*.perf_cycles  =*/ 0,
         /*.perf_time_us =*/ 0,
-        /*.data         =*/ data == NULL ? (void *)(result + 1) : data,
+        /*.data         =*/ (data == NULL && !ctx->no_alloc) ? (void *)(result + 1) : data,
         /*.pad          =*/ { 0 },
     };
 
@@ -10164,6 +10166,7 @@ enum ggml_opt_result ggml_opt(
         struct ggml_init_params params_ctx = {
             .mem_size   = 16*1024*1024,
             .mem_buffer = NULL,
+            .no_alloc   = false,
         };
 
         ctx = ggml_init(params_ctx);
