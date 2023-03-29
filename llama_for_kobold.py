@@ -39,12 +39,12 @@ handle.load_model.restype = ctypes.c_bool
 handle.generate.argtypes = [generation_inputs, ctypes.c_wchar_p] #apparently needed for osx to work. i duno why they need to interpret it that way but whatever
 handle.generate.restype = generation_outputs
   
-def load_model(model_filename,batch_size=8,max_context_length=512,n_parts_overwrite=-1):
+def load_model(model_filename,batch_size=8,max_context_length=512,n_parts_overwrite=-1,threads=6):
     inputs = load_model_inputs()
     inputs.model_filename = model_filename.encode("UTF-8")
     inputs.batch_size = batch_size
     inputs.max_context_length = max_context_length #initial value to use for ctx, can be overwritten
-    inputs.threads = os.cpu_count()
+    inputs.threads = threads
     inputs.n_parts_overwrite = n_parts_overwrite
     inputs.f16_kv = True
     ret = handle.load_model(inputs)
@@ -67,12 +67,14 @@ def generate(prompt,max_length=20, max_context_length=512,temperature=0.8,top_k=
         return ret.text.decode("UTF-8")
     return ""
 
-
+#################################################################
+### A hacky simple HTTP server simulating a kobold api by Concedo
+### we are intentionally NOT using flask, because we want MINIMAL dependencies
+#################################################################
 friendlymodelname = "concedo/llamacpp"  # local kobold api apparently needs a hardcoded known HF model name
 maxctx = 2048
 maxlen = 128
 modelbusy = False
-
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
     sys_version = ""
@@ -88,18 +90,17 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         global maxctx, maxlen, friendlymodelname
-        if self.path in ["/", "/?"] or self.path.startswith('/?'):
+        if self.path in ["/", "/?"] or self.path.startswith(('/?','?')): #it's possible for the root url to have ?params without /
+            response_body = ""
             if self.embedded_kailite is None:
-                response_body = (
-                    b"Embedded Kobold Lite is not found.<br>You will have to connect via the main KoboldAI client, or "
-                    b"<a href='https://lite.koboldai.net?local=1&port={0}'>use this URL</a> to connect.").format(self.port).encode()
+                response_body = (f"Embedded Kobold Lite is not found.<br>You will have to connect via the main KoboldAI client, or <a href='https://lite.koboldai.net?local=1&port={self.port}'>use this URL</a> to connect.").encode()
             else:
                 response_body = self.embedded_kailite
 
-                self.send_response(200)
-                self.send_header('Content-Length', str(len(response_body)))
-                self.end_headers()
-                self.wfile.write(response_body)
+            self.send_response(200)
+            self.send_header('Content-Length', str(len(response_body)))
+            self.end_headers()
+            self.wfile.write(response_body)
             return
                        
         self.path = self.path.rstrip('/')
@@ -276,6 +277,16 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None):
 
 def main(args): 
     ggml_selected_file = args.model_file
+    embedded_kailite = None 
+    if not ggml_selected_file:     
+        #give them a chance to pick a file
+        print("Please manually select ggml file:")
+        from tkinter.filedialog import askopenfilename
+        ggml_selected_file = askopenfilename (title="Select ggml model .bin files")
+        if not ggml_selected_file:
+            print("\nNo ggml model file was selected. Exiting.")
+            time.sleep(1)
+            sys.exit(2)
 
     if not os.path.exists(ggml_selected_file):
         print(f"Cannot find model file: {ggml_selected_file}")
@@ -284,8 +295,8 @@ def main(args):
 
     mdl_nparts = sum(1 for n in range(1, 9) if os.path.exists(f"{ggml_selected_file}.{n}")) + 1
     modelname = os.path.abspath(ggml_selected_file)
-    print("Loading model: " + modelname)
-    loadok = load_model(modelname,8,maxctx,mdl_nparts)
+    print(f"Loading model: {modelname}, Parts: {mdl_nparts}, Threads: {args.threads}")
+    loadok = load_model(modelname,8,maxctx,mdl_nparts,args.threads)
     print("Load Model OK: " + str(loadok))
 
     if not loadok:
@@ -294,19 +305,31 @@ def main(args):
     try:
         basepath = os.path.abspath(os.path.dirname(__file__))
         with open(os.path.join(basepath, "klite.embd"), mode='rb') as f:
-            embedded_kailite = f.read().decode().replace('var localmodehost = "127.0.0.1";' , f'var localmodehost = "{args.host}";').encode()
-        print("Embedded Kobold Lite loaded.")
+            embedded_kailite = f.read()
+            print("Embedded Kobold Lite loaded.")
     except:
         print("Could not find Kobold Lite. Embedded Kobold Lite will not be available.")
 
-    print(f"Starting Kobold HTTP Server on port {args.port}") 
-    print(f"Please connect to custom endpoint at http://{args.host}:{args.port}")
+    print(f"Starting Kobold HTTP Server on port {args.port}")
+    epurl = ""
+    if args.host=="":
+        epurl = f"http://localhost:{args.port}" + ("?streaming=1" if not args.nostream else "")   
+    else:
+        epurl = f"http://{args.host}:{args.port}?host={args.host}" + ("&streaming=1" if not args.nostream else "")   
+    
+        
+    print(f"Please connect to custom endpoint at {epurl}")
     RunServerMultiThreaded(args.host, args.port, embedded_kailite)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Kobold llama.cpp server')
-    parser.add_argument("model_file", help="Model file to load")
-    parser.add_argument("--port", help="Port to listen on", default=5001)
-    parser.add_argument("--host", help="Host IP to listen on", default="127.0.0.1")
+    parser.add_argument("model_file", help="Model file to load", nargs="?")
+    portgroup = parser.add_mutually_exclusive_group() #we want to be backwards compatible with the unnamed positional args
+    portgroup.add_argument("--port", help="Port to listen on", default=5001, type=int)
+    portgroup.add_argument("port", help="Port to listen on", default=5001, nargs="?", type=int)
+    parser.add_argument("--host", help="Host IP to listen on. If empty, all routable interfaces are accepted.", default="")
+    default_threads = (os.cpu_count() if os.cpu_count()<=6 else max(6,os.cpu_count()-2))
+    parser.add_argument("--threads", help="Use a custom number of threads if specified. Otherwise, uses an amount based on CPU cores", type=int, default=default_threads)
+    parser.add_argument("--nostream", help="Disables pseudo streaming", action='store_true')
     args = parser.parse_args()
     main(args)
