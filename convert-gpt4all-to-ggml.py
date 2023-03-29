@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+
+#
+# TODO: deduplicate GPT4All with convert-unversioned-ggml-to-ggml.py
+#
+
 # Original by https://github.com/eiz
 # https://github.com/ggerganov/llama.cpp/issues/324#issuecomment-1476227818
 import argparse
@@ -11,8 +16,8 @@ from sentencepiece import SentencePieceProcessor
 HPARAMS = keys = ["vocab_size", "dim", "multiple_of", "n_heads", "n_layers"]
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Upgrade old ggml model files to the current format')
-    parser.add_argument('dir_model', help='directory containing ggml .bin files')
+    parser = argparse.ArgumentParser(description='Upgrade a GPT4All model to the current format')
+    parser.add_argument('gpt4all_model', help='path to gpt4all-lora-quantized.bin')
     parser.add_argument('tokenizer_model', help='path to LLaMA tokenizer.model file')
     return parser.parse_args()
 
@@ -29,8 +34,8 @@ def write_header(f_out, header):
         raise Exception('Invalid file magic. Must be an old style ggml file.')
 
     values = [
-        0x67676d66,  # magic: ggml in hex
-        1, # file version
+        0x67676d66, # magic: ggml in hex
+        1,          # file version
         vocab_size,
         dim,
         multiple_of,
@@ -60,6 +65,12 @@ def write_tokens(fout, tokenizer):
         fout.write(text)
         fout.write(struct.pack("f", tokenizer.get_score(i)))
 
+    # TODO: GPT4All - add extra <pad> token
+    text = "<pad>".encode("utf-8")
+    fout.write(struct.pack("i", len(text)))
+    fout.write(text)
+    fout.write(struct.pack("f", 0.0))
+
 def read_tokens(f_in, tokenizer):
     for i in range(tokenizer.vocab_size()):
         len_b = f_in.read(4)
@@ -87,14 +98,10 @@ def convert_one_file(path_in, tokenizer):
 
 def main():
     args = parse_args()
-    files = []
-    files.extend(glob.glob(f"{args.dir_model}/*.bin"))
-    files.extend(glob.glob(f"{args.dir_model}/*.bin.*"))
 
     tokenizer = SentencePieceProcessor(args.tokenizer_model)
 
-    for file in files:
-        convert_one_file(file, tokenizer)
+    convert_one_file(args.gpt4all_model, tokenizer)
 
 if __name__ == "__main__":
     main()
