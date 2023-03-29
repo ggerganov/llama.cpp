@@ -3,7 +3,6 @@ import ctypes
 from ctypes import (
     c_int,
     c_float,
-    c_double,
     c_char_p,
     c_void_p,
     c_bool,
@@ -40,7 +39,7 @@ class llama_token_data(Structure):
 
 llama_token_data_p = POINTER(llama_token_data)
 
-llama_progress_callback = ctypes.CFUNCTYPE(None, c_double, c_void_p)
+llama_progress_callback = ctypes.CFUNCTYPE(None, c_float, c_void_p)
 
 
 class llama_context_params(Structure):
@@ -228,9 +227,9 @@ def llama_sample_top_p_top_k(
     last_n_tokens_data,  # type: Array[llama_token]
     last_n_tokens_size: c_int,
     top_k: c_int,
-    top_p: c_double,
-    temp: c_double,
-    repeat_penalty: c_double,
+    top_p: c_float,
+    temp: c_float,
+    repeat_penalty: c_float,
 ) -> llama_token:
     return _lib.llama_sample_top_p_top_k(
         ctx, last_n_tokens_data, last_n_tokens_size, top_k, top_p, temp, repeat_penalty
@@ -242,9 +241,9 @@ _lib.llama_sample_top_p_top_k.argtypes = [
     llama_token_p,
     c_int,
     c_int,
-    c_double,
-    c_double,
-    c_double,
+    c_float,
+    c_float,
+    c_float,
 ]
 _lib.llama_sample_top_p_top_k.restype = llama_token
 
