@@ -176,7 +176,13 @@ jobs:
         if: ${{ matrix.build == 'avx512' }}
         continue-on-error: true
         run: |
-          echo "TODO: check avx512f"
+          cd build
+          $vcdir = $(vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
+          $msvc = $(join-path $vcdir $('VC\Tools\MSVC\'+$(gc -raw $(join-path $vcdir 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt')).Trim()))
+          $cl =  $(join-path $msvc 'bin\Hostx64\x64\cl.exe')
+          echo 'int main(void){unsigned int a[4];__cpuid(a,7);return !(a[1]&65536);}' >> avx512f.c
+          & $cl /O2 /GS- /kernel avx512f.c /link /nodefaultlib /entry:main
+          .\avx512f.exe && echo "AVX512F: YES" && ( echo HAS_AVX512F=1 >> $env:GITHUB_ENV ) || echo "AVX512F: NO"
 
       - name: Test
         id: cmake_test
