@@ -72,6 +72,11 @@ def write_header(shape, dst_name, ftype_cur):
     fout.write(struct.pack("i" * len(shape), *shape[::-1]))
     fout.write(sname)
 
+    # ensure tensor data is aligned
+    tensor_data_offset = fout.tell()
+    tensor_data_offset = (tensor_data_offset + 31) & -32
+    fout.seek(tensor_data_offset)
+
 def convert_non_q4(src_name, dst_name):
     v = model[src_name]
     shape = v.shape
