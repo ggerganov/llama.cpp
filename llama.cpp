@@ -296,7 +296,7 @@ struct llama_context_params llama_context_default_params() {
 // model loading
 //
 
-void * mmap_file(const char* fname) {
+static void * mmap_file(const char* fname) {
 #if defined(MAP_FAILED)
     // POSIX mmap
     int fd = open(fname, O_RDONLY);
