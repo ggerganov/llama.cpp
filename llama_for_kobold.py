@@ -31,14 +31,23 @@ class generation_outputs(ctypes.Structure):
     _fields_ = [("status", ctypes.c_int),
                 ("text", ctypes.c_char * 16384)]
 
-dir_path = os.path.dirname(os.path.realpath(__file__))
-handle = ctypes.CDLL(os.path.join(dir_path, "llamacpp.dll"))
+handle = None
+use_blas = False # if true, uses OpenBLAS for acceleration. libopenblas.dll must exist in the same dir.
 
-handle.load_model.argtypes = [load_model_inputs] 
-handle.load_model.restype = ctypes.c_bool
-handle.generate.argtypes = [generation_inputs, ctypes.c_wchar_p] #apparently needed for osx to work. i duno why they need to interpret it that way but whatever
-handle.generate.restype = generation_outputs
-  
+def init_library():
+    global handle, use_blas
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    if use_blas:
+        #OpenBLAS should provide about a 2x speedup on prompt ingestion if compatible.
+        handle = ctypes.CDLL(os.path.join(dir_path, "llamacpp_blas.dll"))
+    else:
+        handle = ctypes.CDLL(os.path.join(dir_path, "llamacpp.dll"))
+
+    handle.load_model.argtypes = [load_model_inputs] 
+    handle.load_model.restype = ctypes.c_bool
+    handle.generate.argtypes = [generation_inputs, ctypes.c_wchar_p] #apparently needed for osx to work. i duno why they need to interpret it that way but whatever
+    handle.generate.restype = generation_outputs
+    
 def load_model(model_filename,batch_size=8,max_context_length=512,n_parts_overwrite=-1,threads=6):
     inputs = load_model_inputs()
     inputs.model_filename = model_filename.encode("UTF-8")
@@ -276,6 +285,14 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None):
             sys.exit(0)
 
 def main(args): 
+    global use_blas
+    if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "libopenblas.dll")):
+        print("Warning: libopenblas.dll not found. OpenBLAS will be disabled.")
+        use_blas = False
+    elif not args.noblas:
+        print("Attempting to use OpenBLAS library for faster prompt ingestion. A compatible libopenblas.dll will be required.")
+        use_blas = True
+    init_library() # Note: if blas does not exist and is enabled, program will crash.
     ggml_selected_file = args.model_file
     embedded_kailite = None 
     if not ggml_selected_file:     
@@ -331,5 +348,6 @@ if __name__ == '__main__':
     default_threads = (os.cpu_count() if os.cpu_count()<=6 else max(6,os.cpu_count()-2))
     parser.add_argument("--threads", help="Use a custom number of threads if specified. Otherwise, uses an amount based on CPU cores", type=int, default=default_threads)
     parser.add_argument("--nostream", help="Disables pseudo streaming", action='store_true')
+    parser.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
     args = parser.parse_args()
     main(args)

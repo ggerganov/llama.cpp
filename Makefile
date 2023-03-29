@@ -182,8 +182,8 @@ ifndef LLAMA_NO_ACCELERATE
 	endif
 endif
 ifdef LLAMA_OPENBLAS
-	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas
-	LDFLAGS += -lopenblas
+	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas 
+	LDFLAGS += -l:libopenblas.lib -L.
 endif
 ifdef LLAMA_GPROF
 	CFLAGS   += -pg
@@ -221,7 +221,7 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: main llamalib quantize
+default: main llamalib quantize llamalib_blas
 
 #
 # Build library
@@ -229,6 +229,9 @@ default: main llamalib quantize
 
 ggml.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS)   -c ggml.c -o ggml.o
+
+ggml_blas.o: ggml.c ggml.h
+	$(CC)  $(CFLAGS) -DGGML_USE_OPENBLAS -c ggml.c -o ggml_blas.o
 
 llama.o: llama.cpp llama.h
 	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
@@ -250,6 +253,9 @@ main: examples/main/main.cpp ggml.o llama.o common.o
 
 llamalib: expose.cpp ggml.o common.o extra.o
 	$(CXX) $(CXXFLAGS) expose.cpp ggml.o common.o extra.o -shared -o llamacpp.dll $(LDFLAGS)
+
+llamalib_blas: expose.cpp ggml_blas.o common.o extra.o
+	$(CXX) $(CXXFLAGS) expose.cpp ggml_blas.o common.o extra.o libopenblas.lib -shared -o llamacpp_blas.dll $(LDFLAGS)
 
 quantize: examples/quantize/quantize.cpp ggml.o llama.o
 	$(CXX) $(CXXFLAGS) examples/quantize/quantize.cpp ggml.o llama.o -o quantize $(LDFLAGS)

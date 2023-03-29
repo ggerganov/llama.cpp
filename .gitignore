@@ -34,4 +34,4 @@ __pycache__
 .swiftpm
 
 dist/
-llama_for_kobold.spec
+*.spec

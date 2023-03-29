@@ -7,8 +7,22 @@
 //No dynamic memory allocation! Setup structs with FIXED (known) shapes and sizes for ALL output fields
 //Python will ALWAYS provide the memory, we just write to it.
 
+#include <time.h>
 #include "./examples/main/main.cpp"
 #include "extra.h"
+#include "ggml.h"
+
+clock_t bench_timer = 0;
+void timer_start()
+{
+   bench_timer = clock();
+}
+double timer_check()
+{
+    double ticks = clock() - bench_timer;
+    double time_taken = ((double)ticks)/CLOCKS_PER_SEC;
+    return time_taken;
+}
 
 void print_tok_vec(std::vector<llama_token> & embd)
 {
@@ -67,6 +81,8 @@ extern "C" {
 
     bool load_model(const load_model_inputs inputs)
     {
+        printf("System Info: %s\n", llama_print_system_info());
+
         ctx_params = llama_context_default_params();
 
         n_threads = inputs.threads;       
@@ -115,7 +131,7 @@ extern "C" {
         params.n_ctx = inputs.max_context_length;
         params.n_batch = n_batch;
         params.n_threads = n_threads;
-      
+
         if(params.repeat_last_n<1)
         {
             params.repeat_last_n = 1;
@@ -183,6 +199,16 @@ extern "C" {
        
         last_n_tokens.erase(last_n_tokens.begin(),last_n_tokens.begin()+n_past);
         embd_inp.erase(embd_inp.begin(),embd_inp.begin()+n_past);
+
+        //if using BLAS and prompt is big enough, switch to single thread and use a huge batch
+        bool blasmode = (embd_inp.size() >= 32 && ggml_cpu_has_blas());
+        int original_batch = params.n_batch;
+        int original_threads = params.n_threads;
+        if(blasmode)
+        {
+            params.n_batch = 512;
+            params.n_threads = 1;
+        }
         
         current_context_tokens.resize(n_past);
 		
@@ -192,7 +218,9 @@ extern "C" {
 		std::string concat_output = "";  
     	
 		bool startedsampling = false;
-        printf("\nProcessing Prompt (%d tokens): ",embd_inp.size());
+        printf("\nProcessing Prompt (%d tokens%s): ",embd_inp.size(),(blasmode?", BLAS":""));
+        timer_start();
+        double time1=0,time2=0;
 
 		while (remaining_tokens > 0) 
 		{
@@ -224,6 +252,10 @@ extern "C" {
             	if(!startedsampling)
                 {
                     startedsampling = true;
+                    params.n_batch = original_batch;
+                    params.n_threads = original_threads;
+                    time1 = timer_check();
+                    timer_start();
                     printf("\nGenerating (%d tokens): ",params.n_predict);
                 }
 
@@ -268,6 +300,8 @@ extern "C" {
         	}
 
 		}
+        time2 = timer_check();
+        printf("\nTime Taken - Processing:%.1fs, Generation:%.1fs, Total:%.1fs",time1,time2,(time1+time2));
        		
 		output.status = 1;
         snprintf(output.text, sizeof(output.text), "%s", concat_output.c_str());
