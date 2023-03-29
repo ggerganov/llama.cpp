@@ -19,7 +19,7 @@ int main(int argc, char ** argv) {
 
     // needed to initialize f16 tables
     {
-        struct ggml_init_params params = { 0, NULL };
+        struct ggml_init_params params = { 0, NULL, false };
         struct ggml_context * ctx = ggml_init(params);
         ggml_free(ctx);
     }
