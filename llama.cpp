@@ -12,11 +12,15 @@
 #include <cassert>
 #include <cstring>
 
-// headers for POSIX mmap
+// mmap
 #if defined (__unix__) || defined (__APPLE__)
 #   include <sys/mman.h>
 #   include <fcntl.h>
 #   include <unistd.h>
+#elif defined(_WIN32)
+#   define WIN32_LEAN_AND_MEAN
+#   include <Windows.h>
+//#include <Memoryapi.h>
 #endif
 
 #define LLAMA_USE_SCRATCH
@@ -312,8 +316,31 @@ static void mmap_file(const char* fname, void * &mm_addr, size_t &mm_length) {
         mm_addr = NULL;
         mm_length = 0;
     }
+#elif defined(_WIN32)
+    mm_addr = NULL;
+    
+    HANDLE hFile = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        return;
+    }
+
+    // not really necessary
+    LARGE_INTEGER fileSize;
+    GetFileSizeEx(hFile, &fileSize);
+    mm_length = fileSize;
+
+    HANDLE hMapping = CreateFileMappingA(hFile, NULL, PAGE_READONLY, 0, 0, NULL);
+    CloseHandle(hFile);
+
+    if (hMapping == NULL) {
+        return;
+    }
+
+    mm_addr = MapViewOfFile(hMapping, FILE_MAP_READ, 0, 0, 0);
+    CloseHandle(hMapping);
 #else
-    // TODO: windows support
+    mm_addr = NULL;
+    mm_length = 0;
     (void)(fname); // suppress warnings
 #endif
 }
@@ -322,8 +349,9 @@ static void munmap_file(void * addr, size_t length) {
 #if defined(MAP_FAILED)
     // POSIX
     munmap(addr, length);
+#elif defined(_WIN32)
+    UnmapViewOfFile(addr);
 #else
-    // TODO: windows support
     (void)(addr); // suppress warnings
     (void)(length);
 #endif
