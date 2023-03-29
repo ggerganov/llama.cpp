@@ -149,6 +149,10 @@ struct llama_model {
     // the model memory buffer
     std::vector<uint8_t> buf;
 
+    // model memory mapped file
+    void * mm_addr;
+    size_t mm_length;
+
     // tensors
     int n_loaded;
     std::unordered_map<std::string, struct ggml_tensor *> tensors;
@@ -296,22 +300,32 @@ struct llama_context_params llama_context_default_params() {
 // model loading
 //
 
-static void * mmap_file(const char* fname) {
+static void mmap_file(const char* fname, void * &mm_addr, size_t &mm_length) {
 #if defined(MAP_FAILED)
-    // POSIX mmap
+    // POSIX
     int fd = open(fname, O_RDONLY);
-    size_t len = lseek(fd, 0, SEEK_END);
-    void * mm_addr = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0);
+    mm_length = lseek(fd, 0, SEEK_END);
+    mm_addr = mmap(NULL, mm_length, PROT_READ, MAP_SHARED, fd, 0);
+    close(fd);
     if (mm_addr == MAP_FAILED) {
         perror("mmap failed");
         mm_addr = NULL;
+        mm_length = 0;
     }
-    close(fd);
-    return mm_addr;
 #else
     // TODO: windows support
     (void)(fname); // suppress warnings
-    return NULL;
+#endif
+}
+
+static void munmap_file(void * addr, size_t length) {
+#if defined(MAP_FAILED)
+    // POSIX
+    munmap(addr, length);
+#else
+    // TODO: windows support
+    (void)(addr); // suppress warnings
+    (void)(length);
 #endif
 }
 
@@ -480,11 +494,14 @@ static bool llama_model_load(
     bool use_mmap = (n_parts == 1);
 
     // try to memory map the model file
-    void* mm_addr = NULL;
+    void * mm_addr = NULL;
     if (use_mmap) {
-        mm_addr = mmap_file(fname.c_str());
-        if (mm_addr == NULL) {
+        mmap_file(fname.c_str(), model.mm_addr, model.mm_length);
+        if (model.mm_addr == NULL) {
             use_mmap = false;
+        }
+        else {
+            mm_addr = model.mm_addr;
         }
     }
 
@@ -1748,6 +1765,10 @@ void llama_free(struct llama_context * ctx) {
 
     if (ctx->model.ctx) {
         ggml_free(ctx->model.ctx);
+    }
+
+    if (ctx->model.mm_addr) {
+        munmap_file(ctx->model.mm_addr, ctx->model.mm_length);
     }
 
     delete ctx;
