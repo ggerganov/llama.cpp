@@ -120,7 +120,7 @@ def write_header(fout, hparams, ftype):
 def write_tokens(fout, tokenizer):
     for i in range(tokenizer.vocab_size()):
         if tokenizer.is_unknown(i):
-            text = " \u2047 ".encode("utf-8")
+            text = " \u2047 ".encode()
         elif tokenizer.is_control(i):
             text = b""
         elif tokenizer.is_byte(i):
@@ -131,7 +131,7 @@ def write_tokens(fout, tokenizer):
             byte_value = int(piece[3:-1], 16)
             text = struct.pack("B", byte_value)
         else:
-            text = tokenizer.id_to_piece(i).replace("\u2581", " ").encode("utf-8")
+            text = tokenizer.id_to_piece(i).replace("\u2581", " ").encode()
         fout.write(struct.pack("i", len(text)))
         fout.write(text)
         fout.write(struct.pack("f", tokenizer.get_score(i)))
@@ -191,7 +191,7 @@ def process_and_write_variables(fout, model, ftype, part_id, n_parts):
         fullshape = list(partshape)
         if n_dims > 1:
             fullshape[split_dim] *= n_parts
-        sname = name.encode('utf-8')
+        sname = name.encode()
         fout.write(struct.pack("iii", n_dims, len(sname), ftype_cur))
         for dim in reversed(fullshape):
             fout.write(struct.pack("i", dim))
