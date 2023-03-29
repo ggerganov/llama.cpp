@@ -229,13 +229,15 @@ cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
 ### Using [GPT4All](https://github.com/nomic-ai/gpt4all)
 
 - Obtain the `gpt4all-lora-quantized.bin` model
-- It is distributed in the old `ggml` format which is not obsoleted. So you have to convert it to the new format using [./convert-gpt4all-to-ggml.py](./convert-gpt4all-to-ggml.py):
+- It is distributed in the old `ggml` format which is now obsoleted
+- You have to convert it to the new format using [./convert-gpt4all-to-ggml.py](./convert-gpt4all-to-ggml.py):
 
   ```bash
   python3 convert-gpt4all-to-ggml.py models/gpt4all-7B/gpt4all-lora-quantized.bin ./models/tokenizer.model 
   ```
   
-- You can now use the newly generated `gpt4all-lora-quantized.bin` model in exactly the same way as all other models. The original model is stored in the same folder with a suffix `.orig`
+- You can now use the newly generated `gpt4all-lora-quantized.bin` model in exactly the same way as all other models
+- The original model is saved in the same folder with a suffix `.orig`
 
 ### Obtaining and verifying the Facebook LLaMA original model and Stanford Alpaca model data
 
