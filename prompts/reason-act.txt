@@ -15,4 +15,4 @@ Answer: The calculate tool says it is 9.3333333333
 Question: What is capital of france?
 Thought: Do I need to use an action? No, I know the answer
 Answer: Paris is the capital of France
-Question: 
+Question:

@@ -6,11 +6,12 @@ cd ..
 
 # get -m model parameter otherwise defer to default
 if [ "$1" == "-m" ]; then
-  MODEL="-m $1"
+  MODEL="-m $2 "
 fi
 
 ./main $MODEL --color \
     -f ./prompts/reason-act.txt \
     -i --interactive-first \
     --top_k 10000 --temp 0.2 --repeat_penalty 1 -t 7 -c 2048 \
-    -r "Question: " -r "Observation: " -n -1
+    -r "Question:" -r "Observation:" --in-prefix " " \
+    -n -1
