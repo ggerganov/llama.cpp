@@ -6,7 +6,7 @@
 #include <stdbool.h>
 
 #ifdef LLAMA_SHARED
-#    ifdef _WIN32 && !defined __MINGW32__
+#    if defined(_WIN32) && !defined(__MINGW32__)
 #        ifdef LLAMA_BUILD
 #            define LLAMA_API __declspec(dllexport)
 #        else
