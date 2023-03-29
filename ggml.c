@@ -1962,7 +1962,7 @@ static void ggml_vec_dot_q4_1(const int n, float * restrict s, const void * rest
         // Compute cross scales for the block
         const __m256 scale_0 = _mm256_mul_ps( d0v, m1v );
         const __m256 scale_1 = _mm256_mul_ps( m0v, d1v );
-        const __m256 cross_scales = _mm256_blend_ps( scale_0, scale_1, 0b10101010 );
+        const __m256 cross_scales = _mm256_blend_ps( scale_0, scale_1, 0xAA /* 0b10101010 */ );
 
         // Load 16 bytes, and unpack 4 bit fields into bytes, making 32 bytes
         __m256i bx = bytesFromNibbles( x[i].qs );
