@@ -150,8 +150,8 @@ struct llama_model {
     std::vector<uint8_t> buf;
 
     // model memory mapped file
-    void * mm_addr;
-    size_t mm_length;
+    void * mm_addr = NULL;
+    size_t mm_length = 0;
 
     // tensors
     int n_loaded;
