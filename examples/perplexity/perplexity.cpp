@@ -1,15 +1,17 @@
 #include "common.h"
 #include "llama.h"
 
-std::vector<double> softmax(const std::vector<float>& logits) {
-    std::vector<double> probs(logits.size());
+#include <cmath>
+
+std::vector<float> softmax(const std::vector<float>& logits) {
+    std::vector<float> probs(logits.size());
     float max_logit = logits[0];
     for (float v : logits) max_logit = std::max(max_logit, v);
     double sum_exp = 0.0;
     for (size_t i = 0; i < logits.size(); i++) {
         // Subtract the maximum logit value from the current logit value for numerical stability
-        float logit = logits[i] - max_logit;
-        double exp_logit = std::exp(logit);
+        const float logit = logits[i] - max_logit;
+        const float exp_logit = expf(logit);
         sum_exp += exp_logit;
         probs[i] = exp_logit;
     }
@@ -24,14 +26,16 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
     auto tokens = ::llama_tokenize(ctx, params.prompt, true);
 
     int count = 0;
-    double nll = 0.0;
     int seq_count = tokens.size() / params.n_ctx;
+
+    double nll = 0.0;
 
     fprintf(stderr, "%s : calculating perplexity over %d chunks\n", __func__, seq_count);
 
     for (int i = 0; i < seq_count; ++i) {
         int start = i * params.n_ctx;
-        int end = start + params.n_ctx - 1;
+        int end = start + params.n_ctx - 1; // TODO: this is not optimal, e.g. it makes the batch 511 instead of 512
+                                            //       it is better to always be power of 2 for better performance
         std::vector<llama_token> embd(tokens.begin() + start, tokens.begin() + end);
         auto start_t = std::chrono::high_resolution_clock::now();
         if (llama_eval(ctx, embd.data(), embd.size(), 0, params.n_threads)) {
@@ -40,7 +44,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
         }
         auto end_t = std::chrono::high_resolution_clock::now();
         if (i == 0) {
-            double seconds = std::chrono::duration<double>(end_t - start_t).count();
+            const float seconds = std::chrono::duration<float>(end_t - start_t).count();
             printf("%.2f seconds per pass - ETA %.2f hours\n", seconds, (seconds * seq_count) / (60.0*60.0));
         }
         // We get the logits for all the tokens in the context window (params.n_ctx)
@@ -63,7 +67,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
             std::vector<float> tok_logits(
                 logits + j * n_vocab,
                 logits + (j + 1) * n_vocab);
-            double prob = softmax(tok_logits)[tokens[start + j + 1]];
+            const float prob = softmax(tok_logits)[tokens[start + j + 1]];
             nll += -std::log(prob);
             ++count;
         }

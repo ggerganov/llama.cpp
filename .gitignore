@@ -5,6 +5,7 @@
 .vscode/
 .DS_Store
 
+.build/
 build/
 build-em/
 build-debug/
@@ -20,12 +21,17 @@ models/*
 /quantize
 /result
 /perplexity
+/embedding
 
 arm_neon.h
 compile_commands.json
 
 .envrc
 .direnv/
+
+.venv
+__pycache__
+.swiftpm
 
 dist/
 llama_for_kobold.spec

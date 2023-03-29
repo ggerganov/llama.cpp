@@ -35,6 +35,11 @@ CFLAGS   = -I.              -O3 -DNDEBUG -std=c11   -fPIC
 CXXFLAGS = -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC
 LDFLAGS  =
 
+# warnings
+CFLAGS   += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith -Wno-unused-function
+CXXFLAGS += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function
+
+
 #lets try enabling everything
 CFLAGS   += -pthread -mf16c -mfma -mavx2 -mavx -msse3 
 CXXFLAGS += -pthread
