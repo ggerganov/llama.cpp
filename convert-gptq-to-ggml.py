@@ -20,9 +20,12 @@ dir_out = sys.argv[3]
 
 model = torch.load(fname_model, map_location="cpu")
 
-n_vocab, n_embd = model['model.embed_tokens.weight'].shape
-n_layer = 1 + max(int(m.group(1)) for name in model
-                  if (m := re.match(r'model\.layers\.([0-9]+)', name)))
+n_vocab, n_embd = model["model.embed_tokens.weight"].shape
+n_layer = 1 + max(
+    int(m.group(1))
+    for name in model
+    if (m := re.match(r"model\.layers\.([0-9]+)", name))
+)
 
 # hardcoded:
 n_mult = 256
@@ -36,14 +39,14 @@ fname_out = sys.argv[3]
 
 fout = open(fname_out, "wb")
 
-fout.write(struct.pack("i", 0x67676d66)) # magic: ggmf in hex
-fout.write(struct.pack("i", 1)) # file version
+fout.write(struct.pack("i", 0x67676D66))  # magic: ggmf in hex
+fout.write(struct.pack("i", 1))  # file version
 fout.write(struct.pack("i", n_vocab))
 fout.write(struct.pack("i", n_embd))
 fout.write(struct.pack("i", n_mult))
 fout.write(struct.pack("i", n_head))
 fout.write(struct.pack("i", n_layer))
-fout.write(struct.pack("i", n_embd // n_head)) # rot (obsolete)
+fout.write(struct.pack("i", n_embd // n_head))  # rot (obsolete)
 fout.write(struct.pack("i", 4))
 
 
@@ -66,16 +69,23 @@ for i in range(tokenizer.vocab_size()):
     fout.write(text)
     fout.write(struct.pack("f", tokenizer.get_score(i)))
 
+
 def write_header(shape, dst_name, ftype_cur):
-    sname = dst_name.encode('utf-8')
+    sname = dst_name.encode("utf-8")
     fout.write(struct.pack("iii", len(shape), len(sname), ftype_cur))
     fout.write(struct.pack("i" * len(shape), *shape[::-1]))
     fout.write(sname)
 
+
 def convert_non_q4(src_name, dst_name):
     v = model[src_name]
     shape = v.shape
-    print("Processing non-Q4 variable: " + src_name + " with shape: ", shape, " and type: ", v.dtype)
+    print(
+        "Processing non-Q4 variable: " + src_name + " with shape: ",
+        shape,
+        " and type: ",
+        v.dtype,
+    )
     if len(shape) == 1:
         print("  Converting to float32")
         v = v.to(torch.float32)
@@ -88,11 +98,12 @@ def convert_non_q4(src_name, dst_name):
     # data
     v.numpy().tofile(fout)
 
+
 def convert_q4(src_name, dst_name, permute=False):
     zeros = model[f"{src_name}.zeros"].numpy()
     scales = model[f"{src_name}.scales"].numpy()
     bias = model[f"{src_name}.bias"].numpy()
-    qweight = model[f"{src_name}.qweight"].numpy().T # transpose
+    qweight = model[f"{src_name}.qweight"].numpy().T  # transpose
 
     # Q4_1 does not support bias; good thing the bias is always all zeros.
     assert not np.any(bias)
@@ -113,7 +124,7 @@ def convert_q4(src_name, dst_name, permute=False):
     # the columns in a row, so we end up wasting quite a bit of memory with
     # repeated scales and addends.
 
-    addends = -zeros # flip sign
+    addends = -zeros  # flip sign
 
     # Since the output format is mixed between integers and floats, we have
     # to hackily view the floats as int32s just so numpy will let us
@@ -128,37 +139,53 @@ def convert_q4(src_name, dst_name, permute=False):
     addends_rep = np.atleast_3d(addends_view).repeat(grouped.shape[1], axis=1)
     scales_rep = np.atleast_3d(scales_view).repeat(grouped.shape[1], axis=1)
 
-    blob = np.concatenate([scales_rep, addends_rep, grouped], axis=2, casting='no')
+    blob = np.concatenate([scales_rep, addends_rep, grouped], axis=2, casting="no")
 
     if permute:
         # Permute some rows to undo the permutation done by convert_llama_weights_to_hf.py.
         # This can be done after the above conversion because it doesn't affect column order/layout.
-        blob = (blob.reshape(n_head, 2, shape[0] // n_head // 2, *blob.shape[1:])
-                    .swapaxes(1, 2)
-                    .reshape(blob.shape))
+        blob = (
+            blob.reshape(n_head, 2, shape[0] // n_head // 2, *blob.shape[1:])
+            .swapaxes(1, 2)
+            .reshape(blob.shape)
+        )
 
     # header
-    write_header(shape, dst_name, 3) # ftype = Q4_1
+    write_header(shape, dst_name, 3)  # ftype = Q4_1
 
     # data
     blob.tofile(fout)
+
 
 convert_non_q4("model.embed_tokens.weight", "tok_embeddings.weight")
 convert_non_q4("model.norm.weight", "norm.weight")
 convert_non_q4("lm_head.weight", "output.weight")
 
 for i in range(n_layer):
-    convert_q4(f"model.layers.{i}.self_attn.q_proj", f"layers.{i}.attention.wq.weight", permute=True)
-    convert_q4(f"model.layers.{i}.self_attn.k_proj", f"layers.{i}.attention.wk.weight", permute=True)
+    convert_q4(
+        f"model.layers.{i}.self_attn.q_proj",
+        f"layers.{i}.attention.wq.weight",
+        permute=True,
+    )
+    convert_q4(
+        f"model.layers.{i}.self_attn.k_proj",
+        f"layers.{i}.attention.wk.weight",
+        permute=True,
+    )
     convert_q4(f"model.layers.{i}.self_attn.v_proj", f"layers.{i}.attention.wv.weight")
     convert_q4(f"model.layers.{i}.self_attn.o_proj", f"layers.{i}.attention.wo.weight")
 
     convert_q4(f"model.layers.{i}.mlp.gate_proj", f"layers.{i}.feed_forward.w1.weight")
     convert_q4(f"model.layers.{i}.mlp.down_proj", f"layers.{i}.feed_forward.w2.weight")
-    convert_q4(f"model.layers.{i}.mlp.up_proj",   f"layers.{i}.feed_forward.w3.weight")
+    convert_q4(f"model.layers.{i}.mlp.up_proj", f"layers.{i}.feed_forward.w3.weight")
 
-    convert_non_q4(f"model.layers.{i}.input_layernorm.weight", f"layers.{i}.attention_norm.weight")
-    convert_non_q4(f"model.layers.{i}.post_attention_layernorm.weight", f"layers.{i}.ffn_norm.weight")
+    convert_non_q4(
+        f"model.layers.{i}.input_layernorm.weight", f"layers.{i}.attention_norm.weight"
+    )
+    convert_non_q4(
+        f"model.layers.{i}.post_attention_layernorm.weight",
+        f"layers.{i}.ffn_norm.weight",
+    )
 
 
 fout.close()
