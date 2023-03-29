@@ -18,6 +18,10 @@
 #include <signal.h>
 #endif
 
+#if defined (_WIN32)
+#include <windows.h>
+#endif
+
 static console_state con_st;
 
 static bool is_interacting = false;
@@ -33,6 +37,18 @@ void sigint_handler(int signo) {
             _exit(130);
         }
     }
+}
+#endif
+
+#if defined (_WIN32)
+std::string promptconvert(const std::string str)
+{
+    // Convert from current locale to UTF-8
+    wchar_t wstr[1024];
+    int wlen = MultiByteToWideChar(CP_ACP, 0, str.c_str(), str.length(), wstr, 1024);
+    char mbstr[2048];
+    int mblen = WideCharToMultiByte(CP_UTF8, 0, wstr, wlen, mbstr, 2048, 0, 0);
+    return std::string(mbstr, mblen);
 }
 #endif
 
@@ -135,6 +151,11 @@ int main(int argc, char ** argv) {
 
     // Add a space in front of the first character to match OG llama tokenizer behavior
     params.prompt.insert(0, 1, ' ');
+
+#if defined (_WIN32)
+    // Convert from current locale to UTF-8
+    params.prompt = promptconvert(params.prompt);
+#endif
 
     // tokenize the prompt
     auto embd_inp = ::llama_tokenize(ctx, params.prompt, true);
