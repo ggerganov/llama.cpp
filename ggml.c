@@ -1297,7 +1297,7 @@ static inline void __avx_f32cx8_store(ggml_fp16_t *x, __m256 y) {
     _mm256_storeu_ps(arr, y);
 
     for (int i = 0; i < 8; i++)
-        x[i] = GGML_FP16_TO_FP32(arr[i]);
+        x[i] = GGML_FP32_TO_FP16(arr[i]);
 }
 #define GGML_F32Cx8_LOAD(x)     __avx_f32cx8_load(x)
 #define GGML_F32Cx8_STORE(x, y) __avx_f32cx8_store(x, y)
