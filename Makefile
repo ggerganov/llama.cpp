@@ -181,7 +181,7 @@ ifndef LLAMA_NO_ACCELERATE
 endif
 ifdef LLAMA_OPENBLAS
 	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas
-	LDFLAGS += -lopenblas
+	LDFLAGS += -lcblas -lopenblas
 endif
 ifdef LLAMA_GPROF
 	CFLAGS   += -pg
