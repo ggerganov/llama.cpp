@@ -2884,36 +2884,47 @@ size_t ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch) 
     return result;
 }
 
+#ifdef __APPLE__
+#define MLOCK_SUGGESTION \
+    "Try increasing the sysctl values 'vm.user_wire_limit' and 'vm.global_user_wire_limit' and/or " \
+    "decreasing 'vm.global_no_user_wire_amount'.  Also try increasing RLIMIT_MLOCK (ulimit -l).\n"
+#else
+#define MLOCK_SUGGESTION \
+    "Try increasing RLIMIT_MLOCK ('ulimit -l' as root).\n"
+#endif
+
 bool ggml_mlock_supported(void) {
     return GGML_MLOCK_SUPPORT;
 }
 
+bool ggml_mlock(
+        struct ggml_context * ctx,
+        const void *opt_extra_addr,
+        size_t opt_extra_len,
+        char **err_p) {
+    // TODO: Use SetProcessWorkingSetSize() + VirtualLock() on WIN32
 #if GGML_MLOCK_SUPPORT
-#ifdef __APPLE__
-    #define MLOCK_SUGGESTION "Try increasing the sysctl values 'vm.user_wire_limit' and 'vm.global_user_wire_limit' and/or\n" \
-                             "decreasing 'vm.global_no_user_wire_amount'.  Also try increasing RLIMIT_MLOCK (ulimit -l)."
-#else
-    #define MLOCK_SUGGESTION "Try increasing RLIMIT_MLOCK (ulimit -l)."
-#endif
-bool ggml_mlock(struct ggml_context * ctx, char ** err_p) {
     if (ctx->mem_buffer_mlocked) {
         return true;
     }
-    if (mlock(ctx->mem_buffer, ctx->mem_size)) {
-        int ret = asprintf(err_p, "failed to mlock %zu-byte buffer: %s\n" MLOCK_SUGGESTION,
-                           ctx->mem_size, strerror(errno));
-        GGML_ASSERT(ret >= 0);
+    if (mlock(ctx->mem_buffer, ctx->mem_size) ||
+        (opt_extra_len &&
+         mlock(opt_extra_addr, opt_extra_len))) {
+        if ((*err_p = malloc(1024))) {
+            snprintf(*err_p, 1024,
+                     "failed to mlock %zu-byte buffer: %s\n" MLOCK_SUGGESTION,
+                     ctx->mem_size + opt_extra_len,
+                     strerror(errno));
+        }
         return false;
     }
     ctx->mem_buffer_mlocked = true;
     return true;
-}
 #else // GGML_MLOCK_SUPPORT
-bool ggml_mlock(struct ggml_context * ctx, char ** err_p) {
     *err_p = strdup("can't mlock because it's not supported on this system");
     return false;
-}
 #endif // GGML_MLOCK_SUPPORT
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 

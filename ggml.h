@@ -345,7 +345,11 @@ size_t ggml_used_mem(const struct ggml_context * ctx);
 size_t ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch);
 
 bool ggml_mlock_supported(void);
-bool ggml_mlock(struct ggml_context * ctx, char ** err_p);
+bool ggml_mlock(
+        struct ggml_context * ctx,
+        const void *opt_extra_addr,
+        size_t opt_extra_len,
+        char **err_p);
 
 struct ggml_tensor * ggml_new_tensor(
         struct ggml_context * ctx,
