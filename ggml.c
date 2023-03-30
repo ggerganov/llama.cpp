@@ -1829,7 +1829,6 @@ static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void * rest
 
     const int superblock_size = 8;
     const int superblock_count = nb / superblock_size;
-    const int remainder = nb % superblock_size;
 
     for (int superblock_ix = 0; superblock_ix < superblock_count; superblock_ix += 1) {
         int i = superblock_ix * superblock_size;
