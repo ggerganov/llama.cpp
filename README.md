@@ -1,14 +1,16 @@
 # rwkv.cpp
 
-This is a port of [RWKV-LM by @BlinkDL](https://github.com/BlinkDL/RWKV-LM) to [ggml library by @ggerganov](https://github.com/ggerganov/ggml). The end goal is to allow 4-bit quanized inference on CPU.
+This is a port of [BlinkDL/RWKV-LM](https://github.com/BlinkDL/RWKV-LM) to [ggerganov/ggml](https://github.com/ggerganov/ggml). The end goal is to allow 4-bit quanized inference on CPU.
 
 **WORK IN PROGRESS: NOTHING WORKS YET!** If you know C/C++/ggml, please help!
 
-Converting and loading the model works, but I'm not sure if the element/dimension order is correct -- more debugging needed.
+Inference code runs, but outputs all `NaN`s in logits, most probably due to missing operators.  Values are correct up to `ln0`: result of `ln0` matches with reference implementation.
 
 ## Plan
 
 1. Make FP32 inference work
+   1. Implement and use element-wise `max`, `exp`, `sigmoid`
+   2. Compare vectors step-by-step with reference implementation
 2. Validate states and logits against [reference implementation](https://github.com/BlinkDL/ChatRWKV/blob/main/RWKV_in_150_lines.py) by creating a testing script
 3. Heavily refactor code; optimize where possible
 4. Make FP16 inference work
