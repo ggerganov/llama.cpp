@@ -1595,7 +1595,10 @@ struct llama_context * llama_init_from_file(
 
     if (params.use_mlock) {
         char *err;
-        if (!ggml_mlock(ctx->model.ctx, &err)) {
+        if (!ggml_mlock(ctx->model.ctx,
+                        ctx->model.mm_addr,
+                        ctx->model.mm_length,
+                        &err)) {
             fprintf(stderr, "%s\n", err);
             free(err);
             llama_free(ctx);
