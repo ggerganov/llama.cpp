@@ -89,8 +89,9 @@ def write_state_dict(state_dict: Dict[str, torch.Tensor], dest_path: str, data_t
             if data_type == 'float16' and len(tensor.shape) > 1:
                 tensor = tensor.half()
 
-            # ggml stores tensor values in other way than PyTorch, need to flip dimension order here
-            tensor = torch.permute(tensor, dims=[i for i in reversed(range(len(tensor.shape)))]).contiguous()
+            if k == 'emb.weight':
+                # Allows embedding matrix to be multiplied by one-hot vector
+                tensor = torch.permute(tensor, dims=[i for i in reversed(range(len(tensor.shape)))]).contiguous()
 
             shape = tensor.shape
 
