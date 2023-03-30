@@ -182,8 +182,8 @@ ifndef LLAMA_NO_ACCELERATE
 	endif
 endif
 ifdef LLAMA_OPENBLAS
-	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas 
-	LDFLAGS += -l:libopenblas.lib -L.
+	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas
+	LDFLAGS += -lopenblas
 endif
 ifdef LLAMA_GPROF
 	CFLAGS   += -pg
@@ -204,6 +204,13 @@ endif
 ifneq ($(filter armv8%,$(UNAME_M)),)
 	# Raspberry Pi 4
 	CFLAGS += -mfp16-format=ieee -mno-unaligned-access
+endif
+
+BLAS_BUILD = 
+ifeq ($(OS),Windows_NT)
+	BLAS_BUILD = $(CXX) $(CXXFLAGS) expose.cpp ggml_blas.o common.o extra.o libopenblas.lib -shared -o llamacpp_blas.dll $(LDFLAGS)
+else
+	BLAS_BUILD = @echo 'Your OS is $(OS) and does not appear to be Windows. If you want to use openblas, please link it manually with LLAMA_OPENBLAS=1'
 endif
 
 #
@@ -243,7 +250,7 @@ extra.o: extra.cpp extra.h
 	$(CXX) $(CXXFLAGS) -c extra.cpp -o extra.o
 
 clean:
-	rm -vf *.o main quantize perplexity embedding
+	rm -vf *.o main quantize perplexity embedding main.exe quantize.exe llamacpp.dll llamacpp_blas.dll
 
 main: examples/main/main.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
@@ -255,8 +262,8 @@ llamalib: expose.cpp ggml.o common.o extra.o
 	$(CXX) $(CXXFLAGS) expose.cpp ggml.o common.o extra.o -shared -o llamacpp.dll $(LDFLAGS)
 
 llamalib_blas: expose.cpp ggml_blas.o common.o extra.o
-	$(CXX) $(CXXFLAGS) expose.cpp ggml_blas.o common.o extra.o libopenblas.lib -shared -o llamacpp_blas.dll $(LDFLAGS)
-
+	$(BLAS_BUILD)
+	
 quantize: examples/quantize/quantize.cpp ggml.o llama.o
 	$(CXX) $(CXXFLAGS) examples/quantize/quantize.cpp ggml.o llama.o -o quantize $(LDFLAGS)
 

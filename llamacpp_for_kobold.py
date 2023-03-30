@@ -287,7 +287,10 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None):
 def main(args): 
     global use_blas
     if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "libopenblas.dll")) or not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "llamacpp_blas.dll")):
-        print("Warning: libopenblas.dll or llamacpp_blas.dll not found. OpenBLAS will be disabled.")
+        print("Warning: libopenblas.dll or llamacpp_blas.dll not found. Non-BLAS library will be used. Ignore this if you have manually linked with OpenBLAS.")
+        use_blas = False
+    elif os.name != 'nt':
+        print("Prebuilt OpenBLAS binaries only available for windows. Please manually build/link libopenblas from makefile with LLAMA_OPENBLAS=1")
         use_blas = False
     elif not args.noblas:
         print("Attempting to use OpenBLAS library for faster prompt ingestion. A compatible libopenblas.dll will be required.")
@@ -318,6 +321,7 @@ def main(args):
 
     if not loadok:
         print("Could not load model: " + modelname)
+        time.sleep(1)
         sys.exit(3)
     try:
         basepath = os.path.abspath(os.path.dirname(__file__))
