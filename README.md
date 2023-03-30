@@ -169,6 +169,8 @@ When running the larger models, make sure you have enough disk space to store al
 As the models are currently fully loaded into memory, you will need adequate disk space to save them
 and sufficient RAM to load them. At the moment, memory and disk requirements are the same.
 
+We can use [SWAP](https://github.com/ggerganov/llama.cpp/discussions/631) to extend the virtual memory beyond the installed physical memory (RAM), to be able to use larger models if we don't have enought RAM.
+
 | model | original size | quantized size (4-bit) |
 |-------|---------------|------------------------|
 | 7B    | 13 GB         | 3.9 GB                 |
