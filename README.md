@@ -37,9 +37,11 @@ Supported platforms:
 
 Supported models:
 
-- [X] LLaMA
+- [X] LLaMA 🦙
 - [X] [Alpaca](https://github.com/ggerganov/llama.cpp#instruction-mode-with-alpaca)
 - [X] [GPT4All](https://github.com/ggerganov/llama.cpp#using-gpt4all)
+- [X] [Chinese LLaMA / Alpaca](https://github.com/ymcui/Chinese-LLaMA-Alpaca)
+- [X] [Vigogne (French)](https://github.com/bofenghuang/vigogne)
 
 ---
 
