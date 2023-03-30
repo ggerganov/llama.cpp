@@ -863,7 +863,7 @@ static bool llama_eval_internal(
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
     ggml_cgraph gf = {};
-    gf.n_threads = N > 255 && ggml_cpu_has_blas() ? 1 : n_threads;
+    gf.n_threads = N >= 32 && ggml_cpu_has_blas() ? 1 : n_threads;
 
     struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
     memcpy(embd->data, tokens, N*ggml_element_size(embd));
@@ -1451,7 +1451,7 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
             return false;
         }
 
-        std::string word;
+        std::vector<char> word(32);
         vocab.id_to_token.resize(n_vocab);
         for (int i = 0; i < n_vocab; i++) {
             uint32_t len;
@@ -1466,10 +1466,10 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
             finp.read ((char *) &score, sizeof(score));
             fout.write((char *) &score, sizeof(score));
 
-            vocab.token_to_id[word] = i;
+            vocab.token_to_id[word.data()] = i;
 
             auto &tok_score = vocab.id_to_token[i];
-            tok_score.tok = word;
+            tok_score.tok = word.data();
             tok_score.score = score;
         }
     }
