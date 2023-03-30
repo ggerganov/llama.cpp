@@ -1,4 +1,4 @@
-# Convert a LLaMA model checkpoint to a ggml compatible file
+# Convert a LLaMA model checkpoint to a ggjt compatible file
 #
 # Load the model using Torch
 # Iterate over all variables and write them to a binary file.
@@ -52,8 +52,8 @@ GGML_BLCK_SIZE = {
 }
 
 GGML_TYPE_SIZE = {
-    GGML_TYPE_Q4_0: 4   + QK/2,
-    GGML_TYPE_Q4_1: 4*2 + QK/2,
+    GGML_TYPE_Q4_0: 4   + QK//2,
+    GGML_TYPE_Q4_1: 4*2 + QK//2,
     GGML_TYPE_I8:   1,
     GGML_TYPE_I16:  2,
     GGML_TYPE_I32:  4,
@@ -245,11 +245,9 @@ def main():
         fname_model = f"{dir_model}/consolidated.00.pth"
         fname_out = f"{dir_model}/ggml-vocab.bin"
         print(f"Extracting only the vocab from '{fname_model}'\n")
-        model = torch.load(fname_model, map_location="cpu")
         with open(fname_out, "wb") as fout:
             write_header(fout, hparams, ftype)
             write_tokens(fout, tokenizer)
-        del model
         print(f"Done. Output file: {fname_out}\n")
         return
 

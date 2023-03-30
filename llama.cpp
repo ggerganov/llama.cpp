@@ -347,14 +347,15 @@ static void munmap_file(void * addr, size_t length) {
 #endif
 }
 
-static bool report_bad_magic(const char *path) {
+static bool report_bad_magic(const char *path, uint32_t got, uint32_t want) {
     fprintf(stderr,
-            "%s: invalid model file (bad magic)\n"
-            "you most likely need to regenerate your ggml files\n"
-            "the benefit is you'll get 10-100x faster load times\n"
-            "see https://github.com/ggerganov/llama.cpp/issues/91\n"
-            "use convert-pth-to-ggml.py on your llama model files\n",
-            path);
+            "%s: invalid model file (bad magic [got %#x want %#x])\n"
+            "\tyou most likely need to regenerate your ggml files\n"
+            "\tthe benefit is you'll get 10-100x faster load times\n"
+            "\tsee https://github.com/ggerganov/llama.cpp/issues/91\n"
+            "\tuse convert-pth-to-ggml.py to regenerate from original pth\n"
+            "\tuse migrate-ggml-2023-03-30-pr613.py if you deleted originals\n",
+            path, got, want);
     return false;
 }
 
@@ -397,7 +398,7 @@ static bool llama_model_load(
             return false;
         }
         if (magic != LLAMA_FILE_MAGIC) {
-            return report_bad_magic(fname.c_str());
+            return report_bad_magic(fname.c_str(), magic, LLAMA_FILE_MAGIC);
         }
 
         uint32_t format_version;
@@ -1312,7 +1313,7 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
             return false;
         }
         if (magic != LLAMA_FILE_MAGIC) {
-            return report_bad_magic(fname_inp.c_str());
+            return report_bad_magic(fname_inp.c_str(), magic, LLAMA_FILE_MAGIC);
         }
 
         fout.write((char *) &magic, sizeof(magic));
