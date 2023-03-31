@@ -1038,8 +1038,8 @@ static void dequantize_row_q4_1(const void * restrict vx, float * restrict y, in
             const uint8x16_t vq = vcombine_u8(vx_0, vx_1);
 
             // convert to 2x uint16x8_t
-            const uint16x8_t vi_0 = vmovl_s8(vget_low_u8 (vq));
-            const uint16x8_t vi_1 = vmovl_s8(vget_high_u8(vq));
+            const uint16x8_t vi_0 = vmovl_u8(vget_low_u8 (vq));
+            const uint16x8_t vi_1 = vmovl_u8(vget_high_u8(vq));
 
             // convert to 4x float32x4_t
             const float32x4_t vf_0 = vcvtq_f32_u32(vmovl_u16(vget_low_u16 (vi_0)));
@@ -1297,7 +1297,7 @@ static inline void __avx_f32cx8_store(ggml_fp16_t *x, __m256 y) {
     _mm256_storeu_ps(arr, y);
 
     for (int i = 0; i < 8; i++)
-        x[i] = GGML_FP16_TO_FP32(arr[i]);
+        x[i] = GGML_FP32_TO_FP16(arr[i]);
 }
 #define GGML_F32Cx8_LOAD(x)     __avx_f32cx8_load(x)
 #define GGML_F32Cx8_STORE(x, y) __avx_f32cx8_store(x, y)
@@ -1829,7 +1829,6 @@ static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void * rest
 
     const int superblock_size = 8;
     const int superblock_count = nb / superblock_size;
-    const int remainder = nb % superblock_size;
 
     for (int superblock_ix = 0; superblock_ix < superblock_count; superblock_ix += 1) {
         int i = superblock_ix * superblock_size;
@@ -2530,8 +2529,9 @@ struct ggml_context {
     void * mem_buffer;
     bool   mem_buffer_owned;
     bool   mem_buffer_mlocked;
+    bool   no_alloc;
 
-    int n_objects;
+    int    n_objects;
 
     struct ggml_object * objects_begin;
     struct ggml_object * objects_end;
@@ -2816,6 +2816,7 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         /*.mem_buffer         =*/ params.mem_buffer ? params.mem_buffer : malloc(params.mem_size),
         /*.mem_buffer_owned   =*/ params.mem_buffer ? false : true,
         /*.mem_buffer_mlocked =*/ false,
+        /*.no_alloc           =*/ params.no_alloc,
         /*.n_objects          =*/ 0,
         /*.objects_begin      =*/ NULL,
         /*.objects_end        =*/ NULL,
@@ -2883,36 +2884,47 @@ size_t ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch) 
     return result;
 }
 
+#ifdef __APPLE__
+#define MLOCK_SUGGESTION \
+    "Try increasing the sysctl values 'vm.user_wire_limit' and 'vm.global_user_wire_limit' and/or " \
+    "decreasing 'vm.global_no_user_wire_amount'.  Also try increasing RLIMIT_MLOCK (ulimit -l).\n"
+#else
+#define MLOCK_SUGGESTION \
+    "Try increasing RLIMIT_MLOCK ('ulimit -l' as root).\n"
+#endif
+
 bool ggml_mlock_supported(void) {
     return GGML_MLOCK_SUPPORT;
 }
 
+bool ggml_mlock(
+        struct ggml_context * ctx,
+        const void *opt_extra_addr,
+        size_t opt_extra_len,
+        char **err_p) {
+    // TODO: Use SetProcessWorkingSetSize() + VirtualLock() on WIN32
 #if GGML_MLOCK_SUPPORT
-#ifdef __APPLE__
-    #define MLOCK_SUGGESTION "Try increasing the sysctl values 'vm.user_wire_limit' and 'vm.global_user_wire_limit' and/or\n" \
-                             "decreasing 'vm.global_no_user_wire_amount'.  Also try increasing RLIMIT_MLOCK (ulimit -l)."
-#else
-    #define MLOCK_SUGGESTION "Try increasing RLIMIT_MLOCK (ulimit -l)."
-#endif
-bool ggml_mlock(struct ggml_context * ctx, char ** err_p) {
     if (ctx->mem_buffer_mlocked) {
         return true;
     }
-    if (mlock(ctx->mem_buffer, ctx->mem_size)) {
-        int ret = asprintf(err_p, "failed to mlock %zu-byte buffer: %s\n" MLOCK_SUGGESTION,
-                           ctx->mem_size, strerror(errno));
-        GGML_ASSERT(ret >= 0);
+    if (mlock(ctx->mem_buffer, ctx->mem_size) ||
+        (opt_extra_len &&
+         mlock(opt_extra_addr, opt_extra_len))) {
+        if ((*err_p = malloc(1024))) {
+            snprintf(*err_p, 1024,
+                     "failed to mlock %zu-byte buffer: %s\n" MLOCK_SUGGESTION,
+                     ctx->mem_size + opt_extra_len,
+                     strerror(errno));
+        }
         return false;
     }
     ctx->mem_buffer_mlocked = true;
     return true;
-}
 #else // GGML_MLOCK_SUPPORT
-bool ggml_mlock(struct ggml_context * ctx, char ** err_p) {
     *err_p = strdup("can't mlock because it's not supported on this system");
     return false;
-}
 #endif // GGML_MLOCK_SUPPORT
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -2931,7 +2943,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
 
     size_t size_needed = 0;
 
-    if (data == NULL) {
+    if (data == NULL && !ctx->no_alloc) {
         size_needed += GGML_TYPE_SIZE[type]*(ne[0]/GGML_BLCK_SIZE[type]);
         for (int i = 1; i < n_dims; i++) {
             size_needed *= ne[i];
@@ -3015,7 +3027,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
         /*.perf_runs    =*/ 0,
         /*.perf_cycles  =*/ 0,
         /*.perf_time_us =*/ 0,
-        /*.data         =*/ data == NULL ? (void *)(result + 1) : data,
+        /*.data         =*/ (data == NULL && !ctx->no_alloc) ? (void *)(result + 1) : data,
         /*.pad          =*/ { 0 },
     };
 
@@ -10278,6 +10290,7 @@ enum ggml_opt_result ggml_opt(
         struct ggml_init_params params_ctx = {
             .mem_size   = 16*1024*1024,
             .mem_buffer = NULL,
+            .no_alloc   = false,
         };
 
         ctx = ggml_init(params_ctx);

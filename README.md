@@ -21,12 +21,11 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 
 ## Considerations
 - Don't want to use pybind11 due to dependencies on MSVCC
-- ZERO or MINIMAL changes as possible to main.cpp - do not move their function declarations elsewhere!
-- Leave main.cpp UNTOUCHED, We want to be able to update the repo and pull any changes automatically.
+- ZERO or MINIMAL changes as possible to parent repo files - do not move their function declarations elsewhere! We want to be able to update the repo and pull any changes automatically.
 - No dynamic memory allocation! Setup structs with FIXED (known) shapes and sizes for ALL output fields. Python will ALWAYS provide the memory, we just write to it.
 - No external libraries or dependencies. That means no Flask, Pybind and whatever. All You Need Is Python.
 - Since v1.0.6, requires libopenblas, the prebuilt windows binaries are included in this repo. If not found, it will fall back to a mode without BLAS. If you want you can also link your own install of OpenBLAS manually with `LLAMA_OPENBLAS=1`
-- I plan to keep backwards compatibility with all past ggml llama.cpp AND alpaca.cpp models.
+- **I plan to keep backwards compatibility with ALL past llama.cpp AND alpaca.cpp models**. But you are also encouraged to reconvert/update your models if possible for best results.
 
 ## License
 - The original GGML library and llama.cpp by ggerganov are licensed under the MIT License
@@ -34,5 +33,5 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 - The provided python ctypes bindings in llamacpp.dll are also under the AGPL v3.0 License
 
 ## Notes
-- There is a fundamental flaw with llama.cpp, which causes generation delay to scale linearly with original prompt length. If you care, **please contribute to [this discussion](https://github.com/ggerganov/llama.cpp/discussions/229)** which, if resolved, will actually make this viable.
+- Generation delay scales linearly with original prompt length. See [this discussion](https://github.com/ggerganov/llama.cpp/discussions/229). If OpenBLAS is enabled then prompt ingestion becomes about 2-3x faster. This is automatic on windows, but will require linking on OSX and Linux.
 - I have heard of someone claiming a false AV positive report. The exe is a simple pyinstaller bundle that includes the necessary python scripts and dlls to run. If this still concerns you, you might wish to rebuild everything from source code using the makefile, and you can rebuild the exe yourself with pyinstaller by using `make_pyinstaller.bat`

@@ -316,6 +316,7 @@ struct ggml_init_params {
     // memory pool
     size_t mem_size;   // bytes
     void * mem_buffer; // if NULL, memory will be allocated internally
+    bool   no_alloc;   // don't allocate memory for the tensor data
 };
 
 void    ggml_time_init(void); // call this once at the beginning of the program
@@ -344,7 +345,11 @@ size_t ggml_used_mem(const struct ggml_context * ctx);
 size_t ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch);
 
 bool ggml_mlock_supported(void);
-bool ggml_mlock(struct ggml_context * ctx, char ** err_p);
+bool ggml_mlock(
+        struct ggml_context * ctx,
+        const void *opt_extra_addr,
+        size_t opt_extra_len,
+        char **err_p);
 
 struct ggml_tensor * ggml_new_tensor(
         struct ggml_context * ctx,

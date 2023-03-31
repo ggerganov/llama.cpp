@@ -68,7 +68,8 @@ extern "C" {
         char text[16384]; //16kb should be enough for any response
     };
 
-    bool legacy_format = false;
+    //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt) 
+    int file_format = 0;
     llama_context_params ctx_params;
     gpt_params params;
     int n_past = 0;
@@ -95,22 +96,28 @@ extern "C" {
         ctx_params.f16_kv     = inputs.f16_kv;
         ctx_params.logits_all = false;
 
-        ctx = llama_init_from_file(model.c_str(), ctx_params);
-
+        file_format = check_file_format(model.c_str());
+        printf("\nFile format detected: (ver %d)\n",file_format);
+       
+        if(file_format==1 || file_format==2)
+        {
+            ctx = legacy_llama_init_from_file(model.c_str(), ctx_params);
+        }
+        else
+        {
+            ctx = llama_init_from_file(model.c_str(), ctx_params);
+        }
+               
         if (ctx == NULL) {
             fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, model.c_str());
             return false;
         }
 
-        //return val: 0=fail, 1=newformat, 2=legacy
-        int fileformat = check_file_format(model.c_str());        
-        
-        legacy_format = (fileformat==1?true:false);
-        if(legacy_format)
+        if(file_format<3)
         {
-            printf("\n---\nWarning: Your model is using an OUTDATED format. Please reconvert it for better results!\n");
+            printf("\n---\nWarning: Your model has an INVALID or OUTDATED format (ver %d). Please reconvert it for better results!\n---\n",file_format);
         }
-
+              
         //determine mem per token
         const std::vector<llama_token> tmp = { 0, 1, 2, 3 };
         llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads);
@@ -149,7 +156,7 @@ extern "C" {
 		
 	    // tokenize the prompt
  		std::vector<llama_token> embd_inp;
-		if(legacy_format)
+		if(file_format==1)
         {
             embd_inp = ::legacy_llama_tokenize(ctx, params.prompt, true);
         }else{
