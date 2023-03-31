@@ -14,7 +14,7 @@ Inference code runs, but outputs all `NaN`s in logits, most probably due to miss
 2. Validate states and logits against [reference implementation](https://github.com/BlinkDL/ChatRWKV/blob/main/RWKV_in_150_lines.py) by creating a testing script
 3. Heavily refactor code; optimize where possible
 4. Make FP16 inference work
-5. Create fancy interface with sockets/shared memory/pipes/etc.
+5. Create fancy interface with sockets/shared memory/pipes/something else
 6. Create Python wrapper with sampling and simple chat interface
 7. Write a good `README.md` and publish links to this repo
 8. Make INT4 inference work
@@ -27,7 +27,7 @@ This repo is based on the [llama.cpp repo](https://github.com/ggerganov/llama.cp
 - `./rwkv`: directory containing Python scripts
 - `./examples/main_rwkw`: directory containing script that loads and infers RWKV model
 
-Please do not change files in other directories -- this will make pulling recent changes easier.
+Please do not change files in other directories — this will make pulling recent changes easier.
 
 ## How to use
 
@@ -46,7 +46,7 @@ cmake .
 Download an RWKV model from [Huggingface](https://huggingface.co/BlinkDL) and convert it into `ggml` format:
 
 ```commandline
-python convert_pytorch_rwkv_to_ggml.py C:\RWKV-4-Pile-169M-20220807-8023.pth C:\rwkv.cpp-169M.bin float32
+python rwkv\convert_pytorch_rwkv_to_ggml.py C:\RWKV-4-Pile-169M-20220807-8023.pth C:\rwkv.cpp-169M.bin float32
 ```
 
 Compile and run the script:

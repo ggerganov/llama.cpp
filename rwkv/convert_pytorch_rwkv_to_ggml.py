@@ -8,7 +8,7 @@
 #   // All ints and floats are in machine byte order.
 #   // Magic is "ggml" string bytes.
 #   int32 magic = 0x67676d66;
-#   int32 version;
+#   int32 version = 100;
 #   int32 n_vocab;
 #   int32 n_embed;
 #   int32 n_layer;
@@ -106,6 +106,7 @@ def write_state_dict(state_dict: Dict[str, torch.Tensor], dest_path: str, data_t
                 1 if tensor.dtype == torch.float16 else 0
             ))
 
+            # Note that shape is not reversed here like in llama.cpp!
             for dim in tensor.shape:
                 out_file.write(struct.pack('=i', dim))
 

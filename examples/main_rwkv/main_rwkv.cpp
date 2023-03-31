@@ -14,6 +14,7 @@
 
 // --- Utilities ---
 
+// Checks that x is not false. If it is false, prints fancy message to stderr and aborts the execution.
 #define RWKV_ASSERT(x, ...) \
     do { \
         if (!(x)) { \
@@ -23,6 +24,9 @@
             abort(); \
         } \
     } while (0)
+
+// Formats and prints a message to stderr. Trailing newline is added automatically.
+#define RWKV_LOG(...) do { fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); } while (0)
 
 // TODO Move to ggml, if correct
 float ggml_get_f32_2d(struct ggml_tensor * tensor, int i, int j) {
@@ -46,8 +50,8 @@ void print_tensor(struct ggml_tensor * tensor, char * name) {
 
         RWKV_ASSERT(x >= 6, "Too small tensor");
 
-        printf(
-            "1D tensor %s, shape (%d), [%f %f %f ... %f %f %f]\n",
+        RWKV_LOG(
+            "1D tensor %s, shape (%d), [%f %f %f ... %f %f %f]",
             name,
             x,
             ggml_get_f32_1d(tensor, 0),
@@ -62,8 +66,8 @@ void print_tensor(struct ggml_tensor * tensor, char * name) {
         int y = tensor->ne[1];
 
         if (y < 6) {
-            printf(
-                "2D tensor %s, shape (%d, %d), [[%f %f %f ... %f %f %f]]\n",
+            RWKV_LOG(
+                "2D tensor %s, shape (%d, %d), [[%f %f %f ... %f %f %f]]",
                 name,
                 x,
                 y,
@@ -75,8 +79,8 @@ void print_tensor(struct ggml_tensor * tensor, char * name) {
                 ggml_get_f32_2d(tensor, x - 1, y - 1)
             );
         } else {
-            printf(
-                "2D tensor %s, shape (%d, %d), [[%f %f %f ... ] ... [ ... %f %f %f]]\n",
+            RWKV_LOG(
+                "2D tensor %s, shape (%d, %d), [[%f %f %f ... ] ... [ ... %f %f %f]]",
                 name,
                 x,
                 y,
@@ -88,26 +92,6 @@ void print_tensor(struct ggml_tensor * tensor, char * name) {
                 ggml_get_f32_2d(tensor, x - 1, y - 1)
             );
         }
-    } else if (n_dims == 3) {
-        int x = tensor->ne[0];
-        int y = tensor->ne[1];
-        int z = tensor->ne[2];
-
-        RWKV_ASSERT(z >= 6, "Too small tensor");
-
-        printf(
-            "3D tensor %s, shape (%d, %d, %d), [[[%f %f %f ...] ... [... %f %f %f]]]\n",
-            name,
-            x,
-            y,
-            z,
-            ggml_get_f32_3d(tensor, 0, 0, 0),
-            ggml_get_f32_3d(tensor, 0, 0, 1),
-            ggml_get_f32_3d(tensor, 0, 0, 2),
-            ggml_get_f32_3d(tensor, x - 1, y - 1, z - 3),
-            ggml_get_f32_3d(tensor, x - 1, y - 1, z - 2),
-            ggml_get_f32_3d(tensor, x - 1, y - 1, z - 1)
-        );
     } else {
         RWKV_ASSERT(false, "Unsupported dimension count %d", n_dims);
     }
@@ -116,7 +100,7 @@ void print_tensor(struct ggml_tensor * tensor, char * name) {
 // Prints tensor name, dimensionality, shape and part of its contents.
 #define PRINT_TENSOR(x) print_tensor(x, #x)
 
-// Same as above, but additionally computes tensor graph before printing the tensor.
+// Same as PRINT_TENSOR, but additionally computes tensor graph before printing the tensor.
 #define COMPUTE_AND_PRINT_TENSOR(ctx, x) do { compute_graph(ctx, x); print_tensor(x, #x); } while (0)
 
 // Computes value of the tensor and all tensors it depends on.
@@ -201,7 +185,7 @@ void set_block_parameter(std::unordered_map<std::string, struct ggml_tensor *> *
 
 // Loads RWKV model metadata and parameters from a file.
 void load_rwkv_model(ggml_context * ctx, char * file_path, struct rwkv_model * model) {
-    printf("Loading model from %s\n", file_path);
+    RWKV_LOG("Loading model from %s", file_path);
     FILE * file = fopen(file_path, "rb");
     RWKV_ASSERT(file != NULL, "Failed to open file %s", file_path);
 
@@ -227,9 +211,9 @@ void load_rwkv_model(ggml_context * ctx, char * file_path, struct rwkv_model * m
 
     RWKV_ASSERT(model->data_type == 0, "Data types other than float32 are not yet supported"); // TODO
 
-    printf("n_vocab = %d\n", model->n_vocab);
-    printf("n_embed = %d\n", model->n_embed);
-    printf("n_layer = %d\n", model->n_layer);
+    RWKV_LOG("n_vocab = %d", model->n_vocab);
+    RWKV_LOG("n_embed = %d", model->n_embed);
+    RWKV_LOG("n_layer = %d", model->n_layer);
 
     std::unordered_map<std::string, struct ggml_tensor *> parameters;
 
@@ -288,7 +272,7 @@ void load_rwkv_model(ggml_context * ctx, char * file_path, struct rwkv_model * m
 
     fclose(file);
 
-    printf("Initializing model parameters\n");
+    RWKV_LOG("Initializing model parameters");
 
     model->layers.resize(model->n_layer);
 
@@ -372,7 +356,7 @@ int main(int argc, char ** argv) {
     char * logits_out_path = argv[5];
 
     int32_t token = strtol(token_s, (char **) NULL, 10);
-    printf("Token index is %d\n", token);
+    RWKV_LOG("Token index is %d", token);
 
     bool create_new_state = strcmp(state_in_path, "") == 0;
 
@@ -399,7 +383,7 @@ int main(int argc, char ** argv) {
     struct ggml_tensor * state = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, state_element_count);
 
     if (create_new_state) {
-        printf("Creating new state\n");
+        RWKV_LOG("Creating new state");
         ggml_set_f32(state, 0.0F);
 
         // TODO Verify correctness
@@ -410,7 +394,7 @@ int main(int argc, char ** argv) {
             ggml_set_f32(state_part, -1e30F);
         }
     } else {
-        printf("Loading state from %s\n", state_in_path);
+        RWKV_LOG("Loading state from %s", state_in_path);
         int32_t state_file_size = state_element_count * 4;
 
         FILE * state_in_file = fopen(state_in_path, "rb");
@@ -606,7 +590,7 @@ int main(int argc, char ** argv) {
 
     ggml_free(ctx);
 
-    printf("OK\n");
+    RWKV_LOG("OK");
 
     return 0;
 }
