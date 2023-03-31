@@ -11,11 +11,15 @@
 #include <regex>
 #include <cassert>
 #include <cstring>
+#include <cerrno>
+#include <climits>
 
-#if defined(_WIN32) && !defined(_POSIX_MAPPED_FILES)
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
-#else
+#endif
+
+#if !defined(_WIN32) || defined(_POSIX_MAPPED_FILES)
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -35,7 +39,6 @@
             abort(); \
         } \
     } while (0)
-
 
 // determine number of model parts based on the dimension
 static const std::unordered_map<int, int> LLAMA_N_PARTS = {
@@ -156,8 +159,8 @@ struct llama_model {
     std::vector<uint8_t> buf;
 
     // model memory mapped file
-    void * mm_addr = NULL;
-    uint64_t mm_length = 0;
+    void *mm_addr = NULL;
+    int64_t mm_length = 0;
 
     // tensors
     int n_loaded;
@@ -304,10 +307,30 @@ struct llama_context_params llama_context_default_params() {
 }
 
 //
+// error reporting
+//
+
+#ifdef _WIN32
+static int WinStrerror(int err, char *buf, int size) {
+    return FormatMessageA(
+        FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        buf, size, NULL);
+}
+static void LogWindowsError(const char *file, int line, const char *thing) {
+#define LogWindowsError(thing) LogWindowsError(__FILE__, __LINE__, thing)
+    char s[256];
+    int e = GetLastError();
+    WinStrerror(e, s, sizeof(s));
+    fprintf(stderr, "%s:%d: error[%#x]: %s failed: %s\n", file, line, e, thing, s);
+}
+#endif // _WIN32
+
+//
 // model loading
 //
 
-static void *mmap_file(const char *fname, uint64_t *mm_length) {
+static void *mmap_file(const char *fname, int64_t *mm_length) {
 #if defined(_WIN32) && !defined(_POSIX_MAPPED_FILES)
     HANDLE hFile = CreateFileA(fname,
                                GENERIC_READ,
@@ -316,17 +339,26 @@ static void *mmap_file(const char *fname, uint64_t *mm_length) {
                                OPEN_EXISTING,
                                FILE_ATTRIBUTE_NORMAL | FILE_ATTRIBUTE_NOT_CONTENT_INDEXED,
                                NULL);
-    if (hFile == INVALID_HANDLE_VALUE) return 0;
+    if (hFile == INVALID_HANDLE_VALUE) {
+        LogWindowsError("CreateFileA");
+        return 0;
+    }
     LARGE_INTEGER fileSize;
     fileSize.QuadPart = -1;
     GetFileSizeEx(hFile, &fileSize);
     int64_t length = fileSize.QuadPart;
     HANDLE hMapping = CreateFileMappingA(hFile, NULL, PAGE_READONLY, 0, 0, NULL);
     CloseHandle(hFile);
-    if (!hMapping) return 0;
+    if (!hMapping) {
+        LogWindowsError("CreateFileMappingA");
+        return 0;
+    }
     void *addr = MapViewOfFile(hMapping, FILE_MAP_READ, 0, 0, 0);
     CloseHandle(hMapping);
-    if (!addr) return 0;
+    if (!addr) {
+        LogWindowsError("MapViewOfFile");
+        return 0;
+    }
 #else
     int fd = open(fname, O_RDONLY);
     if (fd == -1) return 0;
@@ -339,7 +371,7 @@ static void *mmap_file(const char *fname, uint64_t *mm_length) {
     return addr;
 }
 
-static void munmap_file(void * addr, size_t length) {
+static void munmap_file(void * addr, uint64_t length) {
 #if defined(_WIN32) && !defined(_POSIX_MAPPED_FILES)
     UnmapViewOfFile(addr);
 #else
@@ -357,6 +389,46 @@ static bool report_bad_magic(const char *path, uint32_t got, uint32_t want) {
             "\tuse migrate-ggml-2023-03-30-pr613.py if you deleted originals\n",
             path, got, want);
     return false;
+}
+
+static bool check_n_dims(int32_t n_dims) {
+    if (n_dims == 1) return true;
+    if (n_dims == 2) return true;
+    fprintf(stderr,
+            "%s: unsupported number of dimensions in tensor: %" PRId32 "\n",
+            __func__, n_dims);
+    return false;
+}
+
+static bool check_ios_error(std::ios &ios, const char *thing) {
+    if (ios.good()) {
+        return true;
+    }
+    if (ios.bad()) {
+        fprintf(stderr, "%s failed: system error: %s\n", thing, strerror(errno));
+    } else if (ios.eof()) {
+        fprintf(stderr, "%s failed: unexpected end of file\n", thing);
+    } else if (ios.fail()) {
+        fprintf(stderr, "%s failed: illogical operation\n", thing);
+    }
+    return false;
+}
+
+static bool read_impl(std::istream &fin, char *buf, std::streamsize len, const char *thing) {
+    fin.read(buf, len);
+    return check_ios_error(fin, thing);
+}
+
+static bool read_buf(std::istream &fin, char *buf, std::streamsize len) {
+    return read_impl(fin, buf, len, "read_buf()");
+}
+
+static bool read_int32(std::istream &fin, int32_t *buf) {
+    return read_impl(fin, (char *)buf, sizeof(int32_t), "read_int32()");
+}
+
+static bool read_float(std::istream &fin, float *buf) {
+    return read_impl(fin, (char *)buf, sizeof(float), "read_float()");
 }
 
 static bool llama_model_load(
@@ -385,13 +457,13 @@ static bool llama_model_load(
     fin.rdbuf()->pubsetbuf(f_buf.data(), f_buf.size());
 
     fin.seekg(0, fin.end);
-    const size_t file_size = fin.tellg();
+    const int64_t file_size = fin.tellg();
     fin.seekg(0);
 
     // verify magic
     {
-        uint32_t magic;
-        fin.read((char *) &magic, sizeof(magic));
+        int32_t magic;
+        if (!read_int32(fin, &magic)) return false;
         if (magic == LLAMA_FILE_MAGIC_UNVERSIONED) {
             fprintf(stderr, "%s: invalid model file '%s' (too old, regenerate your model files or convert them with convert-unversioned-ggml-to-ggml.py!)\n",
                     __func__, fname.c_str());
@@ -401,9 +473,8 @@ static bool llama_model_load(
             return report_bad_magic(fname.c_str(), magic, LLAMA_FILE_MAGIC);
         }
 
-        uint32_t format_version;
-        fin.read((char *) &format_version, sizeof(format_version));
-
+        int32_t format_version;
+        if (!read_int32(fin, &format_version)) return false;
         if (format_version != LLAMA_FILE_VERSION) {
             fprintf(stderr, "%s: invalid model file '%s' (unsupported format version %" PRIu32 ", expected %d)\n",
                     __func__, fname.c_str(), format_version, LLAMA_FILE_VERSION);
@@ -417,14 +488,13 @@ static bool llama_model_load(
     {
         auto & hparams = model.hparams;
 
-        fin.read((char *) &hparams.n_vocab, sizeof(hparams.n_vocab));
-        //fin.read((char *) &hparams.n_ctx,   sizeof(hparams.n_ctx));
-        fin.read((char *) &hparams.n_embd,  sizeof(hparams.n_embd));
-        fin.read((char *) &hparams.n_mult,  sizeof(hparams.n_mult));
-        fin.read((char *) &hparams.n_head,  sizeof(hparams.n_head));
-        fin.read((char *) &hparams.n_layer, sizeof(hparams.n_layer));
-        fin.read((char *) &hparams.n_rot,   sizeof(hparams.n_rot));
-        fin.read((char *) &hparams.f16,     sizeof(hparams.f16));
+        if (!read_int32(fin, &hparams.n_vocab)) return false;
+        if (!read_int32(fin, &hparams.n_embd)) return false;
+        if (!read_int32(fin, &hparams.n_mult)) return false;
+        if (!read_int32(fin, &hparams.n_head)) return false;
+        if (!read_int32(fin, &hparams.n_layer)) return false;
+        if (!read_int32(fin, &hparams.n_rot)) return false;
+        if (!read_int32(fin, &hparams.f16)) return false;
 
         hparams.n_ctx = n_ctx;
 
@@ -476,20 +546,20 @@ static bool llama_model_load(
         std::vector<char> tmp(64);
 
         for (int i = 0; i < model.hparams.n_vocab; i++) {
-            uint32_t len;
-            fin.read((char *) &len, sizeof(len));
+            int32_t len;
+            if (!read_int32(fin, &len)) return false;
 
             word.resize(len);
             if (len > 0) {
                 tmp.resize(len);
-                fin.read(tmp.data(), len);
+                if (!read_buf(fin, tmp.data(), len)) return false;
                 word.assign(tmp.data(), len);
             } else {
                 word.clear();
             }
 
             float score;
-            fin.read((char *) &score, sizeof(score));
+            if (!read_float(fin, &score)) return false;
 
             vocab.token_to_id[word] = i;
 
@@ -513,12 +583,11 @@ static bool llama_model_load(
         case 2: wtype = vtype = GGML_TYPE_Q4_0; break;
         case 3: wtype = vtype = GGML_TYPE_Q4_1; break;
         case 4: wtype = GGML_TYPE_Q4_1; vtype = GGML_TYPE_F16; break;
-        default:
-                {
-                    fprintf(stderr, "%s: invalid model file '%s' (bad f16 value %d)\n",
-                            __func__, fname.c_str(), model.hparams.f16);
-                    return false;
-                }
+        default: {
+            fprintf(stderr, "%s: invalid model file '%s' (bad f16 value %d)\n",
+                    __func__, fname.c_str(), model.hparams.f16);
+            return false;
+        }
     }
 
     // map model into memory
@@ -546,7 +615,7 @@ static bool llama_model_load(
         const size_t scale = memory_type == GGML_TYPE_F32 ? 2 : 1;
 
         // this is the total memory required to run the inference
-        const size_t mem_required =
+        const int64_t mem_required =
             ctx_size +
             model.mm_length +
             MEM_REQ_SCRATCH0.at(model.type) +
@@ -554,7 +623,7 @@ static bool llama_model_load(
             MEM_REQ_EVAL.at    (model.type);
 
         // this is the memory required by one llama_state
-        const size_t mem_required_state =
+        const int64_t mem_required_state =
             scale*MEM_REQ_KV_SELF.at(model.type);
 
         fprintf(stderr, "%s: mem required  = %7.2f MB (+ %7.2f MB per state)\n", __func__,
@@ -641,7 +710,7 @@ static bool llama_model_load(
 
     // load weights
     {
-        size_t total_size = 0;
+        int64_t total_size = 0;
         model.n_loaded = 0;
 
         while (true) {
@@ -649,23 +718,35 @@ static bool llama_model_load(
             int32_t length;
             int32_t ftype;
 
-            fin.read(reinterpret_cast<char *>(&n_dims), sizeof(n_dims));
-            fin.read(reinterpret_cast<char *>(&length), sizeof(length));
-            fin.read(reinterpret_cast<char *>(&ftype),  sizeof(ftype));
-
-            if (fin.eof()) {
-                break;
-            }
+            fin.read((char *)&n_dims, 4);
+            if (fin.eof()) break;
+            if (!fin.good()) return false;
+            if (!read_int32(fin, &length)) return false;
+            if (!read_int32(fin, &ftype)) return false;
 
             int32_t nelements = 1;
             int32_t ne[2] = { 1, 1 };
+            if (!check_n_dims(n_dims)) return false;
             for (int i = 0; i < n_dims; ++i) {
-                fin.read(reinterpret_cast<char *>(&ne[i]), sizeof(ne[i]));
+                if (!read_int32(fin, &ne[i])) return false;
                 nelements *= ne[i];
             }
 
+            switch (ftype) {
+                case 0:  // f32
+                case 1:  // f16
+                    break;
+                case 2:  // q4_0
+                case 3:  // q4_1
+                    LLAMA_ASSERT(ne[0] % 64 == 0);
+                    break;
+                default:
+                    fprintf(stderr, "%s: unknown ftype %d in model file\n", __func__, ftype);
+                    return false;
+            }
+
             std::string name(length, 0);
-            fin.read(&name[0], length);
+            if (!read_buf(fin, &name[0], length)) return false;
 
             if (model.tensors.find(name.data()) == model.tensors.end()) {
                 fprintf(stderr, "%s: unknown tensor '%s' in model file\n", __func__, name.data());
@@ -688,23 +769,13 @@ static bool llama_model_load(
                 fprintf(stderr, "%24s - [%5d, %5d], type = %6s\n", name.data(), ne[0], ne[1], ftype_str[ftype]);
             }
 
-            switch (ftype) {
-                case 0:  // f32
-                case 1:  // f16
-                    break;
-                case 2:  // q4_0
-                case 3:  // q4_1
-                    assert(ne[0] % 64 == 0);
-                    break;
-                default:
-                    fprintf(stderr, "%s: unknown ftype %d in model file\n", __func__, ftype);
-                    return false;
-            };
-
             // load the tensor data into memory without copying or reading it
-            size_t offset = fin.tellg();
-            size_t tensor_data_size = ggml_nbytes(tensor);
+            int64_t offset = fin.tellg();
+            int64_t tensor_data_size = ggml_nbytes(tensor);
             offset = (offset + 31) & -32;
+            LLAMA_ASSERT(0 <= offset && offset < model.mm_length);
+            LLAMA_ASSERT(0 <= tensor_data_size && tensor_data_size <= model.mm_length);
+            LLAMA_ASSERT(offset + tensor_data_size <= model.mm_length);
             tensor->data = mm_addr + offset;
             fin.seekg(offset + tensor_data_size);
             total_size += tensor_data_size;
@@ -712,12 +783,10 @@ static bool llama_model_load(
 
             // progress
             if (progress_callback) {
-                double current_progress = size_t(fin.tellg()) / double(file_size);
+                double current_progress = int64_t(fin.tellg()) / double(file_size);
                 progress_callback(current_progress, progress_callback_user_data);
             }
         }
-
-        fin.close();
 
         fprintf(stderr, "%s: model size = %8.2f MB / num tensors = %d\n", __func__, total_size/1024.0/1024.0, model.n_loaded);
         if (model.n_loaded == 0) {
@@ -1305,8 +1374,8 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
 
     // verify magic
     {
-        uint32_t magic;
-        finp.read((char *) &magic, sizeof(magic));
+        int32_t magic;
+        if (!read_int32(finp, &magic)) return false;
         if (magic == LLAMA_FILE_MAGIC_UNVERSIONED) {
             fprintf(stderr, "%s: invalid model file '%s' (too old, regenerate your model files!)\n",
                     __func__, fname_inp.c_str());
@@ -1318,9 +1387,8 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
 
         fout.write((char *) &magic, sizeof(magic));
 
-        uint32_t format_version;
-        finp.read((char *) &format_version, sizeof(format_version));
-
+        int32_t format_version;
+        if (!read_int32(finp, &format_version)) return false;
         if (format_version != LLAMA_FILE_VERSION) {
             fprintf(stderr, "%s: invalid model file '%s' (unsupported format version %" PRIu32 ", expected %d)\n",
                     __func__, fname_inp.c_str(), format_version, LLAMA_FILE_VERSION);
@@ -1334,14 +1402,14 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
 
     // load hparams
     {
-        finp.read((char *) &hparams.n_vocab, sizeof(hparams.n_vocab));
-        //finp.read((char *) &hparams.n_ctx,   sizeof(hparams.n_ctx));
-        finp.read((char *) &hparams.n_embd,  sizeof(hparams.n_embd));
-        finp.read((char *) &hparams.n_mult,  sizeof(hparams.n_mult));
-        finp.read((char *) &hparams.n_head,  sizeof(hparams.n_head));
-        finp.read((char *) &hparams.n_layer, sizeof(hparams.n_layer));
-        finp.read((char *) &hparams.n_rot,   sizeof(hparams.n_rot));
-        finp.read((char *) &hparams.f16,     sizeof(hparams.f16));
+        if (!read_int32(finp, &hparams.n_vocab)) return false;
+        //if (!read_int32(finp, &hparams.n_ctx)) return false;
+        if (!read_int32(finp, &hparams.n_embd)) return false;
+        if (!read_int32(finp, &hparams.n_mult)) return false;
+        if (!read_int32(finp, &hparams.n_head)) return false;
+        if (!read_int32(finp, &hparams.n_layer)) return false;
+        if (!read_int32(finp, &hparams.n_rot)) return false;
+        if (!read_int32(finp, &hparams.f16)) return false;
 
         printf("%s: n_vocab = %d\n", __func__, hparams.n_vocab);
         printf("%s: n_ctx   = %d\n", __func__, hparams.n_ctx);
@@ -1374,16 +1442,16 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
         std::vector<char> word(32);
         vocab.id_to_token.resize(n_vocab);
         for (int i = 0; i < n_vocab; i++) {
-            uint32_t len;
-            finp.read ((char *) &len, sizeof(len));
+            int32_t len;
+            if (!read_int32(finp, &len)) return false;
             fout.write((char *) &len, sizeof(len));
 
             word.resize(len);
-            finp.read ((char *) &word[0], len);
+            if (!read_buf(finp, (char *)&word[0], len)) return false;
             fout.write((char *) &word[0], len);
 
             float score;
-            finp.read ((char *) &score, sizeof(score));
+            if (!read_float(finp, &score)) return false;
             fout.write((char *) &score, sizeof(score));
 
             vocab.token_to_id[word.data()] = i;
@@ -1412,33 +1480,33 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
             int32_t length;
             int32_t ftype;
 
-            finp.read(reinterpret_cast<char *>(&n_dims), sizeof(n_dims));
-            finp.read(reinterpret_cast<char *>(&length), sizeof(length));
-            finp.read(reinterpret_cast<char *>(&ftype),  sizeof(ftype));
-
-            if (finp.eof()) {
-                break;
-            }
+            finp.read((char *)&n_dims, 4);
+            if (finp.eof()) break;
+            if (!finp.good()) return false;
+            if (!read_int32(finp, &length)) return false;
+            if (!read_int32(finp, &ftype)) return false;
 
             int32_t nelements = 1;
             int32_t ne[2] = { 1, 1 };
+            if (!check_n_dims(n_dims)) return false;
             for (int i = 0; i < n_dims; ++i) {
-                finp.read (reinterpret_cast<char *>(&ne[i]), sizeof(ne[i]));
+                if (!read_int32(finp, &ne[i])) return false;
                 nelements *= ne[i];
             }
 
             std::string name(length, 0);
-            finp.read (&name[0], length);
+            if (!read_buf(finp, &name[0], length)) return false;
 
             {
                 // ensure tensor data is aligned
-                uint64_t offset = finp.tellg();
+                int64_t offset = finp.tellg();
                 offset = (offset + 31) & -32;
                 finp.seekg(offset);
             }
 
             {
                 static const char * ftype_str[] = { "f32", "f16", "q4_0", "q4_1", };
+                LLAMA_ASSERT(0 <= ftype && ftype < 4);
                 printf("%48s - [%5d, %5d], type = %6s ", name.data(), ne[0], ne[1], ftype_str[ftype]);
             }
 
@@ -1466,14 +1534,14 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
 
                 if (ftype == 1) {
                     data_f16.resize(nelements);
-                    finp.read(reinterpret_cast<char *>(data_f16.data()), nelements * sizeof(ggml_fp16_t));
+                    if (!read_buf(finp, (char *)&data_f16[0], nelements * sizeof(ggml_fp16_t))) return false;
                     data_f32.resize(nelements);
                     for (int i = 0; i < nelements; ++i) {
                         data_f32[i] = ggml_fp16_to_fp32(data_f16[i]);
                     }
                 } else {
                     data_f32.resize(nelements);
-                    finp.read(reinterpret_cast<char *>(data_f32.data()), nelements * sizeof(float));
+                    if (!read_buf(finp, (char *)&data_f32[0], nelements * sizeof(float))) return false;
                 }
 
                 ftype = itype;
@@ -1481,7 +1549,7 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
                 const int bpe = (ftype == 0) ? sizeof(float) : sizeof(uint16_t);
 
                 data_u8.resize(nelements*bpe);
-                finp.read(reinterpret_cast<char *>(data_u8.data()), nelements * bpe);
+                if (!read_buf(finp, (char *)&data_u8[0], nelements * bpe)) return false;
             }
 
             fout.write(reinterpret_cast<char *>(&n_dims), sizeof(n_dims));
@@ -1508,18 +1576,14 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
 
                 switch (type) {
                     case GGML_TYPE_Q4_0:
-                        {
-                            cur_size = ggml_quantize_q4_0(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
-                        } break;
+                        cur_size = ggml_quantize_q4_0(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                        break;
                     case GGML_TYPE_Q4_1:
-                        {
-                            cur_size = ggml_quantize_q4_1(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
-                        } break;
+                        cur_size = ggml_quantize_q4_1(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                        break;
                     default:
-                        {
-                            fprintf(stderr, "%s: unsupported quantization type %d\n", __func__, type);
-                            return false;
-                        }
+                        fprintf(stderr, "%s: unsupported quantization type %d\n", __func__, type);
+                        return false;
                 }
 
                 fout.write(reinterpret_cast<char *>(work.data()), cur_size);
@@ -1563,7 +1627,7 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
     finp.close();
     fout.close();
 
-    return true;
+    return !fout.bad();
 }
 
 //
