@@ -182,7 +182,7 @@ _lib.llama_get_embeddings.restype = POINTER(c_float)
 
 
 # Token Id -> String. Uses the vocabulary in the provided context
-def llama_token_to_str(ctx: llama_context_p, token: int) -> bytes:
+def llama_token_to_str(ctx: llama_context_p, token: llama_token) -> bytes:
     return _lib.llama_token_to_str(ctx, token)
 
 
