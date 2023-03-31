@@ -73,7 +73,7 @@ def generate(prompt,max_length=20, max_context_length=512,temperature=0.8,top_k=
     inputs.seed = seed
     ret = handle.generate(inputs,outputs)
     if(ret.status==1):
-        return ret.text.decode("UTF-8")
+        return ret.text.decode("UTF-8","ignore")
     return ""
 
 #################################################################

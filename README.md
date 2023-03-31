@@ -25,7 +25,7 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 - Leave main.cpp UNTOUCHED, We want to be able to update the repo and pull any changes automatically.
 - No dynamic memory allocation! Setup structs with FIXED (known) shapes and sizes for ALL output fields. Python will ALWAYS provide the memory, we just write to it.
 - No external libraries or dependencies. That means no Flask, Pybind and whatever. All You Need Is Python.
-- Since v1.0.6, requires libopenblas, the prebuilt windows binaries are included in this repo. If not found, it will fall back to a mode without BLAS.
+- Since v1.0.6, requires libopenblas, the prebuilt windows binaries are included in this repo. If not found, it will fall back to a mode without BLAS. If you want you can also link your own install of OpenBLAS manually with `LLAMA_OPENBLAS=1`
 
 ## License
 - The original GGML library and llama.cpp by ggerganov are licensed under the MIT License
@@ -34,3 +34,4 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 
 ## Notes
 - There is a fundamental flaw with llama.cpp, which causes generation delay to scale linearly with original prompt length. If you care, **please contribute to [this discussion](https://github.com/ggerganov/llama.cpp/discussions/229)** which, if resolved, will actually make this viable.
+- I have heard of someone claiming a false AV positive report. The exe is a simple pyinstaller bundle that includes the necessary python scripts and dlls to run. If this still concerns you, you might wish to rebuild everything from source code using the makefile, and you can rebuild the exe yourself with pyinstaller by using `make_pyinstaller.bat`

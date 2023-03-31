@@ -218,19 +218,30 @@ extern "C" {
 		std::string concat_output = "";  
     	
 		bool startedsampling = false;
-        printf("\nProcessing Prompt (%d tokens%s): ",embd_inp.size(),(blasmode?", BLAS":""));
+        
         timer_start();
         double time1=0,time2=0;
+        unsigned int embd_inp_size = embd_inp.size();
+        printf("\n");
 
 		while (remaining_tokens > 0) 
 		{
 			llama_token id = 0;
 	        // predict
-	        if (embd.size() > 0) 
+            unsigned int embdsize = embd.size();
+	        if (embdsize > 0) 
 			{
-				printf("|");                
+                //print progress                
+                if(!startedsampling)
+                {
+                    printf("\rProcessing Prompt%s (%d / %d tokens)",(blasmode?" [BLAS]":""), input_consumed,embd_inp_size);                   
+                }
+                else
+                {
+                    printf("\rGenerating (%d / %d tokens)",(1+params.n_predict-remaining_tokens),params.n_predict);				    
+                }
                 //printf("\nnp:%d embd:%d txt:%s",n_past,embd.size(),llama_token_to_str(ctx, embd[0]));
-	            if (llama_eval(ctx, embd.data(), embd.size(), n_past, params.n_threads)) 
+	            if (llama_eval(ctx, embd.data(), embdsize, n_past, params.n_threads)) 
 				{
 	                fprintf(stderr, "Failed to predict\n");
                     snprintf(output.text, sizeof(output.text), "%s", "");
@@ -256,7 +267,7 @@ extern "C" {
                     params.n_threads = original_threads;
                     time1 = timer_check();
                     timer_start();
-                    printf("\nGenerating (%d tokens): ",params.n_predict);
+                    printf("\n");
                 }
 
 	            {
@@ -281,7 +292,7 @@ extern "C" {
 	            --remaining_tokens;
                 //printf("\nid:%d word:%s\n",id,llama_token_to_str(ctx, id));
 				concat_output += llama_token_to_str(ctx, id);
-        	} 
+        	}
 			else 
 			{
 	            // some user input remains from prompt or interaction, forward it to processing
