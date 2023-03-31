@@ -4278,9 +4278,7 @@ struct ggml_tensor * ggml_scale_impl(
         is_node = true;
     }
 
-    // TODO: when implement backward, fix this:
-    //struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
-    struct ggml_tensor * result = ggml_view_tensor(ctx, a);
+    struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
 
     result->op   = GGML_OP_SCALE;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -4593,10 +4591,11 @@ struct ggml_tensor * ggml_get_rows(
 
 // ggml_diag_mask_inf
 
-struct ggml_tensor * ggml_diag_mask_inf(
+struct ggml_tensor * ggml_diag_mask_inf_impl(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
-        int                   n_past) {
+        int                   n_past,
+        bool                  inplace) {
     bool is_node = false;
 
     if (a->grad) {
@@ -4604,9 +4603,7 @@ struct ggml_tensor * ggml_diag_mask_inf(
         is_node = true;
     }
 
-    // TODO: when implement backward, fix this:
-    //struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
-    struct ggml_tensor * result = ggml_view_tensor(ctx, a);
+    struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
     struct ggml_tensor * b = ggml_new_i32(ctx, n_past);
 
     result->op   = GGML_OP_DIAG_MASK_INF;
@@ -4617,11 +4614,26 @@ struct ggml_tensor * ggml_diag_mask_inf(
     return result;
 }
 
+struct ggml_tensor * ggml_diag_mask_inf(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int                   n_past) {
+    ggml_diag_mask_inf_impl(ctx, a, n_past, false);
+}
+
+struct ggml_tensor * ggml_diag_mask_inf_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int                   n_past) {
+    ggml_diag_mask_inf_impl(ctx, a, n_past, true);
+}
+
 // ggml_soft_max
 
-struct ggml_tensor * ggml_soft_max(
+struct ggml_tensor * ggml_soft_max_impl(
         struct ggml_context * ctx,
-        struct ggml_tensor  * a) {
+        struct ggml_tensor  * a,
+        bool                  inplace) {
     bool is_node = false;
 
     if (a->grad) {
@@ -4629,9 +4641,7 @@ struct ggml_tensor * ggml_soft_max(
         is_node = true;
     }
 
-    // TODO: when implement backward, fix this:
-    //struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
-    struct ggml_tensor * result = ggml_view_tensor(ctx, a);
+    struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
 
     result->op   = GGML_OP_SOFT_MAX;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -4641,14 +4651,26 @@ struct ggml_tensor * ggml_soft_max(
     return result;
 }
 
+struct ggml_tensor * ggml_soft_max(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a) {
+    ggml_soft_max_impl(ctx, a, false);
+}
+struct ggml_tensor * ggml_soft_max_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a) {
+    ggml_soft_max_impl(ctx, a, true);
+}
+
 // ggml_rope
 
-struct ggml_tensor * ggml_rope(
+struct ggml_tensor * ggml_rope_impl(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         int                   n_past,
         int                   n_dims,
-        int                   mode) {
+        int                   mode,
+        bool                  inplace) {
     GGML_ASSERT(n_past >= 0);
     bool is_node = false;
 
@@ -4657,9 +4679,7 @@ struct ggml_tensor * ggml_rope(
         is_node = true;
     }
 
-    // TODO: when implement backward, fix this:
-    //struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
-    struct ggml_tensor * result = ggml_view_tensor(ctx, a);
+    struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
 
     struct ggml_tensor * b = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 3);
     ((int32_t *) b->data)[0] = n_past;
@@ -4672,6 +4692,23 @@ struct ggml_tensor * ggml_rope(
     result->src1 = b;
 
     return result;
+}
+struct ggml_tensor * ggml_rope(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int                   n_past,
+        int                   n_dims,
+        int                   mode){
+    ggml_rope_impl(ctx, a, n_past, n_dims, mode, false);
+}
+
+struct ggml_tensor * ggml_rope_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int                   n_past,
+        int                   n_dims,
+        int                   mode){
+    ggml_rope_impl(ctx, a, n_past, n_dims, mode, true);
 }
 
 // ggml_conv_1d_1s

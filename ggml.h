@@ -470,25 +470,43 @@ struct ggml_tensor * ggml_repeat(
 struct ggml_tensor * ggml_abs(
         struct ggml_context * ctx,
         struct ggml_tensor  * a);
+struct ggml_tensor * ggml_abs_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a);
 
 struct ggml_tensor * ggml_sgn(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a);
+struct ggml_tensor * ggml_sgn_inplace(
         struct ggml_context * ctx,
         struct ggml_tensor  * a);
 
 struct ggml_tensor * ggml_neg(
         struct ggml_context * ctx,
         struct ggml_tensor  * a);
+struct ggml_tensor * ggml_neg_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a);
 
 struct ggml_tensor * ggml_step(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a);
+struct ggml_tensor * ggml_step_inplace(
         struct ggml_context * ctx,
         struct ggml_tensor  * a);
 
 struct ggml_tensor * ggml_relu(
         struct ggml_context * ctx,
         struct ggml_tensor  * a);
+struct ggml_tensor * ggml_relu_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a);
 
 // TODO: double-check this computation is correct
 struct ggml_tensor * ggml_gelu(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a);
+struct ggml_tensor * ggml_gelu_inplace(
         struct ggml_context * ctx,
         struct ggml_tensor  * a);
 
@@ -605,14 +623,20 @@ struct ggml_tensor * ggml_get_rows(
         struct ggml_tensor  * b);
 
 // set elements above the diagonal to -INF
-// in-place, returns view(a)
 struct ggml_tensor * ggml_diag_mask_inf(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int                   n_past);
+struct ggml_tensor * ggml_diag_mask_inf_inplace(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         int                   n_past);
 
 // in-place, returns view(a)
 struct ggml_tensor * ggml_soft_max(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a);
+struct ggml_tensor * ggml_soft_max_inplace(
         struct ggml_context * ctx,
         struct ggml_tensor  * a);
 
@@ -626,7 +650,12 @@ struct ggml_tensor * ggml_rope(
         int                   n_past,
         int                   n_dims,
         int                   mode);
-
+struct ggml_tensor * ggml_rope_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int                   n_past,
+        int                   n_dims,
+        int                   mode);
 // padding = 1
 // TODO: we don't support extra parameters for now
 //       that's why we are hard-coding the stride, padding, and dilation

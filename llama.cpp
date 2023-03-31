@@ -826,7 +826,7 @@ static bool llama_eval_internal(
             // Q = Qcur.contiguous().view(n_embd/n_head, n_head, N).permute(0, 2, 1, 3)
             struct ggml_tensor * Q =
                 ggml_permute(ctx0,
-                        ggml_rope(ctx0,
+                        ggml_rope_inplace(ctx0,
                             ggml_reshape_3d(ctx0,
                                 Qcur,
                                 n_embd/n_head, n_head, N),
@@ -836,7 +836,7 @@ static bool llama_eval_internal(
             // K = Kmem.view(n_embd/n_head, n_head, n_past + N).permute(0, 2, 1, 3)
             struct ggml_tensor * K =
                 ggml_permute(ctx0,
-                        ggml_rope(ctx0,
+                        ggml_rope_inplace(ctx0,
                             ggml_reshape_3d(ctx0,
                                 ggml_view_1d(ctx0, kv_self.k, (n_past + N)*n_embd, il*n_ctx*ggml_element_size(kv_self.k)*n_embd),
                                 n_embd/n_head, n_head, n_past + N),
@@ -853,10 +853,10 @@ static bool llama_eval_internal(
                         ggml_new_f32(ctx0, 1.0f/sqrtf(float(n_embd)/n_head)));
 
             // KQ_masked = mask_past(KQ_scaled)
-            struct ggml_tensor * KQ_masked = ggml_diag_mask_inf(ctx0, KQ_scaled, n_past);
+            struct ggml_tensor * KQ_masked = ggml_diag_mask_inf_inplace(ctx0, KQ_scaled, n_past);
 
             // KQ = soft_max(KQ_masked)
-            struct ggml_tensor * KQ_soft_max = ggml_soft_max(ctx0, KQ_masked);
+            struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx0, KQ_masked);
 
             // V_trans = Vmem.view(n_embd/n_head, n_head, n_past + N).permute(1, 2, 0, 3).contiguous()
             struct ggml_tensor * V_trans =
