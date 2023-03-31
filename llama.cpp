@@ -827,9 +827,9 @@ static bool llama_eval_internal(
             struct ggml_tensor * Q =
                 ggml_permute(ctx0,
                         ggml_rope(ctx0,
-                            ggml_cpy(ctx0,
+                            ggml_reshape_3d(ctx0,
                                 Qcur,
-                                ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_embd/n_head, n_head, N)),
+                                n_embd/n_head, n_head, N),
                             n_past, n_rot, 0),
                         0, 2, 1, 3);
 
@@ -848,7 +848,7 @@ static bool llama_eval_internal(
 
             // KQ_scaled = KQ / sqrt(n_embd/n_head)
             struct ggml_tensor * KQ_scaled =
-                ggml_scale(ctx0,
+                ggml_scale_inplace(ctx0,
                         KQ,
                         ggml_new_f32(ctx0, 1.0f/sqrtf(float(n_embd)/n_head)));
 
@@ -887,7 +887,7 @@ static bool llama_eval_internal(
 
         lctx.use_buf(ctx0, 1);
 
-        struct ggml_tensor * inpFF = ggml_add(ctx0, cur, inpSA);
+        struct ggml_tensor * inpFF = ggml_add_inplace(ctx0, cur, inpSA);
 
         // feed-forward network
         {
@@ -910,16 +910,16 @@ static bool llama_eval_internal(
                     cur);
 
             // SILU activation
-            cur = ggml_silu(ctx0, cur);
+            cur = ggml_silu_inplace(ctx0, cur);
 
-            cur = ggml_mul(ctx0, cur, tmp);
+            cur = ggml_mul_inplace(ctx0, cur, tmp);
 
             cur = ggml_mul_mat(ctx0,
                     model.layers[il].w2,
                     cur);
         }
 
-        cur = ggml_add(ctx0, cur, inpFF);
+        cur = ggml_add_inplace(ctx0, cur, inpFF);
 
         // input for next layer
         inpL = cur;

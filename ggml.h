@@ -409,11 +409,18 @@ float * ggml_get_data_f32(const struct ggml_tensor * tensor);
 struct ggml_tensor * ggml_dup(
         struct ggml_context * ctx,
         struct ggml_tensor  * a);
+struct ggml_tensor * ggml_dup_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a);
 
 struct ggml_tensor * ggml_add(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         struct ggml_tensor  * b);
+struct ggml_tensor * ggml_add_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor * a,
+        struct ggml_tensor * b);
 
 struct ggml_tensor * ggml_sub(
         struct ggml_context * ctx,
@@ -421,6 +428,10 @@ struct ggml_tensor * ggml_sub(
         struct ggml_tensor  * b);
 
 struct ggml_tensor * ggml_mul(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        struct ggml_tensor  * b);
+struct ggml_tensor * ggml_mul_inplace(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         struct ggml_tensor  * b);
@@ -484,16 +495,25 @@ struct ggml_tensor * ggml_gelu(
 struct ggml_tensor * ggml_silu(
         struct ggml_context * ctx,
         struct ggml_tensor  * a);
+struct ggml_tensor * ggml_silu_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a);
 
 // normalize along rows
 // TODO: eps is hardcoded to 1e-5 for now
 struct ggml_tensor * ggml_norm(
         struct ggml_context * ctx,
         struct ggml_tensor  * a);
+struct ggml_tensor * ggml_norm_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a);
 
 struct ggml_tensor * ggml_rms_norm(
         struct ggml_context * ctx,
         struct ggml_tensor  * a);
+struct ggml_tensor* ggml_rms_norm_inplace(
+        struct ggml_context* ctx,
+        struct ggml_tensor* a);
 
 // A: m rows, n columns
 // B: p rows, n columns (i.e. we transpose it internally)
@@ -512,9 +532,17 @@ struct ggml_tensor * ggml_scale(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         struct ggml_tensor  * b);
+struct ggml_tensor * ggml_scale_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor * a,
+        struct ggml_tensor * b);
 
 // a -> b, return view(b)
 struct ggml_tensor * ggml_cpy(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        struct ggml_tensor  * b);
+struct ggml_tensor * ggml_cpy_inplace(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         struct ggml_tensor  * b);
