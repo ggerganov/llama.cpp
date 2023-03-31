@@ -19,7 +19,7 @@
  #endif
 
 //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt) 
- int check_file_format(const std::string & fname)
+ FileFormat check_file_format(const std::string & fname)
  {
     std::vector<char> f_buf(1024*1024);
 
@@ -27,22 +27,22 @@
     fin.rdbuf()->pubsetbuf(f_buf.data(), f_buf.size());
     if (!fin) {
         fprintf(stderr, "%s: failed to open '%s'\n", __func__, fname.c_str());
-        return false;
+        return FileFormat::FAIL;
     }
 
-    int fileformat = 0;
+    FileFormat fileformat = FileFormat::FAIL;
     uint32_t magic;
     fin.read((char *) &magic, sizeof(magic));
     if (magic == 0x67676d6c) {  //v1 format ggml, alpaca
-       fileformat = 1;
+       fileformat = FileFormat::GGML;
     }
     else if(magic == 0x67676d66) //v2 format ggmf
     {
-        fileformat = 2;
+        fileformat = FileFormat::GGHF;
     }
     else if(magic == 0x67676a74) //v3 format ggjt
     {
-        fileformat = 3; //ggjt by default
+        fileformat = FileFormat::GGJT; //ggjt by default
     }
     fin.close();
     

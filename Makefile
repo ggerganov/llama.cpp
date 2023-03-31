@@ -211,7 +211,7 @@ endif
 
 BLAS_BUILD = 
 ifeq ($(OS),Windows_NT)
-	BLAS_BUILD = $(CXX) $(CXXFLAGS) expose.cpp ggml_blas.o common.o extra.o libopenblas.lib -shared -o llamacpp_blas.dll $(LDFLAGS)
+	BLAS_BUILD = $(CXX) $(CXXFLAGS) ggml_blas.o common.o extra.o expose.o llama_adapter.o libopenblas.lib -shared -o llamacpp_blas.dll $(LDFLAGS)
 else
 	BLAS_BUILD = @echo 'Your OS is $(OS) and does not appear to be Windows. If you want to use openblas, please link it manually with LLAMA_OPENBLAS=1'
 endif
@@ -243,6 +243,9 @@ ggml.o: ggml.c ggml.h
 ggml_blas.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS) -DGGML_USE_OPENBLAS -c ggml.c -o ggml_blas.o
 
+ggml_old_v1.o: otherarch/ggml_old.c otherarch/ggml_old.h
+	$(CC)  $(CFLAGS)   -c otherarch/ggml_old.c -o ggml_old_v1.o
+
 llama.o: llama.cpp llama.h
 	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
 
@@ -252,8 +255,14 @@ common.o: examples/common.cpp examples/common.h
 extra.o: extra.cpp extra.h
 	$(CXX) $(CXXFLAGS) -c extra.cpp -o extra.o
 
+expose.o: expose.cpp expose.h
+	$(CXX) $(CXXFLAGS) -c expose.cpp -o expose.o
+
+llama_adapter.o: llama_adapter.cpp llama_adapter.h
+	$(CXX) $(CXXFLAGS) -c llama_adapter.cpp -o llama_adapter.o
+
 clean:
-	rm -vf *.o main quantize perplexity embedding main.exe quantize.exe llamacpp.dll llamacpp_blas.dll
+	rm -vf *.o main quantize perplexity embedding main.exe quantize.exe llamacpp.dll llamacpp_blas.dll gpt2.exe gptj.exe
 
 main: examples/main/main.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
@@ -261,10 +270,14 @@ main: examples/main/main.cpp ggml.o llama.o common.o
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
 
-llamalib: expose.cpp ggml.o common.o extra.o
-	$(CXX) $(CXXFLAGS) expose.cpp ggml.o common.o extra.o -shared -o llamacpp.dll $(LDFLAGS)
+gptj: ggml_old_v1.o
+	$(CXX) $(CXXFLAGS) otherarch/gptj_old.cpp otherarch/utils.cpp ggml_old_v1.o -o gptj $(LDFLAGS)
 
-llamalib_blas: expose.cpp ggml_blas.o common.o extra.o
+
+llamalib: ggml.o common.o extra.o expose.o llama_adapter.o
+	$(CXX) $(CXXFLAGS) ggml.o common.o extra.o expose.o llama_adapter.o -shared -o llamacpp.dll $(LDFLAGS)
+
+llamalib_blas: ggml_blas.o common.o extra.o expose.o llama_adapter.o
 	$(BLAS_BUILD)
 	
 quantize: examples/quantize/quantize.cpp ggml.o llama.o
