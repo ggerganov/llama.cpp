@@ -256,6 +256,10 @@ embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
 # Tests
 #
 
+benchmark:
+	$(CXX) $(CXXFLAGS) tests/test-benchmark-q4_0-matmult.c ggml.o -o tests/test-benchmark-q4_0-matmult $(LDFLAGS)	
+	tests/test-benchmark-q4_0-matmult
+	
 .PHONY: tests
 tests:
 	bash ./tests/run-tests.sh
