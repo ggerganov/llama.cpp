@@ -4,12 +4,12 @@ This is a port of [BlinkDL/RWKV-LM](https://github.com/BlinkDL/RWKV-LM) to [gger
 
 **WORK IN PROGRESS: NOTHING WORKS YET!** If you know C/C++/ggml, please help!
 
-Inference code runs and outputs some correctly-looking numbers in logits. Values are checked to be correct at least up to `ln0`, they match with reference implementation.
+**Status**: The model outputs correct logits for the first token (logits match reference implementation). But state saving is broken, so for every subsequent token logits are invalid.
 
 ## Plan
 
 1. Make FP32 inference work
-   1. Compare vectors step-by-step with reference implementation
+   1. Fix state saving
 2. Validate states and logits against [reference implementation](https://github.com/BlinkDL/ChatRWKV/blob/main/RWKV_in_150_lines.py) by creating a testing script
 3. Heavily refactor code; optimize where possible
 4. Make FP16 inference work
@@ -23,7 +23,7 @@ Inference code runs and outputs some correctly-looking numbers in logits. Values
 
 This repo is based on the [llama.cpp repo](https://github.com/ggerganov/llama.cpp). RWKV-related code is in these directories:
 
-- `./rwkv`: directory containing Python scripts
+- `./rwkv`: directory containing Python scripts for conversion and validation
 - `./examples/main_rwkw`: directory containing script that loads and infers RWKV model
 
 Please do not change files in other directories — this will make pulling recent changes easier.

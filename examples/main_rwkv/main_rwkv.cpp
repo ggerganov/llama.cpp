@@ -364,8 +364,6 @@ int main(int argc, char ** argv) {
     struct rwkv_model model;
     load_rwkv_model(ctx, model_path, &model);
 
-    PRINT_TENSOR(model.emb);
-
     int32_t n_vocab = model.n_vocab;
     int32_t n_embed = model.n_embed;
     int32_t n_layer = model.n_layer;
@@ -393,7 +391,7 @@ int main(int argc, char ** argv) {
         RWKV_ASSERT(state_in_file != NULL, "Failed to open file %s", state_in_path);
 
         // TODO Saving/loading raw data makes state cache machine-dependent
-        RWKV_ASSERT(fread(state->data, 1, state_file_size, state_in_file) == state_file_size, "Failed to read tensor data from a file");
+        RWKV_ASSERT(fread(state->data, 1, state_file_size, state_in_file) == state_file_size, "Failed to read state from a file");
 
         fclose(state_in_file);
     }
@@ -409,10 +407,6 @@ int main(int argc, char ** argv) {
     // x = self.layer_norm(x, self.w.blocks[0].ln0)
     x = ggml_layer_norm(ctx, x, model.ln0_weight, model.ln0_bias);
 
-    // For token 123 after ln0, should be [-0.4194, 1.1698, 0.7798 ... -1.1838, -0.8716, -0.2765]
-    // Prints (768, 1), [[-0.419416 1.169782 0.779827 ... -1.183806 -0.871573 -0.276483]]
-    COMPUTE_AND_PRINT_TENSOR(ctx, x);
-
     for (int i = 0; i < n_layer; i++) {
         auto layer = model.layers[i];
 
@@ -422,7 +416,6 @@ int main(int argc, char ** argv) {
             struct ggml_tensor * x0 = ggml_layer_norm(ctx, x, layer.ln1_weight, layer.ln1_bias);
             // state[5 * i + 1]
             struct ggml_tensor * x_prev = ggml_view_1d(ctx, state, n_embed, (5 * i + 1) * n_embed * 4);
-            COMPUTE_AND_PRINT_TENSOR(ctx, x_prev);
             // xk = x * time_mix_k + state[5 * i + 1] * (1 - time_mix_k)
             // xv = x * time_mix_v + state[5 * i + 1] * (1 - time_mix_v)
             // xr = x * time_mix_r + state[5 * i + 1] * (1 - time_mix_r)
@@ -443,11 +436,6 @@ int main(int argc, char ** argv) {
             );
             // state[5 * i + 1] = x
             ggml_cpy(ctx, x0, x_prev);
-
-            COMPUTE_AND_PRINT_TENSOR(ctx, xk);
-            COMPUTE_AND_PRINT_TENSOR(ctx, xv);
-            COMPUTE_AND_PRINT_TENSOR(ctx, xr);
-            COMPUTE_AND_PRINT_TENSOR(ctx, x_prev);
 
             // r = torch.sigmoid(rw @ xr)
             struct ggml_tensor * r = ggml_sigmoid(
@@ -497,21 +485,21 @@ int main(int argc, char ** argv) {
             // e2 = torch.exp(k - qq)
             e2 = ggml_exp(ctx, ggml_sub(ctx, k, qq));
             // state[5 * i + 2] = e1 * aa + e2 * v
-            // todo must save result
+            // TODO Must save result
             ggml_cpy(ctx, ggml_add(
                 ctx,
                 ggml_mul(ctx, e1, aa),
                 ggml_mul(ctx, e2, v)
             ), aa);
             // state[5 * i + 3] = e1 * bb + e2
-            // todo must save result
+            // TODO Must save result
             ggml_cpy(ctx, ggml_add(
                 ctx,
                 ggml_mul(ctx, e1, bb),
                 e2
             ), bb);
             // state[5 * i + 4] = qq
-            // todo must save result
+            // TODO Must save result
             ggml_cpy(ctx, qq, pp);
             // ow @ (r * wkv)
             x = ggml_add(
@@ -523,8 +511,6 @@ int main(int argc, char ** argv) {
                     ggml_mul(ctx, r, wkv)
                 )
             );
-            RWKV_LOG("RWKV %d completed", i);
-            COMPUTE_AND_PRINT_TENSOR(ctx, x);
         }
 
         // FFN/channel mixing
@@ -546,7 +532,7 @@ int main(int argc, char ** argv) {
                 ggml_mul(ctx, x_prev, ggml_1_minus_x(ctx, layer.ffn_time_mix_r))
             );
             // state[5 * i + 0] = x
-            // todo must save result
+            // TODO Must save result
             ggml_cpy(ctx, x0, x_prev);
 
             // r = torch.sigmoid(rw @ xr)
@@ -569,8 +555,6 @@ int main(int argc, char ** argv) {
                     ggml_mul_mat(ctx, layer.ffn_value, k)
                 )
             );
-            RWKV_LOG("FFN %d completed", i);
-            COMPUTE_AND_PRINT_TENSOR(ctx, x);
         }
     }
 
@@ -582,10 +566,31 @@ int main(int argc, char ** argv) {
 
     compute_graph(ctx, logits);
 
-    // TODO -nan(ind) -nan(ind) ... (maybe implement exp/max first?)
     PRINT_TENSOR(logits);
 
-    // TODO Save new state and logits
+    {
+        RWKV_LOG("Saving state to %s", state_out_path);
+        int32_t state_file_size = state_element_count * 4;
+
+        FILE * state_out_file = fopen(state_out_path, "wb");
+        RWKV_ASSERT(state_out_file != NULL, "Failed to open file %s", state_out_path);
+
+        RWKV_ASSERT(fwrite(state->data, 1, state_file_size, state_out_file) == state_file_size, "Failed to write state to a file");
+
+        fclose(state_out_file);
+    }
+
+    {
+        RWKV_LOG("Saving logits to %s", logits_out_path);
+        int32_t logits_file_size = n_vocab * 4;
+
+        FILE * logits_out_file = fopen(logits_out_path, "wb");
+        RWKV_ASSERT(logits_out_file != NULL, "Failed to open file %s", logits_out_path);
+
+        RWKV_ASSERT(fwrite(logits->data, 1, logits_file_size, logits_out_file) == logits_file_size, "Failed to write logits to a file");
+
+        fclose(logits_out_file);
+    }
 
     ggml_free(ctx);
 
