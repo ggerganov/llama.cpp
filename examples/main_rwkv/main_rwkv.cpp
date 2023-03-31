@@ -323,22 +323,12 @@ void load_rwkv_model(ggml_context * ctx, char * file_path, struct rwkv_model * m
 
 // --- Operators ---
 
-// TODO Fuse and benchmark
 struct ggml_tensor * ggml_layer_norm(ggml_context * ctx, struct ggml_tensor * x, struct ggml_tensor * weight, struct ggml_tensor * bias) {
-    // LayerNorm in RWKV is:
-    // x = (x - mean(x)) / sqrt(variance(x) + 1e-5) * weight + bias
-    // Looks like ggml_norm does the first part, we only need to apply weight & bias
+    // LayerNorm in RWKV is `x = (x - mean(x)) / sqrt(variance(x) + 1e-5) * weight + bias`
+    // Looks like ggml_norm does the first part, we only need to apply weight & bias.
     x = ggml_norm(ctx, x);
     x = ggml_mul(ctx, x, weight);
     x = ggml_add(ctx, x, bias);
-    return x;
-}
-
-// TODO Fuse and benchmark
-struct ggml_tensor * ggml_sigmoid(ggml_context * ctx, struct ggml_tensor * x) {
-    // ggml has no native sigmoid, but silu(x) / x can be an approximation
-    x = ggml_silu(ctx, x);
-    x = ggml_div(ctx, x, x);
     return x;
 }
 
@@ -348,6 +338,8 @@ struct ggml_tensor * ggml_sigmoid(ggml_context * ctx, struct ggml_tensor * x) {
 // Token index is 0-based.
 // To start from new state, pass empty string instead of input state file path.
 int main(int argc, char ** argv) {
+    ggml_run_test_suite();
+
     RWKV_ASSERT(argc - 1 == 5, "Expected 5 arguments, got %d", argc - 1);
     char * model_path = argv[1];
     char * token_s = argv[2];
@@ -408,9 +400,6 @@ int main(int argc, char ** argv) {
 
     // --- Evaluate model ---
 
-    struct ggml_tensor * ones = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_embed);
-    ggml_set_f32(ones, 1.0F);
-
     // x = self.w.emb.weight[token]
     // TODO Replace with ggml_get_rows or similar
     struct ggml_tensor * one_hot = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_vocab, 1);
@@ -433,26 +422,32 @@ int main(int argc, char ** argv) {
             struct ggml_tensor * x0 = ggml_layer_norm(ctx, x, layer.ln1_weight, layer.ln1_bias);
             // state[5 * i + 1]
             struct ggml_tensor * x_prev = ggml_view_1d(ctx, state, n_embed, (5 * i + 1) * n_embed * 4);
+            COMPUTE_AND_PRINT_TENSOR(ctx, x_prev);
             // xk = x * time_mix_k + state[5 * i + 1] * (1 - time_mix_k)
             // xv = x * time_mix_v + state[5 * i + 1] * (1 - time_mix_v)
             // xr = x * time_mix_r + state[5 * i + 1] * (1 - time_mix_r)
             struct ggml_tensor * xk = ggml_add(
                 ctx,
                 ggml_mul(ctx, x0, layer.att_time_mix_k),
-                ggml_mul(ctx, x_prev, ggml_sub(ctx, ones, layer.att_time_mix_k))
+                ggml_mul(ctx, x_prev, ggml_1_minus_x(ctx, layer.att_time_mix_k))
             );
             struct ggml_tensor * xv = ggml_add(
                 ctx,
                 ggml_mul(ctx, x0, layer.att_time_mix_v),
-                ggml_mul(ctx, x_prev, ggml_sub(ctx, ones, layer.att_time_mix_v))
+                ggml_mul(ctx, x_prev, ggml_1_minus_x(ctx, layer.att_time_mix_v))
             );
             struct ggml_tensor * xr = ggml_add(
                 ctx,
                 ggml_mul(ctx, x0, layer.att_time_mix_r),
-                ggml_mul(ctx, x_prev, ggml_sub(ctx, ones, layer.att_time_mix_r))
+                ggml_mul(ctx, x_prev, ggml_1_minus_x(ctx, layer.att_time_mix_r))
             );
             // state[5 * i + 1] = x
             ggml_cpy(ctx, x0, x_prev);
+
+            COMPUTE_AND_PRINT_TENSOR(ctx, xk);
+            COMPUTE_AND_PRINT_TENSOR(ctx, xv);
+            COMPUTE_AND_PRINT_TENSOR(ctx, xr);
+            COMPUTE_AND_PRINT_TENSOR(ctx, x_prev);
 
             // r = torch.sigmoid(rw @ xr)
             struct ggml_tensor * r = ggml_sigmoid(
@@ -474,14 +469,11 @@ int main(int argc, char ** argv) {
             // ww = time_first + k
             struct ggml_tensor * ww = ggml_add(ctx, layer.att_time_first, k);
             // qq = torch.maximum(pp, ww)
-            // TODO Implement element-wise max in ggml
-            struct ggml_tensor * qq = pp;
+            struct ggml_tensor * qq = ggml_max(ctx, pp, ww);
             // e1 = torch.exp(pp - qq)
-            // TODO Implement element-wise exp in ggml
-            struct ggml_tensor * e1 = ggml_sub(ctx, pp, qq);
+            struct ggml_tensor * e1 = ggml_exp(ctx, ggml_sub(ctx, pp, qq));
             // e2 = torch.exp(ww - qq)
-            // TODO Use exp
-            struct ggml_tensor * e2 = ggml_sub(ctx, ww, qq);
+            struct ggml_tensor * e2 = ggml_exp(ctx, ggml_sub(ctx, ww, qq));
             // a = e1 * aa + e2 * v
             struct ggml_tensor * a = ggml_add(
                 ctx,
@@ -499,27 +491,27 @@ int main(int argc, char ** argv) {
             // ww = pp + time_decay
             ww = ggml_add(ctx, pp, layer.att_time_decay);
             // qq = torch.maximum(ww, k)
-            // TODO Use max
-            qq = ww;
+            qq = ggml_max(ctx, ww, k);
             // e1 = torch.exp(ww - qq)
-            // TODO Use exp
-            e1 = ggml_sub(ctx, ww, qq);
+            e1 = ggml_exp(ctx, ggml_sub(ctx, ww, qq));
             // e2 = torch.exp(k - qq)
-            // TODO Use exp
-            e2 = ggml_sub(ctx, k, qq);
+            e2 = ggml_exp(ctx, ggml_sub(ctx, k, qq));
             // state[5 * i + 2] = e1 * aa + e2 * v
+            // todo must save result
             ggml_cpy(ctx, ggml_add(
                 ctx,
                 ggml_mul(ctx, e1, aa),
                 ggml_mul(ctx, e2, v)
             ), aa);
             // state[5 * i + 3] = e1 * bb + e2
+            // todo must save result
             ggml_cpy(ctx, ggml_add(
                 ctx,
                 ggml_mul(ctx, e1, bb),
                 e2
             ), bb);
             // state[5 * i + 4] = qq
+            // todo must save result
             ggml_cpy(ctx, qq, pp);
             // ow @ (r * wkv)
             x = ggml_add(
@@ -531,6 +523,8 @@ int main(int argc, char ** argv) {
                     ggml_mul(ctx, r, wkv)
                 )
             );
+            RWKV_LOG("RWKV %d completed", i);
+            COMPUTE_AND_PRINT_TENSOR(ctx, x);
         }
 
         // FFN/channel mixing
@@ -544,14 +538,15 @@ int main(int argc, char ** argv) {
             struct ggml_tensor * xk = ggml_add(
                 ctx,
                 ggml_mul(ctx, x0, layer.ffn_time_mix_k),
-                ggml_mul(ctx, x_prev, ggml_sub(ctx, ones, layer.ffn_time_mix_k))
+                ggml_mul(ctx, x_prev, ggml_1_minus_x(ctx, layer.ffn_time_mix_k))
             );
             struct ggml_tensor * xr = ggml_add(
                 ctx,
                 ggml_mul(ctx, x0, layer.ffn_time_mix_r),
-                ggml_mul(ctx, x_prev, ggml_sub(ctx, ones, layer.ffn_time_mix_r))
+                ggml_mul(ctx, x_prev, ggml_1_minus_x(ctx, layer.ffn_time_mix_r))
             );
             // state[5 * i + 0] = x
+            // todo must save result
             ggml_cpy(ctx, x0, x_prev);
 
             // r = torch.sigmoid(rw @ xr)
@@ -574,6 +569,8 @@ int main(int argc, char ** argv) {
                     ggml_mul_mat(ctx, layer.ffn_value, k)
                 )
             );
+            RWKV_LOG("FFN %d completed", i);
+            COMPUTE_AND_PRINT_TENSOR(ctx, x);
         }
     }
 
@@ -587,6 +584,8 @@ int main(int argc, char ** argv) {
 
     // TODO -nan(ind) -nan(ind) ... (maybe implement exp/max first?)
     PRINT_TENSOR(logits);
+
+    // TODO Save new state and logits
 
     ggml_free(ctx);
 

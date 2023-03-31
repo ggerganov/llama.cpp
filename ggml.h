@@ -167,6 +167,32 @@
 //
 // TODO
 //
+// ## Adding new operators
+//
+// Suppose you want to add e^x unary operator. Following steps need to be done:
+//
+// In `ggml.h`:
+//
+// 1. Add member `GGML_OP_EXP` to `ggml_op` enum.
+// 2. Declare the operator function: `struct ggml_tensor * ggml_exp(struct ggml_context * ctx, struct ggml_tensor * x);`.
+//
+// In `ggml.c`:
+//
+// 1. Implement `ggml_exp` function: it will create result tensor and set its' operator and arguments.
+// 2. Create forward computation function for FP32: `ggml_compute_forward_exp_f32`: it will do the actual computation.
+// 3. If needed, create forward computation functions for other types: FP16, INT32, etc.
+// 4. Create forward dispatch function `ggml_compute_forward_exp`: it would dispatch the call based on tensor data type.
+// 5. Add `case GGML_OP_EXP`:
+//   - to `ggml_compute_forward` and call the forward dispatch function here.
+//   - to `ggml_compute_backward` and add `GGML_ASSERT(false)` here.
+//   - to `ggml_graph_compute` and add `node->n_tasks = 1` here.
+// 6. Fix all assertions that check value of `GGML_OP_COUNT`: you've added 1 operator, so increment asserted value by one.
+//
+// When in doubt, consult the code of existing operators similar to that you're implementing.
+// Resulting operator would work for the forward pass, but will lack backward implementation and multi-threading support.
+//
+// TODO Implementing backward pass
+// TODO Implementing multi-threading
 //
 
 #ifdef  __cplusplus
@@ -225,9 +251,22 @@ enum ggml_op {
     GGML_OP_ABS,
     GGML_OP_SGN,
     GGML_OP_NEG,
+    // Element-wise exponential function `e^x`.
+    // Same as `torch.exp(x)` from PyTorch.
+    GGML_OP_EXP,
+    // Element-wise `1 - x`.
+    GGML_OP_1_MINUS_X,
+
+    // Element-wise maximum of 2 values. Argument shapes must match.
+    // Same as `torch.maximum(x)` from PyTorch.
+    GGML_OP_MAX,
+
     GGML_OP_STEP,
     GGML_OP_RELU,
     GGML_OP_GELU,
+    // Element-wise sigmoid activation `1 / (1 + e^-x)`, also called logistic function.
+    // Same as `torch.sigmoid(x)` from PyTorch.
+    GGML_OP_SIGMOID,
     GGML_OP_SILU,
     GGML_OP_NORM, // normalize
     GGML_OP_RMS_NORM,
@@ -463,6 +502,19 @@ struct ggml_tensor * ggml_neg(
         struct ggml_context * ctx,
         struct ggml_tensor  * a);
 
+struct ggml_tensor * ggml_exp(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a);
+
+struct ggml_tensor * ggml_1_minus_x(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a);
+
+struct ggml_tensor * ggml_max(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        struct ggml_tensor  * b);
+
 struct ggml_tensor * ggml_step(
         struct ggml_context * ctx,
         struct ggml_tensor  * a);
@@ -473,6 +525,10 @@ struct ggml_tensor * ggml_relu(
 
 // TODO: double-check this computation is correct
 struct ggml_tensor * ggml_gelu(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a);
+
+struct ggml_tensor * ggml_sigmoid(
         struct ggml_context * ctx,
         struct ggml_tensor  * a);
 
@@ -767,6 +823,11 @@ int ggml_cpu_has_wasm_simd(void);
 int ggml_cpu_has_blas(void);
 int ggml_cpu_has_sse3(void);
 int ggml_cpu_has_vsx(void);
+
+// Run test suite for ggml.
+// Exits normally, if all tests pass.
+// Aborts the execution if any test did not pass.
+void ggml_run_test_suite();
 
 #ifdef  __cplusplus
 }
