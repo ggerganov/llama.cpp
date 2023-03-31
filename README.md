@@ -26,6 +26,7 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 - No dynamic memory allocation! Setup structs with FIXED (known) shapes and sizes for ALL output fields. Python will ALWAYS provide the memory, we just write to it.
 - No external libraries or dependencies. That means no Flask, Pybind and whatever. All You Need Is Python.
 - Since v1.0.6, requires libopenblas, the prebuilt windows binaries are included in this repo. If not found, it will fall back to a mode without BLAS. If you want you can also link your own install of OpenBLAS manually with `LLAMA_OPENBLAS=1`
+- I plan to keep backwards compatibility with all past ggml llama.cpp AND alpaca.cpp models.
 
 ## License
 - The original GGML library and llama.cpp by ggerganov are licensed under the MIT License
