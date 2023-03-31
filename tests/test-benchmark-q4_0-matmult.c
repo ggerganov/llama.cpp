@@ -10,11 +10,17 @@
 #include "ggml.h"
 #include <assert.h>
 #include <math.h>
+#include <cstring>
 #include <cstdio>
 #include <cinttypes>
 #include <unordered_map>
 #include <queue>
 #include <string.h>
+#include <cassert>
+#include <fstream>
+#include <string>
+#include <iterator>
+#include <algorithm>
 
 uint64_t rdtsc(){
     unsigned int lo,hi;
@@ -50,7 +56,42 @@ float tensor_sum_elements(struct ggml_tensor * tensor) {
         TENSOR->ne[0], TENSOR->ne[1], TENSOR->ne[2], TENSOR->nb[0], TENSOR->nb[1], TENSOR->nb[2]); \
     { float sum = tensor_sum_elements(TENSOR); printf("Sum of tensor %s is %6.2f\n",#TENSOR, sum); }
 
-int main(void) {
+void print_usage(int /*argc*/, char ** argv, const int n_threads) {
+    fprintf(stderr, "usage: %s [options]\n", argv[0]);
+    fprintf(stderr, "\n");
+    fprintf(stderr, "options:\n");
+    fprintf(stderr, "  -h, --help            show this help message and exit\n");
+    fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", n_threads);
+    fprintf(stderr, "\n");
+}
+
+int main(int argc, char ** argv)  {
+
+    int n_threads = 1;
+
+    bool invalid_param = false;
+    std::string arg;
+    for (int i = 1; i < argc; i++) {
+        arg = argv[i];
+
+        if (arg == "-t" || arg == "--threads") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            n_threads = std::stoi(argv[i]);
+        } else if (arg == "-h" || arg == "--help") {
+            print_usage(argc, argv, n_threads);
+            exit(0);
+        }     
+        if (invalid_param) {
+            fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
+            print_usage(argc, argv, n_threads);
+            exit(1);
+        }
+    }
+
+
     // create the ggml context
     printf("Starting Test\n");
     
@@ -121,7 +162,7 @@ int main(void) {
     // printf("Creating compute graph\n");
     struct ggml_cgraph gf = ggml_build_forward(m11xm2);
     
-    gf.n_threads=1;
+    gf.n_threads=n_threads;
     printf("cgraph->n_threads=%i\n",gf.n_threads); 
     
     TENSOR_DUMP(m11);
@@ -149,7 +190,7 @@ int main(void) {
         
     // printf("Creating compute graph\n");
     struct ggml_cgraph gf31 = ggml_build_forward(q31);
-    gf31.n_threads=1;
+    gf31.n_threads=n_threads;
     
     // Set up a second graph computation to make sure we override the CPU cache lines    
     // printf("Creating new tensor q12 & Running quantize\n");
@@ -176,20 +217,25 @@ int main(void) {
     // float sum_of_F32_reference = tensor_sum_elements(gf.nodes[0]);
     float sum_of_F32_reference = 11611395072.00f;
 
-    printf("Iteration;NThreads; SizeX; SizeY; SizeZ; Required_FLOPS; Elapsed_CPU_Cycles; FLOPS_per_Cycle\n");
-    printf("============================================================================================\n");
+    printf("Iteration;NThreads; SizeX; SizeY; SizeZ; Required_FLOPS; Elapsed_u_Seconds; FLOPS_per_u_Second\n");
+    printf("==============================================================================================\n");
     
     setlocale(LC_ALL,"de_DE_UTF8");
     
     for (int i=0;i<10;i++) {
     
-        long long int start = rdtsc();
+        long long int start = ggml_time_us();
         //printf("Running ggml_graph_compute\n");
         ggml_graph_compute(ctx, &gf31);
-        long long int stop = rdtsc();
-        long long int cycles = stop-start;
-        float flops_per_cycle = (1.0f*flops_per_matrix)/cycles;
-        printf("%9i;%8i;%6i;%6i;%6i;%15lli;%19lli;%16.2f\n",i,gf31.n_threads, sizex, sizey, sizez, flops_per_matrix, cycles,flops_per_cycle);
+        long long int stop = ggml_time_us();
+        long long int usec = stop-start;
+        float sec = usec/1000000;
+        float flops_per_usec = (1.0f*flops_per_matrix)/usec;
+        printf("%9i;%8i;%6i;%6i;%6i;%15lli;%18lli;%19.2f\n",
+            i,
+            gf31.n_threads, 
+            sizex, sizey, sizez, flops_per_matrix, 
+            usec,flops_per_usec);
 
 #ifdef VERBOSE_DEBUGGING
         TENSOR_DUMP("res",gf31.nodes[0])
