@@ -1,4 +1,18 @@
-#!/bin/bash
+#!/usr/env/bin bash
+
+while getopts "m:u:a:t:p:g:" opt; do
+  case $opt in
+    m) MODEL="--model $OPTARG";;
+    u) USER_NAME="$OPTARG";;
+    a) AI_NAME="$OPTARG";;
+    t) N_THREAD="$OPTARG";;
+    p) N_PREDICTS="$OPTARG";;
+    g) GEN_OPTIONS="$OPTARG";;
+    \?) echo "Invalid option -$OPTARG" >&2; exit 1;;
+  esac
+done
+
+shift $((OPTIND-1))
 
 cd "$(dirname "$0")/.." || exit
 
@@ -17,7 +31,7 @@ GEN_OPTIONS="${GEN_OPTIONS:---ctx_size 2048 --temp 0.7 --top_k 40 --top_p 0.5 --
 
 # shellcheck disable=SC2086 # Intended splitting of GEN_OPTIONS
 ./main $GEN_OPTIONS \
-  --model "$MODEL" \
+  $MODEL \
   --threads "$N_THREAD" \
   --n_predict "$N_PREDICTS" \
   --color --interactive \
