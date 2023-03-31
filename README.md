@@ -4,13 +4,12 @@ This is a port of [BlinkDL/RWKV-LM](https://github.com/BlinkDL/RWKV-LM) to [gger
 
 **WORK IN PROGRESS: NOTHING WORKS YET!** If you know C/C++/ggml, please help!
 
-Inference code runs, but outputs all `NaN`s in logits, most probably due to missing operators.  Values are correct up to `ln0`: result of `ln0` matches with reference implementation.
+Inference code runs and outputs some correctly-looking numbers in logits. Values are checked to be correct at least up to `ln0`, they match with reference implementation.
 
 ## Plan
 
 1. Make FP32 inference work
-   1. Implement and use element-wise `max`, `exp`, `sigmoid`
-   2. Compare vectors step-by-step with reference implementation
+   1. Compare vectors step-by-step with reference implementation
 2. Validate states and logits against [reference implementation](https://github.com/BlinkDL/ChatRWKV/blob/main/RWKV_in_150_lines.py) by creating a testing script
 3. Heavily refactor code; optimize where possible
 4. Make FP16 inference work
