@@ -2,22 +2,18 @@
 
 This is a port of [BlinkDL/RWKV-LM](https://github.com/BlinkDL/RWKV-LM) to [ggerganov/ggml](https://github.com/ggerganov/ggml). The end goal is to allow 4-bit quanized inference on CPU.
 
-**WORK IN PROGRESS: NOTHING WORKS YET!** If you know C/C++/ggml, please help!
-
-**Status**: The model outputs correct logits for the first token (logits match reference implementation). But state saving is broken, so for every subsequent token logits are invalid.
+**WORK IN PROGRESS!** **Status**: FP32 inference works. For 64 tokens, logits from `rwkv.cpp` almost exactly match those from [reference implementation](https://github.com/BlinkDL/ChatRWKV/blob/main/RWKV_in_150_lines.py) (difference <= 0.00005 per token).
 
 ## Plan
 
-1. Make FP32 inference work
-   1. Fix state saving
-2. Validate states and logits against [reference implementation](https://github.com/BlinkDL/ChatRWKV/blob/main/RWKV_in_150_lines.py) by creating a testing script
-3. Heavily refactor code; optimize where possible
-4. Make FP16 inference work
-5. Create fancy interface with sockets/shared memory/pipes/something else
-6. Create Python wrapper with sampling and simple chat interface
-7. Write a good `README.md` and publish links to this repo
-8. Make INT4 inference work
-9. Create pull request to main `ggml` repo with all improvements made here
+1. Remove reference implementation code from this repo
+2. Heavily refactor code; optimize where possible
+3. Make FP16 inference work
+4. Create proper interface (probably, C library)
+5. Create Python wrapper with sampling and simple chat interface
+6. Write a good `README.md` and publish links to this repo
+7. Make INT4 inference work
+8. Create pull request to main `ggml` repo with all improvements made here
 
 ## Structure
 
