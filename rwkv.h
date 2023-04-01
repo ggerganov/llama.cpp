@@ -31,6 +31,8 @@ extern "C" {
 
     // Loads the model from a file and prepares it for inference.
     // Returns NULL on any error. Error messages would be printed to stderr.
+    // - model_file_path: path to model file in ggml format.
+    // - n_threads: count of threads to use, must be positive.
     RWKV_API struct rwkv_context * rwkv_init_from_file(const char * model_file_path, int n_threads);
 
     // Evaluates the model for a single token.
@@ -49,6 +51,13 @@ extern "C" {
 
     // Frees all allocated memory and the context.
     RWKV_API void rwkv_free(struct rwkv_context * ctx);
+
+    // Quantizes FP32 or FP16 model to one of INT4 formats.
+    // Returns false on any error. Error messages would be printed to stderr.
+    // - model_file_path_in: path to model file in ggml format, must be either FP32 or FP16.
+    // - model_file_path_out: quantized model will be written here.
+    // - q_type: set to 2 for GGML_TYPE_Q4_0, set to 3 for GGML_TYPE_Q4_1.
+    RWKV_API bool rwkv_quantize_model_file(const char * model_file_path_in, const char * model_file_path_out, int q_type);
 
     // Returns system information string.
     RWKV_API const char * rwkv_get_system_info_string(void);

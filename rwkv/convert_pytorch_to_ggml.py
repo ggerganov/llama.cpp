@@ -1,5 +1,5 @@
 # Converts an RWKV model checkpoint to an rwkv.cpp compatible file.
-# Usage: python convert_pytorch_rwkv_to_ggml.py C:\RWKV-4-Pile-169M-20220807-8023.pth C:\rwkv.cpp-169M.bin float32
+# Usage: python convert_pytorch_to_ggml.py C:\RWKV-4-Pile-169M-20220807-8023.pth C:\rwkv.cpp-169M.bin float32
 # Get model checkpoints from https://huggingface.co/BlinkDL
 
 # File format:

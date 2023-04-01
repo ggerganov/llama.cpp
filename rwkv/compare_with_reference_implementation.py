@@ -1,7 +1,7 @@
 # Compares logits from rwkv.cpp implementation of RWKV with logits from reference implementation of RWKV.
 # Reference logits were generated with RWKV-4-Pile-169M-20220807-8023.pth model in PyTorch.
 # Reference implementation code: https://github.com/BlinkDL/ChatRWKV/blob/0d0abf181356c6f27501274cad18bdf28c83a45b/RWKV_in_150_lines.py
-# Usage: python compare_cpp_with_reference_implementation.py bin\Release\main_rwkv.exe C:\rwkv.cpp-169M.bin
+# Usage: python compare_with_reference_implementation.py bin\Release\main_rwkv.exe C:\rwkv.cpp-169M.bin
 
 import os
 import struct
@@ -40,7 +40,10 @@ def main() -> None:
         header: Tuple[Any] = struct.unpack('=iiiiii', model_file.read(6 * 4))
         data_type: int = header[5]
 
-        assert data_type == 0 or data_type == 1, f'Unsupported model data type {data_type}'
+        assert data_type == 0 or\
+               data_type == 1 or\
+               data_type == 2 or\
+               data_type == 3, f'Unsupported model data type {data_type}'
 
         if data_type == 0:
             # FP32, high precision
@@ -48,6 +51,13 @@ def main() -> None:
         elif data_type == 1:
             # FP16, lower precision, so higher threshold
             threshold = 0.003
+        elif data_type == 2:
+            # INT4 quantized, even lower precision, so even higher threshold
+            # This threshold will let some bugs pass
+            threshold = 4.0
+        elif data_type == 3:
+            # This format stores more data, so error would be lower
+            threshold = 1.2
 
     model = None
 
