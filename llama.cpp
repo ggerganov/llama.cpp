@@ -1670,7 +1670,7 @@ int llama_model_quantize(
 
 // Returns the KV cache that will contain the context for the
 // ongoing prediction with the model.
-uint8_t* llama_get_kv_cache(struct llama_context * ctx) {
+const uint8_t * llama_get_kv_cache(struct llama_context * ctx) {
   return ctx->model.kv_self.buf.data();
 }
 
