@@ -326,10 +326,42 @@ static float table_f32_f16[1 << 16];
 // This is also true for POWER9.
 #if !defined(GGML_FP16_TO_FP32) || !defined(GGML_FP32_TO_FP16)
 
+// https://gist.github.com/rygorous/2144712
+// Public domain, by Fabian "ryg" Giesen
+inline static float ggml_half_to_float(uint16_t value) {
+    union FP32 {
+        uint32_t u;
+        float f;
+    };
+
+    const union FP32 magic = { (254UL - 15UL) << 23 };
+    const union FP32 was_inf_nan = { (127UL + 16UL) << 23 };
+
+    union FP32 out;
+
+    // Exponent/mantissa bits
+    out.u = (value & 0x7FFFU) << 13;
+    // Exponent adjust
+    out.f *= magic.f;
+
+    // Make sure Inf/NaN survive
+    if (out.f >= was_inf_nan.f) {
+        out.u |= 255UL << 23;
+    }
+
+    // Sign bit
+    out.u |= (value & 0x8000UL) << 16;
+
+    return out.f;
+}
+
 inline static float ggml_lookup_fp16_to_fp32(ggml_fp16_t f) {
-    uint16_t s;
-    memcpy(&s, &f, sizeof(uint16_t));
-    return table_f32_f16[s];
+    // For some reason, lookup table does not work on my machine:
+    // - Windows SDK version 10.0.19041.0
+    // - CMAKE_SYSTEM_PROCESSOR: AMD64
+    // Replaced lookup with some conversion code found online.
+    // TODO This must be properly debugged and fixed
+    return ggml_half_to_float(f);
 }
 
 #define GGML_FP16_TO_FP32(x) ggml_lookup_fp16_to_fp32(x)

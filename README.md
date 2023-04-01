@@ -2,12 +2,12 @@
 
 This is a port of [BlinkDL/RWKV-LM](https://github.com/BlinkDL/RWKV-LM) to [ggerganov/ggml](https://github.com/ggerganov/ggml). The end goal is to allow 4-bit quanized inference on CPU.
 
-**WORK IN PROGRESS!** **Status**: There is a Python wrapper, FP32 and FP16 inference work correctly. Currently, I'm working on INT4 quantization support.
+**WORK IN PROGRESS!** **Status**: FP32, FP16 and INT4 inference work. INT4 gives not so good quality, need to properly measure and compare perplexity.
 
 ## Plan
 
-1. Make INT4 inference work
-2. Create Python script with sampling and simple chat interface
+1. Create Python script with sampling and simple chat interface
+2. Measure performance and quality of different model sizes and data types
 3. Clean up the repo (remove llama related files and mentions)
 4. Write a good `README.md` and publish links to this repo
 5. Create pull request to main `ggml` repo with all improvements made here

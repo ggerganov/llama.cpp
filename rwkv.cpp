@@ -706,6 +706,7 @@ bool rwkv_quantize_model_file(const char * model_file_path_in, const char * mode
                 work.resize(nelements); // for quantization
 
                 size_t cur_size = 0;
+                // This is a histogramm of some values. If it shows single 1.0, then all 0.0, something went very wrong!
                 std::vector<int64_t> hist_cur(1 << 4, 0);
 
                 switch (type) {
