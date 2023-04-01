@@ -74,8 +74,8 @@ struct rwkv_layer {
 
 struct rwkv_model {
     int32_t n_vocab;
-    int32_t n_embed;
     int32_t n_layer;
+    int32_t n_embed;
     // 0 for float32, 1 for float16.
     int32_t data_type;
 
@@ -107,6 +107,26 @@ bool set_block_parameter(std::unordered_map<std::string, struct ggml_tensor *> *
     char full_key[128];
     sprintf(full_key, "blocks.%d.%s", block_index, key);
     return set_parameter(parameters, full_key, dest);
+}
+
+size_t get_memory_required_mb(int32_t n_vocab, int32_t n_layer, int32_t n_embed, int32_t data_type) {
+    if (n_vocab == 50277) {
+        // 169M to 1.5B are exact, others are extrapolated (slightly bigger than needed).
+        /* 169M */ if (n_layer == 12 && n_embed ==  768) return size_t(data_type == 0 ?   650 :   327);
+        /* 430M */ if (n_layer == 24 && n_embed == 1024) return size_t(data_type == 0 ?  1650 :   830);
+        /* 1.5B */ if (n_layer == 24 && n_embed == 2048) return size_t(data_type == 0 ?  5795 :  2907);
+        /*   3B */ if (n_layer == 32 && n_embed == 2560) return size_t(data_type == 0 ? 11590 :  5720); // TODO Measure exactly (FP32 only)
+        /*   7B */ if (n_layer == 32 && n_embed == 4096) return size_t(data_type == 0 ? 27043 : 13566); // TODO Measure exactly
+        /*  14B */ if (n_layer == 40 && n_embed == 5120) return size_t(data_type == 0 ? 54086 : 27132); // TODO Measure exactly
+    }
+
+    fprintf(
+        stderr,
+        "Unknown RWKV model configuration: n_vocab = %d, n_layer = %d, n_embed = %d, data_type = %d; allocating 4 GB of memory\n",
+        n_vocab, n_layer, n_embed, data_type
+    );
+
+    return size_t(4) * 1024;
 }
 
 // --- Operators ---
@@ -161,8 +181,7 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, int n_threads)
 
     // Initialize ggml
     struct ggml_init_params params;
-    // TODO Calculate required memory (automatically or manually)
-    params.mem_size = 1024 * 1024 * 1024;
+    params.mem_size = get_memory_required_mb(model->n_vocab, model->n_layer, model->n_embed, model->data_type) * 1024 * 1024;
     params.mem_buffer = NULL;
     struct ggml_context * ctx = ggml_init(params);
 
@@ -499,6 +518,9 @@ bool rwkv_eval(struct rwkv_context * ctx, long int token, float * state_in, floa
     }
 
     memcpy(logits_out, ctx->logits->data, ctx->logits->ne[0] * FP32_SIZE);
+
+    // Uncomment to measure used memory for adding the value into get_memory_required_mb.
+    //fprintf(stderr, "Used mem: %d MB\n", ggml_used_mem(ctx->ctx) / 1024 / 1024);
 
     return true;
 }
