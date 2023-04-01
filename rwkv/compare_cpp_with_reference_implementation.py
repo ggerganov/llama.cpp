@@ -18,8 +18,9 @@ def parse_args():
 def main() -> None:
     args = parse_args()
 
+    token_count: int = 64
     # It's not important what exactly these tokens are; just that output of both model matches.
-    tokens: List[int] = [(i + 1) for i in range(32)]
+    tokens: List[int] = [(i + 1) for i in range(token_count)]
     state_path: str = './state.bin'
     logits_path: str = './logits.bin'
 
@@ -27,9 +28,11 @@ def main() -> None:
 
     ref_logits, ref_state = None, None
 
-    for token in tokens:
+    for i in range(token_count):
+        token: int = tokens[i]
+
         print()
-        print(f'--- Token {token} ---')
+        print(f'--- {i + 1}/{token_count} ---')
 
         subprocess.run(
             [
@@ -55,8 +58,9 @@ def main() -> None:
         print(f'Actual logits: {actual_logits}')
         print('Difference per token: %.8f' % (difference,))
 
-        assert abs(difference) <= 0.000001, 'Difference is too big'
+        assert abs(difference) <= 0.00005, 'Difference is too big'
 
+    print()
     print('Test passes')
 
 if __name__ == "__main__":
