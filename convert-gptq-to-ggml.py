@@ -9,6 +9,7 @@ import struct
 import numpy as np
 import torch
 from sentencepiece import SentencePieceProcessor
+from ggml import *
 
 if len(sys.argv) != 4:
     print("Usage: convert-gptq-to-ggml.py llamaXXb-4bit.pt tokenizer.model out.bin\n")
@@ -143,7 +144,7 @@ def convert_q4(src_name, dst_name, permute=False):
                     .reshape(blob.shape))
 
     # header
-    write_header(shape, dst_name, 3) # ftype = Q4_1
+    write_header(shape, dst_name, GGML_FILE.Q4_1)
 
     # data
     blob.tofile(fout)

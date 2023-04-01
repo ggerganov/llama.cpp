@@ -54,6 +54,15 @@ enum e_model {
     MODEL_65B,
 };
 
+// model file types
+enum e_ftype {
+    FTYPE_F32  = 0,
+    FTYPE_F16  = 1,
+    FTYPE_Q4_0 = 2,
+    FTYPE_Q4_1 = 3,
+};
+static const char * ftype_str[] = { "f32", "f16", "q4_0", "q4_1" };
+
 static const size_t MB = 1024*1024;
 
 // computed for n_ctx == 2048
@@ -100,7 +109,7 @@ struct llama_hparams {
     int32_t n_head  = 32;
     int32_t n_layer = 32;
     int32_t n_rot   = 64;
-    int32_t f16     = 1;
+    int32_t f16     = FTYPE_F16;
 };
 
 struct llama_layer {
@@ -508,10 +517,10 @@ static bool llama_model_load(
     // wtype is for per-layer weights, while vtype is for other weights
     ggml_type wtype, vtype;
     switch (model.hparams.f16) {
-        case 0: wtype = vtype = GGML_TYPE_F32;  break;
-        case 1: wtype = vtype = GGML_TYPE_F16;  break;
-        case 2: wtype = vtype = GGML_TYPE_Q4_0; break;
-        case 3: wtype = vtype = GGML_TYPE_Q4_1; break;
+        case FTYPE_F32:  wtype = vtype = GGML_TYPE_F32;  break;
+        case FTYPE_F16:  wtype = vtype = GGML_TYPE_F16;  break;
+        case FTYPE_Q4_0: wtype = vtype = GGML_TYPE_Q4_0; break;
+        case FTYPE_Q4_1: wtype = vtype = GGML_TYPE_Q4_1; break;
         case 4: wtype = GGML_TYPE_Q4_1; vtype = GGML_TYPE_F16; break;
         default:
                 {
@@ -684,16 +693,15 @@ static bool llama_model_load(
                 return false;
             }
             if (0) {
-                static const char * ftype_str[] = { "f32", "f16", "q4_0", "q4_1", };
                 fprintf(stderr, "%24s - [%5d, %5d], type = %6s\n", name.data(), ne[0], ne[1], ftype_str[ftype]);
             }
 
             switch (ftype) {
-                case 0:  // f32
-                case 1:  // f16
+                case FTYPE_F32:
+                case FTYPE_F16:
                     break;
-                case 2:  // q4_0
-                case 3:  // q4_1
+                case FTYPE_Q4_0:
+                case FTYPE_Q4_1:
                     assert(ne[0] % 64 == 0);
                     break;
                 default:
@@ -1273,19 +1281,14 @@ static llama_vocab::id llama_sample_top_p_top_k(
 //
 
 // TODO: reuse code from the llama_model_load() somehow
-static bool llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, int itype) {
-    ggml_type type = GGML_TYPE_Q4_1;
+static bool llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, enum e_ftype itype) {
+    ggml_type type;
 
     switch (itype) {
-        case 2: type = GGML_TYPE_Q4_0; break;
-        case 3: type = GGML_TYPE_Q4_1; break;
-        default: fprintf(stderr, "%s: invalid quantization type %d\n", __func__, itype); return 1;
+        case FTYPE_Q4_0: type = GGML_TYPE_Q4_0; break;
+        case FTYPE_Q4_1: type = GGML_TYPE_Q4_1; break;
+        default: fprintf(stderr, "%s: invalid quantization type %d\n", __func__, itype); return false;
     };
-
-    if (type != GGML_TYPE_Q4_0 && type != GGML_TYPE_Q4_1) {
-        fprintf(stderr, "%s: invalid quantization type %d\n", __func__, type);
-        return false;
-    }
 
     llama_vocab vocab;
 
@@ -1438,7 +1441,6 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
             }
 
             {
-                static const char * ftype_str[] = { "f32", "f16", "q4_0", "q4_1", };
                 printf("%48s - [%5d, %5d], type = %6s ", name.data(), ne[0], ne[1], ftype_str[ftype]);
             }
 
@@ -1459,12 +1461,12 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
             quantize &= (n_dims == 2);
 
             if (quantize) {
-                if (ftype != 0 && ftype != 1) {
+                if (ftype != FTYPE_F32 && ftype != FTYPE_F16) {
                     fprintf(stderr, "%s: unsupported ftype %d for integer quantization\n", __func__, ftype);
                     return false;
                 }
 
-                if (ftype == 1) {
+                if (ftype == FTYPE_F16) {
                     data_f16.resize(nelements);
                     finp.read(reinterpret_cast<char *>(data_f16.data()), nelements * sizeof(ggml_fp16_t));
                     data_f32.resize(nelements);
@@ -1478,7 +1480,7 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
 
                 ftype = itype;
             } else {
-                const int bpe = (ftype == 0) ? sizeof(float) : sizeof(uint16_t);
+                const int bpe = (ftype == FTYPE_F32) ? sizeof(float) : sizeof(uint16_t);
 
                 data_u8.resize(nelements*bpe);
                 finp.read(reinterpret_cast<char *>(data_u8.data()), nelements * bpe);
@@ -1660,7 +1662,7 @@ int llama_model_quantize(
         const char * fname_inp,
         const char * fname_out,
                int   itype) {
-    if (!llama_model_quantize_internal(fname_inp, fname_out, itype)) {
+    if (!llama_model_quantize_internal(fname_inp, fname_out, (enum e_ftype)itype)) {
         fprintf(stderr, "%s: failed to quantize\n", __func__);
         return 1;
     }

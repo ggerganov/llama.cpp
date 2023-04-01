@@ -54,50 +54,7 @@ import sys
 import json
 import struct
 import numpy as np
-
-QK = 32
-
-GGML_TYPE_Q4_0  = 0
-GGML_TYPE_Q4_1  = 1
-GGML_TYPE_I8    = 2
-GGML_TYPE_I16   = 3
-GGML_TYPE_I32   = 4
-GGML_TYPE_F16   = 5
-GGML_TYPE_F32   = 6
-
-WTYPE_NAMES = {
-    0: "F32",
-    1: "F16",
-    2: "Q4_0",
-    3: "Q4_1",
-}
-
-WTYPES = {
-    0: GGML_TYPE_F32,
-    1: GGML_TYPE_F16,
-    2: GGML_TYPE_Q4_0,
-    3: GGML_TYPE_Q4_1,
-}
-
-GGML_BLCK_SIZE = {
-    GGML_TYPE_Q4_0:  QK,
-    GGML_TYPE_Q4_1:  QK,
-    GGML_TYPE_I8:    1,
-    GGML_TYPE_I16:   1,
-    GGML_TYPE_I32:   1,
-    GGML_TYPE_F16:   1,
-    GGML_TYPE_F32:   1,
-}
-
-GGML_TYPE_SIZE = {
-    GGML_TYPE_Q4_0: 4   + QK//2,
-    GGML_TYPE_Q4_1: 4*2 + QK//2,
-    GGML_TYPE_I8:   1,
-    GGML_TYPE_I16:  2,
-    GGML_TYPE_I32:  4,
-    GGML_TYPE_F16:  2,
-    GGML_TYPE_F32:  4,
-}
+from ggml import *
 
 HPARAMS = [
     'magic',    # int32
@@ -150,7 +107,7 @@ def ggml_nelements(shape):
 
 def ggml_nbytes(shape, ftype):
     x = ggml_nelements(shape)
-    t = WTYPES[ftype]
+    t = ggml_type_from_ftype[ftype]
     x *= GGML_TYPE_SIZE[t]
     x //= GGML_BLCK_SIZE[t]
     return x
@@ -177,10 +134,10 @@ def copy_tensors(fin, fout, part_id, n_parts):
         name = fin.read(length)
         data = fin.read(ggml_nbytes(partshape, ftype))
 
-        blck_size = GGML_BLCK_SIZE[WTYPES[ftype]]
-        type_size = GGML_TYPE_SIZE[WTYPES[ftype]]
+        blck_size = GGML_BLCK_SIZE[ggml_type_from_ftype[ftype]]
+        type_size = GGML_TYPE_SIZE[ggml_type_from_ftype[ftype]]
 
-        print(f"Processing tensor {name} with shape: {partshape} and type: {WTYPE_NAMES[ftype]}")
+        print(f"Processing tensor {name} with shape: {partshape} and type: {GGML_FILE(ftype).name}")
 
         # determine dimension along which multipart tensor is sharded
         #
@@ -222,7 +179,7 @@ def copy_tensors(fin, fout, part_id, n_parts):
 
         # ensure tensor data is aligned
         tensor_data_offset = fout.tell()
-        while tensor_data_offset % QK != 0:
+        while tensor_data_offset % 32 != 0:
             fout.write(struct.pack("B", 0))
             tensor_data_offset += 1
 

@@ -23,43 +23,7 @@ import numpy as np
 import torch
 
 from sentencepiece import SentencePieceProcessor
-
-QK = 32
-
-GGML_TYPE_Q4_0  = 0
-GGML_TYPE_Q4_1  = 1
-GGML_TYPE_I8    = 2
-GGML_TYPE_I16   = 3
-GGML_TYPE_I32   = 4
-GGML_TYPE_F16   = 5
-GGML_TYPE_F32   = 6
-
-WTYPES = {
-    0: GGML_TYPE_F32,
-    1: GGML_TYPE_F16,
-    2: GGML_TYPE_Q4_0,
-    3: GGML_TYPE_Q4_1,
-}
-
-GGML_BLCK_SIZE = {
-    GGML_TYPE_Q4_0:  QK,
-    GGML_TYPE_Q4_1:  QK,
-    GGML_TYPE_I8:    1,
-    GGML_TYPE_I16:   1,
-    GGML_TYPE_I32:   1,
-    GGML_TYPE_F16:   1,
-    GGML_TYPE_F32:   1,
-}
-
-GGML_TYPE_SIZE = {
-    GGML_TYPE_Q4_0: 4   + QK//2,
-    GGML_TYPE_Q4_1: 4*2 + QK//2,
-    GGML_TYPE_I8:   1,
-    GGML_TYPE_I16:  2,
-    GGML_TYPE_I32:  4,
-    GGML_TYPE_F16:  2,
-    GGML_TYPE_F32:  4,
-}
+from ggml import *
 
 def ggml_nelements(shape):
     r = 1
@@ -69,7 +33,7 @@ def ggml_nelements(shape):
 
 def ggml_nbytes(shape, ftype):
     x = ggml_nelements(shape)
-    t = WTYPES[ftype]
+    t = ggml_type_from_ftype[ftype]
     x *= GGML_TYPE_SIZE[t]
     x //= GGML_BLCK_SIZE[t]
     return x
@@ -155,8 +119,8 @@ def process_and_write_variables(fout, model, ftype, part_id, n_parts):
             print("  Converting to float32")
             data = data.astype(np.float32)
             ftype_cur = 0
-        blck_size = GGML_BLCK_SIZE[WTYPES[ftype_cur]]
-        type_size = GGML_TYPE_SIZE[WTYPES[ftype_cur]]
+        blck_size = GGML_BLCK_SIZE[ggml_type_from_ftype[ftype_cur]]
+        type_size = GGML_TYPE_SIZE[ggml_type_from_ftype[ftype_cur]]
 
         # determine dimension along which multipart tensor is sharded
         #
@@ -199,7 +163,7 @@ def process_and_write_variables(fout, model, ftype, part_id, n_parts):
 
         # ensure tensor data is aligned
         tensor_data_offset = fout.tell()
-        while tensor_data_offset % QK != 0:
+        while tensor_data_offset % 32 != 0:
             fout.write(struct.pack("B", 0))
             tensor_data_offset += 1
 
@@ -234,8 +198,7 @@ def process_and_write_variables(fout, model, ftype, part_id, n_parts):
 def main():
     args = parse_args()
     dir_model = args.dir_model
-    ftype = args.ftype
-    ftype_str = ["f32", "f16"]
+    ftype = GGML_FILE(args.ftype)
     hparams, tokenizer = load_hparams_and_tokenizer(dir_model)
 
     print(args)
@@ -252,7 +215,7 @@ def main():
         return
 
     n_parts = get_n_parts(hparams["dim"])
-    fname_out = f"{dir_model}/ggml-model-{ftype_str[ftype]}.bin"
+    fname_out = f"{dir_model}/ggml-model-{ftype.name.lower()}.bin"
 
     # we output a single file for ggml
     with open(fname_out, "wb") as fout:

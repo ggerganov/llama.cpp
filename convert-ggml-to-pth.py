@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from numba import njit
 from tqdm.auto import tqdm
-
+from ggml import *
 
 def read_header(fin):
     values = struct.unpack("i" * 9, fin.read(4 * 9))
@@ -37,9 +37,8 @@ def read_tokens(fin, vocab_size):
 
 @njit
 def dequantize_weights_numba(fin_data, n_rows, n_cols):
-    qk = 32
+    qk = GGML_BLCK_SIZE[GGML_TYPE.Q4_0]
     nb = n_cols // qk
-    bs = 4 + (qk // 2)
 
     weights = np.zeros((n_rows, n_cols), dtype=np.float32)
     data_pos = 0
@@ -63,9 +62,7 @@ def dequantize_weights_numba(fin_data, n_rows, n_cols):
 
 
 def dequantize_weights(fin, n_rows, n_cols):
-    qk = 32
-    nb = n_cols // qk
-    data_size = n_rows * n_cols // 2 + n_rows * nb * 4
+    data_size = n_rows * n_cols // GGML_BLCK_SIZE[GGML_TYPE.Q4_0] * GGML_TYPE_SIZE[GGML_TYPE.Q4_0]
     fin_data = fin.read(data_size)
     return dequantize_weights_numba(fin_data, n_rows, n_cols)
 
@@ -89,16 +86,16 @@ def read_variables(fin):
         tensor_data_offset = (tensor_data_offset + 31) & -32
         fin.seek(tensor_data_offset)
 
-        if ftype_cur == 2:
+        if ftype_cur == GGML_FILE.Q4_0:
             # 4-bit quantized weights
             dtype = np.uint8
             data = dequantize_weights(fin, shape[0], shape[1])
             data = data.reshape(shape)
-        elif ftype_cur == 0:
+        elif ftype_cur == GGML_FILE.F32:
             dtype = np.float32
             data_size = np.prod(shape)
             data = np.fromfile(fin, dtype=dtype, count=data_size).reshape(shape)
-        elif ftype_cur == 1:
+        elif ftype_cur == GGML_FILE.F16:
             dtype = np.float16
             data_size = np.prod(shape)
             data = np.fromfile(fin, dtype=dtype, count=data_size).reshape(shape)
@@ -269,6 +266,7 @@ def main():
 
     fin = open(ggml_files[0], "rb")
     hparams, ftype = read_header(fin)
+    GGML_FILE(ftype)    # raise ValueError on invalid file type
     tokens = read_tokens(fin, hparams["vocab_size"])
     model = read_variables(fin)
 
