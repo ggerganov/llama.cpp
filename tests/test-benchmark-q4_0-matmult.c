@@ -22,12 +22,6 @@
 #include <iterator>
 #include <algorithm>
 
-uint64_t rdtsc(){
-    unsigned int lo,hi;
-    __asm__ __volatile__ ("rdtsc" : "=a" (lo), "=d" (hi));
-    return ((uint64_t)hi << 32) | lo;
-}
-
 float tensor_sum_elements(struct ggml_tensor * tensor) {
     float sum = 0;
     if (tensor->type==6) { 
@@ -213,9 +207,9 @@ int main(int argc, char ** argv)  {
     printf("Matrix Multiplication of (%i,%i,%i) x (%i,%i,%i) - aboout %6.2f gFLOPS\n\n", sizex, sizey, 1, sizex, sizez, 1, 1.0f*flops_per_matrix / 1000 / 1000 / 1000);
    
 
-    // We cannot use the F32 result, because it will not be exactly the same (due to quantization)
-    // float sum_of_F32_reference = tensor_sum_elements(gf.nodes[0]);
-    float sum_of_F32_reference = 11611395072.00f;
+    // Let's use the F32 result from above as a reference for the q4_0 multiplication
+    float sum_of_F32_reference = tensor_sum_elements(gf.nodes[0]);
+    
 
     printf("Iteration;NThreads; SizeX; SizeY; SizeZ; Required_FLOPS; Elapsed_u_Seconds; FLOPS_per_u_Second\n");
     printf("==============================================================================================\n");
@@ -241,11 +235,18 @@ int main(int argc, char ** argv)  {
         TENSOR_DUMP("res",gf31.nodes[0])
 #endif
 
+        // Check that the matrix multiplication result is in the right ballpark        
+        // We cannot use the exact value from the F32 multiplication because the quantizuation will be slightly different
         float sum_of_Q4_result = tensor_sum_elements(gf31.nodes[0]);
-        if (sum_of_Q4_result != sum_of_F32_reference) {
-            printf("\nABORT - ERROR in Matrix Multiplication result - expected %6.2f, got %6.2f\n",
+        float delta = abs(sum_of_Q4_result - sum_of_F32_reference);
+        float allowed_delta = (sum_of_F32_reference) / 1000 / 1000; //  Let's accept an epsilon of 10^-6
+
+        if (delta > allowed_delta)  {
+            printf("\nABORT - ERROR in Matrix Multiplication result - expected %6.2f, got %6.2f (delta %6.2f > allowed_delta %6.2f)\n",
                 sum_of_F32_reference, 
-                sum_of_Q4_result
+                sum_of_Q4_result,
+                delta,
+                allowed_delta
             );
             exit(0);
         }
