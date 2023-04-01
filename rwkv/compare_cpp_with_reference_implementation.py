@@ -4,11 +4,12 @@
 # Usage: python compare_cpp_with_reference_implementation.py bin\Release\main_rwkv.exe C:\rwkv.cpp-169M.bin
 
 import os
+import struct
 import argparse
 import subprocess
 import torch
 import numpy as np
-from typing import List
+from typing import List, Tuple, Any
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Compare logits from rwkv.cpp implementation of RWKV with logits from reference implementation of RWKV')
@@ -31,6 +32,21 @@ def main() -> None:
                          4395, 2220, 253, 2454, 273, 253, 12685, 15, 495, 1244, 2656, 753, 13, 1281, 627, 320, 1708, 27, 285,
                          627, 369, 1708, 15, 577, 1244, 2656, 3047, 253, 1708, 13, 326, 352, 369, 1175, 27, 285, 2656, 4272,
                          253, 1708, 432, 253, 13862, 15]
+
+    threshold: float
+
+    with open(args.ggml_model_path, 'rb') as model_file:
+        header: Tuple[Any] = struct.unpack('=iiiiii', model_file.read(6 * 4))
+        data_type: int = header[5]
+
+        assert data_type == 0 or data_type == 1, f'Unsupported model data type {data_type}'
+
+        if data_type == 0:
+            # FP32, high precision
+            threshold = 0.000005
+        elif data_type == 1:
+            # FP16, lower precision, so higher threshold
+            threshold = 0.003
 
     def compare_logits(tokens_subset: List[int]) -> None:
         token_count: int = len(tokens_subset)
@@ -72,7 +88,7 @@ def main() -> None:
         print(f'Actual logits: {actual_logits}')
         print('Difference per token: %.8f' % (difference,))
 
-        assert abs(difference) <= 0.000005, 'Difference is too big'
+        assert abs(difference) <= threshold, 'Difference is too big'
 
     # Check small token amount first to avoid waiting too long before seeing that model is broken
     compare_logits(tokens[:4])

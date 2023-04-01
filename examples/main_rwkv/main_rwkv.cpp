@@ -210,8 +210,6 @@ void load_rwkv_model(ggml_context * ctx, char * file_path, struct rwkv_model * m
     read_int32(file, &(model->data_type));
     RWKV_ASSERT(model->data_type == 0 || model->data_type == 1, "Unsupported model data type %d", model->data_type);
 
-    RWKV_ASSERT(model->data_type == 0, "Data types other than float32 are not yet supported"); // TODO
-
     RWKV_LOG("n_vocab = %d", model->n_vocab);
     RWKV_LOG("n_embed = %d", model->n_embed);
     RWKV_LOG("n_layer = %d", model->n_layer);
@@ -236,7 +234,7 @@ void load_rwkv_model(ggml_context * ctx, char * file_path, struct rwkv_model * m
         read_int32(file, &data_type);
         RWKV_ASSERT(data_type == 0 || data_type == 1, "Unsupported parameter data type %d", data_type);
 
-        RWKV_ASSERT(data_type == 0, "Data types other than float32 are not yet supported"); // TODO
+        ggml_type ggml_data_type = data_type == 0 ? GGML_TYPE_F32 : GGML_TYPE_F16;
 
         struct ggml_tensor * tensor;
 
@@ -248,7 +246,7 @@ void load_rwkv_model(ggml_context * ctx, char * file_path, struct rwkv_model * m
         if (dim_count == 1) {
             read_int32(file, &x);
             element_count = x;
-            tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, x);
+            tensor = ggml_new_tensor_1d(ctx, ggml_data_type, x);
         } else if (dim_count == 2) {
             read_int32(file, &x);
             read_int32(file, &y);
@@ -257,7 +255,7 @@ void load_rwkv_model(ggml_context * ctx, char * file_path, struct rwkv_model * m
             // * PyTorch shape is (x rows, y columns)
             // * ggml shape is (y elements in a row, x elements in a column)
             // Both shapes represent the same tensor.
-            tensor = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, y, x);
+            tensor = ggml_new_tensor_2d(ctx, ggml_data_type, y, x);
         } else {
             abort();
         }
@@ -265,11 +263,7 @@ void load_rwkv_model(ggml_context * ctx, char * file_path, struct rwkv_model * m
         std::string key(key_length, 0);
         RWKV_ASSERT(fread(&key[0], 1, key_length, file) == key_length, "Failed to read parameter key");
 
-        size_t element_size = data_type == 0 ?
-            ggml_type_size(GGML_TYPE_F32) :
-            ggml_type_size(GGML_TYPE_F16);
-        size_t byte_count = element_count * element_size;
-
+        size_t byte_count = element_count * ggml_type_size(ggml_data_type);
         RWKV_ASSERT(fread(tensor->data, 1, byte_count, file) == byte_count, "Failed to read parameter data");
 
         parameters[key] = tensor;
@@ -322,8 +316,8 @@ void load_rwkv_model(ggml_context * ctx, char * file_path, struct rwkv_model * m
     // Verify order of dimensions
     struct ggml_tensor * emb = model->emb;
     RWKV_ASSERT(emb->n_dims == 2, "Unexpected dimension count of embedding matrix %d", emb->n_dims);
-    RWKV_ASSERT(emb->ne[0] == model->n_embed, "Unexpected dimension of embedding matrix %d", emb->ne[1]);
-    RWKV_ASSERT(emb->ne[1] == model->n_vocab, "Unexpected dimension of embedding matrix %d", emb->ne[0]);
+    RWKV_ASSERT(emb->ne[0] == model->n_embed, "Unexpected dimension of embedding matrix %d", emb->ne[0]);
+    RWKV_ASSERT(emb->ne[1] == model->n_vocab, "Unexpected dimension of embedding matrix %d", emb->ne[1]);
 }
 
 // --- Operators ---
