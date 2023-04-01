@@ -254,7 +254,7 @@ def main():
     parser.add_argument(
         "--hf",
         action="store_true",
-        help="Whether to save the model in the huggingface format. (default: False)",
+        help="Whether to save the model in the Hugging Face format. (default: False)",
     )
     parser.add_argument(
         "--chat", "-c", action="store_true", help="Whether to open a chat with the model. (default: False)"
