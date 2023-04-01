@@ -15,11 +15,111 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 #endif
+/*
+this is not part of original thpool, thats me hacking it to work on windows
+*/
+#if defined _MSC_VER || defined(__MINGW32__)
+#if !defined(__MINGW32__)
+#include <Windows.h>
+#else
+// ref: https://github.com/ggerganov/whisper.cpp/issues/168
+#include <windows.h>
+#endif
+
+unsigned int sleep(unsigned int seconds) {
+	Sleep(seconds * 1000);
+	return 0;
+}
+
+typedef HANDLE pthread_t;
+
+typedef DWORD thread_ret_t;
+static int pthread_create(pthread_t* out, void* unused, thread_ret_t(*func)(void*), void* arg) {
+    HANDLE handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) func, arg, 0, NULL);
+    if (handle == NULL)
+    {
+        return EAGAIN;
+    }
+
+    *out = handle;
+    return 0;
+}
+
+static int pthread_join(pthread_t thread, void* unused) {
+    return (int) WaitForSingleObject(thread, INFINITE);
+}
+
+static int pthread_detach(pthread_t thread) {
+	CloseHandle(thread);
+	return 0;
+}
+
+typedef struct pthread_mutex_tag {
+    CRITICAL_SECTION critical_section;
+} pthread_mutex_t;
+
+typedef struct pthread_mutexattr_tag {
+    int attr;
+} pthread_mutexattr_t;
+
+int pthread_mutex_init(pthread_mutex_t * mutex, const pthread_mutexattr_t * attr) {
+    InitializeCriticalSection (&mutex->critical_section);
+    return 0;
+}
+
+int pthread_mutex_destroy(pthread_mutex_t * mutex) {
+    DeleteCriticalSection(&mutex->critical_section);
+    return 0;
+}
+
+
+int pthread_mutex_lock(pthread_mutex_t * mutex) {
+    EnterCriticalSection(&mutex->critical_section);
+    return 0;
+}
+
+int pthread_mutex_unlock(pthread_mutex_t * mutex) {
+    LeaveCriticalSection(&mutex->critical_section);
+    return 0;
+}
+
+typedef struct pthread_cond_tag {
+    CONDITION_VARIABLE cond;
+} pthread_cond_t;
+
+int pthread_cond_init(pthread_cond_t * cond, void * unused) {
+    InitializeConditionVariable (&cond->cond);
+    return 0;
+}
+
+int pthread_cond_destroy(pthread_cond_t * cond) {
+    return 0;
+}
+
+int pthread_cond_wait(pthread_cond_t * cond, pthread_mutex_t * mutex) {
+    SleepConditionVariableCS(&cond->cond, &mutex->critical_section, INFINITE);
+    return 0;
+}
+
+int pthread_cond_broadcast(pthread_cond_t * cond) {
+    WakeAllConditionVariable(&cond->cond);
+    return 0;
+}
+
+int pthread_cond_signal(pthread_cond_t * cond) {
+    WakeConditionVariable(&cond->cond);
+    return 0;
+}
+#else
 #include <unistd.h>
+#include <pthread.h>
+#endif
+
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <pthread.h>
+
+
 #include <errno.h>
 #include <time.h>
 #if defined(__linux__)
@@ -247,16 +347,6 @@ void thpool_destroy(thpool_* thpool_p){
 	free(thpool_p);
 }
 
-
-/* Pause all threads in threadpool */
-void thpool_pause(thpool_* thpool_p) {
-	int n;
-	for (n=0; n < thpool_p->num_threads_alive; n++){
-		pthread_kill(thpool_p->threads[n]->pthread, SIGUSR1);
-	}
-}
-
-
 /* Resume all threads in threadpool */
 void thpool_resume(thpool_* thpool_p) {
     // resuming a single threadpool hasn't been
@@ -332,20 +422,22 @@ static void* thread_do(struct thread* thread_p){
 #elif defined(__APPLE__) && defined(__MACH__)
 	pthread_setname_np(thread_name);
 #else
-	err("thread_do(): pthread_setname_np is not supported on this system");
+	// err("thread_do(): pthread_setname_np is not supported on this system");
 #endif
 
 	/* Assure all threads have been created before starting serving */
 	thpool_* thpool_p = thread_p->thpool_p;
 
 	/* Register signal handler */
+	/*
+	///// HACK
 	struct sigaction act;
 	sigemptyset(&act.sa_mask);
 	act.sa_flags = 0;
 	act.sa_handler = thread_hold;
 	if (sigaction(SIGUSR1, &act, NULL) == -1) {
 		err("thread_do(): cannot handle SIGUSR1");
-	}
+	}*/
 
 	/* Mark thread as alive (initialized) */
 	pthread_mutex_lock(&thpool_p->thcount_lock);

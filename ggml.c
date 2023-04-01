@@ -52,78 +52,8 @@ static LONG atomic_fetch_sub(atomic_int* ptr, LONG dec) {
     return atomic_fetch_add(ptr, -(dec));
 }
 
-typedef HANDLE pthread_t;
-
-typedef DWORD thread_ret_t;
-static int pthread_create(pthread_t* out, void* unused, thread_ret_t(*func)(void*), void* arg) {
-    HANDLE handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) func, arg, 0, NULL);
-    if (handle == NULL)
-    {
-        return EAGAIN;
-    }
-
-    *out = handle;
-    return 0;
-}
-
-static int pthread_join(pthread_t thread, void* unused) {
-    return (int) WaitForSingleObject(thread, INFINITE);
-}
-
 static int sched_yield (void) {
     Sleep (0);
-    return 0;
-}
-
-typedef struct pthread_mutex_tag {
-    CRITICAL_SECTION critical_section;
-} pthread_mutex_t;
-
-typedef struct pthread_mutexattr_tag {
-    int attr;
-} pthread_mutexattr_t;
-
-int pthread_mutex_init(pthread_mutex_t * mutex, const pthread_mutexattr_t * attr) {
-    InitializeCriticalSection (&mutex->critical_section);
-    return 0;
-}
-
-int pthread_mutex_destroy(pthread_mutex_t * mutex) {
-    DeleteCriticalSection(&mutex->critical_section);
-    return 0;
-}
-
-
-int pthread_mutex_lock(pthread_mutex_t * mutex) {
-    EnterCriticalSection(&mutex->critical_section);
-    return 0;
-}
-
-int pthread_mutex_unlock(pthread_mutex_t * mutex) {
-    LeaveCriticalSection(&mutex->critical_section);
-    return 0;
-}
-
-typedef struct pthread_cond_tag {
-    CONDITION_VARIABLE cond;
-} pthread_cond_t;
-
-int pthread_cond_init(pthread_cond_t * cond, void * unused) {
-    InitializeConditionVariable (&cond->cond);
-    return 0;
-}
-
-int pthread_cond_destroy(pthread_cond_t * cond) {
-    return 0;
-}
-
-int pthread_cond_wait(pthread_cond_t * cond, pthread_mutex_t * mutex) {
-    SleepConditionVariableCS(&cond->cond, &mutex->critical_section, INFINITE);
-    return 0;
-}
-
-int pthread_cond_broadcast(pthread_cond_t * cond) {
-    WakeAllConditionVariable(&cond->cond);
     return 0;
 }
 
@@ -9042,13 +8972,9 @@ typedef int ggml_lock_t;
 
 #define GGML_LOCK_INITIALIZER 0
 
-typedef pthread_t ggml_thread_t;
 
 #define ggml_thread_create pthread_create
 #define ggml_thread_join   pthread_join
-
-typedef pthread_mutex_t ggml_mutex_t;
-typedef pthread_cond_t ggml_cond_t;
 
 #define ggml_mutex_init       pthread_mutex_init
 #define ggml_mutex_destroy    pthread_mutex_destroy
@@ -9063,19 +8989,10 @@ typedef pthread_cond_t ggml_cond_t;
 #endif
 
 struct ggml_compute_state_shared {
-
     int n_threads;
-
-    // synchronization primitives
-    int  n_ready;
-    bool has_work;
-    bool stop; // stop all threads
-    ggml_mutex_t mutex;
-    ggml_cond_t cond;
 };
 
 struct ggml_compute_state {
-    ggml_thread_t thrd;
 
     struct ggml_compute_params params;
     struct ggml_tensor * node;
@@ -9097,11 +9014,6 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
     const int n_threads = cgraph->n_threads;
     struct ggml_compute_state_shared state_shared = {
         /*.n_threads =*/ n_threads,
-        /*.n_ready   =*/ 0,
-        /*.has_work  =*/ false,
-        /*.stop      =*/ false,
-        /*.mutex     =*/ {0},
-        /*.cond      =*/ {0},
     };
     struct ggml_compute_state * workers = n_threads > 1 ? alloca(sizeof(struct ggml_compute_state)*(n_threads - 1)) : NULL;
 
@@ -9110,7 +9022,6 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         ctx->tpool = thpool_init(n_threads);
         for (int j = 0; j < n_threads - 1; j++) {
             workers[j] = (struct ggml_compute_state) {
-                .thrd   = 0,
                 .params = {
                     .type  = GGML_TASK_COMPUTE,
                     .ith   = j + 1,
