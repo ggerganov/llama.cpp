@@ -4618,14 +4618,14 @@ struct ggml_tensor * ggml_diag_mask_inf(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         int                   n_past) {
-    ggml_diag_mask_inf_impl(ctx, a, n_past, false);
+    return ggml_diag_mask_inf_impl(ctx, a, n_past, false);
 }
 
 struct ggml_tensor * ggml_diag_mask_inf_inplace(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         int                   n_past) {
-    ggml_diag_mask_inf_impl(ctx, a, n_past, true);
+    return ggml_diag_mask_inf_impl(ctx, a, n_past, true);
 }
 
 // ggml_soft_max
@@ -4654,12 +4654,12 @@ struct ggml_tensor * ggml_soft_max_impl(
 struct ggml_tensor * ggml_soft_max(
         struct ggml_context * ctx,
         struct ggml_tensor  * a) {
-    ggml_soft_max_impl(ctx, a, false);
+    return ggml_soft_max_impl(ctx, a, false);
 }
 struct ggml_tensor * ggml_soft_max_inplace(
         struct ggml_context * ctx,
         struct ggml_tensor  * a) {
-    ggml_soft_max_impl(ctx, a, true);
+    return ggml_soft_max_impl(ctx, a, true);
 }
 
 // ggml_rope
@@ -4699,7 +4699,7 @@ struct ggml_tensor * ggml_rope(
         int                   n_past,
         int                   n_dims,
         int                   mode){
-    ggml_rope_impl(ctx, a, n_past, n_dims, mode, false);
+    return ggml_rope_impl(ctx, a, n_past, n_dims, mode, false);
 }
 
 struct ggml_tensor * ggml_rope_inplace(
@@ -4708,7 +4708,7 @@ struct ggml_tensor * ggml_rope_inplace(
         int                   n_past,
         int                   n_dims,
         int                   mode){
-    ggml_rope_impl(ctx, a, n_past, n_dims, mode, true);
+    return ggml_rope_impl(ctx, a, n_past, n_dims, mode, true);
 }
 
 // ggml_conv_1d_1s
