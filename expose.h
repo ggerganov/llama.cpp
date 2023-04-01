@@ -26,3 +26,4 @@ struct generation_outputs
     int status = -1;
     char text[16384]; //16kb should be enough for any response
 };
+

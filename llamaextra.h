@@ -21,13 +21,15 @@ enum FileFormat
     FAIL=0,
     GGML=1,
     GGHF=2,
-    GGJT=3    
+    GGJT=3,
+
+    GPTJ1=100,
+    GPTJ2=101
 };
 
-void print_tok_vec(std::vector<int> &embd);
 void timer_start();
 double timer_check();
-
+void print_tok_vec(std::vector<int> &embd);
 FileFormat check_file_format(const std::string & fname);
 
 std::vector<llama_token> legacy_llama_tokenize(struct llama_context * ctx, const std::string & text, bool add_bos);

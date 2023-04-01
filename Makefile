@@ -206,7 +206,7 @@ endif
 
 BLAS_BUILD = 
 ifeq ($(OS),Windows_NT)
-	BLAS_BUILD = $(CXX) $(CXXFLAGS) ggml_blas.o common.o extra.o expose.o model_adapter.o libopenblas.lib -shared -o llamacpp_blas.dll $(LDFLAGS)
+	BLAS_BUILD = $(CXX) $(CXXFLAGS) ggml_blas.o expose.o llama_adapter.o llamaextra.o common.o libopenblas.lib -shared -o llamacpp_blas.dll $(LDFLAGS)
 else
 	BLAS_BUILD = @echo 'Your OS is $(OS) and does not appear to be Windows. If you want to use openblas, please link it manually with LLAMA_OPENBLAS=1'
 endif
@@ -247,14 +247,17 @@ llama.o: llama.cpp llama.h
 common.o: examples/common.cpp examples/common.h
 	$(CXX) $(CXXFLAGS) -c examples/common.cpp -o common.o
 
-extra.o: extra.cpp extra.h
-	$(CXX) $(CXXFLAGS) -c extra.cpp -o extra.o
+llamaextra.o: llamaextra.cpp llamaextra.h
+	$(CXX) $(CXXFLAGS) -c llamaextra.cpp -o llamaextra.o
 
 expose.o: expose.cpp expose.h
 	$(CXX) $(CXXFLAGS) -c expose.cpp -o expose.o
 
-model_adapter.o: 
-	$(CXX) $(CXXFLAGS) -c llama_adapter.cpp -o model_adapter.o
+llama_adapter.o: 
+	$(CXX) $(CXXFLAGS) -c llama_adapter.cpp -o llama_adapter.o
+	
+gptj_adapter.o: ggml_old_v1.o
+	$(CXX) $(CXXFLAGS) otherarch/gptj_old.cpp otherarch/utils.cpp ggml_old_v1.o gptj_adapter.cpp -o gptj_adapter.o
 
 clean:
 	rm -vf *.o main quantize perplexity embedding main.exe quantize.exe llamacpp.dll llamacpp_blas.dll gpt2.exe gptj.exe
@@ -269,10 +272,10 @@ gptj: ggml_old_v1.o
 	$(CXX) $(CXXFLAGS) otherarch/gptj_old.cpp otherarch/utils.cpp ggml_old_v1.o -o gptj $(LDFLAGS)
 
 
-llamalib: ggml.o common.o extra.o expose.o model_adapter.o
-	$(CXX) $(CXXFLAGS) ggml.o common.o extra.o expose.o model_adapter.o -shared -o llamacpp.dll $(LDFLAGS)
+llamalib: ggml.o expose.o llama_adapter.o llamaextra.o common.o
+	$(CXX) $(CXXFLAGS) expose.o ggml.o llama_adapter.o llamaextra.o common.o -shared -o llamacpp.dll $(LDFLAGS)
 
-llamalib_blas: ggml_blas.o common.o extra.o expose.o model_adapter.o
+llamalib_blas: ggml_blas.o expose.o llama_adapter.o llamaextra.o common.o
 	$(BLAS_BUILD)
 	
 quantize: examples/quantize/quantize.cpp ggml.o llama.o

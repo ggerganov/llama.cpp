@@ -9,7 +9,9 @@
 
 #include "model_adapter.h"
 #include "expose.h"
-#include "extra.h"
+#include "llamaextra.h"
+
+
 
 extern "C"
 {

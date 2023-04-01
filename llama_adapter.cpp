@@ -19,7 +19,7 @@ static gpt_params params;
 static int n_past = 0;
 static int n_threads = 4;
 static int n_batch = 8;
-static std::string model;
+static std::string modelname;
 static llama_context *ctx;
 static std::vector<llama_token> last_n_tokens;
 static std::vector<llama_token> current_context_tokens;
@@ -32,7 +32,7 @@ bool llama_load_model(const load_model_inputs inputs, FileFormat in_file_format)
 
     n_threads = inputs.threads;
     n_batch = inputs.batch_size;
-    model = inputs.model_filename;
+    modelname = inputs.model_filename;
 
     ctx_params.n_ctx = inputs.max_context_length;
     ctx_params.n_parts = inputs.n_parts_overwrite;
@@ -44,16 +44,16 @@ bool llama_load_model(const load_model_inputs inputs, FileFormat in_file_format)
 
     if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF)
     {
-        ctx = legacy_llama_init_from_file(model.c_str(), ctx_params);
+        ctx = legacy_llama_init_from_file(modelname.c_str(), ctx_params);
     }
     else
     {
-        ctx = llama_init_from_file(model.c_str(), ctx_params);
+        ctx = llama_init_from_file(modelname.c_str(), ctx_params);
     }
 
     if (ctx == NULL)
     {
-        fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, model.c_str());
+        fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, modelname.c_str());
         return false;
     }
 
