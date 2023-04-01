@@ -9,11 +9,12 @@ import argparse
 import subprocess
 import torch
 import numpy as np
+import rwkv_cpp
 from typing import List, Tuple, Any
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Compare logits from rwkv.cpp implementation of RWKV with logits from reference implementation of RWKV')
-    parser.add_argument('main_executable_path', help='Path to main rwkv.cpp executable file')
+    parser.add_argument('main_executable_path', help='Path to main rwkv.cpp executable file or shared library')
     parser.add_argument('ggml_model_path', help='Path to rwkv.cpp checkpoint file')
     return parser.parse_args()
 
@@ -48,28 +49,42 @@ def main() -> None:
             # FP16, lower precision, so higher threshold
             threshold = 0.003
 
+    model = None
+
+    if args.main_executable_path.lower().endswith('.dll') or args.main_executable_path.lower().endswith('.so'):
+        print('Testing shared library')
+
+        model = rwkv_cpp.RWKVModel(args.main_executable_path, args.ggml_model_path)
+    else:
+        print('Testing main_rwkv executable')
+
     def compare_logits(tokens_subset: List[int]) -> None:
         token_count: int = len(tokens_subset)
         state_path: str = './state.bin'
         logits_path: str = './logits.bin'
+
+        logits, state = None, None
 
         for i in range(token_count):
             token: int = tokens_subset[i]
 
             print(f'{i + 1}/{token_count}')
 
-            subprocess.run(
-                [
-                    args.main_executable_path,
-                    args.ggml_model_path,
-                    str(token),
-                    # If this is the first token, let the script create a new state.
-                    '' if i == 0 else state_path,
-                    state_path,
-                    logits_path
-                ],
-                check=True
-            )
+            if model is not None:
+                logits, state = model.eval(token, state)
+            else:
+                subprocess.run(
+                    [
+                        args.main_executable_path,
+                        args.ggml_model_path,
+                        str(token),
+                        # If this is the first token, let the script create a new state.
+                        '' if i == 0 else state_path,
+                        state_path,
+                        logits_path
+                    ],
+                    check=True
+                )
 
         expected_logits_path: str = f'expected_logits_169M_20220807_8023_{len(tokens_subset)}_tokens.bin'
 
@@ -79,8 +94,11 @@ def main() -> None:
         with open(expected_logits_path, 'rb') as logits_file:
             expected_logits = torch.tensor(np.frombuffer(logits_file.read(), dtype=np.single))
 
-        with open(logits_path, 'rb') as logits_file:
-            actual_logits = torch.tensor(np.frombuffer(logits_file.read(), dtype=np.single))
+        if model is not None:
+            actual_logits = logits
+        else:
+            with open(logits_path, 'rb') as logits_file:
+                actual_logits = torch.tensor(np.frombuffer(logits_file.read(), dtype=np.single))
 
         difference: float = (torch.sum(expected_logits - actual_logits) / len(expected_logits)).item()
 
@@ -96,6 +114,9 @@ def main() -> None:
 
     print()
     print('Test passes')
+
+    if model is not None:
+        model.free()
 
 if __name__ == "__main__":
     main()

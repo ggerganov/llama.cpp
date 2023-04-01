@@ -29,13 +29,13 @@ extern "C" {
 
     struct rwkv_context;
 
-    // Loads the model from a file and prepares it for inference by allocating memory and building computation graph.
+    // Loads the model from a file and prepares it for inference.
     // Returns NULL on any error. Error messages would be printed to stderr.
     RWKV_API struct rwkv_context * rwkv_init_from_file(const char * model_file_path, int n_threads);
 
-    // Evaluates the model for a single pass.
+    // Evaluates the model for a single token.
     // Returns false on any error. Error messages would be printed to stderr.
-    // - token: next token index, in range 0..n_vocab - 1.
+    // - token: next token index, in range 0 <= token < n_vocab.
     // - state_in: FP32 buffer of size rwkv_get_state_buffer_element_count; or NULL, if this is a first pass.
     // - state_out: FP32 buffer of size rwkv_get_state_buffer_element_count. This buffer will be written to.
     // - logits_out: FP32 buffer of size rwkv_get_logits_buffer_element_count. This buffer will be written to.

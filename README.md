@@ -2,21 +2,21 @@
 
 This is a port of [BlinkDL/RWKV-LM](https://github.com/BlinkDL/RWKV-LM) to [ggerganov/ggml](https://github.com/ggerganov/ggml). The end goal is to allow 4-bit quanized inference on CPU.
 
-**WORK IN PROGRESS!** **Status**: FP32 and FP16 inference work correctly. Currently, I'm working on creating usable C library interface and Python wrapper for it.
+**WORK IN PROGRESS!** **Status**: There is a Python wrapper, FP32 and FP16 inference work correctly. Currently, I'm working on INT4 quantization support.
 
 ## Plan
 
-1. Create proper interface (probably, C library)
-2. Create Python wrapper with sampling and simple chat interface
-3. Write a good `README.md` and publish links to this repo
-4. Make INT4 inference work
+1. Make INT4 inference work
+2. Create Python script with sampling and simple chat interface
+3. Clean up the repo (remove llama related files and mentions)
+4. Write a good `README.md` and publish links to this repo
 5. Create pull request to main `ggml` repo with all improvements made here
 
 ## Structure
 
 This repo is based on the [llama.cpp repo](https://github.com/ggerganov/llama.cpp). RWKV-related code is in these directories:
 
-- `./rwkv`: directory containing Python scripts for conversion and validation
+- `./rwkv`: directory containing Python scripts for conversion, inference and validation
 - `./examples/main_rwkw`: directory containing script that loads and infers RWKV model
 
 Please do not change files in other directories — this will make pulling recent changes easier.
@@ -27,25 +27,39 @@ Please do not change files in other directories — this will make pulling recen
 
 Requirements: [git](https://gitforwindows.org/), [CMake](https://cmake.org/download/), MSVC compiler, Python 3.x with PyTorch.
 
-Clone the repo and set it up for build:
+#### 1. Clone the repo and build it:
 
 ```commandline
 git clone https://github.com/saharNooby/rwkv.cpp.git
 cd rwkv.cpp
-cmake .
+cmake -DBUILD_SHARED_LIBS=ON -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF .
+cmake --build . --config Release
 ```
 
-Download an RWKV model from [Huggingface](https://huggingface.co/BlinkDL) and convert it into `ggml` format:
+If everything went OK, `bin\Release\rwkv.dll` file should appear.
+
+#### 2. Download an RWKV model from [Huggingface](https://huggingface.co/BlinkDL) and convert it into `ggml` format:
 
 ```commandline
 python rwkv\convert_pytorch_rwkv_to_ggml.py C:\RWKV-4-Pile-169M-20220807-8023.pth C:\rwkv.cpp-169M.bin float32
 ```
 
-Compile and run the script:
+#### 3. Use the model in Python:
 
-```commandline
-cmake --build . --config Release
-bin\Release\main_rwkv.exe "C:\rwkv.cpp-169M.bin" 123 "C:\state_in.bin" "C:\state_out.bin" "C:\logits_out.bin"
+```python
+# This file is located at rwkv/rwkv_cpp.py
+import rwkv_cpp
+
+model = rwkv_cpp.RWKVModel(r'bin\Release\rwkv.dll', r'C:\rwkv.cpp-169M.bin')
+
+logits, state = None, None
+
+for token in [1, 2, 3]:
+    logits, state = model.eval(token, state)
+    
+    print(f'Output logits: {logits}')
+
+# Don't forget to free memory after you've done working with the model
+model.free()
+
 ```
-
-The script will read state from `state_in.bin`, do single inference using the state and token `123` as an input, save new state into `state_out.bin` and logits into `logits_out.bin`.
