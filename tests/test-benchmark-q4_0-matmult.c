@@ -214,8 +214,6 @@ int main(int argc, char ** argv)  {
     printf("Iteration;NThreads; SizeX; SizeY; SizeZ; Required_FLOPS; Elapsed_u_Seconds; FLOPS_per_u_Second\n");
     printf("==============================================================================================\n");
     
-    setlocale(LC_ALL,"de_DE_UTF8");
-    
     for (int i=0;i<10;i++) {
     
         long long int start = ggml_time_us();
