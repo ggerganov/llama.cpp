@@ -85,7 +85,7 @@ extern "C" {
 
     // Returns the KV cache that will contain the context for the
     // ongoing prediction with the model.
-    LLAMA_API uint8_t* llama_get_kv_cache(struct llama_context * ctx);
+    LLAMA_API const uint8_t * llama_get_kv_cache(struct llama_context * ctx);
 
     // Returns the size of the KV cache
     LLAMA_API size_t llama_get_kv_cache_size(struct llama_context * ctx);
