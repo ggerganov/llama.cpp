@@ -240,6 +240,10 @@ add_library(llama
             llama.cpp
             llama.h)
 
+add_library(rwkv
+            rwkv.cpp
+            rwkv.h)
+
 target_include_directories(llama PUBLIC .)
 target_compile_features(llama PUBLIC cxx_std_11) # don't bump
 target_link_libraries(llama PRIVATE ggml ${LLAMA_EXTRA_LIBS})

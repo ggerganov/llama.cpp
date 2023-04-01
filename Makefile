@@ -228,6 +228,9 @@ ggml.o: ggml.c ggml.h
 llama.o: llama.cpp llama.h
 	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
 
+rwkv.o: rwkv.cpp rwkv.h
+	$(CXX) $(CXXFLAGS) -c rwkv.cpp -o rwkv.o
+
 common.o: examples/common.cpp examples/common.h
 	$(CXX) $(CXXFLAGS) -c examples/common.cpp -o common.o
 
