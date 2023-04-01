@@ -96,7 +96,7 @@ extern "C" {
     // Sets the KV cache containing the current context for the model
     LLAMA_API void llama_set_kv_cache(
             struct llama_context * ctx,
-                         uint8_t * kv_cache,
+                         const uint8_t * kv_cache,
                             size_t n_size,
                                int n_token_count);
 
