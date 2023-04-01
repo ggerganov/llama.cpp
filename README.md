@@ -6,14 +6,13 @@ This is a port of [BlinkDL/RWKV-LM](https://github.com/BlinkDL/RWKV-LM) to [gger
 
 ## Plan
 
-1. Remove reference implementation code from this repo
-2. Heavily refactor code; optimize where possible
-3. Make FP16 inference work
-4. Create proper interface (probably, C library)
-5. Create Python wrapper with sampling and simple chat interface
-6. Write a good `README.md` and publish links to this repo
-7. Make INT4 inference work
-8. Create pull request to main `ggml` repo with all improvements made here
+1. Heavily refactor code; optimize where possible
+2. Make FP16 inference work
+3. Create proper interface (probably, C library)
+4. Create Python wrapper with sampling and simple chat interface
+5. Write a good `README.md` and publish links to this repo
+6. Make INT4 inference work
+7. Create pull request to main `ggml` repo with all improvements made here
 
 ## Structure
 
