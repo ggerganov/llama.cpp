@@ -50,18 +50,25 @@ float tensor_sum_elements(struct ggml_tensor * tensor) {
         TENSOR->ne[0], TENSOR->ne[1], TENSOR->ne[2], TENSOR->nb[0], TENSOR->nb[1], TENSOR->nb[2]); \
     { float sum = tensor_sum_elements(TENSOR); printf("Sum of tensor %s is %6.2f\n",#TENSOR, sum); }
 
-void print_usage(int /*argc*/, char ** argv, const int n_threads) {
+struct benchmark_params_struct {    
+    int32_t n_threads     = 1;
+    int32_t n_iterations  = 10;
+};
+
+void print_usage(int /*argc*/, char ** argv, struct benchmark_params_struct params) {
     fprintf(stderr, "usage: %s [options]\n", argv[0]);
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -h, --help            show this help message and exit\n");
-    fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", n_threads);
+    fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
+    fprintf(stderr, "  -i N, --iter N     number of iterations to use during computation (default: %d)\n", params.n_iterations);
     fprintf(stderr, "\n");
 }
 
 int main(int argc, char ** argv)  {
 
-    int n_threads = 1;
+    
+    struct benchmark_params_struct benchmark_params;
 
     bool invalid_param = false;
     std::string arg;
@@ -73,14 +80,20 @@ int main(int argc, char ** argv)  {
                 invalid_param = true;
                 break;
             }
-            n_threads = std::stoi(argv[i]);
-        } else if (arg == "-h" || arg == "--help") {
-            print_usage(argc, argv, n_threads);
+            benchmark_params.n_threads = std::stoi(argv[i]);
+        } else if (arg == "-i" || arg == "--iter") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            benchmark_params.n_iterations = std::stoi(argv[i]);
+        }  else if (arg == "-h" || arg == "--help") {
+            print_usage(argc, argv, benchmark_params);
             exit(0);
         }     
         if (invalid_param) {
             fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
-            print_usage(argc, argv, n_threads);
+            print_usage(argc, argv, benchmark_params);
             exit(1);
         }
     }
@@ -156,7 +169,7 @@ int main(int argc, char ** argv)  {
     // printf("Creating compute graph\n");
     struct ggml_cgraph gf = ggml_build_forward(m11xm2);
     
-    gf.n_threads=n_threads;
+    gf.n_threads=benchmark_params.n_threads;
     printf("cgraph->n_threads=%i\n",gf.n_threads); 
     
     TENSOR_DUMP(m11);
@@ -184,7 +197,7 @@ int main(int argc, char ** argv)  {
         
     // printf("Creating compute graph\n");
     struct ggml_cgraph gf31 = ggml_build_forward(q31);
-    gf31.n_threads=n_threads;
+    gf31.n_threads=benchmark_params.n_threads;
     
     // Set up a second graph computation to make sure we override the CPU cache lines    
     // printf("Creating new tensor q12 & Running quantize\n");
@@ -196,7 +209,7 @@ int main(int argc, char ** argv)  {
         
     //printf("Creating compute graph\n");
     struct ggml_cgraph gf32 = ggml_build_forward(q32);
-    gf32.n_threads=1;
+    gf32.n_threads=benchmark_params.n_threads;
     printf("cgraph->n_threads=%i\n",gf31.n_threads); 
     
     const int dimx = sizex;
@@ -214,7 +227,7 @@ int main(int argc, char ** argv)  {
     printf("Iteration;NThreads; SizeX; SizeY; SizeZ; Required_FLOPS; Elapsed_u_Seconds; FLOPS_per_u_Second\n");
     printf("==============================================================================================\n");
     
-    for (int i=0;i<10;i++) {
+    for (int i=0;i<benchmark_params.n_iterations ;i++) {
     
         long long int start = ggml_time_us();
         //printf("Running ggml_graph_compute\n");
