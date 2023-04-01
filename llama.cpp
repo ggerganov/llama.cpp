@@ -3,6 +3,7 @@
 #include "ggml.h"
 
 #include <cinttypes>
+#include <float.h>
 #include <fstream>
 #include <random>
 #include <map>
@@ -1756,6 +1757,12 @@ llama_token llama_sample_top_p_top_k(
 
     // TODO: avoid this ...
     const auto last_n_tokens = std::vector<llama_token>(last_n_tokens_data, last_n_tokens_data + last_n_tokens_size);
+
+    if (std::abs(temp) < FLT_EPSILON) {
+        temp = 0.8f;
+        top_k = 1.0f;
+        top_p = 0.0f;
+    }
 
     result = llama_sample_top_p_top_k(
             *ctx,
