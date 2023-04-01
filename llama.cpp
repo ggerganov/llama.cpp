@@ -1686,7 +1686,7 @@ int llama_get_kv_cache_token_count(struct llama_context * ctx) {
 // Sets the KV cache containing the current context for the model
 void llama_set_kv_cache(
         struct llama_context * ctx,
-                     uint8_t * kv_cache,
+                     const uint8_t * kv_cache,
                         size_t n_size,
                            int n_token_count) {
   // Make sure we have the same kv cache setup
