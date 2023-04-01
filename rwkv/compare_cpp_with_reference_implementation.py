@@ -72,7 +72,7 @@ def main() -> None:
         print(f'Actual logits: {actual_logits}')
         print('Difference per token: %.8f' % (difference,))
 
-        assert abs(difference) <= 0.00005, 'Difference is too big'
+        assert abs(difference) <= 0.000005, 'Difference is too big'
 
     # Check small token amount first to avoid waiting too long before seeing that model is broken
     compare_logits(tokens[:4])

@@ -23,6 +23,7 @@
 #   int32 key_length;
 #   // 0 if float32, 1 if float16.
 #   int32 data_type;
+#   // Same values and order as in PyTorch's tensor.shape
 #   int32[dim_count] shape;
 #   // Keys are like "emb.weight", "block.0.ln1.weight".
 #   uint8[key_length] key_utf8;
@@ -89,10 +90,6 @@ def write_state_dict(state_dict: Dict[str, torch.Tensor], dest_path: str, data_t
             if data_type == 'float16' and len(tensor.shape) > 1:
                 tensor = tensor.half()
 
-            if k == 'emb.weight':
-                # Allows embedding matrix to be multiplied by one-hot vector
-                tensor = torch.permute(tensor, dims=[i for i in reversed(range(len(tensor.shape)))]).contiguous()
-
             shape = tensor.shape
 
             print(f'Writing {k}, shape {shape}, type {tensor.dtype}')
@@ -153,10 +150,10 @@ def test() -> None:
             2,
             10,
             0,
-            2, 3,
+            3, 2,
             'emb.weight'.encode('utf-8'),
-            1.0, 3.0, 5.0,
-            2.0, 4.0, 6.0,
+            1.0, 2.0, 3.0,
+            4.0, 5.0, 6.0,
             # blocks.0.ln1.weight
             1,
             19,
