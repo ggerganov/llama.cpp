@@ -18,6 +18,35 @@
  #include <alloca.h>
  #endif
 
+static clock_t bench_timer = 0;
+
+void timer_start()
+{
+    bench_timer = clock();
+}
+double timer_check()
+{
+    double ticks = clock() - bench_timer;
+    double time_taken = ((double)ticks) / CLOCKS_PER_SEC;
+    return time_taken;
+}
+
+void print_tok_vec(std::vector<int> &embd)
+{
+    std::cout << "[";
+    bool first = true;
+    for (auto i : embd)
+    {
+        if (!first)
+        {
+            std::cout << ',';
+        }
+        first = false;
+        std::cout << i;
+    }
+    std::cout << "]";
+}
+
 //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt) 
  FileFormat check_file_format(const std::string & fname)
  {

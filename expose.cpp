@@ -7,7 +7,7 @@
 //No dynamic memory allocation! Setup structs with FIXED (known) shapes and sizes for ALL output fields
 //Python will ALWAYS provide the memory, we just write to it.
 
-#include "llama_adapter.h"
+#include "model_adapter.h"
 #include "expose.h"
 #include "extra.h"
 

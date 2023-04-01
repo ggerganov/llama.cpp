@@ -24,6 +24,10 @@ enum FileFormat
     GGJT=3    
 };
 
+void print_tok_vec(std::vector<int> &embd);
+void timer_start();
+double timer_check();
+
 FileFormat check_file_format(const std::string & fname);
 
 std::vector<llama_token> legacy_llama_tokenize(struct llama_context * ctx, const std::string & text, bool add_bos);

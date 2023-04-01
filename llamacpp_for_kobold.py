@@ -334,9 +334,9 @@ def main(args):
     print(f"Starting Kobold HTTP Server on port {args.port}")
     epurl = ""
     if args.host=="":
-        epurl = f"http://localhost:{args.port}" + ("?streaming=1" if not args.nostream else "")   
+        epurl = f"http://localhost:{args.port}" + ("?streaming=1" if args.stream else "")   
     else:
-        epurl = f"http://{args.host}:{args.port}?host={args.host}" + ("&streaming=1" if not args.nostream else "")   
+        epurl = f"http://{args.host}:{args.port}?host={args.host}" + ("&streaming=1" if args.stream else "")   
     
         
     print(f"Please connect to custom endpoint at {epurl}")
@@ -351,7 +351,7 @@ if __name__ == '__main__':
     parser.add_argument("--host", help="Host IP to listen on. If empty, all routable interfaces are accepted.", default="")
     default_threads = (os.cpu_count() if os.cpu_count()<=6 else max(6,os.cpu_count()-2))
     parser.add_argument("--threads", help="Use a custom number of threads if specified. Otherwise, uses an amount based on CPU cores", type=int, default=default_threads)
-    parser.add_argument("--nostream", help="Disables pseudo streaming", action='store_true')
+    parser.add_argument("--stream", help="Uses pseudo streaming", action='store_true')
     parser.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
     args = parser.parse_args()
     main(args)
