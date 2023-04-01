@@ -1760,7 +1760,7 @@ llama_token llama_sample_top_p_top_k(
 
     if (std::abs(temp) < FLT_EPSILON) {
         temp = 0.8f;
-        top_k = 1.0f;
+        top_k = 1;
         top_p = 0.0f;
     }
 
