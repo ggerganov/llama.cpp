@@ -272,7 +272,13 @@ void print_tok_vec(std::vector<int> &embd)
         vocab.id_to_token.resize(model.hparams.n_vocab);
         std::vector<char> tmp(64);
 
-        for (int i = 0; i < model.hparams.n_vocab; i++) {
+        int32_t vocabloops = model.hparams.n_vocab;
+        if(vocabloops==32001 && legacy_file_format)
+        {
+            printf("---\n!! WARNING: Model appears to be GPT4ALL v1 model, triggering compatibility fix !!\n---\n");
+            vocabloops -= 1;
+        }
+        for (int i = 0; i < vocabloops; i++) {
             uint32_t len;
             fin.read((char *) &len, sizeof(len));
 

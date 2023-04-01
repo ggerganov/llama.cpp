@@ -1,4 +1,4 @@
-#include "ggml_old.h"
+#include "ggml_v1.h"
 #include "otherarch.h"
 
 #include "utils.h"

@@ -14,7 +14,19 @@
 #include <iostream>
 #include <unistd.h>
 
-
+bool should_transpose_layer(std::string name)
+{
+       
+    if(name.find(".mlp.fc_in.weight")!=std::string::npos || 
+    name.find(".attn.out_proj.weight")!=std::string::npos || 
+    name.find(".attn.q_proj.weight")!=std::string::npos || 
+    name.find(".attn.k_proj.weight")!=std::string::npos || 
+    name.find(".attn.v_proj.weight")!=std::string::npos)
+    {
+        return true;
+    }
+    return false;
+}
 
 // load the model's weights from a file
 bool gptj_model_load(const std::string & fname, gptj_model & model, gpt_vocab & vocab) {
@@ -139,6 +151,7 @@ bool gptj_model_load(const std::string & fname, gptj_model & model, gpt_vocab & 
 
         ctx_size += (5 + 10*n_layer)*256; // object overhead
 
+        ctx_size = ctx_size * 3 / 2;
         printf("%s: ggml ctx size = %6.2f MB\n", __func__, ctx_size/(1024.0*1024.0));
     }
 
@@ -279,6 +292,7 @@ bool gptj_model_load(const std::string & fname, gptj_model & model, gpt_vocab & 
                 fprintf(stderr, "%s: tensor '%s' has wrong size in model file\n", __func__, name.data());
                 return false;
             }
+          
 
             if (tensor->ne[0] != ne[0] || tensor->ne[1] != ne[1]) {
                 fprintf(stderr, "%s: tensor '%s' has wrong shape in model file: got [%d, %d], expected [%d, %d]\n",
@@ -312,7 +326,7 @@ bool gptj_model_load(const std::string & fname, gptj_model & model, gpt_vocab & 
             }
 
             fin.read(reinterpret_cast<char *>(tensor->data), ggml_nbytes(tensor));
-
+          
             //printf("%42s - [%5d, %5d], type = %6s, %6.2f MB\n", name.data(), ne[0], ne[1], ftype == 0 ? "float" : "f16", ggml_nbytes(tensor)/1024.0/1024.0);
             total_size += ggml_nbytes(tensor);
             if (++n_tensors % 8 == 0) {

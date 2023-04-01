@@ -35,7 +35,7 @@ bool gptj_load_model(const load_model_inputs inputs, FileFormat in_file_format)
     n_batch = params.n_batch = inputs.batch_size;
     modelname = params.model = inputs.model_filename;
 
-    if (!legacy_gptj_model_load(params.model, model, vocab)) {
+    if (!gptj_model_load(params.model, model, vocab)) {
         fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
         return false;
     }
@@ -151,7 +151,7 @@ generation_outputs gptj_generate(const generation_inputs inputs, generation_outp
                 printf("\rGenerating (%d / %d tokens)", (1 + params.n_predict - remaining_tokens), params.n_predict);
             }
            
-            if (!legacy_gptj_eval(model, params.n_threads, n_past, embd, logits, mem_per_token))
+            if (!gptj_eval(model, params.n_threads, n_past, embd, logits, mem_per_token))
             {
                 fprintf(stderr, "Failed to predict\n");
                 snprintf(output.text, sizeof(output.text), "%s", "");

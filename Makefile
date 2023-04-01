@@ -238,8 +238,8 @@ ggml.o: ggml.c ggml.h
 ggml_blas.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS) -DGGML_USE_OPENBLAS -c ggml.c -o ggml_blas.o
 
-ggml_old_v1.o: otherarch/ggml_old.c otherarch/ggml_old.h
-	$(CC)  $(CFLAGS)   -c otherarch/ggml_old.c -o ggml_old_v1.o
+ggml_v1.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
+	$(CC)  $(CFLAGS)   -c otherarch/ggml_v1.c -o ggml_v1.o
 
 llama.o: llama.cpp llama.h
 	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
@@ -256,8 +256,8 @@ expose.o: expose.cpp expose.h
 llama_adapter.o: 
 	$(CXX) $(CXXFLAGS) -c llama_adapter.cpp -o llama_adapter.o
 	
-gptj_adapter.o: ggml_old_v1.o
-	$(CXX) $(CXXFLAGS) otherarch/gptj_old.cpp otherarch/utils.cpp ggml_old_v1.o gptj_adapter.cpp -o gptj_adapter.o
+gptj_adapter.o: ggml.o
+	$(CXX) $(CXXFLAGS) otherarch/gptj.cpp otherarch/utils.cpp ggml.o gptj_adapter.cpp -o gptj_adapter.o
 
 clean:
 	rm -vf *.o main quantize perplexity embedding main.exe quantize.exe llamacpp.dll llamacpp_blas.dll gpt2.exe gptj.exe
@@ -268,8 +268,11 @@ main: examples/main/main.cpp ggml.o llama.o common.o
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
 
-gptj: ggml_old_v1.o
-	$(CXX) $(CXXFLAGS) otherarch/gptj_old.cpp otherarch/utils.cpp ggml_old_v1.o -o gptj $(LDFLAGS)
+gptj: ggml.o
+	$(CXX) $(CXXFLAGS) otherarch/gptj.cpp otherarch/utils.cpp ggml.o -o gptj $(LDFLAGS)
+
+gptjold: ggml_v1.o
+	$(CXX) $(CXXFLAGS) otherarch/gptj_old.cpp otherarch/utils.cpp ggml_v1.o -o gptj $(LDFLAGS)
 
 
 llamalib: ggml.o expose.o llama_adapter.o llamaextra.o common.o
