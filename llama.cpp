@@ -256,8 +256,8 @@ static bool kv_cache_init(
     const int n_embd  = hparams.n_embd;
     const int n_layer = hparams.n_layer;
 
-    const int n_mem      = n_layer*n_ctx;
-    const int n_elements = n_embd*n_mem;
+    const int64_t n_mem      = (int64_t)n_layer*n_ctx;
+    const int64_t n_elements = n_embd*n_mem;
 
     cache.buf.resize(2u*n_elements*ggml_type_size(wtype) + 2u*MB);
 
@@ -679,7 +679,7 @@ static bool llama_model_load(
                 return false;
             }
             if (tensor->ne[0] != ne[0] || tensor->ne[1] != ne[1]) {
-                fprintf(stderr, "%s: tensor '%s' has wrong shape in model file: got [%d, %d], expected [%d, %d]\n",
+                fprintf(stderr, "%s: tensor '%s' has wrong shape in model file: got [%" PRId64 ", %" PRId64 "], expected [%d, %d]\n",
                         __func__, name.data(), tensor->ne[0], tensor->ne[1], ne[0], ne[1]);
                 return false;
             }

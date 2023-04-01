@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <float.h>
 
@@ -2774,7 +2775,7 @@ void ggml_print_objects(const struct ggml_context * ctx) {
     GGML_PRINT("%s: --- end ---\n", __func__);
 }
 
-int ggml_nelements(const struct ggml_tensor * tensor) {
+int64_t ggml_nelements(const struct ggml_tensor * tensor) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 
     return tensor->ne[0]*tensor->ne[1]*tensor->ne[2]*tensor->ne[3];
@@ -3090,7 +3091,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
         struct ggml_context * ctx,
         enum   ggml_type type,
         int    n_dims,
-        const int* ne,
+        const int64_t* ne,
         void*  data) {
     // always insert objects at the end of the context's memory pool
     struct ggml_object * obj_cur = ctx->objects_end;
@@ -3210,44 +3211,44 @@ struct ggml_tensor * ggml_new_tensor(
         struct ggml_context * ctx,
         enum   ggml_type type,
         int    n_dims,
-        const int * ne) {
+        const int64_t * ne) {
     return ggml_new_tensor_impl(ctx, type, n_dims, ne, NULL);
 }
 
 struct ggml_tensor * ggml_new_tensor_1d(
         struct ggml_context * ctx,
         enum   ggml_type type,
-        int    ne0) {
+        int64_t ne0) {
     return ggml_new_tensor(ctx, type, 1, &ne0);
 }
 
 struct ggml_tensor * ggml_new_tensor_2d(
         struct ggml_context * ctx,
         enum   ggml_type type,
-        int    ne0,
-        int    ne1) {
-    const int ne[2] = { ne0, ne1 };
+        int64_t ne0,
+        int64_t ne1) {
+    const int64_t ne[2] = { ne0, ne1 };
     return ggml_new_tensor(ctx, type, 2, ne);
 }
 
 struct ggml_tensor * ggml_new_tensor_3d(
         struct ggml_context * ctx,
         enum   ggml_type type,
-        int    ne0,
-        int    ne1,
-        int    ne2) {
-    const int ne[3] = { ne0, ne1, ne2 };
+        int64_t ne0,
+        int64_t ne1,
+        int64_t ne2) {
+    const int64_t ne[3] = { ne0, ne1, ne2 };
     return ggml_new_tensor(ctx, type, 3, ne);
 }
 
 struct ggml_tensor * ggml_new_tensor_4d(
         struct ggml_context * ctx,
         enum   ggml_type type,
-        int    ne0,
-        int    ne1,
-        int    ne2,
-        int    ne3) {
-    const int ne[4] = { ne0, ne1, ne2, ne3 };
+        int64_t ne0,
+        int64_t ne1,
+        int64_t ne2,
+        int64_t ne3) {
+    const int64_t ne[4] = { ne0, ne1, ne2, ne3 };
     return ggml_new_tensor(ctx, type, 4, ne);
 }
 
@@ -3894,7 +3895,7 @@ struct ggml_tensor * ggml_mean(
         is_node = true;
     }
 
-    int ne[GGML_MAX_DIMS] = { 1, a->ne[1], a->ne[2], a->ne[3] };
+    int64_t ne[GGML_MAX_DIMS] = { 1, a->ne[1], a->ne[2], a->ne[3] };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, a->n_dims, ne);
 
     result->op   = GGML_OP_MEAN;
@@ -4255,7 +4256,7 @@ struct ggml_tensor * ggml_mul_mat(
         is_node = true;
     }
 
-    const int ne[4] = { a->ne[1], b->ne[1], a->ne[2], b->ne[3] };
+    const int64_t ne[4] = { a->ne[1], b->ne[1], a->ne[2], b->ne[3] };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, MIN(a->n_dims, b->n_dims), ne);
 
     result->op   = GGML_OP_MUL_MAT;
@@ -4380,8 +4381,8 @@ struct ggml_tensor * ggml_reshape(
 struct ggml_tensor * ggml_reshape_2d(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
-        int                   ne0,
-        int                   ne1) {
+        int64_t               ne0,
+        int64_t               ne1) {
     GGML_ASSERT(ggml_is_contiguous(a));
     GGML_ASSERT(ggml_nelements(a) == ne0*ne1);
 
@@ -4392,7 +4393,7 @@ struct ggml_tensor * ggml_reshape_2d(
         is_node = true;
     }
 
-    const int ne[2] = { ne0, ne1 };
+    const int64_t ne[2] = { ne0, ne1 };
     struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 2, ne, a->data);
 
     result->op   = GGML_OP_RESHAPE;
@@ -4406,9 +4407,9 @@ struct ggml_tensor * ggml_reshape_2d(
 struct ggml_tensor * ggml_reshape_3d(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
-        int                   ne0,
-        int                   ne1,
-        int                   ne2) {
+        int64_t               ne0,
+        int64_t               ne1,
+        int64_t               ne2) {
     GGML_ASSERT(ggml_is_contiguous(a));
     GGML_ASSERT(ggml_nelements(a) == ne0*ne1*ne2);
 
@@ -4419,7 +4420,7 @@ struct ggml_tensor * ggml_reshape_3d(
         is_node = true;
     }
 
-    const int ne[3] = { ne0, ne1, ne2 };
+    const int64_t ne[3] = { ne0, ne1, ne2 };
     struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 3, ne, a->data);
 
     result->op   = GGML_OP_RESHAPE;
@@ -4435,7 +4436,7 @@ struct ggml_tensor * ggml_reshape_3d(
 struct ggml_tensor * ggml_view_1d(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
-        int                   ne0,
+        int64_t               ne0,
         size_t                offset) {
     if (a->grad) {
         GGML_ASSERT(false); // gradient propagation is not supported
@@ -4456,15 +4457,15 @@ struct ggml_tensor * ggml_view_1d(
 struct ggml_tensor * ggml_view_2d(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
-        int                   ne0,
-        int                   ne1,
+        int64_t               ne0,
+        int64_t               ne1,
         size_t                nb1,
         size_t                offset) {
     if (a->grad) {
         GGML_ASSERT(false); // gradient propagation is not supported
     }
 
-    const int ne[GGML_MAX_DIMS] = { ne0, ne1, 1, 1 };
+    const int64_t ne[GGML_MAX_DIMS] = { ne0, ne1, 1, 1 };
 
     struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 2, ne, (char *) a->data + offset);
 
@@ -4695,7 +4696,7 @@ struct ggml_tensor * ggml_conv_1d_1s(
         is_node = true;
     }
 
-    const int ne[4] = { b->ne[0], a->ne[2], 1, 1, };
+    const int64_t ne[4] = { b->ne[0], a->ne[2], 1, 1, };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 2, ne);
 
     result->op   = GGML_OP_CONV_1D_1S;
@@ -4722,7 +4723,7 @@ struct ggml_tensor * ggml_conv_1d_2s(
         is_node = true;
     }
 
-    const int ne[4] = { b->ne[0]/2, a->ne[2], 1, 1, };
+    const int64_t ne[4] = { b->ne[0]/2, a->ne[2], 1, 1, };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 2, ne);
 
     result->op   = GGML_OP_CONV_1D_2S;
@@ -4822,10 +4823,10 @@ static void ggml_compute_forward_dup_f16(
         return;
     }
 
-    const int ne00 = src0->ne[0];
-    const int ne01 = src0->ne[1];
-    const int ne02 = src0->ne[2];
-    const int ne03 = src0->ne[3];
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    const int64_t ne03 = src0->ne[3];
 
     const size_t nb00 = src0->nb[0];
     const size_t nb01 = src0->nb[1];
@@ -4842,9 +4843,9 @@ static void ggml_compute_forward_dup_f16(
             size_t id = 0;
             const size_t rs = ne00*nb00;
 
-            for (int i03 = 0; i03 < ne03; i03++) {
-                for (int i02 = 0; i02 < ne02; i02++) {
-                    for (int i01 = 0; i01 < ne01; i01++) {
+            for (int64_t i03 = 0; i03 < ne03; i03++) {
+                for (int64_t i02 = 0; i02 < ne02; i02++) {
+                    for (int64_t i01 = 0; i01 < ne01; i01++) {
                         const char * src0_ptr = (char *) src0->data + i01*nb01 + i02*nb02 + i03*nb03;
                         char * dst_ptr = (char *) dst->data + id*rs;
 
@@ -4858,10 +4859,10 @@ static void ggml_compute_forward_dup_f16(
             size_t id = 0;
             float * dst_ptr = (float *) dst->data;
 
-            for (int i03 = 0; i03 < ne03; i03++) {
-                for (int i02 = 0; i02 < ne02; i02++) {
-                    for (int i01 = 0; i01 < ne01; i01++) {
-                        for (int i00 = 0; i00 < ne00; i00++) {
+            for (int64_t i03 = 0; i03 < ne03; i03++) {
+                for (int64_t i02 = 0; i02 < ne02; i02++) {
+                    for (int64_t i01 = 0; i01 < ne01; i01++) {
+                        for (int64_t i00 = 0; i00 < ne00; i00++) {
                             const ggml_fp16_t * src0_ptr = (ggml_fp16_t *) ((char *) src0->data + i00*nb00 + i01*nb01 + i02*nb02 + i03*nb03);
 
                             dst_ptr[id] = GGML_FP16_TO_FP32(*src0_ptr);
@@ -4880,10 +4881,10 @@ static void ggml_compute_forward_dup_f16(
             size_t id = 0;
             float * dst_ptr = (float *) dst->data;
 
-            for (int i03 = 0; i03 < ne03; i03++) {
-                for (int i02 = 0; i02 < ne02; i02++) {
-                    for (int i01 = 0; i01 < ne01; i01++) {
-                        for (int i00 = 0; i00 < ne00; i00++) {
+            for (int64_t i03 = 0; i03 < ne03; i03++) {
+                for (int64_t i02 = 0; i02 < ne02; i02++) {
+                    for (int64_t i01 = 0; i01 < ne01; i01++) {
+                        for (int64_t i00 = 0; i00 < ne00; i00++) {
                             const ggml_fp16_t * src0_ptr = (ggml_fp16_t *) ((char *) src0->data + i00*nb00 + i01*nb01 + i02*nb02 + i03*nb03);
 
                             dst_ptr[id] = GGML_FP16_TO_FP32(*src0_ptr);
@@ -4896,10 +4897,10 @@ static void ggml_compute_forward_dup_f16(
             size_t id = 0;
             ggml_fp16_t * dst_ptr = (ggml_fp16_t *) dst->data;
 
-            for (int i03 = 0; i03 < ne03; i03++) {
-                for (int i02 = 0; i02 < ne02; i02++) {
-                    for (int i01 = 0; i01 < ne01; i01++) {
-                        for (int i00 = 0; i00 < ne00; i00++) {
+            for (int64_t i03 = 0; i03 < ne03; i03++) {
+                for (int64_t i02 = 0; i02 < ne02; i02++) {
+                    for (int64_t i01 = 0; i01 < ne01; i01++) {
+                        for (int64_t i00 = 0; i00 < ne00; i00++) {
                             const ggml_fp16_t * src0_ptr = (ggml_fp16_t *) ((char *) src0->data + i00*nb00 + i01*nb01 + i02*nb02 + i03*nb03);
 
                             dst_ptr[id] = *src0_ptr;
@@ -4926,10 +4927,10 @@ static void ggml_compute_forward_dup_f32(
         return;
     }
 
-    const int ne00 = src0->ne[0];
-    const int ne01 = src0->ne[1];
-    const int ne02 = src0->ne[2];
-    const int ne03 = src0->ne[3];
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    const int64_t ne03 = src0->ne[3];
 
     const size_t nb00 = src0->nb[0];
     const size_t nb01 = src0->nb[1];
@@ -4946,9 +4947,9 @@ static void ggml_compute_forward_dup_f32(
             size_t id = 0;
             const size_t rs = ne00*nb00;
 
-            for (int i03 = 0; i03 < ne03; i03++) {
-                for (int i02 = 0; i02 < ne02; i02++) {
-                    for (int i01 = 0; i01 < ne01; i01++) {
+            for (int64_t i03 = 0; i03 < ne03; i03++) {
+                for (int64_t i02 = 0; i02 < ne02; i02++) {
+                    for (int64_t i01 = 0; i01 < ne01; i01++) {
                         const char * src0_ptr = (char *) src0->data + i01*nb01 + i02*nb02 + i03*nb03;
                         char * dst_ptr = (char *) dst->data + id*rs;
 
@@ -4962,10 +4963,10 @@ static void ggml_compute_forward_dup_f32(
             size_t id = 0;
             ggml_fp16_t * dst_ptr = (ggml_fp16_t *) dst->data;
 
-            for (int i03 = 0; i03 < ne03; i03++) {
-                for (int i02 = 0; i02 < ne02; i02++) {
-                    for (int i01 = 0; i01 < ne01; i01++) {
-                        for (int i00 = 0; i00 < ne00; i00++) {
+            for (int64_t i03 = 0; i03 < ne03; i03++) {
+                for (int64_t i02 = 0; i02 < ne02; i02++) {
+                    for (int64_t i01 = 0; i01 < ne01; i01++) {
+                        for (int64_t i00 = 0; i00 < ne00; i00++) {
                             const float * src0_ptr = (float *) ((char *) src0->data + i00*nb00 + i01*nb01 + i02*nb02 + i03*nb03);
 
                             dst_ptr[id] = GGML_FP32_TO_FP16(*src0_ptr);
@@ -4984,10 +4985,10 @@ static void ggml_compute_forward_dup_f32(
             size_t id = 0;
             float * dst_ptr = (float *) dst->data;
 
-            for (int i03 = 0; i03 < ne03; i03++) {
-                for (int i02 = 0; i02 < ne02; i02++) {
-                    for (int i01 = 0; i01 < ne01; i01++) {
-                        for (int i00 = 0; i00 < ne00; i00++) {
+            for (int64_t i03 = 0; i03 < ne03; i03++) {
+                for (int64_t i02 = 0; i02 < ne02; i02++) {
+                    for (int64_t i01 = 0; i01 < ne01; i01++) {
+                        for (int64_t i00 = 0; i00 < ne00; i00++) {
                             const float * src0_ptr = (float *) ((char *) src0->data + i00*nb00 + i01*nb01 + i02*nb02 + i03*nb03);
 
                             dst_ptr[id] = *src0_ptr;
@@ -5000,10 +5001,10 @@ static void ggml_compute_forward_dup_f32(
             size_t id = 0;
             ggml_fp16_t * dst_ptr = (ggml_fp16_t *) dst->data;
 
-            for (int i03 = 0; i03 < ne03; i03++) {
-                for (int i02 = 0; i02 < ne02; i02++) {
-                    for (int i01 = 0; i01 < ne01; i01++) {
-                        for (int i00 = 0; i00 < ne00; i00++) {
+            for (int64_t i03 = 0; i03 < ne03; i03++) {
+                for (int64_t i02 = 0; i02 < ne02; i02++) {
+                    for (int64_t i01 = 0; i01 < ne01; i01++) {
+                        for (int64_t i00 = 0; i00 < ne00; i00++) {
                             const float * src0_ptr = (float *) ((char *) src0->data + i00*nb00 + i01*nb01 + i02*nb02 + i03*nb03);
 
                             dst_ptr[id] = GGML_FP32_TO_FP16(*src0_ptr);
@@ -5389,18 +5390,18 @@ static void ggml_compute_forward_sum_f32(
     assert(ggml_is_scalar(dst));
     assert(src0->nb[0] == sizeof(float));
 
-    const int ne00 = src0->ne[0];
-    const int ne01 = src0->ne[1];
-    const int ne02 = src0->ne[2];
-    const int ne03 = src0->ne[3];
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    const int64_t ne03 = src0->ne[3];
 
     const size_t nb01 = src0->nb[1];
     const size_t nb02 = src0->nb[2];
     const size_t nb03 = src0->nb[3];
 
-    for (int i03 = 0; i03 < ne03; i03++) {
-        for (int i02 = 0; i02 < ne02; i02++) {
-            for (int i01 = 0; i01 < ne01; i01++) {
+    for (int64_t i03 = 0; i03 < ne03; i03++) {
+        for (int64_t i02 = 0; i02 < ne02; i02++) {
+            for (int64_t i01 = 0; i01 < ne01; i01++) {
                 ggml_vec_sum_f32(ne00,
                         (float *) (dst->data),
                         (float *) ((char *) src0->data + i01*nb01 + i02*nb02 + i03*nb03));
@@ -5445,19 +5446,19 @@ static void ggml_compute_forward_mean_f32(
 
     assert(src0->nb[0] == sizeof(float));
 
-    const int ne00 = src0->ne[0];
-    const int ne01 = src0->ne[1];
-    const int ne02 = src0->ne[2];
-    const int ne03 = src0->ne[3];
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    const int64_t ne03 = src0->ne[3];
 
     const size_t nb01 = src0->nb[1];
     const size_t nb02 = src0->nb[2];
     const size_t nb03 = src0->nb[3];
 
-    const int ne0 = dst->ne[0];
-    const int ne1 = dst->ne[1];
-    const int ne2 = dst->ne[2];
-    const int ne3 = dst->ne[3];
+    const int64_t ne0 = dst->ne[0];
+    const int64_t ne1 = dst->ne[1];
+    const int64_t ne2 = dst->ne[2];
+    const int64_t ne3 = dst->ne[3];
 
     assert(ne0 == 1);
     assert(ne1 == ne01);
@@ -5473,9 +5474,9 @@ static void ggml_compute_forward_mean_f32(
     const size_t nb2 = dst->nb[2];
     const size_t nb3 = dst->nb[3];
 
-    for (int i03 = 0; i03 < ne03; i03++) {
-        for (int i02 = 0; i02 < ne02; i02++) {
-            for (int i01 = 0; i01 < ne01; i01++) {
+    for (int64_t i03 = 0; i03 < ne03; i03++) {
+        for (int64_t i02 = 0; i02 < ne02; i02++) {
+            for (int64_t i01 = 0; i01 < ne01; i01++) {
                 ggml_vec_sum_f32(ne00,
                         (float *) ((char *)  dst->data + i01*nb1  + i02*nb2  + i03*nb3),
                         (float *) ((char *) src0->data + i01*nb01 + i02*nb02 + i03*nb03));
@@ -5962,10 +5963,10 @@ static void ggml_compute_forward_norm_f32(
     const int ith = params->ith;
     const int nth = params->nth;
 
-    const int ne00 = src0->ne[0];
-    const int ne01 = src0->ne[1];
-    const int ne02 = src0->ne[2];
-    const int ne03 = src0->ne[3];
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    const int64_t ne03 = src0->ne[3];
 
     const size_t nb01 = src0->nb[1];
     const size_t nb02 = src0->nb[2];
@@ -5978,13 +5979,13 @@ static void ggml_compute_forward_norm_f32(
     const float eps = 1e-5f; // TODO: make this a parameter
 
     // TODO: optimize
-    for (int i03 = 0; i03 < ne03; i03++) {
-        for (int i02 = 0; i02 < ne02; i02++) {
-            for (int i01 = ith; i01 < ne01; i01 += nth) {
+    for (int64_t i03 = 0; i03 < ne03; i03++) {
+        for (int64_t i02 = 0; i02 < ne02; i02++) {
+            for (int64_t i01 = ith; i01 < ne01; i01 += nth) {
                 const float * x = (float *) ((char *) src0->data + i01*nb01 + i02*nb02 + i03*nb03);
 
                 ggml_float sum = 0.0;
-                for (int i00 = 0; i00 < ne00; i00++) {
+                for (int64_t i00 = 0; i00 < ne00; i00++) {
                     sum += (ggml_float)x[i00];
                 }
 
@@ -5993,7 +5994,7 @@ static void ggml_compute_forward_norm_f32(
                 float * y = (float *) ((char *) dst->data + i01*nb1 + i02*nb2 + i03*nb3);
 
                 ggml_float sum2 = 0.0;
-                for (int i00 = 0; i00 < ne00; i00++) {
+                for (int64_t i00 = 0; i00 < ne00; i00++) {
                     float v = x[i00] - mean;
                     y[i00] = v;
                     sum2 += (ggml_float)(v*v);
@@ -6045,10 +6046,10 @@ static void ggml_compute_forward_rms_norm_f32(
     const int ith = params->ith;
     const int nth = params->nth;
 
-    const int ne00 = src0->ne[0];
-    const int ne01 = src0->ne[1];
-    const int ne02 = src0->ne[2];
-    const int ne03 = src0->ne[3];
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    const int64_t ne03 = src0->ne[3];
 
     const size_t nb01 = src0->nb[1];
     const size_t nb02 = src0->nb[2];
@@ -6061,13 +6062,13 @@ static void ggml_compute_forward_rms_norm_f32(
     const float eps = 1e-6f; // TODO: make this a parameter
 
     // TODO: optimize
-    for (int i03 = 0; i03 < ne03; i03++) {
-        for (int i02 = 0; i02 < ne02; i02++) {
-            for (int i01 = ith; i01 < ne01; i01 += nth) {
+    for (int64_t i03 = 0; i03 < ne03; i03++) {
+        for (int64_t i02 = 0; i02 < ne02; i02++) {
+            for (int64_t i01 = ith; i01 < ne01; i01 += nth) {
                 const float * x = (float *) ((char *) src0->data + i01*nb01 + i02*nb02 + i03*nb03);
 
                 ggml_float sum = 0.0;
-                for (int i00 = 0; i00 < ne00; i00++) {
+                for (int64_t i00 = 0; i00 < ne00; i00++) {
                     sum += (ggml_float)(x[i00] * x[i00]);
                 }
 
@@ -6120,13 +6121,13 @@ static bool ggml_compute_forward_mul_mat_use_blas(
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
               struct ggml_tensor * dst) {
-    //const int ne00 = src0->ne[0];
-    //const int ne01 = src0->ne[1];
+    //const int64_t ne00 = src0->ne[0];
+    //const int64_t ne01 = src0->ne[1];
 
-    const int ne10 = src1->ne[0];
+    const int64_t ne10 = src1->ne[0];
 
-    const int ne0 = dst->ne[0];
-    const int ne1 = dst->ne[1];
+    const int64_t ne0 = dst->ne[0];
+    const int64_t ne1 = dst->ne[1];
 
     // TODO: find the optimal values for these
     if (ggml_is_contiguous(src0) &&
@@ -6148,23 +6149,23 @@ static void ggml_compute_forward_mul_mat_f32(
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
-    const int ne00 = src0->ne[0];
-    const int ne01 = src0->ne[1];
-    const int ne02 = src0->ne[2];
-    const int ne03 = src0->ne[3];
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    const int64_t ne03 = src0->ne[3];
 
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-    const int ne10 = src1->ne[0];
+    const int64_t ne10 = src1->ne[0];
 #endif
-    const int ne11 = src1->ne[1];
+    const int64_t ne11 = src1->ne[1];
 #ifndef NDEBUG
-    const int ne12 = src1->ne[2];
-    const int ne13 = src1->ne[3];
+    const int64_t ne12 = src1->ne[2];
+    const int64_t ne13 = src1->ne[3];
 
-    const int ne0  = dst->ne[0];
-    const int ne1  = dst->ne[1];
-    const int ne2  = dst->ne[2];
-    const int ne3  = dst->ne[3];
+    const int64_t ne0  = dst->ne[0];
+    const int64_t ne1  = dst->ne[1];
+    const int64_t ne2  = dst->ne[2];
+    const int64_t ne3  = dst->ne[3];
 
     const int nb00 = src0->nb[0];
 #endif
@@ -6224,8 +6225,8 @@ static void ggml_compute_forward_mul_mat_f32(
             return;
         }
 
-        for (int i03 = 0; i03 < ne03; i03++) {
-            for (int i02 = 0; i02 < ne02; i02++) {
+        for (int64_t i03 = 0; i03 < ne03; i03++) {
+            for (int64_t i02 = 0; i02 < ne02; i02++) {
                 const float * x = (float *) ((char *) src0->data + i02*nb02 + i03*nb03);
                 const float * y = (float *) ((char *) src1->data + i02*nb12 + i03*nb13);
 
@@ -6272,7 +6273,7 @@ static void ggml_compute_forward_mul_mat_f32(
         const int i02 = (ir - i03*ne02*ne01)/ne01;
         const int i01 = (ir - i03*ne02*ne01 - i02*ne01);
 
-        for (int ic = 0; ic < ne11; ++ic) {
+        for (int64_t ic = 0; ic < ne11; ++ic) {
             // src1 indices
             const int i13 = i03;
             const int i12 = i02;
@@ -6313,21 +6314,21 @@ static void ggml_compute_forward_mul_mat_f16_f32(
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
-    const int ne00 = src0->ne[0];
-    const int ne01 = src0->ne[1];
-    const int ne02 = src0->ne[2];
-    const int ne03 = src0->ne[3];
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    const int64_t ne03 = src0->ne[3];
 
-    const int ne10 = src1->ne[0];
-    const int ne11 = src1->ne[1];
-    const int ne12 = src1->ne[2];
-    const int ne13 = src1->ne[3];
+    const int64_t ne10 = src1->ne[0];
+    const int64_t ne11 = src1->ne[1];
+    const int64_t ne12 = src1->ne[2];
+    const int64_t ne13 = src1->ne[3];
 
-    const int ne0  = dst->ne[0];
-    const int ne1  = dst->ne[1];
-    const int ne2  = dst->ne[2];
-    const int ne3  = dst->ne[3];
-    //const int ne   = ne0*ne1*ne2*ne3;
+    const int64_t ne0  = dst->ne[0];
+    const int64_t ne1  = dst->ne[1];
+    const int64_t ne2  = dst->ne[2];
+    const int64_t ne3  = dst->ne[3];
+    //const int64_t ne   = ne0*ne1*ne2*ne3;
 
     const int nb00 = src0->nb[0];
     const int nb01 = src0->nb[1];
@@ -6387,12 +6388,12 @@ static void ggml_compute_forward_mul_mat_f16_f32(
 
         float * const wdata = params->wdata;
 
-        for (int i03 = 0; i03 < ne03; i03++) {
-            for (int i02 = 0; i02 < ne02; i02++) {
+        for (int64_t i03 = 0; i03 < ne03; i03++) {
+            for (int64_t i02 = 0; i02 < ne02; i02++) {
                 {
                     size_t id = 0;
-                    for (int i01 = 0; i01 < ne01; ++i01) {
-                        for (int i00 = 0; i00 < ne00; ++i00) {
+                    for (int64_t i01 = 0; i01 < ne01; ++i01) {
+                        for (int64_t i00 = 0; i00 < ne00; ++i00) {
                             wdata[id++] = GGML_FP16_TO_FP32(*(ggml_fp16_t *) ((char *) src0->data + i03*nb03 + i02*nb02 + i01*nb01 + i00*nb00));
                         }
                     }
@@ -6422,10 +6423,10 @@ static void ggml_compute_forward_mul_mat_f16_f32(
         ggml_fp16_t * const wdata = params->wdata;
 
         size_t id = 0;
-        for (int i13 = 0; i13 < ne13; ++i13) {
-            for (int i12 = 0; i12 < ne12; ++i12) {
-                for (int i11 = 0; i11 < ne11; ++i11) {
-                    for (int i10 = 0; i10 < ne10; ++i10) {
+        for (int64_t i13 = 0; i13 < ne13; ++i13) {
+            for (int64_t i12 = 0; i12 < ne12; ++i12) {
+                for (int64_t i11 = 0; i11 < ne11; ++i11) {
+                    for (int64_t i10 = 0; i10 < ne10; ++i10) {
                         wdata[id++] = GGML_FP32_TO_FP16(*(float *)((char *) src1->data + i13*nb13 + i12*nb12 + i11*nb11 + i10*nb10));
                     }
                 }
@@ -6477,7 +6478,7 @@ static void ggml_compute_forward_mul_mat_f16_f32(
 
         float * dst_col = (float *) ((char *) dst->data + (i0*nb0 + 0*nb1 + i2*nb2 + i3*nb3));
 
-        for (int ic = 0; ic < ne11; ++ic) {
+        for (int64_t ic = 0; ic < ne11; ++ic) {
             ggml_vec_dot_f16(ne00, &dst_col[ic*ne0], src0_row, src1_col + ic*ne00);
         }
     }
@@ -6526,20 +6527,20 @@ static void ggml_compute_forward_mul_mat_q_f32(
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
-    const int ne00 = src0->ne[0];
-    const int ne01 = src0->ne[1];
-    const int ne02 = src0->ne[2];
-    const int ne03 = src0->ne[3];
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    const int64_t ne03 = src0->ne[3];
 
-    const int ne10 = src1->ne[0];
-    const int ne11 = src1->ne[1];
-    const int ne12 = src1->ne[2];
-    const int ne13 = src1->ne[3];
+    const int64_t ne10 = src1->ne[0];
+    const int64_t ne11 = src1->ne[1];
+    const int64_t ne12 = src1->ne[2];
+    const int64_t ne13 = src1->ne[3];
 
-    const int ne0  = dst->ne[0];
-    const int ne1  = dst->ne[1];
-    const int ne2  = dst->ne[2];
-    const int ne3  = dst->ne[3];
+    const int64_t ne0  = dst->ne[0];
+    const int64_t ne1  = dst->ne[1];
+    const int64_t ne2  = dst->ne[2];
+    const int64_t ne3  = dst->ne[3];
 
     const int nb00 = src0->nb[0];
     const int nb01 = src0->nb[1];
@@ -6603,11 +6604,11 @@ static void ggml_compute_forward_mul_mat_q_f32(
         float * const wdata = params->wdata;
         dequantize_row_q_t const dequantize_row_q = quantize_fns[type].dequantize_row_q;
 
-        for (int i03 = 0; i03 < ne03; i03++) {
-            for (int i02 = 0; i02 < ne02; i02++) {
+        for (int64_t i03 = 0; i03 < ne03; i03++) {
+            for (int64_t i02 = 0; i02 < ne02; i02++) {
                 {
                     size_t id = 0;
-                    for (int i01 = 0; i01 < ne01; ++i01) {
+                    for (int64_t i01 = 0; i01 < ne01; ++i01) {
                         dequantize_row_q((char *) src0->data + i03*nb03 + i02*nb02 + i01*nb01, wdata + id, ne00);
                         id += ne00;
                     }
@@ -6637,9 +6638,9 @@ static void ggml_compute_forward_mul_mat_q_f32(
         char * wdata = params->wdata;
         const size_t row_size = ne10*GGML_TYPE_SIZE[type]/GGML_BLCK_SIZE[type];
 
-        for (int i13 = 0; i13 < ne13; ++i13) {
-            for (int i12 = 0; i12 < ne12; ++i12) {
-                for (int i11 = 0; i11 < ne11; ++i11) {
+        for (int64_t i13 = 0; i13 < ne13; ++i13) {
+            for (int64_t i12 = 0; i12 < ne12; ++i12) {
+                for (int64_t i11 = 0; i11 < ne11; ++i11) {
                     quantize_row_q((float *)((char *) src1->data + i13*nb13 + i12*nb12 + i11*nb11), (void *) wdata, ne10);
                     wdata += row_size;
                 }
@@ -6688,7 +6689,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
 
         assert(ne00 % 32 == 0);
 
-        for (int ic = 0; ic < ne11; ++ic) {
+        for (int64_t ic = 0; ic < ne11; ++ic) {
             vec_dot_q(ne00, &dst_col[ic*ne0], src0_row, (void *) (src1_col + ic*row_size));
         }
     }
@@ -7181,10 +7182,10 @@ static void ggml_compute_forward_rope_f32(
     const int n_dims = ((int32_t *) src1->data)[1];
     const int mode   = ((int32_t *) src1->data)[2];
 
-    //const int ne0 = src0->ne[0];
-    const int ne1 = src0->ne[1];
-    const int ne2 = src0->ne[2];
-    const int ne3 = src0->ne[3];
+    //const int64_t ne0 = src0->ne[0];
+    const int64_t ne1 = src0->ne[1];
+    const int64_t ne2 = src0->ne[2];
+    const int64_t ne3 = src0->ne[3];
 
     const int nb0 = src0->nb[0];
     const int nb1 = src0->nb[1];
@@ -7197,10 +7198,10 @@ static void ggml_compute_forward_rope_f32(
     assert(nb0 == sizeof(float));
 
     // TODO: optimize
-    for (int i3 = 0; i3 < ne3; i3++) {
-        for (int i2 = (mode == 0 ? 0 : n_past); i2 < ne2; i2++) {
+    for (int64_t i3 = 0; i3 < ne3; i3++) {
+        for (int64_t i2 = (mode == 0 ? 0 : n_past); i2 < ne2; i2++) {
             const int p = (mode == 0 ? n_past + i2 : i2);
-            for (int i1 = 0; i1 < ne1; i1++) {
+            for (int64_t i1 = 0; i1 < ne1; i1++) {
                 for (int i0 = 0; i0 < n_dims; i0 += 2) {
                     const float theta = powf(10000.0, ((float)-i0)/n_dims);
 
@@ -7238,10 +7239,10 @@ static void ggml_compute_forward_rope_f16(
     const int n_dims = ((int32_t *) src1->data)[1];
     const int mode   = ((int32_t *) src1->data)[2];
 
-    //const int ne0 = src0->ne[0];
-    const int ne1 = src0->ne[1];
-    const int ne2 = src0->ne[2];
-    const int ne3 = src0->ne[3];
+    //const int64_t ne0 = src0->ne[0];
+    const int64_t ne1 = src0->ne[1];
+    const int64_t ne2 = src0->ne[2];
+    const int64_t ne3 = src0->ne[3];
 
     const int nb0 = src0->nb[0];
     const int nb1 = src0->nb[1];
@@ -7253,10 +7254,10 @@ static void ggml_compute_forward_rope_f16(
 
     assert(nb0 == sizeof(ggml_fp16_t));
 
-    for (int i3 = 0; i3 < ne3; i3++) {
-        for (int i2 = (mode == 0 ? 0 : n_past); i2 < ne2; i2++) {
+    for (int64_t i3 = 0; i3 < ne3; i3++) {
+        for (int64_t i2 = (mode == 0 ? 0 : n_past); i2 < ne2; i2++) {
             const int p = (mode == 0 ? n_past + i2 : i2);
-            for (int i1 = 0; i1 < ne1; i1++) {
+            for (int64_t i1 = 0; i1 < ne1; i1++) {
                 for (int i0 = 0; i0 < n_dims; i0 += 2) {
                     const float theta = powf(10000.0, ((float)-i0)/n_dims);
 
@@ -7317,21 +7318,21 @@ static void ggml_compute_forward_conv_1d_1s_f16_f32(
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
-    const int ne00 = src0->ne[0];
-    const int ne01 = src0->ne[1];
-    const int ne02 = src0->ne[2];
-    //const int ne03 = src0->ne[3];
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    //const int64_t ne03 = src0->ne[3];
 
-    const int ne10 = src1->ne[0];
-    const int ne11 = src1->ne[1];
-    //const int ne12 = src1->ne[2];
-    //const int ne13 = src1->ne[3];
+    const int64_t ne10 = src1->ne[0];
+    const int64_t ne11 = src1->ne[1];
+    //const int64_t ne12 = src1->ne[2];
+    //const int64_t ne13 = src1->ne[3];
 
-    //const int ne0  = dst->ne[0];
-    //const int ne1  = dst->ne[1];
-    //const int ne2  = dst->ne[2];
-    //const int ne3  = dst->ne[3];
-    //const int ne   = ne0*ne1*ne2*ne3;
+    //const int64_t ne0  = dst->ne[0];
+    //const int64_t ne1  = dst->ne[1];
+    //const int64_t ne2  = dst->ne[2];
+    //const int64_t ne3  = dst->ne[3];
+    //const int64_t ne   = ne0*ne1*ne2*ne3;
 
     const int nb00 = src0->nb[0];
     const int nb01 = src0->nb[1];
@@ -7368,11 +7369,11 @@ static void ggml_compute_forward_conv_1d_1s_f16_f32(
         {
             ggml_fp16_t * const wdata = (ggml_fp16_t *) params->wdata + 0;
 
-            for (int i02 = 0; i02 < ne02; i02++) {
-                for (int i01 = 0; i01 < ne01; i01++) {
+            for (int64_t i02 = 0; i02 < ne02; i02++) {
+                for (int64_t i01 = 0; i01 < ne01; i01++) {
                     const ggml_fp16_t * const src = (ggml_fp16_t *)((char *) src0->data + i02*nb02 + i01*nb01);
                     ggml_fp16_t * dst_data = wdata + i02*ew0*ne00;
-                    for (int i00 = 0; i00 < ne00; i00++) {
+                    for (int64_t i00 = 0; i00 < ne00; i00++) {
                         dst_data[i00*ew0 + i01] = src[i00];
                     }
                 }
@@ -7383,10 +7384,10 @@ static void ggml_compute_forward_conv_1d_1s_f16_f32(
         {
             ggml_fp16_t * const wdata = (ggml_fp16_t *) params->wdata + ne02*ew0*ne00;
 
-            for (int i11 = 0; i11 < ne11; i11++) {
+            for (int64_t i11 = 0; i11 < ne11; i11++) {
                 const float * const src = (float *)((char *) src1->data + i11*nb11);
                 ggml_fp16_t * dst_data = wdata;
-                for (int i10 = 0; i10 < ne10; i10++) {
+                for (int64_t i10 = 0; i10 < ne10; i10++) {
                     dst_data[(i10 + nh)*ew0 + i11] = GGML_FP32_TO_FP16(src[i10]);
                 }
             }
@@ -7411,7 +7412,7 @@ static void ggml_compute_forward_conv_1d_1s_f16_f32(
 
     for (int i1 = ir0; i1 < ir1; i1++) {
         float * dst_data = (float *)((char *) dst->data + i1*nb1);
-        for (int i0 = 0; i0 < ne10; ++i0) {
+        for (int64_t i0 = 0; i0 < ne10; ++i0) {
             dst_data[i0] = 0;
             for (int k = -nh; k <= nh; k++) {
                 float v = 0.0f;
@@ -7437,21 +7438,21 @@ static void ggml_compute_forward_conv_1d_1s_f32(
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
-    const int ne00 = src0->ne[0];
-    const int ne01 = src0->ne[1];
-    const int ne02 = src0->ne[2];
-    //const int ne03 = src0->ne[3];
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    //const int64_t ne03 = src0->ne[3];
 
-    const int ne10 = src1->ne[0];
-    const int ne11 = src1->ne[1];
-    //const int ne12 = src1->ne[2];
-    //const int ne13 = src1->ne[3];
+    const int64_t ne10 = src1->ne[0];
+    const int64_t ne11 = src1->ne[1];
+    //const int64_t ne12 = src1->ne[2];
+    //const int64_t ne13 = src1->ne[3];
 
-    //const int ne0  = dst->ne[0];
-    //const int ne1  = dst->ne[1];
-    //const int ne2  = dst->ne[2];
-    //const int ne3  = dst->ne[3];
-    //const int ne   = ne0*ne1*ne2*ne3;
+    //const int64_t ne0  = dst->ne[0];
+    //const int64_t ne1  = dst->ne[1];
+    //const int64_t ne2  = dst->ne[2];
+    //const int64_t ne3  = dst->ne[3];
+    //const int64_t ne   = ne0*ne1*ne2*ne3;
 
     const int nb00 = src0->nb[0];
     const int nb01 = src0->nb[1];
@@ -7488,11 +7489,11 @@ static void ggml_compute_forward_conv_1d_1s_f32(
         {
             float * const wdata = (float *) params->wdata + 0;
 
-            for (int i02 = 0; i02 < ne02; i02++) {
-                for (int i01 = 0; i01 < ne01; i01++) {
+            for (int64_t i02 = 0; i02 < ne02; i02++) {
+                for (int64_t i01 = 0; i01 < ne01; i01++) {
                     const float * const src = (float *)((char *) src0->data + i02*nb02 + i01*nb01);
                     float * dst_data = wdata + i02*ew0*ne00;
-                    for (int i00 = 0; i00 < ne00; i00++) {
+                    for (int64_t i00 = 0; i00 < ne00; i00++) {
                         dst_data[i00*ew0 + i01] = src[i00];
                     }
                 }
@@ -7503,10 +7504,10 @@ static void ggml_compute_forward_conv_1d_1s_f32(
         {
             float * const wdata = (float *) params->wdata + ne02*ew0*ne00;
 
-            for (int i11 = 0; i11 < ne11; i11++) {
+            for (int64_t i11 = 0; i11 < ne11; i11++) {
                 const float * const src = (float *)((char *) src1->data + i11*nb11);
                 float * dst_data = wdata;
-                for (int i10 = 0; i10 < ne10; i10++) {
+                for (int64_t i10 = 0; i10 < ne10; i10++) {
                     dst_data[(i10 + nh)*ew0 + i11] = src[i10];
                 }
             }
@@ -7531,7 +7532,7 @@ static void ggml_compute_forward_conv_1d_1s_f32(
 
     for (int i1 = ir0; i1 < ir1; i1++) {
         float * dst_data = (float *)((char *) dst->data + i1*nb1);
-        for (int i0 = 0; i0 < ne10; ++i0) {
+        for (int64_t i0 = 0; i0 < ne10; ++i0) {
             dst_data[i0] = 0;
             for (int k = -nh; k <= nh; k++) {
                 float v = 0.0f;
@@ -7585,21 +7586,21 @@ static void ggml_compute_forward_conv_1d_2s_f16_f32(
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
-    const int ne00 = src0->ne[0];
-    const int ne01 = src0->ne[1];
-    const int ne02 = src0->ne[2];
-    //const int ne03 = src0->ne[3];
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    //const int64_t ne03 = src0->ne[3];
 
-    const int ne10 = src1->ne[0];
-    const int ne11 = src1->ne[1];
-    //const int ne12 = src1->ne[2];
-    //const int ne13 = src1->ne[3];
+    const int64_t ne10 = src1->ne[0];
+    const int64_t ne11 = src1->ne[1];
+    //const int64_t ne12 = src1->ne[2];
+    //const int64_t ne13 = src1->ne[3];
 
-    //const int ne0  = dst->ne[0];
-    //const int ne1  = dst->ne[1];
-    //const int ne2  = dst->ne[2];
-    //const int ne3  = dst->ne[3];
-    //const int ne   = ne0*ne1*ne2*ne3;
+    //const int64_t ne0  = dst->ne[0];
+    //const int64_t ne1  = dst->ne[1];
+    //const int64_t ne2  = dst->ne[2];
+    //const int64_t ne3  = dst->ne[3];
+    //const int64_t ne   = ne0*ne1*ne2*ne3;
 
     const int nb00 = src0->nb[0];
     const int nb01 = src0->nb[1];
@@ -7636,11 +7637,11 @@ static void ggml_compute_forward_conv_1d_2s_f16_f32(
         {
             ggml_fp16_t * const wdata = (ggml_fp16_t *) params->wdata + 0;
 
-            for (int i02 = 0; i02 < ne02; i02++) {
-                for (int i01 = 0; i01 < ne01; i01++) {
+            for (int64_t i02 = 0; i02 < ne02; i02++) {
+                for (int64_t i01 = 0; i01 < ne01; i01++) {
                     const ggml_fp16_t * const src = (ggml_fp16_t *)((char *) src0->data + i02*nb02 + i01*nb01);
                     ggml_fp16_t * dst_data = wdata + i02*ew0*ne00;
-                    for (int i00 = 0; i00 < ne00; i00++) {
+                    for (int64_t i00 = 0; i00 < ne00; i00++) {
                         dst_data[i00*ew0 + i01] = src[i00];
                     }
                 }
@@ -7651,10 +7652,10 @@ static void ggml_compute_forward_conv_1d_2s_f16_f32(
         {
             ggml_fp16_t * const wdata = (ggml_fp16_t *) params->wdata + ne02*ew0*ne00;
 
-            for (int i11 = 0; i11 < ne11; i11++) {
+            for (int64_t i11 = 0; i11 < ne11; i11++) {
                 const float * const src = (float *)((char *) src1->data + i11*nb11);
                 ggml_fp16_t * dst_data = wdata;
-                for (int i10 = 0; i10 < ne10; i10++) {
+                for (int64_t i10 = 0; i10 < ne10; i10++) {
                     dst_data[(i10 + nh)*ew0 + i11] = GGML_FP32_TO_FP16(src[i10]);
                 }
             }
@@ -7679,7 +7680,7 @@ static void ggml_compute_forward_conv_1d_2s_f16_f32(
 
     for (int i1 = ir0; i1 < ir1; i1++) {
         float * dst_data = (float *)((char *) dst->data + i1*nb1);
-        for (int i0 = 0; i0 < ne10; i0 += 2) {
+        for (int64_t i0 = 0; i0 < ne10; i0 += 2) {
             dst_data[i0/2] = 0;
             for (int k = -nh; k <= nh; k++) {
                 float v = 0.0f;
@@ -7705,21 +7706,21 @@ static void ggml_compute_forward_conv_1d_2s_f32(
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
-    const int ne00 = src0->ne[0];
-    const int ne01 = src0->ne[1];
-    const int ne02 = src0->ne[2];
-    //const int ne03 = src0->ne[3];
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    //const int64_t ne03 = src0->ne[3];
 
-    const int ne10 = src1->ne[0];
-    const int ne11 = src1->ne[1];
-    //const int ne12 = src1->ne[2];
-    //const int ne13 = src1->ne[3];
+    const int64_t ne10 = src1->ne[0];
+    const int64_t ne11 = src1->ne[1];
+    //const int64_t ne12 = src1->ne[2];
+    //const int64_t ne13 = src1->ne[3];
 
-    //const int ne0  = dst->ne[0];
-    //const int ne1  = dst->ne[1];
-    //const int ne2  = dst->ne[2];
-    //const int ne3  = dst->ne[3];
-    //const int ne   = ne0*ne1*ne2*ne3;
+    //const int64_t ne0  = dst->ne[0];
+    //const int64_t ne1  = dst->ne[1];
+    //const int64_t ne2  = dst->ne[2];
+    //const int64_t ne3  = dst->ne[3];
+    //const int64_t ne   = ne0*ne1*ne2*ne3;
 
     const int nb00 = src0->nb[0];
     const int nb01 = src0->nb[1];
@@ -7756,11 +7757,11 @@ static void ggml_compute_forward_conv_1d_2s_f32(
         {
             float * const wdata = (float *) params->wdata + 0;
 
-            for (int i02 = 0; i02 < ne02; i02++) {
-                for (int i01 = 0; i01 < ne01; i01++) {
+            for (int64_t i02 = 0; i02 < ne02; i02++) {
+                for (int64_t i01 = 0; i01 < ne01; i01++) {
                     const float * const src = (float *)((char *) src0->data + i02*nb02 + i01*nb01);
                     float * dst_data = wdata + i02*ew0*ne00;
-                    for (int i00 = 0; i00 < ne00; i00++) {
+                    for (int64_t i00 = 0; i00 < ne00; i00++) {
                         dst_data[i00*ew0 + i01] = src[i00];
                     }
                 }
@@ -7771,10 +7772,10 @@ static void ggml_compute_forward_conv_1d_2s_f32(
         {
             float * const wdata = (float *) params->wdata + ne02*ew0*ne00;
 
-            for (int i11 = 0; i11 < ne11; i11++) {
+            for (int64_t i11 = 0; i11 < ne11; i11++) {
                 const float * const src = (float *)((char *) src1->data + i11*nb11);
                 float * dst_data = wdata;
-                for (int i10 = 0; i10 < ne10; i10++) {
+                for (int64_t i10 = 0; i10 < ne10; i10++) {
                     dst_data[(i10 + nh)*ew0 + i11] = src[i10];
                 }
             }
@@ -7799,7 +7800,7 @@ static void ggml_compute_forward_conv_1d_2s_f32(
 
     for (int i1 = ir0; i1 < ir1; i1++) {
         float * dst_data = (float *)((char *) dst->data + i1*nb1);
-        for (int i0 = 0; i0 < ne10; i0 += 2) {
+        for (int64_t i0 = 0; i0 < ne10; i0 += 2) {
             dst_data[i0/2] = 0;
             for (int k = -nh; k <= nh; k++) {
                 float v = 0.0f;
@@ -7851,25 +7852,25 @@ static void ggml_compute_forward_flash_attn_f32(
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
-    const int neq0 = q->ne[0];
-    const int neq1 = q->ne[1];
-    const int neq2 = q->ne[2];
-    const int neq3 = q->ne[3];
+    const int64_t neq0 = q->ne[0];
+    const int64_t neq1 = q->ne[1];
+    const int64_t neq2 = q->ne[2];
+    const int64_t neq3 = q->ne[3];
 
-    const int nek0 = k->ne[0];
-    const int nek1 = k->ne[1];
-    //const int nek2 = k->ne[2];
-    //const int nek3 = k->ne[3];
+    const int64_t nek0 = k->ne[0];
+    const int64_t nek1 = k->ne[1];
+    //const int64_t nek2 = k->ne[2];
+    //const int64_t nek3 = k->ne[3];
 
-    //const int nev0 = v->ne[0];
-    const int nev1 = v->ne[1];
-    //const int nev2 = v->ne[2];
-    //const int nev3 = v->ne[3];
+    //const int64_t nev0 = v->ne[0];
+    const int64_t nev1 = v->ne[1];
+    //const int64_t nev2 = v->ne[2];
+    //const int64_t nev3 = v->ne[3];
 
-    const int ne0  = dst->ne[0];
-    const int ne1  = dst->ne[1];
-    //const int ne2  = dst->ne[2];
-    //const int ne3  = dst->ne[3];
+    const int64_t ne0  = dst->ne[0];
+    const int64_t ne1  = dst->ne[1];
+    //const int64_t ne2  = dst->ne[2];
+    //const int64_t ne3  = dst->ne[3];
 
     const int nbk0 = k->nb[0];
     const int nbk1 = k->nb[1];
@@ -7894,10 +7895,10 @@ static void ggml_compute_forward_flash_attn_f32(
     const int ith = params->ith;
     const int nth = params->nth;
 
-    const int D = neq0;
-    const int N = neq1;
-    const int P = nek1 - N;
-    const int M = P + N;
+    const int64_t D = neq0;
+    const int64_t N = neq1;
+    const int64_t P = nek1 - N;
+    const int64_t M = P + N;
 
     const int Mup = ggml_up(M, GGML_SOFT_MAX_UNROLL);
 
@@ -7959,7 +7960,7 @@ static void ggml_compute_forward_flash_attn_f32(
             S[i] = -INFINITY;
         }
 
-        for (int ic = 0; ic < nek1; ++ic) {
+        for (int64_t ic = 0; ic < nek1; ++ic) {
             // k indices
             const int ik3 = iq3;
             const int ik2 = iq2;
@@ -7978,7 +7979,7 @@ static void ggml_compute_forward_flash_attn_f32(
         ggml_vec_scale_f32(nek1, S, scale);
 
         if (masked) {
-            for (int i = P; i < M; i++) {
+            for (int64_t i = P; i < M; i++) {
                 if (i > P + iq1) {
                     S[i] = -INFINITY;
                 }
@@ -8036,7 +8037,7 @@ static void ggml_compute_forward_flash_attn_f32(
 #endif
         }
 
-        for (int ic = 0; ic < nev1; ++ic) {
+        for (int64_t ic = 0; ic < nev1; ++ic) {
             // dst indices
             const int i1 = iq1;
             const int i2 = iq2;
@@ -8060,25 +8061,25 @@ static void ggml_compute_forward_flash_attn_f16(
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
-    const int neq0 = q->ne[0];
-    const int neq1 = q->ne[1];
-    const int neq2 = q->ne[2];
-    const int neq3 = q->ne[3];
+    const int64_t neq0 = q->ne[0];
+    const int64_t neq1 = q->ne[1];
+    const int64_t neq2 = q->ne[2];
+    const int64_t neq3 = q->ne[3];
 
-    const int nek0 = k->ne[0];
-    const int nek1 = k->ne[1];
-    //const int nek2 = k->ne[2];
-    //const int nek3 = k->ne[3];
+    const int64_t nek0 = k->ne[0];
+    const int64_t nek1 = k->ne[1];
+    //const int64_t nek2 = k->ne[2];
+    //const int64_t nek3 = k->ne[3];
 
-    //const int nev0 = v->ne[0];
-    const int nev1 = v->ne[1];
-    //const int nev2 = v->ne[2];
-    //const int nev3 = v->ne[3];
+    //const int64_t nev0 = v->ne[0];
+    const int64_t nev1 = v->ne[1];
+    //const int64_t nev2 = v->ne[2];
+    //const int64_t nev3 = v->ne[3];
 
-    const int ne0  = dst->ne[0];
-    const int ne1  = dst->ne[1];
-    //const int ne2  = dst->ne[2];
-    //const int ne3  = dst->ne[3];
+    const int64_t ne0  = dst->ne[0];
+    const int64_t ne1  = dst->ne[1];
+    //const int64_t ne2  = dst->ne[2];
+    //const int64_t ne3  = dst->ne[3];
 
     const int nbk0 = k->nb[0];
     const int nbk1 = k->nb[1];
@@ -8103,10 +8104,10 @@ static void ggml_compute_forward_flash_attn_f16(
     const int ith = params->ith;
     const int nth = params->nth;
 
-    const int D = neq0;
-    const int N = neq1;
-    const int P = nek1 - N;
-    const int M = P + N;
+    const int64_t D = neq0;
+    const int64_t N = neq1;
+    const int64_t P = nek1 - N;
+    const int64_t M = P + N;
 
     const int Mup = ggml_up(M, GGML_SOFT_MAX_UNROLL);
 
@@ -8169,7 +8170,7 @@ static void ggml_compute_forward_flash_attn_f16(
         }
 
         if (GGML_VEC_DOT_UNROLL > 2 || nek1 % GGML_VEC_DOT_UNROLL != 0) {
-            for (int ic = 0; ic < nek1; ++ic) {
+            for (int64_t ic = 0; ic < nek1; ++ic) {
                 // k indices
                 const int ik3 = iq3;
                 const int ik2 = iq2;
@@ -8184,7 +8185,7 @@ static void ggml_compute_forward_flash_attn_f16(
                         (ggml_fp16_t *) ((char *) q->data + (iq1*nbq1 + iq2*nbq2 + iq3*nbq3)));
             }
         } else {
-            for (int ic = 0; ic < nek1; ic += GGML_VEC_DOT_UNROLL) {
+            for (int64_t ic = 0; ic < nek1; ic += GGML_VEC_DOT_UNROLL) {
                 // k indices
                 const int ik3 = iq3;
                 const int ik2 = iq2;
@@ -8204,7 +8205,7 @@ static void ggml_compute_forward_flash_attn_f16(
         ggml_vec_scale_f32(nek1, S, scale);
 
         if (masked) {
-            for (int i = P; i < M; i++) {
+            for (int64_t i = P; i < M; i++) {
                 if (i > P + iq1) {
                     S[i] = -INFINITY;
                 }
@@ -8264,12 +8265,12 @@ static void ggml_compute_forward_flash_attn_f16(
 
         ggml_fp16_t * S16 = (ggml_fp16_t *) ((float *) params->wdata + ith*(2*Mup + CACHE_LINE_SIZE_F32) + Mup);
 
-        for (int i = 0; i < M; i++) {
+        for (int64_t i = 0; i < M; i++) {
             S16[i] = GGML_FP32_TO_FP16(S[i]);
         }
 
         if (GGML_VEC_DOT_UNROLL == 1 || (nev1 % GGML_VEC_DOT_UNROLL != 0)) {
-            for (int ic = 0; ic < nev1; ++ic) {
+            for (int64_t ic = 0; ic < nev1; ++ic) {
                 // dst indices
                 const int i1 = iq1;
                 const int i2 = iq2;
@@ -8281,7 +8282,7 @@ static void ggml_compute_forward_flash_attn_f16(
                         S16);
             }
         } else {
-            for (int ic = 0; ic < nev1; ic += GGML_VEC_DOT_UNROLL) {
+            for (int64_t ic = 0; ic < nev1; ic += GGML_VEC_DOT_UNROLL) {
                 // dst indices
                 const int i1 = iq1;
                 const int i2 = iq2;
@@ -8337,35 +8338,35 @@ static void ggml_compute_forward_flash_ff_f16(
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
-    const int nea0 = a->ne[0];
-    const int nea1 = a->ne[1];
-    const int nea2 = a->ne[2];
-    const int nea3 = a->ne[3];
+    const int64_t nea0 = a->ne[0];
+    const int64_t nea1 = a->ne[1];
+    const int64_t nea2 = a->ne[2];
+    const int64_t nea3 = a->ne[3];
 
-    const int neb00 = b0->ne[0];
-    const int neb01 = b0->ne[1];
-    //const int neb02 = b0->ne[2];
-    //const int neb03 = b0->ne[3];
+    const int64_t neb00 = b0->ne[0];
+    const int64_t neb01 = b0->ne[1];
+    //const int64_t neb02 = b0->ne[2];
+    //const int64_t neb03 = b0->ne[3];
 
-    const int neb10 = b1->ne[0];
-    const int neb11 = b1->ne[1];
-    //const int neb12 = b1->ne[2];
-    //const int neb13 = b1->ne[3];
+    const int64_t neb10 = b1->ne[0];
+    const int64_t neb11 = b1->ne[1];
+    //const int64_t neb12 = b1->ne[2];
+    //const int64_t neb13 = b1->ne[3];
 
-    const int nec00 = c0->ne[0];
-    const int nec01 = c0->ne[1];
-    //const int nec02 = c0->ne[2];
-    //const int nec03 = c0->ne[3];
+    const int64_t nec00 = c0->ne[0];
+    const int64_t nec01 = c0->ne[1];
+    //const int64_t nec02 = c0->ne[2];
+    //const int64_t nec03 = c0->ne[3];
 
-    const int nec10 = c1->ne[0];
-    const int nec11 = c1->ne[1];
-    //const int nec12 = c1->ne[2];
-    //const int nec13 = c1->ne[3];
+    const int64_t nec10 = c1->ne[0];
+    const int64_t nec11 = c1->ne[1];
+    //const int64_t nec12 = c1->ne[2];
+    //const int64_t nec13 = c1->ne[3];
 
-    const int ne0 = dst->ne[0];
-    const int ne1 = dst->ne[1];
-    const int ne2 = dst->ne[2];
-    //const int ne3 = dst->ne[3];
+    const int64_t ne0 = dst->ne[0];
+    const int64_t ne1 = dst->ne[1];
+    const int64_t ne2 = dst->ne[2];
+    //const int64_t ne3 = dst->ne[3];
 
     const int nba0 = a->nb[0];
     const int nba1 = a->nb[1];
@@ -8400,9 +8401,9 @@ static void ggml_compute_forward_flash_ff_f16(
     const int ith = params->ith;
     const int nth = params->nth;
 
-    const int D = nea0;
-    //const int N = nea1;
-    const int M = neb01;
+    const int64_t D = nea0;
+    //const int64_t N = nea1;
+    const int64_t M = neb01;
 
     GGML_ASSERT(ne0 == nea0);
     GGML_ASSERT(ne1 == nea1);
@@ -8458,7 +8459,7 @@ static void ggml_compute_forward_flash_ff_f16(
 
         float * S = (float *) params->wdata + ith*(2*M + CACHE_LINE_SIZE_F32);
 
-        for (int ic = 0; ic < neb01; ++ic) {
+        for (int64_t ic = 0; ic < neb01; ++ic) {
             // b0 indices
             const int ib03 = ia3;
             const int ib02 = ia2;
@@ -8478,7 +8479,7 @@ static void ggml_compute_forward_flash_ff_f16(
 
         ggml_fp16_t * S16 = (ggml_fp16_t *) ((float *) params->wdata + ith*(2*M + CACHE_LINE_SIZE_F32) + M);
 
-        for (int i = 0; i < M; i++) {
+        for (int64_t i = 0; i < M; i++) {
             S16[i] = GGML_FP32_TO_FP16(S[i]);
         }
 
@@ -8490,7 +8491,7 @@ static void ggml_compute_forward_flash_ff_f16(
             const int i2 = ia2;
             const int i3 = ia3;
 
-            for (int ic = 0; ic < nec01; ++ic) {
+            for (int64_t ic = 0; ic < nec01; ++ic) {
 
                 ggml_vec_dot_f16(neb01,
                         (float *)       ((char *) dst->data + (ic*nb0 + i1*nb1   + i2*nb2   + i3*nb3)),
@@ -9393,7 +9394,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
 
                         size_t cur = 0;
 
-                        const int ne11 = ggml_up(node->src1->ne[1], GGML_SOFT_MAX_UNROLL);
+                        const int64_t ne11 = ggml_up(node->src1->ne[1], GGML_SOFT_MAX_UNROLL);
 
                         if (node->src1->type == GGML_TYPE_F32) {
                             cur  = sizeof(float)*ne11*node->n_tasks; // TODO: this can become (n_tasks-1)
@@ -9652,7 +9653,7 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
 
         perf_total_per_op_us[node->op] += node->perf_time_us;
 
-        GGML_PRINT(" - %3d: [ %6d, %6d, %6d] %16s %s (%3d) cpu = %7.3f / %7.3f ms, wall = %7.3f / %7.3f ms\n",
+        GGML_PRINT(" - %3d: [ %" PRId64 ", %" PRId64 ", %" PRId64 "] %16s %s (%3d) cpu = %7.3f / %7.3f ms, wall = %7.3f / %7.3f ms\n",
                 i,
                 node->ne[0], node->ne[1], node->ne[2],
                 GGML_OP_LABEL[node->op], node->is_param ? "x" : node->grad ? "g" : " ", node->perf_runs,
@@ -9666,7 +9667,7 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
     for (int i = 0; i < cgraph->n_leafs; i++) {
         struct ggml_tensor * node = cgraph->leafs[i];
 
-        GGML_PRINT(" - %3d: [ %6d, %6d] %8s\n",
+        GGML_PRINT(" - %3d: [ %" PRId64 ", %" PRId64 "] %8s\n",
                 i,
                 node->ne[0], node->ne[1],
                 GGML_OP_LABEL[node->op]);
@@ -9737,7 +9738,7 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
 
         fprintf(fp, "  \"%p\" [ \
 style = filled; fillcolor = %s; shape = record; \
-label=\"%d [%d, %d] | <x>%s",
+label=\"%d [%" PRId64 ", %" PRId64 "] | <x>%s",
                 (void *) node, color,
                 i, node->ne[0], node->ne[1],
                 GGML_OP_SYMBOL[node->op]);
@@ -9762,7 +9763,7 @@ label=\"<x>%.1e\"; ]\n",
         } else {
             fprintf(fp, "  \"%p\" [ \
 style = filled; fillcolor = %s; shape = record; \
-label=\"<x>CONST %d [%d, %d]\"; ]\n",
+label=\"<x>CONST %d [%" PRId64 ", %" PRId64 "]\"; ]\n",
                     (void *) node, color,
                     i, node->ne[0], node->ne[1]);
         }
@@ -9826,9 +9827,9 @@ label=\"<x>CONST %d [%d, %d]\"; ]\n",
 static void ggml_opt_set_params(int np, struct ggml_tensor * const ps[], const float * x) {
     int i = 0;
     for (int p = 0; p < np; ++p) {
-        const int ne = ggml_nelements(ps[p]) ;
+        const int64_t ne = ggml_nelements(ps[p]) ;
         // TODO: add function to set tensor from array
-        for (int j = 0; j < ne; ++j) {
+        for (int64_t j = 0; j < ne; ++j) {
             ggml_set_f32_1d(ps[p], j, x[i++]);
         }
     }
@@ -9837,9 +9838,9 @@ static void ggml_opt_set_params(int np, struct ggml_tensor * const ps[], const f
 static void ggml_opt_get_params(int np, struct ggml_tensor * const ps[], float * x) {
     int i = 0;
     for (int p = 0; p < np; ++p) {
-        const int ne = ggml_nelements(ps[p]) ;
+        const int64_t ne = ggml_nelements(ps[p]) ;
         // TODO: add function to get all elements at once
-        for (int j = 0; j < ne; ++j) {
+        for (int64_t j = 0; j < ne; ++j) {
             x[i++] = ggml_get_f32_1d(ps[p], j);
         }
     }
@@ -9848,9 +9849,9 @@ static void ggml_opt_get_params(int np, struct ggml_tensor * const ps[], float *
 static void ggml_opt_get_grad(int np, struct ggml_tensor * const ps[], float * g) {
     int i = 0;
     for (int p = 0; p < np; ++p) {
-        const int ne = ggml_nelements(ps[p]) ;
+        const int64_t ne = ggml_nelements(ps[p]) ;
         // TODO: add function to get all elements at once
-        for (int j = 0; j < ne; ++j) {
+        for (int64_t j = 0; j < ne; ++j) {
             g[i++] = ggml_get_f32_1d(ps[p]->grad, j);
         }
     }
