@@ -103,8 +103,11 @@ def write_state_dict(state_dict: Dict[str, torch.Tensor], dest_path: str, data_t
                 1 if tensor.dtype == torch.float16 else 0
             ))
 
-            # Note that shape is not reversed here like in llama.cpp!
-            for dim in tensor.shape:
+            # Dimension order is reversed here:
+            # * PyTorch shape is (x rows, y columns)
+            # * ggml shape is (y elements in a row, x elements in a column)
+            # Both shapes represent the same tensor.
+            for dim in reversed(tensor.shape):
                 out_file.write(struct.pack('=i', dim))
 
             out_file.write(k_encoded)
@@ -150,7 +153,7 @@ def test() -> None:
             2,
             10,
             0,
-            3, 2,
+            2, 3,
             'emb.weight'.encode('utf-8'),
             1.0, 2.0, 3.0,
             4.0, 5.0, 6.0,

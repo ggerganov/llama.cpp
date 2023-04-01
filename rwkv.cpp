@@ -192,7 +192,6 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, int n_threads)
 
         int32_t x = -1;
         int32_t y = -1;
-        int32_t z = -1;
         int32_t element_count;
 
         if (dim_count == 1) {
@@ -203,11 +202,7 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, int n_threads)
             read_int32(file, &x);
             read_int32(file, &y);
             element_count = x * y;
-            // Dimension order is reversed here:
-            // * PyTorch shape is (x rows, y columns)
-            // * ggml shape is (y elements in a row, x elements in a column)
-            // Both shapes represent the same tensor.
-            tensor = ggml_new_tensor_2d(ctx, ggml_data_type, y, x);
+            tensor = ggml_new_tensor_2d(ctx, ggml_data_type, x, y);
         } else {
             abort();
         }
