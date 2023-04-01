@@ -21,7 +21,7 @@ extern "C"
     {
         std::string model = inputs.model_filename;
         file_format = check_file_format(model.c_str());
-        printf("\nIdentified as LLAMA model: (ver %d)\n", file_format);
+        printf("\n---\nIdentified as LLAMA model: (ver %d)\nAttempting to Load...\n---\n", file_format);
         
         return llama_load_model(inputs, file_format);
     }
