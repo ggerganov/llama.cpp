@@ -6,6 +6,8 @@ Besides the usual **FP32**, it supports **FP16** and **quantized INT4** inferenc
 
 RWKV is a novel large language model architecture, [with the largest model in the family having 14B parameters](https://huggingface.co/BlinkDL/rwkv-4-pile-14b). In contrast to Transformer with `O(n^2)` attention, RWKV requires only state from previous step to calculate logits. This makes RWKV very CPU-friendly on large context lenghts.
 
+This project provides [a C library rwkv.h](rwkv.h) and [a convinient Python wrapper](rwkv%2Frwkv_cpp_model.py) for it.
+
 **TODO**:
 
 1. Measure performance and perplexity of different model sizes and data types
@@ -36,6 +38,16 @@ If everything went OK, `bin\Release\rwkv.dll` file should appear.
 ```commandline
 python rwkv\convert_pytorch_rwkv_to_ggml.py C:\RWKV-4-Pile-169M-20220807-8023.pth C:\rwkv.cpp-169M.bin float32
 ```
+
+#### 2.1. Optionally, quantize the model
+
+To convert the model into INT4 quantized format, run:
+
+```commandline
+python rwkv\quantize.py C:\rwkv.cpp-169M.bin C:\rwkv.cpp-169M-Q4_1.bin 3
+```
+
+Pass `2` for `Q4_0` format (smaller size, lower quality), `3` for `Q4_1` format (larger size, higher quality).
 
 ### 3. Run the model
 
