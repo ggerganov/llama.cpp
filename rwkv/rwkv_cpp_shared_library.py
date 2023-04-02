@@ -173,7 +173,7 @@ class RWKVSharedLibrary:
         Returns system information string.
         """
 
-        return self.library.rwkv_get_system_info_string()
+        return self.library.rwkv_get_system_info_string().decode('utf-8')
 
 def load_rwkv_shared_library() -> RWKVSharedLibrary:
     """

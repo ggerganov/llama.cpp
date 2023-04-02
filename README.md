@@ -2,29 +2,23 @@
 
 This is a port of [BlinkDL/RWKV-LM](https://github.com/BlinkDL/RWKV-LM) to [ggerganov/ggml](https://github.com/ggerganov/ggml).
 
-Besides usual **FP32**, it supports **FP16** and **quantized INT4** inference on CPU. This project is **CPU only**.
+Besides the usual **FP32**, it supports **FP16** and **quantized INT4** inference on CPU. This project is **CPU only**.
 
-**WORK IN PROGRESS!** **Status**: INT4 gives not so good quality, need to properly measure and compare perplexity.
+RWKV is a novel large language model architecture, [with the largest model in the family having 14B parameters](https://huggingface.co/BlinkDL/rwkv-4-pile-14b). In contrast to Transformer with `O(n^2)` attention, RWKV requires only state from previous step to calculate logits. This makes RWKV very CPU-friendly on large context lenghts.
 
-## Plan
+**TODO**:
 
-1. Create Python script with sampling and simple chat interface
-2. Measure performance and quality of different model sizes and data types
-3. Write a good `README.md` and publish links to this repo
-4. Create pull request to main `ggml` repo with all improvements made here
-
-## Structure
-
-- `./rwkv.h`, `./rwkv.cpp`: source code of the shared library.
-- `./rwkv`: directory containing Python scripts for conversion, inference and validation.
+1. Measure performance and perplexity of different model sizes and data types
+2. Write a good `README.md` (motivation, benchmarks, perplexity) and publish links to this repo
+3. Create pull request to main `ggml` repo with all improvements made here
 
 ## How to use
 
+### 1. Clone the repo and build the library
+
 ### Windows
 
-Requirements: [git](https://gitforwindows.org/), [CMake](https://cmake.org/download/), MSVC compiler, Python 3.x with PyTorch.
-
-#### 1. Clone the repo and build it:
+**Requirements**: [git](https://gitforwindows.org/), [CMake](https://cmake.org/download/), MSVC compiler.
 
 ```commandline
 git clone https://github.com/saharNooby/rwkv.cpp.git
@@ -35,16 +29,37 @@ cmake --build . --config Release
 
 If everything went OK, `bin\Release\rwkv.dll` file should appear.
 
-#### 2. Download an RWKV model from [Huggingface](https://huggingface.co/BlinkDL) and convert it into `ggml` format:
+### 2. Download an RWKV model from [Hugging Face](https://huggingface.co/BlinkDL) and convert it into `ggml` format
+
+**Requirements**: Python 3.x with [PyTorch](https://pytorch.org/get-started/locally/).
 
 ```commandline
 python rwkv\convert_pytorch_rwkv_to_ggml.py C:\RWKV-4-Pile-169M-20220807-8023.pth C:\rwkv.cpp-169M.bin float32
 ```
 
-#### 3. Use the model in Python:
+### 3. Run the model
+
+**Requirements**: Python 3.x with [PyTorch](https://pytorch.org/get-started/locally/) and [tokenizers](https://pypi.org/project/tokenizers/).
+
+To generate some text, run:
+
+```commandline
+python rwkv\generate_completions.py C:\rwkv.cpp-169M.bin
+```
+
+To chat with a bot, run:
+
+```commandline
+python rwkv\chat_with_bot.py C:\rwkv.cpp-169M.bin
+```
+
+Edit [generate_completions.py](rwkv%2Fgenerate_completions.py) or [chat_with_bot.py](rwkv%2Fchat_with_bot.py) to change prompts and sampling settings.
+
+---
+
+Example of using `rwkv.cpp` in your custom Python script:
 
 ```python
-# These files are located in rwkv directory
 import rwkv_cpp_model
 import rwkv_cpp_shared_library
 

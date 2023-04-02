@@ -1,0 +1,3 @@
+numpy
+torch
+tokenizers
