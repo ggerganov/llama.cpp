@@ -84,11 +84,6 @@ def read_variables(fin):
         shape = shape[::-1]
         name = fin.read(name_length).decode()
 
-        # ensure tensor data is aligned
-        tensor_data_offset = fin.tell()
-        tensor_data_offset = (tensor_data_offset + 31) & -32
-        fin.seek(tensor_data_offset)
-
         if ftype_cur == 2:
             # 4-bit quantized weights
             dtype = np.uint8
