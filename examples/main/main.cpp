@@ -368,6 +368,11 @@ int main(int argc, char ** argv) {
                 // potentially set color to indicate we are taking user input
                 set_console_color(con_st, CONSOLE_COLOR_USER_INPUT);
 
+#if defined (_WIN32)
+                // Windows: must reactivate sigint handler after each signal
+                signal(SIGINT, sigint_handler);
+#endif
+
                 if (params.instruct) {
                     printf("\n> ");
                 }
