@@ -5,9 +5,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#ifdef LLAMA_SHARED
+#ifdef RWKV_SHARED
 #    if defined(_WIN32) && !defined(__MINGW32__)
-#        ifdef LLAMA_BUILD
+#        ifdef RWKV_BUILD
 #            define RWKV_API __declspec(dllexport)
 #        else
 #            define RWKV_API __declspec(dllimport)

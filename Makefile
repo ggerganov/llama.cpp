@@ -168,7 +168,7 @@ ifneq ($(filter ppc64%,$(UNAME_M)),)
 		CXXFLAGS += -std=c++23 -DGGML_BIG_ENDIAN
 	endif
 endif
-ifndef LLAMA_NO_ACCELERATE
+ifndef RWKV_NO_ACCELERATE
 	# Mac M1 - include Accelerate framework.
 	# `-framework Accelerate` works on Mac Intel as well, with negliable performance boost (as of the predict time).
 	ifeq ($(UNAME_S),Darwin)
@@ -176,11 +176,11 @@ ifndef LLAMA_NO_ACCELERATE
 		LDFLAGS += -framework Accelerate
 	endif
 endif
-ifdef LLAMA_OPENBLAS
+ifdef RWKV_OPENBLAS
 	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas
 	LDFLAGS += -lopenblas
 endif
-ifdef LLAMA_GPROF
+ifdef RWKV_GPROF
 	CFLAGS   += -pg
 	CXXFLAGS += -pg
 endif
@@ -205,7 +205,7 @@ endif
 # Print build information
 #
 
-$(info I llama.cpp build info: )
+$(info I rwkv.cpp build info: )
 $(info I UNAME_S:  $(UNAME_S))
 $(info I UNAME_P:  $(UNAME_P))
 $(info I UNAME_M:  $(UNAME_M))
@@ -216,7 +216,7 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: main quantize perplexity embedding
+default: rwkv.o
 
 #
 # Build library
@@ -225,40 +225,5 @@ default: main quantize perplexity embedding
 ggml.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS)   -c ggml.c -o ggml.o
 
-llama.o: llama.cpp llama.h
-	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
-
 rwkv.o: rwkv.cpp rwkv.h
 	$(CXX) $(CXXFLAGS) -c rwkv.cpp -o rwkv.o
-
-common.o: examples/common.cpp examples/common.h
-	$(CXX) $(CXXFLAGS) -c examples/common.cpp -o common.o
-
-clean:
-	rm -vf *.o main quantize perplexity embedding
-
-main: examples/main/main.cpp ggml.o llama.o common.o
-	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
-	@echo
-	@echo '====  Run ./main -h for help.  ===='
-	@echo
-
-main_rwkv: examples/main_rwkv/main_rwkv.cpp ggml.o rwkv.o common.o
-	$(CXX) $(CXXFLAGS) examples/main_rwkv/main_rwkv.cpp ggml.o rwkv.o common.o -o main_rwkv $(LDFLAGS)
-
-quantize: examples/quantize/quantize.cpp ggml.o llama.o
-	$(CXX) $(CXXFLAGS) examples/quantize/quantize.cpp ggml.o llama.o -o quantize $(LDFLAGS)
-
-perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o
-	$(CXX) $(CXXFLAGS) examples/perplexity/perplexity.cpp ggml.o llama.o common.o -o perplexity $(LDFLAGS)
-
-embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
-	$(CXX) $(CXXFLAGS) examples/embedding/embedding.cpp ggml.o llama.o common.o -o embedding $(LDFLAGS)
-
-#
-# Tests
-#
-
-.PHONY: tests
-tests:
-	bash ./tests/run-tests.sh

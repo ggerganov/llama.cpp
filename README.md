@@ -1,25 +1,22 @@
 # rwkv.cpp
 
-This is a port of [BlinkDL/RWKV-LM](https://github.com/BlinkDL/RWKV-LM) to [ggerganov/ggml](https://github.com/ggerganov/ggml). The end goal is to allow 4-bit quanized inference on CPU.
+This is a port of [BlinkDL/RWKV-LM](https://github.com/BlinkDL/RWKV-LM) to [ggerganov/ggml](https://github.com/ggerganov/ggml).
 
-**WORK IN PROGRESS!** **Status**: FP32, FP16 and INT4 inference work. INT4 gives not so good quality, need to properly measure and compare perplexity.
+Besides usual **FP32**, it supports **FP16** and **quantized INT4** inference on CPU. This project is **CPU only**.
+
+**WORK IN PROGRESS!** **Status**: INT4 gives not so good quality, need to properly measure and compare perplexity.
 
 ## Plan
 
 1. Create Python script with sampling and simple chat interface
 2. Measure performance and quality of different model sizes and data types
-3. Clean up the repo (remove llama related files and mentions)
-4. Write a good `README.md` and publish links to this repo
-5. Create pull request to main `ggml` repo with all improvements made here
+3. Write a good `README.md` and publish links to this repo
+4. Create pull request to main `ggml` repo with all improvements made here
 
 ## Structure
 
-This repo is based on the [llama.cpp repo](https://github.com/ggerganov/llama.cpp). RWKV-related code is in these directories:
-
-- `./rwkv`: directory containing Python scripts for conversion, inference and validation
-- `./examples/main_rwkw`: directory containing script that loads and infers RWKV model
-
-Please do not change files in other directories — this will make pulling recent changes easier.
+- `./rwkv.h`, `./rwkv.cpp`: source code of the shared library.
+- `./rwkv`: directory containing Python scripts for conversion, inference and validation.
 
 ## How to use
 
@@ -32,7 +29,7 @@ Requirements: [git](https://gitforwindows.org/), [CMake](https://cmake.org/downl
 ```commandline
 git clone https://github.com/saharNooby/rwkv.cpp.git
 cd rwkv.cpp
-cmake -DBUILD_SHARED_LIBS=ON -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF .
+cmake -DBUILD_SHARED_LIBS=ON .
 cmake --build . --config Release
 ```
 
