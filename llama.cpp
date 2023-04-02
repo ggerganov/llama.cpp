@@ -1608,7 +1608,7 @@ struct llama_context * llama_init_from_file(
     }
 
     // reserve memory for context buffers
-    {
+    if (!params.vocab_only) {
         if (!kv_cache_init(ctx->model.hparams, ctx->model.kv_self, memory_type, ctx->model.hparams.n_ctx)) {
             fprintf(stderr, "%s: kv_cache_init() failed for self-attention cache\n", __func__);
             llama_free(ctx);
