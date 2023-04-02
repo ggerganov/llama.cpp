@@ -17,7 +17,7 @@
 #include "otherarch/gptj_v2.cpp"
 
 //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt)
-static FileFormat file_format = FileFormat::FAIL;
+static FileFormat file_format = FileFormat::BADFORMAT;
 static gpt_vocab vocab;
 static gptj_model_v1 model_v1;
 static gptj_model model_v2;
@@ -30,9 +30,8 @@ static std::vector<gpt_vocab::id> current_context_tokens;
 static size_t mem_per_token = 0;
 static std::vector<float> logits;
 
-bool gptj_load_model(const load_model_inputs inputs, FileFormat in_file_format)
+ModelLoadResult gptj_load_model(const load_model_inputs inputs, FileFormat in_file_format)
 {
-    
     ggml_time_init();
 
     file_format = in_file_format;
@@ -40,20 +39,42 @@ bool gptj_load_model(const load_model_inputs inputs, FileFormat in_file_format)
     n_batch = params.n_batch = inputs.batch_size;
     modelname = params.model = inputs.model_filename;
 
-    if (!legacy_gptj_model_load(params.model, model_v1, vocab)) {
-        fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
-        return false;
+    if (file_format == FileFormat::GPTJ1 || file_format == FileFormat::GPTJ2)
+    {   
+        ModelLoadResult res = legacy_gptj_model_load(params.model, model_v1, vocab, file_format);
+        if(res==ModelLoadResult::FAIL)
+        {
+            fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
+            return res;
+        }
+        else if(res==ModelLoadResult::RETRY_LOAD)
+        {
+            printf("\nTensor Transposition Detected! Retrying GPT-J model loading...");
+            return res;
+        }
+         // determine the required inference memory per token:    
+        legacy_gptj_eval(model_v1, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token, file_format);    
+        return ModelLoadResult::SUCCESS;
     }
-
-    if (file_format != FileFormat::GPTJ2)
+    else
     {
-        printf("\n---\nWarning: Your model has an INVALID or OUTDATED format (ver %d). Please reconvert it for better results!\n---\n", file_format);
+        ModelLoadResult loadresult = gptj_model_load(params.model, model_v2, vocab);
+        if (loadresult == ModelLoadResult::FAIL)
+        {
+            fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
+            return loadresult;
+        }
+        else if (loadresult == ModelLoadResult::RETRY_LOAD)
+        {
+            printf("\nTensor Transposition Detected! Retrying GPT-J model loading...");
+            return loadresult;
+        }
+
+        // determine the required inference memory per token:    
+        gptj_eval(model_v2, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);    
+        return ModelLoadResult::SUCCESS;
     }
-
-    // determine the required inference memory per token:    
-    legacy_gptj_eval(model_v1, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);    
-
-    return true;
+   
 }
 
 
@@ -82,9 +103,10 @@ generation_outputs gptj_generate(const generation_inputs inputs, generation_outp
     std::vector<gpt_vocab::id> embd_inp = ::gpt_tokenize(vocab, params.prompt);
 
     //truncate to front of the prompt if its too long
-    if (embd_inp.size() + params.n_predict > model_v1.hparams.n_ctx)
+    auto nctx = ( (file_format == FileFormat::GPTJ1||file_format == FileFormat::GPTJ2)? model_v1.hparams.n_ctx:model_v2.hparams.n_ctx);
+    if (embd_inp.size() + params.n_predict > nctx)
     {
-        int offset = embd_inp.size() - model_v1.hparams.n_ctx + params.n_predict;
+        int offset = embd_inp.size() - nctx + params.n_predict;
         embd_inp = std::vector<llama_token>(embd_inp.begin() + offset, embd_inp.end());
     }
 
@@ -114,7 +136,7 @@ generation_outputs gptj_generate(const generation_inputs inputs, generation_outp
     embd_inp.erase(embd_inp.begin(), embd_inp.begin() + n_past);
 
     //if using BLAS and prompt is big enough, switch to single thread and use a huge batch
-    bool blasmode = false;// (embd_inp.size() >= 32 && ggml_cpu_has_blas());
+    bool blasmode = false; //(embd_inp.size() >= 32 && ggml_cpu_has_blas());
     int original_batch = params.n_batch;
     int original_threads = params.n_threads;
     if (blasmode)
@@ -135,7 +157,7 @@ generation_outputs gptj_generate(const generation_inputs inputs, generation_outp
     timer_start();
     double time1 = 0, time2 = 0;
     unsigned int embd_inp_size = embd_inp.size();
-    const int n_vocab = model_v1.hparams.n_vocab;
+    const int n_vocab = ((file_format == FileFormat::GPTJ1||file_format == FileFormat::GPTJ2)? model_v1.hparams.n_vocab:model_v2.hparams.n_vocab);
 
     printf("\n");
 
@@ -156,7 +178,15 @@ generation_outputs gptj_generate(const generation_inputs inputs, generation_outp
                 printf("\rGenerating (%d / %d tokens)", (1 + params.n_predict - remaining_tokens), params.n_predict);
             }
            
-            if (!legacy_gptj_eval(model_v1, params.n_threads, n_past, embd, logits, mem_per_token))
+            bool evalres = false;
+            if(file_format==FileFormat::GPTJ1 || file_format==FileFormat::GPTJ2)
+            {
+                evalres = legacy_gptj_eval(model_v1, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
+            }else
+            {
+                evalres = gptj_eval(model_v2, params.n_threads, n_past, embd, logits, mem_per_token);
+            }
+            if (!evalres)
             {
                 fprintf(stderr, "Failed to predict\n");
                 snprintf(output.text, sizeof(output.text), "%s", "");

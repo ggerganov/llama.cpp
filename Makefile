@@ -31,8 +31,8 @@ endif
 #
 
 # keep standard at C11 and C++11
-CFLAGS   = -I.              -O3 -DNDEBUG -std=c11   -fPIC
-CXXFLAGS = -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC
+CFLAGS   = -I.              -Ofast -DNDEBUG -std=c11   -fPIC
+CXXFLAGS = -I. -I./examples -Ofast -DNDEBUG -std=c++11 -fPIC
 LDFLAGS  =
 
 #lets try enabling everything
@@ -152,7 +152,7 @@ ggml_blas.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS) -DGGML_USE_OPENBLAS -c ggml.c -o ggml_blas.o
 
 ggml_v1.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
-	$(CC)  $(CFLAGS)   -c otherarch/ggml_v1.c -o ggml_v1.o
+	$(CC)  $(CFLAGS) -c otherarch/ggml_v1.c -o ggml_v1.o
 
 llama.o: llama.cpp llama.h
 	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
@@ -193,6 +193,8 @@ perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o
 embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/embedding/embedding.cpp ggml.o llama.o common.o -o embedding $(LDFLAGS)
 
+gptj: ggml_v1.o
+	$(CXX) $(CXXFLAGS) otherarch/gptj_v1_main.cpp otherarch/utils.cpp ggml_v1.o -o gptj $(LDFLAGS) 
 #
 # Tests
 #

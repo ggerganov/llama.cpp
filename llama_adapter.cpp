@@ -16,7 +16,7 @@
 #include "llamaextra.cpp"
 
 //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt)
-static FileFormat file_format = FileFormat::FAIL;
+static FileFormat file_format = FileFormat::BADFORMAT;
 static llama_context_params ctx_params;
 static gpt_params params;
 static int n_past = 0;

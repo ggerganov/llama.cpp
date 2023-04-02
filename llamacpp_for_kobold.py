@@ -37,12 +37,17 @@ use_blas = False # if true, uses OpenBLAS for acceleration. libopenblas.dll must
 
 def init_library():
     global handle, use_blas
-    dir_path = os.path.dirname(os.path.realpath(__file__))
+    libname = ""
     if use_blas:
-        #OpenBLAS should provide about a 2x speedup on prompt ingestion if compatible.
-        handle = ctypes.CDLL(os.path.join(dir_path, "llamacpp_blas.dll"))
+        libname = "llamacpp_blas.dll"
     else:
-        handle = ctypes.CDLL(os.path.join(dir_path, "llamacpp.dll"))
+        libname = "llamacpp.dll"
+
+    print("Initializing dynamic library: " + libname)
+    dir_path = os.path.dirname(os.path.realpath(__file__))  
+    
+    #OpenBLAS should provide about a 2x speedup on prompt ingestion if compatible.
+    handle = ctypes.CDLL(os.path.join(dir_path, libname ))
 
     handle.load_model.argtypes = [load_model_inputs] 
     handle.load_model.restype = ctypes.c_bool

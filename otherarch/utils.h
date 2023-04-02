@@ -62,6 +62,18 @@ gpt_vocab::id gpt_sample_top_k_top_p(
         double temp,
         std::mt19937 & rng);
 
+gpt_vocab::id gptj_sample_top_p_top_k(
+        const gpt_vocab & vocab,
+        const float * logits,
+        std::vector<gpt_vocab::id> & last_n_tokens,
+        double repeat_penalty,
+        int top_k,
+        double top_p,
+        double temp,
+        std::mt19937 & rng);
+
 bool utils_gpt_params_parse(int argc, char ** argv, gpt_params & params);
 void utils_gpt_print_usage(int argc, char ** argv, const gpt_params & params);
 std::string utils_gpt_random_prompt(std::mt19937 & rng);
+
+static bool should_transpose_layer(std::string name);

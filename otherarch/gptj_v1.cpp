@@ -17,13 +17,15 @@
 
 
 // load the model's weights from a file
-bool legacy_gptj_model_load(const std::string & fname, gptj_model_v1 & model, gpt_vocab & vocab) {
+ModelLoadResult legacy_gptj_model_load(const std::string & fname, gptj_model_v1 & model, gpt_vocab & vocab, FileFormat file_format) {
     printf("%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
+
+    bool super_old_format = (file_format==FileFormat::GPTJ1);
 
     auto fin = std::ifstream(fname, std::ios::binary);
     if (!fin) {
         fprintf(stderr, "%s: failed to open '%s'\n", __func__, fname.c_str());
-        return false;
+        return ModelLoadResult::FAIL;
     }
 
     // verify magic
@@ -32,7 +34,7 @@ bool legacy_gptj_model_load(const std::string & fname, gptj_model_v1 & model, gp
         fin.read((char *) &magic, sizeof(magic));
         if (magic != 0x67676d6c) {
             fprintf(stderr, "%s: invalid model file '%s' (bad magic)\n", __func__, fname.c_str());
-            return false;
+            return ModelLoadResult::FAIL;
         }
     }
 
@@ -65,7 +67,7 @@ bool legacy_gptj_model_load(const std::string & fname, gptj_model_v1 & model, gp
         if (n_vocab != model.hparams.n_vocab) {
             fprintf(stderr, "%s: invalid model file '%s' (bad vocab size %d != %d)\n",
                     __func__, fname.c_str(), n_vocab, model.hparams.n_vocab);
-            return false;
+            return ModelLoadResult::FAIL;
         }
 
         std::string word;
@@ -81,9 +83,23 @@ bool legacy_gptj_model_load(const std::string & fname, gptj_model_v1 & model, gp
         }
     }
 
-    // for the big tensors, we have the option to store the data in 16-bit floats
+    // for the big tensors, we have the option to store the data in 16-bit floats or quantized
     // in order to save memory and also to speed up the computation
-    const ggml_v1_type wtype = model.hparams.f16 ? GGML_V1_TYPE_F16 : GGML_V1_TYPE_F32;
+    ggml_v1_type wtype = GGML_V1_TYPE_COUNT;
+    switch (model.hparams.f16) {
+        case 0: wtype = GGML_V1_TYPE_F32;  break;
+        case 1: wtype = GGML_V1_TYPE_F16;  break;
+        case 2: wtype = GGML_V1_TYPE_Q4_0; break;
+        case 3: wtype = GGML_V1_TYPE_Q4_1; break;
+        default:
+                {
+                    fprintf(stderr, "%s: invalid model file '%s' (bad f16 value %d)\n",
+                            __func__, fname.c_str(), model.hparams.f16);
+                    return ModelLoadResult::FAIL;
+                }
+    }
+
+    const ggml_v1_type wtype2 = GGML_V1_TYPE_F32;
 
     auto & ctx = model.ctx;
 
@@ -97,31 +113,31 @@ bool legacy_gptj_model_load(const std::string & fname, gptj_model_v1 & model, gp
         const int n_ctx   = hparams.n_ctx;
         const int n_vocab = hparams.n_vocab;
 
-        ctx_size += n_embd*ggml_v1_type_size(GGML_V1_TYPE_F32); // ln_f_g
-        ctx_size += n_embd*ggml_v1_type_size(GGML_V1_TYPE_F32); // ln_f_b
+        ctx_size += n_embd*ggml_v1_type_sizef(GGML_V1_TYPE_F32); // ln_f_g
+        ctx_size += n_embd*ggml_v1_type_sizef(GGML_V1_TYPE_F32); // ln_f_b
 
-        ctx_size += n_embd*n_vocab*ggml_v1_type_size(wtype); // wte
+        ctx_size += n_embd*n_vocab*ggml_v1_type_sizef(wtype); // wte
 
-        ctx_size += n_embd*n_vocab*ggml_v1_type_size(wtype);         // lmh_g
-        ctx_size +=        n_vocab*ggml_v1_type_size(GGML_V1_TYPE_F32); // lmh_b
+        ctx_size += n_embd*n_vocab*ggml_v1_type_sizef(wtype);         // lmh_g
+        ctx_size +=        n_vocab*ggml_v1_type_sizef(GGML_V1_TYPE_F32); // lmh_b
 
-        ctx_size += n_layer*(n_embd*ggml_v1_type_size(GGML_V1_TYPE_F32)); // ln_1_g
-        ctx_size += n_layer*(n_embd*ggml_v1_type_size(GGML_V1_TYPE_F32)); // ln_1_b
+        ctx_size += n_layer*(n_embd*ggml_v1_type_sizef(GGML_V1_TYPE_F32)); // ln_1_g
+        ctx_size += n_layer*(n_embd*ggml_v1_type_sizef(GGML_V1_TYPE_F32)); // ln_1_b
 
-        ctx_size += n_layer*(n_embd*n_embd*ggml_v1_type_size(wtype)); // c_attn_q_proj_w
-        ctx_size += n_layer*(n_embd*n_embd*ggml_v1_type_size(wtype)); // c_attn_k_proj_w
-        ctx_size += n_layer*(n_embd*n_embd*ggml_v1_type_size(wtype)); // c_attn_v_proj_w
+        ctx_size += n_layer*(n_embd*n_embd*ggml_v1_type_sizef(wtype)); // c_attn_q_proj_w
+        ctx_size += n_layer*(n_embd*n_embd*ggml_v1_type_sizef(wtype)); // c_attn_k_proj_w
+        ctx_size += n_layer*(n_embd*n_embd*ggml_v1_type_sizef(wtype)); // c_attn_v_proj_w
 
-        ctx_size += n_layer*(n_embd*n_embd*ggml_v1_type_size(wtype)); // c_attn_proj_w
+        ctx_size += n_layer*(n_embd*n_embd*ggml_v1_type_sizef(wtype)); // c_attn_proj_w
 
-        ctx_size += n_layer*(4*n_embd*n_embd*ggml_v1_type_size(wtype));         // c_mlp_fc_w
-        ctx_size += n_layer*(       4*n_embd*ggml_v1_type_size(GGML_V1_TYPE_F32)); // c_mlp_fc_b
+        ctx_size += n_layer*(4*n_embd*n_embd*ggml_v1_type_sizef(wtype));         // c_mlp_fc_w
+        ctx_size += n_layer*(       4*n_embd*ggml_v1_type_sizef(GGML_V1_TYPE_F32)); // c_mlp_fc_b
 
-        ctx_size += n_layer*(4*n_embd*n_embd*ggml_v1_type_size(wtype));         // c_mlp_proj_w_trans
-        ctx_size += n_layer*(         n_embd*ggml_v1_type_size(GGML_V1_TYPE_F32)); // c_mlp_proj_b
+        ctx_size += n_layer*(4*n_embd*n_embd*ggml_v1_type_sizef(wtype));         // c_mlp_proj_w_trans
+        ctx_size += n_layer*(         n_embd*ggml_v1_type_sizef(GGML_V1_TYPE_F32)); // c_mlp_proj_b
 
-        ctx_size += n_ctx*n_layer*n_embd*ggml_v1_type_size(GGML_V1_TYPE_F32); // memory_k
-        ctx_size += n_ctx*n_layer*n_embd*ggml_v1_type_size(GGML_V1_TYPE_F32); // memory_v
+        ctx_size += n_ctx*n_layer*n_embd*ggml_v1_type_sizef(GGML_V1_TYPE_F32); // memory_k
+        ctx_size += n_ctx*n_layer*n_embd*ggml_v1_type_sizef(GGML_V1_TYPE_F32); // memory_v
 
         ctx_size += (5 + 10*n_layer)*256; // object overhead
 
@@ -138,7 +154,7 @@ bool legacy_gptj_model_load(const std::string & fname, gptj_model_v1 & model, gp
         model.ctx = ggml_v1_init(params);
         if (!model.ctx) {
             fprintf(stderr, "%s: ggml_v1_init() failed\n", __func__);
-            return false;
+            return ModelLoadResult::FAIL;
         }
     }
 
@@ -181,8 +197,15 @@ bool legacy_gptj_model_load(const std::string & fname, gptj_model_v1 & model, gp
             layer.c_attn_v_proj_w       = ggml_v1_new_tensor_2d(ctx, wtype,           n_embd,   n_embd);
 
             layer.c_attn_proj_w         = ggml_v1_new_tensor_2d(ctx, wtype,           n_embd,   n_embd);
-
-            layer.c_mlp_fc_w            = ggml_v1_new_tensor_2d(ctx, wtype,         4*n_embd,   n_embd);
+            
+            if(super_old_format)
+            {
+                layer.c_mlp_fc_w        = ggml_v1_new_tensor_2d(ctx, wtype,         4*n_embd,   n_embd);
+            }
+            else
+            {
+                layer.c_mlp_fc_w        = ggml_v1_new_tensor_2d(ctx, wtype,           n_embd, 4*n_embd);
+            }
             layer.c_mlp_fc_b            = ggml_v1_new_tensor_1d(ctx, GGML_V1_TYPE_F32, 4*n_embd);
 
             layer.c_mlp_proj_w_trans    = ggml_v1_new_tensor_2d(ctx, wtype,         4*n_embd,   n_embd);
@@ -257,27 +280,55 @@ bool legacy_gptj_model_load(const std::string & fname, gptj_model_v1 & model, gp
 
             if (model.tensors.find(name.data()) == model.tensors.end()) {
                 fprintf(stderr, "%s: unknown tensor '%s' in model file\n", __func__, name.data());
-                return false;
+                return ModelLoadResult::FAIL;
             }
 
             auto tensor = model.tensors[name.data()];
             if (ggml_v1_nelements(tensor) != nelements) {
                 fprintf(stderr, "%s: tensor '%s' has wrong size in model file\n", __func__, name.data());
-                return false;
+                return ModelLoadResult::FAIL;
             }
 
-            if (tensor->ne[0] != ne[0] || tensor->ne[1] != ne[1]) {
-                fprintf(stderr, "%s: tensor '%s' has wrong shape in model file: got [%d, %d], expected [%d, %d]\n",
-                        __func__, name.data(), tensor->ne[0], tensor->ne[1], ne[0], ne[1]);
-                return false;
+            if (tensor->ne[0] != ne[0] || tensor->ne[1] != ne[1]) 
+            {
+               //test for transposition and retry older loader
+                if(tensor->ne[0]==ne[1] && tensor->ne[1]==ne[0] && should_transpose_layer(name))
+                {
+                    printf("\nFound a transposed tensor. This could be an older model. Retrying load...");
+                    ggml_v1_free(ctx);
+                    return ModelLoadResult::RETRY_LOAD;
+                }
+                else
+                {
+                    fprintf(stderr, "%s: tensor '%s' has wrong shape in model file: got [%d, %d], expected [%d, %d]\n",
+                            __func__, name.data(), tensor->ne[0], tensor->ne[1], ne[0], ne[1]);
+                    return ModelLoadResult::FAIL;
+                }
             }
 
-            const size_t bpe = tensor->type == GGML_V1_TYPE_I8 ? 1 : (ftype == 0) ? sizeof(float) : sizeof(ggml_v1_fp16_t);
+            if (0) {
+                static const char * ftype_str[] = { "f32", "f16", "q4_0", "q4_1", };
+                printf("%24s - [%5d, %5d], type = %6s, %6.2f MB, %9zu bytes\n", name.data(), ne[0], ne[1], ftype_str[ftype], ggml_v1_nbytes(tensor)/1024.0/1024.0, ggml_v1_nbytes(tensor));
+            }
 
-            if (nelements*bpe != ggml_v1_nbytes(tensor)) {
+            size_t bpe = 0;
+
+            switch (ftype) {
+                case 0: bpe = ggml_v1_type_size(GGML_V1_TYPE_F32);  break;
+                case 1: bpe = ggml_v1_type_size(GGML_V1_TYPE_F16);  break;
+                case 2: bpe = ggml_v1_type_size(GGML_V1_TYPE_Q4_0); assert(ne[0] % 64 == 0); break;
+                case 3: bpe = ggml_v1_type_size(GGML_V1_TYPE_Q4_1); assert(ne[0] % 64 == 0); break;
+                default:
+                        {
+                            fprintf(stderr, "%s: unknown ftype %d in model file\n", __func__, ftype);
+                            return ModelLoadResult::FAIL;
+                        }
+            };
+
+            if ((nelements*bpe)/ggml_v1_blck_size(tensor->type) != ggml_v1_nbytes(tensor)) {
                 fprintf(stderr, "%s: tensor '%s' has wrong size in model file: got %zu, expected %zu\n",
                         __func__, name.data(), ggml_v1_nbytes(tensor), nelements*bpe);
-                return false;
+                return ModelLoadResult::FAIL;
             }
 
             fin.read(reinterpret_cast<char *>(tensor->data), ggml_v1_nbytes(tensor));
@@ -297,7 +348,7 @@ bool legacy_gptj_model_load(const std::string & fname, gptj_model_v1 & model, gp
 
     fin.close();
 
-    return true;
+    return ModelLoadResult::SUCCESS;
 }
 
 // evaluate the transformer
@@ -316,7 +367,10 @@ bool legacy_gptj_eval(
         const int n_past,
         const std::vector<gpt_vocab::id> & embd_inp,
               std::vector<float>         & embd_w,
-              size_t                     & mem_per_token) {
+              size_t                     & mem_per_token,
+       FileFormat file_format) {
+
+    bool super_old_format = (file_format==FileFormat::GPTJ1);
     const int N = embd_inp.size();
 
     const auto & hparams = model.hparams;
@@ -379,9 +433,21 @@ bool legacy_gptj_eval(
 
         // self-attention
         {
-            struct ggml_v1_tensor * Qcur = ggml_v1_mul_mat(ctx0, ggml_v1_transpose(ctx0, model.layers[il].c_attn_q_proj_w), cur);
-            struct ggml_v1_tensor * Kcur = ggml_v1_mul_mat(ctx0, ggml_v1_transpose(ctx0, model.layers[il].c_attn_k_proj_w), cur);
-            struct ggml_v1_tensor * Vcur = ggml_v1_mul_mat(ctx0, ggml_v1_transpose(ctx0, model.layers[il].c_attn_v_proj_w), cur);
+            struct ggml_v1_tensor * Qcur;
+            struct ggml_v1_tensor * Kcur;
+            struct ggml_v1_tensor * Vcur;
+            if(super_old_format)
+            {
+                Qcur = ggml_v1_mul_mat(ctx0, ggml_v1_transpose(ctx0, model.layers[il].c_attn_q_proj_w), cur);
+                Kcur = ggml_v1_mul_mat(ctx0, ggml_v1_transpose(ctx0, model.layers[il].c_attn_k_proj_w), cur);
+                Vcur = ggml_v1_mul_mat(ctx0, ggml_v1_transpose(ctx0, model.layers[il].c_attn_v_proj_w), cur);
+            }
+            else
+            {
+                Qcur = ggml_v1_mul_mat(ctx0, model.layers[il].c_attn_q_proj_w, cur);
+                Kcur = ggml_v1_mul_mat(ctx0, model.layers[il].c_attn_k_proj_w, cur);
+                Vcur = ggml_v1_mul_mat(ctx0, model.layers[il].c_attn_v_proj_w, cur);
+            }
 
             // store key and value to memory
             if (N >= 1) {
@@ -448,9 +514,18 @@ bool legacy_gptj_eval(
                     ggml_v1_new_tensor_2d(ctx0, GGML_V1_TYPE_F32, n_embd, N));
 
             // projection (no bias)
-            cur = ggml_v1_mul_mat(ctx0,
-                    ggml_v1_transpose(ctx0, model.layers[il].c_attn_proj_w),
-                    cur);
+            if(super_old_format)
+            {
+                cur = ggml_v1_mul_mat(ctx0,
+                        ggml_v1_transpose(ctx0, model.layers[il].c_attn_proj_w),
+                        cur);
+            }
+            else
+            {                
+                cur = ggml_v1_mul_mat(ctx0,
+                        model.layers[il].c_attn_proj_w,
+                        cur);
+            }
         }
 
         struct ggml_v1_tensor * inpFF = cur;
@@ -459,9 +534,16 @@ bool legacy_gptj_eval(
         // this is independent of the self-attention result, so it could be done in parallel to the self-attention
         {
             // note here we pass inpSA instead of cur
-            cur = ggml_v1_mul_mat(ctx0,
-                    ggml_v1_transpose(ctx0, model.layers[il].c_mlp_fc_w),
-                    inpSA);
+            if(super_old_format)
+            {
+                cur = ggml_v1_mul_mat(ctx0,
+                ggml_v1_transpose(ctx0, model.layers[il].c_mlp_fc_w),
+                inpSA);
+            }else{
+                cur = ggml_v1_mul_mat(ctx0,
+                model.layers[il].c_mlp_fc_w,
+                inpSA);
+            }
 
             cur = ggml_v1_add(ctx0,
                     ggml_v1_repeat(ctx0, model.layers[il].c_mlp_fc_b, cur),
@@ -538,145 +620,3 @@ bool legacy_gptj_eval(
     return true;
 }
 
-// int main(int argc, char ** argv) {
-//     ggml_v1_time_init();
-//     const int64_t t_main_start_us = ggml_v1_time_us();
-
-//     gpt_params params;
-//     params.model = "models/gpt-j-6B/ggml-model.bin";
-
-//     if (utils_gpt_params_parse(argc, argv, params) == false) {
-//         return 1;
-//     }
-
-//     if (params.seed < 0) {
-//         params.seed = time(NULL);
-//     }
-
-//     printf("%s: seed = %d\n", __func__, params.seed);
-
-//     std::mt19937 rng(params.seed);
-//     if (params.prompt.empty()) {
-//         if( !isatty(STDIN_FILENO) ){
-//             std::string line;
-//             while( std::getline(std::cin, line) ){
-//                 params.prompt = params.prompt + "\n" + line;
-//             }
-//         } else {
-//             params.prompt = utils_gpt_random_prompt(rng);
-//         }
-//     }
-
-//     int64_t t_load_us = 0;
-
-//     gpt_vocab vocab;
-//     gptj_model_v1 model;
-
-//     // load the model
-//     {
-//         const int64_t t_start_us = ggml_v1_time_us();
-
-//         if (!legacy_gptj_model_load(params.model, model, vocab)) {
-//             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
-//             return 1;
-//         }
-
-//         t_load_us = ggml_v1_time_us() - t_start_us;
-//     }
-
-//     int n_past = 0;
-
-//     int64_t t_sample_us  = 0;
-//     int64_t t_predict_us = 0;
-
-//     std::vector<float> logits;
-
-//     // tokenize the prompt
-//     std::vector<gpt_vocab::id> embd_inp = ::gpt_tokenize(vocab, params.prompt);
-
-//     params.n_predict = std::min(params.n_predict, model.hparams.n_ctx - (int) embd_inp.size());
-
-//     printf("%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
-//     printf("\n");
-
-//     std::vector<gpt_vocab::id> embd;
-
-//     // determine the required inference memory per token:
-//     size_t mem_per_token = 0;
-//     legacy_gptj_eval(model, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);
-
-//     for (int i = embd.size(); i < embd_inp.size() + params.n_predict; i++) {
-//         // predict
-//         if (embd.size() > 0) {
-//             const int64_t t_start_us = ggml_v1_time_us();
-
-//             if (!legacy_gptj_eval(model, params.n_threads, n_past, embd, logits, mem_per_token)) {
-//                 printf("Failed to predict\n");
-//                 return 1;
-//             }
-
-//             t_predict_us += ggml_v1_time_us() - t_start_us;
-//         }
-
-//         n_past += embd.size();
-//         embd.clear();
-
-//         if (i >= embd_inp.size()) {
-//             // sample next token
-//             const int   top_k = params.top_k;
-//             const float top_p = params.top_p;
-//             const float temp  = params.temp;
-
-//             const int n_vocab = model.hparams.n_vocab;
-
-//             gpt_vocab::id id = 0;
-
-//             {
-//                 const int64_t t_start_sample_us = ggml_v1_time_us();
-
-//                 id = gpt_sample_top_k_top_p(vocab, logits.data() + (logits.size() - n_vocab), top_k, top_p, temp, rng);
-
-//                 t_sample_us += ggml_v1_time_us() - t_start_sample_us;
-//             }
-
-//             // add it to the context
-//             embd.push_back(id);
-//         } else {
-//             // if here, it means we are still processing the input prompt
-//             for (int k = i; k < embd_inp.size(); k++) {
-//                 embd.push_back(embd_inp[k]);
-//                 if (embd.size() > params.n_batch) {
-//                     break;
-//                 }
-//             }
-//             i += embd.size() - 1;
-//         }
-
-//         // display text
-//         for (auto id : embd) {
-//             printf("%s", vocab.id_to_token[id].c_str());
-//         }
-//         fflush(stdout);
-
-//         // end of text token
-//         if (embd.back() == 50256) {
-//             break;
-//         }
-//     }
-
-//     // report timing
-//     {
-//         const int64_t t_main_end_us = ggml_v1_time_us();
-
-//         printf("\n\n");
-//         printf("%s: mem per token = %8zu bytes\n", __func__, mem_per_token);
-//         printf("%s:     load time = %8.2f ms\n", __func__, t_load_us/1000.0f);
-//         printf("%s:   sample time = %8.2f ms\n", __func__, t_sample_us/1000.0f);
-//         printf("%s:  predict time = %8.2f ms / %.2f ms per token\n", __func__, t_predict_us/1000.0f, t_predict_us/1000.0f/n_past);
-//         printf("%s:    total time = %8.2f ms\n", __func__, (t_main_end_us - t_main_start_us)/1000.0f);
-//     }
-
-//     ggml_v1_free(model.ctx);
-
-//     return 0;
-// }

@@ -49,10 +49,10 @@ void print_tok_vec(std::vector<int> &embd)
     fin.rdbuf()->pubsetbuf(f_buf.data(), f_buf.size());
     if (!fin) {
         fprintf(stderr, "%s: failed to open '%s'\n", __func__, fname.c_str());
-        return FileFormat::FAIL;
+        return FileFormat::BADFORMAT;
     }
 
-    FileFormat fileformat = FileFormat::FAIL;
+    FileFormat fileformat = FileFormat::BADFORMAT;
     uint32_t magic;
     fin.read((char *) &magic, sizeof(magic));
     if (magic == 0x67676d6c) {  //v1 format ggml, alpaca, old gptj and gpt2 models

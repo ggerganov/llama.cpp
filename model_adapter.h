@@ -13,23 +13,30 @@
 
 #include "expose.h"
 
-//return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt) 
 enum FileFormat
 {
-    FAIL=0,
-    GGML=1,
-    GGHF=2,
-    GGJT=3,
+    BADFORMAT=0, //unknown, uninit, or failed to load
+    GGML=1, // 1=(original llama ggml, alpaca, GPT4ALL, GPTJ header)
+    GGHF=2, // 2=(llama ggmf)
+    GGJT=3, // 3=(llama ggjt) 
 
-    GPTJ1=100,
-    GPTJ2=101,
+    GPTJ1=100, //the very first super old GPTJ format
+    GPTJ2=101, //pygmalion, uses old ggml lib
+    GPTJ3=102, //uses new ggml lib
 
     GPT2=200,
 };
 
+enum ModelLoadResult
+{
+    FAIL = 0,
+    SUCCESS = 1,
+    RETRY_LOAD = 2, //used if it's suspected that the model is an older format
+};
+
 bool llama_load_model(const load_model_inputs inputs, FileFormat file_format);
 generation_outputs llama_generate(const generation_inputs inputs, generation_outputs &output);
-bool gptj_load_model(const load_model_inputs inputs, FileFormat in_file_format);
+ModelLoadResult gptj_load_model(const load_model_inputs inputs, FileFormat in_file_format);
 generation_outputs gptj_generate(const generation_inputs inputs, generation_outputs &output);
 
 
