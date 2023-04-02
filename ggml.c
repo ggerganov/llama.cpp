@@ -1635,18 +1635,18 @@ inline static void ggml_vec_set_i32(const int n, int32_t * x, const int32_t v) {
 
 inline static void ggml_vec_set_f16(const int n, ggml_fp16_t * x, const int32_t v) { for (int i = 0; i < n; ++i) x[i] = v; }
 
-inline static void ggml_vec_add_f32 (const int n, float * z, const float * x, const float * y)              { for (int i = 0; i < n; ++i) z[i]  = x[i] + y[i];     }
-inline static void ggml_vec_acc_f32 (const int n, float * y, const float * x)                               { for (int i = 0; i < n; ++i) y[i] += x[i];            }
-inline static void ggml_vec_acc1_f32(const int n, float * y, const float   v)                               { for (int i = 0; i < n; ++i) y[i] += v;               }
-inline static void ggml_vec_sub_f32 (const int n, float * z, const float * x, const float * y)              { for (int i = 0; i < n; ++i) z[i]  = x[i] - y[i];     }
-inline static void ggml_vec_set_f32 (const int n, float * x, const float   v)                               { for (int i = 0; i < n; ++i) x[i]  = v;               }
-inline static void ggml_vec_cpy_f32 (const int n, float * y, const float * x)                               { for (int i = 0; i < n; ++i) y[i]  = x[i];            }
-inline static void ggml_vec_neg_f32 (const int n, float * y, const float * x)                               { for (int i = 0; i < n; ++i) y[i]  = -x[i];           }
-inline static void ggml_vec_exp_f32 (const int n, float * y, const float * x)                               { for (int i = 0; i < n; ++i) y[i]  = expf(x[i]);      }
-inline static void ggml_vec_1_minus_x_f32 (const int n, float * y, const float * x)                         { for (int i = 0; i < n; ++i) y[i]  = 1 - x[i];        }
-inline static void ggml_vec_mul_f32 (const int n, float * z, const float * x, const float * y)              { for (int i = 0; i < n; ++i) z[i]  = x[i]*y[i];       }
-inline static void ggml_vec_div_f32 (const int n, float * z, const float * x, const float * y)              { for (int i = 0; i < n; ++i) z[i]  = x[i]/y[i];       }
-inline static void ggml_vec_element_wise_max_f32 (const int n, float * z, const float * x, const float * y) { for (int i = 0; i < n; ++i) z[i]  = max(x[i], y[i]); }
+inline static void ggml_vec_add_f32 (const int n, float * z, const float * x, const float * y)              { for (int i = 0; i < n; ++i) z[i]  = x[i] + y[i];       }
+inline static void ggml_vec_acc_f32 (const int n, float * y, const float * x)                               { for (int i = 0; i < n; ++i) y[i] += x[i];              }
+inline static void ggml_vec_acc1_f32(const int n, float * y, const float   v)                               { for (int i = 0; i < n; ++i) y[i] += v;                 }
+inline static void ggml_vec_sub_f32 (const int n, float * z, const float * x, const float * y)              { for (int i = 0; i < n; ++i) z[i]  = x[i] - y[i];       }
+inline static void ggml_vec_set_f32 (const int n, float * x, const float   v)                               { for (int i = 0; i < n; ++i) x[i]  = v;                 }
+inline static void ggml_vec_cpy_f32 (const int n, float * y, const float * x)                               { for (int i = 0; i < n; ++i) y[i]  = x[i];              }
+inline static void ggml_vec_neg_f32 (const int n, float * y, const float * x)                               { for (int i = 0; i < n; ++i) y[i]  = -x[i];             }
+inline static void ggml_vec_exp_f32 (const int n, float * y, const float * x)                               { for (int i = 0; i < n; ++i) y[i]  = expf(x[i]);        }
+inline static void ggml_vec_1_minus_x_f32 (const int n, float * y, const float * x)                         { for (int i = 0; i < n; ++i) y[i]  = 1 - x[i];          }
+inline static void ggml_vec_mul_f32 (const int n, float * z, const float * x, const float * y)              { for (int i = 0; i < n; ++i) z[i]  = x[i]*y[i];         }
+inline static void ggml_vec_div_f32 (const int n, float * z, const float * x, const float * y)              { for (int i = 0; i < n; ++i) z[i]  = x[i]/y[i];         }
+inline static void ggml_vec_element_wise_max_f32 (const int n, float * z, const float * x, const float * y) { for (int i = 0; i < n; ++i) z[i]  = fmaxf(x[i], y[i]); }
 
 inline static void ggml_vec_dot_f32(const int n, float * restrict s, const float * restrict x, const float * restrict y) {
 #ifdef GGML_SIMD
@@ -10832,11 +10832,11 @@ int ggml_cpu_has_vsx(void) {
 
 #define GGML_TEST_ASSERT_ELEMENT_F32(tensor, i, expected_value) do {\
         float actual = *(float *) ((char *) tensor->data + 4 * i);\
-        GGML_TEST_ASSERT(fabs(actual - expected_value) <= 0.0001F, "At %s[%d]: expected %f, actual %f", #tensor, i, expected_value, actual);\
+        GGML_TEST_ASSERT(fabsf(actual - expected_value) <= 0.0001F, "At %s[%d]: expected %f, actual %f", #tensor, i, expected_value, actual);\
     } while (0)
 
 // Copied from https://github.com/ggerganov/llama.cpp/blob/6e7801d08d81c931a5427bae46f00763e993f54a/tests/test-quantize.c
-void ggml_test_quantization() {
+void ggml_test_quantization(void) {
     #define QK 32
     float src[QK];
     uint8_t dst[24];
@@ -10872,7 +10872,7 @@ void ggml_test_quantization() {
     }
 }
 
-void ggml_run_test_suite() {
+void ggml_run_test_suite(void) {
     ggml_test_quantization();
 
     struct ggml_init_params params;

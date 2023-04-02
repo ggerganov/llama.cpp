@@ -206,12 +206,13 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, uint32_t n_thr
 
     while (true) {
         int32_t dim_count;
-        fread(&dim_count, 4, 1, file);
+        size_t elements_read = fread(&dim_count, 4, 1, file);
 
         if (feof(file)) {
             break;
         }
 
+        RWKV_ASSERT_NULL(elements_read == 1, "Failed to read dimension count");
         RWKV_ASSERT_NULL(dim_count == 1 || dim_count == 2, "Unsupported dimension count %d", dim_count);
 
         int32_t key_length;
@@ -243,23 +244,20 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, uint32_t n_thr
 
         int32_t x = -1;
         int32_t y = -1;
-        int32_t element_count;
 
         if (dim_count == 1) {
             read_int32(file, &x);
-            element_count = x;
             tensor = ggml_new_tensor_1d(ctx, ggml_data_type, x);
         } else if (dim_count == 2) {
             read_int32(file, &x);
             read_int32(file, &y);
-            element_count = x * y;
             tensor = ggml_new_tensor_2d(ctx, ggml_data_type, x, y);
         } else {
             abort();
         }
 
         std::string key(key_length, 0);
-        RWKV_ASSERT_NULL(fread(&key[0], 1, key_length, file) == key_length, "Failed to read parameter key");
+        RWKV_ASSERT_NULL(fread(&key[0], 1, key_length, file) == uint32_t(key_length), "Failed to read parameter key");
 
         RWKV_ASSERT_NULL(fread(tensor->data, 1, ggml_nbytes(tensor), file) == ggml_nbytes(tensor), "Failed to read parameter data");
 
@@ -314,7 +312,6 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, uint32_t n_thr
     RWKV_ASSERT_NULL(emb->ne[0] == model->n_embed, "Unexpected dimension of embedding matrix %d", emb->ne[0]);
     RWKV_ASSERT_NULL(emb->ne[1] == model->n_vocab, "Unexpected dimension of embedding matrix %d", emb->ne[1]);
 
-    int32_t n_vocab = model->n_vocab;
     int32_t n_embed = model->n_embed;
     int32_t n_layer = model->n_layer;
 
@@ -542,7 +539,7 @@ bool rwkv_eval(struct rwkv_context * ctx, int32_t token, float * state_in, float
 
     ggml_graph_compute(ctx->ctx, ctx->graph);
 
-    for (size_t i = 0; i < n_layer * 5; i++) {
+    for (size_t i = 0; i < size_t(n_layer * 5); i++) {
         struct ggml_tensor * part = ctx->state_parts[i];
 
         memcpy(state_out + i * n_embed, part->data, part->ne[0] * FP32_SIZE);
