@@ -235,7 +235,7 @@ common.o: examples/common.cpp examples/common.h
 	$(CXX) $(CXXFLAGS) -c examples/common.cpp -o common.o
 
 clean:
-	rm -vf *.o main quantize perplexity embedding
+	rm -vf *.o main quantize perplexity embedding examples/benchmark/benchmark-q4_0-matmult
 
 main: examples/main/main.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
@@ -257,8 +257,8 @@ embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
 #
 
 benchmark: ggml.o
-	$(CXX) $(CXXFLAGS) tests/test-benchmark-q4_0-matmult.c ggml.o -o tests/test-benchmark-q4_0-matmult $(LDFLAGS)	
-	tests/test-benchmark-q4_0-matmult
+	$(CXX) $(CXXFLAGS) examples/benchmark/benchmark-q4_0-matmult.c ggml.o -o examples/benchmark/benchmark-q4_0-matmult $(LDFLAGS)	
+	examples/benchmark/benchmark-q4_0-matmult
 	
 .PHONY: tests
 tests:
