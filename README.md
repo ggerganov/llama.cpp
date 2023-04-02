@@ -44,6 +44,17 @@ Supported models:
 
 ---
 
+##Model links:
+
+[LLaMA HuggingFace 7B Model](https://huggingface.co/nyanko7/LLaMA-7B/tree/main)
+[LLaMa HuggingFace 65B Model](https://huggingface.co/datasets/nyanko7/LLaMA-65B/tree/main)
+[Alpaca-LoRa HuggingFace 7B Model](https://huggingface.co/Pi3141/alpaca-lora-7B-ggml/tree/main)
+[Alpaca-LoRa HuggingFace 13B Model](https://huggingface.co/Pi3141/alpaca-lora-13B-ggml/tree/main)
+[Alpaca-LoRa HuggingFace 30B Model](https://huggingface.co/Pi3141/alpaca-lora-30B-ggml/tree/main)
+[Alpaca-Native-Enhanced HuggingFace 7B Model](https://huggingface.co/Pi3141/alpaca-7b-native-enhanced/tree/main) - Extreamly better than the LoRa one!
+[Alpaca-Native HuggingFace 7B Model](https://huggingface.co/Pi3141/alpaca-native-7B-ggml/tree/main) - Works Slightly better than LoRa Model!
+[Alpaca-Native HuggingFace 13B Model](https://huggingface.co/Pi3141/alpaca-native-13B-ggml/tree/main) - Works Slightly better than the LoRa Model!
+
 Here is a typical run using LLaMA-7B:
 
 ```java
