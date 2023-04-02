@@ -2,6 +2,7 @@
 #define _GNU_SOURCE
 
 #include "ggml.h"
+#include "ggml_internal.h"
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h> // using malloc.h with MSC/MINGW
@@ -6496,16 +6497,6 @@ static void ggml_compute_forward_mul_mat_f16_f32(
     //}
 }
 
-typedef void (*dequantize_row_q_t)(const void * restrict x, float * restrict y, int k);
-typedef void (*quantize_row_q_t)(const float * restrict x, void * restrict y, int k);
-typedef void (*vec_dot_q_t)(const int n, float * restrict s, const void * restrict x, const void * restrict y);
-
-typedef struct {
-    dequantize_row_q_t dequantize_row_q;
-    quantize_row_q_t   quantize_row_q;
-    vec_dot_q_t        vec_dot_q;
-} quantize_fns_t;
-
 static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
     [GGML_TYPE_Q4_0] = {
         .dequantize_row_q = dequantize_row_q4_0,
@@ -6518,6 +6509,12 @@ static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
         .vec_dot_q        = ggml_vec_dot_q4_1,
     },
 };
+
+// For internal test use
+quantize_fns_t ggml_internal_get_quantize_fn(size_t i) {
+    GGML_ASSERT(i < GGML_TYPE_COUNT);
+    return quantize_fns[i];
+}
 
 static void ggml_compute_forward_mul_mat_q_f32(
         const struct ggml_compute_params * params,

@@ -1,4 +1,5 @@
 #include "llama.h"
+#include "llama_internal.h"
 
 #include "ggml.h"
 
@@ -1853,4 +1854,9 @@ const char * llama_print_system_info(void) {
     s += "VSX = "       + std::to_string(ggml_cpu_has_vsx())       + " | ";
 
     return s.c_str();
+}
+
+// For internal test use
+std::unordered_map<std::string, struct ggml_tensor *>& llama_internal_get_tensor_map(struct llama_context * ctx) {
+    return ctx->model.tensors;
 }
