@@ -3,7 +3,7 @@
 #include <fstream>
 #include <regex>
 
-bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
+bool utils_gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
 
@@ -26,11 +26,11 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         } else if (arg == "-m" || arg == "--model") {
             params.model = argv[++i];
         } else if (arg == "-h" || arg == "--help") {
-            gpt_print_usage(argc, argv, params);
+            utils_gpt_print_usage(argc, argv, params);
             exit(0);
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
-            gpt_print_usage(argc, argv, params);
+            utils_gpt_print_usage(argc, argv, params);
             exit(0);
         }
     }
@@ -38,7 +38,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     return true;
 }
 
-void gpt_print_usage(int argc, char ** argv, const gpt_params & params) {
+void utils_gpt_print_usage(int argc, char ** argv, const gpt_params & params) {
     fprintf(stderr, "usage: %s [options]\n", argv[0]);
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
@@ -57,7 +57,7 @@ void gpt_print_usage(int argc, char ** argv, const gpt_params & params) {
     fprintf(stderr, "\n");
 }
 
-std::string gpt_random_prompt(std::mt19937 & rng) {
+std::string utils_gpt_random_prompt(std::mt19937 & rng) {
     const int r = rng() % 10;
     switch (r) {
         case 0: return "So";

@@ -12,6 +12,9 @@
 #include "ggml.h"
 #include "model_adapter.h"
 
+//for easier compilation
+#include "llamaextra.cpp"
+
 //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt)
 static FileFormat file_format = FileFormat::FAIL;
 static llama_context_params ctx_params;
@@ -109,7 +112,6 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
         embd_inp = ::llama_tokenize(ctx, params.prompt, true);
     }
 
-    //params.n_predict = std::min(params.n_predict, params.n_ctx - (int) embd_inp.size());
     //truncate to front of the prompt if its too long
     if (embd_inp.size() + params.n_predict > params.n_ctx)
     {
@@ -123,11 +125,6 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
 
     int last_n_size = params.repeat_last_n;
     last_n_tokens.resize(last_n_size);
-
-    //display usage
-    // std::string tst = " ";
-    // char * tst2 = (char*)tst.c_str();
-    // gpt_print_usage(1,&tst2,params);
 
     std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
     n_past = 0;
@@ -194,7 +191,7 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
             {
                 printf("\rGenerating (%d / %d tokens)", (1 + params.n_predict - remaining_tokens), params.n_predict);
             }
-            //printf("\nnp:%d embd:%d txt:%s",n_past,embd.size(),llama_token_to_str(ctx, embd[0]));
+           
             if (llama_eval(ctx, embd.data(), embdsize, n_past, params.n_threads))
             {
                 fprintf(stderr, "Failed to predict\n");

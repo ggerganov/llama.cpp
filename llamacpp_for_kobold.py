@@ -5,6 +5,7 @@
 
 import ctypes
 import os
+import psutil
 import argparse
 import json, http.server, threading, socket, sys, time
 
@@ -315,7 +316,7 @@ def main(args):
 
     mdl_nparts = sum(1 for n in range(1, 9) if os.path.exists(f"{ggml_selected_file}.{n}")) + 1
     modelname = os.path.abspath(ggml_selected_file)
-    print(f"Loading model: {modelname}, Parts: {mdl_nparts}, Threads: {args.threads}")
+    print(f"Loading model: {modelname} \n[Parts: {mdl_nparts}, Threads: {args.threads}]")
     loadok = load_model(modelname,8,maxctx,mdl_nparts,args.threads)
     print("Load Model OK: " + str(loadok))
 
@@ -349,7 +350,10 @@ if __name__ == '__main__':
     portgroup.add_argument("--port", help="Port to listen on", default=5001, type=int)
     portgroup.add_argument("port", help="Port to listen on", default=5001, nargs="?", type=int)
     parser.add_argument("--host", help="Host IP to listen on. If empty, all routable interfaces are accepted.", default="")
-    default_threads = (os.cpu_count() if os.cpu_count()<=6 else max(6,os.cpu_count()-2))
+    
+    physical_core_limit = psutil.cpu_count(logical=False)
+    # logical_core_limit = (os.cpu_count() if os.cpu_count()<=4 else max(4,os.cpu_count()-4))
+    default_threads = (physical_core_limit if physical_core_limit<=4 else max(4,physical_core_limit-1))
     parser.add_argument("--threads", help="Use a custom number of threads if specified. Otherwise, uses an amount based on CPU cores", type=int, default=default_threads)
     parser.add_argument("--stream", help="Uses pseudo streaming", action='store_true')
     parser.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')

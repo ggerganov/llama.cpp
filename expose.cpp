@@ -7,11 +7,18 @@
 //No dynamic memory allocation! Setup structs with FIXED (known) shapes and sizes for ALL output fields
 //Python will ALWAYS provide the memory, we just write to it.
 
-#include "model_adapter.h"
+#include <cassert>
+#include <cstring>
+#include <fstream>
+#include <regex>
+#include <iostream>
+#include <iterator>
+#include <queue>
+#include <string>
+#include <math.h>
+
 #include "expose.h"
-#include "llamaextra.h"
-
-
+#include "model_adapter.cpp"
 
 extern "C"
 {
@@ -23,13 +30,28 @@ extern "C"
     {
         std::string model = inputs.model_filename;
         file_format = check_file_format(model.c_str());
-        printf("\n---\nIdentified as LLAMA model: (ver %d)\nAttempting to Load...\n---\n", file_format);
-        
-        return llama_load_model(inputs, file_format);
+
+        if(file_format==GPTJ1 || file_format==GPTJ2)
+        {
+            printf("\n---\nIdentified as GPT-J model: (ver %d)\nAttempting to Load...\n---\n", file_format);   
+            return gptj_load_model(inputs, file_format);
+        }
+        else
+        {
+            printf("\n---\nIdentified as LLAMA model: (ver %d)\nAttempting to Load...\n---\n", file_format);   
+            return llama_load_model(inputs, file_format);
+        }
     }
 
     generation_outputs generate(const generation_inputs inputs, generation_outputs &output)
     {
-        return llama_generate(inputs, output);
+        if (file_format == GPTJ1 || file_format == GPTJ2)
+        {
+            return gptj_generate(inputs, output);
+        }
+        else
+        {
+            return llama_generate(inputs, output);
+        }
     }
 }

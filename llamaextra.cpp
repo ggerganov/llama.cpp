@@ -18,65 +18,7 @@
  #include <alloca.h>
  #endif
 
-static clock_t bench_timer = 0;
 
-void timer_start()
-{
-    bench_timer = clock();
-}
-double timer_check()
-{
-    double ticks = clock() - bench_timer;
-    double time_taken = ((double)ticks) / CLOCKS_PER_SEC;
-    return time_taken;
-}
-
-void print_tok_vec(std::vector<int> &embd)
-{
-    std::cout << "[";
-    bool first = true;
-    for (auto i : embd)
-    {
-        if (!first)
-        {
-            std::cout << ',';
-        }
-        first = false;
-        std::cout << i;
-    }
-    std::cout << "]";
-}
-
-//return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt) 
- FileFormat check_file_format(const std::string & fname)
- {
-    std::vector<char> f_buf(1024*1024);
-
-    auto fin = std::ifstream(fname, std::ios::binary);
-    fin.rdbuf()->pubsetbuf(f_buf.data(), f_buf.size());
-    if (!fin) {
-        fprintf(stderr, "%s: failed to open '%s'\n", __func__, fname.c_str());
-        return FileFormat::FAIL;
-    }
-
-    FileFormat fileformat = FileFormat::FAIL;
-    uint32_t magic;
-    fin.read((char *) &magic, sizeof(magic));
-    if (magic == 0x67676d6c) {  //v1 format ggml, alpaca
-       fileformat = FileFormat::GGML;
-    }
-    else if(magic == 0x67676d66) //v2 format ggmf
-    {
-        fileformat = FileFormat::GGHF;
-    }
-    else if(magic == 0x67676a74) //v3 format ggjt
-    {
-        fileformat = FileFormat::GGJT; //ggjt by default
-    }
-    fin.close();
-    
-    return fileformat;
- }
 
 //freeze all the configurations for model loading for v1 and v2 formats
  struct llama_context * legacy_llama_init_from_file(const char * path_model, struct llama_context_params   params) 

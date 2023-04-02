@@ -206,7 +206,7 @@ endif
 
 BLAS_BUILD = 
 ifeq ($(OS),Windows_NT)
-	BLAS_BUILD = $(CXX) $(CXXFLAGS) ggml_blas.o expose.o llama_adapter.o llamaextra.o common.o libopenblas.lib -shared -o llamacpp_blas.dll $(LDFLAGS)
+	BLAS_BUILD = $(CXX) $(CXXFLAGS) ggml_blas.o ggml_v1.o expose.o common.o llama_adapter.o gptj_adapter.o libopenblas.lib -shared -o llamacpp_blas.dll $(LDFLAGS)
 else
 	BLAS_BUILD = @echo 'Your OS is $(OS) and does not appear to be Windows. If you want to use openblas, please link it manually with LLAMA_OPENBLAS=1'
 endif
@@ -247,20 +247,17 @@ llama.o: llama.cpp llama.h
 common.o: examples/common.cpp examples/common.h
 	$(CXX) $(CXXFLAGS) -c examples/common.cpp -o common.o
 
-llamaextra.o: llamaextra.cpp llamaextra.h
-	$(CXX) $(CXXFLAGS) -c llamaextra.cpp -o llamaextra.o
-
 expose.o: expose.cpp expose.h
 	$(CXX) $(CXXFLAGS) -c expose.cpp -o expose.o
 
 llama_adapter.o: 
 	$(CXX) $(CXXFLAGS) -c llama_adapter.cpp -o llama_adapter.o
-	
-gptj_adapter.o: ggml.o
-	$(CXX) $(CXXFLAGS) otherarch/gptj.cpp otherarch/utils.cpp ggml.o gptj_adapter.cpp -o gptj_adapter.o
+
+gptj_adapter.o: 
+	$(CXX) $(CXXFLAGS) -c gptj_adapter.cpp -o gptj_adapter.o
 
 clean:
-	rm -vf *.o main quantize perplexity embedding main.exe quantize.exe llamacpp.dll llamacpp_blas.dll gpt2.exe gptj.exe
+	rm -vf *.o main quantize perplexity embedding main.exe quantize.exe llamacpp.dll llamacpp_blas.dll gptj.exe
 
 main: examples/main/main.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
@@ -268,17 +265,10 @@ main: examples/main/main.cpp ggml.o llama.o common.o
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
 
-gptj: ggml.o
-	$(CXX) $(CXXFLAGS) otherarch/gptj.cpp otherarch/utils.cpp ggml.o -o gptj $(LDFLAGS)
+llamalib: ggml.o ggml_v1.o expose.o common.o llama_adapter.o gptj_adapter.o
+	$(CXX) $(CXXFLAGS)  ggml.o ggml_v1.o expose.o common.o llama_adapter.o gptj_adapter.o -shared -o llamacpp.dll $(LDFLAGS)
 
-gptjold: ggml_v1.o
-	$(CXX) $(CXXFLAGS) otherarch/gptj_old.cpp otherarch/utils.cpp ggml_v1.o -o gptj $(LDFLAGS)
-
-
-llamalib: ggml.o expose.o llama_adapter.o llamaextra.o common.o
-	$(CXX) $(CXXFLAGS) expose.o ggml.o llama_adapter.o llamaextra.o common.o -shared -o llamacpp.dll $(LDFLAGS)
-
-llamalib_blas: ggml_blas.o expose.o llama_adapter.o llamaextra.o common.o
+llamalib_blas: ggml_blas.o ggml_v1.o expose.o common.o llama_adapter.o gptj_adapter.o 
 	$(BLAS_BUILD)
 	
 quantize: examples/quantize/quantize.cpp ggml.o llama.o

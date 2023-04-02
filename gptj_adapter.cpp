@@ -10,12 +10,17 @@
 #include <time.h>
 #include "model_adapter.h"
 #include "otherarch/otherarch.h"
-#include "llamaextra.h"
+
+//concat source files into one file for compilation purposes
+#include "otherarch/utils.cpp"
+#include "otherarch/gptj_v1.cpp"
+#include "otherarch/gptj_v2.cpp"
 
 //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt)
 static FileFormat file_format = FileFormat::FAIL;
 static gpt_vocab vocab;
-static gptj_model model;
+static gptj_model_v1 model_v1;
+static gptj_model model_v2;
 static gpt_params params;
 static int n_past = 0;
 static int n_threads = 4;
@@ -35,7 +40,7 @@ bool gptj_load_model(const load_model_inputs inputs, FileFormat in_file_format)
     n_batch = params.n_batch = inputs.batch_size;
     modelname = params.model = inputs.model_filename;
 
-    if (!gptj_model_load(params.model, model, vocab)) {
+    if (!legacy_gptj_model_load(params.model, model_v1, vocab)) {
         fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
         return false;
     }
@@ -46,7 +51,7 @@ bool gptj_load_model(const load_model_inputs inputs, FileFormat in_file_format)
     }
 
     // determine the required inference memory per token:    
-    legacy_gptj_eval(model, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);    
+    legacy_gptj_eval(model_v1, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);    
 
     return true;
 }
@@ -77,9 +82,9 @@ generation_outputs gptj_generate(const generation_inputs inputs, generation_outp
     std::vector<gpt_vocab::id> embd_inp = ::gpt_tokenize(vocab, params.prompt);
 
     //truncate to front of the prompt if its too long
-    if (embd_inp.size() + params.n_predict > model.hparams.n_ctx)
+    if (embd_inp.size() + params.n_predict > model_v1.hparams.n_ctx)
     {
-        int offset = embd_inp.size() - model.hparams.n_ctx + params.n_predict;
+        int offset = embd_inp.size() - model_v1.hparams.n_ctx + params.n_predict;
         embd_inp = std::vector<llama_token>(embd_inp.begin() + offset, embd_inp.end());
     }
 
@@ -130,7 +135,7 @@ generation_outputs gptj_generate(const generation_inputs inputs, generation_outp
     timer_start();
     double time1 = 0, time2 = 0;
     unsigned int embd_inp_size = embd_inp.size();
-    const int n_vocab = model.hparams.n_vocab;
+    const int n_vocab = model_v1.hparams.n_vocab;
 
     printf("\n");
 
@@ -151,7 +156,7 @@ generation_outputs gptj_generate(const generation_inputs inputs, generation_outp
                 printf("\rGenerating (%d / %d tokens)", (1 + params.n_predict - remaining_tokens), params.n_predict);
             }
            
-            if (!gptj_eval(model, params.n_threads, n_past, embd, logits, mem_per_token))
+            if (!legacy_gptj_eval(model_v1, params.n_threads, n_past, embd, logits, mem_per_token))
             {
                 fprintf(stderr, "Failed to predict\n");
                 snprintf(output.text, sizeof(output.text), "%s", "");
