@@ -2793,6 +2793,8 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
 
     static bool is_first_call = true;
 
+    bool run_test_suite = false;
+
     if (is_first_call) {
         // initialize time system (required on Windows)
         ggml_time_init();
@@ -2832,6 +2834,8 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
 
             GGML_PRINT_DEBUG("%s: g_state initialized in %f ms\n", __func__, (t_end - t_start)/1000.0f);
         }
+
+        run_test_suite = true;
 
         is_first_call = false;
     }
@@ -2876,6 +2880,10 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
     GGML_PRINT_DEBUG("%s: context initialized\n", __func__);
 
     ggml_critical_section_end();
+
+    if (run_test_suite) {
+        ggml_run_test_suite();
+    }
 
     return ctx;
 }
@@ -10813,18 +10821,59 @@ int ggml_cpu_has_vsx(void) {
 
 #define GGML_TEST_SET_ELEMENT_F32(tensor, i, value) *(float *) ((char *) tensor->data + 4 * i) = value
 
-#define GGML_TEST_ASSERT_ELEMENT_F32(tensor, i, expected_value) do {\
-        float actual = *(float *) ((char *) tensor->data + 4 * i);\
-        if (fabs(actual - expected_value) >= 0.0001F) {\
+#define GGML_TEST_ASSERT(x, ...) do {\
+        if (!(x)) {\
             fprintf(stderr, "*** Assertion failed ***\n");\
-            fprintf(stderr, "At %s[%d]: expected %f, actual %f\n", #tensor, i, expected_value, actual);\
-            fprintf(stderr, "%s:%d\n", __FILE__, __LINE__);\
+            fprintf(stderr, __VA_ARGS__);\
+            fprintf(stderr, "\n%s:%d\n", __FILE__, __LINE__);\
             abort();\
         }\
     } while (0)
 
+#define GGML_TEST_ASSERT_ELEMENT_F32(tensor, i, expected_value) do {\
+        float actual = *(float *) ((char *) tensor->data + 4 * i);\
+        GGML_TEST_ASSERT(fabs(actual - expected_value) <= 0.0001F, "At %s[%d]: expected %f, actual %f", #tensor, i, expected_value, actual);\
+    } while (0)
+
+// Copied from https://github.com/ggerganov/llama.cpp/blob/6e7801d08d81c931a5427bae46f00763e993f54a/tests/test-quantize.c
+void ggml_test_quantization() {
+    #define QK 32
+    float src[QK];
+    uint8_t dst[24];
+    int64_t hist[16];
+
+    for (int i = 0; i < QK; i++) {
+        src[i] = (float) (i + 1);
+    }
+
+    size_t size = ggml_quantize_q4_0(src, dst, QK, QK, hist);
+    GGML_TEST_ASSERT(size == 20, "%d", size);
+    float max_result = ((float *) dst)[0];
+    float max_expected = src[31] / ((1 << 3) - 1);
+    GGML_TEST_ASSERT(max_result == max_expected, "%f, %f", max_result, max_expected);
+    for (int i = 0; i < QK; i++) {
+        uint8_t q4_result = (i % 2) ? (dst[sizeof(float) + i / 2] >> 4) : (dst[sizeof(float) + i / 2] & 0xF);
+        uint8_t q4_expected = roundf(src[i] / max_expected) + 8;
+        GGML_TEST_ASSERT(q4_result == q4_expected, "%d, %d", q4_result, q4_expected);
+    }
+
+    size = ggml_quantize_q4_1(src, dst, QK, QK, hist);
+    GGML_TEST_ASSERT(size == 24, "%d", size);
+    float delta_result = ((float *) dst)[0];
+    float delta_expected = (src[31] - src[0]) / ((1 << 4) - 1);
+    GGML_TEST_ASSERT(delta_result == delta_expected, "%f, %f", delta_result, delta_expected);
+    float min_result = ((float *) dst)[1];
+    float min_expected = src[0];
+    GGML_TEST_ASSERT(min_result == min_expected, "%f, %f", min_result, min_expected);
+    for (int i = 0; i < QK; i++) {
+        uint8_t q4_result = (i % 2) ? (dst[sizeof(float) * 2 + i / 2] >> 4) : (dst[sizeof(float) * 2 + i / 2] & 0xF);
+        uint8_t q4_expected = roundf((src[i] - min_expected) / delta_expected);
+        GGML_TEST_ASSERT(q4_result == q4_expected, "%d, %d", q4_result, q4_expected);
+    }
+}
+
 void ggml_run_test_suite() {
-    fprintf(stderr, "Running ggml test suite...\n");
+    ggml_test_quantization();
 
     struct ggml_init_params params;
     params.mem_size = 16 * 1024;
@@ -10904,6 +10953,4 @@ void ggml_run_test_suite() {
     GGML_TEST_ASSERT_ELEMENT_F32(max_a_b, 5, -0.0446F);
 
     ggml_free(ctx);
-
-    fprintf(stderr, "All ggml tests pass\n");
 }
