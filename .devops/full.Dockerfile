@@ -7,7 +7,7 @@ RUN apt-get update && \
 
 RUN pip install --upgrade pip setuptools wheel \
     && pip install numpy requests sentencepiece tqdm \
-    && pip install torch==2.0.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+    && pip install torch --index-url https://download.pytorch.org/whl/cpu
 
 WORKDIR /app
 
