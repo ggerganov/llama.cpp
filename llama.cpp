@@ -315,6 +315,7 @@ void * mmap_file(const char* fname) {
 #endif
 }
 
+
 static bool llama_model_load(
         const std::string & fname,
         llama_context & lctx,
@@ -487,6 +488,8 @@ static bool llama_model_load(
             use_mmap = false;
         }
     }
+
+
 
     auto & ctx = model.ctx;
 
