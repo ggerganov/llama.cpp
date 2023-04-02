@@ -108,37 +108,6 @@ bool set_block_parameter(std::unordered_map<std::string, struct ggml_tensor *> *
     return set_parameter(parameters, full_key, dest);
 }
 
-size_t get_memory_required_mb(int32_t n_vocab, int32_t n_layer, int32_t n_embed, int32_t data_type) {
-    if (n_vocab == 50277) {
-        // Non-exact values are extrapolated (slightly bigger than needed).
-        // TODO Measure values exactly
-        static const size_t memory_required_mb[6][4] = {
-            /*            FP32   FP16  Q4_0   Q4_1
-               169M  */ {  650,   327,  105,   165}, // All measured exactly
-            /* 430M  */ { 1650,   830,  263,   415}, // FP32, FP16 are exact
-            /* 1.5B  */ { 5795,  2907,  923,  1454}, // FP32, FP16 are exact
-            /*   3B  */ {11610,  5720, 1816,  2860}, // FP16 is exact
-            /*   7B  */ {27090, 13634, 4328,  6817},
-            /*  14B  */ {54180, 27267, 8656, 13634}
-        };
-
-        /* 169M */ if (n_layer == 12 && n_embed ==  768) return memory_required_mb[0][data_type];
-        /* 430M */ if (n_layer == 24 && n_embed == 1024) return memory_required_mb[1][data_type];
-        /* 1.5B */ if (n_layer == 24 && n_embed == 2048) return memory_required_mb[2][data_type];
-        /*   3B */ if (n_layer == 32 && n_embed == 2560) return memory_required_mb[3][data_type];
-        /*   7B */ if (n_layer == 32 && n_embed == 4096) return memory_required_mb[4][data_type];
-        /*  14B */ if (n_layer == 40 && n_embed == 5120) return memory_required_mb[5][data_type];
-    }
-
-    fprintf(
-        stderr,
-        "Unknown RWKV model configuration: n_vocab = %d, n_layer = %d, n_embed = %d, data_type = %d; allocating 4 GB of memory\n",
-        n_vocab, n_layer, n_embed, data_type
-    );
-
-    return size_t(4) * 1024;
-}
-
 // --- Operators ---
 
 struct ggml_tensor * rwkv_layer_norm(ggml_context * ctx, struct ggml_tensor * x, struct ggml_tensor * weight, struct ggml_tensor * bias) {
@@ -196,9 +165,30 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, uint32_t n_thr
         model->data_type
     );
 
+    // Parameter tensors would take at least this amount in memory.
+    size_t file_size;
+
+    {
+        auto fin = std::ifstream(file_path, std::ios::binary);
+        RWKV_ASSERT_NULL(fin, "Failed to open file %s", file_path);
+        fin.seekg(0, fin.end);
+        file_size = fin.tellg();
+        fin.close();
+    }
+
+    size_t memory_required = file_size +
+        // Intermediary vectors for calculation; there are around 100 calls to ggml
+        size_t(100) * model->n_embed * sizeof(float) +
+        // State, in and out
+        size_t(2) * 5 * model->n_layer * model->n_embed * sizeof(float) +
+        // Logits
+        size_t(model->n_vocab) * sizeof(float) +
+        // +32 MB just for any overhead
+        size_t(32) * 1024 * 1024;
+
     // Initialize ggml
     struct ggml_init_params params;
-    params.mem_size = get_memory_required_mb(model->n_vocab, model->n_layer, model->n_embed, model->data_type) * 1024 * 1024;
+    params.mem_size = memory_required;
     params.mem_buffer = NULL;
     struct ggml_context * ctx = ggml_init(params);
 
