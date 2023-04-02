@@ -18,7 +18,7 @@ fname_model = sys.argv[1]
 fname_tokenizer = sys.argv[2]
 dir_out = sys.argv[3]
 
-model = torch.load(fname_model, map_location="cpu")
+model = torch.load(fname_model, map_location="cpu", weights_only=True)
 
 n_vocab, n_embd = model['model.embed_tokens.weight'].shape
 n_layer = 1 + max(int(m.group(1)) for name in model
