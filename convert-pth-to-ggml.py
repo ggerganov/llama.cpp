@@ -264,7 +264,7 @@ def main():
             fout.seek(offset_of_tensors)
             print(f"Processing part {part_id+1} of {n_parts}\n")
             fname_model = f"{dir_model}/consolidated.0{part_id}.pth"
-            model = torch.load(fname_model, map_location="cpu")
+            model = torch.load(fname_model, map_location="cpu", weights_only=True)
             process_and_write_variables(fout, model, ftype, part_id, n_parts)
             del model
 
