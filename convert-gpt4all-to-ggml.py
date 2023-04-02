@@ -10,7 +10,6 @@ import argparse
 import glob
 import os
 import struct
-import sys
 from sentencepiece import SentencePieceProcessor
 
 HPARAMS = keys = ["vocab_size", "dim", "multiple_of", "n_heads", "n_layers"]
@@ -56,7 +55,7 @@ def write_tokens(fout, tokenizer):
             piece = tokenizer.id_to_piece(i)
             if len(piece) != 6:
                 print(f"Invalid token: {piece}")
-                sys.exit(1)
+                raise SystemExit(1)
             byte_value = int(piece[3:-1], 16)
             text = struct.pack("B", byte_value)
         else:

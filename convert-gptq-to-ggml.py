@@ -12,7 +12,7 @@ from sentencepiece import SentencePieceProcessor
 
 if len(sys.argv) != 4:
     print("Usage: convert-gptq-to-ggml.py llamaXXb-4bit.pt tokenizer.model out.bin\n")
-    sys.exit(1)
+    raise SystemExit(1)
 
 fname_model = sys.argv[1]
 fname_tokenizer = sys.argv[2]
@@ -57,7 +57,7 @@ for i in range(tokenizer.vocab_size()):
         piece = tokenizer.id_to_piece(i)
         if len(piece) != 6:
             print(f"Invalid token: {piece}")
-            sys.exit(1)
+            raise SystemExit(1)
         byte_value = int(piece[3:-1], 16)
         text = struct.pack("B", byte_value)
     else:

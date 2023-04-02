@@ -16,7 +16,6 @@
 
 import argparse
 import os
-import sys
 import json
 import struct
 import numpy as np
@@ -86,7 +85,7 @@ def get_n_parts(dim):
     n_parts = mappings.get(dim)
     if n_parts is None:
         print(f"Invalid dim: {dim}")
-        sys.exit(1)
+        raise SystemExit(1)
 
     print(f"n_parts = {n_parts}\n")
     return n_parts
@@ -127,7 +126,7 @@ def write_tokens(fout, tokenizer):
             piece = tokenizer.id_to_piece(i)
             if len(piece) != 6:
                 print(f"Invalid token: {piece}")
-                sys.exit(1)
+                raise SystemExit(1)
             byte_value = int(piece[3:-1], 16)
             text = struct.pack("B", byte_value)
         else:
