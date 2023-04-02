@@ -1,16 +1,15 @@
 # llama.cpp
 
-![llama](https://user-images.githubusercontent.com/1991296/227761327-6d83e30e-2200-41a6-bfbb-f575231c54f4.png)
+![llama]([https://user-images.githubusercontent.com/1991296/227761327-6d83e30e-2200-41a6-bfbb-f575231c54f4.png](https://raw.githubusercontent.com/Shreyas-ITB/---/main/Friendly-Alpaca.png))
 
 [![Actions Status](https://github.com/ggerganov/llama.cpp/workflows/CI/badge.svg)](https://github.com/ggerganov/llama.cpp/actions)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
+Inference of [LLaMA](https://arxiv.org/abs/2302.13971) and [Alpaca](https://crfm.stanford.edu/2023/03/13/alpaca.html) models in pure C/C++
 
 **Hot topics:**
 
-- [Roadmap (short-term)](https://github.com/ggerganov/llama.cpp/discussions/457)
-- Support for [GPT4All](https://github.com/ggerganov/llama.cpp#using-gpt4all)
+- Support for [GPT4All](https://github.com/Shreyas-ITB/llama.cpp#using-gpt4all)
 
 ## Description
 
@@ -38,8 +37,8 @@ Supported platforms:
 Supported models:
 
 - [X] LLaMA 🦙
-- [X] [Alpaca](https://github.com/ggerganov/llama.cpp#instruction-mode-with-alpaca)
-- [X] [GPT4All](https://github.com/ggerganov/llama.cpp#using-gpt4all)
+- [X] [Alpaca](https://github.com/Shreyas-ITB/llama.cpp#instruction-mode-with-alpaca)
+- [X] [GPT4All](https://github.com/Shreyas-ITB/llama.cpp#using-gpt4all)
 - [X] [Chinese LLaMA / Alpaca](https://github.com/ymcui/Chinese-LLaMA-Alpaca)
 - [X] [Vigogne (French)](https://github.com/bofenghuang/vigogne)
 
