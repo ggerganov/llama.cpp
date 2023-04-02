@@ -96,9 +96,9 @@ extern "C" {
     // Sets the KV cache containing the current context for the model
     LLAMA_API void llama_set_kv_cache(
             struct llama_context * ctx,
-                         const uint8_t * kv_cache,
-                            size_t n_size,
-                               int n_token_count);
+                   const uint8_t * kv_cache,
+                          size_t   n_size,
+                             int   n_token_count);
 
     // Run the llama inference to obtain the logits and probabilities for the next token.
     // tokens + n_tokens is the provided batch of new tokens to process

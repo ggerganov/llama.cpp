@@ -1671,28 +1671,28 @@ int llama_model_quantize(
 // Returns the KV cache that will contain the context for the
 // ongoing prediction with the model.
 const uint8_t * llama_get_kv_cache(struct llama_context * ctx) {
-  return ctx->model.kv_self.buf.data();
+    return ctx->model.kv_self.buf.data();
 }
 
 // Returns the size of the KV cache
 size_t llama_get_kv_cache_size(struct llama_context * ctx) {
-  return ctx->model.kv_self.buf.size();
+    return ctx->model.kv_self.buf.size();
 }
 
 int llama_get_kv_cache_token_count(struct llama_context * ctx) {
-  return ctx->model.kv_self.n;
+    return ctx->model.kv_self.n;
 }
 
 // Sets the KV cache containing the current context for the model
 void llama_set_kv_cache(
         struct llama_context * ctx,
-                     const uint8_t * kv_cache,
-                        size_t n_size,
-                           int n_token_count) {
-  // Make sure we have the same kv cache setup
-  LLAMA_ASSERT(ctx->model.kv_self.buf.size() == n_size);
-  memcpy(ctx->model.kv_self.buf.data(), kv_cache, n_size);
-  ctx->model.kv_self.n = n_token_count;
+               const uint8_t * kv_cache,
+                      size_t   n_size,
+                         int   n_token_count) {
+    // Make sure we have the same kv cache setup
+    LLAMA_ASSERT(ctx->model.kv_self.buf.size() == n_size);
+    memcpy(ctx->model.kv_self.buf.data(), kv_cache, n_size);
+    ctx->model.kv_self.n = n_token_count;
 }
 
 int llama_eval(
