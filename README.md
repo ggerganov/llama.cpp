@@ -6,6 +6,8 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 
 ![Preview](preview.png)
 
+Now has **BACKWARDS COMPATIBILITY** with ALL 3 versions of GGML LLAMA models, all ALPACA.CPP models, all versions of GPT4ALL.CPP models, and can run GGML older GPT-J.CPP models too. I also use a bunch of tricks to make subsequent prompt processing with shared ancestry much faster than the parent repo does.
+
 ## Usage
 - [Download the latest release here](https://github.com/LostRuins/llamacpp-for-kobold/releases/latest) or clone the repo.
 - Windows binaries are provided in the form of **llamacpp-for-kobold.exe**, which is a pyinstaller wrapper for **llamacpp.dll** and **llamacpp_for_kobold.py**. If you feel concerned, you may prefer to rebuild it yourself with the provided makefiles and scripts.
@@ -17,6 +19,7 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 
 ## OSX and Linux
 - You will have to compile your binaries from source. A makefile is provided, simply run `make`
+- If you want you can also link your own install of OpenBLAS manually with `make LLAMA_OPENBLAS=1`
 - After all binaries are built, you can run the python script with the command `llamacpp_for_kobold.py [ggml_model.bin] [port]`
 
 ## Considerations
@@ -24,7 +27,7 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 - ZERO or MINIMAL changes as possible to parent repo files - do not move their function declarations elsewhere! We want to be able to update the repo and pull any changes automatically.
 - No dynamic memory allocation! Setup structs with FIXED (known) shapes and sizes for ALL output fields. Python will ALWAYS provide the memory, we just write to it.
 - No external libraries or dependencies. That means no Flask, Pybind and whatever. All You Need Is Python.
-- Since v1.0.6, requires libopenblas, the prebuilt windows binaries are included in this repo. If not found, it will fall back to a mode without BLAS. If you want you can also link your own install of OpenBLAS manually with `LLAMA_OPENBLAS=1`
+- Since v1.0.6, requires libopenblas, the prebuilt windows binaries are included in this repo. If not found, it will fall back to a mode without BLAS. 
 - **I plan to keep backwards compatibility with ALL past llama.cpp AND alpaca.cpp models**. But you are also encouraged to reconvert/update your models if possible for best results.
 
 ## License

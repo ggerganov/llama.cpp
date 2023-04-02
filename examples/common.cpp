@@ -39,6 +39,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 
     bool invalid_param = false;
     std::string arg;
+    gpt_params default_params;
+
     for (int i = 1; i < argc; i++) {
         arg = argv[i];
 
@@ -66,6 +68,11 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             std::ifstream file(argv[i]);
+            if (!file) {
+                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+                invalid_param = true;
+                break;
+            }
             std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(params.prompt));
             if (params.prompt.back() == '\n') {
                 params.prompt.pop_back();
@@ -168,7 +175,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             }
             params.n_parts = std::stoi(argv[i]);
         } else if (arg == "-h" || arg == "--help") {
-            gpt_print_usage(argc, argv, params);
+            gpt_print_usage(argc, argv, default_params);
             exit(0);
         } else if (arg == "--random-prompt") {
             params.random_prompt = true;
@@ -180,13 +187,13 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.input_prefix = argv[i];
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
-            gpt_print_usage(argc, argv, params);
+            gpt_print_usage(argc, argv, default_params);
             exit(1);
         }
     }
     if (invalid_param) {
         fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
-        gpt_print_usage(argc, argv, params);
+        gpt_print_usage(argc, argv, default_params);
         exit(1);
     }
 
