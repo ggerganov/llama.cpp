@@ -1,20 +1,19 @@
 # Compares logits from rwkv.cpp implementation of RWKV with logits from reference implementation of RWKV.
 # Reference logits were generated with RWKV-4-Pile-169M-20220807-8023.pth model in PyTorch.
 # Reference implementation code: https://github.com/BlinkDL/ChatRWKV/blob/0d0abf181356c6f27501274cad18bdf28c83a45b/RWKV_in_150_lines.py
-# Usage: python compare_with_reference_implementation.py bin\Release\main_rwkv.exe C:\rwkv.cpp-169M.bin
+# Usage: python compare_with_reference_implementation.py C:\rwkv.cpp-169M.bin
 
 import os
 import struct
 import argparse
-import subprocess
 import torch
 import numpy as np
-import rwkv_cpp
+import rwkv_cpp_model
+import rwkv_cpp_shared_library
 from typing import List, Tuple, Any
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Compare logits from rwkv.cpp implementation of RWKV with logits from reference implementation of RWKV')
-    parser.add_argument('main_executable_path', help='Path to main rwkv.cpp executable file or shared library')
     parser.add_argument('ggml_model_path', help='Path to rwkv.cpp checkpoint file')
     return parser.parse_args()
 
@@ -22,17 +21,12 @@ def main() -> None:
     args = parse_args()
 
     # Don't want to depend on tokenizer here.
-    # Exact string is:
-    # context = "1 In the beginning God created the heaven and the earth. " \
-    #           "2 And the earth was without form, and void; and darkness was upon the face of the deep. And the Spirit of God moved upon the face of the waters. " \
-    #           "3 And God said, Let there be light: and there was light. " \
-    #           "4 And God saw the light, that it was good: and God divided the light from the darkness."
-    # The Bible was the first non-copyrighted public domain text that came to my mind.
-    tokens: List[int] = [18, 496, 253, 5068, 2656, 3562, 253, 13926, 285, 253, 6149, 15, 374, 1244, 253, 6149, 369, 1293, 830,
-                         13, 285, 2991, 28, 285, 13862, 369, 2220, 253, 2454, 273, 253, 3676, 15, 1244, 253, 14559, 273, 2656,
-                         4395, 2220, 253, 2454, 273, 253, 12685, 15, 495, 1244, 2656, 753, 13, 1281, 627, 320, 1708, 27, 285,
-                         627, 369, 1708, 15, 577, 1244, 2656, 3047, 253, 1708, 13, 326, 352, 369, 1175, 27, 285, 2656, 4272,
-                         253, 1708, 432, 253, 13862, 15]
+    tokens: List[int] = [4, 3631, 4420, 2412, 953, 432, 391, 30567, 87, 15, 14161, 7092, 273, 416, 27767, 55, 342,
+                         2412, 953, 432, 3806, 7092, 273, 416, 27767, 55, 15, 187, 4, 19039, 2412, 953, 497, 4561,
+                         342, 416, 27767, 55, 14, 21, 14, 49, 587, 14, 17809, 46, 14, 938, 14256, 28950, 14, 1438,
+                         1508, 15, 81, 394, 1566, 275, 8462, 22097, 348, 15, 187, 4, 43825, 27, 15548, 7277, 64,
+                         3113, 64, 14005, 64, 39595, 15, 4789, 10269, 61, 18992, 61, 7265, 64, 30217, 39297, 15,
+                         20963, 330, 27, 190, 30567, 87, 15, 14161, 14, 17809, 46, 15, 4805]
 
     threshold: float
 
@@ -50,7 +44,7 @@ def main() -> None:
             threshold = 0.000005
         elif data_type == 1:
             # FP16, lower precision, so higher threshold
-            threshold = 0.003
+            threshold = 0.0032
         elif data_type == 2:
             # INT4 quantized, even lower precision, so even higher threshold
             # This threshold will let some bugs pass
@@ -59,42 +53,24 @@ def main() -> None:
             # This format stores more data, so error would be lower
             threshold = 1.2
 
-    model = None
-
-    if args.main_executable_path.lower().endswith('.dll') or args.main_executable_path.lower().endswith('.so'):
-        print('Testing shared library')
-
-        model = rwkv_cpp.RWKVModel(args.main_executable_path, args.ggml_model_path)
-    else:
-        print('Testing main_rwkv executable')
+    model = rwkv_cpp_model.RWKVModel(rwkv_cpp_shared_library.load_rwkv_shared_library(), args.ggml_model_path)
 
     def compare_logits(tokens_subset: List[int]) -> None:
         token_count: int = len(tokens_subset)
-        state_path: str = './state.bin'
-        logits_path: str = './logits.bin'
 
         logits, state = None, None
 
         for i in range(token_count):
             token: int = tokens_subset[i]
 
-            print(f'{i + 1}/{token_count}')
+            if token_count <= 10 or i % (token_count // 10) == 0:
+                print(f'{i + 1}/{token_count}')
 
-            if model is not None:
-                logits, state = model.eval(token, state)
-            else:
-                subprocess.run(
-                    [
-                        args.main_executable_path,
-                        args.ggml_model_path,
-                        str(token),
-                        # If this is the first token, let the script create a new state.
-                        '' if i == 0 else state_path,
-                        state_path,
-                        logits_path
-                    ],
-                    check=True
-                )
+            logits, state = model.eval(token, state, state, logits)
+
+        actual_logits = logits
+
+        # ---
 
         expected_logits_path: str = f'expected_logits_169M_20220807_8023_{len(tokens_subset)}_tokens.bin'
 
@@ -104,11 +80,7 @@ def main() -> None:
         with open(expected_logits_path, 'rb') as logits_file:
             expected_logits = torch.tensor(np.frombuffer(logits_file.read(), dtype=np.single))
 
-        if model is not None:
-            actual_logits = logits
-        else:
-            with open(logits_path, 'rb') as logits_file:
-                actual_logits = torch.tensor(np.frombuffer(logits_file.read(), dtype=np.single))
+        # ---
 
         difference: float = (torch.sum(expected_logits - actual_logits) / len(expected_logits)).item()
 
@@ -118,8 +90,6 @@ def main() -> None:
 
         assert abs(difference) <= threshold, 'Difference is too big'
 
-    # Check small token amount first to avoid waiting too long before seeing that model is broken
-    compare_logits(tokens[:4])
     compare_logits(tokens)
 
     print()

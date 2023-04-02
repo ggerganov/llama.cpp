@@ -163,7 +163,7 @@ struct rwkv_context {
     bool freed;
 };
 
-struct rwkv_context * rwkv_init_from_file(const char * file_path, int n_threads) {
+struct rwkv_context * rwkv_init_from_file(const char * file_path, uint32_t n_threads) {
     FILE * file = fopen(file_path, "rb");
     RWKV_ASSERT_NULL(file != NULL, "Failed to open file %s", file_path);
 
@@ -505,15 +505,15 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, int n_threads)
     return rwkv_ctx;
 }
 
-size_t rwkv_get_state_buffer_element_count(struct rwkv_context * ctx) {
+uint32_t rwkv_get_state_buffer_element_count(struct rwkv_context * ctx) {
     return ctx->model->n_layer * 5 * ctx->model->n_embed;
 }
 
-size_t rwkv_get_logits_buffer_element_count(struct rwkv_context * ctx) {
+uint32_t rwkv_get_logits_buffer_element_count(struct rwkv_context * ctx) {
     return ctx->model->n_vocab;
 }
 
-bool rwkv_eval(struct rwkv_context * ctx, long int token, float * state_in, float * state_out, float * logits_out) {
+bool rwkv_eval(struct rwkv_context * ctx, int32_t token, float * state_in, float * state_out, float * logits_out) {
     RWKV_ASSERT_FALSE(state_out != NULL, "state_out is NULL");
     RWKV_ASSERT_FALSE(logits_out != NULL, "logits_out is NULL");
 
@@ -564,7 +564,7 @@ void rwkv_free(struct rwkv_context * ctx) {
     delete ctx;
 }
 
-bool rwkv_quantize_model_file(const char * model_file_path_in, const char * model_file_path_out, int q_type) {
+bool rwkv_quantize_model_file(const char * model_file_path_in, const char * model_file_path_out, uint32_t q_type) {
     RWKV_ASSERT_FALSE(q_type == 2 || q_type == 3, "Unsupported quantization type %d", q_type);
 
     ggml_type type;

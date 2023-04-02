@@ -47,10 +47,14 @@ python rwkv\convert_pytorch_rwkv_to_ggml.py C:\RWKV-4-Pile-169M-20220807-8023.pt
 #### 3. Use the model in Python:
 
 ```python
-# This file is located at rwkv/rwkv_cpp.py
-import rwkv_cpp
+# These files are located in rwkv directory
+import rwkv_cpp_model
+import rwkv_cpp_shared_library
 
-model = rwkv_cpp.RWKVModel(r'bin\Release\rwkv.dll', r'C:\rwkv.cpp-169M.bin')
+model = rwkv_cpp_model.RWKVModel(
+    rwkv_cpp_shared_library.load_rwkv_shared_library(),
+    r'C:\rwkv.cpp-169M.bin'
+)
 
 logits, state = None, None
 
@@ -59,7 +63,7 @@ for token in [1, 2, 3]:
     
     print(f'Output logits: {logits}')
 
-# Don't forget to free memory after you've done working with the model
+# Don't forget to free the memory after you've done working with the model
 model.free()
 
 ```
