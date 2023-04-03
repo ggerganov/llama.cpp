@@ -11,6 +11,7 @@ N_PREDICTS="${N_PREDICTS:-4096}"
 
 GEN_OPTIONS=(--batch_size 1024
 --ctx_size 2048
+--keep -1
 --repeat_last_n 256
 --repeat_penalty 1.17647
 --temp 0.7
