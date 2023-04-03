@@ -176,7 +176,10 @@ extern "C" {
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+
+#ifdef LLAMA_MPI_DARWIN
 #include <mpi.h>
+#endif
 
 #define GGML_MAX_DIMS     4
 #define GGML_MAX_NODES    4096

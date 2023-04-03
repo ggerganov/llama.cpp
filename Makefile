@@ -100,6 +100,14 @@ ifdef LLAMA_GPROF
 	CFLAGS   += -pg
 	CXXFLAGS += -pg
 endif
+ifdef LLAMA_MPI_DARWIN
+	CFLAGS   += -I/opt/homebrew/include
+	CXXFLAGS += -I/opt/homebrew/include
+	CC        = mpicc
+	CXX       = mpic++
+endif
+
+
 ifneq ($(filter aarch64%,$(UNAME_M)),)
 	CFLAGS += -mcpu=native
 	CXXFLAGS += -mcpu=native
