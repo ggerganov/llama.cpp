@@ -779,7 +779,27 @@ int ggml_cpu_has_vsx(void);
 
 #if defined(_WIN32) && !defined(_POSIX_THREADS)
 #define WIN32_LEAN_AND_MEAN
-#include <handleapi.h>
+#if !defined(min) && !defined(max)
+#include <Windows.h>
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
+#elif defined(min) && defined(max)
+#include <Windows.h>
+#elif !defined(min)
+#include <Windows.h>
+#ifdef max
+#undef max
+#endif
+#elif !defined(max)
+#include <Windows.h>
+#ifdef min
+#undef min
+#endif
+#endif
 #else
 #include <unistd.h>
 #endif
