@@ -1,6 +1,9 @@
-# llama.cpp
+# cat.cpp
 
-![llama](https://user-images.githubusercontent.com/1991296/227761327-6d83e30e-2200-41a6-bfbb-f575231c54f4.png)
+![byebye llama, hello cat](https://user-images.githubusercontent.com/90981829/229391183-f4cf51c0-629b-4d87-b2e7-ead91663d27c.png)
+### Goodbye llama, cat.cpp is the new and better llama.cpp
+
+Main Feature: Talks like a cat, but the cat knows binary!
 
 [![Actions Status](https://github.com/ggerganov/llama.cpp/workflows/CI/badge.svg)](https://github.com/ggerganov/llama.cpp/actions)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -359,11 +362,7 @@ docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models
 - A bit of backstory for those who are interested: [Changelog podcast](https://changelog.com/podcast/532)
 
 ### Coding guidelines
-
-- Avoid adding third-party dependencies, extra files, extra headers, etc.
-- Always consider cross-compatibility with other operating systems and architectures
-- Avoid fancy looking modern STL constructs, use basic `for` loops, avoid templates, keep it simple
-- There are no strict rules for the code style, but try to follow the patterns in the code (indentation, spaces, etc.). Vertical alignment makes things more readable and easier to batch edit
-- Clean-up any trailing whitespaces, use 4 spaces indentation, brackets on same line, `void * ptr`, `int & a`
-- See [good first issues](https://github.com/ggerganov/llama.cpp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for tasks suitable for first contributions
-
+- There are no guidelines
+- Use whatever formatting style you wish to use
+- Troll everyone with code obfuscation
+- Let the chaos begin
