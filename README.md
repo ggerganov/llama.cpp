@@ -5,6 +5,10 @@
 
 Main Feature: Talks like a cat, but the cat knows binary!
 
+## How to use cat.cpp
+1. Compile and run it like the old llama.cpp
+2. Open translator.html to see what your AI cat is saying!
+
 [![Actions Status](https://github.com/ggerganov/llama.cpp/workflows/CI/badge.svg)](https://github.com/ggerganov/llama.cpp/actions)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
