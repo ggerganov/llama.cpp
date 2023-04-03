@@ -692,13 +692,17 @@ static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * r
 
     for (int i = 0; i < nb; i++) {
         float amax = 0.0f; // absolute max
+        float max = 0.0f;
 
         for (int l = 0; l < QK4_0; l++) {
             const float v = x[i*QK4_0 + l];
-            amax = MAX(amax, fabsf(v));
+            if (amax < fabsf(v)) {
+                amax = fabsf(v);
+                max = v;
+            }
         }
 
-        const float d = amax / ((1 << 3) - 1);
+        const float d = max / -8;
         const float id = d ? 1.0f/d : 0.0f;
 
         y[i].d = d;
@@ -707,8 +711,8 @@ static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * r
             const float v0 = x[i*QK4_0 + l + 0]*id;
             const float v1 = x[i*QK4_0 + l + 1]*id;
 
-            const uint8_t vi0 = (int8_t)roundf(v0) + 8;
-            const uint8_t vi1 = (int8_t)roundf(v1) + 8;
+            const uint8_t vi0 = MIN(15, (int8_t)roundf(v0) + 8);
+            const uint8_t vi1 = MIN(15, (int8_t)roundf(v1) + 8);
 
             assert(vi0 < 16);
             assert(vi1 < 16);
