@@ -39,7 +39,7 @@ To check whether your CPU supports AVX2 or AVX-512, [use CPU-Z](https://www.cpui
 
 ##### Windows
 
-**Requirements**: [CMake](https://cmake.org/download/), MSVC compiler.
+**Requirements**: [CMake](https://cmake.org/download/) or [CMake from anaconda](https://anaconda.org/conda-forge/cmake), MSVC compiler.
 
 ```commandline
 cmake -DBUILD_SHARED_LIBS=ON .
@@ -47,6 +47,18 @@ cmake --build . --config Release
 ```
 
 If everything went OK, `bin\Release\rwkv.dll` file should appear.
+
+##### Linux / MacOS
+
+Get Cmake (linux: `sudo apt install cmake`, macos: `brew install cmake`, anaconoda: [cmake package](https://anaconda.org/conda-forge/cmake)), then run:
+
+```commandline
+cmake -DBUILD_SHARED_LIBS=ON .
+cmake --build . --config Release
+```
+
+If everything went OK, `rwkv.o` (macOS) or `librwkv.so` (linux) file should appear in the base repo folder.
+
 
 ### 3. Download an RWKV model from [Hugging Face](https://huggingface.co/BlinkDL) like [this one](https://huggingface.co/BlinkDL/rwkv-4-pile-169m/blob/main/RWKV-4-Pile-169M-20220807-8023.pth) and convert it into `ggml` format
 
