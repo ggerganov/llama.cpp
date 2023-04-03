@@ -1,7 +1,7 @@
 import os
 import sys
 import ctypes
-from pathlib import Path
+import pathlib
 from typing import Optional
 
 
@@ -198,7 +198,7 @@ def load_rwkv_shared_library() -> RWKVSharedLibrary:
         # If we are in repo root directory
         f'bin/Release/{file_name}',
         # Fallback
-        Path(os.path.abspath(__file__)).parent.parent / file_name
+        pathlib.Path(os.path.abspath(__file__)).parent.parent / file_name
     ]
 
     for path in paths:
