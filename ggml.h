@@ -773,6 +773,16 @@ int ggml_cpu_has_blas(void);
 int ggml_cpu_has_sse3(void);
 int ggml_cpu_has_vsx(void);
 
+//
+// threading for non posix systems
+//
+#ifndef _POSIX_THREADS
+typedef HANDLE pthread_t;
+typedef DWORD thread_ret_t;
+int pthread_create(pthread_t* out, void* unused, thread_ret_t(*func)(void*), void* arg);
+int pthread_join(pthread_t thread, void* unused);
+#endif
+
 #ifdef  __cplusplus
 }
 #endif
