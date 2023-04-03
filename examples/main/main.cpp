@@ -10,6 +10,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <bitset>
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 #include <signal.h>
@@ -17,6 +18,8 @@
 #elif defined (_WIN32)
 #include <signal.h>
 #endif
+
+using std::bitset;
 
 static console_state con_st;
 
@@ -35,6 +38,16 @@ void sigint_handler(int signo) {
     }
 }
 #endif
+
+// convert to meownary
+std::string toMeownary(int n) {
+    std::string r;
+    while ( n!=0 ){
+        r += ( n % 2 == 0 ? "0" : "1" );
+        n /= 2;
+    }
+    return r;
+}
 
 int main(int argc, char ** argv) {
     gpt_params params;
@@ -331,8 +344,42 @@ int main(int argc, char ** argv) {
         // display text
         if (!input_noecho) {
             for (auto id : embd) {
-                printf("%s", llama_token_to_str(ctx, id));
+                // Take llama DNA and turn a calf into a cat
+                std::string mewken = llama_token_to_str(ctx, id);
+
+                // Cat hasn't learned to speak yet
+                std::string meow = "";
+
+                // For each word the cat thinks of, create a kitten
+                for (int i = 0; i < mewken.length(); ++i) {
+                    // Create a cute kitten from a string
+                    std::string kitten = toMeownary(mewken[i]);
+
+                    // Confuse the kitten and make it chase its tail
+                    reverse(kitten.begin(), kitten.end());
+
+                    // If the kitten is too small, we need to feed it
+                    if (kitten.length() < 8)
+                        kitten.insert(kitten.front() == '-' ? 1 : 0, 8 - kitten.length(), '0');
+                    
+                    // Take the kitten to school
+                    std::string educated_kitten = "";
+                    for (int i = 0; i < kitten.length(); i++) {
+                        if (kitten[i] == '0') {
+                            printf(" meow");
+                        }
+                        if (kitten[i] == '1') {
+                            printf(" purr");;
+                        }
+                    }
+
+                    // Once the kitten has graduated school, 
+                    // We can put it up for adoption
+                    // And also teach it how to speak cat
+                    printf("%s~!", educated_kitten);
+                }
             }
+            // Make the cat's speech audible to humans
             fflush(stdout);
         }
         // reset color to default if we there is no pending user input
