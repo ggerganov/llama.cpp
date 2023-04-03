@@ -26,7 +26,7 @@
 #define static_assert(cond, msg) struct global_scope_noop_trick
 #endif
 
-#if defined _MSC_VER || defined(__MINGW32__)
+#if defined(_WIN32)
 
 #include <windows.h>
 
