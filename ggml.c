@@ -2188,6 +2188,162 @@ static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void * rest
     *s = sumf;
 }
 
+static void seap_ggml_vec_dot_q4_0(const int n, float * restrict s, const void * restrict vx, const void * restrict vy, const int tilesize_x, const int tilesize_y, const int rowlength, const int dst_stridelength) {
+    const int nb = n / QK;
+
+    assert(n % QK == 0);
+    assert(nb % 2 == 0);
+
+    const block_q4_0 * restrict x = vx;
+    const block_q4_0 * restrict y = vy;
+
+    float sumf = 0.0;
+
+
+//#if defined(__AVX2__)
+#if 1
+
+#define SEAP_TILESIZE_X 1
+#define SEAP_TILESIZE_Y 8
+#define UNROLL_COUNT 8/SEAP_TILESIZE_Y
+#undef SEAP_DEBUG
+
+    // Initialize accumulator with zeros
+    __m256 acc[SEAP_TILESIZE_Y]; // = 0; // _mm256_setzero_ps();
+    for (int i=0;i<SEAP_TILESIZE_Y; i++) {
+        acc[i] = _mm256_setzero_ps();
+    }
+
+
+    /* Prepare the constants we will need during execution */        
+    const __m256i lowMask = _mm256_set1_epi8( 0xF );
+    const __m256i offset_8 = _mm256_set1_epi16( 8 );
+
+    // make sure we only unroll multiples of the block count
+    assert(nb % UNROLL_COUNT == 0);
+
+// Input: 32 Nibbles (16 bytes) at *p0 
+// Output: 2 vectors with 16 values of type int16_t 
+#define EXPAND_32_Q4_NIBBLES_INTO_TWO_M256_VECTORS(OUT_HIGH,OUT_LOW,IN_SRC,INDEX)     \
+        /* get first input */                                                   \
+        /* Load 16 bytes from memory */                                         \
+        const __m128i tmp_##OUT_HIGH =                                          \
+            _mm_loadu_si128( (const __m128i_u *) IN_SRC);                       \
+                                                                                \
+        /* Expand bytes into uint16_t values */                                 \
+        const __m256i bytes_##OUT_HIGH = _mm256_cvtepu8_epi16(tmp_##OUT_HIGH);  \
+                                                                                \
+        /* Unpack values into individual bytes */                               \
+        const __m256i pre_shift_##OUT_HIGH =                                    \
+            _mm256_andnot_si256( lowMask, bytes_##OUT_HIGH );                   \
+        OUT_HIGH[INDEX] = _mm256_srli_epi16( pre_shift_##OUT_HIGH, 4 );        \
+                                                                                \
+        OUT_LOW[INDEX] = _mm256_and_si256( lowMask, bytes_##OUT_HIGH );        \
+        /* Now we have a vector with bytes in [ 0 .. 15 ] interval. 
+           Offset them into [ -8 .. +7 ] interval.  */                          \
+        OUT_HIGH[INDEX] = _mm256_sub_epi16( OUT_HIGH[INDEX], offset_8 );                      \
+        OUT_LOW[INDEX] = _mm256_sub_epi16( OUT_LOW[INDEX], offset_8 ); 
+
+
+
+    // Main loop
+    for (int i = 0; i < nb; i+=UNROLL_COUNT) {
+
+        // This loop will be unrolled by the compiler    
+        for (int u=0;u<UNROLL_COUNT;u++)  {
+
+            /* get input from x 
+            Input: 32 Nibbles (16 bytes) at *x[i+u] 
+            Output: 2 vectors with 16 values of type int16_t (x_high_q, x_low_q) */        
+            __m256i x_high_q[SEAP_TILESIZE_X];
+            __m256i x_low_q[SEAP_TILESIZE_X];
+            EXPAND_32_Q4_NIBBLES_INTO_TWO_M256_VECTORS(x_high_q, x_low_q, x[i+u].qs,0)
+
+            __m256 scale[SEAP_TILESIZE_Y];
+
+            for (int t=0;t<SEAP_TILESIZE_Y;t++) {
+                /* Compute combined scale for the block */ 
+                scale[t] = _mm256_mul_ps( 
+                        _mm256_broadcast_ss( &x[i+u].d ), 
+                        _mm256_broadcast_ss( &y[i+u+t*rowlength].d ) ); 
+
+#ifdef SEAP_DEBUG
+                void *p = &y[i+u+t*rowlength];
+                printf("dot_ved i=%i,u=%i,t=%i = %li = %f \n",i,u,t, (long int)p, ((block_q4_0 *)(p))->d);              
+#endif
+
+                /* get input from y 
+                Input: 32 Nibbles (16 bytes) at *y[i+u] 
+                Output: 2 vectors with 16 values of type int16_t (y_high_q, y_low_q) */  
+                __m256i y_high_q[SEAP_TILESIZE_Y];
+                __m256i y_low_q[SEAP_TILESIZE_Y];
+
+                EXPAND_32_Q4_NIBBLES_INTO_TWO_M256_VECTORS(y_high_q, y_low_q, y[i+u+t*rowlength].qs,t)
+            
+                /* Compute products of int16_t integers, add pairwise, store as int32_t */     
+                __m256i xy_high_q[SEAP_TILESIZE_Y];
+                 xy_high_q[t] = _mm256_madd_epi16( x_high_q[0], y_high_q[t] ); 
+                __m256i xy_low_q[SEAP_TILESIZE_Y];
+                 xy_low_q[t]= _mm256_madd_epi16( x_low_q[0], y_low_q[t] ); 
+
+                /* Accumulate the products of int32_t integers -> we now have a vector of 8 int_32t */ 
+                __m256i xy_q[SEAP_TILESIZE_Y];
+                xy_q[t] = _mm256_add_epi32( xy_high_q[t], xy_low_q[t] ); 
+
+                /* Convert to vectore of 8 int32_t to 8 floats */ 
+                __m256 q[SEAP_TILESIZE_Y];
+                q[t] = _mm256_cvtepi32_ps( xy_q[t] ); 
+
+                /* Multiply q with scale and accumulate */ 
+                acc[t] = _mm256_fmadd_ps( scale[t], q[t], acc[t] );    
+
+            }
+            
+        }
+       
+    }   
+
+    for (int t=0;t<SEAP_TILESIZE_Y;t++) {
+        // Return horizontal sum of the acc vector
+        __m128 res = _mm256_extractf128_ps( acc[t], 1 );
+        res = _mm_add_ps( res, _mm256_castps256_ps128( acc[t] ) );
+        res = _mm_add_ps( res, _mm_movehl_ps( res, res ) );
+        res = _mm_add_ss( res, _mm_movehdup_ps( res ) );
+        
+        s[(t*dst_stridelength)] = _mm_cvtss_f32( res );
+
+#ifdef SEAP_DEBUG    
+        void *p =  &s[(t*dst_stridelength)];
+        printf("dot_vec dst[%i] @ %li = %f \n",t, (long int)p, (float *)(p));
+#endif
+    }
+
+#else
+    // scalar
+    for (int i = 0; i < nb; i++) {
+        const float d0 = x[i].d;
+        const float d1 = y[i].d;
+
+        const uint8_t * restrict p0 = x[i].qs;
+        const uint8_t * restrict p1 = y[i].qs;
+
+        for (int j = 0; j < QK/2; j++) {
+            const uint8_t v0 = p0[j];
+            const uint8_t v1 = p1[j];
+
+            const float f0 = d0*((int8_t) (v0 & 0xf) - 8);
+            const float f1 = d0*((int8_t) (v0 >> 4)  - 8);
+
+            const float f2 = d1*((int8_t) (v1 & 0xf) - 8);
+            const float f3 = d1*((int8_t) (v1 >> 4)  - 8);
+
+            sumf += f0*f2 + f1*f3;
+        }
+    }
+    *s = sumf;
+#endif
+}
+
 static void ggml_vec_dot_q4_1(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
     const int nb = n / QK;
 
@@ -6718,9 +6874,43 @@ static void ggml_compute_forward_mul_mat_q_f32(
 
         assert(ne00 % 32 == 0);
 
-        for (int64_t ic = 0; ic < ne11; ++ic) {
-            vec_dot_q(ne00, &dst_col[ic*ne0], src0_row, (void *) (src1_col + ic*row_size));
+        if (ne11 < SEAP_TILESIZE_Y) {
+            // existing implementation tiled implementation
+            for (int64_t ic = 0; ic < ne11; ++ic) {
+                vec_dot_q(ne00, &dst_col[ic*ne0], src0_row, (void *) (src1_col + ic*row_size));
+            }
+        } else {
+            // tiled implementation
+            if ((ne11 % SEAP_TILESIZE_Y) !=  0) {
+                printf("ne11=%i\n",ne11);
+            }
+            assert((ne11 % SEAP_TILESIZE_Y) ==  0); // make sure we have a multiple of the tilesize
+
+            for (int64_t ic = 0; ic < ne11; ic+=SEAP_TILESIZE_Y) {
+                //vec_dot_q(ne00, &dst_col[ic*ne0], src0_row, (void *) (src1_col + ic*row_size));
+
+    #ifdef SEAP_DEBUG
+                for (int t=0;t<SEAP_TILESIZE_Y;t++) {
+                    void *p = (src1_col + (ic+t)*row_size);
+                    printf("%i = %li = %f \n",t, (long int)p, ((block_q4_0 *)(p))->d);
+                }
+    #endif
+                
+                seap_ggml_vec_dot_q4_0(ne00, &dst_col[ic*ne0], src0_row, (void *) (src1_col + ic*row_size), SEAP_TILESIZE_X, SEAP_TILESIZE_Y, row_size/GGML_TYPE_SIZE[type], ne0);
+
+    #ifdef SEAP_DEBUG
+                for (int t=0;t<SEAP_TILESIZE_Y;t++) {
+                    void *p = &dst_col[(ic+t)*ne0];
+                    printf("dst[%i] @ %li = %f \n",(ic+t)*ne0, (long int)p, (float *)(p));
+                }
+
+                if (ic>=3) exit(0);
+    #endif
+            }
+
+
         }
+
     }
 
     //int64_t t1 = ggml_time_us();
