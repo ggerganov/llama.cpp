@@ -2188,7 +2188,8 @@ static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void * rest
     *s = sumf;
 }
 
-static void seap_ggml_vec_dot_q4_0(const int n, float * restrict s, const void * restrict vx, const void * restrict vy, const int tilesize_x, const int tilesize_y, const int rowlength, const int dst_stridelength) {
+static void seap_ggml_vec_dot_q4_0(const int n, float * restrict s, const void * restrict vx, const void * restrict vy, 
+        const int rowlength_x, const int rowlength_y, const int dst_stridelength_x, const int dst_stridelength_y) {
     const int nb = n / QK;
 
     assert(n % QK == 0);
@@ -2203,15 +2204,28 @@ static void seap_ggml_vec_dot_q4_0(const int n, float * restrict s, const void *
 //#if defined(__AVX2__)
 #if 1
 
-#define SEAP_TILESIZE_X 1
-#define SEAP_TILESIZE_Y 8
-#define UNROLL_COUNT 8/SEAP_TILESIZE_Y
-#undef SEAP_DEBUG
+#define EXPERIMENT_TILESIZE_X 8
+#define EXPERIMENT_TILESIZE_Y 1
+//#define EXPERIMENT_TILESIZE_X 2
+//#define EXPERIMENT_TILESIZE_Y 2
+
+#define UNROLL_COUNT 1 // 8/EXPERIMENT_TILESIZE_Y
+//#define EXPERIMENT_DEBUG
+#undef EXPERIMENT_DEBUG
+#undef EXPERIMENT_DEBUG2
+
+#ifdef EXPERIMENT_DEBUG
+    printf("rowlength_x=%i,rowlength_y=%i,dst_stridelength_x=%i,dst_stridelength_y=%i\n",rowlength_x,rowlength_y,dst_stridelength_x,dst_stridelength_y);
+#endif
+
 
     // Initialize accumulator with zeros
-    __m256 acc[SEAP_TILESIZE_Y]; // = 0; // _mm256_setzero_ps();
-    for (int i=0;i<SEAP_TILESIZE_Y; i++) {
-        acc[i] = _mm256_setzero_ps();
+    __m256 acc[EXPERIMENT_TILESIZE_X][EXPERIMENT_TILESIZE_Y]; // = 0; // _mm256_setzero_ps();
+
+    for (int tx=0;tx<EXPERIMENT_TILESIZE_X; tx++) {
+        for (int ty=0;ty<EXPERIMENT_TILESIZE_Y; ty++) {
+            acc[tx][ty] = _mm256_setzero_ps();
+        }
     }
 
 
@@ -2224,27 +2238,25 @@ static void seap_ggml_vec_dot_q4_0(const int n, float * restrict s, const void *
 
 // Input: 32 Nibbles (16 bytes) at *p0 
 // Output: 2 vectors with 16 values of type int16_t 
-#define EXPAND_32_Q4_NIBBLES_INTO_TWO_M256_VECTORS(OUT_HIGH,OUT_LOW,IN_SRC,INDEX)     \
+#define EXPAND_32_Q4_NIBBLES_INTO_TWO_M256_VECTORS(IN_SRC, OUT_HIGH,OUT_LOW,INDEX_Y)     \
         /* get first input */                                                   \
         /* Load 16 bytes from memory */                                         \
-        const __m128i tmp_##OUT_HIGH =                                          \
+        const __m128i tmp =                                          \
             _mm_loadu_si128( (const __m128i_u *) IN_SRC);                       \
                                                                                 \
         /* Expand bytes into uint16_t values */                                 \
-        const __m256i bytes_##OUT_HIGH = _mm256_cvtepu8_epi16(tmp_##OUT_HIGH);  \
+        const __m256i bytes = _mm256_cvtepu8_epi16(tmp);  \
                                                                                 \
         /* Unpack values into individual bytes */                               \
-        const __m256i pre_shift_##OUT_HIGH =                                    \
-            _mm256_andnot_si256( lowMask, bytes_##OUT_HIGH );                   \
-        OUT_HIGH[INDEX] = _mm256_srli_epi16( pre_shift_##OUT_HIGH, 4 );        \
+        const __m256i pre_shift =                                    \
+            _mm256_andnot_si256( lowMask, bytes );                   \
+        OUT_HIGH[INDEX_Y] = _mm256_srli_epi16( pre_shift, 4 );        \
                                                                                 \
-        OUT_LOW[INDEX] = _mm256_and_si256( lowMask, bytes_##OUT_HIGH );        \
+        OUT_LOW[INDEX_Y] = _mm256_and_si256( lowMask, bytes );        \
         /* Now we have a vector with bytes in [ 0 .. 15 ] interval. 
            Offset them into [ -8 .. +7 ] interval.  */                          \
-        OUT_HIGH[INDEX] = _mm256_sub_epi16( OUT_HIGH[INDEX], offset_8 );                      \
-        OUT_LOW[INDEX] = _mm256_sub_epi16( OUT_LOW[INDEX], offset_8 ); 
-
-
+        OUT_HIGH[INDEX_Y] = _mm256_sub_epi16( OUT_HIGH[INDEX_Y], offset_8 );                      \
+        OUT_LOW[INDEX_Y] = _mm256_sub_epi16( OUT_LOW[INDEX_Y], offset_8 ); 
 
     // Main loop
     for (int i = 0; i < nb; i+=UNROLL_COUNT) {
@@ -2252,71 +2264,87 @@ static void seap_ggml_vec_dot_q4_0(const int n, float * restrict s, const void *
         // This loop will be unrolled by the compiler    
         for (int u=0;u<UNROLL_COUNT;u++)  {
 
-            /* get input from x 
-            Input: 32 Nibbles (16 bytes) at *x[i+u] 
-            Output: 2 vectors with 16 values of type int16_t (x_high_q, x_low_q) */        
-            __m256i x_high_q[SEAP_TILESIZE_X];
-            __m256i x_low_q[SEAP_TILESIZE_X];
-            EXPAND_32_Q4_NIBBLES_INTO_TWO_M256_VECTORS(x_high_q, x_low_q, x[i+u].qs,0)
+            for (int tx=0;tx<EXPERIMENT_TILESIZE_X;tx++) {
+                /* get input from x 
+                Input: 32 Nibbles (16 bytes) at *x[i+u] 
+                Output: 2 vectors with 16 values of type int16_t (x_high_q, x_low_q) */        
+                __m256i x_high_q[EXPERIMENT_TILESIZE_X];
+                __m256i x_low_q[EXPERIMENT_TILESIZE_X];
+                EXPAND_32_Q4_NIBBLES_INTO_TWO_M256_VECTORS(x[i+u+tx*rowlength_x].qs, x_high_q, x_low_q, tx)
 
-            __m256 scale[SEAP_TILESIZE_Y];
+    #ifdef EXPERIMENT_DEBUG
+                if (i<10) {
+                    void *p = &x[i+u+tx*rowlength_x];
+                    printf("dot_vec i=%i,u=%i,tx=%i @ %li = %f \n",i,u, tx, (long int)p, ((block_q4_0 *)(p))->d);              
+                }
+                
+    #endif                
 
-            for (int t=0;t<SEAP_TILESIZE_Y;t++) {
-                /* Compute combined scale for the block */ 
-                scale[t] = _mm256_mul_ps( 
-                        _mm256_broadcast_ss( &x[i+u].d ), 
-                        _mm256_broadcast_ss( &y[i+u+t*rowlength].d ) ); 
+                __m256 scale[EXPERIMENT_TILESIZE_X][EXPERIMENT_TILESIZE_Y];
 
-#ifdef SEAP_DEBUG
-                void *p = &y[i+u+t*rowlength];
-                printf("dot_ved i=%i,u=%i,t=%i = %li = %f \n",i,u,t, (long int)p, ((block_q4_0 *)(p))->d);              
-#endif
+                for (int ty=0;ty<EXPERIMENT_TILESIZE_Y;ty++) {
+                    /* Compute combined scale for the block */ 
+                    scale[tx][ty] = _mm256_mul_ps( 
+                            _mm256_broadcast_ss( &x[i+u+tx*rowlength_x].d ), 
+                            _mm256_broadcast_ss( &y[i+u+ty*rowlength_y].d ) ); 
 
-                /* get input from y 
-                Input: 32 Nibbles (16 bytes) at *y[i+u] 
-                Output: 2 vectors with 16 values of type int16_t (y_high_q, y_low_q) */  
-                __m256i y_high_q[SEAP_TILESIZE_Y];
-                __m256i y_low_q[SEAP_TILESIZE_Y];
+    #ifdef EXPERIMENT_DEBUG
+                    if (i<10) {
+                        void *p = &y[i+u+ty*rowlength_y];
+                        printf("dot_vec i=%i,u=%i,tx,%i, ty=%i = %li = %f \n",i,u, tx, ty, (long int)p, ((block_q4_0 *)(p))->d);              
+                    }
+                    
+    #endif
 
-                EXPAND_32_Q4_NIBBLES_INTO_TWO_M256_VECTORS(y_high_q, y_low_q, y[i+u+t*rowlength].qs,t)
-            
-                /* Compute products of int16_t integers, add pairwise, store as int32_t */     
-                __m256i xy_high_q[SEAP_TILESIZE_Y];
-                 xy_high_q[t] = _mm256_madd_epi16( x_high_q[0], y_high_q[t] ); 
-                __m256i xy_low_q[SEAP_TILESIZE_Y];
-                 xy_low_q[t]= _mm256_madd_epi16( x_low_q[0], y_low_q[t] ); 
+                    /* get input from y 
+                    Input: 32 Nibbles (16 bytes) at *y[i+u] 
+                    Output: 2 vectors with 16 values of type int16_t (y_high_q, y_low_q) */  
+                    __m256i y_high_q[EXPERIMENT_TILESIZE_X][EXPERIMENT_TILESIZE_Y];
+                    __m256i y_low_q[EXPERIMENT_TILESIZE_X][EXPERIMENT_TILESIZE_Y];
 
-                /* Accumulate the products of int32_t integers -> we now have a vector of 8 int_32t */ 
-                __m256i xy_q[SEAP_TILESIZE_Y];
-                xy_q[t] = _mm256_add_epi32( xy_high_q[t], xy_low_q[t] ); 
+                    EXPAND_32_Q4_NIBBLES_INTO_TWO_M256_VECTORS(y[i+u+ty*rowlength_y].qs, y_high_q[tx], y_low_q[tx], ty)
+                
+                    /* Compute products of int16_t integers, add pairwise, store as int32_t */     
+                    __m256i xy_high_q[EXPERIMENT_TILESIZE_X][EXPERIMENT_TILESIZE_Y];
+                    xy_high_q[tx][ty] = _mm256_madd_epi16( x_high_q[tx], y_high_q[tx][ty] ); 
 
-                /* Convert to vectore of 8 int32_t to 8 floats */ 
-                __m256 q[SEAP_TILESIZE_Y];
-                q[t] = _mm256_cvtepi32_ps( xy_q[t] ); 
+                    __m256i xy_low_q[EXPERIMENT_TILESIZE_X][EXPERIMENT_TILESIZE_Y];
+                    xy_low_q[tx][ty]= _mm256_madd_epi16( x_low_q[tx], y_low_q[tx][ty] ); 
 
-                /* Multiply q with scale and accumulate */ 
-                acc[t] = _mm256_fmadd_ps( scale[t], q[t], acc[t] );    
+                    /* Accumulate the products of int32_t integers -> we now have a vector of 8 int_32t */ 
+                    __m256i xy_q[EXPERIMENT_TILESIZE_X][EXPERIMENT_TILESIZE_Y];
+                    xy_q[tx][ty] = _mm256_add_epi32( xy_high_q[tx][ty], xy_low_q[tx][ty] ); 
 
+                    /* Convert to vectore of 8 int32_t to 8 floats */ 
+                    __m256 q[EXPERIMENT_TILESIZE_X][EXPERIMENT_TILESIZE_Y];
+                    q[tx][ty] = _mm256_cvtepi32_ps( xy_q[tx][ty] ); 
+
+                    /* Multiply q with scale and accumulate */ 
+                    acc[tx][ty] = _mm256_fmadd_ps( scale[tx][ty], q[tx][ty], acc[tx][ty] );    
+
+                }
             }
-            
         }
        
     }   
 
-    for (int t=0;t<SEAP_TILESIZE_Y;t++) {
-        // Return horizontal sum of the acc vector
-        __m128 res = _mm256_extractf128_ps( acc[t], 1 );
-        res = _mm_add_ps( res, _mm256_castps256_ps128( acc[t] ) );
-        res = _mm_add_ps( res, _mm_movehl_ps( res, res ) );
-        res = _mm_add_ss( res, _mm_movehdup_ps( res ) );
-        
-        s[(t*dst_stridelength)] = _mm_cvtss_f32( res );
+    for (int tx=0;tx<EXPERIMENT_TILESIZE_X;tx++) {
+        for (int ty=0;ty<EXPERIMENT_TILESIZE_Y;ty++) {
+            // Return horizontal sum of the acc vector
+            __m128 res = _mm256_extractf128_ps( acc[tx][ty], 1 );
+            res = _mm_add_ps( res, _mm256_castps256_ps128( acc[tx][ty] ) );
+            res = _mm_add_ps( res, _mm_movehl_ps( res, res ) );
+            res = _mm_add_ss( res, _mm_movehdup_ps( res ) );
+            
+            float sum = _mm_cvtss_f32( res );
+            float *p =  &s[(ty*dst_stridelength_y)+tx];
+            *p = sum;
 
-#ifdef SEAP_DEBUG    
-        void *p =  &s[(t*dst_stridelength)];
-        printf("dot_vec dst[%i] @ %li = %f \n",t, (long int)p, (float *)(p));
+#ifdef EXPERIMENT_DEBUG2    
+            printf("storing %f -> dot_vec dst[%i,%i] @ %li = %f \n",sum,tx,ty, (long int)p, (float *)(p));
 #endif
-    }
+        } // for ty
+    } // for tx
 
 #else
     // scalar
@@ -6704,6 +6732,42 @@ static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
     },
 };
 
+float tensor_sum_elements(struct ggml_tensor * tensor) {
+    float sum = 0;
+    if (tensor->type==6) { 
+        for (int j = 0; j < tensor->ne[1]; j++) { 
+            for (int k = 0; k < tensor->ne[0]; k++) { 
+                void *p = &((float *) tensor->data)[j*tensor->ne[0]+k]; 
+                float val = ((float *) tensor->data)[j*tensor->ne[0]+k]; 
+#ifdef EXPERIMENT_DEBUG2                
+                
+                printf("val[%i,%i] @ %lli =%f\n",j,k,p,val);
+#endif                
+                sum +=  val;
+            } 
+        } 
+        return sum;
+    } else if (tensor->type==0) { 
+
+        for (int j = 0; j < tensor->ne[1] / QK; j++) { 
+            for (int k = 0; k < tensor->ne[0] / QK; k++) { 
+                block_q4_0 *blk = tensor->data;
+                
+                float *p = (float *) &(blk[k+j*tensor->ne[0]].d);
+                sum += *p;
+                //printf("j,k,offset =%i,%i,%i @ %lli\n",j,k,k+j*tensor->ne[0],p);
+            }
+            //printf("j=%i\n",j);
+        }
+        return sum;
+    } else {
+        printf("canot sum type %i", tensor->type);
+        return 0;
+    }
+    
+}
+
+
 static void ggml_compute_forward_mul_mat_q_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
@@ -6854,7 +6918,33 @@ static void ggml_compute_forward_mul_mat_q_f32(
     void * wdata = params->wdata;
     const size_t row_size = ne00*GGML_TYPE_SIZE[type]/GGML_BLCK_SIZE[type];
 
-    for (int ir = ir0; ir < ir1; ++ir) {
+#define TENSOR_TYPE_AS_STR(TYPE) TYPE == GGML_TYPE_F32 ? "FP32" : TYPE == GGML_TYPE_F16 ? "FP16" : TYPE == GGML_TYPE_Q4_0 ? "Q4_0" : TYPE == GGML_TYPE_Q4_1 ? "Q4_1" : "UNKNOWN"
+
+#define TENSOR_DUMP(TENSOR) printf("%15s: type = %i (%5s) ne = %5d x %5d x %5d, nb = (%5li, %5li, %5li) @ %lli - ", #TENSOR, \
+        TENSOR->type,TENSOR_TYPE_AS_STR(TENSOR->type),\
+        TENSOR->ne[0], TENSOR->ne[1], TENSOR->ne[2], TENSOR->nb[0], TENSOR->nb[1], TENSOR->nb[2],(long long int)TENSOR->data); \
+         { float sum = tensor_sum_elements(TENSOR); printf("Sum of tensor %s is %6.2f\n",#TENSOR, sum); }
+
+#ifdef EXPERIMENT_DEBUG2
+//#if 1
+    printf("\n");
+    TENSOR_DUMP(src0)
+    TENSOR_DUMP(src1)
+    //TENSOR_DUMP(src1)
+
+    //printf("rowlength_x=%i,rowlength_y=%i,dst_stridelength_x=%i,dst_stridelength_y=%i\n",rowlength_x,rowlength_y,dst_stridelength_x,dst_stridelength_y);
+#endif
+
+    //void *p = (void *) src0->data;
+    assert((ir1-ir0) % EXPERIMENT_TILESIZE_X == 0);
+
+    int x_stride = EXPERIMENT_TILESIZE_X;
+    if (ne11 < EXPERIMENT_TILESIZE_Y) {
+        x_stride = 1;
+    }
+
+
+    for (int ir = ir0; ir < ir1; ir+=x_stride) {
         // src0 indices
         const int i03 = ir/(ne02*ne01);
         const int i02 = (ir - i03*ne02*ne01)/ne01;
@@ -6868,43 +6958,74 @@ static void ggml_compute_forward_mul_mat_q_f32(
         const int i3 = i03;
 
         void * src0_row = (void *) ((char *) src0->data + (i01*nb01 + i02*nb02 + i03*nb03));
+
         char * src1_col =          ((char *)      wdata + (      (0 + i12*ne11 + i13*ne12*ne11)*row_size));
 
         float * dst_col = (float *) ((char *) dst->data + (i0*nb0 + 0*nb1 + i2*nb2 + i3*nb3));
 
+#if 0
+        printf("src0->type=%i, src0->n_dims=%i, src0->nb=(%i,%i,%i), type_size=%lli \n",src0->type, src0->n_dims, nb01,nb02,nb03,GGML_TYPE_SIZE[src0->type]);        
+        
+        /*if (src0->n_dims == 3) {
+            rowlength *= nb03;
+        }*/
+        void *p = src0_row;
+        printf("src_row[%i] @ %li = %f, rowlength = %li \n",
+            ir, (long int)p, (float *)(p),
+            row_size/GGML_TYPE_SIZE[src0->type]);
+        
+        if (ir > 5) exit(0);
+#endif
+#ifdef EXPERIMENT_DEBUG    
+        printf("ir=%i, src0_row=%lli, src1_col=%lli, dst_col=%lli\n",ir, (long long int)src0_row,(long long int)src1_col,(long long int)dst_col );
+        if (ir > 5) exit(0);
+#endif
+
         assert(ne00 % 32 == 0);
 
-        if (ne11 < SEAP_TILESIZE_Y) {
+        if (ne11 < EXPERIMENT_TILESIZE_Y) {
+            //printf("using legacy tile size implementation\n");
             // existing implementation tiled implementation
             for (int64_t ic = 0; ic < ne11; ++ic) {
                 vec_dot_q(ne00, &dst_col[ic*ne0], src0_row, (void *) (src1_col + ic*row_size));
             }
+
         } else {
             // tiled implementation
-            if ((ne11 % SEAP_TILESIZE_Y) !=  0) {
+            if ((ne11 % EXPERIMENT_TILESIZE_Y) !=  0) {
                 printf("ne11=%i\n",ne11);
             }
-            assert((ne11 % SEAP_TILESIZE_Y) ==  0); // make sure we have a multiple of the tilesize
+            assert((ne11 % EXPERIMENT_TILESIZE_Y) ==  0); // make sure we have a multiple of the tilesize
 
-            for (int64_t ic = 0; ic < ne11; ic+=SEAP_TILESIZE_Y) {
+            for (int64_t ic = 0; ic < ne11; ic+=EXPERIMENT_TILESIZE_Y) {
                 //vec_dot_q(ne00, &dst_col[ic*ne0], src0_row, (void *) (src1_col + ic*row_size));
 
-    #ifdef SEAP_DEBUG
-                for (int t=0;t<SEAP_TILESIZE_Y;t++) {
+    #ifdef EXPERIMENT_DEBUG
+                for (int t=0;t<EXPERIMENT_TILESIZE_Y;t++) {
                     void *p = (src1_col + (ic+t)*row_size);
                     printf("%i = %li = %f \n",t, (long int)p, ((block_q4_0 *)(p))->d);
                 }
+                printf("calling seap_ggml_vec_dot_q4_0 for row, col=(%i,%i)\n",ir,ic);
     #endif
                 
-                seap_ggml_vec_dot_q4_0(ne00, &dst_col[ic*ne0], src0_row, (void *) (src1_col + ic*row_size), SEAP_TILESIZE_X, SEAP_TILESIZE_Y, row_size/GGML_TYPE_SIZE[type], ne0);
+                seap_ggml_vec_dot_q4_0(ne00, &dst_col[ic*ne0], src0_row, (void *) (src1_col + ic*row_size), 
+                        nb01/20,
+                        //row_size/GGML_TYPE_SIZE[type], // rowlength_x
+                        row_size/GGML_TYPE_SIZE[type],  // rowlength_y
+                        sizeof(float), // dst_stridelength_x
+                        ne0 // dst_stridelength_y                        
+                        );
 
-    #ifdef SEAP_DEBUG
-                for (int t=0;t<SEAP_TILESIZE_Y;t++) {
-                    void *p = &dst_col[(ic+t)*ne0];
-                    printf("dst[%i] @ %li = %f \n",(ic+t)*ne0, (long int)p, (float *)(p));
+    #ifdef EXPERIMENT_DEBUG2
+                for (int tx=0;tx<EXPERIMENT_TILESIZE_X;tx++) {
+                    for (int ty=0;ty<EXPERIMENT_TILESIZE_Y;ty++) {
+                        void *p = &dst_col[(ic+ty)*ne0+tx];
+                        //float val = 
+                        printf("dst[%i,%i] @ %li = %f \n",ir+tx,ic+ty, (long int)p - (long int)dst->data, *(float *)(p));
+                    }
                 }
 
-                if (ic>=3) exit(0);
+                //if (ic>=3) exit(0);
     #endif
             }
 
@@ -6924,6 +7045,12 @@ static void ggml_compute_forward_mul_mat_q_f32(
 
     //    printf("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX task %d/%d: %d us, acc = %d\n", ith, nth, (int) (t1 - t0), (int) acc);
     //}
+#ifdef EXPERIMENT_DEBUG2
+//#if 1
+    //printf("\n");
+    TENSOR_DUMP(dst)
+    //exit(0);
+#endif
 }
 
 static void ggml_compute_forward_mul_mat(
