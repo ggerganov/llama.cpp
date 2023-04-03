@@ -31,13 +31,16 @@ endif
 #
 
 # keep standard at C11 and C++11
-CFLAGS   = -I.              -O3 -DNDEBUG -std=c11   -fPIC
-CXXFLAGS = -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC
+CFLAGS   = -I.              -O3 -std=c11   -fPIC 
+CXXFLAGS = -I. -I./examples -O3 -std=c++11 -fPIC
 LDFLAGS  =
 
 # warnings
 CFLAGS   += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith -Wno-unused-function
 CXXFLAGS += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function
+
+CFLAGS   += -D EXPERIMENT_TILESIZE_X=$(TILESIZE_X) -D EXPERIMENT_TILESIZE_Y=$(TILESIZE_Y)
+CXXFLAGS   += -D EXPERIMENT_TILESIZE_X=$(TILESIZE_X) -D EXPERIMENT_TILESIZE_Y=$(TILESIZE_Y)
 
 # OS specific
 # TODO: support Windows
@@ -169,6 +172,14 @@ embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
 # Tests
 #
 
+benchmark: ggml.o
+	$(CXX) $(CXXFLAGS) examples/benchmark/benchmark-q4_0-matmult.c ggml.o -o examples/benchmark/benchmark-q4_0-matmult $(LDFLAGS)	
+	examples/benchmark/benchmark-q4_0-matmult -i 100 
+
+benchmark_main: main
+	./main -m /tmp/ggml-alpaca-7b-q4-ggjt.bin -p "Building a website can be done in 10 simple steps:" -n 100 -t 2 --seed 1 
+	
 .PHONY: tests
 tests:
 	bash ./tests/run-tests.sh
+	

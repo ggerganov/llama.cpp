@@ -2204,8 +2204,13 @@ static void seap_ggml_vec_dot_q4_0(const int n, float * restrict s, const void *
 //#if defined(__AVX2__)
 #if 1
 
+#ifndef EXPERIMENT_TILESIZE_X
 #define EXPERIMENT_TILESIZE_X 8
-#define EXPERIMENT_TILESIZE_Y 1
+#endif
+
+#ifndef EXPERIMENT_TILESIZE_Y
+#define EXPERIMENT_TILESIZE_Y 2
+#endif
 //#define EXPERIMENT_TILESIZE_X 2
 //#define EXPERIMENT_TILESIZE_Y 2
 
