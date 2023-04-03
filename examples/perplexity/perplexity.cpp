@@ -38,7 +38,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
                                             //       it is better to always be power of 2 for better performance
         std::vector<llama_token> embd(tokens.begin() + start, tokens.begin() + end);
         auto start_t = std::chrono::high_resolution_clock::now();
-        if (llama_eval(ctx, embd.data(), embd.size(), 0, params.n_threads)) {
+        if (llama_eval(ctx, embd.data(), embd.size(), 0, params.n_threads, params.n_ethreads)) {
             fprintf(stderr, "%s : failed to eval\n", __func__);
             return;
         }

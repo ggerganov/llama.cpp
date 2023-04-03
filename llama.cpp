@@ -745,13 +745,15 @@ static bool llama_model_load(
 //   - tokens:    new batch of tokens to process
 //   - n_past:    the context size so far
 //   - n_threads: number of threads to use
+//   - n_ethreads: number of threads to use for single-token eval
 //
 static bool llama_eval_internal(
         llama_context & lctx,
     const llama_token * tokens,
             const int   n_tokens,
             const int   n_past,
-            const int   n_threads) {
+            const int   n_threads,
+            const int   n_ethreads) {
     const int64_t t_start_us = ggml_time_us();
 
     const int N = n_tokens;
@@ -784,7 +786,7 @@ static bool llama_eval_internal(
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
     ggml_cgraph gf = {};
-    gf.n_threads = N >= 32 && ggml_cpu_has_blas() ? 1 : n_threads;
+    gf.n_threads = N >= 32 && ggml_cpu_has_blas() ? 1 : (N == 1 ? n_ethreads : n_threads);
 
     struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
     memcpy(embd->data, tokens, N*ggml_element_size(embd));
@@ -1714,8 +1716,9 @@ int llama_eval(
            const llama_token * tokens,
                          int   n_tokens,
                          int   n_past,
-                         int   n_threads) {
-    if (!llama_eval_internal(*ctx, tokens, n_tokens, n_past, n_threads)) {
+                         int   n_threads,
+                         int   n_ethreads) {
+    if (!llama_eval_internal(*ctx, tokens, n_tokens, n_past, n_threads, n_ethreads)) {
         fprintf(stderr, "%s: failed to eval\n", __func__);
         return 1;
     }

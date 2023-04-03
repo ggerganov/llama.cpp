@@ -119,12 +119,12 @@ int main(int argc, char ** argv) {
     if (params.mem_test) {
         {
             const std::vector<llama_token> tmp(params.n_batch, 0);
-            llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads);
+            llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads, params.n_ethreads);
         }
 
         {
             const std::vector<llama_token> tmp = { 0, };
-            llama_eval(ctx, tmp.data(), tmp.size(), params.n_predict - 1, params.n_threads);
+            llama_eval(ctx, tmp.data(), tmp.size(), params.n_predict - 1, params.n_threads, params.n_ethreads);
         }
 
         llama_print_timings(ctx);
@@ -264,7 +264,7 @@ int main(int argc, char ** argv) {
                 //printf("\n---\n");
             }
 
-            if (llama_eval(ctx, embd.data(), embd.size(), n_past, params.n_threads)) {
+            if (llama_eval(ctx, embd.data(), embd.size(), n_past, params.n_threads, params.n_ethreads)) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return 1;
             }
