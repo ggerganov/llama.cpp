@@ -119,7 +119,7 @@ endif
 
 BLAS_BUILD = 
 ifeq ($(OS),Windows_NT)
-	BLAS_BUILD = $(CXX) $(CXXFLAGS) ggml_blas.o ggml_v1.o expose.o common.o llama_adapter.o gptj_adapter.o libopenblas.lib -shared -o llamacpp_blas.dll $(LDFLAGS)
+	BLAS_BUILD = $(CXX) $(CXXFLAGS) ggml_blas.o ggml_v1.o expose.o common.o llama_adapter.o gptj_adapter.o libopenblas.lib -shared -o koboldcpp_blas.dll $(LDFLAGS)
 else
 	BLAS_BUILD = @echo 'Your OS is $(OS) and does not appear to be Windows. If you want to use openblas, please link it manually with LLAMA_OPENBLAS=1'
 endif
@@ -170,7 +170,7 @@ gptj_adapter.o:
 	$(CXX) $(CXXFLAGS) -c gptj_adapter.cpp -o gptj_adapter.o
 
 clean:
-	rm -vf *.o main quantize perplexity embedding main.exe quantize.exe llamacpp.dll llamacpp_blas.dll gptj.exe
+	rm -vf *.o main quantize perplexity embedding main.exe quantize.exe koboldcpp.dll koboldcpp_blas.dll gptj.exe
 
 main: examples/main/main.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
@@ -179,7 +179,7 @@ main: examples/main/main.cpp ggml.o llama.o common.o
 	@echo
 
 llamalib: ggml.o ggml_v1.o expose.o common.o llama_adapter.o gptj_adapter.o
-	$(CXX) $(CXXFLAGS)  ggml.o ggml_v1.o expose.o common.o llama_adapter.o gptj_adapter.o -shared -o llamacpp.dll $(LDFLAGS)
+	$(CXX) $(CXXFLAGS)  ggml.o ggml_v1.o expose.o common.o llama_adapter.o gptj_adapter.o -shared -o koboldcpp.dll $(LDFLAGS)
 
 llamalib_blas: ggml_blas.o ggml_v1.o expose.o common.o llama_adapter.o gptj_adapter.o 
 	$(BLAS_BUILD)

@@ -1,7 +1,7 @@
 <!-- 
-An embedded version of Kobold Lite for use in llamacpp-for-kobold
+An embedded version of Kobold Lite for use in koboldcpp
 Current version: 17
-Kobold Lite is under the AGPL v3.0 License for the purposes of llamacpp-for-kobold. Please do not remove this line.
+Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
 - Concedo
 -->
 

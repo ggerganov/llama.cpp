@@ -23,4 +23,4 @@ SOFTWARE.
 ===================================
 
 Note that the above license applies ONLY to the GGML library and llama.cpp by ggerganov which are licensed under the MIT License
-Kobold Lite by Concedo and the provided python ctypes bindings in llamacpp.dll are licensed under the AGPL v3.0 License
+Kobold Lite by Concedo and the provided python ctypes bindings in koboldcpp.dll are licensed under the AGPL v3.0 License

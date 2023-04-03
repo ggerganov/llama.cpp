@@ -39,13 +39,13 @@ def init_library():
     global handle, use_blas
     libname = ""
     if use_blas:
-        libname = "llamacpp_blas.dll"
+        libname = "koboldcpp_blas.dll"
     else:
-        libname = "llamacpp.dll"
+        libname = "koboldcpp.dll"
 
     print("Initializing dynamic library: " + libname)
     dir_path = os.path.dirname(os.path.realpath(__file__))  
-    
+
     #OpenBLAS should provide about a 2x speedup on prompt ingestion if compatible.
     handle = ctypes.CDLL(os.path.join(dir_path, libname ))
 
@@ -86,7 +86,7 @@ def generate(prompt,max_length=20, max_context_length=512,temperature=0.8,top_k=
 ### A hacky simple HTTP server simulating a kobold api by Concedo
 ### we are intentionally NOT using flask, because we want MINIMAL dependencies
 #################################################################
-friendlymodelname = "concedo/llamacpp"  # local kobold api apparently needs a hardcoded known HF model name
+friendlymodelname = "concedo/koboldcpp"  # local kobold api apparently needs a hardcoded known HF model name
 maxctx = 2048
 maxlen = 128
 modelbusy = False
@@ -292,8 +292,8 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None):
 
 def main(args): 
     global use_blas
-    if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "libopenblas.dll")) or not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "llamacpp_blas.dll")):
-        print("Warning: libopenblas.dll or llamacpp_blas.dll not found. Non-BLAS library will be used. Ignore this if you have manually linked with OpenBLAS.")
+    if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "libopenblas.dll")) or not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "koboldcpp_blas.dll")):
+        print("Warning: libopenblas.dll or koboldcpp_blas.dll not found. Non-BLAS library will be used. Ignore this if you have manually linked with OpenBLAS.")
         use_blas = False
     elif os.name != 'nt':
         print("Prebuilt OpenBLAS binaries only available for windows. Please manually build/link libopenblas from makefile with LLAMA_OPENBLAS=1")

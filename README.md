@@ -1,4 +1,4 @@
-# llamacpp-for-kobold
+# koboldcpp (formerly llamacpp-for-kobold)
 
 A self contained distributable from Concedo that exposes llama.cpp function bindings, allowing it to be used via a simulated Kobold API endpoint. 
 
@@ -9,18 +9,18 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 Now has **BACKWARDS COMPATIBILITY** with ALL 3 versions of GGML LLAMA models, all ALPACA.CPP models, all versions of GPT4ALL.CPP models, and can run GGML older GPT-J.CPP models too. I also use a bunch of tricks to make subsequent prompt processing with shared ancestry much faster than the parent repo does.
 
 ## Usage
-- [Download the latest release here](https://github.com/LostRuins/llamacpp-for-kobold/releases/latest) or clone the repo.
-- Windows binaries are provided in the form of **llamacpp-for-kobold.exe**, which is a pyinstaller wrapper for **llamacpp.dll** and **llamacpp_for_kobold.py**. If you feel concerned, you may prefer to rebuild it yourself with the provided makefiles and scripts.
+- [Download the latest release here](https://github.com/LostRuins/koboldcpp/releases/latest) or clone the repo.
+- Windows binaries are provided in the form of **koboldcpp.exe**, which is a pyinstaller wrapper for **koboldcpp.dll** and **koboldcpp.py**. If you feel concerned, you may prefer to rebuild it yourself with the provided makefiles and scripts.
 - Weights are not included, you can use the `quantize.exe` to generate them from your official weight files (or download them from other places).
-- To run, execute **llamacpp-for-kobold.exe** or drag and drop your quantized `ggml_model.bin` file onto the .exe, and then connect with Kobold or Kobold Lite. 
+- To run, execute **koboldcpp.exe** or drag and drop your quantized `ggml_model.bin` file onto the .exe, and then connect with Kobold or Kobold Lite. 
 - By default, you can connect to http://localhost:5001 
-- You can also run it using the command line `llamacpp-for-kobold.exe [ggml_model.bin] [port]`. For info, please check `llamacpp-for-kobold.exe --help` 
+- You can also run it using the command line `koboldcpp.exe [ggml_model.bin] [port]`. For info, please check `koboldcpp.exe --help` 
 - If you are having crashes or issues with OpenBLAS, please try the `--noblas` flag.
 
 ## OSX and Linux
 - You will have to compile your binaries from source. A makefile is provided, simply run `make`
 - If you want you can also link your own install of OpenBLAS manually with `make LLAMA_OPENBLAS=1`
-- After all binaries are built, you can run the python script with the command `llamacpp_for_kobold.py [ggml_model.bin] [port]`
+- After all binaries are built, you can run the python script with the command `koboldcpp.py [ggml_model.bin] [port]`
 
 ## Considerations
 - Don't want to use pybind11 due to dependencies on MSVCC
@@ -33,7 +33,7 @@ Now has **BACKWARDS COMPATIBILITY** with ALL 3 versions of GGML LLAMA models, al
 ## License
 - The original GGML library and llama.cpp by ggerganov are licensed under the MIT License
 - However, Kobold Lite is licensed under the AGPL v3.0 License
-- The provided python ctypes bindings in llamacpp.dll are also under the AGPL v3.0 License
+- The provided python ctypes bindings in koboldcpp.dll are also under the AGPL v3.0 License
 
 ## Notes
 - Generation delay scales linearly with original prompt length. See [this discussion](https://github.com/ggerganov/llama.cpp/discussions/229). If OpenBLAS is enabled then prompt ingestion becomes about 2-3x faster. This is automatic on windows, but will require linking on OSX and Linux.

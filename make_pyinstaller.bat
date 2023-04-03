@@ -1,1 +1,1 @@
-pyinstaller --noconfirm --onefile --clean --console --icon "./niko.ico" --add-data "./klite.embd;." --add-data "./llamacpp.dll;." --add-data "./llamacpp_blas.dll;." --add-data "./libopenblas.dll;." "./llamacpp_for_kobold.py" -n "llamacpp-for-kobold.exe"
+pyinstaller --noconfirm --onefile --clean --console --icon "./niko.ico" --add-data "./klite.embd;." --add-data "./koboldcpp.dll;." --add-data "./koboldcpp_blas.dll;." --add-data "./libopenblas.dll;." "./koboldcpp.py" -n "koboldcpp.exe"
