@@ -1,7 +1,9 @@
 import os
 import sys
 import ctypes
+import pathlib
 from typing import Optional
+
 
 P_FLOAT = ctypes.POINTER(ctypes.c_float)
 
@@ -185,8 +187,10 @@ def load_rwkv_shared_library() -> RWKVSharedLibrary:
 
     if 'win32' in sys.platform or 'cygwin' in sys.platform:
         file_name = 'rwkv.dll'
+    elif 'darwin' in sys.platform:
+        file_name = 'rwkv.o'
     else:
-        file_name = 'rwkv.so'
+        file_name = 'librwkv.so'
 
     paths = [
         # If we are in "rwkv" directory
@@ -194,7 +198,7 @@ def load_rwkv_shared_library() -> RWKVSharedLibrary:
         # If we are in repo root directory
         f'bin/Release/{file_name}',
         # Fallback
-        file_name
+        pathlib.Path(os.path.abspath(__file__)).parent.parent / file_name
     ]
 
     for path in paths:

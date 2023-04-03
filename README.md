@@ -39,7 +39,7 @@ To check whether your CPU supports AVX2 or AVX-512, [use CPU-Z](https://www.cpui
 
 ##### Windows
 
-**Requirements**: [CMake](https://cmake.org/download/), MSVC compiler.
+**Requirements**: [CMake](https://cmake.org/download/) or [CMake from anaconda](https://anaconda.org/conda-forge/cmake), MSVC compiler.
 
 ```commandline
 cmake -DBUILD_SHARED_LIBS=ON .
@@ -48,12 +48,27 @@ cmake --build . --config Release
 
 If everything went OK, `bin\Release\rwkv.dll` file should appear.
 
-### 3. Download an RWKV model from [Hugging Face](https://huggingface.co/BlinkDL) and convert it into `ggml` format
+##### Linux / MacOS
+
+Get Cmake (linux: `sudo apt install cmake`, macos: `brew install cmake`, anaconoda: [cmake package](https://anaconda.org/conda-forge/cmake)), then run:
+
+```commandline
+cmake -DBUILD_SHARED_LIBS=ON .
+cmake --build . --config Release
+```
+
+If everything went OK, `rwkv.o` (macOS) or `librwkv.so` (linux) file should appear in the base repo folder.
+
+
+### 3. Download an RWKV model from [Hugging Face](https://huggingface.co/BlinkDL) like [this one](https://huggingface.co/BlinkDL/rwkv-4-pile-169m/blob/main/RWKV-4-Pile-169M-20220807-8023.pth) and convert it into `ggml` format
 
 **Requirements**: Python 3.x with [PyTorch](https://pytorch.org/get-started/locally/).
 
 ```commandline
-python rwkv\convert_pytorch_rwkv_to_ggml.py C:\RWKV-4-Pile-169M-20220807-8023.pth C:\rwkv.cpp-169M.bin float32
+# Windows
+python rwkv\convert_rwkv_to_ggml.py C:\RWKV-4b-Pile-169M-20220807-8023.pth C:\rwkv.cpp-169M.bin float32
+# Linux/MacOS
+python rwkv/convert_pytorch_to_ggml.py ~/Downloads/RWKV-4b-Pile-169M-20220807-8023.pth ~/Downloads/rwkv.cpp-169M.bin float32
 ```
 
 #### 3.1. Optionally, quantize the model
@@ -61,7 +76,10 @@ python rwkv\convert_pytorch_rwkv_to_ggml.py C:\RWKV-4-Pile-169M-20220807-8023.pt
 To convert the model into INT4 quantized format, run:
 
 ```commandline
+# Windows
 python rwkv\quantize.py C:\rwkv.cpp-169M.bin C:\rwkv.cpp-169M-Q4_1.bin 3
+# Linux / MacOS
+python rwkv/quantize.py ~/Downloads/rwkv.cpp-169M.bin ~/Downloads/rwkv.cpp-169M-Q4_1.bin 3
 ```
 
 Pass `2` for `Q4_0` format (smaller size, lower quality), `3` for `Q4_1` format (larger size, higher quality).
@@ -70,16 +88,24 @@ Pass `2` for `Q4_0` format (smaller size, lower quality), `3` for `Q4_1` format 
 
 **Requirements**: Python 3.x with [PyTorch](https://pytorch.org/get-started/locally/) and [tokenizers](https://pypi.org/project/tokenizers/).
 
+**Note**: change the model path with the non-quantized model for the full weights model.
+
 To generate some text, run:
 
 ```commandline
-python rwkv\generate_completions.py C:\rwkv.cpp-169M.bin
+# Windows
+python rwkv\generate_completions.py C:\rwkv.cpp-169M-Q4_1.bin
+# Linux / MacOS
+python rwkv/generate_completions.py ~/Downloads/rwkv.cpp-169M-Q4_1.bin
 ```
 
 To chat with a bot, run:
 
 ```commandline
-python rwkv\chat_with_bot.py C:\rwkv.cpp-169M.bin
+# Windows
+python rwkv\chat_with_bot.py C:\rwkv.cpp-169M-Q4_1.bin
+# Linux / MacOS
+python rwkv/chat_with_bot.py ~/Downloads/rwkv.cpp-169M-Q4_1.bin
 ```
 
 Edit [generate_completions.py](rwkv%2Fgenerate_completions.py) or [chat_with_bot.py](rwkv%2Fchat_with_bot.py) to change prompts and sampling settings.
@@ -92,9 +118,13 @@ Example of using `rwkv.cpp` in your custom Python script:
 import rwkv_cpp_model
 import rwkv_cpp_shared_library
 
+# change to model paths used above (quantized or full weights) 
+model_path = r'C:\rwkv.cpp-169M.bin'
+
+
 model = rwkv_cpp_model.RWKVModel(
     rwkv_cpp_shared_library.load_rwkv_shared_library(),
-    r'C:\rwkv.cpp-169M.bin'
+    model_path
 )
 
 logits, state = None, None

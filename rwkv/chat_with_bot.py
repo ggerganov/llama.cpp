@@ -1,7 +1,9 @@
 # Provides terminal-based chat interface for RWKV model.
 
+import os
 import sys
 import argparse
+import pathlib
 import sampling
 import tokenizers
 import rwkv_cpp_model
@@ -36,7 +38,8 @@ args = parser.parse_args()
 assert prompt != '', 'Prompt must not be empty'
 
 print('Loading 20B tokenizer')
-tokenizer = tokenizers.Tokenizer.from_file('20B_tokenizer.json')
+tokenizer_path = pathlib.Path(os.path.abspath(__file__)).parent / '20B_tokenizer.json'
+tokenizer = tokenizers.Tokenizer.from_file(str(tokenizer_path))
 
 library = rwkv_cpp_shared_library.load_rwkv_shared_library()
 print(f'System info: {library.rwkv_get_system_info_string()}')
