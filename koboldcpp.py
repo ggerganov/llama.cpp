@@ -358,7 +358,7 @@ if __name__ == '__main__':
     
     physical_core_limit = psutil.cpu_count(logical=False)
     # logical_core_limit = (os.cpu_count() if os.cpu_count()<=4 else max(4,os.cpu_count()-4))
-    default_threads = (physical_core_limit if physical_core_limit<=4 else max(4,physical_core_limit-1))
+    default_threads = (physical_core_limit if physical_core_limit<=3 else max(3,physical_core_limit-1))
     parser.add_argument("--threads", help="Use a custom number of threads if specified. Otherwise, uses an amount based on CPU cores", type=int, default=default_threads)
     parser.add_argument("--stream", help="Uses pseudo streaming", action='store_true')
     parser.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
