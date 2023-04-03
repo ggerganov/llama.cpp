@@ -28,6 +28,7 @@ struct quantize_stats_params {
     std::vector<enum ggml_type> include_types;
 };
 
+const int64_t SCRATCH_ELEMENTS = 32*32;
 const size_t HISTOGRAM_BUCKETS = 150;
 const double HISTOGRAM_RANGE = 0.03;
 
@@ -140,23 +141,29 @@ void test_roundtrip_on_layer(
         error_stats & total_error) {
 
     assert(tensor_is_contiguous(layer));
+    error_stats layer_error {};
     int64_t nelements = ggml_nelements(layer);
 
-    if (layer->type == GGML_TYPE_F16) {
-        for (int i = 0; i < nelements; i++) {
-            input_scratch[i] = ggml_get_f32_1d(layer, i);
+    for (int64_t offset = 0; offset < nelements; offset += SCRATCH_ELEMENTS) {
+        int64_t chunk_size = std::min(SCRATCH_ELEMENTS, nelements - offset);
+
+        if (layer->type == GGML_TYPE_F16) {
+            for (int i = 0; i < chunk_size; i++) {
+                input_scratch[i] = ggml_get_f32_1d(layer, i + offset);
+            }
+        } else {
+            input_scratch = ggml_get_data_f32(layer) + offset;
         }
-    } else {
-        input_scratch = ggml_get_data_f32(layer);
+
+        qfns.quantize_row_q(input_scratch, quantized_scratch, chunk_size);
+        qfns.dequantize_row_q(quantized_scratch, output_scratch, chunk_size);
+
+        update_error_stats(chunk_size, input_scratch, output_scratch, total_error);
+        if (print_layer_stats) {
+            update_error_stats(chunk_size, input_scratch, output_scratch, layer_error);
+        }
     }
-
-    qfns.quantize_row_q(input_scratch, quantized_scratch, nelements);
-    qfns.dequantize_row_q(quantized_scratch, output_scratch, nelements);
-
-    update_error_stats(nelements, input_scratch, output_scratch, total_error);
     if (print_layer_stats) {
-        error_stats layer_error {};
-        update_error_stats(nelements, input_scratch, output_scratch, layer_error);
         print_error_stats(name, layer_error, false);
     }
 }
@@ -280,11 +287,11 @@ int main(int argc, char ** argv) {
     if (is_f16) {
         printf("note: source model is f16\n");
     }
-    printf("testing %d layers with max size %" PRId64 ", allocating %" PRId64 " bytes\n", included_layers, max_nelements, 3*4*max_nelements);
+    printf("testing %d layers with max size %" PRId64 "\n", included_layers, max_nelements);
     // allocate scratch space
-    std::vector<float> input_scratch(max_nelements);
-    std::vector<char> quantized_scratch(max_nelements*4);
-    std::vector<float> output_scratch(max_nelements);
+    std::vector<float> input_scratch(SCRATCH_ELEMENTS);
+    std::vector<char> quantized_scratch(SCRATCH_ELEMENTS*4);
+    std::vector<float> output_scratch(SCRATCH_ELEMENTS);
 
     // loop throught quantization types
     for (int i = 0; i < GGML_TYPE_COUNT; i++) {
