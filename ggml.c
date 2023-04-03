@@ -28,12 +28,7 @@
 
 #if defined _MSC_VER || defined(__MINGW32__)
 
-#if !defined(__MINGW32__)
-#include <Windows.h>
-#else
-// ref: https://github.com/ggerganov/whisper.cpp/issues/168
 #include <windows.h>
-#endif
 
 typedef volatile LONG atomic_int;
 typedef atomic_int atomic_bool;

@@ -14,7 +14,7 @@
 
 #if defined(_WIN32) && !defined(_POSIX_MAPPED_FILES)
 #define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
+#include <windows.h>
 #else
 #include <sys/types.h>
 #include <sys/mman.h>
