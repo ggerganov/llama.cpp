@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Cat.cpp translator</title>
+
+		<style>
+			* {
+				color: black;
+				background: white;
+			}
+			@media (prefers-color-scheme: dark) {
+				* {
+					color: white;
+					background: #222;
+				}
+			}
+			body {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+			}
+			textarea {
+				width: 80%;
+			}
+		</style>
+	</head>
+	<body>
+		<p>Input</p>
+		<textarea id="meow" rows="10"></textarea>
+		<br />
+		<br />
+		<br />
+		<br />
+		<p>Output</p>
+		<textarea id="purr" rows="10" readonly></textarea>
+
+		<script>
+			function catTalksHuman(meow) {
+				var purr = "";
+
+				meow.split(" ").map(function (kitten) {
+					purr += String.fromCharCode(parseInt(kitten, 2));
+				});
+				return purr;
+			}
+			meow.addEventListener("keyup", () => {
+				var miao = meow.value;
+				miao = miao
+					.replaceAll(/meow ?/g, "0")
+					.replaceAll(/purr ?/g, "1")
+					.replaceAll(/~! ?/g, "");
+				purr.value = catTalksHuman(miao);
+			});
+		</script>
+	</body>
+</html>
