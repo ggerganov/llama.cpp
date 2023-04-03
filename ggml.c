@@ -1986,7 +1986,7 @@ static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void * rest
                Output: 2 vectors with 16 values of type int16_t (x_high_q, x_low_q) */             
                                       
             /* Load 16 bytes from memory */  
-            const __m128i tmp_x = _mm_loadu_si128( (const __m128i_u *) x[i+u].qs); 
+            const __m128i tmp_x = _mm_loadu_si128( ( const __m128i* ) x[i+u].qs); 
             /* Expand bytes into uint16_t values */                                 
             const __m256i bytes_x = _mm256_cvtepu8_epi16(tmp_x); 
             /* Unpack values into individual bytes */
@@ -2002,7 +2002,7 @@ static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void * rest
                Output: 2 vectors with 16 values of type int16_t (y_high_q, y_low_q) */             
 
             /* Load 16 bytes from memory */  
-            const __m128i tmp_y = _mm_loadu_si128( (const __m128i_u *) y[i+u].qs); 
+            const __m128i tmp_y = _mm_loadu_si128( (const __m128i* ) y[i+u].qs); 
             /* Expand bytes into uint16_t values */     
             const __m256i bytes_y = _mm256_cvtepu8_epi16(tmp_y); 
             /* Unpack values into individual bytes */
