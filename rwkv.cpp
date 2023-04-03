@@ -183,8 +183,9 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, uint32_t n_thr
         size_t(2) * 5 * model->n_layer * model->n_embed * sizeof(float) +
         // Logits
         size_t(model->n_vocab) * sizeof(float) +
-        // +32 MB just for any overhead
-        size_t(32) * 1024 * 1024;
+        // +256 MB just for any overhead
+        // TODO This is too much for smaller models; need a more proper and robust way of measuring required memory
+        size_t(256) * 1024 * 1024;
 
     // Initialize ggml
     struct ggml_init_params params;

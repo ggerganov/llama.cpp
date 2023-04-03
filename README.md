@@ -8,30 +8,48 @@ RWKV is a novel large language model architecture, [with the largest model in th
 
 This project provides [a C library rwkv.h](rwkv.h) and [a convinient Python wrapper](rwkv%2Frwkv_cpp_model.py) for it.
 
-**TODO**:
+**TODO (contributions welcome!)**:
 
-1. Measure performance and perplexity of different model sizes and data types
-2. Write a good `README.md` (motivation, benchmarks, perplexity) and publish links to this repo
-3. Create pull request to main `ggml` repo with all improvements made here
+1. Measure latency and perplexity of different model sizes (169M to 14B) and data types (FP32, FP16, Q4_0, Q4_1)
+2. Test on Linux (including Colab) and MacOS
+3. Make required memory calculation more robust (see #4)
 
 ## How to use
 
-### 1. Clone the repo and build the library
+### 1. Clone the repo
 
-### Windows
-
-**Requirements**: [git](https://gitforwindows.org/), [CMake](https://cmake.org/download/), MSVC compiler.
+**Requirements**: [git](https://gitforwindows.org/).
 
 ```commandline
 git clone https://github.com/saharNooby/rwkv.cpp.git
 cd rwkv.cpp
+```
+
+### 2. Get the rwkv.cpp library
+
+#### Option 2.1. Download a pre-compiled library
+
+##### Windows
+
+Check out [Releases](https://github.com/saharNooby/rwkv.cpp/releases), download appropriate ZIP for your CPU, extract `rwkv.dll` file into `bin\Release\` directory inside the repository directory.
+
+To check whether your CPU supports AVX2 or AVX-512, [use CPU-Z](https://www.cpuid.com/softwares/cpu-z.html).
+
+#### Option 2.2. Build the library yourself
+
+##### Windows
+
+**Requirements**: [CMake](https://cmake.org/download/), MSVC compiler.
+
+```commandline
 cmake -DBUILD_SHARED_LIBS=ON .
 cmake --build . --config Release
 ```
 
 If everything went OK, `bin\Release\rwkv.dll` file should appear.
 
-### 2. Download an RWKV model from [Hugging Face](https://huggingface.co/BlinkDL) like [this one](https://huggingface.co/BlinkDL/rwkv-4-pile-169m/blob/main/RWKV-4-Pile-169M-20220807-8023.pth) and convert it into `ggml` format
+### 3. Download an RWKV model from [Hugging Face](https://huggingface.co/BlinkDL) like [this one](https://huggingface.co/BlinkDL/rwkv-4-pile-169m/blob/main/RWKV-4-Pile-169M-20220807-8023.pth) and convert it into `ggml` format
+
 **Requirements**: Python 3.x with [PyTorch](https://pytorch.org/get-started/locally/).
 
 ```commandline
@@ -41,7 +59,7 @@ python rwkv\convert_rwkv_to_ggml.py C:\RWKV-4b-Pile-169M-20220807-8023.pth C:\rw
 python rwkv/convert_pytorch_to_ggml.py ~/Downloads/RWKV-4b-Pile-169M-20220807-8023.pth ~/Downloads/rwkv.cpp-169M.bin float32
 ```
 
-#### 2.1. Optionally, quantize the model
+#### 3.1. Optionally, quantize the model
 
 To convert the model into INT4 quantized format, run:
 
@@ -54,7 +72,7 @@ python rwkv/quantize.py ~/Downloads/rwkv.cpp-169M.bin ~/Downloads/rwkv.cpp-169M-
 
 Pass `2` for `Q4_0` format (smaller size, lower quality), `3` for `Q4_1` format (larger size, higher quality).
 
-### 3. Run the model
+### 4. Run the model
 
 **Requirements**: Python 3.x with [PyTorch](https://pytorch.org/get-started/locally/) and [tokenizers](https://pypi.org/project/tokenizers/).
 
