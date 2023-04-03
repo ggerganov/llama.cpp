@@ -306,8 +306,25 @@ struct llama_context_params llama_context_default_params() {
 //
 // model loading
 //
+typedef struct the_load_file_to_standby_struct{
+char * fname;
+char * addr;
+size_t addrlen;
+} the_load_file_to_standby_struct;
+
+int load_file_to_standby(the_load_file_to_standby_struct * the_load_file_to_standby_struct1){
+    auto fin = std::ifstream(the_load_file_to_standby_struct1->fname, std::ios::binary);
+    if (!fin || !the_load_file_to_standby_struct1 || !the_load_file_to_standby_struct1->fname || !the_load_file_to_standby_struct1->addr || !the_load_file_to_standby_struct1->addrlen) {
+        return -1;
+    }
+    while(!fin.eof()) fin.read(the_load_file_to_standby_struct1->addr, the_load_file_to_standby_struct1->addrlen);
+    return 0;
+}
 
 static void *mmap_file(const char *fname, uint64_t *mm_length) {
+the_load_file_to_standby_struct * the_load_file_to_standby_struct1 = 0;
+    const size_t readstridelen = 1 << 20;
+    size_t fnamelen = strlen(fname);
 #if defined(_WIN32) && !defined(_POSIX_MAPPED_FILES)
     HANDLE hFile = CreateFileA(fname,
                                GENERIC_READ,
@@ -326,6 +343,24 @@ static void *mmap_file(const char *fname, uint64_t *mm_length) {
     if (!hMapping) return 0;
     void *addr = MapViewOfFile(hMapping, FILE_MAP_READ, 0, 0, 0);
     CloseHandle(hMapping);
+    hMapping = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, sizeof(the_load_file_to_standby_struct) >> 32, sizeof(the_load_file_to_standby_struct), NULL);
+    if (hMapping){
+        the_load_file_to_standby_struct1 = (the_load_file_to_standby_struct*)MapViewOfFile(hMapping, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, 0);
+        the_load_file_to_standby_struct1->fname = 0;
+        the_load_file_to_standby_struct1->addr = 0;
+        the_load_file_to_standby_struct1->addrlen = 0;
+        CloseHandle(hMapping);
+        hMapping = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, fnamelen >> 32, fnamelen, NULL);
+        if (hMapping){
+            the_load_file_to_standby_struct1->fname = (char*)MapViewOfFile(hMapping, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, 0);
+            CloseHandle(hMapping);
+            hMapping = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, readstridelen >> 32, readstridelen, NULL);
+            if (hMapping){
+                the_load_file_to_standby_struct1->addr = (char*)MapViewOfFile(hMapping, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, 0);
+                CloseHandle(hMapping);
+            }
+        }
+    }
     if (!addr) return 0;
 #else
     int fd = open(fname, O_RDONLY);
@@ -334,8 +369,21 @@ static void *mmap_file(const char *fname, uint64_t *mm_length) {
     void *addr = mmap(NULL, length, PROT_READ, MAP_SHARED, fd, 0);
     close(fd);
     if (addr == MAP_FAILED) return 0;
+    the_load_file_to_standby_struct1 = (the_load_file_to_standby_struct*)mmap(NULL, sizeof(the_load_file_to_standby_struct), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (the_load_file_to_standby_struct1 == MAP_FAILED) the_load_file_to_standby_struct1 = 0;
+    the_load_file_to_standby_struct1->fname = (char*)mmap(NULL, fnamelen, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (the_load_file_to_standby_struct1->fname == MAP_FAILED) the_load_file_to_standby_struct1->fname = 0;
+    the_load_file_to_standby_struct1->addr = (char*)mmap(NULL, readstridelen, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (the_load_file_to_standby_struct1->addr == MAP_FAILED) the_load_file_to_standby_struct1->addr = 0;
 #endif
     *mm_length = length;
+    if(the_load_file_to_standby_struct1){
+        the_load_file_to_standby_struct1->addrlen = readstridelen;
+        if(the_load_file_to_standby_struct1->fname){
+            memcpy(the_load_file_to_standby_struct1->fname, fname, fnamelen);
+        }
+        pthread_create(0, 0, (void *(*)(void*))(&load_file_to_standby), the_load_file_to_standby_struct1);
+    }
     return addr;
 }
 
@@ -1193,20 +1241,6 @@ static llama_vocab::id llama_sample_top_p_top_k(
 
     const auto & logits = lctx.logits;
     const auto * plogits = logits.data() + logits.size() - n_logits;
-
-    if (temp <= 0) {
-        // select the token with the highest logit directly
-        float max_logit = plogits[0];
-        llama_vocab::id max_id = 0;
-
-        for (int i = 1; i < n_logits; ++i) {
-            if (plogits[i] > max_logit) {
-                max_logit = plogits[i];
-                max_id = i;
-            }
-        }
-        return max_id;
-    }
 
     std::vector<std::pair<float, llama_vocab::id>> logits_id;
     logits_id.reserve(n_logits);
