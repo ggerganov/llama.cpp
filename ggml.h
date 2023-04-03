@@ -789,8 +789,8 @@ int ggml_cpu_has_vsx(void);
 #include <windows.h>
 #endif
 typedef HANDLE pthread_t;
-static int pthread_create(pthread_t* out, void* unused, void*(*func)(void*), void* arg);
-static int pthread_join(pthread_t thread, void* unused);
+int pthread_create(pthread_t* out, void* unused, void*(*func)(void*), void* arg);
+int pthread_join(pthread_t thread, void* unused);
 #endif
 
 #ifdef  __cplusplus

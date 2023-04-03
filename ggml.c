@@ -54,7 +54,7 @@ static LONG atomic_fetch_sub(atomic_int* ptr, LONG dec) {
 typedef HANDLE pthread_t;
 
 typedef DWORD thread_ret_t;
-static int pthread_create(pthread_t* out, void* unused, thread_ret_t(*func)(void*), void* arg) {
+int pthread_create(pthread_t* out, void* unused, thread_ret_t(*func)(void*), void* arg) {
     HANDLE handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) func, arg, 0, NULL);
     if (handle == NULL)
     {
@@ -65,7 +65,7 @@ static int pthread_create(pthread_t* out, void* unused, thread_ret_t(*func)(void
     return 0;
 }
 
-static int pthread_join(pthread_t thread, void* unused) {
+int pthread_join(pthread_t thread, void* unused) {
     return (int) WaitForSingleObject(thread, INFINITE);
 }
 
