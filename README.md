@@ -50,14 +50,14 @@ If everything went OK, `bin\Release\rwkv.dll` file should appear.
 
 ##### Linux / MacOS
 
-Get Cmake (linux: `sudo apt install cmake`, macos: `brew install cmake`, anaconoda: [cmake package](https://anaconda.org/conda-forge/cmake)), then run:
+**Requirements**: CMake (Linux: `sudo apt install cmake`, MacOS: `brew install cmake`, anaconoda: [cmake package](https://anaconda.org/conda-forge/cmake)).
 
 ```commandline
 cmake -DBUILD_SHARED_LIBS=ON .
 cmake --build . --config Release
 ```
 
-If everything went OK, `rwkv.o` (macOS) or `librwkv.so` (linux) file should appear in the base repo folder.
+If everything went OK, `librwkv.so` (Linux) or `rwkv.o` (MacOS) file should appear in the base repo folder.
 
 
 ### 3. Download an RWKV model from [Hugging Face](https://huggingface.co/BlinkDL) like [this one](https://huggingface.co/BlinkDL/rwkv-4-pile-169m/blob/main/RWKV-4-Pile-169M-20220807-8023.pth) and convert it into `ggml` format
@@ -67,7 +67,8 @@ If everything went OK, `rwkv.o` (macOS) or `librwkv.so` (linux) file should appe
 ```commandline
 # Windows
 python rwkv\convert_rwkv_to_ggml.py C:\RWKV-4b-Pile-169M-20220807-8023.pth C:\rwkv.cpp-169M.bin float32
-# Linux/MacOS
+
+# Linux / MacOS
 python rwkv/convert_pytorch_to_ggml.py ~/Downloads/RWKV-4b-Pile-169M-20220807-8023.pth ~/Downloads/rwkv.cpp-169M.bin float32
 ```
 
@@ -78,6 +79,7 @@ To convert the model into INT4 quantized format, run:
 ```commandline
 # Windows
 python rwkv\quantize.py C:\rwkv.cpp-169M.bin C:\rwkv.cpp-169M-Q4_1.bin 3
+
 # Linux / MacOS
 python rwkv/quantize.py ~/Downloads/rwkv.cpp-169M.bin ~/Downloads/rwkv.cpp-169M-Q4_1.bin 3
 ```
@@ -95,6 +97,7 @@ To generate some text, run:
 ```commandline
 # Windows
 python rwkv\generate_completions.py C:\rwkv.cpp-169M-Q4_1.bin
+
 # Linux / MacOS
 python rwkv/generate_completions.py ~/Downloads/rwkv.cpp-169M-Q4_1.bin
 ```
@@ -104,6 +107,7 @@ To chat with a bot, run:
 ```commandline
 # Windows
 python rwkv\chat_with_bot.py C:\rwkv.cpp-169M-Q4_1.bin
+
 # Linux / MacOS
 python rwkv/chat_with_bot.py ~/Downloads/rwkv.cpp-169M-Q4_1.bin
 ```
@@ -118,7 +122,7 @@ Example of using `rwkv.cpp` in your custom Python script:
 import rwkv_cpp_model
 import rwkv_cpp_shared_library
 
-# change to model paths used above (quantized or full weights) 
+# Change to model paths used above (quantized or full weights) 
 model_path = r'C:\rwkv.cpp-169M.bin'
 
 
