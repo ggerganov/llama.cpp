@@ -83,6 +83,23 @@ extern "C" {
             const char * fname_out,
                    int   itype);
 
+    // Returns the KV cache that will contain the context for the
+    // ongoing prediction with the model.
+    LLAMA_API const uint8_t * llama_get_kv_cache(struct llama_context * ctx);
+
+    // Returns the size of the KV cache
+    LLAMA_API size_t llama_get_kv_cache_size(struct llama_context * ctx);
+
+    // Returns the number of tokens in the KV cache
+    LLAMA_API int llama_get_kv_cache_token_count(struct llama_context * ctx);
+
+    // Sets the KV cache containing the current context for the model
+    LLAMA_API void llama_set_kv_cache(
+            struct llama_context * ctx,
+                   const uint8_t * kv_cache,
+                          size_t   n_size,
+                             int   n_token_count);
+
     // Run the llama inference to obtain the logits and probabilities for the next token.
     // tokens + n_tokens is the provided batch of new tokens to process
     // n_past is the number of tokens to use from previous eval calls

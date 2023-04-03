@@ -256,8 +256,8 @@ static bool kv_cache_init(
     const int n_embd  = hparams.n_embd;
     const int n_layer = hparams.n_layer;
 
-    const int n_mem      = n_layer*n_ctx;
-    const int n_elements = n_embd*n_mem;
+    const int64_t n_mem      = (int64_t)n_layer*n_ctx;
+    const int64_t n_elements = n_embd*n_mem;
 
     cache.buf.resize(2u*n_elements*ggml_type_size(wtype) + 2u*MB);
 
@@ -679,7 +679,7 @@ static bool llama_model_load(
                 return false;
             }
             if (tensor->ne[0] != ne[0] || tensor->ne[1] != ne[1]) {
-                fprintf(stderr, "%s: tensor '%s' has wrong shape in model file: got [%d, %d], expected [%d, %d]\n",
+                fprintf(stderr, "%s: tensor '%s' has wrong shape in model file: got [%" PRId64 ", %" PRId64 "], expected [%d, %d]\n",
                         __func__, name.data(), tensor->ne[0], tensor->ne[1], ne[0], ne[1]);
                 return false;
             }
@@ -1194,6 +1194,20 @@ static llama_vocab::id llama_sample_top_p_top_k(
     const auto & logits = lctx.logits;
     const auto * plogits = logits.data() + logits.size() - n_logits;
 
+    if (temp <= 0) {
+        // select the token with the highest logit directly
+        float max_logit = plogits[0];
+        llama_vocab::id max_id = 0;
+
+        for (int i = 1; i < n_logits; ++i) {
+            if (plogits[i] > max_logit) {
+                max_logit = plogits[i];
+                max_id = i;
+            }
+        }
+        return max_id;
+    }
+
     std::vector<std::pair<float, llama_vocab::id>> logits_id;
     logits_id.reserve(n_logits);
 
@@ -1666,6 +1680,33 @@ int llama_model_quantize(
     }
 
     return 0;
+}
+
+// Returns the KV cache that will contain the context for the
+// ongoing prediction with the model.
+const uint8_t * llama_get_kv_cache(struct llama_context * ctx) {
+    return ctx->model.kv_self.buf.data();
+}
+
+// Returns the size of the KV cache
+size_t llama_get_kv_cache_size(struct llama_context * ctx) {
+    return ctx->model.kv_self.buf.size();
+}
+
+int llama_get_kv_cache_token_count(struct llama_context * ctx) {
+    return ctx->model.kv_self.n;
+}
+
+// Sets the KV cache containing the current context for the model
+void llama_set_kv_cache(
+        struct llama_context * ctx,
+               const uint8_t * kv_cache,
+                      size_t   n_size,
+                         int   n_token_count) {
+    // Make sure we have the same kv cache setup
+    LLAMA_ASSERT(ctx->model.kv_self.buf.size() == n_size);
+    memcpy(ctx->model.kv_self.buf.data(), kv_cache, n_size);
+    ctx->model.kv_self.n = n_token_count;
 }
 
 int llama_eval(
