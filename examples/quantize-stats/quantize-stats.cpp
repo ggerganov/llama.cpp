@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstring>
 #include <map>
+#include <numeric>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -27,7 +28,7 @@ struct quantize_stats_params {
     std::vector<enum ggml_type> include_types;
 };
 
-const size_t HISTOGRAM_BUCKETS = 30;
+const size_t HISTOGRAM_BUCKETS = 150;
 const double HISTOGRAM_RANGE = 0.03;
 
 struct error_stats {
@@ -87,15 +88,31 @@ void update_error_stats(int64_t nelements, const float * input, const float * ou
     stats.num_samples += nelements;
 }
 
+double find_quantile(const error_stats & stats, double quantile) {
+    double sum = std::accumulate(std::begin(stats.error_histogram), std::end(stats.error_histogram), 0.0);
+
+    double accum = 0;
+    for (size_t i = 0; i < HISTOGRAM_BUCKETS; i++) {
+        accum += stats.error_histogram[i];
+        if (accum >= sum*quantile) {
+            return (i+1) * HISTOGRAM_RANGE / HISTOGRAM_BUCKETS;
+        }
+    }
+    return INFINITY;
+}
+
 void print_error_stats(const std::string & name, const error_stats & stats, bool print_histogram) {
-    printf("%-50s: mse %.8f, maxerr %.8f\n", name.c_str(), stats.total_error / (double) stats.num_samples, stats.max_error);
+    double rms = stats.total_error / (double) stats.num_samples;
+    double median = find_quantile(stats, .5);
+    double pct95 = find_quantile(stats, .95);
+    printf("%-50s: mse %.8f, maxerr %.8f, 95pct<%.4f, median<%.4f\n", name.c_str(), rms, stats.max_error, pct95, median);
     if (print_histogram) {
         printf("Error distribution:\n");
         for (size_t i = 0; i < HISTOGRAM_BUCKETS; i++) {
             double lower = i * HISTOGRAM_RANGE / HISTOGRAM_BUCKETS;
             double upper = (i+1) * HISTOGRAM_RANGE / HISTOGRAM_BUCKETS;
             if (i == HISTOGRAM_BUCKETS -1) upper = INFINITY;
-            printf("[%3.3f, %3.3f): %11" PRIu64 "\n", lower, upper, stats.error_histogram[i]);
+            printf("[%3.4f, %3.4f): %11" PRIu64 "\n", lower, upper, stats.error_histogram[i]);
         }
     }
 }
