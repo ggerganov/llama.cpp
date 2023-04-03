@@ -34,7 +34,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
 
     for (int i = 0; i < seq_count; ++i) {
         int start = i * params.n_ctx;
-        int end = start + params.n_ctx - 1;
+        int end = start + params.n_ctx;
 
         std::vector<float> logits;
         int num_batches = (params.n_ctx + params.n_batch - 1) / params.n_batch;
@@ -66,8 +66,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
         // Example, we have a context window of 512, we will compute perplexity for each of the
         // last 256 tokens.  Then, we split the input up into context window size chunks to
         // process the entire prompt.
-
-        for (int j = params.n_ctx / 2; j < params.n_ctx - 1; ++j) {
+        for (int j = std::min(512, params.n_ctx / 2); j < params.n_ctx - 1; ++j) {
             // Calculate probability of next token, given the previous ones.
             std::vector<float> tok_logits(
                 logits.begin() + j * n_vocab,
