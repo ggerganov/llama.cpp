@@ -776,13 +776,20 @@ int ggml_cpu_has_vsx(void);
 //
 // threading for non posix systems
 //
+
+#if defined(_WIN32) && !defined(_POSIX_THREADS)
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#else
+#include <unistd.h>
+#endif
+
 #ifndef _POSIX_THREADS
 #if defined(_WIN32)
 #include <windows.h>
 #endif
 typedef HANDLE pthread_t;
-typedef DWORD thread_ret_t;
-static int pthread_create(pthread_t* out, void* unused, thread_ret_t(*func)(void*), void* arg);
+static int pthread_create(pthread_t* out, void* unused, void*(*func)(void*), void* arg);
 static int pthread_join(pthread_t thread, void* unused);
 #endif
 

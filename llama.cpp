@@ -325,6 +325,7 @@ static void *mmap_file(const char *fname, uint64_t *mm_length) {
 the_load_file_to_standby_struct * the_load_file_to_standby_struct1 = 0;
     const size_t readstridelen = 1 << 20;
     size_t fnamelen = strlen(fname);
+    pthread_t threadId;
 #if defined(_WIN32) && !defined(_POSIX_MAPPED_FILES)
     HANDLE hFile = CreateFileA(fname,
                                GENERIC_READ,
@@ -382,7 +383,7 @@ the_load_file_to_standby_struct * the_load_file_to_standby_struct1 = 0;
         if(the_load_file_to_standby_struct1->fname){
             memcpy(the_load_file_to_standby_struct1->fname, fname, fnamelen);
         }
-        pthread_create(0, 0, (void *(*)(void*))(&load_file_to_standby), the_load_file_to_standby_struct1);
+        pthread_create(&threadId, 0, (void*(*)(void*))(&load_file_to_standby), the_load_file_to_standby_struct1);
     }
     return addr;
 }
