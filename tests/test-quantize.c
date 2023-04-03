@@ -13,7 +13,7 @@ int main(void) {
         src[i] = (float)(i + 1);
     }
 
-    size_t size = ggml_quantize_q4_0(src, dst, QK, QK, QK, hist);
+    size_t size = ggml_quantize_q4_0(src, dst, QK, QK, hist);
     assert(size == 20);
     float max_result = ((float *)dst)[0];
     float max_expected = src[31] / ((1 << 3) - 1);
@@ -24,7 +24,7 @@ int main(void) {
         assert(q4_result == q4_expected);
     }
 
-    size = ggml_quantize_q4_1(src, dst, QK, QK, QK, hist);
+    size = ggml_quantize_q4_1(src, dst, QK, QK, hist);
     assert(size == 24);
     float delta_result = ((float *)dst)[0];
     float delta_expected = (src[31] - src[0]) / ((1 << 4) - 1);

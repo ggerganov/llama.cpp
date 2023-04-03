@@ -54,6 +54,7 @@ option(LLAMA_SANITIZE_UNDEFINED     "llama: enable undefined sanitizer"         
 # instruction set specific
 option(LLAMA_AVX                    "llama: enable AVX"                                     ON)
 option(LLAMA_AVX2                   "llama: enable AVX2"                                    ON)
+option(LLAMA_AVX512                 "llama: enable AVX512"                                  OFF)
 option(LLAMA_FMA                    "llama: enable FMA"                                     ON)
 
 # 3rd party libs
@@ -67,7 +68,9 @@ option(LLAMA_BUILD_EXAMPLES         "llama: build examples" ${LLAMA_STANDALONE})
 # Compile flags
 #
 
+set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
+set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED true)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
@@ -75,14 +78,17 @@ find_package(Threads REQUIRED)
 if (NOT MSVC)
     if (LLAMA_SANITIZE_THREAD)
         add_compile_options(-fsanitize=thread)
+        link_libraries(-fsanitize=thread)
     endif()
 
     if (LLAMA_SANITIZE_ADDRESS)
         add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+        link_libraries(-fsanitize=address)
     endif()
 
     if (LLAMA_SANITIZE_UNDEFINED)
         add_compile_options(-fsanitize=undefined)
+        link_libraries(-fsanitize=undefined)
     endif()
 endif()
 
@@ -120,8 +126,9 @@ if (LLAMA_ALL_WARNINGS)
             -Wall
             -Wextra
             -Wpedantic
-            -Wshadow
             -Wcast-qual
+            -Wdouble-promotion
+            -Wshadow
             -Wstrict-prototypes
             -Wpointer-arith
             -Wno-unused-function
@@ -131,6 +138,7 @@ if (LLAMA_ALL_WARNINGS)
             -Wextra
             -Wpedantic
             -Wcast-qual
+            -Wno-unused-function
         )
     else()
         # todo : msvc
@@ -185,7 +193,9 @@ if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES
 elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$")
     message(STATUS "x86 detected")
     if (MSVC)
-        if (LLAMA_AVX2)
+        if (LLAMA_AVX512)
+            add_compile_options(/arch:AVX512)
+        elseif (LLAMA_AVX2)
             add_compile_options(/arch:AVX2)
         elseif (LLAMA_AVX)
             add_compile_options(/arch:AVX)
@@ -200,6 +210,12 @@ elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$")
         endif()
         if (LLAMA_AVX2)
             add_compile_options(-mavx2)
+        endif()
+        if (LLAMA_AVX512)
+            add_compile_options(-mavx512f)
+            # add_compile_options(-mavx512cd)
+            # add_compile_options(-mavx512dq)
+            # add_compile_options(-mavx512bw)
         endif()
     endif()
 else()
@@ -239,7 +255,7 @@ endif()
 #
 
 if (LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
-    enable_testing()
+    include(CTest)
     add_subdirectory(tests)
 endif ()
 

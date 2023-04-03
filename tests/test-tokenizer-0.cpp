@@ -77,5 +77,7 @@ int main(int argc, char **argv) {
         }
     }
 
+    llama_free(ctx);
+
     return 0;
 }

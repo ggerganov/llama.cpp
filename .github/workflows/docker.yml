@@ -49,6 +49,7 @@ jobs:
         with:
           context: .
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: "ghcr.io/ggerganov/llama.cpp:${{ matrix.config.tag }}-${{ env.COMMIT_SHA }}"
           file: ${{ matrix.config.dockerfile }}
 
@@ -57,5 +58,6 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name == 'push' }}
+          platforms: linux/amd64,linux/arm64
           tags: "ghcr.io/ggerganov/llama.cpp:${{ matrix.config.tag }}"
           file: ${{ matrix.config.dockerfile }}

@@ -6,7 +6,7 @@
 #include <stdbool.h>
 
 #ifdef LLAMA_SHARED
-#    ifdef _WIN32
+#    if defined(_WIN32) && !defined(__MINGW32__)
 #        ifdef LLAMA_BUILD
 #            define LLAMA_API __declspec(dllexport)
 #        else
@@ -20,7 +20,7 @@
 #endif
 
 #define LLAMA_FILE_VERSION 1
-#define LLAMA_FILE_MAGIC 0x67676d66 // 'ggmf' in hex
+#define LLAMA_FILE_MAGIC 0x67676a74 // 'ggjt' in hex
 #define LLAMA_FILE_MAGIC_UNVERSIONED 0x67676d6c // pre-versioned files
 
 #ifdef __cplusplus
@@ -45,7 +45,7 @@ extern "C" {
 
     } llama_token_data;
 
-    typedef void (*llama_progress_callback)(double progress, void *ctx);
+    typedef void (*llama_progress_callback)(float progress, void *ctx);
 
     struct llama_context_params {
         int n_ctx;   // text context
@@ -81,8 +81,24 @@ extern "C" {
     LLAMA_API int llama_model_quantize(
             const char * fname_inp,
             const char * fname_out,
-                   int   itype,
-                   int   qk);
+                   int   itype);
+
+    // Returns the KV cache that will contain the context for the
+    // ongoing prediction with the model.
+    LLAMA_API const uint8_t * llama_get_kv_cache(struct llama_context * ctx);
+
+    // Returns the size of the KV cache
+    LLAMA_API size_t llama_get_kv_cache_size(struct llama_context * ctx);
+
+    // Returns the number of tokens in the KV cache
+    LLAMA_API int llama_get_kv_cache_token_count(struct llama_context * ctx);
+
+    // Sets the KV cache containing the current context for the model
+    LLAMA_API void llama_set_kv_cache(
+            struct llama_context * ctx,
+                   const uint8_t * kv_cache,
+                          size_t   n_size,
+                             int   n_token_count);
 
     // Run the llama inference to obtain the logits and probabilities for the next token.
     // tokens + n_tokens is the provided batch of new tokens to process
@@ -135,9 +151,9 @@ extern "C" {
           const llama_token * last_n_tokens_data,
                         int   last_n_tokens_size,
                         int   top_k,
-                     double   top_p,
-                     double   temp,
-                     double   repeat_penalty);
+                      float   top_p,
+                      float   temp,
+                      float   repeat_penalty);
 
     // Performance information
     LLAMA_API void llama_print_timings(struct llama_context * ctx);

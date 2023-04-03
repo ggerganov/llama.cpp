@@ -12,6 +12,19 @@
 #include <cassert>
 #include <cstring>
 
+#if defined(_WIN32) && !defined(_POSIX_MAPPED_FILES)
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#else
+#include <sys/types.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <fcntl.h>
+#endif
+
+#define Min(X, Y) ((Y) > (X) ? (X) : (Y))
+#define Max(X, Y) ((Y) < (X) ? (X) : (Y))
+
 #define LLAMA_USE_SCRATCH
 #define LLAMA_MAX_SCRATCH_BUFFERS 16
 
@@ -142,6 +155,10 @@ struct llama_model {
     // the model memory buffer
     std::vector<uint8_t> buf;
 
+    // model memory mapped file
+    void * mm_addr = NULL;
+    uint64_t mm_length = 0;
+
     // tensors
     int n_loaded;
     std::unordered_map<std::string, struct ggml_tensor *> tensors;
@@ -165,6 +182,7 @@ struct llama_context {
 
     int64_t t_load_us = 0;
     int64_t t_start_us = 0;
+    bool has_evaluated_once = false;
 
     int64_t t_sample_us = 0;
     int64_t t_eval_us   = 0;
@@ -206,7 +224,7 @@ struct llama_context {
         }
 
         if (buf_last >= 0) {
-            buf_max_size[buf_last] = std::max(buf_max_size[buf_last], last_size);
+            buf_max_size[buf_last] = Max(buf_max_size[buf_last], last_size);
         }
 
         buf_last = i;
@@ -238,14 +256,15 @@ static bool kv_cache_init(
     const int n_embd  = hparams.n_embd;
     const int n_layer = hparams.n_layer;
 
-    const int n_mem      = n_layer*n_ctx;
-    const int n_elements = n_embd*n_mem;
+    const int64_t n_mem      = (int64_t)n_layer*n_ctx;
+    const int64_t n_elements = n_embd*n_mem;
 
     cache.buf.resize(2u*n_elements*ggml_type_size(wtype) + 2u*MB);
 
     struct ggml_init_params params;
     params.mem_size   = cache.buf.size();
     params.mem_buffer = cache.buf.data();
+    params.no_alloc   = false;
 
     cache.ctx = ggml_init(params);
 
@@ -288,6 +307,58 @@ struct llama_context_params llama_context_default_params() {
 // model loading
 //
 
+static void *mmap_file(const char *fname, uint64_t *mm_length) {
+#if defined(_WIN32) && !defined(_POSIX_MAPPED_FILES)
+    HANDLE hFile = CreateFileA(fname,
+                               GENERIC_READ,
+                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                               NULL,
+                               OPEN_EXISTING,
+                               FILE_ATTRIBUTE_NORMAL | FILE_ATTRIBUTE_NOT_CONTENT_INDEXED,
+                               NULL);
+    if (hFile == INVALID_HANDLE_VALUE) return 0;
+    LARGE_INTEGER fileSize;
+    fileSize.QuadPart = -1;
+    GetFileSizeEx(hFile, &fileSize);
+    int64_t length = fileSize.QuadPart;
+    HANDLE hMapping = CreateFileMappingA(hFile, NULL, PAGE_READONLY, 0, 0, NULL);
+    CloseHandle(hFile);
+    if (!hMapping) return 0;
+    void *addr = MapViewOfFile(hMapping, FILE_MAP_READ, 0, 0, 0);
+    CloseHandle(hMapping);
+    if (!addr) return 0;
+#else
+    int fd = open(fname, O_RDONLY);
+    if (fd == -1) return 0;
+    int64_t length = lseek(fd, 0, SEEK_END);
+    void *addr = mmap(NULL, length, PROT_READ, MAP_SHARED, fd, 0);
+    close(fd);
+    if (addr == MAP_FAILED) return 0;
+#endif
+    *mm_length = length;
+    return addr;
+}
+
+static void munmap_file(void * addr, size_t length) {
+#if defined(_WIN32) && !defined(_POSIX_MAPPED_FILES)
+    UnmapViewOfFile(addr);
+#else
+    munmap(addr, length);
+#endif
+}
+
+static bool report_bad_magic(const char *path, uint32_t got, uint32_t want) {
+    fprintf(stderr,
+            "%s: invalid model file (bad magic [got %#x want %#x])\n"
+            "\tyou most likely need to regenerate your ggml files\n"
+            "\tthe benefit is you'll get 10-100x faster load times\n"
+            "\tsee https://github.com/ggerganov/llama.cpp/issues/91\n"
+            "\tuse convert-pth-to-ggml.py to regenerate from original pth\n"
+            "\tuse migrate-ggml-2023-03-30-pr613.py if you deleted originals\n",
+            path, got, want);
+    return false;
+}
+
 static bool llama_model_load(
         const std::string & fname,
         llama_context & lctx,
@@ -299,34 +370,35 @@ static bool llama_model_load(
         void *progress_callback_user_data) {
     fprintf(stderr, "%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
-    const int64_t t_start_us = ggml_time_us();
-
-    lctx.t_start_us = t_start_us;
-
-    std::vector<char> f_buf(1024*1024);
+    lctx.t_start_us = ggml_time_us();
 
     auto & model = lctx.model;
     auto & vocab = lctx.vocab;
 
     auto fin = std::ifstream(fname, std::ios::binary);
-    fin.rdbuf()->pubsetbuf(f_buf.data(), f_buf.size());
     if (!fin) {
         fprintf(stderr, "%s: failed to open '%s'\n", __func__, fname.c_str());
         return false;
     }
+
+    std::vector<char> f_buf(1024*1024);
+    fin.rdbuf()->pubsetbuf(f_buf.data(), f_buf.size());
+
+    fin.seekg(0, fin.end);
+    const size_t file_size = fin.tellg();
+    fin.seekg(0);
 
     // verify magic
     {
         uint32_t magic;
         fin.read((char *) &magic, sizeof(magic));
         if (magic == LLAMA_FILE_MAGIC_UNVERSIONED) {
-            fprintf(stderr, "%s: invalid model file '%s' (too old, regenerate your model files!)\n",
+            fprintf(stderr, "%s: invalid model file '%s' (too old, regenerate your model files or convert them with convert-unversioned-ggml-to-ggml.py!)\n",
                     __func__, fname.c_str());
             return false;
         }
         if (magic != LLAMA_FILE_MAGIC) {
-            fprintf(stderr, "%s: invalid model file '%s' (bad magic)\n", __func__, fname.c_str());
-            return false;
+            return report_bad_magic(fname.c_str(), magic, LLAMA_FILE_MAGIC);
         }
 
         uint32_t format_version;
@@ -449,43 +521,24 @@ static bool llama_model_load(
                 }
     }
 
+    // map model into memory
+    char *mm_addr = NULL;
+    model.mm_addr = mmap_file(fname.c_str(), &model.mm_length);
+    if (model.mm_addr == NULL) {
+        fprintf(stderr, "%s: failed to mmap '%s'\n", __func__, fname.c_str());
+        return false;
+    }
+    mm_addr = (char *)model.mm_addr;
+    fprintf(stderr, "%s: ggml map size = %6.2f MB\n", __func__, model.mm_length/(1024.0*1024.0));
+
     auto & ctx = model.ctx;
 
     size_t ctx_size = 0;
-
     {
-        const auto & hparams = model.hparams;
-
-        const int n_embd  = hparams.n_embd;
+        const auto &hparams = model.hparams;
         const int n_layer = hparams.n_layer;
-        const int n_ctx   = hparams.n_ctx;
-        const int n_vocab = hparams.n_vocab;
-
-        ctx_size += n_embd*n_vocab*ggml_type_sizef(vtype); // tok_embeddings
-
-        ctx_size += n_embd*ggml_type_sizef(GGML_TYPE_F32); // norm
-
-        ctx_size += n_embd*n_vocab*ggml_type_sizef(vtype); // output
-
-        ctx_size += n_layer*(n_embd*ggml_type_sizef(GGML_TYPE_F32)); // attention_norm
-
-        ctx_size += n_layer*(n_embd*n_embd*ggml_type_sizef(wtype)); // wq
-        ctx_size += n_layer*(n_embd*n_embd*ggml_type_sizef(wtype)); // wk
-        ctx_size += n_layer*(n_embd*n_embd*ggml_type_sizef(wtype)); // wv
-        ctx_size += n_layer*(n_embd*n_embd*ggml_type_sizef(wtype)); // wo
-
-        ctx_size += n_layer*(n_embd*ggml_type_sizef(GGML_TYPE_F32)); // ffn_norm
-
-        ctx_size += n_layer*(n_ff*n_embd*ggml_type_sizef(wtype)); // w1
-        ctx_size += n_layer*(n_ff*n_embd*ggml_type_sizef(wtype)); // w2
-        ctx_size += n_layer*(n_ff*n_embd*ggml_type_sizef(wtype)); // w3
-
-        ctx_size += n_ctx*n_layer*n_embd*ggml_type_sizef(memory_type); // memory_k
-        ctx_size += n_ctx*n_layer*n_embd*ggml_type_sizef(memory_type); // memory_v
-
         ctx_size += (5 + 10*n_layer)*256; // object overhead
-
-        fprintf(stderr, "%s: ggml ctx size = %6.2f MB\n", __func__, ctx_size/(1024.0*1024.0));
+        fprintf(stderr, "%s: ggml ctx size = %6.2f KB\n", __func__, ctx_size/1024.0);
     }
 
     // print memory requirements
@@ -495,6 +548,7 @@ static bool llama_model_load(
         // this is the total memory required to run the inference
         const size_t mem_required =
             ctx_size +
+            model.mm_length +
             MEM_REQ_SCRATCH0.at(model.type) +
             MEM_REQ_SCRATCH1.at(model.type) +
             MEM_REQ_EVAL.at    (model.type);
@@ -514,6 +568,7 @@ static bool llama_model_load(
         struct ggml_init_params params = {
             /*.mem_size   =*/ lctx.model.buf.size(),
             /*.mem_buffer =*/ lctx.model.buf.data(),
+            /*.no_alloc   =*/ true,
         };
 
         model.ctx = ggml_init(params);
@@ -576,234 +631,106 @@ static bool llama_model_load(
         }
     }
 
-    const size_t file_offset = fin.tellg();
-
-    fin.close();
-
     std::vector<uint8_t> tmp;
 
     if (progress_callback) {
         progress_callback(0.0, progress_callback_user_data);
     }
 
-    for (int i = 0; i < n_parts; ++i) {
-        const int part_id = i;
-        //const int part_id = n_parts - i - 1;
+    fprintf(stderr, "%s: loading tensors from '%s'\n", __func__, fname.c_str());
 
-        std::string fname_part = fname;
-        if (i > 0) {
-            fname_part += "." + std::to_string(i);
-        }
+    // load weights
+    {
+        size_t total_size = 0;
+        model.n_loaded = 0;
 
-        fprintf(stderr, "%s: loading model part %d/%d from '%s'\n", __func__, i+1, n_parts, fname_part.c_str());
+        while (true) {
+            int32_t n_dims;
+            int32_t length;
+            int32_t ftype;
 
-        fin = std::ifstream(fname_part, std::ios::binary);
-        fin.rdbuf()->pubsetbuf(f_buf.data(), f_buf.size());
+            fin.read(reinterpret_cast<char *>(&n_dims), sizeof(n_dims));
+            fin.read(reinterpret_cast<char *>(&length), sizeof(length));
+            fin.read(reinterpret_cast<char *>(&ftype),  sizeof(ftype));
 
-        fin.seekg(0, fin.end);
-        const size_t file_size = fin.tellg();
-
-        fin.seekg(file_offset);
-
-        // load weights
-        {
-            size_t total_size = 0;
-
-            model.n_loaded = 0;
-
-            fprintf(stderr, "%s: ", __func__);
-
-            while (true) {
-                int32_t n_dims;
-                int32_t length;
-                int32_t ftype;
-
-                fin.read(reinterpret_cast<char *>(&n_dims), sizeof(n_dims));
-                fin.read(reinterpret_cast<char *>(&length), sizeof(length));
-                fin.read(reinterpret_cast<char *>(&ftype),  sizeof(ftype));
-
-                if (fin.eof()) {
-                    break;
-                }
-
-                int32_t nelements = 1;
-                int32_t ne[2] = { 1, 1 };
-                for (int i = 0; i < n_dims; ++i) {
-                    fin.read(reinterpret_cast<char *>(&ne[i]), sizeof(ne[i]));
-                    nelements *= ne[i];
-                }
-
-                std::string name(length, 0);
-                fin.read(&name[0], length);
-
-                if (model.tensors.find(name.data()) == model.tensors.end()) {
-                    fprintf(stderr, "%s: unknown tensor '%s' in model file\n", __func__, name.data());
-                    return false;
-                }
-
-                // split_type = 0: split by columns
-                // split_type = 1: split by rows
-                int split_type = 0;
-
-                // split_type = 0:
-                // regex:
-                //   - tok_embeddings.*
-                //   - layers.*.attention.wo.weight
-                //   - layers.*.feed_forward.w2.weight
-
-                // split_type = 1:
-                // regex:
-                //   - output.*
-                //   - layers.*.attention.wq.weight
-                //   - layers.*.attention.wk.weight
-                //   - layers.*.attention.wv.weight
-                //   - layers.*.feed_forward.w1.weight
-                //   - layers.*.feed_forward.w3.weight
-                if (name.find("tok_embeddings") != std::string::npos) {
-                    split_type = 0;
-                } else if (name.find("layers") != std::string::npos) {
-                    if (name.find("attention.wo.weight") != std::string::npos) {
-                        split_type = 0;
-                    } else if (name.find("feed_forward.w2.weight") != std::string::npos) {
-                        split_type = 0;
-                    } else {
-                        split_type = 1;
-                    }
-                } else if (name.find("output") != std::string::npos) {
-                    split_type = 1;
-                }
-
-                auto tensor = model.tensors[name.data()];
-
-                if (n_dims == 1) {
-                    if (ggml_nelements(tensor) != nelements) {
-                        fprintf(stderr, "%s: tensor '%s' has wrong size in model file\n", __func__, name.data());
-                        return false;
-                    }
-                } else {
-                    if (ggml_nelements(tensor)/n_parts != nelements) {
-                        fprintf(stderr, "%s: tensor '%s' has wrong size in model file\n", __func__, name.data());
-                        return false;
-                    }
-                }
-
-                if (n_dims == 1) {
-                    if (tensor->ne[0] != ne[0] || tensor->ne[1] != ne[1]) {
-                        fprintf(stderr, "%s: tensor '%s' has wrong shape in model file: got [%d, %d], expected [%d, %d]\n",
-                                __func__, name.data(), tensor->ne[0], tensor->ne[1], ne[0], ne[1]);
-                        return false;
-                    }
-                } else {
-                    if (split_type == 0) {
-                        if (tensor->ne[0]/n_parts != ne[0] || tensor->ne[1] != ne[1]) {
-                            fprintf(stderr, "%s: tensor '%s' has wrong shape in model file: got [%d, %d], expected [%d, %d]\n",
-                                    __func__, name.data(), tensor->ne[0]/n_parts, tensor->ne[1], ne[0], ne[1]);
-                            return false;
-                        }
-                    } else {
-                        if (tensor->ne[0] != ne[0] || tensor->ne[1]/n_parts != ne[1]) {
-                            fprintf(stderr, "%s: tensor '%s' has wrong shape in model file: got [%d, %d], expected [%d, %d]\n",
-                                    __func__, name.data(), tensor->ne[0], tensor->ne[1]/n_parts, ne[0], ne[1]);
-                            return false;
-                        }
-                    }
-                }
-
-                if (0) {
-                    static const char * ftype_str[] = { "f32", "f16", "q4_0", "q4_1", };
-                    fprintf(stderr, "%24s - [%5d, %5d], type = %6s, split = %d\n", name.data(), ne[0], ne[1], ftype_str[ftype], split_type);
-                }
-
-                size_t bpe = 0;
-
-                switch (ftype) {
-                    case 0: bpe = ggml_type_size(GGML_TYPE_F32);  break;
-                    case 1: bpe = ggml_type_size(GGML_TYPE_F16);  break;
-                    case 2: bpe = ggml_type_size(GGML_TYPE_Q4_0); assert(ne[0] % 64 == 0); break;
-                    case 3: bpe = ggml_type_size(GGML_TYPE_Q4_1); assert(ne[0] % 64 == 0); break;
-                    default:
-                            {
-                                fprintf(stderr, "%s: unknown ftype %d in model file\n", __func__, ftype);
-                                return false;
-                            }
-                };
-
-                if (n_dims == 1 || n_parts == 1) {
-                    if ((nelements*bpe)/ggml_blck_size(tensor->type) != ggml_nbytes(tensor)) {
-                        fprintf(stderr, "%s: tensor '%s' has wrong size in model file: got %zu, expected %zu\n",
-                                __func__, name.data(), ggml_nbytes(tensor), nelements*bpe);
-                        return false;
-                    }
-
-                    if (part_id == 0) {
-                        fin.read(reinterpret_cast<char *>(tensor->data), ggml_nbytes(tensor));
-                    } else {
-                        fin.seekg(ggml_nbytes(tensor), std::ios::cur);
-                    }
-
-                    total_size += ggml_nbytes(tensor);
-                } else {
-                    if ((nelements*bpe)/ggml_blck_size(tensor->type) != ggml_nbytes(tensor)/n_parts) {
-                        fprintf(stderr, "%s: tensor '%s' has wrong size in model file: got %zu, expected %zu\n",
-                                __func__, name.data(), ggml_nbytes(tensor)/n_parts, nelements*bpe);
-                        return false;
-                    }
-
-                    if (split_type == 0) {
-                        const int np0 = ne[0];
-
-                        const size_t row_size = (tensor->ne[0]/ggml_blck_size(tensor->type))*ggml_type_size(tensor->type);
-                        assert(row_size == tensor->nb[1]);
-
-                        for (int i1 = 0; i1 < ne[1]; ++i1) {
-                            const size_t offset_row = i1*row_size;
-                            const size_t offset = offset_row + ((part_id*np0)/ggml_blck_size(tensor->type))*ggml_type_size(tensor->type);
-                            fin.read(reinterpret_cast<char *>(tensor->data) + offset, row_size/n_parts);
-                        }
-                    } else {
-                        const int np1 = ne[1];
-
-                        const size_t row_size = (tensor->ne[0]/ggml_blck_size(tensor->type))*ggml_type_size(tensor->type);
-
-                        for (int i1 = 0; i1 < ne[1]; ++i1) {
-                            const size_t offset_row = (i1 + part_id*np1)*row_size;
-                            fin.read(reinterpret_cast<char *>(tensor->data) + offset_row, row_size);
-                        }
-                    }
-
-                    total_size += ggml_nbytes(tensor)/n_parts;
-                }
-
-                //fprintf(stderr, "%42s - [%5d, %5d], type = %6s, %6.2f MB\n", name.data(), ne[0], ne[1], ftype == 0 ? "float" : "f16", ggml_nbytes(tensor)/1024.0/1024.0);
-                model.n_loaded++;
-
-                // progress
-                if (progress_callback) {
-                    double current_file_progress = double(size_t(fin.tellg()) - file_offset) / double(file_size - file_offset);
-                    double current_progress = (double(i) + current_file_progress) / double(n_parts);
-                    progress_callback(current_progress, progress_callback_user_data);
-                }
-                if (model.n_loaded % 8 == 0) {
-                    fprintf(stderr, ".");
-                    fflush(stderr);
-                }
+            if (fin.eof()) {
+                break;
             }
 
-            fprintf(stderr, " done\n");
+            int32_t nelements = 1;
+            int32_t ne[2] = { 1, 1 };
+            for (int i = 0; i < n_dims; ++i) {
+                fin.read(reinterpret_cast<char *>(&ne[i]), sizeof(ne[i]));
+                nelements *= ne[i];
+            }
 
-            fprintf(stderr, "%s: model size = %8.2f MB / num tensors = %d\n", __func__, total_size/1024.0/1024.0, model.n_loaded);
-            if (model.n_loaded == 0) {
-                fprintf(stderr, "%s: WARN no tensors loaded from model file - assuming empty model for testing\n", __func__);
-            } else if (model.n_loaded != (int) model.tensors.size()) {
-                fprintf(stderr, "%s: ERROR not all tensors loaded from model file - expected %zu, got %d\n", __func__, model.tensors.size(), model.n_loaded);
+            std::string name(length, 0);
+            fin.read(&name[0], length);
+
+            if (model.tensors.find(name.data()) == model.tensors.end()) {
+                fprintf(stderr, "%s: unknown tensor '%s' in model file\n", __func__, name.data());
                 return false;
+            }
+
+            auto tensor = model.tensors[name.data()];
+
+            if (ggml_nelements(tensor) != nelements) {
+                fprintf(stderr, "%s: tensor '%s' has wrong size in model file\n", __func__, name.data());
+                return false;
+            }
+            if (tensor->ne[0] != ne[0] || tensor->ne[1] != ne[1]) {
+                fprintf(stderr, "%s: tensor '%s' has wrong shape in model file: got [%" PRId64 ", %" PRId64 "], expected [%d, %d]\n",
+                        __func__, name.data(), tensor->ne[0], tensor->ne[1], ne[0], ne[1]);
+                return false;
+            }
+            if (0) {
+                static const char * ftype_str[] = { "f32", "f16", "q4_0", "q4_1", };
+                fprintf(stderr, "%24s - [%5d, %5d], type = %6s\n", name.data(), ne[0], ne[1], ftype_str[ftype]);
+            }
+
+            switch (ftype) {
+                case 0:  // f32
+                case 1:  // f16
+                    break;
+                case 2:  // q4_0
+                case 3:  // q4_1
+                    assert(ne[0] % 64 == 0);
+                    break;
+                default:
+                    fprintf(stderr, "%s: unknown ftype %d in model file\n", __func__, ftype);
+                    return false;
+            };
+
+            // load the tensor data into memory without copying or reading it
+            size_t offset = fin.tellg();
+            size_t tensor_data_size = ggml_nbytes(tensor);
+            offset = (offset + 31) & -32;
+            tensor->data = mm_addr + offset;
+            fin.seekg(offset + tensor_data_size);
+            total_size += tensor_data_size;
+            model.n_loaded++;
+
+            // progress
+            if (progress_callback) {
+                double current_progress = size_t(fin.tellg()) / double(file_size);
+                progress_callback(current_progress, progress_callback_user_data);
             }
         }
 
         fin.close();
+
+        fprintf(stderr, "%s: model size = %8.2f MB / num tensors = %d\n", __func__, total_size/1024.0/1024.0, model.n_loaded);
+        if (model.n_loaded == 0) {
+            fprintf(stderr, "%s: WARN no tensors loaded from model file - assuming empty model for testing\n", __func__);
+        } else if (model.n_loaded != (int) model.tensors.size()) {
+            fprintf(stderr, "%s: ERROR not all tensors loaded from model file - expected %zu, got %d\n", __func__, model.tensors.size(), model.n_loaded);
+            return false;
+        }
     }
 
-    lctx.t_load_us = ggml_time_us() - t_start_us;
+    // loading time will be recalculate after the first eval, so
+    // we take page faults deferred by mmap() into consideration
+    lctx.t_load_us = ggml_time_us() - lctx.t_start_us;
 
     if (progress_callback) {
         progress_callback(1.0, progress_callback_user_data);
@@ -849,6 +776,7 @@ static bool llama_eval_internal(
     struct ggml_init_params params = {
         /*.mem_size   =*/ buf_compute.size(),
         /*.mem_buffer =*/ buf_compute.data(),
+        /*.no_alloc   =*/ false,
     };
 
     struct ggml_context * ctx0 = ggml_init(params);
@@ -856,7 +784,7 @@ static bool llama_eval_internal(
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
     ggml_cgraph gf = {};
-    gf.n_threads = N > 255 && ggml_cpu_has_blas() ? 1 : n_threads;
+    gf.n_threads = N >= 32 && ggml_cpu_has_blas() ? 1 : n_threads;
 
     struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
     memcpy(embd->data, tokens, N*ggml_element_size(embd));
@@ -922,7 +850,7 @@ static bool llama_eval_internal(
             struct ggml_tensor * KQ_scaled =
                 ggml_scale(ctx0,
                         KQ,
-                        ggml_new_f32(ctx0, 1.0f/sqrt(float(n_embd)/n_head)));
+                        ggml_new_f32(ctx0, 1.0f/sqrtf(float(n_embd)/n_head)));
 
             // KQ_masked = mask_past(KQ_scaled)
             struct ggml_tensor * KQ_masked = ggml_diag_mask_inf(ctx0, KQ_scaled, n_past);
@@ -1126,7 +1054,7 @@ struct llama_tokenizer {
         size_t offs = 0;
         while (offs < text.size()) {
             llama_sp_symbol sym;
-            size_t char_len = std::min(text.size() - offs, utf8_len(text[offs]));
+            size_t char_len = Min(text.size() - offs, utf8_len(text[offs]));
             sym.text = text.c_str() + offs;
             sym.n = char_len;
             offs += char_len;
@@ -1240,12 +1168,12 @@ static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, co
 // sampling
 //
 
-static void sample_top_k(std::vector<std::pair<double, llama_vocab::id>> & logits_id, int top_k) {
+static void sample_top_k(std::vector<std::pair<float, llama_vocab::id>> & logits_id, int top_k) {
     // find the top k tokens
     std::partial_sort(
             logits_id.begin(),
             logits_id.begin() + top_k, logits_id.end(),
-            [](const std::pair<double, llama_vocab::id> & a, const std::pair<double, llama_vocab::id> & b) {
+            [](const std::pair<float, llama_vocab::id> & a, const std::pair<float, llama_vocab::id> & b) {
         return a.first > b.first;
     });
 
@@ -1256,9 +1184,9 @@ static llama_vocab::id llama_sample_top_p_top_k(
         llama_context & lctx,
         const std::vector<llama_vocab::id> & last_n_tokens,
         int top_k,
-        double top_p,
-        double temp,
-        double repeat_penalty) {
+        float top_p,
+        float temp,
+        float repeat_penalty) {
     auto & rng = lctx.rng;
 
     const int n_logits = lctx.model.hparams.n_vocab;
@@ -1266,17 +1194,17 @@ static llama_vocab::id llama_sample_top_p_top_k(
     const auto & logits = lctx.logits;
     const auto * plogits = logits.data() + logits.size() - n_logits;
 
-    std::vector<std::pair<double, llama_vocab::id>> logits_id;
+    std::vector<std::pair<float, llama_vocab::id>> logits_id;
     logits_id.reserve(n_logits);
 
     {
-        const double scale = 1.0/temp;
+        const float scale = 1.0f/temp;
         for (int i = 0; i < n_logits; ++i) {
             // repetition penalty from ctrl paper (https://arxiv.org/abs/1909.05858)
             // credit https://github.com/facebookresearch/llama/compare/main...shawwn:llama:main
             if (std::find(last_n_tokens.begin(), last_n_tokens.end(), i) != last_n_tokens.end()) {
                 // if score < 0 then repetition penalty has to multiplied to reduce the previous token probability
-                if (plogits[i] < 0.0) {
+                if (plogits[i] < 0.0f) {
                     logits_id.push_back(std::make_pair(plogits[i]*scale*repeat_penalty, i));
                 } else {
                     logits_id.push_back(std::make_pair(plogits[i]*scale/repeat_penalty, i));
@@ -1289,18 +1217,18 @@ static llama_vocab::id llama_sample_top_p_top_k(
 
     sample_top_k(logits_id, top_k);
 
-    double maxl = -std::numeric_limits<double>::infinity();
+    float maxl = -std::numeric_limits<float>::infinity();
     for (const auto & kv : logits_id) {
-        maxl = std::max(maxl, kv.first);
+        maxl = Max(maxl, kv.first);
     }
 
     // compute probs for the top k tokens
-    std::vector<double> probs;
+    std::vector<float> probs;
     probs.reserve(logits_id.size());
 
     double sum = 0.0;
     for (const auto & kv : logits_id) {
-        double p = exp(kv.first - maxl);
+        const float p = expf(kv.first - maxl);
         probs.push_back(p);
         sum += p;
     }
@@ -1310,8 +1238,8 @@ static llama_vocab::id llama_sample_top_p_top_k(
         p /= sum;
     }
 
-    if (top_p < 1.0f) {
-        double cumsum = 0.0f;
+    if (top_p < 1.0) {
+        double cumsum = 0.0;
         for (int i = 0; i < (int) probs.size(); i++) {
             cumsum += probs[i];
             if (cumsum >= top_p) {
@@ -1345,7 +1273,7 @@ static llama_vocab::id llama_sample_top_p_top_k(
 //
 
 // TODO: reuse code from the llama_model_load() somehow
-bool llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, int itype, int qk) {
+static bool llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, int itype) {
     ggml_type type = GGML_TYPE_Q4_1;
 
     switch (itype) {
@@ -1385,8 +1313,7 @@ bool llama_model_quantize_internal(const std::string & fname_inp, const std::str
             return false;
         }
         if (magic != LLAMA_FILE_MAGIC) {
-            fprintf(stderr, "%s: invalid model file '%s' (bad magic)\n", __func__, fname_inp.c_str());
-            return false;
+            return report_bad_magic(fname_inp.c_str(), magic, LLAMA_FILE_MAGIC);
         }
 
         fout.write((char *) &magic, sizeof(magic));
@@ -1444,7 +1371,7 @@ bool llama_model_quantize_internal(const std::string & fname_inp, const std::str
             return false;
         }
 
-        std::string word;
+        std::vector<char> word(32);
         vocab.id_to_token.resize(n_vocab);
         for (int i = 0; i < n_vocab; i++) {
             uint32_t len;
@@ -1452,17 +1379,17 @@ bool llama_model_quantize_internal(const std::string & fname_inp, const std::str
             fout.write((char *) &len, sizeof(len));
 
             word.resize(len);
-            finp.read ((char *) word.data(), len);
-            fout.write((char *) word.data(), len);
+            finp.read ((char *) &word[0], len);
+            fout.write((char *) &word[0], len);
 
             float score;
             finp.read ((char *) &score, sizeof(score));
             fout.write((char *) &score, sizeof(score));
 
-            vocab.token_to_id[word] = i;
+            vocab.token_to_id[word.data()] = i;
 
             auto &tok_score = vocab.id_to_token[i];
-            tok_score.tok = word;
+            tok_score.tok = word.data();
             tok_score.score = score;
         }
     }
@@ -1502,6 +1429,13 @@ bool llama_model_quantize_internal(const std::string & fname_inp, const std::str
 
             std::string name(length, 0);
             finp.read (&name[0], length);
+
+            {
+                // ensure tensor data is aligned
+                uint64_t offset = finp.tellg();
+                offset = (offset + 31) & -32;
+                finp.seekg(offset);
+            }
 
             {
                 static const char * ftype_str[] = { "f32", "f16", "q4_0", "q4_1", };
@@ -1558,6 +1492,13 @@ bool llama_model_quantize_internal(const std::string & fname_inp, const std::str
             }
             fout.write(&name[0], length);
 
+            {
+                // ensure tensor data is aligned
+                uint64_t offset = fout.tellp();
+                offset = (offset + 31) & -32;
+                fout.seekp(offset);
+            }
+
             if (quantize) {
                 printf("quantizing .. ");
                 work.resize(nelements); // for quantization
@@ -1568,11 +1509,11 @@ bool llama_model_quantize_internal(const std::string & fname_inp, const std::str
                 switch (type) {
                     case GGML_TYPE_Q4_0:
                         {
-                            cur_size = ggml_quantize_q4_0(data_f32.data(), work.data(), nelements, ne[0], qk, hist_cur.data());
+                            cur_size = ggml_quantize_q4_0(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                         } break;
                     case GGML_TYPE_Q4_1:
                         {
-                            cur_size = ggml_quantize_q4_1(data_f32.data(), work.data(), nelements, ne[0], qk, hist_cur.data());
+                            cur_size = ggml_quantize_q4_1(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                         } break;
                     default:
                         {
@@ -1590,7 +1531,7 @@ bool llama_model_quantize_internal(const std::string & fname_inp, const std::str
                 }
 
                 for (int i = 0; i < (int) hist_cur.size(); ++i) {
-                    printf("%5.3f ", hist_cur[i] / (float)nelements);
+                    printf("%5.3f ", hist_cur[i] / float(nelements));
                 }
                 printf("\n");
             } else {
@@ -1613,7 +1554,7 @@ bool llama_model_quantize_internal(const std::string & fname_inp, const std::str
 
             printf("%s: hist: ", __func__);
             for (int i = 0; i < (int) hist_all.size(); ++i) {
-                printf("%5.3f ", hist_all[i] / (float)sum_all);
+                printf("%5.3f ", hist_all[i] / float(sum_all));
             }
             printf("\n");
         }
@@ -1655,7 +1596,10 @@ struct llama_context * llama_init_from_file(
 
     if (params.use_mlock) {
         char *err;
-        if (!ggml_mlock(ctx->model.ctx, &err)) {
+        if (!ggml_mlock(ctx->model.ctx,
+                        ctx->model.mm_addr,
+                        ctx->model.mm_length,
+                        &err)) {
             fprintf(stderr, "%s\n", err);
             free(err);
             llama_free(ctx);
@@ -1664,7 +1608,7 @@ struct llama_context * llama_init_from_file(
     }
 
     // reserve memory for context buffers
-    {
+    if (!params.vocab_only) {
         if (!kv_cache_init(ctx->model.hparams, ctx->model.kv_self, memory_type, ctx->model.hparams.n_ctx)) {
             fprintf(stderr, "%s: kv_cache_init() failed for self-attention cache\n", __func__);
             llama_free(ctx);
@@ -1705,20 +1649,50 @@ void llama_free(struct llama_context * ctx) {
         ggml_free(ctx->model.ctx);
     }
 
+    if (ctx->model.mm_addr) {
+        munmap_file(ctx->model.mm_addr, ctx->model.mm_length);
+    }
+
     delete ctx;
 }
 
 int llama_model_quantize(
         const char * fname_inp,
         const char * fname_out,
-               int   itype,
-               int   qk) {
-    if (!llama_model_quantize_internal(fname_inp, fname_out, itype, qk)) {
+               int   itype) {
+    if (!llama_model_quantize_internal(fname_inp, fname_out, itype)) {
         fprintf(stderr, "%s: failed to quantize\n", __func__);
         return 1;
     }
 
     return 0;
+}
+
+// Returns the KV cache that will contain the context for the
+// ongoing prediction with the model.
+const uint8_t * llama_get_kv_cache(struct llama_context * ctx) {
+    return ctx->model.kv_self.buf.data();
+}
+
+// Returns the size of the KV cache
+size_t llama_get_kv_cache_size(struct llama_context * ctx) {
+    return ctx->model.kv_self.buf.size();
+}
+
+int llama_get_kv_cache_token_count(struct llama_context * ctx) {
+    return ctx->model.kv_self.n;
+}
+
+// Sets the KV cache containing the current context for the model
+void llama_set_kv_cache(
+        struct llama_context * ctx,
+               const uint8_t * kv_cache,
+                      size_t   n_size,
+                         int   n_token_count) {
+    // Make sure we have the same kv cache setup
+    LLAMA_ASSERT(ctx->model.kv_self.buf.size() == n_size);
+    memcpy(ctx->model.kv_self.buf.data(), kv_cache, n_size);
+    ctx->model.kv_self.n = n_token_count;
 }
 
 int llama_eval(
@@ -1731,7 +1705,11 @@ int llama_eval(
         fprintf(stderr, "%s: failed to eval\n", __func__);
         return 1;
     }
-
+    // get a more accurate load time, upon first eval
+    if (!ctx->has_evaluated_once) {
+        ctx->t_load_us = ggml_time_us() - ctx->t_start_us;
+        ctx->has_evaluated_once = true;
+    }
     return 0;
 }
 
@@ -1796,9 +1774,9 @@ llama_token llama_sample_top_p_top_k(
       const llama_token * last_n_tokens_data,
                     int   last_n_tokens_size,
                     int   top_k,
-                 double   top_p,
-                 double   temp,
-                 double   repeat_penalty) {
+                  float   top_p,
+                  float   temp,
+                  float   repeat_penalty) {
     const int64_t t_start_sample_us = ggml_time_us();
 
     llama_token result = 0;
@@ -1824,21 +1802,20 @@ llama_token llama_sample_top_p_top_k(
 void llama_print_timings(struct llama_context * ctx) {
     const int64_t t_end_us = ggml_time_us();
 
-    const int32_t n_sample = std::max(1, ctx->n_sample);
-    const int32_t n_eval   = std::max(1, ctx->n_eval);
-    const int32_t n_p_eval = std::max(1, ctx->n_p_eval);
+    const int32_t n_sample = Max(1, ctx->n_sample);
+    const int32_t n_eval   = Max(1, ctx->n_eval);
+    const int32_t n_p_eval = Max(1, ctx->n_p_eval);
 
     fprintf(stderr, "\n");
-    fprintf(stderr, "%s:        load time = %8.2f ms\n", __func__, ctx->t_load_us / 1000.0f);
-    fprintf(stderr, "%s:      sample time = %8.2f ms / %5d runs   (%8.2f ms per run)\n",   __func__, 1e-3f * ctx->t_sample_us, n_sample, 1e-3f * ctx->t_sample_us / n_sample);
-    fprintf(stderr, "%s: prompt eval time = %8.2f ms / %5d tokens (%8.2f ms per token)\n", __func__, 1e-3f * ctx->t_p_eval_us, n_p_eval, 1e-3f * ctx->t_p_eval_us / n_p_eval);
-    fprintf(stderr, "%s:        eval time = %8.2f ms / %5d runs   (%8.2f ms per run)\n",   __func__, 1e-3f * ctx->t_eval_us,   n_eval,   1e-3f * ctx->t_eval_us   / n_eval);
-    fprintf(stderr, "%s:       total time = %8.2f ms\n", __func__, (t_end_us - ctx->t_start_us)/1000.0f);
+    fprintf(stderr, "%s:        load time = %8.2f ms\n", __func__, ctx->t_load_us / 1000.0);
+    fprintf(stderr, "%s:      sample time = %8.2f ms / %5d runs   (%8.2f ms per run)\n",   __func__, 1e-3 * ctx->t_sample_us, n_sample, 1e-3 * ctx->t_sample_us / n_sample);
+    fprintf(stderr, "%s: prompt eval time = %8.2f ms / %5d tokens (%8.2f ms per token)\n", __func__, 1e-3 * ctx->t_p_eval_us, n_p_eval, 1e-3 * ctx->t_p_eval_us / n_p_eval);
+    fprintf(stderr, "%s:        eval time = %8.2f ms / %5d runs   (%8.2f ms per run)\n",   __func__, 1e-3 * ctx->t_eval_us,   n_eval,   1e-3 * ctx->t_eval_us   / n_eval);
+    fprintf(stderr, "%s:       total time = %8.2f ms\n", __func__, (t_end_us - ctx->t_start_us)/1000.0);
 }
 
 void llama_reset_timings(struct llama_context * ctx) {
     ctx->t_start_us = ggml_time_us();
-
     ctx->t_sample_us = ctx->n_sample = 0;
     ctx->t_eval_us   = ctx->n_eval   = 0;
     ctx->t_p_eval_us = ctx->n_p_eval = 0;
