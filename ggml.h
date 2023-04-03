@@ -779,7 +779,7 @@ int ggml_cpu_has_vsx(void);
 
 #if defined(_WIN32) && !defined(_POSIX_THREADS)
 #define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
+#include <handleapi.h>
 #else
 #include <unistd.h>
 #endif
