@@ -1959,7 +1959,6 @@ static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void * rest
     // Horizontal sum of all lanes of the accumulator
     sumf = _mm512_reduce_add_ps( acc0 ) + _mm512_reduce_add_ps( acc1 );
 #elif defined(__AVX2__)
-
     // Initialize accumulator with zeros
     __m256 acc = _mm256_setzero_ps();
 
@@ -2024,7 +2023,7 @@ static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void * rest
             __m256 q = _mm256_cvtepi32_ps( xy_q ); 
 
             /* Multiply q with scale and accumulate */ 
-            acc = _mm256_fmadd_ps( scale, q, acc );;    
+            acc = _mm256_fmadd_ps( scale, q, acc );    
         }
        
     }   
