@@ -1975,6 +1975,10 @@ static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void * rest
 
         // This loop will be unrolled by the compiler    
         for (int u=0;u<UNROLL_COUNT;u++)  {
+            // Prefetch data used later in the loop
+            // TODO these numbers are device dependent shouldn't be hard coded derive
+            _mm_prefetch ( x[i+u].qs + 32*20, 1);	// to-do: document what 32*20 even is	
+	
             /* Compute combined scale for the block */ 
             const __m256 scale = _mm256_mul_ps( 
                     _mm256_broadcast_ss( &x[i+u].d ), 
