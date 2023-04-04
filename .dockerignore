@@ -5,7 +5,6 @@
 .vscode/
 .DS_Store
 
-.build/
 build/
 build-em/
 build-debug/
@@ -19,17 +18,7 @@ models/*
 
 /main
 /quantize
-/result
-/perplexity
-/embedding
-/Pipfile
 
 arm_neon.h
 compile_commands.json
-
-.envrc
-.direnv/
-
-.venv
-__pycache__
-.swiftpm
+Dockerfile

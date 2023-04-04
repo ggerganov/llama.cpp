@@ -17,7 +17,7 @@ CXXV := $(shell $(CXX) --version | head -n 1)
 # ref: https://github.com/ggerganov/whisper.cpp/issues/66#issuecomment-1282546789
 ifeq ($(UNAME_S),Darwin)
 	ifneq ($(UNAME_P),arm)
-		SYSCTL_M := $(shell sysctl -n hw.optional.arm64)
+		SYSCTL_M := $(shell sysctl -n hw.optional.arm64 2>/dev/null)
 		ifeq ($(SYSCTL_M),1)
 			# UNAME_P := arm
 			# UNAME_M := arm64
@@ -30,9 +30,14 @@ endif
 # Compile flags
 #
 
+# keep standard at C11 and C++11
 CFLAGS   = -I.              -O3 -DNDEBUG -std=c11   -fPIC
 CXXFLAGS = -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC
 LDFLAGS  =
+
+# warnings
+CFLAGS   += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith -Wno-unused-function
+CXXFLAGS += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function
 
 # OS specific
 # TODO: support Windows
@@ -48,6 +53,14 @@ ifeq ($(UNAME_S),FreeBSD)
 	CFLAGS   += -pthread
 	CXXFLAGS += -pthread
 endif
+ifeq ($(UNAME_S),NetBSD)
+	CFLAGS   += -pthread
+	CXXFLAGS += -pthread
+endif
+ifeq ($(UNAME_S),OpenBSD)
+	CFLAGS   += -pthread
+	CXXFLAGS += -pthread
+endif
 ifeq ($(UNAME_S),Haiku)
 	CFLAGS   += -pthread
 	CXXFLAGS += -pthread
@@ -57,68 +70,14 @@ endif
 # TODO: probably these flags need to be tweaked on some architectures
 #       feel free to update the Makefile for your architecture and send a pull request or issue
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
-	ifeq ($(UNAME_S),Darwin)
-		CFLAGS += -mf16c
-		AVX1_M := $(shell sysctl machdep.cpu.features)
-		ifneq (,$(findstring FMA,$(AVX1_M)))
-			CFLAGS += -mfma
-		endif
-		ifneq (,$(findstring AVX1.0,$(AVX1_M)))
-			CFLAGS += -mavx
-		endif
-		AVX2_M := $(shell sysctl machdep.cpu.leaf7_features)
-		ifneq (,$(findstring AVX2,$(AVX2_M)))
-			CFLAGS += -mavx2
-		endif
-	else ifeq ($(UNAME_S),Linux)
-		AVX1_M := $(shell grep "avx " /proc/cpuinfo)
-		ifneq (,$(findstring avx,$(AVX1_M)))
-			CFLAGS += -mavx
-		endif
-		AVX2_M := $(shell grep "avx2 " /proc/cpuinfo)
-		ifneq (,$(findstring avx2,$(AVX2_M)))
-			CFLAGS += -mavx2
-		endif
-		FMA_M := $(shell grep "fma " /proc/cpuinfo)
-		ifneq (,$(findstring fma,$(FMA_M)))
-			CFLAGS += -mfma
-		endif
-		F16C_M := $(shell grep "f16c " /proc/cpuinfo)
-		ifneq (,$(findstring f16c,$(F16C_M)))
-			CFLAGS += -mf16c
-		endif
-		SSE3_M := $(shell grep "sse3 " /proc/cpuinfo)
-		ifneq (,$(findstring sse3,$(SSE3_M)))
-			CFLAGS += -msse3
-		endif
-	else ifeq ($(UNAME_S),Haiku)
-		AVX1_M := $(shell sysinfo -cpu | grep "AVX ")
-		ifneq (,$(findstring avx,$(AVX1_M)))
-			CFLAGS += -mavx
-		endif
-		AVX2_M := $(shell sysinfo -cpu | grep "AVX2 ")
-		ifneq (,$(findstring avx2,$(AVX2_M)))
-			CFLAGS += -mavx2
-		endif
-		FMA_M := $(shell sysinfo -cpu | grep "FMA ")
-		ifneq (,$(findstring fma,$(FMA_M)))
-			CFLAGS += -mfma
-		endif
-		F16C_M := $(shell sysinfo -cpu | grep "F16C ")
-		ifneq (,$(findstring f16c,$(F16C_M)))
-			CFLAGS += -mf16c
-		endif
-	else
-		CFLAGS += -mfma -mf16c -mavx -mavx2
-	endif
-endif
-ifeq ($(UNAME_M),amd64)
-	CFLAGS += -mavx -mavx2 -mfma -mf16c
+	# Use all CPU extensions that are available:
+	CFLAGS += -march=native -mtune=native
 endif
 ifneq ($(filter ppc64%,$(UNAME_M)),)
 	POWER9_M := $(shell grep "POWER9" /proc/cpuinfo)
 	ifneq (,$(findstring POWER9,$(POWER9_M)))
-		CFLAGS += -mpower9-vector
+		CFLAGS += -mcpu=power9
+		CXXFLAGS += -mcpu=power9
 	endif
 	# Require c++23's std::byteswap for big-endian support.
 	ifeq ($(UNAME_M),ppc64)
@@ -126,7 +85,8 @@ ifneq ($(filter ppc64%,$(UNAME_M)),)
 	endif
 endif
 ifndef LLAMA_NO_ACCELERATE
-	# Mac M1 - include Accelerate framework
+	# Mac M1 - include Accelerate framework.
+	# `-framework Accelerate` works on Mac Intel as well, with negliable performance boost (as of the predict time).
 	ifeq ($(UNAME_S),Darwin)
 		CFLAGS  += -DGGML_USE_ACCELERATE
 		LDFLAGS += -framework Accelerate
@@ -172,7 +132,7 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: main quantize
+default: main quantize perplexity embedding
 
 #
 # Build library
@@ -181,18 +141,29 @@ default: main quantize
 ggml.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS)   -c ggml.c -o ggml.o
 
-utils.o: utils.cpp utils.h
-	$(CXX) $(CXXFLAGS) -c utils.cpp -o utils.o
+llama.o: llama.cpp llama.h
+	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
+
+common.o: examples/common.cpp examples/common.h
+	$(CXX) $(CXXFLAGS) -c examples/common.cpp -o common.o
 
 clean:
-	rm -f *.o main quantize
+	rm -vf *.o main quantize perplexity embedding
 
-main: main.cpp ggml.o utils.o
-	$(CXX) $(CXXFLAGS) main.cpp ggml.o utils.o -o main $(LDFLAGS)
-	./main -h
+main: examples/main/main.cpp ggml.o llama.o common.o
+	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
+	@echo
+	@echo '====  Run ./main -h for help.  ===='
+	@echo
 
-quantize: quantize.cpp ggml.o utils.o
-	$(CXX) $(CXXFLAGS) quantize.cpp ggml.o utils.o -o quantize $(LDFLAGS)
+quantize: examples/quantize/quantize.cpp ggml.o llama.o
+	$(CXX) $(CXXFLAGS) examples/quantize/quantize.cpp ggml.o llama.o -o quantize $(LDFLAGS)
+
+perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o
+	$(CXX) $(CXXFLAGS) examples/perplexity/perplexity.cpp ggml.o llama.o common.o -o perplexity $(LDFLAGS)
+
+embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
+	$(CXX) $(CXXFLAGS) examples/embedding/embedding.cpp ggml.o llama.o common.o -o embedding $(LDFLAGS)
 
 #
 # Tests
