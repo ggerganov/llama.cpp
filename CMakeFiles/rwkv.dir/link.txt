@@ -1,1 +1,0 @@
-/Library/Developer/CommandLineTools/usr/bin/c++ -O3 -DNDEBUG -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -dynamiclib -Wl,-headerpad_max_install_names -o librwkv.dylib -install_name @rpath/librwkv.dylib CMakeFiles/rwkv.dir/rwkv.cpp.o CMakeFiles/ggml.dir/ggml.c.o  -Xlinker -framework -Xlinker Accelerate 

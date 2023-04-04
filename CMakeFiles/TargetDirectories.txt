@@ -1,4 +1,0 @@
-/Users/ericalcaidealdeano/Desktop/projects/lelemeta/rwkv.cpp/CMakeFiles/ggml.dir
-/Users/ericalcaidealdeano/Desktop/projects/lelemeta/rwkv.cpp/CMakeFiles/rwkv.dir
-/Users/ericalcaidealdeano/Desktop/projects/lelemeta/rwkv.cpp/CMakeFiles/edit_cache.dir
-/Users/ericalcaidealdeano/Desktop/projects/lelemeta/rwkv.cpp/CMakeFiles/rebuild_cache.dir
