@@ -70,10 +70,10 @@ If everything went OK, `librwkv.so` (Linux) or `rwkv.o` (MacOS) file should appe
 
 ```commandline
 # Windows
-python rwkv\convert_rwkv_to_ggml.py C:\RWKV-4b-Pile-169M-20220807-8023.pth C:\rwkv.cpp-169M.bin float16
+python rwkv\convert_rwkv_to_ggml.py C:\RWKV-4-Pile-169M-20220807-8023.pth C:\rwkv.cpp-169M.bin float16
 
 # Linux / MacOS
-python rwkv/convert_pytorch_to_ggml.py ~/Downloads/RWKV-4b-Pile-169M-20220807-8023.pth ~/Downloads/rwkv.cpp-169M.bin float16
+python rwkv/convert_pytorch_to_ggml.py ~/Downloads/RWKV-4-Pile-169M-20220807-8023.pth ~/Downloads/rwkv.cpp-169M.bin float16
 ```
 
 #### 3.1. Optionally, quantize the model
