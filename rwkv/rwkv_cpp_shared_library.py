@@ -188,7 +188,7 @@ def load_rwkv_shared_library() -> RWKVSharedLibrary:
     if 'win32' in sys.platform or 'cygwin' in sys.platform:
         file_name = 'rwkv.dll'
     elif 'darwin' in sys.platform:
-        file_name = 'rwkv.o'
+        file_name = 'librwkv.dylib'
     else:
         file_name = 'librwkv.so'
 
