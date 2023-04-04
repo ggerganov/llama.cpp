@@ -57,6 +57,10 @@ cmake -DBUILD_SHARED_LIBS=ON .
 cmake --build . --config Release
 ```
 
+* **Anconda & M1 users**: Please verify that `CMAKE_SYSTEM_PROCESSOR: arm64` after running `cmake -DBUILD_SHARED_LIBS=ON .`
+  * If it detects `x86_64`, edit the `CMakeLists.txt` file under the `# Compile flags` to add `set(CMAKE_SYSTEM_PROCESSOR "arm64")`
+
+
 If everything went OK, `librwkv.so` (Linux) or `rwkv.o` (MacOS) file should appear in the base repo folder.
 
 
@@ -66,10 +70,10 @@ If everything went OK, `librwkv.so` (Linux) or `rwkv.o` (MacOS) file should appe
 
 ```commandline
 # Windows
-python rwkv\convert_rwkv_to_ggml.py C:\RWKV-4b-Pile-169M-20220807-8023.pth C:\rwkv.cpp-169M.bin float32
+python rwkv\convert_rwkv_to_ggml.py C:\RWKV-4b-Pile-169M-20220807-8023.pth C:\rwkv.cpp-169M.bin float16
 
 # Linux / MacOS
-python rwkv/convert_pytorch_to_ggml.py ~/Downloads/RWKV-4b-Pile-169M-20220807-8023.pth ~/Downloads/rwkv.cpp-169M.bin float32
+python rwkv/convert_pytorch_to_ggml.py ~/Downloads/RWKV-4b-Pile-169M-20220807-8023.pth ~/Downloads/rwkv.cpp-169M.bin float16
 ```
 
 #### 3.1. Optionally, quantize the model
