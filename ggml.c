@@ -6941,15 +6941,23 @@ static void ggml_compute_forward_mul_mat_q_f32(
 #endif
 
     //void *p = (void *) src0->data;
-    assert((ir1-ir0) % EXPERIMENT_TILESIZE_X == 0);
 
     int x_stride = EXPERIMENT_TILESIZE_X;
+
+    // if the second matrix is two small, we cannot use the tiled code
     if (ne11 < EXPERIMENT_TILESIZE_Y) {
         x_stride = 1;
     }
 
-
     for (int ir = ir0; ir < ir1; ir+=x_stride) {
+        // check if we can advance with x_stride = EXPERIMENT_TILESIZE_X
+        //printf("ir0=%i -> ir1 - ir=%i\n", ir0, ir1-ir);
+        if ((ir1-ir) < EXPERIMENT_TILESIZE_X) {
+            // we do not have enough rows left - we need to go step by step
+            //printf("ir0=%i - switching to stride 1\n", ir0, ir1-ir);
+            x_stride = 1;
+        }
+
         // src0 indices
         const int i03 = ir/(ne02*ne01);
         const int i02 = (ir - i03*ne02*ne01)/ne01;
@@ -6988,7 +6996,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
 
         assert(ne00 % 32 == 0);
 
-        if (ne11 < EXPERIMENT_TILESIZE_Y) {
+        if ((x_stride != EXPERIMENT_TILESIZE_X) || (ne11 < EXPERIMENT_TILESIZE_Y)) {
             //printf("using legacy tile size implementation\n");
             // existing implementation tiled implementation
             for (int64_t ic = 0; ic < ne11; ++ic) {
