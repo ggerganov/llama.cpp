@@ -34,20 +34,33 @@ extern "C"
         if(file_format==FileFormat::GPTJ1 || file_format==FileFormat::GPTJ2 || file_format==FileFormat::GPTJ3)
         {
             printf("\n---\nIdentified as GPT-J model: (ver %d)\nAttempting to Load...\n---\n", file_format);
-            ModelLoadResult lr = gptj_load_model(inputs, file_format);
+            ModelLoadResult lr = gpttype_load_model(inputs, file_format);
             if (lr == ModelLoadResult::RETRY_LOAD)
             {
                 file_format = FileFormat::GPTJ2;
                 printf("\n---\nRetrying as GPT-J model: (ver %d)\nAttempting to Load...\n---\n", file_format);
-                lr = gptj_load_model(inputs, file_format);
+                lr = gpttype_load_model(inputs, file_format);
             }
             if (lr == ModelLoadResult::RETRY_LOAD)
             {
                 file_format = FileFormat::GPTJ3;
                 printf("\n---\nRetrying as GPT-J model: (ver %d)\nAttempting to Load...\n---\n", file_format);
-                lr = gptj_load_model(inputs, file_format);
+                lr = gpttype_load_model(inputs, file_format);
             }
             
+            if (lr == ModelLoadResult::FAIL || lr == ModelLoadResult::RETRY_LOAD)
+            {
+                return false;
+            }
+            else
+            {
+                return true;
+            }
+        }
+        else if(file_format==FileFormat::GPT2)
+        {
+            printf("\n---\nIdentified as GPT-2 model: (ver %d)\nAttempting to Load...\n---\n", file_format);
+            ModelLoadResult lr = gpttype_load_model(inputs, file_format);
             if (lr == ModelLoadResult::FAIL || lr == ModelLoadResult::RETRY_LOAD)
             {
                 return false;
@@ -66,13 +79,13 @@ extern "C"
 
     generation_outputs generate(const generation_inputs inputs, generation_outputs &output)
     {
-        if (file_format == FileFormat::GPTJ1 || file_format == FileFormat::GPTJ2 || file_format==FileFormat::GPTJ3)
+        if (file_format == FileFormat::GPTJ1 || file_format == FileFormat::GPTJ2 || file_format==FileFormat::GPTJ3 || file_format==FileFormat::GPT2)
         {
-            return gptj_generate(inputs, output);
+            return gpttype_generate(inputs, output);
         }
         else
         {
             return llama_generate(inputs, output);
-        }
+        }       
     }
 }

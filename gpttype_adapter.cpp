@@ -15,12 +15,14 @@
 #include "otherarch/utils.cpp"
 #include "otherarch/gptj_v1.cpp"
 #include "otherarch/gptj_v2.cpp"
+#include "otherarch/gpt2_v1.cpp"
 
 //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt)
 static FileFormat file_format = FileFormat::BADFORMAT;
 static gpt_vocab vocab;
 static gptj_model_v1 model_v1;
 static gptj_model model_v2;
+static gpt2_model model_gpt2;
 static gpt_params params;
 static int n_past = 0;
 static int n_threads = 4;
@@ -31,7 +33,7 @@ static std::vector<gpt_vocab::id> current_context_tokens;
 static size_t mem_per_token = 0;
 static std::vector<float> logits;
 
-ModelLoadResult gptj_load_model(const load_model_inputs inputs, FileFormat in_file_format)
+ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in_file_format)
 {
     ggml_time_init();
 
@@ -40,8 +42,20 @@ ModelLoadResult gptj_load_model(const load_model_inputs inputs, FileFormat in_fi
     n_batch = params.n_batch = inputs.batch_size;
     modelname = params.model = inputs.model_filename;
 
-    if (file_format == FileFormat::GPTJ1 || file_format == FileFormat::GPTJ2)
-    {   
+    if (file_format == FileFormat::GPT2)
+    {
+        ModelLoadResult res = gpt2_model_load(params.model, model_gpt2, vocab, file_format);
+        if(res==ModelLoadResult::FAIL)
+        {
+            fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
+            return res;
+        }
+         // determine the required inference memory per token:    
+        gpt2_eval(model_gpt2, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token, file_format);    
+        return ModelLoadResult::SUCCESS;
+    }
+    else if (file_format == FileFormat::GPTJ1 || file_format == FileFormat::GPTJ2)
+    {
         ModelLoadResult res = legacy_gptj_model_load(params.model, model_v1, vocab, file_format);
         if(res==ModelLoadResult::FAIL)
         {
@@ -80,7 +94,7 @@ ModelLoadResult gptj_load_model(const load_model_inputs inputs, FileFormat in_fi
 
 
 
-generation_outputs gptj_generate(const generation_inputs inputs, generation_outputs &output)
+generation_outputs gpttype_generate(const generation_inputs inputs, generation_outputs &output)
 {
     params.prompt = inputs.prompt;
     params.seed = inputs.seed;
@@ -110,7 +124,20 @@ generation_outputs gptj_generate(const generation_inputs inputs, generation_outp
     std::vector<gpt_vocab::id> embd_inp = ::gpt_tokenize(vocab, params.prompt);
 
     //truncate to front of the prompt if its too long
-    auto nctx = ( (file_format == FileFormat::GPTJ1||file_format == FileFormat::GPTJ2)? model_v1.hparams.n_ctx:model_v2.hparams.n_ctx);
+    int32_t nctx = 512;
+    if(file_format == FileFormat::GPTJ1||file_format == FileFormat::GPTJ2)
+    {
+        nctx = model_v1.hparams.n_ctx;
+    }    
+    else if(file_format==FileFormat::GPTJ3)
+    {
+        nctx = model_v2.hparams.n_ctx;
+    }
+    else if(file_format==FileFormat::GPT2)
+    {
+        nctx = model_gpt2.hparams.n_ctx;
+    }
+
     if (embd_inp.size() + params.n_predict > nctx)
     {
         int offset = embd_inp.size() - nctx + params.n_predict;
@@ -170,10 +197,25 @@ generation_outputs gptj_generate(const generation_inputs inputs, generation_outp
     timer_start();
     double time1 = 0, time2 = 0;
     unsigned int embd_inp_size = embd_inp.size();
-    const int n_vocab = ((file_format == FileFormat::GPTJ1||file_format == FileFormat::GPTJ2)? model_v1.hparams.n_vocab:model_v2.hparams.n_vocab);
+    int32_t n_vocab = 0;
+    if(file_format == FileFormat::GPTJ1||file_format == FileFormat::GPTJ2)
+    {
+        n_vocab = model_v1.hparams.n_vocab;
+    }    
+    else if(file_format == FileFormat::GPTJ3)
+    {
+        n_vocab = model_v2.hparams.n_vocab;
+    }
+    else if(file_format == FileFormat::GPT2)
+    {
+        n_vocab = model_gpt2.hparams.n_vocab;
+    }
+    else
+    {
+        printf("Bad format!");
+    }
 
     printf("\n");
-
     while (remaining_tokens > 0)
     {
         gpt_vocab::id id = 0;
@@ -192,10 +234,17 @@ generation_outputs gptj_generate(const generation_inputs inputs, generation_outp
             }
            
             bool evalres = false;
-            if(file_format==FileFormat::GPTJ1 || file_format==FileFormat::GPTJ2)
+                        
+            //print_tok_vec(logits);
+            if(file_format==FileFormat::GPT2)
+            {
+                evalres = gpt2_eval(model_gpt2, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
+            }
+            else if(file_format==FileFormat::GPTJ1 || file_format==FileFormat::GPTJ2)
             {
                 evalres = legacy_gptj_eval(model_v1, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
-            }else
+            }
+            else
             {
                 evalres = gptj_eval(model_v2, params.n_threads, n_past, embd, logits, mem_per_token);
             }
@@ -229,11 +278,13 @@ generation_outputs gptj_generate(const generation_inputs inputs, generation_outp
             }
 
             {
-                // set the logit of the eos token (2) to zero to avoid sampling it
-                logits[50256] = 0;
-                //set logits of opening square bracket to zero.
+                // set the logit of the eos token (2) to zero to avoid sampling it                
+                logits[50256] = (logits[50256]<0?logits[50256]:0);
+                
+                //gpt2 uses negative logits, so we cant zero it
                             
-                id = gptj_sample_top_p_top_k(vocab, logits.data() + (logits.size() - n_vocab),last_n_tokens,repeat_penalty, top_k, top_p, temp, rng);
+                id = gptj_sample_top_p_top_k(vocab, logits.data() + (logits.size() - n_vocab), last_n_tokens, repeat_penalty, top_k, top_p, temp, rng);
+                
 
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(id);

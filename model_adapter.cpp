@@ -40,7 +40,27 @@ void print_tok_vec(std::vector<int> &embd)
         first = false;
         std::cout << i;
     }
-    std::cout << "]";
+    std::cout << "]\n";
+}
+void print_tok_vec(std::vector<float> &embd)
+{
+    std::cout << "[";
+    bool first = true;
+    int n = 0;
+    for (auto i : embd)
+    {
+        if (!first)
+        {
+            std::cout << ',';
+        }
+        first = false;
+        std::cout << i;
+        if(++n>20)
+        {
+            break;
+        }
+    }
+    std::cout << "]\n";
 }
 
 //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt) 
@@ -66,6 +86,10 @@ void print_tok_vec(std::vector<int> &embd)
        if(vocabsiz==50400) //know GPT-J vocab size
        {
            fileformat = FileFormat::GPTJ1;
+       }
+       if(vocabsiz==50257)
+       {
+           fileformat = FileFormat::GPT2;
        }
     }
     else if(magic == 0x67676d66) //v2 format ggmf
