@@ -75,7 +75,7 @@ class LLaMAInteract:
 
         # add instruction as antiprompt
         if (self.instruct):
-            self.first_antiprompt.append(self.inp_prefix.strip())
+            self.first_antiprompt.append(self._tokenize(self.inp_prefix.strip()))
 
         # primer feed
         if (len(primer) > 0):
