@@ -75,7 +75,7 @@ class LLaMAInteract:
 
         # add instruction as antiprompt
         if (self.instruct):
-            self.first_antiprompt.append(self._tokenize(self.inp_prefix.strip()))
+            self.first_antiprompt.append(self._tokenize(instruct_inp_prefix.strip(), False))
 
         # primer feed
         if (len(primer) > 0):
@@ -197,7 +197,8 @@ class LLaMAInteract:
 
             # respect n_predict even if antiprompt is present
             if (self.use_antiprompt() and self.remaining_tokens <= 0 and self.n_predict != -1):
-                self.embd_inp += self.first_antiprompt[0]
+                if not self.instruct:
+                    self.embd_inp += self.first_antiprompt[0]
                 break
 
     def __enter__(self):
@@ -213,7 +214,7 @@ class LLaMAInteract:
 
     # write input
     def input(self, prompt: str):
-        if (self.instruct):
+        if (self.instruct and self.last_n_tokens[-len(self.inp_prefix):] != self.inp_prefix):
             self.embd_inp += self.inp_prefix
         self.embd_inp += self._tokenize(prompt)
         if (self.instruct):
@@ -284,5 +285,6 @@ The transcript only includes text, it does not include markup like HTML and Mark
                 for i in m.output():
                     print(i,end="",flush=True)
             except KeyboardInterrupt:
-                print(f"\n{USER_NAME}:",end="")
-                m.input(f"\n{USER_NAME}:")
+                if not m.instruct:
+                    print(f"\n{USER_NAME}:",end="")
+                    m.input(f"\n{USER_NAME}:")
