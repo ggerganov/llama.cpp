@@ -649,6 +649,14 @@ bool rwkv_quantize_model_file(const char * model_file_path_in, const char * mode
                     "q4_1"
                 };
                 printf("%48s - [%5d, %5d], type = %6s ", name.data(), ne[0], ne[1], parameter_data_type_str[parameter_data_type]);
+
+                static const float parameter_data_type_size[] = {
+                    4.0F,
+                    2.0F,
+                    20.0F / 32.0F,
+                    24.0F / 32.0F
+                };
+                total_size_orig += (size_t) (nelements * parameter_data_type_size[parameter_data_type]);
             }
 
             // Quantize only 2D tensors
@@ -732,12 +740,11 @@ bool rwkv_quantize_model_file(const char * model_file_path_in, const char * mode
                 fout.write(reinterpret_cast<char *>(data_u8.data()), data_u8.size());
                 total_size_new += data_u8.size();
             }
-
-            total_size_orig += nelements * sizeof(float);
         }
 
-        printf("model size = %8.2f MB\n", total_size_orig / 1024.0 / 1024.0);
-        printf("quant size = %8.2f MB\n", total_size_new / 1024.0 / 1024.0);
+        printf("original size     = %8.2f MB\n", total_size_orig / 1024.0 / 1024.0);
+        printf("quantized size    = %8.2f MB\n", total_size_new / 1024.0 / 1024.0);
+        printf("compression ratio = %8.2f%\n", 1.0 * total_size_orig / total_size_new);
 
         {
             int64_t sum_all = 0;
