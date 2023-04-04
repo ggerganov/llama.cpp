@@ -283,6 +283,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.antiprompt.push_back(argv[i]);
+        } else if (arg == "--stop") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.stop_keywords.push_back(argv[i]);
         } else if (arg == "--perplexity") {
             params.perplexity = true;
         } else if (arg == "--ignore-eos") {
@@ -359,8 +365,10 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
     fprintf(stderr, "  --multiline-input     allows you to write or paste multiple lines without ending each in '\\'\n");
     fprintf(stderr, "  -r PROMPT, --reverse-prompt PROMPT\n");
-    fprintf(stderr, "                        run in interactive mode and poll user input upon seeing PROMPT (can be\n");
-    fprintf(stderr, "                        specified more than once for multiple prompts).\n");
+    fprintf(stderr, "                        run in interactive mode and poll user input upon seeing PROMPT");
+    fprintf(stderr, "                        (can be specified more than once for multiple reverse prompts).\n");
+    fprintf(stderr, "  --stop KEYWORD        a string that, when output by the model, will stop generation\n");
+    fprintf(stderr, "                        (can be specified more than once for multiple keywords).\n");
     fprintf(stderr, "  --color               colorise output to distinguish prompt and user input from generations\n");
     fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)\n");
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);

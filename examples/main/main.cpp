@@ -264,6 +264,13 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "Input suffix: '%s'\n", params.input_suffix.c_str());
         }
     }
+
+    if (params.stop_keywords.size()) {
+      for (auto stop_keyword : params.stop_keywords) {
+        fprintf(stderr, "Stop keyword: '%s'\n", stop_keyword.c_str());
+      }
+    }
+
     fprintf(stderr, "sampling: repeat_last_n = %d, repeat_penalty = %f, presence_penalty = %f, frequency_penalty = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f, mirostat = %d, mirostat_lr = %f, mirostat_ent = %f\n",
             params.repeat_last_n, params.repeat_penalty, params.presence_penalty, params.frequency_penalty, params.top_k, params.tfs_z, params.top_p, params.typical_p, params.temp, params.mirostat, params.mirostat_eta, params.mirostat_tau);
     fprintf(stderr, "generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
@@ -513,13 +520,28 @@ int main(int argc, char ** argv) {
         // check if we should prompt the user for more
         if (params.interactive && (int) embd_inp.size() <= n_consumed) {
 
-            // check for reverse prompt
-            if (params.antiprompt.size()) {
-                std::string last_output;
+            std::string last_output;
+            if (params.antiprompt.size() || params.stop_keywords.size()) {
                 for (auto id : last_n_tokens) {
                     last_output += llama_token_to_str(ctx, id);
                 }
+            }
 
+            // Check for stop keywords, a configurable alternative to the end-of-text token
+            // This should stop also the interactive mode, useful to stop interactive mode without SIGTERM
+            bool stop = false;
+            for (std::string stop_keyword : params.stop_keywords) {
+                if (last_output.find(stop_keyword.c_str(), last_output.length() - stop_keyword.length(), stop_keyword.length()) != std::string::npos) {
+                    stop = true;
+                    break;
+                }
+            }
+            if (stop) {
+                break;
+            }
+
+            // check for reverse prompt
+            if (params.antiprompt.size()) {
                 is_antiprompt = false;
                 // Check if each of the reverse prompts appears at the end of the output.
                 for (std::string & antiprompt : params.antiprompt) {
@@ -583,6 +605,24 @@ int main(int argc, char ** argv) {
 
             if (n_past > 0) {
                 is_interacting = false;
+            }
+        }
+
+        // Check for stop keywords, a configurable alternative to the end-of-text token
+        if (!params.interactive && params.stop_keywords.size() && !is_interacting) {
+            std::string last_output;
+            for (auto id : last_n_tokens) {
+                last_output += llama_token_to_str(ctx, id);
+            }
+            bool stop = false;
+            for (std::string stop_keyword : params.stop_keywords) {
+                if (last_output.find(stop_keyword.c_str(), last_output.length() - stop_keyword.length(), stop_keyword.length()) != std::string::npos) {
+                    stop = true;
+                    break;
+                }
+            }
+            if (stop) {
+                break;
             }
         }
 
