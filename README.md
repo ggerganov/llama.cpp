@@ -146,7 +146,11 @@ cd llama.cpp
 make
 
 #For Windows and CMake, use the following command instead:
-cmake -S . -B build/ -G "MinGW Makefiles"
+cd <path_to_llama_folder>
+mkdir build
+cd build
+cmake ..
+cmake --build . --config Release
 
 # obtain the original LLaMA model weights and place them in ./models
 ls ./models
