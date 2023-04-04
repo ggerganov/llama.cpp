@@ -79,7 +79,7 @@ while True:
 
         decoded = tokenizer.decode([token])
 
-        print(decoded, end='')
+        print(decoded, end='', flush=True)
 
         if '\n' in decoded:
             break
