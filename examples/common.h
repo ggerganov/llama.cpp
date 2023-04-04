@@ -35,6 +35,7 @@ struct gpt_params {
 
 
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
+    std::vector<std::string> stop_keywords; // string upon seeing which the model will stop
 
     bool memory_f16        = true;  // use f16 instead of f32 for memory kv
     bool random_prompt     = false; // do not randomize prompt if none provided
