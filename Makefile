@@ -39,6 +39,14 @@ LDFLAGS  =
 CFLAGS   += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith -Wno-unused-function
 CXXFLAGS += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function
 
+ifeq ($(TILESIZE_X),)
+  TILESIZE_X = 1
+endif
+
+ifeq ($(TILESIZE_Y),)
+  TILESIZE_Y = 1
+endif
+
 CFLAGS   += -D EXPERIMENT_TILESIZE_X=$(TILESIZE_X) -D EXPERIMENT_TILESIZE_Y=$(TILESIZE_Y)
 CXXFLAGS   += -D EXPERIMENT_TILESIZE_X=$(TILESIZE_X) -D EXPERIMENT_TILESIZE_Y=$(TILESIZE_Y)
 
