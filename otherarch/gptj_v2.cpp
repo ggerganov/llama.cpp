@@ -289,7 +289,7 @@ ModelLoadResult gptj_model_load(const std::string & fname, gptj_model & model, g
                 //test for transposition and retry older loader
                 if(tensor->ne[0]==ne[1] && tensor->ne[1]==ne[0] && should_transpose_layer(name))
                 {
-                    printf("\nFound a transposed tensor. This could be an older model. Retrying load...");
+                    printf("\nFound a transposed tensor. This could be an older or newer model. Retrying load...");
                     ggml_free(ctx);
                     return ModelLoadResult::RETRY_LOAD;
                 }

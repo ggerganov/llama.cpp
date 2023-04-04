@@ -139,7 +139,7 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: main llamalib quantize llamalib_blas
+default: llamalib quantize llamalib_blas
 
 #
 # Build library

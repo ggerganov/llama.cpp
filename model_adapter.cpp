@@ -11,16 +11,19 @@
 
 #include "model_adapter.h"
 
-static clock_t bench_timer = 0;
+#include <chrono>
+
+static auto bench_timer = std::chrono::high_resolution_clock().now();
 
 void timer_start()
 {
-    bench_timer = clock();
+    bench_timer = std::chrono::high_resolution_clock().now();
 }
 double timer_check()
 {
-    double ticks = clock() - bench_timer;
-    double time_taken = ((double)ticks) / CLOCKS_PER_SEC;
+    auto endtime = std::chrono::high_resolution_clock().now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endtime - bench_timer);    
+    double time_taken = duration.count()/1000.0;
     return time_taken;
 }
 

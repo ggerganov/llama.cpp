@@ -263,7 +263,7 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
     }
     time2 = timer_check();
     printf("\nTime Taken - Processing:%.1fs, Generation:%.1fs, Total:%.1fs", time1, time2, (time1 + time2));
-
+    fflush(stdout);
     output.status = 1;
     snprintf(output.text, sizeof(output.text), "%s", concat_output.c_str());
     return output;
