@@ -85,6 +85,8 @@ ModelLoadResult gpt2_model_load(const std::string & fname, gpt2_model & model, g
 
     auto & ctx = model.ctx;
 
+    auto memory_type = GGML_V1_TYPE_F16;
+
     size_t ctx_size = 0;
 
     {
@@ -119,8 +121,8 @@ ModelLoadResult gpt2_model_load(const std::string & fname, gpt2_model & model, g
         ctx_size += n_layer*(4*n_embd*n_embd*ggml_v1_type_size(wtype));         // c_mlp_proj_w
         ctx_size += n_layer*(         n_embd*ggml_v1_type_size(GGML_V1_TYPE_F32)); // c_mlp_proj_b
 
-        ctx_size += n_ctx*n_layer*n_embd*ggml_v1_type_size(GGML_V1_TYPE_F32); // memory_k
-        ctx_size += n_ctx*n_layer*n_embd*ggml_v1_type_size(GGML_V1_TYPE_F32); // memory_v
+        ctx_size += n_ctx*n_layer*n_embd*ggml_v1_type_size(memory_type); // memory_k
+        ctx_size += n_ctx*n_layer*n_embd*ggml_v1_type_size(memory_type); // memory_v
 
         ctx_size += (6 + 12*n_layer)*256; // object overhead
 
@@ -218,8 +220,8 @@ ModelLoadResult gpt2_model_load(const std::string & fname, gpt2_model & model, g
         const int n_mem      = n_layer*n_ctx;
         const int n_elements = n_embd*n_mem;
 
-        model.memory_k = ggml_v1_new_tensor_1d(ctx, GGML_V1_TYPE_F32, n_elements);
-        model.memory_v = ggml_v1_new_tensor_1d(ctx, GGML_V1_TYPE_F32, n_elements);
+        model.memory_k = ggml_v1_new_tensor_1d(ctx, memory_type, n_elements);
+        model.memory_v = ggml_v1_new_tensor_1d(ctx, memory_type, n_elements);
 
         const size_t memory_size = ggml_v1_nbytes(model.memory_k) + ggml_v1_nbytes(model.memory_v);
 
