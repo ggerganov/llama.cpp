@@ -800,7 +800,7 @@ static void quantize_row_q4_0(const float * restrict x, void * restrict vy, int 
             const float32x4_t v  = vmulq_n_f32(srcv[l], id);
             const float32x4_t vf = vaddq_f32(v, vdupq_n_f32(8.5f));
             const int32x4_t   vi = vcvtq_s32_f32(vf);
-            const int32x4     vc = vminq_u32(vi, vdupq_n_u32(15));
+            const int32x4_t   vc = vminq_s32(vi, vdupq_n_s32(15));
 
             y[i].qs[2*l + 0] = vgetq_lane_s32(vc, 0) | (vgetq_lane_s32(vc, 1) << 4);
             y[i].qs[2*l + 1] = vgetq_lane_s32(vc, 2) | (vgetq_lane_s32(vc, 3) << 4);
