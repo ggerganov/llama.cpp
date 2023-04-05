@@ -1229,7 +1229,9 @@ static llama_vocab::id llama_sample_top_p_top_k(
         }
     }
 
-    sample_top_k(logits_id, top_k);
+    if (top_k > 0 && top_k < n_logits) {
+        sample_top_k(logits_id, top_k);
+    }
 
     float maxl = -std::numeric_limits<float>::infinity();
     for (const auto & kv : logits_id) {
