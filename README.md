@@ -9,7 +9,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
-- [Roadmap (short-term)](https://github.com/ggerganov/llama.cpp/discussions/457)
+- [Roadmap Apr 2023](https://github.com/ggerganov/llama.cpp/discussions/784)
 
 ## Description
 
