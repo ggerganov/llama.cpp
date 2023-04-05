@@ -1,5 +1,4 @@
 #include "llama.h"
-#include "llama_internal.h"
 
 #include "ggml.h"
 

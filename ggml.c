@@ -2,7 +2,6 @@
 #define _GNU_SOURCE
 
 #include "ggml.h"
-#include "ggml_internal.h"
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h> // using malloc.h with MSC/MINGW

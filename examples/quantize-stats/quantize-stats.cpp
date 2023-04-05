@@ -1,7 +1,5 @@
 #include "ggml.h"
-#include "ggml_internal.h"
 #include "llama.h"
-#include "llama_internal.h"
 
 #include <algorithm>
 #include <cassert>
