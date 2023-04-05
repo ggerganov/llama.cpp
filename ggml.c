@@ -732,28 +732,42 @@ static void quantize_row_q4_0(const float * restrict x, void * restrict vy, int 
 
 #if defined(__POWER9_VECTOR__)
     const vector float v85 = vec_splats(8.5f);
+    const vector signed int v15 = vec_splats(15);
     for (int i = 0; i < nb; i++) {
-        float amax = 0.0f; // absolute max
+        float max = 0.0f;
+        float min = 0.0f;
 
         vector float srcv [8];
-        vector float asrcv[8];
-        vector float amaxv[8];
+        vector float maxv[8];
+        vector float minv[8];
 
         for (int l = 0; l < 8; l++) srcv[l]  = *(vector float *)(x + i*32 + 4*l);
-        for (int l = 0; l < 8; l++) asrcv[l] = vec_abs(srcv[l]);
+        //for (int l = 0; l < 8; l++) asrcv[l] = vec_abs(srcv[l]);
 
-        for (int l = 0; l < 4; l++) amaxv[2*l] = vec_max(asrcv[2*l], asrcv[2*l+1]);
-        //for (int l = 0; l < 2; l++) amaxv[4*l] = vec_max(amaxv[4*l], amaxv[4*l+2]);
-        amaxv[0] = vec_max(amaxv[0], amaxv[2]);
-        amaxv[4] = vec_max(amaxv[4], amaxv[6]);
-        //for (int l = 0; l < 1; l++) amaxv[8*l] = vec_max(amaxv[8*l], amaxv[8*l+4]);
-        amaxv[0] = vec_max(amaxv[0], amaxv[4]);
+        for (int l = 0; l < 4; l++) maxv[2*l] = vec_max(asrcv[2*l], asrcv[2*l+1]);
+        //for (int l = 0; l < 2; l++) maxv[4*l] = vec_max(maxv[4*l], maxv[4*l+2]);
+        maxv[0] = vec_max(maxv[0], maxv[2]);
+        maxv[4] = vec_max(maxv[4], maxv[6]);
+        //for (int l = 0; l < 1; l++) maxv[8*l] = vec_max(maxv[8*l], maxv[8*l+4]);
+        maxv[0] = vec_max(maxv[0], maxv[4]);
 
-        amax = MAX(
-                MAX(vec_extract(amaxv[0], 0), vec_extract(amaxv[0], 1)),
-                MAX(vec_extract(amaxv[0], 2), vec_extract(amaxv[0], 3)));
+        for (int l = 0; l < 4; l++) minv[2*l] = vec_min(asrcv[2*l], asrcv[2*l+1]);
+        //for (int l = 0; l < 2; l++) minv[4*l] = vec_min(minv[4*l], minv[4*l+2]);
+        minv[0] = vec_min(minv[0], minv[2]);
+        minv[4] = vec_min(minv[4], minv[6]);
+        //for (int l = 0; l < 1; l++) minv[8*l] = vec_min(minv[8*l], minv[8*l+4]);
+        minv[0] = vec_min(minv[0], minv[4]);
 
-        const float d = amax / ((1 << 3) - 1);
+
+        max = MAX(
+                MAX(vec_extract(maxv[0], 0), vec_extract(maxv[0], 1)),
+                MAX(vec_extract(maxv[0], 2), vec_extract(maxv[0], 3)));
+        min = MIN(
+                MIN(vec_extract(minv[0], 0), vec_extract(minv[0], 1)),
+                MIN(vec_extract(minv[0], 2), vec_extract(minv[0], 3)));
+
+        const float magnitude = max >= fabsf(min) ? max : min;
+        const float d = magnitude / -8;
         const float id = d ? 1.0/d : 0.0;
 
         y[i].d = d;
@@ -763,9 +777,10 @@ static void quantize_row_q4_0(const float * restrict x, void * restrict vy, int 
         for (int l = 0; l < 8; l++) {
             const vector float vf  = vec_madd(srcv[l], vid, v85);
             const vector signed int vi = vec_signed(vf);
+            const vector signed int vc = vec_min(vi, v15);
 
-            pb[2*l + 0] = vec_extract(vi, 0) | (vec_extract(vi, 1) << 4);
-            pb[2*l + 1] = vec_extract(vi, 2) | (vec_extract(vi, 3) << 4);
+            pb[2*l + 0] = vec_extract(vc, 0) | (vec_extract(vc, 1) << 4);
+            pb[2*l + 1] = vec_extract(vc, 2) | (vec_extract(vc, 3) << 4);
         }
     }
 #elif __ARM_NEON
