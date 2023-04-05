@@ -92,12 +92,12 @@ _lib.llama_free.restype = None
 # TODO: not great API - very likely to change
 # Returns 0 on success
 def llama_model_quantize(
-    fname_inp: bytes, fname_out: bytes, itype: c_int, qk: c_int
+    fname_inp: bytes, fname_out: bytes, itype: c_int
 ) -> c_int:
-    return _lib.llama_model_quantize(fname_inp, fname_out, itype, qk)
+    return _lib.llama_model_quantize(fname_inp, fname_out, itype)
 
 
-_lib.llama_model_quantize.argtypes = [c_char_p, c_char_p, c_int, c_int]
+_lib.llama_model_quantize.argtypes = [c_char_p, c_char_p, c_int]
 _lib.llama_model_quantize.restype = c_int
 
 
