@@ -57,9 +57,7 @@ cmake -DBUILD_SHARED_LIBS=ON .
 cmake --build . --config Release
 ```
 
-* **Anconda & M1 users**: Please verify that `CMAKE_SYSTEM_PROCESSOR: arm64` after running `cmake -DBUILD_SHARED_LIBS=ON .`
-  * If it detects `x86_64`, edit the `CMakeLists.txt` file under the `# Compile flags` to add `set(CMAKE_SYSTEM_PROCESSOR "arm64")`
-
+**Anaconda & M1 users**: please verify that `CMAKE_SYSTEM_PROCESSOR: arm64` after running `cmake -DBUILD_SHARED_LIBS=ON .` — if it detects `x86_64`, edit the `CMakeLists.txt` file under the `# Compile flags` to add `set(CMAKE_SYSTEM_PROCESSOR "arm64")`.
 
 If everything went OK, `librwkv.so` (Linux) or `rwkv.o` (MacOS) file should appear in the base repo folder.
 
