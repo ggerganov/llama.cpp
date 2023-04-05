@@ -240,7 +240,9 @@ endif()
 
 add_library(llama
             llama.cpp
-            llama.h)
+            llama.h
+            examples/common.cpp
+            examples/common.h)
 
 target_include_directories(llama PUBLIC .)
 target_compile_features(llama PUBLIC cxx_std_11) # don't bump
