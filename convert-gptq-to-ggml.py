@@ -36,7 +36,7 @@ fname_out = sys.argv[3]
 
 fout = open(fname_out, "wb")
 
-fout.write(struct.pack("i", 0x67676d66)) # magic: ggmf in hex
+fout.write(struct.pack("i", 0x67676a74)) # magic: ggjt in hex
 fout.write(struct.pack("i", 1)) # file version
 fout.write(struct.pack("i", n_vocab))
 fout.write(struct.pack("i", n_embd))
