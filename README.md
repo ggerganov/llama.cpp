@@ -1,6 +1,6 @@
 # llama.cpp
 
-![llama](https://user-images.githubusercontent.com/1991296/227761327-6d83e30e-2200-41a6-bfbb-f575231c54f4.png)
+![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
 
 [![Actions Status](https://github.com/ggerganov/llama.cpp/workflows/CI/badge.svg)](https://github.com/ggerganov/llama.cpp/actions)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -10,7 +10,6 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 **Hot topics:**
 
 - [Roadmap (short-term)](https://github.com/ggerganov/llama.cpp/discussions/457)
-- Support for [GPT4All](https://github.com/ggerganov/llama.cpp#using-gpt4all)
 
 ## Description
 
@@ -28,20 +27,31 @@ Please do not make conclusions about the models based on the results from this i
 For all I know, it can be completely wrong. This project is for educational purposes.
 New features will probably be added mostly through community contributions.
 
-Supported platforms:
+**Supported platforms:**
 
 - [X] Mac OS
 - [X] Linux
 - [X] Windows (via CMake)
 - [X] Docker
 
-Supported models:
+**Supported models:**
 
 - [X] LLaMA 🦙
 - [X] [Alpaca](https://github.com/ggerganov/llama.cpp#instruction-mode-with-alpaca)
 - [X] [GPT4All](https://github.com/ggerganov/llama.cpp#using-gpt4all)
 - [X] [Chinese LLaMA / Alpaca](https://github.com/ymcui/Chinese-LLaMA-Alpaca)
 - [X] [Vigogne (French)](https://github.com/bofenghuang/vigogne)
+- [X] [Vicuna](https://github.com/ggerganov/llama.cpp/discussions/643#discussioncomment-5533894)
+
+**Bindings:**
+
+- Python: [abetlen/llama-cpp-python](https://github.com/abetlen/llama-cpp-python)
+- Go: [go-skynet/go-llama.cpp](https://github.com/go-skynet/go-llama.cpp)
+
+**UI:**
+
+- [nat/openplayground](https://github.com/nat/openplayground)
+- [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui)
 
 ---
 
@@ -374,3 +384,6 @@ docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models
 - Clean-up any trailing whitespaces, use 4 spaces indentation, brackets on same line, `void * ptr`, `int & a`
 - See [good first issues](https://github.com/ggerganov/llama.cpp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for tasks suitable for first contributions
 
+### Docs
+
+- [GGML tips & tricks](https://github.com/ggerganov/llama.cpp/wiki/GGML-Tips-&-Tricks)
