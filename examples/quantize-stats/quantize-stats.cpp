@@ -24,6 +24,7 @@ struct quantize_stats_params {
     bool verbose = false;
     bool per_layer_stats = false;
     bool print_histogram = false;
+    bool reference = false;
     std::vector<std::string> include_layers;
     std::vector<std::string> exclude_layers;
     std::vector<enum ggml_type> include_types;
@@ -49,6 +50,8 @@ void quantize_stats_print_usage(int /*argc*/, char ** argv) {
     fprintf(stderr, "  -h, --help            show this help message and exit\n");
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
     fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
+    fprintf(stderr, "  -r, --reference\n");
+    fprintf(stderr, "                        use reference implementation (default: false)\n");
     fprintf(stderr, "  -v, --verbose\n");
     fprintf(stderr, "                        verbose output (default: false)\n");
     fprintf(stderr, "  -p, --per-layer-stats\n");
@@ -135,6 +138,7 @@ void test_roundtrip_on_layer(
         std::string & name,
         bool print_layer_stats,
         const quantize_fns_t & qfns,
+        bool use_reference,
         const ggml_tensor * layer,
         float * input_scratch,
         char *quantized_scratch,
@@ -156,7 +160,11 @@ void test_roundtrip_on_layer(
             input_scratch = ggml_get_data_f32(layer) + offset;
         }
 
-        qfns.quantize_row_q(input_scratch, quantized_scratch, chunk_size);
+        if (use_reference) {
+            qfns.quantize_row_q_reference(input_scratch, quantized_scratch, chunk_size);
+        } else {
+            qfns.quantize_row_q(input_scratch, quantized_scratch, chunk_size);
+        }
         qfns.dequantize_row_q(quantized_scratch, output_scratch, chunk_size);
 
         update_error_stats(chunk_size, input_scratch, output_scratch, total_error);
@@ -184,6 +192,8 @@ int main(int argc, char ** argv) {
         if (arg == "-h" || arg == "--help") {
             quantize_stats_print_usage(argc, argv);
             exit(0);
+        } else if (arg == "-r" || arg == "--reference") {
+            params.reference = true;
         } else if (arg == "-v") {
             params.verbose = true;
         } else if (arg == "-p" || arg == "--per-layer-stats") {
@@ -320,6 +330,7 @@ int main(int argc, char ** argv) {
                         layer_name,
                         params.per_layer_stats,
                         qfns,
+                        params.reference,
                         kv_tensor.second,
                         input_scratch.data(),
                         quantized_scratch.data(),

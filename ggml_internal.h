@@ -15,6 +15,7 @@ typedef void (*vec_dot_q_t)(const int n, float * restrict s, const void * restri
 typedef struct {
     dequantize_row_q_t dequantize_row_q;
     quantize_row_q_t   quantize_row_q;
+    quantize_row_q_t   quantize_row_q_reference;
     vec_dot_q_t        vec_dot_q;
 } quantize_fns_t;
 

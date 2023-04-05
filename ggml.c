@@ -6499,14 +6499,16 @@ static void ggml_compute_forward_mul_mat_f16_f32(
 
 static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
     [GGML_TYPE_Q4_0] = {
-        .dequantize_row_q = dequantize_row_q4_0,
-        .quantize_row_q   = quantize_row_q4_0,
-        .vec_dot_q        = ggml_vec_dot_q4_0,
+        .dequantize_row_q         = dequantize_row_q4_0,
+        .quantize_row_q           = quantize_row_q4_0,
+        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_0_reference,
+        .vec_dot_q                = ggml_vec_dot_q4_0,
     },
     [GGML_TYPE_Q4_1] = {
-        .dequantize_row_q = dequantize_row_q4_1,
-        .quantize_row_q   = quantize_row_q4_1,
-        .vec_dot_q        = ggml_vec_dot_q4_1,
+        .dequantize_row_q         = dequantize_row_q4_1,
+        .quantize_row_q           = quantize_row_q4_1,
+        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_1_reference,
+        .vec_dot_q                = ggml_vec_dot_q4_1,
     },
 };
 
