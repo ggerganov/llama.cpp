@@ -151,7 +151,7 @@ Here are the step for the LLaMA-7B model:
 
 ```bash
 # build this repo
-git clone https://github.com/ggerganov/llama.cpp
+git clone https://github.com/ggerganov/llama.git
 cd llama.cpp
 make
 
