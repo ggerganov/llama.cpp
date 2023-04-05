@@ -145,6 +145,13 @@ git clone https://github.com/ggerganov/llama.cpp
 cd llama.cpp
 make
 
+#For Windows and CMake, use the following command instead:
+cd <path_to_llama_folder>
+mkdir build
+cd build
+cmake ..
+cmake --build . --config Release
+
 # obtain the original LLaMA model weights and place them in ./models
 ls ./models
 65B 30B 13B 7B tokenizer_checklist.chk tokenizer.model
