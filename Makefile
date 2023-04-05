@@ -71,7 +71,7 @@ endif
 #       feel free to update the Makefile for your architecture and send a pull request or issue
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 	# Use all CPU extensions that are available:
-	CFLAGS += -march=native -mtune=native
+	CFLAGS += 
 endif
 ifneq ($(filter ppc64%,$(UNAME_M)),)
 	POWER9_M := $(shell grep "POWER9" /proc/cpuinfo)

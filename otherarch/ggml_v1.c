@@ -87,7 +87,7 @@ typedef void* thread_ret_t;
 #define GGML_V1_SOFT_MAX_UNROLL 4
 #define GGML_V1_VEC_DOT_UNROLL  2
 
-#ifdef GGML_V1_USE_ACCELERATE
+#ifdef GGML_USE_ACCELERATE
 // uncomment to use vDSP for soft max computation
 // note: not sure if it is actually faster
 //#define GGML_V1_SOFT_MAX_ACCELERATE
@@ -110,9 +110,9 @@ typedef void* thread_ret_t;
         } \
     } while (0)
 
-#ifdef GGML_V1_USE_ACCELERATE
+#ifdef GGML_USE_ACCELERATE
 #include <Accelerate/Accelerate.h>
-#elif GGML_V1_USE_OPENBLAS
+#elif GGML_USE_OPENBLAS
 #include <cblas.h>
 #endif
 
@@ -1742,7 +1742,7 @@ inline static void ggml_v1_vec_gelu_f32(const int n, float * y, const float * x)
 #endif
 
 inline static void ggml_v1_vec_sum_f32(const int n, float * s, const float * x) {
-#ifndef GGML_V1_USE_ACCELERATE
+#ifndef GGML_USE_ACCELERATE
     ggml_v1_float sum = 0.0;
     for (int i = 0; i < n; ++i) {
         sum += x[i];
@@ -1754,7 +1754,7 @@ inline static void ggml_v1_vec_sum_f32(const int n, float * s, const float * x) 
 }
 
 inline static void ggml_v1_vec_max_f32(const int n, float * s, const float * x) {
-#ifndef GGML_V1_USE_ACCELERATE
+#ifndef GGML_USE_ACCELERATE
     ggml_v1_float max = -INFINITY;
     for (int i = 0; i < n; ++i) {
         max = MAX(max, x[i]);
@@ -5077,7 +5077,7 @@ static void ggml_v1_compute_forward_norm(
 
 // ggml_v1_compute_forward_mul_mat
 
-#if defined(GGML_V1_USE_ACCELERATE) || defined(GGML_V1_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
 // helper function to determine if it is better to use BLAS or not
 // for large matrices, BLAS is faster
 static bool ggml_v1_compute_forward_mul_mat_use_blas(
@@ -5169,7 +5169,7 @@ static void ggml_v1_compute_forward_mul_mat_f32(
     // nb00 <  nb01 - src0 is transposed
     //   compute by src0 columns
 
-#if defined(GGML_V1_USE_ACCELERATE) || defined(GGML_V1_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
     if (ggml_v1_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
         GGML_V1_ASSERT(nb10 == sizeof(float));
 
@@ -5414,7 +5414,7 @@ static void ggml_v1_compute_forward_mul_mat_f16_f32(
     // nb00 <  nb01 - src0 is transposed
     //   compute by src0 columns
 
-#if defined(GGML_V1_USE_ACCELERATE) || defined(GGML_V1_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
     if (ggml_v1_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
         GGML_V1_ASSERT(nb10 == sizeof(float));
 
@@ -5720,7 +5720,7 @@ static void ggml_v1_compute_forward_mul_mat_q4_0_f32(
     // nb00 <  nb01 - src0 is transposed
     //   compute by src0 columns
 
-#if defined(GGML_V1_USE_ACCELERATE) || defined(GGML_V1_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
     if (ggml_v1_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
         GGML_V1_ASSERT(nb10 == sizeof(float));
 
@@ -6020,7 +6020,7 @@ static void ggml_v1_compute_forward_mul_mat_q4_1_f32(
     // nb00 <  nb01 - src0 is transposed
     //   compute by src0 columns
 
-#if defined(GGML_V1_USE_ACCELERATE) || defined(GGML_V1_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
     if (ggml_v1_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
         GGML_V1_ASSERT(nb10 == sizeof(float));
 
@@ -8870,7 +8870,7 @@ void ggml_v1_graph_compute(struct ggml_v1_context * ctx, struct ggml_v1_cgraph *
                         } else {
                             if (node->src0->type == GGML_V1_TYPE_F16 &&
                                 node->src1->type == GGML_V1_TYPE_F32) {
-#if defined(GGML_V1_USE_ACCELERATE) || defined(GGML_V1_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
                                 if (ggml_v1_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
                                     node->n_tasks = 1; // TODO: this actually is doing nothing
                                                        //       the threads are still spinning
@@ -8889,7 +8889,7 @@ void ggml_v1_graph_compute(struct ggml_v1_context * ctx, struct ggml_v1_cgraph *
                                 cur = 0;
                             } else if (node->src0->type == GGML_V1_TYPE_Q4_0 &&
                                        node->src1->type == GGML_V1_TYPE_F32) {
-#if defined(GGML_V1_USE_ACCELERATE) || defined(GGML_V1_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
                                 if (ggml_v1_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
                                     node->n_tasks = 1;
                                     cur = GGML_V1_TYPE_SIZE[GGML_V1_TYPE_F32]*(node->src0->ne[0]*node->src0->ne[1]);
@@ -8901,7 +8901,7 @@ void ggml_v1_graph_compute(struct ggml_v1_context * ctx, struct ggml_v1_cgraph *
 #endif
                             } else if (node->src0->type == GGML_V1_TYPE_Q4_1 &&
                                        node->src1->type == GGML_V1_TYPE_F32) {
-#if defined(GGML_V1_USE_ACCELERATE) || defined(GGML_V1_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
                                 if (ggml_v1_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
                                     node->n_tasks = 1;
                                     cur = GGML_V1_TYPE_SIZE[GGML_V1_TYPE_F32]*(node->src0->ne[0]*node->src0->ne[1]);
@@ -10150,7 +10150,7 @@ int ggml_v1_cpu_has_wasm_simd(void) {
 }
 
 int ggml_v1_cpu_has_blas(void) {
-#if defined(GGML_V1_USE_ACCELERATE) || defined(GGML_V1_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
     return 1;
 #else
     return 0;
