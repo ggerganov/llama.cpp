@@ -166,6 +166,8 @@ perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o
 embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/embedding/embedding.cpp ggml.o llama.o common.o -o embedding $(LDFLAGS)
 
+libllama.so: llama.o ggml.o
+	$(CXX) $(CXXFLAGS) -shared -fPIC -o libllama.so llama.o ggml.o $(LDFLAGS)
 #
 # Tests
 #
