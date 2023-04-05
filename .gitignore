@@ -33,3 +33,6 @@ compile_commands.json
 .venv
 __pycache__
 .swiftpm
+
+zig-out/
+zig-cache/
