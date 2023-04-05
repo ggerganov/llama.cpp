@@ -36,7 +36,7 @@ CXXFLAGS = -I. -I./examples -Ofast -DNDEBUG -std=c++11 -fPIC
 LDFLAGS  =
 
 #lets try enabling everything
-CFLAGS   += -pthread -mf16c -mfma -mavx2 -mavx -msse3 
+CFLAGS   += -pthread 
 CXXFLAGS += -pthread
 
 # OS specific
@@ -71,7 +71,7 @@ endif
 #       feel free to update the Makefile for your architecture and send a pull request or issue
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 	# Use all CPU extensions that are available:
-	CFLAGS += 
+	CFLAGS += -mf16c -mfma -mavx2 -mavx -msse3
 endif
 ifneq ($(filter ppc64%,$(UNAME_M)),)
 	POWER9_M := $(shell grep "POWER9" /proc/cpuinfo)
@@ -146,7 +146,7 @@ default: llamalib quantize llamalib_blas
 #
 
 ggml.o: ggml.c ggml.h
-	$(CC)  $(CFLAGS)   -c ggml.c -o ggml.o
+	$(CC)  $(CFLAGS) -c ggml.c -o ggml.o
 
 ggml_blas.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS) -DGGML_USE_OPENBLAS -c ggml.c -o ggml_blas.o
