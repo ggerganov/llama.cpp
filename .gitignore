@@ -36,3 +36,6 @@ __pycache__
 
 dist/
 *.spec
+
+zig-out/
+zig-cache/
