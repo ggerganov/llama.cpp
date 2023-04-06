@@ -1758,6 +1758,154 @@ int llama_model_quantize(
     }
 }
 
+int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lora, int n_threads) {
+    // TODO: refactor all of this after PR #801
+    auto & model = ctx->model;
+
+    auto fin = std::ifstream(path_lora, std::ios::binary);
+    if (!fin) {
+        fprintf(stderr, "%s: failed to open '%s'\n", __func__, path_lora);
+        return 1;
+    }
+
+    // verify magic and version
+    {
+        uint32_t magic;
+        fin.read((char *) &magic, sizeof(magic));
+        if (magic != 'ggla') {
+            fprintf(stderr, "%s: bad file magic\n", __func__);
+            return 1;
+        }
+        uint32_t format_version;
+        fin.read((char *) &format_version, sizeof(format_version));
+
+        if (format_version != 1) {
+            fprintf(stderr, "%s: unsupported file version\n", __func__ );
+            return 1;
+        }
+    }
+
+    // create a temporary ggml context to store the lora tensors
+    std::vector<uint8_t> buf(1024 * 1024 * 100);
+    struct ggml_init_params params;
+    params.mem_size   = buf.size();
+    params.mem_buffer = buf.data();
+    params.no_alloc   = false;
+
+    ggml_context* lora_ctx = ggml_init(params);
+    std::unordered_map<std::string, struct ggml_tensor *> lora_tensors;
+
+    fprintf(stderr, "%s: ", __func__);
+
+    // read tensors and apply
+    int n_tensors = 0;
+    while (true) {
+        int32_t n_dims;
+        int32_t length;
+        int32_t ftype;
+
+        fin.read(reinterpret_cast<char *>(&n_dims), sizeof(n_dims));
+        fin.read(reinterpret_cast<char *>(&length), sizeof(length));
+        fin.read(reinterpret_cast<char *>(&ftype),  sizeof(ftype));
+        if (fin.eof()) {
+            break;
+        }
+
+        int32_t nelements = 1;
+        int32_t ne[2] = { 1, 1 };
+        for (int i = 0; i < n_dims; ++i) {
+            fin.read(reinterpret_cast<char *>(&ne[i]), sizeof(ne[i]));
+            nelements *= ne[i];
+        }
+
+        std::string name(length, 0);
+        fin.read(&name[0], length);
+
+        // check for lora suffix and get the type of tensor
+        const std::string lora_suffix = ".lora";
+        size_t pos = name.rfind(lora_suffix);
+        if (pos == std::string::npos) {
+            fprintf(stderr, "%s: error: '%s' is not a lora tensor\n", __func__, name.c_str());
+            return 1;
+        }
+
+        std::string lora_type = name.substr(pos + lora_suffix.length());
+        std::string base_name = name;
+        base_name.erase(pos);
+        // fprintf(stderr, "%s: %s => %s (lora type %s) ", __func__, name.c_str(),base_name.c_str(), lora_type.c_str());
+
+        if (model.tensors.find(base_name.data()) == model.tensors.end()) {
+            fprintf(stderr, "%s: unknown tensor '%s' in lora adapter\n", __func__, name.data());
+            return 1;
+        }
+
+        // create ggml tensor
+        ggml_type wtype;
+        switch (ftype) {
+            case 0: wtype = GGML_TYPE_F32;  break;
+            case 1: wtype = GGML_TYPE_F16;  break;
+            default:
+                    {
+                        fprintf(stderr, "%s: invalid tensor data type '%d'\n",
+                                __func__, ftype);
+                        return false;
+                    }
+        }
+        ggml_tensor* lora_tensor;
+        if (n_dims == 2) {
+            lora_tensor = ggml_new_tensor_2d(lora_ctx, wtype, ne[0], ne[1]);
+        }
+        else {
+            fprintf(stderr, "%s: unsupported tensor dimension %d\n", __func__, n_dims);
+            return 1;
+        }
+
+        // load tensor data
+        size_t offset = fin.tellg();
+        size_t tensor_data_size = ggml_nbytes(lora_tensor);
+        offset = (offset + 31) & -32;
+        fin.seekg(offset);
+        fin.read((char*)lora_tensor->data, tensor_data_size);
+
+        lora_tensors[name] = lora_tensor;
+
+        // check if we have both A and B tensors and apply
+        if (lora_tensors.find(base_name + ".loraA") != lora_tensors.end() &&
+            lora_tensors.find(base_name + ".loraB") != lora_tensors.end()) {
+
+            ggml_tensor * tensor = model.tensors[base_name];
+            ggml_tensor * loraA = ggml_transpose(lora_ctx, lora_tensors[base_name + ".loraA"]);
+            ggml_tensor * loraB = lora_tensors[base_name + ".loraB"];
+
+            if (tensor->ne[0] != loraA->ne[1]) {
+                fprintf(stderr, "%s: incompatible tensor dimensions (%" PRId64 " and %" PRId64 ");" 
+                               " are you sure that this adapter is for this model?\n", __func__, tensor->ne[0], loraA->ne[1]);
+                return 1;
+            }
+
+            // w = w + BA
+            ggml_tensor * BA = ggml_mul_mat(lora_ctx, loraB, loraA);
+            ggml_tensor * r = ggml_add_inplace(lora_ctx, tensor, BA);
+
+            struct ggml_cgraph gf = ggml_build_forward(r);
+            gf.n_threads = n_threads;
+            ggml_graph_compute(lora_ctx, &gf);
+
+            // we won't need these tensors again, reset the context to save memory
+            ggml_free(lora_ctx);
+            lora_ctx = ggml_init(params);
+            lora_tensors.clear();
+
+            n_tensors++;
+            if (n_tensors % 8 == 0)
+                fprintf(stderr, ".");
+        }
+    }
+    fprintf(stderr, " done\n");
+
+    return 0;
+}
+
 // Returns the KV cache that will contain the context for the
 // ongoing prediction with the model.
 const uint8_t * llama_get_kv_cache(struct llama_context * ctx) {
