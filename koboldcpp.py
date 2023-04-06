@@ -343,7 +343,7 @@ def main(args):
     if args.host=="":
         epurl = f"http://localhost:{args.port}" + ("?streaming=1" if args.stream else "")   
     else:
-        epurl = f"http://{args.host}:{args.port}?host={args.host}" + ("&streaming=1" if args.stream else "")   
+        epurl = f"http://{args.host}:{args.port}" + ("&streaming=1" if args.stream else "")   
     
         
     print(f"Please connect to custom endpoint at {epurl}")
