@@ -1236,7 +1236,7 @@ static llama_vocab::id llama_sample_top_p_top_k(
         }
     }
 
-    sample_top_k(logits_id, top_k > 0 ? std::min(top_k, n_logits) : n_logits);
+    sample_top_k(logits_id, top_k > 0 ? Min(top_k, n_logits) : n_logits);
 
     // compute probs for the top k tokens
     std::vector<float> probs;
@@ -1264,10 +1264,6 @@ static llama_vocab::id llama_sample_top_p_top_k(
                 logits_id.resize(i + 1);
                 break;
             }
-        }
-
-        for (int i = 0; i < (int) probs.size(); i++) {
-            probs[i] /= cumsum;
         }
     }
 
