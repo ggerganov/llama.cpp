@@ -186,7 +186,8 @@
 //   - to `ggml_compute_forward` and call the forward dispatch function here.
 //   - to `ggml_compute_backward` and add `GGML_ASSERT(false)` here.
 //   - to `ggml_graph_compute` and add `node->n_tasks = 1` here.
-// 6. Fix all assertions that check value of `GGML_OP_COUNT`: you've added 1 operator, so increment asserted value by one.
+// 6. Add operator label to `GGML_OP_LABEL` array and operator symbol to `GGML_OP_SYMBOL` array.
+// 7. Fix all assertions that check value of `GGML_OP_COUNT`: you've added 1 operator, so increment asserted value by one.
 //
 // When in doubt, consult the code of existing operators similar to that you're implementing.
 // Resulting operator would work for the forward pass, but will lack backward implementation and multi-threading support.
