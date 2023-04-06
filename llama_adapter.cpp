@@ -131,7 +131,8 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
 
     //fast forward the past based on identical tokens, stop once a divergence is noted
     int embd_inp_len = embd_inp.size();
-    for (int i = 0; i < current_context_tokens.size(); ++i)
+    int ctxcs = current_context_tokens.size();
+    for (int i = 0; i < ctxcs; ++i)
     {
         if (current_context_tokens[i] == embd_inp[i])
         {
@@ -203,7 +204,7 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
 
         n_past += embd.size();
         embd.clear();
-        if ((int)embd_inp.size() <= input_consumed)
+        if ((int)embd_inp_size <= input_consumed)
         {
             // out of user input, sample next token
             const float top_k = params.top_k;
@@ -247,7 +248,7 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
         else
         {
             // some user input remains from prompt or interaction, forward it to processing
-            while ((int)embd_inp.size() > input_consumed)
+            while ((int)embd_inp_size > input_consumed)
             {
                 embd.push_back(embd_inp[input_consumed]);
                 last_n_tokens.erase(last_n_tokens.begin());
@@ -262,7 +263,9 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
         }
     }
     time2 = timer_check();
-    printf("\nTime Taken - Processing:%.1fs, Generation:%.1fs, Total:%.1fs", time1, time2, (time1 + time2));
+    float pt1 = (time1*1000.0/(embd_inp_size==0?1:embd_inp_size));
+    float pt2 = (time2*1000.0/(params.n_predict==0?1:params.n_predict));
+    printf("\nTime Taken - Processing:%.1fs (%.0fms/T), Generation:%.1fs (%.0fms/T), Total:%.1fs", time1, pt1, time2, pt2, (time1 + time2));
     fflush(stdout);
     output.status = 1;
     snprintf(output.text, sizeof(output.text), "%s", concat_output.c_str());

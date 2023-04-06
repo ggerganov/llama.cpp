@@ -1,3 +1,6 @@
+// Defines CLOCK_MONOTONIC and asprintf on Linux
+#define _GNU_SOURCE
+
 #include "ggml_v1.h"
 
 #if defined(_MSC_VER) || defined(__MINGW32__)

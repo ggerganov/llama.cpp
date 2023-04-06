@@ -5,7 +5,6 @@
 
 import ctypes
 import os
-import psutil
 import argparse
 import json, http.server, threading, socket, sys, time
 
@@ -122,8 +121,8 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         if self.path.endswith(('/api/v1/model', '/api/latest/model')):
             self.send_response(200)
             self.end_headers()
-            result = {'result': friendlymodelname }
-            self.wfile.write(json.dumps(result).encode())
+            result = {'result': friendlymodelname }            
+            self.wfile.write(json.dumps(result).encode())           
             return
 
         if self.path.endswith(('/api/v1/config/max_length', '/api/latest/config/max_length')):
@@ -191,6 +190,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             newprompt = fullprompt
             
             recvtxt = ""
+            res = {}
             if kai_api_flag:
                 recvtxt = generate(
                     prompt=newprompt,
@@ -204,10 +204,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     seed=-1
                     )
                 print("\nOutput: " + recvtxt)
-                res = {"results": [{"text": recvtxt}]}
-                self.send_response(200)
-                self.end_headers()
-                self.wfile.write(json.dumps(res).encode())               
+                res = {"results": [{"text": recvtxt}]}                            
             else:
                 recvtxt = generate(
                     prompt=newprompt,
@@ -221,9 +218,13 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     )
                 print("\nOutput: " + recvtxt)
                 res = {"data": {"seqs":[recvtxt]}}
+
+            try:  
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(json.dumps(res).encode())
+            except:
+                print("Generate: The response could not be sent, maybe connection was terminated?")
             modelbusy = False
             return    
         self.send_response(404)
@@ -278,7 +279,7 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None):
         def stop(self):
             self.httpd.server_close()
 
-    numThreads = 5
+    numThreads = 6
     threadArr = []
     for i in range(numThreads):
         threadArr.append(Thread(i))
@@ -356,8 +357,10 @@ if __name__ == '__main__':
     portgroup.add_argument("port", help="Port to listen on", default=5001, nargs="?", type=int)
     parser.add_argument("--host", help="Host IP to listen on. If empty, all routable interfaces are accepted.", default="")
     
-    physical_core_limit = psutil.cpu_count(logical=False)
-    # logical_core_limit = (os.cpu_count() if os.cpu_count()<=4 else max(4,os.cpu_count()-4))
+    # psutil.cpu_count(logical=False)
+    physical_core_limit = 1 
+    if os.cpu_count()!=None and os.cpu_count()>1:
+        physical_core_limit = int(os.cpu_count()/2)
     default_threads = (physical_core_limit if physical_core_limit<=3 else max(3,physical_core_limit-1))
     parser.add_argument("--threads", help="Use a custom number of threads if specified. Otherwise, uses an amount based on CPU cores", type=int, default=default_threads)
     parser.add_argument("--stream", help="Uses pseudo streaming", action='store_true')
