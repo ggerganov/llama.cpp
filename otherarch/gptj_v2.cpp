@@ -143,7 +143,6 @@ ModelLoadResult gptj_model_load(const std::string & fname, gptj_model & model, g
 
         ctx_size += (5 + 10*n_layer)*256; // object overhead
 
-        ctx_size = ctx_size * 3 / 2;
         printf("%s: ggml ctx size = %6.2f MB\n", __func__, ctx_size/(1024.0*1024.0));
     }
 

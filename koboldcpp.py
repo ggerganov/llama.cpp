@@ -302,6 +302,12 @@ def main(args):
     elif not args.noblas:
         print("Attempting to use OpenBLAS library for faster prompt ingestion. A compatible libopenblas.dll will be required.")
         use_blas = True
+
+    if args.psutil_set_threads:
+        import psutil
+        args.threads = psutil.cpu_count(logical=False)
+        print("Overriding thread count, using " + str(args.threads) + " threads instead.")
+
     init_library() # Note: if blas does not exist and is enabled, program will crash.
     ggml_selected_file = args.model_file
     embedded_kailite = None 
@@ -363,6 +369,7 @@ if __name__ == '__main__':
         physical_core_limit = int(os.cpu_count()/2)
     default_threads = (physical_core_limit if physical_core_limit<=3 else max(3,physical_core_limit-1))
     parser.add_argument("--threads", help="Use a custom number of threads if specified. Otherwise, uses an amount based on CPU cores", type=int, default=default_threads)
+    parser.add_argument("--psutil_set_threads", help="Experimental flag. If set, uses psutils to determine thread count based on physical cores.", action='store_true')
     parser.add_argument("--stream", help="Uses pseudo streaming", action='store_true')
     parser.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
     args = parser.parse_args()
