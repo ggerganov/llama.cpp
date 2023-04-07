@@ -646,6 +646,139 @@ static void quantize_row_q4_0_rmse(const float * restrict x, block_q4_0 * restri
     }
 }
 
+static int comparefloat(const void * f1p, const void * f2p) {
+    float f1 = *(const float *) f1p;
+    float f2 = *(const float *) f2p;
+    return (f1 > f2) - (f1 < f2);
+}
+
+// Find the optimal quantization scaling for a set of values using a sweep line approach
+// Returns the final scaling vale, and writes the quantized indices as bytes to y
+static float find_optimal_scale(const float * restrict x, uint8_t * restrict qi) {
+    // The quantization shape is a set of values that will be scaled linearly with a value 'd' to produce a set of values to choose from.
+    // The input values will then be rounded to the nearest of the scaled values.
+    // The shape can contain any set of values, e.g. to fit a non-linear distribution, but must be in sorted order and have exactly one '0'
+    const float shape[16] = {-8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7};
+    // Precalculate the midpoint between adjacent values in the shape.
+    float inv_midpoints[15] = {0};
+    for (int i = 0; i < 15; i++) {
+        inv_midpoints[i] = 2/(shape[i] + shape[i+1]);
+    }
+    int zero_i;
+    for (zero_i = 0; shape[zero_i] != 0.0f; zero_i++) {
+        // find zero index
+    };
+
+    // Each event represents a value of d where one value in x changes its quantization
+    struct event {
+        float d;
+        uint8_t x_i;
+        uint8_t new_shape_i;
+    };
+    // Each input value will go through each of the 16 quantization values
+    struct event events[16*QK];
+    int nevents = 0;
+    for (int i = 0; i < QK; i++) {
+        if (x[i] == 0.0f) {
+            // We ignore the scaling of zero valued elements
+            continue;
+        }
+        for (int j = 0; j < 15; j++) {
+            // Positive valued elements sweep backwards from zero, negative elements sweep forward from zero,
+            // both will wrap around and end up back at zero
+            int forwardi = (x[i] > 0) ? j : j+1;
+            events[nevents++] = (struct event) {
+                .d           = x[i] * inv_midpoints[j],
+                .x_i         = i,
+                .new_shape_i = forwardi,
+            };
+        }
+        // Add a wrap-around event at 0
+        events[nevents++] = (struct event) {
+            .d           = 0,
+            .x_i         = i,
+            .new_shape_i = (x[i] > 0) ? 15 : 0
+        };
+    }
+
+    // Order the events in increasing order of scaling factor d
+    qsort(events, nevents, sizeof(struct event), comparefloat);
+
+    // We will keep track of our sum-of-squared-error score as we loop through the scales, which is
+    // sum(x_i^2) + d^2*sum(q_i^2) - 2*d*sum(x_i*q_i)
+    // sum(q_i^2)
+    float qv_sqr_sum = 0;
+    // sum(x_i*q_i)
+    float x_mul_qv_sum = 0;
+
+    // Start scaling at negative infinity
+    float best_score = INFINITY;
+    float best_d = 0;
+    int best_i = 0;
+    for (int i = 0; i < QK; i++) {
+        qi[i] = zero_i;
+    }
+
+    for (int i = 0; i < nevents; i++) {
+        struct event ev = events[i];
+        // Update loop values
+        const int old_i = qi[ev.x_i];
+        const float old_val = shape[old_i];
+        const float new_val = shape[ev.new_shape_i];
+        qv_sqr_sum -= old_val*old_val;
+        qv_sqr_sum += new_val*new_val;
+        x_mul_qv_sum -= x[ev.x_i] * old_val;
+        x_mul_qv_sum += x[ev.x_i] * new_val;
+        qi[ev.x_i] = ev.new_shape_i;
+
+        if (ev.d == 0.0f || qv_sqr_sum == 0.0f) {
+            continue;
+        }
+
+        // squared error score at best_d, ommitting the constant sum(x_i^2) factor
+        const float local_score = -(x_mul_qv_sum * x_mul_qv_sum) / qv_sqr_sum;
+
+        if (local_score < best_score) {
+            // find the optimal scaling factor d for the current quantization assignments,
+            // solve for minima of d^2*sum(q_i^2) - 2*d*sum(x_i*q_i)
+            best_d = x_mul_qv_sum / qv_sqr_sum;
+            best_score = local_score;
+            best_i = i;
+        }
+    }
+    // restore qi values at position i
+    for (int i = 0; i < 16; i++) {
+        qi[i] = zero_i;
+    }
+    for (int i = 0; i <= best_i; i++) {
+        qi[events[i].x_i] = events[i].new_shape_i;
+    }
+
+    return best_d;
+}
+
+// Slow implementation of q4_0 that optimizes for RMSE
+static void quantize_row_q4_0_slow(const float * restrict x, block_q4_0 * restrict y, int k) {
+    assert(k % QK == 0);
+    const int nb = k / QK;
+
+    uint8_t pp[QK/2];
+
+    for (int i = 0; i < nb; i++) {
+        uint8_t qi[QK];
+        y[i].d = find_optimal_scale(&x[i*QK], &qi[0]);
+
+        for (int l = 0; l < QK; l += 2) {
+            assert(qi[l]   < 16);
+            assert(qi[l+1] < 16);
+
+            pp[l/2] = qi[l] | (qi[l+1] << 4);
+        }
+
+        memcpy(y[i].qs, pp, sizeof(pp));
+    }
+}
+
 static void quantize_row_q4_0(const float * restrict x, void * restrict vy, int k) {
     assert(k % QK == 0);
     const int nb = k / QK;
