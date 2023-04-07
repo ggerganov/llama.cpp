@@ -318,13 +318,8 @@ void win32_console_init(bool enable_color) {
     }
     void* hConIn = GetStdHandle((unsigned long)-10); // STD_INPUT_HANDLE (-10)
     if (hConIn && hConIn != (void*)-1 && GetConsoleMode(hConIn, &dwMode)) {
-#if 0
-        // Set console input codepage to UTF8
-        SetConsoleCP(CP_UTF8);
-#else
         // Set console input codepage to UTF16
         _setmode(_fileno(stdin), _O_WTEXT);
-#endif
     }
 }
 
