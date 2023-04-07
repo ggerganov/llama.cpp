@@ -36,8 +36,8 @@ CXXFLAGS = -I. -I./examples -Ofast -DNDEBUG -std=c++11 -fPIC
 LDFLAGS  =
 
 #lets try enabling everything
-CFLAGS   += -pthread 
-CXXFLAGS += -pthread
+CFLAGS   += -pthread -s 
+CXXFLAGS += -pthread -s 
 
 # OS specific
 # TODO: support Windows
