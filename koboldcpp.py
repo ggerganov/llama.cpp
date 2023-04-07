@@ -89,6 +89,7 @@ friendlymodelname = "concedo/koboldcpp"  # local kobold api apparently needs a h
 maxctx = 2048
 maxlen = 128
 modelbusy = False
+defaultport = 5001
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
     sys_version = ""
@@ -344,6 +345,8 @@ def main(args):
     except:
         print("Could not find Kobold Lite. Embedded Kobold Lite will not be available.")
 
+    if args.l_port!=defaultport:
+        args.port = args.l_port
     print(f"Starting Kobold HTTP Server on port {args.port}")
     epurl = ""
     if args.host=="":
@@ -359,8 +362,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Kobold llama.cpp server')
     parser.add_argument("model_file", help="Model file to load", nargs="?")
     portgroup = parser.add_mutually_exclusive_group() #we want to be backwards compatible with the unnamed positional args
-    portgroup.add_argument("--port", help="Port to listen on", default=5001, type=int)
-    portgroup.add_argument("port", help="Port to listen on", default=5001, nargs="?", type=int)
+    portgroup.add_argument("--port", help="Port to listen on", default=defaultport, type=int, action='store')
+    portgroup.add_argument("l_port", help="Port to listen on (deprecated)", default=defaultport, nargs="?", type=int, action='store')
     parser.add_argument("--host", help="Host IP to listen on. If empty, all routable interfaces are accepted.", default="")
     
     # psutil.cpu_count(logical=False)
