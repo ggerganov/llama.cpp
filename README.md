@@ -10,7 +10,7 @@ This project provides [a C library rwkv.h](rwkv.h) and [a convinient Python wrap
 
 **TODO (contributions welcome!)**:
 
-1. Measure latency and perplexity of different model sizes (169M to 14B) and data types (FP32, FP16, Q4_0, Q4_1)
+1. Measure latency and perplexity of different model sizes (169M to 14B) and data types (FP32, FP16, Q4_0, Q4_1, Q4_1_O)
 2. Test on Linux (including Colab) and MacOS
 3. Make required memory calculation more robust (see #4)
 
@@ -68,7 +68,7 @@ If everything went OK, `librwkv.so` (Linux) or `rwkv.o` (MacOS) file should appe
 
 ```commandline
 # Windows
-python rwkv\convert_rwkv_to_ggml.py C:\RWKV-4-Pile-169M-20220807-8023.pth C:\rwkv.cpp-169M.bin float16
+python rwkv\convert_pytorch_to_ggml.py C:\RWKV-4-Pile-169M-20220807-8023.pth C:\rwkv.cpp-169M.bin float16
 
 # Linux / MacOS
 python rwkv/convert_pytorch_to_ggml.py ~/Downloads/RWKV-4-Pile-169M-20220807-8023.pth ~/Downloads/rwkv.cpp-169M.bin float16
@@ -80,13 +80,17 @@ To convert the model into INT4 quantized format, run:
 
 ```commandline
 # Windows
-python rwkv\quantize.py C:\rwkv.cpp-169M.bin C:\rwkv.cpp-169M-Q4_1.bin 3
+python rwkv\quantize.py C:\rwkv.cpp-169M.bin C:\rwkv.cpp-169M-Q4_1_O.bin 4
 
 # Linux / MacOS
-python rwkv/quantize.py ~/Downloads/rwkv.cpp-169M.bin ~/Downloads/rwkv.cpp-169M-Q4_1.bin 3
+python rwkv/quantize.py ~/Downloads/rwkv.cpp-169M.bin ~/Downloads/rwkv.cpp-169M-Q4_1_O.bin 4
 ```
 
-Pass `2` for `Q4_0` format (smaller size, lower quality), `3` for `Q4_1` format (larger size, higher quality).
+Formats available:
+
+- `4`: `Q4_1_O`, preserves outliers, best quality, very slow (as FP32).
+- `3`: `Q4_1`, preserves range, poor quality, very fast (as FP16).
+- `2`: `Q4_0`, worst quality, moderately fast (between FP16 and FP32).
 
 ### 4. Run the model
 
@@ -98,20 +102,20 @@ To generate some text, run:
 
 ```commandline
 # Windows
-python rwkv\generate_completions.py C:\rwkv.cpp-169M-Q4_1.bin
+python rwkv\generate_completions.py C:\rwkv.cpp-169M-Q4_1_O.bin
 
 # Linux / MacOS
-python rwkv/generate_completions.py ~/Downloads/rwkv.cpp-169M-Q4_1.bin
+python rwkv/generate_completions.py ~/Downloads/rwkv.cpp-169M-Q4_1_O.bin
 ```
 
 To chat with a bot, run:
 
 ```commandline
 # Windows
-python rwkv\chat_with_bot.py C:\rwkv.cpp-169M-Q4_1.bin
+python rwkv\chat_with_bot.py C:\rwkv.cpp-169M-Q4_1_O.bin
 
 # Linux / MacOS
-python rwkv/chat_with_bot.py ~/Downloads/rwkv.cpp-169M-Q4_1.bin
+python rwkv/chat_with_bot.py ~/Downloads/rwkv.cpp-169M-Q4_1_O.bin
 ```
 
 Edit [generate_completions.py](rwkv%2Fgenerate_completions.py) or [chat_with_bot.py](rwkv%2Fchat_with_bot.py) to change prompts and sampling settings.
