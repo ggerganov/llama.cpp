@@ -9550,7 +9550,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         if (node->n_tasks > 1) {
             thpool_wait(ctx->tpool);
         }
-
+#if 0
         // FINALIZE
         if (node->n_tasks > 1) {
             // launch thread pool
@@ -9574,7 +9574,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         if (node->n_tasks > 1) {
             thpool_wait(ctx->tpool);
         }
-
+#endif
         // performance stats (node)
         {
             int64_t perf_cycles_cur  = ggml_perf_cycles()  - perf_node_start_cycles;
