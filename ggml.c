@@ -2731,6 +2731,7 @@ enum ggml_task_type {
 };
 
 struct ggml_compute_params {
+    job newjob;
     enum ggml_task_type type;
 
     int ith, nth;
@@ -9529,11 +9530,11 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
 
         // INIT
         struct ggml_compute_params params = {
-            /*.type  =*/ GGML_TASK_INIT,
-            /*.ith   =*/ 0,
-            /*.nth   =*/ node->n_tasks,
-            /*.wsize =*/ cgraph->work ? ggml_nbytes(cgraph->work) : 0,
-            /*.wdata =*/ cgraph->work ? cgraph->work->data : NULL,
+            .type  = GGML_TASK_INIT,
+            .ith   = 0,
+            .nth   = node->n_tasks,
+            .wsize = cgraph->work ? ggml_nbytes(cgraph->work) : 0,
+            .wdata = cgraph->work ? cgraph->work->data : NULL,
         };
 
         ggml_compute_forward(&params, node);

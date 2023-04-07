@@ -156,14 +156,6 @@ typedef struct bsem {
 } bsem;
 
 
-/* Job */
-typedef struct job{
-	struct job*  prev;                   /* pointer to previous job   */
-	void   (*function)(void* arg);       /* function pointer          */
-	void*  arg;                          /* function's argument       */
-} job;
-
-
 /* Job queue */
 typedef struct jobqueue{
 	pthread_mutex_t rwmutex;             /* used for queue r/w access */
@@ -279,18 +271,8 @@ struct thpool_* thpool_init(int num_threads){
 
 
 /* Add work to the thread pool */
-int thpool_add_work(thpool_* thpool_p, void (*function_p)(void*), void* arg_p){
-	job* newjob;
-
-	newjob=(struct job*)malloc(sizeof(struct job));
-	if (newjob==NULL){
-		err("thpool_add_work(): Could not allocate memory for new job\n");
-		return -1;
-	}
-
-	/* add function and argument */
+int thpool_add_work(thpool_* thpool_p, void (*function_p)(void*), job * newjob){
 	newjob->function=function_p;
-	newjob->arg=arg_p;
 
 	/* add job to queue */
 	jobqueue_push(&thpool_p->jobqueue, newjob);
@@ -460,9 +442,8 @@ static void* thread_do(struct thread* thread_p){
 			job* job_p = jobqueue_pull(&thpool_p->jobqueue);
 			if (job_p) {
 				func_buff = job_p->function;
-				arg_buff  = job_p->arg;
+				arg_buff  = job_p;
 				func_buff(arg_buff);
-				free(job_p);
 			}
 
 			pthread_mutex_lock(&thpool_p->thcount_lock);

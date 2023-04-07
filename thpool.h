@@ -16,6 +16,12 @@ extern "C" {
 
 typedef struct thpool_* threadpool;
 
+/* Job */
+typedef struct job{
+	struct job*  prev;                   /* pointer to previous job   */
+	void   (*function)(void* arg);       /* function pointer          */
+} job;
+
 
 /**
  * @brief  Initialize threadpool
@@ -64,7 +70,7 @@ threadpool thpool_init(int num_threads);
  * @param  arg_p         pointer to an argument
  * @return 0 on success, -1 otherwise.
  */
-int thpool_add_work(threadpool, void (*function_p)(void*), void* arg_p);
+int thpool_add_work(threadpool, void (*function_p)(void*), job *newjob);
 
 
 /**
