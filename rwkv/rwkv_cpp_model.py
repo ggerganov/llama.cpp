@@ -118,5 +118,5 @@ class RWKVModel:
 
     def __del__(self):
         # Free the context on GC in case user forgot to call free() explicitly.
-        if self._valid:
+        if hasattr(self, '_valid') and self._valid:
             self.free()

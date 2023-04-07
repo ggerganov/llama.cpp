@@ -37,7 +37,8 @@ def main() -> None:
         assert data_type == 0 or\
                data_type == 1 or\
                data_type == 2 or\
-               data_type == 3, f'Unsupported model data type {data_type}'
+               data_type == 3 or\
+               data_type == 4, f'Unsupported model data type {data_type}'
 
         if data_type == 0:
             # FP32, high precision
@@ -46,12 +47,14 @@ def main() -> None:
             # FP16, lower precision, so higher threshold
             threshold = 0.0032
         elif data_type == 2:
-            # INT4 quantized, even lower precision, so even higher threshold
-            # This threshold will let some bugs pass
-            threshold = 4.0
+            # Q4_0 quantized, even lower precision, so even higher threshold
+            threshold = 0.4
         elif data_type == 3:
-            # This format stores more data, so error would be lower
-            threshold = 1.2
+            # Q4_1
+            threshold = 1.21
+        elif data_type == 4:
+            # Q4_1_O
+            threshold = 0.2
 
     model = rwkv_cpp_model.RWKVModel(rwkv_cpp_shared_library.load_rwkv_shared_library(), args.ggml_model_path)
 

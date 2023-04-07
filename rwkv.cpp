@@ -160,7 +160,8 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, uint32_t n_thr
         model->data_type == 0 ||
             model->data_type == 1 ||
             model->data_type == 2 ||
-            model->data_type == 3,
+            model->data_type == 3 ||
+            model->data_type == 4,
         "Unsupported model data type %d",
         model->data_type
     );
@@ -216,7 +217,8 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, uint32_t n_thr
             data_type == 0 ||
                 data_type == 1 ||
                 data_type == 2 ||
-                data_type == 3,
+                data_type == 3 ||
+                data_type == 4,
             "Unsupported parameter data type %d",
             data_type
         );
@@ -228,6 +230,7 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, uint32_t n_thr
             case 1: ggml_data_type = GGML_TYPE_F16; break;
             case 2: ggml_data_type = GGML_TYPE_Q4_0; break;
             case 3: ggml_data_type = GGML_TYPE_Q4_1; break;
+            case 4: ggml_data_type = GGML_TYPE_Q4_1_O; break;
             default: return NULL;
         }
 
@@ -553,17 +556,16 @@ void rwkv_free(struct rwkv_context * ctx) {
 }
 
 bool rwkv_quantize_model_file(const char * model_file_path_in, const char * model_file_path_out, uint32_t q_type) {
-    RWKV_ASSERT_FALSE(q_type == 2 || q_type == 3, "Unsupported quantization type %d", q_type);
+    RWKV_ASSERT_FALSE(q_type == 2 || q_type == 3 || q_type == 4, "Unsupported quantization type %d", q_type);
 
     ggml_type type;
 
     switch (q_type) {
         case 2: type = GGML_TYPE_Q4_0; break;
         case 3: type = GGML_TYPE_Q4_1; break;
+        case 4: type = GGML_TYPE_Q4_1_O; break;
         default: return false;
     };
-
-    RWKV_ASSERT_FALSE(type == GGML_TYPE_Q4_0 || type == GGML_TYPE_Q4_1, "Unsupported data type %d", type);
 
     printf("Loading model from '%s'\n", model_file_path_in);
 
@@ -646,7 +648,8 @@ bool rwkv_quantize_model_file(const char * model_file_path_in, const char * mode
                     "f32",
                     "f16",
                     "q4_0",
-                    "q4_1"
+                    "q4_1",
+                    "q4_1_o"
                 };
                 printf("%48s - [%5d, %5d], type = %6s ", name.data(), ne[0], ne[1], parameter_data_type_str[parameter_data_type]);
 
@@ -655,6 +658,7 @@ bool rwkv_quantize_model_file(const char * model_file_path_in, const char * mode
                     4.0F,
                     2.0F,
                     20.0F / 32.0F,
+                    24.0F / 32.0F,
                     24.0F / 32.0F
                 };
                 total_size_orig += (size_t) (nelements * parameter_data_type_size[parameter_data_type]);
@@ -668,10 +672,11 @@ bool rwkv_quantize_model_file(const char * model_file_path_in, const char * mode
                     name != std::string("head.weight");
 
             if (quantize) {
-                if (parameter_data_type != 0 && parameter_data_type != 1) {
-                    fprintf(stderr, "unsupported data type %d for integer quantization\n", parameter_data_type);
-                    return false;
-                }
+                RWKV_ASSERT_FALSE(
+                    parameter_data_type == 0 || parameter_data_type == 1,
+                    "Unsupported parameter data type %d, only FP32 and FP16 can be quantized",
+                    parameter_data_type
+                );
 
                 if (parameter_data_type == 1) {
                     data_f16.resize(nelements);
@@ -718,6 +723,10 @@ bool rwkv_quantize_model_file(const char * model_file_path_in, const char * mode
                     case GGML_TYPE_Q4_1:
                         {
                             cur_size = ggml_quantize_q4_1(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                        } break;
+                    case GGML_TYPE_Q4_1_O:
+                        {
+                            cur_size = ggml_quantize_q4_1_o(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                         } break;
                     default:
                         {
