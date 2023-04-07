@@ -431,7 +431,7 @@ int main(int argc, char ** argv) {
         }
 
         // end of text token
-        if (embd.back() == llama_token_eos()) {
+        if (!embd.empty() && embd.back() == llama_token_eos()) {
             if (params.instruct) {
                 is_interacting = true;
             } else {
