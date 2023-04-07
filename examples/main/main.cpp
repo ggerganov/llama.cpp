@@ -386,10 +386,19 @@ int main(int argc, char ** argv) {
                 std::string line;
                 bool another_line = true;
                 do {
+#if defined(_WIN32)
+                    std::wstring wline;
+                    if (!std::getline(std::wcin, wline)) {
+                        // input stream is bad or EOF received
+                        return 0;
+                    }
+                    win32_utf8_encode(wline, line);
+#else
                     if (!std::getline(std::cin, line)) {
                         // input stream is bad or EOF received
                         return 0;
                     }
+#endif
                     if (line.empty() || line.back() != '\\') {
                         another_line = false;
                     } else {
