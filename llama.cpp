@@ -644,7 +644,7 @@ static bool llama_model_load(
         size_t total_size = 0;
         model.n_loaded = 0;
 
-        while (true) {
+        while (size_t(fin.tellg()) + 12 < file_size) {
             int32_t n_dims;
             int32_t length;
             int32_t ftype;
@@ -652,10 +652,6 @@ static bool llama_model_load(
             fin.read(reinterpret_cast<char *>(&n_dims), sizeof(n_dims));
             fin.read(reinterpret_cast<char *>(&length), sizeof(length));
             fin.read(reinterpret_cast<char *>(&ftype),  sizeof(ftype));
-
-            if (fin.eof()) {
-                break;
-            }
 
             int32_t nelements = 1;
             int32_t ne[2] = { 1, 1 };
@@ -707,6 +703,10 @@ static bool llama_model_load(
             offset = (offset + 31) & -32;
             tensor->data = mm_addr + offset;
             fin.seekg(offset + tensor_data_size);
+            if (fin.eof()) {
+               fprintf(stderr, "%s: Truncated file?\n", __func__);
+               return false;
+            }
             total_size += tensor_data_size;
             model.n_loaded++;
 
@@ -714,6 +714,15 @@ static bool llama_model_load(
             if (progress_callback) {
                 double current_progress = size_t(fin.tellg()) / double(file_size);
                 progress_callback(current_progress, progress_callback_user_data);
+            }
+        }
+
+        uint32_t version_minor = 0;
+        fin.read((char *)&version_minor, sizeof(version_minor));
+        if (fin.eof() || version_minor < LLAMA_FILE_VERSION_MINOR) {
+            static_assert(LLAMA_FILE_VERSION_MINOR == 1, "Provide a helpful message that explains why the user may want to update their files");
+            if (model.hparams.f16 == 2) {
+                fprintf(stderr, "%s: WARN no minor version detected - your file will work but consider re-creating it for better quantization\n", __func__);
             }
         }
 
@@ -1570,6 +1579,12 @@ static bool llama_model_quantize_internal(const std::string & fname_inp, const s
             }
             printf("\n");
         }
+    }
+
+    static_assert(LLAMA_FILE_VERSION_MINOR == 1, "Check if this condition needs updating for minimal model checksum changes");
+    if ((LLAMA_FILE_VERSION_MINOR > 1) || (itype == 2)) {
+        uint32_t version_minor = LLAMA_FILE_VERSION_MINOR;
+        fout.write((char *)&version_minor, sizeof(version_minor));
     }
 
     finp.close();

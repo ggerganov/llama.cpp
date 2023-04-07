@@ -73,11 +73,15 @@ static int sched_yield (void) {
     Sleep (0);
     return 0;
 }
+
+#define __attribute__(...)
 #else
 #include <pthread.h>
 #include <stdatomic.h>
 
 typedef void* thread_ret_t;
+
+#define __declspec(...)
 #endif
 
 // __FMA__ and __F16C__ are not defined in MSVC, however they are implied with AVX2/AVX512
@@ -517,39 +521,128 @@ typedef struct {
 static_assert(sizeof(block_q4_1) == sizeof(float) * 2 + QK / 2, "wrong q4_1 block size/padding");
 
 // reference implementation for deterministic creation of model files
+static inline void quantize_block_q4_0_reference(const float * restrict x, block_q4_0 * restrict y, float scale) {
+    uint8_t pp[QK/2];
+
+    float amax = 0.0f; // absolute max
+    float max = 0.0f;
+
+    for (int l = 0; l < QK; l++) {
+        const float v = x[l];
+        if (amax < fabsf(v)) {
+            amax = fabsf(v);
+            max = v;
+        }
+    }
+
+    const float d = max / scale;
+    const float id = d ? 1.0f/d : 0.0f;
+
+    y->d = d;
+
+    for (int l = 0; l < QK; l += 2) {
+        const float v0 = x[l + 0]*id;
+        const float v1 = x[l + 1]*id;
+
+        int8_t vs0 = roundf(v0);
+        int8_t vs1 = roundf(v1);
+
+        vs0 = MIN(MAX(0 - 8, vs0), 15 - 8);
+        vs1 = MIN(MAX(0 - 8, vs1), 15 - 8);
+
+        const uint8_t vi0 = vs0 + 8;    // guaranteed to fit into 4 bits
+        const uint8_t vi1 = vs1 + 8;    // thanks to the clamping of the signed values above
+
+        pp[l/2] = vi0 | (vi1 << 4);
+    }
+
+    memcpy(y->qs, pp, sizeof(pp));
+}
+
 static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * restrict y, int k) {
     assert(k % QK == 0);
     const int nb = k / QK;
+    for (int i = 0; i < nb; i++) {
+        quantize_block_q4_0_reference(x + i*QK, y + i, 7);
+    }
+}
 
-    uint8_t pp[QK/2];
+static void quantize_row_q4_0_rmse(const float * restrict x, block_q4_0 * restrict y, int k) {
+    // For each q4_0 block, we try the following values to scale the shared float value
+    // and pick the one with lowest RMS error. We could do a more involved search,
+    // but this is a trade-off with speed of model generation and simplicity of the code.
+    // Operating on 8 values can reasonably be loop-unrolled or vectorized, but that is not
+    // manually done here.
+    // Values hand-picked according to histogram in examples/quantize/scale.py
+    // Include the value +7 of the old method to ensure we don't regress on RMSE on any block.
+    #define Q4_0_SCALE_CANDIDATE_COUNT 8
+    static const float candidates[Q4_0_SCALE_CANDIDATE_COUNT] = { -8.7f, -8.5f, -8.3f, -8.1f, -7.9f, -7.7f, -7.2f, +7.0f };
+
+    assert(k % QK == 0);
+    const int nb = k / QK;
 
     for (int i = 0; i < nb; i++) {
         float amax = 0.0f; // absolute max
+        float max = 0.0f;
 
         for (int l = 0; l < QK; l++) {
             const float v = x[i*QK + l];
-            amax = MAX(amax, fabsf(v));
+            if (amax < fabsf(v)) {
+                amax = fabsf(v);
+                max = v;
+            }
         }
 
-        const float d = amax / ((1 << 3) - 1);
-        const float id = d ? 1.0f/d : 0.0f;
+        // find scale with lowest sum of squared errors, equivalent to lowest RMS error
+        float best_sqerr = +INFINITY;
+        float best_scale = NAN;
 
-        y[i].d = d;
+        for (int si = 0; si < Q4_0_SCALE_CANDIDATE_COUNT; si++) {
+            const float scale = candidates[si];
+            const float d = max / scale;
+            const float id = d ? 1.0f / d : 0.0f;
+            float sqe_acc = 0.f;
+#ifdef __AVX2__
+            const __m256 clamp_lo = _mm256_set1_ps( 0 - 8);
+            const __m256 clamp_hi = _mm256_set1_ps(15 - 8);
+            const __m256 id256    = _mm256_set1_ps(id);
+            for (int l = 0; l < QK; l += 8) {
+                // TODO: use _mm256_load_ps once the quantize loader uses mmap
+                __m256 v = _mm256_loadu_ps(&x[i * QK + l]);
+                v = _mm256_mul_ps(v, id256);
+                __m256 vs = _mm256_round_ps(v, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
+                vs = _mm256_min_ps(_mm256_max_ps(clamp_lo, vs), clamp_hi);
+                const __m256 err = _mm256_sub_ps(vs, v);
+                const __m256 sqe = _mm256_mul_ps(err, err);
 
-        for (int l = 0; l < QK; l += 2) {
-            const float v0 = x[i*QK + l + 0]*id;
-            const float v1 = x[i*QK + l + 1]*id;
+                // this is far from optimal speed-wise, but ensures identical results to scalar implementation
+                // we have to add the floats in sqe to sqe_acc separately and in the correct order
+                // 8x _mm_add_ps(,_mm_permute_ps()) would work but isn't faster than this:
+                __declspec(align(32)) float out[8] __attribute__((aligned(32)));
+                _mm256_store_ps(out, sqe);
+                for (int ei= 0; ei < 8; ei++) {
+                    sqe_acc += out[ei];
+                }
+            }
+#else
+            for (int l = 0; l < QK; l++) {
+                const float v = x[i * QK + l] * id;
+                int8_t vs = roundf(v);
+                vs = MIN(MAX(0 - 8, vs), 15 - 8);
+                sqe_acc += (vs - v) * (vs - v);
+            }
+#endif
+            // the square error sum is calculated on un-scaled q's inside the inner loop
+            sqe_acc *= d * d;
 
-            const uint8_t vi0 = (int8_t)roundf(v0) + 8;
-            const uint8_t vi1 = (int8_t)roundf(v1) + 8;
-
-            assert(vi0 < 16);
-            assert(vi1 < 16);
-
-            pp[l/2] = vi0 | (vi1 << 4);
+            if (best_sqerr > sqe_acc) {
+                best_sqerr = sqe_acc;
+                best_scale = scale;
+            }
         }
-
-        memcpy(y[i].qs, pp, sizeof(pp));
+        assert(isfinite(best_sqerr));
+        assert(isfinite(best_scale));
+        quantize_block_q4_0_reference(x + i * QK, y + i, best_scale);
     }
 }
 
@@ -6564,17 +6657,28 @@ static void ggml_compute_forward_mul_mat_f16_f32(
     //}
 }
 
+static void quantize_row_q_missing(const float * x, void * y, int k) {
+    (void)x; (void)y; (void)k;
+    assert(false);
+}
+
 static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
     [GGML_TYPE_Q4_0] = {
         .dequantize_row_q         = dequantize_row_q4_0,
-        .quantize_row_q           = quantize_row_q4_0,
-        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_0_reference,
+        .quantize_row_q           = {
+            [GGML_QUANTIZE_IMPL_SIMD]      = quantize_row_q4_0,
+            [GGML_QUANTIZE_IMPL_REFERENCE] = (quantize_row_q_t)quantize_row_q4_0_reference,
+            [GGML_QUANTIZE_IMPL_RMSE]      = (quantize_row_q_t)quantize_row_q4_0_rmse,
+        },
         .vec_dot_q                = ggml_vec_dot_q4_0,
     },
     [GGML_TYPE_Q4_1] = {
         .dequantize_row_q         = dequantize_row_q4_1,
-        .quantize_row_q           = quantize_row_q4_1,
-        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_1_reference,
+        .quantize_row_q           = {
+            [GGML_QUANTIZE_IMPL_SIMD]      = quantize_row_q4_1,
+            [GGML_QUANTIZE_IMPL_REFERENCE] = quantize_row_q4_1_reference,
+            [GGML_QUANTIZE_IMPL_RMSE]      = quantize_row_q_missing,
+        },
         .vec_dot_q                = ggml_vec_dot_q4_1,
     },
 };
@@ -6632,7 +6736,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
     GGML_ASSERT(ne3  == ne13);
 
     const enum ggml_type type = src0->type;
-    quantize_row_q_t const quantize_row_q = quantize_fns[type].quantize_row_q;
+    quantize_row_q_t const quantize_row_q = quantize_fns[type].quantize_row_q[GGML_QUANTIZE_IMPL_SIMD];
     vec_dot_q_t      const vec_dot_q      = quantize_fns[type].vec_dot_q;
 
     // we don't support permuted src0 or src1
@@ -10602,7 +10706,7 @@ size_t ggml_quantize_q4_0(const float * src, void * dst, int n, int k, int64_t *
     for (int j = 0; j < n; j += k) {
         block_q4_0 * restrict y = (block_q4_0 *)dst + j/QK;
 
-        quantize_row_q4_0_reference(src + j, y, k);
+        quantize_row_q4_0_rmse(src + j, y, k);
 
         for (int i = 0; i < nb; i++) {
             for (int l = 0; l < QK; l += 2) {
