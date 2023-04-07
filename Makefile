@@ -139,7 +139,7 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: llamalib quantize llamalib_blas
+default: llamalib llamalib_blas
 
 #
 # Build library
@@ -186,6 +186,9 @@ llamalib_blas: ggml_blas.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_a
 	
 quantize: examples/quantize/quantize.cpp ggml.o llama.o
 	$(CXX) $(CXXFLAGS) examples/quantize/quantize.cpp ggml.o llama.o -o quantize $(LDFLAGS)
+
+quantize_gptj: ggml.o llama.o
+	$(CXX) $(CXXFLAGS) otherarch/gptj_quantize.cpp ggml.o llama.o -o quantize_gptj $(LDFLAGS)
 
 perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/perplexity/perplexity.cpp ggml.o llama.o common.o -o perplexity $(LDFLAGS)

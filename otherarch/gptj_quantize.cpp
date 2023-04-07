@@ -1,6 +1,6 @@
 #include "ggml.h"
 
-#include "utils.h"
+#include "otherarch/utils.h"
 
 #include <cassert>
 #include <cmath>
@@ -283,6 +283,7 @@ bool gptj_model_quantize(const std::string & fname_inp, const std::string & fnam
 //  ./gpt-2-quantize models/gpt-2-117M/ggml-model.bin models/gpt-2-117M/ggml-model-quant.bin type
 //
 int main(int argc, char ** argv) {
+    ggml_time_init();
     if (argc != 4) {
         fprintf(stderr, "usage: %s model-f32.bin model-quant.bin type\n", argv[0]);
         fprintf(stderr, "  type = 2 - q4_0\n");
