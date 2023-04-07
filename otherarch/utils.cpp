@@ -426,7 +426,7 @@ gpt_vocab::id gpt_sample_top_k_top_p(
     return logits_id[idx].second;
 }
 
-static bool should_transpose_layer(std::string name)
+bool should_transpose_layer(std::string name)
 {
        
     if(name.find(".mlp.fc_in.weight")!=std::string::npos || 
