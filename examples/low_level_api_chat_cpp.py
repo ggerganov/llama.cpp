@@ -6,8 +6,6 @@ Quirks:
  * The first antiprompt should be the userprompt like "\nUser:",
    because its added when n_predict is reached (aka generation ended prematurely)
  * n_predict can be set to -1 for unlimited length responses (or just a really high value)
- * It's always in interactive mode, generation ends either by reaching an antiprompt
-   or running out of n_predict.
  * Instruction mode adds its own antiprompt.
    You should also still be feeding the model with a "primer" prompt that
    shows it the expected format.
@@ -59,7 +57,6 @@ specified) expect poor results""", file=sys.stderr)
 
         # runtime args
         self.input_consumed = 0
-        self.embd = []
         self.n_past = 0
         self.first_antiprompt = []
         self.remaining_tokens = self.params.n_predict
@@ -74,7 +71,7 @@ specified) expect poor results""", file=sys.stderr)
         self.lparams.use_mlock = self.params.use_mlock
 
         self.ctx = llama_cpp.llama_init_from_file(self.params.model.encode("utf8"), self.lparams)
-        if (self.ctx == 0):
+        if (not self.ctx):
             raise RuntimeError(f"error: failed to load model '{self.params.model}'")
 
         print(file=sys.stderr)
@@ -95,7 +92,13 @@ specified) expect poor results""", file=sys.stderr)
         # Add a space in front of the first character to match OG llama tokenizer behavior
         self.params.prompt = " " + self.params.prompt
 
+        # Load prompt file
+        if (self.params.file):
+            with open(self.params.file) as f:
+                self.params.prompt = f.read()
+
         # tokenize the prompt
+        self.embd = []
         self.embd_inp = self._tokenize(self.params.prompt)
 
         if (len(self.embd_inp) > self.params.n_ctx - 4):
@@ -384,11 +387,7 @@ The transcript only includes text, it does not include markup like HTML and Mark
 {AI_NAME}: Blue
 {USER_NAME}:"""
     args = gpt_params_parse()
-    params = GptParams(args)
+    params = GptParams(**vars(args))
 
-    if (args.file):
-        with open(args.file) as f:
-            params.prompt = f.read()
-
-    with LLaMAInteract() as m:
+    with LLaMAInteract(params) as m:
         m.interact()
