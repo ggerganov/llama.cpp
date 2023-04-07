@@ -11427,7 +11427,6 @@ int ggml_cpu_has_vsx(void) {
 
 // Copied from https://github.com/ggerganov/llama.cpp/blob/6e7801d08d81c931a5427bae46f00763e993f54a/tests/test-quantize.c
 void ggml_test_quantization(void) {
-    #define QK 32
     float src[QK];
     uint8_t dst[24];
     int64_t hist[16];
@@ -11437,7 +11436,7 @@ void ggml_test_quantization(void) {
     }
 
     size_t size = ggml_quantize_q4_0(src, dst, QK, QK, hist);
-    GGML_TEST_ASSERT(size == 20, "%d", size);
+    GGML_TEST_ASSERT(size == 20, "%zd", size);
     float max_result = ((float *) dst)[0];
     float max_expected = src[31] / ((1 << 3) - 1);
     GGML_TEST_ASSERT(max_result == max_expected, "%f, %f", max_result, max_expected);
@@ -11448,7 +11447,7 @@ void ggml_test_quantization(void) {
     }
 
     size = ggml_quantize_q4_1(src, dst, QK, QK, hist);
-    GGML_TEST_ASSERT(size == 24, "%d", size);
+    GGML_TEST_ASSERT(size == 24, "%zd", size);
     float delta_result = ((float *) dst)[0];
     float delta_expected = (src[31] - src[0]) / ((1 << 4) - 1);
     GGML_TEST_ASSERT(delta_result == delta_expected, "%f, %f", delta_result, delta_expected);
@@ -11462,8 +11461,55 @@ void ggml_test_quantization(void) {
     }
 }
 
+void ggml_test_quantization_q4_1_o(void) {
+    float src[QK];
+    uint8_t dst[24];
+    int64_t hist[16];
+
+    for (int i = 0; i < QK; i++) {
+        src[i] = (float) (i + 1);
+    }
+
+    size_t size = ggml_quantize_q4_1_o(src, dst, QK, QK, hist);
+    GGML_TEST_ASSERT(size == 24, "%zd", size);
+
+    float delta_result = ggml_half_to_float_reference(((block_q4_1_o *) dst)->d);
+    float delta_expected = (src[30] - src[0]) / ((1 << 4) - 1);
+    GGML_TEST_ASSERT(delta_result == delta_expected, "%f, %f", delta_result, delta_expected);
+
+    float min_result = ggml_half_to_float_reference(((block_q4_1_o *) dst)->m);
+    float min_expected = src[0];
+    GGML_TEST_ASSERT(min_result == min_expected, "%f, %f", min_result, min_expected);
+
+    uint16_t outlier_index = ((block_q4_1_o *) dst)->outlier_index;
+    uint16_t outlier_index_expected = 31;
+    GGML_TEST_ASSERT(outlier_index == outlier_index_expected, "%d, %d", outlier_index, outlier_index_expected);
+
+    float outlier_value_result = ggml_half_to_float_reference(((block_q4_1_o *) dst)->outlier_value);
+    float outlier_value_expected = src[31];
+    GGML_TEST_ASSERT(outlier_value_result == outlier_value_expected, "%f, %f", outlier_value_result, outlier_value_expected);
+
+    for (int i = 0; i < QK - 1; i++) {
+        uint8_t q4_result = (i % 2) ? (dst[sizeof(float) * 2 + i / 2] >> 4) : (dst[sizeof(float) * 2 + i / 2] & 0xF);
+        uint8_t q4_expected = roundf((src[i] - min_expected) / delta_expected);
+        GGML_TEST_ASSERT(q4_result == q4_expected, "%d: %d, %d", i, q4_result, q4_expected);
+    }
+
+    float dequantized[QK];
+    dequantize_row_q4_1_o(dst, dequantized, QK);
+
+    for (int i = 0; i < QK; i++) {
+        float actual = dequantized[i];
+        float expected = src[i];
+        float diff = fabsf(actual - expected);
+        // Difference looks huge, but the range is 0..31 -- compared to range, it is not that huge
+        GGML_TEST_ASSERT(diff <= 1.0F, "%d: %f, %f", i, actual, expected);
+    }
+}
+
 void ggml_run_test_suite(void) {
     ggml_test_quantization();
+    ggml_test_quantization_q4_1_o();
 
     struct ggml_init_params params;
     params.mem_size = 16 * 1024;
