@@ -9557,8 +9557,6 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         }
         else
         {
-            int start = i;
-            int end = i;
             if (i + 1 < cgraph->n_nodes)
             {
                 struct ggml_tensor * next = cgraph->nodes[i + 1];
@@ -9568,14 +9566,37 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                         .type  = GGML_TASK_COMPUTE | GGML_TASK_INIT,
                         .ith   = 0,
                         .nth   = 1,
-                        .wsize = cgraph->work ? ggml_nbytes(cgraph->work) : 0,
-                        .wdata = cgraph->work ? cgraph->work->data : NULL,
+                        .wsize = 0,
+                        .wdata = NULL,
                     };
-
+                    workers[next_task].node = next;
                     thpool_add_work(ctx->tpool, ggml_graph_compute_thread, &workers[next_task]);
                     next_task++;
+
+                    if (i + 2 < cgraph->n_nodes)
+                    {
+                        struct ggml_tensor * prev = cgraph->nodes[i + 1];
+                        struct ggml_tensor * next = cgraph->nodes[i + 2];
+                        if (next->src0 != node && next->src1 != node && next->n_tasks == 1 &&
+                            next->src0 != prev && next->src1 != prev
+                        )
+                        {
+                            workers[next_task].params = (struct ggml_compute_params) {
+                                .type  = GGML_TASK_COMPUTE | GGML_TASK_INIT,
+                                .ith   = 0,
+                                .nth   = 1,
+                                .wsize = 0,
+                                .wdata = NULL,
+                            };
+                            workers[next_task].node = next;
+                            thpool_add_work(ctx->tpool, ggml_graph_compute_thread, &workers[next_task]);
+                            next_task++;
+                        }
+                    }
                 }
             }
+
+
         }
 
         params.type = GGML_TASK_COMPUTE;
