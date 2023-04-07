@@ -1852,3 +1852,8 @@ const char * llama_print_system_info(void) {
 
     return s.c_str();
 }
+
+// For internal test use
+std::unordered_map<std::string, struct ggml_tensor *>& llama_internal_get_tensor_map(struct llama_context * ctx) {
+    return ctx->model.tensors;
+}

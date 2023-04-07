@@ -19,6 +19,7 @@ models/*
 
 /main
 /quantize
+/quantize-stats
 /result
 /perplexity
 /embedding

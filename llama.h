@@ -164,6 +164,13 @@ extern "C" {
 
 #ifdef __cplusplus
 }
+
+#include <string>
+#include <unordered_map>
+//
+// Internal function exposed for tests and benchmarks
+//
+std::unordered_map<std::string, struct ggml_tensor *>& llama_internal_get_tensor_map(struct llama_context * ctx);
 #endif
 
 #endif
