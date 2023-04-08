@@ -365,7 +365,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
     fprintf(stderr, "  --multiline-input     allows you to write or paste multiple lines without ending each in '\\'\n");
     fprintf(stderr, "  -r PROMPT, --reverse-prompt PROMPT\n");
-    fprintf(stderr, "                        run in interactive mode and poll user input upon seeing PROMPT");
+    fprintf(stderr, "                        run in interactive mode and poll user input upon seeing PROMPT\n");
     fprintf(stderr, "                        (can be specified more than once for multiple reverse prompts).\n");
     fprintf(stderr, "  --stop KEYWORD        a string that, when output by the model, will stop generation\n");
     fprintf(stderr, "                        (can be specified more than once for multiple keywords).\n");
