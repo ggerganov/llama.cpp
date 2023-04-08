@@ -1760,7 +1760,11 @@ int llama_model_quantize(
 
 int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lora, int n_threads) {
     // TODO: refactor all of this after PR #801
+    fprintf(stderr, "%s: applying lora adapter from '%s' - please wait ...\n", __func__, path_lora);
+
     auto & model = ctx->model;
+
+    const int64_t t_start_lora_us = ggml_time_us();
 
     auto fin = std::ifstream(path_lora, std::ios::binary);
     if (!fin) {
@@ -1874,7 +1878,7 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
             lora_tensors.find(base_name + ".loraB") != lora_tensors.end()) {
 
             ggml_tensor * tensor = model.tensors[base_name];
-            ggml_tensor * loraA = ggml_transpose(lora_ctx, lora_tensors[base_name + ".loraA"]);
+            ggml_tensor * loraA = lora_tensors[base_name + ".loraA"];
             ggml_tensor * loraB = lora_tensors[base_name + ".loraB"];
 
             if (tensor->ne[0] != loraA->ne[1]) {
@@ -1901,7 +1905,11 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
                 fprintf(stderr, ".");
         }
     }
-    fprintf(stderr, " done\n");
+
+    ggml_free(lora_ctx);
+
+    const int64_t t_lora_us = ggml_time_us() - t_start_lora_us;
+    fprintf(stderr, " done (%.2f ms)\n", t_lora_us / 1000.0);
 
     return 0;
 }

@@ -94,6 +94,8 @@ with open(output_path, "wb") as fout:
         # since ggml doesn't always support other types for the second operand,
         # the tensors are always converted and exported as f32
         t = v.float().numpy()
+        if "lora_A" in k:
+            t = t.T
         print(f"{k} => {translate_tensor_name(k)} {t.shape} {t.dtype} {t.nbytes/1024/1024:.2f}MB")
         write_tensor_header(fout, translate_tensor_name(k), t.shape, t.dtype)
         t.tofile(fout)
