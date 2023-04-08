@@ -314,13 +314,24 @@ def main(args):
     embedded_kailite = None 
     if not ggml_selected_file:     
         #give them a chance to pick a file
-        print("Please manually select ggml file:")
-        from tkinter.filedialog import askopenfilename
-        ggml_selected_file = askopenfilename (title="Select ggml model .bin files")
-        if not ggml_selected_file:
-            print("\nNo ggml model file was selected. Exiting.")
+        print("For command line arguments, please refer to --help")
+        print("Otherwise, please manually select ggml file:")
+        try:
+            from tkinter.filedialog import askopenfilename
+            import tkinter as tk
+            root = tk.Tk() #we dont want the useless window to be visible, but we want it in taskbar
+            root.attributes("-alpha", 0)
+            ggml_selected_file = askopenfilename (title="Select ggml model .bin files")
+            root.destroy()
+            if not ggml_selected_file:
+                print("\nNo ggml model file was selected. Exiting.")
+                time.sleep(1)
+                sys.exit(2)
+        except:
+            print("File selection GUI unsupported. Please check command line: script.py --help")
             time.sleep(1)
             sys.exit(2)
+       
 
     if not os.path.exists(ggml_selected_file):
         print(f"Cannot find model file: {ggml_selected_file}")
