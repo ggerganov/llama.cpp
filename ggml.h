@@ -788,20 +788,21 @@ int ggml_cpu_has_vsx(void);
 // Internal types and functions exposed for tests and benchmarks
 //
 
-#ifdef  __cplusplus
-// restrict not standard in C++
-#define GGML_RESTRICT
-#else
-#define GGML_RESTRICT restrict
-#endif
-typedef void (*dequantize_row_q_t)(const void * GGML_RESTRICT x, float * GGML_RESTRICT y, int k);
-typedef void (*quantize_row_q_t)(const float * GGML_RESTRICT x, void * GGML_RESTRICT y, int k);
-typedef void (*vec_dot_q_t)(const int n, float * GGML_RESTRICT s, const void * GGML_RESTRICT x, const void * GGML_RESTRICT y);
+typedef void (*dequantize_row_q_t)(const void * x, float * y, int k);
+typedef void (*quantize_row_q_t)(const float * x, void * y, int k);
+typedef void (*vec_dot_q_t)(const int n, float * s, const void * x, const void * y);
+
+typedef enum {
+    GGML_QUANTIZE_IMPL_SIMD,
+    GGML_QUANTIZE_IMPL_REFERENCE,
+    GGML_QUANTIZE_IMPL_RMSE_SW,
+    GGML_QUANTIZE_IMPL_RMSE_UNBOUNDED,
+    GGML_QUANTIZE_IMPL_COUNT
+} ggml_quantize_impl_t;
 
 typedef struct {
     dequantize_row_q_t dequantize_row_q;
-    quantize_row_q_t   quantize_row_q;
-    quantize_row_q_t   quantize_row_q_reference;
+    quantize_row_q_t   quantize_row_q[GGML_QUANTIZE_IMPL_COUNT];
     vec_dot_q_t        vec_dot_q;
 } quantize_fns_t;
 

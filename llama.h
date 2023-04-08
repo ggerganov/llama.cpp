@@ -20,6 +20,7 @@
 #endif
 
 #define LLAMA_FILE_VERSION 1
+#define LLAMA_FILE_VERSION_MINOR 1 // for backward-compatible changes
 #define LLAMA_FILE_MAGIC 0x67676a74 // 'ggjt' in hex
 #define LLAMA_FILE_MAGIC_UNVERSIONED 0x67676d6c // pre-versioned files
 

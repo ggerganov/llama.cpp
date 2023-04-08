@@ -17,12 +17,15 @@
 static const char * type_strs[] = { "q4_0", "q4_1", "i8", "i16", "i32", "f16", "f32"  };
 static_assert(sizeof(type_strs) == GGML_TYPE_COUNT * sizeof(char *), "Incomplete type list");
 
+static const char * impl_strs[] = { "simd", "reference", "rmse-sw", "rmse-unbounded" };
+static_assert(sizeof(impl_strs) == GGML_QUANTIZE_IMPL_COUNT * sizeof(char *), "Incomplete implementation list");
+
 struct quantize_stats_params {
     std::string model = "models/7B/ggml-model-f16.bin";
     bool verbose = false;
     bool per_layer_stats = false;
     bool print_histogram = false;
-    bool reference = false;
+    std::vector<ggml_quantize_impl_t> include_impl;
     std::vector<std::string> include_layers;
     std::vector<std::string> exclude_layers;
     std::vector<enum ggml_type> include_types;
@@ -48,8 +51,8 @@ void quantize_stats_print_usage(int /*argc*/, char ** argv) {
     fprintf(stderr, "  -h, --help            show this help message and exit\n");
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
     fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
-    fprintf(stderr, "  -r, --reference\n");
-    fprintf(stderr, "                        use reference implementation (default: false)\n");
+    fprintf(stderr, "  -i, --implementation\n");
+    fprintf(stderr, "                        select implementation (simd, reference, rmse-sw, rmse-unbounded)\n");
     fprintf(stderr, "  -v, --verbose\n");
     fprintf(stderr, "                        verbose output (default: false)\n");
     fprintf(stderr, "  -p, --per-layer-stats\n");
@@ -104,11 +107,12 @@ double find_quantile(const error_stats & stats, double quantile) {
     return INFINITY;
 }
 
-void print_error_stats(const std::string & name, const error_stats & stats, bool print_histogram) {
+void print_error_stats(const std::string & name, ggml_quantize_impl_t impl, const error_stats & stats, bool print_histogram) {
     double rmse = sqrt(stats.total_error / (double) stats.num_samples);
     double median = find_quantile(stats, .5);
     double pct95 = find_quantile(stats, .95);
-    printf("%-50s: rmse %.8f, maxerr %.8f, 95pct<%.4f, median<%.4f\n", name.c_str(), rmse, stats.max_error, pct95, median);
+    printf("%-4s %-15s: rmse %.8f, maxerr %.8f, 95pct<%.4f, median<%.4f\n",
+        name.c_str(), impl_strs[impl], rmse, stats.max_error, pct95, median);
     if (print_histogram) {
         printf("Error distribution:\n");
         for (size_t i = 0; i < HISTOGRAM_BUCKETS; i++) {
@@ -136,7 +140,7 @@ void test_roundtrip_on_layer(
         std::string & name,
         bool print_layer_stats,
         const quantize_fns_t & qfns,
-        bool use_reference,
+        ggml_quantize_impl_t impl,
         const ggml_tensor * layer,
         float * input_scratch,
         char *quantized_scratch,
@@ -158,11 +162,7 @@ void test_roundtrip_on_layer(
             input_scratch = ggml_get_data_f32(layer) + offset;
         }
 
-        if (use_reference) {
-            qfns.quantize_row_q_reference(input_scratch, quantized_scratch, chunk_size);
-        } else {
-            qfns.quantize_row_q(input_scratch, quantized_scratch, chunk_size);
-        }
+        qfns.quantize_row_q[impl](input_scratch, quantized_scratch, chunk_size);
         qfns.dequantize_row_q(quantized_scratch, output_scratch, chunk_size);
 
         update_error_stats(chunk_size, input_scratch, output_scratch, total_error);
@@ -171,7 +171,7 @@ void test_roundtrip_on_layer(
         }
     }
     if (print_layer_stats) {
-        print_error_stats(name, layer_error, false);
+        print_error_stats(name, impl, layer_error, false);
     }
 }
 
@@ -190,8 +190,21 @@ int main(int argc, char ** argv) {
         if (arg == "-h" || arg == "--help") {
             quantize_stats_print_usage(argc, argv);
             exit(0);
-        } else if (arg == "-r" || arg == "--reference") {
-            params.reference = true;
+        } else if (arg == "-i" || arg == "--implementation") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            int j;
+            for (j = 0; j < GGML_QUANTIZE_IMPL_COUNT && strcmp(argv[i], impl_strs[j]) != 0; j++) {
+                // find match
+            }
+            if (j < GGML_QUANTIZE_IMPL_COUNT) {
+                params.include_impl.push_back((ggml_quantize_impl_t)j);
+            } else {
+                fprintf(stderr, "error: %s not in list of implementations\n", argv[i]);
+                invalid_param = true;
+            }
         } else if (arg == "-v") {
             params.verbose = true;
         } else if (arg == "-p" || arg == "--per-layer-stats") {
@@ -302,42 +315,48 @@ int main(int argc, char ** argv) {
     std::vector<char> quantized_scratch(SCRATCH_ELEMENTS*4);
     std::vector<float> output_scratch(SCRATCH_ELEMENTS);
 
-    // loop throught quantization types
-    for (int i = 0; i < GGML_TYPE_COUNT; i++) {
-        if (!params.include_types.empty() && std::find(params.include_types.begin(), params.include_types.end(), i) == params.include_types.end()) {
+    // loop through quantization types
+    for (int type = 0; type < GGML_TYPE_COUNT; type++) {
+        if (!params.include_types.empty() && std::find(params.include_types.begin(), params.include_types.end(), type) == params.include_types.end()) {
             continue;
         }
-        quantize_fns_t qfns = ggml_internal_get_quantize_fn(i);
-        if (qfns.quantize_row_q && qfns.dequantize_row_q) {
-            if (params.verbose) {
-                printf("testing %s ...\n",  type_strs[i]);
+        quantize_fns_t qfns = ggml_internal_get_quantize_fn(type);
+        for (int impl = 0; impl < GGML_QUANTIZE_IMPL_COUNT; impl++) {
+            if (!params.include_impl.empty() && std::find(params.include_impl.begin(), params.include_impl.end(), impl) == params.include_impl.end()) {
+                continue;
             }
 
-            error_stats global_stats {};
-
-            for (const auto& kv_tensor : tensors_sorted) {
-                if (!layer_included(params, kv_tensor.first)) {
-                    continue;
-                }
+            if (qfns.quantize_row_q[impl] && qfns.dequantize_row_q) {
                 if (params.verbose) {
-                    printf("  %s ...\n",  kv_tensor.first.c_str());
+                    printf("testing %s %s ...\n", type_strs[type], impl_strs[impl]);
                 }
-                std::string layer_name { type_strs[i] };
-                layer_name += "::" + kv_tensor.first;
-                test_roundtrip_on_layer(
-                        layer_name,
-                        params.per_layer_stats,
-                        qfns,
-                        params.reference,
-                        kv_tensor.second,
-                        input_scratch.data(),
-                        quantized_scratch.data(),
-                        output_scratch.data(),
-                        global_stats
-                );
-            }
 
-            print_error_stats(type_strs[i], global_stats, params.print_histogram);
+                error_stats global_stats {};
+
+                for (const auto& kv_tensor : tensors_sorted) {
+                    if (!layer_included(params, kv_tensor.first)) {
+                        continue;
+                    }
+                    if (params.verbose) {
+                        printf("  %s ...\n",  kv_tensor.first.c_str());
+                    }
+                    std::string layer_name { type_strs[type] };
+                    layer_name += "::" + kv_tensor.first;
+                    test_roundtrip_on_layer(
+                            layer_name,
+                            params.per_layer_stats,
+                            qfns,
+                            (ggml_quantize_impl_t)impl,
+                            kv_tensor.second,
+                            input_scratch.data(),
+                            quantized_scratch.data(),
+                            output_scratch.data(),
+                            global_stats
+                    );
+                }
+
+                print_error_stats(type_strs[type], (ggml_quantize_impl_t)impl, global_stats, params.print_histogram);
+            }
         }
     }
 

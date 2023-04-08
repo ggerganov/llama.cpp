@@ -133,7 +133,7 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: main quantize perplexity embedding
+default: main quantize quantize-stats perplexity embedding
 
 #
 # Build library
