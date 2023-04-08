@@ -92,4 +92,5 @@ void set_console_color(console_state & con_st, console_color_t color);
 
 #if defined (_WIN32)
 void win32_console_init(bool enable_color);
+void win32_utf8_encode(const std::wstring & wstr, std::string & str);
 #endif
