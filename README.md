@@ -6,7 +6,9 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 
 ![Preview](preview.png)
 
-Now has **BACKWARDS COMPATIBILITY** with ALL 3 versions of GGML LLAMA models, all ALPACA.CPP models, all versions of GPT4ALL.CPP models, and can run GGML older GPT-J.CPP models too. I also use a bunch of tricks to make subsequent prompt processing with shared ancestry much faster than the parent repo does.
+# Highlights
+- **This repo is somehow being flagged by Smartscreen in Microsoft Edge!** I have no idea why, and it works fine in Chrome and Firefox. To be clear: **Everything** in this project is freely auditable and can be fully built from source code, any malware alerts are **false positives!** If you encounter such warnings, I'd appreciate it if you helped mark it as a false positive/safe to Microsoft.
+- Now has **BACKWARDS COMPATIBILITY** with ALL 3 versions of GGML LLAMA models, all ALPACA.CPP models, all versions of GPT4ALL.CPP models, and can run GGML older GPT-J.CPP models too. I also use a bunch of tricks to make subsequent prompt processing with shared ancestry much faster than the parent repo does.
 
 ## Usage
 - [Download the latest release here](https://github.com/LostRuins/koboldcpp/releases/latest) or clone the repo.
