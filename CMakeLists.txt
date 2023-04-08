@@ -115,6 +115,7 @@ if (LLAMA_OPENBLAS)
 
         add_compile_definitions(GGML_USE_OPENBLAS)
         add_link_options(${BLAS_LIBRARIES})
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} openblas)
     else()
         message(WARNING "OpenBLAS not found")
     endif()
