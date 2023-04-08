@@ -20,11 +20,12 @@ enum FileFormat
     GGHF=2, // 2=(llama ggmf)
     GGJT=3, // 3=(llama ggjt) 
 
-    GPTJ1=100, //the very first super old GPTJ format
-    GPTJ2=101, //pygmalion, uses old ggml lib
-    GPTJ3=102, //uses new ggml lib
+    GPTJ_1=100, //the very first super old GPTJ format
+    GPTJ_2=101, //pygmalion, uses old ggml lib
+    GPTJ_3=102, //uses new ggml lib
 
-    GPT2=200,
+    GPT2_1=200,
+    GPT2_2=201
 };
 
 enum ModelLoadResult

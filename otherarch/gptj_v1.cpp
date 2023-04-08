@@ -20,7 +20,7 @@
 ModelLoadResult legacy_gptj_model_load(const std::string & fname, gptj_model_v1 & model, gpt_vocab & vocab, FileFormat file_format) {
     printf("%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
-    bool super_old_format = (file_format==FileFormat::GPTJ1);
+    bool super_old_format = (file_format==FileFormat::GPTJ_1);
 
     auto fin = std::ifstream(fname, std::ios::binary);
     if (!fin) {
@@ -372,7 +372,7 @@ bool legacy_gptj_eval(
               size_t                     & mem_per_token,
        FileFormat file_format) {
 
-    bool super_old_format = (file_format==FileFormat::GPTJ1);
+    bool super_old_format = (file_format==FileFormat::GPTJ_1);
     const int N = embd_inp.size();
 
     const auto & hparams = model.hparams;

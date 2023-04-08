@@ -761,6 +761,8 @@ static bool llama_eval_internal(
 
     auto & kv_self = model.kv_self;
 
+    printf("\ns:%d\n",llama_get_kv_cache_size(&lctx));
+
     LLAMA_ASSERT(!!kv_self.ctx);
 
     const int n_embd  = hparams.n_embd;

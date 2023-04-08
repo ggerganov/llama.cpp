@@ -433,7 +433,11 @@ bool should_transpose_layer(std::string name)
     name.find(".attn.out_proj.weight")!=std::string::npos || 
     name.find(".attn.q_proj.weight")!=std::string::npos || 
     name.find(".attn.k_proj.weight")!=std::string::npos || 
-    name.find(".attn.v_proj.weight")!=std::string::npos)
+    name.find(".attn.v_proj.weight")!=std::string::npos ||
+    name.find("/attn/c_attn/w")!=std::string::npos || 
+    name.find("/attn/c_proj/w")!=std::string::npos || 
+    name.find("/mlp/c_fc/w")!=std::string::npos || 
+    name.find("/mlp/c_proj/w")!=std::string::npos)
     {
         return true;
     }

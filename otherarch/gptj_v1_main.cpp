@@ -33,7 +33,7 @@ int main(int argc, char ** argv) {
 
     gpt_vocab vocab;
     gptj_model_v1 model;
-    FileFormat file_format = FileFormat::GPTJ2;
+    FileFormat file_format = FileFormat::GPTJ_2;
 
     // load the model
     {

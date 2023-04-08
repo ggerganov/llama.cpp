@@ -121,7 +121,7 @@ BLAS_BUILD =
 ifeq ($(OS),Windows_NT)
 	BLAS_BUILD = $(CXX) $(CXXFLAGS) ggml_blas.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o libopenblas.lib -shared -o koboldcpp_blas.dll $(LDFLAGS)
 else
-	BLAS_BUILD = @echo 'Your OS is $(OS) and does not appear to be Windows. If you want to use openblas, please link it manually with LLAMA_OPENBLAS=1'
+	BLAS_BUILD = @echo 'Your OS $(OS) does not appear to be Windows. If you want to use openblas, please install it seperately, then link it manually with LLAMA_OPENBLAS=1'
 endif
 
 #
@@ -196,8 +196,8 @@ perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o
 embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/embedding/embedding.cpp ggml.o llama.o common.o -o embedding $(LDFLAGS)
 
-gpt2: ggml_v1.o
-	$(CXX) $(CXXFLAGS) otherarch/gpt2_v1.cpp otherarch/utils.cpp ggml_v1.o -o gpt2 $(LDFLAGS) 
+gpt2: ggml.o
+	$(CXX) $(CXXFLAGS) otherarch/gpt2_v2.cpp otherarch/utils.cpp ggml.o -o gpt2 $(LDFLAGS) 
 #
 # Tests
 #

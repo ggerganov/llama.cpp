@@ -85,11 +85,11 @@ void print_tok_vec(std::vector<float> &embd)
        fin.read((char *) &vocabsiz, sizeof(int32_t));
        if(vocabsiz==50400) //know GPT-J vocab size
        {
-           fileformat = FileFormat::GPTJ1;
+           fileformat = FileFormat::GPTJ_1;
        }
        if(vocabsiz==50257)
        {
-           fileformat = FileFormat::GPT2;
+           fileformat = FileFormat::GPT2_1;
        }
     }
     else if(magic == 0x67676d66) //v2 format ggmf
