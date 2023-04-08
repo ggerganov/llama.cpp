@@ -170,7 +170,7 @@ gpttype_adapter.o:
 	$(CXX) $(CXXFLAGS) -c gpttype_adapter.cpp -o gpttype_adapter.o
 
 clean:
-	rm -vf *.o main quantize perplexity embedding main.exe quantize.exe koboldcpp.dll koboldcpp_blas.dll gptj.exe
+	rm -vf *.o main quantize quantize-stats perplexity embedding main.exe quantize.exe koboldcpp.dll koboldcpp_blas.dll gptj.exe gpt2.exe
 
 main: examples/main/main.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
@@ -187,6 +187,10 @@ llamalib_blas: ggml_blas.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_a
 quantize: examples/quantize/quantize.cpp ggml.o llama.o
 	$(CXX) $(CXXFLAGS) examples/quantize/quantize.cpp ggml.o llama.o -o quantize $(LDFLAGS)
 
+quantize-stats: examples/quantize-stats/quantize-stats.cpp ggml.o llama.o
+	$(CXX) $(CXXFLAGS) examples/quantize-stats/quantize-stats.cpp ggml.o llama.o -o quantize-stats $(LDFLAGS)
+
+
 quantize_gptj: ggml.o llama.o
 	$(CXX) $(CXXFLAGS) otherarch/gptj_quantize.cpp ggml.o llama.o -o quantize_gptj $(LDFLAGS)
 
@@ -198,6 +202,10 @@ embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
 
 gpt2: ggml.o
 	$(CXX) $(CXXFLAGS) otherarch/gpt2_v2.cpp otherarch/utils.cpp ggml.o -o gpt2 $(LDFLAGS) 
+
+libllama.so: llama.o ggml.o
+	$(CXX) $(CXXFLAGS) -shared -fPIC -o libllama.so llama.o ggml.o $(LDFLAGS)
+
 #
 # Tests
 #
