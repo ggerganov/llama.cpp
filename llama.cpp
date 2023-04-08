@@ -356,17 +356,17 @@ struct llama_load_tensor {
         LLAMA_ASSERT(shards.size() <= UINT32_MAX);
         uint32_t n_shards = (uint32_t) shards.size();
         switch (split_type) {
-        case SPLIT_NONE:
-            ne = first_shard.ne;
-            break;
-        case SPLIT_BY_COLUMNS:
-            ne = {checked_mul<uint32_t>(first_shard.ne[0], n_shards),
-                  first_shard.ne[1]};
-            break;
-        case SPLIT_BY_ROWS:
-            ne = {first_shard.ne[0],
-                  checked_mul<uint32_t>(first_shard.ne[1], n_shards)};
-            break;
+            case SPLIT_NONE:
+                ne = first_shard.ne;
+                break;
+            case SPLIT_BY_COLUMNS:
+                ne = {checked_mul<uint32_t>(first_shard.ne[0], n_shards),
+                      first_shard.ne[1]};
+                break;
+            case SPLIT_BY_ROWS:
+                ne = {first_shard.ne[0],
+                      checked_mul<uint32_t>(first_shard.ne[1], n_shards)};
+                break;
         }
     }
 
@@ -806,6 +806,25 @@ bool llama_mlock_supported() {
 // model loading
 //
 
+static const char *llama_file_version_name(llama_file_version version) {
+    switch (version) {
+        case LLAMA_FILE_VERSION_GGML: return "'ggml' (old version with low tokenizer quality and no mmap support)";
+        case LLAMA_FILE_VERSION_GGMF_V1: return "ggmf v1 (old version with no mmap support)";
+        case LLAMA_FILE_VERSION_GGJT_V1: return "ggjt v1 (latest)";
+        default: LLAMA_ASSERT(false);
+    }
+}
+
+static const char *llama_model_type_name(e_model type) {
+    switch (type) {
+        case MODEL_7B: return "7B";
+        case MODEL_13B: return "13B";
+        case MODEL_30B: return "30B";
+        case MODEL_65B: return "65B";
+        default: LLAMA_ASSERT(false);
+    }
+}
+
 static void llama_model_load_internal(
         const std::string & fname,
         llama_context & lctx,
@@ -823,8 +842,9 @@ static void llama_model_load_internal(
 
     lctx.vocab = std::move(ml->file_loaders.at(0)->vocab);
     auto & model = lctx.model;
+    model.hparams = ml->file_loaders.at(0)->hparams;
+    llama_file_version file_version = ml->file_loaders.at(0)->file_version;
     auto & hparams = model.hparams;
-    hparams = ml->file_loaders.at(0)->hparams;
     uint32_t n_ff = ((2*(4*hparams.n_embd)/3 + hparams.n_mult - 1)/hparams.n_mult)*hparams.n_mult;
 
     {
@@ -836,18 +856,21 @@ static void llama_model_load_internal(
         }
 
         hparams.n_ctx = n_ctx;
+    }
 
-        fprintf(stderr, "%s: n_vocab = %u\n",  __func__, hparams.n_vocab);
-        fprintf(stderr, "%s: n_ctx   = %u\n",  __func__, hparams.n_ctx);
-        fprintf(stderr, "%s: n_embd  = %u\n",  __func__, hparams.n_embd);
-        fprintf(stderr, "%s: n_mult  = %u\n",  __func__, hparams.n_mult);
-        fprintf(stderr, "%s: n_head  = %u\n",  __func__, hparams.n_head);
-        fprintf(stderr, "%s: n_layer = %u\n",  __func__, hparams.n_layer);
-        fprintf(stderr, "%s: n_rot   = %u\n",  __func__, hparams.n_rot);
-        fprintf(stderr, "%s: f16     = %u\n",  __func__, hparams.f16);
-        fprintf(stderr, "%s: n_ff    = %u\n",  __func__, n_ff);
-        fprintf(stderr, "%s: n_parts = %zu\n", __func__, ml->file_loaders.size());
-        fprintf(stderr, "%s: type    = %u\n",  __func__, model.type);
+    {
+        fprintf(stderr, "%s: format     = %s\n",  __func__, llama_file_version_name(file_version));
+        fprintf(stderr, "%s: n_vocab    = %u\n",  __func__, hparams.n_vocab);
+        fprintf(stderr, "%s: n_ctx      = %u\n",  __func__, hparams.n_ctx);
+        fprintf(stderr, "%s: n_embd     = %u\n",  __func__, hparams.n_embd);
+        fprintf(stderr, "%s: n_mult     = %u\n",  __func__, hparams.n_mult);
+        fprintf(stderr, "%s: n_head     = %u\n",  __func__, hparams.n_head);
+        fprintf(stderr, "%s: n_layer    = %u\n",  __func__, hparams.n_layer);
+        fprintf(stderr, "%s: n_rot      = %u\n",  __func__, hparams.n_rot);
+        fprintf(stderr, "%s: f16        = %u\n",  __func__, hparams.f16);
+        fprintf(stderr, "%s: n_ff       = %u\n",  __func__, n_ff);
+        fprintf(stderr, "%s: n_parts    = %zu\n", __func__, ml->file_loaders.size());
+        fprintf(stderr, "%s: model size = %s\n",  __func__, llama_model_type_name(model.type));
     }
 
     if (vocab_only) {
