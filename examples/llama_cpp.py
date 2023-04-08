@@ -229,7 +229,7 @@ _lib.llama_n_ctx.restype = c_int
 
 
 def llama_n_embd(ctx: llama_context_p) -> c_int:
-    return _lib.llama_n_ctx(ctx)
+    return _lib.llama_n_embd(ctx)
 
 
 _lib.llama_n_embd.argtypes = [llama_context_p]
