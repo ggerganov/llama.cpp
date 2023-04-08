@@ -253,6 +253,19 @@ enum ggml_op {
     GGML_OP_COUNT,
 };
 
+
+// ggml object
+struct ggml_object {
+    size_t offs;
+    size_t size;
+
+    struct ggml_object * next;
+
+    char padding[8];
+};
+
+static const size_t GGML_OBJECT_SIZE = sizeof(struct ggml_object);
+
 // n-dimensional tensor
 struct ggml_tensor {
     enum ggml_type type;
@@ -343,13 +356,6 @@ void ggml_free(struct ggml_context * ctx);
 size_t ggml_used_mem(const struct ggml_context * ctx);
 
 size_t ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch);
-
-bool ggml_mlock_supported(void);
-bool ggml_mlock(
-        struct ggml_context * ctx,
-        const void *opt_extra_addr,
-        size_t opt_extra_len,
-        char **err_p);
 
 struct ggml_tensor * ggml_new_tensor(
         struct ggml_context * ctx,

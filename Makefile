@@ -37,7 +37,7 @@ LDFLAGS  =
 
 # warnings
 CFLAGS   += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith -Wno-unused-function
-CXXFLAGS += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function
+CXXFLAGS += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-multichar
 
 # OS specific
 # TODO: support Windows
@@ -142,7 +142,7 @@ default: main quantize perplexity embedding
 ggml.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS)   -c ggml.c -o ggml.o
 
-llama.o: llama.cpp llama.h
+llama.o: llama.cpp llama.h llama_util.h llama_internal.h
 	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
 
 common.o: examples/common.cpp examples/common.h

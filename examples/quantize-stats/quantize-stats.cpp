@@ -1,5 +1,6 @@
 #include "ggml.h"
 #include "llama.h"
+#include "llama_internal.h"
 
 #include <algorithm>
 #include <cassert>
@@ -266,15 +267,13 @@ int main(int argc, char ** argv) {
         }
     }
 
-    // Sort tensors for consistent output
-    const auto tensors = llama_internal_get_tensor_map(ctx);
-    std::map<std::string, struct ggml_tensor *> tensors_sorted { tensors.begin(), tensors.end() };
+    const auto &tensors = llama_internal_get_tensor_map(ctx);
 
     // check layer tensors
     int included_layers = 0;
     int64_t max_nelements = 0;
     bool is_f16 = false;
-    for (const auto& kv_tensor : tensors_sorted) {
+    for (const auto& kv_tensor : tensors) {
         if (!layer_included(params, kv_tensor.first)) {
             continue;
         }
@@ -315,7 +314,7 @@ int main(int argc, char ** argv) {
 
             error_stats global_stats {};
 
-            for (const auto& kv_tensor : tensors_sorted) {
+            for (const auto& kv_tensor : tensors) {
                 if (!layer_included(params, kv_tensor.first)) {
                     continue;
                 }
