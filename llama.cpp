@@ -1789,6 +1789,15 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
         }
     }
 
+    int32_t lora_r;
+    int32_t lora_alpha;
+    fin.read((char *) &lora_r, sizeof(lora_r));
+    fin.read((char *) &lora_alpha, sizeof(lora_alpha));
+    float scaling = (float)lora_alpha / (float)lora_r;
+
+    fprintf(stderr, "%s: r = %d, alpha = %d, scaling = %.2f\n", __func__, lora_r, lora_alpha, scaling);
+
+
     // create a temporary ggml context to store the lora tensors
     std::vector<uint8_t> buf(1024 * 1024 * 100);
     struct ggml_init_params params;
@@ -1890,11 +1899,13 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
             // w = w + BA*s
             ggml_tensor * BA = ggml_mul_mat(lora_ctx, loraB, loraA);
 
-            //if (true) {
-            //    ggml_tensor * scale_tensor = ggml_new_f32(lora_ctx, 1.0f);
-            //    BA = ggml_scale(lora_ctx, BA, scale_tensor);
-            //}
-            ggml_tensor * r = ggml_add(lora_ctx, tensor, BA);
+            if (scaling != 1.0f) {
+                ggml_tensor * scale_tensor = ggml_new_f32(lora_ctx, scaling);
+                BA = ggml_scale(lora_ctx, BA, scale_tensor);
+            }
+
+            ggml_tensor * r = ggml_add_inplace(lora_ctx, tensor, BA);
+            //ggml_tensor * r = ggml_add(lora_ctx, tensor, BA);
             //r = ggml_cpy(lora_ctx, r, tensor);
 
             struct ggml_cgraph gf = ggml_build_forward(r);
@@ -1902,7 +1913,7 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
             ggml_graph_compute(lora_ctx, &gf);
 
             // hack until ggml_cpy supports quantized tensors
-            memcpy(tensor->data, r->data, ggml_nbytes(tensor));
+            // memcpy(tensor->data, r->data, ggml_nbytes(tensor));
 
             // we won't need these tensors again, reset the context to save memory
             ggml_free(lora_ctx);
