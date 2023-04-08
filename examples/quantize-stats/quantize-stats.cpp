@@ -17,7 +17,7 @@
 static const char * type_strs[] = { "q4_0", "q4_1", "i8", "i16", "i32", "f16", "f32"  };
 static_assert(sizeof(type_strs) == GGML_TYPE_COUNT * sizeof(char *), "Incomplete type list");
 
-static const char * impl_strs[] = { "simd", "reference", "rmse" };
+static const char * impl_strs[] = { "simd", "reference", "rmse-sw", "rmse-unbounded" };
 static_assert(sizeof(impl_strs) == GGML_QUANTIZE_IMPL_COUNT * sizeof(char *), "Incomplete implementation list");
 
 struct quantize_stats_params {
@@ -52,7 +52,7 @@ void quantize_stats_print_usage(int /*argc*/, char ** argv) {
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
     fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
     fprintf(stderr, "  -i, --implementation\n");
-    fprintf(stderr, "                        select implementation (simd, reference, rmse)\n");
+    fprintf(stderr, "                        select implementation (simd, reference, rmse-sw, rmse-unbounded)\n");
     fprintf(stderr, "  -v, --verbose\n");
     fprintf(stderr, "                        verbose output (default: false)\n");
     fprintf(stderr, "  -p, --per-layer-stats\n");
@@ -111,7 +111,7 @@ void print_error_stats(const std::string & name, ggml_quantize_impl_t impl, cons
     double rmse = sqrt(stats.total_error / (double) stats.num_samples);
     double median = find_quantile(stats, .5);
     double pct95 = find_quantile(stats, .95);
-    printf("%-4s %-10s: rmse %.8f, maxerr %.8f, 95pct<%.4f, median<%.4f\n",
+    printf("%-4s %-15s: rmse %.8f, maxerr %.8f, 95pct<%.4f, median<%.4f\n",
         name.c_str(), impl_strs[impl], rmse, stats.max_error, pct95, median);
     if (print_histogram) {
         printf("Error distribution:\n");
@@ -321,12 +321,12 @@ int main(int argc, char ** argv) {
             continue;
         }
         quantize_fns_t qfns = ggml_internal_get_quantize_fn(type);
-        if (qfns.quantize_row_q && qfns.dequantize_row_q) {
-            for (int impl = 0; impl < GGML_QUANTIZE_IMPL_COUNT; impl++) {
-                if (!params.include_impl.empty() && std::find(params.include_impl.begin(), params.include_impl.end(), impl) == params.include_impl.end()) {
-                    continue;
-                }
+        for (int impl = 0; impl < GGML_QUANTIZE_IMPL_COUNT; impl++) {
+            if (!params.include_impl.empty() && std::find(params.include_impl.begin(), params.include_impl.end(), impl) == params.include_impl.end()) {
+                continue;
+            }
 
+            if (qfns.quantize_row_q[impl] && qfns.dequantize_row_q) {
                 if (params.verbose) {
                     printf("testing %s %s ...\n", type_strs[type], impl_strs[impl]);
                 }

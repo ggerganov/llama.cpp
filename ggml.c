@@ -6790,27 +6790,22 @@ static void ggml_compute_forward_mul_mat_f16_f32(
     //}
 }
 
-static void quantize_row_q_missing(const float * x, void * y, int k) {
-    (void)x; (void)y; (void)k;
-    assert(false);
-}
-
 static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
     [GGML_TYPE_Q4_0] = {
         .dequantize_row_q         = dequantize_row_q4_0,
         .quantize_row_q           = {
-            [GGML_QUANTIZE_IMPL_SIMD]      = quantize_row_q4_0,
-            [GGML_QUANTIZE_IMPL_REFERENCE] = (quantize_row_q_t)quantize_row_q4_0_reference,
-            [GGML_QUANTIZE_IMPL_RMSE]      = (quantize_row_q_t)quantize_row_q4_0_rmse,
+            [GGML_QUANTIZE_IMPL_SIMD]           = quantize_row_q4_0,
+            [GGML_QUANTIZE_IMPL_REFERENCE]      = (quantize_row_q_t)quantize_row_q4_0_reference,
+            [GGML_QUANTIZE_IMPL_RMSE_SW]        = (quantize_row_q_t)quantize_row_q4_0_rmse,
+            [GGML_QUANTIZE_IMPL_RMSE_UNBOUNDED] = (quantize_row_q_t)quantize_row_q4_0_slow,
         },
         .vec_dot_q                = ggml_vec_dot_q4_0,
     },
     [GGML_TYPE_Q4_1] = {
         .dequantize_row_q         = dequantize_row_q4_1,
         .quantize_row_q           = {
-            [GGML_QUANTIZE_IMPL_SIMD]      = quantize_row_q4_1,
-            [GGML_QUANTIZE_IMPL_REFERENCE] = quantize_row_q4_1_reference,
-            [GGML_QUANTIZE_IMPL_RMSE]      = quantize_row_q_missing,
+            [GGML_QUANTIZE_IMPL_SIMD]           = quantize_row_q4_1,
+            [GGML_QUANTIZE_IMPL_REFERENCE]      = quantize_row_q4_1_reference,
         },
         .vec_dot_q                = ggml_vec_dot_q4_1,
     },

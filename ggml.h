@@ -795,7 +795,8 @@ typedef void (*vec_dot_q_t)(const int n, float * s, const void * x, const void *
 typedef enum {
     GGML_QUANTIZE_IMPL_SIMD,
     GGML_QUANTIZE_IMPL_REFERENCE,
-    GGML_QUANTIZE_IMPL_RMSE,
+    GGML_QUANTIZE_IMPL_RMSE_SW,
+    GGML_QUANTIZE_IMPL_RMSE_UNBOUNDED,
     GGML_QUANTIZE_IMPL_COUNT
 } ggml_quantize_impl_t;
 
