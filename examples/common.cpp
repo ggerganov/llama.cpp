@@ -473,7 +473,7 @@ bool get_input_text(std::string & input_text, bool escape_newline_mode) {
                 return 1;
             }
         }
-        if (std::ccin.eof()) {
+        if (std::cin.eof()) {
             another_line = false;
             std::cin.clear();
             std::cin.seekg(0, std::ios::beg);
