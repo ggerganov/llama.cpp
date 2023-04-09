@@ -32,12 +32,16 @@ struct gpt_params {
     std::string model  = "models/lamma-7B/ggml-model.bin"; // model path
     std::string prompt = "";
     std::string input_prefix = ""; // string to prefix user inputs with
-    bool input_prefix_bos = false; // append bos token to input prefix
-    std::string input_suffix = ""; // string to suffix user inputs with
-    bool input_suffix_bos = false; // append bos token to input suffix
+
+    std::string instruct_prefix = ""; // prefix user inputs with tokenized string
+    bool instruct_prefix_bos = false; // prepend bos token to instruct prefix
+    std::string instruct_suffix = ""; // suffix user inputs with tokenized string
+    bool instruct_suffix_bos = false; // prepend bos token to instruct suffix
 
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
-    std::vector<std::string> stopprompt; // string upon seeing which more user input is prompted (without adding prefixes and suffixes)
+    std::vector<std::string> stopprompt; // string upon seeing which more user input is prompted (without adding instruct prefixes and suffixes)
+    
+    bool rm_trailing_space_workaround = false; // workaround for removing trailing space from reverse/stop prompts
 
     bool memory_f16        = true;  // use f16 instead of f32 for memory kv
     bool random_prompt     = false; // do not randomize prompt if none provided

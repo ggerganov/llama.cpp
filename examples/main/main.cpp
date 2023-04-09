@@ -85,6 +85,8 @@ int main(int argc, char ** argv) {
         params.prompt = gpt_random_prompt(rng);
     }
 
+    bool instruct_mode = params.instruct_prefix.empty() && params.instruct_suffix.empty();
+
 //    params.prompt = R"(// this function checks if the number n is prime
 //bool is_prime(int n) {)";
 
@@ -154,10 +156,12 @@ int main(int argc, char ** argv) {
     }
 
     // prefix & suffix for instruct mode
-    const auto inp_pfx = ::llama_tokenize(ctx, params.input_prefix, params.input_prefix_bos);
-    std::string input_suffix = params.input_suffix;
-    if (input_suffix.back() == ' ') { input_suffix.pop_back(); } // (remove trailing space workaround)
-    const auto inp_sfx = ::llama_tokenize(ctx, input_suffix, params.input_suffix_bos);
+    const auto inp_pfx = ::llama_tokenize(ctx, params.instruct_prefix, params.instruct_prefix_bos);
+    std::string instruct_suffix = params.instruct_suffix;
+    if (params.rm_trailing_space_workaround) {
+        if (instruct_suffix.back() == ' ') { instruct_suffix.pop_back(); }
+    }
+    const auto inp_sfx = ::llama_tokenize(ctx, instruct_suffix, params.instruct_suffix_bos);
 
     // enable interactive mode if reverse prompt or interactive start is specified
     if (params.antiprompt.size() != 0 || params.stopprompt.size() != 0 || params.interactive_start) { 
@@ -209,10 +213,13 @@ int main(int argc, char ** argv) {
         }
 
         if (!params.input_prefix.empty()) {
-            fprintf(stderr, "Input prefix %s: '%s'\n", params.input_prefix_bos ? "(with bos token)" : "", params.input_prefix.c_str());
+            fprintf(stderr, "Input prefix: '%s'\n", params.input_prefix.c_str());
         }
-        if (!params.input_suffix.empty()) {
-            fprintf(stderr, "Input suffix %s: '%s'\n", params.input_suffix_bos ? "(with bos token)" : "", params.input_suffix.c_str());
+        if (!params.instruct_prefix.empty()) {
+            fprintf(stderr, "Instruct prefix %s: '%s'\n", params.instruct_prefix_bos ? "(with bos token)" : "", params.instruct_prefix.c_str());
+        }
+        if (!params.instruct_suffix.empty()) {
+            fprintf(stderr, "Instruct suffix %s: '%s'\n", params.instruct_suffix_bos ? "(with bos token)" : "", params.instruct_suffix.c_str());
         }
     }
     fprintf(stderr, "sampling: temp = %f, top_k = %d, top_p = %f, repeat_last_n = %i, repeat_penalty = %f\n",
@@ -232,9 +239,9 @@ int main(int argc, char ** argv) {
         );
         if (params.multiline_mode) {
 #if defined (_WIN32)
-            fprintf(stderr, " - Press Ctrl+Z and Return (EOF) to return control to LLaMa.\n\n");
+            fprintf(stderr, " - [MULTILINE MODE] Press Ctrl+Z and Return (EOF) to return control to LLaMa.\n\n");
 #else
-            fprintf(stderr, " - Press Ctrl+D (EOF) to return control to LLaMa.\n\n");
+            fprintf(stderr, " - [MULTILINE MODE] Press Ctrl+D (EOF) to return control to LLaMa.\n\n");
 #endif
         }
         else {
@@ -320,7 +327,7 @@ int main(int argc, char ** argv) {
             }
 
             // replace end of text token with newline token when in interactive mode
-            if (id == llama_token_eos() && params.interactive && params.input_prefix.empty()) {
+            if (id == llama_token_eos() && params.interactive && instruct_mode) {
                 id = llama_token_newline.front();
                 if (params.antiprompt.size() != 0) {
                     // tokenize and inject first reverse prompt
@@ -377,8 +384,10 @@ int main(int argc, char ** argv) {
                 antiprompt.is_stop_prompt = false;
                 // Check if each of the reverse prompts appears at the end of the output.
                 for (std::string & prompt : params.antiprompt) {
-                    antiprompt.trailing_space = prompt.back() == ' ';
-                    antiprompt.len = prompt.length() - (antiprompt.trailing_space ? 1 : 0);
+                    if (params.rm_trailing_space_workaround) {
+                        antiprompt.trailing_space = prompt.back() == ' ';
+                        antiprompt.len = prompt.length() - (antiprompt.trailing_space ? 1 : 0);
+                    }
                     if (last_output.find(prompt.c_str(), last_output.length() - antiprompt.len, antiprompt.len) != std::string::npos) {
                         is_interacting = true;
                         antiprompt.any = true;
@@ -389,8 +398,10 @@ int main(int argc, char ** argv) {
                 }
                 if (!antiprompt.any) {
                     for (std::string & prompt : params.stopprompt) {
-                        antiprompt.trailing_space = prompt.back() == ' ';
-                        antiprompt.len = prompt.length() - (antiprompt.trailing_space ? 1 : 0);
+                        if (params.rm_trailing_space_workaround) {
+                            antiprompt.trailing_space = prompt.back() == ' ';
+                            antiprompt.len = prompt.length() - (antiprompt.trailing_space ? 1 : 0);
+                        }
                         if (last_output.find(prompt.c_str(), last_output.length() - antiprompt.len, antiprompt.len) != std::string::npos) {
                             is_interacting = true;
                             antiprompt.any = true;
@@ -406,21 +417,26 @@ int main(int argc, char ** argv) {
             if (n_past > 0 && is_interacting) 
             {
                 std::string buffer;
-                if (!params.clean_interface && !params.input_prefix.empty() && !antiprompt.any) {
+                if (!params.clean_interface && !params.instruct_prefix.empty() && !antiprompt.any) {
                     // avoid printing again user's new line (TODO: try to revert enter press and print newline)
-                    int i = params.input_prefix.front() == '\n' ? 1 : 0;
+                    int i = params.instruct_prefix.front() == '\n' ? 1 : 0;
                     for (; i < inp_pfx.size(); i++) {
                         printf("%s", llama_token_to_str(ctx, inp_pfx[i]));
                     }
                     fflush(stdout);
                 } 
-                if (antiprompt.any && antiprompt.trailing_space) {
-                    // add back removed trailing space to buffer(workaround)
-                    buffer += ' ';
-                    if (!params.clean_interface) {
-                        printf("%s", buffer.c_str());
+                if (params.rm_trailing_space_workaround) {
+                    // add only if not stopprompt (as stopprompt could be used to pause
+                        //     assistant and then continue without input - adding back trailing 
+                        //     space may mess it up.)
+                    if (!antiprompt.is_stop_prompt && antiprompt.any && antiprompt.trailing_space) {
+                        // add back removed trailing space to buffer(workaround)
+                        buffer += ' ';
+                        if (!params.clean_interface) {
+                            printf("%s", buffer.c_str());
+                        }
+                        fflush(stdout);
                     }
-                    fflush(stdout);
                 }
 
                 // potentially set color to indicate we are taking user input
@@ -435,6 +451,11 @@ int main(int argc, char ** argv) {
                     printf("\n> ");
                 }
 
+                if (!params.input_prefix.empty()) {
+                    buffer += params.input_prefix;
+                    printf("%s", buffer.c_str());
+                }
+
                 if (!get_input_text(buffer, !params.multiline_mode)) {
                     // input stream is bad
                     return 1;
@@ -446,13 +467,16 @@ int main(int argc, char ** argv) {
                 // done taking input, reset color
                 set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
 
-                if (!params.clean_interface && !params.input_suffix.empty() && !antiprompt.is_stop_prompt) {
+                if (!params.clean_interface && !params.instruct_suffix.empty() && !antiprompt.is_stop_prompt) {
                     // avoid printing again user's new line (TODO: try to revert enter press and print newline)
-                    int i = params.input_suffix.front() == '\n' ? 1 : 0;
+                    int i = params.instruct_suffix.front() == '\n' ? 1 : 0;
                     for (; i < inp_sfx.size(); i++) {
                         printf("%s", llama_token_to_str(ctx, inp_sfx[i]));
                     }
-                    // we won't add back removed trailing space here (workaround)
+                    // if (remove trailing space workaround) {
+                    //     We won't add back removed trailing space here, because assistant continues here,
+                    //         and it may mess up it's output (remove trailing space workaround).
+                    // }
                     fflush(stdout);
                 }
 
@@ -461,7 +485,7 @@ int main(int argc, char ** argv) {
                 if (buffer.length() > 1) {
 
                     // insert input prefix
-                    if (!params.input_prefix.empty() && !antiprompt.any) {
+                    if (!params.instruct_prefix.empty() && !antiprompt.any) {
                         n_consumed = embd_inp.size();
                         embd_inp.insert(embd_inp.end(), inp_pfx.begin(), inp_pfx.end());
                     }
@@ -470,7 +494,7 @@ int main(int argc, char ** argv) {
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
 
                     // insert response suffix
-                    if (!params.input_suffix.empty() && !antiprompt.is_stop_prompt) {
+                    if (!params.instruct_suffix.empty() && !antiprompt.is_stop_prompt) {
                         embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
                     }
 
@@ -487,7 +511,7 @@ int main(int argc, char ** argv) {
 
         // end of text token
         if (!embd.empty() && embd.back() == llama_token_eos()) {
-            if (params.interactive && !params.input_prefix.empty()) {
+            if (instruct_mode) {
                 is_interacting = true;
             } else {
                 fprintf(stderr, " [end of text]\n");

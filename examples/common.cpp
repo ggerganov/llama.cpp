@@ -231,18 +231,18 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 "--clean-interface "
                 "--interactive-first "
                 "--keep -1 "
-                "--in-prefix-bos "
-                "--in-prefix \"\\n\\n### Instruction:\\n\\n\" "
-                "--in-suffix \"\\n\\n### Response:\\n\\n\" "
+                "--ins-prefix-bos "
+                "--ins-prefix \"\\n\\n### Instruction:\\n\\n\" "
+                "--ins-suffix \"\\n\\n### Response:\\n\\n\" "
                 "-r \"### Instruction:\\n\\n\" "
             "\n\n");
             // params.instruct = true;
             params.clean_interface = true;
             params.interactive_start = true;
             params.n_keep = -1;
-            params.input_prefix_bos = true;
-            params.input_prefix = "\n\n### Instruction:\n\n";
-            params.input_suffix = "\n\n### Response:\n\n";
+            params.instruct_prefix_bos = true;
+            params.instruct_prefix = "\n\n### Instruction:\n\n";
+            params.instruct_suffix = "\n\n### Response:\n\n";
             params.antiprompt.push_back("### Instruction:\n\n");
         } else if (arg == "--color") {
             params.use_color = true;
@@ -268,6 +268,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.stopprompt.push_back(args[i]);
+        } else if (arg == "--rm-trailing-space-workaround") {
+            params.rm_trailing_space_workaround = true;
         } else if (arg == "--perplexity") {
             params.perplexity = true;
         } else if (arg == "--ignore-eos") {
@@ -283,22 +285,28 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             exit(0);
         } else if (arg == "--random-prompt") {
             params.random_prompt = true;
-        } else if (arg == "--in-prefix-bos") {
-            params.input_prefix_bos = true;
         } else if (arg == "--in-prefix") {
             if (++i >= args_c) {
                 invalid_param = true;
                 break;
             }
             params.input_prefix = args[i];
-        } else if (arg == "--in-suffix-bos") {
-            params.input_suffix_bos = true;
-        } else if (arg == "--in-suffix") {
+        } else if (arg == "--ins-prefix-bos") {
+            params.instruct_prefix_bos = true;
+        } else if (arg == "--ins-prefix") {
             if (++i >= args_c) {
                 invalid_param = true;
                 break;
             }
-            params.input_suffix = args[i];
+            params.instruct_prefix = args[i];
+        } else if (arg == "--ins-suffix-bos") {
+            params.instruct_suffix_bos = true;
+        } else if (arg == "--ins-suffix") {
+            if (++i >= args_c) {
+                invalid_param = true;
+                break;
+            }
+            params.instruct_suffix = args[i];
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             gpt_print_usage(argv[0], default_params);
@@ -332,10 +340,11 @@ void gpt_print_usage(char * argv_0, const gpt_params & params) {
     fprintf(stderr, "  -p PROMPT, --prompt PROMPT\n");
     fprintf(stderr, "                        prompt to start generation with (default: empty)\n");
     fprintf(stderr, "  --random-prompt       start with a randomized prompt.\n");
-    fprintf(stderr, "  --in-prefix-bos       append bos token to input prefix.\n");
     fprintf(stderr, "  --in-prefix STRING    string to prefix user inputs with (default: empty)\n");
-    fprintf(stderr, "  --in-suffix-bos       append bos token to input suffix.\n");
-    fprintf(stderr, "  --in-suffix STRING    string to suffix user inputs with (default: empty)\n");
+    fprintf(stderr, "  --ins-prefix STRING   (instruct) prefix user inputs with tokenized string (default: empty)\n");
+    fprintf(stderr, "  --ins-prefix-bos      (instruct) prepend bos token to instruct prefix.\n");
+    fprintf(stderr, "  --ins-suffix STRING   (instruct) suffix user inputs with tokenized string (default: empty)\n");
+    fprintf(stderr, "  --ins-suffix-bos      (instruct) prepend bos token to instruct suffix.\n");
     fprintf(stderr, "  -f FNAME, --file FNAME\n");
     fprintf(stderr, "                        prompt file to start generation.\n");
     fprintf(stderr, "  -n N, --n_predict N   number of tokens to predict (default: %d, -1 = infinity)\n", params.n_predict);

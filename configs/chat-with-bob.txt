@@ -1,7 +1,10 @@
---interactive-first --keep -1
---in-prefix-bos 
---in-prefix "\nUser: " -r "User: "
---in-suffix "\nBob: " 
+--interactive-first 
+--keep -1
+--ins-prefix-bos 
+--ins-prefix "\nUser: " 
+--ins-suffix "\nBob: "
+--reverse-prompt "User: "
+--rm-trailing-space-workaround
 
 -p "Transcript of a dialog, where the User interacts with an Assistant named Bob. Bob is helpful, kind, honest, good at writing, and never fails to answer the User's requests immediately and with precision.
 User: Hello, Bob.
