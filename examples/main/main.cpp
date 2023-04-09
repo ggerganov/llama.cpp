@@ -25,7 +25,8 @@ static bool is_interacting = false;
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
 void sigint_handler(int signo) {
     set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
-    printf("\n"); // this also force flush stdout.
+    fflush(stdout);
+    fflush(stderr);
     if (signo == SIGINT) {
         if (!is_interacting) {
             is_interacting=true;
@@ -228,8 +229,18 @@ int main(int argc, char ** argv) {
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
                " - Press Ctrl+C to interject at any time.\n"
 #endif
-               " - Press Return to return control to LLaMa.\n"
-               " - If you want to submit another line, end your input in '\\'.\n\n");
+        );
+        if (params.multiline_mode) {
+#if defined (_WIN32)
+            fprintf(stderr, " - Press Ctrl+Z and Return (EOF) to return control to LLaMa.\n\n");
+#else
+            fprintf(stderr, " - Press Ctrl+D (EOF) to return control to LLaMa.\n\n");
+#endif
+        }
+        else {
+            fprintf(stderr, " - Press Return to return control to LLaMa.\n"
+                            " - If you want to submit another line, end your input in '\\'.\n\n");
+        }
         is_interacting = params.interactive_start;
     }
 
@@ -424,33 +435,13 @@ int main(int argc, char ** argv) {
                     printf("\n> ");
                 }
 
-                std::string line;
-                bool another_line = true;
-                do {
-                    // TODO: try to revert going to new line after enter (to enable in-line text writing)
-#if defined(_WIN32)
-                    std::wstring wline;
-                    if (!std::getline(std::wcin, wline)) {
-                        // input stream is bad or EOF received
-                        return 0;
-                    }
-                    win32_utf8_encode(wline, line);
-#else
-                    if (!std::getline(std::cin, line)) {
-                        // input stream is bad or EOF received
-                        return 0;
-                    }
-#endif
-                    if (line.empty() || line.back() != '\\') {
-                        another_line = false;
-                    } else {
-                        line.pop_back(); // Remove the continue character
-                    }
-                    buffer += line;
-                    if (another_line || !antiprompt.is_stop_prompt) {
-                        buffer += '\n'; // Append the line to the result
-                    }
-                } while (another_line);
+                if (!get_input_text(buffer, !params.multiline_mode)) {
+                    // input stream is bad
+                    return 1;
+                }
+                if (!antiprompt.is_stop_prompt) {
+                    buffer += "\n";
+                }
 
                 // done taking input, reset color
                 set_console_color(con_st, CONSOLE_COLOR_DEFAULT);

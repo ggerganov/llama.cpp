@@ -56,6 +56,7 @@ struct gpt_params {
     bool verbose_prompt    = false; // print prompt tokens before generation
 
     bool clean_interface   = false; // hides input prefix & suffix and displays '>'
+    bool multiline_mode    = false; // enables multi-line mode, to send input press CTRL+D on Linux/Max, CTRL+Z on Windows
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
@@ -100,3 +101,5 @@ void set_console_color(console_state & con_st, console_color_t color);
 void win32_console_init(bool enable_color);
 void win32_utf8_encode(const std::wstring & wstr, std::string & str);
 #endif
+
+bool get_input_text(std::string & input_text, bool escape_newline_mode);
