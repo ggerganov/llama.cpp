@@ -16,12 +16,19 @@
 #endif
 
 #if defined (_WIN32)
+#include <fcntl.h>
+#include <io.h>
 #pragma comment(lib,"kernel32.lib")
 extern "C" __declspec(dllimport) void* __stdcall GetStdHandle(unsigned long nStdHandle);
 extern "C" __declspec(dllimport) int __stdcall GetConsoleMode(void* hConsoleHandle, unsigned long* lpMode);
 extern "C" __declspec(dllimport) int __stdcall SetConsoleMode(void* hConsoleHandle, unsigned long dwMode);
 extern "C" __declspec(dllimport) int __stdcall SetConsoleCP(unsigned int wCodePageID);
 extern "C" __declspec(dllimport) int __stdcall SetConsoleOutputCP(unsigned int wCodePageID);
+extern "C" __declspec(dllimport) int __stdcall WideCharToMultiByte(unsigned int CodePage, unsigned long dwFlags, 
+                                                                   const wchar_t * lpWideCharStr, int cchWideChar, 
+                                                                   char * lpMultiByteStr, int cbMultiByte, 
+                                                                   const char * lpDefaultChar, bool * lpUsedDefaultChar);
+#define CP_UTF8 65001
 #endif
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
@@ -307,12 +314,20 @@ void win32_console_init(bool enable_color) {
             SetConsoleMode(hConOut, dwMode | 0x4); // ENABLE_VIRTUAL_TERMINAL_PROCESSING (0x4)
         }
         // Set console output codepage to UTF8
-        SetConsoleOutputCP(65001); // CP_UTF8
+        SetConsoleOutputCP(CP_UTF8);
     }
     void* hConIn = GetStdHandle((unsigned long)-10); // STD_INPUT_HANDLE (-10)
     if (hConIn && hConIn != (void*)-1 && GetConsoleMode(hConIn, &dwMode)) {
-        // Set console input codepage to UTF8
-        SetConsoleCP(65001); // CP_UTF8
+        // Set console input codepage to UTF16
+        _setmode(_fileno(stdin), _O_WTEXT);
     }
+}
+
+// Convert a wide Unicode string to an UTF8 string
+void win32_utf8_encode(const std::wstring & wstr, std::string & str) {
+	int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
+	std::string strTo(size_needed, 0);
+	WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
+	str = strTo;
 }
 #endif
