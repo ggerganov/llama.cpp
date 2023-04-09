@@ -3,9 +3,11 @@
 #include <cassert>
 #include <cstring>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <iterator>
 #include <algorithm>
+#include <regex>
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h> // using malloc.h with MSC/MINGW
@@ -29,6 +31,43 @@ extern "C" __declspec(dllimport) int __stdcall WideCharToMultiByte(unsigned int 
 #define CP_UTF8 65001
 #endif
 
+void split_args(std::string args_string, std::vector<std::string> & output_args) 
+{
+    std::string current_arg = "";
+    bool in_quotes = false;
+    char quote_type;
+
+    for (char c : args_string) {
+        if (c == '"' || c == '\'') {
+            if (!in_quotes) {
+                in_quotes = true;
+                quote_type = c;
+            } else if (quote_type == c) {
+                in_quotes = false;
+            } else {
+                current_arg += c;
+            }
+        } else if (in_quotes) {
+            current_arg += c;
+        } else if (std::isspace(c)) {
+            if (current_arg != "") {
+                output_args.push_back(current_arg);
+                current_arg = "";
+            }
+        } else {
+            current_arg += c;
+        }
+    }
+
+    if (current_arg != "") {
+        output_args.push_back(current_arg);
+    }
+}
+
+std::string unescape(std::string str) {
+    return std::regex_replace(str, std::regex("\\\\n"), "\n");
+}
+
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     // determine sensible default number of threads.
     // std::thread::hardware_concurrency may not be equal to the number of cores, or may return 0.
@@ -46,28 +85,11 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     std::string arg;
     gpt_params default_params;
 
+    // get additional arguments from config files
+    std::vector<std::string> args;
     for (int i = 1; i < argc; i++) {
         arg = argv[i];
-
-        if (arg == "-s" || arg == "--seed") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.seed = std::stoi(argv[i]);
-        } else if (arg == "-t" || arg == "--threads") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_threads = std::stoi(argv[i]);
-        } else if (arg == "-p" || arg == "--prompt") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.prompt = argv[i];
-        } else if (arg == "-f" || arg == "--file") {
+        if (arg == "--config") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -78,83 +100,149 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 invalid_param = true;
                 break;
             }
+            std::string args_string;
+            std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(args_string));
+            if (args_string.back() == '\n') {
+                args_string.pop_back();
+            }
+            split_args(args_string, args);
+            for (int j = 0; j < args.size(); j++) {
+                args[j] = unescape(args[j]);
+            }
+        } else {
+            args.emplace_back(argv[i]);
+        }
+    }
+
+    // parse args
+    int args_c = static_cast<int>(args.size());
+    for (int i = 0; i < args_c && !invalid_param; i++) {
+        arg = args[i];
+
+        if (arg == "-s" || arg == "--seed") {
+            if (++i >= args_c) {
+                invalid_param = true;
+                break;
+            }
+            params.seed = std::stoi(args[i]);
+        } else if (arg == "-t" || arg == "--threads") {
+            if (++i >= args_c) {
+                invalid_param = true;
+                break;
+            }
+            params.n_threads = std::stoi(args[i]);
+        } else if (arg == "-p" || arg == "--prompt") {
+            if (++i >= args_c) {
+                invalid_param = true;
+                break;
+            }
+            params.prompt = args[i];
+        } else if (arg == "-f" || arg == "--file") {
+            if (++i >= args_c) {
+                invalid_param = true;
+                break;
+            }
+            std::ifstream file(args[i]);
+            if (!file) {
+                fprintf(stderr, "error: failed to open file '%s'\n", args[i].c_str());
+                invalid_param = true;
+                break;
+            }
             std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(params.prompt));
             if (params.prompt.back() == '\n') {
                 params.prompt.pop_back();
             }
         } else if (arg == "-n" || arg == "--n_predict") {
-            if (++i >= argc) {
+            if (++i >= args_c) {
                 invalid_param = true;
                 break;
             }
-            params.n_predict = std::stoi(argv[i]);
+            params.n_predict = std::stoi(args[i]);
         } else if (arg == "--top_k") {
-            if (++i >= argc) {
+            if (++i >= args_c) {
                 invalid_param = true;
                 break;
             }
-            params.top_k = std::stoi(argv[i]);
+            params.top_k = std::stoi(args[i]);
         } else if (arg == "-c" || arg == "--ctx_size") {
-            if (++i >= argc) {
+            if (++i >= args_c) {
                 invalid_param = true;
                 break;
             }
-            params.n_ctx = std::stoi(argv[i]);
+            params.n_ctx = std::stoi(args[i]);
         } else if (arg == "--memory_f32") {
             params.memory_f16 = false;
         } else if (arg == "--top_p") {
-            if (++i >= argc) {
+            if (++i >= args_c) {
                 invalid_param = true;
                 break;
             }
-            params.top_p = std::stof(argv[i]);
+            params.top_p = std::stof(args[i]);
         } else if (arg == "--temp") {
-            if (++i >= argc) {
+            if (++i >= args_c) {
                 invalid_param = true;
                 break;
             }
-            params.temp = std::stof(argv[i]);
+            params.temp = std::stof(args[i]);
         } else if (arg == "--repeat_last_n") {
-            if (++i >= argc) {
+            if (++i >= args_c) {
                 invalid_param = true;
                 break;
             }
-            params.repeat_last_n = std::stoi(argv[i]);
+            params.repeat_last_n = std::stoi(args[i]);
         } else if (arg == "--repeat_penalty") {
-            if (++i >= argc) {
+            if (++i >= args_c) {
                 invalid_param = true;
                 break;
             }
-            params.repeat_penalty = std::stof(argv[i]);
+            params.repeat_penalty = std::stof(args[i]);
         } else if (arg == "-b" || arg == "--batch_size") {
-            if (++i >= argc) {
+            if (++i >= args_c) {
                 invalid_param = true;
                 break;
             }
-            params.n_batch = std::stoi(argv[i]);
+            params.n_batch = std::stoi(args[i]);
             params.n_batch = std::min(512, params.n_batch);
         } else if (arg == "--keep") {
-            if (++i >= argc) {
+            if (++i >= args_c) {
                 invalid_param = true;
                 break;
             }
-            params.n_keep = std::stoi(argv[i]);
+            params.n_keep = std::stoi(args[i]);
         } else if (arg == "-m" || arg == "--model") {
-            if (++i >= argc) {
+            if (++i >= args_c) {
                 invalid_param = true;
                 break;
             }
-            params.model = argv[i];
+            params.model = args[i];
         } else if (arg == "-i" || arg == "--interactive") {
             params.interactive = true;
         } else if (arg == "--embedding") {
             params.embedding = true;
+        } else if (arg == "--clean-interface") {
+            params.clean_interface = true;
         } else if (arg == "--interactive-start") {
             params.interactive = true;
         } else if (arg == "--interactive-first") {
             params.interactive_start = true;
         } else if (arg == "-ins" || arg == "--instruct") {
-            params.instruct = true;
+            fprintf(stderr, "\n\nWarning: instruct mode is deprecated! Use: \n"
+                "--clean-interface "
+                "--interactive-first "
+                "--keep -1 "
+                "--in-prefix-bos "
+                "--in-prefix \"\\n\\n### Instruction:\\n\\n\" "
+                "--in-suffix \"\\n\\n### Response:\\n\\n\" "
+                "-r \"### Instruction:\\n\\n\" "
+            "\n\n");
+            // params.instruct = true;
+            params.clean_interface = true;
+            params.interactive_start = true;
+            params.n_keep = -1;
+            params.input_prefix_bos = true;
+            params.input_prefix = "\n\n### Instruction:\n\n";
+            params.input_suffix = "\n\n### Response:\n\n";
+            params.antiprompt.push_back("### Instruction:\n\n");
         } else if (arg == "--color") {
             params.use_color = true;
         } else if (arg == "--mlock") {
@@ -166,55 +254,71 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         } else if (arg == "--verbose-prompt") {
             params.verbose_prompt = true;
         } else if (arg == "-r" || arg == "--reverse-prompt") {
-            if (++i >= argc) {
+            if (++i >= args_c) {
                 invalid_param = true;
                 break;
             }
-            params.antiprompt.push_back(argv[i]);
+            params.antiprompt.push_back(args[i]);
+        } else if (arg == "--stop-prompt") {
+            if (++i >= args_c) {
+                invalid_param = true;
+                break;
+            }
+            params.stopprompt.push_back(args[i]);
         } else if (arg == "--perplexity") {
             params.perplexity = true;
         } else if (arg == "--ignore-eos") {
             params.ignore_eos = true;
         } else if (arg == "--n_parts") {
-            if (++i >= argc) {
+            if (++i >= args_c) {
                 invalid_param = true;
                 break;
             }
-            params.n_parts = std::stoi(argv[i]);
+            params.n_parts = std::stoi(args[i]);
         } else if (arg == "-h" || arg == "--help") {
-            gpt_print_usage(argc, argv, default_params);
+            gpt_print_usage(argv[0], default_params);
             exit(0);
         } else if (arg == "--random-prompt") {
             params.random_prompt = true;
+        } else if (arg == "--in-prefix-bos") {
+            params.input_prefix_bos = true;
         } else if (arg == "--in-prefix") {
-            if (++i >= argc) {
+            if (++i >= args_c) {
                 invalid_param = true;
                 break;
             }
-            params.input_prefix = argv[i];
+            params.input_prefix = args[i];
+        } else if (arg == "--in-suffix-bos") {
+            params.input_suffix_bos = true;
+        } else if (arg == "--in-suffix") {
+            if (++i >= args_c) {
+                invalid_param = true;
+                break;
+            }
+            params.input_suffix = args[i];
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
-            gpt_print_usage(argc, argv, default_params);
+            gpt_print_usage(argv[0], default_params);
             exit(1);
         }
     }
     if (invalid_param) {
         fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
-        gpt_print_usage(argc, argv, default_params);
+        gpt_print_usage(argv[0], default_params);
         exit(1);
     }
 
     return true;
 }
 
-void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
-    fprintf(stderr, "usage: %s [options]\n", argv[0]);
+void gpt_print_usage(char * argv_0, const gpt_params & params) {
+    fprintf(stderr, "usage: %s [options]\n", argv_0);
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -h, --help            show this help message and exit\n");
     fprintf(stderr, "  -i, --interactive     run in interactive mode\n");
     fprintf(stderr, "  --interactive-first   run in interactive mode and wait for input right away\n");
-    fprintf(stderr, "  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
+    fprintf(stderr, "  --clean-interface     hides input prefix & suffix and displays '>' instead\n");
     fprintf(stderr, "  -r PROMPT, --reverse-prompt PROMPT\n");
     fprintf(stderr, "                        run in interactive mode and poll user input upon seeing PROMPT (can be\n");
     fprintf(stderr, "                        specified more than once for multiple prompts).\n");
@@ -224,7 +328,10 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -p PROMPT, --prompt PROMPT\n");
     fprintf(stderr, "                        prompt to start generation with (default: empty)\n");
     fprintf(stderr, "  --random-prompt       start with a randomized prompt.\n");
+    fprintf(stderr, "  --in-prefix-bos       append bos token to input prefix.\n");
     fprintf(stderr, "  --in-prefix STRING    string to prefix user inputs with (default: empty)\n");
+    fprintf(stderr, "  --in-suffix-bos       append bos token to input suffix.\n");
+    fprintf(stderr, "  --in-suffix STRING    string to suffix user inputs with (default: empty)\n");
     fprintf(stderr, "  -f FNAME, --file FNAME\n");
     fprintf(stderr, "                        prompt file to start generation.\n");
     fprintf(stderr, "  -n N, --n_predict N   number of tokens to predict (default: %d, -1 = infinity)\n", params.n_predict);

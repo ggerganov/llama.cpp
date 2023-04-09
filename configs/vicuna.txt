@@ -1,0 +1,5 @@
+--interactive-first --keep -1
+--in-prefix-bos --in-prefix "\n### Human: " -r "### Human: "
+--in-suffix "\n### Assistant: "
+
+-p "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions."

@@ -148,22 +148,18 @@ int main(int argc, char ** argv) {
     }
 
     // number of tokens to keep when resetting context
-    if (params.n_keep < 0 || params.n_keep > (int)embd_inp.size() || params.instruct) {
+    if (params.n_keep < 0 || params.n_keep > (int)embd_inp.size()) {
         params.n_keep = (int)embd_inp.size();
     }
 
     // prefix & suffix for instruct mode
-    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", true);
-    const auto inp_sfx = ::llama_tokenize(ctx, "\n\n### Response:\n\n", false);
-
-    // in instruct mode, we inject a prefix and a suffix to each input by the user
-    if (params.instruct) {
-        params.interactive_start = true;
-        params.antiprompt.push_back("### Instruction:\n\n");
-    }
+    const auto inp_pfx = ::llama_tokenize(ctx, params.input_prefix, params.input_prefix_bos);
+    std::string input_suffix = params.input_suffix;
+    if (input_suffix.back() == ' ') { input_suffix.pop_back(); } // (remove trailing space workaround)
+    const auto inp_sfx = ::llama_tokenize(ctx, input_suffix, params.input_suffix_bos);
 
     // enable interactive mode if reverse prompt or interactive start is specified
-    if (params.antiprompt.size() != 0 || params.interactive_start) { 
+    if (params.antiprompt.size() != 0 || params.stopprompt.size() != 0 || params.interactive_start) { 
         params.interactive = true;
     }
 
@@ -205,9 +201,17 @@ int main(int argc, char ** argv) {
                 fprintf(stderr, "Reverse prompt: '%s'\n", antiprompt.c_str());
             }
         }
+        if (params.stopprompt.size()) {
+            for (auto stopprompt : params.stopprompt) {
+                fprintf(stderr, "Stop prompt: '%s'\n", stopprompt.c_str());
+            }
+        }
 
         if (!params.input_prefix.empty()) {
-            fprintf(stderr, "Input prefix: '%s'\n", params.input_prefix.c_str());
+            fprintf(stderr, "Input prefix %s: '%s'\n", params.input_prefix_bos ? "(with bos token)" : "", params.input_prefix.c_str());
+        }
+        if (!params.input_suffix.empty()) {
+            fprintf(stderr, "Input suffix %s: '%s'\n", params.input_suffix_bos ? "(with bos token)" : "", params.input_suffix.c_str());
         }
     }
     fprintf(stderr, "sampling: temp = %f, top_k = %d, top_p = %f, repeat_last_n = %i, repeat_penalty = %f\n",
@@ -229,7 +233,13 @@ int main(int argc, char ** argv) {
         is_interacting = params.interactive_start;
     }
 
-    bool is_antiprompt = false;
+    struct Antiprompt {
+        bool any = false;
+        bool trailing_space = false;
+        size_t len;
+        bool is_stop_prompt = false;
+    } antiprompt;
+
     bool input_noecho  = false;
 
     int n_past     = 0;
@@ -299,7 +309,7 @@ int main(int argc, char ** argv) {
             }
 
             // replace end of text token with newline token when in interactive mode
-            if (id == llama_token_eos() && params.interactive && !params.instruct) {
+            if (id == llama_token_eos() && params.interactive && params.input_prefix.empty()) {
                 id = llama_token_newline.front();
                 if (params.antiprompt.size() != 0) {
                     // tokenize and inject first reverse prompt
@@ -345,27 +355,63 @@ int main(int argc, char ** argv) {
         // check if we should prompt the user for more
         if (params.interactive && (int) embd_inp.size() <= n_consumed) {
 
-            // check for reverse prompt
-            if (params.antiprompt.size()) {
+            // check for reverse prompt or stop prompt
+            if (params.antiprompt.size() || params.stopprompt.size()) {
                 std::string last_output;
                 for (auto id : last_n_tokens) {
                     last_output += llama_token_to_str(ctx, id);
                 }
 
-                is_antiprompt = false;
+                antiprompt.any = false;
+                antiprompt.is_stop_prompt = false;
                 // Check if each of the reverse prompts appears at the end of the output.
-                for (std::string & antiprompt : params.antiprompt) {
-                    if (last_output.find(antiprompt.c_str(), last_output.length() - antiprompt.length(), antiprompt.length()) != std::string::npos) {
+                for (std::string & prompt : params.antiprompt) {
+                    antiprompt.trailing_space = prompt.back() == ' ';
+                    antiprompt.len = prompt.length() - (antiprompt.trailing_space ? 1 : 0);
+                    if (last_output.find(prompt.c_str(), last_output.length() - antiprompt.len, antiprompt.len) != std::string::npos) {
                         is_interacting = true;
-                        is_antiprompt = true;
+                        antiprompt.any = true;
                         set_console_color(con_st, CONSOLE_COLOR_USER_INPUT);
                         fflush(stdout);
                         break;
                     }
                 }
+                if (!antiprompt.any) {
+                    for (std::string & prompt : params.stopprompt) {
+                        antiprompt.trailing_space = prompt.back() == ' ';
+                        antiprompt.len = prompt.length() - (antiprompt.trailing_space ? 1 : 0);
+                        if (last_output.find(prompt.c_str(), last_output.length() - antiprompt.len, antiprompt.len) != std::string::npos) {
+                            is_interacting = true;
+                            antiprompt.any = true;
+                            antiprompt.is_stop_prompt = true;
+                            set_console_color(con_st, CONSOLE_COLOR_USER_INPUT);
+                            fflush(stdout);
+                            break;
+                        }
+                    }
+                }
             }
 
-            if (n_past > 0 && is_interacting) {
+            if (n_past > 0 && is_interacting) 
+            {
+                std::string buffer;
+                if (!params.clean_interface && !params.input_prefix.empty() && !antiprompt.any) {
+                    // avoid printing again user's new line (TODO: try to revert enter press and print newline)
+                    int i = params.input_prefix.front() == '\n' ? 1 : 0;
+                    for (; i < inp_pfx.size(); i++) {
+                        printf("%s", llama_token_to_str(ctx, inp_pfx[i]));
+                    }
+                    fflush(stdout);
+                } 
+                if (antiprompt.any && antiprompt.trailing_space) {
+                    // add back removed trailing space to buffer(workaround)
+                    buffer += ' ';
+                    if (!params.clean_interface) {
+                        printf("%s", buffer.c_str());
+                    }
+                    fflush(stdout);
+                }
+
                 // potentially set color to indicate we are taking user input
                 set_console_color(con_st, CONSOLE_COLOR_USER_INPUT);
 
@@ -374,19 +420,14 @@ int main(int argc, char ** argv) {
                 signal(SIGINT, sigint_handler);
 #endif
 
-                if (params.instruct) {
+                if (params.clean_interface) {
                     printf("\n> ");
-                }
-
-                std::string buffer;
-                if (!params.input_prefix.empty()) {
-                    buffer += params.input_prefix;
-                    printf("%s", buffer.c_str());
                 }
 
                 std::string line;
                 bool another_line = true;
                 do {
+                    // TODO: try to revert going to new line after enter (to enable in-line text writing)
 #if defined(_WIN32)
                     std::wstring wline;
                     if (!std::getline(std::wcin, wline)) {
@@ -405,18 +446,31 @@ int main(int argc, char ** argv) {
                     } else {
                         line.pop_back(); // Remove the continue character
                     }
-                    buffer += line + '\n'; // Append the line to the result
+                    buffer += line;
+                    if (another_line || !antiprompt.is_stop_prompt) {
+                        buffer += '\n'; // Append the line to the result
+                    }
                 } while (another_line);
 
                 // done taking input, reset color
                 set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
 
+                if (!params.clean_interface && !params.input_suffix.empty() && !antiprompt.is_stop_prompt) {
+                    // avoid printing again user's new line (TODO: try to revert enter press and print newline)
+                    int i = params.input_suffix.front() == '\n' ? 1 : 0;
+                    for (; i < inp_sfx.size(); i++) {
+                        printf("%s", llama_token_to_str(ctx, inp_sfx[i]));
+                    }
+                    // we won't add back removed trailing space here (workaround)
+                    fflush(stdout);
+                }
+
                 // Add tokens to embd only if the input buffer is non-empty
                 // Entering a empty line lets the user pass control back
                 if (buffer.length() > 1) {
 
-                    // instruct mode: insert instruction prefix
-                    if (params.instruct && !is_antiprompt) {
+                    // insert input prefix
+                    if (!params.input_prefix.empty() && !antiprompt.any) {
                         n_consumed = embd_inp.size();
                         embd_inp.insert(embd_inp.end(), inp_pfx.begin(), inp_pfx.end());
                     }
@@ -424,8 +478,8 @@ int main(int argc, char ** argv) {
                     auto line_inp = ::llama_tokenize(ctx, buffer, false);
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
 
-                    // instruct mode: insert response suffix
-                    if (params.instruct) {
+                    // insert response suffix
+                    if (!params.input_suffix.empty() && !antiprompt.is_stop_prompt) {
                         embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
                     }
 
@@ -442,7 +496,7 @@ int main(int argc, char ** argv) {
 
         // end of text token
         if (!embd.empty() && embd.back() == llama_token_eos()) {
-            if (params.instruct) {
+            if (params.interactive && !params.input_prefix.empty()) {
                 is_interacting = true;
             } else {
                 fprintf(stderr, " [end of text]\n");
