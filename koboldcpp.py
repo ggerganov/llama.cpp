@@ -143,7 +143,13 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()           
             self.wfile.write(json.dumps({"value":""}).encode())
             return
-        
+
+        if self.path.endswith(('/api/v1/config/soft_prompts_list', '/api/latest/config/soft_prompts_list')):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(json.dumps({"values": []}).encode())
+            return
+
         self.send_response(404)
         self.end_headers()
         rp = 'Error: HTTP Server is running, but this endpoint does not exist. Please check the URL.'
