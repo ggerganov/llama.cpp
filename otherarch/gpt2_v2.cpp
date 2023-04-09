@@ -141,6 +141,12 @@ ModelLoadResult gpt2_model_load(const std::string & fname, gpt2_model & model, g
 
         ctx_size += (6 + 12*n_layer)*256; // object overhead
 
+        // if(wtype==GGML_TYPE_Q4_0 || wtype==GGML_TYPE_Q4_1)
+        // {
+        //     //quantized needs more context 
+        //     ctx_size = (ctx_size*4);
+        // }
+
         printf("%s: ggml ctx size = %6.2f MB\n", __func__, ctx_size/(1024.0*1024.0));
     }
 

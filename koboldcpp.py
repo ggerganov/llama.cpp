@@ -333,7 +333,7 @@ def main(args):
                 print("\nNo ggml model file was selected. Exiting.")
                 time.sleep(1)
                 sys.exit(2)
-        except:
+        except Exception as ex:
             print("File selection GUI unsupported. Please check command line: script.py --help")
             time.sleep(1)
             sys.exit(2)
@@ -376,6 +376,7 @@ def main(args):
     RunServerMultiThreaded(args.host, args.port, embedded_kailite)
 
 if __name__ == '__main__':
+    print("Welcome to KoboldCpp - Version 1.3") # just update version manually
     parser = argparse.ArgumentParser(description='Kobold llama.cpp server')
     parser.add_argument("model_file", help="Model file to load", nargs="?")
     portgroup = parser.add_mutually_exclusive_group() #we want to be backwards compatible with the unnamed positional args

@@ -291,6 +291,13 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    // needed to initialize f16 tables
+    {
+        struct ggml_init_params params = { 0, NULL };
+        struct ggml_context * ctx = ggml_init(params);
+        ggml_free(ctx);
+    }
+
     const std::string fname_inp = argv[1];
     const std::string fname_out = argv[2];
 
