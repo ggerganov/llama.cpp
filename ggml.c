@@ -9281,8 +9281,8 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
     const int n_threads = cgraph->n_threads;
 
     struct ggml_compute_state_shared state_shared = {
-        /*.n_threads =*/ n_threads,
-        /*.flag      =*/ 0,
+        .n_threads = n_threads,
+        .flag      = 0,
     };
     struct ggml_compute_state * workers = n_threads > 1 ? alloca(sizeof(struct ggml_compute_state)*(n_threads - 1)) : NULL;
 
