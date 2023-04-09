@@ -85,7 +85,7 @@ int main(int argc, char ** argv) {
         params.prompt = gpt_random_prompt(rng);
     }
 
-    bool instruct_mode = params.instruct_prefix.empty() && params.instruct_suffix.empty();
+    bool instruct_mode = !params.instruct_prefix.empty() || !params.instruct_suffix.empty();
 
 //    params.prompt = R"(// this function checks if the number n is prime
 //bool is_prime(int n) {)";
@@ -328,7 +328,7 @@ int main(int argc, char ** argv) {
             }
 
             // replace end of text token with newline token when in interactive mode
-            if (id == llama_token_eos() && params.interactive && instruct_mode) {
+            if (id == llama_token_eos() && params.interactive && !instruct_mode) {
                 id = llama_token_newline.front();
                 if (params.antiprompt.size() != 0) {
                     // tokenize and inject first reverse prompt
