@@ -334,7 +334,7 @@ void gpt_print_usage(char * argv_0, const gpt_params & params) {
     fprintf(stderr, "                        run in interactive mode and poll user input upon seeing PROMPT (can be\n");
     fprintf(stderr, "                        specified more than once for multiple prompts).\n");
     fprintf(stderr, "  --color               colorise output to distinguish prompt and user input from generations\n");
-    fprintf(stderr, "  --multiline           multiline mode (use Ctrl+D on Linux/Mac and Ctrl+Z then Return on Windows to send input)\n");
+    fprintf(stderr, "  --multiline           multiline mode (use Ctrl+D on Linux/Mac and Ctrl+Z then Return on Windows to toggle multiline)\n");
     fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for <= 0)\n");
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
     fprintf(stderr, "  -p PROMPT, --prompt PROMPT\n");
@@ -455,44 +455,54 @@ void win32_utf8_encode(const std::wstring & wstr, std::string & str) {
 }
 #endif
 
-bool get_input_text(std::string & input_text, bool escape_newline_mode) {
+bool get_input_text(std::string & input_text, bool eof_toggled_multiline_mode) {
     bool another_line = true;
+    bool is_eof_multiline_toggled = false;
     do {
         std::string line;
 #if defined(_WIN32)
+        auto & stdcin = std::wcin;
         std::wstring wline;
-        if (!std::getline(std::wcin, wline)) {
+        if (!std::getline(stdcin, wline)) {
             // input stream is bad or EOF received
-            if (std::wcin.bad()) {
+            if (stdcin.bad()) {
                 fprintf(stderr, "%s: error: input stream bad\n", __func__);
                 return 1;
             }
-        }
-        if (std::wcin.eof()) {
-            another_line = false;
-            std::wcin.clear();
-            std::wcin.seekg(0, std::ios::beg);
         }
         win32_utf8_encode(wline, line);
 #else
-        if (!std::getline(std::cin, line)) {
+        auto & stdcin = std::cin;
+        if (!std::getline(stdcin, line)) {
             // input stream is bad or EOF received
-            if (std::wcin.bad()) {
+            if (stdcin.bad()) {
                 fprintf(stderr, "%s: error: input stream bad\n", __func__);
                 return 1;
             }
         }
-        if (std::cin.eof()) {
-            another_line = false;
-            std::cin.clear();
-            std::cin.seekg(0, std::ios::beg);
-        }
 #endif
-        if (escape_newline_mode) {
+        if (stdcin.eof()) {
+            stdcin.clear();
+            stdcin.seekg(0, std::ios::beg);
+            if (!eof_toggled_multiline_mode) {
+                another_line = false;
+            } else {
+                is_eof_multiline_toggled = !is_eof_multiline_toggled;
+                if (is_eof_multiline_toggled) {
+                    input_text += line;
+                    continue;
+                }
+            }
+        }
+        if (!eof_toggled_multiline_mode) {
             if (line.empty() || line.back() != '\\') {
                 another_line = false;
             } else {
                 line.pop_back(); // Remove the continue character
+            }
+        } else {
+            if (!is_eof_multiline_toggled) {
+                another_line = false;
             }
         }
         input_text += line;

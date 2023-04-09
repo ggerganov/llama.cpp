@@ -238,10 +238,11 @@ int main(int argc, char ** argv) {
 #endif
         );
         if (params.multiline_mode) {
+            fprintf(stderr, " - Press Return to return control to LLaMa.\n"
 #if defined (_WIN32)
-            fprintf(stderr, " - [MULTILINE MODE] Press Ctrl+Z then Return (EOF) to return control to LLaMa.\n\n");
+                            " - [MULTILINE MODE] Press Ctrl+Z then Return (EOF) to toggle.\n\n");
 #else
-            fprintf(stderr, " - [MULTILINE MODE] Press Ctrl+D (EOF) to return control to LLaMa.\n\n");
+                            " - [MULTILINE MODE] Press Ctrl+D (EOF) to toggle.\n\n");
 #endif
         }
         else {
@@ -456,7 +457,7 @@ int main(int argc, char ** argv) {
                     printf("%s", buffer.c_str());
                 }
 
-                if (!get_input_text(buffer, !params.multiline_mode)) {
+                if (!get_input_text(buffer, params.multiline_mode)) {
                     // input stream is bad
                     return 1;
                 }
