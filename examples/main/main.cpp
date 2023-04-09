@@ -239,7 +239,7 @@ int main(int argc, char ** argv) {
         );
         if (params.multiline_mode) {
 #if defined (_WIN32)
-            fprintf(stderr, " - [MULTILINE MODE] Press Ctrl+Z and Return (EOF) to return control to LLaMa.\n\n");
+            fprintf(stderr, " - [MULTILINE MODE] Press Ctrl+Z then Return (EOF) to return control to LLaMa.\n\n");
 #else
             fprintf(stderr, " - [MULTILINE MODE] Press Ctrl+D (EOF) to return control to LLaMa.\n\n");
 #endif

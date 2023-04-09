@@ -334,7 +334,7 @@ void gpt_print_usage(char * argv_0, const gpt_params & params) {
     fprintf(stderr, "                        run in interactive mode and poll user input upon seeing PROMPT (can be\n");
     fprintf(stderr, "                        specified more than once for multiple prompts).\n");
     fprintf(stderr, "  --color               colorise output to distinguish prompt and user input from generations\n");
-    fprintf(stderr, "  --multiline           multiline mode (use Ctrl+D on Linux/Mac and Ctrl+Z on Windpws to send input)\n");
+    fprintf(stderr, "  --multiline           multiline mode (use Ctrl+D on Linux/Mac and Ctrl+Z then Return on Windows to send input)\n");
     fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for <= 0)\n");
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
     fprintf(stderr, "  -p PROMPT, --prompt PROMPT\n");
