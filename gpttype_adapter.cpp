@@ -209,7 +209,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     int original_threads = params.n_threads;
     if (blasmode)
     {
-        params.n_batch = 512;
+        params.n_batch = 1024;
         params.n_threads = 1;
     }
 

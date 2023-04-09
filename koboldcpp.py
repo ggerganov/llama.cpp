@@ -377,6 +377,7 @@ if __name__ == '__main__':
     portgroup.add_argument("l_port", help="Port to listen on (deprecated)", default=defaultport, nargs="?", type=int, action='store')
     parser.add_argument("--host", help="Host IP to listen on. If empty, all routable interfaces are accepted.", default="")
     
+    #os.environ["OMP_NUM_THREADS"] = '12'
     # psutil.cpu_count(logical=False)
     physical_core_limit = 1 
     if os.cpu_count()!=None and os.cpu_count()>1:
