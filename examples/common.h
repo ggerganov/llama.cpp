@@ -60,7 +60,7 @@ struct gpt_params {
     bool verbose_prompt    = false; // print prompt tokens before generation
 
     bool clean_interface   = false; // hides input prefix & suffix and displays '>'
-    bool multiline_mode    = false; // enables multi-line mode, to send input press CTRL+D on Linux/Max, Ctrl+Z then Return on Windows
+    bool multiline_mode    = true; // enables multi-line mode, to send input press CTRL+D on Linux/Max, Ctrl+Z then Return on Windows
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);

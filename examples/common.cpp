@@ -246,8 +246,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.antiprompt.push_back("### Instruction:\n\n");
         } else if (arg == "--color") {
             params.use_color = true;
-        } else if (arg == "--multiline") {
-            params.multiline_mode = true;
+        } else if (arg == "--disable-multiline") {
+            params.multiline_mode = false;
         } else if (arg == "--mlock") {
             params.use_mlock = true;
         } else if (arg == "--no-mmap") {
@@ -334,7 +334,7 @@ void gpt_print_usage(char * argv_0, const gpt_params & params) {
     fprintf(stderr, "                        run in interactive mode and poll user input upon seeing PROMPT (can be\n");
     fprintf(stderr, "                        specified more than once for multiple prompts).\n");
     fprintf(stderr, "  --color               colorise output to distinguish prompt and user input from generations\n");
-    fprintf(stderr, "  --multiline           multiline mode (use Ctrl+D on Linux/Mac and Ctrl+Z then Return on Windows to toggle multiline)\n");
+    fprintf(stderr, "  --disable-multiline   disable multiline mode (use Ctrl+D on Linux/Mac and Ctrl+Z then Return on Windows to toggle multiline)\n");
     fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for <= 0)\n");
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
     fprintf(stderr, "  -p PROMPT, --prompt PROMPT\n");
