@@ -156,7 +156,35 @@ static std::string llama_format_win_err(DWORD err) {
 struct llama_mmap {
     void * addr;
     size_t size;
+    void preload_mmap_file(void *addr, size_t length)
+    {
+    #ifndef _PRELOAD_MMAP_FILE
+        return;
+    #endif
+    // Get the page size of the system
+    #if defined(_WIN32)
+        SYSTEM_INFO si;
+        GetSystemInfo(&si);
+        long page_size = si.dwPageSize;
+    #else
+        long page_size = sysconf(_SC_PAGE_SIZE); // in windows we can use GetSystemInfo:
+    #endif
 
+        if (page_size == -1)
+        {
+            perror("sysconf");
+            return;
+        }
+
+        // Loop over the mapped file, jumping by page size
+        for (size_t i = 0; i < length; i += page_size)
+        {
+            // Dereference the pointer at each page boundary
+            volatile char c = ((char *)addr)[i];
+            // Force the compiler to not optimize the loop away:
+            (void)c; // Use the value of 'c' to avoid compiler warnings and ensure the loop is not optimized away
+        }
+    }
     llama_mmap(const llama_mmap &) = delete;
 
 #ifdef _POSIX_MAPPED_FILES
@@ -180,6 +208,8 @@ struct llama_mmap {
             fprintf(stderr, "warning: madvise(.., MADV_WILLNEED) failed: %s\n",
                     strerror(errno));
         }
+        // if _PRELOAD_MMAP_FILE is define, this will preload the file into the page cache efficiently
+        preload_mmap_file(addr, file->size);
     }
 
     ~llama_mmap() {
@@ -217,6 +247,9 @@ struct llama_mmap {
             fprintf(stderr, "warning: PrefetchVirtualMemory failed: %s\n",
                     llama_format_win_err(GetLastError()).c_str());
         }
+
+        // if _PRELOAD_MMAP_FILE is define, this will preload the file into the page cache efficiently
+        preload_mmap_file(addr, file->size);
     }
 
     ~llama_mmap() {
