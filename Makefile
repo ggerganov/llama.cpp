@@ -139,6 +139,9 @@ default: main quantize perplexity embedding
 # Build library
 #
 
+thpool.o: thpool.c thpool.h
+	$(CC)  $(CFLAGS) -c thpool.c -o thpool.o
+
 ggml.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS)   -c ggml.c -o ggml.o
 
@@ -151,23 +154,23 @@ common.o: examples/common.cpp examples/common.h
 clean:
 	rm -vf *.o main quantize quantize-stats perplexity embedding
 
-main: examples/main/main.cpp ggml.o llama.o common.o
-	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
+main: examples/main/main.cpp thpool.o ggml.o llama.o common.o
+	$(CXX) $(CXXFLAGS) examples/main/main.cpp thpool.o ggml.o llama.o common.o -o main $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
 
-quantize: examples/quantize/quantize.cpp ggml.o llama.o
-	$(CXX) $(CXXFLAGS) examples/quantize/quantize.cpp ggml.o llama.o -o quantize $(LDFLAGS)
+quantize: examples/quantize/quantize.cpp thpool.o ggml.o llama.o
+	$(CXX) $(CXXFLAGS) examples/quantize/quantize.cpp thpool.o ggml.o llama.o -o quantize $(LDFLAGS)
 
 quantize-stats: examples/quantize-stats/quantize-stats.cpp ggml.o llama.o
 	$(CXX) $(CXXFLAGS) examples/quantize-stats/quantize-stats.cpp ggml.o llama.o -o quantize-stats $(LDFLAGS)
 
 perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o
-	$(CXX) $(CXXFLAGS) examples/perplexity/perplexity.cpp ggml.o llama.o common.o -o perplexity $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) examples/perplexity/perplexity.cpp thpool.o ggml.o llama.o common.o -o perplexity $(LDFLAGS)
 
-embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
-	$(CXX) $(CXXFLAGS) examples/embedding/embedding.cpp ggml.o llama.o common.o -o embedding $(LDFLAGS)
+embedding: examples/embedding/embedding.cpp thpool.o ggml.o llama.o common.o
+	$(CXX) $(CXXFLAGS) examples/embedding/embedding.cpp thpool.o ggml.o llama.o common.o -o embedding $(LDFLAGS)
 
 libllama.so: llama.o ggml.o
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o libllama.so llama.o ggml.o $(LDFLAGS)

@@ -326,7 +326,7 @@ jobs:
 #          sudo apt-get install cmake
 #
 #      - name: Configure
-#        run: cmake . -DCMAKE_BUILD_TYPE=Debug -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON
+#        run: cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON
 #
 #      - name: Build
 #        run: |
