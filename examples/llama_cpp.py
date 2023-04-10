@@ -37,6 +37,7 @@ def _load_shared_library(lib_base_name):
     ]
 
     if ("LLAMA_CPP_LIB" in os.environ):
+        lib_base_name = os.environ["LLAMA_CPP_LIB"]
         _lib_paths = [pathlib.Path(os.environ["LLAMA_CPP_LIB"]).resolve()]
 
     # Add the library directory to the DLL search path on Windows (if needed)
