@@ -81,6 +81,8 @@ ModelLoadResult gpt2_model_load(const std::string & fname, gpt2_model & model, g
         }
     }
 
+    auto memory_type = GGML_TYPE_F16;
+
     // for the big tensors, we have the option to store the data in 16-bit floats or quantized
     // in order to save memory and also to speed up the computation
     ggml_type wtype = GGML_TYPE_COUNT;
@@ -242,9 +244,9 @@ ModelLoadResult gpt2_model_load(const std::string & fname, gpt2_model & model, g
 
         const int n_mem      = n_layer*n_ctx;
         const int n_elements = n_embd*n_mem;
-
-        model.memory_k = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_elements);
-        model.memory_v = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_elements);
+       
+        model.memory_k = ggml_new_tensor_1d(ctx, memory_type, n_elements);
+        model.memory_v = ggml_new_tensor_1d(ctx, memory_type, n_elements);
 
         const size_t memory_size = ggml_nbytes(model.memory_k) + ggml_nbytes(model.memory_v);
 
@@ -370,7 +372,8 @@ bool gpt2_eval(
     const int n_head  = hparams.n_head;
     const int n_vocab = hparams.n_vocab;
 
-    static size_t buf_size = 256u*1024*1024;
+    //todo: there is a bug that causes the buffer to oom and I cannot figure it out, hack to increase size for now  
+    static size_t buf_size = 1024u*1024*1024;
     static void * buf = malloc(buf_size);
 
     if (mem_per_token > 0 && mem_per_token*N > buf_size) {

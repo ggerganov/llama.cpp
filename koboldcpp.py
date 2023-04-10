@@ -349,7 +349,7 @@ def main(args):
     mdl_nparts = sum(1 for n in range(1, 9) if os.path.exists(f"{ggml_selected_file}.{n}")) + 1
     modelname = os.path.abspath(ggml_selected_file)
     print(f"Loading model: {modelname} \n[Parts: {mdl_nparts}, Threads: {args.threads}]")
-    loadok = load_model(modelname,8,maxctx,mdl_nparts,args.threads,args.usemmap)
+    loadok = load_model(modelname,8,maxctx,mdl_nparts,args.threads,(not args.nommap))
     print("Load Model OK: " + str(loadok))
 
     if not loadok:
@@ -378,7 +378,7 @@ def main(args):
     RunServerMultiThreaded(args.host, args.port, embedded_kailite)
 
 if __name__ == '__main__':
-    print("Welcome to KoboldCpp - Version 1.3") # just update version manually
+    print("Welcome to KoboldCpp - Version 1.4") # just update version manually
     parser = argparse.ArgumentParser(description='Kobold llama.cpp server')
     parser.add_argument("model_file", help="Model file to load", nargs="?")
     portgroup = parser.add_mutually_exclusive_group() #we want to be backwards compatible with the unnamed positional args
@@ -396,6 +396,6 @@ if __name__ == '__main__':
     parser.add_argument("--psutil_set_threads", help="Experimental flag. If set, uses psutils to determine thread count based on physical cores.", action='store_true')
     parser.add_argument("--stream", help="Uses pseudo streaming", action='store_true')
     parser.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
-    parser.add_argument("--usemmap", help="Use mmap to load newer models (default false)", action='store_true')
+    parser.add_argument("--nommap", help="If set, do not use mmap to load newer models", action='store_true')
     args = parser.parse_args()
     main(args)

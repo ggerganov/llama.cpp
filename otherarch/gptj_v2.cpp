@@ -378,7 +378,8 @@ bool gptj_eval(
 
     const int d_key = n_embd/n_head;
 
-    static size_t buf_size = 256u*1024*1024;
+    //todo: there is a bug that causes the buffer to oom and I cannot figure it out, hack to increase size for now  
+    static size_t buf_size = 1024u*1024*1024;
     static void * buf = malloc(buf_size);
 
     if (mem_per_token > 0 && mem_per_token*N > buf_size) {

@@ -36,16 +36,22 @@ ModelLoadResult legacy_gpt2_model_load(const std::string & fname, gpt2_v1_model 
         }
     }
 
+    auto desiredMaxCtx = model.hparams.n_ctx;
+
     // load hparams
     {
         auto & hparams = model.hparams;
 
+        
         fin.read((char *) &hparams.n_vocab, sizeof(hparams.n_vocab));
         fin.read((char *) &hparams.n_ctx,   sizeof(hparams.n_ctx));
         fin.read((char *) &hparams.n_embd,  sizeof(hparams.n_embd));
         fin.read((char *) &hparams.n_head,  sizeof(hparams.n_head));
         fin.read((char *) &hparams.n_layer, sizeof(hparams.n_layer));
         fin.read((char *) &hparams.f16,     sizeof(hparams.f16));
+
+        //used to expand KV size if needed
+        desiredMaxCtx = std::max(hparams.n_ctx,desiredMaxCtx);
 
         printf("%s: n_vocab = %d\n", __func__, hparams.n_vocab);
         printf("%s: n_ctx   = %d\n", __func__, hparams.n_ctx);
@@ -94,7 +100,7 @@ ModelLoadResult legacy_gpt2_model_load(const std::string & fname, gpt2_v1_model 
 
         const int n_embd  = hparams.n_embd;
         const int n_layer = hparams.n_layer;
-        const int n_ctx   = hparams.n_ctx;
+        const int n_ctx   = desiredMaxCtx;
         const int n_vocab = hparams.n_vocab;
 
         ctx_size += n_embd*ggml_v1_type_size(GGML_V1_TYPE_F32); // ln_f_g
@@ -215,7 +221,7 @@ ModelLoadResult legacy_gpt2_model_load(const std::string & fname, gpt2_v1_model 
 
         const int n_embd  = hparams.n_embd;
         const int n_layer = hparams.n_layer;
-        const int n_ctx   = hparams.n_ctx;
+        const int n_ctx   = desiredMaxCtx;
 
         const int n_mem      = n_layer*n_ctx;
         const int n_elements = n_embd*n_mem;
