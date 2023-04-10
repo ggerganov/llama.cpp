@@ -22,9 +22,9 @@ Please provide a detailed written description of what you were trying to do, and
 
 # Current Behavior
 
-Please provide a detailed written description of what `llama.cpp` did, instead. 
+Please provide a detailed written description of what `llama.cpp` did, instead.
 
-# Environment and Context 
+# Environment and Context
 
 Please provide detailed information about your computer setup. This is important in case the issue is not reproducible except for under certain specific conditions.
 
@@ -133,7 +133,7 @@ llama_model_load: loading model part 8/8 from './models/65B/ggml-model-q4_0.bin.
 llama_model_load: .......................................................................................... done
 llama_model_load: model size =  4869.09 MB / num tensors = 723
 
-system_info: n_threads = 16 / 32 | AVX = 1 | AVX2 = 1 | AVX512 = 0 | FMA = 1 | NEON = 0 | ARM_FMA = 0 | F16C = 1 | FP16_VA = 0 | WASM_SIMD = 0 | BLAS = 0 | SSE3 = 1 | VSX = 0 | 
+system_info: n_threads = 16 / 32 | AVX = 1 | AVX2 = 1 | AVX512 = 0 | FMA = 1 | NEON = 0 | ARM_FMA = 0 | F16C = 1 | FP16_VA = 0 | WASM_SIMD = 0 | BLAS = 0 | SSE3 = 1 | VSX = 0 |
 
 main: prompt: 'Please close your issue when it has been answered.'
 main: number of tokens in prompt = 11
@@ -166,14 +166,14 @@ main:    total time = 246406.42 ms
 
  Performance counter stats for './main -m ./models/65B/ggml-model-q4_0.bin -t 16 -n 1024 -p Please close your issue when it has been answered.':
 
-        3636882.89 msec task-clock                #   14.677 CPUs utilized          
-             13509      context-switches          #    3.714 /sec                   
-              2436      cpu-migrations            #    0.670 /sec                   
-          10476679      page-faults               #    2.881 K/sec                  
+        3636882.89 msec task-clock                #   14.677 CPUs utilized
+             13509      context-switches          #    3.714 /sec
+              2436      cpu-migrations            #    0.670 /sec
+          10476679      page-faults               #    2.881 K/sec
     13133115082869      cycles                    #    3.611 GHz                      (16.77%)
        29314462753      stalled-cycles-frontend   #    0.22% frontend cycles idle     (16.76%)
     10294402631459      stalled-cycles-backend    #   78.39% backend cycles idle      (16.74%)
-    23479217109614      instructions              #    1.79  insn per cycle         
+    23479217109614      instructions              #    1.79  insn per cycle
                                                   #    0.44  stalled cycles per insn  (16.76%)
      2353072268027      branches                  #  647.002 M/sec                    (16.77%)
         1998682780      branch-misses             #    0.08% of all branches          (16.76%)
