@@ -8,6 +8,7 @@ struct load_model_inputs
     const bool f16_kv;
     const char *model_filename;
     const int n_parts_overwrite = -1;
+    const bool use_mmap;
 };
 struct generation_inputs
 {

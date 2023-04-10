@@ -42,17 +42,13 @@ bool llama_load_model(const load_model_inputs inputs, FileFormat in_file_format)
     ctx_params.seed = -1;
     ctx_params.f16_kv = inputs.f16_kv;
     ctx_params.logits_all = false;
+    ctx_params.use_mmap = inputs.use_mmap;
 
     file_format = in_file_format;
 
-    if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF)
-    {
-        ctx = legacy_llama_init_from_file(modelname.c_str(), ctx_params);
-    }
-    else
-    {
-        ctx = llama_init_from_file(modelname.c_str(), ctx_params);
-    }
+   
+    ctx = llama_init_from_file(modelname.c_str(), ctx_params);
+    
 
     if (ctx == NULL)
     {

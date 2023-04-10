@@ -97,6 +97,7 @@ int main(int argc, char ** argv) {
         lparams.n_parts    = params.n_parts;
         lparams.seed       = params.seed;
         lparams.f16_kv     = params.memory_f16;
+        lparams.use_mmap   = params.use_mmap;
         lparams.use_mlock  = params.use_mlock;
 
         ctx = llama_init_from_file(params.model.c_str(), lparams);

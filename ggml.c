@@ -97,17 +97,6 @@ typedef void* thread_ret_t;
 #define static_assert(cond, msg) _Static_assert(cond, msg)
 #endif
 
-#define GGML_MLOCK_SUPPORT 0
-
-#ifdef __has_include
-    #if __has_include(<sys/mman.h>)
-        #undef GGML_MLOCK_SUPPORT
-        #define GGML_MLOCK_SUPPORT 1
-        #include <sys/mman.h>
-    #endif
-#endif
-
-
 /*#define GGML_PERF*/
 #define GGML_DEBUG 0
 #define GGML_GELU_FP16
@@ -2690,21 +2679,6 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
 
 static_assert(GGML_OP_COUNT == 35, "GGML_OP_COUNT != 35");
 
-//
-// ggml object
-//
-
-struct ggml_object {
-    size_t offs;
-    size_t size;
-
-    struct ggml_object * next;
-
-    char padding[8];
-};
-
-static const size_t GGML_OBJECT_SIZE = sizeof(struct ggml_object);
-
 static_assert(sizeof(struct ggml_object)%GGML_MEM_ALIGN == 0, "ggml_object size must be a multiple of GGML_MEM_ALIGN");
 static_assert(sizeof(struct ggml_tensor)%GGML_MEM_ALIGN == 0, "ggml_tensor size must be a multiple of GGML_MEM_ALIGN");
 
@@ -2716,7 +2690,6 @@ struct ggml_context {
     size_t mem_size;
     void * mem_buffer;
     bool   mem_buffer_owned;
-    bool   mem_buffer_mlocked;
     bool   no_alloc;
 
     int    n_objects;
@@ -3003,7 +2976,6 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         /*.mem_size           =*/ params.mem_size,
         /*.mem_buffer         =*/ params.mem_buffer ? params.mem_buffer : malloc(params.mem_size),
         /*.mem_buffer_owned   =*/ params.mem_buffer ? false : true,
-        /*.mem_buffer_mlocked =*/ false,
         /*.no_alloc           =*/ params.no_alloc,
         /*.n_objects          =*/ 0,
         /*.objects_begin      =*/ NULL,
@@ -3036,14 +3008,6 @@ void ggml_free(struct ggml_context * ctx) {
             GGML_PRINT_DEBUG("%s: context %d with %d objects has been freed. memory used = %zu\n",
                     __func__, i, ctx->n_objects, ctx->objects_end->offs + ctx->objects_end->size);
 
-#if GGML_MLOCK_SUPPORT
-            if (ctx->mem_buffer_mlocked) {
-                if (munlock(ctx->mem_buffer, ctx->mem_size)) {
-                    fprintf(stderr, "%s: failed to munlock buffer: %s\n", __func__, strerror(errno));
-                }
-            }
-#endif
-
             if (ctx->mem_buffer_owned) {
                 free(ctx->mem_buffer);
             }
@@ -3070,48 +3034,6 @@ size_t ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch) 
     ctx->scratch = scratch;
 
     return result;
-}
-
-#ifdef __APPLE__
-#define MLOCK_SUGGESTION \
-    "Try increasing the sysctl values 'vm.user_wire_limit' and 'vm.global_user_wire_limit' and/or " \
-    "decreasing 'vm.global_no_user_wire_amount'.  Also try increasing RLIMIT_MLOCK (ulimit -l).\n"
-#else
-#define MLOCK_SUGGESTION \
-    "Try increasing RLIMIT_MLOCK ('ulimit -l' as root).\n"
-#endif
-
-bool ggml_mlock_supported(void) {
-    return GGML_MLOCK_SUPPORT;
-}
-
-bool ggml_mlock(
-        struct ggml_context * ctx,
-        const void *opt_extra_addr,
-        size_t opt_extra_len,
-        char **err_p) {
-    // TODO: Use SetProcessWorkingSetSize() + VirtualLock() on WIN32
-#if GGML_MLOCK_SUPPORT
-    if (ctx->mem_buffer_mlocked) {
-        return true;
-    }
-    if (mlock(ctx->mem_buffer, ctx->mem_size) ||
-        (opt_extra_len &&
-         mlock(opt_extra_addr, opt_extra_len))) {
-        if ((*err_p = malloc(1024))) {
-            snprintf(*err_p, 1024,
-                     "failed to mlock %zu-byte buffer: %s\n" MLOCK_SUGGESTION,
-                     ctx->mem_size + opt_extra_len,
-                     strerror(errno));
-        }
-        return false;
-    }
-    ctx->mem_buffer_mlocked = true;
-    return true;
-#else // GGML_MLOCK_SUPPORT
-    *err_p = strdup("can't mlock because it's not supported on this system");
-    return false;
-#endif // GGML_MLOCK_SUPPORT
 }
 
 ////////////////////////////////////////////////////////////////////////////////

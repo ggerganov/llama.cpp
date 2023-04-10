@@ -37,7 +37,7 @@ LDFLAGS  =
 
 #lets try enabling everything
 CFLAGS   += -pthread -s 
-CXXFLAGS += -pthread -s 
+CXXFLAGS += -pthread -s -Wno-multichar
 
 # OS specific
 # TODO: support Windows
@@ -121,7 +121,7 @@ BLAS_BUILD =
 ifeq ($(OS),Windows_NT)
 	BLAS_BUILD = $(CXX) $(CXXFLAGS) ggml_blas.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o libopenblas.lib -shared -o koboldcpp_blas.dll $(LDFLAGS)
 else
-	BLAS_BUILD = @echo 'Your OS $(OS) does not appear to be Windows. If you want to use openblas, please install it seperately, then link it manually with LLAMA_OPENBLAS=1'
+	BLAS_BUILD = @echo 'Your OS $(OS) does not appear to be Windows. If you want to use openblas, please install it seperately, then link it manually with LLAMA_OPENBLAS=1. This is just a reminder, not an error.'
 endif
 
 #
@@ -154,7 +154,7 @@ ggml_blas.o: ggml.c ggml.h
 ggml_v1.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
 	$(CC)  $(CFLAGS) -c otherarch/ggml_v1.c -o ggml_v1.o
 
-llama.o: llama.cpp llama.h
+llama.o: llama.cpp llama.h llama_internal.h
 	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
 
 common.o: examples/common.cpp examples/common.h
