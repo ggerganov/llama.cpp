@@ -1808,6 +1808,12 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
     ggml_context* lora_ctx = ggml_init(params);
     std::unordered_map<std::string, struct ggml_tensor *> lora_tensors;
 
+    // create a name -> tensor map of the model to accelerate lookups
+    std::unordered_map<std::string, struct ggml_tensor*> model_tensors;
+    for (auto & kv: model.tensors_by_name) {
+        model_tensors.insert(kv);
+    }
+
     fprintf(stderr, "%s: ", __func__);
 
     // read tensors and apply
@@ -1847,7 +1853,7 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
         base_name.erase(pos);
         // fprintf(stderr, "%s: %s => %s (lora type %s) ", __func__, name.c_str(),base_name.c_str(), lora_type.c_str());
 
-        if (model.tensors.find(base_name.data()) == model.tensors.end()) {
+        if (model_tensors.find(base_name.data()) == model_tensors.end()) {
             fprintf(stderr, "%s: unknown tensor '%s' in lora adapter\n", __func__, name.data());
             return 1;
         }
@@ -1886,7 +1892,7 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
         if (lora_tensors.find(base_name + ".loraA") != lora_tensors.end() &&
             lora_tensors.find(base_name + ".loraB") != lora_tensors.end()) {
 
-            ggml_tensor * tensor = model.tensors[base_name];
+            ggml_tensor * tensor = model_tensors[base_name];
             ggml_tensor * loraA = lora_tensors[base_name + ".loraA"];
             ggml_tensor * loraB = lora_tensors[base_name + ".loraB"];
 
