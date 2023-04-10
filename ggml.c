@@ -9531,7 +9531,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         {
             int start = i;
             int end = i;
-            while (end < cgraph->n_nodes && (end - start) < n_threads * 2)
+            while (end < cgraph->n_nodes && (end - start) < 48)
             {
                 struct ggml_tensor * next = cgraph->nodes[end];
                 end++;
