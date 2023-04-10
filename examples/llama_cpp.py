@@ -94,6 +94,7 @@ class llama_context_params(Structure):
             c_bool,
         ),  # the llama_eval() call computes all logits, not just the last one
         ("vocab_only", c_bool),  # only load the vocabulary, no weights
+        ("use_mmap", c_bool),  # use mmap if possible
         ("use_mlock", c_bool),  # force system to keep model in RAM
         ("embedding", c_bool),  # embedding mode only
         # called with a progress value between 0 and 1, pass NULL to disable
@@ -116,6 +117,17 @@ def llama_context_default_params() -> llama_context_params:
 _lib.llama_context_default_params.argtypes = []
 _lib.llama_context_default_params.restype = llama_context_params
 
+def llama_mmap_supported() -> c_bool:
+    return _lib.llama_mmap_supported()
+
+_lib.llama_mmap_supported.argtypes = []
+_lib.llama_mmap_supported.restype = c_bool
+
+def llama_mlock_supported() -> c_bool:
+    return _lib.llama_mlock_supported()
+
+_lib.llama_mlock_supported.argtypes = []
+_lib.llama_mlock_supported.restype = c_bool
 
 # Various functions for loading a ggml llama model.
 # Allocate (almost) all memory needed for the model.
