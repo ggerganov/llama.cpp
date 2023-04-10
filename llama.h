@@ -55,6 +55,7 @@ extern "C" {
         bool f16_kv;     // use fp16 for KV cache
         bool logits_all; // the llama_eval() call computes all logits, not just the last one
         bool vocab_only; // only load the vocabulary, no weights
+        bool use_mmap;   // use mmap if possible
         bool use_mlock;  // force system to keep model in RAM
         bool embedding;  // embedding mode only
 
@@ -65,6 +66,9 @@ extern "C" {
     };
 
     LLAMA_API struct llama_context_params llama_context_default_params();
+
+    LLAMA_API bool llama_mmap_supported();
+    LLAMA_API bool llama_mlock_supported();
 
     // Various functions for loading a ggml llama model.
     // Allocate (almost) all memory needed for the model.
@@ -166,4 +170,4 @@ extern "C" {
 }
 #endif
 
-#endif
+#endif // LLAMA_H
