@@ -114,6 +114,14 @@ typedef void* thread_ret_t;
     #define GGML_MEM_ALIGN 16
 #endif
 
+#if defined(_MSC_VER) || defined(__MINGW32__)
+#define GGML_ALIGNED_MALLOC(size)  _aligned_malloc(size, GGML_MEM_ALIGN)
+#define GGML_ALIGNED_FREE(ptr)     _aligned_free(ptr)
+#else
+#define GGML_ALIGNED_MALLOC(size)  aligned_alloc(GGML_MEM_ALIGN, size)
+#define GGML_ALIGNED_FREE(ptr)     free(ptr)
+#endif
+
 #define UNUSED(x) (void)(x)
 #define SWAP(x, y, T) do { T SWAP = x; x = y; y = SWAP; } while (0)
 
@@ -2966,7 +2974,7 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
 
     *ctx = (struct ggml_context) {
         /*.mem_size           =*/ params.mem_size,
-        /*.mem_buffer         =*/ params.mem_buffer ? params.mem_buffer : malloc(params.mem_size),
+        /*.mem_buffer         =*/ params.mem_buffer ? params.mem_buffer : GGML_ALIGNED_MALLOC(params.mem_size),
         /*.mem_buffer_owned   =*/ params.mem_buffer ? false : true,
         /*.no_alloc           =*/ params.no_alloc,
         /*.n_objects          =*/ 0,
@@ -3001,7 +3009,7 @@ void ggml_free(struct ggml_context * ctx) {
                     __func__, i, ctx->n_objects, ctx->objects_end->offs + ctx->objects_end->size);
 
             if (ctx->mem_buffer_owned) {
-                free(ctx->mem_buffer);
+                GGML_ALIGNED_FREE(ctx->mem_buffer);
             }
 
             found = true;
