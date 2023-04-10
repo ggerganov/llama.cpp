@@ -2067,18 +2067,18 @@ static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void * rest
     float sum1 = 0.0f;
 
     for (int i = 0; i < nb; i += 2) {
-        const block_q4_0 * restrict x0 = &px[i + 0];
-        const block_q4_0 * restrict y0 = &py[i + 0];
-        const block_q4_0 * restrict x1 = &px[i + 1];
-        const block_q4_0 * restrict y1 = &py[i + 1];
+        const block_q4_0 * restrict x0 = &x[i + 0];
+        const block_q4_0 * restrict y0 = &y[i + 0];
+        const block_q4_0 * restrict x1 = &x[i + 1];
+        const block_q4_0 * restrict y1 = &y[i + 1];
 
         const v128_t m4b = wasm_u8x16_splat(0xf);
         const v128_t s8b = wasm_i8x16_splat(0x8);
 
-        const v128_t v0_0 = wasm_v128_load(x0.qs);
-        const v128_t v0_1 = wasm_v128_load(y0.qs);
-        const v128_t v1_0 = wasm_v128_load(x1.qs);
-        const v128_t v1_1 = wasm_v128_load(y1.qs);
+        const v128_t v0_0 = wasm_v128_load(x0->qs);
+        const v128_t v0_1 = wasm_v128_load(y0->qs);
+        const v128_t v1_0 = wasm_v128_load(x1->qs);
+        const v128_t v1_1 = wasm_v128_load(y1->qs);
 
         // 4-bit -> 8-bit
         const v128_t v0_0l = wasm_v128_and(v0_0, m4b);
