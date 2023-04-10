@@ -1,16 +1,14 @@
 const std = @import("std");
 
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.build.Builder) void {
     const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
+    const optimize = b.standardReleaseOptions();
     const want_lto = b.option(bool, "lto", "Want -fLTO");
 
-    const lib = b.addStaticLibrary(.{
-        .name = "llama",
-        .target = target,
-        .optimize = optimize,
-    });
+    const lib = b.addStaticLibrary("llama", "llama.cpp");
     lib.want_lto = want_lto;
+    lib.setTarget(target);
+    lib.setBuildMode(optimize);
     lib.linkLibCpp();
     lib.addIncludePath(".");
     lib.addIncludePath("examples");
@@ -44,20 +42,15 @@ pub fn build(b: *std.Build) void {
 fn build_example(comptime name: []const u8, args: anytype) *std.build.LibExeObjStep {
     const b = args.b;
     const lib = args.lib;
-    const target = args.target;
-    const optimize = args.optimize;
     const want_lto = args.want_lto;
 
-    const exe = b.addExecutable(.{
-        .name = name,
-        .target = target,
-        .optimize = optimize,
-    });
+    const exe = b.addExecutable(name, std.fmt.comptimePrint("examples/{s}/{s}.cpp", .{name, name}));
     exe.want_lto = want_lto;
+    lib.setTarget(args.target);
+    lib.setBuildMode(args.optimize);
     exe.addIncludePath(".");
     exe.addIncludePath("examples");
     exe.addCSourceFiles(&.{
-        std.fmt.comptimePrint("examples/{s}/{s}.cpp", .{name, name}),
         "examples/common.cpp",
     }, &.{"-std=c++11"});
     exe.linkLibrary(lib);
