@@ -1,0 +1,14 @@
+name: EditorConfig Checker
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  editorconfig:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: editorconfig-checker/action-editorconfig-checker@main
+      - run: editorconfig-checker

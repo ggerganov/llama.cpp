@@ -242,7 +242,7 @@ There 26 letters in the English Alphabet
 The majority (54%) are using public transit. This includes buses, trams and metros with over 100 lines throughout the city which make it very accessible for tourists to navigate around town as well as locals who commute by tram or metro on a daily basis
 > List 5 words that start with "ca".
 cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
-> 
+>
 ```
 
 ### Using [GPT4All](https://github.com/nomic-ai/gpt4all)
@@ -253,17 +253,17 @@ cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
 convert the model from the old format to the new format with [./migrate-ggml-2023-03-30-pr613.py](./migrate-ggml-2023-03-30-pr613.py):
 
   ```bash
-  python3 convert-gpt4all-to-ggml.py models/gpt4all-7B/gpt4all-lora-quantized.bin ./models/tokenizer.model 
+  python3 convert-gpt4all-to-ggml.py models/gpt4all-7B/gpt4all-lora-quantized.bin ./models/tokenizer.model
   python3 migrate-ggml-2023-03-30-pr613.py models/gpt4all-7B/gpt4all-lora-quantized.bin models/gpt4all-7B/gpt4all-lora-quantized-new.bin
   ```
-  
+
 - You can now use the newly generated `gpt4all-lora-quantized-new.bin` model in exactly the same way as all other models
 - The original model is saved in the same folder with a suffix `.orig`
 
 ### Obtaining and verifying the Facebook LLaMA original model and Stanford Alpaca model data
 
 - **Under no circumstances share IPFS, magnet links, or any other links to model downloads anywhere in this respository, including in issues, discussions or pull requests. They will be immediately deleted.**
-- The LLaMA models are officially distributed by Facebook and will **never** be provided through this repository. 
+- The LLaMA models are officially distributed by Facebook and will **never** be provided through this repository.
 - Refer to [Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to request access to the model data.
 - Please verify the sha256 checksums of all downloaded model files to confirm that you have the correct model data files before creating an issue relating to your model files.
 - The following command will verify if you have all possible latest files in your self-installed `./models` subdirectory:
@@ -283,7 +283,7 @@ convert the model from the old format to the new format with [./migrate-ggml-202
   - GPT-3.5 / InstructGPT / ChatGPT:
     - [Aligning language models to follow instructions](https://openai.com/research/instruction-following)
     - [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
-    
+
 ### Perplexity (Measuring model quality)
 
 You can use the `perplexity` example to measure perplexity over the given prompt.  For more background,

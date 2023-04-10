@@ -22,9 +22,9 @@ extern "C" __declspec(dllimport) int __stdcall GetConsoleMode(void* hConsoleHand
 extern "C" __declspec(dllimport) int __stdcall SetConsoleMode(void* hConsoleHandle, unsigned long dwMode);
 extern "C" __declspec(dllimport) int __stdcall SetConsoleCP(unsigned int wCodePageID);
 extern "C" __declspec(dllimport) int __stdcall SetConsoleOutputCP(unsigned int wCodePageID);
-extern "C" __declspec(dllimport) int __stdcall WideCharToMultiByte(unsigned int CodePage, unsigned long dwFlags, 
-                                                                   const wchar_t * lpWideCharStr, int cchWideChar, 
-                                                                   char * lpMultiByteStr, int cbMultiByte, 
+extern "C" __declspec(dllimport) int __stdcall WideCharToMultiByte(unsigned int CodePage, unsigned long dwFlags,
+                                                                   const wchar_t * lpWideCharStr, int cchWideChar,
+                                                                   char * lpMultiByteStr, int cbMultiByte,
                                                                    const char * lpDefaultChar, bool * lpUsedDefaultChar);
 #define CP_UTF8 65001
 #endif
