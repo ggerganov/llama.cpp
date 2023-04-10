@@ -29,15 +29,15 @@ def _load_shared_library(lib_base_name):
 
     # Construct the paths to the possible shared library names
     _base_path = pathlib.Path(__file__).parent.resolve()
-    _local_path = pathlib.Path.cwd()
     # Searching for the library in the current directory under the name "libllama" (default name
     # for llamacpp) and "llama" (default name for this repo)
     _lib_paths = [
-        _local_path / f"./lib{lib_base_name}{lib_ext}",
-        _local_path / f"./{lib_base_name}{lib_ext}",
         _base_path / f"lib{lib_base_name}{lib_ext}",
         _base_path / f"{lib_base_name}{lib_ext}"
     ]
+
+    if ("LLAMA_CPP_LIB" in os.environ):
+        _lib_paths = [pathlib.Path(os.environ["LLAMA_CPP_LIB"]).resolve()]
 
     # Add the library directory to the DLL search path on Windows (if needed)
     if sys.platform == "win32" and sys.version_info >= (3, 8):
