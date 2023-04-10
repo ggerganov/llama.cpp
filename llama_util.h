@@ -30,6 +30,8 @@
     #include <windows.h>
     #include <io.h>
     #include <stdio.h> // for _fseeki64
+#else
+    #include <unistd.h>
 #endif
 
 #define LLAMA_ASSERT(x) \
