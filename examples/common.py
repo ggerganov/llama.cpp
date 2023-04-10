@@ -50,7 +50,7 @@ class GptParams:
     # If chat ended prematurely, append this to the conversation to fix it.
     # Set to "\nUser:" etc.
     # This is an alternative to input_prefix which always adds it, so it potentially duplicates "User:""
-    fix_prefix: str = " "
+    fix_prefix: str = ""
     output_postfix: str = ""
     input_echo: bool = True,
 
