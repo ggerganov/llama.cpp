@@ -40,6 +40,7 @@ class GptParams:
     instruct: bool = False
     ignore_eos: bool = False
     perplexity: bool = False
+    use_mmap: bool = True
     use_mlock: bool = False
     mem_test: bool = False
     verbose_prompt: bool = False
@@ -110,7 +111,9 @@ def gpt_params_parse(argv = None, params: Optional[GptParams] = None):
         dest="use_color"
     )
     parser.add_argument("--mlock", action="store_true",help="force system to keep model in RAM rather than swapping or compressing",dest="use_mlock")
+    parser.add_argument("--no-mmap", action="store_false",help="do not memory-map model (slower load but may reduce pageouts if not using mlock)",dest="use_mmap")
     parser.add_argument("--mtest", action="store_true",help="compute maximum memory usage",dest="mem_test")
+    parser.add_argument("--verbose-prompt", action="store_true",help="print prompt before generation",dest="verbose_prompt")
     parser.add_argument(
         "-r",
         "--reverse-prompt",
