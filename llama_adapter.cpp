@@ -251,10 +251,12 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
                 last_n_tokens.push_back(embd_inp[input_consumed]);
                 current_context_tokens.push_back(embd_inp[input_consumed]);
                 ++input_consumed;
+#ifndef GGML_USE_CLBLAST
                 if ((int)embd.size() >= params.n_batch)
                 {
                     break;
                 }
+#endif
             }
         }
     }

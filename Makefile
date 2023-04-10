@@ -96,6 +96,10 @@ ifdef LLAMA_OPENBLAS
 	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas
 	LDFLAGS += -lopenblas
 endif
+ifdef LLAMA_CLBLAST
+	CFLAGS  += -DGGML_USE_CLBLAST
+	LDFLAGS += -lclblast -lOpenCL
+endif
 ifdef LLAMA_GPROF
 	CFLAGS   += -pg
 	CXXFLAGS += -pg
