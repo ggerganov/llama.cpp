@@ -113,6 +113,10 @@ ifdef LLAMA_CUBLAS
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -Wno-pedantic -c $< -o $@
 endif
+ifdef LLAMA_CLBLAST
+	CFLAGS  += -DGGML_USE_CLBLAST
+	LDFLAGS += -lclblast -lOpenCL
+endif
 ifdef LLAMA_GPROF
 	CFLAGS   += -pg
 	CXXFLAGS += -pg
