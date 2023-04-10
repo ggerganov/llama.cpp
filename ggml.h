@@ -253,6 +253,9 @@ enum ggml_op {
     GGML_OP_FLASH_ATTN,
     GGML_OP_FLASH_FF,
 
+    GGML_OP_MAP_UNARY,
+    GGML_OP_MAP_BINARY,
+
     GGML_OP_COUNT,
 };
 
@@ -418,6 +421,17 @@ float * ggml_get_data_f32(const struct ggml_tensor * tensor);
 struct ggml_tensor * ggml_dup(
         struct ggml_context * ctx,
         struct ggml_tensor  * a);
+
+struct ggml_tensor *ggml_map_unary(
+    struct ggml_context *ctx,
+    struct ggml_tensor *a,
+    void (*const fun)(int, float *, float *));
+
+struct ggml_tensor *ggml_map_binary(
+    struct ggml_context *ctx,
+    struct ggml_tensor *a,
+    struct ggml_tensor *b,
+    void (*const fun)(int, float *, float *, float *));
 
 struct ggml_tensor * ggml_add(
         struct ggml_context * ctx,
