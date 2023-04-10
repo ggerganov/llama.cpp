@@ -225,13 +225,19 @@ struct llama_mmap {
             perror("sysconf");
             return;
         }
+        #ifdef _WIN32
         HANDLE hProcess = GetCurrentProcess();
         WIN32_MEMORY_RANGE_ENTRY range;
         range.VirtualAddress = addr;
         range.NumberOfBytes = length;
-
         // if (!VirtualLock(addr, length))    {    }; // no benefit. for systems with too little RAM we should lock a part and restrict the preload to that new length
         if (!PrefetchVirtualMemory(hProcess, 1, &range, 0)) { }; // Prefetches part of the data and signals readahead to the file system
+        #else
+        // todo
+        //if (posix_madvise(addr, length, POSIX_MADV_WILLNEED) == -1) { }; 
+        // readahead() should be the equivalent method for Linux. I don't think madvise will cause a full fetch      
+        // the multi threaded read below is pseudo sequential, it also needs a test without OS level readahead in place (worst case set threads to 1 in linux or return)
+        #endif
 
         if (n_threads > 32)
             n_threads = 32;
