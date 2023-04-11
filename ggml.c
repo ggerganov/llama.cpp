@@ -536,10 +536,10 @@ static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * r
 
             // On x86_64 and x86, round is amazingly slow.
             // Here it is best to just use this:
-            const uint8_t vi0 = (uint8_t)(v0 + 8.5f);
-            const uint8_t vi1 = (uint8_t)(v1 + 8.5f);
-            //const uint8_t vi0 = (int8_t)roundf(v0) + 8;
-            //const uint8_t vi1 = (int8_t)roundf(v1) + 8;
+            //const uint8_t vi0 = (uint8_t)(v0 + 8.5f);
+            //const uint8_t vi1 = (uint8_t)(v1 + 8.5f);
+            const uint8_t vi0 = (int8_t)roundf(v0) + 8;
+            const uint8_t vi1 = (int8_t)roundf(v1) + 8;
             // This is marginally slower (but still much faster than round())
             //const uint8_t vi0 = nearestInt(v0) + 8;
             //const uint8_t vi1 = nearestInt(v1) + 8;
@@ -835,8 +835,10 @@ static void quantize_row_q4_1_reference(const float * restrict x, void * restric
 
             // For some reason round() is amazingly slow on X86_64 and x86
             // Using this instead reduces the difference between AVX2 and scalar to less than ~15%
-            const uint8_t vi0 = nearestInt(v0); //roundf(v0);
-            const uint8_t vi1 = nearestInt(v1); //roundf(v1);
+            //const uint8_t vi0 = nearestInt(v0);
+            //const uint8_t vi1 = nearestInt(v1);
+            const uint8_t vi0 = roundf(v0);
+            const uint8_t vi1 = roundf(v1);
 
             assert(vi0 < 16);
             assert(vi1 < 16);
