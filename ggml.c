@@ -5955,11 +5955,6 @@ static void ggml_compute_forward_add_q_f32(
     GGML_ASSERT(nb1 <= nb2);
     GGML_ASSERT(nb2 <= nb3);
 
-    GGML_ASSERT(ne0 == ne01);
-    GGML_ASSERT(ne1 == ne11);
-    GGML_ASSERT(ne2 == ne02);
-    GGML_ASSERT(ne3 == ne03);
-
     GGML_ASSERT(src0->type == GGML_TYPE_Q4_0 || src0->type == GGML_TYPE_Q4_1);
     GGML_ASSERT(dst->type == src0->type);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);

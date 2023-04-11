@@ -44,18 +44,18 @@ NUMPY_TYPE_TO_DATA_TYPE: dict[np.dtype[Any], DataType] = {
 }
 
 HF_SUBLAYER_TO_GGML = {
-    "self_attn.q_proj": "attention.wq.weight",
-    "self_attn.k_proj": "attention.wk.weight",
-    "self_attn.v_proj": "attention.wv.weight",
-    "self_attn.o_proj": "attention.wo.weight",
-    # "embed_tokens.weight": "tok_embeddings.weight",
-    # "norm.weight": "norm.weight",
-    # "lm_head.weight": "output.weight",
-    # "mlp.gate_proj": "feed_forward.w1.weight",
-    # "mlp.down_proj": "feed_forward.w2.weight",
-    # "mlp.up_proj": "feed_forward.w3.weight",
-    # "input_layernorm": "attention_norm.weight",
-    # "post_attention_layernorm": "ffn_norm.weight",
+    "self_attn.q_proj": "attention.wq",
+    "self_attn.k_proj": "attention.wk",
+    "self_attn.v_proj": "attention.wv",
+    "self_attn.o_proj": "attention.wo",
+    "mlp.gate_proj": "feed_forward.w1",
+    "mlp.down_proj": "feed_forward.w2",
+    "mlp.up_proj": "feed_forward.w3",
+    "input_layernorm": "attention_norm",
+    "post_attention_layernorm": "ffn_norm",
+    # "norm": "norm",
+    # "embed_tokens": "tok_embeddings",
+    # "lm_head": "output",
 }
 
 
@@ -71,7 +71,9 @@ def translate_tensor_name(t):
             print(f"Error: unrecognized sub-layer {sub_layer} in tensor {t}")
             sys.exit(1)
 
-        output_string = f"layers.{nn}.{HF_SUBLAYER_TO_GGML[sub_layer]}.lora{lora_type}"
+        output_string = (
+            f"layers.{nn}.{HF_SUBLAYER_TO_GGML[sub_layer]}.weight.lora{lora_type}"
+        )
         return output_string
     else:
         print(f"Error: unrecognized tensor {t}")
@@ -138,16 +140,17 @@ with open(output_path, "wb") as fout:
 
     write_file_header(fout, params)
     for k, v in model.items():
-        # since ggml doesn't always support other types for the second operand,
-        # the tensors are always converted and exported as f32
-        v = v.float()
+        if k.endswith("lora_A.weight"):
+            if v.dtype != torch.float16 and v.dtype != torch.float32:
+                v = v.float()
+            v = v.T
+        else:
+            v = v.float()
+
         t = v.numpy()
-        if "lora_A" in k:
-            t = t.T
-        print(
-            f"{k} => {translate_tensor_name(k)} {t.shape} {t.dtype} {t.nbytes/1024/1024:.2f}MB"
-        )
-        write_tensor_header(fout, translate_tensor_name(k), t.shape, t.dtype)
+        tname = translate_tensor_name(k)
+        print(f"{k} => {tname} {t.shape} {t.dtype} {t.nbytes/1024/1024:.2f}MB")
+        write_tensor_header(fout, tname, t.shape, t.dtype)
         t.tofile(fout)
 
 print(f"Converted {input_json} and {input_model} to {output_path}")

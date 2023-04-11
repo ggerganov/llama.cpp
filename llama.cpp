@@ -617,6 +617,7 @@ struct llama_model_loader {
             throw format("llama.cpp: tensor '%s' has wrong shape; expected %s, got %s",
                          name.c_str(), llama_format_tensor_shape(ne).c_str(), llama_format_tensor_shape(lt.ne).c_str());
         }
+
         return get_tensor_for(lt);
     }
 
@@ -1799,7 +1800,8 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
 
 
     // create a temporary ggml context to store the lora tensors
-    std::vector<uint8_t> buf(1024 * 1024 * 100);
+    // todo: calculate size from biggest possible tensor
+    std::vector<uint8_t> buf(1024ull * 1024ull * 1024ull);
     struct ggml_init_params params;
     params.mem_size   = buf.size();
     params.mem_buffer = buf.data();
@@ -1830,11 +1832,9 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
             break;
         }
 
-        int32_t nelements = 1;
         int32_t ne[2] = { 1, 1 };
         for (int i = 0; i < n_dims; ++i) {
             fin.read(reinterpret_cast<char *>(&ne[i]), sizeof(ne[i]));
-            nelements *= ne[i];
         }
 
         std::string name(length, 0);
@@ -1903,23 +1903,25 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
             }
 
             // w = w + BA*s
-            ggml_tensor * BA = ggml_mul_mat(lora_ctx, loraB, loraA);
+            ggml_tensor * BA = ggml_mul_mat(lora_ctx, loraA, loraB);
 
             if (scaling != 1.0f) {
                 ggml_tensor * scale_tensor = ggml_new_f32(lora_ctx, scaling);
                 BA = ggml_scale(lora_ctx, BA, scale_tensor);
             }
 
+            //printf("%s: (B)(%d %d %d %d) x (A)(%d %d %d %d) => (BA)(%d %d %d %d) + (T)(%d %d %d %d)\n",
+            //    base_name.c_str(),
+            //    (int)loraB->ne[0],  (int)loraB->ne[1],  (int)loraB->ne[2],  (int)loraB->ne[3],
+            //    (int)loraA->ne[0],  (int)loraA->ne[1],  (int)loraA->ne[2],  (int)loraA->ne[3],
+            //    (int)BA->ne[0],     (int)BA->ne[1],     (int)BA->ne[2],     (int)BA->ne[3],
+            //    (int)tensor->ne[0], (int)tensor->ne[1], (int)tensor->ne[2], (int)tensor->ne[3]
+            //);
             ggml_tensor * r = ggml_add_inplace(lora_ctx, tensor, BA);
-            //ggml_tensor * r = ggml_add(lora_ctx, tensor, BA);
-            //r = ggml_cpy(lora_ctx, r, tensor);
 
             struct ggml_cgraph gf = ggml_build_forward(r);
             gf.n_threads = n_threads;
             ggml_graph_compute(lora_ctx, &gf);
-
-            // hack until ggml_cpy supports quantized tensors
-            // memcpy(tensor->data, r->data, ggml_nbytes(tensor));
 
             // we won't need these tensors again, reset the context to save memory
             ggml_free(lora_ctx);
