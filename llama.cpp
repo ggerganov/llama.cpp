@@ -8,6 +8,7 @@
 #include "llama_internal.h"
 
 #include "ggml.h"
+#include "ggml_extra.h"
 
 #include <array>
 #include <cinttypes>
@@ -1546,9 +1547,12 @@ static llama_vocab::id llama_sample_top_p_top_k(
 
 static void llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, int itype) {
     ggml_type quantized_type;
+    bool useNewQuantization = false;
     switch (itype) {
         case 2: quantized_type = GGML_TYPE_Q4_0; break;
         case 3: quantized_type = GGML_TYPE_Q4_1; break;
+        case 4: quantized_type = GGML_TYPE_Q4_0; useNewQuantization = true; break;
+        case 5: quantized_type = GGML_TYPE_Q4_1; useNewQuantization = true; break;
         default: throw format("invalid quantization type %d\n", itype);
     };
 
@@ -1616,11 +1620,15 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             switch (new_type) {
                 case GGML_TYPE_Q4_0:
                     {
-                        new_size = ggml_quantize_q4_0(f32_data, new_data, nelements, (int) tensor.ne.at(0), hist_cur.data());
+                        new_size = useNewQuantization ?
+                            kQuantizeQ4_0H(f32_data, new_data, nelements, hist_cur.data()) :
+                            ggml_quantize_q4_0(f32_data, new_data, nelements, (int) tensor.ne.at(0), hist_cur.data());
                     } break;
                 case GGML_TYPE_Q4_1:
                     {
-                        new_size = ggml_quantize_q4_1(f32_data, new_data, nelements, (int) tensor.ne.at(0), hist_cur.data());
+                        new_size = useNewQuantization ?
+                            kQuantizeQ4_1H(f32_data, new_data, nelements, hist_cur.data()) :
+                            ggml_quantize_q4_1(f32_data, new_data, nelements, (int) tensor.ne.at(0), hist_cur.data());
                     } break;
                 default:
                     LLAMA_ASSERT(false);

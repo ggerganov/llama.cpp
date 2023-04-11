@@ -145,32 +145,35 @@ ggml.o: ggml.c ggml.h
 llama.o: llama.cpp llama.h llama_util.h llama_internal.h
 	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
 
+ggml_extra.o: ggml_extra.cpp ggml_extra.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 common.o: examples/common.cpp examples/common.h
 	$(CXX) $(CXXFLAGS) -c examples/common.cpp -o common.o
 
 clean:
 	rm -vf *.o main quantize quantize-stats perplexity embedding
 
-main: examples/main/main.cpp ggml.o llama.o common.o
-	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
+main: examples/main/main.cpp ggml.o llama.o common.o ggml_extra.o
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
 
-quantize: examples/quantize/quantize.cpp ggml.o llama.o
-	$(CXX) $(CXXFLAGS) examples/quantize/quantize.cpp ggml.o llama.o -o quantize $(LDFLAGS)
+quantize: examples/quantize/quantize.cpp ggml.o llama.o ggml_extra.o
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-quantize-stats: examples/quantize-stats/quantize-stats.cpp ggml.o llama.o
-	$(CXX) $(CXXFLAGS) examples/quantize-stats/quantize-stats.cpp ggml.o llama.o -o quantize-stats $(LDFLAGS)
+quantize-stats: examples/quantize-stats/quantize-stats.cpp ggml.o llama.o ggml_extra.o
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o
-	$(CXX) $(CXXFLAGS) examples/perplexity/perplexity.cpp ggml.o llama.o common.o -o perplexity $(LDFLAGS)
+perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o ggml_extra.o
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
-	$(CXX) $(CXXFLAGS) examples/embedding/embedding.cpp ggml.o llama.o common.o -o embedding $(LDFLAGS)
+embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o ggml_extra.o
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-libllama.so: llama.o ggml.o
-	$(CXX) $(CXXFLAGS) -shared -fPIC -o libllama.so llama.o ggml.o $(LDFLAGS)
+libllama.so: llama.o ggml.o ggml_extra.o
+	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 #
 # Tests
 #

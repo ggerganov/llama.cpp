@@ -10,6 +10,11 @@
 
 namespace {
 
+constexpr int kChunkSize = 32*32*8;
+constexpr int QK = 32;
+constexpr int kBucketSize0 = QK/2 + sizeof(float);
+constexpr int kBucketSize1 = QK/2 + 2*sizeof(float);
+
 inline int toNearestInt(float fval) {
     assert(fval <= 4194303.f);
     constexpr float kSnapper=3<<22;
@@ -126,24 +131,19 @@ std::pair<float, float> kQuantize1(int n, const float* X, int8_t* L, std::vector
     return {a, b};
 }
 
-void kQuantizeQ4(const float* GGML_RESTRICT x, void* GGML_RESTRICT buffer, int k, int type) {
-    constexpr int kChunkSize = 32*32*8;
-    constexpr int QK = 32;
-    constexpr int kBucketSize0 = QK/2 + sizeof(float);
-    constexpr int kBucketSize1 = QK/2 + 2*sizeof(float);
+void kQuantizeQ4(const float* X, void* buffer, int k, int type) {
     assert(k % QK == 0);
 
     auto processOne = [type] (const float* X, int8_t* L, char* y, std::vector<std::pair<float, int>>& work, std::vector<float>& tmpX) {
+        auto q = (uint8_t*)y;
         if (type == 0) {
             float scale = kQuantize0(QK, X, L, work, -7, 7);
-            std::memcpy(y, &scale, sizeof(scale)); y += sizeof(scale);
-            uint8_t* q = (uint8_t*)y;
+            std::memcpy(q, &scale, sizeof(scale)); q += sizeof(scale);
             for (int k=0; k<QK/2; ++k) q[k] = (L[2*k] + 8) | ((L[2*k+1] + 8) << 4);
         } else {
             auto result = kQuantize1(QK, X, L, tmpX, work, 7);
-            std::memcpy(y, &result.second, sizeof(result.second)); y += sizeof(result.second);
-            std::memcpy(y, &result.first,  sizeof(result.first));  y += sizeof(result.first);
-            uint8_t* q = (uint8_t*)y;
+            std::memcpy(q, &result.second, sizeof(result.second)); q += sizeof(result.second);
+            std::memcpy(q, &result.first,  sizeof(result.first));  q += sizeof(result.first);
             for (int k=0; k<QK/2; ++k) q[k] = L[2*k] | (L[2*k+1] << 4);
         }
     };
@@ -156,24 +156,25 @@ void kQuantizeQ4(const float* GGML_RESTRICT x, void* GGML_RESTRICT buffer, int k
         std::vector<std::pair<float,int>> work;
         std::vector<float> tmpX;
         int nb = k / QK;
+        auto x = X;
         for (int i=0; i<nb; ++i) {
-            processOne(x + QK*i, L.data(), y, work, tmpX);
+            processOne(x, L.data(), y, work, tmpX);
             y += bucketSize; x += QK;
         }
         return;
     }
 
     std::atomic<int> counter(0);
-    auto compute = [&counter, x, y, k, bucketSize, &processOne] () {
+    auto compute = [&counter, X, y, k, bucketSize, &processOne] () {
         std::vector<int8_t> L(QK);
         std::vector<std::pair<float,int>> work;
         std::vector<float> tmpX;
         while (true) {
-            int first = counter.fetch_add(kChunkSize);
+            int first = counter.fetch_add(kChunkSize, std::memory_order_relaxed);
             if (first >= k) break;
             int last = first + kChunkSize;
             if (last > k) last = k;
-            auto xi = x + first;
+            auto xi = X + first;
             auto yi = y + (first/QK)*bucketSize;
             int n = (last - first)/QK;
             for (int i=0; i<n; ++i) {
@@ -189,6 +190,21 @@ void kQuantizeQ4(const float* GGML_RESTRICT x, void* GGML_RESTRICT buffer, int k
     for (auto& w : workers) w.join();
 }
 
+void collectHisto(int k, const void* buffer, int64_t* hist, int type) {
+    if (!hist) return;
+    auto y = (const uint8_t*)buffer;
+    int m = type == 0 ? 4 : 8;
+    int n = k / 32;
+    for (int i=0; i<n; ++i) {
+        y += m;
+        for (int l=0; l<16; ++l) {
+            ++hist[y[l] & 15];
+            ++hist[y[l] >> 4];
+        }
+        y += 16;
+    }
+}
+
 }
 
 extern "C" {
@@ -199,6 +215,18 @@ void kQuantizeQ4_0(const float* x, void* buffer, int k) {
 
 void kQuantizeQ4_1(const float* x, void* buffer, int k) {
     kQuantizeQ4(x, buffer, k, 1);
+}
+
+size_t kQuantizeQ4_0H(const float* x, void* buffer, int k, int64_t* hist) {
+    kQuantizeQ4(x, buffer, k, 0);
+    collectHisto(k, buffer, hist, 0);
+    return (k / QK) * kBucketSize0;
+}
+
+size_t kQuantizeQ4_1H(const float* x, void* buffer, int k, int64_t* hist) {
+    kQuantizeQ4(x, buffer, k, 1);
+    collectHisto(k, buffer, hist, 1);
+    return (k / QK) * kBucketSize1;
 }
 
 }
