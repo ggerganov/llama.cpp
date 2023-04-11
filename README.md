@@ -42,6 +42,7 @@ New features will probably be added mostly through community contributions.
 - [X] [Chinese LLaMA / Alpaca](https://github.com/ymcui/Chinese-LLaMA-Alpaca)
 - [X] [Vigogne (French)](https://github.com/bofenghuang/vigogne)
 - [X] [Vicuna](https://github.com/ggerganov/llama.cpp/discussions/643#discussioncomment-5533894)
+- [X] [Koala](https://bair.berkeley.edu/blog/2023/04/03/koala/)
 
 **Bindings:**
 
@@ -350,20 +351,22 @@ We have two Docker images available for this project:
 
 The easiest way to download the models, convert them to ggml and optimize them is with the --all-in-one command which includes the full docker image.
 
+Replace `/path/to/models` below with the actual path where you downloaded the models.
+
  ```bash
-docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:full --all-in-one "/models/" 7B
+docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:full --all-in-one "/models/" 7B
 ```
 
 On complete, you are ready to play!
 
 ```bash
-docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:full --run -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
+docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:full --run -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
 ```
 
 or with light image:
 
 ```bash
-docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
+docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
 ```
 
 ### Contributing
