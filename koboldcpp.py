@@ -378,7 +378,7 @@ def main(args):
     RunServerMultiThreaded(args.host, args.port, embedded_kailite)
 
 if __name__ == '__main__':
-    print("Welcome to KoboldCpp - Version 1.4") # just update version manually
+    print("Welcome to KoboldCpp - Version 1.5") # just update version manually
     parser = argparse.ArgumentParser(description='Kobold llama.cpp server')
     parser.add_argument("model_file", help="Model file to load", nargs="?")
     portgroup = parser.add_mutually_exclusive_group() #we want to be backwards compatible with the unnamed positional args
