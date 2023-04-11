@@ -198,13 +198,14 @@ struct ggml_object;
 struct ggml_context;
 
 enum ggml_type {
-    GGML_TYPE_Q4_0,
-    GGML_TYPE_Q4_1,
+    // explicitly numbered values are used in llama.cpp files
+    GGML_TYPE_F32  = 0,
+    GGML_TYPE_F16  = 1,
+    GGML_TYPE_Q4_0 = 2,
+    GGML_TYPE_Q4_1 = 3,
     GGML_TYPE_I8,
     GGML_TYPE_I16,
     GGML_TYPE_I32,
-    GGML_TYPE_F16,
-    GGML_TYPE_F32,
     GGML_TYPE_COUNT,
 };
 
@@ -236,6 +237,7 @@ enum ggml_op {
 
     GGML_OP_SCALE,
     GGML_OP_CPY,
+    GGML_OP_CONT,
     GGML_OP_RESHAPE,
     GGML_OP_VIEW,
     GGML_OP_PERMUTE,
@@ -524,6 +526,11 @@ struct ggml_tensor * ggml_cpy(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         struct ggml_tensor  * b);
+
+// make contiguous
+struct ggml_tensor * ggml_cont(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a);
 
 // return view(a), b specifies the new shape
 // TODO: when we start computing gradient, make a copy instead of view

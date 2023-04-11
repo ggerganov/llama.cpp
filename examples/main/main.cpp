@@ -1,3 +1,8 @@
+// Defines sigaction on msys:
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include "common.h"
 #include "llama.h"
 
@@ -164,7 +169,7 @@ int main(int argc, char ** argv) {
     const auto inp_sfx = ::llama_tokenize(ctx, instruct_suffix, params.instruct_suffix_bos);
 
     // enable interactive mode if reverse prompt or interactive start is specified
-    if (params.antiprompt.size() != 0 || params.stopprompt.size() != 0 || params.interactive_start) { 
+    if (params.antiprompt.size() != 0 || params.stopprompt.size() != 0 || params.interactive_start) {
         params.interactive = true;
     }
 
