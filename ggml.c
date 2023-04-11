@@ -1,4 +1,4 @@
-// Defines CLOCK_MONOTONIC and asprintf on Linux
+// Defines CLOCK_MONOTONIC on Linux
 #define _GNU_SOURCE
 
 #include "ggml.h"
@@ -50,6 +50,7 @@ typedef HANDLE pthread_t;
 
 typedef DWORD thread_ret_t;
 static int pthread_create(pthread_t* out, void* unused, thread_ret_t(*func)(void*), void* arg) {
+    (void) unused;
     HANDLE handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) func, arg, 0, NULL);
     if (handle == NULL)
     {
@@ -61,6 +62,7 @@ static int pthread_create(pthread_t* out, void* unused, thread_ret_t(*func)(void
 }
 
 static int pthread_join(pthread_t thread, void* unused) {
+    (void) unused;
     return (int) WaitForSingleObject(thread, INFINITE);
 }
 
