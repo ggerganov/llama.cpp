@@ -34,8 +34,8 @@ extern "C"
         //first digit is platform, second is devices
         int platform = inputs.clblast_info/10;
         int devices = inputs.clblast_info%10;
-        std::string platformenv = "KCPP_CBLAST_PLATFORM="+std::to_string(platform);
-        std::string deviceenv = "KCPP_CBLAST_DEVICES="+std::to_string(devices);
+        std::string platformenv = "KCPP_CLBLAST_PLATFORM="+std::to_string(platform);
+        std::string deviceenv = "KCPP_CLBLAST_DEVICES="+std::to_string(devices);
         putenv(platformenv.c_str());
         putenv(deviceenv.c_str());
 

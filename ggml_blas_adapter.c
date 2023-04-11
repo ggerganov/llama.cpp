@@ -24,10 +24,10 @@ static void ggml_cl_sgemm_wrapper(const enum CBLAS_ORDER order, const enum CBLAS
     cl_int err = 0;
 
     if (!cl_initialized) {
-        char * KCPP_CBLAST_PLATFORM = getenv("KCPP_CBLAST_PLATFORM");
-        char * KCPP_CBLAST_DEVICES = getenv("KCPP_CBLAST_DEVICES");       
-        int plat_num = (KCPP_CBLAST_PLATFORM == NULL ? 0 : atoi(KCPP_CBLAST_PLATFORM));
-        int dev_num = (KCPP_CBLAST_DEVICES == NULL ? 0 : atoi(KCPP_CBLAST_DEVICES));
+        char * KCPP_CLBLAST_PLATFORM = getenv("KCPP_CLBLAST_PLATFORM");
+        char * KCPP_CLBLAST_DEVICES = getenv("KCPP_CLBLAST_DEVICES");       
+        int plat_num = (KCPP_CLBLAST_PLATFORM == NULL ? 0 : atoi(KCPP_CLBLAST_PLATFORM));
+        int dev_num = (KCPP_CLBLAST_DEVICES == NULL ? 0 : atoi(KCPP_CLBLAST_DEVICES));
         printf("\nInitializing CLBlast (First Run)...");
         printf("\nSelected: Platform=%d, Device=%d (If invalid, program will crash)\n",plat_num,dev_num);
         cl_uint num_platforms;

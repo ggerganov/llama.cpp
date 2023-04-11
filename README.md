@@ -7,13 +7,12 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 ![Preview](preview.png)
 
 # Highlights
-- **This repo is somehow being flagged by Smartscreen in Microsoft Edge!** I have no idea why, and it works fine in Chrome and Firefox. To be clear: **Everything** in this project is freely auditable and can be fully built from source code, any malware alerts are **false positives!** If you encounter such warnings, I'd appreciate it if you helped mark it as a false positive/safe to Microsoft.
-- Now has **BACKWARDS COMPATIBILITY** with ALL 3 versions of GGML LLAMA models, all ALPACA.CPP models, all versions of GPT4ALL.CPP models, and can run GGML older GPT-J.CPP models too. I also use a bunch of tricks to make subsequent prompt processing with shared ancestry much faster than the parent repo does.
+- Now has experimental CLBlast support.
 
 ## Usage
 - [Download the latest release here](https://github.com/LostRuins/koboldcpp/releases/latest) or clone the repo.
-- Windows binaries are provided in the form of **koboldcpp.exe**, which is a pyinstaller wrapper for **koboldcpp.dll** and **koboldcpp.py**. If you feel concerned, you may prefer to rebuild it yourself with the provided makefiles and scripts.
-- Weights are not included, you can use the `quantize.exe` to generate them from your official weight files (or download them from other places).
+- Windows binaries are provided in the form of **koboldcpp.exe**, which is a pyinstaller wrapper for a few **.dll** files and **koboldcpp.py**. If you feel concerned, you may prefer to rebuild it yourself with the provided makefiles and scripts.
+- Weights are not included, you can use the official llama.cpp `quantize.exe` to generate them from your official weight files (or download them from other places).
 - To run, execute **koboldcpp.exe** or drag and drop your quantized `ggml_model.bin` file onto the .exe, and then connect with Kobold or Kobold Lite. 
 - By default, you can connect to http://localhost:5001 
 - You can also run it using the command line `koboldcpp.exe [ggml_model.bin] [port]`. For info, please check `koboldcpp.exe --help` 
@@ -22,22 +21,23 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 ## OSX and Linux
 - You will have to compile your binaries from source. A makefile is provided, simply run `make`
 - If you want you can also link your own install of OpenBLAS manually with `make LLAMA_OPENBLAS=1`
+- Alternatively, if you want you can also link your own install of CLBlast manually with `make LLAMA_CLBLAST=1`, for this you will need to obtain and link OpenCL and CLBlast libraries.
   - For Arch Linux: Install `cblas` and `openblas`. In the makefile, find the `ifdef LLAMA_OPENBLAS` conditional and add `-lcblas` to `LDFLAGS`.
 - After all binaries are built, you can run the python script with the command `koboldcpp.py [ggml_model.bin] [port]`
 
 ## Considerations
-- Don't want to use pybind11 due to dependencies on MSVCC
 - ZERO or MINIMAL changes as possible to parent repo files - do not move their function declarations elsewhere! We want to be able to update the repo and pull any changes automatically.
 - No dynamic memory allocation! Setup structs with FIXED (known) shapes and sizes for ALL output fields. Python will ALWAYS provide the memory, we just write to it.
-- No external libraries or dependencies. That means no Flask, Pybind and whatever. All You Need Is Python.
+- For Windows: No installation, single file executable, (It Just Works)
 - Since v1.0.6, requires libopenblas, the prebuilt windows binaries are included in this repo. If not found, it will fall back to a mode without BLAS. 
+- Since v1.15, requires CLBlast if enabled, the prebuilt windows binaries are included in this repo. If not found, it will fall back to a mode without CLBlast. 
 - **I plan to keep backwards compatibility with ALL past llama.cpp AND alpaca.cpp models**. But you are also encouraged to reconvert/update your models if possible for best results.
 
 ## License
 - The original GGML library and llama.cpp by ggerganov are licensed under the MIT License
 - However, Kobold Lite is licensed under the AGPL v3.0 License
-- The provided python ctypes bindings in koboldcpp.dll are also under the AGPL v3.0 License
+- The other files are also under the AGPL v3.0 License unless otherwise stated
 
 ## Notes
-- Generation delay scales linearly with original prompt length. See [this discussion](https://github.com/ggerganov/llama.cpp/discussions/229). If OpenBLAS is enabled then prompt ingestion becomes about 2-3x faster. This is automatic on windows, but will require linking on OSX and Linux.
+- Generation delay scales linearly with original prompt length. If OpenBLAS is enabled then prompt ingestion becomes about 2-3x faster. This is automatic on windows, but will require linking on OSX and Linux.
 - I have heard of someone claiming a false AV positive report. The exe is a simple pyinstaller bundle that includes the necessary python scripts and dlls to run. If this still concerns you, you might wish to rebuild everything from source code using the makefile, and you can rebuild the exe yourself with pyinstaller by using `make_pyinstaller.bat`
