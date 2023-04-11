@@ -31,6 +31,14 @@ extern "C"
         std::string model = inputs.model_filename;
         file_format = check_file_format(model.c_str());
 
+        //first digit is platform, second is devices
+        int platform = inputs.clblast_info/10;
+        int devices = inputs.clblast_info%10;
+        std::string platformenv = "KCPP_CBLAST_PLATFORM="+std::to_string(platform);
+        std::string deviceenv = "KCPP_CBLAST_DEVICES="+std::to_string(devices);
+        putenv(platformenv.c_str());
+        putenv(deviceenv.c_str());
+
         if(file_format==FileFormat::GPTJ_1 || file_format==FileFormat::GPTJ_2 || file_format==FileFormat::GPTJ_3)
         {
             printf("\n---\nIdentified as GPT-J model: (ver %d)\nAttempting to Load...\n---\n", file_format);

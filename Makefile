@@ -97,7 +97,7 @@ ifdef LLAMA_OPENBLAS
 	LDFLAGS += -lopenblas
 endif
 ifdef LLAMA_CLBLAST
-	CFLAGS  += -DGGML_USE_CLBLAST
+	CFLAGS  += -DGGML_USE_CLBLAST -DGGML_USE_OPENBLAS
 	LDFLAGS += -lclblast -lOpenCL
 endif
 ifdef LLAMA_GPROF
@@ -121,11 +121,18 @@ ifneq ($(filter armv8%,$(UNAME_M)),)
 	CFLAGS += -mfp16-format=ieee -mno-unaligned-access
 endif
 
-BLAS_BUILD = 
+OPENBLAS_BUILD = 
 ifeq ($(OS),Windows_NT)
-	BLAS_BUILD = $(CXX) $(CXXFLAGS) ggml_blas.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o libopenblas.lib -shared -o koboldcpp_blas.dll $(LDFLAGS)
+	OPENBLAS_BUILD = $(CXX) $(CXXFLAGS) ggml_openblas.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o lib/libopenblas.lib -shared -o koboldcpp_openblas.dll $(LDFLAGS)
 else
-	BLAS_BUILD = @echo 'Your OS $(OS) does not appear to be Windows. If you want to use openblas, please install it seperately, then link it manually with LLAMA_OPENBLAS=1. This is just a reminder, not an error.'
+	OPENBLAS_BUILD = @echo 'Your OS $(OS) does not appear to be Windows. If you want to use openblas, please install it seperately, then link it manually with LLAMA_OPENBLAS=1. This is just a reminder, not an error.'
+endif
+
+CLBLAST_BUILD = 
+ifeq ($(OS),Windows_NT)
+	CLBLAST_BUILD = $(CXX) $(CXXFLAGS) ggml_clblast.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o lib/OpenCL.lib lib/clblast.lib -shared -o koboldcpp_clblast.dll $(LDFLAGS)
+else
+	CLBLAST_BUILD = @echo 'Your OS $(OS) does not appear to be Windows. If you want to use CLBlast, please install it seperately, then link it manually with LLAMA_CLBLAST=1. This is just a reminder, not an error.'
 endif
 
 #
@@ -143,7 +150,7 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: llamalib llamalib_blas
+default: llamalib llamalib_openblas llamalib_clblast
 
 #
 # Build library
@@ -152,8 +159,11 @@ default: llamalib llamalib_blas
 ggml.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS) -c ggml.c -o ggml.o
 
-ggml_blas.o: ggml.c ggml.h
-	$(CC)  $(CFLAGS) -DGGML_USE_OPENBLAS -c ggml.c -o ggml_blas.o
+ggml_openblas.o: ggml.c ggml.h
+	$(CC)  $(CFLAGS) -DGGML_USE_OPENBLAS -c ggml.c -o ggml_openblas.o
+
+ggml_clblast.o: ggml.c ggml.h
+	$(CC)  $(CFLAGS) -DGGML_USE_OPENBLAS -DGGML_USE_CLBLAST -c ggml.c -o ggml_clblast.o
 
 ggml_v1.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
 	$(CC)  $(CFLAGS) -c otherarch/ggml_v1.c -o ggml_v1.o
@@ -174,7 +184,7 @@ gpttype_adapter.o:
 	$(CXX) $(CXXFLAGS) -c gpttype_adapter.cpp -o gpttype_adapter.o
 
 clean:
-	rm -vf *.o main quantize quantize-stats perplexity embedding main.exe quantize.exe koboldcpp.dll koboldcpp_blas.dll gptj.exe gpt2.exe
+	rm -vf *.o main quantize quantize-stats perplexity embedding main.exe quantize.exe koboldcpp.dll koboldcpp_openblas.dll koboldcpp_clblast.dll gptj.exe gpt2.exe
 
 main: examples/main/main.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
@@ -185,8 +195,11 @@ main: examples/main/main.cpp ggml.o llama.o common.o
 llamalib: ggml.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o
 	$(CXX) $(CXXFLAGS)  ggml.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o -shared -o koboldcpp.dll $(LDFLAGS)
 
-llamalib_blas: ggml_blas.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o 
-	$(BLAS_BUILD)
+llamalib_openblas: ggml_openblas.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o 
+	$(OPENBLAS_BUILD)
+
+llamalib_clblast: ggml_clblast.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o 
+	$(CLBLAST_BUILD)
 	
 quantize: examples/quantize/quantize.cpp ggml.o llama.o
 	$(CXX) $(CXXFLAGS) examples/quantize/quantize.cpp ggml.o llama.o -o quantize $(LDFLAGS)
