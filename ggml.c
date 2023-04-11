@@ -123,9 +123,25 @@ typedef void* thread_ret_t;
         } \
     } while (0)
 
+#if GGML_USE_CLBLAST
+#ifndef GGML_USE_OPENBLAS
+#define GGML_USE_OPENBLAS
+#endif
+
+#define CL_TARGET_OPENCL_VERSION 110
+#include <clblast_c.h>
+
+cl_platform_id platform;
+cl_device_id device;
+cl_context context;
+cl_command_queue queue;
+cl_event event;
+bool cl_initialized = false;
+#endif
+
 #ifdef GGML_USE_ACCELERATE
 #include <Accelerate/Accelerate.h>
-#elif GGML_USE_OPENBLAS
+#elif defined(GGML_USE_OPENBLAS)
 #include <cblas.h>
 #endif
 
@@ -6314,7 +6330,7 @@ static void ggml_compute_forward_rms_norm(
 
 // ggml_compute_forward_mul_mat
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
 // helper function to determine if it is better to use BLAS or not
 // for large matrices, BLAS is faster
 static bool ggml_compute_forward_mul_mat_use_blas(
@@ -6339,6 +6355,85 @@ static bool ggml_compute_forward_mul_mat_use_blas(
 
     return false;
 }
+
+#ifdef GGML_USE_CLBLAST
+static bool ggml_cl_sgemm_wrapper(const enum CBLAS_ORDER order, const enum CBLAS_TRANSPOSE trans_a, const enum CBLAS_TRANSPOSE trans_b, const int m, const int n, const int k, const float alpha, const float *host_a, const int lda, const float *host_b, const int ldb, const float beta, float *host_c, const int ldc) {
+    cl_int err = 0;
+
+    if (!cl_initialized) {
+        cl_uint num_platforms;
+        clGetPlatformIDs(0, NULL, &num_platforms);
+        cl_platform_id* platforms = (cl_platform_id*)malloc(num_platforms*sizeof(cl_platform_id));
+        clGetPlatformIDs(num_platforms, platforms, NULL);
+        platform = platforms[0];
+        cl_uint num_devices;
+        clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, 0, NULL, &num_devices);
+        cl_device_id* devices = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
+        clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, num_devices, devices, NULL);
+        device = devices[0];
+        context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
+        if (err != CL_SUCCESS) {
+            printf("Error creating OpenCL context: %d\n", err);
+            fflush(stdout);
+        }
+        queue = clCreateCommandQueue(context, device, 0, &err);
+        event = NULL;
+
+        if (err != CL_SUCCESS) {
+            printf("Error creating OpenCL Command Queue: %d\n", err);
+            fflush(stdout);
+        }
+
+        free(platforms);
+        free(devices);
+        cl_initialized = true;
+    }
+
+    // Prepare buffers
+    cl_mem cl_buffer_a = clCreateBuffer(context, CL_MEM_READ_WRITE, m*k*sizeof(float), NULL, &err);
+    if (err != CL_SUCCESS) {
+        printf("Error creating OpenCL Buffer A: %d\n", err);
+        fflush(stdout);
+    }
+    cl_mem cl_buffer_b = clCreateBuffer(context, CL_MEM_READ_WRITE, n*k*sizeof(float), NULL, &err);
+    if (err != CL_SUCCESS) {
+        printf("Error creating OpenCL Buffer B: %d\n", err);
+        fflush(stdout);
+    }
+    cl_mem cl_buffer_c = clCreateBuffer(context, CL_MEM_READ_WRITE, m*n*sizeof(float), NULL, &err);
+    if (err != CL_SUCCESS) {
+        printf("Error creating OpenCL Buffer C: %d\n", err);
+        fflush(stdout);
+    }
+
+    clEnqueueWriteBuffer(queue, cl_buffer_a, CL_TRUE, 0, m*k*sizeof(float), host_a, 0, NULL, NULL);
+    clEnqueueWriteBuffer(queue, cl_buffer_b, CL_TRUE, 0, n*k*sizeof(float), host_b, 0, NULL, NULL);
+    clEnqueueWriteBuffer(queue, cl_buffer_c, CL_TRUE, 0, m*n*sizeof(float), host_c, 0, NULL, NULL);
+
+    // Call the SGEMM routine.
+    CLBlastStatusCode status = CLBlastSgemm(order,
+                                            trans_a, trans_b,
+                                            m, n, k,
+                                            alpha,
+                                            cl_buffer_a, 0, lda,
+                                            cl_buffer_b, 0, ldb,
+                                            beta,
+                                            cl_buffer_c, 0, ldc,
+                                            &queue, &event);
+
+    // Wait for completion
+    if (status == CLBlastSuccess) {
+      clWaitForEvents(1, &event);
+      clReleaseEvent(event);
+    }
+
+    clEnqueueReadBuffer(queue, cl_buffer_c, CL_TRUE, 0, m*n*sizeof(float), host_c, 0, NULL, NULL);
+
+    clReleaseMemObject(cl_buffer_a);
+    clReleaseMemObject(cl_buffer_b);
+    clReleaseMemObject(cl_buffer_c);
+}
+#endif
 #endif
 
 static void ggml_compute_forward_mul_mat_f32(
@@ -6354,7 +6449,7 @@ static void ggml_compute_forward_mul_mat_f32(
     const int64_t ne02 = src0->ne[2];
     const int64_t ne03 = src0->ne[3];
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
     const int64_t ne10 = src1->ne[0];
 #endif
     const int64_t ne11 = src1->ne[1];
@@ -6411,7 +6506,7 @@ static void ggml_compute_forward_mul_mat_f32(
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
     if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
         if (params->ith != 0) {
             return;
@@ -6433,11 +6528,19 @@ static void ggml_compute_forward_mul_mat_f32(
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
                 // zT = y * xT
+#ifdef GGML_USE_CLBLAST
+                ggml_cl_sgemm_wrapper(CblasRowMajor, CblasNoTrans, CblasTrans,
+                        ne11, ne01, ne10,
+                        1.0f,    y, ne10,
+                                 x, ne10,
+                        0.0f,    d, ne01);
+#else
                 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                         ne11, ne01, ne10,
                         1.0f,    y, ne10,
                                  x, ne10,
                         0.0f,    d, ne01);
+#endif
             }
         }
 
@@ -6570,7 +6673,7 @@ static void ggml_compute_forward_mul_mat_f16_f32(
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
     if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
         GGML_ASSERT(nb10 == sizeof(float));
 
@@ -6605,11 +6708,19 @@ static void ggml_compute_forward_mul_mat_f16_f32(
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
                 // zT = y * xT
+#ifdef GGML_USE_CLBLAST
+                ggml_cl_sgemm_wrapper(CblasRowMajor, CblasNoTrans, CblasTrans,
+                        ne11, ne01, ne10,
+                        1.0f,    y, ne10,
+                                 x, ne10,
+                        0.0f,    d, ne01);
+#else
                 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                         ne11, ne01, ne10,
                         1.0f,    y, ne10,
                                  x, ne10,
                         0.0f,    d, ne01);
+#endif
             }
         }
 
@@ -6785,7 +6896,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
     if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
         if (params->ith != 0) {
             return;
@@ -6818,11 +6929,19 @@ static void ggml_compute_forward_mul_mat_q_f32(
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
                 // zT = y * xT
+#ifdef GGML_USE_CLBLAST
+                ggml_cl_sgemm_wrapper(CblasRowMajor, CblasNoTrans, CblasTrans,
+                        ne11, ne01, ne10,
+                        1.0f,    y, ne10,
+                                 x, ne10,
+                        0.0f,    d, ne01);
+#else
                 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                         ne11, ne01, ne10,
                         1.0f,    y, ne10,
                                  x, ne10,
                         0.0f,    d, ne01);
+#endif
             }
         }
 
@@ -9553,7 +9672,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                         size_t cur = 0;
 
                         if (node->src0->type == GGML_TYPE_F16 && node->src1->type == GGML_TYPE_F32) {
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
                             if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
                                 node->n_tasks = 1; // TODO: this actually is doing nothing
                                                    //       the threads are still spinning
@@ -9570,7 +9689,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                         } else if (node->src0->type == GGML_TYPE_F32 && node->src1->type == GGML_TYPE_F32) {
                             cur = 0;
                         } else if (quantize_fns[node->src0->type].vec_dot_q && node->src1->type == GGML_TYPE_F32) {
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
                             if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
                                 node->n_tasks = 1;
                                 cur = GGML_TYPE_SIZE[GGML_TYPE_F32]*(node->src0->ne[0]*node->src0->ne[1]);
@@ -10867,7 +10986,7 @@ int ggml_cpu_has_wasm_simd(void) {
 }
 
 int ggml_cpu_has_blas(void) {
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
     return 1;
 #else
     return 0;
