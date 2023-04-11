@@ -1,7 +1,7 @@
---interactive-first 
+--interactive-first
 --keep -1
---ins-prefix-bos 
---ins-prefix "\nUser: " 
+--ins-prefix-bos
+--ins-prefix "\nUser: "
 --ins-suffix "\nBob: "
 --reverse-prompt "User: "
 --rm-trailing-space-workaround

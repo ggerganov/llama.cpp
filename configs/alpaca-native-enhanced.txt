@@ -1,14 +1,14 @@
---ctx_size 2048 
---batch_size 16 
+--ctx_size 2048
+--batch_size 16
 --repeat_penalty 1.15
---temp 0.4 
---top_k 30 
---top_p 0.18 
+--temp 0.4
+--top_k 30
+--top_p 0.18
 
---interactive-first 
+--interactive-first
 --keep -1
 
---ins-prefix-bos 
+--ins-prefix-bos
 --ins-prefix "\n\nUser: "
 --ins-suffix "\n\nAssistant: "
 --reverse-prompt "User: "

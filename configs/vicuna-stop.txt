@@ -1,4 +1,4 @@
---interactive-first 
+--interactive-first
 --keep -1
 --ins-prefix-bos
 --ins-prefix "\n### Human: "
