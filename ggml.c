@@ -1,4 +1,4 @@
-// Defines CLOCK_MONOTONIC and asprintf on Linux
+// Defines CLOCK_MONOTONIC on Linux
 #define _GNU_SOURCE
 
 #include "ggml.h"
@@ -50,6 +50,7 @@ typedef HANDLE pthread_t;
 
 typedef DWORD thread_ret_t;
 static int pthread_create(pthread_t* out, void* unused, thread_ret_t(*func)(void*), void* arg) {
+    (void) unused;
     HANDLE handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) func, arg, 0, NULL);
     if (handle == NULL)
     {
@@ -61,6 +62,7 @@ static int pthread_create(pthread_t* out, void* unused, thread_ret_t(*func)(void
 }
 
 static int pthread_join(pthread_t thread, void* unused) {
+    (void) unused;
     return (int) WaitForSingleObject(thread, INFINITE);
 }
 
@@ -2558,29 +2560,26 @@ inline static void ggml_vec_norm_inv_f32(const int n, float * s, const float * x
 //
 
 static const int GGML_BLCK_SIZE[GGML_TYPE_COUNT] = {
-    QK,
-    QK,
-    1,
-    1,
-    1,
-    1,
-    1,
+    [GGML_TYPE_F32]  = 1,
+    [GGML_TYPE_F16]  = 1,
+    [GGML_TYPE_Q4_0] = QK,
+    [GGML_TYPE_Q4_1] = QK,
+    [GGML_TYPE_I8]   = 1,
+    [GGML_TYPE_I16]  = 1,
+    [GGML_TYPE_I32]  = 1,
 };
-
-static_assert(GGML_TYPE_COUNT == 7, "GGML_TYPE_COUNT != 5");
+static_assert(GGML_TYPE_COUNT == 7, "GGML_BLCK_SIZE is outdated");
 
 static const size_t GGML_TYPE_SIZE[GGML_TYPE_COUNT] = {
-    sizeof(block_q4_0),
-    sizeof(block_q4_1),
-    sizeof(int8_t ),
-    sizeof(int16_t),
-    sizeof(int32_t),
-    sizeof(ggml_fp16_t),
-    sizeof(float  ),
+    [GGML_TYPE_F32]  = sizeof(float),
+    [GGML_TYPE_F16]  = sizeof(ggml_fp16_t),
+    [GGML_TYPE_Q4_0] = sizeof(block_q4_0),
+    [GGML_TYPE_Q4_1] = sizeof(block_q4_1),
+    [GGML_TYPE_I8]   = sizeof(int8_t),
+    [GGML_TYPE_I16]  = sizeof(int16_t),
+    [GGML_TYPE_I32]  = sizeof(int32_t),
 };
-
-// don't forget to update the array above when adding new types
-static_assert(GGML_TYPE_COUNT == 7, "GGML_TYPE_COUNT != 5");
+static_assert(GGML_TYPE_COUNT == 7, "GGML_TYPE_SIZE is outdated");
 
 static const char * GGML_OP_LABEL[GGML_OP_COUNT] = {
     "NONE",

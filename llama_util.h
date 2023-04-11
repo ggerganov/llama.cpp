@@ -26,7 +26,9 @@
 
 #if defined(_WIN32)
     #define WIN32_LEAN_AND_MEAN
-    #define NOMINMAX
+    #ifndef NOMINMAX
+        #define NOMINMAX
+    #endif
     #include <windows.h>
     #include <io.h>
     #include <stdio.h> // for _fseeki64
@@ -209,6 +211,7 @@ struct llama_mmap {
             throw format("MapViewOfFile failed: %s", llama_format_win_err(error).c_str());
         }
 
+        #if _WIN32_WINNT >= _WIN32_WINNT_WIN8
         // Advise the kernel to preload the mapped memory
         WIN32_MEMORY_RANGE_ENTRY range;
         range.VirtualAddress = addr;
@@ -217,6 +220,9 @@ struct llama_mmap {
             fprintf(stderr, "warning: PrefetchVirtualMemory failed: %s\n",
                     llama_format_win_err(GetLastError()).c_str());
         }
+        #else
+        #pragma message("warning: You are building for pre-Windows 8; prefetch not supported")
+        #endif // _WIN32_WINNT >= _WIN32_WINNT_WIN8
     }
 
     ~llama_mmap() {
@@ -338,8 +344,8 @@ struct llama_mlock {
             // Hopefully a megabyte is enough overhead:
             size_t increment = size + 1048576;
             // The minimum must be <= the maximum, so we need to increase both:
-            min_ws_size += size;
-            max_ws_size += size;
+            min_ws_size += increment;
+            max_ws_size += increment;
             if (!SetProcessWorkingSetSize(GetCurrentProcess(), min_ws_size, max_ws_size)) {
                 fprintf(stderr, "warning: SetProcessWorkingSetSize failed: %s\n",
                         llama_format_win_err(GetLastError()).c_str());
