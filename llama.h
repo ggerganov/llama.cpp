@@ -65,6 +65,14 @@ extern "C" {
         void * progress_callback_user_data;
     };
 
+    // model file types
+    enum llama_ftype {
+        LLAMA_FTYPE_ALL_F32     = 0,
+        LLAMA_FTYPE_MOSTLY_F16  = 1,  // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_0 = 2,  // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_1 = 3,  // except 1d tensors
+    };
+
     LLAMA_API struct llama_context_params llama_context_default_params();
 
     LLAMA_API bool llama_mmap_supported();
@@ -85,7 +93,7 @@ extern "C" {
     LLAMA_API int llama_model_quantize(
             const char * fname_inp,
             const char * fname_out,
-                   int   itype);
+      enum llama_ftype   ftype);
 
     // Returns the KV cache that will contain the context for the
     // ongoing prediction with the model.

@@ -82,7 +82,7 @@ struct llama_hparams {
     uint32_t n_head  = 32;
     uint32_t n_layer = 32;
     uint32_t n_rot   = 64;
-    uint32_t f16     = 1;
+    enum llama_ftype ftype = LLAMA_FTYPE_MOSTLY_F16;
 
     bool operator!=(const llama_hparams & other) const {
         return memcmp(this, &other, sizeof(llama_hparams));
@@ -432,7 +432,7 @@ struct llama_file_loader {
         hparams.n_head = file.read_u32();
         hparams.n_layer = file.read_u32();
         hparams.n_rot = file.read_u32();
-        hparams.f16 = file.read_u32();
+        hparams.ftype = (enum llama_ftype) file.read_u32();
     }
     void read_vocab() {
         vocab.id_to_token.resize(hparams.n_vocab);
@@ -458,20 +458,21 @@ struct llama_file_loader {
             llama_load_tensor_shard shard;
             uint32_t n_dims = file.read_u32();
             uint32_t name_len = file.read_u32();
-            uint32_t ftype = file.read_u32();
+            shard.type = (enum ggml_type) file.read_u32();
             shard.ne.resize(n_dims);
             file.read_raw(shard.ne.data(), sizeof(shard.ne[0]) * n_dims);
             std::string name = file.read_string(name_len);
             if (n_dims < 1 || n_dims > 2) {
                 throw format("llama.cpp: tensor '%s' should not be %u-dimensional", name.c_str(), n_dims);
             }
-            switch (ftype) {
-                case 0: shard.type = GGML_TYPE_F32; break;
-                case 1: shard.type = GGML_TYPE_F16; break;
-                case 2: shard.type = GGML_TYPE_Q4_0; break;
-                case 3: shard.type = GGML_TYPE_Q4_1; break;
+            switch (shard.type) {
+                case GGML_TYPE_F32:
+                case GGML_TYPE_F16:
+                case GGML_TYPE_Q4_0:
+                case GGML_TYPE_Q4_1:
+                    break;
                 default: {
-                    throw format("unrecognized ftype %u\n", ftype);
+                    throw format("unrecognized tensor type %u\n", shard.type);
                 }
             }
 
@@ -502,18 +503,18 @@ struct llama_file_loader {
 struct llama_file_saver {
     llama_file file;
     llama_file_loader * any_file_loader;
-    llama_file_saver(const char * fname, llama_file_loader * any_file_loader, uint32_t new_f16)
+    llama_file_saver(const char * fname, llama_file_loader * any_file_loader, enum llama_ftype new_ftype)
         : file(fname, "wb"), any_file_loader(any_file_loader) {
         fprintf(stderr, "llama.cpp: saving model to %s\n", fname);
         write_magic();
-        write_hparams(new_f16);
+        write_hparams(new_ftype);
         write_vocab();
     }
     void write_magic() {
         file.write_u32('ggjt'); // magic
         file.write_u32(1); // version
     }
-    void write_hparams(uint32_t new_f16) {
+    void write_hparams(enum llama_ftype new_ftype) {
         const llama_hparams & hparams = any_file_loader->hparams;
         file.write_u32(hparams.n_vocab);
         file.write_u32(hparams.n_embd);
@@ -521,7 +522,7 @@ struct llama_file_saver {
         file.write_u32(hparams.n_head);
         file.write_u32(hparams.n_layer);
         file.write_u32(hparams.n_rot);
-        file.write_u32(new_f16);
+        file.write_u32(new_ftype);
     }
     void write_vocab() {
         if (any_file_loader->file_version == LLAMA_FILE_VERSION_GGML) {
@@ -536,17 +537,17 @@ struct llama_file_saver {
         }
     }
     void write_tensor(llama_load_tensor & tensor, enum ggml_type new_type, const void * new_data, size_t new_size) {
-        uint32_t ftype;
         switch (new_type) {
-            case GGML_TYPE_F32:  ftype = 0; break;
-            case GGML_TYPE_F16:  ftype = 1; break;
-            case GGML_TYPE_Q4_0: ftype = 2; break;
-            case GGML_TYPE_Q4_1: ftype = 3; break;
+            case GGML_TYPE_F32:
+            case GGML_TYPE_F16:
+            case GGML_TYPE_Q4_0:
+            case GGML_TYPE_Q4_1:
+                break;
             default: LLAMA_ASSERT(false);
         }
         file.write_u32((uint32_t) tensor.ne.size());
         file.write_u32((uint32_t) tensor.name.size());
-        file.write_u32(ftype);
+        file.write_u32(new_type);
         file.write_raw(tensor.ne.data(), sizeof(tensor.ne[0]) * tensor.ne.size());
         file.write_raw(tensor.name.data(), tensor.name.size());
         file.seek(-file.tell() & 31, SEEK_CUR);
@@ -820,6 +821,16 @@ static const char *llama_file_version_name(llama_file_version version) {
     }
 }
 
+static const char *llama_ftype_name(enum llama_ftype ftype) {
+    switch (ftype) {
+        case LLAMA_FTYPE_ALL_F32:     return "all F32";
+        case LLAMA_FTYPE_MOSTLY_F16:  return "mostly F16";
+        case LLAMA_FTYPE_MOSTLY_Q4_0: return "mostly Q4_0";
+        case LLAMA_FTYPE_MOSTLY_Q4_1: return "mostly Q4_1";
+        default: LLAMA_ASSERT(false);
+    }
+}
+
 static const char *llama_model_type_name(e_model type) {
     switch (type) {
         case MODEL_7B: return "7B";
@@ -872,7 +883,7 @@ static void llama_model_load_internal(
         fprintf(stderr, "%s: n_head     = %u\n",  __func__, hparams.n_head);
         fprintf(stderr, "%s: n_layer    = %u\n",  __func__, hparams.n_layer);
         fprintf(stderr, "%s: n_rot      = %u\n",  __func__, hparams.n_rot);
-        fprintf(stderr, "%s: f16        = %u\n",  __func__, hparams.f16);
+        fprintf(stderr, "%s: ftype      = %u (%s)\n", __func__, hparams.ftype, llama_ftype_name(hparams.ftype));
         fprintf(stderr, "%s: n_ff       = %u\n",  __func__, n_ff);
         fprintf(stderr, "%s: n_parts    = %zu\n", __func__, ml->file_loaders.size());
         fprintf(stderr, "%s: model size = %s\n",  __func__, llama_model_type_name(model.type));
@@ -1544,17 +1555,17 @@ static llama_vocab::id llama_sample_top_p_top_k(
 // quantization
 //
 
-static void llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, int itype) {
+static void llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, enum llama_ftype ftype) {
     ggml_type quantized_type;
-    switch (itype) {
-        case 2: quantized_type = GGML_TYPE_Q4_0; break;
-        case 3: quantized_type = GGML_TYPE_Q4_1; break;
-        default: throw format("invalid quantization type %d\n", itype);
+    switch (ftype) {
+        case LLAMA_FTYPE_MOSTLY_Q4_0: quantized_type = GGML_TYPE_Q4_0; break;
+        case LLAMA_FTYPE_MOSTLY_Q4_1: quantized_type = GGML_TYPE_Q4_1; break;
+        default: throw format("invalid output file type %d\n", ftype);
     };
 
     std::unique_ptr<llama_model_loader> model_loader(new llama_model_loader(fname_inp.c_str(), /*use_mmap*/ false,
                                                                             /*vocab_only*/ false));
-    llama_file_saver file_saver(fname_out.c_str(), model_loader->file_loaders.at(0).get(), (uint32_t) itype);
+    llama_file_saver file_saver(fname_out.c_str(), model_loader->file_loaders.at(0).get(), ftype);
 
     size_t total_size_org = 0;
     size_t total_size_new = 0;
@@ -1745,9 +1756,9 @@ void llama_free(struct llama_context * ctx) {
 int llama_model_quantize(
         const char * fname_inp,
         const char * fname_out,
-               int   itype) {
+  enum llama_ftype   ftype) {
     try {
-        llama_model_quantize_internal(fname_inp, fname_out, itype);
+        llama_model_quantize_internal(fname_inp, fname_out, ftype);
         return 0;
     } catch (const std::string & err) {
         fprintf(stderr, "%s: failed to quantize: %s\n", __func__, err.c_str());
