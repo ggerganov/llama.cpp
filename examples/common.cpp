@@ -32,7 +32,7 @@ extern "C" __declspec(dllimport) int __stdcall WideCharToMultiByte(unsigned int 
 #define CP_UTF8 65001
 #endif
 
-void split_args(std::string args_string, std::vector<std::string> & output_args)
+void split_args(const std::string & args_string, std::vector<std::string> & output_args)
 {
     std::string current_arg = "";
     bool in_quotes = false;
@@ -65,7 +65,7 @@ void split_args(std::string args_string, std::vector<std::string> & output_args)
     }
 }
 
-std::string unescape(std::string str) {
+std::string unescape(const std::string & str) {
     return std::regex_replace(str, std::regex("\\\\n"), "\n");
 }
 
