@@ -11,9 +11,10 @@ from ctypes import (
     Structure,
     Array,
     c_uint8,
-    c_size_t
+    c_size_t,
 )
 import pathlib
+
 
 # Load the library
 def _load_shared_library(lib_base_name):
@@ -33,10 +34,10 @@ def _load_shared_library(lib_base_name):
     # for llamacpp) and "llama" (default name for this repo)
     _lib_paths = [
         _base_path / f"lib{lib_base_name}{lib_ext}",
-        _base_path / f"{lib_base_name}{lib_ext}"
+        _base_path / f"{lib_base_name}{lib_ext}",
     ]
 
-    if ("LLAMA_CPP_LIB" in os.environ):
+    if "LLAMA_CPP_LIB" in os.environ:
         lib_base_name = os.environ["LLAMA_CPP_LIB"]
         _lib = pathlib.Path(lib_base_name)
         _base_path = _lib.parent.resolve()
@@ -54,7 +55,10 @@ def _load_shared_library(lib_base_name):
             except Exception as e:
                 raise RuntimeError(f"Failed to load shared library '{_lib_path}': {e}")
 
-    raise FileNotFoundError(f"Shared library with base name '{lib_base_name}' not found")
+    raise FileNotFoundError(
+        f"Shared library with base name '{lib_base_name}' not found"
+    )
+
 
 # Specify the base name of the shared library to load
 _lib_base_name = "llama"
@@ -106,6 +110,10 @@ class llama_context_params(Structure):
 
 llama_context_params_p = POINTER(llama_context_params)
 
+LLAMA_FTYPE_ALL_F32 = ctypes.c_int(0)
+LLAMA_FTYPE_MOSTLY_F16 = ctypes.c_int(1)  # except 1d tensors
+LLAMA_FTYPE_MOSTLY_Q4_0 = ctypes.c_int(2)  # except 1d tensors
+LLAMA_FTYPE_MOSTLY_Q4_1 = ctypes.c_int(3)  # except 1d tensors
 
 # Functions
 
@@ -117,17 +125,22 @@ def llama_context_default_params() -> llama_context_params:
 _lib.llama_context_default_params.argtypes = []
 _lib.llama_context_default_params.restype = llama_context_params
 
+
 def llama_mmap_supported() -> c_bool:
     return _lib.llama_mmap_supported()
+
 
 _lib.llama_mmap_supported.argtypes = []
 _lib.llama_mmap_supported.restype = c_bool
 
+
 def llama_mlock_supported() -> c_bool:
     return _lib.llama_mlock_supported()
 
+
 _lib.llama_mlock_supported.argtypes = []
 _lib.llama_mlock_supported.restype = c_bool
+
 
 # Various functions for loading a ggml llama model.
 # Allocate (almost) all memory needed for the model.
@@ -162,32 +175,41 @@ def llama_model_quantize(
 _lib.llama_model_quantize.argtypes = [c_char_p, c_char_p, c_int]
 _lib.llama_model_quantize.restype = c_int
 
+
 # Returns the KV cache that will contain the context for the
 # ongoing prediction with the model.
 def llama_get_kv_cache(ctx: llama_context_p):
     return _lib.llama_get_kv_cache(ctx)
 
+
 _lib.llama_get_kv_cache.argtypes = [llama_context_p]
 _lib.llama_get_kv_cache.restype = POINTER(c_uint8)
+
 
 # Returns the size of the KV cache
 def llama_get_kv_cache_size(ctx: llama_context_p) -> c_size_t:
     return _lib.llama_get_kv_cache_size(ctx)
 
+
 _lib.llama_get_kv_cache_size.argtypes = [llama_context_p]
 _lib.llama_get_kv_cache_size.restype = c_size_t
+
 
 # Returns the number of tokens in the KV cache
 def llama_get_kv_cache_token_count(ctx: llama_context_p) -> c_int:
     return _lib.llama_get_kv_cache_token_count(ctx)
+
 
 _lib.llama_get_kv_cache_token_count.argtypes = [llama_context_p]
 _lib.llama_get_kv_cache_token_count.restype = c_int
 
 
 # Sets the KV cache containing the current context for the model
-def llama_set_kv_cache(ctx: llama_context_p, kv_cache, n_size: c_size_t, n_token_count: c_int):
+def llama_set_kv_cache(
+    ctx: llama_context_p, kv_cache, n_size: c_size_t, n_token_count: c_int
+):
     return _lib.llama_set_kv_cache(ctx, kv_cache, n_size, n_token_count)
+
 
 _lib.llama_set_kv_cache.argtypes = [llama_context_p, POINTER(c_uint8), c_size_t, c_int]
 _lib.llama_set_kv_cache.restype = None
