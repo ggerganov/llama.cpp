@@ -2,6 +2,7 @@
 #define _GNU_SOURCE
 
 #include "ggml.h"
+#include "ggml_extra.h"
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h> // using malloc.h with MSC/MINGW
@@ -502,6 +503,13 @@ typedef struct {
 } block_q4_1;
 static_assert(sizeof(block_q4_1) == sizeof(float) * 2 + QK / 2, "wrong q4_1 block size/padding");
 
+inline int nearestInt(float fval) {
+    assert(fval <= 4194303.f);
+    float val = fval + 12582912.f;
+    int i; memcpy(&i, &val, sizeof(int));
+    return (i & 0x007fffff) - 0x00400000;
+}
+
 // reference implementation for deterministic creation of model files
 static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * restrict y, int k) {
     assert(k % QK == 0);
@@ -526,8 +534,15 @@ static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * r
             const float v0 = x[i*QK + l + 0]*id;
             const float v1 = x[i*QK + l + 1]*id;
 
-            const uint8_t vi0 = (int8_t)roundf(v0) + 8;
-            const uint8_t vi1 = (int8_t)roundf(v1) + 8;
+            // On x86_64 and x86, round is amazingly slow.
+            // Here it is best to just use this:
+            const uint8_t vi0 = (uint8_t)(v0 + 8.5f);
+            const uint8_t vi1 = (uint8_t)(v1 + 8.5f);
+            //const uint8_t vi0 = (int8_t)roundf(v0) + 8;
+            //const uint8_t vi1 = (int8_t)roundf(v1) + 8;
+            // This is marginally slower (but still much faster than round())
+            //const uint8_t vi0 = nearestInt(v0) + 8;
+            //const uint8_t vi1 = nearestInt(v1) + 8;
 
             assert(vi0 < 16);
             assert(vi1 < 16);
@@ -818,8 +833,10 @@ static void quantize_row_q4_1_reference(const float * restrict x, void * restric
             const float v0 = (x[i*QK + l + 0] - min)*id;
             const float v1 = (x[i*QK + l + 1] - min)*id;
 
-            const uint8_t vi0 = roundf(v0);
-            const uint8_t vi1 = roundf(v1);
+            // For some reason round() is amazingly slow on X86_64 and x86
+            // Using this instead reduces the difference between AVX2 and scalar to less than ~15%
+            const uint8_t vi0 = nearestInt(v0); //roundf(v0);
+            const uint8_t vi1 = nearestInt(v1); //roundf(v1);
 
             assert(vi0 < 16);
             assert(vi1 < 16);
@@ -2562,6 +2579,8 @@ inline static void ggml_vec_norm_inv_f32(const int n, float * s, const float * x
 static const int GGML_BLCK_SIZE[GGML_TYPE_COUNT] = {
     QK,
     QK,
+    QK,
+    QK,
     1,
     1,
     1,
@@ -2569,7 +2588,7 @@ static const int GGML_BLCK_SIZE[GGML_TYPE_COUNT] = {
     1,
 };
 
-static_assert(GGML_TYPE_COUNT == 7, "GGML_TYPE_COUNT != 5");
+static_assert(GGML_TYPE_COUNT == 7, "GGML_TYPE_COUNT != 7");
 
 static const size_t GGML_TYPE_SIZE[GGML_TYPE_COUNT] = {
     sizeof(block_q4_0),
@@ -2582,7 +2601,7 @@ static const size_t GGML_TYPE_SIZE[GGML_TYPE_COUNT] = {
 };
 
 // don't forget to update the array above when adding new types
-static_assert(GGML_TYPE_COUNT == 7, "GGML_TYPE_COUNT != 5");
+static_assert(GGML_TYPE_COUNT == 7, "GGML_TYPE_COUNT != 7");
 
 static const char * GGML_OP_LABEL[GGML_OP_COUNT] = {
     "NONE",
