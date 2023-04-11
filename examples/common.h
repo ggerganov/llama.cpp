@@ -40,7 +40,7 @@ struct gpt_params {
 
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
     std::vector<std::string> stopprompt; // string upon seeing which more user input is prompted (without adding instruct prefixes and suffixes)
-    
+
     bool rm_trailing_space_workaround = false; // workaround for removing trailing space from reverse/stop prompts
 
     bool memory_f16        = true;  // use f16 instead of f32 for memory kv

@@ -420,7 +420,7 @@ int main(int argc, char ** argv) {
                 }
             }
 
-            if (n_past > 0 && is_interacting) 
+            if (n_past > 0 && is_interacting)
             {
                 std::string buffer;
                 if (!params.clean_interface && !params.instruct_prefix.empty() && !antiprompt.any) {
@@ -430,10 +430,10 @@ int main(int argc, char ** argv) {
                         printf("%s", llama_token_to_str(ctx, inp_pfx[i]));
                     }
                     fflush(stdout);
-                } 
+                }
                 if (params.rm_trailing_space_workaround) {
                     // add only if not stopprompt (as stopprompt could be used to pause
-                        //     assistant and then continue without input - adding back trailing 
+                        //     assistant and then continue without input - adding back trailing
                         //     space may mess it up.)
                     if (!antiprompt.is_stop_prompt && antiprompt.any && antiprompt.trailing_space) {
                         // add back removed trailing space to buffer(workaround)
