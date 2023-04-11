@@ -5,7 +5,7 @@ pub fn build(b: *std.build.Builder) void {
     const optimize = b.standardReleaseOptions();
     const want_lto = b.option(bool, "lto", "Want -fLTO");
 
-    const lib = b.addStaticLibrary("llama", "llama.cpp");
+    const lib = b.addStaticLibrary("llama", null);
     lib.want_lto = want_lto;
     lib.setTarget(target);
     lib.setBuildMode(optimize);
@@ -44,13 +44,14 @@ fn build_example(comptime name: []const u8, args: anytype) *std.build.LibExeObjS
     const lib = args.lib;
     const want_lto = args.want_lto;
 
-    const exe = b.addExecutable(name, std.fmt.comptimePrint("examples/{s}/{s}.cpp", .{name, name}));
+    const exe = b.addExecutable(name, null);
     exe.want_lto = want_lto;
     lib.setTarget(args.target);
     lib.setBuildMode(args.optimize);
     exe.addIncludePath(".");
     exe.addIncludePath("examples");
     exe.addCSourceFiles(&.{
+        std.fmt.comptimePrint("examples/{s}/{s}.cpp", .{name, name}),
         "examples/common.cpp",
     }, &.{"-std=c++11"});
     exe.linkLibrary(lib);
