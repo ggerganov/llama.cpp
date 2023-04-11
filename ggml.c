@@ -2579,8 +2579,6 @@ inline static void ggml_vec_norm_inv_f32(const int n, float * s, const float * x
 static const int GGML_BLCK_SIZE[GGML_TYPE_COUNT] = {
     QK,
     QK,
-    QK,
-    QK,
     1,
     1,
     1,
