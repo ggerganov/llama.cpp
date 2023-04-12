@@ -437,6 +437,15 @@ int main(int argc, char ** argv) {
                     n_remain -= line_inp.size();
                 }
 
+                // exit gracefully when the word "exit" is typed.
+                if (buffer.length() == 5 && strncmp(buffer.c_str(), "exit", 4) == 0) {
+                    printf("Exit call given, printing stats and exiting.\n");
+                    llama_print_timings(ctx);
+                    llama_free(ctx);
+                    set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
+                    return 0;
+                }
+
                 input_noecho = true; // do not echo this again
             }
 
