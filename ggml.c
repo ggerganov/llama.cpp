@@ -10458,7 +10458,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
     ggml_opt_get_params(np, ps, x);
 
     // the L-BFGS memory
-    struct ggml_lbfgs_iteration_data * lm = alloca(sizeof(struct ggml_lbfgs_iteration_data)*m);
+    struct ggml_lbfgs_iteration_data * lm = malloc(sizeof(struct ggml_lbfgs_iteration_data)*m);
 
     for (int i = 0; i < m; ++i) {
         lm[i].alpha = 0.0f;
@@ -10499,6 +10499,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
 
     // already optimized
     if (gnorm/xnorm <= params.lbfgs.eps) {
+        free(lm);
         return GGML_OPT_OK;
     }
 
@@ -10528,6 +10529,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
             ggml_vec_cpy_f32(nx, x, xp);
             ggml_vec_cpy_f32(nx, g, gp);
 
+            free(lm);
             return ls;
         }
 
@@ -10541,6 +10543,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         }
         if (gnorm/xnorm <= params.lbfgs.eps) {
             // converged
+            free(lm);
             return GGML_OPT_OK;
         }
 
@@ -10551,6 +10554,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
                 const float rate = (pf[k%params.past] - fx)/fx;
 
                 if (fabsf(rate) < params.delta) {
+                    free(lm);
                     return GGML_OPT_OK;
                 }
             }
@@ -10567,6 +10571,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
                 n_no_improvement++;
 
                 if (n_no_improvement >= params.max_no_improvement) {
+                    free(lm);
                     return GGML_OPT_OK;
                 }
             }
@@ -10574,6 +10579,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
 
         if (params.lbfgs.n_iter != 0 && params.lbfgs.n_iter < k + 1) {
             // reached the maximum number of iterations
+            free(lm);
             return GGML_OPT_DID_NOT_CONVERGE;
         }
 
@@ -10627,6 +10633,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         step = 1.0;
     }
 
+    free(lm);
     return GGML_OPT_DID_NOT_CONVERGE;
 }
 
