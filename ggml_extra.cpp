@@ -1,4 +1,5 @@
 #include "ggml_extra.h"
+#include "ggml.h"
 
 #include <limits>
 #include <vector>
@@ -27,8 +28,7 @@ inline int toNearestInt(float fval) {
 // Adapted from PR #835, function quantize_row_q4_0_rmse()
 //
 // I absolutely cannot reproduce the rmse = 0.00185915 reported in #835.
-// Instead, I get rmse = 0.00197 with the original and rmse = 0.00192
-// with the modification that determines the scale actually minimizing
+// Instead, I get rmse = 0.00197 with the original and rmse = 0.00192 // with the modification that determines the scale actually minimizing
 // the rmse.
 //
 // Do I have a bug? iI don't see it.
@@ -79,12 +79,58 @@ float quanizeRmse(int n, const float* X, int8_t* L) {
     //return 1/bestScale;
 }
 
+float quanizeRmseK(int n, const float* X, int8_t* L,
+        int nCandidates, const float* candidates, int nmin, int nmax) {
+    float max = 0;
+    for (int i=0; i<n; ++i) max = std::max(max, std::abs(X[i]));
+    if (!max) { // all zero
+        for (int i=0; i<n; ++i) L[i] = 0;
+        return 1.f;
+    }
+    float best = 0, bestScale = 0;
+    for (int si=0; si<nCandidates; ++si) {
+        float iscale = candidates[si]/max;
+        float sumlx = 0; int suml2 = 0;
+        for (int i=0; i<n; ++i) {
+            int l = std::max(nmin, std::min(nmax, toNearestInt(iscale*X[i])));
+            sumlx += X[i]*l; suml2 += l*l;
+        }
+        if (sumlx*sumlx > best*suml2) {
+            best = sumlx*sumlx/suml2; bestScale = iscale;
+        }
+    }
+    float sumlx = 0; int suml2 = 0;
+    for (int i=0; i<n; ++i) {
+        int l = std::max(nmin, std::min(nmax, toNearestInt(bestScale*X[i])));
+        sumlx += X[i]*l; suml2 += l*l;
+        L[i] = l;
+    }
+    return sumlx/suml2;
+}
 // The following improves the above.
 // It gives RMSE = 0.00185228 for the 7B model.
-float quanizeRmseK(int n, const float* X, int8_t* L) {
+float quanizeRmseK7(int n, const float* X, int8_t* L) {
     constexpr int kCandiateCount = 20;
     static const float candidates[kCandiateCount] = { -8.7f, -8.5f, -8.3f, -8.1f, -7.9f, -7.7f, -7.2f, -7.0f, -6.3f, -5.7f,
                                                       +8.7f, +8.5f, +8.3f, +8.1f, +7.9f, +7.7f, +7.2f, +7.0f, +6.3f, +5.7f};
+    return quanizeRmseK(n, X, L, kCandiateCount, candidates, -8, 7);
+}
+
+float quanizeRmseK15(int n, const float* X, int8_t* L) {
+    constexpr int kCandiateCount = 16;
+    static const float candidates[kCandiateCount] = {
+        +17.75f, +17.25f, +16.75f, +16.25f, +15.75f, +15.25f, +14.75f, +14.25f, +13.75f, +13.25f, +12.75f, +12.25, +11.75f,
+        +11.25f, +10.75f, +10.25f
+    };
+    return quanizeRmseK(n, X, L, kCandiateCount, candidates, 0, 15);
+}
+
+// Fast (as much faster than doing the optimization), but not very good.
+float quanizeRmseFast(int n, const float* X, int8_t* L) {
+    //constexpr int kCandiateCount = 3;
+    //static const float candidates[kCandiateCount] = { +8.3f, +7.2f, +5.7f};
+    constexpr int kCandiateCount = 4;
+    static const float candidates[kCandiateCount] = { +8.7f, +7.9f, +7.2f, +5.7f};
     float max = 0;
     for (int i=0; i<n; ++i) max = std::max(max, std::abs(X[i]));
     if (!max) { // all zero
@@ -94,16 +140,62 @@ float quanizeRmseK(int n, const float* X, int8_t* L) {
     float best = 0, bestScale = 0;
     for (int si=0; si<kCandiateCount; ++si) {
         float iscale = candidates[si]/max;
-        float sumlx = 0; int suml2 = 0;
+        float sumxlp = 0, sumxlm = 0;
+        int   suml2p = 0, suml2m = 0;
         for (int i=0; i<n; ++i) {
-            int l = std::max(-8, std::min(7, toNearestInt(iscale*X[i])));
-            sumlx += X[i]*l; suml2 += l*l;
+            float x = X[i];
+            float sx = iscale*x;
+            int lx = toNearestInt(sx);
+            int lp = std::max(-8, std::min(7, +lx));
+            int lm = std::max(-8, std::min(7, -lx));
+            sumxlp += x*lp;  sumxlm += x*lm;
+            suml2p += lp*lp; suml2m += lm*lm;
         }
-        if (sumlx*sumlx > best*suml2) {
-            best = sumlx*sumlx/suml2; bestScale = iscale;
+        if (sumxlp*sumxlp*suml2m >= sumxlm*sumxlm*suml2p) {
+            if (sumxlp*sumxlp > best*suml2p) {
+                best = sumxlp*sumxlp/suml2p; bestScale = iscale;
+            }
+        } else {
+            if (sumxlm*sumxlm > best*suml2m) {
+                best = sumxlm*sumxlm/suml2m; bestScale = -iscale;
+            }
         }
     }
     float sumlx = 0; int suml2 = 0;
+    for (int i=0; i<n; ++i) {
+        int l = std::max(-8, std::min(7, toNearestInt(bestScale*X[i])));
+        sumlx += X[i]*l; suml2 += l*l;
+        L[i] = l;
+    }
+    return sumlx/suml2;
+}
+
+float quanizeRmseOpt(int n, const float* X, int8_t* L, std::vector<std::pair<float,int>>& work) {
+    work.clear();
+    work.reserve(n*17);
+    for (int l=-8; l<=8; ++l) {
+        float scale = l - 0.4999f;
+        for (int i=0; i<n; ++i) {
+            if (X[i]) work.push_back({scale/std::abs(X[i]), i});
+        }
+    }
+    for (int i=0; i<n; ++i) L[i] = 0;
+    if (work.empty()) return 1.f; // all values are zero
+    std::sort(work.begin(), work.end());
+    float best = 0, bestScale = 0, lasts = work.front().first - 1;
+    double sumlx = 0; int suml2 = 0;
+    for (int k=0; k<int(work.size()); ++k) {
+        float s = work[k].first; int i = work[k].second;
+        int l = std::max(-8, std::min(7, toNearestInt(s*X[i])));
+        if (l != L[i]) {
+            sumlx += X[i]*(l-L[i]); suml2 += l*l - L[i]*L[i];
+            L[i] = l;
+            if ((s != lasts || k == int(work.size())-1) && suml2 > 0 && sumlx*sumlx > best*suml2) {
+                best = sumlx*sumlx/suml2; bestScale = s;
+            }
+        }
+    }
+    sumlx = 0; suml2 = 0;
     for (int i=0; i<n; ++i) {
         int l = std::max(-8, std::min(7, toNearestInt(bestScale*X[i])));
         sumlx += X[i]*l; suml2 += l*l;
@@ -200,9 +292,10 @@ std::pair<float, float> kQuantize1(int n, const float* X, int8_t* L, std::vector
         return {min, 1.f};
     }
     if (int(tmpX.size()) < n) tmpX.resize(n);
-    double a = min, b;
-    for (int itry=0; itry<3; ++itry) {
+    double a = min, b = 0;
+    for (int itry=0; itry<5; ++itry) {
         for (int i=0; i<n; ++i) tmpX[i] = X[i] - a;
+        //quanizeRmseK15(n, tmpX.data(), L);
         kQuantize0(n, tmpX.data(), L, work, 0, 2*nmax+1);
         double sumlx = 0, sumx = 0;
         int suml2 = 0, suml = 0;
@@ -214,9 +307,37 @@ std::pair<float, float> kQuantize1(int n, const float* X, int8_t* L, std::vector
             sumx  += X[i];
         }
         int64_t D = suml2*n - suml*suml;
+        auto aold = a, bold = b;
         a = (sumx*suml2 - sumlx*suml)/D;
         b = (sumlx*n - sumx*suml)/D;
+        if (itry > 0 && std::abs(a - aold) < 1e-6*std::abs(aold) && std::abs(b - bold) < 1e-6*std::abs(bold)) break;
     }
+    return {a, b};
+}
+
+std::pair<float, float> kQuantize1Fast(int n, const float* X, int8_t* L, int nmax) {
+    float min = X[0], max = X[1];
+    for (int i=1; i<n; ++i) {
+        min = std::min(min, X[i]); max = std::max(max, X[i]);
+    }
+    if (max == min) {
+        for (int i=0; i<n; ++i) L[i] = 0;
+        return {min, 1.f};
+    }
+    float scale = (nmax - 0.499f)/(max - min);
+    double sumlx = 0, sumx = 0;
+    int suml2 = 0, suml = 0;
+    for (int i=0; i<n; ++i) {
+        int l = toNearestInt(scale*(X[i] - min));
+        L[i] = l;
+        sumlx += X[i]*l;
+        suml2 += l*l;
+        suml  += l;
+        sumx  += X[i];
+    }
+    int64_t D = suml2*n - suml*suml;
+    double a = (sumx*suml2 - sumlx*suml)/D;
+    double b = (sumlx*n - sumx*suml)/D;
     return {a, b};
 }
 
@@ -226,7 +347,9 @@ void kQuantizeQ4(const float* X, void* buffer, int k, int type) {
     auto processOne = [type] (const float* X, int8_t* L, char* y, std::vector<std::pair<float, int>>& work, std::vector<float>& tmpX) {
         auto q = (uint8_t*)y;
         if (type == 0) {
-            auto scale = quanizeRmseK(QK, X, L);
+            auto scale = quanizeRmseK7(QK, X, L);
+            //auto scale = quanizeRmseFast(QK, X, L);
+            //auto scale = quanizeRmseOpt(QK, X, L, work);
             // The following is not quite as good as quanizeRmseK() and it is slower too.
             //if (int(tmpX.size()) < QK) tmpX.resize(QK);
             //auto r1 = kQuantize0(QK, X, L, work, -8, 7);
@@ -241,11 +364,29 @@ void kQuantizeQ4(const float* X, void* buffer, int k, int type) {
             ////float scale = kQuantize0(QK, X, L, work, -7, 7);
             std::memcpy(q, &scale, sizeof(scale)); q += sizeof(scale);
             for (int k=0; k<QK/2; ++k) q[k] = (L[2*k] + 8) | ((L[2*k+1] + 8) << 4);
-        } else {
+        } else if (type == 1) {
             auto result = kQuantize1(QK, X, L, tmpX, work, 7);
             std::memcpy(q, &result.second, sizeof(result.second)); q += sizeof(result.second);
             std::memcpy(q, &result.first,  sizeof(result.first));  q += sizeof(result.first);
             for (int k=0; k<QK/2; ++k) q[k] = L[2*k] | (L[2*k+1] << 4);
+        } else {
+            auto result = type == 2 ? kQuantize1(QK, X, L, tmpX, work, 15) : kQuantize1Fast(QK, X, L, 31);
+            auto afp16 = ggml_fp32_to_fp16(result.first);
+            auto bfp16 = ggml_fp32_to_fp16(result.second);
+            std::memcpy(q, &afp16, sizeof(afp16)); q += sizeof(afp16);
+            std::memcpy(q, &bfp16, sizeof(bfp16)); q += sizeof(bfp16);
+            auto u = (uint32_t*)q;
+            *u = 0;
+            q += sizeof(uint32_t);
+            uint32_t m = 1u;
+            for (int k=0; k<QK/2; ++k) {
+                auto l1 = L[2*k], l2 = L[2*k+1];
+                if (l1 > 15) { l1 -= 16; *u |= m; }
+                m <<= 1;
+                if (l2 > 15) { l2 -= 16; *u |= m; }
+                m <<= 1;
+                q[k] = l1 | (l2 << 4);
+            }
         }
     };
 
@@ -318,6 +459,14 @@ void kQuantizeQ4_1(const float* x, void* buffer, int k) {
     kQuantizeQ4(x, buffer, k, 1);
 }
 
+void kQuantizeQ5_1(const float* x, void* buffer, int k) {
+    kQuantizeQ4(x, buffer, k, 2);
+}
+
+void kQuantizeQ5_1_Fast(const float* x, void* buffer, int k) {
+    kQuantizeQ4(x, buffer, k, 3);
+}
+
 size_t kQuantizeQ4_0H(const float* x, void* buffer, int k, int64_t* hist) {
     kQuantizeQ4(x, buffer, k, 0);
     collectHisto(k, buffer, hist, 0);
@@ -328,6 +477,44 @@ size_t kQuantizeQ4_1H(const float* x, void* buffer, int k, int64_t* hist) {
     kQuantizeQ4(x, buffer, k, 1);
     collectHisto(k, buffer, hist, 1);
     return (k / QK) * kBucketSize1;
+}
+
+size_t kQuantizeQ5_1H(const float* x, void* buffer, int k, int64_t* hist) {
+    kQuantizeQ4(x, buffer, k, 2);
+    collectHisto(k, buffer, hist, 1);
+    return (k / QK) * kBucketSize1;
+}
+
+size_t kQuantizeQ5_1H_Fast(const float* x, void* buffer, int k, int64_t* hist) {
+    kQuantizeQ4(x, buffer, k, 3);
+    collectHisto(k, buffer, hist, 1);
+    return (k / QK) * kBucketSize1;
+}
+
+void kDequantizeQ5_1(const void* x, float* y, int k) {
+    assert(k % QK == 0);
+    int n = k / QK;
+    auto data = (const uint8_t*)x;
+    for (int i=0; i<n; ++i) {
+        ggml_fp16_t afp16, bfp16;
+        std::memcpy(&afp16, data, sizeof(afp16)); data += sizeof(afp16);
+        std::memcpy(&bfp16, data, sizeof(bfp16)); data += sizeof(bfp16);
+        auto a = ggml_fp16_to_fp32(afp16);
+        auto b = ggml_fp16_to_fp32(bfp16);
+        uint32_t u;
+        std::memcpy(&u, data, sizeof(u)); data += sizeof(u);
+        uint32_t m = 1u;
+        for (int k=0; k<16; ++k) {
+            auto l1 = data[k] & 15, l2 = data[k] >> 4;
+            if (u & m) l1 += 16;
+            m <<= 1;
+            if (u & m) l2 += 16;
+            m <<= 1;
+            *y++ = a + b*l1;
+            *y++ = a + b*l2;
+        }
+        data += 16;
+    }
 }
 
 }

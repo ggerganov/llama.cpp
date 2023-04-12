@@ -22,6 +22,12 @@ size_t kQuantizeQ4_0H(const float* GGML_RESTRICT x, void* GGML_RESTRICT y, int k
 void kQuantizeQ4_1(const float* GGML_RESTRICT x, void* GGML_RESTRICT y, int k);
 size_t kQuantizeQ4_1H(const float* GGML_RESTRICT x, void* GGML_RESTRICT y, int k, int64_t* hist);
 
+void kQuantizeQ5_1(const float* GGML_RESTRICT x, void* GGML_RESTRICT y, int k);
+size_t kQuantizeQ5_1H(const float* GGML_RESTRICT x, void* GGML_RESTRICT y, int k, int64_t* hist);
+void kQuantizeQ5_1_Fast(const float* GGML_RESTRICT x, void* GGML_RESTRICT y, int k);
+size_t kQuantizeQ5_1H_Fast(const float* GGML_RESTRICT x, void* GGML_RESTRICT y, int k, int64_t* hist);
+void kDequantizeQ5_1(const void * GGML_RESTRICT x, float * GGML_RESTRICT y, int k);
+
 #ifdef  __cplusplus
 }
 #endif

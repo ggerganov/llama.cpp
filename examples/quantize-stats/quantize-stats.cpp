@@ -306,13 +306,17 @@ int main(int argc, char ** argv) {
     std::vector<float> output_scratch(SCRATCH_ELEMENTS);
 
     // loop throught quantization types
-    for (int i = 0; i < GGML_TYPE_COUNT; i++) {
+    //for (int i = 0; i < GGML_TYPE_COUNT; i++) {
+    for (int i = 1; i < 2; i++) {
         if (!params.include_types.empty() && std::find(params.include_types.begin(), params.include_types.end(), i) == params.include_types.end()) {
             continue;
         }
         quantize_fns_t qfns = ggml_internal_get_quantize_fn(i);
         if (i < 2 && checkNewQuantization) {
-            qfns.quantize_row_q = i == 0 ? kQuantizeQ4_0 : kQuantizeQ4_1;
+            //qfns.quantize_row_q = i == 0 ? kQuantizeQ4_0 : kQuantizeQ4_1;
+            //qfns.quantize_row_q = i == 0 ? kQuantizeQ4_0 : kQuantizeQ5_1;
+            qfns.quantize_row_q = i == 0 ? kQuantizeQ4_0 : kQuantizeQ5_1_Fast;
+            if (i == 1) qfns.dequantize_row_q = kDequantizeQ5_1;
         }
         if (qfns.quantize_row_q && qfns.dequantize_row_q) {
             if (params.verbose) {
