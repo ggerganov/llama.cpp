@@ -266,7 +266,7 @@ convert the model from the old format to the new format with [./migrate-ggml-202
 - **Under no circumstances share IPFS, magnet links, or any other links to model downloads anywhere in this respository, including in issues, discussions or pull requests. They will be immediately deleted.**
 - The LLaMA models are officially distributed by Facebook and will **never** be provided through this repository.
 - Refer to [Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to request access to the model data.
-- Please verify the sha256 checksums of all downloaded model files to confirm that you have the correct model data files before creating an issue relating to your model files.
+- Please verify the [sha256 checksums](SHA256SUMS) of all downloaded model files to confirm that you have the correct model data files before creating an issue relating to your model files.
 - The following command will verify if you have all possible latest files in your self-installed `./models` subdirectory:
 
   `sha256sum --ignore-missing -c SHA256SUMS` on Linux
