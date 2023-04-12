@@ -36,8 +36,8 @@ extern "C"
         int devices = inputs.clblast_info%10;
         std::string platformenv = "KCPP_CLBLAST_PLATFORM="+std::to_string(platform);
         std::string deviceenv = "KCPP_CLBLAST_DEVICES="+std::to_string(devices);
-        putenv(platformenv.c_str());
-        putenv(deviceenv.c_str());
+        putenv((char*)platformenv.c_str());
+        putenv((char*)deviceenv.c_str());
 
         if(file_format==FileFormat::GPTJ_1 || file_format==FileFormat::GPTJ_2 || file_format==FileFormat::GPTJ_3)
         {
