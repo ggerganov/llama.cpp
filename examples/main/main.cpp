@@ -442,6 +442,7 @@ int main(int argc, char ** argv) {
 
                      // check buffer's first 3 chars equal '???' to enter command mode. 
                     if (strncmp(buffer.c_str(), "???", 3) == 0 && buffer.length() > 3) {
+                        set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
                         std::istringstream command(buffer);
                         int j = 0; std::string test, arg, cmd;
                         while (command>>test) {
@@ -477,9 +478,8 @@ int main(int argc, char ** argv) {
                         } else if (arg == "stats") {
                             llama_print_timings(ctx);
                         } else {
-                            printf("invalid argument parsed: %s\n", arg.c_str());
+                            printf("invalid argument parsed: %s\n please use -n, --top_k, -c, --top_p, --temp, --repeat_last_n, --repeat_penalty, -b, -r, --keep or stats", arg.c_str());
                         }
-                        set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
                         printf("sampling: temp = %f, top_k = %d, top_p = %f, repeat_last_n = %i, repeat_penalty = %f\n",
                                 params.temp, params.top_k, params.top_p, params.repeat_last_n, params.repeat_penalty);
                         printf("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
