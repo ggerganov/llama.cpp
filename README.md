@@ -9,7 +9,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
-- [Add GPU support to ggml](https://github.com/ggerganov/llama.cpp/issues/914)
+- [Add GPU support to ggml](https://github.com/ggerganov/llama.cpp/discussions/915)
 - [Roadmap Apr 2023](https://github.com/ggerganov/llama.cpp/discussions/784)
 
 ## Description
