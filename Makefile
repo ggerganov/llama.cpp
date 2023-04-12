@@ -34,6 +34,7 @@ endif
 CFLAGS   = -I.              -Ofast -DNDEBUG -std=c11   -fPIC
 CXXFLAGS = -I. -I./examples -Ofast -DNDEBUG -std=c++11 -fPIC
 LDFLAGS  =
+BONUSCFLAGS =
 
 #lets try enabling everything
 CFLAGS   += -pthread -s 
@@ -71,7 +72,8 @@ endif
 #       feel free to update the Makefile for your architecture and send a pull request or issue
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 	# Use all CPU extensions that are available:
-	CFLAGS += -mf16c -mfma -mavx2 -mavx -msse3
+	CFLAGS += -mf16c -mavx -msse3 
+	BONUSCFLAGS += -mfma -mavx2 
 endif
 ifneq ($(filter ppc64%,$(UNAME_M)),)
 	POWER9_M := $(shell grep "POWER9" /proc/cpuinfo)
@@ -122,17 +124,19 @@ ifneq ($(filter armv8%,$(UNAME_M)),)
 endif
 
 OPENBLAS_BUILD = 
+CLBLAST_BUILD = 
+OPENBLAS_NOAVX2_BUILD = 
+
 ifeq ($(OS),Windows_NT)
 	OPENBLAS_BUILD = $(CXX) $(CXXFLAGS) ggml_openblas.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o lib/libopenblas.lib -shared -o koboldcpp_openblas.dll $(LDFLAGS)
-else
-	OPENBLAS_BUILD = @echo 'Your OS $(OS) does not appear to be Windows. If you want to use openblas, please install it seperately, then link it manually with LLAMA_OPENBLAS=1. This is just a reminder, not an error.'
-endif
-
-CLBLAST_BUILD = 
-ifeq ($(OS),Windows_NT)
 	CLBLAST_BUILD = $(CXX) $(CXXFLAGS) ggml_clblast.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o lib/OpenCL.lib lib/clblast.lib -shared -o koboldcpp_clblast.dll $(LDFLAGS)
+	OPENBLAS_NOAVX2_BUILD = $(CXX) $(CXXFLAGS) ggml_openblas_noavx2.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o lib/libopenblas.lib -shared -o koboldcpp_openblas_noavx2.dll $(LDFLAGS)
 else
-	CLBLAST_BUILD = @echo 'Your OS $(OS) does not appear to be Windows. If you want to use CLBlast, please install it seperately, then link it manually with LLAMA_CLBLAST=1. This is just a reminder, not an error.'
+	ifndef LLAMA_OPENBLAS
+	ifndef LLAMA_CLBLAST
+	OPENBLAS_BUILD = @echo 'Your OS $(OS) does not appear to be Windows. For faster speeds, install and link a BLAS library. Set LLAMA_OPENBLAS=1 to compile with OpenBLAS support or LLAMA_CLBLAST=1 to compile with ClBlast support. This is just a reminder, not an error.'
+	endif
+	endif
 endif
 
 #
@@ -150,22 +154,28 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: llamalib llamalib_openblas llamalib_clblast
+default: llamalib llamalib_openblas llamalib_openblas_noavx2 llamalib_clblast
 
 #
 # Build library
 #
 
 ggml.o: ggml.c ggml.h
-	$(CC)  $(CFLAGS) -c ggml.c -o ggml.o
+	$(CC)  $(CFLAGS) $(BONUSCFLAGS) -c ggml.c -o ggml.o
 
 ggml_openblas.o: ggml.c ggml.h
-	$(CC)  $(CFLAGS) -DGGML_USE_OPENBLAS -c ggml.c -o ggml_openblas.o
+	$(CC)  $(CFLAGS) $(BONUSCFLAGS) -DGGML_USE_OPENBLAS -c ggml.c -o ggml_openblas.o
+
+ggml_openblas_noavx2.o: ggml.c ggml.h
+	$(CC)  $(CFLAGS) -DGGML_USE_OPENBLAS -c ggml.c -o ggml_openblas_noavx2.o
 
 ggml_clblast.o: ggml.c ggml.h
-	$(CC)  $(CFLAGS) -DGGML_USE_OPENBLAS -DGGML_USE_CLBLAST -c ggml.c -o ggml_clblast.o
+	$(CC)  $(CFLAGS) $(BONUSCFLAGS) -DGGML_USE_OPENBLAS -DGGML_USE_CLBLAST -c ggml.c -o ggml_clblast.o
 
 ggml_v1.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
+	$(CC)  $(CFLAGS) $(BONUSCFLAGS) -c otherarch/ggml_v1.c -o ggml_v1.o
+
+ggml_v1_noavx2.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
 	$(CC)  $(CFLAGS) -c otherarch/ggml_v1.c -o ggml_v1.o
 
 llama.o: llama.cpp llama.h llama_internal.h
@@ -197,6 +207,9 @@ llamalib: ggml.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o
 
 llamalib_openblas: ggml_openblas.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o 
 	$(OPENBLAS_BUILD)
+
+llamalib_openblas_noavx2: ggml_openblas_noavx2.o ggml_v1_noavx2.o expose.o common.o llama_adapter.o gpttype_adapter.o 
+	$(OPENBLAS_NOAVX2_BUILD)
 
 llamalib_clblast: ggml_clblast.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o 
 	$(CLBLAST_BUILD)

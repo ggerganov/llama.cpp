@@ -36,11 +36,14 @@ class generation_outputs(ctypes.Structure):
 handle = None
 use_blas = False # if true, uses OpenBLAS for acceleration. libopenblas.dll must exist in the same dir.
 use_clblast = False #uses CLBlast instead
+use_noavx2 = False #uses openblas with no avx2 instructions
 
 def init_library():
-    global handle, use_blas, use_clblast
+    global handle, use_blas, use_clblast, use_noavx2
     libname = ""
-    if use_blas:
+    if use_noavx2:
+        libname = "koboldcpp_openblas_noavx2.dll"
+    elif use_blas:
         libname = "koboldcpp_openblas.dll"
     elif use_clblast:
         libname = "koboldcpp_clblast.dll"
@@ -309,7 +312,7 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None):
             sys.exit(0)
 
 def main(args): 
-    global use_blas, use_clblast
+    global use_blas, use_clblast, use_noavx2
     if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "libopenblas.dll")) or not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "koboldcpp_openblas.dll")):
         print("Warning: libopenblas.dll or koboldcpp_openblas.dll not found. Non-BLAS library will be used. Ignore this if you have manually linked with OpenBLAS.")
         use_blas = False
@@ -322,6 +325,14 @@ def main(args):
         else:
             print("Attempting to use CLBlast library for faster prompt ingestion. A compatible clblast.dll will be required.")
             use_clblast = True
+    elif args.noavx2:
+        if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "libopenblas.dll")) or not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "koboldcpp_openblas_noavx2.dll")):
+            print("Warning: libopenblas.dll or koboldcpp_openblas_noavx2.dll not found. This mode cannot be used.")
+        elif os.name == 'nt':
+            print("Attempting to use non-avx2 compatibility openblas library.")
+            use_noavx2 = True
+        else:
+            print("Non-AVX2 compatibility OpenBLAS mode only available on windows. On other OS, please manually rebuild without AVX2 flags.")
     elif not args.noblas:
         print("Attempting to use OpenBLAS library for faster prompt ingestion. A compatible libopenblas.dll will be required.")
         use_blas = True
@@ -409,8 +420,10 @@ if __name__ == '__main__':
     parser.add_argument("--threads", help="Use a custom number of threads if specified. Otherwise, uses an amount based on CPU cores", type=int, default=default_threads)
     parser.add_argument("--psutil_set_threads", help="Experimental flag. If set, uses psutils to determine thread count based on physical cores.", action='store_true')
     parser.add_argument("--stream", help="Uses pseudo streaming", action='store_true')
-    parser.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
     parser.add_argument("--nommap", help="If set, do not use mmap to load newer models", action='store_true')
-    parser.add_argument("--useclblast", help="Use CLBlast instead of OpenBLAS for prompt ingestion. Must specify exactly 2 arguments, platform ID and device ID (e.g. --useclblast 1 0).", type=int, choices=range(0,9), nargs=2)
+    compatgroup = parser.add_mutually_exclusive_group()
+    compatgroup.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
+    compatgroup.add_argument("--noavx2", help="Do not use AVX2 instructions, a slower compatibility mode for older devices. Does not work with --noblas or --clblast.", action='store_true')
+    compatgroup.add_argument("--useclblast", help="Use CLBlast instead of OpenBLAS for prompt ingestion. Must specify exactly 2 arguments, platform ID and device ID (e.g. --useclblast 1 0).", type=int, choices=range(0,9), nargs=2)
     args = parser.parse_args()
     main(args)

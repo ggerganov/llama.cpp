@@ -4,6 +4,7 @@
 //windows binaries for clblast obtained from https://github.com/CNugteren/CLBlast (apache license)
 //windows binaries for opencl obtained from https://github.com/KhronosGroup/OpenCL-SDK (apache license)
 
+#if GGML_USE_OPENBLAS
 #include <cblas.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -104,21 +105,16 @@ static void ggml_cl_sgemm_wrapper(const enum CBLAS_ORDER order, const enum CBLAS
 }
 
 #endif
-
-static void do_blas_sgemm(OPENBLAS_CONST enum CBLAS_ORDER Order, OPENBLAS_CONST enum CBLAS_TRANSPOSE TransA, OPENBLAS_CONST enum CBLAS_TRANSPOSE TransB, OPENBLAS_CONST blasint M, OPENBLAS_CONST blasint N, OPENBLAS_CONST blasint K,
-OPENBLAS_CONST float alpha, OPENBLAS_CONST float *A, OPENBLAS_CONST blasint lda, OPENBLAS_CONST float *B, OPENBLAS_CONST blasint ldb, OPENBLAS_CONST float beta, float *C, OPENBLAS_CONST blasint ldc)
-{
-#if GGML_USE_CLBLAST
-    ggml_cl_sgemm_wrapper(Order, TransA, TransB,
-                M, N, K,
-                alpha, A, lda,
-                B, ldb,
-                beta, C, ldc);
-#else
-    cblas_sgemm(Order, TransA, TransB,
-                M, N, K,
-                alpha, A, lda,
-                B, ldb,
-                beta, C, ldc);
 #endif
-}
+
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+#if GGML_USE_CLBLAST
+#define do_blas_sgemm(Order, TransA, TransB,M, N, K,alpha, A, lda, B, ldb, beta, C, ldc) ({\
+ggml_cl_sgemm_wrapper(Order, TransA, TransB, M, N, K, alpha, A, lda, B, ldb, beta, C, ldc);\
+})
+#else
+#define do_blas_sgemm(Order, TransA, TransB,M, N, K,alpha, A, lda, B, ldb, beta, C, ldc) ({\
+cblas_sgemm(Order, TransA, TransB, M, N, K, alpha, A, lda, B, ldb, beta, C, ldc);\
+})
+#endif
+#endif

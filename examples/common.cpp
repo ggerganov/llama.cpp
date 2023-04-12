@@ -22,9 +22,9 @@ extern "C" __declspec(dllimport) int __stdcall GetConsoleMode(void* hConsoleHand
 extern "C" __declspec(dllimport) int __stdcall SetConsoleMode(void* hConsoleHandle, unsigned long dwMode);
 extern "C" __declspec(dllimport) int __stdcall SetConsoleCP(unsigned int wCodePageID);
 extern "C" __declspec(dllimport) int __stdcall SetConsoleOutputCP(unsigned int wCodePageID);
-extern "C" __declspec(dllimport) int __stdcall WideCharToMultiByte(unsigned int CodePage, unsigned long dwFlags, 
-                                                                   const wchar_t * lpWideCharStr, int cchWideChar, 
-                                                                   char * lpMultiByteStr, int cbMultiByte, 
+extern "C" __declspec(dllimport) int __stdcall WideCharToMultiByte(unsigned int CodePage, unsigned long dwFlags,
+                                                                   const wchar_t * lpWideCharStr, int cchWideChar,
+                                                                   char * lpMultiByteStr, int cbMultiByte,
                                                                    const char * lpDefaultChar, bool * lpUsedDefaultChar);
 #define CP_UTF8 65001
 #endif
@@ -328,9 +328,9 @@ void win32_console_init(bool enable_color) {
 
 // Convert a wide Unicode string to an UTF8 string
 void win32_utf8_encode(const std::wstring & wstr, std::string & str) {
-	int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
-	std::string strTo(size_needed, 0);
-	WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
-	str = strTo;
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
+    std::string strTo(size_needed, 0);
+    WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
+    str = strTo;
 }
 #endif
