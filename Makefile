@@ -194,7 +194,7 @@ gpttype_adapter.o:
 	$(CXX) $(CXXFLAGS) -c gpttype_adapter.cpp -o gpttype_adapter.o
 
 clean:
-	rm -vf *.o main quantize quantize-stats perplexity embedding main.exe quantize.exe koboldcpp.dll koboldcpp_openblas.dll koboldcpp_clblast.dll gptj.exe gpt2.exe
+	rm -vf *.o main quantize_llama quantize_gpt2 quantize_gptj quantize-stats perplexity embedding main.exe quantize_llama.exe quantize_gptj.exe quantize_gpt2.exe koboldcpp.dll koboldcpp_openblas.dll koboldcpp_openblas_noavx2.dll koboldcpp_clblast.dll gptj.exe gpt2.exe
 
 main: examples/main/main.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
@@ -214,24 +214,23 @@ llamalib_openblas_noavx2: ggml_openblas_noavx2.o ggml_v1_noavx2.o expose.o commo
 llamalib_clblast: ggml_clblast.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o 
 	$(CLBLAST_BUILD)
 	
-quantize: examples/quantize/quantize.cpp ggml.o llama.o
-	$(CXX) $(CXXFLAGS) examples/quantize/quantize.cpp ggml.o llama.o -o quantize $(LDFLAGS)
+quantize_llama: examples/quantize/quantize.cpp ggml.o llama.o
+	$(CXX) $(CXXFLAGS) examples/quantize/quantize.cpp ggml.o llama.o -o quantize_llama $(LDFLAGS)
 
 quantize-stats: examples/quantize-stats/quantize-stats.cpp ggml.o llama.o
 	$(CXX) $(CXXFLAGS) examples/quantize-stats/quantize-stats.cpp ggml.o llama.o -o quantize-stats $(LDFLAGS)
 
-
 quantize_gptj: ggml.o llama.o
 	$(CXX) $(CXXFLAGS) otherarch/gptj_quantize.cpp ggml.o llama.o -o quantize_gptj $(LDFLAGS)
+
+quantize_gpt2: ggml.o llama.o
+	$(CXX) $(CXXFLAGS) otherarch/gpt2_quantize.cpp ggml.o llama.o -o quantize_gpt2 $(LDFLAGS)
 
 perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/perplexity/perplexity.cpp ggml.o llama.o common.o -o perplexity $(LDFLAGS)
 
 embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/embedding/embedding.cpp ggml.o llama.o common.o -o embedding $(LDFLAGS)
-
-gpt2: ggml.o
-	$(CXX) $(CXXFLAGS) otherarch/gpt2_v2.cpp otherarch/utils.cpp ggml.o -o gpt2 $(LDFLAGS) 
 
 libllama.so: llama.o ggml.o
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o libllama.so llama.o ggml.o $(LDFLAGS)

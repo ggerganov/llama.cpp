@@ -12,19 +12,18 @@
 #include <vector>
 #include <regex>
 
-// default hparams (GPT-J 6B)
-struct gptj_hparams {
-    int32_t n_vocab = 50400;
-    int32_t n_ctx   = 2048;
-    int32_t n_embd  = 4096;
-    int32_t n_head  = 16;
-    int32_t n_layer = 28;
-    int32_t n_rot   = 64;
+// default hparams (GPT-2 117M)
+struct gpt2_hparams {
+    int32_t n_vocab = 50257;
+    int32_t n_ctx   = 1024;
+    int32_t n_embd  = 768;
+    int32_t n_head  = 12;
+    int32_t n_layer = 12;
     int32_t f16     = 1;
 };
 
 // quantize a model
-bool gptj_model_quantize(const std::string & fname_inp, const std::string & fname_out, int itype) {
+bool gpt2_model_quantize(const std::string & fname_inp, const std::string & fname_out, int itype) {
     ggml_type type = GGML_TYPE_Q4_1;
 
     switch (itype) {
@@ -66,7 +65,7 @@ bool gptj_model_quantize(const std::string & fname_inp, const std::string & fnam
         fout.write((char *) &magic, sizeof(magic));
     }
 
-    gptj_hparams hparams;
+    gpt2_hparams hparams;
 
     // load hparams
     {
@@ -75,7 +74,6 @@ bool gptj_model_quantize(const std::string & fname_inp, const std::string & fnam
         finp.read((char *) &hparams.n_embd,  sizeof(hparams.n_embd));
         finp.read((char *) &hparams.n_head,  sizeof(hparams.n_head));
         finp.read((char *) &hparams.n_layer, sizeof(hparams.n_layer));
-        finp.read((char *) &hparams.n_rot,   sizeof(hparams.n_rot));
         finp.read((char *) &hparams.f16,     sizeof(hparams.f16));
 
         printf("%s: n_vocab = %d\n", __func__, hparams.n_vocab);
@@ -90,7 +88,6 @@ bool gptj_model_quantize(const std::string & fname_inp, const std::string & fnam
         fout.write((char *) &hparams.n_embd,  sizeof(hparams.n_embd));
         fout.write((char *) &hparams.n_head,  sizeof(hparams.n_head));
         fout.write((char *) &hparams.n_layer, sizeof(hparams.n_layer));
-        fout.write((char *) &hparams.n_rot,   sizeof(hparams.n_rot));
         fout.write((char *) &itype,           sizeof(hparams.f16));
     }
 
@@ -159,12 +156,17 @@ bool gptj_model_quantize(const std::string & fname_inp, const std::string & fnam
 
             {
                 static const char * ftype_str[] = { "f32", "f16", "q4_0", "q4_1", };
-                printf("%48s - [%5d, %5d], type = %6s ", name.data(), ne[0], ne[1], ftype_str[ftype]);
+                printf("%24s - [%5d, %5d], type = %6s ", name.data(), ne[0], ne[1], ftype_str[ftype]);
             }
 
             // regexes of tensor names to be quantized
             const std::vector<std::string> k_names = {
-                ".*weight",
+                "model/wte",
+                "model/lm_head",
+                "model/h.*/attn/c_attn/w",
+                "model/h.*/attn/c_proj/w",
+                "model/h.*/mlp/c_fc/w",
+                "model/h.*/mlp/c_proj/w",
             };
 
             bool quantize = false;
@@ -174,9 +176,6 @@ bool gptj_model_quantize(const std::string & fname_inp, const std::string & fnam
                     break;
                 }
             }
-
-            // quantize only 2D tensors
-            quantize &= (n_dims == 2);
 
             if (quantize) {
                 if (ftype != 0 && ftype != 1) {
@@ -311,7 +310,7 @@ int main(int argc, char ** argv) {
     {
         const int64_t t_start_us = ggml_time_us();
 
-        if (!gptj_model_quantize(fname_inp, fname_out, itype)) {
+        if (!gpt2_model_quantize(fname_inp, fname_out, itype)) {
             fprintf(stderr, "%s: failed to quantize model from '%s'\n", __func__, fname_inp.c_str());
             return 1;
         }
