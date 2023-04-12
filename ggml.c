@@ -9464,7 +9464,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         /*.has_work  =*/ false,
         /*.stop      =*/ false,
     };
-    struct ggml_compute_state * workers = n_threads > 1 ? alloca(sizeof(struct ggml_compute_state)*(n_threads - 1)) : NULL;
+    struct ggml_compute_state * workers = n_threads > 1 ? malloc(sizeof(struct ggml_compute_state)*(n_threads - 1)) : NULL;
 
     // create thread pool
     if (n_threads > 1) {
@@ -9876,6 +9876,8 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                 (double) perf_time_us_cur     / 1000.0,
                 (double) cgraph->perf_time_us / 1000.0 / cgraph->perf_runs);
     }
+
+    free(workers);
 }
 
 void ggml_graph_reset(struct ggml_cgraph * cgraph) {
