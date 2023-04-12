@@ -369,6 +369,15 @@ void kQuantizeQ4(const float* X, void* buffer, int k, int type) {
             std::memcpy(q, &result.second, sizeof(result.second)); q += sizeof(result.second);
             std::memcpy(q, &result.first,  sizeof(result.first));  q += sizeof(result.first);
             for (int k=0; k<QK/2; ++k) q[k] = L[2*k] | (L[2*k+1] << 4);
+        } else if (type == 4) {
+            auto scale1 = quanizeRmseK7(QK/2, X, L);
+            auto scale2 = quanizeRmseK7(QK/2, X+QK/2, L+QK/2);
+            //printf("scale1 = %g, scale2 = %g\n",scale1,scale2);
+            auto scale1fp16 = ggml_fp32_to_fp16(scale1);
+            auto scale2fp16 = ggml_fp32_to_fp16(scale2);
+            std::memcpy(q, &scale1fp16, sizeof(scale1fp16)); q += sizeof(scale1fp16);
+            std::memcpy(q, &scale2fp16, sizeof(scale2fp16)); q += sizeof(scale2fp16);
+            for (int k=0; k<QK/2; ++k) q[k] = (L[2*k] + 8) | ((L[2*k+1] + 8) << 4);
         } else {
             auto result = type == 2 ? kQuantize1(QK, X, L, tmpX, work, 15) : kQuantize1Fast(QK, X, L, 31);
             auto afp16 = ggml_fp32_to_fp16(result.first);
@@ -390,7 +399,7 @@ void kQuantizeQ4(const float* X, void* buffer, int k, int type) {
         }
     };
 
-    auto bucketSize = type == 0 ? kBucketSize0 : kBucketSize1;
+    auto bucketSize = type == 0 || type == 4 ? kBucketSize0 : kBucketSize1;
     auto y = (char*)buffer;
     int nchunk = (k + kChunkSize-1)/kChunkSize;
     if (nchunk < 2) {
@@ -514,6 +523,35 @@ void kDequantizeQ5_1(const void* x, float* y, int k) {
             *y++ = a + b*l2;
         }
         data += 16;
+    }
+}
+
+void kQuantizeQ4_0K(const float* x, void* buffer, int k) {
+    kQuantizeQ4(x, buffer, k, 4);
+}
+
+void kDequantizeQ4_0K(const void* x, float* y, int k) {
+    assert(k % QK == 0);
+    int n = k / QK;
+    auto data = (const uint8_t*)x;
+    for (int i=0; i<n; ++i) {
+        ggml_fp16_t afp16, bfp16;
+        std::memcpy(&afp16, data, sizeof(afp16)); data += sizeof(afp16);
+        std::memcpy(&bfp16, data, sizeof(bfp16)); data += sizeof(bfp16);
+        auto a = ggml_fp16_to_fp32(afp16);
+        auto b = ggml_fp16_to_fp32(bfp16);
+        for (int k=0; k<8; ++k) {
+            int8_t l1 = data[k] & 15, l2 = data[k] >> 4;
+            l1 -= 8; l2 -= 8;
+            *y++ = a*l1; *y++ = a*l2;
+        }
+        data += 8;
+        for (int k=0; k<8; ++k) {
+            int8_t l1 = data[k] & 15, l2 = data[k] >> 4;
+            l1 -= 8; l2 -= 8;
+            *y++ = b*l1; *y++ = b*l2;
+        }
+        data += 8;
     }
 }
 
