@@ -15,6 +15,4 @@
 #include "llama.h"
 #include "ggml.h"
 
-
-
 std::vector<llama_token> legacy_llama_tokenize(struct llama_context * ctx, const std::string & text, bool add_bos);

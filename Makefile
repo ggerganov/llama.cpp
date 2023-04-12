@@ -123,14 +123,16 @@ ifneq ($(filter armv8%,$(UNAME_M)),)
 	CFLAGS += -mfp16-format=ieee -mno-unaligned-access
 endif
 
-OPENBLAS_BUILD = 
-CLBLAST_BUILD = 
-OPENBLAS_NOAVX2_BUILD = 
+OPENBLAS_BUILD =
+CLBLAST_BUILD =
+NOAVX2_BUILD = 
+OPENBLAS_NOAVX2_BUILD =
 
 ifeq ($(OS),Windows_NT)
 	OPENBLAS_BUILD = $(CXX) $(CXXFLAGS) ggml_openblas.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o lib/libopenblas.lib -shared -o koboldcpp_openblas.dll $(LDFLAGS)
 	CLBLAST_BUILD = $(CXX) $(CXXFLAGS) ggml_clblast.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o lib/OpenCL.lib lib/clblast.lib -shared -o koboldcpp_clblast.dll $(LDFLAGS)
-	OPENBLAS_NOAVX2_BUILD = $(CXX) $(CXXFLAGS) ggml_openblas_noavx2.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o lib/libopenblas.lib -shared -o koboldcpp_openblas_noavx2.dll $(LDFLAGS)
+	OPENBLAS_NOAVX2_BUILD = $(CXX) $(CXXFLAGS) ggml_openblas_noavx2.o ggml_v1_noavx2.o expose.o common.o llama_adapter.o gpttype_adapter.o lib/libopenblas.lib -shared -o koboldcpp_openblas_noavx2.dll $(LDFLAGS)
+	NOAVX2_BUILD = $(CXX) $(CXXFLAGS) ggml_noavx2.o ggml_v1_noavx2.o expose.o common.o llama_adapter.o gpttype_adapter.o -shared -o koboldcpp_noavx2.dll $(LDFLAGS)
 else
 	ifndef LLAMA_OPENBLAS
 	ifndef LLAMA_CLBLAST
@@ -154,7 +156,7 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: llamalib llamalib_openblas llamalib_openblas_noavx2 llamalib_clblast
+default: llamalib llamalib_noavx2 llamalib_openblas llamalib_openblas_noavx2 llamalib_clblast
 
 #
 # Build library
@@ -166,6 +168,9 @@ ggml.o: ggml.c ggml.h
 ggml_openblas.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS) $(BONUSCFLAGS) -DGGML_USE_OPENBLAS -c ggml.c -o ggml_openblas.o
 
+ggml_noavx2.o: ggml.c ggml.h
+	$(CC)  $(CFLAGS) -c ggml.c -o ggml_noavx2.o
+
 ggml_openblas_noavx2.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS) -DGGML_USE_OPENBLAS -c ggml.c -o ggml_openblas_noavx2.o
 
@@ -176,7 +181,7 @@ ggml_v1.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
 	$(CC)  $(CFLAGS) $(BONUSCFLAGS) -c otherarch/ggml_v1.c -o ggml_v1.o
 
 ggml_v1_noavx2.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
-	$(CC)  $(CFLAGS) -c otherarch/ggml_v1.c -o ggml_v1.o
+	$(CC)  $(CFLAGS) -c otherarch/ggml_v1.c -o ggml_v1_noavx2.o
 
 llama.o: llama.cpp llama.h llama_internal.h
 	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
@@ -194,7 +199,7 @@ gpttype_adapter.o:
 	$(CXX) $(CXXFLAGS) -c gpttype_adapter.cpp -o gpttype_adapter.o
 
 clean:
-	rm -vf *.o main quantize_llama quantize_gpt2 quantize_gptj quantize-stats perplexity embedding main.exe quantize_llama.exe quantize_gptj.exe quantize_gpt2.exe koboldcpp.dll koboldcpp_openblas.dll koboldcpp_openblas_noavx2.dll koboldcpp_clblast.dll gptj.exe gpt2.exe
+	rm -vf *.o main quantize_llama quantize_gpt2 quantize_gptj quantize-stats perplexity embedding main.exe quantize_llama.exe quantize_gptj.exe quantize_gpt2.exe koboldcpp.dll koboldcpp_openblas.dll koboldcpp_noavx2.dll koboldcpp_openblas_noavx2.dll koboldcpp_clblast.dll gptj.exe gpt2.exe
 
 main: examples/main/main.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
@@ -207,6 +212,9 @@ llamalib: ggml.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o
 
 llamalib_openblas: ggml_openblas.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o 
 	$(OPENBLAS_BUILD)
+
+llamalib_noavx2: ggml_noavx2.o ggml_v1_noavx2.o expose.o common.o llama_adapter.o gpttype_adapter.o 
+	$(NOAVX2_BUILD)
 
 llamalib_openblas_noavx2: ggml_openblas_noavx2.o ggml_v1_noavx2.o expose.o common.o llama_adapter.o gpttype_adapter.o 
 	$(OPENBLAS_NOAVX2_BUILD)

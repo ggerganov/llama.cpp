@@ -31,9 +31,15 @@ extern "C"
         std::string model = inputs.model_filename;
         file_format = check_file_format(model.c_str());
 
-        //first digit is platform, second is devices
-        int platform = inputs.clblast_info/10;
-        int devices = inputs.clblast_info%10;
+        //first digit is whether configured, second is platform, third is devices
+        int parseinfo = inputs.clblast_info;
+        
+        std::string usingclblast = "KCPP_CLBLAST_CONFIGURED="+std::to_string(parseinfo>0?1:0);
+        putenv((char*)usingclblast.c_str());
+
+        parseinfo = parseinfo%100; //keep last 2 digits      
+        int platform = parseinfo/10;
+        int devices = parseinfo%10;
         std::string platformenv = "KCPP_CLBLAST_PLATFORM="+std::to_string(platform);
         std::string deviceenv = "KCPP_CLBLAST_DEVICES="+std::to_string(devices);
         putenv((char*)platformenv.c_str());

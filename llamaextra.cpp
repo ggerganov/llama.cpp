@@ -2,22 +2,6 @@
 #include "llamaextra.h"
 #include "llama.cpp"
 
-#include <cassert>
-#include <cstring>
-#include <fstream>
-#include <regex>
-#include <iostream>
-#include <iterator>
-#include <queue>
-#include <string>
-#include <math.h>
-
- #if defined(_MSC_VER) || defined(__MINGW32__)
- #include <malloc.h> // using malloc.h with MSC/MINGW
- #elif !defined(__FreeBSD__) && !defined(__NetBSD__)
- #include <alloca.h>
- #endif
-
 
 // TODO: Calculate this constant from the vocabulary
 #define MAX_TOKEN_LEN 18

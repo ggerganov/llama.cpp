@@ -7,6 +7,11 @@
 //No dynamic memory allocation! Setup structs with FIXED (known) shapes and sizes for ALL output fields
 //Python will ALWAYS provide the memory, we just write to it.
 
+// Defines sigaction on msys:
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <time.h>
 #include "./examples/main/main.cpp"
 #include "ggml.h"
@@ -38,11 +43,12 @@ bool llama_load_model(const load_model_inputs inputs, FileFormat in_file_format)
     modelname = inputs.model_filename;
 
     ctx_params.n_ctx = inputs.max_context_length;
-    ctx_params.n_parts = inputs.n_parts_overwrite;
+    ctx_params.n_parts = -1;//inputs.n_parts_overwrite;
     ctx_params.seed = -1;
     ctx_params.f16_kv = inputs.f16_kv;
     ctx_params.logits_all = false;
     ctx_params.use_mmap = inputs.use_mmap;
+    ctx_params.use_mlock = false;
 
     file_format = in_file_format;
 
