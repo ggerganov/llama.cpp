@@ -114,6 +114,7 @@ LLAMA_FTYPE_ALL_F32 = ctypes.c_int(0)
 LLAMA_FTYPE_MOSTLY_F16 = ctypes.c_int(1)  # except 1d tensors
 LLAMA_FTYPE_MOSTLY_Q4_0 = ctypes.c_int(2)  # except 1d tensors
 LLAMA_FTYPE_MOSTLY_Q4_1 = ctypes.c_int(3)  # except 1d tensors
+LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = ctypes.c_int(4)  # tok_embeddings.weight and output.weight are F16
 
 # Functions
 
