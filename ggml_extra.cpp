@@ -1,5 +1,6 @@
 #include "ggml_extra.h"
 
+#include <limits>
 #include <vector>
 #include <utility>
 #include <algorithm>
@@ -21,6 +22,94 @@ inline int toNearestInt(float fval) {
     auto val = fval + kSnapper;
     int i; std::memcpy(&i, &val, sizeof(int));
     return (i & 0x007fffff) - 0x00400000;
+}
+
+// Adapted from PR #835, function quantize_row_q4_0_rmse()
+//
+// I absolutely cannot reproduce the rmse = 0.00185915 reported in #835.
+// Instead, I get rmse = 0.00197 with the original and rmse = 0.00192
+// with the modification that determines the scale actually minimizing
+// the rmse.
+//
+// Do I have a bug? iI don't see it.
+// The only difference is that I'm using toNearestInt()
+// instead of round(), but what are the odds for getting scaled weights at
+// exactly 2.5, 4.5, and 6.5, where toNearestInt() and round() differ.
+// (with toNearestInt() behaving as expected and rounding towards the even integer,
+// while round() always rounding up.
+float quanizeRmse(int n, const float* X, int8_t* L) {
+#define Q4_0_SCALE_CANDIDATE_COUNT 8
+    static const float candidates[Q4_0_SCALE_CANDIDATE_COUNT] = { -8.7f, -8.5f, -8.3f, -8.1f, -7.9f, -7.7f, -7.2f, +7.0f };
+    float max = 0, amax = 0;
+    for (int i=0; i<n; ++i) {
+        float ax = std::abs(X[i]);
+        if (ax > amax) { amax = ax; max = X[i]; }
+    }
+    if (!amax) { // all zero
+        for (int i=0; i<n; ++i) L[i] = 0;
+        return 1.f;
+    }
+    float best = std::numeric_limits<float>::max(), bestScale = 0;
+    for (int si=0; si<Q4_0_SCALE_CANDIDATE_COUNT; ++si) {
+        float iscale = candidates[si]/max;
+        float err = 0;
+        for (int i=0; i<n; ++i) {
+            float sx = iscale*X[i];
+            int l = std::max(-8, std::min(7, toNearestInt(sx)));
+            sx -= l;
+            err += sx*sx;
+        }
+        if (err < best) {
+            best = err; bestScale = iscale;
+        }
+    }
+    // The follwoing is a departure from #835. Given the quants produces by bestScale,
+    // it determines the scale the actually minimizes the MSE (or RMSE).
+    // With this, I get rmse = 0.00192 for the 7B model.
+    float sumlx = 0; int suml2 = 0;
+    for (int i=0; i<n; ++i) {
+        int l = std::max(-8, std::min(7, toNearestInt(bestScale*X[i])));
+        sumlx += X[i]*l; suml2 += l*l;
+        L[i] = l;
+    }
+    return sumlx/suml2;
+    // The following is what is in quantize_row_q4_0_rmse() in PR #835
+    // With this version, I get rmse = 0.00197 for the 7B model.
+    //for (int i=0; i<n; ++i) L[i] = std::max(-8, std::min(7, toNearestInt(bestScale*X[i])));
+    //return 1/bestScale;
+}
+
+// The following improves the above.
+// It gives RMSE = 0.00185228 for the 7B model.
+float quanizeRmseK(int n, const float* X, int8_t* L) {
+    constexpr int kCandiateCount = 20;
+    static const float candidates[kCandiateCount] = { -8.7f, -8.5f, -8.3f, -8.1f, -7.9f, -7.7f, -7.2f, -7.0f, -6.3f, -5.7f,
+                                                      +8.7f, +8.5f, +8.3f, +8.1f, +7.9f, +7.7f, +7.2f, +7.0f, +6.3f, +5.7f};
+    float max = 0;
+    for (int i=0; i<n; ++i) max = std::max(max, std::abs(X[i]));
+    if (!max) { // all zero
+        for (int i=0; i<n; ++i) L[i] = 0;
+        return 1.f;
+    }
+    float best = 0, bestScale = 0;
+    for (int si=0; si<kCandiateCount; ++si) {
+        float iscale = candidates[si]/max;
+        float sumlx = 0; int suml2 = 0;
+        for (int i=0; i<n; ++i) {
+            int l = std::max(-8, std::min(7, toNearestInt(iscale*X[i])));
+            sumlx += X[i]*l; suml2 += l*l;
+        }
+        if (sumlx*sumlx > best*suml2) {
+            best = sumlx*sumlx/suml2; bestScale = iscale;
+        }
+    }
+    float sumlx = 0; int suml2 = 0;
+    for (int i=0; i<n; ++i) {
+        int l = std::max(-8, std::min(7, toNearestInt(bestScale*X[i])));
+        sumlx += X[i]*l; suml2 += l*l;
+        L[i] = l;
+    }
+    return sumlx/suml2;
 }
 
 std::pair<float, float> kQuantize0(int n, const float* X, int8_t* L, std::vector<std::pair<float,int>>& work, int nmin, int nmax) {
@@ -137,17 +226,19 @@ void kQuantizeQ4(const float* X, void* buffer, int k, int type) {
     auto processOne = [type] (const float* X, int8_t* L, char* y, std::vector<std::pair<float, int>>& work, std::vector<float>& tmpX) {
         auto q = (uint8_t*)y;
         if (type == 0) {
-            if (int(tmpX.size()) < QK) tmpX.resize(QK);
-            auto r1 = kQuantize0(QK, X, L, work, -8, 7);
-            for (int i=0; i<QK; ++i) tmpX[i] = -X[i];
-            int8_t L2[QK];
-            auto r2 = kQuantize0(QK, tmpX.data(), L2, work, -8, 7);
-            float scale = r1.first;
-            if (r2.second > r1.first) {
-                scale = -r2.first;
-                std::memcpy(L, L2, QK);
-            }
-            //float scale = kQuantize0(QK, X, L, work, -7, 7);
+            auto scale = quanizeRmseK(QK, X, L);
+            // The following is not quite as good as quanizeRmseK() and it is slower too.
+            //if (int(tmpX.size()) < QK) tmpX.resize(QK);
+            //auto r1 = kQuantize0(QK, X, L, work, -8, 7);
+            //for (int i=0; i<QK; ++i) tmpX[i] = -X[i];
+            //int8_t L2[QK];
+            //auto r2 = kQuantize0(QK, tmpX.data(), L2, work, -8, 7);
+            //float scale = r1.first;
+            //if (r2.second > r1.first) {
+            //    scale = -r2.first;
+            //    std::memcpy(L, L2, QK);
+            //}
+            ////float scale = kQuantize0(QK, X, L, work, -7, 7);
             std::memcpy(q, &scale, sizeof(scale)); q += sizeof(scale);
             for (int k=0; k<QK/2; ++k) q[k] = (L[2*k] + 8) | ((L[2*k+1] + 8) << 4);
         } else {
