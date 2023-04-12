@@ -827,7 +827,9 @@ static const char *llama_ftype_name(enum llama_ftype ftype) {
         case LLAMA_FTYPE_MOSTLY_F16:  return "mostly F16";
         case LLAMA_FTYPE_MOSTLY_Q4_0: return "mostly Q4_0";
         case LLAMA_FTYPE_MOSTLY_Q4_1: return "mostly Q4_1";
-        default: LLAMA_ASSERT(false);
+        case LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16:
+                                      return "mostly Q4_1, some F16";
+        default:                      return "unknown, may not work";
     }
 }
 
