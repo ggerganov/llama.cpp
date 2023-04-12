@@ -3,11 +3,13 @@
 
 #include "ggml.h"
 
+#if __STDC_NO_VLA__
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h> // using malloc.h with MSC/MINGW
 #elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__)
 #include <alloca.h>
 #endif
+#endif /* __STDC_NO_VLA__ */
 
 #include <assert.h>
 #include <errno.h>
@@ -10362,7 +10364,11 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         /*.has_work  =*/ false,
         /*.stop      =*/ false,
     };
+#if __STDC_NO_VLA__
     struct ggml_compute_state * workers = n_threads > 1 ? alloca(sizeof(struct ggml_compute_state)*(n_threads - 1)) : NULL;
+#else
+    struct ggml_compute_state workers[n_threads];
+#endif
 
     // create thread pool
     if (n_threads > 1) {
@@ -11374,7 +11380,11 @@ static enum ggml_opt_result ggml_opt_lbfgs(
     ggml_opt_get_params(np, ps, x);
 
     // the L-BFGS memory
+#if __STDC_NO_VLA__
     struct ggml_lbfgs_iteration_data * lm = alloca(sizeof(struct ggml_lbfgs_iteration_data)*m);
+#else
+    struct ggml_lbfgs_iteration_data lm[m];
+#endif
 
     for (int i = 0; i < m; ++i) {
         lm[i].alpha = 0.0f;
