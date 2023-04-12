@@ -27,6 +27,8 @@ static console_state con_st;
 
 static bool is_interacting = false;
 
+llama_context * ctx;
+
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
 void sigint_handler(int signo) {
     set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
@@ -35,6 +37,9 @@ void sigint_handler(int signo) {
         if (!is_interacting) {
             is_interacting=true;
         } else {
+            //printf("Exit call given, printing stats and exiting.\n");
+            llama_print_timings(ctx);
+            llama_free(ctx);
             _exit(130);
         }
     }
@@ -91,8 +96,6 @@ int main(int argc, char ** argv) {
 
 //    params.prompt = R"(// this function checks if the number n is prime
 //bool is_prime(int n) {)";
-
-    llama_context * ctx;
 
     // load the model
     {
@@ -435,15 +438,6 @@ int main(int argc, char ** argv) {
                     }
 
                     n_remain -= line_inp.size();
-                }
-
-                // exit gracefully when the word "exit" is typed.
-                if (buffer.length() == 5 && strncmp(buffer.c_str(), "exit", 4) == 0) {
-                    printf("Exit call given, printing stats and exiting.\n");
-                    llama_print_timings(ctx);
-                    llama_free(ctx);
-                    set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
-                    return 0;
                 }
 
                 input_noecho = true; // do not echo this again
