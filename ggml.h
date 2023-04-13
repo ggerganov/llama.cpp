@@ -204,6 +204,7 @@ enum ggml_type {
     GGML_TYPE_F16  = 1,
     GGML_TYPE_Q4_0 = 2,
     GGML_TYPE_Q4_1 = 3,
+    GGML_TYPE_Q8_0 = 4,
     GGML_TYPE_I8,
     GGML_TYPE_I16,
     GGML_TYPE_I32,
