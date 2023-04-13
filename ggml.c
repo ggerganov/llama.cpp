@@ -543,6 +543,22 @@ inline float vmaxvq_f32(float32x4_t v) {
             MAX(vgetq_lane_f32(v, 2), vgetq_lane_f32(v, 3)));
 }
 
+inline int8x8_t vzip1_s8(int8x8_t a, int8x8_t b) {
+    return vget_low_s8(vcombine_s8(a, b));
+}
+
+inline int8x8_t vzip2_s8(int8x8_t a, int8x8_t b) {
+    return vget_high_s8(vcombine_s8(a, b));
+}
+
+inline uint8x8_t vzip1_u8(uint8x8_t a, uint8x8_t b) {
+    return vget_low_u8(vcombine_u8(a, b));
+}
+
+inline uint8x8_t vzip2_u8(uint8x8_t a, uint8x8_t b) {
+    return vget_high_u8(vcombine_u8(a, b));
+}
+
 #endif
 #endif
 
