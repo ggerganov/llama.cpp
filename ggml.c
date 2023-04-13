@@ -9363,7 +9363,7 @@ struct ggml_cgraph ggml_build_forward(struct ggml_tensor * tensor) {
     struct ggml_cgraph result = {
         /*.n_nodes      =*/ 0,
         /*.n_leafs      =*/ 0,
-        /*.n_threads    =*/ 0,
+        /*.n_threads    =*/ GGML_DEFAULT_N_THREADS,
         /*.work_size    =*/ 0,
         /*.work         =*/ NULL,
         /*.nodes        =*/ { NULL },
@@ -9983,8 +9983,8 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
 
     GGML_PRINT("=== GRAPH ===\n");
 
-    GGML_PRINT_DEBUG("n_threads       = %d\n",       cgraph->n_threads);
-    GGML_PRINT_DEBUG("total work size = %zu bytes\n",cgraph->work_size);
+    GGML_PRINT_DEBUG("n_threads       = %d\n",        cgraph->n_threads);
+    GGML_PRINT_DEBUG("total work size = %zu bytes\n", cgraph->work_size);
 
     GGML_PRINT("n_nodes = %d\n", cgraph->n_nodes);
     for (int i = 0; i < cgraph->n_nodes; i++) {
