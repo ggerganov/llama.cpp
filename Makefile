@@ -142,7 +142,7 @@ default: main quantize perplexity embedding
 ggml.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS)   -c ggml.c -o ggml.o
 
-llama.o: llama.cpp llama.h llama_util.h llama_internal.h
+llama.o: llama.cpp llama.h llama_util.h
 	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
 
 common.o: examples/common.cpp examples/common.h
