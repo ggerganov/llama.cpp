@@ -86,11 +86,13 @@ int main(int argc, char ** argv) {
     gpt_params params;
     params.model = "models/llama-7B/ggml-model.bin";
 
+    params.n_batch = 512;
     if (gpt_params_parse(argc, argv, params) == false) {
         return 1;
     }
 
     params.perplexity = true;
+    params.n_batch = std::min(params.n_batch, params.n_ctx);
 
     if (params.n_ctx > 2048) {
         fprintf(stderr, "%s: warning: model does not support context sizes greater than 2048 tokens (%d specified);"
