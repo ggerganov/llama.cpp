@@ -34,7 +34,10 @@ endif
 CFLAGS   = -I.              -Ofast -DNDEBUG -std=c11   -fPIC
 CXXFLAGS = -I. -I./examples -Ofast -DNDEBUG -std=c++11 -fPIC
 LDFLAGS  =
-BONUSCFLAGS =
+
+# these are used on windows, to build some libraries with extra old device compatibility
+BONUSCFLAGS1 =
+BONUSCFLAGS2 =
 
 #lets try enabling everything
 CFLAGS   += -pthread -s 
@@ -73,8 +76,10 @@ endif
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 	# Use all CPU extensions that are available:
 	CFLAGS += -mavx 
+# old library NEEDS mf16c to work. so we must build with it. new one doesnt
 	ifeq ($(OS),Windows_NT)
-		BONUSCFLAGS += -mfma -mavx2 -mf16c -msse3 
+		BONUSCFLAGS1 += -mf16c 
+		BONUSCFLAGS2 += -mavx2 -msse3 -mfma 
 	else
 # if not on windows, they are clearly building it themselves, so lets just use whatever is supported
 		CFLAGS += -march=native -mtune=native
@@ -168,10 +173,10 @@ default: llamalib llamalib_noavx2 llamalib_openblas llamalib_openblas_noavx2 lla
 #
 
 ggml.o: ggml.c ggml.h
-	$(CC)  $(CFLAGS) $(BONUSCFLAGS) -c ggml.c -o ggml.o
+	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -c ggml.c -o ggml.o
 
 ggml_openblas.o: ggml.c ggml.h
-	$(CC)  $(CFLAGS) $(BONUSCFLAGS) -DGGML_USE_OPENBLAS -c ggml.c -o ggml_openblas.o
+	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -DGGML_USE_OPENBLAS -c ggml.c -o ggml_openblas.o
 
 ggml_noavx2.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS) -c ggml.c -o ggml_noavx2.o
@@ -180,13 +185,13 @@ ggml_openblas_noavx2.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS) -DGGML_USE_OPENBLAS -c ggml.c -o ggml_openblas_noavx2.o
 
 ggml_clblast.o: ggml.c ggml.h
-	$(CC)  $(CFLAGS) $(BONUSCFLAGS) -DGGML_USE_OPENBLAS -DGGML_USE_CLBLAST -c ggml.c -o ggml_clblast.o
+	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -DGGML_USE_OPENBLAS -DGGML_USE_CLBLAST -c ggml.c -o ggml_clblast.o
 
 ggml_v1.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
-	$(CC)  $(CFLAGS) $(BONUSCFLAGS) -c otherarch/ggml_v1.c -o ggml_v1.o
+	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -c otherarch/ggml_v1.c -o ggml_v1.o
 
 ggml_v1_noavx2.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
-	$(CC)  $(CFLAGS) -c otherarch/ggml_v1.c -o ggml_v1_noavx2.o
+	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) -c otherarch/ggml_v1.c -o ggml_v1_noavx2.o
 
 llama.o: llama.cpp llama.h llama_internal.h
 	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
