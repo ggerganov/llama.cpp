@@ -49,49 +49,48 @@ void sigint_handler(int signo) {
 
 void command(std::string buffer, gpt_params params, const int n_ctx ) {
     // check buffer's first 3 chars equal '???' to enter command mode. 
-    if (strncmp(buffer.c_str(), "???", 3) == 0 && buffer.length() > 3) {
-        set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
-        std::istringstream command(buffer);
-        int j = 0; std::string test, arg, cmd;
-        while (command>>test) {
-            j++;
-            if ( j == 2 ) {
-                arg = test;
-            }
-            if ( j == 3 ) {
-                cmd = test;
-            }
+    if (buffer.length() <= 3 || strncmp(buffer.c_str(), "???", 3) != 0) return;
+    set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
+    std::istringstream command(buffer);
+    int j = 0; std::string test, arg, cmd;
+    while (command>>test) {
+        j++;
+        if ( j == 2 ) {
+            arg = test;
         }
-        if (arg == "-n" || arg == "--n_predict") {
-            params.n_predict = std::stoi(cmd);
-        } else if (arg == "--top_k") {
-            params.top_k = std::stoi(cmd);
-        } else if (arg == "-c" || arg == "--ctx_size") {
-            params.n_ctx = std::stoi(cmd);
-        } else if (arg == "--top_p") {
-            params.top_p = std::stof(cmd);
-        } else if (arg == "--temp") {
-            params.temp = std::stof(cmd);
-        } else if (arg == "--repeat_last_n") {
-            params.repeat_last_n = std::stoi(cmd);
-        } else if (arg == "--repeat_penalty") {
-            params.repeat_penalty = std::stof(cmd);
-        } else if (arg == "-b" || arg == "--batch_size") {
-            params.n_batch = std::stoi(cmd);
-            params.n_batch = std::min(512, params.n_batch);
-        } else if (arg == "-r" || arg == "--reverse-prompt") {
-            params.antiprompt.push_back(cmd);
-        } else if (arg == "--keep") {
-            params.n_keep = std::stoi(cmd);
-        } else if (arg == "stats") {
-            llama_print_timings(ctx);
-        } else {
-            printf("invalid argument parsed: %s\n please use -n, --top_k, -c, --top_p, --temp, --repeat_last_n, --repeat_penalty, -b, -r, --keep or stats", arg.c_str());
+        if ( j == 3 ) {
+            cmd = test;
         }
-        printf("sampling: temp = %f, top_k = %d, top_p = %f, repeat_last_n = %i, repeat_penalty = %f\n",
-                params.temp, params.top_k, params.top_p, params.repeat_last_n, params.repeat_penalty);
-        printf("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
     }
+    if (arg == "-n" || arg == "--n_predict") {
+        params.n_predict = std::stoi(cmd);
+    } else if (arg == "--top_k") {
+        params.top_k = std::stoi(cmd);
+    } else if (arg == "-c" || arg == "--ctx_size") {
+        params.n_ctx = std::stoi(cmd);
+    } else if (arg == "--top_p") {
+        params.top_p = std::stof(cmd);
+    } else if (arg == "--temp") {
+        params.temp = std::stof(cmd);
+    } else if (arg == "--repeat_last_n") {
+        params.repeat_last_n = std::stoi(cmd);
+    } else if (arg == "--repeat_penalty") {
+        params.repeat_penalty = std::stof(cmd);
+    } else if (arg == "-b" || arg == "--batch_size") {
+        params.n_batch = std::stoi(cmd);
+        params.n_batch = std::min(512, params.n_batch);
+    } else if (arg == "-r" || arg == "--reverse-prompt") {
+        params.antiprompt.push_back(cmd);
+    } else if (arg == "--keep") {
+        params.n_keep = std::stoi(cmd);
+    } else if (arg == "stats") {
+        llama_print_timings(ctx);
+    } else {
+        printf("invalid argument parsed: %s\n please use -n, --top_k, -c, --top_p, --temp, --repeat_last_n, --repeat_penalty, -b, -r, --keep or stats", arg.c_str());
+    }
+    printf("sampling: temp = %f, top_k = %d, top_p = %f, repeat_last_n = %i, repeat_penalty = %f\n",
+        params.temp, params.top_k, params.top_p, params.repeat_last_n, params.repeat_penalty);
+    printf("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
 }
 
 int main(int argc, char ** argv) {
