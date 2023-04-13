@@ -2,6 +2,7 @@ import json
 import os
 import tempfile
 import sys
+import sentencepiece as spm
 from tokenizers import Tokenizer, models, pre_tokenizers, decoders, processors
 
 if len(sys.argv) < 3:
@@ -51,10 +52,11 @@ def load_tokenizer_from_json(json_path, special_tokens_map_path, tokenizer_confi
         tokenizer.decoder = decoders.WordPiece()
 
     elif tokenizer_type == "SentencePiece":
-        tokenizer = Tokenizer(models.SentencePiece.from_file(vocab_file.name))
-        tokenizer.pre_tokenizer = pre_tokenizers.WhitespaceSplit()
-        tokenizer.decoder = decoders.SentencePiece()
-
+        sp_model = spm.SentencePieceProcessor()
+        sp_model.Load(vocab_file.name)
+        tokenizer = Tokenizer(models.Model.from_sentencepiece(sp_model))
+        tokenizer.pre_tokenizer = pre_tokenizers.Sequence([pre_tokenizers.Metaspace(), pre_tokenizers.Split()])
+        tokenizer.decoder = decoders.Sequence([decoders.Split(), decoders.Metaspace()])
 
     else:
         raise ValueError(f"Unsupported tokenizer type: {tokenizer_type}")
