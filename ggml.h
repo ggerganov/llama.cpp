@@ -808,6 +808,8 @@ size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t *
 int ggml_cpu_has_avx(void);
 int ggml_cpu_has_avx2(void);
 int ggml_cpu_has_avx512(void);
+int ggml_cpu_has_avx512_vbmi(void);
+int ggml_cpu_has_avx512_vnni(void);
 int ggml_cpu_has_fma(void);
 int ggml_cpu_has_neon(void);
 int ggml_cpu_has_arm_fma(void);
