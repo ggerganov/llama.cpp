@@ -276,6 +276,7 @@ static const char * llama_format_type(enum ggml_type type) {
         case GGML_TYPE_F16: return "f16";
         case GGML_TYPE_Q4_0: return "q4_0";
         case GGML_TYPE_Q4_1: return "q4_1";
+		case GGML_TYPE_Q4_2: return "q4_2";
         default: LLAMA_ASSERT(false);
     }
 }
@@ -471,6 +472,8 @@ struct llama_file_loader {
                 case GGML_TYPE_Q4_0:
                 case GGML_TYPE_Q4_1:
                     break;
+                case GGML_TYPE_Q4_2:
+                    break;
                 default: {
                     throw format("unrecognized tensor type %u\n", shard.type);
                 }
@@ -542,6 +545,8 @@ struct llama_file_saver {
             case GGML_TYPE_F16:
             case GGML_TYPE_Q4_0:
             case GGML_TYPE_Q4_1:
+                break;
+            case GGML_TYPE_Q4_2:
                 break;
             default: LLAMA_ASSERT(false);
         }
@@ -827,8 +832,9 @@ static const char *llama_ftype_name(enum llama_ftype ftype) {
         case LLAMA_FTYPE_MOSTLY_F16:  return "mostly F16";
         case LLAMA_FTYPE_MOSTLY_Q4_0: return "mostly Q4_0";
         case LLAMA_FTYPE_MOSTLY_Q4_1: return "mostly Q4_1";
-        case LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16:
-                                      return "mostly Q4_1, some F16";
+        case LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16:return "mostly Q4_1, some F16";
+        case LLAMA_FTYPE_MOSTLY_Q4_2: return "mostly Q4_2";
+        case LLAMA_FTYPE_MOSTLY_Q4_2_SOME_F16:return "mostly Q4_2, some F16";
         default:                      return "unknown, may not work";
     }
 }
@@ -1562,6 +1568,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     switch (ftype) {
         case LLAMA_FTYPE_MOSTLY_Q4_0: quantized_type = GGML_TYPE_Q4_0; break;
         case LLAMA_FTYPE_MOSTLY_Q4_1: quantized_type = GGML_TYPE_Q4_1; break;
+		case LLAMA_FTYPE_MOSTLY_Q4_2: quantized_type = GGML_TYPE_Q4_2; break;
         default: throw format("invalid output file type %d\n", ftype);
     };
 
