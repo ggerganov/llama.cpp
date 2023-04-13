@@ -171,15 +171,15 @@ embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
 
 libllama.so: llama.o ggml.o
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o libllama.so llama.o ggml.o $(LDFLAGS)
-  
+
 #
 # Tests
 #
 
 benchmark: ggml.o
-	$(CXX) $(CXXFLAGS) examples/benchmark/benchmark-q4_0-matmult.c ggml.o -o benchmark-q4_0-matmult $(LDFLAGS)	
+	$(CXX) $(CXXFLAGS) examples/benchmark/benchmark-q4_0-matmult.c ggml.o -o benchmark-q4_0-matmult $(LDFLAGS)
 	./benchmark-q4_0-matmult
-	
+
 .PHONY: tests
 tests:
 	bash ./tests/run-tests.sh
