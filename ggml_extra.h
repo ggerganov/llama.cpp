@@ -34,6 +34,9 @@ void kDequantizeQ4_0K(const void * GGML_RESTRICT x, float * GGML_RESTRICT y, int
 void kQuantizeQ4_1K(const float* GGML_RESTRICT x, void* GGML_RESTRICT y, int k);
 void kDequantizeQ4_1K(const void * GGML_RESTRICT x, float * GGML_RESTRICT y, int k);
 
+void kQuantizeQ8Simple(const float* GGML_RESTRICT x, void* GGML_RESTRICT y, int k);
+void kDequantizeQ8(const void* GGML_RESTRICT x, float* GGML_RESTRICT y, int k);
+
 #ifdef  __cplusplus
 }
 #endif

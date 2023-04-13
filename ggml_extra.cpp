@@ -105,7 +105,30 @@ float quanizeRmseK(int n, const float* X, int8_t* L,
         sumlx += X[i]*l; suml2 += l*l;
         L[i] = l;
     }
-    return sumlx/suml2;
+    float scale = sumlx/suml2;
+    best = scale*sumlx;
+    for (int itry=0; itry<3; ++itry) {
+        bool haveChanges = false;
+        for (int i=0; i<n; ++i) {
+            auto g = X[i] - scale*L[i];
+            if (g > 0 && L[i] < nmax) {
+                auto s1 = sumlx + X[i];
+                auto s2 = suml2 + 2*L[i] + 1;
+                if (s2 > 0 && s1*s1 > best*s2) {
+                    scale = s1/s2; best = scale*s1; ++L[i]; sumlx = s1; suml2 = s2; haveChanges = true;
+                }
+            }
+            else if (g < 0 && L[i] > nmin) {
+                auto s1 = sumlx - X[i];
+                auto s2 = suml2 - 2*L[i] + 1;
+                if (s2 > 0 && s1*s1 > best*s2) {
+                    scale = s1/s2; best = scale*s1; --L[i]; sumlx = s1; suml2 = s2; haveChanges = true;
+                }
+            }
+        }
+        if (!haveChanges) break;
+    }
+    return scale;
 }
 // The following improves the above.
 // It gives RMSE = 0.00185228 for the 7B model.
@@ -123,6 +146,19 @@ float quanizeRmseK15(int n, const float* X, int8_t* L) {
         +11.25f, +10.75f, +10.25f
     };
     return quanizeRmseK(n, X, L, kCandiateCount, candidates, 0, 15);
+}
+
+float quanizeRmseK31(int n, const float* X, int8_t* L) {
+    constexpr int kCandiateCount = 24;
+    static const float candidates[kCandiateCount] = {
+        +35.25, +34.25f, +33.25f, +32.75f, +32.25f, +31.75f, +31.25f, +30.75f, +30.25f, +29.75f, +29.25f, +28.25f, +27.25f, +26.25f,
+        +25.25f, +24.25f, +23.25, +22.25f, +21.25f, +20.25f, +19.25f, +18.25f, +17.25f, +16.25f
+    };
+    //static const float candidates[kCandiateCount] = {
+    //    +33.25f, +32.25f, +31.75f, +31.25f, +30.75f, +30.25f, +30.25f, +29.25f, +28.75f, +27.25f, +26.25f, +25.25f, +24.25f, +23.25, +22.25f,
+    //    +21.25f
+    //};
+    return quanizeRmseK(n, X, L, kCandiateCount, candidates, 0, 31);
 }
 
 // Fast (as much faster than doing the optimization), but not very good.
@@ -295,8 +331,9 @@ std::pair<float, float> kQuantize1(int n, const float* X, int8_t* L, std::vector
     double a = min, b = 0;
     for (int itry=0; itry<5; ++itry) {
         for (int i=0; i<n; ++i) tmpX[i] = X[i] - a;
-        //quanizeRmseK15(n, tmpX.data(), L);
-        kQuantize0(n, tmpX.data(), L, work, 0, 2*nmax+1);
+        if (nmax == 7) quanizeRmseK15(n, tmpX.data(), L);
+        else if (nmax == 15) quanizeRmseK31(n, tmpX.data(), L);
+        else kQuantize0(n, tmpX.data(), L, work, 0, 2*nmax+1);
         double sumlx = 0, sumx = 0;
         int suml2 = 0, suml = 0;
         for (int i=0; i<n; ++i) {
@@ -595,6 +632,41 @@ void kDequantizeQ4_1K(const void* x, float* y, int k) {
             *y++ = a2 + b2*l1; *y++ = a2 + b2*l2;
         }
         data += 8;
+    }
+}
+
+void kQuantizeQ8Simple(const float* x, void* y, int k) {
+    assert(k % QK == 0);
+    auto data = (int8_t*)y;
+    int n = k / (QK/2);
+    for (int i=0; i<n; ++i) {
+        float max = 0;
+        for (int k=0; k<16; ++k) max = std::max(max, std::abs(x[k]));
+        if (max > 0) {
+            float iscale = 127.f/max;
+            float scale = max/127.f;
+            std::memcpy(data, &scale, sizeof(scale)); data += sizeof(scale);
+            for (int k=0; k<16; ++k) data[k] = toNearestInt(iscale * *x++);
+            data += 16;
+        } else {
+            float scale = 1;
+            std::memcpy(data, &scale, sizeof(scale)); data += sizeof(scale);
+            auto aux = (uint32_t*)data;
+            aux[0] = aux[1] = aux[2] = aux[3] = 0;
+            data += 16;
+        }
+    }
+}
+
+void kDequantizeQ8(const void* x, float* y, int k) {
+    assert(k % QK == 0);
+    auto data = (const int8_t*)x;
+    int n = k / (QK/2);
+    for (int i=0; i<n; ++i) {
+        float scale;
+        std::memcpy(&scale, data, sizeof(scale)); data += sizeof(scale);
+        for (int k=0; k<16; ++k) *y++ = scale*data[k];
+        data += 16;
     }
 }
 

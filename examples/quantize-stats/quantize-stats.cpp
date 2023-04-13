@@ -307,7 +307,7 @@ int main(int argc, char ** argv) {
 
     // loop throught quantization types
     //for (int i = 0; i < GGML_TYPE_COUNT; i++) {
-    for (int i = 1; i < 2; i++) {
+    for (int i = 0; i < 1; i++) {
         if (!params.include_types.empty() && std::find(params.include_types.begin(), params.include_types.end(), i) == params.include_types.end()) {
             continue;
         }
@@ -315,12 +315,14 @@ int main(int argc, char ** argv) {
         if (i < 2 && checkNewQuantization) {
             //qfns.quantize_row_q = i == 0 ? kQuantizeQ4_0 : kQuantizeQ4_1;
             //qfns.quantize_row_q = i == 0 ? kQuantizeQ4_0 : kQuantizeQ5_1;
-            //qfns.quantize_row_q = i == 0 ? kQuantizeQ4_0 : kQuantizeQ5_1_Fast;
+            ////qfns.quantize_row_q = i == 0 ? kQuantizeQ4_0 : kQuantizeQ5_1_Fast;
             //if (i == 1) qfns.dequantize_row_q = kDequantizeQ5_1;
             //qfns.quantize_row_q = i == 0 ? kQuantizeQ4_0K : kQuantizeQ5_1;
             //qfns.dequantize_row_q = i == 0 ? kDequantizeQ4_0K : kDequantizeQ5_1;
-            qfns.quantize_row_q = i == 0 ? kQuantizeQ4_0K : kQuantizeQ4_1K;
-            qfns.dequantize_row_q = i == 0 ? kDequantizeQ4_0K : kDequantizeQ4_1K;
+            //qfns.quantize_row_q = i == 0 ? kQuantizeQ4_0K : kQuantizeQ4_1K;
+            //qfns.dequantize_row_q = i == 0 ? kDequantizeQ4_0K : kDequantizeQ4_1K;
+            qfns.quantize_row_q = i == 0 ? kQuantizeQ8Simple: kQuantizeQ4_1K;
+            qfns.dequantize_row_q = i == 0 ? kDequantizeQ8: kDequantizeQ4_1K;
         }
         if (qfns.quantize_row_q && qfns.dequantize_row_q) {
             if (params.verbose) {
