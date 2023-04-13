@@ -13,6 +13,10 @@
 #include <alloca.h>
 #endif
 
+#if defined(_WIN32) || defined(_WIN64)
+#include <windows.h>
+#endif
+
 #if defined (_WIN32)
 #include <fcntl.h>
 #include <io.h>
@@ -34,9 +38,25 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     // std::thread::hardware_concurrency may not be equal to the number of cores, or may return 0.
 #ifdef __linux__
     std::ifstream cpuinfo("/proc/cpuinfo");
-    params.n_threads = std::count(std::istream_iterator<std::string>(cpuinfo),
-                                  std::istream_iterator<std::string>(),
-                                  std::string("processor"));
+    std::string line;
+    while (std::getline(cpuinfo, line)) {
+        if (line.find("cpu cores") != std::string::npos) {
+            line.erase(0, line.find(": ") + 2);
+            params.n_threads = std::stoul(line);
+            break;
+        }
+    }
+#elif defined(__APPLE__) && defined(__MACH__)
+    int num_physical_cores;
+    size_t len = sizeof(num_physical_cores);
+    int result = sysctlbyname("hw.physicalcpu", &num_physical_cores, &len, NULL, 0);
+    if (result == 0) {
+        params.n_threads = std::stoul(line);
+    }
+#elif defined(_WIN32) || defined(_WIN64)
+    SYSTEM_INFO sysinfo;
+    GetNativeSystemInfo(&sysinfo);
+    params.n_threads = sysinfo.dwNumberOfProcessors;
 #endif
     if (params.n_threads == 0) {
         params.n_threads = std::max(1, (int32_t) std::thread::hardware_concurrency());
