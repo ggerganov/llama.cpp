@@ -42,11 +42,10 @@ int32_t get_num_physical_cores() {
     int result = sysctlbyname("hw.perflevel0.physicalcpu", &num_physical_cores, &len, NULL, 0);
     if (result == 0) {
         return (int32_t) num_physical_cores;
-    } else {
-        int result = sysctlbyname("hw.physicalcpu", &num_physical_cores, &len, NULL, 0);
-        if (result == 0) {
-            return (int32_t) num_physical_cores;
-        }
+    }
+    result = sysctlbyname("hw.physicalcpu", &num_physical_cores, &len, NULL, 0);
+    if (result == 0) {
+        return (int32_t) num_physical_cores;
     }
 #elif defined(_WIN32)
     SYSTEM_INFO sysinfo;
