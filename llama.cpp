@@ -1896,8 +1896,8 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
             ggml_tensor * loraA = lora_tensors[base_name + ".loraA"];
             ggml_tensor * loraB = lora_tensors[base_name + ".loraB"];
 
-            if (tensor->ne[0] != loraA->ne[1]) {
-                fprintf(stderr, "%s: incompatible tensor dimensions (%" PRId64 " and %" PRId64 ");" 
+            if (tensor->ne[0] != loraA->ne[1] || tensor->ne[1] != loraB->ne[1]) {
+                fprintf(stderr, "%s: incompatible tensor dimensions (%" PRId64 " and %" PRId64 ");"
                                " are you sure that this adapter is for this model?\n", __func__, tensor->ne[0], loraA->ne[1]);
                 return 1;
             }

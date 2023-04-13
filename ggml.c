@@ -1420,6 +1420,34 @@ static void dequantize_row_q4_1(const void * restrict vx, float * restrict y, in
 #endif
 }
 
+static void ggml_vec_dot_q4_1(const int n, float * restrict s, const void * restrict vx, const void * restrict vy);
+static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void * restrict vx, const void * restrict vy);
+
+static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
+    [GGML_TYPE_Q4_0] = {
+        .dequantize_row_q         = dequantize_row_q4_0,
+        .quantize_row_q           = quantize_row_q4_0,
+        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_0_reference,
+        .quantize_row_q_dot       = quantize_row_q8_0,
+        .vec_dot_q                = ggml_vec_dot_q4_0_q8_0,
+    },
+    [GGML_TYPE_Q4_1] = {
+        .dequantize_row_q         = dequantize_row_q4_1,
+        .quantize_row_q           = quantize_row_q4_1,
+        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_1_reference,
+        .quantize_row_q_dot       = quantize_row_q4_1,
+        .vec_dot_q                = ggml_vec_dot_q4_1,
+    },
+    // TODO: GGML_TYPE_Q8_0
+};
+
+// For internal test use
+quantize_fns_t ggml_internal_get_quantize_fn(size_t i) {
+    GGML_ASSERT(i < GGML_TYPE_COUNT);
+    return quantize_fns[i];
+}
+
+
 //
 // simd mappings
 //
@@ -5910,12 +5938,12 @@ static void ggml_compute_forward_add_q_f32(
     const int64_t ne03 = src0->ne[3];
 
     //const int64_t ne10 = src1->ne[0];
-    const int64_t ne11 = src1->ne[1];
+    //const int64_t ne11 = src1->ne[1];
     const int64_t ne12 = src1->ne[2];
     const int64_t ne13 = src1->ne[3];
 
-    const int64_t ne0  = dst->ne[0];
-    const int64_t ne1  = dst->ne[1];
+    //const int64_t ne0  = dst->ne[0];
+    //const int64_t ne1  = dst->ne[1];
     const int64_t ne2  = dst->ne[2];
     const int64_t ne3  = dst->ne[3];
 
@@ -7305,30 +7333,6 @@ static void ggml_compute_forward_mul_mat_f16_f32(
 
     //    printf("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX task %d/%d: %d us, acc = %d\n", ith, nth, (int) (t1 - t0), (int) acc);
     //}
-}
-
-static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
-    [GGML_TYPE_Q4_0] = {
-        .dequantize_row_q         = dequantize_row_q4_0,
-        .quantize_row_q           = quantize_row_q4_0,
-        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_0_reference,
-        .quantize_row_q_dot       = quantize_row_q8_0,
-        .vec_dot_q                = ggml_vec_dot_q4_0_q8_0,
-    },
-    [GGML_TYPE_Q4_1] = {
-        .dequantize_row_q         = dequantize_row_q4_1,
-        .quantize_row_q           = quantize_row_q4_1,
-        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_1_reference,
-        .quantize_row_q_dot       = quantize_row_q4_1,
-        .vec_dot_q                = ggml_vec_dot_q4_1,
-    },
-    // TODO: GGML_TYPE_Q8_0
-};
-
-// For internal test use
-quantize_fns_t ggml_internal_get_quantize_fn(size_t i) {
-    GGML_ASSERT(i < GGML_TYPE_COUNT);
-    return quantize_fns[i];
 }
 
 static void ggml_compute_forward_mul_mat_q_f32(
