@@ -204,8 +204,6 @@ python3 convert-pth-to-ggml.py models/7B/ 1
 ./main -m ./models/7B/ggml-model-q4_0.bin -n 128
 ```
 
-Currently, it's best to use Python 3.9 or Python 3.10, as `sentencepiece` has not yet published a wheel for Python 3.11.
-
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
 
 ### Memory/Disk Requirements
