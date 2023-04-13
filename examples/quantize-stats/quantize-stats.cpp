@@ -16,7 +16,7 @@
 #include <unordered_map>
 #include <vector>
 
-static const char * type_strs[] = { "q4_0", "q4_1", "i8", "i16", "i32", "f16", "f32"  };
+static const char * type_strs[] = { "f32", "f16", "q4_0", "q4_1", "q8_0", "i8", "i16", "i32", };
 static_assert(sizeof(type_strs) == GGML_TYPE_COUNT * sizeof(char *), "Incomplete type list");
 
 struct quantize_stats_params {

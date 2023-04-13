@@ -7033,14 +7033,16 @@ static void ggml_compute_forward_mul_mat_f16_f32(
 static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
     [GGML_TYPE_Q4_0] = {
         .dequantize_row_q         = dequantize_row_q4_0,
-        .quantize_row_q           = quantize_row_q8_0,
+        .quantize_row_q           = quantize_row_q4_0,
         .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_0_reference,
+        .quantize_row_q_dot       = quantize_row_q8_0,
         .vec_dot_q                = ggml_vec_dot_q4_0_q8_0,
     },
     [GGML_TYPE_Q4_1] = {
         .dequantize_row_q         = dequantize_row_q4_1,
         .quantize_row_q           = quantize_row_q4_1,
         .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_1_reference,
+        .quantize_row_q_dot       = quantize_row_q8_0,
         .vec_dot_q                = ggml_vec_dot_q4_1,
     },
     // TODO: GGML_TYPE_Q8_0
@@ -7099,8 +7101,8 @@ static void ggml_compute_forward_mul_mat_q_f32(
     GGML_ASSERT(ne3  == ne13);
 
     const enum ggml_type type = src0->type;
-    quantize_row_q_t const quantize_row_q = quantize_fns[type].quantize_row_q;
-    vec_dot_q_t      const vec_dot_q      = quantize_fns[type].vec_dot_q;
+    quantize_row_q_t const quantize_row_q_dot = quantize_fns[type].quantize_row_q_dot;
+    vec_dot_q_t      const vec_dot_q          = quantize_fns[type].vec_dot_q;
 
     // we don't support permuted src0 or src1
     GGML_ASSERT(nb00 == (int) GGML_TYPE_SIZE[type]);
@@ -7174,7 +7176,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
         for (int64_t i13 = 0; i13 < ne13; ++i13) {
             for (int64_t i12 = 0; i12 < ne12; ++i12) {
                 for (int64_t i11 = 0; i11 < ne11; ++i11) {
-                    quantize_row_q((float *)((char *) src1->data + i13*nb13 + i12*nb12 + i11*nb11), (void *) wdata, ne10);
+                    quantize_row_q_dot((float *)((char *) src1->data + i13*nb13 + i12*nb12 + i11*nb11), (void *) wdata, ne10);
                     wdata += row_size;
                 }
             }
