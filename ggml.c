@@ -531,6 +531,18 @@ inline static float vaddvq_f32(float32x4_t v) {
     return vgetq_lane_f32(v, 0) + vgetq_lane_f32(v, 1) + vgetq_lane_f32(v, 2) + vgetq_lane_f32(v, 3);
 }
 
+inline float vminvq_f32(float32x4_t v) {
+    return
+        MIN(MIN(vgetq_lane_f32(v, 0), vgetq_lane_f32(v, 1)),
+            MIN(vgetq_lane_f32(v, 2), vgetq_lane_f32(v, 3)));
+}
+
+inline float vmaxvq_f32(float32x4_t v) {
+    return
+        MAX(MAX(vgetq_lane_f32(v, 0), vgetq_lane_f32(v, 1)),
+            MAX(vgetq_lane_f32(v, 2), vgetq_lane_f32(v, 3)));
+}
+
 #endif
 #endif
 
