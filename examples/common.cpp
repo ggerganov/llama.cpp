@@ -13,13 +13,10 @@
 #include <alloca.h>
 #endif
 
-#if defined(_WIN32) || defined(_WIN64)
-#include <windows.h>
-#endif
-
 #if defined (_WIN32)
 #include <fcntl.h>
 #include <io.h>
+#include <windows.h>
 #pragma comment(lib,"kernel32.lib")
 extern "C" __declspec(dllimport) void* __stdcall GetStdHandle(unsigned long nStdHandle);
 extern "C" __declspec(dllimport) int __stdcall GetConsoleMode(void* hConsoleHandle, unsigned long* lpMode);
@@ -33,9 +30,7 @@ extern "C" __declspec(dllimport) int __stdcall WideCharToMultiByte(unsigned int 
 #define CP_UTF8 65001
 #endif
 
-bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
-    // determine sensible default number of threads.
-    // std::thread::hardware_concurrency may not be equal to the number of cores, or may return 0.
+int32_t get_num_physical_cores() {
 #ifdef __linux__
     std::ifstream cpuinfo("/proc/cpuinfo");
     std::string line;
@@ -43,25 +38,34 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         if (line.find("cpu cores") != std::string::npos) {
             line.erase(0, line.find(": ") + 2);
             try {
-                params.n_threads = std::stoul(line);
-                break;
+                return (int32_t) std::stoul(line);
             } catch (std::invalid_argument& e) {} // Ignore if we could not parse
         }
     }
 #elif defined(__APPLE__) && defined(__MACH__)
     int num_physical_cores;
     size_t len = sizeof(num_physical_cores);
-    int result = sysctlbyname("hw.physicalcpu", &num_physical_cores, &len, NULL, 0);
+    int result = sysctlbyname("hw.perflevel0.physicalcpu", &num_physical_cores, &len, NULL, 0);
     if (result == 0) {
-        params.n_threads = num_physical_cores;
+        return (int32_t) num_physical_cores;
+    } else {
+        int result = sysctlbyname("hw.physicalcpu", &num_physical_cores, &len, NULL, 0);
+        if (result == 0) {
+            return (int32_t) num_physical_cores;
+        }
     }
-#elif defined(_WIN32) || defined(_WIN64)
+#elif defined(_WIN32)
     SYSTEM_INFO sysinfo;
     GetNativeSystemInfo(&sysinfo);
-    params.n_threads = sysinfo.dwNumberOfProcessors;
+    return (in32_t) sysinfo.dwNumberOfProcessors;
 #endif
-    if (params.n_threads == 0) {
-        params.n_threads = std::max(1, (int32_t) std::thread::hardware_concurrency());
+    return -1;
+}
+
+bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
+    // Clip if not a valid number of threads
+    if (params.n_threads <= 0) {
+        params.n_threads = std::max(1, std::min(8, (int32_t) std::thread::hardware_concurrency()));
     }
 
     bool invalid_param = false;
