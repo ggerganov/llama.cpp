@@ -493,10 +493,7 @@ static inline __m128i packNibbles( __m128i bytes1, __m128i bytes2 )
 
 #if __ARM_NEON
 
-// TODO: this check is wrong
-//       we have to check somehow if vaddvq_u8, vzp1q_u8, etc are available, but I don't know how
-//       at least, this works on my 32-bit RPi4
-#if !defined(__ARM_FEATURE_QRDMX)
+#if !defined(__aarch64__)
 
 inline static uint16_t vaddvq_u8(uint8x16_t v) {
     return
