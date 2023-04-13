@@ -378,6 +378,18 @@ void kQuantizeQ4(const float* X, void* buffer, int k, int type) {
             std::memcpy(q, &scale1fp16, sizeof(scale1fp16)); q += sizeof(scale1fp16);
             std::memcpy(q, &scale2fp16, sizeof(scale2fp16)); q += sizeof(scale2fp16);
             for (int k=0; k<QK/2; ++k) q[k] = (L[2*k] + 8) | ((L[2*k+1] + 8) << 4);
+        } else if (type == 5) {
+            auto result1 = kQuantize1(QK/2, X, L, tmpX, work, 7);
+            auto result2 = kQuantize1(QK/2, X + QK/2, L + QK/2, tmpX, work, 7);
+            auto a1fp16 = ggml_fp32_to_fp16(result1.first);
+            auto b1fp16 = ggml_fp32_to_fp16(result1.second);
+            auto a2fp16 = ggml_fp32_to_fp16(result2.first);
+            auto b2fp16 = ggml_fp32_to_fp16(result2.second);
+            std::memcpy(q, &a1fp16, sizeof(a1fp16)); q += sizeof(a1fp16);
+            std::memcpy(q, &b1fp16, sizeof(b1fp16)); q += sizeof(b1fp16);
+            std::memcpy(q, &a2fp16, sizeof(a2fp16)); q += sizeof(a2fp16);
+            std::memcpy(q, &b2fp16, sizeof(b2fp16)); q += sizeof(b2fp16);
+            for (int k=0; k<QK/2; ++k) q[k] = L[2*k] | (L[2*k+1] << 4);
         } else {
             auto result = type == 2 ? kQuantize1(QK, X, L, tmpX, work, 15) : kQuantize1Fast(QK, X, L, 31);
             auto afp16 = ggml_fp32_to_fp16(result.first);
@@ -550,6 +562,37 @@ void kDequantizeQ4_0K(const void* x, float* y, int k) {
             int8_t l1 = data[k] & 15, l2 = data[k] >> 4;
             l1 -= 8; l2 -= 8;
             *y++ = b*l1; *y++ = b*l2;
+        }
+        data += 8;
+    }
+}
+
+void kQuantizeQ4_1K(const float* x, void* buffer, int k) {
+    kQuantizeQ4(x, buffer, k, 5);
+}
+
+void kDequantizeQ4_1K(const void* x, float* y, int k) {
+    assert(k % QK == 0);
+    int n = k / QK;
+    auto data = (const uint8_t*)x;
+    for (int i=0; i<n; ++i) {
+        ggml_fp16_t a1fp16, b1fp16, a2fp16, b2fp16;
+        std::memcpy(&a1fp16, data, sizeof(a1fp16)); data += sizeof(a1fp16);
+        std::memcpy(&b1fp16, data, sizeof(b1fp16)); data += sizeof(b1fp16);
+        std::memcpy(&a2fp16, data, sizeof(a2fp16)); data += sizeof(a2fp16);
+        std::memcpy(&b2fp16, data, sizeof(b2fp16)); data += sizeof(b2fp16);
+        auto a1 = ggml_fp16_to_fp32(a1fp16);
+        auto b1 = ggml_fp16_to_fp32(b1fp16);
+        auto a2 = ggml_fp16_to_fp32(a2fp16);
+        auto b2 = ggml_fp16_to_fp32(b2fp16);
+        for (int k=0; k<8; ++k) {
+            int8_t l1 = data[k] & 15, l2 = data[k] >> 4;
+            *y++ = a1 + b1*l1; *y++ = a1 + b1*l2;
+        }
+        data += 8;
+        for (int k=0; k<8; ++k) {
+            int8_t l1 = data[k] & 15, l2 = data[k] >> 4;
+            *y++ = a2 + b2*l1; *y++ = a2 + b2*l2;
         }
         data += 8;
     }
