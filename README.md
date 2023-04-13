@@ -149,21 +149,43 @@ https://user-images.githubusercontent.com/1991296/224442907-7693d4be-acaa-4e01-8
 
 ## Usage
 
-Here are the step for the LLaMA-7B model:
+Here are the step for the LLaMA-7B model.
+
+### Get the Code
 
 ```bash
-# build this repo
 git clone https://github.com/ggerganov/llama.cpp
 cd llama.cpp
-make
+```
 
-#For Windows and CMake, use the following command instead:
-cd <path_to_llama_folder>
-mkdir build
-cd build
-cmake ..
-cmake --build . --config Release
+### Build
 
+Note: For Windows, CMake or Zig can be used.
+
+1. Use `make`
+
+    ```bash
+    make
+    ```
+
+1. Use CMake
+
+    ```bash
+    mkdir build
+    cd build
+    cmake ..
+    cmake --build . --config Release
+    ```
+
+1. Use Zig
+
+    ```bash
+    zig build -Drelease-fast
+    ```
+
+### Prepare Data & Run
+
+```bash
 # obtain the original LLaMA model weights and place them in ./models
 ls ./models
 65B 30B 13B 7B tokenizer_checklist.chk tokenizer.model
