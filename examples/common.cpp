@@ -1,7 +1,5 @@
 #include "common.h"
 
-#include "ggml.h"
-
 #include <cassert>
 #include <cstring>
 #include <fstream>
@@ -16,12 +14,19 @@
 #endif
 
 #if defined (_WIN32)
+#include <fcntl.h>
+#include <io.h>
 #pragma comment(lib,"kernel32.lib")
 extern "C" __declspec(dllimport) void* __stdcall GetStdHandle(unsigned long nStdHandle);
 extern "C" __declspec(dllimport) int __stdcall GetConsoleMode(void* hConsoleHandle, unsigned long* lpMode);
 extern "C" __declspec(dllimport) int __stdcall SetConsoleMode(void* hConsoleHandle, unsigned long dwMode);
 extern "C" __declspec(dllimport) int __stdcall SetConsoleCP(unsigned int wCodePageID);
 extern "C" __declspec(dllimport) int __stdcall SetConsoleOutputCP(unsigned int wCodePageID);
+extern "C" __declspec(dllimport) int __stdcall WideCharToMultiByte(unsigned int CodePage, unsigned long dwFlags,
+                                                                   const wchar_t * lpWideCharStr, int cchWideChar,
+                                                                   char * lpMultiByteStr, int cbMultiByte,
+                                                                   const char * lpDefaultChar, bool * lpUsedDefaultChar);
+#define CP_UTF8 65001
 #endif
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
@@ -39,6 +44,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 
     bool invalid_param = false;
     std::string arg;
+    gpt_params default_params;
+
     for (int i = 1; i < argc; i++) {
         arg = argv[i];
 
@@ -66,6 +73,11 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             std::ifstream file(argv[i]);
+            if (!file) {
+                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+                invalid_param = true;
+                break;
+            }
             std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(params.prompt));
             if (params.prompt.back() == '\n') {
                 params.prompt.pop_back();
@@ -147,6 +159,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.use_color = true;
         } else if (arg == "--mlock") {
             params.use_mlock = true;
+        } else if (arg == "--no-mmap") {
+            params.use_mmap = false;
         } else if (arg == "--mtest") {
             params.mem_test = true;
         } else if (arg == "--verbose-prompt") {
@@ -168,7 +182,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             }
             params.n_parts = std::stoi(argv[i]);
         } else if (arg == "-h" || arg == "--help") {
-            gpt_print_usage(argc, argv, params);
+            gpt_print_usage(argc, argv, default_params);
             exit(0);
         } else if (arg == "--random-prompt") {
             params.random_prompt = true;
@@ -180,13 +194,13 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.input_prefix = argv[i];
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
-            gpt_print_usage(argc, argv, params);
+            gpt_print_usage(argc, argv, default_params);
             exit(1);
         }
     }
     if (invalid_param) {
         fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
-        gpt_print_usage(argc, argv, params);
+        gpt_print_usage(argc, argv, default_params);
         exit(1);
     }
 
@@ -226,8 +240,11 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -b N, --batch_size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     fprintf(stderr, "  --perplexity          compute perplexity over the prompt\n");
     fprintf(stderr, "  --keep                number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
-    if (ggml_mlock_supported()) {
+    if (llama_mlock_supported()) {
         fprintf(stderr, "  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
+    }
+    if (llama_mmap_supported()) {
+        fprintf(stderr, "  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
     }
     fprintf(stderr, "  --mtest               compute maximum memory usage\n");
     fprintf(stderr, "  --verbose-prompt      print prompt before generation\n");
@@ -300,12 +317,20 @@ void win32_console_init(bool enable_color) {
             SetConsoleMode(hConOut, dwMode | 0x4); // ENABLE_VIRTUAL_TERMINAL_PROCESSING (0x4)
         }
         // Set console output codepage to UTF8
-        SetConsoleOutputCP(65001); // CP_UTF8
+        SetConsoleOutputCP(CP_UTF8);
     }
     void* hConIn = GetStdHandle((unsigned long)-10); // STD_INPUT_HANDLE (-10)
     if (hConIn && hConIn != (void*)-1 && GetConsoleMode(hConIn, &dwMode)) {
-        // Set console input codepage to UTF8
-        SetConsoleCP(65001); // CP_UTF8
+        // Set console input codepage to UTF16
+        _setmode(_fileno(stdin), _O_WTEXT);
     }
+}
+
+// Convert a wide Unicode string to an UTF8 string
+void win32_utf8_encode(const std::wstring & wstr, std::string & str) {
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
+    std::string strTo(size_needed, 0);
+    WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
+    str = strTo;
 }
 #endif

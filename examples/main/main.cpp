@@ -1,3 +1,8 @@
+// Defines sigaction on msys:
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include "common.h"
 #include "llama.h"
 
@@ -97,6 +102,7 @@ int main(int argc, char ** argv) {
         lparams.n_parts    = params.n_parts;
         lparams.seed       = params.seed;
         lparams.f16_kv     = params.memory_f16;
+        lparams.use_mmap   = params.use_mmap;
         lparams.use_mlock  = params.use_mlock;
 
         ctx = llama_init_from_file(params.model.c_str(), lparams);
@@ -162,7 +168,7 @@ int main(int argc, char ** argv) {
     }
 
     // enable interactive mode if reverse prompt or interactive start is specified
-    if (params.antiprompt.size() != 0 || params.interactive_start) { 
+    if (params.antiprompt.size() != 0 || params.interactive_start) {
         params.interactive = true;
     }
 
@@ -368,6 +374,11 @@ int main(int argc, char ** argv) {
                 // potentially set color to indicate we are taking user input
                 set_console_color(con_st, CONSOLE_COLOR_USER_INPUT);
 
+#if defined (_WIN32)
+                // Windows: must reactivate sigint handler after each signal
+                signal(SIGINT, sigint_handler);
+#endif
+
                 if (params.instruct) {
                     printf("\n> ");
                 }
@@ -381,10 +392,19 @@ int main(int argc, char ** argv) {
                 std::string line;
                 bool another_line = true;
                 do {
+#if defined(_WIN32)
+                    std::wstring wline;
+                    if (!std::getline(std::wcin, wline)) {
+                        // input stream is bad or EOF received
+                        return 0;
+                    }
+                    win32_utf8_encode(wline, line);
+#else
                     if (!std::getline(std::cin, line)) {
                         // input stream is bad or EOF received
                         return 0;
                     }
+#endif
                     if (line.empty() || line.back() != '\\') {
                         another_line = false;
                     } else {
@@ -426,7 +446,7 @@ int main(int argc, char ** argv) {
         }
 
         // end of text token
-        if (embd.back() == llama_token_eos()) {
+        if (!embd.empty() && embd.back() == llama_token_eos()) {
             if (params.instruct) {
                 is_interacting = true;
             } else {
