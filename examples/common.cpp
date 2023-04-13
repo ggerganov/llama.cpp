@@ -42,8 +42,10 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     while (std::getline(cpuinfo, line)) {
         if (line.find("cpu cores") != std::string::npos) {
             line.erase(0, line.find(": ") + 2);
-            params.n_threads = std::stoul(line);
-            break;
+            try {
+                params.n_threads = std::stoul(line);
+                break;
+            } catch (std::invalid_argument& e) {} // Ignore if we could not parse
         }
     }
 #elif defined(__APPLE__) && defined(__MACH__)
