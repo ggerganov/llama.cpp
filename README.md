@@ -49,6 +49,7 @@ New features will probably be added mostly through community contributions.
 
 - Python: [abetlen/llama-cpp-python](https://github.com/abetlen/llama-cpp-python)
 - Go: [go-skynet/go-llama.cpp](https://github.com/go-skynet/go-llama.cpp)
+- Node.js: [hlhr202/llama-node](https://github.com/hlhr202/llama-node)
 
 **UI:**
 
