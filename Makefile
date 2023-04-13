@@ -72,8 +72,13 @@ endif
 #       feel free to update the Makefile for your architecture and send a pull request or issue
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 	# Use all CPU extensions that are available:
-	CFLAGS += -mf16c -mavx -msse3 
-	BONUSCFLAGS += -mfma -mavx2 
+	CFLAGS += -mavx 
+	ifeq ($(OS),Windows_NT)
+		BONUSCFLAGS += -mfma -mavx2 -mf16c -msse3 
+	else
+# if not on windows, they are clearly building it themselves, so lets just use whatever is supported
+		CFLAGS += -march=native -mtune=native
+	endif
 endif
 ifneq ($(filter ppc64%,$(UNAME_M)),)
 	POWER9_M := $(shell grep "POWER9" /proc/cpuinfo)

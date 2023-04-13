@@ -160,7 +160,7 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
     int original_threads = params.n_threads;
     if (blasmode)
     {
-        params.n_batch = 1024;
+        params.n_batch = 512; //received reports of 1024 and above crashing on some models
         params.n_threads = 1;
     }
 
