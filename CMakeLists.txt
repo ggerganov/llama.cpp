@@ -56,6 +56,10 @@ option(LLAMA_AVX                    "llama: enable AVX"                         
 option(LLAMA_AVX2                   "llama: enable AVX2"                                    ON)
 option(LLAMA_AVX512                 "llama: enable AVX512"                                  OFF)
 option(LLAMA_FMA                    "llama: enable FMA"                                     ON)
+# in MSVC F16C is implied with AVX2/AVX512
+if (NOT MSVC)
+    option(LLAMA_F16C               "llama: enable F16C"                                    ON)
+endif()
 
 # 3rd party libs
 option(LLAMA_ACCELERATE             "llama: enable Accelerate framework"                    ON)
@@ -207,7 +211,9 @@ elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$")
             add_compile_options(/arch:AVX)
         endif()
     else()
-        add_compile_options(-mf16c)
+        if (LLAMA_F16C)
+            add_compile_options(-mf16c)
+        endif()
         if (LLAMA_FMA)
             add_compile_options(-mfma)
         endif()
