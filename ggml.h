@@ -354,6 +354,8 @@ int    ggml_blck_size (enum ggml_type type);
 size_t ggml_type_size (enum ggml_type type); // size in bytes for all elements in a block
 float  ggml_type_sizef(enum ggml_type type); // ggml_type_size()/ggml_blck_size() as float
 
+const char * ggml_type_name(enum ggml_type type);
+
 size_t ggml_element_size(const struct ggml_tensor * tensor);
 
 struct ggml_context * ggml_init(struct ggml_init_params params);
