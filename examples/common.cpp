@@ -51,7 +51,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     size_t len = sizeof(num_physical_cores);
     int result = sysctlbyname("hw.physicalcpu", &num_physical_cores, &len, NULL, 0);
     if (result == 0) {
-        params.n_threads = std::stoul(line);
+        params.n_threads = num_physical_cores;
     }
 #elif defined(_WIN32) || defined(_WIN64)
     SYSTEM_INFO sysinfo;
