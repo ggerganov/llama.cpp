@@ -55,6 +55,7 @@ extern "C" {
         bool f16_kv;     // use fp16 for KV cache
         bool logits_all; // the llama_eval() call computes all logits, not just the last one
         bool vocab_only; // only load the vocabulary, no weights
+        bool use_mmap;   // use mmap if possible
         bool use_mlock;  // force system to keep model in RAM
         bool embedding;  // embedding mode only
 
@@ -64,7 +65,19 @@ extern "C" {
         void * progress_callback_user_data;
     };
 
+    // model file types
+    enum llama_ftype {
+        LLAMA_FTYPE_ALL_F32     = 0,
+        LLAMA_FTYPE_MOSTLY_F16  = 1,  // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_0 = 2,  // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_1 = 3,  // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4, // tok_embeddings.weight and output.weight are F16
+    };
+
     LLAMA_API struct llama_context_params llama_context_default_params();
+
+    LLAMA_API bool llama_mmap_supported();
+    LLAMA_API bool llama_mlock_supported();
 
     // Various functions for loading a ggml llama model.
     // Allocate (almost) all memory needed for the model.
@@ -81,7 +94,7 @@ extern "C" {
     LLAMA_API int llama_model_quantize(
             const char * fname_inp,
             const char * fname_out,
-                   int   itype);
+      enum llama_ftype   ftype);
 
     // Returns the KV cache that will contain the context for the
     // ongoing prediction with the model.
@@ -166,4 +179,15 @@ extern "C" {
 }
 #endif
 
+// Internal API to be implemented by llama.cpp and used by tests/benchmarks only
+#ifdef LLAMA_API_INTERNAL
+
+#include <vector>
+#include <string>
+struct ggml_tensor;
+
+std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx);
+
 #endif
+
+#endif // LLAMA_H

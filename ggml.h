@@ -198,13 +198,14 @@ struct ggml_object;
 struct ggml_context;
 
 enum ggml_type {
-    GGML_TYPE_Q4_0,
-    GGML_TYPE_Q4_1,
+    // explicitly numbered values are used in llama.cpp files
+    GGML_TYPE_F32  = 0,
+    GGML_TYPE_F16  = 1,
+    GGML_TYPE_Q4_0 = 2,
+    GGML_TYPE_Q4_1 = 3,
     GGML_TYPE_I8,
     GGML_TYPE_I16,
     GGML_TYPE_I32,
-    GGML_TYPE_F16,
-    GGML_TYPE_F32,
     GGML_TYPE_COUNT,
 };
 
@@ -236,6 +237,7 @@ enum ggml_op {
 
     GGML_OP_SCALE,
     GGML_OP_CPY,
+    GGML_OP_CONT,
     GGML_OP_RESHAPE,
     GGML_OP_VIEW,
     GGML_OP_PERMUTE,
@@ -252,6 +254,19 @@ enum ggml_op {
 
     GGML_OP_COUNT,
 };
+
+
+// ggml object
+struct ggml_object {
+    size_t offs;
+    size_t size;
+
+    struct ggml_object * next;
+
+    char padding[8];
+};
+
+static const size_t GGML_OBJECT_SIZE = sizeof(struct ggml_object);
 
 // n-dimensional tensor
 struct ggml_tensor {
@@ -343,13 +358,6 @@ void ggml_free(struct ggml_context * ctx);
 size_t ggml_used_mem(const struct ggml_context * ctx);
 
 size_t ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch);
-
-bool ggml_mlock_supported(void);
-bool ggml_mlock(
-        struct ggml_context * ctx,
-        const void *opt_extra_addr,
-        size_t opt_extra_len,
-        char **err_p);
 
 struct ggml_tensor * ggml_new_tensor(
         struct ggml_context * ctx,
@@ -519,6 +527,11 @@ struct ggml_tensor * ggml_cpy(
         struct ggml_tensor  * a,
         struct ggml_tensor  * b);
 
+// make contiguous
+struct ggml_tensor * ggml_cont(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a);
+
 // return view(a), b specifies the new shape
 // TODO: when we start computing gradient, make a copy instead of view
 struct ggml_tensor * ggml_reshape(
@@ -556,6 +569,16 @@ struct ggml_tensor * ggml_view_2d(
         int64_t               ne0,
         int64_t               ne1,
         size_t                nb1, // row stride in bytes
+        size_t                offset);
+
+struct ggml_tensor * ggml_view_3d(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int64_t               ne0,
+        int64_t               ne1,
+        int64_t               ne2,
+        size_t                nb1, // row   stride in bytes
+        size_t                nb2, // slice stride in bytes
         size_t                offset);
 
 struct ggml_tensor * ggml_permute(
@@ -772,6 +795,30 @@ int ggml_cpu_has_wasm_simd(void);
 int ggml_cpu_has_blas(void);
 int ggml_cpu_has_sse3(void);
 int ggml_cpu_has_vsx(void);
+
+
+//
+// Internal types and functions exposed for tests and benchmarks
+//
+
+#ifdef  __cplusplus
+// restrict not standard in C++
+#define GGML_RESTRICT
+#else
+#define GGML_RESTRICT restrict
+#endif
+typedef void (*dequantize_row_q_t)(const void * GGML_RESTRICT x, float * GGML_RESTRICT y, int k);
+typedef void (*quantize_row_q_t)(const float * GGML_RESTRICT x, void * GGML_RESTRICT y, int k);
+typedef void (*vec_dot_q_t)(const int n, float * GGML_RESTRICT s, const void * GGML_RESTRICT x, const void * GGML_RESTRICT y);
+
+typedef struct {
+    dequantize_row_q_t dequantize_row_q;
+    quantize_row_q_t   quantize_row_q;
+    quantize_row_q_t   quantize_row_q_reference;
+    vec_dot_q_t        vec_dot_q;
+} quantize_fns_t;
+
+quantize_fns_t ggml_internal_get_quantize_fn(size_t i);
 
 #ifdef  __cplusplus
 }

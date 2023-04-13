@@ -1,6 +1,6 @@
 # llama.cpp
 
-![llama](https://user-images.githubusercontent.com/1991296/227761327-6d83e30e-2200-41a6-bfbb-f575231c54f4.png)
+![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
 
 [![Actions Status](https://github.com/ggerganov/llama.cpp/workflows/CI/badge.svg)](https://github.com/ggerganov/llama.cpp/actions)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -9,8 +9,8 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
-- [Roadmap (short-term)](https://github.com/ggerganov/llama.cpp/discussions/457)
-- Support for [GPT4All](https://github.com/ggerganov/llama.cpp#using-gpt4all)
+- [Add GPU support to ggml](https://github.com/ggerganov/llama.cpp/discussions/915)
+- [Roadmap Apr 2023](https://github.com/ggerganov/llama.cpp/discussions/784)
 
 ## Description
 
@@ -28,20 +28,33 @@ Please do not make conclusions about the models based on the results from this i
 For all I know, it can be completely wrong. This project is for educational purposes.
 New features will probably be added mostly through community contributions.
 
-Supported platforms:
+**Supported platforms:**
 
 - [X] Mac OS
 - [X] Linux
 - [X] Windows (via CMake)
 - [X] Docker
 
-Supported models:
+**Supported models:**
 
 - [X] LLaMA 🦙
 - [X] [Alpaca](https://github.com/ggerganov/llama.cpp#instruction-mode-with-alpaca)
 - [X] [GPT4All](https://github.com/ggerganov/llama.cpp#using-gpt4all)
 - [X] [Chinese LLaMA / Alpaca](https://github.com/ymcui/Chinese-LLaMA-Alpaca)
 - [X] [Vigogne (French)](https://github.com/bofenghuang/vigogne)
+- [X] [Vicuna](https://github.com/ggerganov/llama.cpp/discussions/643#discussioncomment-5533894)
+- [X] [Koala](https://bair.berkeley.edu/blog/2023/04/03/koala/)
+
+**Bindings:**
+
+- Python: [abetlen/llama-cpp-python](https://github.com/abetlen/llama-cpp-python)
+- Go: [go-skynet/go-llama.cpp](https://github.com/go-skynet/go-llama.cpp)
+- Node.js: [hlhr202/llama-node](https://github.com/hlhr202/llama-node)
+
+**UI:**
+
+- [nat/openplayground](https://github.com/nat/openplayground)
+- [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui)
 
 ---
 
@@ -137,14 +150,43 @@ https://user-images.githubusercontent.com/1991296/224442907-7693d4be-acaa-4e01-8
 
 ## Usage
 
-Here are the step for the LLaMA-7B model:
+Here are the step for the LLaMA-7B model.
+
+### Get the Code
 
 ```bash
-# build this repo
 git clone https://github.com/ggerganov/llama.cpp
 cd llama.cpp
-make
+```
 
+### Build
+
+Note: For Windows, CMake or Zig can be used.
+
+1. Use `make`
+
+    ```bash
+    make
+    ```
+
+1. Use CMake
+
+    ```bash
+    mkdir build
+    cd build
+    cmake ..
+    cmake --build . --config Release
+    ```
+
+1. Use Zig
+
+    ```bash
+    zig build -Drelease-fast
+    ```
+
+### Prepare Data & Run
+
+```bash
 # obtain the original LLaMA model weights and place them in ./models
 ls ./models
 65B 30B 13B 7B tokenizer_checklist.chk tokenizer.model
@@ -161,8 +203,6 @@ python3 convert-pth-to-ggml.py models/7B/ 1
 # run the inference
 ./main -m ./models/7B/ggml-model-q4_0.bin -n 128
 ```
-
-Currently, it's best to use Python 3.9 or Python 3.10, as `sentencepiece` has not yet published a wheel for Python 3.11.
 
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
 
@@ -225,7 +265,7 @@ There 26 letters in the English Alphabet
 The majority (54%) are using public transit. This includes buses, trams and metros with over 100 lines throughout the city which make it very accessible for tourists to navigate around town as well as locals who commute by tram or metro on a daily basis
 > List 5 words that start with "ca".
 cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
-> 
+>
 ```
 
 ### Using [GPT4All](https://github.com/nomic-ai/gpt4all)
@@ -236,19 +276,19 @@ cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
 convert the model from the old format to the new format with [./migrate-ggml-2023-03-30-pr613.py](./migrate-ggml-2023-03-30-pr613.py):
 
   ```bash
-  python3 convert-gpt4all-to-ggml.py models/gpt4all-7B/gpt4all-lora-quantized.bin ./models/tokenizer.model 
+  python3 convert-gpt4all-to-ggml.py models/gpt4all-7B/gpt4all-lora-quantized.bin ./models/tokenizer.model
   python3 migrate-ggml-2023-03-30-pr613.py models/gpt4all-7B/gpt4all-lora-quantized.bin models/gpt4all-7B/gpt4all-lora-quantized-new.bin
   ```
-  
+
 - You can now use the newly generated `gpt4all-lora-quantized-new.bin` model in exactly the same way as all other models
 - The original model is saved in the same folder with a suffix `.orig`
 
 ### Obtaining and verifying the Facebook LLaMA original model and Stanford Alpaca model data
 
 - **Under no circumstances share IPFS, magnet links, or any other links to model downloads anywhere in this respository, including in issues, discussions or pull requests. They will be immediately deleted.**
-- The LLaMA models are officially distributed by Facebook and will **never** be provided through this repository. 
+- The LLaMA models are officially distributed by Facebook and will **never** be provided through this repository.
 - Refer to [Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to request access to the model data.
-- Please verify the sha256 checksums of all downloaded model files to confirm that you have the correct model data files before creating an issue relating to your model files.
+- Please verify the [sha256 checksums](SHA256SUMS) of all downloaded model files to confirm that you have the correct model data files before creating an issue relating to your model files.
 - The following command will verify if you have all possible latest files in your self-installed `./models` subdirectory:
 
   `sha256sum --ignore-missing -c SHA256SUMS` on Linux
@@ -266,7 +306,7 @@ convert the model from the old format to the new format with [./migrate-ggml-202
   - GPT-3.5 / InstructGPT / ChatGPT:
     - [Aligning language models to follow instructions](https://openai.com/research/instruction-following)
     - [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
-    
+
 ### Perplexity (Measuring model quality)
 
 You can use the `perplexity` example to measure perplexity over the given prompt.  For more background,
@@ -333,20 +373,22 @@ We have two Docker images available for this project:
 
 The easiest way to download the models, convert them to ggml and optimize them is with the --all-in-one command which includes the full docker image.
 
+Replace `/path/to/models` below with the actual path where you downloaded the models.
+
  ```bash
-docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:full --all-in-one "/models/" 7B
+docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:full --all-in-one "/models/" 7B
 ```
 
 On complete, you are ready to play!
 
 ```bash
-docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:full --run -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
+docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:full --run -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
 ```
 
 or with light image:
 
 ```bash
-docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
+docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
 ```
 
 ### Contributing
@@ -367,3 +409,6 @@ docker run -v /llama/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models
 - Clean-up any trailing whitespaces, use 4 spaces indentation, brackets on same line, `void * ptr`, `int & a`
 - See [good first issues](https://github.com/ggerganov/llama.cpp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for tasks suitable for first contributions
 
+### Docs
+
+- [GGML tips & tricks](https://github.com/ggerganov/llama.cpp/wiki/GGML-Tips-&-Tricks)
