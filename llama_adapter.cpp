@@ -31,6 +31,7 @@ static std::string modelname;
 static llama_context *ctx;
 static std::vector<llama_token> last_n_tokens;
 static std::vector<llama_token> current_context_tokens;
+static std::vector<llama_token> smartcontext;
 
 bool llama_load_model(const load_model_inputs inputs, FileFormat in_file_format)
 {
@@ -115,9 +116,10 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
     }
 
     //truncate to front of the prompt if its too long
-    if (embd_inp.size() + params.n_predict > params.n_ctx)
+    int32_t nctx = params.n_ctx;
+    if (embd_inp.size() + params.n_predict > nctx)
     {
-        int offset = embd_inp.size() - params.n_ctx + params.n_predict;
+        int offset = embd_inp.size() - nctx + params.n_predict;
         embd_inp = std::vector<llama_token>(embd_inp.begin() + offset, embd_inp.end());
     }
 
@@ -131,28 +133,7 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
     std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
     n_past = 0;
 
-    //fast forward the past based on identical tokens, stop once a divergence is noted
-    int embd_inp_len = embd_inp.size();
-    int ctxcs = current_context_tokens.size();
-    for (int i = 0; i < ctxcs; ++i)
-    {
-        if (current_context_tokens[i] == embd_inp[i])
-        {
-            n_past += 1;
-            last_n_tokens.push_back(current_context_tokens[i]);
-        }
-        else
-        {
-            break;
-        }
-        if ((i + 2) >= embd_inp_len)
-        {
-            break;
-        }
-    }
-
-    last_n_tokens.erase(last_n_tokens.begin(), last_n_tokens.begin() + n_past);
-    embd_inp.erase(embd_inp.begin(), embd_inp.begin() + n_past);
+    ContextFastForward(current_context_tokens, embd_inp, n_past, last_n_tokens, nctx, smartcontext, true);
 
     //if using BLAS and prompt is big enough, switch to single thread and use a huge batch
     bool blasmode = (embd_inp.size() >= 32 && ggml_cpu_has_blas());

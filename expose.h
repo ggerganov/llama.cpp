@@ -9,6 +9,7 @@ struct load_model_inputs
     const char *model_filename;
     const int n_parts_overwrite = -1;
     const bool use_mmap;
+    const bool use_smartcontext;
     const int clblast_info = 0;
 };
 struct generation_inputs

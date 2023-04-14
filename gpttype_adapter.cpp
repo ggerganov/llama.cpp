@@ -35,6 +35,8 @@ static std::vector<gpt_vocab::id> current_context_tokens;
 static size_t mem_per_token = 0;
 static std::vector<float> logits;
 
+static std::vector<int> smartcontext;
+
 inline bool IsNanCheck(float f)
 {
     const unsigned int u = *(unsigned int*)&f;
@@ -194,27 +196,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
     n_past = 0;
 
-    //fast forward the past based on identical tokens, stop once a divergence is noted
-    int embd_inp_len = embd_inp.size();
-    for (int i = 0; i < current_context_tokens.size(); ++i)
-    {
-        if (current_context_tokens[i] == embd_inp[i])
-        {
-            n_past += 1;
-            last_n_tokens.push_back(current_context_tokens[i]);
-        }
-        else
-        {
-            break;
-        }
-        if ((i + 2) >= embd_inp_len)
-        {
-            break;
-        }
-    }
-
-    last_n_tokens.erase(last_n_tokens.begin(), last_n_tokens.begin() + n_past);
-    embd_inp.erase(embd_inp.begin(), embd_inp.begin() + n_past);
+    ContextFastForward(current_context_tokens, embd_inp, n_past, last_n_tokens, nctx, smartcontext, true);
 
     //if using BLAS and prompt is big enough, switch to single thread and use a huge batch
     // bool approved_format = (file_format!=FileFormat::GPT2_1 && file_format!=FileFormat::GPTJ_1 && file_format!=FileFormat::GPTJ_2);
