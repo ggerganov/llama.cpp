@@ -86,7 +86,7 @@ float dot_product_error(quantize_fns_t & qfns, size_t test_size, const float * t
 
 int main(int argc, char * argv[]) {
     bool verbose = false;
-    const size_t test_size = 32 * 100;
+    const size_t test_size = 32 * 128;
 
     std::string arg;
     for (int i = 1; i < argc; i++) {
@@ -94,7 +94,7 @@ int main(int argc, char * argv[]) {
 
         if (arg == "-v") {
             verbose = true;
-	} else {
+        } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             return 1;
         }

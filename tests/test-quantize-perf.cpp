@@ -18,10 +18,10 @@
 #define WARMUP 5
 #define ITERATIONS 10
 
-#define L1_SIZE      32*100
-#define L2_SIZE     32*2000
-#define L3_SIZE    32*20000
-#define MEM_SIZE 32*2000000
+#define L1_SIZE      32*128
+#define L2_SIZE     32*2048
+#define L3_SIZE    32*20480
+#define MEM_SIZE 32*2048000
 
 struct quantize_perf_params {
     std::vector<std::string> include_types;
@@ -36,7 +36,7 @@ struct quantize_perf_params {
 
 #if defined(__x86_64__) || defined(__i386__)
 
-#include <immintrin.h>
+#include <x86intrin.h>
 inline int64_t cpu_cycles() {
 // Rough way to detect new-ish CPUs
 #ifdef __POPCNT__
@@ -71,16 +71,13 @@ void * align_with_offset(void * ptr, int offset) {
 }
 
 void benchmark_function(size_t size, size_t q_size, std::function<size_t(void)> function) {
-
-    size_t bytes_out = 0;
-
     int64_t min_time_us = INT64_MAX;
     int64_t total_time_us = 0;
     int64_t min_time_cycles = INT64_MAX;
     int64_t total_time_cycles = 0;
 
     for (int i = 0; i < WARMUP; i++) {
-        bytes_out |= function();
+        function();
     }
 
 
@@ -88,12 +85,11 @@ void benchmark_function(size_t size, size_t q_size, std::function<size_t(void)> 
         const int64_t start_time = ggml_time_us();
         const int64_t start_cycles = cpu_cycles();
 
-        bytes_out |= function();
+        function();
 
         const int64_t end_cycles = cpu_cycles();
         const int64_t end_time = ggml_time_us();
 
-        //printf("    aostne %d\n",  end_cycles - start_cycles);
         total_time_cycles += end_cycles - start_cycles;
         min_time_cycles = std::min(min_time_cycles, end_cycles - start_cycles);
         total_time_us += end_time - start_time;
