@@ -313,7 +313,7 @@ void print_tok_vec(std::vector<float> &embd)
                     {
                         break;
                     }
-                    if ((i + 2) >= embd_inp_len)
+                    if ((i + 2 - offset_fix) >= embd_inp_len)
                     {
                         break;
                     }
