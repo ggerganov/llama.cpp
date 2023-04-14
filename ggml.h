@@ -422,17 +422,6 @@ struct ggml_tensor * ggml_dup(
         struct ggml_context * ctx,
         struct ggml_tensor  * a);
 
-struct ggml_tensor *ggml_map_unary(
-    struct ggml_context *ctx,
-    struct ggml_tensor *a,
-    void (*const fun)(int, float *, float *));
-
-struct ggml_tensor *ggml_map_binary(
-    struct ggml_context *ctx,
-    struct ggml_tensor *a,
-    struct ggml_tensor *b,
-    void (*const fun)(int, float *, float *, float *));
-
 struct ggml_tensor * ggml_add(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
@@ -665,6 +654,21 @@ struct ggml_tensor * ggml_flash_ff(
         struct ggml_tensor  * b1,
         struct ggml_tensor  * c0,
         struct ggml_tensor  * c1);
+
+// Mapping operations
+typedef void (*ggml_unary_op_f32_t)(const int, float *, const float *);
+typedef void (*ggml_binary_op_f32_t)(const int, float *, const float *, const float *);
+
+struct ggml_tensor * ggml_map_unary_f32(
+        struct ggml_context        * ctx,
+        struct ggml_tensor         * a,
+        const  ggml_unary_op_f32_t fun);
+
+struct ggml_tensor * ggml_map_binary_f32(
+        struct ggml_context         * ctx,
+        struct ggml_tensor          * a,
+        struct ggml_tensor          * b,
+        const  ggml_binary_op_f32_t fun);
 
 //
 // automatic differentiation
