@@ -3054,9 +3054,11 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         return NULL;
     }
 
+    const size_t mem_size = (params.mem_size + GGML_MEM_ALIGN - 1) & ~(GGML_MEM_ALIGN - 1);
+
     *ctx = (struct ggml_context) {
-        /*.mem_size           =*/ params.mem_size,
-        /*.mem_buffer         =*/ params.mem_buffer ? params.mem_buffer : GGML_ALIGNED_MALLOC(params.mem_size),
+        /*.mem_size           =*/ mem_size,
+        /*.mem_buffer         =*/ params.mem_buffer ? params.mem_buffer : GGML_ALIGNED_MALLOC(mem_size),
         /*.mem_buffer_owned   =*/ params.mem_buffer ? false : true,
         /*.no_alloc           =*/ params.no_alloc,
         /*.n_objects          =*/ 0,
@@ -3066,7 +3068,7 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         /*.scratch_save       =*/ { 0, 0, NULL, },
     };
 
-    GGML_ASSERT(ctx->mem_buffer != NULL); // check for allocation failure
+    GGML_ASSERT(ctx->mem_buffer != NULL);
 
     ggml_assert_aligned(ctx->mem_buffer);
 
