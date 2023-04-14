@@ -71,6 +71,7 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_F16  = 1,  // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q4_0 = 2,  // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q4_1 = 3,  // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4, // tok_embeddings.weight and output.weight are F16
     };
 
     LLAMA_API struct llama_context_params llama_context_default_params();
@@ -176,6 +177,17 @@ extern "C" {
 
 #ifdef __cplusplus
 }
+#endif
+
+// Internal API to be implemented by llama.cpp and used by tests/benchmarks only
+#ifdef LLAMA_API_INTERNAL
+
+#include <vector>
+#include <string>
+struct ggml_tensor;
+
+std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx);
+
 #endif
 
 #endif // LLAMA_H

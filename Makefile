@@ -142,14 +142,14 @@ default: main quantize perplexity embedding
 ggml.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS)   -c ggml.c -o ggml.o
 
-llama.o: llama.cpp llama.h llama_util.h llama_internal.h
+llama.o: llama.cpp llama.h llama_util.h
 	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
 
 common.o: examples/common.cpp examples/common.h
 	$(CXX) $(CXXFLAGS) -c examples/common.cpp -o common.o
 
 clean:
-	rm -vf *.o main quantize quantize-stats perplexity embedding
+	rm -vf *.o main quantize quantize-stats perplexity embedding benchmark-q4_0-matmult
 
 main: examples/main/main.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
@@ -171,9 +171,14 @@ embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
 
 libllama.so: llama.o ggml.o
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o libllama.so llama.o ggml.o $(LDFLAGS)
+
 #
 # Tests
 #
+
+benchmark: ggml.o
+	$(CXX) $(CXXFLAGS) examples/benchmark/benchmark-q4_0-matmult.c ggml.o -o benchmark-q4_0-matmult $(LDFLAGS)
+	./benchmark-q4_0-matmult
 
 .PHONY: tests
 tests:

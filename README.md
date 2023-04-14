@@ -9,6 +9,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
+- [Add GPU support to ggml](https://github.com/ggerganov/llama.cpp/discussions/915)
 - [Roadmap Apr 2023](https://github.com/ggerganov/llama.cpp/discussions/784)
 
 ## Description
@@ -48,6 +49,7 @@ New features will probably be added mostly through community contributions.
 
 - Python: [abetlen/llama-cpp-python](https://github.com/abetlen/llama-cpp-python)
 - Go: [go-skynet/go-llama.cpp](https://github.com/go-skynet/go-llama.cpp)
+- Node.js: [hlhr202/llama-node](https://github.com/hlhr202/llama-node)
 
 **UI:**
 
@@ -148,30 +150,52 @@ https://user-images.githubusercontent.com/1991296/224442907-7693d4be-acaa-4e01-8
 
 ## Usage
 
-Here are the step for the LLaMA-7B model:
+Here are the step for the LLaMA-7B model.
+
+### Get the Code
 
 ```bash
-# build this repo
 git clone https://github.com/ggerganov/llama.cpp
 cd llama.cpp
-make
+```
 
-#For Windows and CMake, use the following command instead:
-cd <path_to_llama_folder>
-mkdir build
-cd build
-cmake ..
-cmake --build . --config Release
+### Build
 
+Note: For Windows, CMake or Zig can be used.
+
+1. Use `make`
+
+    ```bash
+    make
+    ```
+
+1. Use CMake
+
+    ```bash
+    mkdir build
+    cd build
+    cmake ..
+    cmake --build . --config Release
+    ```
+
+1. Use Zig
+
+    ```bash
+    zig build -Drelease-fast
+    ```
+
+### Prepare Data & Run
+
+```bash
 # obtain the original LLaMA model weights and place them in ./models
 ls ./models
 65B 30B 13B 7B tokenizer_checklist.chk tokenizer.model
 
 # install Python dependencies
-python3 -m pip install torch numpy sentencepiece
+python3 -m pip install -r requirements.txt
 
 # convert the 7B model to ggml FP16 format
-python3 convert-pth-to-ggml.py models/7B/ 1
+python3 convert.py models/7B/
 
 # quantize the model to 4-bits (using method 2 = q4_0)
 ./quantize ./models/7B/ggml-model-f16.bin ./models/7B/ggml-model-q4_0.bin 2
@@ -179,8 +203,6 @@ python3 convert-pth-to-ggml.py models/7B/ 1
 # run the inference
 ./main -m ./models/7B/ggml-model-q4_0.bin -n 128
 ```
-
-Currently, it's best to use Python 3.9 or Python 3.10, as `sentencepiece` has not yet published a wheel for Python 3.11.
 
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
 
@@ -266,7 +288,7 @@ convert the model from the old format to the new format with [./migrate-ggml-202
 - **Under no circumstances share IPFS, magnet links, or any other links to model downloads anywhere in this respository, including in issues, discussions or pull requests. They will be immediately deleted.**
 - The LLaMA models are officially distributed by Facebook and will **never** be provided through this repository.
 - Refer to [Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to request access to the model data.
-- Please verify the sha256 checksums of all downloaded model files to confirm that you have the correct model data files before creating an issue relating to your model files.
+- Please verify the [sha256 checksums](SHA256SUMS) of all downloaded model files to confirm that you have the correct model data files before creating an issue relating to your model files.
 - The following command will verify if you have all possible latest files in your self-installed `./models` subdirectory:
 
   `sha256sum --ignore-missing -c SHA256SUMS` on Linux
