@@ -1102,8 +1102,7 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
 
         for (int l = 0; l < 8; l++) {
             const float32x4_t v  = vmulq_n_f32(srcv[l], id);
-            //TODO: rounding
-            const int32x4_t   vi = vcvtq_s32_f32(v);
+            const int32x4_t   vi = vcvtnq_s32_f32(v);
 
             y[i].qs[4*l + 0] = vgetq_lane_s32(vi, 0);
             y[i].qs[4*l + 1] = vgetq_lane_s32(vi, 1);
