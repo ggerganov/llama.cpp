@@ -177,11 +177,12 @@ extern "C" {
 #include <stddef.h>
 #include <stdbool.h>
 
-#define GGML_MAX_DIMS     4
-#define GGML_MAX_NODES    4096
-#define GGML_MAX_PARAMS   16
-#define GGML_MAX_CONTEXTS 64
-#define GGML_MAX_OPT      4
+#define GGML_MAX_DIMS          4
+#define GGML_MAX_NODES         4096
+#define GGML_MAX_PARAMS        16
+#define GGML_MAX_CONTEXTS      64
+#define GGML_MAX_OPT           4
+#define GGML_DEFAULT_N_THREADS 4
 
 #ifdef __ARM_NEON
 // we use the built-in 16-bit float type

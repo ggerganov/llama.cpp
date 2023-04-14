@@ -227,13 +227,13 @@ void print_tok_vec(std::vector<float> &embd)
 
  void ContextFastForward(std::vector<int> &current_context_tokens, std::vector<int> &embd_inp,
  int &n_past, std::vector<int> &last_n_tokens, const int nctx, std::vector<int> &smartcontext, bool useSmartContext)
- {
-     const int SCTokThreshold = 32; //how many tokens of similarity triggers smartcontext
+ {     
      const int SCCtxLenThreshold = nctx * 0.8; //how much context length must be reach to trigger smartcontext
      const int SCInpLenThreshold = nctx * 0.6; //how big must the input array be to trigger smartcontext
      const int SCPastLenThreshold = nctx * 0.5; //how wide of a gap between the fast forwarded past and the present to trigger smart context
      const float SCTruncationRatio = 0.5; //ratio for how many tokens to fast forward
-     
+     const int SCTokThreshold = 32 + (nctx*0.05); //how many tokens of similarity triggers smartcontext
+
     // printf("\nORIGINAL CTX:\n");
     // print_tok_vec(current_context_tokens);
     // printf("\nORIGINAL EMBD:\n");

@@ -193,7 +193,7 @@ ggml_v1.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
 ggml_v1_noavx2.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
 	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) -c otherarch/ggml_v1.c -o ggml_v1_noavx2.o
 
-llama.o: llama.cpp llama.h llama_internal.h
+llama.o: llama.cpp llama.h llama_util.h
 	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
 
 common.o: examples/common.cpp examples/common.h
@@ -209,7 +209,7 @@ gpttype_adapter.o:
 	$(CXX) $(CXXFLAGS) -c gpttype_adapter.cpp -o gpttype_adapter.o
 
 clean:
-	rm -vf *.o main quantize_llama quantize_gpt2 quantize_gptj quantize-stats perplexity embedding main.exe quantize_llama.exe quantize_gptj.exe quantize_gpt2.exe koboldcpp.dll koboldcpp_openblas.dll koboldcpp_noavx2.dll koboldcpp_openblas_noavx2.dll koboldcpp_clblast.dll gptj.exe gpt2.exe
+	rm -vf *.o main quantize_llama quantize_gpt2 quantize_gptj quantize-stats perplexity embedding benchmark-q4_0-matmult main.exe quantize_llama.exe quantize_gptj.exe quantize_gpt2.exe koboldcpp.dll koboldcpp_openblas.dll koboldcpp_noavx2.dll koboldcpp_openblas_noavx2.dll koboldcpp_clblast.dll gptj.exe gpt2.exe
 
 main: examples/main/main.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
@@ -256,6 +256,10 @@ libllama.so: llama.o ggml.o
 #
 # Tests
 #
+
+benchmark: ggml.o
+	$(CXX) $(CXXFLAGS) examples/benchmark/benchmark-q4_0-matmult.c ggml.o -o benchmark-q4_0-matmult $(LDFLAGS)
+	./benchmark-q4_0-matmult
 
 .PHONY: tests
 tests:
