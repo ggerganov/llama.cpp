@@ -498,7 +498,7 @@ int main(int argc, char ** argv) {
                         is_command = true;
                     }
                 }
-                
+
                 input_noecho = true; // do not echo this again
             }
 
