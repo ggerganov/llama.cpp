@@ -1787,7 +1787,7 @@ struct llama_context * llama_init_from_file(
         if (params.logits_all) {
             ctx->logits.reserve(hparams.n_ctx*hparams.n_vocab);
         } else {
-            ctx->logits.reserve(hparams.n_ctx);
+            ctx->logits.reserve(hparams.n_vocab);
         }
 
         if (params.embedding){
