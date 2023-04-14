@@ -324,7 +324,7 @@ def main(args):
     use_noavx2 = False 
 
     if os.name != 'nt':
-        print("You are not on Windows. Default koboldcpp.dll library file will be used. Remember to manually link with OpenBLAS using LLAMA_OPENBLAS=1, or CLBlast with LLAMA_CLBLAST=1 if you want to use them.")
+        print("You are not on Windows. Default koboldcpp.dll library file will be used. Remember to manually link with OpenBLAS using LLAMA_OPENBLAS=1, or CLBlast with LLAMA_CLBLAST=1 if you want to use them. This is not an error, just a reminder.")
     elif args.noavx2:
         use_noavx2 = True
         if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "libopenblas.dll")) or not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "koboldcpp_openblas_noavx2.dll")):
