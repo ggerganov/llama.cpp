@@ -140,44 +140,44 @@ default: main quantize perplexity embedding
 #
 
 ggml.o: ggml.c ggml.h
-	$(CC)  $(CFLAGS)   -c ggml.c -o ggml.o
+	$(CC)  $(CFLAGS)   -c $< -o $@
 
-llama.o: llama.cpp llama.h llama_util.h
-	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
+llama.o: llama.cpp ggml.h llama.h llama_util.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common.o: examples/common.cpp examples/common.h
-	$(CXX) $(CXXFLAGS) -c examples/common.cpp -o common.o
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
 	rm -vf *.o main quantize quantize-stats perplexity embedding benchmark-q4_0-matmult
 
 main: examples/main/main.cpp ggml.o llama.o common.o
-	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
 
 quantize: examples/quantize/quantize.cpp ggml.o llama.o
-	$(CXX) $(CXXFLAGS) examples/quantize/quantize.cpp ggml.o llama.o -o quantize $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 quantize-stats: examples/quantize-stats/quantize-stats.cpp ggml.o llama.o
-	$(CXX) $(CXXFLAGS) examples/quantize-stats/quantize-stats.cpp ggml.o llama.o -o quantize-stats $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o
-	$(CXX) $(CXXFLAGS) examples/perplexity/perplexity.cpp ggml.o llama.o common.o -o perplexity $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
-	$(CXX) $(CXXFLAGS) examples/embedding/embedding.cpp ggml.o llama.o common.o -o embedding $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 libllama.so: llama.o ggml.o
-	$(CXX) $(CXXFLAGS) -shared -fPIC -o libllama.so llama.o ggml.o $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
 #
 # Tests
 #
 
-benchmark: ggml.o
-	$(CXX) $(CXXFLAGS) examples/benchmark/benchmark-q4_0-matmult.c ggml.o -o benchmark-q4_0-matmult $(LDFLAGS)
+benchmark: examples/benchmark/benchmark-q4_0-matmult.c ggml.o
+	$(CXX) $(CXXFLAGS) $^ -o benchmark-q4_0-matmult $(LDFLAGS)
 	./benchmark-q4_0-matmult
 
 .PHONY: tests
