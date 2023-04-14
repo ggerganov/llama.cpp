@@ -2671,6 +2671,18 @@ static const size_t GGML_TYPE_SIZE[GGML_TYPE_COUNT] = {
 };
 static_assert(GGML_TYPE_COUNT == 7, "GGML_TYPE_SIZE is outdated");
 
+
+static const char * GGML_TYPE_NAME[GGML_TYPE_COUNT] = {
+    [GGML_TYPE_F32]  = "f32",
+    [GGML_TYPE_F16]  = "f16",
+    [GGML_TYPE_Q4_0] = "q4_0",
+    [GGML_TYPE_Q4_1] = "q4_1",
+    [GGML_TYPE_I8]   = "i8",
+    [GGML_TYPE_I16]  = "i16",
+    [GGML_TYPE_I32]  = "i32",
+};
+static_assert(GGML_TYPE_COUNT == 7, "GGML_TYPE_NAME is outdated");
+
 static const char * GGML_OP_LABEL[GGML_OP_COUNT] = {
     "NONE",
 
@@ -2894,6 +2906,11 @@ size_t ggml_type_size(enum ggml_type type) {
 float ggml_type_sizef(enum ggml_type type) {
     return ((float)(GGML_TYPE_SIZE[type]))/GGML_BLCK_SIZE[type];
 }
+
+const char * ggml_type_name(enum ggml_type type) {
+    return GGML_TYPE_NAME[type];
+}
+
 
 size_t ggml_element_size(const struct ggml_tensor * tensor) {
     return GGML_TYPE_SIZE[tensor->type];

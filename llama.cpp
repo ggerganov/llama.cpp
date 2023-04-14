@@ -269,16 +269,6 @@ static std::string llama_format_tensor_shape(const std::vector<uint32_t> & ne) {
     return ret;
 }
 
-static const char * llama_format_type(enum ggml_type type) {
-    switch (type) {
-        case GGML_TYPE_F32: return "f32";
-        case GGML_TYPE_F16: return "f16";
-        case GGML_TYPE_Q4_0: return "q4_0";
-        case GGML_TYPE_Q4_1: return "q4_1";
-        default: LLAMA_ASSERT(false);
-    }
-}
-
 static size_t llama_calc_tensor_size(const std::vector<uint32_t> & ne, enum ggml_type type) {
     size_t size = ggml_type_size(type);
     for (uint32_t dim : ne) {
@@ -1582,7 +1572,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         printf("[%zu/%zu] %36s - %s, type = %6s, ",
                ++idx, model_loader->tensors_map.tensors.size(),
                tensor.name.c_str(), llama_format_tensor_shape(tensor.ne).c_str(),
-               llama_format_type(tensor.type));
+               ggml_type_name(tensor.type));
 
         // This used to be a regex, but <regex> has an extreme cost to compile times.
         bool quantize = tensor.name.rfind("weight") == tensor.name.size() - 6; // ends with 'weight'?
@@ -1615,7 +1605,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                     f32_data[i] = ggml_fp16_to_fp32(f16_data[i]);
                 }
             } else {
-                throw format("type %s unsupported for integer quantization", llama_format_type(tensor.type));
+                throw format("type %s unsupported for integer quantization", ggml_type_name(tensor.type));
             }
 
             printf("quantizing .. ");
