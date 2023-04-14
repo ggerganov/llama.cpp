@@ -27,6 +27,7 @@
 static console_state con_st;
 
 static bool is_interacting = false;
+static bool is_command = false;
 
 llama_context * ctx;
 
@@ -47,50 +48,52 @@ void sigint_handler(int signo) {
 }
 #endif
 
-void command(std::string buffer, gpt_params params, const int n_ctx ) {
+int command(std::string buffer, gpt_params params, const int n_ctx ) {
     // check buffer's first 3 chars equal '???' to enter command mode. 
-    if (buffer.length() <= 3 || strncmp(buffer.c_str(), "???", 3) != 0) return;
+    if (buffer.length() <= 3 || strncmp(buffer.c_str(), "???", 3) != 0) return 0;
     set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
     std::istringstream command(buffer);
     int j = 0; std::string test, arg, cmd;
     while (command>>test) {
         j++;
-        if ( j == 2 ) {
-            arg = test;
-        }
-        if ( j == 3 ) {
-            cmd = test;
-        }
+        if ( j == 2 ) arg = test;
+        if ( j == 3 ) cmd = test;
     }
-    if (arg == "-n" || arg == "--n_predict") {
+    if (cmd == "") {
+        printf("Please enter a command value.\n");
+        return 1;
+    }
+    if (arg == "n_predict") {
         params.n_predict = std::stoi(cmd);
-    } else if (arg == "--top_k") {
+    } else if (arg == "top_k") {
         params.top_k = std::stoi(cmd);
-    } else if (arg == "-c" || arg == "--ctx_size") {
+    } else if (arg == "ctx_size") {
         params.n_ctx = std::stoi(cmd);
-    } else if (arg == "--top_p") {
+    } else if (arg == "top_p") {
         params.top_p = std::stof(cmd);
-    } else if (arg == "--temp") {
+    } else if (arg == "temp") {
         params.temp = std::stof(cmd);
-    } else if (arg == "--repeat_last_n") {
+    } else if (arg == "repeat_last_n") {
         params.repeat_last_n = std::stoi(cmd);
-    } else if (arg == "--repeat_penalty") {
+    } else if (arg == "repeat_penalty") {
         params.repeat_penalty = std::stof(cmd);
-    } else if (arg == "-b" || arg == "--batch_size") {
+    } else if (arg == "batch_size") {
         params.n_batch = std::stoi(cmd);
         params.n_batch = std::min(512, params.n_batch);
-    } else if (arg == "-r" || arg == "--reverse-prompt") {
+    } else if (arg == "reverse-prompt") {
         params.antiprompt.push_back(cmd);
-    } else if (arg == "--keep") {
+    } else if (arg == "keep") {
         params.n_keep = std::stoi(cmd);
     } else if (arg == "stats") {
         llama_print_timings(ctx);
     } else {
-        printf("invalid argument parsed: %s\n please use -n, --top_k, -c, --top_p, --temp, --repeat_last_n, --repeat_penalty, -b, -r, --keep or stats", arg.c_str());
+        printf("Invalid command: %s\nValid options are:\n      n_predict, top_k, ctx_size, top_p, temp, repeat_last_n, repeat_penalty, batch_size, reverse-prompt, keep, stats\n", arg.c_str());
+        return 1;
     }
     printf("sampling: temp = %f, top_k = %d, top_p = %f, repeat_last_n = %i, repeat_penalty = %f\n",
         params.temp, params.top_k, params.top_p, params.repeat_last_n, params.repeat_penalty);
     printf("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
+    return 1;
 }
 
 int main(int argc, char ** argv) {
@@ -386,6 +389,8 @@ int main(int argc, char ** argv) {
 
         // display text
         if (!input_noecho) {
+            // if a command was entered clear the output to stop printing of gibberish.
+            if (is_command == true) embd.clear();
             for (auto id : embd) {
                 printf("%s", llama_token_to_str(ctx, id));
             }
@@ -469,24 +474,29 @@ int main(int argc, char ** argv) {
                 // Add tokens to embd only if the input buffer is non-empty
                 // Entering a empty line lets the user pass control back
                 if (buffer.length() > 1) {
+                    //check for commands
+                    if (command(buffer, params, n_ctx) == 0) {
+                        // this is not a command, run normally.
+                        is_command = false;
+                        // instruct mode: insert instruction prefix
+                        if (params.instruct && !is_antiprompt) {
+                            n_consumed = embd_inp.size();
+                            embd_inp.insert(embd_inp.end(), inp_pfx.begin(), inp_pfx.end());
+                        }
 
-                    // instruct mode: insert instruction prefix
-                    if (params.instruct && !is_antiprompt) {
-                        n_consumed = embd_inp.size();
-                        embd_inp.insert(embd_inp.end(), inp_pfx.begin(), inp_pfx.end());
+                        auto line_inp = ::llama_tokenize(ctx, buffer, false);
+                        embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
+
+                        // instruct mode: insert response suffix
+                        if (params.instruct) {
+                            embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
+                        }
+
+                        n_remain -= line_inp.size();
+                    } else {
+                        // this was a command, so we need to stop anything more from printing. 
+                        is_command = true;
                     }
-
-                    auto line_inp = ::llama_tokenize(ctx, buffer, false);
-                    embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
-
-                    // instruct mode: insert response suffix
-                    if (params.instruct) {
-                        embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
-                    }
-
-                    n_remain -= line_inp.size();
-                    
-                    command(buffer, params, n_ctx);
                 }
                 
                 input_noecho = true; // do not echo this again
