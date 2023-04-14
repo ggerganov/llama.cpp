@@ -167,6 +167,8 @@ $(info I CXX:      $(CXXV))
 $(info )
 
 default: llamalib llamalib_noavx2 llamalib_openblas llamalib_openblas_noavx2 llamalib_clblast
+simple: llamalib llamalib_noavx2
+dev: llamalib_openblas
 
 #
 # Build library
