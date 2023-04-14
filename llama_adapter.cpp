@@ -27,6 +27,7 @@ static gpt_params params;
 static int n_past = 0;
 static int n_threads = 4;
 static int n_batch = 8;
+static bool useSmartContext = false;
 static std::string modelname;
 static llama_context *ctx;
 static std::vector<llama_token> last_n_tokens;
@@ -42,6 +43,7 @@ bool llama_load_model(const load_model_inputs inputs, FileFormat in_file_format)
     n_threads = inputs.threads;
     n_batch = inputs.batch_size;
     modelname = inputs.model_filename;
+    useSmartContext = inputs.use_smartcontext;
 
     ctx_params.n_ctx = inputs.max_context_length;
     ctx_params.n_parts = -1;//inputs.n_parts_overwrite;
@@ -133,7 +135,7 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
     std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
     n_past = 0;
 
-    ContextFastForward(current_context_tokens, embd_inp, n_past, last_n_tokens, nctx, smartcontext, true);
+    ContextFastForward(current_context_tokens, embd_inp, n_past, last_n_tokens, nctx, smartcontext, useSmartContext);
 
     //if using BLAS and prompt is big enough, switch to single thread and use a huge batch
     bool blasmode = (embd_inp.size() >= 32 && ggml_cpu_has_blas());
