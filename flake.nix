@@ -10,7 +10,6 @@
           inherit system;
         };
         llama-python = pkgs.python310.withPackages (ps: with ps; [
-          torch
           numpy
           sentencepiece
         ]);
