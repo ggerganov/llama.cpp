@@ -18,10 +18,12 @@ import zipfile
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
+from typing import (IO, TYPE_CHECKING, Any, Callable, Dict, Iterable, List,
+                    Literal, Optional, Sequence, Tuple, TypeVar, Union)
+
 import numpy as np
 from sentencepiece import SentencePieceProcessor  # type: ignore
-from typing import (IO, Any, Callable, Iterable, Literal, Optional, Sequence,
-                    TypeVar, Union, List, Dict, Tuple, TYPE_CHECKING)
+
 if TYPE_CHECKING:
     from typing_extensions import TypeAlias
 
@@ -684,7 +686,7 @@ class LazyUnpickler(pickle.Unpickler):
         description = f'storage data_type={data_type} path-in-zip={filename} path={self.zip_file.filename}'
         return LazyStorage(load=load, kind=pid[1], description=description)
 
-    def lazy_rebuild_tensor_v2(storage: Any, storage_offset: Any, size: Any, stride: Any, # pyright: ignore[reportSelfClsParameterName]
+    def lazy_rebuild_tensor_v2(storage: Any, storage_offset: Any, size: Any, stride: Any,  # pyright: ignore[reportSelfClsParameterName]
                                requires_grad: Any, backward_hooks: Any, metadata: Any = None) -> LazyTensor:
         assert isinstance(storage, LazyStorage)
 
