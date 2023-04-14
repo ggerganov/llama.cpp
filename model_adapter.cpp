@@ -27,11 +27,8 @@ double timer_check()
     return time_taken;
 }
 
+
 void print_tok_vec(std::vector<int> &embd)
-{
-    print_tok_vec(embd,nullptr);
-}
-void print_tok_vec(std::vector<int> &embd, std::map<int32_t, std::string> * decoder)
 {
     std::cout << "[";
     bool first = true;
@@ -41,15 +38,8 @@ void print_tok_vec(std::vector<int> &embd, std::map<int32_t, std::string> * deco
         {
             std::cout << ',';
         }
-        first = false;
-        if(decoder)
-        {
-            std::cout << (*decoder)[i];
-        }
-        else
-        {
-            std::cout << i;
-        }
+        first = false;        
+        std::cout << i;        
     }
     std::cout << "]\n";
 }
