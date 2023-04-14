@@ -1,9 +1,0 @@
---interactive-first
---keep -1
---ins-prefix-bos
---ins-prefix "\n### Human: "
---ins-suffix "\n### Assistant: "
---reverse-prompt "### Human: "
---rm-trailing-space-workaround
-
--p "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions."

@@ -1,7 +1,0 @@
---interactive-first
---keep -1
---ins-prefix-bos
---ins-prefix "\n### Human: "
---ins-suffix "\n### Assistant: "
---reverse-prompt "### Human: "
---rm-trailing-space-workaround
