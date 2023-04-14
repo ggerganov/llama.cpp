@@ -1,0 +1,9 @@
+--clean-interface
+--interactive-first
+--keep -1
+--ins-prefix-bos
+--ins-prefix "\n\n### Instruction:\n\n"
+--ins-suffix "\n\n### Response:\n\n"
+--reverse-prompt "### Instruction:\n\n"
+
+-p "Below is an instruction that describes a task. Write a response that appropriately completes the request.\n"
