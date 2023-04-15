@@ -179,4 +179,15 @@ extern "C" {
 }
 #endif
 
+// Internal API to be implemented by llama.cpp and used by tests/benchmarks only
+#ifdef LLAMA_API_INTERNAL
+
+#include <vector>
+#include <string>
+struct ggml_tensor;
+
+std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx);
+
+#endif
+
 #endif // LLAMA_H

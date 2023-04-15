@@ -49,6 +49,7 @@ New features will probably be added mostly through community contributions.
 
 - Python: [abetlen/llama-cpp-python](https://github.com/abetlen/llama-cpp-python)
 - Go: [go-skynet/go-llama.cpp](https://github.com/go-skynet/go-llama.cpp)
+- Node.js: [hlhr202/llama-node](https://github.com/hlhr202/llama-node)
 
 **UI:**
 
@@ -149,30 +150,52 @@ https://user-images.githubusercontent.com/1991296/224442907-7693d4be-acaa-4e01-8
 
 ## Usage
 
-Here are the step for the LLaMA-7B model:
+Here are the step for the LLaMA-7B model.
+
+### Get the Code
 
 ```bash
-# build this repo
 git clone https://github.com/ggerganov/llama.cpp
 cd llama.cpp
-make
+```
 
-#For Windows and CMake, use the following command instead:
-cd <path_to_llama_folder>
-mkdir build
-cd build
-cmake ..
-cmake --build . --config Release
+### Build
 
+Note: For Windows, CMake or Zig can be used.
+
+1. Use `make`
+
+    ```bash
+    make
+    ```
+
+1. Use CMake
+
+    ```bash
+    mkdir build
+    cd build
+    cmake ..
+    cmake --build . --config Release
+    ```
+
+1. Use Zig
+
+    ```bash
+    zig build -Drelease-fast
+    ```
+
+### Prepare Data & Run
+
+```bash
 # obtain the original LLaMA model weights and place them in ./models
 ls ./models
 65B 30B 13B 7B tokenizer_checklist.chk tokenizer.model
 
 # install Python dependencies
-python3 -m pip install torch numpy sentencepiece
+python3 -m pip install -r requirements.txt
 
 # convert the 7B model to ggml FP16 format
-python3 convert-pth-to-ggml.py models/7B/ 1
+python3 convert.py models/7B/
 
 # quantize the model to 4-bits (using method 2 = q4_0)
 ./quantize ./models/7B/ggml-model-f16.bin ./models/7B/ggml-model-q4_0.bin 2
@@ -180,8 +203,6 @@ python3 convert-pth-to-ggml.py models/7B/ 1
 # run the inference
 ./main -m ./models/7B/ggml-model-q4_0.bin -n 128
 ```
-
-Currently, it's best to use Python 3.9 or Python 3.10, as `sentencepiece` has not yet published a wheel for Python 3.11.
 
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
 
