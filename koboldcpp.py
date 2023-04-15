@@ -355,8 +355,10 @@ def main(args):
         print("Overriding thread count, using " + str(args.threads) + " threads instead.")
 
     init_library() # Note: if blas does not exist and is enabled, program will crash.
-    ggml_selected_file = args.model_file
     embedded_kailite = None 
+    ggml_selected_file = args.model_param
+    if not ggml_selected_file:
+        ggml_selected_file = args.model    
     if not ggml_selected_file:     
         #give them a chance to pick a file
         print("For command line arguments, please refer to --help")
@@ -401,8 +403,8 @@ def main(args):
     except:
         print("Could not find Kobold Lite. Embedded Kobold Lite will not be available.")
 
-    if args.l_port!=defaultport:
-        args.port = args.l_port
+    if args.port_param!=defaultport:
+        args.port = args.port_param
     print(f"Starting Kobold HTTP Server on port {args.port}")
     epurl = ""
     if args.host=="":
@@ -415,12 +417,14 @@ def main(args):
     RunServerMultiThreaded(args.host, args.port, embedded_kailite)
 
 if __name__ == '__main__':
-    print("Welcome to KoboldCpp - Version 1.7") # just update version manually
+    print("Welcome to KoboldCpp - Version 1.8") # just update version manually
     parser = argparse.ArgumentParser(description='Kobold llama.cpp server')
-    parser.add_argument("model_file", help="Model file to load", nargs="?")
+    modelgroup = parser.add_mutually_exclusive_group() #we want to be backwards compatible with the unnamed positional args
+    modelgroup.add_argument("--model", help="Model file to load", nargs="?")
+    modelgroup.add_argument("model_param", help="Model file to load (positional)", nargs="?")
     portgroup = parser.add_mutually_exclusive_group() #we want to be backwards compatible with the unnamed positional args
     portgroup.add_argument("--port", help="Port to listen on", default=defaultport, type=int, action='store')
-    portgroup.add_argument("l_port", help="Port to listen on (deprecated)", default=defaultport, nargs="?", type=int, action='store')
+    portgroup.add_argument("port_param", help="Port to listen on (positional)", default=defaultport, nargs="?", type=int, action='store')
     parser.add_argument("--host", help="Host IP to listen on. If empty, all routable interfaces are accepted.", default="")
     
     #os.environ["OMP_NUM_THREADS"] = '12'
