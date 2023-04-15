@@ -139,10 +139,10 @@ NOAVX2_BUILD =
 OPENBLAS_NOAVX2_BUILD =
 
 ifeq ($(OS),Windows_NT)
-	OPENBLAS_BUILD = $(CXX) $(CXXFLAGS) ggml_openblas.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o lib/libopenblas.lib -shared -o koboldcpp_openblas.dll $(LDFLAGS)
-	CLBLAST_BUILD = $(CXX) $(CXXFLAGS) ggml_clblast.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o lib/OpenCL.lib lib/clblast.lib -shared -o koboldcpp_clblast.dll $(LDFLAGS)
-	OPENBLAS_NOAVX2_BUILD = $(CXX) $(CXXFLAGS) ggml_openblas_noavx2.o ggml_v1_noavx2.o expose.o common.o llama_adapter.o gpttype_adapter.o lib/libopenblas.lib -shared -o koboldcpp_openblas_noavx2.dll $(LDFLAGS)
-	NOAVX2_BUILD = $(CXX) $(CXXFLAGS) ggml_noavx2.o ggml_v1_noavx2.o expose.o common.o llama_adapter.o gpttype_adapter.o -shared -o koboldcpp_noavx2.dll $(LDFLAGS)
+	OPENBLAS_BUILD = $(CXX) $(CXXFLAGS) $^ lib/libopenblas.lib -shared -o $@ $(LDFLAGS)	
+	CLBLAST_BUILD = $(CXX) $(CXXFLAGS) $^ lib/OpenCL.lib lib/clblast.lib -shared -o $@ $(LDFLAGS)
+	OPENBLAS_NOAVX2_BUILD = $(CXX) $(CXXFLAGS) $^ lib/libopenblas.lib -shared -o $@ $(LDFLAGS)
+	NOAVX2_BUILD = $(CXX) $(CXXFLAGS) $^ -shared -o $@ $(LDFLAGS)
 else
 	ifndef LLAMA_OPENBLAS
 	ifndef LLAMA_CLBLAST
@@ -166,101 +166,101 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: llamalib llamalib_noavx2 llamalib_openblas llamalib_openblas_noavx2 llamalib_clblast
-simple: llamalib llamalib_noavx2
-dev: llamalib_openblas
+default: koboldcpp.dll koboldcpp_noavx2.dll koboldcpp_openblas.dll koboldcpp_openblas_noavx2.dll koboldcpp_clblast.dll
+simple: koboldcpp.dll koboldcpp_noavx2.dll
+dev: koboldcpp_openblas.dll
 
 #
 # Build library
 #
 
 ggml.o: ggml.c ggml.h
-	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -c ggml.c -o ggml.o
+	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -c $< -o $@
 
 ggml_openblas.o: ggml.c ggml.h
-	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -DGGML_USE_OPENBLAS -c ggml.c -o ggml_openblas.o
+	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -DGGML_USE_OPENBLAS -c $< -o $@
 
 ggml_noavx2.o: ggml.c ggml.h
-	$(CC)  $(CFLAGS) -c ggml.c -o ggml_noavx2.o
+	$(CC)  $(CFLAGS) -c $< -o $@
 
 ggml_openblas_noavx2.o: ggml.c ggml.h
-	$(CC)  $(CFLAGS) -DGGML_USE_OPENBLAS -c ggml.c -o ggml_openblas_noavx2.o
+	$(CC)  $(CFLAGS) -DGGML_USE_OPENBLAS -c $< -o $@
 
 ggml_clblast.o: ggml.c ggml.h
-	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -DGGML_USE_OPENBLAS -DGGML_USE_CLBLAST -c ggml.c -o ggml_clblast.o
+	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -DGGML_USE_OPENBLAS -DGGML_USE_CLBLAST -c $< -o $@
 
 ggml_v1.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
-	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -c otherarch/ggml_v1.c -o ggml_v1.o
+	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -c $< -o $@
 
 ggml_v1_noavx2.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
-	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) -c otherarch/ggml_v1.c -o ggml_v1_noavx2.o
+	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) -c $< -o $@
 
 llama.o: llama.cpp llama.h llama_util.h
-	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common.o: examples/common.cpp examples/common.h
-	$(CXX) $(CXXFLAGS) -c examples/common.cpp -o common.o
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 expose.o: expose.cpp expose.h
-	$(CXX) $(CXXFLAGS) -c expose.cpp -o expose.o
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-llama_adapter.o: 
-	$(CXX) $(CXXFLAGS) -c llama_adapter.cpp -o llama_adapter.o
+llama_adapter.o: llama_adapter.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-gpttype_adapter.o: 
-	$(CXX) $(CXXFLAGS) -c gpttype_adapter.cpp -o gpttype_adapter.o
+gpttype_adapter.o: gpttype_adapter.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
 	rm -vf *.o main quantize_llama quantize_gpt2 quantize_gptj quantize-stats perplexity embedding benchmark-q4_0-matmult main.exe quantize_llama.exe quantize_gptj.exe quantize_gpt2.exe koboldcpp.dll koboldcpp_openblas.dll koboldcpp_noavx2.dll koboldcpp_openblas_noavx2.dll koboldcpp_clblast.dll gptj.exe gpt2.exe
 
 main: examples/main/main.cpp ggml.o llama.o common.o
-	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
 
-llamalib: ggml.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o
-	$(CXX) $(CXXFLAGS)  ggml.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o -shared -o koboldcpp.dll $(LDFLAGS)
+koboldcpp.dll: ggml.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o
+	$(CXX) $(CXXFLAGS)  $^ -shared -o $@ $(LDFLAGS)
 
-llamalib_openblas: ggml_openblas.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o 
+koboldcpp_openblas.dll: ggml_openblas.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o 
 	$(OPENBLAS_BUILD)
-
-llamalib_noavx2: ggml_noavx2.o ggml_v1_noavx2.o expose.o common.o llama_adapter.o gpttype_adapter.o 
+	
+koboldcpp_noavx2.dll: ggml_noavx2.o ggml_v1_noavx2.o expose.o common.o llama_adapter.o gpttype_adapter.o 
 	$(NOAVX2_BUILD)
 
-llamalib_openblas_noavx2: ggml_openblas_noavx2.o ggml_v1_noavx2.o expose.o common.o llama_adapter.o gpttype_adapter.o 
+koboldcpp_openblas_noavx2.dll: ggml_openblas_noavx2.o ggml_v1_noavx2.o expose.o common.o llama_adapter.o gpttype_adapter.o 
 	$(OPENBLAS_NOAVX2_BUILD)
 
-llamalib_clblast: ggml_clblast.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o 
+koboldcpp_clblast.dll: ggml_clblast.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o 
 	$(CLBLAST_BUILD)
 	
 quantize_llama: examples/quantize/quantize.cpp ggml.o llama.o
-	$(CXX) $(CXXFLAGS) examples/quantize/quantize.cpp ggml.o llama.o -o quantize_llama $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 quantize-stats: examples/quantize-stats/quantize-stats.cpp ggml.o llama.o
-	$(CXX) $(CXXFLAGS) examples/quantize-stats/quantize-stats.cpp ggml.o llama.o -o quantize-stats $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-quantize_gptj: ggml.o llama.o
-	$(CXX) $(CXXFLAGS) otherarch/gptj_quantize.cpp ggml.o llama.o -o quantize_gptj $(LDFLAGS)
+quantize_gptj: ggml.o llama.o otherarch/gptj_quantize.cpp
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-quantize_gpt2: ggml.o llama.o
-	$(CXX) $(CXXFLAGS) otherarch/gpt2_quantize.cpp ggml.o llama.o -o quantize_gpt2 $(LDFLAGS)
+quantize_gpt2: ggml.o llama.o otherarch/gpt2_quantize.cpp
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o
-	$(CXX) $(CXXFLAGS) examples/perplexity/perplexity.cpp ggml.o llama.o common.o -o perplexity $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
-	$(CXX) $(CXXFLAGS) examples/embedding/embedding.cpp ggml.o llama.o common.o -o embedding $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 libllama.so: llama.o ggml.o
-	$(CXX) $(CXXFLAGS) -shared -fPIC -o libllama.so llama.o ggml.o $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
 #
 # Tests
 #
 
-benchmark: ggml.o
-	$(CXX) $(CXXFLAGS) examples/benchmark/benchmark-q4_0-matmult.c ggml.o -o benchmark-q4_0-matmult $(LDFLAGS)
+benchmark: examples/benchmark/benchmark-q4_0-matmult.c ggml.o
+	$(CXX) $(CXXFLAGS) $^ -o benchmark-q4_0-matmult $(LDFLAGS)
 	./benchmark-q4_0-matmult
 
 .PHONY: tests
