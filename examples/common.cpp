@@ -1,13 +1,14 @@
 #include "common.h"
 
 #include <cassert>
+#include <iostream>
 #include <cstring>
 #include <fstream>
 #include <string>
 #include <iterator>
 #include <algorithm>
 
-#elif defined(__APPLE__) && defined(__MACH__)
+#if defined(__APPLE__) && defined(__MACH__)
 #include <sys/types.h>
 #include <sys/sysctl.h>
 #endif
@@ -42,7 +43,6 @@ int32_t get_num_physical_cores() {
         }
     }
 #elif defined(__APPLE__) && defined(__MACH__)
-
     int32_t num_physical_cores;
     size_t len = sizeof(num_physical_cores);
     int result = sysctlbyname("hw.perflevel0.physicalcpu", &num_physical_cores, &len, NULL, 0);
@@ -62,11 +62,6 @@ int32_t get_num_physical_cores() {
 }
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
-    // Clip if not a valid number of threads
-    if (params.n_threads <= 0) {
-        params.n_threads = std::max(1, std::min(8, (int32_t) std::thread::hardware_concurrency()));
-    }
-
     bool invalid_param = false;
     std::string arg;
     gpt_params default_params;
@@ -227,6 +222,17 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
         gpt_print_usage(argc, argv, default_params);
         exit(1);
+    }
+
+    // Clip if not a valid number of threads
+    if (params.n_threads <= 0) {
+        int32_t physical_cores = get_num_physical_cores();
+        if (physical_cores > 4) {
+            std::cout << "\n\033[1;31mWARNING:\033[0m Defaulting to 4 threads. "
+                << "(detected " << physical_cores << " physical cores)" << std::endl
+                << "Adjust --threads based on your observed inference speed in ms/token." << std::endl << std::endl;
+        }
+        params.n_threads = std::max(1, std::min(4, physical_cores));
     }
 
     return true;
