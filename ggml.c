@@ -118,7 +118,16 @@ typedef void* thread_ret_t;
 #define GGML_ALIGNED_MALLOC(size)  _aligned_malloc(size, GGML_MEM_ALIGN)
 #define GGML_ALIGNED_FREE(ptr)     _aligned_free(ptr)
 #else
-#define GGML_ALIGNED_MALLOC(size)  aligned_alloc(GGML_MEM_ALIGN, size)
+inline static void* ggml_aligned_malloc(size_t size) {
+    void* aligned_memory = NULL;
+    int result = posix_memalign(&aligned_memory, GGML_MEM_ALIGN, size);
+    if (result != 0) {
+        // Handle allocation failure
+        return NULL;
+    }
+    return aligned_memory;
+}
+#define GGML_ALIGNED_MALLOC(size)  ggml_aligned_malloc(size)
 #define GGML_ALIGNED_FREE(ptr)     free(ptr)
 #endif
 
@@ -531,31 +540,31 @@ inline static float vaddvq_f32(float32x4_t v) {
     return vgetq_lane_f32(v, 0) + vgetq_lane_f32(v, 1) + vgetq_lane_f32(v, 2) + vgetq_lane_f32(v, 3);
 }
 
-inline float vminvq_f32(float32x4_t v) {
+float vminvq_f32(float32x4_t v) {
     return
         MIN(MIN(vgetq_lane_f32(v, 0), vgetq_lane_f32(v, 1)),
             MIN(vgetq_lane_f32(v, 2), vgetq_lane_f32(v, 3)));
 }
 
-inline float vmaxvq_f32(float32x4_t v) {
+float vmaxvq_f32(float32x4_t v) {
     return
         MAX(MAX(vgetq_lane_f32(v, 0), vgetq_lane_f32(v, 1)),
             MAX(vgetq_lane_f32(v, 2), vgetq_lane_f32(v, 3)));
 }
 
-inline int8x8_t vzip1_s8(int8x8_t a, int8x8_t b) {
+int8x8_t vzip1_s8(int8x8_t a, int8x8_t b) {
     return vget_low_s8(vcombine_s8(a, b));
 }
 
-inline int8x8_t vzip2_s8(int8x8_t a, int8x8_t b) {
+int8x8_t vzip2_s8(int8x8_t a, int8x8_t b) {
     return vget_high_s8(vcombine_s8(a, b));
 }
 
-inline uint8x8_t vzip1_u8(uint8x8_t a, uint8x8_t b) {
+uint8x8_t vzip1_u8(uint8x8_t a, uint8x8_t b) {
     return vget_low_u8(vcombine_u8(a, b));
 }
 
-inline uint8x8_t vzip2_u8(uint8x8_t a, uint8x8_t b) {
+uint8x8_t vzip2_u8(uint8x8_t a, uint8x8_t b) {
     return vget_high_u8(vcombine_u8(a, b));
 }
 
