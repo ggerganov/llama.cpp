@@ -1,6 +1,8 @@
 // Defines fileno on msys:
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#include <cstdint>
+#include <cstdio>
 #endif
 
 #include "llama_util.h"
@@ -1759,8 +1761,7 @@ int llama_model_quantize(
     }
 }
 
-int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lora, int n_threads) {
-    // TODO: refactor all of this after PR #801
+int llama_apply_lora_from_file_internal(struct llama_context * ctx, const char * path_lora, const char * path_base_model, int n_threads) {
     fprintf(stderr, "%s: applying lora adapter from '%s' - please wait ...\n", __func__, path_lora);
 
     auto & model = ctx->model;
@@ -1801,19 +1802,45 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
 
     // create a temporary ggml context to store the lora tensors
     // todo: calculate size from biggest possible tensor
-    std::vector<uint8_t> buf(1024ull * 1024ull * 1024ull);
+    std::vector<uint8_t> lora_buf(1024ull * 1024ull * 1024ull);
     struct ggml_init_params params;
-    params.mem_size   = buf.size();
-    params.mem_buffer = buf.data();
+    params.mem_size   = lora_buf.size();
+    params.mem_buffer = lora_buf.data();
     params.no_alloc   = false;
 
-    ggml_context* lora_ctx = ggml_init(params);
+    ggml_context * lora_ctx = ggml_init(params);
     std::unordered_map<std::string, struct ggml_tensor *> lora_tensors;
 
     // create a name -> tensor map of the model to accelerate lookups
     std::unordered_map<std::string, struct ggml_tensor*> model_tensors;
     for (auto & kv: model.tensors_by_name) {
         model_tensors.insert(kv);
+    }
+
+
+    // load base model
+    std::unique_ptr<llama_model_loader> model_loader;
+    ggml_context * base_ctx = NULL;
+    llama_buffer base_buf;
+    if (path_base_model) {
+        fprintf(stderr, "%s: loading base model from '%s'\n", __func__, path_base_model);
+        model_loader.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true, /*vocab_only*/ false));
+
+        size_t ctx_size, mmapped_size;
+        model_loader->calc_sizes(&ctx_size, &mmapped_size);
+        base_buf.resize(ctx_size);
+
+        ggml_init_params base_params;
+        base_params.mem_size   = base_buf.size;
+        base_params.mem_buffer = base_buf.addr;
+        base_params.no_alloc   = model_loader->use_mmap;
+
+        base_ctx = ggml_init(base_params);
+
+        model_loader->ggml_ctx = base_ctx;
+
+        // maybe this should in llama_model_loader
+        model_loader->mapping.reset(new llama_mmap(&model_loader->file_loaders.at(0)->file, false));
     }
 
     fprintf(stderr, "%s: ", __func__);
@@ -1892,13 +1919,31 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
         if (lora_tensors.find(base_name + ".loraA") != lora_tensors.end() &&
             lora_tensors.find(base_name + ".loraB") != lora_tensors.end()) {
 
-            ggml_tensor * tensor = model_tensors[base_name];
+            ggml_tensor * dest_t = model_tensors[base_name];
+            ggml_tensor * base_t;
+            if (model_loader) {
+                // load from base model
+                if (model_loader->tensors_map.name_to_idx.find(base_name) == model_loader->tensors_map.name_to_idx.end()) {
+                    fprintf(stderr, "%s: error: tensor '%s' not found in base model\n", __func__, base_name.c_str());
+                    return 1;
+                }
+                size_t idx = model_loader->tensors_map.name_to_idx[base_name];
+                llama_load_tensor & lt = model_loader->tensors_map.tensors[idx];
+                base_t = model_loader->get_tensor(base_name, { (uint32_t)dest_t->ne[0], (uint32_t)dest_t->ne[1] });
+                lt.data = (uint8_t *) lt.ggml_tensor->data;
+                model_loader->load_data_for(lt);
+                lt.ggml_tensor->data = lt.data;
+            }
+            else {
+                base_t = dest_t;
+            }
+
             ggml_tensor * loraA = lora_tensors[base_name + ".loraA"];
             ggml_tensor * loraB = lora_tensors[base_name + ".loraB"];
 
-            if (tensor->ne[0] != loraA->ne[1] || tensor->ne[1] != loraB->ne[1]) {
+            if (base_t->ne[0] != loraA->ne[1] || base_t->ne[1] != loraB->ne[1]) {
                 fprintf(stderr, "%s: incompatible tensor dimensions (%" PRId64 " and %" PRId64 ");"
-                               " are you sure that this adapter is for this model?\n", __func__, tensor->ne[0], loraA->ne[1]);
+                               " are you sure that this adapter is for this model?\n", __func__, base_t->ne[0], loraA->ne[1]);
                 return 1;
             }
 
@@ -1910,14 +1955,14 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
                 BA = ggml_scale(lora_ctx, BA, scale_tensor);
             }
 
-            //printf("%s: (B)(%d %d %d %d) x (A)(%d %d %d %d) => (BA)(%d %d %d %d) + (T)(%d %d %d %d)\n",
-            //    base_name.c_str(),
-            //    (int)loraB->ne[0],  (int)loraB->ne[1],  (int)loraB->ne[2],  (int)loraB->ne[3],
-            //    (int)loraA->ne[0],  (int)loraA->ne[1],  (int)loraA->ne[2],  (int)loraA->ne[3],
-            //    (int)BA->ne[0],     (int)BA->ne[1],     (int)BA->ne[2],     (int)BA->ne[3],
-            //    (int)tensor->ne[0], (int)tensor->ne[1], (int)tensor->ne[2], (int)tensor->ne[3]
-            //);
-            ggml_tensor * r = ggml_add_inplace(lora_ctx, tensor, BA);
+            ggml_tensor * r;
+            if (base_t == dest_t) {
+                r = ggml_add_inplace(lora_ctx, dest_t, BA);
+            }
+            else {
+                r = ggml_add(lora_ctx, base_t, BA);
+                r = ggml_cpy(lora_ctx, r, dest_t);
+            }
 
             struct ggml_cgraph gf = ggml_build_forward(r);
             gf.n_threads = n_threads;
@@ -1934,12 +1979,25 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
         }
     }
 
+    // TODO: this should be in a destructor, it will leak on failure
     ggml_free(lora_ctx);
+    if (base_ctx) {
+        ggml_free(base_ctx);
+    }
 
     const int64_t t_lora_us = ggml_time_us() - t_start_lora_us;
     fprintf(stderr, " done (%.2f ms)\n", t_lora_us / 1000.0);
 
     return 0;
+}
+
+int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lora, const char * path_base_model, int n_threads) {
+    try {
+        return llama_apply_lora_from_file_internal(ctx, path_lora, path_base_model, n_threads);
+    } catch (const std::string & err) {
+        fprintf(stderr, "%s: failed to apply lora adapter: %s\n", __func__, err.c_str());
+        return 1;
+    }
 }
 
 // Returns the KV cache that will contain the context for the

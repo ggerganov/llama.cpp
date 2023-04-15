@@ -5461,6 +5461,27 @@ static void ggml_compute_forward_dup_f16(
                         }
                     }
                 }
+            } else if (dst->type == GGML_TYPE_Q4_0 || dst->type == GGML_TYPE_Q4_1) {
+                quantize_row_q_t const quantize_row_q = quantize_fns[dst->type].quantize_row_q;
+                size_t id = 0;
+                uint8_t * dst_ptr = (uint8_t *) dst->data;
+                size_t dst_row_size = nb0 * (ne00 / GGML_BLCK_SIZE[dst->type]);
+                // todo: use work buffer
+                float * src0_f32 = (float *) alloca(ne00 * sizeof(float));
+
+                for (int i03 = 0; i03 < ne03; i03++) {
+                    for (int i02 = 0; i02 < ne02; i02++) {
+                        for (int i01 = 0; i01 < ne01; i01++) {
+                            const ggml_fp16_t * src0_ptr = (ggml_fp16_t *) ((char *) src0->data + i01*nb01 + i02*nb02 + i03*nb03);
+                            // convert to f32 and quantize
+                            for (int i00 = 0; i00 < ne00; i00++) {
+                                src0_f32[i00] = GGML_FP16_TO_FP32(src0_ptr[i00]);
+                            }
+                            quantize_row_q(src0_f32, dst_ptr + id, ne00);
+                            id += dst_row_size;
+                        }
+                    }
+                }
             } else {
                 GGML_ASSERT(false); // TODO: implement
             }
@@ -5650,6 +5671,21 @@ static void ggml_compute_forward_dup_f32(
                                 dst_ptr[id] = GGML_FP32_TO_FP16(*src0_ptr);
                                 id++;
                             }
+                        }
+                    }
+                }
+            } else if (dst->type == GGML_TYPE_Q4_0 || dst->type == GGML_TYPE_Q4_1) {
+                quantize_row_q_t const quantize_row_q = quantize_fns[dst->type].quantize_row_q;
+                size_t id = 0;
+                uint8_t * dst_ptr = (uint8_t *) dst->data;
+                size_t dst_row_size = nb0 * (ne00 / GGML_BLCK_SIZE[dst->type]);
+
+                for (int i03 = 0; i03 < ne03; i03++) {
+                    for (int i02 = 0; i02 < ne02; i02++) {
+                        for (int i01 = 0; i01 < ne01; i01++) {
+                            const float * src0_ptr = (float *) ((char *) src0->data + i01*nb01 + i02*nb02 + i03*nb03);
+                            quantize_row_q(src0_ptr, dst_ptr + id, ne00);
+                            id += dst_row_size;
                         }
                     }
                 }
