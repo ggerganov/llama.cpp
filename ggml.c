@@ -6528,7 +6528,8 @@ static void ggml_compute_forward_mul_mat_f32(
                         ne11, ne01, ne10,
                         1.0f,    y, ne10,
                                  x, ne00,
-                        0.0f,    d, ne01);
+                        0.0f,    d, ne01,
+                        params->type);
             }
         }
 
@@ -6700,7 +6701,8 @@ static void ggml_compute_forward_mul_mat_f16_f32(
                         ne11, ne01, ne10,
                         1.0f,    y, ne10,
                                  x, ne00,
-                        0.0f,    d, ne01);
+                        0.0f,    d, ne01,
+                        params->type);
             }
         }
 
@@ -6895,6 +6897,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
 
         for (int64_t i03 = 0; i03 < ne03; i03++) {
             for (int64_t i02 = 0; i02 < ne02; i02++) {
+#ifndef GGML_USE_CLBLAST
                 {
                     size_t id = 0;
                     for (int64_t i01 = 0; i01 < ne01; ++i01) {
@@ -6904,6 +6907,9 @@ static void ggml_compute_forward_mul_mat_q_f32(
                 }
 
                 const float * x = wdata;
+#else
+                const void* x = src0->data + i03*nb03 + i02*nb02;
+#endif
                 const float * y = (float *) ((char *) src1->data + i02*nb12 + i03*nb13);
 
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
@@ -6913,7 +6919,8 @@ static void ggml_compute_forward_mul_mat_q_f32(
                         ne11, ne01, ne10,
                         1.0f,    y, ne10,
                                  x, ne00,
-                        0.0f,    d, ne01);
+                        0.0f,    d, ne01,
+                        type);
             }
         }
 
