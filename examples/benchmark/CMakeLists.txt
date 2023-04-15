@@ -1,4 +1,4 @@
 set(TARGET benchmark)
-add_executable(${TARGET} benchmark-q4_0-matmul.cpp)
+add_executable(${TARGET} benchmark-q4_0-matmult.c)
 target_link_libraries(${TARGET} PRIVATE common llama ${CMAKE_THREAD_LIBS_INIT})
 target_compile_features(${TARGET} PRIVATE cxx_std_11)
