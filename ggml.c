@@ -437,13 +437,13 @@ static const size_t CACHE_LINE_SIZE_F32 = CACHE_LINE_SIZE/sizeof(float);
 // AVX routine provided by GH user jon-chuang
 // ref: https://github.com/ggerganov/llama.cpp/issues/956#issuecomment-1508090551
 
-#if __AVX2__ || __AVX512F__
+#if false && __AVX2__ || __AVX512F__
 
 // Given A = K X M, B = K X N, compute one row of C = A^TB
 void ggml_mul_row_f32_tall_skinny(const float * A, const float * B, float * C, int M, int N, int K) {
+    alignas(32) float res_vec[8];
     for (int j = 0; j < N; j += 8) { // Process 8 elements of C's row at a time - 256 / size_of(float)
         __m256 c_vec = _mm256_setzero_ps(); // Initialize the result vector to all zeros
-
         for (int k = 0; k < K; ++k) {
             __m256 a = _mm256_broadcast_ss(&A[k * M]); // Broadcast the k-th element of the row of A^T
             __m256 b_vec = _mm256_load_ps(&B[j + k * N]); // Load the j/8-th segment of the k-th row of B^T (corresponding to the k-th column of B)
@@ -451,7 +451,11 @@ void ggml_mul_row_f32_tall_skinny(const float * A, const float * B, float * C, i
         }
 
         // Store the result in the corresponding row of C
-        _mm256_store_ps(&C[j], c_vec);
+        _mm256_store_ps(&res_vec, c_vec);
+
+        for (int k = 0; k < 8; ++k) {
+            C[j+k] = res_vec[k];
+        }
     }
 
     // Handle the remainder
@@ -6702,7 +6706,9 @@ static void ggml_compute_forward_mul_mat_f32(
     assert(ne3 == ne03);
 
 #if defined(__AVX2__) || defined(__AVX__)
-    if (ne00 <= 32) {
+    if (ggml_cpu_has_avx2() && ne00 <= 48 || ne00 <= 32) {
+        // Handle tall and skinny matrices
+        // TODO(jon-chuang): Also check that we only handle 2D matrices?
         assert(ne00 == ne10);
         if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
             return;

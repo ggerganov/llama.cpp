@@ -176,7 +176,7 @@ libllama.so: llama.o ggml.o
 # Tests
 #
 
-benchmark: examples/benchmark/benchmark-q4_0-matmult.c ggml.o
+benchmark: examples/benchmark/benchmark-q4_0-matmult.c ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) $^ -o benchmark-q4_0-matmult $(LDFLAGS)
 	./benchmark-q4_0-matmult
 

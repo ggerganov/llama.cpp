@@ -8,6 +8,7 @@
 
 #include <locale.h>
 #include "ggml.h"
+#include "llama.h"
 #include <assert.h>
 #include <math.h>
 #include <cstring>
@@ -45,7 +46,7 @@ float tensor_sum_elements(struct ggml_tensor * tensor) {
 
 #define TENSOR_TYPE_AS_STR(TYPE) TYPE == GGML_TYPE_F32 ? "FP32" : TYPE == GGML_TYPE_F16 ? "FP16" : TYPE == GGML_TYPE_Q4_0 ? "Q4_0" : TYPE == GGML_TYPE_Q4_1 ? "Q4_1" : "UNKNOWN"
 
-#define TENSOR_DUMP(TENSOR) printf("%15s: type = %i (%5s) ne = %5d x %5d x %5d, nb = (%5li, %5li, %5li) - ", #TENSOR, \
+#define TENSOR_DUMP(TENSOR) printf("%15s: type = %i (%5s) ne = %5ld x %5ld x %5ld, nb = (%5li, %5li, %5li) - ", #TENSOR, \
         TENSOR->type,TENSOR_TYPE_AS_STR(TENSOR->type),\
         TENSOR->ne[0], TENSOR->ne[1], TENSOR->ne[2], TENSOR->nb[0], TENSOR->nb[1], TENSOR->nb[2]); \
     { float sum = tensor_sum_elements(TENSOR); printf("Sum of tensor %s is %6.2f\n",#TENSOR, sum); }
@@ -170,12 +171,40 @@ int main(int argc, char ** argv)  {
     struct ggml_cgraph gf = ggml_build_forward(m11xm2);
 
     gf.n_threads=benchmark_params.n_threads;
-    printf("cgraph->n_threads=%i\n",gf.n_threads);
+    fprintf(stderr, "system_info: n_threads = %d | %s\n",
+            benchmark_params.n_threads, llama_print_system_info());
 
     TENSOR_DUMP(m11);
     TENSOR_DUMP(m2);
 
     ggml_graph_compute(ctx, &gf);
+    {
+        const int dimx = sizex;
+        const int dimy = sizey;
+        const int dimz = sizez;
+        long long int flops_per_dot_product = dimy + dimy;
+        long long int flops_per_matrix = flops_per_dot_product * dimx * dimz; ;
+        printf("Matrix Multiplication of (%i,%i,%i) x (%i,%i,%i) - about %6.2f gFLOPS\n\n", sizex, sizey, 1, sizex, sizez, 1, 1.0f*flops_per_matrix / 1000 / 1000 / 1000);
+
+        printf("Iteration;NThreads; SizeX; SizeY; SizeZ; Required_FLOPS; Elapsed_u_Seconds; FLOPS_per_u_Second\n");
+        printf("==============================================================================================\n");
+
+        for (int i=0;i<benchmark_params.n_iterations ;i++) {
+
+            long long int start = ggml_time_us();
+            //printf("Running ggml_graph_compute\n");
+            ggml_graph_compute(ctx, &gf);
+            long long int stop = ggml_time_us();
+            long long int usec = stop-start;
+            float sec = usec/1000000;
+            float flops_per_usec = (1.0f*flops_per_matrix)/usec;
+            printf("%9i;%8i;%6i;%6i;%6i;%15lli;%18lli;%19.2f\n",
+                i,
+                gf.n_threads,
+                sizex, sizey, sizez, flops_per_matrix,
+                usec,flops_per_usec);
+        }
+    }
 
     TENSOR_DUMP(gf.nodes[0]);
 
@@ -217,7 +246,7 @@ int main(int argc, char ** argv)  {
     const int dimz = sizez;
     long long int flops_per_dot_product = dimy + dimy;
     long long int flops_per_matrix = flops_per_dot_product * dimx * dimz; ;
-    printf("Matrix Multiplication of (%i,%i,%i) x (%i,%i,%i) - aboout %6.2f gFLOPS\n\n", sizex, sizey, 1, sizex, sizez, 1, 1.0f*flops_per_matrix / 1000 / 1000 / 1000);
+    printf("Matrix Multiplication of (%i,%i,%i) x (%i,%i,%i) - about %6.2f gFLOPS\n\n", sizex, sizey, 1, sizex, sizez, 1, 1.0f*flops_per_matrix / 1000 / 1000 / 1000);
 
 
     // Let's use the F32 result from above as a reference for the q4_0 multiplication
