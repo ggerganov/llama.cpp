@@ -5,7 +5,7 @@
 #include <map>
 #include <vector>
 
-std::map<std::string, std::vector<llama_token>>& k_tests()
+static const std::map<std::string, std::vector<llama_token>> & k_tests()
 {
     static std::map<std::string, std::vector<llama_token>> _k_tests = {
         { "Hello World",        { 1,  10994,   2787, }, },

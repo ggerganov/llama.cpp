@@ -42,7 +42,7 @@ static const size_t MB = 1024*1024;
 // TODO: dynamically determine these sizes
 //       needs modifications in ggml
 
-std::map<e_model, size_t>& MEM_REQ_SCRATCH0()
+static const std::map<e_model, size_t> & MEM_REQ_SCRATCH0()
 {
     static std::map<e_model, size_t> _MEM_REQ_SCRATCH0 = {
         { MODEL_7B,    512ull * MB },
@@ -53,7 +53,7 @@ std::map<e_model, size_t>& MEM_REQ_SCRATCH0()
     return _MEM_REQ_SCRATCH0;
 }
 
-std::map<e_model, size_t>& MEM_REQ_SCRATCH1()
+static const std::map<e_model, size_t> & MEM_REQ_SCRATCH1()
 {
     static std::map<e_model, size_t> _MEM_REQ_SCRATCH1 = {
         { MODEL_7B,    512ull * MB },
@@ -65,7 +65,7 @@ std::map<e_model, size_t>& MEM_REQ_SCRATCH1()
 };
 
 // 2*n_embd*n_ctx*n_layer*sizeof(float16)
-std::map<e_model, size_t>& MEM_REQ_KV_SELF()
+static const std::map<e_model, size_t> & MEM_REQ_KV_SELF()
 {
     static std::map<e_model, size_t> _MEM_REQ_KV_SELF = {
         { MODEL_7B,   1026ull * MB },
@@ -78,7 +78,7 @@ std::map<e_model, size_t>& MEM_REQ_KV_SELF()
 
 // this is mostly needed for temporary mul_mat buffers to dequantize the data
 // not actually needed if BLAS is disabled
-std::map<e_model, size_t>& MEM_REQ_EVAL()
+static const std::map<e_model, size_t> & MEM_REQ_EVAL()
 {
     static std::map<e_model, size_t> _MEM_REQ_EVAL = {
         { MODEL_7B,   768ull * MB },
