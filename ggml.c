@@ -2373,11 +2373,11 @@ static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void * rest
             const uint8_t v0 = p0[j];
             const uint8_t v1 = p1[j];
 
-            const int8_t i0 = (int8_t) (v0 & 0xf) - 8;
-            const int8_t i1 = (int8_t) (v0 >> 4)  - 8;
+            const int i0 = (v0 & 0xf) - 8;
+            const int i1 = (v0 >> 4)  - 8;
 
-            const int8_t i2 = (int8_t) (v1 & 0xf) - 8;
-            const int8_t i3 = (int8_t) (v1 >> 4)  - 8;
+            const int i2 = (v1 & 0xf) - 8;
+            const int i3 = (v1 >> 4)  - 8;
 
             sumi += i0*i2 + i1*i3;
         }
