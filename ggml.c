@@ -5466,8 +5466,7 @@ static void ggml_compute_forward_dup_f16(
                 size_t id = 0;
                 uint8_t * dst_ptr = (uint8_t *) dst->data;
                 size_t dst_row_size = nb0 * (ne00 / GGML_BLCK_SIZE[dst->type]);
-                // todo: use work buffer
-                float * src0_f32 = (float *) alloca(ne00 * sizeof(float));
+                float * src0_f32 = (float *) params->wdata;
 
                 for (int i03 = 0; i03 < ne03; i03++) {
                     for (int i02 = 0; i02 < ne02; i02++) {
@@ -10227,9 +10226,17 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
             struct ggml_tensor * node = cgraph->nodes[i];
 
             switch (node->op) {
+                case GGML_OP_CPY:
                 case GGML_OP_DUP:
                     {
                         node->n_tasks = 1;
+
+                        size_t cur = 0;
+                        if (node->type == GGML_TYPE_Q4_0 || node->type == GGML_TYPE_Q4_1) {
+                            cur = GGML_TYPE_SIZE[GGML_TYPE_F32] * node->ne[0];
+                        }
+
+                        work_size = MAX(work_size, cur);
                     } break;
                 case GGML_OP_ADD:
                     {
@@ -10322,7 +10329,6 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                     {
                         node->n_tasks = n_threads;
                     } break;
-                case GGML_OP_CPY:
                 case GGML_OP_CONT:
                 case GGML_OP_RESHAPE:
                 case GGML_OP_VIEW:
