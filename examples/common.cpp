@@ -228,7 +228,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     if (params.n_threads <= 0) {
         int32_t physical_cores = get_num_physical_cores();
         if (physical_cores > 4) {
-            std::cout << "\n\033[1;31mWARNING:\033[0m Defaulting to 4 threads. "
+            std::cerr << "\nWARNING: Defaulting to 4 threads. "
                 << "(detected " << physical_cores << " physical cores)" << std::endl
                 << "Adjust --threads based on your observed inference speed in ms/token." << std::endl << std::endl;
         }
