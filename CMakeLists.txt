@@ -120,6 +120,21 @@ if (LLAMA_OPENBLAS)
         add_compile_definitions(GGML_USE_OPENBLAS)
         add_link_options(${BLAS_LIBRARIES})
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} openblas)
+
+        # find header file
+        set(OPENBLAS_INCLUDE_SEARCH_PATHS
+            /usr/include
+            /usr/include/openblas
+            /usr/include/openblas-base
+            /usr/local/include
+            /usr/local/include/openblas
+            /usr/local/include/openblas-base
+            /opt/OpenBLAS/include
+            $ENV{OpenBLAS_HOME}
+            $ENV{OpenBLAS_HOME}/include
+            )
+        find_path(OPENBLAS_INC NAMES cblas.h PATHS ${OPENBLAS_INCLUDE_SEARCH_PATHS})
+        add_compile_options(-I${OPENBLAS_INC})
     else()
         message(WARNING "OpenBLAS not found")
     endif()
