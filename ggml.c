@@ -6760,7 +6760,7 @@ static void ggml_compute_forward_mul_mat_f32(
             }
         }
 
-        // printf("CBLAS F32 = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne01, ne11, ne02, ne03);
+        //printf("CBLAS F32 = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne01, ne11, ne02, ne03);
 
         return;
     }
