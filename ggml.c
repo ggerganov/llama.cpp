@@ -7322,7 +7322,7 @@ static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
         .dequantize_row_q         = dequantize_row_q4_1,
         .quantize_row_q           = quantize_row_q4_1,
         .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_1_reference,
-        .quantize_row_q_dot       = quantize_row_q8_0,
+        .quantize_row_q_dot       = quantize_row_q4_1,
         .vec_dot_q                = ggml_vec_dot_q4_1,
     },
     // TODO: GGML_TYPE_Q8_0
