@@ -570,41 +570,41 @@ uint8x8_t vzip2_u8(uint8x8_t a, uint8x8_t b) {
 #endif
 
 
-#define QK40 32
+#define QK4_0 32
 typedef struct {
     float   d;          // delta
-    uint8_t qs[QK40/2]; // nibbles / quants
+    uint8_t qs[QK4_0 / 2];  // nibbles / quants
 } block_q4_0;
-static_assert(sizeof(block_q4_0) == sizeof(float) + QK40 / 2, "wrong q4_0 block size/padding");
+static_assert(sizeof(block_q4_0) == sizeof(float) + QK4_0 / 2, "wrong q4_0 block size/padding");
 
-#define QK41 32
+#define QK4_1 32
 typedef struct {
     float   d;          // delta
     float   m;          // min
-    uint8_t qs[QK41/2]; // nibbles / quants
+    uint8_t qs[QK4_1 / 2];  // nibbles / quants
 } block_q4_1;
-static_assert(sizeof(block_q4_1) == sizeof(float) * 2 + QK41 / 2, "wrong q4_1 block size/padding");
+static_assert(sizeof(block_q4_1) == sizeof(float) * 2 + QK4_1 / 2, "wrong q4_1 block size/padding");
 
-#define QK80 32
+#define QK8_0 32
 typedef struct {
     float   d;          // delta
-    int8_t  qs[QK80];   // quants
+    int8_t  qs[QK8_0];  // quants
 } block_q8_0;
-static_assert(sizeof(block_q8_0) == sizeof(float) + QK80, "wrong q8_0 block size/padding");
+static_assert(sizeof(block_q8_0) == sizeof(float) + QK8_0, "wrong q8_0 block size/padding");
 
 
 // reference implementation for deterministic creation of model files
 static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * restrict y, int k) {
-    assert(k % QK40 == 0);
-    const int nb = k / QK40;
+    assert(k % QK4_0 == 0);
+    const int nb = k / QK4_0;
 
-    uint8_t pp[QK40/2];
+    uint8_t pp[QK4_0/2];
 
     for (int i = 0; i < nb; i++) {
         float amax = 0.0f; // absolute max
 
-        for (int l = 0; l < QK40; l++) {
-            const float v = x[i*QK40 + l];
+        for (int l = 0; l < QK4_0; l++) {
+            const float v = x[i*QK4_0 + l];
             amax = MAX(amax, fabsf(v));
         }
 
@@ -613,9 +613,9 @@ static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * r
 
         y[i].d = d;
 
-        for (int l = 0; l < QK40; l += 2) {
-            const float v0 = x[i*QK40 + l + 0]*id;
-            const float v1 = x[i*QK40 + l + 1]*id;
+        for (int l = 0; l < QK4_0; l += 2) {
+            const float v0 = x[i*QK4_0 + l + 0]*id;
+            const float v1 = x[i*QK4_0 + l + 1]*id;
 
             const uint8_t vi0 = (int8_t)roundf(v0) + 8;
             const uint8_t vi1 = (int8_t)roundf(v1) + 8;
@@ -631,8 +631,8 @@ static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * r
 }
 
 static void quantize_row_q4_0(const float * restrict x, void * restrict vy, int k) {
-    assert(k % QK40 == 0);
-    const int nb = k / QK40;
+    assert(k % QK4_0 == 0);
+    const int nb = k / QK4_0;
 
     block_q4_0 * restrict y = vy;
 
@@ -882,19 +882,19 @@ static void quantize_row_q4_0(const float * restrict x, void * restrict vy, int 
 }
 
 static void quantize_row_q4_1_reference(const float * restrict x, void * restrict vy, int k) {
-    assert(k % QK41 == 0);
-    const int nb = k / QK41;
+    assert(k % QK4_1 == 0);
+    const int nb = k / QK4_1;
 
     block_q4_1 * restrict y = vy;
 
-    uint8_t pp[QK41/2];
+    uint8_t pp[QK4_1/2];
 
     for (int i = 0; i < nb; i++) {
         float min = FLT_MAX;
         float max = -FLT_MAX;
 
-        for (int l = 0; l < QK41; l++) {
-            const float v = x[i*QK41 + l];
+        for (int l = 0; l < QK4_1; l++) {
+            const float v = x[i*QK4_1 + l];
             if (v < min) min = v;
             if (v > max) max = v;
         }
@@ -905,9 +905,9 @@ static void quantize_row_q4_1_reference(const float * restrict x, void * restric
         y[i].d = d;
         y[i].m = min;
 
-        for (int l = 0; l < QK41; l += 2) {
-            const float v0 = (x[i*QK41 + l + 0] - min)*id;
-            const float v1 = (x[i*QK41 + l + 1] - min)*id;
+        for (int l = 0; l < QK4_1; l += 2) {
+            const float v0 = (x[i*QK4_1 + l + 0] - min)*id;
+            const float v1 = (x[i*QK4_1 + l + 1] - min)*id;
 
             const uint8_t vi0 = roundf(v0);
             const uint8_t vi1 = roundf(v1);
@@ -923,9 +923,9 @@ static void quantize_row_q4_1_reference(const float * restrict x, void * restric
 }
 
 static void quantize_row_q4_1(const float * restrict x, void * restrict vy, int k) {
-    assert(k % QK41 == 0);
+    assert(k % QK4_1 == 0);
 
-    const int nb = k / QK41;
+    const int nb = k / QK4_1;
 
     block_q4_1 * restrict y = vy;
 
@@ -1009,7 +1009,7 @@ static void quantize_row_q4_1(const float * restrict x, void * restrict vy, int 
         float32x4_t minv[8];
         float32x4_t maxv[8];
 
-        for (int l = 0; l < 8; l++) srcv[l] = vld1q_f32(x + i*QK41 + 4*l);
+        for (int l = 0; l < 8; l++) srcv[l] = vld1q_f32(x + i*QK4_1 + 4*l);
 
         for (int l = 0; l < 4; l++) minv[2*l] = vminq_f32(srcv[2*l], srcv[2*l + 1]);
         for (int l = 0; l < 2; l++) minv[4*l] = vminq_f32(minv[4*l], minv[4*l + 2]);
@@ -1047,14 +1047,14 @@ static void quantize_row_q4_1(const float * restrict x, void * restrict vy, int 
 
 // reference implementation for deterministic creation of model files
 static void quantize_row_q8_0_reference(const float * restrict x, block_q8_0 * restrict y, int k) {
-    assert(k % QK80 == 0);
-    const int nb = k / QK80;
+    assert(k % QK8_0 == 0);
+    const int nb = k / QK8_0;
 
     for (int i = 0; i < nb; i++) {
         float amax = 0.0f; // absolute max
 
-        for (int l = 0; l < QK80; l++) {
-            const float v = x[i*QK80 + l];
+        for (int l = 0; l < QK8_0; l++) {
+            const float v = x[i*QK8_0 + l];
             amax = MAX(amax, fabsf(v));
         }
 
@@ -1063,16 +1063,16 @@ static void quantize_row_q8_0_reference(const float * restrict x, block_q8_0 * r
 
         y[i].d = d;
 
-        for (int l = 0; l < QK80; ++l) {
-            const float   v  = x[i*QK80 + l]*id;
+        for (int l = 0; l < QK8_0; ++l) {
+            const float   v  = x[i*QK8_0 + l]*id;
             y[i].qs[l] = roundf(v);
         }
     }
 }
 
 static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int k) {
-    assert(k % QK80 == 0);
-    const int nb = k / QK80;
+    assert(k % QK8_0 == 0);
+    const int nb = k / QK8_0;
 
     block_q8_0 * restrict y = vy;
 
@@ -1197,8 +1197,8 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
 }
 
 static void dequantize_row_q4_0(const void * restrict vx, float * restrict y, int k) {
-    assert(k % QK40 == 0);
-    const int nb = k / QK40;
+    assert(k % QK4_0 == 0);
+    const int nb = k / QK4_0;
 
     const block_q4_0 * restrict x = vx;
 
@@ -1209,7 +1209,7 @@ static void dequantize_row_q4_0(const void * restrict vx, float * restrict y, in
 
         const uint8_t * restrict pp = x[i].qs;
 
-        for (int l = 0; l < QK40; l += 32) {
+        for (int l = 0; l < QK4_0; l += 32) {
             // Load 32x4-bit integers into 32x8-bit integers
             __m256i vx8 = bytesFromNibbles(pp+l/2);
 
@@ -1231,7 +1231,7 @@ static void dequantize_row_q4_0(const void * restrict vx, float * restrict y, in
             // Scale and store
             for (int j = 0; j < 4; j++) {
                 const __m256 result = _mm256_mul_ps(vf[j], d_v);
-                _mm256_storeu_ps(y + i * QK40 + l + j*8, result);
+                _mm256_storeu_ps(y + i * QK4_0 + l + j*8, result);
             }
         }
     }
@@ -1241,7 +1241,7 @@ static void dequantize_row_q4_0(const void * restrict vx, float * restrict y, in
 
         const uint8_t * restrict pp = x[i].qs;
 
-        for (int l = 0; l < QK40; l += 16) {
+        for (int l = 0; l < QK4_0; l += 16) {
             // Load 16x4-bit integers into 8x8-bit integers
             const uint8x8_t v8 = vld1_u8(pp + l/2);
 
@@ -1280,10 +1280,10 @@ static void dequantize_row_q4_0(const void * restrict vx, float * restrict y, in
             const float32x4_t r3 = vmulq_f32(vf_3, vd);
 
             // Store
-            vst1q_f32(y + i*QK40 + l +  0, r0);
-            vst1q_f32(y + i*QK40 + l +  4, r1);
-            vst1q_f32(y + i*QK40 + l +  8, r2);
-            vst1q_f32(y + i*QK40 + l + 12, r3);
+            vst1q_f32(y + i*QK4_0 + l +  0, r0);
+            vst1q_f32(y + i*QK4_0 + l +  4, r1);
+            vst1q_f32(y + i*QK4_0 + l +  8, r2);
+            vst1q_f32(y + i*QK4_0 + l + 12, r3);
         }
     }
 #else
@@ -1293,7 +1293,7 @@ static void dequantize_row_q4_0(const void * restrict vx, float * restrict y, in
 
         const uint8_t * restrict pp = x[i].qs;
 
-        for (int l = 0; l < QK40; l += 2) {
+        for (int l = 0; l < QK4_0; l += 2) {
             const uint8_t vi = pp[l/2];
 
             const int8_t vi0 = vi & 0xf;
@@ -1304,19 +1304,19 @@ static void dequantize_row_q4_0(const void * restrict vx, float * restrict y, in
 
             //printf("d = %f, vi = %d, vi0 = %d, vi1 = %d, v0 = %f, v1 = %f\n", d, vi, vi0, vi1, v0, v1);
 
-            y[i*QK40 + l + 0] = v0;
-            y[i*QK40 + l + 1] = v1;
+            y[i*QK4_0 + l + 0] = v0;
+            y[i*QK4_0 + l + 1] = v1;
 
-            assert(!isnan(y[i*QK40 + l + 0]));
-            assert(!isnan(y[i*QK40 + l + 1]));
+            assert(!isnan(y[i*QK4_0 + l + 0]));
+            assert(!isnan(y[i*QK4_0 + l + 1]));
         }
     }
 #endif
 }
 
 static void dequantize_row_q4_1(const void * restrict vx, float * restrict y, int k) {
-    assert(k % QK41 == 0);
-    const int nb = k / QK41;
+    assert(k % QK4_1 == 0);
+    const int nb = k / QK4_1;
 
     const block_q4_1 * restrict x = vx;
 
@@ -1327,7 +1327,7 @@ static void dequantize_row_q4_1(const void * restrict vx, float * restrict y, in
 
         const uint8_t * restrict pp = x[i].qs;
 
-        for (int l = 0; l < QK41; l += 32) {
+        for (int l = 0; l < QK4_1; l += 32) {
             // Load 32x4-bit integers into 32x8-bit integers
             __m256i vx8 = bytesFromNibbles(pp+l/2);
 
@@ -1346,7 +1346,7 @@ static void dequantize_row_q4_1(const void * restrict vx, float * restrict y, in
             // Scale, add m and store
             for (int j = 0; j < 4; j++) {
                 const __m256 result = _mm256_add_ps(_mm256_mul_ps(vf[j], d_v), d_m);
-                _mm256_storeu_ps(y + i * QK41 + l + j*8, result);
+                _mm256_storeu_ps(y + i * QK4_1 + l + j*8, result);
             }
         }
     }
@@ -1357,7 +1357,7 @@ static void dequantize_row_q4_1(const void * restrict vx, float * restrict y, in
 
         const uint8_t * restrict pp = x[i].qs;
 
-        for (int l = 0; l < QK41; l += 16) {
+        for (int l = 0; l < QK4_1; l += 16) {
             // Load 16x4-bit integers into 8x8-bit integers
             const uint8x8_t v8 = vld1_u8(pp + l/2);
 
@@ -1388,10 +1388,10 @@ static void dequantize_row_q4_1(const void * restrict vx, float * restrict y, in
             const float32x4_t r3 = vmlaq_f32(vm, vf_3, vd);
 
             // Store
-            vst1q_f32(y + i*QK41 + l +  0, r0);
-            vst1q_f32(y + i*QK41 + l +  4, r1);
-            vst1q_f32(y + i*QK41 + l +  8, r2);
-            vst1q_f32(y + i*QK41 + l + 12, r3);
+            vst1q_f32(y + i*QK4_1 + l +  0, r0);
+            vst1q_f32(y + i*QK4_1 + l +  4, r1);
+            vst1q_f32(y + i*QK4_1 + l +  8, r2);
+            vst1q_f32(y + i*QK4_1 + l + 12, r3);
         }
     }
 #else
@@ -1401,7 +1401,7 @@ static void dequantize_row_q4_1(const void * restrict vx, float * restrict y, in
 
         const uint8_t * restrict pp = x[i].qs;
 
-        for (int l = 0; l < QK41; l += 2) {
+        for (int l = 0; l < QK4_1; l += 2) {
             const uint8_t vi = pp[l/2];
 
             const int8_t vi0 = vi & 0xf;
@@ -1410,11 +1410,11 @@ static void dequantize_row_q4_1(const void * restrict vx, float * restrict y, in
             const float v0 = vi0*d + m;
             const float v1 = vi1*d + m;
 
-            y[i*QK41 + l + 0] = v0;
-            y[i*QK41 + l + 1] = v1;
+            y[i*QK4_1 + l + 0] = v0;
+            y[i*QK4_1 + l + 1] = v1;
 
-            assert(!isnan(y[i*QK41 + l + 0]));
-            assert(!isnan(y[i*QK41 + l + 1]));
+            assert(!isnan(y[i*QK4_1 + l + 0]));
+            assert(!isnan(y[i*QK4_1 + l + 1]));
         }
     }
 #endif
@@ -1976,7 +1976,7 @@ inline static void ggml_vec_dot_f32(const int n, float * restrict s, const float
     *s = sumf;
 }
 
-#if __AVX512F__ && QK40 == 32
+#if __AVX512F__ && QK4_0 == 32
 static inline __m512 dot_q4_0_oneblock_avx512(
     __m512 acc,
     const block_q4_0 * restrict x,
@@ -2044,9 +2044,9 @@ inline static void ggml_vec_dot_f16(const int n, float * restrict s, ggml_fp16_t
 }
 
 static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
-    const int nb = n / QK40;
+    const int nb = n / QK4_0;
 
-    assert(n % QK40 == 0);
+    assert(n % QK4_0 == 0);
     assert(nb % 2 == 0);
 
     const block_q4_0 * restrict x = vx;
@@ -2369,7 +2369,7 @@ static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void * rest
         const uint8_t * restrict p1 = y[i].qs;
 
         int sumi = 0;
-        for (int j = 0; j < QK40/2; j++) {
+        for (int j = 0; j < QK4_0/2; j++) {
             const uint8_t v0 = p0[j];
             const uint8_t v1 = p1[j];
 
@@ -2389,7 +2389,7 @@ static void ggml_vec_dot_q4_0(const int n, float * restrict s, const void * rest
 }
 
 static void ggml_vec_dot_q4_1(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
-    const int nb = n / QK41;
+    const int nb = n / QK4_1;
 
     const block_q4_1 * restrict x = vx;
     const block_q4_1 * restrict y = vy;
@@ -2466,7 +2466,7 @@ static void ggml_vec_dot_q4_1(const int n, float * restrict s, const void * rest
     res = _mm_add_ps( res, _mm_movehl_ps( res, res ) );
     res = _mm_add_ss( res, _mm_movehdup_ps( res ) );
 
-    sumf = _mm_cvtss_f32( res ) + acc_offset * QK41;
+    sumf = _mm_cvtss_f32( res ) + acc_offset * QK4_1;
 #elif defined(__ARM_NEON)
     float sum00 = 0.0f;
     float sum01 = 0.0f;
@@ -2540,7 +2540,7 @@ static void ggml_vec_dot_q4_1(const int n, float * restrict s, const void * rest
 #endif
     }
 
-    sumf = QK41*sum00 + sum01 + sum10 + sum11;
+    sumf = QK4_1*sum00 + sum01 + sum10 + sum11;
 #else
     // scalar
     for (int i = 0; i < nb; i++) {
@@ -2553,7 +2553,7 @@ static void ggml_vec_dot_q4_1(const int n, float * restrict s, const void * rest
         const uint8_t * restrict p0 = x[i].qs;
         const uint8_t * restrict p1 = y[i].qs;
 
-        for (int j = 0; j < QK41/2; j++) {
+        for (int j = 0; j < QK4_1/2; j++) {
             const uint8_t v0 = p0[j];
             const uint8_t v1 = p1[j];
 
@@ -2572,9 +2572,9 @@ static void ggml_vec_dot_q4_1(const int n, float * restrict s, const void * rest
 }
 
 static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
-    const int nb = n / QK80;
+    const int nb = n / QK8_0;
 
-    assert(n % QK80 == 0);
+    assert(n % QK8_0 == 0);
     assert(nb % 2 == 0);
 
     const block_q4_0 * restrict x = vx;
@@ -2756,7 +2756,7 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
         const  int8_t * restrict p1 = y[i].qs;
 
         int sumi = 0;
-        for (int j = 0; j < QK80/2; j++) {
+        for (int j = 0; j < QK8_0/2; j++) {
             const uint8_t v0 = p0[j];
 
             const int i0 = (int8_t) (v0 & 0xf) - 8;
@@ -3018,9 +3018,9 @@ inline static void ggml_vec_norm_inv_f32(const int n, float * s, const float * x
 static const int GGML_BLCK_SIZE[GGML_TYPE_COUNT] = {
     [GGML_TYPE_F32]  = 1,
     [GGML_TYPE_F16]  = 1,
-    [GGML_TYPE_Q4_0] = QK40,
-    [GGML_TYPE_Q4_1] = QK41,
-    [GGML_TYPE_Q8_0] = QK80,
+    [GGML_TYPE_Q4_0] = QK4_0,
+    [GGML_TYPE_Q4_1] = QK4_1,
+    [GGML_TYPE_Q8_0] = QK8_0,
     [GGML_TYPE_I8]   = 1,
     [GGML_TYPE_I16]  = 1,
     [GGML_TYPE_I32]  = 1,
@@ -11232,16 +11232,16 @@ enum ggml_opt_result ggml_opt(
 ////////////////////////////////////////////////////////////////////////////////
 
 size_t ggml_quantize_q4_0(const float * src, void * dst, int n, int k, int64_t * hist) {
-    assert(k % QK40 == 0);
-    const int nb = k / QK40;
+    assert(k % QK4_0 == 0);
+    const int nb = k / QK4_0;
 
     for (int j = 0; j < n; j += k) {
-        block_q4_0 * restrict y = (block_q4_0 *)dst + j/QK40;
+        block_q4_0 * restrict y = (block_q4_0 *)dst + j/QK4_0;
 
         quantize_row_q4_0_reference(src + j, y, k);
 
         for (int i = 0; i < nb; i++) {
-            for (int l = 0; l < QK40; l += 2) {
+            for (int l = 0; l < QK4_0; l += 2) {
                 const uint8_t vi0 = y[i].qs[l/2] & 0xF;
                 const uint8_t vi1 = y[i].qs[l/2] >> 4;
 
@@ -11251,20 +11251,20 @@ size_t ggml_quantize_q4_0(const float * src, void * dst, int n, int k, int64_t *
         }
     }
 
-    return (n/QK40*sizeof(block_q4_0));
+    return (n/QK4_0*sizeof(block_q4_0));
 }
 
 size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t * hist) {
-    assert(k % QK41 == 0);
-    const int nb = k / QK41;
+    assert(k % QK4_1 == 0);
+    const int nb = k / QK4_1;
 
     for (int j = 0; j < n; j += k) {
-        block_q4_1 * restrict y = (block_q4_1 *)dst + j/QK41;
+        block_q4_1 * restrict y = (block_q4_1 *)dst + j/QK4_1;
 
         quantize_row_q4_1_reference(src + j, y, k);
 
         for (int i = 0; i < nb; i++) {
-            for (int l = 0; l < QK41; l += 2) {
+            for (int l = 0; l < QK4_1; l += 2) {
                 const uint8_t vi0 = y[i].qs[l/2] & 0xF;
                 const uint8_t vi1 = y[i].qs[l/2] >> 4;
 
@@ -11274,7 +11274,7 @@ size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t *
         }
     }
 
-    return (n/QK41*sizeof(block_q4_1));
+    return (n/QK4_1*sizeof(block_q4_1));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
