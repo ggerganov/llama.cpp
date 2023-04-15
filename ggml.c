@@ -20,6 +20,10 @@
 #include <stdio.h>
 #include <float.h>
 
+#if defined(__AVX2__)
+#include <stdalign.h>
+#endif
+
 // if C99 - static_assert is noop
 // ref: https://stackoverflow.com/a/53923785/4039976
 #ifndef static_assert
@@ -94,7 +98,7 @@ typedef void* thread_ret_t;
 #define static_assert(cond, msg) _Static_assert(cond, msg)
 #endif
 
-/*#define GGML_PERF*/
+// #define GGML_PERF
 #define GGML_DEBUG 0
 #define GGML_GELU_FP16
 #define GGML_SILU_FP16
@@ -412,9 +416,90 @@ static const size_t CACHE_LINE_SIZE_F32 = CACHE_LINE_SIZE/sizeof(float);
 
 #define QK 32
 
+
+// AVX routine provided by GH user jon-chuang
+// ref: https://github.com/ggerganov/llama.cpp/issues/956#issuecomment-1508090551
+
+#if __AVX2__ || __AVX512F__
+
+// Given A = K X M, B = K X N, compute one row of C = A^TB
+void ggml_mul_row_f32_tall_skinny(const float * A, const float * B, float * C, int M, int N, int K) {
+    for (int j = 0; j < N; j += 8) { // Process 8 elements of C's row at a time - 256 / size_of(float)
+        __m256 c_vec = _mm256_setzero_ps(); // Initialize the result vector to all zeros
+
+        for (int k = 0; k < K; ++k) {
+            __m256 a = _mm256_broadcast_ss(&A[k * M]); // Broadcast the k-th element of the row of A^T
+            __m256 b_vec = _mm256_load_ps(&B[j + k * N]); // Load the j/8-th segment of the k-th row of B^T (corresponding to the k-th column of B)
+            c_vec = _mm256_fmadd_ps(a, b_vec, c_vec); // FMA: c_vec += a * b_vec
+        }
+
+        // Store the result in the corresponding row of C
+        _mm256_store_ps(&C[j], c_vec);
+    }
+
+    // Handle the remainder
+    const int64_t remainder = N & (8l - 1);
+    if (remainder > 0) {
+        int j = N - remainder;
+        __m256i mask_vec = _mm256_set1_epi32(0xffffffff << (8l - remainder));
+
+        __m256 c_vec = _mm256_setzero_ps(); // Initialize the result vector to all zeros
+
+        for (int k = 0; k < K; ++k) {
+            __m256 a = _mm256_broadcast_ss(&A[k * M]); // Broadcast the k-th element of the row of A^T
+            __m256 b_vec = _mm256_maskload_ps(&B[j + k * N], mask_vec); // Load the j/8-th segment of the k-th row of B^T (corresponding to the k-th column of B)
+            c_vec = _mm256_fmadd_ps(a, b_vec, c_vec); // FMA: c_vec += a * b_vec
+        }
+
+        // Store the result in the corresponding offset of C
+        _mm256_maskstore_ps(&C[j], mask_vec, c_vec);
+    }
+}
+
+#elif __AVX__
+
+// Given A = K X M, B = K X N, compute one row of C = A^TB
+void ggml_mul_row_f32_tall_skinny(const float * A, const float * B, float * C, int M, int N, int K) {
+    for (int j = 0; j < N; j += 4) { // Process 4 elements of C's row at a time - 128 / size_of(float)
+        __m128 c_vec = _mm_setzero_ps(); // Initialize the result vector to all zeros
+
+        for (int k = 0; k < K; ++k) {
+            __m128 a = _mm_broadcast_ss(&A[k * M]); // Broadcast the k-th element of the row of A^T
+            __m128 b_vec = _mm_load_ps(&B[j + k * N]); // Load the j/4-th segment of the k-th row of B^T (corresponding to the k-th column of B)
+            c_vec = _mm_fmadd_ps(a, b_vec, c_vec); // FMA: c_vec += a * b_vec
+        }
+
+        // Store the result in the corresponding row of C
+        _mm_store_ps(&C[j], c_vec);
+    }
+
+    // Handle the remainder
+    const int64_t remainder = N & (4l - 1);
+    if (remainder > 0) {
+        int j = N - remainder;
+        __m128i mask_vec = _mm_set1_epi32(0xffffffff << (4l - remainder));
+
+        __m128 c_vec = _mm_setzero_ps(); // Initialize the result vector to all zeros
+
+        for (int k = 0; k < K; ++k) {
+            __m128 a = _mm_broadcast_ss(&A[k * M]); // Broadcast the k-th element of the row of A^T
+            __m128 b_vec = _mm_maskload_ps(&B[j + k * N], mask_vec); // Load the j/4-th segment of the k-th row of B^T (corresponding to the k-th column of B)
+            c_vec = _mm_fmadd_ps(a, b_vec, c_vec); // FMA: c_vec += a * b_vec
+        }
+
+        // Store the result in the corresponding offset of C
+        _mm_maskstore_ps(&C[j], mask_vec, c_vec);
+    }
+}
+
+#endif
+
+
 // AVX routines provided by GH user Const-me
 // ref: https://github.com/ggerganov/ggml/pull/27#issuecomment-1464934600
+
 #if __AVX2__ || __AVX512F__
+
 // Unpack 32 4-bit fields into 32 bytes
 // The output vector contains 32 bytes, each one in [ 0 .. 15 ] interval
 static inline __m256i bytesFromNibbles( const uint8_t* rsi )
@@ -449,6 +534,7 @@ static inline __m128i packNibbles( __m256i bytes )
     return _mm_packus_epi16( r0, r1 );
 }
 #elif __AVX__
+
 static inline __m128i bytesFromNibbles( const uint8_t* rsi )
 {
     // Load 8 bytes from memory
@@ -6353,7 +6439,7 @@ static void ggml_compute_forward_mul_mat_f32(
     const int64_t ne02 = src0->ne[2];
     const int64_t ne03 = src0->ne[3];
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(__AVX2__) || defined(__AVX__)
     const int64_t ne10 = src1->ne[0];
 #endif
     const int64_t ne11 = src1->ne[1];
@@ -6407,6 +6493,35 @@ static void ggml_compute_forward_mul_mat_f32(
     assert(ne2 == ne02);
     assert(ne3 == ne03);
 
+#if defined(__AVX2__) || defined(__AVX__)
+    if (ne00 <= 32) {
+        assert(ne00 == ne10);
+        if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
+            return;
+        }
+        // total rows in src0
+        const int nr = ne01*ne02*ne03;
+
+        // rows per thread
+        const int dr = (nr + nth - 1)/nth;
+
+        // row range for this thread
+        const int ir0 = dr*ith;
+        const int ir1 = MIN(ir0 + dr, nr);
+
+        // fprintf(stderr, "TS_MUL_MAT: %i %i %i, ir0: %d, ir1: %d, ID: %d\n", ne00, ne11, ne01, ir0, ir1, thrd_current());
+        for (int i = ir0; i < ir1; ++i) {
+            // M = ne01, N = ne11, K = ne00
+            ggml_mul_row_f32_tall_skinny(
+                (float *) src0->data + i,
+                (float *) src1->data,
+                (float *) dst->data + i*ne01,
+                ne01, ne11, ne00);
+        }
+        return;
+    }
+#endif
+
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
@@ -6440,7 +6555,7 @@ static void ggml_compute_forward_mul_mat_f32(
             }
         }
 
-        //printf("CBLAS F32 = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);
+        // printf("CBLAS F32 = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne01, ne11, ne02, ne03);
 
         return;
     }
