@@ -228,7 +228,7 @@ int main(int argc, char * argv[]) {
         if (qfns.quantize_row_q && qfns.dequantize_row_q) {
             printf("%s\n", ggml_type_name(type));
 
-            if (params.op_quantize_row_q_reference) {
+            if (params.op_quantize_row_q_reference && qfns.quantize_row_q_reference) {
                 printf("  quantize_row_q_reference\n");
                 for (size_t size : params.test_sizes) {
                     printf("    %zu values (%.2f MB)\n", size, 4*size/(float)(1024*1024));
@@ -242,7 +242,7 @@ int main(int argc, char * argv[]) {
                 printf("\n");
             }
 
-            if (params.op_quantize_row_q) {
+            if (params.op_quantize_row_q && qfns.quantize_row_q) {
                 printf("  quantize_row_q\n");
                 for (size_t size : params.test_sizes) {
                     printf("    %zu values (%.2f MB)\n", size, 4*size/(float)(1024*1024));
@@ -256,7 +256,7 @@ int main(int argc, char * argv[]) {
                 printf("\n");
             }
 
-            if (params.op_dequantize_row_q) {
+            if (params.op_dequantize_row_q && qfns.dequantize_row_q) {
                 printf("  dequantize_row_q\n");
                 qfns.quantize_row_q(test_data1, test_q1, largest);
                 for (size_t size : params.test_sizes) {
@@ -271,7 +271,7 @@ int main(int argc, char * argv[]) {
                 printf("\n");
             }
 
-            if (params.op_quantize_row_q_dot) {
+            if (params.op_quantize_row_q_dot && qfns.quantize_row_q_dot) {
                 printf("  quantize_row_q_dot\n");
                 for (size_t size : params.test_sizes) {
                     printf("    %zu values (%.2f MB)\n", size, 4*size/(float)(1024*1024));
@@ -285,7 +285,7 @@ int main(int argc, char * argv[]) {
                 printf("\n");
             }
 
-            if (params.op_vec_dot_q) {
+            if (params.op_vec_dot_q && qfns.vec_dot_q) {
                 printf("  vec_dot_q\n");
                 qfns.quantize_row_q(test_data1, test_q1, largest);
                 qfns.quantize_row_q(test_data2, test_q2, largest);
