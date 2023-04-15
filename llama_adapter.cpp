@@ -28,6 +28,7 @@ static int n_past = 0;
 static int n_threads = 4;
 static int n_batch = 8;
 static bool useSmartContext = false;
+static int blasbatchsize = 512;
 static std::string modelname;
 static llama_context *ctx;
 static std::vector<llama_token> last_n_tokens;
@@ -44,6 +45,7 @@ bool llama_load_model(const load_model_inputs inputs, FileFormat in_file_format)
     n_batch = inputs.batch_size;
     modelname = inputs.model_filename;
     useSmartContext = inputs.use_smartcontext;
+    blasbatchsize = inputs.blasbatchsize;
 
     ctx_params.n_ctx = inputs.max_context_length;
     ctx_params.n_parts = -1;//inputs.n_parts_overwrite;
@@ -143,7 +145,7 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
     int original_threads = params.n_threads;
     if (blasmode)
     {
-        params.n_batch = 512; //received reports of 1024 and above crashing on some models
+        params.n_batch = blasbatchsize; //received reports of 1024 and above crashing on some models
         params.n_threads = 1;
     }
 
