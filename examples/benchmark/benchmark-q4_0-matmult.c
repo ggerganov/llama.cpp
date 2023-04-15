@@ -24,7 +24,7 @@
 
 float tensor_sum_elements(struct ggml_tensor * tensor) {
     float sum = 0;
-    if (tensor->type==6) {
+    if (tensor->type==GGML_TYPE_F32) {
         for (int j = 0; j < tensor->ne[1]; j++) {
             for (int k = 0; k < tensor->ne[0]; k++) {
                 sum +=  ((float *) tensor->data)[j*tensor->ne[0]+k];
