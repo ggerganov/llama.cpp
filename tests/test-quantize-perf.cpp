@@ -30,6 +30,7 @@ struct quantize_perf_params {
     bool op_quantize_row_q_reference = false;
     bool op_quantize_row_q = false;
     bool op_dequantize_row_q = false;
+    bool op_quantize_row_q_dot = false;
     bool op_vec_dot_q = false;
 };
 
@@ -147,6 +148,8 @@ int main(int argc, char * argv[]) {
                 params.op_quantize_row_q = true;
             } else if (op == "dequantize_row_q") {
                 params.op_dequantize_row_q = true;
+            } else if (op == "quantize_row_q_dot") {
+                params.op_quantize_row_q_dot = true;
             } else if (op == "vec_dot_q") {
                 params.op_vec_dot_q = true;
             } else {
@@ -184,8 +187,8 @@ int main(int argc, char * argv[]) {
     if (params.test_sizes.empty()) {
         params.test_sizes.push_back(L1_SIZE);
     }
-    if (!(params.op_quantize_row_q_reference || params.op_quantize_row_q || params.op_dequantize_row_q || params.op_vec_dot_q)) {
-        params.op_quantize_row_q_reference = params.op_quantize_row_q = params.op_dequantize_row_q = params.op_vec_dot_q = true;
+    if (!(params.op_quantize_row_q_reference || params.op_quantize_row_q || params.op_dequantize_row_q || params.op_quantize_row_q_dot || params.op_vec_dot_q)) {
+        params.op_quantize_row_q_reference = params.op_quantize_row_q = params.op_dequantize_row_q = params.op_quantize_row_q_dot = params.op_vec_dot_q = true;
     }
 
     std::sort(params.test_sizes.begin(), params.test_sizes.end());
@@ -261,6 +264,20 @@ int main(int argc, char * argv[]) {
                     auto quantize_fn = [&](void ) {
                         qfns.dequantize_row_q(test_q1, test_out, size);
                         return test_out[0];
+                    };
+                    size_t quantized_size = size / ggml_blck_size(type) * ggml_type_size(type);
+                    benchmark_function(size, quantized_size, quantize_fn);
+                }
+                printf("\n");
+            }
+
+            if (params.op_quantize_row_q_dot) {
+                printf("  quantize_row_q_dot\n");
+                for (size_t size : params.test_sizes) {
+                    printf("    %zu values (%.2f MB)\n", size, 4*size/(float)(1024*1024));
+                    auto quantize_fn = [&](void ) {
+                        qfns.quantize_row_q_dot(test_data1, test_q1, size);
+                        return test_q1[0];
                     };
                     size_t quantized_size = size / ggml_blck_size(type) * ggml_type_size(type);
                     benchmark_function(size, quantized_size, quantize_fn);

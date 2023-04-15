@@ -12,7 +12,6 @@
 
 const float MAX_QUANTIZATION_REFERENCE_ERROR = 0.0001;
 const float MAX_QUANTIZATION_TOTAL_ERROR = 0.002;
-// TODO: check why q4_1 is high
 const float MAX_DOT_PRODUCT_ERROR = 0.02;
 
 const char* RESULT_STR[] = {"ok", "FAILED"};
@@ -71,10 +70,10 @@ float dot_product(const float * a1, const float * a2, size_t test_size) {
 // Total dot product error
 float dot_product_error(quantize_fns_t & qfns, size_t test_size, const float * test_data1, const float *test_data2) {
     std::vector<uint8_t> tmp_q1(test_size);
-    std::vector<uint8_t> tmp_q2(test_size);
+    std::vector<uint8_t> tmp_q2(test_size*2);
 
     qfns.quantize_row_q(test_data1, tmp_q1.data(), test_size);
-    qfns.quantize_row_q(test_data2, tmp_q2.data(), test_size);
+    qfns.quantize_row_q_dot(test_data2, tmp_q2.data(), test_size);
 
     float result = INFINITY;
     qfns.vec_dot_q(test_size, &result, tmp_q1.data(), tmp_q2.data());
