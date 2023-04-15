@@ -1843,9 +1843,8 @@ int llama_apply_lora_from_file_internal(struct llama_context * ctx, const char *
         model_loader->mapping.reset(new llama_mmap(&model_loader->file_loaders.at(0)->file, false));
     }
 
-    fprintf(stderr, "%s: ", __func__);
-
     // read tensors and apply
+    bool warned = false;
     int n_tensors = 0;
     while (true) {
         int32_t n_dims;
@@ -1938,6 +1937,14 @@ int llama_apply_lora_from_file_internal(struct llama_context * ctx, const char *
                 base_t = dest_t;
             }
 
+            if (base_t->type == GGML_TYPE_Q4_0 || base_t->type == GGML_TYPE_Q4_1) {
+                if (!warned) {
+                    fprintf(stderr, "%s: warning: using a lora adapter with a quantized model may result in poor quality, "
+                                    "use a f16 or f32 base model with --lora-base\n", __func__);
+                    warned = true;
+                }
+            }
+
             ggml_tensor * loraA = lora_tensors[base_name + ".loraA"];
             ggml_tensor * loraB = lora_tensors[base_name + ".loraB"];
 
@@ -1974,7 +1981,7 @@ int llama_apply_lora_from_file_internal(struct llama_context * ctx, const char *
             lora_tensors.clear();
 
             n_tensors++;
-            if (n_tensors % 8 == 0)
+            if (n_tensors % 4 == 0)
                 fprintf(stderr, ".");
         }
     }
