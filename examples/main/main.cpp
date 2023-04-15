@@ -481,8 +481,8 @@ int main(int argc, char ** argv) {
                         // this was a command, so we need to stop anything more from printing. 
                         is_command = true;
                     }
-                    // insert input prefix
-                    if (!params.instruct_prefix.empty() && !antiprompt.any) {
+                    // instruct mode: insert instruction prefix
+                    if (params.instruct && !is_antiprompt) {
                         n_consumed = embd_inp.size();
                         embd_inp.insert(embd_inp.end(), inp_pfx.begin(), inp_pfx.end());
                     }
