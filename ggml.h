@@ -204,6 +204,7 @@ enum ggml_type {
     GGML_TYPE_F16  = 1,
     GGML_TYPE_Q4_0 = 2,
     GGML_TYPE_Q4_1 = 3,
+    GGML_TYPE_Q8_0 = 4,
     GGML_TYPE_I8,
     GGML_TYPE_I16,
     GGML_TYPE_I32,
@@ -836,6 +837,7 @@ typedef struct {
     dequantize_row_q_t dequantize_row_q;
     quantize_row_q_t   quantize_row_q;
     quantize_row_q_t   quantize_row_q_reference;
+    quantize_row_q_t   quantize_row_q_dot;
     vec_dot_q_t        vec_dot_q;
 } quantize_fns_t;
 
