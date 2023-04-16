@@ -2,6 +2,7 @@
 #include "llama.h"
 
 #include <cmath>
+#include <ctime>
 
 std::vector<float> softmax(const std::vector<float>& logits) {
     std::vector<float> probs(logits.size());
