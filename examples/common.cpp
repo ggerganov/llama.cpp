@@ -16,7 +16,6 @@
 #if defined (_WIN32)
 #include <fcntl.h>
 #include <io.h>
-#include <windows.h>
 #pragma comment(lib,"kernel32.lib")
 extern "C" __declspec(dllimport) void* __stdcall GetStdHandle(unsigned long nStdHandle);
 extern "C" __declspec(dllimport) int __stdcall GetConsoleMode(void* hConsoleHandle, unsigned long* lpMode);
@@ -56,7 +55,7 @@ int32_t get_num_physical_cores() {
 #elif defined(_WIN32)
     SYSTEM_INFO sysinfo;
     GetNativeSystemInfo(&sysinfo);
-    return (in32_t) sysinfo.dwNumberOfProcessors;
+    return static_cast<int32_t>(sysinfo.dwNumberOfProcessors);
 #endif
     return -1;
 }
