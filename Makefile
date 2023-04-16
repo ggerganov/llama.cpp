@@ -10,6 +10,10 @@ ifndef UNAME_M
 UNAME_M := $(shell uname -m)
 endif
 
+ifndef ARCH_LINUX
+ARCH_LINUX := $(shell grep "Arch Linux" /etc/os-release 2>/dev/null)
+endif
+
 CCV := $(shell $(CC) --version | head -n 1)
 CXXV := $(shell $(CXX) --version | head -n 1)
 
@@ -40,7 +44,7 @@ BONUSCFLAGS1 =
 BONUSCFLAGS2 =
 
 #lets try enabling everything
-CFLAGS   += -pthread -s 
+CFLAGS   += -pthread -s
 CXXFLAGS += -pthread -s -Wno-multichar
 
 # OS specific
@@ -48,6 +52,9 @@ CXXFLAGS += -pthread -s -Wno-multichar
 ifeq ($(UNAME_S),Linux)
 	CFLAGS   += -pthread
 	CXXFLAGS += -pthread
+ifdef ARCH_LINUX
+	LDFLAGS += -lcblas
+endif
 endif
 ifeq ($(UNAME_S),Darwin)
 	CFLAGS   += -pthread
@@ -75,11 +82,11 @@ endif
 #       feel free to update the Makefile for your architecture and send a pull request or issue
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 	# Use all CPU extensions that are available:
-	CFLAGS += -mavx 
+	CFLAGS += -mavx
 # old library NEEDS mf16c to work. so we must build with it. new one doesnt
 	ifeq ($(OS),Windows_NT)
-		BONUSCFLAGS1 += -mf16c 
-		BONUSCFLAGS2 += -mavx2 -msse3 -mfma 
+		BONUSCFLAGS1 += -mf16c
+		BONUSCFLAGS2 += -mavx2 -msse3 -mfma
 	else
 # if not on windows, they are clearly building it themselves, so lets just use whatever is supported
 		CFLAGS += -march=native -mtune=native
@@ -135,7 +142,7 @@ endif
 
 OPENBLAS_BUILD =
 CLBLAST_BUILD =
-NOAVX2_BUILD = 
+NOAVX2_BUILD =
 OPENBLAS_NOAVX2_BUILD =
 
 ifeq ($(OS),Windows_NT)
