@@ -1840,7 +1840,9 @@ int llama_apply_lora_from_file_internal(struct llama_context * ctx, const char *
         model_loader->ggml_ctx = base_ctx;
 
         // maybe this should in llama_model_loader
-        model_loader->mapping.reset(new llama_mmap(&model_loader->file_loaders.at(0)->file, false));
+        if (model_loader->use_mmap) {
+            model_loader->mapping.reset(new llama_mmap(&model_loader->file_loaders.at(0)->file, /* prefetch */ false));
+        }
     }
 
     // read tensors and apply
