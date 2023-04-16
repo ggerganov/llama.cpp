@@ -9,6 +9,7 @@
 #include "ggml.h"
 
 #include <array>
+#include <ctime>
 #include <cinttypes>
 #include <fstream>
 #include <random>
