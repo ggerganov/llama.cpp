@@ -240,13 +240,13 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
             // decrement remaining sampling budget
             --remaining_tokens;
             //printf("\nid:%d word:%s\n",id,llama_token_to_str(ctx, id));
-            concat_output += llama_token_to_str(ctx, id);
+            concat_output += llama_token_to_str(ctx, id);           
             for (const auto &matched : stop_sequence)
             {
                 if (concat_output.find(matched) != std::string::npos)
                 {
                     remaining_tokens = 0;
-                    printf("\n(Stop sequence triggered)");
+                    printf("\n(Stop sequence triggered: %s)",matched.c_str());
                     break;
                 }
             }
