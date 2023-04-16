@@ -735,7 +735,7 @@ def lazy_load_safetensors_file(fp: IO[bytes], path: Path) -> ModelPlus:
     header: Dict[str, Dict[str, Any]] = json.loads(fp.read(header_size))
     # Use mmap for the actual data to avoid race conditions with the file offset.
     mapped = memoryview(mmap.mmap(fp.fileno(), 0, access=mmap.ACCESS_READ))
-    byte_buf = mapped[fp.tell():]
+    byte_buf = mapped[8 + header_size:]
 
     def convert(info: Dict[str, Any]) -> LazyTensor:
         data_type = SAFETENSORS_DATA_TYPES[info['dtype']]
@@ -761,7 +761,7 @@ def must_read(fp: IO[bytes], length: int) -> bytes:
     return ret
 
 
-def lazy_load_ggml_file(fp: IO[bytes], path: Path) -> ModelPlus:
+def lazy_load_ggml_file(fp: io.BufferedReader, path: Path) -> ModelPlus:
     magic = must_read(fp, 4)[::-1]
     if magic in (b'ggmf', b'ggjt'):
         version, = struct.unpack("i", must_read(fp, 4))
@@ -795,7 +795,9 @@ def lazy_load_ggml_file(fp: IO[bytes], path: Path) -> ModelPlus:
 
     model: LazyModel = {}
     # Use mmap for the actual data to avoid race conditions with the file offset.
+    off = fp.raw.tell()
     mapped = memoryview(mmap.mmap(fp.fileno(), 0, access=mmap.ACCESS_READ))
+    fp.raw.seek(off) # needed on Windows
 
     def read_tensor() -> None:  # this is a function so that variables captured in `load` don't change
         shape_len, name_len, ftype = struct.unpack("iii", must_read(fp, 12))
