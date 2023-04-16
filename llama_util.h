@@ -176,7 +176,6 @@ struct llama_mmap {
         flags |= MAP_POPULATE;
 #endif
         addr = mmap(NULL, file->size, PROT_READ, flags, fd, 0);
-        close(fd);
         if (addr == MAP_FAILED) {
             throw format("mmap failed: %s", strerror(errno));
         }
