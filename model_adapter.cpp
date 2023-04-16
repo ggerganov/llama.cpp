@@ -27,7 +27,21 @@ double timer_check()
     return time_taken;
 }
 
-
+void print_vec(std::vector<std::string> &embd)
+{
+    std::cout << "[";
+    bool first = true;
+    for (auto i : embd)
+    {
+        if (!first)
+        {
+            std::cout << ',';
+        }
+        first = false;        
+        std::cout << i;        
+    }
+    std::cout << "]\n";
+}
 void print_tok_vec(std::vector<int> &embd)
 {
     std::cout << "[";

@@ -45,6 +45,7 @@ void timer_start();
 double timer_check();
 void print_tok_vec(std::vector<int> &embd);
 void print_tok_vec(std::vector<float> &embd);
+void print_vec(std::vector<std::string> &embd);
 std::vector<int> LongestCommonSubseq(const std::vector<int> x, const std::vector<int> y);
 bool ArrStartWith(const std::vector<int> targetArray, const std::vector<int> searchSeq);
 int ArrFindIndexOf(const std::vector<int> targetArray, const std::vector<int> searchSeq);

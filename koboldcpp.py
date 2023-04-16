@@ -8,6 +8,8 @@ import os
 import argparse
 import json, http.server, threading, socket, sys, time
 
+stop_token_max = 10
+
 class load_model_inputs(ctypes.Structure):
     _fields_ = [("threads", ctypes.c_int),
                 ("max_context_length", ctypes.c_int),
@@ -29,7 +31,8 @@ class generation_inputs(ctypes.Structure):
                 ("top_k", ctypes.c_int),
                 ("top_p", ctypes.c_float),
                 ("rep_pen", ctypes.c_float),
-                ("rep_pen_range", ctypes.c_int)]
+                ("rep_pen_range", ctypes.c_int),
+                ("stop_sequence", ctypes.c_char_p * stop_token_max)]
 
 class generation_outputs(ctypes.Structure):
     _fields_ = [("status", ctypes.c_int),
@@ -85,7 +88,7 @@ def load_model(model_filename,batch_size=8,max_context_length=512,n_parts_overwr
     ret = handle.load_model(inputs)
     return ret
 
-def generate(prompt,max_length=20, max_context_length=512,temperature=0.8,top_k=100,top_p=0.85,rep_pen=1.1,rep_pen_range=128,seed=-1):
+def generate(prompt,max_length=20, max_context_length=512,temperature=0.8,top_k=100,top_p=0.85,rep_pen=1.1,rep_pen_range=128,seed=-1,stop_sequence=[]):
     inputs = generation_inputs()
     outputs = ctypes.create_unicode_buffer(ctypes.sizeof(generation_outputs))
     inputs.prompt = prompt.encode("UTF-8")
@@ -97,6 +100,11 @@ def generate(prompt,max_length=20, max_context_length=512,temperature=0.8,top_k=
     inputs.rep_pen = rep_pen
     inputs.rep_pen_range = rep_pen_range
     inputs.seed = seed
+    for n in range(0,stop_token_max):
+        if n >= len(stop_sequence):
+            inputs.stop_sequence[n] = "".encode("UTF-8")
+        else:
+            inputs.stop_sequence[n] = stop_sequence[n].encode("UTF-8")
     ret = handle.generate(inputs,outputs)
     if(ret.status==1):
         return ret.text.decode("UTF-8","ignore")
@@ -170,6 +178,12 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"values": []}).encode())
             return
+        
+        if self.path.endswith(('/api/v1/info/version', '/api/latest/info/version')):
+            self.send_response(200)
+            self.end_headers()           
+            self.wfile.write(json.dumps({"result":"1.2.2"}).encode())
+            return
 
         self.send_response(404)
         self.end_headers()
@@ -229,7 +243,8 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     top_p=genparams.get('top_p', 0.85),
                     rep_pen=genparams.get('rep_pen', 1.1),
                     rep_pen_range=genparams.get('rep_pen_range', 128),
-                    seed=-1
+                    seed=-1,
+                    stop_sequence=genparams.get('stop_sequence', [])
                     )
                 print("\nOutput: " + recvtxt)
                 res = {"results": [{"text": recvtxt}]}                            
@@ -242,7 +257,8 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     top_p=genparams.get('top_p', 0.85),
                     rep_pen=genparams.get('rep_pen', 1.1),
                     rep_pen_range=genparams.get('rep_pen_range', 128),
-                    seed=-1
+                    seed=-1,
+                    stop_sequence=genparams.get('stop_sequence', [])
                     )
                 print("\nOutput: " + recvtxt)
                 res = {"data": {"seqs":[recvtxt]}}
