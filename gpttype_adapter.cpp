@@ -353,7 +353,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                     if (concat_output.find(matched) != std::string::npos)
                     {
                         remaining_tokens = 0;
-                        printf("\n(Stop sequence triggered: %s)",matched.c_str());
+                        printf("\n(Stop sequence triggered: <%s>)",matched.c_str());
                         break;
                     }
                 }
