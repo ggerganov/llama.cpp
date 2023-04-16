@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <iostream>
 #include <string>
