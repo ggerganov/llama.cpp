@@ -13,6 +13,7 @@
 
 #define CL_TARGET_OPENCL_VERSION 110
 #include <clblast_c.h>
+#include <ggml_clblast_dequant.cl>
 
 cl_platform_id platform;
 cl_device_id device;
@@ -51,6 +52,39 @@ cl_program build_program(cl_context ctx, cl_device_id dev, const char* filename)
       exit(1);
    }
    free(program_buffer);
+
+   err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
+   if(err < 0) {
+
+      clGetProgramBuildInfo(program, dev, CL_PROGRAM_BUILD_LOG,
+            0, NULL, &log_size);
+      program_log = (char*) malloc(log_size + 1);
+      program_log[log_size] = '\0';
+      clGetProgramBuildInfo(program, dev, CL_PROGRAM_BUILD_LOG,
+            log_size + 1, program_log, NULL);
+      printf("%s\n", program_log);
+      free(program_log);
+      exit(1);
+   }
+
+   return program;
+}
+
+cl_program build_program_from_source(cl_context ctx, cl_device_id dev, const char* program_buffer) {
+
+   cl_program program;
+   char *program_log;
+   size_t program_size, log_size;
+   int err;
+
+   program_size = strlen(program_buffer);
+   
+   program = clCreateProgramWithSource(ctx, 1,
+      (const char**)&program_buffer, &program_size, &err);
+   if(err < 0) {
+      perror("OpenCL error creating program");
+      exit(1);
+   }
 
    err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
    if(err < 0) {
@@ -115,7 +149,7 @@ static void ggml_cl_sgemm_wrapper(const enum CBLAS_ORDER order, const enum CBLAS
         free(platforms);
         free(devices);
 
-        program = build_program(context, device, "ggml_clblast_dequant.cl");
+        program = build_program_from_source(context, device, clblast_dequant);
 
         // Prepare dequantize kernels
         kernel_q4_0 = clCreateKernel(program, "dequantize_row_q4_0", &err);

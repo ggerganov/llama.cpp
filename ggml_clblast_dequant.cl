@@ -1,3 +1,6 @@
+#define MULTILINE_QUOTE(...) #__VA_ARGS__
+const char * clblast_dequant = MULTILINE_QUOTE(
+
 struct __attribute__ ((packed)) block_q4_0
 {
     float d;
@@ -39,3 +42,5 @@ __kernel void dequantize_row_q4_1(__global struct block_q4_1* blocks, __global f
     result[index + 0] = (vi & 0xf) * d + m;
     result[index + 1] = (vi >> 4) * d + m;
 }
+
+);
