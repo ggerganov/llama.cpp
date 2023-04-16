@@ -177,7 +177,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.n_parts = std::stoi(argv[i]);
         } else if (arg == "-h" || arg == "--help") {
             gpt_print_usage(argc, argv, default_params);
-            exit(0);
+            return true;
         } else if (arg == "--random-prompt") {
             params.random_prompt = true;
         } else if (arg == "--in-prefix") {
@@ -189,13 +189,13 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             gpt_print_usage(argc, argv, default_params);
-            exit(1);
+            return false;
         }
     }
     if (invalid_param) {
         fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
         gpt_print_usage(argc, argv, default_params);
-        exit(1);
+        return false;
     }
 
     return true;

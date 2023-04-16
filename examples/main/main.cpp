@@ -16,6 +16,11 @@
 #include <string>
 #include <vector>
 
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <netinet/in.h>
+#include <unistd.h>
+
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 #include <signal.h>
 #include <unistd.h>
@@ -41,7 +46,57 @@ void sigint_handler(int signo) {
 }
 #endif
 
-int main(int argc, char ** argv) {
+#if _WIN32
+#define LLAMA_EXPORT extern "C" __declspec(dllexport)
+#else
+#define LLAMA_EXPORT extern "C" __attribute__((visibility("default"))) __attribute__((used))
+#endif
+
+bool connected = false;
+
+LLAMA_EXPORT
+int llama_main(int argc, char ** argv) {
+    if (!connected) {
+        connected = true;
+
+        // params
+        printf("argc = %d\n", argc);
+
+        for (int i = 0; i < argc; i++) {
+            printf("argv[%d] = %s\n", i, argv[i]);
+        }
+
+        fflush(stdout);
+
+        // configure the sockaddr_in structure
+        struct sockaddr_in addr;
+        memset(&addr, 0, sizeof(addr));
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK); // IP address of the host (in this case, localhost)
+        addr.sin_port = htons(5567); // socket port
+
+        // create the socket
+        int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockfd == -1) {
+            return 1;
+        }
+
+        // connect the socket to the sockaddr_in structure
+        if (connect(sockfd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
+            return 1;
+        }
+
+        // redirect the output of printf to the socket
+        if (dup2(sockfd, STDOUT_FILENO) == -1) {
+            return 1;
+        }
+
+        // redirect the output of printf to the socket
+        if (dup2(sockfd, STDERR_FILENO) == -1) {
+            return 1;
+        }
+    }
+
     gpt_params params;
     params.model = "models/llama-7B/ggml-model.bin";
 
