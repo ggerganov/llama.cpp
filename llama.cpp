@@ -262,12 +262,12 @@ static size_t checked_div(size_t a, size_t b) {
 }
 
 static std::string llama_format_tensor_shape(const std::vector<uint32_t> & ne) {
-    std::string ret = "[" + std::to_string(ne.at(0));
+    char buf[256];
+    snprintf(buf, sizeof(buf), "%5u", ne.at(0));
     for (size_t i = 1; i < ne.size(); i++) {
-        ret += " x " + std::to_string(ne.at(i));
+        snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), " x %5u", ne.at(i));
     }
-    ret += "]";
-    return ret;
+    return buf;
 }
 
 static size_t llama_calc_tensor_size(const std::vector<uint32_t> & ne, enum ggml_type type) {
@@ -942,8 +942,8 @@ static void llama_model_load_internal(
         ml->ggml_ctx = ctx;
 
         model.tok_embeddings = ml->get_tensor("tok_embeddings.weight", {n_embd, n_vocab});
-        model.norm   = ml->get_tensor("norm.weight", {n_embd});
-        model.output = ml->get_tensor("output.weight", {n_embd, n_vocab});
+        model.norm           = ml->get_tensor("norm.weight",           {n_embd});
+        model.output         = ml->get_tensor("output.weight",         {n_embd, n_vocab});
 
         model.layers.resize(n_layer);
         for (uint32_t i = 0; i < n_layer; ++i) {
@@ -1570,7 +1570,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         tensor.data = read_data.addr;
         model_loader->load_data_for(tensor);
 
-        printf("[%zu/%zu] %36s - %s, type = %6s, ",
+        printf("[%4zu/%4zu] %36s - %16s, type = %6s, ",
                ++idx, model_loader->tensors_map.tensors.size(),
                tensor.name.c_str(), llama_format_tensor_shape(tensor.ne).c_str(),
                ggml_type_name(tensor.type));
