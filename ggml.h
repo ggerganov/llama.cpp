@@ -177,11 +177,12 @@ extern "C" {
 #include <stddef.h>
 #include <stdbool.h>
 
-#define GGML_MAX_DIMS     4
-#define GGML_MAX_NODES    4096
-#define GGML_MAX_PARAMS   16
-#define GGML_MAX_CONTEXTS 64
-#define GGML_MAX_OPT      4
+#define GGML_MAX_DIMS          4
+#define GGML_MAX_NODES         4096
+#define GGML_MAX_PARAMS        16
+#define GGML_MAX_CONTEXTS      64
+#define GGML_MAX_OPT           4
+#define GGML_DEFAULT_N_THREADS 4
 
 #ifdef __ARM_NEON
 // we use the built-in 16-bit float type
@@ -198,13 +199,15 @@ struct ggml_object;
 struct ggml_context;
 
 enum ggml_type {
-    GGML_TYPE_Q4_0,
-    GGML_TYPE_Q4_1,
+    // explicitly numbered values are used in llama.cpp files
+    GGML_TYPE_F32  = 0,
+    GGML_TYPE_F16  = 1,
+    GGML_TYPE_Q4_0 = 2,
+    GGML_TYPE_Q4_1 = 3,
+    GGML_TYPE_Q8_0 = 4,
     GGML_TYPE_I8,
     GGML_TYPE_I16,
     GGML_TYPE_I32,
-    GGML_TYPE_F16,
-    GGML_TYPE_F32,
     GGML_TYPE_COUNT,
 };
 
@@ -250,6 +253,9 @@ enum ggml_op {
 
     GGML_OP_FLASH_ATTN,
     GGML_OP_FLASH_FF,
+
+    GGML_OP_MAP_UNARY,
+    GGML_OP_MAP_BINARY,
 
     GGML_OP_COUNT,
 };
@@ -348,6 +354,8 @@ size_t  ggml_nbytes   (const struct ggml_tensor * tensor);
 int    ggml_blck_size (enum ggml_type type);
 size_t ggml_type_size (enum ggml_type type); // size in bytes for all elements in a block
 float  ggml_type_sizef(enum ggml_type type); // ggml_type_size()/ggml_blck_size() as float
+
+const char * ggml_type_name(enum ggml_type type);
 
 size_t ggml_element_size(const struct ggml_tensor * tensor);
 
@@ -650,6 +658,21 @@ struct ggml_tensor * ggml_flash_ff(
         struct ggml_tensor  * c0,
         struct ggml_tensor  * c1);
 
+// Mapping operations
+typedef void (*ggml_unary_op_f32_t)(const int, float *, const float *);
+typedef void (*ggml_binary_op_f32_t)(const int, float *, const float *, const float *);
+
+struct ggml_tensor * ggml_map_unary_f32(
+        struct ggml_context        * ctx,
+        struct ggml_tensor         * a,
+        const  ggml_unary_op_f32_t fun);
+
+struct ggml_tensor * ggml_map_binary_f32(
+        struct ggml_context         * ctx,
+        struct ggml_tensor          * a,
+        struct ggml_tensor          * b,
+        const  ggml_binary_op_f32_t fun);
+
 //
 // automatic differentiation
 //
@@ -814,6 +837,7 @@ typedef struct {
     dequantize_row_q_t dequantize_row_q;
     quantize_row_q_t   quantize_row_q;
     quantize_row_q_t   quantize_row_q_reference;
+    quantize_row_q_t   quantize_row_q_dot;
     vec_dot_q_t        vec_dot_q;
 } quantize_fns_t;
 
