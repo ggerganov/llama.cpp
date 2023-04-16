@@ -43,7 +43,11 @@
     } while (0)
 
 #ifdef __GNUC__
+#ifdef __MINGW32__
+__attribute__((format(gnu_printf, 1, 2)))
+#else
 __attribute__((format(printf, 1, 2)))
+#endif
 #endif
 static std::string format(const char * fmt, ...) {
     va_list ap, ap2;
@@ -57,7 +61,7 @@ static std::string format(const char * fmt, ...) {
     va_end(ap2);
     va_end(ap);
     return std::string(buf.data(), size);
-};
+}
 
 struct llama_file {
     // use FILE * so we don't have to re-open the file to mmap
