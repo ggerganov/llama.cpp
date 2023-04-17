@@ -10273,11 +10273,13 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
     }
 
 #ifdef GGML_GLOBAL_THREADS
-    // wakeup threads.
-    pthread_mutex_lock(&state_shared->mutex);
-    state_shared->wait_cmd = false;
-    pthread_cond_broadcast(&state_shared->cond);
-    pthread_mutex_unlock(&state_shared->mutex);
+    if (n_threads > 1) {
+        // wakeup threads.
+        pthread_mutex_lock(&state_shared->mutex);
+        state_shared->wait_cmd = false;
+        pthread_cond_broadcast(&state_shared->cond);
+        pthread_mutex_unlock(&state_shared->mutex);
+    }
 #endif
 
 #ifdef GGML_PERF
