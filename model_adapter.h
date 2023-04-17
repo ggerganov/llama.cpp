@@ -25,7 +25,9 @@ enum FileFormat
     GPTJ_3=102, //uses new ggml lib
 
     GPT2_1=200,
-    GPT2_2=201
+    GPT2_2=201,
+
+    RWKV_1=300,
 };
 
 enum ModelLoadResult

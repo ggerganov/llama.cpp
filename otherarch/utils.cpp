@@ -293,7 +293,7 @@ gpt_vocab::id gptj_sample_top_p_top_k(
         }
     }
 
-    gptj_sample_top_k(logits_id, top_k);
+    gptj_sample_top_k(logits_id, top_k > 0 ? std::min(top_k, n_logits) : n_logits);
 
     double maxl = -INFINITY;
     for (const auto & kv : logits_id) {

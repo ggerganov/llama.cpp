@@ -57,11 +57,9 @@ bool llama_load_model(const load_model_inputs inputs, FileFormat in_file_format)
     ctx_params.use_mlock = false;
 
     file_format = in_file_format;
-
    
     ctx = llama_init_from_file(modelname.c_str(), ctx_params);
     
-
     if (ctx == NULL)
     {
         fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, modelname.c_str());
@@ -162,6 +160,7 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
     current_context_tokens.resize(n_past);
 
     int remaining_tokens = params.n_predict;
+    int stopper_unused_tokens = 0;
     int input_consumed = 0;
     std::mt19937 rng(params.seed);
     std::string concat_output = "";
@@ -245,6 +244,7 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
             {
                 if (concat_output.find(matched) != std::string::npos)
                 {
+                    stopper_unused_tokens = remaining_tokens;
                     remaining_tokens = 0;
                     printf("\n(Stop sequence triggered: <%s>)",matched.c_str());
                     break;
@@ -270,7 +270,8 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
     }
     time2 = timer_check();
     float pt1 = (time1*1000.0/(embd_inp_size==0?1:embd_inp_size));
-    float pt2 = (time2*1000.0/(params.n_predict==0?1:params.n_predict));
+    int realnpredict = params.n_predict-stopper_unused_tokens;
+    float pt2 = (time2*1000.0/(realnpredict==0?1:realnpredict));
     printf("\nTime Taken - Processing:%.1fs (%.0fms/T), Generation:%.1fs (%.0fms/T), Total:%.1fs", time1, pt1, time2, pt2, (time1 + time2));
     fflush(stdout);
     output.status = 1;

@@ -132,6 +132,12 @@ void print_tok_vec(std::vector<float> &embd)
     else if(magic == 0x67676d66) //v2 format ggmf
     {
         fileformat = FileFormat::GGHF;
+        uint32_t temp;
+        fin.read((char *)&temp, sizeof(temp)); //file version
+        if(temp==100)
+        {
+            fileformat = FileFormat::RWKV_1;
+        }
     }
     else if(magic == 0x67676a74) //v3 format ggjt
     {
