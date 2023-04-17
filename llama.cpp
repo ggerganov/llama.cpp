@@ -1066,7 +1066,7 @@ static bool llama_eval_internal(
     gf.n_threads = N >= 32 && ggml_cpu_has_blas() ? 1 : n_threads;
 
     struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
-    memcpy(embd->data, tokens, N*ggml_element_size(embd));
+    embd->data = (void*)tokens;
 
     struct ggml_tensor * inpL = ggml_get_rows(ctx0, model.tok_embeddings, embd);
 
