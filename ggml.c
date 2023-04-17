@@ -51,9 +51,14 @@ static inline LONG atomic_flag_test_and_set(atomic_flag* ptr) {
     return InterlockedCompareExchange(ptr, 1, 0);
 }
 
-static inline LONG atomic_flag_test_clear(atomic_flag* ptr) {
-    return InterlockedExchange(ptr, 0)
+static inline LONG atomic_flag_clear(atomic_flag* ptr) {
+    return InterlockedExchange(ptr, 0);
 }
+
+typedef CRITICAL_SECTION   pthread_mutex_t;
+typedef CONDITION_VARIABLE pthread_cond_t;
+typedef void pthread_mutexattr_t;
+typedef void pthread_condattr_t;
 
 typedef HANDLE pthread_t;
 
@@ -73,6 +78,61 @@ static int pthread_create(pthread_t* out, void* unused, thread_ret_t(*func)(void
 static int pthread_join(pthread_t thread, void* unused) {
     (void) unused;
     return (int) WaitForSingleObject(thread, INFINITE);
+}
+
+static int pthread_mutex_init(pthread_mutex_t *mutex, pthread_mutexattr_t *attr) {
+    (void) attr;
+    if (mutex == NULL) return 1;
+    InitializeCriticalSection(mutex);
+    return 0;
+}
+
+static int pthread_mutex_destroy(pthread_mutex_t *mutex) {
+    if (mutex == NULL) return 1;
+    DeleteCriticalSection(mutex);
+    return 0;
+}
+
+static int pthread_mutex_lock(pthread_mutex_t *mutex) {
+    if (mutex == NULL) return 1;
+    EnterCriticalSection(mutex);
+    return 0;
+}
+
+static int pthread_mutex_unlock(pthread_mutex_t *mutex) {
+    if (mutex == NULL) return 1;
+    LeaveCriticalSection(mutex);
+    return 0;
+}
+
+static int pthread_cond_init(pthread_cond_t *cond, pthread_condattr_t *attr) {
+    (void) attr;
+    if (cond == NULL) return 1;
+    InitializeConditionVariable(cond);
+    return 0;
+}
+
+static int pthread_cond_destroy(pthread_cond_t *cond) {
+    (void) cond;
+    return 0;
+}
+
+static int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex) {
+    if (cond == NULL || mutex == NULL) return 1;
+    if (!SleepConditionVariableCS(cond, mutex, INFINITE)) return 1;
+    return 0;
+}
+
+static int pthread_cond_signal(pthread_cond_t *cond) {
+    if (cond == NULL) return 1;
+    WakeConditionVariable(cond);
+    return 0;
+}
+
+static int pthread_cond_broadcast(pthread_cond_t *cond) {
+    if (cond == NULL) return 1;
+    WakeAllConditionVariable(cond);
+    return 0;
 }
 
 static int sched_yield (void) {
@@ -9945,7 +10005,7 @@ static struct ggml_compute_state_shared * state_shared = NULL;
 static thread_ret_t ggml_graph_compute_thread(void * data) {
     struct ggml_compute_state_shared * shared = (struct ggml_compute_state_shared *) data;
     struct ggml_compute_state * task = NULL;
-    
+
     while (true) {
         if (shared->n_task < 0) {
             break;
