@@ -1085,6 +1085,7 @@ def default_outfile(model_paths: List[Path], params: Params) -> Path:
     namestr = {
         GGMLFileType.AllF32: "f32",
         GGMLFileType.MostlyF16: "f16",
+        GGMLFileType.MostlyQ4_0: "q4_0",
         GGMLFileType.MostlyQ4_1: "q4_1",
         GGMLFileType.PerLayerIsQ4_1: "q4_1",
     }[params.file_type]
@@ -1108,7 +1109,7 @@ def main(args_in: Optional[List[str]] = None) -> None:
     parser.add_argument("--dump", action="store_true", help="don't convert, just show what's in the model")
     parser.add_argument("--dump-single", action="store_true", help="don't convert, just show what's in a single model file")
     parser.add_argument("--vocab-only", action="store_true", help="extract only the vocab")
-    parser.add_argument("--outtype", choices=["f32", "f16", "q4_1"], help="output format (default: based on input)")
+    parser.add_argument("--outtype", choices=["f32", "f16", "q4_1", "q4_0"], help="output format (default: based on input)")
     parser.add_argument("--vocab-dir", type=Path, help="directory containing tokenizer.model, if separate from model file")
     parser.add_argument("--outfile", type=Path, help="path to write to; default: based on input")
     parser.add_argument("model", type=Path, help="directory containing model file, or model file itself (*.pth, *.pt, *.bin)")
