@@ -8057,11 +8057,11 @@ static void ggml_compute_forward_rope_f16(
                     const ggml_fp16_t * const src = (ggml_fp16_t *)((char *) src0->data + i3*nb3 + i2*nb2 + i1*nb1 + i0*nb0);
                           ggml_fp16_t * dst_data  = (ggml_fp16_t *)((char *)  dst->data + i3*nb3 + i2*nb2 + i1*nb1 + i0*nb0);
 
-                    const float x0 = ggml_fp16_to_fp32(src[0]);
-                    const float x1 = ggml_fp16_to_fp32(src[1]);
+                    const float x0 = GGML_FP16_TO_FP32(src[0]);
+                    const float x1 = GGML_FP16_TO_FP32(src[1]);
 
-                    dst_data[0] = ggml_fp32_to_fp16(x0*cos_theta - x1*sin_theta);
-                    dst_data[1] = ggml_fp32_to_fp16(x0*sin_theta + x1*cos_theta);
+                    dst_data[0] = GGML_FP32_TO_FP16(x0*cos_theta - x1*sin_theta);
+                    dst_data[1] = GGML_FP32_TO_FP16(x0*sin_theta + x1*cos_theta);
                 }
             }
         }
