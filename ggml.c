@@ -10041,7 +10041,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 
 // Get supported task types (bit OR) for given forward op.
 // TODO: use static map.
-static int ggml_forward_op_tasks(enum ggml_op op) { 
+static int ggml_forward_op_tasks(enum ggml_op op) {
     switch (op) {
         case GGML_OP_DUP:
         case GGML_OP_ADD:
@@ -10412,7 +10412,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                 params.wsize = cgraph->work ? ggml_nbytes(cgraph->work) : 0;
                 params.wdata = cgraph->work ? cgraph->work->data : NULL;
                 ggml_compute_forward(&params, node);
-            
+
                 // wait for tasks done.
                 if (n > 0) {
                     while (state_shared->n_done != n) {
