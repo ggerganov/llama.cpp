@@ -119,6 +119,7 @@ maxctx = 2048
 maxlen = 128
 modelbusy = False
 defaultport = 5001
+KcppVersion = "1.10"
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
     sys_version = ""
@@ -133,7 +134,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, **kwargs)
 
     def do_GET(self):
-        global maxctx, maxlen, friendlymodelname
+        global maxctx, maxlen, friendlymodelname, KcppVersion
         if self.path in ["/", "/?"] or self.path.startswith(('/?','?')): #it's possible for the root url to have ?params without /
             response_body = ""
             if self.embedded_kailite is None:
@@ -183,6 +184,12 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(200)
             self.end_headers()           
             self.wfile.write(json.dumps({"result":"1.2.2"}).encode())
+            return
+
+        if self.path.endswith(('/api/extra/version')):
+            self.send_response(200)
+            self.end_headers()           
+            self.wfile.write(json.dumps({"result":"KoboldCpp","version":KcppVersion}).encode())
             return
 
         self.send_response(404)
@@ -435,7 +442,7 @@ def main(args):
     RunServerMultiThreaded(args.host, args.port, embedded_kailite)
 
 if __name__ == '__main__':
-    print("Welcome to KoboldCpp - Version 1.10") # just update version manually
+    print("Welcome to KoboldCpp - Version " + KcppVersion) # just update version manually
     parser = argparse.ArgumentParser(description='Kobold llama.cpp server')
     modelgroup = parser.add_mutually_exclusive_group() #we want to be backwards compatible with the unnamed positional args
     modelgroup.add_argument("--model", help="Model file to load", nargs="?")
