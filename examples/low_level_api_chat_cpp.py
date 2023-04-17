@@ -144,6 +144,7 @@ specified) expect poor results""", file=sys.stderr)
 
         # determine newline token
         self.llama_token_newline = self._tokenize("\n", False)
+        self.llama_token_eot = self._tokenize(" [end of text]\n", False)
 
         if (self.params.verbose_prompt):
             print(f"""
@@ -203,16 +204,16 @@ n_keep = {self.params.n_keep}
         _n = llama_cpp.llama_tokenize(self.ctx, prompt.encode("utf8"), _arr, len(_arr), bos)
         return _arr[:_n]
 
-    def use_antiprompt(self):
-        return len(self.first_antiprompt) > 0
-
     def set_color(self, c):
         if (self.params.use_color):
             print(c, end="")
 
+    def use_antiprompt(self):
+        return len(self.first_antiprompt) > 0
+
     # generate tokens
     def generate(self):
-        while self.remaining_tokens > 0 or self.params.interactive:
+        while self.remaining_tokens > 0 or self.params.interactive or self.params.n_predict == -1:
             # predict
             if len(self.embd) > 0:
                 # infinite text generation via context swapping
@@ -313,7 +314,7 @@ n_keep = {self.params.n_keep}
             # end of text token
             if len(self.embd) > 0 and self.embd[-1] == llama_cpp.llama_token_eos():
                 if (not self.params.instruct):
-                    for i in " [end of text]\n":
+                    for i in self.llama_token_eot:
                         yield i
                 break
 

@@ -75,7 +75,7 @@ def gpt_params_parse(argv = None, params: Optional[GptParams] = None):
     parser.add_argument("--top_p", type=float, default=0.95, help="top-p samplin",dest="top_p")
     parser.add_argument("--top_k", type=int, default=40, help="top-k sampling",dest="top_k")
     parser.add_argument("--temp", type=float, default=0.80, help="temperature",dest="temp")
-    parser.add_argument("--n_predict", type=int, default=128, help="number of model parts",dest="n_predict")
+    parser.add_argument("--n_predict", type=int, default=128, help="number of tokens to predict (-1 = infinity)",dest="n_predict")
     parser.add_argument("--repeat_last_n", type=int, default=64, help="last n tokens to consider for penalize ",dest="repeat_last_n")
     parser.add_argument("--repeat_penalty", type=float, default=1.10, help="penalize repeat sequence of tokens",dest="repeat_penalty")
     parser.add_argument("-b", "--batch_size", type=int, default=8, help="batch size for prompt processing",dest="n_batch")
