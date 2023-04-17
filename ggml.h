@@ -237,6 +237,8 @@ extern "C" {
         GGML_TYPE_Q5_1 = 7,
         GGML_TYPE_Q8_0 = 8,
         GGML_TYPE_Q8_1 = 9,
+        GGML_TYPE_Q4_0C = 10,
+        GGML_TYPE_Q8_0C = 11,
         GGML_TYPE_I8,
         GGML_TYPE_I16,
         GGML_TYPE_I32,

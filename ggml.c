@@ -772,6 +772,14 @@ typedef struct {
 } block_q8_1;
 static_assert(sizeof(block_q8_1) == 3*sizeof(float) + QK8_1, "wrong q8_1 block size/padding");
 
+#define QK4_0C (4*32)
+#define QK4_0C_MUL (QK4_0C / QK4_0)
+// TODO: nicer description - pseudostruct?
+// q4_0c : (uint8_t[QK4_0C/2]) qs[nb] || float d[n]
+
+#define QK8_0C 32
+// q8_0c : uint8_t qs[n] || float d[n]
+
 // reference implementation for deterministic creation of model files
 static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * restrict y, int k) {
     assert(k % QK4_0 == 0);
@@ -1115,6 +1123,57 @@ static void quantize_row_q4_0(const float * restrict x, void * restrict vy, int 
     // scalar
     quantize_row_q4_0_reference(x, y, k);
 #endif
+}
+
+static void quantize_row_q4_0c_reference(const float * restrict x, uint8_t * restrict y, int k) {
+    assert(k % QK4_0C == 0);
+    const int nb = k / QK4_0;
+    const int nsb = k / QK4_0C;
+
+    // Split y into nibbles section and scales section
+    uint8_t * restrict qs = y;
+    float * restrict ds = (float *) (y + QK4_0C/2 * nsb);
+
+    for (int i = 0; i < nb/2; i++) {
+        // Interleave two output blocks in low and high nibbles
+        const int src0 = i + i/2*2;      // 0, 1, 4, 5, 8, 9, ...
+        const int src1 = i + i/2*2 + 2;  // 2, 3, 6, 7, 10, 11 ...
+        const float * xb[2] = {
+            x + QK4_0 * src0, // block in low nibbles
+            x + QK4_0 * src1, // block in high nibbles
+        };
+
+        // Find multiplier for each block
+        float d[2];
+        float id[2];
+        for (int j = 0; j < 2; j++) {
+            float amax = 0.0f; // absolute max
+
+            for (int l = 0; l < QK4_0; l++) {
+                const float v = xb[j][l];
+                amax = MAX(amax, fabsf(v));
+            }
+
+            d[j] = amax / ((1 << 3) - 1);
+            id[j] = d[j] ? 1.0f/d[j] : 0.0f;
+        }
+
+        ds[src0] = d[0];
+        ds[src1] = d[1];
+
+        for (int l = 0; l < QK4_0; l++) {
+            const float v0 = xb[0][l]*id[0];
+            const uint8_t vi0 = (int8_t)roundf(v0) + 8;
+
+            const float v1 = xb[1][l]*id[1];
+            const uint8_t vi1 = (int8_t)roundf(v1) + 8;
+
+            assert(vi0 < 16);
+            assert(vi1 < 16);
+
+            qs[i*QK4_0 + l] = vi0 | (vi1 << 4);
+        }
+    }
 }
 
 static void quantize_row_q4_1_reference(const float * restrict x, void * restrict vy, int k) {
@@ -1658,6 +1717,40 @@ static void quantize_row_q8_1(const float * restrict x, void * restrict vy, int 
 #endif
 }
 
+// reference implementation for deterministic creation of model files
+static void quantize_row_q8_0c_reference(const float * restrict x, void * restrict y, int k) {
+    assert(k % QK8_0 == 0);
+    const int nb = k / QK8_0;
+
+    uint8_t * restrict qs = y;
+    float * restrict ds = (float *) ((uint8_t *) y + QK8_0C * nb);
+
+    for (int i = 0; i < nb; i++) {
+        float amax = 0.0f; // absolute max
+
+        for (int l = 0; l < QK8_0; l++) {
+            const float v = x[i*QK8_0 + l];
+            amax = MAX(amax, fabsf(v));
+        }
+
+        const float d = amax / ((1 << 7) - 1);
+        const float id = d ? 1.0f/d : 0.0f;
+
+        ds[i] = d;
+
+        for (int l = 0; l < QK8_0; ++l) {
+            const float v = x[i*QK8_0 + l]*id;
+            qs[i*QK8_0 + l] = roundf(v);
+        }
+    }
+}
+
+static void quantize_row_q8_0c(const float * restrict x, void * restrict vy, int k) {
+    assert(k % QK8_0 == 0);
+
+    quantize_row_q8_0c_reference(x, vy, k);
+}
+
 static void dequantize_row_q4_0(const void * restrict vx, float * restrict y, int k) {
     assert(k % QK4_0 == 0);
     const int nb = k / QK4_0;
@@ -1774,6 +1867,41 @@ static void dequantize_row_q4_0(const void * restrict vx, float * restrict y, in
         }
     }
 #endif
+}
+
+static void dequantize_row_q4_0c(const void * restrict vx, float * restrict y, int k) {
+    assert(k % QK4_0C == 0);
+    const int nb = k / QK4_0;
+    const int nsb = k / QK4_0C;
+
+    // Split vx into nibbles section and scales section
+    const uint8_t * restrict qs = vx;
+    const float * restrict ds = (const float *) ((const uint8_t *) vx + QK4_0C/2 * nsb);
+
+    // scalar
+    for (int i = 0; i < nb/2; i++) {
+        const int dst0 = i + i/2*2;      // 0, 1, 4, 5, 8, 9, ...
+        const int dst1 = i + i/2*2 + 2;  // 2, 3, 6, 7, 10, 11 ...
+
+        const float d0 = ds[dst0];
+        const float d1 = ds[dst1];
+
+        for (int l = 0; l < QK4_0; l++) {
+            const uint8_t vi = qs[i * QK4_0 + l];
+
+            const int8_t vi0 = vi & 0xf;
+            const int8_t vi1 = vi >> 4;
+
+            const float v0 = (vi0 - 8)*d0;
+            const float v1 = (vi1 - 8)*d1;
+
+            y[dst0*QK4_0 + l] = v0;
+            y[dst1*QK4_0 + l] = v1;
+
+            assert(!isnan(y[dst0*QK4_0 + l]));
+            assert(!isnan(y[dst1*QK4_0 + l]));
+        }
+    }
 }
 
 static void dequantize_row_q4_1(const void * restrict vx, float * restrict y, int k) {
@@ -2002,6 +2130,7 @@ static void dequantize_row_q8_0(const void * restrict vx, float * restrict y, in
 }
 
 static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void * restrict vx, const void * restrict vy);
+static void ggml_vec_dot_q4_0c_q8_0c(const int n, float * restrict s, const void * restrict vx, const void * restrict vy);
 static void ggml_vec_dot_q4_1_q8_1(const int n, float * restrict s, const void * restrict vx, const void * restrict vy);
 static void ggml_vec_dot_q4_2_q8_0(const int n, float * restrict s, const void * restrict vx, const void * restrict vy);
 static void ggml_vec_dot_q5_0_q8_0(const int n, float * restrict s, const void * restrict vx, const void * restrict vy);
@@ -2016,6 +2145,14 @@ static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
         .quantize_row_q_dot       = quantize_row_q8_0,
         .vec_dot_q                = ggml_vec_dot_q4_0_q8_0,
         .vec_dot_type             = GGML_TYPE_Q8_0,
+    },
+    [GGML_TYPE_Q4_0C] = {
+        .dequantize_row_q         = dequantize_row_q4_0c,
+        //.quantize_row_q           = quantize_row_q4_0c,
+        .quantize_row_q           = (quantize_row_q_t) quantize_row_q4_0c_reference,
+        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_0c_reference,
+        .quantize_row_q_dot       = quantize_row_q8_0c,
+        .vec_dot_q                = ggml_vec_dot_q4_0c_q8_0c,
     },
     [GGML_TYPE_Q4_1] = {
         .dequantize_row_q         = dequantize_row_q4_1,
@@ -2064,6 +2201,13 @@ static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
         .quantize_row_q_dot       = quantize_row_q8_1,
         .vec_dot_q                = NULL,   // TODO
         .vec_dot_type             = GGML_TYPE_Q8_1,
+    },
+    [GGML_TYPE_Q8_0C] = {
+        .dequantize_row_q         = NULL,
+        .quantize_row_q           = quantize_row_q8_0c,
+        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q8_0c_reference,
+        .quantize_row_q_dot       = quantize_row_q8_0c,
+        .vec_dot_q                = NULL,
     },
 };
 
@@ -2833,6 +2977,51 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
     }
     *s = sumf;
 #endif
+}
+
+static void ggml_vec_dot_q4_0c_q8_0c(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
+    const int nb = n / QK4_0;
+    const int nsb = n / QK4_0C;
+
+    assert(n % QK4_0C == 0);
+
+    // Split into nibbles and scales sections
+    const uint8_t * restrict xqs = vx;
+    const float * restrict xds = (const float *) ((const uint8_t *) vx + nsb*QK4_0C/2);
+    const int8_t * restrict yqs = vy;
+    const float * restrict yds = (const float *) ((const uint8_t *) vy + nb*QK8_0C);
+
+    float sumf = 0.0;
+
+    // scalar
+    for (int i = 0; i < nb/2; i++) {
+        const int dst0 = i + i/2*2;      // 0, 1, 4, 5, 8, 9, ...
+        const int dst1 = i + i/2*2 + 2;  // 2, 3, 6, 7, 10, 11 ...
+
+        const float dx0 = xds[dst0];
+        const float dx1 = xds[dst1];
+        const float dy0 = yds[dst0];
+        const float dy1 = yds[dst1];
+
+        int sumi0 = 0;
+        int sumi1 = 0;
+
+        for (int l = 0; l < QK4_0; l++) {
+                const uint8_t v0 = xqs[i*QK4_0 + l];
+
+                const int i0 = (int8_t) (v0 & 0xf) - 8;
+                const int i1 = (int8_t) (v0 >> 4)  - 8;
+
+                const int i2 = yqs[dst0*QK4_0 + l];
+                const int i3 = yqs[dst1*QK4_0 + l];
+
+                sumi0 += i0*i2;
+                sumi1 += i1*i3;
+        }
+        sumf += dx0*dy0*sumi0 + dx1*dy1*sumi1;
+    }
+
+    *s = sumf;
 }
 
 static void ggml_vec_dot_q4_1_q8_1(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
@@ -3885,66 +4074,74 @@ static const int GGML_BLCK_SIZE[GGML_TYPE_COUNT] = {
     [GGML_TYPE_F32]  = 1,
     [GGML_TYPE_F16]  = 1,
     [GGML_TYPE_Q4_0] = QK4_0,
+    [GGML_TYPE_Q4_0C] = QK4_0C,
     [GGML_TYPE_Q4_1] = QK4_1,
     [GGML_TYPE_Q4_2] = QK4_2,
     [GGML_TYPE_Q5_0] = QK5_0,
     [GGML_TYPE_Q5_1] = QK5_1,
     [GGML_TYPE_Q8_0] = QK8_0,
+    [GGML_TYPE_Q8_0C] = QK8_0C,
     [GGML_TYPE_Q8_1] = QK8_1,
     [GGML_TYPE_I8]   = 1,
     [GGML_TYPE_I16]  = 1,
     [GGML_TYPE_I32]  = 1,
 };
-static_assert(GGML_TYPE_COUNT == 13, "GGML_BLCK_SIZE is outdated");
+static_assert(GGML_TYPE_COUNT == 15, "GGML_BLCK_SIZE is outdated");
 
 static const size_t GGML_TYPE_SIZE[GGML_TYPE_COUNT] = {
     [GGML_TYPE_F32]  = sizeof(float),
     [GGML_TYPE_F16]  = sizeof(ggml_fp16_t),
     [GGML_TYPE_Q4_0] = sizeof(block_q4_0),
+    [GGML_TYPE_Q4_0C] = 4*sizeof(block_q4_0),
     [GGML_TYPE_Q4_1] = sizeof(block_q4_1),
     [GGML_TYPE_Q4_2] = sizeof(block_q4_2),
     [GGML_TYPE_Q5_0] = sizeof(block_q5_0),
     [GGML_TYPE_Q5_1] = sizeof(block_q5_1),
     [GGML_TYPE_Q8_0] = sizeof(block_q8_0),
+    [GGML_TYPE_Q8_0C] = sizeof(block_q8_0),
     [GGML_TYPE_Q8_1] = sizeof(block_q8_1),
     [GGML_TYPE_I8]   = sizeof(int8_t),
     [GGML_TYPE_I16]  = sizeof(int16_t),
     [GGML_TYPE_I32]  = sizeof(int32_t),
 };
-static_assert(GGML_TYPE_COUNT == 13, "GGML_TYPE_SIZE is outdated");
+static_assert(GGML_TYPE_COUNT == 15, "GGML_TYPE_SIZE is outdated");
 
 
 static const char * GGML_TYPE_NAME[GGML_TYPE_COUNT] = {
     [GGML_TYPE_F32]  = "f32",
     [GGML_TYPE_F16]  = "f16",
     [GGML_TYPE_Q4_0] = "q4_0",
+    [GGML_TYPE_Q4_0C] = "q4_0c",
     [GGML_TYPE_Q4_1] = "q4_1",
     [GGML_TYPE_Q4_2] = "q4_2",
     [GGML_TYPE_Q5_0] = "q5_0",
     [GGML_TYPE_Q5_1] = "q5_1",
     [GGML_TYPE_Q8_0] = "q8_0",
+    [GGML_TYPE_Q8_0C] = "q8_0c",
     [GGML_TYPE_Q8_1] = "q8_1",
     [GGML_TYPE_I8]   = "i8",
     [GGML_TYPE_I16]  = "i16",
     [GGML_TYPE_I32]  = "i32",
 };
-static_assert(GGML_TYPE_COUNT == 13, "GGML_TYPE_NAME is outdated");
+static_assert(GGML_TYPE_COUNT == 15, "GGML_TYPE_NAME is outdated");
 
 static bool GGML_IS_QUANTIZED[GGML_TYPE_COUNT] = {
     [GGML_TYPE_F32]  = false,
     [GGML_TYPE_F16]  = false,
     [GGML_TYPE_Q4_0] = true,
+    [GGML_TYPE_Q4_0C] = true,
     [GGML_TYPE_Q4_1] = true,
     [GGML_TYPE_Q4_2] = true,
     [GGML_TYPE_Q5_0] = true,
     [GGML_TYPE_Q5_1] = true,
     [GGML_TYPE_Q8_0] = true,
+    [GGML_TYPE_Q8_0C] = true,
     [GGML_TYPE_Q8_1] = true,
     [GGML_TYPE_I8]   = false,
     [GGML_TYPE_I16]  = false,
     [GGML_TYPE_I32]  = false,
 };
-static_assert(GGML_TYPE_COUNT == 13, "GGML_IS_QUANTIZED is outdated");
+static_assert(GGML_TYPE_COUNT == 15, "GGML_IS_QUANTIZED is outdated");
 
 static const char * GGML_OP_LABEL[GGML_OP_COUNT] = {
     "NONE",
@@ -8763,11 +8960,13 @@ static void ggml_compute_forward_mul_mat(
         struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_Q4_0:
+        case GGML_TYPE_Q4_0C:
         case GGML_TYPE_Q4_1:
         case GGML_TYPE_Q4_2:
         case GGML_TYPE_Q5_0:
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
+        case GGML_TYPE_Q8_0C:
         case GGML_TYPE_Q8_1:
             {
                 ggml_compute_forward_mul_mat_q_f32(params, src0, src1, dst);
@@ -8994,11 +9193,13 @@ static void ggml_compute_forward_get_rows(
         struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_Q4_0:
+        case GGML_TYPE_Q4_0C:
         case GGML_TYPE_Q4_1:
         case GGML_TYPE_Q4_2:
         case GGML_TYPE_Q5_0:
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
+        case GGML_TYPE_Q8_0C:
         case GGML_TYPE_Q8_1:
             {
                 ggml_compute_forward_get_rows_q(params, src0, src1, dst);
