@@ -42,35 +42,51 @@ static const size_t MB = 1024*1024;
 // TODO: dynamically determine these sizes
 //       needs modifications in ggml
 
-static const std::map<e_model, size_t> MEM_REQ_SCRATCH0 = {
-    { MODEL_7B,    512ull*MB },
-    { MODEL_13B,   512ull*MB },
-    { MODEL_30B,   512ull*MB },
-    { MODEL_65B,   512ull*MB },
-};
+static const std::map<e_model, size_t> & MEM_REQ_SCRATCH0()
+{
+    static std::map<e_model, size_t> _MEM_REQ_SCRATCH0 = {
+        { MODEL_7B,    512ull * MB },
+        { MODEL_13B,   512ull * MB },
+        { MODEL_30B,   512ull * MB },
+        { MODEL_65B,   512ull * MB },
+    };
+    return _MEM_REQ_SCRATCH0;
+}
 
-static const std::map<e_model, size_t> MEM_REQ_SCRATCH1 = {
-    { MODEL_7B,    512ull*MB },
-    { MODEL_13B,   512ull*MB },
-    { MODEL_30B,   512ull*MB },
-    { MODEL_65B,   512ull*MB },
+static const std::map<e_model, size_t> & MEM_REQ_SCRATCH1()
+{
+    static std::map<e_model, size_t> _MEM_REQ_SCRATCH1 = {
+        { MODEL_7B,    512ull * MB },
+        { MODEL_13B,   512ull * MB },
+        { MODEL_30B,   512ull * MB },
+        { MODEL_65B,   512ull * MB },
+    };
+    return _MEM_REQ_SCRATCH1;
 };
 
 // 2*n_embd*n_ctx*n_layer*sizeof(float16)
-static const std::map<e_model, size_t> MEM_REQ_KV_SELF = {
-    { MODEL_7B,   1026ull*MB },
-    { MODEL_13B,  1608ull*MB },
-    { MODEL_30B,  3124ull*MB },
-    { MODEL_65B,  5120ull*MB },
+static const std::map<e_model, size_t> & MEM_REQ_KV_SELF()
+{
+    static std::map<e_model, size_t> _MEM_REQ_KV_SELF = {
+        { MODEL_7B,   1026ull * MB },
+        { MODEL_13B,  1608ull * MB },
+        { MODEL_30B,  3124ull * MB },
+        { MODEL_65B,  5120ull * MB },
+    };
+    return _MEM_REQ_KV_SELF;
 };
 
 // this is mostly needed for temporary mul_mat buffers to dequantize the data
 // not actually needed if BLAS is disabled
-static const std::map<e_model, size_t> MEM_REQ_EVAL = {
-    { MODEL_7B,   768ull*MB },
-    { MODEL_13B, 1024ull*MB },
-    { MODEL_30B, 1280ull*MB },
-    { MODEL_65B, 1536ull*MB },
+static const std::map<e_model, size_t> & MEM_REQ_EVAL()
+{
+    static std::map<e_model, size_t> _MEM_REQ_EVAL = {
+        { MODEL_7B,   768ull * MB },
+        { MODEL_13B, 1024ull * MB },
+        { MODEL_30B, 1280ull * MB },
+        { MODEL_65B, 1536ull * MB },
+    };
+    return _MEM_REQ_EVAL;
 };
 
 // default hparams (LLaMA 7B)
@@ -899,13 +915,13 @@ static void llama_model_load_internal(
         const size_t mem_required =
             ctx_size +
             mmapped_size +
-            MEM_REQ_SCRATCH0.at(model.type) +
-            MEM_REQ_SCRATCH1.at(model.type) +
-            MEM_REQ_EVAL.at    (model.type);
+            MEM_REQ_SCRATCH0().at(model.type) +
+            MEM_REQ_SCRATCH1().at(model.type) +
+            MEM_REQ_EVAL().at(model.type);
 
         // this is the memory required by one llama_state
         const size_t mem_required_state =
-            scale*MEM_REQ_KV_SELF.at(model.type);
+            scale*MEM_REQ_KV_SELF().at(model.type);
 
         fprintf(stderr, "%s: mem required  = %7.2f MB (+ %7.2f MB per state)\n", __func__,
                 mem_required / 1024.0 / 1024.0, mem_required_state / 1024.0 / 1024.0);
@@ -1732,10 +1748,10 @@ struct llama_context * llama_init_from_file(
             ctx->embedding.resize(hparams.n_embd);
         }
 
-        ctx->buf_compute.resize(MEM_REQ_EVAL.at(ctx->model.type));
+        ctx->buf_compute.resize(MEM_REQ_EVAL().at(ctx->model.type));
 
-        ctx->buf_scratch[0].resize(MEM_REQ_SCRATCH0.at(ctx->model.type));
-        ctx->buf_scratch[1].resize(MEM_REQ_SCRATCH1.at(ctx->model.type));
+        ctx->buf_scratch[0].resize(MEM_REQ_SCRATCH0().at(ctx->model.type));
+        ctx->buf_scratch[1].resize(MEM_REQ_SCRATCH1().at(ctx->model.type));
     }
 
     return ctx;
