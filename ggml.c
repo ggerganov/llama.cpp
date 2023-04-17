@@ -32,6 +32,7 @@
 
 typedef volatile LONG atomic_int;
 typedef atomic_int atomic_bool;
+typedef atomic_int atomic_flag;
 
 static inline void atomic_store(atomic_int* ptr, LONG val) {
     InterlockedExchange(ptr, val);
@@ -46,11 +47,11 @@ static inline LONG atomic_fetch_sub(atomic_int* ptr, LONG dec) {
     return atomic_fetch_add(ptr, -(dec));
 }
 
-static inline LONG atomic_flag_test_and_set(atomic_int* ptr) {
+static inline LONG atomic_flag_test_and_set(atomic_flag* ptr) {
     return InterlockedCompareExchange(ptr, 1, 0);
 }
 
-static inline LONG atomic_flag_test_clear(atomic_int* ptr) {
+static inline LONG atomic_flag_test_clear(atomic_flag* ptr) {
     return InterlockedExchange(ptr, 0)
 }
 
@@ -10270,7 +10271,6 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
             GGML_ASSERT(rc == 0);
         }
     }
-
 
 #ifdef GGML_GLOBAL_THREADS
     // wakeup threads.
