@@ -430,6 +430,12 @@ struct ggml_tensor * ggml_add(
         struct ggml_tensor  * a,
         struct ggml_tensor  * b);
 
+
+struct ggml_tensor * ggml_add_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        struct ggml_tensor  * b);
+
 struct ggml_tensor * ggml_sub(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
