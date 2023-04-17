@@ -1370,7 +1370,7 @@ static void dequantize_row_q4_0(const void * restrict vx, float * restrict y, in
             const float v0 = (vi0 - 8)*d0;
             const float v1 = (vi1 - 8)*d0;
 
-            //printf("d = %f, vi = %d, vi0 = %d, vi1 = %d, v0 = %f, v1 = %f\n", d, vi, vi0, vi1, v0, v1);
+            //printf("l = %4d, d0 = %8.3f, vi = %4d, vi0 = %3d, vi1 = %3d, v0 = %8.3f, v1 = %8.3f\n", l, d0, vi, vi0, vi1, v0, v1);
 
             y[i*QK4_0 + l + 0] = v0;
             y[i*QK4_0 + l + 1] = v1;
@@ -1387,6 +1387,8 @@ static void dequantize_row_q4_0(const void * restrict vx, float * restrict y, in
 
             const float v0 = (vi0 - 8)*d1;
             const float v1 = (vi1 - 8)*d1;
+
+            //printf("l = %4d, d1 = %8.3f, vi = %4d, vi0 = %3d, vi1 = %3d, v0 = %8.3f, v1 = %8.3f\n", l, d1, vi, vi0, vi1, v0, v1);
 
             y[i*QK4_0 + l + 0] = v0;
             y[i*QK4_0 + l + 1] = v1;
