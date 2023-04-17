@@ -46,8 +46,8 @@ typedef atomic_int atomic_bool;
 static void atomic_store(atomic_int* ptr, LONG val) {
     InterlockedExchange(ptr, val);
 }
-static int atomic_compare_exchange_strong(atomic_int* ptr, int* expected, int desired) {
-    int old_val = InterlockedCompareExchange(ptr, desired, *expected);
+static LONG atomic_compare_exchange_strong(atomic_int* ptr, LONG* expected, LONG desired) {
+    LONG old_val = InterlockedCompareExchange(ptr, desired, *expected);
     return old_val == *expected;
 }
 static LONG atomic_load(atomic_int* ptr) {
@@ -9352,7 +9352,7 @@ static bool ggml_wait_while_predicate(void* cond_ptr) {
     }
 }
 
-static bool ggml_wait_while(struct ggml_lock_t* lock, atomic_bool* condition, bool invert) {
+static void ggml_wait_while(struct ggml_lock_t* lock, atomic_bool* condition, bool invert) {
     struct ggml_wait_while_predicate_params_t params = {
         .condition = condition,
         .invert    = invert
@@ -9370,7 +9370,7 @@ static bool ggml_wait_while_not_equal_predicate(void* cond_ptr) {
     return atomic_load(pred->value) != pred->not_equal_to_what;
 }
 
-static bool ggml_wait_while_not_equal(struct ggml_lock_t* lock, atomic_int* value, int not_equal_to_what) {
+static void ggml_wait_while_not_equal(struct ggml_lock_t* lock, atomic_int* value, int not_equal_to_what) {
     struct ggml_wait_while_not_equal_params_t params = {
         .value = value,
         .not_equal_to_what = not_equal_to_what
@@ -9388,7 +9388,7 @@ static bool ggml_wait_while_greater_than_predicate(void* cond_ptr) {
     return atomic_load(pred->value) > pred->greater_than_what;
 }
 
-static bool ggml_wait_while_greater_than(struct ggml_lock_t* lock, atomic_int* value, int greater_than_what) {
+static void ggml_wait_while_greater_than(struct ggml_lock_t* lock, atomic_int* value, int greater_than_what) {
     struct ggml_wait_while_greater_than_params_t params = {
         .value = value,
         .greater_than_what = greater_than_what
