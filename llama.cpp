@@ -481,6 +481,7 @@ struct llama_file_loader {
                 case GGML_TYPE_F32:
                 case GGML_TYPE_F16:
                 case GGML_TYPE_Q4_0:
+                case GGML_TYPE_Q4_0C:
                 case GGML_TYPE_Q4_1:
                 case GGML_TYPE_Q4_2:
                 case GGML_TYPE_Q5_0:
@@ -557,6 +558,7 @@ struct llama_file_saver {
             case GGML_TYPE_F32:
             case GGML_TYPE_F16:
             case GGML_TYPE_Q4_0:
+            case GGML_TYPE_Q4_0C:
             case GGML_TYPE_Q4_1:
             case GGML_TYPE_Q4_2:
             case GGML_TYPE_Q5_0:
@@ -846,6 +848,7 @@ static const char *llama_ftype_name(enum llama_ftype ftype) {
         case LLAMA_FTYPE_ALL_F32:     return "all F32";
         case LLAMA_FTYPE_MOSTLY_F16:  return "mostly F16";
         case LLAMA_FTYPE_MOSTLY_Q4_0: return "mostly Q4_0";
+        case LLAMA_FTYPE_MOSTLY_Q4_0C: return "mostly Q4_0C";
         case LLAMA_FTYPE_MOSTLY_Q4_1: return "mostly Q4_1";
         case LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16:
                                       return "mostly Q4_1, some F16";
@@ -1880,6 +1883,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     ggml_type quantized_type;
     switch (ftype) {
         case LLAMA_FTYPE_MOSTLY_Q4_0: quantized_type = GGML_TYPE_Q4_0; break;
+        case LLAMA_FTYPE_MOSTLY_Q4_0C: quantized_type = GGML_TYPE_Q4_0C; break;
         case LLAMA_FTYPE_MOSTLY_Q4_1: quantized_type = GGML_TYPE_Q4_1; break;
         case LLAMA_FTYPE_MOSTLY_Q4_2: quantized_type = GGML_TYPE_Q4_2; break;
         case LLAMA_FTYPE_MOSTLY_Q5_0: quantized_type = GGML_TYPE_Q5_0; break;
@@ -1961,15 +1965,16 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             new_data = work.addr;
             std::vector<int64_t> hist_cur(1 << 4, 0);
 
-            int chunk_size = 32 * 512;
+            int row_size = tensor.ne.at(0);
+            int chunk_size = ceil(32 * 512 * 1.0 / row_size) * row_size;
             const int nchunk = (nelements + chunk_size - 1)/chunk_size;
             const int nthread_use = nthread > 1 ? std::max(1, std::min(nthread, nchunk)) : 1;
             if (nthread_use < 2) {
-                new_size = ggml_quantize_chunk(new_type, f32_data, new_data, 0, nelements, hist_cur.data());
+                new_size = ggml_quantize_chunk(new_type, f32_data, new_data, 0, nelements, row_size, hist_cur.data());
             } else {
                 size_t counter = 0;
                 new_size = 0;
-                auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, nelements, chunk_size] () {
+                auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, nelements, chunk_size, row_size] () {
                     std::vector<int64_t> local_hist;
                     size_t local_size = 0;
                     while (true) {
@@ -1985,7 +1990,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                         lock.unlock();
                         size_t last = std::min(nelements, first + chunk_size);
                         if (local_hist.empty()) local_hist.resize(hist_cur.size(), 0);
-                        local_size += ggml_quantize_chunk(new_type, f32_data, new_data, first, last - first, local_hist.data());
+                        local_size += ggml_quantize_chunk(new_type, f32_data, new_data, first, last - first, row_size, local_hist.data());
                     }
                 };
                 if (int(workers.size()) < nthread_use - 1) workers.resize(nthread_use - 1);

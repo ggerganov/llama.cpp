@@ -774,11 +774,17 @@ static_assert(sizeof(block_q8_1) == 3*sizeof(float) + QK8_1, "wrong q8_1 block s
 
 #define QK4_0C (4*32)
 #define QK4_0C_MUL (QK4_0C / QK4_0)
-// TODO: nicer description - pseudostruct?
-// q4_0c : (uint8_t[QK4_0C/2]) qs[nb] || float d[n]
+#define Q4_0C_QSIZE (QK4_0C/2 + 4*sizeof(float))
+// typedef struct {
+//    uint8_t qs[QK4_0C/2][nb];
+//    float d[nb];
+// } block_q4_0c
 
 #define QK8_0C 32
-// q8_0c : uint8_t qs[n] || float d[n]
+// typedef struct {
+//    uint8_t qs[QK8_0C][nb];
+//    float d[nb];
+// } block_q8_0c
 
 // reference implementation for deterministic creation of model files
 static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * restrict y, int k) {
@@ -13102,6 +13108,27 @@ size_t ggml_quantize_q4_0(const float * src, void * dst, int n, int k, int64_t *
     return (n/QK4_0*sizeof(block_q4_0));
 }
 
+size_t ggml_quantize_q4_0c(const float * src, void * dst, int n, int k, int64_t * hist) {
+    assert(k % QK4_0C == 0);
+    const int nb = k / QK4_0;
+
+    for (int j = 0; j < n; j += k) {
+        uint8_t * restrict y = (uint8_t *)dst + sizeof(block_q4_0)*j/QK4_0;
+
+        quantize_row_q4_0c_reference(src + j, y, k);
+
+        for (int i = 0; i < nb*QK4_0/2; i++) {
+            const uint8_t vi0 = y[i] & 0xF;
+            const uint8_t vi1 = y[i] >> 4;
+
+            hist[vi0]++;
+            hist[vi1]++;
+        }
+    }
+
+    return (n/QK4_0*sizeof(block_q4_0));
+}
+
 size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t * hist) {
     assert(k % QK4_1 == 0);
     const int nb = k / QK4_1;
@@ -13229,7 +13256,7 @@ size_t ggml_quantize_q8_0(const float * src, void * dst, int n, int k, int64_t *
     return (n/QK8_0*sizeof(block_q8_0));
 }
 
-size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, int start, int n, int64_t * hist) {
+size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, int start, int n, int k, int64_t * hist) {
     size_t result = 0;
     switch (type) {
         case GGML_TYPE_Q4_0:
@@ -13237,6 +13264,12 @@ size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, i
                 GGML_ASSERT(start % QK4_0 == 0);
                 block_q4_0 * block = (block_q4_0*)dst + start / QK4_0;
                 result = ggml_quantize_q4_0(src + start, block, n, n, hist);
+            } break;
+        case GGML_TYPE_Q4_0C:
+            {
+                GGML_ASSERT(start % QK4_0C == 0);
+                uint8_t * dst_off = (uint8_t *) dst + Q4_0C_QSIZE * start / QK4_0C;
+                result = ggml_quantize_q4_0c(src + start, dst_off, n, k, hist);
             } break;
         case GGML_TYPE_Q4_1:
             {
