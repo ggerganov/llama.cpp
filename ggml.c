@@ -726,8 +726,8 @@ static void quantize_row_q4_0(const float * restrict x, void * restrict vy, int 
         const float id0 = d0 ? 1.0f/d0 : 0.0f;
         const float id1 = d1 ? 1.0f/d1 : 0.0f;
 
-        y[i].d0 = d0;
-        y[i].d1 = d1;
+        y[i].d0 = GGML_FP32_TO_FP16(d0);
+        y[i].d1 = GGML_FP32_TO_FP16(d1);
 
         for (int l = 0; l < 4; l++) {
             const float32x4_t v  = vmulq_n_f32(srcv[l], id0);
