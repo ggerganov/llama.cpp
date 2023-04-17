@@ -25,6 +25,7 @@
 #endif
 
 static console_state con_st;
+llama_context * ctx;
 
 static bool is_interacting = false;
 
@@ -36,6 +37,8 @@ void sigint_handler(int signo) {
         if (!is_interacting) {
             is_interacting=true;
         } else {
+            llama_print_timings(ctx);
+            llama_free(ctx);
             _exit(130);
         }
     }
@@ -92,8 +95,6 @@ int main(int argc, char ** argv) {
 
 //    params.prompt = R"(// this function checks if the number n is prime
 //bool is_prime(int n) {)";
-
-    llama_context * ctx;
 
     // load the model
     {
