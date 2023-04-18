@@ -20,6 +20,8 @@
 #include "expose.h"
 #include "model_adapter.cpp"
 
+std::string executable_path = "";
+
 extern "C"
 {
 
@@ -46,6 +48,7 @@ extern "C"
         deviceenv = "KCPP_CLBLAST_DEVICES="+std::to_string(devices);
         putenv((char*)platformenv.c_str());
         putenv((char*)deviceenv.c_str());
+        executable_path = inputs.executable_path;
 
         if(file_format==FileFormat::GPTJ_1 || file_format==FileFormat::GPTJ_2 || file_format==FileFormat::GPTJ_3)
         {

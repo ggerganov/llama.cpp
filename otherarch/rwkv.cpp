@@ -14,8 +14,9 @@
 #include <iostream>
 #include <unordered_map>
 
-
 #include "model_adapter.h"
+
+#include "rwkv_vocab.cpp"
 
 // --- Utilities ---
 

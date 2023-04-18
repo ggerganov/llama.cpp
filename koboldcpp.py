@@ -15,6 +15,7 @@ class load_model_inputs(ctypes.Structure):
                 ("max_context_length", ctypes.c_int),
                 ("batch_size", ctypes.c_int),
                 ("f16_kv", ctypes.c_bool),
+                ("executable_path", ctypes.c_char_p),
                 ("model_filename", ctypes.c_char_p),
                 ("n_parts_overwrite", ctypes.c_int),
                 ("use_mmap", ctypes.c_bool),
@@ -77,7 +78,7 @@ def load_model(model_filename,batch_size=8,max_context_length=512,n_parts_overwr
     inputs.max_context_length = max_context_length #initial value to use for ctx, can be overwritten
     inputs.threads = threads
     inputs.n_parts_overwrite = n_parts_overwrite
-    inputs.f16_kv = True
+    inputs.f16_kv = True    
     inputs.use_mmap = use_mmap
     inputs.use_smartcontext = use_smartcontext
     inputs.blasbatchsize = blasbatchsize
@@ -85,6 +86,7 @@ def load_model(model_filename,batch_size=8,max_context_length=512,n_parts_overwr
     if args.useclblast:
         clblastids = 100 + int(args.useclblast[0])*10 + int(args.useclblast[1])
     inputs.clblast_info = clblastids
+    inputs.executable_path = (os.path.dirname(os.path.realpath(__file__))+"/").encode("UTF-8")
     ret = handle.load_model(inputs)
     return ret
 
@@ -437,7 +439,12 @@ def main(args):
     else:
         epurl = f"http://{args.host}:{args.port}" + ("?streaming=1" if args.stream else "")   
     
-        
+    if args.launch:
+        try:
+            import webbrowser as wb
+            wb.open(epurl)
+        except:
+            print("--launch was set, but could not launch web browser automatically.")
     print(f"Please connect to custom endpoint at {epurl}")
     RunServerMultiThreaded(args.host, args.port, embedded_kailite)
 
@@ -451,6 +458,7 @@ if __name__ == '__main__':
     portgroup.add_argument("--port", help="Port to listen on", default=defaultport, type=int, action='store')
     portgroup.add_argument("port_param", help="Port to listen on (positional)", default=defaultport, nargs="?", type=int, action='store')
     parser.add_argument("--host", help="Host IP to listen on. If empty, all routable interfaces are accepted.", default="")
+    parser.add_argument("--launch", help="Launches a web browser when load is completed.", action='store_true')
     
     #os.environ["OMP_NUM_THREADS"] = '12'
     # psutil.cpu_count(logical=False)

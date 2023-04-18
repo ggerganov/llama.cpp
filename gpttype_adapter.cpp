@@ -77,14 +77,16 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         n_batch = 1;
 
         std::string word;
-        for (int i = 0; i < 20; i++) {
+        read_rwkv_vocab();
+        int vocabsiz = rwkv_vocab.size();
+        for (int i = 0; i < vocabsiz; i++) {
             uint32_t len;
-            word = ('a'+i);
+            word = rwkv_vocab[i];
             vocab.token_to_id[word] = i;
             vocab.id_to_token[i] = word;
         }
+        printf("\nRWKV Vocab: %u\n",vocabsiz);
 
-        int vocabsiz = vocab.token_to_id.size();
         bool testeval = rwkv_eval(rwkv_context_v1, 0, rwkv_context_v1->state_in, rwkv_context_v1->state_out, rwkv_context_v1->logits_out);
         if(!testeval)
         {
@@ -230,6 +232,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     
     // tokenize the prompt
     std::vector<gpt_vocab::id> embd_inp = ::gpt_tokenize(vocab, params.prompt);
+    print_tok_vec(embd_inp);
 
     //truncate to front of the prompt if its too long
     int32_t nctx = params.n_ctx;
@@ -330,7 +333,9 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                                    
             if(file_format==FileFormat::RWKV_1)
             {
+                printf("\nsiz:%d val:%d\n",embd.size(),embd[0]);
                 evalres = rwkv_eval(rwkv_context_v1, embd[0], rwkv_context_v1->state_in, rwkv_context_v1->state_out, rwkv_context_v1->logits_out);
+                memcpy(logits.data(), rwkv_context_v1->logits_out, sizeof(float)*rwkv_vocab.size());
             }
             else if(file_format==FileFormat::GPT2_1)
             {
