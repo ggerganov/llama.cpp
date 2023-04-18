@@ -38,7 +38,6 @@ void sigint_handler(int signo) {
             is_interacting=true;
         } else {
             llama_print_timings(ctx);
-            llama_free(ctx);
             _exit(130);
         }
     }
