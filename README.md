@@ -18,6 +18,14 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 - You can also run it using the command line `koboldcpp.exe [ggml_model.bin] [port]`. For info, please check `koboldcpp.exe --help` 
 - If you are having crashes or issues with OpenBLAS, please try the `--noblas` flag.
 
+## Compiling at Windows
+- If you want to compile your binaries from source at Windows, the easiest way is:
+  - Use the latest release of w64devkit (https://github.com/skeeto/w64devkit). Be sure to use the "vanilla one", not i686 or other different stuff. If you try they will conflit with the precompiled libs!
+  - Make sure you are using the w64devkit integrated terminal, then run 'make' at the KoboldCpp source folder. This will create the .dll files.
+  - If you want to generate the .exe file, make sure you have the python module PyInstaller installed with pip ('pip install PyInstaller').
+  - Run the script make_pyinstaller.bat at a regular terminal (or Windows Explorer).
+  - The koboldcpp.exe file will be at your dist folder.
+
 ## OSX and Linux
 - You will have to compile your binaries from source. A makefile is provided, simply run `make`
 - If you want you can also link your own install of OpenBLAS manually with `make LLAMA_OPENBLAS=1`
