@@ -2810,14 +2810,8 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
         const int32x4_t p_0 = vdotq_s32(vdotq_s32(vdupq_n_s32(0), v0_0ls, v1_0ls), v0_0hs, v1_0hs);
         const int32x4_t p_1 = vdotq_s32(vdotq_s32(vdupq_n_s32(0), v0_1ls, v1_1ls), v0_1hs, v1_1hs);
 
-#if 0
-        // note: this is faster for 4-6 threads by slower for more threads
         sumv0 = vmlaq_n_f32(sumv0, vcvtq_f32_s32(p_0), x0->d*y0->d);
         sumv1 = vmlaq_n_f32(sumv1, vcvtq_f32_s32(p_1), x1->d*y1->d);
-#else
-        sumv0 = vaddq_f32(sumv0, vmulq_f32(vcvtq_f32_s32(p_0), vdupq_n_f32(x0->d*y0->d)));
-        sumv1 = vaddq_f32(sumv1, vmulq_f32(vcvtq_f32_s32(p_1), vdupq_n_f32(x1->d*y1->d)));
-#endif
 #else
         const int16x8_t pl0l = vmull_s8(vget_low_s8 (v0_0ls), vget_low_s8 (v1_0ls));
         const int16x8_t pl0h = vmull_s8(vget_high_s8(v0_0ls), vget_high_s8(v1_0ls));
