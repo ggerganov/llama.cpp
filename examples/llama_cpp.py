@@ -114,7 +114,9 @@ LLAMA_FTYPE_ALL_F32 = ctypes.c_int(0)
 LLAMA_FTYPE_MOSTLY_F16 = ctypes.c_int(1)  # except 1d tensors
 LLAMA_FTYPE_MOSTLY_Q4_0 = ctypes.c_int(2)  # except 1d tensors
 LLAMA_FTYPE_MOSTLY_Q4_1 = ctypes.c_int(3)  # except 1d tensors
-LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = ctypes.c_int(4)  # tok_embeddings.weight and output.weight are F16
+LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = ctypes.c_int(
+    4
+)  # tok_embeddings.weight and output.weight are F16
 
 # Functions
 
@@ -175,6 +177,22 @@ def llama_model_quantize(
 
 _lib.llama_model_quantize.argtypes = [c_char_p, c_char_p, c_int]
 _lib.llama_model_quantize.restype = c_int
+
+
+# Apply a LoRA adapter to a loaded model
+# path_base_model is the path to a higher quality model to use as a base for
+# the layers modified by the adapter. Can be NULL to use the current loaded model.
+# The model needs to be reloaded before applying a new adapter, otherwise the adapter
+# will be applied on top of the previous one
+# Returns 0 on success
+def llama_apply_lora_from_file(
+    ctx: llama_context_p, path_lora: bytes, path_base_model: bytes, n_threads: c_int
+) -> c_int:
+    return _lib.llama_apply_lora_from_file(ctx, path_lora, path_base_model, n_threads)
+
+
+_lib.llama_apply_lora_from_file.argtypes = [llama_context_p, c_char_p, c_char_p, c_int]
+_lib.llama_apply_lora_from_file.restype = c_int
 
 
 # Returns the KV cache that will contain the context for the
