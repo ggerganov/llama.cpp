@@ -585,6 +585,13 @@ typedef struct {
 } block_q4_1;
 static_assert(sizeof(block_q4_1) == sizeof(float) * 2 + QK4_1 / 2, "wrong q4_1 block size/padding");
 
+#define QK4_2 16
+typedef struct {
+    ggml_fp16_t d;         // delta
+    uint8_t qs[QK4_2 / 2]; // nibbles / quants
+} block_q4_2;
+static_assert(sizeof(block_q4_2) == sizeof(ggml_fp16_t) + QK4_2 / 2, "wrong q4_2 block size/padding");
+
 #define QK8_0 32
 typedef struct {
     float   d;          // delta
@@ -1046,6 +1053,49 @@ static void quantize_row_q4_1(const float * restrict x, void * restrict vy, int 
 }
 
 // reference implementation for deterministic creation of model files
+static void quantize_row_q4_2_reference(const float * restrict x, block_q4_2 * restrict y, int k) {
+    assert(k % QK4_2 == 0);
+
+    const int nb = k / QK4_2;
+
+    for (int i = 0; i < nb; i++) {
+        float amax = 0.0f; // absolute max
+
+        for (int l = 0; l < QK4_2; l++) {
+            const float v = x[i*QK4_2 + l];
+            amax = MAX(amax, fabsf(v));
+        }
+
+        const float d = amax / ((1 << 3) - 1);
+
+        const float id = d ? 1.0f/d : 0.0f;
+
+        y[i].d = GGML_FP32_TO_FP16(d);
+
+        for (int l = 0; l < QK4_2; l += 2) {
+            const float v0 = x[i*QK4_2 + l + 0]*id;
+            const float v1 = x[i*QK4_2 + l + 1]*id;
+
+            const uint8_t vi0 = (uint8_t)(v0 + 8.5f);
+            const uint8_t vi1 = (uint8_t)(v1 + 8.5f);
+
+            assert(vi0 < 16);
+            assert(vi1 < 16);
+
+            y[i].qs[l/2] = vi0 | (vi1 << 4);
+        }
+    }
+}
+
+static void quantize_row_q4_2(const float * restrict x, void * restrict vy, int k) {
+    assert(k % QK4_2 == 0);
+
+    block_q4_2 * restrict y = vy;
+
+    quantize_row_q4_2_reference(x, y, k);
+}
+
+// reference implementation for deterministic creation of model files
 static void quantize_row_q8_0_reference(const float * restrict x, block_q8_0 * restrict y, int k) {
     assert(k % QK8_0 == 0);
     const int nb = k / QK8_0;
@@ -1064,7 +1114,7 @@ static void quantize_row_q8_0_reference(const float * restrict x, block_q8_0 * r
         y[i].d = d;
 
         for (int l = 0; l < QK8_0; ++l) {
-            const float   v  = x[i*QK8_0 + l]*id;
+            const float v = x[i*QK8_0 + l]*id;
             y[i].qs[l] = roundf(v);
         }
     }
@@ -1420,8 +1470,39 @@ static void dequantize_row_q4_1(const void * restrict vx, float * restrict y, in
 #endif
 }
 
+static void dequantize_row_q4_2(const void * restrict vx, float * restrict y, int k) {
+    assert(k % QK4_2 == 0);
+    const int nb = k / QK4_2;
+
+    const block_q4_2 * restrict x = vx;
+
+    for (int i = 0; i < nb; i++) {
+        const float d = GGML_FP16_TO_FP32(x[i].d);
+
+        const uint8_t * restrict pp = x[i].qs;
+
+        for (int l = 0; l < QK4_2; l += 2) {
+            const uint8_t vi = pp[l/2];
+
+            const int8_t vi0 = vi & 0xf;
+            const int8_t vi1 = vi >> 4;
+
+            const float v0 = (vi0 - 8)*d;
+            const float v1 = (vi1 - 8)*d;
+
+            y[i*QK4_2 + l + 0] = v0;
+            y[i*QK4_2 + l + 1] = v1;
+
+            assert(!isnan(y[i*QK4_2 + l + 0]));
+            assert(!isnan(y[i*QK4_2 + l + 1]));
+        }
+    }
+}
+
 static void ggml_vec_dot_q4_1(const int n, float * restrict s, const void * restrict vx, const void * restrict vy);
 static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void * restrict vx, const void * restrict vy);
+//static void ggml_vec_dot_q4_1_q8_0(const int n, float * restrict s, const void * restrict vx, const void * restrict vy);
+static void ggml_vec_dot_q4_2_q8_0(const int n, float * restrict s, const void * restrict vx, const void * restrict vy);
 
 static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
     [GGML_TYPE_Q4_0] = {
@@ -1437,6 +1518,13 @@ static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
         .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_1_reference,
         .quantize_row_q_dot       = quantize_row_q4_1,
         .vec_dot_q                = ggml_vec_dot_q4_1,
+    },
+    [GGML_TYPE_Q4_2] = {
+        .dequantize_row_q         = dequantize_row_q4_2,
+        .quantize_row_q           = quantize_row_q4_2,
+        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_2_reference,
+        .quantize_row_q_dot       = quantize_row_q8_0,
+        .vec_dot_q                = ggml_vec_dot_q4_2_q8_0,
     },
     // TODO: GGML_TYPE_Q8_0
 };
@@ -2950,6 +3038,136 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
     *s = sumf;
 }
 
+static void ggml_vec_dot_q4_2_q8_0(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
+    const int nb = n / QK8_0;
+
+    assert(n % QK8_0 == 0);
+    assert(nb % 2 == 0);
+    assert(QK8_0 == 2*QK4_2);
+
+    const block_q4_2 * restrict x = vx;
+    const block_q8_0 * restrict y = vy;
+
+    float sumf = 0.0;
+
+#if defined(__ARM_NEON)
+    float32x4_t sumv0 = vdupq_n_f32(0.0f);
+    float32x4_t sumv1 = vdupq_n_f32(0.0f);
+
+    for (int i = 0; i < nb; i += 2) {
+        const block_q4_2 * restrict x0_0 = &x[2*(i + 0) + 0];
+        const block_q4_2 * restrict x0_1 = &x[2*(i + 0) + 1];
+        const block_q4_2 * restrict x1_0 = &x[2*(i + 1) + 0];
+        const block_q4_2 * restrict x1_1 = &x[2*(i + 1) + 1];
+        const block_q8_0 * restrict y0 = &y[i + 0];
+        const block_q8_0 * restrict y1 = &y[i + 1];
+
+        const uint8x16_t m4b   = vdupq_n_u8(0xf);
+        const int8x16_t  s8b   = vdupq_n_s8(0x8);
+
+        const uint8x16_t v0_0 = vcombine_u8(vld1_u8(x0_0->qs), vld1_u8(x0_1->qs));
+        const uint8x16_t v0_1 = vcombine_u8(vld1_u8(x1_0->qs), vld1_u8(x1_1->qs));
+
+        // 4-bit -> 8-bit
+        const int8x16_t v0_0l = vreinterpretq_s8_u8(vandq_u8  (v0_0, m4b));
+        const int8x16_t v0_0h = vreinterpretq_s8_u8(vshrq_n_u8(v0_0, 4));
+        const int8x16_t v0_1l = vreinterpretq_s8_u8(vandq_u8  (v0_1, m4b));
+        const int8x16_t v0_1h = vreinterpretq_s8_u8(vshrq_n_u8(v0_1, 4));
+
+        // sub 8
+        const int8x16_t v0_0ls = vsubq_s8(v0_0l, s8b);
+        const int8x16_t v0_0hs = vsubq_s8(v0_0h, s8b);
+        const int8x16_t v0_1ls = vsubq_s8(v0_1l, s8b);
+        const int8x16_t v0_1hs = vsubq_s8(v0_1h, s8b);
+
+        // interleave
+        const int8x16_t v0_0lz = vzip1q_s8(v0_0ls, v0_0hs);
+        const int8x16_t v0_0hz = vzip2q_s8(v0_0ls, v0_0hs);
+        const int8x16_t v0_1lz = vzip1q_s8(v0_1ls, v0_1hs);
+        const int8x16_t v0_1hz = vzip2q_s8(v0_1ls, v0_1hs);
+
+        // load y
+        const int8x16_t v1_0l = vld1q_s8(y0->qs);
+        const int8x16_t v1_0h = vld1q_s8(y0->qs + 16);
+        const int8x16_t v1_1l = vld1q_s8(y1->qs);
+        const int8x16_t v1_1h = vld1q_s8(y1->qs + 16);
+
+#if defined(__ARM_FEATURE_DOTPROD)
+        sumv0 = vmlaq_n_f32(sumv0, vaddq_f32(
+                vmulq_n_f32(vcvtq_f32_s32(vdotq_s32(vdupq_n_s32(0), v0_0lz, v1_0l)), GGML_FP16_TO_FP32(x0_0->d)),
+                vmulq_n_f32(vcvtq_f32_s32(vdotq_s32(vdupq_n_s32(0), v0_0hz, v1_0h)), GGML_FP16_TO_FP32(x0_1->d))), y0->d);
+
+        sumv1 = vmlaq_n_f32(sumv1, vaddq_f32(
+                vmulq_n_f32(vcvtq_f32_s32(vdotq_s32(vdupq_n_s32(0), v0_1lz, v1_1l)), GGML_FP16_TO_FP32(x1_0->d)),
+                vmulq_n_f32(vcvtq_f32_s32(vdotq_s32(vdupq_n_s32(0), v0_1hz, v1_1h)), GGML_FP16_TO_FP32(x1_1->d))), y1->d);
+#else
+        const int16x8_t pl0l = vmull_s8(vget_low_s8 (v0_0lz), vget_low_s8 (v1_0l));
+        const int16x8_t pl0h = vmull_s8(vget_high_s8(v0_0lz), vget_high_s8(v1_0l));
+        const int16x8_t ph0l = vmull_s8(vget_low_s8 (v0_0hz), vget_low_s8 (v1_0h));
+        const int16x8_t ph0h = vmull_s8(vget_high_s8(v0_0hz), vget_high_s8(v1_0h));
+
+        const int16x8_t pl1l = vmull_s8(vget_low_s8 (v0_1lz), vget_low_s8 (v1_1l));
+        const int16x8_t pl1h = vmull_s8(vget_high_s8(v0_1lz), vget_high_s8(v1_1l));
+        const int16x8_t ph1l = vmull_s8(vget_low_s8 (v0_1hz), vget_low_s8 (v1_1h));
+        const int16x8_t ph1h = vmull_s8(vget_high_s8(v0_1hz), vget_high_s8(v1_1h));
+
+        const int32x4_t pl0 = vaddq_s32(vpaddlq_s16(pl0l), vpaddlq_s16(pl0h));
+        const int32x4_t ph0 = vaddq_s32(vpaddlq_s16(ph0l), vpaddlq_s16(ph0h));
+        const int32x4_t pl1 = vaddq_s32(vpaddlq_s16(pl1l), vpaddlq_s16(pl1h));
+        const int32x4_t ph1 = vaddq_s32(vpaddlq_s16(ph1l), vpaddlq_s16(ph1h));
+
+        sumv0 = vmlaq_n_f32(sumv0, vaddq_f32(
+                vmulq_n_f32(vcvtq_f32_s32(pl0), GGML_FP16_TO_FP32(x0_0->d)),
+                vmulq_n_f32(vcvtq_f32_s32(ph0), GGML_FP16_TO_FP32(x0_1->d))), y0->d);
+
+        sumv1 = vmlaq_n_f32(sumv1, vaddq_f32(
+                vmulq_n_f32(vcvtq_f32_s32(pl1), GGML_FP16_TO_FP32(x1_0->d)),
+                vmulq_n_f32(vcvtq_f32_s32(ph1), GGML_FP16_TO_FP32(x1_1->d))), y1->d);
+#endif
+    }
+
+    sumf = vaddvq_f32(sumv0) + vaddvq_f32(sumv1);
+#else
+    // scalar
+    for (int i = 0; i < nb; i++) {
+        const uint8_t * restrict x0 = x[2*i + 0].qs;
+        const uint8_t * restrict x1 = x[2*i + 1].qs;
+        const  int8_t * restrict y0 = y[i].qs;
+
+        const float d0 = GGML_FP16_TO_FP32(x[2*i + 0].d);
+        const float d1 = GGML_FP16_TO_FP32(x[2*i + 1].d);
+
+        int sumi_0 = 0;
+        int sumi_1 = 0;
+
+        for (int j = 0; j < QK8_0/4; j++) {
+            const uint8_t v0 = x0[j];
+            const uint8_t v1 = x1[j];
+
+            const int i0_0 = (int8_t) (v0 & 0xf) - 8;
+            const int i1_0 = (int8_t) (v0 >> 4)  - 8;
+
+            const int i0_1 = (int8_t) (v1 & 0xf) - 8;
+            const int i1_1 = (int8_t) (v1 >> 4)  - 8;
+
+            const int i2_0 = y0[2*j + 0];
+            const int i3_0 = y0[2*j + 1];
+
+            const int i2_1 = y0[2*(j + QK8_0/4) + 0];
+            const int i3_1 = y0[2*(j + QK8_0/4) + 1];
+
+            sumi_0 += i0_0*i2_0 + i1_0*i3_0;
+            sumi_1 += i0_1*i2_1 + i1_1*i3_1;
+        }
+
+        sumf += (d0 * y[i].d) * sumi_0;
+        sumf += (d1 * y[i].d) * sumi_1;
+    }
+#endif
+
+    *s = sumf;
+}
+
 // compute GGML_VEC_DOT_UNROLL dot products at once
 // xs - x row stride in bytes
 inline static void ggml_vec_dot_f16_unroll(const int n, const int xs, float * restrict s, void * restrict xv, ggml_fp16_t * restrict y) {
@@ -3196,24 +3414,26 @@ static const int GGML_BLCK_SIZE[GGML_TYPE_COUNT] = {
     [GGML_TYPE_F16]  = 1,
     [GGML_TYPE_Q4_0] = QK4_0,
     [GGML_TYPE_Q4_1] = QK4_1,
+    [GGML_TYPE_Q4_2] = QK4_2,
     [GGML_TYPE_Q8_0] = QK8_0,
     [GGML_TYPE_I8]   = 1,
     [GGML_TYPE_I16]  = 1,
     [GGML_TYPE_I32]  = 1,
 };
-static_assert(GGML_TYPE_COUNT == 8, "GGML_BLCK_SIZE is outdated");
+static_assert(GGML_TYPE_COUNT == 9, "GGML_BLCK_SIZE is outdated");
 
 static const size_t GGML_TYPE_SIZE[GGML_TYPE_COUNT] = {
     [GGML_TYPE_F32]  = sizeof(float),
     [GGML_TYPE_F16]  = sizeof(ggml_fp16_t),
     [GGML_TYPE_Q4_0] = sizeof(block_q4_0),
     [GGML_TYPE_Q4_1] = sizeof(block_q4_1),
+    [GGML_TYPE_Q4_2] = sizeof(block_q4_2),
     [GGML_TYPE_Q8_0] = sizeof(block_q8_0),
     [GGML_TYPE_I8]   = sizeof(int8_t),
     [GGML_TYPE_I16]  = sizeof(int16_t),
     [GGML_TYPE_I32]  = sizeof(int32_t),
 };
-static_assert(GGML_TYPE_COUNT == 8, "GGML_TYPE_SIZE is outdated");
+static_assert(GGML_TYPE_COUNT == 9, "GGML_TYPE_SIZE is outdated");
 
 
 static const char * GGML_TYPE_NAME[GGML_TYPE_COUNT] = {
@@ -3221,12 +3441,26 @@ static const char * GGML_TYPE_NAME[GGML_TYPE_COUNT] = {
     [GGML_TYPE_F16]  = "f16",
     [GGML_TYPE_Q4_0] = "q4_0",
     [GGML_TYPE_Q4_1] = "q4_1",
+    [GGML_TYPE_Q4_2] = "q4_2",
     [GGML_TYPE_Q8_0] = "q8_0",
     [GGML_TYPE_I8]   = "i8",
     [GGML_TYPE_I16]  = "i16",
     [GGML_TYPE_I32]  = "i32",
 };
-static_assert(GGML_TYPE_COUNT == 8, "GGML_TYPE_NAME is outdated");
+static_assert(GGML_TYPE_COUNT == 9, "GGML_TYPE_NAME is outdated");
+
+static bool GGML_IS_QUANTIZED[GGML_TYPE_COUNT] = {
+    [GGML_TYPE_F32]  = false,
+    [GGML_TYPE_F16]  = false,
+    [GGML_TYPE_Q4_0] = true,
+    [GGML_TYPE_Q4_1] = true,
+    [GGML_TYPE_Q4_2] = true,
+    [GGML_TYPE_Q8_0] = true,
+    [GGML_TYPE_I8]   = false,
+    [GGML_TYPE_I16]  = false,
+    [GGML_TYPE_I32]  = false,
+};
+static_assert(GGML_TYPE_COUNT == 9, "GGML_IS_QUANTIZED is outdated");
 
 static const char * GGML_OP_LABEL[GGML_OP_COUNT] = {
     "NONE",
@@ -3486,6 +3720,10 @@ static inline bool ggml_can_mul_mat(const struct ggml_tensor * t0, const struct 
         (t0->ne[0] == t1->ne[0])  &&
         (t0->ne[2] == t1->ne[2])  &&
         (t0->ne[3] == t1->ne[3]);
+}
+
+static inline bool ggml_is_quantized(enum ggml_type type) {
+    return GGML_IS_QUANTIZED[type];
 }
 
 static inline bool ggml_is_transposed(const struct ggml_tensor * tensor) {
@@ -5609,7 +5847,7 @@ static void ggml_compute_forward_dup_f16(
                         }
                     }
                 }
-            } else if (dst->type == GGML_TYPE_Q4_0 || dst->type == GGML_TYPE_Q4_1) {
+            } else if (ggml_is_quantized(dst->type)) {
                 quantize_row_q_t const quantize_row_q = quantize_fns[dst->type].quantize_row_q;
                 size_t id = 0;
                 uint8_t * dst_ptr = (uint8_t *) dst->data;
@@ -5821,7 +6059,7 @@ static void ggml_compute_forward_dup_f32(
                         }
                     }
                 }
-            } else if (dst->type == GGML_TYPE_Q4_0 || dst->type == GGML_TYPE_Q4_1) {
+            } else if (ggml_is_quantized(dst->type)) {
                 quantize_row_q_t const quantize_row_q = quantize_fns[dst->type].quantize_row_q;
                 size_t id = 0;
                 uint8_t * dst_ptr = (uint8_t *) dst->data;
@@ -6184,7 +6422,7 @@ static void ggml_compute_forward_add_q_f32(
     GGML_ASSERT(nb1 <= nb2);
     GGML_ASSERT(nb2 <= nb3);
 
-    GGML_ASSERT(src0->type == GGML_TYPE_Q4_0 || src0->type == GGML_TYPE_Q4_1);
+    GGML_ASSERT(ggml_is_quantized(src0->type));
     GGML_ASSERT(dst->type == src0->type);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
 
@@ -6254,6 +6492,7 @@ static void ggml_compute_forward_add(
             } break;
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
+        case GGML_TYPE_Q4_2:
             {
                 ggml_compute_forward_add_q_f32(params, src0, src1, dst);
             } break;
@@ -7732,6 +7971,7 @@ static void ggml_compute_forward_mul_mat(
     switch (src0->type) {
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
+        case GGML_TYPE_Q4_2:
         case GGML_TYPE_Q8_0:
             {
                 ggml_compute_forward_mul_mat_q_f32(params, src0, src1, dst);
@@ -7987,6 +8227,7 @@ static void ggml_compute_forward_get_rows(
     switch (src0->type) {
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
+        case GGML_TYPE_Q4_2:
         case GGML_TYPE_Q8_0:
             {
                 ggml_compute_forward_get_rows_q(params, src0, src1, dst);
@@ -10398,7 +10639,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                         node->n_tasks = 1;
 
                         size_t cur = 0;
-                        if (node->type == GGML_TYPE_Q4_0 || node->type == GGML_TYPE_Q4_1) {
+                        if (ggml_is_quantized(node->type)) {
                             cur = GGML_TYPE_SIZE[GGML_TYPE_F32] * node->ne[0];
                         }
 
@@ -10410,7 +10651,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
 
                         size_t cur = 0;
 
-                        if (node->src0->type == GGML_TYPE_Q4_0 || node->src0->type == GGML_TYPE_Q4_1) {
+                        if (ggml_is_quantized(node->src0->type)) {
                             cur = GGML_TYPE_SIZE[GGML_TYPE_F32] * node->src0->ne[0] * n_threads;
                         }
 
@@ -11700,6 +11941,29 @@ size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t *
     }
 
     return (n/QK4_1*sizeof(block_q4_1));
+}
+
+size_t ggml_quantize_q4_2(const float * src, void * dst, int n, int k, int64_t * hist) {
+    assert(k % QK4_2 == 0);
+    const int nb = k / QK4_2;
+
+    for (int j = 0; j < n; j += k) {
+        block_q4_2 * restrict y = (block_q4_2 *)dst + j/QK4_2;
+
+        quantize_row_q4_2_reference(src + j, y, k);
+
+        for (int i = 0; i < nb; i++) {
+            for (int l = 0; l < QK4_2; l += 2) {
+                const uint8_t vi0 = y[i].qs[l/2] & 0xF;
+                const uint8_t vi1 = y[i].qs[l/2] >> 4;
+
+                hist[vi0]++;
+                hist[vi1]++;
+            }
+        }
+    }
+
+    return (n/QK4_2*sizeof(block_q4_2));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
