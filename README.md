@@ -52,8 +52,8 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 - Generation delay scales linearly with original prompt length. If OpenBLAS is enabled then prompt ingestion becomes about 2-3x faster. This is automatic on windows, but will require linking on OSX and Linux.
 - I have heard of someone claiming a false AV positive report. The exe is a simple pyinstaller bundle that includes the necessary python scripts and dlls to run. If this still concerns you, you might wish to rebuild everything from source code using the makefile, and you can rebuild the exe yourself with pyinstaller by using `make_pyinstaller.bat`
 - Supported GGML models: 
-  - LLAMA (All versions including ggml, ggmf, ggjt, gpt4all)
-  - GPT-2 (All versions, including legacy f16, newer format + quanitzed, cerebras)
-  - GPT-J (All versions including legacy f16, newer format + quantized, pyg.cpp, new pygmalion, janeway etc.), 
-  - RWKV (f16 GGMF format)
+  - LLAMA (All versions including ggml, ggmf, ggjt, gpt4all). Supports CLBlast and OpenBLAS acceleration for all versions.
+  - GPT-2 (All versions, including legacy f16, newer format + quanitzed, cerebras) Supports OpenBLAS acceleration only for newer format. 
+  - GPT-J (All versions including legacy f16, newer format + quantized, pyg.cpp, new pygmalion, janeway etc.) Supports OpenBLAS acceleration only for newer format. 
+  - RWKV (f16 GGMF format), unaccelerated due to RNN properties.
   - Basically every single current and historical GGML format that has ever existed should be supported, except for bloomz.cpp due to lack of demand.
