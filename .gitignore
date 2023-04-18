@@ -24,6 +24,7 @@ models/*
 /perplexity
 /embedding
 /benchmark-q4_0-matmult
+/vdot
 /Pipfile
 
 arm_neon.h
