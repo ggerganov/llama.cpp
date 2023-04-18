@@ -3099,21 +3099,13 @@ static void ggml_vec_dot_q4_2_q8_0(const int n, float * restrict s, const void *
         const int8x16_t v1_1h = vld1q_s8(y1->qs + 16);
 
 #if defined(__ARM_FEATURE_DOTPROD)
-        const float32x4_t x0_0d = vdupq_n_f32(GGML_FP16_TO_FP32(x0_0->d));
-        const float32x4_t x0_1d = vdupq_n_f32(GGML_FP16_TO_FP32(x0_1->d));
-        const float32x4_t x1_0d = vdupq_n_f32(GGML_FP16_TO_FP32(x1_0->d));
-        const float32x4_t x1_1d = vdupq_n_f32(GGML_FP16_TO_FP32(x1_1->d));
+        sumv0 = vmlaq_n_f32(sumv0, vaddq_f32(
+                vmulq_n_f32(vcvtq_f32_s32(vdotq_s32(vdupq_n_s32(0), v0_0lz, v1_0l)), GGML_FP16_TO_FP32(x0_0->d)),
+                vmulq_n_f32(vcvtq_f32_s32(vdotq_s32(vdupq_n_s32(0), v0_0hz, v1_0h)), GGML_FP16_TO_FP32(x0_1->d))), y0->d);
 
-        const float32x4_t y0d = vdupq_n_f32(y0->d);
-        const float32x4_t y1d = vdupq_n_f32(y1->d);
-
-        sumv0 = vaddq_f32(sumv0, vmulq_f32(y0d, vaddq_f32(
-                vmulq_f32(x0_0d, vcvtq_f32_s32(vdotq_s32(vdupq_n_s32(0), v0_0lz, v1_0l))),
-                vmulq_f32(x0_1d, vcvtq_f32_s32(vdotq_s32(vdupq_n_s32(0), v0_0hz, v1_0h))))));
-
-        sumv1 = vaddq_f32(sumv1, vmulq_f32(y1d, vaddq_f32(
-                vmulq_f32(x1_0d, vcvtq_f32_s32(vdotq_s32(vdupq_n_s32(0), v0_1lz, v1_1l))),
-                vmulq_f32(x1_1d, vcvtq_f32_s32(vdotq_s32(vdupq_n_s32(0), v0_1hz, v1_1h))))));
+        sumv1 = vmlaq_n_f32(sumv1, vaddq_f32(
+                vmulq_n_f32(vcvtq_f32_s32(vdotq_s32(vdupq_n_s32(0), v0_1lz, v1_1l)), GGML_FP16_TO_FP32(x1_0->d)),
+                vmulq_n_f32(vcvtq_f32_s32(vdotq_s32(vdupq_n_s32(0), v0_1hz, v1_1h)), GGML_FP16_TO_FP32(x1_1->d))), y1->d);
 #else
         const int16x8_t pl0l = vmull_s8(vget_low_s8 (v0_0lz), vget_low_s8 (v1_0l));
         const int16x8_t pl0h = vmull_s8(vget_high_s8(v0_0lz), vget_high_s8(v1_0l));
@@ -3130,12 +3122,13 @@ static void ggml_vec_dot_q4_2_q8_0(const int n, float * restrict s, const void *
         const int32x4_t pl1 = vaddq_s32(vpaddlq_s16(pl1l), vpaddlq_s16(pl1h));
         const int32x4_t ph1 = vaddq_s32(vpaddlq_s16(ph1l), vpaddlq_s16(ph1h));
 
-        sumv0 = vaddq_f32(sumv0, vmulq_f32(vdupq_n_f32(y0->d), vaddq_f32(
-                vmulq_f32(vdupq_n_f32(GGML_FP16_TO_FP32(x0_0->d)), vcvtq_f32_s32(pl0)),
-                vmulq_f32(vdupq_n_f32(GGML_FP16_TO_FP32(x0_1->d)), vcvtq_f32_s32(ph0)))));
-        sumv1 = vaddq_f32(sumv1, vmulq_f32(vdupq_n_f32(y1->d), vaddq_f32(
-                vmulq_f32(vdupq_n_f32(GGML_FP16_TO_FP32(x1_0->d)), vcvtq_f32_s32(pl1)),
-                vmulq_f32(vdupq_n_f32(GGML_FP16_TO_FP32(x1_1->d)), vcvtq_f32_s32(ph1)))));
+        sumv0 = vmlaq_n_f32(sumv0, vaddq_f32(
+                vmulq_n_f32(vcvtq_f32_s32(pl0), GGML_FP16_TO_FP32(x0_0->d)),
+                vmulq_n_f32(vcvtq_f32_s32(ph0), GGML_FP16_TO_FP32(x0_1->d))), y0->d);
+
+        sumv1 = vmlaq_n_f32(sumv1, vaddq_f32(
+                vmulq_n_f32(vcvtq_f32_s32(pl1), GGML_FP16_TO_FP32(x1_0->d)),
+                vmulq_n_f32(vcvtq_f32_s32(ph1), GGML_FP16_TO_FP32(x1_1->d))), y1->d);
 #endif
     }
 
