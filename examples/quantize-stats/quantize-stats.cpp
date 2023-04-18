@@ -221,7 +221,7 @@ int main(int argc, char ** argv) {
                 break;
             }
             int j;
-            for (j = 0; j < GGML_TYPE_COUNT && strcmp(argv[i], ggml_type_name((ggml_type) i)) != 0; j++) {
+            for (j = 0; j < GGML_TYPE_COUNT && strcmp(argv[i], ggml_type_name((ggml_type) j)) != 0; j++) {
                 // find match
             }
             if (j < GGML_TYPE_COUNT) {
