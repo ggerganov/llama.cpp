@@ -6610,7 +6610,7 @@ static void ggml_compute_forward_add_q_f32(
     const int ir0 = dr*ith;
     const int ir1 = MIN(ir0 + dr, nr);
 
-    float * wdata = (float*) params->wdata + ne00 * ith;
+    float * wdata = (float *) params->wdata + (ne00 + CACHE_LINE_SIZE_F32) * ith;
 
     for (int ir = ir0; ir < ir1; ++ir) {
         // src0 indices
