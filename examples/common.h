@@ -10,6 +10,10 @@
 #include <thread>
 #include <unordered_map>
 
+#if !defined (_WIN32)
+#include <termios.h>
+#endif
+
 //
 // CLI argument parsing
 //
@@ -56,6 +60,7 @@ struct gpt_params {
 
     bool embedding         = false; // get only sentence embedding
     bool interactive_first = false; // wait for user input immediately
+    bool author_mode       = false; // reverse the usage of `\`
 
     bool instruct          = false; // instruction mode (used for Alpaca models)
     bool penalize_nl       = true;  // consider newlines as a repeatable token
@@ -104,13 +109,15 @@ enum console_color_t {
 };
 
 struct console_state {
+    bool author_mode = false;
     bool use_color = false;
     console_color_t color = CONSOLE_COLOR_DEFAULT;
+#if !defined (_WIN32)
+    termios prev_state;
+#endif
 };
 
-void set_console_color(console_state & con_st, console_color_t color);
-
-#if defined (_WIN32)
-void win32_console_init(bool enable_color);
-void win32_utf8_encode(const std::wstring & wstr, std::string & str);
-#endif
+void console_init(console_state & con_st);
+void console_cleanup(console_state & con_st);
+void console_set_color(console_state & con_st, console_color_t color);
+bool console_readline(console_state & con_st, std::string & line);
