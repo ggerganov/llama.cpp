@@ -172,14 +172,14 @@ static cublasHandle_t cublasH = NULL;
 static cudaStream_t cudaStream = NULL;
 static void init_cublas(void) {
     if (cublasH == NULL) {
-        /* step 1: create cublas handle, bind a stream */
+        // create cublas handle, bind a stream
         CUBLAS_CHECK(cublasCreate(&cublasH));
 
         CUDA_CHECK(cudaStreamCreateWithFlags(&cudaStream, cudaStreamNonBlocking));
         CUBLAS_CHECK(cublasSetStream(cublasH, cudaStream));
 
         // configure logging to stdout
-        //CUBLAS_CHECK(cublasLoggerConfigure(1, 1, 0, NULL));
+        // CUBLAS_CHECK(cublasLoggerConfigure(1, 1, 0, NULL));
     }
 }
 #endif
@@ -7336,11 +7336,11 @@ static void ggml_compute_forward_mul_mat_f32(
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
 #if defined(GGML_USE_CUBLAS)
-                /* step 2: copy data to device */
+                // copy data to device
                 CUDA_CHECK(cudaMemcpyAsync(d_X, x, sizeof(float) * x_ne, cudaMemcpyHostToDevice, cudaStream));
                 CUDA_CHECK(cudaMemcpyAsync(d_Y, y, sizeof(float) * y_ne, cudaMemcpyHostToDevice, cudaStream));
 
-                /* step 3: compute */
+                // compute
                 CUBLAS_CHECK(
                     cublasSgemm(cublasH, CUBLAS_OP_T, CUBLAS_OP_N,
                             ne01, ne11, ne10,
@@ -7348,7 +7348,7 @@ static void ggml_compute_forward_mul_mat_f32(
                                     d_Y, ne10,
                             &beta,  d_D, ne01));
 
-                /* step 4: copy data to host */
+                // copy data to host
                 CUDA_CHECK(cudaMemcpyAsync(d, d_D, sizeof(float) * d_ne, cudaMemcpyDeviceToHost, cudaStream));
                 CUDA_CHECK(cudaStreamSynchronize(cudaStream));
 #else
@@ -7362,7 +7362,6 @@ static void ggml_compute_forward_mul_mat_f32(
             }
         }
 #if defined(GGML_USE_CUBLAS)
-        /* free resources */
         CUDA_CHECK(cudaFree(d_X));
         CUDA_CHECK(cudaFree(d_Y));
         CUDA_CHECK(cudaFree(d_D));
@@ -7533,7 +7532,7 @@ static void ggml_compute_forward_mul_mat_f16_f32(
         for (int64_t i03 = 0; i03 < ne03; i03++) {
             for (int64_t i02 = 0; i02 < ne02; i02++) {
 #if defined(GGML_USE_CUBLAS)
-            // with cuBlAS, instead of converting src0 to fp32, we convert src1 to fp16
+                // with cuBlAS, instead of converting src0 to fp32, we convert src1 to fp16
                 {
                     size_t id = 0;
                     for (int64_t i01 = 0; i01 < ne11; ++i01) {
@@ -7559,11 +7558,11 @@ static void ggml_compute_forward_mul_mat_f16_f32(
 
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
-                /* step 2: copy data to device */
+                // copy data to device
                 CUDA_CHECK(cudaMemcpyAsync(d_X, x, sizeof(ggml_fp16_t) * x_ne, cudaMemcpyHostToDevice, cudaStream));
                 CUDA_CHECK(cudaMemcpyAsync(d_Y, y, sizeof(ggml_fp16_t) * y_ne, cudaMemcpyHostToDevice, cudaStream));
 
-                /* step 3: compute */
+                // compute
                 CUBLAS_CHECK(
                     cublasGemmEx(cublasH, CUBLAS_OP_T, CUBLAS_OP_N,
                             ne01, ne11, ne10,
@@ -7573,7 +7572,7 @@ static void ggml_compute_forward_mul_mat_f16_f32(
                             CUBLAS_COMPUTE_32F,
                             CUBLAS_GEMM_DEFAULT));
 
-                /* step 4: copy data to host */
+                // copy data to host
                 CUDA_CHECK(cudaMemcpyAsync(d, d_D, sizeof(float) * d_ne, cudaMemcpyDeviceToHost, cudaStream));
                 CUDA_CHECK(cudaStreamSynchronize(cudaStream));
 #else
@@ -7593,7 +7592,6 @@ static void ggml_compute_forward_mul_mat_f16_f32(
         }
 
 #if defined(GGML_USE_CUBLAS)
-        /* free resources */
         CUDA_CHECK(cudaFree(d_X));
         CUDA_CHECK(cudaFree(d_Y));
         CUDA_CHECK(cudaFree(d_D));
@@ -7797,11 +7795,11 @@ static void ggml_compute_forward_mul_mat_q_f32(
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
 #if defined(GGML_USE_CUBLAS)
-                /* step 2: copy data to device */
+                // copy data to device
                 CUDA_CHECK(cudaMemcpyAsync(d_X, x, sizeof(float) * x_ne, cudaMemcpyHostToDevice, cudaStream));
                 CUDA_CHECK(cudaMemcpyAsync(d_Y, y, sizeof(float) * y_ne, cudaMemcpyHostToDevice, cudaStream));
 
-                /* step 3: compute */
+                // compute
                 CUBLAS_CHECK(
                     cublasSgemm(cublasH, CUBLAS_OP_T, CUBLAS_OP_N,
                             ne01, ne11, ne10,
@@ -7809,7 +7807,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
                                     d_Y, ne10,
                             &beta,  d_D, ne01));
 
-                /* step 4: copy data to host */
+                // copy data to host
                 CUDA_CHECK(cudaMemcpyAsync(d, d_D, sizeof(float) * d_ne, cudaMemcpyDeviceToHost, cudaStream));
                 CUDA_CHECK(cudaStreamSynchronize(cudaStream));
 #else
@@ -7824,7 +7822,6 @@ static void ggml_compute_forward_mul_mat_q_f32(
         }
 
 #if defined(GGML_USE_CUBLAS)
-        /* free resources */
         CUDA_CHECK(cudaFree(d_X));
         CUDA_CHECK(cudaFree(d_Y));
         CUDA_CHECK(cudaFree(d_D));

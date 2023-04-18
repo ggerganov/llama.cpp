@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.17) # Don't bump this version for no reason
+cmake_minimum_required(VERSION 3.12) # Don't bump this version for no reason
 project("llama.cpp" C CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -144,6 +144,8 @@ if (LLAMA_OPENBLAS)
 endif()
 
 if (LLAMA_CUBLAS)
+    cmake_minimum_required(VERSION 3.17)
+
     find_package(CUDAToolkit)
     if (CUDAToolkit_FOUND)
         message(STATUS "cuBLAS found")
