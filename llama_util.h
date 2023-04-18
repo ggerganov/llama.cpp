@@ -202,7 +202,6 @@ struct llama_mmap {
 
         HANDLE hMapping = CreateFileMappingA(hFile, NULL, PAGE_READONLY, 0, 0, NULL);
         DWORD error = GetLastError();
-        CloseHandle(hFile);
 
         if (hMapping == NULL) {
             throw format("CreateFileMappingA failed: %s", llama_format_win_err(error).c_str());
