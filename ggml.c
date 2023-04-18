@@ -5875,7 +5875,7 @@ static void ggml_compute_forward_dup_f16(
                 }
             } else if (ggml_is_quantized(dst->type)) {
                 quantize_row_q_t const quantize_row_q = quantize_fns[dst->type].quantize_row_q;
-                float * src0_f32 = (float *) params->wdata + ne00 * ith;
+                float * src0_f32 = (float *) params->wdata + (ne00 + CACHE_LINE_SIZE_F32) * ith;
 
                 size_t id = 0;
                 size_t rs = nb0 * (ne00 / GGML_BLCK_SIZE[dst->type]);
