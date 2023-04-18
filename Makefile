@@ -133,7 +133,7 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: main quantize quantize-stats perplexity embedding
+default: main quantize quantize-stats perplexity embedding vdot
 
 #
 # Build library
@@ -167,6 +167,9 @@ perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+
+vdot: pocs/vdot/vdot.cpp ggml.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 libllama.so: llama.o ggml.o
