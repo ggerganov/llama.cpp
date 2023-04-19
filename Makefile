@@ -125,6 +125,10 @@ ifdef LLAMA_CLBLAST
 	CFLAGS  += -DGGML_USE_CLBLAST -DGGML_USE_OPENBLAS
 	LDFLAGS += -lclblast -lOpenCL -lopenblas
 endif
+ifdef LLAMA_CUBLAS
+	CFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include
+	LDFLAGS += -lcublas_static -lculibos -lcudart_static -lcublasLt_static -lpthread -ldl -L/usr/local/cuda/lib64
+endif
 ifdef LLAMA_GPROF
 	CFLAGS   += -pg
 	CXXFLAGS += -pg
