@@ -7,6 +7,10 @@
 
 Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
+**Warnings**
+
+- `Q4_2` and `Q4_3` are still in development. Do not expect any kind of backward compatibility until they are finalize
+
 **Hot topics:**
 
 - [Added LoRA support](https://github.com/ggerganov/llama.cpp/pull/820)

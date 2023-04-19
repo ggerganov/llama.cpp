@@ -1,11 +1,15 @@
 *.o
 *.a
+.DS_Store
+.build/
 .cache/
+.direnv/
+.envrc
+.swiftpm
+.venv
 .vs/
 .vscode/
-.DS_Store
 
-.build/
 build/
 build-em/
 build-debug/
@@ -30,12 +34,9 @@ models/*
 arm_neon.h
 compile_commands.json
 
-.envrc
-.direnv/
-
-.venv
 __pycache__
-.swiftpm
 
 zig-out/
 zig-cache/
+
+ppl-*.txt
