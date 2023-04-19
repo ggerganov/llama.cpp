@@ -1,7 +1,6 @@
 # A hacky little script from Concedo that exposes llama.cpp function bindings 
 # allowing it to be used via a simulated kobold api endpoint
-# it's not very usable as there is a fundamental flaw with llama.cpp 
-# which causes generation delay to scale linearly with original prompt length.
+# generation delay scales linearly with original prompt length.
 
 import ctypes
 import os
@@ -399,17 +398,17 @@ def main(args):
             root.destroy()
             if not ggml_selected_file:
                 print("\nNo ggml model file was selected. Exiting.")
-                time.sleep(1)
+                time.sleep(2)
                 sys.exit(2)
         except Exception as ex:
             print("File selection GUI unsupported. Please check command line: script.py --help")
-            time.sleep(1)
+            time.sleep(2)
             sys.exit(2)
        
 
     if not os.path.exists(ggml_selected_file):
         print(f"Cannot find model file: {ggml_selected_file}")
-        time.sleep(1)
+        time.sleep(2)
         sys.exit(2)
 
     mdl_nparts = sum(1 for n in range(1, 9) if os.path.exists(f"{ggml_selected_file}.{n}")) + 1
@@ -420,7 +419,7 @@ def main(args):
 
     if not loadok:
         print("Could not load model: " + modelname)
-        time.sleep(1)
+        time.sleep(2)
         sys.exit(3)
     try:
         basepath = os.path.abspath(os.path.dirname(__file__))

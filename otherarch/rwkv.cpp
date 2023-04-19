@@ -1,3 +1,6 @@
+//adapted from RWKV.cpp repo under MIT license
+// https://github.com/saharNooby/rwkv.cpp
+
 #include "rwkv.h"
 #include "ggml_rwkv.h"
 #include "otherarch.h"

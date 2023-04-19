@@ -54,4 +54,5 @@ int ArrFindIndexOf(const std::vector<int> targetArray, const std::vector<int> se
 
 FileFormat check_file_format(const std::string & fname);
 void ContextFastForward(std::vector<int> &current_context_tokens, std::vector<int> &embd_inp,
- int &n_past, std::vector<int> &last_n_tokens, const int nctx, std::vector<int> &smartcontext, const bool useSmartContext);
+ int &n_past, std::vector<int> &last_n_tokens, const int nctx, std::vector<int> &smartcontext, 
+ const bool useSmartContext, const bool requireFullSubset);

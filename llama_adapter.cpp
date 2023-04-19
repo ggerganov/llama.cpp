@@ -145,7 +145,7 @@ generation_outputs llama_generate(const generation_inputs inputs, generation_out
     std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
     n_past = 0;
 
-    ContextFastForward(current_context_tokens, embd_inp, n_past, last_n_tokens, nctx, smartcontext, useSmartContext);
+    ContextFastForward(current_context_tokens, embd_inp, n_past, last_n_tokens, nctx, smartcontext, useSmartContext,false);
 
     //if using BLAS and prompt is big enough, switch to single thread and use a huge batch
     bool blasmode = (embd_inp.size() >= 32 && ggml_cpu_has_blas());
