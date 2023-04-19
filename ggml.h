@@ -809,6 +809,8 @@ size_t ggml_quantize_q4_0(const float * src, void * dst, int n, int k, int64_t *
 size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t * hist);
 size_t ggml_quantize_q4_2(const float * src, void * dst, int n, int k, int64_t * hist);
 
+size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, int start, int n, int64_t * hist);
+
 //
 // system info
 //
