@@ -1124,14 +1124,14 @@ static void quantize_row_q4_2_reference(const float * restrict x, block_q4_2 * r
     }
 }
 
-static inline int nearestInt(float fval) {
+static inline int nearest_int(float fval) {
     assert(fval <= 4194303.f);
     float val = fval + 12582912.f;
     int i; memcpy(&i, &val, sizeof(int));
     return (i & 0x007fffff) - 0x00400000;
 }
 
-static float kQuantizeWithBounds(int n, int nmin, int nmax, const float * restrict X, int nCandidates,
+static float kquantize_q4_with_bounds(int n, int nmin, int nmax, const float * restrict X, int nCandidates,
         const float * restrict candidates, int8_t * restrict L) {
     assert (nmin >= INT8_MIN);
     assert (nmax <= INT8_MAX);
@@ -1147,7 +1147,7 @@ static float kQuantizeWithBounds(int n, int nmin, int nmax, const float * restri
         float sumlxP = 0; int suml2P = 0;
         float sumlxM = 0; int suml2M = 0;
         for (int i=0; i<n; ++i) {
-            int l = nearestInt(iscale*X[i]);
+            int l = nearest_int(iscale*X[i]);
             int lp = MAX(nmin, MIN(nmax, +l));
             int lm = MAX(nmin, MIN(nmax, -l));
             sumlxP += X[i]*lp; suml2P += lp*lp;
@@ -1167,7 +1167,7 @@ static float kQuantizeWithBounds(int n, int nmin, int nmax, const float * restri
     }
     float sumlx = 0; int suml2 = 0;
     for (int i=0; i<n; ++i) {
-        int l = nearestInt(bestScale*X[i]);
+        int l = nearest_int(bestScale*X[i]);
         l = MAX(nmin, MIN(nmax, l));
         sumlx += X[i]*l; suml2 += l*l;
         L[i] = l;
@@ -1187,7 +1187,7 @@ static void quantize_row_q4_2_rmse(const float * restrict x, block_q4_2 * restri
 
     for (int i = 0; i < nb; i++) {
 
-        float scale = kQuantizeWithBounds(QK4_2, -8, 7, x, kCandiateCount, candidates, L);
+        float scale = kquantize_q4_with_bounds(QK4_2, -8, 7, x, kCandiateCount, candidates, L);
         y[i].d = GGML_FP32_TO_FP16(scale);
 
         for (int l = 0; l < QK4_2; l += 2) {
