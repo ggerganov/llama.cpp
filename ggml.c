@@ -1177,8 +1177,8 @@ static float kquantize_q4_with_bounds(int n, int nmin, int nmax, const float * r
 }
 
 static void quantize_row_q4_2_rmse(const float * restrict x, block_q4_2 * restrict y, int k) {
-#define kCandiateCount 8
-    static const float candidates[kCandiateCount] = { +8.7f, +8.3f, +8.1f, +7.8f, +7.3f, +7.0f, +6.3f, +5.7f };
+#define CANDIDATE_COUNT 8
+    static const float candidates[CANDIDATE_COUNT] = { +8.7f, +8.3f, +8.1f, +7.8f, +7.3f, +7.0f, +6.3f, +5.7f };
     assert(k % QK4_2 == 0);
 
     int8_t L[QK4_2];
@@ -1187,7 +1187,7 @@ static void quantize_row_q4_2_rmse(const float * restrict x, block_q4_2 * restri
 
     for (int i = 0; i < nb; i++) {
 
-        float scale = kquantize_q4_with_bounds(QK4_2, -8, 7, x, kCandiateCount, candidates, L);
+        float scale = kquantize_q4_with_bounds(QK4_2, -8, 7, x, CANDIDATE_COUNT, candidates, L);
         y[i].d = GGML_FP32_TO_FP16(scale);
 
         for (int l = 0; l < QK4_2; l += 2) {
