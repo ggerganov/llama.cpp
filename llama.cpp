@@ -1711,7 +1711,7 @@ struct llama_context * llama_init_from_file(
             unsigned percentage = (unsigned) (100 * progress);
             while (percentage > *cur_percentage_p) {
                 ++*cur_percentage_p;
-                fprintf(stderr, ".");
+                fprintf(stderr, "[porcentage] %u%%\n", *cur_percentage_p);
                 fflush(stderr);
                 if (percentage >= 100) {
                     fprintf(stderr, "\n");
