@@ -186,7 +186,7 @@ _lib.llama_model_quantize.restype = c_int
 # will be applied on top of the previous one
 # Returns 0 on success
 def llama_apply_lora_from_file(
-    ctx: llama_context_p, path_lora: bytes, path_base_model: bytes, n_threads: c_int
+    ctx: llama_context_p, path_lora: ctypes.c_char_p, path_base_model: ctypes.c_char_p, n_threads: c_int
 ) -> c_int:
     return _lib.llama_apply_lora_from_file(ctx, path_lora, path_base_model, n_threads)
 
