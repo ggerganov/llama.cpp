@@ -21,6 +21,9 @@
           buildInputs = with pkgs; lib.optionals stdenv.isDarwin [
             darwin.apple_sdk.frameworks.Accelerate
           ];
+          makeFlags = with pkgs; lib.optionals (system == "aarch64-darwin") [
+            "CFLAGS=-D__ARM_FEATURE_DOTPROD=1"
+          ];
           buildPhase = ''
             make main quantize quantize-stats perplexity embedding vdot libllama.so
           '';
