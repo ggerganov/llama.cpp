@@ -18,17 +18,21 @@
         packages.default = pkgs.stdenv.mkDerivation {
           name = "llama.cpp";
           src = ./.;
-          nativeBuildInputs = with pkgs; [ cmake ];
           buildInputs = with pkgs; lib.optionals stdenv.isDarwin [
             darwin.apple_sdk.frameworks.Accelerate
           ];
-          cmakeFlags = with pkgs; lib.optionals (system == "aarch64-darwin") [
-            "-DCMAKE_C_FLAGS=-D__ARM_FEATURE_DOTPROD=1"
-          ];
+          buildPhase = ''
+            make main quantize quantize-stats perplexity embedding vdot libllama.so
+          '';
           installPhase = ''
-            mkdir -p $out/bin
-            mv bin/* $out/bin/
-            mv $out/bin/main $out/bin/llama
+            mkdir -p $out/lib/
+            cp libllama.so $out/lib/
+
+            mkdir -p $out/bin/
+            mv main $out/bin/llama
+            for exe in quantize quantize-stats perplexity embedding vdot; do
+              mv $exe $out/bin/
+            done
 
             echo "#!${llama-python}/bin/python" > $out/bin/convert-pth-to-ggml
             cat ${./convert-pth-to-ggml.py} >> $out/bin/convert-pth-to-ggml
