@@ -150,6 +150,10 @@ if (LLAMA_CUBLAS)
     if (CUDAToolkit_FOUND)
         message(STATUS "cuBLAS found")
 
+        enable_language(CUDA)
+
+        set(GGML_CUDA_SOURCES ggml-cuda.cu ggml-cuda.h)
+
         add_compile_definitions(GGML_USE_CUBLAS)
 
         if (LLAMA_STATIC)
@@ -293,7 +297,8 @@ endif()
 
 add_library(ggml OBJECT
             ggml.c
-            ggml.h)
+            ggml.h
+            ${GGML_CUDA_SOURCES})
 
 target_include_directories(ggml PUBLIC .)
 target_compile_features(ggml PUBLIC c_std_11) # don't bump
@@ -314,6 +319,14 @@ if (BUILD_SHARED_LIBS)
     set_target_properties(llama PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_compile_definitions(llama PRIVATE LLAMA_SHARED LLAMA_BUILD)
 endif()
+
+if (GGML_CUDA_SOURCES)
+    message(STATUS "GGML CUDA sources found, configuring CUDA architecture")
+    set_property(TARGET ggml PROPERTY CUDA_ARCHITECTURES OFF)
+    set_property(TARGET ggml PROPERTY CUDA_SELECT_NVCC_ARCH_FLAGS "Auto")
+    set_property(TARGET llama PROPERTY CUDA_ARCHITECTURES OFF)
+endif()
+
 
 #
 # programs, examples and tests
