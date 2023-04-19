@@ -1124,7 +1124,7 @@ static void quantize_row_q4_2_reference(const float * restrict x, block_q4_2 * r
     }
 }
 
-inline int nearestInt(float fval) {
+static inline int nearestInt(float fval) {
     assert(fval <= 4194303.f);
     float val = fval + 12582912.f;
     int i; memcpy(&i, &val, sizeof(int));
