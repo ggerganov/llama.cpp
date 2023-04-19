@@ -1,6 +1,6 @@
 #include <stdint.h>
-#include "ggml-cuda.h"
 #include <cuda_fp16.h>
+#include "ggml-cuda.h"
 
 typedef uint16_t ggml_fp16_t;
 static_assert(sizeof(__half) == sizeof(ggml_fp16_t), "wrong fp16 size");
@@ -31,7 +31,7 @@ static_assert(sizeof(block_q4_2) == sizeof(ggml_fp16_t) + QK4_2 / 2, "wrong q4_2
 static __global__ void dequantize_block_q4_0(const void * vx, float * y) {
     const block_q4_0 * x = (const block_q4_0 *) vx;
 
-    int i = blockIdx.x;
+    const int i = blockIdx.x;
 
     const float d = x[i].d;
 
@@ -54,7 +54,7 @@ static __global__ void dequantize_block_q4_0(const void * vx, float * y) {
 static __global__ void dequantize_block_q4_1(const void * vx, float * y) {
     const block_q4_1 * x = (const block_q4_1 *) vx;
 
-    int i = blockIdx.x;
+    const int i = blockIdx.x;
 
     const float d = x[i].d;
     const float m = x[i].m;
@@ -78,7 +78,7 @@ static __global__ void dequantize_block_q4_1(const void * vx, float * y) {
 static __global__ void dequantize_block_q4_2(const void * vx, float * y) {
     const block_q4_2 * x = (const block_q4_2 *) vx;
 
-    int i = blockIdx.x;
+    const int i = blockIdx.x;
 
     const float d = x[i].d;
 
@@ -99,18 +99,18 @@ static __global__ void dequantize_block_q4_2(const void * vx, float * y) {
 }
 
 extern "C" {
-    __host__ void dequantize_row_q4_0_cuda(const void * vx, float * y, int k) {
+    __host__ void dequantize_row_q4_0_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
         const int nb = k / QK4_0;
-        dequantize_block_q4_0<<<nb, 1>>>(vx, y);
+        dequantize_block_q4_0<<<nb, 1, 0, stream>>>(vx, y);
     }
 
-    __host__ void dequantize_row_q4_1_cuda(const void * vx, float * y, int k) {
+    __host__ void dequantize_row_q4_1_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
         const int nb = k / QK4_1;
-        dequantize_block_q4_1<<<nb, 1>>>(vx, y);
+        dequantize_block_q4_1<<<nb, 1, 0, stream>>>(vx, y);
     }
 
-    __host__ void dequantize_row_q4_2_cuda(const void * vx, float * y, int k) {
+    __host__ void dequantize_row_q4_2_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
         const int nb = k / QK4_2;
-        dequantize_block_q4_2<<<nb, 1>>>(vx, y);
+        dequantize_block_q4_2<<<nb, 1, 0, stream>>>(vx, y);
     }
 }
