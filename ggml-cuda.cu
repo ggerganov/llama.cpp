@@ -51,7 +51,7 @@ static __global__ void dequantize_block_q4_0(const void * vx, float * y) {
     }
 }
 
-static __global__ void dequantize_block_q4_1(const void * vx, float * y, int k) {
+static __global__ void dequantize_block_q4_1(const void * vx, float * y) {
     const block_q4_1 * x = (const block_q4_1 *) vx;
 
     int i = blockIdx.x;
@@ -75,7 +75,7 @@ static __global__ void dequantize_block_q4_1(const void * vx, float * y, int k) 
     }
 }
 
-static __global__ void dequantize_block_q4_2(const void * vx, float * y, int k) {
+static __global__ void dequantize_block_q4_2(const void * vx, float * y) {
     const block_q4_2 * x = (const block_q4_2 *) vx;
 
     int i = blockIdx.x;
@@ -106,11 +106,11 @@ extern "C" {
 
     __host__ void dequantize_row_q4_1_cuda(const void * vx, float * y, int k) {
         const int nb = k / QK4_1;
-        dequantize_block_q4_1<<<nb, 1>>>(vx, y, k);
+        dequantize_block_q4_1<<<nb, 1>>>(vx, y);
     }
 
     __host__ void dequantize_row_q4_2_cuda(const void * vx, float * y, int k) {
         const int nb = k / QK4_2;
-        dequantize_block_q4_2<<<nb, 1>>>(vx, y, k);
+        dequantize_block_q4_2<<<nb, 1>>>(vx, y);
     }
 }
