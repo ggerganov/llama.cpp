@@ -1,5 +1,11 @@
 #include <stdint.h>
+#if defined(__HIP_PLATFORM_AMD__)
+#include "hip/hip_runtime.h"
+#define cudaStream_t hipStream_t
+#define __half _Float16
+#else
 #include <cuda_fp16.h>
+#endif
 #include "ggml-cuda.h"
 
 typedef uint16_t ggml_fp16_t;

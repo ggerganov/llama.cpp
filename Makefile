@@ -107,6 +107,10 @@ ifdef LLAMA_CUBLAS
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	nvcc -arch=native -c -o $@ $<
 endif
+ifdef LLAMA_HIPBLAS
+	CFLAGS  += -DGGML_USE_HIPBLAS -D__HIP_PLATFORM_AMD__ -I/opt/rocm/include
+	LDFLAGS += -lhipblas -lamdhip64 -L/opt/rocm/lib
+endif
 ifdef LLAMA_GPROF
 	CFLAGS   += -pg
 	CXXFLAGS += -pg

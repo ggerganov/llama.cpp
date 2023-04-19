@@ -147,9 +147,41 @@ inline static void* ggml_aligned_malloc(size_t size) {
 #include <Accelerate/Accelerate.h>
 #elif defined(GGML_USE_OPENBLAS)
 #include <cblas.h>
-#elif defined(GGML_USE_CUBLAS)
+#elif defined(GGML_USE_CUBLAS) || defined(GGML_USE_HIPBLAS)
+
+#if defined(GGML_USE_HIPBLAS)
+#include "hipblas/hipblas.h"
+#define CUBLAS_COMPUTE_32F HIPBLAS_R_32F
+#define CUBLAS_GEMM_DEFAULT HIPBLAS_GEMM_DEFAULT
+#define CUBLAS_OP_N HIPBLAS_OP_N
+#define CUBLAS_OP_T HIPBLAS_OP_T
+#define CUBLAS_STATUS_SUCCESS HIPBLAS_STATUS_SUCCESS
+#define cublasCreate hipblasCreate
+#define cublasGemmEx hipblasGemmEx
+#define cublasHandle_t hipblasHandle_t
+#define cublasSetStream hipblasSetStream
+#define cublasSgemm hipblasSgemm
+#define cublasStatus_t hipblasStatus_t
+#define CUDA_R_16F  HIPBLAS_R_16F
+#define CUDA_R_32F  HIPBLAS_R_32F
+#define cudaError_t hipError_t
+#define cudaFree hipFree
+#define cudaGetErrorString hipGetErrorString
+#define cudaGetLastError hipGetLastError
+#define cudaMalloc hipMalloc
+#define cudaMemcpyAsync hipMemcpyAsync
+#define cudaMemcpyDeviceToHost hipMemcpyDeviceToHost
+#define cudaMemcpyHostToDevice hipMemcpyHostToDevice
+#define cudaStream_t hipStream_t
+#define cudaStreamCreateWithFlags hipStreamCreateWithFlags
+#define cudaStreamNonBlocking hipStreamNonBlocking
+#define cudaStreamSynchronize hipStreamSynchronize
+#define cudaSuccess hipSuccess
+#define GGML_USE_CUBLAS
+#else
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
+#endif
 #include "ggml-cuda.h"
 
 #define CUDA_CHECK(err)                                                        \
@@ -8072,7 +8104,6 @@ static void ggml_compute_forward_mul_mat_q_f32(
                 }
                 const float * x = wdata;
 #endif
-
 
 #if defined(GGML_USE_CUBLAS)
                 // copy data to device

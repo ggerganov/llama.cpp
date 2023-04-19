@@ -67,6 +67,7 @@ endif()
 option(LLAMA_ACCELERATE             "llama: enable Accelerate framework"                    ON)
 option(LLAMA_OPENBLAS               "llama: use OpenBLAS"                                   OFF)
 option(LLAMA_CUBLAS                 "llama: use cuBLAS"                                     OFF)
+option(LLAMA_HIPBLAS                "llama: use hipBLAS"                                    OFF)
 
 option(LLAMA_BUILD_TESTS            "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES         "llama: build examples" ${LLAMA_STANDALONE})
@@ -165,6 +166,31 @@ if (LLAMA_CUBLAS)
 
     else()
         message(WARNING "cuBLAS not found")
+    endif()
+endif()
+
+if (LLAMA_HIPBLAS)
+    cmake_minimum_required(VERSION 3.21)
+
+    find_package(hip)
+    find_package(hipblas)
+
+    if (hipblas_FOUND)
+        message(STATUS "hipBLAS found")
+
+        set(LLAMA_HIPBLAS_PLATFORM "AMD" CACHE STRING "hip device type" FORCE)
+        set_property(CACHE LLAMA_HIPBLAS_PLATFORM PROPERTY STRINGS "AMD" "NVIDIA")
+
+        add_compile_definitions(GGML_USE_HIPBLAS "__HIP_PLATFORM_${LLAMA_HIPBLAS_PLATFORM}__")
+
+        add_library(ggml-hip OBJECT ggml-cuda.cu)
+        set_source_files_properties(ggml-cuda.cu PROPERTIES  LANGUAGE  CXX)
+        target_link_libraries(ggml-hip hip::device)
+
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} hip::host roc::hipblas ggml-hip)
+
+    else()
+        message(WARNING "hipBLAS not found")
     endif()
 endif()
 
