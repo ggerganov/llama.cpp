@@ -12189,6 +12189,33 @@ size_t ggml_quantize_q4_3(const float * src, void * dst, int n, int k, int64_t *
     return (n/QK4_3*sizeof(block_q4_3));
 }
 
+size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, int start, int n, int64_t * hist) {
+    size_t result = 0;
+    switch (type) {
+        case GGML_TYPE_Q4_0:
+            {
+                GGML_ASSERT(start % QK4_0 == 0);
+                block_q4_0 * block = (block_q4_0*)dst + start / QK4_0;
+                result = ggml_quantize_q4_0(src + start, block, n, n, hist);
+            } break;
+        case GGML_TYPE_Q4_1:
+            {
+                GGML_ASSERT(start % QK4_1 == 0);
+                block_q4_1 * block = (block_q4_1*)dst + start / QK4_1;
+                result = ggml_quantize_q4_1(src + start, block, n, n, hist);
+            } break;
+        case GGML_TYPE_Q4_2:
+            {
+                GGML_ASSERT(start % QK4_2 == 0);
+                block_q4_2 * block = (block_q4_2*)dst + start / QK4_2;
+                result = ggml_quantize_q4_2(src + start, block, n, n, hist);
+            } break;
+        default:
+            assert(false);
+    }
+    return result;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 int ggml_cpu_has_avx(void) {
