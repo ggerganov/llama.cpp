@@ -1,4 +1,4 @@
-default: koboldcpp koboldcpp_noavx2 koboldcpp_openblas koboldcpp_openblas_noavx2 koboldcpp_clblast 
+default: koboldcpp koboldcpp_noavx2 koboldcpp_openblas koboldcpp_openblas_noavx2 koboldcpp_clblast koboldcpp_cublas
 simple: koboldcpp koboldcpp_noavx2
 dev: koboldcpp_openblas
 
@@ -45,8 +45,8 @@ endif
 #
 
 # keep standard at C11 and C++11
-CFLAGS   = -I.              -Ofast -DNDEBUG -std=c11   -fPIC
-CXXFLAGS = -I. -I./examples -Ofast -DNDEBUG -std=c++11 -fPIC
+CFLAGS   = -I.              -I./include -I./include/CL -Ofast -DNDEBUG -std=c11   -fPIC
+CXXFLAGS = -I. -I./examples -I./include -I./include/CL -Ofast -DNDEBUG -std=c++11 -fPIC
 LDFLAGS  =
 
 # these are used on windows, to build some libraries with extra old device compatibility
@@ -55,7 +55,7 @@ BONUSCFLAGS2 =
 
 OPENBLAS_FLAGS = -DGGML_USE_OPENBLAS -I/usr/local/include/openblas
 CLBLAST_FLAGS = -DGGML_USE_CLBLAST -DGGML_USE_OPENBLAS -I/usr/local/include/openblas
-CUBLAS_FLAGS = -DGGML_USE_CUBLAS -I/usr/local/cuda/include
+CUBLAS_FLAGS = -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I./include/cuda -I./include/cuda/crt
 
 #lets try enabling everything
 CFLAGS   += -pthread -s
@@ -251,7 +251,7 @@ gpttype_adapter.o: gpttype_adapter.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -vf *.o main quantize_llama quantize_gpt2 quantize_gptj quantize-stats perplexity embedding benchmark-q4_0-matmult main.exe quantize_llama.exe quantize_gptj.exe quantize_gpt2.exe koboldcpp.dll koboldcpp_openblas.dll koboldcpp_noavx2.dll koboldcpp_openblas_noavx2.dll koboldcpp_clblast.dll koboldcpp.so koboldcpp_openblas.so koboldcpp_noavx2.so koboldcpp_openblas_noavx2.so koboldcpp_clblast.so gptj.exe gpt2.exe
+	rm -vf *.o main quantize_llama quantize_gpt2 quantize_gptj quantize-stats perplexity embedding benchmark-q4_0-matmult main.exe quantize_llama.exe quantize_gptj.exe quantize_gpt2.exe koboldcpp.dll koboldcpp_openblas.dll koboldcpp_noavx2.dll koboldcpp_openblas_noavx2.dll koboldcpp_clblast.dll koboldcpp_cublas.dll koboldcpp.so koboldcpp_openblas.so koboldcpp_noavx2.so koboldcpp_openblas_noavx2.so koboldcpp_clblast.so koboldcpp_cublas.so gptj.exe gpt2.exe
 
 main: examples/main/main.cpp ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
