@@ -52,8 +52,8 @@ def pick_existant_file(ntoption,nonntoption):
         return ntoption
     else:
         if ntexist and not nonntexist:
-            return option1
-        return option2
+            return ntoption
+        return nonntoption
 
 lib_default = pick_existant_file("koboldcpp.dll","koboldcpp.so")
 lib_noavx2 = pick_existant_file("koboldcpp_noavx2.dll","koboldcpp_noavx2.so")
