@@ -108,8 +108,15 @@ ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	nvcc -arch=native -c -o $@ $<
 endif
 ifdef LLAMA_HIPBLAS
-	CFLAGS  += -DGGML_USE_HIPBLAS -D__HIP_PLATFORM_AMD__ -I/opt/rocm/include
-	LDFLAGS += -lhipblas -lamdhip64 -L/opt/rocm/lib
+	ROCMPATH?= /opt/rocm
+	CFLAGS  += -DGGML_USE_HIPBLAS -D__HIP_PLATFORM_AMD__ -I$(ROCMPATH)/include
+	CXXFLAGS+= -D__HIP_PLATFORM_AMD__ -I$(ROCMPATH)/include
+	HIPFLAGS?= -amdgpu-early-inline-all=true -amdgpu-function-calls=false -march=native
+	LDFLAGS += -lhipblas -lamdhip64 -L$(ROCMPATH)/lib
+	HIPCC   ?= $(ROCMPATH)/bin/hipcc
+	OBJS	+= ggml-cuda.o
+ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
+	$(HIPCC) $(CXXFLAGS) -x hip $(HIPFLAGS) -c -o $@ $<
 endif
 ifdef LLAMA_GPROF
 	CFLAGS   += -pg
