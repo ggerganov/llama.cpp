@@ -1,0 +1,7 @@
+[package]
+name = "nexus"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+yrs = "0.16.5"
