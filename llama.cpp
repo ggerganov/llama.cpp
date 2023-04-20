@@ -1618,6 +1618,11 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         // quantize only 2D tensors
         quantize &= (tensor.ne.size() == 2);
 
+        // GG: uncomment this to keep the output layer in FP16
+        //if (tensor.name.rfind("output")) {
+        //    quantize = false;
+        //}
+
         enum ggml_type new_type;
         void * new_data;
         size_t new_size;
