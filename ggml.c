@@ -6140,7 +6140,6 @@ static void ggml_compute_forward_dup_f32(
                 i10 += ne00 * ir0;
                 while (i10 >= ne0) {
                     i10 -= ne0;
-                    i11++;
                     if (++i11 == ne1) {
                         i11 = 0;
                         if (++i12 == ne2) {
