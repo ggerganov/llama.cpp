@@ -205,7 +205,8 @@ enum ggml_type {
     GGML_TYPE_Q4_0 = 2,
     GGML_TYPE_Q4_1 = 3,
     GGML_TYPE_Q4_2 = 4,
-    GGML_TYPE_Q8_0 = 5,
+    GGML_TYPE_Q4_3 = 5,
+    GGML_TYPE_Q8_0 = 6,
     GGML_TYPE_I8,
     GGML_TYPE_I16,
     GGML_TYPE_I32,
@@ -359,6 +360,8 @@ float  ggml_type_sizef(enum ggml_type type); // ggml_type_size()/ggml_blck_size(
 const char * ggml_type_name(enum ggml_type type);
 
 size_t ggml_element_size(const struct ggml_tensor * tensor);
+
+bool ggml_is_quantized(enum ggml_type type);
 
 struct ggml_context * ggml_init(struct ggml_init_params params);
 void ggml_free(struct ggml_context * ctx);
@@ -808,6 +811,7 @@ enum ggml_opt_result ggml_opt(
 size_t ggml_quantize_q4_0(const float * src, void * dst, int n, int k, int64_t * hist);
 size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t * hist);
 size_t ggml_quantize_q4_2(const float * src, void * dst, int n, int k, int64_t * hist);
+size_t ggml_quantize_q4_3(const float * src, void * dst, int n, int k, int64_t * hist);
 
 //
 // system info
