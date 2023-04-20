@@ -9,7 +9,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Warnings**
 
-- `Q4_2` and `Q4_3` are still in development. Do not expect any kind of backward compatibility until they are finalize
+- `Q4_2` and `Q4_3` are still in development. Do not expect any kind of backward compatibility until they are finalized
 
 **Hot topics:**
 
@@ -19,7 +19,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ## Description
 
-The main goal is to run the model using 4-bit quantization on a MacBook
+The main goal of llama.cpp is to run the llama model using 4-bit quantization on a MacBook.
 
 - Plain C/C++ implementation without dependencies
 - Apple silicon first-class citizen - optimized via ARM NEON and Accelerate framework
@@ -156,7 +156,7 @@ https://user-images.githubusercontent.com/1991296/224442907-7693d4be-acaa-4e01-8
 
 ## Usage
 
-Here are the step for the LLaMA-7B model.
+Here are the steps for the LLaMA-7B model.
 
 ### Get the Code
 
@@ -214,8 +214,7 @@ When running the larger models, make sure you have enough disk space to store al
 
 ### Memory/Disk Requirements
 
-As the models are currently fully loaded into memory, you will need adequate disk space to save them
-and sufficient RAM to load them. At the moment, memory and disk requirements are the same.
+As the models are currently fully loaded into memory, you will need adequate disk space to save them and sufficient RAM to load them. At the moment, memory and disk requirements are the same.
 
 | model | original size | quantized size (4-bit) |
 |-------|---------------|------------------------|
@@ -227,18 +226,18 @@ and sufficient RAM to load them. At the moment, memory and disk requirements are
 ### Interactive mode
 
 If you want a more ChatGPT-like experience, you can run in interactive mode by passing `-i` as a parameter.
-In this mode, you can always interrupt generation by pressing Ctrl+C and enter one or more lines of text which will be converted into tokens and appended to the current context. You can also specify a *reverse prompt* with the parameter `-r "reverse prompt string"`. This will result in user input being prompted whenever the exact tokens of the reverse prompt string are encountered in the generation. A typical use is to use a prompt which makes LLaMa emulate a chat between multiple users, say Alice and Bob, and pass `-r "Alice:"`.
+In this mode, you can always interrupt generation by pressing Ctrl+C and entering one or more lines of text, which will be converted into tokens and appended to the current context. You can also specify a *reverse prompt* with the parameter `-r "reverse prompt string"`. This will result in user input being prompted whenever the exact tokens of the reverse prompt string are encountered in the generation. A typical use is to use a prompt that makes LLaMa emulate a chat between multiple users, say Alice and Bob, and pass `-r "Alice:"`.
 
-Here is an example few-shot interaction, invoked with the command
+Here is an example of a few-shot interaction, invoked with the command
 
 ```bash
-# default arguments using 7B model
+# default arguments using a 7B model
 ./examples/chat.sh
 
-# advanced chat with 13B model
+# advanced chat with a 13B model
 ./examples/chat-13B.sh
 
-# custom arguments using 13B model
+# custom arguments using a 13B model
 ./main -m ./models/13B/ggml-model-q4_0.bin -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
 ```
 
@@ -277,7 +276,7 @@ cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
 ### Using [GPT4All](https://github.com/nomic-ai/gpt4all)
 
 - Obtain the `gpt4all-lora-quantized.bin` model
-- It is distributed in the old `ggml` format which is now obsoleted
+- It is distributed in the old `ggml` format, which is now obsoleted
 - You have to convert it to the new format using [./convert-gpt4all-to-ggml.py](./convert-gpt4all-to-ggml.py). You may also need to
 convert the model from the old format to the new format with [./migrate-ggml-2023-03-30-pr613.py](./migrate-ggml-2023-03-30-pr613.py):
 
@@ -291,7 +290,7 @@ convert the model from the old format to the new format with [./migrate-ggml-202
 
 ### Obtaining and verifying the Facebook LLaMA original model and Stanford Alpaca model data
 
-- **Under no circumstances share IPFS, magnet links, or any other links to model downloads anywhere in this respository, including in issues, discussions or pull requests. They will be immediately deleted.**
+- **Under no circumstances should IPFS, magnet links, or any other links to model downloads be shared anywhere in this repository, including in issues, discussions, or pull requests. They will be immediately deleted.**
 - The LLaMA models are officially distributed by Facebook and will **never** be provided through this repository.
 - Refer to [Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to request access to the model data.
 - Please verify the [sha256 checksums](SHA256SUMS) of all downloaded model files to confirm that you have the correct model data files before creating an issue relating to your model files.
@@ -303,29 +302,27 @@ convert the model from the old format to the new format with [./migrate-ggml-202
 
   `shasum -a 256 --ignore-missing -c SHA256SUMS` on macOS
 
-- If your issue is with model generation quality then please at least scan the following links and papers to understand the limitations of LLaMA models. This is especially important when choosing an appropriate model size and appreciating both the significant and subtle differences between LLaMA models and ChatGPT:
-  - LLaMA:
-    - [Introducing LLaMA: A foundational, 65-billion-parameter large language model](https://ai.facebook.com/blog/large-language-model-llama-meta-ai/)
-    - [LLaMA: Open and Efficient Foundation Language Models](https://arxiv.org/abs/2302.13971)
-  - GPT-3
-    - [Language Models are Few-Shot Learners](https://arxiv.org/abs/2005.14165)
-  - GPT-3.5 / InstructGPT / ChatGPT:
-    - [Aligning language models to follow instructions](https://openai.com/research/instruction-following)
-    - [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
+- If your issue is with model generation quality, then please at least scan the following links and papers to understand the limitations of LLaMA models. This is especially important when choosing an appropriate model size and appreciating both the significant and subtle differences between LLaMA models and ChatGPT:
+- LLaMA:
+- [Introducing LLaMA: A foundational, 65-billion-parameter large language model](https://ai.facebook.com/blog/large-language-model-llama-meta-ai/)
+- [LLaMA: Open and Efficient Foundation Language Models](https://arxiv.org/abs/2302.13971)
+- GPT-3
+- [Language Models are Few-Shot Learners](https://arxiv.org/abs/2005.14165)
+- GPT-3.5 / InstructGPT / ChatGPT:
+- [Aligning language models to follow instructions](https://openai.com/research/instruction-following)
+- [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
 
-### Perplexity (Measuring model quality)
+### Perplexity (measuring model quality)
 
-You can use the `perplexity` example to measure perplexity over the given prompt.  For more background,
-see https://huggingface.co/docs/transformers/perplexity.  However, in general, lower perplexity is better for LLMs.
+You can use the `perplexity` example to measure perplexity over the given prompt. For more background, see [https://huggingface.co/docs/transformers/perplexity](https://huggingface.co/docs/transformers/perplexity). However, in general, lower perplexity is better for LLMs.
 
 #### Latest measurements
 
-The latest perplexity scores for the various model sizes and quantizations are being tracked in [discussion #406](https://github.com/ggerganov/llama.cpp/discussions/406).  `llama.cpp` is measuring very well
-compared to the baseline implementations.  Quantization has a small negative impact to quality, but, as you can see, running
+The latest perplexity scores for the various model sizes and quantizations are being tracked in [discussion #406](https://github.com/ggerganov/llama.cpp/discussions/406). `llama.cpp` is measuring very well compared to the baseline implementations. Quantization has a small negative impact on quality, but, as you can see, running
 13B at q4_0 beats the 7B f16 model by a significant amount.
 
-All measurements are done against wikitext2 test dataset (https://paperswithcode.com/dataset/wikitext-2), with default options (512 length context).
-Note that the changing the context length will have a significant impact on perplexity (longer context = better perplexity).
+All measurements are done against the wikitext2 test dataset (https://paperswithcode.com/dataset/wikitext-2), with default options (512 length context).
+Note that changing the context length will have a significant impact on perplexity (longer context = better perplexity).
 ```
 Perplexity - model options
 5.5985 - 13B, q4_0
@@ -367,7 +364,7 @@ https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b0
 
 #### Prerequisites
 * Docker must be installed and running on your system.
-* Create a folder to store big models & intermediate files (in ex. im using /llama/models)
+* Create a folder to store big models & intermediate files (ex. /llama/models)
 
 #### Images
 We have two Docker images available for this project:
@@ -381,17 +378,17 @@ The easiest way to download the models, convert them to ggml and optimize them i
 
 Replace `/path/to/models` below with the actual path where you downloaded the models.
 
- ```bash
+```bash
 docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:full --all-in-one "/models/" 7B
 ```
 
-On complete, you are ready to play!
+On completion, you are ready to play!
 
 ```bash
 docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:full --run -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
 ```
 
-or with light image:
+or with a light image:
 
 ```bash
 docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
@@ -412,7 +409,7 @@ docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:light -m /mode
 - Always consider cross-compatibility with other operating systems and architectures
 - Avoid fancy looking modern STL constructs, use basic `for` loops, avoid templates, keep it simple
 - There are no strict rules for the code style, but try to follow the patterns in the code (indentation, spaces, etc.). Vertical alignment makes things more readable and easier to batch edit
-- Clean-up any trailing whitespaces, use 4 spaces indentation, brackets on same line, `void * ptr`, `int & a`
+- Clean-up any trailing whitespaces, use 4 spaces for indentation, brackets on the same line, `void * ptr`, `int & a`
 - See [good first issues](https://github.com/ggerganov/llama.cpp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for tasks suitable for first contributions
 
 ### Docs

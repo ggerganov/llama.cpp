@@ -81,7 +81,6 @@ jobs:
       matrix:
         sanitizer: [ADDRESS, THREAD, UNDEFINED]
         build_type: [Debug, Release]
-        accelerate: [ON, OFF]
 
     steps:
       - name: Clone
@@ -99,7 +98,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLAMA_ACCELERATE=${{ matrix.accelerate }}
+          cmake .. -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
           cmake --build . --config ${{ matrix.build_type }}
 
       - name: Test
