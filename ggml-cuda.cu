@@ -1,5 +1,7 @@
 #include <stdint.h>
+#include <stdio.h>
 #include <cuda_fp16.h>
+#include <atomic>
 #include "ggml-cuda.h"
 
 typedef uint16_t ggml_fp16_t;
@@ -34,8 +36,6 @@ typedef struct {
     uint8_t qs[QK4_3 / 2]; // nibbles / quants
 } block_q4_3;
 static_assert(sizeof(block_q4_3) == 2 * sizeof(ggml_fp16_t) + QK4_3 / 2, "wrong q4_3 block size/padding");
-
-
 
 static __global__ void dequantize_block_q4_0(const void * vx, float * y) {
     const block_q4_0 * x = (const block_q4_0 *) vx;
@@ -131,24 +131,83 @@ static __global__ void dequantize_block_q4_3(const void * vx, float * y) {
     }
 }
 
-extern "C" {
-    __host__ void dequantize_row_q4_0_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
-        const int nb = k / QK4_0;
-        dequantize_block_q4_0<<<nb, 1, 0, stream>>>(vx, y);
+void dequantize_row_q4_0_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
+    const int nb = k / QK4_0;
+    dequantize_block_q4_0<<<nb, 1, 0, stream>>>(vx, y);
+}
+
+void dequantize_row_q4_1_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
+    const int nb = k / QK4_1;
+    dequantize_block_q4_1<<<nb, 1, 0, stream>>>(vx, y);
+}
+
+void dequantize_row_q4_2_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
+    const int nb = k / QK4_2;
+    dequantize_block_q4_2<<<nb, 1, 0, stream>>>(vx, y);
+}
+
+void dequantize_row_q4_3_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
+    const int nb = k / QK4_3;
+    dequantize_block_q4_3<<<nb, 1, 0, stream>>>(vx, y);
+}
+
+// lock-free, thread safe buffer pool for cuda
+#define MAX_CUDA_BUFFERS 16
+struct cuda_buffer {
+    std::atomic_uintptr_t ptr;
+    size_t size;
+};
+
+static struct cuda_buffer cuda_buffer_pool[MAX_CUDA_BUFFERS] = {0};
+
+void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
+    for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
+        struct cuda_buffer * b = &cuda_buffer_pool[i];
+        if (b->size >= size) {
+            uintptr_t ptr = atomic_load(&b->ptr);
+            if (ptr) {
+                if (std::atomic_compare_exchange_strong(&b->ptr, &ptr, 0)) {
+                    *actual_size = b->size;
+                    return (void *) ptr;
+                }
+            }
+        }
     }
 
-    __host__ void dequantize_row_q4_1_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
-        const int nb = k / QK4_1;
-        dequantize_block_q4_1<<<nb, 1, 0, stream>>>(vx, y);
-    }
+    void * ptr;
+    CUDA_CHECK(cudaMalloc((void **) &ptr, size));
+    *actual_size = size;
+    return ptr;
+}
 
-    __host__ void dequantize_row_q4_2_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
-        const int nb = k / QK4_2;
-        dequantize_block_q4_2<<<nb, 1, 0, stream>>>(vx, y);
+void ggml_cuda_pool_free(void * ptr, size_t size) {
+    for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
+        struct cuda_buffer * b = &cuda_buffer_pool[i];
+        uintptr_t p = std::atomic_load(&b->ptr);
+        if (p == 0) {
+            if (std::atomic_compare_exchange_strong(&b->ptr, &p, (uintptr_t) ptr)) {
+                b->size = size;
+                return;
+            }
+        }
     }
+    fprintf(stderr, "WARNING: cuda buffer pool full, increase MAX_CUDA_BUFFERS\n");
+    CUDA_CHECK(cudaFree(ptr));
+}
 
-    __host__ void dequantize_row_q4_3_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
-        const int nb = k / QK4_3;
-        dequantize_block_q4_3<<<nb, 1, 0, stream>>>(vx, y);
+cublasHandle_t cublasH = NULL;
+cudaStream_t cudaStream = NULL;
+
+void ggml_init_cublas(void) {
+    if (cublasH == NULL) {
+        // create cublas handle, bind a stream
+        CUBLAS_CHECK(cublasCreate(&cublasH));
+
+        CUDA_CHECK(cudaStreamCreateWithFlags(&cudaStream, cudaStreamNonBlocking));
+
+        CUBLAS_CHECK(cublasSetStream(cublasH, cudaStream));
+
+        // configure logging to stdout
+        // CUBLAS_CHECK(cublasLoggerConfigure(1, 1, 0, NULL));
     }
 }
