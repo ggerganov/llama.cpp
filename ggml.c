@@ -12210,6 +12210,12 @@ size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, i
                 block_q4_2 * block = (block_q4_2*)dst + start / QK4_2;
                 result = ggml_quantize_q4_2(src + start, block, n, n, hist);
             } break;
+        case GGML_TYPE_Q4_3:
+            {
+                GGML_ASSERT(start % QK4_3 == 0);
+                block_q4_3 * block = (block_q4_3*)dst + start / QK4_3;
+                result = ggml_quantize_q4_3(src + start, block, n, n, hist);
+            } break;
         default:
             assert(false);
     }
