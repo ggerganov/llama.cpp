@@ -1,4 +1,4 @@
-default: koboldcpp koboldcpp_noavx2 koboldcpp_openblas koboldcpp_openblas_noavx2 koboldcpp_clblast
+default: koboldcpp koboldcpp_noavx2 koboldcpp_openblas koboldcpp_openblas_noavx2 koboldcpp_clblast 
 simple: koboldcpp koboldcpp_noavx2
 dev: koboldcpp_openblas
 
@@ -15,9 +15,13 @@ ifndef UNAME_M
 UNAME_M := $(shell uname -m)
 endif
 
-ifndef ARCH_LINUX
-ARCH_LINUX := $(shell grep "Arch Linux" /etc/os-release 2>/dev/null)
-ARCH_LIKE := $(shell grep "ID_LIKE=arch" /etc/os-release 2>/dev/null)
+ARCH_LINUX1 := $(shell grep "Arch Linux" /etc/os-release 2>/dev/null)
+ARCH_LINUX2 := $(shell grep "ID_LIKE=arch" /etc/os-release 2>/dev/null)
+ifdef ARCH_LINUX1
+ARCH_ADD = -lcblas
+endif
+ifdef ARCH_LINUX2
+ARCH_ADD = -lcblas
 endif
 
 CCV := $(shell $(CC) --version | head -n 1)
@@ -51,6 +55,7 @@ BONUSCFLAGS2 =
 
 OPENBLAS_FLAGS = -DGGML_USE_OPENBLAS -I/usr/local/include/openblas
 CLBLAST_FLAGS = -DGGML_USE_CLBLAST -DGGML_USE_OPENBLAS -I/usr/local/include/openblas
+CUBLAS_FLAGS = -DGGML_USE_CUBLAS -I/usr/local/cuda/include
 
 #lets try enabling everything
 CFLAGS   += -pthread -s
@@ -152,6 +157,7 @@ NOAVX2_BUILD =
 OPENBLAS_BUILD =
 OPENBLAS_NOAVX2_BUILD =
 CLBLAST_BUILD =
+CUBLAS_BUILD =
 
 ifeq ($(OS),Windows_NT)
 	DEFAULT_BUILD = $(CXX) $(CXXFLAGS)  $^ -shared -o $@.dll $(LDFLAGS)
@@ -159,20 +165,26 @@ ifeq ($(OS),Windows_NT)
 	OPENBLAS_BUILD = $(CXX) $(CXXFLAGS) $^ lib/libopenblas.lib -shared -o $@.dll $(LDFLAGS)
 	OPENBLAS_NOAVX2_BUILD = $(CXX) $(CXXFLAGS) $^ lib/libopenblas.lib -shared -o $@.dll $(LDFLAGS)
 	CLBLAST_BUILD = $(CXX) $(CXXFLAGS) $^ lib/OpenCL.lib lib/clblast.lib -shared -o $@.dll $(LDFLAGS)
+	CUBLAS_BUILD = $(CXX) $(CXXFLAGS) $^  -shared -o $@.dll $(LDFLAGS)
 else
 	DEFAULT_BUILD = $(CXX) $(CXXFLAGS)  $^ -shared -o $@.so $(LDFLAGS)
 	NOAVX2_BUILD = $(CXX) $(CXXFLAGS) $^ -shared -o $@.so $(LDFLAGS)
 	ifdef LLAMA_OPENBLAS
-	OPENBLAS_BUILD = $(CXX) $(CXXFLAGS) $^ -lcblas -lopenblas -shared -o $@.so $(LDFLAGS)
-	OPENBLAS_NOAVX2_BUILD = $(CXX) $(CXXFLAGS) $^ -lcblas -lopenblas -shared -o $@.so $(LDFLAGS)
+	OPENBLAS_BUILD = $(CXX) $(CXXFLAGS) $^ $(ARCH_ADD) -lopenblas -shared -o $@.so $(LDFLAGS)
+	OPENBLAS_NOAVX2_BUILD = $(CXX) $(CXXFLAGS) $^ $(ARCH_ADD) -lopenblas -shared -o $@.so $(LDFLAGS)
 	endif	
 	ifdef LLAMA_CLBLAST
-	CLBLAST_BUILD = $(CXX) $(CXXFLAGS) $^ -lclblast -lOpenCL -lcblas -lopenblas -shared -o $@.so $(LDFLAGS)
+	CLBLAST_BUILD = $(CXX) $(CXXFLAGS) $^ -lclblast -lOpenCL $(ARCH_ADD) -lopenblas -shared -o $@.so $(LDFLAGS)
+	endif
+	ifdef LLAMA_CUBLAS
+	CUBLAS_BUILD = $(CXX) $(CXXFLAGS) $^ -lcublas_static -lculibos -lcudart_static -lcublasLt_static -lpthread -ldl -L/usr/local/cuda/lib64 -shared -o $@.so $(LDFLAGS)
 	endif
 
 	ifndef LLAMA_OPENBLAS
 	ifndef LLAMA_CLBLAST
+	ifndef LLAMA_CUBLAS
 	OPENBLAS_BUILD = @echo 'Your OS $(OS) does not appear to be Windows. For faster speeds, install and link a BLAS library. Set LLAMA_OPENBLAS=1 to compile with OpenBLAS support or LLAMA_CLBLAST=1 to compile with ClBlast support. This is just a reminder, not an error.'
+	endif
 	endif
 	endif
 endif
@@ -210,6 +222,9 @@ ggml_openblas_noavx2.o: ggml.c ggml.h
 
 ggml_clblast.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) $(CLBLAST_FLAGS) -c $< -o $@
+
+ggml_cublas.o: ggml.c ggml.h
+	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) $(CUBLAS_FLAGS) -c $< -o $@
 
 ggml_v1.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
 	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -c $< -o $@
@@ -258,6 +273,9 @@ koboldcpp_openblas_noavx2: ggml_openblas_noavx2.o ggml_rwkv.o ggml_v1_noavx2.o e
 
 koboldcpp_clblast: ggml_clblast.o ggml_rwkv.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o 
 	$(CLBLAST_BUILD)
+
+koboldcpp_cublas: ggml_cublas.o ggml_rwkv.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o 
+	$(CUBLAS_BUILD)
 		
 quantize_llama: examples/quantize/quantize.cpp ggml.o llama.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)

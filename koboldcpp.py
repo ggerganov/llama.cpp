@@ -372,7 +372,7 @@ def main(args):
     
     if args.noavx2:
         use_noavx2 = True
-        if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), lib_openblas_noavx2)) or not (os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "libopenblas.dll")) and os.name=='nt'):
+        if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), lib_openblas_noavx2)) or (os.name=='nt' and not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "libopenblas.dll"))):
             print("Warning: OpenBLAS library file not found. Non-BLAS library will be used.")     
         elif args.noblas:            
             print("Attempting to use non-avx2 compatibility library without OpenBLAS.")
@@ -380,13 +380,13 @@ def main(args):
             use_blas = True
             print("Attempting to use non-avx2 compatibility library with OpenBLAS. A compatible libopenblas will be required.")
     elif args.useclblast:
-        if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), lib_clblast)) or not (os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "clblast.dll")) and os.name=='nt'):
+        if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), lib_clblast)) or (os.name=='nt' and not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "clblast.dll"))):
             print("Warning: CLBlast library file not found. Non-BLAS library will be used.")
         else:
             print("Attempting to use CLBlast library for faster prompt ingestion. A compatible clblast will be required.")
             use_clblast = True
     else:
-        if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), lib_openblas)) or not (os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "libopenblas.dll")) and os.name=='nt'):
+        if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), lib_openblas)) or (os.name=='nt' and not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "libopenblas.dll"))):
             print("Warning: OpenBLAS library file not found. Non-BLAS library will be used.")
         elif args.noblas:
             print("Attempting to library without OpenBLAS.")

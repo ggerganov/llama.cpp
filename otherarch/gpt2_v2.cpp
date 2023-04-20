@@ -371,7 +371,7 @@ bool gpt2_eval(
     const int n_vocab = hparams.n_vocab;
 
     //todo: there is a bug that causes the buffer to oom and I cannot figure it out, hack to increase size for now  
-    static size_t buf_size = 512u*1024*1024;
+    static size_t buf_size = 256u*1024*1024;
     static void * buf = malloc(buf_size);
 
     if (mem_per_token > 0 && mem_per_token*N*1.6 > buf_size) {
