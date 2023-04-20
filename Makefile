@@ -1,3 +1,8 @@
+default: koboldcpp koboldcpp_noavx2 koboldcpp_openblas koboldcpp_openblas_noavx2 koboldcpp_clblast
+simple: koboldcpp koboldcpp_noavx2
+dev: koboldcpp_openblas
+
+
 ifndef UNAME_S
 UNAME_S := $(shell uname -s)
 endif
@@ -117,6 +122,9 @@ endif
 ifdef LLAMA_CUBLAS
 	CFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include
 	LDFLAGS += -lcublas_static -lculibos -lcudart_static -lcublasLt_static -lpthread -ldl -L/usr/local/cuda/lib64
+	OBJS	+= ggml-cuda.o
+ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
+	nvcc -arch=native -c -o $@ $<
 endif
 ifdef LLAMA_GPROF
 	CFLAGS   += -pg
@@ -184,10 +192,6 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: koboldcpp koboldcpp_noavx2 koboldcpp_openblas koboldcpp_openblas_noavx2 koboldcpp_clblast
-simple: koboldcpp koboldcpp_noavx2
-dev: koboldcpp_openblas
-
 #
 # Build library
 #
@@ -234,7 +238,7 @@ gpttype_adapter.o: gpttype_adapter.cpp
 clean:
 	rm -vf *.o main quantize_llama quantize_gpt2 quantize_gptj quantize-stats perplexity embedding benchmark-q4_0-matmult main.exe quantize_llama.exe quantize_gptj.exe quantize_gpt2.exe koboldcpp.dll koboldcpp_openblas.dll koboldcpp_noavx2.dll koboldcpp_openblas_noavx2.dll koboldcpp_clblast.dll koboldcpp.so koboldcpp_openblas.so koboldcpp_noavx2.so koboldcpp_openblas_noavx2.so koboldcpp_clblast.so gptj.exe gpt2.exe
 
-main: examples/main/main.cpp ggml.o llama.o common.o
+main: examples/main/main.cpp ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
@@ -258,32 +262,32 @@ koboldcpp_clblast: ggml_clblast.o ggml_rwkv.o ggml_v1.o expose.o common.o llama_
 quantize_llama: examples/quantize/quantize.cpp ggml.o llama.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-quantize-stats: examples/quantize-stats/quantize-stats.cpp ggml.o llama.o
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
-
 quantize_gptj: ggml.o llama.o otherarch/tools/gptj_quantize.cpp
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 quantize_gpt2: ggml.o llama.o otherarch/tools/gpt2_quantize.cpp
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o
+quantize-stats: examples/quantize-stats/quantize-stats.cpp ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
+perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-vdot: pocs/vdot/vdot.cpp ggml.o
+embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-libllama.so: llama.o ggml.o
+vdot: pocs/vdot/vdot.cpp ggml.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+
+libllama.so: llama.o ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
 #
 # Tests
 #
 
-benchmark: examples/benchmark/benchmark-q4_0-matmult.c ggml.o
+benchmark: examples/benchmark/benchmark-q4_0-matmult.c ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o benchmark-q4_0-matmult $(LDFLAGS)
 	./benchmark-q4_0-matmult
 
