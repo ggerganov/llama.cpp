@@ -1,3 +1,8 @@
+// Defines sigaction on msys:
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include "common.h"
 #include "llama.h"
 
@@ -6,6 +11,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -97,12 +103,24 @@ int main(int argc, char ** argv) {
         lparams.n_parts    = params.n_parts;
         lparams.seed       = params.seed;
         lparams.f16_kv     = params.memory_f16;
+        lparams.use_mmap   = params.use_mmap;
         lparams.use_mlock  = params.use_mlock;
 
         ctx = llama_init_from_file(params.model.c_str(), lparams);
 
         if (ctx == NULL) {
             fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
+            return 1;
+        }
+    }
+
+    if (!params.lora_adapter.empty()) {
+        int err = llama_apply_lora_from_file(ctx,
+                                             params.lora_adapter.c_str(),
+                                             params.lora_base.empty() ? NULL : params.lora_base.c_str(),
+                                             params.n_threads);
+        if (err != 0) {
+            fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
             return 1;
         }
     }
@@ -162,7 +180,7 @@ int main(int argc, char ** argv) {
     }
 
     // enable interactive mode if reverse prompt or interactive start is specified
-    if (params.antiprompt.size() != 0 || params.interactive_start) { 
+    if (params.antiprompt.size() != 0 || params.interactive_start) {
         params.interactive = true;
     }
 
@@ -386,10 +404,19 @@ int main(int argc, char ** argv) {
                 std::string line;
                 bool another_line = true;
                 do {
+#if defined(_WIN32)
+                    std::wstring wline;
+                    if (!std::getline(std::wcin, wline)) {
+                        // input stream is bad or EOF received
+                        return 0;
+                    }
+                    win32_utf8_encode(wline, line);
+#else
                     if (!std::getline(std::cin, line)) {
                         // input stream is bad or EOF received
                         return 0;
                     }
+#endif
                     if (line.empty() || line.back() != '\\') {
                         another_line = false;
                     } else {
@@ -431,7 +458,7 @@ int main(int argc, char ** argv) {
         }
 
         // end of text token
-        if (embd.back() == llama_token_eos()) {
+        if (!embd.empty() && embd.back() == llama_token_eos()) {
             if (params.instruct) {
                 is_interacting = true;
             } else {

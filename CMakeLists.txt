@@ -55,11 +55,18 @@ option(LLAMA_SANITIZE_UNDEFINED     "llama: enable undefined sanitizer"         
 option(LLAMA_AVX                    "llama: enable AVX"                                     ON)
 option(LLAMA_AVX2                   "llama: enable AVX2"                                    ON)
 option(LLAMA_AVX512                 "llama: enable AVX512"                                  OFF)
+option(LLAMA_AVX512_VBMI            "llama: enable AVX512-VBMI"                             OFF)
+option(LLAMA_AVX512_VNNI            "llama: enable AVX512-VNNI"                             OFF)
 option(LLAMA_FMA                    "llama: enable FMA"                                     ON)
+# in MSVC F16C is implied with AVX2/AVX512
+if (NOT MSVC)
+    option(LLAMA_F16C               "llama: enable F16C"                                    ON)
+endif()
 
 # 3rd party libs
 option(LLAMA_ACCELERATE             "llama: enable Accelerate framework"                    ON)
 option(LLAMA_OPENBLAS               "llama: use OpenBLAS"                                   OFF)
+option(LLAMA_CUBLAS                 "llama: use cuBLAS"                                     OFF)
 
 option(LLAMA_BUILD_TESTS            "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES         "llama: build examples" ${LLAMA_STANDALONE})
@@ -103,6 +110,7 @@ if (APPLE AND LLAMA_ACCELERATE)
         message(WARNING "Accelerate framework not found")
     endif()
 endif()
+
 if (LLAMA_OPENBLAS)
     if (LLAMA_STATIC)
         set(BLA_STATIC ON)
@@ -115,8 +123,48 @@ if (LLAMA_OPENBLAS)
 
         add_compile_definitions(GGML_USE_OPENBLAS)
         add_link_options(${BLAS_LIBRARIES})
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} openblas)
+
+        # find header file
+        set(OPENBLAS_INCLUDE_SEARCH_PATHS
+            /usr/include
+            /usr/include/openblas
+            /usr/include/openblas-base
+            /usr/local/include
+            /usr/local/include/openblas
+            /usr/local/include/openblas-base
+            /opt/OpenBLAS/include
+            $ENV{OpenBLAS_HOME}
+            $ENV{OpenBLAS_HOME}/include
+            )
+        find_path(OPENBLAS_INC NAMES cblas.h PATHS ${OPENBLAS_INCLUDE_SEARCH_PATHS})
+        add_compile_options(-I${OPENBLAS_INC})
     else()
         message(WARNING "OpenBLAS not found")
+    endif()
+endif()
+
+if (LLAMA_CUBLAS)
+    cmake_minimum_required(VERSION 3.17)
+
+    find_package(CUDAToolkit)
+    if (CUDAToolkit_FOUND)
+        message(STATUS "cuBLAS found")
+
+        enable_language(CUDA)
+
+        set(GGML_CUDA_SOURCES ggml-cuda.cu ggml-cuda.h)
+
+        add_compile_definitions(GGML_USE_CUBLAS)
+
+        if (LLAMA_STATIC)
+            set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas_static CUDA::cublasLt_static)
+        else()
+            set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart CUDA::cublas CUDA::cublasLt)
+        endif()
+
+    else()
+        message(WARNING "cuBLAS not found")
     endif()
 endif()
 
@@ -131,7 +179,6 @@ if (LLAMA_ALL_WARNINGS)
             -Wshadow
             -Wstrict-prototypes
             -Wpointer-arith
-            -Wno-unused-function
         )
         set(cxx_flags
             -Wall
@@ -139,6 +186,7 @@ if (LLAMA_ALL_WARNINGS)
             -Wpedantic
             -Wcast-qual
             -Wno-unused-function
+            -Wno-multichar
         )
     else()
         # todo : msvc
@@ -149,6 +197,10 @@ if (LLAMA_ALL_WARNINGS)
             "$<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>"
     )
 
+endif()
+
+if (MSVC)
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 endif()
 
 if (LLAMA_LTO)
@@ -194,14 +246,31 @@ elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$")
     message(STATUS "x86 detected")
     if (MSVC)
         if (LLAMA_AVX512)
-            add_compile_options(/arch:AVX512)
+            add_compile_options($<$<COMPILE_LANGUAGE:C>:/arch:AVX512>)
+            add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/arch:AVX512>)
+            # MSVC has no compile-time flags enabling specific
+            # AVX512 extensions, neither it defines the
+            # macros corresponding to the extensions.
+            # Do it manually.
+            if (LLAMA_AVX512_VBMI)
+                add_compile_definitions($<$<COMPILE_LANGUAGE:C>:__AVX512VBMI__>)
+                add_compile_definitions($<$<COMPILE_LANGUAGE:CXX>:__AVX512VBMI__>)
+            endif()
+            if (LLAMA_AVX512_VNNI)
+                add_compile_definitions($<$<COMPILE_LANGUAGE:C>:__AVX512VNNI__>)
+                add_compile_definitions($<$<COMPILE_LANGUAGE:CXX>:__AVX512VNNI__>)
+            endif()
         elseif (LLAMA_AVX2)
-            add_compile_options(/arch:AVX2)
+            add_compile_options($<$<COMPILE_LANGUAGE:C>:/arch:AVX2>)
+            add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/arch:AVX2>)
         elseif (LLAMA_AVX)
-            add_compile_options(/arch:AVX)
+            add_compile_options($<$<COMPILE_LANGUAGE:C>:/arch:AVX>)
+            add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/arch:AVX>)
         endif()
     else()
-        add_compile_options(-mf16c)
+        if (LLAMA_F16C)
+            add_compile_options(-mf16c)
+        endif()
         if (LLAMA_FMA)
             add_compile_options(-mfma)
         endif()
@@ -213,9 +282,13 @@ elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$")
         endif()
         if (LLAMA_AVX512)
             add_compile_options(-mavx512f)
-            # add_compile_options(-mavx512cd)
-            # add_compile_options(-mavx512dq)
-            # add_compile_options(-mavx512bw)
+            add_compile_options(-mavx512bw)
+        endif()
+        if (LLAMA_AVX512_VBMI)
+            add_compile_options(-mavx512vbmi)
+        endif()
+        if (LLAMA_AVX512_VNNI)
+            add_compile_options(-mavx512vnni)
         endif()
     endif()
 else()
@@ -229,7 +302,8 @@ endif()
 
 add_library(ggml OBJECT
             ggml.c
-            ggml.h)
+            ggml.h
+            ${GGML_CUDA_SOURCES})
 
 target_include_directories(ggml PUBLIC .)
 target_compile_features(ggml PUBLIC c_std_11) # don't bump
@@ -240,7 +314,8 @@ endif()
 
 add_library(llama
             llama.cpp
-            llama.h)
+            llama.h
+            llama_util.h)
 
 target_include_directories(llama PUBLIC .)
 target_compile_features(llama PUBLIC cxx_std_11) # don't bump
@@ -249,6 +324,14 @@ if (BUILD_SHARED_LIBS)
     set_target_properties(llama PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_compile_definitions(llama PRIVATE LLAMA_SHARED LLAMA_BUILD)
 endif()
+
+if (GGML_CUDA_SOURCES)
+    message(STATUS "GGML CUDA sources found, configuring CUDA architecture")
+    set_property(TARGET ggml PROPERTY CUDA_ARCHITECTURES OFF)
+    set_property(TARGET ggml PROPERTY CUDA_SELECT_NVCC_ARCH_FLAGS "Auto")
+    set_property(TARGET llama PROPERTY CUDA_ARCHITECTURES OFF)
+endif()
+
 
 #
 # programs, examples and tests
@@ -261,4 +344,5 @@ endif ()
 
 if (LLAMA_BUILD_EXAMPLES)
     add_subdirectory(examples)
+    add_subdirectory(pocs)
 endif()

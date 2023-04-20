@@ -1,3 +1,6 @@
+# Define the default target now so that it is always the first target
+default: main quantize quantize-stats perplexity embedding vdot
+
 ifndef UNAME_S
 UNAME_S := $(shell uname -s)
 endif
@@ -36,8 +39,8 @@ CXXFLAGS = -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC
 LDFLAGS  =
 
 # warnings
-CFLAGS   += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith -Wno-unused-function
-CXXFLAGS += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function
+CFLAGS   += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith
+CXXFLAGS += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-multichar
 
 # OS specific
 # TODO: support Windows
@@ -72,6 +75,7 @@ endif
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 	# Use all CPU extensions that are available:
 	CFLAGS += -march=native -mtune=native
+	CXXFLAGS += -march=native -mtune=native
 endif
 ifneq ($(filter ppc64%,$(UNAME_M)),)
 	POWER9_M := $(shell grep "POWER9" /proc/cpuinfo)
@@ -95,6 +99,13 @@ endif
 ifdef LLAMA_OPENBLAS
 	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas
 	LDFLAGS += -lopenblas
+endif
+ifdef LLAMA_CUBLAS
+	CFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include
+	LDFLAGS += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64
+	OBJS	+= ggml-cuda.o
+ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
+	nvcc -arch=native -c -o $@ $<
 endif
 ifdef LLAMA_GPROF
 	CFLAGS   += -pg
@@ -132,42 +143,53 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
-default: main quantize perplexity embedding
-
 #
 # Build library
 #
 
 ggml.o: ggml.c ggml.h
-	$(CC)  $(CFLAGS)   -c ggml.c -o ggml.o
+	$(CC)  $(CFLAGS)   -c $< -o $@
 
-llama.o: llama.cpp llama.h
-	$(CXX) $(CXXFLAGS) -c llama.cpp -o llama.o
+llama.o: llama.cpp ggml.h llama.h llama_util.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common.o: examples/common.cpp examples/common.h
-	$(CXX) $(CXXFLAGS) -c examples/common.cpp -o common.o
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -vf *.o main quantize perplexity embedding
+	rm -vf *.o main quantize quantize-stats perplexity embedding benchmark-q4_0-matmult
 
-main: examples/main/main.cpp ggml.o llama.o common.o
-	$(CXX) $(CXXFLAGS) examples/main/main.cpp ggml.o llama.o common.o -o main $(LDFLAGS)
+main: examples/main/main.cpp ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
 
-quantize: examples/quantize/quantize.cpp ggml.o llama.o
-	$(CXX) $(CXXFLAGS) examples/quantize/quantize.cpp ggml.o llama.o -o quantize $(LDFLAGS)
+quantize: examples/quantize/quantize.cpp ggml.o llama.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o
-	$(CXX) $(CXXFLAGS) examples/perplexity/perplexity.cpp ggml.o llama.o common.o -o perplexity $(LDFLAGS)
+quantize-stats: examples/quantize-stats/quantize-stats.cpp ggml.o llama.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o
-	$(CXX) $(CXXFLAGS) examples/embedding/embedding.cpp ggml.o llama.o common.o -o embedding $(LDFLAGS)
+perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+
+embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+
+vdot: pocs/vdot/vdot.cpp ggml.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+
+libllama.so: llama.o ggml.o $(OBJS)
+	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
 #
 # Tests
 #
+
+benchmark: examples/benchmark/benchmark-q4_0-matmult.c ggml.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $^ -o benchmark-q4_0-matmult $(LDFLAGS)
+	./benchmark-q4_0-matmult
 
 .PHONY: tests
 tests:

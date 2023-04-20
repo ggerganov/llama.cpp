@@ -1,6 +1,8 @@
 #include "common.h"
 #include "llama.h"
 
+#include <ctime>
+
 int main(int argc, char ** argv) {
     gpt_params params;
     params.model = "models/llama-7B/ggml-model.bin";
@@ -38,6 +40,7 @@ int main(int argc, char ** argv) {
         lparams.seed       = params.seed;
         lparams.f16_kv     = params.memory_f16;
         lparams.logits_all = params.perplexity;
+        lparams.use_mmap   = params.use_mmap;
         lparams.use_mlock  = params.use_mlock;
         lparams.embedding  = params.embedding;
 

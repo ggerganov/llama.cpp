@@ -31,10 +31,11 @@ struct gpt_params {
 
     std::string model  = "models/lamma-7B/ggml-model.bin"; // model path
     std::string prompt = "";
-    std::string input_prefix = ""; // string to prefix user inputs with
-
-
+    std::string input_prefix = "";       // string to prefix user inputs with
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
+
+    std::string lora_adapter = "";  // lora adapter path
+    std::string lora_base = "";     // base model path for the lora adapter
 
     bool memory_f16        = true;  // use f16 instead of f32 for memory kv
     bool random_prompt     = false; // do not randomize prompt if none provided
@@ -47,6 +48,7 @@ struct gpt_params {
     bool instruct          = false; // instruction mode (used for Alpaca models)
     bool ignore_eos        = false; // do not stop generating after eos
     bool perplexity        = false; // compute perplexity over the prompt
+    bool use_mmap          = true;  // use mmap for faster loads
     bool use_mlock         = false; // use mlock to keep model in memory
     bool mem_test          = false; // compute maximum memory usage
     bool verbose_prompt    = false; // print prompt tokens before generation
@@ -92,4 +94,5 @@ void set_console_color(console_state & con_st, console_color_t color);
 
 #if defined (_WIN32)
 void win32_console_init(bool enable_color);
+void win32_utf8_encode(const std::wstring & wstr, std::string & str);
 #endif

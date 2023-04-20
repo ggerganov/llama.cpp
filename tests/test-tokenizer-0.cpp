@@ -5,13 +5,17 @@
 #include <map>
 #include <vector>
 
-static const std::map<std::string, std::vector<llama_token>> k_tests = {
-    { "Hello World",        { 1,  10994,   2787, }, },
-    { " Hello World",       { 1,  15043,   2787, }, },
-    { " Hello World!",      { 1,  15043,   2787,  29991, }, },
-    { " this is 🦙.cpp",    { 1,    445,    338,  29871,    243,    162,    169,    156,  29889,   8223, }, },
-    { "w048 7tuijk dsdfhu", { 1,  29893,  29900,  29946,  29947,  29871,  29955,   9161,  13535,  18031,   2176,   6905, }, },
-    { "нещо на Български",  { 1,    821,   4851,    665,   1386,  29713,   1305, }, },
+static const std::map<std::string, std::vector<llama_token>> & k_tests()
+{
+    static std::map<std::string, std::vector<llama_token>> _k_tests = {
+        { "Hello World",        { 1,  10994,   2787, }, },
+        { " Hello World",       { 1,  15043,   2787, }, },
+        { " Hello World!",      { 1,  15043,   2787,  29991, }, },
+        { " this is 🦙.cpp",    { 1,    445,    338,  29871,    243,    162,    169,    156,  29889,   8223, }, },
+        { "w048 7tuijk dsdfhu", { 1,  29893,  29900,  29946,  29947,  29871,  29955,   9161,  13535,  18031,   2176,   6905, }, },
+        { "нещо на Български",  { 1,    821,   4851,    665,   1386,  29713,   1305, }, },
+    };
+    return _k_tests;
 };
 
 int main(int argc, char **argv) {
@@ -47,7 +51,7 @@ int main(int argc, char **argv) {
         return 2;
     }
 
-    for (const auto & test_kv : k_tests) {
+    for (const auto & test_kv : k_tests()) {
         std::vector<llama_token> res(test_kv.first.size());
         const int n = llama_tokenize(ctx, test_kv.first.c_str(), res.data(), res.size(), true);
         res.resize(n);
