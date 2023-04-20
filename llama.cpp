@@ -1581,7 +1581,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         default: throw format("invalid output file type %d\n", ftype);
     };
 
-    if (nthread <= 0) nthread = std::thread::hardware_concurrency();
+    if (nthread <= 0) {
+        nthread = std::thread::hardware_concurrency();
+    }
 
     std::unique_ptr<llama_model_loader> model_loader(new llama_model_loader(fname_inp.c_str(), /*use_mmap*/ false,
                                                                             /*vocab_only*/ false));
@@ -1647,15 +1649,15 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             new_data = work.addr;
             std::vector<int64_t> hist_cur(1 << 4, 0);
 
-            int chunk_size = 32 * 512;
-            int nchunk = (nelements + chunk_size - 1)/chunk_size;
-            int nthread_use = nthread > 1 ? std::max(1, std::min(nthread, nchunk)) : 1;
+            const int chunk_size = 32 * 512;
+            const int nchunk = (nelements + chunk_size - 1)/chunk_size;
+            const int nthread_use = nthread > 1 ? std::max(1, std::min(nthread, nchunk)) : 1;
             if (nthread_use < 2) {
                 new_size = ggml_quantize_chunk(new_type, f32_data, new_data, 0, nelements, hist_cur.data());
             } else {
                 size_t counter = 0;
                 new_size = 0;
-                auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, nelements, chunk_size] () {
+                auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, nelements] () {
                     std::vector<int64_t> local_hist;
                     size_t local_size = 0;
                     while (true) {
@@ -1674,10 +1676,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                         local_size += ggml_quantize_chunk(new_type, f32_data, new_data, first, last - first, local_hist.data());
                     }
                 };
-                if (int(workers.size()) < nthread_use-1) workers.resize(nthread_use-1);
-                for (int it=0; it<nthread_use-1; ++it) workers[it] = std::thread(compute);
+                if (int(workers.size()) < nthread_use - 1) workers.resize(nthread_use - 1);
+                for (int it = 0; it < nthread_use - 1; ++it) workers[it] = std::thread(compute);
                 compute();
-                for (int it=0; it<nthread_use-1; ++it) workers[it].join();
+                for (int it = 0; it < nthread_use - 1; ++it) workers[it].join();
             }
 
             printf("size = %8.2f MB -> %8.2f MB | hist: ", tensor.size/1024.0/1024.0, new_size/1024.0/1024.0);
