@@ -1649,7 +1649,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             new_data = work.addr;
             std::vector<int64_t> hist_cur(1 << 4, 0);
 
-            constexpr int chunk_size = 32 * 512;
+            int chunk_size = 32 * 512;
             const int nchunk = (nelements + chunk_size - 1)/chunk_size;
             const int nthread_use = nthread > 1 ? std::max(1, std::min(nthread, nchunk)) : 1;
             if (nthread_use < 2) {
@@ -1657,7 +1657,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             } else {
                 size_t counter = 0;
                 new_size = 0;
-                auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, nelements] () {
+                auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, nelements, chunk_size] () {
                     std::vector<int64_t> local_hist;
                     size_t local_size = 0;
                     while (true) {
