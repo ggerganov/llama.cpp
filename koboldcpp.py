@@ -43,21 +43,40 @@ use_blas = False # if true, uses OpenBLAS for acceleration. libopenblas.dll must
 use_clblast = False #uses CLBlast instead
 use_noavx2 = False #uses openblas with no avx2 instructions
 
+def pick_existant_file(ntoption,nonntoption):
+    ntexist = os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), ntoption))
+    nonntexist = os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), nonntoption))
+    if os.name == 'nt':
+        if nonntexist and not ntexist:
+            return nonntoption
+        return ntoption
+    else:
+        if ntexist and not nonntexist:
+            return option1
+        return option2
+
+lib_default = pick_existant_file("koboldcpp.dll","koboldcpp.so")
+lib_noavx2 = pick_existant_file("koboldcpp_noavx2.dll","koboldcpp_noavx2.so")
+lib_openblas = pick_existant_file("koboldcpp_openblas.dll","koboldcpp_openblas.so")
+lib_openblas_noavx2 = pick_existant_file("koboldcpp_openblas_noavx2.dll","koboldcpp_openblas_noavx2.so")
+lib_clblast = pick_existant_file("koboldcpp_clblast.dll","koboldcpp_clblast.so")
+
+
 def init_library():
     global handle, use_blas, use_clblast, use_noavx2
     libname = ""
     if use_noavx2:
         if use_blas:
-            libname = "koboldcpp_openblas_noavx2.dll"
+            libname = lib_openblas_noavx2
         else:
-            libname = "koboldcpp_noavx2.dll"
+            libname = lib_noavx2
     else:
         if use_clblast:
-            libname = "koboldcpp_clblast.dll"
+            libname = lib_clblast
         elif use_blas:
-            libname = "koboldcpp_openblas.dll"
+            libname = lib_openblas
         else:
-            libname = "koboldcpp.dll"
+            libname = lib_default
 
     print("Initializing dynamic library: " + libname)
     dir_path = os.path.dirname(os.path.realpath(__file__))  
@@ -345,35 +364,35 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None):
 
 def main(args): 
     global use_blas, use_clblast, use_noavx2
+    global lib_default,lib_noavx2,lib_openblas,lib_openblas_noavx2,lib_clblast
+
     use_blas = False 
     use_clblast = False 
     use_noavx2 = False 
-
-    if os.name != 'nt':
-        print("You are not on Windows. Default koboldcpp.dll library file will be used. Remember to manually link with OpenBLAS using LLAMA_OPENBLAS=1, or CLBlast with LLAMA_CLBLAST=1 if you want to use them. This is not an error, just a reminder.")
-    elif args.noavx2:
+    
+    if args.noavx2:
         use_noavx2 = True
-        if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "libopenblas.dll")) or not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "koboldcpp_openblas_noavx2.dll")):
-            print("Warning: libopenblas.dll or koboldcpp_openblas_noavx2.dll not found. Non-BLAS library will be used.")     
+        if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), lib_openblas_noavx2)) or not (os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "libopenblas.dll")) and os.name=='nt'):
+            print("Warning: OpenBLAS library file not found. Non-BLAS library will be used.")     
         elif args.noblas:            
             print("Attempting to use non-avx2 compatibility library without OpenBLAS.")
         else:
             use_blas = True
-            print("Attempting to use non-avx2 compatibility library with OpenBLAS.")
+            print("Attempting to use non-avx2 compatibility library with OpenBLAS. A compatible libopenblas will be required.")
     elif args.useclblast:
-        if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "clblast.dll")) or not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "koboldcpp_clblast.dll")):
-            print("Warning: clblast.dll or koboldcpp_clblast.dll not found. Non-BLAS library will be used. Ignore this if you have manually linked with CLBlast.")
+        if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), lib_clblast)) or not (os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "clblast.dll")) and os.name=='nt'):
+            print("Warning: CLBlast library file not found. Non-BLAS library will be used.")
         else:
-            print("Attempting to use CLBlast library for faster prompt ingestion. A compatible clblast.dll will be required.")
+            print("Attempting to use CLBlast library for faster prompt ingestion. A compatible clblast will be required.")
             use_clblast = True
     else:
-        if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "libopenblas.dll")) or not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "koboldcpp_openblas.dll")):
-            print("Warning: libopenblas.dll or koboldcpp_openblas.dll not found. Non-BLAS library will be used.")
+        if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), lib_openblas)) or not (os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "libopenblas.dll")) and os.name=='nt'):
+            print("Warning: OpenBLAS library file not found. Non-BLAS library will be used.")
         elif args.noblas:
             print("Attempting to library without OpenBLAS.")
         else:
             use_blas = True
-            print("Attempting to use OpenBLAS library for faster prompt ingestion. A compatible libopenblas.dll will be required.")
+            print("Attempting to use OpenBLAS library for faster prompt ingestion. A compatible libopenblas will be required.")
     
     if args.psutil_set_threads:
         import psutil
