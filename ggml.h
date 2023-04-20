@@ -204,7 +204,8 @@ enum ggml_type {
     GGML_TYPE_F16  = 1,
     GGML_TYPE_Q4_0 = 2,
     GGML_TYPE_Q4_1 = 3,
-    GGML_TYPE_Q8_0 = 4,
+    GGML_TYPE_Q4_2 = 4,
+    GGML_TYPE_Q8_0 = 5,
     GGML_TYPE_I8,
     GGML_TYPE_I16,
     GGML_TYPE_I32,
@@ -426,6 +427,12 @@ struct ggml_tensor * ggml_dup(
         struct ggml_tensor  * a);
 
 struct ggml_tensor * ggml_add(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        struct ggml_tensor  * b);
+
+
+struct ggml_tensor * ggml_add_inplace(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         struct ggml_tensor  * b);
@@ -800,6 +807,7 @@ enum ggml_opt_result ggml_opt(
 
 size_t ggml_quantize_q4_0(const float * src, void * dst, int n, int k, int64_t * hist);
 size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t * hist);
+size_t ggml_quantize_q4_2(const float * src, void * dst, int n, int k, int64_t * hist);
 
 //
 // system info
@@ -808,6 +816,8 @@ size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t *
 int ggml_cpu_has_avx(void);
 int ggml_cpu_has_avx2(void);
 int ggml_cpu_has_avx512(void);
+int ggml_cpu_has_avx512_vbmi(void);
+int ggml_cpu_has_avx512_vnni(void);
 int ggml_cpu_has_fma(void);
 int ggml_cpu_has_neon(void);
 int ggml_cpu_has_arm_fma(void);
@@ -815,6 +825,7 @@ int ggml_cpu_has_f16c(void);
 int ggml_cpu_has_fp16_va(void);
 int ggml_cpu_has_wasm_simd(void);
 int ggml_cpu_has_blas(void);
+int ggml_cpu_has_cublas(void);
 int ggml_cpu_has_sse3(void);
 int ggml_cpu_has_vsx(void);
 

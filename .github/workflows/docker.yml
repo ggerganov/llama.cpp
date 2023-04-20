@@ -18,6 +18,8 @@ on:
 jobs:
   push_to_registry:
     name: Push Docker image to Docker Hub
+    if: github.event.pull_request.draft == false
+
     runs-on: ubuntu-latest
     env:
       COMMIT_SHA: ${{ github.sha }}

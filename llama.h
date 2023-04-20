@@ -72,6 +72,7 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_Q4_0 = 2,  // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q4_1 = 3,  // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4, // tok_embeddings.weight and output.weight are F16
+        LLAMA_FTYPE_MOSTLY_Q4_2 = 5,  // except 1d tensors
     };
 
     LLAMA_API struct llama_context_params llama_context_default_params();
@@ -95,6 +96,18 @@ extern "C" {
             const char * fname_inp,
             const char * fname_out,
       enum llama_ftype   ftype);
+
+    // Apply a LoRA adapter to a loaded model
+    // path_base_model is the path to a higher quality model to use as a base for
+    // the layers modified by the adapter. Can be NULL to use the current loaded model.
+    // The model needs to be reloaded before applying a new adapter, otherwise the adapter
+    // will be applied on top of the previous one
+    // Returns 0 on success
+    LLAMA_API int llama_apply_lora_from_file(
+            struct llama_context * ctx,
+                      const char * path_lora,
+                      const char * path_base_model,
+                             int   n_threads);
 
     // Returns the KV cache that will contain the context for the
     // ongoing prediction with the model.

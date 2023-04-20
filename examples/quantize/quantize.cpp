@@ -14,6 +14,7 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "usage: %s model-f32.bin model-quant.bin type\n", argv[0]);
         fprintf(stderr, "  type = %d - q4_0\n", LLAMA_FTYPE_MOSTLY_Q4_0);
         fprintf(stderr, "  type = %d - q4_1\n", LLAMA_FTYPE_MOSTLY_Q4_1);
+        fprintf(stderr, "  type = %d - q4_2\n", LLAMA_FTYPE_MOSTLY_Q4_2);
         return 1;
     }
 
