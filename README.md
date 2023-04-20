@@ -26,10 +26,10 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
   - If you want to generate the .exe file, make sure you have the python module PyInstaller installed with pip ('pip install PyInstaller').
   - Run the script make_pyinstaller.bat at a regular terminal (or Windows Explorer).
   - The koboldcpp.exe file will be at your dist folder.
-- If you wish to use your own version of the additional Windows libraries (clblast.lib, libopenblas.lib or OpenCL.lib), you can:
+- If you wish to use your own version of the additional Windows libraries (clblast, libopenblas or OpenCL), you can:
   - Compile then, or download the lastest release from the respective GitHub repository.
-  - Change the extension of the .dll file to .lib.
-  - Move the new .lib file to the /lib folder of your project, overwriting the older file.
+  - Replace the existing versions of the .dll file located in the project directory root.
+  - Move any import .lib file to the /lib folder of your project, overwriting the older file.
   - Make the project using the instructions. 
 
 ## OSX and Linux
