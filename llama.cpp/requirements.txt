@@ -1,2 +1,0 @@
-numpy==1.24
-sentencepiece==0.1.98
