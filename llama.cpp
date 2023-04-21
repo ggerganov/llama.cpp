@@ -1618,8 +1618,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         // quantize only 2D tensors
         quantize &= (tensor.ne.size() == 2);
 
-        // GG: uncomment this to keep the output layer in FP16
-        //if (tensor.name.rfind("output")) {
+        // uncomment this to keep the output layer in FP16
+        //if (tensor.name == "output.weight") {
         //    quantize = false;
         //}
 
