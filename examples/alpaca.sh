@@ -15,5 +15,5 @@ cd ..
        -ins -b 256 \
        --top_k 10000 \
        --temp 0.2 \
-       --repeat_penalty 1 \
+       --repeat_penalty 1.1 \
        -t 7
