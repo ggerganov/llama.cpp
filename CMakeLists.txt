@@ -68,6 +68,9 @@ option(LLAMA_ACCELERATE             "llama: enable Accelerate framework"        
 option(LLAMA_OPENBLAS               "llama: use OpenBLAS"                                   OFF)
 option(LLAMA_CUBLAS                 "llama: use cuBLAS"                                     OFF)
 
+# RMSE minimization when quantizing
+option(LLAMA_NO_RMSE                "llama: disable RMSE minimization"                      OFF)
+
 option(LLAMA_BUILD_TESTS            "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES         "llama: build examples" ${LLAMA_STANDALONE})
 
@@ -97,6 +100,10 @@ if (NOT MSVC)
         add_compile_options(-fsanitize=undefined)
         link_libraries(-fsanitize=undefined)
     endif()
+endif()
+
+if (LLAMA_NO_RMSE)
+    add_compile_definitions(GGML_NO_RMSE)
 endif()
 
 if (APPLE AND LLAMA_ACCELERATE)
