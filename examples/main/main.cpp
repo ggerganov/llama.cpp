@@ -284,8 +284,8 @@ int main(int argc, char ** argv) {
 
             // evaluate tokens in batches
             // embd is typically prepared beforehand to fit within a batch, but not always
-            for (int i = 0; i < (int)embd.size(); i += params.n_batch) {
-                int n_eval = (int)embd.size()-i;
+            for (int i = 0; i < (int) embd.size(); i += params.n_batch) {
+                int n_eval = (int) embd.size() - i;
                 if (n_eval > params.n_batch) {
                     n_eval = params.n_batch;
                 }
