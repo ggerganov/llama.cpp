@@ -21,6 +21,7 @@
 #include "otherarch/gpt2_v1.cpp"
 #include "otherarch/gpt2_v2.cpp"
 #include "otherarch/rwkv.cpp"
+#include "otherarch/neox.cpp"
 
 //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt)
 static FileFormat file_format = FileFormat::BADFORMAT;
@@ -30,6 +31,7 @@ static gptj_model_v1 gptj_ctx_v1;
 static gptj_model gptj_ctx_v2;
 static gpt2_v1_model gpt2_ctx_v1;
 static gpt2_model gpt2_ctx_v2;
+static stablelm_model neox_ctx;
 static rwkv_context * rwkv_ctx_v1;
 static llama_context_params llama_ctx_params;
 static llama_context * llama_ctx_v1;
@@ -66,7 +68,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     blasbatchsize = inputs.blasbatchsize;
     params.memory_f16 = inputs.f16_kv;
     params.n_ctx = inputs.max_context_length;
-    gptj_ctx_v1.hparams.n_ctx = gptj_ctx_v2.hparams.n_ctx = gpt2_ctx_v1.hparams.n_ctx = gpt2_ctx_v2.hparams.n_ctx = params.n_ctx;
+    neox_ctx.hparams.n_ctx = gptj_ctx_v1.hparams.n_ctx = gptj_ctx_v2.hparams.n_ctx = gpt2_ctx_v1.hparams.n_ctx = gpt2_ctx_v2.hparams.n_ctx = params.n_ctx;
 
     printf("System Info: %s\n", llama_print_system_info());
 

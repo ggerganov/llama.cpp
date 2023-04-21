@@ -248,7 +248,7 @@ gpttype_adapter.o: gpttype_adapter.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -vf *.o main quantize_llama quantize_gpt2 quantize_gptj quantize-stats perplexity embedding benchmark-q4_0-matmult main.exe quantize_llama.exe quantize_gptj.exe quantize_gpt2.exe koboldcpp.dll koboldcpp_openblas.dll koboldcpp_noavx2.dll koboldcpp_openblas_noavx2.dll koboldcpp_clblast.dll koboldcpp_cublas.dll koboldcpp.so koboldcpp_openblas.so koboldcpp_noavx2.so koboldcpp_openblas_noavx2.so koboldcpp_clblast.so koboldcpp_cublas.so gptj.exe gpt2.exe
+	rm -vf *.o main quantize_llama quantize_gpt2 quantize_gptj quantize_neox quantize-stats perplexity embedding benchmark-q4_0-matmult main.exe quantize_llama.exe quantize_gptj.exe quantize_gpt2.exe quantize_neox.exe koboldcpp.dll koboldcpp_openblas.dll koboldcpp_noavx2.dll koboldcpp_openblas_noavx2.dll koboldcpp_clblast.dll koboldcpp_cublas.dll koboldcpp.so koboldcpp_openblas.so koboldcpp_noavx2.so koboldcpp_openblas_noavx2.so koboldcpp_clblast.so koboldcpp_cublas.so gptj.exe gpt2.exe
 
 main: examples/main/main.cpp ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
@@ -281,6 +281,9 @@ quantize_gptj: ggml.o llama.o otherarch/tools/gptj_quantize.cpp
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 quantize_gpt2: ggml.o llama.o otherarch/tools/gpt2_quantize.cpp
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+
+quantize_neox: ggml.o llama.o otherarch/tools/neox_quantize.cpp
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 quantize-stats: examples/quantize-stats/quantize-stats.cpp ggml.o llama.o $(OBJS)
