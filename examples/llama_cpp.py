@@ -117,6 +117,8 @@ LLAMA_FTYPE_MOSTLY_Q4_1 = ctypes.c_int(3)  # except 1d tensors
 LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = ctypes.c_int(
     4
 )  # tok_embeddings.weight and output.weight are F16
+LLAMA_FTYPE_MOSTLY_Q4_2 = ctypes.c_int(5)  # except 1d tensors
+LLAMA_FTYPE_MOSTLY_Q4_3 = ctypes.c_int(6)  # except 1d tensors
 
 # Functions
 
@@ -169,13 +171,14 @@ _lib.llama_free.restype = None
 
 # TODO: not great API - very likely to change
 # Returns 0 on success
+# nthread - how many threads to use. If <=0, will use std::thread::hardware_concurrency(), else the number given
 def llama_model_quantize(
-    fname_inp: bytes, fname_out: bytes, itype: c_int
+    fname_inp: bytes, fname_out: bytes, ftype: c_int, nthread: c_int
 ) -> c_int:
-    return _lib.llama_model_quantize(fname_inp, fname_out, itype)
+    return _lib.llama_model_quantize(fname_inp, fname_out, ftype, nthread)
 
 
-_lib.llama_model_quantize.argtypes = [c_char_p, c_char_p, c_int]
+_lib.llama_model_quantize.argtypes = [c_char_p, c_char_p, c_int, c_int]
 _lib.llama_model_quantize.restype = c_int
 
 
