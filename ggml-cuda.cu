@@ -31,9 +31,9 @@ static_assert(sizeof(block_q4_2) == sizeof(ggml_fp16_t) + QK4_2 / 2, "wrong q4_2
 
 #define QK4_3 16
 typedef struct {
-    __half  d;         // delta
-    __half  m;         // min
-    uint8_t qs[QK4_3 / 2]; // nibbles / quants
+    __half  d;              // delta
+    __half  m;              // min
+    uint8_t qs[QK4_3 / 2];  // nibbles / quants
 } block_q4_3;
 static_assert(sizeof(block_q4_3) == 2 * sizeof(ggml_fp16_t) + QK4_3 / 2, "wrong q4_3 block size/padding");
 
@@ -151,29 +151,44 @@ void dequantize_row_q4_3_cuda(const void * vx, float * y, int k, cudaStream_t st
     dequantize_block_q4_3<<<nb, 1, 0, stream>>>(vx, y);
 }
 
-// lock-free, thread safe buffer pool for cuda
+// buffer pool for cuda
 #define MAX_CUDA_BUFFERS 16
-struct cuda_buffer {
-    std::atomic_uintptr_t ptr { 0 };
-    size_t size { 0 };
-};
 
-static cuda_buffer cuda_buffer_pool[MAX_CUDA_BUFFERS];
-
-void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
-    for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
-        struct cuda_buffer * b = &cuda_buffer_pool[i];
-        if (b->size >= size) {
-            uintptr_t ptr = atomic_load(&b->ptr);
-            if (ptr) {
-                if (std::atomic_compare_exchange_strong(&b->ptr, &ptr, 0)) {
-                    *actual_size = b->size;
-                    return (void *) ptr;
-                }
-            }
+struct scoped_spin_lock {
+    std::atomic_flag& lock;
+    scoped_spin_lock(std::atomic_flag& lock) : lock(lock) {
+        while (lock.test_and_set(std::memory_order_acquire)) {
+            ; // spin
         }
     }
+    ~scoped_spin_lock() {
+        lock.clear(std::memory_order_release);
+    }
+    scoped_spin_lock(const scoped_spin_lock&) = delete;
+    scoped_spin_lock& operator=(const scoped_spin_lock&) = delete;
+};
 
+struct cuda_buffer {
+    void * ptr = nullptr;
+    size_t size = 0;
+};
+
+static cuda_buffer g_cuda_buffer_pool[MAX_CUDA_BUFFERS];
+static std::atomic_flag g_cuda_pool_lock = ATOMIC_FLAG_INIT;
+
+void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
+    scoped_spin_lock lock(g_cuda_pool_lock);
+
+    for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
+        cuda_buffer& b = g_cuda_buffer_pool[i];
+        if (b.size >= size && b.ptr != nullptr) {
+            void * ptr = b.ptr;
+            *actual_size = b.size;
+            b.ptr = nullptr;
+            b.size = 0;
+            return ptr;
+        }
+    }
     void * ptr;
     CUDA_CHECK(cudaMalloc((void **) &ptr, size));
     *actual_size = size;
@@ -181,31 +196,31 @@ void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
 }
 
 void ggml_cuda_pool_free(void * ptr, size_t size) {
+    scoped_spin_lock lock(g_cuda_pool_lock);
+
     for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
-        struct cuda_buffer * b = &cuda_buffer_pool[i];
-        uintptr_t p = std::atomic_load(&b->ptr);
-        if (p == 0) {
-            if (std::atomic_compare_exchange_strong(&b->ptr, &p, (uintptr_t) ptr)) {
-                b->size = size;
-                return;
-            }
+        cuda_buffer& b = g_cuda_buffer_pool[i];
+        if (b.ptr == nullptr) {
+            b.ptr = ptr;
+            b.size = size;
+            return;
         }
     }
     fprintf(stderr, "WARNING: cuda buffer pool full, increase MAX_CUDA_BUFFERS\n");
     CUDA_CHECK(cudaFree(ptr));
 }
 
-cublasHandle_t cublasH = NULL;
-cudaStream_t cudaStream = NULL;
+cublasHandle_t g_cublasH = NULL;
+cudaStream_t g_cudaStream = NULL;
 
 void ggml_init_cublas(void) {
-    if (cublasH == NULL) {
+    if (g_cublasH == NULL) {
         // create cublas handle, bind a stream
-        CUBLAS_CHECK(cublasCreate(&cublasH));
+        CUBLAS_CHECK(cublasCreate(&g_cublasH));
 
-        CUDA_CHECK(cudaStreamCreateWithFlags(&cudaStream, cudaStreamNonBlocking));
+        CUDA_CHECK(cudaStreamCreateWithFlags(&g_cudaStream, cudaStreamNonBlocking));
 
-        CUBLAS_CHECK(cublasSetStream(cublasH, cudaStream));
+        CUBLAS_CHECK(cublasSetStream(g_cublasH, g_cudaStream));
 
         // configure logging to stdout
         // CUBLAS_CHECK(cublasLoggerConfigure(1, 1, 0, NULL));

@@ -24,10 +24,8 @@ extern "C" {
         }                                                                               \
     } while (0)
 
-
-
-extern cublasHandle_t cublasH;
-extern cudaStream_t cudaStream;
+extern cublasHandle_t g_cublasH;
+extern cudaStream_t   g_cudaStream;
 
 void   ggml_init_cublas(void);
 void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size);
