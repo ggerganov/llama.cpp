@@ -2990,9 +2990,6 @@ static void ggml_vec_dot_q4_3_q8_0(const int n, float * restrict s, const void *
         const float d1 = GGML_FP16_TO_FP32(x[2*i + 1].d);
         const float m1 = GGML_FP16_TO_FP32(x[2*i + 1].m);
 
-        int sy_0 = 0;
-        int sy_1 = 0;
-
         int sxy_0 = 0;
         int sxy_1 = 0;
 
@@ -3012,15 +3009,11 @@ static void ggml_vec_dot_q4_3_q8_0(const int n, float * restrict s, const void *
             const int y0_1 = y0[2*(j + QK8_0/4) + 0];
             const int y1_1 = y0[2*(j + QK8_0/4) + 1];
 
-            sy_0 += y0_0 + y1_0;
-            sy_1 += y0_1 + y1_1;
-
             sxy_0 += x0_0*y0_0 + x1_0*y1_0;
             sxy_1 += x0_1*y0_1 + x1_1*y1_1;
         }
 
-        sumf += (d0*sxy_0 + m0*sy_0)*y[i].d;
-        sumf += (d1*sxy_1 + m1*sy_1)*y[i].d;
+        sumf += (d0*sxy_0 + d1*sxy_1)*y[i].d + m0*y[i].s0 + m1*y[i].s1;
     }
     *s = sumf;
 #endif
