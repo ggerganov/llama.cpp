@@ -11,6 +11,9 @@
 #include "model_adapter.h"
 #include "otherarch/otherarch.h"
 
+//for easier compilation
+#include "llamaextra.cpp"
+
 //concat source files into one file for compilation purposes
 #include "otherarch/utils.cpp"
 #include "otherarch/gptj_v1.cpp"
@@ -21,12 +24,16 @@
 
 //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt)
 static FileFormat file_format = FileFormat::BADFORMAT;
+
 static gpt_vocab vocab;
-static gptj_model_v1 model_v1;
-static gptj_model model_v2;
-static gpt2_v1_model model_gpt2_v1;
-static gpt2_model model_gpt2_v2;
-static rwkv_context * rwkv_context_v1;
+static gptj_model_v1 gptj_ctx_v1;
+static gptj_model gptj_ctx_v2;
+static gpt2_v1_model gpt2_ctx_v1;
+static gpt2_model gpt2_ctx_v2;
+static rwkv_context * rwkv_ctx_v1;
+static llama_context_params llama_ctx_params;
+static llama_context * llama_ctx_v1;
+
 static gpt_params params;
 static int n_past = 0;
 static int n_threads = 4;
@@ -59,21 +66,52 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     blasbatchsize = inputs.blasbatchsize;
     params.memory_f16 = inputs.f16_kv;
     params.n_ctx = inputs.max_context_length;
-    model_v1.hparams.n_ctx = model_v2.hparams.n_ctx = model_gpt2_v1.hparams.n_ctx = model_gpt2_v2.hparams.n_ctx = params.n_ctx;
+    gptj_ctx_v1.hparams.n_ctx = gptj_ctx_v2.hparams.n_ctx = gpt2_ctx_v1.hparams.n_ctx = gpt2_ctx_v2.hparams.n_ctx = params.n_ctx;
 
-    if (file_format == FileFormat::RWKV_1)
+    printf("System Info: %s\n", llama_print_system_info());
+
+    if(file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT)
     {
-        rwkv_context_v1 = rwkv_init_from_file(modelname.c_str(), n_threads);
+        llama_ctx_params = llama_context_default_params();
+        llama_ctx_params.n_ctx = inputs.max_context_length;
+        llama_ctx_params.n_parts = -1;//inputs.n_parts_overwrite;
+        llama_ctx_params.seed = -1;
+        llama_ctx_params.f16_kv = inputs.f16_kv;
+        llama_ctx_params.logits_all = false;
+        llama_ctx_params.use_mmap = inputs.use_mmap;
+        llama_ctx_params.use_mlock = false;
+        
+        llama_ctx_v1 = llama_init_from_file(modelname.c_str(), llama_ctx_params);
+        
+        if (llama_ctx_v1 == NULL)
+        {
+            fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, modelname.c_str());
+            return ModelLoadResult::FAIL;
+        }
+        if (file_format < FileFormat::GGJT)
+        {
+            printf("\n---\nWarning: Your model has an INVALID or OUTDATED format (ver %d). Please reconvert it for better results!\n---\n", file_format);
+        }
+
+        //determine mem per token
+        const std::vector<int> tmp = {0, 1, 2, 3};
+        llama_eval(llama_ctx_v1, tmp.data(), tmp.size(), 0, params.n_threads);
+        return ModelLoadResult::SUCCESS;
+
+    }
+    else if (file_format == FileFormat::RWKV_1)
+    {
+        rwkv_ctx_v1 = rwkv_init_from_file(modelname.c_str(), n_threads);
 
         //setup buffers for rwkv state
         auto padding = 512u;
-        auto statebufsiz = rwkv_get_state_buffer_element_count(rwkv_context_v1) * sizeof(float) + padding;
-        auto logitbufsiz = rwkv_get_logits_buffer_element_count(rwkv_context_v1) * sizeof(float) + padding;
+        auto statebufsiz = rwkv_get_state_buffer_element_count(rwkv_ctx_v1) * sizeof(float) + padding;
+        auto logitbufsiz = rwkv_get_logits_buffer_element_count(rwkv_ctx_v1) * sizeof(float) + padding;
 
         printf("\nRWKV Init: State Buffer:%u, Logit Buffer:%u\n", statebufsiz, logitbufsiz);
-        rwkv_context_v1->state_out = (float *)malloc(statebufsiz);
-        rwkv_context_v1->logits_out = (float *)malloc(logitbufsiz);
-        rwkv_context_v1->state_in = nullptr;
+        rwkv_ctx_v1->state_out = (float *)malloc(statebufsiz);
+        rwkv_ctx_v1->logits_out = (float *)malloc(logitbufsiz);
+        rwkv_ctx_v1->state_in = nullptr;
         n_batch = 1;
 
         std::string word;
@@ -87,15 +125,15 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         }
         printf("\nRWKV Vocab: %u\n",vocabsiz);
 
-        bool testeval = rwkv_eval(rwkv_context_v1, 0, rwkv_context_v1->state_in, rwkv_context_v1->state_out, rwkv_context_v1->logits_out);
+        bool testeval = rwkv_eval(rwkv_ctx_v1, 0, rwkv_ctx_v1->state_in, rwkv_ctx_v1->state_out, rwkv_ctx_v1->logits_out);
         if(!testeval)
         {
             printf("\nError: RWKV Init Eval Failed!\n");
         }
         logits.resize(vocabsiz);
-        memcpy(logits.data(), rwkv_context_v1->logits_out, sizeof(float)*vocabsiz);
+        memcpy(logits.data(), rwkv_ctx_v1->logits_out, sizeof(float)*vocabsiz);
 
-        if (rwkv_context_v1 == NULL)
+        if (rwkv_ctx_v1 == NULL)
         {
             return ModelLoadResult::FAIL;
         }
@@ -103,7 +141,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     }
     else if (file_format == FileFormat::GPT2_1)
     {
-        ModelLoadResult res = legacy_gpt2_model_load(params.model, model_gpt2_v1, vocab, file_format);
+        ModelLoadResult res = legacy_gpt2_model_load(params.model, gpt2_ctx_v1, vocab, file_format);
         if(res==ModelLoadResult::FAIL)
         {
             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
@@ -115,12 +153,12 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
             return res;
         }
          // determine the required inference memory per token:    
-        legacy_gpt2_eval(model_gpt2_v1, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token, file_format);    
+        legacy_gpt2_eval(gpt2_ctx_v1, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token, file_format);    
         return ModelLoadResult::SUCCESS;
     }
     else if (file_format == FileFormat::GPT2_2)
     {
-        ModelLoadResult res = gpt2_model_load(params.model, model_gpt2_v2, vocab, file_format);
+        ModelLoadResult res = gpt2_model_load(params.model, gpt2_ctx_v2, vocab, file_format);
         if(res==ModelLoadResult::FAIL)
         {
             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
@@ -132,12 +170,12 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
             return res;
         }
          // determine the required inference memory per token:    
-        gpt2_eval(model_gpt2_v2, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token, file_format);    
+        gpt2_eval(gpt2_ctx_v2, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token, file_format);    
         return ModelLoadResult::SUCCESS;
     }
     else if (file_format == FileFormat::GPTJ_1 || file_format == FileFormat::GPTJ_2)
     {
-        ModelLoadResult res = legacy_gptj_model_load(params.model, model_v1, vocab, file_format);
+        ModelLoadResult res = legacy_gptj_model_load(params.model, gptj_ctx_v1, vocab, file_format);
         if(res==ModelLoadResult::FAIL)
         {
             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
@@ -149,13 +187,13 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
             return res;
         }
          // determine the required inference memory per token:    
-        legacy_gptj_eval(model_v1, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token, file_format);    
+        legacy_gptj_eval(gptj_ctx_v1, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token, file_format);    
         
          //if the logits are NAN, it means the model is incompatible
         if(logits.size()>0 && IsNanCheck(logits[0]))
         {
             printf("\nBad Logits detected! Retrying GPT-J model loading...");
-            ggml_v1_free(model_v1.ctx);
+            ggml_v1_free(gptj_ctx_v1.ctx);
             return ModelLoadResult::RETRY_LOAD;
         }
 
@@ -163,7 +201,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     }
     else
     {
-        ModelLoadResult loadresult = gptj_model_load(params.model, model_v2, vocab);
+        ModelLoadResult loadresult = gptj_model_load(params.model, gptj_ctx_v2, vocab);
         if (loadresult == ModelLoadResult::FAIL)
         {
             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
@@ -176,14 +214,14 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         }
 
         // determine the required inference memory per token:    
-        gptj_eval(model_v2, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token); 
+        gptj_eval(gptj_ctx_v2, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token); 
 
       
         //if the logits are NAN, it means the model is incompatible
         if(logits.size()>0 && IsNanCheck(logits[0]))
         {
             printf("\nBad Logits detected! Retrying GPT-J model loading...");
-            ggml_free(model_v2.ctx);
+            ggml_free(gptj_ctx_v2.ctx);
             return ModelLoadResult::RETRY_LOAD;
         }
 
@@ -229,17 +267,35 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     {
         params.seed = time(NULL);
     }
-    
+
     // tokenize the prompt
-    std::vector<gpt_vocab::id> embd_inp = ::gpt_tokenize(vocab, params.prompt);
-    
+    std::vector<int> embd_inp;
+
+    if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT)
+    {
+        params.prompt.insert(0, 1, ' ');
+        if (file_format == FileFormat::GGML)
+        {
+            embd_inp = ::legacy_llama_tokenize(llama_ctx_v1, params.prompt, true);
+        }
+        else
+        {
+            embd_inp = ::llama_tokenize(llama_ctx_v1, params.prompt, true);
+        }
+    }
+    else
+    {
+        // tokenize the prompt
+        embd_inp = ::gpt_tokenize(vocab, params.prompt);
+    }
+
     //truncate to front of the prompt if its too long
     int32_t nctx = params.n_ctx;
 
     if (embd_inp.size() + params.n_predict > nctx)
     {
         int offset = embd_inp.size() - nctx + params.n_predict;
-        embd_inp = std::vector<llama_token>(embd_inp.begin() + offset, embd_inp.end());
+        embd_inp = std::vector<int>(embd_inp.begin() + offset, embd_inp.end());
     }
 
     //determine how much npast we have to rewind from the current state
@@ -261,7 +317,11 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     }
 
     //if using BLAS and prompt is big enough, switch to single thread and use a huge batch
-    bool approved_format = (file_format==FileFormat::GPT2_2 || file_format==FileFormat::GPTJ_3);
+    bool approved_format = (file_format == FileFormat::GGML ||
+                            file_format == FileFormat::GGHF || 
+                            file_format == FileFormat::GGJT ||
+                            file_format == FileFormat::GPT2_2 || 
+                            file_format == FileFormat::GPTJ_3);
     bool blasmode = (approved_format && embd_inp.size() >= 32 && ggml_cpu_has_blas());
     // bool blasmode = false;
     int original_batch = params.n_batch;
@@ -269,7 +329,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     if (blasmode)
     {
         //for gpttype, GPT2 crashes above 256.
-        int bbs = (blasbatchsize>256?256:blasbatchsize);
+        int bbs = blasbatchsize; //(blasbatchsize>256?256:blasbatchsize);
         params.n_batch = bbs; //received reports of 1024 and above crashing on some models
         params.n_threads = 1;
     }
@@ -286,34 +346,38 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
 
     timer_start();
     double time1 = 0, time2 = 0;
-    unsigned int embd_inp_size = embd_inp.size();
     int32_t n_vocab = 0;
-    if(file_format == FileFormat::GPTJ_1||file_format == FileFormat::GPTJ_2)
+
+    if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT)
     {
-        n_vocab = model_v1.hparams.n_vocab;
+        //do nothing
+    }
+    else if (file_format == FileFormat::GPTJ_1 || file_format == FileFormat::GPTJ_2)
+    {
+        n_vocab = gptj_ctx_v1.hparams.n_vocab;
     }    
     else if(file_format == FileFormat::GPTJ_3)
     {
-        n_vocab = model_v2.hparams.n_vocab;
+        n_vocab = gptj_ctx_v2.hparams.n_vocab;
     }
     else if(file_format == FileFormat::GPT2_1)
     {
-        n_vocab = model_gpt2_v1.hparams.n_vocab;
+        n_vocab = gpt2_ctx_v1.hparams.n_vocab;
     }
     else if(file_format == FileFormat::GPT2_2)
     {
-        n_vocab = model_gpt2_v2.hparams.n_vocab;
+        n_vocab = gpt2_ctx_v2.hparams.n_vocab;
     }
     else if(file_format == FileFormat::RWKV_1)
     {
         n_vocab = vocab.id_to_token.size(); //handled seperately
         if(n_past==0)
         {
-            rwkv_context_v1->state_in = nullptr;
+            rwkv_ctx_v1->state_in = nullptr;
         }
         else
         {
-            rwkv_context_v1->state_in = rwkv_context_v1->state_out;
+            rwkv_ctx_v1->state_in = rwkv_ctx_v1->state_out;
             //if it's empty, push in the final previous token
             if(embd_inp.size()==0 && current_context_tokens.size()>0)
             {
@@ -338,36 +402,40 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             //print progress
             if (!startedsampling)
             {
-                printf("\rProcessing Prompt%s (%d / %d tokens)", (blasmode ? " [BLAS]" : ""), input_consumed, embd_inp_size);
+                printf("\rProcessing Prompt%s (%d / %d tokens)", (blasmode ? " [BLAS]" : ""), input_consumed, embd_inp.size());
             }
             else
             {
                 printf("\rGenerating (%d / %d tokens)", (1 + params.n_predict - remaining_tokens), params.n_predict);
             }
-           
+
             bool evalres = false;
-                                   
-            if(file_format==FileFormat::RWKV_1)
+
+            if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT)
             {
-                evalres = rwkv_eval(rwkv_context_v1, embd[0], rwkv_context_v1->state_in, rwkv_context_v1->state_out, rwkv_context_v1->logits_out);
-                memcpy(logits.data(), rwkv_context_v1->logits_out, sizeof(float)*rwkv_vocab.size());
-                rwkv_context_v1->state_in = rwkv_context_v1->state_out;
+                evalres = (llama_eval(llama_ctx_v1, embd.data(), embdsize, n_past, params.n_threads)==0);
+            }
+            else if(file_format==FileFormat::RWKV_1)
+            {
+                evalres = rwkv_eval(rwkv_ctx_v1, embd[0], rwkv_ctx_v1->state_in, rwkv_ctx_v1->state_out, rwkv_ctx_v1->logits_out);
+                memcpy(logits.data(), rwkv_ctx_v1->logits_out, sizeof(float)*rwkv_vocab.size());
+                rwkv_ctx_v1->state_in = rwkv_ctx_v1->state_out;
             }
             else if(file_format==FileFormat::GPT2_1)
             {
-                evalres = legacy_gpt2_eval(model_gpt2_v1, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
+                evalres = legacy_gpt2_eval(gpt2_ctx_v1, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
             }
             else if(file_format==FileFormat::GPT2_2)
             {
-                evalres = gpt2_eval(model_gpt2_v2, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
+                evalres = gpt2_eval(gpt2_ctx_v2, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
             }
             else if(file_format==FileFormat::GPTJ_1 || file_format==FileFormat::GPTJ_2)
             {
-                evalres = legacy_gptj_eval(model_v1, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
+                evalres = legacy_gptj_eval(gptj_ctx_v1, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
             }
             else
             {
-                evalres = gptj_eval(model_v2, params.n_threads, n_past, embd, logits, mem_per_token);
+                evalres = gptj_eval(gptj_ctx_v2, params.n_threads, n_past, embd, logits, mem_per_token);
             }
             if (!evalres)
             {
@@ -398,19 +466,33 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 printf("\n");
             }
 
+            if(file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT)
+            {
+                auto logits = llama_get_logits(llama_ctx_v1);
+                // set the logit of the eos token (2) to zero to avoid sampling it
+                logits[llama_token_eos()] = 0;
+                //set logits of opening square bracket to zero.
+                logits[518] = 0;
+                logits[29961] = 0;
+
+                id = llama_sample_top_p_top_k(llama_ctx_v1, last_n_tokens.data(), last_n_tokens.size(), top_k, top_p, temp, repeat_penalty);
+
+            }
+            else
             {
                 // set the logit of the eos token (2) to zero to avoid sampling it        
                 if(logits.size()>50256)
-                {        
-                    logits[50256] = (logits[50256]<0?logits[50256]:0);
+                {
+                    logits[50256] = (logits[50256] < 0 ? logits[50256] : 0);
                 }
                 //gpt2 uses negative logits, so we cant zero it
-                            
+
                 id = gptj_sample_top_p_top_k(vocab, logits.data() + (logits.size() - n_vocab), last_n_tokens, repeat_penalty, top_k, top_p, temp, rng);
-                last_n_tokens.erase(last_n_tokens.begin());
-                last_n_tokens.push_back(id);
-                current_context_tokens.push_back(id);
             }
+
+            last_n_tokens.erase(last_n_tokens.begin());
+            last_n_tokens.push_back(id);
+            current_context_tokens.push_back(id);
 
             // add it to the context
             embd.push_back(id);
@@ -418,18 +500,25 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             // decrement remaining sampling budget
             --remaining_tokens;
 
-            for (auto id : embd)
+            if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT)
             {
-                concat_output += vocab.id_to_token[id].c_str();
-                for (const auto &matched : stop_sequence)
+                concat_output += llama_token_to_str(llama_ctx_v1, id);
+            }
+            else
+            {
+                for (auto id : embd)
                 {
-                    if (concat_output.find(matched) != std::string::npos)
-                    {
-                        stopper_unused_tokens = remaining_tokens;
-                        remaining_tokens = 0;
-                        printf("\n(Stop sequence triggered: <%s>)",matched.c_str());
-                        break;
-                    }
+                    concat_output += vocab.id_to_token[id].c_str();
+                }
+            }
+            for (const auto &matched : stop_sequence)
+            {
+                if (concat_output.find(matched) != std::string::npos)
+                {
+                    stopper_unused_tokens = remaining_tokens;
+                    remaining_tokens = 0;
+                    printf("\n(Stop sequence triggered: <%s>)", matched.c_str());
+                    break;
                 }
             }
         }
@@ -451,7 +540,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
         }
     }
     time2 = timer_check();
-    float pt1 = (time1*1000.0/(embd_inp_size==0?1:embd_inp_size));
+    float pt1 = (time1*1000.0/(embd_inp.size()==0?1:embd_inp.size()));
     int realnpredict = params.n_predict-stopper_unused_tokens;
     float pt2 = (time2*1000.0/(realnpredict==0?1:realnpredict));
     printf("\nTime Taken - Processing:%.1fs (%.0fms/T), Generation:%.1fs (%.0fms/T), Total:%.1fs", time1, pt1, time2, pt2, (time1 + time2));
