@@ -2318,7 +2318,7 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dest) {
     return written;
 }
 
-// Copies the state to the specified destination address
+// Sets the state reading from the specified source address
 size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
     size_t rng_size;
     char rng_buf[64*1024];
