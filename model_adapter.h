@@ -28,6 +28,8 @@ enum FileFormat
     GPT2_2=201,
 
     RWKV_1=300,
+
+    NEOX_1=400,
 };
 
 enum ModelLoadResult

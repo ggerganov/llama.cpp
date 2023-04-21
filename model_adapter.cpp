@@ -113,7 +113,7 @@ void print_tok_vec(std::vector<float> &embd)
                 fileformat = FileFormat::GPTJ_3; //quantized format cannot be legacy type
            }
        }
-       if(vocabsiz==50257)
+       else if(vocabsiz==50257)
        {
            fileformat = FileFormat::GPT2_1;
            uint32_t temp;
@@ -125,8 +125,12 @@ void print_tok_vec(std::vector<float> &embd)
            if(temp!=0 && temp!=1)
            {
                 fileformat = FileFormat::GPT2_2; //quantized format cannot be legacy type
-           }
-           
+           }           
+       }
+       else if(vocabsiz < 32000 || vocabsiz > 36000)
+       {
+           //anything outside the llama v1 range is assumed to be NeoX
+           fileformat = FileFormat::NEOX_1;
        }
     }
     else if(magic == 0x67676d66) //v2 format ggmf

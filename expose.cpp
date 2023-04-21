@@ -115,6 +115,19 @@ extern "C"
                 return true;
             }
         }
+        else if(file_format==FileFormat::NEOX_1)
+        {
+            printf("\n---\nIdentified as GPT-NEO-X model: (ver %d)\nAttempting to Load...\n---\n", file_format);
+            ModelLoadResult lr = gpttype_load_model(inputs, file_format);          
+            if (lr == ModelLoadResult::FAIL || lr == ModelLoadResult::RETRY_LOAD)
+            {
+                return false;
+            }
+            else
+            {
+                return true;
+            }
+        }
         else
         {
             printf("\n---\nIdentified as LLAMA model: (ver %d)\nAttempting to Load...\n---\n", file_format);
