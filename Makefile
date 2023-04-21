@@ -1,4 +1,4 @@
-default: koboldcpp koboldcpp_noavx2 koboldcpp_openblas koboldcpp_openblas_noavx2 koboldcpp_clblast koboldcpp_cublas
+default: koboldcpp koboldcpp_noavx2 koboldcpp_openblas koboldcpp_openblas_noavx2 koboldcpp_clblast
 simple: koboldcpp koboldcpp_noavx2
 dev: koboldcpp_openblas
 
@@ -165,7 +165,7 @@ ifeq ($(OS),Windows_NT)
 	OPENBLAS_BUILD = $(CXX) $(CXXFLAGS) $^ lib/libopenblas.lib -shared -o $@.dll $(LDFLAGS)
 	OPENBLAS_NOAVX2_BUILD = $(CXX) $(CXXFLAGS) $^ lib/libopenblas.lib -shared -o $@.dll $(LDFLAGS)
 	CLBLAST_BUILD = $(CXX) $(CXXFLAGS) $^ lib/OpenCL.lib lib/clblast.lib -shared -o $@.dll $(LDFLAGS)
-	CUBLAS_BUILD = $(CXX) $(CXXFLAGS) $^  -shared -o $@.dll $(LDFLAGS)
+	CUBLAS_BUILD = $(CXX) $(CXXFLAGS) $^ lib/cuda.lib lib/cublas.lib lib/cublasLt.lib lib/cudart.lib lib/cudart_static.lib lib/ggml-cuda-kernel.lib -shared -o $@.dll $(LDFLAGS)
 else
 	DEFAULT_BUILD = $(CXX) $(CXXFLAGS)  $^ -shared -o $@.so $(LDFLAGS)
 	NOAVX2_BUILD = $(CXX) $(CXXFLAGS) $^ -shared -o $@.so $(LDFLAGS)
@@ -271,7 +271,7 @@ koboldcpp_openblas_noavx2: ggml_openblas_noavx2.o ggml_rwkv.o ggml_v1_noavx2.o e
 koboldcpp_clblast: ggml_clblast.o ggml_rwkv.o ggml_v1.o expose.o common.o gpttype_adapter.o 
 	$(CLBLAST_BUILD)
 
-koboldcpp_cublas: ggml_cublas.o ggml_rwkv.o ggml_v1.o expose.o common.o llama_adapter.o gpttype_adapter.o 
+koboldcpp_cublas: ggml_cublas.o ggml_rwkv.o ggml_v1.o expose.o common.o gpttype_adapter.o 
 	$(CUBLAS_BUILD)
 		
 quantize_llama: examples/quantize/quantize.cpp ggml.o llama.o
