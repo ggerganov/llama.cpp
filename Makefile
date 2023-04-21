@@ -93,18 +93,15 @@ ifndef LLAMA_NO_ACCELERATE
 	# `-framework Accelerate` works on Mac Intel as well, with negliable performance boost (as of the predict time).
 	ifeq ($(UNAME_S),Darwin)
 		CFLAGS  += -DGGML_USE_ACCELERATE
-		CXXFLAGS  += -DGGML_USE_ACCELERATE
 		LDFLAGS += -framework Accelerate
 	endif
 endif
 ifdef LLAMA_OPENBLAS
 	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas
-	CXXFLAGS  += -DGGML_USE_OPENBLAS
 	LDFLAGS += -lopenblas
 endif
 ifdef LLAMA_CUBLAS
 	CFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include
-	CXXFLAGS  += -DGGML_USE_CUBLAS
 	LDFLAGS += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64
 	OBJS	+= ggml-cuda.o
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
