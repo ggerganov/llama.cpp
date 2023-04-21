@@ -53,7 +53,13 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
         auto end_t = std::chrono::high_resolution_clock::now();
         if (i == 0) {
             const float seconds = std::chrono::duration<float>(end_t - start_t).count();
-            printf("%.2f seconds per pass - ETA %.2f hours\n", seconds, (seconds * seq_count) / (60.0*60.0));
+            printf("%.2f seconds per pass - ETA ", seconds);
+            int total_seconds = (int)(seconds * seq_count);
+            if (total_seconds >= 60*60) {
+                printf("%d hours ", total_seconds / (60*60));
+                total_seconds = total_seconds % (60*60);
+            }
+            printf("%d minutes\n", total_seconds / 60);
         }
         // We get the logits for all the tokens in the context window (params.n_ctx)
         // from llama_eval above.  Now, based on https://huggingface.co/docs/transformers/perplexity,
