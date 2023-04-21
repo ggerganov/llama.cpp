@@ -1133,6 +1133,11 @@ static bool llama_eval_internal(
                             n_embd/n_head, n_head, n_past + N),
                         0, 2, 1, 3);
 
+            // re-quantize K
+            if (ggml_is_quantized(model.layers[il].wk->type)) {
+                K = ggml_cpy(ctx0, K, ggml_new_tensor_3d(ctx0, model.layers[il].wk->type, n_embd/n_head, n_past + N, n_head));
+            }
+
             // K * Q
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
 
@@ -1157,6 +1162,11 @@ static bool llama_eval_internal(
                         il*n_ctx*ggml_element_size(kv_self.v)*n_embd);
 
 #if 1
+            // re-quantize V
+            if (ggml_is_quantized(model.layers[il].wv->type) && ((n_past + N) % ggml_blck_size(model.layers[il].wv->type) == 0)) {
+                V = ggml_cpy(ctx0, V, ggml_new_tensor_3d(ctx0, model.layers[il].wv->type, n_past + N, n_embd/n_head, n_head));
+            }
+
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
 #else
             // make V contiguous in memory to speed up the matmul, however we waste time on the copy
