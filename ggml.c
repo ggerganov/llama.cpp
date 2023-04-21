@@ -497,7 +497,7 @@ static inline float hsum_float_8(const __m256 x) {
 }
 
 // horizontally add 8 int32_t
-static inline int hsum_int_8(const __m256i a) {
+static inline int hsum_i32_8(const __m256i a) {
     const __m128i sum128 = _mm_add_epi32(_mm256_castsi256_si128(a), _mm256_extractf128_si256(a, 1));
     const __m128i hi64 = _mm_unpackhi_epi64(sum128, sum128);
     const __m128i sum64 = _mm_add_epi32(hi64, sum128);
@@ -1435,7 +1435,7 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
 
 #if defined(__AVX2__)
         // Compute the sum of the quants and set y[i].s
-        y[i].s = d * hsum_int_8(_mm256_add_epi32(_mm256_add_epi32(i0, i1), _mm256_add_epi32(i2, i3)));
+        y[i].s = d * hsum_i32_8(_mm256_add_epi32(_mm256_add_epi32(i0, i1), _mm256_add_epi32(i2, i3)));
 
         // Convert int32 to int16
         i0 = _mm256_packs_epi32( i0, i1 );	// 0, 1, 2, 3,  8, 9, 10, 11,  4, 5, 6, 7, 12, 13, 14, 15
@@ -1465,7 +1465,7 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
         // Compute the sum of the quants and set y[i].s
         const __m128i s0 = _mm_add_epi32(_mm_add_epi32(ni0, ni1), _mm_add_epi32(ni2, ni3));
         const __m128i s1 = _mm_add_epi32(_mm_add_epi32(ni4, ni5), _mm_add_epi32(ni6, ni7));
-        y[i].s = d * hsum_int_8(_mm256_set_m128i(s1, s0));
+        y[i].s = d * hsum_i32_8(_mm256_set_m128i(s1, s0));
 
         // Convert int32 to int16
         ni0 = _mm_packs_epi32( ni0, ni1 );
