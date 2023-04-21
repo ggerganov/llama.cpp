@@ -126,7 +126,7 @@ endif
 #note: koboldcpp does not officially support cublas. You can manually link it if you want, but it will not be a regular feature
 ifdef LLAMA_CUBLAS
 	CFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include
-	LDFLAGS += -lcublas_static -lculibos -lcudart_static -lcublasLt_static -lpthread -ldl -L/usr/local/cuda/lib64
+	LDFLAGS += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64
 	OBJS	+= ggml-cuda.o
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	nvcc -arch=native -c -o $@ $<
