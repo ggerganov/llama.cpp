@@ -307,7 +307,7 @@ add_library(ggml OBJECT
 
 target_include_directories(ggml PUBLIC .)
 target_compile_features(ggml PUBLIC c_std_11) # don't bump
-target_link_libraries(ggml PRIVATE Threads::Threads ${LLAMA_EXTRA_LIBS})
+target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
 if (BUILD_SHARED_LIBS)
     set_target_properties(ggml PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
