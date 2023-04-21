@@ -132,8 +132,8 @@ extern "C" {
     // Returns the size in bytes of the state (rng, logits, embedding and kv_cache)
     LLAMA_API size_t llama_get_state_size(struct llama_context * ctx);
 
-    // Copies the state to the specified destination address. 
-    // Destination needs to have allocated enough memory. 
+    // Copies the state to the specified destination address.
+    // Destination needs to have allocated enough memory.
     // Returns the number of bytes copied
     LLAMA_API size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dest);
 

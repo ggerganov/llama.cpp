@@ -2253,10 +2253,10 @@ std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_te
 // Returns the size of the state
 size_t llama_get_state_size(struct llama_context * ctx) {
     const size_t s_bool = sizeof(int32_t);
-    // we don't know size of rng until we actually serialize it. so reserve more than enough memory for its serialized state. 
+    // we don't know size of rng until we actually serialize it. so reserve more than enough memory for its serialized state.
     // for reference, std::mt19937(1337) serializes to 6701 bytes.
-    const size_t s_rng_size = sizeof(size_t); 
-    const size_t s_rng = 64*1024; 
+    const size_t s_rng_size = sizeof(size_t);
+    const size_t s_rng = 64*1024;
     const size_t s_logits_capacity = sizeof(size_t);
     const size_t s_logits_size = sizeof(size_t);
     const size_t s_logits = ctx->logits.capacity() * sizeof(float);
@@ -2300,7 +2300,7 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dest) {
     memcpy(out, &logits_capacity, sizeof(size_t)); out += sizeof(size_t);
     memcpy(out, &logits_size, sizeof(size_t)); out += sizeof(size_t);
     if (logits_size) {
-        memcpy(out, ctx->logits.data(), logits_size * sizeof(float)); 
+        memcpy(out, ctx->logits.data(), logits_size * sizeof(float));
     }
     out += logits_capacity * sizeof(float);
     memcpy(out, &embedding_size, sizeof(size_t)); out += sizeof(size_t);
@@ -2342,13 +2342,13 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
     LLAMA_ASSERT(ctx->logits.capacity() == logits_capacity);
     if (logits_size) {
         ctx->logits.resize(logits_size);
-        memcpy(ctx->logits.data(), in, logits_size * sizeof(float)); 
+        memcpy(ctx->logits.data(), in, logits_size * sizeof(float));
     }
     in += logits_capacity * sizeof(float);
     memcpy(&embedding_size, in, sizeof(size_t)); in += sizeof(size_t);
     LLAMA_ASSERT(ctx->embedding.capacity() == embedding_size);
     if (embedding_size) {
-        memcpy(ctx->embedding.data(), in, embedding_size * sizeof(float)); 
+        memcpy(ctx->embedding.data(), in, embedding_size * sizeof(float));
         in += embedding_size * sizeof(float);
     }
     memcpy(&kv_size, in, sizeof(size_t)); in += sizeof(size_t);
@@ -2357,7 +2357,7 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
         LLAMA_ASSERT(ctx->model.kv_self.buf.size == kv_size);
         void * k_data = ctx->model.kv_self.k->data; // remember data pointers
         void * v_data = ctx->model.kv_self.v->data; // because their value is stored in buf and overwritten by memcpy
-        memcpy(ctx->model.kv_self.buf.addr, in, kv_size); 
+        memcpy(ctx->model.kv_self.buf.addr, in, kv_size);
         ctx->model.kv_self.k->data = k_data; // restore correct data pointers
         ctx->model.kv_self.v->data = v_data;
         in += kv_size;
