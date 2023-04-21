@@ -2288,8 +2288,6 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dest) {
     char rng_buf[64*1024];
     memset(&rng_buf[0], 0, 64*1024);
     memcpy(&rng_buf[0], rng_ss.str().data(), rng_ss.str().size());
-    const int32_t has_evaluated_once = ctx->has_evaluated_once ? 1 : 0;
-    const int32_t logits_all = ctx->logits_all ? 1 : 0;
     const size_t logits_capacity = ctx->logits.capacity();
     const size_t logits_size = ctx->logits.size();
     const size_t embedding_size = ctx->embedding.size();
@@ -2333,8 +2331,6 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
     rng_ss >> ctx->rng;
     LLAMA_ASSERT(rng_ss.fail() == false);
 
-    int32_t has_evaluated_once;
-    int32_t logits_all;
     size_t logits_capacity;
     size_t logits_size;
     size_t embedding_size;
