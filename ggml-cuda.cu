@@ -154,11 +154,11 @@ void dequantize_row_q4_3_cuda(const void * vx, float * y, int k, cudaStream_t st
 // lock-free, thread safe buffer pool for cuda
 #define MAX_CUDA_BUFFERS 16
 struct cuda_buffer {
-    std::atomic_uintptr_t ptr;
-    size_t size;
+    std::atomic_uintptr_t ptr { 0 };
+    size_t size { 0 };
 };
 
-static struct cuda_buffer cuda_buffer_pool[MAX_CUDA_BUFFERS] = {0};
+static cuda_buffer cuda_buffer_pool[MAX_CUDA_BUFFERS];
 
 void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
     for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
