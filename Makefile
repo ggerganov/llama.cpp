@@ -109,7 +109,7 @@ ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 endif
 ifdef LLAMA_HIPBLAS
 	ROCM_PATH ?= /opt/rocm
-	LDFLAGS   += -lhipblas -lamdhip64 -L$(ROCM_PATH)/lib
+	LDFLAGS   += -lhipblas -lamdhip64 -L$(ROCM_PATH)/lib -Wl,-rpath=$(ROCM_PATH)/lib
 	HIPCC     ?= $(ROCM_PATH)/bin/hipcc
 	OBJS	  += ggml-cuda.o
 ggml.o:      CFLAGS    += -DGGML_USE_HIPBLAS -D__HIP_PLATFORM_AMD__ -I$(ROCM_PATH)/include
