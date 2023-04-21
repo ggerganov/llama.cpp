@@ -134,6 +134,10 @@ ifneq ($(filter armv8%,$(UNAME_M)),)
 	CFLAGS += -mfp16-format=ieee -mno-unaligned-access
 endif
 
+ifdef LLAMA_NO_RMSE
+	CFLAGS += -DGGML_NO_RMSE
+endif
+
 #
 # Print build information
 #
