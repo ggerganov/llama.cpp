@@ -7,9 +7,9 @@ struct load_model_inputs
     const int max_context_length;
     const int batch_size;
     const bool f16_kv;
-    const char *executable_path;
-    const char *model_filename;
-    const int n_parts_overwrite = -1;
+    const char * executable_path;
+    const char * model_filename;
+    const char * lora_filename;
     const bool use_mmap;
     const bool use_smartcontext;
     const int clblast_info = 0;
@@ -35,3 +35,4 @@ struct generation_outputs
 };
 
 extern std::string executable_path;
+extern std::string lora_filename;

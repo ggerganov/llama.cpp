@@ -21,6 +21,7 @@
 #include "model_adapter.cpp"
 
 std::string executable_path = "";
+std::string lora_filename = "";
 
 extern "C"
 {
@@ -33,6 +34,7 @@ extern "C"
     bool load_model(const load_model_inputs inputs)
     {
         std::string model = inputs.model_filename;
+        lora_filename = inputs.lora_filename;
         file_format = check_file_format(model.c_str());
 
         //first digit is whether configured, second is platform, third is devices

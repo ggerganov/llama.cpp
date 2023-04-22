@@ -76,7 +76,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     {
         llama_ctx_params = llama_context_default_params();
         llama_ctx_params.n_ctx = inputs.max_context_length;
-        llama_ctx_params.n_parts = -1;//inputs.n_parts_overwrite;
+        llama_ctx_params.n_parts = -1;
         llama_ctx_params.seed = -1;
         llama_ctx_params.f16_kv = inputs.f16_kv;
         llama_ctx_params.logits_all = false;
@@ -93,6 +93,21 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         if (file_format < FileFormat::GGJT)
         {
             printf("\n---\nWarning: Your model has an INVALID or OUTDATED format (ver %d). Please reconvert it for better results!\n---\n", file_format);
+        }
+
+        if (lora_filename != "")
+        {
+            printf("\nAttempting to apply LORA adapter: %s\n", lora_filename.c_str());
+     
+            int err = llama_apply_lora_from_file(llama_ctx_v1,
+                                                 lora_filename.c_str(),
+                                                 NULL,
+                                                 n_threads);
+            if (err != 0)
+            {
+                fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
+                return ModelLoadResult::FAIL;
+            }
         }
 
         //determine mem per token
