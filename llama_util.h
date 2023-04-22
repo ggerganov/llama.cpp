@@ -21,6 +21,9 @@
         #if defined(_POSIX_MAPPED_FILES)
             #include <sys/mman.h>
         #endif
+        #if defined(_POSIX_MEMLOCK_RANGE)
+            #include <sys/resource.h>
+        #endif
     #endif
 #endif
 
@@ -303,8 +306,18 @@ struct llama_mlock {
         if (!mlock(addr, size)) {
             return true;
         } else {
-            fprintf(stderr, "warning: failed to mlock %zu-byte buffer (after previously locking %zu bytes): %s\n" MLOCK_SUGGESTION,
-                    size, this->size, std::strerror(errno));
+            char* errmsg = std::strerror(errno);
+            bool suggest = (errno == ENOMEM);
+
+            // Check if the resource limit is fine after all
+            struct rlimit lock_limit;
+            if (suggest && getrlimit(RLIMIT_MEMLOCK, &lock_limit))
+                suggest = false;
+            if (suggest && (lock_limit.rlim_max > lock_limit.rlim_cur + size))
+                suggest = false;
+
+            fprintf(stderr, "warning: failed to mlock %zu-byte buffer (after previously locking %zu bytes): %s\n%s",
+                    size, this->size, errmsg, suggest ? MLOCK_SUGGESTION : "");
             return false;
         }
     }
