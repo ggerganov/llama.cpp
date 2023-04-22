@@ -9,6 +9,7 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 # Highlights
 - Now has experimental CLBlast support.
 - Now supports RWKV models WITHOUT pytorch or tokenizers! Yep, just GGML!
+- Now supports GPT-NeoX / Pythia models
 
 ## Usage
 - [Download the latest release here](https://github.com/LostRuins/koboldcpp/releases/latest) or clone the repo.
@@ -62,4 +63,5 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
   - GPT-2 (All versions, including legacy f16, newer format + quanitzed, cerebras) Supports OpenBLAS acceleration only for newer format. 
   - GPT-J (All versions including legacy f16, newer format + quantized, pyg.cpp, new pygmalion, janeway etc.) Supports OpenBLAS acceleration only for newer format. 
   - RWKV (f16 GGMF format), unaccelerated due to RNN properties.
+  - GPT-NeoX / Pythia
   - Basically every single current and historical GGML format that has ever existed should be supported, except for bloomz.cpp due to lack of demand.

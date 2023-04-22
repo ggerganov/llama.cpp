@@ -127,7 +127,7 @@ void print_tok_vec(std::vector<float> &embd)
                 fileformat = FileFormat::GPT2_2; //quantized format cannot be legacy type
            }           
        }
-       else if(vocabsiz < 32000 || vocabsiz > 36000)
+       else if(vocabsiz < 31998 || vocabsiz > 33000)
        {
            //anything outside the llama v1 range is assumed to be NeoX
            fileformat = FileFormat::NEOX_1;

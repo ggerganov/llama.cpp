@@ -335,7 +335,8 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                             file_format == FileFormat::GGHF || 
                             file_format == FileFormat::GGJT ||
                             file_format == FileFormat::GPT2_2 || 
-                            file_format == FileFormat::GPTJ_3);
+                            file_format == FileFormat::GPTJ_3 ||
+                            file_format == FileFormat::NEOX_1);
     bool blasmode = (approved_format && embd_inp.size() >= 32 && ggml_cpu_has_blas());
     // bool blasmode = false;
     int original_batch = params.n_batch;
@@ -381,6 +382,10 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     else if(file_format == FileFormat::GPT2_2)
     {
         n_vocab = gpt2_ctx_v2.hparams.n_vocab;
+    }
+    else if(file_format == FileFormat::NEOX_1)
+    {
+        n_vocab = neox_ctx.hparams.n_vocab;
     }
     else if(file_format == FileFormat::RWKV_1)
     {
@@ -443,6 +448,10 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             {
                 evalres = gpt2_eval(gpt2_ctx_v2, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
             }
+            else if(file_format==FileFormat::NEOX_1)
+            {
+                evalres = stablelm_eval(neox_ctx, params.n_threads, n_past, embd, logits, mem_per_token);
+            }
             else if(file_format==FileFormat::GPTJ_1 || file_format==FileFormat::GPTJ_2)
             {
                 evalres = legacy_gptj_eval(gptj_ctx_v1, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
@@ -495,7 +504,12 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             else
             {
                 // set the logit of the eos token (2) to zero to avoid sampling it        
-                if(logits.size()>50256)
+                if((file_format == FileFormat::GPT2_1 || 
+                file_format == FileFormat::GPT2_2 || 
+                file_format == FileFormat::GPTJ_1 || 
+                file_format == FileFormat::GPTJ_2 || 
+                file_format == FileFormat::GPTJ_3)
+                && logits.size()>50256)
                 {
                     logits[50256] = (logits[50256] < 0 ? logits[50256] : 0);
                 }
