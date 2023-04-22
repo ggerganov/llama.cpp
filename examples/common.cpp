@@ -159,7 +159,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         } else if (arg == "--interactive-start") {
             params.interactive = true;
         } else if (arg == "--interactive-first") {
-            params.interactive_start = true;
+            params.interactive_first = true;
         } else if (arg == "-ins" || arg == "--instruct") {
             params.instruct = true;
         } else if (arg == "--color") {
