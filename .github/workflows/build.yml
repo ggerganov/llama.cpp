@@ -169,7 +169,7 @@ jobs:
          - build: 'avx'
            defines: '-DLLAMA_AVX2=OFF'
          - build: 'avx512'
-           defines: '-DLLAMA_AVX512=ON'
+           defines: '-DLLAMA_AVX512=ON -DBUILD_SHARED_LIBS=ON'
 
     steps:
       - name: Clone
