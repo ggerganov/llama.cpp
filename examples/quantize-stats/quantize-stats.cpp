@@ -15,6 +15,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <thread>
+#include <mutex>
 
 struct quantize_stats_params {
     std::string model = "models/7B/ggml-model-f16.bin";
@@ -27,7 +29,6 @@ struct quantize_stats_params {
     std::vector<enum ggml_type> include_types;
 };
 
-const int64_t SCRATCH_ELEMENTS = 32*32;
 const size_t HISTOGRAM_BUCKETS = 150;
 const double HISTOGRAM_RANGE = 0.03;
 
@@ -90,6 +91,13 @@ void update_error_stats(int64_t nelements, const float * input, const float * ou
     stats.num_samples += nelements;
 }
 
+void combine_error_stats(error_stats & into, const error_stats & from) {
+    into.num_samples += from.num_samples;
+    into.total_error += from.total_error;
+    if (from.max_error > into.max_error) into.max_error = from.max_error;
+    for (size_t i=0; i<HISTOGRAM_BUCKETS; ++i) into.error_histogram[i] += from.error_histogram[i];
+}
+
 double find_quantile(const error_stats & stats, double quantile) {
     double sum = std::accumulate(std::begin(stats.error_histogram), std::end(stats.error_histogram), 0.0);
 
@@ -130,6 +138,36 @@ static bool tensor_is_contiguous(const struct ggml_tensor * tensor) {
         tensor->nb[3] == tensor->nb[2]*tensor->ne[2];
 }
 
+void test_roundtrip_on_chunk(
+        const ggml_tensor * layer,
+        int64_t offset,
+        int64_t chunk_size,
+        const quantize_fns_t & qfns,
+        bool use_reference,
+        float * input_scratch,
+        char * quantized_scratch,
+        float * output_scratch,
+        error_stats & stats) {
+
+    if (layer->type == GGML_TYPE_F16) {
+        for (int i = 0; i < chunk_size; i++) {
+            input_scratch[i] = ggml_get_f32_1d(layer, i + offset);
+        }
+    } else {
+        input_scratch = ggml_get_data_f32(layer) + offset;
+    }
+
+    if (use_reference) {
+        qfns.quantize_row_q_reference(input_scratch, quantized_scratch, chunk_size);
+    } else {
+        qfns.quantize_row_q(input_scratch, quantized_scratch, chunk_size);
+    }
+    qfns.dequantize_row_q(quantized_scratch, output_scratch, chunk_size);
+
+    update_error_stats(chunk_size, input_scratch, output_scratch, stats);
+}
+
+
 // Run quantization function for a single layer and update error stats
 void test_roundtrip_on_layer(
         std::string & name,
@@ -137,40 +175,61 @@ void test_roundtrip_on_layer(
         const quantize_fns_t & qfns,
         bool use_reference,
         const ggml_tensor * layer,
-        float * input_scratch,
-        char *quantized_scratch,
-        float * output_scratch,
-        error_stats & total_error) {
+        std::vector<float> & input_scratch,
+        std::vector<char> & quantized_scratch,
+        std::vector<float> & output_scratch,
+        error_stats & total_error,
+        int max_thread = 0) {
 
     assert(tensor_is_contiguous(layer));
     error_stats layer_error {};
-    int64_t nelements = ggml_nelements(layer);
+    uint64_t nelements = ggml_nelements(layer);
 
-    for (int64_t offset = 0; offset < nelements; offset += SCRATCH_ELEMENTS) {
-        int64_t chunk_size = std::min(SCRATCH_ELEMENTS, nelements - offset);
-
-        if (layer->type == GGML_TYPE_F16) {
-            for (int i = 0; i < chunk_size; i++) {
-                input_scratch[i] = ggml_get_f32_1d(layer, i + offset);
-            }
-        } else {
-            input_scratch = ggml_get_data_f32(layer) + offset;
-        }
-
-        if (use_reference) {
-            qfns.quantize_row_q_reference(input_scratch, quantized_scratch, chunk_size);
-        } else {
-            qfns.quantize_row_q(input_scratch, quantized_scratch, chunk_size);
-        }
-        qfns.dequantize_row_q(quantized_scratch, output_scratch, chunk_size);
-
-        update_error_stats(chunk_size, input_scratch, output_scratch, total_error);
-        if (print_layer_stats) {
-            update_error_stats(chunk_size, input_scratch, output_scratch, layer_error);
-        }
+    float* input_scratch_ptr = nullptr;
+    if (layer->type == GGML_TYPE_F16) {
+        if (input_scratch.size() < nelements) input_scratch.resize(nelements);
+        input_scratch_ptr = input_scratch.data();
     }
+    if (quantized_scratch.size() < 4*nelements) quantized_scratch.resize(4*nelements);
+    if (output_scratch.size() < nelements) output_scratch.resize(nelements);
+
+    if (max_thread < 1) max_thread = std::thread::hardware_concurrency();
+    int chunk_size = 32*512;
+    int num_chunks = (nelements + chunk_size - 1)/chunk_size;
+
+    if (num_chunks < 2 || max_thread < 2) {
+        test_roundtrip_on_chunk(layer, 0, nelements, qfns, use_reference, input_scratch_ptr, quantized_scratch.data(),
+                output_scratch.data(), print_layer_stats ? layer_error : total_error);
+    } else {
+        auto & stats = print_layer_stats ? layer_error : total_error;
+        std::mutex mutex;
+        uint64_t counter = 0;
+        auto compute = [&mutex, &counter, &stats, &qfns, nelements, layer, use_reference, input_scratch_ptr,
+             &quantized_scratch, &output_scratch, chunk_size] () {
+            error_stats local_stats {};
+            while (true) {
+                std::unique_lock<std::mutex> lock(mutex);
+                uint64_t offset = counter; counter += chunk_size;
+                if (offset >= nelements) {
+                    combine_error_stats(stats, local_stats);
+                    break;
+                }
+                lock.unlock();
+                uint64_t chunk = offset + chunk_size < nelements ? chunk_size : nelements - offset;
+                test_roundtrip_on_chunk(layer, offset, chunk, qfns, use_reference, input_scratch_ptr + offset,
+                        quantized_scratch.data() + 4*offset, output_scratch.data() + offset, local_stats);
+            }
+        };
+        int nthread = std::min(num_chunks, max_thread);
+        std::vector<std::thread> workers(nthread-1);
+        for (auto& w : workers) w = std::thread(compute);
+        compute();
+        for (auto& w : workers) w.join();
+    }
+
     if (print_layer_stats) {
         print_error_stats(name, layer_error, false);
+        combine_error_stats(total_error, layer_error);
     }
 }
 
@@ -181,6 +240,7 @@ int main(int argc, char ** argv) {
 
     // read command line
 
+    int max_thread = 0;
     bool invalid_param = false;
     std::string arg;
     for (int i = 1; i < argc; i++) {
@@ -230,6 +290,12 @@ int main(int argc, char ** argv) {
                 fprintf(stderr, "error: %s not in list of types\n", argv[i]);
                 invalid_param = true;
             }
+        } else if (arg == "-n" || arg == "--num-threads") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            max_thread = atoi(argv[i]);
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             quantize_stats_print_usage(argc, argv);
@@ -295,9 +361,9 @@ int main(int argc, char ** argv) {
     }
     printf("testing %d layers with max size %" PRId64 "\n", included_layers, max_nelements);
     // allocate scratch space
-    std::vector<float> input_scratch(SCRATCH_ELEMENTS);
-    std::vector<char> quantized_scratch(SCRATCH_ELEMENTS*4);
-    std::vector<float> output_scratch(SCRATCH_ELEMENTS);
+    std::vector<float> input_scratch;
+    std::vector<char> quantized_scratch;
+    std::vector<float> output_scratch;
 
     // loop throught quantization types
     for (int i = 0; i < GGML_TYPE_COUNT; i++) {
@@ -328,10 +394,11 @@ int main(int argc, char ** argv) {
                         qfns,
                         params.reference,
                         kv_tensor.second,
-                        input_scratch.data(),
-                        quantized_scratch.data(),
-                        output_scratch.data(),
-                        global_stats
+                        input_scratch,
+                        quantized_scratch,
+                        output_scratch,
+                        global_stats,
+                        max_thread
                 );
             }
 
