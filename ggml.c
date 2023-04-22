@@ -1428,7 +1428,9 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
 
 #if defined(__AVX2__)
         // Compute the sum of the quants and set y[i].s
-        y[i].s = d * hsum_i32_8(_mm256_add_epi32(_mm256_add_epi32(i0, i1), _mm256_add_epi32(i2, i3)));
+        //y[i].s = d * hsum_i32_8(_mm256_add_epi32(_mm256_add_epi32(i0, i1), _mm256_add_epi32(i2, i3)));
+        y[i].s0 = d * hsum_i32_8(_mm256_add_epi32(i0, i1));
+        y[i].s1 = d * hsum_i32_8(_mm256_add_epi32(i2, i3));
 
         // Convert int32 to int16
         i0 = _mm256_packs_epi32( i0, i1 );	// 0, 1, 2, 3,  8, 9, 10, 11,  4, 5, 6, 7, 12, 13, 14, 15
@@ -2657,7 +2659,7 @@ static void ggml_vec_dot_q4_1_q8_0(const int n, float * restrict s, const void *
         const float * d0 = &x[i].d;
         const float * d1 = &y[i].d;
 
-        summs += x[i].m * y[i].s;
+        summs += x[i].m * (y[i].s0 + y[i].s1);
 
         const __m256 d0v = _mm256_broadcast_ss( d0 );
         const __m256 d1v = _mm256_broadcast_ss( d1 );
