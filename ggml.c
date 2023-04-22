@@ -148,44 +148,7 @@ inline static void* ggml_aligned_malloc(size_t size) {
 #elif defined(GGML_USE_OPENBLAS)
 #include <cblas.h>
 #elif defined(GGML_USE_CUBLAS)
-#include <cublas_v2.h>
-#include <cuda_runtime.h>
 #include "ggml-cuda.h"
-
-#define CUDA_CHECK(err)                                                        \
-    do {                                                                       \
-        cudaError_t err_ = (err);                                              \
-        if (err_ != cudaSuccess) {                                             \
-            printf("CUDA error %d at %s:%d: %s\n", err_, __FILE__, __LINE__,   \
-                cudaGetErrorString(err_));                                     \
-            exit(1);                                                           \
-        }                                                                      \
-    } while (0)
-
-#define CUBLAS_CHECK(err)                                                      \
-    do {                                                                       \
-        cublasStatus_t err_ = (err);                                           \
-        if (err_ != CUBLAS_STATUS_SUCCESS) {                                   \
-            printf("cuBLAS error %d at %s:%d\n", err_, __FILE__, __LINE__);    \
-            exit(1);                                                           \
-        }                                                                      \
-    } while (0)
-
-static cublasHandle_t cublasH = NULL;
-static cudaStream_t cudaStream = NULL;
-static void init_cublas(void) {
-    if (cublasH == NULL) {
-        // create cublas handle, bind a stream
-        CUBLAS_CHECK(cublasCreate(&cublasH));
-
-        CUDA_CHECK(cudaStreamCreateWithFlags(&cudaStream, cudaStreamNonBlocking));
-
-        CUBLAS_CHECK(cublasSetStream(cublasH, cudaStream));
-
-        // configure logging to stdout
-        // CUBLAS_CHECK(cublasLoggerConfigure(1, 1, 0, NULL));
-    }
-}
 #endif
 
 #undef MIN
@@ -657,9 +620,10 @@ static_assert(sizeof(block_q4_3) == 2 * sizeof(ggml_fp16_t) + QK4_3 / 2, "wrong 
 #define QK8_0 32
 typedef struct {
     float   d;          // delta
+    float   s;          // d * sum(qs[i])
     int8_t  qs[QK8_0];  // quants
 } block_q8_0;
-static_assert(sizeof(block_q8_0) == sizeof(float) + QK8_0, "wrong q8_0 block size/padding");
+static_assert(sizeof(block_q8_0) == 2*sizeof(float) + QK8_0, "wrong q8_0 block size/padding");
 
 
 // reference implementation for deterministic creation of model files
@@ -1299,12 +1263,38 @@ static void quantize_row_q8_0_reference(const float * restrict x, block_q8_0 * r
 
         y[i].d = d;
 
+        int sum = 0;
         for (int l = 0; l < QK8_0; ++l) {
             const float v = x[i*QK8_0 + l]*id;
             y[i].qs[l] = roundf(v);
+            sum += y[i].qs[l];
         }
+        y[i].s = d * sum;
     }
 }
+
+#ifdef __AVX2__
+// There is no better way of doing this?
+// I guess not, AVX is not very good at horizontal sums.
+// The commented solution for a hotrizontal sum was suggested by @pubby as being slightly
+// faster than the solution below. As I don't have an AVX2 system handt right now to test,
+// keeping the original.
+// TODO: Please try and if it does make a differece, uncomment and remove the implementation below.
+//static inline float horizontal_sum(__m256i a) {
+//    __m256i b = _mm256_castps_si256(_mm256_movehdup_ps(_mm256_castsi256_ps(a)));
+//    __m256i sum = _mm256_add_epi32(a, b);
+//    __m256i hi = _mm256_unpackhi_epi64(sum, sum);
+//    sum = _mm256_add_epi32(sum, hi);
+//    return _mm256_cvtsi256_si32(sum) + _mm256_extract_epi32(sum, 4);
+//}
+static inline float horizontal_sum(__m256i a) {
+    __m128i sum128 = _mm_add_epi32(_mm256_castsi256_si128(a), _mm256_extracti128_si256(a, 1));
+    __m128i hi64 = _mm_unpackhi_epi64(sum128, sum128);
+    __m128i sum64 = _mm_add_epi32(hi64, sum128);
+    __m128i hi32  = _mm_shuffle_epi32(sum64, _MM_SHUFFLE(2, 3, 0, 1));
+    return _mm_cvtsi128_si32(_mm_add_epi32(sum64, hi32));
+}
+#endif
 
 static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int k) {
     assert(k % QK8_0 == 0);
@@ -1332,6 +1322,8 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
 
         y[i].d = d;
 
+        int32x4_t accv = vdupq_n_s32(0);
+
         for (int l = 0; l < 8; l++) {
             const float32x4_t v  = vmulq_n_f32(srcv[l], id);
             const int32x4_t   vi = vcvtnq_s32_f32(v);
@@ -1340,7 +1332,11 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
             y[i].qs[4*l + 1] = vgetq_lane_s32(vi, 1);
             y[i].qs[4*l + 2] = vgetq_lane_s32(vi, 2);
             y[i].qs[4*l + 3] = vgetq_lane_s32(vi, 3);
+
+            accv = vaddq_s32(accv, vi);
         }
+        int32_t sum = vaddvq_s32(accv);
+        y[i].s = d * sum;
     }
 #elif defined(__AVX2__) || defined(__AVX__)
     for (int i = 0; i < nb; i++) {
@@ -1388,6 +1384,10 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
         __m256i i3 = _mm256_cvtps_epi32( v3 );
 
 #if defined(__AVX2__)
+
+        // Compute the sum of the quants and set y[i].s
+        y[i].s = d * horizontal_sum(_mm256_add_epi32(_mm256_add_epi32(i0, i1), _mm256_add_epi32(i2, i3)));
+
         // Convert int32 to int16
         i0 = _mm256_packs_epi32( i0, i1 );	// 0, 1, 2, 3,  8, 9, 10, 11,  4, 5, 6, 7, 12, 13, 14, 15
         i2 = _mm256_packs_epi32( i2, i3 );	// 16, 17, 18, 19,  24, 25, 26, 27,  20, 21, 22, 23, 28, 29, 30, 31
@@ -1429,6 +1429,14 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
 #else
     // scalar
     quantize_row_q8_0_reference(x, y, k);
+#endif
+#if defined __AVX__
+    // TODO: vectorize this
+    for (int i=0; i<nb; ++i) {
+        int sum = 0;
+        for (int l=0; l<QK8_0; ++l) sum += y[i].qs[l];
+        y[i].s = y[i].d * sum;
+    }
 #endif
 }
 
@@ -2372,14 +2380,17 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
     float32x4_t sumv0 = vdupq_n_f32(0.0f);
     float32x4_t sumv1 = vdupq_n_f32(0.0f);
 
+    float sum8 = 0;
+
     for (int i = 0; i < nb; i += 2) {
         const block_q4_0 * restrict x0 = &x[i + 0];
         const block_q4_0 * restrict x1 = &x[i + 1];
         const block_q8_0 * restrict y0 = &y[i + 0];
         const block_q8_0 * restrict y1 = &y[i + 1];
 
+        sum8 += x0->d * y0->s + x1->d * y1->s;
+
         const uint8x16_t m4b   = vdupq_n_u8(0xf);
-        const int8x16_t  s8b   = vdupq_n_s8(0x8);
 
         const uint8x16_t v0_0 = vld1q_u8(x0->qs);
         const uint8x16_t v0_1 = vld1q_u8(x1->qs);
@@ -2389,12 +2400,6 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
         const int8x16_t v0_0h = vreinterpretq_s8_u8(vshrq_n_u8(v0_0, 4));
         const int8x16_t v0_1l = vreinterpretq_s8_u8(vandq_u8  (v0_1, m4b));
         const int8x16_t v0_1h = vreinterpretq_s8_u8(vshrq_n_u8(v0_1, 4));
-
-        // sub 8
-        const int8x16_t v0_0ls = vsubq_s8(v0_0l, s8b);
-        const int8x16_t v0_0hs = vsubq_s8(v0_0h, s8b);
-        const int8x16_t v0_1ls = vsubq_s8(v0_1l, s8b);
-        const int8x16_t v0_1hs = vsubq_s8(v0_1h, s8b);
 
         // load y
         const int8x16_t v1_0l = vld1q_s8(y0->qs);
@@ -2410,21 +2415,21 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
 
 #if defined(__ARM_FEATURE_DOTPROD)
         // dot product into int32x4_t
-        const int32x4_t p_0 = vdotq_s32(vdotq_s32(vdupq_n_s32(0), v0_0ls, v1_0ls), v0_0hs, v1_0hs);
-        const int32x4_t p_1 = vdotq_s32(vdotq_s32(vdupq_n_s32(0), v0_1ls, v1_1ls), v0_1hs, v1_1hs);
+        const int32x4_t p_0 = vdotq_s32(vdotq_s32(vdupq_n_s32(0), v0_0l, v1_0ls), v0_0h, v1_0hs);
+        const int32x4_t p_1 = vdotq_s32(vdotq_s32(vdupq_n_s32(0), v0_1l, v1_1ls), v0_1h, v1_1hs);
 
         sumv0 = vmlaq_n_f32(sumv0, vcvtq_f32_s32(p_0), x0->d*y0->d);
         sumv1 = vmlaq_n_f32(sumv1, vcvtq_f32_s32(p_1), x1->d*y1->d);
 #else
-        const int16x8_t pl0l = vmull_s8(vget_low_s8 (v0_0ls), vget_low_s8 (v1_0ls));
-        const int16x8_t pl0h = vmull_s8(vget_high_s8(v0_0ls), vget_high_s8(v1_0ls));
-        const int16x8_t ph0l = vmull_s8(vget_low_s8 (v0_0hs), vget_low_s8 (v1_0hs));
-        const int16x8_t ph0h = vmull_s8(vget_high_s8(v0_0hs), vget_high_s8(v1_0hs));
+        const int16x8_t pl0l = vmull_s8(vget_low_s8 (v0_0l), vget_low_s8 (v1_0ls));
+        const int16x8_t pl0h = vmull_s8(vget_high_s8(v0_0l), vget_high_s8(v1_0ls));
+        const int16x8_t ph0l = vmull_s8(vget_low_s8 (v0_0h), vget_low_s8 (v1_0hs));
+        const int16x8_t ph0h = vmull_s8(vget_high_s8(v0_0h), vget_high_s8(v1_0hs));
 
-        const int16x8_t pl1l = vmull_s8(vget_low_s8 (v0_1ls), vget_low_s8 (v1_1ls));
-        const int16x8_t pl1h = vmull_s8(vget_high_s8(v0_1ls), vget_high_s8(v1_1ls));
-        const int16x8_t ph1l = vmull_s8(vget_low_s8 (v0_1hs), vget_low_s8 (v1_1hs));
-        const int16x8_t ph1h = vmull_s8(vget_high_s8(v0_1hs), vget_high_s8(v1_1hs));
+        const int16x8_t pl1l = vmull_s8(vget_low_s8 (v0_1l), vget_low_s8 (v1_1ls));
+        const int16x8_t pl1h = vmull_s8(vget_high_s8(v0_1l), vget_high_s8(v1_1ls));
+        const int16x8_t ph1l = vmull_s8(vget_low_s8 (v0_1h), vget_low_s8 (v1_1hs));
+        const int16x8_t ph1h = vmull_s8(vget_high_s8(v0_1h), vget_high_s8(v1_1hs));
 
         const int32x4_t pl0 = vaddq_s32(vpaddlq_s16(pl0l), vpaddlq_s16(pl0h));
         const int32x4_t ph0 = vaddq_s32(vpaddlq_s16(ph0l), vpaddlq_s16(ph0h));
@@ -2436,7 +2441,7 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
 #endif
     }
 
-    sumf = vaddvq_f32(sumv0) + vaddvq_f32(sumv1);
+    sumf = vaddvq_f32(sumv0) + vaddvq_f32(sumv1) - 8 * sum8;
 #elif defined(__AVX2__)
     // Initialize accumulator with zeros
     __m256 acc = _mm256_setzero_ps();
@@ -2569,11 +2574,15 @@ static void ggml_vec_dot_q4_1_q8_0(const int n, float * restrict s, const void *
     float32x4_t sumv0 = vdupq_n_f32(0.0f);
     float32x4_t sumv1 = vdupq_n_f32(0.0f);
 
+    float summs = 0;
+
     for (int i = 0; i < nb; i += 2) {
         const block_q4_1 * restrict x0 = &x[i + 0];
         const block_q4_1 * restrict x1 = &x[i + 1];
         const block_q8_0 * restrict y0 = &y[i + 0];
         const block_q8_0 * restrict y1 = &y[i + 1];
+
+        summs += x0->m * y0->s + x1->m * y1->s;
 
         const uint8x16_t m4b = vdupq_n_u8(0xf);
 
@@ -2597,17 +2606,6 @@ static void ggml_vec_dot_q4_1_q8_0(const int n, float * restrict s, const void *
         const int8x16_t v1_0hs = vuzp2q_s8(v1_0l, v1_0h);
         const int8x16_t v1_1ls = vuzp1q_s8(v1_1l, v1_1h);
         const int8x16_t v1_1hs = vuzp2q_s8(v1_1l, v1_1h);
-
-        const int16x8_t s0i = vaddq_s16(
-                        vaddq_s16(vmovl_s8(vget_low_s8(v1_0ls)), vmovl_s8(vget_high_s8(v1_0ls))),
-                        vaddq_s16(vmovl_s8(vget_low_s8(v1_0hs)), vmovl_s8(vget_high_s8(v1_0hs))));
-
-        const int16x8_t s1i = vaddq_s16(
-                        vaddq_s16(vmovl_s8(vget_low_s8(v1_1ls)), vmovl_s8(vget_high_s8(v1_1ls))),
-                        vaddq_s16(vmovl_s8(vget_low_s8(v1_1hs)), vmovl_s8(vget_high_s8(v1_1hs))));
-
-        sumv0 = vmlaq_n_f32(sumv0, vcvtq_f32_s32(vaddl_s16(vget_low_s16(s0i), vget_high_s16(s0i))), x0->m*y0->d);
-        sumv1 = vmlaq_n_f32(sumv1, vcvtq_f32_s32(vaddl_s16(vget_low_s16(s1i), vget_high_s16(s1i))), x1->m*y1->d);
 
 #if defined(__ARM_FEATURE_DOTPROD)
         // dot product into int32x4_t
@@ -2637,24 +2635,26 @@ static void ggml_vec_dot_q4_1_q8_0(const int n, float * restrict s, const void *
 #endif
     }
 
-    sumf = vaddvq_f32(sumv0) + vaddvq_f32(sumv1);
+    sumf = vaddvq_f32(sumv0) + vaddvq_f32(sumv1) + summs;
 #elif defined(__AVX2__)
     // Initialize accumulator with zeros
     __m256 acc = _mm256_setzero_ps();
+
+    float summs = 0;
 
     // Main loop
     for (int i = 0; i < nb; ++i) {
         const float * d0 = &x[i].d;
         const float * d1 = &y[i].d;
-        const float * m0 = &x[i].m;
+        //const float * m0 = &x[i].m;
+
+        summs += x[i].m * y[i].s;
 
         const __m256 d0v = _mm256_broadcast_ss( d0 );
         const __m256 d1v = _mm256_broadcast_ss( d1 );
-        const __m256 m0v = _mm256_broadcast_ss( m0 );
 
         // Compute combined scales
         const __m256 d0d1 = _mm256_mul_ps( d0v, d1v );
-        const __m256 d1m0 = _mm256_mul_ps( d1v, m0v );
 
         // Load 16 bytes, and unpack 4 bit fields into bytes, making 32 bytes
         const __m256i bx = bytes_from_nibbles_32(x[i].qs);
@@ -2676,15 +2676,6 @@ static void ggml_vec_dot_q4_1_q8_0(const int n, float * restrict s, const void *
 
         // Accumulate d0*d1*x*y
         acc = _mm256_fmadd_ps( d0d1, xy, acc );
-
-        // Compute sum of y values
-        const __m256i y16_l = _mm256_cvtepi8_epi16( _mm256_castsi256_si128( by ) );
-        const __m256i y16_h = _mm256_cvtepi8_epi16( _mm256_extracti128_si256( by, 1 ) );
-        const __m256i ysumi = _mm256_madd_epi16( _mm256_add_epi16(y16_l, y16_h), ones );
-        const __m256 ysum = _mm256_cvtepi32_ps( ysumi );
-
-        // Accumulate d1*m0*y
-        acc = _mm256_fmadd_ps( d1m0, ysum, acc );
     }
 
     // Return horizontal sum of the acc vector
@@ -2693,7 +2684,7 @@ static void ggml_vec_dot_q4_1_q8_0(const int n, float * restrict s, const void *
     res = _mm_add_ps( res, _mm_movehl_ps( res, res ) );
     res = _mm_add_ss( res, _mm_movehdup_ps( res ) );
 
-    sumf = _mm_cvtss_f32( res );
+    sumf = _mm_cvtss_f32( res ) + summs;
 #else
     // scalar
     for (int i = 0; i < nb; i++) {
@@ -3720,7 +3711,7 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
 
         // initialize cuBLAS
         #if defined(GGML_USE_CUBLAS)
-        init_cublas();
+        ggml_init_cublas();
         #endif
 
         is_first_call = false;
@@ -7566,18 +7557,16 @@ static void ggml_compute_forward_mul_mat_f32(
         }
 
 #if defined(GGML_USE_CUBLAS)
-        float *d_X = NULL;
-        float *d_Y = NULL;
-        float *d_D = NULL;
         const float alpha = 1.0f;
         const float beta = 0.0f;
         const int x_ne = ne01 * ne10;
         const int y_ne = ne11 * ne10;
         const int d_ne = ne11 * ne01;
 
-        CUDA_CHECK(cudaMalloc((void **)(&d_X), sizeof(float) * x_ne));
-        CUDA_CHECK(cudaMalloc((void **)(&d_Y), sizeof(float) * y_ne));
-        CUDA_CHECK(cudaMalloc((void **)(&d_D), sizeof(float) * d_ne));
+        size_t x_size, y_size, d_size;
+        float *d_X = ggml_cuda_pool_malloc(sizeof(float) * x_ne, &x_size);
+        float *d_Y = ggml_cuda_pool_malloc(sizeof(float) * y_ne, &y_size);
+        float *d_D = ggml_cuda_pool_malloc(sizeof(float) * d_ne, &d_size);
 #endif
 
         for (int64_t i03 = 0; i03 < ne03; i03++) {
@@ -7589,19 +7578,19 @@ static void ggml_compute_forward_mul_mat_f32(
 
 #if defined(GGML_USE_CUBLAS)
                 // copy data to device
-                CUDA_CHECK(cudaMemcpyAsync(d_X, x, sizeof(float) * x_ne, cudaMemcpyHostToDevice, cudaStream));
-                CUDA_CHECK(cudaMemcpyAsync(d_Y, y, sizeof(float) * y_ne, cudaMemcpyHostToDevice, cudaStream));
+                CUDA_CHECK(cudaMemcpyAsync(d_X, x, sizeof(float) * x_ne, cudaMemcpyHostToDevice, g_cudaStream));
+                CUDA_CHECK(cudaMemcpyAsync(d_Y, y, sizeof(float) * y_ne, cudaMemcpyHostToDevice, g_cudaStream));
 
                 // compute
                 CUBLAS_CHECK(
-                    cublasSgemm(cublasH, CUBLAS_OP_T, CUBLAS_OP_N,
+                    cublasSgemm(g_cublasH, CUBLAS_OP_T, CUBLAS_OP_N,
                             ne01, ne11, ne10,
                             &alpha, d_X, ne00,
                                     d_Y, ne10,
                             &beta,  d_D, ne01));
 
                 // copy data to host
-                CUDA_CHECK(cudaMemcpyAsync(d, d_D, sizeof(float) * d_ne, cudaMemcpyDeviceToHost, cudaStream));
+                CUDA_CHECK(cudaMemcpyAsync(d, d_D, sizeof(float) * d_ne, cudaMemcpyDeviceToHost, g_cudaStream));
 #else
                 // zT = y * xT
                 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
@@ -7613,10 +7602,10 @@ static void ggml_compute_forward_mul_mat_f32(
             }
         }
 #if defined(GGML_USE_CUBLAS)
-        CUDA_CHECK(cudaStreamSynchronize(cudaStream));
-        CUDA_CHECK(cudaFree(d_X));
-        CUDA_CHECK(cudaFree(d_Y));
-        CUDA_CHECK(cudaFree(d_D));
+        CUDA_CHECK(cudaStreamSynchronize(g_cudaStream));
+        ggml_cuda_pool_free(d_X, x_size);
+        ggml_cuda_pool_free(d_Y, y_size);
+        ggml_cuda_pool_free(d_D, d_size);
 #endif
         //printf("CBLAS F32 = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);
 
@@ -7766,18 +7755,16 @@ static void ggml_compute_forward_mul_mat_f16_f32(
 #if defined(GGML_USE_CUBLAS)
         ggml_fp16_t * const wdata = params->wdata;
 
-        float *d_X = NULL;
-        float *d_Y = NULL;
-        float *d_D = NULL;
         const float alpha = 1.0f;
         const float beta = 0.0f;
         const int x_ne = ne01 * ne10;
         const int y_ne = ne11 * ne10;
         const int d_ne = ne11 * ne01;
 
-        CUDA_CHECK(cudaMalloc((void **)(&d_X), sizeof(ggml_fp16_t) * x_ne));
-        CUDA_CHECK(cudaMalloc((void **)(&d_Y), sizeof(float) * y_ne));
-        CUDA_CHECK(cudaMalloc((void **)(&d_D), sizeof(float) * d_ne));
+        size_t x_size, y_size, d_size;
+        float *d_X = ggml_cuda_pool_malloc(sizeof(float) * x_ne, &x_size);
+        float *d_Y = ggml_cuda_pool_malloc(sizeof(float) * y_ne, &y_size);
+        float *d_D = ggml_cuda_pool_malloc(sizeof(float) * d_ne, &d_size);
 #else
         float * const wdata = params->wdata;
 #endif
@@ -7811,12 +7798,12 @@ static void ggml_compute_forward_mul_mat_f16_f32(
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
                 // copy data to device
-                CUDA_CHECK(cudaMemcpyAsync(d_X, x, sizeof(ggml_fp16_t) * x_ne, cudaMemcpyHostToDevice, cudaStream));
-                CUDA_CHECK(cudaMemcpyAsync(d_Y, y, sizeof(ggml_fp16_t) * y_ne, cudaMemcpyHostToDevice, cudaStream));
+                CUDA_CHECK(cudaMemcpyAsync(d_X, x, sizeof(ggml_fp16_t) * x_ne, cudaMemcpyHostToDevice, g_cudaStream));
+                CUDA_CHECK(cudaMemcpyAsync(d_Y, y, sizeof(ggml_fp16_t) * y_ne, cudaMemcpyHostToDevice, g_cudaStream));
 
                 // compute
                 CUBLAS_CHECK(
-                    cublasGemmEx(cublasH, CUBLAS_OP_T, CUBLAS_OP_N,
+                    cublasGemmEx(g_cublasH, CUBLAS_OP_T, CUBLAS_OP_N,
                             ne01, ne11, ne10,
                             &alpha, d_X, CUDA_R_16F, ne00,
                                     d_Y, CUDA_R_16F, ne10,
@@ -7825,7 +7812,7 @@ static void ggml_compute_forward_mul_mat_f16_f32(
                             CUBLAS_GEMM_DEFAULT));
 
                 // copy data to host
-                CUDA_CHECK(cudaMemcpyAsync(d, d_D, sizeof(float) * d_ne, cudaMemcpyDeviceToHost, cudaStream));
+                CUDA_CHECK(cudaMemcpyAsync(d, d_D, sizeof(float) * d_ne, cudaMemcpyDeviceToHost, g_cudaStream));
 #else
                 const float * x = wdata;
                 const float * y = (float *) ((char *) src1->data + i02*nb12 + i03*nb13);
@@ -7843,10 +7830,10 @@ static void ggml_compute_forward_mul_mat_f16_f32(
         }
 
 #if defined(GGML_USE_CUBLAS)
-        CUDA_CHECK(cudaStreamSynchronize(cudaStream));
-        CUDA_CHECK(cudaFree(d_X));
-        CUDA_CHECK(cudaFree(d_Y));
-        CUDA_CHECK(cudaFree(d_D));
+        CUDA_CHECK(cudaStreamSynchronize(g_cudaStream));
+        ggml_cuda_pool_free(d_X, x_size);
+        ggml_cuda_pool_free(d_Y, y_size);
+        ggml_cuda_pool_free(d_D, d_size);
 #endif
         /*printf("CBLAS F16 = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);*/
 
@@ -8014,20 +8001,17 @@ static void ggml_compute_forward_mul_mat_q_f32(
         }
 
 #if defined(GGML_USE_CUBLAS)
-        float *d_X = NULL;
-        float *d_Y = NULL;
-        float *d_D = NULL;
-        float *d_Q = NULL;
         const float alpha = 1.0f;
         const float beta = 0.0f;
         const int x_ne = ne01 * ne10;
         const int y_ne = ne11 * ne10;
         const int d_ne = ne11 * ne01;
 
-        CUDA_CHECK(cudaMalloc((void **)(&d_X), sizeof(float) * x_ne));
-        CUDA_CHECK(cudaMalloc((void **)(&d_Y), sizeof(float) * y_ne));
-        CUDA_CHECK(cudaMalloc((void **)(&d_D), sizeof(float) * d_ne));
-        CUDA_CHECK(cudaMalloc((void **)(&d_Q), GGML_TYPE_SIZE[type] * x_ne / GGML_BLCK_SIZE[type]));
+        size_t x_size, y_size, d_size, q_size;
+        float *d_X = ggml_cuda_pool_malloc(sizeof(float) * x_ne, &x_size);
+        float *d_Y = ggml_cuda_pool_malloc(sizeof(float) * y_ne, &y_size);
+        float *d_D = ggml_cuda_pool_malloc(sizeof(float) * d_ne, &d_size);
+        float *d_Q = ggml_cuda_pool_malloc(GGML_TYPE_SIZE[type] * x_ne / GGML_BLCK_SIZE[type], &q_size);
 
         void (*dequantize_row_q_cuda)(const void * x, float * y, int k, cudaStream_t stream)  = NULL;
         if (type == GGML_TYPE_Q4_0) {
@@ -8057,9 +8041,9 @@ static void ggml_compute_forward_mul_mat_q_f32(
                 // copy and dequantize on device
                 CUDA_CHECK(
                     cudaMemcpyAsync(d_Q, (char *) src0->data + i03*nb03 + i02*nb02,
-                        GGML_TYPE_SIZE[type] * x_ne / GGML_BLCK_SIZE[type], cudaMemcpyHostToDevice, cudaStream));
+                        GGML_TYPE_SIZE[type] * x_ne / GGML_BLCK_SIZE[type], cudaMemcpyHostToDevice, g_cudaStream));
 
-                dequantize_row_q_cuda(d_Q, d_X, ne01 * ne00, cudaStream);
+                dequantize_row_q_cuda(d_Q, d_X, ne01 * ne00, g_cudaStream);
                 CUDA_CHECK(cudaGetLastError());
 #else
                 {
@@ -8075,18 +8059,18 @@ static void ggml_compute_forward_mul_mat_q_f32(
 
 #if defined(GGML_USE_CUBLAS)
                 // copy data to device
-                CUDA_CHECK(cudaMemcpyAsync(d_Y, y, sizeof(float) * y_ne, cudaMemcpyHostToDevice, cudaStream));
+                CUDA_CHECK(cudaMemcpyAsync(d_Y, y, sizeof(float) * y_ne, cudaMemcpyHostToDevice, g_cudaStream));
 
                 // compute
                 CUBLAS_CHECK(
-                    cublasSgemm(cublasH, CUBLAS_OP_T, CUBLAS_OP_N,
+                    cublasSgemm(g_cublasH, CUBLAS_OP_T, CUBLAS_OP_N,
                             ne01, ne11, ne10,
                             &alpha, d_X, ne00,
                                     d_Y, ne10,
                             &beta,  d_D, ne01));
 
                 // copy data to host
-                CUDA_CHECK(cudaMemcpyAsync(d, d_D, sizeof(float) * d_ne, cudaMemcpyDeviceToHost, cudaStream));
+                CUDA_CHECK(cudaMemcpyAsync(d, d_D, sizeof(float) * d_ne, cudaMemcpyDeviceToHost, g_cudaStream));
 #else
                 // zT = y * xT
                 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
@@ -8099,11 +8083,11 @@ static void ggml_compute_forward_mul_mat_q_f32(
         }
 
 #if defined(GGML_USE_CUBLAS)
-        CUDA_CHECK(cudaStreamSynchronize(cudaStream));
-        CUDA_CHECK(cudaFree(d_X));
-        CUDA_CHECK(cudaFree(d_Y));
-        CUDA_CHECK(cudaFree(d_D));
-        CUDA_CHECK(cudaFree(d_Q));
+        CUDA_CHECK(cudaStreamSynchronize(g_cudaStream));
+        ggml_cuda_pool_free(d_X, x_size);
+        ggml_cuda_pool_free(d_Y, y_size);
+        ggml_cuda_pool_free(d_D, d_size);
+        ggml_cuda_pool_free(d_Q, q_size);
 #endif
         //printf("CBLAS = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);
 

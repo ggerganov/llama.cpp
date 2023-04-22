@@ -101,11 +101,13 @@ ifdef LLAMA_OPENBLAS
 	LDFLAGS += -lopenblas
 endif
 ifdef LLAMA_CUBLAS
-	CFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include
-	LDFLAGS += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64
-	OBJS	+= ggml-cuda.o
+	CFLAGS    += -DGGML_USE_CUBLAS -I/usr/local/cuda/include
+	LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64
+	OBJS      += ggml-cuda.o
+	NVCC      = nvcc
+	NVCCFLAGS = --forward-unknown-to-host-linker -arch=native
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
-	nvcc -arch=native -c -o $@ $<
+	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -c $< -o $@
 endif
 ifdef LLAMA_GPROF
 	CFLAGS   += -pg

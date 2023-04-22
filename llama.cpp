@@ -1618,8 +1618,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         // quantize only 2D tensors
         quantize &= (tensor.ne.size() == 2);
 
-        // GG: uncomment this to keep the output layer in FP16
-        //if (tensor.name.rfind("output")) {
+        // uncomment this to keep the output layer in FP16
+        //if (tensor.name == "output.weight") {
         //    quantize = false;
         //}
 
@@ -2092,7 +2092,11 @@ void llama_set_kv_cache(
                          int   n_token_count) {
     // Make sure we have the same kv cache setup
     LLAMA_ASSERT(ctx->model.kv_self.buf.size == n_size);
+    void * k_data = ctx->model.kv_self.k->data; // remember data pointers
+    void * v_data = ctx->model.kv_self.v->data; // because their value is stored in buf and overwritten by memcpy
     memcpy(ctx->model.kv_self.buf.addr, kv_cache, n_size);
+    ctx->model.kv_self.k->data = k_data; // restore correct data pointers
+    ctx->model.kv_self.v->data = v_data;
     ctx->model.kv_self.n = n_token_count;
 }
 
