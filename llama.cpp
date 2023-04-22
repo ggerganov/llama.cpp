@@ -1479,8 +1479,11 @@ static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, co
 // sampling
 //
 
-void llama_sample_softmax(llama_token_data_array * candidates) {
+void llama_sample_softmax(struct llama_context * ctx, llama_token_data_array * candidates) {
     assert(candidates->size > 0);
+
+    const int64_t t_start_sample_us = ggml_time_us();
+
     std::span<llama_token_data> tokens(candidates->data, candidates->size);
 
     // Sort the logits in descending order
@@ -1502,35 +1505,47 @@ void llama_sample_softmax(llama_token_data_array * candidates) {
     for (size_t i = 0; i < tokens.size(); ++i) {
         tokens[i].p /= cum_sum;
     }
+
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    }
 }
 
-void llama_sample_top_k(llama_token_data_array * candidates_p, int k) {
-    assert(k > 0);
+void llama_sample_top_k(struct llama_context * ctx, llama_token_data_array * candidates_p, int k, size_t min_keep) {
+    const int64_t t_start_sample_us = ggml_time_us();
+
+    k = std::max(k, (int) min_keep);
+    k = std::min(k, (int) candidates_p->size);
+
     std::span<llama_token_data> candidates(candidates_p->data, candidates_p->size);
 
     // Sort scores in descending order
     if (!candidates_p->sorted) {
-        if (k >= candidates_p->size) {
-            std::sort(candidates.begin(), candidates.end(), [](const llama_token_data & a, const llama_token_data & b) {
-                return a.logit > b.logit;
-            });
+        auto comp = [](const llama_token_data & a, const llama_token_data & b) {
+            return a.logit > b.logit;
+        };
+        if (k == (int) candidates_p->size) {
+            std::sort(candidates.begin(), candidates.end(), comp);
         } else {
-            std::partial_sort(candidates.begin(), candidates.begin() + k, candidates.end(),
-                    [](const llama_token_data & a, const llama_token_data & b) {
-                        return a.logit > b.logit;
-                    });
+            std::partial_sort(candidates.begin(), candidates.begin() + k, candidates.end(), comp);
         }
         candidates_p->sorted = true;
     }
-    candidates_p->size = std::min(k, (int) candidates.size());
+    candidates_p->size = k;
+
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    }
 }
 
-void llama_sample_top_p(llama_token_data_array * candidates_p, float p, size_t min_keep) {
+void llama_sample_top_p(struct llama_context * ctx, llama_token_data_array * candidates_p, float p, size_t min_keep) {
     if (p >= 1.0f) {
         return;
     }
 
-    llama_sample_softmax(candidates_p);
+    const int64_t t_start_sample_us = ggml_time_us();
+
+    llama_sample_softmax(ctx, candidates_p);
 
     // Compute the cumulative probabilities
     float cum_sum = 0.0f;
@@ -1548,15 +1563,21 @@ void llama_sample_top_p(llama_token_data_array * candidates_p, float p, size_t m
 
     // Resize the output vector to keep only the top-p tokens
     candidates_p->size = last_idx;
+
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    }
 }
 
 // https://www.trentonbricken.com/Tail-Free-Sampling/
-void llama_sample_tail_free(llama_token_data_array * candidates_p, float z, size_t min_keep) {
+void llama_sample_tail_free(struct llama_context * ctx, llama_token_data_array * candidates_p, float z, size_t min_keep) {
     if (z >= 1.0f || candidates_p->size <= 2) {
         return;
     }
 
-    llama_sample_softmax(candidates_p);
+    const int64_t t_start_sample_us = ggml_time_us();
+
+    llama_sample_softmax(nullptr, candidates_p);
 
     // Compute the first and second derivatives
     std::vector<float> first_derivatives(candidates_p->size - 1);
@@ -1594,18 +1615,23 @@ void llama_sample_tail_free(llama_token_data_array * candidates_p, float z, size
 
     // Resize the output vector to keep only the tokens above the tail location
     candidates_p->size = last_idx;
-}
 
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    }
+}
 
 // https://arxiv.org/pdf/2202.00666.pdf
 // https://github.com/huggingface/transformers/compare/main...cimeister:typical-sampling:typical-pr
-void llama_sample_typical(llama_token_data_array * candidates_p, float typical_p, size_t min_keep) {
+void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * candidates_p, float typical_p, size_t min_keep) {
     if (typical_p >= 1.0f) {
         return;
     }
 
+    const int64_t t_start_sample_us = ggml_time_us();
+
     // Compute the softmax of logits and calculate entropy
-    llama_sample_softmax(candidates_p);
+    llama_sample_softmax(nullptr, candidates_p);
 
     std::span<llama_token_data> candidates(candidates_p->data, candidates_p->size);
 
@@ -1654,20 +1680,31 @@ void llama_sample_typical(llama_token_data_array * candidates_p, float typical_p
     // Replace the data in candidates_p with the new_candidates data
     std::copy(new_candidates.begin(), new_candidates.end(), candidates_p->data);
     candidates_p->size = new_candidates.size();
+
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    }
 }
 
+void llama_sample_temperature(struct llama_context * ctx, llama_token_data_array * candidates_p, float temp) {
+    const int64_t t_start_sample_us = ggml_time_us();
 
-void llama_sample_temperature(llama_token_data_array * candidates_p, float temp) {
     std::span<llama_token_data> candidates(candidates_p->data, candidates_p->size);
     for (auto & candidate : candidates) {
         candidate.logit /= temp;
     }
+
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    }
 }
 
-void llama_sample_repetition_penalty(llama_token_data_array * candidates_p, llama_token * last_tokens_p, size_t last_tokens_size, float penalty) {
+void llama_sample_repetition_penalty(struct llama_context * ctx, llama_token_data_array * candidates_p, llama_token * last_tokens_p, size_t last_tokens_size, float penalty) {
     if (last_tokens_size == 0 || penalty == 1.0f) {
         return;
     }
+
+    const int64_t t_start_sample_us = ggml_time_us();
 
     // CTRL paper: https://arxiv.org/pdf/1909.05858.pdf
     std::span<llama_token_data> candidates(candidates_p->data, candidates_p->size);
@@ -1695,12 +1732,18 @@ void llama_sample_repetition_penalty(llama_token_data_array * candidates_p, llam
     }
 
     candidates_p->sorted = false;
+
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    }
 }
 
-void llama_sample_frequency_and_presence_penalties(llama_token_data_array * candidates_p, llama_token * last_tokens_p, size_t last_tokens_size, float alpha_frequency, float alpha_presence) {
+void llama_sample_frequency_and_presence_penalties(struct llama_context * ctx, llama_token_data_array * candidates_p, llama_token * last_tokens_p, size_t last_tokens_size, float alpha_frequency, float alpha_presence) {
     if (last_tokens_size == 0 || (alpha_frequency == 0.0f && alpha_presence == 0.0f)) {
         return;
     }
+
+    const int64_t t_start_sample_us = ggml_time_us();
 
     std::span<llama_token_data> candidates(candidates_p->data, candidates_p->size);
     std::span<llama_token> last_tokens(last_tokens_p, last_tokens_size);
@@ -1723,6 +1766,10 @@ void llama_sample_frequency_and_presence_penalties(llama_token_data_array * cand
     }
 
     candidates_p->sorted = false;
+
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    }
 }
 
 /// @brief Mirostat 1.0 implementation.
@@ -1733,20 +1780,26 @@ void llama_sample_frequency_and_presence_penalties(llama_token_data_array * cand
 /// @param N The size of the vocabulary. This is used in the calculation of the `k` value.
 /// @param k A reference to the integer variable used to store the calculated top-k value. The top-k value determines how many of the most probable tokens are considered for sampling.
 /// @param mu A reference to the floating-point variable that represents the maximum cross-entropy value. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
-llama_token llama_sample_mirostat(struct llama_context * ctx, llama_token_data_array * candidates_p, float tau, float eta, int m, float N, int * k, float * mu) {
+llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_data_array * candidates_p, float tau, float eta, int m, float N, int * k, float * mu) {
+    assert(ctx);
+
+    int64_t t_start_sample_us;
+    t_start_sample_us = ggml_time_us();
+
     // https://arxiv.org/abs/2007.14966
+    // Algorithm 1
     std::span<llama_token_data> candidates(candidates_p->data, candidates_p->size);
 
     // printf("llama_sample_mirostat: candidates.size() = %d, m = %d, N = %f, tau = %f, eta = %f, *k = %d, *mu = %f\n", candidates.size(), m, N, tau, eta, *k, *mu);
 
-    llama_sample_softmax(candidates_p);
+    llama_sample_softmax(nullptr, candidates_p);
 
     // Estimate s_hat using the most probable m tokens
     float s_hat = 0.0;
     float sum_ti_bi = 0.0;
     float sum_ti_sq = 0.0;
-    for (int i = 0; i < m - 1 && i < candidates.size() - 1; ++i) {
-        float t_i = logf((i + 2) / float(i + 1));
+    for (size_t i = 0; i < size_t(m - 1) && i < candidates.size() - 1; ++i) {
+        float t_i = logf(float(i + 2) / float(i + 1));
         float b_i = logf(candidates[i].p / candidates[i + 1].p);
         sum_ti_bi += t_i * b_i;
         sum_ti_sq += t_i * t_i;
@@ -1757,15 +1810,20 @@ llama_token llama_sample_mirostat(struct llama_context * ctx, llama_token_data_a
     float epsilon_hat = s_hat - 1;
     // printf("llama_sample_mirostat: s_hat = %f, epsilon_hat = %f, *mu = %f, N = %f\n", s_hat, epsilon_hat, *mu, N);
     float new_k = powf((epsilon_hat * powf(2, *mu)) / (1 - powf(N, -epsilon_hat)), 1 / s_hat);
-    *k = std::min(new_k, float(candidates.size()));
+    // printf("llama_sample_mirostat: new_k = %f\n", new_k);
+    *k = int(std::min(new_k, float(candidates.size())));
 
     // Sample the next word X using top-k sampling
     // printf("llama_sample_mirostat *k = %d\n", *k);
-    llama_sample_top_k(candidates_p, *k);
+    llama_sample_top_k(nullptr, candidates_p, *k);
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    }
     llama_token X = llama_sample_token(ctx, candidates_p);
+    t_start_sample_us = ggml_time_us();
 
     // Compute error as the difference between observed surprise and target surprise value
-    int X_idx = std::distance(candidates.begin(), std::find_if(candidates.begin(), candidates.end(), [&](const llama_token_data & candidate) {
+    size_t X_idx = std::distance(candidates.begin(), std::find_if(candidates.begin(), candidates.end(), [&](const llama_token_data & candidate) {
         return candidate.id == X;
     }));
     float observed_surprise = -log2f(candidates[X_idx].p);
@@ -1774,13 +1832,23 @@ llama_token llama_sample_mirostat(struct llama_context * ctx, llama_token_data_a
     // Update mu using the learning rate and error
     *mu = *mu - eta * e;
 
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+        ctx->n_sample++;
+    }
     return X;
 }
 
-llama_token llama_sample_mirostat_v2(struct llama_context * ctx, llama_token_data_array * candidates_p, float tau, float eta, float * mu) {
+llama_token llama_sample_token_mirostat_v2(struct llama_context * ctx, llama_token_data_array * candidates_p, float tau, float eta, float * mu) {
+    assert(ctx);
+    int64_t t_start_sample_us;
+    t_start_sample_us = ggml_time_us();
+
+    // https://arxiv.org/abs/2007.14966
+    // Algorithm 2
     std::span<llama_token_data> candidates(candidates_p->data, candidates_p->size);
 
-    llama_sample_softmax(candidates_p);
+    llama_sample_softmax(ctx, candidates_p);
 
     // Truncate the words with surprise values greater than mu
     candidates_p->size = std::distance(candidates.begin(), std::find_if(candidates.begin(), candidates.end(), [&](const llama_token_data & candidate) {
@@ -1788,13 +1856,17 @@ llama_token llama_sample_mirostat_v2(struct llama_context * ctx, llama_token_dat
     }));
 
     // Normalize the probabilities of the remaining words
-    llama_sample_softmax(candidates_p);
+    llama_sample_softmax(ctx, candidates_p);
 
     // Sample the next word X from the remaining words
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    }
     llama_token X = llama_sample_token(ctx, candidates_p);
+    t_start_sample_us = ggml_time_us();
 
     // Compute error as the difference between observed surprise and target surprise value
-    int X_idx = std::distance(candidates.begin(), std::find_if(candidates.begin(), candidates.end(), [&](const llama_token_data & candidate) {
+    size_t X_idx = std::distance(candidates.begin(), std::find_if(candidates.begin(), candidates.end(), [&](const llama_token_data & candidate) {
         return candidate.id == X;
     }));
     float observed_surprise = -log2f(candidates[X_idx].p);
@@ -1803,11 +1875,15 @@ llama_token llama_sample_mirostat_v2(struct llama_context * ctx, llama_token_dat
     // Update mu using the learning rate and error
     *mu = *mu - eta * e;
 
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    }
     return X;
 }
 
-
 llama_token llama_sample_token_greedy(struct llama_context * ctx, llama_token_data_array * candidates_p) {
+    const int64_t t_start_sample_us = ggml_time_us();
+
     // Find max element
     std::span<llama_token_data> candidates(candidates_p->data, candidates_p->size);
     auto max_iter = std::max_element(candidates.begin(), candidates.end(), [](const llama_token_data & a, const llama_token_data & b) {
@@ -1815,14 +1891,17 @@ llama_token llama_sample_token_greedy(struct llama_context * ctx, llama_token_da
     });
 
     llama_token result = max_iter->id;
-    ctx->n_sample++;
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+        ctx->n_sample++;
+    }
     return result;
 }
 
-
 llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_array * candidates_p) {
-    // const int64_t t_start_sample_us = ggml_time_us();
-    llama_sample_softmax(candidates_p);
+    assert(ctx);
+    const int64_t t_start_sample_us = ggml_time_us();
+    llama_sample_softmax(nullptr, candidates_p);
 
     std::span<llama_token_data> candidates(candidates_p->data, candidates_p->size);
 
@@ -1838,9 +1917,8 @@ llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_arra
 
     llama_token result = candidates[idx].id;
 
-    // ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
     ctx->n_sample++;
-
     return result;
 }
 

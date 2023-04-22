@@ -276,8 +276,8 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "Input prefix: '%s'\n", params.input_prefix.c_str());
         }
     }
-    fprintf(stderr, "sampling: repeat_last_n = %d, repeat_penalty = %f, alpha_presence = %f, alpha_frequency = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f\n",
-        params.repeat_last_n, params.repeat_penalty, params.alpha_presence, params.alpha_frequency, params.top_k, params.tfs_z, params.top_p, params.typical_p, params.temp);
+    fprintf(stderr, "sampling: repeat_last_n = %d, repeat_penalty = %f, alpha_presence = %f, alpha_frequency = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f, mirostat = %d, mirostat_eta = %f, mirostat_tau = %f\n",
+        params.repeat_last_n, params.repeat_penalty, params.alpha_presence, params.alpha_frequency, params.top_k, params.tfs_z, params.top_p, params.typical_p, params.temp, params.mirostat, params.mirostat_eta, params.mirostat_tau);
     fprintf(stderr, "generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
     fprintf(stderr, "\n\n");
 
@@ -396,6 +396,9 @@ int main(int argc, char ** argv) {
             const float   repeat_penalty = params.repeat_penalty;
             const float   alpha_presence = params.alpha_presence;
             const float   alpha_frequency = params.alpha_frequency;
+            const int     mirostat   = params.mirostat;
+            const float   mirostat_tau   = params.mirostat_tau;
+            const float   mirostat_eta   = params.mirostat_eta;
 
             // optionally save the session on first sample (for faster prompt loading next time)
             if (!path_session.empty() && need_to_save_session) {
@@ -415,47 +418,45 @@ int main(int argc, char ** argv) {
 
                 std::vector<llama_token_data> candidates;
                 candidates.reserve(n_vocab);
-                for (size_t i = 0; i < n_vocab; i++) {
+                for (size_t i = 0; i < (size_t) n_vocab; i++) {
                     candidates.emplace_back(i, logits[i], 0.0f);
                 }
 
-                llama_token_data_array candidates_p = { candidates.data(), candidates.size() };
+                llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
 
                 // Apply penalties
                 auto last_n_repeat = std::min(std::min((int)last_n_tokens.size(), repeat_last_n), n_ctx);
-                llama_sample_repetition_penalty(&candidates_p,
+                llama_sample_repetition_penalty(ctx, &candidates_p,
                     last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
                     last_n_repeat, repeat_penalty);
-                llama_sample_frequency_and_presence_penalties(&candidates_p,
+                llama_sample_frequency_and_presence_penalties(ctx, &candidates_p,
                     last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
                     last_n_repeat, alpha_frequency, alpha_presence);
 
 
-#if 1
                 if (temp <= 0) {
                     // Greedy sampling
                     id = llama_sample_token_greedy(ctx, &candidates_p);
                 } else {
-                    // Temperature sampling
-                    llama_sample_top_k(&candidates_p, top_k);
-                    llama_sample_tail_free(&candidates_p, tfs_z);
-                    llama_sample_typical(&candidates_p, typical_p);
-                    llama_sample_top_p(&candidates_p, top_p);
-
-                    llama_sample_temperature(&candidates_p, temp);
-                    // printf("`%d`", candidates_p.size);
-                    id = llama_sample_token(ctx, &candidates_p);
+                    if (mirostat == 1) {
+                        static float mirostat_mu = 2.0f * mirostat_tau;
+                        static int mirostat_k = 40;
+                        const int mirostat_m = 100;
+                        id = llama_sample_token_mirostat(ctx, &candidates_p, mirostat_tau, mirostat_eta, mirostat_m, float(n_vocab), &mirostat_k, &mirostat_mu);
+                    } else if (mirostat == 2) {
+                        static float mirostat_mu = 2.0f * mirostat_tau;
+                        id = llama_sample_token_mirostat_v2(ctx, &candidates_p, mirostat_tau, mirostat_eta, &mirostat_mu);
+                    } else {
+                        // Temperature sampling
+                        llama_sample_top_k(ctx, &candidates_p, top_k);
+                        llama_sample_tail_free(ctx, &candidates_p, tfs_z);
+                        llama_sample_typical(ctx, &candidates_p, typical_p);
+                        llama_sample_top_p(ctx, &candidates_p, top_p);
+                        llama_sample_temperature(ctx, &candidates_p, temp);
+                        id = llama_sample_token(ctx, &candidates_p);
+                    }
                 }
-#else
-                const float tau = 5.0f;
-                static float mu = 2.0f * tau;
-                static int k = 40;
-                const float eta = 0.1f;
-                const int m = 100;
-                const float N = n_vocab;
-                id = llama_sample_mirostat(ctx, &candidates_p, tau, eta, m, N, &k, &mu);
-                // id = llama_sample_mirostat_v2(ctx, &candidates_p, tau, eta, &mu);
-#endif
+                // printf("`%d`", candidates_p.size);
 
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(id);

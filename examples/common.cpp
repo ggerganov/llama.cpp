@@ -150,6 +150,24 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.alpha_presence = std::stof(argv[i]);
+        } else if (arg == "--mirostat") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.mirostat = std::stoi(argv[i]);
+        } else if (arg == "--mirostat_eta") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.mirostat_eta = std::stof(argv[i]);
+        } else if (arg == "--mirostat_tau") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.mirostat_tau = std::stof(argv[i]);
         } else if (arg == "-b" || arg == "--batch_size") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -264,14 +282,17 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -f FNAME, --file FNAME\n");
     fprintf(stderr, "                        prompt file to start generation.\n");
     fprintf(stderr, "  -n N, --n_predict N   number of tokens to predict (default: %d, -1 = infinity)\n", params.n_predict);
-    fprintf(stderr, "  --top_k N             top-k sampling (default: %d)\n", params.top_k);
-    fprintf(stderr, "  --top_p N             top-p sampling (default: %.1f)\n", (double)params.top_p);
-    fprintf(stderr, "  --tfs N               tail free sampling (default: %.1f)\n", (double)params.tfs_z);
-    fprintf(stderr, "  --typical N           locally typical sampling (default: %.1f)\n", (double)params.typical_p);
-    fprintf(stderr, "  --alpha_presence N    repeat alpha presence (default: %d)\n", params.alpha_presence);
-    fprintf(stderr, "  --alpha_frequency N   repeat alpha frequency (default: %.1f)\n", (double)params.alpha_frequency);
-    fprintf(stderr, "  --repeat_last_n N     last n tokens to consider for penalize (default: %d)\n", params.repeat_last_n);
-    fprintf(stderr, "  --repeat_penalty N    penalize repeat sequence of tokens (default: %.1f)\n", (double)params.repeat_penalty);
+    fprintf(stderr, "  --top_k N             top-k sampling (default: %d, disabled: 0)\n", params.top_k);
+    fprintf(stderr, "  --top_p N             top-p sampling (default: %.1f, disabled: 1.0)\n", (double)params.top_p);
+    fprintf(stderr, "  --tfs N               tail free sampling, parameter z (default: %.1f, disabled: 1.0)\n", (double)params.tfs_z);
+    fprintf(stderr, "  --typical N           locally typical sampling, parameter p (default: %.1f, disabled: 1.0)\n", (double)params.typical_p);
+    fprintf(stderr, "  --repeat_last_n N     last n tokens to consider for penalize (default: %d, disabled: 0)\n", params.repeat_last_n);
+    fprintf(stderr, "  --repeat_penalty N    penalize repeat sequence of tokens (default: %.1f, disabled: 1.0)\n", (double)params.repeat_penalty);
+    fprintf(stderr, "  --alpha_presence N    repeat alpha presence (default: %.1f, disabled: 0.0)\n", (double)params.alpha_presence);
+    fprintf(stderr, "  --alpha_frequency N   repeat alpha frequency (default: %.1f, disabled: 0.0)\n", (double)params.alpha_frequency);
+    fprintf(stderr, "  --mirostat N          use mirostat sampling (default: %d, disabled: 0, mirostat: 1, mirostat 2.0: 2)\n", params.mirostat);
+    fprintf(stderr, "  --mirostat_eta N      mirostat learning rate (default: %.1f)\n", (double)params.mirostat_eta);
+    fprintf(stderr, "  --mirostat_tau N      mirostat target entropy (default: %.1f)\n", (double)params.mirostat_tau);
     fprintf(stderr, "  -c N, --ctx_size N    size of the prompt context (default: %d)\n", params.n_ctx);
     fprintf(stderr, "  --ignore-eos          ignore end of stream token and continue generating\n");
     fprintf(stderr, "  --memory_f32          use f32 instead of f16 for memory key+value\n");
