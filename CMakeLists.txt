@@ -170,16 +170,24 @@ if (LLAMA_CUBLAS)
 endif()
 
 if (LLAMA_HIPBLAS)
+    list(APPEND CMAKE_PREFIX_PATH /opt/rocm)
+
+    if (NOT ${CMAKE_C_COMPILER_ID} MATCHES "Clang")
+        message(WARNING "Only LLVM is supported for HIP, hint: CC=/opt/rocm/llvm/bin/clang")
+    endif()
+    if (NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
+        message(WARNING "Only LLVM is supported for HIP, hint: CXX=/opt/rocm/llvm/bin/clang++")
+    endif()
+
     find_package(hip)
     find_package(hipblas)
 
     if (${hipblas_FOUND} AND ${hip_FOUND})
         message(STATUS "hipBLAS found")
         add_compile_definitions(GGML_USE_HIPBLAS)
-        enable_language(HIP)
         add_library(ggml-hip OBJECT ggml-cuda.cu ggml-cuda.h)
-        set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE HIP)
-        target_link_libraries(ggml-hip PRIVATE hip::device)
+        set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE CXX)
+        target_link_libraries(ggml-hip PUBLIC hip::device)
 
         if (LLAMA_STATIC)
             message(FATAL_ERROR "Static linking not supported for HIP/ROCm")
@@ -188,6 +196,7 @@ if (LLAMA_HIPBLAS)
     else()
         message(WARNING "hipBLAS or HIP not found. Try setting CMAKE_PREFIX_PATH=/opt/rocm")
     endif()
+
 endif()
 
 if (LLAMA_ALL_WARNINGS)
