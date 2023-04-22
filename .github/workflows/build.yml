@@ -12,7 +12,7 @@ on:
       - master
     paths: ['.github/workflows/**', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.c', '**/*.cpp']
   pull_request:
-    types: [opened, synchronize, edited, reopened, review_requested, ready_for_review]
+    types: [opened, synchronize, reopened]
     paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.c', '**/*.cpp']
 
 env:
@@ -20,8 +20,6 @@ env:
 
 jobs:
   ubuntu-latest-make:
-    if: github.event.pull_request.draft == false
-
     runs-on: ubuntu-latest
 
     steps:
@@ -41,8 +39,6 @@ jobs:
           make
 
   ubuntu-latest-cmake:
-    if: github.event.pull_request.draft == false
-
     runs-on: ubuntu-latest
 
     steps:
@@ -71,8 +67,6 @@ jobs:
           ctest --verbose
 
   ubuntu-latest-cmake-sanitizer:
-    if: github.event.pull_request.draft == false
-
     runs-on: ubuntu-latest
 
     continue-on-error: true
@@ -108,8 +102,6 @@ jobs:
           ctest --verbose
 
   macOS-latest-make:
-    if: github.event.pull_request.draft == false
-
     runs-on: macos-latest
 
     steps:
@@ -128,8 +120,6 @@ jobs:
           make
 
   macOS-latest-cmake:
-    if: github.event.pull_request.draft == false
-
     runs-on: macOS-latest
 
     steps:
@@ -157,8 +147,6 @@ jobs:
           ctest --verbose
 
   windows-latest-cmake:
-    if: github.event.pull_request.draft == false
-
     runs-on: windows-latest
 
     strategy:
