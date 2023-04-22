@@ -365,10 +365,11 @@ bool stablelm_eval(
     const int n_rot   = hparams.n_rot;
 
     static size_t buf_size = 256u*1024*1024;
+    const size_t extra_buf = 64u*1024*1024;
     static void * buf = malloc(buf_size);
 
-    if (mem_per_token > 0 && mem_per_token*N*1.2 > buf_size) {
-        const size_t buf_size_new = 1.4*(mem_per_token*N); // add 10% to account for ggml object overhead
+    if (mem_per_token > 0 && mem_per_token*N*1.5 > buf_size) {
+        const size_t buf_size_new = extra_buf + 1.6*(mem_per_token*N); // add 10% to account for ggml object overhead
         //printf("\n%s: reallocating buffer from %zu to %zu bytes\n", __func__, buf_size, buf_size_new);
 
         // reallocate
