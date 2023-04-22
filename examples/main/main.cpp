@@ -43,6 +43,13 @@ void sigint_handler(int signo) {
 #endif
 
 int main(int argc, char ** argv) {
+#if defined (__OpenBSD__)
+    if (pledge("stdio rpath", "") == -1) {
+        fprintf(stderr, "%s: error: pledge failed\n", __func__);
+        return 1;
+    }
+#endif
+
     gpt_params params;
     params.model = "models/llama-7B/ggml-model.bin";
 
