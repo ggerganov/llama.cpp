@@ -225,7 +225,7 @@ int main(int argc, char * argv[]) {
             continue;
         }
 
-        if (qfns.quantize_row_q) {
+        if (qfns.quantize_row_q && qfns.dequantize_row_q) {
             printf("%s\n", ggml_type_name(type));
 
             if (params.op_quantize_row_q_reference) {

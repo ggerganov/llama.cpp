@@ -2256,7 +2256,6 @@ std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_te
 
 // Returns the size of the state
 size_t llama_get_state_size(struct llama_context * ctx) {
-    const size_t s_bool = sizeof(int32_t);
     // we don't know size of rng until we actually serialize it. so reserve more than enough memory for its serialized state.
     // for reference, std::mt19937(1337) serializes to 6701 bytes.
     const size_t s_rng_size = sizeof(size_t);
