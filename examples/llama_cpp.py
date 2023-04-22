@@ -189,7 +189,10 @@ _lib.llama_model_quantize.restype = c_int
 # will be applied on top of the previous one
 # Returns 0 on success
 def llama_apply_lora_from_file(
-    ctx: llama_context_p, path_lora: ctypes.c_char_p, path_base_model: ctypes.c_char_p, n_threads: c_int
+    ctx: llama_context_p,
+    path_lora: ctypes.c_char_p,
+    path_base_model: ctypes.c_char_p,
+    n_threads: c_int,
 ) -> c_int:
     return _lib.llama_apply_lora_from_file(ctx, path_lora, path_base_model, n_threads)
 
@@ -235,6 +238,36 @@ def llama_set_kv_cache(
 
 _lib.llama_set_kv_cache.argtypes = [llama_context_p, POINTER(c_uint8), c_size_t, c_int]
 _lib.llama_set_kv_cache.restype = None
+
+
+# Returns the size in bytes of the state (rng, logits, embedding and kv_cache)
+def llama_get_state_size(ctx: llama_context_p) -> c_size_t:
+    return _lib.llama_get_state_size(ctx)
+
+
+_lib.llama_get_state_size.argtypes = [llama_context_p]
+_lib.llama_get_state_size.restype = c_size_t
+
+
+# Copies the state to the specified destination address.
+# Destination needs to have allocated enough memory.
+# Returns the number of bytes copied
+def llama_copy_state_data(ctx: llama_context_p, dest) -> c_size_t:
+    return _lib.llama_copy_state_data(ctx, dest)
+
+
+_lib.llama_copy_state_data.argtypes = [llama_context_p, POINTER(c_uint8)]
+_lib.llama_copy_state_data.restype = c_size_t
+
+
+# Set the state reading from the specified address
+# Returns the number of bytes read
+def llama_set_state_data(ctx: llama_context_p, src) -> c_size_t:
+    return _lib.llama_set_state_data(ctx, src)
+
+
+_lib.llama_set_state_data.argtypes = [llama_context_p, POINTER(c_uint8)]
+_lib.llama_set_state_data.restype = c_size_t
 
 
 # Run the llama inference to obtain the logits and probabilities for the next token.
