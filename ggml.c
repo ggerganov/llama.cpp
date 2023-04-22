@@ -468,6 +468,14 @@ static inline int hsum_i32_8(const __m256i a) {
     return _mm_cvtsi128_si32(_mm_add_epi32(sum64, hi32));
 }
 
+// horizontally add 4 int32_t
+static inline int hsum_i32_4(const __m128i a) {
+    const __m128i hi64 = _mm_unpackhi_epi64(a, a);
+    const __m128i sum64 = _mm_add_epi32(hi64, a);
+    const __m128i hi32  = _mm_shuffle_epi32(sum64, _MM_SHUFFLE(2, 3, 0, 1));
+    return _mm_cvtsi128_si32(_mm_add_epi32(sum64, hi32));
+}
+
 #if __AVX2__ || __AVX512F__
 // Unpack 32 4-bit fields into 32 bytes
 // The output vector contains 32 bytes, each one in [ 0 .. 15 ] interval
@@ -1381,7 +1389,6 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
         y[i].s1 = d * sum1;
     }
 #elif defined(__AVX2__) || defined(__AVX__)
-    // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     for (int i = 0; i < nb; i++) {
         // Load elements into 4 AVX vectors
         __m256 v0 = _mm256_loadu_ps( x );
@@ -1460,7 +1467,8 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
         // Compute the sum of the quants and set y[i].s
         const __m128i s0 = _mm_add_epi32(_mm_add_epi32(ni0, ni1), _mm_add_epi32(ni2, ni3));
         const __m128i s1 = _mm_add_epi32(_mm_add_epi32(ni4, ni5), _mm_add_epi32(ni6, ni7));
-        y[i].s = d * hsum_i32_8(_mm256_set_m128i(s1, s0));
+        y[i].s0 = d * hsum_i32_4(s0);
+        y[i].s1 = d * hsum_i32_4(s1);
 
         // Convert int32 to int16
         ni0 = _mm_packs_epi32( ni0, ni1 );

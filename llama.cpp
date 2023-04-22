@@ -68,7 +68,7 @@ static const std::map<e_model, size_t> & MEM_REQ_SCRATCH1()
         { MODEL_65B,   512ull * MB },
     };
     return _MEM_REQ_SCRATCH1;
-};
+}
 
 // 2*n_embd*n_ctx*n_layer*sizeof(float16)
 static const std::map<e_model, size_t> & MEM_REQ_KV_SELF()
@@ -80,7 +80,7 @@ static const std::map<e_model, size_t> & MEM_REQ_KV_SELF()
         { MODEL_65B,  5120ull * MB },
     };
     return _MEM_REQ_KV_SELF;
-};
+}
 
 // this is mostly needed for temporary mul_mat buffers to dequantize the data
 // not actually needed if BLAS is disabled
@@ -93,7 +93,7 @@ static const std::map<e_model, size_t> & MEM_REQ_EVAL()
         { MODEL_65B, 1536ull * MB },
     };
     return _MEM_REQ_EVAL;
-};
+}
 
 // default hparams (LLaMA 7B)
 struct llama_hparams {
