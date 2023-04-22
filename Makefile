@@ -55,7 +55,6 @@ BONUSCFLAGS2 =
 
 OPENBLAS_FLAGS = -DGGML_USE_OPENBLAS -I/usr/local/include/openblas
 CLBLAST_FLAGS = -DGGML_USE_CLBLAST -DGGML_USE_OPENBLAS -I/usr/local/include/openblas
-CUBLAS_FLAGS = -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I./include/cuda -I./include/cuda/crt
 
 #lets try enabling everything
 CFLAGS   += -pthread -s
@@ -157,7 +156,6 @@ NOAVX2_BUILD =
 OPENBLAS_BUILD =
 OPENBLAS_NOAVX2_BUILD =
 CLBLAST_BUILD =
-CUBLAS_BUILD =
 
 ifeq ($(OS),Windows_NT)
 	DEFAULT_BUILD = $(CXX) $(CXXFLAGS)  $^ -shared -o $@.dll $(LDFLAGS)
@@ -165,7 +163,6 @@ ifeq ($(OS),Windows_NT)
 	OPENBLAS_BUILD = $(CXX) $(CXXFLAGS) $^ lib/libopenblas.lib -shared -o $@.dll $(LDFLAGS)
 	OPENBLAS_NOAVX2_BUILD = $(CXX) $(CXXFLAGS) $^ lib/libopenblas.lib -shared -o $@.dll $(LDFLAGS)
 	CLBLAST_BUILD = $(CXX) $(CXXFLAGS) $^ lib/OpenCL.lib lib/clblast.lib -shared -o $@.dll $(LDFLAGS)
-	CUBLAS_BUILD = $(CXX) $(CXXFLAGS) $^ lib/cuda.lib lib/cublas.lib lib/cublasLt.lib lib/cudart.lib lib/cudart_static.lib lib/ggml-cuda-kernel.lib -shared -o $@.dll $(LDFLAGS)
 else
 	DEFAULT_BUILD = $(CXX) $(CXXFLAGS)  $^ -shared -o $@.so $(LDFLAGS)
 	NOAVX2_BUILD = $(CXX) $(CXXFLAGS) $^ -shared -o $@.so $(LDFLAGS)
@@ -176,15 +173,10 @@ else
 	ifdef LLAMA_CLBLAST
 	CLBLAST_BUILD = $(CXX) $(CXXFLAGS) $^ -lclblast -lOpenCL $(ARCH_ADD) -lopenblas -shared -o $@.so $(LDFLAGS)
 	endif
-	ifdef LLAMA_CUBLAS
-	CUBLAS_BUILD = $(CXX) $(CXXFLAGS) $^ -lcublas_static -lculibos -lcudart_static -lcublasLt_static -lpthread -ldl -L/usr/local/cuda/lib64 -shared -o $@.so $(LDFLAGS)
-	endif
 
 	ifndef LLAMA_OPENBLAS
 	ifndef LLAMA_CLBLAST
-	ifndef LLAMA_CUBLAS
 	OPENBLAS_BUILD = @echo 'Your OS $(OS) does not appear to be Windows. For faster speeds, install and link a BLAS library. Set LLAMA_OPENBLAS=1 to compile with OpenBLAS support or LLAMA_CLBLAST=1 to compile with ClBlast support. This is just a reminder, not an error.'
-	endif
 	endif
 	endif
 endif
@@ -223,9 +215,6 @@ ggml_openblas_noavx2.o: ggml.c ggml.h
 ggml_clblast.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) $(CLBLAST_FLAGS) -c $< -o $@
 
-ggml_cublas.o: ggml.c ggml.h
-	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) $(CUBLAS_FLAGS) -c $< -o $@
-
 ggml_v1.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
 	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -c $< -o $@
 
@@ -248,7 +237,7 @@ gpttype_adapter.o: gpttype_adapter.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -vf *.o main quantize_llama quantize_gpt2 quantize_gptj quantize_neox quantize-stats perplexity embedding benchmark-q4_0-matmult main.exe quantize_llama.exe quantize_gptj.exe quantize_gpt2.exe quantize_neox.exe koboldcpp.dll koboldcpp_openblas.dll koboldcpp_noavx2.dll koboldcpp_openblas_noavx2.dll koboldcpp_clblast.dll koboldcpp_cublas.dll koboldcpp.so koboldcpp_openblas.so koboldcpp_noavx2.so koboldcpp_openblas_noavx2.so koboldcpp_clblast.so koboldcpp_cublas.so gptj.exe gpt2.exe
+	rm -vf *.o main quantize_llama quantize_gpt2 quantize_gptj quantize_neox quantize-stats perplexity embedding benchmark-q4_0-matmult main.exe quantize_llama.exe quantize_gptj.exe quantize_gpt2.exe quantize_neox.exe koboldcpp.dll koboldcpp_openblas.dll koboldcpp_noavx2.dll koboldcpp_openblas_noavx2.dll koboldcpp_clblast.dll koboldcpp.so koboldcpp_openblas.so koboldcpp_noavx2.so koboldcpp_openblas_noavx2.so koboldcpp_clblast.so gptj.exe gpt2.exe
 
 main: examples/main/main.cpp ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
@@ -270,9 +259,6 @@ koboldcpp_openblas_noavx2: ggml_openblas_noavx2.o ggml_rwkv.o ggml_v1_noavx2.o e
 
 koboldcpp_clblast: ggml_clblast.o ggml_rwkv.o ggml_v1.o expose.o common.o gpttype_adapter.o 
 	$(CLBLAST_BUILD)
-
-koboldcpp_cublas: ggml_cublas.o ggml_rwkv.o ggml_v1.o expose.o common.o gpttype_adapter.o 
-	$(CUBLAS_BUILD)
 		
 quantize_llama: examples/quantize/quantize.cpp ggml.o llama.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
