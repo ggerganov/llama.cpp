@@ -109,7 +109,7 @@ ifdef LLAMA_CUBLAS
 	LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64
 	OBJS      += ggml-cuda.o
 	NVCC      = nvcc
-	NVCCFLAGS = --forward-unknown-to-host-linker -arch=native --compiler-options -fPIC
+	NVCCFLAGS = --forward-unknown-to-host-compiler -arch=native
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 ifdef LLAMA_GPROF
 	CFLAGS   += -pg
