@@ -338,6 +338,10 @@ if (GGML_CUDA_SOURCES)
     set_property(TARGET llama PROPERTY CUDA_ARCHITECTURES OFF)
 endif()
 
+# Install step is convenient for dependent CMake projects.
+set_target_properties(llama PROPERTIES PUBLIC_HEADER "llama.h")
+install(TARGETS llama)
+
 
 #
 # programs, examples and tests
