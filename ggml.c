@@ -7992,6 +7992,9 @@ static void ggml_compute_forward_mul_mat_q_f32(
         else if (type == GGML_TYPE_Q4_2) {
             dequantize_row_q_cuda = dequantize_row_q4_2_cuda;
         }
+        else if (type == GGML_TYPE_Q4_3) {
+            dequantize_row_q_cuda = dequantize_row_q4_3_cuda;
+        }
         else {
             GGML_ASSERT(false);
         }
