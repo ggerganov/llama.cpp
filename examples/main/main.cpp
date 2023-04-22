@@ -276,8 +276,8 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "Input prefix: '%s'\n", params.input_prefix.c_str());
         }
     }
-    fprintf(stderr, "sampling: temp = %f, top_k = %d, top_p = %f, repeat_last_n = %i, repeat_penalty = %f\n",
-        params.temp, params.top_k, params.top_p, params.repeat_last_n, params.repeat_penalty);
+    fprintf(stderr, "sampling: repeat_last_n = %d, repeat_penalty = %f, alpha_presence = %f, alpha_frequency = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f\n",
+        params.repeat_last_n, params.repeat_penalty, params.alpha_presence, params.alpha_frequency, params.top_k, params.tfs_z, params.top_p, params.typical_p, params.temp);
     fprintf(stderr, "generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
     fprintf(stderr, "\n\n");
 
@@ -387,10 +387,15 @@ int main(int argc, char ** argv) {
 
         if ((int) embd_inp.size() <= n_consumed && !is_interacting) {
             // out of user input, sample next token
-            const int32_t top_k          = params.top_k;
-            const float   top_p          = params.top_p;
             const float   temp           = params.temp;
+            const int32_t top_k          = params.top_k <= 0 ? llama_n_vocab(ctx) : params.top_k;
+            const float   top_p          = params.top_p;
+            const float   tfs_z          = params.tfs_z;
+            const float   typical_p      = params.typical_p;
+            const int32_t repeat_last_n  = params.repeat_last_n < 0 ? n_ctx : params.repeat_last_n;
             const float   repeat_penalty = params.repeat_penalty;
+            const float   alpha_presence = params.alpha_presence;
+            const float   alpha_frequency = params.alpha_frequency;
 
             // optionally save the session on first sample (for faster prompt loading next time)
             if (!path_session.empty() && need_to_save_session) {
@@ -402,14 +407,55 @@ int main(int argc, char ** argv) {
 
             {
                 auto logits = llama_get_logits(ctx);
+                auto n_vocab = llama_n_vocab(ctx);
 
                 if (params.ignore_eos) {
-                    logits[llama_token_eos()] = 0;
+                    logits[llama_token_eos()] = -INFINITY;
                 }
 
-                id = llama_sample_top_p_top_k(ctx,
-                        last_n_tokens.data() + n_ctx - params.repeat_last_n,
-                        params.repeat_last_n, top_k, top_p, temp, repeat_penalty);
+                std::vector<llama_token_data> candidates;
+                candidates.reserve(n_vocab);
+                for (size_t i = 0; i < n_vocab; i++) {
+                    candidates.emplace_back(i, logits[i], 0.0f);
+                }
+
+                llama_token_data_array candidates_p = { candidates.data(), candidates.size() };
+
+                // Apply penalties
+                auto last_n_repeat = std::min(std::min((int)last_n_tokens.size(), repeat_last_n), n_ctx);
+                llama_sample_repetition_penalty(&candidates_p,
+                    last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
+                    last_n_repeat, repeat_penalty);
+                llama_sample_frequency_and_presence_penalties(&candidates_p,
+                    last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
+                    last_n_repeat, alpha_frequency, alpha_presence);
+
+
+#if 1
+                if (temp <= 0) {
+                    // Greedy sampling
+                    id = llama_sample_token_greedy(ctx, &candidates_p);
+                } else {
+                    // Temperature sampling
+                    llama_sample_top_k(&candidates_p, top_k);
+                    llama_sample_tail_free(&candidates_p, tfs_z);
+                    llama_sample_typical(&candidates_p, typical_p);
+                    llama_sample_top_p(&candidates_p, top_p);
+
+                    llama_sample_temperature(&candidates_p, temp);
+                    // printf("`%d`", candidates_p.size);
+                    id = llama_sample_token(ctx, &candidates_p);
+                }
+#else
+                const float tau = 5.0f;
+                static float mu = 2.0f * tau;
+                static int k = 40;
+                const float eta = 0.1f;
+                const int m = 100;
+                const float N = n_vocab;
+                id = llama_sample_mirostat(ctx, &candidates_p, tau, eta, m, N, &k, &mu);
+                // id = llama_sample_mirostat_v2(ctx, &candidates_p, tau, eta, &mu);
+#endif
 
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(id);

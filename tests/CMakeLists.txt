@@ -3,9 +3,12 @@ function(llama_add_test source)
     add_executable(${TEST_TARGET} ${source})
     target_link_libraries(${TEST_TARGET} PRIVATE llama)
     add_test(NAME ${TEST_TARGET} COMMAND $<TARGET_FILE:${TEST_TARGET}> ${ARGN})
+    target_compile_options(${TEST_TARGET} PRIVATE -fsanitize=address)
+    target_link_options(${TEST_TARGET} PRIVATE -fsanitize=address)
 endfunction()
 
 # llama_add_test(test-double-float.c) # SLOW
 llama_add_test(test-quantize-fns.cpp)
 llama_add_test(test-quantize-perf.cpp)
+llama_add_test(test-sampling.cpp)
 llama_add_test(test-tokenizer-0.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab.bin)

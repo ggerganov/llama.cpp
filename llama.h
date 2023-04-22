@@ -39,11 +39,15 @@ extern "C" {
 
     typedef struct llama_token_data {
         llama_token id;  // token id
-
+        float logit; // log-odds of the token
         float p;     // probability of the token
-        float plog;  // log probability of the token
-
     } llama_token_data;
+
+    typedef struct llama_token_data_array {
+        llama_token_data * data;
+        size_t size;
+        bool sorted;
+    } llama_token_data_array;
 
     typedef void (*llama_progress_callback)(float progress, void *ctx);
 
@@ -182,15 +186,21 @@ extern "C" {
     LLAMA_API llama_token llama_token_bos();
     LLAMA_API llama_token llama_token_eos();
 
-    // TODO: improve the last_n_tokens interface ?
-    LLAMA_API llama_token llama_sample_top_p_top_k(
-       struct llama_context * ctx,
-          const llama_token * last_n_tokens_data,
-                        int   last_n_tokens_size,
-                        int   top_k,
-                      float   top_p,
-                      float   temp,
-                      float   repeat_penalty);
+    // Sampling functions
+    LLAMA_API void llama_sample_repetition_penalty(llama_token_data_array * candidates_p, llama_token * last_tokens_p, size_t last_tokens_size, float penalty);
+    LLAMA_API void llama_sample_frequency_and_presence_penalties(llama_token_data_array * candidates_p, llama_token * last_tokens_p, size_t last_tokens_size, float alpha_frequency, float alpha_presence);
+
+    LLAMA_API void llama_sample_softmax(llama_token_data_array * candidates);
+    LLAMA_API void llama_sample_top_k(llama_token_data_array * candidates, int k);
+    LLAMA_API void llama_sample_top_p(llama_token_data_array * candidates, float p, size_t min_keep = 1);
+    LLAMA_API void llama_sample_tail_free(llama_token_data_array * candidates, float z, size_t min_keep = 1);
+    LLAMA_API void llama_sample_typical(llama_token_data_array * candidates, float p, size_t min_keep = 1);
+    LLAMA_API void llama_sample_temperature(llama_token_data_array * candidates, float temp);
+
+    LLAMA_API llama_token llama_sample_token_greedy(struct llama_context * ctx, llama_token_data_array * candidates);
+    LLAMA_API llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_array * candidates);
+    LLAMA_API llama_token llama_sample_mirostat(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, int m, float N, int * k, float * mu);
+    LLAMA_API llama_token llama_sample_mirostat_v2(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, float * mu);
 
     // Performance information
     LLAMA_API void llama_print_timings(struct llama_context * ctx);
