@@ -94,7 +94,7 @@ int main(int argc, char ** argv) {
 
 //    params.prompt = R"(// this function checks if the number n is prime
 //bool is_prime(int n) {)";
-    
+
     llama_context * ctx;
     g_ctx = &ctx;
 

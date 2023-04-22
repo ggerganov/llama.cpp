@@ -120,7 +120,7 @@ int main(int argc, char * argv[]) {
         ggml_type type = (ggml_type) i;
         quantize_fns_t qfns = ggml_internal_get_quantize_fn(i);
 
-        if (qfns.quantize_row_q) {
+        if (qfns.quantize_row_q && qfns.dequantize_row_q) {
             const float total_error = total_quantization_error(qfns, test_size, test_data.data());
             failed = !(total_error < MAX_QUANTIZATION_TOTAL_ERROR);
             num_failed += failed;
