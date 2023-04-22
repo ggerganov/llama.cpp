@@ -23,6 +23,9 @@ cl_program program;
 cl_kernel kernel_q4_0, kernel_q4_1;
 bool cl_initialized = false;
 
+size_t cl_size_a = 0, cl_size_b = 0, cl_size_qb = 0, cl_size_c = 0;
+cl_mem cl_buffer_a, cl_buffer_b, cl_buffer_qb, cl_buffer_c;
+
 // Function taken from https://github.com/rsnemmen/OpenCL-examples/blob/master/add_numbers/add_numbers.c
 cl_program build_program(cl_context ctx, cl_device_id dev, const char* filename) {
 
@@ -163,6 +166,33 @@ static void ggml_cl_sgemm_wrapper(const enum CBLAS_ORDER order, const enum CBLAS
             fflush(stdout);
         };
 
+        size_t defaultBufSize = 8*1024*1024;
+        cl_size_a = defaultBufSize * sizeof(float);
+        cl_size_b = defaultBufSize * sizeof(float);
+        cl_size_qb = defaultBufSize * sizeof(float);
+        cl_size_c = defaultBufSize * sizeof(float);
+        // Prepare buffers
+        cl_buffer_a = clCreateBuffer(context, CL_MEM_READ_ONLY, cl_size_a, NULL, &err);
+        if (err != CL_SUCCESS) {
+            printf("Error creating OpenCL Buffer A: %d\n", err);
+            fflush(stdout);
+        }
+        cl_buffer_b = clCreateBuffer(context, CL_MEM_READ_WRITE, cl_size_b, NULL, &err);
+        if (err != CL_SUCCESS) {
+            printf("Error creating OpenCL Buffer B: %d\n", err);
+            fflush(stdout);
+        }
+        cl_buffer_qb = clCreateBuffer(context, CL_MEM_READ_WRITE, cl_size_qb, NULL, &err);
+        if (err != CL_SUCCESS) {
+            printf("Error creating OpenCL Buffer B: %d\n", err);
+            fflush(stdout);
+        }
+        cl_buffer_c = clCreateBuffer(context, CL_MEM_READ_WRITE, cl_size_c, NULL, &err);
+        if (err != CL_SUCCESS) {
+            printf("Error creating OpenCL Buffer C: %d\n", err);
+            fflush(stdout);
+        }
+
         cl_initialized = true;
     }
 
@@ -170,31 +200,54 @@ static void ggml_cl_sgemm_wrapper(const enum CBLAS_ORDER order, const enum CBLAS
     cl_kernel kernel = btype == 2 ? kernel_q4_0 : kernel_q4_1;
 
     size_t global = n * k, local = 16, qb_size;
-    cl_mem cl_buffer_a, cl_buffer_qb, cl_buffer_b, cl_buffer_c;
 
     // Prepare buffers
-    cl_buffer_a = clCreateBuffer(context, CL_MEM_READ_ONLY, m*k*sizeof(float), NULL, &err);
-    if (err != CL_SUCCESS) {
-        printf("Error creating OpenCL Buffer A: %d\n", err);
-        fflush(stdout);
-    }
-    if (dequant) {
-        qb_size = global * (sizeof(float) * (btype == 2 ? 1 : 2) + 16) / 32;
-        cl_buffer_qb = clCreateBuffer(context, CL_MEM_READ_ONLY, qb_size, NULL, &err);
+    if(m*k*sizeof(float) > cl_size_a)
+    {
+        cl_size_a = m*k*sizeof(float);
+        clReleaseMemObject(cl_buffer_a);
+        cl_buffer_a = clCreateBuffer(context, CL_MEM_READ_ONLY, cl_size_a, NULL, &err);
         if (err != CL_SUCCESS) {
-            printf("Error creating OpenCL Buffer QB: %d\n", err);
+            printf("Error creating OpenCL Buffer A: %d\n", err);
             fflush(stdout);
         }
+        //printf("\nRealloc A: %d",cl_size_a);
     }
-    cl_buffer_b = clCreateBuffer(context, CL_MEM_READ_WRITE, n*k*sizeof(float), NULL, &err);
-    if (err != CL_SUCCESS) {
-        printf("Error creating OpenCL Buffer B: %d\n", err);
-        fflush(stdout);
+    if (dequant) {        
+        qb_size = global * (sizeof(float) * (btype == 2 ? 1 : 2) + 16) / 32;
+        if(qb_size > cl_size_qb)
+        {
+            cl_size_qb = qb_size;
+            clReleaseMemObject(cl_buffer_qb);
+            cl_buffer_qb = clCreateBuffer(context, CL_MEM_READ_ONLY, qb_size, NULL, &err);
+            if (err != CL_SUCCESS) {
+                printf("Error creating OpenCL Buffer QB: %d\n", err);
+                fflush(stdout);
+            }
+            //printf("\nRealloc qB: %d",cl_size_qb);
+        }
     }
-    cl_buffer_c = clCreateBuffer(context, CL_MEM_READ_WRITE, m*n*sizeof(float), NULL, &err);
-    if (err != CL_SUCCESS) {
-        printf("Error creating OpenCL Buffer C: %d\n", err);
-        fflush(stdout);
+    if(n*k*sizeof(float) > cl_size_b)
+    {
+        cl_size_b = n*k*sizeof(float);
+        clReleaseMemObject(cl_buffer_b);
+        cl_buffer_b = clCreateBuffer(context, CL_MEM_READ_WRITE, cl_size_b, NULL, &err);
+        if (err != CL_SUCCESS) {
+            printf("Error creating OpenCL Buffer B: %d\n", err);
+            fflush(stdout);
+        }
+        //printf("\nRealloc B: %d",cl_size_b);
+    }
+    if(m*n*sizeof(float) > cl_size_c)
+    {
+        cl_size_c = m*n*sizeof(float);
+        clReleaseMemObject(cl_buffer_c);
+        cl_buffer_c = clCreateBuffer(context, CL_MEM_READ_WRITE, cl_size_c, NULL, &err);
+        if (err != CL_SUCCESS) {
+            printf("Error creating OpenCL Buffer C: %d\n", err);
+            fflush(stdout);
+        }
+        //printf("\nRealloc C: %d",cl_size_c);
     }
 
     if (dequant) {
@@ -245,13 +298,7 @@ static void ggml_cl_sgemm_wrapper(const enum CBLAS_ORDER order, const enum CBLAS
         clReleaseEvent(events[0]);
         clReleaseEvent(events[1]);
     }
-
-    clReleaseMemObject(cl_buffer_a);
-    if (dequant) {
-        clReleaseMemObject(cl_buffer_qb);
-    }
-    clReleaseMemObject(cl_buffer_b);
-    clReleaseMemObject(cl_buffer_c);
+    
 }
 #endif
 #endif
