@@ -21,11 +21,19 @@ To get started right away, run the following command, making sure to use the cor
 ./main -m models/7B/ggml-model.bin --prompt "Once upon a time"
 ```
 
+The following command generates "infinite" text from a starting prompt (you can use `Ctrl-C` to stop it):
+
+```bash
+./main -m models/7B/ggml-model.bin --ignore-eos --n_predict -1 --keep -1 --prompt "Once upon a time"
+```
+
 For an interactive experience, try this command:
 
 ```bash
 ./main -m models/7B/ggml-model.bin -n -1 --color -r "User:" --in-prefix " " --prompt $'User: Hi\nAI: Hello. I am an AI chatbot. Would you like to talk?\nUser: Sure!\nAI: What would you like to talk about?\nUser:'
 ```
+
+Note that the newline characters in the prompt string above only work on Linux. On Windows, you will have to use the ``--file`` option (see below) to load a multi-line prompt from file instead.
 
 ## Common Options
 
@@ -84,6 +92,8 @@ Instruction mode is particularly useful when working with Alpaca models, which a
 
 -   `-ins, --instruct`: Enable instruction mode to leverage the capabilities of Alpaca models in completing tasks based on user-provided instructions.
 
+Technical detail: the user's input is internally prefixed with the reverse prompt (or ``### Instruction:`` as the default), and followed by ``### Response:`` (except if you just press Return without any input, to keep generating a longer response).
+
 By understanding and utilizing these interaction options, you can create engaging and dynamic experiences with the LLaMA models, tailoring the text generation process to your specific needs.
 
 ## Context Management
@@ -114,7 +124,7 @@ The following options are related to controlling the text generation process, in
 
 The `--n_predict` option controls the number of tokens the model generates in response to the input prompt. By adjusting this value, you can influence the length of the generated text. A higher value will result in longer text, while a lower value will produce shorter text. A value of -1 will cause text to be generated without limit.
 
-It is important to note that the generated text may be shorter than the specified number of tokens if an End-of-Sequence (EOS) token or a reverse prompt is encountered. In interactive mode text generation will pause and control will be returned to the user. In non-interactive mode, the program will end. In both cases, the text generation may stop before reaching the specified `n_predict` value.
+It is important to note that the generated text may be shorter than the specified number of tokens if an End-of-Sequence (EOS) token or a reverse prompt is encountered. In interactive mode text generation will pause and control will be returned to the user. In non-interactive mode, the program will end. In both cases, the text generation may stop before reaching the specified `n_predict` value. If you want the model to keep going without ever producing End-of-Sequence on its own, you can use the ``--ignore-eos`` parameter.
 
 ### RNG Seed
 
@@ -126,7 +136,7 @@ The RNG seed is used to initialize the random number generator that influences t
 
 -   `--temp N`: Adjust the randomness of the generated text (default: 0.8).
 
-Temperature is a hyperparameter that controls the randomness of the generated text. It affects the probability distribution of the model's output tokens. A higher temperature (e.g., 1.5) makes the output more random and creative, while a lower temperature (e.g., 0.5) makes the output more focused, deterministic, and conservative. The default value is 0.8, which provides a balance between randomness and determinism.
+Temperature is a hyperparameter that controls the randomness of the generated text. It affects the probability distribution of the model's output tokens. A higher temperature (e.g., 1.5) makes the output more random and creative, while a lower temperature (e.g., 0.5) makes the output more focused, deterministic, and conservative. The default value is 0.8, which provides a balance between randomness and determinism. At the extreme, a temperature of 0 will always pick the most likely next token, leading to identical outputs in each run.
 
 Example usage: `--temp 0.8`
 
