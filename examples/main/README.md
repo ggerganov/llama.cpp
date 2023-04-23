@@ -177,5 +177,5 @@ These options provide extra functionality and customization when running the LLa
 -   `-h, --help`: Display a help message showing all available options and their default values. This is particularly useful for checking the latest options and default values, as they can change frequently, and the information in this document may become outdated.
 -   `--verbose-prompt`: Print the prompt before generating text.
 -   `--mtest`: Test the model's functionality by running a series of tests to ensure it's working properly.
--   `--lora FNAME`: Apply a LoRA (Layer-wise Relevance Approximation) adapter to the model (implies --no-mmap). This allows you to adapt the pretrained model to specific tasks or domains.
+-   `--lora FNAME`: Apply a LoRA (Low-Rank Adaptation) adapter to the model (implies --no-mmap). This allows you to adapt the pretrained model to specific tasks or domains.
 -   `--lora-base FNAME`: Optional model to use as a base for the layers modified by the LoRA adapter. This flag is used in conjunction with the `--lora` flag, and specifies the base model for the adaptation.
