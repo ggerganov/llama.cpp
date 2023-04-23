@@ -59,7 +59,7 @@ int main(int argc, char ** argv) {
     // save choice to use color for later
     // (note for later: this is a slightly awkward choice)
     con_st.use_color = params.use_color;
-    con_st.author_mode = params.author_mode;
+    con_st.multiline_input = params.multiline_input;
     console_init(con_st);
     atexit([]() { console_cleanup(con_st); });
 
@@ -275,7 +275,7 @@ int main(int argc, char ** argv) {
 
     if (params.interactive) {
         const char *control_message;
-        if (con_st.author_mode) {
+        if (con_st.multiline_input) {
             control_message = " - To return control to LLaMa, end your input with '\\'.\n"
                               " - To return control without starting a new line, end your input with '/'.\n";
         } else {

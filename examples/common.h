@@ -60,7 +60,7 @@ struct gpt_params {
 
     bool embedding         = false; // get only sentence embedding
     bool interactive_first = false; // wait for user input immediately
-    bool author_mode       = false; // reverse the usage of `\`
+    bool multiline_input   = false; // reverse the usage of `\`
 
     bool instruct          = false; // instruction mode (used for Alpaca models)
     bool penalize_nl       = true;  // consider newlines as a repeatable token
@@ -109,7 +109,7 @@ enum console_color_t {
 };
 
 struct console_state {
-    bool author_mode = false;
+    bool multiline_input = false;
     bool use_color = false;
     console_color_t color = CONSOLE_COLOR_DEFAULT;
 #if !defined (_WIN32)

@@ -274,10 +274,10 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.embedding = true;
         } else if (arg == "--interactive-first") {
             params.interactive_first = true;
-        } else if (arg == "--author-mode") {
-            params.author_mode = true;
         } else if (arg == "-ins" || arg == "--instruct") {
             params.instruct = true;
+        } else if (arg == "--multiline-input") {
+            params.multiline_input = true;
         } else if (arg == "--color") {
             params.use_color = true;
         } else if (arg == "--mlock") {
@@ -368,7 +368,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -i, --interactive     run in interactive mode\n");
     fprintf(stderr, "  --interactive-first   run in interactive mode and wait for input right away\n");
     fprintf(stderr, "  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
-    fprintf(stderr, "  --author-mode         allows you to write or paste multiple lines without ending each in '\\'\n");
+    fprintf(stderr, "  --multiline-input     allows you to write or paste multiple lines without ending each in '\\'\n");
     fprintf(stderr, "  -r PROMPT, --reverse-prompt PROMPT\n");
     fprintf(stderr, "                        run in interactive mode and poll user input upon seeing PROMPT (can be\n");
     fprintf(stderr, "                        specified more than once for multiple prompts).\n");
@@ -644,7 +644,7 @@ bool console_readline(console_state & con_st, std::string & line) {
         }
     }
 
-    bool has_more = con_st.author_mode;
+    bool has_more = con_st.multiline_input;
     if (is_special_char) {
         fputs("\b \b", stdout); // Move cursor back, print a space, and move cursor back again
 
