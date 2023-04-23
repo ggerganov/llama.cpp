@@ -156,8 +156,6 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.interactive = true;
         } else if (arg == "--embedding") {
             params.embedding = true;
-        } else if (arg == "--interactive-start") {
-            params.interactive = true;
         } else if (arg == "--interactive-first") {
             params.interactive_first = true;
         } else if (arg == "-ins" || arg == "--instruct") {

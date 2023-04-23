@@ -1,6 +1,6 @@
 # main
 
-This example shows how to run a LLaMA-like model for chatting or generating text. There are three basic modes of operation:
+This example shows how to run a LLaMA-like model for chatting or generating text. There are two basic modes of operation:
 
 - Text generation: starting from an initial prompt, produce additional text as predicted by the model
 - Chat: alternate between user input to complete a prompt and generating some text based on the input
@@ -21,7 +21,7 @@ The most basic application for an LLM is producing more text from a given prompt
 
 This will run until the model predicts an end-of-text token, or until ``--n_predict`` tokens have been generated (a value of ``-1`` means unlimited). If you want the model to keep going without ever predicting end-of-text on its own, use the ``--ignore-eos`` parameter.
 
-When generating "infinite" text, the model will at some point exhaust its context size, that is, the number of past tokens it can remember. When this happens, the oldest half of the context is forgotten, and the most recent half is used to seemlessly continue the text. Text generation will temporarily
+When generating "infinite" text, the model will at some point exhaust its context size, that is, the number of past tokens it can remember. When this happens, the oldest half of the context is forgotten, and the most recent half is used to seamlessly continue the text. Text generation will temporarily
 slow down until the context is recomputed. If you want the model to remember the initial prompt (rather than just continuing from the most recent text), you can pass ``--keep -1`` on the command line (to remember the full prompt), or give a specific number of tokens to remember. In theory, this should lead to more consistency across longer texts.
 
 So, a useful starting point for long text generation (using the default llama-7B model) would be:
@@ -59,7 +59,7 @@ runs a basic chat where the prompt primes the model to expect one of the dialog 
 
 The following parameters control sampling, that is, how a token is randomly selected from the most probable candidates that are predicted by the model. For more background, see [https://huggingface.co/blog/how-to-generate](https://huggingface.co/blog/how-to-generate).
 
-- ``--seed``: the starting value of the randon number generator. If you use a positive value, a given prompt will produce the same output in each run. A negative value (the default) will usually produce somehwat different output in each run.
+- ``--seed``: the starting value of the random number generator. If you use a positive value, a given prompt will produce the same output in each run. A negative value (the default) will usually produce somewhat different output in each run.
 - ``--temp``: the "temperature" parameter of the softmax function. A higher temperature means less likely words are being picked more often. Conversely, a temperature of 0 will always pick the most likely next token, leading to identical outputs in each run.
-- ``--top_k``, ``--top_p``: restrict the selection of the final token candiates to the *k* most likely, or the tokens that combine to a probability mass of at least *p*.
+- ``--top_k``, ``--top_p``: restrict the selection of the final token candidates to the *k* most likely, or the tokens that combine to a probability mass of at least *p*.
 - ``--repeat_last_n``, ``--repeat_penalty``: reduces repetitions within the last *n* tokes by applying a penalty to repeated tokens.
