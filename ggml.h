@@ -630,7 +630,8 @@ struct ggml_tensor * ggml_soft_max(
 
 // rotary position embedding
 // in-place, returns view(a)
-// if mode == 1, skip n_past elements
+// if mode & 1 == 1, skip n_past elements
+// if mode & 2 == 1, GPT-NeoX style
 // TODO: avoid creating a new tensor every time
 struct ggml_tensor * ggml_rope(
         struct ggml_context * ctx,

@@ -74,13 +74,17 @@ endif
 #       feel free to update the Makefile for your architecture and send a pull request or issue
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 	# Use all CPU extensions that are available:
-	CFLAGS += -march=native -mtune=native
+	CFLAGS   += -march=native -mtune=native
 	CXXFLAGS += -march=native -mtune=native
+
+	# Usage AVX-only
+	#CFLAGS   += -mfma -mf16c -mavx
+	#CXXFLAGS += -mfma -mf16c -mavx
 endif
 ifneq ($(filter ppc64%,$(UNAME_M)),)
 	POWER9_M := $(shell grep "POWER9" /proc/cpuinfo)
 	ifneq (,$(findstring POWER9,$(POWER9_M)))
-		CFLAGS += -mcpu=power9
+		CFLAGS   += -mcpu=power9
 		CXXFLAGS += -mcpu=power9
 	endif
 	# Require c++23's std::byteswap for big-endian support.
@@ -101,11 +105,13 @@ ifdef LLAMA_OPENBLAS
 	LDFLAGS += -lopenblas
 endif
 ifdef LLAMA_CUBLAS
-	CFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include
-	LDFLAGS += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64
-	OBJS	+= ggml-cuda.o
+	CFLAGS    += -DGGML_USE_CUBLAS -I/usr/local/cuda/include
+	LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64
+	OBJS      += ggml-cuda.o
+	NVCC      = nvcc
+	NVCCFLAGS = --forward-unknown-to-host-linker -arch=native
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
-	nvcc -arch=native -c -o $@ $<
+	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -c $< -o $@
 endif
 ifdef LLAMA_HIPBLAS
 	ROCM_PATH  ?= /opt/rocm
@@ -124,8 +130,12 @@ ifdef LLAMA_GPROF
 	CFLAGS   += -pg
 	CXXFLAGS += -pg
 endif
+ifdef LLAMA_PERF
+	CFLAGS   += -DGGML_PERF
+	CXXFLAGS += -DGGML_PERF
+endif
 ifneq ($(filter aarch64%,$(UNAME_M)),)
-	CFLAGS += -mcpu=native
+	CFLAGS   += -mcpu=native
 	CXXFLAGS += -mcpu=native
 endif
 ifneq ($(filter armv6%,$(UNAME_M)),)
