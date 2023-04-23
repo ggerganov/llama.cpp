@@ -108,6 +108,12 @@ By utilizing context management options like `--ctx_size` and `--keep`, you can 
 
 The following options are related to controlling the text generation process, influencing the diversity, creativity, and quality of the generated text. Understanding these options will help you fine-tune the output according to your needs:
 
+### RNG Seed
+
+-   `-s SEED, --seed SEED`: Set the random number generator (RNG) seed (default: -1).
+
+The RNG seed is used to initialize the random number generator that influences the text generation process. By setting a specific seed value, you can obtain consistent and reproducible results across multiple runs with the same input and settings. This can be helpful for testing, debugging, or comparing the effects of different options on the generated text to see when they diverge. If the seed is set to a value less than or equal to 0, a random seed will be used, which will result in different outputs on each run.
+
 ### Temperature
 
 -   `--temp N`: Adjust the randomness of the generated text (default: 0.8).
@@ -160,6 +166,7 @@ By understanding and using these performance tuning settings, you can optimize t
 
 These options provide extra functionality and customization when running the LLaMA models:
 
+-   `-h, --help`: Display a help message showing all available options and their default values. This is particularly useful for checking the latest options and default values, as they can change frequently, and the information in this document may become outdated.
 -   `--verbose-prompt`: Print the prompt before generating text.
 -   `--mtest`: Test the model's functionality by running a series of tests to ensure it's working properly.
 -   `--lora FNAME`: Apply a LoRA (Layer-wise Relevance Approximation) adapter to the model (implies --no-mmap). This allows you to adapt the pretrained model to specific tasks or domains.
