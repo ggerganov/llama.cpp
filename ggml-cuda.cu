@@ -31,8 +31,8 @@ static_assert(sizeof(block_q4_2) == sizeof(ggml_fp16_t) + QK4_2 / 2, "wrong q4_2
 
 #define QK4_3 16
 typedef struct {
-    __half  d;              // delta
-    __half  m;              // min
+    __half  d0;             // delta
+    __half  d1;             // delta
     uint8_t qs[QK4_3 / 2];  // nibbles / quants
 } block_q4_3;
 static_assert(sizeof(block_q4_3) == 2 * sizeof(ggml_fp16_t) + QK4_3 / 2, "wrong q4_3 block size/padding");
@@ -112,22 +112,32 @@ static __global__ void dequantize_block_q4_3(const void * vx, float * y) {
 
     const int i = blockIdx.x;
 
-    const float d = x[i].d;
-    const float m = x[i].m;
+    const float d0 = x[i].d0;
+    const float d1 = x[i].d1;
 
     const uint8_t * pp = x[i].qs;
 
-    for (int l = 0; l < QK4_3; l += 2) {
-        const uint8_t vi = pp[l/2];
+    for (int l = 0; l < QK4_3/2; l += 2) {
+        const uint8_t vi0 = pp[l/2];
+        const uint8_t vi1 = pp[l/2 + QK4_3/4];
 
-        const int8_t vi0 = vi & 0xf;
-        const int8_t vi1 = vi >> 4;
+        const int8_t vi0_0 = vi0 & 0xf;
+        const int8_t vi0_1 = vi0 >> 4;
 
-        const float v0 = vi0*d + m;
-        const float v1 = vi1*d + m;
+        const int8_t vi1_0 = vi1 & 0xf;
+        const int8_t vi1_1 = vi1 >> 4;
 
-        y[i*QK4_3 + l + 0] = v0;
-        y[i*QK4_3 + l + 1] = v1;
+        const float v0_0 = (vi0_0 - 8)*d0;
+        const float v0_1 = (vi0_1 - 8)*d0;
+
+        const float v1_0 = (vi1_0 - 8)*d1;
+        const float v1_1 = (vi1_1 - 8)*d1;
+
+        y[i*QK4_3 + l + 0] = v0_0;
+        y[i*QK4_3 + l + 1] = v0_1;
+
+        y[i*QK4_3 + l + 0 + QK4_3/2] = v1_0;
+        y[i*QK4_3 + l + 1 + QK4_3/2] = v1_1;
     }
 }
 
