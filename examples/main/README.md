@@ -31,7 +31,7 @@ For an interactive experience, try this command:
 
 In this section, we cover the most commonly used options for running the `main` program with the LLaMA models:
 
--   `-m FNAME, --model FNAME`: Specify the path to the LLaMA model file (e.g., `models/lamma-7B/ggml-model.bin`).
+-   `-m FNAME, --model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.bin`).
 -   `-i, --interactive`: Run the program in interactive mode, allowing you to provide input directly and receive real-time responses.
 -   `-ins, --instruct`: Run the program in instruction mode, which is particularly useful when working with Alpaca models.
 -   `-t N, --threads N`: Set the number of threads to use during computation. It is recommended to set this to the number of physical cores your CPU has.
@@ -107,6 +107,14 @@ By utilizing context management options like `--ctx_size` and `--keep`, you can 
 ## Generation Flags
 
 The following options are related to controlling the text generation process, influencing the diversity, creativity, and quality of the generated text. Understanding these options will help you fine-tune the output according to your needs:
+
+### Number of Tokens to Predict
+
+-   `-n N, --n_predict N`: Set the number of tokens to predict when generating text (default: 128, -1 = infinity).
+
+The `--n_predict` option controls the number of tokens the model generates in response to the input prompt. By adjusting this value, you can influence the length of the generated text. A higher value will result in longer text, while a lower value will produce shorter text. A value of -1 will cause text to be generated without limit.
+
+It is important to note that the generated text may be shorter than the specified number of tokens if an End-of-Sequence (EOS) token or a reverse prompt is encountered. In interactive mode text generation will pause and control will be returned to the user. In non-interactive mode, the program will end. In both cases, the text generation may stop before reaching the specified `n_predict` value.
 
 ### RNG Seed
 
