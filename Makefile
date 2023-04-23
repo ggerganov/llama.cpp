@@ -120,7 +120,7 @@ ifdef LLAMA_HIPBLAS
 	GPU_TARGETS!= $(ROCM_PATH)/llvm/bin/offload-arch
 	CFLAGS     += -DGGML_USE_HIPBLAS $(shell $(ROCM_PATH)/bin/hipconfig -C)
 	CXXFLAGS   += -DGGML_USE_HIPBLAS $(shell $(ROCM_PATH)/bin/hipconfig -C)
-	LDFLAGS    += -L/opt/rocm/lib -lhipblas -lamdhip64
+	LDFLAGS    += -L/opt/rocm/lib -Wl,-rpath=$(ROCM_PATH)/lib -lhipblas -lamdhip64
 	OBJS       += ggml-cuda.o
 ggml-cuda.o: CXXFLAGS += $(addprefix --offload-arch=,$(GPU_TARGETS))
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
