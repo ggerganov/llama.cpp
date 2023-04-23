@@ -358,8 +358,13 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     int original_threads = params.n_threads;
     if (blasmode)
     {
-        //for gpttype, GPT2 crashes above 256.
-        int bbs = blasbatchsize; //(blasbatchsize>256?256:blasbatchsize);
+        //for non llama, limit to 256
+        int bbs = blasbatchsize;
+        if (file_format != FileFormat::GGML && file_format != FileFormat::GGHF && file_format != FileFormat::GGJT)
+        {
+            bbs = (blasbatchsize > 256 ? 256 : blasbatchsize);
+        }
+
         params.n_batch = bbs; //received reports of 1024 and above crashing on some models
         params.n_threads = 1;
     }
