@@ -2947,6 +2947,7 @@ static void ggml_vec_dot_q4_3_q8_0(const int n, float * restrict s, const void *
 #elif defined(__AVX2__)
     // Initialize accumulator with zeros
     __m256 acc = _mm256_setzero_ps();
+    float summs = 0.0f;
 
     // Main loop
     for (int i = 0; i < nb; i++) {
@@ -2954,9 +2955,8 @@ static void ggml_vec_dot_q4_3_q8_0(const int n, float * restrict s, const void *
         const __m128 d1 = _mm_set1_ps(GGML_FP16_TO_FP32(x[2*i + 1].d));
         const __m256 dx = _mm256_set_m128(d1, d0);
 
-        const __m128 m0 = _mm_set1_ps(GGML_FP16_TO_FP32(x[2*i + 0].m));
-        const __m128 m1 = _mm_set1_ps(GGML_FP16_TO_FP32(x[2*i + 1].m));
-        const __m256 mx = _mm256_set_m128(m1, m0);
+        summs += GGML_FP16_TO_FP32(x[2*i + 0].m) * y[i].s0
+               + GGML_FP16_TO_FP32(x[2*i + 1].m) * y[i].s1;
 
         const __m128i bx0 = bytes_from_nibbles_16(x[2*i + 0].qs);
         const __m128i bx1 = bytes_from_nibbles_16(x[2*i + 1].qs);
@@ -2965,16 +2965,12 @@ static void ggml_vec_dot_q4_3_q8_0(const int n, float * restrict s, const void *
         const __m256 dy = _mm256_broadcast_ss(&y[i].d);
         const __m256i by = _mm256_loadu_si256((const __m256i *)y[i].qs);
 
-        const __m256i syi = _mm256_maddubs_epi16(_mm256_set1_epi8(1), by);
-        const __m256 syf = sum_i16_pairs_float(syi);
-
         const __m256 q = mul_sum_i8_pairs_float(bx, by);
 
-        const __m256 sxy = _mm256_fmadd_ps(q, dx, _mm256_mul_ps(mx, syf));
-        acc = _mm256_fmadd_ps(sxy, dy, acc);
+        acc = _mm256_fmadd_ps(q, _mm256_mul_ps(dx, dy), acc);
     }
 
-    *s = hsum_float_8(acc);
+    *s = hsum_float_8(acc) + summs;
 #else
     // scalar
     float sumf = 0.0;
