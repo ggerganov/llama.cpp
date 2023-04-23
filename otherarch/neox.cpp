@@ -364,11 +364,11 @@ bool stablelm_eval(
     const int n_vocab = hparams.n_vocab;
     const int n_rot   = hparams.n_rot;
 
-    static size_t buf_size = 512u*1024*1024;    
+    static size_t buf_size = 256u*1024*1024;    
     static void * buf = malloc(buf_size);
 
-    if (mem_per_token > 0 && mem_per_token*N*1.4 > buf_size) {
-        const size_t buf_size_new = 1.6*(mem_per_token*N); // add 10% to account for ggml object overhead
+    if (mem_per_token > 0 && mem_per_token*N*1.6 > buf_size) {
+        const size_t buf_size_new = 1.8*(mem_per_token*N); // add 10% to account for ggml object overhead
         //printf("\n%s: reallocating buffer from %zu to %zu bytes\n", __func__, buf_size, buf_size_new);
 
         // reallocate

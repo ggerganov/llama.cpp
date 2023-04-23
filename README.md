@@ -32,6 +32,7 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
   - CLBlast - tested with https://github.com/CNugteren/CLBlast . If you wish to compile it you will need to reference the OpenCL files. It will only generate the ".lib" file if you compile using MSVC.
   - OpenBLAS - tested with https://github.com/xianyi/OpenBLAS . 
   - Move the respectives .lib files to the /lib folder of your project, overwriting the older files.
+  - Also, replace the existing versions of the corresponding .dll files located in the project directory root (e.g. libopenblas.dll).
   - Make the KoboldCPP project using the instructions above. 
 
 ## OSX and Linux
