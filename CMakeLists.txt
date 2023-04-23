@@ -201,6 +201,10 @@ endif()
 
 if (MSVC)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+
+    if (BUILD_SHARED_LIBS)
+        set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    endif()
 endif()
 
 if (LLAMA_LTO)
@@ -307,7 +311,8 @@ add_library(ggml OBJECT
 
 target_include_directories(ggml PUBLIC .)
 target_compile_features(ggml PUBLIC c_std_11) # don't bump
-target_link_libraries(ggml PRIVATE Threads::Threads ${LLAMA_EXTRA_LIBS})
+target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
+
 if (BUILD_SHARED_LIBS)
     set_target_properties(ggml PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
@@ -320,6 +325,7 @@ add_library(llama
 target_include_directories(llama PUBLIC .)
 target_compile_features(llama PUBLIC cxx_std_11) # don't bump
 target_link_libraries(llama PRIVATE ggml ${LLAMA_EXTRA_LIBS})
+
 if (BUILD_SHARED_LIBS)
     set_target_properties(llama PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_compile_definitions(llama PRIVATE LLAMA_SHARED LLAMA_BUILD)
