@@ -117,6 +117,10 @@ ifdef LLAMA_GPROF
 	CFLAGS   += -pg
 	CXXFLAGS += -pg
 endif
+ifdef LLAMA_PERF
+	CFLAGS   += -DGGML_PERF
+	CXXFLAGS += -DGGML_PERF
+endif
 ifneq ($(filter aarch64%,$(UNAME_M)),)
 	CFLAGS   += -mcpu=native
 	CXXFLAGS += -mcpu=native
