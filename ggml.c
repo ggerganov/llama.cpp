@@ -3126,10 +3126,17 @@ static void ggml_vec_dot_q4_0c_q8_0c(const int n, float * restrict s, const void
     float sumf = 0.0;
 
 #if defined(__ARM_NEON)
+    const int ahead=80;
     float32x4_t sumv0 = vdupq_n_f32(0.0f);
     float32x4_t sumv1 = vdupq_n_f32(0.0f);
 
     for (int i = 0; i < nb/2; i++) {
+        __builtin_prefetch(&xqs[i*QK4_0 + 64*ahead]);
+        __builtin_prefetch(&yqs[2*i*QK8_0C + 64*ahead]);
+        __builtin_prefetch(&yqs[2*i*QK8_0C + 64*ahead + 64]);
+        __builtin_prefetch(&xds[2*i + 64/4*ahead]);
+        __builtin_prefetch(&yds[2*i + 64/4*ahead]);
+
         const int dst0 = i + i/2*2;      // 0, 1, 4, 5, 8, 9, ...
         const int dst1 = i + i/2*2 + 2;  // 2, 3, 6, 7, 10, 11 ...
 
@@ -3188,9 +3195,15 @@ static void ggml_vec_dot_q4_0c_q8_0c(const int n, float * restrict s, const void
     sumf = vaddvq_f32(sumv0) + vaddvq_f32(sumv1);
 
 #elif defined(__AVX512F__)
+    const int ahead = 64;
     // Initialize accumulator with zeros
     __m512 acc = _mm512_setzero_ps();
     for (int i = 0; i < nb; i += 4) {
+        _mm_prefetch(xqs + i*QK4_0/2 + 64*ahead, _MM_HINT_T0);
+        _mm_prefetch(yqs + i*QK8_0 + 64*ahead, _MM_HINT_T0);
+        _mm_prefetch(yqs + i*QK8_0 + 64*ahead + 64, _MM_HINT_T0);
+        _mm_prefetch(xds + i + 64/4*ahead, _MM_HINT_T0);
+        _mm_prefetch(yds + i + 64/4*ahead, _MM_HINT_T0);
         acc = dot_q4_0c_fourblocks_avx512(acc, xqs + i*QK4_0/2, xds + i, yqs + i*QK8_0, yds + i);
     }
     // Horizontal sum of all lanes of the accumulator
