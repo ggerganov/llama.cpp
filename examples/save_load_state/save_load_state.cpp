@@ -1,5 +1,5 @@
 #include <vector>
-#include <iostream>
+#include <cstdio>
 #include <chrono>
 
 #include "common.h"
@@ -38,7 +38,7 @@ int main(int argc, char ** argv) {
     auto n_prompt_tokens = llama_tokenize(ctx, params.prompt.c_str(), tokens.data(), tokens.size(), true);
 
     if (n_prompt_tokens < 1) {
-        cout << "Failed to tokenize prompt" << endl;
+        fprintf(stderr, "%s : failed to tokenize prompt\n", __func__);
         return 1;
     }
 
@@ -62,8 +62,7 @@ int main(int argc, char ** argv) {
     auto n_past_saved = n_past;
 
     // first run
-    cout << endl
-         << params.prompt;
+    printf("\n%s", params.prompt.c_str());
     for (auto i = 0; i < params.n_predict; i++) {
         auto next_token = llama_sample_top_p_top_k(
             ctx,
@@ -75,16 +74,14 @@ int main(int argc, char ** argv) {
             1.1);
         auto next_token_str = llama_token_to_str(ctx, next_token);
         last_n_tokens_data.push_back(next_token);
-        cout << next_token_str;
+        printf("%s", next_token_str);
         if (llama_eval(ctx, &next_token, 1, n_past, params.n_threads)) {
-            cout << endl
-                 << "Failed to evaluate" << endl;
+            fprintf(stderr, "\n%s : failed to evaluate\n", __func__);
             return 1;
         }
         n_past += 1;
     }
-    cout << endl
-         << endl;
+    printf("\n\n");
 
     // free old model
     llama_free(ctx);
@@ -97,7 +94,7 @@ int main(int argc, char ** argv) {
     FILE *fp_read = fopen("dump_state.bin", "rb");
     auto state_size2 = llama_get_state_size(ctx2);
     if (state_size != state_size2) {
-        cerr << "state size differs\n";
+        fprintf(stderr, "\n%s : failed to validate state size\n", __func__);
     }
     fread(state_mem, 1, state_size, fp_read);
     llama_set_state_data(ctx2, state_mem);  // could also read directly from memory mapped file
@@ -119,15 +116,13 @@ int main(int argc, char ** argv) {
             1.1);
         auto next_token_str = llama_token_to_str(ctx2, next_token);
         last_n_tokens_data.push_back(next_token);
-        cout << next_token_str;
+        printf("%s", next_token_str);
         if (llama_eval(ctx2, &next_token, 1, n_past, params.n_threads)) {
-            cout << endl
-                 << "Failed to evaluate" << endl;
+            fprintf(stderr, "\n%s : failed to evaluate\n", __func__);
             return 1;
         }
         n_past += 1;
     }
-    cout << endl
-         << endl;
+    printf("\n\n");
     return 0;
 }
