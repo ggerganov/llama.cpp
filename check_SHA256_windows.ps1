@@ -45,7 +45,7 @@ foreach ($line in $hashLines) {
     }
     else {
       $validChecksum = ""
-      $fileMissing = "X"
+      $fileMissing = ""
     }
   }
   else {
