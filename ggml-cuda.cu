@@ -6,7 +6,7 @@
 
 typedef uint16_t ggml_fp16_t;
 static_assert(sizeof(__half) == sizeof(ggml_fp16_t), "wrong fp16 size");
-// #define CUDA_MEM_DEBUG 1
+ #define CUDA_MEM_DEBUG 0
 
 #define QK4_0 32
 typedef struct {
@@ -181,6 +181,19 @@ static int g_cuda_free_buffer_indices[MAX_CUDA_BUFFERS]; // sorted list of free 
 static int g_cuda_free_buffer_count = 0;
 static size_t g_cuda_pool_total_allocated = 0;
 
+void cuda_pool_dump() {
+    printf("========================================\n");
+    printf("| Current CUDA Buffer Pool             |\n");
+    printf("========================================\n");
+    printf("| %-6s | %-12s | %-10s |\n", "Index", "Buffer Index", "Size (bytes)");
+    printf("----------------------------------------\n");
+    for (int i = 0; i < g_cuda_free_buffer_count; ++i) {
+        int buffer_index = g_cuda_free_buffer_indices[i];
+        printf("| %-6d | %-12d | %-10zu |\n",
+               i, buffer_index, g_cuda_buffer_pool[buffer_index].size);
+    }
+    printf("========================================\n");
+}
 
 void cuda_pool_insert_idx(int index) {
     int left = 0;
@@ -188,7 +201,7 @@ void cuda_pool_insert_idx(int index) {
 
     while (left <= right) {
         int mid = (left + right) / 2;
-        if (g_cuda_buffer_pool[g_cuda_free_buffer_indices[mid]].size <= g_cuda_buffer_pool[index].size) {
+        if (g_cuda_buffer_pool[g_cuda_free_buffer_indices[mid]].size < g_cuda_buffer_pool[index].size) {
             left = mid + 1;
         } else {
             right = mid - 1;
@@ -202,8 +215,9 @@ void cuda_pool_insert_idx(int index) {
 
     g_cuda_free_buffer_indices[left] = index;
     g_cuda_free_buffer_count++;
-    #ifdef CUDA_MEM_DEBUG
-    printf("INFO:: Inserted buffer at index %d with size %d bytes\n", index, g_cuda_buffer_pool[index].size);
+    #if CUDA_MEM_DEBUG
+    printf("INFO:: Inserted buffer at index %d with size %lld bytes\n", index, g_cuda_buffer_pool[index].size);
+    cuda_pool_dump();
     #endif
 }
 // find the best fitting block in the pool and remove it from the indexed list
@@ -216,7 +230,11 @@ int cuda_pool_get_block(size_t size, size_t * actual_size) {
         int mid = (left + right) / 2;
         if (g_cuda_buffer_pool[g_cuda_free_buffer_indices[mid]].size >= size) {
             index = mid;
-            right = mid - 1;
+            if (mid > 0 && g_cuda_buffer_pool[g_cuda_free_buffer_indices[mid - 1]].size >= size) {
+                right = mid - 1; // continue searching to the left for smaller fitting buffers
+            } else {
+                break; // found the smallest fitting buffer
+            }
         } else {
             left = mid + 1;
         }
@@ -231,16 +249,19 @@ int cuda_pool_get_block(size_t size, size_t * actual_size) {
             g_cuda_free_buffer_indices[i] = g_cuda_free_buffer_indices[i + 1];
         }
         g_cuda_free_buffer_count--;
-        #ifdef CUDA_MEM_DEBUG
-        printf("INFO:: Found buffer of size %d bytes at index %d\n", *actual_size, buffer_index);
+        #if CUDA_MEM_DEBUG
+        printf("INFO:: Found buffer of size %lld bytes at index %d\n", *actual_size, buffer_index);
+        cuda_pool_dump();
         #endif
         return buffer_index;
     }
-    #ifdef CUDA_MEM_DEBUG
-    printf("INFO:: No buffer found for size %d bytes\n", size);
+    #if CUDA_MEM_DEBUG
+    printf("INFO:: No buffer found for size %lld bytes\n", size);
+    cuda_pool_dump();
     #endif
     return -1;
 }
+
 
 // mark all buffers as free
 void ggml_cuda_pool_initialize() {
@@ -262,8 +283,9 @@ void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
         g_cuda_buffer_pool[buffer_index].ptr = nullptr;
         g_cuda_buffer_pool[buffer_index].size = 0;
         g_cuda_pool_total_allocated -= *actual_size; 
-        #ifdef CUDA_MEM_DEBUG
-        printf("INFO:: Allocated %d bytes from buffer at index %d (total allocated: %d bytes)\n", *actual_size, buffer_index, g_cuda_pool_total_allocated);
+        #if CUDA_MEM_DEBUG
+        printf("INFO:: Allocated %lld bytes from buffer at index %d (total allocated: %lld bytes)\n", *actual_size, buffer_index, g_cuda_pool_total_allocated);
+        cuda_pool_dump();
         #endif
         return ptr;
     }
@@ -274,8 +296,9 @@ void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
     CUDA_CHECK(cudaMalloc((void **) &ptr, size));
     *actual_size = size;
     g_cuda_pool_total_allocated += size;
-    #ifdef CUDA_MEM_DEBUG
-    printf("INFO:: Allocated %d bytes from cudaMalloc (total allocated: %d bytes)\n", *actual_size, g_cuda_pool_total_allocated);
+    #if CUDA_MEM_DEBUG
+    printf("INFO:: Allocated %lld bytes from cudaMalloc (total allocated: %lld bytes)\n", *actual_size, g_cuda_pool_total_allocated);
+    cuda_pool_dump();
     #endif
     return ptr;
 }
