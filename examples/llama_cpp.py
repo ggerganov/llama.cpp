@@ -201,25 +201,6 @@ _lib.llama_apply_lora_from_file.argtypes = [llama_context_p, c_char_p, c_char_p,
 _lib.llama_apply_lora_from_file.restype = c_int
 
 
-# Returns the KV cache that will contain the context for the
-# ongoing prediction with the model.
-def llama_get_kv_cache(ctx: llama_context_p):
-    return _lib.llama_get_kv_cache(ctx)
-
-
-_lib.llama_get_kv_cache.argtypes = [llama_context_p]
-_lib.llama_get_kv_cache.restype = POINTER(c_uint8)
-
-
-# Returns the size of the KV cache
-def llama_get_kv_cache_size(ctx: llama_context_p) -> c_size_t:
-    return _lib.llama_get_kv_cache_size(ctx)
-
-
-_lib.llama_get_kv_cache_size.argtypes = [llama_context_p]
-_lib.llama_get_kv_cache_size.restype = c_size_t
-
-
 # Returns the number of tokens in the KV cache
 def llama_get_kv_cache_token_count(ctx: llama_context_p) -> c_int:
     return _lib.llama_get_kv_cache_token_count(ctx)
@@ -227,17 +208,6 @@ def llama_get_kv_cache_token_count(ctx: llama_context_p) -> c_int:
 
 _lib.llama_get_kv_cache_token_count.argtypes = [llama_context_p]
 _lib.llama_get_kv_cache_token_count.restype = c_int
-
-
-# Sets the KV cache containing the current context for the model
-def llama_set_kv_cache(
-    ctx: llama_context_p, kv_cache, n_size: c_size_t, n_token_count: c_int
-):
-    return _lib.llama_set_kv_cache(ctx, kv_cache, n_size, n_token_count)
-
-
-_lib.llama_set_kv_cache.argtypes = [llama_context_p, POINTER(c_uint8), c_size_t, c_int]
-_lib.llama_set_kv_cache.restype = None
 
 
 # Returns the size in bytes of the state (rng, logits, embedding and kv_cache)
