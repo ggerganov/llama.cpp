@@ -5819,7 +5819,7 @@ struct ggml_tensor * ggml_cont_impl(
     bool is_node = false;
 
     if (!inplace && a->grad) {
-        GGML_ASSERT(false); // TODO: implement backward
+        // TODO: implement backward
         is_node = true;
     }
 
