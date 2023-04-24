@@ -12325,6 +12325,8 @@ int ggml_cpu_has_blas(void) {
 int ggml_cpu_has_cublas(void) {
 #if defined(GGML_USE_CUBLAS)
     return 1;
+#elif defined(GGML_USE_CLBLAST)
+    return 1;
 #else
     return 0;
 #endif

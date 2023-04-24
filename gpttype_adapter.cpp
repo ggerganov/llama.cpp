@@ -366,7 +366,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
         }
 
         params.n_batch = bbs; //received reports of 1024 and above crashing on some models
-        params.n_threads = 1;
+        //params.n_threads = 1; //do not limit here anymore.
     }
 
     current_context_tokens.resize(n_past);
