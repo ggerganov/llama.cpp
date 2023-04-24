@@ -6,6 +6,7 @@
 
 typedef uint16_t ggml_fp16_t;
 static_assert(sizeof(__half) == sizeof(ggml_fp16_t), "wrong fp16 size");
+// #define CUDA_MEM_DEBUG 1
 
 #define QK4_0 32
 typedef struct {
@@ -151,8 +152,6 @@ void dequantize_row_q4_3_cuda(const void * vx, float * y, int k, cudaStream_t st
     dequantize_block_q4_3<<<nb, 1, 0, stream>>>(vx, y);
 }
 
-// buffer pool for cuda
-#define MAX_CUDA_BUFFERS 16
 
 struct scoped_spin_lock {
     std::atomic_flag& lock;
@@ -173,41 +172,137 @@ struct cuda_buffer {
     size_t size = 0;
 };
 
+#define MAX_CUDA_BUFFERS 512 // number of allocations the pool can hold
+static const uint64_t MAX_CUDA_POOL_SIZE = static_cast<uint64_t>(1024) * 1024 * 1024 * 4;  // max memory to allocate for cuda buffers
 static cuda_buffer g_cuda_buffer_pool[MAX_CUDA_BUFFERS];
 static std::atomic_flag g_cuda_pool_lock = ATOMIC_FLAG_INIT;
 
+static int g_cuda_free_buffer_indices[MAX_CUDA_BUFFERS]; // sorted list of free already allocated indices
+static int g_cuda_free_buffer_count = 0;
+static size_t g_cuda_pool_total_allocated = 0;
+
+
+void cuda_pool_insert_idx(int index) {
+    int left = 0;
+    int right = g_cuda_free_buffer_count - 1;
+
+    while (left <= right) {
+        int mid = (left + right) / 2;
+        if (g_cuda_buffer_pool[g_cuda_free_buffer_indices[mid]].size <= g_cuda_buffer_pool[index].size) {
+            left = mid + 1;
+        } else {
+            right = mid - 1;
+        }
+    }
+
+    // Move elements to the right to make space for the new index
+    for (int i = g_cuda_free_buffer_count; i > left; --i) {
+        g_cuda_free_buffer_indices[i] = g_cuda_free_buffer_indices[i - 1];
+    }
+
+    g_cuda_free_buffer_indices[left] = index;
+    g_cuda_free_buffer_count++;
+    #ifdef CUDA_MEM_DEBUG
+    printf("INFO:: Inserted buffer at index %d with size %d bytes\n", index, g_cuda_buffer_pool[index].size);
+    #endif
+}
+// find the best fitting block in the pool and remove it from the indexed list
+int cuda_pool_get_block(size_t size, size_t * actual_size) {
+    int left = 0;
+    int right = g_cuda_free_buffer_count - 1;
+    int index = -1;
+
+    while (left <= right) {
+        int mid = (left + right) / 2;
+        if (g_cuda_buffer_pool[g_cuda_free_buffer_indices[mid]].size >= size) {
+            index = mid;
+            right = mid - 1;
+        } else {
+            left = mid + 1;
+        }
+    }
+
+    if (index != -1) {
+        int buffer_index = g_cuda_free_buffer_indices[index];
+        *actual_size = g_cuda_buffer_pool[buffer_index].size;
+
+        // Remove the used index from the sorted array
+        for (int i = index; i < g_cuda_free_buffer_count - 1; ++i) {
+            g_cuda_free_buffer_indices[i] = g_cuda_free_buffer_indices[i + 1];
+        }
+        g_cuda_free_buffer_count--;
+        #ifdef CUDA_MEM_DEBUG
+        printf("INFO:: Found buffer of size %d bytes at index %d\n", *actual_size, buffer_index);
+        #endif
+        return buffer_index;
+    }
+    #ifdef CUDA_MEM_DEBUG
+    printf("INFO:: No buffer found for size %d bytes\n", size);
+    #endif
+    return -1;
+}
+
+// mark all buffers as free
+void ggml_cuda_pool_initialize() {
+    for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
+        g_cuda_buffer_pool[i].ptr = nullptr;
+        g_cuda_buffer_pool[i].size = 0;
+    }
+    g_cuda_free_buffer_count = 0;
+    g_cuda_pool_total_allocated = 0;
+}
+// Uses the existing pool of buffers to allocate memory efficienty or allocates a new buffer. Returns pointer
 void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
     scoped_spin_lock lock(g_cuda_pool_lock);
 
-    for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
-        cuda_buffer& b = g_cuda_buffer_pool[i];
-        if (b.size >= size && b.ptr != nullptr) {
-            void * ptr = b.ptr;
-            *actual_size = b.size;
-            b.ptr = nullptr;
-            b.size = 0;
-            return ptr;
-        }
+    int buffer_index = cuda_pool_get_block(size, actual_size);
+
+    if (buffer_index != -1) {
+        void * ptr = g_cuda_buffer_pool[buffer_index].ptr;
+        g_cuda_buffer_pool[buffer_index].ptr = nullptr;
+        g_cuda_buffer_pool[buffer_index].size = 0;
+        g_cuda_pool_total_allocated -= *actual_size; 
+        #ifdef CUDA_MEM_DEBUG
+        printf("INFO:: Allocated %d bytes from buffer at index %d (total allocated: %d bytes)\n", *actual_size, buffer_index, g_cuda_pool_total_allocated);
+        #endif
+        return ptr;
+    }
+    if (g_cuda_pool_total_allocated + size > MAX_CUDA_POOL_SIZE) {
+        fprintf(stderr, "WARNING: CUDA pool is full, consider inceasing MAX_CUDA_POOL_SIZE. Trying to allocate anyway..\n");
     }
     void * ptr;
     CUDA_CHECK(cudaMalloc((void **) &ptr, size));
     *actual_size = size;
+    g_cuda_pool_total_allocated += size;
+    #ifdef CUDA_MEM_DEBUG
+    printf("INFO:: Allocated %d bytes from cudaMalloc (total allocated: %d bytes)\n", *actual_size, g_cuda_pool_total_allocated);
+    #endif
     return ptr;
 }
 
 void ggml_cuda_pool_free(void * ptr, size_t size) {
     scoped_spin_lock lock(g_cuda_pool_lock);
 
-    for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
-        cuda_buffer& b = g_cuda_buffer_pool[i];
-        if (b.ptr == nullptr) {
-            b.ptr = ptr;
-            b.size = size;
-            return;
+    if (g_cuda_free_buffer_count < MAX_CUDA_BUFFERS) {
+        int buffer_index = -1;
+        for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
+            if (g_cuda_buffer_pool[i].ptr == nullptr) {
+                buffer_index = i;
+                break;
+            }
         }
+
+        if (buffer_index != -1) {
+            g_cuda_buffer_pool[buffer_index].ptr = ptr;
+            g_cuda_buffer_pool[buffer_index].size = size;
+            cuda_pool_insert_idx
+        (buffer_index);
+            g_cuda_pool_total_allocated += size; 
+        }
+    } else {
+        fprintf(stderr, "WARNING: cuda buffer pool full, consider increasing MAX_CUDA_BUFFERS\n");
+        CUDA_CHECK(cudaFree(ptr));
     }
-    fprintf(stderr, "WARNING: cuda buffer pool full, increase MAX_CUDA_BUFFERS\n");
-    CUDA_CHECK(cudaFree(ptr));
 }
 
 cublasHandle_t g_cublasH = NULL;
@@ -215,6 +310,7 @@ cudaStream_t g_cudaStream = NULL;
 
 void ggml_init_cublas(void) {
     if (g_cublasH == NULL) {
+        ggml_cuda_pool_initialize();
         // create cublas handle, bind a stream
         CUBLAS_CHECK(cublasCreate(&g_cublasH));
 
