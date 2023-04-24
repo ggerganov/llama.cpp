@@ -7,6 +7,32 @@
 
 #define MAX_NARGS 2
 
+//
+// logging
+//
+
+#if (GGML_DEBUG >= 1)
+#define GGML_PRINT_DEBUG(...) printf(__VA_ARGS__)
+#else
+#define GGML_PRINT_DEBUG(...)
+#endif
+
+#if (GGML_DEBUG >= 5)
+#define GGML_PRINT_DEBUG_5(...) printf(__VA_ARGS__)
+#else
+#define GGML_PRINT_DEBUG_5(...)
+#endif
+
+#if (GGML_DEBUG >= 10)
+#define GGML_PRINT_DEBUG_10(...) printf(__VA_ARGS__)
+#else
+#define GGML_PRINT_DEBUG_10(...)
+#endif
+
+#define GGML_PRINT(...) printf(__VA_ARGS__)
+
+
+
 float frand() {
     return (float)rand()/(float)RAND_MAX;
 }
@@ -132,9 +158,9 @@ bool check_gradient(
             const float error_abs = fabsf(g0 - g1);
             const float error_rel = g0 != 0 ? fabsf(g0 - g1)/fabs(g0) : 0;
 
-            printf("%s: ndims=%d, i=%d, k=%d, x0=%f, xm=%f, xp=%f, f0=%f, f1=%f, g0=%f, g1=%f, eps=%f, error_abs=%f, error_rel=%f\n",
-                        op_name, ndims, i, k, x0, xm, xp, f0, f1, g0, g1, eps, error_abs, error_rel);
             if (error_abs > max_error_abs || error_rel > max_error_rel) {
+                printf("%s: ndims=%d, i=%d, k=%d, x0=%f, xm=%f, xp=%f, f0=%f, f1=%f, g0=%f, g1=%f, eps=%f, error_abs=%f, error_rel=%f\n",
+                            op_name, ndims, i, k, x0, xm, xp, f0, f1, g0, g1, eps, error_abs, error_rel);
                 assert(false);
             }
         }
@@ -156,32 +182,32 @@ bool check_mat_mul(
     const int nr = x1->ne[1];
     const int nk = x0->ne[0];
 
-    printf("check_mat_mul: nc=%d, nr=%d, nk=%d\n", nc, nr, nk);
+    GGML_PRINT_DEBUG("check_mat_mul: nc=%d, nr=%d, nk=%d\n", nc, nr, nk);
 
-    printf("x0:\n");
+    GGML_PRINT_DEBUG("x0:\n");
     for (int j = 0; j < x0->ne[1]; ++j) {
         for (int i = 0; i < x0->ne[0]; ++i) {
-            printf("%6.3f ", src0[j*nk + i]);
+            GGML_PRINT_DEBUG("%6.3f ", src0[j*nk + i]);
         }
-        printf("\n");
+        GGML_PRINT_DEBUG("\n");
     }
-    printf("\n");
+    GGML_PRINT_DEBUG("\n");
 
-    printf("x1:\n");
+    GGML_PRINT_DEBUG("x1:\n");
     for (int j = 0; j < x1->ne[1]; ++j) {
         for (int i = 0; i < x1->ne[0]; ++i) {
-            printf("%6.3f ", src1[j*nk + i]);
+            GGML_PRINT_DEBUG("%6.3f ", src1[j*nk + i]);
         }
-        printf("\n");
+        GGML_PRINT_DEBUG("\n");
     }
-    printf("\n");
+    GGML_PRINT_DEBUG("\n");
 
-    printf("y: n_dims = %d, (%lld, %lld)\n", y->n_dims, y->ne[0], y->ne[1]);
+    GGML_PRINT_DEBUG("y: n_dims = %d, (%lld, %lld)\n", y->n_dims, y->ne[0], y->ne[1]);
     for (int j = 0; j < y->ne[1]; ++j) {
         for (int i = 0; i < y->ne[0]; ++i) {
-            printf("%6.3f ", dst[j*nr + i]);
+            GGML_PRINT_DEBUG("%6.3f ", dst[j*nr + i]);
         }
-        printf("\n");
+        GGML_PRINT_DEBUG("\n");
     }
 
     for (int i = 0; i < nr; ++i) {
@@ -193,7 +219,7 @@ bool check_mat_mul(
             }
 
             if (fabsf(dst[i*nc + j] - sum) > 1e-5f) {
-                printf("check_mat_mul: dst[%d] = %f, sum = %f\n", i*nc + j, dst[i*nc + j], sum);
+                fprintf(stderr, "check_mat_mul: dst[%d] = %f, sum = %f\n", i*nc + j, dst[i*nc + j], sum);
                 assert(false);
                 return false;
             }
@@ -241,7 +267,7 @@ int main(int argc, const char ** argv) {
 
                 struct ggml_tensor * f = ggml_sum(ctx0, ggml_add(ctx0, x[0], x[1]));
 
-                check_gradient("add", ctx0, x, f, ndims, nargs, 1, 1e-3f, 1e-3f);
+                check_gradient("add", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, 1e-3f);
             }
         }
 
@@ -375,7 +401,7 @@ int main(int argc, const char ** argv) {
                 struct ggml_tensor * m = ggml_mul_mat(ctx0, x[1], x[0]);
                 struct ggml_tensor * f = ggml_sum(ctx0, m);
 
-                printf("testing: mul_mat, [%lld, %lld] (%d) * [%lld, %lld] (%d)\n", x[1]->ne[0], x[1]->ne[1], x[1]->n_dims, x[0]->ne[0], x[0]->ne[1], x[0]->n_dims);
+                GGML_PRINT_DEBUG("testing: mul_mat, [%lld, %lld] (%d) * [%lld, %lld] (%d)\n", x[1]->ne[0], x[1]->ne[1], x[1]->n_dims, x[0]->ne[0], x[0]->ne[1], x[0]->n_dims);
 
                 check_gradient("mul_mat", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
                 check_mat_mul(m, x[1], x[0]);
