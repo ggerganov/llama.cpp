@@ -252,7 +252,7 @@ extern "C" {
 
         GGML_OP_DUP,
         GGML_OP_ADD,
-        GGML_OP_ADD1
+        GGML_OP_ADD1,
         GGML_OP_ADD_AT,
         GGML_OP_SUB,
         GGML_OP_MUL,
@@ -746,7 +746,7 @@ extern "C" {
             int                   n_dims,
             int                   mode);
 
-    // rotary position embedding backward, i.e compute dx
+    // rotary position embedding backward, i.e compute dx from dy
     GGML_API struct ggml_tensor * ggml_rope_back(
             struct ggml_context * ctx,
             struct ggml_tensor  * x,
