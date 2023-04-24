@@ -12354,6 +12354,18 @@ int ggml_cpu_has_cublas(void) {
 #endif
 }
 
+int ggml_cpu_has_clblast(void) {
+#if defined(GGML_USE_CLBLAST)
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+int ggml_cpu_has_gpublas(void) {
+    return ggml_cpu_has_cublas() || ggml_cpu_has_clblast();
+}
+
 int ggml_cpu_has_sse3(void) {
 #if defined(__SSE3__)
     return 1;
