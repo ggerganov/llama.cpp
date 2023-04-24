@@ -254,11 +254,11 @@ bool stablelm_model_load(const std::string & fname, stablelm_model & model, gpt_
         while (true) {
             int32_t n_dims;
             int32_t length;
-            int32_t ftype;
+            int32_t ttype;
 
             fin.read(reinterpret_cast<char *>(&n_dims), sizeof(n_dims));
             fin.read(reinterpret_cast<char *>(&length), sizeof(length));
-            fin.read(reinterpret_cast<char *>(&ftype),  sizeof(ftype));
+            fin.read(reinterpret_cast<char *>(&ttype),  sizeof(ttype));
 
             if (fin.eof()) {
                 break;
@@ -291,26 +291,12 @@ bool stablelm_model_load(const std::string & fname, stablelm_model & model, gpt_
                 return false;
             }
 
+            // for debugging
             if (0) {
-                static const char * ftype_str[] = { "f32", "f16", "q4_0", "q4_1", "q4_2", };
-                printf("%24s - [%5d, %5d], type = %6s, %6.2f MB, %9zu bytes\n", name.data(), ne[0], ne[1], ftype_str[ftype], ggml_nbytes(tensor)/1024.0/1024.0, ggml_nbytes(tensor));
+                printf("%24s - [%5d, %5d], type = %6s, %6.2f MB, %9zu bytes\n", name.data(), ne[0], ne[1], ggml_type_name(ggml_type(ttype)), ggml_nbytes(tensor)/1024.0/1024.0, ggml_nbytes(tensor));
             }
 
-            size_t bpe = 0;
-
-            switch (ftype) {
-                case 0: bpe = ggml_type_size(GGML_TYPE_F32);  break;
-                case 1: bpe = ggml_type_size(GGML_TYPE_F16);  break;
-                case 2: bpe = ggml_type_size(GGML_TYPE_Q4_0); assert(ne[0] % 64 == 0); break;
-                case 3: bpe = ggml_type_size(GGML_TYPE_Q4_1); assert(ne[0] % 64 == 0); break;
-                case 5: bpe = ggml_type_size(GGML_TYPE_Q4_2); assert(ne[0] % 64 == 0); break;
-                case 6: bpe = ggml_type_size(GGML_TYPE_Q4_3); assert(ne[0] % 64 == 0); break;
-                default:
-                        {
-                            fprintf(stderr, "%s: unknown ftype %d in model file\n", __func__, ftype);
-                            return false;
-                        }
-            };
+            const size_t bpe = ggml_type_size(ggml_type(ttype));
 
             if ((nelements*bpe)/ggml_blck_size(tensor->type) != ggml_nbytes(tensor)) {
                 fprintf(stderr, "%s: tensor '%s' has wrong size in model file: got %zu, expected %zu\n",
@@ -320,7 +306,6 @@ bool stablelm_model_load(const std::string & fname, stablelm_model & model, gpt_
 
             fin.read(reinterpret_cast<char *>(tensor->data), ggml_nbytes(tensor));
 
-            //printf("%42s - [%5d, %5d], type = %6s, %6.2f MB\n", name.data(), ne[0], ne[1], ftype == 0 ? "float" : "f16", ggml_nbytes(tensor)/1024.0/1024.0);
             total_size += ggml_nbytes(tensor);
             if (++n_tensors % 8 == 0) {
                 printf(".");
@@ -364,7 +349,7 @@ bool stablelm_eval(
     const int n_vocab = hparams.n_vocab;
     const int n_rot   = hparams.n_rot;
 
-    static size_t buf_size = 256u*1024*1024;    
+    static size_t buf_size = 256u*1024*1024;
     static void * buf = malloc(buf_size);
 
     if (mem_per_token > 0 && mem_per_token*N*1.9 > buf_size) {

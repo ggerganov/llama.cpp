@@ -99,6 +99,8 @@ def load_model(model_filename):
     inputs.threads = args.threads
     inputs.f16_kv = True
     inputs.use_mmap = (not args.nommap)
+    if args.lora and args.lora!="":
+        inputs.use_mmap = False
     inputs.use_smartcontext = args.smartcontext
     inputs.unban_tokens = args.unbantokens
     inputs.blasbatchsize = args.blasbatchsize
@@ -141,7 +143,7 @@ maxctx = 2048
 maxlen = 128
 modelbusy = False
 defaultport = 5001
-KcppVersion = "1.13"
+KcppVersion = "1.13.1"
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
     sys_version = ""

@@ -51,7 +51,7 @@ __kernel void dequantize_row_q4_2(__global struct block_q4_2* blocks, __global f
     const uint i = get_global_id(0) / 16;
     const uint l = get_local_id(0);
 
-    const float d = vload_half(0, (const half*) &blocks[i].d);;
+    const float d = vload_half(0, (__global half*) &blocks[i].d);;
 
     const uchar vi = blocks[i].qs[l];
 
@@ -71,8 +71,8 @@ __kernel void dequantize_row_q4_3(__global struct block_q4_3* blocks, __global f
     const uint i = get_global_id(0) / 16;
     const uint l = get_local_id(0);
 
-    const float d = vload_half(0, (const half*) &(blocks[i].d));
-    const float m = vload_half(0, (const half*) &(blocks[i].m));
+    const float d = vload_half(0, (__global half*) &(blocks[i].d));
+    const float m = vload_half(0, (__global half*) &(blocks[i].m));
 
     const uchar vi = blocks[i].qs[l];
 

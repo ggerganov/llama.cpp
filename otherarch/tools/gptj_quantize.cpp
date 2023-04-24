@@ -1,6 +1,7 @@
 #include "ggml.h"
 
 #include "otherarch/utils.h"
+#include "common-ggml.h"
 
 #include <cassert>
 #include <cmath>
@@ -24,20 +25,7 @@ struct gptj_hparams {
 };
 
 // quantize a model
-bool gptj_model_quantize(const std::string & fname_inp, const std::string & fname_out, int itype) {
-    ggml_type type = GGML_TYPE_Q4_1;
-
-    switch (itype) {
-        case 2: type = GGML_TYPE_Q4_0; break;
-        case 3: type = GGML_TYPE_Q4_1; break;
-        default: fprintf(stderr, "%s: invalid quantization type %d\n", __func__, itype); return 1;
-    };
-
-    if (type != GGML_TYPE_Q4_0 && type != GGML_TYPE_Q4_1) {
-        fprintf(stderr, "%s: invalid quantization type %d\n", __func__, type);
-        return false;
-    }
-
+bool gptj_model_quantize(const std::string & fname_inp, const std::string & fname_out, ggml_mtype mtype) {
     gpt_vocab vocab;
 
     printf("%s: loading model from '%s'\n", __func__, fname_inp.c_str());
@@ -91,7 +79,7 @@ bool gptj_model_quantize(const std::string & fname_inp, const std::string & fnam
         fout.write((char *) &hparams.n_head,  sizeof(hparams.n_head));
         fout.write((char *) &hparams.n_layer, sizeof(hparams.n_layer));
         fout.write((char *) &hparams.n_rot,   sizeof(hparams.n_rot));
-        fout.write((char *) &itype,           sizeof(hparams.f16));
+        fout.write((char *) &mtype,           sizeof(hparams.f16));
     }
 
     // load vocab
@@ -121,156 +109,14 @@ bool gptj_model_quantize(const std::string & fname_inp, const std::string & fnam
         }
     }
 
-    // load weights
-    {
-        size_t total_size_org = 0;
-        size_t total_size_new = 0;
+    // regexes of tensor names to be quantized
+    const std::vector<std::string> to_quant = {
+        ".*weight",
+    };
 
-        std::vector<float> work;
-
-        std::vector<uint8_t>     data_u8;
-        std::vector<ggml_fp16_t> data_f16;
-        std::vector<float>       data_f32;
-
-        std::vector<int64_t> hist_all(1 << 4, 0);
-
-        while (true) {
-            int32_t n_dims;
-            int32_t length;
-            int32_t ftype;
-
-            finp.read(reinterpret_cast<char *>(&n_dims), sizeof(n_dims));
-            finp.read(reinterpret_cast<char *>(&length), sizeof(length));
-            finp.read(reinterpret_cast<char *>(&ftype),  sizeof(ftype));
-
-            if (finp.eof()) {
-                break;
-            }
-
-            int32_t nelements = 1;
-            int32_t ne[2] = { 1, 1 };
-            for (int i = 0; i < n_dims; ++i) {
-                finp.read (reinterpret_cast<char *>(&ne[i]), sizeof(ne[i]));
-                nelements *= ne[i];
-            }
-
-            std::string name(length, 0);
-            finp.read (&name[0], length);
-
-            {
-                static const char * ftype_str[] = { "f32", "f16", "q4_0", "q4_1", };
-                printf("%48s - [%5d, %5d], type = %6s ", name.data(), ne[0], ne[1], ftype_str[ftype]);
-            }
-
-            // regexes of tensor names to be quantized
-            const std::vector<std::string> k_names = {
-                ".*weight",
-            };
-
-            bool quantize = false;
-            for (const auto & s : k_names) {
-                if (std::regex_match(name, std::regex(s))) {
-                    quantize = true;
-                    break;
-                }
-            }
-
-            // quantize only 2D tensors
-            quantize &= (n_dims == 2);
-
-            if (quantize) {
-                if (ftype != 0 && ftype != 1) {
-                    fprintf(stderr, "%s: unsupported ftype %d for integer quantization\n", __func__, ftype);
-                    return false;
-                }
-
-                if (ftype == 1) {
-                    data_f16.resize(nelements);
-                    finp.read(reinterpret_cast<char *>(data_f16.data()), nelements * sizeof(ggml_fp16_t));
-                    data_f32.resize(nelements);
-                    for (int i = 0; i < nelements; ++i) {
-                        data_f32[i] = ggml_fp16_to_fp32(data_f16[i]);
-                    }
-                } else {
-                    data_f32.resize(nelements);
-                    finp.read(reinterpret_cast<char *>(data_f32.data()), nelements * sizeof(float));
-                }
-
-                ftype = itype;
-            } else {
-                const int bpe = (ftype == 0) ? sizeof(float) : sizeof(uint16_t);
-
-                data_u8.resize(nelements*bpe);
-                finp.read(reinterpret_cast<char *>(data_u8.data()), nelements * bpe);
-            }
-
-            fout.write(reinterpret_cast<char *>(&n_dims), sizeof(n_dims));
-            fout.write(reinterpret_cast<char *>(&length), sizeof(length));
-            fout.write(reinterpret_cast<char *>(&ftype),  sizeof(ftype));
-            for (int i = 0; i < n_dims; ++i) {
-                fout.write(reinterpret_cast<char *>(&ne[i]), sizeof(ne[i]));
-            }
-            fout.write(&name[0], length);
-
-            if (quantize) {
-                printf("quantizing .. ");
-                work.resize(nelements); // for quantization
-
-                size_t cur_size = 0;
-                std::vector<int64_t> hist_cur(1 << 4, 0);
-
-                switch (type) {
-                    case GGML_TYPE_Q4_0:
-                        {
-                            cur_size = ggml_quantize_q4_0(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
-                        } break;
-                    case GGML_TYPE_Q4_1:
-                        {
-                            cur_size = ggml_quantize_q4_1(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
-                        } break;
-                    default:
-                        {
-                            fprintf(stderr, "%s: unsupported quantization type %d\n", __func__, type);
-                            return false;
-                        }
-                }
-
-                fout.write(reinterpret_cast<char *>(work.data()), cur_size);
-                total_size_new += cur_size;
-
-                printf("size = %8.2f MB -> %8.2f MB | hist: ", nelements * sizeof(float)/1024.0/1024.0, cur_size/1024.0/1024.0);
-                for (int i = 0; i < hist_cur.size(); ++i) {
-                    hist_all[i] += hist_cur[i];
-                }
-
-                for (int i = 0; i < hist_cur.size(); ++i) {
-                    printf("%5.3f ", hist_cur[i] / (float)nelements);
-                }
-                printf("\n");
-            } else {
-                printf("size = %8.3f MB\n", data_u8.size()/1024.0/1024.0);
-                fout.write(reinterpret_cast<char *>(data_u8.data()), data_u8.size());
-                total_size_new += data_u8.size();
-            }
-
-            total_size_org += nelements * sizeof(float);
-        }
-
-        printf("%s: model size  = %8.2f MB\n", __func__, total_size_org/1024.0/1024.0);
-        printf("%s: quant size  = %8.2f MB\n", __func__, total_size_new/1024.0/1024.0);
-
-        {
-            int64_t sum_all = 0;
-            for (int i = 0; i < hist_all.size(); ++i) {
-                sum_all += hist_all[i];
-            }
-
-            printf("%s: hist: ", __func__);
-            for (int i = 0; i < hist_all.size(); ++i) {
-                printf("%5.3f ", hist_all[i] / (float)sum_all);
-            }
-            printf("\n");
-        }
+    if (!ggml_common_quantize_0(finp, fout, mtype, to_quant, {})) {
+        fprintf(stderr, "%s: failed to quantize model '%s'\n", __func__, fname_inp.c_str());
+        return false;
     }
 
     finp.close();
@@ -288,6 +134,8 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "usage: %s model-f32.bin model-quant.bin type\n", argv[0]);
         fprintf(stderr, "  type = 2 - q4_0\n");
         fprintf(stderr, "  type = 3 - q4_1\n");
+        fprintf(stderr, "  type = 5 - q4_2\n");
+        fprintf(stderr, "  type = 6 - q4_3\n");
         return 1;
     }
 
@@ -301,7 +149,7 @@ int main(int argc, char ** argv) {
     const std::string fname_inp = argv[1];
     const std::string fname_out = argv[2];
 
-    const int itype = atoi(argv[3]);
+    const int mtype = atoi(argv[3]);
 
     const int64_t t_main_start_us = ggml_time_us();
 
@@ -311,7 +159,7 @@ int main(int argc, char ** argv) {
     {
         const int64_t t_start_us = ggml_time_us();
 
-        if (!gptj_model_quantize(fname_inp, fname_out, itype)) {
+        if (!gptj_model_quantize(fname_inp, fname_out, ggml_mtype(mtype))) {
             fprintf(stderr, "%s: failed to quantize model from '%s'\n", __func__, fname_inp.c_str());
             return 1;
         }

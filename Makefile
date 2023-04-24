@@ -269,13 +269,13 @@ koboldcpp_clblast: ggml_clblast.o ggml_rwkv.o ggml_v1.o expose.o common.o gpttyp
 quantize_llama: examples/quantize/quantize.cpp ggml.o llama.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-quantize_gptj: ggml.o llama.o otherarch/tools/gptj_quantize.cpp
+quantize_gptj: ggml.o llama.o otherarch/tools/gptj_quantize.cpp otherarch/tools/common-ggml.cpp
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-quantize_gpt2: ggml.o llama.o otherarch/tools/gpt2_quantize.cpp
+quantize_gpt2: ggml.o llama.o otherarch/tools/gpt2_quantize.cpp otherarch/tools/common-ggml.cpp
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-quantize_neox: ggml.o llama.o otherarch/tools/neox_quantize.cpp
+quantize_neox: ggml.o llama.o otherarch/tools/neox_quantize.cpp otherarch/tools/common-ggml.cpp
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 quantize-stats: examples/quantize-stats/quantize-stats.cpp ggml.o llama.o $(OBJS)

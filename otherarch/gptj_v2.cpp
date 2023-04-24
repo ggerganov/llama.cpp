@@ -91,6 +91,8 @@ ModelLoadResult gptj_model_load(const std::string & fname, gptj_model & model, g
         case 1: wtype = GGML_TYPE_F16;  break;
         case 2: wtype = GGML_TYPE_Q4_0; break;
         case 3: wtype = GGML_TYPE_Q4_1; break;
+        case 5: wtype = GGML_TYPE_Q4_2; break;
+        case 6: wtype = GGML_TYPE_Q4_3; break;
         default:
                 {
                     fprintf(stderr, "%s: invalid model file '%s' (bad f16 value %d)\n",
@@ -254,22 +256,20 @@ ModelLoadResult gptj_model_load(const std::string & fname, gptj_model & model, g
         while (true) {
             int32_t n_dims;
             int32_t length;
-            int32_t ftype;
+            int32_t ttype;
 
             fin.read(reinterpret_cast<char *>(&n_dims), sizeof(n_dims));
             fin.read(reinterpret_cast<char *>(&length), sizeof(length));
-            fin.read(reinterpret_cast<char *>(&ftype),  sizeof(ftype));
+            fin.read(reinterpret_cast<char *>(&ttype),  sizeof(ttype));
 
             if (fin.eof()) {
                 break;
             }
 
-            int64_t nelements = 1;
-            int64_t ne[2] = { 1, 1 };
+            int32_t nelements = 1;
+            int32_t ne[2] = { 1, 1 };
             for (int i = 0; i < n_dims; ++i) {
-                int32_t ne_cur;
-                fin.read(reinterpret_cast<char *>(&ne_cur), sizeof(ne_cur));
-                ne[i] = ne_cur;
+                fin.read(reinterpret_cast<char *>(&ne[i]), sizeof(ne[i]));
                 nelements *= ne[i];
             }
 
@@ -306,24 +306,12 @@ ModelLoadResult gptj_model_load(const std::string & fname, gptj_model & model, g
                
             }
 
+            // for debugging
             if (0) {
-                static const char * ftype_str[] = { "f32", "f16", "q4_0", "q4_1", };
-                printf("%24s - [%5lld, %5lld], type = %6s, %6.2f MB, %9zu bytes\n", name.data(), ne[0], ne[1], ftype_str[ftype], ggml_nbytes(tensor)/1024.0/1024.0, ggml_nbytes(tensor));
+                printf("%24s - [%5d, %5d], type = %6s, %6.2f MB, %9zu bytes\n", name.data(), ne[0], ne[1], ggml_type_name(ggml_type(ttype)), ggml_nbytes(tensor)/1024.0/1024.0, ggml_nbytes(tensor));
             }
 
-            size_t bpe = 0;
-
-            switch (ftype) {
-                case 0: bpe = ggml_type_size(GGML_TYPE_F32);  break;
-                case 1: bpe = ggml_type_size(GGML_TYPE_F16);  break;
-                case 2: bpe = ggml_type_size(GGML_TYPE_Q4_0); assert(ne[0] % 64 == 0); break;
-                case 3: bpe = ggml_type_size(GGML_TYPE_Q4_1); assert(ne[0] % 64 == 0); break;
-                default:
-                        {
-                            fprintf(stderr, "%s: unknown ftype %d in model file\n", __func__, ftype);
-                            return ModelLoadResult::FAIL;
-                        }
-            };
+            const size_t bpe = ggml_type_size(ggml_type(ttype));
 
             if ((nelements*bpe)/ggml_blck_size(tensor->type) != ggml_nbytes(tensor)) {
                 fprintf(stderr, "%s: tensor '%s' has wrong size in model file: got %zu, expected %zu\n",
@@ -333,7 +321,7 @@ ModelLoadResult gptj_model_load(const std::string & fname, gptj_model & model, g
 
             fin.read(reinterpret_cast<char *>(tensor->data), ggml_nbytes(tensor));
 
-            //printf("%42s - [%5d, %5d], type = %6s, %6.2f MB\n", name.data(), ne[0], ne[1], ftype == 0 ? "float" : "f16", ggml_nbytes(tensor)/1024.0/1024.0);
+            //printf("%42s - [%5d, %5d], type = %6s, %6.2f MB\n", name.data(), ne[0], ne[1], ttype == 0 ? "float" : "f16", ggml_nbytes(tensor)/1024.0/1024.0);
             total_size += ggml_nbytes(tensor);
             if (++n_tensors % 8 == 0) {
                 printf(".");
@@ -381,8 +369,7 @@ bool gptj_eval(
 
     const int d_key = n_embd/n_head;
 
-    //todo: there is a bug that causes the buffer to oom and I cannot figure it out, hack to increase size for now  
-    static size_t buf_size = 256u*1024*1024;    
+    static size_t buf_size = 256u*1024*1024;
     static void * buf = malloc(buf_size);
 
     if (mem_per_token > 0 && mem_per_token*N*1.9 > buf_size) {
