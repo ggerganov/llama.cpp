@@ -6779,15 +6779,20 @@ static void ggml_compute_forward_sum_f32(
     const size_t nb02 = src0->nb[2];
     const size_t nb03 = src0->nb[3];
 
+    ggml_float sum     = 0;
+    float      row_sum = 0;
+
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
             for (int64_t i01 = 0; i01 < ne01; i01++) {
                 ggml_vec_sum_f32(ne00,
-                        (float *) (dst->data),
+                        &row_sum,
                         (float *) ((char *) src0->data + i01*nb01 + i02*nb02 + i03*nb03));
+                sum += row_sum;
             }
         }
     }
+    ((float *) dst->data)[0] = sum;
 }
 
 static void ggml_compute_forward_sum(
