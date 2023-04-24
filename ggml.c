@@ -1200,13 +1200,17 @@ static void quantize_row_q4_2_reference(const float * restrict x, block_q4_2 * r
 
     for (int i = 0; i < nb; i++) {
         float amax = 0.0f; // absolute max
+        float max = 0.0f;
 
         for (int l = 0; l < QK4_2; l++) {
             const float v = x[i*QK4_2 + l];
-            amax = MAX(amax, fabsf(v));
+            if (amax < fabsf(v)) {
+                amax = fabsf(v);
+                max = v;
+            }
         }
 
-        const float d = amax / ((1 << 3) - 1);
+        const float d = max / -8;
 
         const float id = d ? 1.0f/d : 0.0f;
 
@@ -1216,8 +1220,8 @@ static void quantize_row_q4_2_reference(const float * restrict x, block_q4_2 * r
             const float v0 = x[i*QK4_2 + l + 0]*id;
             const float v1 = x[i*QK4_2 + l + 1]*id;
 
-            const uint8_t vi0 = (uint8_t)(v0 + 8.5f);
-            const uint8_t vi1 = (uint8_t)(v1 + 8.5f);
+            const uint8_t vi0 = MIN(15, (uint8_t)(v0 + 8.5f));
+            const uint8_t vi1 = MIN(15, (uint8_t)(v1 + 8.5f));
 
             assert(vi0 < 16);
             assert(vi1 < 16);
@@ -1311,9 +1315,7 @@ static void quantize_row_q4_2(const float * restrict x, void * restrict vy, int 
 
     block_q4_2 * restrict y = vy;
 
-    //quantize_row_q4_2_reference(x, y, k);
-    // This produces the exact same format, just better match to the input floats ("better" as measured by RMSE)
-    quantize_row_q4_2_rmse(x, y, k);
+    quantize_row_q4_2_reference(x, y, k);
 }
 
 static void quantize_row_q4_3_reference(const float * restrict x, block_q4_3 * restrict y, int k) {
@@ -1864,7 +1866,7 @@ static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
     [GGML_TYPE_Q4_2] = {
         .dequantize_row_q         = dequantize_row_q4_2,
         .quantize_row_q           = quantize_row_q4_2,
-        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_2_rmse, //quantize_row_q4_2_reference,
+        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_2_reference,
         .quantize_row_q_dot       = quantize_row_q8_0,
         .vec_dot_q                = ggml_vec_dot_q4_2_q8_0,
     },
@@ -12196,8 +12198,7 @@ size_t ggml_quantize_q4_2(const float * src, void * dst, int n, int k, int64_t *
     for (int j = 0; j < n; j += k) {
         block_q4_2 * restrict y = (block_q4_2 *)dst + j/QK4_2;
 
-        //quantize_row_q4_2_reference(src + j, y, k);
-        quantize_row_q4_2_rmse(src + j, y, k);
+        quantize_row_q4_2_reference(src + j, y, k);
 
         for (int i = 0; i < nb; i++) {
             for (int l = 0; l < QK4_2; l += 2) {
