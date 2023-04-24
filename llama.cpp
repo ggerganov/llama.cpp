@@ -938,6 +938,7 @@ static void llama_model_load_internal(
 
         fprintf(stderr, "%s: mem required  = %7.2f MB (+ %7.2f MB per state)\n", __func__,
                 mem_required / 1024.0 / 1024.0, mem_required_state / 1024.0 / 1024.0);
+        fprintf(stderr, "[model loading]\n");
     }
 
     // create the ggml context
@@ -1749,7 +1750,7 @@ struct llama_context * llama_init_from_file(
             unsigned percentage = (unsigned) (100 * progress);
             while (percentage > *cur_percentage_p) {
                 ++*cur_percentage_p;
-                fprintf(stderr, ".");
+                fprintf(stderr, "[porcentage] %u%%\n", *cur_percentage_p);
                 fflush(stderr);
                 if (percentage >= 100) {
                     fprintf(stderr, "\n");

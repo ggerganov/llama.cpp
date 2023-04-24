@@ -36,6 +36,7 @@ struct gpt_params {
 
     std::string lora_adapter = "";  // lora adapter path
     std::string lora_base = "";     // base model path for the lora adapter
+    std::string eot_token = "[end of text]";
 
     bool memory_f16        = true;  // use f16 instead of f32 for memory kv
     bool random_prompt     = false; // do not randomize prompt if none provided
@@ -52,6 +53,7 @@ struct gpt_params {
     bool use_mlock         = false; // use mlock to keep model in memory
     bool mem_test          = false; // compute maximum memory usage
     bool verbose_prompt    = false; // print prompt tokens before generation
+    bool forceendtoken = true; // Force show the "[end of text]" token after the generation
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);

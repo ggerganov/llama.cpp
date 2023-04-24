@@ -245,7 +245,8 @@ int main(int argc, char ** argv) {
                " - Press Ctrl+C to interject at any time.\n"
 #endif
                " - Press Return to return control to LLaMa.\n"
-               " - If you want to submit another line, end your input in '\\'.\n\n");
+               " - If you want to submit another line, end your input in '\\'.\n"
+               "[model ready]\n");
         is_interacting = params.interactive_start;
     }
 
@@ -388,6 +389,9 @@ int main(int argc, char ** argv) {
                         is_antiprompt = true;
                         set_console_color(con_st, CONSOLE_COLOR_USER_INPUT);
                         fflush(stdout);
+                        if (params.forceendtoken) {
+                            fprintf(stderr, (params.eot_token + "\n").c_str());
+                        }
                         break;
                     }
                 }
@@ -470,10 +474,13 @@ int main(int argc, char ** argv) {
 
         // end of text token
         if (!embd.empty() && embd.back() == llama_token_eos()) {
+            if (params.forceendtoken || !params.instruct) {
+                fprintf(stderr, (params.eot_token + "\n").c_str());
+            }
             if (params.instruct) {
                 is_interacting = true;
-            } else {
-                fprintf(stderr, " [end of text]\n");
+            }
+            else {
                 break;
             }
         }
@@ -481,6 +488,9 @@ int main(int argc, char ** argv) {
         // In interactive mode, respect the maximum number of tokens and drop back to user input when reached.
         if (params.interactive && n_remain <= 0 && params.n_predict != -1) {
             n_remain = params.n_predict;
+            if (params.forceendtoken) {
+                fprintf(stderr, (params.eot_token + "\n").c_str());
+            }
             is_interacting = true;
         }
     }
