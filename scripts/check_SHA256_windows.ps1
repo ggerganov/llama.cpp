@@ -1,17 +1,17 @@
-# Get the working directory
-$modelsPath = $pwd
+# Define the path to the llama directory (parent folder of script directory)
+$llamaPath = Split-Path -Path $pwd -Parent
 
 # Define the file with the list of hashes and filenames
-$hashListPath = "SHA256SUMS"
+$hashListFile = Join-Path -Path $llamaPath -ChildPath "SHA256SUMS"
 
 # Check if the hash list file exists
-if (-not(Test-Path -Path $hashListPath)) {
-    Write-Error "Hash list file not found: $hashListPath"
+if (-not(Test-Path -Path $hashListFile)) {
+    Write-Error "Hash list file not found: $hashListFile"
     exit 1
 }
 
 # Read the hash file content and split it into an array of lines
-$hashList = Get-Content -Path $hashListPath
+$hashList = Get-Content -Path $hashListFile
 $hashLines = $hashList -split "`n"
 
 # Create an array to store the results
@@ -24,7 +24,7 @@ foreach ($line in $hashLines) {
   $hash, $filename = $line -split "  "
 
   # Get the full path of the file by joining the models path and the filename
-  $filePath = Join-Path -Path $modelsPath -ChildPath $filename
+  $filePath = Join-Path -Path $llamaPath -ChildPath $filename
   
   # Informing user of the progress of the integrity check
   Write-Host "Verifying the checksum of $filePath"
