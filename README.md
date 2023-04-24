@@ -303,9 +303,10 @@ Please verify the [sha256 checksums](SHA256SUMS) of all downloaded model files t
  - on macOS: `shasum -a 256 --ignore-missing -c SHA256SUMS` 
  - on windows there is a PowerShell script available which can perfom the verification, use the following steps to run it:
     1. Open PowerShell
-    2. `cd <PathToLLama\scripts>`
-    3. `.\check_SHA256_windows.ps1`
+    2. Change the directory to the script folder in your llama directory: `cd .\PathToLLamMa\scripts`
+    3. Launch the powershell script: `.\check_SHA256_windows.ps1`
 
+### LLaMA papers and background on large language models
 
 If you have issues with model generation quality, then please at least scan the following links and papers to understand the limitations of LLaMA models. This is especially important when choosing an appropriate model size and appreciating both the significant and subtle differences between LLaMA models and ChatGPT:
 - LLaMA:
