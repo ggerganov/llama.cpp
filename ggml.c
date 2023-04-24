@@ -8031,7 +8031,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
         else {
             GGML_ASSERT(false);
         }
-#else
+#elif !defined(GGML_USE_CLBLAST)
         float * const wdata = params->wdata;
         dequantize_row_q_t const dequantize_row_q = quantize_fns[type].dequantize_row_q;
 #endif
@@ -8050,8 +8050,9 @@ static void ggml_compute_forward_mul_mat_q_f32(
 
                 dequantize_row_q_cuda(d_Q, d_X, ne01 * ne00, g_cudaStream);
                 CUDA_CHECK(cudaGetLastError());
+#elif defined(GGML_USE_CLBLAST)
+                const void* x = (char *) src0->data + i03*nb03 + i02*nb02;
 #else
-#ifndef GGML_USE_CLBLAST
                 {
                     size_t id = 0;
                     for (int64_t i01 = 0; i01 < ne01; ++i01) {
@@ -8060,9 +8061,6 @@ static void ggml_compute_forward_mul_mat_q_f32(
                     }
                 }
                 const float * x = wdata;
-#else
-                const void* x = src0->data + i03*nb03 + i02*nb02;
-#endif
 #endif
 
 
