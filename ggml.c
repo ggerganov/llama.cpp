@@ -9088,7 +9088,7 @@ static void ggml_compute_forward_rms_norm_back_f32(
                 const auto i12 = i02;
                 const auto i13 = i03;
                 const float * x = (float *) ((char *) src0->data + i01*nb01 + i02*nb02 + i03*nb03);
-                const float * dy = (float *) ((char *) src1->data + /*TODO*/ i11*nb11 + i12*nb12 + i13*nb13);
+                const float * dy = (float *) ((char *) src1->data + i11*nb11 + i12*nb12 + i13*nb13);
 
                 ggml_float sum = 0.0;
                 for (int64_t i00 = 0; i00 < ne00; i00++) {
