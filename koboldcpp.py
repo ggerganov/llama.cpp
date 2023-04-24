@@ -19,6 +19,7 @@ class load_model_inputs(ctypes.Structure):
                 ("lora_filename", ctypes.c_char_p),
                 ("use_mmap", ctypes.c_bool),
                 ("use_smartcontext", ctypes.c_bool),
+                ("unban_tokens", ctypes.c_bool),
                 ("clblast_info", ctypes.c_int),
                 ("blasbatchsize", ctypes.c_int)]
 
@@ -96,9 +97,10 @@ def load_model(model_filename):
     inputs.batch_size = 8
     inputs.max_context_length = maxctx #initial value to use for ctx, can be overwritten
     inputs.threads = args.threads
-    inputs.f16_kv = True    
+    inputs.f16_kv = True
     inputs.use_mmap = (not args.nommap)
     inputs.use_smartcontext = args.smartcontext
+    inputs.unban_tokens = args.unbantokens
     inputs.blasbatchsize = args.blasbatchsize
     clblastids = 0
     if args.useclblast:
@@ -497,6 +499,7 @@ if __name__ == '__main__':
     parser.add_argument("--blasbatchsize", help="Sets the batch size used in BLAS processing (default 512)", type=int,choices=[32,64,128,256,512,1024], default=512)
     parser.add_argument("--stream", help="Uses pseudo streaming", action='store_true')
     parser.add_argument("--smartcontext", help="Reserving a portion of context to try processing less frequently.", action='store_true')
+    parser.add_argument("--unbantokens", help="Normally, KoboldAI prevents certain tokens such as EOS and Square Brackets. This flag unbans them.", action='store_true')
     parser.add_argument("--nommap", help="If set, do not use mmap to load newer models", action='store_true')
     parser.add_argument("--noavx2", help="Do not use AVX2 instructions, a slower compatibility mode for older devices. Does not work with --clblast.", action='store_true')
     compatgroup = parser.add_mutually_exclusive_group()
