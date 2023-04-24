@@ -13288,8 +13288,8 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                 case GGML_OP_RMS_NORM:
                 case GGML_OP_RMS_NORM_BACK:
                     {
-                        // i think this must not be threaded, because we need mean over all items, not just the slices each thread sees
-                        node->n_tasks = n_threads;
+                        // i think this cannot be threaded, because we need mean over all items, not just the slices each thread sees.
+                        node->n_tasks = 1;
                     } break;
                 case GGML_OP_MUL_MAT:
                     {
