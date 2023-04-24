@@ -112,22 +112,8 @@ extern "C" {
                       const char * path_base_model,
                              int   n_threads);
 
-    // Returns the KV cache that will contain the context for the
-    // ongoing prediction with the model.
-    LLAMA_API const uint8_t * llama_get_kv_cache(struct llama_context * ctx);
-
-    // Returns the size of the KV cache
-    LLAMA_API size_t llama_get_kv_cache_size(struct llama_context * ctx);
-
     // Returns the number of tokens in the KV cache
     LLAMA_API int llama_get_kv_cache_token_count(struct llama_context * ctx);
-
-    // Sets the KV cache containing the current context for the model
-    LLAMA_API void llama_set_kv_cache(
-            struct llama_context * ctx,
-                   const uint8_t * kv_cache,
-                          size_t   n_size,
-                             int   n_token_count);
 
     // Returns the size in bytes of the state (rng, logits, embedding and kv_cache)
     LLAMA_API size_t llama_get_state_size(struct llama_context * ctx);
