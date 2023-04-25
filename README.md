@@ -192,7 +192,7 @@ Note: For Windows, CMake or Zig can be used.
     zig build -Drelease-fast
     ```
 
-BLAS acceleration is not enabled by default, in order to use it you have different options:
+BLAS acceleration is not enabled by default, there are currently two different implementations of it:
 
 - OpenBLAS
 
