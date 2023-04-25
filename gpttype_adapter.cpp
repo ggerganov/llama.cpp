@@ -412,7 +412,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     {
         n_vocab = gpt2_ctx_v2.hparams.n_vocab;
     }
-    else if(file_format == FileFormat::NEOX_1)
+    else if(file_format == FileFormat::NEOX_1 || file_format == FileFormat::NEOX_2)
     {
         n_vocab = neox_ctx.hparams.n_vocab;
     }
