@@ -433,6 +433,26 @@ int main(int argc, const char ** argv) {
             }
         }
 
+        // scale
+        {
+            const int nargs = 2;
+
+            int64_t ne2[4];
+            ne2[0] = 1;
+
+            for (int ndims = 1; ndims <= 2; ++ndims) {
+                x[1] = get_random_tensor(ctx0, 1, ne2, -1.0f, 1.0f);
+                x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
+
+                ggml_set_param(ctx0, x[0]);
+                ggml_set_param(ctx0, x[1]);
+
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_scale(ctx0, x[0], x[1]));
+
+                check_gradient("scale", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY); 
+            }
+        }
+
         ggml_free(ctx0);
     }
 
