@@ -194,7 +194,7 @@ Note: For Windows, CMake or Zig can be used.
 
 #### BLAS Build
 
-Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). BLAS doesn't affect the prompt generation. There are currently three different implementations of it:
+Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). BLAS doesn't affect the normal generation performance. There are currently three different implementations of it:
 
 - Accelerate Framework
 
