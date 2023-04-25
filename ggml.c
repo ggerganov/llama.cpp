@@ -2942,7 +2942,7 @@ static void ggml_vec_dot_q4_3_q8_1(const int n, float * restrict s, const void *
 
     assert(n % QK8_1 == 0);
     assert(nb % 2 == 0);
-    assert(QK8_1 == 2*QK4_2);
+    assert(QK8_1 == 2*QK4_3);
 
     const block_q4_3 * restrict x = vx;
     const block_q8_1 * restrict y = vy;
