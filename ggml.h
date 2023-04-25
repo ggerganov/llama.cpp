@@ -878,6 +878,7 @@ extern "C" {
         quantize_row_q_t   quantize_row_q_reference;
         quantize_row_q_t   quantize_row_q_dot;
         vec_dot_q_t        vec_dot_q;
+        enum ggml_type     vec_dot_type;
     } quantize_fns_t;
 
     quantize_fns_t ggml_internal_get_quantize_fn(size_t i);
