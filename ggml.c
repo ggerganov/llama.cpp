@@ -5601,7 +5601,7 @@ struct ggml_tensor * ggml_silu_back(
     bool is_node = false;
 
     if (a->grad || b->grad) {
-        GGML_ASSERT(false); // TODO: implement backward
+        // TODO: implement backward
         is_node = true;
     }
 
@@ -8905,7 +8905,7 @@ static void ggml_compute_forward_silu_back(
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
-                ggml_compute_forward_silu_back_f32(params, grad, src0, dst);
+                ggml_compute_forward_silu_back_f32(params, src0, grad, dst);
             } break;
         default:
             {
