@@ -12802,7 +12802,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                     src1->grad =
                         ggml_add_impl(ctx,
                             src1->grad,
-                            ggml_mean(ctx, ggml_mul_impl(ctx, tensor->grad, src0, false)),
+                            ggml_sum(ctx, ggml_mul_impl(ctx, tensor->grad, src0, false)),
                             inplace);
                 }
             } break;
