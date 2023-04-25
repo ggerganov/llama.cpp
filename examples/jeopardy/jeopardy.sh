@@ -6,16 +6,19 @@ MODEL=./models/ggml-vicuna-13b-1.1-q4_0.bin
 # exec options
 question_file=./examples/jeopardy/questions.txt
 output_file=./examples/jeopardy/results.txt
-opts="" # additional flags
+opts="--temp 0 -n 80" # additional flags
+prefix="Human: " # Ex. Vicuna uses "Human: "
+
 
 counter=1
 
 echo 'Running'
 while IFS= read -r question
 do
-  exe_cmd="./main -p "\"$question\"" "$opts" -m ""\"$MODEL\""" >> ""\"$output_file\""
+  exe_cmd="./main -p "\"$prefix$question\"" "$opts" -m ""\"$MODEL\""" >> ""\"$output_file\""
   echo $counter
-  echo "$question"
+  echo "Current Question: $question"
   eval "$exe_cmd"
+  echo -e "\n------" >> $output_file
   counter=$((counter+1))
 done < "$question_file"
