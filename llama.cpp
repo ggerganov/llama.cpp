@@ -2082,6 +2082,13 @@ int llama_get_kv_cache_token_count(struct llama_context * ctx) {
 
 #define LLAMA_MAX_RNG_STATE 64*1024
 
+void llama_set_rng_seed(struct llama_context * ctx, int seed) {
+    if (seed <= 0) {
+        seed = time(NULL);
+    }
+    ctx->rng.seed(seed);
+}
+
 // Returns the size of the state
 size_t llama_get_state_size(struct llama_context * ctx) {
     // we don't know size of rng until we actually serialize it. so reserve more than enough memory for its serialized state.

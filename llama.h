@@ -116,6 +116,9 @@ extern "C" {
     // Returns the number of tokens in the KV cache
     LLAMA_API int llama_get_kv_cache_token_count(struct llama_context * ctx);
 
+    // Sets the current rng seed.
+    LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, int seed);
+
     // Returns the size in bytes of the state (rng, logits, embedding and kv_cache)
     LLAMA_API size_t llama_get_state_size(struct llama_context * ctx);
 
