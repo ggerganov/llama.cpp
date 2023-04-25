@@ -192,7 +192,9 @@ Note: For Windows, CMake or Zig can be used.
     zig build -Drelease-fast
     ```
 
-BLAS support is not enabled by default but by enabling it you may obtain some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). There are currently two different implementations of it:
+#### BLAS Build
+
+Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). BLAS doesn't affect the prompt generation. There are currently two different implementations of it:
 
 - OpenBLAS
 
@@ -202,7 +204,7 @@ BLAS support is not enabled by default but by enabling it you may obtain some pe
     ```bash
     make LLAMA_OPENBLAS=1
     ```
-    Note: in order to build with OpenBLAS support enabled on Arch Linux you must edit the Makefile adding at the end of the line 105: `-lcblas`
+    Note: In order to build on Arch Linux with OpenBLAS support enabled you must edit the Makefile adding at the end of the line 105: `-lcblas`
 
 
   - Using CMake
@@ -215,7 +217,7 @@ BLAS support is not enabled by default but by enabling it you may obtain some pe
       ```
 - cuBLAS
 
-  This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads)
+  This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
   - Using `make`
     ```bash
     make LLAMA_CUBLAS=1
