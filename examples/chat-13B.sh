@@ -31,8 +31,6 @@ The transcript only includes text, it does not include markup like HTML and Mark
 
 $USER_NAME: Hello, $AI_NAME!
 $AI_NAME: Hello $USER_NAME! How may I help you today?
-$USER_NAME: What time is it?
-$AI_NAME: It is $(date +%H:%M).
 $USER_NAME: What year is it?
 $AI_NAME: We are in $(date +%Y).
 $USER_NAME: Please tell me the largest city in Europe.
@@ -50,4 +48,6 @@ $AI_NAME: The arguments are stored in process.argv.
     argv[3] is the second argument passed to the script and so on.
 $USER_NAME: Name a color.
 $AI_NAME: Blue
+$USER_NAME: What time is it?
+$AI_NAME: It is $(date +%H:%M).
 $USER_NAME:" "$@"
