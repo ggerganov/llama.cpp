@@ -66,6 +66,33 @@ int32_t get_num_physical_cores() {
     return n_threads > 0 ? (n_threads <= 4 ? n_threads : n_threads / 2) : 4;
 }
 
+std::string process_escapes(const char* input) {
+    std::string output;
+
+    if (input != nullptr) {
+        std::size_t input_len = std::strlen(input);
+        output.reserve(input_len);
+
+        for (std::size_t i = 0; i < input_len; ++i) {
+            if (input[i] == '\\' && i + 1 < input_len) {
+                switch (input[++i]) {
+                    case 'n':  output.push_back('\n'); break;
+                    case 't':  output.push_back('\t'); break;
+                    case '\'': output.push_back('\''); break;
+                    case '\"': output.push_back('\"'); break;
+                    case '\\': output.push_back('\\'); break;
+                    default:   output.push_back('\\');
+                               output.push_back(input[i]); break;
+                }
+            } else {
+                output.push_back(input[i]);
+            }
+        }
+    }
+
+    return output;
+}
+
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     bool invalid_param = false;
     std::string arg;
@@ -91,7 +118,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 invalid_param = true;
                 break;
             }
-            params.prompt = argv[i];
+            params.prompt = process_escapes(argv[i]);
         } else if (arg == "--session") {
             if (++i >= argc) {
                 invalid_param = true;
