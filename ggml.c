@@ -12640,9 +12640,9 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             {
                 if (src0->grad) {
                     src0->grad =
-                        ggml_add_impl(ctx,
+                        ggml_add1_impl(ctx,
                                 src0->grad,
-                                ggml_repeat(ctx, tensor->grad, src0->grad),
+                                tensor->grad,
                                 inplace);
                 }
             } break;
