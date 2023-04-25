@@ -49,7 +49,7 @@ def translate_tensor_name(t: str) -> str:
 def write_file_header(fout: TextIO, params: Dict[str, Any]) -> None:
     fout.write(b"ggla"[::-1])  # magic (ggml lora)
     fout.write(struct.pack("i", 1))  # file version
-    fout.write(struct.pack("ii", params["r"], params["lora_alpha"]))
+    fout.write(struct.pack("ii", params["r"], int(params["lora_alpha"])))
 
 
 def write_tensor_header(
