@@ -111,11 +111,7 @@ void ggml_cl_malloc(size_t req_size, size_t* cur_size, cl_mem_flags flags, cl_me
 void ggml_cl_sgemm_wrapper(const CLBlastLayout order, const CLBlastTranspose trans_a, const CLBlastTranspose trans_b, const int m, const int n, const int k, const float alpha, const void *host_a, const int lda, const float *host_b, const int ldb, const float beta, float *host_c, const int ldc, const int btype) {
     cl_int err = 0;
 
-    cl_event events[4];
-    events[0] = NULL;
-    events[1] = NULL;
-    events[2] = NULL;
-    events[3] = NULL;
+    cl_event events[4] = { NULL };
 
     cl_kernel kernel;
     size_t global, local, size_qb;
@@ -124,22 +120,22 @@ void ggml_cl_sgemm_wrapper(const CLBlastLayout order, const CLBlastTranspose tra
         global = n * k;
 
         switch (btype) {
-        case 2:
+        case GGML_TYPE_Q4_0:
             kernel = kernel_q4_0;
             local = 16;
             size_qb = global * (sizeof(float) + local) / 32;
             break;
-        case 3:
+        case GGML_TYPE_Q4_1:
             kernel = kernel_q4_1;
             local = 16;
             size_qb = global * (sizeof(float) * 2 + local) / 32;
             break;
-        case 4:
+        case GGML_TYPE_Q4_2:
             kernel = kernel_q4_2;
             local = 8;
             size_qb = global * (sizeof(short) + local) / 16;
             break;
-        case 5:
+        case GGML_TYPE_Q4_3:
             kernel = kernel_q4_3;
             local = 8;
             size_qb = global * (sizeof(short) * 2 + local) / 16;

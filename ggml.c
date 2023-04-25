@@ -7580,7 +7580,7 @@ static void ggml_compute_forward_mul_mat_f32(
                         1.0f,    y, ne10,
                                  x, ne10,
                         0.0f,    d, ne01,
-                        params->type);
+                        GGML_TYPE_F32);
 #else
                 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                         ne11, ne01, ne10,
@@ -7814,7 +7814,7 @@ static void ggml_compute_forward_mul_mat_f16_f32(
                         1.0f,    y, ne10,
                                  x, ne10,
                         0.0f,    d, ne01,
-                        params->type);
+                        GGML_TYPE_F32);
 #else
                 const float * x = wdata;
                 const float * y = (float *) ((char *) src1->data + i02*nb12 + i03*nb13);
