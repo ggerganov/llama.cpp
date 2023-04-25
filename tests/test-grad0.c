@@ -124,8 +124,8 @@ bool check_gradient(
     ggml_set_f32      (f->grad, 1.0f);
     ggml_graph_compute(ctx0, &gb);
 
-    ggml_graph_dump_dot(&gf, NULL, "test-grad0-forward.dot");
-    ggml_graph_dump_dot(&gb, &gf,  "test-grad0-backward.dot");
+    // ggml_graph_dump_dot(&gf, NULL, "test-grad0-forward.dot");
+    // ggml_graph_dump_dot(&gb, &gf,  "test-grad0-backward.dot");
 
     for (int i = 0; i < nargs; ++i) {
         const int nelements = ggml_nelements(x[i]);
