@@ -192,17 +192,17 @@ Note: For Windows, CMake or Zig can be used.
     zig build -Drelease-fast
     ```
 
-BLAS is not enabled by default but by enabling it you may obtain some performance improvements. There are currently two different implementations of it:
+BLAS support is not enabled by default but by enabling it you may obtain some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). There are currently two different implementations of it:
 
 - OpenBLAS
 
-  This provides BLAS acceleration using only the CPU. Make sure to have OpenBLAS installed on your machine.
+  This provides BLAS acceleration using only the CPU. Make sure to have OpenBLAS installed on your machine (only for Linux).
   
   - Using `make`
     ```bash
     make LLAMA_OPENBLAS=1
     ```
-    Note: in order to build with OpenBLAS enabled on Arch Linux you must edit the Makefile adding at the end of the line 105: `-lcblas`
+    Note: in order to build with OpenBLAS support enabled on Arch Linux you must edit the Makefile adding at the end of the line 105: `-lcblas`
 
 
   - Using CMake
@@ -215,7 +215,7 @@ BLAS is not enabled by default but by enabling it you may obtain some performanc
       ```
 - cuBLAS
 
-  This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed.
+  This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads)
   - Using `make`
     ```bash
     make LLAMA_CUBLAS=1
