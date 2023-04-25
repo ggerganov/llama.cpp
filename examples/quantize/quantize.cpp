@@ -16,6 +16,7 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "  type = %d - q4_1\n", LLAMA_FTYPE_MOSTLY_Q4_1);
         fprintf(stderr, "  type = %d - q4_2\n", LLAMA_FTYPE_MOSTLY_Q4_2);
         fprintf(stderr, "  type = %d - q4_3\n", LLAMA_FTYPE_MOSTLY_Q4_3);
+        fprintf(stderr, "  type = %d - q8_0\n", LLAMA_FTYPE_MOSTLY_Q8_0);
         return 1;
     }
 
