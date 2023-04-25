@@ -167,15 +167,17 @@ cd llama.cpp
 
 ### Build
 
+In order to build llama.cpp you have three different options.
+
 Note: For Windows, CMake or Zig can be used.
 
-1. Use `make`
+- Using `make`
 
     ```bash
     make
     ```
 
-1. Use CMake
+- Using CMake
 
     ```bash
     mkdir build
@@ -184,10 +186,47 @@ Note: For Windows, CMake or Zig can be used.
     cmake --build . --config Release
     ```
 
-1. Use Zig
+- Using Zig
 
     ```bash
     zig build -Drelease-fast
+    ```
+
+BLAS acceleration is not enabled by default, in order to use it you have different options:
+
+- OpenBLAS
+
+  This provides a faster evaluation time using only the CPU. Make sure to have OpenBLAS installed on your machine.
+  
+  - Using `make`
+    ```bash
+    make LLAMA_OPENBLAS=1
+    ```
+    Note: in order to build with OpenBLAS enabled on Arch Linux you must edit the Makefile adding at the end of the line 105: `-lcblas`
+
+
+  - Using CMake
+
+      ```bash
+      mkdir build
+      cd build
+      cmake .. -DLLAMA_OPENBLAS=ON
+      cmake --build . --config Release
+      ```
+- cuBLAS
+
+  This provides a faster evaluation time using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed.
+  - Using `make`
+    ```bash
+    make LLAMA_CUBLAS=1
+    ```
+  - Using CMake
+
+    ```bash
+    mkdir build
+    cd build
+    cmake .. -DLLAMA_CUBLAS=ON
+    cmake --build . --config Release
     ```
 
 ### Prepare Data & Run
