@@ -130,7 +130,7 @@ void print_tok_vec(std::vector<float> &embd)
        else if(vocabsiz < 31998 || vocabsiz > 33000)
        {
            //anything outside the llama v1 range is assumed to be NeoX
-           fileformat = FileFormat::NEOX_1;
+           fileformat = FileFormat::NEOX_2;
        }
     }
     else if(magic == 0x67676d66) //v2 format ggmf

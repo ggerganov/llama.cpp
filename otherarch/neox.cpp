@@ -17,13 +17,13 @@
 
 
 // load the model's weights from a file
-bool stablelm_model_load(const std::string & fname, stablelm_model & model, gpt_vocab & vocab) {
+ModelLoadResult stablelm_model_load(const std::string & fname, stablelm_model & model, gpt_vocab & vocab, FileFormat file_format) {
     printf("%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
     auto fin = std::ifstream(fname, std::ios::binary);
     if (!fin) {
         fprintf(stderr, "%s: failed to open '%s'\n", __func__, fname.c_str());
-        return false;
+        return ModelLoadResult::FAIL;
     }
 
     // verify magic
@@ -32,7 +32,7 @@ bool stablelm_model_load(const std::string & fname, stablelm_model & model, gpt_
         fin.read((char *) &magic, sizeof(magic));
         if (magic != 0x67676d6c) {
             fprintf(stderr, "%s: invalid model file '%s' (bad magic)\n", __func__, fname.c_str());
-            return false;
+            return ModelLoadResult::FAIL;
         }
     }
 
@@ -88,7 +88,7 @@ bool stablelm_model_load(const std::string & fname, stablelm_model & model, gpt_
                 {
                     fprintf(stderr, "%s: invalid model file '%s' (bad ftype value %d)\n",
                             __func__, fname.c_str(), model.hparams.ftype);
-                    return false;
+                    return ModelLoadResult::FAIL;
                 }
     }
 
@@ -151,7 +151,7 @@ bool stablelm_model_load(const std::string & fname, stablelm_model & model, gpt_
         model.ctx = ggml_init(params);
         if (!model.ctx) {
             fprintf(stderr, "%s: ggml_init() failed\n", __func__);
-            return false;
+            return ModelLoadResult::FAIL;
         }
     }
 
@@ -276,19 +276,19 @@ bool stablelm_model_load(const std::string & fname, stablelm_model & model, gpt_
 
             if (model.tensors.find(name.data()) == model.tensors.end()) {
                 fprintf(stderr, "%s: unknown tensor '%s' in model file\n", __func__, name.data());
-                return false;
+                return ModelLoadResult::FAIL;
             }
 
             auto tensor = model.tensors[name.data()];
             if (ggml_nelements(tensor) != nelements) {
                 fprintf(stderr, "%s: tensor '%s' has wrong size in model file\n", __func__, name.data());
-                return false;
+                return ModelLoadResult::FAIL;
             }
 
             if (tensor->ne[0] != ne[0] || tensor->ne[1] != ne[1]) {
                 fprintf(stderr, "%s: tensor '%s' has wrong shape in model file: got [%5d, %5d], expected [%5d, %5d]\n",
                         __func__, name.data(), (int) tensor->ne[0], (int) tensor->ne[1], ne[0], ne[1]);
-                return false;
+                return ModelLoadResult::FAIL;
             }
 
             // for debugging
@@ -296,12 +296,29 @@ bool stablelm_model_load(const std::string & fname, stablelm_model & model, gpt_
                 printf("%24s - [%5d, %5d], type = %6s, %6.2f MB, %9zu bytes\n", name.data(), ne[0], ne[1], ggml_type_name(ggml_type(ttype)), ggml_nbytes(tensor)/1024.0/1024.0, ggml_nbytes(tensor));
             }
 
-            const size_t bpe = ggml_type_size(ggml_type(ttype));
+            size_t bpe = ggml_type_size(ggml_type(ttype));
+
+            if(file_format==FileFormat::NEOX_1)
+            {
+                switch (ttype) {
+                    case 0: bpe = ggml_type_size(GGML_TYPE_F32);  break;
+                    case 1: bpe = ggml_type_size(GGML_TYPE_F16);  break;
+                    case 2: bpe = ggml_type_size(GGML_TYPE_Q4_0); assert(ne[0] % 64 == 0); break;
+                    case 3: bpe = ggml_type_size(GGML_TYPE_Q4_1); assert(ne[0] % 64 == 0); break;
+                    case 5: bpe = ggml_type_size(GGML_TYPE_Q4_2); assert(ne[0] % 64 == 0); break;
+                    case 6: bpe = ggml_type_size(GGML_TYPE_Q4_3); assert(ne[0] % 64 == 0); break;
+                    default:
+                    {
+                        fprintf(stderr, "%s: unknown ftype %d in model file\n", __func__, ttype);
+                        return ModelLoadResult::FAIL;
+                    }
+                };
+            }
 
             if ((nelements*bpe)/ggml_blck_size(tensor->type) != ggml_nbytes(tensor)) {
                 fprintf(stderr, "%s: tensor '%s' has wrong size in model file: got %zu, expected %zu\n",
                         __func__, name.data(), ggml_nbytes(tensor), nelements*bpe);
-                return false;
+                 return ModelLoadResult::RETRY_LOAD;
             }
 
             fin.read(reinterpret_cast<char *>(tensor->data), ggml_nbytes(tensor));
@@ -320,7 +337,7 @@ bool stablelm_model_load(const std::string & fname, stablelm_model & model, gpt_
 
     fin.close();
 
-    return true;
+    return ModelLoadResult::SUCCESS;
 }
 
 // evaluate the transformer

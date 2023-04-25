@@ -30,6 +30,7 @@ enum FileFormat
     RWKV_1=300,
 
     NEOX_1=400,
+    NEOX_2=401,
 };
 
 enum ModelLoadResult

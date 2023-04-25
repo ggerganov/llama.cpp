@@ -117,10 +117,16 @@ extern "C"
                 return true;
             }
         }
-        else if(file_format==FileFormat::NEOX_1)
+        else if(file_format==FileFormat::NEOX_1 || file_format==FileFormat::NEOX_2)
         {
             printf("\n---\nIdentified as GPT-NEO-X model: (ver %d)\nAttempting to Load...\n---\n", file_format);
-            ModelLoadResult lr = gpttype_load_model(inputs, file_format);          
+            ModelLoadResult lr = gpttype_load_model(inputs, file_format);
+            if (lr == ModelLoadResult::RETRY_LOAD)
+            {
+                file_format = FileFormat::NEOX_1;
+                printf("\n---\nRetrying as GPT-NEO-X model: (ver %d)\nAttempting to Load...\n---\n", file_format);
+                lr = gpttype_load_model(inputs, file_format);
+            }     
             if (lr == ModelLoadResult::FAIL || lr == ModelLoadResult::RETRY_LOAD)
             {
                 return false;
