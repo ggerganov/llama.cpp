@@ -357,7 +357,8 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                             file_format == FileFormat::GGJT ||
                             file_format == FileFormat::GPT2_2 || 
                             file_format == FileFormat::GPTJ_3 ||
-                            file_format == FileFormat::NEOX_1);
+                            file_format == FileFormat::NEOX_1 || 
+                            file_format == FileFormat::NEOX_2);
     bool blasmode = (approved_format && embd_inp.size() >= 32 && ggml_cpu_has_blas());
     // bool blasmode = false;
     int original_batch = params.n_batch;
@@ -477,7 +478,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             {
                 evalres = gpt2_eval(gpt2_ctx_v2, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
             }
-            else if(file_format==FileFormat::NEOX_1)
+            else if(file_format==FileFormat::NEOX_1 || file_format == FileFormat::NEOX_2)
             {
                 evalres = stablelm_eval(neox_ctx, params.n_threads, n_past, embd, logits, mem_per_token);
             }
