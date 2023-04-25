@@ -192,11 +192,11 @@ Note: For Windows, CMake or Zig can be used.
     zig build -Drelease-fast
     ```
 
-BLAS acceleration is not enabled by default, there are currently two different implementations of it:
+BLAS is not enabled by default but by enabling it you may obtain some performance improvements. There are currently two different implementations of it:
 
 - OpenBLAS
 
-  This provides a faster evaluation time using only the CPU. Make sure to have OpenBLAS installed on your machine.
+  This provides BLAS acceleration using only the CPU. Make sure to have OpenBLAS installed on your machine.
   
   - Using `make`
     ```bash
@@ -215,7 +215,7 @@ BLAS acceleration is not enabled by default, there are currently two different i
       ```
 - cuBLAS
 
-  This provides a faster evaluation time using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed.
+  This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed.
   - Using `make`
     ```bash
     make LLAMA_CUBLAS=1
