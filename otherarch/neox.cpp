@@ -318,6 +318,7 @@ ModelLoadResult stablelm_model_load(const std::string & fname, stablelm_model & 
             if ((nelements*bpe)/ggml_blck_size(tensor->type) != ggml_nbytes(tensor)) {
                 fprintf(stderr, "%s: tensor '%s' has wrong size in model file: got %zu, expected %zu\n",
                         __func__, name.data(), ggml_nbytes(tensor), nelements*bpe);
+                 ggml_free(ctx);
                  return ModelLoadResult::RETRY_LOAD;
             }
 
