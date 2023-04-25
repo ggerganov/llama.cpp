@@ -1295,17 +1295,13 @@ static void quantize_row_q8_0_reference(const float * restrict x, block_q8_0 * r
 
     for (int i = 0; i < nb; i++) {
         float amax = 0.0f; // absolute max
-        float max  = 0.0f;
 
         for (int l = 0; l < QK8_0; l++) {
             const float v = x[i*QK8_0 + l];
-            if (amax < fabsf(v)) {
-                amax = fabsf(v);
-                max = v;
-            }
+            amax = MAX(amax, fabsf(v));
         }
 
-        const float d = max / -128;
+        const float d = amax / ((1 << 7) - 1);
         const float id = d ? 1.0f/d : 0.0f;
 
         y[i].d = d;
@@ -1313,7 +1309,7 @@ static void quantize_row_q8_0_reference(const float * restrict x, block_q8_0 * r
         for (int l = 0; l < QK8_0; ++l) {
             const float v0 = x[i*QK8_0 + l]*id;
 
-            y[i].qs[l] = MIN(127, roundf(v0));
+            y[i].qs[l] = roundf(v0);
         }
     }
 }

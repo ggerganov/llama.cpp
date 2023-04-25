@@ -72,7 +72,7 @@ float dot_product_error(quantize_fns_t & qfns, size_t test_size, const float * t
     std::vector<uint8_t> tmp_q1(2*test_size);
     std::vector<uint8_t> tmp_q2(2*test_size);
 
-    qfns.quantize_row_q(test_data1, tmp_q1.data(), test_size);
+    qfns.quantize_row_q    (test_data1, tmp_q1.data(), test_size);
     qfns.quantize_row_q_dot(test_data2, tmp_q2.data(), test_size);
 
     float result = INFINITY;
@@ -125,7 +125,7 @@ int main(int argc, char * argv[]) {
             failed = !(total_error < MAX_QUANTIZATION_TOTAL_ERROR);
             num_failed += failed;
             if (failed || verbose) {
-                printf("%5s absolute quantization error: %s (%f)\n", ggml_type_name(type), RESULT_STR[failed], total_error);
+                printf("%5s absolute quantization error:    %s (%f)\n", ggml_type_name(type), RESULT_STR[failed], total_error);
             }
 
             const float reference_error = reference_quantization_error(qfns, test_size, test_data.data());
@@ -139,7 +139,7 @@ int main(int argc, char * argv[]) {
             failed = !(vec_dot_error < MAX_DOT_PRODUCT_ERROR);
             num_failed += failed;
             if (failed || verbose) {
-                printf("%5s dot product error: %s (%f)\n", ggml_type_name(type), RESULT_STR[failed], vec_dot_error);
+                printf("%5s dot product error:              %s (%f)\n", ggml_type_name(type), RESULT_STR[failed], vec_dot_error);
             }
         }
     }
