@@ -453,6 +453,40 @@ int main(int argc, const char ** argv) {
             }
         }
 
+        // rope
+        {
+            const int nargs = 1;
+
+            int64_t ne2[4];
+            get_random_dims(ne2, 4);
+            ne2[0] += ne2[0] % 2;
+            int n_rot = ne2[0];
+
+            for (int ndims = 3; ndims <= 4; ++ndims) {
+                for (int mode = 0; mode < 4; ++mode) {
+                    for (int n_past = 1; n_past < ne2[2]; ++n_past) {
+                        x[0] = get_random_tensor(ctx0, ndims, ne2, -1.0f, 1.0f);
+
+                        ggml_set_param(ctx0, x[0]);
+
+                        const bool skip_past = (mode & 1);
+                        if (skip_past) {
+                            // we have no past, so this would have to work on uninitialized memory.
+                            // we only test the gradients here;
+                            // skip_past should have no influence on gradient computation.
+                            // so when other modes work, we assume that this does as well.
+                            continue;
+                        }
+
+                        struct ggml_tensor * f = ggml_sum(ctx0, ggml_rope(ctx0, x[0], n_past, n_rot, mode));
+
+                        GGML_PRINT_DEBUG("rope: n_past: %d n_rot: %d mode: %d\n", n_past, n_rot, mode);
+                        check_gradient("rope", ctx0, x, f, ndims, nargs, 1e-2f, 1e-3f, INFINITY); 
+                    }
+                }
+            }
+        }
+
         ggml_free(ctx0);
     }
 
