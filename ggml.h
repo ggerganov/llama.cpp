@@ -223,6 +223,7 @@ extern "C" {
         GGML_TYPE_Q4_2 = 4,
         GGML_TYPE_Q4_3 = 5,
         GGML_TYPE_Q8_0 = 6,
+        GGML_TYPE_Q8_1 = 7,
         GGML_TYPE_I8,
         GGML_TYPE_I16,
         GGML_TYPE_I32,
@@ -832,6 +833,7 @@ extern "C" {
     GGML_API size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t * hist);
     GGML_API size_t ggml_quantize_q4_2(const float * src, void * dst, int n, int k, int64_t * hist);
     GGML_API size_t ggml_quantize_q4_3(const float * src, void * dst, int n, int k, int64_t * hist);
+    GGML_API size_t ggml_quantize_q8_0(const float * src, void * dst, int n, int k, int64_t * hist);
 
     GGML_API size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, int start, int n, int64_t * hist);
 
@@ -876,6 +878,7 @@ extern "C" {
         quantize_row_q_t   quantize_row_q_reference;
         quantize_row_q_t   quantize_row_q_dot;
         vec_dot_q_t        vec_dot_q;
+        enum ggml_type     vec_dot_type;
     } quantize_fns_t;
 
     quantize_fns_t ggml_internal_get_quantize_fn(size_t i);

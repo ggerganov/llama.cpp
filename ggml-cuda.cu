@@ -37,6 +37,13 @@ typedef struct {
 } block_q4_3;
 static_assert(sizeof(block_q4_3) == 2 * sizeof(ggml_fp16_t) + QK4_3 / 2, "wrong q4_3 block size/padding");
 
+#define QK8_0 32
+typedef struct {
+    float   d;              // delta
+    int8_t  qs[QK8_0];      // quants
+} block_q8_0;
+static_assert(sizeof(block_q8_0) == sizeof(float) + QK8_0, "wrong q8_0 block size/padding");
+
 static __global__ void dequantize_block_q4_0(const void * vx, float * y) {
     const block_q4_0 * x = (const block_q4_0 *) vx;
 
@@ -131,6 +138,22 @@ static __global__ void dequantize_block_q4_3(const void * vx, float * y) {
     }
 }
 
+static __global__ void dequantize_block_q8_0(const void * vx, float * y) {
+    const block_q8_0 * x = (const block_q8_0 *) vx;
+
+    const int i = blockIdx.x;
+
+    const float d = x[i].d;
+
+    const int8_t * pp = x[i].qs;
+
+    for (int l = 0; l < QK8_0; l++) {
+        const int8_t vi = pp[l];
+
+        y[i*QK8_0 + l] = vi*d;
+    }
+}
+
 void dequantize_row_q4_0_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
     const int nb = k / QK4_0;
     dequantize_block_q4_0<<<nb, 1, 0, stream>>>(vx, y);
@@ -149,6 +172,11 @@ void dequantize_row_q4_2_cuda(const void * vx, float * y, int k, cudaStream_t st
 void dequantize_row_q4_3_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
     const int nb = k / QK4_3;
     dequantize_block_q4_3<<<nb, 1, 0, stream>>>(vx, y);
+}
+
+void dequantize_row_q8_0_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
+    const int nb = k / QK8_0;
+    dequantize_block_q8_0<<<nb, 1, 0, stream>>>(vx, y);
 }
 
 // buffer pool for cuda
