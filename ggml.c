@@ -3094,10 +3094,6 @@ static void ggml_vec_dot_q8_0_q8_0(const int n, float * restrict s, const void *
         sumv0 = vmlaq_n_f32(sumv0, vcvtq_f32_s32(vaddq_s32(
                         vdotq_s32(vdupq_n_s32(0), v0_0, v1_0),
                         vdotq_s32(vdupq_n_s32(0), v0_1, v1_1))), x0->d*y0->d);
-
-        sumv1 = vmlaq_n_f32(sumv1, vcvtq_f32_s32(vaddq_s32(
-                        vdotq_s32(vdupq_n_s32(0), v0_0, v1_1),
-                        vdotq_s32(vdupq_n_s32(0), v0_1, v1_0))), x0->d*y0->d);
 #else
         const int16x8_t p0l = vmull_s8(vget_low_s8 (v0_0), vget_low_s8 (v1_0));
         const int16x8_t p0h = vmull_s8(vget_high_s8(v0_0), vget_high_s8(v1_0));
