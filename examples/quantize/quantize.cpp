@@ -10,6 +10,8 @@ static const std::map<std::string, enum llama_ftype> LLAMA_FTYPE_MAP = {
   {"q4_1", LLAMA_FTYPE_MOSTLY_Q4_1},
   {"q4_2", LLAMA_FTYPE_MOSTLY_Q4_2},
   {"q4_3", LLAMA_FTYPE_MOSTLY_Q4_3},
+  {"q5_0", LLAMA_FTYPE_MOSTLY_Q5_0},
+  {"q5_1", LLAMA_FTYPE_MOSTLY_Q5_1},
   {"q8_0", LLAMA_FTYPE_MOSTLY_Q8_0},
 };
 

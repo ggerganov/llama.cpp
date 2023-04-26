@@ -37,6 +37,23 @@ typedef struct {
 } block_q4_3;
 static_assert(sizeof(block_q4_3) == 2 * sizeof(ggml_fp16_t) + QK4_3 / 2, "wrong q4_3 block size/padding");
 
+#define QK5_0 32
+typedef struct {
+    __half d;               // delta
+    uint8_t qh[4];          // 5-th bit of quants
+    uint8_t qs[QK5_0 / 2];  // nibbles / quants
+} block_q5_0;
+static_assert(sizeof(block_q5_0) == sizeof(ggml_fp16_t) + sizeof(uint32_t) + QK5_0 / 2, "wrong q5_0 block size/padding");
+
+#define QK5_1 32
+typedef struct {
+    __half d;               // delta
+    __half m;               // min
+    uint32_t qh;            // 5-th bit of quants
+    uint8_t qs[QK5_1 / 2];  // nibbles / quants
+} block_q5_1;
+static_assert(sizeof(block_q5_1) == 2 * sizeof(ggml_fp16_t) + sizeof(uint32_t) + QK5_1 / 2, "wrong q5_1 block size/padding");
+
 #define QK8_0 32
 typedef struct {
     float   d;              // delta
@@ -138,6 +155,64 @@ static __global__ void dequantize_block_q4_3(const void * vx, float * y) {
     }
 }
 
+static __global__ void dequantize_block_q5_0(const void * vx, float * y) {
+    const block_q5_0 * x = (const block_q5_0 *) vx;
+
+    const int i = blockIdx.x;
+
+    const float d = x[i].d;
+
+    const uint8_t * pp = x[i].qs;
+
+    uint32_t qh;
+    memcpy(&qh, x[i].qh, sizeof(qh));
+
+    for (int l = 0; l < QK5_0; l += 2) {
+        const uint8_t vi = pp[l/2];
+
+        const int8_t vh0 = ((qh & (1 << (l + 0))) >> (l + 0)) << 4;
+        const int8_t vh1 = ((qh & (1 << (l + 1))) >> (l + 1)) << 4;
+
+        const int8_t vi0 = ((vi & 0xf) | vh0);
+        const int8_t vi1 = ((vi >>  4) | vh1);
+
+        const float v0 = (vi0 - 16)*d;
+        const float v1 = (vi1 - 16)*d;
+
+        y[i*QK5_0 + l + 0] = v0;
+        y[i*QK5_0 + l + 1] = v1;
+    }
+}
+
+static __global__ void dequantize_block_q5_1(const void * vx, float * y) {
+    const block_q5_1 * x = (const block_q5_1 *) vx;
+
+    const int i = blockIdx.x;
+
+    const float d = x[i].d;
+    const float m = x[i].m;
+
+    const uint8_t * pp = x[i].qs;
+
+    const uint32_t qh = x[i].qh;
+
+    for (int l = 0; l < QK5_1; l += 2) {
+        const uint8_t vi = pp[l/2];
+
+        const int8_t vh0 = ((qh & (1 << (l + 0))) >> (l + 0)) << 4;
+        const int8_t vh1 = ((qh & (1 << (l + 1))) >> (l + 1)) << 4;
+
+        const int8_t vi0 = (vi & 0xf) | vh0;
+        const int8_t vi1 = (vi >>  4) | vh1;
+
+        const float v0 = vi0*d + m;
+        const float v1 = vi1*d + m;
+
+        y[i*QK5_1 + l + 0] = v0;
+        y[i*QK5_1 + l + 1] = v1;
+    }
+}
+
 static __global__ void dequantize_block_q8_0(const void * vx, float * y) {
     const block_q8_0 * x = (const block_q8_0 *) vx;
 
@@ -172,6 +247,16 @@ void dequantize_row_q4_2_cuda(const void * vx, float * y, int k, cudaStream_t st
 void dequantize_row_q4_3_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
     const int nb = k / QK4_3;
     dequantize_block_q4_3<<<nb, 1, 0, stream>>>(vx, y);
+}
+
+void dequantize_row_q5_0_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
+    const int nb = k / QK5_0;
+    dequantize_block_q5_0<<<nb, 1, 0, stream>>>(vx, y);
+}
+
+void dequantize_row_q5_1_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
+    const int nb = k / QK5_1;
+    dequantize_block_q5_1<<<nb, 1, 0, stream>>>(vx, y);
 }
 
 void dequantize_row_q8_0_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
