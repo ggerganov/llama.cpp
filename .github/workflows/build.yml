@@ -31,7 +31,7 @@ jobs:
         id: depends
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential gcc-8
+          sudo apt-get install build-essential gcc-8 libboost-all-dev
 
       - name: Build
         id: make_build
@@ -50,7 +50,7 @@ jobs:
         id: depends
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential
+          sudo apt-get install build-essential libboost-all-dev
 
       - name: Build
         id: cmake_build
@@ -85,7 +85,7 @@ jobs:
         id: depends
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential
+          sudo apt-get install build-essential libboost-all-dev
 
       - name: Build
         id: cmake_build
@@ -113,6 +113,7 @@ jobs:
         id: depends
         run: |
           brew update
+          brew install boost
 
       - name: Build
         id: make_build
@@ -131,6 +132,7 @@ jobs:
         id: depends
         run: |
           brew update
+          brew install boost
 
       - name: Build
         id: cmake_build
