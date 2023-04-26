@@ -1,6 +1,8 @@
 #include "common.h"
 #include "llama.h"
 
+#include <ctime>
+
 int main(int argc, char ** argv) {
     gpt_params params;
     params.model = "models/llama-7B/ggml-model.bin";
