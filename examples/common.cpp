@@ -54,9 +54,8 @@ int32_t get_num_physical_cores() {
         return num_physical_cores;
     }
 #elif defined(_WIN32)
-    SYSTEM_INFO sysinfo;
-    GetNativeSystemInfo(&sysinfo);
-    return static_cast<int32_t>(sysinfo.dwNumberOfProcessors);
+    std::cerr << "WARNING: automatic calibration not supported on Windows. Defaulting to 4 threads.\n" << std::endl;
+    return 4;
 #endif
     return -1;
 }
@@ -237,13 +236,10 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 
     // Clip if not a valid number of threads
     if (params.n_threads <= 0) {
+        std::cerr << "\nWARNING: Using number of physical cores as the default number of threads.\n\
+If your chipset has efficient/performance cores, use the number of performance cores instead.\n" << std::endl;
         int32_t physical_cores = get_num_physical_cores();
-        if (physical_cores > 4) {
-            std::cerr << "\nWARNING: Defaulting to 4 threads. "
-                << "(detected " << physical_cores << " physical cores)" << std::endl
-                << "Adjust --threads based on your observed inference speed in ms/token." << std::endl << std::endl;
-        }
-        params.n_threads = std::max(1, std::min(4, physical_cores));
+        params.n_threads = std::max(1, physical_cores);
     }
 
     return true;
