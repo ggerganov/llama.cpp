@@ -1,12 +1,23 @@
 #include "ggml-opencl.h"
 
-#include <atomic>
-#include <cstdio>
-#include <cstring>
+#define CL_TARGET_OPENCL_VERSION 110
+#include <clblast_c.h>
+
+#include <stdio.h>
+#include <string.h>
 
 #include "ggml.h"
 
 #include <ggml_clblast_dequant.cl>
+
+#define CL_CHECK(err, name)                                                                     \
+    do {                                                                                        \
+        cl_int err_ = (err);                                                                    \
+        if (err_ != CL_SUCCESS) {                                                               \
+            fprintf(stderr, "OpenCL %s error %d at %s:%d\n", name, err_, __FILE__, __LINE__);   \
+            exit(1);                                                                            \
+        }                                                                                       \
+    } while (0)
 
 cl_platform_id platform;
 cl_device_id device;
@@ -74,7 +85,7 @@ void ggml_cl_init(void) {
     printf("Using Platform: %s Device: %s\n", platform_buffer, device_buffer);
     context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
     CL_CHECK(err, "clCreateContext");
-    queue = clCreateCommandQueue(context, device, 0, &err);
+    queue = clCreateCommandQueue(context, device, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &err);
     CL_CHECK(err, "clCreateCommandQueue");
 
     free(platforms);
@@ -93,7 +104,7 @@ void ggml_cl_init(void) {
     CL_CHECK(err, "clCreateKernel");
 }
 
-void ggml_cl_malloc(size_t req_size, size_t* cur_size, cl_mem_flags flags, cl_mem* buf) {
+static void ggml_cl_malloc(size_t req_size, size_t* cur_size, cl_mem_flags flags, cl_mem* buf) {
     if (req_size <= *cur_size) {
         return;
     }
@@ -108,10 +119,13 @@ void ggml_cl_malloc(size_t req_size, size_t* cur_size, cl_mem_flags flags, cl_me
     CL_CHECK(err, "clCreateBuffer");
 }
 
-void ggml_cl_sgemm_wrapper(const CLBlastLayout order, const CLBlastTranspose trans_a, const CLBlastTranspose trans_b, const int m, const int n, const int k, const float alpha, const void *host_a, const int lda, const float *host_b, const int ldb, const float beta, float *host_c, const int ldc, const int btype) {
+void ggml_cl_sgemm_wrapper(
+        const enum ggml_blas_order order, const enum ggml_blas_op trans_a, const enum ggml_blas_op trans_b,
+        const int m, const int n, const int k,
+        const float alpha, const void *host_a, const int lda,
+        const float *host_b, const int ldb, const float beta,
+        float *host_c, const int ldc, const int btype) {
     cl_int err = 0;
-
-    cl_event events[4] = { NULL };
 
     cl_kernel kernel;
     size_t global = n * k, local, size_qb;
@@ -162,42 +176,46 @@ void ggml_cl_sgemm_wrapper(const CLBlastLayout order, const CLBlastTranspose tra
     ggml_cl_malloc(size_b, &cl_size_b, CL_MEM_READ_WRITE, &cl_buffer_b);
     ggml_cl_malloc(size_c, &cl_size_c, CL_MEM_WRITE_ONLY, &cl_buffer_c);
 
+    cl_event ev_a, ev_qb, ev_b;
+
     if (dequant) {
         err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &cl_buffer_qb);
         err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &cl_buffer_b);
         CL_CHECK(err, "clSetKernelArg");
-        clEnqueueWriteBuffer(queue, cl_buffer_qb, CL_FALSE, 0, size_qb, host_b, 0, NULL, events + 1);
+        clEnqueueWriteBuffer(queue, cl_buffer_qb, CL_FALSE, 0, size_qb, host_b, 0, NULL, &ev_qb);
     } else {
-        clEnqueueWriteBuffer(queue, cl_buffer_b, CL_FALSE, 0, size_b, host_b, 0, NULL, events + 1);
+        clEnqueueWriteBuffer(queue, cl_buffer_b, CL_FALSE, 0, size_b, host_b, 0, NULL, &ev_b);
     }
 
-    clEnqueueWriteBuffer(queue, cl_buffer_a, CL_FALSE, 0, size_a, host_a, 0, NULL, events);
+    clEnqueueWriteBuffer(queue, cl_buffer_a, CL_FALSE, 0, size_a, host_a, 0, NULL, &ev_a);
     if (dequant) {
-        err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &global, &local, 1, events + 1, events + 3);
+        err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &global, &local, 1, &ev_qb, &ev_b);
         CL_CHECK(err, "clEnqueueNDRangeKernel");
     }
-    clWaitForEvents(dequant ? 4 : 3, events);
-    clReleaseEvent(events[0]);
-    clReleaseEvent(events[1]);
-    clReleaseEvent(events[2]);
+    clWaitForEvents(1, &ev_a);
+    clWaitForEvents(1, &ev_b);
+    clReleaseEvent(ev_a);
+    clReleaseEvent(ev_b);
     if (dequant) {
-        clReleaseEvent(events[3]);
+        clReleaseEvent(ev_qb);
     }
 
-    CLBlastSgemm(order,
-                 trans_a, trans_b,
+    cl_event ev_sgemm;
+    CLBlastSgemm((CLBlastLayout)order,
+                 (CLBlastTranspose)trans_a, (CLBlastTranspose)trans_b,
                  m, n, k,
                  alpha,
                  cl_buffer_a, 0, lda,
                  cl_buffer_b, 0, ldb,
                  beta,
                  cl_buffer_c, 0, ldc,
-                 &queue, events);
+                 &queue, &ev_sgemm);
 
-    clEnqueueReadBuffer(queue, cl_buffer_c, CL_TRUE, 0, size_c, host_c, 1, events, events + 1);
+    cl_event ev_c;
+    clEnqueueReadBuffer(queue, cl_buffer_c, CL_TRUE, 0, size_c, host_c, 1, &ev_sgemm, &ev_c);
 
     // Wait for completion
-    clWaitForEvents(2, events);
-    clReleaseEvent(events[0]);
-    clReleaseEvent(events[1]);
+    clWaitForEvents(1, &ev_c);
+    clReleaseEvent(ev_sgemm);
+    clReleaseEvent(ev_c);
 }

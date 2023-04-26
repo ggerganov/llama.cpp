@@ -7575,7 +7575,7 @@ static void ggml_compute_forward_mul_mat_f32(
                 CUDA_CHECK(cudaMemcpyAsync(d, d_D, sizeof(float) * d_ne, cudaMemcpyDeviceToHost, g_cudaStream));
 #elif defined(GGML_USE_CLBLAST)
                 // zT = y * xT
-                ggml_cl_sgemm_wrapper(CLBlastLayoutRowMajor, CLBlastTransposeNo, CLBlastTransposeYes,
+                ggml_cl_sgemm_wrapper(GGML_BLAS_ORDER_ROW_MAJOR, GGML_BLAS_OP_N, GGML_BLAS_OP_T,
                         ne11, ne01, ne10,
                         1.0f,    y, ne10,
                                  x, ne10,
@@ -7809,7 +7809,7 @@ static void ggml_compute_forward_mul_mat_f16_f32(
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
                 // zT = y * xT
-                ggml_cl_sgemm_wrapper(CLBlastLayoutRowMajor, CLBlastTransposeNo, CLBlastTransposeYes,
+                ggml_cl_sgemm_wrapper(GGML_BLAS_ORDER_ROW_MAJOR, GGML_BLAS_OP_N, GGML_BLAS_OP_T,
                         ne11, ne01, ne10,
                         1.0f,    y, ne10,
                                  x, ne10,
@@ -8080,7 +8080,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
                 CUDA_CHECK(cudaMemcpyAsync(d, d_D, sizeof(float) * d_ne, cudaMemcpyDeviceToHost, g_cudaStream));
 #elif defined(GGML_USE_CLBLAST)
                 // zT = y * xT
-                ggml_cl_sgemm_wrapper(CLBlastLayoutRowMajor, CLBlastTransposeNo, CLBlastTransposeYes,
+                ggml_cl_sgemm_wrapper(GGML_BLAS_ORDER_ROW_MAJOR, GGML_BLAS_OP_N, GGML_BLAS_OP_T,
                         ne11, ne01, ne10,
                         1.0f,    y, ne10,
                                  x, ne10,
