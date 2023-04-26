@@ -2017,14 +2017,14 @@ int llama_apply_lora_from_file_internal(struct llama_context * ctx, const char *
             ggml_tensor * loraA = lora_tensors[base_name + ".loraA"];
             ggml_tensor * loraB = lora_tensors[base_name + ".loraB"];
 
-            if (base_t->ne[0] != loraA->ne[1] || base_t->ne[1] != loraB->ne[1]) {
-                fprintf(stderr, "%s: incompatible tensor dimensions (%" PRId64 " and %" PRId64 ");"
-                               " are you sure that this adapter is for this model?\n", __func__, base_t->ne[0], loraA->ne[1]);
+            if (base_t->ne[0] != loraB->ne[1] || base_t->ne[1] != loraA->ne[1]) {
+                fprintf(stderr, "%s: incompatible tensor dimensions (outdims: %" PRId64 ", %" PRId64 ", indims: );"
+                               " are you sure that this adapter is for this model?\n", __func__, base_t->ne[0], loraB->ne[1], base_t->ne[1], loraA->ne[1]);
                 return 1;
             }
 
             // w = w + BA*s
-            ggml_tensor * BA = ggml_mul_mat(lora_ctx, loraA, loraB);
+            ggml_tensor * BA = ggml_mul_mat(lora_ctx, loraB, loraA);
 
             if (scaling != 1.0f) {
                 ggml_tensor * scale_tensor = ggml_new_f32(lora_ctx, scaling);
