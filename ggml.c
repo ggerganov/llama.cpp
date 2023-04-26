@@ -328,8 +328,18 @@ static ggml_fp16_t table_exp_f16[1 << 16];
 // precomputed f32 table for f16 (256 KB)
 static float table_f32_f16[1 << 16];
 
-// precomputed table for expanding 8bits to 8 bytes (shl 4)
-static uint64_t table_b2b[1 << 8];
+#define B1(c,s,n)  0x ## n ## c ,  0x ## n ## s
+#define B2(c,s,n) B1(c,s,n ## c), B1(c,s,n ## s)
+#define B3(c,s,n) B2(c,s,n ## c), B2(c,s,n ## s)
+#define B4(c,s,n) B3(c,s,n ## c), B3(c,s,n ## s)
+#define B5(c,s,n) B4(c,s,n ## c), B4(c,s,n ## s)
+#define B6(c,s,n) B5(c,s,n ## c), B5(c,s,n ## s)
+#define B7(c,s,n) B6(c,s,n ## c), B6(c,s,n ## s)
+#define B8(c,s  ) B7(c,s,     c), B7(c,s,     s)
+
+// precomputed tables for expanding 8bits to 8 bytes (shl 4)
+static const uint64_t table_b2b_u[1 << 8] = { B8(00, 10) };
+static const uint64_t table_b2b_i[1 << 8] = { B8(F0, 00) };
 
 // On ARM NEON, it's quicker to directly convert x -> x instead of calling into ggml_lookup_fp16_to_fp32,
 // so we define GGML_FP16_TO_FP32 and GGML_FP32_TO_FP16 elsewhere for NEON.
@@ -688,7 +698,7 @@ static_assert(sizeof(block_q5_0) == sizeof(ggml_fp16_t) + sizeof(uint32_t) + QK5
 typedef struct {
     ggml_fp16_t d;         // delta
     ggml_fp16_t m;         // min
-    uint32_t qh;           // 5-th bit of quants
+    uint8_t qh[4];         // 5-th bit of quants
     uint8_t qs[QK5_1 / 2]; // nibbles / quants
 } block_q5_1;
 static_assert(sizeof(block_q5_1) == 2 * sizeof(ggml_fp16_t) + sizeof(uint32_t) + QK5_1 / 2, "wrong q5_1 block size/padding");
@@ -1376,7 +1386,8 @@ static void quantize_row_q5_1_reference(const float * restrict x, block_q5_1 * r
 
         y[i].d = GGML_FP32_TO_FP16(d);
         y[i].m = GGML_FP32_TO_FP16(min);
-        y[i].qh = 0;
+
+        uint32_t qh = 0;
 
         for (int l = 0; l < QK5_1; l += 2) {
             const float v0 = (x[i*QK5_1 + l + 0] - min)*id;
@@ -1388,9 +1399,11 @@ static void quantize_row_q5_1_reference(const float * restrict x, block_q5_1 * r
             y[i].qs[l/2] = (vi0 & 0x0F) | ((vi1 & 0x0F) << 4);
 
             // get the 5-th bit and store it in qh at the right position
-            y[i].qh |= ((vi0 & 0x10) >> 4) << (l + 0);
-            y[i].qh |= ((vi1 & 0x10) >> 4) << (l + 1);
+            qh |= ((vi0 & 0x10) >> 4) << (l + 0);
+            qh |= ((vi1 & 0x10) >> 4) << (l + 1);
         }
+
+        memcpy(&y[i].qh, &qh, sizeof(y[i].qh));
     }
 }
 
@@ -1966,7 +1979,8 @@ static void dequantize_row_q5_1(const void * restrict vx, float * restrict y, in
 
         const uint8_t * restrict pp = x[i].qs;
 
-        const uint32_t qh = x[i].qh;
+        uint32_t qh;
+        memcpy(&qh, x[i].qh, sizeof(qh));
 
         for (int l = 0; l < QK5_1; l += 2) {
             const uint8_t vi = pp[l/2];
@@ -3297,10 +3311,10 @@ static void ggml_vec_dot_q5_0_q8_0(const int n, float * restrict s, const void *
         uint32_t qh;
         memcpy(&qh, x0->qh, sizeof(qh));
 
-        tmp[0] = table_b2b[(qh >>  0) & 0xFF];
-        tmp[1] = table_b2b[(qh >>  8) & 0xFF];
-        tmp[2] = table_b2b[(qh >> 16) & 0xFF];
-        tmp[3] = table_b2b[(qh >> 24)       ];
+        tmp[0] = table_b2b_u[(qh >>  0) & 0xFF];
+        tmp[1] = table_b2b_u[(qh >>  8) & 0xFF];
+        tmp[2] = table_b2b_u[(qh >> 16) & 0xFF];
+        tmp[3] = table_b2b_u[(qh >> 24)       ];
 
         const int8x16_t qhl = vld1q_s8((const int8_t *)(tmp + 0));
         const int8x16_t qhh = vld1q_s8((const int8_t *)(tmp + 2));
@@ -3350,17 +3364,13 @@ static void ggml_vec_dot_q5_0_q8_0(const int n, float * restrict s, const void *
     // Main loop
     for (int i = 0; i < nb; i++) {
         /* Compute combined scale for the block */
-        const __m128 d0 = _mm_set1_ps(GGML_FP16_TO_FP32(x[2*i + 0].d));
-        const __m128 d1 = _mm_set1_ps(GGML_FP16_TO_FP32(x[2*i + 1].d));
-        const __m256 d = _mm256_mul_ps(_mm256_set_m128(d1, d0), _mm256_broadcast_ss(&y[i].d));
+        const __m256 d = _mm256_mul_ps(_mm256_set1_ps(GGML_FP16_TO_FP32(x[i].d)), _mm256_broadcast_ss(&y[i].d));
 
-        __m128i bx0 = bytes_from_nibbles_16(x[2*i + 0].qs);
-        __m128i bx1 = bytes_from_nibbles_16(x[2*i + 1].qs);
-        __m256i bx = _mm256_set_m128i(bx1, bx0);
-
-        // Now we have a vector with bytes in [ 0 .. 15 ] interval. Offset them into [ -8 .. +7 ] interval.
-        const __m256i off = _mm256_set1_epi8(8);
-        bx = _mm256_sub_epi8(bx, off);
+        __m256i bx = bytes_from_nibbles_32(x[i].qs);
+        const __m256i bxhi = _mm256_set_epi64x(
+            table_b2b_i[x[i].qh[3]], table_b2b_i[x[i].qh[2]],
+            table_b2b_i[x[i].qh[1]], table_b2b_i[x[i].qh[0]]);
+        bx = _mm256_or_si256(bx, bxhi);
 
         __m256i by = _mm256_loadu_si256((const __m256i *)y[i].qs);
 
@@ -3379,7 +3389,7 @@ static void ggml_vec_dot_q5_0_q8_0(const int n, float * restrict s, const void *
         const  int8_t * restrict y0 = y[i].qs;
 
         uint32_t qh;
-        memcpy(&qh, x0->qh, sizeof(qh));
+        memcpy(&qh, x[i].qh, sizeof(qh));
 
         const float d = GGML_FP16_TO_FP32(x[i].d);
 
@@ -3430,12 +3440,13 @@ static void ggml_vec_dot_q5_1_q8_1(const int n, float * restrict s, const void *
         summs += GGML_FP16_TO_FP32(x0->m) * (y0->s0 + y0->s1);
 
         // extract the 5th bit
-        const uint32_t qh = x0->qh;
+        uint32_t qh;
+        memcpy(&qh, x0->qh, sizeof(qh));
 
-        tmp[0] = table_b2b[(qh >>  0) & 0xFF];
-        tmp[1] = table_b2b[(qh >>  8) & 0xFF];
-        tmp[2] = table_b2b[(qh >> 16) & 0xFF];
-        tmp[3] = table_b2b[(qh >> 24)       ];
+        tmp[0] = table_b2b_u[(qh >>  0) & 0xFF];
+        tmp[1] = table_b2b_u[(qh >>  8) & 0xFF];
+        tmp[2] = table_b2b_u[(qh >> 16) & 0xFF];
+        tmp[3] = table_b2b_u[(qh >> 24)       ];
 
         const int8x16_t qhl = vld1q_s8((const int8_t *)(tmp + 0));
         const int8x16_t qhh = vld1q_s8((const int8_t *)(tmp + 2));
@@ -3485,16 +3496,15 @@ static void ggml_vec_dot_q5_1_q8_1(const int n, float * restrict s, const void *
 
     // Main loop
     for (int i = 0; i < nb; i++) {
-        const __m128 d0 = _mm_set1_ps(GGML_FP16_TO_FP32(x[2*i + 0].d));
-        const __m128 d1 = _mm_set1_ps(GGML_FP16_TO_FP32(x[2*i + 1].d));
-        const __m256 dx = _mm256_set_m128(d1, d0);
+        const __m256 dx = _mm256_set1_ps(GGML_FP16_TO_FP32(x[i].d));
 
-        summs += GGML_FP16_TO_FP32(x[2*i + 0].m) * y[i].s0
-               + GGML_FP16_TO_FP32(x[2*i + 1].m) * y[i].s1;
+        summs += GGML_FP16_TO_FP32(x[i].m) * (y[i].s0 + y[i].s1);
 
-        const __m128i bx0 = bytes_from_nibbles_16(x[2*i + 0].qs);
-        const __m128i bx1 = bytes_from_nibbles_16(x[2*i + 1].qs);
-        const __m256i bx = _mm256_set_m128i(bx1, bx0);
+        __m256i bx = bytes_from_nibbles_32(x[i].qs);
+        const __m256i bxhi = _mm256_set_epi64x(
+            table_b2b_u[x[i].qh[3]], table_b2b_u[x[i].qh[2]],
+            table_b2b_u[x[i].qh[1]], table_b2b_u[x[i].qh[0]]);
+        bx = _mm256_or_si256(bx, bxhi);
 
         const __m256 dy = _mm256_broadcast_ss(&y[i].d);
         const __m256i by = _mm256_loadu_si256((const __m256i *)y[i].qs);
@@ -3512,7 +3522,8 @@ static void ggml_vec_dot_q5_1_q8_1(const int n, float * restrict s, const void *
         const uint8_t * restrict x0 = x[i].qs;
         const  int8_t * restrict y0 = y[i].qs;
 
-        const uint32_t qh = x[i].qh;
+        uint32_t qh;
+        memcpy(&qh, x[i].qh, sizeof(qh));
 
         const float d = GGML_FP16_TO_FP32(x[i].d);
         const float m = GGML_FP16_TO_FP32(x[i].m);
@@ -4295,15 +4306,6 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
                 table_gelu_f16[i] = GGML_FP32_TO_FP16(ggml_gelu_f32(f));
                 table_silu_f16[i] = GGML_FP32_TO_FP16(ggml_silu_f32(f));
                 table_exp_f16[i]  = GGML_FP32_TO_FP16(expf(f));
-            }
-
-            for (int i = 0; i < 256; ++i) {
-                table_b2b[i] = 0;
-                for (int b = 0; b < 8; ++b) {
-                    table_b2b[i] |= ((uint64_t)(((i >> b) & 0x01) << 4)) << (8*b);
-                }
-
-                //printf("%3d %016llx\n", i, table_b2b[i]);
             }
 
             const uint64_t t_end = ggml_time_us(); UNUSED(t_end);
@@ -12855,10 +12857,10 @@ size_t ggml_quantize_q5_0(const float * src, void * dst, int n, int k, int64_t *
         quantize_row_q5_0_reference(src + j, y, k);
 
         for (int i = 0; i < nb; i++) {
-            for (int l = 0; l < QK5_0; l += 2) {
-                uint32_t qh;
-                memcpy(&qh, &y[i].qh, sizeof(qh));
+            uint32_t qh;
+            memcpy(&qh, &y[i].qh, sizeof(qh));
 
+            for (int l = 0; l < QK5_0; l += 2) {
                 const uint8_t vh0 = ((qh & (1 << (l + 0))) >> (l + 0)) << 4;
                 const uint8_t vh1 = ((qh & (1 << (l + 1))) >> (l + 1)) << 4;
 
@@ -12885,9 +12887,12 @@ size_t ggml_quantize_q5_1(const float * src, void * dst, int n, int k, int64_t *
         quantize_row_q5_1_reference(src + j, y, k);
 
         for (int i = 0; i < nb; i++) {
+            uint32_t qh;
+            memcpy(&qh, &y[i].qh, sizeof(qh));
+
             for (int l = 0; l < QK5_1; l += 2) {
-                const uint8_t vh0 = ((y[i].qh & (1 << (l + 0))) >> (l + 0)) << 4;
-                const uint8_t vh1 = ((y[i].qh & (1 << (l + 1))) >> (l + 1)) << 4;
+                const uint8_t vh0 = ((qh & (1 << (l + 0))) >> (l + 0)) << 4;
+                const uint8_t vh1 = ((qh & (1 << (l + 1))) >> (l + 1)) << 4;
 
                 // cast to 16 bins
                 const uint8_t vi0 = ((y[i].qs[l/2] & 0x0F) | vh0) / 2;
