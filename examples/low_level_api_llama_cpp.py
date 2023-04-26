@@ -70,7 +70,7 @@ while remaining_tokens > 0:
     if not input_noecho:
         for id in embd:
             print(
-                llama_cpp.llama_token_to_str(ctx, id).decode("utf-8"),
+                llama_cpp.llama_token_to_str(ctx, id).decode("utf-8", errors="ignore"),
                 end="",
                 flush=True,
             )

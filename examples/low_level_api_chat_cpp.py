@@ -96,7 +96,7 @@ specified) expect poor results""", file=sys.stderr)
 
         print(file=sys.stderr)
         print(f"system_info: n_threads = {self.params.n_threads} / {cpu_count()} \
-| {llama_cpp.llama_print_system_info().decode('utf8')}", file=sys.stderr)
+| {llama_cpp.llama_print_system_info().decode('utf8', errors='ignore')}", file=sys.stderr)
 
         # determine the required inference memory per token:
         if (self.params.mem_test):
@@ -342,7 +342,7 @@ n_keep = {self.params.n_keep}
     # return past text
     def past(self):
         for id in self.last_n_tokens[-self.n_past:]:
-            yield llama_cpp.llama_token_to_str(self.ctx, id).decode("utf-8")
+            yield llama_cpp.llama_token_to_str(self.ctx, id).decode("utf-8", errors="ignore")
 
     # write input
     def input(self, prompt: str):
@@ -356,7 +356,7 @@ n_keep = {self.params.n_keep}
     def output(self):
         self.remaining_tokens = self.params.n_predict
         for id in self.generate():
-            yield llama_cpp.llama_token_to_str(self.ctx, id).decode("utf-8")
+            yield llama_cpp.llama_token_to_str(self.ctx, id).decode("utf-8", errors="ignore")
 
     # read user input
     def read_input(self):
