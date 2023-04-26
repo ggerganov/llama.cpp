@@ -167,15 +167,27 @@ cd llama.cpp
 
 ### Build
 
-Note: For Windows, CMake or Zig can be used.
+In order to build llama.cpp you have three different options.
 
-1. Use `make`
+- Using `make`:
+  - On Linux or MacOS:
 
-    ```bash
-    make
-    ```
+      ```bash
+      make
+      ```
 
-1. Use CMake
+  - On Windows:
+
+    1. Download the latest fortran version of [w64devkit](https://github.com/seeto/w64devkit/releases).
+    2. Extract `w64devkit` on your pc.
+    3. Run `w64devkit.exe`.
+    4. Use the `cd` command to reach the `llama.cpp` folder.
+    5. From here you can run:
+        ```bash
+        make
+        ```
+
+- Using `CMake`:
 
     ```bash
     mkdir build
@@ -184,10 +196,69 @@ Note: For Windows, CMake or Zig can be used.
     cmake --build . --config Release
     ```
 
-1. Use Zig
+- Using `Zig`:
 
     ```bash
     zig build -Drelease-fast
+    ```
+
+### BLAS Build
+
+Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). BLAS doesn't affect the normal generation performance. There are currently three different implementations of it:
+
+- Accelerate Framework:
+
+  This is only available on Mac PCs and it's enabled by default. You can just build using the normal instructions.
+
+- OpenBLAS:
+
+  This provides BLAS acceleration using only the CPU. Make sure to have OpenBLAS installed on your machine.
+
+  - Using `make`:
+    - On Linux:
+      ```bash
+      make LLAMA_OPENBLAS=1
+      ```
+      Note: In order to build on Arch Linux with OpenBLAS support enabled you must edit the Makefile adding at the end of the line 105: `-lcblas`
+
+    - On Windows:
+
+      1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
+      2. Download the latest version of [OpenBLAS for Windows](https://github.com/xianyi/OpenBLAS/releases).
+      3. Extract `w64devkit` on your pc.
+      4. From the OpenBLAS zip that you just downloaded copy `libopenblas.a`, located inside the `lib` folder, inside `w64devkit\x86_64-w64-mingw32\lib`.
+      5. From the same OpenBLAS zip copy the content of the `include` folder inside `w64devkit\x86_64-w64-mingw32\include`.
+      6. Run `w64devkit.exe`.
+      7. Use the `cd` command to reach the `llama.cpp` folder.
+      8. From here you can run:
+
+          ```bash
+          make LLAMA_OPENBLAS=1
+          ```
+
+  - Using `CMake` on Linux:
+
+      ```bash
+      mkdir build
+      cd build
+      cmake .. -DLLAMA_OPENBLAS=ON
+      cmake --build . --config Release
+      ```
+
+- cuBLAS
+
+  This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
+  - Using `make`:
+    ```bash
+    make LLAMA_CUBLAS=1
+    ```
+  - Using `CMake`:
+
+    ```bash
+    mkdir build
+    cd build
+    cmake .. -DLLAMA_CUBLAS=ON
+    cmake --build . --config Release
     ```
 
 ### Prepare Data & Run
