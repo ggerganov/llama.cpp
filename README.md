@@ -40,7 +40,7 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 - If you want you can also link your own install of OpenBLAS manually with `make LLAMA_OPENBLAS=1`
 - Alternatively, if you want you can also link your own install of CLBlast manually with `make LLAMA_CLBLAST=1`, for this you will need to obtain and link OpenCL and CLBlast libraries.
 - For a full featured build, do `make LLAMA_OPENBLAS=1 LLAMA_CLBLAST=1`
-  - For Arch Linux: Install `cblas` and `openblas`. 
+  - For Arch Linux: Install `cblas` `openblas` and `clblast`. 
   - For Debian: Install `libclblast-dev` and `libopenblas-dev`.
 - After all binaries are built, you can run the python script with the command `koboldcpp.py [ggml_model.bin] [port]`
 
