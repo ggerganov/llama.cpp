@@ -190,8 +190,8 @@ void ggml_cl_sgemm_wrapper(
     clEnqueueWriteBuffer(queue, cl_buffer_a, CL_FALSE, 0, size_a, host_a, 0, NULL, &ev_a);
     if (dequant) {
         err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &global, &local, 1, &ev_qb, &ev_b);
-        clReleaseEvent(ev_qb);
         CL_CHECK(err, "clEnqueueNDRangeKernel");
+        clReleaseEvent(ev_qb);
     }
     clWaitForEvents(1, &ev_a);
     clWaitForEvents(1, &ev_b);
