@@ -150,7 +150,7 @@ And here is another demo of running both LLaMA-7B and [whisper.cpp](https://gith
 
 https://user-images.githubusercontent.com/1991296/224442907-7693d4be-acaa-4e01-8b4f-add84093ffff.mp4
 
-## Usage
+## Getting Started
 
 Here are the steps for the LLaMA-7B model.
 
@@ -161,17 +161,25 @@ git clone https://github.com/ggerganov/llama.cpp
 cd llama.cpp
 ```
 
-### Build
+### Build with Linux/ Mac Using Make
 
-In order to build llama.cpp you have three different options.
+These commands are specific to Ubuntu linux but OS specific varients are just a google away given this handy dependency list.  Also, if you're using your windows gaming machine, some users have reported great success in using [WSL2](https://github.com/ggerganov/llama.cpp/issues/103#issuecomment-1470440202) to install Ubuntu within Windows and following the linux build instructions to run this project.
+
+```bash
+# Install dependencies (these are for linux, use brew equivelants for mac)
+sudo apt-get update
+sudo apt-get install make cmake build-essentials python3 pip git-lfs
+
+# Build llama.cpp
+make
+
+# Install python dependencies
+python3 -m pip install -r requirements.txt
+```
+
+### Build For Windows
 
 - Using `make`:
-  - On Linux or MacOS:
-
-      ```bash
-      make
-      ```
-
   - On Windows:
 
     1. Download the latest fortran version of [w64devkit](https://github.com/seeto/w64devkit/releases).
@@ -197,6 +205,8 @@ In order to build llama.cpp you have three different options.
     ```bash
     zig build -Drelease-fast
     ```
+
+Don't forget to install the Python dependencies (e.g. `python -m pip install -r requirements.txt`)
 
 ### BLAS Build
 
@@ -257,15 +267,45 @@ Building the program with BLAS support may lead to some performance improvements
     cmake --build . --config Release
     ```
 
-### Prepare Data & Run
+### Aquiring Setting up the 7b model weights
+
+You can use this system to conduct research on an AI chatbot vaguely comparable to ChatGPT-3 and it will even run on your local machine without needing massive amounts of hardware.  But to do so you **must** install the Alpaca 7b model weights into the models folder.
+
+Because these resources belong to Facebook, their official path to obtaining the data should be followed.  While it's true that most researchers using the Alpaca weights obtained them from a magnet link to a torrent file, linking or sharing that magnet link should not be done in this repo due to the questionability of violating FaceBook's IP rights and also (not to be an alarmist here) the potential for the popularization of these weights to cause harm.
+
+- **Under no circumstances should IPFS, magnet links, or any other links to model downloads be shared anywhere in this repository, including in issues, discussions, or pull requests. They will be immediately deleted.**
+- The LLaMA models are officially distributed by Facebook and will **never** be provided through this repository.
+- Refer to [Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to request access to the model data.  Any Magnet links shared
+
+#### Putting the Model Weights in the Right Spot
+
+This guide will assume that you've downloaded the files to an arbitrary folder, `/mnt/c/ai/models/LLaMA` using some responsible means described above.
+
+Because model weights files are so large, you may find it convenient to use softlinks to make them appear within the `models/` folder instead of having to copy them around on your HDD.  Otherwise, if you prefer, you can just download the files directly in the `models/` folder and skip the below softlink command:
 
 ```bash
-# obtain the original LLaMA model weights and place them in ./models
+# On linux, run this from the root of this repo
+rm models/.gitkeep
+
+# Now that the folder is empty, this command can safely remove the models/ folder or errors if something is still there
+rm -r models/
+
+# Create a symlink to the folder where the LLaMA weights are located
+ln -s /mnt/c/ai/models/LLaMA $(pwd)/models
+```
+
+### Prepare Data
+
+```bash
+# Verify the original LLaMA model data
 ls ./models
 65B 30B 13B 7B tokenizer_checklist.chk tokenizer.model
 
-# install Python dependencies
-python3 -m pip install -r requirements.txt
+# Check for file corruption and wrong data
+sha256sum --ignore-missing -c SHA256SUMS
+
+# On mac, use this command instead
+shasum -a 256 --ignore-missing -c SHA256SUMS
 
 # convert the 7B model to ggml FP16 format
 python3 convert.py models/7B/
@@ -273,6 +313,13 @@ python3 convert.py models/7B/
 # quantize the model to 4-bits (using q4_0 method)
 ./quantize ./models/7B/ggml-model-f16.bin ./models/7B/ggml-model-q4_0.bin q4_0
 
+# run the inference
+./main -m ./models/7B/ggml-model-q4_0.bin -n 128
+```
+
+### Run the Alpaca 7b Model
+
+```bash
 # run the inference
 ./main -m ./models/7B/ggml-model-q4_0.bin -n 128
 ```
@@ -374,29 +421,17 @@ python3 convert.py models/gpt4all-7B/gpt4all-lora-quantized.bin
 
 - The newer GPT4All-J model is not yet supported!
 
-### Obtaining and verifying the Facebook LLaMA original model and Stanford Alpaca model data
-
-- **Under no circumstances should IPFS, magnet links, or any other links to model downloads be shared anywhere in this repository, including in issues, discussions, or pull requests. They will be immediately deleted.**
-- The LLaMA models are officially distributed by Facebook and will **never** be provided through this repository.
-- Refer to [Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to request access to the model data.
-- Please verify the [sha256 checksums](SHA256SUMS) of all downloaded model files to confirm that you have the correct model data files before creating an issue relating to your model files.
-- The following command will verify if you have all possible latest files in your self-installed `./models` subdirectory:
-
-  `sha256sum --ignore-missing -c SHA256SUMS` on Linux
-
-  or
-
-  `shasum -a 256 --ignore-missing -c SHA256SUMS` on macOS
+### Additional Notes on the original Facebook LLaMA model and Stanford Alpaca model data
 
 - If your issue is with model generation quality, then please at least scan the following links and papers to understand the limitations of LLaMA models. This is especially important when choosing an appropriate model size and appreciating both the significant and subtle differences between LLaMA models and ChatGPT:
 - LLaMA:
-- [Introducing LLaMA: A foundational, 65-billion-parameter large language model](https://ai.facebook.com/blog/large-language-model-llama-meta-ai/)
-- [LLaMA: Open and Efficient Foundation Language Models](https://arxiv.org/abs/2302.13971)
+  - [Introducing LLaMA: A foundational, 65-billion-parameter large language model](https://ai.facebook.com/blog/large-language-model-llama-meta-ai/)
+  - [LLaMA: Open and Efficient Foundation Language Models](https://arxiv.org/abs/2302.13971)
 - GPT-3
-- [Language Models are Few-Shot Learners](https://arxiv.org/abs/2005.14165)
+  - [Language Models are Few-Shot Learners](https://arxiv.org/abs/2005.14165)
 - GPT-3.5 / InstructGPT / ChatGPT:
-- [Aligning language models to follow instructions](https://openai.com/research/instruction-following)
-- [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
+  - [Aligning language models to follow instructions](https://openai.com/research/instruction-following)
+  - [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
 
 ### Perplexity (measuring model quality)
 
