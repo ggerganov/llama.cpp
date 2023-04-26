@@ -677,10 +677,10 @@ static_assert(sizeof(block_q4_3) == 2 * sizeof(ggml_fp16_t) + QK4_3 / 2, "wrong 
 typedef struct {
     ggml_fp16_t d;         // delta
     ggml_fp16_t m;         // min
-    int32_t qh;            // 5-th bit of quants
+    uint32_t qh;           // 5-th bit of quants
     uint8_t qs[QK5_0 / 2]; // nibbles / quants
 } block_q5_0;
-static_assert(sizeof(block_q5_0) == 2 * sizeof(ggml_fp16_t) + sizeof(int32_t) + QK5_0 / 2, "wrong q5_0 block size/padding");
+static_assert(sizeof(block_q5_0) == 2 * sizeof(ggml_fp16_t) + sizeof(uint32_t) + QK5_0 / 2, "wrong q5_0 block size/padding");
 
 #define QK8_0 32
 typedef struct {
