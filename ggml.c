@@ -328,6 +328,9 @@ static ggml_fp16_t table_exp_f16[1 << 16];
 // precomputed f32 table for f16 (256 KB)
 static float table_f32_f16[1 << 16];
 
+// precomputed table for expanding 8bits to 8 bytes (shl 4)
+static uint64_t table_b2b[1 << 8];
+
 // On ARM NEON, it's quicker to directly convert x -> x instead of calling into ggml_lookup_fp16_to_fp32,
 // so we define GGML_FP16_TO_FP32 and GGML_FP32_TO_FP16 elsewhere for NEON.
 // This is also true for POWER9.
@@ -3181,14 +3184,7 @@ static void ggml_vec_dot_q5_0_q8_1(const int n, float * restrict s, const void *
 
     float summs = 0.0f;
 
-    uint32_t tmp[8];
-
-    static const uint32_t k_mask[16] = {
-        0x00000000, 0x00000010, 0x00001000, 0x00001010,
-        0x00100000, 0x00100010, 0x00101000, 0x00101010,
-        0x10000000, 0x10000010, 0x10001000, 0x10001010,
-        0x10100000, 0x10100010, 0x10101000, 0x10101010,
-    };
+    uint64_t tmp[4];
 
     for (int i = 0; i < nb; ++i) {
         const block_q5_0 * restrict x0 = &x[i];
@@ -3199,17 +3195,13 @@ static void ggml_vec_dot_q5_0_q8_1(const int n, float * restrict s, const void *
         // extract the 5th bit
         const uint32_t qh = x0->qh;
 
-        tmp[0] = k_mask[(qh >>  0) & 0x0F];
-        tmp[1] = k_mask[(qh >>  4) & 0x0F];
-        tmp[2] = k_mask[(qh >>  8) & 0x0F];
-        tmp[3] = k_mask[(qh >> 12) & 0x0F];
-        tmp[4] = k_mask[(qh >> 16) & 0x0F];
-        tmp[5] = k_mask[(qh >> 20) & 0x0F];
-        tmp[6] = k_mask[(qh >> 24) & 0x0F];
-        tmp[7] = k_mask[(qh >> 28)];
+        tmp[0] = table_b2b[(qh >>  0) & 0xFF];
+        tmp[1] = table_b2b[(qh >>  8) & 0xFF];
+        tmp[2] = table_b2b[(qh >> 16) & 0xFF];
+        tmp[3] = table_b2b[(qh >> 24)       ];
 
         const int8x16_t qhl = vld1q_s8((const int8_t *)(tmp + 0));
-        const int8x16_t qhh = vld1q_s8((const int8_t *)(tmp + 4));
+        const int8x16_t qhh = vld1q_s8((const int8_t *)(tmp + 2));
 
         const uint8x16_t v0 = vld1q_u8(x0->qs);
 
@@ -4062,6 +4054,15 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
                 table_gelu_f16[i] = GGML_FP32_TO_FP16(ggml_gelu_f32(f));
                 table_silu_f16[i] = GGML_FP32_TO_FP16(ggml_silu_f32(f));
                 table_exp_f16[i]  = GGML_FP32_TO_FP16(expf(f));
+            }
+
+            for (int i = 0; i < 256; ++i) {
+                table_b2b[i] = 0;
+                for (int b = 0; b < 8; ++b) {
+                    table_b2b[i] |= ((uint64_t)(((i >> b) & 0x01) << 4)) << (8*b);
+                }
+
+                //printf("%3d %016llx\n", i, table_b2b[i]);
             }
 
             const uint64_t t_end = ggml_time_us(); UNUSED(t_end);
