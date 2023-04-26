@@ -201,7 +201,7 @@ n_keep = {self.params.n_keep}
     # tokenize a prompt
     def _tokenize(self, prompt, bos=True):
         _arr = (llama_cpp.llama_token * (len(prompt) + 1))()
-        _n = llama_cpp.llama_tokenize(self.ctx, prompt.encode("utf8"), _arr, len(_arr), bos)
+        _n = llama_cpp.llama_tokenize(self.ctx, prompt.encode("utf8", errors="ignore"), _arr, len(_arr), bos)
         return _arr[:_n]
 
     def set_color(self, c):
