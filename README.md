@@ -177,7 +177,7 @@ In order to build llama.cpp you have three different options.
       ```
 
   - On Windows:
-  
+
     1. Download the latest fortran version of [w64devkit](https://github.com/seeto/w64devkit/releases).
     2. Extract `w64devkit` on your pc.
     3. Run `w64devkit.exe`.
@@ -213,7 +213,7 @@ Building the program with BLAS support may lead to some performance improvements
 - OpenBLAS:
 
   This provides BLAS acceleration using only the CPU. Make sure to have OpenBLAS installed on your machine.
-  
+
   - Using `make`:
     - On Linux:
       ```bash
