@@ -470,6 +470,53 @@ int main(int argc, const char ** argv) {
             }
         }
 
+        // reshape (1d->nd)
+        {
+            const int nargs = 1;
+
+            for (int ndims = 1; ndims <= 2; ++ndims) {
+                int64_t ne2[4];
+                ne2[0] = 1;
+                ne2[1] = 1;
+                ne2[2] = 1;
+                ne2[3] = 1;
+                for (int i = 0; i < ndims; ++i) {
+                    ne2[0] *= ne[i];
+                }
+                x[0] = get_random_tensor(ctx0, 1, ne2, -1.0f, 1.0f);
+                x[1] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
+                ggml_set_param(ctx0, x[0]);
+
+
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_reshape(ctx0, x[0], x[1]));
+                check_gradient("reshape", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+            }
+        }
+
+
+        // reshape (nd->1d)
+        {
+            const int nargs = 1;
+
+            for (int ndims = 1; ndims <= 2; ++ndims) {
+                int64_t ne2[4];
+                ne2[0] = 1;
+                ne2[1] = 1;
+                ne2[2] = 1;
+                ne2[3] = 1;
+                for (int i = 0; i < ndims; ++i) {
+                    ne2[0] *= ne[i];
+                }
+                x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
+                x[1] = get_random_tensor(ctx0, 1, ne2, -1.0f, 1.0f);
+                ggml_set_param(ctx0, x[0]);
+
+
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_reshape(ctx0, x[0], x[1]));
+                check_gradient("reshape", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+            }
+        }
+
         // rope
         {
             const int nargs = 1;
