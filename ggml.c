@@ -494,7 +494,7 @@ void ggml_mul_row_f32_tall_skinny(const float * A, const float * B, float * C, i
         }
 
         // Store the result in the corresponding row of C
-        _mm256_store_ps(&res_vec, c_vec);
+        _mm256_store_ps((float *) &res_vec, c_vec);
 
         for (int k = 0; k < 8; ++k) {
             C[j+k] = res_vec[k];
@@ -7700,7 +7700,7 @@ static void ggml_compute_forward_mul_mat_f32(
     const int64_t ne02 = src0->ne[2];
     const int64_t ne03 = src0->ne[3];
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CUBLAS) || defined(__AVX2__) || defined(__AVX__)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CUBLAS)
     const int64_t ne10 = src1->ne[0];
 #endif
     const int64_t ne11 = src1->ne[1];
@@ -7758,7 +7758,6 @@ static void ggml_compute_forward_mul_mat_f32(
     if ((ggml_cpu_has_avx2() && ne00 <= 48) || ne00 <= 32) {
         // Handle tall and skinny matrices
         // TODO(jon-chuang): Also check that we only handle 2D matrices?
-        assert(ne00 == ne10);
         if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
             return;
         }
