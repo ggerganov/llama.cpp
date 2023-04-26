@@ -29,35 +29,35 @@ cl_mem cl_buffer_a, cl_buffer_qb, cl_buffer_b, cl_buffer_c;
 size_t cl_size_a = 0, cl_size_qb = 0, cl_size_b = 0, cl_size_c = 0;
 
 cl_program build_program_from_source(cl_context ctx, cl_device_id dev, const char* program_buffer) {
-   cl_program program;
+   cl_program p;
    char *program_log;
    size_t program_size, log_size;
    int err;
 
    program_size = strlen(program_buffer);
 
-   program = clCreateProgramWithSource(ctx, 1,
+   p = clCreateProgramWithSource(ctx, 1,
       (const char**)&program_buffer, &program_size, &err);
    if(err < 0) {
       fprintf(stderr, "OpenCL error creating program");
       exit(1);
    }
 
-   err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
+   err = clBuildProgram(p, 0, NULL, NULL, NULL, NULL);
    if(err < 0) {
 
-      clGetProgramBuildInfo(program, dev, CL_PROGRAM_BUILD_LOG,
+      clGetProgramBuildInfo(p, dev, CL_PROGRAM_BUILD_LOG,
             0, NULL, &log_size);
       program_log = (char*) malloc(log_size + 1);
       program_log[log_size] = '\0';
-      clGetProgramBuildInfo(program, dev, CL_PROGRAM_BUILD_LOG,
+      clGetProgramBuildInfo(p, dev, CL_PROGRAM_BUILD_LOG,
             log_size + 1, program_log, NULL);
       printf("%s\n", program_log);
       free(program_log);
       exit(1);
    }
 
-   return program;
+   return p;
 }
 
 void ggml_cl_init(void) {

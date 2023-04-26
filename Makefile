@@ -118,7 +118,7 @@ ifdef LLAMA_CLBLAST
 	LDFLAGS += -lclblast -lOpenCL
 	OBJS    += ggml-opencl.o
 ggml-opencl.o: ggml-opencl.c ggml-opencl.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 endif
 ifdef LLAMA_GPROF
 	CFLAGS   += -pg
