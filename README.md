@@ -18,7 +18,10 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 - To run, execute **koboldcpp.exe** or drag and drop your quantized `ggml_model.bin` file onto the .exe, and then connect with Kobold or Kobold Lite. 
 - By default, you can connect to http://localhost:5001 
 - You can also run it using the command line `koboldcpp.exe [ggml_model.bin] [port]`. For info, please check `koboldcpp.exe --help` 
-- If you are having crashes or issues with OpenBLAS, please try the `--noblas` flag.
+- If you are having crashes or issues, you can try turning off BLAS with the `--noblas` flag. You can also try running in a non-avx2 compatibility mode with `--noavx2`. Lastly, you can try turning off mmap with `--nommap`. 
+- Big context still too slow? Try the `--smartcontext` flag to reduce prompt processing frequency. Also, you can try to run with your GPU using CLBlast, with `--useclblast` flag for a speedup
+
+For more information, be sure to run the program with the --help flag.
 
 ## Compiling at Windows
 - If you want to compile your binaries from source at Windows, the easiest way is:
