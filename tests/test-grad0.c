@@ -517,6 +517,24 @@ int main(int argc, const char ** argv) {
             }
         }
 
+        // softmax
+        {
+            const int nargs = 1;
+            
+            int64_t ne2[4];
+            get_random_dims(ne2, 4);
+            ne2[1] = 1;
+
+            for (int ndims = 1; ndims <= 3; ++ndims) {
+                x[0] = get_random_tensor(ctx0, ndims, ne2, -1.0f, 1.0f);
+                ggml_set_param(ctx0, x[0]);
+
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_soft_max(ctx0, x[0]));
+
+                check_gradient("softmax", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+            }
+        }
+
         // rope
         {
             const int nargs = 1;
