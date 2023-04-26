@@ -281,7 +281,7 @@ Because these resources belong to Facebook, their official path to obtaining the
 
 This guide will assume that you've downloaded the files to an arbitrary folder, `/mnt/c/ai/models/LLaMA` using some responsible means described above.
 
-Because model weights files are so large, you may find it convenient to use softlinks to make them appear within the `models/` folder instead of having to copy them around on your HDD.  Otherwise, if you prefer, you can just download the files directly in the `models/` folder and skip the below softlink command:
+Because the weight files are so large, you may find it convenient to use softlinks to make them appear within the `models/` folder instead of having to copy them around on your HDD.  Otherwise, if you prefer, you can just download the files directly in the `models/` folder and skip the below softlink command:
 
 ```bash
 # On linux, run this from the root of this repo
@@ -423,7 +423,8 @@ python3 convert.py models/gpt4all-7B/gpt4all-lora-quantized.bin
 
 ### Additional Notes on the original Facebook LLaMA model and Stanford Alpaca model data
 
-- If your issue is with model generation quality, then please at least scan the following links and papers to understand the limitations of LLaMA models. This is especially important when choosing an appropriate model size and appreciating both the significant and subtle differences between LLaMA models and ChatGPT:
+If your issue is with model generation quality, then please at least scan the following links and papers to understand the limitations of LLaMA models. This is especially important when choosing an appropriate model size and appreciating both the significant and subtle differences between LLaMA models and ChatGPT:
+
 - LLaMA:
   - [Introducing LLaMA: A foundational, 65-billion-parameter large language model](https://ai.facebook.com/blog/large-language-model-llama-meta-ai/)
   - [LLaMA: Open and Efficient Foundation Language Models](https://arxiv.org/abs/2302.13971)
