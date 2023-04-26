@@ -49,7 +49,12 @@ def translate_tensor_name(t: str) -> str:
 def write_file_header(fout: TextIO, params: Dict[str, Any]) -> None:
     fout.write(b"ggla"[::-1])  # magic (ggml lora)
     fout.write(struct.pack("i", 1))  # file version
-    fout.write(struct.pack("ii", params["r"], params["lora_alpha"]))
+    fout.write(struct.pack("i", params["r"]))
+    # https://opendelta.readthedocs.io/en/latest/modules/deltas.html says that `lora_alpha` is an int
+    # but some models ship a float value instead
+    # let's convert to int, but fail if lossless conversion is not possible
+    assert int(params["lora_alpha"]) == params["lora_alpha"], "cannot convert float to int losslessly"
+    fout.write(struct.pack("i", int(params["lora_alpha"])))
 
 
 def write_tensor_header(
@@ -89,7 +94,7 @@ if params["peft_type"] != "LORA":
     print(f"Error: unsupported adapter type {params['peft_type']}, expected LORA")
     sys.exit(1)
 
-if params["fan_in_fan_out"] == True:
+if params["fan_in_fan_out"] is True:
     print("Error: param fan_in_fan_out is not supported")
     sys.exit(1)
 
