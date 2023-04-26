@@ -169,7 +169,7 @@ cd llama.cpp
 
 In order to build llama.cpp you have three different options.
 
-- Using `make` 
+- Using `make`:
   - On Linux or MacOS:
 
       ```bash
@@ -214,7 +214,7 @@ Building the program with BLAS support may lead to some performance improvements
 
   This provides BLAS acceleration using only the CPU. Make sure to have OpenBLAS installed on your machine.
   
-  - Using `make` 
+  - Using `make`:
     - On Linux:
       ```bash
       make LLAMA_OPENBLAS=1
