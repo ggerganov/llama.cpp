@@ -7,31 +7,27 @@
 
 Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
-**Warnings**
-
-- `Q4_2` and `Q4_3` are still in development. Do not expect any kind of backward compatibility until they are finalized
-
 **Hot topics:**
 
+- [New quantization methods](https://github.com/ggerganov/llama.cpp#quantization)
 - [Added LoRA support](https://github.com/ggerganov/llama.cpp/pull/820)
 - [Add GPU support to ggml](https://github.com/ggerganov/llama.cpp/discussions/915)
 - [Roadmap Apr 2023](https://github.com/ggerganov/llama.cpp/discussions/784)
 
 ## Description
 
-The main goal of llama.cpp is to run the llama model using 4-bit quantization on a MacBook.
+The main goal of `llama.cpp` is to run the LLaMA model using 4-bit integer quantization on a MacBook
 
 - Plain C/C++ implementation without dependencies
 - Apple silicon first-class citizen - optimized via ARM NEON and Accelerate framework
 - AVX2 support for x86 architectures
 - Mixed F16 / F32 precision
-- 4-bit quantization support
+- 4-bit integer quantization support
 - Runs on the CPU
 
-This was [hacked in an evening](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022) - I have no idea if it works correctly.
-Please do not make conclusions about the models based on the results from this implementation.
-For all I know, it can be completely wrong. This project is for educational purposes.
-New features will probably be added mostly through community contributions.
+The original implementation of `llama.cpp` was [hacked in an evening](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022).
+Since then, the project has improved significantly thanks to many contributions. This project is for educational purposes and serves
+as the main playground for developing new features for the [ggml](https://github.com/ggerganov/ggml) library.
 
 **Supported platforms:**
 
@@ -293,6 +289,24 @@ As the models are currently fully loaded into memory, you will need adequate dis
 | 13B   | 24 GB         | 7.8 GB                 |
 | 30B   | 60 GB         | 19.5 GB                |
 | 65B   | 120 GB        | 38.5 GB                |
+
+### Quantization
+
+Several quantization methods are supported. They differ in the resulting model disk size and inference speed.
+
+Model | F16 | Q4_0 | Q4_1 | Q4_2 | Q4_3 | Q5_0 | Q5_1 | Q8_0
+-- | -- | -- | -- | -- | -- | -- | -- | --
+7B (ppl) | 5.9565 | 6.2103 | 6.1286 | 6.1698 | 6.0617 | 6.0139 | 5.9934 | 5.9571
+7B (size) | 13.0G | 4.0G | 4.8G | 4.0G | 4.8G | 4.4G | 4.8G | 7.1G
+7B (ms/tok @ 4th) | 128 | 56 | 61 | 84 | 91 | 91 | 95 | 75
+7B (ms/tok @ 8th) | 128 | 47 | 55 | 48 | 53 | 53 | 59 | 75
+7B (bpw) | 16.0 | 5.0 | 6.0 | 5.0 | 6.0 | 5.5 | 6.0 | 9.0
+-- | -- | -- | -- | -- | -- | -- | -- | --
+13B (ppl) | 5.2455 | 5.3748 | 5.3471 | 5.3433 | 5.3234 | 5.2768 | 5.2582 | 5.2458
+13B (size) | 25.0G | 7.6G | 9.1G | 7.6G | 9.1G | 8.4G | 9.1G | 14G
+13B (ms/tok @ 4th) | 239 | 104 | 113 | 160 | 175 | 176 | 185 | 141
+13B (ms/tok @ 8th) | 240 | 85 | 99 | 97 | 114 | 108 | 117 | 147
+13B (bpw) | 16.0 | 5.0 | 6.0 | 5.0 | 6.0 | 5.5 | 6.0 | 9.0
 
 ### Interactive mode
 
