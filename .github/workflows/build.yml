@@ -8,17 +8,19 @@ on:
         required: true
         type: boolean
   push:
+    branches:
+      - master
     paths: ['.github/workflows/**', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.c', '**/*.cpp']
   pull_request:
-    types: [opened, synchronize, edited, reopened, review_requested, ready_for_review]
+    types: [opened, synchronize, reopened]
     paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.c', '**/*.cpp']
 
 env:
  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
 
 jobs:
-  ubuntu-latest-make:
-    runs-on: ubuntu-latest
+  ubuntu-focal-make:
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Clone
@@ -29,12 +31,12 @@ jobs:
         id: depends
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential
+          sudo apt-get install build-essential gcc-8
 
       - name: Build
         id: make_build
         run: |
-          make
+          CC=gcc-8 make
 
   ubuntu-latest-cmake:
     runs-on: ubuntu-latest
@@ -73,7 +75,6 @@ jobs:
       matrix:
         sanitizer: [ADDRESS, THREAD, UNDEFINED]
         build_type: [Debug, Release]
-        accelerate: [ON, OFF]
 
     steps:
       - name: Clone
@@ -91,7 +92,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLAMA_ACCELERATE=${{ matrix.accelerate }}
+          cmake .. -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
           cmake --build . --config ${{ matrix.build_type }}
 
       - name: Test
@@ -156,7 +157,7 @@ jobs:
          - build: 'avx'
            defines: '-DLLAMA_AVX2=OFF'
          - build: 'avx512'
-           defines: '-DLLAMA_AVX512=ON'
+           defines: '-DLLAMA_AVX512=ON -DBUILD_SHARED_LIBS=ON'
 
     steps:
       - name: Clone
@@ -215,7 +216,7 @@ jobs:
     runs-on: ubuntu-latest
 
     needs:
-      - ubuntu-latest-make
+      - ubuntu-focal-make
       - ubuntu-latest-cmake
       - macOS-latest-make
       - macOS-latest-cmake

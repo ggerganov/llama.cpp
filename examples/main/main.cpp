@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -24,6 +25,7 @@
 #endif
 
 static console_state con_st;
+static llama_context ** g_ctx;
 
 static bool is_interacting = false;
 
@@ -35,6 +37,7 @@ void sigint_handler(int signo) {
         if (!is_interacting) {
             is_interacting=true;
         } else {
+            llama_print_timings(*g_ctx);
             _exit(130);
         }
     }
@@ -93,6 +96,7 @@ int main(int argc, char ** argv) {
 //bool is_prime(int n) {)";
 
     llama_context * ctx;
+    g_ctx = &ctx;
 
     // load the model
     {
@@ -109,6 +113,17 @@ int main(int argc, char ** argv) {
 
         if (ctx == NULL) {
             fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
+            return 1;
+        }
+    }
+
+    if (!params.lora_adapter.empty()) {
+        int err = llama_apply_lora_from_file(ctx,
+                                             params.lora_adapter.c_str(),
+                                             params.lora_base.empty() ? NULL : params.lora_base.c_str(),
+                                             params.n_threads);
+        if (err != 0) {
+            fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
             return 1;
         }
     }
@@ -163,12 +178,12 @@ int main(int argc, char ** argv) {
 
     // in instruct mode, we inject a prefix and a suffix to each input by the user
     if (params.instruct) {
-        params.interactive_start = true;
+        params.interactive_first = true;
         params.antiprompt.push_back("### Instruction:\n\n");
     }
 
     // enable interactive mode if reverse prompt or interactive start is specified
-    if (params.antiprompt.size() != 0 || params.interactive_start) {
+    if (params.antiprompt.size() != 0 || params.interactive_first) {
         params.interactive = true;
     }
 
@@ -231,7 +246,7 @@ int main(int argc, char ** argv) {
 #endif
                " - Press Return to return control to LLaMa.\n"
                " - If you want to submit another line, end your input in '\\'.\n\n");
-        is_interacting = params.interactive_start;
+        is_interacting = params.interactive_first;
     }
 
     bool is_antiprompt = false;
@@ -252,7 +267,7 @@ int main(int argc, char ** argv) {
             // infinite text generation via context swapping
             // if we run out of context:
             // - take the n_keep first tokens from the original prompt (via n_past)
-            // - take half of the last (n_ctx - n_keep) tokens and recompute the logits in a batch
+            // - take half of the last (n_ctx - n_keep) tokens and recompute the logits in batches
             if (n_past + (int) embd.size() > n_ctx) {
                 const int n_left = n_past - params.n_keep;
 
@@ -270,13 +285,21 @@ int main(int argc, char ** argv) {
                 //printf("\n---\n");
             }
 
-            if (llama_eval(ctx, embd.data(), embd.size(), n_past, params.n_threads)) {
-                fprintf(stderr, "%s : failed to eval\n", __func__);
-                return 1;
+            // evaluate tokens in batches
+            // embd is typically prepared beforehand to fit within a batch, but not always
+            for (int i = 0; i < (int) embd.size(); i += params.n_batch) {
+                int n_eval = (int) embd.size() - i;
+                if (n_eval > params.n_batch) {
+                    n_eval = params.n_batch;
+                }
+                if (llama_eval(ctx, &embd[i], n_eval, n_past, params.n_threads)) {
+                    fprintf(stderr, "%s : failed to eval\n", __func__);
+                    return 1;
+                }
+                n_past += n_eval;
             }
         }
 
-        n_past += embd.size();
         embd.clear();
 
         if ((int) embd_inp.size() <= n_consumed && !is_interacting) {
