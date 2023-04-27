@@ -1,9 +1,12 @@
 import matplotlib.pyplot as plt
 import sys, os
+import csv
 
 labels = []
 numbers = []
 numEntries = 0
+
+rows = []
 
 def bar_chart(numbers, labels, pos):
     plt.bar(pos, numbers, color='blue')
@@ -15,6 +18,10 @@ def bar_chart(numbers, labels, pos):
 
 def calculatecorrect():
     directory = os.fsencode("./examples/jeopardy/results/")
+    csv_reader = csv.reader(open("./examples/jeopardy/qasheet.csv", 'rt'), delimiter=',')
+    for row in csv_reader:
+        global rows
+        rows.append(row)
     for listing in os.listdir(directory):
         filename = os.fsdecode(listing)
         if filename.endswith(".txt"):
@@ -24,7 +31,18 @@ def calculatecorrect():
             global numbers
             labels.append(filename[:-4])
             numEntries += 1
-            numbers.append(1)
+            i = 1
+            totalcorrect = 0
+            for line in file.readlines():
+                if line.strip() != "------":
+                    print(line)
+                else:
+                    print("Correct answer: " + rows[i][2] + "\n")
+                    i+=1
+                    print("Did the AI get the question right? (y/n)")
+                    if input() == "y":
+                        totalcorrect += 1
+            numbers.append(totalcorrect)
 
 
 
