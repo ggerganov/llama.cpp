@@ -3,11 +3,11 @@ import hashlib
 import psutil
 
 def sha256sum(file):
-    # Check if system has enough RAM to read the file at once
+    # Check if system has enough free RAM to read the file at once
     file_size = os.path.getsize(file)
-    total_memory = psutil.virtual_memory().total
+    available_memory = psutil.virtual_memory().available
 
-    if file_size < total_memory:
+    if file_size < available_memory:
         # Read the file at once
         with open(file, "rb") as f:
             file_hash = hashlib.sha256(f.read())
