@@ -163,7 +163,7 @@ cd llama.cpp
 
 ### Build with Linux/ Mac Using Make
 
-These commands are specific to Ubuntu linux but OS specific varients are just a google away given this handy dependency list.  Also, if you're using your windows gaming machine, some users have reported great success in using [WSL2](https://github.com/ggerganov/llama.cpp/issues/103#issuecomment-1470440202) to install Ubuntu within Windows and following the linux build instructions to run this project.
+These commands are specific to Ubuntu linux but OS specific varients are just a google away given this handy dependency list.  Also, if you're using your windows gaming machine, some users have reported great success in using [WSL2](https://github.com/ggerganov/llama.cpp/issues/103#issuecomment-1470440202) to install Ubuntu within Windows and following the linux build instructions to run this project, but the CMAKE path is really easy.
 
 ```bash
 # Install dependencies (these are for linux, use brew equivelants for mac)
@@ -282,6 +282,8 @@ Because these resources belong to Facebook, their official path to obtaining the
 This guide will assume that you've downloaded the files to an arbitrary folder, `/some/path/to/LLaMA` using some responsible means described above.
 
 Because the weight files are so large, you may find it convenient to use softlinks to make them appear within the `models/` folder instead of having to copy them around on your HDD.  Otherwise, if you prefer, you can just download the files directly in the `models/` folder and skip the below softlink command:
+
+**Note:** Be concious of how you're mounting the data, as that this can have significat performance impacts.  WSL2 users should note that the p9 file sharing system will significantly slow things down when using symlinks to the host windows machine.
 
 ```bash
 # On linux, run this from the root of this repo
