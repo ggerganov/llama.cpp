@@ -1,32 +1,19 @@
 import os
 import hashlib
-import psutil
 
 def sha256sum(file):
-    # Check if system has enough free RAM to read the file at once
-    file_size = os.path.getsize(file)
-    available_memory = psutil.virtual_memory().available
-
-    if file_size < available_memory:
-        # Read the file at once
-        with open(file, "rb") as f:
-            file_hash = hashlib.sha256(f.read())
-            
-    else:
-        # Read the file in chunks
-        block_size = 16 * 1024 * 1024  # 16 MB block size
-        b  = bytearray(block_size)
-        file_hash = hashlib.sha256()
-        mv = memoryview(b)
-        with open(file, 'rb', buffering=0) as f: 
-            while True:
-                n = f.readinto(mv)
-                if not n:
-                    break
-                file_hash.update(mv[:n])
+    block_size = 16 * 1024 * 1024  # 16 MB block size
+    b  = bytearray(block_size)
+    file_hash = hashlib.sha256()
+    mv = memoryview(b)
+    with open(file, 'rb', buffering=0) as f: 
+        while True:
+            n = f.readinto(mv)
+            if not n:
+                break
+            file_hash.update(mv[:n])
         
     return file_hash.hexdigest()
-
 
 # Define the path to the llama directory (parent folder of script directory)
 llama_path = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
