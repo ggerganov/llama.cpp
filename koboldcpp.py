@@ -168,6 +168,18 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         response_body = None
 
         if self.path in ["", "/?"] or self.path.startswith(('/?','?')): #it's possible for the root url to have ?params without /
+            if args.stream and not "streaming=1" in self.path:
+                self.path = self.path.replace("streaming=0","")
+                if self.path.startswith(('/?','?')):
+                    self.path += "&streaming=1"
+                else:
+                    self.path = self.path + "?streaming=1"
+                self.send_response(302)
+                self.send_header("Location", self.path)
+                self.end_headers()
+                print("Force redirect to streaming mode, as --stream is set.")
+                return None
+            
             if self.embedded_kailite is None:
                 response_body = (f"Embedded Kobold Lite is not found.<br>You will have to connect via the main KoboldAI client, or <a href='https://lite.koboldai.net?local=1&port={self.port}'>use this URL</a> to connect.").encode()
             else:
