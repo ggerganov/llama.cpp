@@ -8,7 +8,7 @@
 
 #include "ggml.h"
 
-#include "ggml_clblast_dequant.cl"
+#include "ggml-opencl-dequant.cl"
 
 #define CL_CHECK(err, name)                                                                     \
     do {                                                                                        \
