@@ -187,7 +187,7 @@ if (LLAMA_HIPBLAS)
         add_compile_definitions(GGML_USE_HIPBLAS)
         add_library(ggml-hip OBJECT ggml-cuda.cu ggml-cuda.h)
         set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE CXX)
-        target_link_libraries(ggml-hip PUBLIC hip::device)
+        target_link_libraries(ggml-hip PRIVATE hip::device)
 
         if (LLAMA_STATIC)
             message(FATAL_ERROR "Static linking not supported for HIP/ROCm")
