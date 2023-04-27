@@ -75,6 +75,8 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_Q4_2 = 5,  // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q4_3 = 6,  // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q8_0 = 7,  // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q5_0 = 8,  // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q5_1 = 9,  // except 1d tensors
     };
 
     LLAMA_API struct llama_context_params llama_context_default_params();
@@ -115,6 +117,9 @@ extern "C" {
 
     // Returns the number of tokens in the KV cache
     LLAMA_API int llama_get_kv_cache_token_count(struct llama_context * ctx);
+
+    // Sets the current rng seed.
+    LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, int seed);
 
     // Returns the size in bytes of the state (rng, logits, embedding and kv_cache)
     LLAMA_API size_t llama_get_state_size(struct llama_context * ctx);
