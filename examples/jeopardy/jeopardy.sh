@@ -2,16 +2,19 @@
 set -e
 
 MODEL=./models/ggml-vicuna-13b-1.1-q4_0.bin
+MODEL_NAME=Vicuna
 
 # exec options
-question_file=./examples/jeopardy/questions.txt
-output_file=./examples/jeopardy/results.txt
 opts="--temp 0 -n 80" # additional flags
 prefix="Human: " # Ex. Vicuna uses "Human: "
-
 nl='
 '
 introduction="You will be playing a game of Jeopardy. Simply answer the question in the correct format (Ex. What is Paris, or Who is George Washington)."
+
+# file options
+question_file=./examples/jeopardy/questions.txt
+touch ./examples/jeopardy/results/$MODEL_NAME.txt
+output_file=./examples/jeopardy/results/$MODEL_NAME.txt
 
 counter=1
 
