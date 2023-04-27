@@ -5,8 +5,8 @@ MODEL=./models/ggml-vicuna-13b-1.1-q4_0.bin
 MODEL_NAME=Vicuna
 
 # exec options
-opts="--temp 0 -n 80" # additional flags
 prefix="Human: " # Ex. Vicuna uses "Human: "
+opts="--temp 0 -n 80" # additional flags
 nl='
 '
 introduction="You will be playing a game of Jeopardy. Simply answer the question in the correct format (Ex. What is Paris, or Who is George Washington)."

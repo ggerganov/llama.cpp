@@ -4,7 +4,7 @@ import csv
 
 labels = []
 numbers = []
-numEntries = 0
+numEntries = 1
 
 rows = []
 
@@ -49,4 +49,8 @@ def calculatecorrect():
 if __name__ == '__main__':
     calculatecorrect()
     pos = list(range(numEntries))
+    labels.append("Human")
+    numbers.append(48.11)
     bar_chart(numbers, labels, pos)
+    print(labels)
+    print(numbers)
