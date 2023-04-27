@@ -1,5 +1,32 @@
 import os
 import hashlib
+import psutil
+
+def sha256sum(file):
+    # Check if system has enough RAM to read the file at once
+    file_size = os.path.getsize(file)
+    total_memory = psutil.virtual_memory().total
+
+    if file_size < total_memory:
+        # Read the file at once
+        with open(file, "rb") as f:
+            file_hash = hashlib.sha256(f.read())
+            
+    else:
+        # Read the file in chunks
+        block_size = 16 * 1024 * 1024  # 16 MB block size
+        b  = bytearray(block_size)
+        file_hash = hashlib.sha256()
+        mv = memoryview(b)
+        with open(file, 'rb', buffering=0) as f: 
+            while True:
+                n = f.readinto(mv)
+                if not n:
+                    break
+                file_hash.update(mv[:n])
+        
+    return file_hash.hexdigest()
+
 
 # Define the path to the llama directory (parent folder of script directory)
 llama_path = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
@@ -24,7 +51,7 @@ for line in hash_list:
     # Split the line into hash and filename
     hash_value, filename = line.split("  ")
 
-    # Get the full path of the file by joining the models path and the filename
+    # Get the full path of the file by joining the llama path and the filename
     file_path = os.path.join(llama_path, filename)
 
     # Informing user of the progress of the integrity check
@@ -33,8 +60,7 @@ for line in hash_list:
     # Check if the file exists
     if os.path.exists(file_path):
         # Calculate the SHA256 checksum of the file using hashlib
-        with open(file_path, "rb") as f:
-            file_hash = hashlib.sha256(f.read()).hexdigest()
+        file_hash = sha256sum(file_path)
 
         # Compare the file hash with the expected hash
         if file_hash == hash_value:
