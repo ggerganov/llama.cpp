@@ -136,7 +136,7 @@ struct llama_kv_cache {
 
     struct ggml_context * ctx = NULL;
 
-    llama_buffer buf;
+    llama_ctx_buffer buf;
 
     int n; // number of tokens currently in the cache
 
