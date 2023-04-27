@@ -19,45 +19,42 @@
         }                                                                                       \
     } while (0)
 
-cl_platform_id platform;
-cl_device_id device;
-cl_context context;
-cl_command_queue queue;
-cl_program program;
-cl_kernel kernel_q4_0, kernel_q4_1, kernel_q4_2, kernel_q4_3;
-cl_mem cl_buffer_a, cl_buffer_qb, cl_buffer_b, cl_buffer_c;
-size_t cl_size_a = 0, cl_size_qb = 0, cl_size_b = 0, cl_size_c = 0;
+static cl_platform_id platform;
+static cl_device_id device;
+static cl_context context;
+static cl_command_queue queue;
+static cl_program program;
+static cl_kernel kernel_q4_0, kernel_q4_1, kernel_q4_2, kernel_q4_3;
+static cl_mem cl_buffer_a, cl_buffer_qb, cl_buffer_b, cl_buffer_c;
+static size_t cl_size_a = 0, cl_size_qb = 0, cl_size_b = 0, cl_size_c = 0;
 
-cl_program build_program_from_source(cl_context ctx, cl_device_id dev, const char* program_buffer) {
-   cl_program p;
-   char *program_log;
-   size_t program_size, log_size;
-   int err;
+static cl_program build_program_from_source(cl_context ctx, cl_device_id dev, const char* program_buffer) {
+    cl_program p;
+    char *program_log;
+    size_t program_size, log_size;
+    int err;
 
-   program_size = strlen(program_buffer);
+    program_size = strlen(program_buffer);
 
-   p = clCreateProgramWithSource(ctx, 1,
-      (const char**)&program_buffer, &program_size, &err);
-   if(err < 0) {
-      fprintf(stderr, "OpenCL error creating program");
-      exit(1);
-   }
+    p = clCreateProgramWithSource(ctx, 1, (const char**)&program_buffer, &program_size, &err);
+    if(err < 0) {
+        fprintf(stderr, "OpenCL error creating program");
+        exit(1);
+    }
 
-   err = clBuildProgram(p, 0, NULL, NULL, NULL, NULL);
-   if(err < 0) {
+    err = clBuildProgram(p, 0, NULL, NULL, NULL, NULL);
+    if(err < 0) {
 
-      clGetProgramBuildInfo(p, dev, CL_PROGRAM_BUILD_LOG,
-            0, NULL, &log_size);
-      program_log = (char*) malloc(log_size + 1);
-      program_log[log_size] = '\0';
-      clGetProgramBuildInfo(p, dev, CL_PROGRAM_BUILD_LOG,
-            log_size + 1, program_log, NULL);
-      printf("%s\n", program_log);
-      free(program_log);
-      exit(1);
-   }
+        clGetProgramBuildInfo(p, dev, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+        program_log = (char*) malloc(log_size + 1);
+        program_log[log_size] = '\0';
+        clGetProgramBuildInfo(p, dev, CL_PROGRAM_BUILD_LOG, log_size + 1, program_log, NULL);
+        printf("%s\n", program_log);
+        free(program_log);
+        exit(1);
+    }
 
-   return p;
+    return p;
 }
 
 void ggml_cl_init(void) {
