@@ -8033,7 +8033,7 @@ static void ggml_compute_forward_mul_mat_f32(
 #if defined(GGML_USE_CUBLAS)
         const float alpha = 1.0f;
         const float beta = 0.0f;
-        const int x_ne = ne01 * ne10;
+        const int x_ne = ne01 * ne00;
         const int y_ne = ne11 * ne10;
         const int d_ne = ne11 * ne01;
 
@@ -8239,7 +8239,7 @@ static void ggml_compute_forward_mul_mat_f16_f32(
 
         const float alpha = 1.0f;
         const float beta = 0.0f;
-        const int x_ne = ne01 * ne10;
+        const int x_ne = ne01 * ne00;
         const int y_ne = ne11 * ne10;
         const int d_ne = ne11 * ne01;
 
@@ -8498,39 +8498,19 @@ static void ggml_compute_forward_mul_mat_q_f32(
 #if defined(GGML_USE_CUBLAS)
         const float alpha = 1.0f;
         const float beta = 0.0f;
-        const int x_ne = ne01 * ne10;
+        const int x_ne = ne01 * ne00;
         const int y_ne = ne11 * ne10;
         const int d_ne = ne11 * ne01;
 
         size_t x_size, y_size, d_size, q_size;
-        float *d_X = ggml_cuda_pool_malloc(sizeof(float) * x_ne, &x_size);
-        float *d_Y = ggml_cuda_pool_malloc(sizeof(float) * y_ne, &y_size);
-        float *d_D = ggml_cuda_pool_malloc(sizeof(float) * d_ne, &d_size);
-        float *d_Q = ggml_cuda_pool_malloc(GGML_TYPE_SIZE[type] * x_ne / GGML_BLCK_SIZE[type], &q_size);
+        float * d_X = ggml_cuda_pool_malloc(sizeof(float) * x_ne, &x_size);
+        float * d_Y = ggml_cuda_pool_malloc(sizeof(float) * y_ne, &y_size);
+        float * d_D = ggml_cuda_pool_malloc(sizeof(float) * d_ne, &d_size);
+        void  * d_Q = ggml_cuda_pool_malloc(GGML_TYPE_SIZE[type] * x_ne / GGML_BLCK_SIZE[type], &q_size);
 
-        void (*dequantize_row_q_cuda)(const void * x, float * y, int k, cudaStream_t stream)  = NULL;
-        if (type == GGML_TYPE_Q4_0) {
-            dequantize_row_q_cuda = dequantize_row_q4_0_cuda;
-        }
-        else if (type == GGML_TYPE_Q4_1) {
-            dequantize_row_q_cuda = dequantize_row_q4_1_cuda;
-        }
-        else if (type == GGML_TYPE_Q4_2) {
-            dequantize_row_q_cuda = dequantize_row_q4_2_cuda;
-        }
-        else if (type == GGML_TYPE_Q5_0) {
-            dequantize_row_q_cuda = dequantize_row_q5_0_cuda;
-        }
-        else if (type == GGML_TYPE_Q5_1) {
-            dequantize_row_q_cuda = dequantize_row_q5_1_cuda;
-        }
-        else if (type == GGML_TYPE_Q8_0) {
-            dequantize_row_q_cuda = dequantize_row_q8_0_cuda;
-        }
-        else {
-            GGML_ASSERT(false);
-        }
-#elif !defined(GGML_USE_CLBLAST)
+        const dequantize_row_q_cuda_t dequantize_row_q_cuda = ggml_get_dequantize_row_q_cuda(type);
+        GGML_ASSERT(dequantize_row_q_cuda != NULL);
+#else
         float * const wdata = params->wdata;
         dequantize_row_q_t const dequantize_row_q = quantize_fns[type].dequantize_row_q;
 #endif
@@ -8545,7 +8525,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
                 // copy and dequantize on device
                 CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_Q, src0, i03, i02, g_cudaStream));
 
-                dequantize_row_q_cuda(d_Q, d_X, ne01 * ne00, g_cudaStream);
+                dequantize_row_q_cuda(d_Q, d_X, x_ne, g_cudaStream2);
                 CUDA_CHECK(cudaGetLastError());
 #elif defined(GGML_USE_CLBLAST)
                 const void* x = (char *) src0->data + i03*nb03 + i02*nb02;
@@ -8564,6 +8544,9 @@ static void ggml_compute_forward_mul_mat_q_f32(
 #if defined(GGML_USE_CUBLAS)
                 // copy data to device
                 CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_Y, src1, i03, i02, g_cudaStream));
+
+                // wait for dequantization
+                CUDA_CHECK(cudaStreamWaitEvent(g_cudaStream, g_cudaEvent, 0));
 
                 // compute
                 CUBLAS_CHECK(
