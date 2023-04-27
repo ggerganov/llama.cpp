@@ -120,6 +120,8 @@ LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = ctypes.c_int(
 LLAMA_FTYPE_MOSTLY_Q4_2 = ctypes.c_int(5)  # except 1d tensors
 LLAMA_FTYPE_MOSTLY_Q4_3 = ctypes.c_int(6)  # except 1d tensors
 LLAMA_FTYPE_MOSTLY_Q8_0 = ctypes.c_int(7)  # except 1d tensors
+LLAMA_FTYPE_MOSTLY_Q5_0 = ctypes.c_int(8)  # except 1d tensors
+LLAMA_FTYPE_MOSTLY_Q5_1 = ctypes.c_int(9)  # except 1d tensors
 
 # Functions
 
@@ -210,6 +212,12 @@ def llama_get_kv_cache_token_count(ctx: llama_context_p) -> c_int:
 _lib.llama_get_kv_cache_token_count.argtypes = [llama_context_p]
 _lib.llama_get_kv_cache_token_count.restype = c_int
 
+# Sets the current rng seed.
+def llama_set_rng_seed(ctx: llama_context_p, seed: c_int):
+    return _lib.llama_set_rng_seed(ctx, seed)
+
+_lib.llama_set_rng_seed.argtypes = [llama_context_p, c_int]
+_lib.llama_set_rng_seed.restype = None
 
 # Returns the size in bytes of the state (rng, logits, embedding and kv_cache)
 def llama_get_state_size(ctx: llama_context_p) -> c_size_t:
