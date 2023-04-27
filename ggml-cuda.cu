@@ -353,3 +353,13 @@ cudaError_t ggml_cuda_h2d_tensor_2d(void * dst, const struct ggml_tensor * src, 
         return cudaSuccess;
     }
 }
+
+void * ggml_cuda_host_malloc(size_t size) {
+    void * ptr;
+    CUDA_CHECK(cudaMallocHost((void **) &ptr, size));
+    return ptr;
+}
+
+void ggml_cuda_host_free(void * ptr) {
+    CUDA_CHECK(cudaFreeHost(ptr));
+}

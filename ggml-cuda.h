@@ -31,6 +31,9 @@ extern cudaStream_t g_cudaStream2;
 extern cudaEvent_t g_cudaEvent;
 
 void   ggml_init_cublas(void);
+void * ggml_cuda_host_malloc(size_t size);
+void   ggml_cuda_host_free(void * ptr);
+
 void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size);
 void   ggml_cuda_pool_free(void * ptr, size_t size);
 
