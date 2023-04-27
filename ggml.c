@@ -8242,15 +8242,18 @@ static void ggml_compute_forward_mul_mat_f16_f32(
         const int d_ne = ne11 * ne01;
 
         size_t x_size, y_size, d_size;
-        float *d_X = ggml_cuda_pool_malloc(sizeof(float) * x_ne, &x_size);
-        float *d_Y = ggml_cuda_pool_malloc(sizeof(float) * y_ne, &y_size);
-        float *d_D = ggml_cuda_pool_malloc(sizeof(float) * d_ne, &d_size);
+        ggml_fp16_t * d_X = ggml_cuda_pool_malloc(sizeof(float) * x_ne, &x_size);
+        ggml_fp16_t * d_Y = ggml_cuda_pool_malloc(sizeof(float) * y_ne, &y_size);
+        float       * d_D = ggml_cuda_pool_malloc(sizeof(float) * d_ne, &d_size);
 #else
         float * const wdata = params->wdata;
 #endif
         for (int64_t i03 = 0; i03 < ne03; i03++) {
             for (int64_t i02 = 0; i02 < ne02; i02++) {
 #if defined(GGML_USE_CUBLAS)
+                // copy src0 while converting src1
+                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_X, src0, i02, i03, g_cudaStream));
+
                 // with cuBlAS, instead of converting src0 to fp32, we convert src1 to fp16
                 ggml_fp16_t * const wdata = (ggml_fp16_t *) params->wdata + (ne11 * ne10) * (i03 * ne02 + i02);
                 {
@@ -8274,11 +8277,9 @@ static void ggml_compute_forward_mul_mat_f16_f32(
 
 #if defined(GGML_USE_CUBLAS)
                 const ggml_fp16_t * y = (ggml_fp16_t *) wdata;
-
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
                 // copy data to device
-                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_X, src0, i03, i02, g_cudaStream));
                 CUDA_CHECK(cudaMemcpyAsync(d_Y, y, sizeof(ggml_fp16_t) * y_ne, cudaMemcpyHostToDevice, g_cudaStream));
 
                 // compute
