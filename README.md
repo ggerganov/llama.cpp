@@ -267,11 +267,11 @@ Building the program with BLAS support may lead to some performance improvements
     cmake --build . --config Release
     ```
 
-### Aquiring Setting up the 7b model weights
+### Aquiring the Publicly Released LLaMA Models
 
-You can use this system to conduct research on an AI chatbot vaguely comparable to ChatGPT-3 and it will even run on your local machine without needing massive amounts of hardware.  But to do so you **must** install the Alpaca 7b model weights into the models folder.
+You can use Llama.cpp for many purposes.  Perhaps you're here to conduct research on an AI chatbot vaguely comparable to ChatGPT-3 that can run on your local machine without needing massive amounts of hardware.  You can use Llama.cpp for this, but to do so you **must** install some kind of model (none are included in this repo).  Due to their wild popularity, this guide walks you through obtaining Facebooks LLaMa's model weights.
 
-Because these resources belong to Facebook, their official path to obtaining the data should be followed.  While it's true that most researchers using the Alpaca weights obtained them from a magnet link to a torrent file, linking or sharing that magnet link should not be done in this repo due to the questionability of violating FaceBook's IP rights and also (not to be an alarmist here) the potential for the popularization of these weights to cause harm.
+Because these resources belong to Facebook, their official path to obtaining the data should be followed.  While it's true that most researchers using the LLaMa weights obtained them from a magnet link to a torrent file, linking or sharing that magnet link should not be done in this repo due to the questionability of violating FaceBook's IP rights and also (not to be an alarmist here) the potential for the popularization of these weights to cause harm.
 
 - **Under no circumstances should IPFS, magnet links, or any other links to model downloads be shared anywhere in this repository, including in issues, discussions, or pull requests. They will be immediately deleted.**
 - The LLaMA models are officially distributed by Facebook and will **never** be provided through this repository.
@@ -279,7 +279,7 @@ Because these resources belong to Facebook, their official path to obtaining the
 
 #### Putting the Model Weights in the Right Spot
 
-This guide will assume that you've downloaded the files to an arbitrary folder, `/mnt/c/ai/models/LLaMA` using some responsible means described above.
+This guide will assume that you've downloaded the files to an arbitrary folder, `/some/path/to/LLaMA` using some responsible means described above.
 
 Because the weight files are so large, you may find it convenient to use softlinks to make them appear within the `models/` folder instead of having to copy them around on your HDD.  Otherwise, if you prefer, you can just download the files directly in the `models/` folder and skip the below softlink command:
 
@@ -291,7 +291,7 @@ rm models/.gitkeep
 rm -r models/
 
 # Create a symlink to the folder where the LLaMA weights are located
-ln -s /mnt/c/ai/models/LLaMA $(pwd)/models
+ln -s /some/path/to/LLaMA $(pwd)/models
 ```
 
 ### Prepare Data
