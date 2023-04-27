@@ -457,6 +457,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             {
                 printf("\rGenerating (%d / %d tokens)", (1 + params.n_predict - remaining_tokens), params.n_predict);
             }
+            fflush(stdout);
 
             bool evalres = false;
 
