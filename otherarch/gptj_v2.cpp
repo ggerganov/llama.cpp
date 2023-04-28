@@ -2,6 +2,7 @@
 #include "otherarch.h"
 
 #include "utils.h"
+#include "common-ggml.h"
 
 #include <cassert>
 #include <cmath>
@@ -48,7 +49,7 @@ ModelLoadResult gptj_model_load(const std::string & fname, gptj_model & model, g
         fin.read((char *) &hparams.n_head,  sizeof(hparams.n_head));
         fin.read((char *) &hparams.n_layer, sizeof(hparams.n_layer));
         fin.read((char *) &hparams.n_rot,   sizeof(hparams.n_rot));
-        fin.read((char *) &hparams.f16,     sizeof(hparams.f16));
+        fin.read((char *) &hparams.ftype,     sizeof(hparams.ftype));
 
         printf("%s: n_vocab = %d\n", __func__, hparams.n_vocab);
         printf("%s: n_ctx   = %d\n", __func__, hparams.n_ctx);
@@ -56,7 +57,7 @@ ModelLoadResult gptj_model_load(const std::string & fname, gptj_model & model, g
         printf("%s: n_head  = %d\n", __func__, hparams.n_head);
         printf("%s: n_layer = %d\n", __func__, hparams.n_layer);
         printf("%s: n_rot   = %d\n", __func__, hparams.n_rot);
-        printf("%s: f16     = %d\n", __func__, hparams.f16);
+        printf("%s: ftype   = %d\n", __func__, hparams.ftype);
     }
 
     // load vocab
@@ -85,23 +86,12 @@ ModelLoadResult gptj_model_load(const std::string & fname, gptj_model & model, g
 
     // for the big tensors, we have the option to store the data in 16-bit floats or quantized
     // in order to save memory and also to speed up the computation
-    ggml_type wtype = GGML_TYPE_COUNT;
-    switch (model.hparams.f16) {
-        case 0: wtype = GGML_TYPE_F32;  break;
-        case 1: wtype = GGML_TYPE_F16;  break;
-        case 2: wtype = GGML_TYPE_Q4_0; break;
-        case 3: wtype = GGML_TYPE_Q4_1; break;
-        case 5: wtype = GGML_TYPE_Q4_2; break;
-        case 6: wtype = GGML_TYPE_Q4_3; break;
-        default:
-                {
-                    fprintf(stderr, "%s: invalid model file '%s' (bad f16 value %d)\n",
-                            __func__, fname.c_str(), model.hparams.f16);
-                    return ModelLoadResult::FAIL;
-                }
+    ggml_type wtype = ggml_ftype_to_ggml_type((ggml_ftype) (model.hparams.ftype));
+    if (wtype == GGML_TYPE_COUNT) {
+        fprintf(stderr, "%s: invalid model file '%s' (bad ftype value %d)\n",
+                __func__, fname.c_str(), model.hparams.ftype);
+        return ModelLoadResult::FAIL;
     }
-
-    const ggml_type wtype2 = GGML_TYPE_F32;
 
     auto & ctx = model.ctx;
 

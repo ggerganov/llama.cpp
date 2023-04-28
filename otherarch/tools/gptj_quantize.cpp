@@ -1,6 +1,6 @@
 #include "ggml.h"
 
-#include "otherarch/utils.h"
+#include "utils.h"
 #include "common-ggml.h"
 
 #include <cassert>
@@ -25,7 +25,7 @@ struct gptj_hparams {
 };
 
 // quantize a model
-bool gptj_model_quantize(const std::string & fname_inp, const std::string & fname_out, ggml_mtype mtype) {
+bool gptj_model_quantize(const std::string & fname_inp, const std::string & fname_out, ggml_ftype ftype) {
     gpt_vocab vocab;
 
     printf("%s: loading model from '%s'\n", __func__, fname_inp.c_str());
@@ -79,7 +79,7 @@ bool gptj_model_quantize(const std::string & fname_inp, const std::string & fnam
         fout.write((char *) &hparams.n_head,  sizeof(hparams.n_head));
         fout.write((char *) &hparams.n_layer, sizeof(hparams.n_layer));
         fout.write((char *) &hparams.n_rot,   sizeof(hparams.n_rot));
-        fout.write((char *) &mtype,           sizeof(hparams.f16));
+        fout.write((char *) &ftype,           sizeof(hparams.f16));
     }
 
     // load vocab
@@ -114,7 +114,7 @@ bool gptj_model_quantize(const std::string & fname_inp, const std::string & fnam
         ".*weight",
     };
 
-    if (!ggml_common_quantize_0(finp, fout, mtype, to_quant, {})) {
+    if (!ggml_common_quantize_0(finp, fout, ftype, to_quant, {})) {
         fprintf(stderr, "%s: failed to quantize model '%s'\n", __func__, fname_inp.c_str());
         return false;
     }
@@ -132,10 +132,7 @@ int main(int argc, char ** argv) {
     ggml_time_init();
     if (argc != 4) {
         fprintf(stderr, "usage: %s model-f32.bin model-quant.bin type\n", argv[0]);
-        fprintf(stderr, "  type = 2 - q4_0\n");
-        fprintf(stderr, "  type = 3 - q4_1\n");
-        fprintf(stderr, "  type = 5 - q4_2\n");
-        fprintf(stderr, "  type = 6 - q4_3\n");
+        ggml_print_ftypes(stderr);
         return 1;
     }
 
@@ -149,7 +146,7 @@ int main(int argc, char ** argv) {
     const std::string fname_inp = argv[1];
     const std::string fname_out = argv[2];
 
-    const int mtype = atoi(argv[3]);
+    const ggml_ftype ftype = ggml_parse_ftype(argv[3]);
 
     const int64_t t_main_start_us = ggml_time_us();
 
@@ -159,7 +156,7 @@ int main(int argc, char ** argv) {
     {
         const int64_t t_start_us = ggml_time_us();
 
-        if (!gptj_model_quantize(fname_inp, fname_out, ggml_mtype(mtype))) {
+        if (!gptj_model_quantize(fname_inp, fname_out, ggml_ftype(ftype))) {
             fprintf(stderr, "%s: failed to quantize model from '%s'\n", __func__, fname_inp.c_str());
             return 1;
         }

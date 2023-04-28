@@ -1,5 +1,6 @@
 default: koboldcpp koboldcpp_noavx2 koboldcpp_openblas koboldcpp_openblas_noavx2 koboldcpp_clblast
 simple: koboldcpp koboldcpp_noavx2
+tools: quantize_gpt2 quantize_gptj quantize_llama quantize_neox
 dev: koboldcpp_openblas
 
 
@@ -45,8 +46,8 @@ endif
 #
 
 # keep standard at C11 and C++11
-CFLAGS   = -I.              -I./include -I./include/CL -Ofast -DNDEBUG -std=c11   -fPIC
-CXXFLAGS = -I. -I./examples -I./include -I./include/CL -Ofast -DNDEBUG -std=c++11 -fPIC
+CFLAGS   = -I.              -I./include -I./include/CL -I./otherarch -I./otherarch/tools -Ofast -DNDEBUG -std=c11   -fPIC
+CXXFLAGS = -I. -I./examples -I./include -I./include/CL -I./otherarch -I./otherarch/tools -Ofast -DNDEBUG -std=c++11 -fPIC
 LDFLAGS  =
 
 # these are used on windows, to build some libraries with extra old device compatibility

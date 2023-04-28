@@ -48,7 +48,7 @@ ModelLoadResult legacy_gpt2_model_load(const std::string & fname, gpt2_v1_model 
         fin.read((char *) &hparams.n_embd,  sizeof(hparams.n_embd));
         fin.read((char *) &hparams.n_head,  sizeof(hparams.n_head));
         fin.read((char *) &hparams.n_layer, sizeof(hparams.n_layer));
-        fin.read((char *) &hparams.f16,     sizeof(hparams.f16));
+        fin.read((char *) &hparams.ftype,     sizeof(hparams.ftype));
 
         //used to expand KV size if needed
         desiredMaxCtx = std::max(hparams.n_ctx,desiredMaxCtx);
@@ -58,7 +58,7 @@ ModelLoadResult legacy_gpt2_model_load(const std::string & fname, gpt2_v1_model 
         printf("%s: n_embd  = %d\n", __func__, hparams.n_embd);
         printf("%s: n_head  = %d\n", __func__, hparams.n_head);
         printf("%s: n_layer = %d\n", __func__, hparams.n_layer);
-        printf("%s: f16     = %d\n", __func__, hparams.f16);
+        printf("%s: f16     = %d\n", __func__, hparams.ftype);
     }
 
     // load vocab
@@ -87,7 +87,7 @@ ModelLoadResult legacy_gpt2_model_load(const std::string & fname, gpt2_v1_model 
 
     // for the big tensors, we have the option to store the data in 16-bit floats
     // in order to save memory and also to speed up the computation
-    const ggml_v1_type wtype = model.hparams.f16 ? GGML_V1_TYPE_F16 : GGML_V1_TYPE_F32;
+    const ggml_v1_type wtype = GGML_V1_TYPE_F16;
 
     auto & ctx = model.ctx;
 

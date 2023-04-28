@@ -1,26 +1,86 @@
-#include "otherarch/tools/common-ggml.h"
-
-#include "ggml.h"
+#include "common-ggml.h"
 
 #include <regex>
+
+static const std::map<std::string, enum ggml_ftype> GGML_FTYPE_MAP = {
+    {"q4_0", GGML_FTYPE_MOSTLY_Q4_0},
+    {"q4_1", GGML_FTYPE_MOSTLY_Q4_1},
+    {"q4_2", GGML_FTYPE_MOSTLY_Q4_2},
+    {"q4_3", GGML_FTYPE_MOSTLY_Q4_3},
+    {"q5_0", GGML_FTYPE_MOSTLY_Q5_0},
+    {"q5_1", GGML_FTYPE_MOSTLY_Q5_1},
+    {"q8_0", GGML_FTYPE_MOSTLY_Q8_0},
+};
+
+void ggml_print_ftypes(FILE * fp) {
+    for (auto it = GGML_FTYPE_MAP.begin(); it != GGML_FTYPE_MAP.end(); it++) {
+        fprintf(fp, "  type = \"%s\" or %d\n", it->first.c_str(), it->second);
+    }
+}
+
+enum ggml_ftype ggml_parse_ftype(const char * str) {
+    enum ggml_ftype ftype;
+    if (str[0] == 'q') {
+        const auto it = GGML_FTYPE_MAP.find(str);
+        if (it == GGML_FTYPE_MAP.end()) {
+            fprintf(stderr, "%s: unknown ftype '%s'\n", __func__, str);
+            return GGML_FTYPE_UNKNOWN;
+        }
+        ftype = it->second;
+    } else {
+        ftype = (enum ggml_ftype) atoi(str);
+    }
+
+    return ftype;
+}
+
+enum ggml_type ggml_ftype_to_ggml_type(const enum ggml_ftype ftype) {
+    ggml_type wtype = GGML_TYPE_COUNT;
+
+    switch (ftype) {
+        case GGML_FTYPE_ALL_F32:              wtype = GGML_TYPE_F32;   break;
+        case GGML_FTYPE_MOSTLY_F16:           wtype = GGML_TYPE_F16;   break;
+        case GGML_FTYPE_MOSTLY_Q4_0:          wtype = GGML_TYPE_Q4_0;  break;
+        case GGML_FTYPE_MOSTLY_Q4_1:          wtype = GGML_TYPE_Q4_1;  break;
+        case GGML_FTYPE_MOSTLY_Q4_2:          wtype = GGML_TYPE_Q4_2;  break;
+        case GGML_FTYPE_MOSTLY_Q4_3:          wtype = GGML_TYPE_Q4_3;  break;
+        case GGML_FTYPE_MOSTLY_Q5_0:          wtype = GGML_TYPE_Q5_0;  break;
+        case GGML_FTYPE_MOSTLY_Q5_1:          wtype = GGML_TYPE_Q5_1;  break;
+        case GGML_FTYPE_MOSTLY_Q8_0:          wtype = GGML_TYPE_Q8_0;  break;
+        case GGML_FTYPE_UNKNOWN:              wtype = GGML_TYPE_COUNT; break;
+        case GGML_FTYPE_MOSTLY_Q4_1_SOME_F16: wtype = GGML_TYPE_COUNT; break;
+    }
+
+    if (wtype == GGML_TYPE_COUNT) {
+        fprintf(stderr, "%s: invalid model type %d\n", __func__, ftype);
+    }
+
+    return wtype;
+}
 
 bool ggml_common_quantize_0(
         std::ifstream & finp,
         std::ofstream & fout,
-        const ggml_mtype mtype,
+        const ggml_ftype ftype,
         const std::vector<std::string> & to_quant,
         const std::vector<std::string> & to_skip) {
 
     ggml_type qtype = GGML_TYPE_F32;
 
-    switch (mtype) {
-        case 2: qtype = GGML_TYPE_Q4_0; break;
-        case 3: qtype = GGML_TYPE_Q4_1; break;
-        case 5: qtype = GGML_TYPE_Q4_2; break;
-        case 6: qtype = GGML_TYPE_Q4_3; break;
-        default:
+    switch (ftype) {
+        case GGML_FTYPE_MOSTLY_Q4_0: qtype = GGML_TYPE_Q4_0; break;
+        case GGML_FTYPE_MOSTLY_Q4_1: qtype = GGML_TYPE_Q4_1; break;
+        case GGML_FTYPE_MOSTLY_Q4_2: qtype = GGML_TYPE_Q4_2; break;
+        case GGML_FTYPE_MOSTLY_Q4_3: qtype = GGML_TYPE_Q4_3; break;
+        case GGML_FTYPE_MOSTLY_Q5_0: qtype = GGML_TYPE_Q5_0; break;
+        case GGML_FTYPE_MOSTLY_Q5_1: qtype = GGML_TYPE_Q5_1; break;
+        case GGML_FTYPE_MOSTLY_Q8_0: qtype = GGML_TYPE_Q8_0; break;
+        case GGML_FTYPE_UNKNOWN:
+        case GGML_FTYPE_ALL_F32:
+        case GGML_FTYPE_MOSTLY_F16:
+        case GGML_FTYPE_MOSTLY_Q4_1_SOME_F16:
                 {
-                    fprintf(stderr, "%s: invalid model type %d\n", __func__, mtype);
+                    fprintf(stderr, "%s: invalid model type %d\n", __func__, ftype);
                     return false;
                 }
     };
@@ -127,7 +187,7 @@ bool ggml_common_quantize_0(
             size_t cur_size = 0;
             std::vector<int64_t> hist_cur(1 << 4, 0);
 
-            switch (ttype) {
+            switch ((ggml_type) ttype) {
                 case GGML_TYPE_Q4_0:
                     {
                         cur_size = ggml_quantize_q4_0(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
@@ -144,7 +204,25 @@ bool ggml_common_quantize_0(
                     {
                         cur_size = ggml_quantize_q4_3(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                     } break;
-                default:
+                case GGML_TYPE_Q5_0:
+                    {
+                        cur_size = ggml_quantize_q5_0(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                    } break;
+                case GGML_TYPE_Q5_1:
+                    {
+                        cur_size = ggml_quantize_q5_1(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                    } break;
+                case GGML_TYPE_Q8_0:
+                    {
+                        cur_size = ggml_quantize_q8_0(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                    } break;
+                case GGML_TYPE_F32:
+                case GGML_TYPE_F16:
+                case GGML_TYPE_I8:
+                case GGML_TYPE_I16:
+                case GGML_TYPE_I32:
+                case GGML_TYPE_Q8_1:
+                case GGML_TYPE_COUNT:
                     {
                         fprintf(stderr, "%s: unsupported quantization type %d (%s)\n", __func__, ttype, ggml_type_name((ggml_type) ttype));
                         return false;
@@ -173,7 +251,7 @@ bool ggml_common_quantize_0(
     }
 
     printf("%s: model size  = %8.2f MB\n", __func__, total_size_org/1024.0/1024.0);
-    printf("%s: quant size  = %8.2f MB | mtype = %d (%s)\n", __func__, total_size_new/1024.0/1024.0, mtype, ggml_type_name(qtype));
+    printf("%s: quant size  = %8.2f MB | ftype = %d (%s)\n", __func__, total_size_new/1024.0/1024.0, ftype, ggml_type_name(qtype));
 
     {
         int64_t sum_all = 0;

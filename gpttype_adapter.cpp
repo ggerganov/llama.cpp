@@ -9,19 +9,21 @@
 
 #include <time.h>
 #include "model_adapter.h"
-#include "otherarch/otherarch.h"
+#include "otherarch.h"
 
 //for easier compilation
 #include "llamaextra.cpp"
 
 //concat source files into one file for compilation purposes
-#include "otherarch/utils.cpp"
-#include "otherarch/gptj_v1.cpp"
-#include "otherarch/gptj_v2.cpp"
-#include "otherarch/gpt2_v1.cpp"
-#include "otherarch/gpt2_v2.cpp"
-#include "otherarch/rwkv.cpp"
-#include "otherarch/neox.cpp"
+#include "common-ggml.cpp"
+#include "utils.cpp"
+#include "gptj_v1.cpp"
+#include "gptj_v2.cpp"
+#include "gpt2_v1.cpp"
+#include "gpt2_v2.cpp"
+#include "rwkv.cpp"
+#include "neox.cpp"
+
 
 //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt)
 static FileFormat file_format = FileFormat::BADFORMAT;

@@ -48,7 +48,7 @@ ModelLoadResult legacy_gptj_model_load(const std::string & fname, gptj_model_v1 
         fin.read((char *) &hparams.n_head,  sizeof(hparams.n_head));
         fin.read((char *) &hparams.n_layer, sizeof(hparams.n_layer));
         fin.read((char *) &hparams.n_rot,   sizeof(hparams.n_rot));
-        fin.read((char *) &hparams.f16,     sizeof(hparams.f16));
+        fin.read((char *) &hparams.ftype,     sizeof(hparams.ftype));
 
         printf("%s: n_vocab = %d\n", __func__, hparams.n_vocab);
         printf("%s: n_ctx   = %d\n", __func__, hparams.n_ctx);
@@ -56,7 +56,7 @@ ModelLoadResult legacy_gptj_model_load(const std::string & fname, gptj_model_v1 
         printf("%s: n_head  = %d\n", __func__, hparams.n_head);
         printf("%s: n_layer = %d\n", __func__, hparams.n_layer);
         printf("%s: n_rot   = %d\n", __func__, hparams.n_rot);
-        printf("%s: f16     = %d\n", __func__, hparams.f16);
+        printf("%s: f16     = %d\n", __func__, hparams.ftype);
     }
 
     // load vocab
@@ -86,7 +86,7 @@ ModelLoadResult legacy_gptj_model_load(const std::string & fname, gptj_model_v1 
     // for the big tensors, we have the option to store the data in 16-bit floats or quantized
     // in order to save memory and also to speed up the computation
     ggml_v1_type wtype = GGML_V1_TYPE_COUNT;
-    switch (model.hparams.f16) {
+    switch (model.hparams.ftype) {
         case 0: wtype = GGML_V1_TYPE_F32;  break;
         case 1: wtype = GGML_V1_TYPE_F16;  break;
         case 2: wtype = GGML_V1_TYPE_Q4_0; break;
@@ -94,7 +94,7 @@ ModelLoadResult legacy_gptj_model_load(const std::string & fname, gptj_model_v1 
         default:
                 {
                     fprintf(stderr, "%s: invalid model file '%s' (bad f16 value %d)\n",
-                            __func__, fname.c_str(), model.hparams.f16);
+                            __func__, fname.c_str(), model.hparams.ftype);
                     return ModelLoadResult::FAIL;
                 }
     }
