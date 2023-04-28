@@ -602,7 +602,7 @@ int main(int argc, const char ** argv) {
             for (int ndims = 1; ndims <= 4; ++ndims) 
             {
                 // ggml_permute will set axes of dimensions below n_dims to 1.
-                // to make ggml_permute correctly work on all axes, 
+                // to make ggml_permute work correctly on all axes, 
                 // the input tensor needs maximal n_dim of 4.
                 for (int i=0; i<ndims; ++i) {
                     ne2[i] = ne[i];
@@ -636,7 +636,7 @@ int main(int argc, const char ** argv) {
             for (int ndims = 1; ndims <= 4; ++ndims) 
             {
                 // ggml_transpose will set axes of dimensions below n_dims to 1.
-                // to make ggml_permute correctly work on all axes, 
+                // to make ggml_transpose work correctly on all axes, 
                 // the input tensor needs maximal n_dim of 4.
                 for (int i=0; i<ndims; ++i) {
                     ne2[i] = ne[i];
