@@ -6,6 +6,7 @@ import ctypes
 import os
 import argparse
 import json, http.server, threading, socket, sys, time
+from tkinter.constants import LEFT, RIGHT
 
 stop_token_max = 10
 
@@ -41,9 +42,6 @@ class generation_outputs(ctypes.Structure):
                 ("text", ctypes.c_char * 16384)]
 
 handle = None
-use_blas = False # if true, uses OpenBLAS for acceleration. libopenblas.dll must exist in the same dir.
-use_clblast = False #uses CLBlast instead
-use_noavx2 = False #uses openblas with no avx2 instructions
 
 def getdirpath():
     return os.path.dirname(os.path.realpath(__file__))
@@ -70,8 +68,38 @@ lib_clblast = pick_existant_file("koboldcpp_clblast.dll","koboldcpp_clblast.so")
 
 
 def init_library():
-    global handle, use_blas, use_clblast, use_noavx2
+    global handle        
+    global lib_default,lib_noavx2,lib_openblas,lib_openblas_noavx2,lib_clblast
+
     libname = ""
+    use_blas = False # if true, uses OpenBLAS for acceleration. libopenblas.dll must exist in the same dir.
+    use_clblast = False #uses CLBlast instead
+    use_noavx2 = False #uses openblas with no avx2 instructions
+    
+    if args.noavx2:
+        use_noavx2 = True
+        if not file_exists(lib_openblas_noavx2) or (os.name=='nt' and not file_exists("libopenblas.dll")):
+            print("Warning: OpenBLAS library file not found. Non-BLAS library will be used.")     
+        elif args.noblas:            
+            print("Attempting to use non-avx2 compatibility library without OpenBLAS.")
+        else:
+            use_blas = True
+            print("Attempting to use non-avx2 compatibility library with OpenBLAS. A compatible libopenblas will be required.")
+    elif args.useclblast:
+        if not file_exists(lib_clblast) or (os.name=='nt' and not file_exists("clblast.dll")):
+            print("Warning: CLBlast library file not found. Non-BLAS library will be used.")
+        else:
+            print("Attempting to use CLBlast library for faster prompt ingestion. A compatible clblast will be required.")
+            use_clblast = True
+    else:
+        if not file_exists(lib_openblas) or (os.name=='nt' and not file_exists("libopenblas.dll")):
+            print("Warning: OpenBLAS library file not found. Non-BLAS library will be used.")
+        elif args.noblas:
+            print("Attempting to library without OpenBLAS.")
+        else:
+            use_blas = True
+            print("Attempting to use OpenBLAS library for faster prompt ingestion. A compatible libopenblas will be required.")
+    
     if use_noavx2:
         if use_blas:
             libname = lib_openblas_noavx2
@@ -365,71 +393,113 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None):
             sys.exit(0)
 
 
-def main(args): 
-    global use_blas, use_clblast, use_noavx2
-    global lib_default,lib_noavx2,lib_openblas,lib_openblas_noavx2,lib_clblast
+def show_gui():
+    import tkinter as tk
+    from tkinter.filedialog import askopenfilename
 
-    use_blas = False 
-    use_clblast = False 
-    use_noavx2 = False 
+    if len(sys.argv) == 1:
+        #no args passed at all. Show nooby gui
+        root = tk.Tk()
+        launchclicked = False
+
+        def guilaunch():
+            nonlocal launchclicked
+            launchclicked = True
+            root.destroy()
+            pass
+
+        # Adjust size
+        root.geometry("460x320")
+        root.title("KoboldCpp v"+KcppVersion)
+        tk.Label(root, text = "KoboldCpp Easy Launcher", 
+                font = ("Arial", 12)).pack(pady=4)       
+        tk.Label(root, text = "(Note: KoboldCpp only works with GGML model formats!)",
+                font = ("Arial", 9)).pack()
+        
+
+        opts = ["Use OpenBLAS","Use CLBLast GPU #1","Use CLBLast GPU #2","Use CLBLast GPU #3","Use No BLAS","Use OpenBLAS (Old Devices)","Use No BLAS (Old Devices)"]
+        runchoice = tk.StringVar()
+        runchoice.set("Use OpenBLAS")      
+        tk.OptionMenu( root , runchoice , *opts ).pack()
+
+        stream = tk.IntVar()
+        smartcontext = tk.IntVar()
+        launchbrowser = tk.IntVar(value=1)
+        tk.Checkbutton(root, text='Streaming Mode',variable=stream, onvalue=1, offvalue=0).pack()
+        tk.Checkbutton(root, text='Use SmartContext',variable=smartcontext, onvalue=1, offvalue=0).pack()
+        tk.Checkbutton(root, text='Launch Browser',variable=launchbrowser, onvalue=1, offvalue=0).pack()
     
-    if args.noavx2:
-        use_noavx2 = True
-        if not file_exists(lib_openblas_noavx2) or (os.name=='nt' and not file_exists("libopenblas.dll")):
-            print("Warning: OpenBLAS library file not found. Non-BLAS library will be used.")     
-        elif args.noblas:            
-            print("Attempting to use non-avx2 compatibility library without OpenBLAS.")
-        else:
-            use_blas = True
-            print("Attempting to use non-avx2 compatibility library with OpenBLAS. A compatible libopenblas will be required.")
-    elif args.useclblast:
-        if not file_exists(lib_clblast) or (os.name=='nt' and not file_exists("clblast.dll")):
-            print("Warning: CLBlast library file not found. Non-BLAS library will be used.")
-        else:
-            print("Attempting to use CLBlast library for faster prompt ingestion. A compatible clblast will be required.")
-            use_clblast = True
+        # Create button, it will change label text
+        tk.Button( root , text = "Launch", font = ("Impact", 18), bg='#54FA9B', command = guilaunch ).pack(pady=10)        
+        tk.Label(root, text = "(Please use the Command Line for more advanced options)",
+                font = ("Arial", 9)).pack() 
+        
+        root.mainloop()
+
+        if launchclicked==False:
+            print("Exiting by user request.")
+            sys.exit()
+        
+        #load all the vars
+        args.stream = (stream.get()==1)
+        args.smartcontext = (smartcontext.get()==1)
+        args.launch = (launchbrowser.get()==1)
+        selchoice = runchoice.get()
+        
+        if selchoice==opts[1]:
+            args.useclblast = [0,0]
+        if selchoice==opts[2]:
+            args.useclblast = [1,0]
+        if selchoice==opts[3]:
+            args.useclblast = [0,1]
+        if selchoice==opts[4]:
+            args.noblas = True
+        if selchoice==opts[5]:
+            args.nonoavx2 = True
+        if selchoice==opts[6]:
+            args.nonoavx2 = True
+            args.noblas = True
+            
+        root = tk.Tk()
+        root.attributes("-alpha", 0)
+        args.model_param = askopenfilename(title="Select ggml model .bin files")
+        root.destroy()     
+        if not args.model_param:
+            print("\nNo ggml model file was selected. Exiting.")
+            time.sleep(2)
+            sys.exit(2)
+
     else:
-        if not file_exists(lib_openblas) or (os.name=='nt' and not file_exists("libopenblas.dll")):
-            print("Warning: OpenBLAS library file not found. Non-BLAS library will be used.")
-        elif args.noblas:
-            print("Attempting to library without OpenBLAS.")
-        else:
-            use_blas = True
-            print("Attempting to use OpenBLAS library for faster prompt ingestion. A compatible libopenblas will be required.")
-    
-    if args.psutil_set_threads:
-        import psutil
-        args.threads = psutil.cpu_count(logical=False)
-        print("Overriding thread count, using " + str(args.threads) + " threads instead.")
+        root = tk.Tk() #we dont want the useless window to be visible, but we want it in taskbar
+        root.attributes("-alpha", 0)
+        args.model_param = askopenfilename(title="Select ggml model .bin files")
+        root.destroy()
+        if not args.model_param:
+            print("\nNo ggml model file was selected. Exiting.")
+            time.sleep(2)
+            sys.exit(2)
 
-    init_library() # Note: if blas does not exist and is enabled, program will crash.
+def main(args):
+    
     embedded_kailite = None 
-    ggml_selected_file = args.model_param
-    if not ggml_selected_file:
-        ggml_selected_file = args.model
-    if not ggml_selected_file:     
+    if not args.model_param:
+        args.model_param = args.model
+    if not args.model_param:     
         #give them a chance to pick a file
         print("For command line arguments, please refer to --help")
         print("Otherwise, please manually select ggml file:")
         try:
-            from tkinter.filedialog import askopenfilename
-            import tkinter as tk
-            root = tk.Tk() #we dont want the useless window to be visible, but we want it in taskbar
-            root.attributes("-alpha", 0)
-            ggml_selected_file = askopenfilename (title="Select ggml model .bin files")
-            root.destroy()
-            if not ggml_selected_file:
-                print("\nNo ggml model file was selected. Exiting.")
-                time.sleep(2)
-                sys.exit(2)
+            show_gui()
         except Exception as ex:
             print("File selection GUI unsupported. Please check command line: script.py --help")
             time.sleep(2)
             sys.exit(2)
-       
 
-    if not os.path.exists(ggml_selected_file):
-        print(f"Cannot find model file: {ggml_selected_file}")
+    init_library() # Note: if blas does not exist and is enabled, program will crash. 
+    print("==========")
+    time.sleep(1)
+    if not os.path.exists(args.model_param):
+        print(f"Cannot find model file: {args.model_param}")
         time.sleep(2)
         sys.exit(2)
 
@@ -439,9 +509,14 @@ def main(args):
             time.sleep(2)
             sys.exit(2)
         else:
-            args.lora = os.path.abspath(args.lora)   
+            args.lora = os.path.abspath(args.lora)
 
-    modelname = os.path.abspath(ggml_selected_file)
+    if args.psutil_set_threads:
+        import psutil
+        args.threads = psutil.cpu_count(logical=False)
+        print("Overriding thread count, using " + str(args.threads) + " threads instead.")
+
+    modelname = os.path.abspath(args.model_param)
     print(f"Loading model: {modelname} \n[Threads: {args.threads}, SmartContext: {args.smartcontext}]")
     loadok = load_model(modelname)
     print("Load Model OK: " + str(loadok))
@@ -504,6 +579,7 @@ if __name__ == '__main__':
     parser.add_argument("--nommap", help="If set, do not use mmap to load newer models", action='store_true')
     parser.add_argument("--noavx2", help="Do not use AVX2 instructions, a slower compatibility mode for older devices. Does not work with --clblast.", action='store_true')
     parser.add_argument("--debugmode", help="Shows additional debug info in the terminal.", action='store_true')
+    parser.add_argument("--skiplauncher", help="Doesn't display or use the new GUI launcher.", action='store_true')
     compatgroup = parser.add_mutually_exclusive_group()
     compatgroup.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
     compatgroup.add_argument("--useclblast", help="Use CLBlast instead of OpenBLAS for prompt ingestion. Must specify exactly 2 arguments, platform ID and device ID (e.g. --useclblast 1 0).", type=int, choices=range(0,9), nargs=2)
