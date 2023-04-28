@@ -8259,7 +8259,6 @@ static void ggml_compute_forward_mul_mat_f32(
 #else
                 const float * x = (float *) ((char *) src0->data + i02*nb02 + i03*nb03);
                 const float * y = (float *) ((char *) src1->data + i02*nb12 + i03*nb13);
-#endif
 #if defined(GGML_USE_CLBLAST)
                 // zT = y * xT
                 ggml_cl_sgemm_wrapper(GGML_BLAS_ORDER_ROW_MAJOR, GGML_BLAS_OP_N, GGML_BLAS_OP_T,
@@ -8274,6 +8273,7 @@ static void ggml_compute_forward_mul_mat_f32(
                         1.0f,    y, ne10,
                                  x, ne00,
                         0.0f,    d, ne01);
+#endif
 #endif
             }
         }
