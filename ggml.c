@@ -8120,8 +8120,12 @@ static bool ggml_compute_forward_mul_mat_use_blas(
     const int64_t ne1 = dst->ne[1];
 
     // TODO: find the optimal values for these
-    if (ggml_is_contiguous(src0) &&
-        ggml_is_contiguous(src1) && ((ne0 >= 32 && ne1 >= 32 && ne10 >= 32))) {
+    if (
+#if !defined(GGML_USE_CUBLAS)
+        ggml_is_contiguous(src0) &&
+        ggml_is_contiguous(src1) &&
+#endif
+        ((ne0 >= 32 && ne1 >= 32 && ne10 >= 32))) {
 
         /*printf("BLAS: %d %d %d %d %d\n", ne0, ne1, ne10, ne00, ne01);*/
         return true;
@@ -8230,15 +8234,12 @@ static void ggml_compute_forward_mul_mat_f32(
 
         for (int64_t i03 = 0; i03 < ne03; i03++) {
             for (int64_t i02 = 0; i02 < ne02; i02++) {
-                const float * x = (float *) ((char *) src0->data + i02*nb02 + i03*nb03);
-                const float * y = (float *) ((char *) src1->data + i02*nb12 + i03*nb13);
-
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
 #if defined(GGML_USE_CUBLAS)
                 // copy data to device
-                CUDA_CHECK(cudaMemcpyAsync(d_X, x, sizeof(float) * x_ne, cudaMemcpyHostToDevice, g_cudaStream));
-                CUDA_CHECK(cudaMemcpyAsync(d_Y, y, sizeof(float) * y_ne, cudaMemcpyHostToDevice, g_cudaStream));
+                CUDA_CHECK(ggml_cuda_cpy_tensor2D(d_X, src0, i03, i02, g_cudaStream));
+                CUDA_CHECK(ggml_cuda_cpy_tensor2D(d_Y, src1, i03, i02, g_cudaStream));
 
                 // compute
                 CUBLAS_CHECK(
@@ -8251,6 +8252,9 @@ static void ggml_compute_forward_mul_mat_f32(
                 // copy data to host
                 CUDA_CHECK(cudaMemcpyAsync(d, d_D, sizeof(float) * d_ne, cudaMemcpyDeviceToHost, g_cudaStream));
 #else
+                const float * x = (float *) ((char *) src0->data + i02*nb02 + i03*nb03);
+                const float * y = (float *) ((char *) src1->data + i02*nb12 + i03*nb13);
+
                 // zT = y * xT
                 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                         ne11, ne01, ne10,
@@ -8457,7 +8461,7 @@ static void ggml_compute_forward_mul_mat_f16_f32(
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
                 // copy data to device
-                CUDA_CHECK(cudaMemcpyAsync(d_X, x, sizeof(ggml_fp16_t) * x_ne, cudaMemcpyHostToDevice, g_cudaStream));
+                CUDA_CHECK(ggml_cuda_cpy_tensor2D(d_X, src0, i03, i02, g_cudaStream));
                 CUDA_CHECK(cudaMemcpyAsync(d_Y, y, sizeof(ggml_fp16_t) * y_ne, cudaMemcpyHostToDevice, g_cudaStream));
 
                 // compute
@@ -8705,19 +8709,16 @@ static void ggml_compute_forward_mul_mat_q_f32(
 
         for (int64_t i03 = 0; i03 < ne03; i03++) {
             for (int64_t i02 = 0; i02 < ne02; i02++) {
-                const float * y = (float *) ((char *) src1->data + i02*nb12 + i03*nb13);
-
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
 #if defined(GGML_USE_CUBLAS)
                 // copy and dequantize on device
-                CUDA_CHECK(
-                    cudaMemcpyAsync(d_Q, (char *) src0->data + i03*nb03 + i02*nb02,
-                        GGML_TYPE_SIZE[type] * x_ne / GGML_BLCK_SIZE[type], cudaMemcpyHostToDevice, g_cudaStream));
+                CUDA_CHECK(ggml_cuda_cpy_tensor2D(d_Q, src0, i03, i02, g_cudaStream));
 
                 dequantize_row_q_cuda(d_Q, d_X, ne01 * ne00, g_cudaStream);
                 CUDA_CHECK(cudaGetLastError());
 #else
+                const float * y = (float *) ((char *) src1->data + i02*nb12 + i03*nb13);
                 {
                     size_t id = 0;
                     for (int64_t i01 = 0; i01 < ne01; ++i01) {
@@ -8731,7 +8732,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
 
 #if defined(GGML_USE_CUBLAS)
                 // copy data to device
-                CUDA_CHECK(cudaMemcpyAsync(d_Y, y, sizeof(float) * y_ne, cudaMemcpyHostToDevice, g_cudaStream));
+                CUDA_CHECK(ggml_cuda_cpy_tensor2D(d_Y, src1, i03, i02, g_cudaStream));
 
                 // compute
                 CUBLAS_CHECK(
