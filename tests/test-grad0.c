@@ -587,6 +587,7 @@ int main(int argc, const char ** argv) {
                 const int offset = i0 * sizeof(float);
                 const int nelem  = i1 - i0;
 
+                // TODO : test for view_2d and view_3d
                 struct ggml_tensor * f = ggml_sum(ctx0, ggml_view_1d(ctx0, x[0], nelem, offset));
 
                 check_gradient("view", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
