@@ -276,8 +276,8 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "Input prefix: '%s'\n", params.input_prefix.c_str());
         }
     }
-    fprintf(stderr, "sampling: repeat_last_n = %d, repeat_penalty = %f, alpha_presence = %f, alpha_frequency = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f, mirostat = %d, mirostat_eta = %f, mirostat_tau = %f\n",
-        params.repeat_last_n, params.repeat_penalty, params.alpha_presence, params.alpha_frequency, params.top_k, params.tfs_z, params.top_p, params.typical_p, params.temp, params.mirostat, params.mirostat_eta, params.mirostat_tau);
+    fprintf(stderr, "sampling: repeat_last_n = %d, repeat_penalty = %f, presence_penalty = %f, frequency_penalty = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f, mirostat = %d, mirostat_eta = %f, mirostat_tau = %f\n",
+            params.repeat_last_n, params.repeat_penalty, params.presence_penalty, params.frequency_penalty, params.top_k, params.tfs_z, params.top_p, params.typical_p, params.temp, params.mirostat, params.mirostat_eta, params.mirostat_tau);
     fprintf(stderr, "generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
     fprintf(stderr, "\n\n");
 
@@ -394,11 +394,12 @@ int main(int argc, char ** argv) {
             const float   typical_p      = params.typical_p;
             const int32_t repeat_last_n  = params.repeat_last_n < 0 ? n_ctx : params.repeat_last_n;
             const float   repeat_penalty = params.repeat_penalty;
-            const float   alpha_presence = params.alpha_presence;
-            const float   alpha_frequency = params.alpha_frequency;
-            const int     mirostat   = params.mirostat;
+            const float   alpha_presence = params.presence_penalty;
+            const float   alpha_frequency = params.frequency_penalty;
+            const int     mirostat       = params.mirostat;
             const float   mirostat_tau   = params.mirostat_tau;
             const float   mirostat_eta   = params.mirostat_eta;
+            const bool    penalize_nl   = params.penalize_nl;
 
             // optionally save the session on first sample (for faster prompt loading next time)
             if (!path_session.empty() && need_to_save_session) {
@@ -412,8 +413,9 @@ int main(int argc, char ** argv) {
                 auto logits = llama_get_logits(ctx);
                 auto n_vocab = llama_n_vocab(ctx);
 
-                if (params.ignore_eos) {
-                    logits[llama_token_eos()] = -INFINITY;
+                // Apply params.logit_bias map
+                for (auto it = params.logit_bias.begin(); it != params.logit_bias.end(); it++) {
+                    logits[it->first] += it->second;
                 }
 
                 std::vector<llama_token_data> candidates;
@@ -425,6 +427,7 @@ int main(int argc, char ** argv) {
                 llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
 
                 // Apply penalties
+                float nl_logit = logits[llama_token_nl()];
                 auto last_n_repeat = std::min(std::min((int)last_n_tokens.size(), repeat_last_n), n_ctx);
                 llama_sample_repetition_penalty(ctx, &candidates_p,
                     last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
@@ -432,7 +435,9 @@ int main(int argc, char ** argv) {
                 llama_sample_frequency_and_presence_penalties(ctx, &candidates_p,
                     last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
                     last_n_repeat, alpha_frequency, alpha_presence);
-
+                if (!penalize_nl) {
+                    logits[llama_token_nl()] = nl_logit;
+                }
 
                 if (temp <= 0) {
                     // Greedy sampling

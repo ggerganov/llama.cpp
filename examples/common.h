@@ -8,6 +8,7 @@
 #include <vector>
 #include <random>
 #include <thread>
+#include <unordered_map>
 
 //
 // CLI argument parsing
@@ -23,18 +24,19 @@ struct gpt_params {
     int32_t n_keep        = 0;    // number of tokens to keep from initial prompt
 
     // sampling parameters
-    int32_t top_k = 0;          // <= 0 to use vocab size
-    float   top_p = 1.0f;       // 1.0 = disabled
-    float   tfs_z = 1.0f;       // 1.0 = disabled
-    float   typical_p = 1.0f;   // 1.0 = disabled
-    float   temp = 1.0f;        // 1.0 = disabled
+    std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
+    int32_t top_k = 0;              // <= 0 to use vocab size
+    float   top_p = 1.0f;           // 1.0 = disabled
+    float   tfs_z = 1.0f;           // 1.0 = disabled
+    float   typical_p = 1.0f;       // 1.0 = disabled
+    float   temp = 1.0f;            // 1.0 = disabled
     float   repeat_penalty  = 1.0f; // 1.0 = disabled
-    int32_t repeat_last_n = -1;  // last n tokens to penalize (0 = disable penalty, -1 = context size)
-    float   alpha_frequency = 0.0f; // 0.0 = disabled
-    float   alpha_presence = 0.0f;  // 0.0 = disabled
-    int     mirostat = 0;       // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
-    float   mirostat_tau = 5.0f; // target entropy
-    float   mirostat_eta = 0.1f; // learning rate
+    int32_t repeat_last_n = -1;     // last n tokens to penalize (0 = disable penalty, -1 = context size)
+    float   frequency_penalty = 0.0f; // 0.0 = disabled
+    float   presence_penalty = 0.0f;  // 0.0 = disabled
+    int     mirostat = 0;           // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
+    float   mirostat_tau = 5.0f;    // target entropy
+    float   mirostat_eta = 0.1f;    // learning rate
 
     std::string model  = "models/lamma-7B/ggml-model.bin"; // model path
     std::string prompt = "";
@@ -54,7 +56,7 @@ struct gpt_params {
     bool interactive_first = false; // wait for user input immediately
 
     bool instruct          = false; // instruction mode (used for Alpaca models)
-    bool ignore_eos        = false; // do not stop generating after eos
+    bool penalize_nl       = true;  // consider newlines as a repeatable token
     bool perplexity        = false; // compute perplexity over the prompt
     bool use_mmap          = true;  // use mmap for faster loads
     bool use_mlock         = false; // use mlock to keep model in memory

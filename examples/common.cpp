@@ -6,6 +6,8 @@
 #include <string>
 #include <iterator>
 #include <algorithm>
+#include <sstream>
+#include <iostream>
 
 #if defined (_WIN32)
 #include <fcntl.h>
@@ -138,18 +140,18 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.repeat_penalty = std::stof(argv[i]);
-        } else if (arg == "--alpha_frequency") {
+        } else if (arg == "--frequency_penalty") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params.alpha_frequency = std::stof(argv[i]);
-        } else if (arg == "--alpha_presence") {
+            params.frequency_penalty = std::stof(argv[i]);
+        } else if (arg == "--presence_penalty") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params.alpha_presence = std::stof(argv[i]);
+            params.presence_penalty = std::stof(argv[i]);
         } else if (arg == "--mirostat") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -227,7 +229,28 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         } else if (arg == "--perplexity") {
             params.perplexity = true;
         } else if (arg == "--ignore-eos") {
-            params.ignore_eos = true;
+            params.logit_bias[llama_token_eos()] = -INFINITY;
+        } else if (arg == "--no-penalize-nl") {
+            params.penalize_nl = false;
+        } else if (arg == "-l" || arg == "--logit-bias") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            std::stringstream ss(argv[i]);
+            llama_token key;
+            char sign;
+            std::string value_str;
+            try {
+                if (ss >> key && ss >> sign && std::getline(ss, value_str) && (sign == '+' || sign == '-' || sign == '=' || sign == ':')) {
+                    params.logit_bias[key] = std::stof(value_str) * ((sign == '-') ? -1.0f : 1.0f);
+                } else {
+                    throw std::exception();
+                }
+            } catch (const std::exception &e) {
+                invalid_param = true;
+                break;
+            }
         } else if (arg == "--n_parts") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -282,19 +305,23 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -f FNAME, --file FNAME\n");
     fprintf(stderr, "                        prompt file to start generation.\n");
     fprintf(stderr, "  -n N, --n_predict N   number of tokens to predict (default: %d, -1 = infinity)\n", params.n_predict);
-    fprintf(stderr, "  --top_k N             top-k sampling (default: %d, disabled: 0)\n", params.top_k);
-    fprintf(stderr, "  --top_p N             top-p sampling (default: %.1f, disabled: 1.0)\n", (double)params.top_p);
-    fprintf(stderr, "  --tfs N               tail free sampling, parameter z (default: %.1f, disabled: 1.0)\n", (double)params.tfs_z);
-    fprintf(stderr, "  --typical N           locally typical sampling, parameter p (default: %.1f, disabled: 1.0)\n", (double)params.typical_p);
-    fprintf(stderr, "  --repeat_last_n N     last n tokens to consider for penalize (default: %d, disabled: 0)\n", params.repeat_last_n);
-    fprintf(stderr, "  --repeat_penalty N    penalize repeat sequence of tokens (default: %.1f, disabled: 1.0)\n", (double)params.repeat_penalty);
-    fprintf(stderr, "  --alpha_presence N    repeat alpha presence (default: %.1f, disabled: 0.0)\n", (double)params.alpha_presence);
-    fprintf(stderr, "  --alpha_frequency N   repeat alpha frequency (default: %.1f, disabled: 0.0)\n", (double)params.alpha_frequency);
-    fprintf(stderr, "  --mirostat N          use mirostat sampling (default: %d, disabled: 0, mirostat: 1, mirostat 2.0: 2)\n", params.mirostat);
+    fprintf(stderr, "  --top_k N             top-k sampling (default: %d, 0 = disabled)\n", params.top_k);
+    fprintf(stderr, "  --top_p N             top-p sampling (default: %.1f, 1.0 = disabled)\n", (double)params.top_p);
+    fprintf(stderr, "  --tfs N               tail free sampling, parameter z (default: %.1f, 1.0 = disabled)\n", (double)params.tfs_z);
+    fprintf(stderr, "  --typical N           locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)\n", (double)params.typical_p);
+    fprintf(stderr, "  --repeat_last_n N     last n tokens to consider for penalize (default: %d, 0 = disabled)\n", params.repeat_last_n);
+    fprintf(stderr, "  --repeat_penalty N    penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)\n", (double)params.repeat_penalty);
+    fprintf(stderr, "  --presence_penalty N  repeat alpha presence penalty (default: %.1f, 0.0 = disabled)\n", (double)params.presence_penalty);
+    fprintf(stderr, "  --frequency_penalty N repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)\n", (double)params.frequency_penalty);
+    fprintf(stderr, "  --mirostat N          use mirostat sampling (default: %d, 0 = disabled, 1 = mirostat, 2 = mirostat 2.0)\n", params.mirostat);
     fprintf(stderr, "  --mirostat_eta N      mirostat learning rate (default: %.1f)\n", (double)params.mirostat_eta);
     fprintf(stderr, "  --mirostat_tau N      mirostat target entropy (default: %.1f)\n", (double)params.mirostat_tau);
+    fprintf(stderr, "  -l TOKEN+BIAS, --logit-bias TOKEN+BIAS");
+    fprintf(stderr, "                        modifies the likelihood of token appearing in the completion,\n");
+    fprintf(stderr, "                        i.e. `--logit-bias 15043+1` to increase likelihood of token ' Hello'\n");
     fprintf(stderr, "  -c N, --ctx_size N    size of the prompt context (default: %d)\n", params.n_ctx);
-    fprintf(stderr, "  --ignore-eos          ignore end of stream token and continue generating\n");
+    fprintf(stderr, "  --ignore-eos          ignore end of stream token and continue generating (implies --logit-bias 2+-inf)\n");
+    fprintf(stderr, "  --no-penalize-nl      do not penalize newline token\n");
     fprintf(stderr, "  --memory_f32          use f32 instead of f16 for memory key+value\n");
     fprintf(stderr, "  --temp N              temperature (default: %.1f)\n", (double)params.temp);
     fprintf(stderr, "  --n_parts N           number of model parts (default: -1 = determine from dimensions)\n");
