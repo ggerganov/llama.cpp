@@ -34,7 +34,6 @@ void   ggml_cuda_pool_free(void * ptr, size_t size);
 void dequantize_row_q4_0_cuda(const void * vx, float * y, int k, cudaStream_t stream);
 void dequantize_row_q4_1_cuda(const void * vx, float * y, int k, cudaStream_t stream);
 void dequantize_row_q4_2_cuda(const void * vx, float * y, int k, cudaStream_t stream);
-void dequantize_row_q4_3_cuda(const void * vx, float * y, int k, cudaStream_t stream);
 void dequantize_row_q5_0_cuda(const void * vx, float * y, int k, cudaStream_t stream);
 void dequantize_row_q5_1_cuda(const void * vx, float * y, int k, cudaStream_t stream);
 void dequantize_row_q8_0_cuda(const void * vx, float * y, int k, cudaStream_t stream);
