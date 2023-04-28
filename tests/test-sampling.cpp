@@ -1,14 +1,13 @@
 #include "llama.h"
-#include <assert.h>
-#include <math.h>
+#include "ggml.h"
+#include <cassert>
+#include <cmath>
 #include <numeric>
 #include <cassert>
 #include <iostream>
 #include <vector>
 #include <algorithm>
 
-#undef assert
-#define assert(__expr) do { if (!(__expr)) { printf("%s:%d (%s) %s\n", __FILE__, __LINE__, __func__, #__expr); exit(1); } } while(0)
 
 void dump(const llama_token_data_array * candidates) {
     for (size_t i = 0; i < candidates->size; i++) {
@@ -32,9 +31,9 @@ void test_top_k(const std::vector<float> & probs,
 
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
     llama_sample_softmax(nullptr, &candidates_p);
-    // DUMP(&candidates_p);
+    DUMP(&candidates_p);
     llama_sample_top_k(nullptr, &candidates_p, k);
-    // DUMP(&candidates_p);
+    DUMP(&candidates_p);
 
     assert(candidates_p.size == expected_probs.size());
     for (size_t i = 0; i < candidates_p.size; i++) {
@@ -57,9 +56,9 @@ void test_top_p(const std::vector<float> & probs,
 
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
     llama_sample_softmax(nullptr, &candidates_p);
-    // DUMP(&candidates_p);
+    DUMP(&candidates_p);
     llama_sample_top_p(nullptr, &candidates_p, p);
-    // DUMP(&candidates_p);
+    DUMP(&candidates_p);
 
     assert(candidates_p.size == expected_probs.size());
     for (size_t i = 0; i < candidates_p.size; i++) {
@@ -80,9 +79,9 @@ void test_tfs(const std::vector<float> & probs,
     }
 
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-    // DUMP(&candidates_p);
+    DUMP(&candidates_p);
     llama_sample_tail_free(nullptr, &candidates_p, z);
-    // DUMP(&candidates_p);
+    DUMP(&candidates_p);
 
     assert(candidates_p.size == expected_probs.size());
     for (size_t i = 0; i < candidates_p.size; i++) {
@@ -103,9 +102,9 @@ void test_typical(const std::vector<float> & probs,
     }
 
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-    // DUMP(&candidates_p);
+    DUMP(&candidates_p);
     llama_sample_typical(nullptr, &candidates_p, p);
-    // DUMP(&candidates_p);
+    DUMP(&candidates_p);
 
     assert(candidates_p.size == expected_probs.size());
     for (size_t i = 0; i < candidates_p.size; i++) {
@@ -172,6 +171,8 @@ void test_frequency_presence_penalty(
 }
 
 int main(void) {
+    ggml_time_init();
+
     test_top_k({0.1, 0.2, 0.3, 0.4}, {0.4}, 1);
     test_top_k({0.1, 0.2, 0.3, 0.4}, {0.4, 0.3, 0.2}, 3);
 
