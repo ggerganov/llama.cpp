@@ -9,10 +9,8 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
+- [Roadmap May 2023](https://github.com/ggerganov/llama.cpp/discussions/1220)
 - [New quantization methods](https://github.com/ggerganov/llama.cpp#quantization)
-- [Added LoRA support](https://github.com/ggerganov/llama.cpp/pull/820)
-- [Add GPU support to ggml](https://github.com/ggerganov/llama.cpp/discussions/915)
-- [Roadmap Apr 2023](https://github.com/ggerganov/llama.cpp/discussions/784)
 
 ## Description
 
