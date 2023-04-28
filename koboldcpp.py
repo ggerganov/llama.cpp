@@ -438,6 +438,7 @@ def show_gui():
 
         if launchclicked==False:
             print("Exiting by user request.")
+            time.sleep(2)
             sys.exit()
         
         #load all the vars
