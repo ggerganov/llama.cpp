@@ -8238,8 +8238,8 @@ static void ggml_compute_forward_mul_mat_f32(
 
 #if defined(GGML_USE_CUBLAS)
                 // copy data to device
-                CUDA_CHECK(ggml_cuda_cpy_tensor2D(d_X, src0, i03, i02, g_cudaStream));
-                CUDA_CHECK(ggml_cuda_cpy_tensor2D(d_Y, src1, i03, i02, g_cudaStream));
+                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_X, src0, i03, i02, g_cudaStream));
+                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_Y, src1, i03, i02, g_cudaStream));
 
                 // compute
                 CUBLAS_CHECK(
@@ -8461,7 +8461,7 @@ static void ggml_compute_forward_mul_mat_f16_f32(
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
                 // copy data to device
-                CUDA_CHECK(ggml_cuda_cpy_tensor2D(d_X, src0, i03, i02, g_cudaStream));
+                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_X, src0, i03, i02, g_cudaStream));
                 CUDA_CHECK(cudaMemcpyAsync(d_Y, y, sizeof(ggml_fp16_t) * y_ne, cudaMemcpyHostToDevice, g_cudaStream));
 
                 // compute
@@ -8713,7 +8713,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
 
 #if defined(GGML_USE_CUBLAS)
                 // copy and dequantize on device
-                CUDA_CHECK(ggml_cuda_cpy_tensor2D(d_Q, src0, i03, i02, g_cudaStream));
+                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_Q, src0, i03, i02, g_cudaStream));
 
                 dequantize_row_q_cuda(d_Q, d_X, ne01 * ne00, g_cudaStream);
                 CUDA_CHECK(cudaGetLastError());
@@ -8732,7 +8732,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
 
 #if defined(GGML_USE_CUBLAS)
                 // copy data to device
-                CUDA_CHECK(ggml_cuda_cpy_tensor2D(d_Y, src1, i03, i02, g_cudaStream));
+                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_Y, src1, i03, i02, g_cudaStream));
 
                 // compute
                 CUBLAS_CHECK(

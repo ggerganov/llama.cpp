@@ -40,7 +40,7 @@ void dequantize_row_q5_0_cuda(const void * vx, float * y, int k, cudaStream_t st
 void dequantize_row_q5_1_cuda(const void * vx, float * y, int k, cudaStream_t stream);
 void dequantize_row_q8_0_cuda(const void * vx, float * y, int k, cudaStream_t stream);
 
-cudaError_t ggml_cuda_cpy_tensor2D(void * dst, const struct ggml_tensor * src, uint64_t i3, uint64_t i2, cudaStream_t stream);
+cudaError_t ggml_cuda_h2d_tensor_2d(void * dst, const struct ggml_tensor * src, uint64_t i3, uint64_t i2, cudaStream_t stream);
 
 #ifdef  __cplusplus
 }
