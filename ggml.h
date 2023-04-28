@@ -699,7 +699,8 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_get_rows_back(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            struct ggml_tensor  * b);
+            struct ggml_tensor  * b,
+            struct ggml_tensor  * c);
 
     GGML_API struct ggml_tensor * ggml_diag(
         struct ggml_context     * ctx,
