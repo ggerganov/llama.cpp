@@ -126,7 +126,7 @@ void print_elements(const char* label, const struct ggml_tensor * t) {
     printf("] shape: [");
     for (int k = 0; k < t->n_dims; ++k) {
         if (k > 0) { printf(", "); }
-        printf("%d", t->ne[k]);
+        printf("%d", (int)t->ne[k]);
     }
     printf("]\n");
 
@@ -331,7 +331,7 @@ int main(int argc, const char ** argv) {
         {
             const int nargs = 2;
 
-            for (int ndims = 1; ndims <= 2; ++ndims) {
+            for (int ndims = 1; ndims <= 4; ++ndims) {
                 for (int i = 0; i < nargs; ++i) {
                     x[i] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
                     ggml_set_param(ctx0, x[i]);
@@ -347,7 +347,7 @@ int main(int argc, const char ** argv) {
         {
             const int nargs = 2;
 
-            for (int ndims = 1; ndims <= 2; ++ndims) {
+            for (int ndims = 1; ndims <= 4; ++ndims) {
                 for (int i = 0; i < nargs; ++i) {
                     x[i] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
                     ggml_set_param(ctx0, x[i]);
@@ -361,7 +361,7 @@ int main(int argc, const char ** argv) {
 
         // div
         {
-            const int nargs = 2;
+            const int nargs = 4;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
                 for (int i = 0; i < nargs; ++i) {
@@ -613,16 +613,44 @@ int main(int argc, const char ** argv) {
 
                 ggml_set_param(ctx0, x[0]);
 
-                // sum requires contiguous tensor rows, so we only test the permutations where ax0 == 0 --> NUM_PERMUTATIONS/4. 
-                // when the logic for gradients work for these permutations, they should also work for the others.
-                const int p = irand(NUM_PERMUTATIONS/4);
+                const int p = irand(NUM_PERMUTATIONS);
                 const int ax0 = all_permutations[p*4+0];
                 const int ax1 = all_permutations[p*4+1];
                 const int ax2 = all_permutations[p*4+2];
                 const int ax3 = all_permutations[p*4+3];
-                struct ggml_tensor * f = ggml_sum(ctx0, ggml_permute(ctx0, x[0], ax0, ax1, ax2, ax3));
+
+                // sum requires contiguous tensor rows
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_cont(ctx0, ggml_permute(ctx0, x[0], ax0, ax1, ax2, ax3)));
 
                 check_gradient("permute", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+            }
+        }
+
+
+        // transpose
+        {
+            int64_t ne2[4];
+
+            const int nargs = 1;
+            for (int ndims = 1; ndims <= 4; ++ndims) 
+            {
+                // ggml_transpose will set axes of dimensions below n_dims to 1.
+                // to make ggml_permute correctly work on all axes, 
+                // the input tensor needs maximal n_dim of 4.
+                for (int i=0; i<ndims; ++i) {
+                    ne2[i] = ne[i];
+                }
+                for (int i=ndims; i<4; ++i) {
+                    ne2[i] = 1;
+                }
+                x[0] = get_random_tensor(ctx0, 4, ne2, -1.0f, 1.0f);
+
+                ggml_set_param(ctx0, x[0]);
+
+                // sum requires contiguous tensor rows
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_cont(ctx0, ggml_transpose(ctx0, x[0])));
+
+                check_gradient("transpose", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
             }
         }
 
