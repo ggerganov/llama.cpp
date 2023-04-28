@@ -276,7 +276,7 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "Input prefix: '%s'\n", params.input_prefix.c_str());
         }
     }
-    fprintf(stderr, "sampling: repeat_last_n = %d, repeat_penalty = %f, presence_penalty = %f, frequency_penalty = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f, mirostat = %d, mirostat_eta = %f, mirostat_tau = %f\n",
+    fprintf(stderr, "sampling: repeat_last_n = %d, repeat_penalty = %f, presence_penalty = %f, frequency_penalty = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f, mirostat = %d, mirostat_lr = %f, mirostat_ent = %f\n",
             params.repeat_last_n, params.repeat_penalty, params.presence_penalty, params.frequency_penalty, params.top_k, params.tfs_z, params.top_p, params.typical_p, params.temp, params.mirostat, params.mirostat_eta, params.mirostat_tau);
     fprintf(stderr, "generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
     fprintf(stderr, "\n\n");
@@ -420,8 +420,8 @@ int main(int argc, char ** argv) {
 
                 std::vector<llama_token_data> candidates;
                 candidates.reserve(n_vocab);
-                for (size_t i = 0; i < (size_t) n_vocab; i++) {
-                    candidates.emplace_back(i, logits[i], 0.0f);
+                for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
+                    candidates.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
                 }
 
                 llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
@@ -445,11 +445,12 @@ int main(int argc, char ** argv) {
                 } else {
                     if (mirostat == 1) {
                         static float mirostat_mu = 2.0f * mirostat_tau;
-                        static int mirostat_k = 40;
                         const int mirostat_m = 100;
-                        id = llama_sample_token_mirostat(ctx, &candidates_p, mirostat_tau, mirostat_eta, mirostat_m, float(n_vocab), &mirostat_k, &mirostat_mu);
+                        llama_sample_temperature(ctx, &candidates_p, temp);
+                        id = llama_sample_token_mirostat(ctx, &candidates_p, mirostat_tau, mirostat_eta, mirostat_m, &mirostat_mu);
                     } else if (mirostat == 2) {
                         static float mirostat_mu = 2.0f * mirostat_tau;
+                        llama_sample_temperature(ctx, &candidates_p, temp);
                         id = llama_sample_token_mirostat_v2(ctx, &candidates_p, mirostat_tau, mirostat_eta, &mirostat_mu);
                     } else {
                         // Temperature sampling

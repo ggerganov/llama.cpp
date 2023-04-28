@@ -1,4 +1,3 @@
-#include "ggml.h"
 #include "llama.h"
 #include <assert.h>
 #include <math.h>
@@ -23,12 +22,12 @@ void test_top_k(const std::vector<float> & probs,
     size_t n_vocab = probs.size();
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
-    for (int i = 0; i < n_vocab; i++) {
-        float logit = log(probs[i]);
-        candidates.emplace_back(llama_token_data{i, logit, 0.0f});
+    for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
+        float logit = log(probs[token_id]);
+        candidates.emplace_back(llama_token_data{token_id, logit, 0.0f});
     }
 
-    llama_token_data_array candidates_p = { candidates.data(), candidates.size() };
+    llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
     llama_sample_softmax(nullptr, &candidates_p);
     // DUMP(&candidates_p);
     llama_sample_top_k(nullptr, &candidates_p, k);
@@ -48,12 +47,12 @@ void test_top_p(const std::vector<float> & probs,
     size_t n_vocab = probs.size();
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
-    for (int i = 0; i < n_vocab; i++) {
-        float logit = log(probs[i]);
-        candidates.emplace_back(llama_token_data{i, logit, 0.0f});
+    for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
+        float logit = log(probs[token_id]);
+        candidates.emplace_back(llama_token_data{token_id, logit, 0.0f});
     }
 
-    llama_token_data_array candidates_p = { candidates.data(), candidates.size() };
+    llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
     // DUMP(&candidates_p);
     llama_sample_top_p(nullptr, &candidates_p, p);
     // DUMP(&candidates_p);
@@ -71,12 +70,12 @@ void test_tfs(const std::vector<float> & probs,
     size_t n_vocab = probs.size();
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
-    for (int i = 0; i < n_vocab; i++) {
-        float logit = log(probs[i]);
-        candidates.emplace_back(llama_token_data{i, logit, 0.0f});
+    for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
+        float logit = log(probs[token_id]);
+        candidates.emplace_back(llama_token_data{token_id, logit, 0.0f});
     }
 
-    llama_token_data_array candidates_p = { candidates.data(), candidates.size() };
+    llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
     // DUMP(&candidates_p);
     llama_sample_tail_free(nullptr, &candidates_p, z);
     // DUMP(&candidates_p);
@@ -94,12 +93,12 @@ void test_typical(const std::vector<float> & probs,
     size_t n_vocab = probs.size();
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
-    for (int i = 0; i < n_vocab; i++) {
-        float logit = log(probs[i]);
-        candidates.emplace_back(llama_token_data{i, logit, 0.0f});
+    for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
+        float logit = log(probs[token_id]);
+        candidates.emplace_back(llama_token_data{token_id, logit, 0.0f});
     }
 
-    llama_token_data_array candidates_p = { candidates.data(), candidates.size() };
+    llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
     // DUMP(&candidates_p);
     llama_sample_typical(nullptr, &candidates_p, p);
     // DUMP(&candidates_p);
@@ -121,12 +120,12 @@ void test_repetition_penalty(
     size_t n_vocab = probs.size();
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
-    for (int i = 0; i < n_vocab; i++) {
-        float logit = log(probs[i]);
-        candidates.emplace_back(llama_token_data{i, logit, 0.0f});
+    for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
+        float logit = log(probs[token_id]);
+        candidates.emplace_back(llama_token_data{token_id, logit, 0.0f});
     }
 
-    llama_token_data_array candidates_p = { candidates.data(), candidates.size() };
+    llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
     llama_sample_softmax(nullptr, &candidates_p);
     DUMP(&candidates_p);
     llama_sample_repetition_penalty(nullptr, &candidates_p, (llama_token *)last_tokens.data(), last_tokens.size(), penalty);
@@ -150,12 +149,12 @@ void test_frequency_presence_penalty(
     size_t n_vocab = probs.size();
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
-    for (int i = 0; i < n_vocab; i++) {
-        float logit = log(probs[i]);
-        candidates.emplace_back(llama_token_data{i, logit, 0.0f});
+    for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
+        float logit = log(probs[token_id]);
+        candidates.emplace_back(llama_token_data{token_id, logit, 0.0f});
     }
 
-    llama_token_data_array candidates_p = { candidates.data(), candidates.size() };
+    llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
     llama_sample_softmax(nullptr, &candidates_p);
     // DUMP(&candidates_p);
     llama_sample_frequency_and_presence_penalties(nullptr, &candidates_p, (llama_token *)last_tokens.data(), last_tokens.size(), alpha_frequency, alpha_presence);
@@ -166,38 +165,6 @@ void test_frequency_presence_penalty(
     for (size_t i = 0; i < candidates_p.size; i++) {
         assert(fabs(candidates_p.data[i].p - expected_probs[i]) < 1e-6);
     }
-}
-
-
-void test_mirostat() {
-    std::vector<float> probs = {0.1, 0.2, 0.3, 0.4};
-    std::vector<float> expected_probs = {0.1, 0.2, 0.3, 0.4};
-
-    size_t n_vocab = probs.size();
-    std::vector<llama_token_data> candidates;
-    candidates.reserve(n_vocab);
-    for (int i = 0; i < n_vocab; i++) {
-        float logit = log(probs[i]);
-        candidates.emplace_back(llama_token_data{i, logit, 0.0f});
-    }
-
-    llama_token_data_array candidates_p = { candidates.data(), candidates.size() };
-    DUMP(&candidates_p);
-
-    float tau = 5.0f;
-    float mu = 2.0f * tau;
-    int k = 0;
-    float eta = 0.1f;
-    int m = 100;
-    // float N = 32000;
-    float N = 4;
-    // llama_sample_mirostat(ctx, &candidates_p, tau, eta, m, N, &k, &mu);
-    DUMP(&candidates_p);
-
-    // assert(candidates_p.size == expected_probs.size());
-    // for (size_t i = 0; i < candidates_p.size; i++) {
-    //     assert(fabs(candidates_p.data[i].p - expected_probs[i]) < 1e-6);
-    // }
 }
 
 int main(void) {
@@ -222,8 +189,6 @@ int main(void) {
     test_frequency_presence_penalty({0.2, 0.2, 0.2, 0.2, 0.2}, {0},             {0.249997, 0.249997, 0.249997, 0.249997, 0.000011}, 5.0, 5.0);
     test_frequency_presence_penalty({0.2, 0.2, 0.2, 0.2, 0.2}, {0, 1, 2},       {0.499966, 0.499966, 0.000023, 0.000023, 0.000023}, 5.0, 5.0);
     test_frequency_presence_penalty({0.2, 0.2, 0.2, 0.2, 0.2}, {0, 1, 2, 0, 0}, {0.499977, 0.499977, 0.000023, 0.000023, 0.000000}, 5.0, 5.0);
-
-    // test_mirostat();
 
     printf("OK\n");
 }

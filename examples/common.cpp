@@ -158,13 +158,13 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.mirostat = std::stoi(argv[i]);
-        } else if (arg == "--mirostat_eta") {
+        } else if (arg == "--mirostat_lr") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.mirostat_eta = std::stof(argv[i]);
-        } else if (arg == "--mirostat_tau") {
+        } else if (arg == "--mirostat_ent") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -242,7 +242,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             char sign;
             std::string value_str;
             try {
-                if (ss >> key && ss >> sign && std::getline(ss, value_str) && (sign == '+' || sign == '-' || sign == '=' || sign == ':')) {
+                if (ss >> key && ss >> sign && std::getline(ss, value_str) && (sign == '+' || sign == '-')) {
                     params.logit_bias[key] = std::stof(value_str) * ((sign == '-') ? -1.0f : 1.0f);
                 } else {
                     throw std::exception();
@@ -309,18 +309,21 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  --top_p N             top-p sampling (default: %.1f, 1.0 = disabled)\n", (double)params.top_p);
     fprintf(stderr, "  --tfs N               tail free sampling, parameter z (default: %.1f, 1.0 = disabled)\n", (double)params.tfs_z);
     fprintf(stderr, "  --typical N           locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)\n", (double)params.typical_p);
-    fprintf(stderr, "  --repeat_last_n N     last n tokens to consider for penalize (default: %d, 0 = disabled)\n", params.repeat_last_n);
+    fprintf(stderr, "  --repeat_last_n N     last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)\n", params.repeat_last_n);
     fprintf(stderr, "  --repeat_penalty N    penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)\n", (double)params.repeat_penalty);
     fprintf(stderr, "  --presence_penalty N  repeat alpha presence penalty (default: %.1f, 0.0 = disabled)\n", (double)params.presence_penalty);
     fprintf(stderr, "  --frequency_penalty N repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)\n", (double)params.frequency_penalty);
-    fprintf(stderr, "  --mirostat N          use mirostat sampling (default: %d, 0 = disabled, 1 = mirostat, 2 = mirostat 2.0)\n", params.mirostat);
-    fprintf(stderr, "  --mirostat_eta N      mirostat learning rate (default: %.1f)\n", (double)params.mirostat_eta);
-    fprintf(stderr, "  --mirostat_tau N      mirostat target entropy (default: %.1f)\n", (double)params.mirostat_tau);
-    fprintf(stderr, "  -l TOKEN+BIAS, --logit-bias TOKEN+BIAS");
+    fprintf(stderr, "  --mirostat N          use Mirostat sampling.\n");
+    fprintf(stderr, "                        Top K, Nucleus, Tail Free and Locally Typical samplers are ignored if used.\n");
+    fprintf(stderr, "                        (default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)\n", params.mirostat);
+    fprintf(stderr, "  --mirostat_lr N       Mirostat learning rate, parameter eta (default: %.1f)\n", (double)params.mirostat_eta);
+    fprintf(stderr, "  --mirostat_ent N      Mirostat target entropy, parameter tau (default: %.1f)\n", (double)params.mirostat_tau);
+    fprintf(stderr, "  -l TOKEN_ID(+/-)BIAS, --logit-bias TOKEN_ID(+/-)BIAS\n");
     fprintf(stderr, "                        modifies the likelihood of token appearing in the completion,\n");
-    fprintf(stderr, "                        i.e. `--logit-bias 15043+1` to increase likelihood of token ' Hello'\n");
+    fprintf(stderr, "                        i.e. `--logit-bias 15043+1` to increase likelihood of token ' Hello',\n");
+    fprintf(stderr, "                        or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'\n");
     fprintf(stderr, "  -c N, --ctx_size N    size of the prompt context (default: %d)\n", params.n_ctx);
-    fprintf(stderr, "  --ignore-eos          ignore end of stream token and continue generating (implies --logit-bias 2+-inf)\n");
+    fprintf(stderr, "  --ignore-eos          ignore end of stream token and continue generating (implies --logit-bias 2-inf)\n");
     fprintf(stderr, "  --no-penalize-nl      do not penalize newline token\n");
     fprintf(stderr, "  --memory_f32          use f32 instead of f16 for memory key+value\n");
     fprintf(stderr, "  --temp N              temperature (default: %.1f)\n", (double)params.temp);

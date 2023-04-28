@@ -1710,12 +1710,6 @@ void llama_sample_repetition_penalty(struct llama_context * ctx, llama_token_dat
         } else {
             candidates->data[i].logit /= penalty;
         }
-
-        // But it does not penalize tokens that logits are near zero, which is a problem.
-        // Another solution is to convert the logits to probabilities, apply the penalty, and then convert back to logits.
-        // float probability = std::exp(candidates[i].logit);
-        // probability /= penalty;
-        // candidates[i].logit = std::log(probability);
     }
 
     candidates->sorted = false;
@@ -1757,9 +1751,9 @@ void llama_sample_frequency_and_presence_penalties(struct llama_context * ctx, l
 }
 
 
-llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, int m, float N, int * k, float * mu) {
+llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, int m, float * mu) {
     assert(ctx);
-
+    auto N = float(llama_n_vocab(ctx));
     int64_t t_start_sample_us;
     t_start_sample_us = ggml_time_us();
 
@@ -1779,12 +1773,10 @@ llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_
 
     // Compute k from the estimated s_hat and target surprise value
     float epsilon_hat = s_hat - 1;
-    float new_k = powf((epsilon_hat * powf(2, *mu)) / (1 - powf(N, -epsilon_hat)), 1 / s_hat);
-    *k = int(std::min(new_k, float(candidates->size)));
+    float k = powf((epsilon_hat * powf(2, *mu)) / (1 - powf(N, -epsilon_hat)), 1 / s_hat);
 
     // Sample the next word X using top-k sampling
-    // printf("llama_sample_mirostat *k = %d\n", *k);
-    llama_sample_top_k(nullptr, candidates, *k);
+    llama_sample_top_k(nullptr, candidates, int(k));
     if (ctx) {
         ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
     }
