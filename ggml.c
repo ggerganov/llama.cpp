@@ -9257,6 +9257,7 @@ static void ggml_compute_forward_soft_max_f32(
 
         uint16_t scvt;
         for (int i = 0; i < nc; i++) {
+            //printf("p[%3d] = %8.4f\n", i, p[i]);
             if (p[i] == -INFINITY) {
                 p[i] = 0.0f;
             } else {
