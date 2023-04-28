@@ -41,3 +41,5 @@ zig-out/
 zig-cache/
 
 ppl-*.txt
+
+examples/jeopardy/results.txt
