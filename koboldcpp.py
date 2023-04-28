@@ -21,7 +21,8 @@ class load_model_inputs(ctypes.Structure):
                 ("use_smartcontext", ctypes.c_bool),
                 ("unban_tokens", ctypes.c_bool),
                 ("clblast_info", ctypes.c_int),
-                ("blasbatchsize", ctypes.c_int)]
+                ("blasbatchsize", ctypes.c_int),
+                ("debugmode", ctypes.c_bool)]
 
 class generation_inputs(ctypes.Structure):
     _fields_ = [("seed", ctypes.c_int),
@@ -114,6 +115,7 @@ def load_model(model_filename):
         clblastids = 100 + int(args.useclblast[0])*10 + int(args.useclblast[1])
     inputs.clblast_info = clblastids
     inputs.executable_path = (getdirpath()+"/").encode("UTF-8")
+    inputs.debugmode = args.debugmode
     ret = handle.load_model(inputs)
     return ret
 
@@ -461,9 +463,9 @@ def main(args):
     print(f"Starting Kobold HTTP Server on port {args.port}")
     epurl = ""
     if args.host=="":
-        epurl = f"http://localhost:{args.port}" + ("?streaming=1" if args.stream else "")   
+        epurl = f"http://localhost:{args.port}"   
     else:
-        epurl = f"http://{args.host}:{args.port}" + ("?streaming=1" if args.stream else "")   
+        epurl = f"http://{args.host}:{args.port}"  
     
     if args.launch:
         try:
@@ -496,11 +498,12 @@ if __name__ == '__main__':
     parser.add_argument("--threads", help="Use a custom number of threads if specified. Otherwise, uses an amount based on CPU cores", type=int, default=default_threads)
     parser.add_argument("--psutil_set_threads", help="Experimental flag. If set, uses psutils to determine thread count based on physical cores.", action='store_true')
     parser.add_argument("--blasbatchsize", help="Sets the batch size used in BLAS processing (default 512)", type=int,choices=[32,64,128,256,512,1024], default=512)
-    parser.add_argument("--stream", help="Uses pseudo streaming", action='store_true')
+    parser.add_argument("--stream", help="Uses pseudo streaming when generating tokens. Only for the Kobold Lite UI.", action='store_true')
     parser.add_argument("--smartcontext", help="Reserving a portion of context to try processing less frequently.", action='store_true')
     parser.add_argument("--unbantokens", help="Normally, KoboldAI prevents certain tokens such as EOS and Square Brackets. This flag unbans them.", action='store_true')
     parser.add_argument("--nommap", help="If set, do not use mmap to load newer models", action='store_true')
     parser.add_argument("--noavx2", help="Do not use AVX2 instructions, a slower compatibility mode for older devices. Does not work with --clblast.", action='store_true')
+    parser.add_argument("--debugmode", help="Shows additional debug info in the terminal.", action='store_true')
     compatgroup = parser.add_mutually_exclusive_group()
     compatgroup.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
     compatgroup.add_argument("--useclblast", help="Use CLBlast instead of OpenBLAS for prompt ingestion. Must specify exactly 2 arguments, platform ID and device ID (e.g. --useclblast 1 0).", type=int, choices=range(0,9), nargs=2)

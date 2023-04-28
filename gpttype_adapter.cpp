@@ -43,6 +43,7 @@ static int n_batch = 8;
 static bool useSmartContext = false;
 static bool unbanTokens = false;
 static int blasbatchsize = 512;
+static bool debugmode = false;
 static std::string modelname;
 static std::vector<gpt_vocab::id> last_n_tokens;
 static std::vector<gpt_vocab::id> current_context_tokens;
@@ -66,6 +67,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     n_batch = params.n_batch = inputs.batch_size;
     modelname = params.model = inputs.model_filename;
     useSmartContext = inputs.use_smartcontext;
+    debugmode = inputs.debugmode;
     unbanTokens = inputs.unban_tokens;
     blasbatchsize = inputs.blasbatchsize;
     params.memory_f16 = inputs.f16_kv;
@@ -440,6 +442,26 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     }
 
     printf("\n");
+
+    if(debugmode)
+    {
+        printf("\n[Debug: Dump Input Tokens]\n");
+        if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT)
+        {
+            for (auto id : embd_inp)
+            {
+                printf("'%s', ",llama_token_to_str(llama_ctx_v1, id));
+            }
+        }
+        else
+        {
+            for (auto id : embd_inp)
+            {
+                printf("'%s', ",vocab.id_to_token[id].c_str());
+            }
+        }
+        printf("\n");
+    }
     
     while (remaining_tokens > 0)
     {
@@ -613,5 +635,6 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     fflush(stdout);
     output.status = 1;
     snprintf(output.text, sizeof(output.text), "%s", concat_output.c_str());
+
     return output;
 }

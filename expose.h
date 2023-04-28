@@ -15,6 +15,7 @@ struct load_model_inputs
     const bool unban_tokens;
     const int clblast_info = 0;
     const int blasbatchsize = 512;
+    const bool debugmode;
 };
 struct generation_inputs
 {
