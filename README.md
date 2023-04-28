@@ -271,7 +271,7 @@ python3 -m pip install -r requirements.txt
 python3 convert.py models/7B/
 
 # quantize the model to 4-bits (using q4_0 method)
-./quantize ./models/7B/ggml-model-f16.bin ./models/7B/ggml-model-q4_0.bin q4_0
+./quantize ./models/7B/ggml-model-f16.bin ./models/7B/ggml-model-q4_0.bin 2
 
 # run the inference
 ./main -m ./models/7B/ggml-model-q4_0.bin -n 128
