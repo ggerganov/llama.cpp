@@ -269,6 +269,7 @@ extern "C" {
         GGML_OP_DIAG_MASK_INF,
         GGML_OP_SOFT_MAX,
         GGML_OP_ROPE,
+        GGML_OP_ALIBI,
         GGML_OP_CONV_1D_1S,
         GGML_OP_CONV_1D_2S,
 
@@ -662,6 +663,14 @@ extern "C" {
             int                   n_dims,
             int                   mode);
 
+    // alibi position embedding
+    // in-place, returns view(a)
+    struct ggml_tensor * ggml_alibi(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int                   n_past,
+            int                   n_head);
+
     // padding = 1
     // TODO: we don't support extra parameters for now
     //       that's why we are hard-coding the stride, padding, and dilation
@@ -858,9 +867,10 @@ extern "C" {
     GGML_API int ggml_cpu_has_wasm_simd  (void);
     GGML_API int ggml_cpu_has_blas       (void);
     GGML_API int ggml_cpu_has_cublas     (void);
+    GGML_API int ggml_cpu_has_clblast    (void);
+    GGML_API int ggml_cpu_has_gpublas    (void);
     GGML_API int ggml_cpu_has_sse3       (void);
     GGML_API int ggml_cpu_has_vsx        (void);
-
 
     //
     // Internal types and functions exposed for tests and benchmarks

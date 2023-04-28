@@ -31,6 +31,7 @@ struct gpt_params {
 
     std::string model  = "models/lamma-7B/ggml-model.bin"; // model path
     std::string prompt = "";
+    std::string path_session = "";       // path to file for saving/loading model eval state
     std::string input_prefix = "";       // string to prefix user inputs with
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
 

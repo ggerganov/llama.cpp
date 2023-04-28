@@ -9,10 +9,8 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
+- [Roadmap May 2023](https://github.com/ggerganov/llama.cpp/discussions/1220)
 - [New quantization methods](https://github.com/ggerganov/llama.cpp#quantization)
-- [Added LoRA support](https://github.com/ggerganov/llama.cpp/pull/820)
-- [Add GPU support to ggml](https://github.com/ggerganov/llama.cpp/discussions/915)
-- [Roadmap Apr 2023](https://github.com/ggerganov/llama.cpp/discussions/784)
 
 ## Description
 
@@ -174,7 +172,7 @@ In order to build llama.cpp you have three different options.
 
   - On Windows:
 
-    1. Download the latest fortran version of [w64devkit](https://github.com/seeto/w64devkit/releases).
+    1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
     2. Extract `w64devkit` on your pc.
     3. Run `w64devkit.exe`.
     4. Use the `cd` command to reach the `llama.cpp` folder.
