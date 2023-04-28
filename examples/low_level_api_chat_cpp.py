@@ -96,7 +96,7 @@ specified) expect poor results""", file=sys.stderr)
 
         print(file=sys.stderr)
         print(f"system_info: n_threads = {self.params.n_threads} / {cpu_count()} \
-| {llama_cpp.llama_print_system_info().decode('utf8', errors='ignore')}", file=sys.stderr)
+| {llama_cpp.llama_print_system_info().decode('utf8')}", file=sys.stderr)
 
         # determine the required inference memory per token:
         if (self.params.mem_test):
