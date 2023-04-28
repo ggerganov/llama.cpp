@@ -174,7 +174,7 @@ In order to build llama.cpp you have three different options.
 
   - On Windows:
 
-    1. Download the latest fortran version of [w64devkit](https://github.com/seeto/w64devkit/releases).
+    1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
     2. Extract `w64devkit` on your pc.
     3. Run `w64devkit.exe`.
     4. Use the `cd` command to reach the `llama.cpp` folder.
