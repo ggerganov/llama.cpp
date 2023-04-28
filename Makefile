@@ -105,8 +105,8 @@ ifdef LLAMA_OPENBLAS
 	LDFLAGS += -lopenblas
 endif
 ifdef LLAMA_CUBLAS
-	CFLAGS    += -DGGML_USE_CUBLAS -I/usr/local/cuda/include
-	LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64
+	CFLAGS    += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
+	LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
 	OBJS      += ggml-cuda.o
 	NVCC      = nvcc
 	NVCCFLAGS = --forward-unknown-to-host-compiler -arch=native
