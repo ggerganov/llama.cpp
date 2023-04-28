@@ -8252,7 +8252,7 @@ static void ggml_compute_forward_mul_mat_f16_f32(
             for (int64_t i02 = 0; i02 < ne02; i02++) {
 #if defined(GGML_USE_CUBLAS)
                 // copy src0 while converting src1
-                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_X, src0, i02, i03, g_cudaStream));
+                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_X, src0, i03, i02, g_cudaStream));
 
                 // with cuBlAS, instead of converting src0 to fp32, we convert src1 to fp16
                 ggml_fp16_t * const wdata = (ggml_fp16_t *) params->wdata + (ne11 * ne10) * (i03 * ne02 + i02);
@@ -8523,10 +8523,11 @@ static void ggml_compute_forward_mul_mat_q_f32(
 
 #if defined(GGML_USE_CUBLAS)
                 // copy and dequantize on device
-                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_Q, src0, i03, i02, g_cudaStream));
+                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_Q, src0, i03, i02, g_cudaStream2));
 
                 dequantize_row_q_cuda(d_Q, d_X, x_ne, g_cudaStream2);
                 CUDA_CHECK(cudaGetLastError());
+                CUDA_CHECK(cudaEventRecord(g_cudaEvent, g_cudaStream2));
 #elif defined(GGML_USE_CLBLAST)
                 const void* x = (char *) src0->data + i03*nb03 + i02*nb02;
 #else
