@@ -281,30 +281,29 @@ When running the larger models, make sure you have enough disk space to store al
 
 As the models are currently fully loaded into memory, you will need adequate disk space to save them and sufficient RAM to load them. At the moment, memory and disk requirements are the same.
 
-| model | original size | quantized size (4-bit) |
-|-------|---------------|------------------------|
-| 7B    | 13 GB         | 3.9 GB                 |
-| 13B   | 24 GB         | 7.8 GB                 |
-| 30B   | 60 GB         | 19.5 GB                |
-| 65B   | 120 GB        | 38.5 GB                |
+| Model | Original size | Quantized size (4-bit) |
+|------:|--------------:|-----------------------:|
+|    7B |         13 GB |                 3.9 GB |
+|   13B |         24 GB |                 7.8 GB |
+|   30B |         60 GB |                19.5 GB |
+|   65B |        120 GB |                38.5 GB |
 
 ### Quantization
 
 Several quantization methods are supported. They differ in the resulting model disk size and inference speed.
 
-Model | F16 | Q4_0 | Q4_1 | Q4_2 | Q4_3 | Q5_0 | Q5_1 | Q8_0
--- | -- | -- | -- | -- | -- | -- | -- | --
-7B (ppl) | 5.9565 | 6.2103 | 6.1286 | 6.1698 | 6.0617 | 6.0139 | 5.9934 | 5.9571
-7B (size) | 13.0G | 4.0G | 4.8G | 4.0G | 4.8G | 4.4G | 4.8G | 7.1G
-7B (ms/tok @ 4th) | 128 | 56 | 61 | 84 | 91 | 91 | 95 | 75
-7B (ms/tok @ 8th) | 128 | 47 | 55 | 48 | 53 | 53 | 59 | 75
-7B (bpw) | 16.0 | 5.0 | 6.0 | 5.0 | 6.0 | 5.5 | 6.0 | 9.0
--- | -- | -- | -- | -- | -- | -- | -- | --
-13B (ppl) | 5.2455 | 5.3748 | 5.3471 | 5.3433 | 5.3234 | 5.2768 | 5.2582 | 5.2458
-13B (size) | 25.0G | 7.6G | 9.1G | 7.6G | 9.1G | 8.4G | 9.1G | 14G
-13B (ms/tok @ 4th) | 239 | 104 | 113 | 160 | 175 | 176 | 185 | 141
-13B (ms/tok @ 8th) | 240 | 85 | 99 | 97 | 114 | 108 | 117 | 147
-13B (bpw) | 16.0 | 5.0 | 6.0 | 5.0 | 6.0 | 5.5 | 6.0 | 9.0
+| Model | Measure      | F16    | Q4_0   | Q4_1   | Q4_2   | Q5_0   | Q5_1   | Q8_0   |
+|------:|--------------|-------:|-------:|-------:|-------:|-------:|-------:|-------:|
+|    7B | perplexity   | 5.9565 | 6.2103 | 6.1286 | 6.1698 | 6.0139 | 5.9934 | 5.9571 |
+|    7B | file size    |  13.0G |   4.0G |   4.8G |   4.0G |   4.4G |   4.8G |   7.1G |
+|    7B | ms/tok @ 4th |    128 |     56 |     61 |     84 |     91 |     95 |     75 |
+|    7B | ms/tok @ 8th |    128 |     47 |     55 |     48 |     53 |     59 |     75 |
+|    7B | bits/weight  |   16.0 |    5.0 |    6.0 |    5.0 |    5.5 |    6.0 |    9.0 |
+|   13B | perplexity   | 5.2455 | 5.3748 | 5.3471 | 5.3433 | 5.2768 | 5.2582 | 5.2458 |
+|   13B | file size    |  25.0G |   7.6G |   9.1G |   7.6G |   8.4G |   9.1G |    14G |
+|   13B | ms/tok @ 4th |    239 |    104 |    113 |    160 |    176 |    185 |    141 |
+|   13B | ms/tok @ 8th |    240 |     85 |     99 |     97 |    108 |    117 |    147 |
+|   13B | bits/weight  |   16.0 |    5.0 |    6.0 |    5.0 |    5.5 |    6.0 |    9.0 |
 
 ### Interactive mode
 
