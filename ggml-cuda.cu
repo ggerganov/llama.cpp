@@ -340,16 +340,6 @@ void ggml_init_cublas(void) {
     }
 }
 
-void * ggml_cuda_host_malloc(size_t size) {
-    void * ptr;
-    CUDA_CHECK(cudaMallocHost((void **) &ptr, size));
-    return ptr;
-}
-
-void ggml_cuda_host_free(void * ptr) {
-    CUDA_CHECK(cudaFreeHost(ptr));
-}
-
 cudaError_t ggml_cuda_cpy_tensor2D(void * dst, const struct ggml_tensor * src, uint64_t i3, uint64_t i2, cudaStream_t stream) {
     const uint64_t ne0 = src->ne[0];
     const uint64_t ne1 = src->ne[1];
