@@ -192,7 +192,45 @@ struct llama_mmap {
         }
     }
 
+#if 0
+    void print_pages_stats() {
+        long sz = sysconf(_SC_PAGESIZE);
+        fprintf(stderr, "\n");
+        fprintf(stderr, "mmap pages stats (page size = %ld):\n", sz);
+        int pages = size / sz;
+        char *vec = (char *)malloc(pages);
+        if (mincore(addr, size, vec) != 0) {
+            fprintf(stderr, "mincore failed: %s\n", strerror(errno));
+        }
+        int resident = 0, nonresident = 0;
+        for (int i = 0; i < pages; i++) {
+            if (i % 80 == 0) {
+                fprintf(stderr, "%08d: ", i);
+            }
+            fprintf(stderr, vec[i] & 1 ? "x" : ".");
+            if (vec[i] & 1) {
+                resident++;
+            } else {
+                nonresident++;
+            }
+            if (i % 80 == (80 - 1)) {
+                fprintf(stderr, "\n");
+            }
+        }
+        fprintf(stderr, "\n");
+        fprintf(stderr, "pages resident     : %d (%0.2f%%)\n", resident, 100.0f * resident / pages);
+        fprintf(stderr, "pages non-resident : %d (%0.2f%%)\n", nonresident, 100.0f * nonresident / pages);
+        fprintf(stderr, "pages total        : %d\n", pages);
+        fprintf(stderr, "\n");
+        free(vec);
+    }
+#endif
+
     ~llama_mmap() {
+// set to 1 to print the mmaped pages stats
+#if 0
+        print_pages_stats();
+#endif
         munmap(addr, size);
     }
 #elif defined(_WIN32)
