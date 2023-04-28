@@ -627,7 +627,6 @@ int main(int argc, const char ** argv) {
             }
         }
 
-
         // transpose
         {
             int64_t ne2[4];
@@ -653,6 +652,36 @@ int main(int argc, const char ** argv) {
 
                 check_gradient("transpose", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
             }
+        }
+
+        // diag_mask_inf
+        {
+            const int nargs = 1;
+            const int ndims = 2;
+
+            x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
+            ggml_set_param(ctx0, x[0]);
+
+            int n_past = irand(ne[0]);
+
+            struct ggml_tensor * f = ggml_sum(ctx0, ggml_diag_mask_inf(ctx0, x[0], n_past));
+
+            check_gradient("diag_mask_inf", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+        }
+
+        // diag_mask_zero
+        {
+            const int nargs = 1;
+            const int ndims = 2;
+
+            x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
+            ggml_set_param(ctx0, x[0]);
+
+            int n_past = irand(ne[0]);
+
+            struct ggml_tensor * f = ggml_sum(ctx0, ggml_diag_mask_zero(ctx0, x[0], n_past));
+
+            check_gradient("diag_mask_zero", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
         }
 
         // softmax
