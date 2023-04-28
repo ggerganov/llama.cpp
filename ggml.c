@@ -8745,8 +8745,8 @@ static void ggml_compute_forward_mul_mat_q_f32(
                 CUDA_CHECK(cudaGetLastError());
 #elif defined(GGML_USE_CLBLAST)
                 const void* x = (char *) src0->data + i03*nb03 + i02*nb02;
-#else
                 const float * y = (float *) ((char *) src1->data + i02*nb12 + i03*nb13);
+#else
                 {
                     size_t id = 0;
                     for (int64_t i01 = 0; i01 < ne01; ++i01) {
