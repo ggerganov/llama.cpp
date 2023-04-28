@@ -188,7 +188,8 @@ bool check_gradient(
             if (error_abs > max_error_abs || error_rel > max_error_rel) {
                 printf("%s: ndims=%d, i=%d, k=%d, x0=%f, xm=%f, xp=%f, f0=%f, f1=%f, g0=%f, g1=%f, eps=%f, error_abs=%f, error_rel=%f\n",
                             op_name, ndims, i, k, x0, xm, xp, f0, f1, g0, g1, eps, error_abs, error_rel);
-                assert(false);
+                 assert(false);
+                 return false;
             }
         }
     }
@@ -314,7 +315,7 @@ int main(int argc, const char ** argv) {
         {
             const int nargs = 2;
 
-            for (int ndims = 1; ndims <= 2; ++ndims) {
+            for (int ndims = 1; ndims <= 4; ++ndims) {
                 for (int i = 0; i < nargs; ++i) {
                     x[i] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
                     ggml_set_param(ctx0, x[i]);
@@ -586,7 +587,6 @@ int main(int argc, const char ** argv) {
                 const int offset = i0 * sizeof(float);
                 const int nelem  = i1 - i0;
 
-                if (nelem == 0) continue;
                 struct ggml_tensor * f = ggml_sum(ctx0, ggml_view_1d(ctx0, x[0], nelem, offset));
 
                 check_gradient("view", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
