@@ -7,6 +7,10 @@
 
 #define MAX_NARGS 2
 
+#undef MIN
+#undef MAX
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 #define GGML_SILU_FP16
 
@@ -514,6 +518,30 @@ int main(int argc, const char ** argv) {
 
                 struct ggml_tensor * f = ggml_sum(ctx0, ggml_reshape(ctx0, x[0], x[1]));
                 check_gradient("reshape", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+            }
+        }
+
+        // view
+        {
+            const int nargs = 1;
+            for (int ndims = 1; ndims <= 3; ++ndims) {
+
+                x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
+
+                ggml_set_param(ctx0, x[0]);
+
+                const int k0 = irand(ggml_nelements(x[0]));
+                const int k1 = irand(ggml_nelements(x[0]));
+                const int i0 = MIN(k0, k1);
+                const int i1 = MAX(k0, k1);
+
+                const int offset = i0 * sizeof(float);
+                const int nelem  = i1 - i0;
+
+                if (nelem == 0) continue;
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_view_1d(ctx0, x[0], nelem, offset));
+
+                check_gradient("view", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
             }
         }
 
