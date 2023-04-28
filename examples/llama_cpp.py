@@ -212,12 +212,15 @@ def llama_get_kv_cache_token_count(ctx: llama_context_p) -> c_int:
 _lib.llama_get_kv_cache_token_count.argtypes = [llama_context_p]
 _lib.llama_get_kv_cache_token_count.restype = c_int
 
+
 # Sets the current rng seed.
 def llama_set_rng_seed(ctx: llama_context_p, seed: c_int):
     return _lib.llama_set_rng_seed(ctx, seed)
 
+
 _lib.llama_set_rng_seed.argtypes = [llama_context_p, c_int]
 _lib.llama_set_rng_seed.restype = None
+
 
 # Returns the size in bytes of the state (rng, logits, embedding and kv_cache)
 def llama_get_state_size(ctx: llama_context_p) -> c_size_t:
@@ -247,6 +250,44 @@ def llama_set_state_data(ctx: llama_context_p, src) -> c_size_t:
 
 _lib.llama_set_state_data.argtypes = [llama_context_p, POINTER(c_uint8)]
 _lib.llama_set_state_data.restype = c_size_t
+
+
+# Save/load session file
+def llama_load_session_file(
+    ctx: llama_context_p,
+    path_session: bytes,
+    tokens_out,
+    n_token_capacity: c_size_t,
+    n_token_count_out,
+) -> c_size_t:
+    return _lib.llama_load_session_file(
+        ctx, path_session, tokens_out, n_token_capacity, n_token_count_out
+    )
+
+
+_lib.llama_load_session_file.argtypes = [
+    llama_context_p,
+    c_char_p,
+    llama_token_p,
+    c_size_t,
+    POINTER(c_size_t),
+]
+_lib.llama_load_session_file.restype = c_size_t
+
+
+def llama_save_session_file(
+    ctx: llama_context_p, path_session: bytes, tokens, n_token_count: c_size_t
+) -> c_size_t:
+    return _lib.llama_save_session_file(ctx, path_session, tokens, n_token_count)
+
+
+_lib.llama_save_session_file.argtypes = [
+    llama_context_p,
+    c_char_p,
+    llama_token_p,
+    c_size_t,
+]
+_lib.llama_save_session_file.restype = c_size_t
 
 
 # Run the llama inference to obtain the logits and probabilities for the next token.
