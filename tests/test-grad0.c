@@ -112,6 +112,26 @@ void set_element(struct ggml_tensor * t, int idx, float value) {
     ((float *)t->data)[idx] = value;
 }
 
+void print_elements(const char* label, const struct ggml_tensor * t) {
+    if (!t) {
+        printf("%s: %s = null\n", __func__, label);
+        return;
+    }
+    const int nelements = ggml_nelements(t);
+    printf("%s: %s = [", __func__, label);
+    for (int k = 0; k < nelements; ++k) {
+        if (k > 0) { printf(", "); }
+        printf("%.5f", get_element(t, k));
+    }
+    printf("] shape: [");
+    for (int k = 0; k < t->n_dims; ++k) {
+        if (k > 0) { printf(", "); }
+        printf("%d", t->ne[k]);
+    }
+    printf("]\n");
+
+}
+
 bool check_gradient(
         const char * op_name,
         struct ggml_context * ctx0,
