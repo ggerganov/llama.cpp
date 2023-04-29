@@ -66,6 +66,7 @@ int main(int argc, char ** argv) {
 
     // first run
     printf("\n%s", params.prompt.c_str());
+
     for (auto i = 0; i < params.n_predict; i++) {
         auto logits = llama_get_logits(ctx);
         auto n_vocab = llama_n_vocab(ctx);
@@ -86,6 +87,7 @@ int main(int argc, char ** argv) {
         }
         n_past += 1;
     }
+
     printf("\n\n");
 
     // free old model
@@ -101,7 +103,13 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "\n%s : failed to validate state size\n", __func__);
             return 1;
         }
-        fread(state_mem, 1, state_size, fp_read);
+
+        const size_t ret = fread(state_mem, 1, state_size, fp_read);
+        if (ret != state_size) {
+            fprintf(stderr, "\n%s : failed to read state\n", __func__);
+            return 1;
+        }
+
         llama_set_state_data(ctx2, state_mem);  // could also read directly from memory mapped file
         fclose(fp_read);
     }
