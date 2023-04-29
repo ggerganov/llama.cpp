@@ -19,6 +19,20 @@
         }                                                                                       \
     } while (0)
 
+#define QK5_0 32
+typedef struct {
+    ggml_fp16_t d;         // delta
+    uint8_t qh[4];         // 5-th bit of quants
+    uint8_t qs[QK5_0 / 2]; // nibbles / quants
+} block_q5_0;
+
+
+typedef struct {
+    float d;                // delta
+    uint32_t qh;          // 5-th bit of quants
+    uint8_t qs[QK5_0 / 2];  // nibbles / quants
+} cl_block_q5_0;
+
 static cl_platform_id platform;
 static cl_device_id device;
 static cl_context context;
@@ -131,6 +145,7 @@ void ggml_cl_sgemm_wrapper(
     cl_kernel kernel;
     size_t global = n * k, local, size_qb;
     bool dequant;
+    cl_block_q5_0* cl_host_b;
 
     switch (btype) {
     case GGML_TYPE_F32:
@@ -152,19 +167,29 @@ void ggml_cl_sgemm_wrapper(
         dequant = true;
         kernel = kernel_q4_2;
         local = 8;
-        size_qb = global * (sizeof(short) + local) / 16;
+        size_qb = global * (sizeof(ggml_fp16_t) + local) / 16;
         break;
     case GGML_TYPE_Q5_0:
         dequant = true;
         kernel = kernel_q5_0;
         local = 16;
-        size_qb = global * (sizeof(short) + 4 + local) / 32;
+        // For some reason OpenCL seems to be incapable of working with structs of size 22.
+        // 20 and 24 bytes are fine. Workaround to do the fp16 to fp32 step on CPU...
+        // TODO Find the reason, fix and remove workaround.
+        const block_q5_0* b = (const block_q5_0*) host_b;
+        cl_host_b = (cl_block_q5_0*) malloc(sizeof(cl_block_q5_0) * global / 32);
+        for (size_t i = 0; i < global / 32; i++) {
+            cl_host_b[i].d = ggml_fp16_to_fp32(b[i].d);
+            memcpy(&cl_host_b[i].qh, b[i].qh, sizeof(uint32_t) + QK5_0 / 2);
+        }
+        host_b = (const float*) cl_host_b;
+        size_qb = global * (sizeof(float) + sizeof(uint32_t) + local) / 32;
         break;
     case GGML_TYPE_Q5_1:
         dequant = true;
         kernel = kernel_q5_1;
         local = 16;
-        size_qb = global * (sizeof(short) * 2 + 4 + local) / 32;
+        size_qb = global * (sizeof(ggml_fp16_t) * 2 + sizeof(uint32_t) + local) / 32;
         break;
     case GGML_TYPE_Q8_0:
         dequant = true;
@@ -237,4 +262,7 @@ void ggml_cl_sgemm_wrapper(
     clWaitForEvents(1, &ev_c);
     clReleaseEvent(ev_sgemm);
     clReleaseEvent(ev_c);
+    if (btype == GGML_TYPE_Q5_0) {
+        free((void*) cl_host_b);
+    }
 }

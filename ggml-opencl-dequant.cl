@@ -63,7 +63,7 @@ __kernel void dequantize_row_q4_2(__global struct block_q4_2* blocks, __global f
 
 struct block_q5_0
 {
-    ushort d;
+    float d;
     uint qh;
     uchar qs[16];
 };
@@ -72,7 +72,7 @@ __kernel void dequantize_row_q5_0(__global struct block_q5_0* blocks, __global f
     const uint i = get_global_id(0) / 32;
     const uint l = get_local_id(0);
 
-    const float d = vload_half(0, (__global half*) &blocks[i].d);
+    const float d = blocks[i].d;
 
     const uchar vi = blocks[i].qs[l];
 
