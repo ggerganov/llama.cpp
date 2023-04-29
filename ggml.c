@@ -9124,7 +9124,7 @@ static void ggml_compute_forward_alibi_f32(
     //const int nb3 = src0->nb[3];
 
     assert(nb0 == sizeof(float));
-    assert(ne1+n_past == ne0);
+    assert(ne1 + n_past == ne0); (void) n_past;
 
     // add alibi to src0 (KQ_scaled)
     const int n_heads_log2_floor = 1 << (int) floor(log2(n_head));
@@ -9185,7 +9185,7 @@ static void ggml_compute_forward_alibi_f16(
     //const int nb3 = src0->nb[3];
 
     assert(nb0 == sizeof(ggml_fp16_t));
-    assert(ne1+n_past == ne0);
+    assert(ne1 + n_past == ne0); (void) n_past;
 
     // add alibi to src0 (KQ_scaled)
     const int n_heads_log2_floor = 1 << (int) floor(log2(n_head));
