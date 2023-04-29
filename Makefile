@@ -184,15 +184,15 @@ common.o: examples/common.cpp examples/common.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -vf *.o main quantize quantize-stats perplexity embedding benchmark-matmult
+	rm -vf *.o main quantize quantize-stats perplexity embedding benchmark-matmult build-info.h
 
 build-info.h: $(GIT_INDEX)
-	@BUILD_NUMBER=`git rev-list HEAD --count 2>/dev/null`;\
-	BUILD_COMMIT=`git rev-parse HEAD 2>/dev/null`;\
-	if [ -z "$$BUILD_NUMBER" ] || [ -z "$$BUILD_COMMIT" ]; then\
-		BUILD_NUMBER="0";\
-		BUILD_COMMIT="unknown";\
-	fi;\
+	@BUILD_NUMBER="0";\
+	BUILD_COMMIT="unknown";\
+	echo "git rev-list HEAD --count"; REV_LIST=`git rev-list HEAD --count`;\
+	if [ $$? -eq 0 ]; then BUILD_NUMBER=$$REV_LIST; fi;\
+	echo "git rev-parse HEAD"; REV_PARSE=`git rev-parse HEAD`;\
+	if [ $$? -eq 0 ]; then BUILD_COMMIT=$$REV_PARSE; fi;\
 	echo "#ifndef BUILD_INFO_H" > $@;\
 	echo "#define BUILD_INFO_H" >> $@;\
 	echo "" >> $@;\
@@ -200,7 +200,6 @@ build-info.h: $(GIT_INDEX)
 	echo "#define BUILD_COMMIT \"$$BUILD_COMMIT\"" >> $@;\
 	echo "" >> $@;\
 	echo "#endif // BUILD_INFO_H" >> $@;
-
 
 main: examples/main/main.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out build-info.h,$^) -o $@ $(LDFLAGS)

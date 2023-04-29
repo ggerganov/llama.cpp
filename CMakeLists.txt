@@ -84,14 +84,14 @@ find_package(Git)
 if(Git_FOUND)
   execute_process(
     COMMAND \${GIT_EXECUTABLE} rev-parse HEAD
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     OUTPUT_VARIABLE TEMP_HEAD
     OUTPUT_STRIP_TRAILING_WHITESPACE
     RESULT_VARIABLE GIT_HEAD_RESULT
   )
   execute_process(
     COMMAND \${GIT_EXECUTABLE} rev-list --count HEAD
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     OUTPUT_VARIABLE TEMP_COUNT
     OUTPUT_STRIP_TRAILING_WHITESPACE
     RESULT_VARIABLE GIT_COUNT_RESULT
@@ -102,7 +102,7 @@ if(Git_FOUND)
   endif()
 endif()
 
-file(WRITE \"${CMAKE_SOURCE_DIR}/build-info.h\" \"#pragma once\\n#define BUILD_NUMBER \${COUNT}\\n#define BUILD_COMMIT \\\"\${HEAD}\\\"\\n\")
+file(WRITE \"${CMAKE_CURRENT_SOURCE_DIR}/build-info.h\" \"#pragma once\\n#define BUILD_NUMBER \${COUNT}\\n#define BUILD_COMMIT \\\"\${HEAD}\\\"\\n\")
 ")
 
 # Call the script to generate build-info.h initially
@@ -110,16 +110,16 @@ execute_process(
   COMMAND ${CMAKE_COMMAND} -DGIT_EXECUTABLE=${GIT_EXECUTABLE} -P ${CMAKE_BINARY_DIR}/BUILD_INFO.cmake
 )
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/.git")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
   # Add a custom target to regenerate build-info.h when .git/index changes
-  add_custom_target(BUILD_INFO ALL DEPENDS "${CMAKE_SOURCE_DIR}/build-info.h")
+  add_custom_target(BUILD_INFO ALL DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h")
 
   # Add a custom command to generate build-info.h when .git/index changes
   add_custom_command(
-    OUTPUT "${CMAKE_SOURCE_DIR}/build-info.h"
-    COMMENT "Updating build-info.h"
+    OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h"
+    COMMENT "Generating build details from Git"
     COMMAND ${CMAKE_COMMAND} -DGIT_EXECUTABLE=${GIT_EXECUTABLE} -P ${CMAKE_BINARY_DIR}/BUILD_INFO.cmake
-    DEPENDS "${CMAKE_SOURCE_DIR}/.git/index"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/.git/index"
     VERBATIM
   )
 endif()
