@@ -26,6 +26,8 @@ struct generation_inputs
     const float temperature;
     const int top_k;
     const float top_p;
+    const float typical_p;
+    const float tfs;
     const float rep_pen;
     const int rep_pen_range;
     const char * stop_sequence[stop_token_max];
