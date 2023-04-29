@@ -879,7 +879,12 @@ extern "C" {
     // restrict not standard in C++
 #define GGML_RESTRICT
 #else
+#if defined(_WIN32)
+// Visual Studio doesn't know restrict, but __restrict for some reason.
+#define GGML_RESTRICT __restrict
+#else
 #define GGML_RESTRICT restrict
+#endif
 #endif
     typedef void (*dequantize_row_q_t)(const void * GGML_RESTRICT x, float * GGML_RESTRICT y, int k);
     typedef void (*quantize_row_q_t)  (const float * GGML_RESTRICT x, void * GGML_RESTRICT y, int k);
