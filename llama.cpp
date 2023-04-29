@@ -5,7 +5,7 @@
 #include <cstdio>
 #endif
 
-#include "llama_util.h"
+#include "llama-util.h"
 #include "llama.h"
 
 #include "ggml.h"
@@ -32,7 +32,6 @@
 
 #define LLAMA_USE_SCRATCH
 #define LLAMA_MAX_SCRATCH_BUFFERS 16
-
 
 // available llama models
 enum e_model {
