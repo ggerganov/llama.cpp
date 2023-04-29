@@ -377,7 +377,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
         }
 
         params.n_batch = bbs; //received reports of 1024 and above crashing on some models
-        if(!ggml_cpu_has_cublas())
+        if(!ggml_cpu_has_gpublas())
         {
             params.n_threads = 1; //do not limit here anymore.
         }

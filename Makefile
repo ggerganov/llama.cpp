@@ -134,13 +134,7 @@ ifdef LLAMA_CUBLAS
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -Wno-pedantic -c $< -o $@
 endif
-ifdef LLAMA_CLBLAST
-	CFLAGS  += -DGGML_USE_CLBLAST
-	LDFLAGS += -lclblast -lOpenCL
-	OBJS    += ggml-opencl.o
-ggml-opencl.o: ggml-opencl.c ggml-opencl.h
-	$(CC) $(CFLAGS) -c $< -o $@
-endif
+
 ifdef LLAMA_GPROF
 	CFLAGS   += -pg
 	CXXFLAGS += -pg
@@ -227,6 +221,9 @@ ggml_noavx2.o: ggml.c ggml.h
 ggml_openblas_noavx2.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS) $(OPENBLAS_FLAGS) -c $< -o $@
 
+ggml-opencl.o: ggml-opencl.c ggml-opencl.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
 ggml_clblast.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) $(CLBLAST_FLAGS) -c $< -o $@
 
@@ -272,7 +269,7 @@ koboldcpp_noavx2: ggml_noavx2.o ggml_rwkv.o ggml_v1_noavx2.o expose.o common.o g
 koboldcpp_openblas_noavx2: ggml_openblas_noavx2.o ggml_rwkv.o ggml_v1_noavx2.o expose.o common.o gpttype_adapter.o 
 	$(OPENBLAS_NOAVX2_BUILD)
 
-koboldcpp_clblast: ggml_clblast.o ggml_rwkv.o ggml_v1.o expose.o common.o gpttype_adapter.o 
+koboldcpp_clblast: ggml_clblast.o ggml_rwkv.o ggml_v1.o expose.o common.o gpttype_adapter.o ggml-opencl.o 
 	$(CLBLAST_BUILD)
 		
 quantize_llama: examples/quantize/quantize.cpp ggml.o llama.o
