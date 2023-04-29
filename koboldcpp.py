@@ -6,7 +6,6 @@ import ctypes
 import os
 import argparse
 import json, http.server, threading, socket, sys, time
-from tkinter.constants import LEFT, RIGHT
 
 stop_token_max = 10
 
