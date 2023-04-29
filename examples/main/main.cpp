@@ -5,6 +5,7 @@
 
 #include "common.h"
 #include "llama.h"
+#include "build-info.h"
 
 #include <cassert>
 #include <cinttypes>
@@ -81,11 +82,17 @@ int main(int argc, char ** argv) {
                 "expect poor results\n", __func__, params.n_ctx);
     }
 
+    if (strcmp(BUILD_BRANCH, "master") == 0) {
+        fprintf(stderr, "%s: build = %d\n", __func__, BUILD_NUMBER);
+    } else {
+        fprintf(stderr, "%s: build = %s-%d\n", __func__, BUILD_BRANCH, BUILD_NUMBER);
+    }
+
     if (params.seed <= 0) {
         params.seed = time(NULL);
     }
 
-    fprintf(stderr, "%s: seed = %d\n", __func__, params.seed);
+    fprintf(stderr, "%s: seed  = %d\n", __func__, params.seed);
 
     std::mt19937 rng(params.seed);
     if (params.random_prompt) {

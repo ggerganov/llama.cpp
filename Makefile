@@ -16,6 +16,8 @@ endif
 CCV := $(shell $(CC) --version | head -n 1)
 CXXV := $(shell $(CXX) --version | head -n 1)
 
+GIT_INDEX = $(wildcard .git/index)
+
 # Mac OS + Arm can report x86_64
 # ref: https://github.com/ggerganov/whisper.cpp/issues/66#issuecomment-1282546789
 ifeq ($(UNAME_S),Darwin)
@@ -184,7 +186,23 @@ common.o: examples/common.cpp examples/common.h
 clean:
 	rm -vf *.o main quantize quantize-stats perplexity embedding benchmark-matmult
 
-main: examples/main/main.cpp ggml.o llama.o common.o $(OBJS)
+build-info.h: $(GIT_INDEX)
+	@BUILD_NUMBER=`git rev-list HEAD --count 2>/dev/null`;\
+	BUILD_BRANCH=`git rev-parse --abbrev-ref HEAD 2>/dev/null`;\
+	if [ -z "$$BUILD_NUMBER" ] || [ -z "$$BUILD_BRANCH" ]; then\
+		BUILD_NUMBER="0";\
+		BUILD_BRANCH="unknown";\
+	fi;\
+	echo "#ifndef BUILD_INFO_H" > $@;\
+	echo "#define BUILD_INFO_H" >> $@;\
+	echo "" >> $@;\
+	echo "#define BUILD_NUMBER $$BUILD_NUMBER" >> $@;\
+	echo "#define BUILD_BRANCH \"$$BUILD_BRANCH\"" >> $@;\
+	echo "" >> $@;\
+	echo "#endif // BUILD_INFO_H" >> $@;
+
+
+main: examples/main/main.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='

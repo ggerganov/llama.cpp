@@ -73,6 +73,58 @@ option(LLAMA_BUILD_TESTS            "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES         "llama: build examples" ${LLAMA_STANDALONE})
 
 #
+# Build info header
+#
+
+file(WRITE ${CMAKE_BINARY_DIR}/BUILD_INFO.cmake "\
+set(HEAD \"unknown\")
+set(COUNT 0)
+
+find_package(Git)
+if(Git_FOUND)
+  execute_process(
+    COMMAND \${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE TEMP_HEAD
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE GIT_HEAD_RESULT
+  )
+  execute_process(
+    COMMAND \${GIT_EXECUTABLE} rev-list --count HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE TEMP_COUNT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE GIT_COUNT_RESULT
+  )
+  if(GIT_HEAD_RESULT EQUAL 0 AND GIT_COUNT_RESULT EQUAL 0)
+    set(HEAD \${TEMP_HEAD})
+    set(COUNT \${TEMP_COUNT})
+  endif()
+endif()
+
+file(WRITE \"${CMAKE_SOURCE_DIR}/build-info.h\" \"#pragma once\\n#define BUILD_NUMBER \${COUNT}\\n#define BUILD_BRANCH \\\"\${HEAD}\\\"\\n\")
+")
+
+# Call the script to generate build-info.h initially
+execute_process(
+  COMMAND ${CMAKE_COMMAND} -DGIT_EXECUTABLE=${GIT_EXECUTABLE} -P ${CMAKE_BINARY_DIR}/BUILD_INFO.cmake
+)
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+  # Add a custom target to regenerate build-info.h when .git/index changes
+  add_custom_target(BUILD_INFO ALL DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h")
+
+  # Add a custom command to generate build-info.h when .git/index changes
+  add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h"
+    COMMENT "Updating build-info.h"
+    COMMAND ${CMAKE_COMMAND} -DGIT_EXECUTABLE=${GIT_EXECUTABLE} -P ${CMAKE_BINARY_DIR}/BUILD_INFO.cmake
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/.git/index"
+    VERBATIM
+  )
+endif()
+
+#
 # Compile flags
 #
 
