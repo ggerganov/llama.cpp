@@ -387,19 +387,19 @@ int main(int argc, char ** argv) {
 
         if ((int) embd_inp.size() <= n_consumed && !is_interacting) {
             // out of user input, sample next token
-            const float   temp           = params.temp;
-            const int32_t top_k          = params.top_k <= 0 ? llama_n_vocab(ctx) : params.top_k;
-            const float   top_p          = params.top_p;
-            const float   tfs_z          = params.tfs_z;
-            const float   typical_p      = params.typical_p;
-            const int32_t repeat_last_n  = params.repeat_last_n < 0 ? n_ctx : params.repeat_last_n;
-            const float   repeat_penalty = params.repeat_penalty;
-            const float   alpha_presence = params.presence_penalty;
+            const float   temp            = params.temp;
+            const int32_t top_k           = params.top_k <= 0 ? llama_n_vocab(ctx) : params.top_k;
+            const float   top_p           = params.top_p;
+            const float   tfs_z           = params.tfs_z;
+            const float   typical_p       = params.typical_p;
+            const int32_t repeat_last_n   = params.repeat_last_n < 0 ? n_ctx : params.repeat_last_n;
+            const float   repeat_penalty  = params.repeat_penalty;
+            const float   alpha_presence  = params.presence_penalty;
             const float   alpha_frequency = params.frequency_penalty;
-            const int     mirostat       = params.mirostat;
-            const float   mirostat_tau   = params.mirostat_tau;
-            const float   mirostat_eta   = params.mirostat_eta;
-            const bool    penalize_nl   = params.penalize_nl;
+            const int     mirostat        = params.mirostat;
+            const float   mirostat_tau    = params.mirostat_tau;
+            const float   mirostat_eta    = params.mirostat_eta;
+            const bool    penalize_nl     = params.penalize_nl;
 
             // optionally save the session on first sample (for faster prompt loading next time)
             if (!path_session.empty() && need_to_save_session) {
