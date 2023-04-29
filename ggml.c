@@ -668,6 +668,33 @@ uint8x8_t vzip2_u8(uint8x8_t a, uint8x8_t b) {
     return vget_high_u8(vcombine_u8(a, b));
 }
 
+int8x16_t vzip1q_s8(int8x16_t a, int8x16_t b) {
+    return vcombine_s8(vget_low_s8(a), vget_low_s8(b));
+}
+
+int8x16_t vzip2q_s8(int8x16_t a, int8x16_t b) {
+    return vcombine_s8(vget_high_s8(a), vget_high_s8(b));
+}
+
+uint8x16_t vzip1q_u8(uint8x16_t a, uint8x16_t b) {
+    return vcombine_u8(vget_low_u8(a), vget_low_u8(b));
+}
+
+uint8x16_t vzip2q_u8(uint8x16_t a, uint8x16_t b) {
+    return vcombine_u8(vget_high_u8(a), vget_high_u8(b));
+}
+
+int32x4_t vcvtnq_s32_f32(float32x4_t v) {
+    int32x4_t res;
+
+    res[0] = roundf(vgetq_lane_f32(v, 0));
+    res[1] = roundf(vgetq_lane_f32(v, 1));
+    res[2] = roundf(vgetq_lane_f32(v, 2));
+    res[3] = roundf(vgetq_lane_f32(v, 3));
+
+    return res;
+}
+
 #endif
 #endif
 
