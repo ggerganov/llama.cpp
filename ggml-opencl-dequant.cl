@@ -116,17 +116,14 @@ __kernel void dequantize_row_q5_1(__global struct block_q5_1* blocks, __global f
 struct block_q8_0
 {
     float d;
-    uchar qs[32];
+    char qs[32];
 };
 
 __kernel void dequantize_row_q8_0(__global struct block_q8_0* blocks, __global float* result) {
     const uint i = get_global_id(0) / 32;
     const uint l = get_local_id(0);
 
-    const float d = blocks[i].d;
-
-    const uint index = i*32 + l;
-    result[index] = blocks[i].qs[l] * d;
+    result[i*32 + l] = blocks[i].qs[l] * blocks[i].d;
 }
 
 );
