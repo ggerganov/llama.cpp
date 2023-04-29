@@ -136,7 +136,7 @@ struct llama_kv_cache {
 
     struct ggml_context * ctx = NULL;
 
-    llama_buffer buf;
+    llama_ctx_buffer buf;
 
     int n; // number of tokens currently in the cache
 
@@ -167,7 +167,7 @@ struct llama_model {
     struct llama_kv_cache kv_self;
 
     // the model memory buffer
-    llama_buffer buf;
+    llama_ctx_buffer buf;
 
     // model memory mapped file
     std::unique_ptr<llama_mmap> mapping;
@@ -228,8 +228,8 @@ struct llama_context {
 
     // memory buffers used to evaluate the model
     // TODO: move in llama_state
-    llama_buffer buf_compute;
-    llama_buffer buf_scratch[LLAMA_MAX_SCRATCH_BUFFERS];
+    llama_ctx_buffer buf_compute;
+    llama_ctx_buffer buf_scratch[LLAMA_MAX_SCRATCH_BUFFERS];
 
     int    buf_last = 0;
     size_t buf_max_size[LLAMA_MAX_SCRATCH_BUFFERS] = { 0 };
@@ -490,7 +490,6 @@ struct llama_file_loader {
                 case GGML_TYPE_Q4_0:
                 case GGML_TYPE_Q4_1:
                 case GGML_TYPE_Q4_2:
-                case GGML_TYPE_Q4_3:
                 case GGML_TYPE_Q5_0:
                 case GGML_TYPE_Q5_1:
                 case GGML_TYPE_Q8_0:
@@ -567,7 +566,6 @@ struct llama_file_saver {
             case GGML_TYPE_Q4_0:
             case GGML_TYPE_Q4_1:
             case GGML_TYPE_Q4_2:
-            case GGML_TYPE_Q4_3:
             case GGML_TYPE_Q5_0:
             case GGML_TYPE_Q5_1:
             case GGML_TYPE_Q8_0:
@@ -860,7 +858,6 @@ static const char *llama_ftype_name(enum llama_ftype ftype) {
         case LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16:
                                       return "mostly Q4_1, some F16";
         case LLAMA_FTYPE_MOSTLY_Q4_2: return "mostly Q4_2";
-        case LLAMA_FTYPE_MOSTLY_Q4_3: return "mostly Q4_3";
         case LLAMA_FTYPE_MOSTLY_Q5_0: return "mostly Q5_0";
         case LLAMA_FTYPE_MOSTLY_Q5_1: return "mostly Q5_1";
         case LLAMA_FTYPE_MOSTLY_Q8_0: return "mostly Q8_0";
@@ -1092,7 +1089,7 @@ static bool llama_eval_internal(
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
     ggml_cgraph gf = {};
-    gf.n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_cublas() ? 1 : n_threads;
+    gf.n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
 
     struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
     memcpy(embd->data, tokens, N*ggml_element_size(embd));
@@ -1600,7 +1597,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         case LLAMA_FTYPE_MOSTLY_Q4_0: quantized_type = GGML_TYPE_Q4_0; break;
         case LLAMA_FTYPE_MOSTLY_Q4_1: quantized_type = GGML_TYPE_Q4_1; break;
         case LLAMA_FTYPE_MOSTLY_Q4_2: quantized_type = GGML_TYPE_Q4_2; break;
-        case LLAMA_FTYPE_MOSTLY_Q4_3: quantized_type = GGML_TYPE_Q4_3; break;
         case LLAMA_FTYPE_MOSTLY_Q5_0: quantized_type = GGML_TYPE_Q5_0; break;
         case LLAMA_FTYPE_MOSTLY_Q5_1: quantized_type = GGML_TYPE_Q5_1; break;
         case LLAMA_FTYPE_MOSTLY_Q8_0: quantized_type = GGML_TYPE_Q8_0; break;
@@ -2438,3 +2434,56 @@ std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_te
     return ctx->model.tensors_by_name;
 }
 
+size_t llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+    // TODO leverage mmap
+    llama_file file(path_session, "rb");
+    const uint32_t magic = file.read_u32();
+    const uint32_t version = file.read_u32();
+
+    if (!(magic == 'ggsn' && version == 0)) {
+        fprintf(stderr, "%s : unknown (magic, version) for session file: %08x, %08x\n", __func__, magic, version);
+        return 0;
+    }
+
+    llama_hparams session_hparams;
+    file.read_raw(&session_hparams, sizeof(llama_hparams));
+
+    // REVIEW
+    if (session_hparams != ctx->model.hparams) {
+        fprintf(stderr, "%s : model hparams didn't match from session file!\n", __func__);
+        return 0;
+    }
+
+    const uint32_t n_token_count = file.read_u32();
+    LLAMA_ASSERT(n_token_capacity >= n_token_count);
+    file.read_raw(tokens_out, sizeof(llama_token) * n_token_count);
+    *n_token_count_out = n_token_count;
+
+    const size_t n_state_size = file.size - file.tell();
+    const size_t n_orig_state_size = llama_get_state_size(ctx);
+    if (n_state_size != n_orig_state_size) {
+        fprintf(stderr, "%s : failed to validate state size\n", __func__);
+    }
+    std::unique_ptr<uint8_t[]> state_data(new uint8_t[n_state_size]);
+    file.read_raw(state_data.get(), n_state_size);
+    return llama_set_state_data(ctx, state_data.get());
+}
+
+size_t llama_save_session_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count) {
+    // TODO save temp & swap
+    llama_file file(path_session, "wb");
+
+    const size_t n_state_size = llama_get_state_size(ctx);
+    std::unique_ptr<uint8_t[]> state_data(new uint8_t[n_state_size]);
+    llama_copy_state_data(ctx, state_data.get());
+
+    file.write_u32('ggsn'); // magic
+    file.write_u32(0); // version
+    file.write_raw(&ctx->model.hparams, sizeof(llama_hparams));
+
+    file.write_u32((uint32_t) n_token_count); // REVIEW
+    file.write_raw(tokens, sizeof(llama_token) * n_token_count);
+
+    file.write_raw(state_data.get(), n_state_size);
+    return n_state_size; // REVIEW
+}

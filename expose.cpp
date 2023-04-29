@@ -40,14 +40,14 @@ extern "C"
         //first digit is whether configured, second is platform, third is devices
         int parseinfo = inputs.clblast_info;
 
-        std::string usingclblast = "KCPP_CLBLAST_CONFIGURED="+std::to_string(parseinfo>0?1:0);
+        std::string usingclblast = "GGML_CLBLAST_CONFIGURED="+std::to_string(parseinfo>0?1:0);
         putenv((char*)usingclblast.c_str());
 
         parseinfo = parseinfo%100; //keep last 2 digits
         int platform = parseinfo/10;
         int devices = parseinfo%10;
-        platformenv = "KCPP_CLBLAST_PLATFORM="+std::to_string(platform);
-        deviceenv = "KCPP_CLBLAST_DEVICES="+std::to_string(devices);
+        platformenv = "GGML_CLBLAST_PLATFORM="+std::to_string(platform);
+        deviceenv = "GGML_CLBLAST_DEVICES="+std::to_string(devices);
         putenv((char*)platformenv.c_str());
         putenv((char*)deviceenv.c_str());
         executable_path = inputs.executable_path;
