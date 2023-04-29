@@ -8033,7 +8033,7 @@ static void ggml_compute_forward_mul_mat_f32(
 #if defined(GGML_USE_CUBLAS)
         const float alpha = 1.0f;
         const float beta = 0.0f;
-        const int x_ne = ne01 * ne10;
+        const int x_ne = ne01 * ne00;
         const int y_ne = ne11 * ne10;
         const int d_ne = ne11 * ne01;
 
@@ -8235,25 +8235,27 @@ static void ggml_compute_forward_mul_mat_f16_f32(
         }
 
 #if defined(GGML_USE_CUBLAS)
-        ggml_fp16_t * const wdata = params->wdata;
-
         const float alpha = 1.0f;
         const float beta = 0.0f;
-        const int x_ne = ne01 * ne10;
+        const int x_ne = ne01 * ne00;
         const int y_ne = ne11 * ne10;
         const int d_ne = ne11 * ne01;
 
         size_t x_size, y_size, d_size;
-        float *d_X = ggml_cuda_pool_malloc(sizeof(float) * x_ne, &x_size);
-        float *d_Y = ggml_cuda_pool_malloc(sizeof(float) * y_ne, &y_size);
-        float *d_D = ggml_cuda_pool_malloc(sizeof(float) * d_ne, &d_size);
+        ggml_fp16_t * d_X = ggml_cuda_pool_malloc(sizeof(float) * x_ne, &x_size);
+        ggml_fp16_t * d_Y = ggml_cuda_pool_malloc(sizeof(float) * y_ne, &y_size);
+        float       * d_D = ggml_cuda_pool_malloc(sizeof(float) * d_ne, &d_size);
 #else
         float * const wdata = params->wdata;
 #endif
         for (int64_t i03 = 0; i03 < ne03; i03++) {
             for (int64_t i02 = 0; i02 < ne02; i02++) {
 #if defined(GGML_USE_CUBLAS)
+                // copy src0 while converting src1
+                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_X, src0, i03, i02, g_cudaStream));
+
                 // with cuBlAS, instead of converting src0 to fp32, we convert src1 to fp16
+                ggml_fp16_t * const wdata = (ggml_fp16_t *) params->wdata + (ne11 * ne10) * (i03 * ne02 + i02);
                 {
                     size_t id = 0;
                     for (int64_t i01 = 0; i01 < ne11; ++i01) {
@@ -8275,11 +8277,9 @@ static void ggml_compute_forward_mul_mat_f16_f32(
 
 #if defined(GGML_USE_CUBLAS)
                 const ggml_fp16_t * y = (ggml_fp16_t *) wdata;
-
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
                 // copy data to device
-                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_X, src0, i03, i02, g_cudaStream));
                 CUDA_CHECK(cudaMemcpyAsync(d_Y, y, sizeof(ggml_fp16_t) * y_ne, cudaMemcpyHostToDevice, g_cudaStream));
 
                 // compute
@@ -8498,39 +8498,19 @@ static void ggml_compute_forward_mul_mat_q_f32(
 #if defined(GGML_USE_CUBLAS)
         const float alpha = 1.0f;
         const float beta = 0.0f;
-        const int x_ne = ne01 * ne10;
+        const int x_ne = ne01 * ne00;
         const int y_ne = ne11 * ne10;
         const int d_ne = ne11 * ne01;
 
         size_t x_size, y_size, d_size, q_size;
-        float *d_X = ggml_cuda_pool_malloc(sizeof(float) * x_ne, &x_size);
-        float *d_Y = ggml_cuda_pool_malloc(sizeof(float) * y_ne, &y_size);
-        float *d_D = ggml_cuda_pool_malloc(sizeof(float) * d_ne, &d_size);
-        float *d_Q = ggml_cuda_pool_malloc(GGML_TYPE_SIZE[type] * x_ne / GGML_BLCK_SIZE[type], &q_size);
+        float * d_X = ggml_cuda_pool_malloc(sizeof(float) * x_ne, &x_size);
+        float * d_Y = ggml_cuda_pool_malloc(sizeof(float) * y_ne, &y_size);
+        float * d_D = ggml_cuda_pool_malloc(sizeof(float) * d_ne, &d_size);
+        void  * d_Q = ggml_cuda_pool_malloc(GGML_TYPE_SIZE[type] * x_ne / GGML_BLCK_SIZE[type], &q_size);
 
-        void (*dequantize_row_q_cuda)(const void * x, float * y, int k, cudaStream_t stream)  = NULL;
-        if (type == GGML_TYPE_Q4_0) {
-            dequantize_row_q_cuda = dequantize_row_q4_0_cuda;
-        }
-        else if (type == GGML_TYPE_Q4_1) {
-            dequantize_row_q_cuda = dequantize_row_q4_1_cuda;
-        }
-        else if (type == GGML_TYPE_Q4_2) {
-            dequantize_row_q_cuda = dequantize_row_q4_2_cuda;
-        }
-        else if (type == GGML_TYPE_Q5_0) {
-            dequantize_row_q_cuda = dequantize_row_q5_0_cuda;
-        }
-        else if (type == GGML_TYPE_Q5_1) {
-            dequantize_row_q_cuda = dequantize_row_q5_1_cuda;
-        }
-        else if (type == GGML_TYPE_Q8_0) {
-            dequantize_row_q_cuda = dequantize_row_q8_0_cuda;
-        }
-        else {
-            GGML_ASSERT(false);
-        }
-#elif !defined(GGML_USE_CLBLAST)
+        const dequantize_row_q_cuda_t dequantize_row_q_cuda = ggml_get_dequantize_row_q_cuda(type);
+        GGML_ASSERT(dequantize_row_q_cuda != NULL);
+#else
         float * const wdata = params->wdata;
         dequantize_row_q_t const dequantize_row_q = quantize_fns[type].dequantize_row_q;
 #endif
@@ -8543,10 +8523,11 @@ static void ggml_compute_forward_mul_mat_q_f32(
 
 #if defined(GGML_USE_CUBLAS)
                 // copy and dequantize on device
-                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_Q, src0, i03, i02, g_cudaStream));
+                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_Q, src0, i03, i02, g_cudaStream2));
 
-                dequantize_row_q_cuda(d_Q, d_X, ne01 * ne00, g_cudaStream);
+                dequantize_row_q_cuda(d_Q, d_X, x_ne, g_cudaStream2);
                 CUDA_CHECK(cudaGetLastError());
+                CUDA_CHECK(cudaEventRecord(g_cudaEvent, g_cudaStream2));
 #elif defined(GGML_USE_CLBLAST)
                 const void* x = (char *) src0->data + i03*nb03 + i02*nb02;
 #else
@@ -8560,10 +8541,12 @@ static void ggml_compute_forward_mul_mat_q_f32(
                 const float * x = wdata;
 #endif
 
-
 #if defined(GGML_USE_CUBLAS)
                 // copy data to device
                 CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_Y, src1, i03, i02, g_cudaStream));
+
+                // wait for dequantization
+                CUDA_CHECK(cudaStreamWaitEvent(g_cudaStream, g_cudaEvent, 0));
 
                 // compute
                 CUBLAS_CHECK(
@@ -11588,7 +11571,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                             if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
                                 node->n_tasks = 1; // TODO: this actually is doing nothing
                                                    //       the threads are still spinning
-                                cur = GGML_TYPE_SIZE[GGML_TYPE_F32]*(node->src0->ne[0]*node->src0->ne[1]);
+                                cur = GGML_TYPE_SIZE[GGML_TYPE_F32]*MAX(ggml_nelements(node->src1), ggml_nelements(node->src0));
                                 //printf("src0: ne0 = %d, ne1 = %d, ne = %d\n", node->src0->ne[0], node->src0->ne[1], node->src0->ne[0]*node->src0->ne[1]);
                                 //printf("src1: ne0 = %d, ne1 = %d, ne = %d\n", node->src1->ne[0], node->src1->ne[1], node->src1->ne[0]*node->src1->ne[1]);
                                 //printf("cur = %zu\n", cur);
@@ -11600,6 +11583,11 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
 #endif
                         } else if (node->src0->type == GGML_TYPE_F32 && node->src1->type == GGML_TYPE_F32) {
                             cur = 0;
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CUBLAS)
+                            if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
+                                node->n_tasks = 1;
+                            }
+#endif
                         } else if (ggml_is_quantized(node->src0->type) && node->src1->type == GGML_TYPE_F32) {
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
                             if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {

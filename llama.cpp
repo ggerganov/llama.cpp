@@ -136,7 +136,7 @@ struct llama_kv_cache {
 
     struct ggml_context * ctx = NULL;
 
-    llama_buffer buf;
+    llama_ctx_buffer buf;
 
     int n; // number of tokens currently in the cache
 
@@ -167,7 +167,7 @@ struct llama_model {
     struct llama_kv_cache kv_self;
 
     // the model memory buffer
-    llama_buffer buf;
+    llama_ctx_buffer buf;
 
     // model memory mapped file
     std::unique_ptr<llama_mmap> mapping;
@@ -228,8 +228,8 @@ struct llama_context {
 
     // memory buffers used to evaluate the model
     // TODO: move in llama_state
-    llama_buffer buf_compute;
-    llama_buffer buf_scratch[LLAMA_MAX_SCRATCH_BUFFERS];
+    llama_ctx_buffer buf_compute;
+    llama_ctx_buffer buf_scratch[LLAMA_MAX_SCRATCH_BUFFERS];
 
     int    buf_last = 0;
     size_t buf_max_size[LLAMA_MAX_SCRATCH_BUFFERS] = { 0 };
