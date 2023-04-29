@@ -203,7 +203,7 @@ build-info.h: $(GIT_INDEX)
 
 
 main: examples/main/main.cpp build-info.h ggml.o llama.o common.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $(filter-out build-info.h,$^) -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
