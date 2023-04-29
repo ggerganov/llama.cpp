@@ -115,12 +115,6 @@ void ggml_cl_init(void) {
     kernel_q4_3 = clCreateKernel(program, "dequantize_row_q4_3", &err);
     CL_CHECK(err, "clCreateKernel");
 
-    //preallocate buffers
-    const size_t defaultBufSize = 16*1024*1024;
-    ggml_cl_malloc(defaultBufSize, &cl_size_a, CL_MEM_READ_ONLY, &cl_buffer_a);
-    ggml_cl_malloc(defaultBufSize, &cl_size_qb, CL_MEM_READ_ONLY, &cl_buffer_qb);   
-    ggml_cl_malloc(defaultBufSize, &cl_size_b, CL_MEM_READ_WRITE, &cl_buffer_b);
-    ggml_cl_malloc(defaultBufSize, &cl_size_c, CL_MEM_WRITE_ONLY, &cl_buffer_c);
 }
 
 void ggml_cl_sgemm_wrapper(
