@@ -8245,8 +8245,6 @@ static void ggml_compute_forward_mul_mat_f16_f32(
         ggml_fp16_t * d_X = ggml_cuda_pool_malloc(sizeof(float) * x_ne, &x_size);
         ggml_fp16_t * d_Y = ggml_cuda_pool_malloc(sizeof(float) * y_ne, &y_size);
         float       * d_D = ggml_cuda_pool_malloc(sizeof(float) * d_ne, &d_size);
-#else
-        float * const wdata = params->wdata;
 #endif
         for (int64_t i03 = 0; i03 < ne03; i03++) {
             for (int64_t i02 = 0; i02 < ne02; i02++) {
@@ -8263,8 +8261,11 @@ static void ggml_compute_forward_mul_mat_f16_f32(
                             wdata[id++] = GGML_FP32_TO_FP16(*(float *) ((char *) src1->data + i03*nb13 + i02*nb12 + i01*nb11 + i00*nb10));
                         }
                     }
+
+                    assert(id*sizeof(ggml_fp16_t) <= params->wsize);
                 }
 #else
+                float * const wdata = params->wdata;
                 {
                     size_t id = 0;
                     for (int64_t i01 = 0; i01 < ne01; ++i01) {
@@ -8272,6 +8273,8 @@ static void ggml_compute_forward_mul_mat_f16_f32(
                             wdata[id++] = GGML_FP16_TO_FP32(*(ggml_fp16_t *) ((char *) src0->data + i03*nb03 + i02*nb02 + i01*nb01 + i00*nb00));
                         }
                     }
+
+                    assert(id*sizeof(float) <= params->wsize);
                 }
 #endif
 
@@ -8537,7 +8540,10 @@ static void ggml_compute_forward_mul_mat_q_f32(
                         dequantize_row_q((char *) src0->data + i03*nb03 + i02*nb02 + i01*nb01, wdata + id, ne00);
                         id += ne00;
                     }
+
+                    assert(id*sizeof(float) <= params->wsize);
                 }
+
                 const float * x = wdata;
 #endif
 
@@ -11571,10 +11577,13 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                             if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
                                 node->n_tasks = 1; // TODO: this actually is doing nothing
                                                    //       the threads are still spinning
-                                cur = GGML_TYPE_SIZE[GGML_TYPE_F32]*MAX(ggml_nelements(node->src1), ggml_nelements(node->src0));
-                                //printf("src0: ne0 = %d, ne1 = %d, ne = %d\n", node->src0->ne[0], node->src0->ne[1], node->src0->ne[0]*node->src0->ne[1]);
-                                //printf("src1: ne0 = %d, ne1 = %d, ne = %d\n", node->src1->ne[0], node->src1->ne[1], node->src1->ne[0]*node->src1->ne[1]);
-                                //printf("cur = %zu\n", cur);
+#if defined(GGML_USE_CUBLAS)
+                                // with cuBLAS, we need memory for the full 3D / 4D data of src1
+                                cur = GGML_TYPE_SIZE[GGML_TYPE_F16]*ggml_nelements(node->src1);
+#else
+                                // here we need memory just for single 2D matrix from src0
+                                cur = GGML_TYPE_SIZE[GGML_TYPE_F32]*(node->src0->ne[0]*node->src0->ne[1]);
+#endif
                             } else {
                                 cur = GGML_TYPE_SIZE[GGML_TYPE_F16]*ggml_nelements(node->src1);
                             }
