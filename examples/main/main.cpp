@@ -53,6 +53,8 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
+
     // save choice to use color for later
     // (note for later: this is a slightly awkward choice)
     con_st.use_color = params.use_color;
@@ -80,12 +82,6 @@ int main(int argc, char ** argv) {
     if (params.n_ctx > 2048) {
         fprintf(stderr, "%s: warning: model does not support context sizes greater than 2048 tokens (%d specified);"
                 "expect poor results\n", __func__, params.n_ctx);
-    }
-
-    if (strcmp(BUILD_BRANCH, "master") == 0) {
-        fprintf(stderr, "%s: build = %d\n", __func__, BUILD_NUMBER);
-    } else {
-        fprintf(stderr, "%s: build = %s-%d\n", __func__, BUILD_BRANCH, BUILD_NUMBER);
     }
 
     if (params.seed <= 0) {

@@ -188,16 +188,16 @@ clean:
 
 build-info.h: $(GIT_INDEX)
 	@BUILD_NUMBER=`git rev-list HEAD --count 2>/dev/null`;\
-	BUILD_BRANCH=`git rev-parse --abbrev-ref HEAD 2>/dev/null`;\
-	if [ -z "$$BUILD_NUMBER" ] || [ -z "$$BUILD_BRANCH" ]; then\
+	BUILD_COMMIT=`git rev-parse HEAD 2>/dev/null`;\
+	if [ -z "$$BUILD_NUMBER" ] || [ -z "$$BUILD_COMMIT" ]; then\
 		BUILD_NUMBER="0";\
-		BUILD_BRANCH="unknown";\
+		BUILD_COMMIT="unknown";\
 	fi;\
 	echo "#ifndef BUILD_INFO_H" > $@;\
 	echo "#define BUILD_INFO_H" >> $@;\
 	echo "" >> $@;\
 	echo "#define BUILD_NUMBER $$BUILD_NUMBER" >> $@;\
-	echo "#define BUILD_BRANCH \"$$BUILD_BRANCH\"" >> $@;\
+	echo "#define BUILD_COMMIT \"$$BUILD_COMMIT\"" >> $@;\
 	echo "" >> $@;\
 	echo "#endif // BUILD_INFO_H" >> $@;
 
