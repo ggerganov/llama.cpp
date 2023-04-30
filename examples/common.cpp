@@ -64,7 +64,7 @@ int32_t get_num_physical_cores() {
 #elif defined(_WIN32)
     //TODO: Implement
 #endif
-    unsigned int n_threads = std::thread::hardware_concurrency()
+    unsigned int n_threads = std::thread::hardware_concurrency();
     return n_threads > 0 ? (n_threads <= 4 ? n_threads : n_threads / 2) : 4;
 }
 
