@@ -35,11 +35,17 @@ int32_t get_num_physical_cores() {
     std::ifstream cpuinfo("/proc/cpuinfo");
     std::string line;
     while (std::getline(cpuinfo, line)) {
-        if (line.find("cpu cores") != std::string::npos) {
-            line.erase(0, line.find(": ") + 2);
-            try {
-                return (int32_t) std::stoul(line);
-            } catch (std::invalid_argument& e) {} // Ignore if we could not parse
+        std::size_t pos = line.find("cpu cores");
+        if (pos != std::string::npos) {
+            pos = line.find(": ", pos);
+            if (pos != std::string::npos) {
+                try {
+                    // Extract the number and return it
+                    return static_cast<int32_t>(std::stoul(line.substr(pos + 2)));
+                } catch (const std::invalid_argument &) {
+                    // Ignore if we could not parse
+                }
+            }
         }
     }
 #elif defined(__APPLE__) && defined(__MACH__)
@@ -54,10 +60,10 @@ int32_t get_num_physical_cores() {
         return num_physical_cores;
     }
 #elif defined(_WIN32)
-    std::cerr << "WARNING: automatic calibration not supported on Windows. Defaulting to 4 threads.\n" << std::endl;
-    return 4;
+    //TODO: Implement
 #endif
-    return -1;
+    unsigned int n_threads = std::thread::hardware_concurrency()
+    return n_threads > 0 ? (n_threads <= 4 ? n_threads : n_threads / 2) : 4;
 }
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
@@ -232,14 +238,6 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
         gpt_print_usage(argc, argv, default_params);
         exit(1);
-    }
-
-    // Clip if not a valid number of threads
-    if (params.n_threads <= 0) {
-        std::cerr << "\nWARNING: Using number of physical cores as the default number of threads.\n\
-If your chipset has efficient/performance cores, use the number of performance cores instead.\n" << std::endl;
-        int32_t physical_cores = get_num_physical_cores();
-        params.n_threads = std::max(1, physical_cores);
     }
 
     return true;

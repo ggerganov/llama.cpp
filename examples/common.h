@@ -15,7 +15,7 @@
 
 struct gpt_params {
     int32_t seed          = -1;   // RNG seed
-    int32_t n_threads     = 0;
+    int32_t n_threads     = get_num_physical_cores();
     int32_t n_predict     = 128;  // new tokens to predict
     int32_t repeat_last_n = 64;   // last n tokens to penalize
     int32_t n_parts       = -1;   // amount of model parts (-1 = determine from model dimensions)
