@@ -232,6 +232,20 @@ extern "C" {
         GGML_TYPE_COUNT,
     };
 
+    // model file types
+    enum ggml_ftype {
+        GGML_FTYPE_UNKNOWN     = -1,
+        GGML_FTYPE_ALL_F32     = 0,
+        GGML_FTYPE_MOSTLY_F16  = 1,  // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q4_0 = 2,  // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q4_1 = 3,  // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4, // tok_embeddings.weight and output.weight are F16
+        GGML_FTYPE_MOSTLY_Q4_2 = 5,  // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q8_0 = 7,  // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q5_0 = 8,  // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q5_1 = 9,  // except 1d tensors
+    };
+
     // available tensor operations:
     enum ggml_op {
         GGML_OP_NONE = 0,
@@ -384,6 +398,9 @@ extern "C" {
     GGML_API size_t  ggml_element_size(const struct ggml_tensor * tensor);
 
     GGML_API bool    ggml_is_quantized(enum ggml_type type);
+
+    // TODO: temporary until model loading of ggml examples is refactored
+    GGML_API enum ggml_type ggml_ftype_to_ggml_type(enum ggml_ftype ftype);
 
     // main
 
