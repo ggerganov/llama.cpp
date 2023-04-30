@@ -1,11 +1,3 @@
-/*
-    License: MIT License
-
-    Changelog:
-    - 2023-03-31 Initial version by Sebastian Apel (https://github.com/SebastianApel)
-
-*/
-
 #include <locale.h>
 #include "ggml.h"
 #include "llama.h"
@@ -99,11 +91,8 @@ int main(int argc, char ** argv)  {
         }
     }
 
-
     // create the ggml context
     printf("Starting Test\n");
-
-
 
     struct ggml_context * ctx;
     //const int sizex = 4096;
@@ -126,16 +115,18 @@ int main(int argc, char ** argv)  {
 #endif
 
     //printf("Memsize required = %i\n", sizex*sizex);
-    ggml_type wtype = GGML_TYPE_F32;
 
     size_t ctx_size = 0;
-    ctx_size += sizex*sizey*ggml_type_sizef(wtype);
-    ctx_size += sizex*sizey*ggml_type_sizef(wtype);
     ctx_size += sizex*sizey*ggml_type_sizef(GGML_TYPE_F32);
-    ctx_size += sizex*sizeof(float);
-    ctx_size += 1024*1024*100;
+    ctx_size += sizex*sizey*ggml_type_sizef(GGML_TYPE_F32);
+    ctx_size += sizex*sizez*ggml_type_sizef(GGML_TYPE_F32);
+    ctx_size += sizex*sizey*ggml_type_sizef(GGML_TYPE_Q4_0);
+    ctx_size += sizex*sizey*ggml_type_sizef(GGML_TYPE_Q4_0);
+    ctx_size += sizex*sizey*ggml_type_sizef(GGML_TYPE_F32); // BLAS
+    ctx_size += sizex*sizey*ggml_type_sizef(GGML_TYPE_F32); // BLAS
+    ctx_size += 1024*1024*16;
 
-    printf("Allocating Memory of size %li byes, %li MB\n",ctx_size, (ctx_size/1024/1024));
+    printf("Allocating Memory of size %li bytes, %li MB\n",ctx_size, (ctx_size/1024/1024));
 
     struct ggml_init_params params = {
         /*.mem_size   =*/ ctx_size,
@@ -263,7 +254,6 @@ int main(int argc, char ** argv)  {
         ggml_graph_compute(ctx, &gf31);
         long long int stop = ggml_time_us();
         long long int usec = stop-start;
-        float sec = usec/1000000;
         float flops_per_usec = (1.0f*flops_per_matrix)/usec;
         printf("%9i;%8i;%6i;%6i;%6i;%15lli;%18lli;%19.2f\n",
             i,
