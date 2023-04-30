@@ -622,7 +622,7 @@ bool console_readline(console_state & con_st, std::string & line) {
                 fputs("\b \b", stdout); // Move cursor back, print a space, and move cursor back again
                 remove_last_utf8_char(line);
             }
-        } else if (input_char < 32) {
+        } else if (static_cast<unsigned>(input_char) < 32) {
             // Ignore control characters
         } else {
 #if defined(_WIN32)
