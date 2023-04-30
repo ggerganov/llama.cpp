@@ -701,8 +701,8 @@ extern "C" {
             struct ggml_tensor  * c1);
 
     // Mapping operations
-    GGML_API typedef void (*ggml_unary_op_f32_t)(const int, float *, const float *);
-    GGML_API typedef void (*ggml_binary_op_f32_t)(const int, float *, const float *, const float *);
+    typedef void (*ggml_unary_op_f32_t)(const int, float *, const float *);
+    typedef void (*ggml_binary_op_f32_t)(const int, float *, const float *, const float *);
 
     GGML_API struct ggml_tensor * ggml_map_unary_f32(
             struct ggml_context        * ctx,
