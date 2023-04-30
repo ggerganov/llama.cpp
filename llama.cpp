@@ -2724,10 +2724,11 @@ size_t llama_load_session_file(struct llama_context * ctx, const char * path_ses
     const size_t n_orig_state_size = llama_get_state_size(ctx);
     if (n_state_size != n_orig_state_size) {
         fprintf(stderr, "%s : failed to validate state size\n", __func__);
+        return 0;
     }
-    std::unique_ptr<uint8_t[]> state_data(new uint8_t[n_state_size]);
-    file.read_raw(state_data.get(), n_state_size);
-    return llama_set_state_data(ctx, state_data.get());
+    std::vector<uint8_t> state_data(n_state_size);
+    file.read_raw(state_data.data(), n_state_size);
+    return llama_set_state_data(ctx, state_data.data());
 }
 
 size_t llama_save_session_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count) {

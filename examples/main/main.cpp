@@ -385,6 +385,12 @@ int main(int argc, char ** argv) {
 
         embd.clear();
 
+        // optionally save the session after prompt eval (for faster prompt loading next time)
+        if (!path_session.empty() && need_to_save_session) {
+            need_to_save_session = false;
+            llama_save_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
+        }
+
         if ((int) embd_inp.size() <= n_consumed && !is_interacting) {
             // out of user input, sample next token
             const float   temp            = params.temp;
@@ -400,12 +406,6 @@ int main(int argc, char ** argv) {
             const float   mirostat_tau    = params.mirostat_tau;
             const float   mirostat_eta    = params.mirostat_eta;
             const bool    penalize_nl     = params.penalize_nl;
-
-            // optionally save the session on first sample (for faster prompt loading next time)
-            if (!path_session.empty() && need_to_save_session) {
-                need_to_save_session = false;
-                llama_save_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
-            }
 
             llama_token id = 0;
 
