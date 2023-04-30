@@ -187,40 +187,40 @@ clean:
 	rm -vf *.o main quantize quantize-stats perplexity embedding benchmark-matmult build-info.h
 
 build-info.h: $(GIT_INDEX)
-	@BUILD_NUMBER="0";\
-	BUILD_COMMIT="unknown";\
-	echo "git rev-list HEAD --count"; REV_LIST=`git rev-list HEAD --count`;\
-	if [ $$? -eq 0 ]; then BUILD_NUMBER=$$REV_LIST; fi;\
-	echo "git rev-parse HEAD"; REV_PARSE=`git rev-parse HEAD`;\
-	if [ $$? -eq 0 ]; then BUILD_COMMIT=$$REV_PARSE; fi;\
-	echo "#ifndef BUILD_INFO_H" > $@;\
-	echo "#define BUILD_INFO_H" >> $@;\
-	echo "" >> $@;\
-	echo "#define BUILD_NUMBER $$BUILD_NUMBER" >> $@;\
-	echo "#define BUILD_COMMIT \"$$BUILD_COMMIT\"" >> $@;\
-	echo "" >> $@;\
-	echo "#endif // BUILD_INFO_H" >> $@;
+	scripts/build-info.sh > $@
 
-main: examples/main/main.cpp build-info.h ggml.o llama.o common.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $(filter-out build-info.h,$^) -o $@ $(LDFLAGS)
-	@echo
-	@echo '====  Run ./main -h for help.  ===='
-	@echo
+#
+# Examples
+#
 
-quantize: examples/quantize/quantize.cpp build-info.h ggml.o llama.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $(filter-out build-info.h,$^) -o $@ $(LDFLAGS)
+TARGETS_CPP += main
+DEPS_main := examples/main/main.cpp ggml.o llama.o common.o
+EXEC_main :=\
+@echo;\
+echo "====  Run ./main -h for help.  ====";\
+echo
 
-quantize-stats: examples/quantize-stats/quantize-stats.cpp build-info.h ggml.o llama.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $(filter-out build-info.h,$^) -o $@ $(LDFLAGS)
+TARGETS_CPP += quantize
+DEPS_quantize := examples/quantize/quantize.cpp ggml.o llama.o
 
-perplexity: examples/perplexity/perplexity.cpp build-info.h ggml.o llama.o common.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $(filter-out build-info.h,$^) -o $@ $(LDFLAGS)
+TARGETS_CPP += quantize-stats
+DEPS_quantize-stats := examples/quantize-stats/quantize-stats.cpp ggml.o llama.o
 
-embedding: examples/embedding/embedding.cpp build-info.h ggml.o llama.o common.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $(filter-out build-info.h,$^) -o $@ $(LDFLAGS)
+TARGETS_CPP += perplexity
+DEPS_perplexity := examples/perplexity/perplexity.cpp ggml.o llama.o common.o
 
-vdot: pocs/vdot/vdot.cpp ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+TARGETS_CPP += embedding
+DEPS_embedding := examples/embedding/embedding.cpp ggml.o llama.o common.o
+
+TARGETS_CPP += save-load-state
+DEPS_save-load-state := examples/save-load-state/save-load-state.cpp ggml.o llama.o common.o
+
+TARGETS_CPP += vdot
+DEPS_vdot := pocs/vdot/vdot.cpp ggml.o
+
+#
+# libllama
+#
 
 libllama.so: llama.o ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
@@ -229,10 +229,31 @@ libllama.so: llama.o ggml.o $(OBJS)
 # Tests
 #
 
-benchmark-matmult: examples/benchmark/benchmark-matmult.cpp build-info.h ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $(filter-out build-info.h,$^) -o $@ $(LDFLAGS)
-	./$@
+TARGETS_CPP += benchmark
+DEPS_benchmark := examples/benchmark/benchmark-matmult.cpp build-info.h ggml.o $(OBJS)
+OUTP_benchmark := benchmark-matmult
+EXEC_benchmark := ./benchmark-matmult
 
 .PHONY: tests
 tests:
 	bash ./tests/run-tests.sh
+
+#
+# Templates
+#
+
+# C++ template
+# To use this template:
+# 1. Add your target to the TARGETS variable: TARGETS_CPP += target
+# 2. Set target-specific dependencies:        DEPS_target := source1 dependency1 dependency2 ...
+# 3. Optionally, set target-specific output:  OUTP_target := output_name
+# 4. Optionally, set target-specific command: EXEC_target := command
+define template_cpp
+OUTP_$(1) ?= $(1)
+$(1): $$(DEPS_$(1)) $$(OBJS) build-info.h
+	$$(CXX) $$(CXXFLAGS) $$(filter-out build-info.h,$$^) -o $$(OUTP_$(1)) $$(LDFLAGS)
+	$$(if $$(value EXEC_$(1)),$$(EXEC_$(1)))
+endef
+
+# This iterates through TARGETS_CPP and call the template for each target
+$(foreach target,$(TARGETS_CPP),$(eval $(call template_cpp,$(target))))

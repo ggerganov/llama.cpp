@@ -80,20 +80,20 @@ option(LLAMA_BUILD_EXAMPLES         "llama: build examples" ${LLAMA_STANDALONE})
 include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
-  # Add a custom target to regenerate build-info.h when .git/index changes
-  add_custom_target(BUILD_INFO ALL DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h")
+    # Add a custom target to regenerate build-info.h when .git/index changes
+    add_custom_target(BUILD_INFO ALL DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h")
 
-  # Add a custom command to generate build-info.h when .git/index changes
-  add_custom_command(
-    OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h"
-    COMMENT "Generating build details from Git"
-    COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/.git/index"
-    VERBATIM
-  )
+    # Add a custom command to generate build-info.h when .git/index changes
+    add_custom_command(
+        OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h"
+        COMMENT "Generating build details from Git"
+        COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/.git/index"
+        VERBATIM
+    )
 else()
-  message(WARNING "Git repository not found; to enable automatic generation of build info, make sure Git is installed and the project is a Git repository.")
+    message(WARNING "Git repository not found; to enable automatic generation of build info, make sure Git is installed and the project is a Git repository.")
 endif()
 
 #
