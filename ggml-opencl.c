@@ -3,9 +3,10 @@
 #define CL_TARGET_OPENCL_VERSION 110
 #include <clblast_c.h>
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdlib.h>
+
 
 #include "ggml.h"
 
@@ -337,7 +338,8 @@ void ggml_cl_sgemm_wrapper(
         cl_host_b = (cl_block_q5_0*) malloc(sizeof(cl_block_q5_0) * global / 32);
         for (size_t i = 0; i < global / 32; i++) {
             cl_host_b[i].d = ggml_fp16_to_fp32(b[i].d);
-            memcpy(&cl_host_b[i].qh, b[i].qh, sizeof(uint32_t) + QK5_0 / 2);
+            memcpy(&cl_host_b[i].qh, b[i].qh, sizeof(uint32_t));
+            memcpy(&cl_host_b[i].qs, b[i].qs, QK5_0 / 2);
         }
         host_b = (const float*) cl_host_b;
         size_qb = global * (sizeof(float) + sizeof(uint32_t) + local) / 32;
