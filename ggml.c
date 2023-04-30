@@ -8253,7 +8253,7 @@ static void ggml_compute_forward_mul_mat_f32(
                                  x, ne10,
                         0.0f,    d, ne01,
                         GGML_TYPE_F32);
-#elif
+#else
                 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                         ne11, ne01, ne10,
                         1.0f,    y, ne10,
