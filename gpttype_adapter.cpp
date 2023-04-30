@@ -674,6 +674,11 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT)
             {
                 concat_output += llama_token_to_str(llama_ctx_v1, id);
+                if(unbanTokens && id==llama_token_eos())
+                {
+                     printf("\n(EOS token triggered!)");
+                     remaining_tokens = 0;
+                }
             }
             else
             {
