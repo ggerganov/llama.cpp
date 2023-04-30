@@ -8124,9 +8124,8 @@ static void ggml_compute_forward_mul_mat_f32(
     assert(ne3 == ne03);
 
 #if (__AVX512F__ || __AVX2__ || __AVX__) && __FMA__
+    // Handle tall and skinny matrices
     if ((ggml_cpu_has_avx2() && ne00 <= 48) || ne00 <= 32) {
-        // Handle tall and skinny matrices
-        // TODO(jon-chuang): Also check that we only handle 2D matrices?
         if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
             return;
         }
