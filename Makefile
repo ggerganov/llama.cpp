@@ -135,19 +135,21 @@ ifdef LLAMA_PERF
 	CXXFLAGS += -DGGML_PERF
 endif
 ifneq ($(filter aarch64%,$(UNAME_M)),)
+	# Apple M1, M2, etc.
+	# Raspberry Pi 3, 4, Zero 2 (64-bit)
 	CFLAGS   += -mcpu=native
 	CXXFLAGS += -mcpu=native
 endif
 ifneq ($(filter armv6%,$(UNAME_M)),)
-	# Raspberry Pi 1, 2, 3
+	# Raspberry Pi 1, Zero
 	CFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access
 endif
 ifneq ($(filter armv7%,$(UNAME_M)),)
-	# Raspberry Pi 4
+	# Raspberry Pi 2
 	CFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access -funsafe-math-optimizations
 endif
 ifneq ($(filter armv8%,$(UNAME_M)),)
-	# Raspberry Pi 4
+	# Raspberry Pi 3, 4, Zero 2 (32-bit)
 	CFLAGS += -mfp16-format=ieee -mno-unaligned-access
 endif
 
