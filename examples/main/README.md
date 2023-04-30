@@ -4,28 +4,14 @@ This example program allows you to use various LLaMA language models in an easy 
 
 ## Table of Contents
 
-- [llama.cpp/example/main](#llamacppexamplemain)
-  - [Table of Contents](#table-of-contents)
-  - [Quick Start](#quick-start)
-  - [Common Options](#common-options)
-  - [Input Prompts](#input-prompts)
-  - [Interaction](#interaction)
-    - [Interaction Options](#interaction-options)
-    - [Reverse Prompts](#reverse-prompts)
-    - [In-Prefix](#in-prefix)
-    - [Instruction Mode](#instruction-mode)
-  - [Context Management](#context-management)
-    - [Context Size](#context-size)
-    - [Keep Prompt](#keep-prompt)
-  - [Generation Flags](#generation-flags)
-    - [Number of Tokens to Predict](#number-of-tokens-to-predict)
-    - [RNG Seed](#rng-seed)
-    - [Temperature](#temperature)
-    - [Repeat Penalty](#repeat-penalty)
-    - [Top-K Sampling](#top-k-sampling)
-    - [Top-P Sampling](#top-p-sampling)
-  - [Performance Tuning and Memory Options](#performance-tuning-and-memory-options)
-  - [Additional Options](#additional-options)
+1. [Quick Start](#quick-start)
+2. [Common Options](#common-options)
+3. [Input Prompts](#input-prompts)
+4. [Interaction](#interaction)
+5. [Context Management](#context-management)
+6. [Generation Flags](#generation-flags)
+7. [Performance Tuning and Memory Options](#performance-tuning-and-memory-options)
+8. [Additional Options](#additional-options)
 
 ## Quick Start
 
@@ -184,7 +170,7 @@ By adjusting these options, you can control the diversity, quality, and creativi
 
 These options help improve the performance and memory usage of the LLaMA models:
 
--   `-t N, --threads N`: Set the number of threads to use during computation. Using the correct number of threads can greatly improve performance. It is recommended to set this value to the number of physical CPU cores, or the number of performance cores in a chipset with efficiency/performance (E/P) cores.
+-   `-t N, --threads N`: Set the number of threads to use during computation. Using the correct number of threads can greatly improve performance. It is recommended to set this value to the number of CPU cores.
 -   `--mlock`: Lock the model in memory, preventing it from being swapped out when mmaped. This can improve performance.
 -   `--no-mmap`: Do not memory-map the model. This results in a slower load time but may reduce pageouts if you're not using `mlock`.
 -   `--memory_f32`: Use 32 bit floats instead of 16 bit floats for memory key+value, allowing higher quality inference at the cost of memory.
