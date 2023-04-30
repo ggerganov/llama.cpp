@@ -12873,7 +12873,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 if (src1->grad) {
                     src1->grad = ggml_add_impl(ctx,
                         src1->grad,
-                        ggml_mean(ctx, tensor->grad),
+                        ggml_mean(ctx, tensor->grad), // TODO: should probably be sum instead of mean
                         inplace);
                 }
             } break;
@@ -12986,7 +12986,10 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             } break;
         case GGML_OP_REPEAT:
             {
+                // necessary for llama
                 if (src0->grad) {
+                    // TODO: is this really correct?
+                    // i think tensor->grad must be reshaped to [*src0->ne[[0,1,2]],-1] and then summed along last axis
                     src0->grad =
                         ggml_add_impl(ctx,
                                 src0->grad,
