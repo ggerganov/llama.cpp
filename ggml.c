@@ -497,7 +497,7 @@ static inline int hsum_i32_4(const __m128i a) {
 }
 
 // AVX routine provided by GH user jon-chuang
-#if (__AVX2__ || __AVX512F__) && FMA
+#if (__AVX2__ || __AVX512F__) && __FMA__
 // Given A = K X M, B = K X N, compute one row of C = A^TB
 void ggml_mul_row_f32_tall_skinny(const float * A, const float * B, float * C, int M, int N, int K) {
     alignas(32) float res_vec[8];
@@ -8123,7 +8123,7 @@ static void ggml_compute_forward_mul_mat_f32(
     assert(ne2 == ne02);
     assert(ne3 == ne03);
 
-#if defined(__AVX2__) || defined(__AVX__)
+#if (__AVX512F__ || __AVX2__ || __AVX__) && __FMA__
     if ((ggml_cpu_has_avx2() && ne00 <= 48) || ne00 <= 32) {
         // Handle tall and skinny matrices
         // TODO(jon-chuang): Also check that we only handle 2D matrices?
