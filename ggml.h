@@ -535,8 +535,12 @@ extern "C" {
             struct ggml_tensor  * a);
 
     // return scalar
-    // TODO: compute sum along rows
     GGML_API struct ggml_tensor * ggml_sum(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
+    // sums along rows, with input shape [a,b,c,d] return shape [1,b,c,d]
+    GGML_API struct ggml_tensor * ggml_sum_rows(
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
 
