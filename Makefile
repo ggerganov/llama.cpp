@@ -210,7 +210,7 @@ libllama.so: llama.o ggml.o $(OBJS)
 # Tests
 #
 
-benchmark: examples/benchmark/benchmark-q4_0-matmult.c ggml.o $(OBJS)
+benchmark: examples/benchmark/benchmark-q4_0-matmult.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o benchmark-q4_0-matmult $(LDFLAGS)
 	./benchmark-q4_0-matmult
 
