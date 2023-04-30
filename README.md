@@ -7,31 +7,25 @@
 
 Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
-**Warnings**
-
-- `Q4_2` and `Q4_3` are still in development. Do not expect any kind of backward compatibility until they are finalized
-
 **Hot topics:**
 
-- [Added LoRA support](https://github.com/ggerganov/llama.cpp/pull/820)
-- [Add GPU support to ggml](https://github.com/ggerganov/llama.cpp/discussions/915)
-- [Roadmap Apr 2023](https://github.com/ggerganov/llama.cpp/discussions/784)
+- [Roadmap May 2023](https://github.com/ggerganov/llama.cpp/discussions/1220)
+- [New quantization methods](https://github.com/ggerganov/llama.cpp#quantization)
 
 ## Description
 
-The main goal of llama.cpp is to run the llama model using 4-bit quantization on a MacBook.
+The main goal of `llama.cpp` is to run the LLaMA model using 4-bit integer quantization on a MacBook
 
 - Plain C/C++ implementation without dependencies
 - Apple silicon first-class citizen - optimized via ARM NEON and Accelerate framework
 - AVX2 support for x86 architectures
 - Mixed F16 / F32 precision
-- 4-bit quantization support
+- 4-bit integer quantization support
 - Runs on the CPU
 
-This was [hacked in an evening](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022) - I have no idea if it works correctly.
-Please do not make conclusions about the models based on the results from this implementation.
-For all I know, it can be completely wrong. This project is for educational purposes.
-New features will probably be added mostly through community contributions.
+The original implementation of `llama.cpp` was [hacked in an evening](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022).
+Since then, the project has improved significantly thanks to many contributions. This project is for educational purposes and serves
+as the main playground for developing new features for the [ggml](https://github.com/ggerganov/ggml) library.
 
 **Supported platforms:**
 
@@ -167,15 +161,27 @@ cd llama.cpp
 
 ### Build
 
-Note: For Windows, CMake or Zig can be used.
+In order to build llama.cpp you have three different options.
 
-1. Use `make`
+- Using `make`:
+  - On Linux or MacOS:
 
-    ```bash
-    make
-    ```
+      ```bash
+      make
+      ```
 
-1. Use CMake
+  - On Windows:
+
+    1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
+    2. Extract `w64devkit` on your pc.
+    3. Run `w64devkit.exe`.
+    4. Use the `cd` command to reach the `llama.cpp` folder.
+    5. From here you can run:
+        ```bash
+        make
+        ```
+
+- Using `CMake`:
 
     ```bash
     mkdir build
@@ -184,10 +190,69 @@ Note: For Windows, CMake or Zig can be used.
     cmake --build . --config Release
     ```
 
-1. Use Zig
+- Using `Zig`:
 
     ```bash
     zig build -Drelease-fast
+    ```
+
+### BLAS Build
+
+Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). BLAS doesn't affect the normal generation performance. There are currently three different implementations of it:
+
+- Accelerate Framework:
+
+  This is only available on Mac PCs and it's enabled by default. You can just build using the normal instructions.
+
+- OpenBLAS:
+
+  This provides BLAS acceleration using only the CPU. Make sure to have OpenBLAS installed on your machine.
+
+  - Using `make`:
+    - On Linux:
+      ```bash
+      make LLAMA_OPENBLAS=1
+      ```
+      Note: In order to build on Arch Linux with OpenBLAS support enabled you must edit the Makefile adding at the end of the line 105: `-lcblas`
+
+    - On Windows:
+
+      1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
+      2. Download the latest version of [OpenBLAS for Windows](https://github.com/xianyi/OpenBLAS/releases).
+      3. Extract `w64devkit` on your pc.
+      4. From the OpenBLAS zip that you just downloaded copy `libopenblas.a`, located inside the `lib` folder, inside `w64devkit\x86_64-w64-mingw32\lib`.
+      5. From the same OpenBLAS zip copy the content of the `include` folder inside `w64devkit\x86_64-w64-mingw32\include`.
+      6. Run `w64devkit.exe`.
+      7. Use the `cd` command to reach the `llama.cpp` folder.
+      8. From here you can run:
+
+          ```bash
+          make LLAMA_OPENBLAS=1
+          ```
+
+  - Using `CMake` on Linux:
+
+      ```bash
+      mkdir build
+      cd build
+      cmake .. -DLLAMA_OPENBLAS=ON
+      cmake --build . --config Release
+      ```
+
+- cuBLAS
+
+  This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
+  - Using `make`:
+    ```bash
+    make LLAMA_CUBLAS=1
+    ```
+  - Using `CMake`:
+
+    ```bash
+    mkdir build
+    cd build
+    cmake .. -DLLAMA_CUBLAS=ON
+    cmake --build . --config Release
     ```
 
 ### Prepare Data & Run
@@ -203,8 +268,8 @@ python3 -m pip install -r requirements.txt
 # convert the 7B model to ggml FP16 format
 python3 convert.py models/7B/
 
-# quantize the model to 4-bits (using method 2 = q4_0)
-./quantize ./models/7B/ggml-model-f16.bin ./models/7B/ggml-model-q4_0.bin 2
+# quantize the model to 4-bits (using q4_0 method)
+./quantize ./models/7B/ggml-model-f16.bin ./models/7B/ggml-model-q4_0.bin q4_0
 
 # run the inference
 ./main -m ./models/7B/ggml-model-q4_0.bin -n 128
@@ -216,12 +281,29 @@ When running the larger models, make sure you have enough disk space to store al
 
 As the models are currently fully loaded into memory, you will need adequate disk space to save them and sufficient RAM to load them. At the moment, memory and disk requirements are the same.
 
-| model | original size | quantized size (4-bit) |
-|-------|---------------|------------------------|
-| 7B    | 13 GB         | 3.9 GB                 |
-| 13B   | 24 GB         | 7.8 GB                 |
-| 30B   | 60 GB         | 19.5 GB                |
-| 65B   | 120 GB        | 38.5 GB                |
+| Model | Original size | Quantized size (4-bit) |
+|------:|--------------:|-----------------------:|
+|    7B |         13 GB |                 3.9 GB |
+|   13B |         24 GB |                 7.8 GB |
+|   30B |         60 GB |                19.5 GB |
+|   65B |        120 GB |                38.5 GB |
+
+### Quantization
+
+Several quantization methods are supported. They differ in the resulting model disk size and inference speed.
+
+| Model | Measure      | F16    | Q4_0   | Q4_1   | Q4_2   | Q5_0   | Q5_1   | Q8_0   |
+|------:|--------------|-------:|-------:|-------:|-------:|-------:|-------:|-------:|
+|    7B | perplexity   | 5.9565 | 6.2103 | 6.1286 | 6.1698 | 6.0139 | 5.9934 | 5.9571 |
+|    7B | file size    |  13.0G |   4.0G |   4.8G |   4.0G |   4.4G |   4.8G |   7.1G |
+|    7B | ms/tok @ 4th |    128 |     56 |     61 |     84 |     91 |     95 |     75 |
+|    7B | ms/tok @ 8th |    128 |     47 |     55 |     48 |     53 |     59 |     75 |
+|    7B | bits/weight  |   16.0 |    5.0 |    6.0 |    5.0 |    5.5 |    6.0 |    9.0 |
+|   13B | perplexity   | 5.2455 | 5.3748 | 5.3471 | 5.3433 | 5.2768 | 5.2582 | 5.2458 |
+|   13B | file size    |  25.0G |   7.6G |   9.1G |   7.6G |   8.4G |   9.1G |    14G |
+|   13B | ms/tok @ 4th |    239 |    104 |    113 |    160 |    176 |    185 |    141 |
+|   13B | ms/tok @ 8th |    240 |     85 |     99 |     97 |    108 |    117 |    147 |
+|   13B | bits/weight  |   16.0 |    5.0 |    6.0 |    5.0 |    5.5 |    6.0 |    9.0 |
 
 ### Interactive mode
 
