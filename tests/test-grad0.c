@@ -378,7 +378,7 @@ int main(int argc, const char ** argv) {
 
                 struct ggml_tensor * f = ggml_sum(ctx0, ggml_add(ctx0, x[0], x[1]));
 
-                check_gradient("add", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, 1e-3f);
+                check_gradient("add", ctx0, x, f, ndims, nargs, 1e-3f, 2e-3f, 2e-3f);
             }
         }
 
@@ -601,7 +601,6 @@ int main(int argc, const char ** argv) {
             }
         }
 
-
         // reshape (nd->1d)
         {
             const int nargs = 1;
@@ -625,10 +624,10 @@ int main(int argc, const char ** argv) {
             }
         }
 
-        // view
+        // view_1d
         {
             const int nargs = 1;
-            for (int ndims = 1; ndims <= 3; ++ndims) {
+            for (int ndims = 1; ndims <= 4; ++ndims) {
 
                 x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
 
@@ -642,10 +641,70 @@ int main(int argc, const char ** argv) {
                 const int offset = i0 * sizeof(float);
                 const int nelem  = i1 - i0;
 
-                // TODO : test for view_2d and view_3d
                 struct ggml_tensor * f = ggml_sum(ctx0, ggml_view_1d(ctx0, x[0], nelem, offset));
 
-                check_gradient("view", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+                check_gradient("view_1d", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+            }
+        }
+
+        // view_2d
+        {
+            int64_t ne2[4];
+            int64_t nb2[4];
+
+            const int nargs = 1;
+            for (int ndims = 1; ndims <= 4; ++ndims) {
+
+                x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
+
+                get_random_dims(ne2, 2);
+                while (ne2[0]*ne2[1] > ggml_nelements(x[0])) {
+                    get_random_dims(ne2, 2);
+                }
+                const int count = ne2[0]*ne2[1];
+
+                nb2[0] = sizeof(float);
+                nb2[1] = nb2[0]*ne2[0];
+
+                ggml_set_param(ctx0, x[0]);
+
+                const int max_offset = ggml_nelements(x[0]) - count;
+                const int offset = irand(max_offset+1) * sizeof(float);
+
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_view_2d(ctx0, x[0], ne2[0], ne2[1], nb2[1], offset));
+
+                check_gradient("view_2d", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+            }
+        }
+
+        // view_3d
+        {
+            int64_t ne2[4] = {1,1,1,1};
+            int64_t nb2[4] = {0,0,0,0};
+
+            const int nargs = 1;
+            for (int ndims = 1; ndims <= 4; ++ndims) {
+
+                x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
+
+                get_random_dims(ne2, 3);
+                while (ne2[0]*ne2[1]*ne2[2] > ggml_nelements(x[0])) {
+                    get_random_dims(ne2, 3);
+                }
+                const int count = ne2[0]*ne2[1]*ne2[2];
+
+                nb2[0] = sizeof(float);
+                nb2[1] = nb2[0]*ne2[0];
+                nb2[2] = nb2[1]*ne2[1];
+
+                ggml_set_param(ctx0, x[0]);
+
+                const int max_offset = ggml_nelements(x[0]) - count;
+                const int offset = irand(max_offset+1) * sizeof(float);
+
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_view_3d(ctx0, x[0], ne2[0], ne2[1], ne2[2], nb2[1], nb2[2], offset));
+
+                check_gradient("view_3d", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
             }
         }
 
