@@ -497,7 +497,7 @@ static inline int hsum_i32_4(const __m128i a) {
 }
 
 // AVX routine provided by GH user jon-chuang
-#if __AVX2__ || __AVX512F__
+#if (__AVX2__ || __AVX512F__) && FMA
 // Given A = K X M, B = K X N, compute one row of C = A^TB
 void ggml_mul_row_f32_tall_skinny(const float * A, const float * B, float * C, int M, int N, int K) {
     alignas(32) float res_vec[8];
@@ -535,7 +535,7 @@ void ggml_mul_row_f32_tall_skinny(const float * A, const float * B, float * C, i
         _mm256_maskstore_ps(&C[j], mask_vec, c_vec);
     }
 }
-#elif __AVX__
+#elif __AVX__ && __FMA__
 // Given A = K X M, B = K X N, compute one row of C = A^TB
 void ggml_mul_row_f32_tall_skinny(const float * A, const float * B, float * C, int M, int N, int K) {
     for (int j = 0; j < N; j += 4) { // Process 4 elements of C's row at a time - 128 / size_of(float)
