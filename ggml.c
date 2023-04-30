@@ -3827,6 +3827,7 @@ static const char * GGML_OP_LABEL[GGML_OP_COUNT] = {
     "DIAG_MASK_INF",
     "SOFT_MAX",
     "ROPE",
+    "ALIBI",
     "CONV_1D_1S",
     "CONV_1D_2S",
 
@@ -3875,6 +3876,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "diag_mask_inf(x)",
     "soft_max(x)",
     "rope(x)",
+    "alibi(x)",
     "conv_1d_1s(x)",
     "conv_1d_2s(x)",
 
