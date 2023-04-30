@@ -34,9 +34,14 @@ endif
 #
 
 # keep standard at C11 and C++11
-CFLAGS   = -I.              -O3 -DNDEBUG -std=c11   -fPIC
-CXXFLAGS = -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC
+CFLAGS   = -I.              -O3 -std=c11   -fPIC
+CXXFLAGS = -I. -I./examples -O3 -std=c++11 -fPIC
 LDFLAGS  =
+
+ifndef LLAMA_DEBUG
+	CFLAGS   += -DNDEBUG
+	CXXFLAGS += -DNDEBUG
+endif
 
 # warnings
 CFLAGS   += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith
@@ -105,13 +110,21 @@ ifdef LLAMA_OPENBLAS
 	LDFLAGS += -lopenblas
 endif
 ifdef LLAMA_CUBLAS
-	CFLAGS    += -DGGML_USE_CUBLAS -I/usr/local/cuda/include
-	LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64
+	CFLAGS    += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
+	CXXFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
+	LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
 	OBJS      += ggml-cuda.o
 	NVCC      = nvcc
 	NVCCFLAGS = --forward-unknown-to-host-compiler -arch=native
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -Wno-pedantic -c $< -o $@
+endif
+ifdef LLAMA_CLBLAST
+	CFLAGS  += -DGGML_USE_CLBLAST
+	LDFLAGS += -lclblast -lOpenCL
+	OBJS    += ggml-opencl.o
+ggml-opencl.o: ggml-opencl.c ggml-opencl.h
+	$(CC) $(CFLAGS) -c $< -o $@
 endif
 ifdef LLAMA_GPROF
 	CFLAGS   += -pg
@@ -157,10 +170,10 @@ $(info )
 # Build library
 #
 
-ggml.o: ggml.c ggml.h
+ggml.o: ggml.c ggml.h ggml-cuda.h
 	$(CC)  $(CFLAGS)   -c $< -o $@
 
-llama.o: llama.cpp ggml.h llama.h llama_util.h
+llama.o: llama.cpp ggml.h ggml-cuda.h llama.h llama-util.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common.o: examples/common.cpp examples/common.h

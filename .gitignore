@@ -15,6 +15,7 @@ build-em/
 build-debug/
 build-release/
 build-static/
+build-cublas/
 build-no-accel/
 build-sanitize-addr/
 build-sanitize-thread/
@@ -40,3 +41,5 @@ zig-out/
 zig-cache/
 
 ppl-*.txt
+
+examples/jeopardy/results.txt
