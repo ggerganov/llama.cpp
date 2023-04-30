@@ -430,5 +430,4 @@ struct llama_ctx_buffer {
 typedef llama_buffer llama_ctx_buffer;
 #endif
 
-
 #endif

@@ -5,7 +5,7 @@
 #include <cstdio>
 #endif
 
-#include "llama_util.h"
+#include "llama-util.h"
 #include "llama.h"
 
 #include "ggml.h"
@@ -32,7 +32,6 @@
 
 #define LLAMA_USE_SCRATCH
 #define LLAMA_MAX_SCRATCH_BUFFERS 16
-
 
 // available llama models
 enum e_model {
@@ -790,7 +789,7 @@ static bool kv_cache_init(
     const int n_embd  = hparams.n_embd;
     const int n_layer = hparams.n_layer;
 
-    const int64_t n_mem      = (int64_t)n_layer*n_ctx;
+    const int64_t n_mem      = n_layer*n_ctx;
     const int64_t n_elements = n_embd*n_mem;
 
     cache.buf.resize(2u*n_elements*ggml_type_size(wtype) + 2u*MB);
