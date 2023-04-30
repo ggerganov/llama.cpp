@@ -1911,8 +1911,8 @@ static void dequantize_row_q5_0(const void * restrict vx, float * restrict y, in
             const uint8_t vi = pp[l/2];
 
             // extract the 5-th bit from qh
-            const uint8_t vh0 = ((qh & (1 << (l + 0))) >> (l + 0)) << 4;
-            const uint8_t vh1 = ((qh & (1 << (l + 1))) >> (l + 1)) << 4;
+            const uint8_t vh0 = ((qh & (1u << (l + 0))) >> (l + 0)) << 4;
+            const uint8_t vh1 = ((qh & (1u << (l + 1))) >> (l + 1)) << 4;
 
             const int8_t vi0 = (vi & 0x0F) | vh0;
             const int8_t vi1 = (vi >>   4) | vh1;
@@ -1948,8 +1948,8 @@ static void dequantize_row_q5_1(const void * restrict vx, float * restrict y, in
             const uint8_t vi = pp[l/2];
 
             // extract the 5-th bit from qh
-            const uint8_t vh0 = ((qh & (1 << (l + 0))) >> (l + 0)) << 4;
-            const uint8_t vh1 = ((qh & (1 << (l + 1))) >> (l + 1)) << 4;
+            const uint8_t vh0 = ((qh & (1u << (l + 0))) >> (l + 0)) << 4;
+            const uint8_t vh1 = ((qh & (1u << (l + 1))) >> (l + 1)) << 4;
 
             const uint8_t vi0 = (vi & 0x0F) | vh0;
             const uint8_t vi1 = (vi >>   4) | vh1;
@@ -3286,8 +3286,8 @@ static void ggml_vec_dot_q5_0_q8_0(const int n, float * restrict s, const void *
         for (int j = 0; j < QK8_0/2; j++) {
             const uint8_t v0 = x0[j];
 
-            const int x0_0h = ((qh & (1 << (2*j + 0))) >> (2*j + 0)) << 4;
-            const int x1_0h = ((qh & (1 << (2*j + 1))) >> (2*j + 1)) << 4;
+            const int x0_0h = ((qh & (1u << (2*j + 0))) >> (2*j + 0)) << 4;
+            const int x1_0h = ((qh & (1u << (2*j + 1))) >> (2*j + 1)) << 4;
 
             const int x0_0 = ((v0 & 0x0F) | x0_0h) - 16;
             const int x1_0 = ((v0 >>   4) | x1_0h) - 16;
@@ -3491,8 +3491,8 @@ static void ggml_vec_dot_q5_1_q8_1(const int n, float * restrict s, const void *
         for (int j = 0; j < QK8_1/2; j++) {
             const uint8_t v0 = x0[j];
 
-            const int x0_0h = ((qh & (1 << (2*j + 0))) >> (2*j + 0)) << 4;
-            const int x1_0h = ((qh & (1 << (2*j + 1))) >> (2*j + 1)) << 4;
+            const int x0_0h = ((qh & (1u << (2*j + 0))) >> (2*j + 0)) << 4;
+            const int x1_0h = ((qh & (1u << (2*j + 1))) >> (2*j + 1)) << 4;
 
             const int x0_0 = (v0 & 0x0F) | x0_0h;
             const int x1_0 = (v0 >>   4) | x1_0h;
@@ -13057,8 +13057,8 @@ size_t ggml_quantize_q5_0(const float * src, void * dst, int n, int k, int64_t *
             memcpy(&qh, &y[i].qh, sizeof(qh));
 
             for (int l = 0; l < QK5_0; l += 2) {
-                const uint8_t vh0 = ((qh & (1 << (l + 0))) >> (l + 0)) << 4;
-                const uint8_t vh1 = ((qh & (1 << (l + 1))) >> (l + 1)) << 4;
+                const uint8_t vh0 = ((qh & (1u << (l + 0))) >> (l + 0)) << 4;
+                const uint8_t vh1 = ((qh & (1u << (l + 1))) >> (l + 1)) << 4;
 
                 // cast to 16 bins
                 const uint8_t vi0 = ((y[i].qs[l/2] & 0x0F) | vh0) / 2;
@@ -13087,8 +13087,8 @@ size_t ggml_quantize_q5_1(const float * src, void * dst, int n, int k, int64_t *
             memcpy(&qh, &y[i].qh, sizeof(qh));
 
             for (int l = 0; l < QK5_1; l += 2) {
-                const uint8_t vh0 = ((qh & (1 << (l + 0))) >> (l + 0)) << 4;
-                const uint8_t vh1 = ((qh & (1 << (l + 1))) >> (l + 1)) << 4;
+                const uint8_t vh0 = ((qh & (1u << (l + 0))) >> (l + 0)) << 4;
+                const uint8_t vh1 = ((qh & (1u << (l + 1))) >> (l + 1)) << 4;
 
                 // cast to 16 bins
                 const uint8_t vi0 = ((y[i].qs[l/2] & 0x0F) | vh0) / 2;
