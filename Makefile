@@ -236,7 +236,7 @@ ggml_v1_noavx2.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
 ggml_rwkv.o: otherarch/ggml_rwkv.c otherarch/ggml_rwkv.h
 	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -c $< -o $@
 
-llama.o: llama.cpp llama.h llama_util.h
+llama.o: llama.cpp llama.h llama-util.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common.o: examples/common.cpp examples/common.h
