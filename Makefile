@@ -180,7 +180,7 @@ common.o: examples/common.cpp examples/common.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -vf *.o main quantize quantize-stats perplexity embedding benchmark-q4_0-matmult
+	rm -vf *.o main quantize quantize-stats perplexity embedding benchmark-matmult
 
 main: examples/main/main.cpp ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
@@ -210,9 +210,9 @@ libllama.so: llama.o ggml.o $(OBJS)
 # Tests
 #
 
-benchmark: examples/benchmark/benchmark-q4_0-matmult.c ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $^ -o benchmark-q4_0-matmult $(LDFLAGS)
-	./benchmark-q4_0-matmult
+benchmark-matmult: examples/benchmark/benchmark-matmult.cpp ggml.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+	./$@
 
 .PHONY: tests
 tests:
