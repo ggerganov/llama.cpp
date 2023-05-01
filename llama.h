@@ -120,13 +120,13 @@ extern "C" {
                              int   n_threads);
 
     // Returns the number of tokens in the KV cache
-    LLAMA_API int llama_get_kv_cache_token_count(struct llama_context * ctx);
+    LLAMA_API int llama_get_kv_cache_token_count(const struct llama_context * ctx);
 
     // Sets the current rng seed.
     LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, int seed);
 
     // Returns the size in bytes of the state (rng, logits, embedding and kv_cache)
-    LLAMA_API size_t llama_get_state_size(struct llama_context * ctx);
+    LLAMA_API size_t llama_get_state_size(const struct llama_context * ctx);
 
     // Copies the state to the specified destination address.
     // Destination needs to have allocated enough memory.
@@ -164,9 +164,9 @@ extern "C" {
                              int   n_max_tokens,
                             bool   add_bos);
 
-    LLAMA_API int llama_n_vocab(struct llama_context * ctx);
-    LLAMA_API int llama_n_ctx  (struct llama_context * ctx);
-    LLAMA_API int llama_n_embd (struct llama_context * ctx);
+    LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
+    LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
+    LLAMA_API int llama_n_embd (const struct llama_context * ctx);
 
     // Token logits obtained from the last call to llama_eval()
     // The logits for the last token are stored in the last row
@@ -180,7 +180,7 @@ extern "C" {
     LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 
     // Token Id -> String. Uses the vocabulary in the provided context
-    LLAMA_API const char * llama_token_to_str(struct llama_context * ctx, llama_token token);
+    LLAMA_API const char * llama_token_to_str(const struct llama_context * ctx, llama_token token);
 
     // Special tokens
     LLAMA_API llama_token llama_token_bos();
