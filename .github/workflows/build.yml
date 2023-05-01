@@ -210,6 +210,82 @@ jobs:
           path: |
             llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-${{ matrix.build }}-x64.zip
 
+  windows-latest-cmake-cublas:
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        cuda: ['12.1.0', '11.7.1']
+        build: ['cublas']
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v1
+
+      - uses: Jimver/cuda-toolkit@v0.2.10
+        id: cuda-toolkit
+        with:
+          cuda: ${{ matrix.cuda }}
+          # TODO(green-sky): _dev seems to fail, and non dev are not enought
+          #sub-packages: '["nvcc", "cudart", "cublas", "cudart_dev", "cublas_dev"]'
+
+      - name: Build
+        id: cmake_build
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DLLAMA_CUBLAS=ON
+          cmake --build . --config Release
+
+      - name: Get commit hash
+        id: commit
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: pr-mpt/actions-commit-hash@v2
+
+      - name: Pack artifacts
+        id: pack_artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        run: |
+          7z a llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip .\build\bin\Release\*
+
+      - name: Upload artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: actions/upload-artifact@v3
+        with:
+          path: |
+            llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip
+
+      - name: Copy and pack Cuda runtime
+        if: ${{ matrix.cuda == '12.1.0' }}
+        # TODO(green-sky): paths are cuda 12 specific
+        run: |
+          echo "Cuda install location: ${{steps.cuda-toolkit.outputs.CUDA_PATH}}"
+          mkdir '.\build\bin\cudart\'
+          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cudart64_12.dll" '.\build\bin\cudart\'
+          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublas64_12.dll" '.\build\bin\cudart\'
+          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublasLt64_12.dll" '.\build\bin\cudart\'
+          7z a cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip .\build\bin\cudart\*
+
+      - name: Copy and pack Cuda runtime
+        if: ${{ matrix.cuda == '11.7.1' }}
+        # TODO(green-sky): paths are cuda 11 specific
+        run: |
+          echo "Cuda install location: ${{steps.cuda-toolkit.outputs.CUDA_PATH}}"
+          mkdir '.\build\bin\cudart\'
+          ls "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin"
+          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cudart64_110.dll" '.\build\bin\cudart\'
+          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublas64_11.dll" '.\build\bin\cudart\'
+          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublasLt64_11.dll" '.\build\bin\cudart\'
+          7z a cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip .\build\bin\cudart\*
+
+      - name: Upload Cuda runtime
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: actions/upload-artifact@v3
+        with:
+          path: |
+            cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip
+
   release:
     if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
 
@@ -221,6 +297,7 @@ jobs:
       - macOS-latest-make
       - macOS-latest-cmake
       - windows-latest-cmake
+      - windows-latest-cmake-cublas
 
     steps:
       - name: Download artifacts
