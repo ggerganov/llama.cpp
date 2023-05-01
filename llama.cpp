@@ -2566,6 +2566,85 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
     return nread;
 }
 
+bool llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+    llama_file file(path_session, "rb");
+
+    // sanity checks
+    {
+        const uint32_t magic   = file.read_u32();
+        const uint32_t version = file.read_u32();
+
+        if (!(magic == LLAMA_SESSION_MAGIC && version == LLAMA_SESSION_VERSION)) {
+            fprintf(stderr, "%s : unknown (magic, version) for session file: %08x, %08x\n", __func__, magic, version);
+            return false;
+        }
+
+        llama_hparams session_hparams;
+        file.read_raw(&session_hparams, sizeof(llama_hparams));
+
+        if (session_hparams != ctx->model.hparams) {
+            fprintf(stderr, "%s : model hparams didn't match from session file!\n", __func__);
+            return false;
+        }
+    }
+
+    // load the prompt
+    {
+        const uint32_t n_token_count = file.read_u32();
+
+        if (n_token_count > n_token_capacity) {
+            fprintf(stderr, "%s : token count in session file exceeded capacity! %u > %zu\n", __func__, n_token_count, n_token_capacity);
+            return false;
+        }
+
+        file.read_raw(tokens_out, sizeof(llama_token) * n_token_count);
+        *n_token_count_out = n_token_count;
+    }
+
+    // restore the context state
+    {
+        const size_t n_state_size_cur = file.size - file.tell();
+        const size_t n_state_size_exp = llama_get_state_size(ctx);
+
+        if (n_state_size_cur != n_state_size_exp) {
+            fprintf(stderr, "%s : the state size in session file didn't match! expected %zu, got %zu\n", __func__, n_state_size_exp, n_state_size_cur);
+            return false;
+        }
+
+        std::vector<uint8_t> state_data(n_state_size_cur);
+        file.read_raw(state_data.data(), n_state_size_cur);
+
+        llama_set_state_data(ctx, state_data.data());
+    }
+
+    return true;
+}
+
+bool llama_save_session_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count) {
+    llama_file file(path_session, "wb");
+
+    file.write_u32(LLAMA_SESSION_MAGIC);
+    file.write_u32(LLAMA_SESSION_VERSION);
+
+    file.write_raw(&ctx->model.hparams, sizeof(llama_hparams));
+
+    // save the prompt
+    file.write_u32((uint32_t) n_token_count);
+    file.write_raw(tokens, sizeof(llama_token) * n_token_count);
+
+    // save the context state
+    {
+        const size_t n_state_size = llama_get_state_size(ctx);
+
+        std::vector<uint8_t> state_data(n_state_size);
+        llama_copy_state_data(ctx, state_data.data());
+
+        file.write_raw(state_data.data(), n_state_size);
+    }
+
+    return true;
+}
+
 int llama_eval(
         struct llama_context * ctx,
            const llama_token * tokens,
@@ -2692,58 +2771,4 @@ const char * llama_print_system_info(void) {
 // For internal test use
 std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx) {
     return ctx->model.tensors_by_name;
-}
-
-size_t llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
-    // TODO leverage mmap
-    llama_file file(path_session, "rb");
-    const uint32_t magic = file.read_u32();
-    const uint32_t version = file.read_u32();
-
-    if (!(magic == 'ggsn' && version == 0)) {
-        fprintf(stderr, "%s : unknown (magic, version) for session file: %08x, %08x\n", __func__, magic, version);
-        return 0;
-    }
-
-    llama_hparams session_hparams;
-    file.read_raw(&session_hparams, sizeof(llama_hparams));
-
-    // REVIEW
-    if (session_hparams != ctx->model.hparams) {
-        fprintf(stderr, "%s : model hparams didn't match from session file!\n", __func__);
-        return 0;
-    }
-
-    const uint32_t n_token_count = file.read_u32();
-    LLAMA_ASSERT(n_token_capacity >= n_token_count);
-    file.read_raw(tokens_out, sizeof(llama_token) * n_token_count);
-    *n_token_count_out = n_token_count;
-
-    const size_t n_state_size = file.size - file.tell();
-    const size_t n_orig_state_size = llama_get_state_size(ctx);
-    if (n_state_size != n_orig_state_size) {
-        fprintf(stderr, "%s : failed to validate state size\n", __func__);
-    }
-    std::unique_ptr<uint8_t[]> state_data(new uint8_t[n_state_size]);
-    file.read_raw(state_data.get(), n_state_size);
-    return llama_set_state_data(ctx, state_data.get());
-}
-
-size_t llama_save_session_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count) {
-    // TODO save temp & swap
-    llama_file file(path_session, "wb");
-
-    const size_t n_state_size = llama_get_state_size(ctx);
-    std::unique_ptr<uint8_t[]> state_data(new uint8_t[n_state_size]);
-    llama_copy_state_data(ctx, state_data.get());
-
-    file.write_u32('ggsn'); // magic
-    file.write_u32(0); // version
-    file.write_raw(&ctx->model.hparams, sizeof(llama_hparams));
-
-    file.write_u32((uint32_t) n_token_count); // REVIEW
-    file.write_raw(tokens, sizeof(llama_token) * n_token_count);
-
-    file.write_raw(state_data.get(), n_state_size);
-    return n_state_size; // REVIEW
 }
