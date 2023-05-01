@@ -252,6 +252,7 @@ extern "C" {
 
         GGML_OP_DUP,
         GGML_OP_ADD,
+        GGML_OP_ADD1
         GGML_OP_ADD_AT,
         GGML_OP_SUB,
         GGML_OP_MUL,
@@ -268,8 +269,10 @@ extern "C" {
         GGML_OP_RELU,
         GGML_OP_GELU,
         GGML_OP_SILU,
+        GGML_OP_SILU_BACK,
         GGML_OP_NORM, // normalize
         GGML_OP_RMS_NORM,
+        GGML_OP_RMS_NORM_BACK,
 
         GGML_OP_MUL_MAT,
 
@@ -282,8 +285,10 @@ extern "C" {
         GGML_OP_TRANSPOSE,
         GGML_OP_GET_ROWS,
         GGML_OP_DIAG_MASK_INF,
+        GGML_OP_DIAG_MASK_ZERO,
         GGML_OP_SOFT_MAX,
         GGML_OP_ROPE,
+        GGML_OP_ROPE_BACK,
         GGML_OP_ALIBI,
         GGML_OP_CONV_1D_1S,
         GGML_OP_CONV_1D_2S,
@@ -481,6 +486,11 @@ extern "C" {
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
 
+    GGML_API struct ggml_tensor * ggml_add1(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+           struct ggml_tensor  * b);
+
     GGML_API struct ggml_tensor * ggml_add_at(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
@@ -563,6 +573,11 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
 
+    struct ggml_tensor * ggml_silu_back(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * x,
+            struct ggml_tensor  * dy);
+
     // normalize along rows
     // TODO: eps is hardcoded to 1e-5 for now
     GGML_API struct ggml_tensor * ggml_norm(
@@ -572,6 +587,11 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_rms_norm(
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
+
+    GGML_API struct ggml_tensor * ggml_rms_norm_back(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * x,
+            struct ggml_tensor  * dy);
 
     // A: m rows, n columns
     // B: p rows, n columns (i.e. we transpose it internally)
@@ -585,8 +605,13 @@ extern "C" {
     // operations on tensors without backpropagation
     //
 
-    // in-place, returns view(a)
     GGML_API struct ggml_tensor * ggml_scale(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b);
+            
+    // in-place, returns view(a)
+    GGML_API struct ggml_tensor * ggml_scale_inplace(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
@@ -670,25 +695,62 @@ extern "C" {
             struct ggml_tensor  * b);
 
     // set elements above the diagonal to -INF
-    // in-place, returns view(a)
     GGML_API struct ggml_tensor * ggml_diag_mask_inf(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             int                   n_past);
 
     // in-place, returns view(a)
+    GGML_API struct ggml_tensor * ggml_diag_mask_inf_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int                   n_past);
+
+    // set elements above the diagonal to 0
+    GGML_API struct ggml_tensor * ggml_diag_mask_zero(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int                   n_past);
+
+    // in-place, returns view(a)
+    GGML_API struct ggml_tensor * gml_diag_mask_zero_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int                   n_past);
+
     GGML_API struct ggml_tensor * ggml_soft_max(
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
 
-    // rotary position embedding
     // in-place, returns view(a)
+    GGML_API struct ggml_tensor * ggml_soft_max_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
+    // rotary position embedding
     // if mode & 1 == 1, skip n_past elements
     // if mode & 2 == 1, GPT-NeoX style
     // TODO: avoid creating a new tensor every time
     GGML_API struct ggml_tensor * ggml_rope(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
+            int                   n_past,
+            int                   n_dims,
+            int                   mode);
+
+	// in-place, returns view(a)
+    GGML_API struct ggml_tensor * ggml_rope_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int                   n_past,
+            int                   n_dims,
+            int                   mode);
+
+    // rotary position embedding backward, i.e compute dx
+    GGML_API struct ggml_tensor * ggml_rope_back(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * x,
+            struct ggml_tensor  * dy,
             int                   n_past,
             int                   n_dims,
             int                   mode);
