@@ -520,10 +520,16 @@ void sample_softmax(struct ggml_tensor * logits, struct ggml_tensor * probs, str
                 ggml_set_i32_1d(best_samples, i, k);
             }
         }
+        float psum = 0;
         for (int k = 0; k < logits->ne[0]; ++k) {
             float logit = ggml_get_f32_1d(logits, i * logits->ne[0] + k);
-            float p = expf(logit - max_logit);
-            ggml_set_i32_1d(probs, i * probs->ne[0] + k, p);
+            float p = (logit == -INFINITY) ? 0 : expf(logit - max_logit);
+            psum += p;
+            ggml_set_f32_1d(probs, i * probs->ne[0] + k, p);
+        }
+        for (int k = 0; k < logits->ne[0]; ++k) {
+            float p = ggml_get_f32_1d(probs, i*probs->ne[0] + k);
+            ggml_set_f32_1d(probs, i * probs->ne[0] + k, p / psum);
         }
     }
 }
@@ -532,7 +538,7 @@ void print_probs(struct ggml_tensor * probs) {
     assert(probs->n_dims == 2);
     for (int i=0; i<probs->ne[1]; ++i) {
         for (int k = 0; k < probs->ne[0]; ++k) {
-            float p = ggml_get_f32_1d(probs, i*probs->ne[1] + k);
+            float p = ggml_get_f32_1d(probs, i*probs->ne[0] + k);
             printf(" %.1f", p);
         }
         printf("\n");
@@ -588,11 +594,11 @@ int main(int argc, char ** argv) {
 
     int n_tokens = 64;
     struct ggml_tensor * before_opt_best_samples = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-    struct ggml_tensor * before_opt_probs = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, model.hparams.n_vocab, n_tokens);
-    struct ggml_tensor * after_opt_best_samples = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-    struct ggml_tensor * after_opt_probs = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, model.hparams.n_vocab, n_tokens);
-    struct ggml_tensor * tokens_input = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-    struct ggml_tensor * targets = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, model.hparams.n_vocab, n_tokens);
+    struct ggml_tensor * before_opt_probs        = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, model.hparams.n_vocab, n_tokens);
+    struct ggml_tensor * after_opt_best_samples  = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+    struct ggml_tensor * after_opt_probs         = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, model.hparams.n_vocab, n_tokens);
+    struct ggml_tensor * tokens_input            = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+    struct ggml_tensor * targets                 = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, model.hparams.n_vocab, n_tokens);
     for (int i=0; i<n_tokens; ++i) {
         float x = i * 3.14159f * 2.0f * 4.0f / n_tokens;
         float y = sinf(x);
@@ -600,13 +606,13 @@ int main(int argc, char ** argv) {
         int token = (int)(z*(float)(model.hparams.n_vocab-1));
         for (int k = 0; k < token; ++k) {
             printf(" ");
-            ggml_set_f32_1d(targets, i*model.hparams.n_vocab + k, -1.0f);
+            ggml_set_f32_1d(targets, i*model.hparams.n_vocab + k, 0.0f);
         }
         printf("X");
         ggml_set_f32_1d(targets, i*model.hparams.n_vocab + token, +1.0f);
         for (int k = token+1; k < model.hparams.n_vocab; ++k) {
             printf(" ");
-            ggml_set_f32_1d(targets, i*model.hparams.n_vocab + k, -1.0f);
+            ggml_set_f32_1d(targets, i*model.hparams.n_vocab + k, 0.0f);
         }
         printf("\n");
         ggml_set_i32_1d(tokens_input, i, token);
@@ -626,6 +632,11 @@ int main(int argc, char ** argv) {
     float error_before_opt = ggml_get_f32_1d(e, 0);
     sample_softmax(logits, before_opt_probs, before_opt_best_samples);
 
+    printf("probabilities before optimization:\n");
+    print_probs(before_opt_probs);
+    printf("best samples before optimization:\n");
+    print_tokens(before_opt_best_samples, model.hparams.n_vocab);
+
     struct ggml_opt_params opt_params = ggml_opt_default_params(GGML_OPT_ADAM);
     ggml_opt(ctx0, opt_params, e);
     // 
@@ -637,11 +648,6 @@ int main(int argc, char ** argv) {
 
     printf("error_before_opt: %.2f\n", error_before_opt);
     printf("error_after_opt:  %.2f\n", error_after_opt);
-
-    printf("probabilities before optimization:\n");
-    print_probs(before_opt_probs);
-    printf("best samples before optimization:\n");
-    print_tokens(before_opt_best_samples, model.hparams.n_vocab);
 
     printf("probabilities after optimization:\n");
     print_probs(after_opt_probs);
