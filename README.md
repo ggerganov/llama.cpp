@@ -15,7 +15,7 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 - [Download the latest release here](https://github.com/LostRuins/koboldcpp/releases/latest) or clone the repo.
 - Windows binaries are provided in the form of **koboldcpp.exe**, which is a pyinstaller wrapper for a few **.dll** files and **koboldcpp.py**. If you feel concerned, you may prefer to rebuild it yourself with the provided makefiles and scripts.
 - Weights are not included, you can use the official llama.cpp `quantize.exe` to generate them from your official weight files (or download them from other places).
-- To run, execute **koboldcpp.exe** or drag and drop your quantized `ggml_model.bin` file onto the .exe, and then connect with Kobold or Kobold Lite. 
+- To run, execute **koboldcpp.exe** or drag and drop your quantized `ggml_model.bin` file onto the .exe, and then connect with Kobold or Kobold Lite. If you're not on windows, then run the script **KoboldCpp.py** after compiling the libraries.
 - By default, you can connect to http://localhost:5001 
 - You can also run it using the command line `koboldcpp.exe [ggml_model.bin] [port]`. For info, please check `koboldcpp.exe --help` 
 - If you are having crashes or issues, you can try turning off BLAS with the `--noblas` flag. You can also try running in a non-avx2 compatibility mode with `--noavx2`. Lastly, you can try turning off mmap with `--nommap`. 
@@ -23,7 +23,7 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 
 For more information, be sure to run the program with the --help flag.
 
-## Compiling at Windows
+## Compiling on Windows
 - If you want to compile your binaries from source at Windows, the easiest way is:
   - Use the latest release of w64devkit (https://github.com/skeeto/w64devkit). Be sure to use the "vanilla one", not i686 or other different stuff. If you try they will conflit with the precompiled libs!
   - Make sure you are using the w64devkit integrated terminal, then run 'make' at the KoboldCpp source folder. This will create the .dll files.
