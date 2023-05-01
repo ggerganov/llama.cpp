@@ -243,7 +243,8 @@ struct llama_mmap {
 #else
     static constexpr bool SUPPORTED = false;
 
-    llama_mmap(struct llama_file *) {
+    llama_mmap(struct llama_file *, bool prefetch = true) {
+        (void)prefetch;
         throw std::string("mmap not supported");
     }
 #endif
@@ -382,8 +383,13 @@ struct llama_mlock {
 #else
     static constexpr bool SUPPORTED = false;
 
-    void raw_lock(const void * addr, size_t size) {
+    size_t lock_granularity() {
+        return (size_t) 65536;
+    }
+
+    bool raw_lock(const void * addr, size_t size) {
         fprintf(stderr, "warning: mlock not supported on this system\n");
+        return false;
     }
 
     void raw_unlock(const void * addr, size_t size) {}
