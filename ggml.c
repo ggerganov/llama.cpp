@@ -4411,7 +4411,7 @@ void ggml_free(struct ggml_context * ctx) {
 }
 
 size_t ggml_used_mem(const struct ggml_context * ctx) {
-    return ctx->objects_end->offs + ctx->objects_end->size;
+    return ctx->objects_end == NULL ? 0 : ctx->objects_end->offs + ctx->objects_end->size;
 }
 
 size_t ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch) {
