@@ -727,8 +727,7 @@ struct llama_model_loader {
             LLAMA_ASSERT(offset == lt.size);
         } else if (lt.split_type == SPLIT_BY_COLUMNS) {
             // Let's load the data into temporary buffers to ensure the OS performs large loads.
-            std::vector<llama_buffer> tmp_bufs;
-            tmp_bufs.resize(lt.shards.size());
+            std::vector<llama_buffer> tmp_bufs(lt.shards.size());
             for (size_t i = 0; i < lt.shards.size(); i++) {
                 llama_load_tensor_shard & shard = lt.shards.at(i);
                 llama_file & file = file_loaders.at(shard.file_idx)->file;

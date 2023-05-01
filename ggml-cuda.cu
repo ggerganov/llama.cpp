@@ -355,8 +355,18 @@ cudaError_t ggml_cuda_h2d_tensor_2d(void * dst, const struct ggml_tensor * src, 
 }
 
 void * ggml_cuda_host_malloc(size_t size) {
-    void * ptr;
-    CUDA_CHECK(cudaMallocHost((void **) &ptr, size));
+    if (getenv("GGML_CUDA_NO_PINNED") != nullptr) {
+        return nullptr;
+    }
+
+    void * ptr = nullptr;
+    cudaError_t err = cudaMallocHost((void **) &ptr, size);
+    if (err != cudaSuccess) {
+        fprintf(stderr, "WARNING: failed to allocate %.2f MB of pinned memory: %s\n",
+            size/1024.0/1024.0, cudaGetErrorString(err));
+        return nullptr;
+    }
+
     return ptr;
 }
 
