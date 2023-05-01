@@ -2373,7 +2373,7 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
     }
 }
 
-int llama_get_kv_cache_token_count(struct llama_context * ctx) {
+int llama_get_kv_cache_token_count(const struct llama_context * ctx) {
     return ctx->model.kv_self.n;
 }
 
@@ -2387,7 +2387,7 @@ void llama_set_rng_seed(struct llama_context * ctx, int seed) {
 }
 
 // Returns the size of the state
-size_t llama_get_state_size(struct llama_context * ctx) {
+size_t llama_get_state_size(const struct llama_context * ctx) {
     // we don't know size of rng until we actually serialize it. so reserve more than enough memory for its serialized state.
     // for reference, std::mt19937(1337) serializes to 6701 bytes.
     const size_t s_rng_size        = sizeof(size_t);
@@ -2605,15 +2605,15 @@ int llama_tokenize(
     return res.size();
 }
 
-int llama_n_vocab(struct llama_context * ctx) {
+int llama_n_vocab(const struct llama_context * ctx) {
     return ctx->vocab.id_to_token.size();
 }
 
-int llama_n_ctx(struct llama_context * ctx) {
+int llama_n_ctx(const struct llama_context * ctx) {
     return ctx->model.hparams.n_ctx;
 }
 
-int llama_n_embd(struct llama_context * ctx) {
+int llama_n_embd(const struct llama_context * ctx) {
     return ctx->model.hparams.n_embd;
 }
 
@@ -2625,7 +2625,7 @@ float * llama_get_embeddings(struct llama_context * ctx) {
     return ctx->embedding.data();
 }
 
-const char * llama_token_to_str(struct llama_context * ctx, llama_token token) {
+const char * llama_token_to_str(const struct llama_context * ctx, llama_token token) {
     if (token >= llama_n_vocab(ctx)) {
         return nullptr;
     }
