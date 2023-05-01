@@ -181,7 +181,7 @@ maxctx = 2048
 maxlen = 128
 modelbusy = False
 defaultport = 5001
-KcppVersion = "1.16"
+KcppVersion = "1.17"
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
     sys_version = ""
@@ -432,8 +432,10 @@ def show_gui():
         stream = tk.IntVar()
         smartcontext = tk.IntVar()
         launchbrowser = tk.IntVar(value=1)
+        unbantokens = tk.IntVar()
         tk.Checkbutton(root, text='Streaming Mode',variable=stream, onvalue=1, offvalue=0).pack()
         tk.Checkbutton(root, text='Use SmartContext',variable=smartcontext, onvalue=1, offvalue=0).pack()
+        tk.Checkbutton(root, text='Unban Tokens',variable=unbantokens, onvalue=1, offvalue=0).pack()
         tk.Checkbutton(root, text='Launch Browser',variable=launchbrowser, onvalue=1, offvalue=0).pack()
     
         # Create button, it will change label text
@@ -452,6 +454,7 @@ def show_gui():
         args.stream = (stream.get()==1)
         args.smartcontext = (smartcontext.get()==1)
         args.launch = (launchbrowser.get()==1)
+        args.unbantokens = (unbantokens.get()==1)
         selchoice = runchoice.get()
         
         if selchoice==opts[1]:
