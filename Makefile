@@ -16,8 +16,6 @@ endif
 CCV := $(shell $(CC) --version | head -n 1)
 CXXV := $(shell $(CXX) --version | head -n 1)
 
-GIT_INDEX = $(wildcard .git/index)
-
 # Mac OS + Arm can report x86_64
 # ref: https://github.com/ggerganov/whisper.cpp/issues/66#issuecomment-1282546789
 ifeq ($(UNAME_S),Darwin)
@@ -183,77 +181,56 @@ llama.o: llama.cpp ggml.h ggml-cuda.h llama.h llama-util.h
 common.o: examples/common.cpp examples/common.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-clean:
-	rm -vf *.o main quantize quantize-stats perplexity embedding benchmark-matmult build-info.h
+libllama.so: llama.o ggml.o $(OBJS)
+	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
-build-info.h: $(GIT_INDEX)
-	scripts/build-info.sh > $@
+clean:
+	rm -vf *.o main quantize quantize-stats perplexity embedding benchmark-matmult save-load-state build-info.h
 
 #
 # Examples
 #
 
-TARGETS_CPP += main
-DEPS_main := examples/main/main.cpp ggml.o llama.o common.o
-EXEC_main :=\
-@echo;\
-echo "====  Run ./main -h for help.  ====";\
-echo
+main: examples/main/main.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
+	@echo
+	@echo '====  Run ./main -h for help.  ===='
+	@echo
 
-TARGETS_CPP += quantize
-DEPS_quantize := examples/quantize/quantize.cpp ggml.o llama.o
+quantize: examples/quantize/quantize.cpp build-info.h ggml.o llama.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-TARGETS_CPP += quantize-stats
-DEPS_quantize-stats := examples/quantize-stats/quantize-stats.cpp ggml.o llama.o
+quantize-stats: examples/quantize-stats/quantize-stats.cpp build-info.h ggml.o llama.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-TARGETS_CPP += perplexity
-DEPS_perplexity := examples/perplexity/perplexity.cpp ggml.o llama.o common.o
+perplexity: examples/perplexity/perplexity.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-TARGETS_CPP += embedding
-DEPS_embedding := examples/embedding/embedding.cpp ggml.o llama.o common.o
+embedding: examples/embedding/embedding.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-TARGETS_CPP += save-load-state
-DEPS_save-load-state := examples/save-load-state/save-load-state.cpp ggml.o llama.o common.o
+save-load-state: examples/save-load-state/save-load-state.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-TARGETS_CPP += vdot
-DEPS_vdot := pocs/vdot/vdot.cpp ggml.o
-
-#
-# libllama
-#
-
-libllama.so: llama.o ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
+build-info.h: $(wildcard .git/index) scripts/build-info.sh
+	@scripts/build-info.sh > $@.tmp
+	@if ! cmp -s $@.tmp $@; then \
+		mv $@.tmp $@; \
+	else \
+		rm $@.tmp; \
+	fi
 
 #
 # Tests
 #
 
-TARGETS_CPP += benchmark
-DEPS_benchmark := examples/benchmark/benchmark-matmult.cpp build-info.h ggml.o $(OBJS)
-OUTP_benchmark := benchmark-matmult
-EXEC_benchmark := ./benchmark-matmult
+benchmark-matmult: examples/benchmark/benchmark-matmult.cpp build-info.h ggml.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
+	./$@
+
+vdot: pocs/vdot/vdot.cpp ggml.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 .PHONY: tests
 tests:
 	bash ./tests/run-tests.sh
-
-#
-# Templates
-#
-
-# C++ template
-# To use this template:
-# 1. Add your target to the TARGETS variable: TARGETS_CPP += target
-# 2. Set target-specific dependencies:        DEPS_target := source1 dependency1 dependency2 ...
-# 3. Optionally, set target-specific output:  OUTP_target := output_name
-# 4. Optionally, set target-specific command: EXEC_target := command
-define template_cpp
-OUTP_$(1) ?= $(1)
-$(1): $$(DEPS_$(1)) $$(OBJS) build-info.h
-	$$(CXX) $$(CXXFLAGS) $$(filter-out build-info.h,$$^) -o $$(OUTP_$(1)) $$(LDFLAGS)
-	$$(if $$(value EXEC_$(1)),$$(EXEC_$(1)))
-endef
-
-# This iterates through TARGETS_CPP and call the template for each target
-$(foreach target,$(TARGETS_CPP),$(eval $(call template_cpp,$(target))))

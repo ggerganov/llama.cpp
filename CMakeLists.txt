@@ -76,14 +76,25 @@ option(LLAMA_BUILD_EXAMPLES         "llama: build examples" ${LLAMA_STANDALONE})
 # Build info header
 #
 
-# Generate build-info.h initially
+# Write header template to binary dir to keep source directory clean
+file(WRITE "${CMAKE_BINARY_DIR}/BUILD_INFO.h.in" "\
+#ifndef BUILD_INFO_H\n\
+#define BUILD_INFO_H\n\
+\n\
+#define BUILD_NUMBER @BUILD_NUMBER@\n\
+#define BUILD_COMMIT \"@BUILD_COMMIT@\"\n\
+\n\
+#endif // BUILD_INFO_H\n\
+")
+
+# Generate initial build-info.h
 include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
-    # Add a custom target to regenerate build-info.h when .git/index changes
+    # Add a custom target for build-info.h
     add_custom_target(BUILD_INFO ALL DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h")
 
-    # Add a custom command to generate build-info.h when .git/index changes
+    # Add a custom command to rebuild build-info.h when .git/index changes
     add_custom_command(
         OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h"
         COMMENT "Generating build details from Git"

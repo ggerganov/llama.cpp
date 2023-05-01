@@ -1,6 +1,9 @@
-set(HEAD "unknown")
-set(COUNT 0)
+set(TEMPLATE_FILE "${CMAKE_BINARY_DIR}/BUILD_INFO.h.in")
+set(HEADER_FILE "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h")
+set(BUILD_NUMBER 0)
+set(BUILD_COMMIT "unknown")
 
+# Look for git
 find_package(Git)
 if(NOT Git_FOUND)
     execute_process(
@@ -16,33 +19,35 @@ if(NOT Git_FOUND)
     endif()
 endif()
 
+# Get the commit count and hash
 if(Git_FOUND)
     execute_process(
-        COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
+        COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        OUTPUT_VARIABLE TEMP_HEAD
+        OUTPUT_VARIABLE HEAD
         OUTPUT_STRIP_TRAILING_WHITESPACE
         RESULT_VARIABLE GIT_HEAD_RESULT
     )
     execute_process(
         COMMAND ${GIT_EXECUTABLE} rev-list --count HEAD
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        OUTPUT_VARIABLE TEMP_COUNT
+        OUTPUT_VARIABLE COUNT
         OUTPUT_STRIP_TRAILING_WHITESPACE
         RESULT_VARIABLE GIT_COUNT_RESULT
     )
     if(GIT_HEAD_RESULT EQUAL 0 AND GIT_COUNT_RESULT EQUAL 0)
-        set(HEAD ${TEMP_HEAD})
-        set(COUNT ${TEMP_COUNT})
+        set(BUILD_COMMIT ${HEAD})
+        set(BUILD_NUMBER ${COUNT})
     endif()
 endif()
 
-file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h" "\
-#ifndef BUILD_INFO_H\n\
-#define BUILD_INFO_H\n\
-\n\
-#define BUILD_NUMBER ${COUNT}\n\
-#define BUILD_COMMIT \"${HEAD}\"\n\
-\n\
-#endif // BUILD_INFO_H\n\
-")
+# Only write the header if it's changed to prevent unnecessary recompilation
+if(EXISTS ${HEADER_FILE})
+    file(STRINGS ${HEADER_FILE} CONTENTS REGEX "BUILD_COMMIT \"([^\"]*)\"")
+    list(GET CONTENTS 0 EXISTING)
+    if(NOT EXISTING STREQUAL "#define BUILD_COMMIT \"${BUILD_COMMIT}\"")
+        configure_file(${TEMPLATE_FILE} ${HEADER_FILE})
+    endif()
+else()
+    configure_file(${TEMPLATE_FILE} ${HEADER_FILE})
+endif()

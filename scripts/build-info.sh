@@ -3,12 +3,12 @@
 BUILD_NUMBER="0"
 BUILD_COMMIT="unknown"
 
-REV_LIST=$(git rev-list HEAD --count)
+REV_LIST=$(git rev-list --count HEAD)
 if [ $? -eq 0 ]; then
   BUILD_NUMBER=$REV_LIST
 fi
 
-REV_PARSE=$(git rev-parse HEAD)
+REV_PARSE=$(git rev-parse --short HEAD)
 if [ $? -eq 0 ]; then
   BUILD_COMMIT=$REV_PARSE
 fi
