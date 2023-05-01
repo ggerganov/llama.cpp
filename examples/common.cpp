@@ -1,13 +1,18 @@
 #include "common.h"
 
 #include <cassert>
+#include <iostream>
 #include <cstring>
 #include <fstream>
 #include <string>
 #include <iterator>
 #include <algorithm>
 #include <sstream>
-#include <iostream>
+
+#if defined(__APPLE__) && defined(__MACH__)
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#endif
 
 #if defined (_WIN32)
 #include <fcntl.h>
@@ -25,19 +30,43 @@ extern "C" __declspec(dllimport) int __stdcall WideCharToMultiByte(unsigned int 
 #define CP_UTF8 65001
 #endif
 
-bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
-    // determine sensible default number of threads.
-    // std::thread::hardware_concurrency may not be equal to the number of cores, or may return 0.
+int32_t get_num_physical_cores() {
 #ifdef __linux__
     std::ifstream cpuinfo("/proc/cpuinfo");
-    params.n_threads = std::count(std::istream_iterator<std::string>(cpuinfo),
-                                  std::istream_iterator<std::string>(),
-                                  std::string("processor"));
-#endif
-    if (params.n_threads == 0) {
-        params.n_threads = std::max(1, (int32_t) std::thread::hardware_concurrency());
+    std::string line;
+    while (std::getline(cpuinfo, line)) {
+        std::size_t pos = line.find("cpu cores");
+        if (pos != std::string::npos) {
+            pos = line.find(": ", pos);
+            if (pos != std::string::npos) {
+                try {
+                    // Extract the number and return it
+                    return static_cast<int32_t>(std::stoul(line.substr(pos + 2)));
+                } catch (const std::invalid_argument &) {
+                    // Ignore if we could not parse
+                }
+            }
+        }
     }
+#elif defined(__APPLE__) && defined(__MACH__)
+    int32_t num_physical_cores;
+    size_t len = sizeof(num_physical_cores);
+    int result = sysctlbyname("hw.perflevel0.physicalcpu", &num_physical_cores, &len, NULL, 0);
+    if (result == 0) {
+        return num_physical_cores;
+    }
+    result = sysctlbyname("hw.physicalcpu", &num_physical_cores, &len, NULL, 0);
+    if (result == 0) {
+        return num_physical_cores;
+    }
+#elif defined(_WIN32)
+    //TODO: Implement
+#endif
+    unsigned int n_threads = std::thread::hardware_concurrency();
+    return n_threads > 0 ? (n_threads <= 4 ? n_threads : n_threads / 2) : 4;
+}
 
+bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     bool invalid_param = false;
     std::string arg;
     gpt_params default_params;

@@ -197,6 +197,14 @@
 #define GGML_MAX_OPT           4
 #define GGML_DEFAULT_N_THREADS 4
 
+#define GGML_ASSERT(x) \
+    do { \
+        if (!(x)) { \
+            fprintf(stderr, "GGML_ASSERT: %s:%d: %s\n", __FILE__, __LINE__, #x); \
+            abort(); \
+        } \
+    } while (0)
+
 #ifdef  __cplusplus
 extern "C" {
 #endif
@@ -211,6 +219,9 @@ extern "C" {
     // convert FP16 <-> FP32
     GGML_API float       ggml_fp16_to_fp32(ggml_fp16_t x);
     GGML_API ggml_fp16_t ggml_fp32_to_fp16(float x);
+
+    GGML_API void ggml_fp16_to_fp32_row(const ggml_fp16_t * x, float * y, size_t n);
+    GGML_API void ggml_fp32_to_fp16_row(const float * x, ggml_fp16_t * y, size_t n);
 
     struct ggml_object;
     struct ggml_context;
@@ -230,6 +241,20 @@ extern "C" {
         GGML_TYPE_I16,
         GGML_TYPE_I32,
         GGML_TYPE_COUNT,
+    };
+
+    // model file types
+    enum ggml_ftype {
+        GGML_FTYPE_UNKNOWN     = -1,
+        GGML_FTYPE_ALL_F32     = 0,
+        GGML_FTYPE_MOSTLY_F16  = 1,  // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q4_0 = 2,  // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q4_1 = 3,  // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4, // tok_embeddings.weight and output.weight are F16
+        GGML_FTYPE_MOSTLY_Q4_2 = 5,  // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q8_0 = 7,  // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q5_0 = 8,  // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q5_1 = 9,  // except 1d tensors
     };
 
     // available tensor operations:
@@ -384,6 +409,9 @@ extern "C" {
     GGML_API size_t  ggml_element_size(const struct ggml_tensor * tensor);
 
     GGML_API bool    ggml_is_quantized(enum ggml_type type);
+
+    // TODO: temporary until model loading of ggml examples is refactored
+    GGML_API enum ggml_type ggml_ftype_to_ggml_type(enum ggml_ftype ftype);
 
     // main
 

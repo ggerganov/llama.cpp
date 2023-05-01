@@ -1,5 +1,6 @@
 #include <locale.h>
 #include "ggml.h"
+#include "build-info.h"
 #include <assert.h>
 #include <math.h>
 #include <cstring>
@@ -90,9 +91,10 @@ int main(int argc, char ** argv)  {
         }
     }
 
-    // create the ggml context
+    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
     printf("Starting Test\n");
 
+    // create the ggml context
     struct ggml_context * ctx;
     //const int sizex = 4096;
     //const int sizey = 11008;

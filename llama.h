@@ -19,9 +19,11 @@
 #    define LLAMA_API
 #endif
 
-#define LLAMA_FILE_VERSION 1
-#define LLAMA_FILE_MAGIC 0x67676a74 // 'ggjt' in hex
-#define LLAMA_FILE_MAGIC_UNVERSIONED 0x67676d6c // pre-versioned files
+#define LLAMA_FILE_VERSION           1
+#define LLAMA_FILE_MAGIC             'ggjt'
+#define LLAMA_FILE_MAGIC_UNVERSIONED 'ggml'
+#define LLAMA_SESSION_MAGIC          'ggsn'
+#define LLAMA_SESSION_VERSION        0
 
 #ifdef __cplusplus
 extern "C" {
@@ -120,13 +122,13 @@ extern "C" {
                              int   n_threads);
 
     // Returns the number of tokens in the KV cache
-    LLAMA_API int llama_get_kv_cache_token_count(struct llama_context * ctx);
+    LLAMA_API int llama_get_kv_cache_token_count(const struct llama_context * ctx);
 
     // Sets the current rng seed.
     LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, int seed);
 
     // Returns the size in bytes of the state (rng, logits, embedding and kv_cache)
-    LLAMA_API size_t llama_get_state_size(struct llama_context * ctx);
+    LLAMA_API size_t llama_get_state_size(const struct llama_context * ctx);
 
     // Copies the state to the specified destination address.
     // Destination needs to have allocated enough memory.
@@ -138,8 +140,8 @@ extern "C" {
     LLAMA_API size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src);
 
     // Save/load session file
-    LLAMA_API size_t llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out);
-    LLAMA_API size_t llama_save_session_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count);
+    LLAMA_API bool llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out);
+    LLAMA_API bool llama_save_session_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count);
 
     // Run the llama inference to obtain the logits and probabilities for the next token.
     // tokens + n_tokens is the provided batch of new tokens to process
@@ -164,9 +166,9 @@ extern "C" {
                              int   n_max_tokens,
                             bool   add_bos);
 
-    LLAMA_API int llama_n_vocab(struct llama_context * ctx);
-    LLAMA_API int llama_n_ctx  (struct llama_context * ctx);
-    LLAMA_API int llama_n_embd (struct llama_context * ctx);
+    LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
+    LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
+    LLAMA_API int llama_n_embd (const struct llama_context * ctx);
 
     // Token logits obtained from the last call to llama_eval()
     // The logits for the last token are stored in the last row
@@ -180,7 +182,7 @@ extern "C" {
     LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 
     // Token Id -> String. Uses the vocabulary in the provided context
-    LLAMA_API const char * llama_token_to_str(struct llama_context * ctx, llama_token token);
+    LLAMA_API const char * llama_token_to_str(const struct llama_context * ctx, llama_token token);
 
     // Special tokens
     LLAMA_API llama_token llama_token_bos();
