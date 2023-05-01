@@ -12161,7 +12161,7 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
                 (void *) node, color);
 
         if (strlen(node->name) > 0) {
-                fprintf(fp, "%s |", node->name);
+                fprintf(fp, "%s | ", node->name);
         }
         if (ggml_nelements(node) == 1) {
             if (node->type == GGML_TYPE_I8 || node->type == GGML_TYPE_I16 || node->type == GGML_TYPE_I32) {
@@ -12172,7 +12172,7 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
             }
         }
         else {
-            fprintf(fp, "CONST %d [%" PRId64 ", %" PRId64 "]\n", i, node->ne[0], node->ne[1]);
+            fprintf(fp, "CONST %d [%" PRId64 ", %" PRId64 "]", i, node->ne[0], node->ne[1]);
         }
         fprintf(fp, "\"; ]\n");
     }
