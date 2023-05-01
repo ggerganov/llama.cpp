@@ -404,7 +404,7 @@ int main(int argc, char ** argv) {
             // optionally save the session on first sample (for faster prompt loading next time)
             if (!path_session.empty() && need_to_save_session) {
                 need_to_save_session = false;
-                llama_save_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
+                llama_save_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size() - 1); // FIXME: -1 is a hack
             }
 
             llama_token id = 0;
