@@ -68,7 +68,7 @@ static_assert(sizeof(block_q5_0) == sizeof(ggml_fp16_t) + sizeof(uint32_t) + QK5
 typedef struct {
     half d;                 // delta
     half m;                 // min
-    uint32_t qh;            // 5-th bit of quants
+    uint8_t qh[4];          // 5-th bit of quants
     uint8_t qs[QK5_1 / 2];  // nibbles / quants
 } block_q5_1;
 static_assert(sizeof(block_q5_1) == 2 * sizeof(ggml_fp16_t) + sizeof(uint32_t) + QK5_1 / 2, "wrong q5_1 block size/padding");
@@ -189,7 +189,8 @@ static __global__ void dequantize_block_q5_1(const void * vx, float * y) {
 
     const uint8_t * pp = x[i].qs;
 
-    const uint32_t qh = x[i].qh;
+    uint32_t qh;
+    memcpy(&qh, x[i].qh, sizeof(qh));
 
     for (int l = 0; l < QK5_1; l += 2) {
         const uint8_t vi = pp[l/2];
