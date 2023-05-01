@@ -6662,10 +6662,12 @@ static void ggml_compute_forward_dup_same_cont(
     const int ie0 = dr * ith;
     const int ie1 = MIN(ie0 + dr, ne);
 
-    memcpy(
-        ((char *)  dst->data + ie0*nb0),
-        ((char *) src0->data + ie0*nb00),
-        (ie1 - ie0) * GGML_TYPE_SIZE[src0->type]);
+    if (ie0 < ie1) {
+        memcpy(
+            ((char *)  dst->data + ie0*nb0),
+            ((char *) src0->data + ie0*nb00),
+            (ie1 - ie0) * GGML_TYPE_SIZE[src0->type]);
+    }
 
 }    
 static void ggml_compute_forward_dup_f16(
