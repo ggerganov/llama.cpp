@@ -28,7 +28,7 @@ models/*
 /result
 /perplexity
 /embedding
-/benchmark-q4_0-matmult
+/benchmark-matmult
 /vdot
 /Pipfile
 
