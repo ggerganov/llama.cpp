@@ -1,5 +1,6 @@
 #include "ggml.h"
 #include "llama.h"
+#include "build-info.h"
 
 #include <cstdio>
 #include <map>
@@ -49,6 +50,8 @@ int main(int argc, char ** argv) {
     } else {
         ftype = (enum llama_ftype)atoi(argv[3]);
     }
+
+    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
 
     int nthread = argc > 4 ? atoi(argv[4]) : 0;
 
