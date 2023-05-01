@@ -7,8 +7,11 @@
 #include <string>
 #include <vector>
 #include <random>
+#if __STDCPP_THREADS__ || _GLIBCXX_HAS_GTHREADS
 #include <thread>
+#endif
 #include <unordered_map>
+#include <chrono>
 
 //
 // CLI argument parsing

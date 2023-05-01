@@ -158,7 +158,7 @@ int main(int argc, char ** argv) {
     {
         fprintf(stderr, "\n");
         fprintf(stderr, "system_info: n_threads = %d / %d | %s\n",
-                params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
+                params.n_threads, get_num_physical_cores(), llama_print_system_info());
     }
 
     perplexity(ctx, params);

@@ -24,9 +24,13 @@
 #include <memory>
 #include <algorithm>
 #include <initializer_list>
+#if __STDCPP_THREADS__ || _GLIBCXX_HAS_GTHREADS
 #include <thread>
 #include <atomic>
 #include <mutex>
+#else
+#warning "C++ standard library is configured for single threading."
+#endif
 #include <sstream>
 #include <numeric>
 
@@ -1889,7 +1893,11 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     };
 
     if (nthread <= 0) {
+#if __STDCPP_THREADS__ || _GLIBCXX_HAS_GTHREADS
         nthread = std::thread::hardware_concurrency();
+#else
+        nthread = 1;
+#endif
     }
 
     std::unique_ptr<llama_model_loader> model_loader(new llama_model_loader(fname_inp.c_str(), /*use_mmap*/ false,
@@ -1900,8 +1908,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     size_t total_size_new = 0;
     std::vector<int64_t> hist_all(1 << 4, 0);
 
+#if __STDCPP_THREADS__ || _GLIBCXX_HAS_GTHREADS
     std::vector<std::thread> workers;
     std::mutex mutex;
+#endif
 
     size_t idx = 0;
     for (llama_load_tensor & tensor : model_loader->tensors_map.tensors) {
@@ -1969,29 +1979,37 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             } else {
                 size_t counter = 0;
                 new_size = 0;
-                auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, nelements, chunk_size] () {
+                auto compute = [&, new_type, f32_data, new_data, nelements, chunk_size] () {
                     std::vector<int64_t> local_hist;
                     size_t local_size = 0;
                     while (true) {
-                        std::unique_lock<std::mutex> lock(mutex);
-                        size_t first = counter; counter += chunk_size;
-                        if (first >= nelements) {
-                            if (!local_hist.empty()) {
-                                for (int j=0; j<int(local_hist.size()); ++j) hist_cur[j] += local_hist[j];
-                                new_size += local_size;
+                        size_t first;
+                        {
+#if __STDCPP_THREADS__ || _GLIBCXX_HAS_GTHREADS
+                            std::unique_lock<std::mutex> lock(mutex);
+#endif
+                            first = counter; counter += chunk_size;
+                            if (first >= nelements) {
+                                if (!local_hist.empty()) {
+                                    for (int j=0; j<int(local_hist.size()); ++j) hist_cur[j] += local_hist[j];
+                                    new_size += local_size;
+                                }
+                                break;
                             }
-                            break;
                         }
-                        lock.unlock();
                         size_t last = std::min(nelements, first + chunk_size);
                         if (local_hist.empty()) local_hist.resize(hist_cur.size(), 0);
                         local_size += ggml_quantize_chunk(new_type, f32_data, new_data, first, last - first, local_hist.data());
                     }
                 };
+#if __STDCPP_THREADS__ || _GLIBCXX_HAS_GTHREADS
                 if (int(workers.size()) < nthread_use - 1) workers.resize(nthread_use - 1);
                 for (int it = 0; it < nthread_use - 1; ++it) workers[it] = std::thread(compute);
                 compute();
                 for (int it = 0; it < nthread_use - 1; ++it) workers[it].join();
+#else
+                compute();
+#endif
             }
 
             printf("size = %8.2f MB -> %8.2f MB | hist: ", tensor.size/1024.0/1024.0, new_size/1024.0/1024.0);
