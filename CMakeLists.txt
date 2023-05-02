@@ -90,19 +90,9 @@ file(WRITE "${CMAKE_BINARY_DIR}/BUILD_INFO.h.in" "\
 # Generate initial build-info.h
 include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git/")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
     # Add a custom target for build-info.h
     add_custom_target(BUILD_INFO ALL DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h")
-
-    # Add a custom command to rebuild build-info.h when .git/index changes
-    add_custom_command(
-        OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h"
-        COMMENT "Generating build details from Git"
-        COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake"
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/.git/index"
-        VERBATIM
-    )
 else()
     message(WARNING "Git repository not found; to enable automatic generation of build info, make sure Git is installed and the project is a Git repository.")
 endif()
