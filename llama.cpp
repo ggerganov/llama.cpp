@@ -2496,30 +2496,31 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dest) {
         memcpy(out, &kv_ntok, sizeof(kv_ntok)); out += sizeof(kv_ntok);
 
         if (kv_size) {
-            {
-                // copy k: k layout is n_layer > n_ctx (tokens) > n_embd
-                const uint8_t * k_data   = (uint8_t *) kv_self.k->data;
-                const size_t    elt_size = ggml_element_size(kv_self.k);
+            const size_t elt_size = ggml_element_size(kv_self.k);
+            char buffer[4096];
+            ggml_context * cpy_ctx = ggml_init({ sizeof(buffer), buffer, .no_alloc = true });
+            ggml_cgraph gf{};
+            gf.n_threads = 1;
 
-                for (int il = 0; il < n_layer; il++) {
-                    const size_t offset = il * n_ctx * n_embd * elt_size;
-                    const size_t size   =      kv_ntok * n_embd * elt_size;
-                    memcpy(out, k_data + offset, size); out += size;
-                }
-            }
+            ggml_tensor * kout3d = ggml_new_tensor_3d(cpy_ctx, kv_self.k->type, n_embd, kv_ntok, n_layer);
+            kout3d->data = out;
+            out += ggml_nbytes(kout3d);
 
-            {
-                // copy v: v layout is n_layer > n_embd > n_ctx (tokens)
-                const uint8_t * v_data       = (uint8_t *) kv_self.v->data;
-                const size_t    elt_size     = ggml_element_size(kv_self.v);
-                const int       n_layer_embd = n_layer * n_embd;
+            ggml_tensor * vout3d = ggml_new_tensor_3d(cpy_ctx, kv_self.v->type, kv_ntok, n_embd, n_layer);
+            vout3d->data = out;
+            out += ggml_nbytes(vout3d);
 
-                for (int ile = 0; ile < n_layer_embd; ile++) {
-                    const size_t offset = ile * n_ctx * elt_size;
-                    const size_t size   =       kv_ntok * elt_size;
-                    memcpy(out, v_data + offset, size); out += size;
-                }
-            }
+            ggml_tensor * k3d = ggml_view_3d(cpy_ctx, kv_self.k,
+                n_embd, kv_ntok, n_layer,
+                elt_size*n_embd, elt_size*n_embd*n_ctx, 0);
+
+            ggml_tensor * v3d = ggml_view_3d(cpy_ctx, kv_self.v,
+                kv_ntok, n_embd, n_layer,
+                elt_size*n_ctx, elt_size*n_ctx*n_embd, 0);
+
+            ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, k3d, kout3d));
+            ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, v3d, vout3d));
+            ggml_graph_compute(cpy_ctx, &gf);
         }
     }
 
@@ -2599,31 +2600,31 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
         if (kv_size) {
             LLAMA_ASSERT(kv_self.buf.size == kv_size);
 
-            {
-                // set k data: k layout is n_layer > n_ctx (tokens) > n_embd
-                      uint8_t * k_data   = (uint8_t *) kv_self.k->data;
-                const size_t    elt_size = ggml_element_size(kv_self.k);
+            const size_t elt_size = ggml_element_size(kv_self.k);
+            char buffer[4096];
+            ggml_context * cpy_ctx = ggml_init({ sizeof(buffer), buffer, .no_alloc = true });
+            ggml_cgraph gf{};
+            gf.n_threads = 1;
 
-                for (int il = 0; il < n_layer; il++) {
-                    const size_t offset = il * n_ctx * n_embd * elt_size;
-                    const size_t size   =      kv_ntok * n_embd * elt_size;
-                    memcpy(k_data + offset, in, size); in += size;
-                }
-            }
+            ggml_tensor * kin3d = ggml_new_tensor_3d(cpy_ctx, kv_self.k->type, n_embd, kv_ntok, n_layer);
+            kin3d->data = (void *) in;
+            in += ggml_nbytes(kin3d);
 
-            {
-                // set v data: v layout is n_layer > n_embd > n_ctx (tokens)
-                      uint8_t * v_data       = (uint8_t *) kv_self.v->data;
-                const size_t    elt_size     = ggml_element_size(kv_self.v);
-                const int       n_layer_embd = n_layer * n_embd;
+            ggml_tensor * vin3d = ggml_new_tensor_3d(cpy_ctx, kv_self.v->type, kv_ntok, n_embd, n_layer);
+            vin3d->data = (void *) in;
+            in += ggml_nbytes(vin3d);
 
-                for (int ile = 0; ile < n_layer_embd; ile++) {
-                    const size_t offset = ile * n_ctx * elt_size;
-                    const size_t size   =       kv_ntok * elt_size;
-                    memcpy(v_data + offset, in, size); in += size;
-                }
-            }
+            ggml_tensor * k3d = ggml_view_3d(cpy_ctx, kv_self.k,
+                n_embd, kv_ntok, n_layer,
+                elt_size*n_embd, elt_size*n_embd*n_ctx, 0);
 
+            ggml_tensor * v3d = ggml_view_3d(cpy_ctx, kv_self.v,
+                kv_ntok, n_embd, n_layer,
+                elt_size*n_ctx, elt_size*n_ctx*n_embd, 0);
+
+            ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, kin3d, k3d));
+            ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, vin3d, v3d));
+            ggml_graph_compute(cpy_ctx, &gf);
         }
 
         ctx->model.kv_self.n = kv_ntok;
