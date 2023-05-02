@@ -38,9 +38,9 @@ float tensor_sum_elements(struct ggml_tensor * tensor) {
 
 #define TENSOR_TYPE_AS_STR(TYPE) TYPE == GGML_TYPE_F32 ? "FP32" : TYPE == GGML_TYPE_F16 ? "FP16" : TYPE == GGML_TYPE_Q4_0 ? "Q4_0" : TYPE == GGML_TYPE_Q4_1 ? "Q4_1" : "UNKNOWN"
 
-#define TENSOR_DUMP(TENSOR) printf("%15s: type = %i (%5s) ne = %5ld x %5ld x %5ld, nb = (%5li, %5li, %5li) - ", #TENSOR, \
+#define TENSOR_DUMP(TENSOR) printf("%15s: type = %i (%5s) ne = %5d x %5d x %5d, nb = (%5li, %5li, %5li) - ", #TENSOR, \
         TENSOR->type,TENSOR_TYPE_AS_STR(TENSOR->type),\
-        TENSOR->ne[0], TENSOR->ne[1], TENSOR->ne[2], TENSOR->nb[0], TENSOR->nb[1], TENSOR->nb[2]); \
+        (int) TENSOR->ne[0], (int) TENSOR->ne[1], (int) TENSOR->ne[2], TENSOR->nb[0], TENSOR->nb[1], TENSOR->nb[2]); \
     { float sum = tensor_sum_elements(TENSOR); printf("Sum of tensor %s is %6.2f\n",#TENSOR, sum); }
 
 struct benchmark_params_struct {
@@ -138,7 +138,7 @@ int main(int argc, char ** argv)  {
     ctx = ggml_init(params);
     if (!ctx) {
         fprintf(stderr, "%s: ggml_init() failed\n", __func__);
-        return false;
+        return 1;
     }
 
 

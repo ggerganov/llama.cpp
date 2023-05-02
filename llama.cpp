@@ -1702,7 +1702,7 @@ void llama_sample_temperature(struct llama_context * ctx, llama_token_data_array
     }
 }
 
-void llama_sample_repetition_penalty(struct llama_context * ctx, llama_token_data_array * candidates, llama_token * last_tokens, size_t last_tokens_size, float penalty) {
+void llama_sample_repetition_penalty(struct llama_context * ctx, llama_token_data_array * candidates, const llama_token * last_tokens, size_t last_tokens_size, float penalty) {
     if (last_tokens_size == 0 || penalty == 1.0f) {
         return;
     }
@@ -1731,7 +1731,7 @@ void llama_sample_repetition_penalty(struct llama_context * ctx, llama_token_dat
     }
 }
 
-void llama_sample_frequency_and_presence_penalties(struct llama_context * ctx, llama_token_data_array * candidates, llama_token * last_tokens_p, size_t last_tokens_size, float alpha_frequency, float alpha_presence) {
+void llama_sample_frequency_and_presence_penalties(struct llama_context * ctx, llama_token_data_array * candidates, const llama_token * last_tokens_p, size_t last_tokens_size, float alpha_frequency, float alpha_presence) {
     if (last_tokens_size == 0 || (alpha_frequency == 0.0f && alpha_presence == 0.0f)) {
         return;
     }
