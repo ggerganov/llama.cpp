@@ -298,7 +298,7 @@ int main(int argc, char ** argv) {
     }
 
     bool is_antiprompt = false;
-    bool input_noecho  = false;
+    bool input_echo  = true;
 
     // HACK - because session saving incurs a non-negligible delay, for now skip re-saving session
     // if we loaded a session with at least 75% similarity. It's currently just used to speed up the
@@ -485,7 +485,7 @@ int main(int argc, char ** argv) {
             embd.push_back(id);
 
             // echo this to console
-            input_noecho = false;
+            input_echo = true;
 
             // decrement remaining sampling budget
             --n_remain;
@@ -503,14 +503,14 @@ int main(int argc, char ** argv) {
         }
 
         // display text
-        if (!input_noecho) {
+        if (input_echo) {
             for (auto id : embd) {
                 printf("%s", llama_token_to_str(ctx, id));
             }
             fflush(stdout);
         }
         // reset color to default if we there is no pending user input
-        if (!input_noecho && (int)embd_inp.size() == n_consumed) {
+        if (input_echo && (int)embd_inp.size() == n_consumed) {
             set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
         }
 
@@ -605,7 +605,7 @@ int main(int argc, char ** argv) {
                     n_remain -= line_inp.size();
                 }
 
-                input_noecho = true; // do not echo this again
+                input_echo = false; // do not echo this again
             }
 
             if (n_past > 0) {
