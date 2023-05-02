@@ -18,6 +18,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include <intrin.h>
 #include <fcntl.h>
 #include <io.h>
 #define CP_UTF8 65001
@@ -53,14 +54,13 @@ int32_t get_num_physical_cores() {
         return num_physical_cores;
     }
 #elif defined(_WIN32)
-    SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *buffer = nullptr;
-    DWORD length = 0;
-
     // Call GetLogicalProcessorInformationEx with a nullptr buffer to get the required buffer length
+    DWORD length = 0;
     GetLogicalProcessorInformationEx(RelationAll, nullptr, &length);
 
     // Allocate memory for the buffer
-    buffer = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *>(new char[length]);
+    std::unique_ptr<char[]> buffer_ptr(new char[length]);
+    char* buffer = buffer_ptr.get();
 
     // Things to count
     unsigned int physical_cores = 0;
@@ -71,11 +71,14 @@ int32_t get_num_physical_cores() {
     unsigned int logical_efficiency_cores = 0;
 
     // Call GetLogicalProcessorInformationEx again with the allocated buffer
-    if (GetLogicalProcessorInformationEx(RelationAll, buffer, &length)) {
+    if (GetLogicalProcessorInformationEx(
+            RelationAll,
+            reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *>(buffer),
+            &length)) {
         DWORD offset = 0;
 
         while (offset < length) {
-            auto info = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *>(reinterpret_cast<char *>(buffer) + offset);
+            auto info = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *>(buffer + offset);
 
             if (info->Relationship == RelationProcessorCore) {
                 physical_cores += info->Processor.GroupCount;
@@ -110,8 +113,6 @@ int32_t get_num_physical_cores() {
     } else {
         fprintf(stderr, "Failed to get processor information. Error: %u\n", GetLastError());
     }
-
-    delete[] buffer;
 
     if (physical_performance_cores > 0) {
         return static_cast<int32_t>(physical_performance_cores);
