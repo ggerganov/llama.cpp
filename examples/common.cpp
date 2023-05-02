@@ -405,6 +405,37 @@ std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::s
     return res;
 }
 
+struct llama_context * llama_init_from_gpt_params(const gpt_params & params) {
+    auto lparams = llama_context_default_params();
+
+    lparams.n_ctx      = params.n_ctx;
+    lparams.n_parts    = params.n_parts;
+    lparams.seed       = params.seed;
+    lparams.f16_kv     = params.memory_f16;
+    lparams.use_mmap   = params.use_mmap;
+    lparams.use_mlock  = params.use_mlock;
+
+    llama_context * lctx = llama_init_from_file(params.model.c_str(), lparams);
+
+    if (lctx == NULL) {
+        fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
+        return NULL;
+    }
+
+    if (!params.lora_adapter.empty()) {
+        int err = llama_apply_lora_from_file(lctx,
+                                             params.lora_adapter.c_str(),
+                                             params.lora_base.empty() ? NULL : params.lora_base.c_str(),
+                                             params.n_threads);
+        if (err != 0) {
+            fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
+            return NULL;
+        }
+    }
+
+    return lctx;
+}
+
 /* Keep track of current color of output, and emit ANSI code if it changes. */
 void set_console_color(console_state & con_st, console_color_t color) {
     if (con_st.use_color && con_st.color != color) {
