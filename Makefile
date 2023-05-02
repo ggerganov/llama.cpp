@@ -213,7 +213,7 @@ save-load-state: examples/save-load-state/save-load-state.cpp build-info.h ggml.
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 build-info.h: $(wildcard .git/index) scripts/build-info.sh
-	@scripts/build-info.sh > $@.tmp
+	@sh scripts/build-info.sh > $@.tmp
 	@if ! cmp -s $@.tmp $@; then \
 		mv $@.tmp $@; \
 	else \
