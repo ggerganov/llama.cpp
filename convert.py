@@ -750,7 +750,7 @@ def lazy_load_safetensors_file(fp: IO[bytes], path: Path) -> ModelPlus:
             return UnquantizedTensor(np.frombuffer(buf, dtype=numpy_dtype).reshape(shape))
         description = f'safetensors begin={begin} end={end} type={data_type} path={path}'
         return LazyTensor(load, shape, data_type, description)
-    model = {name: convert(info) for (name, info) in header.items()}
+    model = {name: convert(info) for (name, info) in header.items() if name != '__metadata__'}
     return ModelPlus(model=model, paths=[path], format='safetensors', vocab=None)
 
 
@@ -1037,6 +1037,10 @@ def load_some_model(path: Path) -> ModelPlus:
     if path.is_dir():
         globs = ["consolidated.00.pth", "pytorch_model-00001-of-*.bin", "*.pt"]
         files = [file for glob in globs for file in path.glob(glob)]
+        if not files:
+            # Check if it's a set of safetensors files
+            globs = ["model-00001-of-*.safetensors"]
+            files = [file for glob in globs for file in path.glob(glob)]
         if not files:
             # Try GGML too, but with lower priority, since if both a non-GGML
             # model and a GGML model exist in the same directory, we assume the
