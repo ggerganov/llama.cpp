@@ -47,3 +47,5 @@ zig-cache/
 ppl-*.txt
 
 examples/jeopardy/results.txt
+koboldcpp.so
+koboldcpp_noavx2.so
