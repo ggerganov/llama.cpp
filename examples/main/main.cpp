@@ -298,7 +298,7 @@ int main(int argc, char ** argv) {
     }
 
     bool is_antiprompt = false;
-    bool input_echo  = true;
+    bool input_echo    = true;
 
     // HACK - because session saving incurs a non-negligible delay, for now skip re-saving session
     // if we loaded a session with at least 75% similarity. It's currently just used to speed up the
@@ -306,9 +306,9 @@ int main(int argc, char ** argv) {
     bool need_to_save_session = !path_session.empty() && n_matching_session_tokens < (embd_inp.size() * 3 / 4);
 
 
-    int n_past     = 0;
-    int n_remain   = params.n_predict;
-    int n_consumed = 0;
+    int n_past             = 0;
+    int n_remain           = params.n_predict;
+    int n_consumed         = 0;
     int n_session_consumed = 0;
 
     // the first thing we will do is to output the prompt, so set color accordingly
@@ -413,7 +413,7 @@ int main(int argc, char ** argv) {
             llama_token id = 0;
 
             {
-                auto logits = llama_get_logits(ctx);
+                auto logits  = llama_get_logits(ctx);
                 auto n_vocab = llama_n_vocab(ctx);
 
                 // Apply params.logit_bias map
