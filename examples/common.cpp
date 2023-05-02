@@ -60,7 +60,7 @@ int32_t get_num_physical_cores() {
     GetLogicalProcessorInformationEx(RelationAll, nullptr, &length);
 
     // Allocate memory for the buffer
-    buffer = static_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *>(malloc(length));
+    buffer = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *>(new char[length]);
 
     // Things to count
     unsigned int physical_cores = 0;
@@ -108,10 +108,10 @@ int32_t get_num_physical_cores() {
                 physical_cores, physical_performance_cores, physical_efficiency_cores,
                 logical_cores, logical_performance_cores, logical_efficiency_cores);
     } else {
-        printf("Failed to get processor information. Error: %u\n", GetLastError());
+        fprintf(stderr, "Failed to get processor information. Error: %u\n", GetLastError());
     }
 
-    free(buffer);
+    delete[] buffer;
 
     if (physical_performance_cores > 0) {
         return static_cast<int32_t>(physical_performance_cores);
