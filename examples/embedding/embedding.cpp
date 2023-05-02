@@ -21,7 +21,7 @@ int main(int argc, char ** argv) {
 
     fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
 
-    if (params.seed <= 0) {
+    if (params.seed < 0) {
         params.seed = time(NULL);
     }
 
