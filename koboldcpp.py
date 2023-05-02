@@ -1,4 +1,4 @@
-# A hacky little script from Concedo that exposes llama.cpp function bindings 
+# A hacky little script from Concedo that exposes llama.cpp function bindings
 # allowing it to be used via a simulated kobold api endpoint
 # generation delay scales linearly with original prompt length.
 
@@ -18,6 +18,7 @@ class load_model_inputs(ctypes.Structure):
                 ("model_filename", ctypes.c_char_p),
                 ("lora_filename", ctypes.c_char_p),
                 ("use_mmap", ctypes.c_bool),
+                ("use_mlock", ctypes.c_bool),
                 ("use_smartcontext", ctypes.c_bool),
                 ("unban_tokens", ctypes.c_bool),
                 ("clblast_info", ctypes.c_int),
@@ -50,7 +51,7 @@ def file_exists(filename):
     return os.path.exists(os.path.join(getdirpath(), filename))
 
 def pick_existant_file(ntoption,nonntoption):
-    ntexist = file_exists(ntoption) 
+    ntexist = file_exists(ntoption)
     nonntexist = file_exists(nonntoption)
     if os.name == 'nt':
         if nonntexist and not ntexist:
@@ -69,19 +70,19 @@ lib_clblast = pick_existant_file("koboldcpp_clblast.dll","koboldcpp_clblast.so")
 
 
 def init_library():
-    global handle        
+    global handle
     global lib_default,lib_noavx2,lib_openblas,lib_openblas_noavx2,lib_clblast
 
     libname = ""
     use_blas = False # if true, uses OpenBLAS for acceleration. libopenblas.dll must exist in the same dir.
     use_clblast = False #uses CLBlast instead
     use_noavx2 = False #uses openblas with no avx2 instructions
-    
+
     if args.noavx2:
         use_noavx2 = True
         if not file_exists(lib_openblas_noavx2) or (os.name=='nt' and not file_exists("libopenblas.dll")):
-            print("Warning: OpenBLAS library file not found. Non-BLAS library will be used.")     
-        elif args.noblas:            
+            print("Warning: OpenBLAS library file not found. Non-BLAS library will be used.")
+        elif args.noblas:
             print("Attempting to use non-avx2 compatibility library without OpenBLAS.")
         else:
             use_blas = True
@@ -100,7 +101,7 @@ def init_library():
         else:
             use_blas = True
             print("Attempting to use OpenBLAS library for faster prompt ingestion. A compatible libopenblas will be required.")
-    
+
     if use_noavx2:
         if use_blas:
             libname = lib_openblas_noavx2
@@ -120,11 +121,11 @@ def init_library():
     #OpenBLAS should provide about a 2x speedup on prompt ingestion if compatible.
     handle = ctypes.CDLL(os.path.join(dir_path, libname))
 
-    handle.load_model.argtypes = [load_model_inputs] 
+    handle.load_model.argtypes = [load_model_inputs]
     handle.load_model.restype = ctypes.c_bool
     handle.generate.argtypes = [generation_inputs, ctypes.c_wchar_p] #apparently needed for osx to work. i duno why they need to interpret it that way but whatever
     handle.generate.restype = generation_outputs
-    
+
 def load_model(model_filename):
     inputs = load_model_inputs()
     inputs.model_filename = model_filename.encode("UTF-8")
@@ -134,6 +135,7 @@ def load_model(model_filename):
     inputs.threads = args.threads
     inputs.f16_kv = True
     inputs.use_mmap = (not args.nommap)
+    inputs.use_mlock = args.usemlock
     if args.lora and args.lora!="":
         inputs.use_mmap = False
     inputs.use_smartcontext = args.smartcontext
@@ -212,31 +214,31 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 print("Force redirect to streaming mode, as --stream is set.")
                 return None
-            
+
             if self.embedded_kailite is None:
                 response_body = (f"Embedded Kobold Lite is not found.<br>You will have to connect via the main KoboldAI client, or <a href='https://lite.koboldai.net?local=1&port={self.port}'>use this URL</a> to connect.").encode()
             else:
                 response_body = self.embedded_kailite
 
         elif self.path.endswith(('/api/v1/model', '/api/latest/model')):
-            response_body = (json.dumps({'result': friendlymodelname }).encode())       
+            response_body = (json.dumps({'result': friendlymodelname }).encode())
 
-        elif self.path.endswith(('/api/v1/config/max_length', '/api/latest/config/max_length')):           
+        elif self.path.endswith(('/api/v1/config/max_length', '/api/latest/config/max_length')):
             response_body = (json.dumps({"value": maxlen}).encode())
 
         elif self.path.endswith(('/api/v1/config/max_context_length', '/api/latest/config/max_context_length')):
             response_body = (json.dumps({"value": maxctx}).encode())
-        
-        elif self.path.endswith(('/api/v1/config/soft_prompt', '/api/latest/config/soft_prompt')):             
+
+        elif self.path.endswith(('/api/v1/config/soft_prompt', '/api/latest/config/soft_prompt')):
             response_body = (json.dumps({"value":""}).encode())
-           
+
         elif self.path.endswith(('/api/v1/config/soft_prompts_list', '/api/latest/config/soft_prompts_list')):
             response_body = (json.dumps({"values": []}).encode())
-          
+
         elif self.path.endswith(('/api/v1/info/version', '/api/latest/info/version')):
             response_body = (json.dumps({"result":"1.2.2"}).encode())
-        
-        elif self.path.endswith(('/api/extra/version')):          
+
+        elif self.path.endswith(('/api/extra/version')):
             response_body = (json.dumps({"result":"KoboldCpp","version":KcppVersion}).encode())
 
         if response_body is None:
@@ -250,11 +252,11 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(response_body)
         return
-    
+
     def do_POST(self):
         global modelbusy
         content_length = int(self.headers['Content-Length'])
-        body = self.rfile.read(content_length)  
+        body = self.rfile.read(content_length)
         basic_api_flag = False
         kai_api_flag = False
         self.path = self.path.rstrip('/')
@@ -281,16 +283,16 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             except ValueError as e:
                 self.send_response(503)
                 self.end_headers()
-                return       
+                return
             print("\nInput: " + json.dumps(genparams))
-            
+
             modelbusy = True
             if kai_api_flag:
                 fullprompt = genparams.get('prompt', "")
             else:
                 fullprompt = genparams.get('text', "")
             newprompt = fullprompt
-            
+
             recvtxt = ""
             res = {}
             if kai_api_flag:
@@ -309,7 +311,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     stop_sequence=genparams.get('stop_sequence', [])
                     )
                 print("\nOutput: " + recvtxt)
-                res = {"results": [{"text": recvtxt}]}                            
+                res = {"results": [{"text": recvtxt}]}
             else:
                 recvtxt = generate(
                     prompt=newprompt,
@@ -327,21 +329,21 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 print("\nOutput: " + recvtxt)
                 res = {"data": {"seqs":[recvtxt]}}
 
-            try:  
+            try:
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(json.dumps(res).encode())
             except:
                 print("Generate: The response could not be sent, maybe connection was terminated?")
             modelbusy = False
-            return    
+            return
         self.send_response(404)
         self.end_headers()
 
     def do_OPTIONS(self):
         self.send_response(200)
         self.end_headers()
-    
+
     def do_HEAD(self):
         self.send_response(200)
         self.end_headers()
@@ -354,7 +356,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
         else:
             self.send_header('Content-type', 'text/html')
-           
+
         return super(ServerRequestHandler, self).end_headers()
 
 
@@ -418,15 +420,15 @@ def show_gui():
         # Adjust size
         root.geometry("460x320")
         root.title("KoboldCpp v"+KcppVersion)
-        tk.Label(root, text = "KoboldCpp Easy Launcher", 
-                font = ("Arial", 12)).pack(pady=4)       
+        tk.Label(root, text = "KoboldCpp Easy Launcher",
+                font = ("Arial", 12)).pack(pady=4)
         tk.Label(root, text = "(Note: KoboldCpp only works with GGML model formats!)",
                 font = ("Arial", 9)).pack()
-        
+
 
         opts = ["Use OpenBLAS","Use CLBLast GPU #1","Use CLBLast GPU #2","Use CLBLast GPU #3","Use No BLAS","Use OpenBLAS (Old Devices)","Use No BLAS (Old Devices)"]
         runchoice = tk.StringVar()
-        runchoice.set("Use OpenBLAS")      
+        runchoice.set("Use OpenBLAS")
         tk.OptionMenu( root , runchoice , *opts ).pack()
 
         stream = tk.IntVar()
@@ -437,26 +439,26 @@ def show_gui():
         tk.Checkbutton(root, text='Use SmartContext',variable=smartcontext, onvalue=1, offvalue=0).pack()
         tk.Checkbutton(root, text='Unban Tokens',variable=unbantokens, onvalue=1, offvalue=0).pack()
         tk.Checkbutton(root, text='Launch Browser',variable=launchbrowser, onvalue=1, offvalue=0).pack()
-    
+
         # Create button, it will change label text
-        tk.Button( root , text = "Launch", font = ("Impact", 18), bg='#54FA9B', command = guilaunch ).pack(pady=10)        
+        tk.Button( root , text = "Launch", font = ("Impact", 18), bg='#54FA9B', command = guilaunch ).pack(pady=10)
         tk.Label(root, text = "(Please use the Command Line for more advanced options)",
-                font = ("Arial", 9)).pack() 
-        
+                font = ("Arial", 9)).pack()
+
         root.mainloop()
 
         if launchclicked==False:
             print("Exiting by user request.")
             time.sleep(2)
             sys.exit()
-        
+
         #load all the vars
         args.stream = (stream.get()==1)
         args.smartcontext = (smartcontext.get()==1)
         args.launch = (launchbrowser.get()==1)
         args.unbantokens = (unbantokens.get()==1)
         selchoice = runchoice.get()
-        
+
         if selchoice==opts[1]:
             args.useclblast = [0,0]
         if selchoice==opts[2]:
@@ -470,11 +472,11 @@ def show_gui():
         if selchoice==opts[6]:
             args.nonoavx2 = True
             args.noblas = True
-            
+
         root = tk.Tk()
         root.attributes("-alpha", 0)
         args.model_param = askopenfilename(title="Select ggml model .bin files")
-        root.destroy()     
+        root.destroy()
         if not args.model_param:
             print("\nNo ggml model file was selected. Exiting.")
             time.sleep(2)
@@ -491,11 +493,11 @@ def show_gui():
             sys.exit(2)
 
 def main(args):
-    
-    embedded_kailite = None 
+
+    embedded_kailite = None
     if not args.model_param:
         args.model_param = args.model
-    if not args.model_param:     
+    if not args.model_param:
         #give them a chance to pick a file
         print("For command line arguments, please refer to --help")
         print("Otherwise, please manually select ggml file:")
@@ -525,7 +527,7 @@ def main(args):
         except Exception as ex:
              print("Error, Could not change process priority: " + str(ex))
 
-    init_library() # Note: if blas does not exist and is enabled, program will crash. 
+    init_library() # Note: if blas does not exist and is enabled, program will crash.
     print("==========")
     time.sleep(1)
     if not os.path.exists(args.model_param):
@@ -568,10 +570,10 @@ def main(args):
     print(f"Starting Kobold HTTP Server on port {args.port}")
     epurl = ""
     if args.host=="":
-        epurl = f"http://localhost:{args.port}"   
+        epurl = f"http://localhost:{args.port}"
     else:
-        epurl = f"http://{args.host}:{args.port}"  
-    
+        epurl = f"http://{args.host}:{args.port}"
+
     if args.launch:
         try:
             import webbrowser as wb
@@ -596,7 +598,7 @@ if __name__ == '__main__':
 
     #os.environ["OMP_NUM_THREADS"] = '12'
     # psutil.cpu_count(logical=False)
-    physical_core_limit = 1 
+    physical_core_limit = 1
     if os.cpu_count()!=None and os.cpu_count()>1:
         physical_core_limit = int(os.cpu_count()/2)
     default_threads = (physical_core_limit if physical_core_limit<=3 else max(3,physical_core_limit-1))
@@ -608,6 +610,7 @@ if __name__ == '__main__':
     parser.add_argument("--smartcontext", help="Reserving a portion of context to try processing less frequently.", action='store_true')
     parser.add_argument("--unbantokens", help="Normally, KoboldAI prevents certain tokens such as EOS and Square Brackets. This flag unbans them.", action='store_true')
     parser.add_argument("--nommap", help="If set, do not use mmap to load newer models", action='store_true')
+    parser.add_argument("--usemlock", help="For Apple Systems. Force system to keep model in RAM rather than swapping or compressing", action='store_true')
     parser.add_argument("--noavx2", help="Do not use AVX2 instructions, a slower compatibility mode for older devices. Does not work with --clblast.", action='store_true')
     parser.add_argument("--debugmode", help="Shows additional debug info in the terminal.", action='store_true')
     parser.add_argument("--skiplauncher", help="Doesn't display or use the new GUI launcher.", action='store_true')

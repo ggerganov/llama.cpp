@@ -11,6 +11,7 @@ struct load_model_inputs
     const char * model_filename;
     const char * lora_filename;
     const bool use_mmap;
+    const bool use_mlock;
     const bool use_smartcontext;
     const bool unban_tokens;
     const int clblast_info = 0;
