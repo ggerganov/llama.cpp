@@ -34,9 +34,14 @@ endif
 #
 
 # keep standard at C11 and C++11
-CFLAGS   = -I.              -O3 -DNDEBUG -std=c11   -fPIC
-CXXFLAGS = -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC
+CFLAGS   = -I.              -O3 -std=c11   -fPIC
+CXXFLAGS = -I. -I./examples -O3 -std=c++11 -fPIC
 LDFLAGS  =
+
+ifndef LLAMA_DEBUG
+	CFLAGS   += -DNDEBUG
+	CXXFLAGS += -DNDEBUG
+endif
 
 # warnings
 CFLAGS   += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith
@@ -74,13 +79,17 @@ endif
 #       feel free to update the Makefile for your architecture and send a pull request or issue
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 	# Use all CPU extensions that are available:
-	CFLAGS += -march=native -mtune=native
+	CFLAGS   += -march=native -mtune=native
 	CXXFLAGS += -march=native -mtune=native
+
+	# Usage AVX-only
+	#CFLAGS   += -mfma -mf16c -mavx
+	#CXXFLAGS += -mfma -mf16c -mavx
 endif
 ifneq ($(filter ppc64%,$(UNAME_M)),)
 	POWER9_M := $(shell grep "POWER9" /proc/cpuinfo)
 	ifneq (,$(findstring POWER9,$(POWER9_M)))
-		CFLAGS += -mcpu=power9
+		CFLAGS   += -mcpu=power9
 		CXXFLAGS += -mcpu=power9
 	endif
 	# Require c++23's std::byteswap for big-endian support.
@@ -101,32 +110,46 @@ ifdef LLAMA_OPENBLAS
 	LDFLAGS += -lopenblas
 endif
 ifdef LLAMA_CUBLAS
-	CFLAGS    += -DGGML_USE_CUBLAS -I/usr/local/cuda/include
-	LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64
+	CFLAGS    += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
+	CXXFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
+	LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
 	OBJS      += ggml-cuda.o
 	NVCC      = nvcc
-	NVCCFLAGS = --forward-unknown-to-host-linker -arch=native
+	NVCCFLAGS = --forward-unknown-to-host-compiler -arch=native
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
-	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -c $< -o $@
+	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -Wno-pedantic -c $< -o $@
+endif
+ifdef LLAMA_CLBLAST
+	CFLAGS  += -DGGML_USE_CLBLAST
+	LDFLAGS += -lclblast -lOpenCL
+	OBJS    += ggml-opencl.o
+ggml-opencl.o: ggml-opencl.c ggml-opencl.h
+	$(CC) $(CFLAGS) -c $< -o $@
 endif
 ifdef LLAMA_GPROF
 	CFLAGS   += -pg
 	CXXFLAGS += -pg
 endif
+ifdef LLAMA_PERF
+	CFLAGS   += -DGGML_PERF
+	CXXFLAGS += -DGGML_PERF
+endif
 ifneq ($(filter aarch64%,$(UNAME_M)),)
-	CFLAGS += -mcpu=native
+	# Apple M1, M2, etc.
+	# Raspberry Pi 3, 4, Zero 2 (64-bit)
+	CFLAGS   += -mcpu=native
 	CXXFLAGS += -mcpu=native
 endif
 ifneq ($(filter armv6%,$(UNAME_M)),)
-	# Raspberry Pi 1, 2, 3
+	# Raspberry Pi 1, Zero
 	CFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access
 endif
 ifneq ($(filter armv7%,$(UNAME_M)),)
-	# Raspberry Pi 4
+	# Raspberry Pi 2
 	CFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access -funsafe-math-optimizations
 endif
 ifneq ($(filter armv8%,$(UNAME_M)),)
-	# Raspberry Pi 4
+	# Raspberry Pi 3, 4, Zero 2 (32-bit)
 	CFLAGS += -mfp16-format=ieee -mno-unaligned-access
 endif
 
@@ -149,49 +172,64 @@ $(info )
 # Build library
 #
 
-ggml.o: ggml.c ggml.h
+ggml.o: ggml.c ggml.h ggml-cuda.h
 	$(CC)  $(CFLAGS)   -c $< -o $@
 
-llama.o: llama.cpp ggml.h llama.h llama_util.h
+llama.o: llama.cpp ggml.h ggml-cuda.h llama.h llama-util.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common.o: examples/common.cpp examples/common.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-clean:
-	rm -vf *.o main quantize quantize-stats perplexity embedding benchmark-q4_0-matmult
+libllama.so: llama.o ggml.o $(OBJS)
+	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
-main: examples/main/main.cpp ggml.o llama.o common.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+clean:
+	rm -vf *.o main quantize quantize-stats perplexity embedding benchmark-matmult save-load-state build-info.h
+
+#
+# Examples
+#
+
+main: examples/main/main.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
 
-quantize: examples/quantize/quantize.cpp ggml.o llama.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+quantize: examples/quantize/quantize.cpp build-info.h ggml.o llama.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-quantize-stats: examples/quantize-stats/quantize-stats.cpp ggml.o llama.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+quantize-stats: examples/quantize-stats/quantize-stats.cpp build-info.h ggml.o llama.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+perplexity: examples/perplexity/perplexity.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-embedding: examples/embedding/embedding.cpp ggml.o llama.o common.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+embedding: examples/embedding/embedding.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-vdot: pocs/vdot/vdot.cpp ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+save-load-state: examples/save-load-state/save-load-state.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-libllama.so: llama.o ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
+build-info.h: $(wildcard .git/index) scripts/build-info.sh
+	@scripts/build-info.sh > $@.tmp
+	@if ! cmp -s $@.tmp $@; then \
+		mv $@.tmp $@; \
+	else \
+		rm $@.tmp; \
+	fi
 
 #
 # Tests
 #
 
-benchmark: examples/benchmark/benchmark-q4_0-matmult.c ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $^ -o benchmark-q4_0-matmult $(LDFLAGS)
-	./benchmark-q4_0-matmult
+benchmark-matmult: examples/benchmark/benchmark-matmult.cpp build-info.h ggml.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
+	./$@
+
+vdot: pocs/vdot/vdot.cpp ggml.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 .PHONY: tests
 tests:

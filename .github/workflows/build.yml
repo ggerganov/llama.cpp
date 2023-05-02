@@ -12,17 +12,15 @@ on:
       - master
     paths: ['.github/workflows/**', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.c', '**/*.cpp']
   pull_request:
-    types: [opened, synchronize, edited, reopened, review_requested, ready_for_review]
+    types: [opened, synchronize, reopened]
     paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.c', '**/*.cpp']
 
 env:
  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
 
 jobs:
-  ubuntu-latest-make:
-    if: github.event.pull_request.draft == false
-
-    runs-on: ubuntu-latest
+  ubuntu-focal-make:
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Clone
@@ -33,16 +31,14 @@ jobs:
         id: depends
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential
+          sudo apt-get install build-essential gcc-8
 
       - name: Build
         id: make_build
         run: |
-          make
+          CC=gcc-8 make
 
   ubuntu-latest-cmake:
-    if: github.event.pull_request.draft == false
-
     runs-on: ubuntu-latest
 
     steps:
@@ -71,8 +67,6 @@ jobs:
           ctest --verbose
 
   ubuntu-latest-cmake-sanitizer:
-    if: github.event.pull_request.draft == false
-
     runs-on: ubuntu-latest
 
     continue-on-error: true
@@ -108,8 +102,6 @@ jobs:
           ctest --verbose
 
   macOS-latest-make:
-    if: github.event.pull_request.draft == false
-
     runs-on: macos-latest
 
     steps:
@@ -128,8 +120,6 @@ jobs:
           make
 
   macOS-latest-cmake:
-    if: github.event.pull_request.draft == false
-
     runs-on: macOS-latest
 
     steps:
@@ -157,8 +147,6 @@ jobs:
           ctest --verbose
 
   windows-latest-cmake:
-    if: github.event.pull_request.draft == false
-
     runs-on: windows-latest
 
     strategy:
@@ -169,7 +157,7 @@ jobs:
          - build: 'avx'
            defines: '-DLLAMA_AVX2=OFF'
          - build: 'avx512'
-           defines: '-DLLAMA_AVX512=ON'
+           defines: '-DLLAMA_AVX512=ON -DBUILD_SHARED_LIBS=ON'
 
     steps:
       - name: Clone
@@ -228,7 +216,7 @@ jobs:
     runs-on: ubuntu-latest
 
     needs:
-      - ubuntu-latest-make
+      - ubuntu-focal-make
       - ubuntu-latest-cmake
       - macOS-latest-make
       - macOS-latest-cmake

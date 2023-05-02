@@ -19,9 +19,11 @@
 #    define LLAMA_API
 #endif
 
-#define LLAMA_FILE_VERSION 1
-#define LLAMA_FILE_MAGIC 0x67676a74 // 'ggjt' in hex
-#define LLAMA_FILE_MAGIC_UNVERSIONED 0x67676d6c // pre-versioned files
+#define LLAMA_FILE_VERSION           1
+#define LLAMA_FILE_MAGIC             'ggjt'
+#define LLAMA_FILE_MAGIC_UNVERSIONED 'ggml'
+#define LLAMA_SESSION_MAGIC          'ggsn'
+#define LLAMA_SESSION_VERSION        0
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,11 +41,15 @@ extern "C" {
 
     typedef struct llama_token_data {
         llama_token id;  // token id
-
+        float logit; // log-odds of the token
         float p;     // probability of the token
-        float plog;  // log probability of the token
-
     } llama_token_data;
+
+    typedef struct llama_token_data_array {
+        llama_token_data * data;
+        size_t size;
+        bool sorted;
+    } llama_token_data_array;
 
     typedef void (*llama_progress_callback)(float progress, void *ctx);
 
@@ -73,7 +79,10 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_Q4_1 = 3,  // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4, // tok_embeddings.weight and output.weight are F16
         LLAMA_FTYPE_MOSTLY_Q4_2 = 5,  // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_3 = 6,  // except 1d tensors
+        // LLAMA_FTYPE_MOSTLY_Q4_3 (6) support has been removed
+        LLAMA_FTYPE_MOSTLY_Q8_0 = 7,  // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q5_0 = 8,  // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q5_1 = 9,  // except 1d tensors
     };
 
     LLAMA_API struct llama_context_params llama_context_default_params();
@@ -112,22 +121,27 @@ extern "C" {
                       const char * path_base_model,
                              int   n_threads);
 
-    // Returns the KV cache that will contain the context for the
-    // ongoing prediction with the model.
-    LLAMA_API const uint8_t * llama_get_kv_cache(struct llama_context * ctx);
-
-    // Returns the size of the KV cache
-    LLAMA_API size_t llama_get_kv_cache_size(struct llama_context * ctx);
-
     // Returns the number of tokens in the KV cache
-    LLAMA_API int llama_get_kv_cache_token_count(struct llama_context * ctx);
+    LLAMA_API int llama_get_kv_cache_token_count(const struct llama_context * ctx);
 
-    // Sets the KV cache containing the current context for the model
-    LLAMA_API void llama_set_kv_cache(
-            struct llama_context * ctx,
-                   const uint8_t * kv_cache,
-                          size_t   n_size,
-                             int   n_token_count);
+    // Sets the current rng seed.
+    LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, int seed);
+
+    // Returns the size in bytes of the state (rng, logits, embedding and kv_cache)
+    LLAMA_API size_t llama_get_state_size(const struct llama_context * ctx);
+
+    // Copies the state to the specified destination address.
+    // Destination needs to have allocated enough memory.
+    // Returns the number of bytes copied
+    LLAMA_API size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dest);
+
+    // Set the state reading from the specified address
+    // Returns the number of bytes read
+    LLAMA_API size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src);
+
+    // Save/load session file
+    LLAMA_API bool llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out);
+    LLAMA_API bool llama_save_session_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count);
 
     // Run the llama inference to obtain the logits and probabilities for the next token.
     // tokens + n_tokens is the provided batch of new tokens to process
@@ -153,9 +167,9 @@ extern "C" {
                              int   n_max_tokens,
                             bool   add_bos);
 
-    LLAMA_API int llama_n_vocab(struct llama_context * ctx);
-    LLAMA_API int llama_n_ctx  (struct llama_context * ctx);
-    LLAMA_API int llama_n_embd (struct llama_context * ctx);
+    LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
+    LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
+    LLAMA_API int llama_n_embd (const struct llama_context * ctx);
 
     // Token logits obtained from the last call to llama_eval()
     // The logits for the last token are stored in the last row
@@ -169,21 +183,57 @@ extern "C" {
     LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 
     // Token Id -> String. Uses the vocabulary in the provided context
-    LLAMA_API const char * llama_token_to_str(struct llama_context * ctx, llama_token token);
+    LLAMA_API const char * llama_token_to_str(const struct llama_context * ctx, llama_token token);
 
     // Special tokens
     LLAMA_API llama_token llama_token_bos();
     LLAMA_API llama_token llama_token_eos();
+    LLAMA_API llama_token llama_token_nl();
 
-    // TODO: improve the last_n_tokens interface ?
-    LLAMA_API llama_token llama_sample_top_p_top_k(
-       struct llama_context * ctx,
-          const llama_token * last_n_tokens_data,
-                        int   last_n_tokens_size,
-                        int   top_k,
-                      float   top_p,
-                      float   temp,
-                      float   repeat_penalty);
+    // Sampling functions
+
+    /// @details Repetition penalty described in CTRL academic paper https://arxiv.org/abs/1909.05858, with negative logit fix.
+    LLAMA_API void llama_sample_repetition_penalty(struct llama_context * ctx, llama_token_data_array * candidates, llama_token * last_tokens, size_t last_tokens_size, float penalty);
+
+    /// @details Frequency and presence penalties described in OpenAI API https://platform.openai.com/docs/api-reference/parameter-details.
+    LLAMA_API void llama_sample_frequency_and_presence_penalties(struct llama_context * ctx, llama_token_data_array * candidates, llama_token * last_tokens, size_t last_tokens_size, float alpha_frequency, float alpha_presence);
+
+    /// @details Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.
+    LLAMA_API void llama_sample_softmax(struct llama_context * ctx, llama_token_data_array * candidates);
+
+    /// @details Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
+    LLAMA_API void llama_sample_top_k(struct llama_context * ctx, llama_token_data_array * candidates, int k, size_t min_keep = 1);
+
+    /// @details Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
+    LLAMA_API void llama_sample_top_p(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep = 1);
+
+    /// @details Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
+    LLAMA_API void llama_sample_tail_free(struct llama_context * ctx, llama_token_data_array * candidates, float z, size_t min_keep = 1);
+
+    /// @details Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
+    LLAMA_API void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep = 1);
+    LLAMA_API void llama_sample_temperature(struct llama_context * ctx, llama_token_data_array * candidates, float temp);
+
+    /// @details Mirostat 1.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
+    /// @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
+    /// @param tau  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
+    /// @param eta The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
+    /// @param m The number of tokens considered in the estimation of `s_hat`. This is an arbitrary value that is used to calculate `s_hat`, which in turn helps to calculate the value of `k`. In the paper, they use `m = 100`, but you can experiment with different values to see how it affects the performance of the algorithm.
+    /// @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
+    LLAMA_API llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, int m, float * mu);
+
+    /// @details Mirostat 2.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
+    /// @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
+    /// @param tau  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
+    /// @param eta The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
+    /// @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
+    LLAMA_API llama_token llama_sample_token_mirostat_v2(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, float * mu);
+
+    /// @details Selects the token with the highest probability.
+    LLAMA_API llama_token llama_sample_token_greedy(struct llama_context * ctx, llama_token_data_array * candidates);
+
+    /// @details Randomly selects a token from the candidates based on their probabilities.
+    LLAMA_API llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_array * candidates);
 
     // Performance information
     LLAMA_API void llama_print_timings(struct llama_context * ctx);

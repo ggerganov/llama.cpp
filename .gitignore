@@ -15,6 +15,7 @@ build-em/
 build-debug/
 build-release/
 build-static/
+build-cublas/
 build-no-accel/
 build-sanitize-addr/
 build-sanitize-thread/
@@ -27,10 +28,11 @@ models/*
 /result
 /perplexity
 /embedding
-/benchmark-q4_0-matmult
+/benchmark-matmult
 /vdot
 /Pipfile
 
+build-info.h
 arm_neon.h
 compile_commands.json
 
@@ -40,3 +42,5 @@ zig-out/
 zig-cache/
 
 ppl-*.txt
+
+examples/jeopardy/results.txt
