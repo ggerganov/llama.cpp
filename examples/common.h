@@ -78,6 +78,12 @@ std::string gpt_random_prompt(std::mt19937 & rng);
 std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::string & text, bool add_bos);
 
 //
+// Model utils
+//
+
+struct llama_context * llama_init_from_gpt_params(const gpt_params & params);
+
+//
 // Console utils
 //
 
