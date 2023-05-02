@@ -160,6 +160,8 @@ jobs:
            defines: '-DLLAMA_AVX512=ON -DBUILD_SHARED_LIBS=ON'
          - build: 'opencl'
            defines: '-DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH="$env:RUNNER_TEMP/clblast"'
+         - build: 'openblas'
+           defines: '-DLLAMA_OPENBLAS=ON -DBLAS_LIBRARIES="/LIBPATH:$env:RUNNER_TEMP/openblas/lib" -DOPENBLAS_INC="$env:RUNNER_TEMP/openblas/include"'
 
     steps:
       - name: Clone
@@ -185,6 +187,14 @@ jobs:
             $txt = Get-Content -Path $f -Raw
             $txt.Replace('C:/dependencies/opencl/', "$($env:RUNNER_TEMP.Replace('\','/'))/opencl/") | Set-Content -Path $f -Encoding UTF8
           }
+      - name: Download OpenBLAS
+        id: get_openblas
+        if: ${{ matrix.build == 'openblas' }}
+        run: |
+          curl.exe -o $env:RUNNER_TEMP/openblas.zip -L https://github.com/xianyi/OpenBLAS/releases/download/v0.3.21/OpenBLAS-0.3.21-x64.zip
+          mkdir $env:RUNNER_TEMP/openblas
+          tar.exe -xvf $env:RUNNER_TEMP/openblas.zip -C $env:RUNNER_TEMP/openblas
+          Rename-Item $env:RUNNER_TEMP/openblas/lib/libopenblas.lib openblas.lib
 
       - name: Build
         id: cmake_build
@@ -199,6 +209,12 @@ jobs:
         if: ${{ matrix.build == 'opencl' }}
         run: |
           cp $env:RUNNER_TEMP/clblast/lib/clblast.dll ./build/bin/Release
+
+      - name: Add libopenblas.dll
+        id: add_libopenblas_dll
+        if: ${{ matrix.build == 'openblas' }}
+        run: |
+          cp $env:RUNNER_TEMP/openblas/bin/libopenblas.dll ./build/bin/Release
 
       - name: Check AVX512F support
         id: check_avx512f
