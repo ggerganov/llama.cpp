@@ -826,6 +826,7 @@ static void quantize_row_q4_0(const float * restrict x, void * restrict vy, int 
         float max = 0.0f;
         float min = 0.0f;
 
+        vector float asrcv [8];
         vector float srcv [8];
         vector float maxv[8];
         vector float minv[8];
