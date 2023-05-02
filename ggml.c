@@ -671,35 +671,91 @@ float vmaxvq_f32(float32x4_t v) {
 }
 
 int8x8_t vzip1_s8(int8x8_t a, int8x8_t b) {
-    return vget_low_s8(vcombine_s8(a, b));
+    int8x8_t res;
+
+    res[0] = a[0]; res[1] = b[0];
+    res[2] = a[1]; res[3] = b[1];
+    res[4] = a[2]; res[5] = b[2];
+    res[6] = a[3]; res[7] = b[3];
+
+    return res;
 }
 
 int8x8_t vzip2_s8(int8x8_t a, int8x8_t b) {
-    return vget_high_s8(vcombine_s8(a, b));
+    int8x8_t res;
+
+    res[0] = a[4]; res[1] = b[4];
+    res[2] = a[5]; res[3] = b[5];
+    res[4] = a[6]; res[5] = b[6];
+    res[6] = a[7]; res[7] = b[7];
+
+    return res;
 }
 
 uint8x8_t vzip1_u8(uint8x8_t a, uint8x8_t b) {
-    return vget_low_u8(vcombine_u8(a, b));
+    uint8x8_t res;
+
+    res[0] = a[0]; res[1] = b[0];
+    res[2] = a[1]; res[3] = b[1];
+    res[4] = a[2]; res[5] = b[2];
+    res[6] = a[3]; res[7] = b[3];
+
+    return res;
 }
 
 uint8x8_t vzip2_u8(uint8x8_t a, uint8x8_t b) {
-    return vget_high_u8(vcombine_u8(a, b));
+    uint8x8_t res;
+
+    res[0] = a[4]; res[1] = b[4];
+    res[2] = a[5]; res[3] = b[5];
+    res[4] = a[6]; res[5] = b[6];
+    res[6] = a[7]; res[7] = b[7];
+
+    return res;
 }
 
 int8x16_t vzip1q_s8(int8x16_t a, int8x16_t b) {
-    return vcombine_s8(vget_low_s8(a), vget_low_s8(b));
+    int8x16_t res;
+
+    res[0]  = a[0]; res[1]  = b[0]; res[2]  = a[1]; res[3]  = b[1];
+    res[4]  = a[2]; res[5]  = b[2]; res[6]  = a[3]; res[7]  = b[3];
+    res[8]  = a[4]; res[9]  = b[4]; res[10] = a[5]; res[11] = b[5];
+    res[12] = a[6]; res[13] = b[6]; res[14] = a[7]; res[15] = b[7];
+
+    return res;
 }
 
 int8x16_t vzip2q_s8(int8x16_t a, int8x16_t b) {
-    return vcombine_s8(vget_high_s8(a), vget_high_s8(b));
+    int8x16_t res;
+
+    res[0]  = a[8];  res[1]  = b[8];  res[2]  = a[9];  res[3]  = b[9];
+    res[4]  = a[10]; res[5]  = b[10]; res[6]  = a[11]; res[7]  = b[11];
+    res[8]  = a[12]; res[9]  = b[12]; res[10] = a[13]; res[11] = b[13];
+    res[12] = a[14]; res[13] = b[14]; res[14] = a[15]; res[15] = b[15];
+
+    return res;
 }
 
 uint8x16_t vzip1q_u8(uint8x16_t a, uint8x16_t b) {
-    return vcombine_u8(vget_low_u8(a), vget_low_u8(b));
+    uint8x16_t res;
+
+    res[0]  = a[0];  res[1]  = b[0];  res[2]  = a[1];  res[3]  = b[1];
+    res[4]  = a[2];  res[5]  = b[2];  res[6]  = a[3];  res[7]  = b[3];
+    res[8]  = a[4];  res[9]  = b[4];  res[10] = a[5];  res[11] = b[5];
+    res[12] = a[6];  res[13] = b[6];  res[14] = a[7];  res[15] = b[7];
+
+    return res;
 }
 
 uint8x16_t vzip2q_u8(uint8x16_t a, uint8x16_t b) {
-    return vcombine_u8(vget_high_u8(a), vget_high_u8(b));
+    uint8x16_t res;
+
+    res[0]  = a[8];  res[1]  = b[8];  res[2]  = a[9];  res[3]  = b[9];
+    res[4]  = a[10]; res[5]  = b[10]; res[6]  = a[11]; res[7]  = b[11];
+    res[8]  = a[12]; res[9]  = b[12]; res[10] = a[13]; res[11] = b[13];
+    res[12] = a[14]; res[13] = b[14]; res[14] = a[15]; res[15] = b[15];
+
+    return res;
 }
 
 int32x4_t vcvtnq_s32_f32(float32x4_t v) {
