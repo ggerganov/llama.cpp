@@ -809,7 +809,7 @@ struct llama_context_params llama_context_default_params() {
     struct llama_context_params result = {
         /*.n_ctx                       =*/ 512,
         /*.n_parts                     =*/ -1,
-        /*.seed                        =*/ 0,
+        /*.seed                        =*/ -1,
         /*.f16_kv                      =*/ false,
         /*.logits_all                  =*/ false,
         /*.vocab_only                  =*/ false,
@@ -2053,7 +2053,7 @@ struct llama_context * llama_init_from_file(
 
     llama_context * ctx = new llama_context;
 
-    if (params.seed <= 0) {
+    if (params.seed < 0) {
         params.seed = time(NULL);
     }
 
@@ -2395,7 +2395,7 @@ int llama_get_kv_cache_token_count(const struct llama_context * ctx) {
 #define LLAMA_MAX_RNG_STATE 64*1024
 
 void llama_set_rng_seed(struct llama_context * ctx, int seed) {
-    if (seed <= 0) {
+    if (seed < 0) {
         seed = time(NULL);
     }
     ctx->rng.seed(seed);
