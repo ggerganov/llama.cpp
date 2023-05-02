@@ -1285,6 +1285,9 @@ static bool llama_eval_internal(
     //embd_w.resize(n_vocab*N);
     //memcpy(embd_w.data(), ggml_get_data(inpL), sizeof(float)*n_vocab*N);
 
+    // update kv token count
+    lctx.model.kv_self.n = n_past + N;
+
     // extract logits
     {
         auto & logits_out = lctx.logits;
@@ -2401,7 +2404,7 @@ void llama_set_rng_seed(struct llama_context * ctx, int seed) {
     ctx->rng.seed(seed);
 }
 
-// Returns the size of the state
+// Returns the *maximum* size of the state
 size_t llama_get_state_size(const struct llama_context * ctx) {
     // we don't know size of rng until we actually serialize it. so reserve more than enough memory for its serialized state.
     // for reference, std::mt19937(1337) serializes to 6701 bytes.
@@ -2480,21 +2483,50 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dest) {
 
     // copy kv cache
     {
-        const size_t kv_size = ctx->model.kv_self.buf.size;
+        const auto & kv_self = ctx->model.kv_self;
+        const auto & hparams = ctx->model.hparams;
+        const int    n_layer = hparams.n_layer;
+        const int    n_embd  = hparams.n_embd;
+        const int    n_ctx   = hparams.n_ctx;
+
+        const size_t kv_size = kv_self.buf.size;
         const int    kv_ntok = llama_get_kv_cache_token_count(ctx);
 
         memcpy(out, &kv_size, sizeof(kv_size)); out += sizeof(kv_size);
         memcpy(out, &kv_ntok, sizeof(kv_ntok)); out += sizeof(kv_ntok);
 
         if (kv_size) {
-            memcpy(out, ctx->model.kv_self.buf.addr, kv_size); out += kv_size;
+            {
+                // copy k: k layout is n_layer > n_ctx (tokens) > n_embd
+                const uint8_t * k_data   = (uint8_t *) kv_self.k->data;
+                const size_t    elt_size = ggml_element_size(kv_self.k);
+
+                for (int il = 0; il < n_layer; il++) {
+                    const size_t offset = il * n_ctx * n_embd * elt_size;
+                    const size_t size   =      kv_ntok * n_embd * elt_size;
+                    memcpy(out, k_data + offset, size); out += size;
+                }
+            }
+
+            {
+                // copy v: v layout is n_layer > n_embd > n_ctx (tokens)
+                const uint8_t * v_data       = (uint8_t *) kv_self.v->data;
+                const size_t    elt_size     = ggml_element_size(kv_self.v);
+                const int       n_layer_embd = n_layer * n_embd;
+
+                for (int ile = 0; ile < n_layer_embd; ile++) {
+                    const size_t offset = ile * n_ctx * elt_size;
+                    const size_t size   =       kv_ntok * elt_size;
+                    memcpy(out, v_data + offset, size); out += size;
+                }
+            }
         }
     }
 
     const size_t written  = out - dest;
-    const size_t expected = llama_get_state_size(ctx);
+    const size_t max_size = llama_get_state_size(ctx);
 
-    LLAMA_ASSERT(written == expected);
+    LLAMA_ASSERT(written <= max_size);
 
     return written;
 }
@@ -2552,6 +2584,12 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
 
     // set kv cache
     {
+        const auto & kv_self = ctx->model.kv_self;
+        const auto & hparams = ctx->model.hparams;
+        const int    n_layer = hparams.n_layer;
+        const int    n_embd  = hparams.n_embd;
+        const int    n_ctx   = hparams.n_ctx;
+
         size_t kv_size;
         int kv_ntok;
 
@@ -2559,15 +2597,32 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
         memcpy(&kv_ntok, in, sizeof(kv_ntok)); in += sizeof(kv_ntok);
 
         if (kv_size) {
-            LLAMA_ASSERT(ctx->model.kv_self.buf.size == kv_size);
+            LLAMA_ASSERT(kv_self.buf.size == kv_size);
 
-            void * k_data = ctx->model.kv_self.k->data; // remember data pointers
-            void * v_data = ctx->model.kv_self.v->data; // because their value is stored in buf and overwritten by memcpy
+            {
+                // set k data: k layout is n_layer > n_ctx (tokens) > n_embd
+                      uint8_t * k_data   = (uint8_t *) kv_self.k->data;
+                const size_t    elt_size = ggml_element_size(kv_self.k);
 
-            memcpy(ctx->model.kv_self.buf.addr, in, kv_size); in += kv_size;
+                for (int il = 0; il < n_layer; il++) {
+                    const size_t offset = il * n_ctx * n_embd * elt_size;
+                    const size_t size   =      kv_ntok * n_embd * elt_size;
+                    memcpy(k_data + offset, in, size); in += size;
+                }
+            }
 
-            ctx->model.kv_self.k->data = k_data; // restore correct data pointers
-            ctx->model.kv_self.v->data = v_data;
+            {
+                // set v data: v layout is n_layer > n_embd > n_ctx (tokens)
+                      uint8_t * v_data       = (uint8_t *) kv_self.v->data;
+                const size_t    elt_size     = ggml_element_size(kv_self.v);
+                const int       n_layer_embd = n_layer * n_embd;
+
+                for (int ile = 0; ile < n_layer_embd; ile++) {
+                    const size_t offset = ile * n_ctx * elt_size;
+                    const size_t size   =       kv_ntok * elt_size;
+                    memcpy(v_data + offset, in, size); in += size;
+                }
+            }
 
         }
 
@@ -2575,9 +2630,9 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
     }
 
     const size_t nread    = in - src;
-    const size_t expected = llama_get_state_size(ctx);
+    const size_t max_size = llama_get_state_size(ctx);
 
-    LLAMA_ASSERT(nread == expected);
+    LLAMA_ASSERT(nread <= max_size);
 
     return nread;
 }
@@ -2620,14 +2675,14 @@ bool llama_load_session_file(struct llama_context * ctx, const char * path_sessi
     // restore the context state
     {
         const size_t n_state_size_cur = file.size - file.tell();
-        const size_t n_state_size_exp = llama_get_state_size(ctx);
+        const size_t n_state_size_max = llama_get_state_size(ctx);
 
-        if (n_state_size_cur != n_state_size_exp) {
-            fprintf(stderr, "%s : the state size in session file didn't match! expected %zu, got %zu\n", __func__, n_state_size_exp, n_state_size_cur);
+        if (n_state_size_cur > n_state_size_max) {
+            fprintf(stderr, "%s : the state size in session file is too big! max %zu, got %zu\n", __func__, n_state_size_max, n_state_size_cur);
             return false;
         }
 
-        std::vector<uint8_t> state_data(n_state_size_cur);
+        std::vector<uint8_t> state_data(n_state_size_max);
         file.read_raw(state_data.data(), n_state_size_cur);
 
         llama_set_state_data(ctx, state_data.data());
@@ -2650,12 +2705,12 @@ bool llama_save_session_file(struct llama_context * ctx, const char * path_sessi
 
     // save the context state
     {
-        const size_t n_state_size = llama_get_state_size(ctx);
+        const size_t n_state_size_max = llama_get_state_size(ctx);
 
-        std::vector<uint8_t> state_data(n_state_size);
-        llama_copy_state_data(ctx, state_data.data());
+        std::vector<uint8_t> state_data(n_state_size_max);
+        const size_t n_state_size_cur = llama_copy_state_data(ctx, state_data.data());
 
-        file.write_raw(state_data.data(), n_state_size);
+        file.write_raw(state_data.data(), n_state_size_cur);
     }
 
     return true;
