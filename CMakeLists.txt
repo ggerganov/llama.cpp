@@ -90,7 +90,7 @@ file(WRITE "${CMAKE_BINARY_DIR}/BUILD_INFO.h.in" "\
 # Generate initial build-info.h
 include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git/")
     # Add a custom target for build-info.h
     add_custom_target(BUILD_INFO ALL DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h")
 
