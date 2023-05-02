@@ -197,6 +197,14 @@
 #define GGML_MAX_OPT           4
 #define GGML_DEFAULT_N_THREADS 4
 
+#define GGML_ASSERT(x) \
+    do { \
+        if (!(x)) { \
+            fprintf(stderr, "GGML_ASSERT: %s:%d: %s\n", __FILE__, __LINE__, #x); \
+            abort(); \
+        } \
+    } while (0)
+
 #ifdef  __cplusplus
 extern "C" {
 #endif
@@ -211,6 +219,9 @@ extern "C" {
     // convert FP16 <-> FP32
     GGML_API float       ggml_fp16_to_fp32(ggml_fp16_t x);
     GGML_API ggml_fp16_t ggml_fp32_to_fp16(float x);
+
+    GGML_API void ggml_fp16_to_fp32_row(const ggml_fp16_t * x, float * y, size_t n);
+    GGML_API void ggml_fp32_to_fp16_row(const float * x, ggml_fp16_t * y, size_t n);
 
     struct ggml_object;
     struct ggml_context;
