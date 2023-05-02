@@ -4541,6 +4541,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
         /*.perf_cycles  =*/ 0,
         /*.perf_time_us =*/ 0,
         /*.data         =*/ (data == NULL && !ctx->no_alloc) ? (void *)(result + 1) : data,
+        /*.name         =*/ { 0 },
         /*.pad          =*/ { 0 },
     };
 
@@ -4893,6 +4894,15 @@ void * ggml_get_data(const struct ggml_tensor * tensor) {
 float * ggml_get_data_f32(const struct ggml_tensor * tensor) {
     assert(tensor->type == GGML_TYPE_F32);
     return (float *)(tensor->data);
+}
+
+const char * ggml_get_name(const struct ggml_tensor * tensor) {
+    return tensor->name;
+}
+
+void ggml_set_name(struct ggml_tensor * tensor, const char * name) {
+    strncpy(tensor->name, name, sizeof(tensor->name));
+    tensor->name[sizeof(tensor->name) - 1] = '\0';
 }
 
 struct ggml_tensor * ggml_view_tensor(
@@ -5994,6 +6004,7 @@ struct ggml_tensor * ggml_diag_mask_inf(
     //struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
     struct ggml_tensor * result = ggml_view_tensor(ctx, a);
     struct ggml_tensor * b = ggml_new_i32(ctx, n_past);
+    ggml_set_name(b, "n_past");
 
     result->op   = GGML_OP_DIAG_MASK_INF;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6051,6 +6062,7 @@ struct ggml_tensor * ggml_rope(
     ((int32_t *) b->data)[0] = n_past;
     ((int32_t *) b->data)[1] = n_dims;
     ((int32_t *) b->data)[2] = mode;
+    ggml_set_name(b, "n_past, n_dims, mode");
 
     result->op   = GGML_OP_ROPE;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -12118,10 +12130,16 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
             snprintf(color, sizeof(color), "white");
         }
 
-        fprintf(fp, "  \"%p\" [ \
-style = filled; fillcolor = %s; shape = record; \
-label=\"%d [%" PRId64 ", %" PRId64 "] | <x>%s",
-                (void *) node, color,
+        fprintf(fp, "  \"%p\" [ "
+                    "style = filled; fillcolor = %s; shape = record; "
+                    "label=\"",
+                (void *) node, color);
+
+        if (strlen(node->name) > 0) {
+            fprintf(fp, "%s |", node->name);
+        }
+
+        fprintf(fp, "%d [%" PRId64 ", %" PRId64 "] | <x>%s",
                 i, node->ne[0], node->ne[1],
                 GGML_OP_SYMBOL[node->op]);
 
@@ -12137,18 +12155,26 @@ label=\"%d [%" PRId64 ", %" PRId64 "] | <x>%s",
 
         snprintf(color, sizeof(color), "pink");
 
-        if (ggml_nelements(node) == 1) {
-            fprintf(fp, "  \"%p\" [ \
-style = filled; fillcolor = %s; shape = record; \
-label=\"<x>%.1e\"; ]\n",
-                    (void *) node, color, (double)ggml_get_f32_1d(node, 0));
-        } else {
-            fprintf(fp, "  \"%p\" [ \
-style = filled; fillcolor = %s; shape = record; \
-label=\"<x>CONST %d [%" PRId64 ", %" PRId64 "]\"; ]\n",
-                    (void *) node, color,
-                    i, node->ne[0], node->ne[1]);
+        fprintf(fp, "  \"%p\" [ "
+                    "style = filled; fillcolor = %s; shape = record; "
+                    "label=\"<x>",
+                (void *) node, color);
+
+        if (strlen(node->name) > 0) {
+                fprintf(fp, "%s | ", node->name);
         }
+        if (ggml_nelements(node) == 1) {
+            if (node->type == GGML_TYPE_I8 || node->type == GGML_TYPE_I16 || node->type == GGML_TYPE_I32) {
+                fprintf(fp, "%d", ggml_get_i32_1d(node, 0));
+            }
+            else {
+                fprintf(fp, "%.1e", (double)ggml_get_f32_1d(node, 0));
+            }
+        }
+        else {
+            fprintf(fp, "CONST %d [%" PRId64 ", %" PRId64 "]", i, node->ne[0], node->ne[1]);
+        }
+        fprintf(fp, "\"; ]\n");
     }
 
     for (int i = 0; i < gb->n_nodes; i++) {
