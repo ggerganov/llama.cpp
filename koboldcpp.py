@@ -501,11 +501,29 @@ def main(args):
         print("Otherwise, please manually select ggml file:")
         try:
             show_gui()
-        except Exception as ex:            
+        except Exception as ex:
             print("File selection GUI unsupported. Please check command line: script.py --help")
             print("Reason for no GUI: " + str(ex))
             time.sleep(2)
             sys.exit(2)
+
+    if args.highpriority:
+        print("Setting process to Higher Priority - Use Caution")
+        try:
+            import psutil
+            os_used = sys.platform
+            process = psutil.Process(os.getpid())  # Set high priority for the python script for the CPU
+            if os_used == "win32":  # Windows (either 32-bit or 64-bit)
+                process.nice(psutil.REALTIME_PRIORITY_CLASS)
+                print("High Priority for Windows Set")
+            elif os_used == "linux":  # linux
+                process.nice(psutil.IOPRIO_HIGH)
+                print("High Priority for Linux Set")
+            else:  # MAC OS X or other
+                process.nice(20)
+                print("High Priority for Other OS Set (nice=20)")
+        except Exception as ex:
+             print("Error, Could not change process priority: " + str(ex))
 
     init_library() # Note: if blas does not exist and is enabled, program will crash. 
     print("==========")
@@ -584,6 +602,7 @@ if __name__ == '__main__':
     default_threads = (physical_core_limit if physical_core_limit<=3 else max(3,physical_core_limit-1))
     parser.add_argument("--threads", help="Use a custom number of threads if specified. Otherwise, uses an amount based on CPU cores", type=int, default=default_threads)
     parser.add_argument("--psutil_set_threads", help="Experimental flag. If set, uses psutils to determine thread count based on physical cores.", action='store_true')
+    parser.add_argument("--highpriority", help="Experimental flag. If set, increases the process CPU priority, potentially speeding up generation. Use caution.", action='store_true')
     parser.add_argument("--blasbatchsize", help="Sets the batch size used in BLAS processing (default 512)", type=int,choices=[32,64,128,256,512,1024], default=512)
     parser.add_argument("--stream", help="Uses pseudo streaming when generating tokens. Only for the Kobold Lite UI.", action='store_true')
     parser.add_argument("--smartcontext", help="Reserving a portion of context to try processing less frequently.", action='store_true')
