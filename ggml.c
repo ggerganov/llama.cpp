@@ -27,7 +27,7 @@
 #define static_assert(cond, msg) struct global_scope_noop_trick
 #endif
 
-#if defined( )
+#if defined(_WIN32)
 
 #include <windows.h>
 
