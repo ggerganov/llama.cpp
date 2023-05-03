@@ -32,36 +32,46 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
     int n_vocab = llama_n_vocab(ctx);
 
     double nll = 0.0;
-    fprintf(stderr, "%s : calculating perplexity over %d chunks, batch_size=%d\n", __func__, seq_count, params.n_batch);
+    fprintf(stderr, "%s: calculating perplexity over %d chunks, batch_size=%d\n", __func__, seq_count, params.n_batch);
 
     for (int i = 0; i < seq_count; ++i) {
-        int start = i * params.n_ctx;
-        int end = start + params.n_ctx;
+        const int start = i * params.n_ctx;
+        const int end   = start + params.n_ctx;
 
         std::vector<float> logits;
-        int num_batches = (params.n_ctx + params.n_batch - 1) / params.n_batch;
-        auto start_t = std::chrono::high_resolution_clock::now();
+        const int num_batches = (params.n_ctx + params.n_batch - 1) / params.n_batch;
+
+        const auto start_t = std::chrono::high_resolution_clock::now();
+
         for (int j = 0; j < num_batches; ++j) {
-            int batch_start = start + j * params.n_batch;
-            int batch_size = std::min(end - batch_start, params.n_batch);
+            const int batch_start = start + j * params.n_batch;
+            const int batch_size  = std::min(end - batch_start, params.n_batch);
+
+            // TODO: not perfect since this can be in the middle of a word, but it is better than nothing
+            tokens[batch_start] = llama_token_bos();
+
             if (llama_eval(ctx, tokens.data() + batch_start, batch_size, j * params.n_batch, params.n_threads)) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return;
             }
-            auto batch_logits = llama_get_logits(ctx);
+
+            const auto batch_logits = llama_get_logits(ctx);
             logits.insert(logits.end(), batch_logits, batch_logits + batch_size * n_vocab);
         }
-        auto end_t = std::chrono::high_resolution_clock::now();
+
+        const auto end_t = std::chrono::high_resolution_clock::now();
+
         if (i == 0) {
             const float seconds = std::chrono::duration<float>(end_t - start_t).count();
-            printf("%.2f seconds per pass - ETA ", seconds);
+            fprintf(stderr, "%s: %.2f seconds per pass - ETA ", __func__, seconds);
             int total_seconds = (int)(seconds * seq_count);
             if (total_seconds >= 60*60) {
-                printf("%d hours ", total_seconds / (60*60));
+                fprintf(stderr, "%d hours ", total_seconds / (60*60));
                 total_seconds = total_seconds % (60*60);
             }
-            printf("%d minutes\n", total_seconds / 60);
+            fprintf(stderr, "%d minutes\n", total_seconds / 60);
         }
+
         // We get the logits for all the tokens in the context window (params.n_ctx)
         // from llama_eval above.  Now, based on https://huggingface.co/docs/transformers/perplexity,
         // calculate the perplexity over the last half the window (so the model always has

@@ -1052,6 +1052,13 @@ static bool llama_eval_internal(
             const int   n_tokens,
             const int   n_past,
             const int   n_threads) {
+
+    // enforce that the first token is BOS
+    if (n_past == 0 && tokens[0] != llama_token_bos()) {
+        fprintf(stderr, "%s: first token must be BOS\n", __func__);
+        return false;
+    }
+
     const int64_t t_start_us = ggml_time_us();
 
     const int N = n_tokens;
@@ -1482,7 +1489,7 @@ static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, co
     }
 
     if (bos) {
-        output.push_back(1);
+        output.push_back(llama_token_bos());
     }
 
     tokenizer.tokenize(text, output);
@@ -2727,11 +2734,14 @@ int llama_eval(
         fprintf(stderr, "%s: failed to eval\n", __func__);
         return 1;
     }
+
     // get a more accurate load time, upon first eval
+    // TODO: fix this
     if (!ctx->has_evaluated_once) {
         ctx->t_load_us = ggml_time_us() - ctx->t_start_us;
         ctx->has_evaluated_once = true;
     }
+
     return 0;
 }
 
