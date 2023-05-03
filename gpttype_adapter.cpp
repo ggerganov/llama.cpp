@@ -41,6 +41,7 @@ static llama_context * llama_ctx_v1;
 static gpt_params params;
 static int n_past = 0;
 static int n_threads = 4;
+static int n_blasthreads = 4;
 static int n_batch = 8;
 static bool useSmartContext = false;
 static bool unbanTokens = false;
@@ -137,6 +138,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
 
     file_format = in_file_format;
     n_threads = params.n_threads = inputs.threads;
+    n_blasthreads = inputs.blasthreads;
     n_batch = params.n_batch = inputs.batch_size;
     modelname = params.model = inputs.model_filename;
     useSmartContext = inputs.use_smartcontext;
@@ -459,6 +461,10 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
         if(!ggml_cpu_has_gpublas())
         {
             params.n_threads = 1; //do not limit here anymore.
+        }
+        else
+        {
+            params.n_threads = n_blasthreads;
         }
     }
 

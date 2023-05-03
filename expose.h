@@ -4,6 +4,7 @@ const int stop_token_max = 10;
 struct load_model_inputs
 {
     const int threads;
+    const int blasthreads;
     const int max_context_length;
     const int batch_size;
     const bool f16_kv;

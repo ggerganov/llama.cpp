@@ -11,6 +11,7 @@ stop_token_max = 10
 
 class load_model_inputs(ctypes.Structure):
     _fields_ = [("threads", ctypes.c_int),
+                ("blasthreads", ctypes.c_int),
                 ("max_context_length", ctypes.c_int),
                 ("batch_size", ctypes.c_int),
                 ("f16_kv", ctypes.c_bool),
@@ -133,6 +134,7 @@ def load_model(model_filename):
     inputs.batch_size = 8
     inputs.max_context_length = maxctx #initial value to use for ctx, can be overwritten
     inputs.threads = args.threads
+    inputs.blasthreads = args.blasthreads
     inputs.f16_kv = True
     inputs.use_mmap = (not args.nommap)
     inputs.use_mlock = args.usemlock
@@ -183,7 +185,7 @@ maxctx = 2048
 maxlen = 128
 modelbusy = False
 defaultport = 5001
-KcppVersion = "1.18"
+KcppVersion = "1.19"
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
     sys_version = ""
@@ -549,8 +551,11 @@ def main(args):
         args.threads = psutil.cpu_count(logical=False)
         print("Overriding thread count, using " + str(args.threads) + " threads instead.")
 
+    if not args.blasthreads or args.blasthreads <= 0:
+        args.blasthreads = args.threads
+
     modelname = os.path.abspath(args.model_param)
-    print(f"Loading model: {modelname} \n[Threads: {args.threads}, SmartContext: {args.smartcontext}]")
+    print(f"Loading model: {modelname} \n[Threads: {args.threads}, BlasThreads: {args.blasthreads}, SmartContext: {args.smartcontext}]")
     loadok = load_model(modelname)
     print("Load Model OK: " + str(loadok))
 
@@ -604,6 +609,7 @@ if __name__ == '__main__':
         physical_core_limit = int(os.cpu_count()/2)
     default_threads = (physical_core_limit if physical_core_limit<=3 else max(3,physical_core_limit-1))
     parser.add_argument("--threads", help="Use a custom number of threads if specified. Otherwise, uses an amount based on CPU cores", type=int, default=default_threads)
+    parser.add_argument("--blasthreads", help="Use a different number of threads during BLAS if specified. Otherwise, has the same value as --threads", type=int, default=0)
     parser.add_argument("--psutil_set_threads", help="Experimental flag. If set, uses psutils to determine thread count based on physical cores.", action='store_true')
     parser.add_argument("--highpriority", help="Experimental flag. If set, increases the process CPU priority, potentially speeding up generation. Use caution.", action='store_true')
     parser.add_argument("--blasbatchsize", help="Sets the batch size used in BLAS processing (default 512)", type=int,choices=[32,64,128,256,512,1024], default=512)
