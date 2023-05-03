@@ -682,6 +682,7 @@ int main(int argc, char ** argv) {
                 [&llama](size_t offset, DataSink &sink)
                 {
                   int ignore = 0;
+                  llama->tokens_completion = 0;
                   while(!llama->is_antiprompt) {
                     std::string result = llama->inference();
                     // ignore ### Human: and ### Assistant:
@@ -699,6 +700,7 @@ int main(int argc, char ** argv) {
                     }
                     printf("\rProcessing: %i tokens processed.", llama->tokens_completion);
                   }
+                  sink.write("[DONE]", 6);
                   sink.done(); // No more data
                   printf("\rCompletion finished: %i tokens predicted.\n", llama->tokens_completion);
                   return true; // return 'false' if you want to cancel the process.
