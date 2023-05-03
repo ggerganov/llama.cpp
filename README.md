@@ -371,29 +371,37 @@ python3 convert.py models/gpt4all-7B/gpt4all-lora-quantized.bin
 
 - The newer GPT4All-J model is not yet supported!
 
-### Obtaining and verifying the Facebook LLaMA original model and Stanford Alpaca model data
+### Obtaining the Facebook LLaMA original model and Stanford Alpaca model data
 
 - **Under no circumstances should IPFS, magnet links, or any other links to model downloads be shared anywhere in this repository, including in issues, discussions, or pull requests. They will be immediately deleted.**
 - The LLaMA models are officially distributed by Facebook and will **never** be provided through this repository.
 - Refer to [Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to request access to the model data.
-- Please verify the [sha256 checksums](SHA256SUMS) of all downloaded model files to confirm that you have the correct model data files before creating an issue relating to your model files.
-- The following command will verify if you have all possible latest files in your self-installed `./models` subdirectory:
 
-  `sha256sum --ignore-missing -c SHA256SUMS` on Linux
+### Verifying the model files
 
-  or
+Please verify the [sha256 checksums](SHA256SUMS) of all downloaded model files to confirm that you have the correct model data files before creating an issue relating to your model files.
+- The following python script will verify if you have all possible latest files in your self-installed `./models` subdirectory:
 
-  `shasum -a 256 --ignore-missing -c SHA256SUMS` on macOS
+```bash
+# run the verification script
+python3 .\scripts\verify-checksum-models.py
+```
 
-- If your issue is with model generation quality, then please at least scan the following links and papers to understand the limitations of LLaMA models. This is especially important when choosing an appropriate model size and appreciating both the significant and subtle differences between LLaMA models and ChatGPT:
+- On linux or macOS it is also possible to run the following commands to verify if you have all possible latest files in your self-installed `./models` subdirectory:
+    - On Linux: `sha256sum --ignore-missing -c SHA256SUMS` 
+    - on macOS: `shasum -a 256 --ignore-missing -c SHA256SUMS`
+
+### Seminal papers and background on the models
+
+If your issue is with model generation quality, then please at least scan the following links and papers to understand the limitations of LLaMA models. This is especially important when choosing an appropriate model size and appreciating both the significant and subtle differences between LLaMA models and ChatGPT:
 - LLaMA:
-- [Introducing LLaMA: A foundational, 65-billion-parameter large language model](https://ai.facebook.com/blog/large-language-model-llama-meta-ai/)
-- [LLaMA: Open and Efficient Foundation Language Models](https://arxiv.org/abs/2302.13971)
+    - [Introducing LLaMA: A foundational, 65-billion-parameter large language model](https://ai.facebook.com/blog/large-language-model-llama-meta-ai/)
+    - [LLaMA: Open and Efficient Foundation Language Models](https://arxiv.org/abs/2302.13971)
 - GPT-3
-- [Language Models are Few-Shot Learners](https://arxiv.org/abs/2005.14165)
+    - [Language Models are Few-Shot Learners](https://arxiv.org/abs/2005.14165)
 - GPT-3.5 / InstructGPT / ChatGPT:
-- [Aligning language models to follow instructions](https://openai.com/research/instruction-following)
-- [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
+    - [Aligning language models to follow instructions](https://openai.com/research/instruction-following)
+    - [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
 
 ### Perplexity (measuring model quality)
 
