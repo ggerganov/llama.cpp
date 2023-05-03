@@ -52,12 +52,19 @@ extern "C" {
     // Frees all allocated memory and the context.
     RWKV_API void rwkv_free(struct rwkv_context * ctx);
 
-    // Quantizes FP32 or FP16 model to one of INT4 formats.
+    // Quantizes FP32 or FP16 model to one of quantized formats.
     // Returns false on any error. Error messages would be printed to stderr.
     // - model_file_path_in: path to model file in ggml format, must be either FP32 or FP16.
     // - model_file_path_out: quantized model will be written here.
-    // - q_type: set to 2 for GGML_RWKV_TYPE_Q4_0, set to 3 for GGML_RWKV_TYPE_Q4_1.
-    RWKV_API bool rwkv_quantize_model_file(const char * model_file_path_in, const char * model_file_path_out, uint32_t q_type);
+    // - format_name: must be one of available format names below.
+    // Available format names:
+    // - Q4_0
+    // - Q4_1
+    // - Q4_2
+    // - Q5_0
+    // - Q5_1
+    // - Q8_0
+    RWKV_API bool rwkv_quantize_model_file(const char * model_file_path_in, const char * model_file_path_out, const char * format_name);
 
     // Returns system information string.
     RWKV_API const char * rwkv_get_system_info_string(void);

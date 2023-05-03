@@ -235,9 +235,6 @@ ggml_v1.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
 ggml_v1_noavx2.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
 	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) -c $< -o $@
 
-ggml_rwkv.o: otherarch/ggml_rwkv.c otherarch/ggml_rwkv.h
-	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -c $< -o $@
-
 llama.o: llama.cpp llama.h llama-util.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
@@ -263,19 +260,19 @@ main: examples/main/main.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
 
-koboldcpp: ggml.o ggml_rwkv.o ggml_v1.o expose.o common.o gpttype_adapter.o
+koboldcpp: ggml.o ggml_v1.o expose.o common.o gpttype_adapter.o
 	$(DEFAULT_BUILD)
 
-koboldcpp_openblas: ggml_openblas.o ggml_rwkv.o ggml_v1.o expose.o common.o gpttype_adapter.o 
+koboldcpp_openblas: ggml_openblas.o ggml_v1.o expose.o common.o gpttype_adapter.o 
 	$(OPENBLAS_BUILD)
 	
-koboldcpp_noavx2: ggml_noavx2.o ggml_rwkv.o ggml_v1_noavx2.o expose.o common.o gpttype_adapter.o 
+koboldcpp_noavx2: ggml_noavx2.o ggml_v1_noavx2.o expose.o common.o gpttype_adapter.o 
 	$(NOAVX2_BUILD)
 
-koboldcpp_openblas_noavx2: ggml_openblas_noavx2.o ggml_rwkv.o ggml_v1_noavx2.o expose.o common.o gpttype_adapter.o 
+koboldcpp_openblas_noavx2: ggml_openblas_noavx2.o ggml_v1_noavx2.o expose.o common.o gpttype_adapter.o 
 	$(OPENBLAS_NOAVX2_BUILD)
 
-koboldcpp_clblast: ggml_clblast.o ggml_rwkv.o ggml_v1.o expose.o common.o gpttype_adapter.o ggml-opencl.o 
+koboldcpp_clblast: ggml_clblast.o ggml_v1.o expose.o common.o gpttype_adapter.o ggml-opencl.o 
 	$(CLBLAST_BUILD)
 		
 quantize_llama: examples/quantize/quantize.cpp ggml.o llama.o
