@@ -23,7 +23,7 @@
 #define LLAMA_FILE_MAGIC             'ggjt'
 #define LLAMA_FILE_MAGIC_UNVERSIONED 'ggml'
 #define LLAMA_SESSION_MAGIC          'ggsn'
-#define LLAMA_SESSION_VERSION        0
+#define LLAMA_SESSION_VERSION        1
 
 #ifdef __cplusplus
 extern "C" {
@@ -127,7 +127,8 @@ extern "C" {
     // Sets the current rng seed.
     LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, int seed);
 
-    // Returns the size in bytes of the state (rng, logits, embedding and kv_cache)
+    // Returns the maximum size in bytes of the state (rng, logits, embedding
+    // and kv_cache) - will often be smaller after compacting tokens
     LLAMA_API size_t llama_get_state_size(const struct llama_context * ctx);
 
     // Copies the state to the specified destination address.
