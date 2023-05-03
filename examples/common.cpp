@@ -66,6 +66,33 @@ int32_t get_num_physical_cores() {
     return n_threads > 0 ? (n_threads <= 4 ? n_threads : n_threads / 2) : 4;
 }
 
+std::string process_escapes(const char* input) {
+    std::string output;
+
+    if (input != nullptr) {
+        std::size_t input_len = std::strlen(input);
+        output.reserve(input_len);
+
+        for (std::size_t i = 0; i < input_len; ++i) {
+            if (input[i] == '\\' && i + 1 < input_len) {
+                switch (input[++i]) {
+                    case 'n':  output.push_back('\n'); break;
+                    case 't':  output.push_back('\t'); break;
+                    case '\'': output.push_back('\''); break;
+                    case '\"': output.push_back('\"'); break;
+                    case '\\': output.push_back('\\'); break;
+                    default:   output.push_back('\\');
+                               output.push_back(input[i]); break;
+                }
+            } else {
+                output.push_back(input[i]);
+            }
+        }
+    }
+
+    return output;
+}
+
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     bool invalid_param = false;
     std::string arg;
@@ -91,7 +118,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 invalid_param = true;
                 break;
             }
-            params.prompt = argv[i];
+            params.prompt = process_escapes(argv[i]);
         } else if (arg == "--session") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -324,7 +351,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "                        run in interactive mode and poll user input upon seeing PROMPT (can be\n");
     fprintf(stderr, "                        specified more than once for multiple prompts).\n");
     fprintf(stderr, "  --color               colorise output to distinguish prompt and user input from generations\n");
-    fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for <= 0)\n");
+    fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)\n");
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
     fprintf(stderr, "  -p PROMPT, --prompt PROMPT\n");
     fprintf(stderr, "                        prompt to start generation with (default: empty)\n");
@@ -403,6 +430,39 @@ std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::s
     res.resize(n);
 
     return res;
+}
+
+struct llama_context * llama_init_from_gpt_params(const gpt_params & params) {
+    auto lparams = llama_context_default_params();
+
+    lparams.n_ctx      = params.n_ctx;
+    lparams.n_parts    = params.n_parts;
+    lparams.seed       = params.seed;
+    lparams.f16_kv     = params.memory_f16;
+    lparams.use_mmap   = params.use_mmap;
+    lparams.use_mlock  = params.use_mlock;
+    lparams.logits_all = params.perplexity;
+    lparams.embedding  = params.embedding;
+
+    llama_context * lctx = llama_init_from_file(params.model.c_str(), lparams);
+
+    if (lctx == NULL) {
+        fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
+        return NULL;
+    }
+
+    if (!params.lora_adapter.empty()) {
+        int err = llama_apply_lora_from_file(lctx,
+                                             params.lora_adapter.c_str(),
+                                             params.lora_base.empty() ? NULL : params.lora_base.c_str(),
+                                             params.n_threads);
+        if (err != 0) {
+            fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
+            return NULL;
+        }
+    }
+
+    return lctx;
 }
 
 /* Keep track of current color of output, and emit ANSI code if it changes. */
