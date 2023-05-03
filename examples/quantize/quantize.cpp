@@ -1,5 +1,6 @@
 #include "ggml.h"
 #include "llama.h"
+#include "build-info.h"
 
 #include <cstdio>
 #include <map>
@@ -9,7 +10,6 @@ static const std::map<std::string, enum llama_ftype> LLAMA_FTYPE_MAP = {
   {"q4_0", LLAMA_FTYPE_MOSTLY_Q4_0},
   {"q4_1", LLAMA_FTYPE_MOSTLY_Q4_1},
   {"q4_2", LLAMA_FTYPE_MOSTLY_Q4_2},
-  {"q4_3", LLAMA_FTYPE_MOSTLY_Q4_3},
   {"q5_0", LLAMA_FTYPE_MOSTLY_Q5_0},
   {"q5_1", LLAMA_FTYPE_MOSTLY_Q5_1},
   {"q8_0", LLAMA_FTYPE_MOSTLY_Q8_0},
@@ -50,6 +50,8 @@ int main(int argc, char ** argv) {
     } else {
         ftype = (enum llama_ftype)atoi(argv[3]);
     }
+
+    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
 
     int nthread = argc > 4 ? atoi(argv[4]) : 0;
 

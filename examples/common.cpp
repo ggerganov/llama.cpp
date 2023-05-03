@@ -1,11 +1,18 @@
 #include "common.h"
 
 #include <cassert>
+#include <iostream>
 #include <cstring>
 #include <fstream>
 #include <string>
 #include <iterator>
 #include <algorithm>
+#include <sstream>
+
+#if defined(__APPLE__) && defined(__MACH__)
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#endif
 
 #if defined (_WIN32)
 #include <fcntl.h>
@@ -23,19 +30,70 @@ extern "C" __declspec(dllimport) int __stdcall WideCharToMultiByte(unsigned int 
 #define CP_UTF8 65001
 #endif
 
-bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
-    // determine sensible default number of threads.
-    // std::thread::hardware_concurrency may not be equal to the number of cores, or may return 0.
+int32_t get_num_physical_cores() {
 #ifdef __linux__
     std::ifstream cpuinfo("/proc/cpuinfo");
-    params.n_threads = std::count(std::istream_iterator<std::string>(cpuinfo),
-                                  std::istream_iterator<std::string>(),
-                                  std::string("processor"));
+    std::string line;
+    while (std::getline(cpuinfo, line)) {
+        std::size_t pos = line.find("cpu cores");
+        if (pos != std::string::npos) {
+            pos = line.find(": ", pos);
+            if (pos != std::string::npos) {
+                try {
+                    // Extract the number and return it
+                    return static_cast<int32_t>(std::stoul(line.substr(pos + 2)));
+                } catch (const std::invalid_argument &) {
+                    // Ignore if we could not parse
+                }
+            }
+        }
+    }
+#elif defined(__APPLE__) && defined(__MACH__)
+    int32_t num_physical_cores;
+    size_t len = sizeof(num_physical_cores);
+    int result = sysctlbyname("hw.perflevel0.physicalcpu", &num_physical_cores, &len, NULL, 0);
+    if (result == 0) {
+        return num_physical_cores;
+    }
+    result = sysctlbyname("hw.physicalcpu", &num_physical_cores, &len, NULL, 0);
+    if (result == 0) {
+        return num_physical_cores;
+    }
+#elif defined(_WIN32)
+    //TODO: Implement
 #endif
-    if (params.n_threads == 0) {
-        params.n_threads = std::max(1, (int32_t) std::thread::hardware_concurrency());
+    unsigned int n_threads = std::thread::hardware_concurrency();
+    return n_threads > 0 ? (n_threads <= 4 ? n_threads : n_threads / 2) : 4;
+}
+
+std::string process_escapes(const char* input) {
+    std::string output;
+
+    if (input != nullptr) {
+        std::size_t input_len = std::strlen(input);
+        output.reserve(input_len);
+
+        for (std::size_t i = 0; i < input_len; ++i) {
+            if (input[i] == '\\' && i + 1 < input_len) {
+                switch (input[++i]) {
+                    case 'n':  output.push_back('\n'); break;
+                    case 't':  output.push_back('\t'); break;
+                    case '\'': output.push_back('\''); break;
+                    case '\"': output.push_back('\"'); break;
+                    case '\\': output.push_back('\\'); break;
+                    default:   output.push_back('\\');
+                               output.push_back(input[i]); break;
+                }
+            } else {
+                output.push_back(input[i]);
+            }
+        }
     }
 
+    return output;
+}
+
+bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     bool invalid_param = false;
     std::string arg;
     gpt_params default_params;
@@ -60,7 +118,13 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 invalid_param = true;
                 break;
             }
-            params.prompt = argv[i];
+            params.prompt = process_escapes(argv[i]);
+        } else if (arg == "--session") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.path_session = argv[i];
         } else if (arg == "-f" || arg == "--file") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -108,6 +172,18 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.temp = std::stof(argv[i]);
+        } else if (arg == "--tfs") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.tfs_z = std::stof(argv[i]);
+        } else if (arg == "--typical") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.typical_p = std::stof(argv[i]);
         } else if (arg == "--repeat_last_n") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -120,6 +196,36 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.repeat_penalty = std::stof(argv[i]);
+        } else if (arg == "--frequency_penalty") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.frequency_penalty = std::stof(argv[i]);
+        } else if (arg == "--presence_penalty") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.presence_penalty = std::stof(argv[i]);
+        } else if (arg == "--mirostat") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.mirostat = std::stoi(argv[i]);
+        } else if (arg == "--mirostat_lr") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.mirostat_eta = std::stof(argv[i]);
+        } else if (arg == "--mirostat_ent") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.mirostat_tau = std::stof(argv[i]);
         } else if (arg == "-b" || arg == "--batch_size") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -179,7 +285,28 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         } else if (arg == "--perplexity") {
             params.perplexity = true;
         } else if (arg == "--ignore-eos") {
-            params.ignore_eos = true;
+            params.logit_bias[llama_token_eos()] = -INFINITY;
+        } else if (arg == "--no-penalize-nl") {
+            params.penalize_nl = false;
+        } else if (arg == "-l" || arg == "--logit-bias") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            std::stringstream ss(argv[i]);
+            llama_token key;
+            char sign;
+            std::string value_str;
+            try {
+                if (ss >> key && ss >> sign && std::getline(ss, value_str) && (sign == '+' || sign == '-')) {
+                    params.logit_bias[key] = std::stof(value_str) * ((sign == '-') ? -1.0f : 1.0f);
+                } else {
+                    throw std::exception();
+                }
+            } catch (const std::exception &e) {
+                invalid_param = true;
+                break;
+            }
         } else if (arg == "--n_parts") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -224,21 +351,36 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "                        run in interactive mode and poll user input upon seeing PROMPT (can be\n");
     fprintf(stderr, "                        specified more than once for multiple prompts).\n");
     fprintf(stderr, "  --color               colorise output to distinguish prompt and user input from generations\n");
-    fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for <= 0)\n");
+    fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)\n");
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
     fprintf(stderr, "  -p PROMPT, --prompt PROMPT\n");
     fprintf(stderr, "                        prompt to start generation with (default: empty)\n");
+    fprintf(stderr, "  --session FNAME       file to cache model state in (may be large!) (default: none)\n");
     fprintf(stderr, "  --random-prompt       start with a randomized prompt.\n");
     fprintf(stderr, "  --in-prefix STRING    string to prefix user inputs with (default: empty)\n");
     fprintf(stderr, "  -f FNAME, --file FNAME\n");
     fprintf(stderr, "                        prompt file to start generation.\n");
     fprintf(stderr, "  -n N, --n_predict N   number of tokens to predict (default: %d, -1 = infinity)\n", params.n_predict);
-    fprintf(stderr, "  --top_k N             top-k sampling (default: %d)\n", params.top_k);
-    fprintf(stderr, "  --top_p N             top-p sampling (default: %.1f)\n", (double)params.top_p);
-    fprintf(stderr, "  --repeat_last_n N     last n tokens to consider for penalize (default: %d)\n", params.repeat_last_n);
-    fprintf(stderr, "  --repeat_penalty N    penalize repeat sequence of tokens (default: %.1f)\n", (double)params.repeat_penalty);
+    fprintf(stderr, "  --top_k N             top-k sampling (default: %d, 0 = disabled)\n", params.top_k);
+    fprintf(stderr, "  --top_p N             top-p sampling (default: %.1f, 1.0 = disabled)\n", (double)params.top_p);
+    fprintf(stderr, "  --tfs N               tail free sampling, parameter z (default: %.1f, 1.0 = disabled)\n", (double)params.tfs_z);
+    fprintf(stderr, "  --typical N           locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)\n", (double)params.typical_p);
+    fprintf(stderr, "  --repeat_last_n N     last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)\n", params.repeat_last_n);
+    fprintf(stderr, "  --repeat_penalty N    penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)\n", (double)params.repeat_penalty);
+    fprintf(stderr, "  --presence_penalty N  repeat alpha presence penalty (default: %.1f, 0.0 = disabled)\n", (double)params.presence_penalty);
+    fprintf(stderr, "  --frequency_penalty N repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)\n", (double)params.frequency_penalty);
+    fprintf(stderr, "  --mirostat N          use Mirostat sampling.\n");
+    fprintf(stderr, "                        Top K, Nucleus, Tail Free and Locally Typical samplers are ignored if used.\n");
+    fprintf(stderr, "                        (default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)\n", params.mirostat);
+    fprintf(stderr, "  --mirostat_lr N       Mirostat learning rate, parameter eta (default: %.1f)\n", (double)params.mirostat_eta);
+    fprintf(stderr, "  --mirostat_ent N      Mirostat target entropy, parameter tau (default: %.1f)\n", (double)params.mirostat_tau);
+    fprintf(stderr, "  -l TOKEN_ID(+/-)BIAS, --logit-bias TOKEN_ID(+/-)BIAS\n");
+    fprintf(stderr, "                        modifies the likelihood of token appearing in the completion,\n");
+    fprintf(stderr, "                        i.e. `--logit-bias 15043+1` to increase likelihood of token ' Hello',\n");
+    fprintf(stderr, "                        or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'\n");
     fprintf(stderr, "  -c N, --ctx_size N    size of the prompt context (default: %d)\n", params.n_ctx);
-    fprintf(stderr, "  --ignore-eos          ignore end of stream token and continue generating\n");
+    fprintf(stderr, "  --ignore-eos          ignore end of stream token and continue generating (implies --logit-bias 2-inf)\n");
+    fprintf(stderr, "  --no-penalize-nl      do not penalize newline token\n");
     fprintf(stderr, "  --memory_f32          use f32 instead of f16 for memory key+value\n");
     fprintf(stderr, "  --temp N              temperature (default: %.1f)\n", (double)params.temp);
     fprintf(stderr, "  --n_parts N           number of model parts (default: -1 = determine from dimensions)\n");
@@ -288,6 +430,39 @@ std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::s
     res.resize(n);
 
     return res;
+}
+
+struct llama_context * llama_init_from_gpt_params(const gpt_params & params) {
+    auto lparams = llama_context_default_params();
+
+    lparams.n_ctx      = params.n_ctx;
+    lparams.n_parts    = params.n_parts;
+    lparams.seed       = params.seed;
+    lparams.f16_kv     = params.memory_f16;
+    lparams.use_mmap   = params.use_mmap;
+    lparams.use_mlock  = params.use_mlock;
+    lparams.logits_all = params.perplexity;
+    lparams.embedding  = params.embedding;
+
+    llama_context * lctx = llama_init_from_file(params.model.c_str(), lparams);
+
+    if (lctx == NULL) {
+        fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
+        return NULL;
+    }
+
+    if (!params.lora_adapter.empty()) {
+        int err = llama_apply_lora_from_file(lctx,
+                                             params.lora_adapter.c_str(),
+                                             params.lora_base.empty() ? NULL : params.lora_base.c_str(),
+                                             params.n_threads);
+        if (err != 0) {
+            fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
+            return NULL;
+        }
+    }
+
+    return lctx;
 }
 
 /* Keep track of current color of output, and emit ANSI code if it changes. */
