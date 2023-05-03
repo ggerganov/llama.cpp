@@ -1,0 +1,7 @@
+#ifndef BUILD_INFO_H
+#define BUILD_INFO_H
+
+#define BUILD_NUMBER @BUILD_NUMBER@
+#define BUILD_COMMIT "@BUILD_COMMIT@"
+
+#endif // BUILD_INFO_H
