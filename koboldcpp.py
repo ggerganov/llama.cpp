@@ -515,15 +515,16 @@ def main(args):
             import psutil
             os_used = sys.platform
             process = psutil.Process(os.getpid())  # Set high priority for the python script for the CPU
+            oldprio = process.nice()
             if os_used == "win32":  # Windows (either 32-bit or 64-bit)
                 process.nice(psutil.REALTIME_PRIORITY_CLASS)
-                print("High Priority for Windows Set")
+                print("High Priority for Windows Set: " + str(oldprio) + " to " + str(process.nice()))
             elif os_used == "linux":  # linux
-                process.nice(psutil.IOPRIO_HIGH)
-                print("High Priority for Linux Set")
+                process.nice(psutil.IOPRIO_CLASS_RT, value=0)
+                print("High Priority for Linux Set: " + str(oldprio) + " to " + str(process.nice()))
             else:  # MAC OS X or other
-                process.nice(20)
-                print("High Priority for Other OS Set (nice=20)")
+                process.nice(-18)
+                print("High Priority for Other OS Set :" + str(oldprio) + " to " + str(process.nice()))
         except Exception as ex:
              print("Error, Could not change process priority: " + str(ex))
 
