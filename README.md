@@ -388,7 +388,7 @@ python3 .\scripts\verify-checksum-models.py
 ```
 
 - On linux or macOS it is also possible to run the following commands to verify if you have all possible latest files in your self-installed `./models` subdirectory:
-    - On Linux: `sha256sum --ignore-missing -c SHA256SUMS` 
+    - On Linux: `sha256sum --ignore-missing -c SHA256SUMS`
     - on macOS: `shasum -a 256 --ignore-missing -c SHA256SUMS`
 
 ### Seminal papers and background on the models
