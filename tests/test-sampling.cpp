@@ -131,7 +131,7 @@ void test_repetition_penalty(
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
     llama_sample_softmax(nullptr, &candidates_p);
     DUMP(&candidates_p);
-    llama_sample_repetition_penalty(nullptr, &candidates_p, (llama_token *)last_tokens.data(), last_tokens.size(), penalty);
+    llama_sample_repetition_penalty(nullptr, &candidates_p, (const llama_token *) last_tokens.data(), last_tokens.size(), penalty);
     llama_sample_softmax(nullptr, &candidates_p);
     DUMP(&candidates_p);
 
@@ -160,7 +160,7 @@ void test_frequency_presence_penalty(
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
     llama_sample_softmax(nullptr, &candidates_p);
     // DUMP(&candidates_p);
-    llama_sample_frequency_and_presence_penalties(nullptr, &candidates_p, (llama_token *)last_tokens.data(), last_tokens.size(), alpha_frequency, alpha_presence);
+    llama_sample_frequency_and_presence_penalties(nullptr, &candidates_p, (const llama_token *) last_tokens.data(), last_tokens.size(), alpha_frequency, alpha_presence);
     llama_sample_softmax(nullptr, &candidates_p);
     // DUMP(&candidates_p);
 

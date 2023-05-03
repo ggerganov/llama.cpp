@@ -672,35 +672,91 @@ float vmaxvq_f32(float32x4_t v) {
 }
 
 int8x8_t vzip1_s8(int8x8_t a, int8x8_t b) {
-    return vget_low_s8(vcombine_s8(a, b));
+    int8x8_t res;
+
+    res[0] = a[0]; res[1] = b[0];
+    res[2] = a[1]; res[3] = b[1];
+    res[4] = a[2]; res[5] = b[2];
+    res[6] = a[3]; res[7] = b[3];
+
+    return res;
 }
 
 int8x8_t vzip2_s8(int8x8_t a, int8x8_t b) {
-    return vget_high_s8(vcombine_s8(a, b));
+    int8x8_t res;
+
+    res[0] = a[4]; res[1] = b[4];
+    res[2] = a[5]; res[3] = b[5];
+    res[4] = a[6]; res[5] = b[6];
+    res[6] = a[7]; res[7] = b[7];
+
+    return res;
 }
 
 uint8x8_t vzip1_u8(uint8x8_t a, uint8x8_t b) {
-    return vget_low_u8(vcombine_u8(a, b));
+    uint8x8_t res;
+
+    res[0] = a[0]; res[1] = b[0];
+    res[2] = a[1]; res[3] = b[1];
+    res[4] = a[2]; res[5] = b[2];
+    res[6] = a[3]; res[7] = b[3];
+
+    return res;
 }
 
 uint8x8_t vzip2_u8(uint8x8_t a, uint8x8_t b) {
-    return vget_high_u8(vcombine_u8(a, b));
+    uint8x8_t res;
+
+    res[0] = a[4]; res[1] = b[4];
+    res[2] = a[5]; res[3] = b[5];
+    res[4] = a[6]; res[5] = b[6];
+    res[6] = a[7]; res[7] = b[7];
+
+    return res;
 }
 
 int8x16_t vzip1q_s8(int8x16_t a, int8x16_t b) {
-    return vcombine_s8(vget_low_s8(a), vget_low_s8(b));
+    int8x16_t res;
+
+    res[0]  = a[0]; res[1]  = b[0]; res[2]  = a[1]; res[3]  = b[1];
+    res[4]  = a[2]; res[5]  = b[2]; res[6]  = a[3]; res[7]  = b[3];
+    res[8]  = a[4]; res[9]  = b[4]; res[10] = a[5]; res[11] = b[5];
+    res[12] = a[6]; res[13] = b[6]; res[14] = a[7]; res[15] = b[7];
+
+    return res;
 }
 
 int8x16_t vzip2q_s8(int8x16_t a, int8x16_t b) {
-    return vcombine_s8(vget_high_s8(a), vget_high_s8(b));
+    int8x16_t res;
+
+    res[0]  = a[8];  res[1]  = b[8];  res[2]  = a[9];  res[3]  = b[9];
+    res[4]  = a[10]; res[5]  = b[10]; res[6]  = a[11]; res[7]  = b[11];
+    res[8]  = a[12]; res[9]  = b[12]; res[10] = a[13]; res[11] = b[13];
+    res[12] = a[14]; res[13] = b[14]; res[14] = a[15]; res[15] = b[15];
+
+    return res;
 }
 
 uint8x16_t vzip1q_u8(uint8x16_t a, uint8x16_t b) {
-    return vcombine_u8(vget_low_u8(a), vget_low_u8(b));
+    uint8x16_t res;
+
+    res[0]  = a[0];  res[1]  = b[0];  res[2]  = a[1];  res[3]  = b[1];
+    res[4]  = a[2];  res[5]  = b[2];  res[6]  = a[3];  res[7]  = b[3];
+    res[8]  = a[4];  res[9]  = b[4];  res[10] = a[5];  res[11] = b[5];
+    res[12] = a[6];  res[13] = b[6];  res[14] = a[7];  res[15] = b[7];
+
+    return res;
 }
 
 uint8x16_t vzip2q_u8(uint8x16_t a, uint8x16_t b) {
-    return vcombine_u8(vget_high_u8(a), vget_high_u8(b));
+    uint8x16_t res;
+
+    res[0]  = a[8];  res[1]  = b[8];  res[2]  = a[9];  res[3]  = b[9];
+    res[4]  = a[10]; res[5]  = b[10]; res[6]  = a[11]; res[7]  = b[11];
+    res[8]  = a[12]; res[9]  = b[12]; res[10] = a[13]; res[11] = b[13];
+    res[12] = a[14]; res[13] = b[14]; res[14] = a[15]; res[15] = b[15];
+
+    return res;
 }
 
 int32x4_t vcvtnq_s32_f32(float32x4_t v) {
@@ -835,6 +891,7 @@ static void quantize_row_q4_0(const float * restrict x, void * restrict vy, int 
         float max = 0.0f;
         float min = 0.0f;
 
+        vector float asrcv [8];
         vector float srcv [8];
         vector float maxv[8];
         vector float minv[8];
@@ -4767,6 +4824,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
         /*.perf_cycles  =*/ 0,
         /*.perf_time_us =*/ 0,
         /*.data         =*/ (data == NULL && !ctx->no_alloc) ? (void *)(result + 1) : data,
+        /*.name         =*/ { 0 },
         /*.pad          =*/ { 0 },
     };
 
@@ -5119,6 +5177,15 @@ void * ggml_get_data(const struct ggml_tensor * tensor) {
 float * ggml_get_data_f32(const struct ggml_tensor * tensor) {
     assert(tensor->type == GGML_TYPE_F32);
     return (float *)(tensor->data);
+}
+
+const char * ggml_get_name(const struct ggml_tensor * tensor) {
+    return tensor->name;
+}
+
+void ggml_set_name(struct ggml_tensor * tensor, const char * name) {
+    strncpy(tensor->name, name, sizeof(tensor->name));
+    tensor->name[sizeof(tensor->name) - 1] = '\0';
 }
 
 struct ggml_tensor * ggml_view_tensor(
@@ -6220,6 +6287,7 @@ struct ggml_tensor * ggml_diag_mask_inf(
     //struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
     struct ggml_tensor * result = ggml_view_tensor(ctx, a);
     struct ggml_tensor * b = ggml_new_i32(ctx, n_past);
+    ggml_set_name(b, "n_past");
 
     result->op   = GGML_OP_DIAG_MASK_INF;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6277,6 +6345,7 @@ struct ggml_tensor * ggml_rope(
     ((int32_t *) b->data)[0] = n_past;
     ((int32_t *) b->data)[1] = n_dims;
     ((int32_t *) b->data)[2] = mode;
+    ggml_set_name(b, "n_past, n_dims, mode");
 
     result->op   = GGML_OP_ROPE;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -12348,10 +12417,16 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
             snprintf(color, sizeof(color), "white");
         }
 
-        fprintf(fp, "  \"%p\" [ \
-style = filled; fillcolor = %s; shape = record; \
-label=\"%d [%" PRId64 ", %" PRId64 "] | <x>%s",
-                (void *) node, color,
+        fprintf(fp, "  \"%p\" [ "
+                    "style = filled; fillcolor = %s; shape = record; "
+                    "label=\"",
+                (void *) node, color);
+
+        if (strlen(node->name) > 0) {
+            fprintf(fp, "%s |", node->name);
+        }
+
+        fprintf(fp, "%d [%" PRId64 ", %" PRId64 "] | <x>%s",
                 i, node->ne[0], node->ne[1],
                 GGML_OP_SYMBOL[node->op]);
 
@@ -12367,18 +12442,26 @@ label=\"%d [%" PRId64 ", %" PRId64 "] | <x>%s",
 
         snprintf(color, sizeof(color), "pink");
 
-        if (ggml_nelements(node) == 1) {
-            fprintf(fp, "  \"%p\" [ \
-style = filled; fillcolor = %s; shape = record; \
-label=\"<x>%.1e\"; ]\n",
-                    (void *) node, color, (double)ggml_get_f32_1d(node, 0));
-        } else {
-            fprintf(fp, "  \"%p\" [ \
-style = filled; fillcolor = %s; shape = record; \
-label=\"<x>CONST %d [%" PRId64 ", %" PRId64 "]\"; ]\n",
-                    (void *) node, color,
-                    i, node->ne[0], node->ne[1]);
+        fprintf(fp, "  \"%p\" [ "
+                    "style = filled; fillcolor = %s; shape = record; "
+                    "label=\"<x>",
+                (void *) node, color);
+
+        if (strlen(node->name) > 0) {
+                fprintf(fp, "%s | ", node->name);
         }
+        if (ggml_nelements(node) == 1) {
+            if (node->type == GGML_TYPE_I8 || node->type == GGML_TYPE_I16 || node->type == GGML_TYPE_I32) {
+                fprintf(fp, "%d", ggml_get_i32_1d(node, 0));
+            }
+            else {
+                fprintf(fp, "%.1e", (double)ggml_get_f32_1d(node, 0));
+            }
+        }
+        else {
+            fprintf(fp, "CONST %d [%" PRId64 ", %" PRId64 "]", i, node->ne[0], node->ne[1]);
+        }
+        fprintf(fp, "\"; ]\n");
     }
 
     for (int i = 0; i < gb->n_nodes; i++) {
