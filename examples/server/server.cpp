@@ -730,7 +730,7 @@ int main(int argc, char ** argv) {
                 { "content", completion.c_str() },
                 { "total_tokens", llama->tokens_completion }
               };
-            printf("\nCompletion finished: %i tokens predicted.\n", llama->tokens_completion);
+            printf("\rCompletion finished: %i tokens predicted.\n", llama->tokens_completion);
             res.set_content(data.dump(), "application/json");
             }
   });
