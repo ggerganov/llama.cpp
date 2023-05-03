@@ -22,6 +22,9 @@
 #include <signal.h>
 #include <unistd.h>
 #elif defined (_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
 #include <signal.h>
 #endif
 
@@ -240,7 +243,10 @@ int main(int argc, char ** argv) {
         sigint_action.sa_flags = 0;
         sigaction(SIGINT, &sigint_action, NULL);
 #elif defined (_WIN32)
-        signal(SIGINT, sigint_handler);
+        auto console_ctrl_handler = [](DWORD ctrl_type) -> BOOL {
+            return (ctrl_type == CTRL_C_EVENT) ? (sigint_handler(SIGINT), true) : false;
+        };
+        SetConsoleCtrlHandler(static_cast<PHANDLER_ROUTINE>(console_ctrl_handler), true);
 #endif
 
         fprintf(stderr, "%s: interactive mode on.\n", __func__);
@@ -519,11 +525,6 @@ int main(int argc, char ** argv) {
                 // potentially set color to indicate we are taking user input
                 set_console_color(con_st, CONSOLE_COLOR_USER_INPUT);
 
-#if defined (_WIN32)
-                // Windows: must reactivate sigint handler after each signal
-                signal(SIGINT, sigint_handler);
-#endif
-
                 if (params.instruct) {
                     printf("\n> ");
                 }
@@ -606,10 +607,6 @@ int main(int argc, char ** argv) {
             is_interacting = true;
         }
     }
-
-#if defined (_WIN32)
-    signal(SIGINT, SIG_DFL);
-#endif
 
     llama_print_timings(ctx);
     llama_free(ctx);
