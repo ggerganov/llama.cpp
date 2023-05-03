@@ -520,7 +520,7 @@ def main(args):
                 process.nice(psutil.REALTIME_PRIORITY_CLASS)
                 print("High Priority for Windows Set: " + str(oldprio) + " to " + str(process.nice()))
             elif os_used == "linux":  # linux
-                process.nice(psutil.IOPRIO_CLASS_RT, value=0)
+                process.nice(psutil.IOPRIO_CLASS_RT)
                 print("High Priority for Linux Set: " + str(oldprio) + " to " + str(process.nice()))
             else:  # MAC OS X or other
                 process.nice(-18)
