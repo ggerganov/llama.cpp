@@ -1,0 +1,5 @@
+set(TARGET server)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(${TARGET} server.cpp json11.cpp json11.hpp httplib.h server.h)
+target_link_libraries(${TARGET} PRIVATE common llama ${CMAKE_THREAD_LIBS_INIT})
+target_compile_features(${TARGET} PRIVATE cxx_std_11)
