@@ -75,3 +75,4 @@ print("-" * 80)
 # Output the results as a table
 for r in results:
     print(f"{r['filename']:40} {r['valid checksum']:^20} {r['file missing']:^20}")
+
