@@ -71,7 +71,7 @@ LLAMA_FILE_VERSION = ctypes.c_int(1)
 LLAMA_FILE_MAGIC = b"ggjt"
 LLAMA_FILE_MAGIC_UNVERSIONED = b"ggml"
 LLAMA_SESSION_MAGIC = b"ggsn"
-LLAMA_SESSION_VERSION = ctypes.c_int(0)
+LLAMA_SESSION_VERSION = ctypes.c_int(1)
 
 llama_context_p = c_void_p
 
@@ -239,7 +239,8 @@ _lib.llama_set_rng_seed.argtypes = [llama_context_p, c_int]
 _lib.llama_set_rng_seed.restype = None
 
 
-# Returns the size in bytes of the state (rng, logits, embedding and kv_cache)
+# Returns the maximum size in bytes of the state (rng, logits, embedding
+# and kv_cache) - will often be smaller after compacting tokens
 def llama_get_state_size(ctx: llama_context_p) -> c_size_t:
     return _lib.llama_get_state_size(ctx)
 
