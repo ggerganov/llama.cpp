@@ -20,12 +20,11 @@ The main goal of `llama.cpp` is to run the LLaMA model using 4-bit integer quant
 - Apple silicon first-class citizen - optimized via ARM NEON and Accelerate framework
 - AVX2 support for x86 architectures
 - Mixed F16 / F32 precision
-- 4-bit integer quantization support
+- 4 & 8 bit integer quantization support
 - Runs on the CPU
 
 The original implementation of `llama.cpp` was [hacked in an evening](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022).
-Since then, the project has improved significantly thanks to many contributions. This project is for educational purposes and serves
-as the main playground for developing new features for the [ggml](https://github.com/ggerganov/ggml) library.
+Since then, the project has improved significantly thanks to many contributions. This project is for educational purposes and serves as the main playground for developing new features for the [ggml](https://github.com/ggerganov/ggml) library.
 
 **Supported platforms:**
 
