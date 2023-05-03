@@ -2436,7 +2436,7 @@ size_t llama_get_state_size(const struct llama_context * ctx) {
 }
 
 // Copies the state to the specified destination address
-size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dest) {
+size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dest, int n_token_offset) {
     uint8_t * out = dest;
 
     // copy rng
@@ -2492,31 +2492,38 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dest) {
         const size_t kv_size = kv_self.buf.size;
         const int    kv_ntok = llama_get_kv_cache_token_count(ctx);
 
-        memcpy(out, &kv_size, sizeof(kv_size)); out += sizeof(kv_size);
-        memcpy(out, &kv_ntok, sizeof(kv_ntok)); out += sizeof(kv_ntok);
+        memcpy(out, &kv_size,        sizeof(kv_size));        out += sizeof(kv_size);
+        memcpy(out, &kv_ntok,        sizeof(kv_ntok));        out += sizeof(kv_ntok);
+        memcpy(out, &n_token_offset, sizeof(n_token_offset)); out += sizeof(n_token_offset);
 
-        if (kv_size) {
+        LLAMA_ASSERT(n_token_offset <= kv_ntok);
+
+        if (kv_size && n_token_offset < kv_ntok) {
+            const int    n_tokens = kv_ntok - n_token_offset;
             const size_t elt_size = ggml_element_size(kv_self.k);
+
             char buffer[4096];
             ggml_context * cpy_ctx = ggml_init({ sizeof(buffer), buffer, /* no_alloc */ true });
             ggml_cgraph gf{};
             gf.n_threads = 1;
 
-            ggml_tensor * kout3d = ggml_new_tensor_3d(cpy_ctx, kv_self.k->type, n_embd, kv_ntok, n_layer);
+            ggml_tensor * kout3d = ggml_new_tensor_3d(cpy_ctx, kv_self.k->type, n_embd, n_tokens, n_layer);
             kout3d->data = out;
             out += ggml_nbytes(kout3d);
 
-            ggml_tensor * vout3d = ggml_new_tensor_3d(cpy_ctx, kv_self.v->type, kv_ntok, n_embd, n_layer);
+            ggml_tensor * vout3d = ggml_new_tensor_3d(cpy_ctx, kv_self.v->type, n_tokens, n_embd, n_layer);
             vout3d->data = out;
             out += ggml_nbytes(vout3d);
 
             ggml_tensor * k3d = ggml_view_3d(cpy_ctx, kv_self.k,
-                n_embd, kv_ntok, n_layer,
-                elt_size*n_embd, elt_size*n_embd*n_ctx, 0);
+                n_embd, n_tokens, n_layer,
+                elt_size*n_embd, elt_size*n_embd*n_ctx,
+                elt_size*n_embd*n_token_offset);
 
             ggml_tensor * v3d = ggml_view_3d(cpy_ctx, kv_self.v,
-                kv_ntok, n_embd, n_layer,
-                elt_size*n_ctx, elt_size*n_ctx*n_embd, 0);
+                n_tokens, n_embd, n_layer,
+                elt_size*n_ctx, elt_size*n_ctx*n_embd,
+                elt_size*n_token_offset);
 
             ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, k3d, kout3d));
             ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, v3d, vout3d));
@@ -2593,34 +2600,42 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
 
         size_t kv_size;
         int kv_ntok;
+        int n_token_offset;
 
-        memcpy(&kv_size, in, sizeof(kv_size)); in += sizeof(kv_size);
-        memcpy(&kv_ntok, in, sizeof(kv_ntok)); in += sizeof(kv_ntok);
+        memcpy(&kv_size,        in, sizeof(kv_size));        in += sizeof(kv_size);
+        memcpy(&kv_ntok,        in, sizeof(kv_ntok));        in += sizeof(kv_ntok);
+        memcpy(&n_token_offset, in, sizeof(n_token_offset)); in += sizeof(n_token_offset);
 
-        if (kv_size) {
+        LLAMA_ASSERT(n_token_offset <= kv_ntok);
+
+        if (kv_size && n_token_offset < kv_ntok) {
             LLAMA_ASSERT(kv_self.buf.size == kv_size);
 
+            const int    n_tokens = kv_ntok - n_token_offset;
             const size_t elt_size = ggml_element_size(kv_self.k);
+
             char buffer[4096];
             ggml_context * cpy_ctx = ggml_init({ sizeof(buffer), buffer, /* no_alloc */ true });
             ggml_cgraph gf{};
             gf.n_threads = 1;
 
-            ggml_tensor * kin3d = ggml_new_tensor_3d(cpy_ctx, kv_self.k->type, n_embd, kv_ntok, n_layer);
+            ggml_tensor * kin3d = ggml_new_tensor_3d(cpy_ctx, kv_self.k->type, n_embd, n_tokens, n_layer);
             kin3d->data = (void *) in;
             in += ggml_nbytes(kin3d);
 
-            ggml_tensor * vin3d = ggml_new_tensor_3d(cpy_ctx, kv_self.v->type, kv_ntok, n_embd, n_layer);
+            ggml_tensor * vin3d = ggml_new_tensor_3d(cpy_ctx, kv_self.v->type, n_tokens, n_embd, n_layer);
             vin3d->data = (void *) in;
             in += ggml_nbytes(vin3d);
 
             ggml_tensor * k3d = ggml_view_3d(cpy_ctx, kv_self.k,
-                n_embd, kv_ntok, n_layer,
-                elt_size*n_embd, elt_size*n_embd*n_ctx, 0);
+                n_embd, n_tokens, n_layer,
+                elt_size*n_embd, elt_size*n_embd*n_ctx,
+                elt_size*n_embd*n_token_offset);
 
             ggml_tensor * v3d = ggml_view_3d(cpy_ctx, kv_self.v,
-                kv_ntok, n_embd, n_layer,
-                elt_size*n_ctx, elt_size*n_ctx*n_embd, 0);
+                n_tokens, n_embd, n_layer,
+                elt_size*n_ctx, elt_size*n_ctx*n_embd,
+                elt_size*n_token_offset);
 
             ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, kin3d, k3d));
             ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, vin3d, v3d));
@@ -2638,7 +2653,12 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
     return nread;
 }
 
-bool llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+bool llama_load_session_file(
+    struct llama_context * ctx,
+              const char * path_session,
+             llama_token * tokens_out,
+                  size_t   n_token_capacity,
+                  size_t * n_token_count_out) {
     llama_file file(path_session, "rb");
 
     // sanity checks
@@ -2660,45 +2680,87 @@ bool llama_load_session_file(struct llama_context * ctx, const char * path_sessi
         }
     }
 
-    // load the prompt
-    {
-        const uint32_t n_token_count = file.read_u32();
+    const size_t n_state_size_max = llama_get_state_size(ctx);
+    size_t       n_token_count    = 0;
 
-        if (n_token_count > n_token_capacity) {
-            fprintf(stderr, "%s : token count in session file exceeded capacity! %u > %zu\n", __func__, n_token_count, n_token_capacity);
-            return false;
+    std::vector<uint8_t> state_data(n_state_size_max);
+
+    // read N segments of (tokens + state), until end or tokens_out filled
+    while (file.size > file.tell()) {
+
+        // load the prompt/tokens
+        const uint32_t n_token_segment = file.read_u32();
+        const size_t   n_token_read    =
+                std::min((size_t) n_token_segment, n_token_capacity - n_token_count);
+
+        file.read_raw(tokens_out + n_token_count, sizeof(llama_token) * n_token_read);
+
+        n_token_count += n_token_read;
+
+        if (n_token_segment > n_token_read) {
+            const size_t n_token_extra = n_token_segment - n_token_read;
+            file.seek(sizeof(llama_token) * n_token_extra, SEEK_CUR);
         }
 
-        file.read_raw(tokens_out, sizeof(llama_token) * n_token_count);
-        *n_token_count_out = n_token_count;
-    }
+        LLAMA_ASSERT(n_token_count <= n_token_capacity);
 
-    // restore the context state
-    {
-        const size_t n_state_size_cur = file.size - file.tell();
-        const size_t n_state_size_max = llama_get_state_size(ctx);
+        // restore the context state
+        {
+            size_t n_state_size_cur;
+            file.read_raw(&n_state_size_cur, sizeof(n_state_size_cur));
 
-        if (n_state_size_cur > n_state_size_max) {
-            fprintf(stderr, "%s : the state size in session file is too big! max %zu, got %zu\n", __func__, n_state_size_max, n_state_size_cur);
-            return false;
+            if (n_state_size_cur > n_state_size_max) {
+                fprintf(stderr, "%s : the state size in session file is too big! max %zu, got %zu\n", __func__, n_state_size_max, n_state_size_cur);
+                return false;
+            }
+
+            file.read_raw(state_data.data(), n_state_size_cur);
+            llama_set_state_data(ctx, state_data.data());
         }
 
-        std::vector<uint8_t> state_data(n_state_size_max);
-        file.read_raw(state_data.data(), n_state_size_cur);
-
-        llama_set_state_data(ctx, state_data.data());
+        if (n_token_count == n_token_capacity) {
+            // the logits for this segment apply to the last token; if we didn't read a full
+            // segment, move back one token to force an eval to get accurate logits
+            if (n_token_read < n_token_segment) {
+                n_token_count--;
+            }
+            break;
+        }
     }
 
+    *n_token_count_out = n_token_count;
     return true;
 }
 
-bool llama_save_session_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count) {
+bool llama_save_session_file(
+    struct llama_context * ctx,
+              const char * path_session,
+       const llama_token * tokens,
+                  size_t   n_token_count) {
+    return (
+        llama_init_session_file(ctx, path_session) &&
+        llama_append_session_file(ctx, path_session, 0, tokens, n_token_count)
+    );
+}
+
+bool llama_init_session_file(struct llama_context * ctx, const char * path_session) {
     llama_file file(path_session, "wb");
 
     file.write_u32(LLAMA_SESSION_MAGIC);
     file.write_u32(LLAMA_SESSION_VERSION);
 
     file.write_raw(&ctx->model.hparams, sizeof(llama_hparams));
+
+    return true;
+}
+
+bool llama_append_session_file(
+    struct llama_context * ctx,
+              const char * path_session,
+                     int   n_token_offset,
+       const llama_token * tokens,
+                  size_t   n_token_count) {
+    llama_file file(path_session, "ab");
 
     // save the prompt
     file.write_u32((uint32_t) n_token_count);
@@ -2709,8 +2771,9 @@ bool llama_save_session_file(struct llama_context * ctx, const char * path_sessi
         const size_t n_state_size_max = llama_get_state_size(ctx);
 
         std::vector<uint8_t> state_data(n_state_size_max);
-        const size_t n_state_size_cur = llama_copy_state_data(ctx, state_data.data());
+        const size_t n_state_size_cur = llama_copy_state_data(ctx, state_data.data(), n_token_offset);
 
+        file.write_raw(&n_state_size_cur, sizeof(n_state_size_cur));
         file.write_raw(state_data.data(), n_state_size_cur);
     }
 

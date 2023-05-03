@@ -140,9 +140,12 @@ int main(int argc, char ** argv) {
     // Add a space in front of the first character to match OG llama tokenizer behavior
     params.prompt.insert(0, 1, ' ');
 
-    std::string path_session = params.path_session;
-    std::vector<llama_token> session_tokens;
+    // tokenize the prompt
+    auto embd_inp = ::llama_tokenize(ctx, params.prompt, true);
 
+    // restore prompt from saved session
+    const std::string path_session = params.path_session;
+    int n_matching_session_tokens = 0;
     if (!path_session.empty()) {
         fprintf(stderr, "%s: attempting to load saved session from '%s'\n", __func__, path_session.c_str());
 
@@ -151,7 +154,7 @@ int main(int argc, char ** argv) {
         if (fp != NULL) {
             std::fclose(fp);
 
-            session_tokens.resize(params.n_ctx);
+            std::vector<llama_token> session_tokens(embd_inp.size());
             size_t n_token_count_out = 0;
             if (!llama_load_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.capacity(), &n_token_count_out)) {
                 fprintf(stderr, "%s: error: failed to load session file '%s'\n", __func__, path_session.c_str());
@@ -159,14 +162,27 @@ int main(int argc, char ** argv) {
             }
             session_tokens.resize(n_token_count_out);
 
-            fprintf(stderr, "%s: loaded a session with prompt size of %d tokens\n", __func__, (int) session_tokens.size());
+            // find matching input prefix from saved session
+            for (llama_token id : session_tokens) {
+                if (n_matching_session_tokens >= (int) embd_inp.size() || id != embd_inp[n_matching_session_tokens]) {
+                    break;
+                }
+                n_matching_session_tokens++;
+            }
+
+            if (n_matching_session_tokens >= (int) embd_inp.size()) {
+                fprintf(stderr, "%s: session file has exact match for prompt!\n", __func__);
+            } else if (n_matching_session_tokens < (int) (embd_inp.size() / 2)) {
+                fprintf(stderr, "%s: warning: session file has low similarity to prompt (%d / %zu tokens); will mostly be reevaluated\n",
+                    __func__, n_matching_session_tokens, embd_inp.size());
+            } else {
+                fprintf(stderr, "%s: session file matches %d / %zu tokens of prompt\n",
+                    __func__, n_matching_session_tokens, embd_inp.size());
+            }
         } else {
             fprintf(stderr, "%s: session file does not exist, will create\n", __func__);
         }
     }
-
-    // tokenize the prompt
-    auto embd_inp = ::llama_tokenize(ctx, params.prompt, true);
 
     const int n_ctx = llama_n_ctx(ctx);
 
@@ -175,25 +191,6 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    // debug message about similarity of saved session, if applicable
-    size_t n_matching_session_tokens = 0;
-    if (session_tokens.size()) {
-        for (llama_token id : session_tokens) {
-            if (n_matching_session_tokens >= embd_inp.size() || id != embd_inp[n_matching_session_tokens]) {
-                break;
-            }
-            n_matching_session_tokens++;
-        }
-        if (n_matching_session_tokens >= embd_inp.size()) {
-            fprintf(stderr, "%s: session file has exact match for prompt!\n", __func__);
-        } else if (n_matching_session_tokens < (embd_inp.size() / 2)) {
-            fprintf(stderr, "%s: warning: session file has low similarity to prompt (%zu / %zu tokens); will mostly be reevaluated\n",
-                __func__, n_matching_session_tokens, embd_inp.size());
-        } else {
-            fprintf(stderr, "%s: session file matches %zu / %zu tokens of prompt\n",
-                __func__, n_matching_session_tokens, embd_inp.size());
-        }
-    }
 
     // number of tokens to keep when resetting context
     if (params.n_keep < 0 || params.n_keep > (int) embd_inp.size() || params.instruct) {
@@ -283,16 +280,11 @@ int main(int argc, char ** argv) {
     bool is_antiprompt = false;
     bool input_echo    = true;
 
-    // HACK - because session saving incurs a non-negligible delay, for now skip re-saving session
-    // if we loaded a session with at least 75% similarity. It's currently just used to speed up the
-    // initial prompt so it doesn't need to be an exact match.
-    bool need_to_save_session = !path_session.empty() && n_matching_session_tokens < (embd_inp.size() * 3 / 4);
-
-
-    int n_past             = 0;
-    int n_remain           = params.n_predict;
-    int n_consumed         = 0;
-    int n_session_consumed = 0;
+    int n_past               = 0;
+    int n_remain             = params.n_predict;
+    int n_consumed           = 0;
+    int n_session_consumed   = 0;
+    int n_session_write_past = 0;
 
     // the first thing we will do is to output the prompt, so set color accordingly
     set_console_color(con_st, CONSOLE_COLOR_PROMPT);
@@ -306,16 +298,14 @@ int main(int argc, char ** argv) {
             // if we run out of context:
             // - take the n_keep first tokens from the original prompt (via n_past)
             // - take half of the last (n_ctx - n_keep) tokens and recompute the logits in batches
-            if (n_past + (int) embd.size() > n_ctx) {
+            bool needs_swap = n_past + (int) embd.size() > n_ctx;
+            if (needs_swap) {
                 const int n_left = n_past - params.n_keep;
 
                 n_past = params.n_keep;
 
                 // insert n_left/2 tokens at the start of embd from last_n_tokens
                 embd.insert(embd.begin(), last_n_tokens.begin() + n_ctx - n_left/2 - embd.size(), last_n_tokens.end() - embd.size());
-
-                // stop saving session if we run out of context
-                path_session = "";
 
                 //printf("\n---\n");
                 //printf("resetting: '");
@@ -326,27 +316,12 @@ int main(int argc, char ** argv) {
                 //printf("\n---\n");
             }
 
-            // try to reuse a matching prefix from the loaded session instead of re-eval (via n_past)
-            // REVIEW
-            if (n_session_consumed < (int) session_tokens.size()) {
-                size_t i = 0;
-                for ( ; i < embd.size(); i++) {
-                    if (embd[i] != session_tokens[n_session_consumed]) {
-                        session_tokens.resize(n_session_consumed);
-                        break;
-                    }
-
-                    n_past++;
-                    n_session_consumed++;
-
-                    if (n_session_consumed >= (int) session_tokens.size()) {
-                        ++i;
-                        break;
-                    }
-                }
-                if (i > 0) {
-                    embd.erase(embd.begin(), embd.begin() + i);
-                }
+            // skip evaluation of tokens in the input prefix that matched session
+            if (n_session_consumed < n_matching_session_tokens) {
+                int n_skip = std::min((int) embd.size(), n_matching_session_tokens - n_session_consumed);
+                embd.erase(embd.begin(), embd.begin() + n_skip);
+                n_session_consumed += n_skip;
+                n_past += n_skip;
             }
 
             // evaluate tokens in batches
@@ -363,13 +338,41 @@ int main(int argc, char ** argv) {
                 n_past += n_eval;
             }
 
-            if (embd.size() > 0 && !path_session.empty()) {
-                session_tokens.insert(session_tokens.end(), embd.begin(), embd.end());
-                n_session_consumed = session_tokens.size();
+            // save session after context swap
+            if (!path_session.empty() && needs_swap) {
+                int n_tokens = n_past - params.n_keep;
+                if (!llama_append_session_file(
+                        ctx, path_session.c_str(), params.n_keep,
+                        last_n_tokens.data() + last_n_tokens.size() - n_tokens, n_tokens)) {
+                    fprintf(stderr, "%s: error: unable to write to session file '%s'\n",
+                        __func__, path_session.c_str());
+                    return 1;
+                }
+
+                n_session_write_past = n_past;
             }
         }
 
         embd.clear();
+
+        // save prompt evaluation state to session file
+        if (!path_session.empty() && !n_session_write_past && (int) embd_inp.size() <= n_consumed) {
+            if (!llama_init_session_file(ctx, path_session.c_str())) {
+                fprintf(stderr, "%s: error: unable to start session file '%s'\n",
+                    __func__, path_session.c_str());
+                return 1;
+            }
+
+            if (!llama_append_session_file(
+                    ctx, path_session.c_str(), 0,
+                    last_n_tokens.data() + last_n_tokens.size() - n_past, n_past)) {
+                fprintf(stderr, "%s: error: unable to write to session file '%s'\n",
+                    __func__, path_session.c_str());
+                return 1;
+            }
+
+            n_session_write_past = n_past;
+        }
 
         if ((int) embd_inp.size() <= n_consumed && !is_interacting) {
             // out of user input, sample next token
@@ -386,12 +389,6 @@ int main(int argc, char ** argv) {
             const float   mirostat_tau    = params.mirostat_tau;
             const float   mirostat_eta    = params.mirostat_eta;
             const bool    penalize_nl     = params.penalize_nl;
-
-            // optionally save the session on first sample (for faster prompt loading next time)
-            if (!path_session.empty() && need_to_save_session) {
-                need_to_save_session = false;
-                llama_save_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
-            }
 
             llama_token id = 0;
 
@@ -605,6 +602,20 @@ int main(int argc, char ** argv) {
         if (params.interactive && n_remain <= 0 && params.n_predict != -1) {
             n_remain = params.n_predict;
             is_interacting = true;
+        }
+    }
+
+    if (!path_session.empty()) {
+        int n_session_remain = n_past - n_session_write_past;
+        fprintf(stderr, "\n%s: saving remaining state (%d tokens) to session file '%s'",
+            __func__, n_session_remain, path_session.c_str());
+        if (!llama_append_session_file(
+                ctx, path_session.c_str(), n_session_write_past,
+                last_n_tokens.data() + last_n_tokens.size() - embd.size() - n_session_remain,
+                n_session_remain)) {
+            fprintf(stderr, "%s: error: unable to write to session file '%s'\n",
+                __func__, path_session.c_str());
+            return 1;
         }
     }
 
