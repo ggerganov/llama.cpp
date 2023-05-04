@@ -709,9 +709,7 @@ class LazyUnpickler(pickle.Unpickler):
 
     @staticmethod
     def rebuild_from_type_v2(func, new_type, args, state):
-        # import torch; return torch._tensor._rebuild_from_type_v2(func, new_type, args, state)
-        ret = func(*args)
-        return ret
+        return func(*args)
 
     CLASSES: Dict[Any, Any] = {
         ('torch._tensor', '_rebuild_from_type_v2'): rebuild_from_type_v2,
