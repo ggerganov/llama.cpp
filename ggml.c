@@ -615,6 +615,50 @@ static inline __m128i packNibbles( __m128i bytes1, __m128i bytes2 )
 
 #if __ARM_NEON
 
+static inline const uint8_t * bytes_from_nibbles_64(const int qk, const uint8_t * qs, uint64_t * qd) {
+    memcpy(qd, qs, qk/2);
+
+    for (int l = 0; l < qk/16; ++l) {
+        qd[l + qk/16] = (qd[l] & 0xF0F0F0F0F0F0F0F0ULL) >> 4;
+        qd[l + 0    ] = (qd[l] & 0x0F0F0F0F0F0F0F0FULL) >> 0;
+    }
+
+    return (const uint8_t *) qd;
+}
+
+// pack first half of weights into low nibbles and second half into high nibbles
+// use one scaling factor
+static inline void nibbles_from_floats_64_0(const int qk, const float * x, float id, uint8_t * qs, uint64_t * qd) {
+    for (int l = 0; l < qk/2; ++l) {
+        const float v0 = x[0    + l]*id;
+        const float v1 = x[qk/2 + l]*id;
+
+        const uint64_t vi0 = MIN(15, (int8_t)(v0 + 8.5f));
+        const uint64_t vi1 = MIN(15, (int8_t)(v1 + 8.5f));
+
+        qd[l/8] |= vi0 << (8*(l & 7));
+        qd[l/8] |= vi1 << (8*(l & 7) + 4);
+    }
+
+    memcpy(qs, qd, qk/2);
+}
+
+// use offset and scaling factor
+static inline void nibbles_from_floats_64_1(const int qk, const float * x, float id, float min, uint8_t * qs, uint64_t * qd) {
+    for (int l = 0; l < qk/2; ++l) {
+        const float v0 = (x[0    + l] - min)*id;
+        const float v1 = (x[qk/2 + l] - min)*id;
+
+        const uint64_t vi0 = MIN(15, (int8_t)(v0 + 0.5f));
+        const uint64_t vi1 = MIN(15, (int8_t)(v1 + 0.5f));
+
+        qd[l/8] |= vi0 << (8*(l & 7));
+        qd[l/8] |= vi1 << (8*(l & 7) + 4);
+    }
+
+    memcpy(qs, qd, qk/2);
+}
+
 #if !defined(__aarch64__)
 
 inline static uint16_t vaddvq_u8(uint8x16_t v) {
@@ -863,19 +907,7 @@ static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * r
 
         uint64_t qs[QK4_0 / 16] = {0};
 
-        // pack first half of weights into low nibbles and second half into high nibbles
-        for (int l = 0; l < qk/2; ++l) {
-            const float v0 = x[i*qk + 0    + l]*id;
-            const float v1 = x[i*qk + qk/2 + l]*id;
-
-            const uint64_t vi0 = MIN(15, (int8_t)(v0 + 8.5f));
-            const uint64_t vi1 = MIN(15, (int8_t)(v1 + 8.5f));
-
-            qs[l/8] |= vi0 << (8*(l & 7));
-            qs[l/8] |= vi1 << (8*(l & 7) + 4);
-        }
-
-        memcpy(y[i].qs, qs, sizeof(qs));
+        nibbles_from_floats_64_0(qk, x + i*qk, id, y[i].qs, qs);
     }
 }
 
@@ -910,19 +942,7 @@ static void quantize_row_q4_1_reference(const float * restrict x, block_q4_1 * r
 
         uint64_t qs[QK4_1 / 16] = {0};
 
-        // pack first half of weights into low nibbles and second half into high nibbles
-        for (int l = 0; l < qk/2; ++l) {
-            const float v0 = (x[i*qk + 0    + l] - min)*id;
-            const float v1 = (x[i*qk + qk/2 + l] - min)*id;
-
-            const uint64_t vi0 = MIN(15, (int8_t)(v0 + 0.5f));
-            const uint64_t vi1 = MIN(15, (int8_t)(v1 + 0.5f));
-
-            qs[l/8] |= vi0 << (8*(l & 7));
-            qs[l/8] |= vi1 << (8*(l & 7) + 4);
-        }
-
-        memcpy(y[i].qs, qs, sizeof(qs));
+        nibbles_from_floats_64_1(qk, x + i*qk, id, min, y[i].qs, qs);
     }
 }
 
@@ -1435,20 +1455,12 @@ static void dequantize_row_q4_0(const block_q4_0 * restrict x, float * restrict 
 
     const int nb = k / qk;
 
+    uint64_t qs[QK4_0 / 8];
+
     for (int i = 0; i < nb; i++) {
         const float d = x[i].d;
 
-        // unpack nibbles into bytes
-        uint64_t qs[QK4_0 / 8] = {0};
-
-        memcpy(qs + 0, x[i].qs, sizeof(x[i].qs));
-
-        for (int l = 0; l < qk / 16; ++l) {
-            qs[l + qk/16] = (qs[l] & 0xF0F0F0F0F0F0F0F0ULL) >> 4;
-            qs[l + 0    ] = (qs[l] & 0x0F0F0F0F0F0F0F0FULL) >> 0;
-        }
-
-        const uint8_t * restrict qsp = (const uint8_t * restrict) qs;
+        const uint8_t * qsp = bytes_from_nibbles_64(qk, x[i].qs, qs);
 
         for (int l = 0; l < qk; ++l) {
             y[i*qk + l] = (qsp[l] - 8)*d;
@@ -1464,21 +1476,13 @@ static void dequantize_row_q4_1(const block_q4_1 * restrict x, float * restrict 
 
     const int nb = k / qk;
 
+    uint64_t qs[QK4_0 / 8];
+
     for (int i = 0; i < nb; i++) {
         const float d = x[i].d;
         const float m = x[i].m;
 
-        // unpack nibbles into bytes
-        uint64_t qs[QK4_0 / 8] = {0};
-
-        memcpy(qs + 0, x[i].qs, sizeof(x[i].qs));
-
-        for (int l = 0; l < qk / 16; ++l) {
-            qs[l + qk/16] = (qs[l] & 0xF0F0F0F0F0F0F0F0ULL) >> 4;
-            qs[l + 0    ] = (qs[l] & 0x0F0F0F0F0F0F0F0FULL) >> 0;
-        }
-
-        const uint8_t * restrict qsp = (const uint8_t * restrict) qs;
+        const uint8_t * qsp = bytes_from_nibbles_64(qk, x[i].qs, qs);
 
         for (int l = 0; l < qk; ++l) {
             y[i*qk + l] = qsp[l]*d + m;
@@ -2410,19 +2414,12 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
     // scalar
     float sumf = 0.0;
 
+    uint64_t qs[QK8_0 / 8];
+
     for (int i = 0; i < nb; i++) {
         // unpack nibbles into bytes
-        uint64_t qs[QK8_0 / 8] = {0};
-
-        memcpy(qs + 0, x[i].qs, sizeof(x[i].qs));
-
-        for (int l = 0; l < qk / 16; ++l) {
-            qs[l + qk/16] = (qs[l] & 0xF0F0F0F0F0F0F0F0ULL) >> 4;
-            qs[l + 0    ] = (qs[l] & 0x0F0F0F0F0F0F0F0FULL) >> 0;
-        }
-
-        const uint8_t * restrict px = (const uint8_t * restrict) qs;
-        const  int8_t * restrict py = y[i].qs;
+        const uint8_t * px = bytes_from_nibbles_64(qk, x[i].qs, qs);
+        const  int8_t * py = y[i].qs;
 
         int sumi = 0;
 
@@ -2542,19 +2539,11 @@ static void ggml_vec_dot_q4_1_q8_1(const int n, float * restrict s, const void *
     // scalar
     float sumf = 0.0;
 
+    uint64_t qs[QK8_1 / 8];
+
     for (int i = 0; i < nb; i++) {
-        // unpack nibbles into bytes
-        uint64_t qs[QK8_1 / 8] = {0};
-
-        memcpy(qs + 0, x[i].qs, sizeof(x[i].qs));
-
-        for (int l = 0; l < qk / 16; ++l) {
-            qs[l + qk/16] = (qs[l] & 0xF0F0F0F0F0F0F0F0ULL) >> 4;
-            qs[l + 0    ] = (qs[l] & 0x0F0F0F0F0F0F0F0FULL) >> 0;
-        }
-
-        const uint8_t * restrict px = (const uint8_t * restrict) qs;
-        const  int8_t * restrict py = y[i].qs;
+        const uint8_t * px = bytes_from_nibbles_64(qk, x[i].qs, qs);
+        const  int8_t * py = y[i].qs;
 
         int sumi = 0;
 
