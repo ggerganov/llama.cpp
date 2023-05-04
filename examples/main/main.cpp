@@ -551,7 +551,7 @@ int main(int argc, char ** argv) {
                         return 0;
                     }
 #endif
-                    if(!line.empty()){
+                    if (!line.empty()) {
                         if (line.back() == '\\') {
                             line.pop_back(); // Remove the continue character
                         } else {
