@@ -574,6 +574,7 @@ int main(int argc, char ** argv) {
                     // append input suffix if any
                     if (!params.input_suffix.empty()) {
                         buffer += params.input_suffix;
+                        printf("%s", params.input_suffix.c_str());
                     }
 
                     // instruct mode: insert instruction prefix
