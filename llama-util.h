@@ -14,6 +14,7 @@
 
 #include <string>
 #include <vector>
+#include <stdexcept>
 
 #ifdef __has_include
     #if __has_include(<unistd.h>)
@@ -74,7 +75,7 @@ struct llama_file {
     llama_file(const char * fname, const char * mode) {
         fp = std::fopen(fname, mode);
         if (fp == NULL) {
-            throw format("failed to open %s: %s", fname, std::strerror(errno));
+            throw std::runtime_error(format("failed to open %s: %s", fname, strerror(errno)));
         }
         seek(0, SEEK_END);
         size = tell();
@@ -107,10 +108,10 @@ struct llama_file {
         errno = 0;
         std::size_t ret = std::fread(ptr, size, 1, fp);
         if (ferror(fp)) {
-            throw format("read error: %s", strerror(errno));
+            throw std::runtime_error(format("read error: %s", strerror(errno)));
         }
         if (ret != 1) {
-            throw std::string("unexpectedly reached end of file");
+            throw std::runtime_error(std::string("unexpectedly reached end of file"));
         }
     }
 
@@ -133,7 +134,7 @@ struct llama_file {
         errno = 0;
         size_t ret = std::fwrite(ptr, size, 1, fp);
         if (ret != 1) {
-            throw format("write error: %s", strerror(errno));
+            throw std::runtime_error(format("write error: %s", strerror(errno)));
         }
     }
 
@@ -180,7 +181,7 @@ struct llama_mmap {
 #endif
         addr = mmap(NULL, file->size, PROT_READ, flags, fd, 0);
         if (addr == MAP_FAILED) {
-            throw format("mmap failed: %s", strerror(errno));
+            throw std::runtime_error(format("mmap failed: %s", strerror(errno)));
         }
 
         if (prefetch) {
@@ -207,7 +208,7 @@ struct llama_mmap {
         DWORD error = GetLastError();
 
         if (hMapping == NULL) {
-            throw format("CreateFileMappingA failed: %s", llama_format_win_err(error).c_str());
+            throw std::runtime_error(format("CreateFileMappingA failed: %s", llama_format_win_err(error).c_str()));
         }
 
         addr = MapViewOfFile(hMapping, FILE_MAP_READ, 0, 0, 0);
@@ -215,7 +216,7 @@ struct llama_mmap {
         CloseHandle(hMapping);
 
         if (addr == NULL) {
-            throw format("MapViewOfFile failed: %s", llama_format_win_err(error).c_str());
+            throw std::runtime_error(format("MapViewOfFile failed: %s", llama_format_win_err(error).c_str()));
         }
 
         #if _WIN32_WINNT >= _WIN32_WINNT_WIN8
@@ -245,7 +246,7 @@ struct llama_mmap {
 
     llama_mmap(struct llama_file *, bool prefetch = true) {
         (void)prefetch;
-        throw std::string("mmap not supported");
+        throw std::runtime_error(std::string("mmap not supported"));
     }
 #endif
 };
