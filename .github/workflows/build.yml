@@ -154,19 +154,14 @@ jobs:
         include:
           - build: 'avx2'
             defines: ''
-            testing: true
           - build: 'avx'
             defines: '-DLLAMA_AVX2=OFF'
-            testing: true
           - build: 'avx512'
             defines: '-DLLAMA_AVX512=ON -DBUILD_SHARED_LIBS=ON'
-            testing: true
           - build: 'opencl'
             defines: '-DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH="$env:RUNNER_TEMP/clblast"'
-            testing: false
           - build: 'openblas'
             defines: '-DLLAMA_OPENBLAS=ON -DBLAS_LIBRARIES="/LIBPATH:$env:RUNNER_TEMP/openblas/lib" -DOPENBLAS_INC="$env:RUNNER_TEMP/openblas/include"'
-            testing: true
 
     steps:
       - name: Clone
@@ -224,7 +219,7 @@ jobs:
 
       - name: Check AVX512F support
         id: check_avx512f
-        if: ${{ matrix.testing && matrix.build == 'avx512' }}
+        if: ${{ matrix.build == 'avx512' }}
         continue-on-error: true
         run: |
           cd build
@@ -237,7 +232,7 @@ jobs:
 
       - name: Test
         id: cmake_test
-        if: ${{ matrix.testing && (matrix.build != 'avx512' || env.HAS_AVX512F == '1') }} # Test AVX-512 only when possible
+        if: ${{ matrix.build != 'opencl' && (matrix.build != 'avx512' || env.HAS_AVX512F == '1') }} # Test AVX-512 only when possible
         run: |
           cd build
           ctest -C Release --verbose
