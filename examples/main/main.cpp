@@ -22,6 +22,9 @@
 #include <signal.h>
 #include <unistd.h>
 #elif defined (_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
 #include <signal.h>
 #endif
 
@@ -84,7 +87,7 @@ int main(int argc, char ** argv) {
 
     fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
 
-    if (params.seed <= 0) {
+    if (params.seed < 0) {
         params.seed = time(NULL);
     }
 
@@ -101,34 +104,11 @@ int main(int argc, char ** argv) {
     llama_context * ctx;
     g_ctx = &ctx;
 
-    // load the model
-    {
-        auto lparams = llama_context_default_params();
-
-        lparams.n_ctx      = params.n_ctx;
-        lparams.n_parts    = params.n_parts;
-        lparams.seed       = params.seed;
-        lparams.f16_kv     = params.memory_f16;
-        lparams.use_mmap   = params.use_mmap;
-        lparams.use_mlock  = params.use_mlock;
-
-        ctx = llama_init_from_file(params.model.c_str(), lparams);
-
-        if (ctx == NULL) {
-            fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
-            return 1;
-        }
-    }
-
-    if (!params.lora_adapter.empty()) {
-        int err = llama_apply_lora_from_file(ctx,
-                                             params.lora_adapter.c_str(),
-                                             params.lora_base.empty() ? NULL : params.lora_base.c_str(),
-                                             params.n_threads);
-        if (err != 0) {
-            fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
-            return 1;
-        }
+    // load the model and apply lora adapter, if any
+    ctx = llama_init_from_gpt_params(params);
+    if (ctx == NULL) {
+        fprintf(stderr, "%s: error: unable to load model\n", __func__);
+        return 1;
     }
 
     // print system information
@@ -263,7 +243,10 @@ int main(int argc, char ** argv) {
         sigint_action.sa_flags = 0;
         sigaction(SIGINT, &sigint_action, NULL);
 #elif defined (_WIN32)
-        signal(SIGINT, sigint_handler);
+        auto console_ctrl_handler = [](DWORD ctrl_type) -> BOOL {
+            return (ctrl_type == CTRL_C_EVENT) ? (sigint_handler(SIGINT), true) : false;
+        };
+        SetConsoleCtrlHandler(static_cast<PHANDLER_ROUTINE>(console_ctrl_handler), true);
 #endif
 
         fprintf(stderr, "%s: interactive mode on.\n", __func__);
@@ -298,7 +281,7 @@ int main(int argc, char ** argv) {
     }
 
     bool is_antiprompt = false;
-    bool input_noecho  = false;
+    bool input_echo    = true;
 
     // HACK - because session saving incurs a non-negligible delay, for now skip re-saving session
     // if we loaded a session with at least 75% similarity. It's currently just used to speed up the
@@ -306,9 +289,9 @@ int main(int argc, char ** argv) {
     bool need_to_save_session = !path_session.empty() && n_matching_session_tokens < (embd_inp.size() * 3 / 4);
 
 
-    int n_past     = 0;
-    int n_remain   = params.n_predict;
-    int n_consumed = 0;
+    int n_past             = 0;
+    int n_remain           = params.n_predict;
+    int n_consumed         = 0;
     int n_session_consumed = 0;
 
     // the first thing we will do is to output the prompt, so set color accordingly
@@ -413,7 +396,7 @@ int main(int argc, char ** argv) {
             llama_token id = 0;
 
             {
-                auto logits = llama_get_logits(ctx);
+                auto logits  = llama_get_logits(ctx);
                 auto n_vocab = llama_n_vocab(ctx);
 
                 // Apply params.logit_bias map
@@ -485,7 +468,7 @@ int main(int argc, char ** argv) {
             embd.push_back(id);
 
             // echo this to console
-            input_noecho = false;
+            input_echo = true;
 
             // decrement remaining sampling budget
             --n_remain;
@@ -503,14 +486,14 @@ int main(int argc, char ** argv) {
         }
 
         // display text
-        if (!input_noecho) {
+        if (input_echo) {
             for (auto id : embd) {
                 printf("%s", llama_token_to_str(ctx, id));
             }
             fflush(stdout);
         }
         // reset color to default if we there is no pending user input
-        if (!input_noecho && (int)embd_inp.size() == n_consumed) {
+        if (input_echo && (int)embd_inp.size() == n_consumed) {
             set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
         }
 
@@ -542,11 +525,6 @@ int main(int argc, char ** argv) {
                 // potentially set color to indicate we are taking user input
                 set_console_color(con_st, CONSOLE_COLOR_USER_INPUT);
 
-#if defined (_WIN32)
-                // Windows: must reactivate sigint handler after each signal
-                signal(SIGINT, sigint_handler);
-#endif
-
                 if (params.instruct) {
                     printf("\n> ");
                 }
@@ -573,12 +551,14 @@ int main(int argc, char ** argv) {
                         return 0;
                     }
 #endif
-                    if (line.empty() || line.back() != '\\') {
-                        another_line = false;
-                    } else {
-                        line.pop_back(); // Remove the continue character
+                    if (!line.empty()) {
+                        if (line.back() == '\\') {
+                            line.pop_back(); // Remove the continue character
+                        } else {
+                            another_line = false;
+                        }
+                        buffer += line + '\n'; // Append the line to the result
                     }
-                    buffer += line + '\n'; // Append the line to the result
                 } while (another_line);
 
                 // done taking input, reset color
@@ -605,7 +585,7 @@ int main(int argc, char ** argv) {
                     n_remain -= line_inp.size();
                 }
 
-                input_noecho = true; // do not echo this again
+                input_echo = false; // do not echo this again
             }
 
             if (n_past > 0) {
@@ -629,10 +609,6 @@ int main(int argc, char ** argv) {
             is_interacting = true;
         }
     }
-
-#if defined (_WIN32)
-    signal(SIGINT, SIG_DFL);
-#endif
 
     llama_print_timings(ctx);
     llama_free(ctx);
