@@ -180,7 +180,11 @@ typedef double ggml_float;
 #undef bool
 #define bool _Bool
 #else
+#if defined(_MSC_VER) || defined(__MINGW32__)
+#include <intrin.h>
+#else
 #include <immintrin.h>
+#endif
 #endif
 #endif
 
