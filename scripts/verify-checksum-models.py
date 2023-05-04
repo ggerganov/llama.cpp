@@ -6,13 +6,13 @@ def sha256sum(file):
     b  = bytearray(block_size)
     file_hash = hashlib.sha256()
     mv = memoryview(b)
-    with open(file, 'rb', buffering=0) as f: 
+    with open(file, 'rb', buffering=0) as f:
         while True:
             n = f.readinto(mv)
             if not n:
                 break
             file_hash.update(mv[:n])
-        
+
     return file_hash.hexdigest()
 
 # Define the path to the llama directory (parent folder of script directory)
@@ -75,4 +75,3 @@ print("-" * 80)
 # Output the results as a table
 for r in results:
     print(f"{r['filename']:40} {r['valid checksum']:^20} {r['file missing']:^20}")
-
