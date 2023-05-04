@@ -551,12 +551,14 @@ int main(int argc, char ** argv) {
                         return 0;
                     }
 #endif
-                    if (line.empty() || line.back() != '\\') {
-                        another_line = false;
-                    } else {
-                        line.pop_back(); // Remove the continue character
+                    if (!line.empty()) {
+                        if (line.back() == '\\') {
+                            line.pop_back(); // Remove the continue character
+                        } else {
+                            another_line = false;
+                        }
+                        buffer += line + '\n'; // Append the line to the result
                     }
-                    buffer += line + '\n'; // Append the line to the result
                 } while (another_line);
 
                 // done taking input, reset color
