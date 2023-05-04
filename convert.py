@@ -291,7 +291,6 @@ class UnquantizedTensor(Tensor):
 
     def astype(self, data_type: DataType) -> Tensor:
         dtype = DATA_TYPE_TO_NUMPY[data_type]
-
         if self.data_type == DT_BF16:
             self.ndarray = bf16_to_fp32(self.ndarray)
         return UnquantizedTensor(self.ndarray.astype(dtype))
