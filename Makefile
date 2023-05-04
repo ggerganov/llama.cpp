@@ -59,7 +59,7 @@ CLBLAST_FLAGS = -DGGML_USE_CLBLAST
 
 #lets try enabling everything
 CFLAGS   += -pthread -s
-CXXFLAGS += -pthread -s -Wno-multichar
+CXXFLAGS += -pthread -s -Wno-multichar -Wno-write-strings
 
 # OS specific
 # TODO: support Windows
