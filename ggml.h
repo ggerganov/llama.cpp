@@ -205,6 +205,45 @@
         } \
     } while (0)
 
+#define GGML_RECOVERABLE_ERRORS
+#ifndef GGML_RECOVERABLE_ERRORS
+#define GGML_RECOVERABLE_ASSERT(_ctx, _code, x, ...) \
+    do { \
+        if (!(x)) { \
+            printf(__VA_ARGS__); \
+            fprintf(stderr, "GGML_ASSERT: %s:%d: %s\n", __FILE__, __LINE__, #x); \
+            abort(); \
+        } \
+    } while (0)
+
+#else
+#define GGML_ERROR_BUFFER_LEN 256
+#define GGML_RECOVERABLE_ASSERT(ctx, errcode, x, ...) \
+    do { \
+        if ((ctx)->last_error_code != GGML_ERRCODE_SUCCESS) { \
+            fprintf(stderr, "GGML_RECOVERABLE_ASSERT: Cannot continue due previous error condition: %s\n", (ctx)->last_error_msg); \
+            GGML_ASSERT(false); \
+        } else if (!(x)) { \
+            snprintf((ctx)->last_error_msg, GGML_ERROR_BUFFER_LEN - 1, __VA_ARGS__); \
+            (ctx)->last_error_msg[GGML_ERROR_BUFFER_LEN - 1] = 0; \
+            (ctx)->last_error_code = errcode; \
+            return NULL; \
+        } \
+    } while (0)
+
+
+#endif
+
+    enum ggml_errcode {
+        GGML_ERRCODE_SUCCESS = 0,
+        GGML_ERRCODE_OTHER,
+        GGML_ERRCODE_CTX_MEMORY_LIMIT,
+        GGML_ERRCODE_SCRATCH_MEMORY_LIMIT,
+        GGML_ERRCODE_BAD_TYPE,
+        GGML_ERRCODE_BAD_DIMENSIONS,
+        GGML_ERRCODE_BAD_SHAPE,
+    };
+
 #ifdef  __cplusplus
 extern "C" {
 #endif
@@ -424,6 +463,15 @@ extern "C" {
     GGML_API size_t  ggml_used_mem(const struct ggml_context * ctx);
 
     GGML_API size_t  ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch);
+
+#ifdef GGML_RECOVERABLE_ERRORS
+    // GGML_API enum ggml_errcode ggml_clear_error(
+    //         struct ggml_context * ctx);
+    GGML_API enum ggml_errcode ggml_last_error_code(
+            struct ggml_context * ctx);
+    GGML_API char * ggml_last_error_msg(
+            struct ggml_context * ctx);
+#endif
 
     GGML_API struct ggml_tensor * ggml_new_tensor(
             struct ggml_context * ctx,

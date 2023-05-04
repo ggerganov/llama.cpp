@@ -4245,6 +4245,10 @@ struct ggml_context {
 
     struct ggml_scratch scratch;
     struct ggml_scratch scratch_save;
+#ifdef GGML_RECOVERABLE_ERRORS
+    enum ggml_errcode last_error_code;
+    char last_error_msg[GGML_ERROR_BUFFER_LEN];
+#endif
 };
 
 struct ggml_context_container {
@@ -4566,6 +4570,10 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         /*.objects_end        =*/ NULL,
         /*.scratch            =*/ { 0, 0, NULL, },
         /*.scratch_save       =*/ { 0, 0, NULL, },
+#ifdef GGML_RECOVERABLE_ERRORS
+        /*.last_error_code    =*/ GGML_ERRCODE_SUCCESS,
+        /*.last_error_msg     =*/ { 0 },
+#endif
     };
 
     GGML_ASSERT(ctx->mem_buffer != NULL);
@@ -4620,6 +4628,24 @@ size_t ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch) 
     return result;
 }
 
+#ifdef GGML_RECOVERABLE_ERRORS
+// enum ggml_errcode ggml_clear_error(struct ggml_context * ctx) {
+//     enum ggml_errcode last_code = ctx->last_error_code;
+
+//     ctx->last_error_code = GGML_ERRCODE_SUCCESS;
+//     ctx->last_error_msg[0] = 0;
+//     return last_code;
+// }
+
+enum ggml_errcode ggml_last_error_code(struct ggml_context * ctx) {
+    return ctx->last_error_code;
+}
+
+char * ggml_last_error_msg(struct ggml_context * ctx) {
+    return ctx->last_error_code == GGML_ERRCODE_SUCCESS ? "Success" : &ctx->last_error_msg;
+}
+#endif
+
 ////////////////////////////////////////////////////////////////////////////////
 
 struct ggml_tensor * ggml_new_tensor_impl(
@@ -4652,12 +4678,11 @@ struct ggml_tensor * ggml_new_tensor_impl(
     if (ctx->scratch.data == NULL || data != NULL) {
         size_needed += sizeof(struct ggml_tensor);
 
-        if (cur_end + size_needed + GGML_OBJECT_SIZE > ctx->mem_size) {
-            GGML_PRINT("%s: not enough space in the context's memory pool (needed %zu, available %zu)\n",
-                    __func__, cur_end + size_needed + GGML_OBJECT_SIZE, ctx->mem_size);
-            assert(false);
-            return NULL;
-        }
+        GGML_RECOVERABLE_ASSERT(ctx, GGML_ERRCODE_CTX_MEMORY_LIMIT,
+            cur_end + size_needed + GGML_OBJECT_SIZE <= ctx->mem_size,
+            "%s: not enough space in the context's memory pool (needed %zu, available %zu)\n",
+                    __func__, cur_end + size_needed + GGML_OBJECT_SIZE, ctx->mem_size
+        );
 
         *obj_new = (struct ggml_object) {
             .offs = cur_end + GGML_OBJECT_SIZE,
@@ -4665,18 +4690,16 @@ struct ggml_tensor * ggml_new_tensor_impl(
             .next = NULL,
         };
     } else {
-        if (ctx->scratch.offs + size_needed > ctx->scratch.size) {
-            GGML_PRINT("%s: not enough space in the scratch memory\n", __func__);
-            assert(false);
-            return NULL;
-        }
+        GGML_RECOVERABLE_ASSERT(ctx, GGML_ERRCODE_SCRATCH_MEMORY_LIMIT,
+            ctx->scratch.offs + size_needed <= ctx->scratch.size,
+            "%s: not enough space in the scratch memory\n", __func__
+        );
 
-        if (cur_end + sizeof(struct ggml_tensor) + GGML_OBJECT_SIZE > ctx->mem_size) {
-            GGML_PRINT("%s: not enough space in the context's memory pool (needed %zu, available %zu)\n",
-                    __func__, cur_end + sizeof(struct ggml_tensor) + GGML_OBJECT_SIZE, ctx->mem_size);
-            assert(false);
-            return NULL;
-        }
+        GGML_RECOVERABLE_ASSERT(ctx, GGML_ERRCODE_CTX_MEMORY_LIMIT,
+            cur_end + sizeof(struct ggml_tensor) + GGML_OBJECT_SIZE <= ctx->mem_size,
+            "%s: not enough space in the context's memory pool (needed %zu, available %zu)\n",
+            __func__, cur_end + sizeof(struct ggml_tensor) + GGML_OBJECT_SIZE, ctx->mem_size
+        );
 
         data = (char * const) ctx->scratch.data + ctx->scratch.offs;
 
@@ -4794,6 +4817,7 @@ struct ggml_tensor * ggml_new_i32(struct ggml_context * ctx, int32_t value) {
     ctx->scratch.data = NULL;
 
     struct ggml_tensor * result = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 1);
+    if (result == NULL) return NULL;
 
     ctx->scratch = ctx->scratch_save;
 
@@ -4807,6 +4831,7 @@ struct ggml_tensor * ggml_new_f32(struct ggml_context * ctx, float value) {
     ctx->scratch.data = NULL;
 
     struct ggml_tensor * result = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, 1);
+    if (result == NULL) return NULL;
 
     ctx->scratch = ctx->scratch_save;
 
@@ -5090,6 +5115,7 @@ struct ggml_tensor * ggml_view_tensor(
         struct ggml_context * ctx,
         const struct ggml_tensor * src) {
     struct ggml_tensor * result = ggml_new_tensor_impl(ctx, src->type, src->n_dims, src->ne, src->data);
+    if (result == NULL) return NULL;
 
     result->nb[0] = src->nb[0];
     result->nb[1] = src->nb[1];
@@ -5114,6 +5140,7 @@ struct ggml_tensor * ggml_dup_impl(
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_DUP;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5142,7 +5169,10 @@ struct ggml_tensor * ggml_add_impl(
         struct ggml_tensor * a,
         struct ggml_tensor * b,
         bool inplace) {
-    GGML_ASSERT(ggml_are_same_shape(a, b));
+    GGML_RECOVERABLE_ASSERT(ctx, GGML_ERRCODE_BAD_SHAPE,
+        ggml_are_same_shape(a, b),
+        "Shape mismatch in ggml_add"
+    );
 
     bool is_node = false;
 
@@ -5151,6 +5181,7 @@ struct ggml_tensor * ggml_add_impl(
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_ADD;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5190,6 +5221,7 @@ struct ggml_tensor * ggml_sub_impl(
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_SUB;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5233,6 +5265,7 @@ struct ggml_tensor * ggml_mul_impl(
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_MUL;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5276,6 +5309,7 @@ struct ggml_tensor * ggml_div_impl(
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_DIV;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5312,6 +5346,7 @@ struct ggml_tensor * ggml_sqr_impl(
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_SQR;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5346,6 +5381,7 @@ struct ggml_tensor * ggml_sqrt_impl(
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_SQRT;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5379,6 +5415,7 @@ struct ggml_tensor * ggml_sum(
     }
 
     struct ggml_tensor * result = ggml_new_tensor_1d(ctx, a->type, 1);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_SUM;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5402,6 +5439,7 @@ struct ggml_tensor * ggml_mean(
 
     int64_t ne[GGML_MAX_DIMS] = { 1, a->ne[1], a->ne[2], a->ne[3] };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, a->n_dims, ne);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_MEAN;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5430,6 +5468,7 @@ struct ggml_tensor * ggml_repeat(
     }
 
     struct ggml_tensor * result = ggml_new_tensor(ctx, a->type, b->n_dims, b->ne);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_REPEAT;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5452,6 +5491,7 @@ struct ggml_tensor * ggml_abs_impl(
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_ABS;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5487,6 +5527,7 @@ struct ggml_tensor * ggml_sgn_impl(
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_SGN;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5521,6 +5562,7 @@ struct ggml_tensor * ggml_neg_impl(
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_NEG;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5555,6 +5597,7 @@ struct ggml_tensor * ggml_step_impl(
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_STEP;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5589,6 +5632,7 @@ struct ggml_tensor * ggml_relu_impl(
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_RELU;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5623,6 +5667,7 @@ struct ggml_tensor * ggml_gelu_impl(
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_GELU;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5657,6 +5702,7 @@ struct ggml_tensor * ggml_silu_impl(
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_SILU;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5692,6 +5738,7 @@ struct ggml_tensor * ggml_norm_impl(
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_NORM;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5725,6 +5772,7 @@ struct ggml_tensor * ggml_rms_norm_impl(
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_RMS_NORM;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5763,6 +5811,7 @@ struct ggml_tensor * ggml_mul_mat(
 
     const int64_t ne[4] = { a->ne[1], b->ne[1], a->ne[2], b->ne[3] };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, MIN(a->n_dims, b->n_dims), ne);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_MUL_MAT;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5792,6 +5841,7 @@ struct ggml_tensor * ggml_scale_impl(
     // TODO: when implement backward, fix this:
     //struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
     struct ggml_tensor * result = ggml_view_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_SCALE;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5833,6 +5883,7 @@ struct ggml_tensor * ggml_cpy_impl(
 
     // make a view of the destination
     struct ggml_tensor * result = ggml_view_tensor(ctx, b);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_CPY;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5870,6 +5921,7 @@ struct ggml_tensor * ggml_cont_impl(
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_CONT;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5909,6 +5961,7 @@ struct ggml_tensor * ggml_reshape(
     }
 
     struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, b->n_dims, b->ne, a->data);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_RESHAPE;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5935,6 +5988,7 @@ struct ggml_tensor * ggml_reshape_2d(
 
     const int64_t ne[2] = { ne0, ne1 };
     struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 2, ne, a->data);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_RESHAPE;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5962,6 +6016,7 @@ struct ggml_tensor * ggml_reshape_3d(
 
     const int64_t ne[3] = { ne0, ne1, ne2 };
     struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 3, ne, a->data);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_RESHAPE;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5983,6 +6038,7 @@ struct ggml_tensor * ggml_view_1d(
     }
 
     struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 1, &ne0, (char *) a->data + offset);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_VIEW;
     result->grad = NULL;
@@ -6008,6 +6064,7 @@ struct ggml_tensor * ggml_view_2d(
     const int64_t ne[GGML_MAX_DIMS] = { ne0, ne1, 1, 1 };
 
     struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 2, ne, (char *) a->data + offset);
+    if (result == NULL) return NULL;
 
     result->nb[1] = nb1;
     result->nb[2] = result->nb[1]*ne1;
@@ -6039,6 +6096,7 @@ struct ggml_tensor * ggml_view_3d(
     const int64_t ne[GGML_MAX_DIMS] = { ne0, ne1, ne2, 1 };
 
     struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 3, ne, (char *) a->data + offset);
+    if (result == NULL) return NULL;
 
     result->nb[1] = nb1;
     result->nb[2] = nb2;
@@ -6081,6 +6139,7 @@ struct ggml_tensor * ggml_permute(
     }
 
     struct ggml_tensor * result = ggml_view_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     int ne[GGML_MAX_DIMS];
     int nb[GGML_MAX_DIMS];
@@ -6159,6 +6218,7 @@ struct ggml_tensor * ggml_get_rows(
     // TODO: implement non F32 return
     //struct ggml_tensor * result = ggml_new_tensor_2d(ctx, a->type, a->ne[0], b->ne[0]);
     struct ggml_tensor * result = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, a->ne[0], b->ne[0]);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_GET_ROWS;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6184,7 +6244,9 @@ struct ggml_tensor * ggml_diag_mask_inf(
     // TODO: when implement backward, fix this:
     //struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
     struct ggml_tensor * result = ggml_view_tensor(ctx, a);
+    if (result == NULL) return NULL;
     struct ggml_tensor * b = ggml_new_i32(ctx, n_past);
+    GGML_ASSERT(b != NULL);
     ggml_set_name(b, "n_past");
 
     result->op   = GGML_OP_DIAG_MASK_INF;
@@ -6210,6 +6272,7 @@ struct ggml_tensor * ggml_soft_max(
     // TODO: when implement backward, fix this:
     //struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
     struct ggml_tensor * result = ggml_view_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_SOFT_MAX;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6238,8 +6301,9 @@ struct ggml_tensor * ggml_rope(
     // TODO: when implement backward, fix this:
     //struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
     struct ggml_tensor * result = ggml_view_tensor(ctx, a);
-
+    if (result == NULL) return NULL;
     struct ggml_tensor * b = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 3);
+    GGML_ASSERT(b != NULL);
     ((int32_t *) b->data)[0] = n_past;
     ((int32_t *) b->data)[1] = n_dims;
     ((int32_t *) b->data)[2] = mode;
@@ -6271,8 +6335,10 @@ struct ggml_tensor * ggml_alibi(
     // TODO: when implement backward, fix this:
     //struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
     struct ggml_tensor * result = ggml_view_tensor(ctx, a);
+    if (result == NULL) return NULL;
 
     struct ggml_tensor * b = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 2);
+    GGML_ASSERT(b != NULL);
     ((int32_t *) b->data)[0] = n_past;
     ((int32_t *) b->data)[1] = n_head;
 
@@ -6302,6 +6368,7 @@ struct ggml_tensor * ggml_conv_1d_1s(
 
     const int64_t ne[4] = { b->ne[0], a->ne[2], 1, 1, };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 2, ne);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_CONV_1D_1S;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6329,6 +6396,7 @@ struct ggml_tensor * ggml_conv_1d_2s(
 
     const int64_t ne[4] = { b->ne[0]/2, a->ne[2], 1, 1, };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 2, ne);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_CONV_1D_2S;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6358,6 +6426,7 @@ struct ggml_tensor * ggml_flash_attn(
 
     //struct ggml_tensor * result = ggml_dup_tensor(ctx, q);
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 4, q->ne);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_FLASH_ATTN;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6365,6 +6434,7 @@ struct ggml_tensor * ggml_flash_attn(
     result->src1 = k;
     result->opt[0] = v;
     result->opt[1] = ggml_new_i32(ctx, masked ? 1 : 0);
+    GGML_ASSERT(result->opt[1] != NULL);
 
     return result;
 }
@@ -6390,6 +6460,7 @@ struct ggml_tensor * ggml_flash_ff(
 
     //struct ggml_tensor * result = ggml_dup_tensor(ctx, a);
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 4, a->ne);
+    if (result == NULL) return NULL;
 
     result->op   = GGML_OP_FLASH_FF;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6416,8 +6487,10 @@ struct ggml_tensor * ggml_map_unary_impl_f32(
     }
 
     struct ggml_tensor * addr_tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, sizeof(void *) / sizeof(int32_t));
+    if (addr_tensor == NULL) return NULL;
     *((void (**)(void))addr_tensor->data) = (void (*)(void))fun;
     struct ggml_tensor *result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    GGML_ASSERT(result != NULL);
 
     result->op = GGML_OP_MAP_UNARY;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6458,8 +6531,10 @@ struct ggml_tensor * ggml_map_binary_impl_f32(
     }
 
     struct ggml_tensor * addr_tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, sizeof(void *) / sizeof(int32_t));
+    if (addr_tensor == NULL) return NULL;
     *((void (**)(void))addr_tensor->data) = (void (*)(void))fun;
     struct ggml_tensor *result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    GGML_ASSERT(result != NULL);
 
     result->op = GGML_OP_MAP_BINARY;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -11741,6 +11816,9 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 }
 
 void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) {
+#ifdef GGML_RECOVERABLE_ERRORS
+    GGML_ASSERT(ctx->last_error_code == GGML_ERRCODE_SUCCESS);
+#endif
     const int n_threads = cgraph->n_threads;
 
     struct ggml_compute_state_shared state_shared = {
