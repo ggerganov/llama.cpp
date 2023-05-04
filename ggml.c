@@ -2855,13 +2855,13 @@ static inline __m512 dot_q4_0c_fourblocks_avx512(
 ) {
     // load quantized bytes
     // TODO: change back to aligned loads
-    const __m512i xqs0123 = _mm512_loadu_epi64( xqs );
+    const __m512i xqs0123 = _mm512_loadu_si512( xqs );
     const __m512i low_nibble_mask = _mm512_set1_epi8( 0xf );
     const __m512i xqs01 = _mm512_and_si512( low_nibble_mask, xqs0123 );
     // TODO: try srlv/i?
     const __m512i xqs23 = _mm512_and_si512( low_nibble_mask, _mm512_srli_epi32( xqs0123, 4 ) );
-    const __m512i yqs01 = _mm512_loadu_epi64( yqs );
-    const __m512i yqs23 = _mm512_loadu_epi64( yqs + 2*QK8_0C );
+    const __m512i yqs01 = _mm512_loadu_si512( yqs );
+    const __m512i yqs23 = _mm512_loadu_si512( yqs + 2*QK8_0C );
 
     // load scales
     const __m512i scale_mask0 = _mm512_set_epi32(1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0);
