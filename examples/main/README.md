@@ -34,13 +34,18 @@ For an interactive experience, try this command:
 #### Unix-based systems (Linux, macOS, etc.):
 
 ```bash
-./main -m models/7B/ggml-model.bin -n -1 --color -r "User:" --in-prefix " " --prompt 'User: Hi\nAI: Hello. I am an AI chatbot. Would you like to talk?\nUser: Sure!\nAI: What would you like to talk about?\nUser:'
+./main -m models/7B/ggml-model.bin -n -1 --color -r "User:" --in-prefix " " \
+'User: Hi
+AI: Hello. I am an AI chatbot. Would you like to talk?
+User: Sure!
+AI: What would you like to talk about?
+User:'
 ```
 
 #### Windows:
 
 ```powershell
-main.exe -m models\7B\ggml-model.bin -n -1 --color -r "User:" --in-prefix " " --prompt "User: Hi\nAI: Hello. I am an AI chatbot. Would you like to talk?\nUser: Sure!\nAI: What would you like to talk about?\nUser:"
+main.exe -m models\7B\ggml-model.bin -n -1 --color -r "User:" --in-prefix " " -e --prompt "User: Hi\nAI: Hello. I am an AI chatbot. Would you like to talk?\nUser: Sure!\nAI: What would you like to talk about?\nUser:"
 ```
 
 The following command generates "infinite" text from a starting prompt (you can use `Ctrl-C` to stop it):
