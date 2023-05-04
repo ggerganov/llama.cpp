@@ -197,7 +197,7 @@ jobs:
           curl.exe -o $env:RUNNER_TEMP/OpenBLAS.LICENSE.txt -L https://github.com/xianyi/OpenBLAS/raw/v0.3.23/LICENSE
           mkdir $env:RUNNER_TEMP/openblas
           tar.exe -xvf $env:RUNNER_TEMP/openblas.zip -C $env:RUNNER_TEMP/openblas
-          Rename-Item $env:RUNNER_TEMP/openblas/lib/libopenblas.lib openblas.lib
+          lib.exe /machine:x64 "/def:${env:RUNNER_TEMP}/openblas/lib/libopenblas.def" "/out:${env:RUNNER_TEMP}/openblas/lib/openblas.lib" /name:openblas.dll
 
       - name: Build
         id: cmake_build
@@ -218,7 +218,7 @@ jobs:
         id: add_libopenblas_dll
         if: ${{ matrix.build == 'openblas' }}
         run: |
-          cp $env:RUNNER_TEMP/openblas/bin/libopenblas.dll ./build/bin/Release
+          cp $env:RUNNER_TEMP/openblas/bin/libopenblas.dll ./build/bin/Release/openblas.dll
           cp $env:RUNNER_TEMP/OpenBLAS.LICENSE.txt ./build/bin/Release
 
       - name: Check AVX512F support
