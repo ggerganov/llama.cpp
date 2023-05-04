@@ -207,6 +207,32 @@ class SentencePieceVocab:
         return f"<SentencePieceVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
 
 
+class PretrainedVocab:
+    def __init__(self, fname_tokenizer: Path) -> None:
+        self.pretrained_dict = json.load(open(fname_tokenizer))
+        vocab_size: int = len(self.pretrained_dict["model"]["vocab"])
+        self.added_tokens_list = list(sorted(self.pretrained_dict["added_tokens"], key=lambda item: item["id"]))
+        self.vocab_size_base: int = vocab_size
+        self.vocab_size: int = self.vocab_size_base + len(self.added_tokens_list)
+        self.fname_tokenizer = fname_tokenizer
+
+    def vocab_tokens(self) -> Iterable[Tuple[bytes, float]]:
+        for k, score in self.pretrained_dict["model"]["vocab"]:
+            yield k.encode("utf-8"), float(score)
+
+    def added_tokens(self) -> Iterable[Tuple[bytes, float]]:
+        for item in self.added_tokens_list:
+            score = -1000.0
+            yield item["content"].encode("utf-8"), score
+
+    def all_tokens(self) -> Iterable[Tuple[bytes, float]]:
+        yield from self.vocab_tokens()
+        yield from self.added_tokens()
+
+    def __repr__(self) -> str:
+        return f"<SentencePieceVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
+
+
 class GGMLVocab:
     def __init__(self, tokens: List[Tuple[bytes, float]]):
         self.tokens = tokens
@@ -219,7 +245,7 @@ class GGMLVocab:
         return f"<GGMLVocab with {self.vocab_size} tokens>"
 
 
-Vocab = Union[SentencePieceVocab, GGMLVocab]
+Vocab = Union[SentencePieceVocab, GGMLVocab, PretrainedVocab]
 
 
 def permute(weights: NDArray, n_head: int) -> NDArray:
@@ -986,6 +1012,7 @@ def do_necessary_conversions(model: LazyModel) -> LazyModel:
 
     if "lm_head.weight" in model:
         model = convert_transformers_to_orig(model)
+
     model = filter_and_sort_tensors(model)
 
     return model
@@ -1071,23 +1098,29 @@ def filter_and_sort_tensors(model: LazyModel) -> LazyModel:
     return {name: model[name] for name in TENSORS_LIST if name in model}
 
 
-def load_vocab(path: Path) -> SentencePieceVocab:
+def load_vocab(path: Path) -> Union[SentencePieceVocab, PretrainedVocab]:
     # Be extra-friendly and accept either a file or a directory.  Also, if it's
     # a directory, it might be the model directory, and tokenizer.model might
     # be in the parent of that.
     if path.is_dir():
-        path2 = path / "tokenizer.model"
-        # Use `.parent` instead of /.. to handle the symlink case better.
-        path3 = path.parent / "tokenizer.model"
-        if path2.exists():
-            path = path2
-        elif path3.exists():
-            path = path3
+        for name in ["tokenizer.model", "tokenizer.json"]:
+            tpath = path / name
+            if tpath.exists():
+                path = tpath
+                break
+            # Use `.parent` instead of /.. to handle the symlink case better.
+            tpath = path.parent / name
+            if tpath.exists():
+                path = tpath
+                break
         else:
             raise FileNotFoundError(f"Could not find tokenizer.model in {path} or its parent; if it's in another directory, pass the directory as --vocab-dir")
-    added_tokens_path = path.parent / "added_tokens.json"
-    print(f"Loading vocab file {path}")
-    return SentencePieceVocab(path, added_tokens_path if added_tokens_path.exists() else None)
+    if path.suffix == ".json":
+        return PretrainedVocab(path)
+    else:
+        added_tokens_path = path.parent / "added_tokens.json"
+        print(f"Loading vocab file {path}")
+        return SentencePieceVocab(path, added_tokens_path if added_tokens_path.exists() else None)
 
 
 def default_outfile(model_paths: List[Path], params: Params) -> Path:
