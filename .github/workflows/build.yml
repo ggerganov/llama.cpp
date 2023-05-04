@@ -192,7 +192,7 @@ jobs:
         id: get_openblas
         if: ${{ matrix.build == 'openblas' }}
         run: |
-          curl.exe -o $env:RUNNER_TEMP/openblas.zip -L https://github.com/xianyi/OpenBLAS/releases/download/v0.3.21/OpenBLAS-0.3.21-x64.zip
+          curl.exe -o $env:RUNNER_TEMP/openblas.zip -L https://github.com/xianyi/OpenBLAS/releases/download/v0.3.23/OpenBLAS-0.3.23-x64.zip
           mkdir $env:RUNNER_TEMP/openblas
           tar.exe -xvf $env:RUNNER_TEMP/openblas.zip -C $env:RUNNER_TEMP/openblas
           Rename-Item $env:RUNNER_TEMP/openblas/lib/libopenblas.lib openblas.lib
@@ -210,12 +210,14 @@ jobs:
         if: ${{ matrix.build == 'opencl' }}
         run: |
           cp $env:RUNNER_TEMP/clblast/lib/clblast.dll ./build/bin/Release
+          curl.exe -L https://github.com/CNugteren/CLBlast/raw/1.5.3/LICENSE -o ./build/bin/Release/CLBlast.LICENSE.txt
 
       - name: Add libopenblas.dll
         id: add_libopenblas_dll
         if: ${{ matrix.build == 'openblas' }}
         run: |
           cp $env:RUNNER_TEMP/openblas/bin/libopenblas.dll ./build/bin/Release
+          curl.exe -L https://github.com/xianyi/OpenBLAS/raw/v0.3.23/LICENSE -o ./build/bin/Release/OpenBLAS.LICENSE.txt
 
       - name: Check AVX512F support
         id: check_avx512f
