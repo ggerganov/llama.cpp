@@ -626,39 +626,6 @@ static inline const uint8_t * bytes_from_nibbles_64(const int qk, const uint8_t 
     return (const uint8_t *) qd;
 }
 
-// pack first half of weights into low nibbles and second half into high nibbles
-// use one scaling factor
-static inline void nibbles_from_floats_64_0(const int qk, const float * x, float id, uint8_t * qs, uint64_t * qd) {
-    for (int l = 0; l < qk/2; ++l) {
-        const float v0 = x[0    + l]*id;
-        const float v1 = x[qk/2 + l]*id;
-
-        const uint64_t vi0 = MIN(15, (int8_t)(v0 + 8.5f));
-        const uint64_t vi1 = MIN(15, (int8_t)(v1 + 8.5f));
-
-        qd[l/8] |= vi0 << (8*(l & 7));
-        qd[l/8] |= vi1 << (8*(l & 7) + 4);
-    }
-
-    memcpy(qs, qd, qk/2);
-}
-
-// use offset and scaling factor
-static inline void nibbles_from_floats_64_1(const int qk, const float * x, float id, float min, uint8_t * qs, uint64_t * qd) {
-    for (int l = 0; l < qk/2; ++l) {
-        const float v0 = (x[0    + l] - min)*id;
-        const float v1 = (x[qk/2 + l] - min)*id;
-
-        const uint64_t vi0 = MIN(15, (int8_t)(v0 + 0.5f));
-        const uint64_t vi1 = MIN(15, (int8_t)(v1 + 0.5f));
-
-        qd[l/8] |= vi0 << (8*(l & 7));
-        qd[l/8] |= vi1 << (8*(l & 7) + 4);
-    }
-
-    memcpy(qs, qd, qk/2);
-}
-
 #if !defined(__aarch64__)
 
 inline static uint16_t vaddvq_u8(uint8x16_t v) {
@@ -907,7 +874,18 @@ static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * r
 
         uint64_t qs[QK4_0 / 16] = {0};
 
-        nibbles_from_floats_64_0(qk, x + i*qk, id, y[i].qs, qs);
+        for (int l = 0; l < qk/2; ++l) {
+            const float v0 = x[i*qk + 0    + l]*id;
+            const float v1 = x[i*qk + qk/2 + l]*id;
+
+            const uint64_t vi0 = MIN(15, (int8_t)(v0 + 8.5f));
+            const uint64_t vi1 = MIN(15, (int8_t)(v1 + 8.5f));
+
+            qs[l/8] |= vi0 << (8*(l & 7));
+            qs[l/8] |= vi1 << (8*(l & 7) + 4);
+        }
+
+        memcpy(y[i].qs, qs, qk/2);
     }
 }
 
@@ -942,7 +920,18 @@ static void quantize_row_q4_1_reference(const float * restrict x, block_q4_1 * r
 
         uint64_t qs[QK4_1 / 16] = {0};
 
-        nibbles_from_floats_64_1(qk, x + i*qk, id, min, y[i].qs, qs);
+        for (int l = 0; l < qk/2; ++l) {
+            const float v0 = (x[0    + l] - min)*id;
+            const float v1 = (x[qk/2 + l] - min)*id;
+
+            const uint64_t vi0 = MIN(15, (int8_t)(v0 + 0.5f));
+            const uint64_t vi1 = MIN(15, (int8_t)(v1 + 0.5f));
+
+            qs[l/8] |= vi0 << (8*(l & 7));
+            qs[l/8] |= vi1 << (8*(l & 7) + 4);
+        }
+
+        memcpy(y[i].qs, qs, qk/2);
     }
 }
 
@@ -978,7 +967,18 @@ static void quantize_row_q4_2_reference(const float * restrict x, block_q4_2 * r
 
         uint64_t qs[QK4_2 / 16] = {0};
 
-        nibbles_from_floats_64_0(qk, x + i*qk, id, y[i].qs, qs);
+        for (int l = 0; l < qk/2; ++l) {
+            const float v0 = x[i*qk + 0    + l]*id;
+            const float v1 = x[i*qk + qk/2 + l]*id;
+
+            const uint64_t vi0 = MIN(15, (int8_t)(v0 + 8.5f));
+            const uint64_t vi1 = MIN(15, (int8_t)(v1 + 8.5f));
+
+            qs[l/8] |= vi0 << (8*(l & 7));
+            qs[l/8] |= vi1 << (8*(l & 7) + 4);
+        }
+
+        memcpy(y[i].qs, qs, qk/2);
     }
 }
 
@@ -987,51 +987,54 @@ static void quantize_row_q4_2(const float * restrict x, void * restrict y, int k
 }
 
 static void quantize_row_q5_0_reference(const float * restrict x, block_q5_0 * restrict y, int k) {
-    assert(k % QK5_0 == 0);
-    const int nb = k / QK5_0;
+    static const int qk = QK5_0;
+
+    assert(qk / 16 == 0);
+    assert( k % qk == 0);
+
+    const int nb = k / qk;
 
     for (int i = 0; i < nb; i++) {
         float amax = 0.0f; // absolute max
-        float max = 0.0f;
+        float max  = 0.0f;
 
-        for (int l = 0; l < QK5_0; l++) {
-            const float v = x[i*QK5_0 + l];
+        for (int l = 0; l < qk; l++) {
+            const float v = x[i*qk + l];
             if (amax < fabsf(v)) {
                 amax = fabsf(v);
-                max = v;
+                max  = v;
             }
         }
 
-        const float d = max / -16;
+        const float d  = max / -16;
         const float id = d ? 1.0f/d : 0.0f;
 
-        y[i].d = GGML_FP32_TO_FP16(d);
+        y[i].d = d;
 
         uint32_t qh = 0;
+        uint64_t qs[QK5_0 / 16] = {0};
 
-        for (int l = 0; l < QK5_0; l += 2) {
-            const float v0 = x[i*QK5_0 + l + 0]*id;
-            const float v1 = x[i*QK5_0 + l + 1]*id;
+        for (int l = 0; l < qk/2; ++l) {
+            const float v0 = x[i*qk + 0    + l]*id;
+            const float v1 = x[i*qk + qk/2 + l]*id;
 
-            const uint32_t vi0 = MIN(31, (int) (v0 + 16.5f));
-            const uint32_t vi1 = MIN(31, (int) (v1 + 16.5f));
+            const uint64_t vi0 = MIN(31, (int8_t)(v0 + 16.5f));
+            const uint64_t vi1 = MIN(31, (int8_t)(v1 + 16.5f));
 
-            y[i].qs[l/2] = (vi0 & 0x0F) | ((vi1 & 0x0F) << 4);
+            qs[l/8] |= vi0 << (8*(l & 7));
+            qs[l/8] |= vi1 << (8*(l & 7) + 4);
 
             // get the 5-th bit and store it in qh at the right position
             qh |= ((vi0 & 0x10) >> 4) << (l + 0);
-            qh |= ((vi1 & 0x10) >> 4) << (l + 1);
+            qh |= ((vi1 & 0x10) >> 4) << (l + qk/2);
         }
 
-        memcpy(&y[i].qh, &qh, sizeof(y[i].qh));
+        memcpy( y[i].qs,  qs, qk/2);
+        memcpy(&y[i].qh, &qh, sizeof(qh));
     }
 }
 
-static void quantize_row_q5_0(const float * restrict x, void * restrict vy, int k) {
-    assert(k % QK5_0 == 0);
-
-    block_q5_0 * restrict y = vy;
-
+static void quantize_row_q5_0(const float * restrict x, void * restrict y, int k) {
     quantize_row_q5_0_reference(x, y, k);
 }
 
@@ -1500,38 +1503,28 @@ static void dequantize_row_q4_2(const block_q4_2 * restrict x, float * restrict 
     }
 }
 
-static void dequantize_row_q5_0(const void * restrict vx, float * restrict y, int k) {
-    assert(k % QK5_0 == 0);
-    const int nb = k / QK5_0;
+static void dequantize_row_q5_0(const block_q5_0 * restrict x, float * restrict y, int k) {
+    static const int qk = QK4_0;
 
-    const block_q5_0 * restrict x = vx;
+    assert(qk / 16 == 0);
+    assert( k % qk == 0);
+
+    const int nb = k / qk;
+
+    uint64_t qs[QK5_0 / 8];
 
     for (int i = 0; i < nb; i++) {
         const float d = GGML_FP16_TO_FP32(x[i].d);
 
-        const uint8_t * restrict pp = x[i].qs;
-
         uint32_t qh;
         memcpy(&qh, x[i].qh, sizeof(qh));
 
-        for (int l = 0; l < QK5_0; l += 2) {
-            const uint8_t vi = pp[l/2];
+        const uint8_t * qsp = bytes_from_nibbles_64(qk, x[i].qs, qs);
 
-            // extract the 5-th bit from qh
-            const uint8_t vh0 = ((qh & (1u << (l + 0))) >> (l + 0)) << 4;
-            const uint8_t vh1 = ((qh & (1u << (l + 1))) >> (l + 1)) << 4;
+        for (int l = 0; l < qk; ++l) {
+            const uint8_t vh = ((qh & (1u << l)) >> l) << 4;
 
-            const int8_t vi0 = (vi & 0x0F) | vh0;
-            const int8_t vi1 = (vi >>   4) | vh1;
-
-            const float v0 = (vi0 - 16)*d;
-            const float v1 = (vi1 - 16)*d;
-
-            y[i*QK5_0 + l + 0] = v0;
-            y[i*QK5_0 + l + 1] = v1;
-
-            assert(!isnan(y[i*QK5_0 + l + 0]));
-            assert(!isnan(y[i*QK5_0 + l + 1]));
+            y[i*qk + l] = ((qsp[l] | vh) - 16)*d;
         }
     }
 }
@@ -1623,7 +1616,7 @@ static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
         .vec_dot_type             = GGML_TYPE_Q8_0,
     },
     [GGML_TYPE_Q5_0] = {
-        .dequantize_row_q         = dequantize_row_q5_0,
+        .dequantize_row_q         = (dequantize_row_q_t) dequantize_row_q5_0,
         .quantize_row_q           = quantize_row_q5_0,
         .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q5_0_reference,
         .quantize_row_q_dot       = quantize_row_q8_0,
@@ -2693,11 +2686,12 @@ static void ggml_vec_dot_q4_2_q8_0(const int n, float * restrict s, const void *
 }
 
 static void ggml_vec_dot_q5_0_q8_0(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
-    const int nb = n / QK8_0;
+    const int qk = QK8_0;
+    const int nb = n / qk;
 
-    assert(n % QK8_0 == 0);
+    assert(n % qk == 0);
     assert(nb % 2 == 0);
-    assert(QK8_0 == QK5_0);
+    assert(qk == QK5_0);
 
     const block_q5_0 * restrict x = vx;
     const block_q8_0 * restrict y = vy;
@@ -2732,13 +2726,9 @@ static void ggml_vec_dot_q5_0_q8_0(const int n, float * restrict s, const void *
         const int8x16_t v0l = vreinterpretq_s8_u8(vandq_u8  (v0, m4b));
         const int8x16_t v0h = vreinterpretq_s8_u8(vshrq_n_u8(v0, 4));
 
-        // interleave
-        const int8x16_t v0lz = vzip1q_s8(v0l, v0h);
-        const int8x16_t v0hz = vzip2q_s8(v0l, v0h);
-
         // add high bit and sub 16
-        const int8x16_t v0lf = vsubq_s8(vorrq_s8(v0lz, qhl), s16b);
-        const int8x16_t v0hf = vsubq_s8(vorrq_s8(v0hz, qhh), s16b);
+        const int8x16_t v0lf = vsubq_s8(vorrq_s8(v0l, qhl), s16b);
+        const int8x16_t v0hf = vsubq_s8(vorrq_s8(v0h, qhh), s16b);
 
         // load y
         const int8x16_t v1l = vld1q_s8(y0->qs);
@@ -2856,34 +2846,28 @@ static void ggml_vec_dot_q5_0_q8_0(const int n, float * restrict s, const void *
 #else
     // scalar
     float sumf = 0.0;
+
+    uint64_t qs[QK8_0 / 8];
+
     for (int i = 0; i < nb; i++) {
-        const uint8_t * restrict x0 = x[i].qs;
-        const  int8_t * restrict y0 = y[i].qs;
+        // unpack nibbles into bytes
+        const uint8_t * px = bytes_from_nibbles_64(qk, x[i].qs, qs);
+        const  int8_t * py = y[i].qs;
 
         uint32_t qh;
         memcpy(&qh, x[i].qh, sizeof(qh));
 
-        const float d = GGML_FP16_TO_FP32(x[i].d);
+        int sumi = 0;
 
-        int sxy = 0;
+        for (int j = 0; j < qk; ++j) {
+            const int xh = ((qh & (1u << j)) >> j) << 4;
 
-        for (int j = 0; j < QK8_0/2; j++) {
-            const uint8_t v0 = x0[j];
-
-            const int x0_0h = ((qh & (1u << (2*j + 0))) >> (2*j + 0)) << 4;
-            const int x1_0h = ((qh & (1u << (2*j + 1))) >> (2*j + 1)) << 4;
-
-            const int x0_0 = ((v0 & 0x0F) | x0_0h) - 16;
-            const int x1_0 = ((v0 >>   4) | x1_0h) - 16;
-
-            const int y0_0 = y0[2*j + 0];
-            const int y1_0 = y0[2*j + 1];
-
-            sxy += x0_0*y0_0 + x1_0*y1_0;
+            sumi += ((px[j] | xh) - 16)*py[j];
         }
 
-        sumf += (d*sxy)*y[i].d;
+        sumf += (GGML_FP16_TO_FP32(x[i].d)*y[i].d)*sumi;
     }
+
     *s = sumf;
 #endif
 }
