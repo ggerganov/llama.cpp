@@ -137,9 +137,6 @@ int main(int argc, char ** argv) {
         return 0;
     }
 
-    // Add a space in front of the first character to match OG llama tokenizer behavior
-    params.prompt.insert(0, 1, ' ');
-
     std::string path_session = params.path_session;
     std::vector<llama_token> session_tokens;
 
@@ -214,9 +211,6 @@ int main(int argc, char ** argv) {
     if (params.antiprompt.size() != 0 || params.interactive_first) {
         params.interactive = true;
     }
-
-    // determine newline token
-    auto llama_token_newline = ::llama_tokenize(ctx, "\n", false);
 
     if (params.verbose_prompt) {
         fprintf(stderr, "\n");
@@ -456,7 +450,7 @@ int main(int argc, char ** argv) {
 
             // replace end of text token with newline token when in interactive mode
             if (id == llama_token_eos() && params.interactive && !params.instruct) {
-                id = llama_token_newline.front();
+                id = llama_token_nl();
                 if (params.antiprompt.size() != 0) {
                     // tokenize and inject first reverse prompt
                     const auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false);
