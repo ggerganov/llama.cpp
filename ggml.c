@@ -11656,7 +11656,14 @@ typedef int ggml_lock_t;
 
 #define ggml_lock_init(x)    UNUSED(x)
 #define ggml_lock_destroy(x) UNUSED(x)
+#ifdef __x86_64__
+static inline void ggml_lock_lock(void* x);
+inline void ggml_lock_lock(void* x) {
+    __asm__ __volatile__("pause\n");
+}
+#else
 #define ggml_lock_lock(x)    UNUSED(x)
+#endif
 #define ggml_lock_unlock(x)  UNUSED(x)
 
 #define GGML_LOCK_INITIALIZER 0
