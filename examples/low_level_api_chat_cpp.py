@@ -10,9 +10,10 @@ Quirks:
    You should also still be feeding the model with a "primer" prompt that
    shows it the expected format.
 """
+import ctypes
 import sys
 from time import time
-from os import cpu_count
+from os import cpu_count, path
 
 import llama_cpp
 from common import GptParams, gpt_params_parse, gpt_random_prompt
@@ -77,6 +78,7 @@ specified) expect poor results""", file=sys.stderr)
         # runtime args
         self.input_consumed = 0
         self.n_past = 0
+        self.n_session_consumed = 0
         self.first_antiprompt = []
         self.remaining_tokens = self.params.n_predict
         self.output_echo = self.params.input_echo
@@ -93,6 +95,19 @@ specified) expect poor results""", file=sys.stderr)
         self.ctx = llama_cpp.llama_init_from_file(self.params.model.encode("utf8"), self.lparams)
         if (not self.ctx):
             raise RuntimeError(f"error: failed to load model '{self.params.model}'")
+
+        if (self.params.ignore_eos):
+            self.params.logit_bias[llama_cpp.llama_token_eos()] = -float("inf")
+
+        if (len(self.params.lora_adapter) > 0):
+            if (llama_cpp.llama_apply_lora_from_file(
+                self.ctx,
+                self.params.lora_adapter,
+                self.params.lora_base if len(self.params.lora_base) > 0 else None,
+                self.params.n_threads
+            ) != 0):
+                print("error: failed to apply lora adapter")
+                return
 
         print(file=sys.stderr)
         print(f"system_info: n_threads = {self.params.n_threads} / {cpu_count()} \
@@ -117,12 +132,48 @@ specified) expect poor results""", file=sys.stderr)
             with open(self.params.file) as f:
                 self.params.prompt = f.read()
 
+        self.session_tokens: list[llama_cpp.llama_token] = []
+        if (len(self.params.path_session) > 0):
+            print(f"attempting to load saved session from '{self.params.path_session}'", file=sys.stderr)
+
+            if (path.exists(self.params.path_session)):
+                _session_tokens = (llama_cpp.llama_token * (self.params.n_ctx))()
+                _n_token_count_out = llama_cpp.c_int()
+                if (llama_cpp.llama_load_session_file(
+                    self.ctx,
+                    self.params.path_session.encode("utf8"),
+                    _session_tokens,
+                    self.params.n_ctx,
+                    ctypes.byref(_n_token_count_out)
+                ) != 0):
+                    print(f"error: failed to load session file '{self.params.path_session}'", file=sys.stderr)
+                    return
+                self.session_tokens = _session_tokens[:_n_token_count_out]
+                print(f"loaded a session with prompt size of {_n_token_count_out} tokens", file=sys.stderr)
+            else:
+                print(f"session file does not exist, will create", file=sys.stderr)
+
         # tokenize the prompt
         self.embd = []
         self.embd_inp = self._tokenize(self.params.prompt)
 
-        if (len(self.embd_inp) > self.params.n_ctx - 4):
+        if (len(self.embd_inp) > self.n_ctx - 4):
             raise RuntimeError(f"error: prompt is too long ({len(self.embd_inp)} tokens, max {self.params.n_ctx - 4})")
+
+        # debug message about similarity of saved session, if applicable
+        n_matching_session_tokens = 0
+        if len(self.session_tokens) > 0:
+            for id in self.session_tokens:
+                if n_matching_session_tokens >= len(self.embd_inp) or id != self.embd_inp[n_matching_session_tokens]:
+                    break
+                n_matching_session_tokens += 1
+
+            if n_matching_session_tokens >= len(self.embd_inp):
+                print(f"session file has exact match for prompt!")
+            elif n_matching_session_tokens < (len(self.embd_inp) / 2):
+                print(f"warning: session file has low similarity to prompt ({n_matching_session_tokens} / {len(self.embd_inp)} tokens); will mostly be reevaluated")
+            else:
+                print(f"session file matches {n_matching_session_tokens} / {len(self.embd_inp)} tokens of prompt")
 
         # number of tokens to keep when resetting context
         if (self.params.n_keep < 0 or self.params.n_keep > len(self.embd_inp) or self.params.instruct):
@@ -132,6 +183,7 @@ specified) expect poor results""", file=sys.stderr)
         self.inp_suffix = self._tokenize(self.params.instruct_inp_suffix, False)
 
         # in instruct mode, we inject a prefix and a suffix to each input by the user
+        self.antiecho = None
         if (self.params.instruct):
             self.params.interactive_start = True
             _ptn = self._tokenize(self.params.instruct_inp_prefix.strip(), False)
@@ -171,16 +223,24 @@ number of tokens in prompt = {len(self.embd_inp)}""", file=sys.stderr)
             if len(self.params.input_prefix) > 0:
                 print(f"Input prefix: '{self.params.input_prefix}'", file=sys.stderr)
 
-        print(f"""sampling: temp = {self.params.temp},\
+        print(f"""sampling: repeat_last_n = {self.params.repeat_last_n},\
+repeat_penalty = {self.params.repeat_penalty},\
+presence_penalty = {self.params.presence_penalty},\
+frequency_penalty = {self.params.frequency_penalty},\
 top_k = {self.params.top_k},\
+tfs_z = {self.params.tfs_z},\
 top_p = {self.params.top_p},\
-repeat_last_n = {self.params.repeat_last_n},\
-repeat_penalty = {self.params.repeat_penalty}
+typical_p = {self.params.typical_p},\
+temp = {self.params.temp},\
+mirostat = {self.params.mirostat},\
+mirostat_lr = {self.params.mirostat_eta},\
+mirostat_ent = {self.params.mirostat_tau},\
 
-generate: n_ctx = {self.n_ctx}, \
-n_batch = {self.params.n_batch}, \
-n_predict = {self.params.n_predict}, \
+generate: n_ctx = {self.n_ctx},\
+n_batch = {self.params.n_batch},\
+n_predict = {self.params.n_predict},\
 n_keep = {self.params.n_keep}
+
 """, file=sys.stderr)
 
         # determine antiprompt tokens
@@ -197,6 +257,9 @@ n_keep = {self.params.n_keep}
 
 """, file=sys.stderr)
         self.set_color(CONSOLE_COLOR_PROMPT)
+
+        self.need_to_save_session = len(self.params.path_session) > 0 and n_matching_session_tokens < (len(self.embd_inp) * 3 / 4)
+
 
     # tokenize a prompt
     def _tokenize(self, prompt, bos=True):
@@ -229,31 +292,117 @@ n_keep = {self.params.n_keep}
                         self.n_ctx - int(n_left/2) - len(self.embd):-len(self.embd)
                     ]
                     self.embd = _insert + self.embd
+                    self.params.path_session = ""
+
+                # try to reuse a matching prefix from the loaded session instead of re-eval (via n_past)
+                # REVIEW
+                if self.n_session_consumed < len(self.session_tokens):
+                    for i in range(len(self.embd)):
+                        if self.embd[i] != self.session_tokens[self.n_session_consumed]:
+                            self.session_tokens = self.session_tokens[:self.n_session_consumed]
+                            break
+
+                        self.n_past += 1
+                        self.n_session_consumed += 1
+
+                        if self.n_session_consumed >= len(self.session_tokens):
+                            i += 1
+                            break
+
+                    if i > 0:
+                        self.embd = self.embd[i:]
+
+                # evaluate tokens in batches
+                # embd is typically prepared beforehand to fit within a batch, but not always
+                #TODO BUG: The batching code causes nonsensical generation
+                """for i in range(0, len(self.embd), self.params.n_batch):
+                    n_eval = self.params.n_batch
+                    _arr = (llama_cpp.llama_token * n_eval)(*self.embd[i:i + n_eval])
+                    if llama_cpp.llama_eval(self.ctx, _arr, n_eval, self.n_past, self.params.n_threads) != 0:
+                        print(f"failed to eval")
+                        return
+
+                    self.n_past += n_eval"""
 
                 if (llama_cpp.llama_eval(
                     self.ctx, (llama_cpp.llama_token * len(self.embd))(*self.embd), len(self.embd), self.n_past, self.params.n_threads
                 ) != 0):
                     raise Exception("Failed to llama_eval!")
 
+                if len(self.embd) > 0 and not len(self.params.path_session) > 0:
+                    self.session_tokens.extend(self.embd)
+                    self.n_session_consumed = len(self.session_tokens)
+
             self.n_past += len(self.embd)
             self.embd = []
-            if len(self.embd_inp) <= self.input_consumed:
+            if len(self.embd_inp) <= self.input_consumed: #&& !is_interacting
                 # out of user input, sample next token
+                top_k = llama_cpp.llama_n_vocab(self.ctx) if self.params.top_k <= 0 else self.params.top_k
+                repeat_last_n = self.n_ctx if self.params.repeat_last_n < 0 else self.params.repeat_last_n
 
-                if (self.params.ignore_eos):
-                    logits = llama_cpp.llama_get_logits(self.ctx)
-                    logits[llama_cpp.llama_token_eos()] = llama_cpp.c_float(0)
+                # optionally save the session on first sample (for faster prompt loading next time)
+                if len(self.params.path_session) > 0 and self.need_to_save_session:
+                    self.need_to_save_session = False
+                    llama_cpp.llama_save_session_file(
+                        self.ctx,
+                        self.params.path_session.encode("utf8"),
+                        self.session_tokens,
+                        len(self.session_tokens)
+                    )
 
-                _arr = self.last_n_tokens[-min(self.params.repeat_last_n, self.n_past):]
-                id = llama_cpp.llama_sample_top_p_top_k(
-                    self.ctx,
-                    (llama_cpp.llama_token * len(_arr))(*_arr),
-                    len(_arr),
-                    self.params.top_k,
-                    self.params.top_p,
-                    self.params.temp,
-                    self.params.repeat_penalty,
-                )
+                id = 0
+
+                logits = llama_cpp.llama_get_logits(self.ctx)
+                n_vocab = llama_cpp.llama_n_vocab(self.ctx)
+
+                # Apply params.logit_bias map
+                for key, value in self.params.logit_bias.items():
+                    logits[key] += value
+
+                _arr = (llama_cpp.llama_token_data * n_vocab)(*[
+                    llama_cpp.llama_token_data(token_id, logits[token_id], 0.0)
+                    for token_id in range(n_vocab)
+                ])
+                candidates_p = llama_cpp.ctypes.pointer(llama_cpp.llama_token_data_array(_arr, len(_arr), False))
+
+                # Apply penalties
+                nl_logit = logits[llama_cpp.llama_token_nl()]
+                last_n_repeat = min(len(self.last_n_tokens), repeat_last_n, self.n_ctx)
+
+                _arr = (llama_cpp.llama_token * last_n_repeat)(*self.last_n_tokens[len(self.last_n_tokens) - last_n_repeat:])
+                llama_cpp.llama_sample_repetition_penalty(self.ctx, candidates_p,
+                    _arr,
+                    last_n_repeat, self.params.repeat_penalty)
+                llama_cpp.llama_sample_frequency_and_presence_penalties(self.ctx, candidates_p,
+                    _arr,
+                    last_n_repeat, self.params.frequency_penalty, self.params.presence_penalty)
+
+                if not self.params.penalize_nl:
+                    logits[llama_cpp.llama_token_nl()] = nl_logit
+
+                if self.params.temp <= 0:
+                    # Greedy sampling
+                    id = llama_cpp.llama_sample_token_greedy(self.ctx, candidates_p)
+                else:
+                    if self.params.mirostat == 1:
+                        mirostat_mu = 2.0 * self.params.mirostat_tau
+                        mirostat_m = 100
+                        llama_cpp.llama_sample_temperature(self.ctx, candidates_p, self.params.temp)
+                        id = llama_cpp.llama_sample_token_mirostat(self.ctx, candidates_p, self.params.mirostat_tau, self.params.mirostat_eta, mirostat_m, mirostat_mu)
+                    elif self.params.mirostat == 2:
+                        mirostat_mu = 2.0 * self.params.mirostat_tau
+                        llama_cpp.llama_sample_temperature(self.ctx, candidates_p, self.params.temp)
+                        id = llama_cpp.llama_sample_token_mirostat_v2(self.ctx, candidates_p, self.params.mirostat_tau, self.params.mirostat_eta, mirostat_mu)
+                    else:
+                        # Temperature sampling
+                        llama_cpp.llama_sample_top_k(self.ctx, candidates_p, top_k)
+                        llama_cpp.llama_sample_tail_free(self.ctx, candidates_p, self.params.tfs_z)
+                        llama_cpp.llama_sample_typical(self.ctx, candidates_p, self.params.typical_p)
+                        llama_cpp.llama_sample_top_p(self.ctx, candidates_p, self.params.top_p)
+                        llama_cpp.llama_sample_temperature(self.ctx, candidates_p, self.params.temp)
+                        id = llama_cpp.llama_sample_token(self.ctx, candidates_p)
+                # print("`{}`".format(candidates_p.size))
+
                 self.last_n_tokens.pop(0)
                 self.last_n_tokens.append(id)
 
@@ -288,7 +437,7 @@ n_keep = {self.params.n_keep}
             # display tokens
             if self.output_echo:
                 for id in self.embd:
-                    if self.params.instruct:
+                    if self.antiecho != None:
                         for r in self.antiecho(id):
                             yield r
                     else:
@@ -316,7 +465,7 @@ n_keep = {self.params.n_keep}
                 if (not self.params.instruct):
                     for i in self.llama_token_eot:
                         yield i
-                break
+                    break
 
             # respect n_predict even if antiprompt is present
             if (self.params.interactive and self.remaining_tokens <= 0 and self.params.n_predict != -1):
@@ -356,7 +505,7 @@ n_keep = {self.params.n_keep}
     def output(self):
         self.remaining_tokens = self.params.n_predict
         for id in self.generate():
-            yield llama_cpp.llama_token_to_str(self.ctx, id).decode("utf-8", errors="ignore")
+            yield llama_cpp.llama_token_to_str(self.ctx, id).decode("utf-8")
 
     # read user input
     def read_input(self):
@@ -415,8 +564,7 @@ The transcript only includes text, it does not include markup like HTML and Mark
 {USER_NAME}: Name a color.
 {AI_NAME}: Blue
 {USER_NAME}:"""
-    args = gpt_params_parse()
-    params = GptParams(**vars(args))
+    params = gpt_params_parse()
 
     with LLaMAInteract(params) as m:
         m.interact()

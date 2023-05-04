@@ -37,6 +37,10 @@ embd = []
 last_n_size = 64
 last_n_tokens_data = [0] * last_n_size
 n_batch = 24
+last_n_repeat = 64
+repeat_penalty = 1
+frequency_penalty = 0.0
+presence_penalty = 0.0
 
 while remaining_tokens > 0:
     if len(embd) > 0:
@@ -47,15 +51,28 @@ while remaining_tokens > 0:
     n_past += len(embd)
     embd = []
     if len(embd_inp) <= input_consumed:
-        id = llama_cpp.llama_sample_top_p_top_k(
-            ctx,
-            (llama_cpp.c_int * len(last_n_tokens_data))(*last_n_tokens_data),
-            len(last_n_tokens_data),
-            40,
-            0.8,
-            0.2,
-            1.0 / 0.85,
-        )
+        logits = llama_cpp.llama_get_logits(ctx)
+        n_vocab = llama_cpp.llama_n_vocab(ctx)
+
+        _arr = (llama_cpp.llama_token_data * n_vocab)(*[
+            llama_cpp.llama_token_data(token_id, logits[token_id], 0.0)
+            for token_id in range(n_vocab)
+        ])
+        candidates_p = llama_cpp.ctypes.pointer(llama_cpp.llama_token_data_array(_arr, len(_arr), False))
+
+        _arr = (llama_cpp.c_int * len(last_n_tokens_data))(*last_n_tokens_data)
+        llama_cpp.llama_sample_repetition_penalty(ctx, candidates_p,
+            _arr,
+            last_n_repeat, repeat_penalty)
+        llama_cpp.llama_sample_frequency_and_presence_penalties(ctx, candidates_p,
+            _arr,
+            last_n_repeat, frequency_penalty, presence_penalty)
+
+        llama_cpp.llama_sample_top_k(ctx, candidates_p, 40)
+        llama_cpp.llama_sample_top_p(ctx, candidates_p, 0.8)
+        llama_cpp.llama_sample_temperature(ctx, candidates_p, 0.2)
+        id = llama_cpp.llama_sample_token(ctx, candidates_p)
+
         last_n_tokens_data = last_n_tokens_data[1:] + [id]
         embd.append(id)
         input_noecho = False
