@@ -77,6 +77,7 @@ std::string process_escapes(const char* input) {
             if (input[i] == '\\' && i + 1 < input_len) {
                 switch (input[++i]) {
                     case 'n':  output.push_back('\n'); break;
+                    case 'r':  output.push_back('\r'); break;
                     case 't':  output.push_back('\t'); break;
                     case '\'': output.push_back('\''); break;
                     case '\"': output.push_back('\"'); break;
@@ -95,6 +96,8 @@ std::string process_escapes(const char* input) {
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     bool invalid_param = false;
+    bool escape_prompt = false;
+    const char* prompt = nullptr;
     std::string arg;
     gpt_params default_params;
 
@@ -118,7 +121,9 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 invalid_param = true;
                 break;
             }
-            params.prompt = process_escapes(argv[i]);
+            prompt = argv[i];
+        } else if (arg == "-e") {
+            escape_prompt = true;
         } else if (arg == "--session") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -335,6 +340,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         gpt_print_usage(argc, argv, default_params);
         exit(1);
     }
+    params.prompt = escape_prompt ? process_escapes(prompt) : prompt;
 
     return true;
 }
@@ -355,6 +361,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
     fprintf(stderr, "  -p PROMPT, --prompt PROMPT\n");
     fprintf(stderr, "                        prompt to start generation with (default: empty)\n");
+    fprintf(stderr, "  -e                    process prompt escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)\n");
     fprintf(stderr, "  --session FNAME       file to cache model state in (may be large!) (default: none)\n");
     fprintf(stderr, "  --random-prompt       start with a randomized prompt.\n");
     fprintf(stderr, "  --in-prefix STRING    string to prefix user inputs with (default: empty)\n");
