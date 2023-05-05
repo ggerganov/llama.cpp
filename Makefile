@@ -112,7 +112,7 @@ ifndef LLAMA_NO_ACCELERATE
 endif
 ifdef LLAMA_OPENBLAS
 	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas
-	LDFLAGS += -lopenblas $(ARCH_ADD)
+	LDFLAGS += -lopenblas $(LDFLAGS_EXTRA)
 endif
 ifdef LLAMA_CUBLAS
 	CFLAGS    += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
