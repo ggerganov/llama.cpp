@@ -13,6 +13,15 @@ ifndef UNAME_M
 UNAME_M := $(shell uname -m)
 endif
 
+ARCH_LINUX1 := $(shell grep "Arch Linux" /etc/os-release 2>/dev/null)
+ARCH_LINUX2 := $(shell grep "ID_LIKE=arch" /etc/os-release 2>/dev/null)
+ifdef ARCH_LINUX1
+ARCH_ADD = -lcblas
+endif
+ifdef ARCH_LINUX2
+ARCH_ADD = -lcblas
+endif
+
 CCV := $(shell $(CC) --version | head -n 1)
 CXXV := $(shell $(CXX) --version | head -n 1)
 
@@ -107,7 +116,7 @@ ifndef LLAMA_NO_ACCELERATE
 endif
 ifdef LLAMA_OPENBLAS
 	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas
-	LDFLAGS += -lopenblas
+	LDFLAGS += -lopenblas $(ARCH_ADD)
 endif
 ifdef LLAMA_CUBLAS
 	CFLAGS    += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
