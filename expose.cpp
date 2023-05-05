@@ -35,7 +35,18 @@ extern "C"
     {
         std::string model = inputs.model_filename;
         lora_filename = inputs.lora_filename;
-        file_format = check_file_format(model.c_str());
+
+        int forceversion = inputs.forceversion;
+
+        if(forceversion==0)
+        {
+            file_format = check_file_format(model.c_str());
+        }
+        else
+        {
+            printf("\nWARNING: FILE FORMAT FORCED TO VER %d\nIf incorrect, loading may fail or crash.\n",forceversion);
+            file_format = (FileFormat)forceversion;
+        }
 
         //first digit is whether configured, second is platform, third is devices
         int parseinfo = inputs.clblast_info;

@@ -18,6 +18,7 @@ struct load_model_inputs
     const int clblast_info = 0;
     const int blasbatchsize = 512;
     const bool debugmode;
+    const int forceversion = 0;
 };
 struct generation_inputs
 {
