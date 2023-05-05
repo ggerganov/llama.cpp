@@ -15,29 +15,13 @@
 #endif
 
 #if defined (_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
 #include <fcntl.h>
 #include <io.h>
-#pragma comment(lib,"kernel32.lib")
-extern "C" __declspec(dllimport) void* __stdcall GetStdHandle(unsigned long nStdHandle);
-extern "C" __declspec(dllimport) int __stdcall GetConsoleMode(void* hConsoleHandle, unsigned long* lpMode);
-extern "C" __declspec(dllimport) int __stdcall SetConsoleMode(void* hConsoleHandle, unsigned long dwMode);
-extern "C" __declspec(dllimport) int __stdcall SetConsoleCP(unsigned int wCodePageID);
-extern "C" __declspec(dllimport) int __stdcall SetConsoleOutputCP(unsigned int wCodePageID);
-extern "C" __declspec(dllimport) int __stdcall WideCharToMultiByte(unsigned int CodePage, unsigned long dwFlags,
-                                                                   const wchar_t * lpWideCharStr, int cchWideChar,
-                                                                   char * lpMultiByteStr, int cbMultiByte,
-                                                                   const char * lpDefaultChar, bool * lpUsedDefaultChar);
-#define ENABLE_LINE_INPUT 0x0002
-#define ENABLE_ECHO_INPUT 0x0004
-#define CP_UTF8 65001
-#define CONSOLE_CHAR_TYPE wchar_t
-#define CONSOLE_GET_CHAR() getwchar()
-#define CONSOLE_EOF WEOF
 #else
 #include <unistd.h>
-#define CONSOLE_CHAR_TYPE char
-#define CONSOLE_GET_CHAR() getchar()
-#define CONSOLE_EOF EOF
 #endif
 
 int32_t get_num_physical_cores() {
@@ -545,6 +529,7 @@ void console_init(console_state & con_st) {
     new_termios.c_cc[VTIME] = 0;
     tcsetattr(STDIN_FILENO, TCSANOW, &new_termios);
 #endif
+    setlocale(LC_ALL, "");
 }
 
 void console_cleanup(console_state & con_st) {
@@ -557,9 +542,80 @@ void console_cleanup(console_state & con_st) {
     console_set_color(con_st, CONSOLE_COLOR_DEFAULT);
 }
 
+#if defined (_WIN32)
+int puts_get_width(_In_z_ CONST CHAR* lpBuffer) {
+    DWORD nNumberOfCharsToWrite = strlen(lpBuffer);
+
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_SCREEN_BUFFER_INFO bufferInfo;
+    if (!GetConsoleScreenBufferInfo(hConsole, &bufferInfo)) {
+        // Make a guess
+        return 1;
+    }
+    COORD initialPosition = bufferInfo.dwCursorPosition;
+
+    DWORD written = 0;
+    WriteConsole(hConsole, lpBuffer, nNumberOfCharsToWrite, &written, nullptr);
+
+    CONSOLE_SCREEN_BUFFER_INFO newBufferInfo;
+    GetConsoleScreenBufferInfo(hConsole, &newBufferInfo);
+
+    int width = newBufferInfo.dwCursorPosition.X - initialPosition.X;
+    if (newBufferInfo.dwCursorPosition.Y > initialPosition.Y) {
+        width += (newBufferInfo.dwSize.X - initialPosition.X);
+    }
+
+    return width;
+}
+#endif
+
+char32_t getchar32() {
+    wchar_t wc = getwchar();
+    if (static_cast<wint_t>(wc) == WEOF) {
+        return WEOF;
+    }
+
+#if WCHAR_MAX == 0xFFFF
+    if ((wc >= 0xD800) && (wc <= 0xDBFF)) { // Check if wc is a high surrogate
+        wchar_t low_surrogate = getwchar();
+        if ((low_surrogate >= 0xDC00) && (low_surrogate <= 0xDFFF)) { // Check if the next wchar is a low surrogate
+            return (static_cast<char32_t>(wc & 0x03FF) << 10) + (low_surrogate & 0x03FF) + 0x10000;
+        }
+    }
+    if ((wc >= 0xD800) && (wc <= 0xDFFF)) { // Invalid surrogate pair
+        return 0xFFFD; // Return the replacement character U+FFFD
+    }
+#endif
+
+    return static_cast<char32_t>(wc);
+}
+
+void append_utf8(char32_t ch, std::string & out) {
+    if (ch <= 0x7F) {
+        out.push_back(static_cast<unsigned char>(ch));
+    } else if (ch <= 0x7FF) {
+        out.push_back(static_cast<unsigned char>(0xC0 | ((ch >> 6) & 0x1F)));
+        out.push_back(static_cast<unsigned char>(0x80 | (ch & 0x3F)));
+    } else if (ch <= 0xFFFF) {
+        out.push_back(static_cast<unsigned char>(0xE0 | ((ch >> 12) & 0x0F)));
+        out.push_back(static_cast<unsigned char>(0x80 | ((ch >> 6) & 0x3F)));
+        out.push_back(static_cast<unsigned char>(0x80 | (ch & 0x3F)));
+    } else if (ch <= 0x10FFFF) {
+        out.push_back(static_cast<unsigned char>(0xF0 | ((ch >> 18) & 0x07)));
+        out.push_back(static_cast<unsigned char>(0x80 | ((ch >> 12) & 0x3F)));
+        out.push_back(static_cast<unsigned char>(0x80 | ((ch >> 6) & 0x3F)));
+        out.push_back(static_cast<unsigned char>(0x80 | (ch & 0x3F)));
+    } else {
+        // Invalid Unicode code point
+    }
+}
+
 // Helper function to remove the last UTF-8 character from a string
-void remove_last_utf8_char(std::string & line) {
-    if (line.empty()) return;
+void pop_back_utf8_char(std::string & line) {
+    if (line.empty()) {
+        return;
+    }
+
     size_t pos = line.length() - 1;
 
     // Find the start of the last UTF-8 character (checking up to 4 bytes back)
@@ -569,33 +625,24 @@ void remove_last_utf8_char(std::string & line) {
     line.erase(pos);
 }
 
-#if defined (_WIN32)
-// Convert a wide Unicode string to an UTF8 string
-void win32_utf8_encode(const std::wstring & wstr, std::string & str) {
-    int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
-    std::string strTo(size_needed, 0);
-    WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
-    str = strTo;
-}
-#endif
-
 bool console_readline(console_state & con_st, std::string & line) {
+    console_set_color(con_st, CONSOLE_COLOR_USER_INPUT);
+
     line.clear();
+    std::vector<int> widths;
     bool is_special_char = false;
     bool end_of_stream = false;
 
-    console_set_color(con_st, CONSOLE_COLOR_USER_INPUT);
-
-    CONSOLE_CHAR_TYPE input_char;
+    char32_t input_char;
     while (true) {
         fflush(stdout); // Ensure all output is displayed before waiting for input
-        input_char = CONSOLE_GET_CHAR();
+        input_char = getchar32();
 
         if (input_char == '\r' || input_char == '\n') {
             break;
         }
 
-        if (input_char == CONSOLE_EOF || input_char == 0x04 /* Ctrl+D*/) {
+        if (input_char == WEOF || input_char == 0x04 /* Ctrl+D*/) {
             end_of_stream = true;
             break;
         }
@@ -608,31 +655,39 @@ bool console_readline(console_state & con_st, std::string & line) {
         }
 
         if (input_char == '\033') { // Escape sequence
-            CONSOLE_CHAR_TYPE code = CONSOLE_GET_CHAR();
-            if (code == '[') {
+            char32_t code = getchar32();
+            if (code == '[' || code == 0x1B) {
                 // Discard the rest of the escape sequence
-                while ((code = CONSOLE_GET_CHAR()) != CONSOLE_EOF) {
+                while ((code = getchar32()) != WEOF) {
                     if ((code >= 'A' && code <= 'Z') || (code >= 'a' && code <= 'z') || code == '~') {
                         break;
                     }
                 }
             }
         } else if (input_char == 0x08 || input_char == 0x7F) { // Backspace
-            if (!line.empty()) {
-                fputs("\b \b", stdout); // Move cursor back, print a space, and move cursor back again
-                remove_last_utf8_char(line);
+            if (!widths.empty()) {
+                int count;
+                do {
+                    count = widths.back();
+                    widths.pop_back();
+                    // Move cursor back, print spaces, and move cursor back again
+                    for (int i = 0; i < count; i++) {
+                        fputs("\b \b", stdout);
+                    }
+                    pop_back_utf8_char(line);
+                } while (count == 0 && !widths.empty());
             }
-        } else if (static_cast<unsigned>(input_char) < 32) {
+        } else if (input_char < 32) {
             // Ignore control characters
         } else {
-#if defined(_WIN32)
-            std::string utf8_char;
-            win32_utf8_encode(std::wstring(1, input_char), utf8_char);
-            line += utf8_char;
-            fputs(utf8_char.c_str(), stdout);
+            int offset = line.length();
+            append_utf8(input_char, line);
+#if defined (_WIN32)
+            int width = puts_get_width(line.c_str() + offset);
+            widths.push_back(width);
 #else
-            line += input_char;
-            putchar(input_char);
+            fputs(line.c_str() + offset, stdout);
+            widths.push_back(wcwidth(input_char));
 #endif
         }
 
@@ -655,7 +710,7 @@ bool console_readline(console_state & con_st, std::string & line) {
             putchar('\n');
             has_more = !has_more;
         } else {
-            // llama doesn't seem to process a single space
+            // llama will just eat the single space
             if (line.length() == 1 && line.back() == ' ') {
                 line.clear();
                 putchar('\b');
