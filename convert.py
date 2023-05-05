@@ -67,6 +67,7 @@ FTYPE_TO_DATA_TYPE: Dict[int, DataType] = \
     {ftype: dtype for (dtype, ftype) in DATA_TYPE_TO_FTYPE.items()}
 
 DATA_TYPE_TO_NUMPY: Dict[DataType, 'np.dtype[Any]'] = {
+    DT_BF16: np.dtype(np.uint16),
     DT_F16: np.dtype(np.float16),
     DT_F32: np.dtype(np.float32),
     DT_I32: np.dtype(np.int32),
@@ -276,6 +277,12 @@ class Tensor(metaclass=ABCMeta):
     def to_ggml(self) -> 'GGMLCompatibleTensor': ...
 
 
+def bf16_to_fp32(bf16_arr: np.ndarray) -> np.ndarray:
+    assert bf16_arr.dtype == np.uint16, f"Input array should be of dtype uint16, but got {bf16_arr.dtype}"
+    fp32_arr = bf16_arr.astype(np.uint32) << 16
+    return fp32_arr.view(np.float32)
+
+
 class UnquantizedTensor(Tensor):
     def __init__(self, ndarray: NDArray) -> None:
         assert isinstance(ndarray, np.ndarray)
@@ -284,6 +291,8 @@ class UnquantizedTensor(Tensor):
 
     def astype(self, data_type: DataType) -> Tensor:
         dtype = DATA_TYPE_TO_NUMPY[data_type]
+        if self.data_type == DT_BF16:
+            self.ndarray = bf16_to_fp32(self.ndarray)
         return UnquantizedTensor(self.ndarray.astype(dtype))
 
     def to_ggml(self) -> 'UnquantizedTensor':
@@ -686,6 +695,7 @@ class LazyUnpickler(pickle.Unpickler):
         description = f'storage data_type={data_type} path-in-zip={filename} path={self.zip_file.filename}'
         return LazyStorage(load=load, kind=pid[1], description=description)
 
+   # @staticmethod
     def lazy_rebuild_tensor_v2(storage: Any, storage_offset: Any, size: Any, stride: Any,  # pyright: ignore[reportSelfClsParameterName]
                                requires_grad: Any, backward_hooks: Any, metadata: Any = None) -> LazyTensor:
         assert isinstance(storage, LazyStorage)
@@ -696,12 +706,18 @@ class LazyUnpickler(pickle.Unpickler):
         description = f'pickled storage_offset={storage_offset} in {storage.description}'
         return LazyTensor(load, list(size), storage.kind.data_type, description)
 
+    # @staticmethod
+    def rebuild_from_type_v2(func, new_type, args, state):
+        return func(*args)
+
     CLASSES: Dict[Any, Any] = {
+        ('torch._tensor', '_rebuild_from_type_v2'): rebuild_from_type_v2,
         ('torch._utils', '_rebuild_tensor_v2'): lazy_rebuild_tensor_v2,
         ('torch', 'BFloat16Storage'): LazyStorageKind(DT_BF16),
         ('torch', 'HalfStorage'): LazyStorageKind(DT_F16),
         ('torch', 'FloatStorage'): LazyStorageKind(DT_F32),
         ('torch', 'IntStorage'): LazyStorageKind(DT_I32),
+        ('torch', 'Tensor'): LazyTensor,
     }
 
     def find_class(self, module: str, name: str) -> Any:
@@ -961,7 +977,7 @@ class OutputFile:
 
 def pick_output_type(model: LazyModel, output_type_str: Optional[str]) -> GGMLFileType:
     wq_type = model["layers.0.attention.wq.weight"].data_type
-    if output_type_str == "f32" or (output_type_str is None and wq_type == DT_F32):
+    if output_type_str == "f32" or (output_type_str is None and wq_type in (DT_F32, DT_BF16)):
         return GGMLFileType.AllF32
     if output_type_str == "f16" or (output_type_str is None and wq_type == DT_F16):
         return GGMLFileType.MostlyF16

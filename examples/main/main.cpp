@@ -260,6 +260,10 @@ int main(int argc, char ** argv) {
         if (!params.input_prefix.empty()) {
             fprintf(stderr, "Input prefix: '%s'\n", params.input_prefix.c_str());
         }
+
+        if (!params.input_suffix.empty()) {
+            fprintf(stderr, "Input suffix: '%s'\n", params.input_suffix.c_str());
+        }
     }
     fprintf(stderr, "sampling: repeat_last_n = %d, repeat_penalty = %f, presence_penalty = %f, frequency_penalty = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f, mirostat = %d, mirostat_lr = %f, mirostat_ent = %f\n",
             params.repeat_last_n, params.repeat_penalty, params.presence_penalty, params.frequency_penalty, params.top_k, params.tfs_z, params.top_p, params.typical_p, params.temp, params.mirostat, params.mirostat_eta, params.mirostat_tau);
@@ -551,12 +555,14 @@ int main(int argc, char ** argv) {
                         return 0;
                     }
 #endif
-                    if (line.empty() || line.back() != '\\') {
-                        another_line = false;
-                    } else {
-                        line.pop_back(); // Remove the continue character
+                    if (!line.empty()) {
+                        if (line.back() == '\\') {
+                            line.pop_back(); // Remove the continue character
+                        } else {
+                            another_line = false;
+                        }
+                        buffer += line + '\n'; // Append the line to the result
                     }
-                    buffer += line + '\n'; // Append the line to the result
                 } while (another_line);
 
                 // done taking input, reset color
@@ -565,6 +571,11 @@ int main(int argc, char ** argv) {
                 // Add tokens to embd only if the input buffer is non-empty
                 // Entering a empty line lets the user pass control back
                 if (buffer.length() > 1) {
+                    // append input suffix if any
+                    if (!params.input_suffix.empty()) {
+                        buffer += params.input_suffix;
+                        printf("%s", params.input_suffix.c_str());
+                    }
 
                     // instruct mode: insert instruction prefix
                     if (params.instruct && !is_antiprompt) {
