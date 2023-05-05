@@ -706,7 +706,7 @@ class LazyUnpickler(pickle.Unpickler):
         description = f'pickled storage_offset={storage_offset} in {storage.description}'
         return LazyTensor(load, list(size), storage.kind.data_type, description)
 
-    @staticmethod
+    # @staticmethod
     def rebuild_from_type_v2(func, new_type, args, state):
         return func(*args)
 
