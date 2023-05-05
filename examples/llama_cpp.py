@@ -439,7 +439,7 @@ _lib.llama_token_nl.restype = llama_token
 # @details Repetition penalty described in CTRL academic paper https://arxiv.org/abs/1909.05858, with negative logit fix.
 def llama_sample_repetition_penalty(
     ctx: llama_context_p,
-    candidates: _Pointer[llama_token_data],
+    candidates: _Pointer[llama_token_data_array],
     last_tokens_data: Array[llama_token],
     last_tokens_size: c_int,
     penalty: c_float,
@@ -462,7 +462,7 @@ _lib.llama_sample_repetition_penalty.restype = None
 # @details Frequency and presence penalties described in OpenAI API https://platform.openai.com/docs/api-reference/parameter-details.
 def llama_sample_frequency_and_presence_penalties(
     ctx: llama_context_p,
-    candidates: _Pointer[llama_token_data],
+    candidates: _Pointer[llama_token_data_array],
     last_tokens_data: Array[llama_token],
     last_tokens_size: c_int,
     alpha_frequency: c_float,
@@ -504,7 +504,7 @@ _lib.llama_sample_softmax.restype = None
 # @details Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
 def llama_sample_top_k(
     ctx: llama_context_p,
-    candidates: _Pointer[llama_token_data],
+    candidates: _Pointer[llama_token_data_array],
     k: c_int,
     min_keep: c_size_t = c_size_t(1),
 ):
@@ -523,7 +523,7 @@ _lib.llama_sample_top_k.restype = None
 # @details Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
 def llama_sample_top_p(
     ctx: llama_context_p,
-    candidates: _Pointer[llama_token_data],
+    candidates: _Pointer[llama_token_data_array],
     p: c_float,
     min_keep: c_size_t = c_size_t(1),
 ):
@@ -542,7 +542,7 @@ _lib.llama_sample_top_p.restype = None
 # @details Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
 def llama_sample_tail_free(
     ctx: llama_context_p,
-    candidates: _Pointer[llama_token_data],
+    candidates: _Pointer[llama_token_data_array],
     z: c_float,
     min_keep: c_size_t = c_size_t(1),
 ):
@@ -561,7 +561,7 @@ _lib.llama_sample_tail_free.restype = None
 # @details Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
 def llama_sample_typical(
     ctx: llama_context_p,
-    candidates: _Pointer[llama_token_data],
+    candidates: _Pointer[llama_token_data_array],
     p: c_float,
     min_keep: c_size_t = c_size_t(1),
 ):
@@ -578,7 +578,7 @@ _lib.llama_sample_typical.restype = None
 
 
 def llama_sample_temperature(
-    ctx: llama_context_p, candidates: _Pointer[llama_token_data], temp: c_float
+    ctx: llama_context_p, candidates: _Pointer[llama_token_data_array], temp: c_float
 ):
     return _lib.llama_sample_temperature(ctx, candidates, temp)
 
@@ -599,7 +599,7 @@ _lib.llama_sample_temperature.restype = None
 # @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
 def llama_sample_token_mirostat(
     ctx: llama_context_p,
-    candidates: _Pointer[llama_token_data],
+    candidates: _Pointer[llama_token_data_array],
     tau: c_float,
     eta: c_float,
     m: c_int,
@@ -626,7 +626,7 @@ _lib.llama_sample_token_mirostat.restype = llama_token
 # @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
 def llama_sample_token_mirostat_v2(
     ctx: llama_context_p,
-    candidates: _Pointer[llama_token_data],
+    candidates: _Pointer[llama_token_data_array],
     tau: c_float,
     eta: c_float,
     mu: _Pointer[c_float],
@@ -646,7 +646,7 @@ _lib.llama_sample_token_mirostat_v2.restype = llama_token
 
 # @details Selects the token with the highest probability.
 def llama_sample_token_greedy(
-    ctx: llama_context_p, candidates: _Pointer[llama_token_data]
+    ctx: llama_context_p, candidates: _Pointer[llama_token_data_array]
 ) -> llama_token:
     return _lib.llama_sample_token_greedy(ctx, candidates)
 
@@ -660,7 +660,7 @@ _lib.llama_sample_token_greedy.restype = llama_token
 
 # @details Randomly selects a token from the candidates based on their probabilities.
 def llama_sample_token(
-    ctx: llama_context_p, candidates: _Pointer[llama_token_data]
+    ctx: llama_context_p, candidates: _Pointer[llama_token_data_array]
 ) -> llama_token:
     return _lib.llama_sample_token(ctx, candidates)
 
