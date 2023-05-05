@@ -14,6 +14,6 @@ WORKDIR /app
 
 COPY . .
 
-RUN make
+RUN LLAMA_AVX2_ONLY=1 make
 
 ENTRYPOINT ["/app/.devops/tools.sh"]

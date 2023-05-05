@@ -9,7 +9,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN make
+RUN LLAMA_AVX2_ONLY=1 make
 
 FROM ubuntu:$UBUNTU_VERSION as runtime
 
