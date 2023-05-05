@@ -689,94 +689,6 @@ float vmaxvq_f32(float32x4_t v) {
             MAX(vgetq_lane_f32(v, 2), vgetq_lane_f32(v, 3)));
 }
 
-int8x8_t vzip1_s8(int8x8_t a, int8x8_t b) {
-    int8x8_t res;
-
-    res[0] = a[0]; res[1] = b[0];
-    res[2] = a[1]; res[3] = b[1];
-    res[4] = a[2]; res[5] = b[2];
-    res[6] = a[3]; res[7] = b[3];
-
-    return res;
-}
-
-int8x8_t vzip2_s8(int8x8_t a, int8x8_t b) {
-    int8x8_t res;
-
-    res[0] = a[4]; res[1] = b[4];
-    res[2] = a[5]; res[3] = b[5];
-    res[4] = a[6]; res[5] = b[6];
-    res[6] = a[7]; res[7] = b[7];
-
-    return res;
-}
-
-uint8x8_t vzip1_u8(uint8x8_t a, uint8x8_t b) {
-    uint8x8_t res;
-
-    res[0] = a[0]; res[1] = b[0];
-    res[2] = a[1]; res[3] = b[1];
-    res[4] = a[2]; res[5] = b[2];
-    res[6] = a[3]; res[7] = b[3];
-
-    return res;
-}
-
-uint8x8_t vzip2_u8(uint8x8_t a, uint8x8_t b) {
-    uint8x8_t res;
-
-    res[0] = a[4]; res[1] = b[4];
-    res[2] = a[5]; res[3] = b[5];
-    res[4] = a[6]; res[5] = b[6];
-    res[6] = a[7]; res[7] = b[7];
-
-    return res;
-}
-
-int8x16_t vzip1q_s8(int8x16_t a, int8x16_t b) {
-    int8x16_t res;
-
-    res[0]  = a[0]; res[1]  = b[0]; res[2]  = a[1]; res[3]  = b[1];
-    res[4]  = a[2]; res[5]  = b[2]; res[6]  = a[3]; res[7]  = b[3];
-    res[8]  = a[4]; res[9]  = b[4]; res[10] = a[5]; res[11] = b[5];
-    res[12] = a[6]; res[13] = b[6]; res[14] = a[7]; res[15] = b[7];
-
-    return res;
-}
-
-int8x16_t vzip2q_s8(int8x16_t a, int8x16_t b) {
-    int8x16_t res;
-
-    res[0]  = a[8];  res[1]  = b[8];  res[2]  = a[9];  res[3]  = b[9];
-    res[4]  = a[10]; res[5]  = b[10]; res[6]  = a[11]; res[7]  = b[11];
-    res[8]  = a[12]; res[9]  = b[12]; res[10] = a[13]; res[11] = b[13];
-    res[12] = a[14]; res[13] = b[14]; res[14] = a[15]; res[15] = b[15];
-
-    return res;
-}
-
-uint8x16_t vzip1q_u8(uint8x16_t a, uint8x16_t b) {
-    uint8x16_t res;
-
-    res[0]  = a[0];  res[1]  = b[0];  res[2]  = a[1];  res[3]  = b[1];
-    res[4]  = a[2];  res[5]  = b[2];  res[6]  = a[3];  res[7]  = b[3];
-    res[8]  = a[4];  res[9]  = b[4];  res[10] = a[5];  res[11] = b[5];
-    res[12] = a[6];  res[13] = b[6];  res[14] = a[7];  res[15] = b[7];
-
-    return res;
-}
-
-uint8x16_t vzip2q_u8(uint8x16_t a, uint8x16_t b) {
-    uint8x16_t res;
-
-    res[0]  = a[8];  res[1]  = b[8];  res[2]  = a[9];  res[3]  = b[9];
-    res[4]  = a[10]; res[5]  = b[10]; res[6]  = a[11]; res[7]  = b[11];
-    res[8]  = a[12]; res[9]  = b[12]; res[10] = a[13]; res[11] = b[13];
-    res[12] = a[14]; res[13] = b[14]; res[14] = a[15]; res[15] = b[15];
-
-    return res;
-}
-
 int32x4_t vcvtnq_s32_f32(float32x4_t v) {
     int32x4_t res;
 
@@ -2753,13 +2665,9 @@ static void ggml_vec_dot_q5_0_q8_0(const int n, float * restrict s, const void *
         const v128_t v0l = wasm_v128_and (v0, m4b);
         const v128_t v0h = wasm_u8x16_shr(v0, 4);
 
-        // interleave
-        const v128_t v0lz = wasm_v8x16_shuffle(v0l, v0h,  0, 16,  1, 17,  2, 18,  3, 19,  4, 20,  5, 21,  6, 22,  7, 23);
-        const v128_t v0hz = wasm_v8x16_shuffle(v0l, v0h,  8, 24,  9, 25, 10, 26, 11, 27, 12, 28, 13, 29, 14, 30, 15, 31);
-
         // add high bit and sub 16
-        const v128_t v0lf = wasm_i8x16_sub(wasm_v128_or(v0lz, qhl), s16b);
-        const v128_t v0hf = wasm_i8x16_sub(wasm_v128_or(v0hz, qhh), s16b);
+        const v128_t v0lf = wasm_i8x16_sub(wasm_v128_or(v0l, qhl), s16b);
+        const v128_t v0hf = wasm_i8x16_sub(wasm_v128_or(v0h, qhh), s16b);
 
         // load y
         const v128_t v1l = wasm_v128_load(y0->qs);
@@ -2944,13 +2852,9 @@ static void ggml_vec_dot_q5_1_q8_1(const int n, float * restrict s, const void *
 
         static bool x = true;
 
-        // interleave
-        const v128_t v0lz = wasm_v8x16_shuffle(v0l, v0h,  0, 16,  1, 17,  2, 18,  3, 19,  4, 20,  5, 21,  6, 22,  7, 23);
-        const v128_t v0hz = wasm_v8x16_shuffle(v0l, v0h,  8, 24,  9, 25, 10, 26, 11, 27, 12, 28, 13, 29, 14, 30, 15, 31);
-
         // add high bit
-        const v128_t v0lf = wasm_v128_or(v0lz, qhl);
-        const v128_t v0hf = wasm_v128_or(v0hz, qhh);
+        const v128_t v0lf = wasm_v128_or(v0l, qhl);
+        const v128_t v0hf = wasm_v128_or(v0h, qhh);
 
         // load y
         const v128_t v1l = wasm_v128_load(y0->qs);
@@ -3033,11 +2937,11 @@ static void ggml_vec_dot_q5_1_q8_1(const int n, float * restrict s, const void *
 }
 
 static void ggml_vec_dot_q8_0_q8_0(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
-    const int nb = n / QK8_0;
+    const int qk = QK8_0;
+    const int nb = n / qk;
 
-    assert(n % QK8_0 == 0);
+    assert(n % qk == 0);
     assert(nb % 2 == 0);
-    assert(QK8_0 == QK8_0);
 
     const block_q8_0 * restrict x = vx;
     const block_q8_0 * restrict y = vy;
@@ -3117,16 +3021,10 @@ static void ggml_vec_dot_q8_0_q8_0(const int n, float * restrict s, const void *
     float sumf = 0.0;
 
     for (int i = 0; i < nb; i++) {
-        const int8_t * restrict x0 = x[i].qs;
-        const int8_t * restrict y0 = y[i].qs;
-
         int sumi = 0;
 
-        for (int j = 0; j < QK8_0; j++) {
-            const int v0 = x0[j];
-            const int v1 = y0[j];
-
-            sumi += v0*v1;
+        for (int j = 0; j < qk; j++) {
+            sumi += x[i].qs[j]*y[i].qs[j];
         }
 
         sumf += (x[i].d*y[i].d)*sumi;
