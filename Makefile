@@ -13,7 +13,7 @@ ifndef UNAME_M
 UNAME_M := $(shell uname -m)
 endif
 
-ARCH_LINUX := $(shell grep -e "Arch Linux" -e "ID_LIKE=arch" /etc/os-release)
+ARCH_LINUX := $(shell grep -e "Arch Linux" -e "ID_LIKE=arch" /etc/os-release 2>/dev/null)
 ifdef ARCH_LINUX
 LDFLAGS_EXTRA += -lcblas
 endif
