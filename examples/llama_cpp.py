@@ -67,11 +67,11 @@ _lib_base_name = "llama"
 _lib = _load_shared_library(_lib_base_name)
 
 # C types
-LLAMA_FILE_VERSION = ctypes.c_int(1)
+LLAMA_FILE_VERSION = c_int(1)
 LLAMA_FILE_MAGIC = b"ggjt"
 LLAMA_FILE_MAGIC_UNVERSIONED = b"ggml"
 LLAMA_SESSION_MAGIC = b"ggsn"
-LLAMA_SESSION_VERSION = ctypes.c_int(1)
+LLAMA_SESSION_VERSION = c_int(1)
 
 llama_context_p = c_void_p
 
@@ -127,18 +127,18 @@ class llama_context_params(Structure):
 
 llama_context_params_p = POINTER(llama_context_params)
 
-LLAMA_FTYPE_ALL_F32 = ctypes.c_int(0)
-LLAMA_FTYPE_MOSTLY_F16 = ctypes.c_int(1)  # except 1d tensors
-LLAMA_FTYPE_MOSTLY_Q4_0 = ctypes.c_int(2)  # except 1d tensors
-LLAMA_FTYPE_MOSTLY_Q4_1 = ctypes.c_int(3)  # except 1d tensors
-LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = ctypes.c_int(
+LLAMA_FTYPE_ALL_F32 = c_int(0)
+LLAMA_FTYPE_MOSTLY_F16 = c_int(1)  # except 1d tensors
+LLAMA_FTYPE_MOSTLY_Q4_0 = c_int(2)  # except 1d tensors
+LLAMA_FTYPE_MOSTLY_Q4_1 = c_int(3)  # except 1d tensors
+LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = c_int(
     4
 )  # tok_embeddings.weight and output.weight are F16
-LLAMA_FTYPE_MOSTLY_Q4_2 = ctypes.c_int(5)  # except 1d tensors
-# LLAMA_FTYPE_MOSTLY_Q4_3 = ctypes.c_int(6)  # except 1d tensors
-LLAMA_FTYPE_MOSTLY_Q8_0 = ctypes.c_int(7)  # except 1d tensors
-LLAMA_FTYPE_MOSTLY_Q5_0 = ctypes.c_int(8)  # except 1d tensors
-LLAMA_FTYPE_MOSTLY_Q5_1 = ctypes.c_int(9)  # except 1d tensors
+LLAMA_FTYPE_MOSTLY_Q4_2 = c_int(5)  # except 1d tensors
+# LLAMA_FTYPE_MOSTLY_Q4_3 = c_int(6)  # except 1d tensors
+LLAMA_FTYPE_MOSTLY_Q8_0 = c_int(7)  # except 1d tensors
+LLAMA_FTYPE_MOSTLY_Q5_0 = c_int(8)  # except 1d tensors
+LLAMA_FTYPE_MOSTLY_Q5_1 = c_int(9)  # except 1d tensors
 
 # Functions
 
@@ -210,8 +210,8 @@ _lib.llama_model_quantize.restype = c_int
 # Returns 0 on success
 def llama_apply_lora_from_file(
     ctx: llama_context_p,
-    path_lora: ctypes.c_char_p,
-    path_base_model: ctypes.c_char_p,
+    path_lora: c_char_p,
+    path_base_model: c_char_p,
     n_threads: c_int,
 ) -> c_int:
     return _lib.llama_apply_lora_from_file(ctx, path_lora, path_base_model, n_threads)
