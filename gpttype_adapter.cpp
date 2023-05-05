@@ -371,6 +371,9 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     params.temp = inputs.temperature;
     params.repeat_last_n = inputs.rep_pen_range;
     params.repeat_penalty = inputs.rep_pen;
+    params.mirostat = inputs.mirostat;
+    params.mirostat_eta = inputs.mirostat_eta;
+    params.mirostat_tau = inputs.mirostat_tau;
     params.n_ctx = inputs.max_context_length;
     params.n_batch = n_batch;
     params.n_threads = n_threads;

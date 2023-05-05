@@ -39,6 +39,9 @@ class generation_inputs(ctypes.Structure):
                 ("tfs", ctypes.c_float),
                 ("rep_pen", ctypes.c_float),
                 ("rep_pen_range", ctypes.c_int),
+                ("mirostat", ctypes.c_int),
+                ("mirostat_tau", ctypes.c_float),
+                ("mirostat_eta", ctypes.c_float),
                 ("stop_sequence", ctypes.c_char_p * stop_token_max)]
 
 class generation_outputs(ctypes.Structure):
@@ -154,7 +157,7 @@ def load_model(model_filename):
     ret = handle.load_model(inputs)
     return ret
 
-def generate(prompt,max_length=20, max_context_length=512,temperature=0.8,top_k=100,top_p=0.85, typical_p=1.0, tfs=1.0 ,rep_pen=1.1,rep_pen_range=128,seed=-1,stop_sequence=[]):
+def generate(prompt,max_length=20, max_context_length=512,temperature=0.8,top_k=100,top_p=0.85, typical_p=1.0, tfs=1.0 ,rep_pen=1.1,rep_pen_range=128,mirostat=0,mirostat_lr=0.1,mirostat_ent=5.0,seed=-1,stop_sequence=[]):
     inputs = generation_inputs()
     outputs = ctypes.create_unicode_buffer(ctypes.sizeof(generation_outputs))
     inputs.prompt = prompt.encode("UTF-8")
@@ -167,6 +170,9 @@ def generate(prompt,max_length=20, max_context_length=512,temperature=0.8,top_k=
     inputs.tfs = tfs
     inputs.rep_pen = rep_pen
     inputs.rep_pen_range = rep_pen_range
+    inputs.mirostat = mirostat
+    inputs.mirostat_eta = mirostat_lr
+    inputs.mirostat_tau = mirostat_ent
     inputs.seed = seed    
     for n in range(0,stop_token_max):
         if not stop_sequence or n >= len(stop_sequence):
@@ -311,6 +317,9 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     tfs=genparams.get('tfs', 1.0),
                     rep_pen=genparams.get('rep_pen', 1.1),
                     rep_pen_range=genparams.get('rep_pen_range', 128),
+                    mirostat=genparams.get('mirostat', 0),
+                    mirostat_lr=genparams.get('mirostat_lr', 0.1),
+                    mirostat_ent=genparams.get('mirostat_ent', 5.0),
                     seed=-1,
                     stop_sequence=genparams.get('stop_sequence', [])
                     )
@@ -327,6 +336,9 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     tfs=genparams.get('tfs', 1.0),
                     rep_pen=genparams.get('rep_pen', 1.1),
                     rep_pen_range=genparams.get('rep_pen_range', 128),
+                    mirostat=genparams.get('mirostat', 0),
+                    mirostat_lr=genparams.get('mirostat_lr', 0.1),
+                    mirostat_ent=genparams.get('mirostat_ent', 5.0),
                     seed=-1,
                     stop_sequence=genparams.get('stop_sequence', [])
                     )

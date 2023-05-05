@@ -33,6 +33,9 @@ struct generation_inputs
     const float tfs;
     const float rep_pen;
     const int rep_pen_range;
+    const int mirostat;
+    const float mirostat_eta;
+    const float mirostat_tau;
     const char * stop_sequence[stop_token_max];
 };
 struct generation_outputs
