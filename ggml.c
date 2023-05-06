@@ -13280,7 +13280,15 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             } break;
         case GGML_OP_SUM_ROWS:
             {
-                GGML_ASSERT(false); // TODO: implement
+                if (src0->grad) {
+                    src0->grad =
+                        ggml_add_impl(ctx,
+                                src0->grad,
+                                ggml_repeat(ctx,
+                                    tensor->grad,
+                                    src0->grad),
+                                inplace);
+                }
             } break;
         case GGML_OP_MEAN:
             {
