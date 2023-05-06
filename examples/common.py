@@ -37,6 +37,7 @@ class GptParams:
     prompt: str = ""
     path_session: str = ""
     input_prefix: str = " "
+    input_suffix: str = ""
     antiprompt: List[str] = field(default_factory=list)
 
     lora_adapter: str = ""
@@ -64,7 +65,6 @@ class GptParams:
     # Set to "\nUser:" etc.
     # This is an alternative to input_prefix which always adds it, so it potentially duplicates "User:""
     fix_prefix: str = ""
-    output_postfix: str = ""
     input_echo: bool = True,
 
     # Default instructions for Alpaca
@@ -110,6 +110,7 @@ def gpt_params_parse(argv = None):
     parser.add_argument("-f", "--file", type=str, default=None, help="file containing initial prompt to load",dest="file")
     parser.add_argument("--session", type=str, default=None, help="file to cache model state in (may be large!)",dest="path_session")
     parser.add_argument("--in-prefix", type=str, default="", help="string to prefix user inputs with", dest="input_prefix")
+    parser.add_argument("--in-suffix", type=str, default="", help="append to input", dest="input_suffix")
     parser.add_argument(
         "-r",
         "--reverse-prompt",
@@ -158,7 +159,6 @@ def gpt_params_parse(argv = None):
 
     #Custom args
     parser.add_argument("--fix-prefix", type=str, default="", help="append to input when generated n_predict tokens", dest="fix_prefix")
-    parser.add_argument("--out-postfix", type=str, default="", help="append to input", dest="output_postfix")
     parser.add_argument("--input-noecho", action="store_false", help="dont output the input", dest="input_echo")
 
     parser.add_argument(

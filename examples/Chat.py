@@ -63,6 +63,7 @@ params = GptParams(
     interactive=True,
     antiprompt=[f"{USER_NAME}:"],
     input_prefix=" ",
+    input_suffix=f"{AI_NAME}:",
     prompt=prompt,
 )
 

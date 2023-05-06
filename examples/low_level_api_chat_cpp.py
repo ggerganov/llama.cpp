@@ -527,8 +527,8 @@ n_keep = {self.params.n_keep}
                 self.input(self.read_input())
             else:
                 print(self.params.input_prefix, end="")
-                self.input(f"{self.params.input_prefix}{self.read_input()}{self.params.output_postfix}")
-                print(self.params.output_postfix,end="")
+                self.input(f"{self.params.input_prefix}{self.read_input()}{self.params.input_suffix}")
+                print(self.params.input_suffix,end="")
             self.set_color(CONSOLE_COLOR_DEFAULT)
 
             try:
