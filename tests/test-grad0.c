@@ -826,6 +826,66 @@ int main(int argc, const char ** argv) {
             }
         }
 
+        // set_1d
+        {
+            int64_t ne2[4];
+
+            const int nargs = 2;
+            for (int ndims = 1; ndims <= 4; ++ndims) {
+
+                x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
+                ggml_set_param(ctx0, x[0]);
+
+                get_random_dims(ne2, 1);
+                while ((ne2[0] > ne[0]) || (ne2[0] > ggml_nelements(x[0]))) {
+                    get_random_dims(ne2, 1);
+                }
+
+                x[1] = get_random_tensor(ctx0, 1, ne2, -1.0f, 1.0f);
+                ggml_set_param(ctx0, x[1]);
+
+                const int max_offset = MAX(0, ggml_nelements(x[0]) - ggml_nelements(x[1]));
+                const int offset = irand(max_offset) * ggml_element_size(x[0]);
+
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_set_1d(ctx0, x[0], x[1], offset));
+
+                check_gradient("set_1d", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+            }
+        }
+
+        // set_2d
+        {
+            int64_t ne2[4];
+            int64_t nb2[4];
+            int64_t max_offsets[4] = { 0, 0, 0, 0 };
+            int64_t offsets[4]     = { 0, 0, 0, 0 };
+
+            const int nargs = 1;
+            for (int ndims = 2; ndims <= 4; ++ndims) {
+
+                x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
+                ggml_set_param(ctx0, x[0]);
+
+                get_random_dims(ne2, 2);
+                while ((ne2[0] > ne[0]) || (ne2[1] > ne[1]) || (ne2[0]*ne2[1] > ggml_nelements(x[0]))) {
+                    get_random_dims(ne2, 2);
+                }
+
+                x[1] = get_random_tensor(ctx0, 2, ne2, -1.0f, 1.0f);
+                ggml_set_param(ctx0, x[1]);
+
+                max_offsets[0] = MAX(0, x[0]->ne[0] - x[1]->ne[0]);
+                max_offsets[1] = MAX(0, x[0]->ne[1] - x[1]->ne[1]);
+                offsets[0] = irand(max_offsets[0]) * x[0]->nb[0];
+                offsets[1] = irand(max_offsets[1]) * x[0]->nb[1];
+                const int offset = offsets[0] + offsets[1];
+
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_set_2d(ctx0, x[0], x[1], x[1]->nb[1], offset));
+
+                check_gradient("set_2d", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+            }
+        }
+
         // view_1d
         {
             const int nargs = 1;

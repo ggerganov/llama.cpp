@@ -279,6 +279,7 @@ extern "C" {
         GGML_OP_MUL_MAT,
 
         GGML_OP_SCALE,
+        GGML_OP_SET,
         GGML_OP_CPY,
         GGML_OP_CONT,
         GGML_OP_RESHAPE,
@@ -637,6 +638,55 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
+
+    // b -> view(a,offset,nb1,nb2,3), return modified a
+    GGML_API struct ggml_tensor * ggml_set(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            size_t                nb1,
+            size_t                nb2,
+            size_t                nb3,
+            size_t                offset);
+
+    // b -> view(a,offset,nb1,nb2,3), return view(a)
+    GGML_API struct ggml_tensor * ggml_set_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            size_t                nb1,
+            size_t                nb2,
+            size_t                nb3,
+            size_t                offset);
+
+    GGML_API struct ggml_tensor * ggml_set_1d(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            size_t                offset);
+
+    GGML_API struct ggml_tensor * ggml_set_1d_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            size_t                offset);
+
+    // b -> view(a,offset,nb1,nb2,3), return modified a
+    GGML_API struct ggml_tensor * ggml_set_2d(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            size_t                nb1,
+            size_t                offset);
+
+    // b -> view(a,offset,nb1,nb2,3), return view(a)
+    GGML_API struct ggml_tensor * ggml_set_2d_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            size_t                nb1,
+            size_t                offset);
+
 
     // a -> b, return view(b)
     GGML_API struct ggml_tensor * ggml_cpy(

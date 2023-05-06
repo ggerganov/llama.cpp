@@ -3986,6 +3986,7 @@ static const char * GGML_OP_LABEL[GGML_OP_COUNT] = {
     "MUL_MAT",
 
     "SCALE",
+    "SET",
     "CPY",
     "CONT",
     "RESHAPE",
@@ -4011,7 +4012,7 @@ static const char * GGML_OP_LABEL[GGML_OP_COUNT] = {
     "MAP_BINARY",
 };
 
-static_assert(GGML_OP_COUNT == 48, "GGML_OP_COUNT != 48");
+static_assert(GGML_OP_COUNT == 49, "GGML_OP_COUNT != 49");
 
 static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "none",
@@ -4045,6 +4046,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "X*Y",
 
     "x*v",
+    "y-\\>view(x)",
     "x-\\>y",
     "cont(x)",
     "reshape(x)",
@@ -4070,7 +4072,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "f(x,y)",
 };
 
-static_assert(GGML_OP_COUNT == 48, "GGML_OP_COUNT != 48");
+static_assert(GGML_OP_COUNT == 49, "GGML_OP_COUNT != 49");
 
 static_assert(sizeof(struct ggml_object)%GGML_MEM_ALIGN == 0, "ggml_object size must be a multiple of GGML_MEM_ALIGN");
 static_assert(sizeof(struct ggml_tensor)%GGML_MEM_ALIGN == 0, "ggml_tensor size must be a multiple of GGML_MEM_ALIGN");
@@ -5856,6 +5858,100 @@ struct ggml_tensor * ggml_scale_inplace(
         struct ggml_tensor * b) {
     return ggml_scale_impl(ctx, a, b, true);
 }
+
+// ggml_set
+
+struct ggml_tensor * ggml_set_impl(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        struct ggml_tensor  * b,
+        size_t                nb1,
+        size_t                nb2,
+        size_t                nb3,
+        size_t                offset,
+        bool inplace) {
+    GGML_ASSERT(ggml_nelements(a) >= ggml_nelements(b));
+
+    bool is_node = false;
+
+    if (!inplace && (a->grad || b->grad)) {
+        is_node = true;
+    }
+
+    // make a view of the destination
+    struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    struct ggml_tensor * c = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 5);
+    (( int32_t * ) c->data)[0] = nb1;
+    (( int32_t * ) c->data)[1] = nb2;
+    (( int32_t * ) c->data)[2] = nb3;
+    (( int32_t * ) c->data)[3] = offset;
+    (( int32_t * ) c->data)[4] = inplace ? 1 : 0;
+
+    result->op   = GGML_OP_SET;
+    result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
+    result->src0 = a;
+    result->src1 = b;
+    result->opt[0] = c;
+
+    return result;
+}
+
+struct ggml_tensor * ggml_set(
+        struct ggml_context * ctx,
+        struct ggml_tensor *  a,
+        struct ggml_tensor *  b,
+        size_t                nb1,
+        size_t                nb2,
+        size_t                nb3,
+        size_t                offset) {
+    return ggml_set_impl(ctx, a, b, nb1, nb2, nb3, offset, false);
+}
+
+struct ggml_tensor * ggml_set_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor *  a,
+        struct ggml_tensor *  b,
+        size_t                nb1,
+        size_t                nb2,
+        size_t                nb3,
+        size_t                offset) {
+    return ggml_set_impl(ctx, a, b, nb1, nb2, nb3, offset, true);
+}
+
+struct ggml_tensor * ggml_set_1d(
+        struct ggml_context * ctx,
+        struct ggml_tensor *  a,
+        struct ggml_tensor *  b,
+        size_t                offset) {
+    return ggml_set_impl(ctx, a, b, a->nb[1], a->nb[2], a->nb[3], offset, false);
+}
+
+struct ggml_tensor * ggml_set_1d_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor *  a,
+        struct ggml_tensor *  b,
+        size_t                offset) {
+    return ggml_set_impl(ctx, a, b, a->nb[1], a->nb[2], a->nb[3], offset, true);
+}
+
+struct ggml_tensor * ggml_set_2d(
+        struct ggml_context * ctx,
+        struct ggml_tensor *  a,
+        struct ggml_tensor *  b,
+        size_t                nb1,
+        size_t                offset) {
+    return ggml_set_impl(ctx, a, b, nb1, a->nb[2], a->nb[3], offset, false);
+}
+
+struct ggml_tensor * ggml_set_2d_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor *  a,
+        struct ggml_tensor *  b,
+        size_t                nb1,
+        size_t                offset) {
+    return ggml_set_impl(ctx, a, b, nb1, a->nb[2], a->nb[3], offset, false);
+}
+
 
 // ggml_cpy
 
@@ -10513,6 +10609,121 @@ static void ggml_compute_forward_scale(
     }
 }
 
+// ggml_compute_forward_set
+
+static void ggml_compute_forward_set_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+        const struct ggml_tensor * opt0,
+        struct ggml_tensor * dst) {
+    GGML_ASSERT(ggml_are_same_shape(src0, dst));
+    GGML_ASSERT(ggml_is_contiguous(dst) && ggml_is_contiguous(src0));
+    
+    GGML_ASSERT(opt0->type == GGML_TYPE_I32);
+    GGML_ASSERT(ggml_nelements(opt0) == 5);
+
+    // view src0 and dst with these strides and data offset inbytes during set 
+    // nb0 is implicitely element_size because src0 and dst are contiguous
+    size_t nb1     = ((int32_t *) opt0->data)[0]; 
+    size_t nb2     = ((int32_t *) opt0->data)[1]; 
+    size_t nb3     = ((int32_t *) opt0->data)[2]; 
+    size_t offset  = ((int32_t *) opt0->data)[3];
+    bool   inplace = (bool) ((int32_t *) opt0->data)[4]; 
+
+    if (!inplace && (params->type == GGML_TASK_INIT)) {
+        // memcpy needs to be synchronized across threads to avoid race conditions.
+        // => do it in INIT phase
+        memcpy(
+            ((char *)  dst->data),
+            ((char *) src0->data),
+            ggml_nbytes(dst));
+    }
+
+    if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
+        return;
+    }
+
+    const int ith = params->ith;
+    const int nth = params->nth;
+
+    const int nr = ggml_nrows(src1);
+    const int nc = src1->ne[0];
+
+    const int64_t ne10 = src1->ne[0];
+    const int64_t ne11 = src1->ne[1];
+    const int64_t ne12 = src1->ne[2];
+    const int64_t ne13 = src1->ne[3];
+
+    const size_t nb10 = src1->nb[0];
+    const size_t nb11 = src1->nb[1];
+    const size_t nb12 = src1->nb[2];
+    const size_t nb13 = src1->nb[3];
+
+    // src0 and dst as viewed during set
+    const size_t nb0 = ggml_element_size(src0);
+
+    const size_t nb00 = nb0;
+    const size_t nb01 = nb1;
+    const size_t nb02 = nb2;
+    const size_t nb03 = nb3;
+
+    const int im0 = (ne10 == 0 ? 0 : ne10-1);
+    const int im1 = (ne11 == 0 ? 0 : ne11-1);
+    const int im2 = (ne12 == 0 ? 0 : ne12-1);
+    const int im3 = (ne13 == 0 ? 0 : ne13-1);
+
+    GGML_ASSERT(offset + im0*nb0  + im1*nb1  + im2*nb2  + im3*nb3  < ggml_nbytes(dst));
+
+    GGML_ASSERT(nb10 == sizeof(float));
+
+    // rows per thread
+    const int dr = (nr + nth - 1)/nth;
+
+    // row range for this thread
+    const int ir0 = dr*ith;
+    const int ir1 = MIN(ir0 + dr, nr);
+
+    for (int ir = ir0; ir < ir1; ++ir) {
+        // src0 and dst are viewed with shape of src1 and offset
+        // => same indices
+        const int i3 = ir/(ne12*ne11);
+        const int i2 = (ir - i3*ne12*ne11)/ne11;
+        const int i1 = (ir - i3*ne12*ne11 - i2*ne11);
+
+        ggml_vec_cpy_f32(nc,
+                (float *) ((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + offset),
+                (float *) ((char *) src1->data + i3*nb13 + i2*nb12 + i1*nb11));
+    }
+}
+
+static void ggml_compute_forward_set(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+        const struct ggml_tensor * opt0,
+        struct ggml_tensor * dst) {
+
+    switch (src0->type) {
+        case GGML_TYPE_F32:
+            {
+                ggml_compute_forward_set_f32(params, src0, src1, opt0, dst);
+            } break;
+        case GGML_TYPE_F16:
+        case GGML_TYPE_Q4_0:
+        case GGML_TYPE_Q4_1:
+        case GGML_TYPE_Q4_2:
+        case GGML_TYPE_Q5_0:
+        case GGML_TYPE_Q5_1:
+        case GGML_TYPE_Q8_0:
+        case GGML_TYPE_Q8_1:
+        default:
+            {
+                GGML_ASSERT(false);
+            } break;
+    }
+}
+
 // ggml_compute_forward_cpy
 
 static void ggml_compute_forward_cpy(
@@ -13045,6 +13256,10 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             {
                 ggml_compute_forward_scale(params, tensor->src0, tensor->src1, tensor);
             } break;
+        case GGML_OP_SET:
+            {
+                ggml_compute_forward_set(params, tensor->src0, tensor->src1, tensor->opt[0], tensor);
+            } break;
         case GGML_OP_CPY:
             {
                 ggml_compute_forward_cpy(params, tensor->src0, tensor);
@@ -13513,6 +13728,51 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                         ggml_add_impl(ctx,
                             src1->grad,
                             ggml_sum(ctx, ggml_mul_impl(ctx, tensor->grad, src0, false)),
+                            inplace);
+                }
+            } break;
+        case GGML_OP_SET:
+            {
+                GGML_ASSERT(ggml_nelements(tensor->opt[0]) == 5);
+                GGML_ASSERT(tensor->opt[0]->type == GGML_TYPE_I32);
+                const size_t nb1     = (( int32_t * ) tensor->opt[0]->data)[0];
+                const size_t nb2     = (( int32_t * ) tensor->opt[0]->data)[1];
+                const size_t nb3     = (( int32_t * ) tensor->opt[0]->data)[2];
+                const size_t offset  = (( int32_t * ) tensor->opt[0]->data)[3];
+
+                struct ggml_tensor * tensor_grad_view = NULL;
+                
+                if (src0->grad || src1->grad) {
+                    GGML_ASSERT(src0->type == tensor->type);
+                    GGML_ASSERT(tensor->grad->type == tensor->type);
+                    GGML_ASSERT(tensor->grad->type == src1->grad->type);
+
+                    tensor_grad_view = ggml_view_4d(ctx,
+                        tensor->grad,
+                        src1->grad->ne[0],
+                        src1->grad->ne[1],
+                        src1->grad->ne[2],
+                        src1->grad->ne[3],
+                        nb1, nb2, nb3, offset);
+                }
+
+                if (src0->grad) {
+                    src0->grad = ggml_add_impl(ctx, 
+                        src0->grad, 
+                        ggml_add_at_impl(ctx,
+                            tensor->grad, 
+                            ggml_neg(ctx, tensor_grad_view),
+                            nb1, nb2, nb3, offset, false),
+                        inplace);
+                }
+
+                if (src1->grad) {
+                    src1->grad =
+                        ggml_add_impl(ctx,
+                            src1->grad,
+                            ggml_reshape(ctx,
+                                ggml_cont(ctx, tensor_grad_view),
+                                src1->grad),
                             inplace);
                 }
             } break;
@@ -14234,6 +14494,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                     {
                         node->n_tasks = n_threads;
                     } break;
+                case GGML_OP_SET:
                 case GGML_OP_CONT:
                 case GGML_OP_RESHAPE:
                 case GGML_OP_VIEW:
