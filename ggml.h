@@ -649,6 +649,11 @@ extern "C" {
 
     // return view(a)
     // TODO: when we start computing gradient, make a copy instead of view
+    GGML_API struct ggml_tensor * ggml_reshape_1d(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int64_t               ne0);
+
     GGML_API struct ggml_tensor * ggml_reshape_2d(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
@@ -663,6 +668,14 @@ extern "C" {
             int64_t               ne0,
             int64_t               ne1,
             int64_t               ne2);
+
+    GGML_API struct ggml_tensor * ggml_reshape_4d(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int64_t               ne0,
+            int64_t               ne1,
+            int64_t               ne2,
+            int64_t               ne3);
 
     // offset in bytes
     GGML_API struct ggml_tensor * ggml_view_1d(
@@ -687,6 +700,18 @@ extern "C" {
             int64_t               ne2,
             size_t                nb1, // row   stride in bytes
             size_t                nb2, // slice stride in bytes
+            size_t                offset);
+
+    GGML_API struct ggml_tensor * ggml_view_4d(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int64_t               ne0,
+            int64_t               ne1,
+            int64_t               ne2,
+            int64_t               ne3,
+            size_t                nb1, // row   stride in bytes
+            size_t                nb2, // slice stride in bytes
+            size_t                nb3, 
             size_t                offset);
 
     GGML_API struct ggml_tensor * ggml_permute(
