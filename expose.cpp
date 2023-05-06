@@ -58,7 +58,7 @@ extern "C"
         int platform = parseinfo/10;
         int devices = parseinfo%10;
         platformenv = "GGML_CLBLAST_PLATFORM="+std::to_string(platform);
-        deviceenv = "GGML_CLBLAST_DEVICES="+std::to_string(devices);
+        deviceenv = "GGML_CLBLAST_DEVICE="+std::to_string(devices);
         putenv((char*)platformenv.c_str());
         putenv((char*)deviceenv.c_str());
         executable_path = inputs.executable_path;
