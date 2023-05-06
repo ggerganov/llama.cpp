@@ -15131,7 +15131,7 @@ enum ggml_opt_result ggml_opt(
 
     // build forward + backward compute graphs
     struct ggml_cgraph gf = ggml_build_forward (f);
-    struct ggml_cgraph gb = ggml_build_backward(ctx, &gf, false);
+    struct ggml_cgraph gb = ggml_build_backward(ctx, &gf, true);
 
     switch (params.type) {
         case GGML_OPT_ADAM:
