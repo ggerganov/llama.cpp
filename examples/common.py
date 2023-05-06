@@ -180,7 +180,7 @@ def gpt_params_parse(argv = None):
     if (logit_bias_str != None):
         for i in logit_bias_str:
             if (m := re.match(r"(\d+)([-+]\d+)", i)):
-                params.logit_bias[int(m.group(1))] = int(m.group(2))
+                params.logit_bias[int(m.group(1))] = float(m.group(2))
 
     return params
 
