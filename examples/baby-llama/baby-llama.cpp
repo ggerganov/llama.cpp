@@ -360,8 +360,8 @@ struct ggml_tensor * forward(
             // wk   shape [n_embd, n_embd, 1, 1]
             // Qcur shape [n_embd/n_head, n_head, N, 1]
             // Kcur shape [n_embd/n_head, n_head, N, 1]
-            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
-            struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wk, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
+            struct ggml_tensor * Qcur = ggml_rope(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
+            struct ggml_tensor * Kcur = ggml_rope(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wk, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
 
             // store key and value to memory
             {
@@ -414,17 +414,17 @@ struct ggml_tensor * forward(
             // KQ_scaled = KQ / sqrt(n_embd/n_head)
             // KQ_scaled shape [n_past + N, N, n_head, 1]
             struct ggml_tensor * KQ_scaled =
-                ggml_scale_inplace(ctx0,
+                ggml_scale(ctx0,
                         KQ,
                         ggml_new_f32(ctx0, 1.0f/sqrtf(float(n_embd)/n_head)));
 
             // KQ_masked = mask_past(KQ_scaled)
             // KQ_masked shape [n_past + N, N, n_head, 1]
-            struct ggml_tensor * KQ_masked = ggml_diag_mask_inf_inplace(ctx0, KQ_scaled, n_past);
+            struct ggml_tensor * KQ_masked = ggml_diag_mask_inf(ctx0, KQ_scaled, n_past);
 
             // KQ = soft_max(KQ_masked)
             // KQ_soft_max shape [n_past + N, N, n_head, 1]
-            struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx0, KQ_masked);
+            struct ggml_tensor * KQ_soft_max = ggml_soft_max(ctx0, KQ_masked);
 
             // split cached V into n_head heads
             //// V shape [n_past + N, n_embd/n_head, n_head, 1]
@@ -446,9 +446,10 @@ struct ggml_tensor * forward(
 
             // cur = KQV_merged.contiguous().view(n_embd, N)
             // cur shape [n_embd,N,1,1]
-            cur = ggml_cpy(ctx0,
-                    KQV_merged,
-                    ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N));
+            cur = ggml_reshape_2d(ctx0, ggml_cont(ctx0, KQV_merged), n_embd, N);
+            // cur = ggml_cpy(ctx0,
+            //         KQV_merged,
+            //         ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N));
 
             // projection (no bias)
             cur = ggml_mul_mat(ctx0,
