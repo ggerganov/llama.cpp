@@ -257,6 +257,8 @@ Building the program with BLAS support may lead to some performance improvements
     cmake --build . --config Release
     ```
 
+Note: Because llama.cpp uses multiple CUDA streams for matrix multiplication results [are not guaranteed to be reproducible](https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility). If you need reproducibility, set `GGML_CUDA_MAX_STREAMS` in the file `ggml-cuda.cu` to 1.
+
 ### Prepare Data & Run
 
 ```bash
