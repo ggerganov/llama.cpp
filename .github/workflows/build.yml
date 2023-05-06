@@ -176,7 +176,7 @@ jobs:
         id: get_opencl
         if: ${{ matrix.build == 'opencl' }}
         run: |
-          curl.exe -o $env:RUNNER_TEMP/opencl.zip -L https://github.com/KhronosGroup/OpenCL-SDK/releases/download/v${env:OPENCL_VERSION}/OpenCL-SDK-v${env:OPENCL_VERSION}-Win-x64.zip
+          curl.exe -o $env:RUNNER_TEMP/opencl.zip -L "https://github.com/KhronosGroup/OpenCL-SDK/releases/download/v${env:OPENCL_VERSION}/OpenCL-SDK-v${env:OPENCL_VERSION}-Win-x64.zip"
           mkdir $env:RUNNER_TEMP/opencl
           tar.exe -xvf $env:RUNNER_TEMP/opencl.zip --strip-components=1 -C $env:RUNNER_TEMP/opencl
 
@@ -184,7 +184,7 @@ jobs:
         id: get_clblast
         if: ${{ matrix.build == 'opencl' }}
         run: |
-          curl.exe -o $env:RUNNER_TEMP/clblast.zip -L https://github.com/CNugteren/CLBlast/releases/download/${env:CLBLAST_VERSION}/CLBlast-${env:CLBLAST_VERSION}-Windows-x64.zip
+          curl.exe -o $env:RUNNER_TEMP/clblast.zip -L "https://github.com/CNugteren/CLBlast/releases/download/${env:CLBLAST_VERSION}/CLBlast-${env:CLBLAST_VERSION}-Windows-x64.zip"
           curl.exe -o $env:RUNNER_TEMP/CLBlast.LICENSE.txt -L https://github.com/CNugteren/CLBlast/raw/${env:CLBLAST_VERSION}/LICENSE
           mkdir $env:RUNNER_TEMP/clblast
           tar.exe -xvf $env:RUNNER_TEMP/clblast.zip -C $env:RUNNER_TEMP/clblast
@@ -197,8 +197,8 @@ jobs:
         id: get_openblas
         if: ${{ matrix.build == 'openblas' }}
         run: |
-          curl.exe -o $env:RUNNER_TEMP/openblas.zip -L https://github.com/xianyi/OpenBLAS/releases/download/v${env:OPENBLAS_VERSION}OpenBLAS-${env:OPENBLAS_VERSION}-x64.zip
-          curl.exe -o $env:RUNNER_TEMP/OpenBLAS.LICENSE.txt -L https://github.com/xianyi/OpenBLAS/raw/v${env:OPENBLAS_VERSION}/LICENSE
+          curl.exe -o $env:RUNNER_TEMP/openblas.zip -L "https://github.com/xianyi/OpenBLAS/releases/download/v${env:OPENBLAS_VERSION}OpenBLAS-${env:OPENBLAS_VERSION}-x64.zip"
+          curl.exe -o $env:RUNNER_TEMP/OpenBLAS.LICENSE.txt -L "https://github.com/xianyi/OpenBLAS/raw/v${env:OPENBLAS_VERSION}/LICENSE"
           mkdir $env:RUNNER_TEMP/openblas
           tar.exe -xvf $env:RUNNER_TEMP/openblas.zip -C $env:RUNNER_TEMP/openblas
           $vcdir = $(vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
