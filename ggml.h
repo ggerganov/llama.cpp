@@ -499,19 +499,19 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b,
-            size_t                offset,
             size_t                nb1,
             size_t                nb2,
-            size_t                nb3);
+            size_t                nb3,
+            size_t                offset);
 
     GGML_API struct ggml_tensor * ggml_add_at_inplace(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b,
-            size_t                offset,
             size_t                nb1,
             size_t                nb2,
-            size_t                nb3);
+            size_t                nb3,
+            size_t                offset);
 
     GGML_API struct ggml_tensor * ggml_sub(
             struct ggml_context * ctx,

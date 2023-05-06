@@ -5058,10 +5058,10 @@ struct ggml_tensor * ggml_add_at_impl(
         struct ggml_context * ctx,
         struct ggml_tensor * a,
         struct ggml_tensor * b,
-        size_t               offset,
         size_t               nb1,
         size_t               nb2,
         size_t               nb3,
+        size_t               offset,
         bool inplace) {
     GGML_ASSERT(ggml_nelements(b) <= ggml_nelements(a));
     GGML_ASSERT(ggml_is_contiguous(a));
@@ -5076,10 +5076,10 @@ struct ggml_tensor * ggml_add_at_impl(
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
     struct ggml_tensor * c = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 5);
-    ((int32_t *) c->data)[0] = offset;
-    ((int32_t *) c->data)[1] = nb1;
-    ((int32_t *) c->data)[2] = nb2;
-    ((int32_t *) c->data)[3] = nb3;
+    ((int32_t *) c->data)[0] = nb1;
+    ((int32_t *) c->data)[1] = nb2;
+    ((int32_t *) c->data)[2] = nb3;
+    ((int32_t *) c->data)[3] = offset;
     ((int32_t *) c->data)[4] = inplace ? 1 : 0;
 
     result->op   = GGML_OP_ADD_AT;
@@ -5095,22 +5095,22 @@ struct ggml_tensor * ggml_add_at(
         struct ggml_context * ctx,
         struct ggml_tensor * a,
         struct ggml_tensor * b,
-        size_t               offset,
         size_t               nb1,
         size_t               nb2,
-        size_t               nb3) {
-    return ggml_add_at_impl(ctx, a, b, offset, nb1, nb2, nb3, false);
+        size_t               nb3,
+        size_t               offset) {
+    return ggml_add_at_impl(ctx, a, b, nb1, nb2, nb3, offset, false);
 }
 
 struct ggml_tensor * ggml_add_at_inplace(
         struct ggml_context * ctx,
         struct ggml_tensor * a,
         struct ggml_tensor * b,
-        size_t               offset,
         size_t               nb1,
         size_t               nb2,
-        size_t               nb3) {
-    return ggml_add_at_impl(ctx, a, b, offset, nb1, nb2, nb3, true);
+        size_t               nb3,
+        size_t               offset) {
+    return ggml_add_at_impl(ctx, a, b, nb1, nb2, nb3, offset, true);
 }
 
 // ggml_sub
@@ -8135,10 +8135,10 @@ static void ggml_compute_forward_add_at_f32(
 
     // view src0 and dst with these strides and data offset inbytes during add_at 
     // nb0 is implicitely element_size because src0 and dst are contiguous
-    size_t offset  = ((int32_t *) opt0->data)[0];
-    size_t nb1     = ((int32_t *) opt0->data)[1]; 
-    size_t nb2     = ((int32_t *) opt0->data)[2]; 
-    size_t nb3     = ((int32_t *) opt0->data)[3]; 
+    size_t nb1     = ((int32_t *) opt0->data)[0]; 
+    size_t nb2     = ((int32_t *) opt0->data)[1]; 
+    size_t nb3     = ((int32_t *) opt0->data)[2]; 
+    size_t offset  = ((int32_t *) opt0->data)[3];
     bool   inplace = (bool) ((int32_t *) opt0->data)[4]; 
 
     if (!inplace && (params->type == GGML_TASK_INIT)) {
@@ -13187,19 +13187,27 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                     src0->grad = ggml_add_impl(ctx, src0->grad, tensor->grad, inplace);
                 }
                 if (src1->grad) {
-                    size_t offset;
-                    memcpy(&offset, tensor->padding, sizeof(size_t));
+                    GGML_ASSERT(ggml_nelements(tensor->opt[0]) == 5);
+                    GGML_ASSERT(tensor->opt[0]->type == GGML_TYPE_I32);
+                    const size_t nb1     = (( int32_t * ) tensor->opt[0]->data)[0];
+                    const size_t nb2     = (( int32_t * ) tensor->opt[0]->data)[1];
+                    const size_t nb3     = (( int32_t * ) tensor->opt[0]->data)[2];
+                    const size_t offset  = (( int32_t * ) tensor->opt[0]->data)[3];
+
+                    struct ggml_tensor * tensor_grad_view = ggml_view_4d(ctx,
+                        tensor->grad,
+                        src1->grad->ne[0],
+                        src1->grad->ne[1],
+                        src1->grad->ne[2],
+                        src1->grad->ne[3],
+                        nb1, nb2, nb3, offset);
+                    
                     src1->grad =
                         ggml_add_impl(ctx,
                             src1->grad,
-                            ggml_view_3d(ctx,
-                                tensor->grad,
-                                tensor->ne[0],
-                                tensor->ne[1],
-                                tensor->ne[2],
-                                tensor->nb[1],
-                                tensor->nb[2],
-                                offset),
+                            ggml_reshape(ctx,
+                                ggml_cont(ctx, tensor_grad_view),
+                                src1->grad),
                             inplace);
                 }
             } break;
@@ -13572,7 +13580,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                         nb3 = (nb3 / n0) * ng;
                     }
                     
-                    src0->grad = ggml_add_at_impl(ctx, src0->grad, tensor->grad, offset, nb1, nb2, nb3, inplace);
+                    src0->grad = ggml_add_at_impl(ctx, src0->grad, tensor->grad, nb1, nb2, nb3, offset, inplace);
                 }
             } break;
         case GGML_OP_PERMUTE:

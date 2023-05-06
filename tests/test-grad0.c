@@ -45,7 +45,8 @@ float frand() {
 }
 
 int irand(int n) {
-    return rand()%n;
+    if (n == 0) return 0;
+    else return rand()%n;
 }
 
 void get_random_dims(int64_t * dims, int ndims) {
@@ -693,6 +694,135 @@ int main(int argc, const char ** argv) {
 
                 struct ggml_tensor * f = ggml_sum(ctx0, ggml_reshape(ctx0, x[0], x[1]));
                 check_gradient("reshape", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+            }
+        }
+
+        // add_at 1d
+        {
+            int64_t ne2[4] = { 1, 1, 1, 1 };
+
+            const int nargs = 2;
+            for (int ndims = 1; ndims <= 4; ++ndims) {
+
+                x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
+                ggml_set_param(ctx0, x[0]);
+
+                get_random_dims(ne2, 1);
+                while ((ne2[0] > ne[0]) || (ne2[0] > ggml_nelements(x[0]))) {
+                    get_random_dims(ne2, 1);
+                }
+
+                x[1] = get_random_tensor(ctx0, 1, ne2, -1.0f, 1.0f);
+                ggml_set_param(ctx0, x[1]);
+
+                const int max_offset = MAX(0, ggml_nelements(x[0]) - ggml_nelements(x[1]));
+                const int offset = irand(max_offset) * ggml_element_size(x[0]);
+
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_add_at(ctx0, x[0], x[1], x[0]->nb[1], x[0]->nb[2], x[0]->nb[3], offset));
+
+                check_gradient("add_at 1d", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+            }
+        }
+
+        // add_at 2d
+        {
+            int64_t ne2[4]         = { 1, 1, 1, 1 };
+            int64_t max_offsets[4] = { 0, 0, 0, 0 };
+            int64_t offsets[4]     = { 0, 0, 0, 0 };
+
+            const int nargs = 2;
+            for (int ndims = 2; ndims <= 4; ++ndims) {
+
+                x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
+                ggml_set_param(ctx0, x[0]);
+
+                get_random_dims(ne2, 2);
+                while ((ne2[0] > ne[0]) || (ne2[1] > ne[1]) || (ne2[0]*ne2[1] > ggml_nelements(x[0]))) {
+                    get_random_dims(ne2, 2);
+                }
+
+                x[1] = get_random_tensor(ctx0, 2, ne2, -1.0f, 1.0f);
+                ggml_set_param(ctx0, x[1]);
+
+                max_offsets[0] = MAX(0, x[0]->ne[0] - x[1]->ne[0]);
+                max_offsets[1] = MAX(0, x[0]->ne[1] - x[1]->ne[1]);
+                offsets[0] = irand(max_offsets[0]) * x[0]->nb[0];
+                offsets[1] = irand(max_offsets[1]) * x[0]->nb[1];
+                const int offset = offsets[0] + offsets[1];
+
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_add_at(ctx0, x[0], x[1], x[0]->nb[1], x[0]->nb[2], x[0]->nb[3], offset));
+
+                check_gradient("add_at 2d", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+            }
+        }
+
+        // add_at 3d
+        {
+            int64_t ne2[4]         = { 1, 1, 1, 1 };
+            int64_t max_offsets[4] = { 0, 0, 0, 0 };
+            int64_t offsets[4]     = { 0, 0, 0, 0 };
+
+            const int nargs = 2;
+            for (int ndims = 3; ndims <= 4; ++ndims) {
+
+                x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
+                ggml_set_param(ctx0, x[0]);
+
+                get_random_dims(ne2, 3);
+                while ((ne2[0] > ne[0]) || (ne2[1] > ne[1]) || (ne2[2] > ne[2]) || (ne2[0]*ne2[1]*ne2[2] > ggml_nelements(x[0]))) {
+                    get_random_dims(ne2, 3);
+                }
+
+                x[1] = get_random_tensor(ctx0, 3, ne2, -1.0f, 1.0f);
+                ggml_set_param(ctx0, x[1]);
+
+                max_offsets[0] = MAX(0, x[0]->ne[0] - x[1]->ne[0]);
+                max_offsets[1] = MAX(0, x[0]->ne[1] - x[1]->ne[1]);
+                max_offsets[2] = MAX(0, x[0]->ne[2] - x[1]->ne[2]);
+                offsets[0] = irand(max_offsets[0]) * x[0]->nb[0];
+                offsets[1] = irand(max_offsets[1]) * x[0]->nb[1];
+                offsets[2] = irand(max_offsets[2]) * x[0]->nb[2];
+                const int offset = offsets[0] + offsets[1] + offsets[2];
+
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_add_at(ctx0, x[0], x[1], x[0]->nb[1], x[0]->nb[2], x[0]->nb[3], offset));
+
+                check_gradient("add_at 3d", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+            }
+        }
+
+        // add_at 4d
+        {
+            int64_t ne2[4]         = { 1, 1, 1, 1 };
+            int64_t max_offsets[4] = { 0, 0, 0, 0 };
+            int64_t offsets[4]     = { 0, 0, 0, 0 };
+
+            const int nargs = 2;
+            for (int ndims = 4; ndims <= 4; ++ndims) {
+
+                x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
+                ggml_set_param(ctx0, x[0]);
+
+                get_random_dims(ne2, 4);
+                while ((ne2[0] > ne[0]) || (ne2[1] > ne[1]) || (ne2[2] > ne[2]) || (ne2[3] > ne[3]) || (ne2[0]*ne2[1]*ne2[2]*ne2[3] > ggml_nelements(x[0]))) {
+                    get_random_dims(ne2, 4);
+                }
+
+                x[1] = get_random_tensor(ctx0, 4, ne2, -1.0f, 1.0f);
+                ggml_set_param(ctx0, x[1]);
+
+                max_offsets[0] = MAX(0, x[0]->ne[0] - x[1]->ne[0]);
+                max_offsets[1] = MAX(0, x[0]->ne[1] - x[1]->ne[1]);
+                max_offsets[2] = MAX(0, x[0]->ne[2] - x[1]->ne[2]);
+                max_offsets[3] = MAX(0, x[0]->ne[3] - x[1]->ne[3]);
+                offsets[0] = irand(max_offsets[0]) * x[0]->nb[0];
+                offsets[1] = irand(max_offsets[1]) * x[0]->nb[1];
+                offsets[2] = irand(max_offsets[2]) * x[0]->nb[2];
+                offsets[3] = irand(max_offsets[3]) * x[0]->nb[3];
+                const int offset = offsets[0] + offsets[1] + offsets[2] + offsets[3];
+
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_add_at(ctx0, x[0], x[1], x[0]->nb[1], x[0]->nb[2], x[0]->nb[3], offset));
+
+                check_gradient("add_at 4d", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
             }
         }
 
