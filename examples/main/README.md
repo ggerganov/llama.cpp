@@ -112,6 +112,14 @@ The `--in-prefix` flag is used to add a prefix to your input, primarily, this is
 ./main -r "User:" --in-prefix " "
 ```
 
+### In-Suffix
+
+The `--in-suffix` flag is used to add a suffix after your input. This is useful for adding an "Assistant:" prompt after the user's input. It's added after the new-line character (`\n`) that's automatically added to the end of the user's input. Here's an example of how to use the `--in-suffix` flag in conjunction with the `--reverse-prompt` flag:
+
+```sh
+./main -r "User:" --in-prefix " " --in-suffix "Assistant:"
+```
+
 ### Instruction Mode
 
 Instruction mode is particularly useful when working with Alpaca models, which are designed to follow user instructions for specific tasks:

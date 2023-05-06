@@ -324,6 +324,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.input_prefix = argv[i];
+        } else if (arg == "--in-suffix") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.input_suffix = argv[i];
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             gpt_print_usage(argc, argv, default_params);
@@ -362,6 +368,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  --session FNAME       file to cache model state in (may be large!) (default: none)\n");
     fprintf(stderr, "  --random-prompt       start with a randomized prompt.\n");
     fprintf(stderr, "  --in-prefix STRING    string to prefix user inputs with (default: empty)\n");
+    fprintf(stderr, "  --in-suffix STRING    string to suffix after user inputs with (default: empty)\n");
     fprintf(stderr, "  -f FNAME, --file FNAME\n");
     fprintf(stderr, "                        prompt file to start generation.\n");
     fprintf(stderr, "  -n N, --n_predict N   number of tokens to predict (default: %d, -1 = infinity)\n", params.n_predict);
