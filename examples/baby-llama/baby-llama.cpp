@@ -534,6 +534,14 @@ void sample_softmax(struct ggml_tensor * logits, struct ggml_tensor * probs, str
     }
 }
 
+void print_probs1(struct ggml_tensor * probs, int i) {
+    for (int k = 0; k < probs->ne[0]; ++k) {
+        float p = ggml_get_f32_1d(probs, i*probs->ne[0] + k);
+        printf(" %.2f", p);
+    }
+    printf("\n");
+}
+
 void print_probs(struct ggml_tensor * probs) {
     assert(probs->n_dims == 2);
     for (int i=0; i<probs->ne[1]; ++i) {
@@ -545,32 +553,49 @@ void print_probs(struct ggml_tensor * probs) {
     }
 }
 
+void print_token(int token, int n_vocab) {
+    for (int k = 0; k < token; ++k) {
+        printf(" ");
+    }
+    printf("X");
+    for (int k = token+1; k < n_vocab; ++k) {
+        printf(" ");
+    }
+    printf("\n");
+}
+
 void print_tokens(struct ggml_tensor * tokens, int n_vocab) {
     for (int i=0; i<tokens->ne[0]; ++i) {
         int token = ggml_get_i32_1d(tokens, i);
-        for (int k = 0; k < token; ++k) {
-            printf(" ");
-        }
-        printf("X");
-        for (int k = token+1; k < n_vocab; ++k) {
-            printf(" ");
-        }
-        printf("\n");
+        print_token(token, n_vocab);
     }
 }
 
 void get_example_targets(int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * targets) {
     int n_tokens = tokens_input->ne[0];
     int n_vocab = targets->ne[0];
+    float randomness = 0.0f;
     ggml_set_zero(targets);
     for (int i=0; i<n_tokens; ++i) {
         float x = example_id + i * 3.14159f * 2.0f * 4.0f / n_tokens;
         float y = sinf(x);//*cosf(x*1.1f+1.0f);
         float z = (y+1.0f)*0.5f; // scale to [0..1]
+        z += (frand()-0.5f)*(randomness/n_tokens);
         z = (z < 0.0f) ? 0.0f : (z > 1.0f) ? 1.0f : z; // clamp to [0..1]
         int token = (int)(z*(float)(n_vocab-1));
         ggml_set_f32_1d(targets, i*n_vocab + token, +1.0f);
         ggml_set_i32_1d(tokens_input, i, token);
+    }
+}
+
+void lshift_examples(struct ggml_tensor * tokens_input, struct ggml_tensor * targets, int n_shift) {
+    int n_tokens = tokens_input->ne[0];
+    int n_vocab = targets->ne[0];
+    for (int i=0; i<n_tokens-n_shift; ++i) {
+        ggml_set_i32_1d(tokens_input, i, ggml_get_i32_1d(tokens_input, i + n_shift));
+        for (int k=0; k<n_vocab; ++k) {
+            ggml_set_f32_1d(targets, i*n_vocab + k, ggml_get_f32_1d(targets, (i + n_shift)*n_vocab + k));
+        }
     }
 }
 
@@ -587,7 +612,7 @@ int main(int argc, char ** argv) {
     model.hparams.n_mult  = 2;
     model.hparams.n_head  = 8;
     model.hparams.n_layer = 8;
-    model.hparams.n_rot   = 16;
+    model.hparams.n_rot   = model.hparams.n_embd / model.hparams.n_head;
 
     // model.hparams.n_embd  = 32;
     // model.hparams.n_mult  = 2;
@@ -608,22 +633,27 @@ int main(int argc, char ** argv) {
     kv_self.ctx = model.ctx;
     init_kv_cache(&kv_self, &model);
 
-    struct ggml_init_params c0params;
-    c0params.mem_size   = 1024*1024*1024;
-    c0params.mem_buffer = NULL;
-    c0params.no_alloc   = false;
 
-    struct ggml_context * ctx0 = model.ctx; // ggml_init(c0params);
+    size_t    compute_size = 1024*1024*1024;
+    uint8_t * compute_addr = new uint8_t[compute_size];
 
-    int n_examples = 2;
+    int n_examples = 32;
     int n_tokens = model.hparams.n_ctx;
 
     for (int ex=0; ex<n_examples; ++ex) {
+        struct ggml_init_params params = {
+            /*.mem_size   =*/ compute_size,
+            /*.mem_buffer =*/ compute_addr,
+            /*.no_alloc   =*/ false,
+        };
 
-        struct ggml_tensor * before_opt_best_samples = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        struct ggml_tensor * before_opt_probs        = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, model.hparams.n_vocab, n_tokens);
-        struct ggml_tensor * after_opt_best_samples  = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        struct ggml_tensor * after_opt_probs         = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, model.hparams.n_vocab, n_tokens);
+        struct ggml_context * ctx0 = ggml_init(params);
+
+
+        // struct ggml_tensor * before_opt_best_samples = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+        // struct ggml_tensor * before_opt_probs        = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, model.hparams.n_vocab, n_tokens);
+        // struct ggml_tensor * after_opt_best_samples  = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+        // struct ggml_tensor * after_opt_probs         = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, model.hparams.n_vocab, n_tokens);
         struct ggml_tensor * tokens_input            = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
         struct ggml_tensor * targets                 = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, model.hparams.n_vocab, n_tokens);
 
@@ -634,8 +664,8 @@ int main(int argc, char ** argv) {
 
         get_example_targets(ex, tokens_input, targets);
         printf("Example %d\n", (ex+1));
-        print_probs(targets);
-        print_tokens(tokens_input, model.hparams.n_vocab);
+        // print_probs(targets);
+        // print_tokens(tokens_input, model.hparams.n_vocab);
 
         struct ggml_tensor * logits = forward(&model, &kv_self, ctx0, &gf, tokens_input, n_tokens, n_past);
         struct ggml_tensor * e = ggml_sum(ctx0, ggml_sqr(ctx0, ggml_sub(ctx0, targets, logits)));
@@ -644,12 +674,12 @@ int main(int argc, char ** argv) {
         ggml_graph_compute(ctx0, &gf);
 
         float error_before_opt = ggml_get_f32_1d(e, 0);
-        sample_softmax(logits, before_opt_probs, before_opt_best_samples);
+        // sample_softmax(logits, before_opt_probs, before_opt_best_samples);
 
-        printf("probabilities before optimization:\n");
-        print_probs(before_opt_probs);
-        printf("best samples before optimization:\n");
-        print_tokens(before_opt_best_samples, model.hparams.n_vocab);
+        // printf("probabilities before optimization:\n");
+        // print_probs(before_opt_probs);
+        // printf("best samples before optimization:\n");
+        // print_tokens(before_opt_best_samples, model.hparams.n_vocab);
 
         struct ggml_opt_params opt_params_adam = ggml_opt_default_params(GGML_OPT_ADAM);
         struct ggml_opt_params opt_params_lbfgs = ggml_opt_default_params(GGML_OPT_LBFGS);
@@ -657,6 +687,8 @@ int main(int argc, char ** argv) {
         opt_params_adam.print_backward_graph = false;
         opt_params_lbfgs.print_forward_graph = false;
         opt_params_lbfgs.print_backward_graph = false;
+        opt_params_adam.adam.n_iter = 16;
+        opt_params_lbfgs.lbfgs.n_iter = 16;
         // ggml_opt(ctx0, opt_params_adam, e);
         ggml_opt(ctx0, opt_params_lbfgs, e);
         // 
@@ -664,20 +696,77 @@ int main(int argc, char ** argv) {
         ggml_graph_compute(ctx0, &gf);
 
         float error_after_opt = ggml_get_f32_1d(e, 0);
-        sample_softmax(logits, after_opt_probs, after_opt_best_samples);
+        // sample_softmax(logits, after_opt_probs, after_opt_best_samples);
 
         printf("error_before_opt: %.2f\n", error_before_opt);
         printf("error_after_opt:  %.2f\n", error_after_opt);
 
-        printf("probabilities after optimization:\n");
-        print_probs(after_opt_probs);
-        printf("best samples after optimization:\n");
-        print_tokens(after_opt_best_samples, model.hparams.n_vocab);
+        // printf("probabilities after optimization:\n");
+        // print_probs(after_opt_probs);
+        // printf("best samples after optimization:\n");
+        // print_tokens(after_opt_best_samples, model.hparams.n_vocab);
+
+        ggml_free(ctx0);
     }
 
+    {
+        int n_gen = 64;
+        int sample_ctx = n_tokens/2;
 
-    ggml_free(ctx0);
+        printf("Generating %d tokens.\n", n_gen);
 
+        struct ggml_tensor * tokens_input = ggml_new_tensor_1d(model.ctx, GGML_TYPE_I32, n_tokens);
+        struct ggml_tensor * targets      = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, model.hparams.n_vocab, n_tokens);
+        
+        get_example_targets(137, tokens_input, targets);
+        for (int i=sample_ctx; i<n_tokens; ++i) {
+            ggml_set_i32_1d(tokens_input, i, model.hparams.n_vocab/2);
+        }
+
+        for (int i=0; i<sample_ctx-1; ++i) {
+            print_token(ggml_get_i32_1d(tokens_input, i), model.hparams.n_vocab);
+        }
+        printf("---\n");
+        for (int i=0; i<n_gen; ++i) {
+            struct ggml_init_params params = {
+                /*.mem_size   =*/ compute_size,
+                /*.mem_buffer =*/ compute_addr,
+                /*.no_alloc   =*/ false,
+            };
+            struct ggml_context * ctx0 = ggml_init(params);
+
+            ggml_cgraph gf = {};
+            gf.n_threads = 1;
+
+            int n_past = 0;
+            struct ggml_tensor * logits = forward(&model, &kv_self, ctx0, &gf, tokens_input, sample_ctx, n_past);
+
+            ggml_build_forward_expand(&gf, logits);
+            ggml_graph_compute(ctx0, &gf);
+
+            struct ggml_tensor * best_samples = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, sample_ctx);
+            struct ggml_tensor * probs        = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, model.hparams.n_vocab, sample_ctx);
+
+            sample_softmax(logits, probs, best_samples);
+
+            // int sample_at = n_tokens-1;
+            int token = ggml_get_i32_1d(best_samples, sample_ctx-1);
+            
+            // print_probs1(probs, sample_at);
+            print_token(token, model.hparams.n_vocab);
+
+            lshift_examples(tokens_input, targets, 1);
+            ggml_set_i32_1d(tokens_input, sample_ctx-1, token);
+            
+            // printf("---\n");
+            // for (int i=0; i<sample_ctx-1; ++i) {
+            //     print_token(ggml_get_i32_1d(tokens_input, i), model.hparams.n_vocab);
+            // }
+            // printf("--\n");
+
+            ggml_free(ctx0);
+        }
+    }
 
     printf("done\n");
     // ggml_free(kv_self.ctx);
