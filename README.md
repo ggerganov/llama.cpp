@@ -216,7 +216,6 @@ Building the program with BLAS support may lead to some performance improvements
       ```bash
       make LLAMA_OPENBLAS=1
       ```
-      Note: In order to build on Arch Linux with OpenBLAS support enabled you must edit the Makefile adding at the end of the line 105: `-lcblas`
 
     - On Windows:
 
