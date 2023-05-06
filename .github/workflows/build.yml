@@ -185,7 +185,7 @@ jobs:
         if: ${{ matrix.build == 'opencl' }}
         run: |
           curl.exe -o $env:RUNNER_TEMP/clblast.zip -L "https://github.com/CNugteren/CLBlast/releases/download/${env:CLBLAST_VERSION}/CLBlast-${env:CLBLAST_VERSION}-Windows-x64.zip"
-          curl.exe -o $env:RUNNER_TEMP/CLBlast.LICENSE.txt -L https://github.com/CNugteren/CLBlast/raw/${env:CLBLAST_VERSION}/LICENSE
+          curl.exe -o $env:RUNNER_TEMP/CLBlast.LICENSE.txt -L "https://github.com/CNugteren/CLBlast/raw/${env:CLBLAST_VERSION}/LICENSE"
           mkdir $env:RUNNER_TEMP/clblast
           tar.exe -xvf $env:RUNNER_TEMP/clblast.zip -C $env:RUNNER_TEMP/clblast
           foreach ($f in (gci -Recurse -Path "$env:RUNNER_TEMP/clblast" -Filter '*.cmake')) {
