@@ -58,6 +58,7 @@ struct gpt_params {
     bool random_prompt     = false; // do not randomize prompt if none provided
     bool use_color         = false; // use color to distinguish generations and inputs
     bool interactive       = false; // interactive mode
+    bool session_full      = false; // save the output to the session file in addition to prompt
 
     bool embedding         = false; // get only sentence embedding
     bool interactive_first = false; // wait for user input immediately

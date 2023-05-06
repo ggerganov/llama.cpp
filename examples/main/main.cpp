@@ -292,13 +292,9 @@ int main(int argc, char ** argv) {
         is_interacting = params.interactive_first;
     }
 
-    bool is_antiprompt = false;
-    bool input_echo    = true;
-
-    // HACK - because session saving incurs a non-negligible delay, for now skip re-saving session
-    // if we loaded a session with at least 75% similarity. It's currently just used to speed up the
-    // initial prompt so it doesn't need to be an exact match.
-    bool need_to_save_session = !path_session.empty() && n_matching_session_tokens < (embd_inp.size() * 3 / 4);
+    bool is_antiprompt        = false;
+    bool input_echo           = true;
+    bool need_to_save_session = !path_session.empty();
 
 
     int n_past             = 0;
@@ -328,6 +324,10 @@ int main(int argc, char ** argv) {
                 embd.insert(embd.begin(), last_n_tokens.begin() + n_ctx - n_left/2 - embd.size(), last_n_tokens.end() - embd.size());
 
                 // stop saving session if we run out of context
+                if (!path_session.empty() && params.session_full) {
+                    llama_save_session_file(ctx, path_session.c_str(),
+                        session_tokens.data(), session_tokens.size());
+                }
                 path_session = "";
 
                 //printf("\n---\n");
@@ -601,6 +601,11 @@ int main(int argc, char ** argv) {
             n_remain = params.n_predict;
             is_interacting = true;
         }
+    }
+
+    if (!path_session.empty() && params.session_full) {
+        fprintf(stderr, "\n%s: saving final output to session file '%s'\n", __func__, path_session.c_str());
+        llama_save_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
     }
 
     llama_print_timings(ctx);
