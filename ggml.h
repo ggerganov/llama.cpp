@@ -464,14 +464,12 @@ extern "C" {
 
     GGML_API size_t  ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch);
 
-#ifdef GGML_RECOVERABLE_ERRORS
     // GGML_API enum ggml_errcode ggml_clear_error(
     //         struct ggml_context * ctx);
     GGML_API enum ggml_errcode ggml_last_error_code(
             struct ggml_context * ctx);
     GGML_API char * ggml_last_error_msg(
             struct ggml_context * ctx);
-#endif
 
     GGML_API struct ggml_tensor * ggml_new_tensor(
             struct ggml_context * ctx,

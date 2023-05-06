@@ -4570,10 +4570,8 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         /*.objects_end        =*/ NULL,
         /*.scratch            =*/ { 0, 0, NULL, },
         /*.scratch_save       =*/ { 0, 0, NULL, },
-#ifdef GGML_RECOVERABLE_ERRORS
         /*.last_error_code    =*/ GGML_ERRCODE_SUCCESS,
         /*.last_error_msg     =*/ { 0 },
-#endif
     };
 
     GGML_ASSERT(ctx->mem_buffer != NULL);
@@ -4628,7 +4626,6 @@ size_t ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch) 
     return result;
 }
 
-#ifdef GGML_RECOVERABLE_ERRORS
 // enum ggml_errcode ggml_clear_error(struct ggml_context * ctx) {
 //     enum ggml_errcode last_code = ctx->last_error_code;
 
@@ -4644,7 +4641,6 @@ enum ggml_errcode ggml_last_error_code(struct ggml_context * ctx) {
 char * ggml_last_error_msg(struct ggml_context * ctx) {
     return ctx->last_error_code == GGML_ERRCODE_SUCCESS ? "Success" : &ctx->last_error_msg;
 }
-#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 
