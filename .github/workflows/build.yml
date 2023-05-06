@@ -213,7 +213,7 @@ jobs:
           cd build
           cmake .. ${{ matrix.defines }}
           cmake --build . --config Release
-          cp ../LICENSE "./bin/Release/llama.cpp-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}.txt"
+          cp ../LICENSE ./bin/Release/llama.cpp.txt
 
       - name: Add clblast.dll
         id: add_clblast_dll
