@@ -859,7 +859,6 @@ int main(int argc, const char ** argv) {
             
             int64_t ne2[4];
             get_random_dims(ne2, 4);
-            ne2[1] = 1;
 
             for (int ndims = 1; ndims <= 3; ++ndims) {
                 x[0] = get_random_tensor(ctx0, ndims, ne2, -1.0f, 1.0f);
