@@ -462,6 +462,22 @@ int main(int argc, const char ** argv) {
             }
         }
 
+        // log
+        {
+            const int nargs = 1;
+
+            for (int ndims = 1; ndims <= 2; ++ndims) {
+                for (int i = 0; i < nargs; ++i) {
+                    x[i] = get_random_tensor(ctx0, ndims, ne, 2.0f*1e-3f, 1.0f);
+                    ggml_set_param(ctx0, x[i]);
+                }
+
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_log(ctx0, x[0]));
+
+                check_gradient("log", ctx0, x, f, ndims, nargs, 1e-3f, INFINITY, 1e-1f);
+            }
+        }
+
         // sum
         {
             const int nargs = 1;
