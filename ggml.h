@@ -269,6 +269,7 @@ extern "C" {
         GGML_OP_DIAG_MASK_INF,
         GGML_OP_SOFT_MAX,
         GGML_OP_ROPE,
+        GGML_OP_ALIBI,
         GGML_OP_CONV_1D_1S,
         GGML_OP_CONV_1D_2S,
 
@@ -666,6 +667,12 @@ extern "C" {
     // TODO: we don't support extra parameters for now
     //       that's why we are hard-coding the stride, padding, and dilation
     //       not great ..
+    struct ggml_tensor * ggml_alibi(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int                   n_past,
+            int                   n_head);
+
     GGML_API struct ggml_tensor * ggml_conv_1d_1s(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
