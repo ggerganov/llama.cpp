@@ -845,7 +845,7 @@ static void quantize_row_q5_0_reference(const float * restrict x, block_q5_0 * r
         const float d  = max / -16;
         const float id = d ? 1.0f/d : 0.0f;
 
-        y[i].d = d;
+        y[i].d = GGML_FP32_TO_FP16(d);
 
         uint32_t qh = 0;
 
