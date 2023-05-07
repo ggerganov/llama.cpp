@@ -11,7 +11,7 @@ let package = Package(
         .target(
             name: "llama",
             path: ".",
-            sources: ["ggml.c", "llama.cpp"],
+            sources: ["ggml.c", "llama.cpp", "ggml-opencl.c"],
             publicHeadersPath: "spm-headers",
             cSettings: [.unsafeFlags(["-Wno-shorten-64-to-32"]), .define("GGML_USE_ACCELERATE"), .define("GGML_USE_CLBLAST")],
             linkerSettings: [.linkedFramework("Accelerate"), .linkedFramework("OpenCL")]
