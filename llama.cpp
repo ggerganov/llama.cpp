@@ -1090,7 +1090,6 @@ static bool llama_eval_internal(
     ggml_set_name(embd, "embd");
     memcpy(embd->data, tokens, N*ggml_element_size(embd));
 
-    // inpL shape [n_embd,N,1,1]
     struct ggml_tensor * inpL = ggml_get_rows(ctx0, model.tok_embeddings, embd);
 
     for (int il = 0; il < n_layer; ++il) {
@@ -1102,7 +1101,6 @@ static bool llama_eval_internal(
 
         // norm
         {
-            // cur shape [n_embd,N,1,1]
             cur = ggml_rms_norm(ctx0, inpL);
 
             // cur = attention_norm*cur
@@ -1114,10 +1112,6 @@ static bool llama_eval_internal(
         // self-attention
         {
             // compute Q and K and RoPE them
-            // wq   shape [n_embd, n_embd, 1, 1]
-            // wk   shape [n_embd, n_embd, 1, 1]
-            // Qcur shape [n_embd/n_head, n_head, N, 1]
-            // Kcur shape [n_embd/n_head, n_head, N, 1]
             struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
             struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wk, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
             ggml_set_name(Qcur, "Qcur");
@@ -1126,14 +1120,8 @@ static bool llama_eval_internal(
             // store key and value to memory
             {
                 // compute the transposed [N, n_embd] V matrix
-                // wv   shape [n_embd, n_embd, 1, 1]
-                // Vcur shape [n_embd, N, 1, 1]
                 struct ggml_tensor * Vcur = ggml_transpose(ctx0, ggml_reshape_2d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wv, cur), n_embd, N));
 
-                // kv_self.k shape [n_embd * n_ctx * n_layer, 1] 
-                // kv_self.v shape [n_embd * n_ctx * n_layer, 1] 
-                // k         shape [n_embd * N, 1]   == kv_self.k[:,n_past:n_past+N,il,0]
-                // v         shape [N, n_embd, 1, 1] == kv_self.v[:,n_past:n_past+N,il,0]
                 struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, N*n_embd, (ggml_element_size(kv_self.k)*n_embd)*(il*n_ctx + n_past));
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, N, n_embd,
                         (   n_ctx)*ggml_element_size(kv_self.v),
@@ -1144,16 +1132,12 @@ static bool llama_eval_internal(
                 ggml_build_forward_expand(&gf, ggml_cpy(ctx0, Vcur, v));
             }
 
-            // Qcur shape [n_embd/n_head, n_head, N, 1]
-            // Q shape    [n_embd/n_head, N, n_head, 1]
             struct ggml_tensor * Q =
                 ggml_permute(ctx0,
                         Qcur,
                         0, 2, 1, 3);
             ggml_set_name(Q, "Q");
 
-            // kv_self.k shape [n_embd * n_ctx * n_layer, 1] 
-            // K shape [n_embd/n_head, n_past + N, n_head, 1]
             struct ggml_tensor * K =
                 ggml_permute(ctx0,
                         ggml_reshape_3d(ctx0,
@@ -1163,7 +1147,6 @@ static bool llama_eval_internal(
             ggml_set_name(K, "K");
 
             // K * Q
-            // KQ shape [n_past + N, N, n_head, 1]
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
             ggml_set_name(KQ, "KQ");
 
@@ -1176,19 +1159,15 @@ static bool llama_eval_internal(
             ggml_set_name(KQ_scaled, "KQ_scaled");
 
             // KQ_masked = mask_past(KQ_scaled)
-            // KQ_masked shape [n_past + N, N, n_head, 1]
             struct ggml_tensor * KQ_masked = ggml_diag_mask_inf_inplace(ctx0, KQ_scaled, n_past);
             ggml_set_name(KQ_masked, "KQ_masked");
 
             // KQ = soft_max(KQ_masked)
-            // KQ_soft_max shape [n_past + N, N, n_head, 1]
             struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx0, KQ_masked);
             ggml_set_name(KQ_soft_max, "KQ_soft_max");
 
 
             // split cached V into n_head heads
-            //// V shape [n_past + N, n_embd/n_head, n_head, 1]
-            // V shape [n_past + N, n_embd/n_head, n_head, 1] == kv_self.v[:,:(n_past+N),il,1]
             struct ggml_tensor * V =
                 ggml_view_3d(ctx0, kv_self.v,
                         n_past + N, n_embd/n_head, n_head,
@@ -1198,7 +1177,6 @@ static bool llama_eval_internal(
             ggml_set_name(V, "V");
 
 #if 1
-            // KQV shape [n_embd/n_head, N, n_head, 1]
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
             ggml_set_name(KQV, "KQV");
 #else
@@ -1210,12 +1188,10 @@ static bool llama_eval_internal(
 #endif
 
             // KQV_merged = KQV.permute(0, 2, 1, 3)
-            // KQV_merged shape [n_embd/n_head, n_head, N, 1]
             struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
             ggml_set_name(KQV_merged, "KQV_merged");
 
             // cur = KQV_merged.contiguous().view(n_embd, N)
-            // cur shape [n_embd,N,1,1]
             cur = ggml_cpy(ctx0,
                     KQV_merged,
                     ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N));
