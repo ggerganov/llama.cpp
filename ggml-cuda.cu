@@ -35,7 +35,7 @@
 #define cudaGetErrorString hipGetErrorString
 #define cudaGetLastError hipGetLastError
 #define cudaMalloc hipMalloc
-#define cudaMallocHost(ptr, size) hipHostMalloc(ptr, size, hipHostMallocPortable)
+#define cudaMallocHost(ptr, size) hipHostMalloc(ptr, size, hipHostMallocDefault)
 #define cudaMemcpy2DAsync hipMemcpy2DAsync
 #define cudaMemcpyAsync hipMemcpyAsync
 #define cudaMemcpyDeviceToHost hipMemcpyDeviceToHost
