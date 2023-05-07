@@ -114,7 +114,7 @@ llama_token sample_token_mirostat(int n_vocab, llama_token_data_array * candidat
     float epsilon_hat = s_hat - 1;
     float k = powf((epsilon_hat * powf(2, *mu)) / (1 - powf(N, -epsilon_hat)), 1 / s_hat);
     // Sample the next word X using top-k sampling
-    llama_sample_top_k(nullptr, candidates, int(k));
+    llama_sample_top_k(nullptr, candidates, int(k),1);
     llama_token X = sample_token(candidates, rng);    // Compute error as the difference between observed surprise and target surprise value
     size_t X_idx = std::distance(candidates->data, std::find_if(candidates->data, candidates->data + candidates->size, [&](const llama_token_data & candidate) {
         return candidate.id == X;
@@ -194,10 +194,10 @@ int mirostat, float mirostat_tau, float mirostat_eta)
         else
         {
             // Temperature sampling
-            llama_sample_top_k(nullptr, &candidates_p, top_k);
-            llama_sample_tail_free(nullptr, &candidates_p, tfs);
-            llama_sample_typical(nullptr, &candidates_p, typical_p);
-            llama_sample_top_p(nullptr, &candidates_p, top_p);
+            llama_sample_top_k(nullptr, &candidates_p, top_k,1);
+            llama_sample_tail_free(nullptr, &candidates_p, tfs,1);
+            llama_sample_typical(nullptr, &candidates_p, typical_p,1);
+            llama_sample_top_p(nullptr, &candidates_p, top_p,1);
             llama_sample_temperature(nullptr, &candidates_p, temp);
             id = sample_token(&candidates_p, rng);
         }

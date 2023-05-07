@@ -16,12 +16,7 @@ ifndef UNAME_M
 UNAME_M := $(shell uname -m)
 endif
 
-ARCH_LINUX1 := $(shell grep "Arch Linux" /etc/os-release 2>/dev/null)
-ARCH_LINUX2 := $(shell grep "ID_LIKE=arch" /etc/os-release 2>/dev/null)
-ifdef ARCH_LINUX1
-ARCH_ADD = -lcblas
-endif
-ifdef ARCH_LINUX2
+ifneq ($(shell grep -e "Arch Linux" -e "ID_LIKE=arch" /etc/os-release 2>/dev/null),)
 ARCH_ADD = -lcblas
 endif
 
