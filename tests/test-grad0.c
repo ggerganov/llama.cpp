@@ -156,7 +156,7 @@ struct ggml_tensor * get_random_tensor_int(
 float get_element(const struct ggml_tensor * t, int idx) {
     if (t->type == GGML_TYPE_F32) {
         return ((float *)t->data)[idx];
-    } else if (t->type == GGML_TYPE_I32) { 
+    } else if (t->type == GGML_TYPE_I32) {
         return ((int32_t *)t->data)[idx];
     } else {
         assert(false);
@@ -591,9 +591,9 @@ int main(int argc, const char ** argv) {
 
 #ifdef GGML_SILU_FP16
                 // due to GGML_SILU_FP16 the finite difference method will be slightly wrong -> increase error bounds.
-                check_gradient("silu", ctx0, x, f, ndims, nargs, 1e-3f, 0.5, INFINITY); 
+                check_gradient("silu", ctx0, x, f, ndims, nargs, 1e-3f, 0.5, INFINITY);
 #else
-                check_gradient("silu", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY); 
+                check_gradient("silu", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
 #endif
             }
         }
@@ -610,7 +610,7 @@ int main(int argc, const char ** argv) {
 
                 struct ggml_tensor * f = ggml_sum(ctx0, ggml_rms_norm(ctx0, x[0]));
 
-                check_gradient("rms_norm", ctx0, x, f, ndims, nargs, 1e-4f, 1.0f, INFINITY); 
+                check_gradient("rms_norm", ctx0, x, f, ndims, nargs, 1e-4f, 1.0f, INFINITY);
             }
         }
 
@@ -630,7 +630,7 @@ int main(int argc, const char ** argv) {
 
                 struct ggml_tensor * f = ggml_sum(ctx0, ggml_scale(ctx0, x[0], x[1]));
 
-                check_gradient("scale", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY); 
+                check_gradient("scale", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
             }
         }
 
@@ -975,10 +975,10 @@ int main(int argc, const char ** argv) {
             int64_t ne2[4];
 
             const int nargs = 1;
-            for (int ndims = 1; ndims <= 4; ++ndims) 
+            for (int ndims = 1; ndims <= 4; ++ndims)
             {
                 // ggml_permute will set axes of dimensions below n_dims to 1.
-                // to make ggml_permute work correctly on all axes, 
+                // to make ggml_permute work correctly on all axes,
                 // the input tensor needs maximal n_dim of 4.
                 for (int i=0; i<ndims; ++i) {
                     ne2[i] = ne[i];
@@ -1008,10 +1008,10 @@ int main(int argc, const char ** argv) {
             int64_t ne2[4];
 
             const int nargs = 1;
-            for (int ndims = 1; ndims <= 4; ++ndims) 
+            for (int ndims = 1; ndims <= 4; ++ndims)
             {
                 // ggml_transpose will set axes of dimensions below n_dims to 1.
-                // to make ggml_transpose work correctly on all axes, 
+                // to make ggml_transpose work correctly on all axes,
                 // the input tensor needs maximal n_dim of 4.
                 for (int i=0; i<ndims; ++i) {
                     ne2[i] = ne[i];
@@ -1038,7 +1038,7 @@ int main(int argc, const char ** argv) {
             const int ndims = 2;
             x[0] = get_random_tensor(ctx0, ndims, ne2, -1.0f, 1.0f);
             x[1] = get_random_tensor_int(ctx0, 1, ne3, 0, ne2[1]);
-        
+
             ggml_set_param(ctx0, x[0]);
 
             struct ggml_tensor * f = ggml_sum(ctx0, ggml_get_rows(ctx0, x[0], x[1]));
@@ -1079,7 +1079,7 @@ int main(int argc, const char ** argv) {
         // softmax
         {
             const int nargs = 1;
-            
+
             int64_t ne2[4];
             get_random_dims(ne2, 4);
 
@@ -1121,7 +1121,7 @@ int main(int argc, const char ** argv) {
                         struct ggml_tensor * f = ggml_sum(ctx0, ggml_rope(ctx0, x[0], n_past, n_rot, mode));
 
                         GGML_PRINT_DEBUG("rope: n_past: %d n_rot: %d mode: %d\n", n_past, n_rot, mode);
-                        check_gradient("rope", ctx0, x, f, ndims, nargs, 1e-2f, 1e-3f, INFINITY); 
+                        check_gradient("rope", ctx0, x, f, ndims, nargs, 1e-2f, 1e-3f, INFINITY);
                     }
                 }
             }

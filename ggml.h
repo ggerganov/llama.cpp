@@ -649,7 +649,7 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
-            
+
     // in-place, returns view(a)
     GGML_API struct ggml_tensor * ggml_scale_inplace(
             struct ggml_context * ctx,
@@ -787,7 +787,7 @@ extern "C" {
             int64_t               ne3,
             size_t                nb1, // row   stride in bytes
             size_t                nb2, // slice stride in bytes
-            size_t                nb3, 
+            size_t                nb3,
             size_t                offset);
 
     GGML_API struct ggml_tensor * ggml_permute(
@@ -862,7 +862,7 @@ extern "C" {
             int                   n_dims,
             int                   mode);
 
-	// in-place, returns view(a)
+    // in-place, returns view(a)
     GGML_API struct ggml_tensor * ggml_rope_inplace(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,

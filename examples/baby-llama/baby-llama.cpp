@@ -381,7 +381,7 @@ void randomize_model(struct llama_model * model, int seed, float mean, float std
     randomize_tensor_normal(model->tok_embeddings, model->tok_embeddings->n_dims, model->tok_embeddings->ne, &rnd);
     randomize_tensor_normal(model->norm,           model->norm->n_dims,           model->norm->ne,           &rnd);
     randomize_tensor_normal(model->output,         model->output->n_dims,         model->output->ne,         &rnd);
-    
+
     for (uint32_t i = 0; i < n_layer; ++i) {
         auto & layer = model->layers[i];
         randomize_tensor_normal(layer.attention_norm, layer.attention_norm->n_dims, layer.attention_norm->ne, &rnd);
@@ -415,7 +415,7 @@ void randomize_model_lora(struct llama_model_lora * model, int seed, float mean,
     randomize_tensor_normal(model->norm,           model->norm->n_dims,           model->norm->ne,           &rnd);
     randomize_tensor_normal(model->outputa,        model->outputa->n_dims,        model->outputa->ne,         &rnd);
     randomize_tensor_normal(model->outputb,        model->outputb->n_dims,        model->outputb->ne,         &rnd);
-    
+
     for (uint32_t i = 0; i < n_layer; ++i) {
         auto & layer = model->layers[i];
         randomize_tensor_normal(layer.attention_norm, layer.attention_norm->n_dims, layer.attention_norm->ne, &rnd);
@@ -508,14 +508,14 @@ bool init_kv_cache_lora(struct llama_kv_cache* cache, struct llama_model_lora * 
 }
 
 struct ggml_tensor * forward(
-        struct llama_model    * model, 
-        struct llama_kv_cache * cache, 
+        struct llama_model    * model,
+        struct llama_kv_cache * cache,
         struct ggml_context   * ctx0,
         struct ggml_cgraph    * gf,
         struct ggml_tensor    * tokens_input,
         const  int              n_tokens,
         const  int              n_past) {
-    
+
     const int N = n_tokens;
 
     struct llama_kv_cache& kv_self = *cache;
@@ -569,11 +569,11 @@ struct ggml_tensor * forward(
                 // Vcur shape [n_embd, N, 1, 1]
                 struct ggml_tensor * Vcur = ggml_cont(ctx0, ggml_transpose(ctx0, ggml_reshape_2d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wv, cur), n_embd, N)));
 
-                // kv_self.k shape [n_embd * n_ctx * n_layer, 1] 
-                // kv_self.v shape [n_embd * n_ctx * n_layer, 1] 
+                // kv_self.k shape [n_embd * n_ctx * n_layer, 1]
+                // kv_self.v shape [n_embd * n_ctx * n_layer, 1]
                 // k         shape [n_embd * N, 1]   == kv_self.k[:,n_past:n_past+N,il,0]
                 // v         shape [N, n_embd, 1, 1] == kv_self.v[:,n_past:n_past+N,il,0]
-                
+
                 /* {
                     struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, N*n_embd, (ggml_element_size(kv_self.k)*n_embd)*(il*n_ctx + n_past));
                     struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, N, n_embd,
@@ -597,7 +597,7 @@ struct ggml_tensor * forward(
                         Qcur,
                         0, 2, 1, 3);
 
-            // kv_self.k shape [n_embd * n_ctx * n_layer, 1] 
+            // kv_self.k shape [n_embd * n_ctx * n_layer, 1]
             // K shape [n_embd/n_head, n_past + N, n_head, 1]
             struct ggml_tensor * K =
                 ggml_permute(ctx0,
@@ -641,7 +641,7 @@ struct ggml_tensor * forward(
             // KQV_merged = KQV.permute(0, 2, 1, 3)
             // KQV_merged shape [n_embd/n_head, n_head, N, 1]
             struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
-            // KQV_merged shape 
+            // KQV_merged shape
 
             // cur = KQV_merged.contiguous().view(n_embd, N)
             // cur shape [n_embd,N,1,1]
@@ -734,14 +734,14 @@ struct ggml_tensor * forward(
 
 
 struct ggml_tensor * forward_lora(
-        struct llama_model_lora * model, 
-        struct llama_kv_cache   * cache, 
+        struct llama_model_lora * model,
+        struct llama_kv_cache   * cache,
         struct ggml_context     * ctx0,
         struct ggml_cgraph      * gf,
         struct ggml_tensor      * tokens_input,
         const  int                n_tokens,
         const  int                n_past) {
-    
+
     const int N = n_tokens;
 
     struct llama_kv_cache& kv_self = *cache;
@@ -784,23 +784,23 @@ struct ggml_tensor * forward_lora(
             // wk   shape [n_embd, n_embd, 1, 1]
             // Qcur shape [n_embd/n_head, n_head, N, 1]
             // Kcur shape [n_embd/n_head, n_head, N, 1]
-            struct ggml_tensor * Qcur = ggml_rope(ctx0, 
-                                            ggml_reshape_3d(ctx0, 
-                                                ggml_mul_mat(ctx0, 
-                                                    model->layers[il].wqa, 
-                                                    ggml_mul_mat(ctx0, 
-                                                        model->layers[il].wqb, 
-                                                        cur)), 
-                                                n_embd/n_head, n_head, N), 
+            struct ggml_tensor * Qcur = ggml_rope(ctx0,
+                                            ggml_reshape_3d(ctx0,
+                                                ggml_mul_mat(ctx0,
+                                                    model->layers[il].wqa,
+                                                    ggml_mul_mat(ctx0,
+                                                        model->layers[il].wqb,
+                                                        cur)),
+                                                n_embd/n_head, n_head, N),
                                             n_past, n_rot, 0);
-            struct ggml_tensor * Kcur = ggml_rope(ctx0, 
-                                            ggml_reshape_3d(ctx0, 
-                                                ggml_mul_mat(ctx0, 
-                                                    model->layers[il].wka, 
-                                                    ggml_mul_mat(ctx0, 
-                                                        model->layers[il].wkb, 
-                                                        cur)), 
-                                                n_embd/n_head, n_head, N), 
+            struct ggml_tensor * Kcur = ggml_rope(ctx0,
+                                            ggml_reshape_3d(ctx0,
+                                                ggml_mul_mat(ctx0,
+                                                    model->layers[il].wka,
+                                                    ggml_mul_mat(ctx0,
+                                                        model->layers[il].wkb,
+                                                        cur)),
+                                                n_embd/n_head, n_head, N),
                                             n_past, n_rot, 0);
 
             // store key and value to memory
@@ -808,21 +808,21 @@ struct ggml_tensor * forward_lora(
                 // compute the transposed [N, n_embd] V matrix
                 // wv   shape [n_embd, n_embd, 1, 1]
                 // Vcur shape [n_embd, N, 1, 1]
-                struct ggml_tensor * Vcur = ggml_cont(ctx0, 
-                                                ggml_transpose(ctx0, 
-                                                    ggml_reshape_2d(ctx0, 
-                                                        ggml_mul_mat(ctx0, 
-                                                            model->layers[il].wva, 
-                                                            ggml_mul_mat(ctx0, 
-                                                                model->layers[il].wvb, 
-                                                                cur)), 
+                struct ggml_tensor * Vcur = ggml_cont(ctx0,
+                                                ggml_transpose(ctx0,
+                                                    ggml_reshape_2d(ctx0,
+                                                        ggml_mul_mat(ctx0,
+                                                            model->layers[il].wva,
+                                                            ggml_mul_mat(ctx0,
+                                                                model->layers[il].wvb,
+                                                                cur)),
                                                         n_embd, N)));
 
-                // kv_self.k shape [n_embd * n_ctx * n_layer, 1] 
-                // kv_self.v shape [n_embd * n_ctx * n_layer, 1] 
+                // kv_self.k shape [n_embd * n_ctx * n_layer, 1]
+                // kv_self.v shape [n_embd * n_ctx * n_layer, 1]
                 // k         shape [n_embd * N, 1]   == kv_self.k[:,n_past:n_past+N,il,0]
                 // v         shape [N, n_embd, 1, 1] == kv_self.v[:,n_past:n_past+N,il,0]
-                
+
                 /* {
                     struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, N*n_embd, (ggml_element_size(kv_self.k)*n_embd)*(il*n_ctx + n_past));
                     struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, N, n_embd,
@@ -846,7 +846,7 @@ struct ggml_tensor * forward_lora(
                         Qcur,
                         0, 2, 1, 3);
 
-            // kv_self.k shape [n_embd * n_ctx * n_layer, 1] 
+            // kv_self.k shape [n_embd * n_ctx * n_layer, 1]
             // K shape [n_embd/n_head, n_past + N, n_head, 1]
             struct ggml_tensor * K =
                 ggml_permute(ctx0,
@@ -890,7 +890,7 @@ struct ggml_tensor * forward_lora(
             // KQV_merged = KQV.permute(0, 2, 1, 3)
             // KQV_merged shape [n_embd/n_head, n_head, N, 1]
             struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
-            // KQV_merged shape 
+            // KQV_merged shape
 
             // cur = KQV_merged.contiguous().view(n_embd, N)
             // cur shape [n_embd,N,1,1]
@@ -974,10 +974,10 @@ struct ggml_tensor * forward_lora(
 
     // lm_head
     // inpL shape [n_vocab,N,1,1]
-    inpL = ggml_mul_mat(ctx0, 
-                model->outputa, 
-                    ggml_mul_mat(ctx0, 
-                        model->outputb, 
+    inpL = ggml_mul_mat(ctx0,
+                model->outputa,
+                    ggml_mul_mat(ctx0,
+                        model->outputb,
                         inpL));
 
     // ggml_set_scratch(ctx0, { 0, 0, nullptr, });
@@ -1094,12 +1094,12 @@ struct ggml_tensor * square_error_loss(struct ggml_context * ctx, struct ggml_te
 
 struct ggml_tensor * cross_entropy_loss(struct ggml_context * ctx, struct ggml_tensor * a, struct ggml_tensor * b) {
     const float eps = 1e-3;
-    return 
-        ggml_sum(ctx, 
-            ggml_neg(ctx, 
-                ggml_sum_rows(ctx, 
-                    ggml_mul(ctx, 
-                        ggml_soft_max(ctx, a), 
+    return
+        ggml_sum(ctx,
+            ggml_neg(ctx,
+                ggml_sum_rows(ctx,
+                    ggml_mul(ctx,
+                        ggml_soft_max(ctx, a),
                         ggml_log(ctx,
                             ggml_add1(ctx,
                                 ggml_soft_max(ctx, b),
@@ -1169,7 +1169,7 @@ int main(int argc, char ** argv) {
 */
 
     // key + value cache for the self attention
-    struct llama_kv_cache kv_self;    
+    struct llama_kv_cache kv_self;
     printf("init_kv_cache\n");
     kv_self.ctx = model.ctx;
     init_kv_cache(&kv_self, &model);
@@ -1221,17 +1221,17 @@ int main(int argc, char ** argv) {
         struct ggml_tensor * logits2 = forward(&model, &kv_self, ctx0, &gf, tokens_input2, n_tokens, n_past);
         // struct ggml_tensor * logits3 = forward(&model, &kv_self, ctx0, &gf, tokens_input3, n_tokens, n_past);
         // struct ggml_tensor * logits4 = forward(&model, &kv_self, ctx0, &gf, tokens_input4, n_tokens, n_past);
-        
+
         // struct ggml_tensor * e = cross_entropy_loss(ctx0, targets1, logits1);
         // struct ggml_tensor * e = square_error_loss(ctx0, targets1, logits1);
-        
+
         struct ggml_tensor * e = ggml_add(ctx0,
                 square_error_loss(ctx0, targets1, logits1),
                 square_error_loss(ctx0, targets2, logits2));
         // struct ggml_tensor * e = ggml_add(ctx0,
         //         cross_entropy_loss(ctx0, targets1, logits1),
         //         cross_entropy_loss(ctx0, targets2, logits2));
-        // struct ggml_tensor * e = ggml_add(ctx0, 
+        // struct ggml_tensor * e = ggml_add(ctx0,
         //     ggml_add(ctx0,
         //         cross_entropy_loss(ctx0, targets1, logits1),
         //         cross_entropy_loss(ctx0, targets2, logits2)),
@@ -1260,7 +1260,7 @@ int main(int argc, char ** argv) {
         opt_params_lbfgs.lbfgs.n_iter = 16;
         // ggml_opt(ctx0, opt_params_adam, e);
         ggml_opt(ctx0, opt_params_lbfgs, e);
-        // 
+        //
         ggml_build_forward_expand(&gf, e);
         ggml_graph_compute(ctx0, &gf);
 
@@ -1292,7 +1292,7 @@ int main(int argc, char ** argv) {
 
         struct ggml_tensor * tokens_input = ggml_new_tensor_1d(model.ctx, GGML_TYPE_I32, n_tokens);
         struct ggml_tensor * targets      = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, n_vocab, n_tokens);
-        
+
         get_example_targets(137, tokens_input, targets);
         for (int i=sample_ctx; i<n_tokens; ++i) {
             ggml_set_i32_1d(tokens_input, i, n_vocab/2);
@@ -1327,14 +1327,14 @@ int main(int argc, char ** argv) {
 
             // int sample_at = n_tokens-1;
             int token = ggml_get_i32_1d(best_samples, sample_ctx-1);
-            
+
             // print_row(probs, sample_at);
             print_token(token, n_vocab);
 
             lshift_examples(tokens_input, targets, 1);
             ggml_set_i32_1d(tokens_input, 0, 0);
             ggml_set_i32_1d(tokens_input, sample_ctx-1, token);
-            
+
             // printf("---\n");
             // for (int i=0; i<sample_ctx-1; ++i) {
             //     print_token(ggml_get_i32_1d(tokens_input, i), model.hparams.n_vocab);
@@ -1350,7 +1350,7 @@ int main(int argc, char ** argv) {
         }
         printf("important (dont optimize it away, compiler!) : %d\n", important_sum);
     }
-    
+
     print_matrix(model.tok_embeddings);
 
     printf("done\n");
