@@ -6743,7 +6743,7 @@ struct ggml_tensor * ggml_diag_mask_zero_impl(
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
     struct ggml_tensor * b = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 2);
-    ggml_set_name(b, "n_past", "inplace");
+    ggml_set_name(b, "n_past, inplace");
     ((int32_t *) b->data)[0] = n_past;
     ((int32_t *) b->data)[1] = inplace ? 1 : 0;
 
