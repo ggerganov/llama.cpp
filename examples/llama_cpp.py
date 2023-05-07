@@ -157,7 +157,7 @@ _lib.llama_context_default_params.argtypes = []
 _lib.llama_context_default_params.restype = llama_context_params
 
 
-def llama_mmap_supported() -> c_bool:
+def llama_mmap_supported() -> bool:
     return _lib.llama_mmap_supported()
 
 
@@ -165,7 +165,7 @@ _lib.llama_mmap_supported.argtypes = []
 _lib.llama_mmap_supported.restype = c_bool
 
 
-def llama_mlock_supported() -> c_bool:
+def llama_mlock_supported() -> bool:
     return _lib.llama_mlock_supported()
 
 
@@ -387,7 +387,9 @@ _lib.llama_n_embd.restype = c_int
 # Can be mutated in order to change the probabilities of the next token
 # Rows: n_tokens
 # Cols: n_vocab
-def llama_get_logits(ctx: llama_context_p):  # type: (...) -> Array[float] # type: ignore
+def llama_get_logits(
+    ctx: llama_context_p,
+):  # type: (...) -> Array[float] # type: ignore
     return _lib.llama_get_logits(ctx)
 
 
@@ -397,7 +399,9 @@ _lib.llama_get_logits.restype = c_float_p
 
 # Get the embeddings for the input
 # shape: [n_embd] (1-dimensional)
-def llama_get_embeddings(ctx: llama_context_p):  # type: (...) -> Array[float] # type: ignore
+def llama_get_embeddings(
+    ctx: llama_context_p,
+):  # type: (...) -> Array[float] # type: ignore
     return _lib.llama_get_embeddings(ctx)
 
 
