@@ -120,7 +120,7 @@ jobs:
           make
 
   macOS-latest-cmake:
-    runs-on: macOS-latest
+    runs-on: macos-latest
 
     steps:
       - name: Clone
@@ -148,21 +148,63 @@ jobs:
 
   windows-latest-cmake:
     runs-on: windows-latest
+    env:
+      OPENBLAS_VERSION: 0.3.23
+      OPENCL_VERSION: 2023.04.17
+      CLBLAST_VERSION: 1.5.3
 
     strategy:
       matrix:
         include:
-         - build: 'avx2'
-           defines: ''
-         - build: 'avx'
-           defines: '-DLLAMA_AVX2=OFF'
-         - build: 'avx512'
-           defines: '-DLLAMA_AVX512=ON -DBUILD_SHARED_LIBS=ON'
+          - build: 'avx2'
+            defines: ''
+          - build: 'avx'
+            defines: '-DLLAMA_AVX2=OFF'
+          - build: 'avx512'
+            defines: '-DLLAMA_AVX512=ON -DBUILD_SHARED_LIBS=ON'
+          - build: 'clblast'
+            defines: '-DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH="$env:RUNNER_TEMP/clblast"'
+          - build: 'openblas'
+            defines: '-DLLAMA_OPENBLAS=ON -DBLAS_LIBRARIES="/LIBPATH:$env:RUNNER_TEMP/openblas/lib" -DOPENBLAS_INC="$env:RUNNER_TEMP/openblas/include"'
 
     steps:
       - name: Clone
         id: checkout
         uses: actions/checkout@v1
+
+      - name: Download OpenCL SDK
+        id: get_opencl
+        if: ${{ matrix.build == 'clblast' }}
+        run: |
+          curl.exe -o $env:RUNNER_TEMP/opencl.zip -L "https://github.com/KhronosGroup/OpenCL-SDK/releases/download/v${env:OPENCL_VERSION}/OpenCL-SDK-v${env:OPENCL_VERSION}-Win-x64.zip"
+          mkdir $env:RUNNER_TEMP/opencl
+          tar.exe -xvf $env:RUNNER_TEMP/opencl.zip --strip-components=1 -C $env:RUNNER_TEMP/opencl
+
+      - name: Download CLBlast
+        id: get_clblast
+        if: ${{ matrix.build == 'clblast' }}
+        run: |
+          curl.exe -o $env:RUNNER_TEMP/clblast.zip -L "https://github.com/CNugteren/CLBlast/releases/download/${env:CLBLAST_VERSION}/CLBlast-${env:CLBLAST_VERSION}-Windows-x64.zip"
+          curl.exe -o $env:RUNNER_TEMP/CLBlast.LICENSE.txt -L "https://github.com/CNugteren/CLBlast/raw/${env:CLBLAST_VERSION}/LICENSE"
+          mkdir $env:RUNNER_TEMP/clblast
+          tar.exe -xvf $env:RUNNER_TEMP/clblast.zip -C $env:RUNNER_TEMP/clblast
+          foreach ($f in (gci -Recurse -Path "$env:RUNNER_TEMP/clblast" -Filter '*.cmake')) {
+            $txt = Get-Content -Path $f -Raw
+            $txt.Replace('C:/dependencies/opencl/', "$($env:RUNNER_TEMP.Replace('\','/'))/opencl/") | Set-Content -Path $f -Encoding UTF8
+          }
+
+      - name: Download OpenBLAS
+        id: get_openblas
+        if: ${{ matrix.build == 'openblas' }}
+        run: |
+          curl.exe -o $env:RUNNER_TEMP/openblas.zip -L "https://github.com/xianyi/OpenBLAS/releases/download/v${env:OPENBLAS_VERSION}/OpenBLAS-${env:OPENBLAS_VERSION}-x64.zip"
+          curl.exe -o $env:RUNNER_TEMP/OpenBLAS.LICENSE.txt -L "https://github.com/xianyi/OpenBLAS/raw/v${env:OPENBLAS_VERSION}/LICENSE"
+          mkdir $env:RUNNER_TEMP/openblas
+          tar.exe -xvf $env:RUNNER_TEMP/openblas.zip -C $env:RUNNER_TEMP/openblas
+          $vcdir = $(vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
+          $msvc = $(join-path $vcdir $('VC\Tools\MSVC\'+$(gc -raw $(join-path $vcdir 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt')).Trim()))
+          $lib =  $(join-path $msvc 'bin\Hostx64\x64\lib.exe')
+          & $lib /machine:x64 "/def:${env:RUNNER_TEMP}/openblas/lib/libopenblas.def" "/out:${env:RUNNER_TEMP}/openblas/lib/openblas.lib" /name:openblas.dll
 
       - name: Build
         id: cmake_build
@@ -171,6 +213,21 @@ jobs:
           cd build
           cmake .. ${{ matrix.defines }}
           cmake --build . --config Release
+          cp ../LICENSE ./bin/Release/llama.cpp.txt
+
+      - name: Add clblast.dll
+        id: add_clblast_dll
+        if: ${{ matrix.build == 'clblast' }}
+        run: |
+          cp $env:RUNNER_TEMP/clblast/lib/clblast.dll ./build/bin/Release
+          cp $env:RUNNER_TEMP/CLBlast.LICENSE.txt ./build/bin/Release/CLBlast-${env:CLBLAST_VERSION}.txt
+
+      - name: Add libopenblas.dll
+        id: add_libopenblas_dll
+        if: ${{ matrix.build == 'openblas' }}
+        run: |
+          cp $env:RUNNER_TEMP/openblas/bin/libopenblas.dll ./build/bin/Release/openblas.dll
+          cp $env:RUNNER_TEMP/OpenBLAS.LICENSE.txt ./build/bin/Release/OpenBLAS-${env:OPENBLAS_VERSION}.txt
 
       - name: Check AVX512F support
         id: check_avx512f
@@ -187,7 +244,7 @@ jobs:
 
       - name: Test
         id: cmake_test
-        if: ${{ matrix.build != 'avx512' || env.HAS_AVX512F == '1' }} # Test AVX-512 only when possible
+        if: ${{ matrix.build != 'clblast' && (matrix.build != 'avx512' || env.HAS_AVX512F == '1') }} # Test AVX-512 only when possible
         run: |
           cd build
           ctest -C Release --verbose
