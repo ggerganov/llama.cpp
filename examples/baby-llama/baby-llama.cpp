@@ -1062,7 +1062,7 @@ void get_example_targets(int example_id, struct ggml_tensor * tokens_input, stru
     ggml_set_f32(targets, -1.0f);
     ggml_set_i32_1d(tokens_input, 0, 0);
     for (int i=1; i<n_tokens+1; ++i) {
-        float x = example_id + i * 3.14159f * 2.0f * 1.0f / n_tokens;
+        float x = example_id + i * 3.14159f * 2.0f * 1.0f * 0.5f / n_tokens;
         float y = sinf(x);//*cosf(x*1.1f+1.0f);
         float z = (y+1.0f)*0.5f; // scale to [0..1]
         z += (frand()-0.5f)*(randomness/n_vocab);
@@ -1113,12 +1113,12 @@ int main(int argc, char ** argv) {
 
     struct llama_model model;
     model.hparams.n_vocab = 8;
-    model.hparams.n_ctx   = 32;
+    model.hparams.n_ctx   = 8;
     model.hparams.n_embd  = 32;
     model.hparams.n_mult  = 2;
     model.hparams.n_head  = 8;
-    model.hparams.n_layer = 8;
-    model.hparams.n_rot   = model.hparams.n_embd / model.hparams.n_head;
+    model.hparams.n_layer = 1;
+    model.hparams.n_rot   = MIN(16, model.hparams.n_embd / model.hparams.n_head);
 
     // model.hparams.n_embd  = 32;
     // model.hparams.n_mult  = 2;
@@ -1177,7 +1177,7 @@ int main(int argc, char ** argv) {
     size_t    compute_size = 1024ll*1024ll*1024ll;
     uint8_t * compute_addr = new uint8_t[compute_size];
 
-    int n_examples = 128;
+    int n_examples = 256;
     int n_tokens = model.hparams.n_ctx;
     int n_vocab  = model.hparams.n_vocab;
 
@@ -1285,7 +1285,7 @@ int main(int argc, char ** argv) {
 
     {
         int n_gen = 128;
-        int sample_ctx = n_tokens/2-n_tokens/16;
+        int sample_ctx = n_tokens-n_tokens/8;
 
         printf("Generating %d tokens.\n", n_gen);
 
