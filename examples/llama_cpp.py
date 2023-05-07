@@ -260,7 +260,7 @@ _lib.llama_get_state_size.restype = c_size_t
 # Returns the number of bytes copied
 def llama_copy_state_data(
     ctx: llama_context_p, dest  # type: Array[c_uint8]
-) -> c_size_t:
+) -> int:
     return _lib.llama_copy_state_data(ctx, dest)
 
 
@@ -272,7 +272,7 @@ _lib.llama_copy_state_data.restype = c_size_t
 # Returns the number of bytes read
 def llama_set_state_data(
     ctx: llama_context_p, src  # type: Array[c_uint8]
-) -> c_size_t:
+) -> int:
     return _lib.llama_set_state_data(ctx, src)
 
 
