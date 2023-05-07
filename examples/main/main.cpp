@@ -5,6 +5,7 @@
 
 #include "common.h"
 #include "llama.h"
+#include "build-info.h"
 
 #include <cassert>
 #include <cinttypes>
@@ -21,6 +22,9 @@
 #include <signal.h>
 #include <unistd.h>
 #elif defined (_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
 #include <signal.h>
 #endif
 
@@ -81,11 +85,13 @@ int main(int argc, char ** argv) {
                 "expect poor results\n", __func__, params.n_ctx);
     }
 
-    if (params.seed <= 0) {
+    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
+
+    if (params.seed < 0) {
         params.seed = time(NULL);
     }
 
-    fprintf(stderr, "%s: seed = %d\n", __func__, params.seed);
+    fprintf(stderr, "%s: seed  = %d\n", __func__, params.seed);
 
     std::mt19937 rng(params.seed);
     if (params.random_prompt) {
@@ -98,34 +104,11 @@ int main(int argc, char ** argv) {
     llama_context * ctx;
     g_ctx = &ctx;
 
-    // load the model
-    {
-        auto lparams = llama_context_default_params();
-
-        lparams.n_ctx      = params.n_ctx;
-        lparams.n_parts    = params.n_parts;
-        lparams.seed       = params.seed;
-        lparams.f16_kv     = params.memory_f16;
-        lparams.use_mmap   = params.use_mmap;
-        lparams.use_mlock  = params.use_mlock;
-
-        ctx = llama_init_from_file(params.model.c_str(), lparams);
-
-        if (ctx == NULL) {
-            fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
-            return 1;
-        }
-    }
-
-    if (!params.lora_adapter.empty()) {
-        int err = llama_apply_lora_from_file(ctx,
-                                             params.lora_adapter.c_str(),
-                                             params.lora_base.empty() ? NULL : params.lora_base.c_str(),
-                                             params.n_threads);
-        if (err != 0) {
-            fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
-            return 1;
-        }
+    // load the model and apply lora adapter, if any
+    ctx = llama_init_from_gpt_params(params);
+    if (ctx == NULL) {
+        fprintf(stderr, "%s: error: unable to load model\n", __func__);
+        return 1;
     }
 
     // print system information
@@ -161,23 +144,22 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> session_tokens;
 
     if (!path_session.empty()) {
-        fprintf(stderr, "%s: attempting to load saved session from %s..\n", __func__, path_session.c_str());
+        fprintf(stderr, "%s: attempting to load saved session from '%s'\n", __func__, path_session.c_str());
 
-        // REVIEW - fopen to check for existing session
+        // fopen to check for existing session
         FILE * fp = std::fopen(path_session.c_str(), "rb");
         if (fp != NULL) {
             std::fclose(fp);
 
             session_tokens.resize(params.n_ctx);
             size_t n_token_count_out = 0;
-            const size_t n_session_bytes = llama_load_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.capacity(), &n_token_count_out);
+            if (!llama_load_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.capacity(), &n_token_count_out)) {
+                fprintf(stderr, "%s: error: failed to load session file '%s'\n", __func__, path_session.c_str());
+                return 1;
+            }
             session_tokens.resize(n_token_count_out);
 
-            if (n_session_bytes > 0) {
-                fprintf(stderr, "%s: loaded %zu bytes of session data!\n", __func__, n_session_bytes);
-            } else {
-                fprintf(stderr, "%s: could not load session file, will recreate\n", __func__);
-            }
+            fprintf(stderr, "%s: loaded a session with prompt size of %d tokens\n", __func__, (int) session_tokens.size());
         } else {
             fprintf(stderr, "%s: session file does not exist, will create\n", __func__);
         }
@@ -214,7 +196,7 @@ int main(int argc, char ** argv) {
     }
 
     // number of tokens to keep when resetting context
-    if (params.n_keep < 0 || params.n_keep > (int)embd_inp.size() || params.instruct) {
+    if (params.n_keep < 0 || params.n_keep > (int) embd_inp.size() || params.instruct) {
         params.n_keep = (int)embd_inp.size();
     }
 
@@ -261,7 +243,10 @@ int main(int argc, char ** argv) {
         sigint_action.sa_flags = 0;
         sigaction(SIGINT, &sigint_action, NULL);
 #elif defined (_WIN32)
-        signal(SIGINT, sigint_handler);
+        auto console_ctrl_handler = [](DWORD ctrl_type) -> BOOL {
+            return (ctrl_type == CTRL_C_EVENT) ? (sigint_handler(SIGINT), true) : false;
+        };
+        SetConsoleCtrlHandler(static_cast<PHANDLER_ROUTINE>(console_ctrl_handler), true);
 #endif
 
         fprintf(stderr, "%s: interactive mode on.\n", __func__);
@@ -274,6 +259,10 @@ int main(int argc, char ** argv) {
 
         if (!params.input_prefix.empty()) {
             fprintf(stderr, "Input prefix: '%s'\n", params.input_prefix.c_str());
+        }
+
+        if (!params.input_suffix.empty()) {
+            fprintf(stderr, "Input suffix: '%s'\n", params.input_suffix.c_str());
         }
     }
     fprintf(stderr, "sampling: repeat_last_n = %d, repeat_penalty = %f, presence_penalty = %f, frequency_penalty = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f, mirostat = %d, mirostat_lr = %f, mirostat_ent = %f\n",
@@ -296,7 +285,7 @@ int main(int argc, char ** argv) {
     }
 
     bool is_antiprompt = false;
-    bool input_noecho  = false;
+    bool input_echo    = true;
 
     // HACK - because session saving incurs a non-negligible delay, for now skip re-saving session
     // if we loaded a session with at least 75% similarity. It's currently just used to speed up the
@@ -304,9 +293,9 @@ int main(int argc, char ** argv) {
     bool need_to_save_session = !path_session.empty() && n_matching_session_tokens < (embd_inp.size() * 3 / 4);
 
 
-    int n_past     = 0;
-    int n_remain   = params.n_predict;
-    int n_consumed = 0;
+    int n_past             = 0;
+    int n_remain           = params.n_predict;
+    int n_consumed         = 0;
     int n_session_consumed = 0;
 
     // the first thing we will do is to output the prompt, so set color accordingly
@@ -329,7 +318,7 @@ int main(int argc, char ** argv) {
                 // insert n_left/2 tokens at the start of embd from last_n_tokens
                 embd.insert(embd.begin(), last_n_tokens.begin() + n_ctx - n_left/2 - embd.size(), last_n_tokens.end() - embd.size());
 
-                // REVIEW - stop saving session if we run out of context
+                // stop saving session if we run out of context
                 path_session = "";
 
                 //printf("\n---\n");
@@ -355,6 +344,7 @@ int main(int argc, char ** argv) {
                     n_session_consumed++;
 
                     if (n_session_consumed >= (int) session_tokens.size()) {
+                        ++i;
                         break;
                     }
                 }
@@ -410,7 +400,7 @@ int main(int argc, char ** argv) {
             llama_token id = 0;
 
             {
-                auto logits = llama_get_logits(ctx);
+                auto logits  = llama_get_logits(ctx);
                 auto n_vocab = llama_n_vocab(ctx);
 
                 // Apply params.logit_bias map
@@ -454,10 +444,10 @@ int main(int argc, char ** argv) {
                         id = llama_sample_token_mirostat_v2(ctx, &candidates_p, mirostat_tau, mirostat_eta, &mirostat_mu);
                     } else {
                         // Temperature sampling
-                        llama_sample_top_k(ctx, &candidates_p, top_k);
-                        llama_sample_tail_free(ctx, &candidates_p, tfs_z);
-                        llama_sample_typical(ctx, &candidates_p, typical_p);
-                        llama_sample_top_p(ctx, &candidates_p, top_p);
+                        llama_sample_top_k(ctx, &candidates_p, top_k, 1);
+                        llama_sample_tail_free(ctx, &candidates_p, tfs_z, 1);
+                        llama_sample_typical(ctx, &candidates_p, typical_p, 1);
+                        llama_sample_top_p(ctx, &candidates_p, top_p, 1);
                         llama_sample_temperature(ctx, &candidates_p, temp);
                         id = llama_sample_token(ctx, &candidates_p);
                     }
@@ -482,7 +472,7 @@ int main(int argc, char ** argv) {
             embd.push_back(id);
 
             // echo this to console
-            input_noecho = false;
+            input_echo = true;
 
             // decrement remaining sampling budget
             --n_remain;
@@ -500,14 +490,14 @@ int main(int argc, char ** argv) {
         }
 
         // display text
-        if (!input_noecho) {
+        if (input_echo) {
             for (auto id : embd) {
                 printf("%s", llama_token_to_str(ctx, id));
             }
             fflush(stdout);
         }
         // reset color to default if we there is no pending user input
-        if (!input_noecho && (int)embd_inp.size() == n_consumed) {
+        if (input_echo && (int)embd_inp.size() == n_consumed) {
             set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
         }
 
@@ -539,11 +529,6 @@ int main(int argc, char ** argv) {
                 // potentially set color to indicate we are taking user input
                 set_console_color(con_st, CONSOLE_COLOR_USER_INPUT);
 
-#if defined (_WIN32)
-                // Windows: must reactivate sigint handler after each signal
-                signal(SIGINT, sigint_handler);
-#endif
-
                 if (params.instruct) {
                     printf("\n> ");
                 }
@@ -570,12 +555,14 @@ int main(int argc, char ** argv) {
                         return 0;
                     }
 #endif
-                    if (line.empty() || line.back() != '\\') {
-                        another_line = false;
-                    } else {
-                        line.pop_back(); // Remove the continue character
+                    if (!line.empty()) {
+                        if (line.back() == '\\') {
+                            line.pop_back(); // Remove the continue character
+                        } else {
+                            another_line = false;
+                        }
+                        buffer += line + '\n'; // Append the line to the result
                     }
-                    buffer += line + '\n'; // Append the line to the result
                 } while (another_line);
 
                 // done taking input, reset color
@@ -584,6 +571,11 @@ int main(int argc, char ** argv) {
                 // Add tokens to embd only if the input buffer is non-empty
                 // Entering a empty line lets the user pass control back
                 if (buffer.length() > 1) {
+                    // append input suffix if any
+                    if (!params.input_suffix.empty()) {
+                        buffer += params.input_suffix;
+                        printf("%s", params.input_suffix.c_str());
+                    }
 
                     // instruct mode: insert instruction prefix
                     if (params.instruct && !is_antiprompt) {
@@ -602,7 +594,7 @@ int main(int argc, char ** argv) {
                     n_remain -= line_inp.size();
                 }
 
-                input_noecho = true; // do not echo this again
+                input_echo = false; // do not echo this again
             }
 
             if (n_past > 0) {
@@ -626,10 +618,6 @@ int main(int argc, char ** argv) {
             is_interacting = true;
         }
     }
-
-#if defined (_WIN32)
-    signal(SIGINT, SIG_DFL);
-#endif
 
     llama_print_timings(ctx);
     llama_free(ctx);

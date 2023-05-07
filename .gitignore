@@ -21,6 +21,7 @@ build-sanitize-addr/
 build-sanitize-thread/
 
 models/*
+*.bin
 
 /main
 /quantize
@@ -32,6 +33,7 @@ models/*
 /vdot
 /Pipfile
 
+build-info.h
 arm_neon.h
 compile_commands.json
 

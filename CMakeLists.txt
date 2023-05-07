@@ -73,6 +73,39 @@ option(LLAMA_BUILD_TESTS            "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES         "llama: build examples" ${LLAMA_STANDALONE})
 
 #
+# Build info header
+#
+
+# Generate initial build-info.h
+include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+    set(GIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+
+    # Is git submodule
+    if(NOT IS_DIRECTORY "${GIT_DIR}")
+        file(READ ${GIT_DIR} REAL_GIT_DIR_LINK)
+        string(REGEX REPLACE "gitdir: (.*)\n$" "\\1" REAL_GIT_DIR ${REAL_GIT_DIR_LINK})
+        set(GIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${REAL_GIT_DIR}")
+    endif()
+
+    # Add a custom target for build-info.h
+    add_custom_target(BUILD_INFO ALL DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h")
+
+    # Add a custom command to rebuild build-info.h when .git/index changes
+    add_custom_command(
+        OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h"
+        COMMENT "Generating build details from Git"
+        COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        DEPENDS "${GIT_DIR}/index"
+        VERBATIM
+    )
+else()
+    message(WARNING "Git repository not found; to enable automatic generation of build info, make sure Git is installed and the project is a Git repository.")
+endif()
+
+#
 # Compile flags
 #
 
@@ -324,8 +357,11 @@ elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$")
             add_compile_options(-mavx512vnni)
         endif()
     endif()
+elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "ppc64")
+    message(STATUS "PowerPC detected")
+    add_compile_options(-mcpu=native -mtune=native)
+    #TODO: Add  targets for Power8/Power9 (Altivec/VSX) and Power10(MMA) and query for big endian systems (ppc64/le/be)
 else()
-    # TODO: support PowerPC
     message(STATUS "Unknown architecture")
 endif()
 

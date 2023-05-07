@@ -135,16 +135,11 @@ inline static void* ggml_aligned_malloc(size_t size) {
 #define UNUSED(x) (void)(x)
 #define SWAP(x, y, T) do { T SWAP = x; x = y; y = SWAP; } while (0)
 
-#define GGML_ASSERT(x) \
-    do { \
-        if (!(x)) { \
-            fprintf(stderr, "GGML_ASSERT: %s:%d: %s\n", __FILE__, __LINE__, #x); \
-            abort(); \
-        } \
-    } while (0)
-
 #if defined(GGML_USE_ACCELERATE)
 #include <Accelerate/Accelerate.h>
+#if defined(GGML_USE_CLBLAST) // allow usage of CLBlast alongside Accelerate functions
+#include "ggml-opencl.h"
+#endif
 #elif defined(GGML_USE_OPENBLAS)
 #include <cblas.h>
 #elif defined(GGML_USE_CUBLAS)
@@ -188,7 +183,11 @@ typedef double ggml_float;
 #undef bool
 #define bool _Bool
 #else
+#if defined(_MSC_VER) || defined(__MINGW32__)
+#include <intrin.h>
+#else
 #include <immintrin.h>
+#endif
 #endif
 #endif
 
@@ -369,6 +368,32 @@ float ggml_fp16_to_fp32(ggml_fp16_t x) {
 ggml_fp16_t ggml_fp32_to_fp16(float x) {
     return GGML_FP32_TO_FP16(x);
 }
+
+void ggml_fp16_to_fp32_row(const ggml_fp16_t * x, float * y, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        y[i] = GGML_FP16_TO_FP32(x[i]);
+    }
+}
+
+void ggml_fp32_to_fp16_row(const float * x, ggml_fp16_t * y, size_t n) {
+    size_t i = 0;
+#if defined(__F16C__)
+    for (; i + 7 < n; i += 8) {
+        __m256 x_vec = _mm256_loadu_ps(x + i);
+        __m128i y_vec = _mm256_cvtps_ph(x_vec, _MM_FROUND_TO_NEAREST_INT);
+        _mm_storeu_si128((__m128i *)(y + i), y_vec);
+    }
+    for(; i + 3 < n; i += 4) {
+        __m128 x_vec = _mm_loadu_ps(x + i);
+        __m128i y_vec = _mm_cvtps_ph(x_vec, _MM_FROUND_TO_NEAREST_INT);
+        _mm_storel_epi64((__m128i *)(y + i), y_vec);
+    }
+#endif
+    for (; i < n; i++) {
+        y[i] = GGML_FP32_TO_FP16(x[i]);
+    }
+}
+
 
 //
 // timing
@@ -653,35 +678,91 @@ float vmaxvq_f32(float32x4_t v) {
 }
 
 int8x8_t vzip1_s8(int8x8_t a, int8x8_t b) {
-    return vget_low_s8(vcombine_s8(a, b));
+    int8x8_t res;
+
+    res[0] = a[0]; res[1] = b[0];
+    res[2] = a[1]; res[3] = b[1];
+    res[4] = a[2]; res[5] = b[2];
+    res[6] = a[3]; res[7] = b[3];
+
+    return res;
 }
 
 int8x8_t vzip2_s8(int8x8_t a, int8x8_t b) {
-    return vget_high_s8(vcombine_s8(a, b));
+    int8x8_t res;
+
+    res[0] = a[4]; res[1] = b[4];
+    res[2] = a[5]; res[3] = b[5];
+    res[4] = a[6]; res[5] = b[6];
+    res[6] = a[7]; res[7] = b[7];
+
+    return res;
 }
 
 uint8x8_t vzip1_u8(uint8x8_t a, uint8x8_t b) {
-    return vget_low_u8(vcombine_u8(a, b));
+    uint8x8_t res;
+
+    res[0] = a[0]; res[1] = b[0];
+    res[2] = a[1]; res[3] = b[1];
+    res[4] = a[2]; res[5] = b[2];
+    res[6] = a[3]; res[7] = b[3];
+
+    return res;
 }
 
 uint8x8_t vzip2_u8(uint8x8_t a, uint8x8_t b) {
-    return vget_high_u8(vcombine_u8(a, b));
+    uint8x8_t res;
+
+    res[0] = a[4]; res[1] = b[4];
+    res[2] = a[5]; res[3] = b[5];
+    res[4] = a[6]; res[5] = b[6];
+    res[6] = a[7]; res[7] = b[7];
+
+    return res;
 }
 
 int8x16_t vzip1q_s8(int8x16_t a, int8x16_t b) {
-    return vcombine_s8(vget_low_s8(a), vget_low_s8(b));
+    int8x16_t res;
+
+    res[0]  = a[0]; res[1]  = b[0]; res[2]  = a[1]; res[3]  = b[1];
+    res[4]  = a[2]; res[5]  = b[2]; res[6]  = a[3]; res[7]  = b[3];
+    res[8]  = a[4]; res[9]  = b[4]; res[10] = a[5]; res[11] = b[5];
+    res[12] = a[6]; res[13] = b[6]; res[14] = a[7]; res[15] = b[7];
+
+    return res;
 }
 
 int8x16_t vzip2q_s8(int8x16_t a, int8x16_t b) {
-    return vcombine_s8(vget_high_s8(a), vget_high_s8(b));
+    int8x16_t res;
+
+    res[0]  = a[8];  res[1]  = b[8];  res[2]  = a[9];  res[3]  = b[9];
+    res[4]  = a[10]; res[5]  = b[10]; res[6]  = a[11]; res[7]  = b[11];
+    res[8]  = a[12]; res[9]  = b[12]; res[10] = a[13]; res[11] = b[13];
+    res[12] = a[14]; res[13] = b[14]; res[14] = a[15]; res[15] = b[15];
+
+    return res;
 }
 
 uint8x16_t vzip1q_u8(uint8x16_t a, uint8x16_t b) {
-    return vcombine_u8(vget_low_u8(a), vget_low_u8(b));
+    uint8x16_t res;
+
+    res[0]  = a[0];  res[1]  = b[0];  res[2]  = a[1];  res[3]  = b[1];
+    res[4]  = a[2];  res[5]  = b[2];  res[6]  = a[3];  res[7]  = b[3];
+    res[8]  = a[4];  res[9]  = b[4];  res[10] = a[5];  res[11] = b[5];
+    res[12] = a[6];  res[13] = b[6];  res[14] = a[7];  res[15] = b[7];
+
+    return res;
 }
 
 uint8x16_t vzip2q_u8(uint8x16_t a, uint8x16_t b) {
-    return vcombine_u8(vget_high_u8(a), vget_high_u8(b));
+    uint8x16_t res;
+
+    res[0]  = a[8];  res[1]  = b[8];  res[2]  = a[9];  res[3]  = b[9];
+    res[4]  = a[10]; res[5]  = b[10]; res[6]  = a[11]; res[7]  = b[11];
+    res[8]  = a[12]; res[9]  = b[12]; res[10] = a[13]; res[11] = b[13];
+    res[12] = a[14]; res[13] = b[14]; res[14] = a[15]; res[15] = b[15];
+
+    return res;
 }
 
 int32x4_t vcvtnq_s32_f32(float32x4_t v) {
@@ -808,6 +889,7 @@ static void quantize_row_q4_0(const float * restrict x, void * restrict vy, int 
         float max = 0.0f;
         float min = 0.0f;
 
+        vector float asrcv [8];
         vector float srcv [8];
         vector float maxv[8];
         vector float minv[8];
@@ -1434,15 +1516,135 @@ static void quantize_row_q8_0_reference(const float * restrict x, block_q8_0 * r
 }
 
 static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int k) {
+    assert(QK8_0 == 32);
     assert(k % QK8_0 == 0);
+    const int nb = k / QK8_0;
 
     block_q8_0 * restrict y = vy;
 
+#if defined(__ARM_NEON)
+    for (int i = 0; i < nb; i++) {
+        float32x4_t srcv [8];
+        float32x4_t asrcv[8];
+        float32x4_t amaxv[8];
+
+        for (int l = 0; l < 8; l++) srcv[l]  = vld1q_f32(x + i*32 + 4*l);
+        for (int l = 0; l < 8; l++) asrcv[l] = vabsq_f32(srcv[l]);
+
+        for (int l = 0; l < 4; l++) amaxv[2*l] = vmaxq_f32(asrcv[2*l], asrcv[2*l+1]);
+        for (int l = 0; l < 2; l++) amaxv[4*l] = vmaxq_f32(amaxv[4*l], amaxv[4*l+2]);
+        for (int l = 0; l < 1; l++) amaxv[8*l] = vmaxq_f32(amaxv[8*l], amaxv[8*l+4]);
+
+        const float amax = vmaxvq_f32(amaxv[0]);
+
+        const float d = amax / ((1 << 7) - 1);
+        const float id = d ? 1.0f/d : 0.0f;
+
+        y[i].d = d;
+
+        for (int l = 0; l < 8; l++) {
+            const float32x4_t v  = vmulq_n_f32(srcv[l], id);
+            const int32x4_t   vi = vcvtnq_s32_f32(v);
+
+            y[i].qs[4*l + 0] = vgetq_lane_s32(vi, 0);
+            y[i].qs[4*l + 1] = vgetq_lane_s32(vi, 1);
+            y[i].qs[4*l + 2] = vgetq_lane_s32(vi, 2);
+            y[i].qs[4*l + 3] = vgetq_lane_s32(vi, 3);
+        }
+    }
+#elif defined(__AVX2__) || defined(__AVX__)
+    for (int i = 0; i < nb; i++) {
+        // Load elements into 4 AVX vectors
+        __m256 v0 = _mm256_loadu_ps( x );
+        __m256 v1 = _mm256_loadu_ps( x + 8 );
+        __m256 v2 = _mm256_loadu_ps( x + 16 );
+        __m256 v3 = _mm256_loadu_ps( x + 24 );
+        x += 32;
+
+        // Compute max(abs(e)) for the block
+        const __m256 signBit = _mm256_set1_ps( -0.0f );
+        __m256 maxAbs = _mm256_andnot_ps( signBit, v0 );
+        maxAbs = _mm256_max_ps( maxAbs, _mm256_andnot_ps( signBit, v1 ) );
+        maxAbs = _mm256_max_ps( maxAbs, _mm256_andnot_ps( signBit, v2 ) );
+        maxAbs = _mm256_max_ps( maxAbs, _mm256_andnot_ps( signBit, v3 ) );
+
+        __m128 max4 = _mm_max_ps( _mm256_extractf128_ps( maxAbs, 1 ), _mm256_castps256_ps128( maxAbs ) );
+        max4 = _mm_max_ps( max4, _mm_movehl_ps( max4, max4 ) );
+        max4 = _mm_max_ss( max4, _mm_movehdup_ps( max4 ) );
+        const float maxScalar = _mm_cvtss_f32( max4 );
+
+        // Quantize these floats
+        const float d = maxScalar / 127.f;
+        y[i].d = d;
+        const float id = ( maxScalar != 0.0f ) ? 127.f / maxScalar : 0.0f;
+        const __m256 mul = _mm256_set1_ps( id );
+
+        // Apply the multiplier
+        v0 = _mm256_mul_ps( v0, mul );
+        v1 = _mm256_mul_ps( v1, mul );
+        v2 = _mm256_mul_ps( v2, mul );
+        v3 = _mm256_mul_ps( v3, mul );
+
+        // Round to nearest integer
+        v0 = _mm256_round_ps( v0, _MM_ROUND_NEAREST );
+        v1 = _mm256_round_ps( v1, _MM_ROUND_NEAREST );
+        v2 = _mm256_round_ps( v2, _MM_ROUND_NEAREST );
+        v3 = _mm256_round_ps( v3, _MM_ROUND_NEAREST );
+
+        // Convert floats to integers
+        __m256i i0 = _mm256_cvtps_epi32( v0 );
+        __m256i i1 = _mm256_cvtps_epi32( v1 );
+        __m256i i2 = _mm256_cvtps_epi32( v2 );
+        __m256i i3 = _mm256_cvtps_epi32( v3 );
+
+#if defined(__AVX2__)
+        // Convert int32 to int16
+        i0 = _mm256_packs_epi32( i0, i1 );	// 0, 1, 2, 3,  8, 9, 10, 11,  4, 5, 6, 7, 12, 13, 14, 15
+        i2 = _mm256_packs_epi32( i2, i3 );	// 16, 17, 18, 19,  24, 25, 26, 27,  20, 21, 22, 23, 28, 29, 30, 31
+                                            // Convert int16 to int8
+        i0 = _mm256_packs_epi16( i0, i2 );	// 0, 1, 2, 3,  8, 9, 10, 11,  16, 17, 18, 19,  24, 25, 26, 27,  4, 5, 6, 7, 12, 13, 14, 15, 20, 21, 22, 23, 28, 29, 30, 31
+
+        // We got our precious signed bytes, but the order is now wrong
+        // These AVX2 pack instructions process 16-byte pieces independently
+        // The following instruction is fixing the order
+        const __m256i perm = _mm256_setr_epi32( 0, 4, 1, 5, 2, 6, 3, 7 );
+        i0 = _mm256_permutevar8x32_epi32( i0, perm );
+
+        _mm256_storeu_si256((__m256i *)y[i].qs, i0);
+#else
+        // Since we don't have in AVX some necessary functions,
+        // we split the registers in half and call AVX2 analogs from SSE
+        __m128i ni0 = _mm256_castsi256_si128( i0 );
+        __m128i ni1 = _mm256_extractf128_si256( i0, 1);
+        __m128i ni2 = _mm256_castsi256_si128( i1 );
+        __m128i ni3 = _mm256_extractf128_si256( i1, 1);
+        __m128i ni4 = _mm256_castsi256_si128( i2 );
+        __m128i ni5 = _mm256_extractf128_si256( i2, 1);
+        __m128i ni6 = _mm256_castsi256_si128( i3 );
+        __m128i ni7 = _mm256_extractf128_si256( i3, 1);
+
+        // Convert int32 to int16
+        ni0 = _mm_packs_epi32( ni0, ni1 );
+        ni2 = _mm_packs_epi32( ni2, ni3 );
+        ni4 = _mm_packs_epi32( ni4, ni5 );
+        ni6 = _mm_packs_epi32( ni6, ni7 );
+        // Convert int16 to int8
+        ni0 = _mm_packs_epi16( ni0, ni2 );
+        ni4 = _mm_packs_epi16( ni4, ni6 );
+
+        _mm_storeu_si128((__m128i *)(y[i].qs +  0), ni0);
+        _mm_storeu_si128((__m128i *)(y[i].qs + 16), ni4);
+#endif
+    }
+#else
+    // scalar
     quantize_row_q8_0_reference(x, y, k);
+#endif
 }
 
 // reference implementation for deterministic creation of model files
 static void quantize_row_q8_1_reference(const float * restrict x, block_q8_1 * restrict y, int k) {
+    assert(QK8_1 == 32);
     assert(k % QK8_1 == 0);
     const int nb = k / QK8_1;
 
@@ -4373,12 +4575,11 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
             GGML_PRINT_DEBUG("%s: g_state initialized in %f ms\n", __func__, (t_end - t_start)/1000.0f);
         }
 
-        // initialize cuBLAS
-        #if defined(GGML_USE_CUBLAS)
+#if defined(GGML_USE_CUBLAS)
         ggml_init_cublas();
-        #elif defined(GGML_USE_CLBLAST)
+#elif defined(GGML_USE_CLBLAST)
         ggml_cl_init();
-        #endif
+#endif
 
         is_first_call = false;
     }
@@ -4459,7 +4660,7 @@ void ggml_free(struct ggml_context * ctx) {
 }
 
 size_t ggml_used_mem(const struct ggml_context * ctx) {
-    return ctx->objects_end->offs + ctx->objects_end->size;
+    return ctx->objects_end == NULL ? 0 : ctx->objects_end->offs + ctx->objects_end->size;
 }
 
 size_t ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch) {
@@ -4572,6 +4773,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
         /*.perf_cycles  =*/ 0,
         /*.perf_time_us =*/ 0,
         /*.data         =*/ (data == NULL && !ctx->no_alloc) ? (void *)(result + 1) : data,
+        /*.name         =*/ { 0 },
         /*.pad          =*/ { 0 },
     };
 
@@ -4924,6 +5126,15 @@ void * ggml_get_data(const struct ggml_tensor * tensor) {
 float * ggml_get_data_f32(const struct ggml_tensor * tensor) {
     assert(tensor->type == GGML_TYPE_F32);
     return (float *)(tensor->data);
+}
+
+const char * ggml_get_name(const struct ggml_tensor * tensor) {
+    return tensor->name;
+}
+
+void ggml_set_name(struct ggml_tensor * tensor, const char * name) {
+    strncpy(tensor->name, name, sizeof(tensor->name));
+    tensor->name[sizeof(tensor->name) - 1] = '\0';
 }
 
 struct ggml_tensor * ggml_view_tensor(
@@ -6532,6 +6743,7 @@ struct ggml_tensor * ggml_diag_mask_zero_impl(
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
     struct ggml_tensor * b = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 2);
+    ggml_set_name(b, "n_past", "inplace");
     ((int32_t *) b->data)[0] = n_past;
     ((int32_t *) b->data)[1] = inplace ? 1 : 0;
 
@@ -6662,6 +6874,7 @@ struct ggml_tensor * ggml_rope_back(
     ((int32_t *) b->data)[0] = n_past;
     ((int32_t *) b->data)[1] = n_dims;
     ((int32_t *) b->data)[2] = mode;
+    ggml_set_name(b, "n_past, n_dims, mode");
 
     result->op   = GGML_OP_ROPE_BACK;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -9761,7 +9974,7 @@ static void ggml_compute_forward_rms_norm_back(
 
 // ggml_compute_forward_mul_mat
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
 // helper function to determine if it is better to use BLAS or not
 // for large matrices, BLAS is faster
 static bool ggml_compute_forward_mul_mat_use_blas(
@@ -9777,12 +9990,9 @@ static bool ggml_compute_forward_mul_mat_use_blas(
     const int64_t ne1 = dst->ne[1];
 
     // TODO: find the optimal values for these
-    if (
-#if !defined(GGML_USE_CUBLAS)
-        ggml_is_contiguous(src0) &&
+    if (ggml_is_contiguous(src0) &&
         ggml_is_contiguous(src1) &&
-#endif
-        ((ne0 >= 32 && ne1 >= 32 && ne10 >= 32))) {
+        (ne0 >= 32 && ne1 >= 32 && ne10 >= 32)) {
 
         /*printf("BLAS: %d %d %d %d %d\n", ne0, ne1, ne10, ne00, ne01);*/
         return true;
@@ -9790,7 +10000,6 @@ static bool ggml_compute_forward_mul_mat_use_blas(
 
     return false;
 }
-
 #endif
 
 static void ggml_compute_forward_mul_mat_f32(
@@ -9806,7 +10015,7 @@ static void ggml_compute_forward_mul_mat_f32(
     const int64_t ne02 = src0->ne[2];
     const int64_t ne03 = src0->ne[3];
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
     const int64_t ne10 = src1->ne[0];
 #endif
     const int64_t ne11 = src1->ne[1];
@@ -9863,7 +10072,16 @@ static void ggml_compute_forward_mul_mat_f32(
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_CUBLAS)
+    if (ggml_cuda_can_mul_mat(src0, src1, dst)) {
+        if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
+            ggml_cuda_mul_mat(src0, src1, dst, params->wdata, params->wsize);
+        }
+        return;
+    }
+#endif
+
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
     if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
         if (params->ith != 0) {
             return;
@@ -9877,43 +10095,13 @@ static void ggml_compute_forward_mul_mat_f32(
             return;
         }
 
-#if defined(GGML_USE_CUBLAS)
-        const float alpha = 1.0f;
-        const float beta = 0.0f;
-        const int x_ne = ne01 * ne00;
-        const int y_ne = ne11 * ne10;
-        const int d_ne = ne11 * ne01;
-
-        size_t x_size, y_size, d_size;
-        float *d_X = ggml_cuda_pool_malloc(sizeof(float) * x_ne, &x_size);
-        float *d_Y = ggml_cuda_pool_malloc(sizeof(float) * y_ne, &y_size);
-        float *d_D = ggml_cuda_pool_malloc(sizeof(float) * d_ne, &d_size);
-#endif
-
         for (int64_t i03 = 0; i03 < ne03; i03++) {
             for (int64_t i02 = 0; i02 < ne02; i02++) {
-#if !defined(GGML_USE_CUBLAS)
                 const float * x = (float *) ((char *) src0->data + i02*nb02 + i03*nb03);
                 const float * y = (float *) ((char *) src1->data + i02*nb12 + i03*nb13);
-#endif
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
-#if defined(GGML_USE_CUBLAS)
-                // copy data to device
-                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_X, src0, i03, i02, g_cudaStream));
-                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_Y, src1, i03, i02, g_cudaStream));
-
-                // compute
-                CUBLAS_CHECK(
-                    cublasSgemm(g_cublasH, CUBLAS_OP_T, CUBLAS_OP_N,
-                            ne01, ne11, ne10,
-                            &alpha, d_X, ne00,
-                                    d_Y, ne10,
-                            &beta,  d_D, ne01));
-
-                // copy data to host
-                CUDA_CHECK(cudaMemcpyAsync(d, d_D, sizeof(float) * d_ne, cudaMemcpyDeviceToHost, g_cudaStream));
-#elif defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_CLBLAST)
                 // zT = y * xT
                 ggml_cl_sgemm_wrapper(GGML_BLAS_ORDER_ROW_MAJOR, GGML_BLAS_OP_N, GGML_BLAS_OP_T,
                         ne11, ne01, ne10,
@@ -9930,12 +10118,6 @@ static void ggml_compute_forward_mul_mat_f32(
 #endif
             }
         }
-#if defined(GGML_USE_CUBLAS)
-        CUDA_CHECK(cudaStreamSynchronize(g_cudaStream));
-        ggml_cuda_pool_free(d_X, x_size);
-        ggml_cuda_pool_free(d_Y, y_size);
-        ggml_cuda_pool_free(d_D, d_size);
-#endif
         //printf("CBLAS F32 = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);
 
         return;
@@ -10065,7 +10247,16 @@ static void ggml_compute_forward_mul_mat_f16_f32(
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_CUBLAS)
+    if (ggml_cuda_can_mul_mat(src0, src1, dst)) {
+        if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
+            ggml_cuda_mul_mat(src0, src1, dst, params->wdata, params->wsize);
+        }
+        return;
+    }
+#endif
+
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
     if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
         GGML_ASSERT(nb10 == sizeof(float));
 
@@ -10081,37 +10272,8 @@ static void ggml_compute_forward_mul_mat_f16_f32(
             return;
         }
 
-#if defined(GGML_USE_CUBLAS)
-        const float alpha = 1.0f;
-        const float beta = 0.0f;
-        const int x_ne = ne01 * ne00;
-        const int y_ne = ne11 * ne10;
-        const int d_ne = ne11 * ne01;
-
-        size_t x_size, y_size, d_size;
-        ggml_fp16_t * d_X = ggml_cuda_pool_malloc(sizeof(float) * x_ne, &x_size);
-        ggml_fp16_t * d_Y = ggml_cuda_pool_malloc(sizeof(float) * y_ne, &y_size);
-        float       * d_D = ggml_cuda_pool_malloc(sizeof(float) * d_ne, &d_size);
-#endif
         for (int64_t i03 = 0; i03 < ne03; i03++) {
             for (int64_t i02 = 0; i02 < ne02; i02++) {
-#if defined(GGML_USE_CUBLAS)
-                // copy src0 while converting src1
-                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_X, src0, i03, i02, g_cudaStream));
-
-                // with cuBlAS, instead of converting src0 to fp32, we convert src1 to fp16
-                ggml_fp16_t * const wdata = (ggml_fp16_t *) params->wdata + (ne11 * ne10) * (i03 * ne02 + i02);
-                {
-                    size_t id = 0;
-                    for (int64_t i01 = 0; i01 < ne11; ++i01) {
-                        for (int64_t i00 = 0; i00 < ne10; ++i00) {
-                            wdata[id++] = GGML_FP32_TO_FP16(*(float *) ((char *) src1->data + i03*nb13 + i02*nb12 + i01*nb11 + i00*nb10));
-                        }
-                    }
-
-                    assert(id*sizeof(ggml_fp16_t) <= params->wsize);
-                }
-#else
                 float * const wdata = params->wdata;
                 {
                     size_t id = 0;
@@ -10123,28 +10285,8 @@ static void ggml_compute_forward_mul_mat_f16_f32(
 
                     assert(id*sizeof(float) <= params->wsize);
                 }
-#endif
 
-#if defined(GGML_USE_CUBLAS)
-                const ggml_fp16_t * y = (ggml_fp16_t *) wdata;
-                float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
-
-                // copy data to device
-                CUDA_CHECK(cudaMemcpyAsync(d_Y, y, sizeof(ggml_fp16_t) * y_ne, cudaMemcpyHostToDevice, g_cudaStream));
-
-                // compute
-                CUBLAS_CHECK(
-                    cublasGemmEx(g_cublasH, CUBLAS_OP_T, CUBLAS_OP_N,
-                            ne01, ne11, ne10,
-                            &alpha, d_X, CUDA_R_16F, ne00,
-                                    d_Y, CUDA_R_16F, ne10,
-                            &beta,  d_D, CUDA_R_32F, ne01,
-                            CUBLAS_COMPUTE_32F,
-                            CUBLAS_GEMM_DEFAULT));
-
-                // copy data to host
-                CUDA_CHECK(cudaMemcpyAsync(d, d_D, sizeof(float) * d_ne, cudaMemcpyDeviceToHost, g_cudaStream));
-#elif defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_CLBLAST)
                 const float * x = wdata;
                 const float * y = (float *) ((char *) src1->data + i02*nb12 + i03*nb13);
 
@@ -10173,12 +10315,6 @@ static void ggml_compute_forward_mul_mat_f16_f32(
             }
         }
 
-#if defined(GGML_USE_CUBLAS)
-        CUDA_CHECK(cudaStreamSynchronize(g_cudaStream));
-        ggml_cuda_pool_free(d_X, x_size);
-        ggml_cuda_pool_free(d_Y, y_size);
-        ggml_cuda_pool_free(d_D, d_size);
-#endif
         /*printf("CBLAS F16 = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);*/
 
         return;
@@ -10331,7 +10467,16 @@ static void ggml_compute_forward_mul_mat_q_f32(
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_CUBLAS)
+    if (ggml_cuda_can_mul_mat(src0, src1, dst)) {
+        if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
+            ggml_cuda_mul_mat(src0, src1, dst, params->wdata, params->wsize);
+        }
+        return;
+    }
+#endif
+
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
     if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
         if (params->ith != 0) {
             return;
@@ -10345,25 +10490,8 @@ static void ggml_compute_forward_mul_mat_q_f32(
             return;
         }
 
-#if defined(GGML_USE_CUBLAS)
-        const float alpha = 1.0f;
-        const float beta = 0.0f;
-        const int x_ne = ne01 * ne00;
-        const int y_ne = ne11 * ne10;
-        const int d_ne = ne11 * ne01;
-
-        size_t x_size, y_size, d_size, q_size;
-        float * d_X = ggml_cuda_pool_malloc(sizeof(float) * x_ne, &x_size);
-        float * d_Y = ggml_cuda_pool_malloc(sizeof(float) * y_ne, &y_size);
-        float * d_D = ggml_cuda_pool_malloc(sizeof(float) * d_ne, &d_size);
-        void  * d_Q = ggml_cuda_pool_malloc(GGML_TYPE_SIZE[type] * x_ne / GGML_BLCK_SIZE[type], &q_size);
-
-        const dequantize_row_q_cuda_t dequantize_row_q_cuda = ggml_get_dequantize_row_q_cuda(type);
-        GGML_ASSERT(dequantize_row_q_cuda != NULL);
-#else
         float * const wdata = params->wdata;
         dequantize_row_q_t const dequantize_row_q = quantize_fns[type].dequantize_row_q;
-#endif
 
         for (int64_t i03 = 0; i03 < ne03; i03++) {
             for (int64_t i02 = 0; i02 < ne02; i02++) {
@@ -10371,14 +10499,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
 
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
-#if defined(GGML_USE_CUBLAS)
-                // copy and dequantize on device
-                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_Q, src0, i03, i02, g_cudaStream2));
-
-                dequantize_row_q_cuda(d_Q, d_X, x_ne, g_cudaStream2);
-                CUDA_CHECK(cudaGetLastError());
-                CUDA_CHECK(cudaEventRecord(g_cudaEvent, g_cudaStream2));
-#elif defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_CLBLAST)
                 const void* x = (char *) src0->data + i03*nb03 + i02*nb02;
 #else
                 {
@@ -10394,24 +10515,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
                 const float * x = wdata;
 #endif
 
-#if defined(GGML_USE_CUBLAS)
-                // copy data to device
-                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_Y, src1, i03, i02, g_cudaStream));
-
-                // wait for dequantization
-                CUDA_CHECK(cudaStreamWaitEvent(g_cudaStream, g_cudaEvent, 0));
-
-                // compute
-                CUBLAS_CHECK(
-                    cublasSgemm(g_cublasH, CUBLAS_OP_T, CUBLAS_OP_N,
-                            ne01, ne11, ne10,
-                            &alpha, d_X, ne00,
-                                    d_Y, ne10,
-                            &beta,  d_D, ne01));
-
-                // copy data to host
-                CUDA_CHECK(cudaMemcpyAsync(d, d_D, sizeof(float) * d_ne, cudaMemcpyDeviceToHost, g_cudaStream));
-#elif defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_CLBLAST)
                 // zT = y * xT
                 ggml_cl_sgemm_wrapper(GGML_BLAS_ORDER_ROW_MAJOR, GGML_BLAS_OP_N, GGML_BLAS_OP_T,
                         ne11, ne01, ne10,
@@ -10429,13 +10533,6 @@ static void ggml_compute_forward_mul_mat_q_f32(
             }
         }
 
-#if defined(GGML_USE_CUBLAS)
-        CUDA_CHECK(cudaStreamSynchronize(g_cudaStream));
-        ggml_cuda_pool_free(d_X, x_size);
-        ggml_cuda_pool_free(d_Y, y_size);
-        ggml_cuda_pool_free(d_D, d_size);
-        ggml_cuda_pool_free(d_Q, q_size);
-#endif
         //printf("CBLAS = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);
 
         return;
@@ -14456,18 +14553,21 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
 
                         size_t cur = 0;
 
+#if defined(GGML_USE_CUBLAS)
+                        if (ggml_cuda_can_mul_mat(node->src0, node->src1, node)) {
+                            node->n_tasks = 1; // TODO: this actually is doing nothing
+                                                //       the threads are still spinning
+                            cur = ggml_cuda_mul_mat_get_wsize(node->src0, node->src1, node);
+                        }
+                        else
+#endif
                         if (node->src0->type == GGML_TYPE_F16 && node->src1->type == GGML_TYPE_F32) {
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
                             if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
                                 node->n_tasks = 1; // TODO: this actually is doing nothing
                                                    //       the threads are still spinning
-#if defined(GGML_USE_CUBLAS)
-                                // with cuBLAS, we need memory for the full 3D / 4D data of src1
-                                cur = GGML_TYPE_SIZE[GGML_TYPE_F16]*ggml_nelements(node->src1);
-#else
                                 // here we need memory just for single 2D matrix from src0
                                 cur = GGML_TYPE_SIZE[GGML_TYPE_F32]*(node->src0->ne[0]*node->src0->ne[1]);
-#endif
                             } else {
                                 cur = GGML_TYPE_SIZE[GGML_TYPE_F16]*ggml_nelements(node->src1);
                             }
@@ -14476,13 +14576,13 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
 #endif
                         } else if (node->src0->type == GGML_TYPE_F32 && node->src1->type == GGML_TYPE_F32) {
                             cur = 0;
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
                             if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
                                 node->n_tasks = 1;
                             }
 #endif
                         } else if (ggml_is_quantized(node->src0->type) && node->src1->type == GGML_TYPE_F32) {
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
                             if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
                                 node->n_tasks = 1;
                                 cur = GGML_TYPE_SIZE[GGML_TYPE_F32]*(node->src0->ne[0]*node->src0->ne[1]);
@@ -14919,10 +15019,16 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
             snprintf(color, sizeof(color), "white");
         }
 
-        fprintf(fp, "  \"%p\" [ \
-style = filled; fillcolor = %s; shape = record; \
-label=\"%d [%" PRId64 ", %" PRId64 "] | <x>%s",
-                (void *) node, color,
+        fprintf(fp, "  \"%p\" [ "
+                    "style = filled; fillcolor = %s; shape = record; "
+                    "label=\"",
+                (void *) node, color);
+
+        if (strlen(node->name) > 0) {
+            fprintf(fp, "%s |", node->name);
+        }
+
+        fprintf(fp, "%d [%" PRId64 ", %" PRId64 "] | <x>%s",
                 i, node->ne[0], node->ne[1],
                 GGML_OP_SYMBOL[node->op]);
 
@@ -14938,18 +15044,26 @@ label=\"%d [%" PRId64 ", %" PRId64 "] | <x>%s",
 
         snprintf(color, sizeof(color), "pink");
 
-        if (ggml_nelements(node) == 1) {
-            fprintf(fp, "  \"%p\" [ \
-style = filled; fillcolor = %s; shape = record; \
-label=\"<x>%.1e\"; ]\n",
-                    (void *) node, color, (double)ggml_get_f32_1d(node, 0));
-        } else {
-            fprintf(fp, "  \"%p\" [ \
-style = filled; fillcolor = %s; shape = record; \
-label=\"<x>CONST %d [%" PRId64 ", %" PRId64 "]\"; ]\n",
-                    (void *) node, color,
-                    i, node->ne[0], node->ne[1]);
+        fprintf(fp, "  \"%p\" [ "
+                    "style = filled; fillcolor = %s; shape = record; "
+                    "label=\"<x>",
+                (void *) node, color);
+
+        if (strlen(node->name) > 0) {
+                fprintf(fp, "%s | ", node->name);
         }
+        if (ggml_nelements(node) == 1) {
+            if (node->type == GGML_TYPE_I8 || node->type == GGML_TYPE_I16 || node->type == GGML_TYPE_I32) {
+                fprintf(fp, "%d", ggml_get_i32_1d(node, 0));
+            }
+            else {
+                fprintf(fp, "%.1e", (double)ggml_get_f32_1d(node, 0));
+            }
+        }
+        else {
+            fprintf(fp, "CONST %d [%" PRId64 ", %" PRId64 "]", i, node->ne[0], node->ne[1]);
+        }
+        fprintf(fp, "\"; ]\n");
     }
 
     for (int i = 0; i < gb->n_nodes; i++) {

@@ -659,6 +659,7 @@ struct llama_model_loader {
             LLAMA_ASSERT(lt.ne.size() == 1);
             tensor = ggml_new_tensor_1d(ggml_ctx, lt.type, lt.ne.at(0));
         }
+        ggml_set_name(tensor, lt.name.c_str());
         LLAMA_ASSERT(lt.ggml_tensor == NULL); // if this fails, we called get_tensor twice on the same tensor
         lt.ggml_tensor = tensor;
         num_ggml_tensors_created++;
@@ -727,8 +728,7 @@ struct llama_model_loader {
             LLAMA_ASSERT(offset == lt.size);
         } else if (lt.split_type == SPLIT_BY_COLUMNS) {
             // Let's load the data into temporary buffers to ensure the OS performs large loads.
-            std::vector<llama_buffer> tmp_bufs;
-            tmp_bufs.resize(lt.shards.size());
+            std::vector<llama_buffer> tmp_bufs(lt.shards.size());
             for (size_t i = 0; i < lt.shards.size(); i++) {
                 llama_load_tensor_shard & shard = lt.shards.at(i);
                 llama_file & file = file_loaders.at(shard.file_idx)->file;
@@ -799,6 +799,8 @@ static bool kv_cache_init(
 
     cache.k = ggml_new_tensor_1d(cache.ctx, wtype, n_elements);
     cache.v = ggml_new_tensor_1d(cache.ctx, wtype, n_elements);
+    ggml_set_name(cache.k, "cache_k");
+    ggml_set_name(cache.v, "cache_v");
 
     return true;
 }
@@ -807,7 +809,7 @@ struct llama_context_params llama_context_default_params() {
     struct llama_context_params result = {
         /*.n_ctx                       =*/ 512,
         /*.n_parts                     =*/ -1,
-        /*.seed                        =*/ 0,
+        /*.seed                        =*/ -1,
         /*.f16_kv                      =*/ false,
         /*.logits_all                  =*/ false,
         /*.vocab_only                  =*/ false,
@@ -1085,6 +1087,7 @@ static bool llama_eval_internal(
     gf.n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
 
     struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
+    ggml_set_name(embd, "embd");
     memcpy(embd->data, tokens, N*ggml_element_size(embd));
 
     // inpL shape [n_embd,N,1,1]
@@ -1117,6 +1120,8 @@ static bool llama_eval_internal(
             // Kcur shape [n_embd/n_head, n_head, N, 1]
             struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
             struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wk, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
+            ggml_set_name(Qcur, "Qcur");
+            ggml_set_name(Kcur, "Kcur");
 
             // store key and value to memory
             {
@@ -1145,6 +1150,7 @@ static bool llama_eval_internal(
                 ggml_permute(ctx0,
                         Qcur,
                         0, 2, 1, 3);
+            ggml_set_name(Q, "Q");
 
             // kv_self.k shape [n_embd * n_ctx * n_layer, 1] 
             // K shape [n_embd/n_head, n_past + N, n_head, 1]
@@ -1154,25 +1160,31 @@ static bool llama_eval_internal(
                             ggml_view_1d(ctx0, kv_self.k, (n_past + N)*n_embd, il*n_ctx*ggml_element_size(kv_self.k)*n_embd),
                             n_embd/n_head, n_head, n_past + N),
                         0, 2, 1, 3);
+            ggml_set_name(K, "K");
 
             // K * Q
             // KQ shape [n_past + N, N, n_head, 1]
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
+            ggml_set_name(KQ, "KQ");
 
             // KQ_scaled = KQ / sqrt(n_embd/n_head)
+            struct ggml_tensor * KQ_scale = ggml_new_f32(ctx0, 1.0f/sqrtf(float(n_embd)/n_head));
+            ggml_set_name(KQ_scale, "1/sqrt(n_embd/n_head)");
+
             // KQ_scaled shape [n_past + N, N, n_head, 1]
-            struct ggml_tensor * KQ_scaled =
-                ggml_scale_inplace(ctx0,
-                        KQ,
-                        ggml_new_f32(ctx0, 1.0f/sqrtf(float(n_embd)/n_head)));
+            struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx0, KQ, KQ_scale);
+            ggml_set_name(KQ_scaled, "KQ_scaled");
 
             // KQ_masked = mask_past(KQ_scaled)
             // KQ_masked shape [n_past + N, N, n_head, 1]
             struct ggml_tensor * KQ_masked = ggml_diag_mask_inf_inplace(ctx0, KQ_scaled, n_past);
+            ggml_set_name(KQ_masked, "KQ_masked");
 
             // KQ = soft_max(KQ_masked)
             // KQ_soft_max shape [n_past + N, N, n_head, 1]
             struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx0, KQ_masked);
+            ggml_set_name(KQ_soft_max, "KQ_soft_max");
+
 
             // split cached V into n_head heads
             //// V shape [n_past + N, n_embd/n_head, n_head, 1]
@@ -1183,10 +1195,12 @@ static bool llama_eval_internal(
                         n_ctx*ggml_element_size(kv_self.v),
                         n_ctx*ggml_element_size(kv_self.v)*n_embd/n_head,
                         il*n_ctx*ggml_element_size(kv_self.v)*n_embd);
+            ggml_set_name(V, "V");
 
 #if 1
             // KQV shape [n_embd/n_head, N, n_head, 1]
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
+            ggml_set_name(KQV, "KQV");
 #else
             // make V contiguous in memory to speed up the matmul, however we waste time on the copy
             // on M1 this is faster for the perplexity computation, but ~5% slower for the single-token generation
@@ -1198,13 +1212,14 @@ static bool llama_eval_internal(
             // KQV_merged = KQV.permute(0, 2, 1, 3)
             // KQV_merged shape [n_embd/n_head, n_head, N, 1]
             struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
-            // KQV_merged shape 
+            ggml_set_name(KQV_merged, "KQV_merged");
 
             // cur = KQV_merged.contiguous().view(n_embd, N)
             // cur shape [n_embd,N,1,1]
             cur = ggml_cpy(ctx0,
                     KQV_merged,
                     ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N));
+            ggml_set_name(cur, "KQV_merged_contiguous");
 
             // projection (no bias)
             cur = ggml_mul_mat(ctx0,
@@ -1295,6 +1310,9 @@ static bool llama_eval_internal(
 
     //embd_w.resize(n_vocab*N);
     //memcpy(embd_w.data(), ggml_get_data(inpL), sizeof(float)*n_vocab*N);
+
+    // update kv token count
+    lctx.model.kv_self.n = n_past + N;
 
     // extract logits
     {
@@ -1713,7 +1731,7 @@ void llama_sample_temperature(struct llama_context * ctx, llama_token_data_array
     }
 }
 
-void llama_sample_repetition_penalty(struct llama_context * ctx, llama_token_data_array * candidates, llama_token * last_tokens, size_t last_tokens_size, float penalty) {
+void llama_sample_repetition_penalty(struct llama_context * ctx, llama_token_data_array * candidates, const llama_token * last_tokens, size_t last_tokens_size, float penalty) {
     if (last_tokens_size == 0 || penalty == 1.0f) {
         return;
     }
@@ -1742,7 +1760,7 @@ void llama_sample_repetition_penalty(struct llama_context * ctx, llama_token_dat
     }
 }
 
-void llama_sample_frequency_and_presence_penalties(struct llama_context * ctx, llama_token_data_array * candidates, llama_token * last_tokens_p, size_t last_tokens_size, float alpha_frequency, float alpha_presence) {
+void llama_sample_frequency_and_presence_penalties(struct llama_context * ctx, llama_token_data_array * candidates, const llama_token * last_tokens_p, size_t last_tokens_size, float alpha_frequency, float alpha_presence) {
     if (last_tokens_size == 0 || (alpha_frequency == 0.0f && alpha_presence == 0.0f)) {
         return;
     }
@@ -1799,7 +1817,7 @@ llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_
     float k = powf((epsilon_hat * powf(2, *mu)) / (1 - powf(N, -epsilon_hat)), 1 / s_hat);
 
     // Sample the next word X using top-k sampling
-    llama_sample_top_k(nullptr, candidates, int(k));
+    llama_sample_top_k(nullptr, candidates, int(k), 1);
     if (ctx) {
         ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
     }
@@ -2064,7 +2082,7 @@ struct llama_context * llama_init_from_file(
 
     llama_context * ctx = new llama_context;
 
-    if (params.seed <= 0) {
+    if (params.seed < 0) {
         params.seed = time(NULL);
     }
 
@@ -2399,21 +2417,21 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
     }
 }
 
-int llama_get_kv_cache_token_count(struct llama_context * ctx) {
+int llama_get_kv_cache_token_count(const struct llama_context * ctx) {
     return ctx->model.kv_self.n;
 }
 
 #define LLAMA_MAX_RNG_STATE 64*1024
 
 void llama_set_rng_seed(struct llama_context * ctx, int seed) {
-    if (seed <= 0) {
+    if (seed < 0) {
         seed = time(NULL);
     }
     ctx->rng.seed(seed);
 }
 
-// Returns the size of the state
-size_t llama_get_state_size(struct llama_context * ctx) {
+// Returns the *maximum* size of the state
+size_t llama_get_state_size(const struct llama_context * ctx) {
     // we don't know size of rng until we actually serialize it. so reserve more than enough memory for its serialized state.
     // for reference, std::mt19937(1337) serializes to 6701 bytes.
     const size_t s_rng_size        = sizeof(size_t);
@@ -2491,21 +2509,51 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dest) {
 
     // copy kv cache
     {
-        const size_t kv_size = ctx->model.kv_self.buf.size;
+        const auto & kv_self = ctx->model.kv_self;
+        const auto & hparams = ctx->model.hparams;
+        const int    n_layer = hparams.n_layer;
+        const int    n_embd  = hparams.n_embd;
+        const int    n_ctx   = hparams.n_ctx;
+
+        const size_t kv_size = kv_self.buf.size;
         const int    kv_ntok = llama_get_kv_cache_token_count(ctx);
 
         memcpy(out, &kv_size, sizeof(kv_size)); out += sizeof(kv_size);
         memcpy(out, &kv_ntok, sizeof(kv_ntok)); out += sizeof(kv_ntok);
 
         if (kv_size) {
-            memcpy(out, ctx->model.kv_self.buf.addr, kv_size); out += kv_size;
+            const size_t elt_size = ggml_element_size(kv_self.k);
+            char buffer[4096];
+            ggml_context * cpy_ctx = ggml_init({ sizeof(buffer), buffer, /* no_alloc */ true });
+            ggml_cgraph gf{};
+            gf.n_threads = 1;
+
+            ggml_tensor * kout3d = ggml_new_tensor_3d(cpy_ctx, kv_self.k->type, n_embd, kv_ntok, n_layer);
+            kout3d->data = out;
+            out += ggml_nbytes(kout3d);
+
+            ggml_tensor * vout3d = ggml_new_tensor_3d(cpy_ctx, kv_self.v->type, kv_ntok, n_embd, n_layer);
+            vout3d->data = out;
+            out += ggml_nbytes(vout3d);
+
+            ggml_tensor * k3d = ggml_view_3d(cpy_ctx, kv_self.k,
+                n_embd, kv_ntok, n_layer,
+                elt_size*n_embd, elt_size*n_embd*n_ctx, 0);
+
+            ggml_tensor * v3d = ggml_view_3d(cpy_ctx, kv_self.v,
+                kv_ntok, n_embd, n_layer,
+                elt_size*n_ctx, elt_size*n_ctx*n_embd, 0);
+
+            ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, k3d, kout3d));
+            ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, v3d, vout3d));
+            ggml_graph_compute(cpy_ctx, &gf);
         }
     }
 
     const size_t written  = out - dest;
-    const size_t expected = llama_get_state_size(ctx);
+    const size_t max_size = llama_get_state_size(ctx);
 
-    LLAMA_ASSERT(written == expected);
+    LLAMA_ASSERT(written <= max_size);
 
     return written;
 }
@@ -2563,6 +2611,12 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
 
     // set kv cache
     {
+        const auto & kv_self = ctx->model.kv_self;
+        const auto & hparams = ctx->model.hparams;
+        const int    n_layer = hparams.n_layer;
+        const int    n_embd  = hparams.n_embd;
+        const int    n_ctx   = hparams.n_ctx;
+
         size_t kv_size;
         int kv_ntok;
 
@@ -2570,27 +2624,123 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
         memcpy(&kv_ntok, in, sizeof(kv_ntok)); in += sizeof(kv_ntok);
 
         if (kv_size) {
-            LLAMA_ASSERT(ctx->model.kv_self.buf.size == kv_size);
+            LLAMA_ASSERT(kv_self.buf.size == kv_size);
 
-            void * k_data = ctx->model.kv_self.k->data; // remember data pointers
-            void * v_data = ctx->model.kv_self.v->data; // because their value is stored in buf and overwritten by memcpy
+            const size_t elt_size = ggml_element_size(kv_self.k);
+            char buffer[4096];
+            ggml_context * cpy_ctx = ggml_init({ sizeof(buffer), buffer, /* no_alloc */ true });
+            ggml_cgraph gf{};
+            gf.n_threads = 1;
 
-            memcpy(ctx->model.kv_self.buf.addr, in, kv_size); in += kv_size;
+            ggml_tensor * kin3d = ggml_new_tensor_3d(cpy_ctx, kv_self.k->type, n_embd, kv_ntok, n_layer);
+            kin3d->data = (void *) in;
+            in += ggml_nbytes(kin3d);
 
-            ctx->model.kv_self.k->data = k_data; // restore correct data pointers
-            ctx->model.kv_self.v->data = v_data;
+            ggml_tensor * vin3d = ggml_new_tensor_3d(cpy_ctx, kv_self.v->type, kv_ntok, n_embd, n_layer);
+            vin3d->data = (void *) in;
+            in += ggml_nbytes(vin3d);
 
+            ggml_tensor * k3d = ggml_view_3d(cpy_ctx, kv_self.k,
+                n_embd, kv_ntok, n_layer,
+                elt_size*n_embd, elt_size*n_embd*n_ctx, 0);
+
+            ggml_tensor * v3d = ggml_view_3d(cpy_ctx, kv_self.v,
+                kv_ntok, n_embd, n_layer,
+                elt_size*n_ctx, elt_size*n_ctx*n_embd, 0);
+
+            ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, kin3d, k3d));
+            ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, vin3d, v3d));
+            ggml_graph_compute(cpy_ctx, &gf);
         }
 
         ctx->model.kv_self.n = kv_ntok;
     }
 
     const size_t nread    = in - src;
-    const size_t expected = llama_get_state_size(ctx);
+    const size_t max_size = llama_get_state_size(ctx);
 
-    LLAMA_ASSERT(nread == expected);
+    LLAMA_ASSERT(nread <= max_size);
 
     return nread;
+}
+
+bool llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+    llama_file file(path_session, "rb");
+
+    // sanity checks
+    {
+        const uint32_t magic   = file.read_u32();
+        const uint32_t version = file.read_u32();
+
+        if (!(magic == LLAMA_SESSION_MAGIC && version == LLAMA_SESSION_VERSION)) {
+            fprintf(stderr, "%s : unknown (magic, version) for session file: %08x, %08x\n", __func__, magic, version);
+            return false;
+        }
+
+        llama_hparams session_hparams;
+        file.read_raw(&session_hparams, sizeof(llama_hparams));
+
+        if (session_hparams != ctx->model.hparams) {
+            fprintf(stderr, "%s : model hparams didn't match from session file!\n", __func__);
+            return false;
+        }
+    }
+
+    // load the prompt
+    {
+        const uint32_t n_token_count = file.read_u32();
+
+        if (n_token_count > n_token_capacity) {
+            fprintf(stderr, "%s : token count in session file exceeded capacity! %u > %zu\n", __func__, n_token_count, n_token_capacity);
+            return false;
+        }
+
+        file.read_raw(tokens_out, sizeof(llama_token) * n_token_count);
+        *n_token_count_out = n_token_count;
+    }
+
+    // restore the context state
+    {
+        const size_t n_state_size_cur = file.size - file.tell();
+        const size_t n_state_size_max = llama_get_state_size(ctx);
+
+        if (n_state_size_cur > n_state_size_max) {
+            fprintf(stderr, "%s : the state size in session file is too big! max %zu, got %zu\n", __func__, n_state_size_max, n_state_size_cur);
+            return false;
+        }
+
+        std::vector<uint8_t> state_data(n_state_size_max);
+        file.read_raw(state_data.data(), n_state_size_cur);
+
+        llama_set_state_data(ctx, state_data.data());
+    }
+
+    return true;
+}
+
+bool llama_save_session_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count) {
+    llama_file file(path_session, "wb");
+
+    file.write_u32(LLAMA_SESSION_MAGIC);
+    file.write_u32(LLAMA_SESSION_VERSION);
+
+    file.write_raw(&ctx->model.hparams, sizeof(llama_hparams));
+
+    // save the prompt
+    file.write_u32((uint32_t) n_token_count);
+    file.write_raw(tokens, sizeof(llama_token) * n_token_count);
+
+    // save the context state
+    {
+        const size_t n_state_size_max = llama_get_state_size(ctx);
+
+        std::vector<uint8_t> state_data(n_state_size_max);
+        const size_t n_state_size_cur = llama_copy_state_data(ctx, state_data.data());
+
+        file.write_raw(state_data.data(), n_state_size_cur);
+    }
+
+    return true;
 }
 
 int llama_eval(
@@ -2631,15 +2781,15 @@ int llama_tokenize(
     return res.size();
 }
 
-int llama_n_vocab(struct llama_context * ctx) {
+int llama_n_vocab(const struct llama_context * ctx) {
     return ctx->vocab.id_to_token.size();
 }
 
-int llama_n_ctx(struct llama_context * ctx) {
+int llama_n_ctx(const struct llama_context * ctx) {
     return ctx->model.hparams.n_ctx;
 }
 
-int llama_n_embd(struct llama_context * ctx) {
+int llama_n_embd(const struct llama_context * ctx) {
     return ctx->model.hparams.n_embd;
 }
 
@@ -2651,7 +2801,7 @@ float * llama_get_embeddings(struct llama_context * ctx) {
     return ctx->embedding.data();
 }
 
-const char * llama_token_to_str(struct llama_context * ctx, llama_token token) {
+const char * llama_token_to_str(const struct llama_context * ctx, llama_token token) {
     if (token >= llama_n_vocab(ctx)) {
         return nullptr;
     }
@@ -2719,58 +2869,4 @@ const char * llama_print_system_info(void) {
 // For internal test use
 std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx) {
     return ctx->model.tensors_by_name;
-}
-
-size_t llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
-    // TODO leverage mmap
-    llama_file file(path_session, "rb");
-    const uint32_t magic = file.read_u32();
-    const uint32_t version = file.read_u32();
-
-    if (!(magic == 'ggsn' && version == 0)) {
-        fprintf(stderr, "%s : unknown (magic, version) for session file: %08x, %08x\n", __func__, magic, version);
-        return 0;
-    }
-
-    llama_hparams session_hparams;
-    file.read_raw(&session_hparams, sizeof(llama_hparams));
-
-    // REVIEW
-    if (session_hparams != ctx->model.hparams) {
-        fprintf(stderr, "%s : model hparams didn't match from session file!\n", __func__);
-        return 0;
-    }
-
-    const uint32_t n_token_count = file.read_u32();
-    LLAMA_ASSERT(n_token_capacity >= n_token_count);
-    file.read_raw(tokens_out, sizeof(llama_token) * n_token_count);
-    *n_token_count_out = n_token_count;
-
-    const size_t n_state_size = file.size - file.tell();
-    const size_t n_orig_state_size = llama_get_state_size(ctx);
-    if (n_state_size != n_orig_state_size) {
-        fprintf(stderr, "%s : failed to validate state size\n", __func__);
-    }
-    std::unique_ptr<uint8_t[]> state_data(new uint8_t[n_state_size]);
-    file.read_raw(state_data.get(), n_state_size);
-    return llama_set_state_data(ctx, state_data.get());
-}
-
-size_t llama_save_session_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count) {
-    // TODO save temp & swap
-    llama_file file(path_session, "wb");
-
-    const size_t n_state_size = llama_get_state_size(ctx);
-    std::unique_ptr<uint8_t[]> state_data(new uint8_t[n_state_size]);
-    llama_copy_state_data(ctx, state_data.get());
-
-    file.write_u32('ggsn'); // magic
-    file.write_u32(0); // version
-    file.write_raw(&ctx->model.hparams, sizeof(llama_hparams));
-
-    file.write_u32((uint32_t) n_token_count); // REVIEW
-    file.write_raw(tokens, sizeof(llama_token) * n_token_count);
-
-    file.write_raw(state_data.get(), n_state_size);
-    return n_state_size; // REVIEW
 }
