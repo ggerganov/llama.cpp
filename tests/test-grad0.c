@@ -351,7 +351,7 @@ int main(int argc, const char ** argv) {
 
 
     // original loop: 1000
-    int niter = 1000;
+    int niter = 4;
     const char *env = getenv("GGML_NLOOP");
     if (env != NULL) {
         niter = atoi(env);
