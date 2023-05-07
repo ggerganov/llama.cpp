@@ -213,6 +213,16 @@ ggml-metal.o: ggml-metal.m ggml-metal.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_METAL
 
+ifdef LLAMA_VULKAN
+	CFLAGS  += -DGGML_USE_VULKAN
+	LDFLAGS += -lvulkan
+	OBJS    += ggml-vulkan.o ggml-vulkan-matmul-shader
+ggml-vulkan.o: ggml-vulkan.cpp ggml-vulkan.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+ggml-vulkan-matmul-shader:
+	glslc -fshader-stage=compute --target-env=vulkan1.2 -O ggml-vulkan-matmul.glsl -o ggml-vulkan-matmul.spv
+endif
+
 ifneq ($(filter aarch64%,$(UNAME_M)),)
 	# Apple M1, M2, etc.
 	# Raspberry Pi 3, 4, Zero 2 (64-bit)
