@@ -118,14 +118,18 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.prompt = argv[i];
         } else if (arg == "-e") {
             escape_prompt = true;
+        } else if (arg == "--prompt-cache") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.path_prompt_cache = argv[i];
         } else if (arg == "--session") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.path_session = argv[i];
-        } else if (arg == "--session-full") {
-            params.session_full = true;
         } else if (arg == "-f" || arg == "--file") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -344,6 +348,11 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         gpt_print_usage(argc, argv, default_params);
         exit(1);
     }
+    if (!params.path_session.empty() && !params.path_prompt_cache.empty()) {
+        fprintf(stderr, "error: only one of --prompt-cache or --session may be specified\n");
+        gpt_print_usage(argc, argv, default_params);
+        exit(1);
+    }
     if (escape_prompt) {
         process_escapes(params.prompt);
     }
@@ -369,8 +378,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -p PROMPT, --prompt PROMPT\n");
     fprintf(stderr, "                        prompt to start generation with (default: empty)\n");
     fprintf(stderr, "  -e                    process prompt escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)\n");
-    fprintf(stderr, "  --session FNAME       file to cache model state in (may be large!) (default: none)\n");
-    fprintf(stderr, "  --session-full        if specified, saves output to the session file in addition to prompt\n");
+    fprintf(stderr, "  --prompt-cache FNAME  file to cache prompt state for faster startup (default: none)\n");
+    fprintf(stderr, "  --session FNAME       file to store prompt and generations, allowing continuation (default: none)\n");
     fprintf(stderr, "  --random-prompt       start with a randomized prompt.\n");
     fprintf(stderr, "  --in-prefix STRING    string to prefix user inputs with (default: empty)\n");
     fprintf(stderr, "  --in-suffix STRING    string to suffix after user inputs with (default: empty)\n");
