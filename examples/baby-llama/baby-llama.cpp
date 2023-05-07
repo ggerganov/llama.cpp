@@ -1017,7 +1017,7 @@ void sample_softmax(struct ggml_tensor * logits, struct ggml_tensor * probs, str
     }
 }
 
-void print_probs1(struct ggml_tensor * probs, int i) {
+void print_row(struct ggml_tensor * probs, int i) {
     for (int k = 0; k < probs->ne[0]; ++k) {
         float p = ggml_get_f32_1d(probs, i*probs->ne[0] + k);
         printf(" %.2f", p);
@@ -1025,7 +1025,7 @@ void print_probs1(struct ggml_tensor * probs, int i) {
     printf("\n");
 }
 
-void print_probs(struct ggml_tensor * probs) {
+void print_matrix(struct ggml_tensor * probs) {
     assert(probs->n_dims == 2);
     for (int i=0; i<probs->ne[1]; ++i) {
         for (int k = 0; k < probs->ne[0]; ++k) {
@@ -1177,7 +1177,7 @@ int main(int argc, char ** argv) {
     size_t    compute_size = 1024ll*1024ll*1024ll;
     uint8_t * compute_addr = new uint8_t[compute_size];
 
-    int n_examples = 256;
+    int n_examples = 25600;
     int n_tokens = model.hparams.n_ctx;
     int n_vocab  = model.hparams.n_vocab;
 
@@ -1213,7 +1213,7 @@ int main(int argc, char ** argv) {
         get_example_targets(64*ex+16, tokens_input2, targets2);
         // get_example_targets(64*ex+32, tokens_input3, targets3);
         // get_example_targets(64*ex+48, tokens_input4, targets4);
-        // print_probs(targets);
+        // print_matrix(targets);
         // print_tokens(tokens_input, n_vocab);
 
         struct ggml_tensor * logits1 = forward(&model, &kv_self, ctx0, &gf, tokens_input1, n_tokens, n_past);
@@ -1245,7 +1245,7 @@ int main(int argc, char ** argv) {
         // sample_softmax(logits1, before_opt_probs, before_opt_best_samples);
 
         // printf("probabilities before optimization:\n");
-        // print_probs(before_opt_probs);
+        // print_matrix(before_opt_probs);
         // printf("best samples before optimization:\n");
         // print_tokens(before_opt_best_samples, n_vocab);
 
@@ -1275,7 +1275,7 @@ int main(int argc, char ** argv) {
         if (ex % 64 == 0) {
             sample_softmax(logits1, after_opt_probs, after_opt_best_samples);
             // printf("probabilities after optimization:\n");
-            // print_probs(after_opt_probs);
+            // print_matrix(after_opt_probs);
             printf("best samples after optimization:\n");
             print_tokens(after_opt_best_samples, n_vocab);
         }
@@ -1326,7 +1326,7 @@ int main(int argc, char ** argv) {
             // int sample_at = n_tokens-1;
             int token = ggml_get_i32_1d(best_samples, sample_ctx-1);
             
-            // print_probs1(probs, sample_at);
+            // print_row(probs, sample_at);
             print_token(token, n_vocab);
 
             lshift_examples(tokens_input, targets, 1);
