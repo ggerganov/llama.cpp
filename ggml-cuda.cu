@@ -26,10 +26,10 @@
 #define cublasStatus_t hipblasStatus_t
 #define cudaDeviceSynchronize hipDeviceSynchronize
 #define cudaError_t hipError_t
+#define cudaEvent_t hipEvent_t
 #define cudaEventCreateWithFlags hipEventCreateWithFlags
 #define cudaEventDisableTiming hipEventDisableTiming
 #define cudaEventRecord hipEventRecord
-#define cudaEvent_t hipEvent_t
 #define cudaFree hipFree
 #define cudaFreeHost hipHostFree
 #define cudaGetErrorString hipGetErrorString
@@ -40,11 +40,12 @@
 #define cudaMemcpyAsync hipMemcpyAsync
 #define cudaMemcpyDeviceToHost hipMemcpyDeviceToHost
 #define cudaMemcpyHostToDevice hipMemcpyHostToDevice
+#define cudaOccupancyMaxPotentialBlockSize hipOccupancyMaxPotentialBlockSize
+#define cudaStream_t hipStream_t
 #define cudaStreamCreateWithFlags hipStreamCreateWithFlags
 #define cudaStreamNonBlocking hipStreamNonBlocking
 #define cudaStreamSynchronize hipStreamSynchronize
 #define cudaStreamWaitEvent hipStreamWaitEvent
-#define cudaStream_t hipStream_t
 #define cudaSuccess hipSuccess
 #else
 #include <cuda_runtime.h>
