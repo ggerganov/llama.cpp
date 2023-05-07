@@ -81,29 +81,26 @@ typedef struct {
 static_assert(sizeof(block_q8_0) == sizeof(float) + QK8_0, "wrong q8_0 block size/padding");
 
 static __global__ void dequantize_block_q4_0(const void * vx, float * y) {
+    static const int qk = QK4_0;
+
     const block_q4_0 * x = (const block_q4_0 *) vx;
 
     const int i = blockIdx.x;
 
     const float d = x[i].d;
 
-    const uint8_t * pp = x[i].qs;
+    for (int j = 0; j < qk/2; ++j) {
+        const int x0 = (x[i].qs[j] & 0xf) - 8;
+        const int x1 = (x[i].qs[j] >>  4) - 8;
 
-    for (int l = 0; l < QK4_0; l += 2) {
-        const uint8_t vi = pp[l/2];
-
-        const int8_t vi0 = vi & 0xf;
-        const int8_t vi1 = vi >> 4;
-
-        const float v0 = (vi0 - 8)*d;
-        const float v1 = (vi1 - 8)*d;
-
-        y[i*QK4_0 + l + 0] = v0;
-        y[i*QK4_0 + l + 1] = v1;
+        y[i*qk + j + 0   ] = x0*d;
+        y[i*qk + j + qk/2] = x1*d;
     }
 }
 
 static __global__ void dequantize_block_q4_1(const void * vx, float * y) {
+    static const int qk = QK4_1;
+
     const block_q4_1 * x = (const block_q4_1 *) vx;
 
     const int i = blockIdx.x;
@@ -111,19 +108,12 @@ static __global__ void dequantize_block_q4_1(const void * vx, float * y) {
     const float d = x[i].d;
     const float m = x[i].m;
 
-    const uint8_t * pp = x[i].qs;
+    for (int j = 0; j < qk/2; ++j) {
+        const int x0 = (x[i].qs[j] & 0xf);
+        const int x1 = (x[i].qs[j] >>  4);
 
-    for (int l = 0; l < QK4_1; l += 2) {
-        const uint8_t vi = pp[l/2];
-
-        const int8_t vi0 = vi & 0xf;
-        const int8_t vi1 = vi >> 4;
-
-        const float v0 = vi0*d + m;
-        const float v1 = vi1*d + m;
-
-        y[i*QK4_1 + l + 0] = v0;
-        y[i*QK4_1 + l + 1] = v1;
+        y[i*qk + j + 0   ] = x0*d + m;
+        y[i*qk + j + qk/2] = x1*d + m;
     }
 }
 
@@ -151,35 +141,32 @@ static __global__ void dequantize_block_q4_2(const void * vx, float * y) {
 }
 
 static __global__ void dequantize_block_q5_0(const void * vx, float * y) {
+    static const int qk = QK5_0;
+
     const block_q5_0 * x = (const block_q5_0 *) vx;
 
     const int i = blockIdx.x;
 
     const float d = x[i].d;
 
-    const uint8_t * pp = x[i].qs;
-
     uint32_t qh;
     memcpy(&qh, x[i].qh, sizeof(qh));
 
-    for (int l = 0; l < QK5_0; l += 2) {
-        const uint8_t vi = pp[l/2];
+    for (int j = 0; j < qk/2; ++j) {
+        const uint8_t xh_0 = ((qh & (1u << (j + 0 ))) >> (j + 0 )) << 4;
+        const uint8_t xh_1 = ((qh & (1u << (j + 16))) >> (j + 12));
 
-        const int8_t vh0 = ((qh & (1 << (l + 0))) >> (l + 0)) << 4;
-        const int8_t vh1 = ((qh & (1 << (l + 1))) >> (l + 1)) << 4;
+        const int32_t x0 = ((x[i].qs[j] & 0xf) | xh_0) - 16;
+        const int32_t x1 = ((x[i].qs[j] >>  4) | xh_1) - 16;
 
-        const int8_t vi0 = ((vi & 0xf) | vh0);
-        const int8_t vi1 = ((vi >>  4) | vh1);
-
-        const float v0 = (vi0 - 16)*d;
-        const float v1 = (vi1 - 16)*d;
-
-        y[i*QK5_0 + l + 0] = v0;
-        y[i*QK5_0 + l + 1] = v1;
+        y[i*qk + j + 0   ] = x0*d;
+        y[i*qk + j + qk/2] = x1*d;
     }
 }
 
 static __global__ void dequantize_block_q5_1(const void * vx, float * y) {
+    static const int qk = QK5_1;
+
     const block_q5_1 * x = (const block_q5_1 *) vx;
 
     const int i = blockIdx.x;
@@ -187,25 +174,18 @@ static __global__ void dequantize_block_q5_1(const void * vx, float * y) {
     const float d = x[i].d;
     const float m = x[i].m;
 
-    const uint8_t * pp = x[i].qs;
-
     uint32_t qh;
     memcpy(&qh, x[i].qh, sizeof(qh));
 
-    for (int l = 0; l < QK5_1; l += 2) {
-        const uint8_t vi = pp[l/2];
+    for (int j = 0; j < qk/2; ++j) {
+        const uint8_t xh_0 = ((qh & (1u << (j + 0 ))) >> (j + 0 )) << 4;
+        const uint8_t xh_1 = ((qh & (1u << (j + 16))) >> (j + 12));
 
-        const int8_t vh0 = ((qh & (1 << (l + 0))) >> (l + 0)) << 4;
-        const int8_t vh1 = ((qh & (1 << (l + 1))) >> (l + 1)) << 4;
+        const int x0 = (x[i].qs[j] & 0xf) | xh_0;
+        const int x1 = (x[i].qs[j] >>  4) | xh_1;
 
-        const int8_t vi0 = (vi & 0xf) | vh0;
-        const int8_t vi1 = (vi >>  4) | vh1;
-
-        const float v0 = vi0*d + m;
-        const float v1 = vi1*d + m;
-
-        y[i*QK5_1 + l + 0] = v0;
-        y[i*QK5_1 + l + 1] = v1;
+        y[i*qk + j + 0   ] = x0*d + m;
+        y[i*qk + j + qk/2] = x1*d + m;
     }
 }
 
