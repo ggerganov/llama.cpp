@@ -826,8 +826,8 @@ static void quantize_row_q4_1_reference(const float * restrict x, block_q4_1 * r
         y[i].m = min;
 
         for (int l = 0; l < qk/2; ++l) {
-            const float x0 = (x[0    + l] - min)*id;
-            const float x1 = (x[qk/2 + l] - min)*id;
+            const float x0 = (x[i*qk + 0    + l] - min)*id;
+            const float x1 = (x[i*qk + qk/2 + l] - min)*id;
 
             const uint8_t xi0 = MIN(15, (int8_t)(x0 + 0.5f));
             const uint8_t xi1 = MIN(15, (int8_t)(x1 + 0.5f));
