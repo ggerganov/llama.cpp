@@ -4245,10 +4245,8 @@ struct ggml_context {
 
     struct ggml_scratch scratch;
     struct ggml_scratch scratch_save;
-#ifdef GGML_RECOVERABLE_ERRORS
     enum ggml_errcode last_error_code;
     char last_error_msg[GGML_ERROR_BUFFER_LEN];
-#endif
 };
 
 struct ggml_context_container {
@@ -4638,8 +4636,8 @@ enum ggml_errcode ggml_last_error_code(struct ggml_context * ctx) {
     return ctx->last_error_code;
 }
 
-char * ggml_last_error_msg(struct ggml_context * ctx) {
-    return ctx->last_error_code == GGML_ERRCODE_SUCCESS ? "Success" : &ctx->last_error_msg;
+const char * ggml_last_error_msg(struct ggml_context * ctx) {
+    return ctx->last_error_code == GGML_ERRCODE_SUCCESS ? "Success" : (const char *)&ctx->last_error_msg;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

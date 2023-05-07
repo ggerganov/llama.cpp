@@ -206,6 +206,7 @@
     } while (0)
 
 #define GGML_RECOVERABLE_ERRORS
+#define GGML_ERROR_BUFFER_LEN 256
 #ifndef GGML_RECOVERABLE_ERRORS
 #define GGML_RECOVERABLE_ASSERT(_ctx, _code, x, ...) \
     do { \
@@ -217,7 +218,6 @@
     } while (0)
 
 #else
-#define GGML_ERROR_BUFFER_LEN 256
 #define GGML_RECOVERABLE_ASSERT(ctx, errcode, x, ...) \
     do { \
         if ((ctx)->last_error_code != GGML_ERRCODE_SUCCESS) { \
@@ -468,7 +468,7 @@ extern "C" {
     //         struct ggml_context * ctx);
     GGML_API enum ggml_errcode ggml_last_error_code(
             struct ggml_context * ctx);
-    GGML_API char * ggml_last_error_msg(
+    GGML_API const char * ggml_last_error_msg(
             struct ggml_context * ctx);
 
     GGML_API struct ggml_tensor * ggml_new_tensor(
