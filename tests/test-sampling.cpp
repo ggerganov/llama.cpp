@@ -32,7 +32,7 @@ void test_top_k(const std::vector<float> & probs,
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
     llama_sample_softmax(nullptr, &candidates_p);
     DUMP(&candidates_p);
-    llama_sample_top_k(nullptr, &candidates_p, k);
+    llama_sample_top_k(nullptr, &candidates_p, k, 1);
     DUMP(&candidates_p);
 
     assert(candidates_p.size == expected_probs.size());
@@ -57,7 +57,7 @@ void test_top_p(const std::vector<float> & probs,
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
     llama_sample_softmax(nullptr, &candidates_p);
     DUMP(&candidates_p);
-    llama_sample_top_p(nullptr, &candidates_p, p);
+    llama_sample_top_p(nullptr, &candidates_p, p, 1);
     DUMP(&candidates_p);
 
     assert(candidates_p.size == expected_probs.size());
@@ -80,7 +80,7 @@ void test_tfs(const std::vector<float> & probs,
 
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
     DUMP(&candidates_p);
-    llama_sample_tail_free(nullptr, &candidates_p, z);
+    llama_sample_tail_free(nullptr, &candidates_p, z, 1);
     DUMP(&candidates_p);
 
     assert(candidates_p.size == expected_probs.size());
@@ -103,7 +103,7 @@ void test_typical(const std::vector<float> & probs,
 
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
     DUMP(&candidates_p);
-    llama_sample_typical(nullptr, &candidates_p, p);
+    llama_sample_typical(nullptr, &candidates_p, p, 1);
     DUMP(&candidates_p);
 
     assert(candidates_p.size == expected_probs.size());
