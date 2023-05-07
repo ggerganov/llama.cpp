@@ -52,26 +52,6 @@ __kernel void dequantize_row_q4_1(__global struct block_q4_1* blocks, __global f
     result[index + 1] = (vi >> 4) * d + m;
 }
 
-struct block_q4_2
-{
-    ushort d;
-    uchar qs[8];
-};
-
-__kernel void dequantize_row_q4_2(__global struct block_q4_2* blocks, __global float* result) {
-    const uint i = get_global_id(0) / 16;
-    const uint l = get_local_id(0);
-
-    const float d = vload_half(0, (__global half*) &blocks[i].d);
-
-    const uchar vi = blocks[i].qs[l];
-
-    const uint index = i*16 + l*2;
-    result[index + 0] = ((vi & 0xf) - 8)*d;
-    result[index + 1] = ((vi >> 4) - 8)*d;
-}
-
-
 struct block_q5_0
 {
     float d;
@@ -167,7 +147,7 @@ static cl_device_id device;
 static cl_context context;
 static cl_command_queue queue;
 static cl_program program;
-static cl_kernel kernel_q4_0, kernel_q4_1, kernel_q4_2, kernel_q5_0, kernel_q5_1, kernel_q8_0;
+static cl_kernel kernel_q4_0, kernel_q4_1, kernel_q5_0, kernel_q5_1, kernel_q8_0;
 static cl_mem cl_buffer_a, cl_buffer_qb, cl_buffer_b, cl_buffer_c;
 static size_t cl_size_a = 0, cl_size_qb = 0, cl_size_b = 0, cl_size_c = 0;
 
@@ -238,8 +218,6 @@ void ggml_cl_init(void) {
     CL_CHECK(err, "clCreateKernel");
     kernel_q4_1 = clCreateKernel(program, "dequantize_row_q4_1", &err);
     CL_CHECK(err, "clCreateKernel");
-    kernel_q4_2 = clCreateKernel(program, "dequantize_row_q4_2", &err);
-    CL_CHECK(err, "clCreateKernel");
     kernel_q5_0 = clCreateKernel(program, "dequantize_row_q5_0", &err);
     CL_CHECK(err, "clCreateKernel");
     kernel_q5_1 = clCreateKernel(program, "dequantize_row_q5_1", &err);
@@ -291,12 +269,6 @@ void ggml_cl_sgemm_wrapper(
         kernel = kernel_q4_1;
         local = 16;
         size_qb = global * (sizeof(float) * 2 + local) / 32;
-        break;
-    case GGML_TYPE_Q4_2:
-        dequant = true;
-        kernel = kernel_q4_2;
-        local = 8;
-        size_qb = global * (sizeof(ggml_fp16_t) + local) / 16;
         break;
     case GGML_TYPE_Q5_0:
         dequant = true;
