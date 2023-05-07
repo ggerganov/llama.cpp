@@ -3960,7 +3960,7 @@ static const char * GGML_OP_LABEL[GGML_OP_COUNT] = {
     "DUP",
     "ADD",
     "ADD1",
-    "ADD_AT",
+    "ACC",
     "SUB",
     "MUL",
     "DIV",
@@ -4020,7 +4020,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "x",
     "x+y",
     "x+y",
-    "x[offset:]+y",
+    "view(x,nb,offset)+=y->x",
     "x-y",
     "x*y",
     "x/y",
@@ -5054,9 +5054,9 @@ struct ggml_tensor * ggml_add1_inplace(
     return ggml_add1_impl(ctx, a, b, true);
 }
 
-// ggml_add_at
+// ggml_acc
 
-struct ggml_tensor * ggml_add_at_impl(
+struct ggml_tensor * ggml_acc_impl(
         struct ggml_context * ctx,
         struct ggml_tensor * a,
         struct ggml_tensor * b,
@@ -5084,7 +5084,7 @@ struct ggml_tensor * ggml_add_at_impl(
     ((int32_t *) c->data)[3] = offset;
     ((int32_t *) c->data)[4] = inplace ? 1 : 0;
 
-    result->op   = GGML_OP_ADD_AT;
+    result->op   = GGML_OP_ACC;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src0 = a;
     result->src1 = b;
@@ -5093,7 +5093,7 @@ struct ggml_tensor * ggml_add_at_impl(
     return result;
 }
 
-struct ggml_tensor * ggml_add_at(
+struct ggml_tensor * ggml_acc(
         struct ggml_context * ctx,
         struct ggml_tensor * a,
         struct ggml_tensor * b,
@@ -5101,10 +5101,10 @@ struct ggml_tensor * ggml_add_at(
         size_t               nb2,
         size_t               nb3,
         size_t               offset) {
-    return ggml_add_at_impl(ctx, a, b, nb1, nb2, nb3, offset, false);
+    return ggml_acc_impl(ctx, a, b, nb1, nb2, nb3, offset, false);
 }
 
-struct ggml_tensor * ggml_add_at_inplace(
+struct ggml_tensor * ggml_acc_inplace(
         struct ggml_context * ctx,
         struct ggml_tensor * a,
         struct ggml_tensor * b,
@@ -5112,7 +5112,7 @@ struct ggml_tensor * ggml_add_at_inplace(
         size_t               nb2,
         size_t               nb3,
         size_t               offset) {
-    return ggml_add_at_impl(ctx, a, b, nb1, nb2, nb3, offset, true);
+    return ggml_acc_impl(ctx, a, b, nb1, nb2, nb3, offset, true);
 }
 
 // ggml_sub
@@ -8215,9 +8215,9 @@ static void ggml_compute_forward_add1(
 }
 
 
-// ggml_compute_forward_add_at
+// ggml_compute_forward_acc
 
-static void ggml_compute_forward_add_at_f32(
+static void ggml_compute_forward_acc_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
@@ -8229,7 +8229,7 @@ static void ggml_compute_forward_add_at_f32(
     GGML_ASSERT(opt0->type == GGML_TYPE_I32);
     GGML_ASSERT(ggml_nelements(opt0) == 5);
 
-    // view src0 and dst with these strides and data offset inbytes during add_at 
+    // view src0 and dst with these strides and data offset inbytes during acc 
     // nb0 is implicitely element_size because src0 and dst are contiguous
     size_t nb1     = ((int32_t *) opt0->data)[0]; 
     size_t nb2     = ((int32_t *) opt0->data)[1]; 
@@ -8266,7 +8266,7 @@ static void ggml_compute_forward_add_at_f32(
     const size_t nb12 = src1->nb[2];
     const size_t nb13 = src1->nb[3];
 
-    // src0 and dst as viewed during add_at
+    // src0 and dst as viewed during acc
     const size_t nb0 = ggml_element_size(src0);
 
     const size_t nb00 = nb0;
@@ -8307,7 +8307,7 @@ static void ggml_compute_forward_add_at_f32(
     }
 }
 
-static void ggml_compute_forward_add_at(
+static void ggml_compute_forward_acc(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
@@ -8317,7 +8317,7 @@ static void ggml_compute_forward_add_at(
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
-                ggml_compute_forward_add_at_f32(params, src0, src1, opt0, dst);
+                ggml_compute_forward_acc_f32(params, src0, src1, opt0, dst);
             } break;
         case GGML_TYPE_F16:
         case GGML_TYPE_Q4_0:
@@ -13168,9 +13168,9 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             {
                 ggml_compute_forward_add1(params, tensor->src0, tensor->src1, tensor);
             } break;
-        case GGML_OP_ADD_AT:
+        case GGML_OP_ACC:
             {
-                ggml_compute_forward_add_at(params, tensor->src0, tensor->src1, tensor->opt[0], tensor);
+                ggml_compute_forward_acc(params, tensor->src0, tensor->src1, tensor->opt[0], tensor);
             } break;
         case GGML_OP_SUB:
             {
@@ -13404,7 +13404,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                         inplace);
                 }
             } break;
-        case GGML_OP_ADD_AT:
+        case GGML_OP_ACC:
             {
                 if (src0->grad) {
                     src0->grad = ggml_add_impl(ctx, src0->grad, tensor->grad, inplace);
@@ -13767,7 +13767,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 if (src0->grad) {
                     src0->grad = ggml_add_impl(ctx, 
                         src0->grad, 
-                        ggml_add_at_impl(ctx,
+                        ggml_acc_impl(ctx,
                             tensor->grad, 
                             ggml_neg(ctx, tensor_grad_view),
                             nb1, nb2, nb3, offset, false),
@@ -13848,7 +13848,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                         nb3 = (nb3 / n0) * ng;
                     }
                     
-                    src0->grad = ggml_add_at_impl(ctx, src0->grad, tensor->grad, nb1, nb2, nb3, offset, inplace);
+                    src0->grad = ggml_acc_impl(ctx, src0->grad, tensor->grad, nb1, nb2, nb3, offset, inplace);
                 }
             } break;
         case GGML_OP_PERMUTE:
@@ -14394,7 +14394,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
 
                         work_size = MAX(work_size, cur);
                     } break;
-                case GGML_OP_ADD_AT:
+                case GGML_OP_ACC:
                     {
                         node->n_tasks = n_threads;
 

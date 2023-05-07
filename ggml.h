@@ -253,7 +253,7 @@ extern "C" {
         GGML_OP_DUP,
         GGML_OP_ADD,
         GGML_OP_ADD1,
-        GGML_OP_ADD_AT,
+        GGML_OP_ACC,
         GGML_OP_SUB,
         GGML_OP_MUL,
         GGML_OP_DIV,
@@ -496,7 +496,7 @@ extern "C" {
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
 
-    GGML_API struct ggml_tensor * ggml_add_at(
+    GGML_API struct ggml_tensor * ggml_acc(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b,
@@ -505,7 +505,7 @@ extern "C" {
             size_t                nb3,
             size_t                offset);
 
-    GGML_API struct ggml_tensor * ggml_add_at_inplace(
+    GGML_API struct ggml_tensor * ggml_acc_inplace(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b,

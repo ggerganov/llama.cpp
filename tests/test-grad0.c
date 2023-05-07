@@ -697,7 +697,7 @@ int main(int argc, const char ** argv) {
             }
         }
 
-        // add_at 1d
+        // acc 1d
         {
             int64_t ne2[4] = { 1, 1, 1, 1 };
 
@@ -718,13 +718,13 @@ int main(int argc, const char ** argv) {
                 const int max_offset = MAX(0, ggml_nelements(x[0]) - ggml_nelements(x[1]));
                 const int offset = irand(max_offset) * ggml_element_size(x[0]);
 
-                struct ggml_tensor * f = ggml_sum(ctx0, ggml_add_at(ctx0, x[0], x[1], x[0]->nb[1], x[0]->nb[2], x[0]->nb[3], offset));
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_acc(ctx0, x[0], x[1], x[0]->nb[1], x[0]->nb[2], x[0]->nb[3], offset));
 
-                check_gradient("add_at 1d", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+                check_gradient("acc 1d", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
             }
         }
 
-        // add_at 2d
+        // acc 2d
         {
             int64_t ne2[4]         = { 1, 1, 1, 1 };
             int64_t max_offsets[4] = { 0, 0, 0, 0 };
@@ -750,13 +750,13 @@ int main(int argc, const char ** argv) {
                 offsets[1] = irand(max_offsets[1]) * x[0]->nb[1];
                 const int offset = offsets[0] + offsets[1];
 
-                struct ggml_tensor * f = ggml_sum(ctx0, ggml_add_at(ctx0, x[0], x[1], x[0]->nb[1], x[0]->nb[2], x[0]->nb[3], offset));
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_acc(ctx0, x[0], x[1], x[0]->nb[1], x[0]->nb[2], x[0]->nb[3], offset));
 
-                check_gradient("add_at 2d", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+                check_gradient("acc 2d", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
             }
         }
 
-        // add_at 3d
+        // acc 3d
         {
             int64_t ne2[4]         = { 1, 1, 1, 1 };
             int64_t max_offsets[4] = { 0, 0, 0, 0 };
@@ -784,13 +784,13 @@ int main(int argc, const char ** argv) {
                 offsets[2] = irand(max_offsets[2]) * x[0]->nb[2];
                 const int offset = offsets[0] + offsets[1] + offsets[2];
 
-                struct ggml_tensor * f = ggml_sum(ctx0, ggml_add_at(ctx0, x[0], x[1], x[0]->nb[1], x[0]->nb[2], x[0]->nb[3], offset));
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_acc(ctx0, x[0], x[1], x[0]->nb[1], x[0]->nb[2], x[0]->nb[3], offset));
 
-                check_gradient("add_at 3d", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+                check_gradient("acc 3d", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
             }
         }
 
-        // add_at 4d
+        // acc 4d
         {
             int64_t ne2[4]         = { 1, 1, 1, 1 };
             int64_t max_offsets[4] = { 0, 0, 0, 0 };
@@ -820,9 +820,9 @@ int main(int argc, const char ** argv) {
                 offsets[3] = irand(max_offsets[3]) * x[0]->nb[3];
                 const int offset = offsets[0] + offsets[1] + offsets[2] + offsets[3];
 
-                struct ggml_tensor * f = ggml_sum(ctx0, ggml_add_at(ctx0, x[0], x[1], x[0]->nb[1], x[0]->nb[2], x[0]->nb[3], offset));
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_acc(ctx0, x[0], x[1], x[0]->nb[1], x[0]->nb[2], x[0]->nb[3], offset));
 
-                check_gradient("add_at 4d", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+                check_gradient("acc 4d", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
             }
         }
 
