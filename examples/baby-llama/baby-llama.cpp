@@ -2,6 +2,7 @@
 #include <vector>
 #include <assert.h>
 #include <random>
+#include <string.h>
 
 #undef MIN
 #undef MAX
@@ -1177,7 +1178,7 @@ int main(int argc, char ** argv) {
     size_t    compute_size = 1024ll*1024ll*1024ll;
     uint8_t * compute_addr = new uint8_t[compute_size];
 
-    int n_examples = 25600;
+    int n_examples = 256;
     int n_tokens = model.hparams.n_ctx;
     int n_vocab  = model.hparams.n_vocab;
 
@@ -1284,7 +1285,7 @@ int main(int argc, char ** argv) {
     }
 
     {
-        int n_gen = 128;
+        int n_gen = 1200000000;
         int sample_ctx = n_tokens-n_tokens/8;
 
         printf("Generating %d tokens.\n", n_gen);
@@ -1301,6 +1302,7 @@ int main(int argc, char ** argv) {
             print_token(ggml_get_i32_1d(tokens_input, i), n_vocab);
         }
         printf("---\n");
+        int important_sum = 0;
         for (int i=0; i<n_gen; ++i) {
             struct ggml_init_params params = {
                 /*.mem_size   =*/ compute_size,
@@ -1338,10 +1340,18 @@ int main(int argc, char ** argv) {
             //     print_token(ggml_get_i32_1d(tokens_input, i), model.hparams.n_vocab);
             // }
             // printf("--\n");
+            for (int k=0; k<1000000; ++k) {
+                for (int j=0; j<30; ++j) {
+                important_sum += (k+j) / MAX(1,i);
+                }
+            }
 
             ggml_free(ctx0);
         }
+        printf("important (dont optimize it away, compiler!) : %d\n", important_sum);
     }
+    
+    print_matrix(model.tok_embeddings);
 
     printf("done\n");
     // ggml_free(kv_self.ctx);
