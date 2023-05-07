@@ -4683,7 +4683,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
     size_t size_needed = 0;
 
     if (!ggml_tensor_required_memory(ctx, type, n_dims, ne, data, &ctx_needed, &scratch_needed)) {
-        if (scratch_needed > 0 && ctx->scratch.size) {
+        if (scratch_needed > 0 && ctx->scratch.offs + scratch_needed > ctx->scratch.size) {
             GGML_PRINT("%s: not enough space in the scratch memory (needed %zu, available %zu)\n",
                     __func__, ctx->scratch.offs + scratch_needed, ctx->scratch.size);
         } else {
