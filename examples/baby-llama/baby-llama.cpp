@@ -1058,7 +1058,8 @@ void get_example_targets(int example_id, struct ggml_tensor * tokens_input, stru
     int n_tokens = tokens_input->ne[0];
     int n_vocab = targets->ne[0];
     float randomness = 0.0f;
-    ggml_set_zero(targets);
+    // ggml_set_zero(targets);
+    ggml_set_f32(targets, -1.0f);
     ggml_set_i32_1d(tokens_input, 0, 0);
     for (int i=1; i<n_tokens+1; ++i) {
         float x = example_id + i * 3.14159f * 2.0f * 1.0f / n_tokens;
