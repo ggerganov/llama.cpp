@@ -1791,7 +1791,7 @@ llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_
     float k = powf((epsilon_hat * powf(2, *mu)) / (1 - powf(N, -epsilon_hat)), 1 / s_hat);
 
     // Sample the next word X using top-k sampling
-    llama_sample_top_k(nullptr, candidates, int(k));
+    llama_sample_top_k(nullptr, candidates, int(k), 1);
     if (ctx) {
         ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
     }
