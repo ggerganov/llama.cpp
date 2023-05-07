@@ -4615,12 +4615,51 @@ size_t ggml_used_mem(const struct ggml_context * ctx) {
     return ctx->objects_end == NULL ? 0 : ctx->objects_end->offs + ctx->objects_end->size;
 }
 
+size_t ggml_used_scratch_mem(const struct ggml_context * ctx) {
+    return ctx->scratch.data == NULL ? 0 : ctx->scratch.offs;
+}
+
 size_t ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch) {
     const size_t result = ctx->scratch.data ? ctx->scratch.offs : 0;
 
     ctx->scratch = scratch;
 
     return result;
+}
+
+bool ggml_tensor_required_memory(
+        struct ggml_context * ctx,
+        enum   ggml_type type,
+        int    n_dims,
+        const int64_t* ne,
+        void*  data,
+        size_t * required_ctx,
+        size_t * required_scratch) {
+    struct ggml_object * obj_cur = ctx->objects_end;
+    const size_t cur_offs = obj_cur == NULL ? 0 : obj_cur->offs;
+    const size_t cur_size = obj_cur == NULL ? 0 : obj_cur->size;
+    const size_t cur_end  = cur_offs + cur_size;
+
+    size_t size_needed = 0;
+
+    if (data == NULL && !ctx->no_alloc) {
+        size_needed += GGML_TYPE_SIZE[type]*(ne[0]/GGML_BLCK_SIZE[type]);
+        for (int i = 1; i < n_dims; i++) {
+            size_needed *= ne[i];
+        }
+        // align to GGML_MEM_ALIGN
+        size_needed = ((size_needed + GGML_MEM_ALIGN - 1)/GGML_MEM_ALIGN)*GGML_MEM_ALIGN;
+    }
+
+    if (ctx->scratch.data == NULL || data != NULL) {
+        *required_ctx += size_needed + sizeof(struct ggml_tensor) + GGML_OBJECT_SIZE;
+        return cur_end + *required_ctx <= ctx->mem_size;
+    }
+
+    *required_ctx += sizeof(struct ggml_tensor) + GGML_OBJECT_SIZE;
+    *required_scratch += size_needed;
+    return ctx->scratch.offs + *required_scratch <= ctx->scratch.size &&
+        cur_end + *required_ctx <= ctx->mem_size;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4638,7 +4677,22 @@ struct ggml_tensor * ggml_new_tensor_impl(
     const size_t cur_size = obj_cur == NULL ? 0 : obj_cur->size;
     const size_t cur_end  = cur_offs + cur_size;
 
+    size_t ctx_needed = 0;
+    size_t scratch_needed = 0;
+
     size_t size_needed = 0;
+
+    if (!ggml_tensor_required_memory(ctx, type, n_dims, ne, data, &ctx_needed, &scratch_needed)) {
+        if (scratch_needed > 0 && ctx->scratch.size) {
+            GGML_PRINT("%s: not enough space in the scratch memory (needed %zu, available %zu)\n",
+                    __func__, ctx->scratch.offs + scratch_needed, ctx->scratch.size);
+        } else {
+            GGML_PRINT("%s: not enough space in the context's memory pool (needed %zu, available %zu)\n",
+                    __func__, cur_end + ctx_needed, ctx->mem_size);
+        }
+        assert(false);
+        return NULL;
+    }
 
     if (data == NULL && !ctx->no_alloc) {
         size_needed += GGML_TYPE_SIZE[type]*(ne[0]/GGML_BLCK_SIZE[type]);
@@ -4655,32 +4709,12 @@ struct ggml_tensor * ggml_new_tensor_impl(
     if (ctx->scratch.data == NULL || data != NULL) {
         size_needed += sizeof(struct ggml_tensor);
 
-        if (cur_end + size_needed + GGML_OBJECT_SIZE > ctx->mem_size) {
-            GGML_PRINT("%s: not enough space in the context's memory pool (needed %zu, available %zu)\n",
-                    __func__, cur_end + size_needed + GGML_OBJECT_SIZE, ctx->mem_size);
-            assert(false);
-            return NULL;
-        }
-
         *obj_new = (struct ggml_object) {
             .offs = cur_end + GGML_OBJECT_SIZE,
             .size = size_needed,
             .next = NULL,
         };
     } else {
-        if (ctx->scratch.offs + size_needed > ctx->scratch.size) {
-            GGML_PRINT("%s: not enough space in the scratch memory\n", __func__);
-            assert(false);
-            return NULL;
-        }
-
-        if (cur_end + sizeof(struct ggml_tensor) + GGML_OBJECT_SIZE > ctx->mem_size) {
-            GGML_PRINT("%s: not enough space in the context's memory pool (needed %zu, available %zu)\n",
-                    __func__, cur_end + sizeof(struct ggml_tensor) + GGML_OBJECT_SIZE, ctx->mem_size);
-            assert(false);
-            return NULL;
-        }
-
         data = (char * const) ctx->scratch.data + ctx->scratch.offs;
 
         *obj_new = (struct ggml_object) {

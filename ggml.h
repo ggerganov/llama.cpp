@@ -422,6 +422,20 @@ extern "C" {
     GGML_API void    ggml_free(struct ggml_context * ctx);
 
     GGML_API size_t  ggml_used_mem(const struct ggml_context * ctx);
+    GGML_API size_t  ggml_used_scratch_mem(const struct ggml_context * ctx);
+
+    // Calculate the memory required to construct a tensor with the specified type,
+    // dimensions and shape. The last two arguments will be incremented by the
+    // required sizes so it's necessary to initialize them to 0 before calling this
+    // function for the first time.
+    GGML_API bool    ggml_tensor_required_memory(
+            struct ggml_context * ctx,
+            enum   ggml_type type,
+            int    n_dims,
+            const int64_t* ne,
+            void*  data,
+            size_t * required_ctx,
+            size_t * required_scratch);
 
     GGML_API size_t  ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch);
 
