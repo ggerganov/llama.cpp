@@ -519,7 +519,7 @@ def llama_sample_top_k(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
     k: c_int,
-    min_keep: c_size_t = c_size_t(1),
+    min_keep: c_size_t,
 ):
     return _lib.llama_sample_top_k(ctx, candidates, k, min_keep)
 
@@ -538,7 +538,7 @@ def llama_sample_top_p(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
     p: c_float,
-    min_keep: c_size_t = c_size_t(1),
+    min_keep: c_size_t,
 ):
     return _lib.llama_sample_top_p(ctx, candidates, p, min_keep)
 
@@ -557,7 +557,7 @@ def llama_sample_tail_free(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
     z: c_float,
-    min_keep: c_size_t = c_size_t(1),
+    min_keep: c_size_t,
 ):
     return _lib.llama_sample_tail_free(ctx, candidates, z, min_keep)
 
@@ -576,7 +576,7 @@ def llama_sample_typical(
     ctx: llama_context_p,
     candidates,  # type: _Pointer[llama_token_data_array]
     p: c_float,
-    min_keep: c_size_t = c_size_t(1),
+    min_keep: c_size_t,
 ):
     return _lib.llama_sample_typical(ctx, candidates, p, min_keep)
 
