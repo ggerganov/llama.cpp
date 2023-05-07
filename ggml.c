@@ -1283,8 +1283,8 @@ static void dequantize_row_q4_0(const block_q4_0 * restrict x, float * restrict 
         const float d = x[i].d;
 
         for (int j = 0; j < qk/2; ++j) {
-            const int x0 = (x[i].qs[j] & 0xf) - 8;
-            const int x1 = (x[i].qs[j] >>  4) - 8;
+            const int x0 = (x[i].qs[j] & 0x0F) - 8;
+            const int x1 = (x[i].qs[j] >>   4) - 8;
 
             y[i*qk + j + 0   ] = x0*d;
             y[i*qk + j + qk/2] = x1*d;
@@ -1304,8 +1304,8 @@ static void dequantize_row_q4_1(const block_q4_1 * restrict x, float * restrict 
         const float m = x[i].m;
 
         for (int j = 0; j < qk/2; ++j) {
-            const int x0 = (x[i].qs[j] & 0xf);
-            const int x1 = (x[i].qs[j] >>  4);
+            const int x0 = (x[i].qs[j] & 0x0F);
+            const int x1 = (x[i].qs[j] >>   4);
 
             y[i*qk + j + 0   ] = x0*d + m;
             y[i*qk + j + qk/2] = x1*d + m;
@@ -1330,8 +1330,8 @@ static void dequantize_row_q5_0(const block_q5_0 * restrict x, float * restrict 
             const uint8_t xh_0 = ((qh & (1u << (j + 0 ))) >> (j + 0 )) << 4;
             const uint8_t xh_1 = ((qh & (1u << (j + 16))) >> (j + 12));
 
-            const int32_t x0 = ((x[i].qs[j] & 0xf) | xh_0) - 16;
-            const int32_t x1 = ((x[i].qs[j] >>  4) | xh_1) - 16;
+            const int32_t x0 = ((x[i].qs[j] & 0x0F) | xh_0) - 16;
+            const int32_t x1 = ((x[i].qs[j] >>   4) | xh_1) - 16;
 
             y[i*qk + j + 0   ] = x0*d;
             y[i*qk + j + qk/2] = x1*d;
@@ -1357,8 +1357,8 @@ static void dequantize_row_q5_1(const block_q5_1 * restrict x, float * restrict 
             const uint8_t xh_0 = ((qh & (1u << (j + 0 ))) >> (j + 0 )) << 4;
             const uint8_t xh_1 = ((qh & (1u << (j + 16))) >> (j + 12));
 
-            const int x0 = (x[i].qs[j] & 0xf) | xh_0;
-            const int x1 = (x[i].qs[j] >>  4) | xh_1;
+            const int x0 = (x[i].qs[j] & 0x0F) | xh_0;
+            const int x1 = (x[i].qs[j] >>   4) | xh_1;
 
             y[i*qk + j + 0   ] = x0*d + m;
             y[i*qk + j + qk/2] = x1*d + m;
@@ -2184,8 +2184,8 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
         int sumi = 0;
 
         for (int j = 0; j < qk/2; ++j) {
-            const int v0 = (x[i].qs[j] & 0xf) - 8;
-            const int v1 = (x[i].qs[j] >>  4) - 8;
+            const int v0 = (x[i].qs[j] & 0x0F) - 8;
+            const int v1 = (x[i].qs[j] >>   4) - 8;
 
             sumi += (v0 * y[i].qs[j]) + (v1 * y[i].qs[j + qk/2]);
         }
@@ -2306,8 +2306,8 @@ static void ggml_vec_dot_q4_1_q8_1(const int n, float * restrict s, const void *
         int sumi = 0;
 
         for (int j = 0; j < qk/2; ++j) {
-            const int v0 = (x[i].qs[j] & 0xf);
-            const int v1 = (x[i].qs[j] >>  4);
+            const int v0 = (x[i].qs[j] & 0x0F);
+            const int v1 = (x[i].qs[j] >>   4);
 
             sumi += (v0 * y[i].qs[j]) + (v1 * y[i].qs[j + qk/2]);
         }
@@ -2487,8 +2487,8 @@ static void ggml_vec_dot_q5_0_q8_0(const int n, float * restrict s, const void *
             const uint8_t xh_0 = ((qh & (1u << (j + 0 ))) >> (j + 0 )) << 4;
             const uint8_t xh_1 = ((qh & (1u << (j + 16))) >> (j + 12));
 
-            const int32_t x0 = ((x[i].qs[j] & 0xf) | xh_0) - 16;
-            const int32_t x1 = ((x[i].qs[j] >>  4) | xh_1) - 16;
+            const int32_t x0 = ((x[i].qs[j] & 0x0F) | xh_0) - 16;
+            const int32_t x1 = ((x[i].qs[j] >>   4) | xh_1) - 16;
 
             sumi += (x0 * y[i].qs[j]) + (x1 * y[i].qs[j + qk/2]);
         }
