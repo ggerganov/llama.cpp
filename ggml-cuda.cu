@@ -49,13 +49,6 @@ typedef struct {
 } block_q4_1;
 static_assert(sizeof(block_q4_1) == sizeof(float) * 2 + QK4_1 / 2, "wrong q4_1 block size/padding");
 
-#define QK4_2 16
-typedef struct {
-    half  d;                // delta
-    uint8_t qs[QK4_2 / 2];  // nibbles / quants
-} block_q4_2;
-static_assert(sizeof(block_q4_2) == sizeof(ggml_fp16_t) + QK4_2 / 2, "wrong q4_2 block size/padding");
-
 #define QK5_0 32
 typedef struct {
     half d;                 // delta
@@ -114,29 +107,6 @@ static __global__ void dequantize_block_q4_1(const void * vx, float * y) {
 
         y[i*qk + j + 0   ] = x0*d + m;
         y[i*qk + j + qk/2] = x1*d + m;
-    }
-}
-
-static __global__ void dequantize_block_q4_2(const void * vx, float * y) {
-    const block_q4_2 * x = (const block_q4_2 *) vx;
-
-    const int i = blockIdx.x;
-
-    const float d = x[i].d;
-
-    const uint8_t * pp = x[i].qs;
-
-    for (int l = 0; l < QK4_2; l += 2) {
-        const uint8_t vi = pp[l/2];
-
-        const int8_t vi0 = vi & 0xf;
-        const int8_t vi1 = vi >> 4;
-
-        const float v0 = (vi0 - 8)*d;
-        const float v1 = (vi1 - 8)*d;
-
-        y[i*QK4_2 + l + 0] = v0;
-        y[i*QK4_2 + l + 1] = v1;
     }
 }
 
@@ -215,11 +185,6 @@ static void dequantize_row_q4_1_cuda(const void * vx, float * y, int k, cudaStre
     dequantize_block_q4_1<<<nb, 1, 0, stream>>>(vx, y);
 }
 
-static void dequantize_row_q4_2_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
-    const int nb = k / QK4_2;
-    dequantize_block_q4_2<<<nb, 1, 0, stream>>>(vx, y);
-}
-
 static void dequantize_row_q5_0_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
     const int nb = k / QK5_0;
     dequantize_block_q5_0<<<nb, 1, 0, stream>>>(vx, y);
@@ -254,8 +219,6 @@ static to_fp32_cuda_t ggml_get_to_fp32_cuda(ggml_type type) {
             return dequantize_row_q4_0_cuda;
         case GGML_TYPE_Q4_1:
             return dequantize_row_q4_1_cuda;
-        case GGML_TYPE_Q4_2:
-            return dequantize_row_q4_2_cuda;
         case GGML_TYPE_Q5_0:
             return dequantize_row_q5_0_cuda;
         case GGML_TYPE_Q5_1:
