@@ -11,6 +11,7 @@
 #include <unordered_map>
 
 #if !defined (_WIN32)
+#include <stdio.h>
 #include <termios.h>
 #endif
 
@@ -112,7 +113,12 @@ struct console_state {
     bool multiline_input = false;
     bool use_color = false;
     console_color_t color = CONSOLE_COLOR_DEFAULT;
-#if !defined (_WIN32)
+
+    FILE* out = stdout;
+#if defined (_WIN32)
+    void* hConsole;
+#else
+    FILE* tty = nullptr;
     termios prev_state;
 #endif
 };
