@@ -91,6 +91,7 @@ void process_escapes(std::string& input) {
 }
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
+    bool ethreads_set = false;
     bool invalid_param = false;
     bool escape_prompt = false;
     std::string arg;
@@ -114,6 +115,13 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.n_threads = std::stoi(argv[i]);
+        } else if (arg == "-e" || arg == "--eval-threads") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_ethreads = std::stoi(argv[i]);
+            ethreads_set = true;
         } else if (arg == "-p" || arg == "--prompt") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -339,6 +347,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             exit(1);
         }
     }
+
+    // ensure that n_ethreads defaults to the system thread-max only when n_threads is not set
+    if (!ethreads_set) {
+        params.n_ethreads = params.n_threads;
+    }
+
     if (invalid_param) {
         fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
         gpt_print_usage(argc, argv, default_params);

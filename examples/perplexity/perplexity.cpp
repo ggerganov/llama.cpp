@@ -41,10 +41,11 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
         std::vector<float> logits;
         int num_batches = (params.n_ctx + params.n_batch - 1) / params.n_batch;
         auto start_t = std::chrono::high_resolution_clock::now();
+
         for (int j = 0; j < num_batches; ++j) {
             int batch_start = start + j * params.n_batch;
             int batch_size = std::min(end - batch_start, params.n_batch);
-            if (llama_eval(ctx, tokens.data() + batch_start, batch_size, j * params.n_batch, params.n_threads)) {
+            if (llama_eval(ctx, tokens.data() + batch_start, batch_size, j * params.n_batch, params.n_threads, params.n_ethreads)) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return;
             }

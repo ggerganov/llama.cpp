@@ -71,7 +71,7 @@ int main(int argc, char ** argv) {
 
     if (params.embedding){
         if (embd_inp.size() > 0) {
-            if (llama_eval(ctx, embd_inp.data(), embd_inp.size(), n_past, params.n_threads)) {
+            if (llama_eval(ctx, embd_inp.data(), embd_inp.size(), n_past, params.n_threads, params.n_ethreads)) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return 1;
             }
