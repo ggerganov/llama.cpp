@@ -39,7 +39,7 @@ struct gpt_params {
     float   mirostat_tau      = 5.00f; // target entropy
     float   mirostat_eta      = 0.10f; // learning rate
 
-    std::string model  = "models/lamma-7B/ggml-model.bin"; // model path
+    std::string model  = "models/llama-7B/ggml-model.bin"; // model path
     std::string prompt = "";
     std::string path_session = "";       // path to file for saving/loading model eval state
     std::string input_prefix = "";       // string to prefix user inputs with
