@@ -3936,7 +3936,7 @@ inline static void ggml_vec_scale_f32(const int n, float * y, const float   v) {
 inline static void ggml_vec_norm_f32 (const int n, float * s, const float * x) { ggml_vec_dot_f32(n, s, x, x); *s = sqrtf(*s);   }
 inline static void ggml_vec_sqr_f32  (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = x[i]*x[i];   }
 inline static void ggml_vec_sqrt_f32 (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = sqrtf(x[i]); }
-inline static void ggml_vec_log_f32  (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = log(x[i]);   }
+inline static void ggml_vec_log_f32  (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = logf(x[i]);   }
 inline static void ggml_vec_abs_f32  (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = fabsf(x[i]); }
 inline static void ggml_vec_sgn_f32  (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = (x[i] > 0.f) ? 1.f : ((x[i] < 0.f) ? -1.f : 0.f); }
 inline static void ggml_vec_step_f32 (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = (x[i] > 0.f) ? 1.f : 0.f; }
@@ -4009,7 +4009,6 @@ inline static float ggml_silu_backward_f32(float x, float dy) {
 
 #ifdef GGML_SILU_FP16
 inline static void ggml_vec_silu_backward_f32(const int n, float * dx, const float * x, const float * dy) {
-    uint16_t t;
     for (int i = 0; i < n; ++i) {
         // we did not use x[i] to compute forward silu but its f16 equivalent
         // take derivative at f16 of x[i]:
@@ -6841,7 +6840,7 @@ struct ggml_tensor * ggml_rope(
         int                   n_dims,
         int                   mode) {
     return ggml_rope_impl(ctx, a, n_past, n_dims, mode, false);
-};
+}
 
 struct ggml_tensor * ggml_rope_inplace(
         struct ggml_context * ctx,
@@ -6850,7 +6849,7 @@ struct ggml_tensor * ggml_rope_inplace(
         int                   n_dims,
         int                   mode) {
     return ggml_rope_impl(ctx, a, n_past, n_dims, mode, true);
-};
+}
 
 // ggml_rope_back
 
@@ -8003,7 +8002,7 @@ static void ggml_compute_forward_add_q_f32(
     const int64_t ne00 = src0->ne[0];
     const int64_t ne01 = src0->ne[1];
     const int64_t ne02 = src0->ne[2];
-    const int64_t ne03 = src0->ne[3];
+    //const int64_t ne03 = src0->ne[3];
 
     const size_t nb00 = src0->nb[0];
     const size_t nb01 = src0->nb[1];
@@ -8028,7 +8027,7 @@ static void ggml_compute_forward_add_q_f32(
     quantize_row_q_t const quantize_row_q = quantize_fns[type].quantize_row_q;
 
     // we don't support permuted src0 or src1
-    GGML_ASSERT(nb00 == (int) GGML_TYPE_SIZE[type]);
+    GGML_ASSERT(nb00 == GGML_TYPE_SIZE[type]);
     GGML_ASSERT(nb10 == sizeof(float));
 
     // dst cannot be transposed or permuted
@@ -8131,9 +8130,6 @@ static void ggml_compute_forward_add1_f32(
         return;
     }
 
-    // scalar to add
-    const float v = *(float *) src1->data;
-
     const int ith = params->ith;
     const int nth = params->nth;
 
@@ -8146,11 +8142,6 @@ static void ggml_compute_forward_add1_f32(
     const size_t nb01 = src0->nb[1];
     const size_t nb02 = src0->nb[2];
     const size_t nb03 = src0->nb[3];
-
-    const size_t nb10 = src1->nb[0];
-    const size_t nb11 = src1->nb[1];
-    const size_t nb12 = src1->nb[2];
-    const size_t nb13 = src1->nb[3];
 
     const size_t nb0 = dst->nb[0];
     const size_t nb1 = dst->nb[1];
@@ -8177,13 +8168,13 @@ static void ggml_compute_forward_add1_f32(
         vDSP_vadd(
                 (float *) ((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01), 1,
                 (float *) ((char *) src1->data), 0,
-                (float *) ((char *) dst->data  + i3*nb3  + i2*nb2  + i1*nb1 ),  1,
+                (float *) ((char *) dst->data  + i3*nb3  + i2*nb2  + i1*nb1 ), 1,
                 ne0);
 #else
         ggml_vec_add1_f32(ne0,
                 (float *) ((char *) dst->data  + i3*nb3  + i2*nb2  + i1*nb1 ),
                 (float *) ((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01),
-                v);
+               *(float *) src1->data);
 #endif
     }
 }
@@ -8348,7 +8339,7 @@ static void ggml_compute_forward_add1_q_f32(
     quantize_row_q_t const quantize_row_q = quantize_fns[type].quantize_row_q;
 
     // we don't support permuted src0
-    GGML_ASSERT(nb00 == (int) GGML_TYPE_SIZE[type]);
+    GGML_ASSERT(nb00 == GGML_TYPE_SIZE[type]);
 
     // dst cannot be transposed or permuted
     GGML_ASSERT(nb0 <= nb1);
@@ -8510,7 +8501,7 @@ static void ggml_compute_forward_acc_f32(
         vDSP_vadd(
                 (float *) ((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + offset), 1,
                 (float *) ((char *) src1->data + i3*nb13 + i2*nb12 + i1*nb11), 1,
-                (float *) ((char *) dst->data  + i3*nb3  + i2*nb2  + i1*nb1  + offset),  1, nc);
+                (float *) ((char *) dst->data  + i3*nb3  + i2*nb2  + i1*nb1  + offset), 1, nc);
 #else
         ggml_vec_add_f32(nc,
                 (float *) ((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + offset),
@@ -9825,28 +9816,30 @@ static void ggml_compute_forward_rms_norm_back_f32(
         for (int64_t i02 = 0; i02 < ne02; i02++) {
             for (int64_t i01 = ith; i01 < ne01; i01 += nth) {
                 // src1 is same shape as src0 => same indices
-                const auto i11 = i01;
-                const auto i12 = i02;
-                const auto i13 = i03;
+                const int64_t i11 = i01;
+                const int64_t i12 = i02;
+                const int64_t i13 = i03;
+
                 const float * x = (float *) ((char *) src0->data + i01*nb01 + i02*nb02 + i03*nb03);
                 const float * dz = (float *) ((char *) src1->data + i11*nb11 + i12*nb12 + i13*nb13);
 
-                ggml_float sum_xx = 0.0;
+                ggml_float sum_xx  = 0.0;
                 ggml_float sum_xdz = 0.0;
+
                 for (int64_t i00 = 0; i00 < ne00; i00++) {
-                    sum_xx += (ggml_float)(x[i00] * x[i00]);
+                    sum_xx  += (ggml_float)(x[i00] * x[i00]);
                     sum_xdz += (ggml_float)(x[i00] * dz[i00]);
                 }
 
-                const float mean = sum_xx/ne00;
+                const float mean     = sum_xx/ne00;
                 const float mean_eps = sum_xx/ne00 + eps;
-                const float sum_eps = sum_xx + eps*ne00;
+                const float sum_eps  = sum_xx + eps*ne00;
                 const float mean_xdz = sum_xdz/ne00;
                 // we could cache rms from forward pass to improve performance.
                 // to do this implement ggml_rms and compose ggml_rms_norm using ggml_rms.
-                const float rms = sqrtf(mean_eps);
-                const float rrms = 1.0f / sqrtf(mean_eps);
-                const float scale = -rrms/(ne00 * mean_eps); // -1/(n*rms**3)
+                const float rms      = sqrtf(mean_eps);
+                const float rrms     = 1.0f / sqrtf(mean_eps);
+                const float scale    = -rrms/(ne00 * mean_eps); // -1/(n*rms**3)
 
                 {
                     // z = rms_norm(x)
@@ -10760,11 +10753,6 @@ static void ggml_compute_forward_set_f32(
     // src0 and dst as viewed during set
     const size_t nb0 = ggml_element_size(src0);
 
-    const size_t nb00 = nb0;
-    const size_t nb01 = nb1;
-    const size_t nb02 = nb2;
-    const size_t nb03 = nb3;
-
     const int im0 = (ne10 == 0 ? 0 : ne10-1);
     const int im1 = (ne11 == 0 ? 0 : ne11-1);
     const int im2 = (ne12 == 0 ? 0 : ne12-1);
@@ -11154,7 +11142,7 @@ static void ggml_compute_forward_diag_f32(
     GGML_ASSERT(ne03 == ne3);
 
     const int nb00 = src0->nb[0];
-    const int nb01 = src0->nb[1];
+    //const int nb01 = src0->nb[1];
     const int nb02 = src0->nb[2];
     const int nb03 = src0->nb[3];
     const int nb0 = dst->nb[0];

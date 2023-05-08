@@ -1280,7 +1280,7 @@ int main(int argc, char ** argv) {
     }
 
     {
-        int n_gen = 1200000000;
+        int n_gen = 128;
         int sample_ctx = n_tokens-n_tokens/8;
 
         printf("Generating %d tokens.\n", n_gen);
