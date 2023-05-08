@@ -348,7 +348,7 @@ static void ggml_cuda_pool_free(void * ptr, size_t size) {
     CUDA_CHECK(cudaFree(ptr));
 }
 
-#define GGML_CUDA_MAX_STREAMS 8
+#define GGML_CUDA_MAX_STREAMS 8 // Set this to 1 for reproducible matrix multiplication.
 #define GGML_CUDA_MAX_EVENTS 64
 static cublasHandle_t g_cublasH = nullptr;
 static cudaStream_t g_cudaStreams[GGML_CUDA_MAX_STREAMS] = { nullptr };
