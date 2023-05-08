@@ -13891,9 +13891,6 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                     GGML_ASSERT(ggml_is_contiguous(tensor->grad));
                     src0->grad = ggml_add_impl(ctx, src0->grad, tensor->grad, inplace);
                 }
-                if (src1->grad) {
-                    // noop
-                }
             } break;
         case GGML_OP_RESHAPE:
             {
@@ -13903,9 +13900,6 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                         ggml_add_impl(ctx, src0->grad,
                             ggml_reshape(ctx, tensor->grad, src0->grad),
                         inplace);
-                }
-                if (src1->grad) {
-                    // noop
                 }
             } break;
         case GGML_OP_VIEW:
