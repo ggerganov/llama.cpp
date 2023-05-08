@@ -541,6 +541,10 @@ def main(args):
         except Exception as ex:
              print("Error, Could not change process priority: " + str(ex))
 
+    if args.contextsize:
+        global maxctx       
+        maxctx = args.contextsize
+
     init_library() # Note: if blas does not exist and is enabled, program will crash.
     print("==========")
     time.sleep(1)
@@ -620,6 +624,7 @@ if __name__ == '__main__':
     parser.add_argument("--blasthreads", help="Use a different number of threads during BLAS if specified. Otherwise, has the same value as --threads",metavar=('[threads]'), type=int, default=0)
     parser.add_argument("--psutil_set_threads", help="Experimental flag. If set, uses psutils to determine thread count based on physical cores.", action='store_true')
     parser.add_argument("--highpriority", help="Experimental flag. If set, increases the process CPU priority, potentially speeding up generation. Use caution.", action='store_true')
+    parser.add_argument("--contextsize", help="Controls the memory allocated for maximum context size, only change if you need more RAM for big contexts. (default 2048)", type=int,choices=[512,1024,2048,4096,8192], default=2048)
     parser.add_argument("--blasbatchsize", help="Sets the batch size used in BLAS processing (default 512)", type=int,choices=[32,64,128,256,512,1024], default=512)
     parser.add_argument("--stream", help="Uses pseudo streaming when generating tokens. Only for the Kobold Lite UI.", action='store_true')
     parser.add_argument("--smartcontext", help="Reserving a portion of context to try processing less frequently.", action='store_true')
