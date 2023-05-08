@@ -11656,7 +11656,7 @@ typedef int ggml_lock_t;
 
 #define ggml_lock_init(x)    UNUSED(x)
 #define ggml_lock_destroy(x) UNUSED(x)
-#if defined(__x86_64__) || defined(_MSC_VER)
+#if defined(__x86_64__) || (defined(_MSC_VER) && defined(_M_AMD64))
 #define ggml_lock_lock(x)    _mm_pause()
 #else
 #define ggml_lock_lock(x)    UNUSED(x)
