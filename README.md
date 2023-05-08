@@ -7,6 +7,14 @@
 
 Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
+## ⚠️ TEMPORARY NOTICE ABOUT UPCOMING BREAKING CHANGE ⚠️
+
+**The quantization formats will soon be updated: https://github.com/ggerganov/llama.cpp/pull/1305**
+
+**All `ggml` model files using the old format will not work with the latest `llama.cpp` code after that change is merged**
+
+---
+
 **Hot topics:**
 
 - [Roadmap May 2023](https://github.com/ggerganov/llama.cpp/discussions/1220)
