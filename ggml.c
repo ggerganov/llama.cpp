@@ -8585,8 +8585,8 @@ static void ggml_compute_forward_sub_f32(
 
 #ifdef GGML_USE_ACCELERATE
             vDSP_vsub(
-                    (float *) ((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01), 1,
                     (float *) ((char *) src1->data + i3*nb13 + i2*nb12 + i1*nb11), 1,
+                    (float *) ((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01), 1,
                     (float *) ((char *) dst->data  + i3*nb3  + i2*nb2  + i1*nb1 ), 1,
                     ne0);
 #else
