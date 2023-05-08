@@ -173,6 +173,52 @@ static __global__ void dequantize_block_q8_0(const void * vx, float * y) {
     }
 }
 
+template <int block_size> static __global__ void dequantize_mul_mat_q4_0(const void * vx, const float * y, float * dst, const int ncols) {
+    const block_q4_0 * x = (const block_q4_0 *) vx;
+    const int qk = QK4_0;
+
+    const int row = blockIdx.x;
+    const int tid = threadIdx.x;
+
+    __shared__ float tmp[block_size]; // separate sum for each thread
+    tmp[tid] = 0;
+
+    for (int i = 0; i < ncols/block_size; i += 2) {
+        const int col = i*block_size + 2*tid;
+        const int ib = (row*ncols + col)/qk; // block index
+        const int iqs = (col%qk)/2; // quant index
+        const int iybs = col - col%qk; // y block start index
+
+        // dequantize
+        const float d = x[ib].d;
+
+        const uint8_t * pp = x[ib].qs;
+
+        const uint8_t vui = pp[iqs];
+
+        const int8_t vi0 = vui & 0xF;
+        const int8_t vi1 = vui >> 4;
+
+        const float v0 = (vi0 - 8)*d;
+        const float v1 = (vi1 - 8)*d;
+
+        // matrix multiplication
+        tmp[tid] += v0 * y[iybs + iqs + 0];
+        tmp[tid] += v1 * y[iybs + iqs + qk/2];
+    }
+
+    // sum up partial sums and write back result
+    for (int s=block_size/2; s>0; s>>=1) {
+        if (tid < s) {
+            tmp[tid] += tmp[tid + s];
+        }
+        __syncthreads();
+    }
+    if (tid == 0) {
+        dst[row] = tmp[0];
+    }
+}
+
 static void dequantize_row_q4_0_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
     const int nb = k / QK4_0;
     dequantize_block_q4_0<<<nb, 1, 0, stream>>>(vx, y);
@@ -196,6 +242,23 @@ static void dequantize_row_q5_1_cuda(const void * vx, float * y, int k, cudaStre
 static void dequantize_row_q8_0_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
     const int nb = k / QK8_0;
     dequantize_block_q8_0<<<nb, 1, 0, stream>>>(vx, y);
+}
+
+static void dequantize_mul_mat_q4_0_cuda(const void * vx, const float * y, float * dst, const int ncols, const int nrows, cudaStream_t stream) {
+    // static int block_size = -1;
+    // if (block_size == -1) {
+    //     int min_grid_size, max_block_size = 1;
+    //     CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &max_block_size, dequantize_mul_mat_q4_0<256>, 0, 0));
+    //     max_block_size = min(max_block_size, GGML_CUDA_MAX_BLOCK_SIZE);
+    //     block_size = 1;
+    //     while (block_size*2 <= max_block_size && block_size*2 % ncols == 0) {
+    //         block_size *= 2;
+    //     }
+    // }
+    // dequantize_mul_mat_q4_0<<<nrows, block_size, 0, stream>>>(vx, y, dst, ncols);
+    const int block_size = 32;
+    GGML_ASSERT(ncols % block_size == 0);
+    dequantize_mul_mat_q4_0<block_size><<<nrows, block_size, 0, stream>>>(vx, y, dst, ncols);
 }
 
 // TODO: optimize
@@ -231,7 +294,7 @@ static to_fp32_cuda_t ggml_get_to_fp32_cuda(ggml_type type) {
 }
 
 // buffer pool for cuda
-#define MAX_CUDA_BUFFERS 16
+#define MAX_CUDA_BUFFERS 256
 
 struct scoped_spin_lock {
     std::atomic_flag& lock;
@@ -538,7 +601,10 @@ static void ggml_cuda_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor 
     const size_t q_sz = ggml_type_size(type) * x_ne / ggml_blck_size(type);
 
     size_t x_size, y_size, d_size, q_size;
-    float * d_X = (float *) ggml_cuda_pool_malloc(n_mm * sizeof(float) * x_ne, &x_size);
+    float * d_X;
+    if (ne11 > 1) {
+        d_X = (float *) ggml_cuda_pool_malloc(n_mm * sizeof(float) * x_ne, &x_size);
+    }
     float * d_Y = (float *) ggml_cuda_pool_malloc(n_mm * sizeof(float) * y_ne, &y_size);
     float * d_D = (float *) ggml_cuda_pool_malloc(n_mm * sizeof(float) * d_ne, &d_size);
     char  * d_Q = (char  *) ggml_cuda_pool_malloc(n_mm * q_sz, &q_size);
@@ -553,31 +619,54 @@ static void ggml_cuda_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor 
             cudaStream_t cudaStream2 = g_cudaStreams2[i % GGML_CUDA_MAX_STREAMS];
             cudaEvent_t  cudaEvent = g_cudaEvents[i % GGML_CUDA_MAX_EVENTS];
 
-            float * c_X = d_X + i * x_ne;
             float * c_Y = d_Y + i * y_ne;
             float * c_D = d_D + i * d_ne;
             char  * c_Q = d_Q + i * q_sz;
 
-            // copy src0 and convert to fp32 on device
-            CUDA_CHECK(ggml_cuda_h2d_tensor_2d(c_Q, src0, i03, i02, cudaStream2));
-            to_fp32_cuda(c_Q, c_X, x_ne, cudaStream2);
-            CUDA_CHECK(cudaGetLastError());
-            CUDA_CHECK(cudaEventRecord(cudaEvent, cudaStream2));
+            // copy src0 to device if necessary
+            if (src0->backend == GGML_BACKEND_CPU) {
+                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(c_Q, src0, i03, i02, cudaStream2));
+            } else if (src0->backend == GGML_BACKEND_CUDA) {
+                c_Q = ((char *) src0->data) + i * q_sz;
+            } else {
+                GGML_ASSERT(false);
+            }
+            if (ne11 == 1) {
+                CUDA_CHECK(cudaEventRecord(cudaEvent, cudaStream2));
 
-            // copy src1 to device
-            CUDA_CHECK(ggml_cuda_h2d_tensor_2d(c_Y, src1, i03, i02, cudaStream));
+                // copy src1 to device
+                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(c_Y, src1, i03, i02, cudaStream));
 
-            // wait for conversion
-            CUDA_CHECK(cudaStreamWaitEvent(cudaStream, cudaEvent, 0));
+                // wait for data
+                CUDA_CHECK(cudaStreamWaitEvent(cudaStream, cudaEvent, 0));
 
-            // compute
-            CUBLAS_CHECK(cublasSetStream(g_cublasH, cudaStream));
-            CUBLAS_CHECK(
-                cublasSgemm(g_cublasH, CUBLAS_OP_T, CUBLAS_OP_N,
-                        ne01, ne11, ne10,
-                        &alpha, c_X, ne00,
-                                c_Y, ne10,
-                        &beta,  c_D, ne01));
+                // compute
+                dequantize_mul_mat_q4_0_cuda(c_Q, c_Y, c_D, ne00, ne01, cudaStream);
+                CUDA_CHECK(cudaGetLastError());
+
+            } else {
+                float * c_X = d_X + i * x_ne;
+
+                // convert src0 to fp32 on device
+                to_fp32_cuda(c_Q, c_X, x_ne, cudaStream2);
+                CUDA_CHECK(cudaGetLastError());
+                CUDA_CHECK(cudaEventRecord(cudaEvent, cudaStream2));
+
+                // copy src1 to device
+                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(c_Y, src1, i03, i02, cudaStream));
+
+                // wait for conversion
+                CUDA_CHECK(cudaStreamWaitEvent(cudaStream, cudaEvent, 0));
+
+                // compute
+                CUBLAS_CHECK(cublasSetStream(g_cublasH, cudaStream));
+                CUBLAS_CHECK(
+                    cublasSgemm(g_cublasH, CUBLAS_OP_T, CUBLAS_OP_N,
+                            ne01, ne11, ne10,
+                            &alpha, c_X, ne00,
+                                    c_Y, ne10,
+                            &beta,  c_D, ne01));
+            }
 
             // copy dst to host
             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
@@ -586,7 +675,9 @@ static void ggml_cuda_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor 
     }
 
     CUDA_CHECK(cudaDeviceSynchronize());
-    ggml_cuda_pool_free(d_X, x_size);
+    if (ne11 > 1) {
+        ggml_cuda_pool_free(d_X, x_size);
+    }
     ggml_cuda_pool_free(d_Y, y_size);
     ggml_cuda_pool_free(d_D, d_size);
     ggml_cuda_pool_free(d_Q, q_size);
@@ -602,8 +693,7 @@ bool ggml_cuda_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_te
     if ((src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) &&
         src1->type == GGML_TYPE_F32 &&
         dst->type == GGML_TYPE_F32 &&
-        (ne0 >= 32 && ne1 >= 32 && ne10 >= 32)) {
-
+        ((ne0 >= 32 && ne1 >= 32 && ne10 >= 32) || src0->backend == GGML_BACKEND_CUDA)) {
         return true;
     }
 
@@ -654,4 +744,26 @@ size_t ggml_cuda_mul_mat_get_wsize(const struct ggml_tensor * src0, const struct
     else {
         return 0;
     }
+}
+
+void ggml_cuda_transform_tensor(ggml_tensor * tensor) {
+    const int64_t ne0 = tensor->ne[0];
+    const int64_t ne1 = tensor->ne[1];
+    const int64_t ne2 = tensor->ne[2];
+    const int64_t ne3 = tensor->ne[3];
+
+    const ggml_type type = tensor->type;
+    const size_t q_sz = ggml_type_size(type) * ne0 * ne1 * ne2 * ne3 / ggml_blck_size(type);
+
+    size_t q_size;
+    char * d_Q = (char *) ggml_cuda_pool_malloc(q_sz, &q_size);
+
+    cudaStream_t cudaStream2 = g_cudaStreams2[0];
+
+    // copy tensor to device
+    CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_Q, tensor, 0, 0, cudaStream2));
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    tensor->data = d_Q;
+    tensor->backend = GGML_BACKEND_CUDA;
 }

@@ -63,6 +63,7 @@ extern "C" {
         bool vocab_only; // only load the vocabulary, no weights
         bool use_mmap;   // use mmap if possible
         bool use_mlock;  // force system to keep model in RAM
+        int gpu_layers;  // number of layers to store in VRAM
         bool embedding;  // embedding mode only
 
         // called with a progress value between 0 and 1, pass NULL to disable

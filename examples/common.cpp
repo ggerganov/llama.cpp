@@ -277,6 +277,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.use_color = true;
         } else if (arg == "--mlock") {
             params.use_mlock = true;
+        } else if (arg == "--gpu_layers") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.gpu_layers = std::stoi(argv[i]);
         } else if (arg == "--no-mmap") {
             params.use_mmap = false;
         } else if (arg == "--mtest") {
@@ -421,6 +427,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     if (llama_mmap_supported()) {
         fprintf(stderr, "  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
     }
+    fprintf(stderr, "  --gpu_layers          number of layers to store in VRAM\n");
     fprintf(stderr, "  --mtest               compute maximum memory usage\n");
     fprintf(stderr, "  --verbose-prompt      print prompt before generation\n");
     fprintf(stderr, "  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
@@ -469,6 +476,7 @@ struct llama_context * llama_init_from_gpt_params(const gpt_params & params) {
     lparams.f16_kv     = params.memory_f16;
     lparams.use_mmap   = params.use_mmap;
     lparams.use_mlock  = params.use_mlock;
+    lparams.gpu_layers = params.gpu_layers;
     lparams.logits_all = params.perplexity;
     lparams.embedding  = params.embedding;
 
