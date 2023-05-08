@@ -102,8 +102,8 @@ specified) expect poor results""", file=sys.stderr)
         if (len(self.params.lora_adapter) > 0):
             if (llama_cpp.llama_apply_lora_from_file(
                 self.ctx,
-                self.params.lora_adapter,
-                self.params.lora_base if len(self.params.lora_base) > 0 else None,
+                self.params.lora_adapter.encode("utf8"),
+                self.params.lora_base.encode("utf8") if len(self.params.lora_base) > 0 else None,
                 self.params.n_threads
             ) != 0):
                 print("error: failed to apply lora adapter")
