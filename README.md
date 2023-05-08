@@ -12,6 +12,39 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 - [Roadmap May 2023](https://github.com/ggerganov/llama.cpp/discussions/1220)
 - [New quantization methods](https://github.com/ggerganov/llama.cpp#quantization)
 
+<details>
+  <summary>Table of Contents</summary>
+  <ol>
+    <li>
+      <a href="#description">Description</a>
+    </li>
+    <li>
+      <a href="#usage">Usage</a>
+      <ul>
+        <li><a href="#get-the-code">Get the Code</a></li>
+        <li><a href="#build">Build</a></li>
+        <li><a href="#blas-build">BLAS Build</a></li>
+        <li><a href="#prepare-data--run">Prepare Data & Run</a></li>
+        <li><a href="#memorydisk-requirements">Memory/Disk Requirements</a></li>
+        <li><a href="#quantization">Quantization</a></li>
+        <li><a href="#interactive-mode">Interactive mode</a></li>
+        <li><a href="#instruction-mode-with-alpaca">Instruction mode with Alpaca</a></li>
+        <li><a href="#using-gpt4all">Using GPT4All</a></li>
+        <li><a href="#using-pygmalion-7b--metharme-7b">Using Pygmalion 7B & Metharme 7B</a></li>
+        <li><a href="#obtaining-the-facebook-llama-original-model-and-stanford-alpaca-model-data">Obtaining the Facebook LLaMA original model and Stanford Alpaca model data</a></li>
+        <li><a href="#verifying-the-model-files">Verifying the model files</a></li>
+        <li><a href="#seminal-papers-and-background-on-the-models">Seminal papers and background on the models</a></li>
+        <li><a href="#perplexity-measuring-model-quality">Perplexity (measuring model quality)</a></li>
+        <li><a href="#android">Android</a></li>
+        <li><a href="#docker">Docker</a></li>
+      </ul>
+    </li>
+    <li><a href="#contributing">Contributing</a></li>
+    <li><a href="#coding-guidelines">Coding guidelines</a></li>
+    <li><a href="#docs">Docs</a></li>
+  </ol>
+</details>
+
 ## Description
 
 The main goal of `llama.cpp` is to run the LLaMA model using 4-bit integer quantization on a MacBook
@@ -46,6 +79,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [Vicuna](https://github.com/ggerganov/llama.cpp/discussions/643#discussioncomment-5533894)
 - [X] [Koala](https://bair.berkeley.edu/blog/2023/04/03/koala/)
 - [X] [OpenBuddy 🐶 (Multilingual)](https://github.com/OpenBuddy/OpenBuddy)
+- [X] [Pygmalion 7B / Metharme 7B](#using-pygmalion-7b--metharme-7b)
 
 **Bindings:**
 
@@ -382,6 +416,19 @@ python3 convert.py models/gpt4all-7B/gpt4all-lora-quantized.bin
 - You can now use the newly generated `models/gpt4all-7B/ggml-model-q4_0.bin` model in exactly the same way as all other models
 
 - The newer GPT4All-J model is not yet supported!
+
+### Using Pygmalion 7B & Metharme 7B
+
+- Obtain the [LLaMA weights](#obtaining-the-facebook-llama-original-model-and-stanford-alpaca-model-data)
+- Obtain the [Pygmalion 7B](https://huggingface.co/PygmalionAI/pygmalion-7b/) or [Metharme 7B](https://huggingface.co/PygmalionAI/metharme-7b) XOR encoded weights
+- Convert the LLaMA model with [the latest HF convert script](https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/convert_llama_weights_to_hf.py)
+- Merge the XOR files with the converted LLaMA weights by running the [xor_codec](https://huggingface.co/PygmalionAI/pygmalion-7b/blob/main/xor_codec.py) script
+- Convert to `ggml` format using the `convert.py` script in this repo:
+```bash
+python3 convert.py pygmalion-7b/ --outtype q4_1
+```
+> The Pygmalion 7B & Metharme 7B weights are saved in [bfloat16](https://en.wikipedia.org/wiki/Bfloat16_floating-point_format) precision. If you wish to convert to `ggml` without quantizating, please specify the `--outtype` as `f32` instead of `f16`.
+
 
 ### Obtaining the Facebook LLaMA original model and Stanford Alpaca model data
 
