@@ -1311,8 +1311,8 @@ static void dequantize_row_q5_0(const block_q5_0 * restrict x, float * restrict 
         memcpy(&qh, x[i].qh, sizeof(qh));
 
         for (int j = 0; j < qk/2; ++j) {
-            const uint8_t xh_0 = ((qh & (1u << (j + 0 ))) >> (j + 0 )) << 4;
-            const uint8_t xh_1 = ((qh & (1u << (j + 16))) >> (j + 12));
+            const uint8_t xh_0 = ((qh >> (j +  0)) << 4) & 0x10;
+            const uint8_t xh_1 = ((qh >> (j + 12))     ) & 0x10;
 
             const int32_t x0 = ((x[i].qs[j] & 0x0F) | xh_0) - 16;
             const int32_t x1 = ((x[i].qs[j] >>   4) | xh_1) - 16;
@@ -1338,8 +1338,8 @@ static void dequantize_row_q5_1(const block_q5_1 * restrict x, float * restrict 
         memcpy(&qh, x[i].qh, sizeof(qh));
 
         for (int j = 0; j < qk/2; ++j) {
-            const uint8_t xh_0 = ((qh & (1u << (j + 0 ))) >> (j + 0 )) << 4;
-            const uint8_t xh_1 = ((qh & (1u << (j + 16))) >> (j + 12));
+            const uint8_t xh_0 = ((qh >> (j +  0)) << 4) & 0x10;
+            const uint8_t xh_1 = ((qh >> (j + 12))     ) & 0x10;
 
             const int x0 = (x[i].qs[j] & 0x0F) | xh_0;
             const int x1 = (x[i].qs[j] >>   4) | xh_1;
@@ -12086,8 +12086,8 @@ size_t ggml_quantize_q5_0(const float * src, void * dst, int n, int k, int64_t *
             memcpy(&qh, &y[i].qh, sizeof(qh));
 
             for (int j = 0; j < QK5_0; j += 2) {
-                const uint8_t vh0 = ((qh & (1u << (j + 0))) >> (j + 0)) << 4;
-                const uint8_t vh1 = ((qh & (1u << (j + 1))) >> (j + 1)) << 4;
+                const uint8_t vh0 = ((qh & (1u << (j + 0 ))) >> (j + 0 )) << 4;
+                const uint8_t vh1 = ((qh & (1u << (j + 16))) >> (j + 12));
 
                 // cast to 16 bins
                 const uint8_t vi0 = ((y[i].qs[j/2] & 0x0F) | vh0) / 2;
@@ -12116,8 +12116,8 @@ size_t ggml_quantize_q5_1(const float * src, void * dst, int n, int k, int64_t *
             memcpy(&qh, &y[i].qh, sizeof(qh));
 
             for (int j = 0; j < QK5_1; j += 2) {
-                const uint8_t vh0 = ((qh & (1u << (j + 0))) >> (j + 0)) << 4;
-                const uint8_t vh1 = ((qh & (1u << (j + 1))) >> (j + 1)) << 4;
+                const uint8_t vh0 = ((qh & (1u << (j + 0 ))) >> (j + 0 )) << 4;
+                const uint8_t vh1 = ((qh & (1u << (j + 16))) >> (j + 12));
 
                 // cast to 16 bins
                 const uint8_t vi0 = ((y[i].qs[j/2] & 0x0F) | vh0) / 2;

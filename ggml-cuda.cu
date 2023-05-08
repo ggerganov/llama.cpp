@@ -123,8 +123,8 @@ static __global__ void dequantize_block_q5_0(const void * vx, float * y) {
     memcpy(&qh, x[i].qh, sizeof(qh));
 
     for (int j = 0; j < qk/2; ++j) {
-        const uint8_t xh_0 = ((qh & (1u << (j + 0 ))) >> (j + 0 )) << 4;
-        const uint8_t xh_1 = ((qh & (1u << (j + 16))) >> (j + 12));
+        const uint8_t xh_0 = ((qh >> (j +  0)) << 4) & 0x10;
+        const uint8_t xh_1 = ((qh >> (j + 12))     ) & 0x10;
 
         const int32_t x0 = ((x[i].qs[j] & 0xf) | xh_0) - 16;
         const int32_t x1 = ((x[i].qs[j] >>  4) | xh_1) - 16;
@@ -148,8 +148,8 @@ static __global__ void dequantize_block_q5_1(const void * vx, float * y) {
     memcpy(&qh, x[i].qh, sizeof(qh));
 
     for (int j = 0; j < qk/2; ++j) {
-        const uint8_t xh_0 = ((qh & (1u << (j + 0 ))) >> (j + 0 )) << 4;
-        const uint8_t xh_1 = ((qh & (1u << (j + 16))) >> (j + 12));
+        const uint8_t xh_0 = ((qh >> (j +  0)) << 4) & 0x10;
+        const uint8_t xh_1 = ((qh >> (j + 12))     ) & 0x10;
 
         const int x0 = (x[i].qs[j] & 0xf) | xh_0;
         const int x1 = (x[i].qs[j] >>  4) | xh_1;
