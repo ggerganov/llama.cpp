@@ -1,13 +1,8 @@
 #include "ggml.h"
 #include <vector>
-#include <assert.h>
+#include <cassert>
 #include <random>
-#include <string.h>
-
-#undef MIN
-#undef MAX
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#include <cstring>
 
 float frand() {
     return (float)rand()/(float)RAND_MAX;
@@ -1068,7 +1063,7 @@ void get_example_targets(int example_id, struct ggml_tensor * tokens_input, stru
         float z = (y+1.0f)*0.5f; // scale to [0..1]
         z += (frand()-0.5f)*(randomness/n_vocab);
         z = (z < 0.0f) ? 0.0f : (z > 1.0f) ? 1.0f : z; // clamp to [0..1]
-        int token = MAX(1,MIN(1+(int)(z*(float)(n_vocab-1)), n_vocab-1));
+        int token = std::max(1,std::min(1+(int)(z*(float)(n_vocab-1)), n_vocab-1));
         ggml_set_f32_1d(targets, (i-1)*n_vocab + token, +1.0f);
         if (i<n_tokens) {
             ggml_set_i32_1d(tokens_input, i, token);
@@ -1119,7 +1114,7 @@ int main(int argc, char ** argv) {
     model.hparams.n_mult  = 2;
     model.hparams.n_head  = 8;
     model.hparams.n_layer = 1;
-    model.hparams.n_rot   = MIN(16, model.hparams.n_embd / model.hparams.n_head);
+    model.hparams.n_rot   = std::min(16u, model.hparams.n_embd / model.hparams.n_head);
 
     // model.hparams.n_embd  = 32;
     // model.hparams.n_mult  = 2;
@@ -1225,12 +1220,12 @@ int main(int argc, char ** argv) {
         // struct ggml_tensor * e = cross_entropy_loss(ctx0, targets1, logits1);
         // struct ggml_tensor * e = square_error_loss(ctx0, targets1, logits1);
 
-        // struct ggml_tensor * e = ggml_add(ctx0,
-                // square_error_loss(ctx0, targets1, logits1),
-                // square_error_loss(ctx0, targets2, logits2));
         struct ggml_tensor * e = ggml_add(ctx0,
-                cross_entropy_loss(ctx0, targets1, logits1),
-                cross_entropy_loss(ctx0, targets2, logits2));
+                square_error_loss(ctx0, targets1, logits1),
+                square_error_loss(ctx0, targets2, logits2));
+        // struct ggml_tensor * e = ggml_add(ctx0,
+        //         cross_entropy_loss(ctx0, targets1, logits1),
+        //         cross_entropy_loss(ctx0, targets2, logits2));
         // struct ggml_tensor * e = ggml_add(ctx0,
         //     ggml_add(ctx0,
         //         cross_entropy_loss(ctx0, targets1, logits1),
