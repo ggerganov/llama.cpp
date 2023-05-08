@@ -54,6 +54,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
             // save original token and restore it after eval
             const auto token_org = tokens[batch_start];
 
+            // add BOS token for the first batch of each chunk
             if (j == 0) {
                 tokens[batch_start] = llama_token_bos();
             }
@@ -63,6 +64,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
                 return;
             }
 
+            // restore the original token in case it was set to BOS
             tokens[batch_start] = token_org;
 
             const auto batch_logits = llama_get_logits(ctx);
