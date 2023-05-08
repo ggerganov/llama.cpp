@@ -34,6 +34,8 @@ static_assert(sizeof(half) == sizeof(ggml_fp16_t), "wrong fp16 size");
 
 typedef void (*to_fp32_cuda_t)(const void * x, float * y, int k, cudaStream_t stream);
 
+#define GGML_CUDA_MAX_BLOCK_SIZE 256
+
 #define QK4_0 32
 typedef struct {
     float   d;              // delta
@@ -85,23 +87,25 @@ static __global__ void dequantize_block_q4_0(const void * vx, float * y, int k) 
 
     const int i = blockIdx.x*blockDim.x + threadIdx.x;
 
-    if (i < k) {
-        const float d = x[i].d;
+    if (i >= k) {
+        return;
+    }
 
-        const uint8_t * pp = x[i].qs;
+    const float d = x[i].d;
 
-        for (int l = 0; l < QK4_0; l += 2) {
-            const uint8_t vi = pp[l/2];
+    const uint8_t * pp = x[i].qs;
 
-            const int8_t vi0 = vi & 0xf;
-            const int8_t vi1 = vi >> 4;
+    for (int l = 0; l < QK4_0; l += 2) {
+        const uint8_t vi = pp[l/2];
 
-            const float v0 = (vi0 - 8)*d;
-            const float v1 = (vi1 - 8)*d;
+        const int8_t vi0 = vi & 0xf;
+        const int8_t vi1 = vi >> 4;
 
-            y[i*QK4_0 + l + 0] = v0;
-            y[i*QK4_0 + l + 1] = v1;
-        }
+        const float v0 = (vi0 - 8)*d;
+        const float v1 = (vi1 - 8)*d;
+
+        y[i*QK4_0 + l + 0] = v0;
+        y[i*QK4_0 + l + 1] = v1;
     }
 }
 
@@ -110,24 +114,26 @@ static __global__ void dequantize_block_q4_1(const void * vx, float * y, int k) 
 
     const int i = blockIdx.x*blockDim.x + threadIdx.x;
 
-    if (i < k) {
-        const float d = x[i].d;
-        const float m = x[i].m;
+    if (i >= k) {
+        return;
+    }
 
-        const uint8_t * pp = x[i].qs;
+    const float d = x[i].d;
+    const float m = x[i].m;
 
-        for (int l = 0; l < QK4_1; l += 2) {
-            const uint8_t vi = pp[l/2];
+    const uint8_t * pp = x[i].qs;
 
-            const int8_t vi0 = vi & 0xf;
-            const int8_t vi1 = vi >> 4;
+    for (int l = 0; l < QK4_1; l += 2) {
+        const uint8_t vi = pp[l/2];
 
-            const float v0 = vi0*d + m;
-            const float v1 = vi1*d + m;
+        const int8_t vi0 = vi & 0xf;
+        const int8_t vi1 = vi >> 4;
 
-            y[i*QK4_1 + l + 0] = v0;
-            y[i*QK4_1 + l + 1] = v1;
-        }
+        const float v0 = vi0*d + m;
+        const float v1 = vi1*d + m;
+
+        y[i*QK4_1 + l + 0] = v0;
+        y[i*QK4_1 + l + 1] = v1;
     }
 }
 
@@ -136,23 +142,25 @@ static __global__ void dequantize_block_q4_2(const void * vx, float * y, int k) 
 
     const int i = blockIdx.x*blockDim.x + threadIdx.x;
 
-    if (i < k) {
-        const float d = x[i].d;
+    if (i >= k) {
+        return;
+    }
 
-        const uint8_t * pp = x[i].qs;
+    const float d = x[i].d;
 
-        for (int l = 0; l < QK4_2; l += 2) {
-            const uint8_t vi = pp[l/2];
+    const uint8_t * pp = x[i].qs;
 
-            const int8_t vi0 = vi & 0xf;
-            const int8_t vi1 = vi >> 4;
+    for (int l = 0; l < QK4_2; l += 2) {
+        const uint8_t vi = pp[l/2];
 
-            const float v0 = (vi0 - 8)*d;
-            const float v1 = (vi1 - 8)*d;
+        const int8_t vi0 = vi & 0xf;
+        const int8_t vi1 = vi >> 4;
 
-            y[i*QK4_2 + l + 0] = v0;
-            y[i*QK4_2 + l + 1] = v1;
-        }
+        const float v0 = (vi0 - 8)*d;
+        const float v1 = (vi1 - 8)*d;
+
+        y[i*QK4_2 + l + 0] = v0;
+        y[i*QK4_2 + l + 1] = v1;
     }
 }
 
@@ -161,29 +169,31 @@ static __global__ void dequantize_block_q5_0(const void * vx, float * y, int k) 
 
     const int i = blockIdx.x*blockDim.x + threadIdx.x;
 
-    if (i < k) {
-        const float d = x[i].d;
+    if (i >= k) {
+        return;
+    }
 
-        const uint8_t * pp = x[i].qs;
+    const float d = x[i].d;
 
-        uint32_t qh;
-        memcpy(&qh, x[i].qh, sizeof(qh));
+    const uint8_t * pp = x[i].qs;
 
-        for (int l = 0; l < QK5_0; l += 2) {
-            const uint8_t vi = pp[l/2];
+    uint32_t qh;
+    memcpy(&qh, x[i].qh, sizeof(qh));
 
-            const int8_t vh0 = ((qh & (1 << (l + 0))) >> (l + 0)) << 4;
-            const int8_t vh1 = ((qh & (1 << (l + 1))) >> (l + 1)) << 4;
+    for (int l = 0; l < QK5_0; l += 2) {
+        const uint8_t vi = pp[l/2];
 
-            const int8_t vi0 = ((vi & 0xf) | vh0);
-            const int8_t vi1 = ((vi >>  4) | vh1);
+        const int8_t vh0 = ((qh & (1 << (l + 0))) >> (l + 0)) << 4;
+        const int8_t vh1 = ((qh & (1 << (l + 1))) >> (l + 1)) << 4;
 
-            const float v0 = (vi0 - 16)*d;
-            const float v1 = (vi1 - 16)*d;
+        const int8_t vi0 = ((vi & 0xf) | vh0);
+        const int8_t vi1 = ((vi >>  4) | vh1);
 
-            y[i*QK5_0 + l + 0] = v0;
-            y[i*QK5_0 + l + 1] = v1;
-        }
+        const float v0 = (vi0 - 16)*d;
+        const float v1 = (vi1 - 16)*d;
+
+        y[i*QK5_0 + l + 0] = v0;
+        y[i*QK5_0 + l + 1] = v1;
     }
 }
 
@@ -192,30 +202,32 @@ static __global__ void dequantize_block_q5_1(const void * vx, float * y, int k) 
 
     const int i = blockIdx.x*blockDim.x + threadIdx.x;
 
-    if (i < k) {
-        const float d = x[i].d;
-        const float m = x[i].m;
+    if (i >= k) {
+        return;
+    }
 
-        const uint8_t * pp = x[i].qs;
+    const float d = x[i].d;
+    const float m = x[i].m;
 
-        uint32_t qh;
-        memcpy(&qh, x[i].qh, sizeof(qh));
+    const uint8_t * pp = x[i].qs;
 
-        for (int l = 0; l < QK5_1; l += 2) {
-            const uint8_t vi = pp[l/2];
+    uint32_t qh;
+    memcpy(&qh, x[i].qh, sizeof(qh));
 
-            const int8_t vh0 = ((qh & (1 << (l + 0))) >> (l + 0)) << 4;
-            const int8_t vh1 = ((qh & (1 << (l + 1))) >> (l + 1)) << 4;
+    for (int l = 0; l < QK5_1; l += 2) {
+        const uint8_t vi = pp[l/2];
 
-            const int8_t vi0 = (vi & 0xf) | vh0;
-            const int8_t vi1 = (vi >>  4) | vh1;
+        const int8_t vh0 = ((qh & (1 << (l + 0))) >> (l + 0)) << 4;
+        const int8_t vh1 = ((qh & (1 << (l + 1))) >> (l + 1)) << 4;
 
-            const float v0 = vi0*d + m;
-            const float v1 = vi1*d + m;
+        const int8_t vi0 = (vi & 0xf) | vh0;
+        const int8_t vi1 = (vi >>  4) | vh1;
 
-            y[i*QK5_1 + l + 0] = v0;
-            y[i*QK5_1 + l + 1] = v1;
-        }
+        const float v0 = vi0*d + m;
+        const float v1 = vi1*d + m;
+
+        y[i*QK5_1 + l + 0] = v0;
+        y[i*QK5_1 + l + 1] = v1;
     }
 }
 
@@ -224,64 +236,90 @@ static __global__ void dequantize_block_q8_0(const void * vx, float * y, int k) 
 
     const int i = blockIdx.x*blockDim.x + threadIdx.x;
 
-    if (i < k) {
-        const float d = x[i].d;
+    if (i >= k) {
+        return;
+    }
 
-        const int8_t * pp = x[i].qs;
+    const float d = x[i].d;
 
-        for (int l = 0; l < QK8_0; l++) {
-            const int8_t vi = pp[l];
+    const int8_t * pp = x[i].qs;
 
-            y[i*QK8_0 + l] = vi*d;
-        }
+    for (int l = 0; l < QK8_0; l++) {
+        const int8_t vi = pp[l];
+
+        y[i*QK8_0 + l] = vi*d;
     }
 }
 
 static void dequantize_row_q4_0_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
     const int nb = k / QK4_0;
-    int min_grid_size, block_size = 1; // Initialize to suppress compiler warning.
-    CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, dequantize_block_q4_0, 0, 0));
-    int grid_size = (nb + block_size - 1) / block_size; // Round up.
+    static int grid_size, block_size = -1;
+    if (block_size == -1) {
+        int min_grid_size;
+        CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, dequantize_block_q4_0, 0, 0));
+        block_size = min(block_size, GGML_CUDA_MAX_BLOCK_SIZE);
+        grid_size = (nb + block_size - 1) / block_size; // Round up.
+    }
     dequantize_block_q4_0<<<grid_size, block_size, 0, stream>>>(vx, y, nb);
 }
 
 static void dequantize_row_q4_1_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
     const int nb = k / QK4_1;
-    int min_grid_size, block_size = 1; // Initialize to suppress compiler warning.
-    CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, dequantize_block_q4_1, 0, 0));
-    int grid_size = (nb + block_size - 1) / block_size; // Round up.
+    static int grid_size, block_size = -1;
+    if (block_size == -1) {
+        int min_grid_size;
+        CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, dequantize_block_q4_1, 0, 0));
+        block_size = min(block_size, GGML_CUDA_MAX_BLOCK_SIZE);
+        grid_size = (nb + block_size - 1) / block_size; // Round up.
+    }
     dequantize_block_q4_1<<<grid_size, block_size, 0, stream>>>(vx, y, nb);
 }
 
 static void dequantize_row_q4_2_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
     const int nb = k / QK4_2;
-    int min_grid_size, block_size = 1; // Initialize to suppress compiler warning.
-    CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, dequantize_block_q4_2, 0, 0));
-    int grid_size = (nb + block_size - 1) / block_size; // Round up.
+    static int grid_size, block_size = -1;
+    if (block_size == -1) {
+        int min_grid_size;
+        CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, dequantize_block_q4_2, 0, 0));
+        block_size = min(block_size, GGML_CUDA_MAX_BLOCK_SIZE);
+        grid_size = (nb + block_size - 1) / block_size; // Round up.
+    }
     dequantize_block_q4_2<<<grid_size, block_size, 0, stream>>>(vx, y, nb);
 }
 
 static void dequantize_row_q5_0_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
     const int nb = k / QK5_0;
-    int min_grid_size, block_size = 1; // Initialize to suppress compiler warning.
-    CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, dequantize_block_q5_0, 0, 0));
-    int grid_size = (nb + block_size - 1) / block_size; // Round up.
+    static int grid_size, block_size = -1;
+    if (block_size == -1) {
+        int min_grid_size;
+        CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, dequantize_block_q5_0, 0, 0));
+        block_size = min(block_size, GGML_CUDA_MAX_BLOCK_SIZE);
+        grid_size = (nb + block_size - 1) / block_size; // Round up.
+    }
     dequantize_block_q5_0<<<grid_size, block_size, 0, stream>>>(vx, y, nb);
 }
 
 static void dequantize_row_q5_1_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
     const int nb = k / QK5_1;
-    int min_grid_size, block_size = 1; // Initialize to suppress compiler warning.
-    CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, dequantize_block_q5_1, 0, 0));
-    int grid_size = (nb + block_size - 1) / block_size; // Round up.
+    static int grid_size, block_size = -1;
+    if (block_size == -1) {
+        int min_grid_size;
+        CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, dequantize_block_q5_1, 0, 0));
+        block_size = min(block_size, GGML_CUDA_MAX_BLOCK_SIZE);
+        grid_size = (nb + block_size - 1) / block_size; // Round up.
+    }
     dequantize_block_q5_1<<<grid_size, block_size, 0, stream>>>(vx, y, nb);
 }
 
 static void dequantize_row_q8_0_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
     const int nb = k / QK8_0;
-    int min_grid_size, block_size = 1; // Initialize to suppress compiler warning.
-    CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, dequantize_block_q8_0, 0, 0));
-    int grid_size = (nb + block_size - 1) / block_size; // Round up.
+    static int grid_size, block_size = -1;
+    if (block_size == -1) {
+        int min_grid_size;
+        CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, dequantize_block_q8_0, 0, 0));
+        block_size = min(block_size, GGML_CUDA_MAX_BLOCK_SIZE);
+        grid_size = (nb + block_size - 1) / block_size; // Round up.
+    }
     dequantize_block_q8_0<<<grid_size, block_size, 0, stream>>>(vx, y, nb);
 }
 
@@ -289,17 +327,23 @@ static void dequantize_row_q8_0_cuda(const void * vx, float * y, int k, cudaStre
 static __global__ void convert_fp16_to_fp32(const void * vx, float * y, int k) {
     const half * x = (const half *) vx;
 
-    const int i = blockIdx.x;
+    const int i = blockIdx.x*blockDim.x + threadIdx.x;
 
-    if (i < k) {
-        y[i] = __half2float(x[i]);
+    if (i >= k) {
+        return;
     }
+
+    y[i] = __half2float(x[i]);
 }
 
 static void convert_fp16_to_fp32_cuda(const void * x, float * y, int k, cudaStream_t stream) {
-    int min_grid_size, block_size = 1; // Initialize to suppress compiler warning.
-    CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, convert_fp16_to_fp32, 0, 0));
-    int grid_size = (k + block_size - 1) / block_size; // Round up.
+    static int grid_size, block_size = -1;
+    if (block_size == -1) {
+        int min_grid_size;
+        CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, convert_fp16_to_fp32, 0, 0));
+        block_size = min(block_size, GGML_CUDA_MAX_BLOCK_SIZE);
+        grid_size = (k + block_size - 1) / block_size; // Round up.
+    }
     convert_fp16_to_fp32<<<grid_size, block_size, 0, stream>>>(x, y, k);
 }
 
