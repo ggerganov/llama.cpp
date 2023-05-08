@@ -298,16 +298,24 @@ Several quantization methods are supported. They differ in the resulting model d
 
 | Model | Measure      | F16    | Q4_0   | Q4_1   | Q4_2   | Q5_0   | Q5_1   | Q8_0   |
 |------:|--------------|-------:|-------:|-------:|-------:|-------:|-------:|-------:|
-|    7B | perplexity   | 5.9565 | 6.2103 | 6.1286 | 6.1698 | 6.0139 | 5.9934 | 5.9571 |
+|    7B | perplexity   | 5.9066 | 6.1620 | 6.0910 | 6.1466 | 5.9862 | 5.9481 | 5.9069 |
 |    7B | file size    |  13.0G |   4.0G |   4.8G |   4.0G |   4.4G |   4.8G |   7.1G |
 |    7B | ms/tok @ 4th |    128 |     56 |     61 |     84 |     91 |     95 |     75 |
 |    7B | ms/tok @ 8th |    128 |     47 |     55 |     48 |     53 |     59 |     75 |
 |    7B | bits/weight  |   16.0 |    5.0 |    6.0 |    5.0 |    5.5 |    6.0 |    9.0 |
-|   13B | perplexity   | 5.2455 | 5.3748 | 5.3471 | 5.3433 | 5.2768 | 5.2582 | 5.2458 |
+|   13B | perplexity   | 5.2543 | 5.3863 | 5.3607 | 5.3513 | 5.2856 | 5.2706 | 5.2548 |
 |   13B | file size    |  25.0G |   7.6G |   9.1G |   7.6G |   8.4G |   9.1G |    14G |
 |   13B | ms/tok @ 4th |    239 |    104 |    113 |    160 |    176 |    185 |    141 |
 |   13B | ms/tok @ 8th |    240 |     85 |     99 |     97 |    108 |    117 |    147 |
 |   13B | bits/weight  |   16.0 |    5.0 |    6.0 |    5.0 |    5.5 |    6.0 |    9.0 |
+
+### Perplexity (measuring model quality)
+
+You can use the `perplexity` example to measure perplexity over a given prompt (lower perplexity is better).
+For more information, see [https://huggingface.co/docs/transformers/perplexity](https://huggingface.co/docs/transformers/perplexity).
+
+The perplexity measurements in table above are done against the `wikitext2` test dataset (https://paperswithcode.com/dataset/wikitext-2), with context length of 512.
+The time per token is measured on a MacBook M1 Pro 32GB RAM using 4 and 8 threads.
 
 ### Interactive mode
 
@@ -406,26 +414,6 @@ If your issue is with model generation quality, then please at least scan the fo
 - GPT-3.5 / InstructGPT / ChatGPT:
     - [Aligning language models to follow instructions](https://openai.com/research/instruction-following)
     - [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
-
-### Perplexity (measuring model quality)
-
-You can use the `perplexity` example to measure perplexity over the given prompt. For more background, see [https://huggingface.co/docs/transformers/perplexity](https://huggingface.co/docs/transformers/perplexity). However, in general, lower perplexity is better for LLMs.
-
-#### Latest measurements
-
-The latest perplexity scores for the various model sizes and quantizations are being tracked in [discussion #406](https://github.com/ggerganov/llama.cpp/discussions/406). `llama.cpp` is measuring very well compared to the baseline implementations. Quantization has a small negative impact on quality, but, as you can see, running
-13B at q4_0 beats the 7B f16 model by a significant amount.
-
-All measurements are done against the wikitext2 test dataset (https://paperswithcode.com/dataset/wikitext-2), with default options (512 length context).
-Note that changing the context length will have a significant impact on perplexity (longer context = better perplexity).
-```
-Perplexity - model options
-5.5985 - 13B, q4_0
-5.9565 - 7B, f16
-6.3001 - 7B, q4_1
-6.5949 - 7B, q4_0
-6.5995 - 7B, q4_0, --memory_f16
-```
 
 #### How to run
 
