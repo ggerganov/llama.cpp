@@ -345,7 +345,8 @@ bool stablelm_eval(
         const int n_past,
         const std::vector<gpt_vocab::id> & embd_inp,
               std::vector<float>         & embd_w,
-              size_t                     & mem_per_token) {
+              size_t                     & mem_per_token,
+              FileFormat file_format) {
     const int N = embd_inp.size();
 
     const auto & hparams = model.hparams;
@@ -494,6 +495,12 @@ bool stablelm_eval(
             }
         }
 
+        if(file_format==FileFormat::NEOX_3)
+        {
+            // layer input + Attn
+            cur  = ggml_add(ctx0, cur, inpL);
+        }
+
         struct ggml_tensor * inpFF = cur;
 
         // feed-forward network
@@ -502,7 +509,7 @@ bool stablelm_eval(
             // post attention layer norm
             // note here we pass inpL instead of cur
             {
-                cur = ggml_norm(ctx0, inpL);
+                cur = ggml_norm(ctx0, (file_format==FileFormat::NEOX_3?cur:inpL));
 
                 cur = ggml_add(ctx0,
                     ggml_mul(ctx0,
@@ -533,11 +540,17 @@ bool stablelm_eval(
                     cur);
         }
 
-        // layer input + FF
-        cur  = ggml_add(ctx0, cur, inpFF);
-
-        // input for next layer
-        inpL = ggml_add(ctx0, cur, inpL);
+        if (file_format == FileFormat::NEOX_3)
+        {
+            // layer input + FF
+            inpL = ggml_add(ctx0, cur, inpFF);
+        }
+        else
+        {
+            cur = ggml_add(ctx0, cur, inpFF);
+            // input for next layer
+            inpL = ggml_add(ctx0, cur, inpL);
+        }
     }
 
     // norm

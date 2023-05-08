@@ -31,6 +31,7 @@ enum FileFormat
 
     NEOX_1=400,
     NEOX_2=401,
+    NEOX_3=402,
 };
 
 enum ModelLoadResult
