@@ -970,8 +970,6 @@ static void llama_model_load_internal(
 
     // prepare memory for the weights
     {
-        const auto & hparams = model.hparams;
-
         const uint32_t n_embd  = hparams.n_embd;
         const uint32_t n_layer = hparams.n_layer;
         const uint32_t n_vocab = hparams.n_vocab;
