@@ -1225,12 +1225,12 @@ int main(int argc, char ** argv) {
         // struct ggml_tensor * e = cross_entropy_loss(ctx0, targets1, logits1);
         // struct ggml_tensor * e = square_error_loss(ctx0, targets1, logits1);
 
-        struct ggml_tensor * e = ggml_add(ctx0,
-                square_error_loss(ctx0, targets1, logits1),
-                square_error_loss(ctx0, targets2, logits2));
         // struct ggml_tensor * e = ggml_add(ctx0,
-        //         cross_entropy_loss(ctx0, targets1, logits1),
-        //         cross_entropy_loss(ctx0, targets2, logits2));
+                // square_error_loss(ctx0, targets1, logits1),
+                // square_error_loss(ctx0, targets2, logits2));
+        struct ggml_tensor * e = ggml_add(ctx0,
+                cross_entropy_loss(ctx0, targets1, logits1),
+                cross_entropy_loss(ctx0, targets2, logits2));
         // struct ggml_tensor * e = ggml_add(ctx0,
         //     ggml_add(ctx0,
         //         cross_entropy_loss(ctx0, targets1, logits1),
@@ -1258,8 +1258,8 @@ int main(int argc, char ** argv) {
         opt_params_lbfgs.print_backward_graph = false;
         opt_params_adam.adam.n_iter = 16;
         opt_params_lbfgs.lbfgs.n_iter = 16;
-        // ggml_opt(ctx0, opt_params_adam, e);
-        ggml_opt(ctx0, opt_params_lbfgs, e);
+        ggml_opt(ctx0, opt_params_adam, e);
+        // ggml_opt(ctx0, opt_params_lbfgs, e);
         //
         ggml_build_forward_expand(&gf, e);
         ggml_graph_compute(ctx0, &gf);
