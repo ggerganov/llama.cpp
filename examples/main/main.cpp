@@ -139,10 +139,9 @@ int main(int argc, char ** argv) {
     // Add a space in front of the first character to match OG llama tokenizer behavior
     params.prompt.insert(0, 1, ' ');
 
-    std::string path_session =
-        !params.path_session.empty() ? params.path_session : params.path_prompt_cache;
+    std::string path_session    = params.path_prompt_cache;
+    const bool session_save_all = params.prompt_cache_save_all;
     std::vector<llama_token> session_tokens;
-    bool resume_session = !params.path_session.empty();
 
     if (!path_session.empty()) {
         fprintf(stderr, "%s: attempting to load saved session from '%s'\n", __func__, path_session.c_str());
@@ -325,8 +324,8 @@ int main(int argc, char ** argv) {
                 // insert n_left/2 tokens at the start of embd from last_n_tokens
                 embd.insert(embd.begin(), last_n_tokens.begin() + n_ctx - n_left/2 - embd.size(), last_n_tokens.end() - embd.size());
 
-                // stop saving session if we run out of context, saving whatever was evaled
-                if (!path_session.empty() && resume_session) {
+                // stop saving session if we run out of context
+                if (!path_session.empty() && session_save_all) {
                     llama_save_session_file(ctx, path_session.c_str(),
                         session_tokens.data(), session_tokens.size());
                 }
@@ -605,7 +604,7 @@ int main(int argc, char ** argv) {
         }
     }
 
-    if (!path_session.empty() && resume_session) {
+    if (!path_session.empty() && session_save_all) {
         fprintf(stderr, "\n%s: saving final output to session file '%s'\n", __func__, path_session.c_str());
         llama_save_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
     }

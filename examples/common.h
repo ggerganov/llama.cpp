@@ -47,7 +47,6 @@ struct gpt_params {
     std::string model  = "models/lamma-7B/ggml-model.bin"; // model path
     std::string prompt = "";
     std::string path_prompt_cache = "";  // path to file for saving/loading prompt eval state
-    std::string path_session      = "";  // file for saving/loading prompt and generations
     std::string input_prefix      = "";  // string to prefix user inputs with
     std::string input_suffix      = "";  // string to suffix user inputs with
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
@@ -55,10 +54,11 @@ struct gpt_params {
     std::string lora_adapter = "";  // lora adapter path
     std::string lora_base = "";     // base model path for the lora adapter
 
-    bool memory_f16        = true;  // use f16 instead of f32 for memory kv
-    bool random_prompt     = false; // do not randomize prompt if none provided
-    bool use_color         = false; // use color to distinguish generations and inputs
-    bool interactive       = false; // interactive mode
+    bool memory_f16            = true;  // use f16 instead of f32 for memory kv
+    bool random_prompt         = false; // do not randomize prompt if none provided
+    bool use_color             = false; // use color to distinguish generations and inputs
+    bool interactive           = false; // interactive mode
+    bool prompt_cache_save_all = false; // save user input and generations to prompt cache
 
     bool embedding         = false; // get only sentence embedding
     bool interactive_first = false; // wait for user input immediately
