@@ -253,73 +253,73 @@ static __global__ void dequantize_block_q8_0(const void * vx, float * y, int k) 
 
 static void dequantize_row_q4_0_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
     const int nb = k / QK4_0;
-    static int grid_size, block_size = -1;
+    static int block_size = -1;
     if (block_size == -1) {
         int min_grid_size;
         CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, dequantize_block_q4_0, 0, 0));
         block_size = min(block_size, GGML_CUDA_MAX_BLOCK_SIZE);
-        grid_size = (nb + block_size - 1) / block_size; // Round up.
     }
+    const int grid_size = (nb + block_size - 1) / block_size; // Round up.
     dequantize_block_q4_0<<<grid_size, block_size, 0, stream>>>(vx, y, nb);
 }
 
 static void dequantize_row_q4_1_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
     const int nb = k / QK4_1;
-    static int grid_size, block_size = -1;
+    static int block_size = -1;
     if (block_size == -1) {
         int min_grid_size;
         CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, dequantize_block_q4_1, 0, 0));
         block_size = min(block_size, GGML_CUDA_MAX_BLOCK_SIZE);
-        grid_size = (nb + block_size - 1) / block_size; // Round up.
     }
+    const int grid_size = (nb + block_size - 1) / block_size; // Round up.
     dequantize_block_q4_1<<<grid_size, block_size, 0, stream>>>(vx, y, nb);
 }
 
 static void dequantize_row_q4_2_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
     const int nb = k / QK4_2;
-    static int grid_size, block_size = -1;
+    static int block_size = -1;
     if (block_size == -1) {
         int min_grid_size;
         CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, dequantize_block_q4_2, 0, 0));
         block_size = min(block_size, GGML_CUDA_MAX_BLOCK_SIZE);
-        grid_size = (nb + block_size - 1) / block_size; // Round up.
     }
+    const int grid_size = (nb + block_size - 1) / block_size; // Round up.
     dequantize_block_q4_2<<<grid_size, block_size, 0, stream>>>(vx, y, nb);
 }
 
 static void dequantize_row_q5_0_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
     const int nb = k / QK5_0;
-    static int grid_size, block_size = -1;
+    static int block_size = -1;
     if (block_size == -1) {
         int min_grid_size;
         CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, dequantize_block_q5_0, 0, 0));
         block_size = min(block_size, GGML_CUDA_MAX_BLOCK_SIZE);
-        grid_size = (nb + block_size - 1) / block_size; // Round up.
     }
+    const int grid_size = (nb + block_size - 1) / block_size; // Round up.
     dequantize_block_q5_0<<<grid_size, block_size, 0, stream>>>(vx, y, nb);
 }
 
 static void dequantize_row_q5_1_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
     const int nb = k / QK5_1;
-    static int grid_size, block_size = -1;
+    static int block_size = -1;
     if (block_size == -1) {
         int min_grid_size;
         CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, dequantize_block_q5_1, 0, 0));
         block_size = min(block_size, GGML_CUDA_MAX_BLOCK_SIZE);
-        grid_size = (nb + block_size - 1) / block_size; // Round up.
     }
+    const int grid_size = (nb + block_size - 1) / block_size; // Round up.
     dequantize_block_q5_1<<<grid_size, block_size, 0, stream>>>(vx, y, nb);
 }
 
 static void dequantize_row_q8_0_cuda(const void * vx, float * y, int k, cudaStream_t stream) {
     const int nb = k / QK8_0;
-    static int grid_size, block_size = -1;
+    static int block_size = -1;
     if (block_size == -1) {
         int min_grid_size;
         CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, dequantize_block_q8_0, 0, 0));
         block_size = min(block_size, GGML_CUDA_MAX_BLOCK_SIZE);
-        grid_size = (nb + block_size - 1) / block_size; // Round up.
     }
+    const int grid_size = (nb + block_size - 1) / block_size; // Round up.
     dequantize_block_q8_0<<<grid_size, block_size, 0, stream>>>(vx, y, nb);
 }
 
@@ -337,13 +337,13 @@ static __global__ void convert_fp16_to_fp32(const void * vx, float * y, int k) {
 }
 
 static void convert_fp16_to_fp32_cuda(const void * x, float * y, int k, cudaStream_t stream) {
-    static int grid_size, block_size = -1;
+    static int block_size = -1;
     if (block_size == -1) {
         int min_grid_size;
         CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, convert_fp16_to_fp32, 0, 0));
         block_size = min(block_size, GGML_CUDA_MAX_BLOCK_SIZE);
-        grid_size = (k + block_size - 1) / block_size; // Round up.
     }
+    const int grid_size = (k + block_size - 1) / block_size; // Round up.
     convert_fp16_to_fp32<<<grid_size, block_size, 0, stream>>>(x, y, k);
 }
 
