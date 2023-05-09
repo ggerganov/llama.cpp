@@ -402,6 +402,7 @@ enum llama_file_version {
     LLAMA_FILE_VERSION_GGML,
     LLAMA_FILE_VERSION_GGMF_V1, // added version field and scores in vocab
     LLAMA_FILE_VERSION_GGJT_V1, // added padding
+    LLAMA_FILE_VERSION_GGJT_V2, // changed quantization format
 };
 
 struct llama_file_loader {
@@ -432,6 +433,8 @@ struct llama_file_loader {
             file_version = LLAMA_FILE_VERSION_GGMF_V1;
         } else if (magic == 'ggjt' && version == 1) {
             file_version = LLAMA_FILE_VERSION_GGJT_V1;
+        } else if (magic == 'ggjt' && version == 2) {
+            file_version = LLAMA_FILE_VERSION_GGJT_V2;
         } else {
             throw format("unknown (magic, version) combination: %08x, %08x; is this really a GGML file?",
                          magic, version);
@@ -837,8 +840,8 @@ static const char *llama_file_version_name(llama_file_version version) {
     switch (version) {
         case LLAMA_FILE_VERSION_GGML: return "'ggml' (old version with low tokenizer quality and no mmap support)";
         case LLAMA_FILE_VERSION_GGMF_V1: return "ggmf v1 (old version with no mmap support)";
-        case LLAMA_FILE_VERSION_GGJT_V1: return "ggjt v1 (latest)";
-        default: LLAMA_ASSERT(false);
+        case LLAMA_FILE_VERSION_GGJT_V1: return "ggjt v1 (pre #1305)";
+        case LLAMA_FILE_VERSION_GGJT_V2: return "ggjt v2 (latest)";
     }
 }
 
@@ -913,6 +916,14 @@ static void llama_model_load_internal(
         fprintf(stderr, "%s: n_ff       = %u\n",  __func__, n_ff);
         fprintf(stderr, "%s: n_parts    = %zu\n", __func__, ml->file_loaders.size());
         fprintf(stderr, "%s: model size = %s\n",  __func__, llama_model_type_name(model.type));
+    }
+
+    if (file_version != LLAMA_FILE_VERSION_GGJT_V2) {
+        if (hparams.ftype != LLAMA_FTYPE_ALL_F32     &&
+            hparams.ftype != LLAMA_FTYPE_MOSTLY_F16  &&
+            hparams.ftype != LLAMA_FTYPE_MOSTLY_Q8_0) {
+            throw format("this format is no longer supported (see https://github.com/ggerganov/llama.cpp/pull/1305)");
+        }
     }
 
     if (vocab_only) {
