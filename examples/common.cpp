@@ -520,8 +520,9 @@ void console_init(console_state & con_st) {
     if (con_st.tty != nullptr) {
         con_st.out = con_st.tty;
     }
-#endif
+
     setlocale(LC_ALL, "");
+#endif
 }
 
 void console_cleanup(console_state & con_st) {
