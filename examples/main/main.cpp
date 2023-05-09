@@ -140,7 +140,6 @@ int main(int argc, char ** argv) {
     params.prompt.insert(0, 1, ' ');
 
     std::string path_session    = params.path_prompt_cache;
-    const bool session_save_all = params.prompt_cache_save_all;
     std::vector<llama_token> session_tokens;
 
     if (!path_session.empty()) {
@@ -236,6 +235,11 @@ int main(int argc, char ** argv) {
     }
 
     if (params.interactive) {
+        if (params.prompt_cache_all) {
+            fprintf(stderr, "error: --prompt-cache-all not supported in interactive mode yet\n");
+            return 1;
+        }
+
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
         struct sigaction sigint_action;
         sigint_action.sa_handler = sigint_handler;
@@ -295,8 +299,7 @@ int main(int argc, char ** argv) {
 
     bool is_antiprompt        = false;
     bool input_echo           = true;
-    bool need_to_save_session = !path_session.empty();
-
+    bool need_to_save_session = !path_session.empty() && n_matching_session_tokens < embd_inp.size();
 
     int n_past             = 0;
     int n_remain           = params.n_predict;
@@ -325,11 +328,7 @@ int main(int argc, char ** argv) {
                 embd.insert(embd.begin(), last_n_tokens.begin() + n_ctx - n_left/2 - embd.size(), last_n_tokens.end() - embd.size());
 
                 // stop saving session if we run out of context
-                if (!path_session.empty() && session_save_all) {
-                    llama_save_session_file(ctx, path_session.c_str(),
-                        session_tokens.data(), session_tokens.size());
-                }
-                path_session = "";
+                path_session.clear();
 
                 //printf("\n---\n");
                 //printf("resetting: '");
@@ -604,7 +603,7 @@ int main(int argc, char ** argv) {
         }
     }
 
-    if (!path_session.empty() && session_save_all) {
+    if (!path_session.empty() && params.prompt_cache_all) {
         fprintf(stderr, "\n%s: saving final output to session file '%s'\n", __func__, path_session.c_str());
         llama_save_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
     }
