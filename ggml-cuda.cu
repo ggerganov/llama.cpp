@@ -349,7 +349,7 @@ static to_fp32_cuda_t ggml_get_to_fp32_cuda(ggml_type type) {
 }
 
 // buffer pool for cuda
-#define MAX_CUDA_BUFFERS 16
+#define MAX_CUDA_BUFFERS 256
 
 struct scoped_spin_lock {
     std::atomic_flag& lock;
@@ -678,9 +678,15 @@ static void ggml_cuda_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor 
             float * c_D = d_D + i * d_ne;
             char  * c_Q = d_Q + i * q_sz;
 
-            if (ne11 == 1) {
-                // copy src0 to device
+            // copy src0 to device if necessary
+            if (src0->backend == GGML_BACKEND_CPU) {
                 CUDA_CHECK(ggml_cuda_h2d_tensor_2d(c_Q, src0, i03, i02, cudaStream2));
+            } else if (src0->backend == GGML_BACKEND_CUDA) {
+                c_Q = ((char *) src0->data) + i * q_sz;
+            } else {
+                GGML_ASSERT(false);
+            }
+            if (ne11 == 1) {
                 CUDA_CHECK(cudaEventRecord(cudaEvent, cudaStream2));
 
                 // copy src1 to device
@@ -696,8 +702,7 @@ static void ggml_cuda_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor 
             } else {
                 float * c_X = d_X + i * x_ne;
 
-                // copy src0 and convert to fp32 on device
-                CUDA_CHECK(ggml_cuda_h2d_tensor_2d(c_Q, src0, i03, i02, cudaStream2));
+                // convert src0 to fp32 on device
                 to_fp32_cuda(c_Q, c_X, x_ne, cudaStream2);
                 CUDA_CHECK(cudaGetLastError());
                 CUDA_CHECK(cudaEventRecord(cudaEvent, cudaStream2));
@@ -742,8 +747,8 @@ bool ggml_cuda_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_te
     // TODO: find the optimal values for these
     if ((src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) &&
         src1->type == GGML_TYPE_F32 &&
-        dst->type == GGML_TYPE_F32) {
-
+        dst->type == GGML_TYPE_F32 &&
+        ((ne0 >= 32 && ne1 >= 32 && ne10 >= 32) || src0->backend == GGML_BACKEND_CUDA)) {
         return true;
     }
 
@@ -794,4 +799,26 @@ size_t ggml_cuda_mul_mat_get_wsize(const struct ggml_tensor * src0, const struct
     else {
         return 0;
     }
+}
+
+void ggml_cuda_transform_tensor(ggml_tensor * tensor) {
+    const int64_t ne0 = tensor->ne[0];
+    const int64_t ne1 = tensor->ne[1];
+    const int64_t ne2 = tensor->ne[2];
+    const int64_t ne3 = tensor->ne[3];
+
+    const ggml_type type = tensor->type;
+    const size_t q_sz = ggml_type_size(type) * ne0 * ne1 * ne2 * ne3 / ggml_blck_size(type);
+
+    size_t q_size;
+    char * d_Q = (char *) ggml_cuda_pool_malloc(q_sz, &q_size);
+
+    cudaStream_t cudaStream2 = g_cudaStreams2[0];
+
+    // copy tensor to device
+    CUDA_CHECK(ggml_cuda_h2d_tensor_2d(d_Q, tensor, 0, 0, cudaStream2));
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    tensor->data = d_Q;
+    tensor->backend = GGML_BACKEND_CUDA;
 }
