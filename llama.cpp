@@ -529,8 +529,8 @@ struct llama_file_saver {
         write_vocab();
     }
     void write_magic() {
-        file.write_u32('ggjt'); // magic
-        file.write_u32(1); // version
+        file.write_u32(LLAMA_FILE_MAGIC);   // magic
+        file.write_u32(LLAMA_FILE_VERSION); // version
     }
     void write_hparams(enum llama_ftype new_ftype) {
         const llama_hparams & hparams = any_file_loader->hparams;
