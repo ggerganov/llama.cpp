@@ -301,7 +301,7 @@ Building the program with BLAS support may lead to some performance improvements
 
 - clBLAS
 
-  This provides BLAS acceleration using the CUDA cores of your GPU. Make sure to have the cblas installed.
+  This provides BLAS acceleration using the CUDA cores of your GPU. Make sure to have the clblast installed.
   - Using `make`:
     ```bash
     make LLAMA_CLBLAS=1
