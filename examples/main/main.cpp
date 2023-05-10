@@ -235,11 +235,6 @@ int main(int argc, char ** argv) {
     }
 
     if (params.interactive) {
-        if (params.prompt_cache_all) {
-            fprintf(stderr, "error: --prompt-cache-all not supported in interactive mode yet\n");
-            return 1;
-        }
-
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
         struct sigaction sigint_action;
         sigint_action.sa_handler = sigint_handler;
