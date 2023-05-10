@@ -423,11 +423,13 @@ int main(int argc, char ** argv) {
                     logits[it->first] += it->second;
                 }
 #if defined(LLAMA_USE_BOOST)
-                for (size_t i = 0; i < llama_get_num_logits(ctx); i++) {
-                    if (!boost::regex_match(partial_completion + llama_token_to_str(ctx, i), response_allowed_regex, boost::match_partial))
-                        logits[i] = -INFINITY;
-                    else if (boost::regex_match(partial_completion + llama_token_to_str(ctx, i), response_bias_regex, boost::match_partial)) {
-                        logits[i] += params.bias_regex_value;
+                if (params.allowed_regex != "" || params.bias_regex != "") {
+                    for (size_t i = 0; i < llama_n_vocab(ctx); i++) {
+                        if (!boost::regex_match(partial_completion + llama_token_to_str(ctx, i), response_allowed_regex, boost::match_partial))
+                            logits[i] = -INFINITY;
+                        else if (boost::regex_match(partial_completion + llama_token_to_str(ctx, i), response_bias_regex, boost::match_partial)) {
+                            logits[i] += params.bias_regex_value;
+                        }
                     }
                 }
 #endif
