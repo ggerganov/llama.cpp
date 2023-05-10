@@ -7,10 +7,51 @@
 
 Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
+## ⚠️ TEMPORARY NOTICE ABOUT UPCOMING BREAKING CHANGE ⚠️
+
+**The quantization formats will soon be updated: https://github.com/ggerganov/llama.cpp/pull/1305**
+
+**All `ggml` model files using the old format will not work with the latest `llama.cpp` code after that change is merged**
+
+---
+
 **Hot topics:**
 
 - [Roadmap May 2023](https://github.com/ggerganov/llama.cpp/discussions/1220)
 - [New quantization methods](https://github.com/ggerganov/llama.cpp#quantization)
+
+<details>
+  <summary>Table of Contents</summary>
+  <ol>
+    <li>
+      <a href="#description">Description</a>
+    </li>
+    <li>
+      <a href="#usage">Usage</a>
+      <ul>
+        <li><a href="#get-the-code">Get the Code</a></li>
+        <li><a href="#build">Build</a></li>
+        <li><a href="#blas-build">BLAS Build</a></li>
+        <li><a href="#prepare-data--run">Prepare Data & Run</a></li>
+        <li><a href="#memorydisk-requirements">Memory/Disk Requirements</a></li>
+        <li><a href="#quantization">Quantization</a></li>
+        <li><a href="#interactive-mode">Interactive mode</a></li>
+        <li><a href="#instruction-mode-with-alpaca">Instruction mode with Alpaca</a></li>
+        <li><a href="#using-gpt4all">Using GPT4All</a></li>
+        <li><a href="#using-pygmalion-7b--metharme-7b">Using Pygmalion 7B & Metharme 7B</a></li>
+        <li><a href="#obtaining-the-facebook-llama-original-model-and-stanford-alpaca-model-data">Obtaining the Facebook LLaMA original model and Stanford Alpaca model data</a></li>
+        <li><a href="#verifying-the-model-files">Verifying the model files</a></li>
+        <li><a href="#seminal-papers-and-background-on-the-models">Seminal papers and background on the models</a></li>
+        <li><a href="#perplexity-measuring-model-quality">Perplexity (measuring model quality)</a></li>
+        <li><a href="#android">Android</a></li>
+        <li><a href="#docker">Docker</a></li>
+      </ul>
+    </li>
+    <li><a href="#contributing">Contributing</a></li>
+    <li><a href="#coding-guidelines">Coding guidelines</a></li>
+    <li><a href="#docs">Docs</a></li>
+  </ol>
+</details>
 
 ## Description
 
@@ -18,10 +59,12 @@ The main goal of `llama.cpp` is to run the LLaMA model using 4-bit integer quant
 
 - Plain C/C++ implementation without dependencies
 - Apple silicon first-class citizen - optimized via ARM NEON and Accelerate framework
-- AVX2 support for x86 architectures
+- AVX, AVX2 and AVX512 support for x86 architectures
 - Mixed F16 / F32 precision
-- 4-bit integer quantization support
+- 4-bit, 5-bit and 8-bit integer quantization support
 - Runs on the CPU
+- OpenBLAS support
+- cuBLAS and CLBlast support
 
 The original implementation of `llama.cpp` was [hacked in an evening](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022).
 Since then, the project has improved significantly thanks to many contributions. This project is for educational purposes and serves
@@ -43,6 +86,8 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [Vigogne (French)](https://github.com/bofenghuang/vigogne)
 - [X] [Vicuna](https://github.com/ggerganov/llama.cpp/discussions/643#discussioncomment-5533894)
 - [X] [Koala](https://bair.berkeley.edu/blog/2023/04/03/koala/)
+- [X] [OpenBuddy 🐶 (Multilingual)](https://github.com/OpenBuddy/OpenBuddy)
+- [X] [Pygmalion 7B / Metharme 7B](#using-pygmalion-7b--metharme-7b)
 
 **Bindings:**
 
@@ -213,7 +258,6 @@ Building the program with BLAS support may lead to some performance improvements
       ```bash
       make LLAMA_OPENBLAS=1
       ```
-      Note: In order to build on Arch Linux with OpenBLAS support enabled you must edit the Makefile adding at the end of the line 105: `-lcblas`
 
     - On Windows:
 
@@ -255,6 +299,8 @@ Building the program with BLAS support may lead to some performance improvements
     cmake --build . --config Release
     ```
 
+Note: Because llama.cpp uses multiple CUDA streams for matrix multiplication results [are not guaranteed to be reproducible](https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility). If you need reproducibility, set `GGML_CUDA_MAX_STREAMS` in the file `ggml-cuda.cu` to 1.
+
 ### Prepare Data & Run
 
 ```bash
@@ -294,16 +340,24 @@ Several quantization methods are supported. They differ in the resulting model d
 
 | Model | Measure      | F16    | Q4_0   | Q4_1   | Q4_2   | Q5_0   | Q5_1   | Q8_0   |
 |------:|--------------|-------:|-------:|-------:|-------:|-------:|-------:|-------:|
-|    7B | perplexity   | 5.9565 | 6.2103 | 6.1286 | 6.1698 | 6.0139 | 5.9934 | 5.9571 |
+|    7B | perplexity   | 5.9066 | 6.1620 | 6.0910 | 6.1466 | 5.9862 | 5.9481 | 5.9069 |
 |    7B | file size    |  13.0G |   4.0G |   4.8G |   4.0G |   4.4G |   4.8G |   7.1G |
 |    7B | ms/tok @ 4th |    128 |     56 |     61 |     84 |     91 |     95 |     75 |
 |    7B | ms/tok @ 8th |    128 |     47 |     55 |     48 |     53 |     59 |     75 |
 |    7B | bits/weight  |   16.0 |    5.0 |    6.0 |    5.0 |    5.5 |    6.0 |    9.0 |
-|   13B | perplexity   | 5.2455 | 5.3748 | 5.3471 | 5.3433 | 5.2768 | 5.2582 | 5.2458 |
+|   13B | perplexity   | 5.2543 | 5.3863 | 5.3607 | 5.3513 | 5.2856 | 5.2706 | 5.2548 |
 |   13B | file size    |  25.0G |   7.6G |   9.1G |   7.6G |   8.4G |   9.1G |    14G |
 |   13B | ms/tok @ 4th |    239 |    104 |    113 |    160 |    176 |    185 |    141 |
 |   13B | ms/tok @ 8th |    240 |     85 |     99 |     97 |    108 |    117 |    147 |
 |   13B | bits/weight  |   16.0 |    5.0 |    6.0 |    5.0 |    5.5 |    6.0 |    9.0 |
+
+### Perplexity (measuring model quality)
+
+You can use the `perplexity` example to measure perplexity over a given prompt (lower perplexity is better).
+For more information, see [https://huggingface.co/docs/transformers/perplexity](https://huggingface.co/docs/transformers/perplexity).
+
+The perplexity measurements in table above are done against the `wikitext2` test dataset (https://paperswithcode.com/dataset/wikitext-2), with context length of 512.
+The time per token is measured on a MacBook M1 Pro 32GB RAM using 4 and 8 threads.
 
 ### Interactive mode
 
@@ -371,6 +425,19 @@ python3 convert.py models/gpt4all-7B/gpt4all-lora-quantized.bin
 
 - The newer GPT4All-J model is not yet supported!
 
+### Using Pygmalion 7B & Metharme 7B
+
+- Obtain the [LLaMA weights](#obtaining-the-facebook-llama-original-model-and-stanford-alpaca-model-data)
+- Obtain the [Pygmalion 7B](https://huggingface.co/PygmalionAI/pygmalion-7b/) or [Metharme 7B](https://huggingface.co/PygmalionAI/metharme-7b) XOR encoded weights
+- Convert the LLaMA model with [the latest HF convert script](https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/convert_llama_weights_to_hf.py)
+- Merge the XOR files with the converted LLaMA weights by running the [xor_codec](https://huggingface.co/PygmalionAI/pygmalion-7b/blob/main/xor_codec.py) script
+- Convert to `ggml` format using the `convert.py` script in this repo:
+```bash
+python3 convert.py pygmalion-7b/ --outtype q4_1
+```
+> The Pygmalion 7B & Metharme 7B weights are saved in [bfloat16](https://en.wikipedia.org/wiki/Bfloat16_floating-point_format) precision. If you wish to convert to `ggml` without quantizating, please specify the `--outtype` as `f32` instead of `f16`.
+
+
 ### Obtaining the Facebook LLaMA original model and Stanford Alpaca model data
 
 - **Under no circumstances should IPFS, magnet links, or any other links to model downloads be shared anywhere in this repository, including in issues, discussions, or pull requests. They will be immediately deleted.**
@@ -402,26 +469,6 @@ If your issue is with model generation quality, then please at least scan the fo
 - GPT-3.5 / InstructGPT / ChatGPT:
     - [Aligning language models to follow instructions](https://openai.com/research/instruction-following)
     - [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
-
-### Perplexity (measuring model quality)
-
-You can use the `perplexity` example to measure perplexity over the given prompt. For more background, see [https://huggingface.co/docs/transformers/perplexity](https://huggingface.co/docs/transformers/perplexity). However, in general, lower perplexity is better for LLMs.
-
-#### Latest measurements
-
-The latest perplexity scores for the various model sizes and quantizations are being tracked in [discussion #406](https://github.com/ggerganov/llama.cpp/discussions/406). `llama.cpp` is measuring very well compared to the baseline implementations. Quantization has a small negative impact on quality, but, as you can see, running
-13B at q4_0 beats the 7B f16 model by a significant amount.
-
-All measurements are done against the wikitext2 test dataset (https://paperswithcode.com/dataset/wikitext-2), with default options (512 length context).
-Note that changing the context length will have a significant impact on perplexity (longer context = better perplexity).
-```
-Perplexity - model options
-5.5985 - 13B, q4_0
-5.9565 - 7B, f16
-6.3001 - 7B, q4_1
-6.5949 - 7B, q4_0
-6.5995 - 7B, q4_0, --memory_f16
-```
 
 #### How to run
 

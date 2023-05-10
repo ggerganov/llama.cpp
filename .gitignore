@@ -21,6 +21,7 @@ build-sanitize-addr/
 build-sanitize-thread/
 
 models/*
+*.bin
 
 /main
 /quantize
@@ -42,5 +43,6 @@ zig-out/
 zig-cache/
 
 ppl-*.txt
+qnt-*.txt
 
 examples/jeopardy/results.txt

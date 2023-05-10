@@ -35,12 +35,12 @@ static bool is_interacting = false;
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
 void sigint_handler(int signo) {
-    set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
-    printf("\n"); // this also force flush stdout.
     if (signo == SIGINT) {
         if (!is_interacting) {
             is_interacting=true;
         } else {
+            console_cleanup(con_st);
+            printf("\n");
             llama_print_timings(*g_ctx);
             _exit(130);
         }
@@ -59,10 +59,9 @@ int main(int argc, char ** argv) {
     // save choice to use color for later
     // (note for later: this is a slightly awkward choice)
     con_st.use_color = params.use_color;
-
-#if defined (_WIN32)
-    win32_console_init(params.use_color);
-#endif
+    con_st.multiline_input = params.multiline_input;
+    console_init(con_st);
+    atexit([]() { console_cleanup(con_st); });
 
     if (params.perplexity) {
         printf("\n************\n");
@@ -260,6 +259,10 @@ int main(int argc, char ** argv) {
         if (!params.input_prefix.empty()) {
             fprintf(stderr, "Input prefix: '%s'\n", params.input_prefix.c_str());
         }
+
+        if (!params.input_suffix.empty()) {
+            fprintf(stderr, "Input suffix: '%s'\n", params.input_suffix.c_str());
+        }
     }
     fprintf(stderr, "sampling: repeat_last_n = %d, repeat_penalty = %f, presence_penalty = %f, frequency_penalty = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f, mirostat = %d, mirostat_lr = %f, mirostat_ent = %f\n",
             params.repeat_last_n, params.repeat_penalty, params.presence_penalty, params.frequency_penalty, params.top_k, params.tfs_z, params.top_p, params.typical_p, params.temp, params.mirostat, params.mirostat_eta, params.mirostat_tau);
@@ -271,12 +274,21 @@ int main(int argc, char ** argv) {
     std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
 
     if (params.interactive) {
+        const char *control_message;
+        if (con_st.multiline_input) {
+            control_message = " - To return control to LLaMa, end your input with '\\'.\n"
+                              " - To return control without starting a new line, end your input with '/'.\n";
+        } else {
+            control_message = " - Press Return to return control to LLaMa.\n"
+                              " - To return control without starting a new line, end your input with '/'.\n"
+                              " - If you want to submit another line, end your input with '\\'.\n";
+        }
         fprintf(stderr, "== Running in interactive mode. ==\n"
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
                " - Press Ctrl+C to interject at any time.\n"
 #endif
-               " - Press Return to return control to LLaMa.\n"
-               " - If you want to submit another line, end your input in '\\'.\n\n");
+               "%s\n", control_message);
+
         is_interacting = params.interactive_first;
     }
 
@@ -295,7 +307,7 @@ int main(int argc, char ** argv) {
     int n_session_consumed = 0;
 
     // the first thing we will do is to output the prompt, so set color accordingly
-    set_console_color(con_st, CONSOLE_COLOR_PROMPT);
+    console_set_color(con_st, CONSOLE_COLOR_PROMPT);
 
     std::vector<llama_token> embd;
 
@@ -309,7 +321,8 @@ int main(int argc, char ** argv) {
             if (n_past + (int) embd.size() > n_ctx) {
                 const int n_left = n_past - params.n_keep;
 
-                n_past = params.n_keep;
+                // always keep the first token - BOS
+                n_past = std::max(1, params.n_keep);
 
                 // insert n_left/2 tokens at the start of embd from last_n_tokens
                 embd.insert(embd.begin(), last_n_tokens.begin() + n_ctx - n_left/2 - embd.size(), last_n_tokens.end() - embd.size());
@@ -327,7 +340,6 @@ int main(int argc, char ** argv) {
             }
 
             // try to reuse a matching prefix from the loaded session instead of re-eval (via n_past)
-            // REVIEW
             if (n_session_consumed < (int) session_tokens.size()) {
                 size_t i = 0;
                 for ( ; i < embd.size(); i++) {
@@ -440,10 +452,10 @@ int main(int argc, char ** argv) {
                         id = llama_sample_token_mirostat_v2(ctx, &candidates_p, mirostat_tau, mirostat_eta, &mirostat_mu);
                     } else {
                         // Temperature sampling
-                        llama_sample_top_k(ctx, &candidates_p, top_k);
-                        llama_sample_tail_free(ctx, &candidates_p, tfs_z);
-                        llama_sample_typical(ctx, &candidates_p, typical_p);
-                        llama_sample_top_p(ctx, &candidates_p, top_p);
+                        llama_sample_top_k(ctx, &candidates_p, top_k, 1);
+                        llama_sample_tail_free(ctx, &candidates_p, tfs_z, 1);
+                        llama_sample_typical(ctx, &candidates_p, typical_p, 1);
+                        llama_sample_top_p(ctx, &candidates_p, top_p, 1);
                         llama_sample_temperature(ctx, &candidates_p, temp);
                         id = llama_sample_token(ctx, &candidates_p);
                     }
@@ -494,7 +506,7 @@ int main(int argc, char ** argv) {
         }
         // reset color to default if we there is no pending user input
         if (input_echo && (int)embd_inp.size() == n_consumed) {
-            set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
+            console_set_color(con_st, CONSOLE_COLOR_DEFAULT);
         }
 
         // in interactive mode, and not currently processing queued inputs;
@@ -514,17 +526,12 @@ int main(int argc, char ** argv) {
                     if (last_output.find(antiprompt.c_str(), last_output.length() - antiprompt.length(), antiprompt.length()) != std::string::npos) {
                         is_interacting = true;
                         is_antiprompt = true;
-                        set_console_color(con_st, CONSOLE_COLOR_USER_INPUT);
-                        fflush(stdout);
                         break;
                     }
                 }
             }
 
             if (n_past > 0 && is_interacting) {
-                // potentially set color to indicate we are taking user input
-                set_console_color(con_st, CONSOLE_COLOR_USER_INPUT);
-
                 if (params.instruct) {
                     printf("\n> ");
                 }
@@ -538,33 +545,21 @@ int main(int argc, char ** argv) {
                 std::string line;
                 bool another_line = true;
                 do {
-#if defined(_WIN32)
-                    std::wstring wline;
-                    if (!std::getline(std::wcin, wline)) {
-                        // input stream is bad or EOF received
-                        return 0;
-                    }
-                    win32_utf8_encode(wline, line);
-#else
-                    if (!std::getline(std::cin, line)) {
-                        // input stream is bad or EOF received
-                        return 0;
-                    }
-#endif
-                    if (line.empty() || line.back() != '\\') {
-                        another_line = false;
-                    } else {
-                        line.pop_back(); // Remove the continue character
-                    }
-                    buffer += line + '\n'; // Append the line to the result
+                    another_line = console_readline(con_st, line);
+                    buffer += line;
                 } while (another_line);
 
                 // done taking input, reset color
-                set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
+                console_set_color(con_st, CONSOLE_COLOR_DEFAULT);
 
                 // Add tokens to embd only if the input buffer is non-empty
                 // Entering a empty line lets the user pass control back
                 if (buffer.length() > 1) {
+                    // append input suffix if any
+                    if (!params.input_suffix.empty()) {
+                        buffer += params.input_suffix;
+                        printf("%s", params.input_suffix.c_str());
+                    }
 
                     // instruct mode: insert instruction prefix
                     if (params.instruct && !is_antiprompt) {
@@ -610,8 +605,6 @@ int main(int argc, char ** argv) {
 
     llama_print_timings(ctx);
     llama_free(ctx);
-
-    set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
 
     return 0;
 }
