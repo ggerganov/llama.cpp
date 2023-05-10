@@ -266,7 +266,7 @@ int main(int argc, char ** argv) {
     }
 
     if (params.stop_keywords.size()) {
-      for (auto stop_keyword : params.stop_keywords) {
+      for (auto & stop_keyword : params.stop_keywords) {
         fprintf(stderr, "Stop keyword: '%s'\n", stop_keyword.c_str());
       }
     }
@@ -516,22 +516,17 @@ int main(int argc, char ** argv) {
             console_set_color(con_st, CONSOLE_COLOR_DEFAULT);
         }
 
-        // in interactive mode, and not currently processing queued inputs;
-        // check if we should prompt the user for more
-        if (params.interactive && (int) embd_inp.size() <= n_consumed) {
-
+        // check for stop keywords if we're processing generations
+        if (params.stop_keywords.size() && (int) embd_inp.size() <= n_consumed) {
             std::string last_output;
-            if (params.antiprompt.size() || params.stop_keywords.size()) {
-                for (auto id : last_n_tokens) {
-                    last_output += llama_token_to_str(ctx, id);
-                }
+            for (auto id : last_n_tokens) {
+                last_output += llama_token_to_str(ctx, id);
             }
-
-            // Check for stop keywords, a configurable alternative to the end-of-text token
-            // This should stop also the interactive mode, useful to stop interactive mode without SIGTERM
             bool stop = false;
-            for (std::string stop_keyword : params.stop_keywords) {
-                if (last_output.find(stop_keyword.c_str(), last_output.length() - stop_keyword.length(), stop_keyword.length()) != std::string::npos) {
+            for (auto & stop_keyword : params.stop_keywords) {
+                const size_t stop_pos = last_output.find(stop_keyword.c_str(),
+                    last_output.length() - stop_keyword.length(), stop_keyword.length());
+                if (stop_pos != std::string::npos) {
                     stop = true;
                     break;
                 }
@@ -539,9 +534,19 @@ int main(int argc, char ** argv) {
             if (stop) {
                 break;
             }
+        }
+
+        // in interactive mode, and not currently processing queued inputs;
+        // check if we should prompt the user for more
+        if (params.interactive && (int) embd_inp.size() <= n_consumed) {
 
             // check for reverse prompt
             if (params.antiprompt.size()) {
+                std::string last_output;
+                for (auto id : last_n_tokens) {
+                    last_output += llama_token_to_str(ctx, id);
+                }
+
                 is_antiprompt = false;
                 // Check if each of the reverse prompts appears at the end of the output.
                 for (std::string & antiprompt : params.antiprompt) {
@@ -605,24 +610,6 @@ int main(int argc, char ** argv) {
 
             if (n_past > 0) {
                 is_interacting = false;
-            }
-        }
-
-        // Check for stop keywords, a configurable alternative to the end-of-text token
-        if (!params.interactive && params.stop_keywords.size() && !is_interacting) {
-            std::string last_output;
-            for (auto id : last_n_tokens) {
-                last_output += llama_token_to_str(ctx, id);
-            }
-            bool stop = false;
-            for (std::string stop_keyword : params.stop_keywords) {
-                if (last_output.find(stop_keyword.c_str(), last_output.length() - stop_keyword.length(), stop_keyword.length()) != std::string::npos) {
-                    stop = true;
-                    break;
-                }
-            }
-            if (stop) {
-                break;
             }
         }
 
