@@ -55,8 +55,6 @@ void sigint_handler(int signo) {
 int main(int argc, char ** argv) {
     gpt_params params;
     params.model = "models/llama-7B/ggml-model.bin";
-//    boost::regex regex = boost::regex("(?:(?:\\([a-z A-Z 0-9]*, [a-z A-Z 0-9]*, [a-z A-Z 0-9]*\\))(?:<\\|>\\([a-z A-Z 0-9]*, [a-z A-Z 0-9]*, [a-z A-Z 0-9]*\\))*)|NONE");
-//    boost::regex negative_bias_regex = boost::regex("^NONE");
 
     if (gpt_params_parse(argc, argv, params) == false) {
         return 1;
