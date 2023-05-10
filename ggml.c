@@ -1415,7 +1415,7 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
             y[i].qs[4*l + 3] = vgetq_lane_s32(vi, 3);
         }
     }
-#elif 0 //defined(__AVX2__) || defined(__AVX__) TODO
+#elif defined(__AVX2__) // || defined(__AVX__) TODO
     for (int i = 0; i < nb; i++) {
         // Load elements into 4 AVX vectors
         __m256 v0 = _mm256_loadu_ps( x );
@@ -1468,10 +1468,11 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
         i0 = _mm256_packs_epi16( i0, i2 );	// 0, 1, 2, 3,  8, 9, 10, 11,  16, 17, 18, 19,  24, 25, 26, 27,  4, 5, 6, 7, 12, 13, 14, 15, 20, 21, 22, 23, 28, 29, 30, 31
 
         // We got our precious signed bytes, but the order is now wrong
-        // These AVX2 pack instructions process 16-byte pieces independently
-        // The following instruction is fixing the order
-        const __m256i perm = _mm256_setr_epi32( 0, 4, 1, 5, 2, 6, 3, 7 );
-        i0 = _mm256_permutevar8x32_epi32( i0, perm );
+        // TODO: find a smarter way to do this
+        i2 = _mm256_permute2f128_si256(i0, i0, 0x01);
+        i1 = _mm256_shuffle_epi8(i0, _mm256_setr_epi8( 0, 2,-1,-1, 4, 6,-1,-1, 8,10,-1,-1,12,14,-1,-1,-1,-1, 1, 3,-1,-1, 5, 7,-1,-1, 9,11,-1,-1,13,15));
+        i2 = _mm256_shuffle_epi8(i2, _mm256_setr_epi8(-1,-1, 0, 2,-1,-1, 4, 6,-1,-1, 8,10,-1,-1,12,14, 1, 3,-1,-1, 5, 7,-1,-1, 9,11,-1,-1,13,15,-1,-1));
+        i0 = _mm256_or_si256(i1, i2);
 
         _mm256_storeu_si256((__m256i *)y[i].qs, i0);
 #else
@@ -1604,7 +1605,7 @@ static void quantize_row_q8_1(const float * restrict x, void * restrict vy, int 
         y[i].s0 = d * sum0;
         y[i].s1 = d * sum1;
     }
-#elif 0//defined(__AVX2__) || defined(__AVX__) TODO
+#elif defined(__AVX2__) // || defined(__AVX__) TODO
     for (int i = 0; i < nb; i++) {
         // Load elements into 4 AVX vectors
         __m256 v0 = _mm256_loadu_ps( x );
@@ -1662,10 +1663,11 @@ static void quantize_row_q8_1(const float * restrict x, void * restrict vy, int 
         i0 = _mm256_packs_epi16( i0, i2 );	// 0, 1, 2, 3,  8, 9, 10, 11,  16, 17, 18, 19,  24, 25, 26, 27,  4, 5, 6, 7, 12, 13, 14, 15, 20, 21, 22, 23, 28, 29, 30, 31
 
         // We got our precious signed bytes, but the order is now wrong
-        // These AVX2 pack instructions process 16-byte pieces independently
-        // The following instruction is fixing the order
-        const __m256i perm = _mm256_setr_epi32( 0, 4, 1, 5, 2, 6, 3, 7 );
-        i0 = _mm256_permutevar8x32_epi32( i0, perm );
+        // TODO: find a smarter way to do this
+        i2 = _mm256_permute2f128_si256(i0, i0, 0x01);
+        i1 = _mm256_shuffle_epi8(i0, _mm256_setr_epi8( 0, 2,-1,-1, 4, 6,-1,-1, 8,10,-1,-1,12,14,-1,-1,-1,-1, 1, 3,-1,-1, 5, 7,-1,-1, 9,11,-1,-1,13,15));
+        i2 = _mm256_shuffle_epi8(i2, _mm256_setr_epi8(-1,-1, 0, 2,-1,-1, 4, 6,-1,-1, 8,10,-1,-1,12,14, 1, 3,-1,-1, 5, 7,-1,-1, 9,11,-1,-1,13,15,-1,-1));
+        i0 = _mm256_or_si256(i1, i2);
 
         _mm256_storeu_si256((__m256i *)y[i].qs, i0);
 #else
