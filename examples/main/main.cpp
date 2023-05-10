@@ -139,7 +139,7 @@ int main(int argc, char ** argv) {
     // Add a space in front of the first character to match OG llama tokenizer behavior
     params.prompt.insert(0, 1, ' ');
 
-    std::string path_session    = params.path_prompt_cache;
+    std::string path_session = params.path_prompt_cache;
     std::vector<llama_token> session_tokens;
 
     if (!path_session.empty()) {
