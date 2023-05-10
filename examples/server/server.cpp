@@ -737,7 +737,7 @@ int main(int argc, char ** argv) {
             }
   });
 
-  printf("llama.cpp HTTP Server Listening at http://%s:%i", hostname, port);
+  printf("llama.cpp HTTP Server Listening at http://%s:%i", hostname.c_str(), port);
   
   // change hostname and port
   svr.listen(hostname, port);
