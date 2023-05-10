@@ -178,8 +178,6 @@ extern "C" {
     // Cols: n_vocab
     LLAMA_API float * llama_get_logits(struct llama_context * ctx);
 
-    LLAMA_API size_t llama_get_num_logits(struct llama_context * ctx);
-
     // Get the embeddings for the input
     // shape: [n_embd] (1-dimensional)
     LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
