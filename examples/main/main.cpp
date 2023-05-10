@@ -503,6 +503,7 @@ int main(int argc, char ** argv) {
             --n_remain;
         } else {
             // some user input remains from prompt or interaction, forward it to processing
+            partial_completion = "";
             while ((int) embd_inp.size() > n_consumed) {
                 embd.push_back(embd_inp[n_consumed]);
                 last_n_tokens.erase(last_n_tokens.begin());
