@@ -333,6 +333,24 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.input_suffix = argv[i];
+        } else if (arg == "--allowed-response-regex") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.allowed_regex = argv[i];
+        } else if (arg == "--response-bias-regex") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.bias_regex = argv[i];
+        } else if (arg == "--response-bias-value") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.bias_regex_value = std::stof(argv[i]);
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             gpt_print_usage(argc, argv, default_params);

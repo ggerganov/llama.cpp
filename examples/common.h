@@ -49,6 +49,9 @@ struct gpt_params {
     std::string path_prompt_cache = "";  // path to file for saving/loading prompt eval state
     std::string input_prefix      = "";  // string to prefix user inputs with
     std::string input_suffix      = "";  // string to suffix user inputs with
+    std::string allowed_regex     = "";  // regex string used to force prediction of matching tokens
+    std::string bias_regex        = "";  // matching tokens are biased by bias_regex_value
+    float bias_regex_value        = -1;  // value to bias tokens matching bias_regex by
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
 
     std::string lora_adapter = "";  // lora adapter path

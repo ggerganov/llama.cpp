@@ -18,6 +18,10 @@
 #include <string>
 #include <vector>
 
+#if defined(LLAMA_USE_BOOST)
+    #include <boost/regex.hpp>
+#endif
+
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 #include <signal.h>
 #include <unistd.h>
@@ -51,6 +55,8 @@ void sigint_handler(int signo) {
 int main(int argc, char ** argv) {
     gpt_params params;
     params.model = "models/llama-7B/ggml-model.bin";
+//    boost::regex regex = boost::regex("(?:(?:\\([a-z A-Z 0-9]*, [a-z A-Z 0-9]*, [a-z A-Z 0-9]*\\))(?:<\\|>\\([a-z A-Z 0-9]*, [a-z A-Z 0-9]*, [a-z A-Z 0-9]*\\))*)|NONE");
+//    boost::regex negative_bias_regex = boost::regex("^NONE");
 
     if (gpt_params_parse(argc, argv, params) == false) {
         return 1;
@@ -96,6 +102,12 @@ int main(int argc, char ** argv) {
     if (params.random_prompt) {
         params.prompt = gpt_random_prompt(rng);
     }
+
+
+#if defined(LLAMA_USE_BOOST)
+    boost::regex response_allowed_regex = boost::regex(params.allowed_regex);
+    boost::regex response_bias_regex = boost::regex(params.bias_regex);
+#endif
 
 //    params.prompt = R"(// this function checks if the number n is prime
 //bool is_prime(int n) {)";
@@ -305,7 +317,7 @@ int main(int argc, char ** argv) {
     console_set_color(con_st, CONSOLE_COLOR_PROMPT);
 
     std::vector<llama_token> embd;
-
+    std::string partial_completion;
     while (n_remain != 0 || params.interactive) {
         // predict
         if (embd.size() > 0) {
@@ -410,6 +422,15 @@ int main(int argc, char ** argv) {
                 for (auto it = params.logit_bias.begin(); it != params.logit_bias.end(); it++) {
                     logits[it->first] += it->second;
                 }
+#if defined(LLAMA_USE_BOOST)
+                for (size_t i = 0; i < llama_get_num_logits(ctx); i++) {
+                    if (!boost::regex_match(partial_completion + llama_token_to_str(ctx, i), response_allowed_regex, boost::match_partial))
+                        logits[i] = -INFINITY;
+                    else if (boost::regex_match(partial_completion + llama_token_to_str(ctx, i), response_bias_regex, boost::match_partial)) {
+                        logits[i] += params.bias_regex_value;
+                    }
+                }
+#endif
 
                 std::vector<llama_token_data> candidates;
                 candidates.reserve(n_vocab);
@@ -459,6 +480,7 @@ int main(int argc, char ** argv) {
 
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(id);
+                partial_completion += llama_token_to_str(ctx, id);
             }
 
             // replace end of text token with newline token when in interactive mode

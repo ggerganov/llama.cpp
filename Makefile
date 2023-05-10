@@ -143,6 +143,11 @@ ifdef LLAMA_PERF
 	CFLAGS   += -DGGML_PERF
 	CXXFLAGS += -DGGML_PERF
 endif
+ifdef LLAMA_USE_BOOST
+	LDFLAGS += -L/usr/lib/x86_64-linux-gnu/ -lboost_regex
+	CFLAGS += -DLLAMA_USE_BOOST
+	CXXFLAGS += -DLLAMA_USE_BOOST
+endif
 ifneq ($(filter aarch64%,$(UNAME_M)),)
 	# Apple M1, M2, etc.
 	# Raspberry Pi 3, 4, Zero 2 (64-bit)
