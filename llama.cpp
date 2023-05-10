@@ -2779,6 +2779,10 @@ float * llama_get_logits(struct llama_context * ctx) {
     return ctx->logits.data();
 }
 
+size_t llama_get_num_logits(struct llama_context * ctx) {
+    return ctx->logits.size();
+}
+
 float * llama_get_embeddings(struct llama_context * ctx) {
     return ctx->embedding.data();
 }
