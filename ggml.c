@@ -925,8 +925,8 @@ static void quantize_row_q8_0_reference(const float * restrict x, block_q8_0 * r
             const float v0 = x[i*QK8_0 + 2*j + 0]*id;
             const float v1 = x[i*QK8_0 + 2*j + 1]*id;
 
-            y[i].qs[          j] = v0 + 0.5f;
-            y[i].qs[QK8_0/2 + j] = v1 + 0.5f;
+            y[i].qs[          j] = roundf(v0);
+            y[i].qs[QK8_0/2 + j] = roundf(v1);
         }
     }
 }
@@ -1083,8 +1083,8 @@ static void quantize_row_q8_1_reference(const float * restrict x, block_q8_1 * r
             const float v0 = x[i*QK8_1 + 2*j + 0]*id;
             const float v1 = x[i*QK8_1 + 2*j + 1]*id;
 
-            y[i].qs[          j] = v0 + 0.5f;
-            y[i].qs[QK8_1/2 + j] = v1 + 0.5f;
+            y[i].qs[          j] = roundf(v0);
+            y[i].qs[QK8_1/2 + j] = roundf(v1);
 
             sum += y[i].qs[          j];
             sum += y[i].qs[QK8_1/2 + j];
