@@ -8811,6 +8811,10 @@ static void ggml_compute_forward_mul_mat_q_f32(
 #if defined(GGML_USE_CUBLAS)
     if (ggml_cuda_can_mul_mat(src0, src1, dst)) {
         if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
+            if (ne11 == 1 && ne12 == 1 && ne13 == 1) {
+                char * wdata = params->wdata;
+                quantize_row_q_dot((float *)((char *) src1->data), (void *) wdata, ne10);
+            }
             ggml_cuda_mul_mat(src0, src1, dst, params->wdata, params->wsize);
         }
         return;
