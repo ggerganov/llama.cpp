@@ -840,7 +840,7 @@ static const char *llama_file_version_name(llama_file_version version) {
     switch (version) {
         case LLAMA_FILE_VERSION_GGML: return "'ggml' (old version with low tokenizer quality and no mmap support)";
         case LLAMA_FILE_VERSION_GGMF_V1: return "ggmf v1 (old version with no mmap support)";
-        case LLAMA_FILE_VERSION_GGJT_V1: return "ggjt v1 (pre #1305)";
+        case LLAMA_FILE_VERSION_GGJT_V1: return "ggjt v1 (pre #1405)";
         case LLAMA_FILE_VERSION_GGJT_V2: return "ggjt v2 (latest)";
     }
 }
