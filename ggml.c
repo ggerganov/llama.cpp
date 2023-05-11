@@ -2425,7 +2425,7 @@ static void ggml_vec_dot_q5_0_q8_0(const int n, float * restrict s, const void *
         const v128_t v0l = wasm_v128_and (v0, m4b);
         const v128_t v0h = wasm_u8x16_shr(v0, 4);
 
-        // add high bit and sub 16
+        // add high bit and sub 16 (equivalent to sub 0x10 when bit is zero)
         const v128_t v0lf = wasm_i8x16_sub(v0l, qhl);
         const v128_t v0hf = wasm_i8x16_sub(v0h, qhh);
 
@@ -2570,7 +2570,7 @@ static void ggml_vec_dot_q5_1_q8_1(const int n, float * restrict s, const void *
         const int8x16_t v0_1l = vreinterpretq_s8_u8(vandq_u8  (v0_1, m4b));
         const int8x16_t v0_1h = vreinterpretq_s8_u8(vshrq_n_u8(v0_1, 4));
 
-        // add 5th bit
+        // add high bit
         const int8x16_t v0_0lf = vorrq_s8(v0_0l, qhl0);
         const int8x16_t v0_0hf = vorrq_s8(v0_0h, qhh0);
         const int8x16_t v0_1lf = vorrq_s8(v0_1l, qhl1);
@@ -2622,6 +2622,7 @@ static void ggml_vec_dot_q5_1_q8_1(const int n, float * restrict s, const void *
     uint32_t qh;
     uint64_t tmp[4];
 
+    // TODO: check if unrolling this is better
     for (int i = 0; i < nb; ++i) {
         const block_q5_1 * restrict x0 = &x[i];
         const block_q8_1 * restrict y0 = &y[i];
