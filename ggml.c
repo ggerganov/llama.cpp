@@ -525,30 +525,14 @@ static inline __m256i bytes_from_bits_32(const uint8_t * x) {
     return _mm256_cmpeq_epi8(bytes, _mm256_set1_epi64x(-1));
 }
 
-static inline __m256i bytes_from_nibbles_32_deinterleave(const uint8_t * rsi) {
-    const __m128i tmp = _mm_loadu_si128((const __m128i *)rsi);
-    const __m256i bytes = _mm256_set_m128i(_mm_srli_epi16(tmp, 4), tmp);
-    const __m256i lowMask = _mm256_set1_epi8( 0xF );
-    return _mm256_and_si256(lowMask, bytes);
-}
-
 // Unpack 32 4-bit fields into 32 bytes
 // The output vector contains 32 bytes, each one in [ 0 .. 15 ] interval
 static inline __m256i bytes_from_nibbles_32(const uint8_t * rsi)
 {
-    // Load 16 bytes from memory
-    __m128i tmp = _mm_loadu_si128( ( const __m128i* )rsi );
-
-    // Expand bytes into uint16_t values
-    __m256i bytes = _mm256_cvtepu8_epi16( tmp );
-
-    // Unpack values into individual bytes
+    const __m128i tmp = _mm_loadu_si128((const __m128i *)rsi);
+    const __m256i bytes = _mm256_set_m128i(_mm_srli_epi16(tmp, 4), tmp);
     const __m256i lowMask = _mm256_set1_epi8( 0xF );
-    __m256i high = _mm256_andnot_si256( lowMask, bytes );
-    __m256i low = _mm256_and_si256( lowMask, bytes );
-    high = _mm256_slli_epi16( high, 4 );
-    bytes = _mm256_or_si256( low, high );
-    return bytes;
+    return _mm256_and_si256(lowMask, bytes);
 }
 
 // add int16_t pairwise and return as float vector
@@ -766,8 +750,8 @@ static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * r
         y[i].d = d;
 
         for (int j = 0; j < qk/2; ++j) {
-            const float x0 = x[i*qk + 2*j + 0]*id;
-            const float x1 = x[i*qk + 2*j + 1]*id;
+            const float x0 = x[i*qk + 0    + j]*id;
+            const float x1 = x[i*qk + qk/2 + j]*id;
 
             const uint8_t xi0 = MIN(15, (int8_t)(x0 + 8.5f));
             const uint8_t xi1 = MIN(15, (int8_t)(x1 + 8.5f));
@@ -807,8 +791,8 @@ static void quantize_row_q4_1_reference(const float * restrict x, block_q4_1 * r
         y[i].m = min;
 
         for (int j = 0; j < qk/2; ++j) {
-            const float x0 = (x[i*qk + 2*j + 0] - min)*id;
-            const float x1 = (x[i*qk + 2*j + 1] - min)*id;
+            const float x0 = (x[i*qk + 0    + j] - min)*id;
+            const float x1 = (x[i*qk + qk/2 + j] - min)*id;
 
             const uint8_t xi0 = MIN(15, (int8_t)(x0 + 0.5f));
             const uint8_t xi1 = MIN(15, (int8_t)(x1 + 0.5f));
@@ -850,8 +834,8 @@ static void quantize_row_q5_0_reference(const float * restrict x, block_q5_0 * r
         uint32_t qh = 0;
 
         for (int j = 0; j < qk/2; ++j) {
-            const float x0 = x[i*qk + 2*j + 0]*id;
-            const float x1 = x[i*qk + 2*j + 1]*id;
+            const float x0 = x[i*qk + 0    + j]*id;
+            const float x1 = x[i*qk + qk/2 + j]*id;
 
             const uint8_t xi0 = MIN(31, (int8_t)(x0 + 16.5f));
             const uint8_t xi1 = MIN(31, (int8_t)(x1 + 16.5f));
@@ -898,8 +882,8 @@ static void quantize_row_q5_1_reference(const float * restrict x, block_q5_1 * r
         uint32_t qh = 0;
 
         for (int j = 0; j < qk/2; ++j) {
-            const float x0 = (x[i*qk + 2*j + 0] - min)*id;
-            const float x1 = (x[i*qk + 2*j + 1] - min)*id;
+            const float x0 = (x[i*qk + 0    + j] - min)*id;
+            const float x1 = (x[i*qk + qk/2 + j] - min)*id;
 
             const uint8_t xi0 = (uint8_t)(x0 + 0.5f);
             const uint8_t xi1 = (uint8_t)(x1 + 0.5f);
@@ -937,12 +921,10 @@ static void quantize_row_q8_0_reference(const float * restrict x, block_q8_0 * r
 
         y[i].d = d;
 
-        for (int j = 0; j < QK8_0/2; ++j) {
-            const float v0 = x[i*QK8_0 + 2*j + 0]*id;
-            const float v1 = x[i*QK8_0 + 2*j + 1]*id;
+        for (int j = 0; j < QK8_0; ++j) {
+            const float x0 = x[i*QK8_0 + j]*id;
 
-            y[i].qs[          j] = roundf(v0);
-            y[i].qs[QK8_0/2 + j] = roundf(v1);
+            y[i].qs[j] = roundf(x0);
         }
     }
 }
@@ -978,13 +960,13 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
             const float32x4_t v  = vmulq_n_f32(srcv[j], id);
             const int32x4_t   vi = vcvtnq_s32_f32(v);
 
-            y[i].qs[     2*j + 0] = vgetq_lane_s32(vi, 0);
-            y[i].qs[16 + 2*j + 0] = vgetq_lane_s32(vi, 1);
-            y[i].qs[     2*j + 1] = vgetq_lane_s32(vi, 2);
-            y[i].qs[16 + 2*j + 1] = vgetq_lane_s32(vi, 3);
+            y[i].qs[4*j + 0] = vgetq_lane_s32(vi, 0);
+            y[i].qs[4*j + 1] = vgetq_lane_s32(vi, 1);
+            y[i].qs[4*j + 2] = vgetq_lane_s32(vi, 2);
+            y[i].qs[4*j + 3] = vgetq_lane_s32(vi, 3);
         }
     }
-#elif defined(__AVX2__)
+#elif defined(__AVX2__) || defined(__AVX__)
     for (int i = 0; i < nb; i++) {
         // Load elements into 4 AVX vectors
         __m256 v0 = _mm256_loadu_ps( x );
@@ -1029,7 +1011,7 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
         __m256i i2 = _mm256_cvtps_epi32( v2 );
         __m256i i3 = _mm256_cvtps_epi32( v3 );
 
-#if defined(__AVX2__) // || defined(__AVX__) TODO
+#if defined(__AVX2__)
         // Convert int32 to int16
         i0 = _mm256_packs_epi32( i0, i1 );	// 0, 1, 2, 3,  8, 9, 10, 11,  4, 5, 6, 7, 12, 13, 14, 15
         i2 = _mm256_packs_epi32( i2, i3 );	// 16, 17, 18, 19,  24, 25, 26, 27,  20, 21, 22, 23, 28, 29, 30, 31
@@ -1037,11 +1019,10 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
         i0 = _mm256_packs_epi16( i0, i2 );	// 0, 1, 2, 3,  8, 9, 10, 11,  16, 17, 18, 19,  24, 25, 26, 27,  4, 5, 6, 7, 12, 13, 14, 15, 20, 21, 22, 23, 28, 29, 30, 31
 
         // We got our precious signed bytes, but the order is now wrong
-        // TODO: find a smarter way to do this
-        i2 = _mm256_permute2f128_si256(i0, i0, 0x01);
-        i1 = _mm256_shuffle_epi8(i0, _mm256_setr_epi8( 0, 2,-1,-1, 4, 6,-1,-1, 8,10,-1,-1,12,14,-1,-1,-1,-1, 1, 3,-1,-1, 5, 7,-1,-1, 9,11,-1,-1,13,15));
-        i2 = _mm256_shuffle_epi8(i2, _mm256_setr_epi8(-1,-1, 0, 2,-1,-1, 4, 6,-1,-1, 8,10,-1,-1,12,14, 1, 3,-1,-1, 5, 7,-1,-1, 9,11,-1,-1,13,15,-1,-1));
-        i0 = _mm256_or_si256(i1, i2);
+        // These AVX2 pack instructions process 16-byte pieces independently
+        // The following instruction is fixing the order
+        const __m256i perm = _mm256_setr_epi32( 0, 4, 1, 5, 2, 6, 3, 7 );
+        i0 = _mm256_permutevar8x32_epi32( i0, perm );
 
         _mm256_storeu_si256((__m256i *)y[i].qs, i0);
 #else
@@ -1097,8 +1078,8 @@ static void quantize_row_q8_1_reference(const float * restrict x, block_q8_1 * r
         int sum = 0;
 
         for (int j = 0; j < QK8_1/2; ++j) {
-            const float v0 = x[i*QK8_1 + 2*j + 0]*id;
-            const float v1 = x[i*QK8_1 + 2*j + 1]*id;
+            const float v0 = x[i*QK8_1           + j]*id;
+            const float v1 = x[i*QK8_1 + QK8_1/2 + j]*id;
 
             y[i].qs[          j] = roundf(v0);
             y[i].qs[QK8_1/2 + j] = roundf(v1);
@@ -1143,17 +1124,17 @@ static void quantize_row_q8_1(const float * restrict x, void * restrict vy, int 
             const float32x4_t v  = vmulq_n_f32(srcv[j], id);
             const int32x4_t   vi = vcvtnq_s32_f32(v);
 
-            y[i].qs[     2*j + 0] = vgetq_lane_s32(vi, 0);
-            y[i].qs[16 + 2*j + 0] = vgetq_lane_s32(vi, 1);
-            y[i].qs[     2*j + 1] = vgetq_lane_s32(vi, 2);
-            y[i].qs[16 + 2*j + 1] = vgetq_lane_s32(vi, 3);
+            y[i].qs[4*j + 0] = vgetq_lane_s32(vi, 0);
+            y[i].qs[4*j + 1] = vgetq_lane_s32(vi, 1);
+            y[i].qs[4*j + 2] = vgetq_lane_s32(vi, 2);
+            y[i].qs[4*j + 3] = vgetq_lane_s32(vi, 3);
 
             accv = vaddq_s32(accv, vi);
         }
 
         y[i].s = d * vaddvq_s32(accv);
     }
-#elif defined(__AVX2__)
+#elif defined(__AVX2__) || defined(__AVX__)
     for (int i = 0; i < nb; i++) {
         // Load elements into 4 AVX vectors
         __m256 v0 = _mm256_loadu_ps( x );
@@ -1198,7 +1179,7 @@ static void quantize_row_q8_1(const float * restrict x, void * restrict vy, int 
         __m256i i2 = _mm256_cvtps_epi32( v2 );
         __m256i i3 = _mm256_cvtps_epi32( v3 );
 
-#if defined(__AVX2__) // || defined(__AVX__) TODO
+#if defined(__AVX2__)
         // Compute the sum of the quants and set y[i].s
         y[i].s = d * hsum_i32_8(_mm256_add_epi32(_mm256_add_epi32(i0, i1), _mm256_add_epi32(i2, i3)));
 
@@ -1209,11 +1190,10 @@ static void quantize_row_q8_1(const float * restrict x, void * restrict vy, int 
         i0 = _mm256_packs_epi16( i0, i2 );	// 0, 1, 2, 3,  8, 9, 10, 11,  16, 17, 18, 19,  24, 25, 26, 27,  4, 5, 6, 7, 12, 13, 14, 15, 20, 21, 22, 23, 28, 29, 30, 31
 
         // We got our precious signed bytes, but the order is now wrong
-        // TODO: find a smarter way to do this
-        i2 = _mm256_permute2f128_si256(i0, i0, 0x01);
-        i1 = _mm256_shuffle_epi8(i0, _mm256_setr_epi8( 0, 2,-1,-1, 4, 6,-1,-1, 8,10,-1,-1,12,14,-1,-1,-1,-1, 1, 3,-1,-1, 5, 7,-1,-1, 9,11,-1,-1,13,15));
-        i2 = _mm256_shuffle_epi8(i2, _mm256_setr_epi8(-1,-1, 0, 2,-1,-1, 4, 6,-1,-1, 8,10,-1,-1,12,14, 1, 3,-1,-1, 5, 7,-1,-1, 9,11,-1,-1,13,15,-1,-1));
-        i0 = _mm256_or_si256(i1, i2);
+        // These AVX2 pack instructions process 16-byte pieces independently
+        // The following instruction is fixing the order
+        const __m256i perm = _mm256_setr_epi32( 0, 4, 1, 5, 2, 6, 3, 7 );
+        i0 = _mm256_permutevar8x32_epi32( i0, perm );
 
         _mm256_storeu_si256((__m256i *)y[i].qs, i0);
 #else
@@ -1266,8 +1246,8 @@ static void dequantize_row_q4_0(const block_q4_0 * restrict x, float * restrict 
             const int x0 = (x[i].qs[j] & 0x0F) - 8;
             const int x1 = (x[i].qs[j] >>   4) - 8;
 
-            y[i*qk + 2*j + 0] = x0*d;
-            y[i*qk + 2*j + 1] = x1*d;
+            y[i*qk + j + 0   ] = x0*d;
+            y[i*qk + j + qk/2] = x1*d;
         }
     }
 }
@@ -1287,8 +1267,8 @@ static void dequantize_row_q4_1(const block_q4_1 * restrict x, float * restrict 
             const int x0 = (x[i].qs[j] & 0x0F);
             const int x1 = (x[i].qs[j] >>   4);
 
-            y[i*qk + 2*j + 0] = x0*d + m;
-            y[i*qk + 2*j + 1] = x1*d + m;
+            y[i*qk + j + 0   ] = x0*d + m;
+            y[i*qk + j + qk/2] = x1*d + m;
         }
     }
 }
@@ -1313,8 +1293,8 @@ static void dequantize_row_q5_0(const block_q5_0 * restrict x, float * restrict 
             const int32_t x0 = ((x[i].qs[j] & 0x0F) | xh_0) - 16;
             const int32_t x1 = ((x[i].qs[j] >>   4) | xh_1) - 16;
 
-            y[i*qk + 2*j + 0] = x0*d;
-            y[i*qk + 2*j + 1] = x1*d;
+            y[i*qk + j + 0   ] = x0*d;
+            y[i*qk + j + qk/2] = x1*d;
         }
     }
 }
@@ -1340,8 +1320,8 @@ static void dequantize_row_q5_1(const block_q5_1 * restrict x, float * restrict 
             const int x0 = (x[i].qs[j] & 0x0F) | xh_0;
             const int x1 = (x[i].qs[j] >>   4) | xh_1;
 
-            y[i*qk + 2*j + 0] = x0*d + m;
-            y[i*qk + 2*j + 1] = x1*d + m;
+            y[i*qk + j + 0   ] = x0*d + m;
+            y[i*qk + j + qk/2] = x1*d + m;
         }
     }
 }
@@ -1358,9 +1338,8 @@ static void dequantize_row_q8_0(const void * restrict vx, float * restrict y, in
     for (int i = 0; i < nb; i++) {
         const float d = x[i].d;
 
-        for (int j = 0; j < qk/2; ++j) {
-            y[i*qk + 2*j + 0] = x[i].qs[j + 0   ]*d;
-            y[i*qk + 2*j + 1] = x[i].qs[j + qk/2]*d;
+        for (int j = 0; j < qk; ++j) {
+            y[i*qk + j] = x[i].qs[j]*d;
         }
     }
 }
@@ -2103,7 +2082,7 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
         /* Compute combined scale for the block */
         const __m256 d = _mm256_mul_ps( _mm256_broadcast_ss( &x[i].d ), _mm256_broadcast_ss( &y[i].d ) );
 
-        __m256i bx = bytes_from_nibbles_32_deinterleave(x[i].qs);
+        __m256i bx = bytes_from_nibbles_32(x[i].qs);
 
         // Now we have a vector with bytes in [ 0 .. 15 ] interval. Offset them into [ -8 .. +7 ] interval.
         const __m256i off = _mm256_set1_epi8( 8 );
@@ -2262,7 +2241,7 @@ static void ggml_vec_dot_q4_1_q8_1(const int n, float * restrict s, const void *
         const __m256 d0d1 = _mm256_mul_ps( d0v, d1v );
 
         // Load 16 bytes, and unpack 4 bit fields into bytes, making 32 bytes
-        const __m256i bx = bytes_from_nibbles_32_deinterleave(x[i].qs);
+        const __m256i bx = bytes_from_nibbles_32(x[i].qs);
         const __m256i by = _mm256_loadu_si256( (const __m256i *)y[i].qs );
 
         const __m256 xy = mul_sum_i8_pairs_float(bx, by);
@@ -2466,7 +2445,7 @@ static void ggml_vec_dot_q5_0_q8_0(const int n, float * restrict s, const void *
         /* Compute combined scale for the block */
         const __m256 d = _mm256_mul_ps(_mm256_set1_ps(GGML_FP16_TO_FP32(x[i].d)), _mm256_broadcast_ss(&y[i].d));
 
-        __m256i bx = bytes_from_nibbles_32_deinterleave(x[i].qs);
+        __m256i bx = bytes_from_nibbles_32(x[i].qs);
         __m256i bxhi = bytes_from_bits_32(x[i].qh);
         bxhi = _mm256_andnot_si256(bxhi, _mm256_set1_epi8((char)0xF0));
         bx = _mm256_or_si256(bx, bxhi);
@@ -2694,7 +2673,7 @@ static void ggml_vec_dot_q5_1_q8_1(const int n, float * restrict s, const void *
 
         summs += GGML_FP16_TO_FP32(x[i].m) * y[i].s;
 
-        __m256i bx = bytes_from_nibbles_32_deinterleave(x[i].qs);
+        __m256i bx = bytes_from_nibbles_32(x[i].qs);
         __m256i bxhi = bytes_from_bits_32(x[i].qh);
         bxhi = _mm256_and_si256(bxhi, _mm256_set1_epi8(0x10));
         bx = _mm256_or_si256(bx, bxhi);
@@ -2719,8 +2698,8 @@ static void ggml_vec_dot_q5_1_q8_1(const int n, float * restrict s, const void *
         int sumi = 0;
 
         for (int j = 0; j < qk/2; ++j) {
-            const uint8_t xh_0 = ((qh & (1u << (j + 0 ))) >> (j + 0 )) << 4;
-            const uint8_t xh_1 = ((qh & (1u << (j + 16))) >> (j + 12));
+            const uint8_t xh_0 = ((qh >> (j +  0)) << 4) & 0x10;
+            const uint8_t xh_1 = ((qh >> (j + 12))     ) & 0x10;
 
             const int32_t x0 = (x[i].qs[j] & 0xF) | xh_0;
             const int32_t x1 = (x[i].qs[j] >>  4) | xh_1;
