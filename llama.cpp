@@ -843,6 +843,8 @@ static const char *llama_file_version_name(llama_file_version version) {
         case LLAMA_FILE_VERSION_GGJT_V1: return "ggjt v1 (pre #1405)";
         case LLAMA_FILE_VERSION_GGJT_V2: return "ggjt v2 (latest)";
     }
+
+    return "unknown";
 }
 
 static const char *llama_ftype_name(enum llama_ftype ftype) {
