@@ -114,6 +114,7 @@ __kernel void dequantize_row_q8_0(__global struct block_q8_0* blocks, __global f
     const uint i = get_global_id(0) / 32;
     const uint l = get_local_id(0);
 
+    // TODO: this is broken
     result[i*32 + l] = blocks[i].qs[l] * blocks[i].d;
 }
 

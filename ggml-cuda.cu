@@ -86,8 +86,8 @@ static __global__ void dequantize_block_q4_0(const void * vx, float * y) {
         const int x0 = (x[i].qs[j] & 0xf) - 8;
         const int x1 = (x[i].qs[j] >>  4) - 8;
 
-        y[i*qk + j + 0   ] = x0*d;
-        y[i*qk + j + qk/2] = x1*d;
+        y[i*qk + 2*j + 0] = x0*d;
+        y[i*qk + 2*j + 1] = x1*d;
     }
 }
 
@@ -105,8 +105,8 @@ static __global__ void dequantize_block_q4_1(const void * vx, float * y) {
         const int x0 = (x[i].qs[j] & 0xf);
         const int x1 = (x[i].qs[j] >>  4);
 
-        y[i*qk + j + 0   ] = x0*d + m;
-        y[i*qk + j + qk/2] = x1*d + m;
+        y[i*qk + 2*j + 0] = x0*d + m;
+        y[i*qk + 2*j + 1] = x1*d + m;
     }
 }
 
@@ -129,8 +129,8 @@ static __global__ void dequantize_block_q5_0(const void * vx, float * y) {
         const int32_t x0 = ((x[i].qs[j] & 0xf) | xh_0) - 16;
         const int32_t x1 = ((x[i].qs[j] >>  4) | xh_1) - 16;
 
-        y[i*qk + j + 0   ] = x0*d;
-        y[i*qk + j + qk/2] = x1*d;
+        y[i*qk + 2*j + 0] = x0*d;
+        y[i*qk + 2*j + 1] = x1*d;
     }
 }
 
@@ -154,24 +154,23 @@ static __global__ void dequantize_block_q5_1(const void * vx, float * y) {
         const int x0 = (x[i].qs[j] & 0xf) | xh_0;
         const int x1 = (x[i].qs[j] >>  4) | xh_1;
 
-        y[i*qk + j + 0   ] = x0*d + m;
-        y[i*qk + j + qk/2] = x1*d + m;
+        y[i*qk + 2*j + 0] = x0*d + m;
+        y[i*qk + 2*j + 1] = x1*d + m;
     }
 }
 
 static __global__ void dequantize_block_q8_0(const void * vx, float * y) {
+    static const int qk = QK8_0;
+
     const block_q8_0 * x = (const block_q8_0 *) vx;
 
     const int i = blockIdx.x;
 
     const float d = x[i].d;
 
-    const int8_t * pp = x[i].qs;
-
-    for (int l = 0; l < QK8_0; l++) {
-        const int8_t vi = pp[l];
-
-        y[i*QK8_0 + l] = vi*d;
+    for (int j = 0; j < qk/2; ++j) {
+        y[i*qk + 2*j + 0] = x[i].qs[j + 0   ]*d;
+        y[i*qk + 2*j + 1] = x[i].qs[j + qk/2]*d;
     }
 }
 

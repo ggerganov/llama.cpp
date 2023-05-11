@@ -751,8 +751,8 @@ static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * r
         y[i].d = d;
 
         for (int j = 0; j < qk/2; ++j) {
-            const float x0 = x[i*qk + 0    + j]*id;
-            const float x1 = x[i*qk + qk/2 + j]*id;
+            const float x0 = x[i*qk + 2*j + 0]*id;
+            const float x1 = x[i*qk + 2*j + 1]*id;
 
             const uint8_t xi0 = MIN(15, (int8_t)(x0 + 8.5f));
             const uint8_t xi1 = MIN(15, (int8_t)(x1 + 8.5f));
@@ -792,8 +792,8 @@ static void quantize_row_q4_1_reference(const float * restrict x, block_q4_1 * r
         y[i].m = min;
 
         for (int j = 0; j < qk/2; ++j) {
-            const float x0 = (x[i*qk + 0    + j] - min)*id;
-            const float x1 = (x[i*qk + qk/2 + j] - min)*id;
+            const float x0 = (x[i*qk + 2*j + 0] - min)*id;
+            const float x1 = (x[i*qk + 2*j + 1] - min)*id;
 
             const uint8_t xi0 = MIN(15, (int8_t)(x0 + 0.5f));
             const uint8_t xi1 = MIN(15, (int8_t)(x1 + 0.5f));
@@ -835,8 +835,8 @@ static void quantize_row_q5_0_reference(const float * restrict x, block_q5_0 * r
         uint32_t qh = 0;
 
         for (int j = 0; j < qk/2; ++j) {
-            const float x0 = x[i*qk + 0    + j]*id;
-            const float x1 = x[i*qk + qk/2 + j]*id;
+            const float x0 = x[i*qk + 2*j + 0]*id;
+            const float x1 = x[i*qk + 2*j + 1]*id;
 
             const uint8_t xi0 = MIN(31, (int8_t)(x0 + 16.5f));
             const uint8_t xi1 = MIN(31, (int8_t)(x1 + 16.5f));
@@ -883,8 +883,8 @@ static void quantize_row_q5_1_reference(const float * restrict x, block_q5_1 * r
         uint32_t qh = 0;
 
         for (int j = 0; j < qk/2; ++j) {
-            const float x0 = (x[i*qk + 0    + j] - min)*id;
-            const float x1 = (x[i*qk + qk/2 + j] - min)*id;
+            const float x0 = (x[i*qk + 2*j + 0] - min)*id;
+            const float x1 = (x[i*qk + 2*j + 1] - min)*id;
 
             const uint8_t xi0 = (uint8_t)(x0 + 0.5f);
             const uint8_t xi1 = (uint8_t)(x1 + 0.5f);
@@ -922,10 +922,12 @@ static void quantize_row_q8_0_reference(const float * restrict x, block_q8_0 * r
 
         y[i].d = d;
 
-        for (int j = 0; j < QK8_0; ++j) {
-            const float v0 = x[i*QK8_0 + j]*id;
+        for (int j = 0; j < QK8_0/2; ++j) {
+            const float v0 = x[i*QK8_0 + 2*j + 0]*id;
+            const float v1 = x[i*QK8_0 + 2*j + 1]*id;
 
-            y[i].qs[j] = roundf(v0);
+            y[i].qs[          j] = v0 + 0.5f;
+            y[i].qs[QK8_0/2 + j] = v1 + 0.5f;
         }
     }
 }
@@ -943,12 +945,12 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
         float32x4_t asrcv[8];
         float32x4_t amaxv[8];
 
-        for (int l = 0; l < 8; l++) srcv[l]  = vld1q_f32(x + i*32 + 4*l);
-        for (int l = 0; l < 8; l++) asrcv[l] = vabsq_f32(srcv[l]);
+        for (int j = 0; j < 8; j++) srcv[j]  = vld1q_f32(x + i*32 + 4*j);
+        for (int j = 0; j < 8; j++) asrcv[j] = vabsq_f32(srcv[j]);
 
-        for (int l = 0; l < 4; l++) amaxv[2*l] = vmaxq_f32(asrcv[2*l], asrcv[2*l+1]);
-        for (int l = 0; l < 2; l++) amaxv[4*l] = vmaxq_f32(amaxv[4*l], amaxv[4*l+2]);
-        for (int l = 0; l < 1; l++) amaxv[8*l] = vmaxq_f32(amaxv[8*l], amaxv[8*l+4]);
+        for (int j = 0; j < 4; j++) amaxv[2*j] = vmaxq_f32(asrcv[2*j], asrcv[2*j+1]);
+        for (int j = 0; j < 2; j++) amaxv[4*j] = vmaxq_f32(amaxv[4*j], amaxv[4*j+2]);
+        for (int j = 0; j < 1; j++) amaxv[8*j] = vmaxq_f32(amaxv[8*j], amaxv[8*j+4]);
 
         const float amax = vmaxvq_f32(amaxv[0]);
 
@@ -957,14 +959,14 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
 
         y[i].d = d;
 
-        for (int l = 0; l < 8; l++) {
-            const float32x4_t v  = vmulq_n_f32(srcv[l], id);
+        for (int j = 0; j < 8; j++) {
+            const float32x4_t v  = vmulq_n_f32(srcv[j], id);
             const int32x4_t   vi = vcvtnq_s32_f32(v);
 
-            y[i].qs[4*l + 0] = vgetq_lane_s32(vi, 0);
-            y[i].qs[4*l + 1] = vgetq_lane_s32(vi, 1);
-            y[i].qs[4*l + 2] = vgetq_lane_s32(vi, 2);
-            y[i].qs[4*l + 3] = vgetq_lane_s32(vi, 3);
+            y[i].qs[     2*j + 0] = vgetq_lane_s32(vi, 0);
+            y[i].qs[16 + 2*j + 0] = vgetq_lane_s32(vi, 1);
+            y[i].qs[     2*j + 1] = vgetq_lane_s32(vi, 2);
+            y[i].qs[16 + 2*j + 1] = vgetq_lane_s32(vi, 3);
         }
     }
 #elif defined(__AVX2__) || defined(__AVX__)
@@ -1080,11 +1082,11 @@ static void quantize_row_q8_1_reference(const float * restrict x, block_q8_1 * r
         int sum1 = 0;
 
         for (int j = 0; j < QK8_1/2; ++j) {
-            const float v0 = x[i*QK8_1           + j]*id;
-            const float v1 = x[i*QK8_1 + QK8_1/2 + j]*id;
+            const float v0 = x[i*QK8_1 + 2*j + 0]*id;
+            const float v1 = x[i*QK8_1 + 2*j + 1]*id;
 
-            y[i].qs[          j] = roundf(v0);
-            y[i].qs[QK8_1/2 + j] = roundf(v1);
+            y[i].qs[          j] = v0 + 0.5f;
+            y[i].qs[QK8_1/2 + j] = v1 + 0.5f;
 
             sum0 += y[i].qs[          j];
             sum1 += y[i].qs[QK8_1/2 + j];
@@ -1129,10 +1131,10 @@ static void quantize_row_q8_1(const float * restrict x, void * restrict vy, int 
             const float32x4_t v  = vmulq_n_f32(srcv[j], id);
             const int32x4_t   vi = vcvtnq_s32_f32(v);
 
-            y[i].qs[4*j + 0] = vgetq_lane_s32(vi, 0);
-            y[i].qs[4*j + 1] = vgetq_lane_s32(vi, 1);
-            y[i].qs[4*j + 2] = vgetq_lane_s32(vi, 2);
-            y[i].qs[4*j + 3] = vgetq_lane_s32(vi, 3);
+            y[i].qs[     2*j + 0] = vgetq_lane_s32(vi, 0);
+            y[i].qs[16 + 2*j + 0] = vgetq_lane_s32(vi, 1);
+            y[i].qs[     2*j + 1] = vgetq_lane_s32(vi, 2);
+            y[i].qs[16 + 2*j + 1] = vgetq_lane_s32(vi, 3);
 
             accv0 = vaddq_s32(accv0, vi);
         }
@@ -1142,10 +1144,10 @@ static void quantize_row_q8_1(const float * restrict x, void * restrict vy, int 
             const float32x4_t v  = vmulq_n_f32(srcv[j], id);
             const int32x4_t   vi = vcvtnq_s32_f32(v);
 
-            y[i].qs[4*j + 0] = vgetq_lane_s32(vi, 0);
-            y[i].qs[4*j + 1] = vgetq_lane_s32(vi, 1);
-            y[i].qs[4*j + 2] = vgetq_lane_s32(vi, 2);
-            y[i].qs[4*j + 3] = vgetq_lane_s32(vi, 3);
+            y[i].qs[     2*j + 0] = vgetq_lane_s32(vi, 0);
+            y[i].qs[16 + 2*j + 0] = vgetq_lane_s32(vi, 1);
+            y[i].qs[     2*j + 1] = vgetq_lane_s32(vi, 2);
+            y[i].qs[16 + 2*j + 1] = vgetq_lane_s32(vi, 3);
 
             accv1 = vaddq_s32(accv1, vi);
         }
@@ -1271,8 +1273,8 @@ static void dequantize_row_q4_0(const block_q4_0 * restrict x, float * restrict 
             const int x0 = (x[i].qs[j] & 0x0F) - 8;
             const int x1 = (x[i].qs[j] >>   4) - 8;
 
-            y[i*qk + j + 0   ] = x0*d;
-            y[i*qk + j + qk/2] = x1*d;
+            y[i*qk + 2*j + 0] = x0*d;
+            y[i*qk + 2*j + 1] = x1*d;
         }
     }
 }
@@ -1292,8 +1294,8 @@ static void dequantize_row_q4_1(const block_q4_1 * restrict x, float * restrict 
             const int x0 = (x[i].qs[j] & 0x0F);
             const int x1 = (x[i].qs[j] >>   4);
 
-            y[i*qk + j + 0   ] = x0*d + m;
-            y[i*qk + j + qk/2] = x1*d + m;
+            y[i*qk + 2*j + 0] = x0*d + m;
+            y[i*qk + 2*j + 1] = x1*d + m;
         }
     }
 }
@@ -1318,8 +1320,8 @@ static void dequantize_row_q5_0(const block_q5_0 * restrict x, float * restrict 
             const int32_t x0 = ((x[i].qs[j] & 0x0F) | xh_0) - 16;
             const int32_t x1 = ((x[i].qs[j] >>   4) | xh_1) - 16;
 
-            y[i*qk + j + 0   ] = x0*d;
-            y[i*qk + j + qk/2] = x1*d;
+            y[i*qk + 2*j + 0] = x0*d;
+            y[i*qk + 2*j + 1] = x1*d;
         }
     }
 }
@@ -1345,8 +1347,8 @@ static void dequantize_row_q5_1(const block_q5_1 * restrict x, float * restrict 
             const int x0 = (x[i].qs[j] & 0x0F) | xh_0;
             const int x1 = (x[i].qs[j] >>   4) | xh_1;
 
-            y[i*qk + j + 0   ] = x0*d + m;
-            y[i*qk + j + qk/2] = x1*d + m;
+            y[i*qk + 2*j + 0] = x0*d + m;
+            y[i*qk + 2*j + 1] = x1*d + m;
         }
     }
 }
@@ -1363,8 +1365,9 @@ static void dequantize_row_q8_0(const void * restrict vx, float * restrict y, in
     for (int i = 0; i < nb; i++) {
         const float d = x[i].d;
 
-        for (int j = 0; j < qk; ++j) {
-            y[i*qk + j] = x[i].qs[j]*d;
+        for (int j = 0; j < qk/2; ++j) {
+            y[i*qk + 2*j + 0] = x[i].qs[j + 0   ]*d;
+            y[i*qk + 2*j + 1] = x[i].qs[j + qk/2]*d;
         }
     }
 }
