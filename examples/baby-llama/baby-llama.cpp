@@ -825,15 +825,15 @@ struct ggml_tensor * forward_batch(
                 // compute the transposed [N, n_embd] V matrix
                 // wv   shape [n_embd, n_embd, 1, 1]
                 // Vcur shape [N, n_embd, n_batch, 1]
-                struct ggml_tensor * Vcur = ggml_cont(ctx0, 
-                    ggml_permute(ctx0, 
-                        ggml_reshape_3d(ctx0, 
-                            ggml_mul_mat(ctx0, 
-                                model->layers[il].wv, 
-                                cur), 
+                struct ggml_tensor * Vcur = ggml_cont(ctx0,
+                    ggml_permute(ctx0,
+                        ggml_reshape_3d(ctx0,
+                            ggml_mul_mat(ctx0,
+                                model->layers[il].wv,
+                                cur),
                         n_embd, N, n_batch),
                         1, 0, 2, 3));
-                
+
                 assert_shape_3d(Vcur, N, n_embd, n_batch);
 
                 // kv_self.k shape [n_embd * n_ctx * n_batch * n_layer]
@@ -852,12 +852,12 @@ struct ggml_tensor * forward_batch(
                     ggml_build_forward_expand(gf, ggml_cpy(ctx0, Vcur, v));
                 } //*/
 
-                kc = ggml_set_2d(ctx0, kc, 
-                        ggml_reshape_2d(ctx0, Kcur, n_embd*N, n_batch), 
+                kc = ggml_set_2d(ctx0, kc,
+                        ggml_reshape_2d(ctx0, Kcur, n_embd*N, n_batch),
                         ggml_element_size(kc)*n_embd*n_ctx,
                         (ggml_element_size(kc)*n_embd)*(il*n_batch*n_ctx + n_past));
-                vc = ggml_set_2d(ctx0, vc, 
-                        ggml_reshape_2d(ctx0, Vcur, N*n_embd, n_batch), 
+                vc = ggml_set_2d(ctx0, vc,
+                        ggml_reshape_2d(ctx0, Vcur, N*n_embd, n_batch),
                         ggml_element_size(vc)*n_ctx*n_embd,
                         ggml_element_size(vc)*(n_past + il*n_embd*n_batch*n_ctx));
 
@@ -878,10 +878,10 @@ struct ggml_tensor * forward_batch(
             struct ggml_tensor * K =
                 ggml_permute(ctx0,
                         ggml_reshape_4d(ctx0,
-                            ggml_view_3d(ctx0, 
-                                kc, 
-                                n_embd, 
-                                (n_past + N), 
+                            ggml_view_3d(ctx0,
+                                kc,
+                                n_embd,
+                                (n_past + N),
                                 n_batch,
                                 n_embd*ggml_element_size(kc),
                                 n_ctx*n_embd*ggml_element_size(kc),
@@ -1036,7 +1036,7 @@ struct ggml_tensor * forward_batch(
 
     {
         // inpL shape [n_vocab,N,n_batch,1]
-        inpL = ggml_reshape_3d(ctx0, 
+        inpL = ggml_reshape_3d(ctx0,
                         inpL,
                         n_vocab, N, n_batch);
         assert_shape_3d(inpL, n_vocab, N, n_batch);
@@ -1346,23 +1346,23 @@ void sample_softmax_batch(struct ggml_context * ctx, struct ggml_tensor * logits
     GGML_ASSERT(n_vocab  == probs->ne[0]);
     GGML_ASSERT(n_tokens == probs->ne[1]);
     GGML_ASSERT(n_batch  == probs->ne[2]);
-    
+
     for (int k=0; k<n_batch; ++k) {
-        struct ggml_tensor * best_samples_k = ggml_view_1d(ctx, 
-                                                best_samples, 
-                                                best_samples->ne[0], 
+        struct ggml_tensor * best_samples_k = ggml_view_1d(ctx,
+                                                best_samples,
+                                                best_samples->ne[0],
                                                 k*best_samples->nb[1]);
-        struct ggml_tensor * logits_k    = ggml_view_2d(ctx, 
-                                                logits, 
-                                                logits->ne[0], 
-                                                logits->ne[1], 
-                                                logits->nb[1], 
+        struct ggml_tensor * logits_k    = ggml_view_2d(ctx,
+                                                logits,
+                                                logits->ne[0],
+                                                logits->ne[1],
+                                                logits->nb[1],
                                                 k*logits->nb[2]);
-        struct ggml_tensor * probs_k    = ggml_view_2d(ctx, 
-                                                probs, 
-                                                probs->ne[0], 
-                                                probs->ne[1], 
-                                                probs->nb[1], 
+        struct ggml_tensor * probs_k    = ggml_view_2d(ctx,
+                                                probs,
+                                                probs->ne[0],
+                                                probs->ne[1],
+                                                probs->nb[1],
                                                 k*probs->nb[2]);
         sample_softmax(logits_k, probs_k, best_samples_k);
     }
@@ -1436,15 +1436,15 @@ void get_example_targets_batch(struct ggml_context * ctx, int example_id, struct
     GGML_ASSERT(n_batch  == targets->ne[2]);
 
     for (int k=0; k<n_batch; ++k) {
-        struct ggml_tensor * tokens_input_k = ggml_view_1d(ctx, 
-                                                tokens_input, 
-                                                tokens_input->ne[0], 
+        struct ggml_tensor * tokens_input_k = ggml_view_1d(ctx,
+                                                tokens_input,
+                                                tokens_input->ne[0],
                                                 k*tokens_input->nb[1]);
-        struct ggml_tensor * targets_k    = ggml_view_2d(ctx, 
-                                                targets, 
-                                                targets->ne[0], 
-                                                targets->ne[1], 
-                                                targets->nb[1], 
+        struct ggml_tensor * targets_k    = ggml_view_2d(ctx,
+                                                targets,
+                                                targets->ne[0],
+                                                targets->ne[1],
+                                                targets->nb[1],
                                                 k*targets->nb[2]);
         get_example_targets(example_id*n_batch + k, tokens_input_k, targets_k);
     }
