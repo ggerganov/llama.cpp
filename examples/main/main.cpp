@@ -358,9 +358,7 @@ int main(int argc, char ** argv) {
             set_console_color(con_st, CONSOLE_COLOR_DEFAULT);
         }
 
-        // in not currently processing queued inputs;
-        // check if we should prompt the user for more
-        // or quit
+        // if not currently processing queued inputs;
         if ((int) embd_inp.size() <= n_consumed) {
 
             // check for reverse prompt
