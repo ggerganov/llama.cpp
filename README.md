@@ -7,31 +7,68 @@
 
 Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
-**Warnings**
+## ⚠️ TEMPORARY NOTICE ABOUT UPCOMING BREAKING CHANGE ⚠️
 
-- `Q4_2` and `Q4_3` are still in development. Do not expect any kind of backward compatibility until they are finalized
+**The quantization formats will soon be updated: https://github.com/ggerganov/llama.cpp/pull/1305**
+
+**All `ggml` model files using the old format will not work with the latest `llama.cpp` code after that change is merged**
+
+---
 
 **Hot topics:**
 
-- [Added LoRA support](https://github.com/ggerganov/llama.cpp/pull/820)
-- [Add GPU support to ggml](https://github.com/ggerganov/llama.cpp/discussions/915)
-- [Roadmap Apr 2023](https://github.com/ggerganov/llama.cpp/discussions/784)
+- [Roadmap May 2023](https://github.com/ggerganov/llama.cpp/discussions/1220)
+- [New quantization methods](https://github.com/ggerganov/llama.cpp#quantization)
+
+<details>
+  <summary>Table of Contents</summary>
+  <ol>
+    <li>
+      <a href="#description">Description</a>
+    </li>
+    <li>
+      <a href="#usage">Usage</a>
+      <ul>
+        <li><a href="#get-the-code">Get the Code</a></li>
+        <li><a href="#build">Build</a></li>
+        <li><a href="#blas-build">BLAS Build</a></li>
+        <li><a href="#prepare-data--run">Prepare Data & Run</a></li>
+        <li><a href="#memorydisk-requirements">Memory/Disk Requirements</a></li>
+        <li><a href="#quantization">Quantization</a></li>
+        <li><a href="#interactive-mode">Interactive mode</a></li>
+        <li><a href="#instruction-mode-with-alpaca">Instruction mode with Alpaca</a></li>
+        <li><a href="#using-gpt4all">Using GPT4All</a></li>
+        <li><a href="#using-pygmalion-7b--metharme-7b">Using Pygmalion 7B & Metharme 7B</a></li>
+        <li><a href="#obtaining-the-facebook-llama-original-model-and-stanford-alpaca-model-data">Obtaining the Facebook LLaMA original model and Stanford Alpaca model data</a></li>
+        <li><a href="#verifying-the-model-files">Verifying the model files</a></li>
+        <li><a href="#seminal-papers-and-background-on-the-models">Seminal papers and background on the models</a></li>
+        <li><a href="#perplexity-measuring-model-quality">Perplexity (measuring model quality)</a></li>
+        <li><a href="#android">Android</a></li>
+        <li><a href="#docker">Docker</a></li>
+      </ul>
+    </li>
+    <li><a href="#contributing">Contributing</a></li>
+    <li><a href="#coding-guidelines">Coding guidelines</a></li>
+    <li><a href="#docs">Docs</a></li>
+  </ol>
+</details>
 
 ## Description
 
-The main goal of llama.cpp is to run the llama model using 4-bit quantization on a MacBook.
+The main goal of `llama.cpp` is to run the LLaMA model using 4-bit integer quantization on a MacBook
 
 - Plain C/C++ implementation without dependencies
 - Apple silicon first-class citizen - optimized via ARM NEON and Accelerate framework
-- AVX2 support for x86 architectures
+- AVX, AVX2 and AVX512 support for x86 architectures
 - Mixed F16 / F32 precision
-- 4-bit quantization support
+- 4-bit, 5-bit and 8-bit integer quantization support
 - Runs on the CPU
+- OpenBLAS support
+- cuBLAS and CLBlast support
 
-This was [hacked in an evening](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022) - I have no idea if it works correctly.
-Please do not make conclusions about the models based on the results from this implementation.
-For all I know, it can be completely wrong. This project is for educational purposes.
-New features will probably be added mostly through community contributions.
+The original implementation of `llama.cpp` was [hacked in an evening](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022).
+Since then, the project has improved significantly thanks to many contributions. This project is for educational purposes and serves
+as the main playground for developing new features for the [ggml](https://github.com/ggerganov/ggml) library.
 
 **Supported platforms:**
 
@@ -49,6 +86,8 @@ New features will probably be added mostly through community contributions.
 - [X] [Vigogne (French)](https://github.com/bofenghuang/vigogne)
 - [X] [Vicuna](https://github.com/ggerganov/llama.cpp/discussions/643#discussioncomment-5533894)
 - [X] [Koala](https://bair.berkeley.edu/blog/2023/04/03/koala/)
+- [X] [OpenBuddy 🐶 (Multilingual)](https://github.com/OpenBuddy/OpenBuddy)
+- [X] [Pygmalion 7B / Metharme 7B](#using-pygmalion-7b--metharme-7b)
 
 **Bindings:**
 
@@ -167,15 +206,27 @@ cd llama.cpp
 
 ### Build
 
-Note: For Windows, CMake or Zig can be used.
+In order to build llama.cpp you have three different options.
 
-1. Use `make`
+- Using `make`:
+  - On Linux or MacOS:
 
-    ```bash
-    make
-    ```
+      ```bash
+      make
+      ```
 
-1. Use CMake
+  - On Windows:
+
+    1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
+    2. Extract `w64devkit` on your pc.
+    3. Run `w64devkit.exe`.
+    4. Use the `cd` command to reach the `llama.cpp` folder.
+    5. From here you can run:
+        ```bash
+        make
+        ```
+
+- Using `CMake`:
 
     ```bash
     mkdir build
@@ -184,11 +235,71 @@ Note: For Windows, CMake or Zig can be used.
     cmake --build . --config Release
     ```
 
-1. Use Zig
+- Using `Zig`:
 
     ```bash
     zig build -Drelease-fast
     ```
+
+### BLAS Build
+
+Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). BLAS doesn't affect the normal generation performance. There are currently three different implementations of it:
+
+- Accelerate Framework:
+
+  This is only available on Mac PCs and it's enabled by default. You can just build using the normal instructions.
+
+- OpenBLAS:
+
+  This provides BLAS acceleration using only the CPU. Make sure to have OpenBLAS installed on your machine.
+
+  - Using `make`:
+    - On Linux:
+      ```bash
+      make LLAMA_OPENBLAS=1
+      ```
+
+    - On Windows:
+
+      1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
+      2. Download the latest version of [OpenBLAS for Windows](https://github.com/xianyi/OpenBLAS/releases).
+      3. Extract `w64devkit` on your pc.
+      4. From the OpenBLAS zip that you just downloaded copy `libopenblas.a`, located inside the `lib` folder, inside `w64devkit\x86_64-w64-mingw32\lib`.
+      5. From the same OpenBLAS zip copy the content of the `include` folder inside `w64devkit\x86_64-w64-mingw32\include`.
+      6. Run `w64devkit.exe`.
+      7. Use the `cd` command to reach the `llama.cpp` folder.
+      8. From here you can run:
+
+          ```bash
+          make LLAMA_OPENBLAS=1
+          ```
+
+  - Using `CMake` on Linux:
+
+      ```bash
+      mkdir build
+      cd build
+      cmake .. -DLLAMA_OPENBLAS=ON
+      cmake --build . --config Release
+      ```
+
+- cuBLAS
+
+  This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
+  - Using `make`:
+    ```bash
+    make LLAMA_CUBLAS=1
+    ```
+  - Using `CMake`:
+
+    ```bash
+    mkdir build
+    cd build
+    cmake .. -DLLAMA_CUBLAS=ON
+    cmake --build . --config Release
+    ```
+
+Note: Because llama.cpp uses multiple CUDA streams for matrix multiplication results [are not guaranteed to be reproducible](https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility). If you need reproducibility, set `GGML_CUDA_MAX_STREAMS` in the file `ggml-cuda.cu` to 1.
 
 ### Prepare Data & Run
 
@@ -203,8 +314,8 @@ python3 -m pip install -r requirements.txt
 # convert the 7B model to ggml FP16 format
 python3 convert.py models/7B/
 
-# quantize the model to 4-bits (using method 2 = q4_0)
-./quantize ./models/7B/ggml-model-f16.bin ./models/7B/ggml-model-q4_0.bin 2
+# quantize the model to 4-bits (using q4_0 method)
+./quantize ./models/7B/ggml-model-f16.bin ./models/7B/ggml-model-q4_0.bin q4_0
 
 # run the inference
 ./main -m ./models/7B/ggml-model-q4_0.bin -n 128
@@ -216,12 +327,37 @@ When running the larger models, make sure you have enough disk space to store al
 
 As the models are currently fully loaded into memory, you will need adequate disk space to save them and sufficient RAM to load them. At the moment, memory and disk requirements are the same.
 
-| model | original size | quantized size (4-bit) |
-|-------|---------------|------------------------|
-| 7B    | 13 GB         | 3.9 GB                 |
-| 13B   | 24 GB         | 7.8 GB                 |
-| 30B   | 60 GB         | 19.5 GB                |
-| 65B   | 120 GB        | 38.5 GB                |
+| Model | Original size | Quantized size (4-bit) |
+|------:|--------------:|-----------------------:|
+|    7B |         13 GB |                 3.9 GB |
+|   13B |         24 GB |                 7.8 GB |
+|   30B |         60 GB |                19.5 GB |
+|   65B |        120 GB |                38.5 GB |
+
+### Quantization
+
+Several quantization methods are supported. They differ in the resulting model disk size and inference speed.
+
+| Model | Measure      | F16    | Q4_0   | Q4_1   | Q4_2   | Q5_0   | Q5_1   | Q8_0   |
+|------:|--------------|-------:|-------:|-------:|-------:|-------:|-------:|-------:|
+|    7B | perplexity   | 5.9066 | 6.1620 | 6.0910 | 6.1466 | 5.9862 | 5.9481 | 5.9069 |
+|    7B | file size    |  13.0G |   4.0G |   4.8G |   4.0G |   4.4G |   4.8G |   7.1G |
+|    7B | ms/tok @ 4th |    128 |     56 |     61 |     84 |     91 |     95 |     75 |
+|    7B | ms/tok @ 8th |    128 |     47 |     55 |     48 |     53 |     59 |     75 |
+|    7B | bits/weight  |   16.0 |    5.0 |    6.0 |    5.0 |    5.5 |    6.0 |    9.0 |
+|   13B | perplexity   | 5.2543 | 5.3863 | 5.3607 | 5.3513 | 5.2856 | 5.2706 | 5.2548 |
+|   13B | file size    |  25.0G |   7.6G |   9.1G |   7.6G |   8.4G |   9.1G |    14G |
+|   13B | ms/tok @ 4th |    239 |    104 |    113 |    160 |    176 |    185 |    141 |
+|   13B | ms/tok @ 8th |    240 |     85 |     99 |     97 |    108 |    117 |    147 |
+|   13B | bits/weight  |   16.0 |    5.0 |    6.0 |    5.0 |    5.5 |    6.0 |    9.0 |
+
+### Perplexity (measuring model quality)
+
+You can use the `perplexity` example to measure perplexity over a given prompt (lower perplexity is better).
+For more information, see [https://huggingface.co/docs/transformers/perplexity](https://huggingface.co/docs/transformers/perplexity).
+
+The perplexity measurements in table above are done against the `wikitext2` test dataset (https://paperswithcode.com/dataset/wikitext-2), with context length of 512.
+The time per token is measured on a MacBook M1 Pro 32GB RAM using 4 and 8 threads.
 
 ### Interactive mode
 
@@ -241,7 +377,7 @@ Here is an example of a few-shot interaction, invoked with the command
 ./main -m ./models/13B/ggml-model-q4_0.bin -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
 ```
 
-Note the use of `--color` to distinguish between user input and generated text.
+Note the use of `--color` to distinguish between user input and generated text. Other parameters are explained in more detail in the [README](examples/main/README.md) for the `main` example program.
 
 ![image](https://user-images.githubusercontent.com/1991296/224575029-2af3c7dc-5a65-4f64-a6bb-517a532aea38.png)
 
@@ -275,62 +411,64 @@ cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
 
 ### Using [GPT4All](https://github.com/nomic-ai/gpt4all)
 
-- Obtain the `gpt4all-lora-quantized.bin` model
-- It is distributed in the old `ggml` format, which is now obsoleted
-- You have to convert it to the new format using [./convert-gpt4all-to-ggml.py](./convert-gpt4all-to-ggml.py). You may also need to
-convert the model from the old format to the new format with [./migrate-ggml-2023-03-30-pr613.py](./migrate-ggml-2023-03-30-pr613.py):
+- Obtain the `tokenizer.model` file from LLaMA model and put it to `models`
+- Obtain the `added_tokens.json` file from Alpaca model and put it to `models`
+- Obtain the `gpt4all-lora-quantized.bin` file from GPT4All model and put it to `models/gpt4all-7B`
+- It is distributed in the old `ggml` format which is now obsoleted
+- You have to convert it to the new format using `convert.py`:
 
-  ```bash
-  python3 convert-gpt4all-to-ggml.py models/gpt4all-7B/gpt4all-lora-quantized.bin ./models/tokenizer.model
-  python3 migrate-ggml-2023-03-30-pr613.py models/gpt4all-7B/gpt4all-lora-quantized.bin models/gpt4all-7B/gpt4all-lora-quantized-new.bin
-  ```
+```bash
+python3 convert.py models/gpt4all-7B/gpt4all-lora-quantized.bin
+```
 
-- You can now use the newly generated `gpt4all-lora-quantized-new.bin` model in exactly the same way as all other models
-- The original model is saved in the same folder with a suffix `.orig`
+- You can now use the newly generated `models/gpt4all-7B/ggml-model-q4_0.bin` model in exactly the same way as all other models
 
-### Obtaining and verifying the Facebook LLaMA original model and Stanford Alpaca model data
+- The newer GPT4All-J model is not yet supported!
+
+### Using Pygmalion 7B & Metharme 7B
+
+- Obtain the [LLaMA weights](#obtaining-the-facebook-llama-original-model-and-stanford-alpaca-model-data)
+- Obtain the [Pygmalion 7B](https://huggingface.co/PygmalionAI/pygmalion-7b/) or [Metharme 7B](https://huggingface.co/PygmalionAI/metharme-7b) XOR encoded weights
+- Convert the LLaMA model with [the latest HF convert script](https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/convert_llama_weights_to_hf.py)
+- Merge the XOR files with the converted LLaMA weights by running the [xor_codec](https://huggingface.co/PygmalionAI/pygmalion-7b/blob/main/xor_codec.py) script
+- Convert to `ggml` format using the `convert.py` script in this repo:
+```bash
+python3 convert.py pygmalion-7b/ --outtype q4_1
+```
+> The Pygmalion 7B & Metharme 7B weights are saved in [bfloat16](https://en.wikipedia.org/wiki/Bfloat16_floating-point_format) precision. If you wish to convert to `ggml` without quantizating, please specify the `--outtype` as `f32` instead of `f16`.
+
+
+### Obtaining the Facebook LLaMA original model and Stanford Alpaca model data
 
 - **Under no circumstances should IPFS, magnet links, or any other links to model downloads be shared anywhere in this repository, including in issues, discussions, or pull requests. They will be immediately deleted.**
 - The LLaMA models are officially distributed by Facebook and will **never** be provided through this repository.
 - Refer to [Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to request access to the model data.
-- Please verify the [sha256 checksums](SHA256SUMS) of all downloaded model files to confirm that you have the correct model data files before creating an issue relating to your model files.
-- The following command will verify if you have all possible latest files in your self-installed `./models` subdirectory:
 
-  `sha256sum --ignore-missing -c SHA256SUMS` on Linux
+### Verifying the model files
 
-  or
+Please verify the [sha256 checksums](SHA256SUMS) of all downloaded model files to confirm that you have the correct model data files before creating an issue relating to your model files.
+- The following python script will verify if you have all possible latest files in your self-installed `./models` subdirectory:
 
-  `shasum -a 256 --ignore-missing -c SHA256SUMS` on macOS
+```bash
+# run the verification script
+python3 .\scripts\verify-checksum-models.py
+```
 
-- If your issue is with model generation quality, then please at least scan the following links and papers to understand the limitations of LLaMA models. This is especially important when choosing an appropriate model size and appreciating both the significant and subtle differences between LLaMA models and ChatGPT:
+- On linux or macOS it is also possible to run the following commands to verify if you have all possible latest files in your self-installed `./models` subdirectory:
+    - On Linux: `sha256sum --ignore-missing -c SHA256SUMS`
+    - on macOS: `shasum -a 256 --ignore-missing -c SHA256SUMS`
+
+### Seminal papers and background on the models
+
+If your issue is with model generation quality, then please at least scan the following links and papers to understand the limitations of LLaMA models. This is especially important when choosing an appropriate model size and appreciating both the significant and subtle differences between LLaMA models and ChatGPT:
 - LLaMA:
-- [Introducing LLaMA: A foundational, 65-billion-parameter large language model](https://ai.facebook.com/blog/large-language-model-llama-meta-ai/)
-- [LLaMA: Open and Efficient Foundation Language Models](https://arxiv.org/abs/2302.13971)
+    - [Introducing LLaMA: A foundational, 65-billion-parameter large language model](https://ai.facebook.com/blog/large-language-model-llama-meta-ai/)
+    - [LLaMA: Open and Efficient Foundation Language Models](https://arxiv.org/abs/2302.13971)
 - GPT-3
-- [Language Models are Few-Shot Learners](https://arxiv.org/abs/2005.14165)
+    - [Language Models are Few-Shot Learners](https://arxiv.org/abs/2005.14165)
 - GPT-3.5 / InstructGPT / ChatGPT:
-- [Aligning language models to follow instructions](https://openai.com/research/instruction-following)
-- [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
-
-### Perplexity (measuring model quality)
-
-You can use the `perplexity` example to measure perplexity over the given prompt. For more background, see [https://huggingface.co/docs/transformers/perplexity](https://huggingface.co/docs/transformers/perplexity). However, in general, lower perplexity is better for LLMs.
-
-#### Latest measurements
-
-The latest perplexity scores for the various model sizes and quantizations are being tracked in [discussion #406](https://github.com/ggerganov/llama.cpp/discussions/406). `llama.cpp` is measuring very well compared to the baseline implementations. Quantization has a small negative impact on quality, but, as you can see, running
-13B at q4_0 beats the 7B f16 model by a significant amount.
-
-All measurements are done against the wikitext2 test dataset (https://paperswithcode.com/dataset/wikitext-2), with default options (512 length context).
-Note that changing the context length will have a significant impact on perplexity (longer context = better perplexity).
-```
-Perplexity - model options
-5.5985 - 13B, q4_0
-5.9565 - 7B, f16
-6.3001 - 7B, q4_1
-6.5949 - 7B, q4_0
-6.5995 - 7B, q4_0, --memory_f16
-```
+    - [Aligning language models to follow instructions](https://openai.com/research/instruction-following)
+    - [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
 
 #### How to run
 

@@ -8,30 +8,47 @@
 #include <vector>
 #include <random>
 #include <thread>
+#include <unordered_map>
+
+#if !defined (_WIN32)
+#include <stdio.h>
+#include <termios.h>
+#endif
 
 //
 // CLI argument parsing
 //
+int32_t get_num_physical_cores();
 
 struct gpt_params {
     int32_t seed          = -1;   // RNG seed
-    int32_t n_threads     = std::min(4, (int32_t) std::thread::hardware_concurrency());
-    int32_t n_predict     = 128;  // new tokens to predict
-    int32_t repeat_last_n = 64;   // last n tokens to penalize
+    int32_t n_threads     = get_num_physical_cores();
+    int32_t n_predict     = -1;  // new tokens to predict
     int32_t n_parts       = -1;   // amount of model parts (-1 = determine from model dimensions)
     int32_t n_ctx         = 512;  // context size
-    int32_t n_batch       = 8;    // batch size for prompt processing
+    int32_t n_batch       = 512;  // batch size for prompt processing (must be >=32 to use BLAS)
     int32_t n_keep        = 0;    // number of tokens to keep from initial prompt
 
     // sampling parameters
-    int32_t top_k = 40;
-    float   top_p = 0.95f;
-    float   temp  = 0.80f;
-    float   repeat_penalty  = 1.10f;
+    std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
+    int32_t top_k             = 40;    // <= 0 to use vocab size
+    float   top_p             = 0.95f; // 1.0 = disabled
+    float   tfs_z             = 1.00f; // 1.0 = disabled
+    float   typical_p         = 1.00f; // 1.0 = disabled
+    float   temp              = 0.80f; // 1.0 = disabled
+    float   repeat_penalty    = 1.10f; // 1.0 = disabled
+    int32_t repeat_last_n     = 64;    // last n tokens to penalize (0 = disable penalty, -1 = context size)
+    float   frequency_penalty = 0.00f; // 0.0 = disabled
+    float   presence_penalty  = 0.00f; // 0.0 = disabled
+    int     mirostat          = 0;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
+    float   mirostat_tau      = 5.00f; // target entropy
+    float   mirostat_eta      = 0.10f; // learning rate
 
     std::string model  = "models/lamma-7B/ggml-model.bin"; // model path
     std::string prompt = "";
-    std::string input_prefix = "";       // string to prefix user inputs with
+    std::string path_prompt_cache = "";  // path to file for saving/loading prompt eval state
+    std::string input_prefix      = "";  // string to prefix user inputs with
+    std::string input_suffix      = "";  // string to suffix user inputs with
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
 
     std::string lora_adapter = "";  // lora adapter path
@@ -41,12 +58,14 @@ struct gpt_params {
     bool random_prompt     = false; // do not randomize prompt if none provided
     bool use_color         = false; // use color to distinguish generations and inputs
     bool interactive       = false; // interactive mode
+    bool prompt_cache_all  = false; // save user input and generations to prompt cache
 
     bool embedding         = false; // get only sentence embedding
-    bool interactive_start = false; // wait for user input immediately
+    bool interactive_first = false; // wait for user input immediately
+    bool multiline_input   = false; // reverse the usage of `\`
 
     bool instruct          = false; // instruction mode (used for Alpaca models)
-    bool ignore_eos        = false; // do not stop generating after eos
+    bool penalize_nl       = true;  // consider newlines as a repeatable token
     bool perplexity        = false; // compute perplexity over the prompt
     bool use_mmap          = true;  // use mmap for faster loads
     bool use_mlock         = false; // use mlock to keep model in memory
@@ -65,6 +84,12 @@ std::string gpt_random_prompt(std::mt19937 & rng);
 //
 
 std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::string & text, bool add_bos);
+
+//
+// Model utils
+//
+
+struct llama_context * llama_init_from_gpt_params(const gpt_params & params);
 
 //
 // Console utils
@@ -86,13 +111,20 @@ enum console_color_t {
 };
 
 struct console_state {
+    bool multiline_input = false;
     bool use_color = false;
     console_color_t color = CONSOLE_COLOR_DEFAULT;
+
+    FILE* out = stdout;
+#if defined (_WIN32)
+    void* hConsole;
+#else
+    FILE* tty = nullptr;
+    termios prev_state;
+#endif
 };
 
-void set_console_color(console_state & con_st, console_color_t color);
-
-#if defined (_WIN32)
-void win32_console_init(bool enable_color);
-void win32_utf8_encode(const std::wstring & wstr, std::string & str);
-#endif
+void console_init(console_state & con_st);
+void console_cleanup(console_state & con_st);
+void console_set_color(console_state & con_st, console_color_t color);
+bool console_readline(console_state & con_st, std::string & line);
