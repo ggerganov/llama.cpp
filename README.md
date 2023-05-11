@@ -9,8 +9,8 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
+- Qauntization formats `Q4` and `Q5` have changed - requantize any old models [(info)](https://github.com/ggerganov/llama.cpp/pull/1405)
 - [Roadmap May 2023](https://github.com/ggerganov/llama.cpp/discussions/1220)
-- [New quantization methods](https://github.com/ggerganov/llama.cpp#quantization)
 
 <details>
   <summary>Table of Contents</summary>
