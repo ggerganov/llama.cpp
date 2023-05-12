@@ -208,25 +208,32 @@ $(info )
 
 ggml.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -c $< -o $@
-
 ggml_openblas.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) $(OPENBLAS_FLAGS) -c $< -o $@
-
 ggml_noavx2.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS) -c $< -o $@
-
 ggml_openblas_noavx2.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS) $(OPENBLAS_FLAGS) -c $< -o $@
-
+ggml_clblast.o: ggml.c ggml.h
+	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) $(CLBLAST_FLAGS) -c $< -o $@
 ggml-opencl.o: ggml-opencl.c ggml-opencl.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-ggml_clblast.o: ggml.c ggml.h
+#old version llama compat
+ggml_v2.o: ggml_v2.c ggml.h
+	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -c $< -o $@
+ggml_openblas_v2.o: ggml_v2.c ggml.h
+	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) $(OPENBLAS_FLAGS) -c $< -o $@
+ggml_noavx2_v2.o: ggml_v2.c ggml.h
+	$(CC)  $(CFLAGS) -c $< -o $@
+ggml_openblas_noavx2_v2.o: ggml_v2.c ggml.h
+	$(CC)  $(CFLAGS) $(OPENBLAS_FLAGS) -c $< -o $@
+ggml_clblast_v2.o: ggml_v2.c ggml.h
 	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) $(CLBLAST_FLAGS) -c $< -o $@
 
+#extreme old version compat
 ggml_v1.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
 	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) -c $< -o $@
-
 ggml_v1_noavx2.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
 	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) -c $< -o $@
 
@@ -255,31 +262,31 @@ main: examples/main/main.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
 
-koboldcpp: ggml.o ggml_v1.o expose.o common.o gpttype_adapter.o
+koboldcpp: ggml.o ggml_v2.o ggml_v1.o expose.o common.o gpttype_adapter.o
 	$(DEFAULT_BUILD)
 
-koboldcpp_openblas: ggml_openblas.o ggml_v1.o expose.o common.o gpttype_adapter.o 
+koboldcpp_openblas: ggml_openblas.o ggml_openblas_v2.o ggml_v1.o expose.o common.o gpttype_adapter.o 
 	$(OPENBLAS_BUILD)
 	
-koboldcpp_noavx2: ggml_noavx2.o ggml_v1_noavx2.o expose.o common.o gpttype_adapter.o 
+koboldcpp_noavx2: ggml_noavx2.o ggml_noavx2_v2.o ggml_v1_noavx2.o expose.o common.o gpttype_adapter.o 
 	$(NOAVX2_BUILD)
 
-koboldcpp_openblas_noavx2: ggml_openblas_noavx2.o ggml_v1_noavx2.o expose.o common.o gpttype_adapter.o 
+koboldcpp_openblas_noavx2: ggml_openblas_noavx2.o ggml_openblas_noavx2_v2.o ggml_v1_noavx2.o expose.o common.o gpttype_adapter.o 
 	$(OPENBLAS_NOAVX2_BUILD)
 
-koboldcpp_clblast: ggml_clblast.o ggml_v1.o expose.o common.o gpttype_adapter.o ggml-opencl.o 
+koboldcpp_clblast: ggml_clblast.o ggml_clblast_v2.o ggml_v1.o expose.o common.o gpttype_adapter.o ggml-opencl.o 
 	$(CLBLAST_BUILD)
 		
 quantize_llama: examples/quantize/quantize.cpp ggml.o llama.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-quantize_gptj: ggml.o llama.o otherarch/tools/gptj_quantize.cpp otherarch/tools/common-ggml.cpp
+quantize_gptj: ggml.o ggml_v2.o llama.o otherarch/tools/gptj_quantize.cpp otherarch/tools/common-ggml.cpp
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-quantize_gpt2: ggml.o llama.o otherarch/tools/gpt2_quantize.cpp otherarch/tools/common-ggml.cpp
+quantize_gpt2: ggml.o ggml_v2.o llama.o otherarch/tools/gpt2_quantize.cpp otherarch/tools/common-ggml.cpp
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-quantize_neox: ggml.o llama.o otherarch/tools/neox_quantize.cpp otherarch/tools/common-ggml.cpp
+quantize_neox: ggml.o ggml_v2.o llama.o otherarch/tools/neox_quantize.cpp otherarch/tools/common-ggml.cpp
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 quantize-stats: examples/quantize-stats/quantize-stats.cpp ggml.o llama.o $(OBJS)
