@@ -2155,8 +2155,8 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
 
     // First round without accumulation
     {
-        _mm_prefetch(&x[1] + sizeof(block_q4_0), _MM_HINT_T0);
-        _mm_prefetch(&y[1] + sizeof(block_q8_0), _MM_HINT_T0);
+        _mm_prefetch(&x[0] + sizeof(block_q4_0), _MM_HINT_T0);
+        _mm_prefetch(&y[0] + sizeof(block_q8_0), _MM_HINT_T0);
 
         // Compute combined scale for the block 0 and 1
         const __m128 d_0_1 = _mm_mul_ps( _mm_set1_ps( x[0].d ), _mm_set1_ps( y[0].d ) );
@@ -2173,8 +2173,8 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
         bx_1 = _mm_sub_epi8(bx_1, off);
         const __m128i i32_1 = mul_sum_i8_pairs(bx_1, by_1);
 
-        _mm_prefetch(&x[2] + sizeof(block_q4_0), _MM_HINT_T0);
-        _mm_prefetch(&y[2] + sizeof(block_q8_0), _MM_HINT_T0);
+        _mm_prefetch(&x[1] + sizeof(block_q4_0), _MM_HINT_T0);
+        _mm_prefetch(&y[1] + sizeof(block_q8_0), _MM_HINT_T0);
 
         // Compute combined scale for the block 2 and 3
         const __m128 d_2_3 = _mm_mul_ps( _mm_set1_ps( x[1].d ), _mm_set1_ps( y[1].d ) );
@@ -2206,8 +2206,8 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
 
     // Main loop
     for (int i = 2; i < nb; i+=2) {
-        _mm_prefetch(&x[i + 1] + sizeof(block_q4_0), _MM_HINT_T0);
-        _mm_prefetch(&y[i + 1] + sizeof(block_q8_0), _MM_HINT_T0);
+        _mm_prefetch(&x[i] + sizeof(block_q4_0), _MM_HINT_T0);
+        _mm_prefetch(&y[i] + sizeof(block_q8_0), _MM_HINT_T0);
 
         // Compute combined scale for the block 0 and 1
         const __m128 d_0_1 = _mm_mul_ps( _mm_set1_ps( x[i].d ), _mm_set1_ps( y[i].d ) );
@@ -2224,8 +2224,8 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
         bx_1 = _mm_sub_epi8(bx_1, off);
         const __m128i i32_1 = mul_sum_i8_pairs(bx_1, by_1);
 
-        _mm_prefetch(&x[i + 2] + sizeof(block_q4_0), _MM_HINT_T0);
-        _mm_prefetch(&y[i + 2] + sizeof(block_q8_0), _MM_HINT_T0);
+        _mm_prefetch(&x[i] + 2 * sizeof(block_q4_0), _MM_HINT_T0);
+        _mm_prefetch(&y[i] + 2 * sizeof(block_q8_0), _MM_HINT_T0);
 
         // Compute combined scale for the block 2 and 3
         const __m128 d_2_3 = _mm_mul_ps( _mm_set1_ps( x[i + 1].d ), _mm_set1_ps( y[i + 1].d ) );
