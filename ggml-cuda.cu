@@ -229,6 +229,7 @@ template <int block_size, int qk, dequantize_kernel_t dequantize_kernel> static 
     }
 
     // sum up partial sums and write back result
+    __syncthreads();
     for (int s=block_size/2; s>0; s>>=1) {
         if (tid < s) {
             tmp[tid] += tmp[tid + s];
