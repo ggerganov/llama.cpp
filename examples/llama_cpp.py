@@ -337,7 +337,7 @@ def llama_tokenize(
     tokens,  # type: Array[llama_token]
     n_max_tokens: c_int,
     add_bos: c_bool,
-) -> c_int:
+) -> int:
     return _lib.llama_tokenize(ctx, text, tokens, n_max_tokens, add_bos)
 
 
