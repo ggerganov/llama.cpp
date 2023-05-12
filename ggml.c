@@ -485,23 +485,6 @@ static inline __m128i mul_sum_i8_pairs(const __m128i x, const __m128i y) {
     return _mm_madd_epi16(ones, dot);
 }
 
-// horizontally add 4 floats
-static inline float hsum_float_4(const __m128 x) {
-    __m128 res =_mm_hadd_ps(x, x);
-    res =_mm_hadd_ps(res, res);
-
-    return _mm_cvtss_f32(res);
-}
-
-// horizontally add 2x4 floats
-static inline float hsum_float_2x4(const __m128 x, const __m128 y) {
-    __m128 res =_mm_hadd_ps(x, y);
-    res =_mm_hadd_ps(res, res);
-    res =_mm_hadd_ps(res, res);
-
-    return _mm_cvtss_f32(res);
-}
-
 // horizontally add 4x4 floats
 static inline float hsum_float_4x4(const __m128 a, const __m128 b, const __m128 c, const __m128 d) {
     __m128 res_0 =_mm_hadd_ps(a, b);
@@ -511,7 +494,7 @@ static inline float hsum_float_4x4(const __m128 a, const __m128 b, const __m128 
     res =_mm_hadd_ps(res, res);
 
     return _mm_cvtss_f32(res);
-} 
+}
 #endif
 
 #if __AVX__ || __AVX2__ || __AVX512F__
@@ -2170,6 +2153,7 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
     __m128 acc_2 = _mm_setzero_ps();
     __m128 acc_3 = _mm_setzero_ps();
 
+    // First round without accumulation
     {
         _mm_prefetch(&x[1] + sizeof(block_q4_0), _MM_HINT_T0);
         _mm_prefetch(&y[1] + sizeof(block_q8_0), _MM_HINT_T0);
