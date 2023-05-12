@@ -106,6 +106,24 @@ static __device__ void dequantize_q4_1(const void * vx, const int ib, const int 
     v1 = vi1*d + m;
 }
 
+static __device__ void dequantize_q5_0(const void * vx, const int ib, const int iqs, float & v0, float & v1){
+    const block_q5_0 * x = (const block_q5_0 *) vx;
+
+    const float d = x[ib].d;
+
+    uint32_t qh;
+    memcpy(&qh, x[ib].qh, sizeof(qh));
+
+    const uint8_t xh_0 = ((qh >> (iqs +  0)) << 4) & 0x10;
+    const uint8_t xh_1 = ((qh >> (iqs + 12))     ) & 0x10;
+
+    const int32_t x0 = ((x[ib].qs[iqs] & 0xf) | xh_0) - 16;
+    const int32_t x1 = ((x[ib].qs[iqs] >>  4) | xh_1) - 16;
+
+    v0 = x0*d;
+    v1 = x1*d;
+}
+
 static __global__ void dequantize_block_q4_0(const void * vx, float * y) {
     static const int qk = QK4_0;
 
@@ -277,6 +295,11 @@ static void dequantize_mul_mat_vec_q4_1_cuda(const void * vx, const float * y, f
     dequantize_mul_mat_vec<CUDA_DMMV_BLOCK_SIZE, QK4_1, dequantize_q4_1><<<nrows, CUDA_DMMV_BLOCK_SIZE, 0, stream>>>(vx, y, dst, ncols);
 }
 
+static void dequantize_mul_mat_vec_q5_0_cuda(const void * vx, const float * y, float * dst, const int ncols, const int nrows, cudaStream_t stream) {
+    GGML_ASSERT(ncols % CUDA_DMMV_BLOCK_SIZE == 0);
+    dequantize_mul_mat_vec<CUDA_DMMV_BLOCK_SIZE, QK5_0, dequantize_q5_0><<<nrows, CUDA_DMMV_BLOCK_SIZE, 0, stream>>>(vx, y, dst, ncols);
+}
+
 // TODO: optimize
 static __global__ void convert_fp16_to_fp32(const void * vx, float * y) {
     const half * x = (const half *) vx;
@@ -315,6 +338,8 @@ static dequantize_mul_mat_vec_cuda_t ggml_get_dequantize_mul_mat_vec_cuda(ggml_t
             return dequantize_mul_mat_vec_q4_0_cuda;
         case GGML_TYPE_Q4_1:
             return dequantize_mul_mat_vec_q4_1_cuda;
+        case GGML_TYPE_Q5_0:
+            return dequantize_mul_mat_vec_q5_0_cuda;
         default:
             return nullptr;
     }
