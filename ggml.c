@@ -472,7 +472,7 @@ static const size_t CACHE_LINE_SIZE_F32 = CACHE_LINE_SIZE/sizeof(float);
 // quantization
 //
 
-#if __AVX__ || __AVX2__ || __AVX512F__ || defined(__SSE3__)
+#if defined(__AVX__) || defined(__AVX2__) || defined(__AVX512F__) || defined(__SSSE3__)
 // multiply int8_t, add results pairwise twice
 static inline __m128i mul_sum_i8_pairs(const __m128i x, const __m128i y) {
     // Get absolute values of x vectors
@@ -2142,7 +2142,7 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
     }
 
     *s = hsum_float_8(acc);
-#elif defined(__SSE3__)
+#elif defined(__SSSE3__)
     // set constants
     const __m128i lowMask = _mm_set1_epi8(0xF);
     const __m128i off = _mm_set1_epi8(8);
