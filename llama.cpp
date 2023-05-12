@@ -402,6 +402,7 @@ enum llama_file_version {
     LLAMA_FILE_VERSION_GGML,
     LLAMA_FILE_VERSION_GGMF_V1, // added version field and scores in vocab
     LLAMA_FILE_VERSION_GGJT_V1, // added padding
+    LLAMA_FILE_VERSION_GGJT_V2, // changed quantization format
 };
 
 struct llama_file_loader {
@@ -432,6 +433,8 @@ struct llama_file_loader {
             file_version = LLAMA_FILE_VERSION_GGMF_V1;
         } else if (magic == 'ggjt' && version == 1) {
             file_version = LLAMA_FILE_VERSION_GGJT_V1;
+        } else if (magic == 'ggjt' && version == 2) {
+            file_version = LLAMA_FILE_VERSION_GGJT_V2;
         } else {
             throw format("unknown (magic, version) combination: %08x, %08x; is this really a GGML file?",
                          magic, version);
@@ -482,7 +485,6 @@ struct llama_file_loader {
                 case GGML_TYPE_F16:
                 case GGML_TYPE_Q4_0:
                 case GGML_TYPE_Q4_1:
-                case GGML_TYPE_Q4_2:
                 case GGML_TYPE_Q5_0:
                 case GGML_TYPE_Q5_1:
                 case GGML_TYPE_Q8_0:
@@ -527,8 +529,8 @@ struct llama_file_saver {
         write_vocab();
     }
     void write_magic() {
-        file.write_u32('ggjt'); // magic
-        file.write_u32(1); // version
+        file.write_u32(LLAMA_FILE_MAGIC);   // magic
+        file.write_u32(LLAMA_FILE_VERSION); // version
     }
     void write_hparams(enum llama_ftype new_ftype) {
         const llama_hparams & hparams = any_file_loader->hparams;
@@ -558,7 +560,6 @@ struct llama_file_saver {
             case GGML_TYPE_F16:
             case GGML_TYPE_Q4_0:
             case GGML_TYPE_Q4_1:
-            case GGML_TYPE_Q4_2:
             case GGML_TYPE_Q5_0:
             case GGML_TYPE_Q5_1:
             case GGML_TYPE_Q8_0:
@@ -839,9 +840,11 @@ static const char *llama_file_version_name(llama_file_version version) {
     switch (version) {
         case LLAMA_FILE_VERSION_GGML: return "'ggml' (old version with low tokenizer quality and no mmap support)";
         case LLAMA_FILE_VERSION_GGMF_V1: return "ggmf v1 (old version with no mmap support)";
-        case LLAMA_FILE_VERSION_GGJT_V1: return "ggjt v1 (latest)";
-        default: LLAMA_ASSERT(false);
+        case LLAMA_FILE_VERSION_GGJT_V1: return "ggjt v1 (pre #1405)";
+        case LLAMA_FILE_VERSION_GGJT_V2: return "ggjt v2 (latest)";
     }
+
+    return "unknown";
 }
 
 static const char *llama_ftype_name(enum llama_ftype ftype) {
@@ -852,7 +855,6 @@ static const char *llama_ftype_name(enum llama_ftype ftype) {
         case LLAMA_FTYPE_MOSTLY_Q4_1: return "mostly Q4_1";
         case LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16:
                                       return "mostly Q4_1, some F16";
-        case LLAMA_FTYPE_MOSTLY_Q4_2: return "mostly Q4_2";
         case LLAMA_FTYPE_MOSTLY_Q5_0: return "mostly Q5_0";
         case LLAMA_FTYPE_MOSTLY_Q5_1: return "mostly Q5_1";
         case LLAMA_FTYPE_MOSTLY_Q8_0: return "mostly Q8_0";
@@ -916,6 +918,14 @@ static void llama_model_load_internal(
         fprintf(stderr, "%s: n_ff       = %u\n",  __func__, n_ff);
         fprintf(stderr, "%s: n_parts    = %zu\n", __func__, ml->file_loaders.size());
         fprintf(stderr, "%s: model size = %s\n",  __func__, llama_model_type_name(model.type));
+    }
+
+    if (file_version != LLAMA_FILE_VERSION_GGJT_V2) {
+        if (hparams.ftype != LLAMA_FTYPE_ALL_F32     &&
+            hparams.ftype != LLAMA_FTYPE_MOSTLY_F16  &&
+            hparams.ftype != LLAMA_FTYPE_MOSTLY_Q8_0) {
+            throw format("this format is no longer supported (see https://github.com/ggerganov/llama.cpp/pull/1305)");
+        }
     }
 
     if (vocab_only) {
@@ -1905,7 +1915,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     switch (ftype) {
         case LLAMA_FTYPE_MOSTLY_Q4_0: quantized_type = GGML_TYPE_Q4_0; break;
         case LLAMA_FTYPE_MOSTLY_Q4_1: quantized_type = GGML_TYPE_Q4_1; break;
-        case LLAMA_FTYPE_MOSTLY_Q4_2: quantized_type = GGML_TYPE_Q4_2; break;
         case LLAMA_FTYPE_MOSTLY_Q5_0: quantized_type = GGML_TYPE_Q5_0; break;
         case LLAMA_FTYPE_MOSTLY_Q5_1: quantized_type = GGML_TYPE_Q5_1; break;
         case LLAMA_FTYPE_MOSTLY_Q8_0: quantized_type = GGML_TYPE_Q8_0; break;
@@ -2813,9 +2822,9 @@ void llama_print_timings(struct llama_context * ctx) {
 
     fprintf(stderr, "\n");
     fprintf(stderr, "%s:        load time = %8.2f ms\n", __func__, ctx->t_load_us / 1000.0);
-    fprintf(stderr, "%s:      sample time = %8.2f ms / %5d runs   (%8.2f ms per run)\n",   __func__, 1e-3 * ctx->t_sample_us, n_sample, 1e-3 * ctx->t_sample_us / n_sample);
+    fprintf(stderr, "%s:      sample time = %8.2f ms / %5d runs   (%8.2f ms per token)\n", __func__, 1e-3 * ctx->t_sample_us, n_sample, 1e-3 * ctx->t_sample_us / n_sample);
     fprintf(stderr, "%s: prompt eval time = %8.2f ms / %5d tokens (%8.2f ms per token)\n", __func__, 1e-3 * ctx->t_p_eval_us, n_p_eval, 1e-3 * ctx->t_p_eval_us / n_p_eval);
-    fprintf(stderr, "%s:        eval time = %8.2f ms / %5d runs   (%8.2f ms per run)\n",   __func__, 1e-3 * ctx->t_eval_us,   n_eval,   1e-3 * ctx->t_eval_us   / n_eval);
+    fprintf(stderr, "%s:        eval time = %8.2f ms / %5d runs   (%8.2f ms per token)\n", __func__, 1e-3 * ctx->t_eval_us,   n_eval,   1e-3 * ctx->t_eval_us   / n_eval);
     fprintf(stderr, "%s:       total time = %8.2f ms\n", __func__, (t_end_us - ctx->t_start_us)/1000.0);
 }
 

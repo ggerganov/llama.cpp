@@ -231,7 +231,7 @@ extern "C" {
         GGML_TYPE_F16  = 1,
         GGML_TYPE_Q4_0 = 2,
         GGML_TYPE_Q4_1 = 3,
-        GGML_TYPE_Q4_2 = 4,
+        // GGML_TYPE_Q4_2 = 4, support has been removed
         // GGML_TYPE_Q4_3 (5) support has been removed
         GGML_TYPE_Q5_0 = 6,
         GGML_TYPE_Q5_1 = 7,
@@ -251,7 +251,6 @@ extern "C" {
         GGML_FTYPE_MOSTLY_Q4_0 = 2,  // except 1d tensors
         GGML_FTYPE_MOSTLY_Q4_1 = 3,  // except 1d tensors
         GGML_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4, // tok_embeddings.weight and output.weight are F16
-        GGML_FTYPE_MOSTLY_Q4_2 = 5,  // except 1d tensors
         GGML_FTYPE_MOSTLY_Q8_0 = 7,  // except 1d tensors
         GGML_FTYPE_MOSTLY_Q5_0 = 8,  // except 1d tensors
         GGML_FTYPE_MOSTLY_Q5_1 = 9,  // except 1d tensors
@@ -876,7 +875,6 @@ extern "C" {
 
     GGML_API size_t ggml_quantize_q4_0(const float * src, void * dst, int n, int k, int64_t * hist);
     GGML_API size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t * hist);
-    GGML_API size_t ggml_quantize_q4_2(const float * src, void * dst, int n, int k, int64_t * hist);
     GGML_API size_t ggml_quantize_q5_0(const float * src, void * dst, int n, int k, int64_t * hist);
     GGML_API size_t ggml_quantize_q5_1(const float * src, void * dst, int n, int k, int64_t * hist);
     GGML_API size_t ggml_quantize_q8_0(const float * src, void * dst, int n, int k, int64_t * hist);

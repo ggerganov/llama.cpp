@@ -19,7 +19,7 @@
 #    define LLAMA_API
 #endif
 
-#define LLAMA_FILE_VERSION           1
+#define LLAMA_FILE_VERSION           2
 #define LLAMA_FILE_MAGIC             'ggjt'
 #define LLAMA_FILE_MAGIC_UNVERSIONED 'ggml'
 #define LLAMA_SESSION_MAGIC          'ggsn'
@@ -78,7 +78,7 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_Q4_0 = 2,  // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q4_1 = 3,  // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4, // tok_embeddings.weight and output.weight are F16
-        LLAMA_FTYPE_MOSTLY_Q4_2 = 5,  // except 1d tensors
+        // LLAMA_FTYPE_MOSTLY_Q4_2 = 5,  // support has been removed
         // LLAMA_FTYPE_MOSTLY_Q4_3 (6) support has been removed
         LLAMA_FTYPE_MOSTLY_Q8_0 = 7,  // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q5_0 = 8,  // except 1d tensors
