@@ -166,31 +166,31 @@ bool ggml_common_quantize_0(
             switch ((ggml_type) ttype) {
                 case GGML_TYPE_Q4_0:
                     {
-                        cur_size = ggml_quantize_q4_0(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                        cur_size = ggml_quantize_q4_0_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                     } break;
                 case GGML_TYPE_Q4_1:
                     {
-                        cur_size = ggml_quantize_q4_1(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                        cur_size = ggml_quantize_q4_1_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                     } break;
                 case GGML_TYPE_Q4_2:
                     {
-                        cur_size = ggml_quantize_q4_2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                        cur_size = ggml_quantize_q4_2_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                     } break;
                 case GGML_TYPE_Q4_3:
                     {
-                        cur_size = ggml_quantize_q4_3(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                        cur_size = ggml_quantize_q4_3_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                     } break;
                 case GGML_TYPE_Q5_0:
                     {
-                        cur_size = ggml_quantize_q5_0(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                        cur_size = ggml_quantize_q5_0_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                     } break;
                 case GGML_TYPE_Q5_1:
                     {
-                        cur_size = ggml_quantize_q5_1(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                        cur_size = ggml_quantize_q5_1_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                     } break;
                 case GGML_TYPE_Q8_0:
                     {
-                        cur_size = ggml_quantize_q8_0(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                        cur_size = ggml_quantize_q8_0_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                     } break;
                 case GGML_TYPE_F32:
                 case GGML_TYPE_F16:

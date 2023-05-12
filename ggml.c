@@ -393,9 +393,6 @@ void ggml_fp32_to_fp16_row(const float * x, ggml_fp16_t * y, size_t n) {
     }
 }
 
-//legacy functions
-#include "ggml_v2.c"
-
 //
 // timing
 //
@@ -723,6 +720,31 @@ typedef struct {
     int8_t  qs[QK8_1]; // quants
 } block_q8_1;
 static_assert(sizeof(block_q8_1) == 2*sizeof(float) + QK8_1, "wrong q8_1 block size/padding");
+
+#define QK4_2 16
+typedef struct {
+    ggml_fp16_t d;         // delta
+    uint8_t qs[QK4_2 / 2]; // nibbles / quants
+} block_q4_2;
+static_assert(sizeof(block_q4_2) == sizeof(ggml_fp16_t) + QK4_2 / 2, "wrong q4_2 block size/padding");
+
+#define QK4_3 16
+typedef struct {
+    ggml_fp16_t d;         // delta
+    ggml_fp16_t m;         // min
+    uint8_t qs[QK4_3 / 2]; // nibbles / quants
+} block_q4_3;
+static_assert(sizeof(block_q4_3) == 2 * sizeof(ggml_fp16_t) + QK4_3 / 2, "wrong q4_3 block size/padding");
+
+#define QK8_1 32
+typedef struct {
+    float   d;          // delta
+    float   s0;         // d * sum(qs[i]) low
+    float   s1;         // d * sum(qs[i]) high
+    int8_t  qs[QK8_1];  // quants
+} block_q8_1_v2;
+static_assert(sizeof(block_q8_1_v2) == 3*sizeof(float) + QK8_1, "wrong q8_1 block size/padding");
+
 
 // reference implementation for deterministic creation of model files
 static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * restrict y, int k) {
@@ -12398,3 +12420,6 @@ int ggml_cpu_has_vsx(void) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+
+//legacy functions
+#include "ggml_v2.c"
