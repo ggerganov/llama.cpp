@@ -206,7 +206,8 @@ static __global__ void dequantize_block_q8_0(const void * vx, float * y) {
     }
 }
 
-template <int block_size, int qk, dequantize_kernel_t dequantize_kernel> static __global__ void dequantize_mul_mat_vec(const void * vx, const float * y, float * dst, const int ncols) {
+template <int block_size, int qk, dequantize_kernel_t dequantize_kernel>
+static __global__ void dequantize_mul_mat_vec(const void * vx, const float * y, float * dst, const int ncols) {
     const int row = blockIdx.x;
     const int tid = threadIdx.x;
 
