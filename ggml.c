@@ -485,18 +485,6 @@ static inline __m128i mul_sum_i8_pairs(const __m128i x, const __m128i y) {
     return _mm_madd_epi16(ones, dot);
 }
 
-// horizontally add 4x4 floats
-static inline float hsum_float_4x4(const __m128 a, const __m128 b, const __m128 c, const __m128 d) {
-    __m128 res_0 =_mm_hadd_ps(a, b);
-    __m128 res_1 =_mm_hadd_ps(c, d);
-    __m128 res =_mm_hadd_ps(res_0, res_1);
-    res =_mm_hadd_ps(res, res);
-    res =_mm_hadd_ps(res, res);
-
-    return _mm_cvtss_f32(res);
-}
-#endif
-
 #if __AVX__ || __AVX2__ || __AVX512F__
 // horizontally add 8 floats
 static inline float hsum_float_8(const __m256 x) {
@@ -609,7 +597,19 @@ static inline __m128i packNibbles( __m128i bytes1, __m128i bytes2 )
     return _mm_packus_epi16( bytes1, bytes2);
 }
 #endif
+#elif defined(__SSSE3__)
+// horizontally add 4x4 floats
+static inline float hsum_float_4x4(const __m128 a, const __m128 b, const __m128 c, const __m128 d) {
+    __m128 res_0 =_mm_hadd_ps(a, b);
+    __m128 res_1 =_mm_hadd_ps(c, d);
+    __m128 res =_mm_hadd_ps(res_0, res_1);
+    res =_mm_hadd_ps(res, res);
+    res =_mm_hadd_ps(res, res);
+
+    return _mm_cvtss_f32(res);
+}
 #endif // __AVX__ || __AVX2__ || __AVX512F__
+#endif // defined(__AVX__) || defined(__AVX2__) || defined(__AVX512F__) || defined(__SSSE3__)
 
 #if __ARM_NEON
 
