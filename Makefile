@@ -140,8 +140,8 @@ ifdef LLAMA_HIPBLAS
 	CC         := $(ROCM_PATH)/llvm/bin/clang
 	CXX        := $(ROCM_PATH)/llvm/bin/clang++
 	GPU_TARGETS = gfx900 gfx906 gfx908 gfx90a gfx1030
-	CFLAGS     += -DGGML_USE_HIPBLAS $(shell $(ROCM_PATH)/bin/hipconfig -C)
-	CXXFLAGS   += -DGGML_USE_HIPBLAS $(shell $(ROCM_PATH)/bin/hipconfig -C)
+	CFLAGS     += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS $(shell $(ROCM_PATH)/bin/hipconfig -C)
+	CXXFLAGS   += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS $(shell $(ROCM_PATH)/bin/hipconfig -C)
 	LDFLAGS    += -L/opt/rocm/lib -Wl,-rpath=$(ROCM_PATH)/lib -lhipblas -lamdhip64
 	OBJS       += ggml-cuda.o
 ggml-cuda.o: CXXFLAGS += $(addprefix --offload-arch=,$(GPU_TARGETS))
