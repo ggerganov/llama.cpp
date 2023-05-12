@@ -210,7 +210,7 @@ int main(int argc, char ** argv) {
     }
 
     // enable interactive mode if interactive start is specified
-    if (params.interactive_start) {
+    if (params.interactive_first) {
         params.interactive = true;
     }
 
@@ -527,7 +527,7 @@ int main(int argc, char ** argv) {
                     if (last_output.find(antiprompt.c_str(), search_start_pos) != std::string::npos) {
                         if (params.interactive) {
                             is_interacting = true;
-                            set_console_color(con_st, CONSOLE_COLOR_USER_INPUT);
+                            console_set_color(con_st, CONSOLE_COLOR_USER_INPUT);
                         }
                         is_antiprompt = true;
                         fflush(stdout);

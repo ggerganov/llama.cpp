@@ -346,7 +346,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     }
     if (params.prompt_cache_all &&
             (params.interactive || params.interactive_first ||
-             params.instruct || params.antiprompt.size())) {
+             params.instruct)) {
         fprintf(stderr, "error: --prompt-cache-all not supported in interactive mode yet\n");
         gpt_print_usage(argc, argv, default_params);
         exit(1);
