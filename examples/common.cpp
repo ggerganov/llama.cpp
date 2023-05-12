@@ -277,7 +277,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.use_color = true;
         } else if (arg == "--mlock") {
             params.use_mlock = true;
-        } else if (arg == "--gpu_layers") {
+        } else if (arg == "--gpu-layers") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -427,7 +427,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     if (llama_mmap_supported()) {
         fprintf(stderr, "  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
     }
-    fprintf(stderr, "  --gpu_layers          number of layers to store in VRAM\n");
+    fprintf(stderr, "  --gpu-layers          number of layers to store in VRAM\n");
     fprintf(stderr, "  --mtest               compute maximum memory usage\n");
     fprintf(stderr, "  --verbose-prompt      print prompt before generation\n");
     fprintf(stderr, "  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
