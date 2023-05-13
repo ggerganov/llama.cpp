@@ -3978,12 +3978,12 @@ inline static float ggml_silu_f32(float x) {
     return x/(1.0f + expf(-x));
 }
 
-inline static void ggml_vec_silu_f16(const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
-    const uint16_t * i16 = (const uint16_t *) x;
-    for (int i = 0; i < n; ++i) {
-        y[i] = table_silu_f16[i16[i]];
-    }
-}
+//inline static void ggml_vec_silu_f16(const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
+//    const uint16_t * i16 = (const uint16_t *) x;
+//    for (int i = 0; i < n; ++i) {
+//        y[i] = table_silu_f16[i16[i]];
+//    }
+//}
 
 #ifdef GGML_SILU_FP16
 inline static void ggml_vec_silu_f32(const int n, float * y, const float * x) {
@@ -4512,9 +4512,9 @@ static inline int ggml_up32(int n) {
     return (n + 31) & ~31;
 }
 
-static inline int ggml_up64(int n) {
-    return (n + 63) & ~63;
-}
+//static inline int ggml_up64(int n) {
+//    return (n + 63) & ~63;
+//}
 
 static inline int ggml_up(int n, int m) {
     // assert m is a power of 2
@@ -8165,6 +8165,8 @@ static void ggml_compute_forward_add1_f32(
         const int i1 = (ir - i3*ne2*ne1 - i2*ne1);
 
 #ifdef GGML_USE_ACCELERATE
+        UNUSED(ggml_vec_add1_f32);
+
         vDSP_vadd(
                 (float *) ((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01), 1,
                 (float *) ((char *) src1->data), 0,
@@ -8680,6 +8682,8 @@ static void ggml_compute_forward_mul_f32(
 
 
 #ifdef GGML_USE_ACCELERATE
+            UNUSED(ggml_vec_mul_f32);
+
             vDSP_vmul(
                     (float *) ((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01), 1,
                     (float *) ((char *) src1->data + i3*nb13 + i2*nb12 + i1*nb11), 1,
@@ -9831,15 +9835,15 @@ static void ggml_compute_forward_rms_norm_back_f32(
                     sum_xdz += (ggml_float)(x[i00] * dz[i00]);
                 }
 
-                const ggml_float mean     = sum_xx/ne00;
-                const ggml_float mean_eps = sum_xx/ne00 + eps;
-                const ggml_float sum_eps  = sum_xx + eps*ne00;
-                const ggml_float mean_xdz = sum_xdz/ne00;
+                //const float mean     = (float)(sum_xx)/ne00;
+                const float mean_eps = (float)(sum_xx)/ne00 + eps;
+                const float sum_eps  = (float)(sum_xx) + eps*ne00;
+                //const float mean_xdz = (float)(sum_xdz)/ne00;
                 // we could cache rms from forward pass to improve performance.
                 // to do this implement ggml_rms and compose ggml_rms_norm using ggml_rms.
-                const ggml_float rms      = sqrtf(mean_eps);
-                const ggml_float rrms     = 1.0f / sqrtf(mean_eps);
-                const ggml_float scale    = -rrms/(ne00 * mean_eps); // -1/(n*rms**3)
+                //const float rms      = sqrtf(mean_eps);
+                const float rrms     = 1.0f / sqrtf(mean_eps);
+                //const float scale    = -rrms/(ne00 * mean_eps); // -1/(n*rms**3)
 
                 {
                     // z = rms_norm(x)
@@ -9937,10 +9941,10 @@ static void ggml_compute_forward_rms_norm_back_f32(
                 // dx := scale(dx, rrms)
                 float * dx = (float *) ((char *) dst->data + i01*nb1 + i02*nb2 + i03*nb3);
 
-                ggml_vec_cpy_f32(ne00, dx, x);
+                ggml_vec_cpy_f32  (ne00, dx, x);
                 // ggml_vec_scale_f32(ne00, dx, -mean_xdz/mean_eps);
-                ggml_vec_scale_f32(ne00, dx, -sum_xdz/sum_eps);
-                ggml_vec_acc_f32(ne00, dx, dz);
+                ggml_vec_scale_f32(ne00, dx, (float)(-sum_xdz)/sum_eps);
+                ggml_vec_acc_f32  (ne00, dx, dz);
                 ggml_vec_scale_f32(ne00, dx, rrms);
             }
         }
