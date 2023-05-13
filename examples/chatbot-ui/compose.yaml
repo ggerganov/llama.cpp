@@ -1,0 +1,26 @@
+version: "3.9"
+services:
+  gpt_llama:
+    privileged: true
+    build: .
+    volumes:
+      - type:   bind
+        source: /PATH/TO/MODEL.bin
+        target: /llama.cpp/models/model.bin
+    command: ["npm start mlock threads 7 "]
+    networks:
+      - llocal
+  chatbot_ui:
+    image: ghcr.io/mckaywrigley/chatbot-ui:main
+    ports:
+      - "3000:3000"
+    environment:
+      DEFAULT_MODEL: gpt-3.5-turbo
+      DEFAULT_SYSTEM_PROMPT: You are ChatGPT, a large language model trained by OpenAI. Follow the user's instructions carefully. Respond using markdown.
+      OPENAI_API_KEY: /llama.cpp/models/model.bin
+      OPENAI_API_HOST: http://gpt_llama:443
+    networks:
+      - llocal
+
+networks:
+  llocal: {}
