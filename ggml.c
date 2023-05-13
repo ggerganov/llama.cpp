@@ -7528,7 +7528,6 @@ static void ggml_compute_forward_add1(
             } break;
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
-        case GGML_TYPE_Q4_2:
         case GGML_TYPE_Q5_0:
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
@@ -7651,7 +7650,6 @@ static void ggml_compute_forward_acc(
         case GGML_TYPE_F16:
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
-        case GGML_TYPE_Q4_2:
         case GGML_TYPE_Q5_0:
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
@@ -9923,7 +9921,6 @@ static void ggml_compute_forward_set(
         case GGML_TYPE_F16:
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
-        case GGML_TYPE_Q4_2:
         case GGML_TYPE_Q5_0:
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
