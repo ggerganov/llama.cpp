@@ -1053,6 +1053,8 @@ static void llama_model_load_internal(
 
         fprintf(stderr, "%s: [cublas] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
     }
+#else
+    (void) n_gpu_layers;
 #endif
 
     // loading time will be recalculate after the first eval, so
