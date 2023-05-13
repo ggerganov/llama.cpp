@@ -16,14 +16,12 @@ typedef uchar uint8_t;
 typedef int int32_t;
 typedef uint uint32_t;
 
-constant uint QK4_0 = 32;
 struct block_q4_0
 {
     float d;
     uint8_t qs[16];
 };
 
-constant uint QK4_1 = 32;
 struct block_q4_1
 {
     float d;
@@ -31,7 +29,6 @@ struct block_q4_1
     uint8_t qs[16];
 };
 
-constant uint QK5_0 = 32;
 struct __attribute__ ((packed)) block_q5_0
 {
     half d;
@@ -39,7 +36,6 @@ struct __attribute__ ((packed)) block_q5_0
     uint8_t qs[16];
 };
 
-constant uint QK5_1 = 32;
 struct block_q5_1
 {
     half d;
@@ -48,7 +44,6 @@ struct block_q5_1
     uint8_t qs[16];
 };
 
-constant uint QK8_0 = 32;
 struct block_q8_0
 {
     float d;
@@ -57,7 +52,7 @@ struct block_q8_0
 
 
 __kernel void dequantize_row_q4_0(__global struct block_q4_0* x, __global float* y) {
-    constant uint qk = QK4_0;
+    const uint qk = 32;
 
     const uint i = get_global_id(0) / qk;
     const uint j = get_local_id(0);
@@ -72,7 +67,7 @@ __kernel void dequantize_row_q4_0(__global struct block_q4_0* x, __global float*
 }
 
 __kernel void dequantize_row_q4_1(__global struct block_q4_1* x, __global float* y) {
-    constant uint qk = QK4_1;
+    const uint qk = 32;
 
     const uint i = get_global_id(0) / qk;
     const uint j = get_local_id(0);
@@ -88,7 +83,7 @@ __kernel void dequantize_row_q4_1(__global struct block_q4_1* x, __global float*
 }
 
 __kernel void dequantize_row_q5_0(__global struct block_q5_0* x, __global float* y) {
-    constant uint qk = QK5_0;
+    const uint qk = 32;
 
     const uint i = get_global_id(0) / qk;
     const uint j = get_local_id(0);
@@ -108,7 +103,7 @@ __kernel void dequantize_row_q5_0(__global struct block_q5_0* x, __global float*
 }
 
 __kernel void dequantize_row_q5_1(__global struct block_q5_1* x, __global float* y) {
-    constant uint qk = QK5_1;
+    const uint qk = 32;
 
     const uint i = get_global_id(0) / qk;
     const uint j = get_local_id(0);
@@ -129,7 +124,7 @@ __kernel void dequantize_row_q5_1(__global struct block_q5_1* x, __global float*
 }
 
 __kernel void dequantize_row_q8_0(__global struct block_q8_0* x, __global float* y) {
-    constant uint qk = QK8_0;
+    const uint qk = 32;
     const uint i = get_global_id(0) / qk;
     const uint j = get_local_id(0);
 
