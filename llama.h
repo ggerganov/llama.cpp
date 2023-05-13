@@ -54,16 +54,16 @@ extern "C" {
     typedef void (*llama_progress_callback)(float progress, void *ctx);
 
     struct llama_context_params {
-        int n_ctx;   // text context
-        int n_parts; // -1 for default
-        int seed;    // RNG seed, -1 for random
+        int n_ctx;        // text context
+        int n_parts;      // -1 for default
+        int n_gpu_layers; // number of layers to store in VRAM
+        int seed;         // RNG seed, -1 for random
 
         bool f16_kv;     // use fp16 for KV cache
         bool logits_all; // the llama_eval() call computes all logits, not just the last one
         bool vocab_only; // only load the vocabulary, no weights
         bool use_mmap;   // use mmap if possible
         bool use_mlock;  // force system to keep model in RAM
-        int gpu_layers;  // number of layers to store in VRAM
         bool embedding;  // embedding mode only
 
         // called with a progress value between 0 and 1, pass NULL to disable

@@ -729,7 +729,7 @@ static void ggml_cuda_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor 
     const size_t q_sz = ggml_type_size(type) * x_ne / ggml_blck_size(type);
 
     size_t x_size, y_size, d_size, q_size;
-    float * d_X;
+    float * d_X = nullptr;
     if (!mul_mat_vec) {
         d_X = (float *) ggml_cuda_pool_malloc(n_mm * sizeof(float) * x_ne, &x_size);
     }
