@@ -9,7 +9,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
-- Qauntization formats `Q4` and `Q5` have changed - requantize any old models [(info)](https://github.com/ggerganov/llama.cpp/pull/1405)
+- Quantization formats `Q4` and `Q5` have changed - requantize any old models [(info)](https://github.com/ggerganov/llama.cpp/pull/1405)
 - [Roadmap May 2023](https://github.com/ggerganov/llama.cpp/discussions/1220)
 
 <details>
@@ -333,12 +333,12 @@ Several quantization methods are supported. They differ in the resulting model d
 
 | Model | Measure      | F16    | Q4_0   | Q4_1   | Q5_0   | Q5_1   | Q8_0   |
 |------:|--------------|-------:|-------:|-------:|-------:|-------:|-------:|
-|    7B | perplexity   | 5.9066 | 6.1620 | 6.0910 | 5.9862 | 5.9481 | 5.9069 |
+|    7B | perplexity   | 5.9066 | 6.1565 | 6.0910 | 5.9862 | 5.9481 | 5.9069 |
 |    7B | file size    |  13.0G |   4.0G |   4.8G |   4.4G |   4.8G |   7.1G |
 |    7B | ms/tok @ 4th |    128 |     50 |     54 |     75 |     83 |     75 |
 |    7B | ms/tok @ 8th |    123 |     44 |     52 |     53 |     58 |     72 |
 |    7B | bits/weight  |   16.0 |    5.0 |    6.0 |    5.5 |    6.0 |    9.0 |
-|   13B | perplexity   | 5.2543 | 5.3863 | 5.3607 | 5.2856 | 5.2706 | 5.2548 |
+|   13B | perplexity   | 5.2543 | 5.3860 | 5.3607 | 5.2856 | 5.2706 | 5.2548 |
 |   13B | file size    |  25.0G |   7.6G |   9.1G |   8.4G |   9.1G |    14G |
 |   13B | ms/tok @ 4th |    239 |     93 |    101 |    150 |    164 |    141 |
 |   13B | ms/tok @ 8th |    240 |     81 |     96 |     96 |    104 |    136 |
