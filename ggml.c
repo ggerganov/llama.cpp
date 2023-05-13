@@ -1433,14 +1433,7 @@ bool quants_unshuffled = false; //new GGJT_2 is unshuffled, all old ones are shu
 static const quantize_fns_t quantize_fns_v2[GGML_TYPE_COUNT]; //forward decl
 static inline quantize_fns_t get_quantize_fn(size_t i) 
 {
-    if(quants_unshuffled)
-    {
-        return quantize_fns[i];
-    }
-    else
-    {
-        return quantize_fns_v2[i];
-    }
+    return(quants_unshuffled?quantize_fns[i]:quantize_fns_v2[i]);  
 }
 
 
@@ -7869,7 +7862,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
         }
 
         float * const wdata = params->wdata;
-        dequantize_row_q_t const dequantize_row_q = quantize_fns[type].dequantize_row_q;
+        dequantize_row_q_t const dequantize_row_q = get_quantize_fn(type).dequantize_row_q;
 
         for (int64_t i03 = 0; i03 < ne03; i03++) {
             for (int64_t i02 = 0; i02 < ne02; i02++) {
