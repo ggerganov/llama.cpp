@@ -19,7 +19,7 @@
 #    define LLAMA_API
 #endif
 
-#define LLAMA_FILE_VERSION           1
+#define LLAMA_FILE_VERSION           2
 #define LLAMA_FILE_MAGIC             'ggjt'
 #define LLAMA_FILE_MAGIC_UNVERSIONED 'ggml'
 #define LLAMA_SESSION_MAGIC          'ggsn'
@@ -78,7 +78,7 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_Q4_0 = 2,  // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q4_1 = 3,  // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4, // tok_embeddings.weight and output.weight are F16
-        LLAMA_FTYPE_MOSTLY_Q4_2 = 5,  // except 1d tensors
+        // LLAMA_FTYPE_MOSTLY_Q4_2 = 5,  // support has been removed
         // LLAMA_FTYPE_MOSTLY_Q4_3 (6) support has been removed
         LLAMA_FTYPE_MOSTLY_Q8_0 = 7,  // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q5_0 = 8,  // except 1d tensors
@@ -134,7 +134,7 @@ extern "C" {
     // Copies the state to the specified destination address.
     // Destination needs to have allocated enough memory.
     // Returns the number of bytes copied
-    LLAMA_API size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dest);
+    LLAMA_API size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst);
 
     // Set the state reading from the specified address
     // Returns the number of bytes read
