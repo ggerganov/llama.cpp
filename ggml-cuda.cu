@@ -414,7 +414,7 @@ static dequantize_mul_mat_vec_cuda_t ggml_get_dequantize_mul_mat_vec_cuda(ggml_t
         case GGML_TYPE_Q8_0:
             return dequantize_mul_mat_vec_q8_0_cuda;
         case GGML_TYPE_F16:
-            return dequantize_mul_mat_vec_q8_0_cuda;
+            return convert_mul_mat_vec_f16_cuda;
         default:
             return nullptr;
     }
