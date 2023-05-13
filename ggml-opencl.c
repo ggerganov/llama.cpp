@@ -20,7 +20,7 @@ constant uint QK4_0 = 32;
 struct block_q4_0
 {
     float d;
-    uchar qs[QK4_0 / 2];
+    uint8_t qs[QK4_0 / 2];
 };
 
 constant uint QK4_1 = 32;
@@ -28,31 +28,31 @@ struct block_q4_1
 {
     float d;
     float m;
-    uchar qs[QK4_1 / 2];
+    uint8_t qs[QK4_1 / 2];
 };
 
 constant uint QK5_0 = 32;
-struct block_q5_0
+struct __attribute__ ((packed)) block_q5_0
 {
-    float d;
-    uint qh;
-    uchar qs[QK5_0 / 2];
+    half d;
+    uint32_t qh;
+    uint8_t qs[QK5_0 / 2];
 };
 
 constant uint QK5_1 = 32;
 struct block_q5_1
 {
-    ushort d;
-    ushort m;
-    uint qh;
-    uchar qs[QK5_1 / 2];
+    half d;
+    half m;
+    uint32_t qh;
+    uint8_t qs[QK5_1 / 2];
 };
 
 constant uint QK8_0 = 32;
 struct block_q8_0
 {
     float d;
-    char qs[QK8_0];
+    uint8_t qs[QK8_0];
 };
 
 
@@ -93,7 +93,7 @@ __kernel void dequantize_row_q5_0(__global struct block_q5_0* x, __global float*
     const uint i = get_global_id(0) / qk;
     const uint j = get_local_id(0);
 
-    const float d = x[i].d;
+    const float d = vload_half(0, (__global half*) &x[i].d);
 
     uint32_t qh = x[i].qh;
 
@@ -147,20 +147,6 @@ __kernel void dequantize_row_q8_0(__global struct block_q8_0* x, __global float*
             exit(1);                                                                            \
         }                                                                                       \
     } while (0)
-
-#define QK5_0 32
-typedef struct {
-    ggml_fp16_t d;         // delta
-    uint8_t qh[4];         // 5-th bit of quants
-    uint8_t qs[QK5_0 / 2]; // nibbles / quants
-} block_q5_0;
-
-
-typedef struct {
-    float d;                // delta
-    uint32_t qh;          // 5-th bit of quants
-    uint8_t qs[QK5_0 / 2];  // nibbles / quants
-} cl_block_q5_0;
 
 static cl_platform_id platform;
 static cl_device_id device;
@@ -272,7 +258,6 @@ void ggml_cl_sgemm_wrapper(
     cl_kernel kernel;
     size_t global = n * k, local, size_qb;
     bool dequant;
-    cl_block_q5_0* cl_host_b;
 
     switch (btype) {
     case GGML_TYPE_F32:
@@ -294,18 +279,7 @@ void ggml_cl_sgemm_wrapper(
         dequant = true;
         kernel = kernel_q5_0;
         local = 16;
-        // For some reason OpenCL seems to be incapable of working with structs of size 22.
-        // 20 and 24 bytes are fine. Workaround to do the fp16 to fp32 step on CPU...
-        // TODO Find the reason, fix and remove workaround.
-        const block_q5_0* b = (const block_q5_0*) host_b;
-        cl_host_b = (cl_block_q5_0*) malloc(sizeof(cl_block_q5_0) * global / 32);
-        for (size_t i = 0; i < global / 32; i++) {
-            cl_host_b[i].d = ggml_fp16_to_fp32(b[i].d);
-            memcpy(&cl_host_b[i].qh, b[i].qh, sizeof(uint32_t));
-            memcpy(&cl_host_b[i].qs, b[i].qs, QK5_0 / 2);
-        }
-        host_b = (const float*) cl_host_b;
-        size_qb = global * (sizeof(float) + sizeof(uint32_t) + local) / 32;
+        size_qb = global * (sizeof(ggml_fp16_t) + sizeof(uint32_t) + local) / 32;
         break;
     case GGML_TYPE_Q5_1:
         dequant = true;
@@ -384,7 +358,4 @@ void ggml_cl_sgemm_wrapper(
     clWaitForEvents(1, &ev_c);
     clReleaseEvent(ev_sgemm);
     clReleaseEvent(ev_c);
-    if (btype == GGML_TYPE_Q5_0) {
-        free((void*) cl_host_b);
-    }
 }
