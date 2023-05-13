@@ -1,0 +1,18 @@
+---
+Checks: >
+    bugprone-*,
+    -bugprone-easily-swappable-parameters,
+    -bugprone-implicit-widening-of-multiplication-result,
+    -bugprone-narrowing-conversions,
+    readability-*,
+    -readability-avoid-unconditional-preprocessor-if,
+    -readability-function-cognitive-complexity,
+    -readability-identifier-length,
+    -readability-implicit-bool-conversion,
+    -readability-magic-numbers,
+    -readability-uppercase-literal-suffix,
+    clang-analyzer-*,
+    -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+    performance-*,
+    portability-*,
+FormatStyle: none

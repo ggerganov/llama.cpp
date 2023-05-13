@@ -121,7 +121,7 @@ int main(int argc, char ** argv) {
     // uncomment the "used_mem" line in llama.cpp to see the results
     if (params.mem_test) {
         {
-            const std::vector<llama_token> tmp(params.n_batch, 0);
+            const std::vector<llama_token> tmp(params.n_batch, llama_token_bos());
             llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads);
         }
 
