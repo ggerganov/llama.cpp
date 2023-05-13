@@ -13632,9 +13632,6 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                 case GGML_OP_GELU:
                 case GGML_OP_SILU:
                 case GGML_OP_SILU_BACK:
-                    {
-                        node->n_tasks = n_threads;
-                    } break;
                 case GGML_OP_NORM:
                 case GGML_OP_RMS_NORM:
                 case GGML_OP_RMS_NORM_BACK:
