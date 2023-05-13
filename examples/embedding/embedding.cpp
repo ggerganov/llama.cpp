@@ -56,9 +56,6 @@ int main(int argc, char ** argv) {
     // tokenize the prompt
     auto embd_inp = ::llama_tokenize(ctx, params.prompt, true);
 
-    // determine newline token
-    auto llama_token_newline = ::llama_tokenize(ctx, "\n", false);
-
     if (params.verbose_prompt) {
         fprintf(stderr, "\n");
         fprintf(stderr, "%s: prompt: '%s'\n", __func__, params.prompt.c_str());
