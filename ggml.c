@@ -144,6 +144,7 @@ inline static void* ggml_aligned_malloc(size_t size) {
 #endif
 #if defined(GGML_USE_CLBLAST)
 #include "ggml-opencl.h"
+#include "ggml-opencl-legacy.h"
 #endif
 
 #undef MIN
@@ -3560,7 +3561,14 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
 #if defined(GGML_USE_CUBLAS)
         ggml_init_cublas();
 #elif defined(GGML_USE_CLBLAST)
-        ggml_cl_init();
+        if(quants_unshuffled)
+        {
+            ggml_cl_init();
+        }
+        else
+        {
+            ggml_cl_init_legacy();
+        }
 #endif
 
         is_first_call = false;
@@ -7474,12 +7482,24 @@ static void ggml_compute_forward_mul_mat_f32(
 
 #if defined(GGML_USE_CLBLAST)
                 // zT = y * xT
+                if(quants_unshuffled)
+                {
                 ggml_cl_sgemm_wrapper(GGML_BLAS_ORDER_ROW_MAJOR, GGML_BLAS_OP_N, GGML_BLAS_OP_T,
                         ne11, ne01, ne10,
                         1.0f,    y, ne10,
                                  x, ne10,
                         0.0f,    d, ne01,
                         GGML_TYPE_F32);
+                }
+                else
+                {
+                ggml_cl_sgemm_wrapper_legacy(GGML_BLAS_ORDER_ROW_MAJOR, GGML_BLAS_OP_N, GGML_BLAS_OP_T,
+                    ne11, ne01, ne10,
+                    1.0f,    y, ne10,
+                                x, ne10,
+                    0.0f,    d, ne01,
+                    GGML_TYPE_F32);
+                }
 #else
                 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                         ne11, ne01, ne10,
@@ -7664,12 +7684,24 @@ static void ggml_compute_forward_mul_mat_f16_f32(
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
                 // zT = y * xT
+                if(quants_unshuffled)
+                {
                 ggml_cl_sgemm_wrapper(GGML_BLAS_ORDER_ROW_MAJOR, GGML_BLAS_OP_N, GGML_BLAS_OP_T,
                         ne11, ne01, ne10,
                         1.0f,    y, ne10,
                                  x, ne10,
                         0.0f,    d, ne01,
                         GGML_TYPE_F32);
+                }
+                else
+                {
+                ggml_cl_sgemm_wrapper_legacy(GGML_BLAS_ORDER_ROW_MAJOR, GGML_BLAS_OP_N, GGML_BLAS_OP_T,
+                        ne11, ne01, ne10,
+                        1.0f,    y, ne10,
+                                 x, ne10,
+                        0.0f,    d, ne01,
+                        GGML_TYPE_F32);
+                }
 #else
                 const float * x = wdata;
                 const float * y = (float *) ((char *) src1->data + i02*nb12 + i03*nb13);
@@ -7888,12 +7920,24 @@ static void ggml_compute_forward_mul_mat_q_f32(
 
 #if defined(GGML_USE_CLBLAST)
                 // zT = y * xT
+                if(quants_unshuffled)
+                {
                 ggml_cl_sgemm_wrapper(GGML_BLAS_ORDER_ROW_MAJOR, GGML_BLAS_OP_N, GGML_BLAS_OP_T,
                         ne11, ne01, ne10,
                         1.0f,    y, ne10,
                                  x, ne10,
                         0.0f,    d, ne01,
                         type);
+                }
+                else
+                {
+                ggml_cl_sgemm_wrapper_legacy(GGML_BLAS_ORDER_ROW_MAJOR, GGML_BLAS_OP_N, GGML_BLAS_OP_T,
+                        ne11, ne01, ne10,
+                        1.0f,    y, ne10,
+                                 x, ne10,
+                        0.0f,    d, ne01,
+                        type);
+                }
 #else
                 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                         ne11, ne01, ne10,

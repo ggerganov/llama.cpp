@@ -218,6 +218,8 @@ ggml_clblast.o: ggml.c ggml.h
 	$(CC)  $(CFLAGS) $(BONUSCFLAGS1) $(BONUSCFLAGS2) $(CLBLAST_FLAGS) -c $< -o $@
 ggml-opencl.o: ggml-opencl.c ggml-opencl.h
 	$(CC) $(CFLAGS) -c $< -o $@
+ggml-opencl-legacy.o: ggml-opencl-legacy.c ggml-opencl-legacy.h
+	$(CC) $(CFLAGS) -c $< -o $@
 
 #extreme old version compat
 ggml_v1.o: otherarch/ggml_v1.c otherarch/ggml_v1.h
@@ -262,7 +264,7 @@ koboldcpp_noavx2: ggml_noavx2.o ggml_v1_noavx2.o expose.o common.o gpttype_adapt
 koboldcpp_openblas_noavx2: ggml_openblas_noavx2.o ggml_v1_noavx2.o expose.o common.o gpttype_adapter.o 
 	$(OPENBLAS_NOAVX2_BUILD)
 
-koboldcpp_clblast: ggml_clblast.o ggml_v1.o expose.o common.o gpttype_adapter.o ggml-opencl.o 
+koboldcpp_clblast: ggml_clblast.o ggml_v1.o expose.o common.o gpttype_adapter.o ggml-opencl.o ggml-opencl-legacy.o
 	$(CLBLAST_BUILD)
 		
 quantize_llama: examples/quantize/quantize.cpp ggml.o llama.o

@@ -1,4 +1,4 @@
-#include "ggml-opencl.h"
+#include "ggml-opencl-legacy.h"
 
 #define CL_TARGET_OPENCL_VERSION 110
 #include <clblast_c.h>
@@ -10,131 +10,151 @@
 #include "ggml.h"
 
 #define MULTILINE_QUOTE(...) #__VA_ARGS__
-const char * clblast_dequant = MULTILINE_QUOTE(
+const char * clblast_dequant_legacy = MULTILINE_QUOTE(
 
-typedef uchar uint8_t;
-typedef int int32_t;
-typedef uint uint32_t;
-
-constant uint QK4_0 = 32;
 struct block_q4_0
 {
     float d;
-    uint8_t qs[QK4_0 / 2];
+    uchar qs[16];
 };
 
-constant uint QK4_1 = 32;
+__kernel void dequantize_row_q4_0(__global struct block_q4_0* blocks, __global float* result) {
+    const uint i = get_global_id(0) / 32;
+    const uint l = get_local_id(0);
+
+    const float d = blocks[i].d;
+
+    const uchar vi = blocks[i].qs[l];
+
+    const uint index = i*32 + l*2;
+    result[index + 0] = ((vi & 0xf) - 8)*d;
+    result[index + 1] = ((vi >> 4) - 8)*d;
+}
+
 struct block_q4_1
 {
     float d;
     float m;
-    uint8_t qs[QK4_1 / 2];
+    uchar qs[16];
 };
 
-constant uint QK5_0 = 32;
-struct __attribute__ ((packed)) block_q5_0
+__kernel void dequantize_row_q4_1(__global struct block_q4_1* blocks, __global float* result) {
+    const uint i = get_global_id(0) / 32;
+    const uint l = get_local_id(0);
+
+    const float d = blocks[i].d;
+    const float m = blocks[i].m;
+
+    const uchar vi = blocks[i].qs[l];
+
+    const uint index = i*32 + l*2;
+    result[index + 0] = (vi & 0xf) * d + m;
+    result[index + 1] = (vi >> 4) * d + m;
+}
+
+struct block_q4_2
 {
-    half d;
-    uint32_t qh;
-    uint8_t qs[QK5_0 / 2];
+    ushort d;
+    uchar qs[8];
 };
 
-constant uint QK5_1 = 32;
+__kernel void dequantize_row_q4_2(__global struct block_q4_2* blocks, __global float* result) {
+    const uint i = get_global_id(0) / 16;
+    const uint l = get_local_id(0);
+
+    const float d = vload_half(0, (__global half*) &blocks[i].d);
+
+    const uchar vi = blocks[i].qs[l];
+
+    const uint index = i*16 + l*2;
+    result[index + 0] = ((vi & 0xf) - 8)*d;
+    result[index + 1] = ((vi >> 4) - 8)*d;
+}
+
+struct block_q4_3
+{
+    ushort d;
+    ushort m;
+    uchar qs[8];
+};
+
+__kernel void dequantize_row_q4_3(__global struct block_q4_3* blocks, __global float* result) {
+    const uint i = get_global_id(0) / 16;
+    const uint l = get_local_id(0);
+
+    const float d = vload_half(0, (__global half*) &(blocks[i].d));
+    const float m = vload_half(0, (__global half*) &(blocks[i].m));
+
+    const uchar vi = blocks[i].qs[l];
+
+    const uint index = i*16 + l*2;
+    result[index + 0] = (vi & 0xf) * d + m;
+    result[index + 1] = (vi >> 4) * d + m;
+}
+
+struct block_q5_0
+{
+    float d;
+    uint qh;
+    uchar qs[16];
+};
+
+__kernel void dequantize_row_q5_0(__global struct block_q5_0* blocks, __global float* result) {
+    const uint i = get_global_id(0) / 32;
+    const uint l = get_local_id(0);
+
+    const float d = blocks[i].d;
+
+    const uchar vi = blocks[i].qs[l];
+
+    const uint l2 = l * 2;
+
+    const uchar vh0 = ((blocks[i].qh & (1 << (l2 + 0))) >> (l2 + 0)) << 4;
+    const uchar vh1 = ((blocks[i].qh & (1 << (l2 + 1))) >> (l2 + 1)) << 4;
+
+    const uint index = i*32 + l2;
+    result[index + 0] = (((vi & 0xf) | vh0) - 16)*d;
+    result[index + 1] = (((vi >>  4) | vh1) - 16)*d;
+}
+
 struct block_q5_1
 {
-    half d;
-    half m;
-    uint32_t qh;
-    uint8_t qs[QK5_1 / 2];
+    ushort d;
+    ushort m;
+    uint qh;
+    uchar qs[16];
 };
 
-constant uint QK8_0 = 32;
+__kernel void dequantize_row_q5_1(__global struct block_q5_1* blocks, __global float* result) {
+    const uint i = get_global_id(0) / 32;
+    const uint l = get_local_id(0);
+
+    const float d = vload_half(0, (__global half*) &blocks[i].d);
+    const float m = vload_half(0, (__global half*) &blocks[i].m);
+
+    const uchar vi = blocks[i].qs[l];
+
+    const uint l2 = l * 2;
+
+    const uchar vh0 = ((blocks[i].qh & (1 << (l2 + 0))) >> (l2 + 0)) << 4;
+    const uchar vh1 = ((blocks[i].qh & (1 << (l2 + 1))) >> (l2 + 1)) << 4;
+
+    const uint index = i*32 + l2;
+    result[index + 0] = ((vi & 0xf) | vh0)*d + m;
+    result[index + 1] = ((vi >>  4) | vh1)*d + m;
+}
+
 struct block_q8_0
 {
     float d;
-    uint8_t qs[QK8_0];
+    char qs[32];
 };
 
+__kernel void dequantize_row_q8_0(__global struct block_q8_0* blocks, __global float* result) {
+    const uint i = get_global_id(0) / 32;
+    const uint l = get_local_id(0);
 
-__kernel void dequantize_row_q4_0(__global struct block_q4_0* x, __global float* y) {
-    constant uint qk = QK4_0;
-
-    const uint i = get_global_id(0) / qk;
-    const uint j = get_local_id(0);
-
-    const float d = x[i].d;
-
-    const int x0 = (x[i].qs[j] & 0xf) - 8;
-    const int x1 = (x[i].qs[j] >>  4) - 8;
-
-    y[i*qk + j + 0   ] = x0*d;
-    y[i*qk + j + qk/2] = x1*d;
-}
-
-__kernel void dequantize_row_q4_1(__global struct block_q4_1* x, __global float* y) {
-    constant uint qk = QK4_1;
-
-    const uint i = get_global_id(0) / qk;
-    const uint j = get_local_id(0);
-
-    const float d = x[i].d;
-    const float m = x[i].m;
-
-    const int x0 = (x[i].qs[j] & 0xf);
-    const int x1 = (x[i].qs[j] >>  4);
-
-    y[i*qk + j + 0   ] = x0*d + m;
-    y[i*qk + j + qk/2] = x1*d + m;
-}
-
-__kernel void dequantize_row_q5_0(__global struct block_q5_0* x, __global float* y) {
-    constant uint qk = QK5_0;
-
-    const uint i = get_global_id(0) / qk;
-    const uint j = get_local_id(0);
-
-    const float d = vload_half(0, (__global half*) &x[i].d);
-
-    uint32_t qh = x[i].qh;
-
-    const uint8_t xh_0 = ((qh >> (j +  0)) << 4) & 0x10;
-    const uint8_t xh_1 = ((qh >> (j + 12))     ) & 0x10;
-
-    const int32_t x0 = ((x[i].qs[j] & 0xf) | xh_0) - 16;
-    const int32_t x1 = ((x[i].qs[j] >>  4) | xh_1) - 16;
-
-    y[i*qk + j + 0   ] = x0*d;
-    y[i*qk + j + qk/2] = x1*d;
-}
-
-__kernel void dequantize_row_q5_1(__global struct block_q5_1* x, __global float* y) {
-    constant uint qk = QK5_1;
-
-    const uint i = get_global_id(0) / qk;
-    const uint j = get_local_id(0);
-
-    const float d = vload_half(0, (__global half*) &x[i].d);
-    const float m = vload_half(0, (__global half*) &x[i].m);
-
-    uint32_t qh = x[i].qh;
-
-    const uint8_t xh_0 = ((qh >> (j +  0)) << 4) & 0x10;
-    const uint8_t xh_1 = ((qh >> (j + 12))     ) & 0x10;
-
-    const int x0 = (x[i].qs[j] & 0xf) | xh_0;
-    const int x1 = (x[i].qs[j] >>  4) | xh_1;
-
-    y[i*qk + j + 0   ] = x0*d + m;
-    y[i*qk + j + qk/2] = x1*d + m;
-}
-
-__kernel void dequantize_row_q8_0(__global struct block_q8_0* x, __global float* y) {
-    constant uint qk = QK8_0;
-    const uint i = get_global_id(0) / qk;
-    const uint j = get_local_id(0);
-
-    const float d = x[i].d;
-    y[i*qk + j] = x[i].qs[j]*d;
+    result[i*32 + l] = blocks[i].qs[l] * blocks[i].d;
 }
 
 );
@@ -148,12 +168,26 @@ __kernel void dequantize_row_q8_0(__global struct block_q8_0* x, __global float*
         }                                                                                       \
     } while (0)
 
+#define QK5_0 32
+typedef struct {
+    ggml_fp16_t d;         // delta
+    uint8_t qh[4];         // 5-th bit of quants
+    uint8_t qs[QK5_0 / 2]; // nibbles / quants
+} block_q5_0;
+
+
+typedef struct {
+    float d;                // delta
+    uint32_t qh;          // 5-th bit of quants
+    uint8_t qs[QK5_0 / 2];  // nibbles / quants
+} cl_block_q5_0;
+
 static cl_platform_id platform;
 static cl_device_id device;
 static cl_context context;
 static cl_command_queue queue;
 static cl_program program;
-static cl_kernel kernel_q4_0, kernel_q4_1, kernel_q5_0, kernel_q5_1, kernel_q8_0;
+static cl_kernel kernel_q4_0, kernel_q4_1, kernel_q4_2, kernel_q4_3, kernel_q5_0, kernel_q5_1, kernel_q8_0;
 static cl_mem cl_buffer_a, cl_buffer_qb, cl_buffer_b, cl_buffer_c;
 static size_t cl_size_a = 0, cl_size_qb = 0, cl_size_b = 0, cl_size_c = 0;
 
@@ -186,13 +220,13 @@ static cl_program build_program_from_source(cl_context ctx, cl_device_id dev, co
     return p;
 }
 
-void ggml_cl_init(void) {
+void ggml_cl_init_legacy(void) {
     cl_int err = 0;
     char * GGML_CLBLAST_PLATFORM = getenv("GGML_CLBLAST_PLATFORM");
     char * GGML_CLBLAST_DEVICE = getenv("GGML_CLBLAST_DEVICE");
     int plat_num = (GGML_CLBLAST_PLATFORM == NULL ? 0 : atoi(GGML_CLBLAST_PLATFORM));
     int dev_num = (GGML_CLBLAST_DEVICE == NULL ? 0 : atoi(GGML_CLBLAST_DEVICE));
-    printf("\nInitializing CLBlast (First Run)...");
+    printf("\nInitializing LEGACY CLBlast (First Run)...");
     printf("\nAttempting to use: Platform=%d, Device=%d (If invalid, program will crash)\n",plat_num,dev_num);
     cl_uint num_platforms;
     clGetPlatformIDs(0, NULL, &num_platforms);
@@ -217,12 +251,16 @@ void ggml_cl_init(void) {
     free(platforms);
     free(devices);
 
-    program = build_program_from_source(context, device, clblast_dequant);
+    program = build_program_from_source(context, device, clblast_dequant_legacy);
 
     // Prepare dequantize kernels
     kernel_q4_0 = clCreateKernel(program, "dequantize_row_q4_0", &err);
     CL_CHECK(err, "clCreateKernel");
     kernel_q4_1 = clCreateKernel(program, "dequantize_row_q4_1", &err);
+    CL_CHECK(err, "clCreateKernel");
+    kernel_q4_2 = clCreateKernel(program, "dequantize_row_q4_2", &err);
+    CL_CHECK(err, "clCreateKernel");
+    kernel_q4_3 = clCreateKernel(program, "dequantize_row_q4_3", &err);
     CL_CHECK(err, "clCreateKernel");
     kernel_q5_0 = clCreateKernel(program, "dequantize_row_q5_0", &err);
     CL_CHECK(err, "clCreateKernel");
@@ -247,7 +285,7 @@ static void ggml_cl_malloc(size_t req_size, size_t* cur_size, cl_mem_flags flags
     CL_CHECK(err, "clCreateBuffer");
 }
 
-void ggml_cl_sgemm_wrapper(
+void ggml_cl_sgemm_wrapper_legacy(
         const enum ggml_blas_order order, const enum ggml_blas_op trans_a, const enum ggml_blas_op trans_b,
         const int m, const int n, const int k,
         const float alpha, const void *host_a, const int lda,
@@ -258,6 +296,7 @@ void ggml_cl_sgemm_wrapper(
     cl_kernel kernel;
     size_t global = n * k, local, size_qb;
     bool dequant;
+    cl_block_q5_0* cl_host_b;
 
     switch (btype) {
     case GGML_TYPE_F32:
@@ -275,11 +314,34 @@ void ggml_cl_sgemm_wrapper(
         local = 16;
         size_qb = global * (sizeof(float) * 2 + local) / 32;
         break;
+    case GGML_TYPE_Q4_2:
+        dequant = true;
+        kernel = kernel_q4_2;
+        local = 8;
+        size_qb = global * (sizeof(ggml_fp16_t) + local) / 16;
+        break;
+    case GGML_TYPE_Q4_3:
+        dequant = true;
+        kernel = kernel_q4_3;
+        local = 8;
+        size_qb = global * (sizeof(short) * 2 + local) / 16;
+        break;
     case GGML_TYPE_Q5_0:
         dequant = true;
         kernel = kernel_q5_0;
         local = 16;
-        size_qb = global * (sizeof(ggml_fp16_t) + sizeof(uint32_t) + local) / 32;
+        // For some reason OpenCL seems to be incapable of working with structs of size 22.
+        // 20 and 24 bytes are fine. Workaround to do the fp16 to fp32 step on CPU...
+        // TODO Find the reason, fix and remove workaround.
+        const block_q5_0* b = (const block_q5_0*) host_b;
+        cl_host_b = (cl_block_q5_0*) malloc(sizeof(cl_block_q5_0) * global / 32);
+        for (size_t i = 0; i < global / 32; i++) {
+            cl_host_b[i].d = ggml_fp16_to_fp32(b[i].d);
+            memcpy(&cl_host_b[i].qh, b[i].qh, sizeof(uint32_t));
+            memcpy(&cl_host_b[i].qs, b[i].qs, QK5_0 / 2);
+        }
+        host_b = (const float*) cl_host_b;
+        size_qb = global * (sizeof(float) + sizeof(uint32_t) + local) / 32;
         break;
     case GGML_TYPE_Q5_1:
         dequant = true;
@@ -358,4 +420,7 @@ void ggml_cl_sgemm_wrapper(
     clWaitForEvents(1, &ev_c);
     clReleaseEvent(ev_sgemm);
     clReleaseEvent(ev_c);
+    if (btype == GGML_TYPE_Q5_0) {
+        free((void*) cl_host_b);
+    }
 }
