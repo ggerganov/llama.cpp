@@ -30,7 +30,7 @@ float frand_normal(struct random_normal_distribution * rnd) {
 struct ggml_tensor * randomize_tensor(
         struct ggml_tensor * tensor,
         int ndims,
-        int64_t ne[],
+        const int64_t ne[],
         float fmin,
         float fmax) {
 
@@ -77,7 +77,7 @@ struct ggml_tensor * randomize_tensor(
 struct ggml_tensor * randomize_tensor_normal(
         struct ggml_tensor * tensor,
         int ndims,
-        int64_t ne[],
+        const int64_t ne[],
         struct random_normal_distribution * rnd) {
     switch (ndims) {
         case 1:
