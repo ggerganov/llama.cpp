@@ -106,6 +106,8 @@ def init_library():
         else:
             use_blas = True
             print("Attempting to use OpenBLAS library for faster prompt ingestion. A compatible libopenblas will be required.")
+            if sys.platform=="darwin":
+                print("Mac OSX note: Some people have found Accelerate actually faster than OpenBLAS. To compare, run Koboldcpp with --noblas instead.")
 
     if use_noavx2:
         if use_blas:
@@ -196,7 +198,7 @@ maxctx = 2048
 maxlen = 128
 modelbusy = False
 defaultport = 5001
-KcppVersion = "1.21"
+KcppVersion = "1.21.1"
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
     sys_version = ""

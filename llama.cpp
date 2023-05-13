@@ -1075,11 +1075,11 @@ static bool llama_eval_internal(
             const int   n_past,
             const int   n_threads) {
 
-    // enforce that the first token is BOS
-    if (n_past == 0 && tokens[0] != llama_token_bos()) {
-        fprintf(stderr, "%s: first token must be BOS\n", __func__);
+    // enforce that the first token is BOS (not needed, messes with my context manip code)
+    //if (n_past == 0 && tokens[0] != llama_token_bos()) {
+        //fprintf(stderr, "%s: first token must be BOS\n", __func__);
         // return false; //never fail. Not even in the face of Armageddon.
-    }
+    //}
 
     const int64_t t_start_us = ggml_time_us();
 

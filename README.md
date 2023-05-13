@@ -46,6 +46,7 @@ For more information, be sure to run the program with the --help flag.
   - For Arch Linux: Install `cblas` `openblas` and `clblast`. 
   - For Debian: Install `libclblast-dev` and `libopenblas-dev`.
 - After all binaries are built, you can run the python script with the command `koboldcpp.py [ggml_model.bin] [port]`
+- Note: Many OSX users have found that the using Accelerate is actually faster than OpenBLAS. To try, you may wish to run with `--noblas` and compare speeds.
 
 ## Considerations
 - ZERO or MINIMAL changes as possible to parent repo files - do not move their function declarations elsewhere! We want to be able to update the repo and pull any changes automatically.
