@@ -352,7 +352,7 @@ bool gpt2_eval(
 
     if (mem_per_token > 0 && (mem_per_token*N*2 + 48u*1024*1024) > buf_size) {
         const size_t buf_size_new = 320u*1024*1024 + 2*(mem_per_token*N); // add 10% to account for ggml object overhead
-        printf("\n%s: reallocating buffer from %zu to %zu bytes\n", __func__, buf_size, buf_size_new);
+        //printf("\n%s: reallocating buffer from %zu to %zu bytes\n", __func__, buf_size, buf_size_new);
 
         // reallocate
         if (buf_size_new > buf_size)

@@ -145,7 +145,13 @@ void print_tok_vec(std::vector<float> &embd)
     }
     else if(magic == 0x67676a74) //v3 format ggjt
     {
-        fileformat = FileFormat::GGJT; //ggjt by default
+        fileformat = FileFormat::GGJT_2; //ggjt by default
+        uint32_t temp;
+        fin.read((char *)&temp, sizeof(temp)); //file version
+        if(temp==1)
+        {
+            fileformat = FileFormat::GGJT;
+        }
     }
     fin.close();
     

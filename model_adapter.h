@@ -19,6 +19,7 @@ enum FileFormat
     GGML=1, // 1=(original llama ggml, alpaca, GPT4ALL, GPTJ header)
     GGHF=2, // 2=(llama ggmf)
     GGJT=3, // 3=(llama ggjt) 
+    GGJT_2=4, //newer llama format
 
     GPTJ_1=100, //the very first super old GPTJ format
     GPTJ_2=101, //pygmalion, uses old ggml lib

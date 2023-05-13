@@ -1571,6 +1571,11 @@ static void ggml_vec_dot_q5_0_q8_0_v2(const int n, float * restrict s, const voi
 static void ggml_vec_dot_q5_1_q8_1_v2(const int n, float * restrict s, const void * restrict vx, const void * restrict vy);
 static void ggml_vec_dot_q8_0_q8_0_v2(const int n, float * restrict s, const void * restrict vx, const void * restrict vy);
 
+void SetQuantsUnshuffled(bool unshuffle)
+{
+    quants_unshuffled = unshuffle;
+}
+
 //TODO: integrate backwards compat
 static const quantize_fns_t quantize_fns_v2[GGML_TYPE_COUNT] = {
     [GGML_TYPE_Q4_0] = {

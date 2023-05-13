@@ -937,7 +937,8 @@ static void llama_model_load_internal(
         if (hparams.ftype != LLAMA_FTYPE_ALL_F32     &&
             hparams.ftype != LLAMA_FTYPE_MOSTLY_F16  &&
             hparams.ftype != LLAMA_FTYPE_MOSTLY_Q8_0) {
-            throw format("this format is no longer supported (see https://github.com/ggerganov/llama.cpp/pull/1305)");
+            printf("\nLegacy LLAMA GGJT compatability changes triggered.\n");
+            //throw format("this format is no longer supported (see https://github.com/ggerganov/llama.cpp/pull/1305)");
         }
     }
 

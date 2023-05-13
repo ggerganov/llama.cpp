@@ -1429,6 +1429,20 @@ quantize_fns_t ggml_internal_get_quantize_fn(size_t i) {
     return quantize_fns[i];
 }
 
+bool quants_unshuffled = false; //new GGJT_2 is unshuffled, all old ones are shuffled
+static const quantize_fns_t quantize_fns_v2[GGML_TYPE_COUNT]; //forward decl
+static inline quantize_fns_t get_quantize_fn(size_t i) 
+{
+    if(quants_unshuffled)
+    {
+        return quantize_fns[i];
+    }
+    else
+    {
+        return quantize_fns_v2[i];
+    }
+}
+
 
 //
 // simd mappings
@@ -5637,7 +5651,7 @@ static void ggml_compute_forward_dup_f16(
                     }
                 }
             } else if (ggml_is_quantized(dst->type)) {
-                quantize_row_q_t const quantize_row_q = quantize_fns[dst->type].quantize_row_q;
+                quantize_row_q_t const quantize_row_q = get_quantize_fn(dst->type).quantize_row_q;
                 float * src0_f32 = (float *) params->wdata + (ne00 + CACHE_LINE_SIZE_F32) * ith;
 
                 size_t id = 0;
@@ -5936,7 +5950,7 @@ static void ggml_compute_forward_dup_f32(
                     }
                 }
             } else if (ggml_is_quantized(dst->type)) {
-                quantize_row_q_t const quantize_row_q = quantize_fns[dst->type].quantize_row_q;
+                quantize_row_q_t const quantize_row_q = get_quantize_fn(dst->type).quantize_row_q;
 
                 size_t id = 0;
                 size_t rs = nb0 * (ne00 / GGML_BLCK_SIZE[dst->type]);
@@ -6346,8 +6360,8 @@ static void ggml_compute_forward_add_q_f32(
     GGML_ASSERT(ne3  == ne13);
 
     const enum ggml_type type = src0->type;
-    dequantize_row_q_t const dequantize_row_q = quantize_fns[type].dequantize_row_q;
-    quantize_row_q_t const quantize_row_q = quantize_fns[type].quantize_row_q;
+    dequantize_row_q_t const dequantize_row_q = get_quantize_fn(type).dequantize_row_q;
+    quantize_row_q_t const quantize_row_q = get_quantize_fn(type).quantize_row_q;
 
     // we don't support permuted src0 or src1
     GGML_ASSERT(nb00 == (int) GGML_TYPE_SIZE[type]);
@@ -7809,9 +7823,9 @@ static void ggml_compute_forward_mul_mat_q_f32(
     GGML_ASSERT(ne3  == ne13);
 
     const enum ggml_type type = src0->type;
-    quantize_row_q_t const quantize_row_q_dot = quantize_fns[type].quantize_row_q_dot;
-    vec_dot_q_t      const vec_dot_q          = quantize_fns[type].vec_dot_q;
-    enum ggml_type   const vec_dot_type       = quantize_fns[type].vec_dot_type;
+    quantize_row_q_t const quantize_row_q_dot = get_quantize_fn(type).quantize_row_q_dot;
+    vec_dot_q_t      const vec_dot_q          = get_quantize_fn(type).vec_dot_q;
+    enum ggml_type   const vec_dot_type       = get_quantize_fn(type).vec_dot_type;
 
     // we don't support permuted src0 or src1
     GGML_ASSERT(nb00 == (int) GGML_TYPE_SIZE[type]);
@@ -8138,7 +8152,7 @@ static void ggml_compute_forward_get_rows_q(
     const int nc = src0->ne[0];
     const int nr = ggml_nelements(src1);
     const enum ggml_type type = src0->type;
-    dequantize_row_q_t const dequantize_row_q = quantize_fns[type].dequantize_row_q;
+    dequantize_row_q_t const dequantize_row_q = get_quantize_fn(type).dequantize_row_q;
 
     assert( dst->ne[0] == nc);
     assert( dst->ne[1] == nr);
@@ -10923,7 +10937,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                             } else
 #endif
                             {
-                                const enum ggml_type type_q = quantize_fns[node->src0->type].vec_dot_type;
+                                const enum ggml_type type_q = get_quantize_fn(node->src0->type).vec_dot_type;
                                 cur = GGML_TYPE_SIZE[type_q]*ggml_nelements(node->src1)/GGML_BLCK_SIZE[type_q];
                             }
                         } else {

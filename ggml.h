@@ -895,6 +895,8 @@ extern "C" {
     // system info
     //
 
+    void SetQuantsUnshuffled(bool unshuffled);
+
     GGML_API int ggml_cpu_has_avx        (void);
     GGML_API int ggml_cpu_has_avx2       (void);
     GGML_API int ggml_cpu_has_avx512     (void);
