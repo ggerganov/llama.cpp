@@ -38,9 +38,7 @@
 
 #define GGML_PRINT(...) printf(__VA_ARGS__)
 
-
-
-float frand() {
+float frand(void) {
     return (float)rand()/(float)RAND_MAX;
 }
 
@@ -856,7 +854,6 @@ int main(int argc, const char ** argv) {
         // set_2d
         {
             int64_t ne2[4];
-            int64_t nb2[4];
             int64_t max_offsets[4] = { 0, 0, 0, 0 };
             int64_t offsets[4]     = { 0, 0, 0, 0 };
 

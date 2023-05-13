@@ -191,6 +191,13 @@ int main(int argc, const char ** argv) {
 // main: original  e = 1620817.8750
 // main: optimized e = 698387.6875
 
+// another run on M1
+// int64_t ne1[4] = {4, 1024, 1, 1};
+// int64_t ne2[4] = {4, 2048, 1, 1};;
+// int64_t ne3[4] = {1024, 2048, 1, 1};
+// main: original  e = 1629595.6250
+// main: optimized e = 698169.1250
+
 // int64_t ne1[4] = {32, 1024, 1, 1};
 // int64_t ne2[4] = {32, 2048, 1, 1};;
 // int64_t ne3[4] = {1024, 2048, 1, 1};

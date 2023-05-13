@@ -13605,9 +13605,6 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                                     src0),
                                 inplace);
                 }
-                if (src1->grad) {
-                    // not supported
-                }
             } break;
         case GGML_OP_SUM:
             {
