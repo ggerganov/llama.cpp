@@ -13715,17 +13715,11 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                 case GGML_OP_GET_ROWS_BACK:
                 case GGML_OP_DIAG:
                 case GGML_OP_DIAG_MASK_INF:
-                    {
-                        node->n_tasks = 1;
-                    } break;
                 case GGML_OP_DIAG_MASK_ZERO:
                     {
                         node->n_tasks = 1;
                     } break;
                 case GGML_OP_SOFT_MAX:
-                    {
-                        node->n_tasks = n_threads;
-                    } break;
                 case GGML_OP_ROPE:
                 case GGML_OP_ROPE_BACK:
                     {

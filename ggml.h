@@ -612,10 +612,12 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
 
-    struct ggml_tensor * ggml_silu_back(
+    // a - x
+    // b - dy
+    GGML_API struct ggml_tensor * ggml_silu_back(
             struct ggml_context * ctx,
-            struct ggml_tensor  * x,
-            struct ggml_tensor  * dy);
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b);
 
     // normalize along rows
     // TODO: eps is hardcoded to 1e-5 for now
@@ -627,10 +629,12 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
 
+    // a - x
+    // b - dy
     GGML_API struct ggml_tensor * ggml_rms_norm_back(
             struct ggml_context * ctx,
-            struct ggml_tensor  * x,
-            struct ggml_tensor  * dy);
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b);
 
     // A: m rows, n columns
     // B: p rows, n columns (i.e. we transpose it internally)
@@ -870,9 +874,10 @@ extern "C" {
             int                   mode);
 
     // rotary position embedding backward, i.e compute dx from dy
+    // a - dy
     GGML_API struct ggml_tensor * ggml_rope_back(
             struct ggml_context * ctx,
-            struct ggml_tensor  * dy,
+            struct ggml_tensor  * a,
             int                   n_past,
             int                   n_dims,
             int                   mode);
@@ -921,13 +926,13 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_map_unary_f32(
             struct ggml_context        * ctx,
             struct ggml_tensor         * a,
-            const  ggml_unary_op_f32_t fun);
+                   ggml_unary_op_f32_t   fun);
 
     GGML_API struct ggml_tensor * ggml_map_binary_f32(
             struct ggml_context         * ctx,
             struct ggml_tensor          * a,
             struct ggml_tensor          * b,
-            const  ggml_binary_op_f32_t fun);
+                   ggml_binary_op_f32_t   fun);
 
     //
     // automatic differentiation
