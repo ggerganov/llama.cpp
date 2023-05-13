@@ -1592,7 +1592,7 @@ static const quantize_fns_t quantize_fns_v2[GGML_TYPE_COUNT] = {
         .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_1_reference_v2,
         .quantize_row_q_dot       = quantize_row_q8_1_v2,
         .vec_dot_q                = ggml_vec_dot_q4_1_q8_1_v2,
-        .vec_dot_type             = GGML_TYPE_Q8_1,
+        .vec_dot_type             = GGML_TYPE_Q8_1B,
     },
     [GGML_TYPE_Q4_2] = {
         .dequantize_row_q         = dequantize_row_q4_2_v2,
@@ -1608,7 +1608,7 @@ static const quantize_fns_t quantize_fns_v2[GGML_TYPE_COUNT] = {
         .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_3_reference_v2,
         .quantize_row_q_dot       = quantize_row_q8_1_v2,
         .vec_dot_q                = ggml_vec_dot_q4_3_q8_1_v2,
-        .vec_dot_type             = GGML_TYPE_Q8_1,
+        .vec_dot_type             = GGML_TYPE_Q8_1B,
     },
     [GGML_TYPE_Q5_0] = {
         .dequantize_row_q         = dequantize_row_q5_0_v2,
@@ -1624,7 +1624,7 @@ static const quantize_fns_t quantize_fns_v2[GGML_TYPE_COUNT] = {
         .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q5_1_reference_v2,
         .quantize_row_q_dot       = quantize_row_q8_1_v2,
         .vec_dot_q                = ggml_vec_dot_q5_1_q8_1_v2,
-        .vec_dot_type             = GGML_TYPE_Q8_1,
+        .vec_dot_type             = GGML_TYPE_Q8_1B,
     },
     [GGML_TYPE_Q8_0] = {
         .dequantize_row_q         = dequantize_row_q8_0_v2,
@@ -1634,13 +1634,13 @@ static const quantize_fns_t quantize_fns_v2[GGML_TYPE_COUNT] = {
         .vec_dot_q                = ggml_vec_dot_q8_0_q8_0_v2,
         .vec_dot_type             = GGML_TYPE_Q8_0,
     },
-    [GGML_TYPE_Q8_1] = {
+    [GGML_TYPE_Q8_1B] = {
         .dequantize_row_q         = NULL,   // TODO
         .quantize_row_q           = quantize_row_q8_1_v2,
         .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q8_1_reference_v2,
         .quantize_row_q_dot       = quantize_row_q8_1_v2,
         .vec_dot_q                = NULL,   // TODO
-        .vec_dot_type             = GGML_TYPE_Q8_1,
+        .vec_dot_type             = GGML_TYPE_Q8_1B,
     },
 };
 

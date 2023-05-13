@@ -20,7 +20,7 @@ constant uint QK4_0 = 32;
 struct block_q4_0
 {
     float d;
-    uint8_t qs[QK4_0 / 2];
+    uint8_t qs[16];
 };
 
 constant uint QK4_1 = 32;
@@ -28,7 +28,7 @@ struct block_q4_1
 {
     float d;
     float m;
-    uint8_t qs[QK4_1 / 2];
+    uint8_t qs[16];
 };
 
 constant uint QK5_0 = 32;
@@ -36,7 +36,7 @@ struct __attribute__ ((packed)) block_q5_0
 {
     half d;
     uint32_t qh;
-    uint8_t qs[QK5_0 / 2];
+    uint8_t qs[16];
 };
 
 constant uint QK5_1 = 32;
@@ -45,14 +45,14 @@ struct block_q5_1
     half d;
     half m;
     uint32_t qh;
-    uint8_t qs[QK5_1 / 2];
+    uint8_t qs[16];
 };
 
 constant uint QK8_0 = 32;
 struct block_q8_0
 {
     float d;
-    uint8_t qs[QK8_0];
+    uint8_t qs[32];
 };
 
 

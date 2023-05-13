@@ -240,6 +240,7 @@ extern "C" {
         GGML_TYPE_I8,
         GGML_TYPE_I16,
         GGML_TYPE_I32,
+        GGML_TYPE_Q8_1B = 13, //legacy q8_1
         GGML_TYPE_COUNT,
     };
 
