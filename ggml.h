@@ -307,6 +307,7 @@ extern "C" {
         GGML_OP_DIAG_MASK_INF,
         GGML_OP_DIAG_MASK_ZERO,
         GGML_OP_SOFT_MAX,
+        GGML_OP_SOFT_MAX_BACK,
         GGML_OP_ROPE,
         GGML_OP_ROPE_BACK,
         GGML_OP_ALIBI,
@@ -859,6 +860,17 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_soft_max_inplace(
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
+
+    GGML_API struct ggml_tensor * ggml_soft_max_back(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b);
+
+    // in-place, returns view(a)
+    GGML_API struct ggml_tensor * ggml_soft_max_back_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b);
 
     // rotary position embedding
     // if mode & 1 == 1, skip n_past elements
