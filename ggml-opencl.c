@@ -12,6 +12,7 @@
 #define MULTILINE_QUOTE(...) #__VA_ARGS__
 static const char * program_source = MULTILINE_QUOTE(
 
+typedef char int8_t;
 typedef uchar uint8_t;
 typedef int int32_t;
 typedef uint uint32_t;
@@ -47,7 +48,7 @@ struct block_q5_1
 struct block_q8_0
 {
     float d;
-    uint8_t qs[16]; /* QK8_0 / 2 */
+    int8_t qs[32]; /* QK8_0 */
 };
 
 
