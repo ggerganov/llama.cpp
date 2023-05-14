@@ -15,7 +15,7 @@
 #include <iterator>
 #include <algorithm>
 
-float tensor_sum_elements(struct ggml_tensor * tensor) {
+float tensor_sum_elements(const ggml_tensor * tensor) {
     float sum = 0;
     if (tensor->type==GGML_TYPE_F32) {
         for (int j = 0; j < tensor->ne[1]; j++) {
@@ -27,21 +27,15 @@ float tensor_sum_elements(struct ggml_tensor * tensor) {
     return sum;
 }
 
+void tensor_dump(const ggml_tensor * tensor, const char * name) {
+    printf("%15s: type = %i (%5s) ne = %5d x %5d x %5d, nb = (%5li, %5li, %5li) - ", name,
+        tensor->type, ggml_type_name(tensor->type),
+        (int) tensor->ne[0], (int) tensor->ne[1], (int) tensor->ne[2], tensor->nb[0], tensor->nb[1], tensor->nb[2]);
+    float sum = tensor_sum_elements(tensor);
+    printf("Sum of tensor %s is %6.2f\n", name, sum);
+}
 
-/*
-    These are mapping to unknown
-    GGML_TYPE_I8,
-    GGML_TYPE_I16,
-    GGML_TYPE_I32,
-    GGML_TYPE_COUNT,
-*/
-
-#define TENSOR_TYPE_AS_STR(TYPE) TYPE == GGML_TYPE_F32 ? "FP32" : TYPE == GGML_TYPE_F16 ? "FP16" : TYPE == GGML_TYPE_Q4_0 ? "Q4_0" : TYPE == GGML_TYPE_Q4_1 ? "Q4_1" : "UNKNOWN"
-
-#define TENSOR_DUMP(TENSOR) printf("%15s: type = %i (%5s) ne = %5d x %5d x %5d, nb = (%5li, %5li, %5li) - ", #TENSOR, \
-        TENSOR->type,TENSOR_TYPE_AS_STR(TENSOR->type),\
-        (int) TENSOR->ne[0], (int) TENSOR->ne[1], (int) TENSOR->ne[2], TENSOR->nb[0], TENSOR->nb[1], TENSOR->nb[2]); \
-    { float sum = tensor_sum_elements(TENSOR); printf("Sum of tensor %s is %6.2f\n",#TENSOR, sum); }
+#define TENSOR_DUMP(tensor) tensor_dump(tensor, #tensor)
 
 struct benchmark_params_struct {
     int32_t n_threads     = 1;
@@ -59,8 +53,6 @@ void print_usage(int /*argc*/, char ** argv, struct benchmark_params_struct para
 }
 
 int main(int argc, char ** argv)  {
-
-
     struct benchmark_params_struct benchmark_params;
 
     bool invalid_param = false;
@@ -84,11 +76,11 @@ int main(int argc, char ** argv)  {
             print_usage(argc, argv, benchmark_params);
             exit(0);
         }
-        if (invalid_param) {
-            fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
-            print_usage(argc, argv, benchmark_params);
-            exit(1);
-        }
+    }
+    if (invalid_param) {
+        fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
+        print_usage(argc, argv, benchmark_params);
+        exit(1);
     }
 
     fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
@@ -216,9 +208,8 @@ int main(int argc, char ** argv)  {
     // Let's use the F32 result from above as a reference for the q4_0 multiplication
     float sum_of_F32_reference = tensor_sum_elements(gf.nodes[0]);
 
-
-    printf("Iteration;NThreads; SizeX; SizeY; SizeZ; Required_FLOPS; Elapsed_u_Seconds; FLOPS_per_u_Second\n");
-    printf("==============================================================================================\n");
+    printf("Iteration;NThreads; SizeX; SizeY; SizeZ; Required_FLOPS; Elapsed_u_Seconds; gigaFLOPS\n");
+    printf("=====================================================================================\n");
 
     for (int i=0;i<benchmark_params.n_iterations ;i++) {
 
@@ -227,12 +218,12 @@ int main(int argc, char ** argv)  {
         ggml_graph_compute(ctx, &gf31);
         long long int stop = ggml_time_us();
         long long int usec = stop-start;
-        float flops_per_usec = (1.0f*flops_per_matrix)/usec;
-        printf("%9i;%8i;%6i;%6i;%6i;%15lli;%18lli;%19.2f\n",
+        double gflops = (double)(flops_per_matrix)/usec/1000.0;
+        printf("%9i;%8i;%6i;%6i;%6i;%15lli;%18lli;%10.2f\n",
             i,
             gf31.n_threads,
             sizex, sizey, sizez, flops_per_matrix,
-            usec,flops_per_usec);
+            usec,gflops);
 
 #ifdef VERBOSE_DEBUGGING
         TENSOR_DUMP("res",gf31.nodes[0])
@@ -256,7 +247,5 @@ int main(int argc, char ** argv)  {
 
         // Running a different graph computation to make sure we override the CPU cache lines
         ggml_graph_compute(ctx, &gf32);
-
     }
-
 }
