@@ -613,7 +613,7 @@ int main(int argc, char ** argv) {
             exit(1);
         }
   }
-  
+
   if (invalid_param)
   {
         fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
