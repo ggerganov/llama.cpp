@@ -969,9 +969,16 @@ void print_tokens(struct llama_context* ctx, struct ggml_tensor * tokens) {
 
 void print_tokens_batch(struct llama_context* ctx, struct ggml_tensor * tokens) {
     for (int i1=0; i1<tokens->ne[1]; ++i1) {
+        int num_newline = 0;
         for (int i0=0; i0<tokens->ne[0]; ++i0) {
             int token = ggml_get_i32_1d(tokens, i0 + i1*tokens->ne[0]);
-            print_token(ctx, token);
+            bool isnl = (token == llama_token_nl());
+            if (isnl) {
+                ++num_newline;
+            }
+            if (!isnl || (num_newline < 2)) {
+                print_token(ctx, token);
+            }
         }
         printf("\n--\n");
     }
