@@ -228,7 +228,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     if(file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2)
     {
         //newer format has bit unshuffling
-        SetQuantsUnshuffled(file_format== FileFormat::GGJT_2);        
+        SetQuantsUnshuffled(file_format == FileFormat::GGJT_2);        
 
         llama_ctx_params = llama_context_default_params();
         llama_ctx_params.n_ctx = inputs.max_context_length;
@@ -248,7 +248,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         }
         if (file_format < FileFormat::GGJT_2)
         {
-            printf("\n---\nWarning: Your model has an INVALID or OUTDATED format (ver %d). Please reconvert it for better results!\n---\n", file_format);
+            printf("\n---\nWarning: Your model may be an OUTDATED format (ver %d). Please reconvert it for better results!\n---\n", file_format);
         }
 
         if (lora_filename != "")
