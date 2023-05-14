@@ -19,20 +19,24 @@ enum FileFormat
     GGML=1, // 1=(original llama ggml, alpaca, GPT4ALL, GPTJ header)
     GGHF=2, // 2=(llama ggmf)
     GGJT=3, // 3=(llama ggjt) 
-    GGJT_2=4, //newer llama format
+    GGJT_2=4, //newer llama format unshuffled
 
     GPTJ_1=100, //the very first super old GPTJ format
     GPTJ_2=101, //pygmalion, uses old ggml lib
     GPTJ_3=102, //uses new ggml lib
+    GPTJ_4=103, //unshuffled
 
     GPT2_1=200,
     GPT2_2=201,
+    GPT2_3=202, //unshuffled
 
     RWKV_1=300,
 
     NEOX_1=400,
     NEOX_2=401,
-    NEOX_3=402,
+    NEOX_3=402, //redpajama
+    NEOX_4=403, //unshuffled
+    NEOX_5=404, //unshuffled redpajama
 };
 
 enum ModelLoadResult

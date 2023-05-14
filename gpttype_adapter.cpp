@@ -329,8 +329,11 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         legacy_gpt2_eval(gpt2_ctx_v1, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token, file_format);    
         return ModelLoadResult::SUCCESS;
     }
-    else if (file_format == FileFormat::GPT2_2)
+    else if (file_format == FileFormat::GPT2_2 || file_format==FileFormat::GPT2_3)
     {
+        //newer format has bit unshuffling
+        SetQuantsUnshuffled(file_format == FileFormat::GPT2_3);   
+
         ModelLoadResult res = gpt2_model_load(params.model, gpt2_ctx_v2, vocab, file_format);
         if(res==ModelLoadResult::FAIL)
         {
@@ -372,7 +375,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
 
         return ModelLoadResult::SUCCESS;
     }
-    else if(file_format==FileFormat::NEOX_1 || file_format==FileFormat::NEOX_2 || file_format==FileFormat::NEOX_3)
+    else if(file_format==FileFormat::NEOX_1 || file_format==FileFormat::NEOX_2 || file_format==FileFormat::NEOX_3 || file_format==FileFormat::NEOX_4 || file_format==FileFormat::NEOX_5)
     {
         ModelLoadResult res = stablelm_model_load(params.model, neox_ctx, vocab, file_format);       
         if(res==ModelLoadResult::FAIL)
@@ -385,14 +388,18 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
             printf("\nIncorrect Tensor Size Detected! Retrying GPT-NeoX model loading...");
             return res;
         }
+
+        //newer format has bit unshuffling
+        SetQuantsUnshuffled(file_format==FileFormat::NEOX_4 || file_format==FileFormat::NEOX_5);   
+
          // determine the required inference memory per token:    
         stablelm_eval(neox_ctx, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token, file_format);
 
-        if(logits.size()>0 && file_format==FileFormat::NEOX_2 && !IsNanCheck(logits[0]))
+        if(logits.size()>0 && (file_format==FileFormat::NEOX_2 || file_format==FileFormat::NEOX_4) && !IsNanCheck(logits[0]))
         {
             //run the black magic eval to determine if it's redpajama. VERY UGLY HACK!
             std::vector<int> test_embd = ::gpt_tokenize(vocab, "1 2 3 4 5 6 7");           
-            stablelm_eval(neox_ctx, params.n_threads, 0, test_embd, logits, mem_per_token, FileFormat::NEOX_3);          
+            stablelm_eval(neox_ctx, params.n_threads, 0, test_embd, logits, mem_per_token, (file_format==FileFormat::NEOX_2?FileFormat::NEOX_3:FileFormat::NEOX_5));          
             int topid = std::max_element(logits.begin(),logits.end())-logits.begin();
             std::string predicted = vocab.id_to_token[topid].c_str();
             if(predicted.find("8") != std::string::npos)
@@ -407,6 +414,9 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     }
     else
     {
+        //newer format has bit unshuffling
+        SetQuantsUnshuffled(file_format == FileFormat::GPTJ_4);   
+
         ModelLoadResult loadresult = gptj_model_load(params.model, gptj_ctx_v2, vocab);
         if (loadresult == ModelLoadResult::FAIL)
         {
@@ -584,7 +594,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     {
         n_vocab = gptj_ctx_v1.hparams.n_vocab;
     }    
-    else if(file_format == FileFormat::GPTJ_3)
+    else if(file_format == FileFormat::GPTJ_3 || file_format==FileFormat::GPTJ_4)
     {
         n_vocab = gptj_ctx_v2.hparams.n_vocab;
     }
@@ -592,11 +602,11 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     {
         n_vocab = gpt2_ctx_v1.hparams.n_vocab;
     }
-    else if(file_format == FileFormat::GPT2_2)
+    else if(file_format == FileFormat::GPT2_2 || file_format==FileFormat::GPT2_3)
     {
         n_vocab = gpt2_ctx_v2.hparams.n_vocab;
     }
-    else if(file_format == FileFormat::NEOX_1 || file_format == FileFormat::NEOX_2 || file_format == FileFormat::NEOX_3)
+    else if(file_format == FileFormat::NEOX_1 || file_format == FileFormat::NEOX_2 || file_format == FileFormat::NEOX_3 || file_format==FileFormat::NEOX_4 || file_format==FileFormat::NEOX_5)
     {
         n_vocab = neox_ctx.hparams.n_vocab;
     }
@@ -678,11 +688,11 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             {
                 evalres = legacy_gpt2_eval(gpt2_ctx_v1, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
             }
-            else if(file_format==FileFormat::GPT2_2)
+            else if(file_format==FileFormat::GPT2_2 || file_format==FileFormat::GPT2_3)
             {
                 evalres = gpt2_eval(gpt2_ctx_v2, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
             }
-            else if(file_format==FileFormat::NEOX_1 || file_format == FileFormat::NEOX_2 || file_format == FileFormat::NEOX_3)
+            else if(file_format==FileFormat::NEOX_1 || file_format == FileFormat::NEOX_2 || file_format == FileFormat::NEOX_3 || file_format==FileFormat::NEOX_4 || file_format==FileFormat::NEOX_5)
             {
                 evalres = stablelm_eval(neox_ctx, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
             }
@@ -750,9 +760,11 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                     // set the logit of the eos token (2) to zero to avoid sampling it
                     if ((file_format == FileFormat::GPT2_1 ||
                          file_format == FileFormat::GPT2_2 ||
+                         file_format == FileFormat::GPT2_3 ||
                          file_format == FileFormat::GPTJ_1 ||
                          file_format == FileFormat::GPTJ_2 ||
-                         file_format == FileFormat::GPTJ_3) &&
+                         file_format == FileFormat::GPTJ_3 ||
+                         file_format == FileFormat::GPTJ_4) &&
                         logits.size() > 50256)
                     {
                         logits[50256] = (logits[50256] < 0 ? logits[50256] : 0);
