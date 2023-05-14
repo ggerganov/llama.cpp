@@ -190,6 +190,9 @@
 #define GGML_FILE_MAGIC   0x67676d6c // "ggml"
 #define GGML_FILE_VERSION 1
 
+#define GGML_QNT_VERSION        1    // bump this on quantization format changes
+#define GGML_QNT_VERSION_FACTOR 1000 // do not change this
+
 #define GGML_MAX_DIMS          4
 #define GGML_MAX_NODES         4096
 #define GGML_MAX_PARAMS        256
@@ -337,7 +340,7 @@ extern "C" {
 
     // n-dimensional tensor
     struct ggml_tensor {
-        enum ggml_type type;
+        enum ggml_type    type;
         enum ggml_backend backend;
 
         int     n_dims;
@@ -369,7 +372,7 @@ extern "C" {
 
         char name[32];
 
-        char padding[9]; // TODO: remove and add padding to name?
+        char padding[16];
     };
 
     // computation graph
