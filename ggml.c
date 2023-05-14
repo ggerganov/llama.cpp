@@ -10565,8 +10565,8 @@ static void ggml_compute_forward_soft_max_back_f32(
 #ifndef NDEBUG
         for (int i = 0; i < nc; ++i) {
             //printf("p[%d] = %f\n", i, p[i]);
-            assert(!isnan(s0[i]));
-            assert(!isnan(s1[i]));
+            assert(!isnan(dy[i]));
+            assert(!isnan(y[i]));
         }
 #endif
         // Jii = yi - yi*yi
