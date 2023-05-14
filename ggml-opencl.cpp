@@ -136,8 +136,8 @@ __kernel void dequantize_row_q8_0(__global struct block_q8_0* x, __global float*
 }
 
 __kernel void dequantize_mul_mat_vec(__global struct block_q4_0* x, __local float* tmp, __global float* y, __global float* dst, int ncols) {
-    const int row = get_global_id(0);
-    const int tid = get_local_id(0);
+    const int row = get_local_id(0);
+    const int tid = get_global_id(0);
     const int block_size = get_local_size(0);
 
     const uint qk = 32; /* QK4_0 */
@@ -162,8 +162,8 @@ __kernel void dequantize_mul_mat_vec(__global struct block_q4_0* x, __local floa
         const int8_t vi0 = vui & 0xF;
         const int8_t vi1 = vui >> 4;
 
-        v0 = (vi0 - 8)*d;
-        v1 = (vi1 - 8)*d;
+        float v0 = (vi0 - 8)*d;
+        float v1 = (vi1 - 8)*d;
 
         // matrix multiplication
         tmp[tid] += v0 * y[iybs + iqs + 0];
@@ -769,42 +769,40 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
 
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
-            cl_event ev_Q;
             cl_event ev_sgemm;
 
             // copy src0 to device if necessary
             if (src0->backend == GGML_BACKEND_CPU) {
-                CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Q, 0, src0, i03, i02, &ev_Q));
+                CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Q, 0, src0, i03, i02, NULL));
             } else if (src0->backend == GGML_BACKEND_CL) {
-                d_Q = * (cl_mem *) src0->data;
+                d_Q = *(cl_mem*) src0->data;
             } else {
                 GGML_ASSERT(false);
             }
             if (mul_mat_vec) { // specialized dequantize_mul_mat_vec kernel
-                printf("Gogogo\n");
                 // copy src1 to device
                 CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i03, i02, NULL));
 
                 // compute
                 // dequantize_mul_mat_vec(__global void * vx, __local float* tmp, __global float * y, __global float * dst, __global int ncols, __global int vx_type) {
-                const size_t global = ne00;
+                const size_t global = ne01;
                 const size_t local = CL_DMMV_BLOCK_SIZE;
-                const cl_int ncols = ne01;
-                const cl_int qtype = src0->type;
+                const cl_int ncols = ne00;
                 CL_CHECK(clSetKernelArg(dequantize_mul_mat_vec_cl, 0, sizeof(cl_mem), &d_Q));
                 CL_CHECK(clSetKernelArg(dequantize_mul_mat_vec_cl, 1, sizeof(float) * local, NULL));
                 CL_CHECK(clSetKernelArg(dequantize_mul_mat_vec_cl, 2, sizeof(cl_mem), &d_Y));
                 CL_CHECK(clSetKernelArg(dequantize_mul_mat_vec_cl, 3, sizeof(cl_mem), &d_D));
                 CL_CHECK(clSetKernelArg(dequantize_mul_mat_vec_cl, 4, sizeof(cl_int), &ncols));
-                CL_CHECK(clSetKernelArg(dequantize_mul_mat_vec_cl, 5, sizeof(cl_int), &qtype));
-                CL_CHECK(clEnqueueNDRangeKernel(queue, dequantize_mul_mat_vec_cl, 1, NULL, &global, &local, 1, &ev_Q, &ev_sgemm));
+                CL_CHECK(clFinish(queue));
+                CL_CHECK(clEnqueueNDRangeKernel(queue, dequantize_mul_mat_vec_cl, 1, NULL, &global, &local, 0, NULL, &ev_sgemm));
             } else { // general dequantization kernel + CLBlast matrix matrix multiplication
                 // convert src0 to fp32 on device
                 const size_t global = x_ne;
-                const size_t local = 16;
+                const size_t local = ggml_blck_size(type) / 2;
                 CL_CHECK(clSetKernelArg(*to_fp32_cl, 0, sizeof(cl_mem), &d_Q));
                 CL_CHECK(clSetKernelArg(*to_fp32_cl, 1, sizeof(cl_mem), &d_X));
-                CL_CHECK(clEnqueueNDRangeKernel(queue, *to_fp32_cl, 1, NULL, &global, &local, 1, &ev_Q, NULL));
+                CL_CHECK(clFinish(queue));
+                CL_CHECK(clEnqueueNDRangeKernel(queue, *to_fp32_cl, 1, NULL, &global, &local, 0, NULL, NULL));
 
                 // copy src1 to device
                 CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i03, i02, NULL));
@@ -831,6 +829,7 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
             // copy dst to host
             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
             CL_CHECK(clEnqueueReadBuffer(queue, d_D, true, 0, sizeof(float) * d_ne, d, 1, &ev_sgemm, NULL));
+            clReleaseEvent(ev_sgemm);
         }
     }
 
