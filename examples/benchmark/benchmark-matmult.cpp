@@ -27,13 +27,15 @@ float tensor_sum_elements(const ggml_tensor * tensor) {
     return sum;
 }
 
-void tensor_dump(const ggml_tensor * tensor) {
-    printf("%15s: type = %i (%5s) ne = %5d x %5d x %5d, nb = (%5li, %5li, %5li) - ", "tensor",
+void tensor_dump(const ggml_tensor * tensor, const char * name) {
+    printf("%15s: type = %i (%5s) ne = %5d x %5d x %5d, nb = (%5li, %5li, %5li) - ", name,
         tensor->type, ggml_type_name(tensor->type),
         (int) tensor->ne[0], (int) tensor->ne[1], (int) tensor->ne[2], tensor->nb[0], tensor->nb[1], tensor->nb[2]);
     float sum = tensor_sum_elements(tensor);
-    printf("Sum of tensor %s is %6.2f\n","tensor", sum);
+    printf("Sum of tensor %s is %6.2f\n", name, sum);
 }
+
+#define TENSOR_DUMP(tensor) tensor_dump(tensor, #tensor)
 
 struct benchmark_params_struct {
     int32_t n_threads     = 1;
@@ -155,12 +157,12 @@ int main(int argc, char ** argv)  {
     gf.n_threads=benchmark_params.n_threads;
     printf("cgraph->n_threads=%i\n",gf.n_threads);
 
-    tensor_dump(m11);
-    tensor_dump(m2);
+    TENSOR_DUMP(m11);
+    TENSOR_DUMP(m2);
 
     ggml_graph_compute(ctx, &gf);
 
-    tensor_dump(gf.nodes[0]);
+    TENSOR_DUMP(gf.nodes[0]);
 
     printf("\n------ Test 2 - Matrix Mult via Q4_0 code ------------------------------------------------------------------------------\n");
 
@@ -224,7 +226,7 @@ int main(int argc, char ** argv)  {
             usec,gflops);
 
 #ifdef VERBOSE_DEBUGGING
-        tensor_dump("res",gf31.nodes[0])
+        TENSOR_DUMP("res",gf31.nodes[0])
 #endif
 
         // Check that the matrix multiplication result is in the right ballpark
