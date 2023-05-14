@@ -191,9 +191,6 @@ llama.o: llama.cpp ggml.h ggml-cuda.h llama.h llama-util.h
 common.o: examples/common.cpp examples/common.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-json11.o: examples/server/json11.cpp examples/server/json11.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
 libllama.so: llama.o ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
@@ -224,12 +221,6 @@ embedding: examples/embedding/embedding.cpp build-info.h ggml.o llama.o common.o
 
 save-load-state: examples/save-load-state/save-load-state.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
-
-server: examples/server/server.cpp examples/server/server.h examples/server/httplib.h  build-info.h ggml.o llama.o common.o json11.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
-	@echo
-	@echo '====  Run ./server -h for help.  ===='
-	@echo
 
 build-info.h: $(wildcard .git/index) scripts/build-info.sh
 	@sh scripts/build-info.sh > $@.tmp

@@ -1,7 +1,7 @@
 #include <server.h>
 
 using namespace httplib;
-using namespace json11;
+using json = nlohmann::json;
 
 bool Llama::load_context() {
   // load the model
@@ -643,81 +643,79 @@ int main(int argc, char ** argv) {
 
   svr.Post("/setting-context", [&llama](const Request &req, Response &res) {
             if(!llama->context_config) {
-              std::string err;
-              Json body = Json::parse(req.body, err);
+              json body = json::parse(req.body);
               /*
                 Seed whould be passed by the request, but seem 
                 the current implementation need it in the load file
               */
               if (!body["threads"].is_null())
               {
-                llama->params.n_threads = body["threads"].int_value();
+                llama->params.n_threads = body["threads"].get<int>();
               }
               if (!body["n_predict"].is_null())
               {
-                llama->params.n_predict = body["n_predict"].int_value();
+                llama->params.n_predict = body["n_predict"].get<int>();
               }
               if (!body["top_k"].is_null())
               {
-                llama->params.top_k = body["top_k"].int_value();
+                llama->params.top_k = body["top_k"].get<int>();
               }
               if (!body["top_p"].is_null())
               {
-                llama->params.top_p = (float)body["top_p"].number_value();
+                llama->params.top_p = (float)body["top_p"].get<float>();
               }
               if (!body["temperature"].is_null())
               {
-                llama->params.temp = (float)body["temperature"].number_value();
+                llama->params.temp = (float)body["temperature"].get<float>();
               }
               if (!body["batch_size"].is_null())
               {
-                llama->params.n_batch = body["batch_size"].int_value();
+                llama->params.n_batch = body["batch_size"].get<int>();
               }
               if (!body["tags"].is_null())
               {
-                Json tags = body["tags"].object_items();
-                llama->user_tag = tags["user"].string_value();
-                llama->assistant_tag = tags["assistant"].string_value();
+                json tags = body["tags"].get<json>();
+                llama->user_tag = tags["user"].get<std::string>();
+                llama->assistant_tag = tags["assistant"].get<std::string>();
               }
               if (!body["context"].is_null())
               {
                 llama->params.prompt = "";
-                Json::array context_messages = body["context"].array_items();
-                for (Json ctx_msg : context_messages)
+                std::vector<json> context_messages = body["context"].get<std::vector<json>>();
+                for (json ctx_msg : context_messages)
                 {
-                  auto role = ctx_msg["role"].string_value();
+                  auto role = ctx_msg["role"].get<std::string>();
                   if (role == "system")
                   {
-                    llama->params.prompt = ctx_msg["content"].string_value() + "\n\n";
+                    llama->params.prompt = ctx_msg["content"].get<std::string>() + "\n\n";
                   }
                   else if (role == "user")
                   {
-                    llama->params.prompt += llama->user_tag + " " + ctx_msg["content"].string_value() + "\n";
+                    llama->params.prompt += llama->user_tag + " " + ctx_msg["content"].get<std::string>() + "\n";
                   }
                   else if (role == "assistant")
                   {
-                    llama->params.prompt += llama->assistant_tag + " " + ctx_msg["content"].string_value() + "\n";
+                    llama->params.prompt += llama->assistant_tag + " " + ctx_msg["content"].get<std::string>() + "\n";
                   }
                 }
                 llama->params.prompt += llama->user_tag;
               }
               else if (!body["prompt"].is_null())
               {
-                llama->params.prompt = body["prompt"].string_value();
+                llama->params.prompt = body["prompt"].get<std::string>();
               }
               else
               {
-                Json data = Json::object{
+                json data = {
                     {"status", "error"},
                     {"reason", "You need to pass the context or prompt"}};
                 res.set_content(data.dump(), "application/json");
                 res.status = 400;
                 return;
               }
-
               if(!llama->prompt_test())
               {
-                Json data = Json::object{
+                json data = {
                     {"status", "error"},
                     {"reason", "Context too long, please be more specific"}};
                 res.set_content(data.dump(), "application/json");
@@ -731,7 +729,7 @@ int main(int argc, char ** argv) {
               llama->params.repeat_penalty = 1.1f;
               llama->setting_context();
           }
-            Json data = Json::object {
+            json data = {
                 { "status", "done" }};
             res.set_content(data.dump(), "application/json");
   });
@@ -740,11 +738,10 @@ int main(int argc, char ** argv) {
     bool result = false;
     if (llama->context_config)
     {
-      std::string err;
-      Json body = Json::parse(req.body, err);
-      result = llama->set_message(body["message"].string_value() + "\n");
+      json body = json::parse(req.body);
+      result = llama->set_message(body["message"].get<std::string>() + "\n");
     }
-    Json data = Json::object{
+    json data = {
         {"can_inference", result }};
     res.set_content(data.dump(), "application/json");
   });
@@ -764,8 +761,8 @@ int main(int argc, char ** argv) {
                   llama->tokens_completion = 0;
                   while(!llama->is_antiprompt) {
                     std::string result = llama->inference();
-                    Json data = Json::object{
-                        {"content", result.c_str()},
+                    json data = {
+                        {"content", result },
                         {"tokens_consumed", 1},
                         {"stop", llama->is_antiprompt }};
                     std::string json_data = data.dump();
@@ -776,27 +773,13 @@ int main(int argc, char ** argv) {
                 });
             } else {
               // Send all completion when finish
-              int ignore = 0;
               std::string completion = "";
               llama->tokens_completion = 0;
               while (!llama->is_antiprompt)
               {
-                std::string result = llama->inference();
-                // ignore ### Human: and ### Assistant:
-                if (result == "##")
-                {
-                  ignore = 5;
-                }
-                if (ignore == 0)
-                {
-                  completion += result;
-                }
-                else
-                {
-                  ignore--;
-                }
+                completion += llama->inference();
               }
-              Json data = Json::object {
+              json data = {
                 { "content", completion.c_str() },
                 { "total_tokens", llama->tokens_completion }
               };
