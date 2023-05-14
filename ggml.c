@@ -7514,8 +7514,8 @@ static void ggml_compute_forward_add1_q_f32(
     const size_t nb3 = dst->nb[3];
 
     const enum ggml_type type = src0->type;
-    dequantize_row_q_t const dequantize_row_q = quantize_fns[type].dequantize_row_q;
-    quantize_row_q_t const quantize_row_q = quantize_fns[type].quantize_row_q;
+    dequantize_row_q_t const dequantize_row_q = get_quantize_fn(type).dequantize_row_q;
+    quantize_row_q_t const quantize_row_q = get_quantize_fn(type).quantize_row_q;
 
     // we don't support permuted src0
     GGML_ASSERT(nb00 == GGML_TYPE_SIZE[type]);
