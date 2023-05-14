@@ -14,6 +14,7 @@ bool Llama::load_context() {
     lparams.f16_kv = params.memory_f16;
     lparams.use_mmap = params.use_mmap;
     lparams.use_mlock = params.use_mlock;
+    lparams.n_gpu_layers = params.n_gpu_layers;
 
     ctx = llama_init_from_file(params.model.c_str(), lparams);
 
@@ -38,7 +39,6 @@ bool Llama::load_context() {
 
   last_n_tokens.resize(n_ctx);
   std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
-  printf("Llama Context loaded\n");
   return true;
 }
 
@@ -54,6 +54,9 @@ bool Llama::prompt_test() {
 }
 
 void Llama::setting_context() {
+  user_tag_tokens = ::llama_tokenize(ctx, user_tag, false);
+  assistant_tag_tokens = ::llama_tokenize(ctx, assistant_tag, false);
+
   n_remain   = params.n_predict;
 
   // number of tokens to keep when resetting context
@@ -72,10 +75,7 @@ void Llama::setting_context() {
   fprintf(stderr, "sampling: repeat_last_n = %d, repeat_penalty = %f, presence_penalty = %f, frequency_penalty = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f, mirostat = %d, mirostat_lr = %f, mirostat_ent = %f\n",
           params.repeat_last_n, params.repeat_penalty, params.presence_penalty, params.frequency_penalty, params.top_k, params.tfs_z, params.top_p, params.typical_p, params.temp, params.mirostat, params.mirostat_eta, params.mirostat_tau);
   fprintf(stderr, "generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
-  fprintf(stderr, "\n\n");
 
-  printf("\rLoading prompt: 0%");
- 
   while(true) {
     if (embd.size() > 0)
     {
@@ -174,10 +174,10 @@ void Llama::setting_context() {
           else
           {
             // Temperature sampling
-            llama_sample_top_k(ctx, &candidates_p, top_k);
-            llama_sample_tail_free(ctx, &candidates_p, tfs_z);
-            llama_sample_typical(ctx, &candidates_p, typical_p);
-            llama_sample_top_p(ctx, &candidates_p, top_p);
+            llama_sample_top_k(ctx, &candidates_p, top_k, 1);
+            llama_sample_tail_free(ctx, &candidates_p, tfs_z, 1);
+            llama_sample_typical(ctx, &candidates_p, typical_p, 1);
+            llama_sample_top_p(ctx, &candidates_p, top_p, 1);
             llama_sample_temperature(ctx, &candidates_p, temp);
             id = llama_sample_token(ctx, &candidates_p);
           }
@@ -216,7 +216,6 @@ void Llama::setting_context() {
           break;
         }
       }
-      printf("\rLoading prompt: %d%%", (int)(((float)n_consumed / (int)embd_inp.size()) * 100));
     }
     if (params.interactive && (int)embd_inp.size() <= n_consumed) {
       // check for reverse prompt
@@ -236,14 +235,12 @@ void Llama::setting_context() {
             is_interacting = true;
             is_antiprompt = true;
             context_config = true;
-            printf("\rContext prompt and behavior configured.\n");
             return;
           }
         }
       }
     }
   }
-  
 }
 
 int Llama::set_message(std::string msg) {
@@ -251,19 +248,17 @@ int Llama::set_message(std::string msg) {
   {
     auto line_inp = ::llama_tokenize(ctx, msg, false);
     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
-    n_remain -= line_inp.size();
-    printf("\nRequest completion: %i message tokens \n", line_inp.size());
+    n_remain -= (int)line_inp.size();
     is_antiprompt = false;
-    return line_inp.size();
+    return (int)line_inp.size();
   } else {
     return 0;
   }
 }
 
-std::string Llama::inference() {
-   std::string result = "";
-   if (embd.size() > 0)
-    {
+llama_token Llama::nextToken() {
+   llama_token result = -1;
+   if (embd.size() > 0) {
       if (n_past + (int)embd.size() > n_ctx)
       {
         const int n_left = n_past - params.n_keep;
@@ -359,10 +354,9 @@ std::string Llama::inference() {
           else
           {
             // Temperature sampling
-            llama_sample_top_k(ctx, &candidates_p, top_k);
-            llama_sample_tail_free(ctx, &candidates_p, tfs_z);
-            llama_sample_typical(ctx, &candidates_p, typical_p);
-            llama_sample_top_p(ctx, &candidates_p, top_p);
+            llama_sample_tail_free(ctx, &candidates_p, tfs_z, 1);
+            llama_sample_typical(ctx, &candidates_p, typical_p, 1);
+            llama_sample_top_p(ctx, &candidates_p, top_p, 1);
             llama_sample_temperature(ctx, &candidates_p, temp);
             id = llama_sample_token(ctx, &candidates_p);
           }
@@ -385,9 +379,10 @@ std::string Llama::inference() {
 
       // add it to the context
       embd.push_back(id);
+
       for (auto id : embd)
       {
-        result += llama_token_to_str(ctx, id);
+        result = id;
         tokens_completion++;
       }
       // decrement remaining sampling budget
@@ -442,6 +437,72 @@ std::string Llama::inference() {
     return result;
 }
 
+std::string Llama::inference() {
+  llama_token tkn = nextToken();
+  if(tkn == -1) {
+    return "";
+  }
+  std::vector<llama_token> tokens_completion;
+  tokens_completion.push_back(tkn);
+
+  // Avoid add the user or assistant tag to the response
+
+  int match_token = 1;
+  if(tokens_completion[0] == user_tag_tokens[0]) {
+    while(true) {
+      if(match_token == user_tag_tokens.size()) { // all user tag tokens matched, return empty inference
+        return "";
+      }
+      tkn = nextToken();
+      tokens_completion.push_back(tkn);
+      if(tkn == user_tag_tokens[match_token]) { // the token follow the sequence
+        match_token++;
+      } else if(match_token < user_tag_tokens.size()) { // no complete all user tag
+        break;
+      }
+    }
+  }
+  if(tokens_completion[0] == assistant_tag_tokens[0]) {
+    bool execute_matching = true;
+    if(tokens_completion.size() > 1) { // if user tag had been tested
+      for(int i = 1;i < assistant_tag_tokens.size(); i++) {
+        if(i >= tokens_completion.size()) {
+          match_token = i;
+          break;
+        }
+        if(tokens_completion[i] == assistant_tag_tokens[i]) {
+          continue;
+        } else {
+          execute_matching = false;
+          break;
+        }
+      }
+    }
+    while(execute_matching) {
+      if(match_token == assistant_tag_tokens.size()) { // all assistant tag tokens matched, return empty inference
+        return "";
+      }
+      tkn = nextToken();
+      tokens_completion.push_back(tkn);
+      if(tkn == assistant_tag_tokens[match_token]) { // the token follow the sequence
+        match_token++;
+      } else if(match_token < assistant_tag_tokens.size()) { // no complete all user tag
+        break;
+      }
+    }
+  }
+  std::string result = "";
+  for(llama_token token : tokens_completion) {
+    result += llama_token_to_str(ctx, token);
+  }
+  return result;
+}
+
+void Llama::release() {
+  // TODO: Clean the context
+  // llama_free(ctx);
+}
+
 void server_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "usage: %s [options]\n", argv[0]);
     fprintf(stderr, "\n");
@@ -456,13 +517,14 @@ void server_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     if (llama_mmap_supported()) {
         fprintf(stderr, "  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
     }
+    fprintf(stderr, "  -ngl N, --n-gpu-layers N\n");
+    fprintf(stderr, "                        number of layers to store in VRAM\n");
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
     fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
     fprintf(stderr, "  -host                 ip address to listen (default 0.0.0.0)\n");
     fprintf(stderr, "  -port PORT            port to listen (default 8080)\n");
     fprintf(stderr, "\n");
 }
-
 
 int main(int argc, char ** argv) {
 
@@ -481,32 +543,35 @@ int main(int argc, char ** argv) {
   for (int i = 1; i < argc; i++)
   {
         arg = argv[i];
-        if (arg == "--port")
-        {
-        if (++i >= argc)
-        {
-          invalid_param = true;
-          break;
+        if (arg == "--port") {
+          if (++i >= argc) {
+            invalid_param = true;
+            break;
+          }
+          port = std::stoi(argv[i]);
+        } else if (arg == "--host") {
+            if (++i >= argc)
+            {
+              invalid_param = true;
+              break;
+            }
+            hostname = argv[i];
+        }  else if (arg == "--keep") {
+            if (++i >= argc) {
+              invalid_param = true;
+              break;
+            }
+            params.n_keep = std::stoi(argv[i]);
         }
-        port = std::stoi(argv[i]);
-        }
-        else if (arg == "--host")
-        {
-        if (++i >= argc)
-        {
-          invalid_param = true;
-          break;
-        }
-        hostname = argv[i];
-        }
-        else if (arg == "--keep")
-        {
-        if (++i >= argc)
-        {
-          invalid_param = true;
-          break;
-        }
-        params.n_keep = std::stoi(argv[i]);
+        else if (arg == "-s" || arg == "--seed") {
+#if defined(GGML_USE_CUBLAS)
+            fprintf(stderr, "WARNING: when using cuBLAS generation results are NOT guaranteed to be reproducible.\n");
+#endif
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.seed = std::stoi(argv[i]);
         }
         else if (arg == "-m" || arg == "--model")
         {
@@ -533,15 +598,22 @@ int main(int argc, char ** argv) {
         }
         else if (arg == "--memory_f32")
         {
-        params.memory_f16 = false;
+            params.memory_f16 = false;
+        }  else if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_gpu_layers = std::stoi(argv[i]);
         }
         else
         {
-        fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
-        server_print_usage(argc, argv, default_params);
-        exit(1);
+            fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
+            server_print_usage(argc, argv, default_params);
+            exit(1);
         }
   }
+  
   if (invalid_param)
   {
         fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
@@ -557,8 +629,6 @@ int main(int argc, char ** argv) {
   fprintf(stderr, "%s: seed = %d\n", __func__, params.seed);
 
   Llama* llama = new Llama(params);
-
-  // load model file
   if(!llama->load_context()) {
     return 1;
   }
@@ -572,11 +642,13 @@ int main(int argc, char ** argv) {
   );
 
   svr.Post("/setting-context", [&llama](const Request &req, Response &res) {
-            if(!llama->context_config){
+            if(!llama->context_config) {
               std::string err;
               Json body = Json::parse(req.body, err);
-              // seed whould be passed by the request, but seem 
-              // the current implementation need it in the load file
+              /*
+                Seed whould be passed by the request, but seem 
+                the current implementation need it in the load file
+              */
               if (!body["threads"].is_null())
               {
                 llama->params.n_threads = body["threads"].int_value();
@@ -591,21 +663,26 @@ int main(int argc, char ** argv) {
               }
               if (!body["top_p"].is_null())
               {
-                llama->params.top_p = body["top_p"].number_value();
+                llama->params.top_p = (float)body["top_p"].number_value();
               }
               if (!body["temperature"].is_null())
               {
-                llama->params.temp = body["temperature"].number_value();
+                llama->params.temp = (float)body["temperature"].number_value();
               }
               if (!body["batch_size"].is_null())
               {
-                llama->params.n_batch = body["batch_size"].number_value();
+                llama->params.n_batch = body["batch_size"].int_value();
+              }
+              if (!body["tags"].is_null())
+              {
+                Json tags = body["tags"].object_items();
+                llama->user_tag = tags["user"].string_value();
+                llama->assistant_tag = tags["assistant"].string_value();
               }
               if (!body["context"].is_null())
               {
                 llama->params.prompt = "";
                 Json::array context_messages = body["context"].array_items();
-                // generate prompt for vicuna model v1
                 for (Json ctx_msg : context_messages)
                 {
                   auto role = ctx_msg["role"].string_value();
@@ -615,20 +692,24 @@ int main(int argc, char ** argv) {
                   }
                   else if (role == "user")
                   {
-                    llama->params.prompt += "### Human: " + ctx_msg["content"].string_value() + "\n";
+                    llama->params.prompt += llama->user_tag + " " + ctx_msg["content"].string_value() + "\n";
                   }
                   else if (role == "assistant")
                   {
-                    llama->params.prompt += "### Assistant: " + ctx_msg["content"].string_value() + "\n";
+                    llama->params.prompt += llama->assistant_tag + " " + ctx_msg["content"].string_value() + "\n";
                   }
                 }
-                llama->params.prompt += "### Human:";
+                llama->params.prompt += llama->user_tag;
+              }
+              else if (!body["prompt"].is_null())
+              {
+                llama->params.prompt = body["prompt"].string_value();
               }
               else
               {
                 Json data = Json::object{
                     {"status", "error"},
-                    {"reason", "Missing Context"}};
+                    {"reason", "You need to pass the context or prompt"}};
                 res.set_content(data.dump(), "application/json");
                 res.status = 400;
                 return;
@@ -643,10 +724,9 @@ int main(int argc, char ** argv) {
                 res.status = 400;
                 return;
               }
-
               // Default configs for interactive with Vicuna model
               llama->params.interactive = true;
-              llama->params.antiprompt.push_back("### Human:");
+              llama->params.antiprompt.push_back(llama->user_tag);
               llama->params.repeat_last_n = 64;
               llama->params.repeat_penalty = 1.1f;
               llama->setting_context();
@@ -681,28 +761,17 @@ int main(int argc, char ** argv) {
                 "application/json",
                 [&llama](size_t offset, DataSink &sink)
                 {
-                  int ignore = 0;
                   llama->tokens_completion = 0;
                   while(!llama->is_antiprompt) {
                     std::string result = llama->inference();
-                    // ignore ### Human: and ### Assistant:
-                    if(result == "##") {
-                      ignore = 5;
-                    }
-                    if(ignore == 0) {
-                      Json data = Json::object{
-                          {"content", result.c_str()},
-                          {"tokens_consumed", 1 }};
-                      std::string json_data = data.dump();
-                      sink.write(json_data.c_str(), json_data.length());
-                    } else {
-                      ignore--;
-                    }
-                    printf("\rProcessing: %i tokens processed.", llama->tokens_completion);
+                    Json data = Json::object{
+                        {"content", result.c_str()},
+                        {"tokens_consumed", 1},
+                        {"stop", llama->is_antiprompt }};
+                    std::string json_data = data.dump();
+                    sink.write(json_data.c_str(), json_data.length());
                   }
-                  sink.write("[DONE]", 6);
                   sink.done(); // No more data
-                  printf("\rCompletion finished: %i tokens predicted.\n", llama->tokens_completion);
                   return true; // return 'false' if you want to cancel the process.
                 });
             } else {
@@ -721,7 +790,6 @@ int main(int argc, char ** argv) {
                 if (ignore == 0)
                 {
                   completion += result;
-                  printf("\rProcessing: %i tokens processed.", llama->tokens_completion);
                 }
                 else
                 {
@@ -732,7 +800,6 @@ int main(int argc, char ** argv) {
                 { "content", completion.c_str() },
                 { "total_tokens", llama->tokens_completion }
               };
-            printf("\rCompletion finished: %i tokens predicted.\n", llama->tokens_completion);
             res.set_content(data.dump(), "application/json");
             }
   });

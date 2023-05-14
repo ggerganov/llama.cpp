@@ -10,19 +10,25 @@
 #include <thread>
 #include <unordered_map>
 
+#if !defined (_WIN32)
+#include <stdio.h>
+#include <termios.h>
+#endif
+
 //
 // CLI argument parsing
 //
 int32_t get_num_physical_cores();
 
 struct gpt_params {
-    int32_t seed          = -1;   // RNG seed
+    int32_t seed          = -1;  // RNG seed
     int32_t n_threads     = get_num_physical_cores();
     int32_t n_predict     = -1;  // new tokens to predict
-    int32_t n_parts       = -1;   // amount of model parts (-1 = determine from model dimensions)
-    int32_t n_ctx         = 512;  // context size
-    int32_t n_batch       = 512;  // batch size for prompt processing (must be >=32 to use BLAS)
-    int32_t n_keep        = 0;    // number of tokens to keep from initial prompt
+    int32_t n_parts       = -1;  // amount of model parts (-1 = determine from model dimensions)
+    int32_t n_ctx         = 512; // context size
+    int32_t n_batch       = 512; // batch size for prompt processing (must be >=32 to use BLAS)
+    int32_t n_keep        = 0;   // number of tokens to keep from initial prompt
+    int32_t n_gpu_layers  = 0;   // number of layers to store in VRAM
 
     // sampling parameters
     std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
@@ -41,8 +47,9 @@ struct gpt_params {
 
     std::string model  = "models/lamma-7B/ggml-model.bin"; // model path
     std::string prompt = "";
-    std::string path_session = "";       // path to file for saving/loading model eval state
-    std::string input_prefix = "";       // string to prefix user inputs with
+    std::string path_prompt_cache = "";  // path to file for saving/loading prompt eval state
+    std::string input_prefix      = "";  // string to prefix user inputs with
+    std::string input_suffix      = "";  // string to suffix user inputs with
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
 
     std::string lora_adapter = "";  // lora adapter path
@@ -52,9 +59,11 @@ struct gpt_params {
     bool random_prompt     = false; // do not randomize prompt if none provided
     bool use_color         = false; // use color to distinguish generations and inputs
     bool interactive       = false; // interactive mode
+    bool prompt_cache_all  = false; // save user input and generations to prompt cache
 
     bool embedding         = false; // get only sentence embedding
     bool interactive_first = false; // wait for user input immediately
+    bool multiline_input   = false; // reverse the usage of `\`
 
     bool instruct          = false; // instruction mode (used for Alpaca models)
     bool penalize_nl       = true;  // consider newlines as a repeatable token
@@ -103,13 +112,20 @@ enum console_color_t {
 };
 
 struct console_state {
+    bool multiline_input = false;
     bool use_color = false;
     console_color_t color = CONSOLE_COLOR_DEFAULT;
+
+    FILE* out = stdout;
+#if defined (_WIN32)
+    void* hConsole;
+#else
+    FILE* tty = nullptr;
+    termios prev_state;
+#endif
 };
 
-void set_console_color(console_state & con_st, console_color_t color);
-
-#if defined (_WIN32)
-void win32_console_init(bool enable_color);
-void win32_utf8_encode(const std::wstring & wstr, std::string & str);
-#endif
+void console_init(console_state & con_st);
+void console_cleanup(console_state & con_st);
+void console_set_color(console_state & con_st, console_color_t color);
+bool console_readline(console_state & con_st, std::string & line);

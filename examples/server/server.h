@@ -21,12 +21,16 @@ class Llama{
         bool prompt_test();
         void setting_context();
         int set_message(std::string msg);
+        void release();
+        
+        llama_token nextToken();
         std::string inference();
 
         bool context_config = false;
         bool is_antiprompt = false;
         int tokens_completion = 0;
         gpt_params params;
+        std::string user_tag = "### Human:", assistant_tag = "### Assistant:";
     private:
         llama_context *ctx;
         int n_ctx;
@@ -39,4 +43,8 @@ class Llama{
         bool is_interacting = false;
         std::vector<int> llama_token_newline;
         std::vector<int> embd_inp;
+
+        // to ignore this in the completion
+        std::vector<int> user_tag_tokens;
+        std::vector<int> assistant_tag_tokens;
 };
