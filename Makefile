@@ -74,6 +74,15 @@ ifeq ($(UNAME_S),Haiku)
 	CXXFLAGS += -pthread
 endif
 
+ifdef LLAMA_GPROF
+	CFLAGS   += -pg
+	CXXFLAGS += -pg
+endif
+ifdef LLAMA_PERF
+	CFLAGS   += -DGGML_PERF
+	CXXFLAGS += -DGGML_PERF
+endif
+
 # Architecture specific
 # TODO: probably these flags need to be tweaked on some architectures
 #       feel free to update the Makefile for your architecture and send a pull request or issue
@@ -147,14 +156,6 @@ ifdef LLAMA_HIPBLAS
 ggml-cuda.o: CXXFLAGS += $(addprefix --offload-arch=,$(GPU_TARGETS))
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(CXX) $(CXXFLAGS) -x hip -c -o $@ $<
-endif
-ifdef LLAMA_GPROF
-	CFLAGS   += -pg
-	CXXFLAGS += -pg
-endif
-ifdef LLAMA_PERF
-	CFLAGS   += -DGGML_PERF
-	CXXFLAGS += -DGGML_PERF
 endif
 ifneq ($(filter aarch64%,$(UNAME_M)),)
 	# Apple M1, M2, etc.

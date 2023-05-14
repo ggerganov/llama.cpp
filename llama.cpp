@@ -9,6 +9,9 @@
 #include "llama.h"
 
 #include "ggml.h"
+#ifdef GGML_USE_CUBLAS
+#include "ggml-cuda.h"
+#endif
 
 #include <array>
 #include <ctime>
@@ -810,6 +813,7 @@ struct llama_context_params llama_context_default_params() {
     struct llama_context_params result = {
         /*.n_ctx                       =*/ 512,
         /*.n_parts                     =*/ -1,
+        /*.gpu_layers                  =*/ 0,
         /*.seed                        =*/ -1,
         /*.f16_kv                      =*/ false,
         /*.logits_all                  =*/ false,
@@ -876,6 +880,7 @@ static void llama_model_load_internal(
         const std::string & fname,
         llama_context & lctx,
         int n_ctx,
+        int n_gpu_layers,
         ggml_type memory_type,
         bool use_mmap,
         bool use_mlock,
@@ -1022,6 +1027,35 @@ static void llama_model_load_internal(
     ml->load_all_data(progress_callback, progress_callback_user_data, use_mlock ? &lctx.model.mlock_mmap : NULL);
 
     model.mapping = std::move(ml->mapping);
+#ifdef GGML_USE_CUBLAS
+    {
+        const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
+
+        fprintf(stderr, "%s: [cublas] offloading %d layers to GPU\n", __func__, n_gpu);
+
+        size_t vram_total = 0;
+
+        for (int i = 0; i < n_gpu; ++i) {
+            const auto & layer = model.layers[i];
+
+            ggml_cuda_transform_tensor(layer.wq); vram_total += ggml_nbytes(layer.wq);
+            ggml_cuda_transform_tensor(layer.wk); vram_total += ggml_nbytes(layer.wk);
+            ggml_cuda_transform_tensor(layer.wv); vram_total += ggml_nbytes(layer.wv);
+            ggml_cuda_transform_tensor(layer.wo); vram_total += ggml_nbytes(layer.wo);
+            ggml_cuda_transform_tensor(layer.w1); vram_total += ggml_nbytes(layer.w1);
+            ggml_cuda_transform_tensor(layer.w2); vram_total += ggml_nbytes(layer.w2);
+            ggml_cuda_transform_tensor(layer.w3); vram_total += ggml_nbytes(layer.w3);
+        }
+        if (n_gpu_layers > (int) hparams.n_layer) {
+            fprintf(stderr, "%s: [cublas] offloading output layer to GPU\n", __func__);
+            ggml_cuda_transform_tensor(model.output); vram_total += ggml_nbytes(model.output);
+        }
+
+        fprintf(stderr, "%s: [cublas] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
+    }
+#else
+    (void) n_gpu_layers;
+#endif
 
     // loading time will be recalculate after the first eval, so
     // we take page faults deferred by mmap() into consideration
@@ -1032,6 +1066,7 @@ static bool llama_model_load(
         const std::string & fname,
         llama_context & lctx,
         int n_ctx,
+        int n_gpu_layers,
         ggml_type memory_type,
         bool use_mmap,
         bool use_mlock,
@@ -1039,7 +1074,7 @@ static bool llama_model_load(
         llama_progress_callback progress_callback,
         void *progress_callback_user_data) {
     try {
-        llama_model_load_internal(fname, lctx, n_ctx, memory_type, use_mmap, use_mlock,
+        llama_model_load_internal(fname, lctx, n_ctx, n_gpu_layers, memory_type, use_mmap, use_mlock,
                                   vocab_only, progress_callback, progress_callback_user_data);
         return true;
     } catch (const std::string & err) {
@@ -1128,8 +1163,8 @@ static bool llama_eval_internal(
         // self-attention
         {
             // compute Q and K and RoPE them
-            struct ggml_tensor * Qcur = ggml_rope(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
-            struct ggml_tensor * Kcur = ggml_rope(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wk, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
+            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
+            struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wk, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
             ggml_set_name(Qcur, "Qcur");
             ggml_set_name(Kcur, "Kcur");
 
@@ -1170,16 +1205,18 @@ static bool llama_eval_internal(
             struct ggml_tensor * KQ_scale = ggml_new_f32(ctx0, 1.0f/sqrtf(float(n_embd)/n_head));
             ggml_set_name(KQ_scale, "1/sqrt(n_embd/n_head)");
 
-            struct ggml_tensor * KQ_scaled = ggml_scale(ctx0, KQ, KQ_scale);
+            // KQ_scaled shape [n_past + N, N, n_head, 1]
+            struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx0, KQ, KQ_scale);
             ggml_set_name(KQ_scaled, "KQ_scaled");
 
             // KQ_masked = mask_past(KQ_scaled)
-            struct ggml_tensor * KQ_masked = ggml_diag_mask_inf(ctx0, KQ_scaled, n_past);
+            struct ggml_tensor * KQ_masked = ggml_diag_mask_inf_inplace(ctx0, KQ_scaled, n_past);
             ggml_set_name(KQ_masked, "KQ_masked");
 
             // KQ = soft_max(KQ_masked)
-            struct ggml_tensor * KQ_soft_max = ggml_soft_max(ctx0, KQ_masked);
+            struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx0, KQ_masked);
             ggml_set_name(KQ_soft_max, "KQ_soft_max");
+
 
             // split cached V into n_head heads
             struct ggml_tensor * V =
@@ -1281,7 +1318,7 @@ static bool llama_eval_internal(
     lctx.use_buf(ctx0, -1);
 
     // logits -> probs
-    //inpL = ggml_soft_max(ctx0, inpL);
+    //inpL = ggml_soft_max_inplace(ctx0, inpL);
 
     // run the computation
     ggml_build_forward_expand(&gf, inpL);
@@ -2109,7 +2146,7 @@ struct llama_context * llama_init_from_file(
 
     ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
-    if (!llama_model_load(path_model, *ctx, params.n_ctx, memory_type,
+    if (!llama_model_load(path_model, *ctx, params.n_ctx, params.n_gpu_layers, memory_type,
                           params.use_mmap, params.use_mlock, params.vocab_only,
                           params.progress_callback, params.progress_callback_user_data)) {
         fprintf(stderr, "%s: failed to load model\n", __func__);
@@ -2375,7 +2412,7 @@ int llama_apply_lora_from_file_internal(struct llama_context * ctx, const char *
 
             if (scaling != 1.0f) {
                 ggml_tensor * scale_tensor = ggml_new_f32(lora_ctx, scaling);
-                BA = ggml_scale(lora_ctx, BA, scale_tensor);
+                BA = ggml_scale_inplace(lora_ctx, BA, scale_tensor);
             }
 
             ggml_tensor * r;
