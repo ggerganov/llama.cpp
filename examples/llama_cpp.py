@@ -70,7 +70,7 @@ _lib_base_name = "llama"
 _lib = _load_shared_library(_lib_base_name)
 
 # C types
-LLAMA_FILE_VERSION = c_int(1)
+LLAMA_FILE_VERSION = c_int(2)
 LLAMA_FILE_MAGIC = b"ggjt"
 LLAMA_FILE_MAGIC_UNVERSIONED = b"ggml"
 LLAMA_SESSION_MAGIC = b"ggsn"
@@ -111,6 +111,7 @@ class llama_context_params(Structure):
     _fields_ = [
         ("n_ctx", c_int),  # text context
         ("n_parts", c_int),  # -1 for default
+        ("n_gpu_layers", c_int),  # number of layers to store in VRAM
         ("seed", c_int),  # RNG seed, 0 for random
         ("f16_kv", c_bool),  # use fp16 for KV cache
         (
@@ -137,7 +138,7 @@ LLAMA_FTYPE_MOSTLY_Q4_1 = c_int(3)  # except 1d tensors
 LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = c_int(
     4
 )  # tok_embeddings.weight and output.weight are F16
-LLAMA_FTYPE_MOSTLY_Q4_2 = c_int(5)  # except 1d tensors
+# LLAMA_FTYPE_MOSTLY_Q4_2 = c_int(5)  # except 1d tensors
 # LLAMA_FTYPE_MOSTLY_Q4_3 = c_int(6)  # except 1d tensors
 LLAMA_FTYPE_MOSTLY_Q8_0 = c_int(7)  # except 1d tensors
 LLAMA_FTYPE_MOSTLY_Q5_0 = c_int(8)  # except 1d tensors
@@ -261,9 +262,9 @@ _lib.llama_get_state_size.restype = c_size_t
 # Destination needs to have allocated enough memory.
 # Returns the number of bytes copied
 def llama_copy_state_data(
-    ctx: llama_context_p, dest  # type: Array[c_uint8]
+    ctx: llama_context_p, dst  # type: Array[c_uint8]
 ) -> int:
-    return _lib.llama_copy_state_data(ctx, dest)
+    return _lib.llama_copy_state_data(ctx, dst)
 
 
 _lib.llama_copy_state_data.argtypes = [llama_context_p, c_uint8_p]
