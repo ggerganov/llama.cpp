@@ -10470,7 +10470,7 @@ static void ggml_compute_forward_diag_mask_f32(
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
-    
+
     // TODO: handle transposed/permuted matrices
 
     const int n  = ggml_nrows(src0);
