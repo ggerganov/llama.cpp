@@ -4,7 +4,7 @@
 #include "common.h"
 #include "llama.h"
 
-/* 
+/*
     This isn't the best way to do this.
 
     Missing:
@@ -22,7 +22,7 @@ class Llama{
         void setting_context();
         int set_message(std::string msg);
         void release();
-        
+
         llama_token nextToken();
         std::string inference();
 

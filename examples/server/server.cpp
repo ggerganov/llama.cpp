@@ -44,7 +44,7 @@ bool Llama::load_context() {
 
 bool Llama::prompt_test() {
   embd_inp = ::llama_tokenize(ctx, params.prompt, true);
-  
+
   if ((int)embd_inp.size() > n_ctx - 4)
   {
     fprintf(stderr, "%s: error: prompt is too long (%d tokens, max %d)\n", __func__, (int)embd_inp.size(), n_ctx - 4);
@@ -71,7 +71,7 @@ void Llama::setting_context() {
     fprintf(stderr, "system_info: n_threads = %d / %d | %s\n",
             params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
   }
-  
+
   fprintf(stderr, "sampling: repeat_last_n = %d, repeat_penalty = %f, presence_penalty = %f, frequency_penalty = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f, mirostat = %d, mirostat_lr = %f, mirostat_ent = %f\n",
           params.repeat_last_n, params.repeat_penalty, params.presence_penalty, params.frequency_penalty, params.top_k, params.tfs_z, params.top_p, params.typical_p, params.temp, params.mirostat, params.mirostat_eta, params.mirostat_tau);
   fprintf(stderr, "generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
@@ -636,7 +636,7 @@ int main(int argc, char ** argv) {
   Server svr;
 
   svr.Get("/", [](const Request &req, Response &res)
-          { 
+          {
             res.set_content("<h1>llama.cpp server works</h1>", "text/html");
           }
   );
@@ -645,7 +645,7 @@ int main(int argc, char ** argv) {
             if(!llama->context_config) {
               json body = json::parse(req.body);
               /*
-                Seed whould be passed by the request, but seem 
+                Seed whould be passed by the request, but seem
                 the current implementation need it in the load file
               */
               if (!body["threads"].is_null())
@@ -747,7 +747,7 @@ int main(int argc, char ** argv) {
   });
 
   svr.Get("/completion", [&llama](const Request &req, Response &res)
-          { 
+          {
             bool stream = false;
             if (req.has_param("stream")) {
                 stream = req.get_param_value("stream") == "true";
@@ -788,7 +788,7 @@ int main(int argc, char ** argv) {
   });
 
   printf("llama.cpp HTTP Server Listening at http://%s:%i", hostname.c_str(), port);
-  
+
   // change hostname and port
   svr.listen(hostname, port);
 }

@@ -108,8 +108,9 @@ Options:
 
 `threads`: Set the number of threads to use during computation.
 
-`context`: Set a short conversation as context. 
-Insert a array of this form: `{ role: "user", content: "Hello, Assistant." }`, where:
+`context`: Set a short conversation as context.
+
+Insert items to an array of this form: `{ role: "user", content: "Hello, Assistant." }`, where:
 
 `role` can be `system`, `assistant` and `user`.
 
