@@ -10321,20 +10321,23 @@ static void ggml_compute_forward_diag_mask_f32(
     assert(src1->type == GGML_TYPE_I32);
     assert(ggml_nelements(src1) == 2);
 
-    if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
-        return;
-    }
-
     const int ith = params->ith;
     const int nth = params->nth;
 
     const int  n_past  =       ((int32_t *) src1->data)[0];
     const bool inplace = (bool)((int32_t *) src1->data)[1];
 
-    if (!inplace) {
+
+    if (!inplace && (params->type == GGML_TASK_INIT)) {
+        // dup needs to be synchronized across threads to avoid race conditions.
+        // => do it in INIT phase
         ggml_compute_forward_dup_same_cont(params, src0, dst);
     }
 
+    if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
+        return;
+    }
+    
     // TODO: handle transposed/permuted matrices
 
     const int n  = ggml_nrows(src0);
