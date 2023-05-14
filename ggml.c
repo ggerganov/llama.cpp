@@ -10506,7 +10506,6 @@ static void ggml_compute_forward_diag_mask_f32(
 
     const int  n_past  =       ((int32_t *) src1->data)[0];
     const bool inplace = (bool)((int32_t *) src1->data)[1];
-  
     assert(n_past >= 0);
 
     if (!inplace && (params->type == GGML_TASK_INIT)) {
