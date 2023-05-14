@@ -1075,7 +1075,7 @@ static void llama_model_load_internal(
             ggml_cl_transform_tensor(layer.w3); vram_total += ggml_nbytes(layer.w3);
         }
         if (n_gpu_layers > (int) hparams.n_layer) {
-            fprintf(stderr, "%s: [cublas] offloading output layer to GPU\n", __func__);
+            fprintf(stderr, "%s: [opencl] offloading output layer to GPU\n", __func__);
             ggml_cl_transform_tensor(model.output); vram_total += ggml_nbytes(model.output);
         }
 
