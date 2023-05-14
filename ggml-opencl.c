@@ -138,7 +138,6 @@ static cl_platform_id platform;
 static cl_device_id device;
 static cl_context context;
 static cl_command_queue queue;
-static cl_bool out_of_order;
 static cl_program program;
 static cl_kernel kernel_q4_0, kernel_q4_1, kernel_q5_0, kernel_q5_1, kernel_q8_0;
 static cl_mem cl_buffer_a, cl_buffer_qb, cl_buffer_b, cl_buffer_c;
@@ -214,11 +213,10 @@ void ggml_cl_init(void) {
         }
     }
 
-    text_buffer[0] = 0;
     device = NULL;
     char * GGML_OPENCL_DEVICE = getenv("GGML_OPENCL_DEVICE");
     if (GGML_OPENCL_DEVICE != NULL) {
-        cl_device_id devices[16];
+        cl_device_id devices[NDEV];
         cl_uint num_devices;
         clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, NDEV, devices, &num_devices);
 
@@ -284,10 +282,8 @@ void ggml_cl_init(void) {
         fprintf(stderr, "ggml_opencl: using device: '%s'\n", text_buffer);
     }
 
-    out_of_order = CL_TRUE;
     queue = clCreateCommandQueue(context, device, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &err);
     if (err == CL_INVALID_PROPERTY || err == CL_INVALID_VALUE) {
-        out_of_order = CL_FALSE;
         queue = clCreateCommandQueue(context, device, 0, &err);
     }
     CL_CHECK(err, "clCreateCommandQueue");
