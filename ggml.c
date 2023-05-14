@@ -10358,8 +10358,8 @@ static void ggml_compute_forward_diag_mask_f32(
         const struct ggml_tensor * src1,
         struct ggml_tensor * dst,
         const float value) {
-    assert(src1->type == GGML_TYPE_I32);
-    assert(ggml_nelements(src1) == 2);
+    GGML_ASSERT(src1->type == GGML_TYPE_I32);
+    GGML_ASSERT(ggml_nelements(src1) == 2);
 
     const int ith = params->ith;
     const int nth = params->nth;
@@ -10369,9 +10369,12 @@ static void ggml_compute_forward_diag_mask_f32(
 
 
     if (!inplace && (params->type == GGML_TASK_INIT)) {
-        // dup needs to be synchronized across threads to avoid race conditions.
+        // memcpy needs to be synchronized across threads to avoid race conditions.
         // => do it in INIT phase
-        ggml_compute_forward_dup_same_cont(params, src0, dst);
+        memcpy(
+            ((char *)  dst->data),
+            ((char *) src0->data),
+            ggml_nbytes(dst));
     }
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -10385,8 +10388,8 @@ static void ggml_compute_forward_diag_mask_f32(
     const int nr = src0->ne[1];
     const int nz = n/nr;
 
-    assert( dst->nb[0] == sizeof(float));
-    assert(src0->nb[0] == sizeof(float));
+    GGML_ASSERT( dst->nb[0] == sizeof(float));
+    GGML_ASSERT(src0->nb[0] == sizeof(float));
 
     for (int k = 0; k < nz; k++) {
         for (int j = ith; j < nr; j += nth) {
