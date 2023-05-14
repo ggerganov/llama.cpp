@@ -135,7 +135,19 @@ __kernel void dequantize_row_q8_0(__global struct block_q8_0* x, __global float*
     y[i*32 + j] = x[i].qs[j]*d;
 }
 
-__kernel void dequantize_mul_mat_vec(__global struct block_q4_0* x, __local float* tmp, __global float* y, __global float* dst, int ncols) {
+void dequantize_q4_0(__global const struct block_q4_0* x, const int ib, const int iqs, float* v0, float* v1) {
+    const float d = x[ib].d;
+
+    const uint8_t vui = x[ib].qs[iqs];
+
+    const int8_t vi0 = vui & 0xF;
+    const int8_t vi1 = vui >> 4;
+
+    *v0 = (vi0 - 8)*d;
+    *v1 = (vi1 - 8)*d;
+}
+
+__kernel void dequantize_mul_mat_vec_q4_0(__global struct block_q4_0* x, __local float* tmp, __global float* y, __global float* dst, const int ncols) {
     const int block_size = get_local_size(0);
     const int row = get_global_id(0) / block_size;
     const int tid = get_local_id(0);
@@ -155,15 +167,261 @@ __kernel void dequantize_mul_mat_vec(__global struct block_q4_0* x, __local floa
 
         // dequantize
         float v0, v1;
-        const float d = vload_half(0, &x[ib].d);
+        dequantize_q4_0(x, ib, iqs, &v0, &v1);
 
-        const uint8_t vui = x[ib].qs[iqs];
+        // matrix multiplication
+        tmp[tid] += v0 * y[iybs + iqs + 0];
+        tmp[tid] += v1 * y[iybs + iqs + y_offset];
+    }
 
-        const int8_t vi0 = vui & 0xF;
-        const int8_t vi1 = vui >> 4;
+    // sum up partial sums and write back result
+    barrier(CLK_LOCAL_MEM_FENCE);
+    for (int s=block_size/2; s>0; s>>=1) {
+        if (tid < s) {
+            tmp[tid] += tmp[tid + s];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+    if (tid == 0) {
+        dst[row] = tmp[0];
+    }
+}
 
-        float v0 = (vi0 - 8)*d;
-        float v1 = (vi1 - 8)*d;
+void dequantize_q4_1(__global const struct block_q4_1* x, const int ib, const int iqs, float* v0, float* v1) {
+    const float d = x[ib].d;
+    const float m = x[ib].m;
+
+    const uint8_t vui = x[ib].qs[iqs];
+
+    const int8_t vi0 = vui & 0xF;
+    const int8_t vi1 = vui >> 4;
+
+    *v0 = vi0*d + m;
+    *v1 = vi1*d + m;
+}
+__kernel void dequantize_mul_mat_vec_q4_1(__global struct block_q4_1* x, __local float* tmp, __global float* y, __global float* dst, const int ncols) {
+    const int block_size = get_local_size(0);
+    const int row = get_global_id(0) / block_size;
+    const int tid = get_local_id(0);
+
+    const uint qk = QK4_1;
+    const uint qr = QR4_1;
+
+    const int y_offset = qr == 1 ? 1 : qk/2;
+
+    tmp[tid] = 0;
+
+    for (int i = 0; i < ncols/block_size; i += 2) {
+        const int col = i*block_size + 2*tid;
+        const int ib = (row*ncols + col)/qk; // block index
+        const int iqs = (col%qk)/qr; // quant index
+        const int iybs = col - col%qk; // y block start index
+
+        // dequantize
+        float v0, v1;
+        dequantize_q4_1(x, ib, iqs, &v0, &v1);
+
+        // matrix multiplication
+        tmp[tid] += v0 * y[iybs + iqs + 0];
+        tmp[tid] += v1 * y[iybs + iqs + y_offset];
+    }
+
+    // sum up partial sums and write back result
+    barrier(CLK_LOCAL_MEM_FENCE);
+    for (int s=block_size/2; s>0; s>>=1) {
+        if (tid < s) {
+            tmp[tid] += tmp[tid + s];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+    if (tid == 0) {
+        dst[row] = tmp[0];
+    }
+}
+
+void dequantize_q5_0(__global const struct block_q5_0* x, const int ib, const int iqs, float* v0, float* v1) {
+    const float d = vload_half(0, (__global half*) &x[ib].d);
+
+    uint32_t qh = x[ib].qh;
+
+    const uint8_t xh_0 = ((qh >> (iqs +  0)) << 4) & 0x10;
+    const uint8_t xh_1 = ((qh >> (iqs + 12))     ) & 0x10;
+
+    const int32_t x0 = ((x[ib].qs[iqs] & 0xf) | xh_0) - 16;
+    const int32_t x1 = ((x[ib].qs[iqs] >>  4) | xh_1) - 16;
+
+    *v0 = x0*d;
+    *v1 = x1*d;
+}
+__kernel void dequantize_mul_mat_vec_q5_0(__global struct block_q5_0* x, __local float* tmp, __global float* y, __global float* dst, const int ncols) {
+    const int block_size = get_local_size(0);
+    const int row = get_global_id(0) / block_size;
+    const int tid = get_local_id(0);
+
+    const uint qk = QK5_0;
+    const uint qr = QR5_0;
+
+    const int y_offset = qr == 1 ? 1 : qk/2;
+
+    tmp[tid] = 0;
+
+    for (int i = 0; i < ncols/block_size; i += 2) {
+        const int col = i*block_size + 2*tid;
+        const int ib = (row*ncols + col)/qk; // block index
+        const int iqs = (col%qk)/qr; // quant index
+        const int iybs = col - col%qk; // y block start index
+
+        // dequantize
+        float v0, v1;
+        dequantize_q5_0(x, ib, iqs, &v0, &v1);
+
+        // matrix multiplication
+        tmp[tid] += v0 * y[iybs + iqs + 0];
+        tmp[tid] += v1 * y[iybs + iqs + y_offset];
+    }
+
+    // sum up partial sums and write back result
+    barrier(CLK_LOCAL_MEM_FENCE);
+    for (int s=block_size/2; s>0; s>>=1) {
+        if (tid < s) {
+            tmp[tid] += tmp[tid + s];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+    if (tid == 0) {
+        dst[row] = tmp[0];
+    }
+}
+
+void dequantize_q5_1(__global const struct block_q5_1* x, const int ib, const int iqs, float* v0, float* v1) {
+    const float d = vload_half(0, (__global half*) &x[ib].d);
+    const float m = vload_half(0, (__global half*) &x[ib].m);
+
+    uint32_t qh = x[ib].qh;
+
+    const uint8_t xh_0 = ((qh >> (iqs +  0)) << 4) & 0x10;
+    const uint8_t xh_1 = ((qh >> (iqs + 12))     ) & 0x10;
+
+    const int32_t x0 = ((x[ib].qs[iqs] & 0xf) | xh_0);
+    const int32_t x1 = ((x[ib].qs[iqs] >>  4) | xh_1);
+
+    *v0 = x0*d + m;
+    *v1 = x1*d + m;
+}
+__kernel void dequantize_mul_mat_vec_q5_1(__global struct block_q5_1* x, __local float* tmp, __global float* y, __global float* dst, const int ncols) {
+    const int block_size = get_local_size(0);
+    const int row = get_global_id(0) / block_size;
+    const int tid = get_local_id(0);
+
+    const uint qk = QK5_1;
+    const uint qr = QR5_1;
+
+    const int y_offset = qr == 1 ? 1 : qk/2;
+
+    tmp[tid] = 0;
+
+    for (int i = 0; i < ncols/block_size; i += 2) {
+        const int col = i*block_size + 2*tid;
+        const int ib = (row*ncols + col)/qk; // block index
+        const int iqs = (col%qk)/qr; // quant index
+        const int iybs = col - col%qk; // y block start index
+
+        // dequantize
+        float v0, v1;
+        dequantize_q5_1(x, ib, iqs, &v0, &v1);
+
+        // matrix multiplication
+        tmp[tid] += v0 * y[iybs + iqs + 0];
+        tmp[tid] += v1 * y[iybs + iqs + y_offset];
+    }
+
+    // sum up partial sums and write back result
+    barrier(CLK_LOCAL_MEM_FENCE);
+    for (int s=block_size/2; s>0; s>>=1) {
+        if (tid < s) {
+            tmp[tid] += tmp[tid + s];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+    if (tid == 0) {
+        dst[row] = tmp[0];
+    }
+}
+
+void dequantize_q8_0(__global const struct block_q8_0* x, const int ib, const int iqs, float* v0, float* v1) {
+    const float d = x[ib].d;
+
+    const int8_t vi0 = x[ib].qs[iqs + 0];
+    const int8_t vi1 = x[ib].qs[iqs + 1];
+
+    *v0 = vi0*d;
+    *v1 = vi1*d;
+}
+__kernel void dequantize_mul_mat_vec_q8_0(__global struct block_q8_0* x, __local float* tmp, __global float* y, __global float* dst, const int ncols) {
+    const int block_size = get_local_size(0);
+    const int row = get_global_id(0) / block_size;
+    const int tid = get_local_id(0);
+
+    const uint qk = QK8_0;
+    const uint qr = QR8_0;
+
+    const int y_offset = qr == 1 ? 1 : qk/2;
+
+    tmp[tid] = 0;
+
+    for (int i = 0; i < ncols/block_size; i += 2) {
+        const int col = i*block_size + 2*tid;
+        const int ib = (row*ncols + col)/qk; // block index
+        const int iqs = (col%qk)/qr; // quant index
+        const int iybs = col - col%qk; // y block start index
+
+        // dequantize
+        float v0, v1;
+        dequantize_q8_0(x, ib, iqs, &v0, &v1);
+
+        // matrix multiplication
+        tmp[tid] += v0 * y[iybs + iqs + 0];
+        tmp[tid] += v1 * y[iybs + iqs + y_offset];
+    }
+
+    // sum up partial sums and write back result
+    barrier(CLK_LOCAL_MEM_FENCE);
+    for (int s=block_size/2; s>0; s>>=1) {
+        if (tid < s) {
+            tmp[tid] += tmp[tid + s];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+    if (tid == 0) {
+        dst[row] = tmp[0];
+    }
+}
+
+void convert_f16(__global half* x, const int ib, const int iqs, float* v0, float* v1){
+    *v0 = vload_half(0, (__global half*) &x[ib + 0]);
+    *v1 = vload_half(0, (__global half*) &x[ib + 1]);
+}
+__kernel void convert_mul_mat_vec_f16(__global half* x, __local float* tmp, __global float* y, __global float* dst, const int ncols) {
+    const int block_size = get_local_size(0);
+    const int row = get_global_id(0) / block_size;
+    const int tid = get_local_id(0);
+
+    const uint qk = 32;
+    const uint qr = 1;
+
+    const int y_offset = qr == 1 ? 1 : qk/2;
+
+    tmp[tid] = 0;
+
+    for (int i = 0; i < ncols/block_size; i += 2) {
+        const int col = i*block_size + 2*tid;
+        const int ib = (row*ncols + col)/qk; // block index
+        const int iqs = (col%qk)/qr; // quant index
+        const int iybs = col - col%qk; // y block start index
+
+        // convert
+        float v0, v1;
+        convert_f16(x, ib, iqs, &v0, &v1);
 
         // matrix multiplication
         tmp[tid] += v0 * y[iybs + iqs + 0];
@@ -211,7 +469,7 @@ static cl_command_queue queue;
 static cl_program program;
 static cl_kernel convert_fp16_to_fp32_cl;
 static cl_kernel dequantize_row_q4_0_cl, dequantize_row_q4_1_cl, dequantize_row_q5_0_cl, dequantize_row_q5_1_cl, dequantize_row_q8_0_cl;
-static cl_kernel dequantize_mul_mat_vec_cl;
+static cl_kernel dequantize_mul_mat_vec_q4_0_cl, dequantize_mul_mat_vec_q4_1_cl, dequantize_mul_mat_vec_q5_0_cl, dequantize_mul_mat_vec_q5_1_cl, dequantize_mul_mat_vec_q8_0_cl, convert_mul_mat_vec_f16_cl;
 static bool fp16_support;
 
 static cl_program build_program_from_source(cl_context ctx, cl_device_id dev, const char* program_buffer) {
@@ -433,7 +691,12 @@ void ggml_cl_init(void) {
     CL_CHECK((dequantize_row_q8_0_cl = clCreateKernel(program, "dequantize_row_q8_0", &err), err));
 
     // dequant mul mat kernel
-    CL_CHECK((dequantize_mul_mat_vec_cl = clCreateKernel(program, "dequantize_mul_mat_vec", &err), err));
+    CL_CHECK((dequantize_mul_mat_vec_q4_0_cl = clCreateKernel(program, "dequantize_mul_mat_vec_q4_0", &err), err));
+    CL_CHECK((dequantize_mul_mat_vec_q4_1_cl = clCreateKernel(program, "dequantize_mul_mat_vec_q4_1", &err), err));
+    CL_CHECK((dequantize_mul_mat_vec_q5_0_cl = clCreateKernel(program, "dequantize_mul_mat_vec_q5_0", &err), err));
+    CL_CHECK((dequantize_mul_mat_vec_q5_1_cl = clCreateKernel(program, "dequantize_mul_mat_vec_q5_1", &err), err));
+    CL_CHECK((dequantize_mul_mat_vec_q8_0_cl = clCreateKernel(program, "dequantize_mul_mat_vec_q8_0", &err), err));
+    CL_CHECK((convert_mul_mat_vec_f16_cl = clCreateKernel(program, "convert_mul_mat_vec_f16", &err), err));
 }
 
 static cl_kernel* ggml_get_to_fp32_cl(ggml_type type) {
@@ -458,17 +721,17 @@ static cl_kernel* ggml_get_to_fp32_cl(ggml_type type) {
 static cl_kernel* ggml_get_dequantize_mul_mat_vec_cl(ggml_type type) {
     switch (type) {
         case GGML_TYPE_Q4_0:
-            return &dequantize_mul_mat_vec_cl;
-        // case GGML_TYPE_Q4_1:
-        //     return dequantize_mul_mat_vec_q4_1_cl;
-        // case GGML_TYPE_Q5_0:
-        //     return dequantize_mul_mat_vec_q5_0_cl;
-        // case GGML_TYPE_Q5_1:
-        //     return dequantize_mul_mat_vec_q5_1_cl;
-        // case GGML_TYPE_Q8_0:
-        //     return dequantize_mul_mat_vec_q8_0_cl;
-        // case GGML_TYPE_F16:
-        //     return convert_mul_mat_vec_f16_cl;
+            return &dequantize_mul_mat_vec_q4_0_cl;
+        case GGML_TYPE_Q4_1:
+            return &dequantize_mul_mat_vec_q4_1_cl;
+        case GGML_TYPE_Q5_0:
+            return &dequantize_mul_mat_vec_q5_0_cl;
+        case GGML_TYPE_Q5_1:
+            return &dequantize_mul_mat_vec_q5_1_cl;
+        case GGML_TYPE_Q8_0:
+            return &dequantize_mul_mat_vec_q8_0_cl;
+        case GGML_TYPE_F16:
+            return &convert_mul_mat_vec_f16_cl;
         default:
             return nullptr;
     }
@@ -765,6 +1028,7 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
     }
 
     cl_kernel* to_fp32_cl = ggml_get_to_fp32_cl(type);
+    cl_kernel* dmmv = ggml_get_dequantize_mul_mat_vec_cl(type);
     GGML_ASSERT(to_fp32_cl != nullptr);
 
     for (int64_t i03 = 0; i03 < ne03; i03++) {
@@ -788,13 +1052,13 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
                 const size_t global = ne01 * CL_DMMV_BLOCK_SIZE;
                 const size_t local = CL_DMMV_BLOCK_SIZE;
                 const cl_int ncols = ne00;
-                CL_CHECK(clSetKernelArg(dequantize_mul_mat_vec_cl, 0, sizeof(cl_mem), &d_Q));
-                CL_CHECK(clSetKernelArg(dequantize_mul_mat_vec_cl, 1, sizeof(float) * local, NULL));
-                CL_CHECK(clSetKernelArg(dequantize_mul_mat_vec_cl, 2, sizeof(cl_mem), &d_Y));
-                CL_CHECK(clSetKernelArg(dequantize_mul_mat_vec_cl, 3, sizeof(cl_mem), &d_D));
-                CL_CHECK(clSetKernelArg(dequantize_mul_mat_vec_cl, 4, sizeof(cl_int), &ncols));
+                CL_CHECK(clSetKernelArg(*dmmv, 0, sizeof(cl_mem), &d_Q));
+                CL_CHECK(clSetKernelArg(*dmmv, 1, sizeof(float) * local, NULL));
+                CL_CHECK(clSetKernelArg(*dmmv, 2, sizeof(cl_mem), &d_Y));
+                CL_CHECK(clSetKernelArg(*dmmv, 3, sizeof(cl_mem), &d_D));
+                CL_CHECK(clSetKernelArg(*dmmv, 4, sizeof(cl_int), &ncols));
                 CL_CHECK(clFinish(queue));
-                CL_CHECK(clEnqueueNDRangeKernel(queue, dequantize_mul_mat_vec_cl, 1, NULL, &global, &local, 0, NULL, &ev_sgemm));
+                CL_CHECK(clEnqueueNDRangeKernel(queue, *dmmv, 1, NULL, &global, &local, 0, NULL, &ev_sgemm));
             } else { // general dequantization kernel + CLBlast matrix matrix multiplication
                 // convert src0 to fp32 on device
                 const size_t global = x_ne;
