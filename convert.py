@@ -1055,7 +1055,7 @@ def load_some_model(path: Path) -> ModelPlus:
         files = list(path.glob("model-00001-of-*.safetensors"))
         if not files:
             # Try the PyTorch patterns too, with lower priority
-            globs = ["consolidated.00.pth", "pytorch_model-00001-of-*.bin", "*.pt"]
+            globs = ["consolidated.00.pth", "pytorch_model-00001-of-*.bin", "*.pt", "pytorch_model.bin" ]
             files = [file for glob in globs for file in path.glob(glob)]
         if not files:
             # Try GGML too, but with lower priority, since if both a non-GGML
