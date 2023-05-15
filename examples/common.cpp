@@ -31,18 +31,18 @@ int32_t get_num_physical_cores() {
 #ifdef __linux__
     // enumerate the set of thread siblings, num entries is num cores
     std::unordered_set<std::string> siblings;
-    for(uint32_t cpu=0; cpu < UINT32_MAX; ++cpu) {
+    for (uint32_t cpu=0; cpu < UINT32_MAX; ++cpu) {
         std::ifstream thread_siblings("/sys/devices/system/cpu"
             + std::to_string(cpu) + "/topology/thread_siblings");
-        if(!thread_siblings.is_open()) {
+        if (!thread_siblings.is_open()) {
             break; // no more cpus
         }
         std::string line;
-        if(std::getline(thread_siblings, line)) {
+        if (std::getline(thread_siblings, line)) {
             siblings.insert(line);
         }
     }
-    if(siblings.size() > 0) {
+    if (siblings.size() > 0) {
         return static_cast<int32_t>(siblings.size());
     }
 #elif defined(__APPLE__) && defined(__MACH__)
