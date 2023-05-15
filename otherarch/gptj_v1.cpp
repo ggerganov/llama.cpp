@@ -407,7 +407,8 @@ bool legacy_gptj_eval(
     
 
     struct ggml_v1_context * ctx0 = ggml_v1_init(params);
-    struct ggml_v1_cgraph gf = { .n_threads = n_threads };
+    struct ggml_v1_cgraph gf = {};
+    gf.n_threads = n_threads;
 
     struct ggml_v1_tensor * embd = ggml_v1_new_tensor_1d(ctx0, GGML_V1_TYPE_I32, N);
     memcpy(embd->data, embd_inp.data(), N*ggml_v1_element_size(embd));
