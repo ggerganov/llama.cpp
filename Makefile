@@ -150,7 +150,12 @@ ifdef LLAMA_CUBLAS
 	LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
 	OBJS      += ggml-cuda.o
 	NVCC      = nvcc
-	NVCCFLAGS = --forward-unknown-to-host-compiler -arch=native
+	NVCCFLAGS = --forward-unknown-to-host-compiler
+ifdef CUDA_DOCKER_ARCH
+	NVCCFLAGS += -Wno-deprecated-gpu-targets -arch=$(CUDA_DOCKER_ARCH)
+else
+	NVCCFLAGS += -arch=native
+endif # CUDA_DOCKER_ARCH
 ifdef LLAMA_CUDA_DMMV_X
 	NVCCFLAGS += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
 else
@@ -161,6 +166,7 @@ ifdef LLAMA_CUDA_DMMV_Y
 else
 	NVCCFLAGS += -DGGML_CUDA_DMMV_Y=1
 endif # LLAMA_CUDA_DMMV_Y
+
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -Wno-pedantic -c $< -o $@
 endif # LLAMA_CUBLAS
