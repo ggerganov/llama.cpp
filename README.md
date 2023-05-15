@@ -278,7 +278,7 @@ Building the program with BLAS support may lead to some performance improvements
 
 - cuBLAS
 
-  This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
+  This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. It also enables GPU accelerated token generation via llama.cpp CUDA kernels. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
   - Using `make`:
     ```bash
     make LLAMA_CUBLAS=1
@@ -291,6 +291,8 @@ Building the program with BLAS support may lead to some performance improvements
     cmake .. -DLLAMA_CUBLAS=ON
     cmake --build . --config Release
     ```
+
+Prompt processing will automatically be GPU accelerated. To enable token generation acceleration use the `-ngl` or `--n-gpu-layers` argument and specify how many layers should be offloaded to the GPU. A higher value will enable more GPU acceleration but also increase VRAM usage. Maximum effective values: 33 for 7b, 41 for 13b, 61 for 33b, 81 for 65b. Multi-GPU setups and iGPUs are currently not supported.
 
 Note: Because llama.cpp uses multiple CUDA streams for matrix multiplication results [are not guaranteed to be reproducible](https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility). If you need reproducibility, set `GGML_CUDA_MAX_STREAMS` in the file `ggml-cuda.cu` to 1.
 

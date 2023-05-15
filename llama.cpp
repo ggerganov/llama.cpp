@@ -1054,7 +1054,10 @@ static void llama_model_load_internal(
         fprintf(stderr, "%s: [cublas] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
     }
 #else
-    (void) n_gpu_layers;
+    if (n_gpu_layers > 0) {
+        throw format("llama.cpp was compiled without cuBLAS. "
+            "It is not possible to offload the requested %d layers onto the GPU.\n", n_gpu_layers);
+    }
 #endif
 
     // loading time will be recalculate after the first eval, so
