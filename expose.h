@@ -19,6 +19,7 @@ struct load_model_inputs
     const int blasbatchsize = 512;
     const bool debugmode;
     const int forceversion = 0;
+    const int gpulayers = 0;
 };
 struct generation_inputs
 {

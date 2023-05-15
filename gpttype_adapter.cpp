@@ -238,6 +238,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         llama_ctx_params.logits_all = false;
         llama_ctx_params.use_mmap = inputs.use_mmap;
         llama_ctx_params.use_mlock = inputs.use_mlock;
+        llama_ctx_params.n_gpu_layers = inputs.gpulayers;
         
         llama_ctx_v1 = llama_init_from_file(modelname.c_str(), llama_ctx_params);
         

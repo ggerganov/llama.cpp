@@ -25,7 +25,8 @@ class load_model_inputs(ctypes.Structure):
                 ("clblast_info", ctypes.c_int),
                 ("blasbatchsize", ctypes.c_int),
                 ("debugmode", ctypes.c_bool),
-                ("forceversion", ctypes.c_int)]
+                ("forceversion", ctypes.c_int),
+                ("gpulayers", ctypes.c_int)]
 
 class generation_inputs(ctypes.Structure):
     _fields_ = [("seed", ctypes.c_int),
@@ -150,6 +151,7 @@ def load_model(model_filename):
     inputs.unban_tokens = args.unbantokens
     inputs.blasbatchsize = args.blasbatchsize
     inputs.forceversion = args.forceversion
+    inputs.gpulayers = args.gpulayers
     clblastids = 0
     if args.useclblast:
         clblastids = 100 + int(args.useclblast[0])*10 + int(args.useclblast[1])
@@ -641,5 +643,6 @@ if __name__ == '__main__':
     compatgroup = parser.add_mutually_exclusive_group()
     compatgroup.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
     compatgroup.add_argument("--useclblast", help="Use CLBlast instead of OpenBLAS for prompt ingestion. Must specify exactly 2 arguments, platform ID and device ID (e.g. --useclblast 1 0).", type=int, choices=range(0,9), nargs=2)
+    parser.add_argument("--gpulayers", help="For future use: Set number of layers to offload to GPU when using CLBlast.",metavar=('[GPU layers]'), type=int, default=0)
     args = parser.parse_args()
     main(args)
