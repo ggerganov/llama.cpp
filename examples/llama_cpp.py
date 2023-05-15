@@ -44,15 +44,17 @@ def _load_shared_library(lib_base_name: str):
         _base_path = _lib.parent.resolve()
         _lib_paths = [_lib.resolve()]
 
+    cdll_args = dict()  # type: ignore
     # Add the library directory to the DLL search path on Windows (if needed)
     if sys.platform == "win32" and sys.version_info >= (3, 8):
         os.add_dll_directory(str(_base_path))
+        cdll_args["winmode"] = 0
 
     # Try to load the shared library, handling potential errors
     for _lib_path in _lib_paths:
         if _lib_path.exists():
             try:
-                return ctypes.CDLL(str(_lib_path), winmode=0)
+                return ctypes.CDLL(str(_lib_path), **cdll_args)
             except Exception as e:
                 raise RuntimeError(f"Failed to load shared library '{_lib_path}': {e}")
 
