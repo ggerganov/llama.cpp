@@ -52,7 +52,7 @@ def _load_shared_library(lib_base_name: str):
     for _lib_path in _lib_paths:
         if _lib_path.exists():
             try:
-                return ctypes.CDLL(str(_lib_path))
+                return ctypes.CDLL(str(_lib_path), winmode=0)
             except Exception as e:
                 raise RuntimeError(f"Failed to load shared library '{_lib_path}': {e}")
 
