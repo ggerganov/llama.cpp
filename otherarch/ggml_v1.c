@@ -10053,10 +10053,10 @@ enum ggml_v1_opt_result ggml_v1_opt(
         struct ggml_v1_tensor * f) {
     bool free_ctx = false;
     if (ctx == NULL) {
-        struct ggml_v1_init_params params_ctx = {
-            .mem_size   = 16*1024*1024,
-            .mem_buffer = NULL,
-        };
+        struct ggml_v1_init_params params_ctx;
+        params_ctx.mem_size   = 16*1024*1024;
+        params_ctx.mem_buffer = NULL;
+       
 
         ctx = ggml_v1_init(params_ctx);
         if (ctx == NULL) {

@@ -10,7 +10,7 @@ import torch
 import numpy as np
 import re
 
-from transformers import GPTJForCausalLM, AutoModelForCausalLM
+from transformers import AutoModelForCausalLM
 
 # ref: https://github.com/openai/gpt-2/blob/master/src/encoder.py
 def bytes_to_unicode():

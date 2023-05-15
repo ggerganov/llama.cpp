@@ -12,7 +12,6 @@
 #include <string>
 #include <vector>
 #include <iostream>
-#include <unistd.h>
 
 
 
@@ -148,10 +147,10 @@ ModelLoadResult legacy_gptj_model_load(const std::string & fname, gptj_model_v1 
 
     // create the ggml context
     {
-        struct ggml_v1_init_params params = {
-            .mem_size   = ctx_size,
-            .mem_buffer = NULL,
-        };
+        struct ggml_v1_init_params params;
+        params.mem_size   = ctx_size;
+        params.mem_buffer = NULL;
+        
 
         model.ctx = ggml_v1_init(params);
         if (!model.ctx) {
@@ -402,10 +401,10 @@ bool legacy_gptj_eval(
         }
     }
 
-    struct ggml_v1_init_params params = {
-        .mem_size   = buf_size,
-        .mem_buffer = buf,
-    };
+    struct ggml_v1_init_params params;
+    params.mem_size   = buf_size;
+    params.mem_buffer = buf;
+    
 
     struct ggml_v1_context * ctx0 = ggml_v1_init(params);
     struct ggml_v1_cgraph gf = { .n_threads = n_threads };

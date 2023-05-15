@@ -13,7 +13,6 @@
 #include <string>
 #include <vector>
 #include <iostream>
-#include <unistd.h>
 
 
 
@@ -135,12 +134,11 @@ ModelLoadResult stablelm_model_load(const std::string & fname, stablelm_model & 
 
     // create the ggml context
     {
-        struct ggml_init_params params = {
-            .mem_size   = ctx_size,
-            .mem_buffer = NULL,
-            .no_alloc   = false,
-        };
-
+        struct ggml_init_params params;
+        params.mem_size   = ctx_size;
+        params.mem_buffer = NULL;
+        params.no_alloc   = false;
+        
         model.ctx = ggml_init(params);
         if (!model.ctx) {
             fprintf(stderr, "%s: ggml_init() failed\n", __func__);
@@ -377,11 +375,11 @@ bool stablelm_eval(
         }
     }
 
-    struct ggml_init_params params = {
-        .mem_size   = buf_size,
-        .mem_buffer = buf,
-        .no_alloc   = false,
-    };
+    struct ggml_init_params params;
+    params.mem_size   = buf_size;
+    params.mem_buffer = buf;
+    params.no_alloc   = false;
+    
 
     struct ggml_context * ctx0 = ggml_init(params);
     struct ggml_cgraph gf = { .n_threads = n_threads };

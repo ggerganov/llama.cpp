@@ -1,7 +1,6 @@
 import sys
 import struct
 import json
-import torch
 import numpy as np
 
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -59,6 +58,7 @@ fout.write(struct.pack("i", hparams["hidden_size"]))
 fout.write(struct.pack("i", hparams["num_attention_heads"]))
 fout.write(struct.pack("i", hparams["num_hidden_layers"]))
 fout.write(struct.pack("i", int(hparams["rotary_pct"]*(hparams["hidden_size"]//hparams["num_attention_heads"]))))
+fout.write(struct.pack("i", hparams["use_parallel_residual"]))
 fout.write(struct.pack("i", ftype))
 
 # TODO: temporary hack to not deal with implementing the tokenizer
