@@ -121,7 +121,6 @@ def make_tensors_list() -> List[str]:
             f'layers.{i}.feed_forward.w1.weight',
             f'layers.{i}.feed_forward.w2.weight',
             f'layers.{i}.feed_forward.w3.weight',
-            f'layers.{i}.atttention_norm.weight',
             f'layers.{i}.ffn_norm.weight',
         ]
     return ret
