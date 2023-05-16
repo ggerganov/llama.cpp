@@ -1,0 +1,1092 @@
+#include "ggml-opencl.h"
+
+#include <atomic>
+
+#define CL_TARGET_OPENCL_VERSION 110
+#include <clblast.h>
+#include <clblast_c.h>
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "ggml.h"
+
+#define CL_DMMV_BLOCK_SIZE 32;
+
+#define MULTILINE_QUOTE(...) #__VA_ARGS__
+const char * clblast_dequant = MULTILINE_QUOTE(
+
+typedef char int8_t;
+typedef uchar uint8_t;
+typedef int int32_t;
+typedef uint uint32_t;
+
+constant uint GGML_TYPE_Q4_0 = 2;
+constant uint GGML_TYPE_Q4_1 = 3;
+constant uint GGML_TYPE_Q5_0 = 6;
+constant uint GGML_TYPE_Q5_1 = 7;
+constant uint GGML_TYPE_Q8_0 = 8;
+constant uint GGML_TYPE_Q8_1 = 9;
+
+constant uint QK4_0 = 32;
+constant uint QR4_0 = 2;
+struct block_q4_0
+{
+    float d;
+    uint8_t qs[QK4_0 / 2];
+};
+
+constant uint QK4_1 = 32;
+constant uint QR4_1 = 2;
+struct block_q4_1
+{
+    float d;
+    float m;
+    uint8_t qs[QK4_1 / 2];
+};
+
+constant uint QK5_0 = 32;
+constant uint QR5_0 = 2;
+struct __attribute__ ((packed)) block_q5_0
+{
+    half d;
+    uint32_t qh;
+    uint8_t qs[QK5_0 / 2];
+};
+
+constant uint QK5_1 = 32;
+constant uint QR5_1 = 2;
+struct block_q5_1
+{
+    half d;
+    half m;
+    uint32_t qh;
+    uint8_t qs[QK5_1 / 2];
+};
+
+constant uint QK8_0 = 32;
+constant uint QR8_0 = 1;
+struct block_q8_0
+{
+    float d;
+    uint8_t qs[QK8_0];
+};
+
+
+__kernel void convert_fp16_to_fp32(__global half* x, __global float* y) {
+    const uint i = get_global_id(0);
+
+    y[i] = vload_half(0, &x[i]);
+}
+
+
+__kernel void dequantize_row_q4_0(__global struct block_q4_0* x, __global float* y) {
+    constant uint qk = QK4_0;
+
+    const uint i = get_global_id(0) / qk;
+    const uint j = get_local_id(0);
+
+    const float d = x[i].d;
+
+    const int x0 = (x[i].qs[j] & 0xf) - 8;
+    const int x1 = (x[i].qs[j] >>  4) - 8;
+
+    y[i*qk + j + 0   ] = x0*d;
+    y[i*qk + j + qk/2] = x1*d;
+}
+
+__kernel void dequantize_row_q4_1(__global struct block_q4_1* x, __global float* y) {
+    constant uint qk = QK4_1;
+
+    const uint i = get_global_id(0) / qk;
+    const uint j = get_local_id(0);
+
+    const float d = x[i].d;
+    const float m = x[i].m;
+
+    const int x0 = (x[i].qs[j] & 0xf);
+    const int x1 = (x[i].qs[j] >>  4);
+
+    y[i*qk + j + 0   ] = x0*d + m;
+    y[i*qk + j + qk/2] = x1*d + m;
+}
+
+__kernel void dequantize_row_q5_0(__global struct block_q5_0* x, __global float* y) {
+    constant uint qk = QK5_0;
+
+    const uint i = get_global_id(0) / qk;
+    const uint j = get_local_id(0);
+
+    const float d = vload_half(0, (__global half*) &x[i].d);
+
+    uint32_t qh = x[i].qh;
+
+    const uint8_t xh_0 = ((qh >> (j +  0)) << 4) & 0x10;
+    const uint8_t xh_1 = ((qh >> (j + 12))     ) & 0x10;
+
+    const int32_t x0 = ((x[i].qs[j] & 0xf) | xh_0) - 16;
+    const int32_t x1 = ((x[i].qs[j] >>  4) | xh_1) - 16;
+
+    y[i*qk + j + 0   ] = x0*d;
+    y[i*qk + j + qk/2] = x1*d;
+}
+
+__kernel void dequantize_row_q5_1(__global struct block_q5_1* x, __global float* y) {
+    constant uint qk = QK5_1;
+
+    const uint i = get_global_id(0) / qk;
+    const uint j = get_local_id(0);
+
+    const float d = vload_half(0, (__global half*) &x[i].d);
+    const float m = vload_half(0, (__global half*) &x[i].m);
+
+    uint32_t qh = x[i].qh;
+
+    const uint8_t xh_0 = ((qh >> (j +  0)) << 4) & 0x10;
+    const uint8_t xh_1 = ((qh >> (j + 12))     ) & 0x10;
+
+    const int x0 = (x[i].qs[j] & 0xf) | xh_0;
+    const int x1 = (x[i].qs[j] >>  4) | xh_1;
+
+    y[i*qk + j + 0   ] = x0*d + m;
+    y[i*qk + j + qk/2] = x1*d + m;
+}
+
+__kernel void dequantize_row_q8_0(__global struct block_q8_0* x, __global float* y) {
+    constant uint qk = QK8_0;
+    const uint i = get_global_id(0) / qk;
+    const uint j = get_local_id(0);
+
+    const float d = x[i].d;
+    y[i*qk + j] = x[i].qs[j]*d;
+}
+
+void dequantize_q4_0(__global const struct block_q4_0* x, const int ib, const int iqs, float* v0, float* v1) {
+    const float d = x[ib].d;
+
+    const uint8_t vui = x[ib].qs[iqs];
+
+    const int8_t vi0 = vui & 0xF;
+    const int8_t vi1 = vui >> 4;
+
+    *v0 = (vi0 - 8)*d;
+    *v1 = (vi1 - 8)*d;
+}
+
+__kernel void dequantize_mul_mat_vec_q4_0(__global struct block_q4_0* x, __local float* tmp, __global float* y, __global float* dst, const int ncols) {
+    const int block_size = get_local_size(0);
+    const int row = get_global_id(0) / block_size;
+    const int tid = get_local_id(0);
+
+    const uint qk = QK4_0;
+    const uint qr = QR4_0;
+
+    const int y_offset = qr == 1 ? 1 : qk/2;
+
+    tmp[tid] = 0;
+
+    for (int i = 0; i < ncols/block_size; i += 2) {
+        const int col = i*block_size + 2*tid;
+        const int ib = (row*ncols + col)/qk; // block index
+        const int iqs = (col%qk)/qr; // quant index
+        const int iybs = col - col%qk; // y block start index
+
+        // dequantize
+        float v0, v1;
+        dequantize_q4_0(x, ib, iqs, &v0, &v1);
+
+        // matrix multiplication
+        tmp[tid] += v0 * y[iybs + iqs + 0];
+        tmp[tid] += v1 * y[iybs + iqs + y_offset];
+    }
+
+    // sum up partial sums and write back result
+    barrier(CLK_LOCAL_MEM_FENCE);
+    for (int s=block_size/2; s>0; s>>=1) {
+        if (tid < s) {
+            tmp[tid] += tmp[tid + s];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+    if (tid == 0) {
+        dst[row] = tmp[0];
+    }
+}
+
+void dequantize_q4_1(__global const struct block_q4_1* x, const int ib, const int iqs, float* v0, float* v1) {
+    const float d = x[ib].d;
+    const float m = x[ib].m;
+
+    const uint8_t vui = x[ib].qs[iqs];
+
+    const int8_t vi0 = vui & 0xF;
+    const int8_t vi1 = vui >> 4;
+
+    *v0 = vi0*d + m;
+    *v1 = vi1*d + m;
+}
+__kernel void dequantize_mul_mat_vec_q4_1(__global struct block_q4_1* x, __local float* tmp, __global float* y, __global float* dst, const int ncols) {
+    const int block_size = get_local_size(0);
+    const int row = get_global_id(0) / block_size;
+    const int tid = get_local_id(0);
+
+    const uint qk = QK4_1;
+    const uint qr = QR4_1;
+
+    const int y_offset = qr == 1 ? 1 : qk/2;
+
+    tmp[tid] = 0;
+
+    for (int i = 0; i < ncols/block_size; i += 2) {
+        const int col = i*block_size + 2*tid;
+        const int ib = (row*ncols + col)/qk; // block index
+        const int iqs = (col%qk)/qr; // quant index
+        const int iybs = col - col%qk; // y block start index
+
+        // dequantize
+        float v0, v1;
+        dequantize_q4_1(x, ib, iqs, &v0, &v1);
+
+        // matrix multiplication
+        tmp[tid] += v0 * y[iybs + iqs + 0];
+        tmp[tid] += v1 * y[iybs + iqs + y_offset];
+    }
+
+    // sum up partial sums and write back result
+    barrier(CLK_LOCAL_MEM_FENCE);
+    for (int s=block_size/2; s>0; s>>=1) {
+        if (tid < s) {
+            tmp[tid] += tmp[tid + s];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+    if (tid == 0) {
+        dst[row] = tmp[0];
+    }
+}
+
+void dequantize_q5_0(__global const struct block_q5_0* x, const int ib, const int iqs, float* v0, float* v1) {
+    const float d = vload_half(0, (__global half*) &x[ib].d);
+
+    uint32_t qh = x[ib].qh;
+
+    const uint8_t xh_0 = ((qh >> (iqs +  0)) << 4) & 0x10;
+    const uint8_t xh_1 = ((qh >> (iqs + 12))     ) & 0x10;
+
+    const int32_t x0 = ((x[ib].qs[iqs] & 0xf) | xh_0) - 16;
+    const int32_t x1 = ((x[ib].qs[iqs] >>  4) | xh_1) - 16;
+
+    *v0 = x0*d;
+    *v1 = x1*d;
+}
+__kernel void dequantize_mul_mat_vec_q5_0(__global struct block_q5_0* x, __local float* tmp, __global float* y, __global float* dst, const int ncols) {
+    const int block_size = get_local_size(0);
+    const int row = get_global_id(0) / block_size;
+    const int tid = get_local_id(0);
+
+    const uint qk = QK5_0;
+    const uint qr = QR5_0;
+
+    const int y_offset = qr == 1 ? 1 : qk/2;
+
+    tmp[tid] = 0;
+
+    for (int i = 0; i < ncols/block_size; i += 2) {
+        const int col = i*block_size + 2*tid;
+        const int ib = (row*ncols + col)/qk; // block index
+        const int iqs = (col%qk)/qr; // quant index
+        const int iybs = col - col%qk; // y block start index
+
+        // dequantize
+        float v0, v1;
+        dequantize_q5_0(x, ib, iqs, &v0, &v1);
+
+        // matrix multiplication
+        tmp[tid] += v0 * y[iybs + iqs + 0];
+        tmp[tid] += v1 * y[iybs + iqs + y_offset];
+    }
+
+    // sum up partial sums and write back result
+    barrier(CLK_LOCAL_MEM_FENCE);
+    for (int s=block_size/2; s>0; s>>=1) {
+        if (tid < s) {
+            tmp[tid] += tmp[tid + s];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+    if (tid == 0) {
+        dst[row] = tmp[0];
+    }
+}
+
+void dequantize_q5_1(__global const struct block_q5_1* x, const int ib, const int iqs, float* v0, float* v1) {
+    const float d = vload_half(0, (__global half*) &x[ib].d);
+    const float m = vload_half(0, (__global half*) &x[ib].m);
+
+    uint32_t qh = x[ib].qh;
+
+    const uint8_t xh_0 = ((qh >> (iqs +  0)) << 4) & 0x10;
+    const uint8_t xh_1 = ((qh >> (iqs + 12))     ) & 0x10;
+
+    const int32_t x0 = ((x[ib].qs[iqs] & 0xf) | xh_0);
+    const int32_t x1 = ((x[ib].qs[iqs] >>  4) | xh_1);
+
+    *v0 = x0*d + m;
+    *v1 = x1*d + m;
+}
+__kernel void dequantize_mul_mat_vec_q5_1(__global struct block_q5_1* x, __local float* tmp, __global float* y, __global float* dst, const int ncols) {
+    const int block_size = get_local_size(0);
+    const int row = get_global_id(0) / block_size;
+    const int tid = get_local_id(0);
+
+    const uint qk = QK5_1;
+    const uint qr = QR5_1;
+
+    const int y_offset = qr == 1 ? 1 : qk/2;
+
+    tmp[tid] = 0;
+
+    for (int i = 0; i < ncols/block_size; i += 2) {
+        const int col = i*block_size + 2*tid;
+        const int ib = (row*ncols + col)/qk; // block index
+        const int iqs = (col%qk)/qr; // quant index
+        const int iybs = col - col%qk; // y block start index
+
+        // dequantize
+        float v0, v1;
+        dequantize_q5_1(x, ib, iqs, &v0, &v1);
+
+        // matrix multiplication
+        tmp[tid] += v0 * y[iybs + iqs + 0];
+        tmp[tid] += v1 * y[iybs + iqs + y_offset];
+    }
+
+    // sum up partial sums and write back result
+    barrier(CLK_LOCAL_MEM_FENCE);
+    for (int s=block_size/2; s>0; s>>=1) {
+        if (tid < s) {
+            tmp[tid] += tmp[tid + s];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+    if (tid == 0) {
+        dst[row] = tmp[0];
+    }
+}
+
+void dequantize_q8_0(__global const struct block_q8_0* x, const int ib, const int iqs, float* v0, float* v1) {
+    const float d = x[ib].d;
+
+    const int8_t vi0 = x[ib].qs[iqs + 0];
+    const int8_t vi1 = x[ib].qs[iqs + 1];
+
+    *v0 = vi0*d;
+    *v1 = vi1*d;
+}
+__kernel void dequantize_mul_mat_vec_q8_0(__global struct block_q8_0* x, __local float* tmp, __global float* y, __global float* dst, const int ncols) {
+    const int block_size = get_local_size(0);
+    const int row = get_global_id(0) / block_size;
+    const int tid = get_local_id(0);
+
+    const uint qk = QK8_0;
+    const uint qr = QR8_0;
+
+    const int y_offset = qr == 1 ? 1 : qk/2;
+
+    tmp[tid] = 0;
+
+    for (int i = 0; i < ncols/block_size; i += 2) {
+        const int col = i*block_size + 2*tid;
+        const int ib = (row*ncols + col)/qk; // block index
+        const int iqs = (col%qk)/qr; // quant index
+        const int iybs = col - col%qk; // y block start index
+
+        // dequantize
+        float v0, v1;
+        dequantize_q8_0(x, ib, iqs, &v0, &v1);
+
+        // matrix multiplication
+        tmp[tid] += v0 * y[iybs + iqs + 0];
+        tmp[tid] += v1 * y[iybs + iqs + y_offset];
+    }
+
+    // sum up partial sums and write back result
+    barrier(CLK_LOCAL_MEM_FENCE);
+    for (int s=block_size/2; s>0; s>>=1) {
+        if (tid < s) {
+            tmp[tid] += tmp[tid + s];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+    if (tid == 0) {
+        dst[row] = tmp[0];
+    }
+}
+
+void convert_f16(__global half* x, const int ib, const int iqs, float* v0, float* v1){
+    *v0 = vload_half(0, (__global half*) &x[ib + 0]);
+    *v1 = vload_half(0, (__global half*) &x[ib + 1]);
+}
+__kernel void convert_mul_mat_vec_f16(__global half* x, __local float* tmp, __global float* y, __global float* dst, const int ncols) {
+    const int block_size = get_local_size(0);
+    const int row = get_global_id(0) / block_size;
+    const int tid = get_local_id(0);
+
+    const uint qk = 32;
+    const uint qr = 1;
+
+    const int y_offset = qr == 1 ? 1 : qk/2;
+
+    tmp[tid] = 0;
+
+    for (int i = 0; i < ncols/block_size; i += 2) {
+        const int col = i*block_size + 2*tid;
+        const int ib = (row*ncols + col)/qk; // block index
+        const int iqs = (col%qk)/qr; // quant index
+        const int iybs = col - col%qk; // y block start index
+
+        // convert
+        float v0, v1;
+        convert_f16(x, ib, iqs, &v0, &v1);
+
+        // matrix multiplication
+        tmp[tid] += v0 * y[iybs + iqs + 0];
+        tmp[tid] += v1 * y[iybs + iqs + y_offset];
+    }
+
+    // sum up partial sums and write back result
+    barrier(CLK_LOCAL_MEM_FENCE);
+    for (int s=block_size/2; s>0; s>>=1) {
+        if (tid < s) {
+            tmp[tid] += tmp[tid + s];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+    if (tid == 0) {
+        dst[row] = tmp[0];
+    }
+}
+);
+
+#define CL_CHECK(err, name)                                                                     \
+    do {                                                                                        \
+        cl_int err_ = (err);                                                                    \
+        if (err_ != CL_SUCCESS) {                                                               \
+            fprintf(stderr, "OpenCL %s error %d at %s:%d\n", name, err_, __FILE__, __LINE__);   \
+            exit(1);                                                                            \
+        }                                                                                       \
+    } while (0)
+
+static cl_platform_id platform;
+static cl_device_id device;
+static cl_context context;
+static cl_command_queue queue;
+static cl_program program;
+static cl_kernel convert_fp16_to_fp32_cl;
+static cl_kernel dequantize_row_q4_0_cl, dequantize_row_q4_1_cl, dequantize_row_q5_0_cl, dequantize_row_q5_1_cl, dequantize_row_q8_0_cl;
+static cl_kernel dequantize_mul_mat_vec_q4_0_cl, dequantize_mul_mat_vec_q4_1_cl, dequantize_mul_mat_vec_q5_0_cl, dequantize_mul_mat_vec_q5_1_cl, dequantize_mul_mat_vec_q8_0_cl, convert_mul_mat_vec_f16_cl;
+static bool fp16_support;
+
+static cl_program build_program_from_source(cl_context ctx, cl_device_id dev, const char* program_buffer) {
+    cl_program p;
+    char *program_log;
+    size_t program_size, log_size;
+    int err;
+
+    program_size = strlen(program_buffer);
+
+    p = clCreateProgramWithSource(ctx, 1, (const char**)&program_buffer, &program_size, &err);
+    if(err < 0) {
+        fprintf(stderr, "OpenCL error creating program");
+        exit(1);
+    }
+
+    err = clBuildProgram(p, 0, NULL, NULL, NULL, NULL);
+    if(err < 0) {
+
+        clGetProgramBuildInfo(p, dev, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+        program_log = (char*) malloc(log_size + 1);
+        program_log[log_size] = '\0';
+        clGetProgramBuildInfo(p, dev, CL_PROGRAM_BUILD_LOG, log_size + 1, program_log, NULL);
+        printf("%s\n", program_log);
+        free(program_log);
+        exit(1);
+    }
+
+    return p;
+}
+
+void ggml_cl_init(void) {
+    cl_int err = 0;
+    char * GGML_CLBLAST_PLATFORM = getenv("GGML_CLBLAST_PLATFORM");
+    char * GGML_CLBLAST_DEVICE = getenv("GGML_CLBLAST_DEVICE");
+    int plat_num = (GGML_CLBLAST_PLATFORM == NULL ? 0 : atoi(GGML_CLBLAST_PLATFORM));
+    int dev_num = (GGML_CLBLAST_DEVICE == NULL ? 0 : atoi(GGML_CLBLAST_DEVICE));
+    printf("\nInitializing CLBlast (First Run)...");
+    printf("\nAttempting to use: Platform=%d, Device=%d (If invalid, program will crash)\n",plat_num,dev_num);
+    cl_uint num_platforms;
+    clGetPlatformIDs(0, NULL, &num_platforms);
+    cl_platform_id* platforms = (cl_platform_id*)malloc(num_platforms*sizeof(cl_platform_id));
+    clGetPlatformIDs(num_platforms, platforms, NULL);
+    platform = platforms[plat_num];
+    char platform_buffer[1024];
+    clGetPlatformInfo(platform, CL_PLATFORM_NAME, sizeof(platform_buffer), &platform_buffer, NULL);
+    cl_uint num_devices;
+    clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, 0, NULL, &num_devices);
+    cl_device_id* devices = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
+    clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, num_devices, devices, NULL);
+    device = devices[dev_num];
+    char device_buffer[1024];
+    clGetDeviceInfo(device, CL_DEVICE_NAME, sizeof(device_buffer), &device_buffer, NULL);
+    size_t ext_str_size;
+    clGetDeviceInfo(device, CL_DEVICE_EXTENSIONS, 0, NULL, &ext_str_size);
+    char* ext_buffer = (char*) malloc(sizeof(char) * ext_str_size);
+    clGetDeviceInfo(device, CL_DEVICE_EXTENSIONS, ext_str_size, ext_buffer, NULL);
+    // Check if ext_buffer contains cl_khr_fp16
+    for (size_t i = 0; i < ext_str_size - 12; i++) {
+        if (memcmp(ext_buffer + i, "cl_khr_fp16", 11) == 0) {
+            fp16_support = true;
+            break;
+        }
+    }
+    free(ext_buffer);
+    printf("Using Platform: %s Device: %s FP16: %d\n", platform_buffer, device_buffer, fp16_support);
+    context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
+    CL_CHECK(err, "clCreateContext");
+    queue = clCreateCommandQueue(context, device, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &err);
+    CL_CHECK(err, "clCreateCommandQueue");
+
+    free(platforms);
+    free(devices);
+
+    program = build_program_from_source(context, device, clblast_dequant);
+
+    // FP16 to FP32 kernel
+    convert_fp16_to_fp32_cl = clCreateKernel(program, "convert_fp16_to_fp32", &err);
+    CL_CHECK(err, "clCreateKernel");
+
+    // Dequantize kernels
+    dequantize_row_q4_0_cl = clCreateKernel(program, "dequantize_row_q4_0", &err);
+    CL_CHECK(err, "clCreateKernel");
+    dequantize_row_q4_1_cl = clCreateKernel(program, "dequantize_row_q4_1", &err);
+    CL_CHECK(err, "clCreateKernel");
+    dequantize_row_q5_0_cl = clCreateKernel(program, "dequantize_row_q5_0", &err);
+    CL_CHECK(err, "clCreateKernel");
+    dequantize_row_q5_1_cl = clCreateKernel(program, "dequantize_row_q5_1", &err);
+    CL_CHECK(err, "clCreateKernel");
+    dequantize_row_q8_0_cl = clCreateKernel(program, "dequantize_row_q8_0", &err);
+    CL_CHECK(err, "clCreateKernel");
+
+    // dequant mul mat kernel
+    dequantize_mul_mat_vec_q4_0_cl = clCreateKernel(program, "dequantize_mul_mat_vec_q4_0", &err);
+    CL_CHECK(err, "clCreateKernel");
+    dequantize_mul_mat_vec_q4_1_cl = clCreateKernel(program, "dequantize_mul_mat_vec_q4_1", &err);
+    CL_CHECK(err, "clCreateKernel");
+    dequantize_mul_mat_vec_q5_0_cl = clCreateKernel(program, "dequantize_mul_mat_vec_q5_0", &err);
+    CL_CHECK(err, "clCreateKernel");
+    dequantize_mul_mat_vec_q5_1_cl = clCreateKernel(program, "dequantize_mul_mat_vec_q5_1", &err);
+    CL_CHECK(err, "clCreateKernel");
+    dequantize_mul_mat_vec_q8_0_cl = clCreateKernel(program, "dequantize_mul_mat_vec_q8_0", &err);
+    CL_CHECK(err, "clCreateKernel");
+    convert_mul_mat_vec_f16_cl = clCreateKernel(program, "convert_mul_mat_vec_f16", &err);
+    CL_CHECK(err, "clCreateKernel");
+}
+
+static cl_kernel* ggml_get_to_fp32_cl(ggml_type type) {
+    switch (type) {
+        case GGML_TYPE_Q4_0:
+            return &dequantize_row_q4_0_cl;
+        case GGML_TYPE_Q4_1:
+            return &dequantize_row_q4_1_cl;
+        case GGML_TYPE_Q5_0:
+            return &dequantize_row_q5_0_cl;
+        case GGML_TYPE_Q5_1:
+            return &dequantize_row_q5_1_cl;
+        case GGML_TYPE_Q8_0:
+            return &dequantize_row_q8_0_cl;
+        case GGML_TYPE_F16:
+            return &convert_fp16_to_fp32_cl;
+        default:
+            return nullptr;
+    }
+}
+
+static cl_kernel* ggml_get_dequantize_mul_mat_vec_cl(ggml_type type) {
+    switch (type) {
+        case GGML_TYPE_Q4_0:
+            return &dequantize_mul_mat_vec_q4_0_cl;
+        case GGML_TYPE_Q4_1:
+            return &dequantize_mul_mat_vec_q4_1_cl;
+        case GGML_TYPE_Q5_0:
+            return &dequantize_mul_mat_vec_q5_0_cl;
+        case GGML_TYPE_Q5_1:
+            return &dequantize_mul_mat_vec_q5_1_cl;
+        case GGML_TYPE_Q8_0:
+            return &dequantize_mul_mat_vec_q8_0_cl;
+        case GGML_TYPE_F16:
+            return &convert_mul_mat_vec_f16_cl;
+        default:
+            return nullptr;
+    }
+}
+
+// buffer pool for cl
+#define MAX_CL_BUFFERS 256
+
+struct scoped_spin_lock {
+    std::atomic_flag& lock;
+    scoped_spin_lock(std::atomic_flag& lock) : lock(lock) {
+        while (lock.test_and_set(std::memory_order_acquire)) {
+            ; // spin
+        }
+    }
+    ~scoped_spin_lock() {
+        lock.clear(std::memory_order_release);
+    }
+    scoped_spin_lock(const scoped_spin_lock&) = delete;
+    scoped_spin_lock& operator=(const scoped_spin_lock&) = delete;
+};
+
+struct cl_buffer {
+    cl_mem mem;
+    size_t size = 0;
+};
+
+static cl_buffer g_cl_buffer_pool[MAX_CL_BUFFERS];
+static std::atomic_flag g_cl_pool_lock = ATOMIC_FLAG_INIT;
+
+static cl_mem ggml_cl_pool_malloc(size_t size, size_t * actual_size, cl_mem_flags flags) {
+    scoped_spin_lock lock(g_cl_pool_lock);
+    cl_int err;
+
+    for (int i = 0; i < MAX_CL_BUFFERS; ++i) {
+        cl_buffer& b = g_cl_buffer_pool[i];
+        if (b.size > 0 && b.size >= size) {
+            cl_mem mem = b.mem;
+            *actual_size = b.size;
+            b.size = 0;
+            return mem;
+        }
+    }
+    cl_mem mem = clCreateBuffer(context, flags, size, NULL, &err);
+    CL_CHECK(err, "clCreateBuffer");
+    *actual_size = size;
+    return mem;
+}
+
+static void ggml_cl_pool_free(cl_mem mem, size_t size) {
+    scoped_spin_lock lock(g_cl_pool_lock);
+
+    for (int i = 0; i < MAX_CL_BUFFERS; ++i) {
+        cl_buffer& b = g_cl_buffer_pool[i];
+        if (b.size == 0) {
+            b.mem = mem;
+            b.size = size;
+            return;
+        }
+    }
+    fprintf(stderr, "WARNING: cl buffer pool full, increase MAX_CL_BUFFERS\n");
+    clReleaseMemObject(mem);
+}
+
+static cl_int ggml_cl_h2d_tensor_2d(cl_command_queue queue, cl_mem dst, size_t offset, const struct ggml_tensor * src, uint64_t i3, uint64_t i2, cl_event* ev) {
+    cl_int err;
+    const uint64_t ne0 = src->ne[0];
+    const uint64_t ne1 = src->ne[1];
+    const uint64_t nb0 = src->nb[0];
+    const uint64_t nb1 = src->nb[1];
+    const uint64_t nb2 = src->nb[2];
+    const uint64_t nb3 = src->nb[3];
+    const enum ggml_type type = src->type;
+    const size_t ts = ggml_type_size(type);
+    const size_t bs = ggml_blck_size(type);
+
+    const void * x = (const void *) ((const char *) src->data + i2*nb2 + i3*nb3);
+    if (nb0 == ts && nb1 == ts*ne0/bs) {
+        err = clEnqueueWriteBuffer(queue, dst, CL_FALSE, offset, ne1*nb1, x, 0, NULL, ev);
+        return err;
+    }
+    if (nb0 == ts) {
+        const size_t buffer_origin[3] = { offset, 0, 0 };
+        const size_t host_origin[3] = { 0, 0, 0 };
+        const size_t region[3] = { ts*ne0/bs, ne1, 1 };
+        err = clEnqueueWriteBufferRect(queue, dst, CL_FALSE, buffer_origin, host_origin, region, ts*ne0/bs, 0, nb1, 0, x, 0, NULL, ev);
+        return err;
+    }
+    for (uint64_t i1 = 0; i1 < ne1; i1++) {
+        // pretend the row is a matrix with cols=1
+        const size_t buffer_origin[3] = { offset, i1, 0 };
+        const size_t host_origin[3] = { 0, 0, 0 };
+        const size_t region[3] = { ts/bs, ne0, 1 };
+        err = clEnqueueWriteBufferRect(queue, dst, CL_FALSE, buffer_origin, host_origin, region, 0, 0, nb0, 0, ((const char *)x) + i1*nb0, 0, NULL, ev);
+        if (err != CL_SUCCESS) {
+            break;
+        }
+    }
+    return err;
+}
+
+static void ggml_cl_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    const int64_t ne03 = src0->ne[3];
+
+    const int64_t ne10 = src1->ne[0];
+    const int64_t ne11 = src1->ne[1];
+
+    const int nb2  = dst->nb[2];
+    const int nb3  = dst->nb[3];
+
+    const float alpha = 1.0f;
+    const float beta = 0.0f;
+    const int x_ne = ne01 * ne00;
+    const int y_ne = ne11 * ne10;
+    const int d_ne = ne11 * ne01;
+
+    size_t x_size, y_size, d_size;
+    cl_mem d_X = ggml_cl_pool_malloc(sizeof(float) * x_ne, &x_size, CL_MEM_READ_ONLY);
+    cl_mem d_Y = ggml_cl_pool_malloc(sizeof(float) * y_ne, &y_size, CL_MEM_READ_ONLY);
+    cl_mem d_D = ggml_cl_pool_malloc(sizeof(float) * d_ne, &d_size, CL_MEM_WRITE_ONLY);
+
+    cl_int err;
+
+    for (int64_t i03 = 0; i03 < ne03; i03++) {
+        for (int64_t i02 = 0; i02 < ne02; i02++) {
+            // copy data to device
+            err = ggml_cl_h2d_tensor_2d(queue, d_X, 0, src0, i03, i02, NULL);
+            err |= ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i03, i02, NULL);
+            CL_CHECK(err, "ggml_cl_h2d_tensor_2d");
+
+            CL_CHECK(clFinish(queue), "clFinish");
+
+            // compute
+            cl_event ev_sgemm;
+
+            clblast::StatusCode status = (clblast::StatusCode)CLBlastSgemm((CLBlastLayout)clblast::Layout::kColMajor,
+                                            (CLBlastTranspose)clblast::Transpose::kYes, (CLBlastTranspose)clblast::Transpose::kNo,
+                                            ne01, ne11, ne10,
+                                            alpha,
+                                            d_X, 0, ne00,
+                                            d_Y, 0, ne10,
+                                            beta,
+                                            d_D, 0, ne01,
+                                            &queue, &ev_sgemm);
+
+            if (status != clblast::StatusCode::kSuccess) {
+                GGML_ASSERT(false);
+            }
+
+            // copy dst to host
+            float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
+            err = clEnqueueReadBuffer(queue, d_D, true, 0, sizeof(float) * d_ne, d, 1, &ev_sgemm, NULL);
+            CL_CHECK(err, "clEnqueueReadBuffer");
+        }
+    }
+
+    ggml_cl_pool_free(d_X, x_size);
+    ggml_cl_pool_free(d_Y, y_size);
+    ggml_cl_pool_free(d_D, d_size);
+}
+
+static void ggml_cl_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, void * wdata, size_t /* wsize */) {
+    GGML_ASSERT(fp16_support);
+
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    const int64_t ne03 = src0->ne[3];
+
+    const int64_t ne10 = src1->ne[0];
+    const int64_t ne11 = src1->ne[1];
+
+    const int nb10 = src1->nb[0];
+    const int nb11 = src1->nb[1];
+    const int nb12 = src1->nb[2];
+    const int nb13 = src1->nb[3];
+
+    const int nb2  = dst->nb[2];
+    const int nb3  = dst->nb[3];
+
+    const ggml_fp16_t alpha = ggml_fp32_to_fp16(1.0f);
+    const ggml_fp16_t beta = ggml_fp32_to_fp16(0.0f);
+    const int x_ne = ne01 * ne00;
+    const int y_ne = ne11 * ne10;
+    const int d_ne = ne11 * ne01;
+
+    size_t x_size, y_size, d_size;
+    cl_mem d_X = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &x_size, CL_MEM_READ_ONLY);
+    cl_mem d_Y = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * y_ne, &y_size, CL_MEM_READ_ONLY);
+    cl_mem d_D = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * d_ne, &d_size, CL_MEM_WRITE_ONLY);
+
+    cl_int err;
+
+    bool src1_cont_rows = nb10 == sizeof(float);
+    bool src1_cont_cols = (size_t)nb11 == ne11*sizeof(float);
+
+    for (int64_t i03 = 0; i03 < ne03; i03++) {
+        for (int64_t i02 = 0; i02 < ne02; i02++) {
+            // copy src0 to device
+            err = ggml_cl_h2d_tensor_2d(queue, d_X, 0, src0, i03, i02, NULL);
+            CL_CHECK(err, "ggml_cl_h2d_tensor_2d");
+
+            // convert src1 to fp16
+            // TODO: use multiple threads
+            ggml_fp16_t * const tmp = (ggml_fp16_t *) wdata + (ne11 * ne10) * (i03 * ne02 + i02);
+            char * src1i = (char *) src1->data + i03*nb13 + i02*nb12;
+            if (src1_cont_rows) {
+                if (src1_cont_cols) {
+                    ggml_fp32_to_fp16_row((float *) src1i, tmp, ne10*ne11);
+                }
+                else {
+                    for (int64_t i01 = 0; i01 < ne11; i01++) {
+                        ggml_fp32_to_fp16_row((float *) (src1i + i01*nb11), tmp + i01*ne10, ne10);
+                    }
+                }
+            }
+            else {
+                for (int64_t i01 = 0; i01 < ne11; i01++) {
+                    for (int64_t i00 = 0; i00 < ne10; i00++) {
+                        // very slow due to no inlining
+                        tmp[i01*ne10 + i00] = ggml_fp32_to_fp16(*(float *) (src1i + i01*nb11 + i00*nb10));
+                    }
+                }
+            }
+
+            // copy src1 to device
+            err |= clEnqueueWriteBuffer(queue, d_Y, false, 0, sizeof(ggml_fp16_t) * y_ne, tmp, 0, NULL, NULL);
+            CL_CHECK(err, "ggml_cl_h2d_tensor_2d");
+
+            CL_CHECK(clFinish(queue), "clFinish");
+
+            // compute
+            cl_event ev_sgemm;
+            clblast::StatusCode status = (clblast::StatusCode)CLBlastSgemm((CLBlastLayout)clblast::Layout::kColMajor,
+                                            (CLBlastTranspose)clblast::Transpose::kYes, (CLBlastTranspose)clblast::Transpose::kNo,
+                                            ne01, ne11, ne10,
+                                            alpha,
+                                            d_X, 0, ne00,
+                                            d_Y, 0, ne10,
+                                            beta,
+                                            d_D, 0, ne01,
+                                            &queue, &ev_sgemm);
+
+            if (status != clblast::StatusCode::kSuccess) {
+                GGML_ASSERT(false);
+            }
+
+            // copy dst to host, then convert to float
+            err = clEnqueueReadBuffer(queue, d_D, true, 0, sizeof(ggml_fp16_t) * d_ne, tmp, 1, &ev_sgemm, NULL);
+
+            float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
+
+            ggml_fp16_to_fp32_row(tmp, d, d_ne);
+        }
+    }
+
+    ggml_cl_pool_free(d_X, x_size);
+    ggml_cl_pool_free(d_Y, y_size);
+    ggml_cl_pool_free(d_D, d_size);
+}
+
+static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    const int64_t ne03 = src0->ne[3];
+
+    const int64_t ne10 = src1->ne[0];
+    const int64_t ne11 = src1->ne[1];
+
+    const int nb2  = dst->nb[2];
+    const int nb3  = dst->nb[3];
+    const ggml_type type = src0->type;
+    const bool mul_mat_vec = ne11 == 1;
+
+    const float alpha = 1.0f;
+    const float beta = 0.0f;
+    const int x_ne = ne01 * ne00;
+    const int y_ne = ne11 * ne10;
+    const int d_ne = ne11 * ne01;
+    const size_t q_sz = ggml_type_size(type) * x_ne / ggml_blck_size(type);
+
+    size_t x_size, y_size, d_size, q_size;
+    cl_mem d_X;
+    if (!mul_mat_vec) {
+        d_X = ggml_cl_pool_malloc(sizeof(float) * x_ne, &x_size, CL_MEM_READ_WRITE);
+    }
+    cl_mem d_Y = ggml_cl_pool_malloc(sizeof(float) * y_ne, &y_size, CL_MEM_READ_ONLY);
+    cl_mem d_D = ggml_cl_pool_malloc(sizeof(float) * d_ne, &d_size, CL_MEM_WRITE_ONLY);
+    cl_mem d_Q;
+    if (src0->backend == GGML_BACKEND_CPU) {
+        d_Q = ggml_cl_pool_malloc(q_sz, &q_size, CL_MEM_READ_ONLY);
+    }
+
+    cl_kernel* to_fp32_cl = ggml_get_to_fp32_cl(type);
+    cl_kernel* dmmv = ggml_get_dequantize_mul_mat_vec_cl(type);
+    GGML_ASSERT(to_fp32_cl != nullptr);
+
+    for (int64_t i03 = 0; i03 < ne03; i03++) {
+        for (int64_t i02 = 0; i02 < ne02; i02++) {
+            cl_event ev_sgemm;
+
+            // copy src0 to device if necessary
+            if (src0->backend == GGML_BACKEND_CPU) {
+                CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Q, 0, src0, i03, i02, NULL), "ggml_cl_h2d_tensor_2d");
+            } else if (src0->backend == GGML_BACKEND_CL) {
+                d_Q = *(cl_mem*) src0->data;
+            } else {
+                GGML_ASSERT(false);
+            }
+            if (mul_mat_vec) { // specialized dequantize_mul_mat_vec kernel
+                // copy src1 to device
+                CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i03, i02, NULL), "ggml_cl_h2d_tensor_2d");
+
+                // compute
+                // dequantize_mul_mat_vec(__global void * vx, __local float* tmp, __global float * y, __global float * dst, __global int ncols, __global int vx_type) {
+                const size_t global = ne01 * CL_DMMV_BLOCK_SIZE;
+                const size_t local = CL_DMMV_BLOCK_SIZE;
+                const cl_int ncols = ne00;
+                CL_CHECK(clSetKernelArg(*dmmv, 0, sizeof(cl_mem), &d_Q), "clSetKernelArg");
+                CL_CHECK(clSetKernelArg(*dmmv, 1, sizeof(float) * local, NULL), "clSetKernelArg");
+                CL_CHECK(clSetKernelArg(*dmmv, 2, sizeof(cl_mem), &d_Y), "clSetKernelArg");
+                CL_CHECK(clSetKernelArg(*dmmv, 3, sizeof(cl_mem), &d_D), "clSetKernelArg");
+                CL_CHECK(clSetKernelArg(*dmmv, 4, sizeof(cl_int), &ncols), "clSetKernelArg");
+                CL_CHECK(clFinish(queue), "clFinish");
+                CL_CHECK(clEnqueueNDRangeKernel(queue, *dmmv, 1, NULL, &global, &local, 0, NULL, &ev_sgemm), "clEnqueueNDRangeKernel");
+            } else { // general dequantization kernel + CLBlast matrix matrix multiplication
+                // convert src0 to fp32 on device
+                const size_t global = x_ne;
+                const size_t local = ggml_blck_size(type) / 2;
+                CL_CHECK(clSetKernelArg(*to_fp32_cl, 0, sizeof(cl_mem), &d_Q), "clSetKernelArg");
+                CL_CHECK(clSetKernelArg(*to_fp32_cl, 1, sizeof(cl_mem), &d_X), "clSetKernelArg");
+                CL_CHECK(clFinish(queue), "clFinish");
+                CL_CHECK(clEnqueueNDRangeKernel(queue, *to_fp32_cl, 1, NULL, &global, &local, 0, NULL, NULL), "clEnqueueNDRangeKernel");
+
+                // copy src1 to device
+                CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i03, i02, NULL), "ggml_cl_h2d_tensor_2d");
+
+                // wait for conversion
+                CL_CHECK(clFinish(queue), "clFinish");
+
+                // compute
+                clblast::StatusCode status = (clblast::StatusCode)CLBlastSgemm((CLBlastLayout)clblast::Layout::kColMajor,
+                                            (CLBlastTranspose)clblast::Transpose::kYes, (CLBlastTranspose)clblast::Transpose::kNo,
+                                            ne01, ne11, ne10,
+                                            alpha,
+                                            d_X, 0, ne00,
+                                            d_Y, 0, ne10,
+                                            beta,
+                                            d_D, 0, ne01,
+                                            &queue, &ev_sgemm);
+
+                if (status != clblast::StatusCode::kSuccess) {
+                    GGML_ASSERT(false);
+                }
+            }
+
+            // copy dst to host
+            float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
+            CL_CHECK(clEnqueueReadBuffer(queue, d_D, true, 0, sizeof(float) * d_ne, d, 1, &ev_sgemm, NULL), "clEnqueueReadBuffer");
+            clReleaseEvent(ev_sgemm);
+        }
+    }
+
+    if (!mul_mat_vec) {
+        ggml_cl_pool_free(d_X, x_size);
+    }
+    ggml_cl_pool_free(d_Y, y_size);
+    ggml_cl_pool_free(d_D, d_size);
+    if (src0->backend == GGML_BACKEND_CPU) {
+        ggml_cl_pool_free(d_Q, q_size);
+    }
+}
+
+
+bool ggml_cl_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
+    const int64_t ne10 = src1->ne[0];
+
+    const int64_t ne0 = dst->ne[0];
+    const int64_t ne1 = dst->ne[1];
+
+    // TODO: find the optimal values for these
+    if ((src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) &&
+        src1->type == GGML_TYPE_F32 &&
+        dst->type == GGML_TYPE_F32 &&
+        ((ne0 >= 32 && ne1 >= 32 && ne10 >= 32) || src0->backend == GGML_BACKEND_CL)) {
+        return true;
+    }
+
+    return false;
+}
+
+bool ggml_cl_mul_mat_use_f16(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * /* dst */) {
+    // If device doesn't support FP16
+    if (!fp16_support) {
+        return false;
+    }
+
+    size_t src0_sz = ggml_nbytes(src0);
+    size_t src1_sz = ggml_nbytes(src1);
+
+    // mul_mat_q: src0 is converted to fp32 on device
+    size_t mul_mat_q_transfer = src0_sz + src1_sz;
+
+    // mul_mat_f16: src1 is converted to fp16 on cpu
+    size_t mul_mat_f16_transfer = src0_sz + sizeof(ggml_fp16_t) * ggml_nelements(src1);
+
+    // choose the smaller one to transfer to the device
+    // TODO: this is not always the best choice due to the overhead of converting to fp16
+    return mul_mat_f16_transfer < mul_mat_q_transfer;
+}
+
+void ggml_cl_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst, void * wdata, size_t wsize) {
+    GGML_ASSERT(ggml_cl_can_mul_mat(src0, src1, dst));
+
+    if (src0->type == GGML_TYPE_F32) {
+        ggml_cl_mul_mat_f32(src0, src1, dst);
+    }
+    else if (src0->type == GGML_TYPE_F16) {
+        if (ggml_cl_mul_mat_use_f16(src0, src1, dst)) {
+            ggml_cl_mul_mat_f16(src0, src1, dst, wdata, wsize);
+        }
+        else {
+            ggml_cl_mul_mat_q_f32(src0, src1, dst);
+        }
+    }
+    else if (ggml_is_quantized(src0->type)) {
+        ggml_cl_mul_mat_q_f32(src0, src1, dst);
+    }
+    else {
+        GGML_ASSERT(false);
+    }
+}
+
+size_t ggml_cl_mul_mat_get_wsize(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
+    if (ggml_cl_mul_mat_use_f16(src0, src1, dst)) {
+        return ggml_nelements(src1) * sizeof(ggml_fp16_t);
+    }
+    return 0;
+}
+
+void ggml_cl_transform_tensor(ggml_tensor * tensor) {
+    const int64_t ne0 = tensor->ne[0];
+    const int64_t ne1 = tensor->ne[1];
+    const int64_t ne2 = tensor->ne[2];
+    const int64_t ne3 = tensor->ne[3];
+
+    const ggml_type type = tensor->type;
+    const size_t q_sz = ggml_type_size(type) * ne0 * ne1 * ne2 * ne3 / ggml_blck_size(type);
+
+    size_t q_size;
+    cl_mem* d_Q = (cl_mem*) malloc(sizeof(cl_mem));
+    *d_Q = ggml_cl_pool_malloc(q_sz, &q_size, CL_MEM_READ_ONLY);
+
+    // copy tensor to device
+    CL_CHECK(ggml_cl_h2d_tensor_2d(queue, *d_Q, 0, tensor, 0, 0, NULL), "ggml_cl_h2d_tensor_2d");
+    CL_CHECK(clFinish(queue), "clFinish");
+
+    tensor->data = d_Q;
+    tensor->backend = GGML_BACKEND_CL;
+}
