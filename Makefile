@@ -41,8 +41,8 @@ endif
 #
 
 # keep standard at C11 and C++11
-CFLAGS   = -I.              -I./include -I./include/CL -I./otherarch -I./otherarch/tools -Ofast -DNDEBUG -std=c11   -fPIC
-CXXFLAGS = -I. -I./examples -I./include -I./include/CL -I./otherarch -I./otherarch/tools -Ofast -DNDEBUG -std=c++11 -fPIC
+CFLAGS   = -I.              -I./include -I./include/CL -I./otherarch -I./otherarch/tools -O3 -DNDEBUG -std=c11   -fPIC
+CXXFLAGS = -I. -I./examples -I./include -I./include/CL -I./otherarch -I./otherarch/tools -O3 -DNDEBUG -std=c++11 -fPIC
 LDFLAGS  =
 
 # these are used on windows, to build some libraries with extra old device compatibility
@@ -261,7 +261,7 @@ main: examples/main/main.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
 
-koboldcpp: ggml.o ggml_v1.o expose.o common.o gpttype_adapter.o
+koboldcpp: ggml.o ggml_v1.o expose.o common.o gpttype_adapter.o $(OBJS)
 	$(DEFAULT_BUILD)
 
 koboldcpp_openblas: ggml_openblas.o ggml_v1.o expose.o common.o gpttype_adapter.o 
