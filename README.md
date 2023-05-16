@@ -80,6 +80,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [Koala](https://bair.berkeley.edu/blog/2023/04/03/koala/)
 - [X] [OpenBuddy 🐶 (Multilingual)](https://github.com/OpenBuddy/OpenBuddy)
 - [X] [Pygmalion 7B / Metharme 7B](#using-pygmalion-7b--metharme-7b)
+- [X] [WizardLM](https://github.com/nlpxucan/WizardLM)
 
 **Bindings:**
 
