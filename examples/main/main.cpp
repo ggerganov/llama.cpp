@@ -191,7 +191,7 @@ int main(int argc, char ** argv) {
         //    }
         //}
         //const int N = embd_inp.size();
-        llama_set_steering_write(ctx, params.steering_layer, +1.0f);
+        llama_set_steering_write(ctx, params.steering_source, +1.0f);
         llama_eval(ctx, add_tokens.data(), std::min((int)add_tokens.size(), n_ctx), 0, params.n_threads);
 
         llama_set_steering_write(ctx, params.steering_layer, -1.0f);

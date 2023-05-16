@@ -77,6 +77,7 @@ struct gpt_params {
     std::string steering_sub;
     float       steering_mul = 1.0f;
     int         steering_layer = 15;
+    int         steering_source = 2;
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
