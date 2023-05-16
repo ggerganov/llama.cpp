@@ -1038,10 +1038,12 @@ static void llama_model_load_internal(
         for (int i = 0; i < n_gpu; ++i) {
             const auto & layer = model.layers[i];
 
+            ggml_cuda_transform_tensor(layer.attention_norm); vram_total += ggml_nbytes(layer.attention_norm);
             ggml_cuda_transform_tensor(layer.wq); vram_total += ggml_nbytes(layer.wq);
             ggml_cuda_transform_tensor(layer.wk); vram_total += ggml_nbytes(layer.wk);
             ggml_cuda_transform_tensor(layer.wv); vram_total += ggml_nbytes(layer.wv);
             ggml_cuda_transform_tensor(layer.wo); vram_total += ggml_nbytes(layer.wo);
+            ggml_cuda_transform_tensor(layer.ffn_norm); vram_total += ggml_nbytes(layer.ffn_norm);
             ggml_cuda_transform_tensor(layer.w1); vram_total += ggml_nbytes(layer.w1);
             ggml_cuda_transform_tensor(layer.w2); vram_total += ggml_nbytes(layer.w2);
             ggml_cuda_transform_tensor(layer.w3); vram_total += ggml_nbytes(layer.w3);

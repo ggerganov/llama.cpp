@@ -7961,6 +7961,14 @@ static void ggml_compute_forward_mul_f32(
     }
     const int ith = params->ith;
     const int nth = params->nth;
+#ifdef GGML_USE_CUBLAS
+    if (src1->backend == GGML_BACKEND_CUDA) {
+        if (ith == 0) {
+            ggml_cuda_mul(src0, src1, dst);
+        }
+        return;
+    }
+#endif
 
     const size_t nb00 = src0->nb[0];
     const size_t nb01 = src0->nb[1];
