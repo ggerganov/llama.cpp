@@ -72,6 +72,11 @@ struct gpt_params {
     bool use_mlock         = false; // use mlock to keep model in memory
     bool mem_test          = false; // compute maximum memory usage
     bool verbose_prompt    = false; // print prompt tokens before generation
+
+    std::string steering_add = "";
+    std::string steering_sub = "";
+    float       steering_mul = 1.0f;
+    int         steering_lyr = 20;
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);

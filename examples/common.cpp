@@ -344,6 +344,30 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.input_suffix = argv[i];
+        } else if (arg == "--steering-add") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.steering_add = argv[i];
+        } else if (arg == "--steering-sub") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.steering_sub = argv[i];
+        } else if (arg == "--steering-mul") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.steering_mul = std::stof(argv[i]);
+        } else if (arg == "--steering-lyr") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.steering_lyr = std::stoi(argv[i]);
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             gpt_print_usage(argc, argv, default_params);

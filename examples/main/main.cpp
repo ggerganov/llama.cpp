@@ -136,6 +136,28 @@ int main(int argc, char ** argv) {
         return 0;
     }
 
+    if (params.steering_add.size() || params.steering_sub.size())
+    {
+        auto steering_add_tokens = ::llama_tokenize(ctx, params.steering_add, true);
+        auto steering_sub_tokens = ::llama_tokenize(ctx, params.steering_sub, true);
+
+        if (steering_add_tokens.size() != steering_sub_tokens.size()) {
+            llama_token space;
+            llama_tokenize(ctx, " ", &space, 1, 0);
+
+            while (steering_add_tokens.size() < steering_sub_tokens.size()) steering_add_tokens.push_back(space);
+            while (steering_sub_tokens.size() < steering_add_tokens.size()) steering_sub_tokens.push_back(space);
+        }
+
+        llama_set_steering_write(ctx, params.steering_lyr, params.steering_mul/2);
+        llama_eval(ctx, steering_add_tokens.data(), std::min((int)steering_add_tokens.size(), params.n_ctx), 0, params.n_threads);
+
+        llama_set_steering_write(ctx, params.steering_lyr, -params.steering_mul/2);
+        llama_eval(ctx, steering_sub_tokens.data(), std::min((int)steering_sub_tokens.size(), params.n_ctx), 0, params.n_threads);
+
+        llama_set_steering_read(ctx, params.steering_lyr, 1);
+    }
+
     // Add a space in front of the first character to match OG llama tokenizer behavior
     params.prompt.insert(0, 1, ' ');
 
