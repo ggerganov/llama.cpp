@@ -4643,7 +4643,7 @@ struct ggml_tensor * ggml_mul_impl(
         struct ggml_tensor * a,
         struct ggml_tensor * b,
         bool inplace) {
-    GGML_ASSERT(ggml_are_same_shape(a, b));
+    GGML_ASSERT(a->ne[0] == b->ne[0] && ggml_can_repeat(b, a));
 
     bool is_node = false;
 
@@ -7945,18 +7945,22 @@ static void ggml_compute_forward_mul_f32(
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
         struct ggml_tensor * dst) {
-    assert(ggml_are_same_shape(src0, src1) && ggml_are_same_shape(src0, dst));
+    const int nr  = ggml_nrows(src0);
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    const int64_t ne10 = src1->ne[0];
+    const int64_t ne11 = src1->ne[1];
+    const int64_t ne12 = src1->ne[2];
+    const int64_t ne13 = src0->ne[3];
+
+    GGML_ASSERT(ne00 == ne10 && ggml_can_repeat(src1, src0) && ggml_are_same_shape(src0, dst));
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
     const int ith = params->ith;
     const int nth = params->nth;
-
-    const int nr  = ggml_nrows(src0);
-    const int64_t ne0 = src0->ne[0];
-    const int64_t ne1 = src0->ne[1];
-    const int64_t ne2 = src0->ne[2];
 
     const size_t nb00 = src0->nb[0];
     const size_t nb01 = src0->nb[1];
@@ -7976,12 +7980,12 @@ static void ggml_compute_forward_mul_f32(
     GGML_ASSERT( nb0 == sizeof(float));
     GGML_ASSERT(nb00 == sizeof(float));
 
-    if (nb10 == sizeof(float)) {
+    if (nb10 == sizeof(float) && ggml_are_same_shape(src0, src1)) {
         for (int ir = ith; ir < nr; ir += nth) {
             // src0, src1 and dst are same shape => same indices
-            const int i3 = ir/(ne2*ne1);
-            const int i2 = (ir - i3*ne2*ne1)/ne1;
-            const int i1 = (ir - i3*ne2*ne1 - i2*ne1);
+            const int i3 = ir/(ne02*ne01);
+            const int i2 = (ir - i3*ne02*ne01)/ne01;
+            const int i1 = (ir - i3*ne02*ne01 - i2*ne01);
 
 
 #ifdef GGML_USE_ACCELERATE
@@ -7991,9 +7995,9 @@ static void ggml_compute_forward_mul_f32(
                     (float *) ((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01), 1,
                     (float *) ((char *) src1->data + i3*nb13 + i2*nb12 + i1*nb11), 1,
                     (float *) ((char *) dst->data  + i3*nb3  + i2*nb2  + i1*nb1 ), 1,
-                    ne0);
+                    ne00);
 #else
-            ggml_vec_mul_f32(ne0,
+            ggml_vec_mul_f32(ne00,
                     (float *) ((char *) dst->data  + i3*nb3  + i2*nb2  + i1*nb1 ),
                     (float *) ((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01),
                     (float *) ((char *) src1->data + i3*nb13 + i2*nb12 + i1*nb11));
@@ -8004,15 +8008,19 @@ static void ggml_compute_forward_mul_f32(
     } else {
         // src1 is not contiguous
         for (int ir = ith; ir < nr; ir += nth) {
-            // src0, src1 and dst are same shape => same indices
-            const int i3 = ir/(ne2*ne1);
-            const int i2 = (ir - i3*ne2*ne1)/ne1;
-            const int i1 = (ir - i3*ne2*ne1 - i2*ne1);
+            // src0 and dst are same shape => same indices
+            // src1 is broadcastable across src0 and dst in i1, i2, i3
+            const int i03 = ir/(ne02*ne01);
+            const int i02 = (ir - i03*ne02*ne01)/ne01;
+            const int i01 = (ir - i03*ne02*ne01 - i02*ne01);
+            const int i13 = i03 % ne13;
+            const int i12 = i02 % ne12;
+            const int i11 = i01 % ne11;
 
-            float * dst_ptr  = (float *) ((char *) dst->data  + i3*nb3  + i2*nb2  + i1*nb1 );
-            float * src0_ptr = (float *) ((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01);
-            for (int i0 = 0; i0 < ne0; i0++) {
-                float * src1_ptr = (float *) ((char *) src1->data + i3*nb13 + i2*nb12 + i1*nb11 + i0*nb10);
+            float * dst_ptr  = (float *) ((char *) dst->data  + i03*nb3  + i02*nb2  + i01*nb1 );
+            float * src0_ptr = (float *) ((char *) src0->data + i03*nb03 + i02*nb02 + i01*nb01);
+            for (int i0 = 0; i0 < ne00; i0++) {
+                float * src1_ptr = (float *) ((char *) src1->data + i13*nb13 + i12*nb12 + i11*nb11 + i0*nb10);
 
                 dst_ptr[i0] = src0_ptr[i0] * (*src1_ptr);
             }

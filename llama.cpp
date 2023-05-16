@@ -1154,10 +1154,14 @@ static bool llama_eval_internal(
         {
             cur = ggml_rms_norm(ctx0, inpL);
 
-            // cur = attention_norm*cur
+            // cur = cur*attention_norm(broadcasted)
+#ifdef GGML_USE_CUBLAS
+            cur = ggml_mul(ctx0, cur, model.layers[il].attention_norm);
+#else
             cur = ggml_mul(ctx0,
                         ggml_repeat(ctx0, model.layers[il].attention_norm, cur),
                         cur);
+#endif
         }
 
         // self-attention
@@ -1264,10 +1268,14 @@ static bool llama_eval_internal(
             {
                 cur = ggml_rms_norm(ctx0, inpFF);
 
-                // cur = ffn_norm*cur
+                // cur = cur*ffn_norm(broadcasted)
+#ifdef GGML_USE_CUBLAS
+                cur = ggml_mul(ctx0, cur, model.layers[il].ffn_norm);
+#else
                 cur = ggml_mul(ctx0,
                         ggml_repeat(ctx0, model.layers[il].ffn_norm, cur),
                         cur);
+#endif
             }
 
             struct ggml_tensor * tmp = ggml_mul_mat(ctx0,
@@ -1304,10 +1312,14 @@ static bool llama_eval_internal(
 
         inpL = ggml_rms_norm(ctx0, inpL);
 
-        // inpL = norm*inpL
+        // inpL = inpL*norm(broadcasted)
+#ifdef GGML_USE_CUBLAS
+        inpL = ggml_mul(ctx0, inpL, model.norm);
+#else
         inpL = ggml_mul(ctx0,
                     ggml_repeat(ctx0, model.norm, inpL),
                     inpL);
+#endif
 
         embeddings = inpL;
     }
