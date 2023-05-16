@@ -2449,7 +2449,7 @@ static void ggml_vec_dot_q4_1_q8_1(const int n, float * restrict s, const void *
         const __m256i bx = bytes_from_nibbles_32(x[i].qs);
         const __m256i by = _mm256_loadu_si256( (const __m256i *)y[i].qs );
 
-        const __m256 xy = mul_sum_i8_pairs_float(bx, by);
+        const __m256 xy = mul_sum_us8_pairs_float(bx, by);
 
         // Accumulate d0*d1*x*y
 #if defined(__AVX2__)
