@@ -94,6 +94,10 @@ as the main playground for developing new features for the [ggml](https://github
 - [nat/openplayground](https://github.com/nat/openplayground)
 - [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui)
 
+**Tools:**
+
+- [akx/ggify](https://github.com/akx/ggify) – download PyTorch models from HuggingFace Hub and convert them to GGML
+
 ---
 
 Here is a typical run using LLaMA-7B:
