@@ -211,6 +211,7 @@ int main(int argc, char ** argv)  {
     printf("Iteration;NThreads; SizeX; SizeY; SizeZ; Required_FLOPS; Elapsed_u_Seconds; gigaFLOPS\n");
     printf("=====================================================================================\n");
 
+    double  gflops_average = 0;
     for (int i=0;i<benchmark_params.n_iterations ;i++) {
 
         long long int start = ggml_time_us();
@@ -224,6 +225,13 @@ int main(int argc, char ** argv)  {
             gf31.n_threads,
             sizex, sizey, sizez, flops_per_matrix,
             usec,gflops);
+
+        gflops_average += gflops;
+        if (i+1 == benchmark_params.n_iterations)  {
+          printf("\n");
+          printf("Average                                                                    %10.2f\n",gflops_average/((double)benchmark_params.n_iterations));
+          printf("=====================================================================================\n");
+        }
 
 #ifdef VERBOSE_DEBUGGING
         TENSOR_DUMP("res",gf31.nodes[0])
