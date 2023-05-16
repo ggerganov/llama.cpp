@@ -1579,6 +1579,14 @@ inline bool GetQuantsUnshuffled()
 {
     return quants_unshuffled;
 }
+inline void SetGPULayers(bool layers)
+{
+    true_gpu_layers = layers;
+}
+inline bool GetGPULayers()
+{
+    return true_gpu_layers;
+}
 
 //TODO: integrate backwards compat
 static const quantize_fns_t quantize_fns_v2[GGML_TYPE_COUNT] = {

@@ -313,6 +313,7 @@ static std::string generate_kernels() {
         cl_int err_ = (err);                                                                    \
         if (err_ != CL_SUCCESS) {                                                               \
             fprintf(stderr, "OpenCL %s error %d at %s:%d\n", name, err_, __FILE__, __LINE__);   \
+            fprintf(stderr, "You may be out of VRAM. Please check if you have enough.\n");      \
             exit(1);                                                                            \
         }                                                                                       \
     } while (0)
@@ -840,6 +841,7 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
                                             &queue, &ev_sgemm);
 
                 if (status != clblast::StatusCode::kSuccess) {
+                    printf("\nYou may be out of VRAM. Please check if you have enough.\n");
                     GGML_ASSERT(false);
                 }
             }
@@ -872,7 +874,7 @@ bool ggml_cl_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tens
     if ((src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) &&
         src1->type == GGML_TYPE_F32 &&
         dst->type == GGML_TYPE_F32 &&
-        ((GetQuantsUnshuffled() && ne0 >= 32 && ne1 >= 32 && ne10 >= 32) || src0->backend == GGML_BACKEND_CL)) {
+        ((GetQuantsUnshuffled() && GetGPULayers()>0 && ne0 >= 32 && ne1 >= 32 && ne10 >= 32) || src0->backend == GGML_BACKEND_CL)) {
         return true;
     }
 

@@ -1499,6 +1499,7 @@ quantize_fns_t ggml_internal_get_quantize_fn(size_t i) {
     return quantize_fns[i];
 }
 
+int true_gpu_layers = 0;
 bool quants_unshuffled = false; //new GGJT_2 is unshuffled, all old ones are shuffled
 static const quantize_fns_t quantize_fns_v2[GGML_TYPE_COUNT]; //forward decl
 static inline quantize_fns_t get_quantize_fn(size_t i) 

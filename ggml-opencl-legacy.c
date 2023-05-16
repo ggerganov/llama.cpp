@@ -164,6 +164,7 @@ __kernel void dequantize_row_q8_0(__global struct block_q8_0* blocks, __global f
         cl_int err_ = (err);                                                                    \
         if (err_ != CL_SUCCESS) {                                                               \
             fprintf(stderr, "OpenCL %s error %d at %s:%d\n", name, err_, __FILE__, __LINE__);   \
+            fprintf(stderr, "You may be out of VRAM. Please check if you have enough.\n");      \
             exit(1);                                                                            \
         }                                                                                       \
     } while (0)
