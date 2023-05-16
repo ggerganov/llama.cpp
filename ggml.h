@@ -321,6 +321,7 @@ extern "C" {
 
         GGML_OP_MAP_UNARY,
         GGML_OP_MAP_BINARY,
+        GGML_OP_MAP_TERNARY,
 
         GGML_OP_COUNT,
     };
@@ -358,6 +359,7 @@ extern "C" {
         struct ggml_tensor * grad;
         struct ggml_tensor * src0;
         struct ggml_tensor * src1;
+        struct ggml_tensor * src2;
         struct ggml_tensor * opt[GGML_MAX_OPT];
 
         // thread scheduling
@@ -372,7 +374,7 @@ extern "C" {
 
         char name[32];
 
-        char padding[16];
+        char padding[8];
     };
 
     // computation graph
@@ -931,6 +933,7 @@ extern "C" {
     // Mapping operations
     typedef void (*ggml_unary_op_f32_t)(const int, float *, const float *);
     typedef void (*ggml_binary_op_f32_t)(const int, float *, const float *, const float *);
+    typedef void (*ggml_ternary_op_f32_t)(const int, float *, const float *, const float *, const float *);
 
     GGML_API struct ggml_tensor * ggml_map_unary_f32(
             struct ggml_context        * ctx,
@@ -942,6 +945,13 @@ extern "C" {
             struct ggml_tensor          * a,
             struct ggml_tensor          * b,
                    ggml_binary_op_f32_t   fun);
+
+    GGML_API struct ggml_tensor * ggml_map_ternary_f32(
+            struct ggml_context         * ctx,
+            struct ggml_tensor          * a,
+            struct ggml_tensor          * b,
+            struct ggml_tensor          * c,
+            const  ggml_ternary_op_f32_t fun);
 
     //
     // automatic differentiation
