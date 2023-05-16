@@ -8,7 +8,6 @@
 
 int main(int argc, char ** argv) {
     gpt_params params;
-    params.model = "models/llama-7B/ggml-model.bin";
     params.seed = 42;
     params.n_threads = 4;
     params.repeat_last_n = 64;
