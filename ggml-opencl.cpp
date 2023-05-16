@@ -1025,13 +1025,19 @@ void ggml_cl_transform_tensor(ggml_tensor * tensor) {
     const size_t q_sz = ggml_type_size(type) * ne0 * ne1 * ne2 * ne3 / ggml_blck_size(type);
 
     size_t q_size;
-    cl_mem* d_Q = (cl_mem*) malloc(sizeof(cl_mem));
-    *d_Q = ggml_cl_pool_malloc(q_sz, &q_size, CL_MEM_READ_ONLY);
+    cl_mem* dst = (cl_mem*) malloc(sizeof(cl_mem));
+    *dst = ggml_cl_pool_malloc(q_sz, &q_size, CL_MEM_READ_ONLY);
 
     // copy tensor to device
-    CL_CHECK(ggml_cl_h2d_tensor_2d(queue, *d_Q, 0, tensor, 0, 0, NULL));
+    for (int64_t i3 = 0; i3 < ne3; i3++) {
+        for (int64_t i2 = 0; i2 < ne2; i2++) {
+            int i = i3*ne2 + i2;
+            CL_CHECK(ggml_cl_h2d_tensor_2d(queue, *dst, i*ne0*ne1, tensor, i3, i2, NULL));
+        }
+    }
+
     CL_CHECK(clFinish(queue));
 
-    tensor->data = d_Q;
+    tensor->data = dst;
     tensor->backend = GGML_BACKEND_CL;
 }
