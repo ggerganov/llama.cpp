@@ -362,12 +362,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.steering_mul = std::stof(argv[i]);
-        } else if (arg == "--steering-lyr") {
+        } else if (arg == "--steering-layer") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params.steering_lyr = std::stoi(argv[i]);
+            params.steering_layer = std::stoi(argv[i]);
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             gpt_print_usage(argc, argv, default_params);
@@ -454,6 +454,10 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     }
     fprintf(stderr, "  -ngl N, --n-gpu-layers N\n");
     fprintf(stderr, "                        number of layers to store in VRAM\n");
+    fprintf(stderr, "  --steering-add        add positive steering prompt\n");
+    fprintf(stderr, "  --steering-sub        add negativ steering prompt\n");
+    fprintf(stderr, "  --steering-mul        set steering strength (negative is reverse, default %.1f)\n", params.steering_mul);
+    fprintf(stderr, "  --steering-layer      set layer for steering (default %d)\n", params.steering_layer);
     fprintf(stderr, "  --mtest               compute maximum memory usage\n");
     fprintf(stderr, "  --verbose-prompt      print prompt before generation\n");
     fprintf(stderr, "  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");

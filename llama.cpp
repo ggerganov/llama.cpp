@@ -287,6 +287,9 @@ void llama_set_steering_read(struct llama_context * ctx, int layer, float mul) {
     ctx->steering_mode = STEERING_READ;
     ctx->steering_mul = mul;
     ctx->steering_layer = layer;
+    //FILE* steeringbin = fopen("steering.bin", "wb");
+    //fwrite(ctx->steering_vector.data(), sizeof(float), ctx->steering_vector.size(), steeringbin);
+    //fclose(steeringbin);
 }
 
 template <typename T>
@@ -1163,8 +1166,9 @@ static bool llama_eval_internal(
 
     struct ggml_tensor * steer;
     if (lctx.steering_mode != STEERING_OFF) {
-        steer = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_ctx, n_embd);
-        memcpy(steer->data, lctx.steering_vector.data(), ggml_nbytes(steer));
+        steer = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N);
+        //steer->data = lctx.steering_vector.data() + n_past * n_embd * sizeof(float);
+        memcpy(steer->data, lctx.steering_vector.data() + n_past * n_embd * sizeof(float), ggml_nbytes(steer));
     }
 
     struct ggml_tensor * inpL = ggml_get_rows(ctx0, model.tok_embeddings, embd);
@@ -1177,15 +1181,14 @@ static bool llama_eval_internal(
         lctx.use_buf(ctx0, 0);
 
         if (lctx.steering_mode != STEERING_OFF && il == lctx.steering_layer) {
-            steer->data = lctx.steering_vector.data();
-
-            struct ggml_tensor * src = ggml_scale(ctx0, inpL, ggml_new_f32(ctx0, lctx.steering_mul));
-            struct ggml_tensor * dst = ggml_view_2d(ctx0, steer, n_embd, N, n_embd * sizeof(float), n_past * n_embd * sizeof(float));
+            struct ggml_tensor * scal = ggml_new_f32(ctx0, lctx.steering_mul);
             if (lctx.steering_mode == STEERING_WRITE) {
-                ggml_build_forward_expand(&gf, ggml_cpy(ctx0, ggml_add(ctx0, src, dst), dst));
-            } else {
-                inpL = src;
+                ggml_build_forward_expand(&gf, ggml_cpy(ctx0,
+                    ggml_add(ctx0, ggml_scale(ctx0, inpL, scal), steer), steer));
+                break;
             }
+            
+            inpL = ggml_add(ctx0, ggml_scale(ctx0, steer, scal), inpL);
         }
 
         // norm
@@ -1403,7 +1406,7 @@ static bool llama_eval_internal(
 
 
     if (lctx.steering_mode == STEERING_WRITE) {
-        memcpy(lctx.steering_vector.data(), steer->data, ggml_nbytes(steer));
+        memcpy(lctx.steering_vector.data() + n_past * n_embd * sizeof(float), steer->data, ggml_nbytes(steer));
     }
 
 
