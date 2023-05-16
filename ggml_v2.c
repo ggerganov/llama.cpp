@@ -1575,6 +1575,10 @@ void SetQuantsUnshuffled(bool unshuffle)
 {
     quants_unshuffled = unshuffle;
 }
+bool GetQuantsUnshuffled()
+{
+    return quants_unshuffled;
+}
 
 //TODO: integrate backwards compat
 static const quantize_fns_t quantize_fns_v2[GGML_TYPE_COUNT] = {

@@ -1072,6 +1072,8 @@ static void llama_model_load_internal(
 #elif defined(GGML_USE_CLBLAST)
     {
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
+        if(GetQuantsUnshuffled())
+        {       
 
         fprintf(stderr, "%s: [opencl] offloading %d layers to GPU\n", __func__, n_gpu);
 
@@ -1094,6 +1096,14 @@ static void llama_model_load_internal(
         }
 
         fprintf(stderr, "%s: [opencl] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
+        }
+        else
+        {
+            if(n_gpu>0)
+            {
+                printf("\n[WARNING: Old format does not support GPU offloading! It will be deactivated!]\n");
+            }
+        }
     }
 #else
     (void) n_gpu_layers;
