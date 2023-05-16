@@ -248,7 +248,6 @@ expose.o: expose.cpp expose.h
 
 gpttype_adapter.o: gpttype_adapter.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
-
 gpttype_adapter_clblast.o: gpttype_adapter.cpp
 	$(CXX) $(CXXFLAGS) $(CLBLAST_FLAGS) -c $< -o $@
 
