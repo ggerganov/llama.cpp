@@ -10,6 +10,7 @@
 
 #include "ggml.h"
 #ifdef GGML_USE_CUBLAS
+#include <cuda_runtime.h>
 #include "ggml-cuda.h"
 #endif
 
