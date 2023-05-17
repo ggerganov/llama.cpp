@@ -813,6 +813,34 @@ typedef struct {
 } block_q8_1;
 static_assert(sizeof(block_q8_1) == 2*sizeof(float) + QK8_1, "wrong q8_1 block size/padding");
 
+void quantize_upgrade(enum ggml_type type, void* data, size_t size) {
+
+    if (type == GGML_TYPE_Q4_0) {
+
+        int qk = ggml_blck_size(type);
+        const size_t nb = size / sizeof(block_q4_0);
+        block_q4_0 *blk = (block_q4_0 *)data;
+        block_q4_0 new_blk;
+
+        for (size_t i = 0; i < nb ; i++) {
+            for (size_t j = 0; j < qk/4; j++)
+            {
+                // old: d0, d1, d2, d3, d4, ....... d_half, d_half1
+                // new: d0, d_half, d1, d_half1
+                uint8_t d1;
+                uint8_t d2;
+
+                d1 = blk[i].qs[0 + j];
+                d2 = blk[i].qs[qk/4 + j];
+
+                new_blk.qs[0 + j * 2] = (d1 & 0x0f) | ((d2 & 0x0f) << 4);
+                new_blk.qs[1 + j * 2] = (d1 >> 4) | (d2 & 0xf0);
+            }
+            memcpy(blk[i].qs, new_blk.qs, sizeof(new_blk.qs));
+        }
+    }
+}
+
 // reference implementation for deterministic creation of model files
 static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * restrict y, int k) {
     static const int qk = QK4_0;
