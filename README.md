@@ -4,7 +4,7 @@
 
 [![Actions Status](https://github.com/ggerganov/llama.cpp/workflows/CI/badge.svg)](https://github.com/ggerganov/llama.cpp/actions)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Discord](https://img.shields.io/discord/1107170063758413824?label=discord&style=plastic)](https://discord.gg/wnRNyrMJ6j)
+[![Discord](https://img.shields.io/discord/1107170063758413824?label=user-maintained%20discord)](https://discord.gg/wnRNyrMJ6j)
 
 Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
