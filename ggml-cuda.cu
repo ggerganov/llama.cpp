@@ -2,11 +2,13 @@
 #include <cstdint>
 #include <stdint.h>
 #include <stdio.h>
+#include <fcntl.h>
 #include <atomic>
 
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 #include <cuda_fp16.h>
+#include <cufile.h>
 
 #include "ggml-cuda.h"
 #include "ggml.h"
@@ -30,6 +32,15 @@ static_assert(sizeof(half) == sizeof(ggml_fp16_t), "wrong fp16 size");
             fprintf(stderr, "cuBLAS error %d at %s:%d\n", err_, __FILE__, __LINE__);    \
             exit(1);                                                                    \
         }                                                                               \
+    } while (0)
+
+#define CUFILE_CHECK(status)                                                                \
+    do {                                                                                    \
+        CUfileError_t status_ = (status);                                                   \
+        if (status_.err != CU_FILE_SUCCESS) {                                               \
+            fprintf(stderr, "cuFile error %d at %s:%d\n", status_.err, __FILE__, __LINE__); \
+            exit(1);                                                                        \
+        }                                                                                   \
     } while (0)
 
 typedef void (*dequantize_kernel_t)(const void * vx, const int ib, const int iqs, float & v0, float & v1);
@@ -372,7 +383,7 @@ struct cuda_buffer {
 static cuda_buffer g_cuda_buffer_pool[MAX_CUDA_BUFFERS];
 static std::atomic_flag g_cuda_pool_lock = ATOMIC_FLAG_INIT;
 
-static void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
+void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
     scoped_spin_lock lock(g_cuda_pool_lock);
 
     for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
@@ -391,7 +402,7 @@ static void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
     return ptr;
 }
 
-static void ggml_cuda_pool_free(void * ptr, size_t size) {
+void ggml_cuda_pool_free(void * ptr, size_t size) {
     scoped_spin_lock lock(g_cuda_pool_lock);
 
     for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
@@ -431,6 +442,9 @@ void ggml_init_cublas() {
 
         // configure logging to stdout
         // CUBLAS_CHECK(cublasLoggerConfigure(1, 1, 0, nullptr));
+
+        // initialize cuFile for loading model parameters directly to VRAM
+        CUFILE_CHECK(cuFileDriverOpen());
     }
 }
 
@@ -892,4 +906,35 @@ void ggml_cuda_transform_tensor(ggml_tensor * tensor) {
 
     tensor->data = dst;
     tensor->backend = GGML_BACKEND_CUDA;
+}
+
+bool ggml_cuda_load_data_cufile(const char * fname, struct ggml_tensor ** tensors, const int num_tensors, const size_t * offsets) {
+    CUfileDescr_t cf_descr;
+    memset((void *)&cf_descr, 0, sizeof(CUfileDescr_t));
+    const int fd_cf = open(fname, O_RDONLY|O_DIRECT, 0644);
+    cf_descr.handle.fd = fd_cf;
+    cf_descr.type = CU_FILE_HANDLE_TYPE_OPAQUE_FD;
+
+    CUfileHandle_t cf_handle;
+    CUfileError_t status = cuFileHandleRegister(&cf_handle, &cf_descr);
+
+    if (status.err == CU_FILE_INTERNAL_ERROR) {
+        fprintf(stderr, "WARNING: cuFile experienced an internal error while loading weights from \"%s\". Using a workaround (slower). "
+                "This happens with weight files on Btrfs partitions. ext4 and NTFS are confirmed to work.\n", fname);
+    }
+    if (status.err != CU_FILE_SUCCESS) {
+        return false;
+    }
+
+    for (int i = 0; i < num_tensors; ++i) {
+        ggml_tensor * tensor = tensors[i];
+        const size_t size = ggml_nbytes(tensor);
+        const size_t offset = offsets[i];
+
+        size_t actual_size;
+        void * buf = ggml_cuda_pool_malloc(size, &actual_size);
+        cuFileRead(cf_handle, buf, size, offset, 0);
+        tensor->data = buf;
+    }
+    return true;
 }

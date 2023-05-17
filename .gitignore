@@ -48,3 +48,12 @@ qnt-*.txt
 perf-*.txt
 
 examples/jeopardy/results.txt
+
+/prompts
+*.sh
+*.log
+*.py
+*.txt
+/wikitext-2-raw/
+*.org
+/libllama.so
