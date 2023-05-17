@@ -705,7 +705,7 @@ static void ggml_cl_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
 
             // compute
             cl_event ev_sgemm;
-            clblast::StatusCode status = (clblast::StatusCode)CLBlastSgemm((CLBlastLayout)clblast::Layout::kColMajor,
+            clblast::StatusCode status = (clblast::StatusCode)CLBlastHgemm((CLBlastLayout)clblast::Layout::kColMajor,
                                             (CLBlastTranspose)clblast::Transpose::kYes, (CLBlastTranspose)clblast::Transpose::kNo,
                                             ne01, ne11, ne10,
                                             alpha,
