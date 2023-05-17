@@ -1,12 +1,11 @@
 #include "common-ggml.h"
 
 #include <regex>
+#include <map>
 
 static const std::map<std::string, enum ggml_ftype> GGML_FTYPE_MAP = {
     {"q4_0", GGML_FTYPE_MOSTLY_Q4_0},
     {"q4_1", GGML_FTYPE_MOSTLY_Q4_1},
-    {"q4_2", GGML_FTYPE_MOSTLY_Q4_2},
-    {"q4_3", GGML_FTYPE_MOSTLY_Q4_3},
     {"q5_0", GGML_FTYPE_MOSTLY_Q5_0},
     {"q5_1", GGML_FTYPE_MOSTLY_Q5_1},
     {"q8_0", GGML_FTYPE_MOSTLY_Q8_0},
@@ -46,8 +45,6 @@ bool ggml_common_quantize_0(
     switch (ftype) {
         case GGML_FTYPE_MOSTLY_Q4_0: qtype = GGML_TYPE_Q4_0; break;
         case GGML_FTYPE_MOSTLY_Q4_1: qtype = GGML_TYPE_Q4_1; break;
-        case GGML_FTYPE_MOSTLY_Q4_2: qtype = GGML_TYPE_Q4_2; break;
-        case GGML_FTYPE_MOSTLY_Q4_3: qtype = GGML_TYPE_Q4_3; break;
         case GGML_FTYPE_MOSTLY_Q5_0: qtype = GGML_TYPE_Q5_0; break;
         case GGML_FTYPE_MOSTLY_Q5_1: qtype = GGML_TYPE_Q5_1; break;
         case GGML_FTYPE_MOSTLY_Q8_0: qtype = GGML_TYPE_Q8_0; break;
@@ -91,7 +88,7 @@ bool ggml_common_quantize_0(
         }
 
         int32_t nelements = 1;
-        int32_t ne[2] = { 1, 1 };
+        int32_t ne[4] = { 1, 1, 1, 1 };
         for (int i = 0; i < n_dims; ++i) {
             finp.read (reinterpret_cast<char *>(&ne[i]), sizeof(ne[i]));
             nelements *= ne[i];
@@ -100,7 +97,7 @@ bool ggml_common_quantize_0(
         std::string name(length, 0);
         finp.read (&name[0], length);
 
-        printf("%64s - [%5d, %5d], type = %6s ", name.data(), ne[0], ne[1], ggml_type_name((ggml_type) ttype));
+        printf("%64s - [%5d, %5d, %5d], type = %6s ", name.data(), ne[0], ne[1], ne[2], ggml_type_name((ggml_type) ttype));
 
         bool quantize = false;
 
@@ -166,31 +163,23 @@ bool ggml_common_quantize_0(
             switch ((ggml_type) ttype) {
                 case GGML_TYPE_Q4_0:
                     {
-                        cur_size = ggml_quantize_q4_0_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                        cur_size = ggml_quantize_q4_0(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                     } break;
                 case GGML_TYPE_Q4_1:
                     {
-                        cur_size = ggml_quantize_q4_1_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
-                    } break;
-                case GGML_TYPE_Q4_2:
-                    {
-                        cur_size = ggml_quantize_q4_2_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
-                    } break;
-                case GGML_TYPE_Q4_3:
-                    {
-                        cur_size = ggml_quantize_q4_3_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                        cur_size = ggml_quantize_q4_1(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                     } break;
                 case GGML_TYPE_Q5_0:
                     {
-                        cur_size = ggml_quantize_q5_0_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                        cur_size = ggml_quantize_q5_0(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                     } break;
                 case GGML_TYPE_Q5_1:
                     {
-                        cur_size = ggml_quantize_q5_1_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                        cur_size = ggml_quantize_q5_1(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                     } break;
                 case GGML_TYPE_Q8_0:
                     {
-                        cur_size = ggml_quantize_q8_0_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                        cur_size = ggml_quantize_q8_0(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                     } break;
                 case GGML_TYPE_F32:
                 case GGML_TYPE_F16:
@@ -198,7 +187,6 @@ bool ggml_common_quantize_0(
                 case GGML_TYPE_I16:
                 case GGML_TYPE_I32:
                 case GGML_TYPE_Q8_1:
-                case GGML_TYPE_Q8_1B:
                 case GGML_TYPE_COUNT:
                     {
                         fprintf(stderr, "%s: unsupported quantization type %d (%s)\n", __func__, ttype, ggml_type_name((ggml_type) ttype));
@@ -210,11 +198,11 @@ bool ggml_common_quantize_0(
             total_size_new += cur_size;
 
             printf("size = %8.2f MB -> %8.2f MB | hist: ", nelements * sizeof(float)/1024.0/1024.0, cur_size/1024.0/1024.0);
-            for (int i = 0; i < hist_cur.size(); ++i) {
+            for (int i = 0; i < (int) hist_cur.size(); ++i) {
                 hist_all[i] += hist_cur[i];
             }
 
-            for (int i = 0; i < hist_cur.size(); ++i) {
+            for (int i = 0; i < (int) hist_cur.size(); ++i) {
                 printf("%5.3f ", hist_cur[i] / (float)nelements);
             }
             printf("\n");
@@ -232,12 +220,12 @@ bool ggml_common_quantize_0(
 
     {
         int64_t sum_all = 0;
-        for (int i = 0; i < hist_all.size(); ++i) {
+        for (int i = 0; i < (int) hist_all.size(); ++i) {
             sum_all += hist_all[i];
         }
 
         printf("%s: hist: ", __func__);
-        for (int i = 0; i < hist_all.size(); ++i) {
+        for (int i = 0; i < (int) hist_all.size(); ++i) {
             printf("%5.3f ", hist_all[i] / (float)sum_all);
         }
         printf("\n");

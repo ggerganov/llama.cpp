@@ -214,7 +214,7 @@ struct gpt2_model {
 };
 
 // default hparams (StableLM 3B)
-struct stablelm_hparams {
+struct gpt_neox_hparams {
     int32_t n_vocab = 50257;
     int32_t n_ctx   = 4096;
     int32_t n_embd  = 4096;
@@ -224,7 +224,7 @@ struct stablelm_hparams {
     int32_t ftype   = 1;
 };
 
-struct stablelm_layer {
+struct gpt_neox_layer {
     // pre normalization
     struct ggml_tensor * ln_1_g;
     struct ggml_tensor * ln_1_b;
@@ -248,8 +248,8 @@ struct stablelm_layer {
     struct ggml_tensor * c_mlp_proj_b;
 };
 
-struct stablelm_model {
-    stablelm_hparams hparams;
+struct gpt_neox_model {
+    gpt_neox_hparams hparams;
 
     // normalization
     struct ggml_tensor * ln_f_g;
@@ -260,7 +260,7 @@ struct stablelm_model {
     struct ggml_tensor * lmh_g; // language model head
     //struct ggml_tensor * lmh_b; // language model bias
 
-    std::vector<stablelm_layer> layers;
+    std::vector<gpt_neox_layer> layers;
 
     // key + value memory
     struct ggml_tensor * memory_k;

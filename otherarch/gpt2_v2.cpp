@@ -2,7 +2,6 @@
 #include "otherarch.h"
 
 #include "utils.h"
-#include "common-ggml.h"
 
 #include <cassert>
 #include <cmath>

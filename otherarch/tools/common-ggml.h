@@ -2,15 +2,13 @@
 
 #include "ggml.h"
 
-#include <map>
 #include <fstream>
 #include <vector>
 #include <string>
 
+enum ggml_ftype ggml_parse_ftype(const char * str);
 
 void ggml_print_ftypes(FILE * fp = stderr);
-
-enum ggml_ftype ggml_parse_ftype(const char * str);
 
 bool ggml_common_quantize_0(
         std::ifstream & finp,
