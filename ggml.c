@@ -816,15 +816,34 @@ static_assert(sizeof(block_q8_1) == 2*sizeof(float) + QK8_1, "wrong q8_1 block s
 void quantize_upgrade(enum ggml_type type, void* data, size_t size) {
 
     if (type == GGML_TYPE_Q4_0) {
-
         int qk = ggml_blck_size(type);
         const size_t nb = size / sizeof(block_q4_0);
         block_q4_0 *blk = (block_q4_0 *)data;
         block_q4_0 new_blk;
 
         for (size_t i = 0; i < nb ; i++) {
-            for (size_t j = 0; j < qk/4; j++)
-            {
+            for (size_t j = 0; j < qk/4; j++) {
+                // old: d0, d1, d2, d3, d4, ....... d_half, d_half1
+                // new: d0, d_half, d1, d_half1
+                uint8_t d1;
+                uint8_t d2;
+
+                d1 = blk[i].qs[0 + j];
+                d2 = blk[i].qs[qk/4 + j];
+
+                new_blk.qs[0 + j * 2] = (d1 & 0x0f) | ((d2 & 0x0f) << 4);
+                new_blk.qs[1 + j * 2] = (d1 >> 4) | (d2 & 0xf0);
+            }
+            memcpy(blk[i].qs, new_blk.qs, sizeof(new_blk.qs));
+        }
+    } else if (type == GGML_TYPE_Q4_1) {
+        int qk = ggml_blck_size(type);
+        const size_t nb = size / sizeof(block_q4_1);
+        block_q4_1 *blk = (block_q4_1 *)data;
+        block_q4_1 new_blk;
+
+        for (size_t i = 0; i < nb ; i++) {
+            for (size_t j = 0; j < qk/4; j++) {
                 // old: d0, d1, d2, d3, d4, ....... d_half, d_half1
                 // new: d0, d_half, d1, d_half1
                 uint8_t d1;
