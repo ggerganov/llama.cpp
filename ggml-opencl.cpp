@@ -23,13 +23,6 @@ typedef uchar uint8_t;
 typedef int int32_t;
 typedef uint uint32_t;
 
-constant uint GGML_TYPE_Q4_0 = 2;
-constant uint GGML_TYPE_Q4_1 = 3;
-constant uint GGML_TYPE_Q5_0 = 6;
-constant uint GGML_TYPE_Q5_1 = 7;
-constant uint GGML_TYPE_Q8_0 = 8;
-constant uint GGML_TYPE_Q8_1 = 9;
-
 constant uint QK4_0 = 32;
 constant uint QR4_0 = 2;
 struct block_q4_0
