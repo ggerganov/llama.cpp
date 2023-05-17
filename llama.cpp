@@ -812,7 +812,6 @@ static bool kv_cache_init(
 struct llama_context_params llama_context_default_params() {
     struct llama_context_params result = {
         /*.n_ctx                       =*/ 512,
-        /*.n_parts                     =*/ -1,
         /*.gpu_layers                  =*/ 0,
         /*.seed                        =*/ -1,
         /*.f16_kv                      =*/ false,
