@@ -1,4 +1,4 @@
-{ pkgs ? import <nixpkgs> { overlays = [ (import ./vespa-cli-overlay.nix) ]; } }:
+{ pkgs ? import <nixpkgs> {} }:
 
 pkgs.mkShell {
   buildInputs = with pkgs; [
@@ -6,7 +6,6 @@ pkgs.mkShell {
     cargo
     tree
     poetry
-    vespa-cli
   ];
   shellHook = ''
     cat <<'EOF'

@@ -11,6 +11,9 @@ self: super:
     };
 
     buildInputs = [];
+
+    nativeBuildInputs = [ super.makeWrapper ];
+
     dontBuild = true;
 
     unpackPhase = ''
@@ -21,8 +24,7 @@ self: super:
       mkdir -p $out/bin
       cp vespa-cli_${version}_darwin_arm64/bin/vespa $out/bin
       chmod +x $out/bin/vespa
-      # Add an exception to allow the vespa binary to run
-      xattr -r -d com.apple.quarantine $out/bin/vespa
+      # Wrap the vespa binary to remove quarantine attribute
     '';
   };
 }
