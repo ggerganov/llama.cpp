@@ -66,6 +66,7 @@ endif()
 # 3rd party libs
 option(LLAMA_ACCELERATE             "llama: enable Accelerate framework"                    ON)
 option(LLAMA_OPENBLAS               "llama: use OpenBLAS"                                   OFF)
+option(LLAMA_BLIS                   "llama: use blis"                                       OFF)
 option(LLAMA_CUBLAS                 "llama: use cuBLAS"                                     OFF)
 option(LLAMA_CLBLAST                "llama: use CLBlast"                                    OFF)
 
@@ -176,6 +177,24 @@ if (LLAMA_OPENBLAS)
     else()
         message(WARNING "OpenBLAS not found")
     endif()
+endif()
+
+if (LLAMA_BLIS)
+    add_compile_definitions(GGML_USE_BLIS)
+    # we don't directly call BLIS apis, use cblas wrapper instead
+    add_compile_definitions(GGML_USE_OPENBLAS)
+    set(BLIS_INCLUDE_SEARCH_PATHS
+        /usr/include
+        /usr/include/blis
+        /usr/local/include
+        /usr/local/include/blis
+        $ENV{BLIS_HOME}
+        $ENV{BLIS_HOME}/include
+        )
+    find_path(BLIS_INC NAMES blis.h PATHS ${BLIS_INCLUDE_SEARCH_PATHS})
+    add_compile_definitions(BLIS_ENABLE_CBLAS)
+    add_link_options(-lblis)
+    add_compile_options(-I${BLIS_INC})
 endif()
 
 if (LLAMA_CUBLAS)

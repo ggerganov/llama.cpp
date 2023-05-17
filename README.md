@@ -58,6 +58,7 @@ The main goal of `llama.cpp` is to run the LLaMA model using 4-bit integer quant
 - Runs on the CPU
 - OpenBLAS support
 - cuBLAS and CLBlast support
+- BLIS support (cblas wrapper)
 
 The original implementation of `llama.cpp` was [hacked in an evening](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022).
 Since then, the project has improved significantly thanks to many contributions. This project is for educational purposes and serves
@@ -277,6 +278,10 @@ Building the program with BLAS support may lead to some performance improvements
       cmake .. -DLLAMA_OPENBLAS=ON
       cmake --build . --config Release
       ```
+
+- BLIS
+
+  Check [BLIS.md](BLIS.md) for more information.
 
 - cuBLAS
 
