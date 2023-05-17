@@ -617,6 +617,7 @@ static void ggml_cl_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
                                             &queue, &ev_sgemm);
 
             if (status != clblast::StatusCode::kSuccess) {
+                printf("\nF32 Matmul Failed (%d): You may be out of VRAM. Please check if you have enough.\n",status);
                 GGML_ASSERT(false);
             }
 
@@ -715,6 +716,7 @@ static void ggml_cl_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
                                             &queue, &ev_sgemm);
 
             if (status != clblast::StatusCode::kSuccess) {
+                printf("\nF16 Matmul Failed (%d): You may be out of VRAM. Please check if you have enough.\n",status);
                 GGML_ASSERT(false);
             }
 
@@ -824,7 +826,7 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
                                             &queue, &ev_sgemm);
 
                 if (status != clblast::StatusCode::kSuccess) {
-                    printf("\nYou may be out of VRAM. Please check if you have enough.\n");
+                    printf("\nQF32 Matmul Failed (%d): You may be out of VRAM. Please check if you have enough.\n",status);
                     GGML_ASSERT(false);
                 }
             }
