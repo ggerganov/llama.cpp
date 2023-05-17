@@ -24,13 +24,6 @@ typedef uchar uint8_t;
 typedef int int32_t;
 typedef uint uint32_t;
 
-const uint GGML_TYPE_Q4_0 = 2;
-const uint GGML_TYPE_Q4_1 = 3;
-const uint GGML_TYPE_Q5_0 = 6;
-const uint GGML_TYPE_Q5_1 = 7;
-const uint GGML_TYPE_Q8_0 = 8;
-const uint GGML_TYPE_Q8_1 = 9;
-
 struct block_q4_0
 {
     float d;
