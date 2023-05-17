@@ -201,6 +201,9 @@ typedef double ggml_float;
 #define GGML_COMPUTE_FP32_TO_FP16(x) _cvtss_sh(x, 0)
 #endif
 
+#define GGML_FP16_TO_FP32(x) GGML_COMPUTE_FP16_TO_FP32(x)
+#define GGML_FP32_TO_FP16(x) GGML_COMPUTE_FP32_TO_FP16(x)
+
 #elif defined(__POWER9_VECTOR__)
 
 #define GGML_COMPUTE_FP16_TO_FP32(x) ggml_compute_fp16_to_fp32(x)
