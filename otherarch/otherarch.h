@@ -221,6 +221,7 @@ struct gpt_neox_hparams {
     int32_t n_head  = 32;
     int32_t n_layer = 16;
     int32_t n_rot   = 32; // rotary_pct * (n_embd / n_head)
+    int32_t par_res = 1; // 1 = true, 0 = false
     int32_t ftype   = 1;
 };
 

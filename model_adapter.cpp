@@ -143,19 +143,41 @@ void print_tok_vec(std::vector<float> &embd)
        {
            //anything outside the llama v1 range is assumed to be NeoX
            fileformat = FileFormat::NEOX_4;
-           uint32_t temp;
+           uint32_t temp,temp2;
            fin.read((char *)&temp, sizeof(temp)); //ctx
            fin.read((char *)&temp, sizeof(temp)); //n_embd
            fin.read((char *)&temp, sizeof(temp)); //n_head
            fin.read((char *)&temp, sizeof(temp)); //n_layer
            fin.read((char *)&temp, sizeof(temp)); //n_rot
-           fin.read((char *)&temp, sizeof(temp)); //f16
-           const int32_t qntvr = temp / 1000;
-           temp %= 1000;
-           if(qntvr==0)
-           {
+           fin.read((char *)&temp, sizeof(temp)); //either par_res or ftype (for older ver)
+           
+           if(temp!=0 && temp!=1){
+               //must be ftype, means its an older model. par_res will be undefined
                fileformat = FileFormat::NEOX_2;
            }
+           else
+           {
+                //it could be a newer model, or an old f16/f32 model
+                fin.read((char *)&temp2, sizeof(temp2)); //if previous was par_res, this is ftype. else unknown
+
+                //if it is new ftype, then it must have these properties: > 1000, low multiple of 1k and small remaineder
+                bool isNewFtype = (temp2>=1000 && temp2<=9000 && temp2%1000<20);
+
+                if(!isNewFtype)
+                {
+                    fileformat = FileFormat::NEOX_2;
+                }
+                else
+                {
+                    const int32_t qntvr = temp2 / 1000; //for future use
+                    //then temp was par_res
+                    if(temp==0) //use_parallel_residual is false in RedPajama
+                    {
+                        fileformat = FileFormat::NEOX_5;
+                    }
+                }
+           }
+          
        }
     }
     else if(magic == 0x67676d66) //v2 format ggmf
