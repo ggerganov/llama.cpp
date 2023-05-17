@@ -24,7 +24,6 @@ self: super:
       mkdir -p $out/bin
       cp vespa-cli_${version}_darwin_arm64/bin/vespa $out/bin
       chmod +x $out/bin/vespa
-      # Wrap the vespa binary to remove quarantine attribute
     '';
   };
 }
