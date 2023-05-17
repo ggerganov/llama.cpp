@@ -31,48 +31,38 @@ const uint GGML_TYPE_Q5_1 = 7;
 const uint GGML_TYPE_Q8_0 = 8;
 const uint GGML_TYPE_Q8_1 = 9;
 
-const uint  QK4_0 = 32;
-const uint  QR4_0 = 2;
 struct block_q4_0
 {
     float d;
-    uint8_t qs[QK4_0 / 2];
+    uint8_t qs[16];
 };
 
-const uint  QK4_1 = 32;
-const uint  QR4_1 = 2;
 struct block_q4_1
 {
     float d;
     float m;
-    uint8_t qs[QK4_1 / 2];
+    uint8_t qs[16];
 };
 
-const uint  QK5_0 = 32;
-const uint  QR5_0 = 2;
 struct __attribute__ ((packed)) block_q5_0
 {
     half d;
     uint32_t qh;
-    uint8_t qs[QK5_0 / 2];
+    uint8_t qs[16];
 };
 
-const uint  QK5_1 = 32;
-const uint  QR5_1 = 2;
 struct block_q5_1
 {
     half d;
     half m;
     uint32_t qh;
-    uint8_t qs[QK5_1 / 2];
+    uint8_t qs[16];
 };
 
-const uint  QK8_0 = 32;
-const uint  QR8_0 = 1;
 struct block_q8_0
 {
     float d;
-    uint8_t qs[QK8_0];
+    uint8_t qs[32];
 };
 
 
@@ -84,7 +74,7 @@ __kernel void convert_fp16_to_fp32(__global half* x, __global float* y) {
 
 
 __kernel void dequantize_row_q4_0(__global struct block_q4_0* x, __global float* y) {
-    const uint  qk = QK4_0;
+    const uint qk = 32;
 
     const uint i = get_global_id(0) / qk;
     const uint j = get_local_id(0);
@@ -99,7 +89,7 @@ __kernel void dequantize_row_q4_0(__global struct block_q4_0* x, __global float*
 }
 
 __kernel void dequantize_row_q4_1(__global struct block_q4_1* x, __global float* y) {
-    const uint  qk = QK4_1;
+    const uint qk = 32;
 
     const uint i = get_global_id(0) / qk;
     const uint j = get_local_id(0);
@@ -115,7 +105,7 @@ __kernel void dequantize_row_q4_1(__global struct block_q4_1* x, __global float*
 }
 
 __kernel void dequantize_row_q5_0(__global struct block_q5_0* x, __global float* y) {
-    const uint  qk = QK5_0;
+    const uint qk = 32;
 
     const uint i = get_global_id(0) / qk;
     const uint j = get_local_id(0);
@@ -135,7 +125,7 @@ __kernel void dequantize_row_q5_0(__global struct block_q5_0* x, __global float*
 }
 
 __kernel void dequantize_row_q5_1(__global struct block_q5_1* x, __global float* y) {
-    const uint  qk = QK5_1;
+    const uint qk = 32;
 
     const uint i = get_global_id(0) / qk;
     const uint j = get_local_id(0);
@@ -156,7 +146,7 @@ __kernel void dequantize_row_q5_1(__global struct block_q5_1* x, __global float*
 }
 
 __kernel void dequantize_row_q8_0(__global struct block_q8_0* x, __global float* y) {
-    const uint  qk = QK8_0;
+    const uint qk = 32;
     const uint i = get_global_id(0) / qk;
     const uint j = get_local_id(0);
 
@@ -278,11 +268,11 @@ std::array<std::string, 5> dequant_mul_mat_vec_str_keys = {
 };
 
 std::array<std::string, 30> dequant_mul_mat_vec_str_values = {
-    "dequantize_mul_mat_vec_q4_0", "struct block_q4_0", "QK4_0", "QR4_0", "dequantize_q4_0",
-    "dequantize_mul_mat_vec_q4_1", "struct block_q4_1", "QK4_1", "QR4_1", "dequantize_q4_1",
-    "dequantize_mul_mat_vec_q5_0", "struct block_q5_0", "QK5_0", "QR5_0", "dequantize_q5_0",
-    "dequantize_mul_mat_vec_q5_1", "struct block_q5_1", "QK5_1", "QR5_1", "dequantize_q5_1",
-    "dequantize_mul_mat_vec_q8_0", "struct block_q8_0", "QK8_0", "QR8_0", "dequantize_q8_0",
+    "dequantize_mul_mat_vec_q4_0", "struct block_q4_0", "32", "2", "dequantize_q4_0",
+    "dequantize_mul_mat_vec_q4_1", "struct block_q4_1", "32", "2", "dequantize_q4_1",
+    "dequantize_mul_mat_vec_q5_0", "struct block_q5_0", "32", "2", "dequantize_q5_0",
+    "dequantize_mul_mat_vec_q5_1", "struct block_q5_1", "32", "2", "dequantize_q5_1",
+    "dequantize_mul_mat_vec_q8_0", "struct block_q8_0", "32", "1", "dequantize_q8_0",
     "convert_mul_mat_vec_f16", "half", "32", "1", "convert_f16"
 };
 
