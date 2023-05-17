@@ -344,6 +344,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.input_suffix = argv[i];
+        } else if (arg == "--disable-tty") {
+            params.disable_tty = true;
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             gpt_print_usage(argc, argv, default_params);
@@ -382,6 +384,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "                        run in interactive mode and poll user input upon seeing PROMPT (can be\n");
     fprintf(stderr, "                        specified more than once for multiple prompts).\n");
     fprintf(stderr, "  --color               colorise output to distinguish prompt and user input from generations\n");
+    fprintf(stderr, "  --disable-tty         disable the use of TTY in interactive mode in favor of stderr\n");
     fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)\n");
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
     fprintf(stderr, "  -p PROMPT, --prompt PROMPT\n");
@@ -503,7 +506,7 @@ struct llama_context * llama_init_from_gpt_params(const gpt_params & params) {
     return lctx;
 }
 
-void console_init(console_state & con_st) {
+void console_init(console_state & con_st, bool disable_tty) {
 #if defined(_WIN32)
     // Windows-specific console initialization
     DWORD dwMode = 0;
@@ -541,9 +544,13 @@ void console_init(console_state & con_st) {
     new_termios.c_cc[VTIME] = 0;
     tcsetattr(STDIN_FILENO, TCSANOW, &new_termios);
 
-    con_st.tty = fopen("/dev/tty", "w+");
-    if (con_st.tty != nullptr) {
-        con_st.out = con_st.tty;
+    if (!disable_tty) {
+        con_st.tty = fopen("/dev/tty", "w+");
+        if (con_st.tty != nullptr) {
+            con_st.out = con_st.tty;
+        }
+    } else {
+        con_st.out = stderr;
     }
 
     setlocale(LC_ALL, "");

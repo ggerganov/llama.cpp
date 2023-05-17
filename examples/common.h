@@ -72,6 +72,7 @@ struct gpt_params {
     bool use_mlock         = false; // use mlock to keep model in memory
     bool mem_test          = false; // compute maximum memory usage
     bool verbose_prompt    = false; // print prompt tokens before generation
+    bool disable_tty       = false; // disable TTY mode
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
@@ -125,7 +126,7 @@ struct console_state {
 #endif
 };
 
-void console_init(console_state & con_st);
+void console_init(console_state & con_st, bool disable_tty);
 void console_cleanup(console_state & con_st);
 void console_set_color(console_state & con_st, console_color_t color);
 bool console_readline(console_state & con_st, std::string & line);
