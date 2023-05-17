@@ -48,7 +48,9 @@ def _load_shared_library(lib_base_name: str):
     # Add the library directory to the DLL search path on Windows (if needed)
     if sys.platform == "win32" and sys.version_info >= (3, 8):
         os.add_dll_directory(str(_base_path))
-        os.add_dll_directory(os.path.join(os.environ["CUDA_PATH"], "bin"))
+        if "CUDA_PATH" in os.environ:
+            os.add_dll_directory(os.path.join(os.environ["CUDA_PATH"], "bin"))
+            os.add_dll_directory(os.path.join(os.environ["CUDA_PATH"], "lib"))
         cdll_args["winmode"] = 0
 
     # Try to load the shared library, handling potential errors
