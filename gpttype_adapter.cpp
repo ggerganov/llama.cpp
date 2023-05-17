@@ -334,7 +334,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         //newer format has bit unshuffling
         SetQuantsUnshuffled(file_format == FileFormat::GPT2_3);   
 
-        ModelLoadResult res = gpt2_model_load(params.model, gpt2_ctx_v2, vocab, file_format);
+        ModelLoadResult res = gpt2_model_load(params.model, gpt2_ctx_v2, vocab, file_format, inputs.gpulayers);
         if(res==ModelLoadResult::FAIL)
         {
             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
@@ -421,7 +421,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         //newer format has bit unshuffling
         SetQuantsUnshuffled(file_format == FileFormat::GPTJ_4);   
 
-        ModelLoadResult loadresult = gptj_model_load(params.model, gptj_ctx_v2, vocab);
+        ModelLoadResult loadresult = gptj_model_load(params.model, gptj_ctx_v2, vocab, inputs.gpulayers);
         if (loadresult == ModelLoadResult::FAIL)
         {
             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
