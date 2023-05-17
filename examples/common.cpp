@@ -461,7 +461,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -ngl N, --n-gpu-layers N\n");
     fprintf(stderr, "                        number of layers to store in VRAM\n");
     fprintf(stderr, "  --steering-add        add positive steering prompt\n");
-    fprintf(stderr, "  --steering-sub        add negativ steering prompt\n");
+    fprintf(stderr, "  --steering-sub        add negative steering prompt\n");
     fprintf(stderr, "  --steering-mul        steering strength (negative is reverse, default %.1f)\n", params.steering_mul);
     fprintf(stderr, "  --steering-source     layer for steering source (default %d)\n", params.steering_source);
     fprintf(stderr, "  --steering-layer      layer for steering insertion (default %d)\n", params.steering_layer);
