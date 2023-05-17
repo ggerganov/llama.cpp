@@ -377,6 +377,9 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     }
     else if(file_format==FileFormat::NEOX_1 || file_format==FileFormat::NEOX_2 || file_format==FileFormat::NEOX_3 || file_format==FileFormat::NEOX_4 || file_format==FileFormat::NEOX_5)
     {
+        //newer format has bit unshuffling
+        SetQuantsUnshuffled(file_format==FileFormat::NEOX_4 || file_format==FileFormat::NEOX_5);   
+
         ModelLoadResult res = gpt_neox_model_load(params.model, neox_ctx, vocab, file_format);       
         if(res==ModelLoadResult::FAIL)
         {
@@ -388,9 +391,6 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
             printf("\nIncorrect Tensor Size Detected! Retrying GPT-NeoX model loading...");
             return res;
         }
-
-        //newer format has bit unshuffling
-        SetQuantsUnshuffled(file_format==FileFormat::NEOX_4 || file_format==FileFormat::NEOX_5);   
 
          // determine the required inference memory per token:    
         gpt_neox_eval(neox_ctx, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);
