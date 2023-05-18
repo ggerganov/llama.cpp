@@ -9,7 +9,7 @@ rustup target add wasm32-unknown-unknown`
 
 -----------------------------------------
 
-# ISSUE: Cosmonic fails to launch server on macOS due to incorrect OpenSSL version
+# Issue: Cosmonic fails to launch server on macOS due to incorrect OpenSSL version
 
 **Description:**
 
