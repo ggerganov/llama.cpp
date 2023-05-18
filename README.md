@@ -1,17 +1,17 @@
-# Start Vespa with Docker
+**Start Vespa with Docker**
+
 `docker run -it --platform=linux/amd64 --detach --name vespa --hostname vespa-container \
   --publish 8080:8080 --publish 19071:19071 \
   vespaengine/vespa`
 
-# If you have issues starting cosmonic:
+**If you have issues starting cosmonic:**
+
 `rustup default stable
 rustup target add wasm32-unknown-unknown`
 
 -----------------------------------------
 
-# Issue: Cosmonic fails to launch server on macOS due to incorrect OpenSSL version
-
-**Description:**
+**Cosmonic fails to launch server on macOS due to incorrect OpenSSL version**
 
 Cosmonic is unable to properly launch a server on macOS systems because the default OpenSSL version provided by the operating system is LibreSSL, which is incompatible with Cosmonic's requirements. The Cosmonic documentation suggests installing OpenSSL 1.1 using Homebrew (`brew install openssl@1.1`), which resolves the issue for installations managed by Homebrew. However, when attempting to use Nix to install the same package, the issue persists.
 
