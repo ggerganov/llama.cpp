@@ -17,13 +17,13 @@ typedef uchar uint8_t;
 typedef int int32_t;
 typedef uint uint32_t;
 
-struct block_q4_0
+struct __attribute__ ((packed)) block_q4_0
 {
     float d;
     uint8_t qs[16]; /* QK4_0 / 2 */
 };
 
-struct block_q4_1
+struct __attribute__ ((packed)) block_q4_1
 {
     float d;
     float m;
@@ -37,7 +37,7 @@ struct __attribute__ ((packed)) block_q5_0
     uint8_t qs[16]; /* QK5_0 / 2 */
 };
 
-struct block_q5_1
+struct __attribute__ ((packed)) block_q5_1
 {
     half d;
     half m;
@@ -45,7 +45,7 @@ struct block_q5_1
     uint8_t qs[16]; /* QK5_1 / 2 */
 };
 
-struct block_q8_0
+struct __attribute__ ((packed)) block_q8_0
 {
     float d;
     int8_t qs[32]; /* QK8_0 */
