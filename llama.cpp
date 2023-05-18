@@ -32,6 +32,7 @@
 #include <mutex>
 #include <sstream>
 #include <numeric>
+#include <iostream>
 
 #define LLAMA_USE_SCRATCH
 #define LLAMA_MAX_SCRATCH_BUFFERS 16
@@ -1187,8 +1188,8 @@ static bool llama_eval_internal(
                     ggml_add(ctx0, ggml_scale(ctx0, inpL, scal), steer), steer));
                 break;
             }
-            
-            inpL = ggml_add(ctx0, ggml_scale(ctx0, steer, scal), inpL);
+            // std::cout << "\nAdding steering vector to inpL " << il << "\n";
+            inpSA = ggml_add(ctx0, ggml_scale(ctx0, steer, scal), inpSA);
         }
 
         // norm
