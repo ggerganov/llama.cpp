@@ -2075,22 +2075,17 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         llama_buffer work;
 
         if (model_loader->file_loaders.at(0)->file_version == LLAMA_FILE_VERSION_GGJT_V1 && quantize) {
-            if (tensor.type == GGML_TYPE_Q4_0 && quantized_type == GGML_TYPE_Q4_0) {
+            if (((tensor.type == GGML_TYPE_Q4_0)
+             || (tensor.type == GGML_TYPE_Q4_1)
+             || (tensor.type == GGML_TYPE_Q5_0)
+             || (tensor.type == GGML_TYPE_Q5_1)) && (quantized_type == tensor.type)) {
                 // convet
                 new_type = tensor.type;
                 new_data = tensor.data;
                 new_size = tensor.size;
                 quantize_upgrade(new_type, new_data, new_size);
                 printf("Upgrade - size = %8.3f MB\n", tensor.size/1024.0/1024.0);
-            }
-            else if (tensor.type == GGML_TYPE_Q4_1 && quantized_type == GGML_TYPE_Q4_1) {
-                new_type = tensor.type;
-                new_data = tensor.data;
-                new_size = tensor.size;
-                quantize_upgrade(new_type, new_data, new_size);
-                printf("Upgrade - size = %8.3f MB\n", tensor.size/1024.0/1024.0);
-            }
-            else {
+            } else {
                 throw format("type %s unsupported for quantization format upgrade", ggml_type_name(tensor.type));
             }
         } else if (!quantize) {
