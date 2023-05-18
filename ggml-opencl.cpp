@@ -126,8 +126,8 @@ void dequantize_q8_0(__global const struct block_q8_0* x, const int ib, const in
     *v1 = vi1*d;
 }
 void convert_f16(__global half* x, const int ib, const int iqs, float* v0, float* v1){
-    *v0 = vload_half(0, (__global half*) &x[ib + 0]);
-    *v1 = vload_half(0, (__global half*) &x[ib + 1]);
+    *v0 = vload_half(0, &x[ib + 0]);
+    *v1 = vload_half(0, &x[ib + 1]);
 }
 );
 
@@ -227,7 +227,7 @@ std::array<std::string, 30> dequant_str_values = {
     "dequantize_row_q5_0", "struct block_q5_0", "QK5_0", "QR5_0", "dequantize_q5_0",
     "dequantize_row_q5_1", "struct block_q5_1", "QK5_1", "QR5_1", "dequantize_q5_1",
     "dequantize_row_q8_0", "struct block_q8_0", "QK8_0", "QR8_0", "dequantize_q8_0",
-    "convert_row_f16", "half", "32", "1", "convert_f16"
+    "convert_row_f16", "half", "1", "1", "convert_f16"
 };
 
 std::array<std::string, 30> dequant_mul_mat_vec_str_values = {
@@ -236,7 +236,7 @@ std::array<std::string, 30> dequant_mul_mat_vec_str_values = {
     "dequantize_mul_mat_vec_q5_0", "struct block_q5_0", "QK5_0", "QR5_0", "dequantize_q5_0",
     "dequantize_mul_mat_vec_q5_1", "struct block_q5_1", "QK5_1", "QR5_1", "dequantize_q5_1",
     "dequantize_mul_mat_vec_q8_0", "struct block_q8_0", "QK8_0", "QR8_0", "dequantize_q8_0",
-    "convert_mul_mat_vec_f16", "half", "32", "1", "convert_f16"
+    "convert_mul_mat_vec_f16", "half", "1", "1", "convert_f16"
 };
 
 std::string& replace(std::string& s, const std::string& from, const std::string& to) {
