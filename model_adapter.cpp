@@ -203,7 +203,7 @@ void print_tok_vec(std::vector<float> &embd)
         fin.read((char *)&temp, sizeof(temp));//rot
         fin.read((char *)&ftype, sizeof(ftype));//filetype
 
-        if(ver==1 || ftype==7) //q8 formats treat as old one
+        if(ver==1)
         {
             fileformat = FileFormat::GGJT;
         }
