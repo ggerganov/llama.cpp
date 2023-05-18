@@ -47,11 +47,6 @@ void sigint_handler(int signo) {
     }
 }
 #endif
-#if defined (_WIN32)
-BOOL console_ctrl_handler(DWORD ctrl_type) {
-    return (ctrl_type == CTRL_C_EVENT) ? (sigint_handler(SIGINT), true) : false;
-}
-#endif
 
 int main(int argc, char ** argv) {
     gpt_params params;
@@ -246,7 +241,10 @@ int main(int argc, char ** argv) {
         sigint_action.sa_flags = 0;
         sigaction(SIGINT, &sigint_action, NULL);
 #elif defined (_WIN32)
-        SetConsoleCtrlHandler(console_ctrl_handler, true);
+        auto console_ctrl_handler = +[](DWORD ctrl_type) -> BOOL {
+            return (ctrl_type == CTRL_C_EVENT) ? (sigint_handler(SIGINT), true) : false;
+        };
+        SetConsoleCtrlHandler(static_cast<PHANDLER_ROUTINE>(console_ctrl_handler), true);
 #endif
 
         fprintf(stderr, "%s: interactive mode on.\n", __func__);
