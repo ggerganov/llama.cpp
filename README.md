@@ -3,7 +3,7 @@
   --publish 8080:8080 --publish 19071:19071 \
   vespaengine/vespa`
 
-# If you have issues starting cosmonic run:
+# If you have issues starting cosmonic:
 `rustup default stable
 rustup target add wasm32-unknown-unknown`
 
