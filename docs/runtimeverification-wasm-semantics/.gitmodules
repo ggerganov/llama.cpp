@@ -1,0 +1,12 @@
+[submodule "deps/k"]
+	path = deps/k
+	url = https://github.com/kframework/k
+	ignore = untracked
+[submodule "tests/wasm-tests"]
+	path = tests/wasm-tests
+	url = https://github.com/webassembly/spec
+	ignore = untracked
+[submodule "deps/py-wasm"]
+	path = deps/py-wasm
+	url = https://github.com/ethereum/py-wasm
+	ignore = untracked

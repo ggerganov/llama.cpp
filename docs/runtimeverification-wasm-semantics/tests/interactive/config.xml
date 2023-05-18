@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright (c) 2015 K Team. All Rights Reserved. -->
+  <tests>
+    <test
+        definition="wasm.k"
+        programs="."
+        extension="wasm"
+        results="." >
+      <all-programs>
+        <krun-option name="--smt" value="none" />
+        <krun-option name="--output" value="none" />
+      </all-programs>
+    </test>
+  </tests>

@@ -1,0 +1,51 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "pykwasm"
+version = "0.1.0"
+description = ""
+authors = [
+    "Runtime Verification, Inc. <contact@runtimeverification.com>",
+]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+cytoolz = "^0.12.1"
+numpy = "^1.24.2"
+pyk = { git = "https://github.com/runtimeverification/pyk.git", tag="v0.1.232" }
+
+[tool.poetry.group.dev.dependencies]
+autoflake = "*"
+black = "*"
+flake8 = "*"
+flake8-bugbear = "*"
+flake8-comprehensions = "*"
+flake8-quotes = "*"
+isort = "*"
+mypy = "*"
+pep8-naming = "*"
+pytest = "*"
+pytest-cov = "*"
+pytest-mock = "*"
+pytest-xdist = "*"
+
+[tool.isort]
+profile = "black"
+line_length = 120
+
+[tool.autoflake]
+recursive = true
+expand-star-imports = true
+remove-all-unused-imports = true
+ignore-init-module-imports = true
+remove-duplicate-keys = true
+remove-unused-variables = true
+
+[tool.black]
+line-length = 120
+skip-string-normalization = true
+
+[tool.mypy]
+disallow_untyped_defs = true

@@ -1,0 +1,15 @@
+address.wast
+align.wast
+call_indirect.wast
+const.wast
+data.wast
+elem.wast
+f32_bitwise.wast
+f64_bitwise.wast
+float_memory.wast
+float_misc.wast
+imports.wast
+left-to-right.wast
+memory_redundancy.wast
+memory_trap.wast
+traps.wast

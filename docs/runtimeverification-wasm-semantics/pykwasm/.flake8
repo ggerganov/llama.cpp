@@ -1,0 +1,6 @@
+[flake8]
+max-line-length = 120
+extend-select = B9
+extend-ignore = B950,E,W1,W2,W3,W4,W5
+per-file-ignores =
+    */__init__.py: F401

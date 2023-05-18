@@ -1,0 +1,18 @@
+{
+  "template": "https://github.com/runtimeverification/python-project-template.git",
+  "commit": "e51305c984afe6bfb51d212c1b8834bfe95fa8da",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "project_name": "pykwasm",
+      "project_slug": "pykwasm",
+      "package_name": "pykwasm",
+      "version": "0.1.0",
+      "description": "",
+      "author_name": "Runtime Verification, Inc.",
+      "author_email": "contact@runtimeverification.com",
+      "_template": "https://github.com/runtimeverification/python-project-template.git"
+    }
+  },
+  "directory": null
+}

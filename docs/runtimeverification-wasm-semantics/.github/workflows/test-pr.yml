@@ -1,0 +1,123 @@
+name: 'Run Tests'
+on:
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  pykwasm-code-quality-checks:
+    name: 'Code Quality Checks'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Check out code'
+        uses: actions/checkout@v3
+      - name: 'Install Poetry'
+        uses: Gr1N/setup-poetry@v8
+      - name: 'Build and run code quality checks'
+        run: make -C pykwasm check
+
+  pykwasm-unit-tests:
+    needs: pykwasm-code-quality-checks
+    name: 'Unit Tests'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Check out code'
+        uses: actions/checkout@v3
+      - name: 'Install Poetry'
+        uses: Gr1N/setup-poetry@v8
+      - name: 'Build and run unit tests'
+        run: make -C pykwasm cov-unit
+
+  pykwasm-integration-tests:
+    needs: pykwasm-code-quality-checks
+    name: 'Integration Tests'
+    runs-on: [self-hosted, linux, normal]
+    steps:
+      - name: 'Check out code'
+        uses: actions/checkout@v3
+      - name: 'Set up Docker'
+        uses: ./.github/actions/with-docker
+        with:
+          container-name: kwasm-ci-pykwasm-${{ github.sha }}
+      - name: 'Build and run integration tests'
+        run: docker exec -u user kwasm-ci-pykwasm-${GITHUB_SHA} make -C pykwasm cov-integration
+      - name: 'Tear down Docker'
+        if: always()
+        run: |
+          docker stop --time=0 kwasm-ci-pykwasm-${GITHUB_SHA}
+
+  parse-tests:
+    needs: [pykwasm-unit-tests, pykwasm-integration-tests]
+    name: 'Parser Tests'
+    runs-on: [self-hosted, linux, normal]
+    timeout-minutes: 18
+    steps:
+      - name: 'Check out code'
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: 'Set up Docker'
+        uses: ./.github/actions/with-docker
+        with:
+          container-name: kwasm-ci-parse-${{ github.sha }}
+      - name: 'Build LLVM Backend and pykwasm'
+        run: docker exec -u user kwasm-ci-parse-${GITHUB_SHA} make -j2 build-llvm pykwasm-poetry-install
+      - name: 'Binary parse'
+        run: docker exec -u user kwasm-ci-parse-${GITHUB_SHA} make -j6 TEST_CONCRETE_BACKEND=llvm test-binary-parser
+      - name: 'Conformance parse'
+        run: docker exec -u user kwasm-ci-parse-${GITHUB_SHA} make -j4 test-conformance-parse
+      - name: 'Tear down Docker'
+        if: always()
+        run: |
+          docker stop --time=0 kwasm-ci-parse-${GITHUB_SHA}
+
+  conformance-tests:
+    needs: [pykwasm-unit-tests, pykwasm-integration-tests]
+    name: 'Conformance Tests'
+    runs-on: [self-hosted, linux, normal]
+    timeout-minutes: 18
+    steps:
+      - name: 'Check out code'
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: 'Set up Docker'
+        uses: ./.github/actions/with-docker
+        with:
+          container-name: kwasm-ci-conformance-${{ github.sha }}
+      - name: 'Build LLVM Backend'
+        run: docker exec -u user kwasm-ci-conformance-${GITHUB_SHA} make -j2 build-llvm
+      - name: 'Simple tests'
+        run: docker exec -u user kwasm-ci-conformance-${GITHUB_SHA} make -j6 TEST_CONCRETE_BACKEND=llvm test-simple
+      - name: 'Conformance run'
+        run: docker exec -u user kwasm-ci-conformance-${GITHUB_SHA} make -j6 TEST_CONCRETE_BACKEND=llvm test-conformance-supported
+      - name: 'Tear down Docker'
+        if: always()
+        run: |
+          docker stop --time=0 kwasm-ci-conformance-${GITHUB_SHA}
+
+  prove-tests:
+    needs: [pykwasm-unit-tests, pykwasm-integration-tests]
+    name: 'Prover Tests'
+    runs-on: [self-hosted, linux, normal]
+    timeout-minutes: 18
+    steps:
+      - name: 'Check out code'
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: 'Set up Docker'
+        uses: ./.github/actions/with-docker
+        with:
+          container-name: kwasm-ci-prove-${{ github.sha }}
+      - name: 'Build Haskell Backend'
+        run: docker exec -u user kwasm-ci-prove-${GITHUB_SHA} make -j2 build-haskell
+      - name: 'Prove'
+        run: docker exec -u user kwasm-ci-prove-${GITHUB_SHA} make -j6 test-prove
+      - name: 'Tear down Docker'
+        if: always()
+        run: |
+          docker stop --time=0 kwasm-ci-prove-${GITHUB_SHA}

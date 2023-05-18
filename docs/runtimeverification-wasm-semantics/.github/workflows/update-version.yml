@@ -1,0 +1,45 @@
+name: 'Update Version'
+on:
+  push:
+    branches:
+      - '_update-deps/runtimeverification/k'
+      - '_update-deps/runtimeverification/pyk'
+# Stop in progress workflows on the same branch and same workflow to use latest committed code
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  update-versions:
+    name: 'Update dependency versions'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: 'Check out code'
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+          token: ${{ secrets.JENKINS_GITHUB_PAT }}
+      - run: |
+          git config user.name devops
+          git config user.email devops@runtimeverification.com
+      - name: 'Update K submodule'
+        run: |
+          K_VERSION="$(cat deps/k_release)"
+          cd deps/k
+          git fetch --tags
+          git checkout "v${K_VERSION}"
+          cd -
+          git add deps/k && git commit -m "deps/k: sync submodule v${K_VERSION}" || true
+      - name: 'Update pyk Release tag'
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 - --version 1.3.2
+          poetry --version
+          pyk_version="$(cat deps/pyk_release)"
+          sed -i 's!pyk = { git = "https://github.com/runtimeverification/pyk.git", tag="[v0-9\.]*" }!pyk = { git = "https://github.com/runtimeverification/pyk.git", tag="'${pyk_version}'" }!' pykwasm/pyproject.toml
+          cd pykwasm
+          poetry update
+          cd -
+          git add pykwasm/ && git commit -m "pykwasm/: sync poetry files ${pyk_version}" || true
+      - name: 'Push updates'
+        run: git push

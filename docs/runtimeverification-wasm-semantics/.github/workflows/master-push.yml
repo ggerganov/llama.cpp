@@ -1,0 +1,26 @@
+name: 'Master Push'
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+
+  release:
+    name: 'Publish Release'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: 'Update dependents'
+        env:
+          GITHUB_TOKEN: ${{ secrets.JENKINS_GITHUB_PAT }}
+        run: |
+          set -x
+          version="${GITHUB_SHA}"
+          curl --fail                                                          \
+            -X POST                                                            \
+            -H "Accept: application/vnd.github+json"                           \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}"                         \
+            -H "X-GitHub-Api-Version: 2022-11-28"                              \
+            https://api.github.com/repos/runtimeverification/devops/dispatches \
+            -d '{"event_type":"on-demand-test","client_payload":{"repo":"runtimeverification/wasm-semantics","version":"'${version}'"}}'

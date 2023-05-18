@@ -1,0 +1,14 @@
+br_table.wast
+comments.wast
+conversions.wast
+endianness.wast
+f32_cmp.wast
+f32.wast
+f64_cmp.wast
+f64.wast
+float_exprs.wast
+float_literals.wast
+globals.wast
+memory.wast
+names.wast
+skip-stack-guard-page.wast
