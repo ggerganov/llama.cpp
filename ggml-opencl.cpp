@@ -311,7 +311,7 @@ static size_t cl_size_a = 0, cl_size_qb = 0, cl_size_b = 0, cl_size_c = 0;
 static cl_kernel convert_fp16_to_fp32_cl;
 static cl_kernel dequantize_row_q4_0_cl, dequantize_row_q4_1_cl, dequantize_row_q5_0_cl, dequantize_row_q5_1_cl, dequantize_row_q8_0_cl;
 static cl_kernel dequantize_mul_mat_vec_q4_0_cl, dequantize_mul_mat_vec_q4_1_cl, dequantize_mul_mat_vec_q5_0_cl, dequantize_mul_mat_vec_q5_1_cl, dequantize_mul_mat_vec_q8_0_cl, convert_mul_mat_vec_f16_cl;
-static bool fp16_support;
+static bool fp16_support = false;
 
 static cl_program build_program_from_source(cl_context ctx, cl_device_id dev, const char* program_buffer) {
     cl_program p;
@@ -377,6 +377,8 @@ void ggml_cl_init(void) {
     }
     free(ext_buffer);
     printf("Using Platform: %s Device: %s FP16: %d\n", platform_buffer, device_buffer, fp16_support);
+    fp16_support = false;
+    printf("CL FP16 temporarily disabled pending further optimization.\n");
     context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
     CL_CHECK(err, "clCreateContext");
     queue = clCreateCommandQueue(context, device, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &err);
