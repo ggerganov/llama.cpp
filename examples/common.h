@@ -24,7 +24,6 @@ struct gpt_params {
     int32_t seed          = -1;  // RNG seed
     int32_t n_threads     = get_num_physical_cores();
     int32_t n_predict     = -1;  // new tokens to predict
-    int32_t n_parts       = -1;  // amount of model parts (-1 = determine from model dimensions)
     int32_t n_ctx         = 512; // context size
     int32_t n_batch       = 512; // batch size for prompt processing (must be >=32 to use BLAS)
     int32_t n_keep        = 0;   // number of tokens to keep from initial prompt
@@ -45,7 +44,7 @@ struct gpt_params {
     float   mirostat_tau      = 5.00f; // target entropy
     float   mirostat_eta      = 0.10f; // learning rate
 
-    std::string model  = "models/lamma-7B/ggml-model.bin"; // model path
+    std::string model  = "models/7B/ggml-model.bin"; // model path
     std::string prompt = "";
     std::string path_prompt_cache = "";  // path to file for saving/loading prompt eval state
     std::string input_prefix      = "";  // string to prefix user inputs with

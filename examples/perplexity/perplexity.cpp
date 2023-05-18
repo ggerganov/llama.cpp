@@ -116,7 +116,6 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
 
 int main(int argc, char ** argv) {
     gpt_params params;
-    params.model = "models/llama-7B/ggml-model.bin";
 
     params.n_batch = 512;
     if (gpt_params_parse(argc, argv, params) == false) {

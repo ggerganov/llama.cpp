@@ -55,7 +55,6 @@ extern "C" {
 
     struct llama_context_params {
         int n_ctx;        // text context
-        int n_parts;      // -1 for default
         int n_gpu_layers; // number of layers to store in VRAM
         int seed;         // RNG seed, -1 for random
 
