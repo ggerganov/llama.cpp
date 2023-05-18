@@ -383,7 +383,7 @@ struct cuda_buffer {
 static cuda_buffer g_cuda_buffer_pool[MAX_CUDA_BUFFERS];
 static std::atomic_flag g_cuda_pool_lock = ATOMIC_FLAG_INIT;
 
-void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
+static void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
     scoped_spin_lock lock(g_cuda_pool_lock);
 
     for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
@@ -402,7 +402,7 @@ void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
     return ptr;
 }
 
-void ggml_cuda_pool_free(void * ptr, size_t size) {
+static void ggml_cuda_pool_free(void * ptr, size_t size) {
     scoped_spin_lock lock(g_cuda_pool_lock);
 
     for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
@@ -908,7 +908,7 @@ void ggml_cuda_transform_tensor(ggml_tensor * tensor) {
     tensor->backend = GGML_BACKEND_CUDA;
 }
 
-bool ggml_cuda_load_data_cufile(const char * fname, struct ggml_tensor ** tensors, const int num_tensors, const size_t * offsets) {
+void ggml_cuda_load_data(const char * fname, struct ggml_tensor ** tensors, const int num_tensors, const size_t * offsets) {
     CUfileDescr_t cf_descr;
     memset((void *)&cf_descr, 0, sizeof(CUfileDescr_t));
     const int fd_cf = open(fname, O_RDONLY|O_DIRECT, 0644);
@@ -921,20 +921,48 @@ bool ggml_cuda_load_data_cufile(const char * fname, struct ggml_tensor ** tensor
     if (status.err == CU_FILE_INTERNAL_ERROR) {
         fprintf(stderr, "WARNING: cuFile experienced an internal error while loading weights from \"%s\". Using a workaround (slower). "
                 "This happens with weight files on Btrfs partitions. ext4 and NTFS are confirmed to work.\n", fname);
+    } else {
+        for (int i = 0; i < num_tensors; ++i) {
+            ggml_tensor * tensor = tensors[i];
+            const size_t size = ggml_nbytes(tensor);
+            const size_t offset = offsets[i];
+
+            size_t actual_size;
+            void * buf = ggml_cuda_pool_malloc(size, &actual_size);
+            cuFileRead(cf_handle, buf, size, offset, 0);
+            tensor->data = buf;
+        }
+        return;
     }
-    if (status.err != CU_FILE_SUCCESS) {
-        return false;
-    }
+
+    FILE * fp = fopen(fname, "rb");
 
     for (int i = 0; i < num_tensors; ++i) {
         ggml_tensor * tensor = tensors[i];
         const size_t size = ggml_nbytes(tensor);
         const size_t offset = offsets[i];
 
-        size_t actual_size;
-        void * buf = ggml_cuda_pool_malloc(size, &actual_size);
-        cuFileRead(cf_handle, buf, size, offset, 0);
+        void * buf;
+        CUDA_CHECK(cudaMalloc(&buf, size));
+        void * buf_host = malloc(size);
+
+#ifdef _WIN32
+        int ret = _fseeki64(fp, (__int64) offset, SEEK_SET);
+#else
+        int ret = fseek(fp, (long) offset, SEEK_SET);
+#endif
+        GGML_ASSERT(ret == 0); // same
+
+        size_t ret2 = fread(buf_host, size, 1, fp);
+        if (ret2 != 1) {
+            fprintf(stderr, "unexpectedly reached end of file");
+            exit(1);
+        }
+
+        cudaMemcpy(buf, buf_host, size, cudaMemcpyHostToDevice);
+        cudaDeviceSynchronize();
+
         tensor->data = buf;
+        free(buf_host);
     }
-    return true;
 }

@@ -10,7 +10,6 @@
 
 #include "ggml.h"
 #ifdef GGML_USE_CUBLAS
-#include <cuda_runtime.h>
 #include "ggml-cuda.h"
 #endif
 
@@ -1069,28 +1068,7 @@ static void llama_model_load_internal(
             LLAMA_ASSERT(lt.shards.size() == 1);
             offsets.emplace_back(lt.shards.at(0).file_off);
         }
-        bool cufile_success = ggml_cuda_load_data_cufile(fname.c_str(), tensors.data(), tensors.size(), offsets.data());
-
-        if (!cufile_success) {
-            for (llama_load_tensor & lt : ml->tensors_map.tensors) {
-                if (lt.ggml_tensor->backend != GGML_BACKEND_CUDA) {
-                    continue;
-                }
-                size_t actual_size;
-                void * buf = ggml_cuda_pool_malloc(lt.size, &actual_size);
-                void * buf_host = ggml_cuda_host_malloc(lt.size);
-
-                llama_file & file = ml->file_loaders.at(lt.shards.at(0).file_idx)->file;
-                file.seek(lt.shards.at(0).file_off, SEEK_SET);
-                file.read_raw(buf_host, lt.size);
-
-                cudaMemcpy(buf, buf_host, lt.size, cudaMemcpyHostToDevice);
-                cudaDeviceSynchronize();
-
-                lt.ggml_tensor->data = buf;
-                ggml_cuda_host_free(buf_host);
-            }
-        }
+        ggml_cuda_load_data(fname.c_str(), tensors.data(), tensors.size(), offsets.data());
     }
 #endif // GGML_USE_CUBLAS
 
