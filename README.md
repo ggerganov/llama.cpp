@@ -1,4 +1,4 @@
-# Start Vespa with Docekr
+# Start Vespa with Docker
 `docker run -it --platform=linux/amd64 --detach --name vespa --hostname vespa-container \
   --publish 8080:8080 --publish 19071:19071 \
   vespaengine/vespa`
