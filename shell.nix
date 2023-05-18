@@ -10,6 +10,11 @@ pkgs.mkShell {
     vespa-cli
   ];
   shellHook = ''
+    # Check if cosmo is installed, if not install it
+    if ! command -v cosmo &> /dev/null; then
+      bash -c "$(curl -fsSL https://cosmonic.sh/install.sh)"
+    fi
+
     cat <<'EOF'
                .-.
                   `-'

@@ -1,3 +1,14 @@
+# Start Vespa with Docekr
+`docker run -it --platform=linux/amd64 --detach --name vespa --hostname vespa-container \
+  --publish 8080:8080 --publish 19071:19071 \
+  vespaengine/vespa`
+
+# If you have issues starting cosmonic run:
+`rustup default stable
+rustup target add wasm32-unknown-unknown`
+
+-----------------------------------------
+
 Title: Cosmonic fails to launch server on macOS due to incorrect OpenSSL version
 
 **Description:**
