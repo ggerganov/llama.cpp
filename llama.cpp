@@ -679,12 +679,16 @@ struct llama_model_loader {
 
     void load_all_data(llama_progress_callback progress_callback, void *  progress_callback_user_data, llama_mlock * lmlock) {
         size_t data_size = 0;
+        size_t prefetch_size = 0;
         for (const llama_load_tensor & lt : tensors_map.tensors) {
             data_size += lt.size;
+            if (lt.ggml_tensor->backend == GGML_BACKEND_CPU) {
+                prefetch_size += lt.size;
+            }
         }
 
         if (use_mmap) {
-            mapping.reset(new llama_mmap(&file_loaders.at(0)->file, false));
+            mapping.reset(new llama_mmap(&file_loaders.at(0)->file, prefetch_size));
             if (!lmlock) {
                 // Don't call the callback since the actual loading will be lazy
                 // and we can't measure it.
@@ -2317,7 +2321,7 @@ int llama_apply_lora_from_file_internal(struct llama_context * ctx, const char *
 
         // maybe this should in llama_model_loader
         if (model_loader->use_mmap) {
-            model_loader->mapping.reset(new llama_mmap(&model_loader->file_loaders.at(0)->file, /* prefetch */ false));
+            model_loader->mapping.reset(new llama_mmap(&model_loader->file_loaders.at(0)->file, /* prefetch */ 0));
         }
     }
 
