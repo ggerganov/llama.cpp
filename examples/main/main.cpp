@@ -208,8 +208,8 @@ int main(int argc, char ** argv) {
         params.antiprompt.push_back("### Instruction:\n\n");
     }
 
-    // enable interactive mode if reverse prompt or interactive start is specified
-    if (params.antiprompt.size() != 0 || params.interactive_first) {
+    // enable interactive mode if interactive start is specified
+    if (params.interactive_first) {
         params.interactive = true;
     }
 
@@ -305,7 +305,7 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd;
 
-    while (n_remain != 0 || params.interactive) {
+    while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
         if (embd.size() > 0) {
             // infinite text generation via context swapping
@@ -503,9 +503,8 @@ int main(int argc, char ** argv) {
             console_set_color(con_st, CONSOLE_COLOR_DEFAULT);
         }
 
-        // in interactive mode, and not currently processing queued inputs;
-        // check if we should prompt the user for more
-        if (params.interactive && (int) embd_inp.size() <= n_consumed) {
+        // if not currently processing queued inputs;
+        if ((int) embd_inp.size() <= n_consumed) {
 
             // check for reverse prompt
             if (params.antiprompt.size()) {
@@ -516,10 +515,21 @@ int main(int argc, char ** argv) {
 
                 is_antiprompt = false;
                 // Check if each of the reverse prompts appears at the end of the output.
+                // If we're not running interactively, the reverse prompt might be tokenized with some following characters
+                // so we'll compensate for that by widening the search window a bit.
                 for (std::string & antiprompt : params.antiprompt) {
-                    if (last_output.find(antiprompt.c_str(), last_output.length() - antiprompt.length(), antiprompt.length()) != std::string::npos) {
-                        is_interacting = true;
+                    size_t extra_padding = params.interactive ? 0 : 2;
+                    size_t search_start_pos = last_output.length() > static_cast<size_t>(antiprompt.length() + extra_padding)
+                        ? last_output.length() - static_cast<size_t>(antiprompt.length() + extra_padding)
+                        : 0;
+
+                    if (last_output.find(antiprompt.c_str(), search_start_pos) != std::string::npos) {
+                        if (params.interactive) {
+                            is_interacting = true;
+                            console_set_color(con_st, CONSOLE_COLOR_USER_INPUT);
+                        }
                         is_antiprompt = true;
+                        fflush(stdout);
                         break;
                     }
                 }
