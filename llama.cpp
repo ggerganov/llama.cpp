@@ -575,7 +575,7 @@ struct llama_file_saver {
         file.write_u32(new_type);
         file.write_raw(tensor.ne.data(), sizeof(tensor.ne[0]) * tensor.ne.size());
         file.write_raw(tensor.name.data(), tensor.name.size());
-        file.seek(-static_cast<ptrdiff_t >(file.tell()) & 31, SEEK_CUR);
+        file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
         LLAMA_ASSERT(new_size == llama_calc_tensor_size(tensor.ne, new_type));
         file.write_raw(new_data, new_size);
     }
