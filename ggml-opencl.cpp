@@ -289,7 +289,9 @@ static cl_program build_program_from_source(cl_context ctx, cl_device_id dev, co
         exit(1);
     }
 
-    err = clBuildProgram(p, 0, NULL, NULL, NULL, NULL);
+    const char* compile_opts = "-cl-mad-enable -cl-unsafe-math-optimizations -cl-finite-math-only -cl-fast-relaxed-math";
+
+    err = clBuildProgram(p, 0, NULL, compile_opts, NULL, NULL);
     if(err < 0) {
 
         clGetProgramBuildInfo(p, dev, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
