@@ -428,7 +428,12 @@ int main(int argc, char ** argv) {
                     last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
                     last_n_repeat, alpha_frequency, alpha_presence);
                 if (!penalize_nl) {
-                    logits[llama_token_nl()] = nl_logit;
+                  for (size_t idx = 0; idx < candidates_p.size; idx++) {
+                    if (candidates_p.data[idx].id == llama_token_nl()) {
+                      candidates_p.data[idx].logit = nl_logit;
+                      break;
+                    }
+                  }
                 }
 
                 if (temp <= 0) {
