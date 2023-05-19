@@ -941,7 +941,7 @@ static void llama_model_load_internal(
     size_t ctx_size;
     size_t mmapped_size;
     ml->calc_sizes(&ctx_size, &mmapped_size);
-    fprintf(stderr, "%s: ggml ctx size = %6.2f KB\n", __func__, ctx_size/1024.0);
+    fprintf(stderr, "%s: ggml ctx size = %6.2f MB\n", __func__, ctx_size/1024.0/1024.0);
 
     // print memory requirements
     {
