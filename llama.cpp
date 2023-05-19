@@ -1169,7 +1169,7 @@ static bool llama_eval_internal(
     if (lctx.steering_mode != STEERING_OFF) {
         steer = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N);
         //steer->data = lctx.steering_vector.data() + n_past * n_embd * sizeof(float);
-        memcpy(steer->data, lctx.steering_vector.data() + n_past * n_embd * sizeof(float), ggml_nbytes(steer));
+        memcpy(steer->data, lctx.steering_vector.data() + n_past * n_embd, ggml_nbytes(steer));
     }
 
     struct ggml_tensor * inpL = ggml_get_rows(ctx0, model.tok_embeddings, embd);
@@ -1407,7 +1407,7 @@ static bool llama_eval_internal(
 
 
     if (lctx.steering_mode == STEERING_WRITE) {
-        memcpy(lctx.steering_vector.data() + n_past * n_embd * sizeof(float), steer->data, ggml_nbytes(steer));
+        memcpy(lctx.steering_vector.data() + n_past * n_embd, steer->data, ggml_nbytes(steer));
     }
 
 
