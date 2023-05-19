@@ -3,10 +3,12 @@
 #include <unordered_map>
 #include <vector>
 #include <cassert>
-#include <random>
 #include <cstring>
 #include <stdexcept>
 #include <cstdarg>
+#include <ctime>
+#include <random>
+#include <stdexcept>
 #include <algorithm>
 #include <string>
 
@@ -1484,6 +1486,8 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "usage: %s model training_data\n", argv[0]);
         //return 1;
     }
+
+    srand(time(NULL));
 
     const char * fn_model = (argc >= 2) ? argv[1] : default_argv[1];
     const char * fn_train = (argc >= 3) ? argv[2] : default_argv[2];
