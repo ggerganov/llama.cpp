@@ -1712,9 +1712,12 @@ int main(int argc, char ** argv) {
     save_model(&model, fn_chkpt_out);
 
     {
-        int n_gen = 128;
+        int n_gen = 1024;
         int sample_ctx = n_tokens - n_tokens/8;
         
+        sampler.params.temp = 0.2;
+        sampler.params.repeat_penalty = 1.1;
+        sampler.params.mirostat = 2;
         init_sampler(&sampler, lctx);
 
         printf("Generating %d tokens.\n", n_gen);
