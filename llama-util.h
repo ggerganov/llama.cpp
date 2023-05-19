@@ -127,7 +127,7 @@ struct llama_file {
         return std::string(chars.data(), len);
     }
 
-    void write_raw(const void * ptr, size_t len) {
+    void write_raw(const void * ptr, size_t len) const {
         if (len == 0) {
             return;
         }
