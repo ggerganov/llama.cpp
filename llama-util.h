@@ -101,7 +101,7 @@ struct llama_file {
         LLAMA_ASSERT(ret == 0); // same
     }
 
-    void read_raw(void * ptr, size_t len) {
+    void read_raw(void * ptr, size_t len) const {
         if (len == 0) {
             return;
         }
