@@ -4,7 +4,6 @@
 #include <vector>
 #include <cassert>
 #include <cstring>
-#include <stdexcept>
 #include <cstdarg>
 #include <ctime>
 #include <random>
