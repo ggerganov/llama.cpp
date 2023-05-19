@@ -4334,7 +4334,7 @@ struct ggml_tensor * ggml_add_impl(
 
     bool is_node = false;
 
-    if (!inplace && (a->grad || b->grad)) {
+    if (a->grad || b->grad) {
         is_node = true;
     }
 
@@ -5248,7 +5248,7 @@ struct ggml_tensor * ggml_set_impl(
 
     bool is_node = false;
 
-    if (!inplace && (a->grad || b->grad)) {
+    if (a->grad || b->grad) {
         is_node = true;
     }
 
@@ -6016,7 +6016,7 @@ struct ggml_tensor * ggml_rope_impl(
     GGML_ASSERT(n_past >= 0);
     bool is_node = false;
 
-    if (!inplace && a->grad) {
+    if (a->grad) {
         is_node = true;
     }
 
@@ -6065,8 +6065,7 @@ struct ggml_tensor * ggml_rope_back(
     bool is_node = false;
 
     if (a->grad) {
-        GGML_ASSERT(false); // TODO: implement backward
-        is_node = true;
+        is_node = false; // TODO: implement backward
     }
 
     struct ggml_tensor * result = ggml_dup_tensor(ctx, a);
