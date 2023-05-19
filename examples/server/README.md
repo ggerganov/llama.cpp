@@ -73,7 +73,8 @@ You can interact with this API Endpoints. This implementations just support chat
 
 -   **POST** `hostname:port/completion`: Setting up the Llama Context to begin the completions tasks.
 
-Options:
+*Options:*
+
 `batch_size`: Set the batch size for prompt processing (default: 512).
 
 `temperature`: Adjust the randomness of the generated text (default: 0.8).
@@ -100,6 +101,8 @@ Options:
 
 -   **POST** `hostname:port/embedding`: Generate embedding of a given text
 
+*Options:*
+
 `content`: Set the text to get generate the embedding.
 
 `threads`: Set the number of threads to use during computation.
@@ -108,9 +111,15 @@ To use this endpoint, you need to start the server with the `--embedding` option
 
 -   **POST** `hostname:port/tokenize`: Tokenize a given text
 
+*Options:*
+
 `content`: Set the text to tokenize.
 
 -   **GET** `hostname:port/next-token`: Receive the next token predicted, execute this request in a loop. Make sure set `as_loop` as `true` in the completion request.
+
+*Options:*
+
+`stop`: Set `hostname:port/next-token?stop=true` to stop the token generation.
 
 ## More examples
 
@@ -155,6 +164,7 @@ async function ChatCompletion(answer) {
 
     let message = "";
     while (true) {
+        // you can stop the inference adding '?stop=true' like this http://127.0.0.1:8080/next-token?stop=true
         result = await axios.get("http://127.0.0.1:8080/next-token");
         process.stdout.write(result.data.content);
         message += result.data.content;
@@ -226,7 +236,7 @@ async function DoInstruction(instruction) {
 }
 
 // This function should be called every time a instruction to the model is needed.
-DoInstruction("Destroy the world");
+DoInstruction("Destroy the world"); // as joke
 ```
 
 ### Embeddings
