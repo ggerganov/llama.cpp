@@ -5,6 +5,7 @@
 #undef NDEBUG
 #endif
 
+#include <cmath>
 #include <numeric>
 #include <cassert>
 #include <iostream>
