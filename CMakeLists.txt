@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.12) # Don't bump this version for no reason
+cmake_minimum_required(VERSION 3.25) # Don't bump this version for no reason
 project("llama.cpp" C CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -65,8 +65,8 @@ endif()
 
 # 3rd party libs
 option(LLAMA_ACCELERATE             "llama: enable Accelerate framework"                    ON)
-option(LLAMA_OPENBLAS               "llama: use OpenBLAS"                                   OFF)
-option(LLAMA_BLIS                   "llama: use blis"                                       OFF)
+option(LLAMA_BLAS                   "llama: use BLAS"                                       OFF)
+option(LLAMA_BLAS_VENDOR            "llama: BLA_VENDOR from https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors" Generic)
 option(LLAMA_CUBLAS                 "llama: use cuBLAS"                                     OFF)
 option(LLAMA_CLBLAST                "llama: use CLBlast"                                    OFF)
 
@@ -146,55 +146,24 @@ if (APPLE AND LLAMA_ACCELERATE)
     endif()
 endif()
 
-if (LLAMA_OPENBLAS)
+if (LLAMA_BLAS)
     if (LLAMA_STATIC)
         set(BLA_STATIC ON)
     endif()
-
-    set(BLA_VENDOR OpenBLAS)
+    set(BLA_SIZEOF_INTEGRER 8)
+    set(BLA_VENDOR ${LLAMA_BLAS_VENDOR})
     find_package(BLAS)
     if (BLAS_FOUND)
-        message(STATUS "OpenBLAS found")
+        message(STATUS "BLAS found, Libraries: ${BLAS_LIBRARIES}")
 
         add_compile_definitions(GGML_USE_OPENBLAS)
-        add_link_options(${BLAS_LIBRARIES})
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} openblas)
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ${BLAS_LIBRARIES})
 
-        # find header file
-        set(OPENBLAS_INCLUDE_SEARCH_PATHS
-            /usr/include
-            /usr/include/openblas
-            /usr/include/openblas-base
-            /usr/local/include
-            /usr/local/include/openblas
-            /usr/local/include/openblas-base
-            /opt/OpenBLAS/include
-            $ENV{OpenBLAS_HOME}
-            $ENV{OpenBLAS_HOME}/include
-            )
-        find_path(OPENBLAS_INC NAMES cblas.h PATHS ${OPENBLAS_INCLUDE_SEARCH_PATHS})
-        add_compile_options(-I${OPENBLAS_INC})
+        message("${BLAS_LIBRARIES}")
+        include_directories(${BLAS_INCLUDE_DIRS})
     else()
-        message(WARNING "OpenBLAS not found")
+        message(WARNING "BLAS not found, please refer to https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors to set correct LLAMA_BLAS_VENDOR")
     endif()
-endif()
-
-if (LLAMA_BLIS)
-    add_compile_definitions(GGML_USE_BLIS)
-    # we don't directly call BLIS apis, use cblas wrapper instead
-    add_compile_definitions(GGML_USE_OPENBLAS)
-    set(BLIS_INCLUDE_SEARCH_PATHS
-        /usr/include
-        /usr/include/blis
-        /usr/local/include
-        /usr/local/include/blis
-        $ENV{BLIS_HOME}
-        $ENV{BLIS_HOME}/include
-        )
-    find_path(BLIS_INC NAMES blis.h PATHS ${BLIS_INCLUDE_SEARCH_PATHS})
-    add_compile_definitions(BLIS_ENABLE_CBLAS)
-    add_link_options(-lblis)
-    add_compile_options(-I${BLIS_INC})
 endif()
 
 if (LLAMA_CUBLAS)

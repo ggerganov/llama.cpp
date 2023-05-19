@@ -39,7 +39,7 @@ CMake:
 ```bash
 mkdir build
 cd build
-cmake -DLLAMA_BLIS=ON ..
+cmake -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=FLAME ..
 make -j
 ```
 

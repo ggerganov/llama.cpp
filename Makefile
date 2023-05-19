@@ -123,7 +123,7 @@ ifdef LLAMA_OPENBLAS
 	endif
 endif
 ifdef LLAMA_BLIS
-	CFLAGS += -DGGML_USE_OPENBLAS -DGGML_USE_BLIS -I/usr/local/include/blis -I/usr/include/blis
+	CFLAGS += -DGGML_USE_OPENBLAS -I/usr/local/include/blis -I/usr/include/blis
 	LDFLAGS += -lblis -L/usr/local/lib
 endif
 ifdef LLAMA_CUBLAS
