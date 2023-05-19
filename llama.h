@@ -191,6 +191,7 @@ extern "C" {
     LLAMA_API llama_token llama_token_eos();
     LLAMA_API llama_token llama_token_nl();
 
+    LLAMA_API void llama_set_steering_off(struct llama_context * ctx);
     LLAMA_API void llama_set_steering_write(struct llama_context * ctx, int layer, float mul);
     LLAMA_API void llama_set_steering_read(struct llama_context * ctx, int layer, float mul);
 

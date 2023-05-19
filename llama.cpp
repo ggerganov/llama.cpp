@@ -279,6 +279,10 @@ struct llama_context {
     }
 };
 
+void llama_set_steering_off(struct llama_context * ctx) {
+    ctx->steering_mode = STEERING_OFF;
+}
+
 void llama_set_steering_write(struct llama_context * ctx, int layer, float mul) {
     ctx->steering_mode = STEERING_WRITE;
     ctx->steering_mul = mul;
