@@ -24,7 +24,7 @@ NEXT_PROMPT_FILE="${CHAT_SAVE_DIR}/next-prompt.txt"
 NEXT_PROMPT_CACHE="${CHAT_SAVE_DIR}/next-cache.bin"
 
 SESSION_SIZE_MSG_PATTERN='main: session file matches \d+ / \d+'
-SAMPLE_TIME_MSG_PATTERN='sample time =\s+\d+.\d+ ms /\s+\d+' 
+SAMPLE_TIME_MSG_PATTERN='sample time =\s+\d+.\d+ ms /\s+\d+'
 SED_DELETE_MESSAGES="/^(${USER_NAME}:|${AI_NAME}:|\\.\\.\\.)/,\$d"
 
 CTX_SIZE=2048
@@ -143,7 +143,7 @@ while read -e line; do
         tail -c+$((n_prompt_len_pre + 1)) "$CUR_PROMPT_FILE" >>"$NEXT_PROMPT_FILE"
     fi
 
-    # Update cache for next prompt in background, ideally during user input 
+    # Update cache for next prompt in background, ideally during user input
     ./main >>"$LOG_BG" 2>&1 "${OPTS[@]}" \
           --prompt-cache "$NEXT_PROMPT_CACHE" \
           --file "$NEXT_PROMPT_FILE" \
