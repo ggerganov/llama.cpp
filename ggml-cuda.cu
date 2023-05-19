@@ -85,7 +85,7 @@ static_assert(sizeof(block_q8_0) == sizeof(ggml_fp16_t) + QK8_0, "wrong q8_0 blo
 
 #define CUDA_MUL_BLOCK_SIZE 256
 #define CUDA_DEQUANTIZE_BLOCK_SIZE 256
-#define CUDA_DMMV_BLOCK_SIZE 32 // dmmv = dequantize_mul_mat_vec
+#define CUDA_DMMV_BLOCK_X 32 // dmmv = dequantize_mul_mat_vec
 
 static __global__ void mul_f32(const float * x, const float * y, float * dst, const int kx, const int ky) {
     const int i = blockDim.x*blockIdx.x + threadIdx.x;
@@ -202,7 +202,7 @@ static __global__ void dequantize_block(const void * vx, float * y, const int k)
 
 template <int block_size, int qk, int qr, dequantize_kernel_t dequantize_kernel>
 static __global__ void dequantize_mul_mat_vec(const void * vx, const float * y, float * dst, const int ncols) {
-    const int row = blockIdx.x;
+    const int row = blockIdx.x*blockDim.y + threadIdx.y;
     const int tid = threadIdx.x;
 
     const int y_offset = qr == 1 ? 1 : qk/2;
@@ -279,33 +279,35 @@ static void dequantize_row_q8_0_cuda(const void * vx, float * y, const int k, cu
 }
 
 static void dequantize_mul_mat_vec_q4_0_cuda(const void * vx, const float * y, float * dst, const int ncols, const int nrows, cudaStream_t stream) {
-    GGML_ASSERT(ncols % CUDA_DMMV_BLOCK_SIZE == 0);
-    dequantize_mul_mat_vec<CUDA_DMMV_BLOCK_SIZE, QK4_0, QR4_0, dequantize_q4_0>
-        <<<nrows, CUDA_DMMV_BLOCK_SIZE, 0, stream>>>(vx, y, dst, ncols);
+    GGML_ASSERT(ncols % CUDA_DMMV_BLOCK_X == 0);
+    GGML_ASSERT(nrows % CUDA_DMMV_BLOCK_Y == 0);
+    const dim3 block_dims(CUDA_DMMV_BLOCK_X, CUDA_DMMV_BLOCK_Y, 1);
+    dequantize_mul_mat_vec<CUDA_DMMV_BLOCK_X, QK4_0, QR4_0, dequantize_q4_0>
+        <<<nrows/CUDA_DMMV_BLOCK_Y, block_dims, 0, stream>>>(vx, y, dst, ncols);
 }
 
 static void dequantize_mul_mat_vec_q4_1_cuda(const void * vx, const float * y, float * dst, const int ncols, const int nrows, cudaStream_t stream) {
-    GGML_ASSERT(ncols % CUDA_DMMV_BLOCK_SIZE == 0);
-    dequantize_mul_mat_vec<CUDA_DMMV_BLOCK_SIZE, QK4_1, QR4_1, dequantize_q4_1>
-        <<<nrows, CUDA_DMMV_BLOCK_SIZE, 0, stream>>>(vx, y, dst, ncols);
+    GGML_ASSERT(ncols % CUDA_DMMV_BLOCK_X == 0);
+    dequantize_mul_mat_vec<CUDA_DMMV_BLOCK_X, QK4_1, QR4_1, dequantize_q4_1>
+        <<<nrows, CUDA_DMMV_BLOCK_X, 0, stream>>>(vx, y, dst, ncols);
 }
 
 static void dequantize_mul_mat_vec_q5_0_cuda(const void * vx, const float * y, float * dst, const int ncols, const int nrows, cudaStream_t stream) {
-    GGML_ASSERT(ncols % CUDA_DMMV_BLOCK_SIZE == 0);
-    dequantize_mul_mat_vec<CUDA_DMMV_BLOCK_SIZE, QK5_0, QR5_0, dequantize_q5_0>
-        <<<nrows, CUDA_DMMV_BLOCK_SIZE, 0, stream>>>(vx, y, dst, ncols);
+    GGML_ASSERT(ncols % CUDA_DMMV_BLOCK_X == 0);
+    dequantize_mul_mat_vec<CUDA_DMMV_BLOCK_X, QK5_0, QR5_0, dequantize_q5_0>
+        <<<nrows, CUDA_DMMV_BLOCK_X, 0, stream>>>(vx, y, dst, ncols);
 }
 
 static void dequantize_mul_mat_vec_q5_1_cuda(const void * vx, const float * y, float * dst, const int ncols, const int nrows, cudaStream_t stream) {
-    GGML_ASSERT(ncols % CUDA_DMMV_BLOCK_SIZE == 0);
-    dequantize_mul_mat_vec<CUDA_DMMV_BLOCK_SIZE, QK5_1, QR5_1, dequantize_q5_1>
-        <<<nrows, CUDA_DMMV_BLOCK_SIZE, 0, stream>>>(vx, y, dst, ncols);
+    GGML_ASSERT(ncols % CUDA_DMMV_BLOCK_X == 0);
+    dequantize_mul_mat_vec<CUDA_DMMV_BLOCK_X, QK5_1, QR5_1, dequantize_q5_1>
+        <<<nrows, CUDA_DMMV_BLOCK_X, 0, stream>>>(vx, y, dst, ncols);
 }
 
 static void dequantize_mul_mat_vec_q8_0_cuda(const void * vx, const float * y, float * dst, const int ncols, const int nrows, cudaStream_t stream) {
-    GGML_ASSERT(ncols % CUDA_DMMV_BLOCK_SIZE == 0);
-    dequantize_mul_mat_vec<CUDA_DMMV_BLOCK_SIZE, QK8_0, QR8_0, dequantize_q8_0>
-        <<<nrows, CUDA_DMMV_BLOCK_SIZE, 0, stream>>>(vx, y, dst, ncols);
+    GGML_ASSERT(ncols % CUDA_DMMV_BLOCK_X == 0);
+    dequantize_mul_mat_vec<CUDA_DMMV_BLOCK_X, QK8_0, QR8_0, dequantize_q8_0>
+        <<<nrows, CUDA_DMMV_BLOCK_X, 0, stream>>>(vx, y, dst, ncols);
 }
 
 static void convert_fp16_to_fp32_cuda(const void * vx, float * y, const int k, cudaStream_t stream) {
@@ -314,9 +316,9 @@ static void convert_fp16_to_fp32_cuda(const void * vx, float * y, const int k, c
 }
 
 static void convert_mul_mat_vec_f16_cuda(const void * vx, const float * y, float * dst, const int ncols, const int nrows, cudaStream_t stream) {
-    GGML_ASSERT(ncols % CUDA_DMMV_BLOCK_SIZE == 0);
-    dequantize_mul_mat_vec<CUDA_DMMV_BLOCK_SIZE, 32, 1, convert_f16>
-        <<<nrows, CUDA_DMMV_BLOCK_SIZE, 0, stream>>>(vx, y, dst, ncols);
+    GGML_ASSERT(ncols % CUDA_DMMV_BLOCK_X == 0);
+    dequantize_mul_mat_vec<CUDA_DMMV_BLOCK_X, 32, 1, convert_f16>
+        <<<nrows, CUDA_DMMV_BLOCK_X, 0, stream>>>(vx, y, dst, ncols);
 }
 
 static to_fp32_cuda_t ggml_get_to_fp32_cuda(ggml_type type) {
