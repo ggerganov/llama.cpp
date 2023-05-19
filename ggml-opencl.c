@@ -126,13 +126,24 @@ __kernel void dequantize_row_q8_0(__global struct block_q8_0* x, __global float*
 
 );
 
-#define CL_CHECK(err, name)                                                                     \
-    do {                                                                                        \
-        cl_int err_ = (err);                                                                    \
-        if (err_ != CL_SUCCESS) {                                                               \
-            fprintf(stderr, "ggml_opencl: %s error %d at %s:%d\n", name, err_, __FILE__, __LINE__);   \
-            exit(1);                                                                            \
-        }                                                                                       \
+#define CL_CHECK(err)                                               \
+    do {                                                            \
+        cl_int err_ = (err);                                        \
+        if (err_ != CL_SUCCESS) {                                   \
+            fprintf(stderr, "ggml_opencl: %s error %d at %s:%d\n",  \
+                #err, err_, __FILE__, __LINE__);                    \
+            exit(1);                                                \
+        }                                                           \
+    } while (0)
+
+#define CLBLAST_CHECK(err)                                          \
+    do {                                                            \
+        CLBlastStatusCode err_ = (err);                             \
+        if (err_ != CLBlastSuccess) {                               \
+            fprintf(stderr, "ggml_opencl: %s error %d at %s:%d\n",  \
+                #err, err_, __FILE__, __LINE__);                    \
+            exit(1);                                                \
+        }                                                           \
     } while (0)
 
 static cl_platform_id platform;
@@ -185,8 +196,7 @@ void ggml_cl_init(void) {
 
     cl_platform_id platforms[NPLAT];
     cl_uint num_platforms;
-    err = clGetPlatformIDs(NPLAT, platforms, &num_platforms);
-    CL_CHECK(err, "clGetPlatformIDs");
+    CL_CHECK(clGetPlatformIDs(NPLAT, platforms, &num_platforms));
 
     char * GGML_OPENCL_PLATFORM = getenv("GGML_OPENCL_PLATFORM");
     if (GGML_OPENCL_PLATFORM != NULL) {
@@ -197,11 +207,11 @@ void ggml_cl_init(void) {
                 exit(1);
             } else {
                 platform = platforms[plat_num];
-                clGetPlatformInfo(platform, CL_PLATFORM_NAME, sizeof(text_buffer), &text_buffer, NULL);
+                CL_CHECK(clGetPlatformInfo(platform, CL_PLATFORM_NAME, sizeof(text_buffer), &text_buffer, NULL));
             }
         } else {
             for (unsigned i = 0; i < num_platforms; i++) {
-                clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, sizeof(text_buffer), &text_buffer, NULL);
+                CL_CHECK(clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, sizeof(text_buffer), &text_buffer, NULL));
                 if (strstr(text_buffer, GGML_OPENCL_PLATFORM) != NULL) {
                     platform = platforms[i];
                     break;
@@ -220,8 +230,7 @@ void ggml_cl_init(void) {
     if (GGML_OPENCL_DEVICE != NULL) {
         cl_device_id devices[NDEV];
         cl_uint num_devices;
-        clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, NDEV, devices, &num_devices);
-        CL_CHECK(err, "clGetDeviceIDs");
+        CL_CHECK(clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, NDEV, devices, &num_devices));
 
         unsigned dev_num;
         if (sscanf(GGML_OPENCL_DEVICE, " %u", &dev_num) == 1) {
@@ -230,11 +239,11 @@ void ggml_cl_init(void) {
                 exit(1);
             } else {
                 device = devices[dev_num];
-                clGetDeviceInfo(device, CL_DEVICE_NAME, sizeof(text_buffer), &text_buffer, NULL);
+                CL_CHECK(clGetDeviceInfo(device, CL_DEVICE_NAME, sizeof(text_buffer), &text_buffer, NULL));
             }
         } else {
             for (unsigned i = 0; i < num_devices; i++) {
-                clGetDeviceInfo(devices[i], CL_DEVICE_NAME, sizeof(text_buffer), &text_buffer, NULL);
+                CL_CHECK(clGetDeviceInfo(devices[i], CL_DEVICE_NAME, sizeof(text_buffer), &text_buffer, NULL));
                 if (strstr(text_buffer, GGML_OPENCL_DEVICE) != NULL) {
                     device = devices[i];
                     break;
@@ -247,8 +256,7 @@ void ggml_cl_init(void) {
         } else {
             fprintf(stderr, "ggml_opencl: selecting device: '%s'\n", text_buffer);
             if (platform == NULL) {
-                err = clGetDeviceInfo(device, CL_DEVICE_PLATFORM, sizeof(&platform), &platform, NULL);
-                CL_CHECK(err, "clGetDeviceInfo");
+                CL_CHECK(clGetDeviceInfo(device, CL_DEVICE_PLATFORM, sizeof(&platform), &platform, NULL));
             }
         }
     }
@@ -258,8 +266,7 @@ void ggml_cl_init(void) {
         cl_uint num_devices;
 
         for (unsigned i = 0; i < num_platforms; i++) {
-            clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, NDEV, devices, &num_devices);
-            CL_CHECK(err, "clGetDeviceIDs");
+            CL_CHECK(clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, NDEV, devices, &num_devices));
 
             if (num_devices > 0) {
                 platform = platforms[i];
@@ -278,24 +285,19 @@ void ggml_cl_init(void) {
     };
 
     if (device != NULL) {
-        context = clCreateContext(properties, 1, &device, NULL, NULL, &err);
-        CL_CHECK(err, "clCreateContext");
+        CL_CHECK((context = clCreateContext(properties, 1, &device, NULL, NULL, &err), err));
     } else {
-        context = clCreateContextFromType(properties, CL_DEVICE_TYPE_GPU, NULL, NULL, &err);
-        if (err == CL_DEVICE_NOT_AVAILABLE || err == CL_DEVICE_NOT_FOUND) {
-            context = clCreateContextFromType(properties, CL_DEVICE_TYPE_DEFAULT, NULL, NULL, &err);
-            if (err == CL_DEVICE_NOT_AVAILABLE || err == CL_DEVICE_NOT_FOUND) {
-                context = clCreateContextFromType(properties, CL_DEVICE_TYPE_ALL, NULL, NULL, &err);
-            }
-        }
-        CL_CHECK(err, "clCreateContextFromType");
+        CL_CHECK((context = clCreateContextFromType(properties, CL_DEVICE_TYPE_GPU, NULL, NULL, &err),
+            (err != CL_DEVICE_NOT_AVAILABLE && err != CL_DEVICE_NOT_FOUND ? err :
+            (context = clCreateContextFromType(properties, CL_DEVICE_TYPE_DEFAULT, NULL, NULL, &err),
+                (err != CL_DEVICE_NOT_AVAILABLE && err != CL_DEVICE_NOT_FOUND ? err :
+                (context = clCreateContextFromType(properties, CL_DEVICE_TYPE_ALL, NULL, NULL, &err), err))
+            ))
+        ));
 
-        err = clGetContextInfo(context, CL_CONTEXT_DEVICES, sizeof(&device), &device, NULL);
-        CL_CHECK(err, "clGetContextInfo");
-
+        CL_CHECK(clGetContextInfo(context, CL_CONTEXT_DEVICES, sizeof(&device), &device, NULL));
         if (platform == NULL) {
-            err = clGetDeviceInfo(device, CL_DEVICE_PLATFORM, sizeof(&platform), &platform, NULL);
-            CL_CHECK(err, "clGetDeviceInfo");
+            CL_CHECK(clGetDeviceInfo(device, CL_DEVICE_PLATFORM, sizeof(&platform), &platform, NULL));
         }
     }
 
@@ -308,26 +310,19 @@ void ggml_cl_init(void) {
     clGetDeviceInfo(device, CL_DEVICE_NAME, sizeof(text_buffer), &text_buffer, NULL);
     fprintf(stderr, "ggml_opencl: using device: '%s'\n", text_buffer);
 
-
-    queue = clCreateCommandQueue(context, device, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &err);
-    if (err == CL_INVALID_PROPERTY || err == CL_INVALID_VALUE) {
-        queue = clCreateCommandQueue(context, device, 0, &err);
-    }
-    CL_CHECK(err, "clCreateCommandQueue");
+    CL_CHECK((queue = clCreateCommandQueue(context, device, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &err),
+        (err != CL_INVALID_PROPERTY && err != CL_INVALID_VALUE ? err :
+        (queue = clCreateCommandQueue(context, device, 0, &err), err)
+    )));
 
     program = build_program_from_source(context, device, program_source);
 
     // Prepare dequantize kernels
-    kernel_q4_0 = clCreateKernel(program, "dequantize_row_q4_0", &err);
-    CL_CHECK(err, "clCreateKernel");
-    kernel_q4_1 = clCreateKernel(program, "dequantize_row_q4_1", &err);
-    CL_CHECK(err, "clCreateKernel");
-    kernel_q5_0 = clCreateKernel(program, "dequantize_row_q5_0", &err);
-    CL_CHECK(err, "clCreateKernel");
-    kernel_q5_1 = clCreateKernel(program, "dequantize_row_q5_1", &err);
-    CL_CHECK(err, "clCreateKernel");
-    kernel_q8_0 = clCreateKernel(program, "dequantize_row_q8_0", &err);
-    CL_CHECK(err, "clCreateKernel");
+    CL_CHECK((kernel_q4_0 = clCreateKernel(program, "dequantize_row_q4_0", &err), err));
+    CL_CHECK((kernel_q4_1 = clCreateKernel(program, "dequantize_row_q4_1", &err), err));
+    CL_CHECK((kernel_q5_0 = clCreateKernel(program, "dequantize_row_q5_0", &err), err));
+    CL_CHECK((kernel_q5_1 = clCreateKernel(program, "dequantize_row_q5_1", &err), err));
+    CL_CHECK((kernel_q8_0 = clCreateKernel(program, "dequantize_row_q8_0", &err), err));
 }
 
 static void ggml_cl_malloc(size_t req_size, size_t* cur_size, cl_mem_flags flags, cl_mem* buf) {
@@ -340,9 +335,8 @@ static void ggml_cl_malloc(size_t req_size, size_t* cur_size, cl_mem_flags flags
         clReleaseMemObject(*buf);
     }
     cl_int err;
-    *buf = clCreateBuffer(context, flags, req_size, NULL, &err);
+    CL_CHECK((*buf = clCreateBuffer(context, flags, req_size, NULL, &err), err));
     *cur_size = req_size;
-    CL_CHECK(err, "clCreateBuffer");
 }
 
 void ggml_cl_sgemm_wrapper(
@@ -351,7 +345,6 @@ void ggml_cl_sgemm_wrapper(
         const float alpha, const void *host_a, const int lda,
         const float *host_b, const int ldb, const float beta,
         float *host_c, const int ldc, const int btype) {
-    cl_int err = 0;
 
     cl_kernel kernel;
     size_t global = n * k, local, size_qb;
@@ -411,49 +404,40 @@ void ggml_cl_sgemm_wrapper(
     cl_event ev_a, ev_qb, ev_b;
 
     if (dequant) {
-        err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &cl_buffer_qb);
-        err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &cl_buffer_b);
-        CL_CHECK(err, "clSetKernelArg");
-        err = clEnqueueWriteBuffer(queue, cl_buffer_qb, CL_FALSE, 0, size_qb, host_b, 0, NULL, &ev_qb);
-        CL_CHECK(err, "clEnqueueWriteBuffer qb");
+        CL_CHECK(clSetKernelArg(kernel, 0, sizeof(cl_mem), &cl_buffer_qb));
+        CL_CHECK(clSetKernelArg(kernel, 1, sizeof(cl_mem), &cl_buffer_b));
+        CL_CHECK(clEnqueueWriteBuffer(queue, cl_buffer_qb, CL_FALSE, 0, size_qb, host_b, 0, NULL, &ev_qb));
     } else {
-        err = clEnqueueWriteBuffer(queue, cl_buffer_b, CL_FALSE, 0, size_b, host_b, 0, NULL, &ev_b);
-        CL_CHECK(err, "clEnqueueWriteBuffer b");
+        CL_CHECK(clEnqueueWriteBuffer(queue, cl_buffer_b, CL_FALSE, 0, size_b, host_b, 0, NULL, &ev_b));
     }
 
-    err = clEnqueueWriteBuffer(queue, cl_buffer_a, CL_FALSE, 0, size_a, host_a, 0, NULL, &ev_a);
-    CL_CHECK(err, "clEnqueueWriteBuffer a");
+    CL_CHECK(clEnqueueWriteBuffer(queue, cl_buffer_a, CL_FALSE, 0, size_a, host_a, 0, NULL, &ev_a));
     if (dequant) {
-        err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &global, &local, 1, &ev_qb, &ev_b);
-        CL_CHECK(err, "clEnqueueNDRangeKernel");
-        clReleaseEvent(ev_qb);
+        CL_CHECK(clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &global, &local, 1, &ev_qb, &ev_b));
+        CL_CHECK(clReleaseEvent(ev_qb));
     }
-    clWaitForEvents(1, &ev_a);
-    clWaitForEvents(1, &ev_b);
-    clReleaseEvent(ev_a);
-    clReleaseEvent(ev_b);
+    CL_CHECK(clWaitForEvents(1, &ev_a));
+    CL_CHECK(clWaitForEvents(1, &ev_b));
+    CL_CHECK(clReleaseEvent(ev_a));
+    CL_CHECK(clReleaseEvent(ev_b));
 
     cl_event ev_sgemm;
-    CLBlastStatusCode status = CLBlastSgemm((CLBlastLayout)order,
-                                            (CLBlastTranspose)trans_a, (CLBlastTranspose)trans_b,
-                                            m, n, k,
-                                            alpha,
-                                            cl_buffer_a, 0, lda,
-                                            cl_buffer_b, 0, ldb,
-                                            beta,
-                                            cl_buffer_c, 0, ldc,
-                                            &queue, &ev_sgemm);
-
-    if (status != CLBlastSuccess) {
-        fprintf(stderr, "Error: CLBlast SGEMM %d\n", status);
-        abort();
-    }
+    CLBLAST_CHECK(CLBlastSgemm(
+        (CLBlastLayout)order,
+        (CLBlastTranspose)trans_a, (CLBlastTranspose)trans_b,
+        m, n, k,
+        alpha,
+        cl_buffer_a, 0, lda,
+        cl_buffer_b, 0, ldb,
+        beta,
+        cl_buffer_c, 0, ldc,
+        &queue, &ev_sgemm));
 
     cl_event ev_c;
-    clEnqueueReadBuffer(queue, cl_buffer_c, CL_TRUE, 0, size_c, host_c, 1, &ev_sgemm, &ev_c);
+    CL_CHECK(clEnqueueReadBuffer(queue, cl_buffer_c, CL_TRUE, 0, size_c, host_c, 1, &ev_sgemm, &ev_c));
 
     // Wait for completion
-    clWaitForEvents(1, &ev_c);
-    clReleaseEvent(ev_sgemm);
-    clReleaseEvent(ev_c);
+    CL_CHECK(clWaitForEvents(1, &ev_c));
+    CL_CHECK(clReleaseEvent(ev_sgemm));
+    CL_CHECK(clReleaseEvent(ev_c));
 }
