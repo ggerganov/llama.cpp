@@ -749,7 +749,7 @@ bool console_readline(console_state & con_st, std::string & line) {
             break;
         }
 
-        if (input_char == WEOF || input_char == 0x04 /* Ctrl+D*/) {
+        if (input_char == (char32_t) WEOF || input_char == 0x04 /* Ctrl+D*/) {
             end_of_stream = true;
             break;
         }
@@ -764,7 +764,7 @@ bool console_readline(console_state & con_st, std::string & line) {
             char32_t code = getchar32();
             if (code == '[' || code == 0x1B) {
                 // Discard the rest of the escape sequence
-                while ((code = getchar32()) != WEOF) {
+                while ((code = getchar32()) != (char32_t) WEOF) {
                     if ((code >= 'A' && code <= 'Z') || (code >= 'a' && code <= 'z') || code == '~') {
                         break;
                     }
