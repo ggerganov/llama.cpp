@@ -1080,7 +1080,6 @@ static void llama_model_load_internal(
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
         if(GetQuantsUnshuffled())
         {
-        SetGPULayers(n_gpu);
 
         fprintf(stderr, "%s: [opencl] offloading %d layers to GPU\n", __func__, n_gpu);
 

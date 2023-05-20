@@ -333,7 +333,6 @@ ModelLoadResult gpt2_model_load(const std::string & fname, gpt2_model & model, g
 //         const int n_gpu = std::min(gpulayers, int(hparams.n_layer));
 //         if(GetQuantsUnshuffled())
 //         {
-//         SetGPULayers(n_gpu);
 
 //         fprintf(stderr, "%s: [opencl] offloading %d layers to GPU\n", __func__, n_gpu);
 
