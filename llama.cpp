@@ -829,10 +829,9 @@ static bool kv_cache_init(
 struct llama_context_params llama_context_default_params() {
     struct llama_context_params result = {
         /*.n_ctx                       =*/ 512,
-        /*.n_parts                     =*/ -1,
         /*.gpu_layers                  =*/ 0,
         /*.seed                        =*/ -1,
-        /*.f16_kv                      =*/ false,
+        /*.f16_kv                      =*/ true,
         /*.logits_all                  =*/ false,
         /*.vocab_only                  =*/ false,
         /*.use_mmap                    =*/ true,
@@ -965,7 +964,7 @@ static void llama_model_load_internal(
     size_t ctx_size;
     size_t mmapped_size;
     ml->calc_sizes(&ctx_size, &mmapped_size);
-    fprintf(stderr, "%s: ggml ctx size = %6.2f KB\n", __func__, ctx_size/1024.0);
+    fprintf(stderr, "%s: ggml ctx size = %6.2f MB\n", __func__, ctx_size/1024.0/1024.0);
 
     // print memory requirements
     {

@@ -211,6 +211,7 @@ int main(int argc, char ** argv)  {
     printf("Iteration;NThreads; SizeX; SizeY; SizeZ; Required_FLOPS; Elapsed_u_Seconds; gigaFLOPS\n");
     printf("=====================================================================================\n");
 
+    double  gflops_sum = 0;
     for (int i=0;i<benchmark_params.n_iterations ;i++) {
 
         long long int start = ggml_time_us();
@@ -219,6 +220,7 @@ int main(int argc, char ** argv)  {
         long long int stop = ggml_time_us();
         long long int usec = stop-start;
         double gflops = (double)(flops_per_matrix)/usec/1000.0;
+        gflops_sum += gflops;
         printf("%9i;%8i;%6i;%6i;%6i;%15lli;%18lli;%10.2f\n",
             i,
             gf31.n_threads,
@@ -248,4 +250,7 @@ int main(int argc, char ** argv)  {
         // Running a different graph computation to make sure we override the CPU cache lines
         ggml_graph_compute(ctx, &gf32);
     }
+    printf("\n");
+    printf("Average%78.2f\n",gflops_sum/((double)benchmark_params.n_iterations));
+    printf("=====================================================================================\n");
 }
