@@ -2618,8 +2618,8 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
 }
 
 // Sets the state reading from the specified source address
-size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
-    const uint8_t * inp = src;
+size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
+    uint8_t * inp = src;
 
     // set rng
     {
