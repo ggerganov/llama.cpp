@@ -313,6 +313,7 @@ extern "C" {
         GGML_OP_ROPE,
         GGML_OP_ROPE_BACK,
         GGML_OP_ALIBI,
+        GGML_OP_CLAMP,
         GGML_OP_CONV_1D_1S,
         GGML_OP_CONV_1D_2S,
 
@@ -849,7 +850,7 @@ extern "C" {
             int                   n_past);
 
     // in-place, returns view(a)
-    GGML_API struct ggml_tensor * gml_diag_mask_zero_inplace(
+    GGML_API struct ggml_tensor * ggml_diag_mask_zero_inplace(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             int                   n_past);
@@ -897,7 +898,16 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             int                   n_past,
-            int                   n_head);
+            int                   n_head,
+            float                 bias_max);
+
+    // clamp
+    // in-place, returns view(a)
+    struct ggml_tensor * ggml_clamp(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            float                 min,
+            float                 max);
 
     // padding = 1
     // TODO: we don't support extra parameters for now
