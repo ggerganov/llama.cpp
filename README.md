@@ -56,7 +56,7 @@ The main goal of `llama.cpp` is to run the LLaMA model using 4-bit integer quant
 - Mixed F16 / F32 precision
 - 4-bit, 5-bit and 8-bit integer quantization support
 - Runs on the CPU
-- Supports OpenBLAS/Apple BLAS/ARM Performance Lib/ATLAS/BLIS/Intel MKL/NVHPC/ACML/SCSL/SGIMATH and [more](https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors) in BLAS
+- OpenBLAS support
 - cuBLAS and CLBlast support
 
 The original implementation of `llama.cpp` was [hacked in an evening](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022).
@@ -274,24 +274,9 @@ Building the program with BLAS support may lead to some performance improvements
       ```bash
       mkdir build
       cd build
-      cmake .. -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS
+      cmake .. -DLLAMA_OPENBLAS=ON
       cmake --build . --config Release
       ```
-
-- BLIS
-
-  Check [BLIS.md](BLIS.md) for more information.
-
-- Intel MKL
-
-  By default, `LLAMA_BLAS_VENDOR` is set to `Generic`, so if you already sourced intel environment script and assign `-DLLAMA_BLAS=ON` in cmake, the mkl version of Blas will automatically been selected. You may also specify it by:
-
-  ```bash
-  mkdir build
-  cd build
-  cmake .. -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=Intel10_64lp -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
-  cmake --build . -config Release
-  ```
 
 - cuBLAS
 
