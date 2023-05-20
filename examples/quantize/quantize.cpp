@@ -1,6 +1,6 @@
-#include "ggml.h"
-#include "llama.h"
 #include "build-info.h"
+
+#include "llama.h"
 
 #include <cstdio>
 #include <map>
@@ -42,8 +42,6 @@ bool try_parse_ftype(const std::string & ftype_str, llama_ftype & ftype, std::st
 //  ./quantize models/llama/ggml-model.bin [models/llama/ggml-model-quant.bin] type [nthreads]
 //
 int main(int argc, char ** argv) {
-    ggml_time_init();
-
     if (argc < 3) {
         fprintf(stderr, "usage: %s model-f32.bin [model-quant.bin] type [nthreads]\n", argv[0]);
         for (auto it = LLAMA_FTYPE_MAP.begin(); it != LLAMA_FTYPE_MAP.end(); it++) {
@@ -52,12 +50,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    // needed to initialize f16 tables
-    {
-        struct ggml_init_params params = { 0, NULL, false };
-        struct ggml_context * ctx = ggml_init(params);
-        ggml_free(ctx);
-    }
+    llama_init_backend();
 
     // parse command line arguments
     const std::string fname_inp = argv[1];
@@ -116,25 +109,25 @@ int main(int argc, char ** argv) {
     }
     fprintf(stderr, "\n");
 
-    const int64_t t_main_start_us = ggml_time_us();
+    const int64_t t_main_start_us = llama_time_us();
 
     int64_t t_quantize_us = 0;
 
     // load the model
     {
-        const int64_t t_start_us = ggml_time_us();
+        const int64_t t_start_us = llama_time_us();
 
         if (llama_model_quantize(fname_inp.c_str(), fname_out.c_str(), ftype, nthread)) {
             fprintf(stderr, "%s: failed to quantize model from '%s'\n", __func__, fname_inp.c_str());
             return 1;
         }
 
-        t_quantize_us = ggml_time_us() - t_start_us;
+        t_quantize_us = llama_time_us() - t_start_us;
     }
 
     // report timing
     {
-        const int64_t t_main_end_us = ggml_time_us();
+        const int64_t t_main_end_us = llama_time_us();
 
         printf("\n");
         printf("%s: quantize time = %8.2f ms\n", __func__, t_quantize_us/1000.0);

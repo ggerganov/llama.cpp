@@ -839,6 +839,21 @@ bool llama_mlock_supported() {
     return llama_mlock::SUPPORTED;
 }
 
+void llama_init_backend() {
+    ggml_time_init();
+
+    // needed to initialize f16 tables
+    {
+        struct ggml_init_params params = { 0, NULL, false };
+        struct ggml_context * ctx = ggml_init(params);
+        ggml_free(ctx);
+    }
+}
+
+int64_t llama_time_us() {
+    return ggml_time_us();
+}
+
 //
 // model loading
 //
