@@ -797,8 +797,8 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
 
     if(debugmode)
     {
-        printf("\n[Debug: Dump Input Tokens]\n");
-        if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2 || file_format == FileFormat::GGJT_3)
+        printf("\n[Debug: Dump Input Tokens: %d]\n",file_format);
+        if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2)
         {
             for (auto id : embd_inp)
             {
@@ -986,7 +986,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             // decrement remaining sampling budget
             --remaining_tokens;
 
-            if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2)
+            if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2|| file_format == FileFormat::GGJT_3)
             {
                 if(file_format == FileFormat::GGJT_3)
                 {
