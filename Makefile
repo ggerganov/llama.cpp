@@ -122,6 +122,10 @@ ifdef LLAMA_OPENBLAS
 		LDFLAGS += -lopenblas
 	endif
 endif
+ifdef LLAMA_BLIS
+	CFLAGS += -DGGML_USE_OPENBLAS -I/usr/local/include/blis -I/usr/include/blis
+	LDFLAGS += -lblis -L/usr/local/lib
+endif
 ifdef LLAMA_CUBLAS
 	CFLAGS    += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
 	CXXFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
