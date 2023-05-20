@@ -68,7 +68,7 @@ option(LLAMA_ACCELERATE             "llama: enable Accelerate framework"        
 option(LLAMA_BLAS                   "llama: use BLAS"                                       OFF)
 option(LLAMA_BLAS_VENDOR            "llama: BLA_VENDOR from https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors" Generic)
 option(LLAMA_CUBLAS                 "llama: use cuBLAS"                                     OFF)
-option(LLAMA_CUDA_BY                "llama: y block size for dmmv CUDA kernels"             1)
+set(LLAMA_CUDA_BY "1" CACHE STRING  "llama: y block size for dmmv CUDA kernels")
 option(LLAMA_CUDA_UNROLL            "llama: unroll loops in dmmv CUDA kernels"              OFF)
 option(LLAMA_CLBLAST                "llama: use CLBlast"                                    OFF)
 
