@@ -2481,7 +2481,7 @@ static void ggml_vec_dot_q4_1_q8_1(const int n, float * restrict s, const void *
             sumi += (v0 * y[i].qs[j]) + (v1 * y[i].qs[j + qk/2]);
         }
 
-        sumf += (GGML_FP16_TO_FP32(x[i]).d*y[i].d)*sumi + GGML_FP16_TO_FP32(x[i].m)*y[i].s;
+        sumf += (GGML_FP16_TO_FP32(x[i].d)*y[i].d)*sumi + GGML_FP16_TO_FP32(x[i].m)*y[i].s;
     }
 
     *s = sumf;
