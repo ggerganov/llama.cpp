@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25) # Don't bump this version for no reason
+cmake_minimum_required(VERSION 3.12) # Don't bump this version for no reason
 project("llama.cpp" C CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -150,19 +150,24 @@ if (LLAMA_BLAS)
     if (LLAMA_STATIC)
         set(BLA_STATIC ON)
     endif()
-    set(BLA_SIZEOF_INTEGRER 8)
+    if ($(CMAKE_VERSION) VERSION_GREATER_EQUAL 3.22)
+        set(BLA_SIZEOF_INTEGRER 8)
+    endif()
     set(BLA_VENDOR ${LLAMA_BLAS_VENDOR})
     find_package(BLAS)
     if (BLAS_FOUND)
         message(STATUS "BLAS found, Libraries: ${BLAS_LIBRARIES}")
 
+	add_compile_options(${BLAS_LINKER_FLAGS})
         add_compile_definitions(GGML_USE_OPENBLAS)
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ${BLAS_LIBRARIES})
 
         message("${BLAS_LIBRARIES}")
         include_directories(${BLAS_INCLUDE_DIRS})
     else()
-        message(WARNING "BLAS not found, please refer to https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors to set correct LLAMA_BLAS_VENDOR")
+        message(WARNING "BLAS not found, please refer to "
+	"https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors"
+	" to set correct LLAMA_BLAS_VENDOR")
     endif()
 endif()
 
