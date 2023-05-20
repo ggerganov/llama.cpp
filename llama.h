@@ -40,9 +40,9 @@ extern "C" {
     typedef int llama_token;
 
     typedef struct llama_token_data {
-        llama_token id;  // token id
-        float logit; // log-odds of the token
-        float p;     // probability of the token
+        llama_token id; // token id
+        float logit;    // log-odds of the token
+        float p;        // probability of the token
     } llama_token_data;
 
     typedef struct llama_token_data_array {
@@ -73,22 +73,29 @@ extern "C" {
 
     // model file types
     enum llama_ftype {
-        LLAMA_FTYPE_ALL_F32     = 0,
-        LLAMA_FTYPE_MOSTLY_F16  = 1,  // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_0 = 2,  // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_1 = 3,  // except 1d tensors
+        LLAMA_FTYPE_ALL_F32              = 0,
+        LLAMA_FTYPE_MOSTLY_F16           = 1, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_0          = 2, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_1          = 3, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4, // tok_embeddings.weight and output.weight are F16
-        // LLAMA_FTYPE_MOSTLY_Q4_2 = 5,  // support has been removed
-        // LLAMA_FTYPE_MOSTLY_Q4_3 (6) support has been removed
-        LLAMA_FTYPE_MOSTLY_Q8_0 = 7,  // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q5_0 = 8,  // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q5_1 = 9,  // except 1d tensors
+        // LLAMA_FTYPE_MOSTLY_Q4_2       = 5, // support has been removed
+        // LLAMA_FTYPE_MOSTLY_Q4_3       = 6, // support has been removed
+        LLAMA_FTYPE_MOSTLY_Q8_0          = 7, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q5_0          = 8, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q5_1          = 9, // except 1d tensors
     };
 
     LLAMA_API struct llama_context_params llama_context_default_params();
 
     LLAMA_API bool llama_mmap_supported();
     LLAMA_API bool llama_mlock_supported();
+
+    // TODO: not great API - very likely to change
+    // Initialize the llama + ggml backend
+    // Call once at the start of the program
+    LLAMA_API void llama_init_backend();
+
+    LLAMA_API int64_t llama_time_us();
 
     // Various functions for loading a ggml llama model.
     // Allocate (almost) all memory needed for the model.

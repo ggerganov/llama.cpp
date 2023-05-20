@@ -1,6 +1,7 @@
-#include <locale.h>
 #include "ggml.h"
 #include "build-info.h"
+
+#include <locale.h>
 #include <assert.h>
 #include <math.h>
 #include <cstring>
