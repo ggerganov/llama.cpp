@@ -1018,7 +1018,7 @@ static void llama_model_load_internal(
         // "output" tensor
         {
             ggml_backend backend_output;
-            if (n_gpu_layers > int(n_layer)) {
+            if (n_gpu_layers > int(n_layer)) { // NOLINT
                 backend_output = LLAMA_BACKEND_OFFLOAD;
             } else {
                 backend_output = GGML_BACKEND_CPU;
