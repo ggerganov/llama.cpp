@@ -1,15 +1,5 @@
-/*.o
-/*.a
-/*.sh
-/*.log
-/*.org
-
-/ppl-*.txt
-/qnt-*.txt
-/perf-*.txt
-
-*.bin
-
+*.o
+*.a
 .DS_Store
 .build/
 .cache/
@@ -31,9 +21,8 @@ build-no-accel/
 build-sanitize-addr/
 build-sanitize-thread/
 
-prompts/
 models/*
-wikitext-2-raw/
+*.bin
 
 /main
 /quantize
@@ -44,7 +33,6 @@ wikitext-2-raw/
 /benchmark-matmult
 /vdot
 /Pipfile
-/libllama.so
 
 build-info.h
 arm_neon.h
@@ -54,5 +42,9 @@ __pycache__
 
 zig-out/
 zig-cache/
+
+ppl-*.txt
+qnt-*.txt
+perf-*.txt
 
 examples/jeopardy/results.txt
