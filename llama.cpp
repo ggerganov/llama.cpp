@@ -427,26 +427,30 @@ struct llama_file_loader {
     }
     void read_magic() {
         uint32_t magic = file.read_u32();
-        uint32_t version = 0;
 
-        if (magic != 'ggml') {
-            version = file.read_u32();
-        }
-
-        if (magic == 'ggml' && version == 0) {
+        if (magic == LLAMA_FILE_MAGIC_GGML) {
             file_version = LLAMA_FILE_VERSION_GGML;
-        } else if (magic == 'ggmf' && version == 1) {
-            file_version = LLAMA_FILE_VERSION_GGMF_V1;
-        } else if (magic == 'ggjt' && version == 1) {
-            file_version = LLAMA_FILE_VERSION_GGJT_V1;
-        } else if (magic == 'ggjt' && version == 2) {
-            file_version = LLAMA_FILE_VERSION_GGJT_V2;
-        } else if (magic == 'ggjt' && version == 3) {
-            file_version = LLAMA_FILE_VERSION_GGJT_V3;
-        } else {
-            throw format("unknown (magic, version) combination: %08x, %08x; is this really a GGML file?",
-                         magic, version);
+            return;
         }
+
+        uint32_t version = file.read_u32();
+
+        switch (magic) {
+            case LLAMA_FILE_MAGIC_GGMF:
+                switch (version) {
+                    case 1: file_version = LLAMA_FILE_VERSION_GGMF_V1; return;
+                }
+                break;
+            case LLAMA_FILE_MAGIC_GGJT:
+                switch (version) {
+                    case 1: file_version = LLAMA_FILE_VERSION_GGJT_V1; return;
+                    case 2: file_version = LLAMA_FILE_VERSION_GGJT_V2; return;
+                    case 3: file_version = LLAMA_FILE_VERSION_GGJT_V3; return;
+                }
+        }
+
+        throw format("unknown (magic, version) combination: %08x, %08x; is this really a GGML file?",
+                     magic, version);
     }
     void read_hparams() {
         hparams.n_vocab = file.read_u32();
@@ -2290,7 +2294,7 @@ int llama_apply_lora_from_file_internal(struct llama_context * ctx, const char *
     {
         uint32_t magic;
         fin.read((char *) &magic, sizeof(magic));
-        if (magic != 'ggla') {
+        if (magic != LLAMA_FILE_MAGIC_GGLA) {
             fprintf(stderr, "%s: bad file magic\n", __func__);
             return 1;
         }
