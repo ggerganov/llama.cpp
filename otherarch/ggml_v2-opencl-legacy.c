@@ -1,4 +1,4 @@
-#include "ggml-opencl-legacy.h"
+#include "ggml_v2-opencl-legacy.h"
 
 #define CL_TARGET_OPENCL_VERSION 110
 #include <clblast_c.h>
@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "ggml.h"
+#include "ggml_v2.h"
 
 #define MULTILINE_QUOTE(...) #__VA_ARGS__
 const char * clblast_dequant_legacy = MULTILINE_QUOTE(
@@ -171,7 +171,7 @@ __kernel void dequantize_row_q8_0(__global struct block_q8_0* blocks, __global f
 
 #define QK5_0 32
 typedef struct {
-    ggml_fp16_t d;         // delta
+    ggml_v2_fp16_t d;         // delta
     uint8_t qh[4];         // 5-th bit of quants
     uint8_t qs[QK5_0 / 2]; // nibbles / quants
 } block_q5_0;
@@ -221,12 +221,12 @@ static cl_program build_program_from_source(cl_context ctx, cl_device_id dev, co
     return p;
 }
 
-void ggml_cl_init_legacy(void) {
+void ggml_v2_cl_init_legacy(void) {
     cl_int err = 0;
-    char * GGML_CLBLAST_PLATFORM = getenv("GGML_CLBLAST_PLATFORM");
-    char * GGML_CLBLAST_DEVICE = getenv("GGML_CLBLAST_DEVICE");
-    int plat_num = (GGML_CLBLAST_PLATFORM == NULL ? 0 : atoi(GGML_CLBLAST_PLATFORM));
-    int dev_num = (GGML_CLBLAST_DEVICE == NULL ? 0 : atoi(GGML_CLBLAST_DEVICE));
+    char * GGML_V2_CLBLAST_PLATFORM = getenv("GGML_CLBLAST_PLATFORM");
+    char * GGML_V2_CLBLAST_DEVICE = getenv("GGML_CLBLAST_DEVICE");
+    int plat_num = (GGML_V2_CLBLAST_PLATFORM == NULL ? 0 : atoi(GGML_V2_CLBLAST_PLATFORM));
+    int dev_num = (GGML_V2_CLBLAST_DEVICE == NULL ? 0 : atoi(GGML_V2_CLBLAST_DEVICE));
     printf("\nInitializing LEGACY CLBlast (First Run)...");
     printf("\nAttempting to use: Platform=%d, Device=%d (If invalid, program will crash)\n",plat_num,dev_num);
     cl_uint num_platforms;
@@ -271,7 +271,7 @@ void ggml_cl_init_legacy(void) {
     CL_CHECK(err, "clCreateKernel");
 }
 
-static void ggml_cl_malloc(size_t req_size, size_t* cur_size, cl_mem_flags flags, cl_mem* buf) {
+static void ggml_v2_cl_malloc(size_t req_size, size_t* cur_size, cl_mem_flags flags, cl_mem* buf) {
     if (req_size <= *cur_size) {
         return;
     }
@@ -286,8 +286,8 @@ static void ggml_cl_malloc(size_t req_size, size_t* cur_size, cl_mem_flags flags
     CL_CHECK(err, "clCreateBuffer");
 }
 
-void ggml_cl_sgemm_wrapper_legacy(
-        const enum ggml_blas_order order, const enum ggml_blas_op trans_a, const enum ggml_blas_op trans_b,
+void ggml_v2_cl_sgemm_wrapper_legacy(
+        const enum ggml_v2_blas_order order, const enum ggml_v2_blas_op trans_a, const enum ggml_v2_blas_op trans_b,
         const int m, const int n, const int k,
         const float alpha, const void *host_a, const int lda,
         const float *host_b, const int ldb, const float beta,
@@ -300,34 +300,34 @@ void ggml_cl_sgemm_wrapper_legacy(
     cl_block_q5_0* cl_host_b;
 
     switch (btype) {
-    case GGML_TYPE_F32:
+    case GGML_V2_TYPE_F32:
         dequant = false;
         break;
-    case GGML_TYPE_Q4_0:
+    case GGML_V2_TYPE_Q4_0:
         dequant = true;
         kernel = kernel_q4_0;
         local = 16;
         size_qb = global * (sizeof(float) + local) / 32;
         break;
-    case GGML_TYPE_Q4_1:
+    case GGML_V2_TYPE_Q4_1:
         dequant = true;
         kernel = kernel_q4_1;
         local = 16;
         size_qb = global * (sizeof(float) * 2 + local) / 32;
         break;
-    case GGML_TYPE_Q4_2:
+    case GGML_V2_TYPE_Q4_2:
         dequant = true;
         kernel = kernel_q4_2;
         local = 8;
-        size_qb = global * (sizeof(ggml_fp16_t) + local) / 16;
+        size_qb = global * (sizeof(ggml_v2_fp16_t) + local) / 16;
         break;
-    case GGML_TYPE_Q4_3:
+    case GGML_V2_TYPE_Q4_3:
         dequant = true;
         kernel = kernel_q4_3;
         local = 8;
         size_qb = global * (sizeof(short) * 2 + local) / 16;
         break;
-    case GGML_TYPE_Q5_0:
+    case GGML_V2_TYPE_Q5_0:
         dequant = true;
         kernel = kernel_q5_0;
         local = 16;
@@ -337,20 +337,20 @@ void ggml_cl_sgemm_wrapper_legacy(
         const block_q5_0* b = (const block_q5_0*) host_b;
         cl_host_b = (cl_block_q5_0*) malloc(sizeof(cl_block_q5_0) * global / 32);
         for (size_t i = 0; i < global / 32; i++) {
-            cl_host_b[i].d = ggml_fp16_to_fp32(b[i].d);
+            cl_host_b[i].d = ggml_v2_fp16_to_fp32(b[i].d);
             memcpy(&cl_host_b[i].qh, b[i].qh, sizeof(uint32_t));
             memcpy(&cl_host_b[i].qs, b[i].qs, QK5_0 / 2);
         }
         host_b = (const float*) cl_host_b;
         size_qb = global * (sizeof(float) + sizeof(uint32_t) + local) / 32;
         break;
-    case GGML_TYPE_Q5_1:
+    case GGML_V2_TYPE_Q5_1:
         dequant = true;
         kernel = kernel_q5_1;
         local = 16;
-        size_qb = global * (sizeof(ggml_fp16_t) * 2 + sizeof(uint32_t) + local) / 32;
+        size_qb = global * (sizeof(ggml_v2_fp16_t) * 2 + sizeof(uint32_t) + local) / 32;
         break;
-    case GGML_TYPE_Q8_0:
+    case GGML_V2_TYPE_Q8_0:
         dequant = true;
         kernel = kernel_q8_0;
         local = 32;
@@ -366,12 +366,12 @@ void ggml_cl_sgemm_wrapper_legacy(
     const size_t size_c =  m * n * sizeof(float);
 
     // Prepare buffers
-    ggml_cl_malloc(size_a, &cl_size_a, CL_MEM_READ_ONLY, &cl_buffer_a);
+    ggml_v2_cl_malloc(size_a, &cl_size_a, CL_MEM_READ_ONLY, &cl_buffer_a);
     if (dequant) {
-        ggml_cl_malloc(size_qb, &cl_size_qb, CL_MEM_READ_ONLY, &cl_buffer_qb);
+        ggml_v2_cl_malloc(size_qb, &cl_size_qb, CL_MEM_READ_ONLY, &cl_buffer_qb);
     }
-    ggml_cl_malloc(size_b, &cl_size_b, CL_MEM_READ_WRITE, &cl_buffer_b);
-    ggml_cl_malloc(size_c, &cl_size_c, CL_MEM_WRITE_ONLY, &cl_buffer_c);
+    ggml_v2_cl_malloc(size_b, &cl_size_b, CL_MEM_READ_WRITE, &cl_buffer_b);
+    ggml_v2_cl_malloc(size_c, &cl_size_c, CL_MEM_WRITE_ONLY, &cl_buffer_c);
 
     cl_event ev_a, ev_qb, ev_b;
 
@@ -421,7 +421,7 @@ void ggml_cl_sgemm_wrapper_legacy(
     clWaitForEvents(1, &ev_c);
     clReleaseEvent(ev_sgemm);
     clReleaseEvent(ev_c);
-    if (btype == GGML_TYPE_Q5_0) {
+    if (btype == GGML_V2_TYPE_Q5_0) {
         free((void*) cl_host_b);
     }
 }

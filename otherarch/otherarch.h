@@ -46,6 +46,26 @@ struct gptj_layer {
     struct ggml_tensor * c_mlp_proj_w_trans; //for backwards compatibility
     struct ggml_tensor * c_mlp_proj_b;
 };
+struct gptj_layer_v2 {
+    // normalization
+    struct ggml_v2_tensor * ln_1_g;
+    struct ggml_v2_tensor * ln_1_b;
+
+    // attention
+    struct ggml_v2_tensor * c_attn_q_proj_w;
+    struct ggml_v2_tensor * c_attn_k_proj_w;
+    struct ggml_v2_tensor * c_attn_v_proj_w;
+
+    struct ggml_v2_tensor * c_attn_proj_w;
+
+    // ff
+    struct ggml_v2_tensor * c_mlp_fc_w;
+    struct ggml_v2_tensor * c_mlp_fc_b;
+
+    struct ggml_v2_tensor * c_mlp_proj_w;
+    struct ggml_v2_tensor * c_mlp_proj_w_trans; //for backwards compatibility
+    struct ggml_v2_tensor * c_mlp_proj_b;
+};
 struct gptj_layer_v1 {
     // normalization
     struct ggml_v1_tensor * ln_1_g;
@@ -88,6 +108,29 @@ struct gptj_model_v1 {
     //
     struct ggml_v1_context * ctx;
     std::map<std::string, struct ggml_v1_tensor *> tensors;
+};
+
+struct gptj_model_v2 {
+    gptj_hparams hparams;
+
+    // normalization
+    struct ggml_v2_tensor * ln_f_g;
+    struct ggml_v2_tensor * ln_f_b;
+
+    struct ggml_v2_tensor * wte; // position embedding
+
+    struct ggml_v2_tensor * lmh_g; // language model head
+    struct ggml_v2_tensor * lmh_b; // language model bias
+
+    std::vector<gptj_layer> layers;
+
+    // key + value memory
+    struct ggml_v2_tensor * memory_k;
+    struct ggml_v2_tensor * memory_v;
+
+    //
+    struct ggml_v2_context * ctx;
+    std::map<std::string, struct ggml_v2_tensor *> tensors;
 };
 
 struct gptj_model {
@@ -167,6 +210,50 @@ struct gpt2_v1_model {
     std::map<std::string, struct ggml_v1_tensor *> tensors;
 };
 
+struct gpt2_layer_v2 {
+    // normalization
+    struct ggml_v2_tensor * ln_1_g;
+    struct ggml_v2_tensor * ln_1_b;
+
+    struct ggml_v2_tensor * ln_2_g;
+    struct ggml_v2_tensor * ln_2_b;
+
+    // attention
+    struct ggml_v2_tensor * c_attn_attn_w;
+    struct ggml_v2_tensor * c_attn_attn_b;
+
+    struct ggml_v2_tensor * c_attn_proj_w;
+    struct ggml_v2_tensor * c_attn_proj_b;
+
+    // mlp
+    struct ggml_v2_tensor * c_mlp_fc_w;
+    struct ggml_v2_tensor * c_mlp_fc_b;
+
+    struct ggml_v2_tensor * c_mlp_proj_w;
+    struct ggml_v2_tensor * c_mlp_proj_b;
+};
+
+struct gpt2_v2_model {
+    gpt2_hparams hparams;
+
+    // normalization
+    struct ggml_v2_tensor * ln_f_g;
+    struct ggml_v2_tensor * ln_f_b;
+
+    struct ggml_v2_tensor * wte;     // position embedding
+    struct ggml_v2_tensor * wpe;     //    token embedding
+    struct ggml_v2_tensor * lm_head; // language model head
+
+    std::vector<gpt2_layer_v2> layers;
+
+    // key + value memory
+    struct ggml_v2_tensor * memory_k;
+    struct ggml_v2_tensor * memory_v;
+
+    //
+    struct ggml_v2_context * ctx;
+    std::map<std::string, struct ggml_v2_tensor *> tensors;
+};
 
 struct gpt2_layer {
     // normalization
@@ -223,6 +310,53 @@ struct gpt_neox_hparams {
     int32_t n_rot   = 32; // rotary_pct * (n_embd / n_head)
     int32_t par_res = 1; // 1 = true, 0 = false
     int32_t ftype   = 1;
+};
+
+struct gpt_neox_layer_v2 {
+    // pre normalization
+    struct ggml_v2_tensor * ln_1_g;
+    struct ggml_v2_tensor * ln_1_b;
+
+    // attention
+    struct ggml_v2_tensor * c_attn_attn_w;
+    struct ggml_v2_tensor * c_attn_attn_b;
+
+    struct ggml_v2_tensor * c_attn_proj_w;
+    struct ggml_v2_tensor * c_attn_proj_b;
+
+    // post normalization
+    struct ggml_v2_tensor * ln_2_g;
+    struct ggml_v2_tensor * ln_2_b;
+
+    // ff
+    struct ggml_v2_tensor * c_mlp_fc_w;
+    struct ggml_v2_tensor * c_mlp_fc_b;
+
+    struct ggml_v2_tensor * c_mlp_proj_w;
+    struct ggml_v2_tensor * c_mlp_proj_b;
+};
+
+struct gpt_neox_v2_model {
+    gpt_neox_hparams hparams;
+
+    // normalization
+    struct ggml_v2_tensor * ln_f_g;
+    struct ggml_v2_tensor * ln_f_b;
+
+    struct ggml_v2_tensor * wte; // position embedding
+
+    struct ggml_v2_tensor * lmh_g; // language model head
+    //struct ggml_tensor * lmh_b; // language model bias
+
+    std::vector<gpt_neox_layer_v2> layers;
+
+    // key + value memory
+    struct ggml_v2_tensor * memory_k;
+    struct ggml_v2_tensor * memory_v;
+
+    //
+    struct ggml_v2_context * ctx;
+    std::map<std::string, struct ggml_v2_tensor *> tensors;
 };
 
 struct gpt_neox_layer {

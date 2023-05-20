@@ -1,4 +1,4 @@
-#include "ggml-opencl.h"
+#include "ggml_v2-opencl.h"
 
 #include <array>
 #include <atomic>

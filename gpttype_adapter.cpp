@@ -12,7 +12,7 @@
 #include "otherarch.h"
 
 //for easier compilation
-#include "llamaextra.cpp"
+#include "llama_v2.cpp"
 
 //concat source files into one file for compilation purposes
 #include "utils.cpp"

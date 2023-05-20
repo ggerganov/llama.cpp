@@ -4,7 +4,7 @@
 #include "otherarch.h"
 
 #include "rwkv_v2.h"
-#include "ggml.h"
+#include "ggml_v2.h"
 
 #include <string>
 #include <vector>
@@ -48,21 +48,21 @@ bool read_int32(FILE * file, int32_t * dest) {
     return true;
 }
 
-#define GGML_TYPE_UNKNOWN GGML_TYPE_COUNT
+#define GGML_V2_TYPE_UNKNOWN GGML_V2_TYPE_COUNT
 
 #define FORMAT_TYPE_COUNT 10
 
-static const ggml_type FORMAT_TYPE_TO_GGML_TYPE[FORMAT_TYPE_COUNT] = {
-    GGML_TYPE_F32,
-    GGML_TYPE_F16,
-    GGML_TYPE_Q4_0,
-    GGML_TYPE_Q4_1,
-    GGML_TYPE_UNKNOWN, // Unused
-    GGML_TYPE_Q4_2,
-    GGML_TYPE_UNKNOWN, // Unused
-    GGML_TYPE_Q5_0,
-    GGML_TYPE_Q5_1,
-    GGML_TYPE_Q8_0
+static const ggml_v2_type FORMAT_TYPE_TO_GGML_V2_TYPE[FORMAT_TYPE_COUNT] = {
+    GGML_V2_TYPE_F32,
+    GGML_V2_TYPE_F16,
+    GGML_V2_TYPE_Q4_0,
+    GGML_V2_TYPE_Q4_1,
+    GGML_V2_TYPE_UNKNOWN, // Unused
+    GGML_V2_TYPE_Q4_2,
+    GGML_V2_TYPE_UNKNOWN, // Unused
+    GGML_V2_TYPE_Q5_0,
+    GGML_V2_TYPE_Q5_1,
+    GGML_V2_TYPE_Q8_0
 };
 
 static int32_t format_name_to_format_type(const char * format_name) {
@@ -79,29 +79,29 @@ static int32_t format_name_to_format_type(const char * format_name) {
 // --- Model definition and loading utilities ---
 
 struct rwkv_layer {
-    struct ggml_tensor * ln1_weight;
-    struct ggml_tensor * ln1_bias;
+    struct ggml_v2_tensor * ln1_weight;
+    struct ggml_v2_tensor * ln1_bias;
 
     // RWKV, also called "attention" by the author.
-    struct ggml_tensor * att_time_mix_k;
-    struct ggml_tensor * att_time_mix_v;
-    struct ggml_tensor * att_time_mix_r;
-    struct ggml_tensor * att_time_first;
-    struct ggml_tensor * att_time_decay;
-    struct ggml_tensor * att_key;
-    struct ggml_tensor * att_value;
-    struct ggml_tensor * att_receptance;
-    struct ggml_tensor * att_output;
+    struct ggml_v2_tensor * att_time_mix_k;
+    struct ggml_v2_tensor * att_time_mix_v;
+    struct ggml_v2_tensor * att_time_mix_r;
+    struct ggml_v2_tensor * att_time_first;
+    struct ggml_v2_tensor * att_time_decay;
+    struct ggml_v2_tensor * att_key;
+    struct ggml_v2_tensor * att_value;
+    struct ggml_v2_tensor * att_receptance;
+    struct ggml_v2_tensor * att_output;
 
-    struct ggml_tensor * ln2_weight;
-    struct ggml_tensor * ln2_bias;
+    struct ggml_v2_tensor * ln2_weight;
+    struct ggml_v2_tensor * ln2_bias;
 
     // FFN.
-    struct ggml_tensor * ffn_time_mix_k;
-    struct ggml_tensor * ffn_time_mix_r;
-    struct ggml_tensor * ffn_key;
-    struct ggml_tensor * ffn_value;
-    struct ggml_tensor * ffn_receptance;
+    struct ggml_v2_tensor * ffn_time_mix_k;
+    struct ggml_v2_tensor * ffn_time_mix_r;
+    struct ggml_v2_tensor * ffn_key;
+    struct ggml_v2_tensor * ffn_value;
+    struct ggml_v2_tensor * ffn_receptance;
 };
 
 struct rwkv_model {
@@ -111,23 +111,23 @@ struct rwkv_model {
     // 0 for float32, 1 for float16.
     int32_t data_type;
 
-    struct ggml_tensor * emb;
+    struct ggml_v2_tensor * emb;
 
-    struct ggml_tensor * ln0_weight;
-    struct ggml_tensor * ln0_bias;
+    struct ggml_v2_tensor * ln0_weight;
+    struct ggml_v2_tensor * ln0_bias;
 
     std::vector<rwkv_layer> layers;
 
-    struct ggml_tensor * ln_out_weight;
-    struct ggml_tensor * ln_out_bias;
+    struct ggml_v2_tensor * ln_out_weight;
+    struct ggml_v2_tensor * ln_out_bias;
 
-    struct ggml_tensor * head;
+    struct ggml_v2_tensor * head;
 };
 
 // Finds model parameter by key and sets it into dest.
 // If the parameter was not found, returns false.
-bool set_parameter(std::unordered_map<std::string, struct ggml_tensor *> * parameters, char * key, struct ggml_tensor ** dest) {
-    struct ggml_tensor * parameter = (*parameters)[key];
+bool set_parameter(std::unordered_map<std::string, struct ggml_v2_tensor *> * parameters, char * key, struct ggml_v2_tensor ** dest) {
+    struct ggml_v2_tensor * parameter = (*parameters)[key];
     RWKV_ASSERT_FALSE(parameter != NULL, "Parameter %s not found in model file", key);
     *dest = parameter;
     return true;
@@ -135,7 +135,7 @@ bool set_parameter(std::unordered_map<std::string, struct ggml_tensor *> * param
 
 // Finds block parameter by block index and key and sets it into dest.
 // If the parameter was not found, returns false.
-bool set_block_parameter(std::unordered_map<std::string, struct ggml_tensor *> * parameters, int32_t block_index, char * key, struct ggml_tensor ** dest) {
+bool set_block_parameter(std::unordered_map<std::string, struct ggml_v2_tensor *> * parameters, int32_t block_index, char * key, struct ggml_v2_tensor ** dest) {
     char full_key[128];
     sprintf(full_key, "blocks.%d.%s", block_index, key);
     return set_parameter(parameters, full_key, dest);
@@ -167,28 +167,28 @@ void rwkv_max_impl(const int n_cols, float * dest, const float * src0, const flo
     }
 }
 
-struct ggml_tensor * rwkv_exp(ggml_context * ctx, struct ggml_tensor * x) {
-    return ggml_map_unary_f32(ctx, x, rwkv_exp_impl);
+struct ggml_v2_tensor * rwkv_exp(ggml_v2_context * ctx, struct ggml_v2_tensor * x) {
+    return ggml_v2_map_unary_f32(ctx, x, rwkv_exp_impl);
 }
 
-struct ggml_tensor * rwkv_1_minus_x(ggml_context * ctx, struct ggml_tensor * x) {
-    return ggml_map_unary_f32(ctx, x, rwkv_1_minus_x_impl);
+struct ggml_v2_tensor * rwkv_1_minus_x(ggml_v2_context * ctx, struct ggml_v2_tensor * x) {
+    return ggml_v2_map_unary_f32(ctx, x, rwkv_1_minus_x_impl);
 }
 
-struct ggml_tensor * rwkv_sigmoid(ggml_context * ctx, struct ggml_tensor * x) {
-    return ggml_map_unary_f32(ctx, x, rwkv_sigmoid_impl);
+struct ggml_v2_tensor * rwkv_sigmoid(ggml_v2_context * ctx, struct ggml_v2_tensor * x) {
+    return ggml_v2_map_unary_f32(ctx, x, rwkv_sigmoid_impl);
 }
 
-struct ggml_tensor * rwkv_max(ggml_context * ctx, struct ggml_tensor * x, struct ggml_tensor * y) {
-    return ggml_map_binary_f32(ctx, x, y, rwkv_max_impl);
+struct ggml_v2_tensor * rwkv_max(ggml_v2_context * ctx, struct ggml_v2_tensor * x, struct ggml_v2_tensor * y) {
+    return ggml_v2_map_binary_f32(ctx, x, y, rwkv_max_impl);
 }
 
-struct ggml_tensor * rwkv_layer_norm(ggml_context * ctx, struct ggml_tensor * x, struct ggml_tensor * weight, struct ggml_tensor * bias) {
+struct ggml_v2_tensor * rwkv_layer_norm(ggml_v2_context * ctx, struct ggml_v2_tensor * x, struct ggml_v2_tensor * weight, struct ggml_v2_tensor * bias) {
     // LayerNorm in RWKV is `x = (x - mean(x)) / sqrt(variance(x) + 1e-5) * weight + bias`
-    // Looks like ggml_norm does the first part, we only need to apply weight & bias.
-    x = ggml_norm(ctx, x);
-    x = ggml_mul(ctx, x, weight);
-    x = ggml_add(ctx, x, bias);
+    // Looks like ggml_v2_norm does the first part, we only need to apply weight & bias.
+    x = ggml_v2_norm(ctx, x);
+    x = ggml_v2_mul(ctx, x, weight);
+    x = ggml_v2_add(ctx, x, bias);
     return x;
 }
 
@@ -196,12 +196,12 @@ struct ggml_tensor * rwkv_layer_norm(ggml_context * ctx, struct ggml_tensor * x,
 
 struct rwkv_context {
     struct rwkv_model * model;
-    struct ggml_tensor * token_index;
-    struct ggml_tensor * state;
-    struct ggml_tensor ** state_parts;
-    struct ggml_tensor * logits;
-    struct ggml_context * ctx;
-    struct ggml_cgraph * graph;
+    struct ggml_v2_tensor * token_index;
+    struct ggml_v2_tensor * state;
+    struct ggml_v2_tensor ** state_parts;
+    struct ggml_v2_tensor * logits;
+    struct ggml_v2_context * ctx;
+    struct ggml_v2_cgraph * graph;
     bool freed;
     float * state_in = 0; //stores input state, or use null for a new state
     float * state_out = 0; //stores address of output state buffer
@@ -267,13 +267,13 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, uint32_t n_thr
         size_t(256) * 1024 * 1024;
 
     // Initialize ggml
-    struct ggml_init_params params;
+    struct ggml_v2_init_params params;
     params.mem_size = memory_required;
     params.mem_buffer = NULL;
     params.no_alloc = false;
-    struct ggml_context * ctx = ggml_init(params);
+    struct ggml_v2_context * ctx = ggml_v2_init(params);
 
-    std::unordered_map<std::string, struct ggml_tensor *> parameters;
+    std::unordered_map<std::string, struct ggml_v2_tensor *> parameters;
 
     while (true) {
         int32_t dim_count;
@@ -294,22 +294,22 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, uint32_t n_thr
         read_int32(file, &data_type);
         RWKV_ASSERT_NULL(data_type >= 0 && data_type < FORMAT_TYPE_COUNT, "Unsupported parameter data type %d", data_type);
 
-        ggml_type ggml_data_type = FORMAT_TYPE_TO_GGML_TYPE[data_type];
+        ggml_v2_type ggml_v2_data_type = FORMAT_TYPE_TO_GGML_V2_TYPE[data_type];
 
-        RWKV_ASSERT_NULL(ggml_data_type != GGML_TYPE_UNKNOWN, "Unsupported parameter data type %d", data_type);
+        RWKV_ASSERT_NULL(ggml_v2_data_type != GGML_V2_TYPE_UNKNOWN, "Unsupported parameter data type %d", data_type);
 
-        struct ggml_tensor * tensor;
+        struct ggml_v2_tensor * tensor;
 
         int32_t x = -1;
         int32_t y = -1;
 
         if (dim_count == 1) {
             read_int32(file, &x);
-            tensor = ggml_new_tensor_1d(ctx, ggml_data_type, x);
+            tensor = ggml_v2_new_tensor_1d(ctx, ggml_v2_data_type, x);
         } else if (dim_count == 2) {
             read_int32(file, &x);
             read_int32(file, &y);
-            tensor = ggml_new_tensor_2d(ctx, ggml_data_type, x, y);
+            tensor = ggml_v2_new_tensor_2d(ctx, ggml_v2_data_type, x, y);
         } else {
             abort();
         }
@@ -317,7 +317,7 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, uint32_t n_thr
         std::string key(key_length, 0);
         RWKV_ASSERT_NULL(fread(&key[0], 1, key_length, file) == uint32_t(key_length), "Failed to read parameter key");
 
-        RWKV_ASSERT_NULL(fread(tensor->data, 1, ggml_nbytes(tensor), file) == ggml_nbytes(tensor), "Failed to read parameter data");
+        RWKV_ASSERT_NULL(fread(tensor->data, 1, ggml_v2_nbytes(tensor), file) == ggml_v2_nbytes(tensor), "Failed to read parameter data");
 
         parameters[key] = tensor;
     }
@@ -365,7 +365,7 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, uint32_t n_thr
     set_parameter(&parameters, "head.weight", &(model->head));
 
     // Verify order of dimensions
-    struct ggml_tensor * emb = model->emb;
+    struct ggml_v2_tensor * emb = model->emb;
     RWKV_ASSERT_NULL(emb->n_dims == 2, "Unexpected dimension count of embedding matrix %d", emb->n_dims);
     RWKV_ASSERT_NULL(emb->ne[0] == model->n_embed, "Unexpected dimension of embedding matrix %lld", emb->ne[0]);
     RWKV_ASSERT_NULL(emb->ne[1] == model->n_vocab, "Unexpected dimension of embedding matrix %lld", emb->ne[1]);
@@ -374,17 +374,17 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, uint32_t n_thr
     int32_t n_layer = model->n_layer;
 
     // Build graph
-    struct ggml_tensor * state = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_layer * 5 * n_embed);
+    struct ggml_v2_tensor * state = ggml_v2_new_tensor_1d(ctx, GGML_V2_TYPE_F32, n_layer * 5 * n_embed);
 
     // x = self.w.emb.weight[token]
-    struct ggml_tensor * token_index = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 1);
-    struct ggml_tensor * x = ggml_get_rows(ctx, model->emb, token_index);
+    struct ggml_v2_tensor * token_index = ggml_v2_new_tensor_1d(ctx, GGML_V2_TYPE_I32, 1);
+    struct ggml_v2_tensor * x = ggml_v2_get_rows(ctx, model->emb, token_index);
 
     // x = self.layer_norm(x, self.w.blocks[0].ln0)
     x = rwkv_layer_norm(ctx, x, model->ln0_weight, model->ln0_bias);
 
     // We collect parts of new state here. Each part is (n_embed) vector.
-    struct ggml_tensor ** state_parts = new ggml_tensor * [n_layer * 5];
+    struct ggml_v2_tensor ** state_parts = new ggml_v2_tensor * [n_layer * 5];
 
     for (int i = 0; i < n_layer; i++) {
         auto layer = model->layers[i];
@@ -392,99 +392,99 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, uint32_t n_thr
         // RWKV/time mixing
         {
             // self.layer_norm(x, self.w.blocks[i].ln1)
-            struct ggml_tensor * x0 = rwkv_layer_norm(ctx, x, layer.ln1_weight, layer.ln1_bias);
+            struct ggml_v2_tensor * x0 = rwkv_layer_norm(ctx, x, layer.ln1_weight, layer.ln1_bias);
             // state[5 * i + 1]
-            struct ggml_tensor * x_prev = ggml_view_1d(ctx, state, n_embed, (5 * i + 1) * n_embed * sizeof(float));
+            struct ggml_v2_tensor * x_prev = ggml_v2_view_1d(ctx, state, n_embed, (5 * i + 1) * n_embed * sizeof(float));
             // xk = x * time_mix_k + state[5 * i + 1] * (1 - time_mix_k)
             // xv = x * time_mix_v + state[5 * i + 1] * (1 - time_mix_v)
             // xr = x * time_mix_r + state[5 * i + 1] * (1 - time_mix_r)
-            struct ggml_tensor * xk = ggml_add(
+            struct ggml_v2_tensor * xk = ggml_v2_add(
                 ctx,
-                ggml_mul(ctx, x0, layer.att_time_mix_k),
-                ggml_mul(ctx, x_prev, rwkv_1_minus_x(ctx, layer.att_time_mix_k))
+                ggml_v2_mul(ctx, x0, layer.att_time_mix_k),
+                ggml_v2_mul(ctx, x_prev, rwkv_1_minus_x(ctx, layer.att_time_mix_k))
             );
-            struct ggml_tensor * xv = ggml_add(
+            struct ggml_v2_tensor * xv = ggml_v2_add(
                 ctx,
-                ggml_mul(ctx, x0, layer.att_time_mix_v),
-                ggml_mul(ctx, x_prev, rwkv_1_minus_x(ctx, layer.att_time_mix_v))
+                ggml_v2_mul(ctx, x0, layer.att_time_mix_v),
+                ggml_v2_mul(ctx, x_prev, rwkv_1_minus_x(ctx, layer.att_time_mix_v))
             );
-            struct ggml_tensor * xr = ggml_add(
+            struct ggml_v2_tensor * xr = ggml_v2_add(
                 ctx,
-                ggml_mul(ctx, x0, layer.att_time_mix_r),
-                ggml_mul(ctx, x_prev, rwkv_1_minus_x(ctx, layer.att_time_mix_r))
+                ggml_v2_mul(ctx, x0, layer.att_time_mix_r),
+                ggml_v2_mul(ctx, x_prev, rwkv_1_minus_x(ctx, layer.att_time_mix_r))
             );
             // state[5 * i + 1] = x
             state_parts[5 * i + 1] = x0;
 
             // r = torch.sigmoid(rw @ xr)
-            struct ggml_tensor * r = rwkv_sigmoid(
+            struct ggml_v2_tensor * r = rwkv_sigmoid(
                 ctx,
-                ggml_mul_mat(ctx, layer.att_receptance, xr)
+                ggml_v2_mul_mat(ctx, layer.att_receptance, xr)
             );
             // k = kw @ xk
-            struct ggml_tensor * k = ggml_mul_mat(ctx, layer.att_key, xk);
+            struct ggml_v2_tensor * k = ggml_v2_mul_mat(ctx, layer.att_key, xk);
             // v = vw @ xv
-            struct ggml_tensor * v = ggml_mul_mat(ctx, layer.att_value, xv);
+            struct ggml_v2_tensor * v = ggml_v2_mul_mat(ctx, layer.att_value, xv);
 
             // aa = state[5 * i + 2]
             // bb = state[5 * i + 3]
             // pp = state[5 * i + 4]
-            struct ggml_tensor * aa = ggml_view_1d(ctx, state, n_embed, (5 * i + 2) * n_embed * sizeof(float));
-            struct ggml_tensor * bb = ggml_view_1d(ctx, state, n_embed, (5 * i + 3) * n_embed * sizeof(float));
-            struct ggml_tensor * pp = ggml_view_1d(ctx, state, n_embed, (5 * i + 4) * n_embed * sizeof(float));
+            struct ggml_v2_tensor * aa = ggml_v2_view_1d(ctx, state, n_embed, (5 * i + 2) * n_embed * sizeof(float));
+            struct ggml_v2_tensor * bb = ggml_v2_view_1d(ctx, state, n_embed, (5 * i + 3) * n_embed * sizeof(float));
+            struct ggml_v2_tensor * pp = ggml_v2_view_1d(ctx, state, n_embed, (5 * i + 4) * n_embed * sizeof(float));
 
             // ww = time_first + k
-            struct ggml_tensor * ww = ggml_add(ctx, layer.att_time_first, k);
+            struct ggml_v2_tensor * ww = ggml_v2_add(ctx, layer.att_time_first, k);
             // qq = torch.maximum(pp, ww)
-            struct ggml_tensor * qq = rwkv_max(ctx, pp, ww);
+            struct ggml_v2_tensor * qq = rwkv_max(ctx, pp, ww);
             // e1 = torch.exp(pp - qq)
-            struct ggml_tensor * e1 = rwkv_exp(ctx, ggml_sub(ctx, pp, qq));
+            struct ggml_v2_tensor * e1 = rwkv_exp(ctx, ggml_v2_sub(ctx, pp, qq));
             // e2 = torch.exp(ww - qq)
-            struct ggml_tensor * e2 = rwkv_exp(ctx, ggml_sub(ctx, ww, qq));
+            struct ggml_v2_tensor * e2 = rwkv_exp(ctx, ggml_v2_sub(ctx, ww, qq));
             // a = e1 * aa + e2 * v
-            struct ggml_tensor * a = ggml_add(
+            struct ggml_v2_tensor * a = ggml_v2_add(
                 ctx,
-                ggml_mul(ctx, e1, aa),
-                ggml_mul(ctx, e2, v)
+                ggml_v2_mul(ctx, e1, aa),
+                ggml_v2_mul(ctx, e2, v)
             );
             // b = e1 * bb + e2
-            struct ggml_tensor * b = ggml_add(
+            struct ggml_v2_tensor * b = ggml_v2_add(
                 ctx,
-                ggml_mul(ctx, e1, bb),
+                ggml_v2_mul(ctx, e1, bb),
                 e2
             );
             // wkv = a / b
-            struct ggml_tensor * wkv = ggml_div(ctx, a, b);
+            struct ggml_v2_tensor * wkv = ggml_v2_div(ctx, a, b);
             // ww = pp + time_decay
-            ww = ggml_add(ctx, pp, layer.att_time_decay);
+            ww = ggml_v2_add(ctx, pp, layer.att_time_decay);
             // qq = torch.maximum(ww, k)
             qq = rwkv_max(ctx, ww, k);
             // e1 = torch.exp(ww - qq)
-            e1 = rwkv_exp(ctx, ggml_sub(ctx, ww, qq));
+            e1 = rwkv_exp(ctx, ggml_v2_sub(ctx, ww, qq));
             // e2 = torch.exp(k - qq)
-            e2 = rwkv_exp(ctx, ggml_sub(ctx, k, qq));
+            e2 = rwkv_exp(ctx, ggml_v2_sub(ctx, k, qq));
             // state[5 * i + 2] = e1 * aa + e2 * v
-            state_parts[5 * i + 2] = ggml_add(
+            state_parts[5 * i + 2] = ggml_v2_add(
                 ctx,
-                ggml_mul(ctx, e1, aa),
-                ggml_mul(ctx, e2, v)
+                ggml_v2_mul(ctx, e1, aa),
+                ggml_v2_mul(ctx, e2, v)
             );
             // state[5 * i + 3] = e1 * bb + e2
-            state_parts[5 * i + 3] = ggml_add(
+            state_parts[5 * i + 3] = ggml_v2_add(
                 ctx,
-                ggml_mul(ctx, e1, bb),
+                ggml_v2_mul(ctx, e1, bb),
                 e2
             );
             // state[5 * i + 4] = qq
             state_parts[5 * i + 4] = qq;
             // ow @ (r * wkv)
-            x = ggml_add(
+            x = ggml_v2_add(
                 ctx,
                 x,
-                ggml_mul_mat(
+                ggml_v2_mul_mat(
                     ctx,
                     layer.att_output,
-                    ggml_mul(ctx, r, wkv)
+                    ggml_v2_mul(ctx, r, wkv)
                 )
             );
         }
@@ -492,42 +492,42 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, uint32_t n_thr
         // FFN/channel mixing
         {
             // self.layer_norm(x, self.w.blocks[i].ln2)
-            struct ggml_tensor * x0 = rwkv_layer_norm(ctx, x, layer.ln2_weight, layer.ln2_bias);
+            struct ggml_v2_tensor * x0 = rwkv_layer_norm(ctx, x, layer.ln2_weight, layer.ln2_bias);
             // state[5 * i + 0]
-            struct ggml_tensor * x_prev = ggml_view_1d(ctx, state, n_embed, (5 * i + 0) * n_embed * sizeof(float));
+            struct ggml_v2_tensor * x_prev = ggml_v2_view_1d(ctx, state, n_embed, (5 * i + 0) * n_embed * sizeof(float));
             // xk = x * time_mix_k + state[5 * i + 0] * (1 - time_mix_k)
             // xr = x * time_mix_r + state[5 * i + 0] * (1 - time_mix_r)
-            struct ggml_tensor * xk = ggml_add(
+            struct ggml_v2_tensor * xk = ggml_v2_add(
                 ctx,
-                ggml_mul(ctx, x0, layer.ffn_time_mix_k),
-                ggml_mul(ctx, x_prev, rwkv_1_minus_x(ctx, layer.ffn_time_mix_k))
+                ggml_v2_mul(ctx, x0, layer.ffn_time_mix_k),
+                ggml_v2_mul(ctx, x_prev, rwkv_1_minus_x(ctx, layer.ffn_time_mix_k))
             );
-            struct ggml_tensor * xr = ggml_add(
+            struct ggml_v2_tensor * xr = ggml_v2_add(
                 ctx,
-                ggml_mul(ctx, x0, layer.ffn_time_mix_r),
-                ggml_mul(ctx, x_prev, rwkv_1_minus_x(ctx, layer.ffn_time_mix_r))
+                ggml_v2_mul(ctx, x0, layer.ffn_time_mix_r),
+                ggml_v2_mul(ctx, x_prev, rwkv_1_minus_x(ctx, layer.ffn_time_mix_r))
             );
             // state[5 * i + 0] = x
             state_parts[5 * i + 0] = x0;
 
             // r = torch.sigmoid(rw @ xr)
-            struct ggml_tensor * r = rwkv_sigmoid(
+            struct ggml_v2_tensor * r = rwkv_sigmoid(
                 ctx,
-                ggml_mul_mat(ctx, layer.ffn_receptance, xr)
+                ggml_v2_mul_mat(ctx, layer.ffn_receptance, xr)
             );
             // k = torch.square(torch.relu(kw @ xk))
-            struct ggml_tensor * k = ggml_sqr(ctx, ggml_relu(
+            struct ggml_v2_tensor * k = ggml_v2_sqr(ctx, ggml_v2_relu(
                 ctx,
-                ggml_mul_mat(ctx, layer.ffn_key, xk)
+                ggml_v2_mul_mat(ctx, layer.ffn_key, xk)
             ));
             // r * (vw @ k)
-            x = ggml_add(
+            x = ggml_v2_add(
                 ctx,
                 x,
-                ggml_mul(
+                ggml_v2_mul(
                     ctx,
                     r,
-                    ggml_mul_mat(ctx, layer.ffn_value, k)
+                    ggml_v2_mul_mat(ctx, layer.ffn_value, k)
                 )
             );
         }
@@ -537,14 +537,14 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, uint32_t n_thr
     x = rwkv_layer_norm(ctx, x, model->ln_out_weight, model->ln_out_bias);
 
     // x = (self.w.head.weight @ x).float()
-    struct ggml_tensor * logits = ggml_mul_mat(ctx, model->head, x);
+    struct ggml_v2_tensor * logits = ggml_v2_mul_mat(ctx, model->head, x);
 
-    struct ggml_cgraph * graph = (struct ggml_cgraph *) calloc(1, sizeof(struct ggml_cgraph));
+    struct ggml_v2_cgraph * graph = (struct ggml_v2_cgraph *) calloc(1, sizeof(struct ggml_v2_cgraph));
 
-    *graph = ggml_build_forward(logits);
+    *graph = ggml_v2_build_forward(logits);
 
     for (int i = 0; i < n_layer * 5; i++) {
-       ggml_build_forward_expand(graph, state_parts[i]);
+       ggml_v2_build_forward_expand(graph, state_parts[i]);
     }
 
     graph->n_threads = n_threads;
@@ -578,15 +578,15 @@ bool rwkv_eval(struct rwkv_context * ctx, int32_t token, float * state_in, float
 
     RWKV_ASSERT_FALSE(token >= 0 && token < n_vocab, "Token is out of range 0..%d", n_vocab - 1);
 
-    ggml_set_i32_1d(ctx->token_index, 0, token);
+    ggml_v2_set_i32_1d(ctx->token_index, 0, token);
 
     if (state_in == NULL) {
-        ggml_set_f32(ctx->state, 0.0F);
+        ggml_v2_set_f32(ctx->state, 0.0F);
 
         for (int i = 0; i < n_layer; i++) {
             // state[5 * i + 4] = -1e30
-            ggml_set_f32(
-                ggml_view_1d(ctx->ctx, ctx->state, n_embed, (5 * i + 4) * n_embed * sizeof(float)),
+            ggml_v2_set_f32(
+                ggml_v2_view_1d(ctx->ctx, ctx->state, n_embed, (5 * i + 4) * n_embed * sizeof(float)),
                 -1e30F
             );
         }
@@ -594,10 +594,10 @@ bool rwkv_eval(struct rwkv_context * ctx, int32_t token, float * state_in, float
         memcpy(ctx->state->data, state_in, ctx->state->ne[0] * sizeof(float));
     }
 
-    ggml_graph_compute(ctx->ctx, ctx->graph);
+    ggml_v2_graph_compute(ctx->ctx, ctx->graph);
 
     for (size_t i = 0; i < size_t(n_layer * 5); i++) {
-        struct ggml_tensor * part = ctx->state_parts[i];
+        struct ggml_v2_tensor * part = ctx->state_parts[i];
 
         memcpy(state_out + i * n_embed, part->data, part->ne[0] * sizeof(float));
     }
@@ -611,7 +611,7 @@ void rwkv_free(struct rwkv_context * ctx) {
     ctx->model->layers.~vector();
     free(ctx->model);
     delete[] ctx->state_parts;
-    ggml_free(ctx->ctx);
+    ggml_v2_free(ctx->ctx);
     free(ctx->graph);
     free(ctx);
 }
@@ -621,15 +621,15 @@ bool rwkv_quantize_model_file(const char * model_file_path_in, const char * mode
 
     RWKV_ASSERT_FALSE(format_type != -1, "Unsupported format \"%s\"", format_name);
 
-    ggml_type type = FORMAT_TYPE_TO_GGML_TYPE[format_type];
+    ggml_v2_type type = FORMAT_TYPE_TO_GGML_V2_TYPE[format_type];
 
-    RWKV_ASSERT_FALSE(type != GGML_TYPE_UNKNOWN, "Unsupported format \"%s\"", format_name);
+    RWKV_ASSERT_FALSE(type != GGML_V2_TYPE_UNKNOWN, "Unsupported format \"%s\"", format_name);
 
     // Needed to initialize FP16 lookup table
     {
-        struct ggml_init_params params = { 0, NULL, false };
-        struct ggml_context * ctx = ggml_init(params);
-        ggml_free(ctx);
+        struct ggml_v2_init_params params = { 0, NULL, false };
+        struct ggml_v2_context * ctx = ggml_v2_init(params);
+        ggml_v2_free(ctx);
     }
 
     printf("Loading model from '%s'\n", model_file_path_in);
@@ -680,7 +680,7 @@ bool rwkv_quantize_model_file(const char * model_file_path_in, const char * mode
         std::vector<float> work;
 
         std::vector<uint8_t>     data_u8;
-        std::vector<ggml_fp16_t> data_f16;
+        std::vector<ggml_v2_fp16_t> data_f16;
         std::vector<float>       data_f32;
 
         std::vector<int64_t> hist_all(1 << 4, 0);
@@ -700,9 +700,9 @@ bool rwkv_quantize_model_file(const char * model_file_path_in, const char * mode
 
             RWKV_ASSERT_FALSE(parameter_data_type >= 0 && parameter_data_type < FORMAT_TYPE_COUNT, "Invalid parameter data type %d", parameter_data_type);
 
-            ggml_type parameter_ggml_type = FORMAT_TYPE_TO_GGML_TYPE[parameter_data_type];
+            ggml_v2_type parameter_ggml_v2_type = FORMAT_TYPE_TO_GGML_V2_TYPE[parameter_data_type];
 
-            RWKV_ASSERT_FALSE(parameter_ggml_type != GGML_TYPE_UNKNOWN, "Invalid parameter data type %d", parameter_data_type);
+            RWKV_ASSERT_FALSE(parameter_ggml_v2_type != GGML_V2_TYPE_UNKNOWN, "Invalid parameter data type %d", parameter_data_type);
 
             int32_t nelements = 1;
             int32_t ne[2] = { 1, 1 };
@@ -715,9 +715,9 @@ bool rwkv_quantize_model_file(const char * model_file_path_in, const char * mode
             finp.read(&name[0], key_length);
 
             {
-                printf("%48s - [%5d, %5d], type = %6s ", name.data(), ne[0], ne[1], ggml_type_name(parameter_ggml_type));
+                printf("%48s - [%5d, %5d], type = %6s ", name.data(), ne[0], ne[1], ggml_v2_type_name(parameter_ggml_v2_type));
 
-                total_size_orig += (size_t) (nelements * ggml_type_sizef(parameter_ggml_type));
+                total_size_orig += (size_t) (nelements * ggml_v2_type_sizef(parameter_ggml_v2_type));
             }
 
             // Quantize only 2D tensors, except embedding and head matrices.
@@ -736,10 +736,10 @@ bool rwkv_quantize_model_file(const char * model_file_path_in, const char * mode
 
                 if (parameter_data_type == 1) {
                     data_f16.resize(nelements);
-                    finp.read(reinterpret_cast<char *>(data_f16.data()), nelements * sizeof(ggml_fp16_t));
+                    finp.read(reinterpret_cast<char *>(data_f16.data()), nelements * sizeof(ggml_v2_fp16_t));
                     data_f32.resize(nelements);
                     for (int i = 0; i < nelements; ++i) {
-                        data_f32[i] = ggml_fp16_to_fp32(data_f16[i]);
+                        data_f32[i] = ggml_v2_fp16_to_fp32(data_f16[i]);
                     }
                 } else {
                     data_f32.resize(nelements);
@@ -772,23 +772,23 @@ bool rwkv_quantize_model_file(const char * model_file_path_in, const char * mode
                 std::vector<int64_t> hist_cur(1 << 4, 0);
 
                 switch (type) {
-                    case GGML_TYPE_Q4_0:
-                        cur_size = ggml_quantize_q4_0_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                    case GGML_V2_TYPE_Q4_0:
+                        cur_size = ggml_v2_quantize_q4_0_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                         break;
-                    case GGML_TYPE_Q4_1:
-                        cur_size = ggml_quantize_q4_1_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                    case GGML_V2_TYPE_Q4_1:
+                        cur_size = ggml_v2_quantize_q4_1_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                         break;
-                    case GGML_TYPE_Q4_2:
-                        cur_size = ggml_quantize_q4_2_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                    case GGML_V2_TYPE_Q4_2:
+                        cur_size = ggml_v2_quantize_q4_2_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                         break;
-                    case GGML_TYPE_Q5_0:
-                        cur_size = ggml_quantize_q5_0_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                    case GGML_V2_TYPE_Q5_0:
+                        cur_size = ggml_v2_quantize_q5_0_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                         break;
-                    case GGML_TYPE_Q5_1:
-                        cur_size = ggml_quantize_q5_1_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                    case GGML_V2_TYPE_Q5_1:
+                        cur_size = ggml_v2_quantize_q5_1_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                         break;
-                    case GGML_TYPE_Q8_0:
-                        cur_size = ggml_quantize_q8_0_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
+                    case GGML_V2_TYPE_Q8_0:
+                        cur_size = ggml_v2_quantize_q8_0_v2(data_f32.data(), work.data(), nelements, ne[0], hist_cur.data());
                         break;
                     default: {
                         fprintf(stderr, "unsupported quantization type %d\n", type);
@@ -848,18 +848,18 @@ const char * rwkv_get_system_info_string(void) {
     static std::string s;
 
     s  = "";
-    s += "AVX = "       + std::to_string(ggml_cpu_has_avx())       + " | ";
-    s += "AVX2 = "      + std::to_string(ggml_cpu_has_avx2())      + " | ";
-    s += "AVX512 = "    + std::to_string(ggml_cpu_has_avx512())    + " | ";
-    s += "FMA = "       + std::to_string(ggml_cpu_has_fma())       + " | ";
-    s += "NEON = "      + std::to_string(ggml_cpu_has_neon())      + " | ";
-    s += "ARM_FMA = "   + std::to_string(ggml_cpu_has_arm_fma())   + " | ";
-    s += "F16C = "      + std::to_string(ggml_cpu_has_f16c())      + " | ";
-    s += "FP16_VA = "   + std::to_string(ggml_cpu_has_fp16_va())   + " | ";
-    s += "WASM_SIMD = " + std::to_string(ggml_cpu_has_wasm_simd()) + " | ";
-    s += "BLAS = "      + std::to_string(ggml_cpu_has_blas())      + " | ";
-    s += "SSE3 = "      + std::to_string(ggml_cpu_has_sse3())      + " | ";
-    s += "VSX = "       + std::to_string(ggml_cpu_has_vsx())       + " | ";
+    s += "AVX = "       + std::to_string(ggml_v2_cpu_has_avx())       + " | ";
+    s += "AVX2 = "      + std::to_string(ggml_v2_cpu_has_avx2())      + " | ";
+    s += "AVX512 = "    + std::to_string(ggml_v2_cpu_has_avx512())    + " | ";
+    s += "FMA = "       + std::to_string(ggml_v2_cpu_has_fma())       + " | ";
+    s += "NEON = "      + std::to_string(ggml_v2_cpu_has_neon())      + " | ";
+    s += "ARM_FMA = "   + std::to_string(ggml_v2_cpu_has_arm_fma())   + " | ";
+    s += "F16C = "      + std::to_string(ggml_v2_cpu_has_f16c())      + " | ";
+    s += "FP16_VA = "   + std::to_string(ggml_v2_cpu_has_fp16_va())   + " | ";
+    s += "WASM_SIMD = " + std::to_string(ggml_v2_cpu_has_wasm_simd()) + " | ";
+    s += "BLAS = "      + std::to_string(ggml_v2_cpu_has_blas())      + " | ";
+    s += "SSE3 = "      + std::to_string(ggml_v2_cpu_has_sse3())      + " | ";
+    s += "VSX = "       + std::to_string(ggml_v2_cpu_has_vsx())       + " | ";
 
     return s.c_str();
 }
