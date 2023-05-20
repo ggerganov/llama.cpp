@@ -1000,6 +1000,12 @@ static void llama_model_load_internal(
         }
     }
 
+#ifdef GGML_USE_CUBLAS
+#define LLAMA_BACKEND_OFFLOAD GGML_BACKEND_CUDA
+#else
+#define LLAMA_BACKEND_OFFLOAD GGML_BACKEND_CPU
+#endif
+
     // prepare memory for the weights
     size_t vram_total = 0;
     {
@@ -1016,19 +1022,19 @@ static void llama_model_load_internal(
         {
             ggml_backend backend_output;
             if (n_gpu_layers > int(n_layer)) {
-                backend_output = GGML_BACKEND_CUDA;
+                backend_output = LLAMA_BACKEND_OFFLOAD;
             } else {
                 backend_output = GGML_BACKEND_CPU;
             }
 
-            model.output = ml->get_tensor("output.weight",         {n_embd, n_vocab}, backend_output);
+            model.output = ml->get_tensor("output.weight", {n_embd, n_vocab}, backend_output);
         }
 
         const int i_gpu_start = n_layer - n_gpu_layers;
 
         model.layers.resize(n_layer);
         for (uint32_t i = 0; i < n_layer; ++i) {
-            const ggml_backend backend = int(i) < i_gpu_start ? GGML_BACKEND_CPU : GGML_BACKEND_CUDA;
+            const ggml_backend backend = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD;
 
             auto & layer = model.layers[i];
 
@@ -1047,7 +1053,7 @@ static void llama_model_load_internal(
             layer.w2 = ml->get_tensor(layers_i + ".feed_forward.w2.weight", {  n_ff,   n_embd}, backend);
             layer.w3 = ml->get_tensor(layers_i + ".feed_forward.w3.weight", {n_embd,   n_ff},   backend);
 
-            if (backend == GGML_BACKEND_CUDA) {
+            if (backend == LLAMA_BACKEND_OFFLOAD) {
                 vram_total +=
                     ggml_nbytes(layer.attention_norm) + ggml_nbytes(layer.wq) + ggml_nbytes(layer.wk)             +
                     ggml_nbytes(layer.wv)             + ggml_nbytes(layer.wo) + ggml_nbytes(layer.attention_norm) +
@@ -1213,13 +1219,7 @@ static bool llama_eval_internal(
             cur = ggml_rms_norm(ctx0, inpL);
 
             // cur = cur*attention_norm(broadcasted)
-#ifdef GGML_USE_CUBLAS
             cur = ggml_mul(ctx0, cur, model.layers[il].attention_norm);
-#else
-            cur = ggml_mul(ctx0,
-                        ggml_repeat(ctx0, model.layers[il].attention_norm, cur),
-                        cur);
-#endif
         }
 
         // self-attention
@@ -1327,13 +1327,7 @@ static bool llama_eval_internal(
                 cur = ggml_rms_norm(ctx0, inpFF);
 
                 // cur = cur*ffn_norm(broadcasted)
-#ifdef GGML_USE_CUBLAS
                 cur = ggml_mul(ctx0, cur, model.layers[il].ffn_norm);
-#else
-                cur = ggml_mul(ctx0,
-                        ggml_repeat(ctx0, model.layers[il].ffn_norm, cur),
-                        cur);
-#endif
             }
 
             struct ggml_tensor * tmp = ggml_mul_mat(ctx0,
@@ -1371,13 +1365,7 @@ static bool llama_eval_internal(
         inpL = ggml_rms_norm(ctx0, inpL);
 
         // inpL = inpL*norm(broadcasted)
-#ifdef GGML_USE_CUBLAS
         inpL = ggml_mul(ctx0, inpL, model.norm);
-#else
-        inpL = ggml_mul(ctx0,
-                    ggml_repeat(ctx0, model.norm, inpL),
-                    inpL);
-#endif
 
         embeddings = inpL;
     }
