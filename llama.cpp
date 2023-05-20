@@ -45,6 +45,7 @@ enum e_model {
     MODEL_65B,
 };
 
+
 static const size_t MB = 1024*1024;
 
 // computed for n_ctx == 2048
@@ -110,7 +111,7 @@ struct llama_hparams {
     enum llama_ftype ftype = LLAMA_FTYPE_MOSTLY_F16;
 
     bool operator!=(const llama_hparams & other) const {
-        return memcmp(this, &other, sizeof(llama_hparams));
+        return static_cast<bool>(memcmp(this, &other, sizeof(llama_hparams)));
     }
 };
 
@@ -502,7 +503,7 @@ struct llama_file_loader {
 
             if (file_version >= LLAMA_FILE_VERSION_GGJT_V1) {
                 // skip to the next multiple of 32 bytes
-                file.seek(-file.tell() & 31, SEEK_CUR);
+                file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
             }
             shard.file_idx = file_idx;
             shard.file_off = file.tell();
@@ -577,7 +578,7 @@ struct llama_file_saver {
         file.write_u32(new_type);
         file.write_raw(tensor.ne.data(), sizeof(tensor.ne[0]) * tensor.ne.size());
         file.write_raw(tensor.name.data(), tensor.name.size());
-        file.seek(-file.tell() & 31, SEEK_CUR);
+        file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
         LLAMA_ASSERT(new_size == llama_calc_tensor_size(tensor.ne, new_type));
         file.write_raw(new_data, new_size);
     }
