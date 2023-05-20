@@ -158,16 +158,16 @@ if (LLAMA_BLAS)
     if (BLAS_FOUND)
         message(STATUS "BLAS found, Libraries: ${BLAS_LIBRARIES}")
 
-	add_compile_options(${BLAS_LINKER_FLAGS})
+        add_compile_options(${BLAS_LINKER_FLAGS})
         add_compile_definitions(GGML_USE_OPENBLAS)
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ${BLAS_LIBRARIES})
 
-        message("${BLAS_LIBRARIES}")
+        message("${BLAS_LIBRARIES} ${BLAS_INCLUDE_DIRS}")
         include_directories(${BLAS_INCLUDE_DIRS})
     else()
         message(WARNING "BLAS not found, please refer to "
-	"https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors"
-	" to set correct LLAMA_BLAS_VENDOR")
+        "https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors"
+        " to set correct LLAMA_BLAS_VENDOR")
     endif()
 endif()
 
