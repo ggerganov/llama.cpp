@@ -190,7 +190,7 @@
 #define GGML_FILE_MAGIC   0x67676d6c // "ggml"
 #define GGML_FILE_VERSION 1
 
-#define GGML_QNT_VERSION        1    // bump this on quantization format changes
+#define GGML_QNT_VERSION        2    // bump this on quantization format changes
 #define GGML_QNT_VERSION_FACTOR 1000 // do not change this
 
 #define GGML_MAX_DIMS          4
@@ -234,8 +234,8 @@ extern "C" {
         GGML_TYPE_F16  = 1,
         GGML_TYPE_Q4_0 = 2,
         GGML_TYPE_Q4_1 = 3,
-        GGML_TYPE_Q4_2 = 4, //support has been removed
-        GGML_TYPE_Q4_3 = 5, //support has been removed
+        // GGML_TYPE_Q4_2 = 4, support has been removed
+        // GGML_TYPE_Q4_3 (5) support has been removed
         GGML_TYPE_Q5_0 = 6,
         GGML_TYPE_Q5_1 = 7,
         GGML_TYPE_Q8_0 = 8,
@@ -243,14 +243,12 @@ extern "C" {
         GGML_TYPE_I8,
         GGML_TYPE_I16,
         GGML_TYPE_I32,
-        GGML_TYPE_Q8_1B = 13, //legacy q8_1
         GGML_TYPE_COUNT,
     };
 
     enum ggml_backend {
         GGML_BACKEND_CPU = 0,
         GGML_BACKEND_CUDA = 1,
-        GGML_BACKEND_CL = 2,
     };
 
     // model file types
@@ -261,8 +259,6 @@ extern "C" {
         GGML_FTYPE_MOSTLY_Q4_0 = 2,  // except 1d tensors
         GGML_FTYPE_MOSTLY_Q4_1 = 3,  // except 1d tensors
         GGML_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4, // tok_embeddings.weight and output.weight are F16
-        GGML_FTYPE_MOSTLY_Q4_2 = 5,  // except 1d tensors
-        GGML_FTYPE_MOSTLY_Q4_3 = 6,  // except 1d tensors
         GGML_FTYPE_MOSTLY_Q8_0 = 7,  // except 1d tensors
         GGML_FTYPE_MOSTLY_Q5_0 = 8,  // except 1d tensors
         GGML_FTYPE_MOSTLY_Q5_1 = 9,  // except 1d tensors
@@ -853,7 +849,7 @@ extern "C" {
             int                   n_past);
 
     // in-place, returns view(a)
-    GGML_API struct ggml_tensor * ggml_diag_mask_zero_inplace(
+    GGML_API struct ggml_tensor * gml_diag_mask_zero_inplace(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             int                   n_past);
@@ -1073,27 +1069,16 @@ extern "C" {
     //
 
     GGML_API size_t ggml_quantize_q4_0(const float * src, void * dst, int n, int k, int64_t * hist);
-    GGML_API size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t * hist);    
+    GGML_API size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t * hist);
     GGML_API size_t ggml_quantize_q5_0(const float * src, void * dst, int n, int k, int64_t * hist);
     GGML_API size_t ggml_quantize_q5_1(const float * src, void * dst, int n, int k, int64_t * hist);
     GGML_API size_t ggml_quantize_q8_0(const float * src, void * dst, int n, int k, int64_t * hist);
 
-    GGML_API size_t ggml_quantize_q4_0_v2(const float * src, void * dst, int n, int k, int64_t * hist);
-    GGML_API size_t ggml_quantize_q4_1_v2(const float * src, void * dst, int n, int k, int64_t * hist);
-    GGML_API size_t ggml_quantize_q4_2_v2(const float * src, void * dst, int n, int k, int64_t * hist);
-    GGML_API size_t ggml_quantize_q4_3_v2(const float * src, void * dst, int n, int k, int64_t * hist);
-    GGML_API size_t ggml_quantize_q5_0_v2(const float * src, void * dst, int n, int k, int64_t * hist);
-    GGML_API size_t ggml_quantize_q5_1_v2(const float * src, void * dst, int n, int k, int64_t * hist);
-    GGML_API size_t ggml_quantize_q8_0_v2(const float * src, void * dst, int n, int k, int64_t * hist);
-
     GGML_API size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, int start, int n, int64_t * hist);
-    GGML_API size_t ggml_quantize_chunk_v2(enum ggml_type type, const float * src, void * dst, int start, int n, int64_t * hist);
+
     //
     // system info
     //
-
-    void SetQuantsUnshuffled(bool unshuffled);
-    bool GetQuantsUnshuffled();
 
     GGML_API int ggml_cpu_has_avx        (void);
     GGML_API int ggml_cpu_has_avx2       (void);
