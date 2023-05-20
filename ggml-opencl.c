@@ -229,8 +229,8 @@ void ggml_cl_init(void) {
 
         cl_device_id device_ids[NDEV];
         cl_int clGetDeviceIDsError = clGetDeviceIDs(p->id, CL_DEVICE_TYPE_ALL, NDEV, device_ids, &p->n_devices);
-        if (clGetDeviceIDsError == CL_DEVICE_NOT_FOUND) p->n_devices = 0;
-        else CL_CHECK(clGetDeviceIDsError);
+        if (clGetDeviceIDsError == CL_DEVICE_NOT_FOUND) { p->n_devices = 0; }
+        else { CL_CHECK(clGetDeviceIDsError); }
         p->devices = p->n_devices > 0 ? &devices[n_devices] : NULL;
         p->default_device = NULL;
 
