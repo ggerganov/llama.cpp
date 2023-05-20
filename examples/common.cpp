@@ -321,12 +321,6 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 invalid_param = true;
                 break;
             }
-        } else if (arg == "--n-parts") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_parts = std::stoi(argv[i]);
         } else if (arg == "-h" || arg == "--help") {
             gpt_print_usage(argc, argv, default_params);
             exit(0);
@@ -357,7 +351,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     }
     if (params.prompt_cache_all &&
             (params.interactive || params.interactive_first ||
-             params.instruct || params.antiprompt.size())) {
+             params.instruct)) {
         fprintf(stderr, "error: --prompt-cache-all not supported in interactive mode yet\n");
         gpt_print_usage(argc, argv, default_params);
         exit(1);
@@ -379,8 +373,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
     fprintf(stderr, "  --multiline-input     allows you to write or paste multiple lines without ending each in '\\'\n");
     fprintf(stderr, "  -r PROMPT, --reverse-prompt PROMPT\n");
-    fprintf(stderr, "                        run in interactive mode and poll user input upon seeing PROMPT (can be\n");
-    fprintf(stderr, "                        specified more than once for multiple prompts).\n");
+    fprintf(stderr, "                        halt generation at PROMPT, return control in interactive mode\n");
+    fprintf(stderr, "                        (can be specified more than once for multiple prompts).\n");
     fprintf(stderr, "  --color               colorise output to distinguish prompt and user input from generations\n");
     fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)\n");
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
@@ -418,7 +412,6 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  --no-penalize-nl      do not penalize newline token\n");
     fprintf(stderr, "  --memory-f32          use f32 instead of f16 for memory key+value\n");
     fprintf(stderr, "  --temp N              temperature (default: %.1f)\n", (double)params.temp);
-    fprintf(stderr, "  --n-parts N           number of model parts (default: -1 = determine from dimensions)\n");
     fprintf(stderr, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     fprintf(stderr, "  --perplexity          compute perplexity over the prompt\n");
     fprintf(stderr, "  --keep                number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
@@ -473,7 +466,6 @@ struct llama_context * llama_init_from_gpt_params(const gpt_params & params) {
     auto lparams = llama_context_default_params();
 
     lparams.n_ctx        = params.n_ctx;
-    lparams.n_parts      = params.n_parts;
     lparams.n_gpu_layers = params.n_gpu_layers;
     lparams.seed         = params.seed;
     lparams.f16_kv       = params.memory_f16;
@@ -586,6 +578,37 @@ void console_set_color(console_state & con_st, console_color_t color) {
 }
 
 char32_t getchar32() {
+#if defined(_WIN32)
+    HANDLE hConsole = GetStdHandle(STD_INPUT_HANDLE);
+    wchar_t high_surrogate = 0;
+
+    while (true) {
+        INPUT_RECORD record;
+        DWORD count;
+        if (!ReadConsoleInputW(hConsole, &record, 1, &count) || count == 0) {
+            return WEOF;
+        }
+
+        if (record.EventType == KEY_EVENT && record.Event.KeyEvent.bKeyDown) {
+            wchar_t wc = record.Event.KeyEvent.uChar.UnicodeChar;
+            if (wc == 0) {
+                continue;
+            }
+
+            if ((wc >= 0xD800) && (wc <= 0xDBFF)) { // Check if wc is a high surrogate
+                high_surrogate = wc;
+                continue;
+            } else if ((wc >= 0xDC00) && (wc <= 0xDFFF)) { // Check if wc is a low surrogate
+                if (high_surrogate != 0) { // Check if we have a high surrogate
+                    return ((high_surrogate - 0xD800) << 10) + (wc - 0xDC00) + 0x10000;
+                }
+            }
+
+            high_surrogate = 0; // Reset the high surrogate
+            return static_cast<char32_t>(wc);
+        }
+    }
+#else
     wchar_t wc = getwchar();
     if (static_cast<wint_t>(wc) == WEOF) {
         return WEOF;
@@ -604,6 +627,7 @@ char32_t getchar32() {
 #endif
 
     return static_cast<char32_t>(wc);
+#endif
 }
 
 void pop_cursor(console_state & con_st) {
@@ -757,7 +781,7 @@ bool console_readline(console_state & con_st, std::string & line) {
             break;
         }
 
-        if (input_char == WEOF || input_char == 0x04 /* Ctrl+D*/) {
+        if (input_char == (char32_t) WEOF || input_char == 0x04 /* Ctrl+D*/) {
             end_of_stream = true;
             break;
         }
@@ -772,7 +796,7 @@ bool console_readline(console_state & con_st, std::string & line) {
             char32_t code = getchar32();
             if (code == '[' || code == 0x1B) {
                 // Discard the rest of the escape sequence
-                while ((code = getchar32()) != WEOF) {
+                while ((code = getchar32()) != (char32_t) WEOF) {
                     if ((code >= 'A' && code <= 'Z') || (code >= 'a' && code <= 'z') || code == '~') {
                         break;
                     }
