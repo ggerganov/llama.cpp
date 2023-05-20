@@ -1010,20 +1010,27 @@ static void llama_model_load_internal(
         ml->ggml_ctx = ctx;
 
         model.tok_embeddings = ml->get_tensor("tok_embeddings.weight", {n_embd, n_vocab}, GGML_BACKEND_CPU);
-        model.norm           = ml->get_tensor("norm.weight",           {n_embd}, GGML_BACKEND_CPU);
-        ggml_backend backend_output;
-        if (n_gpu_layers > int(n_layer)) {
-            backend_output = GGML_BACKEND_CUDA;
-        } else {
-            backend_output = GGML_BACKEND_CPU;
+        model.norm           = ml->get_tensor("norm.weight",           {n_embd},          GGML_BACKEND_CPU);
+
+        // "output" tensor
+        {
+            ggml_backend backend_output;
+            if (n_gpu_layers > int(n_layer)) {
+                backend_output = GGML_BACKEND_CUDA;
+            } else {
+                backend_output = GGML_BACKEND_CPU;
+            }
+
+            model.output = ml->get_tensor("output.weight",         {n_embd, n_vocab}, backend_output);
         }
-        model.output         = ml->get_tensor("output.weight",         {n_embd, n_vocab}, backend_output);
+
+        const int i_gpu_start = n_layer - n_gpu_layers;
 
         model.layers.resize(n_layer);
-        const int i_gpu_start = n_layer - n_gpu_layers;
         for (uint32_t i = 0; i < n_layer; ++i) {
-            auto & layer = model.layers[i];
             const ggml_backend backend = int(i) < i_gpu_start ? GGML_BACKEND_CPU : GGML_BACKEND_CUDA;
+
+            auto & layer = model.layers[i];
 
             std::string layers_i = "layers." + std::to_string(i);
 
@@ -1036,13 +1043,15 @@ static void llama_model_load_internal(
 
             layer.ffn_norm = ml->get_tensor(layers_i + ".ffn_norm.weight", {n_embd}, backend);
 
-            layer.w1 = ml->get_tensor(layers_i + ".feed_forward.w1.weight", {n_embd,   n_ff}, backend);
+            layer.w1 = ml->get_tensor(layers_i + ".feed_forward.w1.weight", {n_embd,   n_ff},   backend);
             layer.w2 = ml->get_tensor(layers_i + ".feed_forward.w2.weight", {  n_ff,   n_embd}, backend);
-            layer.w3 = ml->get_tensor(layers_i + ".feed_forward.w3.weight", {n_embd,   n_ff}, backend);
+            layer.w3 = ml->get_tensor(layers_i + ".feed_forward.w3.weight", {n_embd,   n_ff},   backend);
+
             if (backend == GGML_BACKEND_CUDA) {
-                vram_total += ggml_nbytes(layer.attention_norm) + ggml_nbytes(layer.wq) + ggml_nbytes(layer.wk)
-                    + ggml_nbytes(layer.wv) + ggml_nbytes(layer.wo) + ggml_nbytes(layer.attention_norm)
-                    + ggml_nbytes(layer.w1) + ggml_nbytes(layer.w2) + ggml_nbytes(layer.w3);
+                vram_total +=
+                    ggml_nbytes(layer.attention_norm) + ggml_nbytes(layer.wq) + ggml_nbytes(layer.wk)             +
+                    ggml_nbytes(layer.wv)             + ggml_nbytes(layer.wo) + ggml_nbytes(layer.attention_norm) +
+                    ggml_nbytes(layer.w1)             + ggml_nbytes(layer.w2) + ggml_nbytes(layer.w3);
             }
         }
     }
@@ -1077,7 +1086,7 @@ static void llama_model_load_internal(
         }
         fprintf(stderr, "%s: [cublas] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
 #else
-    (void) n_gpu_layers;
+        (void) n_gpu_layers;
 #endif
     }
 
@@ -2192,7 +2201,7 @@ struct llama_context * llama_init_from_file(
             unsigned * cur_percentage_p = (unsigned *) ctx;
             unsigned percentage = (unsigned) (100 * progress);
             while (percentage > *cur_percentage_p) {
-                ++*cur_percentage_p;
+                *cur_percentage_p = percentage;
                 fprintf(stderr, ".");
                 fflush(stderr);
                 if (percentage >= 100) {
@@ -2442,8 +2451,7 @@ int llama_apply_lora_from_file_internal(struct llama_context * ctx, const char *
                 }
                 size_t idx = model_loader->tensors_map.name_to_idx[base_name];
                 llama_load_tensor & lt = model_loader->tensors_map.tensors[idx];
-                base_t = model_loader->get_tensor(
-                    base_name, { (uint32_t)dest_t->ne[0], (uint32_t)dest_t->ne[1] }, GGML_BACKEND_CPU);
+                base_t = model_loader->get_tensor(base_name, { (uint32_t)dest_t->ne[0], (uint32_t)dest_t->ne[1] }, GGML_BACKEND_CPU);
                 lt.data = (uint8_t *) lt.ggml_tensor->data;
                 model_loader->load_data_for(lt);
                 lt.ggml_tensor->data = lt.data;
