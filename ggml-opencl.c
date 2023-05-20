@@ -233,7 +233,7 @@ void ggml_cl_init(void) {
         else CL_CHECK(clGetDeviceIDsError);
         p->devices = p->n_devices > 0 ? &devices[n_devices] : NULL;
         p->default_device = NULL;
-        
+
         for (unsigned j = 0; j < p->n_devices; j++) {
             struct cl_device * d = &devices[n_devices];
             d->number = n_devices++;
@@ -269,14 +269,14 @@ void ggml_cl_init(void) {
     if (user_device_string != NULL && sscanf(user_device_string, " %u", &n) == 1 && n < n_devices) {
         user_device_number = (int)n;
     }
-    
+
     struct cl_device * selected_devices = devices;
     unsigned n_selected_devices = n_devices;
 
     if (user_platform_number == -1 && user_platform_string != NULL && user_platform_string[0] != 0) {
         for (unsigned i = 0; i < n_platforms; i++) {
             struct cl_platform * p = &platforms[i];
-            if (strstr(p->name, user_platform_string) != NULL || 
+            if (strstr(p->name, user_platform_string) != NULL ||
                 strstr(p->vendor, user_platform_string) != NULL) {
                 user_platform_number = (int)i;
                 break;
