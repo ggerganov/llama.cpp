@@ -16,7 +16,7 @@ void * ggml_cuda_host_malloc(size_t size);
 void   ggml_cuda_host_free(void * ptr);
 
 void ggml_cuda_transform_tensor(struct ggml_tensor * tensor);
-void ggml_cuda_load_data(const char * fname, struct ggml_tensor ** tensors, int num_tensors, const size_t * offsets);
+void ggml_cuda_load_data(const char * fname, struct ggml_tensor * tensors, size_t offset);
 
 #ifdef  __cplusplus
 }

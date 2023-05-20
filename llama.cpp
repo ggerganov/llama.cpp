@@ -1,6 +1,7 @@
 // Defines fileno on msys:
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #endif
@@ -720,9 +721,6 @@ struct llama_model_loader {
                 lmlock->grow_to(done_size);
             }
         }
-        if (progress_callback) {
-            progress_callback(1.0f, progress_callback_user_data);
-        }
     }
 
     void load_data_for(llama_load_tensor & lt) {
@@ -1104,19 +1102,30 @@ static void llama_model_load_internal(
 
 #ifdef GGML_USE_CUBLAS
     {
-        std::vector<struct ggml_tensor *> tensors;
-        std::vector<size_t> offsets;
+        size_t done_size = 0;
+        size_t data_size = 0;
+        for (llama_load_tensor & lt : ml->tensors_map.tensors) {
+            data_size += lt.size;
+            if (lt.ggml_tensor->backend == GGML_BACKEND_CPU) {
+                done_size += lt.size;
+            }
+        }
         for (llama_load_tensor & lt : ml->tensors_map.tensors) {
             if (lt.ggml_tensor->backend != GGML_BACKEND_CUDA) {
                 continue;
             }
-            tensors.emplace_back(lt.ggml_tensor);
-            LLAMA_ASSERT(lt.shards.size() == 1);
-            offsets.emplace_back(lt.shards.at(0).file_off);
+            if (progress_callback) {
+                progress_callback((float) done_size / data_size, progress_callback_user_data);
+            }
+            ggml_cuda_load_data(fname.c_str(), lt.ggml_tensor, lt.shards.at(0).file_off);
+            done_size += lt.size;
         }
-        ggml_cuda_load_data(fname.c_str(), tensors.data(), tensors.size(), offsets.data());
     }
 #endif // GGML_USE_CUBLAS
+
+    if (progress_callback) {
+        progress_callback(1.0f, progress_callback_user_data);
+    }
 
     model.mapping = std::move(ml->mapping);
 

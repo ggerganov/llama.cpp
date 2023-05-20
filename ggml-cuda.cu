@@ -894,35 +894,31 @@ void ggml_cuda_transform_tensor(ggml_tensor * tensor) {
     tensor->backend = GGML_BACKEND_CUDA;
 }
 
-void ggml_cuda_load_data(const char * fname, struct ggml_tensor ** tensors, const int num_tensors, const size_t * offsets) {
+void ggml_cuda_load_data(const char * fname, struct ggml_tensor * tensor, const size_t offset) {
     FILE * fp = fopen(fname, "rb");
 
-    for (int i = 0; i < num_tensors; ++i) {
-        ggml_tensor * tensor = tensors[i];
-        const size_t size = ggml_nbytes(tensor);
-        const size_t offset = offsets[i];
+    const size_t size = ggml_nbytes(tensor);
 
-        void * buf;
-        CUDA_CHECK(cudaMalloc(&buf, size));
-        void * buf_host = malloc(size);
+    void * buf;
+    CUDA_CHECK(cudaMalloc(&buf, size));
+    void * buf_host = malloc(size);
 
 #ifdef _WIN32
-        int ret = _fseeki64(fp, (__int64) offset, SEEK_SET);
+    int ret = _fseeki64(fp, (__int64) offset, SEEK_SET);
 #else
-        int ret = fseek(fp, (long) offset, SEEK_SET);
+    int ret = fseek(fp, (long) offset, SEEK_SET);
 #endif
-        GGML_ASSERT(ret == 0); // same
+    GGML_ASSERT(ret == 0); // same
 
-        size_t ret2 = fread(buf_host, size, 1, fp);
-        if (ret2 != 1) {
-            fprintf(stderr, "unexpectedly reached end of file");
-            exit(1);
-        }
-
-        cudaMemcpy(buf, buf_host, size, cudaMemcpyHostToDevice);
-        cudaDeviceSynchronize();
-
-        tensor->data = buf;
-        free(buf_host);
+    size_t ret2 = fread(buf_host, size, 1, fp);
+    if (ret2 != 1) {
+        fprintf(stderr, "unexpectedly reached end of file");
+        exit(1);
     }
+
+    cudaMemcpy(buf, buf_host, size, cudaMemcpyHostToDevice);
+    cudaDeviceSynchronize();
+
+    tensor->data = buf;
+    free(buf_host);
 }
