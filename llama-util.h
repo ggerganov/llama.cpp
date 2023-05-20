@@ -101,12 +101,12 @@ struct llama_file {
         LLAMA_ASSERT(ret == 0); // same
     }
 
-    void read_raw(void * ptr, size_t size) {
-        if (size == 0) {
+    void read_raw(void * ptr, size_t len) const {
+        if (len == 0) {
             return;
         }
         errno = 0;
-        std::size_t ret = std::fread(ptr, size, 1, fp);
+        std::size_t ret = std::fread(ptr, len, 1, fp);
         if (ferror(fp)) {
             throw std::runtime_error(format("read error: %s", strerror(errno)));
         }
@@ -127,12 +127,12 @@ struct llama_file {
         return std::string(chars.data(), len);
     }
 
-    void write_raw(const void * ptr, size_t size) {
-        if (size == 0) {
+    void write_raw(const void * ptr, size_t len) const {
+        if (len == 0) {
             return;
         }
         errno = 0;
-        size_t ret = std::fwrite(ptr, size, 1, fp);
+        size_t ret = std::fwrite(ptr, len, 1, fp);
         if (ret != 1) {
             throw std::runtime_error(format("write error: %s", strerror(errno)));
         }
@@ -267,9 +267,9 @@ struct llama_mlock {
         }
     }
 
-    void init(void * addr) {
-        LLAMA_ASSERT(this->addr == NULL && this->size == 0);
-        this->addr = addr;
+    void init(void * ptr) {
+        LLAMA_ASSERT(addr == NULL && size == 0);
+        addr = ptr;
     }
 
     void grow_to(size_t target_size) {
@@ -340,14 +340,14 @@ struct llama_mlock {
         return (size_t) si.dwPageSize;
     }
 
-    bool raw_lock(void * addr, size_t size) {
+    bool raw_lock(void * ptr, size_t len) {
         for (int tries = 1; ; tries++) {
-            if (VirtualLock(addr, size)) {
+            if (VirtualLock(ptr, len)) {
                 return true;
             }
             if (tries == 2) {
                 fprintf(stderr, "warning: failed to VirtualLock %zu-byte buffer (after previously locking %zu bytes): %s\n",
-                        size, this->size, llama_format_win_err(GetLastError()).c_str());
+                    len, size, llama_format_win_err(GetLastError()).c_str());
                 return false;
             }
 
@@ -363,7 +363,7 @@ struct llama_mlock {
             // is equal to the number of pages in its minimum working set minus
             // a small overhead."
             // Hopefully a megabyte is enough overhead:
-            size_t increment = size + 1048576;
+            size_t increment = len + 1048576;
             // The minimum must be <= the maximum, so we need to increase both:
             min_ws_size += increment;
             max_ws_size += increment;
@@ -375,8 +375,8 @@ struct llama_mlock {
         }
     }
 
-    void raw_unlock(void * addr, size_t size) {
-        if (!VirtualUnlock(addr, size)) {
+    void raw_unlock(void * ptr, size_t len) {
+        if (!VirtualUnlock(ptr, len)) {
             fprintf(stderr, "warning: failed to VirtualUnlock buffer: %s\n",
                     llama_format_win_err(GetLastError()).c_str());
         }
@@ -388,12 +388,12 @@ struct llama_mlock {
         return (size_t) 65536;
     }
 
-    bool raw_lock(const void * addr, size_t size) {
+    bool raw_lock(const void * addr, size_t len) {
         fprintf(stderr, "warning: mlock not supported on this system\n");
         return false;
     }
 
-    void raw_unlock(const void * addr, size_t size) {}
+    void raw_unlock(const void * addr, size_t len) {}
 #endif
 };
 
@@ -404,10 +404,10 @@ struct llama_buffer {
 
     llama_buffer() = default;
 
-    void resize(size_t size) {
+    void resize(size_t len) {
         delete[] addr;
-        addr = new uint8_t[size];
-        this->size = size;
+        addr = new uint8_t[len];
+        size = len;
     }
 
     ~llama_buffer() {
