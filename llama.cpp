@@ -2188,6 +2188,11 @@ struct llama_context * llama_init_from_file(
     return ctx;
 }
 
+void llama_init_ggml(struct ggml_init_params params) {
+    struct ggml_context * ctx = ggml_init(params);
+    ggml_free(ctx);
+}
+
 void llama_free(struct llama_context * ctx) {
     delete ctx;
 }
@@ -2198,12 +2203,6 @@ int llama_model_quantize(
   enum llama_ftype   ftype,
         int          nthread) {
     try {
-        // needed to initialize f16 tables
-        {
-            struct ggml_init_params params = { 0, NULL, false };
-            struct ggml_context * ctx = ggml_init(params);
-            ggml_free(ctx);
-        }
         llama_model_quantize_internal(fname_inp, fname_out, ftype, nthread);
         return 0;
     } catch (const std::string & err) {

@@ -52,6 +52,13 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    // needed to initialize f16 tables
+    {
+        struct ggml_init_params params = { 0, NULL, false };
+        struct ggml_context * ctx = ggml_init(params);
+        ggml_free(ctx);
+    }
+
     // parse command line arguments
     const std::string fname_inp = argv[1];
     std::string fname_out;

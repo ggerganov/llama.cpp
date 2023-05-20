@@ -97,6 +97,10 @@ extern "C" {
                              const char * path_model,
             struct llama_context_params   params);
 
+    // Init the ggml context (it won't return a context ptr because it will free
+    // the ctx after initialing it).
+    LLAMA_API void llama_init_ggml(struct ggml_init_params params);
+
     // Frees all allocated memory
     LLAMA_API void llama_free(struct llama_context * ctx);
 
