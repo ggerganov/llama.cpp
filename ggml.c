@@ -4374,7 +4374,7 @@ struct ggml_tensor * ggml_add1_impl(
 
     bool is_node = false;
 
-    if (!inplace && (a->grad || b->grad)) {
+    if (a->grad || b->grad) {
         is_node = true;
     }
 
@@ -5205,7 +5205,7 @@ struct ggml_tensor * ggml_scale_impl(
 
     bool is_node = false;
 
-    if (!inplace && (a->grad || b->grad)) {
+    if (a->grad || b->grad) {
         is_node = true;
     }
 
