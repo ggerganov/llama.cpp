@@ -302,7 +302,7 @@ void ggml_cl_init(void) {
         for (unsigned i = 0; i < n_selected_devices; i++) {
             struct cl_device * d = &selected_devices[i];
             if (strstr(d->name, user_device_string) != NULL) {
-                user_device_number = (int)i;
+                user_device_number = d->number;
                 break;
             }
         }
@@ -312,7 +312,7 @@ void ggml_cl_init(void) {
         }
     }
     if (user_device_number != -1) {
-        selected_devices = &selected_devices[user_device_number];
+        selected_devices = &devices[user_device_number];
         n_selected_devices = 1;
         default_device = &selected_devices[0];
     }
