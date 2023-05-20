@@ -6260,6 +6260,7 @@ struct ggml_tensor * ggml_clamp(
     ggml_scratch_save(ctx);
 
     struct ggml_tensor * b = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 3);
+
     ((float *) b->data)[0] = min;
     ((float *) b->data)[1] = max;
 
@@ -10901,7 +10902,6 @@ static void ggml_compute_forward_clamp_f32(
     const int min = ((float *) src1->data)[0];
     const int max = ((float *) src1->data)[1];
 
-
     const int ith = params->ith;
     const int nth = params->nth;
 
@@ -10918,15 +10918,14 @@ static void ggml_compute_forward_clamp_f32(
     GGML_ASSERT(nb00 == sizeof(float));
 
     for (int j = ith; j < n; j += nth) {
-        float * dst_ptr  = (float *) ((char *) dst->data  + j*nb1);
+        float * dst_ptr  = (float *) ((char *)  dst->data + j*nb1);
         float * src0_ptr = (float *) ((char *) src0->data + j*nb01);
-        for (int i = 0; i < nc; i++) {
 
+        for (int i = 0; i < nc; i++) {
             dst_ptr[i] = MAX(MIN(src0_ptr[i], max), min);
         }
     }
 }
-
 
 static void ggml_compute_forward_clamp(
         const struct ggml_compute_params * params,
