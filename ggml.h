@@ -1094,8 +1094,6 @@ extern "C" {
 
     void SetQuantsUnshuffled(bool unshuffled);
     bool GetQuantsUnshuffled();
-    void SetGPULayers(bool layers);
-    bool GetGPULayers();
 
     GGML_API int ggml_cpu_has_avx        (void);
     GGML_API int ggml_cpu_has_avx2       (void);

@@ -20,8 +20,8 @@
 #include "gptj_v2.cpp"
 #include "gpt2_v1.cpp"
 #include "gpt2_v2.cpp"
-#include "rwkv.cpp"
-#include "neox.cpp"
+#include "rwkv_v2.cpp"
+#include "neox_v2.cpp"
 
 
 //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt)

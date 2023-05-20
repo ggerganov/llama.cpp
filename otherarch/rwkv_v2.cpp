@@ -3,7 +3,7 @@
 
 #include "otherarch.h"
 
-#include "rwkv.h"
+#include "rwkv_v2.h"
 #include "ggml.h"
 
 #include <string>

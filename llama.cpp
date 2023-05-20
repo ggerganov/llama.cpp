@@ -412,6 +412,7 @@ enum llama_file_version {
     LLAMA_FILE_VERSION_GGMF_V1, // added version field and scores in vocab
     LLAMA_FILE_VERSION_GGJT_V1, // added padding
     LLAMA_FILE_VERSION_GGJT_V2, // changed quantization format
+    LLAMA_FILE_VERSION_GGJT_V3, // changed Q4 and Q8 quantization format
 };
 
 struct llama_file_loader {
@@ -444,6 +445,8 @@ struct llama_file_loader {
             file_version = LLAMA_FILE_VERSION_GGJT_V1;
         } else if (magic == 'ggjt' && version == 2) {
             file_version = LLAMA_FILE_VERSION_GGJT_V2;
+        } else if (magic == 'ggjt' && version == 3) {
+            file_version = LLAMA_FILE_VERSION_GGJT_V3;
         } else {
             throw format("unknown (magic, version) combination: %08x, %08x; is this really a GGML file?",
                          magic, version);
@@ -861,7 +864,8 @@ static const char *llama_file_version_name(llama_file_version version) {
         case LLAMA_FILE_VERSION_GGML: return "'ggml' (old version with low tokenizer quality and no mmap support)";
         case LLAMA_FILE_VERSION_GGMF_V1: return "ggmf v1 (old version with no mmap support)";
         case LLAMA_FILE_VERSION_GGJT_V1: return "ggjt v1 (pre #1405)";
-        case LLAMA_FILE_VERSION_GGJT_V2: return "ggjt v2 (latest)";
+        case LLAMA_FILE_VERSION_GGJT_V2: return "ggjt v2 (pre #1508)";
+        case LLAMA_FILE_VERSION_GGJT_V3: return "ggjt v3 (latest)";
     }
 
     return "unknown";
@@ -946,12 +950,19 @@ static void llama_model_load_internal(
         fprintf(stderr, "%s: model size = %s\n",  __func__, llama_model_type_name(model.type));
     }
 
-    if (file_version != LLAMA_FILE_VERSION_GGJT_V2) {
+    if (file_version < LLAMA_FILE_VERSION_GGJT_V2) {
         if (hparams.ftype != LLAMA_FTYPE_ALL_F32     &&
             hparams.ftype != LLAMA_FTYPE_MOSTLY_F16  &&
             hparams.ftype != LLAMA_FTYPE_MOSTLY_Q8_0) {
-            printf("\nLegacy LLAMA GGJT compatability changes triggered.\n");
-            //throw format("this format is no longer supported (see https://github.com/ggerganov/llama.cpp/pull/1305)");
+            printf("\nLegacy LLAMA GGJT v1 compatability changes triggered.\n");
+        }
+    }
+
+    if (file_version < LLAMA_FILE_VERSION_GGJT_V3) {
+        if (hparams.ftype == LLAMA_FTYPE_MOSTLY_Q4_0 ||
+            hparams.ftype == LLAMA_FTYPE_MOSTLY_Q4_1 ||
+            hparams.ftype == LLAMA_FTYPE_MOSTLY_Q8_0) {
+            printf("\nLegacy LLAMA GGJT v2 compatability changes triggered.\n");
         }
     }
 

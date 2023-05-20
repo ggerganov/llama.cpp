@@ -19,7 +19,7 @@
 #    define LLAMA_API
 #endif
 
-#define LLAMA_FILE_VERSION           2
+#define LLAMA_FILE_VERSION           3
 #define LLAMA_FILE_MAGIC             'ggjt'
 #define LLAMA_FILE_MAGIC_UNVERSIONED 'ggml'
 #define LLAMA_SESSION_MAGIC          'ggsn'
