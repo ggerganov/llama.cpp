@@ -921,4 +921,5 @@ void ggml_cuda_load_data(const char * fname, struct ggml_tensor * tensor, const 
 
     tensor->data = buf;
     free(buf_host);
+    fclose(fp);
 }
