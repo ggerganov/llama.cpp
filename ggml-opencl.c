@@ -187,128 +187,156 @@ static cl_program build_program_from_source(cl_context ctx, cl_device_id dev, co
 void ggml_cl_init(void) {
     cl_int err = 0;
 
+    struct cl_device;
+    struct cl_platform {
+        cl_platform_id id;
+        unsigned number;
+        char name[128];
+        char vendor[128];
+        struct cl_device * devices;
+        unsigned n_devices;
+        struct cl_device * default_device;
+    };
+
+    struct cl_device {
+        struct cl_platform * platform;
+        cl_device_id id;
+        unsigned number;
+        cl_device_type type;
+        char name[128];
+    };
+
     enum { NPLAT = 16, NDEV = 16 };
 
-    char text_buffer[1024] = {0};
+    struct cl_platform platforms[NPLAT];
+    unsigned n_platforms = 0;
+    struct cl_device devices[NDEV];
+    unsigned n_devices = 0;
+    struct cl_device * default_device = NULL;
 
     platform = NULL;
     device = NULL;
 
-    cl_platform_id platforms[NPLAT];
-    cl_uint num_platforms;
-    CL_CHECK(clGetPlatformIDs(NPLAT, platforms, &num_platforms));
+    cl_platform_id platform_ids[NPLAT];
+    CL_CHECK(clGetPlatformIDs(NPLAT, platform_ids, &n_platforms));
 
-    char * GGML_OPENCL_PLATFORM = getenv("GGML_OPENCL_PLATFORM");
-    if (GGML_OPENCL_PLATFORM != NULL) {
-        unsigned plat_num;
-        if (sscanf(GGML_OPENCL_PLATFORM, " %u", &plat_num) == 1) {
-            if (plat_num >= num_platforms) {
-                fprintf(stderr, "ggml_opencl: There is no platform %d\n", plat_num);
-                exit(1);
-            } else {
-                platform = platforms[plat_num];
-                CL_CHECK(clGetPlatformInfo(platform, CL_PLATFORM_NAME, sizeof(text_buffer), &text_buffer, NULL));
-            }
-        } else {
-            for (unsigned i = 0; i < num_platforms; i++) {
-                CL_CHECK(clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, sizeof(text_buffer), &text_buffer, NULL));
-                if (strstr(text_buffer, GGML_OPENCL_PLATFORM) != NULL) {
-                    platform = platforms[i];
-                    break;
-                }
+    for (unsigned i = 0; i < n_platforms; i++) {
+        struct cl_platform * p = &platforms[i];
+        p->number = i;
+        p->id = platform_ids[i];
+        CL_CHECK(clGetPlatformInfo(p->id, CL_PLATFORM_NAME, sizeof(p->name), &p->name, NULL));
+        CL_CHECK(clGetPlatformInfo(p->id, CL_PLATFORM_VENDOR, sizeof(p->vendor), &p->vendor, NULL));
+
+        cl_device_id device_ids[NDEV];
+        cl_int clGetDeviceIDsError = clGetDeviceIDs(p->id, CL_DEVICE_TYPE_ALL, NDEV, device_ids, &p->n_devices);
+        if (clGetDeviceIDsError == CL_DEVICE_NOT_FOUND) p->n_devices = 0;
+        else CL_CHECK(clGetDeviceIDsError);
+        p->devices = p->n_devices > 0 ? &devices[n_devices] : NULL;
+        p->default_device = NULL;
+        
+        for (unsigned j = 0; j < p->n_devices; j++) {
+            struct cl_device * d = &devices[n_devices];
+            d->number = n_devices++;
+            d->id = device_ids[j];
+            d->platform = p;
+            CL_CHECK(clGetDeviceInfo(d->id, CL_DEVICE_NAME, sizeof(d->name), &d->name, NULL));
+            CL_CHECK(clGetDeviceInfo(d->id, CL_DEVICE_TYPE, sizeof(d->type), &d->type, NULL));
+
+            if (p->default_device == NULL && d->type == CL_DEVICE_TYPE_GPU) {
+                p->default_device = d;
             }
         }
-        if (platform == NULL) {
-            fprintf(stderr, "ggml_opencl: no platform matching '%s' was found.\n", GGML_OPENCL_PLATFORM);
-            exit(1);
-        } else {
-            fprintf(stderr, "ggml_opencl: selecting platform: '%s'\n", text_buffer);
-        }
-    }
 
-    char * GGML_OPENCL_DEVICE = getenv("GGML_OPENCL_DEVICE");
-    if (GGML_OPENCL_DEVICE != NULL) {
-        cl_device_id devices[NDEV];
-        cl_uint num_devices;
-        CL_CHECK(clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, NDEV, devices, &num_devices));
-
-        unsigned dev_num;
-        if (sscanf(GGML_OPENCL_DEVICE, " %u", &dev_num) == 1) {
-            if (dev_num >= num_devices) {
-                fprintf(stderr, "ggml_opencl: There is no device %d\n", dev_num);
-                exit(1);
-            } else {
-                device = devices[dev_num];
-                CL_CHECK(clGetDeviceInfo(device, CL_DEVICE_NAME, sizeof(text_buffer), &text_buffer, NULL));
-            }
-        } else {
-            for (unsigned i = 0; i < num_devices; i++) {
-                CL_CHECK(clGetDeviceInfo(devices[i], CL_DEVICE_NAME, sizeof(text_buffer), &text_buffer, NULL));
-                if (strstr(text_buffer, GGML_OPENCL_DEVICE) != NULL) {
-                    device = devices[i];
-                    break;
-                }
-            }
-        }
-        if (device == NULL) {
-            fprintf(stderr, "ggml_opencl: no device matching '%s' was found.\n", GGML_OPENCL_DEVICE);
-            exit(1);
-        } else {
-            fprintf(stderr, "ggml_opencl: selecting device: '%s'\n", text_buffer);
-            if (platform == NULL) {
-                CL_CHECK(clGetDeviceInfo(device, CL_DEVICE_PLATFORM, sizeof(&platform), &platform, NULL));
-            }
+        if (default_device == NULL && p->default_device != NULL) {
+            default_device = p->default_device;
         }
     }
 
-    if (platform == NULL) {
-        cl_device_id devices[NDEV];
-        cl_uint num_devices;
+    if (n_devices == 0) {
+        fprintf(stderr, "ggml_opencl: could find any OpenCL devices.\n");
+        exit(1);
+    }
 
-        for (unsigned i = 0; i < num_platforms; i++) {
-            CL_CHECK(clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, NDEV, devices, &num_devices));
+    char * user_platform_string = getenv("GGML_OPENCL_PLATFORM");
+    char * user_device_string = getenv("GGML_OPENCL_DEVICE");
+    int user_platform_number = -1;
+    int user_device_number = -1;
 
-            if (num_devices > 0) {
-                platform = platforms[i];
-                device = devices[0];
-                if (num_devices > 1) {
-                    fprintf(stderr, "ggml_opencl: platform has more than 1 GPU, selecting the first.\n");
-                }
-                fprintf(stderr, "ggml_opencl: autodetected GPU.\n");
+    unsigned n;
+    if (user_platform_string != NULL && sscanf(user_platform_string, " %u", &n) == 1 && n < n_platforms) {
+        user_platform_number = (int)n;
+    }
+    if (user_device_string != NULL && sscanf(user_device_string, " %u", &n) == 1 && n < n_devices) {
+        user_device_number = (int)n;
+    }
+    
+    struct cl_device * selected_devices = devices;
+    unsigned n_selected_devices = n_devices;
+
+    if (user_platform_number == -1 && user_platform_string != NULL && user_platform_string[0] != 0) {
+        for (unsigned i = 0; i < n_platforms; i++) {
+            struct cl_platform * p = &platforms[i];
+            if (strstr(p->name, user_platform_string) != NULL || 
+                strstr(p->vendor, user_platform_string) != NULL) {
+                user_platform_number = (int)i;
                 break;
             }
         }
+        if (user_platform_number == -1) {
+            fprintf(stderr, "ggml_opencl: no platform matching '%s' was found.\n", user_platform_string);
+            exit(1);
+        }
     }
-
-    cl_context_properties *properties = platform == NULL ? NULL : (cl_context_properties[]){
-        (intptr_t)CL_CONTEXT_PLATFORM, (intptr_t)platform, 0
-    };
-
-    if (device != NULL) {
-        CL_CHECK((context = clCreateContext(properties, 1, &device, NULL, NULL, &err), err));
-    } else {
-        CL_CHECK((context = clCreateContextFromType(properties, CL_DEVICE_TYPE_GPU, NULL, NULL, &err),
-            (err != CL_DEVICE_NOT_AVAILABLE && err != CL_DEVICE_NOT_FOUND ? err :
-            (context = clCreateContextFromType(properties, CL_DEVICE_TYPE_DEFAULT, NULL, NULL, &err),
-                (err != CL_DEVICE_NOT_AVAILABLE && err != CL_DEVICE_NOT_FOUND ? err :
-                (context = clCreateContextFromType(properties, CL_DEVICE_TYPE_ALL, NULL, NULL, &err), err))
-            ))
-        ));
-
-        CL_CHECK(clGetContextInfo(context, CL_CONTEXT_DEVICES, sizeof(&device), &device, NULL));
-        if (platform == NULL) {
-            CL_CHECK(clGetDeviceInfo(device, CL_DEVICE_PLATFORM, sizeof(&platform), &platform, NULL));
+    if (user_platform_number != -1) {
+        struct cl_platform * p = &platforms[user_platform_number];
+        selected_devices = p->devices;
+        n_selected_devices = p->n_devices;
+        default_device = p->default_device;
+        if (n_selected_devices == 0) {
+            fprintf(stderr, "ggml_opencl: selected platform '%s' does not have any devices.\n", p->name);
+            exit(1);
         }
     }
 
+    if (user_device_number == -1 && user_device_string != NULL && user_device_string[0] != 0) {
+        for (unsigned i = 0; i < n_selected_devices; i++) {
+            struct cl_device * d = &selected_devices[i];
+            if (strstr(d->name, user_device_string) != NULL) {
+                user_device_number = (int)i;
+                break;
+            }
+        }
+        if (user_device_number == -1) {
+            fprintf(stderr, "ggml_opencl: no device matching '%s' was found.\n", user_device_string);
+            exit(1);
+        }
+    }
+    if (user_device_number != -1) {
+        selected_devices = &selected_devices[user_device_number];
+        n_selected_devices = 1;
+        default_device = &selected_devices[0];
+    }
 
-    GGML_ASSERT(platform != NULL);
-    clGetPlatformInfo(platform, CL_PLATFORM_NAME, sizeof(text_buffer), &text_buffer, NULL);
-    fprintf(stderr, "ggml_opencl: using platform: '%s'\n", text_buffer);
+    GGML_ASSERT(n_selected_devices > 0);
 
-    GGML_ASSERT(device != NULL);
-    clGetDeviceInfo(device, CL_DEVICE_NAME, sizeof(text_buffer), &text_buffer, NULL);
-    fprintf(stderr, "ggml_opencl: using device: '%s'\n", text_buffer);
+    if (default_device == NULL) {
+        default_device = &selected_devices[0];
+    }
+
+    fprintf(stderr, "ggml_opencl: selecting platform: '%s'\n", default_device->platform->name);
+    fprintf(stderr, "ggml_opencl: selecting device: '%s'\n", default_device->name);
+    if (default_device->type != CL_DEVICE_TYPE_GPU) {
+        fprintf(stderr, "ggml_opencl: warning, not a GPU: '%s'.\n", default_device->name);
+    }
+
+    platform = default_device->platform->id;
+    device = default_device->id;
+
+    cl_context_properties properties[] = {
+        (intptr_t)CL_CONTEXT_PLATFORM, (intptr_t)platform, 0
+    };
+
+    CL_CHECK((context = clCreateContext(properties, 1, &device, NULL, NULL, &err), err));
 
     CL_CHECK((queue = clCreateCommandQueue(context, device, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &err),
         (err != CL_INVALID_PROPERTY && err != CL_INVALID_VALUE ? err :
