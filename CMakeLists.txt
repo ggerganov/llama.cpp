@@ -65,8 +65,7 @@ endif()
 
 # 3rd party libs
 option(LLAMA_ACCELERATE             "llama: enable Accelerate framework"                    ON)
-option(LLAMA_BLAS                   "llama: use BLAS"                                       OFF)
-option(LLAMA_BLAS_VENDOR            "llama: BLA_VENDOR from https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors" Generic)
+option(LLAMA_OPENBLAS               "llama: use OpenBLAS"                                   OFF)
 option(LLAMA_CUBLAS                 "llama: use cuBLAS"                                     OFF)
 option(LLAMA_CLBLAST                "llama: use CLBlast"                                    OFF)
 
@@ -146,28 +145,36 @@ if (APPLE AND LLAMA_ACCELERATE)
     endif()
 endif()
 
-if (LLAMA_BLAS)
+if (LLAMA_OPENBLAS)
     if (LLAMA_STATIC)
         set(BLA_STATIC ON)
     endif()
-    if ($(CMAKE_VERSION) VERSION_GREATER_EQUAL 3.22)
-        set(BLA_SIZEOF_INTEGER 8)
-    endif()
-    set(BLA_VENDOR ${LLAMA_BLAS_VENDOR})
+
+    set(BLA_VENDOR OpenBLAS)
     find_package(BLAS)
     if (BLAS_FOUND)
-        message(STATUS "BLAS found, Libraries: ${BLAS_LIBRARIES}")
+        message(STATUS "OpenBLAS found")
 
-	add_compile_options(${BLAS_LINKER_FLAGS})
         add_compile_definitions(GGML_USE_OPENBLAS)
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ${BLAS_LIBRARIES})
+        add_link_options(${BLAS_LIBRARIES})
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} openblas)
 
-        message("${BLAS_LIBRARIES}")
-        include_directories(${BLAS_INCLUDE_DIRS})
+        # find header file
+        set(OPENBLAS_INCLUDE_SEARCH_PATHS
+            /usr/include
+            /usr/include/openblas
+            /usr/include/openblas-base
+            /usr/local/include
+            /usr/local/include/openblas
+            /usr/local/include/openblas-base
+            /opt/OpenBLAS/include
+            $ENV{OpenBLAS_HOME}
+            $ENV{OpenBLAS_HOME}/include
+            )
+        find_path(OPENBLAS_INC NAMES cblas.h PATHS ${OPENBLAS_INCLUDE_SEARCH_PATHS})
+        add_compile_options(-I${OPENBLAS_INC})
     else()
-        message(WARNING "BLAS not found, please refer to "
-	"https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors"
-	" to set correct LLAMA_BLAS_VENDOR")
+        message(WARNING "OpenBLAS not found")
     endif()
 endif()
 
