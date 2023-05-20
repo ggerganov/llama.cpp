@@ -552,7 +552,7 @@ static void ggml_cl_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
 
             // compute
             cl_event ev_sgemm;
-            clblast::StatusCode status = clblast::Gemm(clblast::Layout::kColMajor,
+            clblast::StatusCode status = clblast::Gemm<cl_float>(clblast::Layout::kColMajor,
                                                        clblast::Transpose::kYes, clblast::Transpose::kNo,
                                                        ne01, ne11, ne10,
                                                        alpha,
@@ -650,7 +650,7 @@ static void ggml_cl_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
 
             // compute
             cl_event ev_sgemm;
-            clblast::StatusCode status = clblast::Gemm(clblast::Layout::kColMajor,
+            clblast::StatusCode status = clblast::Gemm<cl_half>(clblast::Layout::kColMajor,
                                                        clblast::Transpose::kYes, clblast::Transpose::kNo,
                                                        ne01, ne11, ne10,
                                                        alpha,
@@ -757,7 +757,7 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
                 CL_CHECK(clFinish(queue), "clFinish");
 
                 // compute
-                clblast::StatusCode status = clblast::Gemm(clblast::Layout::kColMajor,
+                clblast::StatusCode status = clblast::Gemm<cl_float>(clblast::Layout::kColMajor,
                                                            clblast::Transpose::kYes, clblast::Transpose::kNo,
                                                            ne01, ne11, ne10,
                                                            alpha,
