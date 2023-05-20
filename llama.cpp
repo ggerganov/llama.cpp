@@ -1137,11 +1137,11 @@ static bool llama_eval_internal(
             const int   n_past,
             const int   n_threads) {
 
-    // enforce that the first token is BOS
-    if (n_past == 0 && tokens[0] != llama_token_bos()) {
-        fprintf(stderr, "%s: first token must be BOS\n", __func__);
-        return false;
-    }
+    // // enforce that the first token is BOS
+    // if (n_past == 0 && tokens[0] != llama_token_bos()) {
+    //     fprintf(stderr, "%s: first token must be BOS\n", __func__);
+    //     return false;
+    // }
 
     const int64_t t_start_us = ggml_time_us();
 

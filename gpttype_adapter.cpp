@@ -318,7 +318,11 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
 
         //determine mem per token
         const std::vector<int> tmp = {1, 2, 3, 4};
-        llama_eval(llama_ctx_v3, tmp.data(), tmp.size(), 0, params.n_threads);
+        auto er = llama_eval(llama_ctx_v3, tmp.data(), tmp.size(), 0, params.n_threads);
+        if(er!=0)
+        {
+            printf("\nLLAMA EVAL returned nonzero!\n");
+        }
         return ModelLoadResult::SUCCESS;
     }
     else if (file_format == FileFormat::RWKV_1)
