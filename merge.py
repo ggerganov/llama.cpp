@@ -4,8 +4,8 @@ import json
 import torch
 import argparse
 import transformers
-from transformers import LlamaTokenizer, LlamaConfig, LlamaForCausalLM
-from peft import PeftModel, LoraConfig, LoraModel
+from transformers import LlamaTokenizer, LlamaForCausalLM
+from peft import PeftModel
 
 # args
 parser = argparse.ArgumentParser()
@@ -45,9 +45,7 @@ model = PeftModel.from_pretrained(
 
 print(f">>> merging lora...")
 
-#Why 'LlamaForCausalLM' object has no attribute 'merge_and_unload' ????????
-#okay, it works, i don't know why it didn't.
-
+#Using new Peft function merge Lora
 model = model.merge_and_unload()
 model.save_pretrained(args.out_path)
 
