@@ -27,7 +27,7 @@ constant uint QK4_0 = 32;
 constant uint QR4_0 = 2;
 struct block_q4_0
 {
-    float d;
+    half d;
     uint8_t qs[QK4_0 / 2];
 };
 
@@ -35,8 +35,8 @@ constant uint QK4_1 = 32;
 constant uint QR4_1 = 2;
 struct block_q4_1
 {
-    float d;
-    float m;
+    half d;
+    half m;
     uint8_t qs[QK4_1 / 2];
 };
 
@@ -63,7 +63,7 @@ constant uint QK8_0 = 32;
 constant uint QR8_0 = 1;
 struct block_q8_0
 {
-    float d;
+    half d;
     uint8_t qs[QK8_0];
 };
 
@@ -75,7 +75,7 @@ __kernel void convert_fp16_to_fp32(__global half* x, __global float* y) {
 }
 
 void dequantize_q4_0(__global const struct block_q4_0* x, const int ib, const int iqs, float* v0, float* v1) {
-    const float d = x[ib].d;
+    const float d = vload_half(0, &x[ib].d);
 
     const uint8_t vui = x[ib].qs[iqs];
 
@@ -86,8 +86,8 @@ void dequantize_q4_0(__global const struct block_q4_0* x, const int ib, const in
     *v1 = (vi1 - 8)*d;
 }
 void dequantize_q4_1(__global const struct block_q4_1* x, const int ib, const int iqs, float* v0, float* v1) {
-    const float d = x[ib].d;
-    const float m = x[ib].m;
+    const float d = vload_half(0, &x[ib].d);
+    const float m = vload_half(0, &x[ib].m);
 
     const uint8_t vui = x[ib].qs[iqs];
 
@@ -127,7 +127,7 @@ void dequantize_q5_1(__global const struct block_q5_1* x, const int ib, const in
     *v1 = x1*d + m;
 }
 void dequantize_q8_0(__global const struct block_q8_0* x, const int ib, const int iqs, float* v0, float* v1) {
-    const float d = x[ib].d;
+    const float d = vload_half(0, &x[ib].d);
 
     const int8_t vi0 = x[ib].qs[iqs + 0];
     const int8_t vi1 = x[ib].qs[iqs + 1];
