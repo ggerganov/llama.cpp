@@ -230,22 +230,10 @@ static __global__ void dequantize_mul_mat_vec(const void * vx, const float * y, 
 
     // sum up partial sums and write back result
     __syncthreads();
-#ifdef GGML_USE_HIPBLAS
-    __shared__ float tmpa[block_size];
-    tmpa[tid] = tmp;
-    for (int s=block_size/2; s>0; s>>=1) {
-        if (tid < s) {
-            tmpa[tid] += tmpa[tid + s];
-        }
-        __syncthreads();
-    }
-    tmp = tmpa[0]; // now full sum
-#else
 #pragma unroll
     for (int mask = 16; mask > 0; mask >>= 1) {
         tmp += __shfl_xor_sync(0xffffffff, tmp, mask, 32);
     }
-#endif
 
     if (tid == 0) {
         dst[row] = tmp;
