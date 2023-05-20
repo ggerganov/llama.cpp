@@ -31,7 +31,6 @@ model = LlamaForCausalLM.from_pretrained(
     load_in_8bit=False,
     torch_dtype=torch.float16,
     device_map={"": "cpu"},
-    
 )
 
 
