@@ -31,6 +31,8 @@ int main(int argc, char ** argv) {
         params.prompt = gpt_random_prompt(rng);
     }
 
+    llama_init_backend();
+
     llama_context * ctx;
 
     // load the model
