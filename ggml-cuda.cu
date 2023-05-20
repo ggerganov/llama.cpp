@@ -17,6 +17,7 @@
 #define CUBLAS_TF32_TENSOR_OP_MATH 0
 #define CUDA_R_16F  HIPBLAS_R_16F
 #define CUDA_R_32F  HIPBLAS_R_32F
+#define __shfl_xor_sync(mask, var, laneMask, width) __shfl_xor(var, laneMask, width)
 #define cublasCreate hipblasCreate
 #define cublasGemmEx hipblasGemmEx
 #define cublasHandle_t hipblasHandle_t
