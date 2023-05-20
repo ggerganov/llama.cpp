@@ -164,8 +164,13 @@ void print_tok_vec(std::vector<float> &embd)
                 bool isNewFtype = (temp2>=1000 && temp2<=9000 && temp2%1000<20);
 
                 if(!isNewFtype)
-                {
+                {                    
                     fileformat = FileFormat::NEOX_2;
+                    if((temp==0||temp==1)&&(temp2==0||temp2==1))//special case: par_res and ftype are both 1 or 0
+                    {
+                        //its a f16/f32 model in the new format
+                        fileformat = FileFormat::NEOX_4;
+                    }
                 }
                 else
                 {
