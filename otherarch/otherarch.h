@@ -87,7 +87,7 @@ struct gptj_layer_v1 {
     struct ggml_v1_tensor * c_mlp_proj_b;
 };
 
-struct gptj_model_v1 {
+struct gptj_v1_model {
     gptj_hparams hparams;
 
     // normalization
@@ -110,7 +110,7 @@ struct gptj_model_v1 {
     std::map<std::string, struct ggml_v1_tensor *> tensors;
 };
 
-struct gptj_model_v2 {
+struct gptj_v2_model {
     gptj_hparams hparams;
 
     // normalization
@@ -122,7 +122,7 @@ struct gptj_model_v2 {
     struct ggml_v2_tensor * lmh_g; // language model head
     struct ggml_v2_tensor * lmh_b; // language model bias
 
-    std::vector<gptj_layer> layers;
+    std::vector<gptj_layer_v2> layers;
 
     // key + value memory
     struct ggml_v2_tensor * memory_k;

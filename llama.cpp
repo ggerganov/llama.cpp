@@ -11,6 +11,8 @@
 #include "ggml.h"
 #ifdef GGML_USE_CUBLAS
 #include "ggml-cuda.h"
+#elif defined(GGML_USE_CLBLAST)
+#include "ggml-opencl.h"
 #endif
 
 #include <array>
@@ -91,7 +93,7 @@ static const std::map<e_model, size_t> & MEM_REQ_KV_SELF()
 static const std::map<e_model, size_t> & MEM_REQ_EVAL()
 {
     static std::map<e_model, size_t> k_sizes = {
-        { MODEL_7B,   768ull * MB },
+        { MODEL_7B,   800ull * MB },
         { MODEL_13B, 1024ull * MB },
         { MODEL_30B, 1280ull * MB },
         { MODEL_65B, 1536ull * MB },
@@ -933,7 +935,7 @@ static void llama_model_load_internal(
         if (hparams.ftype != LLAMA_FTYPE_ALL_F32     &&
             hparams.ftype != LLAMA_FTYPE_MOSTLY_F16  &&
             hparams.ftype != LLAMA_FTYPE_MOSTLY_Q8_0) {
-            throw format("this format is no longer supported (see https://github.com/ggerganov/llama.cpp/pull/1405)");
+            printf("\nthis format is no longer supported (see https://github.com/ggerganov/llama.cpp/pull/1405)");
         }
     }
 
@@ -941,7 +943,7 @@ static void llama_model_load_internal(
         if (hparams.ftype == LLAMA_FTYPE_MOSTLY_Q4_0 ||
             hparams.ftype == LLAMA_FTYPE_MOSTLY_Q4_1 ||
             hparams.ftype == LLAMA_FTYPE_MOSTLY_Q8_0) {
-            throw format("this format is no longer supported (see https://github.com/ggerganov/llama.cpp/pull/1508)");
+            printf("\nthis format is no longer supported (see https://github.com/ggerganov/llama.cpp/pull/1508)");
         }
     }
 
@@ -1039,7 +1041,7 @@ static void llama_model_load_internal(
     ml->load_all_data(progress_callback, progress_callback_user_data, use_mlock ? &lctx.model.mlock_mmap : NULL);
 
     model.mapping = std::move(ml->mapping);
-#ifdef GGML_USE_CUBLAS
+#if defined(GGML_USE_CUBLAS)
     {
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
 
@@ -1064,6 +1066,32 @@ static void llama_model_load_internal(
         }
 
         fprintf(stderr, "%s: [cublas] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
+    }
+#elif defined(GGML_USE_CLBLAST)
+    {
+        const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
+
+        fprintf(stderr, "%s: [opencl] offloading %d layers to GPU\n", __func__, n_gpu);
+
+        size_t vram_total = 0;
+
+        for (int i = 0; i < n_gpu; ++i) {
+            const auto & layer = model.layers[i];
+
+            ggml_cl_transform_tensor(layer.wq); vram_total += ggml_nbytes(layer.wq);
+            ggml_cl_transform_tensor(layer.wk); vram_total += ggml_nbytes(layer.wk);
+            ggml_cl_transform_tensor(layer.wv); vram_total += ggml_nbytes(layer.wv);
+            ggml_cl_transform_tensor(layer.wo); vram_total += ggml_nbytes(layer.wo);
+            ggml_cl_transform_tensor(layer.w1); vram_total += ggml_nbytes(layer.w1);
+            ggml_cl_transform_tensor(layer.w2); vram_total += ggml_nbytes(layer.w2);
+            ggml_cl_transform_tensor(layer.w3); vram_total += ggml_nbytes(layer.w3);
+        }
+        if (n_gpu_layers > (int) hparams.n_layer) {
+            fprintf(stderr, "%s: [opencl] offloading output layer to GPU\n", __func__);
+            ggml_cl_transform_tensor(model.output); vram_total += ggml_nbytes(model.output);
+        }
+
+        fprintf(stderr, "%s: [opencl] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
     }
 #else
     (void) n_gpu_layers;

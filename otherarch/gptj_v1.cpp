@@ -16,7 +16,7 @@
 
 
 // load the model's weights from a file
-ModelLoadResult legacy_gptj_model_load(const std::string & fname, gptj_model_v1 & model, gpt_vocab & vocab, FileFormat file_format) {
+ModelLoadResult legacy_gptj_model_load(const std::string & fname, gptj_v1_model & model, gpt_vocab & vocab, FileFormat file_format) {
     printf("%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
     bool super_old_format = (file_format==FileFormat::GPTJ_1);
@@ -363,7 +363,7 @@ ModelLoadResult legacy_gptj_model_load(const std::string & fname, gptj_model_v1 
 // The GPT-J model requires about 16MB of memory per input token.
 //
 bool legacy_gptj_eval(
-        const gptj_model_v1 & model,
+        const gptj_v1_model & model,
         const int n_threads,
         const int n_past,
         const std::vector<gpt_vocab::id> & embd_inp,

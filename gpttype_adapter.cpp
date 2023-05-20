@@ -12,30 +12,42 @@
 #include "otherarch.h"
 
 //for easier compilation
-#include "llama_v2.cpp"
-
 //concat source files into one file for compilation purposes
+#include "llama_v2.cpp"
+#include "llama.cpp"
 #include "utils.cpp"
 #include "gptj_v1.cpp"
 #include "gptj_v2.cpp"
+#include "gptj_v3.cpp"
 #include "gpt2_v1.cpp"
 #include "gpt2_v2.cpp"
+#include "gpt2_v3.cpp"
 #include "rwkv_v2.cpp"
 #include "neox_v2.cpp"
+#include "neox_v3.cpp"
 
 
 //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt)
 static FileFormat file_format = FileFormat::BADFORMAT;
 
 static gpt_vocab vocab;
-static gptj_model_v1 gptj_ctx_v1;
-static gptj_model gptj_ctx_v2;
+
+static gptj_v1_model gptj_ctx_v1;
+static gptj_v2_model gptj_ctx_v2;
+static gptj_model gptj_ctx_v3;
+
 static gpt2_v1_model gpt2_ctx_v1;
-static gpt2_model gpt2_ctx_v2;
-static gpt_neox_model neox_ctx;
+static gpt2_v2_model gpt2_ctx_v2;
+static gpt2_model gpt2_ctx_v3;
+
+static gpt_neox_v2_model neox_ctx_v2;
+static gpt_neox_model neox_ctx_v3;
+
 static rwkv_context * rwkv_ctx_v1;
+static llama_v2_context_params llama_ctx_params_v2;
 static llama_context_params llama_ctx_params;
-static llama_context * llama_ctx_v1;
+static llama_v2_context * llama_ctx_v2;
+static llama_context * llama_ctx_v3;
 
 static gpt_params params;
 static int n_past = 0;
@@ -81,7 +93,6 @@ inline bool LogitsDuplicated(std::vector<float> & arr1, std::vector<float> & arr
 
 llama_token sample_token(llama_token_data_array * candidates, std::mt19937 & rng) 
 {
-    const int64_t t_start_sample_us = ggml_time_us();
     llama_sample_softmax(nullptr, candidates);
     std::vector<float> probs;
     probs.reserve(candidates->size);
@@ -220,7 +231,9 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     blasbatchsize = inputs.blasbatchsize;
     params.memory_f16 = inputs.f16_kv;
     params.n_ctx = inputs.max_context_length;
-    neox_ctx.hparams.n_ctx = gptj_ctx_v1.hparams.n_ctx = gptj_ctx_v2.hparams.n_ctx = gpt2_ctx_v1.hparams.n_ctx = gpt2_ctx_v2.hparams.n_ctx = params.n_ctx;
+
+    neox_ctx_v2.hparams.n_ctx = gptj_ctx_v1.hparams.n_ctx = gptj_ctx_v2.hparams.n_ctx = gpt2_ctx_v1.hparams.n_ctx = gpt2_ctx_v2.hparams.n_ctx 
+    = neox_ctx_v3.hparams.n_ctx = gptj_ctx_v3.hparams.n_ctx = gptj_ctx_v3.hparams.n_ctx = params.n_ctx;
 
     printf("System Info: %s\n", llama_print_system_info());
     SetQuantsUnshuffled(false);   
@@ -229,33 +242,31 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         //newer format has bit unshuffling
         SetQuantsUnshuffled(file_format == FileFormat::GGJT_2);        
 
-        llama_ctx_params = llama_context_default_params();
-        llama_ctx_params.n_ctx = inputs.max_context_length;
+        llama_ctx_params_v2 = llama_v2_context_default_params();
+        llama_ctx_params_v2.n_ctx = inputs.max_context_length;
         //llama_ctx_params.n_parts = -1;
-        llama_ctx_params.seed = -1;
-        llama_ctx_params.f16_kv = inputs.f16_kv;
-        llama_ctx_params.logits_all = false;
-        llama_ctx_params.use_mmap = inputs.use_mmap;
-        llama_ctx_params.use_mlock = inputs.use_mlock;
-        llama_ctx_params.n_gpu_layers = inputs.gpulayers;
+        llama_ctx_params_v2.seed = -1;
+        llama_ctx_params_v2.f16_kv = inputs.f16_kv;
+        llama_ctx_params_v2.logits_all = false;
+        llama_ctx_params_v2.use_mmap = inputs.use_mmap;
+        llama_ctx_params_v2.use_mlock = inputs.use_mlock;
+        llama_ctx_params_v2.n_gpu_layers = inputs.gpulayers;
         
-        llama_ctx_v1 = llama_init_from_file(modelname.c_str(), llama_ctx_params);
+        llama_ctx_v2 = llama_v2_init_from_file(modelname.c_str(), llama_ctx_params_v2);
         
-        if (llama_ctx_v1 == NULL)
+        if (llama_ctx_v2 == NULL)
         {
             fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, modelname.c_str());
             return ModelLoadResult::FAIL;
         }
-        if (file_format < FileFormat::GGJT_2)
-        {
-            printf("\n---\nWarning: Your model may be an OUTDATED format (ver %d). Please reconvert it for better results!\n---\n", file_format);
-        }
-
+       
+        printf("\n---\nWarning: Your model may be an OUTDATED format (ver %d). Please reconvert it for better results!\n---\n", file_format);
+       
         if (lora_filename != "")
         {
             printf("\nAttempting to apply LORA adapter: %s\n", lora_filename.c_str());
      
-            int err = llama_apply_lora_from_file(llama_ctx_v1,
+            int err = llama_v2_apply_lora_from_file(llama_ctx_v2,
                                                  lora_filename.c_str(),
                                                  NULL,
                                                  n_threads);
@@ -268,9 +279,47 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
 
         //determine mem per token
         const std::vector<int> tmp = {1, 2, 3, 4};
-        llama_eval(llama_ctx_v1, tmp.data(), tmp.size(), 0, params.n_threads);
+        llama_v2_eval(llama_ctx_v2, tmp.data(), tmp.size(), 0, params.n_threads);
         return ModelLoadResult::SUCCESS;
+    }
+    else if(file_format == FileFormat::GGJT_3)
+    {
+        llama_ctx_params = llama_context_default_params();
+        llama_ctx_params.n_ctx = inputs.max_context_length;
+        //llama_ctx_paran_parts = -1;
+        llama_ctx_params.seed = -1;
+        llama_ctx_params.f16_kv = inputs.f16_kv;
+        llama_ctx_params.logits_all = false;
+        llama_ctx_params.use_mmap = inputs.use_mmap;
+        llama_ctx_params.use_mlock = inputs.use_mlock;
+        llama_ctx_params.n_gpu_layers = inputs.gpulayers;
+        
+        llama_ctx_v3 = llama_init_from_file(modelname.c_str(), llama_ctx_params);
+        
+        if (llama_ctx_v3 == NULL)
+        {
+            fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, modelname.c_str());
+            return ModelLoadResult::FAIL;
+        }
+        if (lora_filename != "")
+        {
+            printf("\nAttempting to apply LORA adapter: %s\n", lora_filename.c_str());
+     
+            int err = llama_apply_lora_from_file(llama_ctx_v3,
+                                                 lora_filename.c_str(),
+                                                 NULL,
+                                                 n_threads);
+            if (err != 0)
+            {
+                fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
+                return ModelLoadResult::FAIL;
+            }
+        }
 
+        //determine mem per token
+        const std::vector<int> tmp = {1, 2, 3, 4};
+        llama_eval(llama_ctx_v3, tmp.data(), tmp.size(), 0, params.n_threads);
+        return ModelLoadResult::SUCCESS;
     }
     else if (file_format == FileFormat::RWKV_1)
     {
@@ -329,25 +378,45 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         legacy_gpt2_eval(gpt2_ctx_v1, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token, file_format);    
         return ModelLoadResult::SUCCESS;
     }
-    else if (file_format == FileFormat::GPT2_2 || file_format==FileFormat::GPT2_3)
+    else if (file_format == FileFormat::GPT2_2 || file_format==FileFormat::GPT2_3 || file_format==FileFormat::GPT2_4)
     {
-        //newer format has bit unshuffling
-        SetQuantsUnshuffled(file_format == FileFormat::GPT2_3);   
-
-        ModelLoadResult res = gpt2_model_load(params.model, gpt2_ctx_v2, vocab, file_format, inputs.gpulayers);
-        if(res==ModelLoadResult::FAIL)
+        if(file_format==FileFormat::GPT2_4)
         {
-            fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
-            return res;
-        } 
-        else if(res==ModelLoadResult::RETRY_LOAD)
-        {
-            printf("\nTensor Transposition Detected! Retrying GPT-2 model loading...");
-            return res;
+            ModelLoadResult res = gpt2_model_load(params.model, gpt2_ctx_v3, vocab, file_format, inputs.gpulayers);
+            if(res==ModelLoadResult::FAIL)
+            {
+                fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
+                return res;
+            } 
+            else if(res==ModelLoadResult::RETRY_LOAD)
+            {
+                printf("\nTensor Transposition Detected! Retrying GPT-2 model loading...");
+                return res;
+            }
+            // determine the required inference memory per token:
+            gpt2_eval(gpt2_ctx_v3, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token, file_format);    
+            return ModelLoadResult::SUCCESS;
         }
-         // determine the required inference memory per token:    
-        gpt2_eval(gpt2_ctx_v2, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token, file_format);    
-        return ModelLoadResult::SUCCESS;
+        else
+        {
+            //newer format has bit unshuffling
+            SetQuantsUnshuffled(file_format == FileFormat::GPT2_3);   
+
+            ModelLoadResult res = gpt2_v2_model_load(params.model, gpt2_ctx_v2, vocab, file_format, inputs.gpulayers);
+            if(res==ModelLoadResult::FAIL)
+            {
+                fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
+                return res;
+            } 
+            else if(res==ModelLoadResult::RETRY_LOAD)
+            {
+                printf("\nTensor Transposition Detected! Retrying GPT-2 model loading...");
+                return res;
+            }
+            // determine the required inference memory per token:    
+            gpt2_v2_eval(gpt2_ctx_v2, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token, file_format);    
+            return ModelLoadResult::SUCCESS;
+        }
     }
     else if (file_format == FileFormat::GPTJ_1 || file_format == FileFormat::GPTJ_2)
     {
@@ -375,82 +444,146 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
 
         return ModelLoadResult::SUCCESS;
     }
-    else if(file_format==FileFormat::NEOX_1 || file_format==FileFormat::NEOX_2 || file_format==FileFormat::NEOX_3 || file_format==FileFormat::NEOX_4 || file_format==FileFormat::NEOX_5)
+    else if(file_format == FileFormat::GPTJ_3 || file_format == FileFormat::GPTJ_4 || file_format == FileFormat::GPTJ_5)
     {
-        //newer format has bit unshuffling
-        SetQuantsUnshuffled(file_format==FileFormat::NEOX_4 || file_format==FileFormat::NEOX_5);   
-
-        ModelLoadResult res = gpt_neox_model_load(params.model, neox_ctx, vocab, file_format);       
-        if(res==ModelLoadResult::FAIL)
+        if(file_format == FileFormat::GPTJ_5)
         {
-            fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
-            return res;
-        }
-        else if(res==ModelLoadResult::RETRY_LOAD)
-        {
-            printf("\nIncorrect Tensor Size Detected! Retrying GPT-NeoX model loading...");
-            return res;
-        }
-
-         // determine the required inference memory per token:    
-        gpt_neox_eval(neox_ctx, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);
-
-        if(logits.size()>0 && file_format==FileFormat::NEOX_2 && !IsNanCheck(logits[0]))
-        {
-            //run the black magic eval to determine if it's redpajama. VERY UGLY HACK!
-            std::vector<int> test_embd = ::gpt_tokenize(vocab, "1 2 3 4 5 6 7");
-            auto orig_par_res = neox_ctx.hparams.par_res;
-            neox_ctx.hparams.par_res = 0; //test with residual false
-            gpt_neox_eval(neox_ctx, params.n_threads, 0, test_embd, logits, mem_per_token);
-            neox_ctx.hparams.par_res = orig_par_res;      
-            int topid = std::max_element(logits.begin(),logits.end())-logits.begin();
-            std::string predicted = vocab.id_to_token[topid].c_str();
-            auto findresult = predicted.find("8");
-            if(findresult != std::string::npos && findresult<2)
+            ModelLoadResult loadresult = gptj_model_load(params.model, gptj_ctx_v3, vocab, inputs.gpulayers);
+            if (loadresult == ModelLoadResult::FAIL)
             {
-                printf("\n---\nOld RedPajama NeoX Detected! Switching to new format! (use_parallel_residual=False)\n");
-                ggml_free(neox_ctx.ctx);
+                fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
+                return loadresult;
+            }
+            else if (loadresult == ModelLoadResult::RETRY_LOAD)
+            {
+                printf("\nTensor Transposition Detected! Retrying GPT-J model loading...");
+                return loadresult;
+            }
+
+            // determine the required inference memory per token:    
+            gptj_eval(gptj_ctx_v3, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);
+        
+            //if the logits are NAN or duplicated, it means the model is incompatible
+            std::vector<float> oldlogits(logits);
+
+            //this is another hack because they change the library - we run the eval through the model
+            //twice and compare logits. if they give the same logits for different inputs, model is broken
+            gptj_eval(gptj_ctx_v3, params.n_threads, 0, {4, 5, 6, 7}, logits, mem_per_token);
+                    
+            if(logits.size()>0 && (IsNanCheck(logits[0]) || LogitsDuplicated(oldlogits,logits)))
+            {
+                printf("\nBad Logits detected! Retrying GPT-J model loading...");
+                ggml_free(gptj_ctx_v3.ctx);
                 return ModelLoadResult::RETRY_LOAD;
             }
-        }
 
-        return ModelLoadResult::SUCCESS;
+            return ModelLoadResult::SUCCESS;
+        }
+        else
+        {
+            //newer format has bit unshuffling
+            SetQuantsUnshuffled(file_format == FileFormat::GPTJ_4);   
+
+            ModelLoadResult loadresult = gptj_v2_model_load(params.model, gptj_ctx_v2, vocab, inputs.gpulayers);
+            if (loadresult == ModelLoadResult::FAIL)
+            {
+                fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
+                return loadresult;
+            }
+            else if (loadresult == ModelLoadResult::RETRY_LOAD)
+            {
+                printf("\nTensor Transposition Detected! Retrying GPT-J model loading...");
+                return loadresult;
+            }
+
+            // determine the required inference memory per token:    
+            gptj_v2_eval(gptj_ctx_v2, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);
+        
+            //if the logits are NAN or duplicated, it means the model is incompatible
+            std::vector<float> oldlogits(logits);
+
+            //this is another hack because they change the library - we run the eval through the model
+            //twice and compare logits. if they give the same logits for different inputs, model is broken
+            gptj_v2_eval(gptj_ctx_v2, params.n_threads, 0, {4, 5, 6, 7}, logits, mem_per_token);
+                    
+            if(logits.size()>0 && (IsNanCheck(logits[0]) || LogitsDuplicated(oldlogits,logits)))
+            {
+                printf("\nBad Logits detected! Retrying GPT-J model loading...");
+                ggml_v2_free(gptj_ctx_v2.ctx);
+                return ModelLoadResult::RETRY_LOAD;
+            }
+
+            return ModelLoadResult::SUCCESS;
+        }
+    }
+    else if(file_format==FileFormat::NEOX_1 || file_format==FileFormat::NEOX_2 || file_format==FileFormat::NEOX_3 || file_format==FileFormat::NEOX_4 || file_format==FileFormat::NEOX_5|| file_format==FileFormat::NEOX_6|| file_format==FileFormat::NEOX_7)
+    {
+        if(file_format==FileFormat::NEOX_6|| file_format==FileFormat::NEOX_7)
+        {           
+            ModelLoadResult res = gpt_neox_model_load(params.model, neox_ctx_v3, vocab, file_format);       
+            if(res==ModelLoadResult::FAIL)
+            {
+                fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
+                return res;
+            }
+            else if(res==ModelLoadResult::RETRY_LOAD)
+            {
+                printf("\nIncorrect Tensor Size Detected! Retrying GPT-NeoX model loading...");
+                return res;
+            }
+
+            // determine the required inference memory per token:    
+            gpt_neox_eval(neox_ctx_v3, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);
+
+            return ModelLoadResult::SUCCESS;
+        }
+        else
+        {
+            //newer format has bit unshuffling
+            SetQuantsUnshuffled(file_format==FileFormat::NEOX_4 || file_format==FileFormat::NEOX_5);   
+
+            ModelLoadResult res = gpt_neox_v2_model_load(params.model, neox_ctx_v2, vocab, file_format);       
+            if(res==ModelLoadResult::FAIL)
+            {
+                fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
+                return res;
+            }
+            else if(res==ModelLoadResult::RETRY_LOAD)
+            {
+                printf("\nIncorrect Tensor Size Detected! Retrying GPT-NeoX model loading...");
+                return res;
+            }
+
+            // determine the required inference memory per token:    
+            gpt_neox_v2_eval(neox_ctx_v2, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);
+
+            if(logits.size()>0 && file_format==FileFormat::NEOX_2 && !IsNanCheck(logits[0]))
+            {
+                //run the black magic eval to determine if it's redpajama. VERY UGLY HACK!
+                std::vector<int> test_embd = ::gpt_tokenize(vocab, "1 2 3 4 5 6 7");
+                auto orig_par_res = neox_ctx_v2.hparams.par_res;
+                neox_ctx_v2.hparams.par_res = 0; //test with residual false
+                gpt_neox_v2_eval(neox_ctx_v2, params.n_threads, 0, test_embd, logits, mem_per_token);
+                neox_ctx_v2.hparams.par_res = orig_par_res;      
+                int topid = std::max_element(logits.begin(),logits.end())-logits.begin();
+                std::string predicted = vocab.id_to_token[topid].c_str();
+                auto findresult = predicted.find("8");
+                if(findresult != std::string::npos && findresult<2)
+                {
+                    printf("\n---\nOld RedPajama NeoX Detected! Switching to new format! (use_parallel_residual=False)\n");
+                    ggml_v2_free(neox_ctx_v2.ctx);
+                    return ModelLoadResult::RETRY_LOAD;
+                }
+            }
+
+            return ModelLoadResult::SUCCESS;
+        }
+       
     }
     else
     {
-        //newer format has bit unshuffling
-        SetQuantsUnshuffled(file_format == FileFormat::GPTJ_4);   
-
-        ModelLoadResult loadresult = gptj_model_load(params.model, gptj_ctx_v2, vocab, inputs.gpulayers);
-        if (loadresult == ModelLoadResult::FAIL)
-        {
-            fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
-            return loadresult;
-        }
-        else if (loadresult == ModelLoadResult::RETRY_LOAD)
-        {
-            printf("\nTensor Transposition Detected! Retrying GPT-J model loading...");
-            return loadresult;
-        }
-
-        // determine the required inference memory per token:    
-        gptj_eval(gptj_ctx_v2, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);
-      
-        //if the logits are NAN or duplicated, it means the model is incompatible
-        std::vector<float> oldlogits(logits);
-
-        //this is another hack because they change the library - we run the eval through the model
-        //twice and compare logits. if they give the same logits for different inputs, model is broken
-        gptj_eval(gptj_ctx_v2, params.n_threads, 0, {4, 5, 6, 7}, logits, mem_per_token);
-                
-        if(logits.size()>0 && (IsNanCheck(logits[0]) || LogitsDuplicated(oldlogits,logits)))
-        {
-            printf("\nBad Logits detected! Retrying GPT-J model loading...");
-            ggml_free(gptj_ctx_v2.ctx);
-            return ModelLoadResult::RETRY_LOAD;
-        }
-
-        return ModelLoadResult::SUCCESS;
+        printf("\nUnknown Model, cannot load.\n");
+        return ModelLoadResult::FAIL;
     }
    
 }
@@ -501,16 +634,20 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     // tokenize the prompt
     std::vector<int> embd_inp;
 
-    if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2)
+    if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2  || file_format == FileFormat::GGJT_3)
     {
         params.prompt.insert(0, 1, ' ');
-        if (file_format == FileFormat::GGML)
+        if(file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2 )
         {
-            embd_inp = ::legacy_llama_tokenize(llama_ctx_v1, params.prompt, true);
+            embd_inp = ::llama_v2_tokenize(llama_ctx_v2, params.prompt, true);
+        }
+        else if (file_format == FileFormat::GGML)
+        {
+            embd_inp = ::legacy_llama_v2_tokenize(llama_ctx_v2, params.prompt, true);
         }
         else
         {
-            embd_inp = ::llama_tokenize(llama_ctx_v1, params.prompt, true);
+            embd_inp = ::llama_tokenize(llama_ctx_v3, params.prompt, true);
         }
     }
     else
@@ -560,7 +697,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     {
         //for non llama, limit to 256
         int bbs = blasbatchsize;
-        if (file_format != FileFormat::GGML && file_format != FileFormat::GGHF && file_format != FileFormat::GGJT && file_format != FileFormat::GGJT_2)
+        if (file_format != FileFormat::GGML && file_format != FileFormat::GGHF && file_format != FileFormat::GGJT && file_format != FileFormat::GGJT_2 && file_format != FileFormat::GGJT_3)
         {
             bbs = (blasbatchsize > 256 ? 256 : blasbatchsize);
         }
@@ -592,7 +729,11 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
 
     if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2)
     {
-        n_vocab = llama_n_vocab(llama_ctx_v1);
+        n_vocab = llama_v2_n_vocab(llama_ctx_v2);
+    }
+    else if(file_format == FileFormat::GGJT_3)
+    {
+        n_vocab = llama_n_vocab(llama_ctx_v3);
     }
     else if (file_format == FileFormat::GPTJ_1 || file_format == FileFormat::GPTJ_2)
     {
@@ -602,6 +743,10 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     {
         n_vocab = gptj_ctx_v2.hparams.n_vocab;
     }
+    else if(file_format==FileFormat::GPTJ_5)
+    {
+        n_vocab = gptj_ctx_v3.hparams.n_vocab;
+    }
     else if(file_format == FileFormat::GPT2_1)
     {
         n_vocab = gpt2_ctx_v1.hparams.n_vocab;
@@ -610,9 +755,17 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     {
         n_vocab = gpt2_ctx_v2.hparams.n_vocab;
     }
+    else if(file_format==FileFormat::GPT2_4)
+    {
+        n_vocab = gpt2_ctx_v3.hparams.n_vocab;
+    }
     else if(file_format == FileFormat::NEOX_1 || file_format == FileFormat::NEOX_2 || file_format == FileFormat::NEOX_3 || file_format==FileFormat::NEOX_4 || file_format==FileFormat::NEOX_5)
     {
-        n_vocab = neox_ctx.hparams.n_vocab;
+        n_vocab = neox_ctx_v2.hparams.n_vocab;
+    }
+    else if( file_format==FileFormat::NEOX_6|| file_format==FileFormat::NEOX_7)
+    {
+        n_vocab = neox_ctx_v3.hparams.n_vocab;
     }
     else if(file_format == FileFormat::RWKV_1)
     {
@@ -641,11 +794,18 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     if(debugmode)
     {
         printf("\n[Debug: Dump Input Tokens]\n");
-        if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2)
+        if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2 || file_format == FileFormat::GGJT_3)
         {
             for (auto id : embd_inp)
             {
-                printf("'%s (%d)', ",llama_token_to_str(llama_ctx_v1, id),id);
+                printf("'%s (%d)', ",llama_v2_token_to_str(llama_ctx_v2, id),id);
+            }
+        }
+        else if (file_format == FileFormat::GGJT_3)
+        {
+            for (auto id : embd_inp)
+            {
+                printf("'%s (%d)', ",llama_token_to_str(llama_ctx_v3, id),id);
             }
         }
         else
@@ -680,7 +840,11 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
 
             if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2)
             {
-                evalres = (llama_eval(llama_ctx_v1, embd.data(), embdsize, n_past, params.n_threads)==0);
+                evalres = (llama_v2_eval(llama_ctx_v2, embd.data(), embdsize, n_past, params.n_threads)==0);
+            }
+            else if(file_format == FileFormat::GGJT_3)
+            {
+                evalres = (llama_eval(llama_ctx_v3, embd.data(), embdsize, n_past, params.n_threads)==0);
             }
             else if(file_format==FileFormat::RWKV_1)
             {
@@ -694,20 +858,37 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             }
             else if(file_format==FileFormat::GPT2_2 || file_format==FileFormat::GPT2_3)
             {
-                evalres = gpt2_eval(gpt2_ctx_v2, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
+                evalres = gpt2_v2_eval(gpt2_ctx_v2, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
+            }
+            else if(file_format==FileFormat::GPT2_4)
+            {
+                evalres = gpt2_eval(gpt2_ctx_v3, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
             }
             else if(file_format==FileFormat::NEOX_1 || file_format == FileFormat::NEOX_2 || file_format == FileFormat::NEOX_3 || file_format==FileFormat::NEOX_4 || file_format==FileFormat::NEOX_5)
             {
-                evalres = gpt_neox_eval(neox_ctx, params.n_threads, n_past, embd, logits, mem_per_token);
+                evalres = gpt_neox_v2_eval(neox_ctx_v2, params.n_threads, n_past, embd, logits, mem_per_token);
+            }
+            else if(file_format==FileFormat::NEOX_6|| file_format==FileFormat::NEOX_7)
+            {
+                evalres = gpt_neox_eval(neox_ctx_v3, params.n_threads, n_past, embd, logits, mem_per_token);
             }
             else if(file_format==FileFormat::GPTJ_1 || file_format==FileFormat::GPTJ_2)
             {
                 evalres = legacy_gptj_eval(gptj_ctx_v1, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
             }
+            else if(file_format==FileFormat::GPTJ_3 || file_format==FileFormat::GPTJ_4)
+            {
+                evalres = gptj_v2_eval(gptj_ctx_v2, params.n_threads, n_past, embd, logits, mem_per_token);
+            }
+            else if(file_format==FileFormat::GPTJ_5)
+            {
+                evalres = gptj_eval(gptj_ctx_v3, params.n_threads, n_past, embd, logits, mem_per_token);
+            }
             else
             {
-                evalres = gptj_eval(gptj_ctx_v2, params.n_threads, n_past, embd, logits, mem_per_token);
+                printf("\nCannot find eval function\n");
             }
+
             if (!evalres)
             {
                 fprintf(stderr, "Failed to predict\n");
@@ -739,9 +920,17 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 printf("\n");
             }
 
-            if(file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2)
+            if(file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2 || file_format == FileFormat::GGJT_3)
             {
-                auto logits = llama_get_logits(llama_ctx_v1);
+                float * logits;
+                if(file_format == FileFormat::GGJT_3)
+                {
+                    logits = llama_get_logits(llama_ctx_v3);
+                }
+                else
+                {
+                    logits = llama_v2_get_logits(llama_ctx_v2);
+                }
 
                 if (!unbanTokens)
                 {
@@ -765,10 +954,12 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                     if ((file_format == FileFormat::GPT2_1 ||
                          file_format == FileFormat::GPT2_2 ||
                          file_format == FileFormat::GPT2_3 ||
+                         file_format == FileFormat::GPT2_4 ||
                          file_format == FileFormat::GPTJ_1 ||
                          file_format == FileFormat::GPTJ_2 ||
                          file_format == FileFormat::GPTJ_3 ||
-                         file_format == FileFormat::GPTJ_4) &&
+                         file_format == FileFormat::GPTJ_4 ||
+                         file_format == FileFormat::GPTJ_5) &&
                         logits.size() > 50256)
                     {
                         logits[50256] = (logits[50256] < 0 ? logits[50256] : 0);
@@ -793,7 +984,15 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
 
             if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2)
             {
-                concat_output += llama_token_to_str(llama_ctx_v1, id);
+                if(file_format == FileFormat::GGJT_3)
+                {
+                    concat_output += llama_token_to_str(llama_ctx_v3, id);
+                }
+                else
+                {
+                    concat_output += llama_v2_token_to_str(llama_ctx_v2, id);
+                }
+                
                 if(unbanTokens && id==llama_token_eos())
                 {
                      printf("\n(EOS token triggered!)");

@@ -285,6 +285,14 @@ target_compile_features(ggml_v1 PUBLIC c_std_11) # don't bump
 target_link_libraries(ggml_v1 PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
 set_target_properties(ggml_v1 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+add_library(ggml_v2 OBJECT
+            otherarch/ggml_v2.c
+            otherarch/ggml_v2.h)
+target_include_directories(ggml_v2 PUBLIC . ./otherarch ./otherarch/tools)
+target_compile_features(ggml_v2 PUBLIC c_std_11) # don't bump
+target_link_libraries(ggml_v2 PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
+set_target_properties(ggml_v2 PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 add_library(common2
             examples/common.cpp
             examples/common.h)

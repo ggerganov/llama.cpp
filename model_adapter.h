@@ -20,15 +20,18 @@ enum FileFormat
     GGHF=2, // 2=(llama ggmf)
     GGJT=3, // 3=(llama ggjt) 
     GGJT_2=4, //newer llama format unshuffled
+    GGJT_3=5, //using 16bit scalar
 
     GPTJ_1=100, //the very first super old GPTJ format
     GPTJ_2=101, //pygmalion, uses old ggml lib
     GPTJ_3=102, //uses new ggml lib
     GPTJ_4=103, //unshuffled
+    GPTJ_5=104, //using 16bit scalar
 
     GPT2_1=200,
     GPT2_2=201,
     GPT2_3=202, //unshuffled
+    GPT2_4=203, //using 16bit scalar
 
     RWKV_1=300,
 
@@ -37,6 +40,8 @@ enum FileFormat
     NEOX_3=402, //redpajama
     NEOX_4=403, //unshuffled
     NEOX_5=404, //unshuffled redpajama
+    NEOX_6=405, //using 16bit scalar
+    NEOX_7=406, //using 16bit scalar redpajama
 };
 
 enum ModelLoadResult

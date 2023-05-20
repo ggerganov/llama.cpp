@@ -6,6 +6,7 @@
 
 #define CL_TARGET_OPENCL_VERSION 110
 #include <clblast.h>
+#include <clblast_c.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -16,55 +17,45 @@
 #define CL_DMMV_BLOCK_SIZE 32;
 
 #define MULTILINE_QUOTE(...) #__VA_ARGS__
-std::string program_source = MULTILINE_QUOTE(
+static std::string program_source = MULTILINE_QUOTE(
 
 typedef char int8_t;
 typedef uchar uint8_t;
 typedef int int32_t;
 typedef uint uint32_t;
 
-constant uint QK4_0 = 32;
-constant uint QR4_0 = 2;
 struct block_q4_0
 {
     half d;
-    uint8_t qs[QK4_0 / 2];
+    uint8_t qs[16];
 };
 
-constant uint QK4_1 = 32;
-constant uint QR4_1 = 2;
 struct block_q4_1
 {
     half d;
     half m;
-    uint8_t qs[QK4_1 / 2];
+    uint8_t qs[16];
 };
 
-constant uint QK5_0 = 32;
-constant uint QR5_0 = 2;
 struct __attribute__ ((packed)) block_q5_0
 {
     half d;
     uint32_t qh;
-    uint8_t qs[QK5_0 / 2];
+    uint8_t qs[16];
 };
 
-constant uint QK5_1 = 32;
-constant uint QR5_1 = 2;
 struct block_q5_1
 {
     half d;
     half m;
     uint32_t qh;
-    uint8_t qs[QK5_1 / 2];
+    uint8_t qs[16];
 };
 
-constant uint QK8_0 = 32;
-constant uint QR8_0 = 1;
 struct block_q8_0
 {
     half d;
-    uint8_t qs[QK8_0];
+    uint8_t qs[32];
 };
 
 
@@ -135,13 +126,13 @@ void dequantize_q8_0(__global const struct block_q8_0* x, const int ib, const in
     *v0 = vi0*d;
     *v1 = vi1*d;
 }
-void convert_f16(__global half* x, const int ib, const int iqs, float* v0, float* v1){
+static void convert_f16(__global half* x, const int ib, const int iqs, float* v0, float* v1){
     *v0 = vload_half(0, &x[ib + 0]);
     *v1 = vload_half(0, &x[ib + 1]);
 }
 );
 
-std::string dequant_template = MULTILINE_QUOTE(
+static std::string dequant_template = MULTILINE_QUOTE(
 __kernel void KERNEL_NAME(__global X_TYPE* x, __global float* y) {
     const int i = get_group_id(0)*get_local_size(0) + get_local_id(0)*2;
 
@@ -165,7 +156,7 @@ __kernel void KERNEL_NAME(__global X_TYPE* x, __global float* y) {
 }
 );
 
-std::string dequant_mul_mat_vec_template = MULTILINE_QUOTE(
+static std::string dequant_mul_mat_vec_template = MULTILINE_QUOTE(
 __kernel void KERNEL_NAME(__global X_TYPE* x, __local float* tmp, __global float* y, __global float* dst, const int ncols) {
     const int block_size = get_local_size(0);
     const int row = get_global_id(0) / block_size;
@@ -207,29 +198,29 @@ __kernel void KERNEL_NAME(__global X_TYPE* x, __local float* tmp, __global float
 }
 );
 
-std::array<std::string, 5> dequant_str_keys = {
+static std::array<std::string, 5> dequant_str_keys = {
     "KERNEL_NAME", "X_TYPE", "QUANT_K", "QUANT_R", "DEQUANT_FUNC"
 };
 
-std::array<std::string, 30> dequant_str_values = {
-    "dequantize_row_q4_0", "struct block_q4_0", "QK4_0", "QR4_0", "dequantize_q4_0",
-    "dequantize_row_q4_1", "struct block_q4_1", "QK4_1", "QR4_1", "dequantize_q4_1",
-    "dequantize_row_q5_0", "struct block_q5_0", "QK5_0", "QR5_0", "dequantize_q5_0",
-    "dequantize_row_q5_1", "struct block_q5_1", "QK5_1", "QR5_1", "dequantize_q5_1",
-    "dequantize_row_q8_0", "struct block_q8_0", "QK8_0", "QR8_0", "dequantize_q8_0",
+static std::array<std::string, 30> dequant_str_values = {
+    "dequantize_row_q4_0", "struct block_q4_0", "32", "2", "dequantize_q4_0",
+    "dequantize_row_q4_1", "struct block_q4_1", "32", "2", "dequantize_q4_1",
+    "dequantize_row_q5_0", "struct block_q5_0", "32", "2", "dequantize_q5_0",
+    "dequantize_row_q5_1", "struct block_q5_1", "32", "2", "dequantize_q5_1",
+    "dequantize_row_q8_0", "struct block_q8_0", "32", "1", "dequantize_q8_0",
     "convert_row_f16", "half", "1", "1", "convert_f16"
 };
 
-std::array<std::string, 30> dequant_mul_mat_vec_str_values = {
-    "dequantize_mul_mat_vec_q4_0", "struct block_q4_0", "QK4_0", "QR4_0", "dequantize_q4_0",
-    "dequantize_mul_mat_vec_q4_1", "struct block_q4_1", "QK4_1", "QR4_1", "dequantize_q4_1",
-    "dequantize_mul_mat_vec_q5_0", "struct block_q5_0", "QK5_0", "QR5_0", "dequantize_q5_0",
-    "dequantize_mul_mat_vec_q5_1", "struct block_q5_1", "QK5_1", "QR5_1", "dequantize_q5_1",
-    "dequantize_mul_mat_vec_q8_0", "struct block_q8_0", "QK8_0", "QR8_0", "dequantize_q8_0",
+static std::array<std::string, 30> dequant_mul_mat_vec_str_values = {
+    "dequantize_mul_mat_vec_q4_0", "struct block_q4_0", "32", "2", "dequantize_q4_0",
+    "dequantize_mul_mat_vec_q4_1", "struct block_q4_1", "32", "2", "dequantize_q4_1",
+    "dequantize_mul_mat_vec_q5_0", "struct block_q5_0", "32", "2", "dequantize_q5_0",
+    "dequantize_mul_mat_vec_q5_1", "struct block_q5_1", "32", "2", "dequantize_q5_1",
+    "dequantize_mul_mat_vec_q8_0", "struct block_q8_0", "32", "1", "dequantize_q8_0",
     "convert_mul_mat_vec_f16", "half", "1", "1", "convert_f16"
 };
 
-std::string& replace(std::string& s, const std::string& from, const std::string& to) {
+static std::string& sreplace(std::string& s, const std::string& from, const std::string& to) {
     size_t pos = 0;
     while ((pos = s.find(from, pos)) != std::string::npos) {
          s.replace(pos, from.length(), to);
@@ -238,15 +229,15 @@ std::string& replace(std::string& s, const std::string& from, const std::string&
     return s;
 }
 
-std::string generate_kernels() {
+static std::string generate_kernels() {
     std::stringstream src;
     src << program_source << '\n';
     for (size_t i = 0; i < dequant_str_values.size(); i += dequant_str_keys.size()) {
         std::string dequant_kernel = dequant_template;
         std::string dmmv_kernel = dequant_mul_mat_vec_template;
         for (size_t j = 0; j < dequant_str_keys.size(); j++) {
-            replace(dequant_kernel, dequant_str_keys[j], dequant_str_values[i + j]);
-            replace(dmmv_kernel, dequant_str_keys[j], dequant_mul_mat_vec_str_values[i + j]);
+            sreplace(dequant_kernel, dequant_str_keys[j], dequant_str_values[i + j]);
+            sreplace(dmmv_kernel, dequant_str_keys[j], dequant_mul_mat_vec_str_values[i + j]);
         }
         src << dequant_kernel << '\n';
         src << dmmv_kernel << '\n';
@@ -259,6 +250,7 @@ std::string generate_kernels() {
         cl_int err_ = (err);                                                                    \
         if (err_ != CL_SUCCESS) {                                                               \
             fprintf(stderr, "OpenCL %s error %d at %s:%d\n", name, err_, __FILE__, __LINE__);   \
+            fprintf(stderr, "You may be out of VRAM. Please check if you have enough.\n");      \
             exit(1);                                                                            \
         }                                                                                       \
     } while (0)
@@ -271,7 +263,7 @@ static cl_program program;
 static cl_kernel convert_row_f16_cl;
 static cl_kernel dequantize_row_q4_0_cl, dequantize_row_q4_1_cl, dequantize_row_q5_0_cl, dequantize_row_q5_1_cl, dequantize_row_q8_0_cl;
 static cl_kernel dequantize_mul_mat_vec_q4_0_cl, dequantize_mul_mat_vec_q4_1_cl, dequantize_mul_mat_vec_q5_0_cl, dequantize_mul_mat_vec_q5_1_cl, dequantize_mul_mat_vec_q8_0_cl, convert_mul_mat_vec_f16_cl;
-static bool fp16_support;
+static bool fp16_support = false;
 
 static cl_program build_program_from_source(cl_context ctx, cl_device_id dev, const char* program_buffer) {
     cl_program p;
@@ -339,6 +331,8 @@ void ggml_cl_init(void) {
     }
     free(ext_buffer);
     printf("Using Platform: %s Device: %s FP16: %d\n", platform_buffer, device_buffer, fp16_support);
+    fp16_support = false;
+    printf("CL FP16 temporarily disabled pending further optimization.\n");
     context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
     CL_CHECK(err, "clCreateContext");
     queue = clCreateCommandQueue(context, device, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &err);
@@ -552,17 +546,18 @@ static void ggml_cl_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
 
             // compute
             cl_event ev_sgemm;
-            clblast::StatusCode status = clblast::Gemm<cl_float>(clblast::Layout::kColMajor,
-                                                       clblast::Transpose::kYes, clblast::Transpose::kNo,
-                                                       ne01, ne11, ne10,
-                                                       alpha,
-                                                       d_X, 0, ne00,
-                                                       d_Y, 0, ne10,
-                                                       beta,
-                                                       d_D, 0, ne01,
-                                                       &queue, &ev_sgemm);
+            clblast::StatusCode status = (clblast::StatusCode)CLBlastSgemm((CLBlastLayout)clblast::Layout::kColMajor,
+                                            (CLBlastTranspose)clblast::Transpose::kYes, (CLBlastTranspose)clblast::Transpose::kNo,
+                                            ne01, ne11, ne10,
+                                            alpha,
+                                            d_X, 0, ne00,
+                                            d_Y, 0, ne10,
+                                            beta,
+                                            d_D, 0, ne01,
+                                            &queue, &ev_sgemm);
 
             if (status != clblast::StatusCode::kSuccess) {
+ 				printf("\nF32 Matmul Failed (%d): You may be out of VRAM. Please check if you have enough.\n",status);    
                 GGML_ASSERT(false);
             }
 
@@ -650,18 +645,19 @@ static void ggml_cl_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
 
             // compute
             cl_event ev_sgemm;
-            clblast::StatusCode status = clblast::Gemm<cl_half>(clblast::Layout::kColMajor,
-                                                       clblast::Transpose::kYes, clblast::Transpose::kNo,
-                                                       ne01, ne11, ne10,
-                                                       alpha,
-                                                       d_X, 0, ne00,
-                                                       d_Y, 0, ne10,
-                                                       beta,
-                                                       d_D, 0, ne01,
-                                                       &queue, &ev_sgemm);
+            clblast::StatusCode status = (clblast::StatusCode)CLBlastHgemm((CLBlastLayout)clblast::Layout::kColMajor,
+                                            (CLBlastTranspose)clblast::Transpose::kYes, (CLBlastTranspose)clblast::Transpose::kNo,
+                                            ne01, ne11, ne10,
+                                            alpha,
+                                            d_X, 0, ne00,
+                                            d_Y, 0, ne10,
+                                            beta,
+                                            d_D, 0, ne01,
+                                            &queue, &ev_sgemm);
 
             if (status != clblast::StatusCode::kSuccess) {
-                GGML_ASSERT(false);
+				printf("\nF16 Matmul Failed (%d): You may be out of VRAM. Please check if you have enough.\n",status);
+           		GGML_ASSERT(false);
             }
 
             // copy dst to host, then convert to float
@@ -757,17 +753,18 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
                 CL_CHECK(clFinish(queue), "clFinish");
 
                 // compute
-                clblast::StatusCode status = clblast::Gemm<cl_float>(clblast::Layout::kColMajor,
-                                                           clblast::Transpose::kYes, clblast::Transpose::kNo,
-                                                           ne01, ne11, ne10,
-                                                           alpha,
-                                                           d_X, 0, ne00,
-                                                           d_Y, 0, ne10,
-                                                           beta,
-                                                           d_D, 0, ne01,
-                                                           &queue, &ev_sgemm);
+                clblast::StatusCode status = (clblast::StatusCode)CLBlastSgemm((CLBlastLayout)clblast::Layout::kColMajor,
+                                            (CLBlastTranspose)clblast::Transpose::kYes, (CLBlastTranspose)clblast::Transpose::kNo,
+                                            ne01, ne11, ne10,
+                                            alpha,
+                                            d_X, 0, ne00,
+                                            d_Y, 0, ne10,
+                                            beta,
+                                            d_D, 0, ne01,
+                                            &queue, &ev_sgemm);
 
                 if (status != clblast::StatusCode::kSuccess) {
+					printf("\nQF32 Matmul Failed (%d): You may be out of VRAM. Please check if you have enough.\n",status);
                     GGML_ASSERT(false);
                 }
             }

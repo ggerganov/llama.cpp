@@ -1463,7 +1463,7 @@ static void ggml_v2_vec_dot_q5_0_q8_0(const int n, float * restrict s, const voi
 static void ggml_v2_vec_dot_q5_1_q8_1(const int n, float * restrict s, const void * restrict vx, const void * restrict vy);
 static void ggml_v2_vec_dot_q8_0_q8_0(const int n, float * restrict s, const void * restrict vx, const void * restrict vy);
 
-static const quantize_fns_t quantize_fns[GGML_V2_TYPE_COUNT] = {
+static const quantize_fns_t2 quantize_fns[GGML_V2_TYPE_COUNT] = {
     [GGML_V2_TYPE_Q4_0] = {
         .dequantize_row_q         = (dequantize_row_q_t) dequantize_row_q4_0,
         .quantize_row_q           = quantize_row_q4_0,
@@ -1515,14 +1515,14 @@ static const quantize_fns_t quantize_fns[GGML_V2_TYPE_COUNT] = {
 };
 
 // For internal test use
-quantize_fns_t ggml_v2_internal_get_quantize_fn(size_t i) {
+quantize_fns_t2 ggml_v2_internal_get_quantize_fn(size_t i) {
     GGML_V2_ASSERT(i < GGML_V2_TYPE_COUNT);
     return quantize_fns[i];
 }
 
 bool quants_unshuffled = false; //new GGJT_2 is unshuffled, all old ones are shuffled
-static const quantize_fns_t quantize_fns_v2[GGML_V2_TYPE_COUNT]; //forward decl
-static inline quantize_fns_t get_quantize_fn(size_t i) 
+static const quantize_fns_t2 quantize_fns_v2[GGML_V2_TYPE_COUNT]; //forward decl
+static inline quantize_fns_t2 get_quantize_fn(size_t i) 
 {
     return(quants_unshuffled?quantize_fns[i]:quantize_fns_v2[i]);  
 }
@@ -17186,7 +17186,7 @@ inline bool GetQuantsUnshuffled()
 }
 
 //TODO: integrate backwards compat
-static const quantize_fns_t quantize_fns_v2[GGML_V2_TYPE_COUNT] = {
+static const quantize_fns_t2 quantize_fns_v2[GGML_V2_TYPE_COUNT] = {
     [GGML_V2_TYPE_Q4_0] = {
         .dequantize_row_q         = dequantize_row_q4_0_v2,
         .quantize_row_q           = quantize_row_q4_0_v2,

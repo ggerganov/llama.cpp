@@ -112,7 +112,14 @@ void print_tok_vec(std::vector<float> &embd)
            temp %= 1000;
            if (qntvr != 0)
            {
-               fileformat = FileFormat::GPTJ_4;
+               if (qntvr == 1)
+               {
+                   fileformat = FileFormat::GPTJ_4;
+               }
+               else
+               {
+                   fileformat = FileFormat::GPTJ_5;
+               }
            }
            else if (temp != 0 && temp != 1)
            {
@@ -131,8 +138,15 @@ void print_tok_vec(std::vector<float> &embd)
            const int32_t qntvr = temp / 1000;
            temp %= 1000;           
            if (qntvr != 0)
-           {
-               fileformat = FileFormat::GPT2_3;
+           {               
+               if (qntvr == 1)
+               {
+                   fileformat = FileFormat::GPT2_3;
+               }
+               else
+               {
+                   fileformat = FileFormat::GPT2_4;
+               }
            }
            else if (temp != 0 && temp != 1)
            {
@@ -142,7 +156,7 @@ void print_tok_vec(std::vector<float> &embd)
        else if(vocabsiz < 31998 || vocabsiz > 33000)
        {
            //anything outside the llama v1 range is assumed to be NeoX
-           fileformat = FileFormat::NEOX_4;
+           fileformat = FileFormat::NEOX_6;
            uint32_t temp,temp2;
            fin.read((char *)&temp, sizeof(temp)); //ctx
            fin.read((char *)&temp, sizeof(temp)); //n_embd
@@ -169,17 +183,21 @@ void print_tok_vec(std::vector<float> &embd)
                     if((temp==0||temp==1)&&(temp2==0||temp2==1))//special case: par_res and ftype are both 1 or 0
                     {
                         //its a f16/f32 model in the new format
-                        fileformat = FileFormat::NEOX_4;
+                        fileformat = temp==0?FileFormat::NEOX_7:FileFormat::NEOX_6;
                     }
                 }
                 else
                 {
                     const int32_t qntvr = temp2 / 1000; //for future use
-                    //then temp was par_res
-                    if(temp==0) //use_parallel_residual is false in RedPajama
+                    //then temp was par_res, use_parallel_residual is false in RedPajama                  
+                    if(qntvr==1)
                     {
-                        fileformat = FileFormat::NEOX_5;
+                        fileformat = (temp==0?FileFormat::NEOX_5:FileFormat::NEOX_4);
                     }
+                    else
+                    {
+                        fileformat = (temp==0?FileFormat::NEOX_7:FileFormat::NEOX_6);
+                    }              
                 }
            }
           
@@ -197,7 +215,7 @@ void print_tok_vec(std::vector<float> &embd)
     }
     else if(magic == 0x67676a74) //v3 format ggjt
     {
-        fileformat = FileFormat::GGJT_2; //ggjt by default
+        fileformat = FileFormat::GGJT_3; //ggjt by default
         uint32_t ver, temp, ftype;
         fin.read((char *)&ver, sizeof(ver)); //file version
         fin.read((char *)&temp, sizeof(temp));//vocab
@@ -211,6 +229,10 @@ void print_tok_vec(std::vector<float> &embd)
         if(ver==1)
         {
             fileformat = FileFormat::GGJT;
+        }
+        else if(ver==2)
+        {
+            fileformat = FileFormat::GGJT_2;
         }
     }
     fin.close();

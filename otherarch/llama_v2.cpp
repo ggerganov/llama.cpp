@@ -5,7 +5,7 @@
 #include <cstdio>
 #endif
 
-#include "llama-util.h"
+#include "llama_v2-util.h"
 #include "llama_v2.h"
 
 #include "ggml_v2.h"
@@ -39,67 +39,67 @@
 #define LLAMA_V2_MAX_SCRATCH_BUFFERS 16
 
 // available llama models
-enum e_model {
-    MODEL_UNKNOWN,
-    MODEL_7B,
-    MODEL_13B,
-    MODEL_30B,
-    MODEL_65B,
+enum e_model2 {
+    MODEL_UNKNOWN_2,
+    MODEL_7B_2,
+    MODEL_13B_2,
+    MODEL_30B_2,
+    MODEL_65B_2,
 };
 
-static const size_t MB = 1024*1024;
+static const size_t MB_2 = 1024*1024;
 
 // computed for n_ctx == 2048
 // TODO: dynamically determine these sizes
 //       needs modifications in ggml
 
-static const std::map<e_model, size_t> & MEM_REQ_SCRATCH0()
+static const std::map<e_model2, size_t> & MEM_REQ_SCRATCH0_2()
 {
-    static std::map<e_model, size_t> k_sizes = {
-        { MODEL_UNKNOWN, 512ull * MB },
-        { MODEL_7B,    512ull * MB },
-        { MODEL_13B,   512ull * MB },
-        { MODEL_30B,   512ull * MB },
-        { MODEL_65B,  1024ull * MB },
+    static std::map<e_model2, size_t> k_sizes = {
+        { MODEL_UNKNOWN_2, 512ull * MB_2 },
+        { MODEL_7B_2,    512ull * MB_2 },
+        { MODEL_13B_2,   512ull * MB_2 },
+        { MODEL_30B_2,   512ull * MB_2 },
+        { MODEL_65B_2,  1024ull * MB_2 },
     };
     return k_sizes;
 }
 
-static const std::map<e_model, size_t> & MEM_REQ_SCRATCH1()
+static const std::map<e_model2, size_t> & MEM_REQ_SCRATCH1_2()
 {
-    static std::map<e_model, size_t> k_sizes = {
-        { MODEL_UNKNOWN, 512ull * MB },
-        { MODEL_7B,    512ull * MB },
-        { MODEL_13B,   512ull * MB },
-        { MODEL_30B,   512ull * MB },
-        { MODEL_65B,  1024ull * MB },
+    static std::map<e_model2, size_t> k_sizes = {
+        { MODEL_UNKNOWN_2, 512ull * MB_2 },
+        { MODEL_7B_2,    512ull * MB_2 },
+        { MODEL_13B_2,   512ull * MB_2 },
+        { MODEL_30B_2,   512ull * MB_2 },
+        { MODEL_65B_2,  1024ull * MB_2 },
     };
     return k_sizes;
 }
 
 // 2*n_embd*n_ctx*n_layer*sizeof(float16)
-static const std::map<e_model, size_t> & MEM_REQ_KV_SELF()
+static const std::map<e_model2, size_t> & MEM_REQ_KV_SELF_2()
 {
-    static std::map<e_model, size_t> k_sizes = {
-        { MODEL_UNKNOWN, 1026ull * MB },
-        { MODEL_7B,   1026ull * MB },
-        { MODEL_13B,  1608ull * MB },
-        { MODEL_30B,  3124ull * MB },
-        { MODEL_65B,  5120ull * MB },
+    static std::map<e_model2, size_t> k_sizes = {
+        { MODEL_UNKNOWN_2, 1026ull * MB_2 },
+        { MODEL_7B_2,   1026ull * MB_2 },
+        { MODEL_13B_2,  1608ull * MB_2 },
+        { MODEL_30B_2,  3124ull * MB_2 },
+        { MODEL_65B_2,  5120ull * MB_2 },
     };
     return k_sizes;
 }
 
 // this is mostly needed for temporary mul_mat buffers to dequantize the data
 // not actually needed if BLAS is disabled
-static const std::map<e_model, size_t> & MEM_REQ_EVAL()
+static const std::map<e_model2, size_t> & MEM_REQ_EVAL_2()
 {
-    static std::map<e_model, size_t> k_sizes = {
-        { MODEL_UNKNOWN,   800ull * MB },
-        { MODEL_7B,   800ull * MB },
-        { MODEL_13B, 1024ull * MB },
-        { MODEL_30B, 1280ull * MB },
-        { MODEL_65B, 1536ull * MB },
+    static std::map<e_model2, size_t> k_sizes = {
+        { MODEL_UNKNOWN_2,   800ull * MB_2 },
+        { MODEL_7B_2,   800ull * MB_2 },
+        { MODEL_13B_2, 1024ull * MB_2 },
+        { MODEL_30B_2, 1280ull * MB_2 },
+        { MODEL_65B_2, 1536ull * MB_2 },
     };
     return k_sizes;
 }
@@ -157,7 +157,7 @@ struct llama_v2_kv_cache {
 };
 
 struct llama_v2_model {
-    e_model type = MODEL_UNKNOWN;
+    e_model2 type = MODEL_UNKNOWN_2;
 
     llama_v2_hparams hparams;
 
@@ -276,7 +276,7 @@ struct llama_v2_context {
 };
 
 template <typename T>
-static T checked_mul(T a, T b) {
+static T checked_mul2(T a, T b) {
     T ret = a * b;
     if (a != 0 && ret / a != b) {
         throw format("overflow multiplying %llu * %llu",
@@ -285,7 +285,7 @@ static T checked_mul(T a, T b) {
     return ret;
 }
 
-static size_t checked_div(size_t a, size_t b) {
+static size_t checked_div2(size_t a, size_t b) {
     if (b == 0 || a % b != 0) {
         throw format("error dividing %zu / %zu", a, b);
     }
@@ -304,7 +304,7 @@ static std::string llama_v2_format_tensor_shape(const std::vector<uint32_t> & ne
 static size_t llama_v2_calc_tensor_size(const std::vector<uint32_t> & ne, enum ggml_v2_type type) {
     size_t size = ggml_v2_type_size(type);
     for (uint32_t dim : ne) {
-        size = checked_mul<size_t>(size, dim);
+        size = checked_mul2<size_t>(size, dim);
     }
     return size / ggml_v2_blck_size(type);
 }
@@ -322,9 +322,9 @@ struct llama_v2_load_tensor_shard {
 };
 
 enum llama_v2_split_type {
-    SPLIT_NONE,
-    SPLIT_BY_COLUMNS,
-    SPLIT_BY_ROWS
+    SPLIT_NONE_2,
+    SPLIT_BY_COLUMNS_2,
+    SPLIT_BY_ROWS_2
 };
 
 struct llama_v2_load_tensor {
@@ -332,7 +332,7 @@ struct llama_v2_load_tensor {
 
     std::string name;
     enum ggml_v2_type type = GGML_V2_TYPE_F32;
-    llama_v2_split_type split_type = SPLIT_NONE;
+    llama_v2_split_type split_type = SPLIT_NONE_2;
     std::vector<uint32_t> ne;
     size_t size;
     struct ggml_v2_tensor * ggml_v2_tensor = NULL;
@@ -360,13 +360,13 @@ struct llama_v2_load_tensor {
     void calc_split_type() {
         if (shards.at(0).ne.size() == 1 || // 1D tensors are just duplicated in every file
             shards.size() == 1) { // only one file?
-            split_type = SPLIT_NONE;
+            split_type = SPLIT_NONE_2;
         } else if (name.find("tok_embeddings.") == 0 ||
             name.find(".attention.wo.weight") != std::string::npos ||
             name.find(".feed_forward.w2.weight") != std::string::npos) {
-            split_type = SPLIT_BY_COLUMNS;
+            split_type = SPLIT_BY_COLUMNS_2;
         } else {
-            split_type = SPLIT_BY_ROWS;
+            split_type = SPLIT_BY_ROWS_2;
         }
     }
 
@@ -382,16 +382,16 @@ struct llama_v2_load_tensor {
         LLAMA_V2_ASSERT(shards.size() <= UINT32_MAX);
         uint32_t n_shards = (uint32_t) shards.size();
         switch (split_type) {
-            case SPLIT_NONE:
+            case SPLIT_NONE_2:
                 ne = first_shard.ne;
                 break;
-            case SPLIT_BY_COLUMNS:
-                ne = {checked_mul<uint32_t>(first_shard.ne[0], n_shards),
+            case SPLIT_BY_COLUMNS_2:
+                ne = {checked_mul2<uint32_t>(first_shard.ne[0], n_shards),
                       first_shard.ne[1]};
                 break;
-            case SPLIT_BY_ROWS:
+            case SPLIT_BY_ROWS_2:
                 ne = {first_shard.ne[0],
-                      checked_mul<uint32_t>(first_shard.ne[1], n_shards)};
+                      checked_mul2<uint32_t>(first_shard.ne[1], n_shards)};
                 break;
         }
     }
@@ -737,11 +737,11 @@ struct llama_v2_model_loader {
         if (use_mmap) {
             LLAMA_V2_ASSERT(lt.shards.size() == 1);
             lt.data = (uint8_t *) mapping->addr + lt.shards.at(0).file_off;
-        } else if (lt.split_type == SPLIT_NONE) {
+        } else if (lt.split_type == SPLIT_NONE_2) {
             llama_v2_file & file = file_loaders.at(lt.shards.at(0).file_idx)->file;
             file.seek(lt.shards.at(0).file_off, SEEK_SET);
             file.read_raw(lt.data, lt.size);
-        } else if (lt.split_type == SPLIT_BY_ROWS) {
+        } else if (lt.split_type == SPLIT_BY_ROWS_2) {
             size_t offset = 0;
             for (llama_v2_load_tensor_shard & shard : lt.shards) {
                 llama_v2_file & file = file_loaders.at(shard.file_idx)->file;
@@ -750,7 +750,7 @@ struct llama_v2_model_loader {
                 offset += shard.size;
             }
             LLAMA_V2_ASSERT(offset == lt.size);
-        } else if (lt.split_type == SPLIT_BY_COLUMNS) {
+        } else if (lt.split_type == SPLIT_BY_COLUMNS_2) {
             // Let's load the data into temporary buffers to ensure the OS performs large loads.
             std::vector<llama_v2_buffer> tmp_bufs(lt.shards.size());
             for (size_t i = 0; i < lt.shards.size(); i++) {
@@ -807,7 +807,7 @@ static bool kv_cache_init(
     const int64_t n_mem      = n_layer*n_ctx;
     const int64_t n_elements = n_embd*n_mem;
 
-    cache.buf.resize(2u*n_elements*ggml_v2_type_size(wtype) + 2u*MB);
+    cache.buf.resize(2u*n_elements*ggml_v2_type_size(wtype) + 2u*MB_2);
 
     struct ggml_v2_init_params params;
     params.mem_size   = cache.buf.size;
@@ -888,12 +888,12 @@ static const char *llama_v2_ftype_name(enum llama_v2_ftype ftype) {
     }
 }
 
-static const char *llama_v2_model_type_name(e_model type) {
+static const char *llama_v2_model_type_name(e_model2 type) {
     switch (type) {
-        case MODEL_7B: return "7B";
-        case MODEL_13B: return "13B";
-        case MODEL_30B: return "30B";
-        case MODEL_65B: return "65B";
+        case MODEL_7B_2: return "7B";
+        case MODEL_13B_2: return "13B";
+        case MODEL_30B_2: return "30B";
+        case MODEL_65B_2: return "65B";
         default: 
             printf("\nWARNING: NON-STANDARD LLAMA FILE DETECTED. DEFAULT TO 7B SIZE.\n");
             return "UNKNOWN";
@@ -925,11 +925,11 @@ static void llama_v2_model_load_internal(
 
     {
         switch (hparams.n_layer) {
-            case 32: model.type = e_model::MODEL_7B; break;
-            case 40: model.type = e_model::MODEL_13B; break;
-            case 60: model.type = e_model::MODEL_30B; break;
-            case 80: model.type = e_model::MODEL_65B; break;
-            default: model.type = e_model::MODEL_UNKNOWN; break;
+            case 32: model.type = e_model2::MODEL_7B_2; break;
+            case 40: model.type = e_model2::MODEL_13B_2; break;
+            case 60: model.type = e_model2::MODEL_30B_2; break;
+            case 80: model.type = e_model2::MODEL_65B_2; break;
+            default: model.type = e_model2::MODEL_UNKNOWN_2; break;
         }
 
         hparams.n_ctx = n_ctx;
@@ -985,13 +985,13 @@ static void llama_v2_model_load_internal(
         const size_t mem_required =
             ctx_size +
             mmapped_size +
-            MEM_REQ_SCRATCH0().at(model.type) +
-            MEM_REQ_SCRATCH1().at(model.type) +
-            MEM_REQ_EVAL().at(model.type);
+            MEM_REQ_SCRATCH0_2().at(model.type) +
+            MEM_REQ_SCRATCH1_2().at(model.type) +
+            MEM_REQ_EVAL_2().at(model.type);
 
         // this is the memory required by one llama_v2_state
         const size_t mem_required_state =
-            scale*MEM_REQ_KV_SELF().at(model.type);
+            scale*MEM_REQ_KV_SELF_2().at(model.type);
 
         fprintf(stderr, "%s: mem required  = %7.2f MB (+ %7.2f MB per state)\n", __func__,
                 mem_required / 1024.0 / 1024.0, mem_required_state / 1024.0 / 1024.0);
@@ -1462,7 +1462,7 @@ static bool llama_v2_eval_internal(
 // tokenizer
 //
 
-static size_t utf8_len(char src) {
+static size_t utf8_len2(char src) {
     const size_t lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4 };
     uint8_t highbits = static_cast<uint8_t>(src) >> 4;
     return lookup[highbits];
@@ -1503,7 +1503,7 @@ struct llama_v2_tokenizer {
         size_t offs = 0;
         while (offs < text.size()) {
             llama_v2_sp_symbol sym;
-            size_t char_len = std::min(text.size() - offs, utf8_len(text[offs]));
+            size_t char_len = std::min(text.size() - offs, utf8_len2(text[offs]));
             sym.text = text.c_str() + offs;
             sym.n = char_len;
             offs += char_len;
@@ -2251,10 +2251,10 @@ struct llama_v2_context * llama_v2_init_from_file(
             ctx->embedding.resize(hparams.n_embd);
         }
 
-        ctx->buf_compute.resize(MEM_REQ_EVAL().at(ctx->model.type));
+        ctx->buf_compute.resize(MEM_REQ_EVAL_2().at(ctx->model.type));
 
-        ctx->buf_scratch[0].resize(MEM_REQ_SCRATCH0().at(ctx->model.type));
-        ctx->buf_scratch[1].resize(MEM_REQ_SCRATCH1().at(ctx->model.type));
+        ctx->buf_scratch[0].resize(MEM_REQ_SCRATCH0_2().at(ctx->model.type));
+        ctx->buf_scratch[1].resize(MEM_REQ_SCRATCH1_2().at(ctx->model.type));
     }
 
     return ctx;
@@ -3075,6 +3075,16 @@ int legacy_llama_v2_tokenize(
 std::vector<llama_v2_token> legacy_llama_v2_tokenize(struct llama_v2_context * ctx, const std::string & text, bool add_bos) {
     std::vector<llama_v2_token> res(8096);
     int n = legacy_llama_v2_tokenize(ctx, text.c_str(), res.data(), res.size(), add_bos);
+    res.resize(n);
+
+    return res;
+}
+
+std::vector<llama_token> llama_v2_tokenize(struct llama_v2_context * ctx, const std::string & text, bool add_bos) {
+    // initialize to prompt numer of chars, since n_tokens <= n_prompt_chars
+    std::vector<llama_token> res(text.size() + (int) add_bos);
+    const int n = llama_v2_tokenize(ctx, text.c_str(), res.data(), res.size(), add_bos);
+    assert(n >= 0);
     res.resize(n);
 
     return res;
