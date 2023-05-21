@@ -1107,8 +1107,8 @@ struct ggml_tensor * cross_entropy_loss(struct ggml_context * ctx, struct ggml_t
             ggml_mul(ctx,
                 probs,
                 ggml_log(ctx,
-                    ggml_add1(ctx,
-                        ggml_scale(ctx,
+                    ggml_add1_inplace(ctx,
+                        ggml_scale_inplace(ctx,
                             ggml_soft_max(ctx, a),
                             ggml_new_f32(ctx, 1.0f-eps)),
                         ggml_new_f32(ctx, eps)))));
