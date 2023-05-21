@@ -2109,10 +2109,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         bool needShuffle = (model_loader->file_loaders.at(0)->file_version == LLAMA_FILE_VERSION_GGJT_V1);
 
         if (model_loader->file_loaders.at(0)->file_version < LLAMA_FILE_VERSION_GGJT_V3 && quantize) {
-            if ((quantized_type == tensor.type) && 
-            (tensor.type == GGML_TYPE_Q4_0 || tensor.type == GGML_TYPE_Q4_1 
-            || tensor.type == GGML_TYPE_Q5_0 || tensor.type == GGML_TYPE_Q5_1
-            || tensor.type == GGML_TYPE_Q8_0)) {
+            if ((quantized_type == tensor.type) &&
+                (tensor.type == GGML_TYPE_Q4_0 || tensor.type == GGML_TYPE_Q4_1 || tensor.type == GGML_TYPE_Q5_0 || tensor.type == GGML_TYPE_Q5_1 || tensor.type == GGML_TYPE_Q8_0)) {
                 // convet
                 new_type = tensor.type;
                 new_data = tensor.data;

@@ -920,7 +920,6 @@ void quantize_upgrade(enum ggml_type type, void* data, size_t * size, bool shuff
         block_q8_0_old *blk = (block_q8_0_old *)data;
         block_q8_0 *new_blk = (block_q8_0 *)data;
         block_q8_0 new_blk_buf;
-        
         *size = nb * sizeof(block_q8_0);
 
         for (size_t i = 0; i < nb ; i++) {
