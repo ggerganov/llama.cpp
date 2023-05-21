@@ -48,7 +48,6 @@ model = LlamaForCausalLM.from_pretrained(
     device_map={"": "cpu"},
 )
 
-
 # peft loaded. load lora.
 model = PeftModel.from_pretrained(
     model,
