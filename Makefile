@@ -133,14 +133,16 @@ ifdef LLAMA_CUBLAS
 	OBJS      += ggml-cuda.o
 	NVCC      = nvcc
 	NVCCFLAGS = --forward-unknown-to-host-compiler -arch=native
+ifdef LLAMA_CUDA_BX
+	NVCCFLAGS += -DGGML_CUDA_DMMV_BLOCK_X=$(LLAMA_CUDA_BX)
+else
+	NVCCFLAGS += -DGGML_CUDA_DMMV_BLOCK_X=32
+endif # LLAMA_CUDA_BY
 ifdef LLAMA_CUDA_BY
 	NVCCFLAGS += -DGGML_CUDA_DMMV_BLOCK_Y=$(LLAMA_CUDA_BY)
 else
 	NVCCFLAGS += -DGGML_CUDA_DMMV_BLOCK_Y=1
 endif # LLAMA_CUDA_BY
-ifdef LLAMA_CUDA_UNROLL
-	NVCCFLAGS += -DGGML_CUDA_UNROLL=$(LLAMA_CUDA_UNROLL)
-endif # LLAMA_CUDA_UNROLL
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -Wno-pedantic -c $< -o $@
 endif # LLAMA_CUBLAS
