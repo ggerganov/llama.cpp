@@ -22,7 +22,7 @@ parser.add_argument(
     "--lora_path",
     type=str,
     default="decapoda-research/lora",
-    help="Directory contain Lora ",
+    help="Directory contain Lora",
 )
 # The output dir
 parser.add_argument(
