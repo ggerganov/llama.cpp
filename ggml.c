@@ -76,6 +76,11 @@ static int sched_yield (void) {
 #include <stdatomic.h>
 
 typedef void* thread_ret_t;
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #endif
 
 // __FMA__ and __F16C__ are not defined in MSVC, however they are implied with AVX2/AVX512
@@ -102,6 +107,30 @@ typedef void* thread_ret_t;
 
 #define GGML_SOFT_MAX_UNROLL 4
 #define GGML_VEC_DOT_UNROLL  2
+
+//
+// logging
+//
+
+#if (GGML_DEBUG >= 1)
+#define GGML_PRINT_DEBUG(...) printf(__VA_ARGS__)
+#else
+#define GGML_PRINT_DEBUG(...)
+#endif
+
+#if (GGML_DEBUG >= 5)
+#define GGML_PRINT_DEBUG_5(...) printf(__VA_ARGS__)
+#else
+#define GGML_PRINT_DEBUG_5(...)
+#endif
+
+#if (GGML_DEBUG >= 10)
+#define GGML_PRINT_DEBUG_10(...) printf(__VA_ARGS__)
+#else
+#define GGML_PRINT_DEBUG_10(...)
+#endif
+
+#define GGML_PRINT(...) printf(__VA_ARGS__)
 
 #ifdef GGML_USE_ACCELERATE
 // uncomment to use vDSP for soft max computation
@@ -395,7 +424,6 @@ void ggml_fp32_to_fp16_row(const float * x, ggml_fp16_t * y, size_t n) {
     }
 }
 
-
 //
 // timing
 //
@@ -451,6 +479,85 @@ int64_t ggml_cycles_per_ms(void) {
 #define ggml_perf_cycles()        0
 #define ggml_perf_cycles_per_ms() 0
 #endif
+
+//
+// NUMA support
+//
+
+struct ggml_numa_node
+{
+    uint32_t *cpus; // hardware threads on this node
+    uint32_t n_cpus;
+};
+
+struct ggml_numa_nodes
+{
+    struct ggml_numa_node *nodes;
+    uint32_t n_nodes;
+    uint32_t total_cpus; // hardware threads on system
+};
+
+struct ggml_numa_nodes ggml_numa = {
+    .nodes = NULL,
+    .n_nodes = 0,
+    .total_cpus = 0,
+};
+
+void ggml_numa_init(void)
+{
+    if (ggml_numa.n_nodes > 0) return;
+#ifdef __linux__
+    struct stat st;
+    char path[256];
+    int rv;
+    // enumerate nodes
+    while (true) {
+        rv = snprintf(path, sizeof(path), "/sys/devices/system/node/node%u", ggml_numa.n_nodes);
+        GGML_ASSERT(rv > 0 && (unsigned)rv < sizeof(path));
+        if (stat(path, &st) != 0) break;
+        ++ggml_numa.n_nodes;
+    }
+    // enumerate CPUs
+    while (true) {
+        rv = snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%u", ggml_numa.total_cpus);
+        GGML_ASSERT(rv > 0 && (unsigned)rv < sizeof(path));
+        if (stat(path, &st) != 0) break;
+        ++ggml_numa.total_cpus;
+    }
+    GGML_PRINT_DEBUG("found %u numa nodes, %u CPUs\n", ggml_numa.n_nodes, ggml_numa.total_cpus);
+    ggml_numa.nodes = calloc(ggml_numa.n_nodes, sizeof(struct ggml_numa_node));
+    GGML_ASSERT(ggml_numa.nodes != NULL);
+    for (uint32_t n = 0; n < ggml_numa.n_nodes; ++n) {
+        struct ggml_numa_node *node = &ggml_numa.nodes[n];
+        node->cpus = calloc(ggml_numa.total_cpus, sizeof(uint32_t));
+        GGML_ASSERT(node->cpus != NULL);
+        GGML_PRINT_DEBUG("CPUs on node %u:", n);
+        for (uint32_t c = 0; c < ggml_numa.total_cpus; ++c) {
+            rv = snprintf(path, sizeof(path), "/sys/devices/system/node/node%u/cpu%u", n, c);
+            GGML_ASSERT(rv > 0 && (unsigned)rv < sizeof(path));
+            if (stat(path, &st) == 0) {
+                node->cpus[node->n_cpus++] = c;
+                GGML_PRINT_DEBUG(" %u", c);
+            }
+        }
+        GGML_PRINT_DEBUG("\n");
+    }
+    if (ggml_is_numa()) {
+        FILE *fptr = fopen("/proc/sys/kernel/numa_balancing", "r");
+        if (fptr != NULL) {
+            char buf[42];
+            if (fgets(buf, sizeof(buf), fptr) && strncmp(buf, "0\n", sizeof(buf)) != 0) {
+                GGML_PRINT("WARNING: /proc/sys/kernel/numa_balancing is enabled, this has been observed to impair performance\n");
+            }
+            fclose(fptr);
+        }
+    }
+#else
+    // TODO
+#endif
+}
+
+bool ggml_is_numa(void) { return ggml_numa.n_nodes > 1; }
 
 //
 // cache line
@@ -3404,30 +3511,6 @@ inline static void ggml_vec_norm_inv_f32(const int n, float * s, const float * x
     ggml_vec_norm_f32(n, s, x);
     *s = 1.f/(*s);
 }
-
-//
-// logging
-//
-
-#if (GGML_DEBUG >= 1)
-#define GGML_PRINT_DEBUG(...) printf(__VA_ARGS__)
-#else
-#define GGML_PRINT_DEBUG(...)
-#endif
-
-#if (GGML_DEBUG >= 5)
-#define GGML_PRINT_DEBUG_5(...) printf(__VA_ARGS__)
-#else
-#define GGML_PRINT_DEBUG_5(...)
-#endif
-
-#if (GGML_DEBUG >= 10)
-#define GGML_PRINT_DEBUG_10(...) printf(__VA_ARGS__)
-#else
-#define GGML_PRINT_DEBUG_10(...)
-#endif
-
-#define GGML_PRINT(...) printf(__VA_ARGS__)
 
 //
 // data types
@@ -13966,6 +14049,49 @@ typedef pthread_t ggml_thread_t;
 
 #endif
 
+#ifdef __linux__
+void set_numa_thread_affinity(int thread_n, int n_threads)
+{
+    if (!ggml_is_numa()) return;
+    // run thread on node_num thread_n / (threads per node)
+    int node_num = thread_n / (n_threads / ggml_numa.n_nodes);
+    struct ggml_numa_node *node = &ggml_numa.nodes[node_num];
+    size_t setsize = CPU_ALLOC_SIZE(ggml_numa.total_cpus);
+    cpu_set_t *cpus = CPU_ALLOC(ggml_numa.total_cpus);
+    CPU_ZERO_S(setsize, cpus);
+    for (size_t i=0; i < node->n_cpus; ++i) {
+        CPU_SET_S(node->cpus[i], setsize, cpus);
+    }
+    int rv;
+    if ((rv = pthread_setaffinity_np(pthread_self(), setsize, cpus))) {
+            fprintf(stderr, "warning: pthread_setaffinity_np() failed: %s\n",
+                    strerror(rv));
+    }
+    CPU_FREE(cpus);
+}
+void clear_numa_thread_affinity(void)
+{
+    if (!ggml_is_numa()) return;
+    size_t setsize = CPU_ALLOC_SIZE(ggml_numa.total_cpus);
+    cpu_set_t *cpus = CPU_ALLOC(ggml_numa.total_cpus);
+    CPU_ZERO_S(setsize, cpus);
+    for (unsigned i=0; i < ggml_numa.total_cpus; ++i) {
+        CPU_SET_S(i, setsize, cpus);
+    }
+    int rv;
+    if((rv = pthread_setaffinity_np(pthread_self(), setsize, cpus))) {
+        fprintf(stderr, "warning: pthread_setaffinity_np() failed: %s\n",
+            strerror(rv));
+    }
+    CPU_FREE(cpus);
+}
+#else
+// TODO: Windows etc.
+// (the linux implementation may also work on BSD, someone should test)
+void set_numa_thread_affinity(int thread_n, int n_threads) { UNUSED(thread_n); UNUSED(n_threads);  }
+void clear_numa_thread_affinity(int thread_n, int n_threads) { UNUSED(thread_n); UNUSED(n_threads); }
+#endif
+
 struct ggml_compute_state_shared {
     ggml_lock_t spin;
 
@@ -13990,6 +14116,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
     struct ggml_compute_state * state = (struct ggml_compute_state *) data;
 
     const int n_threads = state->shared->n_threads;
+    set_numa_thread_affinity(state->params.ith, n_threads);
 
     while (true) {
         if (atomic_fetch_add(&state->shared->n_ready, 1) == n_threads - 1) {

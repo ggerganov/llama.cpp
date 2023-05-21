@@ -851,6 +851,7 @@ bool llama_mlock_supported() {
 
 void llama_init_backend() {
     ggml_time_init();
+    ggml_numa_init();
 
     // needed to initialize f16 tables
     {
