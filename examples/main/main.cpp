@@ -134,8 +134,6 @@ int main(int argc, char ** argv) {
         return 0;
     }
 
-    // Add a space in front of the first character to match OG llama tokenizer behavior
-    params.prompt.insert(0, 1, ' ');
 
     std::string path_session = params.path_prompt_cache;
     std::vector<llama_token> session_tokens;
@@ -155,6 +153,9 @@ int main(int argc, char ** argv) {
                 return 1;
             }
             session_tokens.resize(n_token_count_out);
+            if (params.seed != -1) {
+                llama_set_rng_seed(ctx, params.seed);
+            }
 
             fprintf(stderr, "%s: loaded a session with prompt size of %d tokens\n", __func__, (int) session_tokens.size());
         } else {
@@ -163,7 +164,16 @@ int main(int argc, char ** argv) {
     }
 
     // tokenize the prompt
-    auto embd_inp = ::llama_tokenize(ctx, params.prompt, true);
+    std::vector<llama_token> embd_inp;
+
+    if (params.prompt.size() > 0 || session_tokens.size() == 0) {
+        // Add a space in front of the first character to match OG llama tokenizer behavior
+        params.prompt.insert(0, 1, ' ');
+
+        embd_inp = ::llama_tokenize(ctx, params.prompt, true);
+    } else {
+        embd_inp = session_tokens;
+    }
 
     const int n_ctx = llama_n_ctx(ctx);
 
