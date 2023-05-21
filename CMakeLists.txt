@@ -322,6 +322,6 @@ target_compile_features(${TARGET} PUBLIC cxx_std_11) # don't bump
 set_target_properties(${TARGET} PROPERTIES PREFIX "")
 set_target_properties(${TARGET} PROPERTIES OUTPUT_NAME "koboldcpp")
 set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_link_libraries(${TARGET} PUBLIC ggml ggml_v1 common2 gpttype_adapter ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(${TARGET} PUBLIC ggml ggml_v1 ggml_v2 common2 gpttype_adapter ${CMAKE_THREAD_LIBS_INIT})
 target_compile_features(${TARGET} PRIVATE cxx_std_11)
 

@@ -3893,7 +3893,7 @@ struct ggml_v2_context * ggml_v2_init(struct ggml_v2_init_params params) {
         }
 
 #if defined(GGML_USE_CUBLAS)
-        ggml_v2_init_cublas();
+        ggml_init_cublas();
 #elif defined(GGML_USE_CLBLAST)
         if(quants_unshuffled)
         {
@@ -9447,9 +9447,9 @@ static void ggml_v2_compute_forward_mul_mat_f32(
     //   compute by src0 rows
 
 #if defined(GGML_USE_CUBLAS)
-    if (ggml_v2_cuda_can_mul_mat(src0, src1, dst)) {
+    if (ggml_cuda_can_mul_mat(src0, src1, dst)) {
         if (params->ith == 0 && params->type == GGML_V2_TASK_COMPUTE) {
-            ggml_v2_cuda_mul_mat(src0, src1, dst, params->wdata, params->wsize);
+            ggml_cuda_mul_mat(src0, src1, dst, params->wdata, params->wsize);
         }
         return;
     }
@@ -9641,9 +9641,9 @@ static void ggml_v2_compute_forward_mul_mat_f16_f32(
     //   compute by src0 rows
 
 #if defined(GGML_USE_CUBLAS)
-    if (ggml_v2_cuda_can_mul_mat(src0, src1, dst)) {
+    if (ggml_cuda_can_mul_mat(src0, src1, dst)) {
         if (params->ith == 0 && params->type == GGML_V2_TASK_COMPUTE) {
-            ggml_v2_cuda_mul_mat(src0, src1, dst, params->wdata, params->wsize);
+            ggml_cuda_mul_mat(src0, src1, dst, params->wdata, params->wsize);
         }
         return;
     }
@@ -9880,9 +9880,9 @@ static void ggml_v2_compute_forward_mul_mat_q_f32(
     //   compute by src0 rows
 
 #if defined(GGML_USE_CUBLAS)
-    if (ggml_v2_cuda_can_mul_mat(src0, src1, dst)) {
+    if (ggml_cuda_can_mul_mat(src0, src1, dst)) {
         if (params->ith == 0 && params->type == GGML_V2_TASK_COMPUTE) {
-            ggml_v2_cuda_mul_mat(src0, src1, dst, params->wdata, params->wsize);
+            ggml_cuda_mul_mat(src0, src1, dst, params->wdata, params->wsize);
         }
         return;
     }
@@ -14060,10 +14060,10 @@ void ggml_v2_graph_compute(struct ggml_v2_context * ctx, struct ggml_v2_cgraph *
                         size_t cur = 0;
 
 #if defined(GGML_USE_CUBLAS)
-                        if (ggml_v2_cuda_can_mul_mat(node->src0, node->src1, node)) {
+                        if (ggml_cuda_can_mul_mat(node->src0, node->src1, node)) {
                             node->n_tasks = 1; // TODO: this actually is doing nothing
                                                 //       the threads are still spinning
-                            cur = ggml_v2_cuda_mul_mat_get_wsize(node->src0, node->src1, node);
+                            cur = ggml_cuda_mul_mat_get_wsize(node->src0, node->src1, node);
                         }
                         else
 #elif defined(GGML_USE_CLBLAST)
