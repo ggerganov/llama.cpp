@@ -1081,12 +1081,68 @@ extern "C" {
         } lbfgs;
     };
 
+    struct ggml_opt_context {
+        struct ggml_context * ctx;
+        struct ggml_opt_params params;
+
+        int iter;
+        int64_t nx; // number of parameter elements
+
+        bool just_initialized;
+
+        struct {
+            struct ggml_tensor * x;  // view of the parameters
+            struct ggml_tensor * g1; // gradient
+            struct ggml_tensor * g2; // gradient squared
+            struct ggml_tensor * m;  // first moment
+            struct ggml_tensor * v;  // second moment
+            struct ggml_tensor * mh; // first moment hat
+            struct ggml_tensor * vh; // second moment hat
+            struct ggml_tensor * pf; // past function values
+            float fx_best;
+            float fx_prev;
+            int n_no_improvement;
+        } adam;
+
+        struct {
+            struct ggml_tensor * x;    // current parameters
+            struct ggml_tensor * xp;   // previous parameters
+            struct ggml_tensor * g;    // current gradient
+            struct ggml_tensor * gp;   // previous gradient
+            struct ggml_tensor * d;    // search direction
+            struct ggml_tensor * pf;   // past function values
+            struct ggml_tensor * lmal; // the L-BFGS memory alpha
+            struct ggml_tensor * lmys; // the L-BFGS memory ys
+            struct ggml_tensor * lms;  // the L-BFGS memory s
+            struct ggml_tensor * lmy;  // the L-BFGS memory y
+            float fx_best;
+            float step;
+            int j;
+            int k;
+            int end;
+            int n_no_improvement;
+        } lbfgs;
+    };
+
     GGML_API struct ggml_opt_params ggml_opt_default_params(enum ggml_opt_type type);
 
     // optimize the function defined by the tensor f
     GGML_API enum ggml_opt_result ggml_opt(
             struct ggml_context * ctx,
             struct ggml_opt_params params,
+            struct ggml_tensor * f);
+
+    // initialize optimizer context
+    GGML_API void ggml_opt_init(
+            struct ggml_context * ctx,
+            struct ggml_opt_context * opt,
+            struct ggml_opt_params params,
+            int64_t nx);
+
+    // continue optimizing the function defined by the tensor f
+    GGML_API enum ggml_opt_result ggml_opt_resume(
+            struct ggml_context * ctx,
+            struct ggml_opt_context * opt,
             struct ggml_tensor * f);
 
     //

@@ -14577,6 +14577,7 @@ static void ggml_opt_get_grad(int np, struct ggml_tensor * const ps[], float * g
 
 static enum ggml_opt_result ggml_opt_adam(
         struct ggml_context * ctx,
+        struct ggml_opt_context * opt,
         struct ggml_opt_params params,
         struct ggml_tensor * f,
         struct ggml_cgraph * gf,
@@ -14602,6 +14603,12 @@ static enum ggml_opt_result ggml_opt_adam(
         }
     }
 
+    if ((opt->params.type != params.type) || (opt->nx != nx) || (opt->params.past != params.past)) {
+        int iter = opt->iter;
+        ggml_opt_init(opt->ctx, opt, params, nx);
+        opt->iter = iter;
+    }
+
     // constants
     const float sched = params.adam.sched;
     const float decay = params.adam.decay * sched;
@@ -14610,19 +14617,15 @@ static enum ggml_opt_result ggml_opt_adam(
     const float beta2 = params.adam.beta2;
     const float eps   = params.adam.eps;
 
-    float * x  = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx)->data; // view of the parameters
-    float * g1 = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx)->data; // gradient
-    float * g2 = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx)->data; // gradient squared
-    float * m  = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx)->data; // first moment
-    float * v  = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx)->data; // second moment
-    float * mh = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx)->data; // first moment hat
-    float * vh = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx)->data; // second moment hat
+    float * x  = opt->adam.x->data;  // view of the parameters
+    float * g1 = opt->adam.g1->data; // gradient
+    float * g2 = opt->adam.g2->data; // gradient squared
+    float * m  = opt->adam.m->data;  // first moment
+    float * v  = opt->adam.v->data;  // second moment
+    float * mh = opt->adam.mh->data; // first moment hat
+    float * vh = opt->adam.vh->data; // second moment hat
 
-    float * pf = params.past > 0 ? ggml_new_tensor_1d(ctx, GGML_TYPE_F32, params.past)->data : NULL; // past function values
-
-    // initialize
-    ggml_vec_set_f32(nx, m, 0.0f);
-    ggml_vec_set_f32(nx, v, 0.0f);
+    float * pf = params.past > 0 ? opt->adam.pf->data : NULL; // past function values
 
     // update view
     ggml_opt_get_params(np, ps, x);
@@ -14632,16 +14635,27 @@ static enum ggml_opt_result ggml_opt_adam(
     ggml_set_f32      (f->grad, 1.0f);
     ggml_graph_compute(ctx, gb);
 
-    float fx_prev = ggml_get_f32_1d(f, 0);
+    opt->adam.fx_prev = ggml_get_f32_1d(f, 0);
+    opt->adam.fx_best = opt->adam.fx_prev;
     if (pf) {
-        pf[0] = fx_prev;
+        pf[opt->iter % params.past] = opt->adam.fx_prev;
     }
 
-    int n_no_improvement = 0;
-    float fx_best = fx_prev;
+    // initialize
+    if (opt->just_initialized) {
+        opt->adam.n_no_improvement = 0;
+        opt->just_initialized = false;
+    }
+
+    float * fx_best = &opt->adam.fx_best;
+    float * fx_prev = &opt->adam.fx_prev;
+    int * n_no_improvement = &opt->adam.n_no_improvement;
+
+    int iter0 = opt->iter;
 
     // run the optimizer
     for (int t = 0; t < params.adam.n_iter; ++t) {
+        opt->iter = iter0 + t + 1;
         GGML_PRINT_DEBUG  ("=== iter %d ===\n", t);
 
         GGML_PRINT_DEBUG  ("f      = %10.6f\n", ggml_get_f32_1d(f, 0));
@@ -14683,8 +14697,8 @@ static enum ggml_opt_result ggml_opt_adam(
             ggml_vec_cpy_f32  (nx, mh, m);
             ggml_vec_cpy_f32  (nx, vh, v);
 
-            ggml_vec_scale_f32(nx, mh, alpha/(1.0f - powf(beta1, t + 1)));
-            ggml_vec_scale_f32(nx, vh,  1.0f/(1.0f - powf(beta2, t + 1)));
+            ggml_vec_scale_f32(nx, mh, alpha/(1.0f - powf(beta1, opt->iter)));
+            ggml_vec_scale_f32(nx, vh,  1.0f/(1.0f - powf(beta2, opt->iter)));
 
             ggml_vec_sqrt_f32 (nx, vh, vh);
             ggml_vec_acc1_f32 (nx, vh, eps);
@@ -14704,7 +14718,7 @@ static enum ggml_opt_result ggml_opt_adam(
         const float fx = ggml_get_f32_1d(f, 0);
 
         // check convergence
-        if (fabsf(fx - fx_prev)/fx < params.adam.eps_f) {
+        if (fabsf(fx - fx_prev[0])/fx < params.adam.eps_f) {
             GGML_PRINT_DEBUG("converged\n");
 
             return GGML_OPT_OK;
@@ -14713,32 +14727,32 @@ static enum ggml_opt_result ggml_opt_adam(
         // delta-based convergence test
         if (pf != NULL) {
             // need at least params.past iterations to start checking for convergence
-            if (params.past <= t) {
-                const float rate = (pf[t%params.past] - fx)/fx;
+            if (params.past <= iter0 + t) {
+                const float rate = (pf[(iter0 + t)%params.past] - fx)/fx;
 
                 if (fabsf(rate) < params.delta) {
                     return GGML_OPT_OK;
                 }
             }
 
-            pf[t%params.past] = fx;
+            pf[(iter0 + t)%params.past] = fx;
         }
 
         // check for improvement
         if (params.max_no_improvement > 0) {
-            if (fx_best > fx) {
-                fx_best = fx;
-                n_no_improvement = 0;
+            if (fx_best[0] > fx) {
+                fx_best[0] = fx;
+                n_no_improvement[0] = 0;
             } else {
-                ++n_no_improvement;
+                ++n_no_improvement[0];
 
-                if (n_no_improvement >= params.max_no_improvement) {
+                if (n_no_improvement[0] >= params.max_no_improvement) {
                     return GGML_OPT_OK;
                 }
             }
         }
 
-        fx_prev = fx;
+        fx_prev[0] = fx;
 
         {
             const int64_t t_end_cpu = ggml_cycles();
@@ -14877,6 +14891,7 @@ static enum ggml_opt_result linesearch_backtracking(
 
 static enum ggml_opt_result ggml_opt_lbfgs(
         struct ggml_context * ctx,
+        struct ggml_opt_context * opt,
         struct ggml_opt_params params,
         struct ggml_tensor * f,
         struct ggml_cgraph * gf,
@@ -14909,31 +14924,32 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         }
     }
 
-    float * x  = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx)->data; // current parameters
-    float * xp = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx)->data; // previous parameters
-    float * g  = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx)->data; // current gradient
-    float * gp = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx)->data; // previous gradient
-    float * d  = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx)->data; // search direction
+    if ((opt->params.type != params.type) || (opt->nx != nx) || (opt->params.past != params.past) || (opt->params.lbfgs.m != params.lbfgs.m)) {
+        int iter = opt->iter;
+        ggml_opt_init(ctx, opt, params, nx);
+        opt->iter = iter;
+    }
 
-    float * pf = params.past > 0 ? ggml_new_tensor_1d(ctx, GGML_TYPE_F32, params.past)->data : NULL; // past function values
+    float * x  = opt->lbfgs.x->data;  // current parameters
+    float * xp = opt->lbfgs.xp->data; // previous parameters
+    float * g  = opt->lbfgs.g->data;  // current gradient
+    float * gp = opt->lbfgs.gp->data; // previous gradient
+    float * d  = opt->lbfgs.d->data;  // search direction
+
+    float * pf = params.past > 0 ? opt->lbfgs.pf->data : NULL; // past function values
 
     float fx    = 0.0f; // cost function value
     float xnorm = 0.0f; // ||x||
     float gnorm = 0.0f; // ||g||
-    float step  = 0.0f;
 
     // initialize x from the graph nodes
     ggml_opt_get_params(np, ps, x);
 
     // the L-BFGS memory
-    struct ggml_lbfgs_iteration_data * lm = alloca(sizeof(struct ggml_lbfgs_iteration_data)*m);
-
-    for (int i = 0; i < m; ++i) {
-        lm[i].alpha = 0.0f;
-        lm[i].ys    = 0.0f;
-        lm[i].s     = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx)->data;
-        lm[i].y     = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx)->data;
-    }
+    float * lm_alpha = opt->lbfgs.lmal->data;
+    float * lm_ys    = opt->lbfgs.lmys->data;
+    float * lm_s     = opt->lbfgs.lms->data;
+    float * lm_y     = opt->lbfgs.lmy->data;
 
     // evaluate the function value and its gradient
     {
@@ -14947,12 +14963,6 @@ static enum ggml_opt_result ggml_opt_lbfgs(
 
         fx = ggml_get_f32_1d(f, 0);
     }
-
-    if (pf) {
-        pf[0] = fx;
-    }
-
-    float fx_best = fx;
 
     // search direction = -gradient
     ggml_vec_neg_f32(nx, d, g);
@@ -14970,26 +14980,43 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         return GGML_OPT_OK;
     }
 
-    // initial step
-    ggml_vec_norm_inv_f32(nx, &step, d);
+    if (opt->just_initialized) {
+        if (pf) {
+            pf[0] = fx;
+        }
+        opt->lbfgs.fx_best = fx;
 
-    int j                = 0;
-    int k                = 1;
-    int ls               = 0;
-    int end              = 0;
-    int bound            = 0;
-    int n_no_improvement = 0;
+        // initial step
+        ggml_vec_norm_inv_f32(nx, &opt->lbfgs.step, d);
+        opt->lbfgs.j                = 0;
+        opt->lbfgs.k                = 1;
+        opt->lbfgs.end              = 0;
+        opt->lbfgs.n_no_improvement = 0;
+        opt->just_initialized       = false;
+    }
+
+    float * fx_best        = &opt->lbfgs.fx_best;
+    float * step           = &opt->lbfgs.step;
+    int * j                = &opt->lbfgs.j;
+    int * k                = &opt->lbfgs.k;
+    int * end              = &opt->lbfgs.end;
+    int * n_no_improvement = &opt->lbfgs.n_no_improvement;
+
+    int ls     = 0;
+    int bound  = 0;
 
     float ys   = 0.0f;
     float yy   = 0.0f;
     float beta = 0.0f;
+
+    int it = 0;
 
     while (true) {
         // store the current position and gradient vectors
         ggml_vec_cpy_f32(nx, xp, x);
         ggml_vec_cpy_f32(nx, gp, g);
 
-        ls = linesearch_backtracking(ctx, &params, nx, x, &fx, g, d, &step, xp, f, gf, gb, np, ps);
+        ls = linesearch_backtracking(ctx, &params, nx, x, &fx, g, d, step, xp, f, gf, gb, np, ps);
 
         if (ls < 0) {
             // linesearch failed - go back to the previous point and return
@@ -15015,32 +15042,32 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         // delta-based convergence test
         if (pf != NULL) {
             // need at least params.past iterations to start checking for convergence
-            if (params.past <= k) {
-                const float rate = (pf[k%params.past] - fx)/fx;
+            if (params.past <= k[0]) {
+                const float rate = (pf[k[0]%params.past] - fx)/fx;
 
                 if (fabsf(rate) < params.delta) {
                     return GGML_OPT_OK;
                 }
             }
 
-            pf[k%params.past] = fx;
+            pf[k[0]%params.past] = fx;
         }
 
         // check for improvement
         if (params.max_no_improvement > 0) {
-            if (fx < fx_best) {
-                fx_best = fx;
-                n_no_improvement = 0;
+            if (fx < fx_best[0]) {
+                fx_best[0] = fx;
+                n_no_improvement[0] = 0;
             } else {
-                n_no_improvement++;
+                n_no_improvement[0]++;
 
-                if (n_no_improvement >= params.max_no_improvement) {
+                if (n_no_improvement[0] >= params.max_no_improvement) {
                     return GGML_OPT_OK;
                 }
             }
         }
 
-        if (params.lbfgs.n_iter != 0 && params.lbfgs.n_iter < k + 1) {
+        if (params.lbfgs.n_iter != 0 && params.lbfgs.n_iter < it + 1) {
             // reached the maximum number of iterations
             return GGML_OPT_DID_NOT_CONVERGE;
         }
@@ -15049,50 +15076,51 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         //   s_{k+1} = x_{k+1} - x_{k} = \step * d_{k}.
         //   y_{k+1} = g_{k+1} - g_{k}.
         //
-        ggml_vec_sub_f32(nx, lm[end].s, x, xp);
-        ggml_vec_sub_f32(nx, lm[end].y, g, gp);
+        ggml_vec_sub_f32(nx, &lm_s[end[0]*nx], x, xp);
+        ggml_vec_sub_f32(nx, &lm_y[end[0]*nx], g, gp);
 
         // compute scalars ys and yy:
         //     ys = y^t \cdot s    -> 1 / \rho.
         //     yy = y^t \cdot y.
         //
-        ggml_vec_dot_f32(nx, &ys, lm[end].y, lm[end].s);
-        ggml_vec_dot_f32(nx, &yy, lm[end].y, lm[end].y);
+        ggml_vec_dot_f32(nx, &ys, &lm_y[end[0]*nx], &lm_s[end[0] *nx]);
+        ggml_vec_dot_f32(nx, &yy, &lm_y[end[0]*nx], &lm_y[end[0]*nx]);
 
-        lm[end].ys = ys;
+        lm_ys[end[0]] = ys;
 
         // find new search direction
         //   ref: https://en.wikipedia.org/wiki/Limited-memory_BFGS
 
-        bound = (m <= k) ? m : k;
-        k++;
-        end = (end + 1)%m;
+        bound = (m <= k[0]) ? m : k[0];
+        k[0]++;
+        it++;
+        end[0] = (end[0] + 1)%m;
 
         // initialize search direction with -g
         ggml_vec_neg_f32(nx, d, g);
 
-        j = end;
+        j[0] = end[0];
         for (int i = 0; i < bound; ++i) {
-            j = (j + m - 1) % m;
+            j[0] = (j[0] + m - 1) % m;
             // \alpha_{j} = \rho_{j} s^{t}_{j} \cdot q_{k+1}
-            ggml_vec_dot_f32(nx, &lm[j].alpha, lm[j].s, d);
-            lm[j].alpha /= lm[j].ys;
+            ggml_vec_dot_f32(nx, &lm_alpha[j[0]], &lm_s[j[0]*nx], d);
+            lm_alpha[j[0]] /= lm_ys[j[0]];
             // q_{i} = q_{i+1} - \alpha_{i} y_{i}
-            ggml_vec_mad_f32(nx, d, lm[j].y, -lm[j].alpha);
+            ggml_vec_mad_f32(nx, d, &lm_y[j[0]*nx], -lm_alpha[j[0]]);
         }
 
         ggml_vec_scale_f32(nx, d, ys/yy);
 
         for (int i = 0; i < bound; ++i) {
             // \beta_{j} = \rho_{j} y^t_{j} \cdot \gamma_{i}
-            ggml_vec_dot_f32(nx, &beta, lm[j].y, d);
-            beta /= lm[j].ys;
+            ggml_vec_dot_f32(nx, &beta, &lm_y[j[0]*nx], d);
+            beta /= lm_ys[j[0]];
             // \gamma_{i+1} = \gamma_{i} + (\alpha_{j} - \beta_{j}) s_{j}
-            ggml_vec_mad_f32(nx, d, lm[j].s, lm[j].alpha - beta);
-            j = (j + 1)%m;
+            ggml_vec_mad_f32(nx, d, &lm_s[j[0]*nx], lm_alpha[j[0]] - beta);
+            j[0] = (j[0] + 1)%m;
         }
 
-        step = 1.0;
+        step[0] = 1.0;
     }
 
     return GGML_OPT_DID_NOT_CONVERGE;
@@ -15161,6 +15189,71 @@ struct ggml_opt_params ggml_opt_default_params(enum ggml_opt_type type) {
     return result;
 }
 
+GGML_API void ggml_opt_init(
+        struct ggml_context * ctx,
+        struct ggml_opt_context * opt,
+        struct ggml_opt_params params,
+        int64_t nx) {
+    opt->ctx = ctx;
+    opt->params = params;
+    opt->iter = 0;
+    opt->nx = nx;
+    opt->just_initialized = true;
+    switch (opt->params.type) {
+        case GGML_OPT_ADAM:
+            {
+                opt->adam.x  = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
+                opt->adam.g1 = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
+                opt->adam.g2 = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
+                opt->adam.m  = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
+                opt->adam.v  = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
+                opt->adam.mh = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
+                opt->adam.vh = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
+                opt->adam.pf = params.past > 0
+                    ? ggml_new_tensor_1d(ctx, GGML_TYPE_F32, params.past)
+                    : NULL;
+                ggml_set_zero(opt->adam.x);
+                ggml_set_zero(opt->adam.g1);
+                ggml_set_zero(opt->adam.g2);
+                ggml_set_zero(opt->adam.m);
+                ggml_set_zero(opt->adam.v);
+                ggml_set_zero(opt->adam.mh);
+                ggml_set_zero(opt->adam.vh);
+                if (opt->adam.pf) {
+                    ggml_set_zero(opt->adam.pf);
+                }
+            } break;
+        case GGML_OPT_LBFGS:
+            {
+                opt->lbfgs.x  = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
+                opt->lbfgs.xp = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
+                opt->lbfgs.g  = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
+                opt->lbfgs.gp = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
+                opt->lbfgs.d  = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
+                opt->lbfgs.pf = params.past > 0
+                    ? ggml_new_tensor_1d(ctx, GGML_TYPE_F32, params.past)
+                    : NULL;
+                opt->lbfgs.lmal = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, params.lbfgs.m);
+                opt->lbfgs.lmys = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, params.lbfgs.m);
+                opt->lbfgs.lms  = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, nx, params.lbfgs.m);
+                opt->lbfgs.lmy  = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, nx, params.lbfgs.m);
+                ggml_set_zero(opt->lbfgs.x);
+                ggml_set_zero(opt->lbfgs.xp);
+                ggml_set_zero(opt->lbfgs.g);
+                ggml_set_zero(opt->lbfgs.gp);
+                ggml_set_zero(opt->lbfgs.d);
+                ggml_set_zero(opt->lbfgs.pf);
+                if (opt->lbfgs.pf) {
+                    ggml_set_zero(opt->lbfgs.pf);
+                }
+                ggml_set_zero(opt->lbfgs.lmal);
+                ggml_set_zero(opt->lbfgs.lmys);
+                ggml_set_zero(opt->lbfgs.lms);
+                ggml_set_zero(opt->lbfgs.lmy);
+            } break;
+    }
+}
+
 enum ggml_opt_result ggml_opt(
         struct ggml_context * ctx,
         struct ggml_opt_params params,
@@ -15183,33 +15276,54 @@ enum ggml_opt_result ggml_opt(
 
     enum ggml_opt_result result = GGML_OPT_OK;
 
-    // build forward + backward compute graphs
-    struct ggml_cgraph gf = ggml_build_forward (f);
-    struct ggml_cgraph gb = ggml_build_backward(ctx, &gf, true);
+    struct ggml_opt_context * opt = (struct ggml_opt_context *) alloca(sizeof(struct ggml_opt_context));
 
-    switch (params.type) {
-        case GGML_OPT_ADAM:
-            {
-                result = ggml_opt_adam(ctx, params, f, &gf, &gb);
-            } break;
-        case GGML_OPT_LBFGS:
-            {
-                result = ggml_opt_lbfgs(ctx, params, f, &gf, &gb);
-            } break;
-    }
-
-    if (params.print_forward_graph) {
-        ggml_graph_print   (&gf);
-        ggml_graph_dump_dot(&gf, NULL, "opt-forward.dot");
-    }
-
-    if (params.print_backward_graph) {
-        ggml_graph_print   (&gb);
-        ggml_graph_dump_dot(&gb, &gf, "opt-backward.dot");
-    }
+    ggml_opt_init(ctx, opt, params, 0);
+    result = ggml_opt_resume(ctx, opt, f);
 
     if (free_ctx) {
         ggml_free(ctx);
+    }
+
+    return result;
+}
+
+enum ggml_opt_result ggml_opt_resume(
+        struct ggml_context * ctx,
+        struct ggml_opt_context * opt,
+        struct ggml_tensor * f) {
+
+    // build forward + backward compute graphs
+    struct ggml_tensor * gfbuf = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, sizeof(struct ggml_cgraph) / GGML_TYPE_SIZE[GGML_TYPE_I32]+ (sizeof(struct ggml_cgraph) % GGML_TYPE_SIZE[GGML_TYPE_I32] ? 1 : 0));
+    struct ggml_tensor * gbbuf = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, sizeof(struct ggml_cgraph) / GGML_TYPE_SIZE[GGML_TYPE_I32]+ (sizeof(struct ggml_cgraph) % GGML_TYPE_SIZE[GGML_TYPE_I32] ? 1 : 0));
+    
+    struct ggml_cgraph * gf = (struct ggml_cgraph *) gfbuf->data;
+    struct ggml_cgraph * gb = (struct ggml_cgraph *) gbbuf->data;
+
+    *gf = ggml_build_forward (f);
+    *gb = ggml_build_backward(ctx, gf, true);
+
+    enum ggml_opt_result result = GGML_OPT_OK;
+
+    switch (opt->params.type) {
+        case GGML_OPT_ADAM:
+            {
+                result = ggml_opt_adam(ctx, opt, opt->params, f, gf, gb);
+            } break;
+        case GGML_OPT_LBFGS:
+            {
+                result = ggml_opt_lbfgs(ctx, opt, opt->params, f, gf, gb);
+            } break;
+    }
+
+    if (opt->params.print_forward_graph) {
+        ggml_graph_print   (gf);
+        ggml_graph_dump_dot(gf, NULL, "opt-forward.dot");
+    }
+
+    if (opt->params.print_backward_graph) {
+        ggml_graph_print   (gb);
+        ggml_graph_dump_dot(gb, gf, "opt-backward.dot");
     }
 
     return result;
