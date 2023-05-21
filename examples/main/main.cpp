@@ -166,7 +166,7 @@ int main(int argc, char ** argv) {
     // tokenize the prompt
     std::vector<llama_token> embd_inp;
 
-    if (params.prompt.size() > 0 || session_tokens.size() == 0) {
+    if (!params.prompt.empty() || session_tokens.empty()) {
         // Add a space in front of the first character to match OG llama tokenizer behavior
         params.prompt.insert(0, 1, ' ');
 
