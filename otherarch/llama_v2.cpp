@@ -1071,17 +1071,17 @@ static void llama_v2_model_load_internal(
         for (int i = 0; i < n_gpu; ++i) {
             const auto & layer = model.layers[i];
 
-            ggml_v2_cuda_transform_tensor(layer.wq); vram_total += ggml_v2_nbytes(layer.wq);
-            ggml_v2_cuda_transform_tensor(layer.wk); vram_total += ggml_v2_nbytes(layer.wk);
-            ggml_v2_cuda_transform_tensor(layer.wv); vram_total += ggml_v2_nbytes(layer.wv);
-            ggml_v2_cuda_transform_tensor(layer.wo); vram_total += ggml_v2_nbytes(layer.wo);
-            ggml_v2_cuda_transform_tensor(layer.w1); vram_total += ggml_v2_nbytes(layer.w1);
-            ggml_v2_cuda_transform_tensor(layer.w2); vram_total += ggml_v2_nbytes(layer.w2);
-            ggml_v2_cuda_transform_tensor(layer.w3); vram_total += ggml_v2_nbytes(layer.w3);
+            ggml_cuda_transform_tensor(layer.wq); vram_total += ggml_v2_nbytes(layer.wq);
+            ggml_cuda_transform_tensor(layer.wk); vram_total += ggml_v2_nbytes(layer.wk);
+            ggml_cuda_transform_tensor(layer.wv); vram_total += ggml_v2_nbytes(layer.wv);
+            ggml_cuda_transform_tensor(layer.wo); vram_total += ggml_v2_nbytes(layer.wo);
+            ggml_cuda_transform_tensor(layer.w1); vram_total += ggml_v2_nbytes(layer.w1);
+            ggml_cuda_transform_tensor(layer.w2); vram_total += ggml_v2_nbytes(layer.w2);
+            ggml_cuda_transform_tensor(layer.w3); vram_total += ggml_v2_nbytes(layer.w3);
         }
         if (n_gpu_layers > (int) hparams.n_layer) {
             fprintf(stderr, "%s: [cublas] offloading output layer to GPU\n", __func__);
-            ggml_v2_cuda_transform_tensor(model.output); vram_total += ggml_v2_nbytes(model.output);
+            ggml_cuda_transform_tensor(model.output); vram_total += ggml_v2_nbytes(model.output);
         }
 
         fprintf(stderr, "%s: [cublas] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);

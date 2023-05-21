@@ -191,6 +191,14 @@ def generate(prompt,max_length=20, max_context_length=512,temperature=0.8,top_k=
         return ret.text.decode("UTF-8","ignore")
     return ""
 
+def utfprint(str):
+    try:
+        print(str)
+    except UnicodeEncodeError:
+        # Replace or omit the problematic character
+        utf_string = str.encode('ascii', 'ignore').decode('ascii')
+        print(utf_string)
+
 #################################################################
 ### A hacky simple HTTP server simulating a kobold api by Concedo
 ### we are intentionally NOT using flask, because we want MINIMAL dependencies
@@ -301,7 +309,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_response(503)
                 self.end_headers()
                 return
-            print("\nInput: " + json.dumps(genparams))
+            utfprint("\nInput: " + json.dumps(genparams))
 
             modelbusy = True
             if kai_api_flag:
@@ -327,7 +335,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     seed=-1,
                     stop_sequence=genparams.get('stop_sequence', [])
                     )
-                print("\nOutput: " + recvtxt)
+                utfprint("\nOutput: " + recvtxt)
                 res = {"results": [{"text": recvtxt}]}
             else:
                 recvtxt = generate(
@@ -343,7 +351,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     seed=-1,
                     stop_sequence=genparams.get('stop_sequence', [])
                     )
-                print("\nOutput: " + recvtxt)
+                utfprint("\nOutput: " + recvtxt)
                 res = {"data": {"seqs":[recvtxt]}}
 
             try:
