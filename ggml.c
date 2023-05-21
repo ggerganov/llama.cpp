@@ -856,10 +856,11 @@ void quantize_upgrade(enum ggml_type type, void* data, size_t * size, bool shuff
 
             new_blk_buf.d = GGML_FP32_TO_FP16(blk[i].d);
 
-            if (shuffle)
+            if (shuffle) {
                 quantize_shuffle_block(blk[i].qs, new_blk_buf.qs, qk/4);
-            else
+            } else {
                 memcpy(new_blk_buf.qs, blk[i].qs, qk / 2);
+            }
 
             memcpy(&new_blk[i], &new_blk_buf, sizeof(block_q4_0));
         }
@@ -875,10 +876,11 @@ void quantize_upgrade(enum ggml_type type, void* data, size_t * size, bool shuff
             new_blk_buf.d = GGML_FP32_TO_FP16(blk[i].d);
             new_blk_buf.m = GGML_FP32_TO_FP16(blk[i].m);
 
-            if (shuffle)
+            if (shuffle) {
                 quantize_shuffle_block(blk[i].qs, new_blk_buf.qs, qk/4);
-            else
+            } else {
                 memcpy(new_blk_buf.qs, blk[i].qs, qk / 2);
+            }
             memcpy(&new_blk[i], &new_blk_buf, sizeof(block_q4_1));
         }
     } else if (type == GGML_TYPE_Q5_0) {
@@ -889,10 +891,11 @@ void quantize_upgrade(enum ggml_type type, void* data, size_t * size, bool shuff
         block_q5_0 new_blk;
 
         for (size_t i = 0; i < nb ; i++) {
-            if (shuffle)
+            if (shuffle) {
                 quantize_shuffle_block(blk[i].qs, new_blk.qs, qk/4);
-            else
+            } else {
                 memcpy(new_blk.qs, blk[i].qs, qk / 2);
+            }
             memcpy(blk[i].qs, new_blk.qs, sizeof(new_blk.qs));
         }
     } else if (type == GGML_TYPE_Q5_1) {
@@ -903,10 +906,11 @@ void quantize_upgrade(enum ggml_type type, void* data, size_t * size, bool shuff
         block_q5_1 new_blk;
 
         for (size_t i = 0; i < nb ; i++) {
-            if (shuffle)
+            if (shuffle) {
                 quantize_shuffle_block(blk[i].qs, new_blk.qs, qk/4);
-            else
+            } else {
                 memcpy(new_blk.qs, blk[i].qs, qk / 2);
+            }
             memcpy(&blk[i], &new_blk, sizeof(new_blk));
         }
     } else if (type == GGML_TYPE_Q8_0) {

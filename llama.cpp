@@ -327,6 +327,8 @@ static size_t llama_calc_tensor_size_prev3(const std::vector<uint32_t> & ne, enu
         case GGML_TYPE_Q8_0:
             size += 2;
             break;
+        default:
+            break;
     }
 
     for (uint32_t dim : ne) {
@@ -343,10 +345,11 @@ struct llama_load_tensor_shard {
     size_t file_off;
 
     void calc_size(llama_file_version file_version) {
-        if (file_version == LLAMA_FILE_VERSION_GGJT_V3)
+        if (file_version == LLAMA_FILE_VERSION_GGJT_V3) {
             size = llama_calc_tensor_size(ne, type);
-        else
+        } else {
             size = llama_calc_tensor_size_prev3(ne, type);
+        }
     }
 };
 
@@ -426,10 +429,11 @@ struct llama_load_tensor {
     }
 
     void calc_size(llama_file_version file_version) {
-        if (file_version == LLAMA_FILE_VERSION_GGJT_V3)
+        if (file_version == LLAMA_FILE_VERSION_GGJT_V3) {
             size = llama_calc_tensor_size(ne, type);
-        else
+        } else {
             size = llama_calc_tensor_size_prev3(ne, type);
+        }
     }
 };
 
