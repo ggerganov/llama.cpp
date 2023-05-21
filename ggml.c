@@ -3698,6 +3698,12 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "f(x,y)",
 };
 
+// only send finalize op to thread pool if it actually does something
+// currently none of them?
+static const bool GGML_OP_HAS_FINALIZE[GGML_OP_COUNT] = {
+    0
+};
+
 static_assert(GGML_OP_COUNT == 51, "GGML_OP_COUNT != 51");
 
 static_assert(sizeof(struct ggml_object)%GGML_MEM_ALIGN == 0, "ggml_object size must be a multiple of GGML_MEM_ALIGN");
@@ -14541,7 +14547,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         }
 
         // FINALIZE
-        if (node->n_tasks > 1) {
+        if (node->n_tasks > 1 && GGML_OP_HAS_FINALIZE[node->op]) {
             if (atomic_fetch_add(&state_shared.n_ready, 1) == n_threads - 1) {
                 atomic_store(&state_shared.has_work, false);
             }
@@ -14577,7 +14583,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         ggml_compute_forward(&params, node);
 
         // wait for thread pool
-        if (node->n_tasks > 1) {
+        if (node->n_tasks > 1 && GGML_OP_HAS_FINALIZE[node->op]) {
             if (atomic_fetch_add(&state_shared.n_ready, 1) == n_threads - 1) {
                 atomic_store(&state_shared.has_work, false);
             }
