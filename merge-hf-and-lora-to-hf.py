@@ -29,7 +29,7 @@ parser.add_argument(
     "--out_path",
     type=str,
     default="decapoda-research/lora-merged",
-    help="Directory  store merged HF model",
+    help="Directory store merged HF model",
 )
 
 args = parser.parse_args()
