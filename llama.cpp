@@ -1882,6 +1882,10 @@ llama_token llama_sample_token_mirostat_v2(struct llama_context * ctx, llama_tok
         return -log2f(candidate.p) > *mu;
     }));
 
+    if (candidates->size == 0) {
+        candidates->size = 1;
+    }
+
     // Normalize the probabilities of the remaining words
     llama_sample_softmax(ctx, candidates);
 
