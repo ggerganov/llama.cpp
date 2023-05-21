@@ -14631,9 +14631,12 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
             fprintf(fp, "%s |", node->name);
         }
 
-        fprintf(fp, "%d [%" PRId64 ", %" PRId64 "] | <x>%s",
-                i, node->ne[0], node->ne[1],
-                GGML_OP_SYMBOL[node->op]);
+        if (node->n_dims == 2) {
+            fprintf(fp, "%d [%" PRId64 ", %" PRId64 "] | <x>%s", i, node->ne[0], node->ne[1], GGML_OP_SYMBOL[node->op]);
+        } else {
+            fprintf(fp, "%d [%" PRId64 ", %" PRId64 ", %" PRId64 "] | <x>%s", i, node->ne[0], node->ne[1], node->ne[2], GGML_OP_SYMBOL[node->op]);
+        }
+
 
         if (node->grad) {
             fprintf(fp, " | <g>%s\"; ]\n", GGML_OP_SYMBOL[node->grad->op]);
