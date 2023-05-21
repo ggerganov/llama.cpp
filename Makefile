@@ -245,6 +245,6 @@ benchmark-matmult: examples/benchmark/benchmark-matmult.cpp build-info.h ggml.o 
 vdot: pocs/vdot/vdot.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-.PHONY: tests
+.PHONY: tests clean
 tests:
 	bash ./tests/run-tests.sh
