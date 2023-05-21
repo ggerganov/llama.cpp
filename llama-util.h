@@ -163,6 +163,9 @@ static std::string llama_format_win_err(DWORD err) {
 }
 #endif
 
+extern "C" {
+bool ggml_is_numa();
+}
 struct llama_mmap {
     void * addr;
     size_t size;
@@ -176,8 +179,10 @@ struct llama_mmap {
         size = file->size;
         int fd = fileno(file->fp);
         int flags = MAP_SHARED;
+        // prefetch/readahead impairs performance on NUMA systems
+        if (ggml_is_numa()) prefetch = 0;
 #ifdef __linux__
-        flags |= MAP_POPULATE;
+        if (prefetch) flags |= MAP_POPULATE;
 #endif
         addr = mmap(NULL, file->size, PROT_READ, flags, fd, 0);
         if (addr == MAP_FAILED) {
@@ -188,6 +193,14 @@ struct llama_mmap {
             // Advise the kernel to preload the mapped memory
             if (madvise(addr, std::min(file->size, prefetch), MADV_WILLNEED)) {
                 fprintf(stderr, "warning: madvise(.., MADV_WILLNEED) failed: %s\n",
+                        strerror(errno));
+            }
+        }
+        if (ggml_is_numa()) {
+            // advise the kernel not to use readahead
+            // (because the next page might not belong on the same node)
+            if (madvise(addr, file->size, MADV_RANDOM)) {
+                fprintf(stderr, "warning: madvise(.., MADV_RANDOM) failed: %s\n",
                         strerror(errno));
             }
         }
