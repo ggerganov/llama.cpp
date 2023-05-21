@@ -1247,6 +1247,8 @@ void print_tokens_batch(struct llama_context* ctx, struct ggml_tensor * tokens) 
             }
             if (!isnl || (num_newline < 2)) {
                 print_token(ctx, token);
+            } else {
+                printf("\\n");
             }
         }
         printf("\n--\n");
