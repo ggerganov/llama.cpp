@@ -26,21 +26,21 @@ typedef uint uint32_t;
 struct __attribute__ ((packed)) block_q4_0
 {
     half d;
-    uint8_t qs[16]; /* QK4_0 / 2 */
+    uint8_t qs[QK4_0 / 2];
 };
 
 struct __attribute__ ((packed)) block_q4_1
 {
     half d;
     half m;
-    uint8_t qs[16]; /* QK4_1 / 2 */
+    uint8_t qs[QK4_1 / 2];
 };
 
 struct __attribute__ ((packed)) block_q5_0
 {
     half d;
     uint32_t qh;
-    uint8_t qs[16]; /* QK5_0 / 2 */
+    uint8_t qs[QK5_0 / 2];
 };
 
 struct __attribute__ ((packed)) block_q5_1
@@ -48,13 +48,13 @@ struct __attribute__ ((packed)) block_q5_1
     half d;
     half m;
     uint32_t qh;
-    uint8_t qs[16]; /* QK5_1 / 2 */
+    uint8_t qs[QK5_1 / 2];
 };
 
 struct __attribute__ ((packed)) block_q8_0
 {
     half d;
-    int8_t qs[32]; /* QK8_0 */
+    int8_t qs[QK8_0];
 };
 
 
@@ -65,7 +65,7 @@ __kernel void convert_fp16_to_fp32(__global half* x, __global float* y) {
 }
 
 void dequantize_q4_0(__global const struct block_q4_0* x, const int ib, const int iqs, float* v0, float* v1) {
-    const float d = x[ib].d;
+    const float d = vload_half(0, &x[ib].d);
 
     const uint8_t vui = x[ib].qs[iqs];
 
@@ -76,8 +76,8 @@ void dequantize_q4_0(__global const struct block_q4_0* x, const int ib, const in
     *v1 = (vi1 - 8)*d;
 }
 void dequantize_q4_1(__global const struct block_q4_1* x, const int ib, const int iqs, float* v0, float* v1) {
-    const float d = x[ib].d;
-    const float m = x[ib].m;
+    const float d = vload_half(0, &x[ib].d);
+    const float m = vload_half(0, &x[ib].m);
 
     const uint8_t vui = x[ib].qs[iqs];
 
@@ -88,7 +88,7 @@ void dequantize_q4_1(__global const struct block_q4_1* x, const int ib, const in
     *v1 = vi1*d + m;
 }
 void dequantize_q5_0(__global const struct block_q5_0* x, const int ib, const int iqs, float* v0, float* v1) {
-    const float d = vload_half(0, (__global half*) &x[ib].d);
+    const float d = vload_half(0, &x[ib].d);
 
     uint32_t qh = x[ib].qh;
 
@@ -102,8 +102,8 @@ void dequantize_q5_0(__global const struct block_q5_0* x, const int ib, const in
     *v1 = x1*d;
 }
 void dequantize_q5_1(__global const struct block_q5_1* x, const int ib, const int iqs, float* v0, float* v1) {
-    const float d = vload_half(0, (__global half*) &x[ib].d);
-    const float m = vload_half(0, (__global half*) &x[ib].m);
+    const float d = vload_half(0, &x[ib].d);
+    const float m = vload_half(0, &x[ib].m);
 
     uint32_t qh = x[ib].qh;
 
@@ -117,7 +117,7 @@ void dequantize_q5_1(__global const struct block_q5_1* x, const int ib, const in
     *v1 = x1*d + m;
 }
 void dequantize_q8_0(__global const struct block_q8_0* x, const int ib, const int iqs, float* v0, float* v1) {
-    const float d = x[ib].d;
+    const float d = vload_half(0, &x[ib].d);
 
     const int8_t vi0 = x[ib].qs[iqs + 0];
     const int8_t vi1 = x[ib].qs[iqs + 1];
@@ -289,7 +289,8 @@ static cl_program build_program_from_source(cl_context ctx, cl_device_id dev, co
         exit(1);
     }
 
-    const char* compile_opts = "-cl-mad-enable -cl-unsafe-math-optimizations -cl-finite-math-only -cl-fast-relaxed-math";
+    const char* compile_opts = "-cl-mad-enable -cl-unsafe-math-optimizations -cl-finite-math-only -cl-fast-relaxed-math "
+                               "-DQK4_0=32 -DQR4_0=2 -DQK4_1=32 -DQR4_1=2 -DQK5_0=32 -DQR5_0=2 -DQK5_1=32 -DQR5_1=2 -DQK8_0=32 -DQR8_0=1";
 
     err = clBuildProgram(p, 0, NULL, compile_opts, NULL, NULL);
     if(err < 0) {
