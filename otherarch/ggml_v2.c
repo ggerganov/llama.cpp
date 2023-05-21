@@ -17176,11 +17176,11 @@ static void ggml_v2_vec_dot_q5_0_q8_0_v2(const int n, float * restrict s, const 
 static void ggml_v2_vec_dot_q5_1_q8_1_v2(const int n, float * restrict s, const void * restrict vx, const void * restrict vy);
 static void ggml_v2_vec_dot_q8_0_q8_0_v2(const int n, float * restrict s, const void * restrict vx, const void * restrict vy);
 
-inline void SetQuantsUnshuffled(bool unshuffle)
+void SetQuantsUnshuffled(bool unshuffle)
 {
     quants_unshuffled = unshuffle;
 }
-inline bool GetQuantsUnshuffled()
+bool GetQuantsUnshuffled()
 {
     return quants_unshuffled;
 }
