@@ -1,4 +1,3 @@
-import json
 import torch
 import argparse
 from transformers import LlamaTokenizer, LlamaForCausalLM
