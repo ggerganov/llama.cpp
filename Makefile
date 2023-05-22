@@ -98,10 +98,10 @@ endif
 # TODO: probably these flags need to be tweaked on some architectures
 #       feel free to update the Makefile for your architecture and send a pull request or issue
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
-	# Use all CPU extensions that are available:
-	CFLAGS += -mavx
+	# Use all CPU extensions that are available:	
 # old library NEEDS mf16c to work. so we must build with it. new one doesnt
 	ifeq ($(OS),Windows_NT)
+		CFLAGS += -mavx
 		BONUSCFLAGS1 += -mf16c
 		BONUSCFLAGS2 += -mavx2 -msse3 -mfma
 	else
