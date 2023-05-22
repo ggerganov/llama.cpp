@@ -40,7 +40,7 @@ tokenizer.save_pretrained(args.out)
 
 # load model.
 model = LlamaForCausalLM.from_pretrained(
-    args.model_path,
+    args.model,
     load_in_8bit=False,
     torch_dtype=torch.float16,
     device_map={"": "cpu"},
