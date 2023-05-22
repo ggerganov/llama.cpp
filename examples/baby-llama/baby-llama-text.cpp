@@ -270,7 +270,7 @@ void init_model(struct my_llama_model * model) {
         layer.w3 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd,   n_ff);
 
         ggml_set_name(layer.attention_norm, (layers_i + ".attention_norm.weight").c_str());
-        
+
         ggml_set_name(layer.wq, (layers_i + ".attention.wq.weight").c_str());
         ggml_set_name(layer.wk, (layers_i + ".attention.wk.weight").c_str());
         ggml_set_name(layer.wv, (layers_i + ".attention.wv.weight").c_str());
@@ -1019,7 +1019,7 @@ struct ggml_tensor * forward_batch_wo_cache(
 
             // Vcur shape [N, n_batch, n_embd/n_head, n_head]
             // V shape    [N, n_embd/n_head, n_head, n_batch]
-            struct ggml_tensor * V = 
+            struct ggml_tensor * V =
                 ggml_permute(ctx0,
                     Vcur,
                     0, 3, 1, 2);
@@ -1430,7 +1430,7 @@ int tokenize_file(struct llama_context * lctx, const char * filename, std::vecto
     out.resize(buf.size());
 
     int n_tokens = llama_tokenize(lctx, buf.data(), out.data(), buf.size(), false);
-    if (n_tokens >= 0) { 
+    if (n_tokens >= 0) {
         out.resize(n_tokens);
     }
 
@@ -1470,7 +1470,7 @@ void shuffle_ints(int * begin, int * end) {
     for (int i=0; i<max+1; ++i) {
        vals[i] = frand();
     }
-    std::sort(begin, end, [&vals](auto a, auto b){ 
+    std::sort(begin, end, [&vals](auto a, auto b){
        return vals.at(a) < vals.at(b);
     });
 }
@@ -1494,7 +1494,7 @@ struct my_llama_sampler_params {
 struct my_llama_sampler {
     struct llama_context * ctx = NULL;
     my_llama_sampler_params params;
-    
+
     int n_vocab = 0;
     int n_ctx = 0;
 
@@ -1538,17 +1538,17 @@ llama_token sample(struct my_llama_sampler * sampler, float * logits, const llam
     const int n_last = std::min(std::min(n_last_tokens, params.repeat_last_n), sampler->n_ctx);
 
     llama_sample_repetition_penalty(
-        ctx, 
+        ctx,
         candidates_p,
         last_tokens + n_last_tokens - n_last,
         n_last,
         params.repeat_penalty);
     llama_sample_frequency_and_presence_penalties(
-        ctx, 
+        ctx,
         candidates_p,
         last_tokens + n_last_tokens - n_last,
-        n_last, 
-        params.alpha_frequency, 
+        n_last,
+        params.alpha_frequency,
         params.alpha_presence);
 
     if (!params.penalize_nl) {
@@ -1572,7 +1572,7 @@ llama_token sample(struct my_llama_sampler * sampler, float * logits, const llam
             llama_sample_top_k        (ctx, candidates_p, params.top_k, 1);
             llama_sample_tail_free    (ctx, candidates_p, params.tfs_z, 1);
             llama_sample_typical      (ctx, candidates_p, params.typical_p, 1);
-            
+
             llama_sample_top_p        (ctx, candidates_p, params.top_p, 1);
             llama_sample_temperature  (ctx, candidates_p, params.temp);
             token = llama_sample_token(ctx, candidates_p);
@@ -1809,7 +1809,7 @@ bool load_checkpoint(struct my_llama_model * model, struct ggml_opt_context * op
         model->hparams.n_rot   = file.read_u32();
         print_params(&model->hparams);
     }
-    
+
     if (init) {
         init_model(model);
     }
@@ -1872,7 +1872,7 @@ int main(int argc, char ** argv) {
     const char * default_chkpt_in  = "checkpoint.bin";
     const char * default_chkpt_out = "checkpoint.bin";
     const char * default_argv[5] = {argv[0], default_model, default_train, default_chkpt_in, default_chkpt_out};
-    
+
     if (argc < 5) {
         fprintf(stderr, "usage: %s model training_data chkpt_in chkpt_out\n", argv[0]);
         //return 1;
@@ -1979,13 +1979,13 @@ int main(int argc, char ** argv) {
     printf("%s: init model\n", __func__);
     bool existed = load_checkpoint(&model, opt, fn_chkpt_in, true);
     set_param_model(&model);
-    
+
     opt->iter = model.train_its;
     printf("%s: opt iter %d\n", __func__, opt->iter);
 
     bool from_scratch = !existed;
-    if (from_scratch) { 
-        randomize_model(&model, 1337, 0.0f, 1.0f, -1.0f, +1.0f); 
+    if (from_scratch) {
+        randomize_model(&model, 1337, 0.0f, 1.0f, -1.0f, +1.0f);
     }
 
     init_kv_cache(&kv_self, &model, 1);
@@ -2041,8 +2041,8 @@ int main(int argc, char ** argv) {
 
         get_example_targets_batch(lctx, train_samples.data(), train_samples.size(), train_tokens.data(), train_tokens.size(), ex,  tokens_input, target_logits, target_probs);
 
-        struct ggml_tensor * logits = 
-            (n_past == 0) 
+        struct ggml_tensor * logits =
+            (n_past == 0)
             ? forward_batch_wo_cache(&model, ctx0, &gf, tokens_input, n_tokens, n_batch)
             : forward_batch(&model, &kv_self, ctx0, &gf, tokens_input, n_tokens, n_past, n_batch);
 
@@ -2054,9 +2054,9 @@ int main(int argc, char ** argv) {
         size_t used_mem_before_opt = ggml_used_mem(ctx0);
 
         float error_before_opt = ggml_get_f32_1d(e, 0);
-        
-        opt->params.adam.sched = (opt->iter < warmup) 
-            ? (float) opt->iter / (float) warmup 
+
+        opt->params.adam.sched = (opt->iter < warmup)
+            ? (float) opt->iter / (float) warmup
             : cosine_decay_restart(cos_decay_steps, cos_decay_alpha, opt->iter - warmup, cos_decay_restart);
         printf("%s: opt->params.adam.sched %.5f\n", __func__, opt->params.adam.sched);
 
@@ -2088,9 +2088,9 @@ int main(int argc, char ** argv) {
             for (int i=0; i<n_batch; ++i) {
                 init_sampler(&sampler, lctx);
                 for (int k=0; k<n_tokens; ++k) {
-                    int32_t token = sample(&sampler, 
-                        (float *)       ((char *) logits->data + i*logits->nb[2] + k*logits->nb[1]), 
-                        (llama_token *) ((char *) tokens_input->data + i*tokens_input->nb[1]), 
+                    int32_t token = sample(&sampler,
+                        (float *)       ((char *) logits->data + i*logits->nb[2] + k*logits->nb[1]),
+                        (llama_token *) ((char *) tokens_input->data + i*tokens_input->nb[1]),
                         k);
                     * ((int32_t *) ((char *) after_opt_best_samples->data + i*after_opt_best_samples->nb[1] + k*after_opt_best_samples->nb[0])) = token;
                 }
@@ -2118,7 +2118,7 @@ int main(int argc, char ** argv) {
     {
         int n_gen = 1024;
         int sample_ctx = n_tokens - n_tokens/8;
-        
+
         sampler.params.temp = 0.2;
         sampler.params.repeat_penalty = 1.1;
         sampler.params.mirostat = 2;
@@ -2161,9 +2161,9 @@ int main(int argc, char ** argv) {
             struct ggml_tensor * probs        = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_vocab, sample_ctx);
 
             // set_logits_masked(logits, token_notavail, -1e9);
-            int token = sample(&sampler, 
-                (float *) ((char *) logits->data + (sample_ctx-1)*logits->nb[1]), 
-                (llama_token *) tokens_input->data, 
+            int token = sample(&sampler,
+                (float *) ((char *) logits->data + (sample_ctx-1)*logits->nb[1]),
+                (llama_token *) tokens_input->data,
                 sample_ctx-1);
             //int token = ggml_get_i32_1d(best_samples, sample_ctx-1);
 
@@ -2175,7 +2175,7 @@ int main(int argc, char ** argv) {
             ggml_set_i32_1d(tokens_input, sample_ctx-1, token);
 
             ggml_free(ctx0);
-        }        
+        }
     }
 
     free(compute_addr);

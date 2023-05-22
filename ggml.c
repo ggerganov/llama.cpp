@@ -9940,7 +9940,7 @@ static void ggml_compute_forward_out_prod_f32(
         const int64_t i3 = ir/(ne2*ne1);
         const int64_t i2 = (ir - i3*ne2*ne1)/ne1;
         const int64_t i1 = (ir - i3*ne2*ne1 - i2*ne1);
-        
+
         const int64_t i02 = i2;
         const int64_t i03 = i3;
 
@@ -15296,7 +15296,7 @@ enum ggml_opt_result ggml_opt_resume(
     // build forward + backward compute graphs
     struct ggml_tensor * gfbuf = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, sizeof(struct ggml_cgraph) / GGML_TYPE_SIZE[GGML_TYPE_I32]+ (sizeof(struct ggml_cgraph) % GGML_TYPE_SIZE[GGML_TYPE_I32] ? 1 : 0));
     struct ggml_tensor * gbbuf = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, sizeof(struct ggml_cgraph) / GGML_TYPE_SIZE[GGML_TYPE_I32]+ (sizeof(struct ggml_cgraph) % GGML_TYPE_SIZE[GGML_TYPE_I32] ? 1 : 0));
-    
+
     struct ggml_cgraph * gf = (struct ggml_cgraph *) gfbuf->data;
     struct ggml_cgraph * gb = (struct ggml_cgraph *) gbbuf->data;
 
