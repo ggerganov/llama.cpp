@@ -5,8 +5,7 @@ from peft import PeftModel
 
 # args with description.
 parser = argparse.ArgumentParser(
-    prog="Merge HF file with Lora\n",
-    description="Please locate HF format model path with pytorch_*.bin inside, lora path with adapter_config.json and adapter_model.bin.",
+    description="Merge HF model with LoRA",
 )
 
 # The original base model checkpoint dir
