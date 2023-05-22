@@ -1184,14 +1184,38 @@ void print_tokens_batch(struct llama_context* ctx, struct ggml_tensor * tokens) 
             if (isnl) {
                 ++num_newline;
             }
-            if (!isnl || (num_newline < 2)) {
-                print_token(ctx, token);
+            if (isnl) {
+                if (num_newline < 2) {
+                    print_token(ctx, token);
+                } else {
+                    printf("\\n");
+                }
             } else {
-                printf("\\n");
+                print_token(ctx, token);
             }
         }
         printf("\n--\n");
     }
+}
+
+void set_f32_2d(struct ggml_tensor * tensor, int64_t i0, int64_t i1, float value) {
+    float * ptr = (float *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1]);
+    *ptr = value;
+}
+
+void set_i32_2d(struct ggml_tensor * tensor, int64_t i0, int64_t i1, int32_t value) {
+    int32_t * ptr = (int32_t *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1]);
+    *ptr = value;
+}
+
+float get_f32_2d(struct ggml_tensor * tensor, int64_t i0, int64_t i1) {
+    float * ptr = (float *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1]);
+    return *ptr;
+}
+
+int32_t get_i32_2d(struct ggml_tensor * tensor, int64_t i0, int64_t i1) {
+    int32_t * ptr = (int32_t *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1]);
+    return *ptr;
 }
 
 void get_example_targets(const int * train_samples, size_t n_train_samples, const llama_token * train_data, size_t n_train_data, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * target_logits, struct ggml_tensor * target_probs) {
@@ -1209,8 +1233,8 @@ void get_example_targets(const int * train_samples, size_t n_train_samples, cons
     ggml_set_i32_1d(tokens_input, 0, llama_token_bos());
     for (int i=1; i<n_tokens+1; ++i) {
         int token = clamp(train_data[sample+i-1], 0, n_vocab-1);
-        ggml_set_f32_1d(target_logits, (i-1)*n_vocab + token, +1.0f);
-        ggml_set_f32_1d(target_probs,  (i-1)*n_vocab + token, -1.0f);
+        set_f32_2d(target_logits, token, i-1, +1.0f);
+        set_f32_2d(target_probs,  token, i-1, -1.0f);
         if (i<n_tokens) {
             ggml_set_i32_1d(tokens_input, i, token);
         }
