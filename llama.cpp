@@ -460,6 +460,22 @@ struct llama_file_loader {
         hparams.n_layer = file.read_u32();
         hparams.n_rot = file.read_u32();
         hparams.ftype = (enum llama_ftype) file.read_u32();
+
+        if (file_version < LLAMA_FILE_VERSION_GGJT_V2) {
+            if (hparams.ftype != LLAMA_FTYPE_ALL_F32     &&
+                hparams.ftype != LLAMA_FTYPE_MOSTLY_F16  &&
+                hparams.ftype != LLAMA_FTYPE_MOSTLY_Q8_0) {
+                throw format("this format is no longer supported (see https://github.com/ggerganov/llama.cpp/pull/1405)");
+            }
+        }
+
+        if (file_version < LLAMA_FILE_VERSION_GGJT_V3) {
+            if (hparams.ftype == LLAMA_FTYPE_MOSTLY_Q4_0 ||
+                hparams.ftype == LLAMA_FTYPE_MOSTLY_Q4_1 ||
+                hparams.ftype == LLAMA_FTYPE_MOSTLY_Q8_0) {
+                throw format("this format is no longer supported (see https://github.com/ggerganov/llama.cpp/pull/1508)");
+            }
+        }
     }
     void read_vocab() {
         vocab.id_to_token.resize(hparams.n_vocab);
@@ -952,22 +968,6 @@ static void llama_model_load_internal(
         fprintf(stderr, "%s: n_ff       = %u\n",  __func__, n_ff);
         fprintf(stderr, "%s: n_parts    = %zu\n", __func__, ml->file_loaders.size());
         fprintf(stderr, "%s: model size = %s\n",  __func__, llama_model_type_name(model.type));
-    }
-
-    if (file_version < LLAMA_FILE_VERSION_GGJT_V2) {
-        if (hparams.ftype != LLAMA_FTYPE_ALL_F32     &&
-            hparams.ftype != LLAMA_FTYPE_MOSTLY_F16  &&
-            hparams.ftype != LLAMA_FTYPE_MOSTLY_Q8_0) {
-            throw format("this format is no longer supported (see https://github.com/ggerganov/llama.cpp/pull/1405)");
-        }
-    }
-
-    if (file_version < LLAMA_FILE_VERSION_GGJT_V3) {
-        if (hparams.ftype == LLAMA_FTYPE_MOSTLY_Q4_0 ||
-            hparams.ftype == LLAMA_FTYPE_MOSTLY_Q4_1 ||
-            hparams.ftype == LLAMA_FTYPE_MOSTLY_Q8_0) {
-            throw format("this format is no longer supported (see https://github.com/ggerganov/llama.cpp/pull/1508)");
-        }
     }
 
     if (vocab_only) {
