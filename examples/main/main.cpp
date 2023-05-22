@@ -549,6 +549,9 @@ int main(int argc, char ** argv) {
                 bool another_line = true;
                 do {
                     another_line = console_readline(con_st, line);
+                    if (!line.compare("/exit\n")) {
+                        goto out_of_main_loop;
+                    }
                     buffer += line;
                 } while (another_line);
 
@@ -604,8 +607,9 @@ int main(int argc, char ** argv) {
             n_remain = params.n_predict;
             is_interacting = true;
         }
-    }
+    } // end while
 
+    out_of_main_loop:
     if (!path_session.empty() && params.prompt_cache_all) {
         fprintf(stderr, "\n%s: saving final output to session file '%s'\n", __func__, path_session.c_str());
         llama_save_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
