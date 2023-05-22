@@ -1144,72 +1144,6 @@ struct ggml_tensor * forward_batch_wo_cache(
     return inpL;
 }
 
-void sample_softmax(struct ggml_tensor * logits, struct ggml_tensor * probs, struct ggml_tensor * best_samples) {
-    assert(logits->n_dims == 2);
-    assert(probs->n_dims == 2);
-    assert(best_samples->n_dims == 1);
-    assert(logits->ne[1] == best_samples->ne[0]);
-    assert(logits->ne[0] == probs->ne[0]);
-    assert(logits->ne[1] == probs->ne[1]);
-    for (int i = 0; i < logits->ne[1]; ++i) {
-        float max_logit = ggml_get_f32_1d(logits, i * logits->ne[0]);
-        ggml_set_i32_1d(best_samples, i, 0);
-        for (int k = 0; k < logits->ne[0]; ++k) {
-            float logit = ggml_get_f32_1d(logits, i * logits->ne[0] + k);
-            if (logit > max_logit) {
-                max_logit = logit;
-                ggml_set_i32_1d(best_samples, i, k);
-            }
-        }
-        float psum = 0;
-        for (int k = 0; k < logits->ne[0]; ++k) {
-            float logit = ggml_get_f32_1d(logits, i * logits->ne[0] + k);
-            float p = (logit == -INFINITY) ? 0 : expf(logit - max_logit);
-            psum += p;
-            ggml_set_f32_1d(probs, i * probs->ne[0] + k, p);
-        }
-        for (int k = 0; k < logits->ne[0]; ++k) {
-            float p = ggml_get_f32_1d(probs, i*probs->ne[0] + k);
-            ggml_set_f32_1d(probs, i * probs->ne[0] + k, p / psum);
-        }
-    }
-}
-
-void sample_softmax_batch(struct ggml_context * ctx, struct ggml_tensor * logits, struct ggml_tensor * probs, struct ggml_tensor * best_samples) {
-    GGML_ASSERT(best_samples->n_dims == 2);
-    GGML_ASSERT(logits->n_dims == 3);
-    GGML_ASSERT(probs->n_dims == 3);
-    int n_tokens = best_samples->ne[0];
-    int n_batch  = best_samples->ne[1];
-    int n_vocab  = logits->ne[0];
-    GGML_ASSERT(n_tokens == logits->ne[1]);
-    GGML_ASSERT(n_batch  == logits->ne[2]);
-    GGML_ASSERT(n_vocab  == probs->ne[0]);
-    GGML_ASSERT(n_tokens == probs->ne[1]);
-    GGML_ASSERT(n_batch  == probs->ne[2]);
-
-    for (int k = 0; k < n_batch; ++k) {
-        struct ggml_tensor * best_samples_k = ggml_view_1d(ctx,
-                                                best_samples,
-                                                best_samples->ne[0],
-                                                k*best_samples->nb[1]);
-        struct ggml_tensor * logits_k       = ggml_view_2d(ctx,
-                                                logits,
-                                                logits->ne[0],
-                                                logits->ne[1],
-                                                logits->nb[1],
-                                                k*logits->nb[2]);
-        struct ggml_tensor * probs_k        = ggml_view_2d(ctx,
-                                                probs,
-                                                probs->ne[0],
-                                                probs->ne[1],
-                                                probs->nb[1],
-                                                k*probs->nb[2]);
-        sample_softmax(logits_k, probs_k, best_samples_k);
-    }
-}
-
-
 void print_row(struct ggml_tensor * probs, int i) {
     for (int k = 0; k < probs->ne[0]; ++k) {
         float p = ggml_get_f32_1d(probs, i*probs->ne[0] + k);
@@ -2116,7 +2050,6 @@ int main(int argc, char ** argv) {
                 }
             }
 
-            // sample_softmax_batch(ctx0, logits, after_opt_probs, after_opt_best_samples);
             // printf("probabilities after optimization:\n");
             // print_matrix(after_opt_probs);
             printf("Example:\n---\n");
@@ -2184,7 +2117,6 @@ int main(int argc, char ** argv) {
                 (float *) ((char *) logits->data + (sample_ctx-1)*logits->nb[1]), 
                 (llama_token *) tokens_input->data, 
                 sample_ctx-1);
-            // sample_softmax(logits, probs, best_samples);
             //int token = ggml_get_i32_1d(best_samples, sample_ctx-1);
 
             // print_row(probs, sample_at);
