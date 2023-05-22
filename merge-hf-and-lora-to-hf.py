@@ -10,23 +10,23 @@ parser = argparse.ArgumentParser(
 
 # The original base model checkpoint dir
 parser.add_argument(
-    "--model_path",
+    "--model",
     type=str,
     default="decapoda-research/llama-7b-hf",
-    help="Directory contain original HF model",
+    help="HF model name or path",
 )
 # The finetuned lora model checkpoint dir
 parser.add_argument(
-    "--lora_path",
+    "--lora",
     type=str,
-    default="decapoda-research/lora",
-    help="Directory contain Lora",
+    required=True,
+    help="LoRA model name or path",
 )
 # The output dir
 parser.add_argument(
-    "--out_path",
+    "--out",
     type=str,
-    default="decapoda-research/lora-merged",
+    required=True,
     help="Directory store merged HF model",
 )
 
