@@ -321,7 +321,6 @@ int main(int argc, char ** argv) {
         auto lparams = llama_context_default_params();
 
         lparams.n_ctx      = 256;
-        lparams.n_parts    = 1;
         lparams.seed       = 1;
         lparams.f16_kv     = false;
         lparams.use_mlock  = false;
