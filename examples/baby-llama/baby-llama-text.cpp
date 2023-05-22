@@ -2089,7 +2089,9 @@ int main(int argc, char ** argv) {
         ggml_free(ctx0);
     }
 
-    save_checkpoint(&model, opt, fn_chkpt_out);
+    if (n_examples > 0) {
+        save_checkpoint(&model, opt, fn_chkpt_out);
+    }
 
     {
         int n_gen = 1024;
