@@ -385,8 +385,8 @@ void ggml_cl_init(void) {
 
     char * user_platform_string = getenv("GGML_OPENCL_PLATFORM");
     char * user_device_string = getenv("GGML_OPENCL_DEVICE");
-    unsigned int user_platform_number = -1;
-    unsigned int user_device_number = -1;
+    int user_platform_number = -1;
+    int user_device_number = -1;
 
     unsigned n;
     if (user_platform_string != NULL && sscanf(user_platform_string, " %u", &n) == 1 && n < n_platforms) {
@@ -397,7 +397,7 @@ void ggml_cl_init(void) {
     }
     if (user_platform_number != -1 && user_device_number != -1) {
         cl_platform* platform = &platforms[user_platform_number];
-        if (user_device_number >= platform->n_devices) {
+        if ((unsigned)user_device_number >= platform->n_devices) {
             fprintf(stderr, "ggml_opencl: invalid device number %d\n", user_device_number);
             exit(1);
         }
