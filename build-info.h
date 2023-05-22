@@ -1,0 +1,7 @@
+#ifndef BUILD_INFO_H
+#define BUILD_INFO_H
+
+#define BUILD_NUMBER 999
+#define BUILD_COMMIT "KOBOLDCPP"
+
+#endif // BUILD_INFO_H

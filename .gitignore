@@ -34,7 +34,6 @@ models/*
 /vdot
 /Pipfile
 
-build-info.h
 arm_neon.h
 compile_commands.json
 
