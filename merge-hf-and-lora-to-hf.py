@@ -32,11 +32,11 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-print(f">>> load model from {args.model_path} and lora from {args.lora_path}....")
+print(f">>> load model from {args.model} and lora from {args.lora}....")
 
 # transformer loaded. load and save Tokenizer.
-tokenizer = LlamaTokenizer.from_pretrained(args.model_path)
-tokenizer.save_pretrained(args.out_path)
+tokenizer = LlamaTokenizer.from_pretrained(args.model)
+tokenizer.save_pretrained(args.out)
 
 # load model.
 model = LlamaForCausalLM.from_pretrained(
@@ -49,7 +49,7 @@ model = LlamaForCausalLM.from_pretrained(
 # peft loaded. load lora.
 model = PeftModel.from_pretrained(
     model,
-    args.lora_path,
+    args.lora,
     torch_dtype=torch.float16,
     device_map={"": "cpu"},
 )
@@ -58,4 +58,4 @@ print(f">>> merging lora...")
 
 # Using Peft function to merge Lora.
 model = model.merge_and_unload()
-model.save_pretrained(args.out_path)
+model.save_pretrained(args.out)
