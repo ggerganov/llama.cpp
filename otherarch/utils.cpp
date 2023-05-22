@@ -76,7 +76,7 @@ std::string utils_gpt_random_prompt(std::mt19937 & rng) {
     return "The";
 }
 
-void replace(std::string & str, const std::string & needle, const std::string & replacement) {
+void utreplace(std::string & str, const std::string & needle, const std::string & replacement) {
     size_t pos = 0;
     while ((pos = str.find(needle, pos)) != std::string::npos) {
         str.replace(pos, needle.length(), replacement);
@@ -148,9 +148,9 @@ std::map<std::string, int32_t> json_parse(const std::string & fname) {
                         has_key = false;
                     }
 
-                    ::replace(str_key, "\\u0120", " " ); // \u0120 -> space
-                    ::replace(str_key, "\\u010a", "\n"); // \u010a -> new line
-                    ::replace(str_key, "\\\"",    "\""); // \\\"   -> "
+                    ::utreplace(str_key, "\\u0120", " " ); // \u0120 -> space
+                    ::utreplace(str_key, "\\u010a", "\n"); // \u010a -> new line
+                    ::utreplace(str_key, "\\\"",    "\""); // \\\"   -> "
 
                     try {
                         result[str_key] = std::stoi(str_val);

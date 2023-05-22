@@ -223,8 +223,8 @@ static cl_program build_program_from_source(cl_context ctx, cl_device_id dev, co
 
 void ggml_v2_cl_init_legacy(void) {
     cl_int err = 0;
-    char * GGML_V2_CLBLAST_PLATFORM = getenv("GGML_CLBLAST_PLATFORM");
-    char * GGML_V2_CLBLAST_DEVICE = getenv("GGML_CLBLAST_DEVICE");
+    char * GGML_V2_CLBLAST_PLATFORM = getenv("GGML_OPENCL_PLATFORM");
+    char * GGML_V2_CLBLAST_DEVICE = getenv("GGML_OPENCL_DEVICE");
     int plat_num = (GGML_V2_CLBLAST_PLATFORM == NULL ? 0 : atoi(GGML_V2_CLBLAST_PLATFORM));
     int dev_num = (GGML_V2_CLBLAST_DEVICE == NULL ? 0 : atoi(GGML_V2_CLBLAST_DEVICE));
     printf("\nInitializing LEGACY CLBlast (First Run)...");

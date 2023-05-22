@@ -172,7 +172,7 @@ struct llama_mmap {
 #ifdef _POSIX_MAPPED_FILES
     static constexpr bool SUPPORTED = true;
 
-    llama_mmap(struct llama_file * file, bool prefetch = true) {
+    llama_mmap(struct llama_file * file, size_t prefetch = (size_t) -1 /* -1 = max value */) {
         size = file->size;
         int fd = fileno(file->fp);
         int flags = MAP_SHARED;
@@ -184,9 +184,9 @@ struct llama_mmap {
             throw std::runtime_error(format("mmap failed: %s", strerror(errno)));
         }
 
-        if (prefetch) {
+        if (prefetch > 0) {
             // Advise the kernel to preload the mapped memory
-            if (madvise(addr, file->size, MADV_WILLNEED)) {
+            if (madvise(addr, std::min(file->size, prefetch), MADV_WILLNEED)) {
                 fprintf(stderr, "warning: madvise(.., MADV_WILLNEED) failed: %s\n",
                         strerror(errno));
             }

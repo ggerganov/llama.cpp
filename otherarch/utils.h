@@ -26,7 +26,7 @@ struct gpt_vocab {
     std::map<id, token> id_to_token;
 };
 
-void replace(std::string & str, const std::string & needle, const std::string & replacement);
+void utreplace(std::string & str, const std::string & needle, const std::string & replacement);
 
 // poor-man's JSON parsing
 std::map<std::string, int32_t> json_parse(const std::string & fname);
