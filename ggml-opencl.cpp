@@ -385,8 +385,8 @@ void ggml_cl_init(void) {
 
     char * user_platform_string = getenv("GGML_OPENCL_PLATFORM");
     char * user_device_string = getenv("GGML_OPENCL_DEVICE");
-    int user_platform_number = -1;
-    int user_device_number = -1;
+    unsigned int user_platform_number = -1;
+    unsigned int user_device_number = -1;
 
     unsigned n;
     if (user_platform_string != NULL && sscanf(user_platform_string, " %u", &n) == 1 && n < n_platforms) {
@@ -395,58 +395,67 @@ void ggml_cl_init(void) {
     if (user_device_string != NULL && sscanf(user_device_string, " %u", &n) == 1 && n < n_devices) {
         user_device_number = (int)n;
     }
+    if (user_platform_number != -1 && user_device_number != -1) {
+        cl_platform* platform = &platforms[user_platform_number];
+        if (user_device_number >= platform->n_devices) {
+            fprintf(stderr, "ggml_opencl: invalid device number %d\n", user_device_number);
+            exit(1);
+        }
+        default_device = &platform->devices[user_device_number];
+    } else {
 
-    struct cl_device * selected_devices = devices;
-    unsigned n_selected_devices = n_devices;
+        struct cl_device * selected_devices = devices;
+        unsigned n_selected_devices = n_devices;
 
-    if (user_platform_number == -1 && user_platform_string != NULL && user_platform_string[0] != 0) {
-        for (unsigned i = 0; i < n_platforms; i++) {
-            struct cl_platform * p = &platforms[i];
-            if (strstr(p->name, user_platform_string) != NULL ||
-                strstr(p->vendor, user_platform_string) != NULL) {
-                user_platform_number = (int)i;
-                break;
+        if (user_platform_number == -1 && user_platform_string != NULL && user_platform_string[0] != 0) {
+            for (unsigned i = 0; i < n_platforms; i++) {
+                struct cl_platform * p = &platforms[i];
+                if (strstr(p->name, user_platform_string) != NULL ||
+                    strstr(p->vendor, user_platform_string) != NULL) {
+                    user_platform_number = (int)i;
+                    break;
+                }
+            }
+            if (user_platform_number == -1) {
+                fprintf(stderr, "ggml_opencl: no platform matching '%s' was found.\n", user_platform_string);
+                exit(1);
             }
         }
-        if (user_platform_number == -1) {
-            fprintf(stderr, "ggml_opencl: no platform matching '%s' was found.\n", user_platform_string);
-            exit(1);
-        }
-    }
-    if (user_platform_number != -1) {
-        struct cl_platform * p = &platforms[user_platform_number];
-        selected_devices = p->devices;
-        n_selected_devices = p->n_devices;
-        default_device = p->default_device;
-        if (n_selected_devices == 0) {
-            fprintf(stderr, "ggml_opencl: selected platform '%s' does not have any devices.\n", p->name);
-            exit(1);
-        }
-    }
-
-    if (user_device_number == -1 && user_device_string != NULL && user_device_string[0] != 0) {
-        for (unsigned i = 0; i < n_selected_devices; i++) {
-            struct cl_device * d = &selected_devices[i];
-            if (strstr(d->name, user_device_string) != NULL) {
-                user_device_number = d->number;
-                break;
+        if (user_platform_number != -1) {
+            struct cl_platform * p = &platforms[user_platform_number];
+            selected_devices = p->devices;
+            n_selected_devices = p->n_devices;
+            default_device = p->default_device;
+            if (n_selected_devices == 0) {
+                fprintf(stderr, "ggml_opencl: selected platform '%s' does not have any devices.\n", p->name);
+                exit(1);
             }
         }
-        if (user_device_number == -1) {
-            fprintf(stderr, "ggml_opencl: no device matching '%s' was found.\n", user_device_string);
-            exit(1);
+
+        if (user_device_number == -1 && user_device_string != NULL && user_device_string[0] != 0) {
+            for (unsigned i = 0; i < n_selected_devices; i++) {
+                struct cl_device * d = &selected_devices[i];
+                if (strstr(d->name, user_device_string) != NULL) {
+                    user_device_number = d->number;
+                    break;
+                }
+            }
+            if (user_device_number == -1) {
+                fprintf(stderr, "ggml_opencl: no device matching '%s' was found.\n", user_device_string);
+                exit(1);
+            }
         }
-    }
-    if (user_device_number != -1) {
-        selected_devices = &devices[user_device_number];
-        n_selected_devices = 1;
-        default_device = &selected_devices[0];
-    }
+        if (user_device_number != -1) {
+            selected_devices = &devices[user_device_number];
+            n_selected_devices = 1;
+            default_device = &selected_devices[0];
+        }
 
-    GGML_ASSERT(n_selected_devices > 0);
+        GGML_ASSERT(n_selected_devices > 0);
 
-    if (default_device == NULL) {
-        default_device = &selected_devices[0];
+        if (default_device == NULL) {
+            default_device = &selected_devices[0];
+        }
     }
 
     fprintf(stderr, "ggml_opencl: selecting platform: '%s'\n", default_device->platform->name);
