@@ -66,7 +66,7 @@ endif()
 # 3rd party libs
 option(LLAMA_ACCELERATE             "llama: enable Accelerate framework"                    ON)
 option(LLAMA_BLAS                   "llama: use BLAS"                                       OFF)
-option(LLAMA_BLAS_VENDOR            "llama: BLA_VENDOR from https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors" Generic)
+set(LLAMA_BLAS_VENDOR  "OpenBLAS" CACHE STRING "llama: BLA_VENDOR from https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors")
 option(LLAMA_CUBLAS                 "llama: use cuBLAS"                                     OFF)
 option(LLAMA_CLBLAST                "llama: use CLBlast"                                    OFF)
 
@@ -135,81 +135,6 @@ if (NOT MSVC)
     endif()
 endif()
 
-if (APPLE AND LLAMA_ACCELERATE)
-    find_library(ACCELERATE_FRAMEWORK Accelerate)
-    if (ACCELERATE_FRAMEWORK)
-        message(STATUS "Accelerate framework found")
-
-        add_compile_definitions(GGML_USE_ACCELERATE)
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ${ACCELERATE_FRAMEWORK})
-    else()
-        message(WARNING "Accelerate framework not found")
-    endif()
-endif()
-
-if (LLAMA_BLAS)
-    if (LLAMA_STATIC)
-        set(BLA_STATIC ON)
-    endif()
-    if ($(CMAKE_VERSION) VERSION_GREATER_EQUAL 3.22)
-        set(BLA_SIZEOF_INTEGER 8)
-    endif()
-    set(BLA_VENDOR ${LLAMA_BLAS_VENDOR})
-    find_package(BLAS)
-    if (BLAS_FOUND)
-        message(STATUS "BLAS found, Libraries: ${BLAS_LIBRARIES}")
-
-        add_compile_options(${BLAS_LINKER_FLAGS})
-        add_compile_definitions(GGML_USE_OPENBLAS)
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ${BLAS_LIBRARIES})
-
-        message("${BLAS_LIBRARIES} ${BLAS_INCLUDE_DIRS}")
-        include_directories(${BLAS_INCLUDE_DIRS})
-    else()
-        message(WARNING "BLAS not found, please refer to "
-        "https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors"
-        " to set correct LLAMA_BLAS_VENDOR")
-    endif()
-endif()
-
-if (LLAMA_CUBLAS)
-    cmake_minimum_required(VERSION 3.17)
-
-    find_package(CUDAToolkit)
-    if (CUDAToolkit_FOUND)
-        message(STATUS "cuBLAS found")
-
-        enable_language(CUDA)
-
-        set(GGML_CUDA_SOURCES ggml-cuda.cu ggml-cuda.h)
-
-        add_compile_definitions(GGML_USE_CUBLAS)
-
-        if (LLAMA_STATIC)
-            set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas_static CUDA::cublasLt_static)
-        else()
-            set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart CUDA::cublas CUDA::cublasLt)
-        endif()
-
-    else()
-        message(WARNING "cuBLAS not found")
-    endif()
-endif()
-
-if (LLAMA_CLBLAST)
-    find_package(CLBlast)
-    if (CLBlast_FOUND)
-        message(STATUS "CLBlast found")
-
-        set(GGML_OPENCL_SOURCES ggml-opencl.cpp ggml-opencl.h)
-
-        add_compile_definitions(GGML_USE_CLBLAST)
-
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} clblast)
-    else()
-        message(WARNING "CLBlast not found")
-    endif()
-endif()
 
 if (LLAMA_ALL_WARNINGS)
     if (NOT MSVC)
@@ -363,19 +288,13 @@ endif()
 # Build libraries
 #
 
-add_library(ggml OBJECT
+add_library(ggml STATIC
             ggml.c
-            ggml.h
-            ${GGML_CUDA_SOURCES}
-            ${GGML_OPENCL_SOURCES})
+            ggml.h)
 
 target_include_directories(ggml PUBLIC .)
 target_compile_features(ggml PUBLIC c_std_11) # don't bump
-target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
-
-if (BUILD_SHARED_LIBS)
-    set_target_properties(ggml PROPERTIES POSITION_INDEPENDENT_CODE ON)
-endif()
+target_link_libraries(ggml PUBLIC Threads::Threads)
 
 add_library(llama
             llama.cpp
@@ -384,18 +303,101 @@ add_library(llama
 
 target_include_directories(llama PUBLIC .)
 target_compile_features(llama PUBLIC cxx_std_11) # don't bump
-target_link_libraries(llama PRIVATE ggml ${LLAMA_EXTRA_LIBS})
+target_link_libraries(llama PRIVATE ggml)
 
 if (BUILD_SHARED_LIBS)
+    set_target_properties(ggml PROPERTIES POSITION_INDEPENDENT_CODE ON)
     set_target_properties(llama PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_compile_definitions(llama PRIVATE LLAMA_SHARED LLAMA_BUILD)
 endif()
 
-if (GGML_CUDA_SOURCES)
-    message(STATUS "GGML CUDA sources found, configuring CUDA architecture")
-    set_property(TARGET ggml PROPERTY CUDA_ARCHITECTURES OFF)
-    set_property(TARGET ggml PROPERTY CUDA_SELECT_NVCC_ARCH_FLAGS "Auto")
-    set_property(TARGET llama PROPERTY CUDA_ARCHITECTURES OFF)
+if (APPLE AND LLAMA_ACCELERATE)
+    find_library(ACCELERATE_FRAMEWORK Accelerate)
+    if (ACCELERATE_FRAMEWORK)
+        message(STATUS "Accelerate framework found")
+
+        add_compile_definitions(GGML_USE_ACCELERATE)
+        target_link_libraries(ggml PUBLIC ${ACCELERATE_FRAMEWORK})
+    else()
+        message(WARNING "Accelerate framework not found")
+    endif()
+endif()
+
+if (LLAMA_BLAS)
+    if (LLAMA_STATIC)
+        set(BLA_STATIC ON)
+    endif()
+    if ($(CMAKE_VERSION) VERSION_GREATER_EQUAL 3.22)
+        set(BLA_SIZEOF_INTEGER 8)
+    endif()
+    set(BLA_VENDOR ${LLAMA_BLAS_VENDOR})
+    find_package(BLAS)
+    if (BLAS_FOUND)
+        message(STATUS "BLAS found, Libraries: ${BLAS_LIBRARIES}")
+
+        target_link_options(ggml PUBLIC ${BLAS_LINKER_FLAGS})
+        target_compile_definitions(ggml PRIVATE GGML_USE_OPENBLAS)
+        target_link_libraries(ggml PUBLIC ${BLAS_LIBRARIES})
+
+        target_include_directories(ggml PRIVATE ${BLAS_INCLUDE_DIRS})
+    else()
+        message(WARNING "BLAS not found, please refer to "
+        "https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors"
+        " to set correct LLAMA_BLAS_VENDOR")
+    endif()
+endif()
+
+if (LLAMA_CUBLAS)
+    cmake_minimum_required(VERSION 3.17)
+
+    find_package(CUDAToolkit)
+    if (CUDAToolkit_FOUND)
+        message(STATUS "cuBLAS found")
+
+        enable_language(CUDA)
+
+        add_library(ggml-cuda STATIC
+                    ggml-cuda.cu
+                    ggml-cuda.h)
+
+        target_compile_definitions(ggml-cuda PUBLIC GGML_USE_CUBLAS)
+
+        set_property(TARGET ggml-cuda PROPERTY CUDA_ARCHITECTURES OFF)
+        set_property(TARGET ggml-cuda PROPERTY CUDA_SELECT_NVCC_ARCH_FLAGS "Auto")
+
+        if (LLAMA_STATIC)
+            target_link_libraries(ggml-cuda PRIVATE
+                CUDA::cudart_static CUDA::cublas_static CUDA::cublasLt_static
+            )
+        else()
+            target_link_libraries(ggml-cuda PRIVATE
+                CUDA::cudart CUDA::cublas CUDA::cublasLt
+            )
+        endif()
+
+        target_link_libraries(ggml PUBLIC ggml-cuda)
+
+    else()
+        message(WARNING "cuBLAS not found")
+    endif()
+endif()
+
+if (LLAMA_CLBLAST)
+    find_package(CLBlast)
+    if (CLBlast_FOUND)
+        message(STATUS "CLBlast found")
+
+        add_library(ggml-opencl STATIC
+                    ggml-opencl.cpp
+                    ggml-opencl.h)
+
+        target_compile_definitions(ggml-opencl PUBLIC GGML_USE_CLBLAST)
+
+        target_link_libraries(ggml-opencl PUBLIC clblast)
+        target_link_libraries(ggml PUBLIC ggml-opencl)
+    else()
+        message(WARNING "CLBlast not found")
+    endif()
 endif()
 
 

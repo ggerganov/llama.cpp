@@ -10,10 +10,9 @@ find_package(Threads REQUIRED)
 
 set(TARGET common)
 
-add_library(${TARGET} OBJECT
-    common.h
-    common.cpp
-    )
+add_library(${TARGET} STATIC
+            common.h
+            common.cpp)
 
 if (BUILD_SHARED_LIBS)
     set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
