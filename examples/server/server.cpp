@@ -13,8 +13,6 @@ struct llama_server_context
 {
   bool as_loop = false;
   bool has_next_token = false;
-
-
   std::string generated_text = "";
 
   int32_t num_tokens_predicted = 0;
@@ -81,21 +79,6 @@ struct llama_server_context
 
   bool loadPrompt() {
     params.prompt.insert(0, 1, ' '); // always add a first space
-
-    if(processed_tokens.size() != 0)
-    {
-        processed_tokens.erase(processed_tokens.begin() + 1, processed_tokens.end());
-    }
-
-    if(embd_inp.size() != 0)
-    {
-        embd_inp.erase(embd_inp.begin() + 1, embd_inp.end());
-    }
-
-    n_remain = 0;
-    n_past = 0;
-    n_consumed = 0;
-
     std::vector<llama_token> prompt_tokens = ::llama_tokenize(ctx, params.prompt, true);
     // compare the evaluated prompt with the new prompt
     int new_prompt_len = 0;
@@ -150,7 +133,6 @@ struct llama_server_context
         // Reset context
         const int n_left = n_past - params.n_keep;
         n_past = std::max(1, params.n_keep);
-        last_n_tokens.erase(last_n_tokens.begin() + n_past, last_n_tokens.end());
         processed_tokens.erase(processed_tokens.begin() + n_past, processed_tokens.end());
         embd.insert(embd.begin(), last_n_tokens.begin() + params.n_ctx - n_left / 2 - embd.size(), last_n_tokens.end() - embd.size());
       }
