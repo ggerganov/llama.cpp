@@ -43,7 +43,7 @@ struct llama_server_context
 
     if(reload_ctx)
     {
-      if(processed_tokens.size() != 0)
+      if(!processed_tokens.empty())
       {
         processed_tokens.erase(processed_tokens.begin() + 1, processed_tokens.end());
       }
