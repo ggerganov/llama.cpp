@@ -397,20 +397,17 @@ The prompt, user inputs, and model generations can be saved and resumed across c
 
 ```bash
 # Start a new chat
-PROMPT_CACHE_FILE=chat.prompt.bin CHAT_SAVE_DIR=./chat/default \
-    MODEL=~/llama-models/30B/ggml-model-q4_0. ./examples/chat-persistent.sh
+PROMPT_CACHE_FILE=chat.prompt.bin CHAT_SAVE_DIR=./chat/default ./examples/chat-persistent.sh
 
 # Resume that chat
-PROMPT_CACHE_FILE=chat.prompt.bin CHAT_SAVE_DIR=./chat/default \
-    MODEL=~/llama-models/30B/ggml-model-q4_0. ./examples/chat-persistent.sh
+PROMPT_CACHE_FILE=chat.prompt.bin CHAT_SAVE_DIR=./chat/default ./examples/chat-persistent.sh
 
 # Start a different chat with the same prompt/model
-PROMPT_CACHE_FILE=chat.prompt.bin CHAT_SAVE_DIR=./chat/another \
-    MODEL=~/llama-models/30B/ggml-model-q4_0. ./examples/chat-persistent.sh
+PROMPT_CACHE_FILE=chat.prompt.bin CHAT_SAVE_DIR=./chat/another ./examples/chat-persistent.sh
 
 # Different prompt cache for different prompt/model
 PROMPT_TEMPLATE=./prompts/chat-with-bob.txt PROMPT_CACHE_FILE=bob.prompt.bin \
-    CHAT_SAVE_DIR=./chat/bob MODEL=~/llama-models/30B/ggml-model-q4_0. ./examples/chat-persistent.sh
+    CHAT_SAVE_DIR=./chat/bob ./examples/chat-persistent.sh
 ```
 
 ### Instruction mode with Alpaca
