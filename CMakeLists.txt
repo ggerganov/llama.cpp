@@ -73,6 +73,7 @@ option(LLAMA_CLBLAST                "llama: use CLBlast"                        
 option(LLAMA_BUILD_TESTS            "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES         "llama: build examples" ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_SERVER           "llama: build server example"                           OFF)
+option(LLAMA_BUILD_GRPC_SERVER      "llama: build grpc server example"                      OFF)
 
 #
 # Build info header
@@ -111,7 +112,7 @@ endif()
 # Compile flags
 #
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED true)
