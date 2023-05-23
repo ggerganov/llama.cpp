@@ -64,7 +64,21 @@ pkgs.mkShell {
 
     # Check if cosmo is installed, if not install it
     if ! command -v cosmo &> /dev/null; then
-      bash -c "$(curl -fsSL https://cosmonic.sh/install.sh)"
+        bash -c "$(curl -fsSL https://cosmonic.sh/install.sh)"
+
+        # Get the current shell name
+        current_shell="$(basename "$SHELL")"
+
+        # Update the corresponding configuration file based on the current shell
+        if [[ "$current_shell" == "bash" ]]; then
+            echo "export PATH=\"/Users/test/.cosmo/bin:\${PATH}\"" >> "${HOME}/.bashrc" && source "${HOME}/.bashrc"
+        elif [[ "$current_shell" == "zsh" ]]; then
+            echo "export PATH=\"/Users/test/.cosmo/bin:\${PATH}\"" >> "${HOME}/.zshrc" && source "${HOME}/.zshrc"
+        else
+            echo "Unsupported shell: $current_shell"
+            exit 1
+        fi
+
     fi
 
     cat <<'EOF'
