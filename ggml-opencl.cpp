@@ -488,7 +488,7 @@ void ggml_cl_init(void) {
     CL_CHECK((context = clCreateContext(properties, 1, &device, NULL, NULL, &err), err));
 
     CL_CHECK((queue = clCreateCommandQueue(context, device, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &err),
-        (err != CL_INVALID_PROPERTY && err != CL_INVALID_VALUE ? err :
+        (err != CL_INVALID_QUEUE_PROPERTIES && err != CL_INVALID_VALUE ? err :
         (queue = clCreateCommandQueue(context, device, 0, &err), err)
     )));
 
