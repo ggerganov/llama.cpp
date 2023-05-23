@@ -180,9 +180,9 @@ struct llama_mmap {
         int fd = fileno(file->fp);
         int flags = MAP_SHARED;
         // prefetch/readahead impairs performance on NUMA systems
-        if (ggml_is_numa()) prefetch = 0;
+        if (ggml_is_numa()) { prefetch = 0; }
 #ifdef __linux__
-        if (prefetch) flags |= MAP_POPULATE;
+        if (prefetch) { flags |= MAP_POPULATE; }
 #endif
         addr = mmap(NULL, file->size, PROT_READ, flags, fd, 0);
         if (addr == MAP_FAILED) {

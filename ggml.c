@@ -505,7 +505,7 @@ struct ggml_numa_nodes ggml_numa = {
 
 void ggml_numa_init(void)
 {
-    if (ggml_numa.n_nodes > 0) return;
+    if (ggml_numa.n_nodes > 0) { return; }
 #ifdef __linux__
     struct stat st;
     char path[256];
@@ -514,17 +514,21 @@ void ggml_numa_init(void)
     while (true) {
         rv = snprintf(path, sizeof(path), "/sys/devices/system/node/node%u", ggml_numa.n_nodes);
         GGML_ASSERT(rv > 0 && (unsigned)rv < sizeof(path));
-        if (stat(path, &st) != 0) break;
+        if (stat(path, &st) != 0) { break; }
         ++ggml_numa.n_nodes;
     }
     // enumerate CPUs
     while (true) {
         rv = snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%u", ggml_numa.total_cpus);
         GGML_ASSERT(rv > 0 && (unsigned)rv < sizeof(path));
-        if (stat(path, &st) != 0) break;
+        if (stat(path, &st) != 0) { break; }
         ++ggml_numa.total_cpus;
     }
     GGML_PRINT_DEBUG("found %u numa nodes, %u CPUs\n", ggml_numa.n_nodes, ggml_numa.total_cpus);
+    if (ggml_numa.n_nodes < 1 || ggml_numa.total_cpus < 1) {
+        ggml_numa.n_nodes = 0;
+        return;
+    }
     ggml_numa.nodes = calloc(ggml_numa.n_nodes, sizeof(struct ggml_numa_node));
     GGML_ASSERT(ggml_numa.nodes != NULL);
     for (uint32_t n = 0; n < ggml_numa.n_nodes; ++n) {
@@ -14058,18 +14062,18 @@ typedef pthread_t ggml_thread_t;
 #ifdef __linux__
 void set_numa_thread_affinity(int thread_n, int n_threads)
 {
-    if (!ggml_is_numa()) return;
+    if (!ggml_is_numa()) { return; }
     // run thread on node_num thread_n / (threads per node)
     int node_num = thread_n / (n_threads / ggml_numa.n_nodes);
     struct ggml_numa_node *node = &ggml_numa.nodes[node_num];
     size_t setsize = CPU_ALLOC_SIZE(ggml_numa.total_cpus);
     cpu_set_t *cpus = CPU_ALLOC(ggml_numa.total_cpus);
     CPU_ZERO_S(setsize, cpus);
-    for (size_t i=0; i < node->n_cpus; ++i) {
+    for (size_t i = 0; i < node->n_cpus; ++i) {
         CPU_SET_S(node->cpus[i], setsize, cpus);
     }
-    int rv;
-    if ((rv = pthread_setaffinity_np(pthread_self(), setsize, cpus))) {
+    int rv = pthread_setaffinity_np(pthread_self(), setsize, cpus);
+    if (rv) {
             fprintf(stderr, "warning: pthread_setaffinity_np() failed: %s\n",
                     strerror(rv));
     }
@@ -14077,15 +14081,15 @@ void set_numa_thread_affinity(int thread_n, int n_threads)
 }
 void clear_numa_thread_affinity(void)
 {
-    if (!ggml_is_numa()) return;
+    if (!ggml_is_numa()) { return; }
     size_t setsize = CPU_ALLOC_SIZE(ggml_numa.total_cpus);
     cpu_set_t *cpus = CPU_ALLOC(ggml_numa.total_cpus);
     CPU_ZERO_S(setsize, cpus);
-    for (unsigned i=0; i < ggml_numa.total_cpus; ++i) {
+    for (unsigned i = 0; i < ggml_numa.total_cpus; ++i) {
         CPU_SET_S(i, setsize, cpus);
     }
-    int rv;
-    if((rv = pthread_setaffinity_np(pthread_self(), setsize, cpus))) {
+    int rv = pthread_setaffinity_np(pthread_self(), setsize, cpus);
+    if (rv) {
         fprintf(stderr, "warning: pthread_setaffinity_np() failed: %s\n",
             strerror(rv));
     }
