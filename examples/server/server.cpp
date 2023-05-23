@@ -13,6 +13,8 @@ struct llama_server_context
 {
   bool as_loop = false;
   bool has_next_token = false;
+
+
   std::string generated_text = "";
 
   int32_t num_tokens_predicted = 0;
@@ -32,12 +34,33 @@ struct llama_server_context
   llama_context *ctx;
   gpt_params params;
 
+  bool reload_ctx = false;
+
   void rewind() {
     as_loop = false;
     params.antiprompt.clear();
     no_show_words.clear();
     num_tokens_predicted = 0;
     generated_text = "";
+
+    if(reload_ctx)
+    {
+      if(processed_tokens.size() != 0)
+      {
+        processed_tokens.erase(processed_tokens.begin() + 1, processed_tokens.end());
+      }
+
+      if(embd_inp.size() != 0)
+      {
+        embd_inp.erase(embd_inp.begin() + 1, embd_inp.end());
+      }
+
+      n_remain = 0;
+      n_past = 0;
+      n_consumed = 0;
+
+      reload_ctx = false;
+    }
   }
 
   bool loadModel(gpt_params params_)
@@ -58,6 +81,21 @@ struct llama_server_context
 
   bool loadPrompt() {
     params.prompt.insert(0, 1, ' '); // always add a first space
+
+    if(processed_tokens.size() != 0)
+    {
+        processed_tokens.erase(processed_tokens.begin() + 1, processed_tokens.end());
+    }
+
+    if(embd_inp.size() != 0)
+    {
+        embd_inp.erase(embd_inp.begin() + 1, embd_inp.end());
+    }
+
+    n_remain = 0;
+    n_past = 0;
+    n_consumed = 0;
+
     std::vector<llama_token> prompt_tokens = ::llama_tokenize(ctx, params.prompt, true);
     // compare the evaluated prompt with the new prompt
     int new_prompt_len = 0;
@@ -112,6 +150,7 @@ struct llama_server_context
         // Reset context
         const int n_left = n_past - params.n_keep;
         n_past = std::max(1, params.n_keep);
+        last_n_tokens.erase(last_n_tokens.begin() + n_past, last_n_tokens.end());
         processed_tokens.erase(processed_tokens.begin() + n_past, processed_tokens.end());
         embd.insert(embd.begin(), last_n_tokens.begin() + params.n_ctx - n_left / 2 - embd.size(), last_n_tokens.end() - embd.size());
       }
@@ -518,9 +557,49 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
   {
     llama.params.top_p = body["top_p"].get<float>();
   }
+  if (!body["tfs_z"].is_null())
+  {
+    llama.params.tfs_z = body["tfs_z"].get<float>();
+  }
+  if (!body["typical_p"].is_null())
+  {
+    llama.params.typical_p = body["typical_p"].get<float>();
+  }
+  if (!body["repeat_last_n"].is_null())
+  {
+    llama.params.repeat_last_n = body["repeat_last_n"].get<float>();
+  }
   if (!body["temperature"].is_null())
   {
     llama.params.temp = body["temperature"].get<float>();
+  }
+  if (!body["repeat_penalty"].is_null())
+  {
+    llama.params.repeat_penalty = body["repeat_penalty"].get<float>();
+  }
+  if (!body["presence_penalty"].is_null())
+  {
+    llama.params.presence_penalty = body["presence_penalty"].get<float>();
+  }
+  if (!body["frequency_penalty"].is_null())
+  {
+    llama.params.frequency_penalty = body["frequency_penalty"].get<float>();
+  }
+  if (!body["mirostat"].is_null())
+  {
+    llama.params.mirostat = body["mirostat"].get<float>();
+  }
+  if (!body["mirostat_tau"].is_null())
+  {
+    llama.params.mirostat_tau = body["mirostat_tau"].get<float>();
+  }
+  if (!body["mirostat_eta"].is_null())
+  {
+    llama.params.mirostat_eta = body["mirostat_eta"].get<float>();
+  }
+  if (!body["penalize_nl"].is_null())
+  {
+    llama.params.penalize_nl = body["penalize_nl"].get<float>();
   }
   if (!body["batch_size"].is_null())
   {
@@ -537,6 +616,10 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
   if (!body["interactive"].is_null())
   {
     llama.params.interactive = body["interactive"].get<bool>();
+  }
+  if (!body["reload_ctx"].is_null())
+  {
+      llama.reload_ctx = body["reload_ctx"].get<int>();
   }
   if (!body["prompt"].is_null())
   {
