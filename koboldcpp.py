@@ -334,7 +334,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     tfs=genparams.get('tfs', 1.0),
                     rep_pen=genparams.get('rep_pen', 1.1),
                     rep_pen_range=genparams.get('rep_pen_range', 128),
-                    seed=-1,
+                    seed=genparams.get('sampler_seed', -1),
                     stop_sequence=genparams.get('stop_sequence', [])
                     )
                 utfprint("\nOutput: " + recvtxt)
@@ -350,7 +350,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     tfs=genparams.get('tfs', 1.0),
                     rep_pen=genparams.get('rep_pen', 1.1),
                     rep_pen_range=genparams.get('rep_pen_range', 128),
-                    seed=-1,
+                    seed=genparams.get('sampler_seed', -1),
                     stop_sequence=genparams.get('stop_sequence', [])
                     )
                 utfprint("\nOutput: " + recvtxt)
