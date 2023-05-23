@@ -14099,7 +14099,7 @@ void clear_numa_thread_affinity(void)
 // TODO: Windows etc.
 // (the linux implementation may also work on BSD, someone should test)
 void set_numa_thread_affinity(int thread_n, int n_threads) { UNUSED(thread_n); UNUSED(n_threads);  }
-void clear_numa_thread_affinity(int thread_n, int n_threads) { UNUSED(thread_n); UNUSED(n_threads); }
+void clear_numa_thread_affinity() {}
 #endif
 
 struct ggml_compute_state_shared {
