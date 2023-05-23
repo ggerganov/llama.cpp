@@ -48,7 +48,7 @@ struct llama_server_context
         processed_tokens.erase(processed_tokens.begin() + 1, processed_tokens.end());
       }
 
-      if(embd_inp.size() != 0)
+      if(!embd_inp.empty())
       {
         embd_inp.erase(embd_inp.begin() + 1, embd_inp.end());
       }
