@@ -69,7 +69,7 @@ def pick_existant_file(ntoption,nonntoption):
         return nonntoption
 
 lib_default = pick_existant_file("koboldcpp.dll","koboldcpp.so")
-lib_noavx2 = pick_existant_file("koboldcpp_noavx2.dll","koboldcpp_noavx2.so")
+lib_failsafe = pick_existant_file("koboldcpp_failsafe.dll","koboldcpp_failsafe.so")
 lib_openblas = pick_existant_file("koboldcpp_openblas.dll","koboldcpp_openblas.so")
 lib_openblas_noavx2 = pick_existant_file("koboldcpp_openblas_noavx2.dll","koboldcpp_openblas_noavx2.so")
 lib_clblast = pick_existant_file("koboldcpp_clblast.dll","koboldcpp_clblast.so")
@@ -77,7 +77,7 @@ lib_clblast = pick_existant_file("koboldcpp_clblast.dll","koboldcpp_clblast.so")
 
 def init_library():
     global handle
-    global lib_default,lib_noavx2,lib_openblas,lib_openblas_noavx2,lib_clblast
+    global lib_default,lib_failsafe,lib_openblas,lib_openblas_noavx2,lib_clblast
 
     libname = ""
     use_blas = False # if true, uses OpenBLAS for acceleration. libopenblas.dll must exist in the same dir.
@@ -89,7 +89,7 @@ def init_library():
         if not file_exists(lib_openblas_noavx2) or (os.name=='nt' and not file_exists("libopenblas.dll")):
             print("Warning: OpenBLAS library file not found. Non-BLAS library will be used.")
         elif args.noblas:
-            print("Attempting to use non-avx2 compatibility library without OpenBLAS.")
+            print("!!! Attempting to use FAILSAFE MODE !!!")
         else:
             use_blas = True
             print("Attempting to use non-avx2 compatibility library with OpenBLAS. A compatible libopenblas will be required.")
@@ -114,7 +114,9 @@ def init_library():
         if use_blas:
             libname = lib_openblas_noavx2
         else:
-            libname = lib_noavx2
+            libname = lib_failsafe
+            args.nommap = True
+            print("[Failsafe Mode : mmap is disabled.]")
     else:
         if use_clblast:
             libname = lib_clblast
@@ -451,7 +453,7 @@ def show_gui():
                 font = ("Arial", 9)).pack()
 
 
-        opts = ["Use OpenBLAS","Use CLBLast GPU #1","Use CLBLast GPU #2","Use CLBLast GPU #3","Use No BLAS","Use OpenBLAS (Old Devices)","Use No BLAS (Old Devices)"]
+        opts = ["Use OpenBLAS","Use CLBLast GPU #1","Use CLBLast GPU #2","Use CLBLast GPU #3","Use No BLAS","Use OpenBLAS (Old CPU, noavx2)","Failsafe Mode (Old CPU, noavx)"]
         runchoice = tk.StringVar()
         runchoice.set("Use OpenBLAS")
         tk.OptionMenu( root , runchoice , *opts ).pack()
@@ -493,9 +495,9 @@ def show_gui():
         if selchoice==opts[4]:
             args.noblas = True
         if selchoice==opts[5]:
-            args.nonoavx2 = True
+            args.noavx2 = True
         if selchoice==opts[6]:
-            args.nonoavx2 = True
+            args.noavx2 = True
             args.noblas = True
 
         root = tk.Tk()

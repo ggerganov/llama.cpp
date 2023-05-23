@@ -797,10 +797,16 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
 
     if(debugmode)
     {
-        printf("\n[Debug: Dump Input Tokens: %d]\n",file_format);
+        printf("\n[Debug: Dump Input Tokens, format: %d]\n",file_format);
         if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2)
         {
             for (auto id : embd_inp)
+            {
+                printf("'%s (%d)', ",llama_v2_token_to_str(llama_ctx_v2, id),id);
+            }
+
+            printf("\n\n[Debug: Context Size = %d]\n",current_context_tokens.size());
+            for (auto id : current_context_tokens)
             {
                 printf("'%s (%d)', ",llama_v2_token_to_str(llama_ctx_v2, id),id);
             }
@@ -811,6 +817,11 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             {
                 printf("'%s (%d)', ",llama_token_to_str(llama_ctx_v3, id),id);
             }
+            printf("\n\n[Debug: Context Size = %d]\n",current_context_tokens.size());
+            for (auto id : current_context_tokens)
+            {
+                printf("'%s (%d)', ",llama_token_to_str(llama_ctx_v3, id),id);
+            }
         }
         else
         {
@@ -818,8 +829,13 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             {
                 printf("'%s (%d)', ",vocab.id_to_token[id].c_str(),id);
             }
+            printf("\n\n[Debug: Context Size = %d]\n",current_context_tokens.size());
+             for (auto id : current_context_tokens)
+            {
+                printf("'%s (%d)', ",vocab.id_to_token[id].c_str(),id);
+            }
         }
-        printf("\n");
+        printf("\n\n");
     }
     
     while (remaining_tokens > 0)
