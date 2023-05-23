@@ -549,7 +549,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
   }
   if (!body["repeat_last_n"].is_null())
   {
-    llama.params.repeat_last_n = body["repeat_last_n"].get<float>();
+    llama.params.repeat_last_n = body["repeat_last_n"].get<int32_t>();
   }
   if (!body["temperature"].is_null())
   {
@@ -569,7 +569,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
   }
   if (!body["mirostat"].is_null())
   {
-    llama.params.mirostat = body["mirostat"].get<float>();
+    llama.params.mirostat = body["mirostat"].get<int>();
   }
   if (!body["mirostat_tau"].is_null())
   {
@@ -581,7 +581,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
   }
   if (!body["penalize_nl"].is_null())
   {
-    llama.params.penalize_nl = body["penalize_nl"].get<float>();
+    llama.params.penalize_nl = body["penalize_nl"].get<bool>();
   }
   if (!body["batch_size"].is_null())
   {
