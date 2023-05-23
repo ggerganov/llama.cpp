@@ -395,10 +395,10 @@ n_keep = {self.params.n_keep}
                         id = llama_cpp.llama_sample_token_mirostat_v2(self.ctx, candidates_p, llama_cpp.c_float(self.params.mirostat_tau), llama_cpp.c_float(self.params.mirostat_eta), llama_cpp.c_float(mirostat_mu))
                     else:
                         # Temperature sampling
-                        llama_cpp.llama_sample_top_k(self.ctx, candidates_p, top_k)
-                        llama_cpp.llama_sample_tail_free(self.ctx, candidates_p, llama_cpp.c_float(self.params.tfs_z))
-                        llama_cpp.llama_sample_typical(self.ctx, candidates_p, llama_cpp.c_float(self.params.typical_p))
-                        llama_cpp.llama_sample_top_p(self.ctx, candidates_p, llama_cpp.c_float(self.params.top_p))
+                        llama_cpp.llama_sample_top_k(self.ctx, candidates_p, top_k, min_keep=llama_cpp.c_size_t(1))
+                        llama_cpp.llama_sample_tail_free(self.ctx, candidates_p, llama_cpp.c_float(self.params.tfs_z),min_keep=llama_cpp.c_size_t(1))
+                        llama_cpp.llama_sample_typical(self.ctx, candidates_p, llama_cpp.c_float(self.params.typical_p),min_keep=llama_cpp.c_size_t(1))
+                        llama_cpp.llama_sample_top_p(self.ctx, candidates_p, llama_cpp.c_float(self.params.top_p),min_keep=llama_cpp.c_size_t(1))
                         llama_cpp.llama_sample_temperature(self.ctx, candidates_p, llama_cpp.c_float(self.params.temp))
                         id = llama_cpp.llama_sample_token(self.ctx, candidates_p)
                 # print("`{}`".format(candidates_p.size))

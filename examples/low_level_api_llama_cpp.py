@@ -68,8 +68,8 @@ while remaining_tokens > 0:
             _arr,
             last_n_repeat, frequency_penalty, presence_penalty)
 
-        llama_cpp.llama_sample_top_k(ctx, candidates_p, 40)
-        llama_cpp.llama_sample_top_p(ctx, candidates_p, 0.8)
+        llama_cpp.llama_sample_top_k(ctx, candidates_p, 40, min_keep=llama_cpp.c_size_t(1))
+        llama_cpp.llama_sample_top_p(ctx, candidates_p, 0.8, min_keep=llama_cpp.c_size_t(1))
         llama_cpp.llama_sample_temperature(ctx, candidates_p, 0.2)
         id = llama_cpp.llama_sample_token(ctx, candidates_p)
 
