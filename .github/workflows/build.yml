@@ -190,7 +190,7 @@ jobs:
           rename-item $env:RUNNER_TEMP/clblast_release_dir clblast
           foreach ($f in (gci -Recurse -Path "$env:RUNNER_TEMP/clblast" -Filter '*.cmake')) {
             $txt = Get-Content -Path $f -Raw
-            $txt.Replace('C:/vcpkg/packages/opencl_x64-windows/', "$($env:RUNNER_TEMP.Replace('\','/'))/clblast/") | Set-Content -Path $f -Encoding UTF8
+            $txt.Replace('C:/vcpkg/packages/opencl_x64-windows/', "$($env:RUNNER_TEMP.Replace('\','/'))/opencl/") | Set-Content -Path $f -Encoding UTF8
           }
 
       - name: Download OpenBLAS
