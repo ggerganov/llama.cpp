@@ -302,7 +302,7 @@ static cl_program build_program_from_source(cl_context ctx, cl_device_id dev, co
         program_log = (char*) malloc(log_size + 1);
         program_log[log_size] = '\0';
         clGetProgramBuildInfo(p, dev, CL_PROGRAM_BUILD_LOG, log_size + 1, program_log, NULL);
-        printf("%s\n", program_log);
+        fprintf(stderr, "ggml_opencl: kernel compile error:\n\n%s\n", program_log);
         free(program_log);
         exit(1);
     }
@@ -394,75 +394,74 @@ void ggml_cl_init(void) {
     int user_platform_number = -1;
     int user_device_number = -1;
 
-    unsigned n;   
-    if (user_platform_string != NULL && sscanf(user_platform_string, "%u", &n) == 1 && n < n_platforms) {
-        user_platform_number = (int)n;       
+    unsigned n;
+    if (user_platform_string != NULL && sscanf(user_platform_string, " %u", &n) == 1 && n < n_platforms) {
+        user_platform_number = (int)n;
     }
-    
-    if (user_device_string != NULL && sscanf(user_device_string, "%u", &n) == 1 && n < n_devices) {
+    if (user_device_string != NULL && sscanf(user_device_string, " %u", &n) == 1 && n < n_devices) {
         user_device_number = (int)n;
     }
+    if (user_platform_number != -1 && user_device_number != -1) {
+        cl_platform* platform = &platforms[user_platform_number];
+        if ((unsigned)user_device_number >= platform->n_devices) {
+            fprintf(stderr, "ggml_opencl: invalid device number %d\n", user_device_number);
+            exit(1);
+        }
+        default_device = &platform->devices[user_device_number];
+    } else {
 
-    struct cl_device * selected_devices = devices;
-    unsigned n_selected_devices = n_devices;
+        struct cl_device * selected_devices = devices;
+        unsigned n_selected_devices = n_devices;
 
-    if (user_platform_number == -1 && user_platform_string != NULL && user_platform_string[0] != 0) {
-        for (unsigned i = 0; i < n_platforms; i++) {
-            struct cl_platform * p = &platforms[i];
-            if (strstr(p->name, user_platform_string) != NULL ||
-                strstr(p->vendor, user_platform_string) != NULL) {
-                user_platform_number = (int)i;
-                break;
+        if (user_platform_number == -1 && user_platform_string != NULL && user_platform_string[0] != 0) {
+            for (unsigned i = 0; i < n_platforms; i++) {
+                struct cl_platform * p = &platforms[i];
+                if (strstr(p->name, user_platform_string) != NULL ||
+                    strstr(p->vendor, user_platform_string) != NULL) {
+                    user_platform_number = (int)i;
+                    break;
+                }
+            }
+            if (user_platform_number == -1) {
+                fprintf(stderr, "ggml_opencl: no platform matching '%s' was found.\n", user_platform_string);
+                exit(1);
             }
         }
-        if (user_platform_number == -1) {
-            fprintf(stderr, "ggml_opencl: no platform matching '%s' was found.\n", user_platform_string);
-            exit(1);
-        }
-    }
-    if (user_platform_number != -1) {
-        struct cl_platform * p = &platforms[user_platform_number];
-        selected_devices = p->devices;
-        n_selected_devices = p->n_devices;
-        default_device = p->default_device;
-        if (n_selected_devices == 0) {
-            fprintf(stderr, "ggml_opencl: selected platform '%s' does not have any devices.\n", p->name);
-            exit(1);
-        }
-    }
-
-    if (user_device_number == -1 && user_device_string != NULL && user_device_string[0] != 0) {
-        for (unsigned i = 0; i < n_selected_devices; i++) {
-            struct cl_device * d = &selected_devices[i];
-            if (strstr(d->name, user_device_string) != NULL) {
-                user_device_number = d->number;
-                break;
+        if (user_platform_number != -1) {
+            struct cl_platform * p = &platforms[user_platform_number];
+            selected_devices = p->devices;
+            n_selected_devices = p->n_devices;
+            default_device = p->default_device;
+            if (n_selected_devices == 0) {
+                fprintf(stderr, "ggml_opencl: selected platform '%s' does not have any devices.\n", p->name);
+                exit(1);
             }
         }
-        if (user_device_number == -1) {
-            fprintf(stderr, "ggml_opencl: no device matching '%s' was found.\n", user_device_string);
-            exit(1);
+
+        if (user_device_number == -1 && user_device_string != NULL && user_device_string[0] != 0) {
+            for (unsigned i = 0; i < n_selected_devices; i++) {
+                struct cl_device * d = &selected_devices[i];
+                if (strstr(d->name, user_device_string) != NULL) {
+                    user_device_number = d->number;
+                    break;
+                }
+            }
+            if (user_device_number == -1) {
+                fprintf(stderr, "ggml_opencl: no device matching '%s' was found.\n", user_device_string);
+                exit(1);
+            }
         }
-    }
-    if (user_device_number != -1) {
-        selected_devices = &devices[user_device_number];
-        n_selected_devices = 1;
-        default_device = &selected_devices[0];
-    }
+        if (user_device_number != -1) {
+            selected_devices = &devices[user_device_number];
+            n_selected_devices = 1;
+            default_device = &selected_devices[0];
+        }
 
-    GGML_ASSERT(n_selected_devices > 0);
+        GGML_ASSERT(n_selected_devices > 0);
 
-    if (default_device == NULL) {
-        default_device = &selected_devices[0];
-    }
-
-    //todo: fun hot fix
-    if (user_platform_number != -1 && user_device_number != -1)
-    {
-        cl_platform * myplat = &platforms[user_platform_number];
-        cl_device * mydev = &(myplat->devices[user_device_number]);
-        default_device = mydev;
-        default_device->platform = myplat;
+        if (default_device == NULL) {
+            default_device = &selected_devices[0];
+        }
     }
 
     fprintf(stderr, "ggml_opencl: selecting platform: '%s'\n", default_device->platform->name);
@@ -679,14 +678,21 @@ static void ggml_cl_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     size_t x_size;
     size_t y_size;
     size_t d_size;
-    cl_mem d_X = ggml_cl_pool_malloc(sizeof(float) * x_ne, &x_size, CL_MEM_READ_ONLY);
+    cl_mem d_X;
+    if (src0->backend == GGML_BACKEND_CL) {
+        d_X = *(cl_mem*) src0->data;
+    } else {
+        d_X = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &x_size, CL_MEM_READ_ONLY);
+    }
     cl_mem d_Y = ggml_cl_pool_malloc(sizeof(float) * y_ne, &y_size, CL_MEM_READ_ONLY);
     cl_mem d_D = ggml_cl_pool_malloc(sizeof(float) * d_ne, &d_size, CL_MEM_WRITE_ONLY);
 
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
             // copy data to device
-            CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_X, 0, src0, i03, i02, NULL));
+            if (src0->backend != GGML_BACKEND_CL) {
+                CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_X, 0, src0, i03, i02, NULL));
+            }
             CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i03, i02, NULL));
 
             CL_CHECK(clFinish(queue));
@@ -714,7 +720,9 @@ static void ggml_cl_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
         }
     }
 
-    ggml_cl_pool_free(d_X, x_size);
+    if (src0->backend != GGML_BACKEND_CL) {
+        ggml_cl_pool_free(d_X, x_size);
+    }
     ggml_cl_pool_free(d_Y, y_size);
     ggml_cl_pool_free(d_D, d_size);
 }
@@ -747,7 +755,12 @@ static void ggml_cl_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
     size_t x_size;
     size_t y_size;
     size_t d_size;
-    cl_mem d_X = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &x_size, CL_MEM_READ_ONLY);
+    cl_mem d_X;
+    if (src0->backend == GGML_BACKEND_CL) {
+        d_X = *(cl_mem*) src0->data;
+    } else {
+        d_X = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &x_size, CL_MEM_READ_ONLY);
+    }
     cl_mem d_Y = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * y_ne, &y_size, CL_MEM_READ_ONLY);
     cl_mem d_D = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * d_ne, &d_size, CL_MEM_WRITE_ONLY);
 
@@ -757,7 +770,9 @@ static void ggml_cl_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
             // copy src0 to device
-            CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_X, 0, src0, i03, i02, NULL));
+            if (src0->backend != GGML_BACKEND_CL) {
+                CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_X, 0, src0, i03, i02, NULL));
+            }
 
             // convert src1 to fp16
             // TODO: use multiple threads
@@ -813,7 +828,9 @@ static void ggml_cl_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
         }
     }
 
-    ggml_cl_pool_free(d_X, x_size);
+    if (src0->backend != GGML_BACKEND_CL) {
+        ggml_cl_pool_free(d_X, x_size);
+    }
     ggml_cl_pool_free(d_Y, y_size);
     ggml_cl_pool_free(d_D, d_size);
 }

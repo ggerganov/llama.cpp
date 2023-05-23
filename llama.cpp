@@ -1153,8 +1153,6 @@ static void llama_model_load_internal(
 
         fprintf(stderr, "ggml_opencl: total VRAM used: %zu MB\n", vram_total / 1024 / 1024);
     }
-#else
-    (void) n_gpu_layers;
 #endif
 
     if (progress_callback) {
