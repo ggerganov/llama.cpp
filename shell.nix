@@ -15,6 +15,12 @@ pkgs.mkShell {
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
     fi
 
+    # Check if wasm32-unknown-unknown target is installed, if not install it
+    if ! rustup target list --installed | grep -q "wasm32-unknown-unknown"; then
+        rustup target add wasm32-unknown-unknown
+    fi
+
+
     # Check if OpenSSL 1.1 is installed
     if ! (command -v openssl &> /dev/null && openssl version | grep -q "OpenSSL 1.1"); then
 
@@ -67,13 +73,19 @@ pkgs.mkShell {
         bash -c "$(curl -fsSL https://cosmonic.sh/install.sh)"
 
         # Get the current shell name
-        current_shell="$(basename "$SHELL")"
+        current_shell="$(basename ${builtins.getEnv "SHELL"})"
 
         # Update the corresponding configuration file based on the current shell
         if [[ "$current_shell" == "bash" ]]; then
-            echo "export PATH=\"/Users/test/.cosmo/bin:\${PATH}\"" >> "${HOME}/.bashrc" && source "${HOME}/.bashrc"
+            cat >> "${builtins.getEnv "HOME"}/.bashrc" <<EOF
+    export PATH="/Users/test/.cosmo/bin:\${builtins.getEnv "PATH"}"
+    EOF
+            source "${builtins.getEnv "HOME"}/.bashrc"
         elif [[ "$current_shell" == "zsh" ]]; then
-            echo "export PATH=\"/Users/test/.cosmo/bin:\${PATH}\"" >> "${HOME}/.zshrc" && source "${HOME}/.zshrc"
+            cat >> "${builtins.getEnv "HOME"}/.zshrc" <<EOF
+    export PATH="/Users/test/.cosmo/bin:\${builtins.getEnv "PATH"}"
+    EOF
+            source "${builtins.getEnv "HOME"}/.zshrc"
         else
             echo "Unsupported shell: $current_shell"
             exit 1
@@ -82,17 +94,17 @@ pkgs.mkShell {
     fi
 
     cat <<'EOF'
-               .-.
-                  `-'
-    ___          LoRA
-  .´   `'.     _...._
- :  LLAMA  :  .'      '.
-  '._____.' /`(o)    (o)`\
-  _|_______|/  :      :  \
-[_____________/ '------'  \
-  /  o                    /
-  `"`"|"`"`"`"`"`"`"`""=""===""`
-EOF
+                .-.
+                    `-'
+        ___          LoRA
+    .´   `'.     _...._
+    :  LLAMA  :  .'      '.
+    '._____.' /`(o)    (o)`\
+    _|_______|/  :      :  \
+    [_____________/ '------'  \
+    /  o                    /
+    `"`"|"`"`"`"`"`"`"`""=""===""`
+    EOF
 
     echo "gm gm ⟁"
   '';
