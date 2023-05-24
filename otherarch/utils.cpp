@@ -137,6 +137,20 @@ std::vector<gpt_vocab::id> gpt_tokenize(const gpt_vocab & vocab, const std::stri
         std::string str = text;
         std::string pat = R"('s|'t|'re|'ve|'m|'ll|'d| ?[[:alpha:]]+| ?[[:digit:]]+| ?[^\s[:alpha:][:digit:]]+|\s+(?!\S)|\s+)";
 
+        // Generate the subpattern from the special_tokens vector if it's not empty
+        if (!vocab.special_tokens.empty()) {
+            std::string special_tokens_subpattern;
+            for (const auto & token : vocab.special_tokens) {
+                if (!special_tokens_subpattern.empty()) {
+                    special_tokens_subpattern += "|";
+                }
+                special_tokens_subpattern += token;
+            }
+
+            // Modify the regex pattern with the generated special tokens subpattern
+            pat = special_tokens_subpattern + "|" + pat;
+        }
+
         std::regex re(pat);
         std::smatch m;
 
