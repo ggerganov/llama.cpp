@@ -96,7 +96,7 @@ int main(int argc, char ** argv) {
         params.prompt = gpt_random_prompt(rng);
     }
 
-    llama_init_backend();
+    //llama_init_backend();
 
     llama_context * ctx;
     g_ctx = &ctx;
