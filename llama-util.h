@@ -219,6 +219,7 @@ struct llama_mmap {
             throw std::runtime_error(format("MapViewOfFile failed: %s", llama_format_win_err(error).c_str()));
         }
 
+        #ifndef USE_FAILSAFE
         #if _WIN32_WINNT >= _WIN32_WINNT_WIN8
         if (prefetch) {
             // Advise the kernel to preload the mapped memory
@@ -233,6 +234,9 @@ struct llama_mmap {
         #else
         #pragma message("warning: You are building for pre-Windows 8; prefetch not supported")
         #endif // _WIN32_WINNT >= _WIN32_WINNT_WIN8
+        #else
+        printf("\nPrefetchVirtualMemory skipped in failsafe mode.");
+        #endif
     }
 
     ~llama_mmap() {
