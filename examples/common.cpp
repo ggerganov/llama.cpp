@@ -522,7 +522,7 @@ void console_init(console_state & con_st) {
         // Turn off ICANON (ENABLE_LINE_INPUT) and ECHO (ENABLE_ECHO_INPUT)
         dwMode &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
         SetConsoleMode(hConIn, dwMode);
-
+    }else{
         // Set console input codepage to UTF8
         _setmode(_fileno(stdin), _O_U8TEXT);
         // Set locale to Chinese Simplified UTF-8
