@@ -143,12 +143,22 @@ class Params:
     def guessed(model: 'LazyModel', file_type: GGMLFileType) -> 'Params':
         n_vocab, n_embd = model["tok_embeddings.weight"].shape
 
+        n_mult=256
+        n_head=n_embd // 128
+        n_layer=next(i for i in itertools.count() if f"layers.{i}.attention.wq.weight" not in model)
+
+        # TODO: hack for open_llama_3b
+        if n_embd == 3200:
+            n_mult = 108
+            n_head = 32
+            n_layer = 26
+
         return Params(
             n_vocab=n_vocab,
             n_embd=n_embd,
-            n_mult=256,
-            n_head=n_embd // 128,
-            n_layer=next(i for i in itertools.count() if f"layers.{i}.attention.wq.weight" not in model),
+            n_mult=n_mult,
+            n_head=n_head,
+            n_layer=n_layer,
             file_type=file_type,
         )
 
