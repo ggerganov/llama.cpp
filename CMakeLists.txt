@@ -73,6 +73,7 @@ option(LLAMA_HIPBLAS                "llama: use hipBLAS"                        
 
 option(LLAMA_BUILD_TESTS            "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES         "llama: build examples" ${LLAMA_STANDALONE})
+option(LLAMA_BUILD_SERVER           "llama: build server example"                           OFF)
 
 #
 # Build info header
@@ -201,7 +202,7 @@ if (LLAMA_CLBLAST)
     if (CLBlast_FOUND)
         message(STATUS "CLBlast found")
 
-        set(GGML_OPENCL_SOURCES ggml-opencl.c ggml-opencl.h)
+        set(GGML_OPENCL_SOURCES ggml-opencl.cpp ggml-opencl.h)
 
         add_compile_definitions(GGML_USE_CLBLAST)
 

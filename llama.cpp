@@ -12,6 +12,8 @@
 #include "ggml.h"
 #ifdef GGML_USE_CUBLAS
 #include "ggml-cuda.h"
+#elif defined(GGML_USE_CLBLAST)
+#include "ggml-opencl.h"
 #endif
 
 #include <array>
@@ -1092,7 +1094,7 @@ static void llama_model_load_internal(
             fprintf(stderr, "%s: [cublas] offloading output layer to GPU\n", __func__);
         }
         fprintf(stderr, "%s: [cublas] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
-#else
+#elif !defined(GGML_USE_CLBLAST)
         (void) n_gpu_layers;
 #endif
     }
@@ -1125,7 +1127,33 @@ static void llama_model_load_internal(
             done_size += lt.size;
         }
     }
-#endif // GGML_USE_CUBLAS
+#elif defined(GGML_USE_CLBLAST)
+    {
+        const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
+
+        fprintf(stderr, "ggml_opencl: offloading %d layers to GPU\n", n_gpu);
+
+        size_t vram_total = 0;
+
+        for (int i = 0; i < n_gpu; ++i) {
+            const auto & layer = model.layers[i];
+
+            ggml_cl_transform_tensor(layer.wq); vram_total += ggml_nbytes(layer.wq);
+            ggml_cl_transform_tensor(layer.wk); vram_total += ggml_nbytes(layer.wk);
+            ggml_cl_transform_tensor(layer.wv); vram_total += ggml_nbytes(layer.wv);
+            ggml_cl_transform_tensor(layer.wo); vram_total += ggml_nbytes(layer.wo);
+            ggml_cl_transform_tensor(layer.w1); vram_total += ggml_nbytes(layer.w1);
+            ggml_cl_transform_tensor(layer.w2); vram_total += ggml_nbytes(layer.w2);
+            ggml_cl_transform_tensor(layer.w3); vram_total += ggml_nbytes(layer.w3);
+        }
+        if (n_gpu_layers > (int) hparams.n_layer) {
+            fprintf(stderr, "ggml_opencl: offloading output layer to GPU\n");
+            ggml_cl_transform_tensor(model.output); vram_total += ggml_nbytes(model.output);
+        }
+
+        fprintf(stderr, "ggml_opencl: total VRAM used: %zu MB\n", vram_total / 1024 / 1024);
+    }
+#endif
 
     if (progress_callback) {
         progress_callback(1.0f, progress_callback_user_data);
