@@ -6,11 +6,10 @@
 git clone https://github.com/nexus
 ```
 
-2. Enter the Nexus flox environment
+2. Enter the Nix environment
 
 ```bash
-cd nexus
-flox activate
+nix-shell
 ```
 
 This will activate the flox environment defined in the nexus/flox.nix file. This environment has all the necessary dependencies installed to build and run your project.
