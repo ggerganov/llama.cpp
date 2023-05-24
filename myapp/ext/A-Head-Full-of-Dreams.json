@@ -1,0 +1,15 @@
+{
+    "put": "id:mynamespace:music::a-head-full-of-dreams",
+    "fields": {
+        "album": "A Head Full of Dreams",
+        "artist": "Coldplay",
+        "year": 2015,
+        "category_scores": {
+            "cells": [
+                { "address" : { "cat" : "pop" },  "value": 1 },
+                { "address" : { "cat" : "rock" }, "value": 0.2 },
+                { "address" : { "cat" : "jazz" }, "value": 0 }
+            ]
+        }
+    }
+}
