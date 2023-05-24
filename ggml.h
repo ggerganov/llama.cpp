@@ -249,6 +249,7 @@ extern "C" {
     enum ggml_backend {
         GGML_BACKEND_CPU = 0,
         GGML_BACKEND_CUDA = 1,
+        GGML_BACKEND_CL = 2,
     };
 
     // model file types
