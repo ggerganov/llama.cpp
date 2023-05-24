@@ -1,41 +1,48 @@
-**Start Vespa with Docker**
+ Here is the complete set of instructions:
 
-`docker run -it --platform=linux/amd64 --detach --name vespa --hostname vespa-container \
-  --publish 8080:8080 --publish 19071:19071 \
-  vespaengine/vespa`
+1. Clone the Nexus repository
 
-**If you have issues starting cosmonic:**
+```bash
+git clone https://github.com/nexus
+```
 
-`rustup default stable
-rustup target add wasm32-unknown-unknown`
+2. Enter the Nexus flox environment
 
------------------------------------------
+```bash
+cd nexus
+flox activate
+```
 
-**Cosmonic fails to launch server on macOS due to incorrect OpenSSL version**
+This will activate the flox environment defined in the nexus/flox.nix file. This environment has all the necessary dependencies installed to build and run your project.
 
-Cosmonic is unable to properly launch a server on macOS systems because the default OpenSSL version provided by the operating system is LibreSSL, which is incompatible with Cosmonic's requirements. The Cosmonic documentation suggests installing OpenSSL 1.1 using Homebrew (`brew install openssl@1.1`), which resolves the issue for installations managed by Homebrew. However, when attempting to use Nix to install the same package, the issue persists.
+3. Build and run with cosmo
 
-It is assumed that this problem occurs because Homebrew installs OpenSSL 1.1 as a "keg-only" package, avoiding symlinking it to avoid conflicts with macOS's LibreSSL dependencies. As a result, Cosmonic may be hard-coded to look for the OpenSSL installation in the Homebrew-specific directory, causing it to miss the Nix installation.
+Now you can use cosmo to build and launch your project:
 
-**Steps to reproduce:**
+```bash
+cosmo build
+cosmo launch
+```
 
-1. Use macOS with the default LibreSSL version installed.
-2. Try to launch a Cosmonic server.
-3. Observe the server failing to start due to the incorrect OpenSSL version.
-4. Install OpenSSL 1.1 using Nix.
-5. Attempt to launch the Cosmonic server again.
-6. Observe the server still failing to start, even with the correct OpenSSL version installed via Nix.
+**If this is your first run of cosmo**, it will automatically start the tutorial.
 
-**Expected behavior:**
+**If not your first run**, you can start the tutorial with:
 
-Cosmonic should be able to detect and utilize the correct OpenSSL version installed via Nix, similar to how it works with Homebrew installations.
+```bash
+cosmo tutorial hello
+```
 
-**System information:**
+4. Explaining the components
 
-- macOS version: (please provide your macOS version)
-- Cosmonic version: (please provide your Cosmonic version)
-- Nix version: (please provide your Nix version)
+- flox is a tool for managing declarative Nix-based environments. The nexus/flox.nix file defines an environment with all the dependencies for your project.
+- cosmo is a tool for building and deploying WebAssembly actors. You use it to build and launch your actor from within the flox environment.
+- Nix is a purely functional package manager that is used by flox to define environments.
 
-**Possible solution:**
+5. Installation (if not already completed)
 
-Update Cosmonic to search for OpenSSL installations in common Nix paths, or provide a configuration option to specify the location of the OpenSSL installation.
+Follow the instructions to install flox and configure your system to use it. This will install the necessary tools to get started with the Nexus project.
+
+- Install Nix (if not already installed)
+- Install flox
+
+You now have all the necessary components installed and configured to build and run the Nexus project! Let me know if you have any other questions.
