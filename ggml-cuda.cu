@@ -862,6 +862,10 @@ static void ggml_cuda_op(const ggml_tensor * src0, const ggml_tensor * src1, ggm
     }
 }
 
+bool ggml_cuda_can_mul(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
+    return src1->backend == GGML_BACKEND_CUDA;
+}
+
 void ggml_cuda_mul(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
     GGML_ASSERT(src0->type == GGML_TYPE_F32 && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32);
     ggml_cuda_op<GGML_CUDA_OP_TYPE_FFF, ggml_cuda_op_mul>(src0, src1, dst);
@@ -967,4 +971,35 @@ void ggml_cuda_load_data(const char * fname, struct ggml_tensor * tensor, const 
     tensor->data = buf;
     free(buf_host);
     fclose(fp);
+}
+
+bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor){
+    switch (tensor->op) {
+        case GGML_OP_MUL:
+            if (!ggml_cuda_can_mul(tensor->src0, tensor->src1, tensor)) {
+                return false;
+            }
+            if (params->ith != 0) {
+                return true;
+            }
+            if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
+                return true;
+            }
+            ggml_cuda_mul(tensor->src0, tensor->src1, tensor);
+            return true;
+        case GGML_OP_MUL_MAT:
+            if (!ggml_cuda_can_mul_mat(tensor->src0, tensor->src1, tensor)) {
+                return false;
+            }
+            if (params->ith != 0) {
+                return true;
+            }
+            if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
+                return true;
+            }
+            ggml_cuda_mul_mat(tensor->src0, tensor->src1, tensor, params->wdata, params->wsize);
+            return true;
+        default:
+            return false;
+    }
 }
