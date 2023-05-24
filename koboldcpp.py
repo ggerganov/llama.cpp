@@ -114,9 +114,7 @@ def init_library():
         if use_blas:
             libname = lib_openblas_noavx2
         else:
-            libname = lib_failsafe
-            args.nommap = True
-            print("[Failsafe Mode : mmap is disabled.]")
+            libname = lib_failsafe            
     else:
         if use_clblast:
             libname = lib_clblast
@@ -499,6 +497,8 @@ def show_gui():
         if selchoice==opts[6]:
             args.noavx2 = True
             args.noblas = True
+            args.nommap = True
+            print("[Failsafe Mode : mmap is disabled.]")
 
         root = tk.Tk()
         root.attributes("-alpha", 0)
