@@ -620,6 +620,7 @@ def main(args):
 
 if __name__ == '__main__':
     print("Welcome to KoboldCpp - Version " + KcppVersion) # just update version manually
+    # print("Python version: " + sys.version)
     parser = argparse.ArgumentParser(description='Kobold llama.cpp server')
     modelgroup = parser.add_mutually_exclusive_group() #we want to be backwards compatible with the unnamed positional args
     modelgroup.add_argument("--model", help="Model file to load", nargs="?")
