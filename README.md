@@ -15,13 +15,12 @@ flox activate
 
 This will activate the flox environment defined in the nexus/flox.nix file. This environment has all the necessary dependencies installed to build and run your project.
 
-3. Build and run with cosmo
+3. Run cosmo
 
-Now you can use cosmo to build and launch your project:
+Now you can use cosmo launch your project:
 
 ```bash
-cosmo build
-cosmo launch
+cosmo
 ```
 
 **If this is your first run of cosmo**, it will automatically start the tutorial.
