@@ -85,9 +85,6 @@ int main(int argc, char ** argv) {
 
     fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
 
-    // Save the initial seed parameter before overwriting it so it's possible to determine whether
-    // the user supplied a seed or not. This is useful when loading saved sessions.
-    int32_t initial_seed = params.seed;
     if (params.seed < 0) {
         params.seed = time(NULL);
     }
@@ -156,12 +153,7 @@ int main(int argc, char ** argv) {
                 return 1;
             }
             session_tokens.resize(n_token_count_out);
-            if (initial_seed != -1) {
-                fprintf(stderr, "%s: seed argument overrides session file RNG state, will now use seed: %d\n", __func__, params.seed);
-                llama_set_rng_seed(ctx, params.seed);
-            } else {
-                fprintf(stderr, "%s: using RNG state from loaded session file rather than seed\n", __func__);
-            }
+            llama_set_rng_seed(ctx, params.seed);
 
             fprintf(stderr, "%s: loaded a session with prompt size of %d tokens\n", __func__, (int) session_tokens.size());
         } else {
