@@ -169,6 +169,8 @@ ifdef LLAMA_HIPBLAS
 	LDFLAGS    += -L/opt/rocm/lib -Wl,-rpath=$(ROCM_PATH)/lib -lhipblas -lamdhip64
 	OBJS       += ggml-cuda.o
 ggml-cuda.o: CXXFLAGS += $(addprefix --offload-arch=,$(GPU_TARGETS))
+ggml-cuda.o: CXXFLAGS += -DGGML_CUDA_DMMV_X=64
+ggml-cuda.o: CXXFLAGS += -DGGML_CUDA_DMMV_Y=1
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(CXX) $(CXXFLAGS) -x hip -c -o $@ $<
 endif
