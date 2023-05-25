@@ -1,5 +1,9 @@
 scripts_dir := "scripts"
 
+# Check if Nix is installed, if not install it based on the platform
+install-nix: {{scripts_dir}}/install_nix.sh
+    @bash {{scripts_dir}}/install_nix.sh
+
 # Check if Rust is installed, if not install it
 install-rust:
     @if ! command -v rustc &> /dev/null; then \
@@ -28,4 +32,4 @@ install-cosmo:
         . {{scripts_dir}}/update_path.sh; \
     fi
 
-all: install-rust install-wasm-target install-openssl install-cosmo
+all: install-nix install-rust install-wasm-target install-openssl install-cosmo
