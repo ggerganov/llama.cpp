@@ -197,6 +197,7 @@ static __global__ void dequantize_block(const void * vx, float * y, const int k)
     // dequantize
     float & v0 = y[iybs + iqs + 0];
     float & v1 = y[iybs + iqs + y_offset];
+
     dequantize_kernel(vx, ib, iqs, v0, v1);
 }
 
@@ -414,6 +415,42 @@ static cudaStream_t g_cudaStreams2[GGML_CUDA_MAX_STREAMS] = { nullptr };
 static cudaEvent_t g_cudaEvents[GGML_CUDA_MAX_EVENTS] = { nullptr };
 
 void ggml_init_cublas() {
+    int device_id = 0;
+    cudaSetDevice(device_id);
+
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, device_id);
+
+    fprintf(stderr, "Device id:                                 %d\n",
+        device_id);
+    fprintf(stderr, "Device name:                               %s\n",
+        prop.name);
+    fprintf(stderr, "Compute capability:                        %d.%d\n",
+        prop.major, prop.minor);
+    fprintf(stderr, "Amount of global memory:                   %g GB\n",
+        prop.totalGlobalMem / (1024.0 * 1024 * 1024));
+    fprintf(stderr, "Amount of constant memory:                 %g KB\n",
+        prop.totalConstMem  / 1024.0);
+    fprintf(stderr, "Maximum grid size:                         %d %d %d\n",
+        prop.maxGridSize[0],
+        prop.maxGridSize[1], prop.maxGridSize[2]);
+    fprintf(stderr, "Maximum block size:                        %d %d %d\n",
+        prop.maxThreadsDim[0], prop.maxThreadsDim[1],
+        prop.maxThreadsDim[2]);
+    fprintf(stderr, "Number of SMs:                             %d\n",
+        prop.multiProcessorCount);
+    fprintf(stderr, "Maximum amount of shared memory per block: %g KB\n",
+        prop.sharedMemPerBlock / 1024.0);
+    fprintf(stderr, "Maximum amount of shared memory per SM:    %g KB\n",
+        prop.sharedMemPerMultiprocessor / 1024.0);
+    fprintf(stderr, "Maximum number of registers per block:     %d K\n",
+        prop.regsPerBlock / 1024);
+    fprintf(stderr, "Maximum number of registers per SM:        %d K\n",
+        prop.regsPerMultiprocessor / 1024);
+    fprintf(stderr, "Maximum number of threads per block:       %d\n",
+        prop.maxThreadsPerBlock);
+    fprintf(stderr, "Maximum number of threads per SM:          %d\n",
+        prop.maxThreadsPerMultiProcessor);
     if (g_cublasH == nullptr) {
         // create streams
         for (int i = 0; i < GGML_CUDA_MAX_STREAMS; ++i) {
@@ -442,9 +479,16 @@ void * ggml_cuda_host_malloc(size_t size) {
     void * ptr = nullptr;
     cudaError_t err = cudaMallocHost((void **) &ptr, size);
     if (err != cudaSuccess) {
+        // The allocation error can be bypassed. A null ptr will assigned out of this function.
+        // This can fixed the OOM error in WSL.
+        cudaGetLastError();
         fprintf(stderr, "WARNING: failed to allocate %.2f MB of pinned memory: %s\n",
             size/1024.0/1024.0, cudaGetErrorString(err));
         return nullptr;
+    }
+    else{
+        fprintf(stderr, "INFO: succeed to allocate %.2f MB of pinned memory\n",
+            size/1024.0/1024.0);
     }
 
     return ptr;
