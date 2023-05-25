@@ -37,6 +37,6 @@ install-cosmo:
         else \
             echo "Unsupported shell: $$current_shell"; \
         fi; \
-    fiai
+    fi; \
 
 all: install-nix install-rust install-wasm-target install-openssl install-cosmo
