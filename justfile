@@ -6,7 +6,7 @@ install-nix:
 
 # Check if Rust is installed, if not install it
 install-rust:
-    @if ! command -v rustc &> /dev/null; then \
+    @if ! command -v rustup &> /dev/null; then \
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh; \
         . {{scripts_dir}}/update_path.sh; \
     fi
@@ -37,6 +37,6 @@ install-cosmo:
         else \
             echo "Unsupported shell: $$current_shell"; \
         fi; \
-    fi
+    fiai
 
 all: install-nix install-rust install-wasm-target install-openssl install-cosmo
