@@ -19,11 +19,11 @@ if ! command -v nix --help >/dev/null 2>&1; then
   case `uname` in
     Linux*)
       echo "Error: Nix package manager is not installed. Installing Nix for Linux..."
-      sh <(curl -L https://nixos.org/nix/install) --daemon
+      curl -L https://nixos.org/nix/install | sh --daemon -
       ;;
     Darwin*)
       echo "Error: Nix package manager is not installed. Installing Nix for macOS..."
-      sh <(curl -L https://nixos.org/nix/install) --darwin-use-unencrypted-nix-store-volume
+      curl -L https://nixos.org/nix/install | sh --darwin-use-unencrypted-nix-store-volume -
       ;;
     *)
       echo "Unsupported platform for Nix installation"
