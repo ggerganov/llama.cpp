@@ -233,6 +233,8 @@ if (LLAMA_HIPBLAS)
         message(STATUS "HIP and hipBLAS found")
         add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUBLAS)
         add_library(ggml-rocm OBJECT ggml-cuda.cu ggml-cuda.h)
+        target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
+        target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_DMMV_Y=${LLAMA_CUDA_DMMV_Y})
         set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE CXX)
         target_link_libraries(ggml-rocm PRIVATE hip::device PUBLIC hip::host roc::hipblas)
 
