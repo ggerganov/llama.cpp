@@ -55,11 +55,11 @@ use wasmcloud_interface_httpserver::{HttpRequest, HttpResponse, HttpServer, Http
 
 #[derive(Debug, Default, Actor, HealthResponder)]
 #[services(Actor, HttpServer)]
-struct DuckActor {}
+struct <your_project_name>Actor {}
 
 /// Implementation of the HttpServer capability contract
 #[async_trait]
-impl HttpServer for DuckActor {
+impl HttpServer for <your_project_name>Actor {
     async fn handle_request(&self, _ctx: &Context, _req: &HttpRequest) -> RpcResult<HttpResponse> {
         Ok(HttpResponse::ok("message"))
     }
@@ -74,17 +74,45 @@ use wasmcloud_interface_httpserver::{HttpRequest, HttpResponse, HttpServer, Http
 
 #[derive(Debug, Default, Actor, HealthResponder)]
 #[services(Actor, HttpServer)]
-struct HelloActor {}
+struct <your_project_name>Actor {}
 
 /// Implementation of the HTTP server capability
 #[async_trait]
-impl HttpServer for HelloActor {
+impl HttpServer for <your_project_name>Actor {
     async fn handle_request(&self, _ctx: &Context, _req: &HttpRequest) -> RpcResult<HttpResponse> {
         let message: &str = r#"message"#;
 
-        HttpResponse::ok(message)
+        Ok(HttpResponse::ok(message))
     }
 }
+
+```
+## Launching the Project
+
+1. Build and sign your actor:
+
+```bash
+cosmo build
 ```
 
-Now you're all set! You can start building your project and explore the Nexus repository. Happy coding!
+2. Launch the actor using Cosmo CLI:
+
+```bash
+cosmo launch
+```
+
+3. Navigate to [Cosmonic App](https://app.cosmonic.com) and sign in with your account.
+
+4. In the Logic view, you should see the new actor you just launched.
+
+5. To make your actor accessible from the web, launch a new provider for an HTTP server with the following OCI URL: `cosmonic.azurecr.io/httpserver_wormhole:0.5.3`. Give the link a name, and note that the HTTP server must be launched on a Cosmonic Manager resource.
+
+6. Once the HTTP server is launched, link it to your actor.
+
+7. Launch a wormhole and connect it to your actor link (the HTTP server and the actor).
+
+8. Your actor should now be accessible at the domain of the wormhole followed by `.cosmonic.app`. For example: `https://white-morning-5041.cosmonic.app`.
+
+Now you can access your project from any web browser using the provided URL!
+
+You're all set! You can start building your project and explore the Nexus repository. Happy coding!
