@@ -151,7 +151,7 @@ jobs:
     env:
       OPENBLAS_VERSION: 0.3.23
       OPENCL_VERSION: 2023.04.17
-      CLBLAST_VERSION: 1.5.3
+      CLBLAST_VERSION: 1.6.0
 
     strategy:
       matrix:
@@ -184,13 +184,13 @@ jobs:
         id: get_clblast
         if: ${{ matrix.build == 'clblast' }}
         run: |
-          curl.exe -o $env:RUNNER_TEMP/clblast.zip -L "https://github.com/CNugteren/CLBlast/releases/download/${env:CLBLAST_VERSION}/CLBlast-${env:CLBLAST_VERSION}-Windows-x64.zip"
+          curl.exe -o $env:RUNNER_TEMP/clblast.7z -L "https://github.com/CNugteren/CLBlast/releases/download/${env:CLBLAST_VERSION}/CLBlast-${env:CLBLAST_VERSION}-windows-x64.7z"
           curl.exe -o $env:RUNNER_TEMP/CLBlast.LICENSE.txt -L "https://github.com/CNugteren/CLBlast/raw/${env:CLBLAST_VERSION}/LICENSE"
-          mkdir $env:RUNNER_TEMP/clblast
-          tar.exe -xvf $env:RUNNER_TEMP/clblast.zip -C $env:RUNNER_TEMP/clblast
+          7z x "-o${env:RUNNER_TEMP}" $env:RUNNER_TEMP/clblast.7z
+          rename-item $env:RUNNER_TEMP/clblast_release_dir clblast
           foreach ($f in (gci -Recurse -Path "$env:RUNNER_TEMP/clblast" -Filter '*.cmake')) {
             $txt = Get-Content -Path $f -Raw
-            $txt.Replace('C:/dependencies/opencl/', "$($env:RUNNER_TEMP.Replace('\','/'))/opencl/") | Set-Content -Path $f -Encoding UTF8
+            $txt.Replace('C:/vcpkg/packages/opencl_x64-windows/', "$($env:RUNNER_TEMP.Replace('\','/'))/opencl/") | Set-Content -Path $f -Encoding UTF8
           }
 
       - name: Download OpenBLAS
