@@ -29,7 +29,14 @@ install-openssl:
 install-cosmo:
     @if ! command -v cosmo &> /dev/null; then \
         bash -c "$(curl -fsSL https://cosmonic.sh/install.sh)"; \
-        . {{scripts_dir}}/update_path.sh; \
+        current_shell=$$(basename "$$SHELL"); \
+        if [ "$$current_shell" == "bash" ]; then \
+            echo "export PATH=\"/Users/nexus/.cosmo/bin:\$$${PATH}\"" >> "${HOME}/.bashrc" && source "${HOME}/.bashrc"; \
+        elif [ "$$current_shell" == "zsh" ]; then \
+            echo "export PATH=\"/Users/nexus/.cosmo/bin:\$$${PATH}\"" >> "${HOME}/.zshrc" && source "${HOME}/.zshrc"; \
+        else \
+            echo "Unsupported shell: $$current_shell"; \
+        fi; \
     fi
 
 all: install-nix install-rust install-wasm-target install-openssl install-cosmo
