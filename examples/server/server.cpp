@@ -421,6 +421,8 @@ void server_print_usage(int /*argc*/, char **argv, const gpt_params &params)
   fprintf(stderr, "                        number of layers to store in VRAM\n");
   fprintf(stderr, "  -m FNAME, --model FNAME\n");
   fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
+  fprintf(stderr, "  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
+  fprintf(stderr, "  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
   fprintf(stderr, "  -host                 ip address to listen (default 127.0.0.1)\n");
   fprintf(stderr, "  -port PORT            port to listen (default 8080)\n");
   fprintf(stderr, "\n");
@@ -504,6 +506,24 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
         break;
       }
       params.n_gpu_layers = std::stoi(argv[i]);
+    }
+    else if (arg == "--lora")
+    {
+        if (++i >= argc)
+        {
+            invalid_param = true;
+            break;
+        }
+        params.lora_adapter = argv[i];
+        params.use_mmap = false;
+    }
+    else if (arg == "--lora-base")
+    {
+        if (++i >= argc) {
+            invalid_param = true;
+            break;
+        }
+        params.lora_base = argv[i];
     }
     else
     {
