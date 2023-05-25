@@ -1,7 +1,7 @@
 [package]
 name = "nexus"
 version = "0.0.0"
-edition = "2033"
+edition = "2021"
 
 [dependencies]
 c2pa = "0.21.0"

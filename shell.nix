@@ -6,7 +6,6 @@ pkgs.mkShell {
     cargo
     tree
     poetry
-    openssl_1_1
     vespa-cli
   ];
   shellHook = ''
