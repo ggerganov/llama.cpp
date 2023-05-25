@@ -1,8 +1,8 @@
 scripts_dir := "scripts"
 
 # Check if Nix is installed, if not install it based on the platform
-install-nix: {{scripts_dir}}/install_nix.sh
-    @bash {{scripts_dir}}/install_nix.sh
+install-nix:
+    . {{scripts_dir}}/install_nix.sh; \
 
 # Check if Rust is installed, if not install it
 install-rust:
