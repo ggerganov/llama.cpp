@@ -9,7 +9,12 @@ case $current_shell in
         source ~/.bashrc || source ~/.bash_profile
         ;;
     zsh)
-        source ~/.zshrc
+        if [ -f ~/.zshrc ]; then
+            source ~/.zshrc
+        else
+            touch ~/.zshrc
+            source ~/.zshrc
+        fi
         ;;
     *)
         exit 1
