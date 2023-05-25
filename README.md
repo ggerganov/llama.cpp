@@ -89,29 +89,41 @@ impl HttpServer for <your_project_name>Actor {
 ```
 ## Launching the Project
 
-1. Build and sign your actor:
+1. Login to Cosmonic:
+
+```bash
+cosmo login
+```
+
+2. Build and sign your actor:
 
 ```bash
 cosmo build
 ```
 
-2. Launch the actor using Cosmo CLI:
+3. Start your wasmCloud host:
+
+```bash
+cosmo up
+```
+
+4. Launch the actor using Cosmo CLI:
 
 ```bash
 cosmo launch
 ```
 
-3. Navigate to [Cosmonic App](https://app.cosmonic.com) and sign in with your account.
+5. Navigate to [Cosmonic App](https://app.cosmonic.com) and sign in with your account.
 
-4. In the Logic view, you should see the new actor you just launched.
+6. In the Logic view, you should see the new actor you just launched.
 
-5. To make your actor accessible from the web, launch a new provider for an HTTP server with the following OCI URL: `cosmonic.azurecr.io/httpserver_wormhole:0.5.3`. Give the link a name, and note that the HTTP server must be launched on a Cosmonic Manager resource.
+7. To make your actor accessible from the web, launch a new provider for an HTTP server with the following OCI URL: `cosmonic.azurecr.io/httpserver_wormhole:0.5.3`. Give the link a name, and note that the HTTP server must be launched on a Cosmonic Manager resource.
 
-6. Once the HTTP server is launched, link it to your actor.
+8. Once the HTTP server is launched, link it to your actor.
 
-7. Launch a wormhole and connect it to your actor link (the HTTP server and the actor).
+9. Launch a wormhole and connect it to your actor link (the HTTP server and the actor).
 
-8. Your actor should now be accessible at the domain of the wormhole followed by `.cosmonic.app`. For example: `https://white-morning-5041.cosmonic.app`.
+10. Your actor should now be accessible at the domain of the wormhole followed by `.cosmonic.app`. For example: `https://white-morning-5041.cosmonic.app`.
 
 Now you can access your project from any web browser using the provided URL!
 

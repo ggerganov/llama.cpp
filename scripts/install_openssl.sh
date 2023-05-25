@@ -9,6 +9,13 @@ if ! (command -v openssl &> /dev/null && openssl version | grep -q "OpenSSL 1.1"
             # MacOS M1 installation
             if ! command -v brew &> /dev/null; then
                 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+                (echo; echo 'eval "$(/opt/homebrew/bin/brew shellenv)"') >> "$HOME/.zprofile"
+
+                eval "$(/opt/homebrew/bin/brew shellenv)"
+
+                echo 'export PATH="/opt/homebrew/opt/openssl@1.1/bin:$PATH"' >> ~/.zshrc
+
             fi
 
             export PATH="/opt/homebrew/bin:$PATH"
