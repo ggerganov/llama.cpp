@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package robot;
+package llama;
 
 option go_package = "./pkg/grpc";
 
