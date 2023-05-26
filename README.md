@@ -335,7 +335,7 @@ Building the program with BLAS support may lead to some performance improvements
       </details>
 
   Installing CLBlast: it may be found in your operating system's packages.
-  
+
   - <details>
     <summary>If not, then installing from source:</summary>
 
@@ -364,9 +364,9 @@ Building the program with BLAS support may lead to some performance improvements
     cmake .. -DLLAMA_CLBLAST=ON -DCLBlast_dir=/some/path
     cmake --build . --config Release
     ```
-  
+
   Running:
-  
+
   The CLBlast build supports `--gpu-layers|-ngl` like  the CUDA version does.
 
   To select the correct platform (driver) and device (GPU), you can use the environment variables `GGML_OPENCL_PLATFORM` and `GGML_OPENCL_DEVICE`.
@@ -383,7 +383,7 @@ Building the program with BLAS support may lead to some performance improvements
   Using the variables it is possible to select a CPU-based driver as well, if so desired.
 
   You can get a list of platforms and devices from the `clinfo -l` command, etc.
-  
+
 ### Prepare Data & Run
 
 ```bash
