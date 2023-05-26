@@ -1,46 +1,130 @@
- Here is the complete set of instructions:
+# Nexus
 
-1. Clone the Nexus repository
+Welcome to the Nexus! This README will guide you through setting up your development environment and getting started with the project.
+
+## Prerequisites
+
+Before you begin, make sure you have the following installed on your system:
+
+- [Nix](https://nixos.org)
+- [Git](https://git-scm.com/)
+- [Rust](https://www.rust-lang.org/)
+- wasm32-unknown-unknown target
+- [OpenSSL 1.1](https://www.openssl.org/)
+- [Cosmoonic](https://cosmonic.com)
+
+## Getting Started
+
+1. Clone the repository and navigate to the project directory:
 
 ```bash
-git clone https://github.com/nexus
+git clone https://github.com/plurigrid/nexus.git
+cd nexus
 ```
 
-2. Enter the Nix environment
+2. Start nix shell and run the following command to install all required dependencies:
 
 ```bash
 nix-shell
+make all
 ```
 
-This will activate the flox environment defined in the nexus/flox.nix file. This environment has all the necessary dependencies installed to build and run your project.
+This will automatically check for and install Rust, wasm32-unknown-unknown target, OpenSSL 1.1, and Cosmo CLI if they are not already installed on your system.
 
-3. Run cosmo
-
-Now you can use cosmo launch your project:
+3. Create a new actor using Cosmo CLI:
 
 ```bash
-cosmo
+cosmo new actor <your_project_name>
 ```
 
-**If this is your first run of cosmo**, it will automatically start the tutorial.
+Replace `<your_project_name>` with your desired project name.
 
-**If not your first run**, you can start the tutorial with:
+4. Navigate to your newly created project directory:
 
 ```bash
-cosmo tutorial hello
+cd <your_project_name>
 ```
 
-4. Explaining the components
+5. Edit `src/lib.rs` file in your favorite text editor.
 
-- flox is a tool for managing declarative Nix-based environments. The nexus/flox.nix file defines an environment with all the dependencies for your project.
-- cosmo is a tool for building and deploying WebAssembly actors. You use it to build and launch your actor from within the flox environment.
-- Nix is a purely functional package manager that is used by flox to define environments.
+The default file content looks like this:
 
-5. Installation (if not already completed)
+```rust
+use wasmbus_rpc::actor::prelude::*;
+use wasmcloud_interface_httpserver::{HttpRequest, HttpResponse, HttpServer, HttpServerReceiver};
 
-Follow the instructions to install flox and configure your system to use it. This will install the necessary tools to get started with the Nexus project.
+#[derive(Debug, Default, Actor, HealthResponder)]
+#[services(Actor, HttpServer)]
+struct <your_project_name>Actor {}
 
-- Install Nix (if not already installed)
-- Install flox
+/// Implementation of the HttpServer capability contract
+#[async_trait]
+impl HttpServer for <your_project_name>Actor {
+    async fn handle_request(&self, _ctx: &Context, _req: &HttpRequest) -> RpcResult<HttpResponse> {
+        Ok(HttpResponse::ok("message"))
+    }
+}
+```
 
-You now have all the necessary components installed and configured to build and run the Nexus project! Let me know if you have any other questions.
+You can modify the file to accommodate more text like this:
+
+```rust
+use wasmbus_rpc::actor::prelude::*;
+use wasmcloud_interface_httpserver::{HttpRequest, HttpResponse, HttpServer, HttpServerReceiver};
+
+#[derive(Debug, Default, Actor, HealthResponder)]
+#[services(Actor, HttpServer)]
+struct <your_project_name>Actor {}
+
+/// Implementation of the HTTP server capability
+#[async_trait]
+impl HttpServer for <your_project_name>Actor {
+    async fn handle_request(&self, _ctx: &Context, _req: &HttpRequest) -> RpcResult<HttpResponse> {
+        let message: &str = r#"message"#;
+
+        Ok(HttpResponse::ok(message))
+    }
+}
+
+```
+## Launching the Project
+
+1. Login to Cosmonic:
+
+```bash
+cosmo login
+```
+
+2. Build and sign your actor:
+
+```bash
+cosmo build
+```
+
+3. Start your wasmCloud host:
+
+```bash
+cosmo up
+```
+
+4. Launch the actor using Cosmo CLI:
+
+```bash
+cosmo launch
+```
+
+5. Navigate to [Cosmonic App](https://app.cosmonic.com) and sign in with your account.
+
+6. In the Logic view, you should see the new actor you just launched.
+
+7. To make your actor accessible from the web, launch a new provider for an HTTP server with the following OCI URL: `cosmonic.azurecr.io/httpserver_wormhole:0.5.3`. Give the link a name, and note that the HTTP server must be launched on a Cosmonic Manager resource.
+
+8. Once the HTTP server is launched, link it to your actor.
+
+9. Launch a wormhole and connect it to your actor link (the HTTP server and the actor).
+
+10. Your actor should now be accessible at the domain of the wormhole followed by `.cosmonic.app`. For example: `https://white-morning-5041.cosmonic.app`.
+
+Now you can access your project from any web browser using the provided URL!
+
+You're all set! You can start building your project and explore the Nexus repository. Happy coding!
