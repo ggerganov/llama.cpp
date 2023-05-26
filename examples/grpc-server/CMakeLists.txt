@@ -1,16 +1,17 @@
 set(TARGET grpc-server)
 set(_PROTOBUF_LIBPROTOBUF libprotobuf)
 set(_REFLECTION grpc++_reflection)
-include_directories($ENV{MY_INSTALL_DIR}/include)
-find_package(absl REQUIRED PATHS $ENV{MY_INSTALL_DIR}/lib)
-find_package(Protobuf CONFIG REQUIRED PATHS $ENV{MY_INSTALL_DIR}/lib)
+
+find_package(absl REQUIRED)
+find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_program(_PROTOBUF_PROTOC protoc)
 set(_GRPC_GRPCPP grpc++)
 find_program(_GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
+include_directories(${Protobuf_INCLUDE_DIRS})
 
-message(STATUS "Using protobuf ${Protobuf_VERSION} ${CMAKE_CURRENT_BINARY_DIR} $ENV{MY_INSTALL_DIR}/include")
+message(STATUS "Using protobuf ${Protobuf_VERSION} ${Protobuf_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR}")
 
 
 # Proto file

@@ -108,6 +108,7 @@ public:
       ctx_for_embedding = llama_init_from_gpt_params(params);
     }
     params.embedding = false;
+    fprintf(stderr, "%s: loading model\n", __func__);
     ctx = llama_init_from_gpt_params(params);
     if (ctx == NULL || (has_embedding && ctx_for_embedding == NULL))
     {
@@ -116,6 +117,7 @@ public:
     }
     else
     {
+      fprintf(stderr, "%s: model loaded\n", __func__);
       loaded = true;
       last_n_tokens.resize(params.n_ctx);
       std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
@@ -749,6 +751,7 @@ int main(int argc, char **argv)
   // load the model
   if (!llama.loaded)
   {
+    fprintf(stderr, "error: failed to load model\n");
     return 1;
   }
 
