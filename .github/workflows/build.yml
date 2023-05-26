@@ -187,7 +187,7 @@ jobs:
           curl.exe -o $env:RUNNER_TEMP/clblast.7z -L "https://github.com/CNugteren/CLBlast/releases/download/${env:CLBLAST_VERSION}/CLBlast-${env:CLBLAST_VERSION}-windows-x64.7z"
           curl.exe -o $env:RUNNER_TEMP/CLBlast.LICENSE.txt -L "https://github.com/CNugteren/CLBlast/raw/${env:CLBLAST_VERSION}/LICENSE"
           7z x "-o${env:RUNNER_TEMP}" $env:RUNNER_TEMP/clblast.7z
-          rename-item $env:RUNNER_TEMP/clblast_release_dir clblast
+          rename-item $env:RUNNER_TEMP/CLBlast-${env:CLBLAST_VERSION}-windows-x64 clblast
           foreach ($f in (gci -Recurse -Path "$env:RUNNER_TEMP/clblast" -Filter '*.cmake')) {
             $txt = Get-Content -Path $f -Raw
             $txt.Replace('C:/vcpkg/packages/opencl_x64-windows/', "$($env:RUNNER_TEMP.Replace('\','/'))/opencl/") | Set-Content -Path $f -Encoding UTF8
