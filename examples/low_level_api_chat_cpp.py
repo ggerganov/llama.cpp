@@ -409,12 +409,15 @@ n_keep = {self.params.n_keep}
                 # replace end of text token with newline token when in interactive mode
                 if (id == llama_cpp.llama_token_eos() and self.params.interactive and not self.params.instruct):
                     id = self.llama_token_newline[0]
+                    self.embd.append(id)
                     if (self.use_antiprompt()):
                         # tokenize and inject first reverse prompt
                         self.embd_inp += self.first_antiprompt[0]
-
-                # add it to the context
-                self.embd.append(id)
+                        for id in self.first_antiprompt[0]:
+                            self.embd.append(id)
+                else:
+                    # add it to the context
+                    self.embd.append(id)
 
                 # echo this to console
                 self.output_echo = True
