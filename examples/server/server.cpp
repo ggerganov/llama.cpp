@@ -61,7 +61,7 @@ struct llama_server_context
     std::vector<llama_token> prompt_tokens = ::llama_tokenize(ctx, params.prompt, true);
     // compare the evaluated prompt with the new prompt
     int new_prompt_len = 0;
-    for (int i = 0;i < prompt_tokens.size(); i++) {
+    for (size_t i = 0; i < prompt_tokens.size(); i++) {
       if (i < processed_tokens.size() &&
         processed_tokens[i] == prompt_tokens[i])
       {
@@ -71,7 +71,7 @@ struct llama_server_context
       {
         embd_inp.push_back(prompt_tokens[i]);
         if(new_prompt_len == 0) {
-          if(i - 1 < n_past) {
+          if(int32_t(i) - 1 < n_past) {
             processed_tokens.erase(processed_tokens.begin() + i, processed_tokens.end());
           }
           // Evaluate the new fragment prompt from the last token processed.
@@ -136,7 +136,7 @@ struct llama_server_context
     {
       // out of user input, sample next token
       const float temp = params.temp;
-      const int32_t top_k = params.top_k <= 0 ? llama_n_vocab(ctx) : params.top_k;
+      // const int32_t top_k = params.top_k <= 0 ? llama_n_vocab(ctx) : params.top_k;
       const float top_p = params.top_p;
       const float tfs_z = params.tfs_z;
       const float typical_p = params.typical_p;
@@ -306,12 +306,12 @@ struct llama_server_context
     // Avoid add the no show words to the response
     for (std::vector<llama_token> word_tokens : no_show_words)
     {
-      int match_token = 1;
+      size_t match_token = 1;
       if (tokens_predicted.front() == word_tokens.front())
       {
         bool execute_matching = true;
         if (tokens_predicted.size() > 1) { // if previus tokens had been tested
-          for (int i = 1; i < word_tokens.size(); i++)
+          for (size_t i = 1; i < word_tokens.size(); i++)
           {
             if (i >= tokens_predicted.size()) {
               match_token = i;
@@ -601,7 +601,7 @@ int main(int argc, char **argv)
 
   Server svr;
 
-  svr.Get("/", [](const Request &req, Response &res)
+  svr.Get("/", [](const Request &, Response &res)
           { res.set_content("<h1>llama.cpp server works</h1>", "text/html"); });
 
   svr.Post("/completion", [&llama](const Request &req, Response &res)
@@ -649,7 +649,7 @@ int main(int argc, char **argv)
                       {"tokens_predicted", llama.num_tokens_predicted}};
                   return res.set_content(data.dump(), "application/json");
                 }
-                catch (json::exception e)
+                catch (const json::exception &e)
                 {
                   // Some tokens have bad UTF-8 strings, the json parser is very sensitive
                   json data = {
@@ -701,7 +701,7 @@ int main(int argc, char **argv)
                         {"content", result },
                         {"stop", !llama.has_next_token }};
               return res.set_content(data.dump(), "application/json");
-            } catch (json::exception e) {
+            } catch (const json::exception &e) {
               // Some tokens have bad UTF-8 strings, the json parser is very sensitive
               json data = {
                         {"content", "" },

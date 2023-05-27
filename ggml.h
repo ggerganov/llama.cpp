@@ -380,9 +380,6 @@ extern "C" {
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);
 
-    // use this to compute the memory overhead of a tensor
-    static const size_t GGML_TENSOR_OVERHEAD = (GGML_OBJECT_SIZE + GGML_TENSOR_SIZE + 16);
-
     // computation graph
     struct ggml_cgraph {
         int n_nodes;
@@ -443,6 +440,9 @@ extern "C" {
 
     // TODO: temporary until model loading of ggml examples is refactored
     GGML_API enum ggml_type ggml_ftype_to_ggml_type(enum ggml_ftype ftype);
+
+    // use this to compute the memory overhead of a tensor
+    GGML_API size_t ggml_tensor_overhead(void);
 
     // main
 
