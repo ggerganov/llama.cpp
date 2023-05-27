@@ -180,6 +180,36 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    if (!params.steering_add.empty() || !params.steering_sub.empty())
+    {
+        fprintf(stderr, "%s: steering: ('%s' - '%s') * %f\n",
+            __func__, params.steering_add.c_str(), params.steering_sub.c_str(), params.steering_mul);
+
+        params.steering_add.insert(0, 1, ' ');
+        params.steering_sub.insert(0, 1, ' ');
+
+        auto add_tokens = ::llama_tokenize(ctx, params.steering_add, true);
+        auto sub_tokens = ::llama_tokenize(ctx, params.steering_sub, true);
+
+
+        if (add_tokens.size() != sub_tokens.size()) {
+            while (add_tokens.size() < sub_tokens.size()) {
+                add_tokens.push_back(llama_token_nl());
+            }
+            while (sub_tokens.size() < add_tokens.size()) {
+                sub_tokens.push_back(llama_token_nl());
+            }
+        }
+
+        llama_set_steering_write(ctx, params.steering_source, +1.0f);
+        llama_eval(ctx, add_tokens.data(), std::min((int)add_tokens.size(), n_ctx), 0, params.n_threads);
+
+        llama_set_steering_write(ctx, params.steering_source, -1.0f);
+        llama_eval(ctx, sub_tokens.data(), std::min((int)sub_tokens.size(), n_ctx), 0, params.n_threads);
+
+        llama_set_steering_read(ctx, params.steering_layer, params.steering_mul);
+    }
+
     // debug message about similarity of saved session, if applicable
     size_t n_matching_session_tokens = 0;
     if (session_tokens.size()) {
@@ -407,6 +437,8 @@ int main(int argc, char ** argv) {
                 need_to_save_session = false;
                 llama_save_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
             }
+
+            //llama_set_steering_off(ctx);
 
             llama_token id = 0;
 

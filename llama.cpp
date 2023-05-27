@@ -35,6 +35,7 @@
 #include <mutex>
 #include <sstream>
 #include <numeric>
+#include <iostream>
 
 #define LLAMA_USE_SCRATCH
 #define LLAMA_MAX_SCRATCH_BUFFERS 16
@@ -233,6 +234,15 @@ struct llama_context {
     // input embedding (1-dimensional array: [n_embd])
     std::vector<float> embedding;
 
+    std::vector<float> steering_vector; // [n_ctx, n_embd]
+    int                steering_layer = 0;
+    int                steering_mode = 0;
+    float              steering_mul = 0.0f;
+
+    #define STEERING_OFF   0
+    #define STEERING_WRITE 2
+    #define STEERING_READ  3
+
     // memory buffers used to evaluate the model
     // TODO: move in llama_state
     llama_ctx_buffer buf_compute;
@@ -272,6 +282,24 @@ struct llama_context {
 #endif
     }
 };
+
+void llama_set_steering_off(struct llama_context * ctx) {
+    ctx->steering_mode = STEERING_OFF;
+}
+
+void llama_set_steering_write(struct llama_context * ctx, int layer, float mul) {
+    ctx->steering_mode = STEERING_WRITE;
+    ctx->steering_mul = mul;
+    ctx->steering_layer = layer;
+}
+void llama_set_steering_read(struct llama_context * ctx, int layer, float mul) {
+    ctx->steering_mode = STEERING_READ;
+    ctx->steering_mul = mul;
+    ctx->steering_layer = layer;
+    //FILE* steeringbin = fopen("steering.bin", "wb");
+    //fwrite(ctx->steering_vector.data(), sizeof(float), ctx->steering_vector.size(), steeringbin);
+    //fclose(steeringbin);
+}
 
 template <typename T>
 static T checked_mul(T a, T b) {
@@ -1245,6 +1273,13 @@ static bool llama_eval_internal(
     ggml_set_name(embd, "embd");
     memcpy(embd->data, tokens, N*ggml_element_size(embd));
 
+    struct ggml_tensor * steer;
+    if (lctx.steering_mode != STEERING_OFF) {
+        steer = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N);
+        //steer->data = lctx.steering_vector.data() + n_past * n_embd * sizeof(float);
+        memcpy(steer->data, lctx.steering_vector.data() + n_past * n_embd, ggml_nbytes(steer));
+    }
+
     struct ggml_tensor * inpL = ggml_get_rows(ctx0, model.tok_embeddings, embd);
 
     for (int il = 0; il < n_layer; ++il) {
@@ -1253,6 +1288,17 @@ static bool llama_eval_internal(
         struct ggml_tensor * cur;
 
         lctx.use_buf(ctx0, 0);
+
+        if (lctx.steering_mode != STEERING_OFF && il == lctx.steering_layer) {
+            struct ggml_tensor * scal = ggml_new_f32(ctx0, lctx.steering_mul);
+            if (lctx.steering_mode == STEERING_WRITE) {
+                ggml_build_forward_expand(&gf, ggml_cpy(ctx0,
+                    ggml_add(ctx0, ggml_scale(ctx0, inpL, scal), steer), steer));
+                break;
+            }
+            // std::cout << "\nAdding steering vector to inpL " << il << "\n";
+            inpSA = ggml_add(ctx0, ggml_scale(ctx0, steer, scal), inpSA);
+        }
 
         // norm
         {
@@ -1460,6 +1506,12 @@ static bool llama_eval_internal(
         embedding_out.resize(n_embd);
         memcpy(embedding_out.data(), (float *) ggml_get_data(embeddings) + (n_embd*(N - 1)), sizeof(float)*n_embd);
     }
+
+
+    if (lctx.steering_mode == STEERING_WRITE) {
+        memcpy(lctx.steering_vector.data() + n_past * n_embd, steer->data, ggml_nbytes(steer));
+    }
+
 
     if (mem_per_token == 0) {
         mem_per_token = ggml_used_mem(ctx0)/N;
@@ -2282,6 +2334,8 @@ struct llama_context * llama_init_from_file(
 
         ctx->buf_scratch[0].resize(MEM_REQ_SCRATCH0().at(ctx->model.type));
         ctx->buf_scratch[1].resize(MEM_REQ_SCRATCH1().at(ctx->model.type));
+
+        ctx->steering_vector.resize(hparams.n_ctx * hparams.n_embd);
     }
 
     return ctx;
