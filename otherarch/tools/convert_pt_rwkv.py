@@ -1,48 +1,15 @@
-# Converts an RWKV model checkpoint to an rwkv.cpp compatible file.
+# Converts an RWKV model checkpoint in PyTorch format to an rwkv.cpp compatible file.
 # Usage: python convert_pytorch_to_ggml.py C:\RWKV-4-Pile-169M-20220807-8023.pth C:\rwkv.cpp-169M.bin float32
 # Get model checkpoints from https://huggingface.co/BlinkDL
+# See FILE_FORMAT.md for the documentation on the file format.
 
-# File format:
-#
-# RWKVModelFile {
-#   // All ints and floats are in machine byte order.
-#   // Magic is "ggml" string bytes.
-#   int32 magic = 0x67676d66;
-#   int32 version = 100;
-#   int32 n_vocab;
-#   int32 n_embed;
-#   int32 n_layer;
-#   // 0 if float32, 1 if float16, 2 if Q4_0, 3 if Q4_1, 4 if Q4_1_O.
-#   int32 data_type;
-#   // Read until EOF.
-#   Parameter[] parameters;
-# }
-#
-# Parameter {
-#   int32 dim_count;
-#   int32 key_length;
-#   // 0 if float32, 1 if float16, 2 if Q4_0, 3 if Q4_1, 4 if Q4_1_O.
-#   int32 data_type;
-#   // Compared to PyTorch's tensor.shape, dimension order is reversed here!
-#   int32[dim_count] shape;
-#   // Keys are like "emb.weight", "block.0.ln1.weight".
-#   uint8[key_length] key_utf8;
-#  // float32: 4 * element_count bytes.
-#  // float16: 2 * element_count bytes.
-#  // Q4_0: element_count / 32 * 20 bytes.
-#  // Q4_1: element_count / 32 * 24 bytes.
-#  // Q4_1_O: element_count / 32 * 24 bytes.
-#  byte[] data;
-# }
-
-import os
 import argparse
 import struct
 import torch
 from typing import Dict
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Convert an RWKV model checkpoint to an rwkv.cpp compatible file')
+    parser = argparse.ArgumentParser(description='Convert an RWKV model checkpoint in PyTorch format to an rwkv.cpp compatible file')
     parser.add_argument('src_path', help='Path to PyTorch checkpoint file')
     parser.add_argument('dest_path', help='Path to rwkv.cpp checkpoint file, will be overwritten')
     parser.add_argument('data_type', help='Data type, float16 or float32', type=str, choices=['float16', 'float32'], default='float32')
@@ -71,8 +38,7 @@ def write_state_dict(state_dict: Dict[str, torch.Tensor], dest_path: str, data_t
             '=iiiiii',
             # Magic: 'ggmf' in hex
             0x67676d66,
-            # llama.cpp uses file versions 1+, let's use 100+ for rwkv.cpp
-            100,
+            101,
             n_vocab,
             n_embed,
             n_layer,
@@ -128,54 +94,6 @@ def main() -> None:
     write_state_dict(state_dict, args.dest_path, args.data_type)
 
     print('Done')
-
-# --- Tests ---
-
-def test() -> None:
-    test_file_path = 'convert_pytorch_rwkv_to_ggml_test.tmp'
-
-    try:
-        state_dict: Dict[str, torch.Tensor] = {
-            'emb.weight': torch.tensor([[1, 2], [3, 4], [5, 6]], dtype=torch.float32),
-            'blocks.0.ln1.weight': torch.tensor([1], dtype=torch.float32)
-        }
-
-        write_state_dict(state_dict, dest_path=test_file_path, data_type='float32')
-
-        with open(test_file_path, 'rb') as input:
-            actual_bytes: bytes = input.read()
-
-        expected_bytes: bytes = struct.pack(
-            '=iiiiii' + 'iiiii10sffffff' + 'iiii19sf',
-            0x67676d66,
-            100,
-            3,
-            2,
-            1,
-            0,
-            # emb.weight
-            2,
-            10,
-            0,
-            2, 3,
-            'emb.weight'.encode('utf-8'),
-            1.0, 2.0, 3.0,
-            4.0, 5.0, 6.0,
-            # blocks.0.ln1.weight
-            1,
-            19,
-            0,
-            1,
-            'blocks.0.ln1.weight'.encode('utf-8'),
-            1.0
-        )
-
-        assert list(actual_bytes) == list(expected_bytes), f'\nActual: {list(actual_bytes)}\nExpected: {list(expected_bytes)}'
-
-        print('All tests pass')
-    finally:
-        if os.path.isfile(test_file_path):
-            os.remove(test_file_path)
 
 if __name__ == "__main__":
     main()
