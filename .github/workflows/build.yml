@@ -10,10 +10,10 @@ on:
   push:
     branches:
       - master
-    paths: ['.github/workflows/**', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.c', '**/*.cpp']
+    paths: ['.github/workflows/**', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp']
   pull_request:
     types: [opened, synchronize, reopened]
-    paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.c', '**/*.cpp']
+    paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp']
 
 env:
  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
@@ -157,15 +157,15 @@ jobs:
       matrix:
         include:
           - build: 'avx2'
-            defines: ''
+            defines: '-DLLAMA_BUILD_SERVER=ON'
           - build: 'avx'
-            defines: '-DLLAMA_AVX2=OFF'
+            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX2=OFF'
           - build: 'avx512'
-            defines: '-DLLAMA_AVX512=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX512=ON -DBUILD_SHARED_LIBS=ON'
           - build: 'clblast'
-            defines: '-DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH="$env:RUNNER_TEMP/clblast"'
+            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH="$env:RUNNER_TEMP/clblast"'
           - build: 'openblas'
-            defines: '-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DBLAS_INCLUDE_DIRS="$env:RUNNER_TEMP/openblas/include" -DBLAS_LIBRARIES="$env:RUNNER_TEMP/openblas/lib/openblas.lib"'
+            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DBLAS_INCLUDE_DIRS="$env:RUNNER_TEMP/openblas/include" -DBLAS_LIBRARIES="$env:RUNNER_TEMP/openblas/lib/openblas.lib"'
 
     steps:
       - name: Clone
@@ -292,7 +292,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_CUBLAS=ON
+          cmake .. -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON
           cmake --build . --config Release
 
       - name: Get commit hash

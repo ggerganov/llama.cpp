@@ -1,5 +1,11 @@
 # Define the default target now so that it is always the first target
-default: main quantize quantize-stats perplexity embedding vdot
+BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot
+
+ifdef LLAMA_BUILD_SERVER
+	BUILD_TARGETS += server
+endif
+
+default: $(BUILD_TARGETS)
 
 ifndef UNAME_S
 UNAME_S := $(shell uname -s)
@@ -210,7 +216,7 @@ libllama.so: llama.o ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
 clean:
-	rm -vf *.o main quantize quantize-stats perplexity embedding benchmark-matmult save-load-state build-info.h
+	rm -vf *.o main quantize quantize-stats perplexity embedding benchmark-matmult save-load-state server vdot build-info.h
 
 #
 # Examples
@@ -236,6 +242,9 @@ embedding: examples/embedding/embedding.cpp build-info.h ggml.o llama.o common.o
 
 save-load-state: examples/save-load-state/save-load-state.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
+
+server: examples/server/server.cpp examples/server/httplib.h examples/server/json.hpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) -Iexamples/server $(filter-out %.h,$(filter-out %.hpp,$^)) -o $@ $(LDFLAGS)
 
 build-info.h: $(wildcard .git/index) scripts/build-info.sh
 	@sh scripts/build-info.sh > $@.tmp
