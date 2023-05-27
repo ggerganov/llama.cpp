@@ -2,6 +2,7 @@
 #define _GNU_SOURCE
 
 #include "ggml.h"
+#include "k_quants.h"
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h> // using malloc.h with MSC/MINGW
@@ -1564,6 +1565,14 @@ static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
         .quantize_row_q_dot       = quantize_row_q8_1,
         .vec_dot_q                = NULL,   // TODO
         .vec_dot_type             = GGML_TYPE_Q8_1,
+    },
+    [GGML_TYPE_Q3_K] = {
+        .dequantize_row_q         = (dequantize_row_q_t) dequantize_row_q3_K,
+        .quantize_row_q           = quantize_row_q3_K,
+        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q3_K_reference,
+        .quantize_row_q_dot       = NULL, //quantize_row_q8_K,
+        .vec_dot_q                = NULL, //ggml_vec_dot_q3_K_q8_K,
+        .vec_dot_type             = GGML_TYPE_Q8_K,
     },
 };
 
@@ -3444,11 +3453,13 @@ static const int GGML_BLCK_SIZE[GGML_TYPE_COUNT] = {
     [GGML_TYPE_Q5_1] = QK5_1,
     [GGML_TYPE_Q8_0] = QK8_0,
     [GGML_TYPE_Q8_1] = QK8_1,
+    [GGML_TYPE_Q3_K] = QK_K,
+    [GGML_TYPE_Q8_K] = QK_K,
     [GGML_TYPE_I8]   = 1,
     [GGML_TYPE_I16]  = 1,
     [GGML_TYPE_I32]  = 1,
 };
-static_assert(GGML_TYPE_COUNT == 13, "GGML_BLCK_SIZE is outdated");
+static_assert(GGML_TYPE_COUNT == 15, "GGML_BLCK_SIZE is outdated");
 
 static const size_t GGML_TYPE_SIZE[GGML_TYPE_COUNT] = {
     [GGML_TYPE_F32]  = sizeof(float),
@@ -3459,11 +3470,13 @@ static const size_t GGML_TYPE_SIZE[GGML_TYPE_COUNT] = {
     [GGML_TYPE_Q5_1] = sizeof(block_q5_1),
     [GGML_TYPE_Q8_0] = sizeof(block_q8_0),
     [GGML_TYPE_Q8_1] = sizeof(block_q8_1),
+    [GGML_TYPE_Q3_K] = sizeof(block_q3_K),
+    [GGML_TYPE_Q8_K] = sizeof(block_q8_K),
     [GGML_TYPE_I8]   = sizeof(int8_t),
     [GGML_TYPE_I16]  = sizeof(int16_t),
     [GGML_TYPE_I32]  = sizeof(int32_t),
 };
-static_assert(GGML_TYPE_COUNT == 13, "GGML_TYPE_SIZE is outdated");
+static_assert(GGML_TYPE_COUNT == 15, "GGML_TYPE_SIZE is outdated");
 
 
 static const char * GGML_TYPE_NAME[GGML_TYPE_COUNT] = {
@@ -3475,11 +3488,13 @@ static const char * GGML_TYPE_NAME[GGML_TYPE_COUNT] = {
     [GGML_TYPE_Q5_1] = "q5_1",
     [GGML_TYPE_Q8_0] = "q8_0",
     [GGML_TYPE_Q8_1] = "q8_1",
+    [GGML_TYPE_Q3_K] = "q3_K",
+    [GGML_TYPE_Q8_K] = "q8_K",
     [GGML_TYPE_I8]   = "i8",
     [GGML_TYPE_I16]  = "i16",
     [GGML_TYPE_I32]  = "i32",
 };
-static_assert(GGML_TYPE_COUNT == 13, "GGML_TYPE_NAME is outdated");
+static_assert(GGML_TYPE_COUNT == 15, "GGML_TYPE_NAME is outdated");
 
 static bool GGML_IS_QUANTIZED[GGML_TYPE_COUNT] = {
     [GGML_TYPE_F32]  = false,
@@ -3490,11 +3505,13 @@ static bool GGML_IS_QUANTIZED[GGML_TYPE_COUNT] = {
     [GGML_TYPE_Q5_1] = true,
     [GGML_TYPE_Q8_0] = true,
     [GGML_TYPE_Q8_1] = true,
+    [GGML_TYPE_Q3_K] = true,
+    [GGML_TYPE_Q8_K] = true,
     [GGML_TYPE_I8]   = false,
     [GGML_TYPE_I16]  = false,
     [GGML_TYPE_I32]  = false,
 };
-static_assert(GGML_TYPE_COUNT == 13, "GGML_IS_QUANTIZED is outdated");
+static_assert(GGML_TYPE_COUNT == 15, "GGML_IS_QUANTIZED is outdated");
 
 static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "NONE",
@@ -3801,6 +3818,7 @@ enum ggml_type ggml_ftype_to_ggml_type(enum ggml_ftype ftype) {
         case GGML_FTYPE_MOSTLY_Q5_0:          wtype = GGML_TYPE_Q5_0;  break;
         case GGML_FTYPE_MOSTLY_Q5_1:          wtype = GGML_TYPE_Q5_1;  break;
         case GGML_FTYPE_MOSTLY_Q8_0:          wtype = GGML_TYPE_Q8_0;  break;
+        case GGML_FTYPE_MOSTLY_Q3_K:          wtype = GGML_TYPE_Q3_K;  break;
         case GGML_FTYPE_UNKNOWN:              wtype = GGML_TYPE_COUNT; break;
         case GGML_FTYPE_MOSTLY_Q4_1_SOME_F16: wtype = GGML_TYPE_COUNT; break;
     }
@@ -10996,6 +11014,8 @@ static void ggml_compute_forward_alibi(
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
         case GGML_TYPE_Q8_1:
+        case GGML_TYPE_Q3_K:
+        case GGML_TYPE_Q8_K:
         case GGML_TYPE_I8:
         case GGML_TYPE_I16:
         case GGML_TYPE_I32:
@@ -11067,6 +11087,8 @@ static void ggml_compute_forward_clamp(
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
         case GGML_TYPE_Q8_1:
+        case GGML_TYPE_Q3_K:
+        case GGML_TYPE_Q8_K:
         case GGML_TYPE_I8:
         case GGML_TYPE_I16:
         case GGML_TYPE_I32:
