@@ -175,7 +175,37 @@ llama_token sample_token_mirostat_v2(llama_token_data_array * candidates, std::m
     return X;
 }
 
-int SampleLogits(const float * logits, int n_ctx, int n_vocab, int rep_pen_range, float rep_pen, float top_k, float top_p, float typical_p, float tfs, float temp, std::mt19937 & rng,
+// Top-a (remove all tokens that have softmax probability less than top_a*m^2 where m is the maximum softmax probability)
+// top-a 0 is off (no effect)
+void sample_top_a(llama_token_data_array * candidates, float a) {
+    if (a <= 0.0f || candidates->size<=1) {
+        return;
+    }
+
+    llama_sample_softmax(nullptr, candidates);
+
+    // Compute the cumulative probabilities
+    float maxprob = candidates->data[0].p;
+    
+    float threshold = a * maxprob * maxprob; //tokens with probs less than this are removed
+    size_t last_idx = candidates->size;
+
+    for (size_t i = 0; i < candidates->size; ++i) {       
+        // Go until we reach a value under the threshold
+        float checkprob = candidates->data[i].p;
+        if (checkprob < threshold) {
+            last_idx = i;
+            break;
+        }
+    }
+    // printf("\n\nCandidates: %d, A:%f, MaxProb: %f, Threshold: %f, LastIdx: %d",candidates->size,a,maxprob,threshold,last_idx);
+    // printf("\nCandidates: %f %f %f %f\n",candidates->data[0].p,candidates->data[1].p,candidates->data[2].p,candidates->data[3].p);
+
+    // Resize the output vector to keep only the selected tokens
+    candidates->size = last_idx;
+}
+
+int SampleLogits(const float * logits, int n_ctx, int n_vocab, int rep_pen_range, float rep_pen, float top_k, float top_a, float top_p, float typical_p, float tfs, float temp, std::mt19937 & rng,
 int mirostat, float mirostat_tau, float mirostat_eta)
 {
     int id = 0;
@@ -221,6 +251,7 @@ int mirostat, float mirostat_tau, float mirostat_eta)
         {
             // Temperature sampling
             llama_sample_top_k(nullptr, &candidates_p, top_k,1);
+            sample_top_a(&candidates_p,top_a);
             llama_sample_tail_free(nullptr, &candidates_p, tfs,1);
             llama_sample_typical(nullptr, &candidates_p, typical_p,1);
             llama_sample_top_p(nullptr, &candidates_p, top_p,1);
@@ -659,7 +690,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     }
     if (params.top_k < 1)
     {
-        params.top_k = 200; //to disable top_k we actually need to increase this value to a very high number
+        params.top_k = 300; //to disable top_k we actually need to increase this value to a very high number
     }
     if (params.seed <= 0)
     {
@@ -937,6 +968,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             const float top_k = params.top_k;
             const float top_p = params.top_p;
             const float temp = params.temp;
+            const float top_a = inputs.top_a;
             const float repeat_penalty = params.repeat_penalty;
             const float typical_p = params.typical_p;
             const float tfs_z = params.tfs_z;
@@ -1015,7 +1047,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             }
          
             id = SampleLogits(logitsPtr, nctx, n_vocab, last_n_size, repeat_penalty, 
-            top_k, top_p, typical_p, tfs_z, temp, rng,
+            top_k, top_a, top_p, typical_p, tfs_z, temp, rng,
             params.mirostat,params.mirostat_tau,params.mirostat_eta);
             
             last_n_tokens.erase(last_n_tokens.begin());

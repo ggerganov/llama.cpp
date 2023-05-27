@@ -29,6 +29,7 @@ struct generation_inputs
     const int max_length;
     const float temperature;
     const int top_k;
+    const float top_a = 0.0f;
     const float top_p;
     const float typical_p;
     const float tfs;
