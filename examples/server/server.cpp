@@ -423,8 +423,8 @@ void server_print_usage(int /*argc*/, char **argv, const gpt_params &params)
   fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
   fprintf(stderr, "  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
   fprintf(stderr, "  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
-  fprintf(stderr, "  -host                 ip address to listen (default 127.0.0.1)\n");
-  fprintf(stderr, "  -port PORT            port to listen (default 8080)\n");
+  fprintf(stderr, "  --host                ip address to listen (default 127.0.0.1)\n");
+  fprintf(stderr, "  --port PORT           port to listen (default 8080)\n");
   fprintf(stderr, "\n");
 }
 
