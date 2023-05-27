@@ -14,7 +14,7 @@
 
 #include "ggml_v2.h"
 
-#define CL_DMMV_BLOCK_SIZE 32;
+#define CL_DMMV_BLOCK_SIZE 64;
 
 #define MULTILINE_QUOTE(...) #__VA_ARGS__
 static std::string program_source = MULTILINE_QUOTE(
