@@ -212,6 +212,10 @@ void print_tok_vec(std::vector<float> &embd)
         {
             fileformat = FileFormat::RWKV_1;
         }
+        else if(temp==101)
+        {
+            fileformat = FileFormat::RWKV_2;
+        }
     }
     else if(magic == 0x67676a74) //v3 format ggjt
     {

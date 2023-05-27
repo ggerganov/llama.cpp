@@ -34,6 +34,7 @@ enum FileFormat
     GPT2_4=203, //using 16bit scalar
 
     RWKV_1=300,
+    RWKV_2=301,
 
     NEOX_1=400,
     NEOX_2=401,
