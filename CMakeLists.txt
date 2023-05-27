@@ -66,7 +66,7 @@ endif()
 # 3rd party libs
 option(LLAMA_ACCELERATE                 "llama: enable Accelerate framework"                    ON)
 option(LLAMA_BLAS                       "llama: use BLAS"                                       OFF)
-option(LLAMA_BLAS_VENDOR                "llama: BLA_VENDOR from https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors" Generic)
+set(LLAMA_BLAS_VENDOR "Generic" CACHE STRING "llama: BLAS library vendor")
 option(LLAMA_CUBLAS                     "llama: use cuBLAS"                                     OFF)
 set(LLAMA_CUDA_DMMV_X "32" CACHE STRING "llama: x stride for dmmv CUDA kernels")
 set(LLAMA_CUDA_DMMV_Y "1" CACHE STRING  "llama: y block size for dmmv CUDA kernels")
