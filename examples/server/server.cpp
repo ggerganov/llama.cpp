@@ -71,7 +71,7 @@ struct llama_server_context
       {
         embd_inp.push_back(prompt_tokens[i]);
         if(new_prompt_len == 0) {
-          if(((int32_t)i) - 1 < n_past) {
+          if(int32_t(i) - 1 < n_past) {
             processed_tokens.erase(processed_tokens.begin() + i, processed_tokens.end());
           }
           // Evaluate the new fragment prompt from the last token processed.
