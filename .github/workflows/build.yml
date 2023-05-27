@@ -257,7 +257,7 @@ jobs:
         id: pack_artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
-          Copy-Item ..\LICENSE .\bin\Release\llama.cpp.txt
+          Copy-Item LICENSE .\build\bin\Release\llama.cpp.txt
           7z a llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-${{ matrix.build }}-x64.zip .\build\bin\Release\*
 
       - name: Upload artifacts
