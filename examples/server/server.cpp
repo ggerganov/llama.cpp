@@ -70,7 +70,6 @@ struct llama_server_context
       embd_inp = last_prompt_tokens;
       n_past = processed_tokens.size();
       n_consumed = last_prompt_tokens.size() - 2;
-      last_prompt_tokens = prompt_tokens;
       has_next_token = true;
       return true;
     }
@@ -111,6 +110,7 @@ struct llama_server_context
     {
       return false;
     }
+    last_prompt_tokens = prompt_tokens;
     has_next_token = true;
     return true;
   }
