@@ -61,7 +61,7 @@ struct llama_server_context
     std::vector<llama_token> prompt_tokens = ::llama_tokenize(ctx, params.prompt, true);
     // compare the evaluated prompt with the new prompt
     int new_prompt_len = 0;
-    for (unsigned int i = 0;i < prompt_tokens.size(); i++) {
+    for (size_t i = 0; i < prompt_tokens.size(); i++) {
       if (i < processed_tokens.size() &&
         processed_tokens[i] == prompt_tokens[i])
       {
@@ -71,7 +71,7 @@ struct llama_server_context
       {
         embd_inp.push_back(prompt_tokens[i]);
         if(new_prompt_len == 0) {
-          if(((int)i) - 1 < (int)n_past) {
+          if(((int32_t)i) - 1 < n_past) {
             processed_tokens.erase(processed_tokens.begin() + i, processed_tokens.end());
           }
           // Evaluate the new fragment prompt from the last token processed.
@@ -306,12 +306,12 @@ struct llama_server_context
     // Avoid add the no show words to the response
     for (std::vector<llama_token> word_tokens : no_show_words)
     {
-      unsigned int match_token = 1;
+      size_t match_token = 1;
       if (tokens_predicted.front() == word_tokens.front())
       {
         bool execute_matching = true;
         if (tokens_predicted.size() > 1) { // if previus tokens had been tested
-          for (unsigned int i = 1; i < word_tokens.size(); i++)
+          for (size_t i = 1; i < word_tokens.size(); i++)
           {
             if (i >= tokens_predicted.size()) {
               match_token = i;
@@ -649,7 +649,7 @@ int main(int argc, char **argv)
                       {"tokens_predicted", llama.num_tokens_predicted}};
                   return res.set_content(data.dump(), "application/json");
                 }
-                catch (json::exception const &e)
+                catch (const json::exception &e)
                 {
                   // Some tokens have bad UTF-8 strings, the json parser is very sensitive
                   json data = {
@@ -701,7 +701,7 @@ int main(int argc, char **argv)
                         {"content", result },
                         {"stop", !llama.has_next_token }};
               return res.set_content(data.dump(), "application/json");
-            } catch (json::exception const &e) {
+            } catch (const json::exception &e) {
               // Some tokens have bad UTF-8 strings, the json parser is very sensitive
               json data = {
                         {"content", "" },
