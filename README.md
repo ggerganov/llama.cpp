@@ -240,11 +240,11 @@ In order to build llama.cpp you have three different options.
 
 Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). BLAS doesn't affect the normal generation performance. There are currently three different implementations of it:
 
-- Accelerate Framework:
+- **Accelerate Framework**:
 
   This is only available on Mac PCs and it's enabled by default. You can just build using the normal instructions.
 
-- OpenBLAS:
+- **OpenBLAS**:
 
   This provides BLAS acceleration using only the CPU. Make sure to have OpenBLAS installed on your machine.
 
@@ -278,11 +278,11 @@ Building the program with BLAS support may lead to some performance improvements
       cmake --build . --config Release
       ```
 
-- BLIS
+- **BLIS**
 
   Check [BLIS.md](BLIS.md) for more information.
 
-- Intel MKL
+- **Intel MKL**
 
   By default, `LLAMA_BLAS_VENDOR` is set to `Generic`, so if you already sourced intel environment script and assign `-DLLAMA_BLAS=ON` in cmake, the mkl version of Blas will automatically been selected. You may also specify it by:
 
@@ -293,7 +293,7 @@ Building the program with BLAS support may lead to some performance improvements
   cmake --build . -config Release
   ```
 
-- cuBLAS
+- **cuBLAS**
 
   This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
   - Using `make`:
@@ -308,8 +308,81 @@ Building the program with BLAS support may lead to some performance improvements
     cmake .. -DLLAMA_CUBLAS=ON
     cmake --build . --config Release
     ```
+  Note: Because llama.cpp uses multiple CUDA streams for matrix multiplication results [are not guaranteed to be reproducible](https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility). If you need reproducibility, set `GGML_CUDA_MAX_STREAMS` in the file `ggml-cuda.cu` to 1.
 
-Note: Because llama.cpp uses multiple CUDA streams for matrix multiplication results [are not guaranteed to be reproducible](https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility). If you need reproducibility, set `GGML_CUDA_MAX_STREAMS` in the file `ggml-cuda.cu` to 1.
+- **CLBlast**
+
+  OpenCL acceleration is provided by the matrix multiplication kernels from the [CLBlast](https://github.com/CNugteren/CLBlast) project and custom kernels for ggml that can generate tokens on the GPU.
+
+  You will need the [OpenCL SDK](https://github.com/KhronosGroup/OpenCL-SDK).
+    - For Ubuntu or Debian, the packages `opencl-headers`, `ocl-icd` may be needed.
+
+    - <details>
+        <summary>Installing the OpenCL SDK from source</summary>
+
+        ```sh
+        git clone --recurse-submodules https://github.com/KhronosGroup/OpenCL-SDK.git
+        mkdir OpenCL-SDK/build
+        cd OpenCL-SDK/build
+        cmake .. -DBUILD_DOCS=OFF \
+          -DBUILD_EXAMPLES=OFF \
+          -DBUILD_TESTING=OFF \
+          -DOPENCL_SDK_BUILD_SAMPLES=OFF \
+          -DOPENCL_SDK_TEST_SAMPLES=OFF
+        cmake --build . --config Release
+        cmake --install . --prefix /some/path
+        ```
+      </details>
+
+  Installing CLBlast: it may be found in your operating system's packages.
+
+  - <details>
+    <summary>If not, then installing from source:</summary>
+
+      ```sh
+      git clone https://github.com/CNugteren/CLBlast.git
+      mkdir CLBlast/build
+      cd CLBLast/build
+      cmake .. -DBUILD_SHARED_LIBS=OFF -DTUNERS=OFF
+      cmake --build . --config Release
+      cmake --install . --prefix /some/path
+      ```
+
+      Where `/some/path` is where the built library will be installed (default is `/usr/loca`l`).
+    </details>
+
+  Building:
+
+  - Build with make:
+    ```sh
+    make LLAMA_CLBLAST=1
+    ```
+  - CMake:
+    ```sh
+    mkdir build
+    cd build
+    cmake .. -DLLAMA_CLBLAST=ON -DCLBlast_dir=/some/path
+    cmake --build . --config Release
+    ```
+
+  Running:
+
+  The CLBlast build supports `--gpu-layers|-ngl` like  the CUDA version does.
+
+  To select the correct platform (driver) and device (GPU), you can use the environment variables `GGML_OPENCL_PLATFORM` and `GGML_OPENCL_DEVICE`.
+  The selection can be a number (starting from 0) or a text string to search:
+
+  ```sh
+  GGML_OPENCL_PLATFORM=1 ./main ...
+  GGML_OPENCL_DEVICE=2 ./main ...
+  GGML_OPENCL_PLATFORM=Intel ./main ...
+  GGML_OPENCL_PLATFORM=AMD GGML_OPENCL_DEVICE=1 ./main ...
+  ```
+
+  The default behavior is to find the first GPU device, but when it is an integrated GPU on a laptop, for instance, the selectors are useful.
+  Using the variables it is possible to select a CPU-based driver as well, if so desired.
+
+  You can get a list of platforms and devices from the `clinfo -l` command, etc.
 
 ### Prepare Data & Run
 
