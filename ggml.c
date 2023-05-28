@@ -13063,11 +13063,11 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                     src0->grad =
                         ggml_add_impl(ctx,
                                 src0->grad,
-                                ggml_mul(ctx,
-                                    tensor->grad, // this was not catched by test_grad because in test_grad tensor->grad is 1
+                                ggml_scale(ctx,
                                     ggml_div(ctx,
-                                        ggml_repeat(ctx, ggml_new_f32(ctx, 0.5f), tensor),
-                                        tensor)),
+                                        tensor->grad,
+                                        tensor),
+                                    ggml_new_f32(ctx, 0.5f)),
                                 inplace);
                 }
             } break;
