@@ -8559,8 +8559,8 @@ static void ggml_compute_forward_repeat_back_f32(
         for         (int k3 = 0; k3 < ne3; k3++) {
             for     (int k2 = 0; k2 < ne2; k2++) {
                 for (int k1 = 0; k1 < ne1; k1++) {
-                    ggml_vec_set_f32(ne0, 
-                        (float *) ((char *) dst->data + k1*nb1 + k2*nb2 + k3*nb3), 
+                    ggml_vec_set_f32(ne0,
+                        (float *) ((char *) dst->data + k1*nb1 + k2*nb2 + k3*nb3),
                         0);
                 }
             }
