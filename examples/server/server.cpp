@@ -29,7 +29,6 @@ struct llama_server_context
   std::vector<llama_token> embd_inp;
 
   std::vector<llama_token> last_prompt_tokens;
-  
   llama_context *ctx;
   gpt_params params;
 
@@ -249,7 +248,6 @@ struct llama_server_context
     if (token == -1) {
       return "";
     }
-    
     if(as_loop) {
       generated_text = "";
     }
@@ -817,5 +815,4 @@ int main(int argc, char **argv)
   svr.set_read_timeout(sparams.read_timeout);
   svr.set_write_timeout(sparams.write_timeout);
   svr.listen(sparams.hostname, sparams.port);
-  
 }
