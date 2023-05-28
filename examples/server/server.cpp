@@ -293,7 +293,7 @@ void server_print_usage(int /*argc*/, char **argv, const gpt_params &params)
   fprintf(stderr, "\n");
   fprintf(stderr, "options:\n");
   fprintf(stderr, "  -h, --help            show this help message and exit\n");
-  fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)\n");
+  fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
   fprintf(stderr, "  --memory_f32          use f32 instead of f16 for memory key+value\n");
   fprintf(stderr, "  --embedding           enable embedding mode\n");
   fprintf(stderr, "  --keep                number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
@@ -343,18 +343,6 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
       }
       sparams.hostname = argv[i];
     }
-    else if (arg == "-s" || arg == "--seed")
-    {
-#if defined(GGML_USE_CUBLAS)
-      fprintf(stderr, "WARNING: when using cuBLAS generation results are NOT guaranteed to be reproducible.\n");
-#endif
-      if (++i >= argc)
-      {
-        invalid_param = true;
-        break;
-      }
-      params.seed = std::stoi(argv[i]);
-    }
     else if (arg == "-m" || arg == "--model")
     {
       if (++i >= argc)
@@ -385,6 +373,23 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
     else if (arg == "--memory_f32")
     {
       params.memory_f16 = false;
+    }
+    else if (arg == "--threads" || arg == "-t")
+    {
+        if (++i >= argc) {
+            invalid_param = true;
+            break;
+        }
+        params.n_threads = std::stoi(argv[i]);
+    }
+    else if (arg == "-b" || arg == "--batch-size")
+    {
+        if (++i >= argc) {
+            invalid_param = true;
+            break;
+        }
+        params.n_batch = std::stoi(argv[i]);
+        params.n_batch = std::min(512, params.n_batch);
     }
     else if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers")
     {
@@ -491,13 +496,17 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
   {
     llama.params.penalize_nl = body["penalize_nl"].get<float>();
   }
-  if (!body["batch_size"].is_null())
-  {
-    llama.params.n_batch = body["batch_size"].get<int>();
-  }
   if (!body["n_keep"].is_null())
   {
     llama.params.n_keep = body["n_keep"].get<int>();
+  }
+  if (!body["seed"].is_null())
+  {
+      llama.params.seed = body["seed"].get<int>();
+  }
+  else
+  {
+      llama.params.seed = -1;
   }
   if (!body["prompt"].is_null())
   {
