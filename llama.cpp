@@ -905,6 +905,12 @@ static void llama_model_load_internal(
             case 40: model.type = e_model::MODEL_13B; break;
             case 60: model.type = e_model::MODEL_30B; break;
             case 80: model.type = e_model::MODEL_65B; break;
+            default:
+                {
+                    if (hparams.n_layer < 32) {
+                        model.type = e_model::MODEL_7B;
+                    }
+                } break;
         }
 
         hparams.n_ctx = n_ctx;
