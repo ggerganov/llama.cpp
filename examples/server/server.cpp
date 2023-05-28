@@ -298,7 +298,7 @@ void server_print_usage(int /*argc*/, char **argv, const gpt_params &params, con
   fprintf(stderr, "options:\n");
   fprintf(stderr, "  -h, --help            show this help message and exit\n");
   fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
-  fprintf(stderr, "  --memory_f32          use f32 instead of f16 for memory key+value\n");
+  fprintf(stderr, "  --memory-f32          use f32 instead of f16 for memory key+value\n");
   fprintf(stderr, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
   fprintf(stderr, "  --embedding           enable embedding mode\n");
   fprintf(stderr, "  --keep                number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
@@ -386,7 +386,7 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
       }
       params.n_ctx = std::stoi(argv[i]);
     }
-    else if (arg == "--memory_f32")
+    else if (arg == "--memory-f32")
     {
       params.memory_f16 = false;
     }
