@@ -300,8 +300,9 @@ void server_print_usage(int /*argc*/, char **argv, const gpt_params &params, con
   fprintf(stderr, "  -h, --help            show this help message and exit\n");
   fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
   fprintf(stderr, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
-  fprintf(stderr, "  --memory-f32          use f32 instead of f16 for memory key+value\n");
   fprintf(stderr, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
+  fprintf(stderr, "  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
+  fprintf(stderr, "                        not recommended: doubles context memory required and no measurable increase in quality\n");
   fprintf(stderr, "  --embedding           enable embedding mode\n");
   fprintf(stderr, "  --keep                number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
   if (llama_mlock_supported())
@@ -312,10 +313,14 @@ void server_print_usage(int /*argc*/, char **argv, const gpt_params &params, con
   {
     fprintf(stderr, "  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
   }
+#ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
   fprintf(stderr, "  -ngl N, --n-gpu-layers N\n");
   fprintf(stderr, "                        number of layers to store in VRAM\n");
+#endif
   fprintf(stderr, "  -m FNAME, --model FNAME\n");
   fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
+  fprintf(stderr, "  -a ALIAS, --alias ALIAS\n");
+  fprintf(stderr, "                        set an alias for the model, will be added as `model` field in completion response\n");
   fprintf(stderr, "  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
   fprintf(stderr, "  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
   fprintf(stderr, "  --host                ip address to listen (default  (default: %s)\n", sparams.hostname.c_str());
@@ -370,6 +375,15 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
       }
       params.model = argv[i];
     }
+    else if (arg == "-a" || arg == "--alias")
+    {
+      if (++i >= argc)
+      {
+        invalid_param = true;
+        break;
+      }
+      params.model_alias = argv[i];
+    }
     else if (arg == "--embedding")
     {
       params.embedding = true;
@@ -379,7 +393,7 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
       server_print_usage(argc, argv, default_params, default_sparams);
       exit(0);
     }
-    else if (arg == "-c" || arg == "--ctx-size")
+    else if (arg == "-c" || arg == "--ctx-size" || arg == "--ctx_size")
     {
       if (++i >= argc)
       {
@@ -388,7 +402,7 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
       }
       params.n_ctx = std::stoi(argv[i]);
     }
-    else if (arg == "--memory-f32")
+    else if (arg == "--memory-f32" || arg == "--memory_f32")
     {
       params.memory_f16 = false;
     }
@@ -416,7 +430,12 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
         invalid_param = true;
         break;
       }
+#ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
       params.n_gpu_layers = std::stoi(argv[i]);
+#else
+      fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");
+      fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
+#endif
     }
     else if (arg == "--lora")
     {
@@ -708,9 +727,10 @@ int main(int argc, char **argv)
                 try
                 {
                   json data = {
+                      {"model", llama.params.model_alias },
                       {"content", llama.generated_text },
                       {"tokens_predicted", llama.num_tokens_predicted},
-                      {"generation_settings", format_generation_settings(llama) },
+                      {"generation_settings", format_generation_settings(llama)},
                       {"prompt", llama.params.prompt},
                       {"stopping_word", llama.stopping_word} };
                   return res.set_content(data.dump(), "application/json");
@@ -780,7 +800,7 @@ int main(int argc, char **argv)
                         {"content", result },
                         {"stop", true },
                         {"tokens_predicted", llama.num_tokens_predicted},
-                        {"generation_settings", format_generation_settings(llama) },
+                        {"generation_settings", format_generation_settings(llama)},
                         {"prompt", llama.params.prompt},
                         {"stopping_word", llama.stopping_word},
                         {"generated_text", final_text}
@@ -806,7 +826,7 @@ int main(int argc, char **argv)
                         {"content", u8"\uFFFD" },
                         {"stop", true },
                         {"tokens_predicted", llama.num_tokens_predicted},
-                        {"generation_settings", format_generation_settings(llama) },
+                        {"generation_settings", format_generation_settings(llama)},
                         {"prompt", llama.params.prompt},
                         {"stopping_word", llama.stopping_word},
                         {"generated_text", final_text}
