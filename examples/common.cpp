@@ -278,7 +278,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.use_color = true;
         } else if (arg == "--mlock") {
             params.use_mlock = true;
-#ifdef LLAMA_CAN_GPU_OFFLOAD
+#ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
         } else if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers") {
             if (++i >= argc) {
                 invalid_param = true;
