@@ -614,6 +614,22 @@ int main(int argc, char **argv)
                       {"content", llama.generated_text },
                       {"tokens_predicted", llama.num_tokens_predicted},
                       {"seed", llama.params.seed},
+                      {"generation_settings", {
+                            "temp", llama.params.temp,
+                            "top_k", llama.params.top_k,
+                            "top_p", llama.params.top_p,
+                            "tfs_z", llama.params.tfs_z,
+                            "typical_p", llama.params.typical_p,
+                            "repeat_last_n", llama.params.repeat_last_n,
+                            "repeat_penalty", llama.params.repeat_penalty,
+                            "alpha_presence", llama.params.presence_penalty,
+                            "alpha_frequency", llama.params.frequency_penalty,
+                            "mirostat", llama.params.mirostat,
+                            "mirostat_tau", llama.params.mirostat_tau,
+                            "mirostat_eta", llama.params.mirostat_eta,
+                            "penalize_nl", llama.params.penalize_nl
+                        }
+                      },
                       {"prompt", llama.params.prompt} };
                   return res.set_content(data.dump(), "application/json");
                 }
@@ -682,11 +698,27 @@ int main(int argc, char **argv)
                         {"stop", true },
                         {"tokens_predicted", llama.num_tokens_predicted},
                         {"seed", llama.params.seed},
+                        {"generation_settings", {
+                              "temp", llama.params.temp,
+                              "top_k", llama.params.top_k,
+                              "top_p", llama.params.top_p,
+                              "tfs_z", llama.params.tfs_z,
+                              "typical_p", llama.params.typical_p,
+                              "repeat_last_n", llama.params.repeat_last_n,
+                              "repeat_penalty", llama.params.repeat_penalty,
+                              "alpha_presence", llama.params.presence_penalty,
+                              "alpha_frequency", llama.params.frequency_penalty,
+                              "mirostat", llama.params.mirostat,
+                              "mirostat_tau", llama.params.mirostat_tau,
+                              "mirostat_eta", llama.params.mirostat_eta,
+                              "penalize_nl", llama.params.penalize_nl
+                            }
+                        },
                         {"prompt", llama.params.prompt},
                         {"generated_text", final_text}
                   };
               }
-              
+
               return res.set_content(data.dump(), "application/json");
             } catch (const json::exception &e) {
               // Some tokens have bad UTF-8 strings, the json parser is very sensitive
@@ -707,6 +739,22 @@ int main(int argc, char **argv)
                         {"stop", true },
                         {"tokens_predicted", llama.num_tokens_predicted},
                         {"seed", llama.params.seed},
+                        {"generation_settings", {
+                              "temp", llama.params.temp,
+                              "top_k", llama.params.top_k,
+                              "top_p", llama.params.top_p,
+                              "tfs_z", llama.params.tfs_z,
+                              "typical_p", llama.params.typical_p,
+                              "repeat_last_n", llama.params.repeat_last_n,
+                              "repeat_penalty", llama.params.repeat_penalty,
+                              "alpha_presence", llama.params.presence_penalty,
+                              "alpha_frequency", llama.params.frequency_penalty,
+                              "mirostat", llama.params.mirostat,
+                              "mirostat_tau", llama.params.mirostat_tau,
+                              "mirostat_eta", llama.params.mirostat_eta,
+                              "penalize_nl", llama.params.penalize_nl
+                            }
+                        },
                         {"prompt", llama.params.prompt},
                         {"generated_text", final_text}
                   };
