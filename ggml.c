@@ -12961,10 +12961,10 @@ static void ggml_compute_forward_cross_entropy_loss_f32(
             }
 
             assert(sum > 0.0);
-            sum = 1.0/sum;
+            // sum = 1.0/sum;
         }
         // avoid log(0) by rescaling from [0..1] to [eps..1]
-        sum = sum * (1.0f - eps);
+        sum = (1.0f - eps) / sum;
         ggml_vec_scale_f32(nc, st, sum);
         ggml_vec_add1_f32(nc, st, st, eps);
         ggml_vec_log_f32(nc, st, st);
