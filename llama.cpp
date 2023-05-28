@@ -2852,6 +2852,19 @@ int llama_n_embd(const struct llama_context * ctx) {
     return ctx->model.hparams.n_embd;
 }
 
+int llama_get_vocab(
+        const struct llama_context * ctx,
+        const char * * strings,
+        float  * scores,
+        int capacity) {
+    int n = std::min(capacity, (int) ctx->vocab.id_to_token.size());
+    for (int i = 0; i<n; ++i) {
+        strings[i] = ctx->vocab.id_to_token[i].tok.c_str();
+        scores[i]  = ctx->vocab.id_to_token[i].score;
+    }
+    return n;
+}
+
 float * llama_get_logits(struct llama_context * ctx) {
     return ctx->logits.data();
 }
