@@ -32,7 +32,7 @@ struct llama_server_context
   llama_context *ctx;
   gpt_params params;
 
-  std::string stopping_word = "";
+  std::string stopping_word;
 
   void rewind() {
     as_loop = false;
@@ -255,7 +255,7 @@ struct llama_server_context
     std::string token_text = llama_token_to_str(ctx, token);
     generated_text += token_text;
 
-    for (std::string word : params.antiprompt) {
+    for (const std::string& word : params.antiprompt) {
       size_t i = generated_text.find(word, generated_text.size() - (word.size() + token_text.size()));
       if (i != std::string::npos) {
         generated_text.erase(generated_text.begin() + i, generated_text.begin() + i + word.size());
@@ -299,6 +299,7 @@ void server_print_usage(int /*argc*/, char **argv, const gpt_params &params, con
   fprintf(stderr, "  -h, --help            show this help message and exit\n");
   fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
   fprintf(stderr, "  --memory_f32          use f32 instead of f16 for memory key+value\n");
+  fprintf(stderr, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
   fprintf(stderr, "  --embedding           enable embedding mode\n");
   fprintf(stderr, "  --keep                number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
   if (llama_mlock_supported())
@@ -637,7 +638,7 @@ int main(int argc, char **argv)
   llama_server_context llama;
   params.model = "ggml-model.bin";
 
-  std::string final_text = "";
+  std::string final_text;
 
   if (server_params_parse(argc, argv, sparams, params) == false)
   {
