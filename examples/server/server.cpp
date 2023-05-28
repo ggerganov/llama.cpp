@@ -585,6 +585,14 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
   {
     llama.params.seed = time(NULL);
   }
+  if (!body["ignore_eos"].is_null() && body["ignore_eos"].get<bool>())
+  {
+      llama.params.logit_bias[llama_token_eos()] = -INFINITY;
+  }
+  else
+  {
+      llama.params.logit_bias.erase(llama_token_eos());
+  }
   if (!body["prompt"].is_null())
   {
     llama.params.prompt = body["prompt"].get<std::string>();
