@@ -298,6 +298,7 @@ void server_print_usage(int /*argc*/, char **argv, const gpt_params &params, con
   fprintf(stderr, "options:\n");
   fprintf(stderr, "  -h, --help            show this help message and exit\n");
   fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
+  fprintf(stderr, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
   fprintf(stderr, "  --memory-f32          use f32 instead of f16 for memory key+value\n");
   fprintf(stderr, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
   fprintf(stderr, "  --embedding           enable embedding mode\n");
@@ -377,7 +378,7 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
       server_print_usage(argc, argv, default_params, default_sparams);
       exit(0);
     }
-    else if (arg == "-c" || arg == "--ctx_size")
+    else if (arg == "-c" || arg == "--ctx-size")
     {
       if (++i >= argc)
       {
