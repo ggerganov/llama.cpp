@@ -236,6 +236,7 @@ struct llama_server_context
     if (!embd.empty() && embd.back() == llama_token_eos()) {
         stopping_word = llama_token_to_str(ctx, embd.back());
         has_next_token = false;
+        return result;
     }
 
     has_next_token = n_remain != 0;
