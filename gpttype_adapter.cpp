@@ -179,7 +179,7 @@ llama_token sample_token_mirostat_v2(llama_token_data_array * candidates, std::m
 
 // Top-a (remove all tokens that have softmax probability less than top_a*m^2 where m is the maximum softmax probability)
 // top-a 0 is off (no effect)
-void sample_top_a(llama_token_data_array * candidates, float a) {
+void sample_top_a(llama_token_data_array * candidates, float a, size_t min_keep) {
     if (a <= 0.0f || candidates->size<=1) {
         return;
     }
@@ -195,7 +195,7 @@ void sample_top_a(llama_token_data_array * candidates, float a) {
     for (size_t i = 0; i < candidates->size; ++i) {       
         // Go until we reach a value under the threshold
         float checkprob = candidates->data[i].p;
-        if (checkprob < threshold) {
+        if (checkprob < threshold && i >= min_keep) {
             last_idx = i;
             break;
         }
@@ -253,7 +253,7 @@ int mirostat, float mirostat_tau, float mirostat_eta)
         {
             // Temperature sampling
             llama_sample_top_k(nullptr, &candidates_p, top_k,1);
-            sample_top_a(&candidates_p,top_a);
+            sample_top_a(&candidates_p,top_a,1);
             llama_sample_tail_free(nullptr, &candidates_p, tfs,1);
             llama_sample_typical(nullptr, &candidates_p, typical_p,1);
             llama_sample_top_p(nullptr, &candidates_p, top_p,1);
