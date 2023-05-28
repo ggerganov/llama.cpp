@@ -100,7 +100,7 @@ struct llama_server_context
         // Reset context
         const int n_left = n_past - params.n_keep;
         n_past = std::max(1, params.n_keep);
-        processed_tokens.erase(processed_tokens.begin() + n_past, processed_tokens.end());
+        //processed_tokens.erase(processed_tokens.begin() + n_past, processed_tokens.end());
         embd.insert(embd.begin(), last_n_tokens.begin() + params.n_ctx - n_left / 2 - embd.size(), last_n_tokens.end() - embd.size());
       }
       for (int i = 0; i < (int)embd.size(); i += params.n_batch)
@@ -498,10 +498,6 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
   if (!body["n_keep"].is_null())
   {
     llama.params.n_keep = body["n_keep"].get<int>();
-  }
-  if (!body["as_loop"].is_null())
-  {
-    llama.as_loop = body["as_loop"].get<bool>();
   }
   if (!body["prompt"].is_null())
   {
