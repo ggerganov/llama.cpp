@@ -400,8 +400,10 @@ void server_print_usage(int /*argc*/, char **argv, const gpt_params &params)
   fprintf(stderr, "                        number of layers to store in VRAM\n");
   fprintf(stderr, "  -m FNAME, --model FNAME\n");
   fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
-  fprintf(stderr, "  -host                 ip address to listen (default 127.0.0.1)\n");
-  fprintf(stderr, "  -port PORT            port to listen (default 8080)\n");
+  fprintf(stderr, "  -a ALIAS, --alias ALIAS\n");
+  fprintf(stderr, "                        set an alias for the model, will be added as `model` field in completion response\n");
+  fprintf(stderr, "  --host                ip address to listen (default 127.0.0.1)\n");
+  fprintf(stderr, "  --port PORT           port to listen (default 8080)\n");
   fprintf(stderr, "\n");
 }
 
@@ -452,6 +454,15 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
         break;
       }
       params.model = argv[i];
+    }
+    else if (arg == "-a" || arg == "--alias")
+    {
+      if (++i >= argc)
+      {
+        invalid_param = true;
+        break;
+      }
+      params.model_alias = argv[i];
     }
     else if (arg == "--embedding")
     {
@@ -645,6 +656,7 @@ int main(int argc, char **argv)
                 try
                 {
                   json data = {
+                      {"model", llama.params.model_alias },
                       {"content", llama.generated_text },
                       {"tokens_predicted", llama.num_tokens_predicted}};
                   return res.set_content(data.dump(), "application/json");

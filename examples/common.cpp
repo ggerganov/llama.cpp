@@ -251,6 +251,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.model = argv[i];
+        } else if (arg == "-a" || arg == "--alias") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.model_alias = argv[i];
         } else if (arg == "--lora") {
             if (++i >= argc) {
                 invalid_param = true;
