@@ -41,4 +41,4 @@ ENV CXX=/opt/rocm/llvm/bin/clang++
 
 RUN make
 
-ENTRYPOINT ["/app/.devops/tools.sh"]
+ENTRYPOINT ["/app/.devops/tools.py"]

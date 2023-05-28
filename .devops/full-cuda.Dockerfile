@@ -30,4 +30,4 @@ ENV LLAMA_CUBLAS=1
 
 RUN make
 
-ENTRYPOINT ["/app/.devops/tools.sh"]
+ENTRYPOINT ["/app/.devops/tools.py"]

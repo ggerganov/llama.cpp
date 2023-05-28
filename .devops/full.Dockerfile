@@ -18,4 +18,4 @@ RUN make
 
 ENV LC_ALL=C.utf8
 
-ENTRYPOINT ["/app/.devops/tools.sh"]
+ENTRYPOINT ["/app/.devops/tools.py"]
