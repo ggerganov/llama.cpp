@@ -469,16 +469,11 @@ void ggml_cl_init(void) {
 
     size_t ext_str_size;
     clGetDeviceInfo(device, CL_DEVICE_EXTENSIONS, 0, NULL, &ext_str_size);
-    char* ext_buffer = (char*) malloc(sizeof(char) * ext_str_size);
+    char *ext_buffer = (char *)alloca(ext_str_size + 1);
     clGetDeviceInfo(device, CL_DEVICE_EXTENSIONS, ext_str_size, ext_buffer, NULL);
+    ext_buffer[ext_str_size] = '\0'; // ensure it is null terminated
     // Check if ext_buffer contains cl_khr_fp16
-    for (size_t i = 0; i < ext_str_size - 12; i++) {
-        if (memcmp(ext_buffer + i, "cl_khr_fp16", 11) == 0) {
-            fp16_support = true;
-            break;
-        }
-    }
-    free(ext_buffer);
+    fp16_support = strstr(ext_buffer, "cl_khr_fp16") != NULL;
     fprintf(stderr, "ggml_opencl: device FP16 support: %s\n", fp16_support ? "true" : "false");
 
     cl_context_properties properties[] = {
