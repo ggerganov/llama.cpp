@@ -92,6 +92,7 @@ struct llama_server_context
       }
     }
     n_remain = params.n_predict;
+    llama_set_rng_seed(ctx, params.seed);
   }
 
   llama_token nextToken() {
@@ -579,11 +580,11 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
   }
   if (!body["seed"].is_null())
   {
-      llama.params.seed = body["seed"].get<int>();
+    llama.params.seed = body["seed"].get<int>();
   }
   else
   {
-      llama.params.seed = -1;
+    llama.params.seed = time(NULL);
   }
   if (!body["prompt"].is_null())
   {
@@ -607,6 +608,25 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
       llama.params.antiprompt.clear();
   }
   return true;
+}
+
+json format_generation_settings(const llama_server_context& llama) {
+  return json {
+    { "seed", llama.params.seed },
+    { "temp", llama.params.temp },
+    { "top_k", llama.params.top_k },
+    { "top_p", llama.params.top_p },
+    { "tfs_z", llama.params.tfs_z },
+    { "typical_p", llama.params.typical_p },
+    { "repeat_last_n", llama.params.repeat_last_n },
+    { "repeat_penalty", llama.params.repeat_penalty },
+    { "presence_penalty", llama.params.presence_penalty },
+    { "frequency_penalty", llama.params.frequency_penalty },
+    { "mirostat", llama.params.mirostat },
+    { "mirostat_tau", llama.params.mirostat_tau },
+    { "mirostat_eta", llama.params.mirostat_eta },
+    { "penalize_nl", llama.params.penalize_nl }
+  };
 }
 
 int main(int argc, char **argv)
@@ -681,23 +701,7 @@ int main(int argc, char **argv)
                   json data = {
                       {"content", llama.generated_text },
                       {"tokens_predicted", llama.num_tokens_predicted},
-                      {"seed", llama.params.seed},
-                      {"generation_settings", {
-                            "temp", llama.params.temp,
-                            "top_k", llama.params.top_k,
-                            "top_p", llama.params.top_p,
-                            "tfs_z", llama.params.tfs_z,
-                            "typical_p", llama.params.typical_p,
-                            "repeat_last_n", llama.params.repeat_last_n,
-                            "repeat_penalty", llama.params.repeat_penalty,
-                            "presence_penalty", llama.params.presence_penalty,
-                            "frequency_penalty", llama.params.frequency_penalty,
-                            "mirostat", llama.params.mirostat,
-                            "mirostat_tau", llama.params.mirostat_tau,
-                            "mirostat_eta", llama.params.mirostat_eta,
-                            "penalize_nl", llama.params.penalize_nl
-                        }
-                      },
+                      {"generation_settings", format_generation_settings(llama) },
                       {"prompt", llama.params.prompt},
                       {"stopping_word", llama.stopping_word} };
                   return res.set_content(data.dump(), "application/json");
@@ -767,23 +771,7 @@ int main(int argc, char **argv)
                         {"content", result },
                         {"stop", true },
                         {"tokens_predicted", llama.num_tokens_predicted},
-                        {"seed", llama.params.seed},
-                        {"generation_settings", {
-                              "temp", llama.params.temp,
-                              "top_k", llama.params.top_k,
-                              "top_p", llama.params.top_p,
-                              "tfs_z", llama.params.tfs_z,
-                              "typical_p", llama.params.typical_p,
-                              "repeat_last_n", llama.params.repeat_last_n,
-                              "repeat_penalty", llama.params.repeat_penalty,
-                              "presence_penalty", llama.params.presence_penalty,
-                              "frequency_penalty", llama.params.frequency_penalty,
-                              "mirostat", llama.params.mirostat,
-                              "mirostat_tau", llama.params.mirostat_tau,
-                              "mirostat_eta", llama.params.mirostat_eta,
-                              "penalize_nl", llama.params.penalize_nl
-                            }
-                        },
+                        {"generation_settings", format_generation_settings(llama) },
                         {"prompt", llama.params.prompt},
                         {"stopping_word", llama.stopping_word},
                         {"generated_text", final_text}
@@ -809,23 +797,7 @@ int main(int argc, char **argv)
                         {"content", u8"\uFFFD" },
                         {"stop", true },
                         {"tokens_predicted", llama.num_tokens_predicted},
-                        {"seed", llama.params.seed},
-                        {"generation_settings", {
-                              "temp", llama.params.temp,
-                              "top_k", llama.params.top_k,
-                              "top_p", llama.params.top_p,
-                              "tfs_z", llama.params.tfs_z,
-                              "typical_p", llama.params.typical_p,
-                              "repeat_last_n", llama.params.repeat_last_n,
-                              "repeat_penalty", llama.params.repeat_penalty,
-                              "presence_penalty", llama.params.presence_penalty,
-                              "frequency_penalty", llama.params.frequency_penalty,
-                              "mirostat", llama.params.mirostat,
-                              "mirostat_tau", llama.params.mirostat_tau,
-                              "mirostat_eta", llama.params.mirostat_eta,
-                              "penalize_nl", llama.params.penalize_nl
-                            }
-                        },
+                        {"generation_settings", format_generation_settings(llama) },
                         {"prompt", llama.params.prompt},
                         {"stopping_word", llama.stopping_word},
                         {"generated_text", final_text}
