@@ -160,9 +160,8 @@ struct llama_server_context
     {
       // out of user input, sample next token
       const float temp = params.temp;
-      // const int32_t top_k = params.top_k <= 0 ? llama_n_vocab(ctx) : params.top_k;
-      const float top_p = params.top_p;
       const int32_t top_k = params.top_k <= 0 ? llama_n_vocab(ctx) : params.top_k;
+      const float top_p = params.top_p;
       const float tfs_z = params.tfs_z;
       const float typical_p = params.typical_p;
       const int32_t repeat_last_n = params.repeat_last_n < 0 ? params.n_ctx : params.repeat_last_n;
