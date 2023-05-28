@@ -1570,8 +1570,8 @@ static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
         .dequantize_row_q         = (dequantize_row_q_t) dequantize_row_q3_K,
         .quantize_row_q           = quantize_row_q3_K,
         .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q3_K_reference,
-        .quantize_row_q_dot       = NULL, //quantize_row_q8_K,
-        .vec_dot_q                = NULL, //ggml_vec_dot_q3_K_q8_K,
+        .quantize_row_q_dot       = quantize_row_q8_K,
+        .vec_dot_q                = ggml_vec_dot_q3_K_q8_K,
         .vec_dot_type             = GGML_TYPE_Q8_K,
     },
 };
@@ -7602,6 +7602,7 @@ static void ggml_compute_forward_add(
         case GGML_TYPE_Q5_0:
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
+        case GGML_TYPE_Q3_K:
             {
                 ggml_compute_forward_add_q_f32(params, src0, src1, dst);
             } break;
@@ -7905,6 +7906,7 @@ static void ggml_compute_forward_add1(
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
         case GGML_TYPE_Q8_1:
+        case GGML_TYPE_Q3_K:
             {
                 ggml_compute_forward_add1_q_f32(params, src0, src1, dst);
             } break;
@@ -8027,6 +8029,7 @@ static void ggml_compute_forward_acc(
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
         case GGML_TYPE_Q8_1:
+        case GGML_TYPE_Q3_K:
         default:
             {
                 GGML_ASSERT(false);
@@ -10120,6 +10123,7 @@ static void ggml_compute_forward_mul_mat(
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
         case GGML_TYPE_Q8_1:
+        case GGML_TYPE_Q3_K:
             {
                 ggml_compute_forward_mul_mat_q_f32(params, src0, src1, dst);
             } break;
@@ -10303,6 +10307,7 @@ static void ggml_compute_forward_set(
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
         case GGML_TYPE_Q8_1:
+        case GGML_TYPE_Q3_K:
         default:
             {
                 GGML_ASSERT(false);
@@ -10468,6 +10473,7 @@ static void ggml_compute_forward_get_rows(
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
         case GGML_TYPE_Q8_1:
+        case GGML_TYPE_Q3_K:
             {
                 ggml_compute_forward_get_rows_q(params, src0, src1, dst);
             } break;
@@ -16091,6 +16097,12 @@ size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, i
                 GGML_ASSERT(start % QK8_0 == 0);
                 block_q8_0 * block = (block_q8_0*)dst + start / QK8_0;
                 result = ggml_quantize_q8_0(src + start, block, n, n, hist);
+            } break;
+        case GGML_TYPE_Q3_K:
+            {
+                GGML_ASSERT(start % QK_K == 0);
+                block_q3_K * block = (block_q3_K*)dst + start / QK_K;
+                result = ggml_quantize_q3_K(src + start, block, n, n, hist);
             } break;
         default:
             assert(false);

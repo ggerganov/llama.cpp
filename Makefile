@@ -229,7 +229,7 @@ clean:
 # Examples
 #
 
-main: examples/main/main.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+main: examples/main/main.cpp build-info.h ggml.o k_quants.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
@@ -269,7 +269,7 @@ benchmark-matmult: examples/benchmark/benchmark-matmult.cpp build-info.h ggml.o 
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 	./$@
 
-vdot: pocs/vdot/vdot.cpp ggml.o $(OBJS)
+vdot: pocs/vdot/vdot.cpp ggml.o k_quants.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 .PHONY: tests clean
