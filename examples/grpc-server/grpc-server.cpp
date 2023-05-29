@@ -220,7 +220,7 @@ public:
   bool loadPrompt(std::string prompt)
   {
     // prompt.insert(0, " Below is an instruction that describes a task. Write a response that appropriately completes the request.\n"); // always add a first space
-    prompt.insert(0, 1, ' ');                                                                                                         // always add a first space
+    prompt.insert(0, 1, ' '); // always add a first space
     std::vector<llama_token> prompt_tokens = ::llama_tokenize(ctx, prompt, true);
     // compare the evaluated prompt with the new prompt
     int new_prompt_len = 0;
@@ -455,12 +455,14 @@ public:
     {
       has_next_token = false;
     }
-
-    if (params.interactive && n_remain <= 0 && params.n_predict != -1)
+    else
     {
-      n_remain = params.n_predict;
+      if (params.interactive && n_remain <= 0 && params.n_predict != -1)
+      {
+        n_remain = params.n_predict;
+      }
+      has_next_token = n_remain != 0;
     }
-    has_next_token = n_remain != 0;
     return result;
   }
 
