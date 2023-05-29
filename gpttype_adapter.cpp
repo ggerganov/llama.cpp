@@ -1090,7 +1090,9 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                     }
                         
                      // set the logit of the eos token (0) to minimum to avoid sampling it
-                    if (file_format == FileFormat::NEOX_1 ||
+                    if (file_format == FileFormat::RWKV_1 ||
+                        file_format == FileFormat::RWKV_2 ||
+                        file_format == FileFormat::NEOX_1 ||
                          file_format == FileFormat::NEOX_2 ||
                          file_format == FileFormat::NEOX_3 ||
                          file_format == FileFormat::NEOX_4 ||
