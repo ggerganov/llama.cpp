@@ -186,7 +186,9 @@ typedef double ggml_float;
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <intrin.h>
 #else
+#if !defined(__riscv)
 #include <immintrin.h>
+#endif
 #endif
 #endif
 #endif
@@ -3806,6 +3808,10 @@ enum ggml_type ggml_ftype_to_ggml_type(enum ggml_ftype ftype) {
     GGML_ASSERT(wtype != GGML_TYPE_COUNT);
 
     return wtype;
+}
+
+size_t ggml_tensor_overhead(void) {
+    return GGML_OBJECT_SIZE + GGML_TENSOR_SIZE + 16;
 }
 
 static inline bool ggml_is_transposed(const struct ggml_tensor * tensor) {
@@ -14527,6 +14533,14 @@ void ggml_graph_reset(struct ggml_cgraph * cgraph) {
 }
 
 struct ggml_tensor * ggml_get_tensor_by_name(struct ggml_cgraph * cgraph, const char * name) {
+    for (int i = 0; i < cgraph->n_leafs; i++) {
+        struct ggml_tensor * leaf = cgraph->leafs[i];
+
+        if (strcmp(leaf->name, name) == 0) {
+            return leaf;
+        }
+    }
+
     for (int i = 0; i < cgraph->n_nodes; i++) {
         struct ggml_tensor * node = cgraph->nodes[i];
 
