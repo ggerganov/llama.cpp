@@ -29,6 +29,9 @@ struct ggml_mtl_context {
 
     id<MTLFunction>             function_soft_max;
     id<MTLComputePipelineState> pipeline_soft_max;
+
+    id<MTLFunction>             function_get_rows_q4_0;
+    id<MTLComputePipelineState> pipeline_get_rows_q4_0;
 };
 
 // MSL code
@@ -90,7 +93,7 @@ struct ggml_mtl_context * llama_mtl_init(
     {
         NSError * error = nil;
 
-        NSString * path = [[NSBundle mainBundle] pathForResource:@"../examples/mtl/mtl" ofType:@"metal"];
+        NSString * path = [[NSBundle mainBundle] pathForResource:@"../../examples/mtl/mtl" ofType:@"metal"];
         NSString * src  = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
         if (error) {
             fprintf(stderr, "%s: error: %s\n", __func__, [[error description] UTF8String]);
@@ -107,10 +110,7 @@ struct ggml_mtl_context * llama_mtl_init(
 
     // load kernels
     {
-        const int k_digits = 123;
-
         MTLFunctionConstantValues * constants = [MTLFunctionConstantValues new];
-        [constants setConstantValue:&k_digits type:MTLDataTypeInt withName:@"k_digits"];
 
         ctx->function_add = [ctx->library newFunctionWithName:@"kernel_add"];
         ctx->pipeline_add = [ctx->device newComputePipelineStateWithFunction:ctx->function_add error:nil];
@@ -123,6 +123,10 @@ struct ggml_mtl_context * llama_mtl_init(
         ctx->function_soft_max = [ctx->library newFunctionWithName:@"kernel_soft_max" constantValues:constants error:nil];
         ctx->pipeline_soft_max = [ctx->device newComputePipelineStateWithFunction:ctx->function_soft_max error:nil];
         fprintf(stderr, "%s: loaded kernel_soft_max: %p\n", __func__, (void *) ctx->pipeline_soft_max);
+
+        ctx->function_get_rows_q4_0 = [ctx->library newFunctionWithName:@"kernel_get_rows_q4_0"];
+        ctx->pipeline_get_rows_q4_0 = [ctx->device newComputePipelineStateWithFunction:ctx->function_get_rows_q4_0 error:nil];
+        fprintf(stderr, "%s: loaded kernel_get_rows_q4_0: %p\n", __func__, (void *) ctx->pipeline_get_rows_q4_0);
     }
 
     // MTLBuffer approach
@@ -314,6 +318,35 @@ int llama_mtl_eval(
                         transposeLeft:false transposeRight:true resultRows:nrows1 resultColumns:nrows0 interiorColumns:ncols0 alpha:1.0 beta:0.0];
 
                     [mul encodeToCommandBuffer:command_buffer leftMatrix:mat_src1 rightMatrix:mat_src0 resultMatrix:mat_dst];
+                } break;
+            case GGML_OP_GET_ROWS:
+                {
+                    if (encoder == nil) {
+                        encoder = [command_buffer computeCommandEncoder];
+                    }
+
+                    id<MTLBuffer> id_src0 = llama_mtl_get_buffer(ctx, gf->nodes[i]->src0, &offs_src0);
+                    id<MTLBuffer> id_src1 = llama_mtl_get_buffer(ctx, gf->nodes[i]->src1, &offs_src1);
+                    id<MTLBuffer> id_dst  = llama_mtl_get_buffer(ctx, gf->nodes[i],       &offs_dst);
+
+                    switch (gf->nodes[i]->src0->type) {
+                        case GGML_TYPE_Q4_0: [encoder setComputePipelineState:ctx->pipeline_get_rows_q4_0]; break;
+                        default: {
+                                     // not implemented
+                                     fprintf(stderr, "%s: node %3d, op = %8s, type = %8s not implemented\n", __func__, i, ggml_op_name(gf->nodes[i]->op), ggml_type_name(gf->nodes[i]->src0->type));
+                                 }
+                    }
+
+                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                    [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
+                    [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
+                    [encoder setBytes:&(gf->nodes[i]->src0->ne[0]) length:sizeof( int64_t) atIndex:3];
+                    [encoder setBytes:&(gf->nodes[i]->src0->nb[1]) length:sizeof(uint64_t) atIndex:4];
+                    [encoder setBytes:&(gf->nodes[i]->nb[1])       length:sizeof(uint64_t) atIndex:5];
+
+                    const int64_t n = ggml_nelements(gf->nodes[i]->src1);
+
+                    [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                 } break;
             default:
                 fprintf(stderr, "%s: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
