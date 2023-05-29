@@ -318,6 +318,7 @@ extern "C" {
 
         GGML_OP_FLASH_ATTN,
         GGML_OP_FLASH_FF,
+        GGML_OP_FLASH_ATTN_BACK,
 
         GGML_OP_MAP_UNARY,
         GGML_OP_MAP_BINARY,
@@ -951,6 +952,14 @@ extern "C" {
             struct ggml_tensor  * k,
             struct ggml_tensor  * v,
             bool                  masked);
+
+    GGML_API struct ggml_tensor * ggml_flash_attn_back(
+           struct ggml_context * ctx,
+           struct ggml_tensor  * q,
+           struct ggml_tensor  * k,
+           struct ggml_tensor  * v,
+           struct ggml_tensor  * d,
+           bool                  masked);
 
     GGML_API struct ggml_tensor * ggml_flash_ff(
             struct ggml_context * ctx,
