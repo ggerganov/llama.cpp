@@ -185,7 +185,14 @@ typedef double ggml_v2_float;
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <intrin.h>
 #else
+#if !defined(__riscv)
 #include <immintrin.h>
+extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_set_m128i (__m128i __H, __m128i __L)
+{
+  return _mm256_insertf128_si256 (_mm256_castsi128_si256 (__L), __H, 1);
+}
+#endif
 #endif
 #endif
 #endif
