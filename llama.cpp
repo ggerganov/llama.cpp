@@ -587,6 +587,7 @@ struct llama_file_saver {
             case GGML_TYPE_Q5_1:
             case GGML_TYPE_Q8_0:
             case GGML_TYPE_Q3_K:
+            case GGML_TYPE_Q4_K:
             case GGML_TYPE_Q5_K:
             case GGML_TYPE_Q6_K:
                 break;
@@ -2172,8 +2173,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                          (i_feed_forward_w2 - n_feed_forward_w2/8)%3 == 2)) new_type = GGML_TYPE_Q6_K;
                 ++i_feed_forward_w2;
             }
-            else if (tensor.name.find("feed_forward.w3.weight") != std::string::npos ||
-                     tensor.name.find("attention.wo.weight")    != std::string::npos) {
+            else if (tensor.name.find("attention.wo.weight") != std::string::npos) {
                 if      (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M) new_type = GGML_TYPE_Q4_K;
                 else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
             }
