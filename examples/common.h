@@ -74,6 +74,7 @@ struct gpt_params {
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
+bool gpt_params_parse_with_extra_check(int argc, char **argv, gpt_params &params, std::vector<std::string> *extra_args);
 
 void gpt_print_usage(int argc, char ** argv, const gpt_params & params);
 
