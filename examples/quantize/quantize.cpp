@@ -14,6 +14,7 @@ static const std::map<std::string, llama_ftype> LLAMA_FTYPE_MAP = {
   {"q8_0", LLAMA_FTYPE_MOSTLY_Q8_0},
   {"q3_K", LLAMA_FTYPE_MOSTLY_Q3_K},
   {"q4_K", LLAMA_FTYPE_MOSTLY_Q4_K},
+  {"q6_K", LLAMA_FTYPE_MOSTLY_Q6_K},
 };
 
 bool try_parse_ftype(const std::string & ftype_str, llama_ftype & ftype, std::string & ftype_str_out) {
