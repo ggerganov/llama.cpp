@@ -540,6 +540,10 @@ def main(args):
             time.sleep(2)
             sys.exit(2)
 
+    if args.renamemodel and args.renamemodel!="":
+        global friendlymodelname
+        friendlymodelname = "koboldcpp/"+args.renamemodel
+
     if args.highpriority:
         print("Setting process to Higher Priority - Use Caution")
         try:
@@ -655,6 +659,7 @@ if __name__ == '__main__':
     parser.add_argument("--noavx2", help="Do not use AVX2 instructions, a slower compatibility mode for older devices. Does not work with --clblast.", action='store_true')
     parser.add_argument("--debugmode", help="Shows additional debug info in the terminal.", action='store_true')
     parser.add_argument("--skiplauncher", help="Doesn't display or use the new GUI launcher.", action='store_true')
+    parser.add_argument("--renamemodel", help="Sets the display model name to something else, for easy use on Horde.", type=str, default="")
     compatgroup = parser.add_mutually_exclusive_group()
     compatgroup.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
     compatgroup.add_argument("--useclblast", help="Use CLBlast instead of OpenBLAS for prompt ingestion. Must specify exactly 2 arguments, platform ID and device ID (e.g. --useclblast 1 0).", type=int, choices=range(0,9), nargs=2)
