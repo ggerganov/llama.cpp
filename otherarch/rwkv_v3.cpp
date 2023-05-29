@@ -22,8 +22,8 @@
 #include <sys/stat.h> // fstat
 
 #ifdef WIN32
-#define stat64 _stat64
-#define fstat64 _fstat64
+#define stat _stat64
+#define fstat _fstat64
 #endif
 
 // --- Error handling ---
@@ -477,8 +477,8 @@ struct rwkv_context * rwkv_init_from_file(const char * file_path, const uint32_t
     rwkv_file_guard file_guard { file };
 
     // Be very careful when changing this code. It must support files larger than 2 GB by using 64-bit functions to the get file length.
-    struct stat64 file_stat;
-    RWKV_ASSERT_NULL_MSG(RWKV_ERROR_FILE | RWKV_ERROR_FILE_STAT, fstat64(fileno(file), &file_stat) == 0, "Failed to stat file %s", file_path);
+    struct stat file_stat;
+    RWKV_ASSERT_NULL_MSG(RWKV_ERROR_FILE | RWKV_ERROR_FILE_STAT, fstat(fileno(file), &file_stat) == 0, "Failed to stat file %s", file_path);
 
     int32_t magic;
     RWKV_ASSERT_NULL(RWKV_ERROR_FILE, read_int32(file, &magic, "magic"));
