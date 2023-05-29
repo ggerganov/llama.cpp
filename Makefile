@@ -40,8 +40,10 @@ endif
 #
 
 # keep standard at C11 and C++11
-CFLAGS   = -I.              -O3 -std=c11   -fPIC
-CXXFLAGS = -I. -I./examples -O3 -std=c++11 -fPIC
+#OPT = -Ofast
+OPT = -O3
+CFLAGS   = -I.              $(OPT) -std=c11   -fPIC
+CXXFLAGS = -I. -I./examples $(OPT) -std=c++11 -fPIC
 LDFLAGS  =
 
 ifdef LLAMA_DEBUG

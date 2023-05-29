@@ -509,6 +509,7 @@ struct llama_file_loader {
                 case GGML_TYPE_Q8_0:
                 case GGML_TYPE_Q3_K:
                 case GGML_TYPE_Q4_K:
+                case GGML_TYPE_Q5_K:
                 case GGML_TYPE_Q6_K:
                     break;
                 default: {
@@ -586,7 +587,7 @@ struct llama_file_saver {
             case GGML_TYPE_Q5_1:
             case GGML_TYPE_Q8_0:
             case GGML_TYPE_Q3_K:
-            case GGML_TYPE_Q4_K:
+            case GGML_TYPE_Q5_K:
             case GGML_TYPE_Q6_K:
                 break;
             default: LLAMA_ASSERT(false);
@@ -906,6 +907,7 @@ static const char *llama_ftype_name(enum llama_ftype ftype) {
         case LLAMA_FTYPE_MOSTLY_Q8_0: return "mostly Q8_0";
         case LLAMA_FTYPE_MOSTLY_Q3_K: return "mostly Q3_K";
         case LLAMA_FTYPE_MOSTLY_Q4_K: return "mostly Q4_K";
+        case LLAMA_FTYPE_MOSTLY_Q5_K: return "mostly Q5_K";
         case LLAMA_FTYPE_MOSTLY_Q6_K: return "mostly Q6_K";
         default:                      return "unknown, may not work";
     }
@@ -2074,6 +2076,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         case LLAMA_FTYPE_MOSTLY_Q8_0: quantized_type = GGML_TYPE_Q8_0; break;
         case LLAMA_FTYPE_MOSTLY_Q3_K: quantized_type = GGML_TYPE_Q3_K; break;
         case LLAMA_FTYPE_MOSTLY_Q4_K: quantized_type = GGML_TYPE_Q4_K; break;
+        case LLAMA_FTYPE_MOSTLY_Q5_K: quantized_type = GGML_TYPE_Q5_K; break;
         case LLAMA_FTYPE_MOSTLY_Q6_K: quantized_type = GGML_TYPE_Q6_K; break;
         default: throw format("invalid output file type %d\n", ftype);
     };
