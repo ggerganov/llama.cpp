@@ -117,15 +117,15 @@ struct ggml_mtl_context * llama_mtl_init(
 
         ctx->function_add = [ctx->library newFunctionWithName:@"kernel_add"];
         ctx->pipeline_add = [ctx->device newComputePipelineStateWithFunction:ctx->function_add error:nil];
-        fprintf(stderr, "%s: loaded kernel_add: %p\n", __func__, ctx->pipeline_add);
+        fprintf(stderr, "%s: loaded kernel_add: %p\n", __func__, (void *) ctx->pipeline_add);
 
         ctx->function_relu = [ctx->library newFunctionWithName:@"kernel_relu"];
         ctx->pipeline_relu = [ctx->device newComputePipelineStateWithFunction:ctx->function_relu error:nil];
-        fprintf(stderr, "%s: loaded kernel_relu: %p\n", __func__, ctx->pipeline_relu);
+        fprintf(stderr, "%s: loaded kernel_relu: %p\n", __func__, (void *) ctx->pipeline_relu);
 
         ctx->function_soft_max = [ctx->library newFunctionWithName:@"kernel_soft_max" constantValues:constants error:nil];
         ctx->pipeline_soft_max = [ctx->device newComputePipelineStateWithFunction:ctx->function_soft_max error:nil];
-        fprintf(stderr, "%s: loaded kernel_soft_max: %p\n", __func__, ctx->pipeline_soft_max);
+        fprintf(stderr, "%s: loaded kernel_soft_max: %p\n", __func__, (void *) ctx->pipeline_soft_max);
     }
 
     // MTLBuffer approach
@@ -217,11 +217,11 @@ int llama_mtl_eval(
 
     // copy the input data to the GPU
     {
-        struct ggml_tensor * inp = ggml_graph_get_tensor(gf, "input");
+        struct ggml_tensor * embd = ggml_graph_get_tensor(gf, "embd");
 
-        id<MTLBuffer> id_dst = llama_mtl_get_buffer(ctx, inp, &offs_src0);
+        id<MTLBuffer> id_dst = llama_mtl_get_buffer(ctx, embd, &offs_src0);
 
-        memcpy(id_dst.contents + offs_src0, inp->data, ggml_nbytes(inp));
+        memcpy((char *) id_dst.contents + offs_src0, embd->data, ggml_nbytes(embd));
     }
 
     for (int i = 0; i < gf->n_nodes; ++i) {

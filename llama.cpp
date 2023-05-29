@@ -1243,6 +1243,10 @@ static bool llama_eval_internal(
     ggml_cgraph gf = {};
     gf.n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
 
+    // TODO: TMP !!!
+    ggml_cgraph gf_export = {};
+    gf_export.n_threads = 1;
+
     struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
     ggml_set_name(embd, "embd");
     memcpy(embd->data, tokens, N*ggml_element_size(embd));
@@ -1262,6 +1266,11 @@ static bool llama_eval_internal(
 
             // cur = cur*attention_norm(broadcasted)
             cur = ggml_mul(ctx0, cur, model.layers[il].attention_norm);
+        }
+
+        // TODO: TMP !!!!
+        if (il == 0) {
+            ggml_set_name(cur, "mtl-check");
         }
 
         // self-attention
@@ -1420,12 +1429,17 @@ static bool llama_eval_internal(
     // logits -> probs
     //inpL = ggml_soft_max_inplace(ctx0, inpL);
 
+    // TODO: TMP !!!!!!!!!!!!!!!!!!!!
     // run the computation
-    ggml_build_forward_expand(&gf, inpL);
-    ggml_graph_compute       (ctx0, &gf);
+    //ggml_build_forward_expand(&gf, inpL);
+    //ggml_graph_compute       (ctx0, &gf);
+
+    // lets export a smaller graph to get things rolling -- baby steps first
+    ggml_build_forward_expand(&gf_export, ggml_get_tensor(ctx0, "mtl-check"));
 
     if (cgraph_fname) {
-        ggml_graph_export(&gf, cgraph_fname);
+        //ggml_graph_export(&gf, cgraph_fname);
+        ggml_graph_export(&gf_export, cgraph_fname);
     }
 
 #ifdef GGML_PERF
