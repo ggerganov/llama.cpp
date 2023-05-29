@@ -1189,17 +1189,19 @@ static bool llama_model_load(
 
 // evaluate the transformer
 //
-//   - lctx:      llama context
-//   - tokens:    new batch of tokens to process
-//   - n_past:    the context size so far
-//   - n_threads: number of threads to use
+//   - lctx:         llama context
+//   - tokens:       new batch of tokens to process
+//   - n_past:       the context size so far
+//   - n_threads:    number of threads to use
+//   - cgraph_fname: filename of the exported computation graph (TODO: TMP!!!)
 //
 static bool llama_eval_internal(
-        llama_context & lctx,
-    const llama_token * tokens,
-            const int   n_tokens,
-            const int   n_past,
-            const int   n_threads) {
+        llama_context &  lctx,
+    const llama_token *  tokens,
+            const int    n_tokens,
+            const int    n_past,
+            const int    n_threads,
+            const char * cgraph_fname) {
 
     // enforce that the first token is BOS
     if (n_past == 0 && tokens[0] != llama_token_bos()) {
@@ -1421,6 +1423,10 @@ static bool llama_eval_internal(
     // run the computation
     ggml_build_forward_expand(&gf, inpL);
     ggml_graph_compute       (ctx0, &gf);
+
+    if (cgraph_fname) {
+        ggml_graph_export(&gf, cgraph_fname);
+    }
 
 #ifdef GGML_PERF
     // print timing information per ggml operation (for debugging purposes)
@@ -2899,7 +2905,7 @@ int llama_eval(
                          int   n_tokens,
                          int   n_past,
                          int   n_threads) {
-    if (!llama_eval_internal(*ctx, tokens, n_tokens, n_past, n_threads)) {
+    if (!llama_eval_internal(*ctx, tokens, n_tokens, n_past, n_threads, nullptr)) {
         fprintf(stderr, "%s: failed to eval\n", __func__);
         return 1;
     }
@@ -2909,6 +2915,24 @@ int llama_eval(
     if (!ctx->has_evaluated_once) {
         ctx->t_load_us = ggml_time_us() - ctx->t_start_us;
         ctx->has_evaluated_once = true;
+    }
+
+    return 0;
+}
+
+int llama_eval_export(struct llama_context * ctx, const char * fname) {
+    // these values determine the maximum inference sizes of the exported computation graph
+    // TODO: TMP !!!
+    //const int n_ctx   = ctx->model.hparams.n_ctx;
+    //const int n_batch = 512;
+    const int n_ctx   = 128;
+    const int n_batch = 32;
+
+    const std::vector<llama_token> tmp(n_batch, llama_token_bos());
+
+    if (!llama_eval_internal(*ctx, tmp.data(), tmp.size(), n_ctx, 1, fname)) {
+        fprintf(stderr, "%s: failed to eval\n", __func__);
+        return 1;
     }
 
     return 0;

@@ -173,6 +173,10 @@ extern "C" {
                              int   n_past,
                              int   n_threads);
 
+    // Export a computation graph for model inference
+    // TODO: very likely to change
+    LLAMA_API int llama_eval_export(struct llama_context * ctx, const char * fname);
+
     // Convert the provided text into tokens.
     // The tokens pointer must be large enough to hold the resulting tokens.
     // Returns the number of tokens on success, no more than n_max_tokens
