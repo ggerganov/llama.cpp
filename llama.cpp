@@ -1266,16 +1266,19 @@ static bool llama_eval_internal(
 
             // cur = cur*attention_norm(broadcasted)
             cur = ggml_mul(ctx0, cur, model.layers[il].attention_norm);
-            // TODO: TMP !!!!
-            if (il == 0) {
-                ggml_set_name(cur, "mtl-check");
-            }
         }
 
         // self-attention
         {
+            auto * x = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
+            // TODO: TMP !!!!
+            if (il == 0) {
+                ggml_set_name(x, "mtl-check");
+            }
+
             // compute Q and K and RoPE them
-            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
+            //struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
+            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, x, n_embd/n_head, n_head, N), n_past, n_rot, 0);
             struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wk, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
             ggml_set_name(Qcur, "Qcur");
             ggml_set_name(Kcur, "Kcur");

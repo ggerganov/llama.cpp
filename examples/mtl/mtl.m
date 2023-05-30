@@ -38,6 +38,9 @@ struct ggml_mtl_context {
 
     id<MTLFunction>             function_rms_norm;
     id<MTLComputePipelineState> pipeline_rms_norm;
+
+    id<MTLFunction>             function_mul_mat_q4_0;
+    id<MTLComputePipelineState> pipeline_mul_mat_q4_0;
 };
 
 // MSL code
@@ -141,6 +144,10 @@ struct ggml_mtl_context * llama_mtl_init(
         ctx->function_rms_norm = [ctx->library newFunctionWithName:@"kernel_rms_norm"];
         ctx->pipeline_rms_norm = [ctx->device newComputePipelineStateWithFunction:ctx->function_rms_norm error:nil];
         fprintf(stderr, "%s: loaded kernel_rms_norm: %p\n", __func__, (void *) ctx->pipeline_rms_norm);
+
+        ctx->function_mul_mat_q4_0 = [ctx->library newFunctionWithName:@"kernel_mul_mat_q4_0"];
+        ctx->pipeline_mul_mat_q4_0 = [ctx->device newComputePipelineStateWithFunction:ctx->function_mul_mat_q4_0 error:nil];
+        fprintf(stderr, "%s: loaded kernel_mul_mat_q4_0: %p\n", __func__, (void *) ctx->pipeline_mul_mat_q4_0);
     }
 
     // MTLBuffer approach
@@ -317,7 +324,9 @@ int llama_mtl_eval(
                     [encoder dispatchThreadgroups:MTLSizeMake(1, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                 } break;
             case GGML_OP_MUL_MAT:
-                {
+                if (gf->nodes[i]->src0->type == GGML_TYPE_F32) {
+                    // for F32 x F32 we use MPS
+
                     if (encoder != nil) {
                         [encoder endEncoding];
                         encoder = nil;
@@ -354,6 +363,43 @@ int llama_mtl_eval(
                         transposeLeft:false transposeRight:true resultRows:nrows1 resultColumns:nrows0 interiorColumns:ncols0 alpha:1.0 beta:0.0];
 
                     [mul encodeToCommandBuffer:command_buffer leftMatrix:mat_src1 rightMatrix:mat_src0 resultMatrix:mat_dst];
+                } else {
+                    // for Q4 x F32 we use custom kernel
+
+                    if (encoder == nil) {
+                        encoder = [command_buffer computeCommandEncoder];
+                    }
+
+                    GGML_ASSERT(gf->nodes[i]->src0->ne[2] == 1);
+                    GGML_ASSERT(gf->nodes[i]->src1->ne[2] == 1);
+
+                    id<MTLBuffer> id_src0 = llama_mtl_get_buffer(ctx, gf->nodes[i]->src0, &offs_src0);
+                    id<MTLBuffer> id_src1 = llama_mtl_get_buffer(ctx, gf->nodes[i]->src1, &offs_src1);
+                    id<MTLBuffer> id_dst  = llama_mtl_get_buffer(ctx, gf->nodes[i],       &offs_dst);
+
+                    const int64_t ncols0 = gf->nodes[i]->src0->ne[0];
+                    const int64_t nrows0 = gf->nodes[i]->src0->ne[1];
+
+                    const int64_t ncols1 = gf->nodes[i]->src1->ne[0];
+                    const int64_t nrows1 = gf->nodes[i]->src1->ne[1];
+
+                    const int64_t ncols = gf->nodes[i]->ne[0];
+                    const int64_t nrows = gf->nodes[i]->ne[1];
+
+                    [encoder setComputePipelineState:ctx->pipeline_mul_mat_q4_0];
+                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                    [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
+                    [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
+                    [encoder setBytes:&ncols0 length:sizeof(ncols0) atIndex:3];
+                    [encoder setBytes:&nrows0 length:sizeof(nrows0) atIndex:4];
+                    [encoder setBytes:&ncols1 length:sizeof(ncols1) atIndex:5];
+                    [encoder setBytes:&nrows1 length:sizeof(nrows1) atIndex:6];
+                    [encoder setBytes:&ncols  length:sizeof(ncols)  atIndex:7];
+                    [encoder setBytes:&nrows  length:sizeof(nrows)  atIndex:8];
+
+                    printf("mul_mat: %lldx%lld * %lldx%lld -> %lldx%lld\n", ncols0, nrows0, ncols1, nrows1, ncols, nrows);
+
+                    [encoder dispatchThreadgroups:MTLSizeMake(nrows0, nrows1, 1) threadsPerThreadgroup:MTLSizeMake(32, 1, 1)];
                 } break;
             case GGML_OP_GET_ROWS:
                 {
