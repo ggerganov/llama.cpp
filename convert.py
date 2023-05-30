@@ -143,22 +143,12 @@ class Params:
     def guessed(model: 'LazyModel', file_type: GGMLFileType) -> 'Params':
         n_vocab, n_embd = model["tok_embeddings.weight"].shape
 
-        n_mult=256
-        n_head=n_embd // 128
-        n_layer=next(i for i in itertools.count() if f"layers.{i}.attention.wq.weight" not in model)
-
-        # TODO: hack for open_llama_3b
-        if n_embd == 3200:
-            n_mult = 216
-            n_head = 32
-            n_layer = 26
-
         return Params(
             n_vocab=n_vocab,
             n_embd=n_embd,
-            n_mult=n_mult,
-            n_head=n_head,
-            n_layer=n_layer,
+            n_mult=256,
+            n_head=n_embd // 128,
+            n_layer=next(i for i in itertools.count() if f"layers.{i}.attention.wq.weight" not in model),
             file_type=file_type,
         )
 
@@ -607,9 +597,7 @@ def convert_transformers_to_orig(model: LazyModel) -> LazyModel:
     out["norm.weight"] = model["model.norm.weight"]
     out["output.weight"] = model["lm_head.weight"]
 
-    # TODO: hack for open_llama_3b
-    n_embd = model["model.layers.0.self_attn.q_proj.weight"].shape[1]
-    n_head = 32 if n_embd == 3200 else n_embd // 128
+    n_head = model["model.layers.0.self_attn.q_proj.weight"].shape[1] // 128
     for i in itertools.count():
         if f"model.layers.{i}.self_attn.q_proj.weight" not in model:
             break
