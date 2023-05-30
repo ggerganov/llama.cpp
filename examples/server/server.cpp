@@ -66,6 +66,10 @@ struct llama_server_context
   bool loadPrompt() {
     params.prompt.insert(0, 1, ' '); // always add a first space
     std::vector<llama_token> prompt_tokens = ::llama_tokenize(ctx, params.prompt, true);
+    if (prompt_tokens == last_prompt_tokens)
+    {
+        embd.clear();
+    }
     // compare the evaluated prompt with the new prompt
     for (n_past = 0; n_past < prompt_tokens.size() - 1 && n_past < processed_tokens.size(); n_past++) {
       if (prompt_tokens[n_past] != processed_tokens[n_past]) {
