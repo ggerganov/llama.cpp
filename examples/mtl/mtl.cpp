@@ -5,6 +5,8 @@
 #include <cstring>
 #include <cstdlib>
 
+#include <vector> // tmp
+
 int main(int argc, char ** argv) {
     ggml_time_init();
 
@@ -36,6 +38,17 @@ int main(int argc, char ** argv) {
 
     // this allocates all Metal resources and memory buffers
     auto * ctx_mtl = llama_mtl_init(ctx_data, ctx_eval, ctx_work, &gf);
+
+    // TODO: tmp to match the input used when creating the cgraph
+    {
+        const int n_ctx   = 128;
+        const int n_batch = 32;
+
+        const std::vector<int> tmp(n_batch, 1); // BOS
+
+        struct ggml_tensor * input = ggml_graph_get_tensor(&gf, "embd");
+        memcpy(input->data, tmp.data(), tmp.size() * sizeof(int));
+    }
 
     // the actual inference happens here
     llama_mtl_eval(ctx_mtl, &gf);

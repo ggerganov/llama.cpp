@@ -357,6 +357,8 @@ int llama_mtl_eval(
 
     // extract results from the GPU
     {
+        fprintf(stderr, "%s: extract results from the GPU\n", __func__);
+
         if (encoder != nil) {
             [encoder endEncoding];
             encoder = nil;
@@ -366,6 +368,8 @@ int llama_mtl_eval(
 
         id<MTLBuffer> id_src = llama_mtl_get_buffer(ctx, out, &offs_src0);
         id<MTLBuffer> id_dst = ctx->out;
+
+        printf("XXXXX n = %d\n", ggml_nelements(out));
 
         id<MTLBlitCommandEncoder> encoder_blit = [command_buffer blitCommandEncoder];
         [encoder_blit copyFromBuffer:id_src sourceOffset:offs_src0 toBuffer:id_dst destinationOffset:0 size:ggml_nbytes(out)];
@@ -382,6 +386,25 @@ int llama_mtl_eval(
 
     // TODO
     const float * logits = ctx->out.contents;
+
+    {
+        struct ggml_tensor * t = ggml_get_tensor(ctx->ctx_eval, "mtl-check");
+        float * data = (float *) ctx->out.contents;
+        printf("data: ");
+        int n = t->ne[0];
+        if (n > 10) {
+            n = 10;
+        }
+        for (int i = 0; i < n; i++) {
+            printf("%f ", data[i]);
+        }
+        printf("\n");
+        double sum = 0.0;
+        for (int i = 0; i < ggml_nelements(t); i++) {
+            sum += data[i];
+        }
+        printf("sum:  %f\n", sum);
+    }
 
     return 0;
 }

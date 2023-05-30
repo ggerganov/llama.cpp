@@ -67,7 +67,6 @@ kernel void kernel_soft_max(
     }
 }
 
-// TODO: not tested
 kernel void kernel_get_rows_q4_0(
         device const  void * src0,
         device const   int * src1,

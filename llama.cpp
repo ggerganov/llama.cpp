@@ -1252,6 +1252,7 @@ static bool llama_eval_internal(
     memcpy(embd->data, tokens, N*ggml_element_size(embd));
 
     struct ggml_tensor * inpL = ggml_get_rows(ctx0, model.tok_embeddings, embd);
+    ggml_set_name(inpL, "mtl-check");
 
     for (int il = 0; il < n_layer; ++il) {
         struct ggml_tensor * inpSA = inpL;
@@ -1269,9 +1270,9 @@ static bool llama_eval_internal(
         }
 
         // TODO: TMP !!!!
-        if (il == 0) {
-            ggml_set_name(cur, "mtl-check");
-        }
+        //if (il == 0) {
+        //    ggml_set_name(cur, "mtl-check");
+        //}
 
         // self-attention
         {
@@ -1436,6 +1437,26 @@ static bool llama_eval_internal(
 
     // lets export a smaller graph to get things rolling -- baby steps first
     ggml_build_forward_expand(&gf_export, ggml_get_tensor(ctx0, "mtl-check"));
+
+    // print
+    {
+        auto print_t = [&](struct ggml_tensor * t) {
+            float * data = (float *)t->data;
+            printf("data: ");
+            for (int i = 0; i < std::min((int) t->ne[0], 10); i++) {
+                printf("%f ", data[i]);
+            }
+            printf("\n");
+            double sum = 0.0;
+            for (int i = 0; i < ggml_nelements(t); i++) {
+                sum += data[i];
+            }
+            printf("sum:  %f\n", sum);
+        };
+
+        ggml_graph_compute(ctx0, &gf_export);
+        print_t(ggml_get_tensor(ctx0, "mtl-check"));
+    }
 
     if (cgraph_fname) {
         //ggml_graph_export(&gf, cgraph_fname);
