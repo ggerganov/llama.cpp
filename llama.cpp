@@ -1263,13 +1263,13 @@ static bool llama_eval_internal(
         // norm
         {
             cur = ggml_rms_norm(ctx0, inpL);
+
+            // cur = cur*attention_norm(broadcasted)
+            cur = ggml_mul(ctx0, cur, model.layers[il].attention_norm);
             // TODO: TMP !!!!
             if (il == 0) {
                 ggml_set_name(cur, "mtl-check");
             }
-
-            // cur = cur*attention_norm(broadcasted)
-            cur = ggml_mul(ctx0, cur, model.layers[il].attention_norm);
         }
 
         // self-attention

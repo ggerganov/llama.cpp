@@ -24,6 +24,9 @@ struct ggml_mtl_context {
     id<MTLFunction>             function_add;
     id<MTLComputePipelineState> pipeline_add;
 
+    id<MTLFunction>             function_mul;
+    id<MTLComputePipelineState> pipeline_mul;
+
     id<MTLFunction>             function_relu;
     id<MTLComputePipelineState> pipeline_relu;
 
@@ -118,6 +121,10 @@ struct ggml_mtl_context * llama_mtl_init(
         ctx->function_add = [ctx->library newFunctionWithName:@"kernel_add"];
         ctx->pipeline_add = [ctx->device newComputePipelineStateWithFunction:ctx->function_add error:nil];
         fprintf(stderr, "%s: loaded kernel_add: %p\n", __func__, (void *) ctx->pipeline_add);
+
+        ctx->function_mul = [ctx->library newFunctionWithName:@"kernel_mul"];
+        ctx->pipeline_mul = [ctx->device newComputePipelineStateWithFunction:ctx->function_mul error:nil];
+        fprintf(stderr, "%s: loaded kernel_mul: %p\n", __func__, (void *) ctx->pipeline_mul);
 
         ctx->function_relu = [ctx->library newFunctionWithName:@"kernel_relu"];
         ctx->pipeline_relu = [ctx->device newComputePipelineStateWithFunction:ctx->function_relu error:nil];
@@ -255,6 +262,28 @@ int llama_mtl_eval(
 
                     [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                 } break;
+            case GGML_OP_MUL:
+                {
+                    if (encoder == nil) {
+                        encoder = [command_buffer computeCommandEncoder];
+                    }
+
+                    id<MTLBuffer> id_src0 = llama_mtl_get_buffer(ctx, gf->nodes[i]->src0, &offs_src0);
+                    id<MTLBuffer> id_src1 = llama_mtl_get_buffer(ctx, gf->nodes[i]->src1, &offs_src1);
+                    id<MTLBuffer> id_dst  = llama_mtl_get_buffer(ctx, gf->nodes[i],       &offs_dst);
+
+                    const int64_t ne00 = gf->nodes[i]->src0->ne[0];
+
+                    [encoder setComputePipelineState:ctx->pipeline_mul];
+                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                    [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
+                    [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
+                    [encoder setBytes:&ne00 length:sizeof(ne00) atIndex:3];
+
+                    const int64_t n = ggml_nelements(gf->nodes[i]);
+
+                    [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                } break;
             case GGML_OP_RELU:
                 {
                     if (encoder == nil) {
@@ -373,7 +402,7 @@ int llama_mtl_eval(
                     [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
                     [encoder setBytes:&ne00 length:sizeof( int64_t) atIndex:2];
                     [encoder setBytes:&nb01 length:sizeof(uint64_t) atIndex:3];
-                    [encoder setBytes:&eps  length:sizeof(  float) atIndex:4];
+                    [encoder setBytes:&eps  length:sizeof(  float)  atIndex:4];
 
                     const int64_t nrows = ggml_nrows(gf->nodes[i]->src0);
 

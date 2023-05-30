@@ -42,6 +42,17 @@ kernel void kernel_add(
     dst[gid] = src0[gid] + src1[gid];
 }
 
+// assumption: src1 is a row
+// broadcast src1 into src0
+kernel void kernel_mul(
+        device const float * src0,
+        device const float * src1,
+        device       float * dst,
+        constant   int64_t & ne00,
+        uint gid[[thread_position_in_grid]]) {
+    dst[gid] = src0[gid] * src1[gid % ne00];
+}
+
 kernel void kernel_relu(
         device const float * src0,
         device       float * dst,
