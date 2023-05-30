@@ -720,7 +720,6 @@ int main(int argc, char **argv)
               llama.beginCompletion();
               if(llama.streaming)
               {
-                  fprintf(stdout, "In streaming\n");
                 res.set_chunked_content_provider("text/event-stream", [&](size_t /*offset*/,
                     DataSink& sink) {
                 std::string final_text = "";
@@ -729,7 +728,6 @@ int main(int argc, char **argv)
                    std::string result = llama.doCompletion();
                   json data;
                   final_text += result;
-                  fprintf(stdout, "Result: %s\n", result);
                   if (llama.has_next_token)
                   {
                     data = { {"content", result}, {"stop", false} };
