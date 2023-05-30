@@ -127,6 +127,7 @@ kernel void kernel_mul_mat_q4_0(
         constant   int64_t & ne11,
         constant   int64_t & ne0,
         constant   int64_t & ne1,
+        threadgroup float  * sum [[threadgroup(0)]],
         uint2 tgpig[[threadgroup_position_in_grid]],
         uint2  tpig[[thread_position_in_grid]],
         uint2 tpitg[[thread_position_in_threadgroup]],
@@ -140,10 +141,9 @@ kernel void kernel_mul_mat_q4_0(
     device const block_q4_0 * x = (device const block_q4_0 *) src0 + r0*nb;
     device const float      * y = (device const float      *) src1 + r1*ne10;
 
-    threadgroup float sum[32]; // TODO: should be equal to threadgroup size
     sum[tpitg.x] = 0.0f;
 
-    for (int i = 0; i < nb; i += tptg.x) {
+    for (int i = tpitg.x; i < nb; i += tptg.x) {
         //device const uint4  * x0p = (device const  uint4 *) (x + i)->qs;
         //device const float4 * y0p = (device const float4 *) (y + i*qk);
 
@@ -206,5 +206,7 @@ kernel void kernel_mul_mat_q4_0(
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
 
-    dst[r1*ne0 + r0] = sum[0];
+    if (tpitg.x == 0) {
+        dst[r1*ne0 + r0] = sum[0];
+    }
 }

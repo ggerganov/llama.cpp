@@ -389,11 +389,12 @@ int llama_mtl_eval(
                     [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                     [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
                     [encoder setBytes:&ne00 length:sizeof(ne00) atIndex:3];
-                    [encoder setBytes:&ne00 length:sizeof(ne00) atIndex:4];
-                    [encoder setBytes:&ne11 length:sizeof(ne11) atIndex:5];
+                    [encoder setBytes:&ne01 length:sizeof(ne01) atIndex:4];
+                    [encoder setBytes:&ne10 length:sizeof(ne10) atIndex:5];
                     [encoder setBytes:&ne11 length:sizeof(ne11) atIndex:6];
                     [encoder setBytes:&ne0  length:sizeof(ne0)  atIndex:7];
                     [encoder setBytes:&ne1  length:sizeof(ne1)  atIndex:8];
+                    [encoder setThreadgroupMemoryLength:32*sizeof(float) atIndex:0];
 
                     printf("mul_mat: %lldx%lld * %lldx%lld -> %lldx%lld\n", ne00, ne01, ne10, ne11, ne0, ne1);
 
@@ -446,7 +447,7 @@ int llama_mtl_eval(
                     [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
                     [encoder setBytes:&ne00 length:sizeof( int64_t) atIndex:2];
                     [encoder setBytes:&nb01 length:sizeof(uint64_t) atIndex:3];
-                    [encoder setBytes:&eps  length:sizeof(  float)  atIndex:4];
+                    [encoder setBytes:&eps  length:sizeof(   float) atIndex:4];
 
                     const int64_t nrows = ggml_nrows(gf->nodes[i]->src0);
 
