@@ -451,8 +451,11 @@ extern "C" {
 
     GGML_API size_t  ggml_used_mem(const struct ggml_context * ctx);
 
-    GGML_API size_t  ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch);
+    GGML_API size_t  ggml_set_scratch (struct ggml_context * ctx, struct ggml_scratch scratch);
     GGML_API void    ggml_set_no_alloc(struct ggml_context * ctx, bool no_alloc);
+
+    GGML_API void *  ggml_get_mem_buffer(struct ggml_context * ctx);
+    GGML_API size_t  ggml_get_mem_size  (struct ggml_context * ctx);
 
     GGML_API struct ggml_tensor * ggml_new_tensor(
             struct ggml_context * ctx,
@@ -491,6 +494,8 @@ extern "C" {
 
     GGML_API struct ggml_tensor * ggml_dup_tensor (struct ggml_context * ctx, const struct ggml_tensor * src);
     GGML_API struct ggml_tensor * ggml_view_tensor(struct ggml_context * ctx, const struct ggml_tensor * src);
+
+    GGML_API struct ggml_tensor * ggml_get_tensor(struct ggml_context * ctx, const char * name);
 
     GGML_API struct ggml_tensor * ggml_set_zero(struct ggml_tensor * tensor);
     GGML_API struct ggml_tensor * ggml_set_i32 (struct ggml_tensor * tensor, int32_t value);
@@ -978,7 +983,10 @@ extern "C" {
     GGML_API void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph);
     GGML_API void ggml_graph_reset  (struct ggml_cgraph * cgraph);
 
-    GGML_API struct ggml_tensor * ggml_get_tensor_by_name(struct ggml_cgraph * cgraph, const char * name);
+    GGML_API struct ggml_tensor * ggml_graph_get_tensor(struct ggml_cgraph * cgraph, const char * name);
+
+    GGML_API void               ggml_graph_export(const struct ggml_cgraph * cgraph, const char * fname);
+    GGML_API struct ggml_cgraph ggml_graph_import(const char * fname, struct ggml_context ** ctx_data, struct ggml_context ** ctx_eval);
 
     // print info and performance information for the graph
     GGML_API void ggml_graph_print(const struct ggml_cgraph * cgraph);
