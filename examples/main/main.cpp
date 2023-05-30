@@ -50,7 +50,6 @@ void sigint_handler(int signo) {
 
 int main(int argc, char ** argv) {
     gpt_params params;
-    params.model = "models/llama-7B/ggml-model.bin";
 
     if (gpt_params_parse(argc, argv, params) == false) {
         return 1;
@@ -97,8 +96,7 @@ int main(int argc, char ** argv) {
         params.prompt = gpt_random_prompt(rng);
     }
 
-//    params.prompt = R"(// this function checks if the number n is prime
-//bool is_prime(int n) {)";
+    llama_init_backend();
 
     llama_context * ctx;
     g_ctx = &ctx;
@@ -136,8 +134,6 @@ int main(int argc, char ** argv) {
         return 0;
     }
 
-    // Add a space in front of the first character to match OG llama tokenizer behavior
-    params.prompt.insert(0, 1, ' ');
 
     std::string path_session = params.path_prompt_cache;
     std::vector<llama_token> session_tokens;
@@ -157,6 +153,7 @@ int main(int argc, char ** argv) {
                 return 1;
             }
             session_tokens.resize(n_token_count_out);
+            llama_set_rng_seed(ctx, params.seed);
 
             fprintf(stderr, "%s: loaded a session with prompt size of %d tokens\n", __func__, (int) session_tokens.size());
         } else {
@@ -165,7 +162,16 @@ int main(int argc, char ** argv) {
     }
 
     // tokenize the prompt
-    auto embd_inp = ::llama_tokenize(ctx, params.prompt, true);
+    std::vector<llama_token> embd_inp;
+
+    if (params.interactive_first || params.instruct || !params.prompt.empty() || session_tokens.empty()) {
+        // Add a space in front of the first character to match OG llama tokenizer behavior
+        params.prompt.insert(0, 1, ' ');
+
+        embd_inp = ::llama_tokenize(ctx, params.prompt, true);
+    } else {
+        embd_inp = session_tokens;
+    }
 
     const int n_ctx = llama_n_ctx(ctx);
 
@@ -183,7 +189,9 @@ int main(int argc, char ** argv) {
             }
             n_matching_session_tokens++;
         }
-        if (n_matching_session_tokens >= embd_inp.size()) {
+        if (params.prompt.empty() && n_matching_session_tokens == embd_inp.size()) {
+            fprintf(stderr, "%s: using full prompt from session file\n", __func__);
+        } else if (n_matching_session_tokens >= embd_inp.size()) {
             fprintf(stderr, "%s: session file has exact match for prompt!\n", __func__);
         } else if (n_matching_session_tokens < (embd_inp.size() / 2)) {
             fprintf(stderr, "%s: warning: session file has low similarity to prompt (%zu / %zu tokens); will mostly be reevaluated\n",
@@ -209,8 +217,8 @@ int main(int argc, char ** argv) {
         params.antiprompt.push_back("### Instruction:\n\n");
     }
 
-    // enable interactive mode if reverse prompt or interactive start is specified
-    if (params.antiprompt.size() != 0 || params.interactive_first) {
+    // enable interactive mode if interactive start is specified
+    if (params.interactive_first) {
         params.interactive = true;
     }
 
@@ -242,7 +250,7 @@ int main(int argc, char ** argv) {
         sigint_action.sa_flags = 0;
         sigaction(SIGINT, &sigint_action, NULL);
 #elif defined (_WIN32)
-        auto console_ctrl_handler = [](DWORD ctrl_type) -> BOOL {
+        auto console_ctrl_handler = +[](DWORD ctrl_type) -> BOOL {
             return (ctrl_type == CTRL_C_EVENT) ? (sigint_handler(SIGINT), true) : false;
         };
         SetConsoleCtrlHandler(static_cast<PHANDLER_ROUTINE>(console_ctrl_handler), true);
@@ -306,7 +314,7 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd;
 
-    while (n_remain != 0 || params.interactive) {
+    while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
         if (embd.size() > 0) {
             // infinite text generation via context swapping
@@ -352,6 +360,12 @@ int main(int argc, char ** argv) {
                     }
                 }
                 if (i > 0) {
+                    // check if we've used up all the prompt but not all cached tokens
+                    if (embd.size() == i && n_session_consumed < (int) session_tokens.size()) {
+                        // force revaluation of the last token to recalculate logits
+                        i--;
+                        n_past--;
+                    }
                     embd.erase(embd.begin(), embd.begin() + i);
                 }
             }
@@ -504,9 +518,8 @@ int main(int argc, char ** argv) {
             console_set_color(con_st, CONSOLE_COLOR_DEFAULT);
         }
 
-        // in interactive mode, and not currently processing queued inputs;
-        // check if we should prompt the user for more
-        if (params.interactive && (int) embd_inp.size() <= n_consumed) {
+        // if not currently processing queued inputs;
+        if ((int) embd_inp.size() <= n_consumed) {
 
             // check for reverse prompt
             if (params.antiprompt.size()) {
@@ -517,10 +530,21 @@ int main(int argc, char ** argv) {
 
                 is_antiprompt = false;
                 // Check if each of the reverse prompts appears at the end of the output.
+                // If we're not running interactively, the reverse prompt might be tokenized with some following characters
+                // so we'll compensate for that by widening the search window a bit.
                 for (std::string & antiprompt : params.antiprompt) {
-                    if (last_output.find(antiprompt.c_str(), last_output.length() - antiprompt.length(), antiprompt.length()) != std::string::npos) {
-                        is_interacting = true;
+                    size_t extra_padding = params.interactive ? 0 : 2;
+                    size_t search_start_pos = last_output.length() > static_cast<size_t>(antiprompt.length() + extra_padding)
+                        ? last_output.length() - static_cast<size_t>(antiprompt.length() + extra_padding)
+                        : 0;
+
+                    if (last_output.find(antiprompt.c_str(), search_start_pos) != std::string::npos) {
+                        if (params.interactive) {
+                            is_interacting = true;
+                            console_set_color(con_st, CONSOLE_COLOR_USER_INPUT);
+                        }
                         is_antiprompt = true;
+                        fflush(stdout);
                         break;
                     }
                 }

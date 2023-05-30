@@ -9,6 +9,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
+- Quantization formats `Q4` and `Q8` have changed again (19 May) - [(info)](https://github.com/ggerganov/llama.cpp/pull/1508)
 - Quantization formats `Q4` and `Q5` have changed - requantize any old models [(info)](https://github.com/ggerganov/llama.cpp/pull/1405)
 - [Roadmap May 2023](https://github.com/ggerganov/llama.cpp/discussions/1220)
 
@@ -55,7 +56,7 @@ The main goal of `llama.cpp` is to run the LLaMA model using 4-bit integer quant
 - Mixed F16 / F32 precision
 - 4-bit, 5-bit and 8-bit integer quantization support
 - Runs on the CPU
-- OpenBLAS support
+- Supports OpenBLAS/Apple BLAS/ARM Performance Lib/ATLAS/BLIS/Intel MKL/NVHPC/ACML/SCSL/SGIMATH and [more](https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors) in BLAS
 - cuBLAS and CLBlast support
 
 The original implementation of `llama.cpp` was [hacked in an evening](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022).
@@ -80,6 +81,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [Koala](https://bair.berkeley.edu/blog/2023/04/03/koala/)
 - [X] [OpenBuddy 🐶 (Multilingual)](https://github.com/OpenBuddy/OpenBuddy)
 - [X] [Pygmalion 7B / Metharme 7B](#using-pygmalion-7b--metharme-7b)
+- [X] [WizardLM](https://github.com/nlpxucan/WizardLM)
 
 **Bindings:**
 
@@ -238,11 +240,11 @@ In order to build llama.cpp you have three different options.
 
 Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). BLAS doesn't affect the normal generation performance. There are currently three different implementations of it:
 
-- Accelerate Framework:
+- **Accelerate Framework**:
 
   This is only available on Mac PCs and it's enabled by default. You can just build using the normal instructions.
 
-- OpenBLAS:
+- **OpenBLAS**:
 
   This provides BLAS acceleration using only the CPU. Make sure to have OpenBLAS installed on your machine.
 
@@ -272,11 +274,26 @@ Building the program with BLAS support may lead to some performance improvements
       ```bash
       mkdir build
       cd build
-      cmake .. -DLLAMA_OPENBLAS=ON
+      cmake .. -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS
       cmake --build . --config Release
       ```
 
-- cuBLAS
+- **BLIS**
+
+  Check [BLIS.md](BLIS.md) for more information.
+
+- **Intel MKL**
+
+  By default, `LLAMA_BLAS_VENDOR` is set to `Generic`, so if you already sourced intel environment script and assign `-DLLAMA_BLAS=ON` in cmake, the mkl version of Blas will automatically been selected. You may also specify it by:
+
+  ```bash
+  mkdir build
+  cd build
+  cmake .. -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=Intel10_64lp -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
+  cmake --build . -config Release
+  ```
+
+- **cuBLAS**
 
   This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
   - Using `make`:
@@ -291,8 +308,81 @@ Building the program with BLAS support may lead to some performance improvements
     cmake .. -DLLAMA_CUBLAS=ON
     cmake --build . --config Release
     ```
+  Note: Because llama.cpp uses multiple CUDA streams for matrix multiplication results [are not guaranteed to be reproducible](https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility). If you need reproducibility, set `GGML_CUDA_MAX_STREAMS` in the file `ggml-cuda.cu` to 1.
 
-Note: Because llama.cpp uses multiple CUDA streams for matrix multiplication results [are not guaranteed to be reproducible](https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility). If you need reproducibility, set `GGML_CUDA_MAX_STREAMS` in the file `ggml-cuda.cu` to 1.
+- **CLBlast**
+
+  OpenCL acceleration is provided by the matrix multiplication kernels from the [CLBlast](https://github.com/CNugteren/CLBlast) project and custom kernels for ggml that can generate tokens on the GPU.
+
+  You will need the [OpenCL SDK](https://github.com/KhronosGroup/OpenCL-SDK).
+    - For Ubuntu or Debian, the packages `opencl-headers`, `ocl-icd` may be needed.
+
+    - <details>
+        <summary>Installing the OpenCL SDK from source</summary>
+
+        ```sh
+        git clone --recurse-submodules https://github.com/KhronosGroup/OpenCL-SDK.git
+        mkdir OpenCL-SDK/build
+        cd OpenCL-SDK/build
+        cmake .. -DBUILD_DOCS=OFF \
+          -DBUILD_EXAMPLES=OFF \
+          -DBUILD_TESTING=OFF \
+          -DOPENCL_SDK_BUILD_SAMPLES=OFF \
+          -DOPENCL_SDK_TEST_SAMPLES=OFF
+        cmake --build . --config Release
+        cmake --install . --prefix /some/path
+        ```
+      </details>
+
+  Installing CLBlast: it may be found in your operating system's packages.
+
+  - <details>
+    <summary>If not, then installing from source:</summary>
+
+      ```sh
+      git clone https://github.com/CNugteren/CLBlast.git
+      mkdir CLBlast/build
+      cd CLBLast/build
+      cmake .. -DBUILD_SHARED_LIBS=OFF -DTUNERS=OFF
+      cmake --build . --config Release
+      cmake --install . --prefix /some/path
+      ```
+
+      Where `/some/path` is where the built library will be installed (default is `/usr/loca`l`).
+    </details>
+
+  Building:
+
+  - Build with make:
+    ```sh
+    make LLAMA_CLBLAST=1
+    ```
+  - CMake:
+    ```sh
+    mkdir build
+    cd build
+    cmake .. -DLLAMA_CLBLAST=ON -DCLBlast_dir=/some/path
+    cmake --build . --config Release
+    ```
+
+  Running:
+
+  The CLBlast build supports `--gpu-layers|-ngl` like  the CUDA version does.
+
+  To select the correct platform (driver) and device (GPU), you can use the environment variables `GGML_OPENCL_PLATFORM` and `GGML_OPENCL_DEVICE`.
+  The selection can be a number (starting from 0) or a text string to search:
+
+  ```sh
+  GGML_OPENCL_PLATFORM=1 ./main ...
+  GGML_OPENCL_DEVICE=2 ./main ...
+  GGML_OPENCL_PLATFORM=Intel ./main ...
+  GGML_OPENCL_PLATFORM=AMD GGML_OPENCL_DEVICE=1 ./main ...
+  ```
+
+  The default behavior is to find the first GPU device, but when it is an integrated GPU on a laptop, for instance, the selectors are useful.
+  Using the variables it is possible to select a CPU-based driver as well, if so desired.
+
+  You can get a list of platforms and devices from the `clinfo -l` command, etc.
 
 ### Prepare Data & Run
 
@@ -333,16 +423,16 @@ Several quantization methods are supported. They differ in the resulting model d
 
 | Model | Measure      | F16    | Q4_0   | Q4_1   | Q5_0   | Q5_1   | Q8_0   |
 |------:|--------------|-------:|-------:|-------:|-------:|-------:|-------:|
-|    7B | perplexity   | 5.9066 | 6.1565 | 6.0910 | 5.9862 | 5.9481 | 5.9069 |
-|    7B | file size    |  13.0G |   4.0G |   4.8G |   4.4G |   4.8G |   7.1G |
-|    7B | ms/tok @ 4th |    128 |     50 |     54 |     75 |     83 |     75 |
-|    7B | ms/tok @ 8th |    123 |     44 |     52 |     53 |     58 |     72 |
-|    7B | bits/weight  |   16.0 |    5.0 |    6.0 |    5.5 |    6.0 |    9.0 |
-|   13B | perplexity   | 5.2543 | 5.3860 | 5.3607 | 5.2856 | 5.2706 | 5.2548 |
-|   13B | file size    |  25.0G |   7.6G |   9.1G |   8.4G |   9.1G |    14G |
-|   13B | ms/tok @ 4th |    239 |     93 |    101 |    150 |    164 |    141 |
-|   13B | ms/tok @ 8th |    240 |     81 |     96 |     96 |    104 |    136 |
-|   13B | bits/weight  |   16.0 |    5.0 |    6.0 |    5.5 |    6.0 |    9.0 |
+|    7B | perplexity   | 5.9066 | 6.1565 | 6.0912 | 5.9862 | 5.9481 | 5.9070 |
+|    7B | file size    |  13.0G |   3.5G |   3.9G |   4.3G |   4.7G |   6.7G |
+|    7B | ms/tok @ 4th |    127 |     55 |     54 |     76 |     83 |     72 |
+|    7B | ms/tok @ 8th |    122 |     43 |     45 |     52 |     56 |     67 |
+|    7B | bits/weight  |   16.0 |    4.5 |    5.0 |    5.5 |    6.0 |    8.5 |
+|   13B | perplexity   | 5.2543 | 5.3860 | 5.3608 | 5.2856 | 5.2706 | 5.2548 |
+|   13B | file size    |  25.0G |   6.8G |   7.6G |   8.3G |   9.1G |    13G |
+|   13B | ms/tok @ 4th |      - |    103 |    105 |    148 |    160 |    131 |
+|   13B | ms/tok @ 8th |      - |     73 |     82 |     98 |    105 |    128 |
+|   13B | bits/weight  |   16.0 |    4.5 |    5.0 |    5.5 |    6.0 |    8.5 |
 
 ### Perplexity (measuring model quality)
 
@@ -373,6 +463,25 @@ Here is an example of a few-shot interaction, invoked with the command
 Note the use of `--color` to distinguish between user input and generated text. Other parameters are explained in more detail in the [README](examples/main/README.md) for the `main` example program.
 
 ![image](https://user-images.githubusercontent.com/1991296/224575029-2af3c7dc-5a65-4f64-a6bb-517a532aea38.png)
+
+### Persistent Interaction
+
+The prompt, user inputs, and model generations can be saved and resumed across calls to `./main` by leveraging `--prompt-cache` and `--prompt-cache-all`. The `./examples/chat-persistent.sh` script demonstrates this with support for long-running, resumable chat sessions. To use this example, you must provide a file to cache the initial chat prompt and a directory to save the chat session, and may optionally provide the same variables as `chat-13B.sh`. The same prompt cache can be reused for new chat sessions. Note that both prompt cache and chat directory are tied to the initial prompt (`PROMPT_TEMPLATE`) and the model file.
+
+```bash
+# Start a new chat
+PROMPT_CACHE_FILE=chat.prompt.bin CHAT_SAVE_DIR=./chat/default ./examples/chat-persistent.sh
+
+# Resume that chat
+PROMPT_CACHE_FILE=chat.prompt.bin CHAT_SAVE_DIR=./chat/default ./examples/chat-persistent.sh
+
+# Start a different chat with the same prompt/model
+PROMPT_CACHE_FILE=chat.prompt.bin CHAT_SAVE_DIR=./chat/another ./examples/chat-persistent.sh
+
+# Different prompt cache for different prompt/model
+PROMPT_TEMPLATE=./prompts/chat-with-bob.txt PROMPT_CACHE_FILE=bob.prompt.bin \
+    CHAT_SAVE_DIR=./chat/bob ./examples/chat-persistent.sh
+```
 
 ### Instruction mode with Alpaca
 

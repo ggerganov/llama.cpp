@@ -8,7 +8,6 @@
 
 int main(int argc, char ** argv) {
     gpt_params params;
-    params.model = "models/llama-7B/ggml-model.bin";
     params.seed = 42;
     params.n_threads = 4;
     params.repeat_last_n = 64;
@@ -27,7 +26,6 @@ int main(int argc, char ** argv) {
     auto lparams = llama_context_default_params();
 
     lparams.n_ctx     = params.n_ctx;
-    lparams.n_parts   = params.n_parts;
     lparams.seed      = params.seed;
     lparams.f16_kv    = params.memory_f16;
     lparams.use_mmap  = params.use_mmap;

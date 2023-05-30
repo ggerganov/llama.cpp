@@ -2104,7 +2104,7 @@ struct train_params {
     int n_batch;
     int n_examples;
     int n_predict;
-    
+
     int print_info_interval;
     int print_details_interval;
 
@@ -2148,7 +2148,7 @@ struct train_params get_default_train_params() {
     params.n_batch    =    8;
     params.n_examples =    8;
     params.n_predict  = 1024;
-    
+
     params.print_info_interval    = 1;
     params.print_details_interval = 2;
 
@@ -2621,9 +2621,9 @@ int main(int argc, char ** argv) {
         opt->params.adam.sched = (opt->iter < params.warmup)
             ? (float) opt->iter / (float) params.warmup
             : cosine_decay_restart(
-                params.cos_decay_steps, 
-                params.cos_decay_alpha, 
-                opt->iter - params.warmup, 
+                params.cos_decay_steps,
+                params.cos_decay_alpha,
+                opt->iter - params.warmup,
                 params.cos_decay_restart);
 
         printf("%s: opt->params.adam.sched %.5f\n", __func__, opt->params.adam.sched);

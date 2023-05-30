@@ -37,40 +37,44 @@ endif()
 #
 
 # general
-option(LLAMA_STATIC                 "llama: static link libraries"                          OFF)
-option(LLAMA_NATIVE                 "llama: enable -march=native flag"                      OFF)
-option(LLAMA_LTO                    "llama: enable link time optimization"                  OFF)
+option(LLAMA_STATIC                     "llama: static link libraries"                          OFF)
+option(LLAMA_NATIVE                     "llama: enable -march=native flag"                      OFF)
+option(LLAMA_LTO                        "llama: enable link time optimization"                  OFF)
 
 # debug
-option(LLAMA_ALL_WARNINGS           "llama: enable all compiler warnings"                   ON)
-option(LLAMA_ALL_WARNINGS_3RD_PARTY "llama: enable all compiler warnings in 3rd party libs" OFF)
-option(LLAMA_GPROF                  "llama: enable gprof"                                   OFF)
+option(LLAMA_ALL_WARNINGS               "llama: enable all compiler warnings"                   ON)
+option(LLAMA_ALL_WARNINGS_3RD_PARTY     "llama: enable all compiler warnings in 3rd party libs" OFF)
+option(LLAMA_GPROF                      "llama: enable gprof"                                   OFF)
 
 # sanitizers
-option(LLAMA_SANITIZE_THREAD        "llama: enable thread sanitizer"                        OFF)
-option(LLAMA_SANITIZE_ADDRESS       "llama: enable address sanitizer"                       OFF)
-option(LLAMA_SANITIZE_UNDEFINED     "llama: enable undefined sanitizer"                     OFF)
+option(LLAMA_SANITIZE_THREAD            "llama: enable thread sanitizer"                        OFF)
+option(LLAMA_SANITIZE_ADDRESS           "llama: enable address sanitizer"                       OFF)
+option(LLAMA_SANITIZE_UNDEFINED         "llama: enable undefined sanitizer"                     OFF)
 
 # instruction set specific
-option(LLAMA_AVX                    "llama: enable AVX"                                     ON)
-option(LLAMA_AVX2                   "llama: enable AVX2"                                    ON)
-option(LLAMA_AVX512                 "llama: enable AVX512"                                  OFF)
-option(LLAMA_AVX512_VBMI            "llama: enable AVX512-VBMI"                             OFF)
-option(LLAMA_AVX512_VNNI            "llama: enable AVX512-VNNI"                             OFF)
-option(LLAMA_FMA                    "llama: enable FMA"                                     ON)
+option(LLAMA_AVX                        "llama: enable AVX"                                     ON)
+option(LLAMA_AVX2                       "llama: enable AVX2"                                    ON)
+option(LLAMA_AVX512                     "llama: enable AVX512"                                  OFF)
+option(LLAMA_AVX512_VBMI                "llama: enable AVX512-VBMI"                             OFF)
+option(LLAMA_AVX512_VNNI                "llama: enable AVX512-VNNI"                             OFF)
+option(LLAMA_FMA                        "llama: enable FMA"                                     ON)
 # in MSVC F16C is implied with AVX2/AVX512
 if (NOT MSVC)
-    option(LLAMA_F16C               "llama: enable F16C"                                    ON)
+    option(LLAMA_F16C                   "llama: enable F16C"                                    ON)
 endif()
 
 # 3rd party libs
-option(LLAMA_ACCELERATE             "llama: enable Accelerate framework"                    ON)
-option(LLAMA_OPENBLAS               "llama: use OpenBLAS"                                   OFF)
-option(LLAMA_CUBLAS                 "llama: use cuBLAS"                                     OFF)
-option(LLAMA_CLBLAST                "llama: use CLBlast"                                    OFF)
+option(LLAMA_ACCELERATE                 "llama: enable Accelerate framework"                    ON)
+option(LLAMA_BLAS                       "llama: use BLAS"                                       OFF)
+set(LLAMA_BLAS_VENDOR "Generic" CACHE STRING "llama: BLAS library vendor")
+option(LLAMA_CUBLAS                     "llama: use cuBLAS"                                     OFF)
+set(LLAMA_CUDA_DMMV_X "32" CACHE STRING "llama: x stride for dmmv CUDA kernels")
+set(LLAMA_CUDA_DMMV_Y "1" CACHE STRING  "llama: y block size for dmmv CUDA kernels")
+option(LLAMA_CLBLAST                    "llama: use CLBlast"                                    OFF)
 
-option(LLAMA_BUILD_TESTS            "llama: build tests"    ${LLAMA_STANDALONE})
-option(LLAMA_BUILD_EXAMPLES         "llama: build examples" ${LLAMA_STANDALONE})
+option(LLAMA_BUILD_TESTS                "llama: build tests"    ${LLAMA_STANDALONE})
+option(LLAMA_BUILD_EXAMPLES             "llama: build examples" ${LLAMA_STANDALONE})
+option(LLAMA_BUILD_SERVER               "llama: build server example"                           OFF)
 
 #
 # Build info header
@@ -145,36 +149,28 @@ if (APPLE AND LLAMA_ACCELERATE)
     endif()
 endif()
 
-if (LLAMA_OPENBLAS)
+if (LLAMA_BLAS)
     if (LLAMA_STATIC)
         set(BLA_STATIC ON)
     endif()
-
-    set(BLA_VENDOR OpenBLAS)
+    if ($(CMAKE_VERSION) VERSION_GREATER_EQUAL 3.22)
+        set(BLA_SIZEOF_INTEGER 8)
+    endif()
+    set(BLA_VENDOR ${LLAMA_BLAS_VENDOR})
     find_package(BLAS)
     if (BLAS_FOUND)
-        message(STATUS "OpenBLAS found")
+        message(STATUS "BLAS found, Libraries: ${BLAS_LIBRARIES}")
 
+        add_compile_options(${BLAS_LINKER_FLAGS})
         add_compile_definitions(GGML_USE_OPENBLAS)
-        add_link_options(${BLAS_LIBRARIES})
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} openblas)
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ${BLAS_LIBRARIES})
 
-        # find header file
-        set(OPENBLAS_INCLUDE_SEARCH_PATHS
-            /usr/include
-            /usr/include/openblas
-            /usr/include/openblas-base
-            /usr/local/include
-            /usr/local/include/openblas
-            /usr/local/include/openblas-base
-            /opt/OpenBLAS/include
-            $ENV{OpenBLAS_HOME}
-            $ENV{OpenBLAS_HOME}/include
-            )
-        find_path(OPENBLAS_INC NAMES cblas.h PATHS ${OPENBLAS_INCLUDE_SEARCH_PATHS})
-        add_compile_options(-I${OPENBLAS_INC})
+        message("${BLAS_LIBRARIES} ${BLAS_INCLUDE_DIRS}")
+        include_directories(${BLAS_INCLUDE_DIRS})
     else()
-        message(WARNING "OpenBLAS not found")
+        message(WARNING "BLAS not found, please refer to "
+        "https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors"
+        " to set correct LLAMA_BLAS_VENDOR")
     endif()
 endif()
 
@@ -190,6 +186,8 @@ if (LLAMA_CUBLAS)
         set(GGML_CUDA_SOURCES ggml-cuda.cu ggml-cuda.h)
 
         add_compile_definitions(GGML_USE_CUBLAS)
+        add_compile_definitions(GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
+        add_compile_definitions(GGML_CUDA_DMMV_Y=${LLAMA_CUDA_DMMV_Y})
 
         if (LLAMA_STATIC)
             set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas_static CUDA::cublasLt_static)
@@ -207,7 +205,7 @@ if (LLAMA_CLBLAST)
     if (CLBlast_FOUND)
         message(STATUS "CLBlast found")
 
-        set(GGML_OPENCL_SOURCES ggml-opencl.c ggml-opencl.h)
+        set(GGML_OPENCL_SOURCES ggml-opencl.cpp ggml-opencl.h)
 
         add_compile_definitions(GGML_USE_CLBLAST)
 
