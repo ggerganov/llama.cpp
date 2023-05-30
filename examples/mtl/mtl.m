@@ -32,6 +32,9 @@ struct ggml_mtl_context {
 
     id<MTLFunction>             function_get_rows_q4_0;
     id<MTLComputePipelineState> pipeline_get_rows_q4_0;
+
+    id<MTLFunction>             function_rms_norm;
+    id<MTLComputePipelineState> pipeline_rms_norm;
 };
 
 // MSL code
@@ -127,6 +130,10 @@ struct ggml_mtl_context * llama_mtl_init(
         ctx->function_get_rows_q4_0 = [ctx->library newFunctionWithName:@"kernel_get_rows_q4_0"];
         ctx->pipeline_get_rows_q4_0 = [ctx->device newComputePipelineStateWithFunction:ctx->function_get_rows_q4_0 error:nil];
         fprintf(stderr, "%s: loaded kernel_get_rows_q4_0: %p\n", __func__, (void *) ctx->pipeline_get_rows_q4_0);
+
+        ctx->function_rms_norm = [ctx->library newFunctionWithName:@"kernel_rms_norm"];
+        ctx->pipeline_rms_norm = [ctx->device newComputePipelineStateWithFunction:ctx->function_rms_norm error:nil];
+        fprintf(stderr, "%s: loaded kernel_rms_norm: %p\n", __func__, (void *) ctx->pipeline_rms_norm);
     }
 
     // MTLBuffer approach
@@ -347,6 +354,30 @@ int llama_mtl_eval(
                     const int64_t n = ggml_nelements(gf->nodes[i]->src1);
 
                     [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                } break;
+            case GGML_OP_RMS_NORM:
+                {
+                    if (encoder == nil) {
+                        encoder = [command_buffer computeCommandEncoder];
+                    }
+
+                    id<MTLBuffer> id_src0 = llama_mtl_get_buffer(ctx, gf->nodes[i]->src0, &offs_src0);
+                    id<MTLBuffer> id_dst  = llama_mtl_get_buffer(ctx, gf->nodes[i],       &offs_dst);
+
+                    const  int64_t ne00 = gf->nodes[i]->src0->ne[0];
+                    const uint64_t nb01 = gf->nodes[i]->src0->nb[1];
+                    const    float eps  = 1e-6f;
+
+                    [encoder setComputePipelineState:ctx->pipeline_rms_norm];
+                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                    [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
+                    [encoder setBytes:&ne00 length:sizeof( int64_t) atIndex:2];
+                    [encoder setBytes:&nb01 length:sizeof(uint64_t) atIndex:3];
+                    [encoder setBytes:&eps  length:sizeof(  float) atIndex:4];
+
+                    const int64_t nrows = ggml_nrows(gf->nodes[i]->src0);
+
+                    [encoder dispatchThreadgroups:MTLSizeMake(nrows, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                 } break;
             default:
                 fprintf(stderr, "%s: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(gf->nodes[i]->op));

@@ -1252,7 +1252,6 @@ static bool llama_eval_internal(
     memcpy(embd->data, tokens, N*ggml_element_size(embd));
 
     struct ggml_tensor * inpL = ggml_get_rows(ctx0, model.tok_embeddings, embd);
-    ggml_set_name(inpL, "mtl-check");
 
     for (int il = 0; il < n_layer; ++il) {
         struct ggml_tensor * inpSA = inpL;
@@ -1264,15 +1263,14 @@ static bool llama_eval_internal(
         // norm
         {
             cur = ggml_rms_norm(ctx0, inpL);
+            // TODO: TMP !!!!
+            if (il == 0) {
+                ggml_set_name(cur, "mtl-check");
+            }
 
             // cur = cur*attention_norm(broadcasted)
             cur = ggml_mul(ctx0, cur, model.layers[il].attention_norm);
         }
-
-        // TODO: TMP !!!!
-        //if (il == 0) {
-        //    ggml_set_name(cur, "mtl-check");
-        //}
 
         // self-attention
         {
