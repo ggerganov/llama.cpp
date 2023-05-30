@@ -1652,7 +1652,7 @@ void shuffle_ints(int * begin, int * end) {
     for (int i=0; i<max+1; ++i) {
        vals[i] = frand();
     }
-    std::sort(begin, end, [&vals](auto a, auto b){
+    std::sort(begin, end, [&vals](int a, int b){
        return vals.at(a) < vals.at(b);
     });
 }
