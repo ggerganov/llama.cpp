@@ -1822,6 +1822,168 @@ static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, co
 }
 
 //
+// grammar - internal
+//
+
+struct llama_grammar {
+    const std::vector<const uint16_t *>        rules;
+    std::vector<std::vector<const uint16_t *>> stacks;
+};
+
+// transforms a grammar pushdown stack into N possible stacks, all terminating
+// at a character range (terminal element)
+static void llama_grammar_advance_stack(
+        const std::vector<const uint16_t *>        & rules,
+        const std::vector<const uint16_t *>        & stack,
+        std::vector<std::vector<const uint16_t *>> & new_stacks) {
+
+    if (stack.empty()) {
+        new_stacks.push_back(stack);
+        return;
+    }
+
+    const uint16_t * pos = stack.back();
+    
+    if (*pos == 1) {
+        // rule reference, apply rule to stack
+        const uint16_t * subpos = rules[pos[1]] + 1;
+        while (*subpos) {
+            // init new stack without the top (pos)
+            std::vector<const uint16_t *> new_stack(stack.begin(), stack.end() - 1);
+            if (pos[2]) {
+                // if the rule ref is followed by another element, add that to stack
+                new_stack.push_back(pos + 2);
+            }
+            if (subpos[1]) {
+                // if the referenced rule is nonempty, add that to the stack
+                new_stack.push_back(subpos + 1);
+            }
+            llama_grammar_advance_stack(rules, new_stack, new_stacks);
+            subpos += 1 + *subpos;
+        }
+    } else {
+        // rule element size > 1 -> character reference
+        LLAMA_ASSERT(*pos);
+        new_stacks.push_back(stack);
+    }
+}
+
+// takes a set of possible pushdown stacks on a grammar, which are required to
+// be positioned at a character range (see `llama_grammar_advance_stack`), and
+// produces the N possible stacks if the given char is accepted at those
+// positions  
+static std::vector<std::vector<const uint16_t *>> llama_grammar_accept(
+        const std::vector<const uint16_t *>              & rules,
+        const std::vector<std::vector<const uint16_t *>> & stacks,
+        const uint16_t                                     chr) {
+
+    std::vector<std::vector<const uint16_t *>> new_stacks;
+
+    for (const auto & stack : stacks) {
+        if (stack.empty()) {
+            continue;
+        }
+
+        const uint16_t * pos       = stack.back();
+        const uint16_t   num_chars = *pos;
+        LLAMA_ASSERT(num_chars > 1);
+
+        pos++; // skip num chars indicator
+        bool found = false;
+        // loop over the inclusive char pairs to find a match on the given char
+        for (int i = 0; i < num_chars; i += 2) {
+            if (pos[i] <= chr && (i + 1 == num_chars || chr <= pos[i + 1])) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            continue;
+        }
+
+        // advance past char range, updating top of stack to next element, if any
+        pos += num_chars;
+        std::vector<const uint16_t *> new_stack(stack.begin(), stack.end() - 1);
+        if (*pos) {
+            new_stack.push_back(pos);
+        }
+        llama_grammar_advance_stack(rules, new_stack, new_stacks);
+    }
+
+    return new_stacks;
+}
+
+// returns `true` if one of the pushdown stacks can accept the given char. 
+static bool llama_grammar_peek(
+        const std::vector<std::vector<const uint16_t *>> & stacks,
+        const uint16_t                                     chr) {
+
+    for (const auto & stack : stacks) {
+        if (stack.empty()) {
+            if (!chr) {
+                return true;
+            }
+        } else {
+            const uint16_t * pos       = stack.back();
+            const uint16_t   num_chars = *pos;
+            LLAMA_ASSERT(num_chars > 1);
+
+            pos++;
+            for (int i = 0; i < num_chars; i += 2) {
+                if (pos[i] <= chr && (i + 1 == num_chars || chr <= pos[i + 1])) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+
+//
+// grammar - external
+// 
+
+struct llama_grammar * llama_grammar_init(const uint16_t * src, uint16_t start_rule_id) {
+    const uint16_t * pos = src;
+    std::vector<const uint16_t *> rules;
+
+    // build `rules` as list of pointers to rules embedded in binary grammar `src`
+    while (*pos != 0xffff) {
+        uint16_t rule_id = *pos;
+        if (rules.size() <= rule_id) {
+            rules.resize(rule_id + 1);
+        }
+        rules[rule_id] = pos;
+        // skip rule id
+        pos++;
+        // skip rule alternates
+        while (*pos) {
+            pos += 1 + *pos;
+        }
+        // skip 0 denoting end of rule
+        pos++;
+    }
+
+    // TODO: handle if start rule has alternates
+    const uint16_t * start_rule = rules[start_rule_id];
+
+    // rule starts with rule id and 1st alternate's size; skip that so initial
+    // stack starts at 1st element in 1st alternate
+    LLAMA_ASSERT(start_rule[0] == start_rule_id && start_rule[1]);
+    const std::vector<const uint16_t *> stack = { start_rule + 2 };
+
+    std::vector<std::vector<const uint16_t *>> stacks;
+    llama_grammar_advance_stack(rules, stack, stacks);
+
+    return new llama_grammar{ rules, stacks };
+}
+
+void llama_grammar_free(struct llama_grammar * grammar) {
+    delete grammar;
+}
+
+//
 // sampling
 //
 
@@ -2097,6 +2259,30 @@ void llama_sample_frequency_and_presence_penalties(struct llama_context * ctx, l
     }
 }
 
+void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * candidates, const struct llama_grammar * grammar) {
+    assert(ctx);
+    const int64_t     t_start_sample_us  = ggml_time_us();
+    const llama_token eos                = llama_token_eos();
+    // since many llama tokens are prefixed with a single space, special case a lookahead on ' '
+    const auto        stacks_after_space = llama_grammar_accept(grammar->rules, grammar->stacks, ' ');
+
+    for (size_t i = 0; i < candidates->size; ++i) {
+        const llama_token id    = candidates->data[i].id;
+        const char *      str   = llama_token_to_str(ctx, id);
+
+        // prune tokens based on first char only - in `llama_grammar_accept_token` we will find the
+        // full matching prefix of the selected token
+        const bool valid = str[0] == ' '
+            ? llama_grammar_peek(stacks_after_space, str[1])
+            : llama_grammar_peek(grammar->stacks,    id == eos ? 0 : str[0]);
+
+        if (!valid) {
+            candidates->data[i].logit = -INFINITY;
+        }
+    }
+
+    ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+}
 
 llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, int m, float * mu) {
     assert(ctx);
@@ -2221,6 +2407,60 @@ llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_arra
     ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
     ctx->n_sample++;
     return result;
+}
+
+llama_token llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar * grammar, llama_token token) {
+    const int64_t t_start_sample_us = ggml_time_us();
+
+    if (token == llama_token_eos()) {
+        for (const auto & stack : grammar->stacks) {
+            if (stack.empty()) {
+                return token;
+            }
+            LLAMA_ASSERT(false);
+        }
+    }
+
+    const char * str    = llama_token_to_str(ctx, token);
+    const char * suffix = str;
+
+    // Find prefix of selected token that matches grammar, expecting at least 1 char
+    auto new_stacks = llama_grammar_accept(grammar->rules, grammar->stacks, *suffix);
+    LLAMA_ASSERT(!new_stacks.empty());
+    if (*suffix) {
+        ++suffix;
+        for ( ; *suffix; ++suffix) {
+            new_stacks = llama_grammar_accept(grammar->rules, new_stacks, *suffix);
+            if (new_stacks.empty()) {
+                break;
+            }
+        }
+    }
+
+    // if full token is matched, accept new stacks
+    if (!(*suffix)) {
+        grammar->stacks = new_stacks;
+        return token;
+    }
+
+    // otherwise, tokenize the string prefix that did match
+    llama_token tokens[32]; // TODO - determine actual max token size
+    const std::string prefix_str(str, suffix - str);
+    int n_tokens = llama_tokenize(ctx, prefix_str.c_str(), tokens, 32, false);
+    if (n_tokens < 1) {
+        return token; // REVIEW
+    }
+
+    // accept the first token of the matching prefix into the grammar
+    llama_token first_prefix_token = tokens[0];
+    const char * first_prefix_str = llama_token_to_str(ctx, first_prefix_token);
+    for ( ; *first_prefix_str; ++first_prefix_str) {
+        grammar->stacks = llama_grammar_accept(grammar->rules, grammar->stacks, *first_prefix_str);
+        LLAMA_ASSERT(!grammar->stacks.empty());
+    }
+
+    ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    return first_prefix_token;
 }
 
 //

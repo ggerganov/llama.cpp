@@ -55,6 +55,8 @@ extern "C" {
 
     struct llama_context;
 
+    struct llama_grammar;
+
     typedef int llama_token;
 
     typedef struct llama_token_data {
@@ -233,6 +235,30 @@ extern "C" {
     LLAMA_API llama_token llama_token_eos();
     LLAMA_API llama_token llama_token_nl();
 
+    // Grammar
+    //
+    // Accepts a binary encoding of a context-free grammar. The returned struct can be used to
+    // constrain sampled tokens (see below).
+    //
+    // The binary format represents one or more production rules, each with one or more alternate
+    // defininitions:
+    //
+    // (<rule_id: u16> (<alt_size: u16> <alt_size * u16>)+ 0000)+ FFFF
+    //
+    // rule_ids should be assigned sequentially from zero but may appear out of order. Each
+    // rule alternate is a sequence of zero or more symbols, each prefixed with size:
+    //
+    // (<sym_size: u16> <sym_size * u16>)* 0000
+    //
+    // A symbol of size 1 is interpreted as a rule reference (whose value is the single following
+    // u16). Symbols sized greater than 1 are interpreted as inclusive pairs of 16-bit chars to
+    // match. Note that symbol sizes greater than 7FFF are reserved for future use.
+    //
+    // The provided `src` must be kept valid for the lifetime of the `llama_grammar`.
+    //
+    LLAMA_API struct llama_grammar * llama_grammar_init(const uint16_t * src, uint16_t start_rule_id);
+    LLAMA_API void llama_grammar_free(struct llama_grammar * grammar);
+
     // Sampling functions
 
     /// @details Repetition penalty described in CTRL academic paper https://arxiv.org/abs/1909.05858, with negative logit fix.
@@ -257,6 +283,9 @@ extern "C" {
     LLAMA_API void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep);
     LLAMA_API void llama_sample_temperature(struct llama_context * ctx, llama_token_data_array * candidates, float temp);
 
+    /// @details Apply constraints from grammar
+    LLAMA_API void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * candidates, const struct llama_grammar * grammar);
+
     /// @details Mirostat 1.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
     /// @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
     /// @param tau  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
@@ -277,6 +306,9 @@ extern "C" {
 
     /// @details Randomly selects a token from the candidates based on their probabilities.
     LLAMA_API llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_array * candidates);
+
+    /// @details Accepts the sampled token into the grammar, possibly transforming to a new token
+    LLAMA_API llama_token llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar * grammar, llama_token token);
 
     // Performance information
     LLAMA_API void llama_print_timings(struct llama_context * ctx);
