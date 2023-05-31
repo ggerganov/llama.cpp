@@ -1788,9 +1788,9 @@ void write_tensor(struct llama_file * file, struct ggml_tensor * tensor) {
     const char * name = ggml_get_name(tensor);
     uint32_t name_len = strlen(name);
     uint32_t nd = tensor->n_dims;
-    uint32_t ne[4] = { (uint32_t)tensor->ne[0], 
-                       (uint32_t)tensor->ne[1], 
-                       (uint32_t)tensor->ne[2], 
+    uint32_t ne[4] = { (uint32_t)tensor->ne[0],
+                       (uint32_t)tensor->ne[1],
+                       (uint32_t)tensor->ne[2],
                        (uint32_t)tensor->ne[3] };
     file->write_u32(nd);
     file->write_u32(name_len);
