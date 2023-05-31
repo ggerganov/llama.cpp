@@ -796,9 +796,7 @@ int main(int argc, char **argv)
                        {"prompt", llama.params.prompt},
                        {"stopping_word", llama.stopping_word}};
 
-          if (llama.verbose) {
-              llama_print_timings(llama.ctx);
-          }
+          llama_print_timings(llama.ctx);
 
           return res.set_content(
               data.dump(llama.json_indent, ' ', false, json::error_handler_t::replace),
@@ -870,16 +868,13 @@ int main(int argc, char **argv)
                   if (!sink.write(str.data(), str.size())) {
                       if (llama.verbose) {
                           fprintf(stderr, "stream closed\n");
-                          llama_print_timings(llama.ctx);
                       }
+                      llama_print_timings(llama.ctx);
                       return false;
                   }
               }
 
-              if (llama.verbose) {
-                  llama_print_timings(llama.ctx);
-              }
-
+              llama_print_timings(llama.ctx);
               sink.done();
               return true;
           };
