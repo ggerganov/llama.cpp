@@ -1571,7 +1571,7 @@ static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
         .quantize_row_q           = quantize_row_q2_K,
         .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q2_K_reference,
         .quantize_row_q_dot       = quantize_row_q8_K,
-        .vec_dot_q                = NULL, //ggml_vec_dot_q2_K_q8_K,
+        .vec_dot_q                = ggml_vec_dot_q2_K_q8_K,
         .vec_dot_type             = GGML_TYPE_Q8_K,
     },
     [GGML_TYPE_Q3_K] = {
