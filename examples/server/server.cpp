@@ -781,6 +781,10 @@ int main(int argc, char **argv)
   llama.verbose = sparams.verbose;
   llama.json_indent = sparams.verbose ? 4 : -1;
 
+  if (params.model_alias == "unknown") {
+    params.model_alias = params.model;
+  }
+
   // load the model
   if (!llama.loadModel(params))
   {
