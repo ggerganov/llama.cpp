@@ -608,10 +608,12 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
     res.status = 400;
     return false;
   }
+  llama.params.antiprompt.clear();
   if (!body["stop"].is_null()) {
-    llama.params.antiprompt = body["stop"].get<std::vector<std::string>>();
-  } else {
-    llama.params.antiprompt.clear();
+    const auto stop = body["stop"].get<std::vector<std::string>>();
+    std::copy_if(stop.begin(), stop.end(),
+                 std::back_inserter(llama.params.antiprompt),
+                 [](const std::string &str) { return !str.empty(); });
   }
 
   if (llama.verbose) {
