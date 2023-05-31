@@ -15011,6 +15011,7 @@ struct ggml_cgraph ggml_graph_import(const char * fname, struct ggml_context ** 
 
                 // create the tensor
                 // "view" operations are handled differently
+                // TODO: handle inplac ops - currentl a copy is always made
 
                 struct ggml_tensor * tensor = NULL;
 
@@ -15018,8 +15019,11 @@ struct ggml_cgraph ggml_graph_import(const char * fname, struct ggml_context ** 
                     // TODO: implement other view ops
                     case GGML_OP_RESHAPE:
                         {
-                            // TODO: implement other dims
-                            tensor = ggml_reshape_3d(*ctx_eval, args[0], ne[0], ne[1], ne[2]);
+                            tensor = ggml_reshape_4d(*ctx_eval, args[0], ne[0], ne[1], ne[2], ne[3]);
+                        } break;
+                    case GGML_OP_TRANSPOSE:
+                        {
+                            tensor = ggml_transpose(*ctx_eval, args[0]);
                         } break;
                     default:
                         {

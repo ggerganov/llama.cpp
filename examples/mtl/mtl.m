@@ -258,6 +258,7 @@ int llama_mtl_eval(
 
         switch (gf->nodes[i]->op) {
             case GGML_OP_RESHAPE:
+            case GGML_OP_TRANSPOSE:
                 {
                     // noop
                 } break;

@@ -1279,15 +1279,14 @@ static bool llama_eval_internal(
             ggml_set_name(Qcur, "Qcur");
             ggml_set_name(Kcur, "Kcur");
 
-            // TODO: TMP !!!!
-            if (il == 0) {
-                ggml_set_name(Qcur, "mtl-check");
-            }
-
             // store key and value to memory
             {
                 // compute the transposed [N, n_embd] V matrix
                 struct ggml_tensor * Vcur = ggml_transpose(ctx0, ggml_reshape_2d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wv, cur), n_embd, N));
+                // TODO: TMP !!!!
+                if (il == 0) {
+                    ggml_set_name(Vcur, "mtl-check");
+                }
 
                 struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, N*n_embd, (ggml_element_size(kv_self.k)*n_embd)*(il*n_ctx + n_past));
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, N, n_embd,
