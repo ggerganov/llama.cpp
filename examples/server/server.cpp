@@ -912,25 +912,14 @@ int main(int argc, char **argv)
     fprintf(stderr, "NOTE: Mode embedding enabled. Completion function doesn't work in this mode.\n");
   }
 
-  if (llama.verbose) {
-      svr.set_logger([](const Request& req, const Response& res) {
-          json log = {
-          { "status", res.status },
-          { "request", req.body },
-          { "response", res.body },
-          };
-          fprintf(stdout, "http_request: request: %s %s \nhttp_request: log: %s\n", req.method.c_str(), req.path.c_str(), log.dump().c_str());
+  svr.set_logger([](const Request& req, const Response& res) {
+      json log = {
+      { "status", res.status },
+      { "request", req.body },
+      { "response", res.body },
+      };
+      fprintf(stdout, "http_request: request: %s %s \nhttp_request: log: %s\n", req.method.c_str(), req.path.c_str(), log.dump().c_str());
       });
-  } else {
-      svr.set_logger([](const Request& req, const Response& res) {
-          json log = {
-              { "status", res.status },
-              { "request", req.body },
-              { "response", res.body },
-          };
-          fprintf(stdout, "http_request: request: %s %s \n", req.method.c_str(), req.path.c_str());
-      });
-  }
 
   svr.set_exception_handler([](const Request &, Response &res, std::exception_ptr ep) {
       auto fmt = "500 Internal Server Error\n%s";
