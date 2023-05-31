@@ -42,6 +42,7 @@ struct llama_server_context
     params.antiprompt.clear();
     num_tokens_predicted = 0;
     generated_text = "";
+    generated_text.reserve(params.n_ctx);
     stopping_word = "";
 
     //processed_tokens.clear();
