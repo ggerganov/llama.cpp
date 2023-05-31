@@ -901,8 +901,6 @@ int main(int argc, char **argv)
               return res.set_content(data.dump(llama.json_indent), "application/json");
             });
 
-  fprintf(stderr, "%s: http server Listening at http://%s:%i\n", __func__, sparams.hostname.c_str(), sparams.port);
-
   if(params.embedding) {
     fprintf(stderr, "NOTE: Mode embedding enabled. Completion function doesn't work in this mode.\n");
   }
@@ -930,5 +928,16 @@ int main(int argc, char **argv)
   // set timeouts and change hostname and port
   svr.set_read_timeout(sparams.read_timeout);
   svr.set_write_timeout(sparams.write_timeout);
-  svr.listen(sparams.hostname, sparams.port);
+
+  if (!svr.bind_to_port(sparams.hostname, sparams.port)) {
+      fprintf(stderr, "%s: ERROR: couldn't bind server to %s:%i\n", __func__,
+              sparams.hostname.c_str(), sparams.port);
+      return 1;
+  }
+
+  fprintf(stderr, "%s: http server Listening at http://%s:%i\n", __func__,
+          sparams.hostname.c_str(), sparams.port);
+  if (!svr.listen_after_bind()) {
+      return 1;
+  }
 }
