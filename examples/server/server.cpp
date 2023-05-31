@@ -1,7 +1,9 @@
-#include <httplib.h>
-#include <json.hpp>
 #include "common.h"
 #include "llama.h"
+#include "build-info.h"
+
+#include <httplib.h>
+#include <json.hpp>
 
 struct server_params
 {
@@ -30,7 +32,7 @@ struct llama_server_context
   std::vector<llama_token> embd_inp;
 
   std::vector<llama_token> last_prompt_tokens;
-  llama_context *ctx;
+  llama_context *ctx = nullptr;
   gpt_params params;
 
   std::string stopping_word;
@@ -38,10 +40,19 @@ struct llama_server_context
   bool verbose = false;
   int json_indent = -1;
 
+  ~llama_server_context()
+  {
+      if (ctx) {
+          llama_free(ctx);
+          ctx = nullptr;
+      }
+  }
+
   void rewind() {
     params.antiprompt.clear();
     num_tokens_predicted = 0;
     generated_text = "";
+    generated_text.reserve(params.n_ctx);
     stopping_word = "";
 
     //processed_tokens.clear();
@@ -51,7 +62,7 @@ struct llama_server_context
     n_consumed = 0;
   }
 
-  bool loadModel(gpt_params params_)
+  bool loadModel(const gpt_params &params_)
   {
     params = params_;
     ctx = llama_init_from_gpt_params(params);
@@ -249,7 +260,7 @@ struct llama_server_context
         return result;
     }
 
-    has_next_token = n_remain != 0;
+    has_next_token = params.n_predict == -1 ? true : n_remain != 0;
     return result;
   }
 
@@ -496,210 +507,151 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
   return true;
 }
 
-bool parse_options_completion(json body, llama_server_context& llama, Response &res) {
+bool parse_options_completion(json body, llama_server_context& llama, Response &res)
+{
   gpt_params default_params;
-  if (!body["stream"].is_null())
-  {
-      llama.stream = body["stream"].get<bool>();
+  if (!body["stream"].is_null()) {
+    llama.stream = body["stream"].get<bool>();
+  } else {
+    llama.stream = false;
   }
-  else
-  {
-      llama.stream = false;
+  if (!body["n_predict"].is_null()) {
+    llama.params.n_predict = body["n_predict"].get<int>();
+  } else {
+    llama.params.n_predict = default_params.n_predict;
   }
-  if (!body["n_predict"].is_null())
-  {
-      llama.params.n_predict = body["n_predict"].get<int>();
+  if (!body["top_k"].is_null()) {
+    llama.params.top_k = body["top_k"].get<int>();
+  } else {
+    llama.params.top_k = default_params.top_k;
   }
-  else
-  {
-      llama.params.n_predict = default_params.n_predict;
+  if (!body["top_p"].is_null()) {
+    llama.params.top_p = body["top_p"].get<float>();
+  } else {
+    llama.params.top_p = default_params.top_p;
   }
-  if (!body["top_k"].is_null())
-  {
-      llama.params.top_k = body["top_k"].get<int>();
+  if (!body["tfs_z"].is_null()) {
+    llama.params.tfs_z = body["tfs_z"].get<float>();
+  } else {
+    llama.params.tfs_z = default_params.tfs_z;
   }
-  else
-  {
-      llama.params.top_k = default_params.top_k;
+  if (!body["typical_p"].is_null()) {
+    llama.params.typical_p = body["typical_p"].get<float>();
+  } else {
+    llama.params.typical_p = default_params.typical_p;
   }
-  if (!body["top_p"].is_null())
-  {
-      llama.params.top_p = body["top_p"].get<float>();
+  if (!body["repeat_last_n"].is_null()) {
+    llama.params.repeat_last_n = body["repeat_last_n"].get<int>();
+  } else {
+    llama.params.repeat_last_n = default_params.repeat_last_n;
   }
-  else
-  {
-      llama.params.top_p = default_params.top_p;
+  if (!body["temperature"].is_null()) {
+    llama.params.temp = body["temperature"].get<float>();
+  } else {
+    llama.params.temp = default_params.temp;
   }
-  if (!body["tfs_z"].is_null())
-  {
-      llama.params.tfs_z = body["tfs_z"].get<float>();
+  if (!body["repeat_penalty"].is_null()) {
+    llama.params.repeat_penalty = body["repeat_penalty"].get<float>();
+  } else {
+    llama.params.repeat_penalty = default_params.repeat_penalty;
   }
-  else
-  {
-      llama.params.tfs_z = default_params.tfs_z;
+  if (!body["presence_penalty"].is_null()) {
+    llama.params.presence_penalty = body["presence_penalty"].get<float>();
+  } else {
+    llama.params.presence_penalty = default_params.presence_penalty;
   }
-  if (!body["typical_p"].is_null())
-  {
-      llama.params.typical_p = body["typical_p"].get<float>();
+  if (!body["frequency_penalty"].is_null()) {
+    llama.params.frequency_penalty = body["frequency_penalty"].get<float>();
+  } else {
+    llama.params.frequency_penalty = default_params.frequency_penalty;
   }
-  else
-  {
-      llama.params.typical_p = default_params.typical_p;
+  if (!body["mirostat"].is_null()) {
+    llama.params.mirostat = body["mirostat"].get<float>();
+  } else {
+    llama.params.mirostat = default_params.mirostat;
   }
-  if (!body["repeat_last_n"].is_null())
-  {
-      llama.params.repeat_last_n = body["repeat_last_n"].get<int>();
+  if (!body["mirostat_tau"].is_null()) {
+    llama.params.mirostat_tau = body["mirostat_tau"].get<float>();
+  } else {
+    llama.params.mirostat_tau = default_params.mirostat_tau;
   }
-  else
-  {
-      llama.params.repeat_last_n = default_params.repeat_last_n;
+  if (!body["mirostat_eta"].is_null()) {
+    llama.params.mirostat_eta = body["mirostat_eta"].get<float>();
+  } else {
+    llama.params.mirostat_eta = default_params.mirostat_eta;
   }
-  if (!body["temperature"].is_null())
-  {
-      llama.params.temp = body["temperature"].get<float>();
+  if (!body["penalize_nl"].is_null()) {
+    llama.params.penalize_nl = body["penalize_nl"].get<float>();
+  } else {
+    llama.params.penalize_nl = false;
   }
-  else
-  {
-      llama.params.temp = default_params.temp;
+  if (!body["n_keep"].is_null()) {
+    llama.params.n_keep = body["n_keep"].get<int>();
+  } else {
+    llama.params.n_keep = default_params.n_keep;
   }
-  if (!body["repeat_penalty"].is_null())
-  {
-      llama.params.repeat_penalty = body["repeat_penalty"].get<float>();
-  }
-  else
-  {
-      llama.params.repeat_penalty = default_params.repeat_penalty;
-  }
-  if (!body["presence_penalty"].is_null())
-  {
-      llama.params.presence_penalty = body["presence_penalty"].get<float>();
-  }
-  else
-  {
-      llama.params.presence_penalty = default_params.presence_penalty;
-  }
-  if (!body["frequency_penalty"].is_null())
-  {
-      llama.params.frequency_penalty = body["frequency_penalty"].get<float>();
-  }
-  else
-  {
-      llama.params.frequency_penalty = default_params.frequency_penalty;
-  }
-  if (!body["mirostat"].is_null())
-  {
-      llama.params.mirostat = body["mirostat"].get<float>();
-  }
-  else
-  {
-      llama.params.mirostat = default_params.mirostat;
-  }
-  if (!body["mirostat_tau"].is_null())
-  {
-      llama.params.mirostat_tau = body["mirostat_tau"].get<float>();
-  }
-  else
-  {
-      llama.params.mirostat_tau = default_params.mirostat_tau;
-  }
-  if (!body["mirostat_eta"].is_null())
-  {
-      llama.params.mirostat_eta = body["mirostat_eta"].get<float>();
-  }
-  else
-  {
-      llama.params.mirostat_eta = default_params.mirostat_eta;
-  }
-  if (!body["penalize_nl"].is_null())
-  {
-      llama.params.penalize_nl = body["penalize_nl"].get<float>();
-  }
-  else
-  {
-      llama.params.penalize_nl = default_params.penalize_nl;
-  }
-  if (!body["n_keep"].is_null())
-  {
-      llama.params.n_keep = body["n_keep"].get<int>();
-  }
-  else
-  {
-      llama.params.n_keep = default_params.n_keep;
-  }
-  if (!body["seed"].is_null())
-  {
+  if (!body["seed"].is_null()) {
     llama.params.seed = body["seed"].get<int>();
-  }
-  else
-  {
+  } else {
     llama.params.seed = time(NULL);
   }
-  if (!body["ignore_eos"].is_null() && body["ignore_eos"].get<bool>())
-  {
-      llama.params.logit_bias[llama_token_eos()] = -INFINITY;
+  if (!body["ignore_eos"].is_null() && body["ignore_eos"].get<bool>()) {
+    llama.params.logit_bias[llama_token_eos()] = -INFINITY;
+  } else {
+    llama.params.logit_bias.erase(llama_token_eos());
   }
-  else
-  {
-      llama.params.logit_bias.erase(llama_token_eos());
-  }
-  if (!body["prompt"].is_null())
-  {
+  if (!body["prompt"].is_null()) {
     llama.params.prompt = body["prompt"].get<std::string>();
-  }
-  else
-  {
-    json data = {
-        {"status", "error"},
-        {"reason", "You need to pass the prompt"}};
+  } else {
+    json data = {{"status", "error"}, {"reason", "You need to pass the prompt"}};
     res.set_content(data.dump(llama.json_indent), "application/json");
     res.status = 400;
     return false;
   }
-  if (!body["stop"].is_null())
-  {
+  if (!body["stop"].is_null()) {
     llama.params.antiprompt = body["stop"].get<std::vector<std::string>>();
-  }
-  else
-  {
-      llama.params.antiprompt.clear();
+  } else {
+    llama.params.antiprompt.clear();
   }
 
   if (llama.verbose) {
-      std::string tmp_stop =
-          std::accumulate(llama.params.antiprompt.begin(), llama.params.antiprompt.end(),
-                          std::string{}, [](std::string a, std::string b) {
-                              return a + (a != "" ? ", \"" : "\"") + b + "\"";
-                          });
+    std::string tmp_stop =
+        std::accumulate(llama.params.antiprompt.begin(), llama.params.antiprompt.end(),
+                        std::string{}, [](std::string a, std::string b) {
+                            return a + (a != "" ? ", \"" : "\"") + b + "\"";
+                        });
 
-      fprintf(stderr,
-              "-------------------------\n"
-              "/completion parameters: {\n"
-              "    stream: %d,\n"
-              "    frequency_penalty: %f,\n"
-              "    mirostat: %d,\n"
-              "    mirostat_eta: %f,\n"
-              "    mirostat_tau: %f,\n"
-              "    n_keep: %d,\n"
-              "    n_predict: %d,\n"
-              "    penalize_nl: %d,\n"
-              "    presence_penalty: %f,\n"
-              "    repeat_last_n: %d,\n"
-              "    repeat_penalty: %f,\n"
-              "    seed: %d,\n"
-              "    stop: [%s],\n"
-              "    temperature: %f,\n"
-              "    tfs_z: %f,\n"
-              "    top_k: %d,\n"
-              "    top_p: %f,\n"
-              "    typical_p: %f,\n"
-              "}\nPROMPT[%s]\n",
-              llama.stream, llama.params.frequency_penalty, llama.params.mirostat,
-              llama.params.mirostat_eta, llama.params.mirostat_tau, llama.params.n_keep,
-              llama.params.n_predict, llama.params.penalize_nl,
-              llama.params.presence_penalty, llama.params.repeat_last_n,
-              llama.params.repeat_penalty, llama.params.seed, tmp_stop.c_str(),
-              llama.params.temp, llama.params.tfs_z, llama.params.top_k,
-              llama.params.top_p, llama.params.typical_p, llama.params.prompt.c_str());
+    fprintf(stderr,
+            "-------------------------\n"
+            "/completion parameters: {\n"
+            "    stream: %d,\n"
+            "    ignore_eos: %d,\n"
+            "    frequency_penalty: %f,\n"
+            "    mirostat: %d,\n"
+            "    mirostat_eta: %f,\n"
+            "    mirostat_tau: %f,\n"
+            "    n_keep: %d,\n"
+            "    n_predict: %d,\n"
+            "    penalize_nl: %d,\n"
+            "    presence_penalty: %f,\n"
+            "    repeat_last_n: %d,\n"
+            "    repeat_penalty: %f,\n"
+            "    seed: %d,\n"
+            "    stop: [%s],\n"
+            "    temperature: %f,\n"
+            "    tfs_z: %f,\n"
+            "    top_k: %d,\n"
+            "    top_p: %f,\n"
+            "    typical_p: %f,\n"
+            "}\nPROMPT[%s]\n",
+            llama.stream, -INFINITY == llama.params.logit_bias[llama_token_eos()],
+            llama.params.frequency_penalty, llama.params.mirostat,
+            llama.params.mirostat_eta, llama.params.mirostat_tau, llama.params.n_keep,
+            llama.params.n_predict, llama.params.penalize_nl,
+            llama.params.presence_penalty, llama.params.repeat_last_n,
+            llama.params.repeat_penalty, llama.params.seed, tmp_stop.c_str(),
+            llama.params.temp, llama.params.tfs_z, llama.params.top_k, llama.params.top_p,
+            llama.params.typical_p, llama.params.prompt.c_str());
   }
 
   return true;
@@ -764,6 +716,8 @@ std::string log(const Request &req, const Response &res)
 
 int main(int argc, char **argv)
 {
+  llama_init_backend();
+
   // own arguments required by this example
   gpt_params params;
   server_params sparams;
@@ -779,6 +733,14 @@ int main(int argc, char **argv)
 
   llama.verbose = sparams.verbose;
   llama.json_indent = sparams.verbose ? 4 : -1;
+
+  if (params.model_alias == "unknown") {
+    params.model_alias = params.model;
+  }
+
+  fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
+  fprintf(stderr, "system_info: n_threads = %d / %d | %s\n\n", params.n_threads,
+          std::thread::hardware_concurrency(), llama_print_system_info());
 
   // load the model
   if (!llama.loadModel(params))
@@ -804,6 +766,7 @@ int main(int argc, char **argv)
       }
 
       llama.rewind();
+      llama_reset_timings(llama.ctx);
 
       if (parse_options_completion(json::parse(req.body), llama, res) == false) {
           return;
@@ -832,21 +795,57 @@ int main(int argc, char **argv)
                        {"generation_settings", format_generation_settings(llama)},
                        {"prompt", llama.params.prompt},
                        {"stopping_word", llama.stopping_word}};
+
+          llama_print_timings(llama.ctx);
+
           return res.set_content(
               data.dump(llama.json_indent, ' ', false, json::error_handler_t::replace),
               "application/json");
       } else {
           const auto chunked_content_provider = [&](size_t, DataSink &sink) {
+              size_t sent_count = 0;
+              int32_t multibyte_pending = 0;
+
               while (llama.has_next_token) {
                   std::string token_text = llama.doCompletion();
 
+                  if (multibyte_pending > 0) {
+                      multibyte_pending -= token_text.size();
+                  } else if (token_text.size() == 1) {
+                      const char c = token_text[0];
+                      // 2-byte characters: 110xxxxx 10xxxxxx
+                      if ((c & 0xE0) == 0xC0) {
+                          multibyte_pending = 1;
+                      // 3-byte characters: 1110xxxx 10xxxxxx 10xxxxxx
+                      } else if ((c & 0xF0) == 0xE0) {
+                          multibyte_pending = 2;
+                      // 4-byte characters: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+                      } else if ((c & 0xF8) == 0xF0) {
+                          multibyte_pending = 3;
+                      } else {
+                          multibyte_pending = 0;
+                      }
+                  }
+
+                  if (multibyte_pending > 0) {
+                      if (!llama.has_next_token) {
+                          llama.has_next_token = true;
+                          llama.n_remain++;
+                      }
+                      continue;
+                  }
+
+                  const size_t pos = std::min(sent_count, llama.generated_text.size());
+                  std::string to_send = llama.generated_text.substr(pos);
+                  sent_count += to_send.size();
+
                   json data;
                   if (llama.has_next_token) {
-                      data = {{"content", token_text}, {"stop", false}};
+                      data = {{"content", to_send}, {"stop", false}};
                   } else {
                       // Generation is done, send extra information.
                       data = {
-                          {"content", token_text},
+                          {"content", to_send},
                           {"stop", true},
                           {"model", llama.params.model_alias},
                           {"tokens_predicted", llama.num_tokens_predicted},
@@ -856,18 +855,26 @@ int main(int argc, char **argv)
                           {"generated_text", llama.generated_text}};
                   }
 
-                  std::string str = "data: " +
-                                    data.dump(llama.json_indent, ' ', false,
-                                              json::error_handler_t::replace) +
-                                    "\n\n";
+                  std::string str =
+                      "data: " +
+                      data.dump(llama.has_next_token ? -1 : llama.json_indent, ' ', false,
+                                json::error_handler_t::replace) +
+                      "\n\n";
+
+                  if (llama.verbose) {
+                      fprintf(stderr, "to_send=%s", str.c_str());
+                  }
+
                   if (!sink.write(str.data(), str.size())) {
                       if (llama.verbose) {
                           fprintf(stderr, "stream closed\n");
                       }
+                      llama_print_timings(llama.ctx);
                       return false;
                   }
               }
 
+              llama_print_timings(llama.ctx);
               sink.done();
               return true;
           };
@@ -901,8 +908,6 @@ int main(int argc, char **argv)
               return res.set_content(data.dump(llama.json_indent), "application/json");
             });
 
-  fprintf(stderr, "%s: http server Listening at http://%s:%i\n", __func__, sparams.hostname.c_str(), sparams.port);
-
   if(params.embedding) {
     fprintf(stderr, "NOTE: Mode embedding enabled. Completion function doesn't work in this mode.\n");
   }
@@ -930,5 +935,18 @@ int main(int argc, char **argv)
   // set timeouts and change hostname and port
   svr.set_read_timeout(sparams.read_timeout);
   svr.set_write_timeout(sparams.write_timeout);
-  svr.listen(sparams.hostname, sparams.port);
+
+  if (!svr.bind_to_port(sparams.hostname, sparams.port)) {
+      fprintf(stderr, "%s: ERROR: couldn't bind server to %s:%i\n", __func__,
+              sparams.hostname.c_str(), sparams.port);
+      return 1;
+  }
+
+  fprintf(stderr, "%s: http server Listening at http://%s:%i\n", __func__,
+          sparams.hostname.c_str(), sparams.port);
+  if (!svr.listen_after_bind()) {
+      return 1;
+  }
+
+  return 0;
 }
