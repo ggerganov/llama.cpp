@@ -668,7 +668,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
       std::string tmp_stop =
           std::accumulate(llama.params.antiprompt.begin(), llama.params.antiprompt.end(),
                           std::string{}, [](std::string a, std::string b) {
-                              return a + (a != "" ? ", \"" : "") + b + "\"";
+                              return a + (a != "" ? ", \"" : "\"") + b + "\"";
                           });
 
       fprintf(stderr,
@@ -860,7 +860,12 @@ int main(int argc, char **argv)
                                     data.dump(llama.json_indent, ' ', false,
                                               json::error_handler_t::replace) +
                                     "\n\n";
-                  sink.write(str.data(), str.size());
+                  if (!sink.write(str.data(), str.size())) {
+                      if (llama.verbose) {
+                          fprintf(stderr, "stream closed\n");
+                      }
+                      return false;
+                  }
               }
 
               sink.done();
