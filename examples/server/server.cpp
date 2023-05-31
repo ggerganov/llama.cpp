@@ -507,6 +507,31 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
   return true;
 }
 
+json format_generation_settings(llama_server_context &llama) {
+  const bool ignore_eos = -INFINITY == llama.params.logit_bias[llama_token_eos()];
+  return json {
+    { "seed", llama.params.seed },
+    { "temp", llama.params.temp },
+    { "top_k", llama.params.top_k },
+    { "top_p", llama.params.top_p },
+    { "tfs_z", llama.params.tfs_z },
+    { "typical_p", llama.params.typical_p },
+    { "repeat_last_n", llama.params.repeat_last_n },
+    { "repeat_penalty", llama.params.repeat_penalty },
+    { "presence_penalty", llama.params.presence_penalty },
+    { "frequency_penalty", llama.params.frequency_penalty },
+    { "mirostat", llama.params.mirostat },
+    { "mirostat_tau", llama.params.mirostat_tau },
+    { "mirostat_eta", llama.params.mirostat_eta },
+    { "penalize_nl", llama.params.penalize_nl },
+    { "stop", llama.params.antiprompt },
+    { "n_predict", llama.params.n_predict },
+    { "n_keep", llama.params.n_keep },
+    { "ignore_eos", ignore_eos },
+    { "stream", llama.stream },
+  };
+}
+
 bool parse_options_completion(json body, llama_server_context& llama, Response &res)
 {
   gpt_params default_params;
@@ -617,65 +642,16 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
   }
 
   if (llama.verbose) {
-    std::string tmp_stop =
-        std::accumulate(llama.params.antiprompt.begin(), llama.params.antiprompt.end(),
-                        std::string{}, [](std::string a, std::string b) {
-                            return a + (a != "" ? ", \"" : "\"") + b + "\"";
-                        });
-
+    json tmp = format_generation_settings(llama);
     fprintf(stderr,
             "-------------------------\n"
-            "/completion parameters: {\n"
-            "    stream: %d,\n"
-            "    ignore_eos: %d,\n"
-            "    frequency_penalty: %f,\n"
-            "    mirostat: %d,\n"
-            "    mirostat_eta: %f,\n"
-            "    mirostat_tau: %f,\n"
-            "    n_keep: %d,\n"
-            "    n_predict: %d,\n"
-            "    penalize_nl: %d,\n"
-            "    presence_penalty: %f,\n"
-            "    repeat_last_n: %d,\n"
-            "    repeat_penalty: %f,\n"
-            "    seed: %d,\n"
-            "    stop: [%s],\n"
-            "    temperature: %f,\n"
-            "    tfs_z: %f,\n"
-            "    top_k: %d,\n"
-            "    top_p: %f,\n"
-            "    typical_p: %f,\n"
-            "}\nPROMPT[%s]\n",
-            llama.stream, -INFINITY == llama.params.logit_bias[llama_token_eos()],
-            llama.params.frequency_penalty, llama.params.mirostat,
-            llama.params.mirostat_eta, llama.params.mirostat_tau, llama.params.n_keep,
-            llama.params.n_predict, llama.params.penalize_nl,
-            llama.params.presence_penalty, llama.params.repeat_last_n,
-            llama.params.repeat_penalty, llama.params.seed, tmp_stop.c_str(),
-            llama.params.temp, llama.params.tfs_z, llama.params.top_k, llama.params.top_p,
-            llama.params.typical_p, llama.params.prompt.c_str());
+            "/completion parameters: %s\n"
+            "PROMPT[%s]\n",
+            tmp.dump(4, ' ', false, json::error_handler_t::replace).c_str(),
+            llama.params.prompt.c_str());
   }
 
   return true;
-}
-
-json format_generation_settings(const llama_server_context& llama) {
-  return json {
-    { "seed", llama.params.seed },
-    { "temp", llama.params.temp },
-    { "top_k", llama.params.top_k },
-    { "top_p", llama.params.top_p },
-    { "tfs_z", llama.params.tfs_z },
-    { "typical_p", llama.params.typical_p },
-    { "repeat_last_n", llama.params.repeat_last_n },
-    { "repeat_penalty", llama.params.repeat_penalty },
-    { "presence_penalty", llama.params.presence_penalty },
-    { "frequency_penalty", llama.params.frequency_penalty },
-    { "mirostat", llama.params.mirostat },
-    { "mirostat_tau", llama.params.mirostat_tau },
-    { "mirostat_eta", llama.params.mirostat_eta },
-    { "penalize_nl", llama.params.penalize_nl }
-  };
 }
 
 std::string log(const Request &req, const Response &res)
