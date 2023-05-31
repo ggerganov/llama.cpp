@@ -668,7 +668,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
       std::string tmp_stop =
           std::accumulate(llama.params.antiprompt.begin(), llama.params.antiprompt.end(),
                           std::string{}, [](std::string a, std::string b) {
-                              return a + (a != "" ? ", \"" : "") + b + "\"";
+                              return a + (a != "" ? ", \"" : "\"") + b + "\"";
                           });
 
       fprintf(stderr,
