@@ -41,6 +41,9 @@ struct ggml_mtl_context {
 
     id<MTLFunction>             function_mul_mat_q4_0;
     id<MTLComputePipelineState> pipeline_mul_mat_q4_0;
+
+    id<MTLFunction>             function_rope;
+    id<MTLComputePipelineState> pipeline_rope;
 };
 
 // MSL code
@@ -148,6 +151,10 @@ struct ggml_mtl_context * llama_mtl_init(
         ctx->function_mul_mat_q4_0 = [ctx->library newFunctionWithName:@"kernel_mul_mat_q4_0"];
         ctx->pipeline_mul_mat_q4_0 = [ctx->device newComputePipelineStateWithFunction:ctx->function_mul_mat_q4_0 error:nil];
         fprintf(stderr, "%s: loaded kernel_mul_mat_q4_0: %p\n", __func__, (void *) ctx->pipeline_mul_mat_q4_0);
+
+        ctx->function_rope = [ctx->library newFunctionWithName:@"kernel_rope"];
+        ctx->pipeline_rope = [ctx->device newComputePipelineStateWithFunction:ctx->function_rope error:nil];
+        fprintf(stderr, "%s: loaded kernel_rope: %p\n", __func__, (void *) ctx->pipeline_rope);
     }
 
     // MTLBuffer approach
@@ -250,6 +257,10 @@ int llama_mtl_eval(
         fprintf(stderr, "%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
 
         switch (gf->nodes[i]->op) {
+            case GGML_OP_RESHAPE:
+                {
+                    // noop
+                } break;
             case GGML_OP_ADD:
                 {
                     if (encoder == nil) {
@@ -453,6 +464,68 @@ int llama_mtl_eval(
 
                     [encoder dispatchThreadgroups:MTLSizeMake(nrows, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                 } break;
+            case GGML_OP_ROPE:
+                {
+                    if (encoder == nil) {
+                        encoder = [command_buffer computeCommandEncoder];
+                    }
+
+                    id<MTLBuffer> id_src0 = llama_mtl_get_buffer(ctx, gf->nodes[i]->src0, &offs_src0);
+                    id<MTLBuffer> id_dst  = llama_mtl_get_buffer(ctx, gf->nodes[i],       &offs_dst);
+
+                    const int64_t ne00 = gf->nodes[i]->src0->ne[0];
+                    const int64_t ne01 = gf->nodes[i]->src0->ne[1];
+                    const int64_t ne02 = gf->nodes[i]->src0->ne[2];
+                    const int64_t ne03 = gf->nodes[i]->src0->ne[3];
+
+                    const uint64_t nb00 = gf->nodes[i]->src0->nb[0];
+                    const uint64_t nb01 = gf->nodes[i]->src0->nb[1];
+                    const uint64_t nb02 = gf->nodes[i]->src0->nb[2];
+                    const uint64_t nb03 = gf->nodes[i]->src0->nb[3];
+
+                    const int64_t ne0 = gf->nodes[i]->ne[0];
+                    const int64_t ne1 = gf->nodes[i]->ne[1];
+                    const int64_t ne2 = gf->nodes[i]->ne[2];
+                    const int64_t ne3 = gf->nodes[i]->ne[3];
+
+                    const uint64_t nb0 = gf->nodes[i]->nb[0];
+                    const uint64_t nb1 = gf->nodes[i]->nb[1];
+                    const uint64_t nb2 = gf->nodes[i]->nb[2];
+                    const uint64_t nb3 = gf->nodes[i]->nb[3];
+
+                    const int n_past = ((int32_t *) gf->nodes[i]->src1->data)[0]; // TODO: TMP !!!!!
+                    const int n_dims = ((int32_t *) gf->nodes[i]->src1->data)[1];
+                    const int mode   = ((int32_t *) gf->nodes[i]->src1->data)[2];
+
+                    printf("rope: %lld x %lld x %lld x %lld\n", ne00, ne01, ne02, ne03);
+                    printf("rope: %lld x %lld x %lld x %lld\n", ne0,  ne1,  ne2,  ne3);
+                    printf("rope: n_past = %d, n_dims = %d, mode = %d\n", n_past, n_dims, mode);
+
+                    [encoder setComputePipelineState:ctx->pipeline_rope];
+                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                    [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
+                    [encoder setBytes:&ne00   length:sizeof( int64_t) atIndex:2];
+                    [encoder setBytes:&ne01   length:sizeof( int64_t) atIndex:3];
+                    [encoder setBytes:&ne02   length:sizeof( int64_t) atIndex:4];
+                    [encoder setBytes:&ne03   length:sizeof( int64_t) atIndex:5];
+                    [encoder setBytes:&nb00   length:sizeof(uint64_t) atIndex:6];
+                    [encoder setBytes:&nb01   length:sizeof(uint64_t) atIndex:7];
+                    [encoder setBytes:&nb02   length:sizeof(uint64_t) atIndex:8];
+                    [encoder setBytes:&nb03   length:sizeof(uint64_t) atIndex:9];
+                    [encoder setBytes:&ne0    length:sizeof( int64_t) atIndex:10];
+                    [encoder setBytes:&ne1    length:sizeof( int64_t) atIndex:11];
+                    [encoder setBytes:&ne2    length:sizeof( int64_t) atIndex:12];
+                    [encoder setBytes:&ne3    length:sizeof( int64_t) atIndex:13];
+                    [encoder setBytes:&nb0    length:sizeof(uint64_t) atIndex:14];
+                    [encoder setBytes:&nb1    length:sizeof(uint64_t) atIndex:15];
+                    [encoder setBytes:&nb2    length:sizeof(uint64_t) atIndex:16];
+                    [encoder setBytes:&nb3    length:sizeof(uint64_t) atIndex:17];
+                    [encoder setBytes:&n_past length:sizeof(     int) atIndex:18];
+                    [encoder setBytes:&n_dims length:sizeof(     int) atIndex:19];
+                    [encoder setBytes:&mode   length:sizeof(     int) atIndex:20];
+
+                    [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                } break;
             default:
                 fprintf(stderr, "%s: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
                 GGML_ASSERT(false);
@@ -486,7 +559,7 @@ int llama_mtl_eval(
 
     {
         const double time_elapsed = [command_buffer GPUEndTime] - [command_buffer GPUStartTime];
-        fprintf(stderr, "%s: time elapsed = %f\n", __func__, time_elapsed);
+        fprintf(stderr, "%s: time elapsed = %f ms\n", __func__, time_elapsed * 1000.0);
     }
 
     // TODO

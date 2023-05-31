@@ -210,3 +210,58 @@ kernel void kernel_mul_mat_q4_0(
         dst[r1*ne0 + r0] = sum[0];
     }
 }
+
+kernel void kernel_rope(
+        device const  void * src0,
+        device       float * dst,
+        constant   int64_t & ne00,
+        constant   int64_t & ne01,
+        constant   int64_t & ne02,
+        constant   int64_t & ne03,
+        constant  uint64_t & nb00,
+        constant  uint64_t & nb01,
+        constant  uint64_t & nb02,
+        constant  uint64_t & nb03,
+        constant   int64_t & ne0,
+        constant   int64_t & ne1,
+        constant   int64_t & ne2,
+        constant   int64_t & ne3,
+        constant  uint64_t & nb0,
+        constant  uint64_t & nb1,
+        constant  uint64_t & nb2,
+        constant  uint64_t & nb3,
+        constant       int & n_past,
+        constant       int & n_dims,
+        constant       int & mode,
+        uint3 tpig[[thread_position_in_grid]]) {
+    const int64_t i3 = tpig[2];
+    const int64_t i2 = tpig[1];
+    const int64_t i1 = tpig[0];
+
+    const bool is_neox = mode & 2;
+    const float theta_scale = pow(10000.0, -2.0f/n_dims);
+
+    const int64_t p = ((mode & 1) == 0 ? n_past + i2 : i2);
+
+    float theta = (float)p;
+
+    if (!is_neox) {
+        for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
+            const float cos_theta = cos(theta);
+            const float sin_theta = sin(theta);
+
+            theta *= theta_scale;
+
+            device const float * const src = (device float *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
+            device       float * dst_data  = (device float *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
+
+            const float x0 = src[0];
+            const float x1 = src[1];
+
+            dst_data[0] = x0*cos_theta - x1*sin_theta;
+            dst_data[1] = x0*sin_theta + x1*cos_theta;
+        }
+    } else {
+        // TODO: implement
+    }
+}

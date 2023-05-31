@@ -1270,18 +1270,19 @@ static bool llama_eval_internal(
 
         // self-attention
         {
-            auto * x = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
-            // TODO: TMP !!!!
-            if (il == 0) {
-                ggml_set_name(x, "mtl-check");
-            }
+            //auto * x = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
+            //struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, x, n_embd/n_head, n_head, N), n_past, n_rot, 0);
 
             // compute Q and K and RoPE them
-            //struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
-            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, x, n_embd/n_head, n_head, N), n_past, n_rot, 0);
+            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
             struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wk, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
             ggml_set_name(Qcur, "Qcur");
             ggml_set_name(Kcur, "Kcur");
+
+            // TODO: TMP !!!!
+            if (il == 0) {
+                ggml_set_name(Qcur, "mtl-check");
+            }
 
             // store key and value to memory
             {
@@ -1437,7 +1438,14 @@ static bool llama_eval_internal(
     //ggml_graph_compute       (ctx0, &gf);
 
     // lets export a smaller graph to get things rolling -- baby steps first
-    ggml_build_forward_expand(&gf_export, ggml_get_tensor(ctx0, "mtl-check"));
+    {
+        struct ggml_tensor * t = ggml_get_tensor(ctx0, "mtl-check");
+        if (!t) {
+            fprintf(stderr, "%s: failed to find tensor 'mtl-check'\n", __func__);
+            exit(1);
+        }
+        ggml_build_forward_expand(&gf_export, t);
+    }
 
     // print
     {
