@@ -207,7 +207,7 @@ def utfprint(str):
 #################################################################
 friendlymodelname = "concedo/koboldcpp"  # local kobold api apparently needs a hardcoded known HF model name
 maxctx = 2048
-maxlen = 128
+maxlen = 256
 modelbusy = False
 defaultport = 5001
 KcppVersion = "1.27"
@@ -629,7 +629,7 @@ def main(args):
 if __name__ == '__main__':
     print("Welcome to KoboldCpp - Version " + KcppVersion) # just update version manually
     # print("Python version: " + sys.version)
-    parser = argparse.ArgumentParser(description='Kobold llama.cpp server')
+    parser = argparse.ArgumentParser(description='KoboldCpp Server')
     modelgroup = parser.add_mutually_exclusive_group() #we want to be backwards compatible with the unnamed positional args
     modelgroup.add_argument("--model", help="Model file to load", nargs="?")
     modelgroup.add_argument("model_param", help="Model file to load (positional)", nargs="?")
