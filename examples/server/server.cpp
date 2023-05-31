@@ -280,7 +280,7 @@ struct llama_server_context
     for (const std::string& word : params.antiprompt) {
       size_t i = generated_text.find(word, generated_text.size() - (word.size() + token_text.size()));
       if (i != std::string::npos) {
-        generated_text.erase(generated_text.begin() + i, generated_text.begin() + i + word.size());
+        generated_text.erase(generated_text.begin() + i, generated_text.end());
         stopping_word = word;
         has_next_token = false;
         break;
