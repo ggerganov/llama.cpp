@@ -2,8 +2,8 @@
 #include "llama.h"
 #include "build-info.h"
 
-#include <httplib.h>
-#include <json.hpp>
+#include "httplib.h"
+#include "json.hpp"
 
 struct server_params
 {
@@ -161,7 +161,7 @@ struct llama_server_context
     const bool penalize_nl = params.penalize_nl;
     llama_token id = 0;
     {
-      auto logits = llama_get_logits(ctx);
+      auto *logits = llama_get_logits(ctx);
       auto n_vocab = llama_n_vocab(ctx);
 
       // Apply params.logit_bias map
@@ -692,7 +692,7 @@ int main(int argc, char **argv)
       llama.rewind();
       llama_reset_timings(llama.ctx);
 
-      if (parse_options_completion(json::parse(req.body), llama, res) == false) {
+      if (!parse_options_completion(json::parse(req.body), llama, res)) {
           return;
       }
 
@@ -847,10 +847,10 @@ int main(int argc, char **argv)
   });
 
   svr.set_exception_handler([](const Request &, Response &res, std::exception_ptr ep) {
-      auto fmt = "500 Internal Server Error\n%s";
+      const auto *fmt = "500 Internal Server Error\n%s";
       char buf[BUFSIZ];
       try {
-          std::rethrow_exception(ep);
+          std::rethrow_exception(std::move(ep));
       } catch (std::exception &e) {
           snprintf(buf, sizeof(buf), fmt, e.what());
       } catch (...) {
