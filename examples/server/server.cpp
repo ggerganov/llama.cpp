@@ -52,7 +52,7 @@ struct llama_server_context
     n_consumed = 0;
   }
 
-  bool loadModel(gpt_params params_)
+  bool loadModel(const gpt_params &params_)
   {
     params = params_;
     ctx = llama_init_from_gpt_params(params);
