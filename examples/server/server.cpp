@@ -915,10 +915,11 @@ int main(int argc, char **argv)
   svr.set_logger([](const Request& req, const Response& res) {
       json log = {
           { "status", res.status },
+          { "path", req.path },
           { "request", req.body },
           { "response", res.body },
       };
-      fprintf(stdout, "http_request: request: %s %s \nhttp_request: log: %s\n", req.method.c_str(), req.path.c_str(), log.dump().c_str());
+      fprintf(stdout, "http_request: %s\n", log.dump().c_str());
   });
 
   svr.set_exception_handler([](const Request &, Response &res, std::exception_ptr ep) {
