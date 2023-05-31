@@ -270,6 +270,127 @@ static inline void get_scale_min_k4(int j, const uint8_t * restrict q, uint8_t *
     }
 }
 
+//========================- 2-bit (de)-quantization
+
+void quantize_row_q2_K_reference(const float * restrict x, block_q2_K * restrict y, int k) {
+    assert(k % QK_K == 0);
+    const int nb = k / QK_K;
+
+    uint8_t L[QK_K];
+    float mins[QK_K/16];
+    float scales[QK_K/16];
+
+    const float q4scale = 15.f;
+
+    for (int i = 0; i < nb; i++) {
+
+        float max_scale = 0; // as we are deducting the min, scales are always positive
+        float max_min = 0;
+        for (int j = 0; j < QK_K/16; ++j) {
+            scales[j] = make_qkx1_quants(16, 3, x + 16*j, L + 16*j, &mins[j], 5);
+            float scale = scales[j];
+            if (scale > max_scale) {
+                max_scale = scale;
+            }
+            float min = mins[j];
+            if (min > max_min) {
+                max_min = min;
+            }
+        }
+
+        if (max_scale > 0) {
+            float iscale = q4scale/max_scale;
+            for (int j = 0; j < QK_K/16; ++j) {
+                int l = nearest_int(iscale*scales[j]);
+                y[i].scales[j] = l;
+            }
+            y[i].d = ggml_fp32_to_fp16(max_scale/q4scale);
+        } else {
+            for (int j = 0; j < QK_K/16; ++j) y[i].scales[j] = 0;
+            y[i].d = ggml_fp32_to_fp16(0.f);
+        }
+        if (max_min > 0) {
+            float iscale = q4scale/max_min;
+            for (int j = 0; j < QK_K/16; ++j) {
+                int l = nearest_int(iscale*mins[j]);
+                y[i].scales[j] |= (l << 4);
+            }
+            y[i].dmin = ggml_fp32_to_fp16(max_min/q4scale);
+        } else {
+            y[i].dmin = ggml_fp32_to_fp16(0.f);
+        }
+        for (int j = 0; j < QK_K/16; ++j) {
+            const float d = ggml_fp16_to_fp32(y[i].d) * (y[i].scales[j] & 0xF);
+            if (!d) continue;
+            const float dm = ggml_fp16_to_fp32(y[i].dmin) * (y[i].scales[j] >> 4);
+            for (int ii = 0; ii < 16; ++ii) {
+                int l = nearest_int((x[16*j + ii] + dm)/d);
+                l = MAX(0, MIN(3, l));
+                L[16*j + ii] = l;
+            }
+        }
+
+        for (int j = 0; j < QK_K; j += 128) {
+            for (int l = 0; l < 32; ++l) {
+                y[i].qs[j/4 + l] = L[j + l] | (L[j + l + 32] << 2) | (L[j + l + 64] << 4) | (L[j + l + 96] << 6);
+            }
+        }
+
+        x += QK_K;
+
+    }
+}
+
+void dequantize_row_q2_K(const block_q2_K * restrict x, float * restrict y, int k) {
+    assert(k % QK_K == 0);
+    const int nb = k / QK_K;
+
+    for (int i = 0; i < nb; i++) {
+
+        const float d = ggml_fp16_to_fp32(x[i].d);
+        const float min = ggml_fp16_to_fp32(x[i].dmin);
+
+        const uint8_t * q = x[i].qs;
+
+        int is = 0;
+        float dl, ml;
+        for (int n = 0; n < QK_K; n += 128) {
+            int shift = 0;
+            for (int j = 0; j < 4; ++j) {
+
+                uint8_t sc = x[i].scales[is++];
+                dl = d * (sc & 0xF); ml = min * (sc >> 4);
+                for (int l = 0; l < 16; ++l) *y++ = dl * ((int8_t)((q[l] >> shift) & 3)) - ml;
+
+                sc = x[i].scales[is++];
+                dl = d * (sc & 0xF); ml = min * (sc >> 4);
+                for (int l = 0; l < 16; ++l) *y++ = dl * ((int8_t)((q[l+16] >> shift) & 3)) - ml;
+
+                shift += 2;
+            }
+            q += 32;
+        }
+
+    }
+}
+
+void quantize_row_q2_K(const float * restrict x, void * restrict vy, int k) {
+    quantize_row_q2_K_reference(x, vy, k);
+}
+
+size_t ggml_quantize_q2_K(const float * restrict src, void * restrict dst, int n, int k, int64_t * restrict hist) {
+    const int nb = k / QK_K;
+
+    // TODO - collect histograms - although, at a second thought, I don't really care about them
+    (void)hist;
+
+    for (int j = 0; j < nb; j += k) {
+        block_q2_K * restrict y = (block_q2_K *)dst + j/QK_K;
+        quantize_row_q2_K_reference(src + j, y, k);
+    }
+    return (n/QK_K*sizeof(block_q2_K));
+}
+
 //========================= 3-bit (de)-quantization
 
 void quantize_row_q3_K_reference(const float * restrict x, block_q3_K * restrict y, int k) {

@@ -90,6 +90,14 @@ static_assert(sizeof(block_q8_0) == sizeof(ggml_fp16_t) + QK8_0, "wrong q8_0 blo
 #define QK_K 256
 
 typedef struct {
+    uint8_t scales[QK_K/16]; // scales and mins, quantized with 4 bits
+    uint8_t qs[QK_K/4];      // quants
+    half d;                  // super-block scale for quantized scales
+    half dmin;               // super-block scale for quantized mins
+} block_q2_K;
+static_assert(sizeof(block_q2_K) == 2*sizeof(ggml_fp16_t) + QK_K/16 + QK_K/4, "wrong q2_K block size/padding");
+
+typedef struct {
     uint8_t hmask[QK_K/8];
     uint8_t qs[QK_K/4]; // nibbles / quants
     uint8_t scales[3*QK_K/64];
@@ -224,6 +232,59 @@ static __device__ void dequantize_q8_0(const void * vx, const int ib, const int 
 }
 
 //================================== k-quants
+
+static __global__ void dequantize_block_q2_K(const void * vx, float * yy) {
+
+    const int i   = blockIdx.x;
+    const int tid = threadIdx.x;
+    const int n   = tid/32;
+    const int l   = tid - 32*n;
+    const int is  = 8*n + l/16;
+
+    const block_q2_K * x = (const block_q2_K *) vx;
+
+    const uint8_t q = x[i].qs[32*n + l];
+    float * y = yy + i*QK_K + 128*n;
+
+    float dall = x[i].d;
+    float dmin = x[i].dmin;
+    y[l+ 0] = dall * (x[i].scales[is+0] & 0xF) * ((q >> 0) & 3) - dmin * (x[i].scales[is+0] >> 4);
+    y[l+32] = dall * (x[i].scales[is+2] & 0xF) * ((q >> 2) & 3) - dmin * (x[i].scales[is+2] >> 4);
+    y[l+64] = dall * (x[i].scales[is+4] & 0xF) * ((q >> 4) & 3) - dmin * (x[i].scales[is+4] >> 4);
+    y[l+96] = dall * (x[i].scales[is+6] & 0xF) * ((q >> 6) & 3) - dmin * (x[i].scales[is+6] >> 4);
+
+}
+
+static __device__ void vec_dot_q2_K(const void * vx, const int ib, const int iqs, const float * yy, float & result) {
+
+    const block_q2_K * x = (const block_q2_K *) vx;
+
+    // if n is 0, we want to do the lower 128, else the upper 128,
+    // covering y[l+0],  y[l+32], y[l+64], y[l+96] and
+    //          y[l+16], y[l+48], y[l+80], y[l+112]
+    int n = iqs/128;                // 0 or 1
+    int r = iqs - 128*n;            // 0...120 in steps of 8
+    int l = r/8;                    // 0...15 in steps of 1
+
+    const float   * y = yy + 128*n + l;
+    const uint8_t * q = x[ib].qs + 32*n + l;
+    const uint8_t * s = x[ib].scales + 8*n;
+
+    const float dall = x[ib].d;
+    const float dmin = x[ib].dmin;
+
+    float sum = y[  0] * (dall * ((s[0] & 0xF) * ((q[ 0] >> 0) & 3)) - dmin * (s[0] >> 4))
+              + y[ 32] * (dall * ((s[2] & 0xF) * ((q[ 0] >> 2) & 3)) - dmin * (s[2] >> 4))
+              + y[ 64] * (dall * ((s[4] & 0xF) * ((q[ 0] >> 4) & 3)) - dmin * (s[4] >> 4))
+              + y[ 96] * (dall * ((s[6] & 0xF) * ((q[ 0] >> 6) & 3)) - dmin * (s[6] >> 4))
+              + y[ 16] * (dall * ((s[1] & 0xF) * ((q[16] >> 0) & 3)) - dmin * (s[1] >> 4))
+              + y[ 48] * (dall * ((s[3] & 0xF) * ((q[16] >> 2) & 3)) - dmin * (s[1] >> 4))
+              + y[ 80] * (dall * ((s[5] & 0xF) * ((q[16] >> 4) & 3)) - dmin * (s[5] >> 4))
+              + y[112] * (dall * ((s[7] & 0xF) * ((q[16] >> 6) & 3)) - dmin * (s[7] >> 4));
+
+    result = sum;
+
+}
 
 static __global__ void dequantize_block_q3_K(const void * vx, float * yy) {
 
@@ -625,6 +686,11 @@ static void dequantize_row_q8_0_cuda(const void * vx, float * y, const int k, cu
     dequantize_block<QK8_0, QR8_0, dequantize_q8_0><<<num_blocks, CUDA_DEQUANTIZE_BLOCK_SIZE, 0, stream>>>(vx, y, k);
 }
 
+static void dequantize_row_q2_K_cuda(const void * vx, float * y, const int k, cudaStream_t stream) {
+    const int nb = k / QK_K;
+    dequantize_block_q2_K<<<nb, 64, 0, stream>>>(vx, y);
+}
+
 static void dequantize_row_q3_K_cuda(const void * vx, float * y, const int k, cudaStream_t stream) {
     const int nb = k / QK_K;
     dequantize_block_q3_K<<<nb, 64, 0, stream>>>(vx, y);
@@ -685,6 +751,12 @@ static void dequantize_mul_mat_vec_q8_0_cuda(const void * vx, const float * y, f
         <<<nrows/GGML_CUDA_DMMV_Y, block_dims, 0, stream>>>(vx, y, dst, ncols);
 }
 
+static void dequantize_mul_mat_vec_q2_K_cuda(const void * vx, const float * y, float * dst, const int ncols, const int nrows, cudaStream_t stream) {
+    GGML_ASSERT(ncols % QK_K == 0);
+    const dim3 block_dims(32, 2, 1);
+    dequantize_mul_mat_vec_k<32, vec_dot_q2_K><<<nrows/2, block_dims, 0, stream>>>(vx, y, dst, ncols);
+}
+
 static void dequantize_mul_mat_vec_q3_K_cuda(const void * vx, const float * y, float * dst, const int ncols, const int nrows, cudaStream_t stream) {
     GGML_ASSERT(ncols % QK_K == 0);
     const dim3 block_dims(32, 2, 1);
@@ -734,6 +806,8 @@ static to_fp32_cuda_t ggml_get_to_fp32_cuda(ggml_type type) {
             return dequantize_row_q5_1_cuda;
         case GGML_TYPE_Q8_0:
             return dequantize_row_q8_0_cuda;
+        case GGML_TYPE_Q2_K:
+            return dequantize_row_q2_K_cuda;
         case GGML_TYPE_Q3_K:
             return dequantize_row_q3_K_cuda;
         case GGML_TYPE_Q4_K:
@@ -761,6 +835,8 @@ static dequantize_mul_mat_vec_cuda_t ggml_get_dequantize_mul_mat_vec_cuda(ggml_t
             return dequantize_mul_mat_vec_q5_1_cuda;
         case GGML_TYPE_Q8_0:
             return dequantize_mul_mat_vec_q8_0_cuda;
+        case GGML_TYPE_Q2_K:
+            return dequantize_mul_mat_vec_q2_K_cuda;
         case GGML_TYPE_Q3_K:
             return dequantize_mul_mat_vec_q3_K_cuda;
         case GGML_TYPE_Q4_K:
