@@ -842,16 +842,49 @@ int main(int argc, char **argv)
               "application/json");
       } else {
           const auto chunked_content_provider = [&](size_t, DataSink &sink) {
+              size_t sent_count = 0;
+              int32_t multibyte_pending = 0;
+
               while (llama.has_next_token) {
                   std::string token_text = llama.doCompletion();
 
+                  if (multibyte_pending > 0) {
+                      multibyte_pending -= token_text.size();
+                  } else if (token_text.size() == 1) {
+                      const char c = token_text[0];
+                      // 2-byte characters: 110xxxxx 10xxxxxx
+                      if ((c & 0xE0) == 0xC0) {
+                          multibyte_pending = 1;
+                      // 3-byte characters: 1110xxxx 10xxxxxx 10xxxxxx
+                      } else if ((c & 0xF0) == 0xE0) {
+                          multibyte_pending = 2;
+                      // 4-byte characters: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+                      } else if ((c & 0xF8) == 0xF0) {
+                          multibyte_pending = 3;
+                      } else {
+                          multibyte_pending = 0;
+                      }
+                  }
+
+                  if (multibyte_pending > 0) {
+                      if (!llama.has_next_token) {
+                          llama.has_next_token = true;
+                          llama.n_remain++;
+                      }
+                      continue;
+                  }
+
+                  const size_t pos = std::min(sent_count, llama.generated_text.size());
+                  std::string to_send = llama.generated_text.substr(pos);
+                  sent_count += to_send.size();
+
                   json data;
                   if (llama.has_next_token) {
-                      data = {{"content", token_text}, {"stop", false}};
+                      data = {{"content", to_send}, {"stop", false}};
                   } else {
                       // Generation is done, send extra information.
                       data = {
-                          {"content", token_text},
+                          {"content", to_send},
                           {"stop", true},
                           {"model", llama.params.model_alias},
                           {"tokens_predicted", llama.num_tokens_predicted},
