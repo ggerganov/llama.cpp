@@ -860,7 +860,12 @@ int main(int argc, char **argv)
                                     data.dump(llama.json_indent, ' ', false,
                                               json::error_handler_t::replace) +
                                     "\n\n";
-                  sink.write(str.data(), str.size());
+                  if (!sink.write(str.data(), str.size())) {
+                      if (llama.verbose) {
+                          fprintf(stderr, "stream closed\n");
+                      }
+                      return false;
+                  }
               }
 
               sink.done();
