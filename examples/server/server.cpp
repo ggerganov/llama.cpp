@@ -507,210 +507,151 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
   return true;
 }
 
-bool parse_options_completion(json body, llama_server_context& llama, Response &res) {
+bool parse_options_completion(json body, llama_server_context& llama, Response &res)
+{
   gpt_params default_params;
-  if (!body["stream"].is_null())
-  {
-      llama.stream = body["stream"].get<bool>();
+  if (!body["stream"].is_null()) {
+    llama.stream = body["stream"].get<bool>();
+  } else {
+    llama.stream = false;
   }
-  else
-  {
-      llama.stream = false;
+  if (!body["n_predict"].is_null()) {
+    llama.params.n_predict = body["n_predict"].get<int>();
+  } else {
+    llama.params.n_predict = default_params.n_predict;
   }
-  if (!body["n_predict"].is_null())
-  {
-      llama.params.n_predict = body["n_predict"].get<int>();
+  if (!body["top_k"].is_null()) {
+    llama.params.top_k = body["top_k"].get<int>();
+  } else {
+    llama.params.top_k = default_params.top_k;
   }
-  else
-  {
-      llama.params.n_predict = default_params.n_predict;
+  if (!body["top_p"].is_null()) {
+    llama.params.top_p = body["top_p"].get<float>();
+  } else {
+    llama.params.top_p = default_params.top_p;
   }
-  if (!body["top_k"].is_null())
-  {
-      llama.params.top_k = body["top_k"].get<int>();
+  if (!body["tfs_z"].is_null()) {
+    llama.params.tfs_z = body["tfs_z"].get<float>();
+  } else {
+    llama.params.tfs_z = default_params.tfs_z;
   }
-  else
-  {
-      llama.params.top_k = default_params.top_k;
+  if (!body["typical_p"].is_null()) {
+    llama.params.typical_p = body["typical_p"].get<float>();
+  } else {
+    llama.params.typical_p = default_params.typical_p;
   }
-  if (!body["top_p"].is_null())
-  {
-      llama.params.top_p = body["top_p"].get<float>();
+  if (!body["repeat_last_n"].is_null()) {
+    llama.params.repeat_last_n = body["repeat_last_n"].get<int>();
+  } else {
+    llama.params.repeat_last_n = default_params.repeat_last_n;
   }
-  else
-  {
-      llama.params.top_p = default_params.top_p;
+  if (!body["temperature"].is_null()) {
+    llama.params.temp = body["temperature"].get<float>();
+  } else {
+    llama.params.temp = default_params.temp;
   }
-  if (!body["tfs_z"].is_null())
-  {
-      llama.params.tfs_z = body["tfs_z"].get<float>();
+  if (!body["repeat_penalty"].is_null()) {
+    llama.params.repeat_penalty = body["repeat_penalty"].get<float>();
+  } else {
+    llama.params.repeat_penalty = default_params.repeat_penalty;
   }
-  else
-  {
-      llama.params.tfs_z = default_params.tfs_z;
+  if (!body["presence_penalty"].is_null()) {
+    llama.params.presence_penalty = body["presence_penalty"].get<float>();
+  } else {
+    llama.params.presence_penalty = default_params.presence_penalty;
   }
-  if (!body["typical_p"].is_null())
-  {
-      llama.params.typical_p = body["typical_p"].get<float>();
+  if (!body["frequency_penalty"].is_null()) {
+    llama.params.frequency_penalty = body["frequency_penalty"].get<float>();
+  } else {
+    llama.params.frequency_penalty = default_params.frequency_penalty;
   }
-  else
-  {
-      llama.params.typical_p = default_params.typical_p;
+  if (!body["mirostat"].is_null()) {
+    llama.params.mirostat = body["mirostat"].get<float>();
+  } else {
+    llama.params.mirostat = default_params.mirostat;
   }
-  if (!body["repeat_last_n"].is_null())
-  {
-      llama.params.repeat_last_n = body["repeat_last_n"].get<int>();
+  if (!body["mirostat_tau"].is_null()) {
+    llama.params.mirostat_tau = body["mirostat_tau"].get<float>();
+  } else {
+    llama.params.mirostat_tau = default_params.mirostat_tau;
   }
-  else
-  {
-      llama.params.repeat_last_n = default_params.repeat_last_n;
+  if (!body["mirostat_eta"].is_null()) {
+    llama.params.mirostat_eta = body["mirostat_eta"].get<float>();
+  } else {
+    llama.params.mirostat_eta = default_params.mirostat_eta;
   }
-  if (!body["temperature"].is_null())
-  {
-      llama.params.temp = body["temperature"].get<float>();
+  if (!body["penalize_nl"].is_null()) {
+    llama.params.penalize_nl = body["penalize_nl"].get<float>();
+  } else {
+    llama.params.penalize_nl = false;
   }
-  else
-  {
-      llama.params.temp = default_params.temp;
+  if (!body["n_keep"].is_null()) {
+    llama.params.n_keep = body["n_keep"].get<int>();
+  } else {
+    llama.params.n_keep = default_params.n_keep;
   }
-  if (!body["repeat_penalty"].is_null())
-  {
-      llama.params.repeat_penalty = body["repeat_penalty"].get<float>();
-  }
-  else
-  {
-      llama.params.repeat_penalty = default_params.repeat_penalty;
-  }
-  if (!body["presence_penalty"].is_null())
-  {
-      llama.params.presence_penalty = body["presence_penalty"].get<float>();
-  }
-  else
-  {
-      llama.params.presence_penalty = default_params.presence_penalty;
-  }
-  if (!body["frequency_penalty"].is_null())
-  {
-      llama.params.frequency_penalty = body["frequency_penalty"].get<float>();
-  }
-  else
-  {
-      llama.params.frequency_penalty = default_params.frequency_penalty;
-  }
-  if (!body["mirostat"].is_null())
-  {
-      llama.params.mirostat = body["mirostat"].get<float>();
-  }
-  else
-  {
-      llama.params.mirostat = default_params.mirostat;
-  }
-  if (!body["mirostat_tau"].is_null())
-  {
-      llama.params.mirostat_tau = body["mirostat_tau"].get<float>();
-  }
-  else
-  {
-      llama.params.mirostat_tau = default_params.mirostat_tau;
-  }
-  if (!body["mirostat_eta"].is_null())
-  {
-      llama.params.mirostat_eta = body["mirostat_eta"].get<float>();
-  }
-  else
-  {
-      llama.params.mirostat_eta = default_params.mirostat_eta;
-  }
-  if (!body["penalize_nl"].is_null())
-  {
-      llama.params.penalize_nl = body["penalize_nl"].get<float>();
-  }
-  else
-  {
-      llama.params.penalize_nl = default_params.penalize_nl;
-  }
-  if (!body["n_keep"].is_null())
-  {
-      llama.params.n_keep = body["n_keep"].get<int>();
-  }
-  else
-  {
-      llama.params.n_keep = default_params.n_keep;
-  }
-  if (!body["seed"].is_null())
-  {
+  if (!body["seed"].is_null()) {
     llama.params.seed = body["seed"].get<int>();
-  }
-  else
-  {
+  } else {
     llama.params.seed = time(NULL);
   }
-  if (!body["ignore_eos"].is_null() && body["ignore_eos"].get<bool>())
-  {
-      llama.params.logit_bias[llama_token_eos()] = -INFINITY;
+  if (!body["ignore_eos"].is_null() && body["ignore_eos"].get<bool>()) {
+    llama.params.logit_bias[llama_token_eos()] = -INFINITY;
+  } else {
+    llama.params.logit_bias.erase(llama_token_eos());
   }
-  else
-  {
-      llama.params.logit_bias.erase(llama_token_eos());
-  }
-  if (!body["prompt"].is_null())
-  {
+  if (!body["prompt"].is_null()) {
     llama.params.prompt = body["prompt"].get<std::string>();
-  }
-  else
-  {
-    json data = {
-        {"status", "error"},
-        {"reason", "You need to pass the prompt"}};
+  } else {
+    json data = {{"status", "error"}, {"reason", "You need to pass the prompt"}};
     res.set_content(data.dump(llama.json_indent), "application/json");
     res.status = 400;
     return false;
   }
-  if (!body["stop"].is_null())
-  {
+  if (!body["stop"].is_null()) {
     llama.params.antiprompt = body["stop"].get<std::vector<std::string>>();
-  }
-  else
-  {
-      llama.params.antiprompt.clear();
+  } else {
+    llama.params.antiprompt.clear();
   }
 
   if (llama.verbose) {
-      std::string tmp_stop =
-          std::accumulate(llama.params.antiprompt.begin(), llama.params.antiprompt.end(),
-                          std::string{}, [](std::string a, std::string b) {
-                              return a + (a != "" ? ", \"" : "\"") + b + "\"";
-                          });
+    std::string tmp_stop =
+        std::accumulate(llama.params.antiprompt.begin(), llama.params.antiprompt.end(),
+                        std::string{}, [](std::string a, std::string b) {
+                            return a + (a != "" ? ", \"" : "\"") + b + "\"";
+                        });
 
-      fprintf(stderr,
-              "-------------------------\n"
-              "/completion parameters: {\n"
-              "    stream: %d,\n"
-              "    frequency_penalty: %f,\n"
-              "    mirostat: %d,\n"
-              "    mirostat_eta: %f,\n"
-              "    mirostat_tau: %f,\n"
-              "    n_keep: %d,\n"
-              "    n_predict: %d,\n"
-              "    penalize_nl: %d,\n"
-              "    presence_penalty: %f,\n"
-              "    repeat_last_n: %d,\n"
-              "    repeat_penalty: %f,\n"
-              "    seed: %d,\n"
-              "    stop: [%s],\n"
-              "    temperature: %f,\n"
-              "    tfs_z: %f,\n"
-              "    top_k: %d,\n"
-              "    top_p: %f,\n"
-              "    typical_p: %f,\n"
-              "}\nPROMPT[%s]\n",
-              llama.stream, llama.params.frequency_penalty, llama.params.mirostat,
-              llama.params.mirostat_eta, llama.params.mirostat_tau, llama.params.n_keep,
-              llama.params.n_predict, llama.params.penalize_nl,
-              llama.params.presence_penalty, llama.params.repeat_last_n,
-              llama.params.repeat_penalty, llama.params.seed, tmp_stop.c_str(),
-              llama.params.temp, llama.params.tfs_z, llama.params.top_k,
-              llama.params.top_p, llama.params.typical_p, llama.params.prompt.c_str());
+    fprintf(stderr,
+            "-------------------------\n"
+            "/completion parameters: {\n"
+            "    stream: %d,\n"
+            "    ignore_eos: %d,\n"
+            "    frequency_penalty: %f,\n"
+            "    mirostat: %d,\n"
+            "    mirostat_eta: %f,\n"
+            "    mirostat_tau: %f,\n"
+            "    n_keep: %d,\n"
+            "    n_predict: %d,\n"
+            "    penalize_nl: %d,\n"
+            "    presence_penalty: %f,\n"
+            "    repeat_last_n: %d,\n"
+            "    repeat_penalty: %f,\n"
+            "    seed: %d,\n"
+            "    stop: [%s],\n"
+            "    temperature: %f,\n"
+            "    tfs_z: %f,\n"
+            "    top_k: %d,\n"
+            "    top_p: %f,\n"
+            "    typical_p: %f,\n"
+            "}\nPROMPT[%s]\n",
+            llama.stream, -INFINITY == llama.params.logit_bias[llama_token_eos()],
+            llama.params.frequency_penalty, llama.params.mirostat,
+            llama.params.mirostat_eta, llama.params.mirostat_tau, llama.params.n_keep,
+            llama.params.n_predict, llama.params.penalize_nl,
+            llama.params.presence_penalty, llama.params.repeat_last_n,
+            llama.params.repeat_penalty, llama.params.seed, tmp_stop.c_str(),
+            llama.params.temp, llama.params.tfs_z, llama.params.top_k, llama.params.top_p,
+            llama.params.typical_p, llama.params.prompt.c_str());
   }
 
   return true;
