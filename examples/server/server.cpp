@@ -674,6 +674,8 @@ int main(int argc, char **argv)
 
   Server svr;
 
+  svr.set_default_headers({ {"Access-Control-Allow-Origin", "*"} });
+
   svr.Get("/", [](const Request &, Response &res)
           { res.set_content("<h1>llama.cpp server works</h1>", "text/html"); });
 
