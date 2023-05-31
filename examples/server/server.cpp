@@ -654,44 +654,6 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
   return true;
 }
 
-std::string log(const Request &req, const Response &res)
-{
-    std::string s;
-
-    s += "============ REQUEST ===========\n";
-    s += "< ";
-    s += req.method;
-    s += " ";
-    s += req.path;
-    s += " ";
-    s += req.version;
-    s += "\n";
-
-    if (!req.body.empty()) {
-        std::string line;
-        std::istringstream stream(req.body);
-        while (std::getline(stream, line)) {
-            s += "< " + line + "\n";
-        }
-    }
-
-    s += "------------ RESPONSE ------------\n> ";
-    s += res.version;
-    s += " ";
-    s += std::to_string(res.status);
-    s += "\n";
-
-    if (!res.body.empty()) {
-        std::string line;
-        std::istringstream stream(res.body);
-        while (std::getline(stream, line)) {
-            s += "> " + line + "\n";
-        }
-    }
-
-    return s;
-}
-
 int main(int argc, char **argv)
 {
   llama_init_backend();
