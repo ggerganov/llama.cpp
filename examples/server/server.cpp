@@ -250,7 +250,7 @@ struct llama_server_context
         return result;
     }
 
-    has_next_token = n_remain != 0;
+    has_next_token = params.n_predict == -1 ? true : n_remain != 0;
     return result;
   }
 
