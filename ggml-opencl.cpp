@@ -701,7 +701,7 @@ static void ggml_cl_mul_f32(const ggml_tensor * src0, const ggml_tensor * src1, 
     size_t d_size;
 
     cl_mem d_X = ggml_cl_pool_malloc(ne0 * sizeof(float), &x_size, CL_MEM_READ_ONLY); // src0
-    cl_mem d_Y = *(cl_mem*) src1->data; // src1 is already on device, broadcasted.
+    cl_mem d_Y = (cl_mem) src1->data; // src1 is already on device, broadcasted.
     cl_mem d_D = ggml_cl_pool_malloc(ne0 * sizeof(float), &d_size, CL_MEM_WRITE_ONLY); // dst
 
     for (int64_t i03 = 0; i03 < ne03; i03++) {
@@ -1174,8 +1174,8 @@ void ggml_cl_load_data(const char * fname, struct ggml_tensor * tensor, const si
 
     const size_t size = ggml_nbytes(tensor);
 
-    cl_mem* dst = (cl_mem*) malloc(sizeof(cl_mem));
-    CL_CHECK((*dst = clCreateBuffer(context, CL_MEM_READ_ONLY, size, nullptr, &err), err));
+    cl_mem dst;
+    CL_CHECK((dst = clCreateBuffer(context, CL_MEM_READ_ONLY, size, nullptr, &err), err));
     void * buf_host = malloc(size);
 
 #ifdef _WIN32
@@ -1191,7 +1191,7 @@ void ggml_cl_load_data(const char * fname, struct ggml_tensor * tensor, const si
         exit(1);
     }
 
-    clEnqueueWriteBuffer(queue, *dst, CL_TRUE, 0, size, buf_host, 0, nullptr, nullptr);
+    clEnqueueWriteBuffer(queue, dst, CL_TRUE, 0, size, buf_host, 0, nullptr, nullptr);
 
     tensor->data = dst;
     free(buf_host);
