@@ -750,11 +750,8 @@ int main(int argc, char **argv)
 
   Server svr;
 
-  svr.Get("/", [](const Request &req, Response &res)
-          {
-            fprintf(stderr, "request: GET / [remote_addr: %s]", req.remote_addr.c_str());
-            res.set_content("<h1>llama.cpp server works</h1>", "text/html");
-          });
+  svr.Get("/", [](const Request &, Response &res)
+          { res.set_content("<h1>llama.cpp server works</h1>", "text/html"); });
 
   svr.Post("/completion", [&llama](const Request &req, Response &res) {
       if (llama.params.embedding) {
@@ -774,8 +771,6 @@ int main(int argc, char **argv)
       if (parse_options_completion(json::parse(req.body), llama, res) == false) {
           return;
       }
-
-      fprintf(stderr, "request: POST /completion [remote_addr: %s, stream: %s]", req.remote_addr.c_str(), llama.stream ? "true" : "false");
 
       if (!llama.loadPrompt()) {
           json data = {{"status", "error"}, {"reason", "Context too long."}};
@@ -890,7 +885,6 @@ int main(int argc, char **argv)
 
   svr.Post("/tokenize", [&llama](const Request &req, Response &res)
             {
-              fprintf(stderr, "request: POST /tokenize [remote_addr: %s]", req.remote_addr.c_str());
               json body = json::parse(req.body);
               json data = {
                     {"tokens", ::llama_tokenize(llama.ctx, body["content"].get<std::string>(), false) } };
@@ -899,7 +893,6 @@ int main(int argc, char **argv)
 
   svr.Post("/embedding", [&llama](const Request &req, Response &res)
             {
-              fprintf(stderr, "request: POST /embedding [remote_addr: %s]", req.remote_addr.c_str());
               if(!llama.params.embedding) {
                 std::vector<float> empty;
                 json data = {
@@ -920,8 +913,22 @@ int main(int argc, char **argv)
   }
 
   if (llama.verbose) {
-      svr.set_logger([](const Request &req, const Response &res) {
-          fprintf(stderr, "%s", log(req, res).c_str());
+      svr.set_logger([](const Request& req, const Response& res) {
+          json log = {
+          { "status", res.status },
+          { "request", req.body },
+          { "response", res.body },
+          };
+          fprintf(stdout, "http_request: request: %s %s \nhttp_request: log: %s\n", req.method.c_str(), req.path.c_str(), log.dump().c_str());
+      });
+  } else {
+      svr.set_logger([](const Request& req, const Response& res) {
+          json log = {
+              { "status", res.status },
+              { "request", req.body },
+              { "response", res.body },
+          };
+          fprintf(stdout, "http_request: request: %s %s \n", req.method.c_str(), req.path.c_str());
       });
   }
 
