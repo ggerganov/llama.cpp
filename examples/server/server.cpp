@@ -482,6 +482,10 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
   {
     llama.streaming = body["streaming"].get<bool>();
   }
+  else
+  {
+      llama.streaming = false;
+  }
   if (!body["n_predict"].is_null())
   {
       llama.params.n_predict = body["n_predict"].get<int>();
