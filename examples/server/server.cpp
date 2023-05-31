@@ -1,7 +1,9 @@
-#include <httplib.h>
-#include <json.hpp>
 #include "common.h"
 #include "llama.h"
+#include "build-info.h"
+
+#include <httplib.h>
+#include <json.hpp>
 
 struct server_params
 {
@@ -30,13 +32,21 @@ struct llama_server_context
   std::vector<llama_token> embd_inp;
 
   std::vector<llama_token> last_prompt_tokens;
-  llama_context *ctx;
+  llama_context *ctx = nullptr;
   gpt_params params;
 
   std::string stopping_word;
 
   bool verbose = false;
   int json_indent = -1;
+
+  ~llama_server_context()
+  {
+      if (ctx) {
+          llama_free(ctx);
+          ctx = nullptr;
+      }
+  }
 
   void rewind() {
     params.antiprompt.clear();
@@ -765,6 +775,8 @@ std::string log(const Request &req, const Response &res)
 
 int main(int argc, char **argv)
 {
+  llama_init_backend();
+
   // own arguments required by this example
   gpt_params params;
   server_params sparams;
@@ -784,6 +796,10 @@ int main(int argc, char **argv)
   if (params.model_alias == "unknown") {
     params.model_alias = params.model;
   }
+
+  fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
+  fprintf(stderr, "system_info: n_threads = %d / %d | %s\n\n", params.n_threads,
+          std::thread::hardware_concurrency(), llama_print_system_info());
 
   // load the model
   if (!llama.loadModel(params))
@@ -809,6 +825,7 @@ int main(int argc, char **argv)
       }
 
       llama.rewind();
+      llama_reset_timings(llama.ctx);
 
       if (parse_options_completion(json::parse(req.body), llama, res) == false) {
           return;
@@ -837,6 +854,11 @@ int main(int argc, char **argv)
                        {"generation_settings", format_generation_settings(llama)},
                        {"prompt", llama.params.prompt},
                        {"stopping_word", llama.stopping_word}};
+
+          if (llama.verbose) {
+              llama_print_timings(llama.ctx);
+          }
+
           return res.set_content(
               data.dump(llama.json_indent, ' ', false, json::error_handler_t::replace),
               "application/json");
@@ -894,16 +916,27 @@ int main(int argc, char **argv)
                           {"generated_text", llama.generated_text}};
                   }
 
-                  std::string str = "data: " +
-                                    data.dump(llama.json_indent, ' ', false,
-                                              json::error_handler_t::replace) +
-                                    "\n\n";
+                  std::string str =
+                      "data: " +
+                      data.dump(llama.has_next_token ? -1 : llama.json_indent, ' ', false,
+                                json::error_handler_t::replace) +
+                      "\n\n";
+
+                  if (llama.verbose) {
+                      fprintf(stderr, "to_send=%s", str.c_str());
+                  }
+
                   if (!sink.write(str.data(), str.size())) {
                       if (llama.verbose) {
                           fprintf(stderr, "stream closed\n");
+                          llama_print_timings(llama.ctx);
                       }
                       return false;
                   }
+              }
+
+              if (llama.verbose) {
+                  llama_print_timings(llama.ctx);
               }
 
               sink.done();
@@ -978,4 +1011,6 @@ int main(int argc, char **argv)
   if (!svr.listen_after_bind()) {
       return 1;
   }
+
+  return 0;
 }
