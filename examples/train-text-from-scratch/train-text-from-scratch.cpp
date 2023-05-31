@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <vector>
 #include <cassert>
+#include <climits>
 #include <cstring>
 #include <cstdarg>
 #include <ctime>
