@@ -61,7 +61,7 @@ struct llama_server_context
     std::vector<llama_token> prompt_tokens = ::llama_tokenize(ctx, params.prompt, true);
     // compare the evaluated prompt with the new prompt
     int new_prompt_len = 0;
-    for (int i = 0;i < prompt_tokens.size(); i++) {
+    for (size_t i = 0; i < prompt_tokens.size(); i++) {
       if (i < processed_tokens.size() &&
         processed_tokens[i] == prompt_tokens[i])
       {
@@ -71,7 +71,7 @@ struct llama_server_context
       {
         embd_inp.push_back(prompt_tokens[i]);
         if(new_prompt_len == 0) {
-          if(i - 1 < n_past) {
+          if(int32_t(i) - 1 < n_past) {
             processed_tokens.erase(processed_tokens.begin() + i, processed_tokens.end());
           }
           // Evaluate the new fragment prompt from the last token processed.
@@ -136,7 +136,7 @@ struct llama_server_context
     {
       // out of user input, sample next token
       const float temp = params.temp;
-      const int32_t top_k = params.top_k <= 0 ? llama_n_vocab(ctx) : params.top_k;
+      // const int32_t top_k = params.top_k <= 0 ? llama_n_vocab(ctx) : params.top_k;
       const float top_p = params.top_p;
       const float tfs_z = params.tfs_z;
       const float typical_p = params.typical_p;
@@ -306,12 +306,12 @@ struct llama_server_context
     // Avoid add the no show words to the response
     for (std::vector<llama_token> word_tokens : no_show_words)
     {
-      int match_token = 1;
+      size_t match_token = 1;
       if (tokens_predicted.front() == word_tokens.front())
       {
         bool execute_matching = true;
         if (tokens_predicted.size() > 1) { // if previus tokens had been tested
-          for (int i = 1; i < word_tokens.size(); i++)
+          for (size_t i = 1; i < word_tokens.size(); i++)
           {
             if (i >= tokens_predicted.size()) {
               match_token = i;
@@ -385,7 +385,9 @@ void server_print_usage(int /*argc*/, char **argv, const gpt_params &params)
   fprintf(stderr, "options:\n");
   fprintf(stderr, "  -h, --help            show this help message and exit\n");
   fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)\n");
-  fprintf(stderr, "  --memory_f32          use f32 instead of f16 for memory key+value\n");
+  fprintf(stderr, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
+  fprintf(stderr, "  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
+  fprintf(stderr, "                        not recommended: doubles context memory required and no measurable increase in quality\n");
   fprintf(stderr, "  --embedding           enable embedding mode\n");
   fprintf(stderr, "  --keep                number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
   if (llama_mlock_supported())
@@ -396,12 +398,16 @@ void server_print_usage(int /*argc*/, char **argv, const gpt_params &params)
   {
     fprintf(stderr, "  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
   }
+#ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
   fprintf(stderr, "  -ngl N, --n-gpu-layers N\n");
   fprintf(stderr, "                        number of layers to store in VRAM\n");
+#endif
   fprintf(stderr, "  -m FNAME, --model FNAME\n");
   fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
-  fprintf(stderr, "  -host                 ip address to listen (default 127.0.0.1)\n");
-  fprintf(stderr, "  -port PORT            port to listen (default 8080)\n");
+  fprintf(stderr, "  -a ALIAS, --alias ALIAS\n");
+  fprintf(stderr, "                        set an alias for the model, will be added as `model` field in completion response\n");
+  fprintf(stderr, "  --host                ip address to listen (default 127.0.0.1)\n");
+  fprintf(stderr, "  --port PORT           port to listen (default 8080)\n");
   fprintf(stderr, "\n");
 }
 
@@ -453,6 +459,15 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
       }
       params.model = argv[i];
     }
+    else if (arg == "-a" || arg == "--alias")
+    {
+      if (++i >= argc)
+      {
+        invalid_param = true;
+        break;
+      }
+      params.model_alias = argv[i];
+    }
     else if (arg == "--embedding")
     {
       params.embedding = true;
@@ -462,7 +477,7 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
       server_print_usage(argc, argv, default_params);
       exit(0);
     }
-    else if (arg == "-c" || arg == "--ctx_size")
+    else if (arg == "-c" || arg == "--ctx-size" || arg == "--ctx_size")
     {
       if (++i >= argc)
       {
@@ -471,7 +486,7 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
       }
       params.n_ctx = std::stoi(argv[i]);
     }
-    else if (arg == "--memory_f32")
+    else if (arg == "--memory-f32" || arg == "--memory_f32")
     {
       params.memory_f16 = false;
     }
@@ -482,7 +497,12 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
         invalid_param = true;
         break;
       }
+#ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
       params.n_gpu_layers = std::stoi(argv[i]);
+#else
+      fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");
+      fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
+#endif
     }
     else
     {
@@ -601,7 +621,7 @@ int main(int argc, char **argv)
 
   Server svr;
 
-  svr.Get("/", [](const Request &req, Response &res)
+  svr.Get("/", [](const Request &, Response &res)
           { res.set_content("<h1>llama.cpp server works</h1>", "text/html"); });
 
   svr.Post("/completion", [&llama](const Request &req, Response &res)
@@ -645,11 +665,12 @@ int main(int argc, char **argv)
                 try
                 {
                   json data = {
+                      {"model", llama.params.model_alias },
                       {"content", llama.generated_text },
                       {"tokens_predicted", llama.num_tokens_predicted}};
                   return res.set_content(data.dump(), "application/json");
                 }
-                catch (json::exception e)
+                catch (const json::exception &e)
                 {
                   // Some tokens have bad UTF-8 strings, the json parser is very sensitive
                   json data = {
@@ -701,7 +722,7 @@ int main(int argc, char **argv)
                         {"content", result },
                         {"stop", !llama.has_next_token }};
               return res.set_content(data.dump(), "application/json");
-            } catch (json::exception e) {
+            } catch (const json::exception &e) {
               // Some tokens have bad UTF-8 strings, the json parser is very sensitive
               json data = {
                         {"content", "" },
