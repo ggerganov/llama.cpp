@@ -1506,6 +1506,25 @@ static bool llama_eval_internal(
 
     if (cgraph_fname) {
         ggml_graph_export(&gf, cgraph_fname);
+
+        float * logits = (float *) ggml_get_data(inpL);
+
+        printf("logits: ");
+        for (int i = 0; i < 10; i++) {
+            printf("%8.4f ", logits[i]);
+        }
+        printf("\n");
+        double sum = 0.0;
+        int imax = 0;
+        double vmax = -INFINITY;
+        for (int i = 0; i < 32000; i++) {
+            sum += (double) logits[i];
+            if (logits[i] > vmax) {
+                vmax = logits[i];
+                imax = i;
+            }
+        }
+        printf("sum: %f, imax = %d, vmax = %f\n", sum, imax, vmax);
     }
 
 #ifdef GGML_PERF
@@ -3002,11 +3021,11 @@ int llama_eval(
 
 int llama_eval_export(struct llama_context * ctx, const char * fname) {
     // these values determine the maximum inference sizes of the exported computation graph
-    // TODO: TMP !!!
+    // TODO: need to increase buffers to support the full context
     //const int n_ctx   = ctx->model.hparams.n_ctx;
     //const int n_batch = 512;
-    const int n_ctx   = 128;
-    const int n_batch = 32;
+    const int n_batch = 1;
+    const int n_ctx   = 512 - n_batch;
 
     const std::vector<llama_token> tmp(n_batch, llama_token_bos());
 

@@ -14647,8 +14647,8 @@ static void ggml_graph_export_node(const struct ggml_tensor * tensor, const char
 }
 
 void ggml_graph_export(const struct ggml_cgraph * cgraph, const char * fname) {
-    assert(cgraph->work      == NULL);
-    assert(cgraph->work_size == 0);
+    //assert(cgraph->work      == NULL);
+    //assert(cgraph->work_size == 0);
 
     uint64_t size_eval = 0;
 

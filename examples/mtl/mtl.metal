@@ -87,25 +87,80 @@ kernel void kernel_soft_max(
         constant   int64_t & ne00,
         constant   int64_t & ne01,
         constant   int64_t & ne02,
-        uint3 tpig[[thread_position_in_grid]]) {
-    const int64_t i03 = tpig[2];
-    const int64_t i02 = tpig[1];
-    const int64_t i01 = tpig[0];
+        threadgroup float  * buf [[threadgroup(0)]],
+        uint3 tgpig[[threadgroup_position_in_grid]],
+        uint3 tpitg[[thread_position_in_threadgroup]],
+        uint3   ntg[[threads_per_threadgroup]]) {
+    const int64_t i03 = tgpig[2];
+    const int64_t i02 = tgpig[1];
+    const int64_t i01 = tgpig[0];
 
     device const float * psrc0 = src0 + i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00;
     device       float * pdst  = dst  + i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00;
 
-    float max = 0.0f;
-    for (int i = 0; i < ne00; i++) {
-        max = MAX(max, psrc0[i]);
+    //float max = 0.0f;
+    //for (int i = 0; i < ne00; i++) {
+    //    max = MAX(max, psrc0[i]);
+    //}
+    //float sum = 0.0f;
+    //for (int i = 0; i < ne00; i++) {
+    //    pdst[i] = exp(psrc0[i] - max);
+    //    sum += pdst[i];
+    //}
+    //for (int i = 0; i < ne00; i++) {
+    //    pdst[i] /= sum;
+    //}
+
+    // parallel max
+    buf[tpitg[0]] = -INFINITY;
+    for (int i00 = tpitg[0]; i00 < ne00; i00 += ntg[0]) {
+        buf[tpitg[0]] = MAX(buf[tpitg[0]], psrc0[i00]);
     }
-    float sum = 0.0f;
-    for (int i = 0; i < ne00; i++) {
-        pdst[i] = exp(psrc0[i] - max);
-        sum += pdst[i];
+
+    // reduce
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (uint i = ntg[0]/2; i > 0; i /= 2) {
+        if (tpitg[0] < i) {
+            buf[tpitg[0]] = MAX(buf[tpitg[0]], buf[tpitg[0] + i]);
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
     }
-    for (int i = 0; i < ne00; i++) {
-        pdst[i] /= sum;
+
+    // broadcast
+    if (tpitg[0] == 0) {
+        buf[0] = buf[0];
+    }
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    const float max = buf[0];
+
+    // parallel sum
+    buf[tpitg[0]] = 0.0f;
+    for (int i00 = tpitg[0]; i00 < ne00; i00 += ntg[0]) {
+        buf[tpitg[0]] += exp(psrc0[i00] - max);
+    }
+
+    // reduce
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (uint i = ntg[0]/2; i > 0; i /= 2) {
+        if (tpitg[0] < i) {
+            buf[tpitg[0]] += buf[tpitg[0] + i];
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+
+    // broadcast
+    if (tpitg[0] == 0) {
+        buf[0] = buf[0];
+    }
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    const float sum = buf[0];
+
+    for (int i00 = tpitg[0]; i00 < ne00; i00 += ntg[0]) {
+        pdst[i00] = exp(psrc0[i00] - max) / sum;
     }
 }
 
@@ -149,19 +204,39 @@ kernel void kernel_rms_norm(
         constant   int64_t & ne00,
         constant  uint64_t & nb01,
         constant     float & eps,
-        uint tpig[[thread_position_in_grid]]) {
-    device const float * x = (device const float *) ((device const char *) src0 + tpig*nb01);
+        threadgroup float  * sum [[threadgroup(0)]],
+        uint tgpig[[threadgroup_position_in_grid]],
+        uint tpitg[[thread_position_in_threadgroup]],
+        uint   ntg[[threads_per_threadgroup]]) {
+    device const float * x = (device const float *) ((device const char *) src0 + tgpig*nb01);
 
-    float sum = 0.0f;
-    for (int i00 = 0; i00 < ne00; i00++) {
-        sum += x[i00] * x[i00];
+    // parallel sum
+    sum[tpitg] = 0.0f;
+    for (int i00 = tpitg; i00 < ne00; i00 += ntg) {
+        sum[tpitg] += x[i00] * x[i00];
     }
 
-    const float mean  = sum/ne00;
+    // reduce
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (uint i = ntg/2; i > 0; i /= 2) {
+        if (tpitg < i) {
+            sum[tpitg] += sum[tpitg + i];
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+
+    // broadcast
+    if (tpitg == 0) {
+        sum[0] /= ne00;
+    }
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    const float mean  = sum[0];
     const float scale = 1.0f/sqrt(mean + eps);
 
-    device float * y = dst + tpig*ne00;
-    for (int i00 = 0; i00 < ne00; i00++) {
+    device float * y = dst + tgpig*ne00;
+    for (int i00 = tpitg; i00 < ne00; i00 += ntg) {
         y[i00] = x[i00] * scale;
     }
 }

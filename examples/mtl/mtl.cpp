@@ -41,13 +41,15 @@ int main(int argc, char ** argv) {
 
     // TODO: tmp to match the input used when creating the cgraph
     {
-        const int n_past  = 128;
-        const int n_batch = 32;
+        const int n_batch = 1;
+        const int n_past  = 512 - n_batch;
 
         const std::vector<int> tmp(n_batch, 1); // BOS
 
         // the actual inference happens here
-        llama_mtl_eval(ctx_mtl, &gf, tmp.data(), tmp.size(), n_past);
+        for (int i = 0; i < 10; ++i) {
+            llama_mtl_eval(ctx_mtl, &gf, tmp.data(), tmp.size(), n_past);
+        }
     }
 
     llama_mtl_free(ctx_mtl);

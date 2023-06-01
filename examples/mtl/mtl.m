@@ -429,14 +429,17 @@ int llama_mtl_eval(
                     const int64_t ne02 = gf->nodes[i]->src0->ne[2];
                     const int64_t ne03 = gf->nodes[i]->src0->ne[3];
 
+                    const int nth = 32;
+
                     [encoder setComputePipelineState:ctx->pipeline_soft_max];
                     [encoder setBuffer:id_src offset:offs_src0 atIndex:0];
                     [encoder setBuffer:id_dst offset:offs_dst  atIndex:1];
                     [encoder setBytes:&ne00 length:sizeof(ne00) atIndex:2];
                     [encoder setBytes:&ne01 length:sizeof(ne01) atIndex:3];
                     [encoder setBytes:&ne02 length:sizeof(ne02) atIndex:4];
+                    [encoder setThreadgroupMemoryLength:nth*sizeof(float) atIndex:0];
 
-                    [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                    [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
                 } break;
             case GGML_OP_DIAG_MASK_INF:
                 {
@@ -494,10 +497,10 @@ int llama_mtl_eval(
                     const enum ggml_type src1t = gf->nodes[i]->src1->type;
                     const enum ggml_type dstt  = gf->nodes[i]->type;
 
-                    printf("mul_mat: src0 - %s[%lld, %lld, %lld]\n", ggml_type_name(src0t), ne00, ne01, ne02);
-                    printf("mul_mat: src1 - %s[%lld, %lld, %lld]\n", ggml_type_name(src1t), ne10, ne11, ne12);
-                    printf("mul_mat: dst  - %s[%lld, %lld, %lld]\n", ggml_type_name(dstt),  ne0,  ne1,  ne2);
-                    printf("mul_mat: %s * %s -> %s\n", ggml_type_name(src0t), ggml_type_name(src1t), ggml_type_name(dstt));
+                    fprintf(stderr, "mul_mat: src0 - %s[%lld, %lld, %lld]\n", ggml_type_name(src0t), ne00, ne01, ne02);
+                    fprintf(stderr, "mul_mat: src1 - %s[%lld, %lld, %lld]\n", ggml_type_name(src1t), ne10, ne11, ne12);
+                    fprintf(stderr, "mul_mat: dst  - %s[%lld, %lld, %lld]\n", ggml_type_name(dstt),  ne0,  ne1,  ne2);
+                    fprintf(stderr, "mul_mat: %s * %s -> %s\n", ggml_type_name(src0t), ggml_type_name(src1t), ggml_type_name(dstt));
 
                     GGML_ASSERT(ne00 == ne10);
                     GGML_ASSERT(ne02 == ne12);
@@ -599,16 +602,19 @@ int llama_mtl_eval(
                     const uint64_t nb01 = gf->nodes[i]->src0->nb[1];
                     const    float eps  = 1e-6f;
 
+                    const int nth = 32;
+
                     [encoder setComputePipelineState:ctx->pipeline_rms_norm];
                     [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                     [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
                     [encoder setBytes:&ne00 length:sizeof( int64_t) atIndex:2];
                     [encoder setBytes:&nb01 length:sizeof(uint64_t) atIndex:3];
                     [encoder setBytes:&eps  length:sizeof(   float) atIndex:4];
+                    [encoder setThreadgroupMemoryLength:nth*sizeof(float) atIndex:0];
 
                     const int64_t nrows = ggml_nrows(gf->nodes[i]->src0);
 
-                    [encoder dispatchThreadgroups:MTLSizeMake(nrows, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                    [encoder dispatchThreadgroups:MTLSizeMake(nrows, 1, 1) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
                 } break;
             case GGML_OP_ROPE:
                 {
@@ -643,9 +649,9 @@ int llama_mtl_eval(
                     const int n_dims = ((int32_t *) gf->nodes[i]->src1->data)[1];
                     const int mode   = ((int32_t *) gf->nodes[i]->src1->data)[2];
 
-                    printf("rope: %lld x %lld x %lld x %lld\n", ne00, ne01, ne02, ne03);
-                    printf("rope: %lld x %lld x %lld x %lld\n", ne0,  ne1,  ne2,  ne3);
-                    printf("rope: n_past = %d, n_dims = %d, mode = %d\n", n_past, n_dims, mode);
+                    fprintf(stderr, "rope: %lld x %lld x %lld x %lld\n", ne00, ne01, ne02, ne03);
+                    fprintf(stderr, "rope: %lld x %lld x %lld x %lld\n", ne0,  ne1,  ne2,  ne3);
+                    fprintf(stderr, "rope: n_past = %d, n_dims = %d, mode = %d\n", n_past, n_dims, mode);
 
                     [encoder setComputePipelineState:ctx->pipeline_rope];
                     [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
@@ -704,11 +710,13 @@ int llama_mtl_eval(
                     const enum ggml_type src0t = gf->nodes[i]->src0->type;
                     const enum ggml_type dstt  = gf->nodes[i]->type;
 
-                    printf("cpy: %lld x %lld x %lld x %lld\n", ne00, ne01, ne02, ne03);
-                    printf("cpy: %lld x %lld x %lld x %lld\n", nb00, nb01, nb02, nb03);
-                    printf("cpy: %lld x %lld x %lld x %lld\n", ne0,  ne1,  ne2,  ne3);
-                    printf("cpy: %lld x %lld x %lld x %lld\n", nb0,  nb1,  nb2,  nb3);
-                    printf("cpy: %s -> %s\n", ggml_type_name(src0t), ggml_type_name(dstt));
+                    const int nth = 32;
+
+                    fprintf(stderr, "cpy: %lld x %lld x %lld x %lld\n", ne00, ne01, ne02, ne03);
+                    fprintf(stderr, "cpy: %lld x %lld x %lld x %lld\n", nb00, nb01, nb02, nb03);
+                    fprintf(stderr, "cpy: %lld x %lld x %lld x %lld\n", ne0,  ne1,  ne2,  ne3);
+                    fprintf(stderr, "cpy: %lld x %lld x %lld x %lld\n", nb0,  nb1,  nb2,  nb3);
+                    fprintf(stderr, "cpy: %s -> %s\n", ggml_type_name(src0t), ggml_type_name(dstt));
 
                     switch (src0t) {
                         case GGML_TYPE_F32:
@@ -741,7 +749,7 @@ int llama_mtl_eval(
                     [encoder setBytes:&nb2    length:sizeof(uint64_t) atIndex:16];
                     [encoder setBytes:&nb3    length:sizeof(uint64_t) atIndex:17];
 
-                    [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(32, 1, 1)];
+                    [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
                 } break;
             default:
                 fprintf(stderr, "%s: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
@@ -764,8 +772,6 @@ int llama_mtl_eval(
         id<MTLBuffer> id_src = llama_mtl_get_buffer(ctx, out, &offs_src0);
         id<MTLBuffer> id_dst = ctx->out;
 
-        printf("XXXXX n = %d\n", ggml_nelements(out));
-
         id<MTLBlitCommandEncoder> encoder_blit = [command_buffer blitCommandEncoder];
         [encoder_blit copyFromBuffer:id_src sourceOffset:offs_src0 toBuffer:id_dst destinationOffset:0 size:ggml_nbytes(out)];
         [encoder_blit endEncoding];
@@ -776,11 +782,28 @@ int llama_mtl_eval(
 
     {
         const double time_elapsed = [command_buffer GPUEndTime] - [command_buffer GPUStartTime];
-        fprintf(stderr, "%s: time elapsed = %f ms\n", __func__, time_elapsed * 1000.0);
+        printf("%s: time elapsed = %f ms\n", __func__, time_elapsed * 1000.0);
     }
 
     // TODO
     const float * logits = ctx->out.contents;
+
+    printf("logits: ");
+    for (int i = 0; i < 100; i++) {
+        printf("%8.4f ", logits[i]);
+    }
+    printf("\n");
+    double sum = 0.0;
+    int imax = 0;
+    double vmax = -INFINITY;
+    for (int i = 0; i < 32000; i++) {
+        sum += (double) logits[i];
+        if (logits[i] > vmax) {
+            vmax = logits[i];
+            imax = i;
+        }
+    }
+    printf("sum: %f, imax = %d, vmax = %f\n", sum, imax, vmax);
 
     //{
     //    struct ggml_tensor * t = ggml_get_tensor(ctx->ctx_eval, "mtl-check");
