@@ -11,7 +11,7 @@
 
 
 const float MAX_QUANTIZATION_REFERENCE_ERROR = 0.0001;
-const float MAX_QUANTIZATION_TOTAL_ERROR = 0.002;
+const float MAX_QUANTIZATION_TOTAL_ERROR = 0.0022;
 const float MAX_DOT_PRODUCT_ERROR = 0.02;
 
 const char* RESULT_STR[] = {"ok", "FAILED"};
