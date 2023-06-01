@@ -655,6 +655,16 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
   } else {
     llama.params.logit_bias.erase(llama_token_eos());
   }
+  if (body["logit_bias"].is_array()) {
+    int n_vocab = llama_n_vocab(llama.ctx);
+    for (const auto &el : body["logit_bias"]) {
+      if (el.is_array() && el.size() == 2 && el[0].is_number_integer() && el[1].is_number_float()) {
+        llama_token tok = el[0].get<llama_token>();
+        if (tok < 0 || tok >= n_vocab) continue;
+        llama.params.logit_bias[tok] = el[1].get<float>();
+      }
+    }
+  }
   if (!body["prompt"].is_null()) {
     llama.params.prompt = body["prompt"].get<std::string>();
   } else {
