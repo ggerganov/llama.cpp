@@ -251,7 +251,10 @@ struct llama_server_context
           id = llama_sample_token(ctx, &candidates_p);
         }
       }
-      last_n_tokens.erase(last_n_tokens.begin());
+      if (!last_n_tokens.empty())
+      {
+          last_n_tokens.erase(last_n_tokens.begin());
+      }
       last_n_tokens.push_back(id);
       num_tokens_predicted++;
     }
