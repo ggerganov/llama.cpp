@@ -53,6 +53,9 @@ struct ggml_mtl_context {
 
     id<MTLFunction>             function_cpy_f32_f16;
     id<MTLComputePipelineState> pipeline_cpy_f32_f16;
+
+    id<MTLFunction>             function_cpy_f32_f32;
+    id<MTLComputePipelineState> pipeline_cpy_f32_f32;
 };
 
 // MSL code
@@ -176,6 +179,10 @@ struct ggml_mtl_context * llama_mtl_init(
         ctx->function_cpy_f32_f16 = [ctx->library newFunctionWithName:@"kernel_cpy_f32_f16"];
         ctx->pipeline_cpy_f32_f16 = [ctx->device newComputePipelineStateWithFunction:ctx->function_cpy_f32_f16 error:nil];
         fprintf(stderr, "%s: loaded kernel_cpy_f32_f16: %p\n", __func__, (void *) ctx->pipeline_cpy_f32_f16);
+
+        ctx->function_cpy_f32_f32 = [ctx->library newFunctionWithName:@"kernel_cpy_f32_f32"];
+        ctx->pipeline_cpy_f32_f32 = [ctx->device newComputePipelineStateWithFunction:ctx->function_cpy_f32_f32 error:nil];
+        fprintf(stderr, "%s: loaded kernel_cpy_f32_f32: %p\n", __func__, (void *) ctx->pipeline_cpy_f32_f32);
     }
 
     // MTLBuffer approach
@@ -669,6 +676,7 @@ int llama_mtl_eval(
                             {
                                 switch (dstt) {
                                     case GGML_TYPE_F16: [encoder setComputePipelineState:ctx->pipeline_cpy_f32_f16]; break;
+                                    case GGML_TYPE_F32: [encoder setComputePipelineState:ctx->pipeline_cpy_f32_f32]; break;
                                     default: GGML_ASSERT(false && "not implemented");
                                 };
                             } break;

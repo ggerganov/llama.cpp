@@ -1350,11 +1350,6 @@ static bool llama_eval_internal(
                         il*n_ctx*ggml_element_size(kv_self.v)*n_embd);
             ggml_set_name(V, "V");
 
-            // TODO: TMP !!!!
-            if (il == 0) {
-                ggml_set_name(V, "mtl-check");
-            }
-
 #if 1
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
             ggml_set_name(KQV, "KQV");
@@ -1375,6 +1370,11 @@ static bool llama_eval_internal(
                     KQV_merged,
                     ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N));
             ggml_set_name(cur, "KQV_merged_contiguous");
+
+            // TODO: TMP !!!!
+            if (il == 0) {
+                ggml_set_name(cur, "mtl-check");
+            }
 
             // projection (no bias)
             cur = ggml_mul_mat(ctx0,
