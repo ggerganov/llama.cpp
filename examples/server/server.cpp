@@ -719,7 +719,10 @@ int main(int argc, char **argv)
 
   Server svr;
 
-  svr.set_default_headers({ {"Access-Control-Allow-Origin", "*"} });
+  svr.set_default_headers({
+      {"Access-Control-Allow-Origin", "*"},
+      {"Access-Control-Allow-Headers", "content-type"}
+  });
 
   svr.Get("/", [](const Request &, Response &res)
           { res.set_content("<h1>llama.cpp server works</h1>", "text/html"); });
@@ -873,6 +876,11 @@ int main(int argc, char **argv)
           res.set_chunked_content_provider("text/event-stream", chunked_content_provider);
       }
   });
+
+  svr.Options(R"(/.*)", [&llama](const Request &req, Response &res)
+            {
+                return res.set_content("", "application/json");
+            });
 
   svr.Post("/tokenize", [&llama](const Request &req, Response &res)
             {
