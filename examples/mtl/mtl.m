@@ -378,11 +378,19 @@ int llama_mtl_eval(
                     id<MTLBuffer> id_src = llama_mtl_get_buffer(ctx, gf->nodes[i]->src0, &offs_src0);
                     id<MTLBuffer> id_dst = llama_mtl_get_buffer(ctx, gf->nodes[i],       &offs_dst);
 
+                    const int64_t ne00 = gf->nodes[i]->src0->ne[0];
+                    const int64_t ne01 = gf->nodes[i]->src0->ne[1];
+                    const int64_t ne02 = gf->nodes[i]->src0->ne[2];
+                    const int64_t ne03 = gf->nodes[i]->src0->ne[3];
+
                     [encoder setComputePipelineState:ctx->pipeline_soft_max];
                     [encoder setBuffer:id_src offset:offs_src0 atIndex:0];
                     [encoder setBuffer:id_dst offset:offs_dst  atIndex:1];
+                    [encoder setBytes:&ne00 length:sizeof(ne00) atIndex:2];
+                    [encoder setBytes:&ne01 length:sizeof(ne01) atIndex:3];
+                    [encoder setBytes:&ne02 length:sizeof(ne02) atIndex:4];
 
-                    [encoder dispatchThreadgroups:MTLSizeMake(1, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                    [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                 } break;
             case GGML_OP_DIAG_MASK_INF:
                 {

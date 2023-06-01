@@ -31,9 +31,6 @@ static void dequantize_row_q4_0(device const block_q4_0 * x, device float * y, i
     }
 }
 
-// TODO: not needed
-constant int nsoftmax [[function_constant(0)]];
-
 kernel void kernel_add(
         device const float * src0,
         device const float * src1,
@@ -68,41 +65,33 @@ kernel void kernel_relu(
     dst[tpig] = max(0.0f, src0[tpig]);
 }
 
-// TODO: broken
 kernel void kernel_soft_max(
         device const float * src0,
-        device       float * dst) {
+        device       float * dst,
+        constant   int64_t & ne00,
+        constant   int64_t & ne01,
+        constant   int64_t & ne02,
+        uint3 tpig[[thread_position_in_grid]]) {
+    const int64_t i03 = tpig[2];
+    const int64_t i02 = tpig[1];
+    const int64_t i01 = tpig[0];
+
+    device const float * psrc0 = src0 + i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00;
+    device       float * pdst  = dst  + i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00;
+
     float max = 0.0f;
-    for (int i = 0; i < nsoftmax; i++) {
-        max = MAX(max, src0[i]);
+    for (int i = 0; i < ne00; i++) {
+        max = MAX(max, psrc0[i]);
     }
     float sum = 0.0f;
-    for (int i = 0; i < nsoftmax; i++) {
-        dst[i] = exp(src0[i] - max);
-        sum += dst[i];
+    for (int i = 0; i < ne00; i++) {
+        pdst[i] = exp(psrc0[i] - max);
+        sum += pdst[i];
     }
-    for (int i = 0; i < nsoftmax; i++) {
-        dst[i] /= sum;
+    for (int i = 0; i < ne00; i++) {
+        pdst[i] /= sum;
     }
 }
-
-//const int n  = ggml_nrows(src0);
-//const int nc = src0->ne[0];
-//const int nr = src0->ne[1];
-//const int nz = n/nr;
-//
-//assert( dst->nb[0] == sizeof(float));
-//assert(src0->nb[0] == sizeof(float));
-//
-//for (int k = 0; k < nz; k++) {
-//    for (int j = ith; j < nr; j += nth) {
-//        for (int i = n_past; i < nc; i++) {
-//            if (i > n_past + j) {
-//                *(float *)((char *) dst->data + k*dst->nb[2] + j*dst->nb[1] + i*dst->nb[0]) = value;
-//            }
-//        }
-//    }
-//}
 
 kernel void kernel_diag_mask_inf(
         device const float * src0,

@@ -1336,15 +1336,15 @@ static bool llama_eval_internal(
             // KQ_masked = mask_past(KQ_scaled)
             struct ggml_tensor * KQ_masked = ggml_diag_mask_inf_inplace(ctx0, KQ_scaled, n_past);
             ggml_set_name(KQ_masked, "KQ_masked");
-            // TODO: TMP !!!!
-            if (il == 0) {
-                ggml_set_name(KQ_masked, "mtl-check");
-            }
 
             // KQ = soft_max(KQ_masked)
             struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx0, KQ_masked);
             ggml_set_name(KQ_soft_max, "KQ_soft_max");
 
+            // TODO: TMP !!!!
+            if (il == 0) {
+                ggml_set_name(KQ_soft_max, "mtl-check");
+            }
 
             // split cached V into n_head heads
             struct ggml_tensor * V =
