@@ -53,6 +53,14 @@ kernel void kernel_mul(
     dst[tpig] = src0[tpig] * src1[tpig % ne00];
 }
 
+kernel void kernel_scale(
+        device const float * src0,
+        device       float * dst,
+        constant     float & scale,
+        uint tpig[[thread_position_in_grid]]) {
+    dst[tpig] = src0[tpig] * scale;
+}
+
 kernel void kernel_relu(
         device const float * src0,
         device       float * dst,

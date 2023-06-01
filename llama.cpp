@@ -1324,10 +1324,6 @@ static bool llama_eval_internal(
             // K * Q
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
             ggml_set_name(KQ, "KQ");
-            // TODO: TMP !!!!
-            if (il == 0) {
-                ggml_set_name(KQ, "mtl-check");
-            }
 
             // KQ_scaled = KQ / sqrt(n_embd/n_head)
             struct ggml_tensor * KQ_scale = ggml_new_f32(ctx0, 1.0f/sqrtf(float(n_embd)/n_head));
@@ -1336,6 +1332,10 @@ static bool llama_eval_internal(
             // KQ_scaled shape [n_past + N, N, n_head, 1]
             struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx0, KQ, KQ_scale);
             ggml_set_name(KQ_scaled, "KQ_scaled");
+            // TODO: TMP !!!!
+            if (il == 0) {
+                ggml_set_name(KQ_scaled, "mtl-check");
+            }
 
             // KQ_masked = mask_past(KQ_scaled)
             struct ggml_tensor * KQ_masked = ggml_diag_mask_inf_inplace(ctx0, KQ_scaled, n_past);
