@@ -1371,11 +1371,6 @@ static bool llama_eval_internal(
                     ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N));
             ggml_set_name(cur, "KQV_merged_contiguous");
 
-            // TODO: TMP !!!!
-            if (il == 0) {
-                ggml_set_name(cur, "mtl-check");
-            }
-
             // projection (no bias)
             cur = ggml_mul_mat(ctx0,
                     model.layers[il].wo,
@@ -1406,6 +1401,11 @@ static bool llama_eval_internal(
 
             // SILU activation
             cur = ggml_silu(ctx0, cur);
+
+            // TODO: TMP !!!!
+            if (il == 0) {
+                ggml_set_name(cur, "mtl-check");
+            }
 
             cur = ggml_mul(ctx0, cur, tmp);
 

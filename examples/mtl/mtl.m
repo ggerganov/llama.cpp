@@ -30,6 +30,9 @@ struct ggml_mtl_context {
     id<MTLFunction>             function_scale;
     id<MTLComputePipelineState> pipeline_scale;
 
+    id<MTLFunction>             function_silu;
+    id<MTLComputePipelineState> pipeline_silu;
+
     id<MTLFunction>             function_relu;
     id<MTLComputePipelineState> pipeline_relu;
 
@@ -147,6 +150,10 @@ struct ggml_mtl_context * llama_mtl_init(
         ctx->function_scale = [ctx->library newFunctionWithName:@"kernel_scale"];
         ctx->pipeline_scale = [ctx->device newComputePipelineStateWithFunction:ctx->function_scale error:nil];
         fprintf(stderr, "%s: loaded kernel_scale: %p\n", __func__, (void *) ctx->pipeline_scale);
+
+        ctx->function_silu = [ctx->library newFunctionWithName:@"kernel_silu"];
+        ctx->pipeline_silu = [ctx->device newComputePipelineStateWithFunction:ctx->function_silu error:nil];
+        fprintf(stderr, "%s: loaded kernel_silu: %p\n", __func__, (void *) ctx->pipeline_silu);
 
         ctx->function_relu = [ctx->library newFunctionWithName:@"kernel_relu"];
         ctx->pipeline_relu = [ctx->device newComputePipelineStateWithFunction:ctx->function_relu error:nil];
@@ -354,6 +361,23 @@ int llama_mtl_eval(
                     [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                     [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
                     [encoder setBytes:&scale length:sizeof(scale) atIndex:2];
+
+                    const int64_t n = ggml_nelements(gf->nodes[i]);
+
+                    [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                } break;
+            case GGML_OP_SILU:
+                {
+                    if (encoder == nil) {
+                        encoder = [command_buffer computeCommandEncoder];
+                    }
+
+                    id<MTLBuffer> id_src0 = llama_mtl_get_buffer(ctx, gf->nodes[i]->src0, &offs_src0);
+                    id<MTLBuffer> id_dst  = llama_mtl_get_buffer(ctx, gf->nodes[i],       &offs_dst);
+
+                    [encoder setComputePipelineState:ctx->pipeline_silu];
+                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                    [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
 
                     const int64_t n = ggml_nelements(gf->nodes[i]);
 
