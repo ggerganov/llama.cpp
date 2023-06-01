@@ -1289,16 +1289,22 @@ static bool llama_eval_internal(
                         (   n_ctx)*ggml_element_size(kv_self.v),
                         (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd + n_past*ggml_element_size(kv_self.v));
 
-                struct ggml_tensor * t = ggml_cpy(ctx0, Kcur, k);
-                // TODO: TMP !!!!
-                if (il == 0) {
-                    ggml_set_name(t, "mtl-check");
-                }
+                //struct ggml_tensor * t = ggml_cpy(ctx0, Vcur, v);
+                //// TODO: TMP !!!!
+                //if (il == 0) {
+                //    ggml_set_name(t, "mtl-check");
+                //}
 
                 // important: storing RoPE-ed version of K in the KV cache!
-                //ggml_build_forward_expand(&gf, ggml_cpy(ctx0, Kcur, k));
-                ggml_build_forward_expand(&gf, t);
+                ggml_build_forward_expand(&gf, ggml_cpy(ctx0, Kcur, k));
                 ggml_build_forward_expand(&gf, ggml_cpy(ctx0, Vcur, v));
+                //ggml_build_forward_expand(&gf, t);
+
+                // TODO: TMP !!!!!!!!!!
+                if (il == 0) {
+                    ggml_build_forward_expand(&gf_export, ggml_cpy(ctx0, Kcur, k));
+                    ggml_build_forward_expand(&gf_export, ggml_cpy(ctx0, Vcur, v));
+                }
             }
 
             struct ggml_tensor * Q =
@@ -1318,6 +1324,10 @@ static bool llama_eval_internal(
             // K * Q
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
             ggml_set_name(KQ, "KQ");
+            // TODO: TMP !!!!
+            if (il == 0) {
+                ggml_set_name(KQ, "mtl-check");
+            }
 
             // KQ_scaled = KQ / sqrt(n_embd/n_head)
             struct ggml_tensor * KQ_scale = ggml_new_f32(ctx0, 1.0f/sqrtf(float(n_embd)/n_head));
