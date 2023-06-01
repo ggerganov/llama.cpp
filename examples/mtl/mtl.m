@@ -752,19 +752,26 @@ int llama_mtl_eval(
             }
             printf("sum:  %f\n", sum);
         } else if (t->type == GGML_TYPE_F16) {
-            const ggml_fp16_t * data = (const ggml_fp16_t *) ctx->out.contents;
+            ggml_fp16_t * data = (const ggml_fp16_t *) ctx->out.contents;
             printf("data: ");
-            int n = ggml_nelements(t);
-            if (n > 10) {
-                n = 10;
-            }
-            for (int i = 0; i < n; i++) {
+            for (int i = 0; i < (int) t->ne[0]; i++) {
                 printf("%f ", ggml_fp16_to_fp32(data[i]));
             }
             printf("\n");
             double sum = 0.0;
-            for (int i = 0; i < ggml_nelements(t); i++) {
-                sum += ggml_fp16_to_fp32(data[i]);
+            printf("nb: %lld %lld %lld %lld\n", t->nb[0], t->nb[1], t->nb[2], t->nb[3]);
+            for (int64_t i3 = 0; i3 < t->ne[3]; ++i3) {
+                for (int64_t i2 = 0; i2 < t->ne[2]; ++i2) {
+                    for (int64_t i1 = 0; i1 < t->ne[1]; ++i1) {
+                        for (int64_t i0 = 0; i0 < t->ne[0]; ++i0) {
+                            const size_t offs = i3*t->nb[3] + i2*t->nb[2] + i1*t->nb[1] + i0*t->nb[0];
+                            const ggml_fp16_t cur = *((ggml_fp16_t *)((char *) data + offs));
+                            const float curf = ggml_fp16_to_fp32(cur);
+                            if (isinf(curf)) continue;
+                            sum += curf;
+                        }
+                    }
+                }
             }
             printf("sum:  %f\n", sum);
         } else {

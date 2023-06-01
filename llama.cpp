@@ -1341,11 +1341,6 @@ static bool llama_eval_internal(
             struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx0, KQ_masked);
             ggml_set_name(KQ_soft_max, "KQ_soft_max");
 
-            // TODO: TMP !!!!
-            if (il == 0) {
-                ggml_set_name(KQ_soft_max, "mtl-check");
-            }
-
             // split cached V into n_head heads
             struct ggml_tensor * V =
                 ggml_view_3d(ctx0, kv_self.v,
@@ -1354,6 +1349,11 @@ static bool llama_eval_internal(
                         n_ctx*ggml_element_size(kv_self.v)*n_embd/n_head,
                         il*n_ctx*ggml_element_size(kv_self.v)*n_embd);
             ggml_set_name(V, "V");
+
+            // TODO: TMP !!!!
+            if (il == 0) {
+                ggml_set_name(V, "mtl-check");
+            }
 
 #if 1
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
@@ -1479,13 +1479,24 @@ static bool llama_eval_internal(
         auto print_t_f16 = [&](struct ggml_tensor * t) {
             ggml_fp16_t * data = (ggml_fp16_t *)t->data;
             printf("data: ");
-            for (int i = 0; i < std::min((int) t->ne[0], 10); i++) {
+            for (int i = 0; i < (int) t->ne[0]; i++) {
                 printf("%f ", ggml_fp16_to_fp32(data[i]));
             }
             printf("\n");
             double sum = 0.0;
-            for (int i = 0; i < ggml_nelements(t); i++) {
-                sum += ggml_fp16_to_fp32(data[i]);
+            printf("nb: %lld %lld %lld %lld\n", t->nb[0], t->nb[1], t->nb[2], t->nb[3]);
+            for (int64_t i3 = 0; i3 < t->ne[3]; ++i3) {
+                for (int64_t i2 = 0; i2 < t->ne[2]; ++i2) {
+                    for (int64_t i1 = 0; i1 < t->ne[1]; ++i1) {
+                        for (int64_t i0 = 0; i0 < t->ne[0]; ++i0) {
+                            const size_t offs = i3*t->nb[3] + i2*t->nb[2] + i1*t->nb[1] + i0*t->nb[0];
+                            const ggml_fp16_t cur = *((ggml_fp16_t *)((char *) data + offs));
+                            const float curf = ggml_fp16_to_fp32(cur);
+                            if (isinf(curf)) continue;
+                            sum += curf;
+                        }
+                    }
+                }
             }
             printf("sum:  %f\n", sum);
         };
