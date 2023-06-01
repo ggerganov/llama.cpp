@@ -559,6 +559,7 @@ json format_generation_settings(llama_server_context &llama) {
     { "n_keep", llama.params.n_keep },
     { "ignore_eos", ignore_eos },
     { "stream", llama.stream },
+    { "logit_bias", llama.params.logit_bias },
   };
 }
 
@@ -650,10 +651,10 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
   } else {
     llama.params.seed = time(NULL);
   }
+
+  llama.params.logit_bias.clear();
   if (!body["ignore_eos"].is_null() && body["ignore_eos"].get<bool>()) {
     llama.params.logit_bias[llama_token_eos()] = -INFINITY;
-  } else {
-    llama.params.logit_bias.erase(llama_token_eos());
   }
   if (body["logit_bias"].is_array()) {
     int n_vocab = llama_n_vocab(llama.ctx);
@@ -665,6 +666,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
       }
     }
   }
+
   if (!body["prompt"].is_null()) {
     llama.params.prompt = body["prompt"].get<std::string>();
   } else {
@@ -673,6 +675,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
     res.status = 400;
     return false;
   }
+
   llama.params.antiprompt.clear();
   if (!body["stop"].is_null()) {
     const auto stop = body["stop"].get<std::vector<std::string>>();
