@@ -1402,12 +1402,12 @@ static bool llama_eval_internal(
             // SILU activation
             cur = ggml_silu(ctx0, cur);
 
+            cur = ggml_mul(ctx0, cur, tmp);
+
             // TODO: TMP !!!!
             if (il == 0) {
                 ggml_set_name(cur, "mtl-check");
             }
-
-            cur = ggml_mul(ctx0, cur, tmp);
 
             cur = ggml_mul_mat(ctx0,
                     model.layers[il].w2,

@@ -27,6 +27,10 @@ struct ggml_mtl_context {
     id<MTLFunction>             function_mul;
     id<MTLComputePipelineState> pipeline_mul;
 
+    // TODO: avoid this extra kernel, instead extend the "mul" kernel to support broadcast
+    id<MTLFunction>             function_mul_row;
+    id<MTLComputePipelineState> pipeline_mul_row;
+
     id<MTLFunction>             function_scale;
     id<MTLComputePipelineState> pipeline_scale;
 
@@ -146,6 +150,10 @@ struct ggml_mtl_context * llama_mtl_init(
         ctx->function_mul = [ctx->library newFunctionWithName:@"kernel_mul"];
         ctx->pipeline_mul = [ctx->device newComputePipelineStateWithFunction:ctx->function_mul error:nil];
         fprintf(stderr, "%s: loaded kernel_mul: %p\n", __func__, (void *) ctx->pipeline_mul);
+
+        ctx->function_mul_row = [ctx->library newFunctionWithName:@"kernel_mul_row"];
+        ctx->pipeline_mul_row = [ctx->device newComputePipelineStateWithFunction:ctx->function_mul_row error:nil];
+        fprintf(stderr, "%s: loaded kernel_mul_row: %p\n", __func__, (void *) ctx->pipeline_mul_row);
 
         ctx->function_scale = [ctx->library newFunctionWithName:@"kernel_scale"];
         ctx->pipeline_scale = [ctx->device newComputePipelineStateWithFunction:ctx->function_scale error:nil];
@@ -336,7 +344,14 @@ int llama_mtl_eval(
 
                     const int64_t ne00 = gf->nodes[i]->src0->ne[0];
 
-                    [encoder setComputePipelineState:ctx->pipeline_mul];
+                    const int64_t ne10 = gf->nodes[i]->src1->ne[0];
+
+                    if (ggml_nelements(gf->nodes[i]->src1) == ne10) {
+                        // src1 is a row
+                        [encoder setComputePipelineState:ctx->pipeline_mul_row];
+                    } else {
+                        [encoder setComputePipelineState:ctx->pipeline_mul];
+                    }
                     [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                     [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                     [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
