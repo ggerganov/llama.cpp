@@ -38,7 +38,7 @@ endif()
 
 # general
 option(LLAMA_STATIC                     "llama: static link libraries"                          OFF)
-option(LLAMA_NATIVE                     "llama: enable -march=native flag"                      OFF)
+option(LLAMA_NATIVE                     "llama: enable -march=native flag"                      ON)
 option(LLAMA_LTO                        "llama: enable link time optimization"                  OFF)
 
 # debug
@@ -109,8 +109,7 @@ else()
     message(WARNING "Git repository not found; to enable automatic generation of build info, make sure Git is installed and the project is a Git repository.")
 endif()
 
-MESSAGE("NATIVE=" ${LLAMA_NATIVE} " MSVC=" ${MSVC})
-IF(LLAMA_NATIVE AND MSVC)
+IF(LLAMA_NATIVE)
     include(cmake/FindSIMD.cmake)
 ENDIF()
 
