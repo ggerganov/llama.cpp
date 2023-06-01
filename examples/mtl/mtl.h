@@ -20,7 +20,10 @@ void llama_mtl_free(struct ggml_mtl_context * ctx);
 // return 0 on success
 int llama_mtl_eval(
         struct ggml_mtl_context * ctx,
-        struct ggml_cgraph      * gf);
+             struct ggml_cgraph * gf,
+                      const int * tokens,
+                            int   n_tokens,
+                            int   n_past);
 
 #ifdef __cplusplus
 }

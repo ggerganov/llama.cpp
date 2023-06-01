@@ -36,6 +36,9 @@ struct ggml_mtl_context {
     id<MTLFunction>             function_soft_max;
     id<MTLComputePipelineState> pipeline_soft_max;
 
+    id<MTLFunction>             function_diag_mask_inf;
+    id<MTLComputePipelineState> pipeline_diag_mask_inf;
+
     id<MTLFunction>             function_get_rows_q4_0;
     id<MTLComputePipelineState> pipeline_get_rows_q4_0;
 
@@ -150,6 +153,10 @@ struct ggml_mtl_context * llama_mtl_init(
         ctx->pipeline_soft_max = [ctx->device newComputePipelineStateWithFunction:ctx->function_soft_max error:nil];
         fprintf(stderr, "%s: loaded kernel_soft_max: %p\n", __func__, (void *) ctx->pipeline_soft_max);
 
+        ctx->function_diag_mask_inf = [ctx->library newFunctionWithName:@"kernel_diag_mask_inf" constantValues:constants error:nil];
+        ctx->pipeline_diag_mask_inf = [ctx->device newComputePipelineStateWithFunction:ctx->function_diag_mask_inf error:nil];
+        fprintf(stderr, "%s: loaded kernel_diag_mask_inf: %p\n", __func__, (void *) ctx->pipeline_diag_mask_inf);
+
         ctx->function_get_rows_q4_0 = [ctx->library newFunctionWithName:@"kernel_get_rows_q4_0"];
         ctx->pipeline_get_rows_q4_0 = [ctx->device newComputePipelineStateWithFunction:ctx->function_get_rows_q4_0 error:nil];
         fprintf(stderr, "%s: loaded kernel_get_rows_q4_0: %p\n", __func__, (void *) ctx->pipeline_get_rows_q4_0);
@@ -248,8 +255,14 @@ id<MTLBuffer> llama_mtl_get_buffer(struct ggml_mtl_context * ctx, struct ggml_te
 
 int llama_mtl_eval(
         struct ggml_mtl_context * ctx,
-        struct ggml_cgraph      * gf) {
-    fprintf(stderr, "%s: evaluating\n", __func__);
+             struct ggml_cgraph * gf,
+                      const int * tokens,
+                            int   n_tokens,
+                            int   n_past) {
+    fprintf(stderr, "%s: evaluating, n_tokens = %d, n_past = %d\n", __func__, n_tokens, n_past);
+
+    struct ggml_tensor * input = ggml_graph_get_tensor(gf, "embd");
+    memcpy(input->data, tokens, n_tokens * sizeof(int));
 
     id<MTLCommandBuffer> command_buffer  = [ctx->queue commandBuffer];
     id<MTLComputeCommandEncoder> encoder = nil;
@@ -370,6 +383,28 @@ int llama_mtl_eval(
                     [encoder setBuffer:id_dst offset:offs_dst  atIndex:1];
 
                     [encoder dispatchThreadgroups:MTLSizeMake(1, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                } break;
+            case GGML_OP_DIAG_MASK_INF:
+                {
+                    if (encoder == nil) {
+                        encoder = [command_buffer computeCommandEncoder];
+                    }
+
+                    id<MTLBuffer> id_src = llama_mtl_get_buffer(ctx, gf->nodes[i]->src0, &offs_src0);
+                    id<MTLBuffer> id_dst = llama_mtl_get_buffer(ctx, gf->nodes[i],       &offs_dst);
+
+                    const int64_t ne00 = gf->nodes[i]->src0->ne[0];
+                    const int64_t ne01 = gf->nodes[i]->src0->ne[1];
+                    const int64_t ne02 = gf->nodes[i]->src0->ne[2];
+
+                    [encoder setComputePipelineState:ctx->pipeline_diag_mask_inf];
+                    [encoder setBuffer:id_src offset:offs_src0 atIndex:0];
+                    [encoder setBuffer:id_dst offset:offs_dst  atIndex:1];
+                    [encoder setBytes:&ne00   length:sizeof(ne00) atIndex:2];
+                    [encoder setBytes:&ne01   length:sizeof(ne01) atIndex:3];
+                    [encoder setBytes:&n_past length:sizeof(int)  atIndex:4];
+
+                    [encoder dispatchThreadgroups:MTLSizeMake(ne00, ne01, ne02) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                 } break;
             case GGML_OP_MUL_MAT:
                 {
@@ -550,7 +585,7 @@ int llama_mtl_eval(
                     const uint64_t nb2 = gf->nodes[i]->nb[2];
                     const uint64_t nb3 = gf->nodes[i]->nb[3];
 
-                    const int n_past = ((int32_t *) gf->nodes[i]->src1->data)[0]; // TODO: TMP !!!!!
+                    //const int n_past = ((int32_t *) gf->nodes[i]->src1->data)[0]; // TODO: TMP !!!!!
                     const int n_dims = ((int32_t *) gf->nodes[i]->src1->data)[1];
                     const int mode   = ((int32_t *) gf->nodes[i]->src1->data)[2];
 
@@ -697,17 +732,15 @@ int llama_mtl_eval(
         if (t->type == GGML_TYPE_F32) {
             const const float * data = (float *) ctx->out.contents;
             printf("data: ");
-            int n = ggml_nelements(t);
-            if (n > 10) {
-                n = 10;
-            }
-            for (int i = 0; i < n; i++) {
+            for (int i = 0; i < (int) t->ne[0]; i++) {
                 printf("%f ", data[i]);
             }
             printf("\n");
             double sum = 0.0;
             for (int i = 0; i < ggml_nelements(t); i++) {
-                sum += data[i];
+                double cur = data[i];
+                if (isinf(cur)) continue;
+                sum += cur;
             }
             printf("sum:  %f\n", sum);
         } else if (t->type == GGML_TYPE_F16) {

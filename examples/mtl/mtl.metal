@@ -86,6 +86,42 @@ kernel void kernel_soft_max(
     }
 }
 
+//const int n  = ggml_nrows(src0);
+//const int nc = src0->ne[0];
+//const int nr = src0->ne[1];
+//const int nz = n/nr;
+//
+//assert( dst->nb[0] == sizeof(float));
+//assert(src0->nb[0] == sizeof(float));
+//
+//for (int k = 0; k < nz; k++) {
+//    for (int j = ith; j < nr; j += nth) {
+//        for (int i = n_past; i < nc; i++) {
+//            if (i > n_past + j) {
+//                *(float *)((char *) dst->data + k*dst->nb[2] + j*dst->nb[1] + i*dst->nb[0]) = value;
+//            }
+//        }
+//    }
+//}
+
+kernel void kernel_diag_mask_inf(
+        device const float * src0,
+        device       float * dst,
+        constant   int64_t & ne00,
+        constant   int64_t & ne01,
+        constant       int & n_past,
+        uint3 tpig[[thread_position_in_grid]]) {
+    const int64_t i02 = tpig[2];
+    const int64_t i01 = tpig[1];
+    const int64_t i00 = tpig[0];
+
+    if (i00 > n_past + i01) {
+        dst[i02*ne01*ne00 + i01*ne00 + i00] = -INFINITY;
+    } else {
+        dst[i02*ne01*ne00 + i01*ne00 + i00] = src0[i02*ne01*ne00 + i01*ne00 + i00];
+    }
+}
+
 kernel void kernel_get_rows_q4_0(
         device const  void * src0,
         device const   int * src1,

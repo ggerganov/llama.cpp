@@ -41,17 +41,14 @@ int main(int argc, char ** argv) {
 
     // TODO: tmp to match the input used when creating the cgraph
     {
-        const int n_ctx   = 128;
+        const int n_past  = 128;
         const int n_batch = 32;
 
         const std::vector<int> tmp(n_batch, 1); // BOS
 
-        struct ggml_tensor * input = ggml_graph_get_tensor(&gf, "embd");
-        memcpy(input->data, tmp.data(), tmp.size() * sizeof(int));
+        // the actual inference happens here
+        llama_mtl_eval(ctx_mtl, &gf, tmp.data(), tmp.size(), n_past);
     }
-
-    // the actual inference happens here
-    llama_mtl_eval(ctx_mtl, &gf);
 
     llama_mtl_free(ctx_mtl);
 

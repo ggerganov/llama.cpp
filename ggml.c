@@ -15061,7 +15061,6 @@ struct ggml_cgraph ggml_graph_import(const char * fname, struct ggml_context ** 
                             memcpy(&offs, args[2]->data, sizeof(offs));
 
                             tensor->data = ((char *) tensor->data) + offs;
-                            printf("xxxxxx offs: %zu\n", offs);
                         } break;
                     case GGML_OP_TRANSPOSE:
                         {

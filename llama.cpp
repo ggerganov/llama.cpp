@@ -1332,14 +1332,14 @@ static bool llama_eval_internal(
             // KQ_scaled shape [n_past + N, N, n_head, 1]
             struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx0, KQ, KQ_scale);
             ggml_set_name(KQ_scaled, "KQ_scaled");
-            // TODO: TMP !!!!
-            if (il == 0) {
-                ggml_set_name(KQ_scaled, "mtl-check");
-            }
 
             // KQ_masked = mask_past(KQ_scaled)
             struct ggml_tensor * KQ_masked = ggml_diag_mask_inf_inplace(ctx0, KQ_scaled, n_past);
             ggml_set_name(KQ_masked, "KQ_masked");
+            // TODO: TMP !!!!
+            if (il == 0) {
+                ggml_set_name(KQ_masked, "mtl-check");
+            }
 
             // KQ = soft_max(KQ_masked)
             struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx0, KQ_masked);
@@ -1464,12 +1464,14 @@ static bool llama_eval_internal(
         auto print_t_f32 = [&](struct ggml_tensor * t) {
             float * data = (float *)t->data;
             printf("data: ");
-            for (int i = 0; i < std::min((int) t->ne[0], 10); i++) {
+            for (int i = 0; i < (int) t->ne[0]; i++) {
                 printf("%f ", data[i]);
             }
             printf("\n");
             double sum = 0.0;
             for (int i = 0; i < ggml_nelements(t); i++) {
+                double cur = data[i];
+                if (isinf(cur)) continue;
                 sum += data[i];
             }
             printf("sum:  %f\n", sum);
