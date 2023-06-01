@@ -1012,8 +1012,10 @@ static void llama_model_load_internal(
 
 #if defined(GGML_USE_CUBLAS)
 #define LLAMA_BACKEND_OFFLOAD GGML_BACKEND_CUDA
+    fprintf(stderr, "%s: using CUDA for GPU acceleration\n", __func__);
 #elif defined(GGML_USE_CLBLAST)
 #define LLAMA_BACKEND_OFFLOAD GGML_BACKEND_CL
+    fprintf(stderr, "%s: using OpenCL for GPU acceleration\n", __func__);
 #else
 #define LLAMA_BACKEND_OFFLOAD GGML_BACKEND_CPU
 #endif
@@ -1095,22 +1097,14 @@ static void llama_model_load_internal(
         fprintf(stderr, "%s: mem required  = %7.2f MB (+ %7.2f MB per state)\n", __func__,
                 mem_required / 1024.0 / 1024.0, mem_required_state / 1024.0 / 1024.0);
 
-#if defined(GGML_USE_CUBLAS)
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
 
-        fprintf(stderr, "%s: [cublas] offloading %d layers to GPU\n", __func__, n_gpu);
+#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+        fprintf(stderr, "%s: offloading %d layers to GPU\n", __func__, n_gpu);
         if (n_gpu_layers > (int) hparams.n_layer) {
-            fprintf(stderr, "%s: [cublas] offloading output layer to GPU\n", __func__);
+            fprintf(stderr, "%s: offloading output layer to GPU\n", __func__);
         }
-        fprintf(stderr, "%s: [cublas] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
-#elif defined(GGML_USE_CLBLAST)
-        const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
-
-        fprintf(stderr, "%s: [opencl] offloading %d layers to GPU\n", __func__, n_gpu);
-        if (n_gpu_layers > (int) hparams.n_layer) {
-            fprintf(stderr, "%s: [opencl] offloading output layer to GPU\n", __func__);
-        }
-        fprintf(stderr, "%s: [opencl] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
+        fprintf(stderr, "%s: total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
 #else
         (void) n_gpu_layers;
 #endif
