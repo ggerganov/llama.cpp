@@ -17457,6 +17457,17 @@ enum ggml_opt_result ggml_opt_resume(
     *gf = ggml_build_forward (f);
     *gb = ggml_build_backward(ctx, gf, true);
 
+    return ggml_opt_resume_g(ctx, opt, f, gf, gb);
+}
+
+enum ggml_opt_result ggml_opt_resume_g(
+        struct ggml_context * ctx,
+        struct ggml_opt_context * opt,
+        struct ggml_tensor * f,
+        struct ggml_cgraph * gf,
+        struct ggml_cgraph * gb) {
+
+    // build forward + backward compute graphs
     enum ggml_opt_result result = GGML_OPT_OK;
 
     switch (opt->params.type) {
