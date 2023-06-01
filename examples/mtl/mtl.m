@@ -44,6 +44,9 @@ struct ggml_mtl_context {
 
     id<MTLFunction>             function_rope;
     id<MTLComputePipelineState> pipeline_rope;
+
+    id<MTLFunction>             function_cpy_f32_f16;
+    id<MTLComputePipelineState> pipeline_cpy_f32_f16;
 };
 
 // MSL code
@@ -155,6 +158,10 @@ struct ggml_mtl_context * llama_mtl_init(
         ctx->function_rope = [ctx->library newFunctionWithName:@"kernel_rope"];
         ctx->pipeline_rope = [ctx->device newComputePipelineStateWithFunction:ctx->function_rope error:nil];
         fprintf(stderr, "%s: loaded kernel_rope: %p\n", __func__, (void *) ctx->pipeline_rope);
+
+        ctx->function_cpy_f32_f16 = [ctx->library newFunctionWithName:@"kernel_cpy_f32_f16"];
+        ctx->pipeline_cpy_f32_f16 = [ctx->device newComputePipelineStateWithFunction:ctx->function_cpy_f32_f16 error:nil];
+        fprintf(stderr, "%s: loaded kernel_cpy_f32_f16: %p\n", __func__, (void *) ctx->pipeline_cpy_f32_f16);
     }
 
     // MTLBuffer approach
@@ -258,6 +265,7 @@ int llama_mtl_eval(
 
         switch (gf->nodes[i]->op) {
             case GGML_OP_RESHAPE:
+            case GGML_OP_VIEW:
             case GGML_OP_TRANSPOSE:
                 {
                     // noop
@@ -527,6 +535,76 @@ int llama_mtl_eval(
 
                     [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                 } break;
+            case GGML_OP_CPY:
+                {
+                    if (encoder == nil) {
+                        encoder = [command_buffer computeCommandEncoder];
+                    }
+
+                    id<MTLBuffer> id_src0 = llama_mtl_get_buffer(ctx, gf->nodes[i]->src0, &offs_src0);
+                    id<MTLBuffer> id_dst  = llama_mtl_get_buffer(ctx, gf->nodes[i],       &offs_dst);
+
+                    const int64_t ne00 = gf->nodes[i]->src0->ne[0];
+                    const int64_t ne01 = gf->nodes[i]->src0->ne[1];
+                    const int64_t ne02 = gf->nodes[i]->src0->ne[2];
+                    const int64_t ne03 = gf->nodes[i]->src0->ne[3];
+
+                    const uint64_t nb00 = gf->nodes[i]->src0->nb[0];
+                    const uint64_t nb01 = gf->nodes[i]->src0->nb[1];
+                    const uint64_t nb02 = gf->nodes[i]->src0->nb[2];
+                    const uint64_t nb03 = gf->nodes[i]->src0->nb[3];
+
+                    const int64_t ne0 = gf->nodes[i]->ne[0];
+                    const int64_t ne1 = gf->nodes[i]->ne[1];
+                    const int64_t ne2 = gf->nodes[i]->ne[2];
+                    const int64_t ne3 = gf->nodes[i]->ne[3];
+
+                    const uint64_t nb0 = gf->nodes[i]->nb[0];
+                    const uint64_t nb1 = gf->nodes[i]->nb[1];
+                    const uint64_t nb2 = gf->nodes[i]->nb[2];
+                    const uint64_t nb3 = gf->nodes[i]->nb[3];
+
+                    const enum ggml_type src0t = gf->nodes[i]->src0->type;
+                    const enum ggml_type dstt  = gf->nodes[i]->type;
+
+                    printf("cpy: %lld x %lld x %lld x %lld\n", ne00, ne01, ne02, ne03);
+                    printf("cpy: %lld x %lld x %lld x %lld\n", nb00, nb01, nb02, nb03);
+                    printf("cpy: %lld x %lld x %lld x %lld\n", ne0,  ne1,  ne2,  ne3);
+                    printf("cpy: %lld x %lld x %lld x %lld\n", nb0,  nb1,  nb2,  nb3);
+                    printf("cpy: %s -> %s\n", ggml_type_name(src0t), ggml_type_name(dstt));
+
+                    switch (src0t) {
+                        case GGML_TYPE_F32:
+                            {
+                                switch (dstt) {
+                                    case GGML_TYPE_F16: [encoder setComputePipelineState:ctx->pipeline_cpy_f32_f16]; break;
+                                    default: GGML_ASSERT(false && "not implemented");
+                                };
+                            } break;
+                        default: GGML_ASSERT(false && "not implemented");
+                    }
+
+                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                    [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
+                    [encoder setBytes:&ne00   length:sizeof( int64_t) atIndex:2];
+                    [encoder setBytes:&ne01   length:sizeof( int64_t) atIndex:3];
+                    [encoder setBytes:&ne02   length:sizeof( int64_t) atIndex:4];
+                    [encoder setBytes:&ne03   length:sizeof( int64_t) atIndex:5];
+                    [encoder setBytes:&nb00   length:sizeof(uint64_t) atIndex:6];
+                    [encoder setBytes:&nb01   length:sizeof(uint64_t) atIndex:7];
+                    [encoder setBytes:&nb02   length:sizeof(uint64_t) atIndex:8];
+                    [encoder setBytes:&nb03   length:sizeof(uint64_t) atIndex:9];
+                    [encoder setBytes:&ne0    length:sizeof( int64_t) atIndex:10];
+                    [encoder setBytes:&ne1    length:sizeof( int64_t) atIndex:11];
+                    [encoder setBytes:&ne2    length:sizeof( int64_t) atIndex:12];
+                    [encoder setBytes:&ne3    length:sizeof( int64_t) atIndex:13];
+                    [encoder setBytes:&nb0    length:sizeof(uint64_t) atIndex:14];
+                    [encoder setBytes:&nb1    length:sizeof(uint64_t) atIndex:15];
+                    [encoder setBytes:&nb2    length:sizeof(uint64_t) atIndex:16];
+                    [encoder setBytes:&nb3    length:sizeof(uint64_t) atIndex:17];
+
+                    [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(32, 1, 1)];
+                } break;
             default:
                 fprintf(stderr, "%s: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
                 GGML_ASSERT(false);
@@ -568,21 +646,41 @@ int llama_mtl_eval(
 
     {
         struct ggml_tensor * t = ggml_get_tensor(ctx->ctx_eval, "mtl-check");
-        float * data = (float *) ctx->out.contents;
-        printf("data: ");
-        int n = t->ne[0];
-        if (n > 10) {
-            n = 10;
+        if (t->type == GGML_TYPE_F32) {
+            const const float * data = (float *) ctx->out.contents;
+            printf("data: ");
+            int n = ggml_nelements(t);
+            if (n > 10) {
+                n = 10;
+            }
+            for (int i = 0; i < n; i++) {
+                printf("%f ", data[i]);
+            }
+            printf("\n");
+            double sum = 0.0;
+            for (int i = 0; i < ggml_nelements(t); i++) {
+                sum += data[i];
+            }
+            printf("sum:  %f\n", sum);
+        } else if (t->type == GGML_TYPE_F16) {
+            const ggml_fp16_t * data = (const ggml_fp16_t *) ctx->out.contents;
+            printf("data: ");
+            int n = ggml_nelements(t);
+            if (n > 10) {
+                n = 10;
+            }
+            for (int i = 0; i < n; i++) {
+                printf("%f ", ggml_fp16_to_fp32(data[i]));
+            }
+            printf("\n");
+            double sum = 0.0;
+            for (int i = 0; i < ggml_nelements(t); i++) {
+                sum += ggml_fp16_to_fp32(data[i]);
+            }
+            printf("sum:  %f\n", sum);
+        } else {
+            GGML_ASSERT(false && "not implemented");
         }
-        for (int i = 0; i < n; i++) {
-            printf("%f ", data[i]);
-        }
-        printf("\n");
-        double sum = 0.0;
-        for (int i = 0; i < ggml_nelements(t); i++) {
-            sum += data[i];
-        }
-        printf("sum:  %f\n", sum);
     }
 
     return 0;

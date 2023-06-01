@@ -1283,18 +1283,21 @@ static bool llama_eval_internal(
             {
                 // compute the transposed [N, n_embd] V matrix
                 struct ggml_tensor * Vcur = ggml_transpose(ctx0, ggml_reshape_2d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wv, cur), n_embd, N));
-                // TODO: TMP !!!!
-                if (il == 0) {
-                    ggml_set_name(Vcur, "mtl-check");
-                }
 
                 struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, N*n_embd, (ggml_element_size(kv_self.k)*n_embd)*(il*n_ctx + n_past));
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, N, n_embd,
                         (   n_ctx)*ggml_element_size(kv_self.v),
                         (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd + n_past*ggml_element_size(kv_self.v));
 
+                struct ggml_tensor * t = ggml_cpy(ctx0, Kcur, k);
+                // TODO: TMP !!!!
+                if (il == 0) {
+                    ggml_set_name(t, "mtl-check");
+                }
+
                 // important: storing RoPE-ed version of K in the KV cache!
-                ggml_build_forward_expand(&gf, ggml_cpy(ctx0, Kcur, k));
+                //ggml_build_forward_expand(&gf, ggml_cpy(ctx0, Kcur, k));
+                ggml_build_forward_expand(&gf, t);
                 ggml_build_forward_expand(&gf, ggml_cpy(ctx0, Vcur, v));
             }
 
@@ -1448,7 +1451,7 @@ static bool llama_eval_internal(
 
     // print
     {
-        auto print_t = [&](struct ggml_tensor * t) {
+        auto print_t_f32 = [&](struct ggml_tensor * t) {
             float * data = (float *)t->data;
             printf("data: ");
             for (int i = 0; i < std::min((int) t->ne[0], 10); i++) {
@@ -1461,9 +1464,36 @@ static bool llama_eval_internal(
             }
             printf("sum:  %f\n", sum);
         };
+        auto print_t_f16 = [&](struct ggml_tensor * t) {
+            ggml_fp16_t * data = (ggml_fp16_t *)t->data;
+            printf("data: ");
+            for (int i = 0; i < std::min((int) t->ne[0], 10); i++) {
+                printf("%f ", ggml_fp16_to_fp32(data[i]));
+            }
+            printf("\n");
+            double sum = 0.0;
+            for (int i = 0; i < ggml_nelements(t); i++) {
+                sum += ggml_fp16_to_fp32(data[i]);
+            }
+            printf("sum:  %f\n", sum);
+        };
 
         ggml_graph_compute(ctx0, &gf_export);
-        print_t(ggml_get_tensor(ctx0, "mtl-check"));
+
+        {
+            auto * t = ggml_get_tensor(ctx0, "mtl-check");
+            switch (t->type) {
+                case GGML_TYPE_F32:
+                    print_t_f32(t);
+                    break;
+                case GGML_TYPE_F16:
+                    print_t_f16(t);
+                    break;
+                default:
+                    fprintf(stderr, "%s: unsupported type\n", __func__);
+                    exit(1);
+            }
+        }
     }
 
     if (cgraph_fname) {
