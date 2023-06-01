@@ -725,7 +725,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     }
     if (params.top_k < 1)
     {
-        params.top_k = 300; //to disable top_k we actually need to increase this value to a very high number
+        params.top_k = 120; //to disable top_k we actually need to increase this value to a very high number
     }
     if (params.seed <= 0)
     {

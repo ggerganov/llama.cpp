@@ -162,7 +162,7 @@ def load_model(model_filename):
     ret = handle.load_model(inputs)
     return ret
 
-def generate(prompt,max_length=20, max_context_length=512,temperature=0.8,top_k=300, top_a=0.0 ,top_p=0.85, typical_p=1.0, tfs=1.0 ,rep_pen=1.1,rep_pen_range=128,seed=-1,stop_sequence=[]):
+def generate(prompt,max_length=20, max_context_length=512,temperature=0.8,top_k=120, top_a=0.0 ,top_p=0.85, typical_p=1.0, tfs=1.0 ,rep_pen=1.1,rep_pen_range=128,seed=-1,stop_sequence=[]):
     inputs = generation_inputs()
     outputs = ctypes.create_unicode_buffer(ctypes.sizeof(generation_outputs))
     inputs.prompt = prompt.encode("UTF-8")
@@ -328,7 +328,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     max_context_length=genparams.get('max_context_length', maxctx),
                     max_length=genparams.get('max_length', 50),
                     temperature=genparams.get('temperature', 0.8),
-                    top_k=genparams.get('top_k', 300),
+                    top_k=genparams.get('top_k', 120),
                     top_a=genparams.get('top_a', 0.0),
                     top_p=genparams.get('top_p', 0.85),
                     typical_p=genparams.get('typical', 1.0),
@@ -345,7 +345,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     prompt=newprompt,
                     max_length=genparams.get('max', 50),
                     temperature=genparams.get('temperature', 0.8),
-                    top_k=genparams.get('top_k', 300),
+                    top_k=genparams.get('top_k', 120),
                     top_a=genparams.get('top_a', 0.0),
                     top_p=genparams.get('top_p', 0.85),
                     typical_p=genparams.get('typical', 1.0),
