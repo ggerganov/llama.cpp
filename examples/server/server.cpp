@@ -888,7 +888,7 @@ int main(int argc, char **argv)
       }
   });
 
-  svr.Options(R"(/.*)", [&llama](const Request &req, Response &res)
+  svr.Options(R"(/.*)", [&llama](const Request &, Response &res)
             {
                 return res.set_content("", "application/json");
             });
