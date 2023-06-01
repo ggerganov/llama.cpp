@@ -638,7 +638,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
   if (!body["penalize_nl"].is_null()) {
     llama.params.penalize_nl = body["penalize_nl"].get<float>();
   } else {
-    llama.params.penalize_nl = false;
+    llama.params.penalize_nl = default_params.penalize_nl;
   }
   if (!body["n_keep"].is_null()) {
     llama.params.n_keep = body["n_keep"].get<int>();
