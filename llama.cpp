@@ -2248,12 +2248,16 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             }
 
             printf("size = %8.2f MB -> %8.2f MB | hist: ", tensor.size/1024.0/1024.0, new_size/1024.0/1024.0);
+            int64_t tot_count = 0;
             for (size_t i = 0; i < hist_cur.size(); i++) {
                 hist_all[i] += hist_cur[i];
+                tot_count += hist_cur[i];
             }
 
-            for (size_t i = 0; i < hist_cur.size(); i++) {
-                printf("%5.3f ", hist_cur[i] / float(nelements));
+            if (tot_count > 0) {
+                for (size_t i = 0; i < hist_cur.size(); i++) {
+                    printf("%5.3f ", hist_cur[i] / float(nelements));
+                }
             }
             printf("\n");
         }
@@ -2271,11 +2275,13 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             sum_all += hist_all[i];
         }
 
-        printf("%s: hist: ", __func__);
-        for (size_t i = 0; i < hist_all.size(); i++) {
-            printf("%5.3f ", hist_all[i] / float(sum_all));
+        if (sum_all > 0) {
+            printf("%s: hist: ", __func__);
+            for (size_t i = 0; i < hist_all.size(); i++) {
+                printf("%5.3f ", hist_all[i] / float(sum_all));
+            }
+            printf("\n");
         }
-        printf("\n");
     }
 }
 
