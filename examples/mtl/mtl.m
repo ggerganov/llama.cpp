@@ -52,8 +52,11 @@ struct ggml_mtl_context {
     id<MTLFunction>             function_rms_norm;
     id<MTLComputePipelineState> pipeline_rms_norm;
 
-    id<MTLFunction>             function_mul_mat_q4_0;
-    id<MTLComputePipelineState> pipeline_mul_mat_q4_0;
+    id<MTLFunction>             function_mul_mat_q4_0_f32;
+    id<MTLComputePipelineState> pipeline_mul_mat_q4_0_f32;
+
+    id<MTLFunction>             function_mul_mat_f16_f32;
+    id<MTLComputePipelineState> pipeline_mul_mat_f16_f32;
 
     id<MTLFunction>             function_rope;
     id<MTLComputePipelineState> pipeline_rope;
@@ -183,9 +186,13 @@ struct ggml_mtl_context * llama_mtl_init(
         ctx->pipeline_rms_norm = [ctx->device newComputePipelineStateWithFunction:ctx->function_rms_norm error:nil];
         fprintf(stderr, "%s: loaded kernel_rms_norm: %p\n", __func__, (void *) ctx->pipeline_rms_norm);
 
-        ctx->function_mul_mat_q4_0 = [ctx->library newFunctionWithName:@"kernel_mul_mat_q4_0"];
-        ctx->pipeline_mul_mat_q4_0 = [ctx->device newComputePipelineStateWithFunction:ctx->function_mul_mat_q4_0 error:nil];
-        fprintf(stderr, "%s: loaded kernel_mul_mat_q4_0: %p\n", __func__, (void *) ctx->pipeline_mul_mat_q4_0);
+        ctx->function_mul_mat_q4_0_f32 = [ctx->library newFunctionWithName:@"kernel_mul_mat_q4_0_f32"];
+        ctx->pipeline_mul_mat_q4_0_f32 = [ctx->device newComputePipelineStateWithFunction:ctx->function_mul_mat_q4_0_f32 error:nil];
+        fprintf(stderr, "%s: loaded kernel_mul_mat_q4_0_f32: %p\n", __func__, (void *) ctx->pipeline_mul_mat_q4_0_f32);
+
+        ctx->function_mul_mat_f16_f32 = [ctx->library newFunctionWithName:@"kernel_mul_mat_f16_f32"];
+        ctx->pipeline_mul_mat_f16_f32 = [ctx->device newComputePipelineStateWithFunction:ctx->function_mul_mat_f16_f32 error:nil];
+        fprintf(stderr, "%s: loaded kernel_mul_mat_f16_f32: %p\n", __func__, (void *) ctx->pipeline_mul_mat_f16_f32);
 
         ctx->function_rope = [ctx->library newFunctionWithName:@"kernel_rope"];
         ctx->pipeline_rope = [ctx->device newComputePipelineStateWithFunction:ctx->function_rope error:nil];
@@ -493,6 +500,8 @@ int llama_mtl_eval(
                     //const uint64_t nb1 = gf->nodes[i]->nb[1];
                     const uint64_t nb2 = gf->nodes[i]->nb[2];
 
+                    const int nth = 16;
+
                     const enum ggml_type src0t = gf->nodes[i]->src0->type;
                     const enum ggml_type src1t = gf->nodes[i]->src1->type;
                     const enum ggml_type dstt  = gf->nodes[i]->type;
@@ -505,7 +514,7 @@ int llama_mtl_eval(
                     GGML_ASSERT(ne00 == ne10);
                     GGML_ASSERT(ne02 == ne12);
 
-                    if (src0t == GGML_TYPE_F32 || src0t == GGML_TYPE_F16) {
+                    if ((src0t == GGML_TYPE_F32 || src0t == GGML_TYPE_F16) && ne11 > 1) {
                         if (encoder != nil) {
                             [encoder endEncoding];
                             encoder = nil;
@@ -528,6 +537,8 @@ int llama_mtl_eval(
                             initWithDevice:ctx->device transposeLeft:false transposeRight:true
                                 resultRows:ne11 resultColumns:ne01 interiorColumns:ne00 alpha:1.0 beta:0.0];
 
+                        // we need to do ne02 multiplications
+                        // TODO: is there a way to do this in parallel - currently very slow ..
                         for (int64_t i02 = 0; i02 < ne02; ++i02) {
                             size_t offs_src0_cur = offs_src0 + i02*nb02;
                             size_t offs_src1_cur = offs_src1 + i02*nb12;
@@ -544,8 +555,13 @@ int llama_mtl_eval(
                             encoder = [command_buffer computeCommandEncoder];
                         }
 
-                        // for Q4 x F32 we use custom kernel
-                        [encoder setComputePipelineState:ctx->pipeline_mul_mat_q4_0];
+                        // use custom matrix x vector kernel
+                        switch (src0t) {
+                            case GGML_TYPE_Q4_0: [encoder setComputePipelineState:ctx->pipeline_mul_mat_q4_0_f32]; break;
+                            case GGML_TYPE_F16:  [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32]; break;
+                            default: GGML_ASSERT(false && "not implemented");
+                        };
+
                         [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                         [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                         [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
@@ -555,9 +571,9 @@ int llama_mtl_eval(
                         [encoder setBytes:&ne11 length:sizeof(ne11) atIndex:6];
                         [encoder setBytes:&ne0  length:sizeof(ne0)  atIndex:7];
                         [encoder setBytes:&ne1  length:sizeof(ne1)  atIndex:8];
-                        [encoder setThreadgroupMemoryLength:32*sizeof(float) atIndex:0];
+                        [encoder setThreadgroupMemoryLength:nth*sizeof(float) atIndex:0];
 
-                        [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne11, 1) threadsPerThreadgroup:MTLSizeMake(32, 1, 1)];
+                        [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne11, 1) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
                     }
                 } break;
             case GGML_OP_GET_ROWS:
