@@ -559,6 +559,7 @@ json format_generation_settings(llama_server_context &llama) {
     { "n_keep", llama.params.n_keep },
     { "ignore_eos", ignore_eos },
     { "stream", llama.stream },
+    { "logit_bias", llama.params.logit_bias },
   };
 }
 
@@ -638,7 +639,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
   if (!body["penalize_nl"].is_null()) {
     llama.params.penalize_nl = body["penalize_nl"].get<float>();
   } else {
-    llama.params.penalize_nl = false;
+    llama.params.penalize_nl = default_params.penalize_nl;
   }
   if (!body["n_keep"].is_null()) {
     llama.params.n_keep = body["n_keep"].get<int>();
@@ -650,10 +651,10 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
   } else {
     llama.params.seed = time(NULL);
   }
+
+  llama.params.logit_bias.clear();
   if (!body["ignore_eos"].is_null() && body["ignore_eos"].get<bool>()) {
     llama.params.logit_bias[llama_token_eos()] = -INFINITY;
-  } else {
-    llama.params.logit_bias.erase(llama_token_eos());
   }
   if (body["logit_bias"].is_array()) {
     int n_vocab = llama_n_vocab(llama.ctx);
@@ -665,6 +666,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
       }
     }
   }
+
   if (!body["prompt"].is_null()) {
     llama.params.prompt = body["prompt"].get<std::string>();
   } else {
@@ -673,6 +675,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
     res.status = 400;
     return false;
   }
+
   llama.params.antiprompt.clear();
   if (!body["stop"].is_null()) {
     const auto stop = body["stop"].get<std::vector<std::string>>();
@@ -888,7 +891,7 @@ int main(int argc, char **argv)
       }
   });
 
-  svr.Options(R"(/.*)", [&llama](const Request &req, Response &res)
+  svr.Options(R"(/.*)", [&llama](const Request &, Response &res)
             {
                 return res.set_content("", "application/json");
             });
