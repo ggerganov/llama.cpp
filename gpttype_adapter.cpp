@@ -791,7 +791,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                             file_format == FileFormat::GPTJ_2 || 
                             file_format == FileFormat::RWKV_1 || 
                             file_format==FileFormat::RWKV_2);
-    bool blasmode = (approved_format && embd_inp.size() >= 32 && ggml_cpu_has_blas());
+    bool blasmode = (approved_format && embd_inp.size() >= 32 && ggml_cpu_has_blas() && blasbatchsize!=-1);
     // bool blasmode = false;
     int original_batch = params.n_batch;
     int original_threads = params.n_threads;
