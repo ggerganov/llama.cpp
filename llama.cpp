@@ -1243,10 +1243,6 @@ static bool llama_eval_internal(
     ggml_cgraph gf = {};
     gf.n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
 
-    // TODO: TMP !!!
-    ggml_cgraph gf_export = {};
-    gf_export.n_threads = 1;
-
     struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
     ggml_set_name(embd, "embd");
     memcpy(embd->data, tokens, N*ggml_element_size(embd));
@@ -1299,12 +1295,6 @@ static bool llama_eval_internal(
                 ggml_build_forward_expand(&gf, ggml_cpy(ctx0, Kcur, k));
                 ggml_build_forward_expand(&gf, ggml_cpy(ctx0, Vcur, v));
                 //ggml_build_forward_expand(&gf, t);
-
-                // TODO: TMP !!!!!!!!!!
-                if (il == 0) {
-                    ggml_build_forward_expand(&gf_export, ggml_cpy(ctx0, Kcur, k));
-                    ggml_build_forward_expand(&gf_export, ggml_cpy(ctx0, Vcur, v));
-                }
             }
 
             struct ggml_tensor * Q =
@@ -1404,11 +1394,6 @@ static bool llama_eval_internal(
 
             cur = ggml_mul(ctx0, cur, tmp);
 
-            // TODO: TMP !!!!
-            if (il == 0) {
-                ggml_set_name(cur, "mtl-check");
-            }
-
             cur = ggml_mul_mat(ctx0,
                     model.layers[il].w2,
                     cur);
@@ -1444,84 +1429,83 @@ static bool llama_eval_internal(
     // logits -> probs
     //inpL = ggml_soft_max_inplace(ctx0, inpL);
 
-    // TODO: TMP !!!!!!!!!!!!!!!!!!!!
     // run the computation
-    //ggml_build_forward_expand(&gf, inpL);
-    //ggml_graph_compute       (ctx0, &gf);
+    ggml_build_forward_expand(&gf, inpL);
+    ggml_graph_compute       (ctx0, &gf);
 
-    // lets export a smaller graph to get things rolling -- baby steps first
-    {
-        struct ggml_tensor * t = ggml_get_tensor(ctx0, "mtl-check");
-        if (!t) {
-            fprintf(stderr, "%s: failed to find tensor 'mtl-check'\n", __func__);
-            exit(1);
-        }
-        ggml_build_forward_expand(&gf_export, t);
-    }
+    // TODO: not needed anymore, keeping for a bit
+    //// lets export a smaller graph to get things rolling -- baby steps first
+    //{
+    //    struct ggml_tensor * t = ggml_get_tensor(ctx0, "mtl-check");
+    //    if (!t) {
+    //        fprintf(stderr, "%s: failed to find tensor 'mtl-check'\n", __func__);
+    //        exit(1);
+    //    }
+    //    ggml_build_forward_expand(&gf, t);
+    //}
 
     // print
-    {
-        auto print_t_f32 = [&](struct ggml_tensor * t) {
-            float * data = (float *)t->data;
-            printf("data: ");
-            for (int i = 0; i < (int) t->ne[0]; i++) {
-                printf("%f ", data[i]);
-            }
-            printf("\n");
-            double sum = 0.0;
-            for (int i = 0; i < ggml_nelements(t); i++) {
-                double cur = data[i];
-                if (isinf(cur)) continue;
-                sum += data[i];
-            }
-            printf("sum:  %f\n", sum);
-        };
-        auto print_t_f16 = [&](struct ggml_tensor * t) {
-            ggml_fp16_t * data = (ggml_fp16_t *)t->data;
-            printf("data: ");
-            for (int i = 0; i < (int) t->ne[0]; i++) {
-                printf("%f ", ggml_fp16_to_fp32(data[i]));
-            }
-            printf("\n");
-            double sum = 0.0;
-            printf("nb: %lld %lld %lld %lld\n", t->nb[0], t->nb[1], t->nb[2], t->nb[3]);
-            for (int64_t i3 = 0; i3 < t->ne[3]; ++i3) {
-                for (int64_t i2 = 0; i2 < t->ne[2]; ++i2) {
-                    for (int64_t i1 = 0; i1 < t->ne[1]; ++i1) {
-                        for (int64_t i0 = 0; i0 < t->ne[0]; ++i0) {
-                            const size_t offs = i3*t->nb[3] + i2*t->nb[2] + i1*t->nb[1] + i0*t->nb[0];
-                            const ggml_fp16_t cur = *((ggml_fp16_t *)((char *) data + offs));
-                            const float curf = ggml_fp16_to_fp32(cur);
-                            if (isinf(curf)) continue;
-                            sum += curf;
-                        }
-                    }
-                }
-            }
-            printf("sum:  %f\n", sum);
-        };
+    //{
+    //    auto print_t_f32 = [&](struct ggml_tensor * t) {
+    //        float * data = (float *)t->data;
+    //        printf("data: ");
+    //        for (int i = 0; i < (int) t->ne[0]; i++) {
+    //            printf("%f ", data[i]);
+    //        }
+    //        printf("\n");
+    //        double sum = 0.0;
+    //        for (int i = 0; i < ggml_nelements(t); i++) {
+    //            double cur = data[i];
+    //            if (isinf(cur)) continue;
+    //            sum += data[i];
+    //        }
+    //        printf("sum:  %f\n", sum);
+    //    };
+    //    auto print_t_f16 = [&](struct ggml_tensor * t) {
+    //        ggml_fp16_t * data = (ggml_fp16_t *)t->data;
+    //        printf("data: ");
+    //        for (int i = 0; i < (int) t->ne[0]; i++) {
+    //            printf("%f ", ggml_fp16_to_fp32(data[i]));
+    //        }
+    //        printf("\n");
+    //        double sum = 0.0;
+    //        printf("nb: %lld %lld %lld %lld\n", t->nb[0], t->nb[1], t->nb[2], t->nb[3]);
+    //        for (int64_t i3 = 0; i3 < t->ne[3]; ++i3) {
+    //            for (int64_t i2 = 0; i2 < t->ne[2]; ++i2) {
+    //                for (int64_t i1 = 0; i1 < t->ne[1]; ++i1) {
+    //                    for (int64_t i0 = 0; i0 < t->ne[0]; ++i0) {
+    //                        const size_t offs = i3*t->nb[3] + i2*t->nb[2] + i1*t->nb[1] + i0*t->nb[0];
+    //                        const ggml_fp16_t cur = *((ggml_fp16_t *)((char *) data + offs));
+    //                        const float curf = ggml_fp16_to_fp32(cur);
+    //                        if (isinf(curf)) continue;
+    //                        sum += curf;
+    //                    }
+    //                }
+    //            }
+    //        }
+    //        printf("sum:  %f\n", sum);
+    //    };
 
-        ggml_graph_compute(ctx0, &gf_export);
+    //    ggml_graph_compute(ctx0, &gf);
 
-        {
-            auto * t = ggml_get_tensor(ctx0, "mtl-check");
-            switch (t->type) {
-                case GGML_TYPE_F32:
-                    print_t_f32(t);
-                    break;
-                case GGML_TYPE_F16:
-                    print_t_f16(t);
-                    break;
-                default:
-                    fprintf(stderr, "%s: unsupported type\n", __func__);
-                    exit(1);
-            }
-        }
-    }
+    //    {
+    //        auto * t = ggml_get_tensor(ctx0, "mtl-check");
+    //        switch (t->type) {
+    //            case GGML_TYPE_F32:
+    //                print_t_f32(t);
+    //                break;
+    //            case GGML_TYPE_F16:
+    //                print_t_f16(t);
+    //                break;
+    //            default:
+    //                fprintf(stderr, "%s: unsupported type\n", __func__);
+    //                exit(1);
+    //        }
+    //    }
+    //}
 
     if (cgraph_fname) {
-        //ggml_graph_export(&gf, cgraph_fname);
-        ggml_graph_export(&gf_export, cgraph_fname);
+        ggml_graph_export(&gf, cgraph_fname);
     }
 
 #ifdef GGML_PERF
