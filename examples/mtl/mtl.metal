@@ -265,7 +265,10 @@ kernel void kernel_mul_mat_q4_0_f32(
     device const block_q4_0 * x = (device const block_q4_0 *) src0 + r0*nb;
     device const float      * y = (device const float      *) src1 + r1*ne10;
 
-    sum[tpitg.x] = 0.0f;
+    const uint nth = tptg.x*tptg.y;
+    const uint ith = 16*tpitg.x + tpitg.y;
+
+    sum[ith] = 0.0f;
 
     for (int i = tpitg.x; i < nb; i += tptg.x) {
         device const uchar * x0p = (device const uchar *) (x + i)->qs;
@@ -273,7 +276,9 @@ kernel void kernel_mul_mat_q4_0_f32(
 
         float acc = 0.0f;
 
-        for (int j = 0; j < 16; ++j) {
+        //for (int j = 0; j < 16; ++j) {
+        const int j = tpitg.y;
+        {
             const uchar x0v = *(x0p + j);
 
             const int x0 = x0v & 0x0F;
@@ -285,43 +290,50 @@ kernel void kernel_mul_mat_q4_0_f32(
             acc += (x0 - 8)*y0 + (x1 - 8)*y1;
         }
 
-        sum[tpitg.x] += acc * (x + i)->d;
+        sum[ith] += acc * (x + i)->d;
     }
 
     // accumulate the sum from all threads in the threadgroup
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    for (uint i = tptg.x/2; i > 0; i /= 2) {
-        if (tpitg.x < i) {
-            sum[tpitg.x] += sum[tpitg.x + i];
+    for (uint i = nth/2; i > 0; i /= 2) {
+        if (ith < i) {
+            sum[ith] += sum[ith + i];
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
 
-    if (tpitg.x == 0) {
+    if (ith == 0) {
         dst[r1*ne0 + r0] = sum[0];
     }
 }
 
 kernel void kernel_mul_mat_f16_f32(
-        device const  half * src0,
-        device const float * src1,
+        device const  char * src0,
+        device const  char * src1,
         device       float * dst,
         constant   int64_t & ne00,
         constant   int64_t & ne01,
+        constant  uint64_t & nb00,
+        constant  uint64_t & nb01,
+        constant  uint64_t & nb02,
         constant   int64_t & ne10,
         constant   int64_t & ne11,
+        constant  uint64_t & nb10,
+        constant  uint64_t & nb11,
+        constant  uint64_t & nb12,
         constant   int64_t & ne0,
         constant   int64_t & ne1,
         threadgroup float  * sum [[threadgroup(0)]],
-        uint2 tgpig[[threadgroup_position_in_grid]],
-        uint2  tpig[[thread_position_in_grid]],
-        uint2 tpitg[[thread_position_in_threadgroup]],
-        uint2  tptg[[threads_per_threadgroup]]) {
+        uint3 tgpig[[threadgroup_position_in_grid]],
+        uint3  tpig[[thread_position_in_grid]],
+        uint3 tpitg[[thread_position_in_threadgroup]],
+        uint3  tptg[[threads_per_threadgroup]]) {
     const int64_t r0 = tgpig.x;
     const int64_t r1 = tgpig.y;
+    const int64_t im = tgpig.z;
 
-    device const half  * x = src0 + r0*ne00;
-    device const float * y = src1 + r1*ne10;
+    device const half  * x = (device const half  *) (src0 + r0*nb01 + im*nb02);
+    device const float * y = (device const float *) (src1 + r1*nb11 + im*nb12);
 
     sum[tpitg.x] = 0.0f;
 
@@ -339,7 +351,7 @@ kernel void kernel_mul_mat_f16_f32(
     }
 
     if (tpitg.x == 0) {
-        dst[r1*ne0 + r0] = sum[0];
+        dst[im*ne1*ne0 + r1*ne0 + r0] = sum[0];
     }
 }
 

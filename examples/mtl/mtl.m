@@ -480,41 +480,41 @@ int llama_mtl_eval(
                     const int64_t ne01 = gf->nodes[i]->src0->ne[1];
                     const int64_t ne02 = gf->nodes[i]->src0->ne[2];
 
-                    //const uint64_t nb00 = gf->nodes[i]->src0->nb[0];
-                    //const uint64_t nb01 = gf->nodes[i]->src0->nb[1];
+                    const uint64_t nb00 = gf->nodes[i]->src0->nb[0];
+                    const uint64_t nb01 = gf->nodes[i]->src0->nb[1];
                     const uint64_t nb02 = gf->nodes[i]->src0->nb[2];
 
                     const int64_t ne10 = gf->nodes[i]->src1->ne[0];
                     const int64_t ne11 = gf->nodes[i]->src1->ne[1];
                     const int64_t ne12 = gf->nodes[i]->src1->ne[2];
 
-                    //const uint64_t nb10 = gf->nodes[i]->src1->nb[0];
-                    //const uint64_t nb11 = gf->nodes[i]->src1->nb[1];
+                    const uint64_t nb10 = gf->nodes[i]->src1->nb[0];
+                    const uint64_t nb11 = gf->nodes[i]->src1->nb[1];
                     const uint64_t nb12 = gf->nodes[i]->src1->nb[2];
 
                     const int64_t ne0  = gf->nodes[i]->ne[0];
                     const int64_t ne1  = gf->nodes[i]->ne[1];
                     const int64_t ne2  = gf->nodes[i]->ne[2];
 
-                    //const uint64_t nb0 = gf->nodes[i]->nb[0];
-                    //const uint64_t nb1 = gf->nodes[i]->nb[1];
+                    const uint64_t nb0 = gf->nodes[i]->nb[0];
+                    const uint64_t nb1 = gf->nodes[i]->nb[1];
                     const uint64_t nb2 = gf->nodes[i]->nb[2];
-
-                    const int nth = 16;
 
                     const enum ggml_type src0t = gf->nodes[i]->src0->type;
                     const enum ggml_type src1t = gf->nodes[i]->src1->type;
                     const enum ggml_type dstt  = gf->nodes[i]->type;
 
-                    fprintf(stderr, "mul_mat: src0 - %s[%lld, %lld, %lld]\n", ggml_type_name(src0t), ne00, ne01, ne02);
-                    fprintf(stderr, "mul_mat: src1 - %s[%lld, %lld, %lld]\n", ggml_type_name(src1t), ne10, ne11, ne12);
+                    fprintf(stderr, "mul_mat: src0 - %s[%lld, %lld, %lld], %d\n", ggml_type_name(src0t), ne00, ne01, ne02, ggml_is_contiguous(gf->nodes[i]->src0));
+                    fprintf(stderr, "mul_mat: src1 - %s[%lld, %lld, %lld], %d\n", ggml_type_name(src1t), ne10, ne11, ne12, ggml_is_contiguous(gf->nodes[i]->src1));
                     fprintf(stderr, "mul_mat: dst  - %s[%lld, %lld, %lld]\n", ggml_type_name(dstt),  ne0,  ne1,  ne2);
                     fprintf(stderr, "mul_mat: %s * %s -> %s\n", ggml_type_name(src0t), ggml_type_name(src1t), ggml_type_name(dstt));
 
                     GGML_ASSERT(ne00 == ne10);
                     GGML_ASSERT(ne02 == ne12);
 
-                    if ((src0t == GGML_TYPE_F32 || src0t == GGML_TYPE_F16) && ne11 > 1) {
+                    if (ggml_is_contiguous(gf->nodes[i]->src0) &&
+                        ggml_is_contiguous(gf->nodes[i]->src1) &&
+                        (src0t == GGML_TYPE_F32 || src0t == GGML_TYPE_F16) && ne11 > 1) {
                         if (encoder != nil) {
                             [encoder endEncoding];
                             encoder = nil;
@@ -555,25 +555,52 @@ int llama_mtl_eval(
                             encoder = [command_buffer computeCommandEncoder];
                         }
 
+                        int nth = 32;
+
                         // use custom matrix x vector kernel
                         switch (src0t) {
-                            case GGML_TYPE_Q4_0: [encoder setComputePipelineState:ctx->pipeline_mul_mat_q4_0_f32]; break;
-                            case GGML_TYPE_F16:  [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32]; break;
+                            case GGML_TYPE_Q4_0:
+                                {
+                                    GGML_ASSERT(ne02 == 1);
+                                    GGML_ASSERT(ne12 == 1);
+
+                                    nth = 4;
+                                    [encoder setComputePipelineState:ctx->pipeline_mul_mat_q4_0_f32];
+                                } break;
+                            case GGML_TYPE_F16:
+                                {
+                                    GGML_ASSERT(ne02 == ne12);
+
+                                    nth = 32;
+                                    [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32];
+                                } break;
                             default: GGML_ASSERT(false && "not implemented");
                         };
+
 
                         [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                         [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                         [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
                         [encoder setBytes:&ne00 length:sizeof(ne00) atIndex:3];
                         [encoder setBytes:&ne01 length:sizeof(ne01) atIndex:4];
-                        [encoder setBytes:&ne10 length:sizeof(ne10) atIndex:5];
-                        [encoder setBytes:&ne11 length:sizeof(ne11) atIndex:6];
-                        [encoder setBytes:&ne0  length:sizeof(ne0)  atIndex:7];
-                        [encoder setBytes:&ne1  length:sizeof(ne1)  atIndex:8];
-                        [encoder setThreadgroupMemoryLength:nth*sizeof(float) atIndex:0];
+                        [encoder setBytes:&nb00 length:sizeof(nb00) atIndex:5];
+                        [encoder setBytes:&nb01 length:sizeof(nb01) atIndex:6];
+                        [encoder setBytes:&nb02 length:sizeof(nb02) atIndex:7];
+                        [encoder setBytes:&ne10 length:sizeof(ne10) atIndex:8];
+                        [encoder setBytes:&ne11 length:sizeof(ne11) atIndex:9];
+                        [encoder setBytes:&nb10 length:sizeof(nb10) atIndex:10];
+                        [encoder setBytes:&nb11 length:sizeof(nb11) atIndex:11];
+                        [encoder setBytes:&nb12 length:sizeof(nb12) atIndex:12];
+                        [encoder setBytes:&ne0  length:sizeof(ne0)  atIndex:13];
+                        [encoder setBytes:&ne1  length:sizeof(ne1)  atIndex:14];
 
-                        [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne11, 1) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
+                        if (src0t == GGML_TYPE_Q4_0) {
+                            [encoder setThreadgroupMemoryLength:16*nth*sizeof(float) atIndex:0];
+                            [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne11, 1) threadsPerThreadgroup:MTLSizeMake(nth, 16, 1)];
+                        } else {
+                            [encoder setThreadgroupMemoryLength:nth*sizeof(float) atIndex:0];
+                            [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
+                        }
                     }
                 } break;
             case GGML_OP_GET_ROWS:
