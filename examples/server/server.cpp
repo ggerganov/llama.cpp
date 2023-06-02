@@ -567,12 +567,12 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
     llama.stream = false;
   }
   if (!body["n_predict"].is_null()) {
-    llama.params.n_predict = body["n_predict"].get<int>();
+    llama.params.n_predict = body["n_predict"].get<int32_t>();
   } else {
     llama.params.n_predict = default_params.n_predict;
   }
   if (!body["top_k"].is_null()) {
-    llama.params.top_k = body["top_k"].get<int>();
+    llama.params.top_k = body["top_k"].get<int32_t>();
   } else {
     llama.params.top_k = default_params.top_k;
   }
@@ -592,7 +592,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
     llama.params.typical_p = default_params.typical_p;
   }
   if (!body["repeat_last_n"].is_null()) {
-    llama.params.repeat_last_n = body["repeat_last_n"].get<int>();
+    llama.params.repeat_last_n = body["repeat_last_n"].get<int32_t>();
   } else {
     llama.params.repeat_last_n = default_params.repeat_last_n;
   }
@@ -617,7 +617,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
     llama.params.frequency_penalty = default_params.frequency_penalty;
   }
   if (!body["mirostat"].is_null()) {
-    llama.params.mirostat = body["mirostat"].get<float>();
+    llama.params.mirostat = body["mirostat"].get<int>();
   } else {
     llama.params.mirostat = default_params.mirostat;
   }
@@ -632,17 +632,17 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
     llama.params.mirostat_eta = default_params.mirostat_eta;
   }
   if (!body["penalize_nl"].is_null()) {
-    llama.params.penalize_nl = body["penalize_nl"].get<float>();
+    llama.params.penalize_nl = body["penalize_nl"].get<bool>();
   } else {
     llama.params.penalize_nl = default_params.penalize_nl;
   }
   if (!body["n_keep"].is_null()) {
-    llama.params.n_keep = body["n_keep"].get<int>();
+    llama.params.n_keep = body["n_keep"].get<int32_t>();
   } else {
     llama.params.n_keep = default_params.n_keep;
   }
   if (!body["seed"].is_null()) {
-    llama.params.seed = body["seed"].get<int>();
+    llama.params.seed = body["seed"].get<int32_t>();
   } else {
     llama.params.seed = time(NULL);
   }
