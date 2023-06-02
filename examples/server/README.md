@@ -8,10 +8,8 @@ Command line options:
 -   `-m FNAME`, `--model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.bin`).
 -   `-c N`, `--ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference.
 -   `-ngl N`, `--n-gpu-layers N`: When compiled with appropriate support (currently CLBlast or cuBLAS), this option allows offloading some layers to the GPU for computation. Generally results in increased performance.
--   `--embedding`: Enable the embedding mode. **Completion function doesn't work in this mode**.
 -   `--host`: Set the hostname or ip address to listen. Default `127.0.0.1`;
 -   `--port`: Set the port to listen. Default: `8080`.
-
 
 ## Quick Start
 
