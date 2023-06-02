@@ -530,7 +530,9 @@ void server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
 }
 
 json format_generation_settings(llama_server_context &llama) {
-  const bool ignore_eos = -INFINITY == llama.params.logit_bias[llama_token_eos()];
+  const auto eos_bias = llama.params.logit_bias.find(llama_token_eos());
+  const bool ignore_eos =
+      eos_bias != llama.params.logit_bias.end() && -INFINITY == eos_bias->second;
   return json {
     { "seed", llama.params.seed },
     { "temp", llama.params.temp },
