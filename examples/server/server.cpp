@@ -137,8 +137,6 @@ struct llama_server_context
   void beginCompletion()
   {
     // number of tokens to keep when resetting context
-
-
     n_remain = params.n_predict;
     llama_set_rng_seed(ctx, params.seed);
   }
@@ -192,9 +190,8 @@ struct llama_server_context
       auto n_vocab = llama_n_vocab(ctx);
 
       // Apply params.logit_bias map
-      for (auto it = params.logit_bias.begin(); it != params.logit_bias.end(); it++)
-      {
-        logits[it->first] += it->second;
+      for (const auto &it : params.logit_bias) {
+        logits[it.first] += it.second;
       }
 
       std::vector<llama_token_data> candidates;
@@ -271,7 +268,7 @@ struct llama_server_context
         return result;
     }
 
-    has_next_token = params.n_predict == -1 ? true : n_remain != 0;
+    has_next_token = params.n_predict == -1 || n_remain != 0;
     return result;
   }
 
@@ -330,7 +327,7 @@ struct llama_server_context
   std::vector<float> embedding(std::string content, int threads) {
     content.insert(0, 1, ' ');
     std::vector<llama_token> tokens = ::llama_tokenize(ctx, content, true);
-    if (tokens.size() > 0)
+    if (!tokens.empty())
     {
       if (llama_eval(ctx, tokens.data(), tokens.size(), 0, threads))
       {
@@ -340,7 +337,7 @@ struct llama_server_context
       }
     }
     const int n_embd = llama_n_embd(ctx);
-    const auto embeddings = llama_get_embeddings(ctx);
+    auto *const embeddings = llama_get_embeddings(ctx);
     std::vector<float> embeddings_(embeddings, embeddings + n_embd);
     return embeddings_;
   }
