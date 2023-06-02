@@ -107,14 +107,6 @@ This implementations just support chat style interaction.
     These words will not be included in the completion, so make sure to add them to the prompt for the next iteration.
     Default: `[]`
 
--   **POST** `hostname:port/embedding`: Generate embedding of a given text
-
-    *Options:*
-
-    `content`: Set the text to get generate the embedding.
-
-    To use this endpoint, you need to start the server with the `--embedding` option added.
-
 -   **POST** `hostname:port/tokenize`: Tokenize a given text
 
     *Options:*
