@@ -958,23 +958,34 @@ int main(int argc, char **argv)
 
   svr.Post("/embedding", [&llama](const Request &req, Response &res)
             {
+              json data;
               if(!llama.params.embedding) {
                 std::vector<float> empty;
-                json data = {
-                    {"embedding", empty}};
-                fprintf(stderr, "[llama-server] : You need enable embedding mode adding: --embedding option\n");
+                data = {
+                    {"embedding", empty},
+                    {"error", "Server is not in embedding mode."} };
+                fprintf(stderr, "[llama-server] : You need to enable embedding mode by adding --embedding when launching the server.\n");
                 return res.set_content(data.dump(llama.json_indent), "application/json");
               }
               json body = json::parse(req.body);
-              std::string content = body["content"].get<std::string>();
-              int threads = body["threads"].get<int>();
-              json data = {
-                    {"embedding", llama.embedding(content, threads) } };
+              if (body["content"].is_null()) {
+                  std::vector<float> empty;
+                  data = {
+                     {"embedding", empty},
+                     {"error", "The embedding content was not set."} };
+                  fprintf(stderr, "[llama-server] : The embedding content was not set.\n");
+              }
+              else
+              {
+                  std::string content = body["content"].get<std::string>();
+                  data = {
+                        {"embedding", llama.embedding(content, llama.params.n_threads) } };
+              }
               return res.set_content(data.dump(llama.json_indent), "application/json");
             });
 
   if(params.embedding) {
-    fprintf(stderr, "NOTE: Mode embedding enabled. Completion function doesn't work in this mode.\n");
+    fprintf(stderr, "NOTE: Embedding mode enabled. Completion is disabled in this mode.\n");
   }
 
   svr.set_logger([](const Request& req, const Response& res) {
