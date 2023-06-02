@@ -422,7 +422,6 @@ void server_print_usage(int /*argc*/, char **argv, const gpt_params &params, con
   fprintf(stderr, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
   fprintf(stderr, "  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
   fprintf(stderr, "                        not recommended: doubles context memory required and no measurable increase in quality\n");
-  fprintf(stderr, "  --keep                number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
   if (llama_mlock_supported())
   {
     fprintf(stderr, "  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
