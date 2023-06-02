@@ -25,10 +25,16 @@ GPU: A6000 (48GB VRAM)
 CPU: 7 physical cores
 RAM: 32GB
 
+Model: `TheBloke_Wizard-Vicuna-30B-Uncensored-GGML/Wizard-Vicuna-30B-Uncensored.ggmlv3.q4_0.bin` (30B parameters, 4bit quantization, GGML)
+
+Run command: `./main -m "path/to/model.bin" -p "-p "An extremely detailed description of the 10 best ethnic dishes will follow, with recipes: " -n 1000 [additional benchmark flags]`
+
 Result:
 
-| command | tokens/second |
+| command | tokens/second (higher is better) |
 | - | - |
 | -ngl 2000000 | N/A (less than 0.1) |
-| -t 7 | 1.6 |
-| -t 7 -ngl 2000000 | 8.5 |
+| -t 7 | 1.7 |
+| -t 1 -ngl 2000000 | 5.5 |
+| -t 7 -ngl 2000000 | 8.7 |
+| -t 4 -ngl 2000000 | 9.1 |
