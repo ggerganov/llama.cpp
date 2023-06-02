@@ -55,8 +55,6 @@ struct llama_server_context
 
   size_t num_tokens_predicted = 0;
   size_t n_past = 0;
-  size_t n_consumed = 0;
-  size_t n_session_consumed = 0;
   size_t n_remain = 0;
 
   std::vector<llama_token> embd;
@@ -87,7 +85,6 @@ struct llama_server_context
 
     n_remain = 0;
     n_past = 0;
-    n_consumed = 0;
   }
 
   bool loadModel(const gpt_params &params_)
