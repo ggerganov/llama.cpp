@@ -293,8 +293,6 @@ Building the program with BLAS support may lead to some performance improvements
   cmake --build . -config Release
   ```
 
-<a name="cublas"></a>
-
 - #### cuBLAS
 
   This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
