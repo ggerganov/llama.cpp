@@ -108,20 +108,6 @@ struct ggml_mtl_context * llama_mtl_init(
             exit(1);
         }
     }
-#elif 0
-    // this does not work !?!?!
-
-    // load library from "mtl.metallib"
-    {
-        NSError * error = nil;
-
-        NSString * path = [[NSBundle mainBundle] pathForResource:@"./mtl" ofType:@"metallib"];
-        ctx->library = [ctx->device newLibraryWithFile:path error:&error];
-        if (error) {
-            fprintf(stderr, "%s: error: %s\n", __func__, [[error description] UTF8String]);
-            exit(1);
-        }
-    }
 #else
     // read the source from "../examples/mtl/mtl.metal" into a string and use newLibraryWithSource
     {

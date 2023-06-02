@@ -24,6 +24,31 @@ int main(int argc, char ** argv) {
     struct ggml_cgraph gf = ggml_graph_import(fname_cgraph, &ctx_data, &ctx_eval);
     gf.n_threads = 1;
 
+    {
+        struct ggml_tensor * t_vocab = ggml_graph_get_tensor(&gf, "vocab");
+        if (t_vocab == NULL) {
+            fprintf(stderr, "%s: vocab tensor not found\n", __func__);
+            return -1;
+        }
+
+        const char * ptr = (const char *) t_vocab->data;
+
+        int32_t n_vocab = 0;
+        memcpy(&n_vocab, ptr, sizeof(n_vocab)); ptr += sizeof(n_vocab);
+
+        printf("%s: n_vocab = %d\n", __func__, n_vocab);
+
+        for (int i = 0; i < 512; ++i) {
+            char text[32];
+            float score;
+
+            memcpy(text,   ptr, sizeof(text));  ptr += sizeof(text);
+            memcpy(&score, ptr, sizeof(score)); ptr += sizeof(score);
+
+            printf("%s: token[%4d] = %16.*s, score = %6.2f\n", __func__, i, (int) sizeof(text), text, score);
+        }
+    }
+
     // allocate work context
     static size_t buf_size = gf.work_size; // TODO
     static void * buf = malloc(buf_size);

@@ -1505,7 +1505,49 @@ static bool llama_eval_internal(
     //}
 
     if (cgraph_fname) {
-        ggml_graph_export(&gf, cgraph_fname);
+        // TODO: tmp add the vocabulary as a leaf to the computation graph, until better approach is found
+        {
+            char tmp[32]; // max token length
+
+            // store null-terminated string for simplicity
+            std::vector<uint8_t> buf_vocab(sizeof(int32_t) + n_vocab*(32 + sizeof(float)));
+
+            uint64_t offs = 0;
+
+            {
+                const int32_t n = n_vocab;
+                memcpy(&buf_vocab[offs], &n, sizeof(n)); offs += sizeof(n);
+            }
+
+            for (int i = 0; i < n_vocab; i++) {
+                const int32_t id = i;
+
+                const float score = lctx.vocab.id_to_token[id].score;
+                const std::string text = lctx.vocab.id_to_token[id].tok;
+
+                snprintf(tmp, sizeof(tmp), "%s", text.c_str());
+
+                memcpy(&buf_vocab[offs], tmp, 32); offs += 32;
+                memcpy(&buf_vocab[offs], &score, sizeof(score)); offs += sizeof(score);
+            }
+
+            struct ggml_init_params params;
+            params.mem_size   = ggml_tensor_overhead();
+            params.mem_buffer = NULL;
+            params.no_alloc   = true;
+
+            ggml_context * ctx_vocab = ggml_init(params);
+
+            struct ggml_tensor * t_vocab = ggml_new_tensor_1d(ctx_vocab, GGML_TYPE_I8, buf_vocab.size());
+            t_vocab->data = buf_vocab.data();
+            ggml_set_name(t_vocab, "vocab");
+
+            gf.leafs[gf.n_leafs++] = t_vocab;
+
+            ggml_graph_export(&gf, cgraph_fname);
+
+            ggml_free(ctx_vocab);
+        }
 
         float * logits = (float *) ggml_get_data(inpL);
 
