@@ -657,3 +657,4 @@ docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:light -m /mode
 ### Docs
 
 - [GGML tips & tricks](https://github.com/ggerganov/llama.cpp/wiki/GGML-Tips-&-Tricks)
+- [Performance troubleshooting](./docs/token_generation_performance_tips.md)
