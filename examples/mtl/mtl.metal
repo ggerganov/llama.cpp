@@ -266,31 +266,63 @@ kernel void kernel_mul_mat_q4_0_f32(
     device const float      * y = (device const float      *) src1 + r1*ne10;
 
     const uint nth = tptg.x*tptg.y;
-    const uint ith = 16*tpitg.x + tpitg.y;
+    const uint ith = tptg.y*tpitg.x + tpitg.y;
 
     sum[ith] = 0.0f;
 
     for (int i = tpitg.x; i < nb; i += tptg.x) {
-        device const uchar * x0p = (device const uchar *) (x + i)->qs;
-        device const float * y0p = (device const float *) (y + i*qk);
+        device const uchar4 * x0p = (device const uchar4 *) (x + i)->qs;
+        device const float4 * y0p = (device const float4 *) (y + i*qk);
+
+        const float d = (float)((x + i)->d);
+
+        const uchar4 x0v = *(x0p + tpitg.y);
+        const float4 y0v = *(y0p + tpitg.y + 0);
+        const float4 y1v = *(y0p + tpitg.y + 4);
 
         float acc = 0.0f;
 
-        //for (int j = 0; j < 16; ++j) {
-        const int j = tpitg.y;
         {
-            const uchar x0v = *(x0p + j);
+            const int x0 = x0v[0] & 0x0F;
+            const int x1 = x0v[0] >>   4;
 
-            const int x0 = x0v & 0x0F;
-            const int x1 = x0v >>   4;
-
-            const float y0 = *(y0p + j);
-            const float y1 = *(y0p + j + 16);
+            const float y0 = y0v[0];
+            const float y1 = y1v[0];
 
             acc += (x0 - 8)*y0 + (x1 - 8)*y1;
         }
 
-        sum[ith] += acc * (x + i)->d;
+        {
+            const int x0 = x0v[1] & 0x0F;
+            const int x1 = x0v[1] >>   4;
+
+            const float y0 = y0v[1];
+            const float y1 = y1v[1];
+
+            acc += (x0 - 8)*y0 + (x1 - 8)*y1;
+        }
+
+        {
+            const int x0 = x0v[2] & 0x0F;
+            const int x1 = x0v[2] >>   4;
+
+            const float y0 = y0v[2];
+            const float y1 = y1v[2];
+
+            acc += (x0 - 8)*y0 + (x1 - 8)*y1;
+        }
+
+        {
+            const int x0 = x0v[3] & 0x0F;
+            const int x1 = x0v[3] >>   4;
+
+            const float y0 = y0v[3];
+            const float y1 = y1v[3];
+
+            acc += (x0 - 8)*y0 + (x1 - 8)*y1;
+        }
+
+        sum[ith] += acc*d;
     }
 
     // accumulate the sum from all threads in the threadgroup

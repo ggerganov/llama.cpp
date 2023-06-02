@@ -555,7 +555,8 @@ int llama_mtl_eval(
                             encoder = [command_buffer computeCommandEncoder];
                         }
 
-                        int nth = 32;
+                        int nth0 = 32;
+                        int nth1 = 1;
 
                         // use custom matrix x vector kernel
                         switch (src0t) {
@@ -564,14 +565,16 @@ int llama_mtl_eval(
                                     GGML_ASSERT(ne02 == 1);
                                     GGML_ASSERT(ne12 == 1);
 
-                                    nth = 4;
+                                    nth0 = 8;
+                                    nth1 = 4;
                                     [encoder setComputePipelineState:ctx->pipeline_mul_mat_q4_0_f32];
                                 } break;
                             case GGML_TYPE_F16:
                                 {
                                     GGML_ASSERT(ne02 == ne12);
 
-                                    nth = 32;
+                                    nth0 = 32;
+                                    nth1 = 1;
                                     [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32];
                                 } break;
                             default: GGML_ASSERT(false && "not implemented");
@@ -595,11 +598,11 @@ int llama_mtl_eval(
                         [encoder setBytes:&ne1  length:sizeof(ne1)  atIndex:14];
 
                         if (src0t == GGML_TYPE_Q4_0) {
-                            [encoder setThreadgroupMemoryLength:16*nth*sizeof(float) atIndex:0];
-                            [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne11, 1) threadsPerThreadgroup:MTLSizeMake(nth, 16, 1)];
+                            [encoder setThreadgroupMemoryLength:nth0*nth1*sizeof(float) atIndex:0];
+                            [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne11, 1) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                         } else {
-                            [encoder setThreadgroupMemoryLength:nth*sizeof(float) atIndex:0];
-                            [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
+                            [encoder setThreadgroupMemoryLength:nth0*sizeof(float) atIndex:0];
+                            [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                         }
                     }
                 } break;
