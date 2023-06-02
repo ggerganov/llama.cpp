@@ -995,7 +995,8 @@ int main(int argc, char **argv)
           { "request", req.body },
           { "response", res.body },
       };
-      fprintf(stdout, "http_request: %s\n", log.dump().c_str());
+      fprintf(stdout, "http_request: %s\n",
+              log.dump(-1, ' ', false, json::error_handler_t::replace).c_str());
   });
 
   svr.set_exception_handler([](const Request &, Response &res, std::exception_ptr ep) {
