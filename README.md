@@ -633,6 +633,10 @@ or with a light image:
 ```bash
 docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
 ```
+If you want to use Chinese model, use this command.
+```
+docker run -v /path/to/models:/models -e LC_ALL=zh_CN.utf8 ghcr.io/ggerganov/llama.cpp:full --run -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
+```
 
 ### Contributing
 
