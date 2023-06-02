@@ -756,8 +756,6 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
 
 int main(int argc, char **argv)
 {
-  llama_init_backend();
-
   // own arguments required by this example
   gpt_params params;
   server_params sparams;
@@ -774,6 +772,8 @@ int main(int argc, char **argv)
   if (params.model_alias == "unknown") {
     params.model_alias = params.model;
   }
+
+  llama_init_backend();
 
   fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
   fprintf(stderr, "system_info: n_threads = %d / %d | %s\n\n", params.n_threads,
