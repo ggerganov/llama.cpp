@@ -46,10 +46,21 @@ int main(int argc, char ** argv) {
 
         const std::vector<int> tmp(n_batch, 1); // BOS
 
+        // warmup
+        llama_mtl_eval(ctx_mtl, &gf, tmp.data(), tmp.size(), n_past);
+
+        const int n_iter = 16;
+
+        const int64_t t0 = ggml_time_us();
+
         // the actual inference happens here
-        for (int i = 0; i < 10; ++i) {
+        for (int i = 0; i < n_iter; ++i) {
             llama_mtl_eval(ctx_mtl, &gf, tmp.data(), tmp.size(), n_past);
         }
+
+        const int64_t t1 = ggml_time_us();
+
+        printf("time: %.2f ms, %.2f ms/tok\n", (t1 - t0) / 1000.0, (t1 - t0) / 1000.0 / n_iter);
     }
 
     llama_mtl_free(ctx_mtl);
