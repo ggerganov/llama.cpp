@@ -761,15 +761,21 @@ int main(int argc, char **argv)
       llama.beginCompletion();
 
       if (!llama.stream) {
+          size_t stop_pos = std::string::npos;
+
           while (llama.has_next_token) {
               const std::string token_text = llama.doCompletion();
-              const size_t stop_pos = llama.findStoppingStrings(
-                  llama.generated_text, token_text.size(), STOP_FULL);
 
-              if (stop_pos != std::string::npos) {
-                  llama.generated_text.erase(llama.generated_text.begin() + stop_pos,
-                                             llama.generated_text.end());
-              }
+              stop_pos = llama.findStoppingStrings(llama.generated_text,
+                                                   token_text.size(), STOP_FULL);
+          }
+
+          if (stop_pos == std::string::npos) {
+              stop_pos = llama.findStoppingStrings(llama.generated_text, 0, STOP_PARTIAL);
+          }
+          if (stop_pos != std::string::npos) {
+              llama.generated_text.erase(llama.generated_text.begin() + stop_pos,
+                                         llama.generated_text.end());
           }
 
           json data = {{"content", llama.generated_text},
