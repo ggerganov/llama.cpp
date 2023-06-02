@@ -446,100 +446,73 @@ void server_print_usage(int /*argc*/, char **argv, const gpt_params &params, con
   fprintf(stderr, "\n");
 }
 
-void server_params_parse(int argc, char **argv, server_params &sparams, gpt_params &params)
+void server_params_parse(int argc, char **argv, server_params &sparams,
+                         gpt_params &params)
 {
   gpt_params default_params;
   server_params default_sparams;
   std::string arg;
   bool invalid_param = false;
 
-  for (int i = 1; i < argc; i++)
-  {
+  for (int i = 1; i < argc; i++) {
     arg = argv[i];
-    if (arg == "--port")
-    {
-      if (++i >= argc)
-      {
+    if (arg == "--port") {
+      if (++i >= argc) {
         invalid_param = true;
         break;
       }
       sparams.port = std::stoi(argv[i]);
-    }
-    else if (arg == "--host")
-    {
-      if (++i >= argc)
-      {
+    } else if (arg == "--host") {
+      if (++i >= argc) {
         invalid_param = true;
         break;
       }
       sparams.hostname = argv[i];
-    }
-    else if (arg == "--timeout" || arg == "-to")
-    {
-        if (++i >= argc) {
-            invalid_param = true;
-            break;
-        }
-        sparams.read_timeout = std::stoi(argv[i]);
-        sparams.write_timeout = std::stoi(argv[i]);
-    }
-    else if (arg == "-m" || arg == "--model")
-    {
-      if (++i >= argc)
-      {
+    } else if (arg == "--timeout" || arg == "-to") {
+      if (++i >= argc) {
+        invalid_param = true;
+        break;
+      }
+      sparams.read_timeout = std::stoi(argv[i]);
+      sparams.write_timeout = std::stoi(argv[i]);
+    } else if (arg == "-m" || arg == "--model") {
+      if (++i >= argc) {
         invalid_param = true;
         break;
       }
       params.model = argv[i];
-    }
-    else if (arg == "-a" || arg == "--alias")
-    {
-      if (++i >= argc)
-      {
+    } else if (arg == "-a" || arg == "--alias") {
+      if (++i >= argc) {
         invalid_param = true;
         break;
       }
       params.model_alias = argv[i];
-    }
-    else if (arg == "-h" || arg == "--help")
-    {
+    } else if (arg == "-h" || arg == "--help") {
       server_print_usage(argc, argv, default_params, default_sparams);
       exit(0);
-    }
-    else if (arg == "-c" || arg == "--ctx-size" || arg == "--ctx_size")
-    {
-      if (++i >= argc)
-      {
+    } else if (arg == "-c" || arg == "--ctx-size" || arg == "--ctx_size") {
+      if (++i >= argc) {
         invalid_param = true;
         break;
       }
       params.n_ctx = std::stoi(argv[i]);
-    }
-    else if (arg == "--memory-f32" || arg == "--memory_f32")
-    {
+    } else if (arg == "--memory-f32" || arg == "--memory_f32") {
       params.memory_f16 = false;
-    }
-    else if (arg == "--threads" || arg == "-t")
-    {
-        if (++i >= argc) {
-            invalid_param = true;
-            break;
-        }
-        params.n_threads = std::stoi(argv[i]);
-    }
-    else if (arg == "-b" || arg == "--batch-size")
-    {
-        if (++i >= argc) {
-            invalid_param = true;
-            break;
-        }
-        params.n_batch = std::stoi(argv[i]);
-        params.n_batch = std::min(512, params.n_batch);
-    }
-    else if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers")
-    {
-      if (++i >= argc)
-      {
+    } else if (arg == "--threads" || arg == "-t") {
+      if (++i >= argc) {
+        invalid_param = true;
+        break;
+      }
+      params.n_threads = std::stoi(argv[i]);
+    } else if (arg == "-b" || arg == "--batch-size") {
+      if (++i >= argc) {
+        invalid_param = true;
+        break;
+      }
+      params.n_batch = std::stoi(argv[i]);
+      params.n_batch = std::min(512, params.n_batch);
+    } else if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers") {
+      if (++i >= argc) {
         invalid_param = true;
         break;
       }
@@ -549,37 +522,33 @@ void server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
       fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");
       fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
 #endif
-    }
-    else if (arg == "--lora")
-    {
-        if (++i >= argc)
-        {
-            invalid_param = true;
-            break;
-        }
-        params.lora_adapter = argv[i];
-        params.use_mmap = false;
-    }
-    else if (arg == "--lora-base")
-    {
-        if (++i >= argc) {
-            invalid_param = true;
-            break;
-        }
-        params.lora_base = argv[i];
+    } else if (arg == "--lora") {
+      if (++i >= argc) {
+        invalid_param = true;
+        break;
+      }
+      params.lora_adapter = argv[i];
+      params.use_mmap = false;
+    } else if (arg == "--lora-base") {
+      if (++i >= argc) {
+        invalid_param = true;
+        break;
+      }
+      params.lora_base = argv[i];
     } else if (arg == "-v" || arg == "--verbose") {
-        sparams.verbose = true;
-    }
-    else
-    {
+      sparams.verbose = true;
+    } else if (arg == "--mlock") {
+      params.use_mlock = true;
+    } else if (arg == "--no-mmap") {
+      params.use_mmap = false;
+    } else {
       fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
       server_print_usage(argc, argv, default_params, default_sparams);
       exit(1);
     }
   }
 
-  if (invalid_param)
-  {
+  if (invalid_param) {
     fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
     server_print_usage(argc, argv, default_params, default_sparams);
     exit(1);
