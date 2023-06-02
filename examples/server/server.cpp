@@ -55,8 +55,6 @@ struct llama_server_context
 
   size_t num_tokens_predicted = 0;
   size_t n_past = 0;
-  size_t n_consumed = 0;
-  size_t n_session_consumed = 0;
   size_t n_remain = 0;
 
   std::vector<llama_token> embd;
@@ -87,7 +85,6 @@ struct llama_server_context
 
     n_remain = 0;
     n_past = 0;
-    n_consumed = 0;
   }
 
   bool loadModel(const gpt_params &params_)
@@ -105,7 +102,7 @@ struct llama_server_context
     return true;
   }
 
-  bool loadPrompt() {
+  void loadPrompt() {
     params.prompt.insert(0, 1, ' '); // always add a first space
     std::vector<llama_token> prompt_tokens = ::llama_tokenize(ctx, params.prompt, true);
 
@@ -135,14 +132,11 @@ struct llama_server_context
       n_past--;
     }
     has_next_token = true;
-    return true;
   }
 
   void beginCompletion()
   {
     // number of tokens to keep when resetting context
-
-
     n_remain = params.n_predict;
     llama_set_rng_seed(ctx, params.seed);
   }
@@ -196,9 +190,8 @@ struct llama_server_context
       auto n_vocab = llama_n_vocab(ctx);
 
       // Apply params.logit_bias map
-      for (auto it = params.logit_bias.begin(); it != params.logit_bias.end(); it++)
-      {
-        logits[it->first] += it->second;
+      for (const auto &it : params.logit_bias) {
+        logits[it.first] += it.second;
       }
 
       std::vector<llama_token_data> candidates;
@@ -275,7 +268,7 @@ struct llama_server_context
         return result;
     }
 
-    has_next_token = params.n_predict == -1 ? true : n_remain != 0;
+    has_next_token = params.n_predict == -1 || n_remain != 0;
     return result;
   }
 
@@ -334,7 +327,7 @@ struct llama_server_context
   std::vector<float> embedding(std::string content, int threads) {
     content.insert(0, 1, ' ');
     std::vector<llama_token> tokens = ::llama_tokenize(ctx, content, true);
-    if (tokens.size() > 0)
+    if (!tokens.empty())
     {
       if (llama_eval(ctx, tokens.data(), tokens.size(), 0, threads))
       {
@@ -344,7 +337,7 @@ struct llama_server_context
       }
     }
     const int n_embd = llama_n_embd(ctx);
-    const auto embeddings = llama_get_embeddings(ctx);
+    auto *const embeddings = llama_get_embeddings(ctx);
     std::vector<float> embeddings_(embeddings, embeddings + n_embd);
     return embeddings_;
   }
@@ -392,7 +385,7 @@ void server_print_usage(int /*argc*/, char **argv, const gpt_params &params, con
   fprintf(stderr, "\n");
 }
 
-bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_params &params)
+void server_params_parse(int argc, char **argv, server_params &sparams, gpt_params &params)
 {
   gpt_params default_params;
   server_params default_sparams;
@@ -534,7 +527,6 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
     server_print_usage(argc, argv, default_params, default_sparams);
     exit(1);
   }
-  return true;
 }
 
 json format_generation_settings(llama_server_context &llama) {
@@ -575,12 +567,12 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
     llama.stream = false;
   }
   if (!body["n_predict"].is_null()) {
-    llama.params.n_predict = body["n_predict"].get<int>();
+    llama.params.n_predict = body["n_predict"].get<int32_t>();
   } else {
     llama.params.n_predict = default_params.n_predict;
   }
   if (!body["top_k"].is_null()) {
-    llama.params.top_k = body["top_k"].get<int>();
+    llama.params.top_k = body["top_k"].get<int32_t>();
   } else {
     llama.params.top_k = default_params.top_k;
   }
@@ -600,7 +592,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
     llama.params.typical_p = default_params.typical_p;
   }
   if (!body["repeat_last_n"].is_null()) {
-    llama.params.repeat_last_n = body["repeat_last_n"].get<int>();
+    llama.params.repeat_last_n = body["repeat_last_n"].get<int32_t>();
   } else {
     llama.params.repeat_last_n = default_params.repeat_last_n;
   }
@@ -625,7 +617,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
     llama.params.frequency_penalty = default_params.frequency_penalty;
   }
   if (!body["mirostat"].is_null()) {
-    llama.params.mirostat = body["mirostat"].get<float>();
+    llama.params.mirostat = body["mirostat"].get<int>();
   } else {
     llama.params.mirostat = default_params.mirostat;
   }
@@ -640,17 +632,17 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
     llama.params.mirostat_eta = default_params.mirostat_eta;
   }
   if (!body["penalize_nl"].is_null()) {
-    llama.params.penalize_nl = body["penalize_nl"].get<float>();
+    llama.params.penalize_nl = body["penalize_nl"].get<bool>();
   } else {
     llama.params.penalize_nl = default_params.penalize_nl;
   }
   if (!body["n_keep"].is_null()) {
-    llama.params.n_keep = body["n_keep"].get<int>();
+    llama.params.n_keep = body["n_keep"].get<int32_t>();
   } else {
     llama.params.n_keep = default_params.n_keep;
   }
   if (!body["seed"].is_null()) {
-    llama.params.seed = body["seed"].get<int>();
+    llama.params.seed = body["seed"].get<int32_t>();
   } else {
     llama.params.seed = time(NULL);
   }
@@ -717,10 +709,7 @@ int main(int argc, char **argv)
   llama_server_context llama;
   params.model = "ggml-model.bin";
 
-  if (server_params_parse(argc, argv, sparams, params) == false)
-  {
-    return 1;
-  }
+  server_params_parse(argc, argv, sparams, params);
 
   llama.verbose = sparams.verbose;
   llama.json_indent = sparams.verbose ? 4 : -1;
@@ -768,15 +757,7 @@ int main(int argc, char **argv)
           return;
       }
 
-      if (!llama.loadPrompt()) {
-          json data = {{"status", "error"}, {"reason", "Context too long."}};
-          res.set_content(
-              data.dump(llama.json_indent, ' ', false, json::error_handler_t::replace),
-              "application/json");
-          res.status = 400;
-          return;
-      }
-
+      llama.loadPrompt();
       llama.beginCompletion();
 
       if (!llama.stream) {
