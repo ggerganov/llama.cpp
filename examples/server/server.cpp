@@ -102,7 +102,7 @@ struct llama_server_context
     return true;
   }
 
-  bool loadPrompt() {
+  void loadPrompt() {
     params.prompt.insert(0, 1, ' '); // always add a first space
     std::vector<llama_token> prompt_tokens = ::llama_tokenize(ctx, params.prompt, true);
 
@@ -132,7 +132,6 @@ struct llama_server_context
       n_past--;
     }
     has_next_token = true;
-    return true;
   }
 
   void beginCompletion()
@@ -389,7 +388,7 @@ void server_print_usage(int /*argc*/, char **argv, const gpt_params &params, con
   fprintf(stderr, "\n");
 }
 
-bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_params &params)
+void server_params_parse(int argc, char **argv, server_params &sparams, gpt_params &params)
 {
   gpt_params default_params;
   server_params default_sparams;
@@ -531,7 +530,6 @@ bool server_params_parse(int argc, char **argv, server_params &sparams, gpt_para
     server_print_usage(argc, argv, default_params, default_sparams);
     exit(1);
   }
-  return true;
 }
 
 json format_generation_settings(llama_server_context &llama) {
@@ -706,10 +704,7 @@ int main(int argc, char **argv)
   llama_server_context llama;
   params.model = "ggml-model.bin";
 
-  if (server_params_parse(argc, argv, sparams, params) == false)
-  {
-    return 1;
-  }
+  server_params_parse(argc, argv, sparams, params);
 
   llama.verbose = sparams.verbose;
   llama.json_indent = sparams.verbose ? 4 : -1;
@@ -757,15 +752,7 @@ int main(int argc, char **argv)
           return;
       }
 
-      if (!llama.loadPrompt()) {
-          json data = {{"status", "error"}, {"reason", "Context too long."}};
-          res.set_content(
-              data.dump(llama.json_indent, ' ', false, json::error_handler_t::replace),
-              "application/json");
-          res.status = 400;
-          return;
-      }
-
+      llama.loadPrompt();
       llama.beginCompletion();
 
       if (!llama.stream) {
