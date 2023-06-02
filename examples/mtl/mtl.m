@@ -598,6 +598,7 @@ int llama_mtl_eval(
                         [encoder setBytes:&ne1  length:sizeof(ne1)  atIndex:14];
 
                         if (src0t == GGML_TYPE_Q4_0) {
+                            //printf("nb = %d\n", ne00/32);
                             [encoder setThreadgroupMemoryLength:nth0*nth1*sizeof(float) atIndex:0];
                             [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne11, 1) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                         } else {
