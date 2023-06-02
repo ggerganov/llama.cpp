@@ -9,6 +9,9 @@
 #include "llama-util.h"
 #include "llama.h"
 
+// METAL
+#include "examples/mtl/mtl.h"
+
 #include "ggml.h"
 #ifdef GGML_USE_CUBLAS
 #include "ggml-cuda.h"
@@ -237,6 +240,10 @@ struct llama_context {
     // TODO: move in llama_state
     llama_ctx_buffer buf_compute;
     llama_ctx_buffer buf_scratch[LLAMA_MAX_SCRATCH_BUFFERS];
+
+    // METAL
+    ggml_mtl_context * mtl_ctx = NULL;
+    ggml_cgraph        mtl_gf;
 
     int    buf_last = 0;
     size_t buf_max_size[LLAMA_MAX_SCRATCH_BUFFERS] = { 0 };
@@ -836,6 +843,7 @@ struct llama_context_params llama_context_default_params() {
         /*.use_mmap                    =*/ true,
         /*.use_mlock                   =*/ false,
         /*.embedding                   =*/ false,
+        /*.cgraph                      =*/ false,
         /*.progress_callback           =*/ nullptr,
         /*.progress_callback_user_data =*/ nullptr,
     };
@@ -1270,8 +1278,14 @@ static bool llama_eval_internal(
             //struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, x, n_embd/n_head, n_head, N), n_past, n_rot, 0);
 
             // compute Q and K and RoPE them
-            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
-            struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wk, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
+
+            struct ggml_tensor * Qpre = ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wq, cur), n_embd/n_head, n_head, N);
+            struct ggml_tensor * Kpre = ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wk, cur), n_embd/n_head, n_head, N);
+            ggml_set_name(Qpre, "Qpre");
+            ggml_set_name(Kpre, "Kpre");
+
+            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, Qpre, n_past, n_rot, 0);
+            struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, Kpre, n_past, n_rot, 0);
             ggml_set_name(Qcur, "Qcur");
             ggml_set_name(Kcur, "Kcur");
 
@@ -1279,22 +1293,19 @@ static bool llama_eval_internal(
             {
                 // compute the transposed [N, n_embd] V matrix
                 struct ggml_tensor * Vcur = ggml_transpose(ctx0, ggml_reshape_2d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wv, cur), n_embd, N));
+                ggml_set_name(Vcur, "Vcur");
 
                 struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, N*n_embd, (ggml_element_size(kv_self.k)*n_embd)*(il*n_ctx + n_past));
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, N, n_embd,
                         (   n_ctx)*ggml_element_size(kv_self.v),
                         (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd + n_past*ggml_element_size(kv_self.v));
 
-                //struct ggml_tensor * t = ggml_cpy(ctx0, Vcur, v);
-                //// TODO: TMP !!!!
-                //if (il == 0) {
-                //    ggml_set_name(t, "mtl-check");
-                //}
+                ggml_set_name(k, "k");
+                ggml_set_name(v, "v");
 
                 // important: storing RoPE-ed version of K in the KV cache!
                 ggml_build_forward_expand(&gf, ggml_cpy(ctx0, Kcur, k));
                 ggml_build_forward_expand(&gf, ggml_cpy(ctx0, Vcur, v));
-                //ggml_build_forward_expand(&gf, t);
             }
 
             struct ggml_tensor * Q =
@@ -2391,9 +2402,25 @@ struct llama_context * llama_init_from_file(
 
     ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
+    // METAL
+    if (params.cgraph) {
+        params.vocab_only = true;
+
+        // load the compute graph
+        struct ggml_context * ctx_data = NULL;
+        struct ggml_context * ctx_eval = NULL;
+
+        struct ggml_cgraph gf = ggml_graph_import("llama.ggml", &ctx_data, &ctx_eval);
+        gf.n_threads = 1;
+
+        // this allocates all Metal resources and memory buffers
+        ctx->mtl_ctx = llama_mtl_init(ctx_data, ctx_eval, NULL, &gf);
+        ctx->mtl_gf  = gf;
+    }
+
     if (!llama_model_load(path_model, *ctx, params.n_ctx, params.n_gpu_layers, memory_type,
-                          params.use_mmap, params.use_mlock, params.vocab_only,
-                          params.progress_callback, params.progress_callback_user_data)) {
+                params.use_mmap, params.use_mlock, params.vocab_only,
+                params.progress_callback, params.progress_callback_user_data)) {
         fprintf(stderr, "%s: failed to load model\n", __func__);
         llama_free(ctx);
         return nullptr;
@@ -2411,7 +2438,11 @@ struct llama_context * llama_init_from_file(
             const size_t memory_size = ggml_nbytes(ctx->model.kv_self.k) + ggml_nbytes(ctx->model.kv_self.v);
             fprintf(stderr, "%s: kv self size  = %7.2f MB\n", __func__, memory_size / 1024.0 / 1024.0);
         }
+    }
 
+    // METAL
+    // TODO: changed the behavior here for vocab_only -- reconsider implications later
+    {
         const auto & hparams = ctx->model.hparams;
 
         // resized during inference
@@ -3046,9 +3077,25 @@ int llama_eval(
                          int   n_tokens,
                          int   n_past,
                          int   n_threads) {
-    if (!llama_eval_internal(*ctx, tokens, n_tokens, n_past, n_threads, nullptr)) {
-        fprintf(stderr, "%s: failed to eval\n", __func__);
-        return 1;
+    // METAL
+    if (ctx->mtl_ctx) {
+        llama_mtl_eval(ctx->mtl_ctx, &ctx->mtl_gf, tokens, n_tokens, n_past);
+
+        const float * logits = llama_mtl_get_logits(ctx->mtl_ctx);
+
+        // extract logits
+        {
+            const int n_vocab = ctx->model.hparams.n_vocab;
+            auto & logits_out = ctx->logits;
+
+            logits_out.resize(n_vocab);
+            memcpy(logits_out.data(), logits, sizeof(float)*n_vocab);
+        }
+    } else {
+        if (!llama_eval_internal(*ctx, tokens, n_tokens, n_past, n_threads, nullptr)) {
+            fprintf(stderr, "%s: failed to eval\n", __func__);
+            return 1;
+        }
     }
 
     // get a more accurate load time, upon first eval

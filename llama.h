@@ -75,6 +75,7 @@ extern "C" {
         bool use_mmap;   // use mmap if possible
         bool use_mlock;  // force system to keep model in RAM
         bool embedding;  // embedding mode only
+        bool cgraph;     // try to load computation graph from "llama.ggml" (METAL)
 
         // called with a progress value between 0 and 1, pass NULL to disable
         llama_progress_callback progress_callback;

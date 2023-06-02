@@ -301,6 +301,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.mem_test = true;
         } else if (arg == "--export") {
             params.export_cgraph = true;
+        } else if (arg == "--import") {
+            params.import_cgraph = true;
         } else if (arg == "--verbose-prompt") {
             params.verbose_prompt = true;
         } else if (arg == "-r" || arg == "--reverse-prompt") {
@@ -441,6 +443,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
 #endif
     fprintf(stderr, "  --mtest               compute maximum memory usage\n");
     fprintf(stderr, "  --export              export the computation graph to 'llama.ggml'\n");
+    fprintf(stderr, "  --import              import a computation graph from 'llama.ggml'\n");
     fprintf(stderr, "  --verbose-prompt      print prompt before generation\n");
     fprintf(stderr, "  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
     fprintf(stderr, "  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
@@ -490,6 +493,7 @@ struct llama_context * llama_init_from_gpt_params(const gpt_params & params) {
     lparams.use_mlock    = params.use_mlock;
     lparams.logits_all   = params.perplexity;
     lparams.embedding    = params.embedding;
+    lparams.cgraph       = params.import_cgraph;
 
     llama_context * lctx = llama_init_from_file(params.model.c_str(), lparams);
 

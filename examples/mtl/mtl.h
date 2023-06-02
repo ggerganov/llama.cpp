@@ -25,6 +25,8 @@ int llama_mtl_eval(
                             int   n_tokens,
                             int   n_past);
 
+float * llama_mtl_get_logits(struct ggml_mtl_context * ctx);
+
 #ifdef __cplusplus
 }
 #endif

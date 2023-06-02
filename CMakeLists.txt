@@ -384,11 +384,22 @@ endif()
 add_library(llama
             llama.cpp
             llama.h
-            llama-util.h)
+            llama-util.h
+            examples/mtl/mtl.h # TODO: METAL TMP
+            examples/mtl/mtl.m # TODO: METAL TMP
+            )
 
 target_include_directories(llama PUBLIC .)
 target_compile_features(llama PUBLIC cxx_std_11) # don't bump
-target_link_libraries(llama PRIVATE ggml ${LLAMA_EXTRA_LIBS})
+target_link_libraries(llama PRIVATE
+    ggml
+    ${LLAMA_EXTRA_LIBS}
+    ${FOUNDATION_LIBRARY}         # TODO: METAL TMP
+    ${METAL_FRAMEWORK}            # TODO: METAL TMP
+    ${METALKIT_FRAMEWORK}         # TODO: METAL TMP
+    ${METALPERFORMANCE_FRAMEWORK} # TODO: METAL TMP
+    )
+target_compile_definitions(llama PRIVATE LLAMA_MTL_NDEBUG) # TODO: METAL TMP
 
 if (BUILD_SHARED_LIBS)
     set_target_properties(llama PROPERTIES POSITION_INDEPENDENT_CODE ON)
