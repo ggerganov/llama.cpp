@@ -1,14 +1,22 @@
 # llama.cpp/example/server
 
-This example allow you to have a llama.cpp http server to interact from a web page or consume the API.
+This example demonstrates a simple HTTP API server to interact with llama.cpp.
 
 Command line options:
 
--   `--threads N`, `-t N`: use N threads.
+-   `--threads N`, `-t N`: Set the number of threads to use during computation.
 -   `-m FNAME`, `--model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.bin`).
+-   `-m ALIAS`, `--alias ALIAS`: Set an alias for the model. The alias will be returned in API responses.
 -   `-c N`, `--ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference.
 -   `-ngl N`, `--n-gpu-layers N`: When compiled with appropriate support (currently CLBlast or cuBLAS), this option allows offloading some layers to the GPU for computation. Generally results in increased performance.
--   `--host`: Set the hostname or ip address to listen. Default `127.0.0.1`;
+-   `-b N`, `--batch-size N`: Set the batch size for prompt processing. Default: `512`.
+-   `--memory-f32`: Use 32-bit floats instead of 16-bit floats for memory key+value. Not recommended.
+-   `--mlock`: Lock the model in memory, preventing it from being swapped out when memory-mapped.
+-   `--no-mmap`: Do not memory-map the model. By default, models are mapped into memory, which allows the system to load only the necessary parts of the model as needed.
+-   `--lora FNAME`: Apply a LoRA (Low-Rank Adaptation) adapter to the model (implies --no-mmap). This allows you to adapt the pretrained model to specific tasks or domains.
+-   `--lora-base FNAME`: Optional model to use as a base for the layers modified by the LoRA adapter. This flag is used in conjunction with the `--lora` flag, and specifies the base model for the adaptation.
+-   `-to N`, `--timeout N`: Server read/write timeout in seconds. Default `600`.
+-   `--host`: Set the hostname or ip address to listen. Default `127.0.0.1`.
 -   `--port`: Set the port to listen. Default: `8080`.
 
 ## Quick Start
@@ -79,10 +87,7 @@ node .
 
 ## API Endpoints
 
-You can interact with this API Endpoints.
-This implementations just support chat style interaction.
-
--   **POST** `hostname:port/completion`: Setting up the Llama Context to begin the completions tasks.
+-   **POST** `/completion`: Given a prompt, it returns the predicted completion.
 
     *Options:*
 
@@ -102,10 +107,35 @@ This implementations just support chat style interaction.
     `prompt`: Provide a prompt. Internally, the prompt is compared, and it detects if a part has already been evaluated, and the remaining part will be evaluate.
 
     `stop`: Specify the strings that indicate a stop.
-    These words will not be included in the completion, so make sure to add them to the prompt for the next iteration.
-    Default: `[]`
+    These words will not be included in the completion, so make sure to add them to the prompt for the next iteration (default: []).
 
--   **POST** `hostname:port/tokenize`: Tokenize a given text
+    `tfs_z`: Enable tail free sampling with parameter z (default: 1.0, 1.0 = disabled).
+
+    `typical_p`: Enable locally typical sampling with parameter p (default: 1.0, 1.0 = disabled).
+
+    `repeat_penalty`: Control the repetition of token sequences in the generated text (default: 1.1).
+
+    `repeat_last_n`: Last n tokens to consider for penalizing repetition (default: 64, 0 = disabled, -1 = ctx-size).
+
+    `penalize_nl`: Penalize newline tokens when applying the repeat penalty (default: true).
+
+    `presence_penalty`: Repeat alpha presence penalty (default: 0.0, 0.0 = disabled).
+
+    `frequency_penalty`: Repeat alpha frequency penalty (default: 0.0, 0.0 = disabled);
+
+    `mirostat`: Enable Mirostat sampling, controlling perplexity during text generation (default: 0, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0).
+
+    `mirostat_tau`: Set the Mirostat target entropy, parameter tau (default: 5.0).
+
+    `mirostat_eta`: Set the Mirostat learning rate, parameter eta (default: 0.1).
+
+    `seed`: Set the random number generator (RNG) seed (default: -1, < 0 = random seed).
+
+    `ignore_eos`: Ignore end of stream token and continue generating (default: false).
+
+    `logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `logit-bias: [[15043,1]]` to increase the likelihood of the token 'Hello', or `logit-bias: [[15043,-1]]` to decrease its likelihood. Setting the value to false, `logit-bias: [[15043,false]]` ensures that the token `Hello` is never produced (default: []).
+
+-   **POST** `/tokenize`: Tokenize a given text.
 
     *Options:*
 
