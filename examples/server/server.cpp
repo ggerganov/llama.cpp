@@ -67,6 +67,7 @@ struct llama_server_context
 
   bool verbose = false;
   int json_indent = -1;
+  int32_t multibyte_pending = 0;
 
   ~llama_server_context()
   {
@@ -82,6 +83,7 @@ struct llama_server_context
     generated_text = "";
     generated_text.reserve(params.n_ctx);
     stopping_word = "";
+    multibyte_pending = 0;
 
     n_remain = 0;
     n_past = 0;
@@ -300,12 +302,32 @@ struct llama_server_context
   std::string doCompletion()
   {
     llama_token token = nextToken();
-    if (token == -1) {
-      return "";
+
+    std::string token_text = token == -1 ? "" : llama_token_to_str(ctx, token);
+    generated_text += token_text;
+
+    if (multibyte_pending > 0) {
+      multibyte_pending -= token_text.size();
+    } else if (token_text.size() == 1) {
+      const char c = token_text[0];
+      // 2-byte characters: 110xxxxx 10xxxxxx
+      if ((c & 0xE0) == 0xC0) {
+        multibyte_pending = 1;
+      // 3-byte characters: 1110xxxx 10xxxxxx 10xxxxxx
+      } else if ((c & 0xF0) == 0xE0) {
+        multibyte_pending = 2;
+      // 4-byte characters: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+      } else if ((c & 0xF8) == 0xF0) {
+        multibyte_pending = 3;
+      } else {
+        multibyte_pending = 0;
+      }
     }
 
-    std::string token_text = llama_token_to_str(ctx, token);
-    generated_text += token_text;
+    if (multibyte_pending > 0 && !has_next_token) {
+      has_next_token = true;
+      n_remain++;
+    }
 
     if (verbose) {
       fprintf(stderr,
@@ -794,34 +816,10 @@ int main(int argc, char **argv)
       } else {
           const auto chunked_content_provider = [&](size_t, DataSink &sink) {
               size_t sent_count = 0;
-              int32_t multibyte_pending = 0;
 
               while (llama.has_next_token) {
                   const std::string token_text = llama.doCompletion();
-
-                  if (multibyte_pending > 0) {
-                      multibyte_pending -= token_text.size();
-                  } else if (token_text.size() == 1) {
-                      const char c = token_text[0];
-                      // 2-byte characters: 110xxxxx 10xxxxxx
-                      if ((c & 0xE0) == 0xC0) {
-                          multibyte_pending = 1;
-                      // 3-byte characters: 1110xxxx 10xxxxxx 10xxxxxx
-                      } else if ((c & 0xF0) == 0xE0) {
-                          multibyte_pending = 2;
-                      // 4-byte characters: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
-                      } else if ((c & 0xF8) == 0xF0) {
-                          multibyte_pending = 3;
-                      } else {
-                          multibyte_pending = 0;
-                      }
-                  }
-
-                  if (multibyte_pending > 0) {
-                      if (!llama.has_next_token) {
-                          llama.has_next_token = true;
-                          llama.n_remain++;
-                      }
+                  if (llama.multibyte_pending > 0) {
                       continue;
                   }
 
