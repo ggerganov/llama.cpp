@@ -993,11 +993,11 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
     cl_kernel* dmmv = ggml_get_dequantize_mul_mat_vec_cl(type);
     GGML_ASSERT(to_fp32_cl != nullptr);
 
+    size_t ev_idx = 0;
+    std::vector<cl_event> events;
+
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
-            size_t ev_idx = 0;
-            std::vector<cl_event> events;
-
             // copy src0 to device if necessary
             if (src0->backend == GGML_BACKEND_CPU) {
                 events.emplace_back();
@@ -1061,6 +1061,9 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
             for (auto *event : events) {
                 clReleaseEvent(event);
             }
+
+            ev_idx = 0;
+            events.clear();
         }
     }
 
