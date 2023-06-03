@@ -447,32 +447,59 @@ def show_gui():
             pass
 
         # Adjust size
-        root.geometry("460x320")
+        root.geometry("480x360")
         root.title("KoboldCpp v"+KcppVersion)
+        root.grid_columnconfigure(0, weight=1)
         tk.Label(root, text = "KoboldCpp Easy Launcher",
-                font = ("Arial", 12)).pack(pady=4)
+                font = ("Arial", 12)).grid(row=0,column=0)
         tk.Label(root, text = "(Note: KoboldCpp only works with GGML model formats!)",
-                font = ("Arial", 9)).pack()
+                font = ("Arial", 9)).grid(row=1,column=0)
 
 
         opts = ["Use OpenBLAS","Use CLBLast GPU #1","Use CLBLast GPU #2","Use CLBLast GPU #3","Use No BLAS","Use OpenBLAS (Old CPU, noavx2)","Failsafe Mode (Old CPU, noavx)"]
         runchoice = tk.StringVar()
         runchoice.set("Use OpenBLAS")
-        tk.OptionMenu( root , runchoice , *opts ).pack()
+        tk.OptionMenu( root , runchoice , *opts ).grid(row=2,column=0)
+     
+
+        frm2 = tk.Frame(root)
+        threads_var=tk.StringVar()
+        threads_var.set(str(default_threads))
+        threads_lbl = tk.Label(frm2, text = 'Threads: ', font=('calibre',10, 'bold'))  
+        threads_input = tk.Entry(frm2,textvariable = threads_var, font=('calibre',10,'normal'))
+        threads_lbl.grid(row=0,column=0)
+        threads_input.grid(row=0,column=1)
+        frm2.grid(row=3,column=0,pady=4)
+
+        frm1 = tk.Frame(root)
+        gpu_layers_var=tk.StringVar()
+        gpu_layers_var.set("0")
+        gpu_lbl = tk.Label(frm1, text = 'GPU Layers (CLBlast only): ', font=('calibre',10, 'bold'))  
+        gpu_layers_input = tk.Entry(frm1,textvariable = gpu_layers_var, font=('calibre',10,'normal'))
+        gpu_lbl.grid(row=0,column=0)
+        gpu_layers_input.grid(row=0,column=1)
+        frm1.grid(row=4,column=0,pady=4)
 
         stream = tk.IntVar()
         smartcontext = tk.IntVar()
         launchbrowser = tk.IntVar(value=1)
         unbantokens = tk.IntVar()
-        tk.Checkbutton(root, text='Streaming Mode',variable=stream, onvalue=1, offvalue=0).pack()
-        tk.Checkbutton(root, text='Use SmartContext',variable=smartcontext, onvalue=1, offvalue=0).pack()
-        tk.Checkbutton(root, text='Unban Tokens',variable=unbantokens, onvalue=1, offvalue=0).pack()
-        tk.Checkbutton(root, text='Launch Browser',variable=launchbrowser, onvalue=1, offvalue=0).pack()
+        highpriority = tk.IntVar()
+        disablemmap = tk.IntVar()
+        frm3 = tk.Frame(root)
+        tk.Checkbutton(frm3, text='Streaming Mode',variable=stream, onvalue=1, offvalue=0).grid(row=0,column=0)
+        tk.Checkbutton(frm3, text='Use SmartContext',variable=smartcontext, onvalue=1, offvalue=0).grid(row=0,column=1)
+        tk.Checkbutton(frm3, text='High Priority',variable=highpriority, onvalue=1, offvalue=0).grid(row=1,column=0)
+        tk.Checkbutton(frm3, text='Disable MMAP',variable=disablemmap, onvalue=1, offvalue=0).grid(row=1,column=1)
+        tk.Checkbutton(frm3, text='Unban Tokens',variable=unbantokens, onvalue=1, offvalue=0).grid(row=2,column=0)
+        tk.Checkbutton(frm3, text='Launch Browser',variable=launchbrowser, onvalue=1, offvalue=0).grid(row=2,column=1)
+        
+        frm3.grid(row=5,column=0,pady=4)
 
         # Create button, it will change label text
-        tk.Button( root , text = "Launch", font = ("Impact", 18), bg='#54FA9B', command = guilaunch ).pack(pady=10)
+        tk.Button( root , text = "Launch", font = ("Impact", 18), bg='#54FA9B', command = guilaunch ).grid(row=6,column=0)
         tk.Label(root, text = "(Please use the Command Line for more advanced options)",
-                font = ("Arial", 9)).pack()
+                font = ("Arial", 9)).grid(row=7,column=0)
 
         root.mainloop()
 
@@ -482,10 +509,15 @@ def show_gui():
             sys.exit()
 
         #load all the vars
+        args.threads = int(threads_var.get())
+        args.gpulayers = int(gpu_layers_var.get())
+
         args.stream = (stream.get()==1)
         args.smartcontext = (smartcontext.get()==1)
         args.launch = (launchbrowser.get()==1)
         args.unbantokens = (unbantokens.get()==1)
+        args.highpriority = (highpriority.get()==1)
+        args.nommap = (disablemmap.get()==1)
         selchoice = runchoice.get()
 
         if selchoice==opts[1]:

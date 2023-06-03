@@ -2,14 +2,9 @@
 
 A self contained distributable from Concedo that exposes llama.cpp function bindings, allowing it to be used via a simulated Kobold API endpoint. 
 
-What does it mean? You get llama.cpp with a fancy UI, persistent stories, editing tools, save formats, memory, world info, author's note, characters, scenarios and everything Kobold and Kobold Lite have to offer. In a tiny package around 10 MB in size, excluding model weights.
+What does it mean? You get llama.cpp with a fancy UI, persistent stories, editing tools, save formats, memory, world info, author's note, characters, scenarios and everything Kobold and Kobold Lite have to offer. In a tiny package around 20 MB in size, excluding model weights.
 
 ![Preview](preview.png)
-
-# Highlights
-- Now has experimental CLBlast support.
-- Now supports RWKV models WITHOUT pytorch or tokenizers! Yep, just GGML!
-- Now supports GPT-NeoX / Pythia models
 
 ## Usage
 - [Download the latest release here](https://github.com/LostRuins/koboldcpp/releases/latest) or clone the repo.
@@ -20,8 +15,9 @@ What does it mean? You get llama.cpp with a fancy UI, persistent stories, editin
 - You can also run it using the command line `koboldcpp.exe [ggml_model.bin] [port]`. For info, please check `koboldcpp.exe --help` 
 - If you are having crashes or issues, you can try turning off BLAS with the `--noblas` flag. You can also try running in a non-avx2 compatibility mode with `--noavx2`. Lastly, you can try turning off mmap with `--nommap`. 
 - Big context still too slow? Try the `--smartcontext` flag to reduce prompt processing frequency. Also, you can try to run with your GPU using CLBlast, with `--useclblast` flag for a speedup
+- Want even more speedup? Combine `--useclblast` with `--gpulayers` to offload entire layers to the GPU! **Much faster, but uses more VRAM**. Experiment to determine number of layers to offload.
 
-For more information, be sure to run the program with the --help flag.
+For more information, be sure to run the program with the `--help` flag.
 
 ## Compiling on Windows
 - If you want to compile your binaries from source at Windows, the easiest way is:
@@ -62,12 +58,13 @@ For more information, be sure to run the program with the --help flag.
 - The other files are also under the AGPL v3.0 License unless otherwise stated
 
 ## Notes
-- Generation delay scales linearly with original prompt length. If OpenBLAS is enabled then prompt ingestion becomes about 2-3x faster. This is automatic on windows, but will require linking on OSX and Linux.
+- Generation delay scales linearly with original prompt length. If OpenBLAS is enabled then prompt ingestion becomes about 2-3x faster. This is automatic on windows, but will require linking on OSX and Linux. CLBlast speeds this up even further, and `--gpulayers` + `--useclblast` more so.
 - I have heard of someone claiming a false AV positive report. The exe is a simple pyinstaller bundle that includes the necessary python scripts and dlls to run. If this still concerns you, you might wish to rebuild everything from source code using the makefile, and you can rebuild the exe yourself with pyinstaller by using `make_pyinstaller.bat`
 - Supported GGML models: 
-  - LLAMA (All versions including ggml, ggmf, ggjt, gpt4all). Supports CLBlast and OpenBLAS acceleration for all versions.
+  - LLAMA (All versions including ggml, ggmf, ggjt v1,v2,v3, openllama, gpt4all). Supports CLBlast and OpenBLAS acceleration for all versions.
   - GPT-2 (All versions, including legacy f16, newer format + quanitzed, cerebras) Supports OpenBLAS acceleration only for newer format. 
   - GPT-J (All versions including legacy f16, newer format + quantized, pyg.cpp, new pygmalion, janeway etc.) Supports OpenBLAS acceleration only for newer format. 
   - RWKV (all formats except Q4_1_O).
   - GPT-NeoX / Pythia / StableLM / Dolly / RedPajama
+  - MPT models (ggjt v3)
   - Basically every single current and historical GGML format that has ever existed should be supported, except for bloomz.cpp due to lack of demand.
