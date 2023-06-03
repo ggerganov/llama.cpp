@@ -87,6 +87,8 @@ ModelLoadResult gpt2_model_load(const std::string & fname, gpt2_model & model, g
 
             vocab.token_to_id[word] = i;
             vocab.id_to_token[i] = word;
+
+            // if (i < 10) fprintf(stderr, "%.s: vocab[%d] = '%s'\n", __func__, i, word.c_str());
         }
     }
 
@@ -113,6 +115,10 @@ ModelLoadResult gpt2_model_load(const std::string & fname, gpt2_model & model, g
         const int n_ctx   = hparams.n_ctx;
         const int n_vocab = hparams.n_vocab;
 
+        const int head_dim = n_embd / hparams.n_head;
+        const int kv_heads = hparams.n_head; // 1 if MQA else hparams.n_head
+        const int kv_dim   = kv_heads * head_dim;
+
         ctx_size += n_embd*ggml_type_sizef(GGML_TYPE_F32); // ln_f_g
         ctx_size += n_embd*ggml_type_sizef(GGML_TYPE_F32); // ln_f_b
 
@@ -126,8 +132,8 @@ ModelLoadResult gpt2_model_load(const std::string & fname, gpt2_model & model, g
         ctx_size += n_layer*(n_embd*ggml_type_sizef(GGML_TYPE_F32)); // ln_2_g
         ctx_size += n_layer*(n_embd*ggml_type_sizef(GGML_TYPE_F32)); // ln_2_b
 
-        ctx_size += n_layer*(3*n_embd*n_embd*ggml_type_sizef(wtype));         // c_attn_attn_w
-        ctx_size += n_layer*(       3*n_embd*ggml_type_sizef(GGML_TYPE_F32)); // c_attn_attn_b
+        ctx_size += n_layer*((n_embd + 2*kv_dim)*n_embd*ggml_type_sizef(wtype));         // c_attn_attn_w // TODO:
+        ctx_size += n_layer*(       (n_embd + 2*kv_dim)*ggml_type_sizef(GGML_TYPE_F32)); // c_attn_attn_b
 
         ctx_size += n_layer*(n_embd*n_embd*ggml_type_sizef(wtype));           // c_attn_proj_w
         ctx_size += n_layer*(       n_embd*ggml_type_sizef(GGML_TYPE_F32));   // c_attn_proj_b
@@ -138,12 +144,11 @@ ModelLoadResult gpt2_model_load(const std::string & fname, gpt2_model & model, g
         ctx_size += n_layer*(4*n_embd*n_embd*ggml_type_sizef(wtype));         // c_mlp_proj_w
         ctx_size += n_layer*(         n_embd*ggml_type_sizef(GGML_TYPE_F32)); // c_mlp_proj_b
 
-        ctx_size += 1.5*(n_ctx*n_layer*n_embd*ggml_type_sizef(GGML_TYPE_F32)); // memory_k
-        ctx_size += 1.5*(n_ctx*n_layer*n_embd*ggml_type_sizef(GGML_TYPE_F32)); // memory_v
+        ctx_size += n_ctx*n_layer*n_embd*ggml_type_sizef(memory_type); // memory_k
+        ctx_size += n_ctx*n_layer*n_embd*ggml_type_sizef(memory_type); // memory_v
 
         ctx_size += (6 + 12*n_layer)*512; // object overhead
 
-        printf("%s: ggml tensor size = %d bytes\n", __func__, (int) sizeof(ggml_tensor));
         printf("%s: ggml ctx size = %6.2f MB\n", __func__, ctx_size/(1024.0*1024.0));
     }
 
@@ -171,6 +176,10 @@ ModelLoadResult gpt2_model_load(const std::string & fname, gpt2_model & model, g
         const int n_ctx   = hparams.n_ctx;
         const int n_vocab = hparams.n_vocab;
 
+        const int head_dim = n_embd / hparams.n_head;
+        const int kv_heads = hparams.n_head; // 1 if MQA else hparams.n_head
+        const int kv_dim   = kv_heads * head_dim;
+
         model.layers.resize(n_layer);
 
         model.ln_f_g = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_embd);
@@ -197,13 +206,13 @@ ModelLoadResult gpt2_model_load(const std::string & fname, gpt2_model & model, g
             layer.ln_2_g        = ggml_new_tensor_1d(ctx, GGML_TYPE_F32,   n_embd);
             layer.ln_2_b        = ggml_new_tensor_1d(ctx, GGML_TYPE_F32,   n_embd);
 
-            layer.c_attn_attn_w = ggml_new_tensor_2d(ctx, wtype,           n_embd, 3*n_embd);
-            layer.c_attn_attn_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, 3*n_embd);
+            layer.c_attn_attn_w = ggml_new_tensor_2d(ctx, wtype,           n_embd, n_embd + 2*kv_dim);
+            layer.c_attn_attn_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_embd + 2*kv_dim);
 
             layer.c_attn_proj_w = ggml_new_tensor_2d(ctx, wtype,           n_embd, n_embd);
             layer.c_attn_proj_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32,   n_embd);
 
-            layer.c_mlp_fc_w    = ggml_new_tensor_2d(ctx, wtype,           n_embd, 4*n_embd);
+            layer.c_mlp_fc_w    = ggml_new_tensor_2d(ctx, wtype,           n_embd, 4*n_embd); //TODO: 4*n_embd = config.n_inner
             layer.c_mlp_fc_b    = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, 4*n_embd);
 
             layer.c_mlp_proj_w  = ggml_new_tensor_2d(ctx, wtype,         4*n_embd, n_embd);
@@ -240,9 +249,9 @@ ModelLoadResult gpt2_model_load(const std::string & fname, gpt2_model & model, g
 
         const int n_mem      = n_layer*n_ctx;
         const int n_elements = n_embd*n_mem;
-       
-        model.memory_k = ggml_new_tensor_1d(ctx, memory_type, n_elements*1.5);
-        model.memory_v = ggml_new_tensor_1d(ctx, memory_type, n_elements*1.5);
+
+        model.memory_k = ggml_new_tensor_1d(ctx, memory_type, n_elements);
+        model.memory_v = ggml_new_tensor_1d(ctx, memory_type, n_elements);
 
         const size_t memory_size = ggml_nbytes(model.memory_k) + ggml_nbytes(model.memory_v);
 
@@ -405,7 +414,7 @@ bool gpt2_eval(
     static void * buf = malloc(buf_size);
 
     if (mem_per_token > 0 && (mem_per_token*N*2 + 64u*1024*1024) > buf_size) {
-        const size_t buf_size_new = 320u*1024*1024 + 2*(mem_per_token*N); // add 10% to account for ggml object overhead
+        const size_t buf_size_new = 320u*1024*1024 + 1.7*(mem_per_token*N); // add 10% to account for ggml object overhead
         //printf("\n%s: reallocating buffer from %zu to %zu bytes\n", __func__, buf_size, buf_size_new);
 
         // reallocate
@@ -511,7 +520,7 @@ bool gpt2_eval(
                         ggml_reshape_3d(ctx0,
                             ggml_view_1d(ctx0, model.memory_k, (n_past + N)*n_embd, il*n_ctx*ggml_element_size(model.memory_k)*n_embd),
                             n_embd/n_head, n_head, n_past + N),
-                        0, 2, 1, 3);
+                        0, 2, 1, 3); //TODO: need to be tiled
 
             // GG: flash attention
             //struct ggml_tensor * V =
@@ -527,7 +536,7 @@ bool gpt2_eval(
 
             // K * Q
             // [n_past + N, N, 12]
-            struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
+            struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q); //TODO: check if it broadcasts
 
             // KQ_scaled = KQ / sqrt(n_embd/n_head)
             // [n_past + N, N, 12]
@@ -691,7 +700,7 @@ bool gpt2_eval(
     if (mem_per_token == 0) {
         mem_per_token = ggml_used_mem(ctx0)/N;
     }
-    //printf("used_mem = %zu\n", ggml_used_mem(ctx0));
+    //printf("used_mem = %zu MB\n", ggml_used_mem(ctx0)/(1024*1024));
 
     ggml_free(ctx0);
 
