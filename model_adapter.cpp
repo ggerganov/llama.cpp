@@ -98,7 +98,11 @@ void print_tok_vec(std::vector<float> &embd)
        //we need to read more to determine
        int32_t vocabsiz = 0;
        fin.read((char *) &vocabsiz, sizeof(int32_t));
-       if(vocabsiz==50400) //know GPT-J vocab size
+       if(vocabsiz==4096) //actually the d_model for mpt
+       {
+           fileformat = FileFormat::MPT_1;
+       }
+       else if(vocabsiz==50400) //know GPT-J vocab size
        {
            fileformat = FileFormat::GPTJ_1;
            uint32_t temp;

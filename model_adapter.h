@@ -43,6 +43,8 @@ enum FileFormat
     NEOX_5=404, //unshuffled redpajama
     NEOX_6=405, //using 16bit scalar
     NEOX_7=406, //using 16bit scalar redpajama
+
+    MPT_1=500, //first supported mpt version
 };
 
 enum ModelLoadResult

@@ -407,3 +407,50 @@ struct gpt_neox_model {
 };
 
 
+// no defaults for now
+struct mpt_hparams {
+    int32_t d_model      = 0;
+    int32_t max_seq_len  = 0;
+    int32_t n_heads      = 0;
+    int32_t n_layers     = 0;
+    int32_t n_vocab      = 0;
+    float alibi_bias_max = 0;
+    float clip_qkv       = 0;
+    int32_t ftype        = 0;
+    int32_t n_ctx        = 0;
+
+};
+
+struct mpt_layer {
+    // pre normalization
+    struct ggml_tensor * norm_1_weight;
+
+    // attention
+    struct ggml_tensor * c_attn_wqkv_weight;
+    struct ggml_tensor * c_attn_out_proj_weight;
+
+    // post normalization
+    struct ggml_tensor * norm_2_weight;
+
+    // ff
+    struct ggml_tensor * ffn_up_proj;
+    struct ggml_tensor * ffn_down_proj;
+};
+
+struct mpt_model {
+    mpt_hparams hparams;
+
+    struct ggml_tensor * wte_weight;    // position embedding
+    struct ggml_tensor * norm_f_weight; // language model head
+
+    std::vector<mpt_layer> layers;
+
+    // key + value memory
+    struct ggml_tensor * memory_k;
+    struct ggml_tensor * memory_v;
+
+    struct ggml_context * ctx;
+    std::map<std::string, struct ggml_tensor *> tensors;
+};
+
+
