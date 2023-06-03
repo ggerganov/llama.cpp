@@ -1499,16 +1499,6 @@ void ggml_vec_dot_q3_K_q8_K(const int n, float * restrict s, const void * restri
 
 }
 
-#ifdef __AVX__
-static inline int32_t hsum_int_4(__m128i v) {
-    __m128i hi64  = _mm_unpackhi_epi64(v, v);
-    __m128i sum64 = _mm_add_epi32(hi64, v);
-    __m128i hi32  = _mm_shufflelo_epi16(sum64, _MM_SHUFFLE(1, 0, 3, 2));
-    __m128i sum32 = _mm_add_epi32(sum64, hi32);
-    return _mm_cvtsi128_si32(sum32);
-}
-#endif
-
 void ggml_vec_dot_q4_K_q8_K(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
     assert(n % QK_K == 0);
 
@@ -1521,7 +1511,7 @@ void ggml_vec_dot_q4_K_q8_K(const int n, float * restrict s, const void * restri
     static const uint32_t kmask2 = 0x0f0f0f0f;
     static const uint32_t kmask3 = 0x03030303;
 
-    uint32_t utmp[3];
+    uint32_t utmp[4];
 
 #ifdef __ARM_NEON
 
