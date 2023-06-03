@@ -1194,27 +1194,14 @@ static bool llama_model_load(
     }
 }
 
-// evaluate the transformer
-//
-//   - lctx:      llama context
-//   - tokens:    new batch of tokens to process
-//   - n_past:    the context size so far
-//   - n_threads: number of threads to use
-//
-static bool llama_eval_internal(
-        llama_context & lctx,
-    const llama_token * tokens,
+static bool llama_eval_internal_tensor(
+            llama_context& lctx,
+            ggml_context* ctx0,
+            ggml_tensor* inpL,
             const int   n_tokens,
             const int   n_past,
-            const int   n_threads) {
-
-    // enforce that the first token is BOS
-    if (n_past == 0 && tokens[0] != llama_token_bos()) {
-        fprintf(stderr, "%s: first token must be BOS\n", __func__);
-        return false;
-    }
-
-    const int64_t t_start_us = ggml_time_us();
+            const int   n_threads,
+            const int64_t t_start_us) {
 
     const int N = n_tokens;
 
@@ -1222,8 +1209,6 @@ static bool llama_eval_internal(
     const auto & hparams = model.hparams;
 
     const auto & kv_self = model.kv_self;
-
-    LLAMA_ASSERT(!!kv_self.ctx);
 
     const int n_embd  = hparams.n_embd;
     const int n_layer = hparams.n_layer;
@@ -1233,26 +1218,14 @@ static bool llama_eval_internal(
     const int n_rot   = hparams.n_embd/hparams.n_head;
 
     auto & mem_per_token = lctx.mem_per_token;
-    auto & buf_compute   = lctx.buf_compute;
 
-    struct ggml_init_params params = {
-        /*.mem_size   =*/ buf_compute.size,
-        /*.mem_buffer =*/ buf_compute.addr,
-        /*.no_alloc   =*/ false,
-    };
-
-    struct ggml_context * ctx0 = ggml_init(params);
+    LLAMA_ASSERT(!!kv_self.ctx);
 
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
     ggml_cgraph gf = {};
     gf.n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
 
-    struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
-    ggml_set_name(embd, "embd");
-    memcpy(embd->data, tokens, N*ggml_element_size(embd));
-
-    struct ggml_tensor * inpL = ggml_get_rows(ctx0, model.tok_embeddings, embd);
 
     for (int il = 0; il < n_layer; ++il) {
         struct ggml_tensor * inpSA = inpL;
@@ -1492,6 +1465,52 @@ static bool llama_eval_internal(
     }
 
     return true;
+}
+
+
+// evaluate the transformer
+//
+//   - lctx:      llama context
+//   - tokens:    new batch of tokens to process
+//   - n_past:    the context size so far
+//   - n_threads: number of threads to use
+//
+static bool llama_eval_internal(
+        llama_context & lctx,
+    const llama_token * tokens,
+            const int   n_tokens,
+            const int   n_past,
+            const int   n_threads) {
+
+    // enforce that the first token is BOS
+    if (n_past == 0 && tokens[0] != llama_token_bos()) {
+        fprintf(stderr, "%s: first token must be BOS\n", __func__);
+        return false;
+    }
+
+    const auto & model   = lctx.model;
+
+    const int64_t t_start_us = ggml_time_us();
+
+    const int N = n_tokens;
+
+    auto & buf_compute   = lctx.buf_compute;
+
+    struct ggml_init_params params = {
+        /*.mem_size   =*/ buf_compute.size,
+        /*.mem_buffer =*/ buf_compute.addr,
+        /*.no_alloc   =*/ false,
+    };
+
+    struct ggml_context * ctx0 = ggml_init(params);
+
+
+    struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
+    ggml_set_name(embd, "embd");
+    memcpy(embd->data, tokens, N*ggml_element_size(embd));
+
+    struct ggml_tensor * inpL = ggml_get_rows(ctx0, model.tok_embeddings, embd);
+    return llama_eval_internal_tensor(lctx, ctx0, inpL, N, n_past, n_threads, t_start_us);
 }
 
 //
@@ -2214,6 +2233,97 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     }
 }
 
+
+ggml_tensor *quantize_float_tensor(ggml_context *ctx0, ggml_tensor* tensor,
+                                   llama_ftype ftype, int nthread) {
+
+  ggml_type quantized_type;
+  switch (ftype) {
+  case LLAMA_FTYPE_MOSTLY_Q4_0:
+    quantized_type = GGML_TYPE_Q4_0;
+    break;
+  case LLAMA_FTYPE_MOSTLY_Q4_1:
+    quantized_type = GGML_TYPE_Q4_1;
+    break;
+  case LLAMA_FTYPE_MOSTLY_Q5_0:
+    quantized_type = GGML_TYPE_Q5_0;
+    break;
+  case LLAMA_FTYPE_MOSTLY_Q5_1:
+    quantized_type = GGML_TYPE_Q5_1;
+    break;
+  case LLAMA_FTYPE_MOSTLY_Q8_0:
+    quantized_type = GGML_TYPE_Q8_0;
+    break;
+  default:
+    throw format("invalid output file type %d\n", ftype);
+  };
+  void *new_data;
+  size_t new_size;
+  llama_buffer work;
+  float *f32_data;
+  size_t nelements = tensor->ne[0] * tensor->ne[1];
+  llama_buffer f32_conv_buf;
+  f32_data = (float *)tensor->data;
+  work.resize(nelements * 4);
+  new_data = work.addr;
+  std::vector<int64_t> hist_cur(1 << 4, 0);
+  std::vector<std::thread> workers;
+  std::mutex mutex;
+  enum ggml_type new_type = quantized_type;
+
+  int chunk_size = 32 * 512;
+  const int nchunk = (nelements + chunk_size - 1) / chunk_size;
+  const int nthread_use =
+      nthread > 1 ? std::max(1, std::min(nthread, nchunk)) : 1;
+  if (nthread_use < 2) {
+    new_size = ggml_quantize_chunk(new_type, f32_data, new_data, 0, nelements,
+                                   hist_cur.data());
+  } else {
+    size_t counter = 0;
+    new_size = 0;
+    auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data,
+                    new_data, nelements, chunk_size]() {
+      std::vector<int64_t> local_hist;
+      size_t local_size = 0;
+      while (true) {
+        std::unique_lock<std::mutex> lock(mutex);
+        size_t first = counter;
+        counter += chunk_size;
+        if (first >= nelements) {
+          if (!local_hist.empty()) {
+            for (int j = 0; j < int(local_hist.size()); ++j) {
+              hist_cur[j] += local_hist[j];
+            }
+            new_size += local_size;
+          }
+          break;
+        }
+        lock.unlock();
+        size_t last = std::min(nelements, first + chunk_size);
+        if (local_hist.empty()) {
+          local_hist.resize(hist_cur.size(), 0);
+        }
+        local_size += ggml_quantize_chunk(new_type, f32_data, new_data, first,
+                                          last - first, local_hist.data());
+      }
+    };
+    if ((int)workers.size() < nthread_use - 1) {
+      workers.resize(nthread_use - 1);
+    }
+    for (int it = 0; it < nthread_use - 1; ++it) {
+      workers[it] = std::thread(compute);
+    }
+    compute();
+    for (int it = 0; it < nthread_use - 1; ++it) {
+      workers[it].join();
+    }
+  }
+  ggml_tensor *ret =
+      ggml_new_tensor_2d(ctx0, new_type, tensor->ne[0], tensor->ne[1]);
+  memcpy(ret->data, new_data, new_size);
+  return ret;
+}
+
 //
 // interface implementation
 //
@@ -2907,6 +3017,52 @@ int llama_eval(
                          int   n_past,
                          int   n_threads) {
     if (!llama_eval_internal(*ctx, tokens, n_tokens, n_past, n_threads)) {
+        fprintf(stderr, "%s: failed to eval\n", __func__);
+        return 1;
+    }
+
+    // get a more accurate load time, upon first eval
+    // TODO: fix this
+    if (!ctx->has_evaluated_once) {
+        ctx->t_load_us = ggml_time_us() - ctx->t_start_us;
+        ctx->has_evaluated_once = true;
+    }
+
+    return 0;
+}
+
+int llama_eval_float(
+        struct llama_context * ctx,
+           const float * input,
+                         int   n_tokens,
+                         int   n_past,
+                         int   n_threads) {
+    const auto & model   = ctx->model;
+
+    const int64_t t_start_us = ggml_time_us();
+
+    const int N = n_tokens;
+
+    auto & buf_compute   = ctx->buf_compute;
+
+    struct ggml_init_params params = {
+        /*.mem_size   =*/ buf_compute.size,
+        /*.mem_buffer =*/ buf_compute.addr,
+        /*.no_alloc   =*/ false,
+    };
+
+    struct ggml_context * ctx0 = ggml_init(params);
+
+
+    struct ggml_tensor *input_f =
+      ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, N * model.hparams.n_embd);
+  memcpy(input_f->data, input,
+         N * model.hparams.n_embd * ggml_element_size(input_f));
+  struct ggml_tensor *inpL =
+      quantize_float_tensor(ctx0, input_f, model.hparams.ftype, n_threads);
+
+    ;
+    if (!llama_eval_internal_tensor(*ctx, ctx0, inpL, N, n_past, n_threads, t_start_us)) {
         fprintf(stderr, "%s: failed to eval\n", __func__);
         return 1;
     }

@@ -173,6 +173,13 @@ extern "C" {
                              int   n_past,
                              int   n_threads);
 
+    LLAMA_API int llama_eval_float(
+            struct llama_context * ctx,
+               const float * embds,
+                             int   n_tokens,
+                             int   n_past,
+                             int   n_threads);
+
     // Convert the provided text into tokens.
     // The tokens pointer must be large enough to hold the resulting tokens.
     // Returns the number of tokens on success, no more than n_max_tokens
