@@ -243,7 +243,6 @@ struct llama_context {
 
     // METAL
     ggml_mtl_context * mtl_ctx = NULL;
-    ggml_cgraph        mtl_gf;
 
     int    buf_last = 0;
     size_t buf_max_size[LLAMA_MAX_SCRATCH_BUFFERS] = { 0 };
@@ -1262,7 +1261,7 @@ static bool llama_eval_internal(
 
         struct ggml_tensor * cur;
 
-        lctx.use_buf(ctx0, 0);
+        //lctx.use_buf(ctx0, 0);
 
         // norm
         {
@@ -1378,7 +1377,7 @@ static bool llama_eval_internal(
                     cur);
         }
 
-        lctx.use_buf(ctx0, 1);
+        //lctx.use_buf(ctx0, 1);
 
         struct ggml_tensor * inpFF = ggml_add(ctx0, cur, inpSA);
 
@@ -1416,7 +1415,7 @@ static bool llama_eval_internal(
         inpL = cur;
     }
 
-    lctx.use_buf(ctx0, 0);
+    //lctx.use_buf(ctx0, 0);
 
     // used at the end to optionally extract the embeddings
     struct ggml_tensor * embeddings = NULL;
@@ -1435,85 +1434,20 @@ static bool llama_eval_internal(
     // lm_head
     inpL = ggml_mul_mat(ctx0, model.output, inpL);
 
-    lctx.use_buf(ctx0, -1);
+    //lctx.use_buf(ctx0, -1);
 
     // logits -> probs
     //inpL = ggml_soft_max_inplace(ctx0, inpL);
 
     // run the computation
     ggml_build_forward_expand(&gf, inpL);
-    ggml_graph_compute       (ctx0, &gf);
 
-    // TODO: not needed anymore, keeping for a bit
-    //// lets export a smaller graph to get things rolling -- baby steps first
-    //{
-    //    struct ggml_tensor * t = ggml_get_tensor(ctx0, "mtl-check");
-    //    if (!t) {
-    //        fprintf(stderr, "%s: failed to find tensor 'mtl-check'\n", __func__);
-    //        exit(1);
-    //    }
-    //    ggml_build_forward_expand(&gf, t);
-    //}
-
-    // print
-    //{
-    //    auto print_t_f32 = [&](struct ggml_tensor * t) {
-    //        float * data = (float *)t->data;
-    //        printf("data: ");
-    //        for (int i = 0; i < (int) t->ne[0]; i++) {
-    //            printf("%f ", data[i]);
-    //        }
-    //        printf("\n");
-    //        double sum = 0.0;
-    //        for (int i = 0; i < ggml_nelements(t); i++) {
-    //            double cur = data[i];
-    //            if (isinf(cur)) continue;
-    //            sum += data[i];
-    //        }
-    //        printf("sum:  %f\n", sum);
-    //    };
-    //    auto print_t_f16 = [&](struct ggml_tensor * t) {
-    //        ggml_fp16_t * data = (ggml_fp16_t *)t->data;
-    //        printf("data: ");
-    //        for (int i = 0; i < (int) t->ne[0]; i++) {
-    //            printf("%f ", ggml_fp16_to_fp32(data[i]));
-    //        }
-    //        printf("\n");
-    //        double sum = 0.0;
-    //        printf("nb: %lld %lld %lld %lld\n", t->nb[0], t->nb[1], t->nb[2], t->nb[3]);
-    //        for (int64_t i3 = 0; i3 < t->ne[3]; ++i3) {
-    //            for (int64_t i2 = 0; i2 < t->ne[2]; ++i2) {
-    //                for (int64_t i1 = 0; i1 < t->ne[1]; ++i1) {
-    //                    for (int64_t i0 = 0; i0 < t->ne[0]; ++i0) {
-    //                        const size_t offs = i3*t->nb[3] + i2*t->nb[2] + i1*t->nb[1] + i0*t->nb[0];
-    //                        const ggml_fp16_t cur = *((ggml_fp16_t *)((char *) data + offs));
-    //                        const float curf = ggml_fp16_to_fp32(cur);
-    //                        if (isinf(curf)) continue;
-    //                        sum += curf;
-    //                    }
-    //                }
-    //            }
-    //        }
-    //        printf("sum:  %f\n", sum);
-    //    };
-
-    //    ggml_graph_compute(ctx0, &gf);
-
-    //    {
-    //        auto * t = ggml_get_tensor(ctx0, "mtl-check");
-    //        switch (t->type) {
-    //            case GGML_TYPE_F32:
-    //                print_t_f32(t);
-    //                break;
-    //            case GGML_TYPE_F16:
-    //                print_t_f16(t);
-    //                break;
-    //            default:
-    //                fprintf(stderr, "%s: unsupported type\n", __func__);
-    //                exit(1);
-    //        }
-    //    }
-    //}
+    // METAL
+    if (lctx.mtl_ctx) {
+        llama_mtl_eval(lctx.mtl_ctx, &gf, tokens, n_tokens, n_past);
+    } else {
+        ggml_graph_compute (ctx0, &gf);
+    }
 
     if (cgraph_fname) {
         // TODO: tmp add the vocabulary as a leaf to the computation graph, until better approach is found
@@ -2402,22 +2336,6 @@ struct llama_context * llama_init_from_file(
 
     ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
-    // METAL
-    if (params.cgraph) {
-        params.vocab_only = true;
-
-        // load the compute graph
-        struct ggml_context * ctx_data = NULL;
-        struct ggml_context * ctx_eval = NULL;
-
-        struct ggml_cgraph gf = ggml_graph_import("llama.ggml", &ctx_data, &ctx_eval);
-        gf.n_threads = 1;
-
-        // this allocates all Metal resources and memory buffers
-        ctx->mtl_ctx = llama_mtl_init(ctx_data, ctx_eval, NULL, &gf);
-        ctx->mtl_gf  = gf;
-    }
-
     if (!llama_model_load(path_model, *ctx, params.n_ctx, params.n_gpu_layers, memory_type,
                 params.use_mmap, params.use_mlock, params.vocab_only,
                 params.progress_callback, params.progress_callback_user_data)) {
@@ -2438,11 +2356,7 @@ struct llama_context * llama_init_from_file(
             const size_t memory_size = ggml_nbytes(ctx->model.kv_self.k) + ggml_nbytes(ctx->model.kv_self.v);
             fprintf(stderr, "%s: kv self size  = %7.2f MB\n", __func__, memory_size / 1024.0 / 1024.0);
         }
-    }
 
-    // METAL
-    // TODO: changed the behavior here for vocab_only -- reconsider implications later
-    {
         const auto & hparams = ctx->model.hparams;
 
         // resized during inference
@@ -2460,6 +2374,20 @@ struct llama_context * llama_init_from_file(
 
         ctx->buf_scratch[0].resize(MEM_REQ_SCRATCH0().at(ctx->model.type));
         ctx->buf_scratch[1].resize(MEM_REQ_SCRATCH1().at(ctx->model.type));
+    }
+
+    // METAL
+    if (params.cgraph) {
+        // this allocates all Metal resources and memory buffers
+        //ctx->mtl_ctx = llama_mtl_init(ctx_data, ctx_eval, &gf);
+        ctx->mtl_ctx = llama_mtl_init(
+                ggml_get_mem_buffer(ctx->model.ctx),
+                ggml_get_mem_size  (ctx->model.ctx),
+                ctx->buf_compute.addr,
+                ctx->buf_compute.size,
+                ctx->model.kv_self.buf.addr,
+                ctx->model.kv_self.buf.size,
+                32*ctx->model.hparams.n_vocab*sizeof(float));
     }
 
     return ctx;
@@ -3077,25 +3005,9 @@ int llama_eval(
                          int   n_tokens,
                          int   n_past,
                          int   n_threads) {
-    // METAL
-    if (ctx->mtl_ctx) {
-        llama_mtl_eval(ctx->mtl_ctx, &ctx->mtl_gf, tokens, n_tokens, n_past);
-
-        const float * logits = llama_mtl_get_logits(ctx->mtl_ctx);
-
-        // extract logits
-        {
-            const int n_vocab = ctx->model.hparams.n_vocab;
-            auto & logits_out = ctx->logits;
-
-            logits_out.resize(n_vocab);
-            memcpy(logits_out.data(), logits, sizeof(float)*n_vocab);
-        }
-    } else {
-        if (!llama_eval_internal(*ctx, tokens, n_tokens, n_past, n_threads, nullptr)) {
-            fprintf(stderr, "%s: failed to eval\n", __func__);
-            return 1;
-        }
+    if (!llama_eval_internal(*ctx, tokens, n_tokens, n_past, n_threads, nullptr)) {
+        fprintf(stderr, "%s: failed to eval\n", __func__);
+        return 1;
     }
 
     // get a more accurate load time, upon first eval

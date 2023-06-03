@@ -24,6 +24,8 @@ int main(int argc, char ** argv) {
     struct ggml_cgraph gf = ggml_graph_import(fname_cgraph, &ctx_data, &ctx_eval);
     gf.n_threads = 1;
 
+    int32_t n_vocab = 0;
+
     {
         struct ggml_tensor * t_vocab = ggml_graph_get_tensor(&gf, "vocab");
         if (t_vocab == NULL) {
@@ -33,7 +35,6 @@ int main(int argc, char ** argv) {
 
         const char * ptr = (const char *) t_vocab->data;
 
-        int32_t n_vocab = 0;
         memcpy(&n_vocab, ptr, sizeof(n_vocab)); ptr += sizeof(n_vocab);
 
         printf("%s: n_vocab = %d\n", __func__, n_vocab);
@@ -49,20 +50,14 @@ int main(int argc, char ** argv) {
         }
     }
 
-    // allocate work context
-    static size_t buf_size = gf.work_size; // TODO
-    static void * buf = malloc(buf_size);
-
-    struct ggml_init_params params = {
-        /*.mem_size   =*/ buf_size,
-        /*.mem_buffer =*/ buf,
-        /*.no_alloc   =*/ false,
-    };
-
-    struct ggml_context * ctx_work = ggml_init(params);
-
     // this allocates all Metal resources and memory buffers
-    auto * ctx_mtl = llama_mtl_init(ctx_data, ctx_eval, ctx_work, &gf);
+    auto * ctx_mtl = llama_mtl_init(
+            ggml_get_mem_buffer(ctx_data),
+            ggml_get_mem_size  (ctx_data),
+            ggml_get_mem_buffer(ctx_eval),
+            ggml_get_mem_size  (ctx_eval),
+            NULL, 0, // cache
+            32*n_vocab*sizeof(float));
 
     // TODO: tmp to match the input used when creating the cgraph
     {
@@ -90,7 +85,6 @@ int main(int argc, char ** argv) {
 
     llama_mtl_free(ctx_mtl);
 
-    ggml_free(ctx_work);
     ggml_free(ctx_data);
     ggml_free(ctx_eval);
 

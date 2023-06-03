@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stddef.h>
+
 struct ggml_context;
 struct ggml_cgraph;
 
@@ -10,10 +12,13 @@ extern "C" {
 struct ggml_mtl_context;
 
 struct ggml_mtl_context * llama_mtl_init(
-        struct ggml_context * ctx_data,
-        struct ggml_context * ctx_eval,
-        struct ggml_context * ctx_work,
-        struct ggml_cgraph  * gf);
+        void   * data_buf,
+        size_t   data_size,
+        void   * eval_buf,
+        size_t   eval_size,
+        void   * cach_buf,
+        size_t   cach_size,
+        size_t   outp_size);
 
 void llama_mtl_free(struct ggml_mtl_context * ctx);
 

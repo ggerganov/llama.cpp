@@ -11,11 +11,16 @@
 #else
 #define mtl_printf(...) fprintf(stderr, __VA_ARGS__)
 #endif
+//#define mtl_printf(...)
 
 struct ggml_mtl_context {
-    struct ggml_context * ctx_data;
-    struct ggml_context * ctx_eval;
-    struct ggml_context * ctx_work;
+    void   * data_buf;
+    size_t   data_size;
+    void   * eval_buf;
+    size_t   eval_size;
+    void   * cach_buf;
+    size_t   cach_size;
+    size_t   outp_size;
 
     float * logits;
 
@@ -25,6 +30,7 @@ struct ggml_mtl_context {
 
     id<MTLBuffer> buffer_data;
     id<MTLBuffer> buffer_eval;
+    id<MTLBuffer> buffer_cach;
 
     id<MTLBuffer> out;
 
@@ -82,17 +88,23 @@ struct ggml_mtl_context {
 NSString * const msl_library_llama = @"see mtl.metal";
 
 struct ggml_mtl_context * llama_mtl_init(
-    struct ggml_context * ctx_data,
-    struct ggml_context * ctx_eval,
-    struct ggml_context * ctx_work,
-    struct ggml_cgraph  * gf) {
+                     void   * data_buf,
+                     size_t   data_size,
+                     void   * eval_buf,
+                     size_t   eval_size,
+                     void   * cach_buf,
+                     size_t   cach_size,
+                     size_t   outp_size) {
     fprintf(stderr, "%s: allocating\n", __func__);
 
     struct ggml_mtl_context * ctx = malloc(sizeof(struct ggml_mtl_context));
 
-    ctx->ctx_data = ctx_data;
-    ctx->ctx_eval = ctx_eval;
-    ctx->ctx_work = ctx_work;
+    ctx->data_buf  = data_buf;
+    ctx->data_size = data_size;
+    ctx->eval_buf  = eval_buf;
+    ctx->eval_size = eval_size;
+    ctx->cach_buf  = cach_buf;
+    ctx->cach_size = cach_size;
 
     ctx->device = MTLCreateSystemDefaultDevice();
     ctx->queue  = [ctx->device newCommandQueue];
@@ -208,9 +220,10 @@ struct ggml_mtl_context * llama_mtl_init(
     // TODO: how to use MTLStorageModeManaged?
     // TODO: see if we can avoid this copy somehow
     {
-        const void * mem_buffer = ggml_get_mem_buffer(ctx_data);
-        const size_t mem_size   = ggml_get_mem_size(ctx_data);
+        void * mem_buffer = data_buf;
+        const size_t mem_size   = data_size;
 
+        //ctx->buffer_data = [ctx->device newBufferWithBytesNoCopy:mem_buffer length:mem_size options:MTLResourceStorageModeShared deallocator:nil];
         ctx->buffer_data = [ctx->device newBufferWithBytes:mem_buffer length:mem_size options:MTLResourceStorageModeShared];
 
         fprintf(stderr, "%s: allocated data buffer, size = %8.2f MB\n", __func__, mem_size / 1024.0 / 1024.0);
@@ -219,16 +232,26 @@ struct ggml_mtl_context * llama_mtl_init(
     // pin ctx_eval memory to GPU
     // this buffer will be used for the intermediate results of the evaluation
     {
-        const size_t mem_size = ggml_get_mem_size(ctx_eval);
+        const void * mem_buffer = eval_buf;
+        const size_t mem_size   = eval_size;
 
-        ctx->buffer_eval = [ctx->device newBufferWithLength:mem_size options:MTLResourceStorageModePrivate];
+        ctx->buffer_eval = [ctx->device newBufferWithBytes:mem_buffer length:mem_size options:MTLResourceStorageModeShared];
 
         fprintf(stderr, "%s: allocated eval buffer, size = %8.2f MB\n", __func__, mem_size / 1024.0 / 1024.0);
     }
 
+    if (cach_buf) {
+        const void * mem_buffer = cach_buf;
+        const size_t mem_size   = cach_size;
+
+        ctx->buffer_cach = [ctx->device newBufferWithBytes:mem_buffer length:mem_size options:MTLResourceStorageModeShared];
+
+        fprintf(stderr, "%s: allocated cach buffer, size = %8.2f MB\n", __func__, mem_size / 1024.0 / 1024.0);
+    }
+
     // allocate buffer for result extraction
     {
-        const size_t mem_size = ggml_nbytes(gf->nodes[gf->n_nodes - 1]);
+        const size_t mem_size = outp_size;
 
         ctx->out = [ctx->device newBufferWithLength:mem_size options:MTLResourceStorageModeShared];
 
@@ -246,30 +269,48 @@ void llama_mtl_free(struct ggml_mtl_context * ctx) {
 
 // get data / eval buffer + offset
 id<MTLBuffer> llama_mtl_get_buffer(struct ggml_mtl_context * ctx, struct ggml_tensor * t, size_t * offs) {
-    const int64_t offs_data = (int64_t) t->data - (int64_t) ggml_get_mem_buffer(ctx->ctx_data);
-    const int64_t offs_eval = (int64_t) t->data - (int64_t) ggml_get_mem_buffer(ctx->ctx_eval);
-
-    const bool is_data = (offs_eval < 0) || (offs_data >= 0 && offs_data < offs_eval);
+    const int64_t offs_data = (int64_t) t->data - (int64_t) ctx->data_buf;
+    const int64_t offs_eval = (int64_t) t->data - (int64_t) ctx->eval_buf;
+    const int64_t offs_cach = (int64_t) t->data - (int64_t) ctx->cach_buf;
 
     //const size_t t_size = ggml_nbytes(t);
-    const size_t t_offs = is_data ? offs_data : offs_eval;
 
     id<MTLBuffer> result;
+    size_t t_offs = 0;
 
-    if (is_data) {
-        //fprintf(stderr, "%s: data tensor '%16s', offs = %8ld, size = %8ld\n", __func__, t->name, t_offs, t_size);
+    if ( offs_data > 0 &&
+        (offs_eval < 0 || (offs_data < offs_eval)) &&
+        (offs_cach < 0 || (offs_data < offs_cach))
+       ) {
         result = ctx->buffer_data;
-    } else {
-        //fprintf(stderr, "%s: eval tensor '%16s', offs = %8ld, size = %8ld\n", __func__, t->name, t_offs, t_size);
-        result = ctx->buffer_eval;
+        t_offs = offs_data;
+        //fprintf(stderr, "%s: data tensor '%16s', offs = %8ld, size = %8ld\n", __func__, t->name, t_offs, t_size);
     }
 
-    if (result == nil) {
+    if ( offs_eval > 0 &&
+        (offs_data < 0 || (offs_eval < offs_data)) &&
+        (offs_cach < 0 || (offs_eval < offs_cach))
+       ) {
+        result = ctx->buffer_eval;
+        t_offs = offs_eval;
+        //fprintf(stderr, "%s: data tensor '%16s', offs = %8ld, size = %8ld\n", __func__, t->name, t_offs, t_size);
+    }
+
+    if ( offs_cach > 0 &&
+        (offs_data < 0 || (offs_cach < offs_data)) &&
+        (offs_eval < 0 || (offs_cach < offs_eval))
+       ) {
+        result = ctx->buffer_cach;
+        t_offs = offs_cach;
+        //fprintf(stderr, "%s: data tensor '%16s', offs = %8ld, size = %8ld\n", __func__, t->name, t_offs, t_size);
+    }
+
+    if (result == nil || (t_offs > ctx->data_size && t_offs > ctx->eval_size && t_offs > ctx->cach_size)) {
         fprintf(stderr, "%s: error: buffer is nil\n", __func__);
         GGML_ASSERT(false);
     }
 
-    if (offs != nil) {
+    if (offs != 0) {
         *offs = t_offs;
     }
 
@@ -284,48 +325,8 @@ int llama_mtl_eval(
                             int   n_past) {
     mtl_printf("%s: evaluating, n_tokens = %d, n_past = %d\n", __func__, n_tokens, n_past);
 
-    // adjust dynamic shapes
-    // TODO: wrong ...
-    //{
-    //    struct ggml_tensor * t = ggml_graph_get_tensor(gf, "embd");
-    //    t->ne[0] = n_tokens;
-    //}
-    //{
-    //    struct ggml_tensor * t = ggml_graph_get_tensor(gf, "Qpre");
-    //    t->src0->ne[2] = n_tokens;
-    //}
-    //{
-    //    struct ggml_tensor * t = ggml_graph_get_tensor(gf, "Kpre");
-    //    t->src0->ne[2] = n_tokens;
-    //}
-    //{
-    //    struct ggml_tensor * t = ggml_graph_get_tensor(gf, "Vcur");
-    //    t->ne[0] = n_tokens;
-    //}
-    //{
-    //    struct ggml_tensor * k = ggml_graph_get_tensor(gf, "k");
-    //    struct ggml_tensor * v = ggml_graph_get_tensor(gf, "v");
-    //    k->ne[0] = n_tokens*v->ne[1];
-    //    v->ne[0] = n_tokens;
-    //}
-    //{
-    //    struct ggml_tensor * t = ggml_graph_get_tensor(gf, "Q");
-    //    t->ne[1] = n_tokens;
-    //}
-    //{
-    //    struct ggml_tensor * t = ggml_graph_get_tensor(gf, "K");
-    //    t->ne[1] = n_past + n_tokens;
-    //}
-    //{
-    //    struct ggml_tensor * t = ggml_graph_get_tensor(gf, "KQV_merged_contiguous");
-    //    t->src1->ne[1] = n_tokens;
-    //}
-
     struct ggml_tensor * input = ggml_graph_get_tensor(gf, "embd");
     memcpy(input->data, tokens, n_tokens * sizeof(int));
-
-    id<MTLCommandBuffer> command_buffer  = [ctx->queue commandBuffer];
-    id<MTLComputeCommandEncoder> encoder = nil;
 
     size_t offs_src0 = 0;
     size_t offs_src1 = 0;
@@ -339,6 +340,9 @@ int llama_mtl_eval(
 
         memcpy((char *) id_dst.contents + offs_src0, embd->data, ggml_nbytes(embd));
     }
+
+    id<MTLCommandBuffer> command_buffer  = [ctx->queue commandBuffer];
+    id<MTLComputeCommandEncoder> encoder = nil;
 
     for (int i = 0; i < gf->n_nodes; ++i) {
         //mtl_printf("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
@@ -790,6 +794,9 @@ int llama_mtl_eval(
     ctx->logits = ctx->out.contents;
 
     const float * logits = ctx->logits;
+
+    struct ggml_tensor * t = gf->nodes[gf->n_nodes - 1];
+    memcpy(t->data, logits, ggml_nbytes(t));
 
 #if 1
     mtl_printf("logits: ");
