@@ -4,6 +4,7 @@
 #include <atomic>
 #include <sstream>
 #include <vector>
+#include <limits>
 
 #define CL_TARGET_OPENCL_VERSION 110
 #include <clblast.h>
@@ -616,7 +617,7 @@ static cl_mem ggml_cl_pool_malloc(size_t size, size_t * actual_size, cl_mem_flag
     scoped_spin_lock lock(g_cl_pool_lock);
     cl_int err;
 
-    int best_i = -1, best_size = (size_t)-1; //smallest unused buffer that fits our needs
+    int best_i = -1, best_size = std::numeric_limits<size_t>::max(); //smallest unused buffer that fits our needs
     int worst_i = -1, worst_size = 0; //largest unused buffer seen so far
     for (int i = 0; i < MAX_CL_BUFFERS; ++i) {
         cl_buffer &b = g_cl_buffer_pool[i];
@@ -724,6 +725,7 @@ static void ggml_cl_mul_f32(const ggml_tensor * src0, const ggml_tensor * src1, 
     cl_mem d_X = ggml_cl_pool_malloc(ne0 * sizeof(float), &x_size, CL_MEM_READ_WRITE); // src0
     cl_mem d_Y = (cl_mem) src1->data; // src1 is already on device, broadcasted.
     cl_mem d_D = ggml_cl_pool_malloc(ne0 * sizeof(float), &d_size, CL_MEM_READ_WRITE); // dst
+
 
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
