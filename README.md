@@ -255,7 +255,11 @@ Using Metal allows the computation to be executed on the GPU for Apple devices:
     ```
 
 When built with Metal support, you can enable GPU inference with the `--gpu-layers|-ngl` command-line argument.
-Any value larger than 0 will offload the computation to the GPU.
+Any value larger than 0 will offload the computation to the GPU. For example:
+
+```bash
+./main -m ./models/7B/ggml-model-q4_0.bin -n 128 -ngl 1
+```
 
 ### BLAS Build
 
