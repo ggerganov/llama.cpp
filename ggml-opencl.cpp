@@ -717,6 +717,7 @@ static void ggml_cl_mul_f32(const ggml_tensor * src0, const ggml_tensor * src1, 
     cl_mem d_Y = (cl_mem) src1->data; // src1 is already on device, broadcasted.
     cl_mem d_D = ggml_cl_pool_malloc(ne0 * sizeof(float), &d_size, CL_MEM_READ_WRITE); // dst
 
+
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
             const int i0 = i03*ne02 + i02;
