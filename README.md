@@ -1,4 +1,4 @@
-# koboldcpp (formerly llamacpp-for-kobold)
+# koboldcpp
 
 A self contained distributable from Concedo that exposes llama.cpp function bindings, allowing it to be used via a simulated Kobold API endpoint. 
 
@@ -62,8 +62,8 @@ For more information, be sure to run the program with the `--help` flag.
 - I have heard of someone claiming a false AV positive report. The exe is a simple pyinstaller bundle that includes the necessary python scripts and dlls to run. If this still concerns you, you might wish to rebuild everything from source code using the makefile, and you can rebuild the exe yourself with pyinstaller by using `make_pyinstaller.bat`
 - Supported GGML models: 
   - LLAMA (All versions including ggml, ggmf, ggjt v1,v2,v3, openllama, gpt4all). Supports CLBlast and OpenBLAS acceleration for all versions.
-  - GPT-2 (All versions, including legacy f16, newer format + quanitzed, cerebras) Supports OpenBLAS acceleration only for newer format. 
-  - GPT-J (All versions including legacy f16, newer format + quantized, pyg.cpp, new pygmalion, janeway etc.) Supports OpenBLAS acceleration only for newer format. 
+  - GPT-2 (All versions, including legacy f16, newer format + quanitzed, cerebras, starcoder) Supports CLBlast and OpenBLAS acceleration for newer formats, no GPU layer offload. 
+  - GPT-J (All versions including legacy f16, newer format + quantized, pyg.cpp, new pygmalion, janeway etc.) Supports CLBlast and OpenBLAS acceleration for newer formats, no GPU layer offload. 
   - RWKV (all formats except Q4_1_O).
   - GPT-NeoX / Pythia / StableLM / Dolly / RedPajama
   - MPT models (ggjt v3)
