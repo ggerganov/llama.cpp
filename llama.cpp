@@ -1010,8 +1010,12 @@ static void llama_model_load_internal(
         }
     }
 
-#ifdef GGML_USE_CUBLAS
+#if defined(GGML_USE_CUBLAS)
 #define LLAMA_BACKEND_OFFLOAD GGML_BACKEND_CUDA
+    fprintf(stderr, "%s: using CUDA for GPU acceleration\n", __func__);
+#elif defined(GGML_USE_CLBLAST)
+#define LLAMA_BACKEND_OFFLOAD GGML_BACKEND_CL
+    fprintf(stderr, "%s: using OpenCL for GPU acceleration\n", __func__);
 #else
 #define LLAMA_BACKEND_OFFLOAD GGML_BACKEND_CPU
 #endif
@@ -1063,7 +1067,7 @@ static void llama_model_load_internal(
             layer.w2 = ml->get_tensor(layers_i + ".feed_forward.w2.weight", {  n_ff,   n_embd}, backend);
             layer.w3 = ml->get_tensor(layers_i + ".feed_forward.w3.weight", {n_embd,   n_ff},   backend);
 
-            if (backend == GGML_BACKEND_CUDA) {
+            if (backend == LLAMA_BACKEND_OFFLOAD) {
                 vram_total +=
                     ggml_nbytes(layer.attention_norm) + ggml_nbytes(layer.wq) + ggml_nbytes(layer.wk)             +
                     ggml_nbytes(layer.wv)             + ggml_nbytes(layer.wo) + ggml_nbytes(layer.attention_norm) +
@@ -1093,15 +1097,15 @@ static void llama_model_load_internal(
         fprintf(stderr, "%s: mem required  = %7.2f MB (+ %7.2f MB per state)\n", __func__,
                 mem_required / 1024.0 / 1024.0, mem_required_state / 1024.0 / 1024.0);
 
-#ifdef GGML_USE_CUBLAS
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
 
-        fprintf(stderr, "%s: [cublas] offloading %d layers to GPU\n", __func__, n_gpu);
+#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+        fprintf(stderr, "%s: offloading %d layers to GPU\n", __func__, n_gpu);
         if (n_gpu_layers > (int) hparams.n_layer) {
-            fprintf(stderr, "%s: [cublas] offloading output layer to GPU\n", __func__);
+            fprintf(stderr, "%s: offloading output layer to GPU\n", __func__);
         }
-        fprintf(stderr, "%s: [cublas] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
-#elif !defined(GGML_USE_CLBLAST)
+        fprintf(stderr, "%s: total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
+#else
         (void) n_gpu_layers;
 #endif
     }
@@ -1113,7 +1117,7 @@ static void llama_model_load_internal(
 
     ml->load_all_data(progress_callback, progress_callback_user_data, use_mlock ? &lctx.model.mlock_mmap : NULL);
 
-#ifdef GGML_USE_CUBLAS
+#if defined(GGML_USE_CUBLAS)
     {
         size_t done_size = 0;
         size_t data_size = 0;
@@ -1136,29 +1140,24 @@ static void llama_model_load_internal(
     }
 #elif defined(GGML_USE_CLBLAST)
     {
-        const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
-
-        fprintf(stderr, "ggml_opencl: offloading %d layers to GPU\n", n_gpu);
-
-        size_t vram_total = 0;
-
-        for (int i = 0; i < n_gpu; ++i) {
-            const auto & layer = model.layers[i];
-
-            ggml_cl_transform_tensor(layer.wq); vram_total += ggml_nbytes(layer.wq);
-            ggml_cl_transform_tensor(layer.wk); vram_total += ggml_nbytes(layer.wk);
-            ggml_cl_transform_tensor(layer.wv); vram_total += ggml_nbytes(layer.wv);
-            ggml_cl_transform_tensor(layer.wo); vram_total += ggml_nbytes(layer.wo);
-            ggml_cl_transform_tensor(layer.w1); vram_total += ggml_nbytes(layer.w1);
-            ggml_cl_transform_tensor(layer.w2); vram_total += ggml_nbytes(layer.w2);
-            ggml_cl_transform_tensor(layer.w3); vram_total += ggml_nbytes(layer.w3);
+        size_t done_size = 0;
+        size_t data_size = 0;
+        for (llama_load_tensor & lt : ml->tensors_map.tensors) {
+            data_size += lt.size;
+            if (lt.ggml_tensor->backend == GGML_BACKEND_CPU) {
+                done_size += lt.size;
+            }
         }
-        if (n_gpu_layers > (int) hparams.n_layer) {
-            fprintf(stderr, "ggml_opencl: offloading output layer to GPU\n");
-            ggml_cl_transform_tensor(model.output); vram_total += ggml_nbytes(model.output);
+        for (llama_load_tensor & lt : ml->tensors_map.tensors) {
+            if (lt.ggml_tensor->backend != GGML_BACKEND_CL) {
+                continue;
+            }
+            if (progress_callback) {
+                progress_callback((float) done_size / data_size, progress_callback_user_data);
+            }
+            ggml_cl_load_data(fname.c_str(), lt.ggml_tensor, lt.shards.at(0).file_off);
+            done_size += lt.size;
         }
-
-        fprintf(stderr, "ggml_opencl: total VRAM used: %zu MB\n", vram_total / 1024 / 1024);
     }
 #endif
 

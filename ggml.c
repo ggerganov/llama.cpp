@@ -8134,6 +8134,13 @@ static void ggml_compute_forward_mul_f32(
         }
         return;
     }
+#elif defined(GGML_USE_CLBLAST)
+    if (src1->backend == GGML_BACKEND_CL) {
+        if (ith == 0) {
+            ggml_cl_mul(src0, src1, dst);
+        }
+        return;
+    }
 #endif
 
     const int64_t nr = ggml_nrows(src0);
