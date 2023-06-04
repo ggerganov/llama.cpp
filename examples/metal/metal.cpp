@@ -1,5 +1,5 @@
 #include "ggml.h"
-#include "ggml-mtl.h"
+#include "ggml-metal.h"
 
 #include <cstdio>
 #include <cstring>
@@ -23,20 +23,20 @@ int main(int argc, char ** argv) {
     gf.n_threads = 1;
 
     // this allocates all Metal resources and memory buffers
-    auto * ctx_mtl = ggml_mtl_init();
+    auto * ctx_metal = ggml_metal_init();
 
-    ggml_mtl_add_buffer(ctx_mtl, "data", ggml_get_mem_buffer(ctx_data), ggml_get_mem_size(ctx_data));
-    ggml_mtl_add_buffer(ctx_mtl, "eval", ggml_get_mem_buffer(ctx_eval), ggml_get_mem_size(ctx_eval));
+    ggml_metal_add_buffer(ctx_metal, "data", ggml_get_mem_buffer(ctx_data), ggml_get_mem_size(ctx_data));
+    ggml_metal_add_buffer(ctx_metal, "eval", ggml_get_mem_buffer(ctx_eval), ggml_get_mem_size(ctx_eval));
 
     // main
     {
         struct ggml_tensor * input = ggml_graph_get_tensor(&gf, "embd");
         *(int32_t *) input->data = 1; // BOS
 
-        ggml_mtl_set_tensor(ctx_mtl, input);
+        ggml_metal_set_tensor(ctx_metal, input);
 
         // warmup
-        ggml_mtl_graph_compute(ctx_mtl, &gf);
+        ggml_metal_graph_compute(ctx_metal, &gf);
 
         const int n_iter = 16;
 
@@ -44,7 +44,7 @@ int main(int argc, char ** argv) {
 
         // the actual inference happens here
         for (int i = 0; i < n_iter; ++i) {
-            ggml_mtl_graph_compute(ctx_mtl, &gf);
+            ggml_metal_graph_compute(ctx_metal, &gf);
         }
 
         const int64_t t1 = ggml_time_us();
@@ -55,7 +55,7 @@ int main(int argc, char ** argv) {
     // debug output
     {
         struct ggml_tensor * logits = gf.nodes[gf.n_nodes - 1];
-        ggml_mtl_get_tensor(ctx_mtl, logits);
+        ggml_metal_get_tensor(ctx_metal, logits);
 
         float * ptr = (float *) ggml_get_data(logits);
 
@@ -77,7 +77,7 @@ int main(int argc, char ** argv) {
         printf("sum: %f, imax = %d, vmax = %f\n", sum, imax, vmax);
     }
 
-    ggml_mtl_free(ctx_mtl);
+    ggml_metal_free(ctx_metal);
 
     ggml_free(ctx_data);
     ggml_free(ctx_eval);

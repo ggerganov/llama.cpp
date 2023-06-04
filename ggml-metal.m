@@ -1,28 +1,30 @@
-#import "ggml-mtl.h"
+#import "ggml-metal.h"
 
 #import "ggml.h"
 
 #import <Foundation/Foundation.h>
+
 #import <Metal/Metal.h>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 
 #ifdef GGML_METAL_NDEBUG
-#define mtl_printf(...)
+#define metal_printf(...)
 #else
-#define mtl_printf(...) fprintf(stderr, __VA_ARGS__)
+#define metal_printf(...) fprintf(stderr, __VA_ARGS__)
 #endif
-//#define mtl_printf(...)
 
-struct ggml_mtl_buffer {
+#define UNUSED(x) (void)(x)
+
+struct ggml_metal_buffer {
     const char * name;
 
     void   * data;
     size_t   size;
 
-    id<MTLBuffer> mtl;
+    id<MTLBuffer> metal;
 };
 
-struct ggml_mtl_context {
+struct ggml_metal_context {
     float * logits;
 
     id<MTLDevice>       device;
@@ -30,65 +32,41 @@ struct ggml_mtl_context {
     id<MTLLibrary>      library;
 
     int n_buffers;
-    struct ggml_mtl_buffer buffers[GGML_METAL_MAX_BUFFERS];
+    struct ggml_metal_buffer buffers[GGML_METAL_MAX_BUFFERS];
 
     // custom kernels
-    id<MTLFunction>             function_add;
-    id<MTLComputePipelineState> pipeline_add;
+#define GGML_METAL_DECL_KERNEL(name) \
+    id<MTLFunction>             function_##name; \
+    id<MTLComputePipelineState> pipeline_##name
 
-    id<MTLFunction>             function_mul;
-    id<MTLComputePipelineState> pipeline_mul;
+    GGML_METAL_DECL_KERNEL(add);
+    GGML_METAL_DECL_KERNEL(mul);
+    GGML_METAL_DECL_KERNEL(mul_row); // TODO: avoid this extra kernel, instead extend the "mul" kernel to support broadcast
+    GGML_METAL_DECL_KERNEL(scale);
+    GGML_METAL_DECL_KERNEL(silu);
+    GGML_METAL_DECL_KERNEL(relu);
+    GGML_METAL_DECL_KERNEL(soft_max);
+    GGML_METAL_DECL_KERNEL(diag_mask_inf);
+    GGML_METAL_DECL_KERNEL(get_rows_q4_0);
+    GGML_METAL_DECL_KERNEL(rms_norm);
+    GGML_METAL_DECL_KERNEL(mul_mat_q4_0_f32);
+    GGML_METAL_DECL_KERNEL(mul_mat_f16_f32);
+    GGML_METAL_DECL_KERNEL(rope);
+    GGML_METAL_DECL_KERNEL(cpy_f32_f16);
+    GGML_METAL_DECL_KERNEL(cpy_f32_f32);
 
-    // TODO: avoid this extra kernel, instead extend the "mul" kernel to support broadcast
-    id<MTLFunction>             function_mul_row;
-    id<MTLComputePipelineState> pipeline_mul_row;
-
-    id<MTLFunction>             function_scale;
-    id<MTLComputePipelineState> pipeline_scale;
-
-    id<MTLFunction>             function_silu;
-    id<MTLComputePipelineState> pipeline_silu;
-
-    id<MTLFunction>             function_relu;
-    id<MTLComputePipelineState> pipeline_relu;
-
-    id<MTLFunction>             function_soft_max;
-    id<MTLComputePipelineState> pipeline_soft_max;
-
-    id<MTLFunction>             function_diag_mask_inf;
-    id<MTLComputePipelineState> pipeline_diag_mask_inf;
-
-    id<MTLFunction>             function_get_rows_q4_0;
-    id<MTLComputePipelineState> pipeline_get_rows_q4_0;
-
-    id<MTLFunction>             function_rms_norm;
-    id<MTLComputePipelineState> pipeline_rms_norm;
-
-    id<MTLFunction>             function_mul_mat_q4_0_f32;
-    id<MTLComputePipelineState> pipeline_mul_mat_q4_0_f32;
-
-    id<MTLFunction>             function_mul_mat_f16_f32;
-    id<MTLComputePipelineState> pipeline_mul_mat_f16_f32;
-
-    id<MTLFunction>             function_rope;
-    id<MTLComputePipelineState> pipeline_rope;
-
-    id<MTLFunction>             function_cpy_f32_f16;
-    id<MTLComputePipelineState> pipeline_cpy_f32_f16;
-
-    id<MTLFunction>             function_cpy_f32_f32;
-    id<MTLComputePipelineState> pipeline_cpy_f32_f32;
+#undef GGML_METAL_DECL_KERNEL
 };
 
 // MSL code
 // TODO: move the contents here when ready
 //       for now it is easier to work in a separate file
-NSString * const msl_library_source = @"see mtl.metal";
+static NSString * const msl_library_source = @"see metal.metal";
 
-struct ggml_mtl_context * ggml_mtl_init(void) {
+struct ggml_metal_context * ggml_metal_init(void) {
     fprintf(stderr, "%s: allocating\n", __func__);
 
-    struct ggml_mtl_context * ctx = malloc(sizeof(struct ggml_mtl_context));
+    struct ggml_metal_context * ctx = malloc(sizeof(struct ggml_metal_context));
 
     ctx->device = MTLCreateSystemDefaultDevice();
     ctx->queue  = [ctx->device newCommandQueue];
@@ -113,12 +91,14 @@ struct ggml_mtl_context * ggml_mtl_init(void) {
         }
     }
 #else
-    // read the source from "../examples/mtl/mtl.metal" into a string and use newLibraryWithSource
+    UNUSED(msl_library_source);
+
+    // read the source from "ggml-metal.metal" into a string and use newLibraryWithSource
     {
         NSError * error = nil;
 
-        //NSString * path = [[NSBundle mainBundle] pathForResource:@"../../examples/mtl/mtl" ofType:@"metal"];
-        NSString * path = [[NSBundle mainBundle] pathForResource:@"ggml-mtl" ofType:@"metal"];
+        //NSString * path = [[NSBundle mainBundle] pathForResource:@"../../examples/metal/metal" ofType:@"metal"];
+        NSString * path = [[NSBundle mainBundle] pathForResource:@"ggml-metal" ofType:@"metal"];
         fprintf(stderr, "%s: loading '%s'\n", __func__, [path UTF8String]);
 
         NSString * src  = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
@@ -137,80 +117,44 @@ struct ggml_mtl_context * ggml_mtl_init(void) {
 
     // load kernels
     {
-        MTLFunctionConstantValues * constants = [MTLFunctionConstantValues new];
+#define GGML_METAL_ADD_KERNEL(name) \
+        ctx->function_##name = [ctx->library newFunctionWithName:@"kernel_"#name]; \
+        ctx->pipeline_##name = [ctx->device newComputePipelineStateWithFunction:ctx->function_##name error:nil]; \
+        fprintf(stderr, "%s: loaded %-32s %16p\n", __func__, "kernel_"#name, (void *) ctx->pipeline_##name);
 
-        ctx->function_add = [ctx->library newFunctionWithName:@"kernel_add"];
-        ctx->pipeline_add = [ctx->device newComputePipelineStateWithFunction:ctx->function_add error:nil];
-        fprintf(stderr, "%s: loaded kernel_add: %p\n", __func__, (void *) ctx->pipeline_add);
+        GGML_METAL_ADD_KERNEL(add);
+        GGML_METAL_ADD_KERNEL(mul);
+        GGML_METAL_ADD_KERNEL(mul_row);
+        GGML_METAL_ADD_KERNEL(scale);
+        GGML_METAL_ADD_KERNEL(silu);
+        GGML_METAL_ADD_KERNEL(relu);
+        GGML_METAL_ADD_KERNEL(soft_max);
+        GGML_METAL_ADD_KERNEL(diag_mask_inf);
+        GGML_METAL_ADD_KERNEL(get_rows_q4_0);
+        GGML_METAL_ADD_KERNEL(rms_norm);
+        GGML_METAL_ADD_KERNEL(mul_mat_q4_0_f32);
+        GGML_METAL_ADD_KERNEL(mul_mat_f16_f32);
+        GGML_METAL_ADD_KERNEL(rope);
+        GGML_METAL_ADD_KERNEL(cpy_f32_f16);
+        GGML_METAL_ADD_KERNEL(cpy_f32_f32);
 
-        ctx->function_mul = [ctx->library newFunctionWithName:@"kernel_mul"];
-        ctx->pipeline_mul = [ctx->device newComputePipelineStateWithFunction:ctx->function_mul error:nil];
-        fprintf(stderr, "%s: loaded kernel_mul: %p\n", __func__, (void *) ctx->pipeline_mul);
-
-        ctx->function_mul_row = [ctx->library newFunctionWithName:@"kernel_mul_row"];
-        ctx->pipeline_mul_row = [ctx->device newComputePipelineStateWithFunction:ctx->function_mul_row error:nil];
-        fprintf(stderr, "%s: loaded kernel_mul_row: %p\n", __func__, (void *) ctx->pipeline_mul_row);
-
-        ctx->function_scale = [ctx->library newFunctionWithName:@"kernel_scale"];
-        ctx->pipeline_scale = [ctx->device newComputePipelineStateWithFunction:ctx->function_scale error:nil];
-        fprintf(stderr, "%s: loaded kernel_scale: %p\n", __func__, (void *) ctx->pipeline_scale);
-
-        ctx->function_silu = [ctx->library newFunctionWithName:@"kernel_silu"];
-        ctx->pipeline_silu = [ctx->device newComputePipelineStateWithFunction:ctx->function_silu error:nil];
-        fprintf(stderr, "%s: loaded kernel_silu: %p\n", __func__, (void *) ctx->pipeline_silu);
-
-        ctx->function_relu = [ctx->library newFunctionWithName:@"kernel_relu"];
-        ctx->pipeline_relu = [ctx->device newComputePipelineStateWithFunction:ctx->function_relu error:nil];
-        fprintf(stderr, "%s: loaded kernel_relu: %p\n", __func__, (void *) ctx->pipeline_relu);
-
-        ctx->function_soft_max = [ctx->library newFunctionWithName:@"kernel_soft_max" constantValues:constants error:nil];
-        ctx->pipeline_soft_max = [ctx->device newComputePipelineStateWithFunction:ctx->function_soft_max error:nil];
-        fprintf(stderr, "%s: loaded kernel_soft_max: %p\n", __func__, (void *) ctx->pipeline_soft_max);
-
-        ctx->function_diag_mask_inf = [ctx->library newFunctionWithName:@"kernel_diag_mask_inf" constantValues:constants error:nil];
-        ctx->pipeline_diag_mask_inf = [ctx->device newComputePipelineStateWithFunction:ctx->function_diag_mask_inf error:nil];
-        fprintf(stderr, "%s: loaded kernel_diag_mask_inf: %p\n", __func__, (void *) ctx->pipeline_diag_mask_inf);
-
-        ctx->function_get_rows_q4_0 = [ctx->library newFunctionWithName:@"kernel_get_rows_q4_0"];
-        ctx->pipeline_get_rows_q4_0 = [ctx->device newComputePipelineStateWithFunction:ctx->function_get_rows_q4_0 error:nil];
-        fprintf(stderr, "%s: loaded kernel_get_rows_q4_0: %p\n", __func__, (void *) ctx->pipeline_get_rows_q4_0);
-
-        ctx->function_rms_norm = [ctx->library newFunctionWithName:@"kernel_rms_norm"];
-        ctx->pipeline_rms_norm = [ctx->device newComputePipelineStateWithFunction:ctx->function_rms_norm error:nil];
-        fprintf(stderr, "%s: loaded kernel_rms_norm: %p\n", __func__, (void *) ctx->pipeline_rms_norm);
-
-        ctx->function_mul_mat_q4_0_f32 = [ctx->library newFunctionWithName:@"kernel_mul_mat_q4_0_f32"];
-        ctx->pipeline_mul_mat_q4_0_f32 = [ctx->device newComputePipelineStateWithFunction:ctx->function_mul_mat_q4_0_f32 error:nil];
-        fprintf(stderr, "%s: loaded kernel_mul_mat_q4_0_f32: %p\n", __func__, (void *) ctx->pipeline_mul_mat_q4_0_f32);
-
-        ctx->function_mul_mat_f16_f32 = [ctx->library newFunctionWithName:@"kernel_mul_mat_f16_f32"];
-        ctx->pipeline_mul_mat_f16_f32 = [ctx->device newComputePipelineStateWithFunction:ctx->function_mul_mat_f16_f32 error:nil];
-        fprintf(stderr, "%s: loaded kernel_mul_mat_f16_f32: %p\n", __func__, (void *) ctx->pipeline_mul_mat_f16_f32);
-
-        ctx->function_rope = [ctx->library newFunctionWithName:@"kernel_rope"];
-        ctx->pipeline_rope = [ctx->device newComputePipelineStateWithFunction:ctx->function_rope error:nil];
-        fprintf(stderr, "%s: loaded kernel_rope: %p\n", __func__, (void *) ctx->pipeline_rope);
-
-        ctx->function_cpy_f32_f16 = [ctx->library newFunctionWithName:@"kernel_cpy_f32_f16"];
-        ctx->pipeline_cpy_f32_f16 = [ctx->device newComputePipelineStateWithFunction:ctx->function_cpy_f32_f16 error:nil];
-        fprintf(stderr, "%s: loaded kernel_cpy_f32_f16: %p\n", __func__, (void *) ctx->pipeline_cpy_f32_f16);
-
-        ctx->function_cpy_f32_f32 = [ctx->library newFunctionWithName:@"kernel_cpy_f32_f32"];
-        ctx->pipeline_cpy_f32_f32 = [ctx->device newComputePipelineStateWithFunction:ctx->function_cpy_f32_f32 error:nil];
-        fprintf(stderr, "%s: loaded kernel_cpy_f32_f32: %p\n", __func__, (void *) ctx->pipeline_cpy_f32_f32);
+#undef GGML_METAL_ADD_KERNEL
     }
 
     return ctx;
 }
 
-void ggml_mtl_free(struct ggml_mtl_context * ctx) {
+void ggml_metal_free(struct ggml_metal_context * ctx) {
     fprintf(stderr, "%s: deallocating\n", __func__);
 
     free(ctx);
 }
 
-// get data / eval buffer + offset
-static id<MTLBuffer> ggml_mtl_get_buffer(struct ggml_mtl_context * ctx, struct ggml_tensor * t, size_t * offs) {
+// finds the Metal buffer that contains the tensor data on the GPU device
+// the assumption is that there is 1-to-1 mapping between the host and device memory buffers, so we can find the
+// Metal buffer based on the host memory pointer
+//
+static id<MTLBuffer> ggml_metal_get_buffer(struct ggml_metal_context * ctx, struct ggml_tensor * t, size_t * offs) {
     //fprintf(stderr, "%s: data tensor '%16s', offs_data = %8ld, offs_eval = %8ld, offs_cach = %8ld\n", __func__, t->name, offs_data, offs_eval, offs_cach);
 
     for (int i = 0; i < ctx->n_buffers; ++i) {
@@ -221,64 +165,75 @@ static id<MTLBuffer> ggml_mtl_get_buffer(struct ggml_mtl_context * ctx, struct g
 
             //fprintf(stderr, "%s: '%s' tensor '%16s', offs = %8ld\n", __func__, ctx->buffers[i].name, t->name, *offs);
 
-            return ctx->buffers[i].mtl;
+            return ctx->buffers[i].metal;
         }
     }
 
     fprintf(stderr, "%s: error: buffer is nil\n", __func__);
-    GGML_ASSERT(false);
 
     return nil;
 }
 
-void ggml_mtl_add_buffer(
-        struct ggml_mtl_context * ctx,
+bool ggml_metal_add_buffer(
+        struct ggml_metal_context * ctx,
                      const char * name,
                            void * data,
                          size_t   size) {
     if (ctx->n_buffers >= GGML_METAL_MAX_BUFFERS) {
         fprintf(stderr, "%s: too many buffers\n", __func__);
-        return;
+        return false;
     }
 
     if (data) {
+        // verify that the buffer does not overlap with any of the existing buffers
+        for (int i = 0; i < ctx->n_buffers; ++i) {
+            const int64_t ioffs = (int64_t) data - (int64_t) ctx->buffers[i].data;
+
+            if (ioffs >= 0 && ioffs < (int64_t) ctx->buffers[i].size) {
+                fprintf(stderr, "%s: error: buffer '%s' overlaps with '%s'\n", __func__, name, ctx->buffers[i].name);
+                return false;
+            }
+        }
+
         ctx->buffers[ctx->n_buffers].name = name;
         ctx->buffers[ctx->n_buffers].data = data;
         ctx->buffers[ctx->n_buffers].size = size;
-        ctx->buffers[ctx->n_buffers].mtl = [ctx->device newBufferWithBytes:data length:size options:MTLResourceStorageModeShared];
+        ctx->buffers[ctx->n_buffers].metal = [ctx->device newBufferWithBytes:data length:size options:MTLResourceStorageModeShared];
 
         ++ctx->n_buffers;
 
-        fprintf(stderr, "%s: allocated '%16s' buffer, size = %8.2f MB\n", __func__, name, size / 1024.0 / 1024.0);
+        fprintf(stderr, "%s: allocated '%-16s' buffer, size = %8.2f MB\n", __func__, name, size / 1024.0 / 1024.0);
     }
+
+    return true;
 }
 
-void ggml_mtl_set_tensor(
-        struct ggml_mtl_context * ctx,
+void ggml_metal_set_tensor(
+        struct ggml_metal_context * ctx,
         struct ggml_tensor * t) {
-    mtl_printf("%s: set input for tensor '%s'\n", __func__, t->name);
+    metal_printf("%s: set input for tensor '%s'\n", __func__, t->name);
 
     size_t offs;
-    id<MTLBuffer> id_dst = ggml_mtl_get_buffer(ctx, t, &offs);
+    id<MTLBuffer> id_dst = ggml_metal_get_buffer(ctx, t, &offs);
 
     memcpy((void *) ((uint8_t *) id_dst.contents + offs), t->data, ggml_nbytes(t));
 }
 
-void ggml_mtl_get_tensor(
-        struct ggml_mtl_context * ctx,
+void ggml_metal_get_tensor(
+        struct ggml_metal_context * ctx,
         struct ggml_tensor * t) {
-    mtl_printf("%s: extract results for tensor '%s'\n", __func__, t->name);
+    metal_printf("%s: extract results for tensor '%s'\n", __func__, t->name);
 
     size_t offs;
-    id<MTLBuffer> id_src = ggml_mtl_get_buffer(ctx, t, &offs);
+    id<MTLBuffer> id_src = ggml_metal_get_buffer(ctx, t, &offs);
 
     memcpy(t->data, (void *) ((uint8_t *) id_src.contents + offs), ggml_nbytes(t));
 }
 
-int ggml_mtl_graph_compute(
-        struct ggml_mtl_context * ctx,
+void ggml_metal_graph_compute(
+        struct ggml_metal_context * ctx,
              struct ggml_cgraph * gf) {
-    mtl_printf("%s: evaluating graph\n", __func__);
+    metal_printf("%s: evaluating graph\n", __func__);
 
     size_t offs_src0 = 0;
     size_t offs_src1 = 0;
@@ -288,7 +243,7 @@ int ggml_mtl_graph_compute(
     id<MTLComputeCommandEncoder> encoder = nil;
 
     for (int i = 0; i < gf->n_nodes; ++i) {
-        //mtl_printf("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
+        //metal_printf("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
 
         struct ggml_tensor * src0 = gf->nodes[i]->src0;
         struct ggml_tensor * src1 = gf->nodes[i]->src1;
@@ -307,12 +262,12 @@ int ggml_mtl_graph_compute(
         const int64_t  ne10 = src1 ? src1->ne[0] : 0;
         const int64_t  ne11 = src1 ? src1->ne[1] : 0;
         const int64_t  ne12 = src1 ? src1->ne[2] : 0;
-        //const int64_t  ne13 = src1 ? src1->ne[3] : 0;
+        const int64_t  ne13 = src1 ? src1->ne[3] : 0; UNUSED(ne13);
 
         const uint64_t nb10 = src1 ? src1->nb[0] : 0;
         const uint64_t nb11 = src1 ? src1->nb[1] : 0;
         const uint64_t nb12 = src1 ? src1->nb[2] : 0;
-        //const uint64_t nb13 = src1 ? src1->nb[3] : 0;
+        const uint64_t nb13 = src1 ? src1->nb[3] : 0; UNUSED(nb13);
 
         const int64_t  ne0  = dst ? dst->ne[0] : 0;
         const int64_t  ne1  = dst ? dst->ne[1] : 0;
@@ -328,21 +283,21 @@ int ggml_mtl_graph_compute(
         const enum ggml_type src1t = src1 ? src1->type : GGML_TYPE_COUNT;
         const enum ggml_type dstt  = dst  ? dst->type  : GGML_TYPE_COUNT;
 
-        id<MTLBuffer> id_src0 = src0 ? ggml_mtl_get_buffer(ctx, src0, &offs_src0) : nil;
-        id<MTLBuffer> id_src1 = src1 ? ggml_mtl_get_buffer(ctx, src1, &offs_src1) : nil;
-        id<MTLBuffer> id_dst  = dst  ? ggml_mtl_get_buffer(ctx, dst,  &offs_dst)  : nil;
+        id<MTLBuffer> id_src0 = src0 ? ggml_metal_get_buffer(ctx, src0, &offs_src0) : nil;
+        id<MTLBuffer> id_src1 = src1 ? ggml_metal_get_buffer(ctx, src1, &offs_src1) : nil;
+        id<MTLBuffer> id_dst  = dst  ? ggml_metal_get_buffer(ctx, dst,  &offs_dst)  : nil;
 
-        //mtl_printf("%s: op - %s\n", __func__, ggml_op_name(dst->op));
+        //metal_printf("%s: op - %s\n", __func__, ggml_op_name(dst->op));
         //if (src0) {
-        //    mtl_printf("%s: src0 - %4s [%5lld, %5lld, %5lld], %d, %s\n", __func__, ggml_type_name(src0t), ne00, ne01, ne02,
+        //    metal_printf("%s: src0 - %4s [%5lld, %5lld, %5lld], %d, %s\n", __func__, ggml_type_name(src0t), ne00, ne01, ne02,
         //            ggml_is_contiguous(src0), src0->name);
         //}
         //if (src1) {
-        //    mtl_printf("%s: src1 - %4s [%5lld, %5lld, %5lld], %d, %s\n", __func__, ggml_type_name(src1t), ne10, ne11, ne12,
+        //    metal_printf("%s: src1 - %4s [%5lld, %5lld, %5lld], %d, %s\n", __func__, ggml_type_name(src1t), ne10, ne11, ne12,
         //            ggml_is_contiguous(src1), src1->name);
         //}
         //if (dst) {
-        //    mtl_printf("%s: dst  - %4s [%5lld, %5lld, %5lld], 1, %s\n",  __func__, ggml_type_name(dstt),  ne0,  ne1,  ne2,
+        //    metal_printf("%s: dst  - %4s [%5lld, %5lld, %5lld], 1, %s\n",  __func__, ggml_type_name(dstt),  ne0,  ne1,  ne2,
         //            dst->name);
         //}
 
@@ -472,6 +427,8 @@ int ggml_mtl_graph_compute(
                 } break;
             case GGML_OP_MUL_MAT:
                 {
+                    // TODO: needs to be updated after PR: https://github.com/ggerganov/ggml/pull/224
+
                     GGML_ASSERT(ne00 == ne10);
                     GGML_ASSERT(ne02 == ne12);
 
@@ -503,6 +460,7 @@ int ggml_mtl_graph_compute(
 
                         // we need to do ne02 multiplications
                         // TODO: is there a way to do this in parallel - currently very slow ..
+                        // TODO: might be possible to offload part of the computation to ANE using Accelerate's CBLAS
                         for (int64_t i02 = 0; i02 < ne02; ++i02) {
                             size_t offs_src0_cur = offs_src0 + i02*nb02;
                             size_t offs_src1_cur = offs_src1 + i02*nb12;
@@ -578,10 +536,7 @@ int ggml_mtl_graph_compute(
 
                     switch (src0->type) {
                         case GGML_TYPE_Q4_0: [encoder setComputePipelineState:ctx->pipeline_get_rows_q4_0]; break;
-                        default: {
-                                     // not implemented
-                                     fprintf(stderr, "%s: node %3d, op = %8s, type = %8s not implemented\n", __func__, i, ggml_op_name(dst->op), ggml_type_name(src0->type));
-                                 }
+                        default: GGML_ASSERT(false && "not implemented");
                     }
 
                     [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
@@ -626,10 +581,6 @@ int ggml_mtl_graph_compute(
                     const int n_dims = ((int32_t *) src1->data)[1];
                     const int mode   = ((int32_t *) src1->data)[2];
 
-                    //mtl_printf("rope: %lld x %lld x %lld x %lld\n", ne00, ne01, ne02, ne03);
-                    //mtl_printf("rope: %lld x %lld x %lld x %lld\n", ne0,  ne1,  ne2,  ne3);
-                    //mtl_printf("rope: n_past = %d, n_dims = %d, mode = %d\n", n_past, n_dims, mode);
-
                     const int n_past = ((int32_t *)(src1->data))[0];
 
                     [encoder setComputePipelineState:ctx->pipeline_rope];
@@ -664,12 +615,6 @@ int ggml_mtl_graph_compute(
                     }
 
                     const int nth = 32;
-
-                    //mtl_printf("cpy: %lld x %lld x %lld x %lld\n", ne00, ne01, ne02, ne03);
-                    //mtl_printf("cpy: %lld x %lld x %lld x %lld\n", nb00, nb01, nb02, nb03);
-                    //mtl_printf("cpy: %lld x %lld x %lld x %lld\n", ne0,  ne1,  ne2,  ne3);
-                    //mtl_printf("cpy: %lld x %lld x %lld x %lld\n", nb0,  nb1,  nb2,  nb3);
-                    //mtl_printf("cpy: %s -> %s\n", ggml_type_name(src0t), ggml_type_name(dstt));
 
                     switch (src0t) {
                         case GGML_TYPE_F32:
@@ -707,7 +652,6 @@ int ggml_mtl_graph_compute(
             default:
                 fprintf(stderr, "%s: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(dst->op));
                 GGML_ASSERT(false);
-                return -1;
         }
     }
 
@@ -721,8 +665,8 @@ int ggml_mtl_graph_compute(
 
     {
         const double time_elapsed = [command_buffer GPUEndTime] - [command_buffer GPUStartTime];
-        mtl_printf("%s: time elapsed = %f ms\n", __func__, time_elapsed * 1000.0);
-    }
+        UNUSED(time_elapsed);
 
-    return 0;
+        metal_printf("%s: time elapsed = %f ms\n", __func__, time_elapsed * 1000.0);
+    }
 }

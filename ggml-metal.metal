@@ -98,19 +98,6 @@ kernel void kernel_soft_max(
     device const float * psrc0 = src0 + i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00;
     device       float * pdst  = dst  + i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00;
 
-    //float max = 0.0f;
-    //for (int i = 0; i < ne00; i++) {
-    //    max = MAX(max, psrc0[i]);
-    //}
-    //float sum = 0.0f;
-    //for (int i = 0; i < ne00; i++) {
-    //    pdst[i] = exp(psrc0[i] - max);
-    //    sum += pdst[i];
-    //}
-    //for (int i = 0; i < ne00; i++) {
-    //    pdst[i] /= sum;
-    //}
-
     // parallel max
     buf[tpitg[0]] = -INFINITY;
     for (int i00 = tpitg[0]; i00 < ne00; i00 += ntg[0]) {

@@ -17,7 +17,7 @@
 #endif
 
 #ifdef GGML_USE_METAL
-#include "ggml-mtl.h"
+#include "ggml-metal.h"
 #endif
 
 #include <array>
@@ -243,7 +243,7 @@ struct llama_context {
     llama_ctx_buffer buf_scratch[LLAMA_MAX_SCRATCH_BUFFERS];
 
 #ifdef GGML_USE_METAL
-    ggml_mtl_context * mtl_ctx = NULL;
+    ggml_metal_context * ctx_metal = NULL;
 #endif
 
     int    buf_last = 0;
@@ -1256,8 +1256,8 @@ static bool llama_eval_internal(
     memcpy(embd->data, tokens, N*ggml_element_size(embd));
 
 #ifdef GGML_USE_METAL
-    if (lctx.mtl_ctx) {
-        ggml_mtl_set_tensor(lctx.mtl_ctx, embd);
+    if (lctx.ctx_metal) {
+        ggml_metal_set_tensor(lctx.ctx_metal, embd);
     }
 #endif
 
@@ -1448,11 +1448,25 @@ static bool llama_eval_internal(
     ggml_build_forward_expand(&gf, cur);
 
 #ifdef GGML_USE_METAL
-    if (lctx.mtl_ctx) {
-        ggml_mtl_graph_compute(lctx.mtl_ctx, &gf);
-        ggml_mtl_get_tensor(lctx.mtl_ctx, cur);
+    if (lctx.ctx_metal && N == 1) {
+        ggml_metal_graph_compute(lctx.ctx_metal, &gf);
+        ggml_metal_get_tensor   (lctx.ctx_metal, cur);
     } else {
+        // IMPORTANT:
+        // Since we don't have efficient Matrix x Matrix Metal multiplication yet, we fallback to vanilla
+        // ggml_graph_compute(). It uses Apple's Accelerate CBLAS API which takes advantage of the ANE or the AMX
+        // coprocessor.
+        //
+        // When we implement Matrix x Matrix Metal multiplication, we can avoid this branch.
+        // But for now, we have focused only on Matrix x Vector Metal multiplication.
+        //
         ggml_graph_compute(ctx0, &gf);
+
+        if (lctx.ctx_metal) {
+            // We need to sync the CPU KV cache with the GPU KV cache
+            ggml_metal_set_tensor(lctx.ctx_metal, kv_self.k);
+            ggml_metal_set_tensor(lctx.ctx_metal, kv_self.v);
+        }
     }
 #else
     ggml_graph_compute(ctx0, &gf);
@@ -2318,12 +2332,7 @@ struct llama_context * llama_init_from_file(
             ctx->embedding.resize(hparams.n_embd);
         }
 
-#ifdef GGML_USE_METAL
-        // when using Metal, we don't need the extra buffer for intermediate dequantization
-        ctx->buf_compute.resize(MEM_REQ_EVAL().at(ctx->model.type)/100);
-#else
         ctx->buf_compute.resize(MEM_REQ_EVAL().at(ctx->model.type));
-#endif
 
         ctx->buf_scratch[0].resize(MEM_REQ_SCRATCH0().at(ctx->model.type));
         ctx->buf_scratch[1].resize(MEM_REQ_SCRATCH1().at(ctx->model.type));
@@ -2333,19 +2342,19 @@ struct llama_context * llama_init_from_file(
     if (params.n_gpu_layers > 0) {
         // this allocates all Metal resources and memory buffers
         if (params.use_mmap) {
-            ctx->mtl_ctx = ggml_mtl_init();
-            ggml_mtl_add_buffer(ctx->mtl_ctx, "data", ctx->model.mapping->addr,    ctx->model.mapping->size);
-            ggml_mtl_add_buffer(ctx->mtl_ctx, "eval", ctx->buf_compute.addr,       ctx->buf_compute.size);
-            ggml_mtl_add_buffer(ctx->mtl_ctx, "kv",   ctx->model.kv_self.buf.addr, ctx->model.kv_self.buf.size);
-            ggml_mtl_add_buffer(ctx->mtl_ctx, "scr0", ctx->buf_scratch[0].addr,    ctx->buf_scratch[0].size);
-            ggml_mtl_add_buffer(ctx->mtl_ctx, "scr1", ctx->buf_scratch[1].addr,    ctx->buf_scratch[1].size);
+            ctx->ctx_metal = ggml_metal_init();
+            ggml_metal_add_buffer(ctx->ctx_metal, "data", ctx->model.mapping->addr,    ctx->model.mapping->size);
+            ggml_metal_add_buffer(ctx->ctx_metal, "eval", ctx->buf_compute.addr,       ctx->buf_compute.size);
+            ggml_metal_add_buffer(ctx->ctx_metal, "kv",   ctx->model.kv_self.buf.addr, ctx->model.kv_self.buf.size);
+            ggml_metal_add_buffer(ctx->ctx_metal, "scr0", ctx->buf_scratch[0].addr,    ctx->buf_scratch[0].size);
+            ggml_metal_add_buffer(ctx->ctx_metal, "scr1", ctx->buf_scratch[1].addr,    ctx->buf_scratch[1].size);
         } else {
-            ctx->mtl_ctx = ggml_mtl_init();
-            ggml_mtl_add_buffer(ctx->mtl_ctx, "data", ggml_get_mem_buffer(ctx->model.ctx), ggml_get_mem_size(ctx->model.ctx));
-            ggml_mtl_add_buffer(ctx->mtl_ctx, "eval", ctx->buf_compute.addr,               ctx->buf_compute.size);
-            ggml_mtl_add_buffer(ctx->mtl_ctx, "kv",   ctx->model.kv_self.buf.addr,         ctx->model.kv_self.buf.size);
-            ggml_mtl_add_buffer(ctx->mtl_ctx, "scr0", ctx->buf_scratch[0].addr,            ctx->buf_scratch[0].size);
-            ggml_mtl_add_buffer(ctx->mtl_ctx, "scr1", ctx->buf_scratch[1].addr,            ctx->buf_scratch[1].size);
+            ctx->ctx_metal = ggml_metal_init();
+            ggml_metal_add_buffer(ctx->ctx_metal, "data", ggml_get_mem_buffer(ctx->model.ctx), ggml_get_mem_size(ctx->model.ctx));
+            ggml_metal_add_buffer(ctx->ctx_metal, "eval", ctx->buf_compute.addr,               ctx->buf_compute.size);
+            ggml_metal_add_buffer(ctx->ctx_metal, "kv",   ctx->model.kv_self.buf.addr,         ctx->model.kv_self.buf.size);
+            ggml_metal_add_buffer(ctx->ctx_metal, "scr0", ctx->buf_scratch[0].addr,            ctx->buf_scratch[0].size);
+            ggml_metal_add_buffer(ctx->ctx_metal, "scr1", ctx->buf_scratch[1].addr,            ctx->buf_scratch[1].size);
         }
     }
 #endif

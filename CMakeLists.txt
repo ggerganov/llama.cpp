@@ -207,7 +207,7 @@ if (LLAMA_METAL)
     find_library(METALKIT_FRAMEWORK         MetalKit                REQUIRED)
     find_library(METALPERFORMANCE_FRAMEWORK MetalPerformanceShaders REQUIRED)
 
-    set(GGML_SOURCES_METAL ggml-mtl.m ggml-mtl.h)
+    set(GGML_SOURCES_METAL ggml-metal.m ggml-metal.h)
 
     add_compile_definitions(GGML_USE_METAL)
     add_compile_definitions(GGML_METAL_NDEBUG)
@@ -215,8 +215,8 @@ if (LLAMA_METAL)
     # get full path to the file
     #add_compile_definitions(GGML_METAL_DIR_KERNELS="${CMAKE_CURRENT_SOURCE_DIR}/")
 
-    # copy ggml-mtl.metal to bin directory
-    configure_file(ggml-mtl.metal bin/ggml-mtl.metal COPYONLY)
+    # copy ggml-metal.metal to bin directory
+    configure_file(ggml-metal.metal bin/ggml-metal.metal COPYONLY)
 
     set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS}
         ${FOUNDATION_LIBRARY}
