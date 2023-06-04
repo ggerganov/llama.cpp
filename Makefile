@@ -209,7 +209,7 @@ $(info )
 # Build library
 #
 
-ggml.o: ggml.c ggml.h ggml-cuda.h
+ggml.o: ggml.c ggml.h ggml-cuda.h k_quants.h
 	$(CC)  $(CFLAGS)   -c $< -o $@
 
 k_quants.o: k_quants.c k_quants.h ggml.h ggml-cuda.h
