@@ -9,9 +9,11 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
-- Quantization formats `Q4` and `Q8` have changed again (19 May) - [(info)](https://github.com/ggerganov/llama.cpp/pull/1508)
-- Quantization formats `Q4` and `Q5` have changed - requantize any old models [(info)](https://github.com/ggerganov/llama.cpp/pull/1405)
-- [Roadmap May 2023](https://github.com/ggerganov/llama.cpp/discussions/1220)
+- GPU support with Metal (Apple Silicon): https://github.com/ggerganov/llama.cpp/pull/1642
+- High-quality 2,3,4,5,6-bit quantization: https://github.com/ggerganov/llama.cpp/pull/1684
+- Multi-GPU support: https://github.com/ggerganov/llama.cpp/pull/1607
+- Training LLaMA models from scratch: https://github.com/ggerganov/llama.cpp/pull/1652
+- CPU threading improvements: https://github.com/ggerganov/llama.cpp/pull/1632
 
 <details>
   <summary>Table of Contents</summary>
