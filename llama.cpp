@@ -1201,7 +1201,7 @@ static bool llama_model_load(
 //   - tokens:       new batch of tokens to process
 //   - n_past:       the context size so far
 //   - n_threads:    number of threads to use
-//   - cgraph_fname: filename of the exported computation graph (TODO: TMP!!!)
+//   - cgraph_fname: filename of the exported computation graph
 //
 static bool llama_eval_internal(
         llama_context &  lctx,
@@ -1256,7 +1256,7 @@ static bool llama_eval_internal(
     memcpy(embd->data, tokens, N*ggml_element_size(embd));
 
 #ifdef GGML_USE_METAL
-    if (lctx.ctx_metal) {
+    if (lctx.ctx_metal && N == 1) {
         ggml_metal_set_tensor(lctx.ctx_metal, embd);
     }
 #endif
@@ -1279,18 +1279,10 @@ static bool llama_eval_internal(
 
         // self-attention
         {
-            //auto * x = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
-            //struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, x, n_embd/n_head, n_head, N), n_past, n_rot, 0);
-
             // compute Q and K and RoPE them
 
-            struct ggml_tensor * Qpre = ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wq, cur), n_embd/n_head, n_head, N);
-            struct ggml_tensor * Kpre = ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wk, cur), n_embd/n_head, n_head, N);
-            ggml_set_name(Qpre, "Qpre");
-            ggml_set_name(Kpre, "Kpre");
-
-            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, Qpre, n_past, n_rot, 0);
-            struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, Kpre, n_past, n_rot, 0);
+            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
+            struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wk, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
             ggml_set_name(Qcur, "Qcur");
             ggml_set_name(Kcur, "Kcur");
 
@@ -1304,9 +1296,6 @@ static bool llama_eval_internal(
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, N, n_embd,
                         (   n_ctx)*ggml_element_size(kv_self.v),
                         (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd + n_past*ggml_element_size(kv_self.v));
-
-                ggml_set_name(k, "k");
-                ggml_set_name(v, "v");
 
                 // important: storing RoPE-ed version of K in the KV cache!
                 ggml_build_forward_expand(&gf, ggml_cpy(ctx0, Kcur, k));
@@ -2341,21 +2330,19 @@ struct llama_context * llama_init_from_file(
 #ifdef GGML_USE_METAL
     if (params.n_gpu_layers > 0) {
         // this allocates all Metal resources and memory buffers
+        ctx->ctx_metal = ggml_metal_init();
+
         if (params.use_mmap) {
-            ctx->ctx_metal = ggml_metal_init();
-            ggml_metal_add_buffer(ctx->ctx_metal, "data", ctx->model.mapping->addr,    ctx->model.mapping->size);
-            ggml_metal_add_buffer(ctx->ctx_metal, "eval", ctx->buf_compute.addr,       ctx->buf_compute.size);
-            ggml_metal_add_buffer(ctx->ctx_metal, "kv",   ctx->model.kv_self.buf.addr, ctx->model.kv_self.buf.size);
-            ggml_metal_add_buffer(ctx->ctx_metal, "scr0", ctx->buf_scratch[0].addr,    ctx->buf_scratch[0].size);
-            ggml_metal_add_buffer(ctx->ctx_metal, "scr1", ctx->buf_scratch[1].addr,    ctx->buf_scratch[1].size);
+            ggml_metal_add_buffer(ctx->ctx_metal, "data", ctx->model.mapping->addr, ctx->model.mapping->size);
+            ggml_metal_add_buffer(ctx->ctx_metal, "eval", ctx->buf_compute.addr,    ctx->buf_compute.size);
         } else {
-            ctx->ctx_metal = ggml_metal_init();
             ggml_metal_add_buffer(ctx->ctx_metal, "data", ggml_get_mem_buffer(ctx->model.ctx), ggml_get_mem_size(ctx->model.ctx));
             ggml_metal_add_buffer(ctx->ctx_metal, "eval", ctx->buf_compute.addr,               ctx->buf_compute.size);
-            ggml_metal_add_buffer(ctx->ctx_metal, "kv",   ctx->model.kv_self.buf.addr,         ctx->model.kv_self.buf.size);
-            ggml_metal_add_buffer(ctx->ctx_metal, "scr0", ctx->buf_scratch[0].addr,            ctx->buf_scratch[0].size);
-            ggml_metal_add_buffer(ctx->ctx_metal, "scr1", ctx->buf_scratch[1].addr,            ctx->buf_scratch[1].size);
         }
+
+        ggml_metal_add_buffer(ctx->ctx_metal, "kv",   ctx->model.kv_self.buf.addr, ctx->model.kv_self.buf.size);
+        ggml_metal_add_buffer(ctx->ctx_metal, "scr0", ctx->buf_scratch[0].addr,    ctx->buf_scratch[0].size);
+        ggml_metal_add_buffer(ctx->ctx_metal, "scr1", ctx->buf_scratch[1].addr,    ctx->buf_scratch[1].size);
     }
 #endif
 

@@ -15049,7 +15049,7 @@ struct ggml_cgraph ggml_graph_import(const char * fname, struct ggml_context ** 
 
                 // create the tensor
                 // "view" operations are handled differently
-                // TODO: handle inplac ops - currentl a copy is always made
+                // TODO: handle inplace ops - currently a copy is always made
 
                 struct ggml_tensor * tensor = NULL;
 
@@ -15084,10 +15084,8 @@ struct ggml_cgraph ggml_graph_import(const char * fname, struct ggml_context ** 
                         } break;
                 }
 
-
                 memcpy(tensor->name, ptr_name, GGML_MAX_NAME);
 
-                // TODO: double-check this is needed
                 for (int j = 0; j < GGML_MAX_DIMS; ++j) {
                     tensor->nb[j] = nb[j];
                 }

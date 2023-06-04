@@ -1,4 +1,4 @@
-// Evaluate a statically export ggml computation graph with Metal
+// Evaluate a statically exported ggml computation graph with Metal
 //
 // - First, export a LLaMA graph:
 //
