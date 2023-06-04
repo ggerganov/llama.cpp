@@ -64,13 +64,14 @@ if (NOT MSVC)
 endif()
 
 # 3rd party libs
-option(LLAMA_ACCELERATE                 "llama: enable Accelerate framework"                    ON)
-option(LLAMA_BLAS                       "llama: use BLAS"                                       OFF)
+option(LLAMA_ACCELERATE                      "llama: enable Accelerate framework"               ON)
+option(LLAMA_BLAS                            "llama: use BLAS"                                  OFF)
 set(LLAMA_BLAS_VENDOR "Generic" CACHE STRING "llama: BLAS library vendor")
-option(LLAMA_CUBLAS                     "llama: use cuBLAS"                                     OFF)
-set(LLAMA_CUDA_DMMV_X "32" CACHE STRING "llama: x stride for dmmv CUDA kernels")
-set(LLAMA_CUDA_DMMV_Y "1" CACHE STRING  "llama: y block size for dmmv CUDA kernels")
-option(LLAMA_CLBLAST                    "llama: use CLBlast"                                    OFF)
+option(LLAMA_CUBLAS                          "llama: use cuBLAS"                                OFF)
+set(LLAMA_CUDA_DMMV_X      "32" CACHE STRING "llama: x stride for dmmv CUDA kernels")
+set(LLAMA_CUDA_DMMV_Y       "1" CACHE STRING "llama: y block size for dmmv CUDA kernels")
+option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
+option(LLAMA_METAL                           "llama: use Metal"                                 OFF)
 
 option(LLAMA_BUILD_TESTS                "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES             "llama: build examples" ${LLAMA_STANDALONE})
@@ -183,7 +184,7 @@ if (LLAMA_CUBLAS)
 
         enable_language(CUDA)
 
-        set(GGML_CUDA_SOURCES ggml-cuda.cu ggml-cuda.h)
+        set(GGML_SOURCES_CUDA ggml-cuda.cu ggml-cuda.h)
 
         add_compile_definitions(GGML_USE_CUBLAS)
         add_compile_definitions(GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
@@ -200,12 +201,37 @@ if (LLAMA_CUBLAS)
     endif()
 endif()
 
+if (LLAMA_METAL)
+    find_library(FOUNDATION_LIBRARY         Foundation              REQUIRED)
+    find_library(METAL_FRAMEWORK            Metal                   REQUIRED)
+    find_library(METALKIT_FRAMEWORK         MetalKit                REQUIRED)
+    find_library(METALPERFORMANCE_FRAMEWORK MetalPerformanceShaders REQUIRED)
+
+    set(GGML_SOURCES_METAL ggml-mtl.m ggml-mtl.h)
+
+    add_compile_definitions(GGML_USE_METAL)
+    add_compile_definitions(GGML_METAL_NDEBUG)
+
+    # get full path to the file
+    #add_compile_definitions(GGML_METAL_DIR_KERNELS="${CMAKE_CURRENT_SOURCE_DIR}/")
+
+    # copy ggml-mtl.metal to bin directory
+    configure_file(ggml-mtl.metal bin/ggml-mtl.metal COPYONLY)
+
+    set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS}
+        ${FOUNDATION_LIBRARY}
+        ${METAL_FRAMEWORK}
+        ${METALKIT_FRAMEWORK}
+        ${METALPERFORMANCE_FRAMEWORK}
+        )
+endif()
+
 if (LLAMA_CLBLAST)
     find_package(CLBlast)
     if (CLBlast_FOUND)
         message(STATUS "CLBlast found")
 
-        set(GGML_OPENCL_SOURCES ggml-opencl.cpp ggml-opencl.h)
+        set(GGML_SOURCES_OPENCL ggml-opencl.cpp ggml-opencl.h)
 
         add_compile_definitions(GGML_USE_CLBLAST)
 
@@ -370,8 +396,10 @@ endif()
 add_library(ggml OBJECT
             ggml.c
             ggml.h
-            ${GGML_CUDA_SOURCES}
-            ${GGML_OPENCL_SOURCES})
+            ${GGML_SOURCES_CUDA}
+            ${GGML_SOURCES_OPENCL}
+            ${GGML_SOURCES_METAL}
+            )
 
 target_include_directories(ggml PUBLIC .)
 target_compile_features(ggml PUBLIC c_std_11) # don't bump
@@ -385,8 +413,6 @@ add_library(llama
             llama.cpp
             llama.h
             llama-util.h
-            examples/mtl/mtl.h # TODO: METAL TMP
-            examples/mtl/mtl.m # TODO: METAL TMP
             )
 
 target_include_directories(llama PUBLIC .)
@@ -394,22 +420,17 @@ target_compile_features(llama PUBLIC cxx_std_11) # don't bump
 target_link_libraries(llama PRIVATE
     ggml
     ${LLAMA_EXTRA_LIBS}
-    ${FOUNDATION_LIBRARY}         # TODO: METAL TMP
-    ${METAL_FRAMEWORK}            # TODO: METAL TMP
-    ${METALKIT_FRAMEWORK}         # TODO: METAL TMP
-    ${METALPERFORMANCE_FRAMEWORK} # TODO: METAL TMP
     )
-target_compile_definitions(llama PRIVATE LLAMA_MTL_NDEBUG) # TODO: METAL TMP
 
 if (BUILD_SHARED_LIBS)
     set_target_properties(llama PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_compile_definitions(llama PRIVATE LLAMA_SHARED LLAMA_BUILD)
 endif()
 
-if (GGML_CUDA_SOURCES)
+if (GGML_SOURCES_CUDA)
     message(STATUS "GGML CUDA sources found, configuring CUDA architecture")
-    set_property(TARGET ggml PROPERTY CUDA_ARCHITECTURES OFF)
-    set_property(TARGET ggml PROPERTY CUDA_SELECT_NVCC_ARCH_FLAGS "Auto")
+    set_property(TARGET ggml  PROPERTY CUDA_ARCHITECTURES OFF)
+    set_property(TARGET ggml  PROPERTY CUDA_SELECT_NVCC_ARCH_FLAGS "Auto")
     set_property(TARGET llama PROPERTY CUDA_ARCHITECTURES OFF)
 endif()
 

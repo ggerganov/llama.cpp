@@ -1,5 +1,5 @@
 #include "ggml.h"
-#include "mtl.h"
+#include "ggml-mtl.h"
 
 #include <cstdio>
 #include <cstring>
@@ -51,7 +51,7 @@ int main(int argc, char ** argv) {
     }
 
     // this allocates all Metal resources and memory buffers
-    auto * ctx_mtl = llama_mtl_init(
+    auto * ctx_mtl = ggml_mtl_init(
             ggml_get_mem_buffer(ctx_data),
             ggml_get_mem_size  (ctx_data),
             ggml_get_mem_buffer(ctx_eval),
@@ -67,7 +67,7 @@ int main(int argc, char ** argv) {
         const std::vector<int> tmp(n_batch, 1); // BOS
 
         // warmup
-        llama_mtl_eval(ctx_mtl, &gf, tmp.data(), tmp.size(), n_past);
+        ggml_mtl_graph_compute(ctx_mtl, &gf, tmp.data(), tmp.size(), n_past);
 
         const int n_iter = 16;
 
@@ -75,7 +75,7 @@ int main(int argc, char ** argv) {
 
         // the actual inference happens here
         for (int i = 0; i < n_iter; ++i) {
-            llama_mtl_eval(ctx_mtl, &gf, tmp.data(), tmp.size(), n_past);
+            ggml_mtl_graph_compute(ctx_mtl, &gf, tmp.data(), tmp.size(), n_past);
         }
 
         const int64_t t1 = ggml_time_us();
@@ -83,7 +83,7 @@ int main(int argc, char ** argv) {
         printf("time: %.2f ms, %.2f ms/tok\n", (t1 - t0) / 1000.0, (t1 - t0) / 1000.0 / n_iter);
     }
 
-    llama_mtl_free(ctx_mtl);
+    ggml_mtl_free(ctx_mtl);
 
     ggml_free(ctx_data);
     ggml_free(ctx_eval);

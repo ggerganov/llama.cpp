@@ -451,7 +451,7 @@ extern "C" {
     // main
 
     GGML_API struct ggml_context * ggml_init(struct ggml_init_params params);
-    GGML_API void    ggml_free(struct ggml_context * ctx);
+    GGML_API void                  ggml_free(struct ggml_context * ctx);
 
     GGML_API size_t  ggml_used_mem(const struct ggml_context * ctx);
 

@@ -31,7 +31,7 @@
 #define LLAMA_SESSION_MAGIC          LLAMA_FILE_MAGIC_GGSN
 #define LLAMA_SESSION_VERSION        1
 
-#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL)
 // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
 #define LLAMA_SUPPORTS_GPU_OFFLOAD
 #endif
@@ -75,7 +75,6 @@ extern "C" {
         bool use_mmap;   // use mmap if possible
         bool use_mlock;  // force system to keep model in RAM
         bool embedding;  // embedding mode only
-        bool cgraph;     // try to load computation graph from "llama.ggml" (METAL)
 
         // called with a progress value between 0 and 1, pass NULL to disable
         llama_progress_callback progress_callback;

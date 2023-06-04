@@ -1,4 +1,4 @@
-#import "mtl.h"
+#import "ggml-mtl.h"
 
 #import "ggml.h"
 
@@ -6,7 +6,7 @@
 #import <Metal/Metal.h>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 
-#ifdef LLAMA_MTL_NDEBUG
+#ifdef GGML_METAL_NDEBUG
 #define mtl_printf(...)
 #else
 #define mtl_printf(...) fprintf(stderr, __VA_ARGS__)
@@ -85,9 +85,9 @@ struct ggml_mtl_context {
 // MSL code
 // TODO: move the contents here when ready
 //       for now it is easier to work in a separate file
-NSString * const msl_library_llama = @"see mtl.metal";
+NSString * const msl_library_source = @"see mtl.metal";
 
-struct ggml_mtl_context * llama_mtl_init(
+struct ggml_mtl_context * ggml_mtl_init(
                      void   * data_buf,
                      size_t   data_size,
                      void   * eval_buf,
@@ -122,7 +122,7 @@ struct ggml_mtl_context * llama_mtl_init(
     {
         NSError * error = nil;
 
-        ctx->library = [ctx->device newLibraryWithSource:msl_library_llama options:nil error:&error];
+        ctx->library = [ctx->device newLibraryWithSource:msl_library_source options:nil error:&error];
         if (error) {
             fprintf(stderr, "%s: error: %s\n", __func__, [[error description] UTF8String]);
             exit(1);
@@ -133,7 +133,10 @@ struct ggml_mtl_context * llama_mtl_init(
     {
         NSError * error = nil;
 
-        NSString * path = [[NSBundle mainBundle] pathForResource:@"../../examples/mtl/mtl" ofType:@"metal"];
+        //NSString * path = [[NSBundle mainBundle] pathForResource:@"../../examples/mtl/mtl" ofType:@"metal"];
+        NSString * path = [[NSBundle mainBundle] pathForResource:@"ggml-mtl" ofType:@"metal"];
+        fprintf(stderr, "%s: loading '%s'\n", __func__, [path UTF8String]);
+
         NSString * src  = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
         if (error) {
             fprintf(stderr, "%s: error: %s\n", __func__, [[error description] UTF8String]);
@@ -220,7 +223,7 @@ struct ggml_mtl_context * llama_mtl_init(
     // TODO: how to use MTLStorageModeManaged?
     // TODO: see if we can avoid this copy somehow
     {
-        void * mem_buffer = data_buf;
+        const void * mem_buffer = data_buf;
         const size_t mem_size   = data_size;
 
         //ctx->buffer_data = [ctx->device newBufferWithBytesNoCopy:mem_buffer length:mem_size options:MTLResourceStorageModeShared deallocator:nil];
@@ -261,17 +264,19 @@ struct ggml_mtl_context * llama_mtl_init(
     return ctx;
 }
 
-void llama_mtl_free(struct ggml_mtl_context * ctx) {
+void ggml_mtl_free(struct ggml_mtl_context * ctx) {
     fprintf(stderr, "%s: deallocating\n", __func__);
 
     free(ctx);
 }
 
 // get data / eval buffer + offset
-id<MTLBuffer> llama_mtl_get_buffer(struct ggml_mtl_context * ctx, struct ggml_tensor * t, size_t * offs) {
+id<MTLBuffer> ggml_mtl_get_buffer(struct ggml_mtl_context * ctx, struct ggml_tensor * t, size_t * offs) {
     const int64_t offs_data = (int64_t) t->data - (int64_t) ctx->data_buf;
     const int64_t offs_eval = (int64_t) t->data - (int64_t) ctx->eval_buf;
     const int64_t offs_cach = (int64_t) t->data - (int64_t) ctx->cach_buf;
+
+    //fprintf(stderr, "%s: data tensor '%16s', offs_data = %8ld, offs_eval = %8ld, offs_cach = %8ld\n", __func__, t->name, offs_data, offs_eval, offs_cach);
 
     //const size_t t_size = ggml_nbytes(t);
 
@@ -317,7 +322,7 @@ id<MTLBuffer> llama_mtl_get_buffer(struct ggml_mtl_context * ctx, struct ggml_te
     return result;
 }
 
-int llama_mtl_eval(
+int ggml_mtl_graph_compute(
         struct ggml_mtl_context * ctx,
              struct ggml_cgraph * gf,
                       const int * tokens,
@@ -336,7 +341,7 @@ int llama_mtl_eval(
     {
         struct ggml_tensor * embd = ggml_graph_get_tensor(gf, "embd");
 
-        id<MTLBuffer> id_dst = llama_mtl_get_buffer(ctx, embd, &offs_src0);
+        id<MTLBuffer> id_dst = ggml_mtl_get_buffer(ctx, embd, &offs_src0);
 
         memcpy((char *) id_dst.contents + offs_src0, embd->data, ggml_nbytes(embd));
     }
@@ -385,9 +390,9 @@ int llama_mtl_eval(
         const enum ggml_type src1t = src1 ? src1->type : GGML_TYPE_COUNT;
         const enum ggml_type dstt  = dst  ? dst->type  : GGML_TYPE_COUNT;
 
-        id<MTLBuffer> id_src0 = src0 ? llama_mtl_get_buffer(ctx, src0, &offs_src0) : nil;
-        id<MTLBuffer> id_src1 = src1 ? llama_mtl_get_buffer(ctx, src1, &offs_src1) : nil;
-        id<MTLBuffer> id_dst  = dst  ? llama_mtl_get_buffer(ctx, dst,  &offs_dst)  : nil;
+        id<MTLBuffer> id_src0 = src0 ? ggml_mtl_get_buffer(ctx, src0, &offs_src0) : nil;
+        id<MTLBuffer> id_src1 = src1 ? ggml_mtl_get_buffer(ctx, src1, &offs_src1) : nil;
+        id<MTLBuffer> id_dst  = dst  ? ggml_mtl_get_buffer(ctx, dst,  &offs_dst)  : nil;
 
         //mtl_printf("%s: op - %s\n", __func__, ggml_op_name(dst->op));
         //if (src0) {
@@ -775,7 +780,7 @@ int llama_mtl_eval(
 
         struct ggml_tensor * out = gf->nodes[gf->n_nodes - 1];
 
-        id<MTLBuffer> id_src = llama_mtl_get_buffer(ctx, out, &offs_src0);
+        id<MTLBuffer> id_src = ggml_mtl_get_buffer(ctx, out, &offs_src0);
         id<MTLBuffer> id_dst = ctx->out;
 
         id<MTLBlitCommandEncoder> encoder_blit = [command_buffer blitCommandEncoder];
@@ -817,53 +822,5 @@ int llama_mtl_eval(
     mtl_printf("sum: %f, imax = %d, vmax = %f\n", sum, imax, vmax);
 #endif
 
-    //{
-    //    struct ggml_tensor * t = ggml_get_tensor(ctx->ctx_eval, "mtl-check");
-    //    if (t->type == GGML_TYPE_F32) {
-    //        const const float * data = (float *) ctx->out.contents;
-    //        printf("data: ");
-    //        for (int i = 0; i < (int) t->ne[0]; i++) {
-    //            printf("%f ", data[i]);
-    //        }
-    //        printf("\n");
-    //        double sum = 0.0;
-    //        for (int i = 0; i < ggml_nelements(t); i++) {
-    //            double cur = data[i];
-    //            if (isinf(cur)) continue;
-    //            sum += cur;
-    //        }
-    //        printf("sum:  %f\n", sum);
-    //    } else if (t->type == GGML_TYPE_F16) {
-    //        ggml_fp16_t * data = (const ggml_fp16_t *) ctx->out.contents;
-    //        printf("data: ");
-    //        for (int i = 0; i < (int) t->ne[0]; i++) {
-    //            printf("%f ", ggml_fp16_to_fp32(data[i]));
-    //        }
-    //        printf("\n");
-    //        double sum = 0.0;
-    //        printf("nb: %lld %lld %lld %lld\n", t->nb[0], t->nb[1], t->nb[2], t->nb[3]);
-    //        for (int64_t i3 = 0; i3 < t->ne[3]; ++i3) {
-    //            for (int64_t i2 = 0; i2 < t->ne[2]; ++i2) {
-    //                for (int64_t i1 = 0; i1 < t->ne[1]; ++i1) {
-    //                    for (int64_t i0 = 0; i0 < t->ne[0]; ++i0) {
-    //                        const size_t offs = i3*t->nb[3] + i2*t->nb[2] + i1*t->nb[1] + i0*t->nb[0];
-    //                        const ggml_fp16_t cur = *((ggml_fp16_t *)((char *) data + offs));
-    //                        const float curf = ggml_fp16_to_fp32(cur);
-    //                        if (isinf(curf)) continue;
-    //                        sum += curf;
-    //                    }
-    //                }
-    //            }
-    //        }
-    //        printf("sum:  %f\n", sum);
-    //    } else {
-    //        GGML_ASSERT(false && "not implemented");
-    //    }
-    //}
-
     return 0;
-}
-
-float * llama_mtl_get_logits(struct ggml_mtl_context * ctx) {
-    return ctx->logits;
 }

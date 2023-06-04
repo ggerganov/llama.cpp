@@ -72,7 +72,6 @@ struct gpt_params {
     bool use_mlock         = false; // use mlock to keep model in memory
     bool mem_test          = false; // compute maximum memory usage
     bool export_cgraph     = false; // export the computation graph
-    bool import_cgraph     = false; // import a computation graph
     bool verbose_prompt    = false; // print prompt tokens before generation
 };
 

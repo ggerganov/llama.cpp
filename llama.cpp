@@ -9,14 +9,15 @@
 #include "llama-util.h"
 #include "llama.h"
 
-// METAL
-#include "examples/mtl/mtl.h"
-
 #include "ggml.h"
 #ifdef GGML_USE_CUBLAS
 #include "ggml-cuda.h"
 #elif defined(GGML_USE_CLBLAST)
 #include "ggml-opencl.h"
+#endif
+
+#ifdef GGML_USE_METAL
+#include "ggml-mtl.h"
 #endif
 
 #include <array>
@@ -241,8 +242,9 @@ struct llama_context {
     llama_ctx_buffer buf_compute;
     llama_ctx_buffer buf_scratch[LLAMA_MAX_SCRATCH_BUFFERS];
 
-    // METAL
+#ifdef GGML_USE_METAL
     ggml_mtl_context * mtl_ctx = NULL;
+#endif
 
     int    buf_last = 0;
     size_t buf_max_size[LLAMA_MAX_SCRATCH_BUFFERS] = { 0 };
@@ -842,7 +844,6 @@ struct llama_context_params llama_context_default_params() {
         /*.use_mmap                    =*/ true,
         /*.use_mlock                   =*/ false,
         /*.embedding                   =*/ false,
-        /*.cgraph                      =*/ false,
         /*.progress_callback           =*/ nullptr,
         /*.progress_callback_user_data =*/ nullptr,
     };
@@ -1442,12 +1443,15 @@ static bool llama_eval_internal(
     // run the computation
     ggml_build_forward_expand(&gf, inpL);
 
-    // METAL
+#ifdef GGML_USE_METAL
     if (lctx.mtl_ctx) {
-        llama_mtl_eval(lctx.mtl_ctx, &gf, tokens, n_tokens, n_past);
+        ggml_mtl_graph_compute(lctx.mtl_ctx, &gf, tokens, n_tokens, n_past);
     } else {
-        ggml_graph_compute (ctx0, &gf);
+        ggml_graph_compute(ctx0, &gf);
     }
+#else
+    ggml_graph_compute(ctx0, &gf);
+#endif
 
     if (cgraph_fname) {
         // TODO: tmp add the vocabulary as a leaf to the computation graph, until better approach is found
@@ -2376,11 +2380,10 @@ struct llama_context * llama_init_from_file(
         ctx->buf_scratch[1].resize(MEM_REQ_SCRATCH1().at(ctx->model.type));
     }
 
-    // METAL
-    if (params.cgraph) {
+#ifdef GGML_USE_METAL
+    if (params.n_gpu_layers > 0) {
         // this allocates all Metal resources and memory buffers
-        //ctx->mtl_ctx = llama_mtl_init(ctx_data, ctx_eval, &gf);
-        ctx->mtl_ctx = llama_mtl_init(
+        ctx->mtl_ctx = ggml_mtl_init(
                 ggml_get_mem_buffer(ctx->model.ctx),
                 ggml_get_mem_size  (ctx->model.ctx),
                 ctx->buf_compute.addr,
@@ -2389,6 +2392,7 @@ struct llama_context * llama_init_from_file(
                 ctx->model.kv_self.buf.size,
                 32*ctx->model.hparams.n_vocab*sizeof(float));
     }
+#endif
 
     return ctx;
 }
