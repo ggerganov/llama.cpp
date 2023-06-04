@@ -4,6 +4,7 @@
 #include <atomic>
 #include <sstream>
 #include <vector>
+#include <limits>
 
 #define CL_TARGET_OPENCL_VERSION 110
 #include <clblast.h>
@@ -608,7 +609,7 @@ static cl_mem ggml_cl_pool_malloc(size_t size, size_t * actual_size, cl_mem_flag
     scoped_spin_lock lock(g_cl_pool_lock);
     cl_int err;
 
-    int best_i = -1, best_size = (size_t)-1; //smallest unused buffer that fits our needs
+    int best_i = -1, best_size = std::numeric_limits<size_t>::max(); //smallest unused buffer that fits our needs
     int worst_i = -1, worst_size = 0; //largest unused buffer seen so far
     for (int i = 0; i < MAX_CL_BUFFERS; ++i) {
         cl_buffer &b = g_cl_buffer_pool[i];
