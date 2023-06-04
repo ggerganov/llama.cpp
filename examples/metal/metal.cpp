@@ -1,3 +1,18 @@
+// Evaluate a statically export ggml computation graph with Metal
+//
+// - First, export a LLaMA graph:
+//
+//  $ ./bin/main -m ../models/7B/ggml-model-q4_0.bin --export
+//
+// - Run this tool to evaluate the exported graph:
+//
+//  $ ./bin/metal llama.ggml
+//
+// The purpose of this tool is mostly for debugging and demonstration purposes.
+// The main limitation of exporting computation graphs is that their sizes are static which often
+// can be a problem for real-world applications.
+//
+
 #include "ggml.h"
 #include "ggml-metal.h"
 

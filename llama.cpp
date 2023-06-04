@@ -2990,10 +2990,6 @@ int llama_eval(
 }
 
 int llama_eval_export(struct llama_context * ctx, const char * fname) {
-    // these values determine the maximum inference sizes of the exported computation graph
-    // TODO: need to increase buffers to support the full context
-    //const int n_ctx   = ctx->model.hparams.n_ctx;
-    //const int n_batch = 512;
     const int n_batch = 1;
     const int n_ctx   = 512 - n_batch;
 

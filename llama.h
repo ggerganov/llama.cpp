@@ -173,8 +173,10 @@ extern "C" {
                              int   n_past,
                              int   n_threads);
 
-    // Export a computation graph for model inference
-    // TODO: very likely to change
+    // Export a static computation graph for context of 511 and batch size of 1
+    // NOTE: since this functionality is mostly for debugging and demonstration purposes, we hardcode these
+    //       parameters here to keep things simple
+    // IMPORTANT: do not use for anything else other than debugging and testing!
     LLAMA_API int llama_eval_export(struct llama_context * ctx, const char * fname);
 
     // Convert the provided text into tokens.
