@@ -138,8 +138,8 @@ ModelLoadResult gpt_neox_model_load(const std::string & fname, gpt_neox_model & 
         ctx_size += n_layer*(4*n_embd*n_embd*ggml_type_sizef(wtype));         // c_mlp_proj_w
         ctx_size += n_layer*(         n_embd*ggml_type_sizef(GGML_TYPE_F32)); // c_mlp_proj_b
 
-        ctx_size += n_ctx*n_layer*n_embd*ggml_type_sizef(GGML_TYPE_F32); // memory_k
-        ctx_size += n_ctx*n_layer*n_embd*ggml_type_sizef(GGML_TYPE_F32); // memory_v
+        ctx_size += n_ctx*n_layer*n_embd*ggml_type_sizef(GGML_TYPE_F16); // memory_k
+        ctx_size += n_ctx*n_layer*n_embd*ggml_type_sizef(GGML_TYPE_F16); // memory_v
 
         ctx_size += (6 + 16*n_layer)*512; // object overhead
 
@@ -410,15 +410,19 @@ bool gpt_neox_eval(
     static void * buf = malloc(buf_size);
 
     if (mem_per_token > 0 && (mem_per_token*N*2 + 64u*1024*1024) > buf_size) {
-        const size_t buf_size_new = 360u*1024*1024 + 2*(mem_per_token*N); // add 10% to account for ggml object overhead
+        const size_t buf_size_new = 360u*1024*1024 + 1.7*(mem_per_token*N); // add 10% to account for ggml object overhead
         //printf("\n%s: reallocating buffer from %zu to %zu bytes\n", __func__, buf_size, buf_size_new);
 
         // reallocate
-        buf_size = buf_size_new;
-        buf = realloc(buf, buf_size);
-        if (buf == nullptr) {
-            fprintf(stderr, "%s: failed to allocate %zu bytes\n", __func__, buf_size);
-            return false;
+        if (buf_size_new > buf_size)
+        {
+            buf_size = buf_size_new;
+            buf = realloc(buf, buf_size);
+            if (buf == nullptr)
+            {
+                fprintf(stderr, "%s: failed to allocate %zu bytes\n", __func__, buf_size);
+                return false;
+            }
         }
     }
 

@@ -459,7 +459,14 @@ def show_gui():
         opts = ["Use OpenBLAS","Use CLBLast GPU #1","Use CLBLast GPU #2","Use CLBLast GPU #3","Use No BLAS","Use OpenBLAS (Old CPU, noavx2)","Failsafe Mode (Old CPU, noavx)"]
         runchoice = tk.StringVar()
         runchoice.set("Use OpenBLAS")
-        tk.OptionMenu( root , runchoice , *opts ).grid(row=2,column=0)
+        def onDropdownChange(event):
+            sel = runchoice.get()
+            if sel==opts[1] or sel==opts[2] or sel==opts[3]:
+                frm1.grid(row=4,column=0,pady=4)
+            else:
+                frm1.grid_forget()
+            pass
+        tk.OptionMenu( root , runchoice , command = onDropdownChange ,*opts ).grid(row=2,column=0)
      
 
         frm2 = tk.Frame(root)
@@ -479,6 +486,7 @@ def show_gui():
         gpu_lbl.grid(row=0,column=0)
         gpu_layers_input.grid(row=0,column=1)
         frm1.grid(row=4,column=0,pady=4)
+        onDropdownChange(None)
 
         stream = tk.IntVar()
         smartcontext = tk.IntVar()
