@@ -51,23 +51,22 @@ int main(int argc, char ** argv) {
     }
 
     // this allocates all Metal resources and memory buffers
-    auto * ctx_mtl = ggml_mtl_init(
-            ggml_get_mem_buffer(ctx_data),
-            ggml_get_mem_size  (ctx_data),
-            ggml_get_mem_buffer(ctx_eval),
-            ggml_get_mem_size  (ctx_eval),
-            NULL, 0, // cache
-            32*n_vocab*sizeof(float));
+    auto * ctx_mtl = ggml_mtl_init();
+
+    ggml_mtl_add_buffer(ctx_mtl, "data", ggml_get_mem_buffer(ctx_data), ggml_get_mem_size(ctx_data));
+    ggml_mtl_add_buffer(ctx_mtl, "eval", ggml_get_mem_buffer(ctx_eval), ggml_get_mem_size(ctx_eval));
 
     // TODO: tmp to match the input used when creating the cgraph
     {
-        const int n_batch = 1;
-        const int n_past  = 512 - n_batch;
+        const std::vector<int> tmp(1, 1); // BOS
 
-        const std::vector<int> tmp(n_batch, 1); // BOS
+        struct ggml_tensor * input = ggml_graph_get_tensor(&gf, "embd");
+        memcpy(input->data, tmp.data(), tmp.size() * sizeof(int));
+
+        ggml_mtl_set_tensor(ctx_mtl, input);
 
         // warmup
-        ggml_mtl_graph_compute(ctx_mtl, &gf, tmp.data(), tmp.size(), n_past);
+        ggml_mtl_graph_compute(ctx_mtl, &gf);
 
         const int n_iter = 16;
 
@@ -75,12 +74,37 @@ int main(int argc, char ** argv) {
 
         // the actual inference happens here
         for (int i = 0; i < n_iter; ++i) {
-            ggml_mtl_graph_compute(ctx_mtl, &gf, tmp.data(), tmp.size(), n_past);
+            ggml_mtl_graph_compute(ctx_mtl, &gf);
         }
 
         const int64_t t1 = ggml_time_us();
 
         printf("time: %.2f ms, %.2f ms/tok\n", (t1 - t0) / 1000.0, (t1 - t0) / 1000.0 / n_iter);
+    }
+
+    // debug output
+    {
+        struct ggml_tensor * logits = gf.nodes[gf.n_nodes - 1];
+        ggml_mtl_get_tensor(ctx_mtl, logits);
+
+        float * ptr = (float *) ggml_get_data(logits);
+
+        printf("logits: ");
+        for (int i = 0; i < 10; i++) {
+            printf("%8.4f ", ptr[i]);
+        }
+        printf("\n");
+        int imax = 0;
+        double sum = 0.0;
+        double vmax = -1e9;
+        for (int i = 0; i < 32000; i++) {
+            sum += (double) ptr[i];
+            if (ptr[i] > vmax) {
+                vmax = ptr[i];
+                imax = i;
+            }
+        }
+        printf("sum: %f, imax = %d, vmax = %f\n", sum, imax, vmax);
     }
 
     ggml_mtl_free(ctx_mtl);

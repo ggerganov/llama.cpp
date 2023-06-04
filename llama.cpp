@@ -1085,7 +1085,7 @@ static void llama_model_load_internal(
             mmapped_size - vram_total + // weights in VRAM not in memory
             MEM_REQ_SCRATCH0().at(model.type) +
             MEM_REQ_SCRATCH1().at(model.type) +
-            MEM_REQ_EVAL().at(model.type);
+            MEM_REQ_EVAL().at    (model.type);
 
         // this is the memory required by one llama_state
         const size_t mem_required_state =
@@ -1255,14 +1255,19 @@ static bool llama_eval_internal(
     ggml_set_name(embd, "embd");
     memcpy(embd->data, tokens, N*ggml_element_size(embd));
 
+#ifdef GGML_USE_METAL
+    if (lctx.mtl_ctx) {
+        ggml_mtl_set_tensor(lctx.mtl_ctx, embd);
+    }
+#endif
+
+    struct ggml_tensor * cur;
     struct ggml_tensor * inpL = ggml_get_rows(ctx0, model.tok_embeddings, embd);
 
     for (int il = 0; il < n_layer; ++il) {
         struct ggml_tensor * inpSA = inpL;
 
-        struct ggml_tensor * cur;
-
-        //lctx.use_buf(ctx0, 0);
+        lctx.use_buf(ctx0, 0);
 
         // norm
         {
@@ -1378,7 +1383,7 @@ static bool llama_eval_internal(
                     cur);
         }
 
-        //lctx.use_buf(ctx0, 1);
+        lctx.use_buf(ctx0, 1);
 
         struct ggml_tensor * inpFF = ggml_add(ctx0, cur, inpSA);
 
@@ -1416,36 +1421,36 @@ static bool llama_eval_internal(
         inpL = cur;
     }
 
-    //lctx.use_buf(ctx0, 0);
+    lctx.use_buf(ctx0, 0);
 
     // used at the end to optionally extract the embeddings
     struct ggml_tensor * embeddings = NULL;
 
     // norm
     {
+        cur = ggml_rms_norm(ctx0, inpL);
 
-        inpL = ggml_rms_norm(ctx0, inpL);
+        // cur = cur*norm(broadcasted)
+        cur = ggml_mul(ctx0, cur, model.norm);
 
-        // inpL = inpL*norm(broadcasted)
-        inpL = ggml_mul(ctx0, inpL, model.norm);
-
-        embeddings = inpL;
+        embeddings = cur;
     }
 
     // lm_head
-    inpL = ggml_mul_mat(ctx0, model.output, inpL);
+    cur = ggml_mul_mat(ctx0, model.output, cur);
 
-    //lctx.use_buf(ctx0, -1);
+    lctx.use_buf(ctx0, -1);
 
     // logits -> probs
-    //inpL = ggml_soft_max_inplace(ctx0, inpL);
+    //cur = ggml_soft_max_inplace(ctx0, cur);
 
     // run the computation
-    ggml_build_forward_expand(&gf, inpL);
+    ggml_build_forward_expand(&gf, cur);
 
 #ifdef GGML_USE_METAL
     if (lctx.mtl_ctx) {
-        ggml_mtl_graph_compute(lctx.mtl_ctx, &gf, tokens, n_tokens, n_past);
+        ggml_mtl_graph_compute(lctx.mtl_ctx, &gf);
+        ggml_mtl_get_tensor(lctx.mtl_ctx, cur);
     } else {
         ggml_graph_compute(ctx0, &gf);
     }
@@ -1498,7 +1503,7 @@ static bool llama_eval_internal(
             ggml_free(ctx_vocab);
         }
 
-        float * logits = (float *) ggml_get_data(inpL);
+        float * logits = (float *) ggml_get_data(cur);
 
         printf("logits: ");
         for (int i = 0; i < 10; i++) {
@@ -1530,7 +1535,7 @@ static bool llama_eval_internal(
     //}
 
     //embd_w.resize(n_vocab*N);
-    //memcpy(embd_w.data(), ggml_get_data(inpL), sizeof(float)*n_vocab*N);
+    //memcpy(embd_w.data(), ggml_get_data(cur), sizeof(float)*n_vocab*N);
 
     // update kv token count
     lctx.model.kv_self.n = n_past + N;
@@ -1541,11 +1546,11 @@ static bool llama_eval_internal(
 
         if (lctx.logits_all) {
             logits_out.resize(n_vocab * N);
-            memcpy(logits_out.data(), (float *) ggml_get_data(inpL), sizeof(float)*n_vocab*N);
+            memcpy(logits_out.data(), (float *) ggml_get_data(cur), sizeof(float)*n_vocab*N);
         } else {
             // return result for just the last token
             logits_out.resize(n_vocab);
-            memcpy(logits_out.data(), (float *) ggml_get_data(inpL) + (n_vocab*(N-1)), sizeof(float)*n_vocab);
+            memcpy(logits_out.data(), (float *) ggml_get_data(cur) + (n_vocab*(N-1)), sizeof(float)*n_vocab);
         }
     }
 
@@ -2374,7 +2379,12 @@ struct llama_context * llama_init_from_file(
             ctx->embedding.resize(hparams.n_embd);
         }
 
+#ifdef GGML_USE_METAL
+        // when using Metal, we don't need the extra buffer for intermediate dequantization
+        ctx->buf_compute.resize(MEM_REQ_EVAL().at(ctx->model.type)/100);
+#else
         ctx->buf_compute.resize(MEM_REQ_EVAL().at(ctx->model.type));
+#endif
 
         ctx->buf_scratch[0].resize(MEM_REQ_SCRATCH0().at(ctx->model.type));
         ctx->buf_scratch[1].resize(MEM_REQ_SCRATCH1().at(ctx->model.type));
@@ -2383,14 +2393,21 @@ struct llama_context * llama_init_from_file(
 #ifdef GGML_USE_METAL
     if (params.n_gpu_layers > 0) {
         // this allocates all Metal resources and memory buffers
-        ctx->mtl_ctx = ggml_mtl_init(
-                ggml_get_mem_buffer(ctx->model.ctx),
-                ggml_get_mem_size  (ctx->model.ctx),
-                ctx->buf_compute.addr,
-                ctx->buf_compute.size,
-                ctx->model.kv_self.buf.addr,
-                ctx->model.kv_self.buf.size,
-                32*ctx->model.hparams.n_vocab*sizeof(float));
+        if (params.use_mmap) {
+            ctx->mtl_ctx = ggml_mtl_init();
+            ggml_mtl_add_buffer(ctx->mtl_ctx, "data", ctx->model.mapping->addr,    ctx->model.mapping->size);
+            ggml_mtl_add_buffer(ctx->mtl_ctx, "eval", ctx->buf_compute.addr,       ctx->buf_compute.size);
+            ggml_mtl_add_buffer(ctx->mtl_ctx, "kv",   ctx->model.kv_self.buf.addr, ctx->model.kv_self.buf.size);
+            ggml_mtl_add_buffer(ctx->mtl_ctx, "scr0", ctx->buf_scratch[0].addr,    ctx->buf_scratch[0].size);
+            ggml_mtl_add_buffer(ctx->mtl_ctx, "scr1", ctx->buf_scratch[1].addr,    ctx->buf_scratch[1].size);
+        } else {
+            ctx->mtl_ctx = ggml_mtl_init();
+            ggml_mtl_add_buffer(ctx->mtl_ctx, "data", ggml_get_mem_buffer(ctx->model.ctx), ggml_get_mem_size(ctx->model.ctx));
+            ggml_mtl_add_buffer(ctx->mtl_ctx, "eval", ctx->buf_compute.addr,               ctx->buf_compute.size);
+            ggml_mtl_add_buffer(ctx->mtl_ctx, "kv",   ctx->model.kv_self.buf.addr,         ctx->model.kv_self.buf.size);
+            ggml_mtl_add_buffer(ctx->mtl_ctx, "scr0", ctx->buf_scratch[0].addr,            ctx->buf_scratch[0].size);
+            ggml_mtl_add_buffer(ctx->mtl_ctx, "scr1", ctx->buf_scratch[1].addr,            ctx->buf_scratch[1].size);
+        }
     }
 #endif
 

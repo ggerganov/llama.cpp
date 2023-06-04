@@ -13,26 +13,24 @@
 #endif
 //#define mtl_printf(...)
 
-struct ggml_mtl_context {
-    void   * data_buf;
-    size_t   data_size;
-    void   * eval_buf;
-    size_t   eval_size;
-    void   * cach_buf;
-    size_t   cach_size;
-    size_t   outp_size;
+struct ggml_mtl_buffer {
+    const char * name;
 
+    void   * data;
+    size_t   size;
+
+    id<MTLBuffer> mtl;
+};
+
+struct ggml_mtl_context {
     float * logits;
 
     id<MTLDevice>       device;
     id<MTLCommandQueue> queue;
     id<MTLLibrary>      library;
 
-    id<MTLBuffer> buffer_data;
-    id<MTLBuffer> buffer_eval;
-    id<MTLBuffer> buffer_cach;
-
-    id<MTLBuffer> out;
+    int n_buffers;
+    struct ggml_mtl_buffer buffers[GGML_METAL_MAX_BUFFERS];
 
     // custom kernels
     id<MTLFunction>             function_add;
@@ -87,24 +85,10 @@ struct ggml_mtl_context {
 //       for now it is easier to work in a separate file
 NSString * const msl_library_source = @"see mtl.metal";
 
-struct ggml_mtl_context * ggml_mtl_init(
-                     void   * data_buf,
-                     size_t   data_size,
-                     void   * eval_buf,
-                     size_t   eval_size,
-                     void   * cach_buf,
-                     size_t   cach_size,
-                     size_t   outp_size) {
+struct ggml_mtl_context * ggml_mtl_init(void) {
     fprintf(stderr, "%s: allocating\n", __func__);
 
     struct ggml_mtl_context * ctx = malloc(sizeof(struct ggml_mtl_context));
-
-    ctx->data_buf  = data_buf;
-    ctx->data_size = data_size;
-    ctx->eval_buf  = eval_buf;
-    ctx->eval_size = eval_size;
-    ctx->cach_buf  = cach_buf;
-    ctx->cach_size = cach_size;
 
     ctx->device = MTLCreateSystemDefaultDevice();
     ctx->queue  = [ctx->device newCommandQueue];
@@ -216,51 +200,6 @@ struct ggml_mtl_context * ggml_mtl_init(
         fprintf(stderr, "%s: loaded kernel_cpy_f32_f32: %p\n", __func__, (void *) ctx->pipeline_cpy_f32_f32);
     }
 
-    // MTLBuffer approach
-
-    // pin ctx_data memory to GPU
-    // use MTLStorageModeShared to allow us to initialize the weights from the CPU
-    // TODO: how to use MTLStorageModeManaged?
-    // TODO: see if we can avoid this copy somehow
-    {
-        const void * mem_buffer = data_buf;
-        const size_t mem_size   = data_size;
-
-        //ctx->buffer_data = [ctx->device newBufferWithBytesNoCopy:mem_buffer length:mem_size options:MTLResourceStorageModeShared deallocator:nil];
-        ctx->buffer_data = [ctx->device newBufferWithBytes:mem_buffer length:mem_size options:MTLResourceStorageModeShared];
-
-        fprintf(stderr, "%s: allocated data buffer, size = %8.2f MB\n", __func__, mem_size / 1024.0 / 1024.0);
-    }
-
-    // pin ctx_eval memory to GPU
-    // this buffer will be used for the intermediate results of the evaluation
-    {
-        const void * mem_buffer = eval_buf;
-        const size_t mem_size   = eval_size;
-
-        ctx->buffer_eval = [ctx->device newBufferWithBytes:mem_buffer length:mem_size options:MTLResourceStorageModeShared];
-
-        fprintf(stderr, "%s: allocated eval buffer, size = %8.2f MB\n", __func__, mem_size / 1024.0 / 1024.0);
-    }
-
-    if (cach_buf) {
-        const void * mem_buffer = cach_buf;
-        const size_t mem_size   = cach_size;
-
-        ctx->buffer_cach = [ctx->device newBufferWithBytes:mem_buffer length:mem_size options:MTLResourceStorageModeShared];
-
-        fprintf(stderr, "%s: allocated cach buffer, size = %8.2f MB\n", __func__, mem_size / 1024.0 / 1024.0);
-    }
-
-    // allocate buffer for result extraction
-    {
-        const size_t mem_size = outp_size;
-
-        ctx->out = [ctx->device newBufferWithLength:mem_size options:MTLResourceStorageModeShared];
-
-        fprintf(stderr, "%s: allocated  out buffer, size = %8.2f MB\n", __func__, mem_size / 1024.0 / 1024.0);
-    }
-
     return ctx;
 }
 
@@ -271,80 +210,79 @@ void ggml_mtl_free(struct ggml_mtl_context * ctx) {
 }
 
 // get data / eval buffer + offset
-id<MTLBuffer> ggml_mtl_get_buffer(struct ggml_mtl_context * ctx, struct ggml_tensor * t, size_t * offs) {
-    const int64_t offs_data = (int64_t) t->data - (int64_t) ctx->data_buf;
-    const int64_t offs_eval = (int64_t) t->data - (int64_t) ctx->eval_buf;
-    const int64_t offs_cach = (int64_t) t->data - (int64_t) ctx->cach_buf;
-
+static id<MTLBuffer> ggml_mtl_get_buffer(struct ggml_mtl_context * ctx, struct ggml_tensor * t, size_t * offs) {
     //fprintf(stderr, "%s: data tensor '%16s', offs_data = %8ld, offs_eval = %8ld, offs_cach = %8ld\n", __func__, t->name, offs_data, offs_eval, offs_cach);
 
-    //const size_t t_size = ggml_nbytes(t);
+    for (int i = 0; i < ctx->n_buffers; ++i) {
+        const int64_t ioffs = (int64_t) t->data - (int64_t) ctx->buffers[i].data;
 
-    id<MTLBuffer> result;
-    size_t t_offs = 0;
+        if (ioffs >= 0 && ioffs < (int64_t) ctx->buffers[i].size) {
+            *offs = (size_t) ioffs;
 
-    if ( offs_data > 0 &&
-        (offs_eval < 0 || (offs_data < offs_eval)) &&
-        (offs_cach < 0 || (offs_data < offs_cach))
-       ) {
-        result = ctx->buffer_data;
-        t_offs = offs_data;
-        //fprintf(stderr, "%s: data tensor '%16s', offs = %8ld, size = %8ld\n", __func__, t->name, t_offs, t_size);
+            //fprintf(stderr, "%s: '%s' tensor '%16s', offs = %8ld\n", __func__, ctx->buffers[i].name, t->name, *offs);
+
+            return ctx->buffers[i].mtl;
+        }
     }
 
-    if ( offs_eval > 0 &&
-        (offs_data < 0 || (offs_eval < offs_data)) &&
-        (offs_cach < 0 || (offs_eval < offs_cach))
-       ) {
-        result = ctx->buffer_eval;
-        t_offs = offs_eval;
-        //fprintf(stderr, "%s: data tensor '%16s', offs = %8ld, size = %8ld\n", __func__, t->name, t_offs, t_size);
+    fprintf(stderr, "%s: error: buffer is nil\n", __func__);
+    GGML_ASSERT(false);
+
+    return nil;
+}
+
+void ggml_mtl_add_buffer(
+        struct ggml_mtl_context * ctx,
+                     const char * name,
+                           void * data,
+                         size_t   size) {
+    if (ctx->n_buffers >= GGML_METAL_MAX_BUFFERS) {
+        fprintf(stderr, "%s: too many buffers\n", __func__);
+        return;
     }
 
-    if ( offs_cach > 0 &&
-        (offs_data < 0 || (offs_cach < offs_data)) &&
-        (offs_eval < 0 || (offs_cach < offs_eval))
-       ) {
-        result = ctx->buffer_cach;
-        t_offs = offs_cach;
-        //fprintf(stderr, "%s: data tensor '%16s', offs = %8ld, size = %8ld\n", __func__, t->name, t_offs, t_size);
-    }
+    if (data) {
+        ctx->buffers[ctx->n_buffers].name = name;
+        ctx->buffers[ctx->n_buffers].data = data;
+        ctx->buffers[ctx->n_buffers].size = size;
+        ctx->buffers[ctx->n_buffers].mtl = [ctx->device newBufferWithBytes:data length:size options:MTLResourceStorageModeShared];
 
-    if (result == nil || (t_offs > ctx->data_size && t_offs > ctx->eval_size && t_offs > ctx->cach_size)) {
-        fprintf(stderr, "%s: error: buffer is nil\n", __func__);
-        GGML_ASSERT(false);
-    }
+        ++ctx->n_buffers;
 
-    if (offs != 0) {
-        *offs = t_offs;
+        fprintf(stderr, "%s: allocated '%16s' buffer, size = %8.2f MB\n", __func__, name, size / 1024.0 / 1024.0);
     }
+}
 
-    return result;
+void ggml_mtl_set_tensor(
+        struct ggml_mtl_context * ctx,
+        struct ggml_tensor * t) {
+    mtl_printf("%s: set input for tensor '%s'\n", __func__, t->name);
+
+    size_t offs;
+    id<MTLBuffer> id_dst = ggml_mtl_get_buffer(ctx, t, &offs);
+
+    memcpy((void *) ((uint8_t *) id_dst.contents + offs), t->data, ggml_nbytes(t));
+}
+
+void ggml_mtl_get_tensor(
+        struct ggml_mtl_context * ctx,
+        struct ggml_tensor * t) {
+    mtl_printf("%s: extract results for tensor '%s'\n", __func__, t->name);
+
+    size_t offs;
+    id<MTLBuffer> id_src = ggml_mtl_get_buffer(ctx, t, &offs);
+
+    memcpy(t->data, (void *) ((uint8_t *) id_src.contents + offs), ggml_nbytes(t));
 }
 
 int ggml_mtl_graph_compute(
         struct ggml_mtl_context * ctx,
-             struct ggml_cgraph * gf,
-                      const int * tokens,
-                            int   n_tokens,
-                            int   n_past) {
-    mtl_printf("%s: evaluating, n_tokens = %d, n_past = %d\n", __func__, n_tokens, n_past);
-
-    struct ggml_tensor * input = ggml_graph_get_tensor(gf, "embd");
-    memcpy(input->data, tokens, n_tokens * sizeof(int));
+             struct ggml_cgraph * gf) {
+    mtl_printf("%s: evaluating graph\n", __func__);
 
     size_t offs_src0 = 0;
     size_t offs_src1 = 0;
     size_t offs_dst  = 0;
-
-    // copy the input data to the GPU
-    {
-        struct ggml_tensor * embd = ggml_graph_get_tensor(gf, "embd");
-
-        id<MTLBuffer> id_dst = ggml_mtl_get_buffer(ctx, embd, &offs_src0);
-
-        memcpy((char *) id_dst.contents + offs_src0, embd->data, ggml_nbytes(embd));
-    }
 
     id<MTLCommandBuffer> command_buffer  = [ctx->queue commandBuffer];
     id<MTLComputeCommandEncoder> encoder = nil;
@@ -521,6 +459,8 @@ int ggml_mtl_graph_compute(
                         encoder = [command_buffer computeCommandEncoder];
                     }
 
+                    const int n_past = ((int32_t *)(src1->data))[0];
+
                     [encoder setComputePipelineState:ctx->pipeline_diag_mask_inf];
                     [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                     [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
@@ -690,6 +630,8 @@ int ggml_mtl_graph_compute(
                     //mtl_printf("rope: %lld x %lld x %lld x %lld\n", ne0,  ne1,  ne2,  ne3);
                     //mtl_printf("rope: n_past = %d, n_dims = %d, mode = %d\n", n_past, n_dims, mode);
 
+                    const int n_past = ((int32_t *)(src1->data))[0];
+
                     [encoder setComputePipelineState:ctx->pipeline_rope];
                     [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                     [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
@@ -769,23 +711,9 @@ int ggml_mtl_graph_compute(
         }
     }
 
-    // extract results from the GPU
-    {
-        mtl_printf("%s: extract results from the GPU\n", __func__);
-
-        if (encoder != nil) {
-            [encoder endEncoding];
-            encoder = nil;
-        }
-
-        struct ggml_tensor * out = gf->nodes[gf->n_nodes - 1];
-
-        id<MTLBuffer> id_src = ggml_mtl_get_buffer(ctx, out, &offs_src0);
-        id<MTLBuffer> id_dst = ctx->out;
-
-        id<MTLBlitCommandEncoder> encoder_blit = [command_buffer blitCommandEncoder];
-        [encoder_blit copyFromBuffer:id_src sourceOffset:offs_src0 toBuffer:id_dst destinationOffset:0 size:ggml_nbytes(out)];
-        [encoder_blit endEncoding];
+    if (encoder != nil) {
+        [encoder endEncoding];
+        encoder = nil;
     }
 
     [command_buffer commit];
@@ -795,32 +723,6 @@ int ggml_mtl_graph_compute(
         const double time_elapsed = [command_buffer GPUEndTime] - [command_buffer GPUStartTime];
         mtl_printf("%s: time elapsed = %f ms\n", __func__, time_elapsed * 1000.0);
     }
-
-    ctx->logits = ctx->out.contents;
-
-    const float * logits = ctx->logits;
-
-    struct ggml_tensor * t = gf->nodes[gf->n_nodes - 1];
-    memcpy(t->data, logits, ggml_nbytes(t));
-
-#if 1
-    mtl_printf("logits: ");
-    for (int i = 0; i < 100; i++) {
-        mtl_printf("%8.4f ", logits[i]);
-    }
-    mtl_printf("\n");
-    double sum = 0.0;
-    int imax = 0;
-    double vmax = -INFINITY;
-    for (int i = 0; i < 32000; i++) {
-        sum += (double) logits[i];
-        if (logits[i] > vmax) {
-            vmax = logits[i];
-            imax = i;
-        }
-    }
-    mtl_printf("sum: %f, imax = %d, vmax = %f\n", sum, imax, vmax);
-#endif
 
     return 0;
 }
