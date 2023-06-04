@@ -346,6 +346,7 @@ extern "C" {
         enum ggml_type    type;
         enum ggml_backend backend;
 
+        int     layer_num;
         int     n_dims;
         int64_t ne[GGML_MAX_DIMS]; // number of elements
         size_t  nb[GGML_MAX_DIMS]; // stride in bytes:
@@ -512,6 +513,7 @@ extern "C" {
 
     GGML_API const char * ggml_get_name(const struct ggml_tensor * tensor);
     GGML_API void         ggml_set_name(struct ggml_tensor * tensor, const char * name);
+GGML_API void         ggml_set_layer_num(struct ggml_tensor * tensor, int layer_num);
 
     //
     // operations on tensors with backpropagation

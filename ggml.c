@@ -4518,6 +4518,10 @@ void ggml_set_name(struct ggml_tensor * tensor, const char * name) {
     tensor->name[sizeof(tensor->name) - 1] = '\0';
 }
 
+void ggml_set_layer_num(struct ggml_tensor * tensor, int layer_num) {
+    tensor->layer_num = layer_num;
+}
+
 struct ggml_tensor * ggml_view_tensor(
         struct ggml_context * ctx,
         const struct ggml_tensor * src) {

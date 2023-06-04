@@ -657,21 +657,22 @@ struct llama_model_loader {
         }
     }
 
-    struct ggml_tensor * get_tensor(const std::string & name, const std::vector<uint32_t> & ne, ggml_backend backend) {
-        auto it = tensors_map.name_to_idx.find(name);
+    struct ggml_tensor * get_tensor(int layer_num, const std::string & name, const std::vector<uint32_t> & ne, ggml_backend backend) {
+        std::string layer_name_wnum = (layer_num == 0) ? name : "layers." + std::to_string(layer_num) + name;
+        auto it = tensors_map.name_to_idx.find(layer_name_wnum);
         if (it == tensors_map.name_to_idx.end()) {
-            throw format("llama.cpp: tensor '%s' is missing from model", name.c_str());
+            throw format("llama.cpp: tensor '%s' is missing from model", layer_name_wnum.c_str());
         }
         llama_load_tensor & lt = tensors_map.tensors.at(it->second);
         if (lt.ne != ne) {
             throw format("llama.cpp: tensor '%s' has wrong shape; expected %s, got %s",
-                         name.c_str(), llama_format_tensor_shape(ne).c_str(), llama_format_tensor_shape(lt.ne).c_str());
+                         layer_name_wnum.c_str(), llama_format_tensor_shape(ne).c_str(), llama_format_tensor_shape(lt.ne).c_str());
         }
 
-        return get_tensor_for(lt, backend);
+        return get_tensor_for(lt, layer_num, backend);
     }
 
-    struct ggml_tensor * get_tensor_for(llama_load_tensor & lt, ggml_backend backend) {
+    struct ggml_tensor * get_tensor_for(llama_load_tensor & lt, int layer_num, ggml_backend backend) {
         struct ggml_tensor * tensor;
         if (lt.ne.size() == 2) {
             tensor = ggml_new_tensor_2d(ggml_ctx, lt.type, lt.ne.at(0), lt.ne.at(1));
@@ -680,6 +681,7 @@ struct llama_model_loader {
             tensor = ggml_new_tensor_1d(ggml_ctx, lt.type, lt.ne.at(0));
         }
         ggml_set_name(tensor, lt.name.c_str());
+        ggml_set_layer_num(tensor, layer_num);
         LLAMA_ASSERT(lt.ggml_tensor == NULL); // if this fails, we called get_tensor twice on the same tensor
         tensor->backend = backend;
         lt.ggml_tensor = tensor;
@@ -1029,8 +1031,8 @@ static void llama_model_load_internal(
 
         ml->ggml_ctx = ctx;
 
-        model.tok_embeddings = ml->get_tensor("tok_embeddings.weight", {n_embd, n_vocab}, GGML_BACKEND_CPU);
-        model.norm           = ml->get_tensor("norm.weight",           {n_embd},          GGML_BACKEND_CPU);
+        model.tok_embeddings = ml->get_tensor(0, "tok_embeddings.weight", {n_embd, n_vocab}, GGML_BACKEND_CPU);
+        model.norm           = ml->get_tensor(0, "norm.weight",           {n_embd},          GGML_BACKEND_CPU);
 
         // "output" tensor
         {
@@ -1041,7 +1043,7 @@ static void llama_model_load_internal(
                 backend_output = GGML_BACKEND_CPU;
             }
 
-            model.output = ml->get_tensor("output.weight", {n_embd, n_vocab}, backend_output);
+            model.output = ml->get_tensor(0, "output.weight", {n_embd, n_vocab}, backend_output);
         }
 
         const int i_gpu_start = n_layer - n_gpu_layers;
@@ -1052,20 +1054,18 @@ static void llama_model_load_internal(
 
             auto & layer = model.layers[i];
 
-            std::string layers_i = "layers." + std::to_string(i);
+            layer.attention_norm = ml->get_tensor(i, ".attention_norm.weight", {n_embd}, backend);
 
-            layer.attention_norm = ml->get_tensor(layers_i + ".attention_norm.weight", {n_embd}, backend);
+            layer.wq = ml->get_tensor(i, ".attention.wq.weight", {n_embd, n_embd}, backend);
+            layer.wk = ml->get_tensor(i, ".attention.wk.weight", {n_embd, n_embd}, backend);
+            layer.wv = ml->get_tensor(i, ".attention.wv.weight", {n_embd, n_embd}, backend);
+            layer.wo = ml->get_tensor(i, ".attention.wo.weight", {n_embd, n_embd}, backend);
 
-            layer.wq = ml->get_tensor(layers_i + ".attention.wq.weight", {n_embd, n_embd}, backend);
-            layer.wk = ml->get_tensor(layers_i + ".attention.wk.weight", {n_embd, n_embd}, backend);
-            layer.wv = ml->get_tensor(layers_i + ".attention.wv.weight", {n_embd, n_embd}, backend);
-            layer.wo = ml->get_tensor(layers_i + ".attention.wo.weight", {n_embd, n_embd}, backend);
+            layer.ffn_norm = ml->get_tensor(i, ".ffn_norm.weight", {n_embd}, backend);
 
-            layer.ffn_norm = ml->get_tensor(layers_i + ".ffn_norm.weight", {n_embd}, backend);
-
-            layer.w1 = ml->get_tensor(layers_i + ".feed_forward.w1.weight", {n_embd,   n_ff},   backend);
-            layer.w2 = ml->get_tensor(layers_i + ".feed_forward.w2.weight", {  n_ff,   n_embd}, backend);
-            layer.w3 = ml->get_tensor(layers_i + ".feed_forward.w3.weight", {n_embd,   n_ff},   backend);
+            layer.w1 = ml->get_tensor(i, ".feed_forward.w1.weight", {n_embd,   n_ff},   backend);
+            layer.w2 = ml->get_tensor(i, ".feed_forward.w2.weight", {  n_ff,   n_embd}, backend);
+            layer.w3 = ml->get_tensor(i, ".feed_forward.w3.weight", {n_embd,   n_ff},   backend);
 
             if (backend == LLAMA_BACKEND_OFFLOAD) {
                 vram_total +=
@@ -2485,7 +2485,7 @@ int llama_apply_lora_from_file_internal(struct llama_context * ctx, const char *
                 }
                 size_t idx = model_loader->tensors_map.name_to_idx[base_name];
                 llama_load_tensor & lt = model_loader->tensors_map.tensors[idx];
-                base_t = model_loader->get_tensor(base_name, { (uint32_t)dest_t->ne[0], (uint32_t)dest_t->ne[1] }, GGML_BACKEND_CPU);
+                base_t = model_loader->get_tensor(0, base_name, { (uint32_t)dest_t->ne[0], (uint32_t)dest_t->ne[1] }, GGML_BACKEND_CPU);
                 lt.data = (uint8_t *) lt.ggml_tensor->data;
                 model_loader->load_data_for(lt);
                 lt.ggml_tensor->data = lt.data;
