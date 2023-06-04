@@ -43,8 +43,6 @@ endif()
 # 3rd party libs
 option(LLAMA_CUBLAS                 "llama: use cuBLAS"                                     ON)
 
-option(LLAMA_BUILD_TESTS            "llama: build tests"    OFF)
-option(LLAMA_BUILD_EXAMPLES         "llama: build examples" OFF)
 
 #
 # Build info header

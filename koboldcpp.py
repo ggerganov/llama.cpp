@@ -572,11 +572,11 @@ def main(args):
             time.sleep(2)
             sys.exit(2)
 
-    if args.renamemodel and args.renamemodel[0]!="":
+    if args.hordeconfig and args.hordeconfig[0]!="":
         global friendlymodelname, maxlen
-        friendlymodelname = "koboldcpp/"+args.renamemodel[0]
-        if len(args.renamemodel) > 1:
-            maxlen = int(args.renamemodel[1])
+        friendlymodelname = "koboldcpp/"+args.hordeconfig[0]
+        if len(args.hordeconfig) > 1:
+            maxlen = int(args.hordeconfig[1])
 
     if args.highpriority:
         print("Setting process to Higher Priority - Use Caution")
@@ -693,7 +693,7 @@ if __name__ == '__main__':
     parser.add_argument("--noavx2", help="Do not use AVX2 instructions, a slower compatibility mode for older devices. Does not work with --clblast.", action='store_true')
     parser.add_argument("--debugmode", help="Shows additional debug info in the terminal.", action='store_true')
     parser.add_argument("--skiplauncher", help="Doesn't display or use the new GUI launcher.", action='store_true')
-    parser.add_argument("--renamemodel", help="Sets the display model name to something else, for easy use on Horde. An optional second parameter sets the horde max gen length.",metavar=('[hordename]', '[hordelength]'), nargs='+')
+    parser.add_argument("--hordeconfig", help="Sets the display model name to something else, for easy use on AI Horde. An optional second parameter sets the horde max gen length.",metavar=('[hordename]', '[hordelength]'), nargs='+')
     compatgroup = parser.add_mutually_exclusive_group()
     compatgroup.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
     compatgroup.add_argument("--useclblast", help="Use CLBlast instead of OpenBLAS for prompt ingestion. Must specify exactly 2 arguments, platform ID and device ID (e.g. --useclblast 1 0).", type=int, choices=range(0,9), nargs=2)

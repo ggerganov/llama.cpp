@@ -310,10 +310,6 @@ quantize_neox: ggml.o llama.o otherarch/tools/neox_quantize.cpp otherarch/tools/
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 quantize_mpt: ggml.o llama.o otherarch/tools/mpt_quantize.cpp otherarch/tools/common-ggml.cpp
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
-quantize-stats: examples/quantize-stats/quantize-stats.cpp ggml.o llama.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
-perplexity: examples/perplexity/perplexity.cpp ggml.o llama.o common.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 
 build-info.h: 
