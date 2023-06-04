@@ -5,8 +5,6 @@
 #include <cstring>
 #include <cstdlib>
 
-#include <vector> // tmp
-
 int main(int argc, char ** argv) {
     ggml_time_init();
 
@@ -24,44 +22,16 @@ int main(int argc, char ** argv) {
     struct ggml_cgraph gf = ggml_graph_import(fname_cgraph, &ctx_data, &ctx_eval);
     gf.n_threads = 1;
 
-    int32_t n_vocab = 0;
-
-    {
-        struct ggml_tensor * t_vocab = ggml_graph_get_tensor(&gf, "vocab");
-        if (t_vocab == NULL) {
-            fprintf(stderr, "%s: vocab tensor not found\n", __func__);
-            return -1;
-        }
-
-        const char * ptr = (const char *) t_vocab->data;
-
-        memcpy(&n_vocab, ptr, sizeof(n_vocab)); ptr += sizeof(n_vocab);
-
-        printf("%s: n_vocab = %d\n", __func__, n_vocab);
-
-        for (int i = 0; i < 512; ++i) {
-            char text[32];
-            float score;
-
-            memcpy(text,   ptr, sizeof(text));  ptr += sizeof(text);
-            memcpy(&score, ptr, sizeof(score)); ptr += sizeof(score);
-
-            printf("%s: token[%4d] = %16.*s, score = %6.2f\n", __func__, i, (int) sizeof(text), text, score);
-        }
-    }
-
     // this allocates all Metal resources and memory buffers
     auto * ctx_mtl = ggml_mtl_init();
 
     ggml_mtl_add_buffer(ctx_mtl, "data", ggml_get_mem_buffer(ctx_data), ggml_get_mem_size(ctx_data));
     ggml_mtl_add_buffer(ctx_mtl, "eval", ggml_get_mem_buffer(ctx_eval), ggml_get_mem_size(ctx_eval));
 
-    // TODO: tmp to match the input used when creating the cgraph
+    // main
     {
-        const std::vector<int> tmp(1, 1); // BOS
-
         struct ggml_tensor * input = ggml_graph_get_tensor(&gf, "embd");
-        memcpy(input->data, tmp.data(), tmp.size() * sizeof(int));
+        *(int32_t *) input->data = 1; // BOS
 
         ggml_mtl_set_tensor(ctx_mtl, input);
 
