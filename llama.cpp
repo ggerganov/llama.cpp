@@ -865,6 +865,17 @@ struct llama_context_params llama_context_default_params() {
     return result;
 }
 
+struct llama_model_quantize_params llama_model_quantize_default_params() {
+    struct llama_model_quantize_params result = {
+        /*.nthread                     =*/ 0,
+        /*.ftype                       =*/ LLAMA_FTYPE_MOSTLY_Q5_1,
+        /*.allow_requantize            =*/ false,
+        /*.quantize_output_tensor      =*/ true,
+    };
+
+    return result;
+}
+
 bool llama_mmap_supported() {
     return llama_mmap::SUPPORTED;
 }
@@ -2112,9 +2123,12 @@ llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_arra
 // quantization
 //
 
-static void llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, enum llama_ftype ftype, int nthread) {
+static void llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, const llama_model_quantize_params * params) {
     ggml_type quantized_type;
-    switch (ftype) {
+    llama_ftype ftype = params->ftype;
+    int nthread = params->nthread;
+
+    switch (params->ftype) {
         case LLAMA_FTYPE_MOSTLY_Q4_0: quantized_type = GGML_TYPE_Q4_0; break;
         case LLAMA_FTYPE_MOSTLY_Q4_1: quantized_type = GGML_TYPE_Q4_1; break;
         case LLAMA_FTYPE_MOSTLY_Q5_0: quantized_type = GGML_TYPE_Q5_0; break;
@@ -2140,7 +2154,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
     std::unique_ptr<llama_model_loader> model_loader(new llama_model_loader(fname_inp, /*use_mmap*/ false,
                                                                             /*vocab_only*/ false));
-    llama_file_saver file_saver(fname_out.c_str(), model_loader->file_loaders.at(0).get(), ftype);
+    llama_file_saver file_saver(fname_out.c_str(), model_loader->file_loaders.at(0).get(), params->ftype);
 
     int n_attention_wv    = 0;
     int n_feed_forward_w2 = 0;
@@ -2182,9 +2196,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         quantize &= (tensor.ne.size() == 2);
 
         // uncomment this to keep the output layer in FP16
-        //if (tensor.name == "output.weight") {
-        //    quantize = false;
-        //}
+        if (!params->quantize_output_tensor && tensor.name == "output.weight") {
+           quantize = false;
+        }
 
         enum ggml_type new_type;
         void * new_data;
@@ -2222,17 +2236,26 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             float * f32_data;
             size_t nelements = tensor.ne.at(0) * tensor.ne.at(1);
             llama_buffer f32_conv_buf;
+
             if (tensor.type == GGML_TYPE_F32) {
                 f32_data = (float *) tensor.data;
-            } else if (tensor.type == GGML_TYPE_F16) {
+            } else {
                 f32_conv_buf.resize(nelements * sizeof(float));
                 f32_data = (float *) f32_conv_buf.addr;
-                const auto * f16_data = (const ggml_fp16_t *) tensor.data;
-                for (size_t i = 0; i < nelements; i++) {
-                    f32_data[i] = ggml_fp16_to_fp32(f16_data[i]);
+                if (tensor.type == GGML_TYPE_F16) {
+                    const auto * f16_data = (const ggml_fp16_t *) tensor.data;
+                    for (size_t i = 0; i < nelements; i++) {
+                        f32_data[i] = ggml_fp16_to_fp32(f16_data[i]);
+                    }
+                } else if (!params->allow_requantize) {
+                    throw format("requantizing from type %s is disabled", ggml_type_name(tensor.type));
+                } else {
+                    quantize_fns_t qtype = ggml_internal_get_quantize_fn(tensor.type);
+                    if (qtype.dequantize_row_q == NULL) {
+                        throw format("type %s unsupported for integer quantization: no dequantization available", ggml_type_name(tensor.type));
+                    }
+                    qtype.dequantize_row_q((void *)tensor.data, f32_data, nelements);
                 }
-            } else {
-                throw std::runtime_error(format("type %s unsupported for integer quantization", ggml_type_name(tensor.type)));
             }
 
             printf("quantizing .. ");
@@ -2429,10 +2452,9 @@ void llama_free(struct llama_context * ctx) {
 int llama_model_quantize(
         const char * fname_inp,
         const char * fname_out,
-  enum llama_ftype   ftype,
-        int          nthread) {
+        const llama_model_quantize_params *params) {
     try {
-        llama_model_quantize_internal(fname_inp, fname_out, ftype, nthread);
+        llama_model_quantize_internal(fname_inp, fname_out, params);
         return 0;
     } catch (const std::exception & err) {
         fprintf(stderr, "%s: failed to quantize: %s\n", __func__, err.what());
