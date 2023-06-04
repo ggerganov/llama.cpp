@@ -21,9 +21,6 @@ build-no-accel/
 build-sanitize-addr/
 build-sanitize-thread/
 
-models/*
-*.bin
-
 /main
 /quantize
 /quantize-stats

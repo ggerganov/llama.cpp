@@ -331,46 +331,6 @@ ModelLoadResult gptj_v2_model_load(const std::string & fname, gptj_v2_model & mo
 
     fin.close();
 
-//         //gpu offload for gptj
-// #if defined(GGML_USE_CLBLAST)
-//     if(gpulayers>0)
-//     {
-//         const auto & hparams = model.hparams;
-//         const int n_gpu = std::min(gpulayers, int(hparams.n_layer));
-//         if(GetQuantsUnshuffled())
-//         {
-
-//         fprintf(stderr, "%s: [opencl] offloading %d layers to GPU\n", __func__, n_gpu);
-
-//         size_t vram_total = 0;
-
-//         for (int i = 0; i < n_gpu; ++i) {
-//             const auto & layer = model.layers[i];
-
-//             ggml_v2_cl_transform_tensor(layer.ln_1_g); vram_total += ggml_v2_nbytes(layer.ln_1_g);
-//             ggml_v2_cl_transform_tensor(layer.ln_1_b); vram_total += ggml_v2_nbytes(layer.ln_1_b);
-//             ggml_v2_cl_transform_tensor(layer.c_attn_q_proj_w); vram_total += ggml_v2_nbytes(layer.c_attn_q_proj_w);
-//             ggml_v2_cl_transform_tensor(layer.c_attn_k_proj_w); vram_total += ggml_v2_nbytes(layer.c_attn_k_proj_w);
-//             ggml_v2_cl_transform_tensor(layer.c_attn_v_proj_w); vram_total += ggml_v2_nbytes(layer.c_attn_v_proj_w);
-//             ggml_v2_cl_transform_tensor(layer.c_attn_proj_w); vram_total += ggml_v2_nbytes(layer.c_attn_proj_w);
-//             ggml_v2_cl_transform_tensor(layer.c_mlp_fc_w); vram_total += ggml_v2_nbytes(layer.c_mlp_fc_w);
-//             ggml_v2_cl_transform_tensor(layer.c_mlp_fc_b); vram_total += ggml_v2_nbytes(layer.c_mlp_fc_b);
-//             ggml_v2_cl_transform_tensor(layer.c_mlp_proj_w); vram_total += ggml_v2_nbytes(layer.c_mlp_proj_w);
-//             ggml_v2_cl_transform_tensor(layer.c_mlp_proj_b); vram_total += ggml_v2_nbytes(layer.c_mlp_proj_b);
-//         }
-
-//         fprintf(stderr, "%s: [opencl] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
-//         }
-//         else
-//         {
-//             if(n_gpu>0)
-//             {
-//                 printf("\n[WARNING: Old format does not support GPU offloading! It will be deactivated!]\n");
-//             }
-//         }
-//     }
-// #endif
-
 
     return ModelLoadResult::SUCCESS;
 }
