@@ -40,8 +40,11 @@ endif
 #
 
 # keep standard at C11 and C++11
-CFLAGS   = -I.              -O3 -std=c11   -fPIC
-CXXFLAGS = -I. -I./examples -O3 -std=c++11 -fPIC
+# -Ofast tends to produce faster code, but may not be available for some compilers.
+#OPT = -Ofast
+OPT = -O3
+CFLAGS   = -I.              $(OPT) -std=c11   -fPIC
+CXXFLAGS = -I. -I./examples $(OPT) -std=c++11 -fPIC
 LDFLAGS  =
 
 ifdef LLAMA_DEBUG
@@ -228,7 +231,10 @@ $(info )
 # Build library
 #
 
-ggml.o: ggml.c ggml.h ggml-cuda.h
+ggml.o: ggml.c ggml.h ggml-cuda.h ggml-quants-k.h
+	$(CC)  $(CFLAGS)   -c $< -o $@
+
+ggml-quants-k.o: ggml-quants-k.c ggml-quants-k.h ggml.h ggml-cuda.h
 	$(CC)  $(CFLAGS)   -c $< -o $@
 
 llama.o: llama.cpp ggml.h ggml-cuda.h llama.h llama-util.h
@@ -247,25 +253,25 @@ clean:
 # Examples
 #
 
-main: examples/main/main.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+main: examples/main/main.cpp build-info.h ggml.o ggml-quants-k.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
 
-quantize: examples/quantize/quantize.cpp build-info.h ggml.o llama.o $(OBJS)
+quantize: examples/quantize/quantize.cpp build-info.h ggml.o llama.o ggml-quants-k.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-quantize-stats: examples/quantize-stats/quantize-stats.cpp build-info.h ggml.o llama.o $(OBJS)
+quantize-stats: examples/quantize-stats/quantize-stats.cpp build-info.h ggml.o llama.o ggml-quants-k.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-perplexity: examples/perplexity/perplexity.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+perplexity: examples/perplexity/perplexity.cpp build-info.h ggml.o llama.o common.o ggml-quants-k.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-embedding: examples/embedding/embedding.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+embedding: examples/embedding/embedding.cpp build-info.h ggml.o llama.o common.o ggml-quants-k.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-save-load-state: examples/save-load-state/save-load-state.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+save-load-state: examples/save-load-state/save-load-state.cpp build-info.h ggml.o llama.o common.o ggml-quants-k.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 server: examples/server/server.cpp examples/server/httplib.h examples/server/json.hpp build-info.h ggml.o llama.o common.o $(OBJS)
@@ -287,7 +293,7 @@ benchmark-matmult: examples/benchmark/benchmark-matmult.cpp build-info.h ggml.o 
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 	./$@
 
-vdot: pocs/vdot/vdot.cpp ggml.o $(OBJS)
+vdot: pocs/vdot/vdot.cpp ggml.o ggml-quants-k.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 .PHONY: tests clean

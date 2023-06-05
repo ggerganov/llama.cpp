@@ -515,6 +515,11 @@ struct llama_file_loader {
                 case GGML_TYPE_Q5_0:
                 case GGML_TYPE_Q5_1:
                 case GGML_TYPE_Q8_0:
+                case GGML_TYPE_Q2_K:
+                case GGML_TYPE_Q3_K:
+                case GGML_TYPE_Q4_K:
+                case GGML_TYPE_Q5_K:
+                case GGML_TYPE_Q6_K:
                     break;
                 default: {
                     throw format("unrecognized tensor type %u\n", shard.type);
@@ -590,6 +595,11 @@ struct llama_file_saver {
             case GGML_TYPE_Q5_0:
             case GGML_TYPE_Q5_1:
             case GGML_TYPE_Q8_0:
+            case GGML_TYPE_Q2_K:
+            case GGML_TYPE_Q3_K:
+            case GGML_TYPE_Q4_K:
+            case GGML_TYPE_Q5_K:
+            case GGML_TYPE_Q6_K:
                 break;
             default: LLAMA_ASSERT(false);
         }
@@ -906,6 +916,16 @@ static const char *llama_ftype_name(enum llama_ftype ftype) {
         case LLAMA_FTYPE_MOSTLY_Q5_0: return "mostly Q5_0";
         case LLAMA_FTYPE_MOSTLY_Q5_1: return "mostly Q5_1";
         case LLAMA_FTYPE_MOSTLY_Q8_0: return "mostly Q8_0";
+        // K-quants
+        case LLAMA_FTYPE_MOSTLY_Q2_K: return "mostly Q2_K";
+        case LLAMA_FTYPE_MOSTLY_Q3_K_S: return "mostly Q3_K - Small";
+        case LLAMA_FTYPE_MOSTLY_Q3_K_M: return "mostly Q3_K - Medium";
+        case LLAMA_FTYPE_MOSTLY_Q3_K_L: return "mostly Q3_K - Large";
+        case LLAMA_FTYPE_MOSTLY_Q4_K_S: return "mostly Q4_K - Small";
+        case LLAMA_FTYPE_MOSTLY_Q4_K_M: return "mostly Q4_K - Medium";
+        case LLAMA_FTYPE_MOSTLY_Q5_K_S: return "mostly Q5_K - Small";
+        case LLAMA_FTYPE_MOSTLY_Q5_K_M: return "mostly Q5_K - Medium";
+        case LLAMA_FTYPE_MOSTLY_Q6_K: return "mostly Q6_K";
         default:                      return "unknown, may not work";
     }
 }
@@ -2113,8 +2133,18 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         case LLAMA_FTYPE_MOSTLY_Q5_0: quantized_type = GGML_TYPE_Q5_0; break;
         case LLAMA_FTYPE_MOSTLY_Q5_1: quantized_type = GGML_TYPE_Q5_1; break;
         case LLAMA_FTYPE_MOSTLY_Q8_0: quantized_type = GGML_TYPE_Q8_0; break;
+        // K-quants
+        case LLAMA_FTYPE_MOSTLY_Q2_K: quantized_type = GGML_TYPE_Q2_K; break;
+        case LLAMA_FTYPE_MOSTLY_Q3_K_S:
+        case LLAMA_FTYPE_MOSTLY_Q3_K_M:
+        case LLAMA_FTYPE_MOSTLY_Q3_K_L: quantized_type = GGML_TYPE_Q3_K; break;
+        case LLAMA_FTYPE_MOSTLY_Q4_K_S:
+        case LLAMA_FTYPE_MOSTLY_Q4_K_M: quantized_type = GGML_TYPE_Q4_K; break;
+        case LLAMA_FTYPE_MOSTLY_Q5_K_S:
+        case LLAMA_FTYPE_MOSTLY_Q5_K_M: quantized_type = GGML_TYPE_Q5_K; break;
+        case LLAMA_FTYPE_MOSTLY_Q6_K: quantized_type = GGML_TYPE_Q6_K; break;
         default: throw format("invalid output file type %d\n", ftype);
-    };
+    }
 
     if (nthread <= 0) {
         nthread = std::thread::hardware_concurrency();
@@ -2123,6 +2153,20 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     std::unique_ptr<llama_model_loader> model_loader(new llama_model_loader(fname_inp, /*use_mmap*/ false,
                                                                             /*vocab_only*/ false));
     llama_file_saver file_saver(fname_out.c_str(), model_loader->file_loaders.at(0).get(), ftype);
+
+    int n_attention_wv    = 0;
+    int n_feed_forward_w2 = 0;
+    for (auto& tensor : model_loader->tensors_map.tensors) {
+        if (tensor.name.find("attention.wv.weight") != std::string::npos) {
+            ++n_attention_wv;
+        }
+        else if (tensor.name.find("feed_forward.w2.weight") != std::string::npos) {
+            ++n_feed_forward_w2;
+        }
+    }
+
+    int i_attention_wv = 0;
+    int i_feed_forward_w2 = 0;
 
     size_t total_size_org = 0;
     size_t total_size_new = 0;
@@ -2166,6 +2210,27 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             printf("size = %8.3f MB\n", tensor.size/1024.0/1024.0);
         } else {
             new_type = quantized_type;
+            if (tensor.name == "output.weight") new_type = GGML_TYPE_Q6_K;
+            else if (tensor.name.find("attention.wv.weight") != std::string::npos) {
+                if      (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q4_K;
+                else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
+                else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) &&
+                         (i_attention_wv < n_attention_wv/8 || i_attention_wv >= 7*n_attention_wv/8 ||
+                         (i_attention_wv - n_attention_wv/8)%3 == 2)) new_type = GGML_TYPE_Q6_K;
+                ++i_attention_wv;
+            }
+            else if (tensor.name.find("feed_forward.w2.weight") != std::string::npos) {
+                if      (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q4_K;
+                else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
+                else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) &&
+                         (i_feed_forward_w2 < n_feed_forward_w2/8 || i_feed_forward_w2 >= 7*n_feed_forward_w2/8 ||
+                         (i_feed_forward_w2 - n_feed_forward_w2/8)%3 == 2)) new_type = GGML_TYPE_Q6_K;
+                ++i_feed_forward_w2;
+            }
+            else if (tensor.name.find("attention.wo.weight") != std::string::npos) {
+                if      (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q4_K;
+                else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
+            }
             float * f32_data;
             size_t nelements = tensor.ne.at(0) * tensor.ne.at(1);
             llama_buffer f32_conv_buf;
@@ -2233,12 +2298,16 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             }
 
             printf("size = %8.2f MB -> %8.2f MB | hist: ", tensor.size/1024.0/1024.0, new_size/1024.0/1024.0);
+            int64_t tot_count = 0;
             for (size_t i = 0; i < hist_cur.size(); i++) {
                 hist_all[i] += hist_cur[i];
+                tot_count += hist_cur[i];
             }
 
-            for (size_t i = 0; i < hist_cur.size(); i++) {
-                printf("%5.3f ", hist_cur[i] / float(nelements));
+            if (tot_count > 0) {
+                for (size_t i = 0; i < hist_cur.size(); i++) {
+                    printf("%5.3f ", hist_cur[i] / float(nelements));
+                }
             }
             printf("\n");
         }
@@ -2256,11 +2325,13 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             sum_all += hist_all[i];
         }
 
-        printf("%s: hist: ", __func__);
-        for (size_t i = 0; i < hist_all.size(); i++) {
-            printf("%5.3f ", hist_all[i] / float(sum_all));
+        if (sum_all > 0) {
+            printf("%s: hist: ", __func__);
+            for (size_t i = 0; i < hist_all.size(); i++) {
+                printf("%5.3f ", hist_all[i] / float(sum_all));
+            }
+            printf("\n");
         }
-        printf("\n");
     }
 }
 
