@@ -2133,10 +2133,10 @@ static void llama_convert_tensor_internal(const llama_load_tensor & tensor, llam
     if (ggml_is_quantized(tensor.type)) {
         qtype = ggml_internal_get_quantize_fn(tensor.type);
         if (qtype.dequantize_row_q == NULL) {
-            throw format("type %s unsupported for integer quantization: no dequantization available", ggml_type_name(tensor.type));
+            throw std::runtime_error(format("type %s unsupported for integer quantization: no dequantization available", ggml_type_name(tensor.type)));
         }
     } else if (tensor.type != GGML_TYPE_F16) {
-        throw format("cannot dequantize/convert tensor type %s", ggml_type_name(tensor.type));
+        throw std::runtime_error(format("cannot dequantize/convert tensor type %s", ggml_type_name(tensor.type)));
     }
 
     if (nthread < 2) {
@@ -2299,7 +2299,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             if (tensor.type == GGML_TYPE_F32) {
                 f32_data = (float *) tensor.data;
             } else if (ggml_is_quantized(tensor.type) && !params->allow_requantize) {
-                throw format("requantizing from type %s is disabled", ggml_type_name(tensor.type));
+                throw std::runtime_error(format("requantizing from type %s is disabled", ggml_type_name(tensor.type)));
             } else {
                 llama_convert_tensor_internal(tensor, f32_conv_buf, nelements, nthread);
                 f32_data = (float *) f32_conv_buf.addr;
