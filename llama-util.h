@@ -410,7 +410,7 @@ struct llama_buffer {
         int result = posix_memalign((void **) &addr, getpagesize(), len);
         if (result == 0) {
             memset(addr, 0, len);
-        } 
+        }
         else {
             addr = NULL;
         }
