@@ -12,6 +12,8 @@
 
 const float MAX_QUANTIZATION_REFERENCE_ERROR = 0.0001;
 const float MAX_QUANTIZATION_TOTAL_ERROR = 0.002;
+const float MAX_QUANTIZATION_TOTAL_ERROR_2BITS = 0.0075;
+const float MAX_QUANTIZATION_TOTAL_ERROR_3BITS = 0.0040;
 const float MAX_DOT_PRODUCT_ERROR = 0.02;
 
 const char* RESULT_STR[] = {"ok", "FAILED"};
@@ -122,7 +124,10 @@ int main(int argc, char * argv[]) {
 
         if (qfns.quantize_row_q && qfns.dequantize_row_q) {
             const float total_error = total_quantization_error(qfns, test_size, test_data.data());
-            failed = !(total_error < MAX_QUANTIZATION_TOTAL_ERROR);
+            const float max_quantization_error =
+                type == GGML_TYPE_Q2_K ? MAX_QUANTIZATION_TOTAL_ERROR_2BITS :
+                type == GGML_TYPE_Q3_K ? MAX_QUANTIZATION_TOTAL_ERROR_3BITS : MAX_QUANTIZATION_TOTAL_ERROR;
+            failed = !(total_error < max_quantization_error);
             num_failed += failed;
             if (failed || verbose) {
                 printf("%5s absolute quantization error:    %s (%f)\n", ggml_type_name(type), RESULT_STR[failed], total_error);
