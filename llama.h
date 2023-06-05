@@ -31,7 +31,7 @@
 #define LLAMA_SESSION_MAGIC          LLAMA_FILE_MAGIC_GGSN
 #define LLAMA_SESSION_VERSION        1
 
-#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL)
 // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
 #define LLAMA_SUPPORTS_GPU_OFFLOAD
 #endif
@@ -94,6 +94,15 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_Q8_0          = 7, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q5_0          = 8, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q5_1          = 9, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q2_K          = 10,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q3_K_S        = 11,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q3_K_M        = 12,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q3_K_L        = 13,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_K_S        = 14,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_K_M        = 15,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q5_K_S        = 16,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q5_K_M        = 17,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q6_K          = 18,// except 1d tensors
     };
 
     LLAMA_API struct llama_context_params llama_context_default_params();
@@ -172,6 +181,12 @@ extern "C" {
                              int   n_tokens,
                              int   n_past,
                              int   n_threads);
+
+    // Export a static computation graph for context of 511 and batch size of 1
+    // NOTE: since this functionality is mostly for debugging and demonstration purposes, we hardcode these
+    //       parameters here to keep things simple
+    // IMPORTANT: do not use for anything else other than debugging and testing!
+    LLAMA_API int llama_eval_export(struct llama_context * ctx, const char * fname);
 
     // Convert the provided text into tokens.
     // The tokens pointer must be large enough to hold the resulting tokens.
