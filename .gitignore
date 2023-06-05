@@ -17,6 +17,7 @@ build-release/
 build-static/
 build-cublas/
 build-opencl/
+build-metal/
 build-no-accel/
 build-sanitize-addr/
 build-sanitize-thread/

@@ -425,6 +425,7 @@ extern "C" {
     GGML_API void    ggml_print_objects(const struct ggml_context * ctx);
 
     GGML_API int64_t ggml_nelements(const struct ggml_tensor * tensor);
+    GGML_API int64_t ggml_nrows    (const struct ggml_tensor * tensor);
     GGML_API size_t  ggml_nbytes   (const struct ggml_tensor * tensor);
 
     GGML_API int     ggml_blck_size (enum ggml_type type);
@@ -441,13 +442,16 @@ extern "C" {
     // TODO: temporary until model loading of ggml examples is refactored
     GGML_API enum ggml_type ggml_ftype_to_ggml_type(enum ggml_ftype ftype);
 
+    GGML_API bool ggml_is_transposed(const struct ggml_tensor * tensor);
+    GGML_API bool ggml_is_contiguous(const struct ggml_tensor * tensor);
+
     // use this to compute the memory overhead of a tensor
     GGML_API size_t ggml_tensor_overhead(void);
 
     // main
 
     GGML_API struct ggml_context * ggml_init(struct ggml_init_params params);
-    GGML_API void    ggml_free(struct ggml_context * ctx);
+    GGML_API void                  ggml_free(struct ggml_context * ctx);
 
     GGML_API size_t  ggml_used_mem(const struct ggml_context * ctx);
 
