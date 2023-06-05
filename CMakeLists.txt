@@ -370,8 +370,8 @@ endif()
 add_library(ggml OBJECT
             ggml.c
             ggml.h
-            k_quants.h
-            k_quants.c
+            ggml-quants-k.h
+            ggml-quants-k.c
             ${GGML_CUDA_SOURCES}
             ${GGML_OPENCL_SOURCES})
 
