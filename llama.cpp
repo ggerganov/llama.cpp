@@ -2160,7 +2160,7 @@ static void llama_convert_tensor_internal(const llama_load_tensor & tensor, llam
 
     std::vector<std::thread> workers;
     for (auto tnum = 0, in_buff_offs = 0, out_buff_offs = 0; tnum < nthread; tnum++) {
-        auto thr_blocks = blocks_per_thread + (tnum == nthread - 1 && spare_blocks ? spare_blocks : 0); // num blocks for this thread
+        auto thr_blocks = blocks_per_thread + (tnum == nthread - 1 ? spare_blocks : 0); // num blocks for this thread
         auto thr_elems = thr_blocks * block_size; // number of elements for this thread
         auto thr_block_bytes = thr_blocks * block_size_bytes; // number of input bytes for this thread
 
