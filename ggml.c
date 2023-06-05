@@ -14203,6 +14203,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                         if (ggml_cuda_can_mul_mat(node->src0, node->src1, node)) {
                             node->n_tasks = 1; // TODO: this actually is doing nothing
                                                 //       the threads are still spinning
+                            cur = ggml_cuda_mul_mat_get_wsize(node->src0, node->src1, node);
                         }
                         else
 #elif defined(GGML_USE_CLBLAST)
