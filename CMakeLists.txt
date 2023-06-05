@@ -443,7 +443,6 @@ add_library(llama
     llama.cpp
     llama.h
     llama-util.h
-    llama-jni.cpp
 )
 
 target_include_directories(llama PUBLIC .)
