@@ -663,8 +663,9 @@ or with a light image:
 docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
 ```
 If you want to use Chinese model, use this command.
+> more options [#1673](https://github.com/ggerganov/llama.cpp/pull/1673)
 ```
-docker run -v /path/to/models:/models -e LC_ALL=zh_CN.utf8 ghcr.io/ggerganov/llama.cpp:full --run -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
+docker run -v /path/to/models:/models -e LANG=C.utf8 ghcr.io/ggerganov/llama.cpp:full --run -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
 ```
 
 ### Contributing
