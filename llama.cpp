@@ -2123,6 +2123,64 @@ llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_arra
 // quantization
 //
 
+static void llama_convert_tensor_internal(const llama_load_tensor & tensor, llama_buffer & output, const int nelements, const int nthread) {
+    if (output.size < nelements * sizeof(float)) {
+        output.resize(nelements * sizeof(float));
+    }
+    float * f32_output = (float *) output.addr;
+
+    quantize_fns_t qtype;
+    if (ggml_is_quantized(tensor.type)) {
+        qtype = ggml_internal_get_quantize_fn(tensor.type);
+        if (qtype.dequantize_row_q == NULL) {
+            throw format("type %s unsupported for integer quantization: no dequantization available", ggml_type_name(tensor.type));
+        }
+    } else if (tensor.type != GGML_TYPE_F16) {
+        throw format("cannot dequantize/convert tensor type %s", ggml_type_name(tensor.type));
+    }
+
+    if (nthread < 2) {
+        if (tensor.type == GGML_TYPE_F16) {
+            ggml_fp16_to_fp32_row((ggml_fp16_t *)tensor.data, f32_output, nelements);
+        } else if (ggml_is_quantized(tensor.type)) {
+            qtype.dequantize_row_q(tensor.data, f32_output, nelements);
+        } else {
+            LLAMA_ASSERT(false); // unreachable
+        }
+        return;
+    }
+
+    auto block_size = tensor.type == GGML_TYPE_F16 ? 1 : (size_t)ggml_blck_size(tensor.type);
+    auto block_size_bytes = ggml_type_size(tensor.type);
+
+    LLAMA_ASSERT(nelements % block_size == 0);
+    auto nblocks = nelements / block_size;
+    auto blocks_per_thread = nblocks / nthread;
+    auto spare_blocks = nblocks - (blocks_per_thread * nthread); // if blocks aren't divisible by thread count
+
+    std::vector<std::thread> workers;
+    for (auto tnum = 0, in_buff_offs = 0, out_buff_offs = 0; tnum < nthread; tnum++) {
+        auto thr_blocks = blocks_per_thread + (tnum == nthread - 1 && spare_blocks ? spare_blocks : 0); // num blocks for this thread
+        auto thr_elems = thr_blocks * block_size; // number of elements for this thread
+        auto thr_block_bytes = thr_blocks * block_size_bytes; // number of input bytes for this thread
+
+        auto compute = [qtype] (ggml_type typ, uint8_t * inbuf, float * outbuf, int nels) {
+            if (typ == GGML_TYPE_F16) {
+                ggml_fp16_to_fp32_row((ggml_fp16_t *)inbuf, outbuf, nels);
+            } else {
+                qtype.dequantize_row_q(inbuf, outbuf, nels);
+            }
+        };
+        workers.push_back(std::thread(compute, tensor.type, tensor.data + in_buff_offs, f32_output + out_buff_offs, thr_elems));
+        in_buff_offs += thr_block_bytes;
+        out_buff_offs += thr_elems;
+    }
+    for (auto & worker : workers) {
+        worker.join();
+    }
+
+}
+
 static void llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, const llama_model_quantize_params * params) {
     ggml_type quantized_type;
     llama_ftype ftype = params->ftype;
@@ -2199,6 +2257,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         if (!params->quantize_output_tensor && tensor.name == "output.weight") {
            quantize = false;
         }
+        quantize = quantize && quantized_type != tensor.type;
 
         enum ggml_type new_type;
         void * new_data;
@@ -2239,23 +2298,11 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
             if (tensor.type == GGML_TYPE_F32) {
                 f32_data = (float *) tensor.data;
+            } else if (ggml_is_quantized(tensor.type) && !params->allow_requantize) {
+                throw format("requantizing from type %s is disabled", ggml_type_name(tensor.type));
             } else {
-                f32_conv_buf.resize(nelements * sizeof(float));
+                llama_convert_tensor_internal(tensor, f32_conv_buf, nelements, nthread);
                 f32_data = (float *) f32_conv_buf.addr;
-                if (tensor.type == GGML_TYPE_F16) {
-                    const auto * f16_data = (const ggml_fp16_t *) tensor.data;
-                    for (size_t i = 0; i < nelements; i++) {
-                        f32_data[i] = ggml_fp16_to_fp32(f16_data[i]);
-                    }
-                } else if (!params->allow_requantize) {
-                    throw format("requantizing from type %s is disabled", ggml_type_name(tensor.type));
-                } else {
-                    quantize_fns_t qtype = ggml_internal_get_quantize_fn(tensor.type);
-                    if (qtype.dequantize_row_q == NULL) {
-                        throw format("type %s unsupported for integer quantization: no dequantization available", ggml_type_name(tensor.type));
-                    }
-                    qtype.dequantize_row_q((void *)tensor.data, f32_data, nelements);
-                }
             }
 
             printf("quantizing .. ");
