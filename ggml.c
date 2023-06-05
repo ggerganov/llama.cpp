@@ -20,7 +20,10 @@
 #include <stdio.h>
 #include <float.h>
 #include <limits.h>
+
+#ifdef GGML_USE_METAL
 #include <unistd.h>
+#endif
 
 // if C99 - static_assert is noop
 // ref: https://stackoverflow.com/a/53923785/4039976
