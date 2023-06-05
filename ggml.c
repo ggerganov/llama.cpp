@@ -186,7 +186,9 @@ typedef double ggml_float;
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <intrin.h>
 #else
+#if !defined(__riscv)
 #include <immintrin.h>
+#endif
 #endif
 #endif
 #endif
@@ -3494,7 +3496,7 @@ static bool GGML_IS_QUANTIZED[GGML_TYPE_COUNT] = {
 };
 static_assert(GGML_TYPE_COUNT == 13, "GGML_IS_QUANTIZED is outdated");
 
-static const char * GGML_OP_LABEL[GGML_OP_COUNT] = {
+static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "NONE",
 
     "DUP",
@@ -3749,6 +3751,9 @@ const char * ggml_type_name(enum ggml_type type) {
     return GGML_TYPE_NAME[type];
 }
 
+const char * ggml_op_name(enum ggml_op op) {
+    return GGML_OP_NAME[op];
+}
 
 size_t ggml_element_size(const struct ggml_tensor * tensor) {
     return GGML_TYPE_SIZE[tensor->type];
@@ -3803,6 +3808,10 @@ enum ggml_type ggml_ftype_to_ggml_type(enum ggml_ftype ftype) {
     GGML_ASSERT(wtype != GGML_TYPE_COUNT);
 
     return wtype;
+}
+
+size_t ggml_tensor_overhead(void) {
+    return GGML_OBJECT_SIZE + GGML_TENSOR_SIZE + 16;
 }
 
 static inline bool ggml_is_transposed(const struct ggml_tensor * tensor) {
@@ -4017,6 +4026,10 @@ size_t ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch) 
     return result;
 }
 
+void ggml_set_no_alloc(struct ggml_context * ctx, bool no_alloc) {
+    ctx->no_alloc = no_alloc;
+}
+
 // IMPORTANT:
 // when creating "opt" tensors, always save and load the scratch buffer
 // this is an error prone process, but it is necessary to support inplace
@@ -4061,7 +4074,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
     struct ggml_object * const obj_new = (struct ggml_object *)(mem_buffer + cur_end);
 
     if (ctx->scratch.data == NULL || data != NULL) {
-        size_needed += sizeof(struct ggml_tensor);
+        size_needed += GGML_TENSOR_SIZE;
 
         if (cur_end + size_needed + GGML_OBJECT_SIZE > ctx->mem_size) {
             GGML_PRINT("%s: not enough space in the context's memory pool (needed %zu, available %zu)\n",
@@ -4077,14 +4090,15 @@ struct ggml_tensor * ggml_new_tensor_impl(
         };
     } else {
         if (ctx->scratch.offs + size_needed > ctx->scratch.size) {
-            GGML_PRINT("%s: not enough space in the scratch memory\n", __func__);
+            GGML_PRINT("%s: not enough space in the scratch memory pool (needed %zu, available %zu)\n",
+                    __func__, ctx->scratch.offs + size_needed, ctx->scratch.size);
             assert(false);
             return NULL;
         }
 
-        if (cur_end + sizeof(struct ggml_tensor) + GGML_OBJECT_SIZE > ctx->mem_size) {
+        if (cur_end + GGML_TENSOR_SIZE + GGML_OBJECT_SIZE > ctx->mem_size) {
             GGML_PRINT("%s: not enough space in the context's memory pool (needed %zu, available %zu)\n",
-                    __func__, cur_end + sizeof(struct ggml_tensor) + GGML_OBJECT_SIZE, ctx->mem_size);
+                    __func__, cur_end + GGML_TENSOR_SIZE + GGML_OBJECT_SIZE, ctx->mem_size);
             assert(false);
             return NULL;
         }
@@ -4093,7 +4107,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
 
         *obj_new = (struct ggml_object) {
             .offs = cur_end + GGML_OBJECT_SIZE,
-            .size = sizeof(struct ggml_tensor),
+            .size = GGML_TENSOR_SIZE,
             .next = NULL,
         };
 
@@ -9431,7 +9445,7 @@ static void ggml_compute_forward_rms_norm_back(
 
 // ggml_compute_forward_mul_mat
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
 // helper function to determine if it is better to use BLAS or not
 // for large matrices, BLAS is faster
 static bool ggml_compute_forward_mul_mat_use_blas(
@@ -9472,7 +9486,7 @@ static void ggml_compute_forward_mul_mat_f32(
     const int64_t ne02 = src0->ne[2];
     const int64_t ne03 = src0->ne[3];
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
     const int64_t ne10 = src1->ne[0];
 #endif
     const int64_t ne11 = src1->ne[1];
@@ -9536,9 +9550,16 @@ static void ggml_compute_forward_mul_mat_f32(
         }
         return;
     }
+#elif defined(GGML_USE_CLBLAST)
+    if (ggml_cl_can_mul_mat(src0, src1, dst)) {
+        if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
+            ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
+        }
+        return;
+    }
 #endif
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
     if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
         if (params->ith != 0) {
             return;
@@ -9558,21 +9579,11 @@ static void ggml_compute_forward_mul_mat_f32(
                 const float * y = (float *) ((char *) src1->data + i02*nb12 + i03*nb13);
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
-#if defined(GGML_USE_CLBLAST)
-                // zT = y * xT
-                ggml_cl_sgemm_wrapper(GGML_BLAS_ORDER_ROW_MAJOR, GGML_BLAS_OP_N, GGML_BLAS_OP_T,
-                        ne11, ne01, ne10,
-                        1.0f,    y, ne10,
-                                 x, ne10,
-                        0.0f,    d, ne01,
-                        GGML_TYPE_F32);
-#else
                 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                         ne11, ne01, ne10,
                         1.0f,    y, ne10,
                                  x, ne00,
                         0.0f,    d, ne01);
-#endif
             }
         }
         //printf("CBLAS F32 = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);
@@ -9711,9 +9722,16 @@ static void ggml_compute_forward_mul_mat_f16_f32(
         }
         return;
     }
+#elif defined(GGML_USE_CLBLAST)
+    if (ggml_cl_can_mul_mat(src0, src1, dst)) {
+        if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
+            ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
+        }
+        return;
+    }
 #endif
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
     if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
         GGML_ASSERT(nb10 == sizeof(float));
 
@@ -9743,20 +9761,6 @@ static void ggml_compute_forward_mul_mat_f16_f32(
                     assert(id*sizeof(float) <= params->wsize);
                 }
 
-#if defined(GGML_USE_CLBLAST)
-                const float * x = wdata;
-                const float * y = (float *) ((char *) src1->data + i02*nb12 + i03*nb13);
-
-                float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
-
-                // zT = y * xT
-                ggml_cl_sgemm_wrapper(GGML_BLAS_ORDER_ROW_MAJOR, GGML_BLAS_OP_N, GGML_BLAS_OP_T,
-                        ne11, ne01, ne10,
-                        1.0f,    y, ne10,
-                                 x, ne10,
-                        0.0f,    d, ne01,
-                        GGML_TYPE_F32);
-#else
                 const float * x = wdata;
                 const float * y = (float *) ((char *) src1->data + i02*nb12 + i03*nb13);
 
@@ -9768,7 +9772,6 @@ static void ggml_compute_forward_mul_mat_f16_f32(
                         1.0f,    y, ne10,
                                  x, ne00,
                         0.0f,    d, ne01);
-#endif
             }
         }
 
@@ -9931,9 +9934,16 @@ static void ggml_compute_forward_mul_mat_q_f32(
         }
         return;
     }
+#elif defined(GGML_USE_CLBLAST)
+    if (ggml_cl_can_mul_mat(src0, src1, dst)) {
+        if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
+            ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
+        }
+        return;
+    }
 #endif
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
     if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
         if (params->ith != 0) {
             return;
@@ -9956,9 +9966,6 @@ static void ggml_compute_forward_mul_mat_q_f32(
 
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
-#if defined(GGML_USE_CLBLAST)
-                const void* x = (char *) src0->data + i03*nb03 + i02*nb02;
-#else
                 {
                     size_t id = 0;
                     for (int64_t i01 = 0; i01 < ne01; ++i01) {
@@ -9970,23 +9977,12 @@ static void ggml_compute_forward_mul_mat_q_f32(
                 }
 
                 const float * x = wdata;
-#endif
 
-#if defined(GGML_USE_CLBLAST)
-                // zT = y * xT
-                ggml_cl_sgemm_wrapper(GGML_BLAS_ORDER_ROW_MAJOR, GGML_BLAS_OP_N, GGML_BLAS_OP_T,
-                        ne11, ne01, ne10,
-                        1.0f,    y, ne10,
-                                 x, ne10,
-                        0.0f,    d, ne01,
-                        type);
-#else
                 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                         ne11, ne01, ne10,
                         1.0f,    y, ne10,
                                  x, ne00,
                         0.0f,    d, ne01);
-#endif
             }
         }
 
@@ -13810,10 +13806,18 @@ static void ggml_visit_parents(struct ggml_cgraph * cgraph, struct ggml_tensor *
         // reached a leaf node, not part of the gradient graph (e.g. a constant)
         GGML_ASSERT(cgraph->n_leafs < GGML_MAX_NODES);
 
+        if (strlen(node->name) == 0) {
+            snprintf(node->name, sizeof(node->name), "leaf_%d", cgraph->n_leafs);
+        }
+
         cgraph->leafs[cgraph->n_leafs] = node;
         cgraph->n_leafs++;
     } else {
         GGML_ASSERT(cgraph->n_nodes < GGML_MAX_NODES);
+
+        if (strlen(node->name) == 0) {
+            snprintf(node->name, sizeof(node->name), "node_%d", cgraph->n_nodes);
+        }
 
         cgraph->nodes[cgraph->n_nodes] = node;
         cgraph->grads[cgraph->n_nodes] = node->grad;
@@ -14165,9 +14169,16 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                             cur = ggml_cuda_mul_mat_get_wsize(node->src0, node->src1, node);
                         }
                         else
+#elif defined(GGML_USE_CLBLAST)
+                        if (ggml_cl_can_mul_mat(node->src0, node->src1, node)) {
+                            node->n_tasks = 1; // TODO: this actually is doing nothing
+                                                //       the threads are still spinning
+                            cur = ggml_cl_mul_mat_get_wsize(node->src0, node->src1, node);
+                        }
+                        else
 #endif
                         if (node->src0->type == GGML_TYPE_F16 && node->src1->type == GGML_TYPE_F32) {
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
                             if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
                                 node->n_tasks = 1; // TODO: this actually is doing nothing
                                                    //       the threads are still spinning
@@ -14181,13 +14192,13 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
 #endif
                         } else if (node->src0->type == GGML_TYPE_F32 && node->src1->type == GGML_TYPE_F32) {
                             cur = 0;
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
                             if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
                                 node->n_tasks = 1;
                             }
 #endif
                         } else if (ggml_is_quantized(node->src0->type) && node->src1->type == GGML_TYPE_F32) {
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
                             if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
                                 node->n_tasks = 1;
                                 cur = GGML_TYPE_SIZE[GGML_TYPE_F32]*(node->src0->ne[0]*node->src0->ne[1]);
@@ -14521,6 +14532,26 @@ void ggml_graph_reset(struct ggml_cgraph * cgraph) {
     }
 }
 
+struct ggml_tensor * ggml_get_tensor_by_name(struct ggml_cgraph * cgraph, const char * name) {
+    for (int i = 0; i < cgraph->n_leafs; i++) {
+        struct ggml_tensor * leaf = cgraph->leafs[i];
+
+        if (strcmp(leaf->name, name) == 0) {
+            return leaf;
+        }
+    }
+
+    for (int i = 0; i < cgraph->n_nodes; i++) {
+        struct ggml_tensor * node = cgraph->nodes[i];
+
+        if (strcmp(node->name, name) == 0) {
+            return node;
+        }
+    }
+
+    return NULL;
+}
+
 void ggml_graph_print(const struct ggml_cgraph * cgraph) {
     int64_t perf_total_per_op_us[GGML_OP_COUNT] = {0};
 
@@ -14538,7 +14569,7 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
         GGML_PRINT(" - %3d: [ %5" PRId64 ", %5" PRId64 ", %5" PRId64 "] %16s %s (%3d) cpu = %7.3f / %7.3f ms, wall = %7.3f / %7.3f ms\n",
                 i,
                 node->ne[0], node->ne[1], node->ne[2],
-                GGML_OP_LABEL[node->op], node->is_param ? "x" : node->grad ? "g" : " ", node->perf_runs,
+                GGML_OP_NAME[node->op], node->is_param ? "x" : node->grad ? "g" : " ", node->perf_runs,
                 (double) node->perf_cycles  / (double) ggml_cycles_per_ms(),
                 (double) node->perf_cycles  / (double) ggml_cycles_per_ms() / (double) node->perf_runs,
                 (double) node->perf_time_us / 1000.0,
@@ -14552,7 +14583,7 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
         GGML_PRINT(" - %3d: [ %5" PRId64 ", %5" PRId64 "] %8s\n",
                 i,
                 node->ne[0], node->ne[1],
-                GGML_OP_LABEL[node->op]);
+                GGML_OP_NAME[node->op]);
     }
 
     for (int i = 0; i < GGML_OP_COUNT; i++) {
@@ -14560,7 +14591,7 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
             continue;
         }
 
-        GGML_PRINT("perf_total_per_op_us[%16s] = %7.3f ms\n", GGML_OP_LABEL[i], (double) perf_total_per_op_us[i] / 1000.0);
+        GGML_PRINT("perf_total_per_op_us[%16s] = %7.3f ms\n", GGML_OP_NAME[i], (double) perf_total_per_op_us[i] / 1000.0);
     }
 
     GGML_PRINT("========================================\n");

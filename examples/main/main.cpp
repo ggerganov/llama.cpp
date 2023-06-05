@@ -134,8 +134,6 @@ int main(int argc, char ** argv) {
         return 0;
     }
 
-    // Add a space in front of the first character to match OG llama tokenizer behavior
-    params.prompt.insert(0, 1, ' ');
 
     std::string path_session = params.path_prompt_cache;
     std::vector<llama_token> session_tokens;
@@ -155,6 +153,7 @@ int main(int argc, char ** argv) {
                 return 1;
             }
             session_tokens.resize(n_token_count_out);
+            llama_set_rng_seed(ctx, params.seed);
 
             fprintf(stderr, "%s: loaded a session with prompt size of %d tokens\n", __func__, (int) session_tokens.size());
         } else {
@@ -163,7 +162,16 @@ int main(int argc, char ** argv) {
     }
 
     // tokenize the prompt
-    auto embd_inp = ::llama_tokenize(ctx, params.prompt, true);
+    std::vector<llama_token> embd_inp;
+
+    if (params.interactive_first || params.instruct || !params.prompt.empty() || session_tokens.empty()) {
+        // Add a space in front of the first character to match OG llama tokenizer behavior
+        params.prompt.insert(0, 1, ' ');
+
+        embd_inp = ::llama_tokenize(ctx, params.prompt, true);
+    } else {
+        embd_inp = session_tokens;
+    }
 
     const int n_ctx = llama_n_ctx(ctx);
 
@@ -181,7 +189,9 @@ int main(int argc, char ** argv) {
             }
             n_matching_session_tokens++;
         }
-        if (n_matching_session_tokens >= embd_inp.size()) {
+        if (params.prompt.empty() && n_matching_session_tokens == embd_inp.size()) {
+            fprintf(stderr, "%s: using full prompt from session file\n", __func__);
+        } else if (n_matching_session_tokens >= embd_inp.size()) {
             fprintf(stderr, "%s: session file has exact match for prompt!\n", __func__);
         } else if (n_matching_session_tokens < (embd_inp.size() / 2)) {
             fprintf(stderr, "%s: warning: session file has low similarity to prompt (%zu / %zu tokens); will mostly be reevaluated\n",
