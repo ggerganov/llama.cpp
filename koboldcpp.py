@@ -455,37 +455,43 @@ def show_gui():
         tk.Label(root, text = "(Note: KoboldCpp only works with GGML model formats!)",
                 font = ("Arial", 9)).grid(row=1,column=0)
 
+        blasbatchopts = ["Don't Batch BLAS","BLAS = 32","BLAS = 64","BLAS = 128","BLAS = 256","BLAS = 512","BLAS = 1024"]
+        blaschoice = tk.StringVar()
+        blaschoice.set("BLAS = 512")
 
-        opts = ["Use OpenBLAS","Use CLBLast GPU #1","Use CLBLast GPU #2","Use CLBLast GPU #3","Use No BLAS","Use OpenBLAS (Old CPU, noavx2)","Failsafe Mode (Old CPU, noavx)"]
+        runopts = ["Use OpenBLAS","Use CLBLast GPU #1","Use CLBLast GPU #2","Use CLBLast GPU #3","Use No BLAS","Use OpenBLAS (Old CPU, noavx2)","Failsafe Mode (Old CPU, noavx)"]
         runchoice = tk.StringVar()
         runchoice.set("Use OpenBLAS")
+
         def onDropdownChange(event):
             sel = runchoice.get()
-            if sel==opts[1] or sel==opts[2] or sel==opts[3]:
-                frm1.grid(row=4,column=0,pady=4)
+            if sel==runopts[1] or sel==runopts[2] or sel==runopts[3]:
+                frameC.grid(row=4,column=0,pady=4)
             else:
-                frm1.grid_forget()
-            pass
-        tk.OptionMenu( root , runchoice , command = onDropdownChange ,*opts ).grid(row=2,column=0)
-     
+                frameC.grid_forget()                        
 
-        frm2 = tk.Frame(root)
+        frameA = tk.Frame(root)
+        tk.OptionMenu( frameA , runchoice , command = onDropdownChange ,*runopts ).grid(row=0,column=0)        
+        tk.OptionMenu( frameA , blaschoice ,*blasbatchopts ).grid(row=0,column=1)
+        frameA.grid(row=2,column=0)
+
+        frameB = tk.Frame(root)
         threads_var=tk.StringVar()
         threads_var.set(str(default_threads))
-        threads_lbl = tk.Label(frm2, text = 'Threads: ', font=('calibre',10, 'bold'))  
-        threads_input = tk.Entry(frm2,textvariable = threads_var, font=('calibre',10,'normal'))
+        threads_lbl = tk.Label(frameB, text = 'Threads: ', font=('calibre',10, 'bold'))  
+        threads_input = tk.Entry(frameB,textvariable = threads_var, font=('calibre',10,'normal'))
         threads_lbl.grid(row=0,column=0)
         threads_input.grid(row=0,column=1)
-        frm2.grid(row=3,column=0,pady=4)
+        frameB.grid(row=3,column=0,pady=4)
 
-        frm1 = tk.Frame(root)
+        frameC = tk.Frame(root)
         gpu_layers_var=tk.StringVar()
         gpu_layers_var.set("0")
-        gpu_lbl = tk.Label(frm1, text = 'GPU Layers (CLBlast only): ', font=('calibre',10, 'bold'))  
-        gpu_layers_input = tk.Entry(frm1,textvariable = gpu_layers_var, font=('calibre',10,'normal'))
+        gpu_lbl = tk.Label(frameC, text = 'GPU Layers (CLBlast only): ', font=('calibre',10, 'bold'))  
+        gpu_layers_input = tk.Entry(frameC,textvariable = gpu_layers_var, font=('calibre',10,'normal'))
         gpu_lbl.grid(row=0,column=0)
         gpu_layers_input.grid(row=0,column=1)
-        frm1.grid(row=4,column=0,pady=4)
+        frameC.grid(row=4,column=0,pady=4)
         onDropdownChange(None)
 
         stream = tk.IntVar()
@@ -494,15 +500,15 @@ def show_gui():
         unbantokens = tk.IntVar()
         highpriority = tk.IntVar()
         disablemmap = tk.IntVar()
-        frm3 = tk.Frame(root)
-        tk.Checkbutton(frm3, text='Streaming Mode',variable=stream, onvalue=1, offvalue=0).grid(row=0,column=0)
-        tk.Checkbutton(frm3, text='Use SmartContext',variable=smartcontext, onvalue=1, offvalue=0).grid(row=0,column=1)
-        tk.Checkbutton(frm3, text='High Priority',variable=highpriority, onvalue=1, offvalue=0).grid(row=1,column=0)
-        tk.Checkbutton(frm3, text='Disable MMAP',variable=disablemmap, onvalue=1, offvalue=0).grid(row=1,column=1)
-        tk.Checkbutton(frm3, text='Unban Tokens',variable=unbantokens, onvalue=1, offvalue=0).grid(row=2,column=0)
-        tk.Checkbutton(frm3, text='Launch Browser',variable=launchbrowser, onvalue=1, offvalue=0).grid(row=2,column=1)
-        
-        frm3.grid(row=5,column=0,pady=4)
+
+        frameD = tk.Frame(root)
+        tk.Checkbutton(frameD, text='Streaming Mode',variable=stream, onvalue=1, offvalue=0).grid(row=0,column=0)
+        tk.Checkbutton(frameD, text='Use SmartContext',variable=smartcontext, onvalue=1, offvalue=0).grid(row=0,column=1)
+        tk.Checkbutton(frameD, text='High Priority',variable=highpriority, onvalue=1, offvalue=0).grid(row=1,column=0)
+        tk.Checkbutton(frameD, text='Disable MMAP',variable=disablemmap, onvalue=1, offvalue=0).grid(row=1,column=1)
+        tk.Checkbutton(frameD, text='Unban Tokens',variable=unbantokens, onvalue=1, offvalue=0).grid(row=2,column=0)
+        tk.Checkbutton(frameD, text='Launch Browser',variable=launchbrowser, onvalue=1, offvalue=0).grid(row=2,column=1) 
+        frameD.grid(row=5,column=0,pady=4)
 
         # Create button, it will change label text
         tk.Button( root , text = "Launch", font = ("Impact", 18), bg='#54FA9B', command = guilaunch ).grid(row=6,column=0)
@@ -526,23 +532,39 @@ def show_gui():
         args.unbantokens = (unbantokens.get()==1)
         args.highpriority = (highpriority.get()==1)
         args.nommap = (disablemmap.get()==1)
-        selchoice = runchoice.get()
+        selrunchoice = runchoice.get()
+        selblaschoice = blaschoice.get()
 
-        if selchoice==opts[1]:
+        if selrunchoice==runopts[1]:
             args.useclblast = [0,0]
-        if selchoice==opts[2]:
+        if selrunchoice==runopts[2]:
             args.useclblast = [1,0]
-        if selchoice==opts[3]:
+        if selrunchoice==runopts[3]:
             args.useclblast = [0,1]
-        if selchoice==opts[4]:
+        if selrunchoice==runopts[4]:
             args.noblas = True
-        if selchoice==opts[5]:
+        if selrunchoice==runopts[5]:
             args.noavx2 = True
-        if selchoice==opts[6]:
+        if selrunchoice==runopts[6]:
             args.noavx2 = True
             args.noblas = True
             args.nommap = True
             print("[Failsafe Mode : mmap is disabled.]")
+
+        if selblaschoice==blasbatchopts[0]:
+            args.blasbatchsize = -1
+        if selblaschoice==blasbatchopts[1]:
+            args.blasbatchsize = 32
+        if selblaschoice==blasbatchopts[2]:
+            args.blasbatchsize = 64
+        if selblaschoice==blasbatchopts[3]:
+            args.blasbatchsize = 128
+        if selblaschoice==blasbatchopts[4]:
+            args.blasbatchsize = 256
+        if selblaschoice==blasbatchopts[5]:
+            args.blasbatchsize = 512
+        if selblaschoice==blasbatchopts[6]:
+            args.blasbatchsize = 1024
 
         root = tk.Tk()
         root.attributes("-alpha", 0)
