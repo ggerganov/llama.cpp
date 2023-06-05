@@ -317,7 +317,7 @@ Building the program with BLAS support may lead to some performance improvements
   mkdir build
   cd build
   cmake .. -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=Intel10_64lp -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
-  cmake --build . -config Release
+  cmake --build . --config Release
   ```
 
 - **cuBLAS**
