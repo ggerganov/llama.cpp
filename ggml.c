@@ -22,6 +22,10 @@
 #include <float.h>
 #include <limits.h>
 
+#ifdef GGML_USE_METAL
+#include <unistd.h>
+#endif
+
 // if C99 - static_assert is noop
 // ref: https://stackoverflow.com/a/53923785/4039976
 #ifndef static_assert
@@ -122,7 +126,11 @@ typedef void* thread_ret_t;
 #else
 inline static void* ggml_aligned_malloc(size_t size) {
     void* aligned_memory = NULL;
+#ifdef GGML_USE_METAL
+    int result = posix_memalign(&aligned_memory, getpagesize(), size);
+#else
     int result = posix_memalign(&aligned_memory, GGML_MEM_ALIGN, size);
+#endif
     if (result != 0) {
         // Handle allocation failure
         return NULL;

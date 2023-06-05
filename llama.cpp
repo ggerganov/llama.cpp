@@ -53,7 +53,6 @@ enum e_model {
     MODEL_65B,
 };
 
-
 static const size_t MB = 1024*1024;
 
 // computed for n_ctx == 2048
@@ -1281,12 +1280,6 @@ static bool llama_eval_internal(
     ggml_set_name(embd, "embd");
     memcpy(embd->data, tokens, N*ggml_element_size(embd));
 
-#ifdef GGML_USE_METAL
-    if (lctx.ctx_metal && N == 1) {
-        ggml_metal_set_tensor(lctx.ctx_metal, embd);
-    }
-#endif
-
     struct ggml_tensor * cur;
     struct ggml_tensor * inpL = ggml_get_rows(ctx0, model.tok_embeddings, embd);
 
@@ -1484,12 +1477,6 @@ static bool llama_eval_internal(
         }
 
         ggml_graph_compute(ctx0, &gf);
-
-        if (lctx.ctx_metal) {
-            // We need to sync the CPU KV cache with the GPU KV cache
-            ggml_metal_set_tensor(lctx.ctx_metal, kv_self.k);
-            ggml_metal_set_tensor(lctx.ctx_metal, kv_self.v);
-        }
     }
 #else
     ggml_graph_compute(ctx0, &gf);
