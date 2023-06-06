@@ -204,6 +204,11 @@ bool ggml_metal_add_buffer(
         ctx->buffers[ctx->n_buffers].name = name;
         ctx->buffers[ctx->n_buffers].data = data;
         ctx->buffers[ctx->n_buffers].size = size;
+
+        if (ctx->device.maxBufferLength < aligned_size) {
+            fprintf(stderr, "%s: buffer '%s' size %zu is larger than buffer maximum of %zu\n", __func__, name, aligned_size, ctx->device.maxBufferLength);
+            return false;
+        }
         ctx->buffers[ctx->n_buffers].metal = [ctx->device newBufferWithBytesNoCopy:data length:aligned_size options:MTLResourceStorageModeShared deallocator:nil];
 
         if (ctx->buffers[ctx->n_buffers].metal == nil) {
