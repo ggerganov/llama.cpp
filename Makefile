@@ -185,7 +185,7 @@ ifdef LLAMA_HIPBLAS
 	CC         := $(ROCM_PATH)/llvm/bin/clang
 	CXX        := $(ROCM_PATH)/llvm/bin/clang++
 	GPU_TARGETS = gfx900 gfx906 gfx908 gfx90a gfx1030
-	LLAMA_CUDA_DMMV_X ?= 64
+	LLAMA_CUDA_DMMV_X ?= 32
 	LLAMA_CUDA_DMMV_Y ?= 1
 	CFLAGS     += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS $(shell $(ROCM_PATH)/bin/hipconfig -C)
 	CXXFLAGS   += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS $(shell $(ROCM_PATH)/bin/hipconfig -C)

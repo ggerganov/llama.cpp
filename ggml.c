@@ -3727,26 +3727,6 @@ struct ggml_context_container {
 };
 
 //
-// compute types
-//
-
-enum ggml_task_type {
-    GGML_TASK_INIT = 0,
-    GGML_TASK_COMPUTE,
-    GGML_TASK_FINALIZE,
-};
-
-struct ggml_compute_params {
-    enum ggml_task_type type;
-
-    int ith, nth;
-
-    // work buffer for all threads
-    size_t wsize;
-    void * wdata;
-};
-
-//
 // ggml state
 //
 
@@ -3819,6 +3799,12 @@ size_t ggml_nbytes(const struct ggml_tensor * tensor) {
     // is enough, but just in case, adding the second part
 
     return MAX(tensor->ne[3]*tensor->nb[3], (ggml_nelements(tensor)*GGML_TYPE_SIZE[tensor->type])/GGML_BLCK_SIZE[tensor->type]);
+}
+
+size_t ggml_nbytes_split(const struct ggml_tensor * tensor, int nrows_split) {
+    static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
+
+    return (nrows_split*tensor->ne[0]*GGML_TYPE_SIZE[tensor->type])/GGML_BLCK_SIZE[tensor->type];
 }
 
 int ggml_blck_size(enum ggml_type type) {
@@ -4248,6 +4234,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
         /*.perf_time_us =*/ 0,
         /*.data         =*/ (data == NULL && !ctx->no_alloc) ? (void *)(result + 1) : data,
         /*.name         =*/ { 0 },
+        /*.extra        =*/ NULL,
         /*.pad          =*/ { 0 },
     };
 
@@ -8265,15 +8252,8 @@ static void ggml_compute_forward_mul_f32(
     const int ith = params->ith;
     const int nth = params->nth;
 
-#ifdef GGML_USE_CUBLAS
-    if (src1->backend == GGML_BACKEND_CUDA) {
-        if (ith == 0) {
-            ggml_cuda_mul(src0, src1, dst);
-        }
-        return;
-    }
-#elif defined(GGML_USE_CLBLAST)
-    if (src1->backend == GGML_BACKEND_CL) {
+#ifdef GGML_USE_CLBLAST
+    if (src1->backend == GGML_BACKEND_GPU) {
         if (ith == 0) {
             ggml_cl_mul(src0, src1, dst);
         }
@@ -9713,14 +9693,7 @@ static void ggml_compute_forward_mul_mat_f32(
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
-#if defined(GGML_USE_CUBLAS)
-    if (ggml_cuda_can_mul_mat(src0, src1, dst)) {
-        if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
-            ggml_cuda_mul_mat(src0, src1, dst, params->wdata, params->wsize);
-        }
-        return;
-    }
-#elif defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_CLBLAST)
     if (ggml_cl_can_mul_mat(src0, src1, dst)) {
         if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
             ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
@@ -9885,14 +9858,7 @@ static void ggml_compute_forward_mul_mat_f16_f32(
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
-#if defined(GGML_USE_CUBLAS)
-    if (ggml_cuda_can_mul_mat(src0, src1, dst)) {
-        if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
-            ggml_cuda_mul_mat(src0, src1, dst, params->wdata, params->wsize);
-        }
-        return;
-    }
-#elif defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_CLBLAST)
     if (ggml_cl_can_mul_mat(src0, src1, dst)) {
         if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
             ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
@@ -10097,14 +10063,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
-#if defined(GGML_USE_CUBLAS)
-    if (ggml_cuda_can_mul_mat(src0, src1, dst)) {
-        if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
-            ggml_cuda_mul_mat(src0, src1, dst, params->wdata, params->wsize);
-        }
-        return;
-    }
-#elif defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_CLBLAST)
     if (ggml_cl_can_mul_mat(src0, src1, dst)) {
         if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
             ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
@@ -13057,6 +13016,15 @@ static void ggml_compute_forward_map_binary(
 static void ggml_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor) {
     GGML_ASSERT(params);
 
+#ifdef GGML_USE_CUBLAS
+    bool skip_cpu = ggml_cuda_compute_forward(params, tensor);
+    if (skip_cpu) {
+        return;
+    }
+    GGML_ASSERT(tensor->src0->backend == GGML_BACKEND_CPU);
+    GGML_ASSERT(tensor->src1 == NULL || tensor->src1->backend == GGML_BACKEND_CPU);
+#endif // GGML_USE_CUBLAS
+
     switch (tensor->op) {
         case GGML_OP_DUP:
             {
@@ -14363,7 +14331,6 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                         if (ggml_cuda_can_mul_mat(node->src0, node->src1, node)) {
                             node->n_tasks = 1; // TODO: this actually is doing nothing
                                                 //       the threads are still spinning
-                            cur = ggml_cuda_mul_mat_get_wsize(node->src0, node->src1, node);
                         }
                         else
 #elif defined(GGML_USE_CLBLAST)
