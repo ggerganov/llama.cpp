@@ -639,7 +639,7 @@ static cl_mem ggml_cl_pool_malloc(size_t size, size_t * actual_size) {
          cl_buffer& b = g_cl_buffer_pool[worst_i];
          cl_mem mem = b.mem;
          b.size = 0;
-         clReleaseMemObject(mem);         
+         clReleaseMemObject(mem);
     }
     cl_mem mem;
     CL_CHECK((mem = clCreateBuffer(context, CL_MEM_READ_WRITE, size, NULL, &err), err));
