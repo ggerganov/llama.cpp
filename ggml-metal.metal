@@ -1,3 +1,4 @@
+// 34.7 ms / token
 #include <metal_stdlib>
 
 using namespace metal;
@@ -47,6 +48,19 @@ static inline uchar2 get_scale_min_k4(int j, device const uint8_t * q) {
     } else {
         r[0] = (q[j+4] & 0xF) | ((q[j-4] >> 6) << 4);
         r[1] = (q[j+4] >>  4) | ((q[j-0] >> 6) << 4);
+    }
+    return r;
+}
+static inline uchar4 get_scale_min_k4_2(int j, device const uint8_t * q) {
+    uchar4 r;
+    if (j < 4) {
+        r[0] = q[j+0] & 63; r[1] = q[j+4] & 63;
+        r[2] = q[j+1] & 63; r[3] = q[j+5] & 63;
+    } else {
+        r[0] = (q[j+4] & 0xF) | ((q[j-4] >> 6) << 4);
+        r[1] = (q[j+4] >>  4) | ((q[j-0] >> 6) << 4);
+        r[2] = (q[j+5] & 0xF) | ((q[j-3] >> 6) << 4);
+        r[3] = (q[j+5] >>  4) | ((q[j+1] >> 6) << 4);
     }
     return r;
 }
@@ -412,10 +426,10 @@ kernel void kernel_mul_mat_q4_k_f32(
     const uint nth = tptg.x*tptg.y;
     const uint ith = tptg.y*tpitg.x + tpitg.y;
 
-    const int tid = tpitg.y;
-    const int il  = tid/8;
-    const int ir  = tid%8;
-    const int n   = 4;
+    const int tid = tpitg.y;   // 0...16
+    const int il  = tid/4;     // 0...3
+    const int ir  = tid%4;     // 0...3
+    const int n   = 8;
     const int is  = 2*il;
 
     sum[ith] = 0.0f;
@@ -430,14 +444,14 @@ kernel void kernel_mul_mat_q4_k_f32(
         const float dall = (float)((x + i)->d);
         const float dmin = (float)((x + i)->dmin);
 
-        const uchar2 sc1 = get_scale_min_k4(is, scales);
-        const float d1 = dall * sc1[0]; const float m1 = dmin * sc1[1];
-        const uchar2 sc2 = get_scale_min_k4(is+1, scales);
-        const float d2 = dall * sc2[0]; const float m2 = dmin * sc2[1];
+        const uchar4 sc = get_scale_min_k4_2(is, scales);
 
+        float4 s = {0.f, 0.f, 0.f, 0.f};
         for (int l = 0; l < n; ++l) {
-            sumf += y[l] * (d1 * (q[l] & 0xF) - m1) + y[l+32] * (d2 * (q[l] >> 4) - m2);
+            s[0] += y[l] * (q[l] & 0xF); s[1] += y[l];
+            s[2] += y[l+32] * (q[l] >>  4); s[3] += y[l+32];
         }
+        sumf += dall * (s[0] * sc[0] + s[2] * sc[2]) - dmin * (s[1] * sc[1] + s[3] * sc[3]);
 
     }
     sum[ith] = sumf;
