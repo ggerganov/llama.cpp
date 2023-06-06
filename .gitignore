@@ -35,6 +35,7 @@ models/*
 /benchmark-matmult
 /vdot
 /Pipfile
+/libllama.so
 
 build-info.h
 arm_neon.h

@@ -14753,7 +14753,7 @@ static void ggml_graph_export_leaf(const struct ggml_tensor * tensor, FILE * fou
     const int64_t * ne = tensor->ne;
     const size_t  * nb = tensor->nb;
 
-    fprintf(fout, "%-6s %-12s %8d %8lld %8lld %8lld %8lld %16zu %16zu %16zu %16zu %16p %32s\n",
+    fprintf(fout, "%-6s %-12s %8d %8jd %jd %jd %jd %16zu %16zu %16zu %16zu %16p %32s\n",
             ggml_type_name(tensor->type),
             ggml_op_name  (tensor->op),
             tensor->n_dims,
@@ -14767,7 +14767,7 @@ static void ggml_graph_export_node(const struct ggml_tensor * tensor, const char
     const int64_t * ne = tensor->ne;
     const size_t  * nb = tensor->nb;
 
-    fprintf(fout, "%-6s %-6s %-12s %8d %8lld %8lld %8lld %8lld %16zu %16zu %16zu %16zu %8d %16p %32s\n",
+    fprintf(fout, "%-6s %-6s %-12s %8d %jd %jd %jd %jd %16zu %16zu %16zu %16zu %8d %16p %32s\n",
             arg,
             ggml_type_name(tensor->type),
             ggml_op_name  (tensor->op),
@@ -14796,11 +14796,11 @@ void ggml_graph_export(const struct ggml_cgraph * cgraph, const char * fname) {
         FILE * fout = stdout;
 
         fprintf(fout, "\n");
-        fprintf(fout, "%-16s %8x\n",   "magic",   GGML_FILE_MAGIC);
-        fprintf(fout, "%-16s %8d\n",   "version", GGML_FILE_VERSION);
-        fprintf(fout, "%-16s %8d\n",   "leafs",   cgraph->n_leafs);
-        fprintf(fout, "%-16s %8d\n",   "nodes",   cgraph->n_nodes);
-        fprintf(fout, "%-16s %8llu\n", "eval",    size_eval);
+        fprintf(fout, "%-16s %8x\n",  "magic",   GGML_FILE_MAGIC);
+        fprintf(fout, "%-16s %8d\n",  "version", GGML_FILE_VERSION);
+        fprintf(fout, "%-16s %8d\n",  "leafs",   cgraph->n_leafs);
+        fprintf(fout, "%-16s %8d\n",  "nodes",   cgraph->n_nodes);
+        fprintf(fout, "%-16s %8ju\n", "eval",    size_eval);
 
         // header
         fprintf(fout, "\n");
@@ -15033,7 +15033,11 @@ struct ggml_cgraph ggml_graph_import(const char * fname, struct ggml_context ** 
 
         data = ggml_new_tensor_1d(*ctx_data, GGML_TYPE_I8, fsize);
 
-        fread(data->data, sizeof(char), fsize, fin);
+        const size_t ret = fread(data->data, sizeof(char), fsize, fin);
+        if (ret != fsize) {
+            fprintf(stderr, "%s: failed to read %s\n", __func__, fname);
+            return result;
+        }
 
         fclose(fin);
     }
