@@ -21,10 +21,10 @@ int main(int argc, char** argv) {
     // printf("eval float end\n");
     eval_string(mymodel, mymodel->params.prompt.c_str());
     for (int i=0;i < 50; i++) {
-        int id = sampling_id(mymodel);
-        printf("%s", llama_token_to_str(mymodel->ctx, id));
+        // int id = sampling_id(mymodel);
+        printf("%s", sampling(mymodel)); // llama_token_to_str(mymodel->ctx, id));
         fflush(stdout);
-        eval_id(mymodel, id);
+        // eval_id(mymodel, id);
     }
     printf("\n");
     return 0;
