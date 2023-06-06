@@ -169,6 +169,22 @@ kernel void kernel_diag_mask_inf(
     }
 }
 
+kernel void kernel_get_rows_f16(
+        device const  void * src0,
+        device const   int * src1,
+        device       float * dst,
+        constant   int64_t & ne00,
+        constant  uint64_t & nb01,
+        constant  uint64_t & nb1,
+        uint tpig[[thread_position_in_grid]]) {
+    const int i = tpig;
+    const int r = ((device int32_t *) src1)[i];
+
+    for (int j = 0; j < ne00; j++) {
+        dst[i*nb1 + j] = ((device half *) ((device char *) src0 + r*nb01))[j];
+    }
+}
+
 kernel void kernel_get_rows_q4_0(
         device const  void * src0,
         device const   int * src1,

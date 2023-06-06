@@ -961,7 +961,6 @@ static void llama_model_load_internal(
     model.hparams = ml->file_loaders.at(0)->hparams;
     llama_file_version file_version = ml->file_loaders.at(0)->file_version;
     auto & hparams = model.hparams;
-    uint32_t n_ff = ((2*(4*hparams.n_embd)/3 + hparams.n_mult - 1)/hparams.n_mult)*hparams.n_mult;
 
     {
         switch (hparams.n_layer) {
@@ -974,6 +973,8 @@ static void llama_model_load_internal(
 
         hparams.n_ctx = n_ctx;
     }
+
+    const uint32_t n_ff = ((2*(4*hparams.n_embd)/3 + hparams.n_mult - 1)/hparams.n_mult)*hparams.n_mult;
 
     {
         fprintf(stderr, "%s: format     = %s\n",  __func__, llama_file_version_name(file_version));
