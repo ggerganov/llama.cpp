@@ -4,6 +4,7 @@
 #include <atomic>
 #include <sstream>
 #include <vector>
+#include <limits>
 
 #define CL_TARGET_OPENCL_VERSION 110
 #include <clblast.h>
@@ -604,21 +605,44 @@ struct cl_buffer {
 static cl_buffer g_cl_buffer_pool[MAX_CL_BUFFERS];
 static std::atomic_flag g_cl_pool_lock = ATOMIC_FLAG_INIT;
 
-static cl_mem ggml_cl_pool_malloc(size_t size, size_t * actual_size, cl_mem_flags flags) {
+static cl_mem ggml_cl_pool_malloc(size_t size, size_t * actual_size) {
     scoped_spin_lock lock(g_cl_pool_lock);
     cl_int err;
 
+    int best_i = -1;
+    size_t best_size = std::numeric_limits<size_t>::max(); //smallest unused buffer that fits our needs
+    int worst_i = -1;
+    size_t worst_size = 0; //largest unused buffer seen so far
     for (int i = 0; i < MAX_CL_BUFFERS; ++i) {
-        cl_buffer& b = g_cl_buffer_pool[i];
-        if (b.size > 0 && b.size >= size) {
-            cl_mem mem = b.mem;
-            *actual_size = b.size;
-            b.size = 0;
-            return mem;
+        cl_buffer &b = g_cl_buffer_pool[i];
+        if (b.size > 0 && b.size >= size && b.size < best_size)
+        {
+            best_i = i;
+            best_size = b.size;
+        }
+        if (b.size > 0 && b.size > worst_size)
+        {
+            worst_i = i;
+            worst_size = b.size;
         }
     }
+    if(best_i!=-1) //found the smallest buffer that fits our needs
+    {
+        cl_buffer& b = g_cl_buffer_pool[best_i];
+        cl_mem mem = b.mem;
+        *actual_size = b.size;
+        b.size = 0;
+        return mem;
+    }
+    if(worst_i!=-1) //no buffer that fits our needs, resize largest one to save memory
+    {
+         cl_buffer& b = g_cl_buffer_pool[worst_i];
+         cl_mem mem = b.mem;
+         b.size = 0;
+         clReleaseMemObject(mem);
+    }
     cl_mem mem;
-    CL_CHECK((mem = clCreateBuffer(context, flags, size, NULL, &err), err));
+    CL_CHECK((mem = clCreateBuffer(context, CL_MEM_READ_WRITE, size, NULL, &err), err));
     *actual_size = size;
     return mem;
 }
@@ -692,9 +716,10 @@ static void ggml_cl_mul_f32(const ggml_tensor * src0, const ggml_tensor * src1, 
     size_t x_size;
     size_t d_size;
 
-    cl_mem d_X = ggml_cl_pool_malloc(ne0 * sizeof(float), &x_size, CL_MEM_READ_ONLY); // src0
+    cl_mem d_X = ggml_cl_pool_malloc(ne0 * sizeof(float), &x_size); // src0
     cl_mem d_Y = (cl_mem) src1->data; // src1 is already on device, broadcasted.
-    cl_mem d_D = ggml_cl_pool_malloc(ne0 * sizeof(float), &d_size, CL_MEM_WRITE_ONLY); // dst
+    cl_mem d_D = ggml_cl_pool_malloc(ne0 * sizeof(float), &d_size); // dst
+
 
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
@@ -792,10 +817,10 @@ static void ggml_cl_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     if (src0->backend == GGML_BACKEND_CL) {
         d_X = (cl_mem) src0->data;
     } else {
-        d_X = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &x_size, CL_MEM_READ_ONLY);
+        d_X = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &x_size);
     }
-    cl_mem d_Y = ggml_cl_pool_malloc(sizeof(float) * y_ne, &y_size, CL_MEM_READ_ONLY);
-    cl_mem d_D = ggml_cl_pool_malloc(sizeof(float) * d_ne, &d_size, CL_MEM_WRITE_ONLY);
+    cl_mem d_Y = ggml_cl_pool_malloc(sizeof(float) * y_ne, &y_size);
+    cl_mem d_D = ggml_cl_pool_malloc(sizeof(float) * d_ne, &d_size);
 
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
@@ -868,10 +893,10 @@ static void ggml_cl_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
     if (src0->backend == GGML_BACKEND_CL) {
         d_X = (cl_mem) src0->data;
     } else {
-        d_X = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &x_size, CL_MEM_READ_ONLY);
+        d_X = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &x_size);
     }
-    cl_mem d_Y = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * y_ne, &y_size, CL_MEM_READ_ONLY);
-    cl_mem d_D = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * d_ne, &d_size, CL_MEM_WRITE_ONLY);
+    cl_mem d_Y = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * y_ne, &y_size);
+    cl_mem d_D = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * d_ne, &d_size);
 
     bool src1_cont_rows = nb10 == sizeof(float);
     bool src1_cont_cols = (size_t)nb11 == ne11*sizeof(float);
@@ -970,13 +995,13 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
     size_t q_size;
     cl_mem d_X;
     if (!mul_mat_vec) {
-        d_X = ggml_cl_pool_malloc(sizeof(float) * x_ne, &x_size, CL_MEM_READ_WRITE);
+        d_X = ggml_cl_pool_malloc(sizeof(float) * x_ne, &x_size);
     }
-    cl_mem d_Y = ggml_cl_pool_malloc(sizeof(float) * y_ne, &y_size, CL_MEM_READ_ONLY);
-    cl_mem d_D = ggml_cl_pool_malloc(sizeof(float) * d_ne, &d_size, CL_MEM_WRITE_ONLY);
+    cl_mem d_Y = ggml_cl_pool_malloc(sizeof(float) * y_ne, &y_size);
+    cl_mem d_D = ggml_cl_pool_malloc(sizeof(float) * d_ne, &d_size);
     cl_mem d_Q;
     if (src0->backend == GGML_BACKEND_CPU) {
-        d_Q = ggml_cl_pool_malloc(q_sz, &q_size, CL_MEM_READ_ONLY);
+        d_Q = ggml_cl_pool_malloc(q_sz, &q_size);
     }
 
     cl_kernel* to_fp32_cl = ggml_get_to_fp32_cl(type);
@@ -1143,7 +1168,7 @@ void ggml_cl_transform_tensor(ggml_tensor * tensor) {
     const size_t q_sz = ggml_type_size(type) * ne0 * ne1 * ne2 * ne3 / ggml_blck_size(type);
 
     size_t q_size;
-    cl_mem dst = ggml_cl_pool_malloc(q_sz, &q_size, CL_MEM_READ_ONLY);
+    cl_mem dst = ggml_cl_pool_malloc(q_sz, &q_size);
 
     // copy tensor to device
     for (int64_t i3 = 0; i3 < ne3; i3++) {
