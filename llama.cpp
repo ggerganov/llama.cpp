@@ -1059,23 +1059,23 @@ static void llama_model_load_internal(
         }
     }
 
+    (void) main_gpu;
 #if defined(GGML_USE_CUBLAS)
     fprintf(stderr, "%s: using CUDA for GPU acceleration\n", __func__);
     ggml_cuda_set_main_device(main_gpu);
-#define LLAMA_BACKEND_OFFLOAD GGML_BACKEND_GPU
+#define LLAMA_BACKEND_OFFLOAD       GGML_BACKEND_GPU
 #define LLAMA_BACKEND_OFFLOAD_SPLIT GGML_BACKEND_GPU_SPLIT
 #elif defined(GGML_USE_CLBLAST)
     fprintf(stderr, "%s: using OpenCL for GPU acceleration\n", __func__);
-#define LLAMA_BACKEND_OFFLOAD GGML_BACKEND_GPU
+#define LLAMA_BACKEND_OFFLOAD       GGML_BACKEND_GPU
 #define LLAMA_BACKEND_OFFLOAD_SPLIT GGML_BACKEND_GPU
 #else
-#define LLAMA_BACKEND_OFFLOAD GGML_BACKEND_CPU
+#define LLAMA_BACKEND_OFFLOAD       GGML_BACKEND_CPU
 #define LLAMA_BACKEND_OFFLOAD_SPLIT GGML_BACKEND_CPU
 #endif
 
     // prepare memory for the weights
     size_t vram_weights = 0;
-    size_t vram_scratch = 0;
     {
         const uint32_t n_embd  = hparams.n_embd;
         const uint32_t n_layer = hparams.n_layer;
@@ -1152,10 +1152,8 @@ static void llama_model_load_internal(
         fprintf(stderr, "%s: mem required  = %7.2f MB (+ %7.2f MB per state)\n", __func__,
                 mem_required / 1024.0 / 1024.0, mem_required_state / 1024.0 / 1024.0);
 
-        const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
-
 #ifdef GGML_USE_CUBLAS
-        vram_scratch = n_batch * MB;
+        const size_t vram_scratch = n_batch * MB;
         ggml_cuda_set_scratch_size(vram_scratch);
         if (n_gpu_layers > 0) {
             fprintf(stderr, "%s: allocating batch_size x 1 MB = %ld MB VRAM for the scratch buffer\n",
@@ -1163,6 +1161,8 @@ static void llama_model_load_internal(
         }
 #endif // GGML_USE_CUBLAS
 #if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+        const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
+
         fprintf(stderr, "%s: offloading %d layers to GPU\n", __func__, n_gpu);
         if (n_gpu_layers > (int) hparams.n_layer) {
             fprintf(stderr, "%s: offloading output layer to GPU\n", __func__);
@@ -1331,6 +1331,7 @@ static bool llama_eval_internal(
     struct ggml_tensor * inpL = ggml_get_rows(ctx0, model.tok_embeddings, embd);
 
     const int i_gpu_start = n_layer - n_gpu_layers;
+    (void) i_gpu_start;
 
     for (int il = 0; il < n_layer; ++il) {
         offload_func_t offload_func = llama_nop;
