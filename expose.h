@@ -18,6 +18,7 @@ struct load_model_inputs
     const int clblast_info = 0;
     const int blasbatchsize = 512;
     const bool debugmode;
+    const bool stream_sse;
     const int forceversion = 0;
     const int gpulayers = 0;
 };
@@ -48,3 +49,6 @@ struct generation_outputs
 
 extern std::string executable_path;
 extern std::string lora_filename;
+
+extern void receive_current_token(std::string token);
+extern void set_stream_finished();
