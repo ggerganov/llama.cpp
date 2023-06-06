@@ -196,7 +196,6 @@ ggml-cuda.o: CXXFLAGS += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
 ggml-cuda.o: CXXFLAGS += -DGGML_CUDA_DMMV_Y=$(LLAMA_CUDA_DMMV_Y)
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(CXX) $(CXXFLAGS) -x hip -c -o $@ $<
-endif
 endif # LLAMA_HIPBLAS
 
 ifdef LLAMA_METAL
