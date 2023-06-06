@@ -96,6 +96,7 @@ struct MyModel* create_mymodel(int argc, char ** argv) {
     struct MyModel* ret= new MyModel();
     ret->ctx = ctx;
     ret->params = params;
+    ret->n_past = 0;
     // printf("ctx: %d\n", ret->ctx);
     return ret;
 }
@@ -106,11 +107,13 @@ bool eval_float(void* model, float* input, int N){
     llama_context* ctx = mymodel->ctx;
     gpt_params params = mymodel->params;
     int n_emb = llama_n_embd(ctx);
-    int n_past = 0;
-    for (int i = 0; i < (int) N; i += params.n_batch) {
+    int n_past = mymodel->n_past;
+    // printf("%f,%f\n", *input, *(input+1));
+    int n_batch = N; // params.n_batch;
+    for (int i = 0; i < (int) N; i += n_batch) {
         int n_eval = (int) N - i;
-        if (n_eval > params.n_batch) {
-            n_eval = params.n_batch;
+        if (n_eval > n_batch) {
+            n_eval = n_batch;
         }
         if (llama_eval_float(ctx, (input+i*n_emb), n_eval, n_past, params.n_threads)) {
             fprintf(stderr, "%s : failed to eval\n", __func__);
@@ -118,6 +121,7 @@ bool eval_float(void* model, float* input, int N){
         }
         n_past += n_eval;
     }
+    mymodel->n_past = n_past;
     return true;
 }
 
@@ -135,7 +139,7 @@ bool eval_tokens(void* model, std::vector<llama_token> tokens) {
     // printf("ctx2: %d\n", ctx);
     gpt_params params = mymodel->params;
     // printf("\n%d\n", params);
-    int n_past = 1;
+    int n_past = mymodel->n_past;
     for (int i = 0; i < (int) tokens.size(); i += params.n_batch) {
         int n_eval = (int) tokens.size() - i;
         if (n_eval > params.n_batch) {
@@ -148,6 +152,7 @@ bool eval_tokens(void* model, std::vector<llama_token> tokens) {
         }
         n_past += n_eval;
     }
+    mymodel->n_past = n_past;
     return true;
 }
 

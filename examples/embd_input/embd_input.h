@@ -11,6 +11,7 @@ extern "C" {
 typedef struct MyModel {
     llama_context* ctx;
     gpt_params params;
+    int n_past = 0;
 } MyModel;
 
 
