@@ -1,5 +1,11 @@
 # Define the default target now so that it is always the first target
-default: main quantize quantize-stats perplexity embedding vdot
+BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot
+
+ifdef LLAMA_BUILD_SERVER
+	BUILD_TARGETS += server
+endif
+
+default: $(BUILD_TARGETS)
 
 ifndef UNAME_S
 UNAME_S := $(shell uname -s)
@@ -34,11 +40,18 @@ endif
 #
 
 # keep standard at C11 and C++11
-CFLAGS   = -I.              -O3 -std=c11   -fPIC
-CXXFLAGS = -I. -I./examples -O3 -std=c++11 -fPIC
+# -Ofast tends to produce faster code, but may not be available for some compilers.
+#OPT = -Ofast
+OPT = -O3
+CFLAGS   = -I.              $(OPT) -std=c11   -fPIC
+CXXFLAGS = -I. -I./examples $(OPT) -std=c++11 -fPIC
 LDFLAGS  =
 
-ifndef LLAMA_DEBUG
+ifdef LLAMA_DEBUG
+	CFLAGS   += -O0 -g
+	CXXFLAGS += -O0 -g
+	LDFLAGS  += -g
+else
 	CFLAGS   += -DNDEBUG
 	CXXFLAGS += -DNDEBUG
 endif
@@ -95,6 +108,7 @@ ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 	#CFLAGS   += -mfma -mf16c -mavx
 	#CXXFLAGS += -mfma -mf16c -mavx
 endif
+
 ifneq ($(filter ppc64%,$(UNAME_M)),)
 	POWER9_M := $(shell grep "POWER9" /proc/cpuinfo)
 	ifneq (,$(findstring POWER9,$(POWER9_M)))
@@ -106,6 +120,7 @@ ifneq ($(filter ppc64%,$(UNAME_M)),)
 		CXXFLAGS += -std=c++23 -DGGML_BIG_ENDIAN
 	endif
 endif
+
 ifndef LLAMA_NO_ACCELERATE
 	# Mac M1 - include Accelerate framework.
 	# `-framework Accelerate` works on Mac Intel as well, with negliable performance boost (as of the predict time).
@@ -113,7 +128,8 @@ ifndef LLAMA_NO_ACCELERATE
 		CFLAGS  += -DGGML_USE_ACCELERATE
 		LDFLAGS += -framework Accelerate
 	endif
-endif
+endif # LLAMA_NO_ACCELERATE
+
 ifdef LLAMA_OPENBLAS
 	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas -I/usr/include/openblas
 	ifneq ($(shell grep -e "Arch Linux" -e "ID_LIKE=arch" /etc/os-release 2>/dev/null),)
@@ -121,11 +137,13 @@ ifdef LLAMA_OPENBLAS
 	else
 		LDFLAGS += -lopenblas
 	endif
-endif
+endif # LLAMA_OPENBLAS
+
 ifdef LLAMA_BLIS
 	CFLAGS += -DGGML_USE_OPENBLAS -I/usr/local/include/blis -I/usr/include/blis
 	LDFLAGS += -lblis -L/usr/local/lib
-endif
+endif # LLAMA_BLIS
+
 ifdef LLAMA_CUBLAS
 	CFLAGS    += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
 	CXXFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
@@ -146,9 +164,10 @@ endif # LLAMA_CUDA_DMMV_Y
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -Wno-pedantic -c $< -o $@
 endif # LLAMA_CUBLAS
+
 ifdef LLAMA_CLBLAST
-	CFLAGS  += -DGGML_USE_CLBLAST
-	CXXFLAGS  += -DGGML_USE_CLBLAST
+	CFLAGS   += -DGGML_USE_CLBLAST
+	CXXFLAGS += -DGGML_USE_CLBLAST
 	# Mac provides OpenCL as a framework
 	ifeq ($(UNAME_S),Darwin)
 		LDFLAGS += -lclblast -framework OpenCL
@@ -156,9 +175,11 @@ ifdef LLAMA_CLBLAST
 		LDFLAGS += -lclblast -lOpenCL
 	endif
 	OBJS    += ggml-opencl.o
+
 ggml-opencl.o: ggml-opencl.cpp ggml-opencl.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
-endif
+endif # LLAMA_CLBLAST
+
 ifdef LLAMA_HIPBLAS
 	ROCM_PATH  ?= /opt/rocm
 	CC         := $(ROCM_PATH)/llvm/bin/clang
@@ -176,20 +197,35 @@ ggml-cuda.o: CXXFLAGS += -DGGML_CUDA_DMMV_Y=$(LLAMA_CUDA_DMMV_Y)
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(CXX) $(CXXFLAGS) -x hip -c -o $@ $<
 endif
+endif # LLAMA_HIPBLAS
+
+ifdef LLAMA_METAL
+	CFLAGS   += -DGGML_USE_METAL -DGGML_METAL_NDEBUG
+	CXXFLAGS += -DGGML_USE_METAL
+	LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit -framework MetalPerformanceShaders
+	OBJS     += ggml-metal.o
+
+ggml-metal.o: ggml-metal.m ggml-metal.h
+	$(CC) $(CFLAGS) -c $< -o $@
+endif # LLAMA_METAL
+
 ifneq ($(filter aarch64%,$(UNAME_M)),)
 	# Apple M1, M2, etc.
 	# Raspberry Pi 3, 4, Zero 2 (64-bit)
 	CFLAGS   += -mcpu=native
 	CXXFLAGS += -mcpu=native
 endif
+
 ifneq ($(filter armv6%,$(UNAME_M)),)
 	# Raspberry Pi 1, Zero
 	CFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access
 endif
+
 ifneq ($(filter armv7%,$(UNAME_M)),)
 	# Raspberry Pi 2
 	CFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access -funsafe-math-optimizations
 endif
+
 ifneq ($(filter armv8%,$(UNAME_M)),)
 	# Raspberry Pi 3, 4, Zero 2 (32-bit)
 	CFLAGS += -mfp16-format=ieee -mno-unaligned-access
@@ -214,7 +250,10 @@ $(info )
 # Build library
 #
 
-ggml.o: ggml.c ggml.h ggml-cuda.h
+ggml.o: ggml.c ggml.h ggml-cuda.h ggml-quants-k.h
+	$(CC)  $(CFLAGS)   -c $< -o $@
+
+ggml-quants-k.o: ggml-quants-k.c ggml-quants-k.h ggml.h ggml-cuda.h
 	$(CC)  $(CFLAGS)   -c $< -o $@
 
 llama.o: llama.cpp ggml.h ggml-cuda.h llama.h llama-util.h
@@ -223,36 +262,39 @@ llama.o: llama.cpp ggml.h ggml-cuda.h llama.h llama-util.h
 common.o: examples/common.cpp examples/common.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-libllama.so: llama.o ggml.o $(OBJS)
+libllama.so: llama.o ggml.o ggml-quants-k.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
 clean:
-	rm -vf *.o main quantize quantize-stats perplexity embedding benchmark-matmult save-load-state build-info.h
+	rm -vf *.o main quantize quantize-stats perplexity embedding benchmark-matmult save-load-state server vdot build-info.h
 
 #
 # Examples
 #
 
-main: examples/main/main.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+main: examples/main/main.cpp                                  build-info.h ggml.o ggml-quants-k.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
 
-quantize: examples/quantize/quantize.cpp build-info.h ggml.o llama.o $(OBJS)
+quantize: examples/quantize/quantize.cpp                      build-info.h ggml.o ggml-quants-k.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-quantize-stats: examples/quantize-stats/quantize-stats.cpp build-info.h ggml.o llama.o $(OBJS)
+quantize-stats: examples/quantize-stats/quantize-stats.cpp    build-info.h ggml.o ggml-quants-k.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-perplexity: examples/perplexity/perplexity.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+perplexity: examples/perplexity/perplexity.cpp                build-info.h ggml.o ggml-quants-k.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-embedding: examples/embedding/embedding.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+embedding: examples/embedding/embedding.cpp                   build-info.h ggml.o ggml-quants-k.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-save-load-state: examples/save-load-state/save-load-state.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+save-load-state: examples/save-load-state/save-load-state.cpp build-info.h ggml.o ggml-quants-k.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
+
+server: examples/server/server.cpp examples/server/httplib.h examples/server/json.hpp build-info.h ggml.o ggml-quants-k.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) -Iexamples/server $(filter-out %.h,$(filter-out %.hpp,$^)) -o $@ $(LDFLAGS)
 
 build-info.h: $(wildcard .git/index) scripts/build-info.sh
 	@sh scripts/build-info.sh > $@.tmp
@@ -266,11 +308,11 @@ build-info.h: $(wildcard .git/index) scripts/build-info.sh
 # Tests
 #
 
-benchmark-matmult: examples/benchmark/benchmark-matmult.cpp build-info.h ggml.o $(OBJS)
+benchmark-matmult: examples/benchmark/benchmark-matmult.cpp build-info.h ggml.o ggml-quants-k.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 	./$@
 
-vdot: pocs/vdot/vdot.cpp ggml.o $(OBJS)
+vdot: pocs/vdot/vdot.cpp ggml.o ggml-quants-k.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 .PHONY: tests clean

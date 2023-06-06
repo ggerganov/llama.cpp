@@ -134,6 +134,13 @@ int main(int argc, char ** argv) {
         return 0;
     }
 
+    // export the cgraph and exit
+    if (params.export_cgraph) {
+        llama_eval_export(ctx, "llama.ggml");
+        llama_free(ctx);
+
+        return 0;
+    }
 
     std::string path_session = params.path_prompt_cache;
     std::vector<llama_token> session_tokens;
@@ -200,6 +207,13 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "%s: session file matches %zu / %zu tokens of prompt\n",
                 __func__, n_matching_session_tokens, embd_inp.size());
         }
+    }
+
+    // if we will use the cache for the full prompt without reaching the end of the cache, force
+    // reevaluation of the last token token to recalculate the cached logits
+    if (!embd_inp.empty() && n_matching_session_tokens == embd_inp.size() &&
+            session_tokens.size() > embd_inp.size()) {
+        session_tokens.resize(embd_inp.size() - 1);
     }
 
     // number of tokens to keep when resetting context
