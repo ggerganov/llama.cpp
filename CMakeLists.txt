@@ -237,6 +237,8 @@ endif()
 add_library(ggml OBJECT
             ggml.c
             ggml.h
+            ggml-quants-k.h
+            ggml-quants-k.c
             ${GGML_CUDA_SOURCES})
 target_include_directories(ggml PUBLIC . ./otherarch ./otherarch/tools)
 target_compile_features(ggml PUBLIC c_std_11) # don't bump

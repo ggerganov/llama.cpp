@@ -7,6 +7,7 @@
 .envrc
 .swiftpm
 .venv
+.clang-tidy
 .vs/
 .vscode/
 
@@ -17,6 +18,7 @@ build-release/
 build-static/
 build-cublas/
 build-opencl/
+build-metal/
 build-no-accel/
 build-sanitize-addr/
 build-sanitize-thread/
@@ -30,6 +32,7 @@ build-sanitize-thread/
 /benchmark-matmult
 /vdot
 /Pipfile
+/libllama.so
 
 arm_neon.h
 compile_commands.json
