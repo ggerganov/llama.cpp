@@ -59,7 +59,7 @@ int main(int argc, char ** argv) {
     // (note for later: this is a slightly awkward choice)
     con_st.use_color = params.use_color;
     con_st.multiline_input = params.multiline_input;
-    console_init(con_st);
+    console_init(con_st, params.disable_tty);
     atexit([]() { console_cleanup(con_st); });
 
     if (params.perplexity) {
