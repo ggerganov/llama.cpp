@@ -210,7 +210,7 @@ maxctx = 2048
 maxlen = 256
 modelbusy = False
 defaultport = 5001
-KcppVersion = "1.28"
+KcppVersion = "1.29"
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
     sys_version = ""
@@ -328,7 +328,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     max_context_length=genparams.get('max_context_length', maxctx),
                     max_length=genparams.get('max_length', 50),
                     temperature=genparams.get('temperature', 0.8),
-                    top_k=genparams.get('top_k', 120),
+                    top_k=int(genparams.get('top_k', 120)),
                     top_a=genparams.get('top_a', 0.0),
                     top_p=genparams.get('top_p', 0.85),
                     typical_p=genparams.get('typical', 1.0),
@@ -345,7 +345,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     prompt=newprompt,
                     max_length=genparams.get('max', 50),
                     temperature=genparams.get('temperature', 0.8),
-                    top_k=genparams.get('top_k', 120),
+                    top_k=int(genparams.get('top_k', 120)),
                     top_a=genparams.get('top_a', 0.0),
                     top_p=genparams.get('top_p', 0.85),
                     typical_p=genparams.get('typical', 1.0),
