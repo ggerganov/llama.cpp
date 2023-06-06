@@ -17,6 +17,8 @@ class MyModel:
         args_c = (c_char_p * argc)(*c_str)
         self.model = c_void_p(libc.create_mymodel(argc, args_c))
 #         print("self.model", self.model)
+    def __del__(self):
+        libc.free_mymodel(self.model)
 
     def eval_float(self, x):
         libc.eval_float(self.model, x.astype(np.float32).ctypes.data_as(POINTER(c_float)), x.shape[0])

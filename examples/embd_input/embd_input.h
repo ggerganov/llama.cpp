@@ -23,6 +23,7 @@ bool eval_id(struct MyModel* mymodel, int id);
 bool eval_string(struct MyModel* mymodel, const char* str);
 const char* sampling(struct MyModel* mymodel);
 llama_token sampling_id(struct MyModel* mymodel);
+void free_mymodel(struct MyModel* mymodel);
 
 }
 

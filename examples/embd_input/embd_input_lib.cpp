@@ -101,6 +101,13 @@ struct MyModel* create_mymodel(int argc, char ** argv) {
     return ret;
 }
 
+void free_mymodel(struct MyModel* mymodel) {
+    llama_context* ctx = mymodel->ctx;
+    llama_print_timings(ctx);
+    llama_free(ctx);
+    delete mymodel;
+}
+
 
 bool eval_float(void* model, float* input, int N){
     MyModel* mymodel = (MyModel* )model;

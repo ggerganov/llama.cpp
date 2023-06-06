@@ -27,5 +27,6 @@ int main(int argc, char** argv) {
         // eval_id(mymodel, id);
     }
     printf("\n");
+    free_mymodel(mymodel);
     return 0;
 }
