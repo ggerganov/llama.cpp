@@ -1,6 +1,7 @@
 #include "embd_input.h"
 #include <stdlib.h>
 #include <random>
+#include <string.h>
 
 int main(int argc, char** argv) {
 
@@ -20,9 +21,12 @@ int main(int argc, char** argv) {
     eval_string(mymodel, "assistant:");
     // printf("eval float end\n");
     eval_string(mymodel, mymodel->params.prompt.c_str());
-    for (int i=0;i < 50; i++) {
+    const char* tmp;
+    for (int i=0;i < 500; i++) {
         // int id = sampling_id(mymodel);
-        printf("%s", sampling(mymodel)); // llama_token_to_str(mymodel->ctx, id));
+        tmp = sampling(mymodel);
+        if (strlen(tmp) == 0) break;
+        printf("%s", tmp); // llama_token_to_str(mymodel->ctx, id));
         fflush(stdout);
         // eval_id(mymodel, id);
     }

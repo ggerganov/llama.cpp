@@ -33,16 +33,20 @@ class MyModel:
         s = libc.sampling(self.model)
         return s
 
-model = MyModel(["main", "--model", "../llama.cpp/models/ggml-vic13b-q4_1.bin", "-c", "2048"])
-# print(model)
-model.eval_string("""user: what is the color of the flag of UN?""")
-# model.eval_token(100)
-x = np.random.random((10, 5120))# , dtype=np.float32)
-model.eval_float(x)
-model.eval_string("""assistant:""")
-# print(x[0,0], x[0,1],x[1,0])
-# model.eval_float(x)
-# print(libc)
+if __name__ == "__main__":
+    model = MyModel(["main", "--model", "../llama.cpp/models/ggml-vic13b-q4_1.bin", "-c", "2048"])
+    # print(model)
+    model.eval_string("""user: what is the color of the flag of UN?""")
+    # model.eval_token(100)
+    x = np.random.random((10, 5120))# , dtype=np.float32)
+    model.eval_float(x)
+    model.eval_string("""assistant:""")
+    # print(x[0,0], x[0,1],x[1,0])
+    # model.eval_float(x)
+    # print(libc)
 
-for i in range(50):
-    print(model.sampling().decode(), end="", flush=True)
+    for i in range(500):
+        tmp = model.sampling().decode()
+        if tmp == "":
+            break
+        print(tmp, end="", flush=True)
