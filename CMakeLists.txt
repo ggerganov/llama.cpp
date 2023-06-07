@@ -56,6 +56,8 @@ set(CMAKE_C_STANDARD_REQUIRED true)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
+add_compile_definitions(GGML_USE_K_QUANTS)
+
 if (LLAMA_CUBLAS)
     cmake_minimum_required(VERSION 3.17)
 
@@ -237,8 +239,8 @@ endif()
 add_library(ggml OBJECT
             ggml.c
             ggml.h
-            ggml-quants-k.h
-            ggml-quants-k.c
+            k_quants.h
+            k_quants.c
             ${GGML_CUDA_SOURCES})
 target_include_directories(ggml PUBLIC . ./otherarch ./otherarch/tools)
 target_compile_features(ggml PUBLIC c_std_11) # don't bump
