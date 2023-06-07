@@ -1259,8 +1259,8 @@ void ggml_vec_dot_q3_K_q8_K(const int n, float * restrict s, const void * restri
         for (int j = 0; j < QK_K/128; ++j) {
 
             const uint8x16x2_t q3bits = vld1q_u8_x2(q3); q3 += 32;
-            const int8x16x4_t q8bytes_1 = vld1q_s8_x4(q8); q8 += 64;
-            const int8x16x4_t q8bytes_2 = vld1q_s8_x4(q8); q8 += 64;
+            const int8x16x4_t q8bytes_1 = vld4q_s8(q8); q8 += 64;
+            const int8x16x4_t q8bytes_2 = vld4q_s8(q8); q8 += 64;
 
             q3h.val[0] = vshlq_n_u8(vbicq_u8(m0, qhbits.val[0]), 2);
             q3h.val[1] = vshlq_n_u8(vbicq_u8(m0, qhbits.val[1]), 2);
@@ -1788,7 +1788,7 @@ void ggml_vec_dot_q5_K_q8_K(const int n, float * restrict s, const void * restri
         for (int j = 0; j < QK_K/64; ++j) {
 
             const uint8x16x2_t q5bits = vld1q_u8_x2(q5); q5 += 32;
-            const int8x16x4_t q8bytes = vld1q_s8_x4(q8); q8 += 64;
+            const int8x16x4_t q8bytes = vld4q_s8(q8); q8 += 64;
 
             q5h.val[0] = vshlq_n_u8(vandq_u8(mone, qhbits.val[0]), 4);
             q5h.val[1] = vshlq_n_u8(vandq_u8(mone, qhbits.val[1]), 4);
@@ -2020,8 +2020,8 @@ void ggml_vec_dot_q6_K_q8_K(const int n, float * restrict s, const void * restri
         for (int j = 0; j < QK_K/128; ++j) {
 
             uint8x16x2_t qhbits = vld1q_u8_x2(qh); qh += 32;
-            uint8x16x4_t q6bits = vld1q_u8_x4(q6); q6 += 64;
-            int8x16x4_t q8bytes = vld1q_s8_x4(q8); q8 += 64;
+            uint8x16x4_t q6bits = vld4q_u8(q6); q6 += 64;
+            int8x16x4_t q8bytes = vld4q_s8(q8); q8 += 64;
 
             q6h.val[0] = vshlq_n_u8(vandq_u8(mone, qhbits.val[0]), 4);
             q6h.val[1] = vshlq_n_u8(vandq_u8(mone, qhbits.val[1]), 4);
@@ -2064,7 +2064,7 @@ void ggml_vec_dot_q6_K_q8_K(const int n, float * restrict s, const void * restri
             scale += 2;
 #endif
 
-            q8bytes = vld1q_s8_x4(q8); q8 += 64;
+            q8bytes = vld4q_s8(q8); q8 += 64;
 
             shifted = vshrq_n_u8(qhbits.val[0], 4);
             q6h.val[0] = vshlq_n_u8(vandq_u8(mone, shifted), 4);
