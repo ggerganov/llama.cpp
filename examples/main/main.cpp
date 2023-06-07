@@ -417,7 +417,7 @@ int main(int argc, char ** argv) {
             const bool    penalize_nl     = params.penalize_nl;
 
             // optionally save the session on first sample (for faster prompt loading next time)
-            if (!path_session.empty() && need_to_save_session) {
+            if (!path_session.empty() && need_to_save_session && !params.prompt_cache_ro) {
                 need_to_save_session = false;
                 llama_save_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
             }
@@ -630,7 +630,7 @@ int main(int argc, char ** argv) {
         }
     }
 
-    if (!path_session.empty() && params.prompt_cache_all) {
+    if (!path_session.empty() && params.prompt_cache_all && !params.prompt_cache_ro) {
         fprintf(stderr, "\n%s: saving final output to session file '%s'\n", __func__, path_session.c_str());
         llama_save_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
     }

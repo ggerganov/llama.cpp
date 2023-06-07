@@ -132,6 +132,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.path_prompt_cache = argv[i];
         } else if (arg == "--prompt-cache-all") {
             params.prompt_cache_all = true;
+        } else if (arg == "--prompt-cache-ro") {
+            params.prompt_cache_ro = true;
         } else if (arg == "-f" || arg == "--file") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -432,6 +434,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  --prompt-cache FNAME  file to cache prompt state for faster startup (default: none)\n");
     fprintf(stderr, "  --prompt-cache-all    if specified, saves user input and generations to cache as well.\n");
     fprintf(stderr, "                        not supported with --interactive or other interactive options\n");
+    fprintf(stderr, "  --prompt-cache-ro     if specified, uses the prompt cache but does not update it.\n");
     fprintf(stderr, "  --random-prompt       start with a randomized prompt.\n");
     fprintf(stderr, "  --in-prefix STRING    string to prefix user inputs with (default: empty)\n");
     fprintf(stderr, "  --in-suffix STRING    string to suffix after user inputs with (default: empty)\n");
