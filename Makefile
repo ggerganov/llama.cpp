@@ -121,7 +121,7 @@ ifneq ($(filter ppc64%,$(UNAME_M)),)
 	endif
 endif
 
-ifdef LLAMA_K_QUANTS
+ifndef LLAMA_NO_K_QUANTS
 	CFLAGS   += -DGGML_USE_K_QUANTS
 	OBJS     += k_quants.o
 endif
@@ -217,10 +217,10 @@ ifneq ($(filter armv8%,$(UNAME_M)),)
 	CFLAGS += -mfp16-format=ieee -mno-unaligned-access
 endif
 
-ifdef LLAMA_K_QUANTS
+ifdef LLAMA_NO_K_QUANTS
 k_quants.o: k_quants.c k_quants.h
 	$(CC) $(CFLAGS) -c $< -o $@
-endif # LLAMA_K_QUANTS
+endif # LLAMA_NO_K_QUANTS
 
 #
 # Print build information
