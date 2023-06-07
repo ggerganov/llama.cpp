@@ -9,6 +9,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
+- Roadmap June 2023: https://github.com/ggerganov/llama.cpp/discussions/1729
 - GPU support with Metal (Apple Silicon): https://github.com/ggerganov/llama.cpp/pull/1642
 - High-quality 2,3,4,5,6-bit quantization: https://github.com/ggerganov/llama.cpp/pull/1684
 - Multi-GPU support: https://github.com/ggerganov/llama.cpp/pull/1607
