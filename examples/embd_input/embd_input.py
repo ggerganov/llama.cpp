@@ -21,7 +21,7 @@ class MyModel:
         libc.free_mymodel(self.model)
 
     def eval_float(self, x):
-        libc.eval_float(self.model, x.astype(np.float32).ctypes.data_as(POINTER(c_float)), x.shape[0])
+        libc.eval_float(self.model, x.astype(np.float32).ctypes.data_as(POINTER(c_float)), x.shape[1])
 
     def eval_string(self, x):
         libc.eval_string(self.model, x.encode()) # c_char_p(x.encode()))
@@ -38,7 +38,7 @@ if __name__ == "__main__":
     # print(model)
     model.eval_string("""user: what is the color of the flag of UN?""")
     # model.eval_token(100)
-    x = np.random.random((10, 5120))# , dtype=np.float32)
+    x = np.random.random((5120,10))# , dtype=np.float32)
     model.eval_float(x)
     model.eval_string("""assistant:""")
     # print(x[0,0], x[0,1],x[1,0])
