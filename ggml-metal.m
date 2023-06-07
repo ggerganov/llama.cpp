@@ -530,14 +530,6 @@ void ggml_metal_graph_compute(
                                     nth1 = 16;
                                     [encoder setComputePipelineState:ctx->pipeline_mul_mat_q4_k_f32];
                                 } break;
-                            case GGML_TYPE_F16:
-                                {
-                                    GGML_ASSERT(ne02 == ne12);
-
-                                    nth0 = 32;
-                                    nth1 = 1;
-                                    [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32];
-                                } break;
                             default:
                                 {
                                     fprintf(stderr, "Asserting on type %d\n",(int)src0t);
