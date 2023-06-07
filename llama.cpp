@@ -1366,17 +1366,21 @@ static bool llama_eval_internal(
         {
             // compute Q and K and RoPE them
             struct ggml_tensor * tmpq = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
-            // offload_func(tmpq);
+            offload_func(tmpq);
             ggml_set_name(tmpq, "tmpq");
 
             struct ggml_tensor * tmpk = ggml_mul_mat(ctx0, model.layers[il].wk, cur);
-            // offload_func(tmpk);
+            offload_func(tmpk);
             ggml_set_name(tmpk, "tmpk");
 
             struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd/n_head, n_head, N), n_past, n_rot, 0);
+            offload_func(Kcur);
+            Kcur->backend = GGML_BACKEND_CPU;
             ggml_set_name(Kcur, "Kcur");
 
             struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd/n_head, n_head, N), n_past, n_rot, 0);
+            offload_func(Qcur);
+            Qcur->backend = GGML_BACKEND_CPU;
             ggml_set_name(Qcur, "Qcur");
 
             // store key and value to memory

@@ -1783,7 +1783,7 @@ void ggml_cuda_free_data(struct ggml_tensor * tensor) {
 
 void ggml_cuda_assign_buffers(struct ggml_tensor * tensor) {
     if (tensor->src0 != nullptr && tensor->src0->op == GGML_OP_RESHAPE) {
-        ggml_cuda_assign_buffers(tensor);
+        ggml_cuda_assign_buffers(tensor->src0);
     }
 
     const size_t size = ggml_nbytes(tensor);
@@ -1800,8 +1800,7 @@ void ggml_cuda_assign_buffers(struct ggml_tensor * tensor) {
     CUDA_CHECK(cudaSetDevice(g_main_device));
     if (inplace && tensor->src0->backend == GGML_BACKEND_GPU) {
         struct ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu * ) tensor->src0->extra;
-        extra->data_device[g_main_device] = src0_extra->data_device;
-        GGML_ASSERT(false);
+        extra->data_device[g_main_device] = src0_extra->data_device[g_main_device];
     } else {
         char * data = (char *) g_scratch_buffer;
         if (data == nullptr) {
