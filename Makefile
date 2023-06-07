@@ -160,6 +160,16 @@ ifdef LLAMA_PERF
 	CFLAGS   += -DGGML_PERF
 	CXXFLAGS += -DGGML_PERF
 endif
+ifdef LLAMA_METAL
+	CFLAGS   += -DGGML_USE_METAL -DGGML_METAL_NDEBUG
+	CXXFLAGS += -DGGML_USE_METAL
+	LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit -framework MetalPerformanceShaders
+	OBJS     += ggml-metal.o
+
+ggml-metal.o: ggml-metal.m ggml-metal.h
+	$(CC) $(CFLAGS) -c $< -o $@
+endif # LLAMA_METAL
+
 ifneq ($(filter aarch64%,$(UNAME_M)),)
 	# Apple M1, M2, etc.
 	# Raspberry Pi 3, 4, Zero 2 (64-bit)
