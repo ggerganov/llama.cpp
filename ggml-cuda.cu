@@ -1512,6 +1512,13 @@ static void ggml_cuda_op(const ggml_tensor * src0, const ggml_tensor * src1, ggm
                         i01_high = row_high % ne01;
                     }
                 }
+
+                // There is possibly a bug in the Windows nvcc compiler regarding instruction reordering or optimizing out local variables. 
+                // Removing the first assert or changing the order of the arguments causes the second assert to fail. 
+                // Removing both asserts results in i01_high becoming 0 which in turn results in garbage output.
+                GGML_ASSERT(i01_low == 0 || g_device_count > 1);
+                GGML_ASSERT(i01_high == ne01 || g_device_count > 1);
+                
                 const int64_t i01_diff = i01_high - i01_low;
                 if (i01_diff == 0) {
                     continue;
