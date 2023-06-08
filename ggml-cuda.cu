@@ -1516,7 +1516,7 @@ static void ggml_cuda_op(const ggml_tensor * src0, const ggml_tensor * src1, ggm
                 // There is possibly a bug in the Windows nvcc compiler regarding instruction reordering or optimizing out local variables.
                 // Removing the first assert or changing the order of the arguments causes the second assert to fail.
                 // Removing both asserts results in i01_high becoming 0 which in turn results in garbage output.
-                // The root cause seems to be a problem with i0_offset_high becoming 0 when it should always be 1 (for single GPU).
+                // The root cause seems to be a problem with i0_offset_high becoming 0 when it should always be >0 (for single GPU).
                 GGML_ASSERT(i01_low == 0 || g_device_count > 1);
                 GGML_ASSERT(i01_high == ne01 || g_device_count > 1);
 
