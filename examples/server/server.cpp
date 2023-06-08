@@ -156,7 +156,7 @@ struct llama_server_context
 
       prompt_tokens = new_tokens;
     } else {
-      size_t ps = prompt_tokens.size();
+      const size_t ps = prompt_tokens.size();
       std::fill(last_n_tokens.begin(), last_n_tokens.end() - ps, 0);
       std::copy(prompt_tokens.begin(), prompt_tokens.end(), last_n_tokens.end() - ps);
     }
@@ -744,7 +744,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response &
   if (!body["prompt"].is_null()) {
     llama.params.prompt = body["prompt"].get<std::string>();
   } else {
-    json data = {{"status", "error"}, {"reason", "You need to pass the prompt"}};
+    json data = {{"status", "error"}, {"reason", "You need to provide a prompt"}};
     res.set_content(data.dump(llama.json_indent), "application/json");
     res.status = 400;
     return false;
