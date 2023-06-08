@@ -60,3 +60,5 @@ koboldcpp_failsafe.dll
 koboldcpp_openblas.dll
 koboldcpp_openblas_noavx2.dll
 koboldcpp_clblast.dll
+
+ggml-metal.m.patched

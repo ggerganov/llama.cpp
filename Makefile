@@ -141,6 +141,13 @@ ifdef LLAMA_METAL
 
 ggml-metal.o: ggml-metal.m ggml-metal.h
 	$(CC) $(CFLAGS) -c $< -o $@
+
+ggml-metal.m: ggml-metal.m.patched
+
+ggml-metal.m.patched: ggml-metal.m.diff
+	if [ -e $@ ]; then patch -R ggml-metal.m $@; fi
+	patch ggml-metal.m $<
+	cp ggml-metal.m.diff $@
 endif # LLAMA_METAL
 
 ifneq ($(filter aarch64%,$(UNAME_M)),)
@@ -278,7 +285,7 @@ gpttype_adapter_clblast.o: gpttype_adapter.cpp
 	$(CXX) $(CXXFLAGS) $(CLBLAST_FLAGS) -c $< -o $@
 
 clean:
-	rm -vf *.o main quantize_llama quantize_gpt2 quantize_gptj quantize_neox quantize_mpt quantize-stats perplexity embedding benchmark-matmult save-load-state main.exe quantize_llama.exe quantize_gptj.exe quantize_gpt2.exe quantize_neox.exe quantize_mpt.exe koboldcpp.dll koboldcpp_openblas.dll koboldcpp_failsafe.dll koboldcpp_openblas_noavx2.dll koboldcpp_clblast.dll koboldcpp_clblast_noavx2.dll koboldcpp.so koboldcpp_openblas.so koboldcpp_failsafe.so koboldcpp_openblas_noavx2.so koboldcpp_clblast.so koboldcpp_clblast_noavx2.so
+	rm -vf *.o main quantize_llama quantize_gpt2 quantize_gptj quantize_neox quantize_mpt quantize-stats perplexity embedding benchmark-matmult save-load-state main.exe quantize_llama.exe quantize_gptj.exe quantize_gpt2.exe quantize_neox.exe quantize_mpt.exe koboldcpp.dll koboldcpp_openblas.dll koboldcpp_failsafe.dll koboldcpp_openblas_noavx2.dll koboldcpp_clblast.dll koboldcpp_clblast_noavx2.dll koboldcpp.so koboldcpp_openblas.so koboldcpp_failsafe.so koboldcpp_openblas_noavx2.so koboldcpp_clblast.so koboldcpp_clblast_noavx2.so ggml-metal.m.patched
 
 main: examples/main/main.cpp build-info.h ggml.o k_quants.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
