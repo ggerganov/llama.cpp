@@ -1041,7 +1041,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 fprintf(stderr, "Failed to predict\n");
                 snprintf(output.text, sizeof(output.text), "%s", "");
                 output.status = 0;
-                set_stream_finished();
+                set_stream_finished(true);
                 return output;
             }
         }
@@ -1224,7 +1224,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     printf("\nTime Taken - Processing:%.1fs (%.0fms/T), Generation:%.1fs (%.0fms/T), Total:%.1fs", time1, pt1, time2, pt2, (time1 + time2));
     fflush(stdout);
     output.status = 1;
-    set_stream_finished();
+    set_stream_finished(true);
     snprintf(output.text, sizeof(output.text), "%s", concat_output.c_str());
 
     return output;

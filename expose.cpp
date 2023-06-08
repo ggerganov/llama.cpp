@@ -210,7 +210,6 @@ extern "C"
 
     generation_outputs generate(const generation_inputs inputs, generation_outputs &output)
     {
-        finished_stream = false;
         return gpttype_generate(inputs, output);
     }
 
@@ -230,6 +229,12 @@ extern "C"
     bool has_finished() {
         return finished_stream;
     }
+
+
+    // TODO: dont duplicate code
+    void bind_set_stream_finished(bool status) {
+        finished_stream = status;
+    }
 }
 
 void receive_current_token(std::string token) {
@@ -237,6 +242,6 @@ void receive_current_token(std::string token) {
     new_token_available = true;
 }
 
-void set_stream_finished() {
-    finished_stream = true;
+void set_stream_finished(bool status) {
+    finished_stream = status;
 }
