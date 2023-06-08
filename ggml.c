@@ -2,7 +2,10 @@
 #define _GNU_SOURCE
 
 #include "ggml.h"
-#include "ggml-quants-k.h"
+
+#ifdef GGML_USE_K_QUANTS
+#include "k_quants.h"
+#endif
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h> // using malloc.h with MSC/MINGW
@@ -1580,46 +1583,48 @@ static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
         .vec_dot_q                = NULL,   // TODO
         .vec_dot_type             = GGML_TYPE_Q8_1,
     },
+#ifdef GGML_USE_K_QUANTS
     [GGML_TYPE_Q2_K] = {
-        .dequantize_row_q         = (dequantize_row_q_t) dequantize_row_q2_k,
-        .quantize_row_q           = quantize_row_q2_k,
-        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q2_k_reference,
-        .quantize_row_q_dot       = quantize_row_q8_k,
-        .vec_dot_q                = ggml_vec_dot_q2_k_q8_k,
+        .dequantize_row_q         = (dequantize_row_q_t) dequantize_row_q2_K,
+        .quantize_row_q           = quantize_row_q2_K,
+        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q2_K_reference,
+        .quantize_row_q_dot       = quantize_row_q8_K,
+        .vec_dot_q                = ggml_vec_dot_q2_K_q8_K,
         .vec_dot_type             = GGML_TYPE_Q8_K,
     },
     [GGML_TYPE_Q3_K] = {
-        .dequantize_row_q         = (dequantize_row_q_t) dequantize_row_q3_k,
-        .quantize_row_q           = quantize_row_q3_k,
-        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q3_k_reference,
-        .quantize_row_q_dot       = quantize_row_q8_k,
-        .vec_dot_q                = ggml_vec_dot_q3_k_q8_k,
+        .dequantize_row_q         = (dequantize_row_q_t) dequantize_row_q3_K,
+        .quantize_row_q           = quantize_row_q3_K,
+        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q3_K_reference,
+        .quantize_row_q_dot       = quantize_row_q8_K,
+        .vec_dot_q                = ggml_vec_dot_q3_K_q8_K,
         .vec_dot_type             = GGML_TYPE_Q8_K,
     },
     [GGML_TYPE_Q4_K] = {
-        .dequantize_row_q         = (dequantize_row_q_t) dequantize_row_q4_k,
-        .quantize_row_q           = quantize_row_q4_k,
-        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_k_reference,
-        .quantize_row_q_dot       = quantize_row_q8_k,
-        .vec_dot_q                = ggml_vec_dot_q4_k_q8_k,
+        .dequantize_row_q         = (dequantize_row_q_t) dequantize_row_q4_K,
+        .quantize_row_q           = quantize_row_q4_K,
+        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_K_reference,
+        .quantize_row_q_dot       = quantize_row_q8_K,
+        .vec_dot_q                = ggml_vec_dot_q4_K_q8_K,
         .vec_dot_type             = GGML_TYPE_Q8_K,
     },
     [GGML_TYPE_Q5_K] = {
-        .dequantize_row_q         = (dequantize_row_q_t) dequantize_row_q5_k,
-        .quantize_row_q           = quantize_row_q5_k,
-        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q5_k_reference,
-        .quantize_row_q_dot       = quantize_row_q8_k,
-        .vec_dot_q                = ggml_vec_dot_q5_k_q8_k,
+        .dequantize_row_q         = (dequantize_row_q_t) dequantize_row_q5_K,
+        .quantize_row_q           = quantize_row_q5_K,
+        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q5_K_reference,
+        .quantize_row_q_dot       = quantize_row_q8_K,
+        .vec_dot_q                = ggml_vec_dot_q5_K_q8_K,
         .vec_dot_type             = GGML_TYPE_Q8_K,
     },
     [GGML_TYPE_Q6_K] = {
-        .dequantize_row_q         = (dequantize_row_q_t) dequantize_row_q6_k,
-        .quantize_row_q           = quantize_row_q6_k,
-        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q6_k_reference,
-        .quantize_row_q_dot       = quantize_row_q8_k,
-        .vec_dot_q                = ggml_vec_dot_q6_k_q8_k,
+        .dequantize_row_q         = (dequantize_row_q_t) dequantize_row_q6_K,
+        .quantize_row_q           = quantize_row_q6_K,
+        .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q6_K_reference,
+        .quantize_row_q_dot       = quantize_row_q8_K,
+        .vec_dot_q                = ggml_vec_dot_q6_K_q8_K,
         .vec_dot_type             = GGML_TYPE_Q8_K,
     },
+#endif
 };
 
 // For internal test use
@@ -3499,12 +3504,14 @@ static const int GGML_BLCK_SIZE[GGML_TYPE_COUNT] = {
     [GGML_TYPE_Q5_1] = QK5_1,
     [GGML_TYPE_Q8_0] = QK8_0,
     [GGML_TYPE_Q8_1] = QK8_1,
+#ifdef GGML_USE_K_QUANTS
     [GGML_TYPE_Q2_K] = QK_K,
     [GGML_TYPE_Q3_K] = QK_K,
     [GGML_TYPE_Q4_K] = QK_K,
     [GGML_TYPE_Q5_K] = QK_K,
     [GGML_TYPE_Q6_K] = QK_K,
     [GGML_TYPE_Q8_K] = QK_K,
+#endif
     [GGML_TYPE_I8]   = 1,
     [GGML_TYPE_I16]  = 1,
     [GGML_TYPE_I32]  = 1,
@@ -3520,12 +3527,14 @@ static const size_t GGML_TYPE_SIZE[GGML_TYPE_COUNT] = {
     [GGML_TYPE_Q5_1] = sizeof(block_q5_1),
     [GGML_TYPE_Q8_0] = sizeof(block_q8_0),
     [GGML_TYPE_Q8_1] = sizeof(block_q8_1),
-    [GGML_TYPE_Q2_K] = sizeof(block_q2_k),
-    [GGML_TYPE_Q3_K] = sizeof(block_q3_k),
-    [GGML_TYPE_Q4_K] = sizeof(block_q4_k),
-    [GGML_TYPE_Q5_K] = sizeof(block_q5_k),
-    [GGML_TYPE_Q6_K] = sizeof(block_q6_k),
-    [GGML_TYPE_Q8_K] = sizeof(block_q8_k),
+#ifdef GGML_USE_K_QUANTS
+    [GGML_TYPE_Q2_K] = sizeof(block_q2_K),
+    [GGML_TYPE_Q3_K] = sizeof(block_q3_K),
+    [GGML_TYPE_Q4_K] = sizeof(block_q4_K),
+    [GGML_TYPE_Q5_K] = sizeof(block_q5_K),
+    [GGML_TYPE_Q6_K] = sizeof(block_q6_K),
+    [GGML_TYPE_Q8_K] = sizeof(block_q8_K),
+#endif
     [GGML_TYPE_I8]   = sizeof(int8_t),
     [GGML_TYPE_I16]  = sizeof(int16_t),
     [GGML_TYPE_I32]  = sizeof(int32_t),
@@ -3542,12 +3551,12 @@ static const char * GGML_TYPE_NAME[GGML_TYPE_COUNT] = {
     [GGML_TYPE_Q5_1] = "q5_1",
     [GGML_TYPE_Q8_0] = "q8_0",
     [GGML_TYPE_Q8_1] = "q8_1",
-    [GGML_TYPE_Q2_K] = "q2_k",
-    [GGML_TYPE_Q3_K] = "q3_k",
-    [GGML_TYPE_Q4_K] = "q4_k",
-    [GGML_TYPE_Q5_K] = "q5_k",
-    [GGML_TYPE_Q6_K] = "q6_k",
-    [GGML_TYPE_Q8_K] = "q8_k",
+    [GGML_TYPE_Q2_K] = "q2_K",
+    [GGML_TYPE_Q3_K] = "q3_K",
+    [GGML_TYPE_Q4_K] = "q4_K",
+    [GGML_TYPE_Q5_K] = "q5_K",
+    [GGML_TYPE_Q6_K] = "q6_K",
+    [GGML_TYPE_Q8_K] = "q8_K",
     [GGML_TYPE_I8]   = "i8",
     [GGML_TYPE_I16]  = "i16",
     [GGML_TYPE_I32]  = "i32",
@@ -14720,12 +14729,12 @@ static void ggml_graph_export_leaf(const struct ggml_tensor * tensor, FILE * fou
     const int64_t * ne = tensor->ne;
     const size_t  * nb = tensor->nb;
 
-    fprintf(fout, "%-6s %-12s %8d %8d %d %d %d %16zu %16zu %16zu %16zu %16p %32s\n",
+    fprintf(fout, "%-6s %-12s %8d %" PRId64 " %" PRId64 " %" PRId64 " %" PRId64 " %16zu %16zu %16zu %16zu %16p %32s\n",
             ggml_type_name(tensor->type),
             ggml_op_name  (tensor->op),
             tensor->n_dims,
-            (int) ne[0], (int) ne[1], (int) ne[2], (int) ne[3],
-                  nb[0],       nb[1],       nb[2],       nb[3],
+            ne[0], ne[1], ne[2], ne[3],
+            nb[0], nb[1], nb[2], nb[3],
             tensor->data,
             tensor->name);
 }
@@ -14734,13 +14743,13 @@ static void ggml_graph_export_node(const struct ggml_tensor * tensor, const char
     const int64_t * ne = tensor->ne;
     const size_t  * nb = tensor->nb;
 
-    fprintf(fout, "%-6s %-6s %-12s %8d %d %d %d %d %16zu %16zu %16zu %16zu %8d %16p %32s\n",
+    fprintf(fout, "%-6s %-6s %-12s %8d %" PRId64 " %" PRId64 " %" PRId64 " %" PRId64 " %16zu %16zu %16zu %16zu %8d %16p %32s\n",
             arg,
             ggml_type_name(tensor->type),
             ggml_op_name  (tensor->op),
             tensor->n_dims,
-            (int) ne[0], (int) ne[1], (int) ne[2], (int) ne[3],
-                  nb[0],       nb[1],       nb[2],       nb[3],
+            ne[0], ne[1], ne[2], ne[3],
+            nb[0], nb[1], nb[2], nb[3],
             tensor->n_tasks,
             tensor->data,
             tensor->name);
@@ -14763,11 +14772,11 @@ void ggml_graph_export(const struct ggml_cgraph * cgraph, const char * fname) {
         FILE * fout = stdout;
 
         fprintf(fout, "\n");
-        fprintf(fout, "%-16s %8x\n", "magic",   GGML_FILE_MAGIC);
-        fprintf(fout, "%-16s %8d\n", "version", GGML_FILE_VERSION);
-        fprintf(fout, "%-16s %8d\n", "leafs",   cgraph->n_leafs);
-        fprintf(fout, "%-16s %8d\n", "nodes",   cgraph->n_nodes);
-        fprintf(fout, "%-16s %8d\n", "eval",    (int) size_eval);
+        fprintf(fout, "%-16s %8x\n", "magic",        GGML_FILE_MAGIC);
+        fprintf(fout, "%-16s %8d\n", "version",      GGML_FILE_VERSION);
+        fprintf(fout, "%-16s %8d\n", "leafs",        cgraph->n_leafs);
+        fprintf(fout, "%-16s %8d\n", "nodes",        cgraph->n_nodes);
+        fprintf(fout, "%-16s %" PRIu64 "\n", "eval", size_eval);
 
         // header
         fprintf(fout, "\n");
@@ -16249,36 +16258,38 @@ size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, i
                 block_q8_0 * block = (block_q8_0*)dst + start / QK8_0;
                 result = ggml_quantize_q8_0(src + start, block, n, n, hist);
             } break;
+#ifdef GGML_USE_K_QUANTS
         case GGML_TYPE_Q2_K:
             {
                 GGML_ASSERT(start % QK_K == 0);
-                block_q2_k * block = (block_q2_k*)dst + start / QK_K;
-                result = ggml_quantize_q2_k(src + start, block, n, n, hist);
+                block_q2_K * block = (block_q2_K*)dst + start / QK_K;
+                result = ggml_quantize_q2_K(src + start, block, n, n, hist);
             } break;
         case GGML_TYPE_Q3_K:
             {
                 GGML_ASSERT(start % QK_K == 0);
-                block_q3_k * block = (block_q3_k*)dst + start / QK_K;
-                result = ggml_quantize_q3_k(src + start, block, n, n, hist);
+                block_q3_K * block = (block_q3_K*)dst + start / QK_K;
+                result = ggml_quantize_q3_K(src + start, block, n, n, hist);
             } break;
         case GGML_TYPE_Q4_K:
             {
                 GGML_ASSERT(start % QK_K == 0);
-                block_q4_k * block = (block_q4_k*)dst + start / QK_K;
-                result = ggml_quantize_q4_k(src + start, block, n, n, hist);
+                block_q4_K * block = (block_q4_K*)dst + start / QK_K;
+                result = ggml_quantize_q4_K(src + start, block, n, n, hist);
             } break;
         case GGML_TYPE_Q5_K:
             {
                 GGML_ASSERT(start % QK_K == 0);
-                block_q5_k * block = (block_q5_k*)dst + start / QK_K;
-                result = ggml_quantize_q5_k(src + start, block, n, n, hist);
+                block_q5_K * block = (block_q5_K*)dst + start / QK_K;
+                result = ggml_quantize_q5_K(src + start, block, n, n, hist);
             } break;
         case GGML_TYPE_Q6_K:
             {
                 GGML_ASSERT(start % QK_K == 0);
-                block_q6_k * block = (block_q6_k*)dst + start / QK_K;
-                result = ggml_quantize_q6_k(src + start, block, n, n, hist);
+                block_q6_K * block = (block_q6_K*)dst + start / QK_K;
+                result = ggml_quantize_q6_K(src + start, block, n, n, hist);
             } break;
+#endif
         default:
             assert(false);
     }

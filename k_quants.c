@@ -1,4 +1,4 @@
-#include "ggml-quants-k.h"
+#include "k_quants.h"
 #include "ggml.h"
 
 #include <math.h>
@@ -272,7 +272,7 @@ static inline void get_scale_min_k4(int j, const uint8_t * restrict q, uint8_t *
 
 //========================- 2-bit (de)-quantization
 
-void quantize_row_q2_k_reference(const float * restrict x, block_q2_k * restrict y, int k) {
+void quantize_row_q2_K_reference(const float * restrict x, block_q2_K * restrict y, int k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
@@ -341,7 +341,7 @@ void quantize_row_q2_k_reference(const float * restrict x, block_q2_k * restrict
     }
 }
 
-void dequantize_row_q2_k(const block_q2_k * restrict x, float * restrict y, int k) {
+void dequantize_row_q2_K(const block_q2_K * restrict x, float * restrict y, int k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
@@ -374,26 +374,26 @@ void dequantize_row_q2_k(const block_q2_k * restrict x, float * restrict y, int 
     }
 }
 
-void quantize_row_q2_k(const float * restrict x, void * restrict vy, int k) {
-    quantize_row_q2_k_reference(x, vy, k);
+void quantize_row_q2_K(const float * restrict x, void * restrict vy, int k) {
+    quantize_row_q2_K_reference(x, vy, k);
 }
 
-size_t ggml_quantize_q2_k(const float * restrict src, void * restrict dst, int n, int k, int64_t * restrict hist) {
+size_t ggml_quantize_q2_K(const float * restrict src, void * restrict dst, int n, int k, int64_t * restrict hist) {
     const int nb = k / QK_K;
 
     // TODO - collect histograms - although, at a second thought, I don't really care about them
     (void)hist;
 
     for (int j = 0; j < nb; j += k) {
-        block_q2_k * restrict y = (block_q2_k *)dst + j/QK_K;
-        quantize_row_q2_k_reference(src + j, y, k);
+        block_q2_K * restrict y = (block_q2_K *)dst + j/QK_K;
+        quantize_row_q2_K_reference(src + j, y, k);
     }
-    return (n/QK_K*sizeof(block_q2_k));
+    return (n/QK_K*sizeof(block_q2_K));
 }
 
 //========================= 3-bit (de)-quantization
 
-void quantize_row_q3_k_reference(const float * restrict x, block_q3_k * restrict y, int k) {
+void quantize_row_q3_K_reference(const float * restrict x, block_q3_K * restrict y, int k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
@@ -469,7 +469,7 @@ void quantize_row_q3_k_reference(const float * restrict x, block_q3_k * restrict
     }
 }
 
-void dequantize_row_q3_k(const block_q3_k * restrict x, float * restrict y, int k) {
+void dequantize_row_q3_K(const block_q3_K * restrict x, float * restrict y, int k) {
     assert(k % QK_K == 0);
     assert(QK_K == 256);
     const int nb = k / QK_K;
@@ -520,26 +520,26 @@ void dequantize_row_q3_k(const block_q3_k * restrict x, float * restrict y, int 
     }
 }
 
-void quantize_row_q3_k(const float * restrict x, void * restrict vy, int k) {
-    quantize_row_q3_k_reference(x, vy, k);
+void quantize_row_q3_K(const float * restrict x, void * restrict vy, int k) {
+    quantize_row_q3_K_reference(x, vy, k);
 }
 
-size_t ggml_quantize_q3_k(const float * restrict src, void * restrict dst, int n, int k, int64_t * restrict hist) {
+size_t ggml_quantize_q3_K(const float * restrict src, void * restrict dst, int n, int k, int64_t * restrict hist) {
     const int nb = k / QK_K;
 
     // TODO - collect histograms - although, at a second thought, I don't really care about them
     (void)hist;
 
     for (int j = 0; j < nb; j += k) {
-        block_q3_k * restrict y = (block_q3_k *)dst + j/QK_K;
-        quantize_row_q3_k_reference(src + j, y, k);
+        block_q3_K * restrict y = (block_q3_K *)dst + j/QK_K;
+        quantize_row_q3_K_reference(src + j, y, k);
     }
-    return (n/QK_K*sizeof(block_q3_k));
+    return (n/QK_K*sizeof(block_q3_K));
 }
 
 // ====================== 4-bit (de)-quantization
 
-void quantize_row_q4_k_reference(const float * restrict x, block_q4_k * restrict y, int k) {
+void quantize_row_q4_K_reference(const float * restrict x, block_q4_K * restrict y, int k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
@@ -604,7 +604,7 @@ void quantize_row_q4_k_reference(const float * restrict x, block_q4_k * restrict
     }
 }
 
-void dequantize_row_q4_k(const block_q4_k * restrict x, float * restrict y, int k) {
+void dequantize_row_q4_K(const block_q4_K * restrict x, float * restrict y, int k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
@@ -630,26 +630,26 @@ void dequantize_row_q4_k(const block_q4_k * restrict x, float * restrict y, int 
     }
 }
 
-void quantize_row_q4_k(const float * restrict x, void * restrict vy, int k) {
+void quantize_row_q4_K(const float * restrict x, void * restrict vy, int k) {
     assert(k % QK_K == 0);
-    block_q4_k * restrict y = vy;
-    quantize_row_q4_k_reference(x, y, k);
+    block_q4_K * restrict y = vy;
+    quantize_row_q4_K_reference(x, y, k);
 }
 
-size_t ggml_quantize_q4_k(const float * restrict src, void * restrict dst, int n, int k, int64_t * restrict hist) {
+size_t ggml_quantize_q4_K(const float * restrict src, void * restrict dst, int n, int k, int64_t * restrict hist) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
     (void)hist; // TODO: collect histograms
     for (int j = 0; j < nb; j += k) {
-        block_q4_k * restrict y = (block_q4_k *)dst + j/QK_K;
-        quantize_row_q4_k_reference(src + j, y, k);
+        block_q4_K * restrict y = (block_q4_K *)dst + j/QK_K;
+        quantize_row_q4_K_reference(src + j, y, k);
     }
-    return (n/QK_K*sizeof(block_q4_k));
+    return (n/QK_K*sizeof(block_q4_K));
 }
 
 // ====================== 5-bit (de)-quantization
 
-void quantize_row_q5_k_reference(const float * restrict x, block_q5_k * restrict y, int k) {
+void quantize_row_q5_K_reference(const float * restrict x, block_q5_K * restrict y, int k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
@@ -731,7 +731,7 @@ void quantize_row_q5_k_reference(const float * restrict x, block_q5_k * restrict
     }
 }
 
-void dequantize_row_q5_k(const block_q5_k * restrict x, float * restrict y, int k) {
+void dequantize_row_q5_K(const block_q5_K * restrict x, float * restrict y, int k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
@@ -759,26 +759,26 @@ void dequantize_row_q5_k(const block_q5_k * restrict x, float * restrict y, int 
     }
 }
 
-void quantize_row_q5_k(const float * restrict x, void * restrict vy, int k) {
+void quantize_row_q5_K(const float * restrict x, void * restrict vy, int k) {
     assert(k % QK_K == 0);
-    block_q5_k * restrict y = vy;
-    quantize_row_q5_k_reference(x, y, k);
+    block_q5_K * restrict y = vy;
+    quantize_row_q5_K_reference(x, y, k);
 }
 
-size_t ggml_quantize_q5_k(const float * restrict src, void * restrict dst, int n, int k, int64_t * restrict hist) {
+size_t ggml_quantize_q5_K(const float * restrict src, void * restrict dst, int n, int k, int64_t * restrict hist) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
     (void)hist;
     for (int j = 0; j < nb; j += k) {
-        block_q5_k * restrict y = (block_q5_k *)dst + j/QK_K;
-        quantize_row_q5_k_reference(src + j, y, k);
+        block_q5_K * restrict y = (block_q5_K *)dst + j/QK_K;
+        quantize_row_q5_K_reference(src + j, y, k);
     }
-    return (n/QK_K*sizeof(block_q5_k));
+    return (n/QK_K*sizeof(block_q5_K));
 }
 
 // ====================== 6-bit (de)-quantization
 
-void quantize_row_q6_k_reference(const float * restrict x, block_q6_k * restrict y, int k) {
+void quantize_row_q6_K_reference(const float * restrict x, block_q6_K * restrict y, int k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
@@ -842,7 +842,7 @@ void quantize_row_q6_k_reference(const float * restrict x, block_q6_k * restrict
     }
 }
 
-void dequantize_row_q6_k(const block_q6_k * restrict x, float * restrict y, int k) {
+void dequantize_row_q6_K(const block_q6_K * restrict x, float * restrict y, int k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
@@ -875,28 +875,28 @@ void dequantize_row_q6_k(const block_q6_k * restrict x, float * restrict y, int 
     }
 }
 
-void quantize_row_q6_k(const float * restrict x, void * restrict vy, int k) {
+void quantize_row_q6_K(const float * restrict x, void * restrict vy, int k) {
     assert(k % QK_K == 0);
-    block_q6_k * restrict y = vy;
-    quantize_row_q6_k_reference(x, y, k);
+    block_q6_K * restrict y = vy;
+    quantize_row_q6_K_reference(x, y, k);
 }
 
-size_t ggml_quantize_q6_k(const float * src, void * dst, int n, int k, int64_t * hist) {
+size_t ggml_quantize_q6_K(const float * src, void * dst, int n, int k, int64_t * hist) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
     (void)hist; // TODO
 
     for (int j = 0; j < nb; j += k) {
-        block_q6_k * restrict y = (block_q6_k *)dst + j/QK_K;
-        quantize_row_q6_k_reference(src + j, y, k);
+        block_q6_K * restrict y = (block_q6_K *)dst + j/QK_K;
+        quantize_row_q6_K_reference(src + j, y, k);
     }
-    return (n/QK_K*sizeof(block_q6_k));
+    return (n/QK_K*sizeof(block_q6_K));
 }
 
 //===================================== Q8_K ==============================================
 
-void quantize_row_q8_k_reference(const float * restrict x, block_q8_k * restrict y, int k) {
+void quantize_row_q8_K_reference(const float * restrict x, block_q8_K * restrict y, int k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
@@ -933,7 +933,7 @@ void quantize_row_q8_k_reference(const float * restrict x, block_q8_k * restrict
     }
 }
 
-void dequantize_row_q8_k(const block_q8_k * restrict x, float * restrict y, int k) {
+void dequantize_row_q8_K(const block_q8_K * restrict x, float * restrict y, int k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
@@ -944,8 +944,8 @@ void dequantize_row_q8_k(const block_q8_k * restrict x, float * restrict y, int 
     }
 }
 
-void quantize_row_q8_k(const float * restrict x, void * restrict y, int k) {
-    quantize_row_q8_k_reference(x, y, k);
+void quantize_row_q8_K(const float * restrict x, void * restrict y, int k) {
+    quantize_row_q8_K_reference(x, y, k);
 }
 
 //===================================== Dot ptoducts =================================
@@ -1002,10 +1002,10 @@ static inline __m128i get_scale_shuffle(int i) {
 }
 #endif
 
-void ggml_vec_dot_q2_k_q8_k(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
+void ggml_vec_dot_q2_K_q8_K(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
 
-    const block_q2_k * restrict x = vx;
-    const block_q8_k * restrict y = vy;
+    const block_q2_K * restrict x = vx;
+    const block_q8_K * restrict y = vy;
 
     const int nb = n / QK_K;
 
@@ -1201,14 +1201,14 @@ void ggml_vec_dot_q2_k_q8_k(const int n, float * restrict s, const void * restri
 #endif
 }
 
-void ggml_vec_dot_q3_k_q8_k(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
+void ggml_vec_dot_q3_K_q8_K(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
     assert(n % QK_K == 0);
 
     const uint32_t kmask1 = 0x03030303;
     const uint32_t kmask2 = 0x0f0f0f0f;
 
-    const block_q3_k * restrict x = vx;
-    const block_q8_k * restrict y = vy;
+    const block_q3_K * restrict x = vx;
+    const block_q8_K * restrict y = vy;
 
     const int nb = n / QK_K;
 
@@ -1501,11 +1501,11 @@ void ggml_vec_dot_q3_k_q8_k(const int n, float * restrict s, const void * restri
 
 }
 
-void ggml_vec_dot_q4_k_q8_k(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
+void ggml_vec_dot_q4_K_q8_K(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
     assert(n % QK_K == 0);
 
-    const block_q4_k * restrict x = vx;
-    const block_q8_k * restrict y = vy;
+    const block_q4_K * restrict x = vx;
+    const block_q8_K * restrict y = vy;
 
     const int nb = n / QK_K;
 
@@ -1727,11 +1727,11 @@ void ggml_vec_dot_q4_k_q8_k(const int n, float * restrict s, const void * restri
 #endif
 }
 
-void ggml_vec_dot_q5_k_q8_k(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
+void ggml_vec_dot_q5_K_q8_K(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
     assert(n % QK_K == 0);
 
-    const block_q5_k * restrict x = vx;
-    const block_q8_k * restrict y = vy;
+    const block_q5_K * restrict x = vx;
+    const block_q8_K * restrict y = vy;
 
     const int nb = n / QK_K;
 
@@ -1974,11 +1974,11 @@ void ggml_vec_dot_q5_k_q8_k(const int n, float * restrict s, const void * restri
 
 
 
-void ggml_vec_dot_q6_k_q8_k(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
+void ggml_vec_dot_q6_K_q8_K(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
     assert(n % QK_K == 0);
 
-    const block_q6_k * restrict x = vx;
-    const block_q8_k * restrict y = vy;
+    const block_q6_K * restrict x = vx;
+    const block_q8_K * restrict y = vy;
 
     const int nb = n / QK_K;
 
