@@ -1735,6 +1735,7 @@ void ggml_cuda_load_data(const char * fname, struct ggml_tensor * tensor, const 
             row_low -= row_low % GGML_CUDA_DMMV_Y;
             row_high = id == g_device_count - 1 ? nrows : nrows*g_tensor_split[id + 1];
             row_high -= row_high % GGML_CUDA_DMMV_Y;
+            GGML_ASSERT(nrows % GGML_CUDA_DMMV_Y == 0);
         } else {
             GGML_ASSERT(false);
         }
