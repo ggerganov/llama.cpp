@@ -37,7 +37,7 @@ To get started right away, run the following command, making sure to use the cor
 server.exe -m models\7B\ggml-model.bin -c 2048
 ```
 
-That will start a server that by default listens on `127.0.0.1:8080`.
+The above command will start a server that by default listens on `127.0.0.1:8080`.
 You can consume the endpoints with Postman or NodeJS with axios library.
 
 ## Testing with CURL

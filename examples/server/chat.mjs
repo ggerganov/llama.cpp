@@ -25,7 +25,7 @@ async function ChatCompletion(question) {
       top_p: 0.9,
       n_keep: 29,
       n_predict: 256,
-      stop: ["\n### Human:"], // when detect this, stop completion
+      stop: ["\n### Human:"], // stop completion after generating this
       stream: true,
     })
   })
