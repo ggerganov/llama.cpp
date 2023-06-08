@@ -623,10 +623,16 @@ static void dequantize_row_q4_k(device const block_q4_k * x, device float * y, i
 }
 
 static void dequantize_row_q6_k(device const block_q6_k * x, device float * y, int k) {
+    assert(k % QK_K == 0);
+    const int nb = k / QK_K;
+
+    for (int i = 0; i < nb; i++) {
 
         device const uint8_t * ql = x[i].ql;
         device const uint8_t * qh = x[i].qh;
         device const int8_t  * sc = x[i].scales;
+
+        const float d = x[i].d;
 
         for (int n = 0; n < QK_K; n += 128) {
             for (int l = 0; l < 32; ++l) {
