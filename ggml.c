@@ -5884,7 +5884,17 @@ struct ggml_tensor * ggml_view_1d(
     result->src1 = NULL;
 
     if (is_node) {
-        memcpy(result->padding, &offset, sizeof(offset));
+        ggml_scratch_save(ctx);
+
+        struct ggml_tensor * b = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 2);
+
+        GGML_ASSERT(sizeof(offset) <= ggml_nbytes(b));
+
+        memcpy(b->data, &offset, sizeof(offset));
+
+        ggml_scratch_load(ctx);
+
+        result->opt[0] = b;
     }
 
     return result;
@@ -5920,7 +5930,17 @@ struct ggml_tensor * ggml_view_2d(
     result->src1 = NULL;
 
     if (is_node) {
-        memcpy(result->padding, &offset, sizeof(offset));
+        ggml_scratch_save(ctx);
+
+        struct ggml_tensor * b = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 2);
+
+        GGML_ASSERT(sizeof(offset) <= ggml_nbytes(b));
+
+        memcpy(b->data, &offset, sizeof(offset));
+
+        ggml_scratch_load(ctx);
+
+        result->opt[0] = b;
     }
 
     return result;
@@ -5958,7 +5978,17 @@ struct ggml_tensor * ggml_view_3d(
     result->src1 = NULL;
 
     if (is_node) {
-        memcpy(result->padding, &offset, sizeof(offset));
+        ggml_scratch_save(ctx);
+
+        struct ggml_tensor * b = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 2);
+
+        GGML_ASSERT(sizeof(offset) <= ggml_nbytes(b));
+
+        memcpy(b->data, &offset, sizeof(offset));
+
+        ggml_scratch_load(ctx);
+
+        result->opt[0] = b;
     }
 
     return result;
@@ -5998,7 +6028,17 @@ struct ggml_tensor * ggml_view_4d(
     result->src1 = NULL;
 
     if (is_node) {
-        memcpy(result->padding, &offset, sizeof(offset));
+        ggml_scratch_save(ctx);
+
+        struct ggml_tensor * b = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 2);
+
+        GGML_ASSERT(sizeof(offset) <= ggml_nbytes(b));
+
+        memcpy(b->data, &offset, sizeof(offset));
+
+        ggml_scratch_load(ctx);
+
+        result->opt[0] = b;
     }
 
     return result;
@@ -6062,10 +6102,18 @@ struct ggml_tensor * ggml_permute(
     result->src1 = NULL;
 
     if (is_node) {
-        result->padding[0] = axis0;
-        result->padding[1] = axis1;
-        result->padding[2] = axis2;
-        result->padding[3] = axis3;
+        ggml_scratch_save(ctx);
+
+        struct ggml_tensor * b = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 4);
+
+        ((int32_t *) b->data)[0] = axis0;
+        ((int32_t *) b->data)[1] = axis1;
+        ((int32_t *) b->data)[2] = axis2;
+        ((int32_t *) b->data)[3] = axis3;
+
+        ggml_scratch_load(ctx);
+
+        result->opt[0] = b;
     }
 
     return result;
@@ -14834,7 +14882,9 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 // necessary for llama
                 if (src0->grad) {
                     size_t offset;
-                    memcpy(&offset, tensor->padding, sizeof(offset));
+
+                    GGML_ASSERT(sizeof(offset) <= ggml_nbytes(tensor->opt[0]));
+                    memcpy(&offset, tensor->opt[0]->data, sizeof(offset));
 
                     size_t nb1     = tensor->nb[1];
                     size_t nb2     = tensor->nb[2];
@@ -14861,10 +14911,11 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             {
                 // necessary for llama
                 if (src0->grad) {
-                    int axis0 = tensor->padding[0] & 0x3;
-                    int axis1 = tensor->padding[1] & 0x3;
-                    int axis2 = tensor->padding[2] & 0x3;
-                    int axis3 = tensor->padding[3] & 0x3;
+                    int32_t * axes = (int32_t *) tensor->opt[0]->data;
+                    int axis0 = axes[0] & 0x3;
+                    int axis1 = axes[1] & 0x3;
+                    int axis2 = axes[2] & 0x3;
+                    int axis3 = axes[3] & 0x3;
                     int axes_backward[4] = {0,0,0,0};
                     axes_backward[axis0] = 0;
                     axes_backward[axis1] = 1;
