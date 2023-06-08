@@ -405,13 +405,29 @@ struct llama_buffer {
     llama_buffer() = default;
 
     void resize(size_t len) {
+#ifdef GGML_USE_METAL
+        free(addr);
+        int result = posix_memalign((void **) &addr, getpagesize(), len);
+        if (result == 0) {
+            memset(addr, 0, len);
+        }
+        else {
+            addr = NULL;
+        }
+#else
         delete[] addr;
         addr = new uint8_t[len];
+#endif
         size = len;
     }
 
     ~llama_buffer() {
+#ifdef GGML_USE_METAL
+        free(addr);
+#else
         delete[] addr;
+#endif
+        addr = NULL;
     }
 
     // disable copy and move

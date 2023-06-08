@@ -9,9 +9,12 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
-- Quantization formats `Q4` and `Q8` have changed again (19 May) - [(info)](https://github.com/ggerganov/llama.cpp/pull/1508)
-- Quantization formats `Q4` and `Q5` have changed - requantize any old models [(info)](https://github.com/ggerganov/llama.cpp/pull/1405)
-- [Roadmap May 2023](https://github.com/ggerganov/llama.cpp/discussions/1220)
+- Roadmap June 2023: https://github.com/ggerganov/llama.cpp/discussions/1729
+- GPU support with Metal (Apple Silicon): https://github.com/ggerganov/llama.cpp/pull/1642
+- High-quality 2,3,4,5,6-bit quantization: https://github.com/ggerganov/llama.cpp/pull/1684
+- Multi-GPU support: https://github.com/ggerganov/llama.cpp/pull/1607
+- Training LLaMA models from scratch: https://github.com/ggerganov/llama.cpp/pull/1652
+- CPU threading improvements: https://github.com/ggerganov/llama.cpp/pull/1632
 
 <details>
   <summary>Table of Contents</summary>
@@ -51,11 +54,10 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 The main goal of `llama.cpp` is to run the LLaMA model using 4-bit integer quantization on a MacBook
 
 - Plain C/C++ implementation without dependencies
-- Apple silicon first-class citizen - optimized via ARM NEON and Accelerate framework
+- Apple silicon first-class citizen - optimized via ARM NEON, Accelerate and Metal frameworks
 - AVX, AVX2 and AVX512 support for x86 architectures
 - Mixed F16 / F32 precision
 - 4-bit, 5-bit and 8-bit integer quantization support
-- Runs on the CPU
 - Supports OpenBLAS/Apple BLAS/ARM Performance Lib/ATLAS/BLIS/Intel MKL/NVHPC/ACML/SCSL/SGIMATH and [more](https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors) in BLAS
 - cuBLAS and CLBlast support
 
@@ -236,15 +238,41 @@ In order to build llama.cpp you have three different options.
     zig build -Drelease-fast
     ```
 
+### Metal Build
+
+Using Metal allows the computation to be executed on the GPU for Apple devices:
+
+- Using `make`:
+
+  ```bash
+  LLAMA_METAL=1 make
+  ```
+
+- Using `CMake`:
+
+    ```bash
+    mkdir build-metal
+    cd build-metal
+    cmake -DLLAMA_METAL=ON ..
+    cmake --build . --config Release
+    ```
+
+When built with Metal support, you can enable GPU inference with the `--gpu-layers|-ngl` command-line argument.
+Any value larger than 0 will offload the computation to the GPU. For example:
+
+```bash
+./main -m ./models/7B/ggml-model-q4_0.bin -n 128 -ngl 1
+```
+
 ### BLAS Build
 
 Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). BLAS doesn't affect the normal generation performance. There are currently three different implementations of it:
 
-- **Accelerate Framework**:
+- #### Accelerate Framework:
 
   This is only available on Mac PCs and it's enabled by default. You can just build using the normal instructions.
 
-- **OpenBLAS**:
+- #### OpenBLAS:
 
   This provides BLAS acceleration using only the CPU. Make sure to have OpenBLAS installed on your machine.
 
@@ -278,11 +306,11 @@ Building the program with BLAS support may lead to some performance improvements
       cmake --build . --config Release
       ```
 
-- **BLIS**
+- #### BLIS
 
   Check [BLIS.md](BLIS.md) for more information.
 
-- **Intel MKL**
+- #### Intel MKL
 
   By default, `LLAMA_BLAS_VENDOR` is set to `Generic`, so if you already sourced intel environment script and assign `-DLLAMA_BLAS=ON` in cmake, the mkl version of Blas will automatically been selected. You may also specify it by:
 
@@ -290,10 +318,10 @@ Building the program with BLAS support may lead to some performance improvements
   mkdir build
   cd build
   cmake .. -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=Intel10_64lp -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
-  cmake --build . -config Release
+  cmake --build . --config Release
   ```
 
-- **cuBLAS**
+- #### cuBLAS
 
   This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
   - Using `make`:
@@ -312,7 +340,7 @@ Building the program with BLAS support may lead to some performance improvements
 
   The environment variable [`CUDA_VISIBLE_DEVICES`](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#env-vars) can be used to specify which GPU(s) will be used.
 
-- **CLBlast**
+- #### CLBlast
 
   OpenCL acceleration is provided by the matrix multiplication kernels from the [CLBlast](https://github.com/CNugteren/CLBlast) project and custom kernels for ggml that can generate tokens on the GPU.
 
@@ -369,7 +397,7 @@ Building the program with BLAS support may lead to some performance improvements
 
   Running:
 
-  The CLBlast build supports `--gpu-layers|-ngl` like  the CUDA version does.
+  The CLBlast build supports `--gpu-layers|-ngl` like the CUDA version does.
 
   To select the correct platform (driver) and device (GPU), you can use the environment variables `GGML_OPENCL_PLATFORM` and `GGML_OPENCL_DEVICE`.
   The selection can be a number (starting from 0) or a text string to search:
@@ -657,3 +685,4 @@ docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:light -m /mode
 ### Docs
 
 - [GGML tips & tricks](https://github.com/ggerganov/llama.cpp/wiki/GGML-Tips-&-Tricks)
+- [Performance troubleshooting](./docs/token_generation_performance_tips.md)
