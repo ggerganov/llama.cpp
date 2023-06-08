@@ -513,7 +513,7 @@ extern "C" {
 
     GGML_API const char * ggml_get_name(const struct ggml_tensor * tensor);
     GGML_API void         ggml_set_name(struct ggml_tensor * tensor, const char * name);
-GGML_API void         ggml_set_layer_num(struct ggml_tensor * tensor, int layer_num);
+    GGML_API void         ggml_set_layer_num(struct ggml_tensor * tensor, int layer_num);
 
     //
     // operations on tensors with backpropagation
