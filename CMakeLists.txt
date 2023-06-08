@@ -72,6 +72,7 @@ set(LLAMA_CUDA_DMMV_X "32" CACHE STRING "llama: x stride for dmmv CUDA kernels")
 set(LLAMA_CUDA_DMMV_Y "1" CACHE STRING "llama: y block size for dmmv CUDA kernels")
 option(LLAMA_CLBLAST "llama: use CLBlast" OFF)
 option(LLAMA_METAL "llama: use Metal" OFF)
+option(LLAMA_K_QUANTS "llama: use k-quants" ON)
 
 option(LLAMA_BUILD_TESTS "llama: build tests" ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES "llama: build examples" ${LLAMA_STANDALONE})
@@ -228,6 +229,11 @@ if(LLAMA_METAL)
         ${METALKIT_FRAMEWORK}
         ${METALPERFORMANCE_FRAMEWORK}
     )
+endif()
+
+if(LLAMA_K_QUANTS)
+    set(GGML_SOURCES_EXTRA ${GGML_SOURCES_EXTRA} k_quants.c k_quants.h)
+    add_compile_definitions(GGML_USE_K_QUANTS)
 endif()
 
 if(LLAMA_CLBLAST)
@@ -429,6 +435,7 @@ add_library(ggml OBJECT
     ${GGML_SOURCES_CUDA}
     ${GGML_SOURCES_OPENCL}
     ${GGML_SOURCES_METAL}
+    ${GGML_SOURCES_EXTRA}
 )
 
 target_include_directories(ggml PUBLIC .)

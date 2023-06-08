@@ -40,8 +40,11 @@ endif
 #
 
 # keep standard at C11 and C++11
-CFLAGS   = -I.              -O3 -std=c11   -fPIC
-CXXFLAGS = -I. -I./examples -O3 -std=c++11 -fPIC
+# -Ofast tends to produce faster code, but may not be available for some compilers.
+#OPT = -Ofast
+OPT = -O3
+CFLAGS   = -I.              $(OPT) -std=c11   -fPIC
+CXXFLAGS = -I. -I./examples $(OPT) -std=c++11 -fPIC
 LDFLAGS  =
 
 ifdef LLAMA_DEBUG
@@ -118,6 +121,11 @@ ifneq ($(filter ppc64%,$(UNAME_M)),)
 	endif
 endif
 
+ifndef LLAMA_NO_K_QUANTS
+	CFLAGS   += -DGGML_USE_K_QUANTS
+	OBJS     += k_quants.o
+endif
+
 ifndef LLAMA_NO_ACCELERATE
 	# Mac M1 - include Accelerate framework.
 	# `-framework Accelerate` works on Mac Intel as well, with negliable performance boost (as of the predict time).
@@ -137,7 +145,7 @@ ifdef LLAMA_OPENBLAS
 endif # LLAMA_OPENBLAS
 
 ifdef LLAMA_BLIS
-	CFLAGS += -DGGML_USE_OPENBLAS -I/usr/local/include/blis -I/usr/include/blis
+	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/blis -I/usr/include/blis
 	LDFLAGS += -lblis -L/usr/local/lib
 endif # LLAMA_BLIS
 
@@ -209,6 +217,11 @@ ifneq ($(filter armv8%,$(UNAME_M)),)
 	CFLAGS += -mfp16-format=ieee -mno-unaligned-access
 endif
 
+ifdef LLAMA_NO_K_QUANTS
+k_quants.o: k_quants.c k_quants.h
+	$(CC) $(CFLAGS) -c $< -o $@
+endif # LLAMA_NO_K_QUANTS
+
 #
 # Print build information
 #
@@ -247,22 +260,22 @@ clean:
 # Examples
 #
 
-main: examples/main/main.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+main: examples/main/main.cpp                                  build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
 
-quantize: examples/quantize/quantize.cpp build-info.h ggml.o llama.o $(OBJS)
+quantize: examples/quantize/quantize.cpp                      build-info.h ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-quantize-stats: examples/quantize-stats/quantize-stats.cpp build-info.h ggml.o llama.o $(OBJS)
+quantize-stats: examples/quantize-stats/quantize-stats.cpp    build-info.h ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-perplexity: examples/perplexity/perplexity.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+perplexity: examples/perplexity/perplexity.cpp                build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-embedding: examples/embedding/embedding.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+embedding: examples/embedding/embedding.cpp                   build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 save-load-state: examples/save-load-state/save-load-state.cpp build-info.h ggml.o llama.o common.o $(OBJS)
