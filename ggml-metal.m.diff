@@ -1,0 +1,11 @@
+--- ggml-metal.m	2023-06-09 00:52:44
++++ ggml-metal.m	2023-06-09 00:52:31
+@@ -99,7 +99,7 @@
+         NSError * error = nil;
+ 
+         //NSString * path = [[NSBundle mainBundle] pathForResource:@"../../examples/metal/metal" ofType:@"metal"];
+-        NSString * path = [[NSBundle mainBundle] pathForResource:@"ggml-metal" ofType:@"metal"];
++        NSString * path = @"./ggml-metal.metal";
+         fprintf(stderr, "%s: loading '%s'\n", __func__, [path UTF8String]);
+ 
+         NSString * src  = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
