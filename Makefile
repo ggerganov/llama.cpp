@@ -316,15 +316,15 @@ main: examples/main/main.cpp build-info.h ggml.o k_quants.o llama.o common.o $(O
 #generated libraries
 koboldcpp: ggml.o ggml_v2.o ggml_v1.o expose.o common.o gpttype_adapter.o k_quants.o $(OBJS)
 	$(DEFAULT_BUILD)
-koboldcpp_openblas: ggml_openblas.o ggml_v2_openblas.o ggml_v1.o expose.o common.o gpttype_adapter.o k_quants.o 
+koboldcpp_openblas: ggml_openblas.o ggml_v2_openblas.o ggml_v1.o expose.o common.o gpttype_adapter.o k_quants.o $(OBJS)
 	$(OPENBLAS_BUILD)	
-koboldcpp_failsafe: ggml_failsafe.o ggml_v2_failsafe.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter_failsafe.o k_quants_failsafe.o 
+koboldcpp_failsafe: ggml_failsafe.o ggml_v2_failsafe.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter_failsafe.o k_quants_failsafe.o $(OBJS)
 	$(FAILSAFE_BUILD)
-koboldcpp_openblas_noavx2: ggml_openblas_noavx2.o ggml_v2_openblas_noavx2.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter.o k_quants_noavx2.o 
+koboldcpp_openblas_noavx2: ggml_openblas_noavx2.o ggml_v2_openblas_noavx2.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter.o k_quants_noavx2.o $(OBJS)
 	$(OPENBLAS_NOAVX2_BUILD)
-koboldcpp_clblast: ggml_clblast.o ggml_v2_clblast.o ggml_v1.o expose.o common.o gpttype_adapter_clblast.o ggml-opencl.o ggml_v2-opencl.o ggml_v2-opencl-legacy.o k_quants.o
+koboldcpp_clblast: ggml_clblast.o ggml_v2_clblast.o ggml_v1.o expose.o common.o gpttype_adapter_clblast.o ggml-opencl.o ggml_v2-opencl.o ggml_v2-opencl-legacy.o k_quants.o $(OBJS)
 	$(CLBLAST_BUILD)
-koboldcpp_clblast_noavx2: ggml_clblast_noavx2.o ggml_v2_clblast_noavx2.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter_clblast.o ggml-opencl.o ggml_v2-opencl.o ggml_v2-opencl-legacy.o k_quants_noavx2.o
+koboldcpp_clblast_noavx2: ggml_clblast_noavx2.o ggml_v2_clblast_noavx2.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter_clblast.o ggml-opencl.o ggml_v2-opencl.o ggml_v2-opencl-legacy.o k_quants_noavx2.o $(OBJS)
 	$(CLBLAST_NOAVX2_BUILD)
 		
 quantize_llama: examples/quantize/quantize.cpp ggml.o llama.o k_quants.o
