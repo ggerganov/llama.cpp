@@ -68,6 +68,7 @@ if (LLAMA_CUBLAS)
         enable_language(CUDA)
 
         set(GGML_CUDA_SOURCES ggml-cuda.cu ggml-cuda.h)
+        set(GGML_V2_CUDA_SOURCES otherarch/ggml_v2-cuda.cu otherarch/ggml_v2-cuda.h)
 
         add_compile_definitions(GGML_USE_CUBLAS)
 
@@ -257,7 +258,8 @@ set_target_properties(ggml_v1 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_library(ggml_v2 OBJECT
             otherarch/ggml_v2.c
-            otherarch/ggml_v2.h)
+            otherarch/ggml_v2.h
+            ${GGML_V2_CUDA_SOURCES})
 target_include_directories(ggml_v2 PUBLIC . ./otherarch ./otherarch/tools)
 target_compile_features(ggml_v2 PUBLIC c_std_11) # don't bump
 target_link_libraries(ggml_v2 PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})

@@ -115,7 +115,7 @@ def init_library():
         if use_blas:
             libname = lib_openblas_noavx2
         else:
-            libname = lib_failsafe            
+            libname = lib_failsafe
     else:
         if use_clblast:
             libname = lib_clblast
@@ -182,7 +182,7 @@ def generate(prompt,max_length=20, max_context_length=512,temperature=0.8,top_k=
         inputs.mirostat_eta = float(args.usemirostat[2])
     else:
         inputs.mirostat = inputs.mirostat_tau = inputs.mirostat_eta = 0
-    inputs.seed = seed    
+    inputs.seed = seed
     for n in range(0,stop_token_max):
         if not stop_sequence or n >= len(stop_sequence):
             inputs.stop_sequence[n] = "".encode("UTF-8")
@@ -468,17 +468,17 @@ def show_gui():
             if sel==runopts[1] or sel==runopts[2] or sel==runopts[3]:
                 frameC.grid(row=4,column=0,pady=4)
             else:
-                frameC.grid_forget()                        
+                frameC.grid_forget()
 
         frameA = tk.Frame(root)
-        tk.OptionMenu( frameA , runchoice , command = onDropdownChange ,*runopts ).grid(row=0,column=0)        
+        tk.OptionMenu( frameA , runchoice , command = onDropdownChange ,*runopts ).grid(row=0,column=0)
         tk.OptionMenu( frameA , blaschoice ,*blasbatchopts ).grid(row=0,column=1)
         frameA.grid(row=2,column=0)
 
         frameB = tk.Frame(root)
         threads_var=tk.StringVar()
         threads_var.set(str(default_threads))
-        threads_lbl = tk.Label(frameB, text = 'Threads: ', font=('calibre',10, 'bold'))  
+        threads_lbl = tk.Label(frameB, text = 'Threads: ', font=('calibre',10, 'bold'))
         threads_input = tk.Entry(frameB,textvariable = threads_var, font=('calibre',10,'normal'))
         threads_lbl.grid(row=0,column=0)
         threads_input.grid(row=0,column=1)
@@ -487,7 +487,7 @@ def show_gui():
         frameC = tk.Frame(root)
         gpu_layers_var=tk.StringVar()
         gpu_layers_var.set("0")
-        gpu_lbl = tk.Label(frameC, text = 'GPU Layers (CLBlast only): ', font=('calibre',10, 'bold'))  
+        gpu_lbl = tk.Label(frameC, text = 'GPU Layers (CLBlast only): ', font=('calibre',10, 'bold'))
         gpu_layers_input = tk.Entry(frameC,textvariable = gpu_layers_var, font=('calibre',10,'normal'))
         gpu_lbl.grid(row=0,column=0)
         gpu_layers_input.grid(row=0,column=1)
@@ -507,7 +507,7 @@ def show_gui():
         tk.Checkbutton(frameD, text='High Priority',variable=highpriority, onvalue=1, offvalue=0).grid(row=1,column=0)
         tk.Checkbutton(frameD, text='Disable MMAP',variable=disablemmap, onvalue=1, offvalue=0).grid(row=1,column=1)
         tk.Checkbutton(frameD, text='Unban Tokens',variable=unbantokens, onvalue=1, offvalue=0).grid(row=2,column=0)
-        tk.Checkbutton(frameD, text='Launch Browser',variable=launchbrowser, onvalue=1, offvalue=0).grid(row=2,column=1) 
+        tk.Checkbutton(frameD, text='Launch Browser',variable=launchbrowser, onvalue=1, offvalue=0).grid(row=2,column=1)
         frameD.grid(row=5,column=0,pady=4)
 
         # Create button, it will change label text
@@ -628,7 +628,7 @@ def main(args):
              print("Error, Could not change process priority: " + str(ex))
 
     if args.contextsize:
-        global maxctx       
+        global maxctx
         maxctx = args.contextsize
 
     init_library() # Note: if blas does not exist and is enabled, program will crash.

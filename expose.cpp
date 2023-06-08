@@ -83,7 +83,7 @@ extern "C"
                     file_format = FileFormat::GPTJ_3;
                     printf("\n---\nRetrying as GPT-J model: (ver %d)\nAttempting to Load...\n---\n", file_format);
                     lr = gpttype_load_model(inputs, file_format);
-                }  
+                }
 
                 //lastly try format 2
                 if (lr == ModelLoadResult::RETRY_LOAD)
@@ -91,8 +91,8 @@ extern "C"
                     file_format = FileFormat::GPTJ_2;
                     printf("\n---\nRetrying as GPT-J model: (ver %d)\nAttempting to Load...\n---\n", file_format);
                     lr = gpttype_load_model(inputs, file_format);
-                }              
-            }           
+                }
+            }
 
             if (lr == ModelLoadResult::FAIL || lr == ModelLoadResult::RETRY_LOAD)
             {
@@ -131,7 +131,7 @@ extern "C"
         else if(file_format==FileFormat::RWKV_1 || file_format==FileFormat::RWKV_2)
         {
             printf("\n---\nIdentified as RWKV model: (ver %d)\nAttempting to Load...\n---\n", file_format);
-            ModelLoadResult lr = gpttype_load_model(inputs, file_format);          
+            ModelLoadResult lr = gpttype_load_model(inputs, file_format);
             if (lr == ModelLoadResult::FAIL || lr == ModelLoadResult::RETRY_LOAD)
             {
                 return false;
@@ -165,7 +165,7 @@ extern "C"
                 file_format = FileFormat::NEOX_1;
                 printf("\n---\nRetrying as GPT-NEO-X model: (ver %d)\nAttempting to Load...\n---\n", file_format);
                 lr = gpttype_load_model(inputs, file_format);
-            }    
+            }
             if (lr == ModelLoadResult::FAIL || lr == ModelLoadResult::RETRY_LOAD)
             {
                 return false;
@@ -178,7 +178,7 @@ extern "C"
         else if(file_format==FileFormat::MPT_1)
         {
             printf("\n---\nIdentified as MPT model: (ver %d)\nAttempting to Load...\n---\n", file_format);
-            ModelLoadResult lr = gpttype_load_model(inputs, file_format);          
+            ModelLoadResult lr = gpttype_load_model(inputs, file_format);
             if (lr == ModelLoadResult::FAIL || lr == ModelLoadResult::RETRY_LOAD)
             {
                 return false;

@@ -416,7 +416,7 @@ struct llama_v2_buffer {
 };
 
 #ifdef GGML_USE_CUBLAS
-#include "ggml-cuda.h"
+#include "ggml_v2-cuda.h"
 struct llama_v2_ctx_buffer {
     uint8_t * addr = NULL;
     bool is_cuda;
@@ -427,7 +427,7 @@ struct llama_v2_ctx_buffer {
     void resize(size_t size) {
         free();
 
-        addr = (uint8_t *) ggml_cuda_host_malloc(size);
+        addr = (uint8_t *) ggml_v2_cuda_host_malloc(size);
         if (addr) {
             is_cuda = true;
         }
@@ -442,7 +442,7 @@ struct llama_v2_ctx_buffer {
     void free() {
         if (addr) {
             if (is_cuda) {
-                ggml_cuda_host_free(addr);
+                ggml_v2_cuda_host_free(addr);
             }
             else {
                 delete[] addr;
