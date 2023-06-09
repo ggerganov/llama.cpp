@@ -14,7 +14,7 @@ struct server_params
     bool verbose = false;
 };
 
-static size_t common_part(const std::vector<llama_token>& a, const std::vector<llama_token>& b) {
+static size_t common_part(const std::vector<llama_token> & a, const std::vector<llama_token> & b) {
     size_t i;
     for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++) {}
     return i;
@@ -25,13 +25,13 @@ enum stop_type {
     STOP_PARTIAL,
 };
 
-bool ends_with(const std::string& str, const std::string& suffix)
+bool ends_with(const std::string & str, const std::string & suffix)
 {
     return str.size() >= suffix.size() &&
         0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
 }
 
-size_t find_partial_stop_string(const std::string& stop, const std::string& text)
+size_t find_partial_stop_string(const std::string & stop, const std::string & text)
 {
     if (!text.empty() && !stop.empty()) {
         const char text_last_char = text.back();
@@ -47,7 +47,7 @@ size_t find_partial_stop_string(const std::string& stop, const std::string& text
     return std::string::npos;
 }
 
-static std::string debug_str(const std::string& s) {
+static std::string debug_str(const std::string & s) {
     std::string ret;
     for (size_t i = 0; s[i]; i++) {
         switch (s[i]) {
@@ -60,7 +60,7 @@ static std::string debug_str(const std::string& s) {
 }
 
 template<class InputIt, class OutputIt>
-static std::string tokens_to_str(llama_context* ctx, InputIt begin, OutputIt end) {
+static std::string tokens_to_str(llama_context * ctx, InputIt begin, OutputIt end) {
     std::string ret;
     for (; begin != end; (void)++begin) {
         ret += llama_token_to_str(ctx, *begin);
@@ -81,7 +81,7 @@ struct llama_server_context
     std::vector<llama_token> embd;
     std::vector<llama_token> last_n_tokens;
 
-    llama_context* ctx = nullptr;
+    llama_context * ctx = nullptr;
     gpt_params params;
 
     std::string stopping_word;
@@ -110,7 +110,7 @@ struct llama_server_context
         n_past = 0;
     }
 
-    bool loadModel(const gpt_params& params_)
+    bool loadModel(const gpt_params & params_)
     {
         params = params_;
         ctx = llama_init_from_gpt_params(params);
@@ -247,11 +247,11 @@ struct llama_server_context
         const bool penalize_nl = params.penalize_nl;
         llama_token id = 0;
         {
-            auto* logits = llama_get_logits(ctx);
+            auto * logits = llama_get_logits(ctx);
             auto n_vocab = llama_n_vocab(ctx);
 
             // Apply params.logit_bias map
-            for (const auto& it : params.logit_bias) {
+            for (const auto & it : params.logit_bias) {
                 logits[it.first] += it.second;
             }
 
@@ -327,11 +327,11 @@ struct llama_server_context
         return result;
     }
 
-    size_t findStoppingStrings(const std::string& text, const size_t last_token_size,
+    size_t findStoppingStrings(const std::string & text, const size_t last_token_size,
         const stop_type type)
     {
         size_t stop_pos = std::string::npos;
-        for (const std::string& word : params.antiprompt) {
+        for (const std::string & word : params.antiprompt) {
             size_t pos;
             if (type == STOP_FULL) {
                 const size_t tmp = word.size() + last_token_size;
@@ -405,7 +405,7 @@ using namespace httplib;
 
 using json = nlohmann::json;
 
-void server_print_usage(int /*argc*/, char** argv, const gpt_params& params, const server_params& sparams)
+void server_print_usage(int /*argc*/, char ** argv, const gpt_params & params, const server_params & sparams)
 {
     fprintf(stderr, "usage: %s [options]\n", argv[0]);
     fprintf(stderr, "\n");
@@ -445,8 +445,8 @@ void server_print_usage(int /*argc*/, char** argv, const gpt_params& params, con
     fprintf(stderr, "\n");
 }
 
-void server_params_parse(int argc, char** argv, server_params& sparams,
-    gpt_params& params)
+void server_params_parse(int argc, char ** argv, server_params & sparams,
+    gpt_params & params)
 {
     gpt_params default_params;
     server_params default_sparams;
@@ -598,7 +598,7 @@ void server_params_parse(int argc, char** argv, server_params& sparams,
     }
 }
 
-json format_generation_settings(llama_server_context& llama) {
+json format_generation_settings(llama_server_context & llama) {
     const auto eos_bias = llama.params.logit_bias.find(llama_token_eos());
     const bool ignore_eos = eos_bias != llama.params.logit_bias.end() &&
         eos_bias->second < 0.0f && std::isinf(eos_bias->second);
@@ -627,7 +627,7 @@ json format_generation_settings(llama_server_context& llama) {
     };
 }
 
-bool parse_options_completion(json body, llama_server_context& llama, Response& res)
+bool parse_options_completion(json body, llama_server_context & llama, Response & res)
 {
     gpt_params default_params;
     if (!body["stream"].is_null()) {
@@ -722,7 +722,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response& 
     }
     if (body["logit_bias"].is_array()) {
         int n_vocab = llama_n_vocab(llama.ctx);
-        for (const auto& el : body["logit_bias"]) {
+        for (const auto & el : body["logit_bias"]) {
             if (el.is_array() && el.size() == 2 && el[0].is_number_integer()) {
                 llama_token tok = el[0].get<llama_token>();
                 if (tok >= 0 && tok < n_vocab) {
@@ -750,7 +750,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response& 
         const auto stop = body["stop"].get<std::vector<std::string>>();
         std::copy_if(stop.begin(), stop.end(),
             std::back_inserter(llama.params.antiprompt),
-            [](const std::string& str) { return !str.empty(); });
+            [](const std::string & str) { return !str.empty(); });
     }
 
     if (llama.verbose) {
@@ -766,7 +766,7 @@ bool parse_options_completion(json body, llama_server_context& llama, Response& 
     return true;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char ** argv)
 {
     // own arguments required by this example
     gpt_params params;
@@ -804,10 +804,10 @@ int main(int argc, char** argv)
         {"Access-Control-Allow-Headers", "content-type"}
         });
 
-    svr.Get("/", [](const Request&, Response& res)
+    svr.Get("/", [](const Request &, Response & res)
         { res.set_content("<h1>llama.cpp server works</h1>", "text/html"); });
 
-    svr.Post("/completion", [&llama](const Request& req, Response& res) {
+    svr.Post("/completion", [&llama](const Request & req, Response & res) {
 
         llama.rewind();
         llama_reset_timings(llama.ctx);
@@ -922,12 +922,12 @@ int main(int argc, char** argv)
         }
         });
 
-    svr.Options(R"(/.*)", [](const Request&, Response& res)
+    svr.Options(R"(/.*)", [](const Request &, Response & res)
         {
             return res.set_content("", "application/json");
         });
 
-    svr.Post("/tokenize", [&llama](const Request& req, Response& res)
+    svr.Post("/tokenize", [&llama](const Request & req, Response & res)
         {
             json body = json::parse(req.body);
             json data = {
@@ -935,7 +935,7 @@ int main(int argc, char** argv)
             return res.set_content(data.dump(llama.json_indent), "application/json");
         });
 
-    svr.set_logger([](const Request& req, const Response& res) {
+    svr.set_logger([](const Request & req, const Response & res) {
         json log = {
             { "status", res.status },
             { "path", req.path },
@@ -946,8 +946,8 @@ int main(int argc, char** argv)
             log.dump(-1, ' ', false, json::error_handler_t::replace).c_str());
         });
 
-    svr.set_exception_handler([](const Request&, Response& res, std::exception_ptr ep) {
-        const auto* fmt = "500 Internal Server Error\n%s";
+    svr.set_exception_handler([](const Request &, Response & res, std::exception_ptr ep) {
+        const auto * fmt = "500 Internal Server Error\n%s";
         char buf[BUFSIZ];
         try {
             std::rethrow_exception(std::move(ep));
