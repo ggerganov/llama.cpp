@@ -774,7 +774,6 @@ int main(int argc, char ** argv)
 
     // struct that contains llama context and inference
     llama_server_context llama;
-    params.model = "ggml-model.bin";
 
     server_params_parse(argc, argv, sparams, params);
 

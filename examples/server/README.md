@@ -110,7 +110,7 @@ node .
 
     `prompt`: Provide a prompt. Internally, the prompt is compared, and it detects if a part has already been evaluated, and the remaining part will be evaluate.
 
-    `stop`: Specify the strings that indicate a stop.
+    `stop`: Specify a JSON array of stopping strings.
     These words will not be included in the completion, so make sure to add them to the prompt for the next iteration (default: []).
 
     `tfs_z`: Enable tail free sampling with parameter z (default: 1.0, 1.0 = disabled).
