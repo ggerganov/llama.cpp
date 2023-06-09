@@ -210,7 +210,11 @@ struct llama_model {
         for (size_t i = 0; i < tensors_by_name.size(); ++i) {
             ggml_cuda_free_data(tensors_by_name[i].second);
         }
-#endif // GGML_USE_CUBLAS
+#elif defined(GGML_USE_CLBLAST)
+        for (size_t i = 0; i < tensors_by_name.size(); ++i) {
+            ggml_cl_free_data(tensors_by_name[i].second);
+        }
+#endif
     }
 };
 
