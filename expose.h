@@ -50,5 +50,5 @@ struct generation_outputs
 extern std::string executable_path;
 extern std::string lora_filename;
 
-extern void receive_current_token(std::string token);
-extern void set_stream_finished(bool status = true);
+extern std::vector<std::string> generated_tokens;
+extern bool generation_finished;

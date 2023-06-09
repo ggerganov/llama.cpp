@@ -736,6 +736,9 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     params.n_batch = n_batch;
     params.n_threads = n_threads;
 
+    generation_finished = false; // Set current generation status
+    generated_tokens.clear(); // New Generation, new tokens
+
     if (params.repeat_last_n < 1)
     {
         params.repeat_last_n = 1;
@@ -1041,7 +1044,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 fprintf(stderr, "Failed to predict\n");
                 snprintf(output.text, sizeof(output.text), "%s", "");
                 output.status = 0;
-                set_stream_finished(true);
+                generation_finished = true;
                 return output;
             }
         }
@@ -1155,7 +1158,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
 
                 if (stream_sse)
                 {
-                    receive_current_token(tokenizedstr);
+                    generated_tokens.push_back(tokenizedstr);
                 }
                 concat_output += tokenizedstr;
             }
@@ -1224,7 +1227,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     printf("\nTime Taken - Processing:%.1fs (%.0fms/T), Generation:%.1fs (%.0fms/T), Total:%.1fs", time1, pt1, time2, pt2, (time1 + time2));
     fflush(stdout);
     output.status = 1;
-    set_stream_finished(true);
+    generation_finished = true;
     snprintf(output.text, sizeof(output.text), "%s", concat_output.c_str());
 
     return output;

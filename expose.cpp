@@ -24,9 +24,8 @@ std::string executable_path = "";
 std::string lora_filename = "";
 
 
-static std::string current_token = "";
-static bool new_token_available = false;
-static bool finished_stream = false;
+bool generation_finished;
+std::vector<std::string> generated_tokens;
 
 extern "C"
 {
@@ -213,35 +212,17 @@ extern "C"
         return gpttype_generate(inputs, output);
     }
 
+    const char* new_token(int idx) {
+        if (generated_tokens.size() <= idx || idx < 0) return nullptr;
 
-    const char* new_token() {
-        if (new_token_available) {
-            new_token_available = false;
-            return current_token.c_str();
-        }
-        return nullptr;
+        return generated_tokens[idx].c_str();
     }
 
-    bool is_locked() {
-        return !new_token_available;
+    int get_stream_count() {
+        return generated_tokens.size();
     }
 
     bool has_finished() {
-        return finished_stream;
+        return generation_finished;
     }
-
-
-    // TODO: dont duplicate code
-    void bind_set_stream_finished(bool status) {
-        finished_stream = status;
-    }
-}
-
-void receive_current_token(std::string token) {
-    current_token = token;
-    new_token_available = true;
-}
-
-void set_stream_finished(bool status) {
-    finished_stream = status;
 }
