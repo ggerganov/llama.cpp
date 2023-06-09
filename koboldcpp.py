@@ -289,7 +289,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Connection", "keep-alive")
         self.end_headers()
 
-        current_token = 0;
+        current_token = 0
 
         while not handle.has_finished():
             if current_token < handle.get_stream_count():
@@ -307,7 +307,10 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             await asyncio.sleep(0)
 
-        # Implement connection closing here
+        # flush buffers, sleep a bit to make sure all data sent, and then force close the connection
+        self.wfile.flush()
+        await asyncio.sleep(0.1)
+        self.close_connection = True
 
 
     async def handle_request(self, genparams, newprompt, basic_api_flag, stream_flag):
@@ -417,6 +420,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 genparams = json.loads(body)
             except ValueError as e:
+                utfprint("Body Err: " + str(body))
                 return self.send_response(503)
 
             utfprint("\nInput: " + json.dumps(genparams))
