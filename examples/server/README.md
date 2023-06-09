@@ -23,6 +23,8 @@ Command line options:
 
 ## Quick Start
 
+**Note:** The server is not built by default. Make sure to add `LLAMA_BUILD_SERVER=ON` to your CMake command.
+
 To get started right away, run the following command, making sure to use the correct path for the model you have:
 
 ### Unix-based systems (Linux, macOS, etc.):
@@ -99,7 +101,7 @@ node .
 
     `top_p`: Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P (default: 0.9).
 
-    `n_predict`: Set the number of tokens to predict when generating text (default: 128, -1 = infinity).
+    `n_predict`: Set the number of tokens to predict when generating text. **Note:** May exceed the the limit slightly if the last token is a partial multibyte character.  (default: 128, -1 = infinity).
 
     `n_keep`: Specify the number of tokens from the initial prompt to retain when the model resets its internal context.
     By default, this value is set to 0 (meaning no tokens are kept). Use `-1` to retain all tokens from the initial prompt.
