@@ -949,9 +949,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
         }
         ::utreplace(tmp, "\n", "\\n");
         outstr += tmp;
-        printf(outstr.c_str());
-
-        printf("\n\n");
+        printf("%s\n\n", outstr.c_str());
     }
 
     while (remaining_tokens > 0)
