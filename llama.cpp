@@ -1028,6 +1028,14 @@ static void llama_model_load_internal(
         }
     }
 
+    #if defined(GGML_USE_CLBLAST)
+    if (file_version == LLAMA_FILE_VERSION_GGJT_V3) {
+        if (hparams.ftype >= LLAMA_FTYPE_MOSTLY_Q2_K && hparams.ftype <= LLAMA_FTYPE_MOSTLY_Q6_K) {
+            printf("\n===\nK-Quants are currently not supported with CLBlast!!!\nPlease select a q4_0, q4_0, q5_0 or q5_1 format instead!\n=====\n");
+        }
+    }
+    #endif
+
     if (vocab_only) {
         return;
     }
