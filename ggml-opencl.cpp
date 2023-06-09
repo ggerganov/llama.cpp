@@ -662,7 +662,7 @@ static void ggml_cl_pool_free(cl_mem mem, size_t size) {
     clReleaseMemObject(mem);
 }
 
-void ggml_cl_data_free(const struct ggml_tensor* tensor) {
+void ggml_cl_free_data(const struct ggml_tensor* tensor) {
     if (tensor->backend != GGML_BACKEND_GPU) {
         return;
     }
