@@ -274,7 +274,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         try:
             return res
         except Exception as e:
-            print(f"Generate: Error while generating {e}")
+            print(f"Generate: Error while generating: {e}")
 
 
     async def send_sse_event(self, event, data):
@@ -307,7 +307,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             await asyncio.sleep(0)
 
-        await self.wfile.close()
+        # Implement connection closing here
 
 
     async def handle_request(self, genparams, newprompt, basic_api_flag, stream_flag):
@@ -321,7 +321,6 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             await asyncio.gather(*tasks)
-            print("done")
             generate_result = generate_task.result()
             return generate_result
         except Exception as e:
@@ -433,6 +432,8 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             gen = asyncio.run(self.handle_request(genparams, newprompt, basic_api_flag, kai_sse_stream_flag))
 
             try:
+                self.send_response(200)
+                self.end_headers()
                 self.wfile.write(json.dumps(gen).encode())
             except:
                 print("Generate: The response could not be sent, maybe connection was terminated?")
