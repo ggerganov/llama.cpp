@@ -7,11 +7,23 @@
 #include <string>
 
 static const std::map<std::string, llama_ftype> LLAMA_FTYPE_MAP = {
-  {"q4_0", LLAMA_FTYPE_MOSTLY_Q4_0},
-  {"q4_1", LLAMA_FTYPE_MOSTLY_Q4_1},
-  {"q5_0", LLAMA_FTYPE_MOSTLY_Q5_0},
-  {"q5_1", LLAMA_FTYPE_MOSTLY_Q5_1},
-  {"q8_0", LLAMA_FTYPE_MOSTLY_Q8_0},
+  {"q4_0",   LLAMA_FTYPE_MOSTLY_Q4_0},
+  {"q4_1",   LLAMA_FTYPE_MOSTLY_Q4_1},
+  {"q5_0",   LLAMA_FTYPE_MOSTLY_Q5_0},
+  {"q5_1",   LLAMA_FTYPE_MOSTLY_Q5_1},
+  {"q8_0",   LLAMA_FTYPE_MOSTLY_Q8_0},
+  {"q2_K",   LLAMA_FTYPE_MOSTLY_Q2_K},
+  {"q3_K",   LLAMA_FTYPE_MOSTLY_Q3_K_M},
+  {"q3_K_S", LLAMA_FTYPE_MOSTLY_Q3_K_S},
+  {"q3_K_M", LLAMA_FTYPE_MOSTLY_Q3_K_M},
+  {"q3_K_L", LLAMA_FTYPE_MOSTLY_Q3_K_L},
+  {"q4_K",   LLAMA_FTYPE_MOSTLY_Q4_K_M},
+  {"q4_K_S", LLAMA_FTYPE_MOSTLY_Q4_K_S},
+  {"q4_K_M", LLAMA_FTYPE_MOSTLY_Q4_K_M},
+  {"q5_K",   LLAMA_FTYPE_MOSTLY_Q5_K_M},
+  {"q5_K_S", LLAMA_FTYPE_MOSTLY_Q5_K_S},
+  {"q5_K_M", LLAMA_FTYPE_MOSTLY_Q5_K_M},
+  {"q6_K",   LLAMA_FTYPE_MOSTLY_Q6_K},
 };
 
 bool try_parse_ftype(const std::string & ftype_str, llama_ftype & ftype, std::string & ftype_str_out) {
