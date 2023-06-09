@@ -12,22 +12,26 @@ static const std::map<std::string, llama_ftype> LLAMA_FTYPE_MAP = {
   {"q5_0",   LLAMA_FTYPE_MOSTLY_Q5_0},
   {"q5_1",   LLAMA_FTYPE_MOSTLY_Q5_1},
   {"q8_0",   LLAMA_FTYPE_MOSTLY_Q8_0},
-  {"q2_K",   LLAMA_FTYPE_MOSTLY_Q2_K},
-  {"q3_K",   LLAMA_FTYPE_MOSTLY_Q3_K_M},
-  {"q3_K_S", LLAMA_FTYPE_MOSTLY_Q3_K_S},
-  {"q3_K_M", LLAMA_FTYPE_MOSTLY_Q3_K_M},
-  {"q3_K_L", LLAMA_FTYPE_MOSTLY_Q3_K_L},
-  {"q4_K",   LLAMA_FTYPE_MOSTLY_Q4_K_M},
-  {"q4_K_S", LLAMA_FTYPE_MOSTLY_Q4_K_S},
-  {"q4_K_M", LLAMA_FTYPE_MOSTLY_Q4_K_M},
-  {"q5_K",   LLAMA_FTYPE_MOSTLY_Q5_K_M},
-  {"q5_K_S", LLAMA_FTYPE_MOSTLY_Q5_K_S},
-  {"q5_K_M", LLAMA_FTYPE_MOSTLY_Q5_K_M},
-  {"q6_K",   LLAMA_FTYPE_MOSTLY_Q6_K},
+  {"q2_k",   LLAMA_FTYPE_MOSTLY_Q2_K},
+  {"q3_k",   LLAMA_FTYPE_MOSTLY_Q3_K_M},
+  {"q3_k_s", LLAMA_FTYPE_MOSTLY_Q3_K_S},
+  {"q3_k_m", LLAMA_FTYPE_MOSTLY_Q3_K_M},
+  {"q3_k_l", LLAMA_FTYPE_MOSTLY_Q3_K_L},
+  {"q4_k",   LLAMA_FTYPE_MOSTLY_Q4_K_M},
+  {"q4_k_s", LLAMA_FTYPE_MOSTLY_Q4_K_S},
+  {"q4_k_m", LLAMA_FTYPE_MOSTLY_Q4_K_M},
+  {"q5_k",   LLAMA_FTYPE_MOSTLY_Q5_K_M},
+  {"q5_k_s", LLAMA_FTYPE_MOSTLY_Q5_K_S},
+  {"q5_k_m", LLAMA_FTYPE_MOSTLY_Q5_K_M},
+  {"q6_k",   LLAMA_FTYPE_MOSTLY_Q6_K},
 };
 
 bool try_parse_ftype(const std::string & ftype_str, llama_ftype & ftype, std::string & ftype_str_out) {
-    auto it = LLAMA_FTYPE_MAP.find(ftype_str);
+    std::string ftype_str_lower;
+    for (char c : ftype_str) {
+        ftype_str_lower.push_back(std::tolower(c));
+    }
+    auto it = LLAMA_FTYPE_MAP.find(ftype_str_lower);
     if (it != LLAMA_FTYPE_MAP.end()) {
         ftype = it->second;
         ftype_str_out = it->first;
@@ -35,7 +39,7 @@ bool try_parse_ftype(const std::string & ftype_str, llama_ftype & ftype, std::st
     }
     // try to parse as an integer
     try {
-        int ftype_int = std::stoi(ftype_str);
+        int ftype_int = std::stoi(ftype_str_lower);
         for (auto it = LLAMA_FTYPE_MAP.begin(); it != LLAMA_FTYPE_MAP.end(); it++) {
             if (it->second == ftype_int) {
                 ftype = it->second;
