@@ -267,6 +267,8 @@ kernel void kernel_mul_mat_q4_0_f32(
         uint2  tptg[[threads_per_threadgroup]]) {
     const int nb = ne00/QK4_0;
 
+    const int8_t m8 = 8;
+
     const int64_t r0 = tgpig.x;
     const int64_t r1 = tgpig.y;
 
@@ -276,32 +278,33 @@ kernel void kernel_mul_mat_q4_0_f32(
     const uint nth = tptg.x*tptg.y;
     const uint ith = tptg.y*tpitg.x + tpitg.y;
 
-    sum[ith] = 0.0f;
+    const int ix = tpitg.y/4;           // 0 or 1
+    const int iy = tpitg.y - 4*ix;      // 0...3
 
-    for (int i = tpitg.x; i < nb; i += tptg.x) {
-        device const uchar4 * x0p = (device const uchar4 *) (x + i)->qs;
-        device const float4 * y0p = (device const float4 *) (y + i*QK4_0);
+    const int first = 4 * iy;
 
-        const float d = (float)((x + i)->d);
+    float sumf = 0;
 
-        const uchar4 x0v = *(x0p + tpitg.y);
-        const float4 y0v = *(y0p + tpitg.y + 0);
-        const float4 y1v = *(y0p + tpitg.y + 4);
+    for (int i = 2*tpitg.x + ix; i < nb; i += 2*tptg.x) {
 
-        float acc = 0.0f;
+        const float d = (float)x[i].d;
+
+        device const uint8_t * xl = x[i].qs + first;
+        device const float   * yl = y + i * QK4_0 + first;
+
+        float2 acc = {0.0f, 0.0f};
 
         for (int j = 0; j < 4; ++j) {
-            const int x0 = x0v[j] & 0x0F;
-            const int x1 = x0v[j] >>   4;
 
-            const float y0 = y0v[j];
-            const float y1 = y1v[j];
+            acc[0] += yl[j+ 0] * ((int8_t)(xl[j] & 0xF) - m8);
+            acc[1] += yl[j+16] * ((int8_t)(xl[j] >>  4) - m8);
 
-            acc += (x0 - 8)*y0 + (x1 - 8)*y1;
         }
 
-        sum[ith] += acc*d;
+        sumf += d * (acc[0] + acc[1]);
     }
+
+    sum[ith] = sumf;
 
     //
     // Accumulate the sum from all threads in the threadgroup
@@ -357,6 +360,7 @@ kernel void kernel_mul_mat_f16_f32(
         uint3  tpig[[thread_position_in_grid]],
         uint3 tpitg[[thread_position_in_threadgroup]],
         uint3  tptg[[threads_per_threadgroup]]) {
+
     const int64_t r0 = tgpig.x;
     const int64_t r1 = tgpig.y;
     const int64_t im = tgpig.z;
