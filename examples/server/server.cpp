@@ -951,11 +951,9 @@ int main(int argc, char** argv)
         char buf[BUFSIZ];
         try {
             std::rethrow_exception(std::move(ep));
-        }
-        catch (std::exception& e) {
+        } catch (std::exception& e) {
             snprintf(buf, sizeof(buf), fmt, e.what());
-        }
-        catch (...) {
+        } catch (...) {
             snprintf(buf, sizeof(buf), fmt, "Unknown Exception");
         }
         res.set_content(buf, "text/plain");
