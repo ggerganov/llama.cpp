@@ -63,6 +63,7 @@ static bool useSmartContext = false;
 static bool unbanTokens = false;
 static int blasbatchsize = 512;
 static bool debugmode = false;
+static bool stream_sse = true;
 static std::string modelname;
 static std::vector<gpt_vocab::id> last_n_tokens;
 static std::vector<gpt_vocab::id> current_context_tokens;
@@ -735,6 +736,9 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     params.n_batch = n_batch;
     params.n_threads = n_threads;
 
+    generation_finished = false; // Set current generation status
+    generated_tokens.clear(); // New Generation, new tokens
+
     if (params.repeat_last_n < 1)
     {
         params.repeat_last_n = 1;
@@ -1038,6 +1042,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 fprintf(stderr, "Failed to predict\n");
                 snprintf(output.text, sizeof(output.text), "%s", "");
                 output.status = 0;
+                generation_finished = true;
                 return output;
             }
         }
@@ -1147,7 +1152,13 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
 
             for (auto id : embd)
             {
-                concat_output += FileFormatTokenizeID(id,file_format);
+                std::string tokenizedstr = FileFormatTokenizeID(id, file_format);
+
+                if (stream_sse)
+                {
+                    generated_tokens.push_back(tokenizedstr);
+                }
+                concat_output += tokenizedstr;
             }
 
             if (startedsampling)
@@ -1214,6 +1225,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     printf("\nTime Taken - Processing:%.1fs (%.0fms/T), Generation:%.1fs (%.0fms/T), Total:%.1fs", time1, pt1, time2, pt2, (time1 + time2));
     fflush(stdout);
     output.status = 1;
+    generation_finished = true;
     snprintf(output.text, sizeof(output.text), "%s", concat_output.c_str());
 
     return output;

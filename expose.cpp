@@ -23,6 +23,10 @@
 std::string executable_path = "";
 std::string lora_filename = "";
 
+
+bool generation_finished;
+std::vector<std::string> generated_tokens;
+
 extern "C"
 {
 
@@ -206,5 +210,19 @@ extern "C"
     generation_outputs generate(const generation_inputs inputs, generation_outputs &output)
     {
         return gpttype_generate(inputs, output);
+    }
+
+    const char* new_token(int idx) {
+        if (generated_tokens.size() <= idx || idx < 0) return nullptr;
+
+        return generated_tokens[idx].c_str();
+    }
+
+    int get_stream_count() {
+        return generated_tokens.size();
+    }
+
+    bool has_finished() {
+        return generation_finished;
     }
 }
