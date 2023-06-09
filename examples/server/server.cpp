@@ -16,7 +16,7 @@ struct server_params
 
 static size_t common_part(const std::vector<llama_token>& a, const std::vector<llama_token>& b) {
     size_t i;
-    for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++);
+    for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++) {}
     return i;
 }
 
@@ -33,7 +33,7 @@ bool ends_with(const std::string& str, const std::string& suffix)
 
 size_t find_partial_stop_string(const std::string& stop, const std::string& text)
 {
-    if (!text.empty()) {
+    if (!text.empty() && !stop.empty()) {
         const char text_last_char = text.back();
         for (int64_t char_index = stop.size() - 1; char_index >= 0; char_index--) {
             if (stop[char_index] == text_last_char) {
