@@ -229,6 +229,7 @@ endif()
 
 if (LLAMA_K_QUANTS)
     set(GGML_SOURCES_EXTRA ${GGML_SOURCES_EXTRA} k_quants.c k_quants.h)
+    add_compile_definitions(GGML_USE_K_QUANTS)
 endif()
 
 if (LLAMA_CLBLAST)

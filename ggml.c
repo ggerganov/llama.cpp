@@ -14729,12 +14729,12 @@ static void ggml_graph_export_leaf(const struct ggml_tensor * tensor, FILE * fou
     const int64_t * ne = tensor->ne;
     const size_t  * nb = tensor->nb;
 
-    fprintf(fout, "%-6s %-12s %8d %8d %d %d %d %16zu %16zu %16zu %16zu %16p %32s\n",
+    fprintf(fout, "%-6s %-12s %8d %" PRId64 " %" PRId64 " %" PRId64 " %" PRId64 " %16zu %16zu %16zu %16zu %16p %32s\n",
             ggml_type_name(tensor->type),
             ggml_op_name  (tensor->op),
             tensor->n_dims,
-            (int) ne[0], (int) ne[1], (int) ne[2], (int) ne[3],
-                  nb[0],       nb[1],       nb[2],       nb[3],
+            ne[0], ne[1], ne[2], ne[3],
+            nb[0], nb[1], nb[2], nb[3],
             tensor->data,
             tensor->name);
 }
@@ -14743,13 +14743,13 @@ static void ggml_graph_export_node(const struct ggml_tensor * tensor, const char
     const int64_t * ne = tensor->ne;
     const size_t  * nb = tensor->nb;
 
-    fprintf(fout, "%-6s %-6s %-12s %8d %d %d %d %d %16zu %16zu %16zu %16zu %8d %16p %32s\n",
+    fprintf(fout, "%-6s %-6s %-12s %8d %" PRId64 " %" PRId64 " %" PRId64 " %" PRId64 " %16zu %16zu %16zu %16zu %8d %16p %32s\n",
             arg,
             ggml_type_name(tensor->type),
             ggml_op_name  (tensor->op),
             tensor->n_dims,
-            (int) ne[0], (int) ne[1], (int) ne[2], (int) ne[3],
-                  nb[0],       nb[1],       nb[2],       nb[3],
+            ne[0], ne[1], ne[2], ne[3],
+            nb[0], nb[1], nb[2], nb[3],
             tensor->n_tasks,
             tensor->data,
             tensor->name);
@@ -14772,11 +14772,11 @@ void ggml_graph_export(const struct ggml_cgraph * cgraph, const char * fname) {
         FILE * fout = stdout;
 
         fprintf(fout, "\n");
-        fprintf(fout, "%-16s %8x\n", "magic",   GGML_FILE_MAGIC);
-        fprintf(fout, "%-16s %8d\n", "version", GGML_FILE_VERSION);
-        fprintf(fout, "%-16s %8d\n", "leafs",   cgraph->n_leafs);
-        fprintf(fout, "%-16s %8d\n", "nodes",   cgraph->n_nodes);
-        fprintf(fout, "%-16s %8d\n", "eval",    (int) size_eval);
+        fprintf(fout, "%-16s %8x\n", "magic",        GGML_FILE_MAGIC);
+        fprintf(fout, "%-16s %8d\n", "version",      GGML_FILE_VERSION);
+        fprintf(fout, "%-16s %8d\n", "leafs",        cgraph->n_leafs);
+        fprintf(fout, "%-16s %8d\n", "nodes",        cgraph->n_nodes);
+        fprintf(fout, "%-16s %" PRIu64 "\n", "eval", size_eval);
 
         // header
         fprintf(fout, "\n");
