@@ -893,6 +893,10 @@ static bool kv_cache_init(
     ggml_set_name(cache.k, "cache_k");
     ggml_set_name(cache.v, "cache_v");
 
+#ifdef GGML_USE_CUBLAS
+    ggml_cuda_assign_buffers_no_scratch(cache.k);
+#endif // GGML_USE_CUBLAS
+
     return true;
 }
 
@@ -1375,12 +1379,12 @@ static bool llama_eval_internal(
 
             struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd/n_head, n_head, N), n_past, n_rot, 0);
             offload_func(Kcur);
-            Kcur->backend = GGML_BACKEND_CPU;
+            // Kcur->backend = GGML_BACKEND_CPU;
             ggml_set_name(Kcur, "Kcur");
 
             struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd/n_head, n_head, N), n_past, n_rot, 0);
             offload_func(Qcur);
-            Qcur->backend = GGML_BACKEND_CPU;
+            // Qcur->backend = GGML_BACKEND_CPU;
             ggml_set_name(Qcur, "Qcur");
 
             // store key and value to memory
@@ -1390,6 +1394,7 @@ static bool llama_eval_internal(
                 ggml_set_name(Vcur, "Vcur");
 
                 struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, N*n_embd, (ggml_element_size(kv_self.k)*n_embd)*(il*n_ctx + n_past));
+                offload_func(k);
                 ggml_set_name(k, "k");
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, N, n_embd,
                         (   n_ctx)*ggml_element_size(kv_self.v),
@@ -1405,6 +1410,7 @@ static bool llama_eval_internal(
                 ggml_permute(ctx0,
                         Qcur,
                         0, 2, 1, 3);
+            offload_func(Q);
             ggml_set_name(Q, "Q");
 
             struct ggml_tensor * K =
@@ -1413,6 +1419,7 @@ static bool llama_eval_internal(
                             ggml_view_1d(ctx0, kv_self.k, (n_past + N)*n_embd, il*n_ctx*ggml_element_size(kv_self.k)*n_embd),
                             n_embd/n_head, n_head, n_past + N),
                         0, 2, 1, 3);
+            offload_func(K);
             ggml_set_name(K, "K");
 
             // K * Q
