@@ -18,7 +18,6 @@ struct load_model_inputs
     const int clblast_info = 0;
     const int blasbatchsize = 512;
     const bool debugmode;
-    const bool stream_sse;
     const int forceversion = 0;
     const int gpulayers = 0;
 };
@@ -40,6 +39,7 @@ struct generation_inputs
     const float mirostat_eta;
     const float mirostat_tau;
     const char * stop_sequence[stop_token_max];
+    const bool stream_sse;
 };
 struct generation_outputs
 {
@@ -49,6 +49,5 @@ struct generation_outputs
 
 extern std::string executable_path;
 extern std::string lora_filename;
-
 extern std::vector<std::string> generated_tokens;
 extern bool generation_finished;

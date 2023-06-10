@@ -20,13 +20,6 @@
 #include "expose.h"
 #include "model_adapter.cpp"
 
-std::string executable_path = "";
-std::string lora_filename = "";
-
-
-bool generation_finished;
-std::vector<std::string> generated_tokens;
-
 extern "C"
 {
 
@@ -224,5 +217,13 @@ extern "C"
 
     bool has_finished() {
         return generation_finished;
+    }
+
+    const char* get_pending_output() {
+       return gpttype_get_pending_output().c_str();
+    }
+
+    bool abort_generate() {
+        return gpttype_generate_abort();
     }
 }
