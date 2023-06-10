@@ -234,8 +234,6 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, **kwargs)
 
     async def generate_text(self, newprompt, genparams, basic_api_flag, stream_flag):
-        loop = asyncio.get_event_loop()
-        executor = ThreadPoolExecutor()
 
         def run_blocking():
             if basic_api_flag:
@@ -270,8 +268,13 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     stop_sequence=genparams.get('stop_sequence', []),
                     stream_sse=stream_flag)
 
-
-        recvtxt = await loop.run_in_executor(executor, run_blocking)
+        recvtxt = ""
+        if stream_flag:
+            loop = asyncio.get_event_loop()
+            executor = ThreadPoolExecutor()
+            recvtxt = await loop.run_in_executor(executor, run_blocking)
+        else:
+            recvtxt = run_blocking()
 
         utfprint("\nOutput: " + recvtxt)
 
