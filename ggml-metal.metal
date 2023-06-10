@@ -11,6 +11,13 @@ typedef struct {
     uint8_t qs[QK4_0 / 2]; // nibbles / quants
 } block_q4_0;
 
+#define QK4_1 32
+typedef struct {
+    half d;          // delta
+    half m;          // min
+    uint8_t qs[QK4_1 / 2];  // nibbles / quants
+} block_q4_1;
+
 static void dequantize_row_q4_0(device const block_q4_0 * x, device float * y, int k) {
     const int qk = QK4_0;
 
@@ -27,6 +34,27 @@ static void dequantize_row_q4_0(device const block_q4_0 * x, device float * y, i
 
             y[i*qk + j + 0   ] = x0*d;
             y[i*qk + j + qk/2] = x1*d;
+        }
+    }
+}
+
+static void dequantize_row_q4_1(device const block_q4_1 * x, device float * y, int k) {
+    const int qk = QK4_1;
+
+    assert(k % qk == 0);
+
+    const int nb = k / qk;
+
+    for (int i = 0; i < nb; i++) {
+        const half d = x[i].d;
+        const half m = x[i].m;
+
+        for (int j = 0; j < qk/2; ++j) {
+            const int x0 = (x[i].qs[j] & 0x0F);
+            const int x1 = (x[i].qs[j] >>   4);
+
+            y[i*qk + j + 0   ] = x0*d + m;
+            y[i*qk + j + qk/2] = x1*d + m;
         }
     }
 }
@@ -212,6 +240,22 @@ kernel void kernel_get_rows_q4_0(
                        (device float *) ((device char *)  dst + i*nb1), ne00);
 }
 
+kernel void kernel_get_rows_q4_1(
+        device const  void * src0,
+        device const   int * src1,
+        device       float * dst,
+        constant   int64_t & ne00,
+        constant  uint64_t & nb01,
+        constant  uint64_t & nb1,
+        uint tpig[[thread_position_in_grid]]) {
+    const int i = tpig;
+    const int r = ((device int32_t *) src1)[i];
+
+    dequantize_row_q4_1(
+            (device const block_q4_1 *) ((device char *) src0 + r*nb01),
+                       (device float *) ((device char *)  dst + i*nb1), ne00);
+}
+
 kernel void kernel_rms_norm(
         device const  void * src0,
         device       float * dst,
@@ -348,6 +392,85 @@ kernel void kernel_mul_mat_q4_0_f32(
     //if (ith == 0) {
     //    dst[r1*ne0 + r0] = sum[0];
     //}
+}
+
+kernel void kernel_mul_mat_q4_1_f32(
+        device const  void * src0,
+        device const float * src1,
+        device       float * dst,
+        constant   int64_t & ne00,
+        constant   int64_t & ne01,
+        constant  uint64_t & nb00,
+        constant  uint64_t & nb01,
+        constant  uint64_t & nb02,
+        constant   int64_t & ne10,
+        constant   int64_t & ne11,
+        constant  uint64_t & nb10,
+        constant  uint64_t & nb11,
+        constant  uint64_t & nb12,
+        constant   int64_t & ne0,
+        constant   int64_t & ne1,
+        threadgroup float  * sum [[threadgroup(0)]],
+        uint2 tgpig[[threadgroup_position_in_grid]],
+        uint2  tpig[[thread_position_in_grid]],
+        uint2 tpitg[[thread_position_in_threadgroup]],
+        uint2  tptg[[threads_per_threadgroup]]) {
+    const int nb = ne00/QK4_1;
+
+    const int64_t r0 = tgpig.x;
+    const int64_t r1 = tgpig.y;
+
+    device const block_q4_1 * x = (device const block_q4_1 *) src0 + r0*nb;
+    device const float      * y = (device const float      *) src1 + r1*ne10;
+
+    const uint nth = tptg.x*tptg.y;
+    const uint ith = tptg.y*tpitg.x + tpitg.y;
+
+    const int ix = tpitg.y/4;           // 0 or 1
+    const int iy = tpitg.y - 4*ix;      // 0...3
+
+    const int first = 4 * iy;
+
+    float sumf = 0;
+
+    for (int i = 2*tpitg.x + ix; i < nb; i += 2*tptg.x) {
+
+        const float d = (float)x[i].d;
+        const float m = (float)x[i].m;
+
+        device const uint8_t * xl = x[i].qs + first;
+        device const float   * yl = y + i * QK4_1 + first;
+
+        float2 acc = {0.0f, 0.0f};
+
+        for (int j = 0; j < 4; ++j) {
+
+            acc[0] += yl[j+ 0] * (d * (xl[j] & 0xF) + m);
+            acc[1] += yl[j+16] * (d * (xl[j] >>  4) + m);
+
+        }
+
+        sumf += acc[0] + acc[1];
+    }
+
+    sum[ith] = sumf;
+
+    //
+    // Accumulate the sum from all threads in the threadgroup
+    //
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (ith%4 == 0) {
+        for (int i = 1; i < 4; ++i) sum[ith] += sum[ith + i];
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (ith%16 == 0) {
+        for (int i = 4; i < 16; i += 4) sum[ith] += sum[ith + i];
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (ith == 0) {
+        for (int i = 16; i < nth; i += 16) sum[0] += sum[i];
+        dst[r1*ne0 + r0] = sum[0];
+    }
 }
 
 kernel void kernel_mul_mat_f16_f32(
