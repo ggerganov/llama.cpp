@@ -747,11 +747,6 @@ struct llama_model_loader {
 
         if (use_mmap) {
             mapping.reset(new llama_mmap(&file_loaders.at(0)->file, prefetch_size));
-            if (!lmlock) {
-                // Don't call the callback since the actual loading will be lazy
-                // and we can't measure it.
-                progress_callback = NULL;
-            }
             if (lmlock) {
                 lmlock->init(mapping->addr);
             }
