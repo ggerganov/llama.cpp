@@ -202,6 +202,12 @@ if (LLAMA_CUBLAS)
     endif()
 endif()
 
+add_library(llama
+            llama.cpp
+            llama.h
+            llama-util.h
+            )
+
 if (LLAMA_METAL)
     find_library(FOUNDATION_LIBRARY         Foundation              REQUIRED)
     find_library(METAL_FRAMEWORK            Metal                   REQUIRED)
@@ -419,11 +425,7 @@ if (BUILD_SHARED_LIBS)
     set_target_properties(ggml PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 
-add_library(llama
-            llama.cpp
-            llama.h
-            llama-util.h
-            )
+
 
 target_include_directories(llama PUBLIC .)
 target_compile_features(llama PUBLIC cxx_std_11) # don't bump
