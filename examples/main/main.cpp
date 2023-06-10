@@ -81,6 +81,9 @@ int main(int argc, char ** argv) {
     if (params.n_ctx > 2048) {
         fprintf(stderr, "%s: warning: model does not support context sizes greater than 2048 tokens (%d specified);"
                 "expect poor results\n", __func__, params.n_ctx);
+    } else if (params.n_ctx < 8) {
+        fprintf(stderr, "%s: warning: minimum context size is 8, using minimum size.\n", __func__);
+        params.n_ctx = 8;
     }
 
     fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
@@ -331,7 +334,7 @@ int main(int argc, char ** argv) {
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
         if (embd.size() > 0) {
-            auto max_embd_size = n_ctx - 2;
+            auto max_embd_size = n_ctx - 4;
             // Ensure the input doesn't exceed the context size by truncating embd if necessary.
             if ((int)embd.size() > max_embd_size) {
                 auto skipped_tokens = embd.size() - max_embd_size;
