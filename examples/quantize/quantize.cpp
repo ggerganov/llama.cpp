@@ -4,43 +4,137 @@
 
 #include <cstdio>
 #include <cstring>
-#include <map>
+#include <vector>
+#include <iostream>
+#include <iomanip>
 #include <string>
 
-static const std::map<std::string, llama_ftype> LLAMA_FTYPE_MAP = {
-  {"q4_0",   LLAMA_FTYPE_MOSTLY_Q4_0},
-  {"q4_1",   LLAMA_FTYPE_MOSTLY_Q4_1},
-  {"q5_0",   LLAMA_FTYPE_MOSTLY_Q5_0},
-  {"q5_1",   LLAMA_FTYPE_MOSTLY_Q5_1},
-  {"q8_0",   LLAMA_FTYPE_MOSTLY_Q8_0},
-  {"q2_K",   LLAMA_FTYPE_MOSTLY_Q2_K},
-  {"q3_K",   LLAMA_FTYPE_MOSTLY_Q3_K_M},
-  {"q3_K_S", LLAMA_FTYPE_MOSTLY_Q3_K_S},
-  {"q3_K_M", LLAMA_FTYPE_MOSTLY_Q3_K_M},
-  {"q3_K_L", LLAMA_FTYPE_MOSTLY_Q3_K_L},
-  {"q4_K",   LLAMA_FTYPE_MOSTLY_Q4_K_M},
-  {"q4_K_S", LLAMA_FTYPE_MOSTLY_Q4_K_S},
-  {"q4_K_M", LLAMA_FTYPE_MOSTLY_Q4_K_M},
-  {"q5_K",   LLAMA_FTYPE_MOSTLY_Q5_K_M},
-  {"q5_K_S", LLAMA_FTYPE_MOSTLY_Q5_K_S},
-  {"q5_K_M", LLAMA_FTYPE_MOSTLY_Q5_K_M},
-  {"q6_K",   LLAMA_FTYPE_MOSTLY_Q6_K},
+struct quant_option {
+    std::string name;
+    llama_ftype ftype;
+    std::string desc;
 };
 
-bool try_parse_ftype(const std::string & ftype_str, llama_ftype & ftype, std::string & ftype_str_out) {
-    auto it = LLAMA_FTYPE_MAP.find(ftype_str);
-    if (it != LLAMA_FTYPE_MAP.end()) {
-        ftype = it->second;
-        ftype_str_out = it->first;
-        return true;
+static const std::vector<struct quant_option> QUANT_OPTIONS = {
+    {
+        "q4_0",
+        LLAMA_FTYPE_MOSTLY_Q4_0,
+        "approx +0.2499 perplexity, 3.50G output @ 7B",
+    },
+    {
+        "q4_1",
+        LLAMA_FTYPE_MOSTLY_Q4_1,
+        "approx +0.1846 perplexity, 3.90G output @ 7B",
+    },
+    {
+        "q5_0",
+        LLAMA_FTYPE_MOSTLY_Q5_0,
+        "approx +0.0796 perplexity, 4.30G output @ 7B",
+    },
+    {
+        "q5_1",
+        LLAMA_FTYPE_MOSTLY_Q5_1,
+        "approx +0.0415 perplexity, 4.70G output @ 7B",
+    },
+#ifdef GGML_USE_K_QUANTS
+    {
+        "q2_k",
+        LLAMA_FTYPE_MOSTLY_Q2_K,
+        "approx +0.8698 perplexity, 2.67G output @ 7B",
+    },
+    {
+        "q3_k",
+        LLAMA_FTYPE_MOSTLY_Q3_K_M,
+        "alias for q3_k_m"
+    },
+    {
+        "q3_k_s",
+        LLAMA_FTYPE_MOSTLY_Q3_K_S,
+        "approx +0.5505 perplexity, 2.75G output @ 7B",
+    },
+    {
+        "q3_k_m",
+        LLAMA_FTYPE_MOSTLY_Q3_K_M,
+        "approx +0.2437 perplexity, 3.06G output @ 7B",
+    },
+    {
+        "q3_k_l",
+        LLAMA_FTYPE_MOSTLY_Q3_K_L,
+        "approx +0.1803 perplexity, 3.35G output @ 7B",
+    },
+    {
+        "q4_k",
+        LLAMA_FTYPE_MOSTLY_Q4_K_M,
+        "alias for q4_k_m",
+    },
+    {
+        "q4_k_s",
+        LLAMA_FTYPE_MOSTLY_Q4_K_S,
+        "approx +0.1149 perplexity, 3.56G output @ 7B",
+    },
+    {
+        "q4_k_m",
+        LLAMA_FTYPE_MOSTLY_Q4_K_M,
+        "approx +0.0535 perplexity, 3.80G output @ 7B",
+    },
+    {
+        "q5_k",
+        LLAMA_FTYPE_MOSTLY_Q5_K_M,
+        "alias for q5_k_m",
+    },
+    {
+        "q5_k_s",
+        LLAMA_FTYPE_MOSTLY_Q5_K_S,
+        "approx +0.0353 perplexity, 4.33G output @ 7B",
+    },
+    {
+        "q5_k_m",
+        LLAMA_FTYPE_MOSTLY_Q5_K_M,
+        "approx +0.0142 perplexity, 4.45G output @ 7B",
+    },
+    {
+        "q6_k",
+        LLAMA_FTYPE_MOSTLY_Q6_K,
+        "approx +0.0044 perplexity, 5.15G output @ 7B",
+    },
+#endif
+    {
+        "q8_0",
+        LLAMA_FTYPE_MOSTLY_Q8_0,
+        "approx +0.0004 perplexity, 6.70G output @ 7B",
+    },
+    {
+        "f16",
+        LLAMA_FTYPE_MOSTLY_F16,
+        "no significant perplexity increase, 13.00G output @ 7B",
+    },
+    {
+        "f32",
+        LLAMA_FTYPE_ALL_F32,
+        "full quality, 26.00G output @ 7B",
+    },
+};
+
+
+bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftype, std::string & ftype_str_out) {
+    std::string ftype_str;
+
+    for (auto ch : ftype_str_in) {
+        ftype_str.push_back(std::tolower(ch));
     }
-    // try to parse as an integer
+    for (auto & it : QUANT_OPTIONS) {
+        if (it.name == ftype_str) {
+            ftype = it.ftype;
+            ftype_str_out = it.name;
+            return true;
+        }
+    }
     try {
         int ftype_int = std::stoi(ftype_str);
-        for (auto it = LLAMA_FTYPE_MAP.begin(); it != LLAMA_FTYPE_MAP.end(); it++) {
-            if (it->second == ftype_int) {
-                ftype = it->second;
-                ftype_str_out = it->first;
+        for (auto & it : QUANT_OPTIONS) {
+            if (it.ftype == ftype_int) {
+                ftype = it.ftype;
+                ftype_str_out = it.name;
                 return true;
             }
         }
@@ -59,8 +153,8 @@ void usage(const char * executable) {
     fprintf(stderr, "  --allow-requantize: Allows requantizing tensors that have already been quantized. Warning: This can severely reduce quality compared to quantizing from 16bit or 32bit\n");
     fprintf(stderr, "  --leave-output-tensor: Will leave output.weight un(re)quantized. Increases model size but may also increase quality, especially when requantizing\n");
     fprintf(stderr, "Allowed quantization types:\n");
-    for (auto it = LLAMA_FTYPE_MAP.begin(); it != LLAMA_FTYPE_MAP.end(); it++) {
-        fprintf(stderr, "  type = \"%s\" or %d\n", it->first.c_str(), it->second);
+    for (auto & it : QUANT_OPTIONS) {
+        std::cout << "  " << std::setw(2) << it.ftype << "  or  " << std::setw(6) << it.name << "  :  " << it.desc << "\n";
     }
     exit(1);
 }
