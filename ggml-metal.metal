@@ -1280,22 +1280,16 @@ kernel void kernel_mul_mat_q5_k_f32(
         device const float * src1,
         device       float * dst,
         constant   int64_t & ne00,
-        constant   int64_t & ne01,
-        constant  uint64_t & nb00,
-        constant  uint64_t & nb01,
-        constant  uint64_t & nb02,
         constant   int64_t & ne10,
-        constant   int64_t & ne11,
-        constant  uint64_t & nb10,
-        constant  uint64_t & nb11,
-        constant  uint64_t & nb12,
         constant   int64_t & ne0,
-        constant   int64_t & ne1,
         threadgroup float  * sum [[threadgroup(0)]],
         uint2 tgpig[[threadgroup_position_in_grid]],
-        uint2  tpig[[thread_position_in_grid]],               // we don't use this for now
         uint2 tpitg[[thread_position_in_threadgroup]],
         uint2  tptg[[threads_per_threadgroup]]) {
+
+    const uint16_t kmask1 = 0x3f3f;
+    const uint16_t kmask2 = 0x0f0f;
+    const uint16_t kmask3 = 0xc0c0;
 
     const int nb = ne00/QK_K;
 
@@ -1310,48 +1304,67 @@ kernel void kernel_mul_mat_q5_k_f32(
 
     const int tid = tpitg.y;   // 0...16
     const int il  = tid/4;     // 0...3
-    const int ir  = tid%4;     // 0...3
-    const int n   = 8;
-    const int is  = 2*il;
+    const int ir  = tid - 4*il;// 0...3
+    const int n   = 4;
 
-    const uint8_t hm1 = 1u << is;
+    const int im = il/2;  // 0 or 1. 0 computes 0,32 + 128,160, 1 computes 64,96 + 192,224
+    const int in = il%2;
+
+    const int l0 = n*(2*ir + in);
+    const int q_offset = 32*im + l0;
+    const int y_offset = 64*im + l0;
+
+    const uint8_t hm1 = 1u << (2*im);
     const uint8_t hm2 = hm1 << 1;
+    const uint8_t hm3 = hm1 << 4;
+    const uint8_t hm4 = hm2 << 4;
+
+    uchar2 sc1, sc2, sc3, sc4;
 
     float sumf = 0;
     for (int i = tpitg.x; i < nb; i += tptg.x) {
 
-        device const uint8_t * ql = (x + i)->qs + 32*il + n*ir;
-        device const uint8_t * qh = (x + i)->qh + n*ir;
-        device const float   * y  = yy + i*QK_K + 64*il + n*ir;
-        device const uint8_t * scales = (x + i)->scales;
+        device const uint8_t * q1 = (x + i)->qs + q_offset;
+        device const uint8_t * q2 = q1 + 64;
+        device const uint8_t * qh = (x + i)->qh + l0;
+        device const float   * y1 = yy + i*QK_K + y_offset;
+        device const float   * y2 = y1 + 128;
 
         const float dall = (float)((x + i)->d);
         const float dmin = (float)((x + i)->dmin);
 
-        const uchar4 sc = get_scale_min_k4(is, scales);
+        device const uint16_t * a = (device const uint16_t *)(x + i)->scales;
+        sc1 = as_type<uchar2>((uint16_t)(a[im+0] & kmask1));
+        sc2 = as_type<uchar2>((uint16_t)(a[im+2] & kmask1));
+        sc3 = as_type<uchar2>((uint16_t)(((a[im+4] >> 0) & kmask2) | ((a[im+0] & kmask3) >> 2)));
+        sc4 = as_type<uchar2>((uint16_t)(((a[im+4] >> 4) & kmask2) | ((a[im+2] & kmask3) >> 2)));
 
         float4 s = {0.f, 0.f, 0.f, 0.f};
+        float smin = 0;
         for (int l = 0; l < n; ++l) {
-            s[0] += y[l+ 0] * ((ql[l] & 0xF) + (qh[l] & hm1 ? 16 : 0)); s[1] += y[l+ 0];
-            s[2] += y[l+32] * ((ql[l] >>  4) + (qh[l] & hm2 ? 16 : 0)); s[3] += y[l+32];
+
+            s[0] += y1[l+ 0] * ((q1[l] & 0xF) + (qh[l] & hm1 ? 16 : 0));
+            s[1] += y1[l+32] * ((q1[l] >>  4) + (qh[l] & hm2 ? 16 : 0));
+            s[2] += y2[l+ 0] * ((q2[l] & 0xF) + (qh[l] & hm3 ? 16 : 0));
+            s[3] += y2[l+32] * ((q2[l] >>  4) + (qh[l] & hm4 ? 16 : 0));
+            smin += y1[l] * sc2[0] + y1[l+32] * sc2[1] + y2[l] * sc4[0] + y2[l+32] * sc4[1];
+
         }
-        sumf += dall * (s[0] * sc[0] + s[2] * sc[2]) - dmin * (s[1] * sc[1] + s[3] * sc[3]);
+        sumf += dall * (s[0] * sc1[0] + s[1] * sc1[1] + s[2] * sc3[0] + s[3] * sc3[1]) - dmin * smin;
 
     }
     sum[ith] = sumf;
 
     //
     // Accumulate the sum from all threads in the threadgroup
-    // This version is slightly faster than the commented out one below,
-    // which I copy-pasted from ggerganov's q4_0 dot product for metal.
     //
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (ith%4 == 0) {
-        for (int i = 1; i < 4; ++i) sum[ith] += sum[ith + i];
+        sum[ith] += sum[ith+1] + sum[ith+2] + sum[ith+3];
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (ith%16 == 0) {
-        for (int i = 4; i < 16; i += 4) sum[ith] += sum[ith + i];
+        sum[ith] += sum[ith+4] + sum[ith+8] + sum[ith+12];
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (ith == 0) {
@@ -1359,18 +1372,6 @@ kernel void kernel_mul_mat_q5_k_f32(
         dst[r1*ne0 + r0] = sum[0];
     }
 
-    //// accumulate the sum from all threads in the threadgroup
-    //threadgroup_barrier(mem_flags::mem_threadgroup);
-    //for (uint i = nth/2; i > 0; i /= 2) {
-    //    if (ith < i) {
-    //        sum[ith] += sum[ith + i];
-    //    }
-    //    threadgroup_barrier(mem_flags::mem_threadgroup);
-    //}
-
-    //if (ith == 0) {
-    //    dst[r1*ne0 + r0] = sum[0];
-    //}
 }
 
 kernel void kernel_mul_mat_q6_k_f32(
