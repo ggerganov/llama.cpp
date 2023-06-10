@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Original at https://github.com/google/uVkCompute/blob/f3180c7e72ae639c0a7bc8cff7ed615b63ced27c/benchmarks/mmt/mmt_i8.glsl
 // Modified by 0cc4m for FP32
 
 #version 450 core
@@ -21,6 +22,12 @@
 #extension GL_EXT_control_flow_attributes : enable
 
 #extension GL_KHR_shader_subgroup_basic : enable
+
+#define WG_X 32
+#define WG_Y 2
+#define M0 32
+#define N0 256
+#define K0 16
 
 layout(binding = 0) buffer InputA { vec4 x[]; } inputA;
 layout(binding = 1) buffer InputB { vec4 x[]; } inputB;

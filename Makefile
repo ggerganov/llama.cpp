@@ -216,7 +216,7 @@ endif # LLAMA_METAL
 ifdef LLAMA_VULKAN
 	CFLAGS  += -DGGML_USE_VULKAN
 	LDFLAGS += -lvulkan
-	OBJS    += ggml-vulkan.o ggml-vulkan-matmul-shader
+	OBJS    += ggml-vulkan.o
 ggml-vulkan.o: ggml-vulkan.cpp ggml-vulkan.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 ggml-vulkan-matmul-shader:
