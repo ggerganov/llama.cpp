@@ -167,6 +167,26 @@ if (LLAMA_BLAS)
         add_compile_definitions(GGML_USE_OPENBLAS)
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ${BLAS_LIBRARIES})
 
+        # check include dir
+        if (NOT BLAS_INCLUDE_DIRS)
+            # find header file
+            set(BLAS_INCLUDE_SEARCH_PATHS
+                /usr/include
+                /usr/include/openblas
+                /usr/include/openblas-base
+                /usr/local/include
+                /usr/local/include/openblas
+                /usr/local/include/openblas-base
+                /opt/OpenBLAS/include
+                $ENV{OpenBLAS_HOME}
+                $ENV{OpenBLAS_HOME}/include
+            )
+            find_path(BLAS_INC NAMES cblas.h PATHS ${BLAS_INCLUDE_SEARCH_PATHS})
+            add_compile_options(-I${BLAS_INC})
+            set(BLAS_INCLUDE_DIRS ${BLAS_INC})
+            message(STATUS "Found header file in ${BLAS_INC}")
+        endif()
+
         message("${BLAS_LIBRARIES} ${BLAS_INCLUDE_DIRS}")
         include_directories(${BLAS_INCLUDE_DIRS})
     else()
