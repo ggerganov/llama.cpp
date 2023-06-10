@@ -331,6 +331,17 @@ int main(int argc, char ** argv) {
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
         if (embd.size() > 0) {
+            auto max_embd_size = n_ctx - 2;
+            // Ensure the input doesn't exceed the context size by truncating embd if necessary.
+            if ((int)embd.size() > max_embd_size) {
+                auto skipped_tokens = embd.size() - max_embd_size;
+                console_set_color(con_st, CONSOLE_COLOR_ERROR);
+                printf("<<input too long: skipped %ld token%s>>", skipped_tokens, skipped_tokens != 1 ? "s" : "");
+                console_set_color(con_st, CONSOLE_COLOR_DEFAULT);
+                fflush(stdout);
+                embd.resize(max_embd_size);
+            }
+
             // infinite text generation via context swapping
             // if we run out of context:
             // - take the n_keep first tokens from the original prompt (via n_past)

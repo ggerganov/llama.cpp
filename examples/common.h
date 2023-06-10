@@ -112,7 +112,8 @@ struct llama_context * llama_init_from_gpt_params(const gpt_params & params);
 enum console_color_t {
     CONSOLE_COLOR_DEFAULT=0,
     CONSOLE_COLOR_PROMPT,
-    CONSOLE_COLOR_USER_INPUT
+    CONSOLE_COLOR_USER_INPUT,
+    CONSOLE_COLOR_ERROR
 };
 
 struct console_state {
