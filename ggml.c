@@ -3721,6 +3721,7 @@ struct ggml_context {
     void * mem_buffer;
     bool   mem_buffer_owned;
     bool   no_alloc;
+    bool   no_alloc_save; // this is used to save the no_alloc state when using scratch buffers
 
     int    n_objects;
 
@@ -4055,6 +4056,7 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         /*.mem_buffer         =*/ params.mem_buffer ? params.mem_buffer : GGML_ALIGNED_MALLOC(mem_size),
         /*.mem_buffer_owned   =*/ params.mem_buffer ? false : true,
         /*.no_alloc           =*/ params.no_alloc,
+        /*.no_alloc_save      =*/ params.no_alloc,
         /*.n_objects          =*/ 0,
         /*.objects_begin      =*/ NULL,
         /*.objects_end        =*/ NULL,
@@ -4132,11 +4134,18 @@ size_t ggml_get_mem_size(struct ggml_context * ctx) {
 // operators when using scratch buffers
 // TODO: implement a better way
 void ggml_scratch_save(struct ggml_context * ctx) {
+    // this is needed to allow opt tensors to store their data
+    // TODO: again, need to find a better way
+    ctx->no_alloc_save = ctx->no_alloc;
+    ctx->no_alloc      = false;
+
     ctx->scratch_save = ctx->scratch;
     ctx->scratch.data = NULL;
 }
 
 void ggml_scratch_load(struct ggml_context * ctx) {
+    ctx->no_alloc = ctx->no_alloc_save;
+
     ctx->scratch = ctx->scratch_save;
 }
 
