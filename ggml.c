@@ -16312,7 +16312,6 @@ size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, i
                 int elemsize = sizeof(float);
                 result = n * elemsize;
                 memcpy((uint8_t *)dst + start * elemsize, src + start, result);
-
             } break;
         default:
             assert(false);

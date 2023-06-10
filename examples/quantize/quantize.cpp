@@ -17,101 +17,101 @@ struct quant_option {
 
 static const std::vector<struct quant_option> QUANT_OPTIONS = {
     {
-        "q4_0",
+        "Q4_0",
         LLAMA_FTYPE_MOSTLY_Q4_0,
-        "approx +0.2499 perplexity, 3.50G output @ 7B",
+        "approx +0.2499 perplexity, 3.50 GiB size @ 7B",
     },
     {
-        "q4_1",
+        "Q4_1",
         LLAMA_FTYPE_MOSTLY_Q4_1,
-        "approx +0.1846 perplexity, 3.90G output @ 7B",
+        "approx +0.1846 perplexity, 3.90 GiB size @ 7B",
     },
     {
-        "q5_0",
+        "Q5_0",
         LLAMA_FTYPE_MOSTLY_Q5_0,
-        "approx +0.0796 perplexity, 4.30G output @ 7B",
+        "approx +0.0796 perplexity, 4.30 GiB size @ 7B",
     },
     {
-        "q5_1",
+        "Q5_1",
         LLAMA_FTYPE_MOSTLY_Q5_1,
-        "approx +0.0415 perplexity, 4.70G output @ 7B",
+        "approx +0.0415 perplexity, 4.70 GiB size @ 7B",
     },
 #ifdef GGML_USE_K_QUANTS
     {
-        "q2_k",
+        "Q2_K",
         LLAMA_FTYPE_MOSTLY_Q2_K,
-        "approx +0.8698 perplexity, 2.67G output @ 7B",
+        "approx +0.8698 perplexity, 2.67 GiB size @ 7B",
     },
     {
-        "q3_k",
+        "Q3_K",
         LLAMA_FTYPE_MOSTLY_Q3_K_M,
-        "alias for q3_k_m"
+        "alias for Q3_K_M"
     },
     {
-        "q3_k_s",
+        "Q3_K_S",
         LLAMA_FTYPE_MOSTLY_Q3_K_S,
-        "approx +0.5505 perplexity, 2.75G output @ 7B",
+        "approx +0.5505 perplexity, 2.75 GiB size @ 7B",
     },
     {
-        "q3_k_m",
+        "Q3_K_M",
         LLAMA_FTYPE_MOSTLY_Q3_K_M,
-        "approx +0.2437 perplexity, 3.06G output @ 7B",
+        "approx +0.2437 perplexity, 3.06 GiB size @ 7B",
     },
     {
-        "q3_k_l",
+        "Q3_K_L",
         LLAMA_FTYPE_MOSTLY_Q3_K_L,
-        "approx +0.1803 perplexity, 3.35G output @ 7B",
+        "approx +0.1803 perplexity, 3.35 GiB size @ 7B",
     },
     {
-        "q4_k",
+        "Q4_K",
         LLAMA_FTYPE_MOSTLY_Q4_K_M,
-        "alias for q4_k_m",
+        "alias for Q4_K_M",
     },
     {
-        "q4_k_s",
+        "Q4_K_S",
         LLAMA_FTYPE_MOSTLY_Q4_K_S,
-        "approx +0.1149 perplexity, 3.56G output @ 7B",
+        "approx +0.1149 perplexity, 3.56 GiB size @ 7B",
     },
     {
-        "q4_k_m",
+        "Q4_K_M",
         LLAMA_FTYPE_MOSTLY_Q4_K_M,
-        "approx +0.0535 perplexity, 3.80G output @ 7B",
+        "approx +0.0535 perplexity, 3.80 GiB size @ 7B",
     },
     {
-        "q5_k",
+        "Q5_K",
         LLAMA_FTYPE_MOSTLY_Q5_K_M,
-        "alias for q5_k_m",
+        "alias for Q5_K_M",
     },
     {
-        "q5_k_s",
+        "Q5_K_S",
         LLAMA_FTYPE_MOSTLY_Q5_K_S,
-        "approx +0.0353 perplexity, 4.33G output @ 7B",
+        "approx +0.0353 perplexity, 4.33 GiB size @ 7B",
     },
     {
-        "q5_k_m",
+        "Q5_K_M",
         LLAMA_FTYPE_MOSTLY_Q5_K_M,
-        "approx +0.0142 perplexity, 4.45G output @ 7B",
+        "approx +0.0142 perplexity, 4.45 GiB size @ 7B",
     },
     {
-        "q6_k",
+        "Q6_K",
         LLAMA_FTYPE_MOSTLY_Q6_K,
-        "approx +0.0044 perplexity, 5.15G output @ 7B",
+        "approx +0.0044 perplexity, 5.15 GiB size @ 7B",
     },
 #endif
     {
-        "q8_0",
+        "Q8_0",
         LLAMA_FTYPE_MOSTLY_Q8_0,
-        "approx +0.0004 perplexity, 6.70G output @ 7B",
+        "approx +0.0004 perplexity, 6.70 GiB size @ 7B",
     },
     {
-        "f16",
+        "F16",
         LLAMA_FTYPE_MOSTLY_F16,
-        "no significant perplexity increase, 13.00G output @ 7B",
+        "no significant perplexity increase, 13.00 GiB size @ 7B",
     },
     {
-        "f32",
+        "F32",
         LLAMA_FTYPE_ALL_F32,
-        "full quality, 26.00G output @ 7B",
+        "full quality, 26.00 GiB size @ 7B",
     },
 };
 
@@ -120,7 +120,7 @@ bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftype, std:
     std::string ftype_str;
 
     for (auto ch : ftype_str_in) {
-        ftype_str.push_back(std::tolower(ch));
+        ftype_str.push_back(std::toupper(ch));
     }
     for (auto & it : QUANT_OPTIONS) {
         if (it.name == ftype_str) {
