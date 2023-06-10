@@ -21,9 +21,26 @@ Command line options:
 -   `--host`: Set the hostname or ip address to listen. Default `127.0.0.1`.
 -   `--port`: Set the port to listen. Default: `8080`.
 
-## Quick Start
+## Build
 
-**Note:** The server is not built by default. Make sure to add `LLAMA_BUILD_SERVER=ON` to your CMake command.
+Build llama.cpp with server from repository root with either make or CMake.
+
+- Using `make`:
+
+  ```bash
+  LLAMA_BUILD_SERVER=1 make
+  ```
+
+- Using `CMake`:
+
+  ```bash
+  mkdir build-server
+  cd build-server
+  cmake -DLLAMA_BUILD_SERVER=ON ..
+  cmake --build . --config Release
+  ```
+
+## Quick Start
 
 To get started right away, run the following command, making sure to use the correct path for the model you have:
 
