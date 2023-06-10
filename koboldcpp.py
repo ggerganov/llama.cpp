@@ -154,8 +154,8 @@ def load_model(model_filename):
     inputs.f16_kv = True
     inputs.use_mmap = (not args.nommap)
     inputs.use_mlock = args.usemlock
-    inputs.lora_filename = ""
-    inputs.lora_base = ""
+    inputs.lora_filename = "".encode("UTF-8")
+    inputs.lora_base = "".encode("UTF-8")
     if args.lora:
         inputs.lora_filename = args.lora[0].encode("UTF-8")
         inputs.use_mmap = False
