@@ -152,6 +152,7 @@ static_assert(sizeof(block_q6_K) == sizeof(ggml_fp16_t) + 13*QK_K/16, "wrong q6_
 #define CUDA_MUL_BLOCK_SIZE 256
 #define CUDA_SILU_BLOCK_SIZE 256
 #define CUDA_CPY_BLOCK_SIZE 32
+#define CUDA_SCALE_BLOCK_SIZE 256
 #define CUDA_ROPE_BLOCK_SIZE 256
 #define CUDA_DEQUANTIZE_BLOCK_SIZE 256
 
@@ -826,6 +827,16 @@ static __global__ void rope_f32(const float * x, float * dst, const int ncols, c
     dst[i + 1] = x0*sin_theta + x1*cos_theta;
 }
 
+static __global__ void scale_f32(const float * x, float * dst, const float scale, const int k) {
+    const int i = blockDim.x*blockIdx.x + threadIdx.x;
+
+    if (i >= k) {
+        return;
+    }
+
+    dst[i] = scale * x[i];
+}
+
 static void add_f32_cuda(const float * x, const float * y, float * dst, const int k, cudaStream_t stream) {
     const int num_blocks = (k + CUDA_ADD_BLOCK_SIZE - 1) / CUDA_ADD_BLOCK_SIZE;
     add_f32<<<num_blocks, CUDA_ADD_BLOCK_SIZE, 0, stream>>>(x, y, dst, k);
@@ -1023,6 +1034,11 @@ static void ggml_cpy_f32_f16_cuda(const float * x, void * vdst, const int ne0, c
     const dim3 block_nums(block_num_x, ne1, ne2);
     const dim3 block_dims(CUDA_CPY_BLOCK_SIZE, 1, 1);
     cpy_f32_f16<<<block_nums, block_dims, 0, stream>>>(x, vdst, ne0, ne1, stride_1, stride_2);
+}
+
+static void scale_f32_cuda(const float * x, float * dst, const float scale, const int k, cudaStream_t stream) {
+    const int num_blocks = (k + CUDA_SCALE_BLOCK_SIZE - 1) / CUDA_SCALE_BLOCK_SIZE;
+    scale_f32<<<num_blocks, CUDA_SCALE_BLOCK_SIZE, 0, stream>>>(x, dst, scale, k);
 }
 
 static void rope_f32_cuda(const float * x, float * dst, const int ncols, const int nrows, const float p, const float theta_scale, cudaStream_t stream) {
@@ -1463,6 +1479,31 @@ inline void ggml_cuda_op_rope(
     (void) i1;
 }
 
+inline void ggml_cuda_op_scale(
+    const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, char * src0_ddq_i,
+    float * src0_ddf_i, float * src1_ddf_i, float * dst_ddf_i, int64_t i02, int64_t i01_low, int64_t i01_high, int i1,
+    cudaStream_t & cudaStream_main){
+
+    GGML_ASSERT(src0_ddf_i != nullptr);
+    GGML_ASSERT(dst_ddf_i != nullptr);
+
+    const float scale = ((float *) src1->data)[0];
+
+    const int64_t ne00 = src0->ne[0];
+    const int64_t i01_diff = i01_high - i01_low;
+
+    // compute
+    scale_f32_cuda(src0_ddf_i, dst_ddf_i, scale, ne00*i01_diff, cudaStream_main);
+    CUDA_CHECK(cudaGetLastError());
+
+    (void) src1;
+    (void) dst;
+    (void) src0_ddq_i;
+    (void) src1_ddf_i;
+    (void) i02;
+    (void) i1;
+}
+
 static void ggml_cuda_op(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
                          ggml_cuda_op_t op, bool src0_needs_f32) {
     const int64_t ne00 = src0->ne[0];
@@ -1829,7 +1870,12 @@ void ggml_cuda_mul_mat_p021_f16_f32(const ggml_tensor * src0, const ggml_tensor 
         src1_ddf = (float *) src1_extra->data_device[g_main_device];
         // CUDA_CHECK(cudaMemset(src1_ddf, 0, ggml_nbytes(src1)));
     }
-    CUDA_CHECK(cudaMalloc(&dst_ddf, dst_size));
+    if (dst->backend == GGML_BACKEND_CPU) {
+        CUDA_CHECK(cudaMalloc(&dst_ddf, dst_size));
+    } else {
+        struct ggml_tensor_extra_gpu * dst_extra = (ggml_tensor_extra_gpu *) dst->extra;
+        dst_ddf = (float *) dst_extra->data_device[g_main_device];
+    }
 
     for (int64_t i11 = 0; i11 < ne11; ++i11) {
         float * src1_ddf_i = src1_ddf + i11 * ne10*ne12;
@@ -1840,16 +1886,19 @@ void ggml_cuda_mul_mat_p021_f16_f32(const ggml_tensor * src0, const ggml_tensor 
 
     CUDA_CHECK(cudaDeviceSynchronize());
 
-    for (int64_t i3 = 0; i3 < ne3; i3++) {
-        for (int64_t i2 = 0; i2 < ne2; i2++) {
-            for (int64_t i1 = 0; i1 < ne1; i1++) {
-                const int64_t i = i3*ne2*ne1 + i2*ne1 + i1;
-                float * dst_ddf_i = dst_ddf + i*ne0;
-                float * dhf_dst_i = (float *) ((char *) dst->data + i3*nb3 + i2*nb2 + i1*nb1);
-                CUDA_CHECK(cudaMemcpyAsync(dhf_dst_i, dst_ddf_i, ne0*sizeof(float), cudaMemcpyDeviceToHost, cudaStream_main));
+    if (dst->backend == GGML_BACKEND_CPU) {
+        for (int64_t i3 = 0; i3 < ne3; i3++) {
+            for (int64_t i2 = 0; i2 < ne2; i2++) {
+                for (int64_t i1 = 0; i1 < ne1; i1++) {
+                    const int64_t i = i3*ne2*ne1 + i2*ne1 + i1;
+                    float * dst_ddf_i = dst_ddf + i*ne0;
+                    float * dhf_dst_i = (float *) ((char *) dst->data + i3*nb3 + i2*nb2 + i1*nb1);
+                    CUDA_CHECK(cudaMemcpyAsync(dhf_dst_i, dst_ddf_i, ne0*sizeof(float), cudaMemcpyDeviceToHost, cudaStream_main));
+                }
             }
         }
     }
+
     CUDA_CHECK(cudaDeviceSynchronize());
     if (src0->backend == GGML_BACKEND_CPU) {
         CUDA_CHECK(cudaFree(src0_ddq));
@@ -1857,7 +1906,9 @@ void ggml_cuda_mul_mat_p021_f16_f32(const ggml_tensor * src0, const ggml_tensor 
     if (src1->backend == GGML_BACKEND_CPU) {
         CUDA_CHECK(cudaFree(src1_ddf));
     }
-    CUDA_CHECK(cudaFree(dst_ddf));
+    if (src1->backend == GGML_BACKEND_CPU) {
+        CUDA_CHECK(cudaFree(dst_ddf));
+    }
 }
 
 void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
@@ -1875,6 +1926,11 @@ void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1, ggml_
     } else {
         GGML_ASSERT(false);
     }
+}
+
+void ggml_cuda_scale(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_ASSERT(src0->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32);
+    ggml_cuda_op(src0, src1, dst, ggml_cuda_op_scale, true);
 }
 
 void ggml_cuda_cpy(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
@@ -2107,6 +2163,12 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
                 return false;
             }
             func = ggml_cuda_mul_mat;
+            break;
+        case GGML_OP_SCALE:
+            if (!any_on_device) {
+                return false;
+            }
+            func = ggml_cuda_scale;
             break;
         case GGML_OP_CPY:
             if (!any_on_device) {

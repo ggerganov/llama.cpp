@@ -1424,6 +1424,7 @@ static bool llama_eval_internal(
 
             // K * Q
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
+            offload_func(KQ);
             ggml_set_name(KQ, "KQ");
 
             // KQ_scaled = KQ / sqrt(n_embd/n_head)
@@ -1432,6 +1433,8 @@ static bool llama_eval_internal(
 
             // KQ_scaled shape [n_past + N, N, n_head, 1]
             struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx0, KQ, KQ_scale);
+            offload_func(KQ_scaled);
+            KQ_scaled->backend = GGML_BACKEND_CPU;
             ggml_set_name(KQ_scaled, "KQ_scaled");
 
             // KQ_masked = mask_past(KQ_scaled)
