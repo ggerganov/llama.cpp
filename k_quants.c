@@ -1519,7 +1519,7 @@ void ggml_vec_dot_q4_K_q8_K(const int n, float * restrict s, const void * restri
 
     const uint8x16_t m4b = vdupq_n_u8(0xf);
 #ifdef __ARM_FEATURE_DOTPROD
-    const uint32x4_t mzero = vdupq_n_s32(0);
+    const int32x4_t mzero = vdupq_n_s32(0);
 #endif
 
     int8x16x2_t q4bytes;
@@ -1745,7 +1745,7 @@ void ggml_vec_dot_q5_K_q8_K(const int n, float * restrict s, const void * restri
 #ifdef __ARM_NEON
 
     const uint8x16_t m4b = vdupq_n_u8(0xf);
-    const uint32x4_t mzero = vdupq_n_u32(0);
+    const int32x4_t mzero = vdupq_n_s32(0);
     const uint8x16_t mone = vdupq_n_u8(1);
     const uint8x16_t mtwo = vdupq_n_u8(2);
 
@@ -2242,5 +2242,3 @@ void ggml_vec_dot_q6_K_q8_K(const int n, float * restrict s, const void * restri
     *s = sumf;
 #endif
 }
-
-
