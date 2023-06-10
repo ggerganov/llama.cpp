@@ -73,6 +73,12 @@ struct ggml_metal_context {
 //       for now it is easier to work in a separate file
 static NSString * const msl_library_source = @"see metal.metal";
 
+// Here to assist with NSBundle Path Hack
+@interface GGMLMetalClass : NSObject
+@end
+@implementation GGMLMetalClass
+@end
+
 struct ggml_metal_context * ggml_metal_init(void) {
     fprintf(stderr, "%s: allocating\n", __func__);
 
@@ -108,7 +114,8 @@ struct ggml_metal_context * ggml_metal_init(void) {
         NSError * error = nil;
 
         //NSString * path = [[NSBundle mainBundle] pathForResource:@"../../examples/metal/metal" ofType:@"metal"];
-        NSString * path = [[NSBundle mainBundle] pathForResource:@"ggml-metal" ofType:@"metal"];
+        NSBundle * bundle = [NSBundle bundleForClass:[GGMLMetalClass class]];
+        NSString * path = [bundle pathForResource:@"ggml-metal" ofType:@"metal"];
         fprintf(stderr, "%s: loading '%s'\n", __func__, [path UTF8String]);
 
         NSString * src  = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
