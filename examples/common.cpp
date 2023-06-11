@@ -632,6 +632,9 @@ void console_set_color(console_state & con_st, console_color_t color) {
             case CONSOLE_COLOR_USER_INPUT:
                 fprintf(con_st.out, ANSI_BOLD ANSI_COLOR_GREEN);
                 break;
+            case CONSOLE_COLOR_ERROR:
+                fprintf(con_st.out, ANSI_BOLD ANSI_COLOR_RED);
+                break;
         }
         con_st.color = color;
         fflush(con_st.out);
