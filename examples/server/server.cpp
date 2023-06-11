@@ -5,6 +5,10 @@
 #include "httplib.h"
 #include "json.hpp"
 
+#ifndef SERVER_VERBOSE
+#define SERVER_VERBOSE 1
+#endif
+
 using namespace httplib;
 using json = nlohmann::json;
 
@@ -553,7 +557,7 @@ void server_params_parse(int argc, char ** argv, server_params & sparams,
             params.lora_base = argv[i];
         } else if (arg == "-v" || arg == "--verbose") {
             sparams.verbose = true;
-#ifndef SERVER_VERBOSE
+#if SERVER_VERBOSE != 1
             LOG_WARNING("server.cpp is not built with verbose logging.", {});
 #endif
         } else if (arg == "--mlock") {
@@ -743,7 +747,7 @@ int main(int argc, char ** argv) {
 
     server_params_parse(argc, argv, sparams, params);
 
-#ifdef SERVER_VERBOSE
+#if SERVER_VERBOSE == 1
     server_verbose = sparams.verbose;
 #endif
 

@@ -34,6 +34,7 @@ models/*
 /embedding
 /benchmark-matmult
 /vdot
+/server
 /Pipfile
 /libllama.so
 
