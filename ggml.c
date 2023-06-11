@@ -13545,7 +13545,7 @@ static void ggml_compute_forward_flash_attn_back_f32(
     for (int ir = ir0; ir < ir1; ++ir) {
         // q indices
         const int iq3 = ir/(neq2);
-        const int iq2 = (ir - iq3*neq2)/neq2;
+        const int iq2 = ir - iq3*neq2;
         for ( int iq1 = 0; iq1 < neq1; ++iq1) {
 
 
