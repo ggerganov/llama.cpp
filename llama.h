@@ -53,6 +53,7 @@ extern "C" {
     // TODO: show sample usage
     //
 
+    struct llama_model;
     struct llama_context;
 
     typedef int llama_token;
@@ -136,6 +137,16 @@ extern "C" {
 
     LLAMA_API int64_t llama_time_us();
 
+    LLAMA_API struct llama_model * llama_load_model_from_file(
+                             const char * path_model,
+            struct llama_context_params   params);
+
+    LLAMA_API void llama_free_model(struct llama_model * model);
+
+    LLAMA_API struct llama_context * llama_new_context_with_model(
+                             struct llama_model * model,
+            struct llama_context_params   params);
+
     // Various functions for loading a ggml llama model.
     // Allocate (almost) all memory needed for the model.
     // Return NULL on failure
@@ -160,6 +171,12 @@ extern "C" {
     // Returns 0 on success
     LLAMA_API int llama_apply_lora_from_file(
             struct llama_context * ctx,
+                      const char * path_lora,
+                      const char * path_base_model,
+                             int   n_threads);
+
+    LLAMA_API int llama_model_apply_lora_from_file(
+            const struct llama_model * model,
                       const char * path_lora,
                       const char * path_base_model,
                              int   n_threads);
