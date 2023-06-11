@@ -10498,7 +10498,7 @@ static void ggml_compute_forward_out_prod_f32(
     const int64_t ne03 = src0->ne[3];
 
     const int64_t ne10 = src1->ne[0];
-    const int64_t ne11 = src1->ne[1];
+    //const int64_t ne11 = src1->ne[1];
     const int64_t ne12 = src1->ne[2];
     const int64_t ne13 = src1->ne[3];
 
@@ -10587,10 +10587,9 @@ static void ggml_compute_forward_out_prod_f32(
         const int64_t i02 = i2;
         const int64_t i03 = i3;
 
-        const int64_t i10 = i1;
+        //const int64_t i10 = i1;
         const int64_t i12 = i2;
         const int64_t i13 = i3;
-
 
         for (int64_t i01 = 0; i01 < ne01; ++i01) {
             const int64_t i11 = i01;
@@ -13956,8 +13955,7 @@ static void ggml_compute_forward_cross_entropy_loss_f32(
         return;
     }
 
-    const float eps = 1e-9f;
-
+    const double eps = 1e-9;
 
     // rows per thread
     const int dr = (nr + nth - 1)/nth;
@@ -14002,7 +14000,7 @@ static void ggml_compute_forward_cross_entropy_loss_f32(
             // sum = 1.0/sum;
         }
         // avoid log(0) by rescaling from [0..1] to [eps..1]
-        sum = (1.0f - eps) / sum;
+        sum = (1.0 - eps) / sum;
         ggml_vec_scale_f32(nc, st, sum);
         ggml_vec_add1_f32(nc, st, st, eps);
         ggml_vec_log_f32(nc, st, st);
@@ -14054,8 +14052,6 @@ static void ggml_compute_forward_cross_entropy_loss_back_f32(
     const int64_t ith = params->ith;
     const int64_t nth = params->nth;
 
-    float * sums = (float *) params->wdata;
-
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
@@ -14090,6 +14086,8 @@ static void ggml_compute_forward_cross_entropy_loss_back_f32(
 #endif
         // step by step explanation:
         {
+            //float * sums = (float *) params->wdata;
+
             // forward pass with annotated gradients from backward pass
             // (built by going in reverse operation order, adding to gradients of current operation args)
             // st0 = exp(s0-max(s0))                                                       grad[st0] = grad[st1]*(1.0 - eps)/sum
@@ -14162,10 +14160,10 @@ static void ggml_compute_forward_cross_entropy_loss_back_f32(
         float dot_st1_dst1 = 0;
         ggml_vec_scale_f32(nc, sm, sum);
         ggml_vec_cpy_f32  (nc, ds0, sm);
-        ggml_vec_scale_f32(nc, ds0, (1.0 - eps));
+        ggml_vec_scale_f32(nc, ds0, (1.0f - eps));
         ggml_vec_add1_f32 (nc, ds0, ds0, eps);
         ggml_vec_div_f32  (nc, ds0, s1, ds0);
-        ggml_vec_scale_f32(nc, ds0, -(1.0 - eps)*d[0]);
+        ggml_vec_scale_f32(nc, ds0, -(1.0f - eps)*d[0]);
         ggml_vec_dot_f32  (nc, &dot_st1_dst1, sm, ds0);
         ggml_vec_acc1_f32 (nc, ds0, -dot_st1_dst1);
         ggml_vec_mul_f32  (nc, ds0, ds0, sm);

@@ -953,7 +953,7 @@ struct ggml_tensor * forward_batch_wo_cache(
     const int N = n_tokens;
 
     const auto & hparams = model->hparams;
-    const int n_ctx   = hparams.n_ctx;
+    //const int n_ctx   = hparams.n_ctx;
     const int n_vocab = hparams.n_vocab;
     const int n_embd  = hparams.n_embd;
     const int n_layer = hparams.n_layer;
@@ -1181,7 +1181,7 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn(
     const int N = n_tokens;
 
     const auto & hparams = model->hparams;
-    const int n_ctx   = hparams.n_ctx;
+    //const int n_ctx   = hparams.n_ctx;
     const int n_vocab = hparams.n_vocab;
     const int n_embd  = hparams.n_embd;
     const int n_layer = hparams.n_layer;
@@ -1368,7 +1368,7 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train(
     gf->work = NULL;
 
     const auto & hparams = model->hparams;
-    const int n_ctx      = hparams.n_ctx;
+    //const int n_ctx      = hparams.n_ctx;
     const int n_vocab    = hparams.n_vocab;
     const int n_embd     = hparams.n_embd;
     const int n_layer    = hparams.n_layer;
@@ -1894,7 +1894,7 @@ void print_tokens(struct llama_context* ctx, struct ggml_tensor * tokens) {
 
 void print_tokens_batch(struct llama_context* ctx, struct ggml_tensor * tokens) {
     for (int i1=0; i1<tokens->ne[1]; ++i1) {
-        int num_newline = 0;
+        //int num_newline = 0;
         for (int i0=0; i0<tokens->ne[0]; ++i0) {
             int token = get_i32_2d(tokens, i0, i1);
             print_token(ctx, token);
@@ -1920,7 +1920,7 @@ void get_example_targets(const int * train_samples, size_t n_train_samples, cons
     int n_tokens = tokens_input->ne[0];
     int n_vocab  = target_logits->ne[0];
 
-    int sample = train_samples[example_id % n_train_samples];
+    size_t sample = train_samples[example_id % n_train_samples];
     GGML_ASSERT(sample+n_tokens-1 < n_train_data);
 
     ggml_set_f32(target_logits, -1.0f/n_vocab);
@@ -1936,7 +1936,7 @@ void get_example_targets(const int * train_samples, size_t n_train_samples, cons
     }
 }
 
-void get_example_targets_batch(struct llama_context * lctx, const int * train_samples, size_t n_train_samples, const llama_token * train_data, size_t n_train_data, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * target_logits, struct ggml_tensor * target_probs) {
+void get_example_targets_batch(struct llama_context * /*lctx*/, const int * train_samples, size_t n_train_samples, const llama_token * train_data, size_t n_train_data, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * target_logits, struct ggml_tensor * target_probs) {
     GGML_ASSERT(tokens_input->n_dims  == 2);
     GGML_ASSERT(target_logits->n_dims == 3);
     GGML_ASSERT(target_probs->n_dims  == 3);
@@ -1953,7 +1953,7 @@ void get_example_targets_batch(struct llama_context * lctx, const int * train_sa
     ggml_set_f32(target_probs, 0.0f);
     for (int k=0; k<n_batch; ++k) {
         // printf("%s: batch %d\n", __func__, k);
-        int sample = train_samples[(example_id*n_batch + k) % n_train_samples];
+        size_t sample = train_samples[(example_id*n_batch + k) % n_train_samples];
         GGML_ASSERT(sample+n_tokens-1 < n_train_data);
 
         set_i32_2d(tokens_input, 0, k, llama_token_bos());
@@ -2120,7 +2120,7 @@ int tokenize_file(struct llama_context * lctx, const char * filename, std::vecto
     if (verify) {
         const char * in  = buf.data();
         const char * end = buf.data() + buf.size();
-        for (int i=0; i < out.size(); ++i) {
+        for (int i = 0; i < (int) out.size(); ++i) {
             const char * s = llama_token_to_str(lctx, out[i]);
             int len = strlen(s);
             if (in >= end) {
@@ -2264,7 +2264,7 @@ llama_token sample(struct my_llama_sampler * sampler, float * logits, const llam
 }
 
 void set_logits_masked(struct ggml_tensor * logits, std::vector<bool>& mask, float value) {
-    GGML_ASSERT(logits->ne[0] == mask.size());
+    GGML_ASSERT(logits->ne[0] == (int64_t) mask.size());
     for (int i2 = 0; i2 < logits->ne[2]; ++i2) {
         for (int i1 = 0; i1 < logits->ne[1]; ++i1) {
             for (int i0 = 0; i0 < logits->ne[0]; ++i0) {
@@ -2301,7 +2301,7 @@ void write_tensor(struct llama_file * file, struct ggml_tensor * tensor) {
 }
 
 void read_tensor(struct llama_file * file, struct ggml_tensor * tensor) {
-    uint32_t nd = file->read_u32();
+    int32_t nd = file->read_u32();
     GGML_ASSERT(nd == tensor->n_dims);
 
     uint32_t name_len       = file->read_u32();
@@ -3003,7 +3003,7 @@ int main(int argc, char ** argv) {
     if (tokenize_file(lctx, params.fn_train_data, train_tokens) < 0) {
         fprintf(stderr, "%s: failed to tokenize file '%s'\n", __func__, params.fn_train_data);
     }
-    printf("%s: number of training tokens: %d\n", __func__, train_tokens.size());
+    printf("%s: number of training tokens: %d\n", __func__, (int) train_tokens.size());
 
     struct my_llama_model model;
     model.hparams.n_vocab = llama_n_vocab(lctx);
@@ -3020,7 +3020,7 @@ int main(int argc, char ** argv) {
     std::vector<bool>   token_notavail;
     token_noccurs.resize(model.hparams.n_vocab, 0);
     token_notavail.resize(model.hparams.n_vocab, true);
-    for (int i=0; i<train_tokens.size(); ++i) {
+    for (int i = 0; i < (int) train_tokens.size(); ++i) {
         ++token_noccurs[train_tokens[i]];
         token_notavail[train_tokens[i]] = false;
     }
@@ -3028,7 +3028,7 @@ int main(int argc, char ** argv) {
     std::vector<float> token_freq;
     token_freq.resize(model.hparams.n_vocab, 0);
     int n_unique_tokens = 0;
-    for (int i=0; i<token_noccurs.size(); ++i) {
+    for (int i = 0; i < (int) token_noccurs.size(); ++i) {
         token_freq[i] = (float) token_noccurs[i] / (float) train_tokens.size();
         n_unique_tokens += (token_noccurs[i] > 0) ? 1 : 0;
     }
@@ -3104,26 +3104,26 @@ int main(int argc, char ** argv) {
     uint8_t * compute_buf_1 = new uint8_t[size_buf_1];
     uint8_t * compute_buf_2 = new uint8_t[size_buf_2];
 
-    GGML_ASSERT(train_tokens.size() > n_tokens);;
+    GGML_ASSERT(n_tokens < (int) train_tokens.size());
     std::vector<int> train_samples;
     train_samples.push_back(0);
-    for (int i=1; i<train_tokens.size()-n_tokens; ++i) {
+    for (int i = 1; i < (int) train_tokens.size() - n_tokens; ++i) {
         if (!params.samples_start_after_nl || (train_tokens[i-1] == llama_token_nl())) {
             train_samples.push_back(i);
         }
     }
     shuffle_ints(train_samples.data(), train_samples.data() + train_samples.size());
-    for (int i=0; i<train_samples.size(); ++i) {
-        GGML_ASSERT(train_samples[i]+n_tokens-1 < train_tokens.size());
+    for (int i = 0; i < (int) train_samples.size(); ++i) {
+        GGML_ASSERT(train_samples[i]+n_tokens-1 < (int) train_tokens.size());
     }
 
     printf("%s: begin training\n", __func__);
 
-    for (int ex=0; ex<params.n_examples; ++ex) {
-        if (ex*n_batch >= train_samples.size()) {
+    for (int ex = 0; ex < params.n_examples; ++ex) {
+        if (ex*n_batch >= (int) train_samples.size()) {
             shuffle_ints(train_samples.data(), train_samples.data() + train_samples.size());
-            for (int i=0; i<train_samples.size(); ++i) {
-                GGML_ASSERT(train_samples[i]+n_tokens-1 < train_tokens.size());
+            for (int i = 0; i < (int) train_samples.size(); ++i) {
+                GGML_ASSERT(train_samples[i]+n_tokens-1 < (int) train_tokens.size());
             }
         }
 
@@ -3134,11 +3134,11 @@ int main(int argc, char ** argv) {
         };
         struct ggml_context * ctx0 = ggml_init(cparams);
 
-        struct ggml_tensor * after_opt_best_samples  = ggml_new_tensor_2d(ctx0, GGML_TYPE_I32, n_tokens, n_batch);
-        struct ggml_tensor * after_opt_probs         = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_vocab,  n_tokens, n_batch);
-        struct ggml_tensor * tokens_input            = ggml_new_tensor_2d(ctx0, GGML_TYPE_I32, n_tokens, n_batch);
-        struct ggml_tensor * target_logits           = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_vocab,  n_tokens, n_batch);
-        struct ggml_tensor * target_probs            = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_vocab,  n_tokens, n_batch);
+        struct ggml_tensor * after_opt_best_samples = ggml_new_tensor_2d(ctx0, GGML_TYPE_I32, n_tokens, n_batch);
+        //struct ggml_tensor * after_opt_probs        = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_vocab,  n_tokens, n_batch);
+        struct ggml_tensor * tokens_input           = ggml_new_tensor_2d(ctx0, GGML_TYPE_I32, n_tokens, n_batch);
+        struct ggml_tensor * target_logits          = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_vocab,  n_tokens, n_batch);
+        struct ggml_tensor * target_probs           = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_vocab,  n_tokens, n_batch);
 
         int n_past = 0;
 
@@ -3293,8 +3293,8 @@ int main(int argc, char ** argv) {
             ggml_build_forward_expand(&gf, logits);
             ggml_graph_compute(ctx0, &gf);
 
-            struct ggml_tensor * best_samples = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, sample_ctx);
-            struct ggml_tensor * probs        = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_vocab, sample_ctx);
+            //struct ggml_tensor * best_samples = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, sample_ctx);
+            //struct ggml_tensor * probs        = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_vocab, sample_ctx);
 
             // set_logits_masked(logits, token_notavail, -1e9);
             int token = sample(&sampler,

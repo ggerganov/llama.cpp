@@ -193,9 +193,9 @@ extern "C" {
     // Returns number of results.
     LLAMA_API int llama_get_vocab(
             const struct llama_context * ctx,
-            const char * * strings,
-            float  * scores,
-            int capacity);
+                          const char * * strings,
+                                 float * scores,
+                                   int   capacity);
 
     // Token logits obtained from the last call to llama_eval()
     // The logits for the last token are stored in the last row
