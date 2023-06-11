@@ -895,6 +895,7 @@ static bool kv_cache_init(
 
 #ifdef GGML_USE_CUBLAS
     ggml_cuda_assign_buffers_no_scratch(cache.k);
+    // ggml_cuda_assign_buffers_no_scratch(cache.v);
 #endif // GGML_USE_CUBLAS
 
     return true;
@@ -1452,6 +1453,7 @@ static bool llama_eval_internal(
                         n_ctx*ggml_element_size(kv_self.v),
                         n_ctx*ggml_element_size(kv_self.v)*n_embd/n_head,
                         il*n_ctx*ggml_element_size(kv_self.v)*n_embd);
+            // offload_func(V);
             ggml_set_name(V, "V");
 
 #if 1
