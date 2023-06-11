@@ -9,7 +9,9 @@
 #include "llama_v2.h"
 
 #include "ggml_v2.h"
-#if defined(GGML_USE_CLBLAST)
+#ifdef GGML_USE_CUBLAS
+#include "ggml_v2-cuda.h"
+#elif defined(GGML_USE_CLBLAST)
 #include "ggml_v2-opencl.h"
 #endif
 
@@ -892,7 +894,7 @@ static const char *llama_v2_model_type_name(e_model2 type) {
         case MODEL_13B_2: return "13B";
         case MODEL_30B_2: return "30B";
         case MODEL_65B_2: return "65B";
-        default: 
+        default:
             printf("\nWARNING: NON-STANDARD LLAMA FILE DETECTED. DEFAULT TO 7B SIZE.\n");
             return "UNKNOWN";
     }
@@ -1058,7 +1060,33 @@ static void llama_v2_model_load_internal(
     ml->load_all_data(progress_callback, progress_callback_user_data, use_mlock ? &lctx.model.mlock_mmap : NULL);
 
     model.mapping = std::move(ml->mapping);
-#if defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_CUBLAS)
+    {
+        const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
+
+        fprintf(stderr, "%s: [old cublas] offloading %d layers to GPU\n", __func__, n_gpu);
+
+        size_t vram_total = 0;
+
+        for (int i = 0; i < n_gpu; ++i) {
+            const auto & layer = model.layers[i];
+
+            ggml_v2_cuda_transform_tensor(layer.wq); vram_total += ggml_v2_nbytes(layer.wq);
+            ggml_v2_cuda_transform_tensor(layer.wk); vram_total += ggml_v2_nbytes(layer.wk);
+            ggml_v2_cuda_transform_tensor(layer.wv); vram_total += ggml_v2_nbytes(layer.wv);
+            ggml_v2_cuda_transform_tensor(layer.wo); vram_total += ggml_v2_nbytes(layer.wo);
+            ggml_v2_cuda_transform_tensor(layer.w1); vram_total += ggml_v2_nbytes(layer.w1);
+            ggml_v2_cuda_transform_tensor(layer.w2); vram_total += ggml_v2_nbytes(layer.w2);
+            ggml_v2_cuda_transform_tensor(layer.w3); vram_total += ggml_v2_nbytes(layer.w3);
+        }
+        if (n_gpu_layers > (int) hparams.n_layer) {
+            fprintf(stderr, "%s: [old cublas] offloading output layer to GPU\n", __func__);
+            ggml_v2_cuda_transform_tensor(model.output); vram_total += ggml_v2_nbytes(model.output);
+        }
+
+        fprintf(stderr, "%s: [old cublas] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
+    }
+#elif defined(GGML_USE_CLBLAST)
     {
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
         if(GetQuantsUnshuffled())
