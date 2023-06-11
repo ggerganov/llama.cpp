@@ -308,7 +308,7 @@ Building the program with BLAS support may lead to some performance improvements
 
 - #### BLIS
 
-  Check [BLIS.md](BLIS.md) for more information.
+  Check [BLIS.md](docs/BLIS.md) for more information.
 
 - #### Intel MKL
 
