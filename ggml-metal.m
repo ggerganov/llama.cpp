@@ -579,7 +579,7 @@ void ggml_metal_graph_compute(
                                     GGML_ASSERT(ne12 == 1);
 
                                     nth0 = 4;
-                                    nth1 = 16;
+                                    nth1 = 32;
                                     [encoder setComputePipelineState:ctx->pipeline_mul_mat_q2_k_f32];
                                 } break;
                             case GGML_TYPE_Q3_K:
