@@ -334,6 +334,8 @@ int main(int argc, char ** argv) {
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
         if (embd.size() > 0) {
+            // Note: n_ctx - 4 here is to match the logic for commandline prompt handling via
+            // --prompt or --file which uses the same value.
             auto max_embd_size = n_ctx - 4;
             // Ensure the input doesn't exceed the context size by truncating embd if necessary.
             if ((int)embd.size() > max_embd_size) {
