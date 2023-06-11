@@ -155,7 +155,7 @@ void convert_f16(__global half* x, const int ib, const int iqs, float* v0, float
     *v1 = vload_half(0, &x[ib + 1]);
 }
 
-static inline void get_scale_min_k4(int j,  const __global uchar *q, uchar *d, uchar *m) {
+inline void get_scale_min_k4(int j,  const __global uchar *q, uchar *d, uchar *m) {
     if (j < 4) {
         *d = q[j] & 63;
         *m = q[j + 4] & 63;
@@ -747,6 +747,64 @@ static cl_kernel* ggml_get_to_fp32_cl(ggml_type type) {
     }
 }
 
+static size_t ggml_cl_global_denom(ggml_type type) {
+    switch (type) {
+        case GGML_TYPE_Q4_0:
+            return 1;
+        case GGML_TYPE_Q4_1:
+            return 1;
+        case GGML_TYPE_Q5_0:
+            return 1;
+        case GGML_TYPE_Q5_1:
+            return 1;
+        case GGML_TYPE_Q8_0:
+            return 1;
+        case GGML_TYPE_Q2_K:
+            return 4;
+        case GGML_TYPE_Q3_K:
+            return 4;
+        case GGML_TYPE_Q4_K:
+            return 8;
+        case GGML_TYPE_Q5_K:
+            return 4;
+        case GGML_TYPE_Q6_K:
+            return 4;
+        case GGML_TYPE_F16:
+            return 1;
+        default:
+            return 1;
+    }
+}
+
+static size_t ggml_cl_local_size(ggml_type type) {
+    switch (type) {
+        case GGML_TYPE_Q4_0:
+            return 0;
+        case GGML_TYPE_Q4_1:
+            return 0;
+        case GGML_TYPE_Q5_0:
+            return 0;
+        case GGML_TYPE_Q5_1:
+            return 0;
+        case GGML_TYPE_Q8_0:
+            return 0;
+        case GGML_TYPE_Q2_K:
+            return 64;
+        case GGML_TYPE_Q3_K:
+            return 64;
+        case GGML_TYPE_Q4_K:
+            return 32;
+        case GGML_TYPE_Q5_K:
+            return 64;
+        case GGML_TYPE_Q6_K:
+            return 64;
+        case GGML_TYPE_F16:
+            return 0;
+        default:
+            return 0;
+    }
+}
+
 static cl_kernel* ggml_get_dequantize_mul_mat_vec_cl(ggml_type type) {
     switch (type) {
         case GGML_TYPE_Q4_0:
@@ -1199,11 +1257,15 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
         d_Q = ggml_cl_pool_malloc(q_sz, &q_size);
     }
 
+    printf("\ntype:%d q_sz:%d y_sz:%d ne00:%d ne01:%d ne10:%d ne11:%d nb2:%d nb3:%d",type,q_size,y_size,ne00,ne01,ne10,ne11);
+    fflush(stdout);
+
     cl_kernel* to_fp32_cl = ggml_get_to_fp32_cl(type);
     cl_kernel* dmmv = ggml_get_dequantize_mul_mat_vec_cl(type);
     GGML_ASSERT(to_fp32_cl != nullptr);
 
-    printf("\ntype:%d q_sz:%d y_sz:%d ne00:%d ne01:%d ne10:%d ne11:%d nb2:%d nb3:%d",type,q_size,y_size,ne00,ne01,ne10,ne11);
+    const size_t global_denom = ggml_cl_global_denom(type);
+    const size_t local = ggml_cl_local_size(type);
 
     size_t ev_idx = 0;
     std::vector<cl_event> events;
@@ -1237,10 +1299,10 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
                 CL_CHECK(clEnqueueNDRangeKernel(queue, *dmmv, 1, NULL, &global, &local, events.size() - 1, events.data(), events.data() + ev_idx++));
             } else { // general dequantization kernel + CLBlast matrix matrix multiplication
                 // convert src0 to fp32 on device
-                const size_t global = x_ne;
+                const size_t global = x_ne / global_denom;
                 CL_CHECK(clSetKernelArg(*to_fp32_cl, 0, sizeof(cl_mem), &d_Q));
                 CL_CHECK(clSetKernelArg(*to_fp32_cl, 1, sizeof(cl_mem), &d_X));
-                CL_CHECK(clEnqueueNDRangeKernel(queue, *to_fp32_cl, 1, NULL, &global, NULL, events.size(), !events.empty() ? events.data() : NULL, NULL));
+                CL_CHECK(clEnqueueNDRangeKernel(queue, *to_fp32_cl, 1, NULL, &global, local > 0 ? &local : NULL, events.size(), !events.empty() ? events.data() : NULL, NULL));
 
                 // copy src1 to device
                 CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i03, i02, NULL));
