@@ -2690,7 +2690,7 @@ int llama_model_quantize(
     }
 }
 
-int llama_apply_lora_from_file_internal(const struct llama_model& model/* struct llama_context * ctx */, const char * path_lora, const char * path_base_model, int n_threads) {
+int llama_apply_lora_from_file_internal(const struct llama_model& model, const char * path_lora, const char * path_base_model, int n_threads) {
     fprintf(stderr, "%s: applying lora adapter from '%s' - please wait ...\n", __func__, path_lora);
 
     const int64_t t_start_lora_us = ggml_time_us();
