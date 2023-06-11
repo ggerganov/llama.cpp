@@ -1405,21 +1405,26 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train(
         last_buf = buf;
     };
 
-    auto clr_buf = [&buf_offs] (int buf) {
+    bool track_max_mem = false;
+    size_t buf_maxs[3] = { 0, 0, 0 };
+
+    auto clr_buf = [ctx0, &last_buf, &buf_offs, &buf_size, &buf_data, &buf_maxs, track_max_mem] (int buf) {
         if (buf < 0) return;
-        // size_t last_offs = 0;
-        // last_offs = ggml_set_scratch(ctx, { 0, 0, nullptr, });
-        // if (last_buf >= 0) {
-        //     buf_offs[last_buf] = last_offs;
-        // }
-        // buf_max_size[buf] = std::max(buf_max_size[buf], buf_offs[buf]);
+        if (track_max_mem) {
+            size_t last_offs = 0;
+            last_offs = ggml_set_scratch(ctx0, { 0, 0, nullptr, });
+            if (last_buf >= 0) {
+                buf_offs[last_buf] = last_offs;
+                buf_maxs[last_buf] = std::max(buf_maxs[last_buf], buf_offs[last_buf]);
+            }
+        }
         buf_offs[buf] = 0;
-        // if (last_buf >= 0) {
-        //     size_t offs = buf_offs[last_buf];
-        //     size_t size = buf_size[last_buf];
-        //     void * data = buf_data[last_buf];
-        //     ggml_set_scratch(ctx0, { offset, size, data, });
-        // }
+        if (track_max_mem && last_buf >= 0) {
+            size_t offs = buf_offs[last_buf];
+            size_t size = buf_size[last_buf];
+            void * data = buf_data[last_buf];
+            ggml_set_scratch(ctx0, { offs, size, data, });
+        }
     };
 
     auto view__q = [ctx0, n_embd, n_head, N, n_batch] (struct ggml_tensor * t) -> struct ggml_tensor * {
@@ -1471,6 +1476,13 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train(
 
     use_buf(-1);
 
+    // need to create grads for model parameters, so that expand(..) correctly populates cgraph->leafs & cgraph->grads
+    // this wastes memory, because unnecessary grad for each op is automatically created:
+    // the automatically generated grad is unnecessary because we later manually set the grad (e.g. t35->grad = expand(gb, ...) ).
+    // this discards the automatically generated grad resulting in wasted memory.
+    // TODO: improve this, possibly by changing expand(..) to not use ggml_build_forward_expand.
+    //       expand should correctly set cgraph->nodes.
+    //       cgraph->leafs & cgraph->grads could be set in another pass after the last expand call.
     model->tok_embeddings->grad = ggml_dup_tensor(ctx0, model->tok_embeddings->grad);
     model->norm->grad = ggml_dup_tensor(ctx0, model->norm->grad);
     model->output->grad = ggml_dup_tensor(ctx0, model->output->grad);
@@ -1491,10 +1503,12 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train(
     clr_buf(1);
     clr_buf(2);
 
-    use_buf(0);
+    use_buf(-1);
 
     struct ggml_tensor * t00 = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N*n_batch); assert_shape_1d(t00, N*n_batch);
     memcpy(t00->data, tokens_input->data, ggml_element_size(t00)*N*n_batch);
+
+    use_buf(0);
 
     struct ggml_tensor * t01 = expand(gf, ggml_get_rows(ctx0, model->tok_embeddings, t00)); assert_shape_2d(t01, n_embd, N*n_batch);
 
@@ -1536,35 +1550,35 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train(
         struct my_llama_layer & layer = model->layers[il];
         // tensors with values necessary for backward pass are in persistent buf(0)
         // other tensors with buf(1) are only temporary needed, and their memory reused after layer is completed.
-        use_buf(0); struct ggml_tensor * t02 = expand(gf, ggml_rms_norm     (ctx0, cur));                                    assert_shape_2d(t02, n_embd, N*n_batch);                  // n_embd, N*n_batch
+        use_buf(0); struct ggml_tensor * t02 = expand(gf, ggml_rms_norm     (ctx0, cur));                                    assert_shape_2d(t02, n_embd, N*n_batch);
         use_buf(1); struct ggml_tensor * t03 = expand(gf, ggml_repeat       (ctx0, layer.attention_norm, t02));              assert_shape_2d(t03, n_embd, N*n_batch);
-        use_buf(0); struct ggml_tensor * t04 = expand(gf, ggml_mul          (ctx0, t02, t03));                               assert_shape_2d(t04, n_embd, N*n_batch);                  // n_embd, N*n_batch
-        use_buf(1); struct ggml_tensor * t05 = expand(gf, ggml_mul_mat      (ctx0, layer.wq, t04));                          assert_shape_2d(t05, n_embd, N*n_batch);
-        use_buf(1); struct ggml_tensor * t06 = expand(gf, ggml_reshape_4d   (ctx0, t05, n_embd/n_head, n_head, N, n_batch)); assert_shape_4d(t06, n_embd/n_head, n_head, N, n_batch);
-        use_buf(1); struct ggml_tensor * t07 = expand(gf, ggml_rope_inplace (ctx0, t06, n_past, n_rot, rope_mode));          assert_shape_4d(t07, n_embd/n_head, n_head, N, n_batch);
-        use_buf(1); struct ggml_tensor * t08 = expand(gf, ggml_mul_mat      (ctx0, layer.wk, t04));                          assert_shape_2d(t08, n_embd, N*n_batch);
-        use_buf(1); struct ggml_tensor * t09 = expand(gf, ggml_reshape_4d   (ctx0, t08, n_embd/n_head, n_head, N, n_batch)); assert_shape_4d(t09, n_embd/n_head, n_head, N, n_batch);
-        use_buf(1); struct ggml_tensor * t10 = expand(gf, ggml_rope_inplace (ctx0, t09, n_past, n_rot, rope_mode));          assert_shape_4d(t10, n_embd/n_head, n_head, N, n_batch);
-        use_buf(1); struct ggml_tensor * t11 = expand(gf, ggml_mul_mat      (ctx0, t04, layer.wv));                          assert_shape_2d(t11, N*n_batch, n_embd);
-        use_buf(1); struct ggml_tensor * t12 = expand(gf, ggml_reshape_4d   (ctx0, t11, N, n_batch, n_embd/n_head, n_head)); assert_shape_4d(t12, N, n_batch, n_embd/n_head, n_head);
-        use_buf(0); struct ggml_tensor * t13 = expand(gf, ggml_permute      (ctx0, t07, 0, 2, 1, 3));                        assert_shape_4d(t13, n_embd/n_head, N, n_head, n_batch);  // n_embd/n_head, N, n_head, n_batch
-        use_buf(0); struct ggml_tensor * t14 = expand(gf, ggml_permute      (ctx0, t10, 0, 2, 1, 3));                        assert_shape_4d(t14, n_embd/n_head, N, n_head, n_batch);  // n_embd/n_head, N, n_head, n_batch
-        use_buf(0); struct ggml_tensor * t15 = expand(gf, ggml_permute      (ctx0, t12, 0, 3, 1, 2));                        assert_shape_4d(t15, N, n_embd/n_head, n_head, n_batch);  // N, n_embd/n_head, n_head, n_batch
-        use_buf(1); struct ggml_tensor * t16 = expand(gf, ggml_flash_attn   (ctx0, t13, t14, t15, true));                    assert_shape_4d(t16, n_embd/n_head, N, n_head, n_batch);
+        use_buf(0); struct ggml_tensor * t04 = expand(gf, ggml_mul          (ctx0, t02, t03));                               assert_shape_2d(t04, n_embd, N*n_batch);
+        use_buf(0); struct ggml_tensor * t05 = expand(gf, ggml_mul_mat      (ctx0, layer.wq, t04));                          assert_shape_2d(t05, n_embd, N*n_batch);
+        use_buf(0); struct ggml_tensor * t06 = expand(gf, ggml_reshape_4d   (ctx0, t05, n_embd/n_head, n_head, N, n_batch)); assert_shape_4d(t06, n_embd/n_head, n_head, N, n_batch);
+        use_buf(0); struct ggml_tensor * t07 = expand(gf, ggml_rope_inplace (ctx0, t06, n_past, n_rot, rope_mode));          assert_shape_4d(t07, n_embd/n_head, n_head, N, n_batch);
+        use_buf(0); struct ggml_tensor * t08 = expand(gf, ggml_mul_mat      (ctx0, layer.wk, t04));                          assert_shape_2d(t08, n_embd, N*n_batch);
+        use_buf(0); struct ggml_tensor * t09 = expand(gf, ggml_reshape_4d   (ctx0, t08, n_embd/n_head, n_head, N, n_batch)); assert_shape_4d(t09, n_embd/n_head, n_head, N, n_batch);
+        use_buf(0); struct ggml_tensor * t10 = expand(gf, ggml_rope_inplace (ctx0, t09, n_past, n_rot, rope_mode));          assert_shape_4d(t10, n_embd/n_head, n_head, N, n_batch);
+        use_buf(0); struct ggml_tensor * t11 = expand(gf, ggml_mul_mat      (ctx0, t04, layer.wv));                          assert_shape_2d(t11, N*n_batch, n_embd);
+        use_buf(0); struct ggml_tensor * t12 = expand(gf, ggml_reshape_4d   (ctx0, t11, N, n_batch, n_embd/n_head, n_head)); assert_shape_4d(t12, N, n_batch, n_embd/n_head, n_head);
+        use_buf(0); struct ggml_tensor * t13 = expand(gf, ggml_permute      (ctx0, t07, 0, 2, 1, 3));                        assert_shape_4d(t13, n_embd/n_head, N, n_head, n_batch);
+        use_buf(0); struct ggml_tensor * t14 = expand(gf, ggml_permute      (ctx0, t10, 0, 2, 1, 3));                        assert_shape_4d(t14, n_embd/n_head, N, n_head, n_batch);
+        use_buf(0); struct ggml_tensor * t15 = expand(gf, ggml_permute      (ctx0, t12, 0, 3, 1, 2));                        assert_shape_4d(t15, N, n_embd/n_head, n_head, n_batch);
+        use_buf(0); struct ggml_tensor * t16 = expand(gf, ggml_flash_attn   (ctx0, t13, t14, t15, true));                    assert_shape_4d(t16, n_embd/n_head, N, n_head, n_batch);
         use_buf(1); struct ggml_tensor * t17 = expand(gf, ggml_permute      (ctx0, t16, 0, 2, 1, 3));                        assert_shape_4d(t17, n_embd/n_head, n_head, N, n_batch);
-        use_buf(1); struct ggml_tensor * t18 = expand(gf, ggml_cont         (ctx0, t17));                                    assert_shape_4d(t18, n_embd/n_head, n_head, N, n_batch);
-        use_buf(0); struct ggml_tensor * t19 = expand(gf, ggml_reshape_2d   (ctx0, t18, n_embd, N*n_batch));                 assert_shape_2d(t19, n_embd, N*n_batch);                  // n_embd, N*n_batch
+        use_buf(0); struct ggml_tensor * t18 = expand(gf, ggml_cont         (ctx0, t17));                                    assert_shape_4d(t18, n_embd/n_head, n_head, N, n_batch);
+        use_buf(0); struct ggml_tensor * t19 = expand(gf, ggml_reshape_2d   (ctx0, t18, n_embd, N*n_batch));                 assert_shape_2d(t19, n_embd, N*n_batch);
         use_buf(1); struct ggml_tensor * t20 = expand(gf, ggml_mul_mat      (ctx0, layer.wo, t19));                          assert_shape_2d(t20, n_embd, N*n_batch);
-        use_buf(0); struct ggml_tensor * t21 = expand(gf, ggml_add          (ctx0, t20, cur));                               assert_shape_2d(t21, n_embd, N*n_batch);                  // n_embd, N*n_batch
-        use_buf(0); struct ggml_tensor * t22 = expand(gf, ggml_rms_norm     (ctx0, t21));                                    assert_shape_2d(t22, n_embd, N*n_batch);                  // n_embd, N*n_batch
+        use_buf(0); struct ggml_tensor * t21 = expand(gf, ggml_add          (ctx0, t20, cur));                               assert_shape_2d(t21, n_embd, N*n_batch);
+        use_buf(0); struct ggml_tensor * t22 = expand(gf, ggml_rms_norm     (ctx0, t21));                                    assert_shape_2d(t22, n_embd, N*n_batch);
         use_buf(1); struct ggml_tensor * t23 = expand(gf, ggml_repeat       (ctx0, layer.ffn_norm, t22));                    assert_shape_2d(t23, n_embd, N*n_batch);
-        use_buf(0); struct ggml_tensor * t24 = expand(gf, ggml_mul          (ctx0, t23, t22));                               assert_shape_2d(t24, n_embd, N*n_batch);                  // n_embd, N*n_batch
-        use_buf(0); struct ggml_tensor * t25 = expand(gf, ggml_mul_mat      (ctx0, layer.w3, t24));                          assert_shape_2d(t25, n_ff, N*n_batch);                    // n_ff, N*n_batch
-        use_buf(0); struct ggml_tensor * t26 = expand(gf, ggml_mul_mat      (ctx0, layer.w1, t24));                          assert_shape_2d(t26, n_ff, N*n_batch);                    // n_ff, N*n_batch
-        use_buf(0); struct ggml_tensor * t27 = expand(gf, ggml_silu         (ctx0, t26));                                    assert_shape_2d(t27, n_ff, N*n_batch);                    // n_ff, N*n_batch
-        use_buf(0); struct ggml_tensor * t28 = expand(gf, ggml_mul          (ctx0, t27, t25));                               assert_shape_2d(t28, n_ff, N*n_batch);                    // n_ff, N*n_batch
+        use_buf(0); struct ggml_tensor * t24 = expand(gf, ggml_mul          (ctx0, t23, t22));                               assert_shape_2d(t24, n_embd, N*n_batch);
+        use_buf(0); struct ggml_tensor * t25 = expand(gf, ggml_mul_mat      (ctx0, layer.w3, t24));                          assert_shape_2d(t25, n_ff, N*n_batch);
+        use_buf(0); struct ggml_tensor * t26 = expand(gf, ggml_mul_mat      (ctx0, layer.w1, t24));                          assert_shape_2d(t26, n_ff, N*n_batch);
+        use_buf(0); struct ggml_tensor * t27 = expand(gf, ggml_silu         (ctx0, t26));                                    assert_shape_2d(t27, n_ff, N*n_batch);
+        use_buf(0); struct ggml_tensor * t28 = expand(gf, ggml_mul          (ctx0, t27, t25));                               assert_shape_2d(t28, n_ff, N*n_batch);
         use_buf(1); struct ggml_tensor * t29 = expand(gf, ggml_mul_mat      (ctx0, layer.w2, t28));                          assert_shape_2d(t29, n_embd, N*n_batch);
-        use_buf(0); struct ggml_tensor * t30 = expand(gf, ggml_add          (ctx0, t21, t29));                               assert_shape_2d(t30, n_embd, N*n_batch);                  // n_embd, N*n_batch
+        use_buf(0); struct ggml_tensor * t30 = expand(gf, ggml_add          (ctx0, t21, t29));                               assert_shape_2d(t30, n_embd, N*n_batch);
         t02L[il] = t02;
         t03L[il] = t03;
         t04L[il] = t04;
@@ -1602,6 +1616,7 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train(
     struct ggml_tensor * t31   = expand(gf, ggml_rms_norm  (ctx0, cur));                       assert_shape_2d(t31, n_embd, N*n_batch);
     struct ggml_tensor * t32   = expand(gf, ggml_repeat    (ctx0, model->norm, t31));          assert_shape_2d(t32, n_embd, N*n_batch);
     struct ggml_tensor * t33   = expand(gf, ggml_mul       (ctx0, t32, t31));                  assert_shape_2d(t33, n_embd, N*n_batch);
+    use_buf(-1);
     struct ggml_tensor * t34   = expand(gf, ggml_mul_mat   (ctx0, model->output, t33));        assert_shape_2d(t34, n_vocab, N*n_batch);
     struct ggml_tensor * t35   = expand(gf, ggml_reshape_3d(ctx0, t34, n_vocab, N, n_batch));  assert_shape_3d(t35, n_vocab, N, n_batch);
     struct ggml_tensor * t36   = expand(gf, ggml_cross_entropy_loss(ctx0, t35, targets));      assert_shape_1d(t36, 1);
@@ -1705,10 +1720,10 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train(
 
     *gb = *gf;
 
-    use_buf(-1);
     // t36->grad gets set to one by optimizer, so we need to create the tensor.
     // initialize it with 1.0f to make sure.
     GGML_ASSERT(t36->grad != NULL);
+    // use_buf(-1);
     // t36->grad = expand(gb, ggml_new_f32(ctx0, 1.0f));
 
     use_buf(1);
@@ -1770,7 +1785,7 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train(
             t30->grad = expand(gb, ggml_add(ctx0, t30->grad, grad_layer_inp->grad)); assert_shape_2d(t30->grad, n_embd, N*n_batch);
         }
         clr_buf(2);
-        t29->grad = t30->grad; assert_shape_2d(t29->grad, n_embd, N*n_batch);
+        t29->grad = t30->grad;                                                                                        assert_shape_2d(t29->grad, n_embd, N*n_batch);
         t28->grad = expand(gb, ggml_out_prod(ctx0, layer.w2, ggml_transpose(ctx0, t29->grad)));                       assert_shape_2d(t28->grad, n_ff, N*n_batch);
         t27->grad = expand(gb, ggml_mul(ctx0, t28->grad, t25));                                                       assert_shape_2d(t27->grad, n_ff, N*n_batch);
         t26->grad = expand(gb, ggml_silu_back(ctx0, t26, t27->grad));                                                 assert_shape_2d(t26->grad, n_ff, N*n_batch);
@@ -1786,7 +1801,7 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train(
         use_buf(1);
         t20->grad = t21->grad;                                                                                        assert_shape_2d(t20->grad, n_embd, N*n_batch);
         t19->grad = expand(gb, ggml_out_prod(ctx0, layer.wo, ggml_transpose(ctx0, t20->grad)));                       assert_shape_2d(t19->grad, n_embd, N*n_batch);
-        t18->grad = expand(gb, ggml_reshape(ctx0, t19->grad, t18));                                                   assert_shape_4d(t18->grad, n_embd/n_head, n_head, N, n_batch);
+        t18->grad = expand(gb, ggml_reshape_4d(ctx0, t19->grad, n_embd/n_head, n_head, N, n_batch));                  assert_shape_4d(t18->grad, n_embd/n_head, n_head, N, n_batch);
         t17->grad = t18->grad;                                                                                        assert_shape_4d(t17->grad, n_embd/n_head, n_head, N, n_batch);
         t16->grad = expand(gb, ggml_permute(ctx0, t17->grad, 0, 2, 1, 3));                                            assert_shape_4d(t16->grad, n_embd/n_head, N, n_head, n_batch);
         struct ggml_tensor * flash_attn = expand(gb, ggml_flash_attn_back(ctx0, t13, t14, t15, t16->grad, true));     assert_shape_4d(flash_attn, n_embd/n_head, N*3, n_head, n_batch);
@@ -1794,13 +1809,13 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train(
         t14->grad = expand(gb, view__k(flash_attn));                                                                  assert_shape_4d(t14->grad, n_embd/n_head, N, n_head, n_batch);
         t13->grad = expand(gb, view__q(flash_attn));                                                                  assert_shape_4d(t13->grad, n_embd/n_head, N, n_head, n_batch);
         t12->grad = expand(gb, ggml_permute(ctx0, t15->grad, 0, 2, 3, 1));                                            assert_shape_4d(t12->grad, N, n_batch, n_embd/n_head, n_head);
-        t11->grad = expand(gb, ggml_reshape(ctx0, ggml_cont(ctx0, t12->grad), t11));                                  assert_shape_2d(t11->grad, N*n_batch, n_embd);
+        t11->grad = expand(gb, ggml_reshape_2d(ctx0, ggml_cont(ctx0, t12->grad), N*n_batch, n_embd));                 assert_shape_2d(t11->grad, N*n_batch, n_embd);
         t10->grad = expand(gb, ggml_permute(ctx0, t14->grad, 0, 2, 1, 3));                                            assert_shape_4d(t10->grad, n_embd/n_head, n_head, N, n_batch);
         t09->grad = expand(gb, ggml_rope_back(ctx0, t10->grad, n_past, n_rot, rope_mode));                            assert_shape_4d(t09->grad, n_embd/n_head, n_head, N, n_batch);
-        t08->grad = expand(gb, ggml_reshape(ctx0, t09->grad, t08));                                                   assert_shape_2d(t08->grad, n_embd, N*n_batch);
+        t08->grad = expand(gb, ggml_reshape_2d(ctx0, t09->grad, n_embd, N*n_batch));                                  assert_shape_2d(t08->grad, n_embd, N*n_batch);
         t07->grad = expand(gb, ggml_permute(ctx0, t13->grad, 0, 2, 1, 3));                                            assert_shape_4d(t07->grad, n_embd/n_head, n_head, N, n_batch);
         t06->grad = expand(gb, ggml_rope_back(ctx0, t07->grad, n_past, n_rot, rope_mode));                            assert_shape_4d(t06->grad, n_embd/n_head, n_head, N, n_batch);
-        t05->grad = expand(gb, ggml_reshape(ctx0, t06->grad, t05));                                                   assert_shape_2d(t05->grad, n_embd, N*n_batch);
+        t05->grad = expand(gb, ggml_reshape_2d(ctx0, t06->grad, n_embd, N*n_batch));                                  assert_shape_2d(t05->grad, n_embd, N*n_batch);
         t04->grad = expand(gb, ggml_add_inplace(ctx0,
                         ggml_add_inplace(ctx0,
                             ggml_out_prod(ctx0, layer.wv, t11->grad),
@@ -1808,9 +1823,8 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train(
                         ggml_out_prod(ctx0, layer.wq, ggml_transpose(ctx0, t05->grad))));                             assert_shape_2d(t04->grad, n_embd, N*n_batch);
         t03->grad = expand(gb, ggml_mul(ctx0, t04->grad, t02));                                                       assert_shape_2d(t04->grad, n_embd, N*n_batch);
         use_buf(2);
-        t02->grad = expand(gb, ggml_mul(ctx0, t04->grad, t03));                                                       assert_shape_2d(t02->grad, n_embd, N*n_batch);
+        t02->grad = expand(gb, ggml_mul(ctx0, t04->grad, ggml_repeat(ctx0, layer.attention_norm, t02)));              assert_shape_2d(t02->grad, n_embd, N*n_batch);
         back_layer_inp = t02;
-        use_buf(1);
 
         use_buf(-1);
         layer.attention_norm->grad = expand(gb, add_or_set(layer.attention_norm->grad, ggml_repeat_back(ctx0, t03->grad, layer.attention_norm)));   assert_shape_1d(layer.attention_norm->grad, n_embd);
@@ -1822,17 +1836,20 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train(
         layer.w1->grad             = expand(gb, add_or_set(layer.w1->grad,             ggml_out_prod(ctx0, t24, t26->grad)));                       assert_shape_2d(layer.w1->grad,             n_embd, n_ff);
         layer.w2->grad             = expand(gb, add_or_set(layer.w2->grad,             ggml_out_prod(ctx0, t28, t29->grad)));                       assert_shape_2d(layer.w2->grad,             n_ff, n_embd);
         layer.w3->grad             = expand(gb, add_or_set(layer.w3->grad,             ggml_out_prod(ctx0, t24, t25->grad)));                       assert_shape_2d(layer.w3->grad,             n_embd, n_ff);
-        use_buf(1);
     }
     clr_buf(1);
     use_buf(1);
     t01->grad = expand(gb, ggml_add_inplace(ctx0, grad_layer_inp->grad, ggml_rms_norm_back(ctx0, t01, back_layer_inp->grad)));  assert_shape_2d(t01->grad, n_embd, N*n_batch);
     use_buf(-1);
     model->tok_embeddings->grad = expand(gb, ggml_get_rows_back(ctx0, t01->grad, t00, model->tok_embeddings));            assert_shape_2d(model->tok_embeddings->grad, n_embd, n_vocab);
-    clr_buf(2);
-    clr_buf(1);
 
     *logits = t35;
+
+    if (track_max_mem) {
+        printf("%s: max size compute buf0: %zu\n", __func__, buf_maxs[0]);
+        printf("%s: max size compute buf1: %zu\n", __func__, buf_maxs[1]);
+        printf("%s: max size compute buf2: %zu\n", __func__, buf_maxs[2]);
+    }
 
     return t36;
 }
