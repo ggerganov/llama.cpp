@@ -762,6 +762,7 @@ struct llama_model_loader {
 
             // allocate temp buffer if not using mmap
             if (!use_mmap && lt.data == NULL) {
+                GGML_ASSERT(lt.ggml_tensor->backend != GGML_BACKEND_CPU);
                 lt.data = (uint8_t*)malloc(ggml_nbytes(lt.ggml_tensor));
             }
 
