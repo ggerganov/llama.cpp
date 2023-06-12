@@ -54,7 +54,7 @@ size_t find_partial_stop_string(const std::string & stop, const std::string & te
 template<class Iter>
 static std::string tokens_to_str(llama_context * ctx, Iter begin, Iter end) {
     std::string ret;
-    for (; begin != end; (void)++begin) {
+    for (; begin != end; ++begin) {
         ret += llama_token_to_str(ctx, *begin);
     }
     return ret;
