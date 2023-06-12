@@ -148,10 +148,9 @@ struct llama_hparams_lora {
     uint32_t n_rot   = 64;
     uint32_t n_lora  = 64;
 
-    bool operator!=(const llama_hparams & other) const {
-        return memcmp(this, &other, sizeof(llama_hparams)) != 0;
+    bool operator!=(const llama_hparams_lora & other) const {
+        return memcmp(this, &other, sizeof(llama_hparams_lora)) != 0;
     }
-};
 
 struct llama_layer {
     // normalization
