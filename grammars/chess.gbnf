@@ -1,0 +1,5 @@
+root    ::= "1. " move " " move "\n" ([1-9] [0-9]? ". " move " " move "\n")+
+move    ::= (pawn | nonpawn | castle) [+#]?
+nonpawn ::= [NBKQR] [a-h]? [1-8]? "x"? [a-h] [1-8]
+pawn    ::= ([a-h] "x")? [a-h] [1-8] ("=" [NBKQR])?
+castle  ::= "O-O" "-O"?
