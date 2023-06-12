@@ -167,8 +167,16 @@ node .
 ### Interactive mode
 
 Check the sample in [chat.mjs](chat.mjs).
-Run with node:
+Run with NodeJS version 16 or later:
 
 ```sh
 node chat.mjs
+```
+
+Another sample in [chat.sh](chat.sh).
+Requires [bash](https://www.gnu.org/software/bash/), [curl](https://curl.se) and [jq](https://jqlang.github.io/jq/).
+Run with bash:
+
+```sh
+bash chat.sh
 ```
