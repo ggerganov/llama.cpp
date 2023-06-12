@@ -2,6 +2,13 @@
 #include "llama.h"
 #include "build-info.h"
 
+// single thread
+#define CPPHTTPLIB_THREAD_POOL_COUNT 1
+#ifndef NDEBUG
+// crash the server in debug mode, otherwise send an http 500 error
+#define CPPHTTPLIB_NO_EXCEPTIONS 1
+#endif
+
 #include "httplib.h"
 #include "json.hpp"
 
