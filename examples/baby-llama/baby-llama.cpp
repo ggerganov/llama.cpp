@@ -151,6 +151,7 @@ struct llama_hparams_lora {
     bool operator!=(const llama_hparams_lora & other) const {
         return memcmp(this, &other, sizeof(llama_hparams_lora)) != 0;
     }
+};
 
 struct llama_layer {
     // normalization
