@@ -5,8 +5,6 @@
 #include <cstdio>
 #include <cstring>
 #include <vector>
-#include <iostream>
-#include <iomanip>
 #include <string>
 
 struct quant_option {
@@ -154,7 +152,7 @@ void usage(const char * executable) {
     fprintf(stderr, "  --leave-output-tensor: Will leave output.weight un(re)quantized. Increases model size but may also increase quality, especially when requantizing\n");
     fprintf(stderr, "Allowed quantization types:\n");
     for (auto & it : QUANT_OPTIONS) {
-        std::cout << "  " << std::setw(2) << it.ftype << "  or  " << std::setw(6) << it.name << "  :  " << it.desc << "\n";
+        printf("  %2d  or  %6s  :  %s\n", it.ftype, it.name.c_str(), it.desc.c_str());
     }
     exit(1);
 }
