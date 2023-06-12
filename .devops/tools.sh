@@ -11,7 +11,7 @@ shift
 arg2="$@"
 
 if [[ $arg1 == '--convert' || $arg1 == '-c' ]]; then
-    python3 ./convert-pth-to-ggml.py $arg2
+    python3 ./convert.py $arg2
 elif [[ $arg1 == '--quantize' || $arg1 == '-q' ]]; then
     ./quantize $arg2
 elif [[ $arg1 == '--run' || $arg1 == '-r' ]]; then
@@ -32,7 +32,7 @@ else
     echo "  --run (-r): Run a model previously converted into ggml"
     echo "              ex: -m /models/7B/ggml-model-q4_0.bin -p \"Building a website can be done in 10 simple steps:\" -n 512"
     echo "  --convert (-c): Convert a llama model into ggml"
-    echo "              ex: \"/models/7B/\" 1"
+    echo "              ex: --outtype f16 \"/models/7B/\" "
     echo "  --quantize (-q): Optimize with quantization process ggml"
     echo "              ex: \"/models/7B/ggml-model-f16.bin\" \"/models/7B/ggml-model-q4_0.bin\" 2"
     echo "  --all-in-one (-a): Execute --convert & --quantize"

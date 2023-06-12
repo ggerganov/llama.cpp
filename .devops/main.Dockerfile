@@ -15,4 +15,6 @@ FROM ubuntu:$UBUNTU_VERSION as runtime
 
 COPY --from=build /app/main /main
 
+ENV LC_ALL=C.utf8
+
 ENTRYPOINT [ "/main" ]

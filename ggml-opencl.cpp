@@ -3,6 +3,8 @@
 #include <array>
 #include <atomic>
 #include <sstream>
+#include <vector>
+#include <limits>
 
 #define CL_TARGET_OPENCL_VERSION 110
 #include <clblast.h>
@@ -197,6 +199,18 @@ __kernel void KERNEL_NAME(__global X_TYPE* x, __local float* tmp, __global float
 }
 );
 
+std::string mul_template = MULTILINE_QUOTE(
+__kernel void KERNEL_NAME(__global TYPE* x, const int x_offset, __global TYPE* y, const int y_offset, __global TYPE* dst, const int dst_offset, const int ky) {
+    const int i = get_group_id(0)*get_local_size(0) + get_local_id(0);
+
+    if (i >= get_global_size(0)) {
+        return;
+    }
+
+    dst[dst_offset + i] = x[x_offset + i] * y[y_offset + i%ky];
+}
+);
+
 #define CL_CHECK(err)                                               \
     do {                                                            \
         cl_int err_ = (err);                                        \
@@ -239,6 +253,13 @@ std::array<std::string, 30> dequant_mul_mat_vec_str_values = {
     "convert_mul_mat_vec_f16", "half", "1", "1", "convert_f16"
 };
 
+std::array<std::string, 2> mul_str_keys = {
+    "KERNEL_NAME", "TYPE"
+};
+std::array<std::string, 2> mul_str_values = {
+    "mul_f32", "float"
+};
+
 std::string& replace(std::string& s, const std::string& from, const std::string& to) {
     size_t pos = 0;
     while ((pos = s.find(from, pos)) != std::string::npos) {
@@ -261,6 +282,13 @@ std::string generate_kernels() {
         src << dequant_kernel << '\n';
         src << dmmv_kernel << '\n';
     }
+    for (size_t i = 0; i < mul_str_values.size(); i += mul_str_keys.size()) {
+        std::string mul_kernel = mul_template;
+        for (size_t j = 0; j < mul_str_keys.size(); j++) {
+            replace(mul_kernel, mul_str_keys[j], mul_str_values[i + j]);
+        }
+        src << mul_kernel << '\n';
+    }
     return src.str();
 }
 
@@ -272,6 +300,7 @@ static cl_program program;
 static cl_kernel convert_row_f16_cl;
 static cl_kernel dequantize_row_q4_0_cl, dequantize_row_q4_1_cl, dequantize_row_q5_0_cl, dequantize_row_q5_1_cl, dequantize_row_q8_0_cl;
 static cl_kernel dequantize_mul_mat_vec_q4_0_cl, dequantize_mul_mat_vec_q4_1_cl, dequantize_mul_mat_vec_q5_0_cl, dequantize_mul_mat_vec_q5_1_cl, dequantize_mul_mat_vec_q8_0_cl, convert_mul_mat_vec_f16_cl;
+static cl_kernel mul_f32_cl;
 static bool fp16_support;
 
 static cl_program build_program_from_source(cl_context ctx, cl_device_id dev, const char* program_buffer) {
@@ -508,6 +537,9 @@ void ggml_cl_init(void) {
     CL_CHECK((dequantize_mul_mat_vec_q5_1_cl = clCreateKernel(program, "dequantize_mul_mat_vec_q5_1", &err), err));
     CL_CHECK((dequantize_mul_mat_vec_q8_0_cl = clCreateKernel(program, "dequantize_mul_mat_vec_q8_0", &err), err));
     CL_CHECK((convert_mul_mat_vec_f16_cl = clCreateKernel(program, "convert_mul_mat_vec_f16", &err), err));
+
+    // mul kernel
+    CL_CHECK((mul_f32_cl = clCreateKernel(program, "mul_f32", &err), err));
 }
 
 static cl_kernel* ggml_get_to_fp32_cl(ggml_type type) {
@@ -573,21 +605,44 @@ struct cl_buffer {
 static cl_buffer g_cl_buffer_pool[MAX_CL_BUFFERS];
 static std::atomic_flag g_cl_pool_lock = ATOMIC_FLAG_INIT;
 
-static cl_mem ggml_cl_pool_malloc(size_t size, size_t * actual_size, cl_mem_flags flags) {
+static cl_mem ggml_cl_pool_malloc(size_t size, size_t * actual_size) {
     scoped_spin_lock lock(g_cl_pool_lock);
     cl_int err;
 
+    int best_i = -1;
+    size_t best_size = std::numeric_limits<size_t>::max(); //smallest unused buffer that fits our needs
+    int worst_i = -1;
+    size_t worst_size = 0; //largest unused buffer seen so far
     for (int i = 0; i < MAX_CL_BUFFERS; ++i) {
-        cl_buffer& b = g_cl_buffer_pool[i];
-        if (b.size > 0 && b.size >= size) {
-            cl_mem mem = b.mem;
-            *actual_size = b.size;
-            b.size = 0;
-            return mem;
+        cl_buffer &b = g_cl_buffer_pool[i];
+        if (b.size > 0 && b.size >= size && b.size < best_size)
+        {
+            best_i = i;
+            best_size = b.size;
+        }
+        if (b.size > 0 && b.size > worst_size)
+        {
+            worst_i = i;
+            worst_size = b.size;
         }
     }
+    if(best_i!=-1) //found the smallest buffer that fits our needs
+    {
+        cl_buffer& b = g_cl_buffer_pool[best_i];
+        cl_mem mem = b.mem;
+        *actual_size = b.size;
+        b.size = 0;
+        return mem;
+    }
+    if(worst_i!=-1) //no buffer that fits our needs, resize largest one to save memory
+    {
+         cl_buffer& b = g_cl_buffer_pool[worst_i];
+         cl_mem mem = b.mem;
+         b.size = 0;
+         clReleaseMemObject(mem);
+    }
     cl_mem mem;
-    CL_CHECK((mem = clCreateBuffer(context, flags, size, NULL, &err), err));
+    CL_CHECK((mem = clCreateBuffer(context, CL_MEM_READ_WRITE, size, NULL, &err), err));
     *actual_size = size;
     return mem;
 }
@@ -604,6 +659,15 @@ static void ggml_cl_pool_free(cl_mem mem, size_t size) {
         }
     }
     fprintf(stderr, "WARNING: cl buffer pool full, increase MAX_CL_BUFFERS\n");
+    clReleaseMemObject(mem);
+}
+
+void ggml_cl_free_data(const struct ggml_tensor* tensor) {
+    if (tensor->backend != GGML_BACKEND_GPU) {
+        return;
+    }
+
+    cl_mem mem = (cl_mem)tensor->data;
     clReleaseMemObject(mem);
 }
 
@@ -644,6 +708,99 @@ static cl_int ggml_cl_h2d_tensor_2d(cl_command_queue queue, cl_mem dst, size_t o
     return err;
 }
 
+static void ggml_cl_mul_f32(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_ASSERT(src1->backend == GGML_BACKEND_GPU);
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    const int64_t ne03 = src0->ne[2];
+    const int64_t ne0 = ne00 * ne01 * ne02 * ne03;
+    const int64_t ne10 = src1->ne[0];
+    const int64_t ne11 = src1->ne[1];
+    const int64_t ne12 = src1->ne[2];
+    const int64_t ne13 = src1->ne[3];
+    const int64_t nb10 = src1->nb[0];
+    const int nb2  = dst->nb[2];
+    const int nb3  = dst->nb[3];
+    size_t x_size;
+    size_t d_size;
+
+    cl_mem d_X = ggml_cl_pool_malloc(ne0 * sizeof(float), &x_size); // src0
+    cl_mem d_Y = (cl_mem) src1->data; // src1 is already on device, broadcasted.
+    cl_mem d_D = ggml_cl_pool_malloc(ne0 * sizeof(float), &d_size); // dst
+
+
+    for (int64_t i03 = 0; i03 < ne03; i03++) {
+        for (int64_t i02 = 0; i02 < ne02; i02++) {
+            const int i0 = i03*ne02 + i02;
+
+            cl_event ev;
+
+            // copy src0 to device
+            CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_X, i0, src0, i03, i02, &ev));
+
+            if (nb10 == sizeof(float)) {
+                // Contiguous, avoid overhead from queueing many kernel runs
+                const int64_t i13 = i03%ne13;
+                const int64_t i12 = i02%ne12;
+                const int i1 = i13*ne12*ne11 + i12*ne11;
+
+                cl_int x_offset = 0;
+                cl_int y_offset = i1*ne10;
+                cl_int d_offset = 0;
+
+                size_t global = ne00 * ne01;
+                cl_int ky = ne10;
+                CL_CHECK(clSetKernelArg(mul_f32_cl, 0, sizeof(cl_mem), &d_X));
+                CL_CHECK(clSetKernelArg(mul_f32_cl, 1, sizeof(cl_int), &x_offset));
+                CL_CHECK(clSetKernelArg(mul_f32_cl, 2, sizeof(cl_mem), &d_Y));
+                CL_CHECK(clSetKernelArg(mul_f32_cl, 3, sizeof(cl_int), &y_offset));
+                CL_CHECK(clSetKernelArg(mul_f32_cl, 4, sizeof(cl_mem), &d_D));
+                CL_CHECK(clSetKernelArg(mul_f32_cl, 5, sizeof(cl_int), &d_offset));
+                CL_CHECK(clSetKernelArg(mul_f32_cl, 6, sizeof(cl_int), &ky));
+                CL_CHECK(clEnqueueNDRangeKernel(queue, mul_f32_cl, 1, NULL, &global, NULL, 1, &ev, NULL));
+            } else {
+                for (int64_t i01 = 0; i01 < ne01; i01++) {
+                    const int64_t i13 = i03%ne13;
+                    const int64_t i12 = i02%ne12;
+                    const int64_t i11 = i01%ne11;
+                    const int i1 = i13*ne12*ne11 + i12*ne11 + i11;
+
+                    cl_int x_offset = i01*ne00;
+                    cl_int y_offset = i1*ne10;
+                    cl_int d_offset = i01*ne00;
+
+                    // compute
+                    size_t global = ne00;
+                    cl_int ky = ne10;
+                    CL_CHECK(clSetKernelArg(mul_f32_cl, 0, sizeof(cl_mem), &d_X));
+                    CL_CHECK(clSetKernelArg(mul_f32_cl, 1, sizeof(cl_int), &x_offset));
+                    CL_CHECK(clSetKernelArg(mul_f32_cl, 2, sizeof(cl_mem), &d_Y));
+                    CL_CHECK(clSetKernelArg(mul_f32_cl, 3, sizeof(cl_int), &y_offset));
+                    CL_CHECK(clSetKernelArg(mul_f32_cl, 4, sizeof(cl_mem), &d_D));
+                    CL_CHECK(clSetKernelArg(mul_f32_cl, 5, sizeof(cl_int), &d_offset));
+                    CL_CHECK(clSetKernelArg(mul_f32_cl, 6, sizeof(cl_int), &ky));
+                    CL_CHECK(clEnqueueNDRangeKernel(queue, mul_f32_cl, 1, NULL, &global, NULL, 1, &ev, NULL));
+                }
+            }
+
+            CL_CHECK(clReleaseEvent(ev));
+            CL_CHECK(clFinish(queue));
+
+            // copy dst to host
+            float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
+            CL_CHECK(clEnqueueReadBuffer(queue, d_D, true, 0, sizeof(float) * ne00*ne01, d, 0, NULL, NULL));
+        }
+    }
+    ggml_cl_pool_free(d_X, x_size);
+    ggml_cl_pool_free(d_D, d_size);
+}
+
+void ggml_cl_mul(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
+    GGML_ASSERT(src0->type == GGML_TYPE_F32 && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32);
+    ggml_cl_mul_f32(src0, src1, dst);
+}
+
 static void ggml_cl_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     const int64_t ne00 = src0->ne[0];
     const int64_t ne01 = src0->ne[1];
@@ -666,18 +823,18 @@ static void ggml_cl_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     size_t y_size;
     size_t d_size;
     cl_mem d_X;
-    if (src0->backend == GGML_BACKEND_CL) {
+    if (src0->backend == GGML_BACKEND_GPU) { // NOLINT
         d_X = (cl_mem) src0->data;
     } else {
-        d_X = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &x_size, CL_MEM_READ_ONLY);
+        d_X = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &x_size);
     }
-    cl_mem d_Y = ggml_cl_pool_malloc(sizeof(float) * y_ne, &y_size, CL_MEM_READ_ONLY);
-    cl_mem d_D = ggml_cl_pool_malloc(sizeof(float) * d_ne, &d_size, CL_MEM_WRITE_ONLY);
+    cl_mem d_Y = ggml_cl_pool_malloc(sizeof(float) * y_ne, &y_size);
+    cl_mem d_D = ggml_cl_pool_malloc(sizeof(float) * d_ne, &d_size);
 
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
             // copy data to device
-            if (src0->backend != GGML_BACKEND_CL) {
+            if (src0->backend != GGML_BACKEND_GPU) {
                 CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_X, 0, src0, i03, i02, NULL));
             }
             CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i03, i02, NULL));
@@ -706,7 +863,7 @@ static void ggml_cl_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
         }
     }
 
-    if (src0->backend != GGML_BACKEND_CL) {
+    if (src0->backend != GGML_BACKEND_GPU) {
         ggml_cl_pool_free(d_X, x_size);
     }
     ggml_cl_pool_free(d_Y, y_size);
@@ -742,13 +899,13 @@ static void ggml_cl_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
     size_t y_size;
     size_t d_size;
     cl_mem d_X;
-    if (src0->backend == GGML_BACKEND_CL) {
+    if (src0->backend == GGML_BACKEND_GPU) { // NOLINT
         d_X = (cl_mem) src0->data;
     } else {
-        d_X = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &x_size, CL_MEM_READ_ONLY);
+        d_X = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &x_size);
     }
-    cl_mem d_Y = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * y_ne, &y_size, CL_MEM_READ_ONLY);
-    cl_mem d_D = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * d_ne, &d_size, CL_MEM_WRITE_ONLY);
+    cl_mem d_Y = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * y_ne, &y_size);
+    cl_mem d_D = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * d_ne, &d_size);
 
     bool src1_cont_rows = nb10 == sizeof(float);
     bool src1_cont_cols = (size_t)nb11 == ne11*sizeof(float);
@@ -756,7 +913,7 @@ static void ggml_cl_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
             // copy src0 to device
-            if (src0->backend != GGML_BACKEND_CL) {
+            if (src0->backend != GGML_BACKEND_GPU) {
                 CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_X, 0, src0, i03, i02, NULL));
             }
 
@@ -813,7 +970,7 @@ static void ggml_cl_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
         }
     }
 
-    if (src0->backend != GGML_BACKEND_CL) {
+    if (src0->backend != GGML_BACKEND_GPU) {
         ggml_cl_pool_free(d_X, x_size);
     }
     ggml_cl_pool_free(d_Y, y_size);
@@ -847,56 +1004,60 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
     size_t q_size;
     cl_mem d_X;
     if (!mul_mat_vec) {
-        d_X = ggml_cl_pool_malloc(sizeof(float) * x_ne, &x_size, CL_MEM_READ_WRITE);
+        d_X = ggml_cl_pool_malloc(sizeof(float) * x_ne, &x_size);
     }
-    cl_mem d_Y = ggml_cl_pool_malloc(sizeof(float) * y_ne, &y_size, CL_MEM_READ_ONLY);
-    cl_mem d_D = ggml_cl_pool_malloc(sizeof(float) * d_ne, &d_size, CL_MEM_WRITE_ONLY);
+    cl_mem d_Y = ggml_cl_pool_malloc(sizeof(float) * y_ne, &y_size);
+    cl_mem d_D = ggml_cl_pool_malloc(sizeof(float) * d_ne, &d_size);
     cl_mem d_Q;
     if (src0->backend == GGML_BACKEND_CPU) {
-        d_Q = ggml_cl_pool_malloc(q_sz, &q_size, CL_MEM_READ_ONLY);
+        d_Q = ggml_cl_pool_malloc(q_sz, &q_size);
     }
 
     cl_kernel* to_fp32_cl = ggml_get_to_fp32_cl(type);
     cl_kernel* dmmv = ggml_get_dequantize_mul_mat_vec_cl(type);
     GGML_ASSERT(to_fp32_cl != nullptr);
 
+    size_t ev_idx = 0;
+    std::vector<cl_event> events;
+
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
-            cl_event ev_sgemm;
-
             // copy src0 to device if necessary
             if (src0->backend == GGML_BACKEND_CPU) {
-                CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Q, 0, src0, i03, i02, NULL));
-            } else if (src0->backend == GGML_BACKEND_CL) {
+                events.emplace_back();
+                CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Q, 0, src0, i03, i02, events.data() + ev_idx++));
+            } else if (src0->backend == GGML_BACKEND_GPU) {
                 d_Q = (cl_mem) src0->data;
             } else {
                 GGML_ASSERT(false);
             }
             if (mul_mat_vec) { // specialized dequantize_mul_mat_vec kernel
                 // copy src1 to device
-                CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i03, i02, NULL));
+                events.emplace_back();
+                CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i03, i02, events.data() + ev_idx++));
 
                 // compute
                 const size_t global = ne01 * CL_DMMV_BLOCK_SIZE;
                 const size_t local = CL_DMMV_BLOCK_SIZE;
                 const cl_int ncols = ne00;
+                events.emplace_back();
                 CL_CHECK(clSetKernelArg(*dmmv, 0, sizeof(cl_mem), &d_Q));
                 CL_CHECK(clSetKernelArg(*dmmv, 1, sizeof(float) * local, NULL));
                 CL_CHECK(clSetKernelArg(*dmmv, 2, sizeof(cl_mem), &d_Y));
                 CL_CHECK(clSetKernelArg(*dmmv, 3, sizeof(cl_mem), &d_D));
                 CL_CHECK(clSetKernelArg(*dmmv, 4, sizeof(cl_int), &ncols));
-                CL_CHECK(clFinish(queue));
-                CL_CHECK(clEnqueueNDRangeKernel(queue, *dmmv, 1, NULL, &global, &local, 0, NULL, &ev_sgemm));
+                CL_CHECK(clEnqueueNDRangeKernel(queue, *dmmv, 1, NULL, &global, &local, events.size() - 1, events.data(), events.data() + ev_idx++));
             } else { // general dequantization kernel + CLBlast matrix matrix multiplication
                 // convert src0 to fp32 on device
                 const size_t global = x_ne;
                 CL_CHECK(clSetKernelArg(*to_fp32_cl, 0, sizeof(cl_mem), &d_Q));
                 CL_CHECK(clSetKernelArg(*to_fp32_cl, 1, sizeof(cl_mem), &d_X));
-                CL_CHECK(clFinish(queue));
-                CL_CHECK(clEnqueueNDRangeKernel(queue, *to_fp32_cl, 1, NULL, &global, NULL, 0, NULL, NULL));
+                CL_CHECK(clEnqueueNDRangeKernel(queue, *to_fp32_cl, 1, NULL, &global, NULL, events.size(), !events.empty() ? events.data() : NULL, NULL));
 
                 // copy src1 to device
                 CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i03, i02, NULL));
+
+                events.emplace_back();
 
                 // wait for conversion
                 CL_CHECK(clFinish(queue));
@@ -910,7 +1071,7 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
                                                            d_Y, 0, ne10,
                                                            beta,
                                                            d_D, 0, ne01,
-                                                           &queue, &ev_sgemm);
+                                                           &queue, events.data() + ev_idx++);
 
                 if (status != clblast::StatusCode::kSuccess) {
                     GGML_ASSERT(false);
@@ -919,8 +1080,13 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
 
             // copy dst to host
             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
-            CL_CHECK(clEnqueueReadBuffer(queue, d_D, true, 0, sizeof(float) * d_ne, d, 1, &ev_sgemm, NULL));
-            clReleaseEvent(ev_sgemm);
+            CL_CHECK(clEnqueueReadBuffer(queue, d_D, true, 0, sizeof(float) * d_ne, d, 1, &events[events.size() - 1], NULL));
+            for (auto *event : events) {
+                clReleaseEvent(event);
+            }
+
+            ev_idx = 0;
+            events.clear();
         }
     }
 
@@ -945,7 +1111,7 @@ bool ggml_cl_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tens
     if ((src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) &&
         src1->type == GGML_TYPE_F32 &&
         dst->type == GGML_TYPE_F32 &&
-        ((ne0 >= 32 && ne1 >= 32 && ne10 >= 32) || src0->backend == GGML_BACKEND_CL)) {
+        ((ne0 >= 32 && ne1 >= 32 && ne10 >= 32) || src0->backend == GGML_BACKEND_GPU)) {
         return true;
     }
 
@@ -1001,7 +1167,7 @@ size_t ggml_cl_mul_mat_get_wsize(const struct ggml_tensor * src0, const struct g
     return 0;
 }
 
-void ggml_cl_transform_tensor(ggml_tensor * tensor) {
+void ggml_cl_transform_tensor(void * data, ggml_tensor * tensor) {
     const int64_t ne0 = tensor->ne[0];
     const int64_t ne1 = tensor->ne[1];
     const int64_t ne2 = tensor->ne[2];
@@ -1011,8 +1177,9 @@ void ggml_cl_transform_tensor(ggml_tensor * tensor) {
     const size_t q_sz = ggml_type_size(type) * ne0 * ne1 * ne2 * ne3 / ggml_blck_size(type);
 
     size_t q_size;
-    cl_mem dst = ggml_cl_pool_malloc(q_sz, &q_size, CL_MEM_READ_ONLY);
+    cl_mem dst = ggml_cl_pool_malloc(q_sz, &q_size);
 
+    tensor->data = data;
     // copy tensor to device
     for (int64_t i3 = 0; i3 < ne3; i3++) {
         for (int64_t i2 = 0; i2 < ne2; i2++) {
@@ -1024,5 +1191,5 @@ void ggml_cl_transform_tensor(ggml_tensor * tensor) {
     CL_CHECK(clFinish(queue));
 
     tensor->data = dst;
-    tensor->backend = GGML_BACKEND_CL;
+    GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
 }
