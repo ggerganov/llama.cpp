@@ -15,7 +15,7 @@ message(STATUS "Using protobuf ${Protobuf_VERSION} ${Protobuf_INCLUDE_DIRS} ${CM
 
 
 # Proto file
-get_filename_component(hw_proto "./message.proto" ABSOLUTE)
+get_filename_component(hw_proto "./llama/v1/message.proto" ABSOLUTE)
 get_filename_component(hw_proto_path "${hw_proto}" PATH)
 
 # Generated sources

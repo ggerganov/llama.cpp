@@ -41,9 +41,10 @@ using grpc::ServerContext;
 using grpc::ServerUnaryReactor;
 using grpc::ServerWriteReactor;
 using grpc::Status;
-using llama::Job;
-using llama::LlamaGoService;
-using llama::Output;
+using llama::v1::Request;
+using llama::v1::LlamaService;
+using llama::v1::EmbedResponse;
+using llama::v1::CompletionResponse;
 
 struct server_params
 {
@@ -497,13 +498,13 @@ private:
 };
 
 // Logic and data behind the server's behavior.
-class LlamaServiceImpl final : public LlamaGoService::CallbackService
+class LlamaServiceImpl final : public LlamaService::CallbackService
 {
 
-  class Reactor : public grpc::ServerWriteReactor<Output>
+  class Reactor : public grpc::ServerWriteReactor<CompletionResponse>
   {
   public:
-    Reactor(CallbackServerContext *ctx, LlamaServerContext *llama, const Job *request)
+    Reactor(CallbackServerContext *ctx, LlamaServerContext *llama, const Request *request)
         : ctx_(ctx), request_(request), llama_(llama)
     {
       if (llama->loadPrompt(request->prompt()))
@@ -534,22 +535,22 @@ class LlamaServiceImpl final : public LlamaGoService::CallbackService
   private:
     CallbackServerContext *const ctx_;
     LlamaServerContext *llama_;
-    const Job *const request_;
+    const Request *const request_;
     int n_remain{0};
     std::mutex finish_mu_;
     bool finished_{false};
-    Output *response;
+    CompletionResponse *response;
 
     void NextWrite()
     {
-      response = new Output();
+      response = new CompletionResponse();
       // loop inference until finish completion
       if (llama_->has_next_token)
       {
         std::lock_guard<std::mutex> l(finish_mu_);
         auto result = llama_->doCompletion();
         fprintf(stderr, "%s", result.c_str());
-        response->set_status(llama::Status::RUNNING);
+        response->set_status(llama::v1::Status::RUNNING);
         response->set_output(result);
         StartWrite(response);
       }
@@ -560,7 +561,7 @@ class LlamaServiceImpl final : public LlamaGoService::CallbackService
               l(finish_mu_);
           if (!finished_)
           {
-            response->set_status(llama::Status::FINISHED);
+            response->set_status(llama::v1::Status::FINISHED);
             StartWriteLast(response, grpc::WriteOptions());
           }
         }
@@ -585,8 +586,8 @@ public:
   {
   }
 
-  ServerWriteReactor<Output> *Answer(
-      CallbackServerContext *context, const Job *request)
+  ServerWriteReactor<CompletionResponse> *Complete(
+      CallbackServerContext *context, const Request *request)
   {
     fprintf(stderr, "%s : new answer request: %s\n", __func__, request->prompt().c_str());
     llama->rewind();
@@ -598,7 +599,7 @@ public:
   }
 
   ServerUnaryReactor *Embed(
-      CallbackServerContext *context, const Job *request, Output *response)
+      CallbackServerContext *context, const Request *request, EmbedResponse *response)
   {
     fprintf(stderr, "%s : get embed %s\n", __func__, request->prompt().c_str());
     std::vector<float> embeded = llama->embedding(request->prompt());

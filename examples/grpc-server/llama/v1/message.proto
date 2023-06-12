@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package llama.v1;
+
+option go_package = "./pkg/grpc";
+
+service LlamaService {
+    rpc Complete(Request) returns (stream CompletionResponse){}
+    rpc Embed(Request) returns (EmbedResponse){}
+}
+
+message Request {
+	string id = 1;  
+	string prompt = 2;     
+}
+
+enum Status {
+    PENDING_UNSPECIFIED = 0;
+    RUNNING = 1;
+    FINISHED = 2;
+    FAILED = 3;
+}
+
+message CompletionResponse {
+    string id = 1;
+    Status status = 2;
+    string output = 3;
+}
+
+message EmbedResponse {
+    string id = 1;
+    repeated float embed = 2;
+}
