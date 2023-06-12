@@ -167,7 +167,7 @@ node .
 ### Interactive mode
 
 Check the sample in [chat.mjs](chat.mjs).
-Run with node:
+Run with NodeJS version 16 or later:
 
 ```sh
 node chat.mjs
