@@ -296,6 +296,10 @@ int main(int argc, char ** argv) {
     llama_grammar *             grammar = NULL;
     if (!params.grammar.empty()) {
         parsed_grammar = grammar_parser::parse(params.grammar.c_str());
+        // will be empty (default) if there are parse errors
+        if (parsed_grammar.out_grammar.empty()) {
+            return 1;
+        }
         fprintf(stderr, "%s: grammar:\n", __func__);
         grammar_parser::print_grammar(stderr, parsed_grammar);
         fprintf(stderr, "\n");
@@ -631,11 +635,8 @@ int main(int argc, char ** argv) {
             if (n_past > 0) {
                 if (is_interacting) {
                     // reset grammar state if we're restarting generation
-                    if (!params.grammar.empty()) {
-                        parsed_grammar = grammar_parser::parse(params.grammar.c_str());
-                        if (grammar != NULL) {
-                            llama_grammar_free(grammar);
-                        }
+                    if (grammar != NULL) {
+                        llama_grammar_free(grammar);
                         grammar = llama_grammar_init(
                             parsed_grammar.out_grammar.data(), parsed_grammar.symbol_ids.at("root"));
                     }

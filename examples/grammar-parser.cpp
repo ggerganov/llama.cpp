@@ -47,7 +47,7 @@ namespace grammar_parser {
             pos++;
         }
         if (pos == src) {
-            throw std::string("expecting name at ") + src;
+            throw std::runtime_error(std::string("expecting name at ") + src);
         }
         return std::make_pair(pos, parse_space(pos));
     }
@@ -63,7 +63,7 @@ namespace grammar_parser {
                         return std::make_pair((first << 4) + second, src + 4);
                     }
                 }
-                throw std::string("expecting \\xNN at ") + src;
+                throw std::runtime_error(std::string("expecting \\xNN at ") + src);
             } else if (esc == '"' || esc == '[' || esc == ']') {
                 return std::make_pair(esc, src + 2);
             } else if (esc == 'r') {
@@ -73,11 +73,11 @@ namespace grammar_parser {
             } else if (esc == 't') {
                 return std::make_pair('\t', src + 2);
             }
-            throw std::string("unknown escape at ") + src;
+            throw std::runtime_error(std::string("unknown escape at ") + src);
         } else if (*src) {
             return std::make_pair(*src, src + 1);
         }
-        throw std::string("unexpected end of input");
+        throw std::runtime_error("unexpected end of input");
     }
 
     const char * parse_alternates(
@@ -151,12 +151,12 @@ namespace grammar_parser {
                 outbuf.push_back(1);
                 outbuf.push_back(sub_rule_id);
                 if (*pos != ')') {
-                    throw std::string("expecting ')' at ") + pos;
+                    throw std::runtime_error(std::string("expecting ')' at ") + pos);
                 }
                 pos = parse_space(pos + 1);
             } else if (*pos == '*' || *pos == '+' || *pos == '?') { // repetition operator
                 if (outbuf.size() - out_start - 1 == 0) {
-                    throw std::string("expecting preceeding item to */+/? at ") + pos;
+                    throw std::runtime_error(std::string("expecting preceeding item to */+/? at ") + pos);
                 }
                 std::vector<uint16_t> & out_grammar = state.out_grammar;
 
@@ -236,7 +236,7 @@ namespace grammar_parser {
         const std::string name(src, name_len);
 
         if (!(pos[0] == ':' && pos[1] == ':' && pos[2] == '=')) {
-            throw std::string("expecting ::= at ") + pos;
+            throw std::runtime_error(std::string("expecting ::= at ") + pos);
         }
         pos = parse_space(pos + 3);
 
@@ -247,19 +247,24 @@ namespace grammar_parser {
         } else if (*pos == '\n') {
             pos++;
         } else if (*pos) {
-            throw std::string("expecting newline or end at ") + pos;
+            throw std::runtime_error(std::string("expecting newline or end at ") + pos);
         }
         return parse_space(pos);
     }
 
     parse_state parse(const char * src) {
-        parse_state state;
-        const char * pos = parse_space(src);
-        while (*pos) {
-            pos = parse_rule(state, pos);
+        try {
+            parse_state state;
+            const char * pos = parse_space(src);
+            while (*pos) {
+                pos = parse_rule(state, pos);
+            }
+            state.out_grammar.push_back(0xffff);
+            return state;
+        } catch (const std::exception & err) {
+            fprintf(stderr, "%s: error parsing grammar: %s\n", __func__, err.what());
+            return parse_state();
         }
-        state.out_grammar.push_back(0xffff);
-        return state;
     }
 
     const uint16_t * print_rule(
