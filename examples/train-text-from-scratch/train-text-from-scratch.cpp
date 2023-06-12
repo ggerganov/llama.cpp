@@ -3043,12 +3043,11 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-
     if (params.seed < 0) {
-        srand(time(NULL));
-    } else {
-        srand(params.seed);
+        params.seed = time(NULL);
     }
+    printf("%s: seed: %d\n", __func__, params.seed);
+    srand(params.seed);
 
     struct llama_context_params llama_params = llama_context_default_params();
     llama_params.vocab_only = true;
