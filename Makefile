@@ -4,7 +4,7 @@ BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot
 ifdef LLAMA_BUILD_SERVER
 	BUILD_TARGETS += server
 	LLAMA_SERVER_VERBOSE ?= 1
-server: CXXFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
+server: private CXXFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
 endif
 
 default: $(BUILD_TARGETS)
