@@ -32,16 +32,22 @@ namespace grammar_parser {
         return -1;
     }
 
-    const char * parse_space(const char * src) {
+    const char * parse_space(const char * src, bool newline_ok) {
         const char * pos = src;
-        // TODO: support newlines in some cases
-        while (*pos == ' ' || *pos == '\t') {
-            pos++;
+        while (*pos == ' ' || *pos == '\t' || *pos == '#' ||
+                (newline_ok && (*pos == '\r' || *pos == '\n'))) {
+            if (*pos == '#') {
+                while (*pos && *pos != '\r' && *pos != '\n') {
+                    pos++;
+                }
+            } else {
+                pos++;
+            }
         }
         return pos;
     }
 
-    std::pair<const char *, const char *> parse_name(const char * src) {
+    const char * parse_name(const char * src) {
         const char * pos = src;
         while (is_word_char(*pos)) {
             pos++;
@@ -49,7 +55,7 @@ namespace grammar_parser {
         if (pos == src) {
             throw std::runtime_error(std::string("expecting name at ") + src);
         }
-        return std::make_pair(pos, parse_space(pos));
+        return pos;
     }
 
     std::pair<uint16_t, const char *> parse_char(const char * src) {
@@ -84,13 +90,15 @@ namespace grammar_parser {
             parse_state       & state,
             const char        * src,
             const std::string & rule_name,
-            uint16_t            rule_id);
+            uint16_t            rule_id,
+            bool                is_nested);
 
     const char * parse_sequence(
             parse_state           & state,
             const char            * src,
             const std::string     & rule_name,
-            std::vector<uint16_t> & outbuf) {
+            std::vector<uint16_t> & outbuf,
+            bool                    is_nested) {
         size_t out_start = outbuf.size();
 
         // sequence size, will be replaced at end when known
@@ -111,7 +119,7 @@ namespace grammar_parser {
                     outbuf.push_back(char_pair.first);
                     outbuf.push_back(char_pair.first);
                 }
-                pos = parse_space(pos + 1);
+                pos = parse_space(pos + 1, is_nested);
             } else if (*pos == '[') { // char range(s)
                 pos++;
                 last_sym_start = outbuf.size();
@@ -133,19 +141,19 @@ namespace grammar_parser {
                 }
                 // replace num chars with actual
                 outbuf[last_sym_start] = static_cast<uint16_t>(outbuf.size() - last_sym_start - 1);
-                pos = parse_space(pos + 1);
+                pos = parse_space(pos + 1, is_nested);
             } else if (is_word_char(*pos)) { // rule reference
-                auto     name_pair   = parse_name(pos);
-                uint16_t ref_rule_id = get_symbol_id(state, pos, name_pair.first - pos);
-                         pos         = name_pair.second;
+                const char * name_end    = parse_name(pos);
+                uint16_t     ref_rule_id = get_symbol_id(state, pos, name_end - pos);
+                pos = parse_space(name_end, is_nested);
                 last_sym_start = outbuf.size();
                 outbuf.push_back(1);
                 outbuf.push_back(ref_rule_id);
             } else if (*pos == '(') { // grouping
                 // parse nested alternates into synthesized rule
-                pos = parse_space(pos + 1);
+                pos = parse_space(pos + 1, true);
                 uint16_t sub_rule_id = generate_symbol_id(state, rule_name);
-                pos = parse_alternates(state, pos, rule_name, sub_rule_id);
+                pos = parse_alternates(state, pos, rule_name, sub_rule_id, true);
                 last_sym_start = outbuf.size();
                 // output reference to synthesized rule
                 outbuf.push_back(1);
@@ -153,7 +161,7 @@ namespace grammar_parser {
                 if (*pos != ')') {
                     throw std::runtime_error(std::string("expecting ')' at ") + pos);
                 }
-                pos = parse_space(pos + 1);
+                pos = parse_space(pos + 1, is_nested);
             } else if (*pos == '*' || *pos == '+' || *pos == '?') { // repetition operator
                 if (outbuf.size() - out_start - 1 == 0) {
                     throw std::runtime_error(std::string("expecting preceeding item to */+/? at ") + pos);
@@ -199,7 +207,7 @@ namespace grammar_parser {
                 outbuf.push_back(1);
                 outbuf.push_back(sub_rule_id);
 
-                pos = parse_space(pos + 1);
+                pos = parse_space(pos + 1, is_nested);
             } else {
                 break;
             }
@@ -215,12 +223,13 @@ namespace grammar_parser {
             parse_state       & state,
             const char        * src,
             const std::string & rule_name,
-            uint16_t            rule_id) {
+            uint16_t            rule_id,
+            bool                is_nested) {
         std::vector<uint16_t> outbuf;
-        const char * pos = parse_sequence(state, src, rule_name, outbuf);
+        const char * pos = parse_sequence(state, src, rule_name, outbuf, is_nested);
         while (*pos == '|') {
-            pos = parse_space(pos + 1);
-            pos = parse_sequence(state, pos, rule_name, outbuf);
+            pos = parse_space(pos + 1, true);
+            pos = parse_sequence(state, pos, rule_name, outbuf, is_nested);
         }
         state.out_grammar.push_back(rule_id);
         state.out_grammar.insert(state.out_grammar.end(), outbuf.begin(), outbuf.end());
@@ -229,18 +238,18 @@ namespace grammar_parser {
     }
 
     const char * parse_rule(parse_state & state, const char * src) {
-        auto         name_pair = parse_name(src);
-        const char * pos       = name_pair.second;
-        size_t       name_len  = name_pair.first - src;
-        uint16_t     rule_id   = get_symbol_id(state, src, name_len);
+        const char * name_end = parse_name(src);
+        const char * pos      = parse_space(name_end, false);
+        size_t       name_len = name_end - src;
+        uint16_t     rule_id  = get_symbol_id(state, src, name_len);
         const std::string name(src, name_len);
 
         if (!(pos[0] == ':' && pos[1] == ':' && pos[2] == '=')) {
             throw std::runtime_error(std::string("expecting ::= at ") + pos);
         }
-        pos = parse_space(pos + 3);
+        pos = parse_space(pos + 3, true);
 
-        pos = parse_alternates(state, pos, name, rule_id);
+        pos = parse_alternates(state, pos, name, rule_id, false);
 
         if (*pos == '\r') {
             pos += pos[1] == '\n' ? 2 : 1;
@@ -249,13 +258,13 @@ namespace grammar_parser {
         } else if (*pos) {
             throw std::runtime_error(std::string("expecting newline or end at ") + pos);
         }
-        return parse_space(pos);
+        return parse_space(pos, true);
     }
 
     parse_state parse(const char * src) {
         try {
             parse_state state;
-            const char * pos = parse_space(src);
+            const char * pos = parse_space(src, true);
             while (*pos) {
                 pos = parse_rule(state, pos);
             }

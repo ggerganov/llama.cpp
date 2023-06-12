@@ -1,8 +1,24 @@
-root ::= object | array
+# Grammar for subset of JSON - doesn't support full string or number syntax
+
+root  ::= object | array
 value ::= object | array | string | number | boolean
-object ::= "{" ws (string ":" ws value ("," ws string ":" ws value)*)? "}"
-array ::= "[" ws (value ("," ws value)*)? "]"
-string ::= "\"" [ \t!#-\[\]-~]* "\"" ws
-number ::= [0-9]+ ws
+
+object ::=
+  "{" ws (
+            string ":" ws value
+    ("," ws string ":" ws value)*
+  )? "}"
+
+array  ::=
+  "[" ws (
+            value
+    ("," ws value)*
+  )? "]"
+
+# Subset of JSON primitives: strings without escapes and only regular integers
+string  ::= "\"" [ \t!#-\[\]-~]* "\"" ws
+number  ::= "-"? [0-9]+ ws
 boolean ::= ("true" | "false") ws
-ws ::= [ \t\t] ws |
+
+# Optional space: by convention, applied in this grammar after literal chars when allowed
+ws ::= [ \t\n] ws |
