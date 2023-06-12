@@ -2377,12 +2377,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             printf("size = %8.3f MB\n", tensor.size/1024.0/1024.0);
         } else {
             new_type = quantized_type;
-            // TODO: temporary disabled until Metal / OpenCL support is available
-            //       ref: https://github.com/ggerganov/llama.cpp/issues/1711
-            //if (tensor.name == "output.weight") {
-            //    new_type = GGML_TYPE_Q6_K;
-            //}
-            if (tensor.name.find("attention.wv.weight") != std::string::npos) {
+            if (tensor.name == "output.weight") {
+                new_type = GGML_TYPE_Q6_K;
+            }
+            else if (tensor.name.find("attention.wv.weight") != std::string::npos) {
                 if      (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q4_K;
                 else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
                 else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) &&
