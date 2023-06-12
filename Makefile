@@ -140,7 +140,7 @@ ifndef LLAMA_NO_ACCELERATE
 endif # LLAMA_NO_ACCELERATE
 
 ifdef LLAMA_OPENBLAS
-	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas -I/usr/include/openblas
+	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas -I/usr/include/openblas -I/data/data/com.termux/files/usr/include/openblas
 	ifneq ($(shell grep -e "Arch Linux" -e "ID_LIKE=arch" /etc/os-release 2>/dev/null),)
 		LDFLAGS += -lopenblas -lcblas
 	else
