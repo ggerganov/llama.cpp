@@ -107,6 +107,10 @@ ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 	# Usage AVX-only
 	#CFLAGS   += -mfma -mf16c -mavx
 	#CXXFLAGS += -mfma -mf16c -mavx
+
+	# Usage SSSE3-only (Not is SSE3!)
+	#CFLAGS   += -mssse3
+	#CXXFLAGS += -mssse3
 endif
 
 ifneq ($(filter ppc64%,$(UNAME_M)),)

@@ -662,6 +662,15 @@ static void ggml_cl_pool_free(cl_mem mem, size_t size) {
     clReleaseMemObject(mem);
 }
 
+void ggml_cl_free_data(const struct ggml_tensor* tensor) {
+    if (tensor->backend != GGML_BACKEND_GPU) {
+        return;
+    }
+
+    cl_mem mem = (cl_mem)tensor->data;
+    clReleaseMemObject(mem);
+}
+
 static cl_int ggml_cl_h2d_tensor_2d(cl_command_queue queue, cl_mem dst, size_t offset, const struct ggml_tensor * src, uint64_t i3, uint64_t i2, cl_event* ev) {
     cl_int err;
     const uint64_t ne0 = src->ne[0];
