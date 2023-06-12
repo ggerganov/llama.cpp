@@ -86,6 +86,7 @@ struct ggml_metal_context * ggml_metal_init(void) {
 
     ctx->device = MTLCreateSystemDefaultDevice();
     ctx->queue  = [ctx->device newCommandQueue];
+    ctx->n_buffers = 0;
 
     // determine if we can use MPS
     if (MPSSupportsMTLDevice(ctx->device)) {
