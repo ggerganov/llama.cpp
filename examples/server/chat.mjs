@@ -1,6 +1,8 @@
 import * as readline from 'node:readline'
 import { stdin, stdout } from 'node:process'
 
+const API_URL = 'http://127.0.0.1:8080'
+
 const chat = [
     {
         human: "Hello, Assistant.",
@@ -21,7 +23,7 @@ function format_prompt(question) {
 }
 
 async function tokenize(content) {
-    const result = await fetch("http://127.0.0.1:8080/tokenize", {
+    const result = await fetch(`${API_URL}/tokenize`, {
         method: 'POST',
         body: JSON.stringify({ content })
     })
@@ -36,7 +38,7 @@ async function tokenize(content) {
 const n_keep = await tokenize(instruction).length
 
 async function chat_completion(question) {
-    const result = await fetch("http://127.0.0.1:8080/completion", {
+    const result = await fetch(`${API_URL}/completion`, {
         method: 'POST',
         body: JSON.stringify({
             prompt: format_prompt(question),
