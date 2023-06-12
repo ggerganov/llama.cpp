@@ -77,10 +77,10 @@ struct __attribute__ ((packed)) block_q3_K
 
 struct __attribute__ ((packed)) block_q4_K
 {
-    uint8_t scales[12];
-    uint8_t qs[128];
     half d;
     half dmin;
+    uint8_t scales[12];
+    uint8_t qs[128];
 };
 
 struct __attribute__ ((packed)) block_q6_K
