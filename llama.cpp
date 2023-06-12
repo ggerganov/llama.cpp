@@ -1843,7 +1843,7 @@ static void llama_grammar_advance_stack(
     }
 
     const uint16_t * pos = stack.back();
-    
+
     if (*pos == 1) {
         // rule reference, apply rule to stack
         const uint16_t * subpos = rules[pos[1]] + 1;
@@ -1871,7 +1871,7 @@ static void llama_grammar_advance_stack(
 // takes a set of possible pushdown stacks on a grammar, which are required to
 // be positioned at a character range (see `llama_grammar_advance_stack`), and
 // produces the N possible stacks if the given char is accepted at those
-// positions  
+// positions
 static std::vector<std::vector<const uint16_t *>> llama_grammar_accept(
         const std::vector<const uint16_t *>              & rules,
         const std::vector<std::vector<const uint16_t *>> & stacks,
@@ -1913,7 +1913,7 @@ static std::vector<std::vector<const uint16_t *>> llama_grammar_accept(
     return new_stacks;
 }
 
-// returns `true` if one of the pushdown stacks can accept the given char. 
+// returns `true` if one of the pushdown stacks can accept the given char.
 static bool llama_grammar_peek(
         const std::vector<std::vector<const uint16_t *>> & stacks,
         const uint16_t                                     chr) {
@@ -1942,7 +1942,7 @@ static bool llama_grammar_peek(
 
 //
 // grammar - external
-// 
+//
 
 struct llama_grammar * llama_grammar_init(const uint16_t * src, uint16_t start_rule_id) {
     const uint16_t * pos = src;

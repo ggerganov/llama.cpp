@@ -293,7 +293,7 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "\n\n");
 
     grammar_parser::parse_state parsed_grammar;
-    llama_grammar *             grammar = NULL; 
+    llama_grammar *             grammar = NULL;
     if (!params.grammar.empty()) {
         parsed_grammar = grammar_parser::parse(params.grammar.c_str());
         fprintf(stderr, "%s: grammar:\n", __func__);

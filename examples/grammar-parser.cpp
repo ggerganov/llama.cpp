@@ -265,7 +265,7 @@ namespace grammar_parser {
     const uint16_t * print_rule(
             FILE           * file,
             const uint16_t * base,
-            const uint16_t * src, 
+            const uint16_t * src,
             const std::map<uint16_t, std::string> & symbol_id_names) {
         uint16_t rule_id = *src;
         fprintf(file, "<%zu>%s ::= ", src - base, symbol_id_names.at(rule_id).c_str());
@@ -312,4 +312,3 @@ namespace grammar_parser {
         }
     }
 }
-
