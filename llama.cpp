@@ -707,6 +707,9 @@ struct llama_model_loader {
 
     struct ggml_tensor * get_tensor_for(llama_load_tensor & lt, ggml_backend backend) {
         struct ggml_tensor * tensor;
+        if (backend != GGML_BACKEND_CPU) {
+            ggml_set_no_alloc(ggml_ctx, true);
+        }
         if (lt.ne.size() == 2) {
             tensor = ggml_new_tensor_2d(ggml_ctx, lt.type, lt.ne.at(0), lt.ne.at(1));
         } else {
@@ -716,6 +719,9 @@ struct llama_model_loader {
         ggml_set_name(tensor, lt.name.c_str());
         LLAMA_ASSERT(lt.ggml_tensor == NULL); // if this fails, we called get_tensor twice on the same tensor
 
+        if (backend != GGML_BACKEND_CPU) {
+            ggml_set_no_alloc(ggml_ctx, use_mmap);
+        }
         tensor->backend = backend;
         lt.ggml_tensor = tensor;
         num_ggml_tensors_created++;
@@ -731,6 +737,7 @@ struct llama_model_loader {
     void load_all_data(llama_progress_callback progress_callback, void *  progress_callback_user_data, llama_mlock * lmlock) {
         size_t data_size = 0;
         size_t prefetch_size = 0;
+        size_t lock_size = 0;
         for (const llama_load_tensor & lt : tensors_map.tensors) {
             data_size += lt.size;
             if (lt.ggml_tensor->backend == GGML_BACKEND_CPU) {
@@ -740,11 +747,6 @@ struct llama_model_loader {
 
         if (use_mmap) {
             mapping.reset(new llama_mmap(&file_loaders.at(0)->file, prefetch_size));
-            if (!lmlock) {
-                // Don't call the callback since the actual loading will be lazy
-                // and we can't measure it.
-                progress_callback = NULL;
-            }
             if (lmlock) {
                 lmlock->init(mapping->addr);
             }
@@ -752,20 +754,49 @@ struct llama_model_loader {
 
         size_t done_size = 0;
         for (llama_load_tensor & lt : tensors_map.tensors) {
-            if (lt.ggml_tensor->backend != GGML_BACKEND_CPU) {
-                continue;
-            }
             if (progress_callback) {
                 progress_callback((float) done_size / data_size, progress_callback_user_data);
             }
             LLAMA_ASSERT(lt.ggml_tensor); // unused tensors should have been caught by load_data already
             lt.data = (uint8_t *) lt.ggml_tensor->data;
-            load_data_for(lt);
-            lt.ggml_tensor->data = lt.data;
-            done_size += lt.size;
-            if (use_mmap && lmlock) {
-                lmlock->grow_to(done_size);
+
+            // allocate temp buffer if not using mmap
+            if (!use_mmap && lt.data == NULL) {
+                GGML_ASSERT(lt.ggml_tensor->backend != GGML_BACKEND_CPU);
+                lt.data = (uint8_t*)malloc(ggml_nbytes(lt.ggml_tensor));
             }
+
+            load_data_for(lt);
+
+            switch(lt.ggml_tensor->backend) {
+                case GGML_BACKEND_CPU:
+                    lt.ggml_tensor->data = lt.data;
+                    if (use_mmap && lmlock) {
+                        lock_size += lt.size;
+                        lmlock->grow_to(lock_size);
+                    }
+                    break;
+#if defined(GGML_USE_CUBLAS)
+                case GGML_BACKEND_GPU:
+                case GGML_BACKEND_GPU_SPLIT:
+                    ggml_cuda_transform_tensor(lt.data, lt.ggml_tensor);
+                    if (!use_mmap) {
+                        free(lt.data);
+                    }
+                    break;
+#elif defined(GGML_USE_CLBLAST)
+                case GGML_BACKEND_GPU:
+                    ggml_cl_transform_tensor(lt.data, lt.ggml_tensor);
+                    if (!use_mmap) {
+                        free(lt.data);
+                    }
+                    break;
+#endif
+                default:
+                    continue;
+            }
+
+            done_size += lt.size;
         }
     }
 
@@ -1141,7 +1172,7 @@ static void llama_model_load_internal(
             if (backend == GGML_BACKEND_GPU) {
                 vram_weights +=
                     ggml_nbytes(layer.attention_norm) + ggml_nbytes(layer.wq) + ggml_nbytes(layer.wk)             +
-                    ggml_nbytes(layer.wv)             + ggml_nbytes(layer.wo) + ggml_nbytes(layer.attention_norm) +
+                    ggml_nbytes(layer.wv)             + ggml_nbytes(layer.wo) + ggml_nbytes(layer.ffn_norm) +
                     ggml_nbytes(layer.w1)             + ggml_nbytes(layer.w2) + ggml_nbytes(layer.w3);
             }
         }
@@ -1196,57 +1227,13 @@ static void llama_model_load_internal(
         model.tensors_by_name.emplace_back(lt.name, lt.ggml_tensor);
     }
 
-    ml->load_all_data(progress_callback, progress_callback_user_data, use_mlock ? &lctx.model.mlock_mmap : NULL);
-
 #if defined(GGML_USE_CUBLAS)
     {
         ggml_cuda_set_tensor_split(tensor_split);
-
-        size_t done_size = 0;
-        size_t data_size = 0;
-        for (llama_load_tensor & lt : ml->tensors_map.tensors) {
-            data_size += lt.size;
-            if (lt.ggml_tensor->backend == GGML_BACKEND_CPU) {
-                done_size += lt.size;
-            }
-        }
-        for (llama_load_tensor & lt : ml->tensors_map.tensors) {
-            ggml_backend backend = lt.ggml_tensor->backend;
-            if (backend != GGML_BACKEND_GPU && backend != GGML_BACKEND_GPU_SPLIT) {
-                continue;
-            }
-            if (progress_callback) {
-                progress_callback((float) done_size / data_size, progress_callback_user_data);
-            }
-            ggml_cuda_load_data(fname.c_str(), lt.ggml_tensor, lt.shards.at(0).file_off);
-            done_size += lt.size;
-        }
     }
-#elif defined(GGML_USE_CLBLAST)
-    {
-        size_t done_size = 0;
-        size_t data_size = 0;
-        for (llama_load_tensor & lt : ml->tensors_map.tensors) {
-            data_size += lt.size;
-            if (lt.ggml_tensor->backend == GGML_BACKEND_CPU) {
-                done_size += lt.size;
-            }
-        }
-        for (llama_load_tensor & lt : ml->tensors_map.tensors) {
-            if (lt.ggml_tensor->backend != GGML_BACKEND_GPU) {
-                continue;
-            }
-            if (progress_callback) {
-                progress_callback((float) done_size / data_size, progress_callback_user_data);
-            }
-            ggml_cl_load_data(fname.c_str(), lt.ggml_tensor, lt.shards.at(0).file_off);
-            done_size += lt.size;
-        }
-    }
-#else
-    (void) n_batch;
-    (void) tensor_split;
 #endif
+
+    ml->load_all_data(progress_callback, progress_callback_user_data, use_mlock ? &lctx.model.mlock_mmap : NULL);
 
     if (progress_callback) {
         progress_callback(1.0f, progress_callback_user_data);

@@ -1713,8 +1713,7 @@ void ggml_cuda_nop(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tens
     (void) dst;
 }
 
-void ggml_cuda_load_data(const char * fname, struct ggml_tensor * tensor, const size_t offset) {
-    FILE * fp = fopen(fname, "rb");
+void ggml_cuda_transform_tensor(void * data, struct ggml_tensor * tensor) {
     int nrows = ggml_nrows(tensor);
     const size_t nb1 = tensor->nb[1];
     ggml_backend backend = tensor->backend;
@@ -1748,35 +1747,19 @@ void ggml_cuda_load_data(const char * fname, struct ggml_tensor * tensor, const 
 
         int64_t nrows_split = row_high - row_low;
 
-        const size_t offset_split = offset + row_low*nb1;
+        const size_t offset_split = row_low*nb1;
         const size_t size = ggml_nbytes_split(tensor, nrows_split);
 
         void * buf;
         CUDA_CHECK(cudaMalloc(&buf, size));
-        void * buf_host = malloc(size);
-
-#ifdef _WIN32
-        int ret = _fseeki64(fp, (__int64) offset_split, SEEK_SET);
-#else
-        int ret = fseek(fp, (long) offset_split, SEEK_SET);
-#endif
-        GGML_ASSERT(ret == 0); // same
-
-        size_t ret2 = fread(buf_host, size, 1, fp);
-        if (ret2 != 1) {
-            fprintf(stderr, "unexpectedly reached end of file");
-            exit(1);
-        }
+        void * buf_host = (char*)data + offset_split;
 
         cudaMemcpy(buf, buf_host, size, cudaMemcpyHostToDevice);
-        cudaDeviceSynchronize();
 
-        free(buf_host);
         extra->data_device[id] = buf;
     }
 
     tensor->extra = extra;
-    fclose(fp);
 }
 
 void ggml_cuda_free_data(struct ggml_tensor * tensor) {
