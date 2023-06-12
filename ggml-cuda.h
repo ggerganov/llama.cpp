@@ -24,7 +24,8 @@ void   ggml_cuda_mul_mat(const struct ggml_tensor * src0, const struct ggml_tens
 void * ggml_cuda_host_malloc(size_t size);
 void   ggml_cuda_host_free(void * ptr);
 
-void   ggml_cuda_load_data(const char * fname, struct ggml_tensor * tensors, size_t offset);
+void   ggml_cuda_transform_tensor(void * data, struct ggml_tensor * tensor);
+
 void   ggml_cuda_free_data(struct ggml_tensor * tensor);
 void   ggml_cuda_assign_buffers(struct ggml_tensor * tensor);
 void   ggml_cuda_set_main_device(int main_device);
