@@ -18,8 +18,7 @@ void   ggml_cl_host_free(void * ptr);
 
 void ggml_cl_free_data(const struct ggml_tensor* tensor);
 
-void ggml_cl_transform_tensor(struct ggml_tensor * tensor);
-void ggml_cl_load_data(const char * fname, struct ggml_tensor * tensor, size_t offset);
+void ggml_cl_transform_tensor(void * data, struct ggml_tensor * tensor);
 
 #ifdef  __cplusplus
 }
