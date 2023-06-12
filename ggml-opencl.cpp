@@ -1360,8 +1360,8 @@ static cl_int ggml_cl_h2d_tensor_2d(cl_command_queue queue, cl_mem dst, size_t o
     }
     for (uint64_t i1 = 0; i1 < ne1; i1++) {
         // pretend the row is a matrix with cols=1
-        const size_t buffer_origin[3] = { offset, i1, 0 };
-        const size_t host_origin[3] = { 0, 0, 0 };
+        const size_t buffer_origin[3] = { offset, i1*nb1, 0 };
+        const size_t host_origin[3] = { 0, i1*ts*ne0/bs, 0 };
         const size_t region[3] = { ts/bs, ne0, 1 };
         err = clEnqueueWriteBufferRect(queue, dst, CL_FALSE, buffer_origin, host_origin, region, 0, 0, nb0, 0, ((const char *)x) + i1*nb0, 0, NULL, ev);
         if (err != CL_SUCCESS) {
