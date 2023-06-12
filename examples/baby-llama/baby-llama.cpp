@@ -149,7 +149,7 @@ struct llama_hparams_lora {
     uint32_t n_lora  = 64;
 
     bool operator!=(const llama_hparams & other) const {
-        return memcmp(this, &other, sizeof(llama_hparams));
+        return memcmp(this, &other, sizeof(llama_hparams)) != 0;
     }
 };
 
