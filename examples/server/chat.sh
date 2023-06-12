@@ -17,36 +17,49 @@ format_prompt() {
 }
 
 tokenize() {
-    echo -n "$1" | jq -Rs '{content:.}' | curl \
+    curl \
         --silent \
         --request POST \
         --url "${API_URL}/tokenize" \
-        --data "@-" | jq '.tokens[]'
+        --data-raw "$(jq -ns --arg content "$1" '{content:$content}')" \
+    | jq '.tokens[]'
 }
 
 N_KEEP=$(tokenize "${INSTRUCTION}" | wc -l)
 
 chat_completion() {
-    CONTENT=$(format_prompt "$1" | jq -Rs --argjson n_keep $N_KEEP '{
+    DATA="$(format_prompt "$1" | jq -Rs --argjson n_keep $N_KEEP '{
         prompt: .,
         temperature: 0.2,
         top_k: 40,
         top_p: 0.9,
         n_keep: $n_keep,
         n_predict: 256,
-        stop: ["\n### Human:"]
-    }' | curl \
+        stop: ["\n### Human:"],
+        stream: true
+    }')"
+
+    ANSWER=''
+
+    curl \
         --silent \
+        --no-buffer \
         --request POST \
         --url "${API_URL}/completion" \
-        --data "@-" | jq -r '.content | sub("^\\s*"; "")')
+        --data-raw "${DATA}" | while IFS= read -r LINE; do
+        if [[ $LINE = data:* ]]; then
+            CONTENT="$(echo "${LINE:5}" | jq -r '.content')"
+            printf "%s" "${CONTENT}"
+            ANSWER+="${CONTENT}"
+        fi
+    done
 
-    printf "$CONTENT\n"
+    printf "\n"
 
-    CHAT+=("$1" "$CONTENT")
+    CHAT+=("$1" "${ANSWER:1}")
 }
 
 while true; do
-    read -p "> " QUESTION
+    read -e -p "> " QUESTION
     chat_completion "${QUESTION}"
 done
