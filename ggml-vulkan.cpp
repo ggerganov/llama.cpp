@@ -17,8 +17,9 @@ vk::Instance vk_instance;
 uint32_t vk_compute_queue_family_index;
 vk::PhysicalDevice vk_physical_device;
 vk::Device vk_device;
-vmaAllocator vk_allocator;
+VmaAllocator vk_allocator;
 vk::DescriptorSetLayout vk_pipeline_matmul_dsl;
+vk::PipelineLayout vk_pipeline_matmul_layout;
 vk::Pipeline vk_pipeline_matmul;
 VmaAllocation vk_buffer_qa_alloc, vk_buffer_a_alloc, vk_buffer_b_alloc, vk_buffer_c_alloc;
 vk::Buffer vk_buffer_qa, vk_buffer_a, vk_buffer_b, vk_buffer_c;
@@ -86,7 +87,7 @@ void ggml_vk_init(void) {
     vk_pipeline_matmul_dsl = vk_device.createDescriptorSetLayout(descriptor_set_layout_create_info);
 
     vk::PipelineLayoutCreateInfo pipeline_layout_create_info(vk::PipelineLayoutCreateFlags(), vk_pipeline_matmul_dsl);
-    vk::PipelineLayout pipeline_layout = vk_device.createPipelineLayout(pipeline_layout_create_info);
+    vk_pipeline_matmul_layout = vk_device.createPipelineLayout(pipeline_layout_create_info);
     vk::PipelineCache pipeline_cache = vk_device.createPipelineCache(vk::PipelineCacheCreateInfo());
 
     vk::PipelineShaderStageCreateInfo pipeline_shader_create_info(
@@ -95,9 +96,9 @@ void ggml_vk_init(void) {
             shader_module,
             "main");
     vk::ComputePipelineCreateInfo compute_pipeline_create_info(
-        vk::PipelineCreateFlags(),    // Flags
-        pipeline_shader_create_info,     // Shader Create Info struct
-        pipeline_layout);              // Pipeline Layout
+        vk::PipelineCreateFlags(),
+        pipeline_shader_create_info,
+        vk_pipeline_matmul_layout);
     vk_pipeline_matmul = vk_device.createComputePipeline(pipeline_cache, compute_pipeline_create_info).value;
 }
 
@@ -120,7 +121,7 @@ struct scoped_spin_lock {
 
 struct vk_buffer {
     vk::Buffer buffer;
-    vmaAllocation allocation;
+    VmaAllocation allocation;
     size_t size = 0;
 };
 
@@ -160,7 +161,6 @@ static void ggml_vk_pool_malloc(size_t size, vk_buffer* buf) {
         b.size = 0;
         vmaDestroyBuffer(vk_allocator, b.buffer, b.allocation);
     }
-    buf = new vk_buffer;
     buf->size = size;
 
     vk::BufferCreateInfo buffer_create_info{
@@ -190,7 +190,7 @@ static void ggml_vk_pool_free(vk_buffer* buffer) {
         vk_buffer& b = g_vk_buffer_pool[i];
         if (b.size == 0) {
             b.buffer = buffer->buffer;
-            b.memory = buffer->memory;
+            b.allocation = buffer->allocation;
             b.size = buffer->size;
             return;
         }
@@ -198,11 +198,9 @@ static void ggml_vk_pool_free(vk_buffer* buffer) {
     fprintf(stderr, "WARNING: vk buffer pool full, increase MAX_VK_BUFFERS\n");
     buffer->size = 0;
     vmaDestroyBuffer(vk_allocator, buffer->buffer, buffer->allocation);
-    delete buffer;
 }
 
-static vk_int ggml_vk_h2d_tensor_2d(vk_command_queue queue, vk_buffer* dst, size_t offset, const struct ggml_tensor * src, uint64_t i3, uint64_t i2, vk_event* ev) {
-    vk_int err;
+static void ggml_vk_h2d_tensor_2d(vk_buffer* dst, size_t offset, const struct ggml_tensor * src, uint64_t i3, uint64_t i2) {
     const uint64_t ne0 = src->ne[0];
     const uint64_t ne1 = src->ne[1];
     const uint64_t nb0 = src->nb[0];
@@ -219,7 +217,7 @@ static vk_int ggml_vk_h2d_tensor_2d(vk_command_queue queue, vk_buffer* dst, size
 		vmaMapMemory(vk_allocator, dst->allocation, &dst_ptr);
         memcpy(dst_ptr + offset, x, ne1*nb1);
 		vmaUnmapMemory(vk_allocator, dst->allocation);
-        return err;
+        return;
     }
     if (nb0 == ts) {
         void* dst_ptr = nullptr;
@@ -229,16 +227,18 @@ static vk_int ggml_vk_h2d_tensor_2d(vk_command_queue queue, vk_buffer* dst, size
             memcpy(dst_ptr + offset + ne0 * i1, x + ts*ne0/bs, ne0*nb0);
         }
 		vmaUnmapMemory(vk_allocator, dst->allocation);
-        return err;
+        return;
     }
-    vmaMapMemory(vk_allocator, dst->allocation, &dst_ptr);
+    uint8_t* dst_ptr = nullptr;
+    uint8_t* xc = (uint8_t*)x;
+    vmaMapMemory(vk_allocator, dst->allocation, (void**) &dst_ptr);
     for (uint64_t i1 = 0; i1 < ne1; i1++) {
         for (uint64_t i0 = 0; i0 < ne0; i0++) {
-            dst_ptr[offset + i1 * ts*ne0/bs + i0 * ts] = x[i1 * nb1 + i0 * nb0];
+            dst_ptr[offset + i1 * ts*ne0/bs + i0 * ts] = xc[i1 * nb1 + i0 * nb0];
         }
     }
     vmaUnmapMemory(vk_allocator, dst->allocation);
-    return err;
+    return;
 }
 
 static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
@@ -260,13 +260,13 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     const int d_ne = ne11 * ne01;
 
     vk_buffer d_X;
-    if (src0->backend == GGML_BACKEND_GPU) { // NOLINT
-        d_X = (vk_buffer) src0->data;
+    vk_buffer d_Y;
+    vk_buffer d_D;
+    if (src0->backend == GGML_BACKEND_GPU) {
+        d_X = *(vk_buffer*) src0->data;
     } else {
         ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &d_X);
     }
-    vk_buffer d_Y;
-    vk_buffer d_D;
     ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y);
     ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D);
 
@@ -274,165 +274,200 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
         for (int64_t i02 = 0; i02 < ne02; i02++) {
             // copy data to device
             if (src0->backend != GGML_BACKEND_GPU) {
-                ggml_vk_h2d_tensor_2d(queue, &d_X, 0, src0, i03, i02, NULL);
+                ggml_vk_h2d_tensor_2d(&d_X, 0, src0, i03, i02);
             }
-            ggml_vk_h2d_tensor_2d(queue, &d_Y, 0, src1, i03, i02, NULL);
-
-            vkFinish(queue);
+            ggml_vk_h2d_tensor_2d(&d_Y, 0, src1, i03, i02);
 
             // compute
-            vk_event ev_sgemm;
-            vkblast::StatusCode status = vkblast::Gemm<vk_float>(vkblast::Layout::kColMajor,
-                                                       vkblast::Transpose::kYes, vkblast::Transpose::kNo,
-                                                       ne01, ne11, ne10,
-                                                       alpha,
-                                                       d_X, 0, ne00,
-                                                       d_Y, 0, ne10,
-                                                       beta,
-                                                       d_D, 0, ne01,
-                                                       &queue, &ev_sgemm);
+            vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, 3);
+            vk::DescriptorPoolCreateInfo descriptor_pool_create_info(vk::DescriptorPoolCreateFlags(), 1, descriptor_pool_size);
+            vk::DescriptorPool descriptor_pool = vk_device.createDescriptorPool(descriptor_pool_create_info);
 
-            if (status != vkblast::StatusCode::kSuccess) {
-                GGML_ASSERT(false);
-            }
+            vk::DescriptorSetAllocateInfo descriptor_set_alloc_info(descriptor_pool, 1, &vk_pipeline_matmul_dsl);
+            const std::vector<vk::DescriptorSet> descriptor_sets = vk_device.allocateDescriptorSets(descriptor_set_alloc_info);
+            vk::DescriptorSet descriptor_set = descriptor_sets.front();
+            vk::DescriptorBufferInfo d_X_buffer_info(d_X.buffer, 0, sizeof(float) * x_ne);
+            vk::DescriptorBufferInfo d_Y_buffer_info(d_Y.buffer, 0, sizeof(float) * y_ne);
+            vk::DescriptorBufferInfo d_D_buffer_info(d_D.buffer, 0, sizeof(float) * d_ne);
+
+            const std::vector<vk::WriteDescriptorSet> write_descriptor_sets = {
+                {descriptor_set, 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_X_buffer_info},
+                {descriptor_set, 1, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_Y_buffer_info},
+                {descriptor_set, 2, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_D_buffer_info},
+            };
+            vk_device.updateDescriptorSets(write_descriptor_sets, {});
+
+            vk::CommandPoolCreateInfo command_pool_create_info(vk::CommandPoolCreateFlags(), vk_compute_queue_family_index);
+            vk::CommandPool command_pool = vk_device.createCommandPool(command_pool_create_info);
+
+            vk::CommandBufferAllocateInfo command_buffer_alloc_info(
+                command_pool,
+                vk::CommandBufferLevel::ePrimary,
+                1);
+            const std::vector<vk::CommandBuffer> cmd_buffers = vk_device.allocateCommandBuffers(command_buffer_alloc_info);
+            vk::CommandBuffer cmd_buffer = cmd_buffers.front();
+
+            vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+            cmd_buffer.begin(cmd_buffer_begin_info);
+            cmd_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, vk_pipeline_matmul);
+            cmd_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+                                         vk_pipeline_matmul_layout,
+                                         0,
+                                         { descriptor_set },
+                                         {});
+            cmd_buffer.dispatch(d_ne, 1, 1);
+            cmd_buffer.end();
+
+            vk::Queue queue = vk_device.getQueue(vk_compute_queue_family_index, 0);
+            vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
+
+            vk::SubmitInfo submit_info(0,
+                                       nullptr,
+                                       nullptr,
+                                       1,
+                                       &cmd_buffer);
+            queue.submit({ submit_info }, fence);
+            vk_device.waitForFences({ fence },
+                                    true,
+                                    uint64_t(-1));
 
             // copy dst to host
             void* src_ptr = nullptr;
             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
-            vmaMapMemory(vk_allocator, d_D->allocation, &src_ptr);
+            vmaMapMemory(vk_allocator, d_D.allocation, &src_ptr);
             memcpy(d, src_ptr, sizeof(float) * d_ne);
-            vmaUnmapMemory(vk_allocator, d_D->allocation);
+            vmaUnmapMemory(vk_allocator, d_D.allocation);
         }
     }
 
     if (src0->backend != GGML_BACKEND_GPU) {
-        ggml_vk_pool_free(d_X);
+        ggml_vk_pool_free(&d_X);
     }
-    ggml_vk_pool_free(d_Y);
-    ggml_vk_pool_free(d_D);
+    ggml_vk_pool_free(&d_Y);
+    ggml_vk_pool_free(&d_D);
 }
 
 static void ggml_vk_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
-    const int64_t ne00 = src0->ne[0];
-    const int64_t ne01 = src0->ne[1];
-    const int64_t ne02 = src0->ne[2];
-    const int64_t ne03 = src0->ne[3];
-
-    const int64_t ne10 = src1->ne[0];
-    const int64_t ne11 = src1->ne[1];
-
-    const int nb2  = dst->nb[2];
-    const int nb3  = dst->nb[3];
-    const ggml_type type = src0->type;
-    const bool mul_mat_vec = ne11 == 1;
-
-    const float alpha = 1.0f;
-    const float beta = 0.0f;
-    const int x_ne = ne01 * ne00;
-    const int y_ne = ne11 * ne10;
-    const int d_ne = ne11 * ne01;
-    const size_t q_sz = ggml_type_size(type) * x_ne / ggml_blck_size(type);
-
-    size_t x_size;
-    size_t y_size;
-    size_t d_size;
-    size_t q_size;
-    vk_buffer d_X;
-    if (!mul_mat_vec) {
-        d_X = ggml_vk_pool_malloc(sizeof(float) * x_ne, &x_size);
-    }
-    vk_buffer d_Y = ggml_vk_pool_malloc(sizeof(float) * y_ne, &y_size);
-    vk_buffer d_D = ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_size);
-    vk_buffer d_Q;
-    if (src0->backend == GGML_BACKEND_CPU) {
-        d_Q = ggml_vk_pool_malloc(q_sz, &q_size);
-    }
-
-    vk_kernel* to_fp32_vk = ggml_get_to_fp32_vk(type);
-    vk_kernel* dmmv = ggml_get_dequantize_mul_mat_vec_vk(type);
-    GGML_ASSERT(to_fp32_vk != nullptr);
-
-    size_t ev_idx = 0;
-    std::vector<vk_event> events;
-
-    for (int64_t i03 = 0; i03 < ne03; i03++) {
-        for (int64_t i02 = 0; i02 < ne02; i02++) {
-            // copy src0 to device if necessary
-            if (src0->backend == GGML_BACKEND_CPU) {
-                events.emplace_back();
-                VK_CHECK(ggml_vk_h2d_tensor_2d(queue, d_Q, 0, src0, i03, i02, events.data() + ev_idx++));
-            } else if (src0->backend == GGML_BACKEND_GPU) {
-                d_Q = (vk_buffer) src0->data;
-            } else {
-                GGML_ASSERT(false);
-            }
-            if (mul_mat_vec) { // specialized dequantize_mul_mat_vec kernel
-                // copy src1 to device
-                events.emplace_back();
-                VK_CHECK(ggml_vk_h2d_tensor_2d(queue, d_Y, 0, src1, i03, i02, events.data() + ev_idx++));
-
-                // compute
-                const size_t global = ne01 * VK_DMMV_BLOCK_SIZE;
-                const size_t local = VK_DMMV_BLOCK_SIZE;
-                const vk_int ncols = ne00;
-                events.emplace_back();
-                VK_CHECK(vkSetKernelArg(*dmmv, 0, sizeof(vk_buffer), &d_Q));
-                VK_CHECK(vkSetKernelArg(*dmmv, 1, sizeof(float) * local, NULL));
-                VK_CHECK(vkSetKernelArg(*dmmv, 2, sizeof(vk_buffer), &d_Y));
-                VK_CHECK(vkSetKernelArg(*dmmv, 3, sizeof(vk_buffer), &d_D));
-                VK_CHECK(vkSetKernelArg(*dmmv, 4, sizeof(vk_int), &ncols));
-                VK_CHECK(vkEnqueueNDRangeKernel(queue, *dmmv, 1, NULL, &global, &local, events.size() - 1, events.data(), events.data() + ev_idx++));
-            } else { // general dequantization kernel + VKBlast matrix matrix multiplication
-                // convert src0 to fp32 on device
-                const size_t global = x_ne;
-                VK_CHECK(vkSetKernelArg(*to_fp32_vk, 0, sizeof(vk_buffer), &d_Q));
-                VK_CHECK(vkSetKernelArg(*to_fp32_vk, 1, sizeof(vk_buffer), &d_X));
-                VK_CHECK(vkEnqueueNDRangeKernel(queue, *to_fp32_vk, 1, NULL, &global, NULL, events.size(), !events.empty() ? events.data() : NULL, NULL));
-
-                // copy src1 to device
-                VK_CHECK(ggml_vk_h2d_tensor_2d(queue, d_Y, 0, src1, i03, i02, NULL));
-
-                events.emplace_back();
-
-                // wait for conversion
-                VK_CHECK(vkFinish(queue));
-
-                // compute
-                vkblast::StatusCode status = vkblast::Gemm<vk_float>(vkblast::Layout::kColMajor,
-                                                           vkblast::Transpose::kYes, vkblast::Transpose::kNo,
-                                                           ne01, ne11, ne10,
-                                                           alpha,
-                                                           d_X, 0, ne00,
-                                                           d_Y, 0, ne10,
-                                                           beta,
-                                                           d_D, 0, ne01,
-                                                           &queue, events.data() + ev_idx++);
-
-                if (status != vkblast::StatusCode::kSuccess) {
-                    GGML_ASSERT(false);
-                }
-            }
-
-            // copy dst to host
-            float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
-            VK_CHECK(vkEnqueueReadBuffer(queue, d_D, true, 0, sizeof(float) * d_ne, d, 1, &events[events.size() - 1], NULL));
-            for (auto *event : events) {
-                vkReleaseEvent(event);
-            }
-
-            ev_idx = 0;
-            events.vkear();
-        }
-    }
-
-    if (!mul_mat_vec) {
-        ggml_vk_pool_free(d_X, x_size);
-    }
-    ggml_vk_pool_free(d_Y, y_size);
-    ggml_vk_pool_free(d_D, d_size);
-    if (src0->backend == GGML_BACKEND_CPU) {
-        ggml_vk_pool_free(d_Q, q_size);
-    }
+//     const int64_t ne00 = src0->ne[0];
+//     const int64_t ne01 = src0->ne[1];
+//     const int64_t ne02 = src0->ne[2];
+//     const int64_t ne03 = src0->ne[3];
+//
+//     const int64_t ne10 = src1->ne[0];
+//     const int64_t ne11 = src1->ne[1];
+//
+//     const int nb2  = dst->nb[2];
+//     const int nb3  = dst->nb[3];
+//     const ggml_type type = src0->type;
+//     const bool mul_mat_vec = ne11 == 1;
+//
+//     const float alpha = 1.0f;
+//     const float beta = 0.0f;
+//     const int x_ne = ne01 * ne00;
+//     const int y_ne = ne11 * ne10;
+//     const int d_ne = ne11 * ne01;
+//     const size_t q_sz = ggml_type_size(type) * x_ne / ggml_blck_size(type);
+//
+//     size_t x_size;
+//     size_t y_size;
+//     size_t d_size;
+//     size_t q_size;
+//     vk_buffer d_X;
+//     if (!mul_mat_vec) {
+//         d_X = ggml_vk_pool_malloc(sizeof(float) * x_ne, &x_size);
+//     }
+//     vk_buffer d_Y = ggml_vk_pool_malloc(sizeof(float) * y_ne, &y_size);
+//     vk_buffer d_D = ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_size);
+//     vk_buffer d_Q;
+//     if (src0->backend == GGML_BACKEND_CPU) {
+//         d_Q = ggml_vk_pool_malloc(q_sz, &q_size);
+//     }
+//
+//     vk_kernel* to_fp32_vk = ggml_get_to_fp32_vk(type);
+//     vk_kernel* dmmv = ggml_get_dequantize_mul_mat_vec_vk(type);
+//     GGML_ASSERT(to_fp32_vk != nullptr);
+//
+//     size_t ev_idx = 0;
+//     std::vector<vk_event> events;
+//
+//     for (int64_t i03 = 0; i03 < ne03; i03++) {
+//         for (int64_t i02 = 0; i02 < ne02; i02++) {
+//             // copy src0 to device if necessary
+//             if (src0->backend == GGML_BACKEND_CPU) {
+//                 events.emplace_back();
+//                 VK_CHECK(ggml_vk_h2d_tensor_2d(queue, d_Q, 0, src0, i03, i02, events.data() + ev_idx++));
+//             } else if (src0->backend == GGML_BACKEND_GPU) {
+//                 d_Q = (vk_buffer) src0->data;
+//             } else {
+//                 GGML_ASSERT(false);
+//             }
+//             if (mul_mat_vec) { // specialized dequantize_mul_mat_vec kernel
+//                 // copy src1 to device
+//                 events.emplace_back();
+//                 VK_CHECK(ggml_vk_h2d_tensor_2d(queue, d_Y, 0, src1, i03, i02, events.data() + ev_idx++));
+//
+//                 // compute
+//                 const size_t global = ne01 * VK_DMMV_BLOCK_SIZE;
+//                 const size_t local = VK_DMMV_BLOCK_SIZE;
+//                 const vk_int ncols = ne00;
+//                 events.emplace_back();
+//                 VK_CHECK(vkSetKernelArg(*dmmv, 0, sizeof(vk_buffer), &d_Q));
+//                 VK_CHECK(vkSetKernelArg(*dmmv, 1, sizeof(float) * local, NULL));
+//                 VK_CHECK(vkSetKernelArg(*dmmv, 2, sizeof(vk_buffer), &d_Y));
+//                 VK_CHECK(vkSetKernelArg(*dmmv, 3, sizeof(vk_buffer), &d_D));
+//                 VK_CHECK(vkSetKernelArg(*dmmv, 4, sizeof(vk_int), &ncols));
+//                 VK_CHECK(vkEnqueueNDRangeKernel(queue, *dmmv, 1, NULL, &global, &local, events.size() - 1, events.data(), events.data() + ev_idx++));
+//             } else { // general dequantization kernel + VKBlast matrix matrix multiplication
+//                 // convert src0 to fp32 on device
+//                 const size_t global = x_ne;
+//                 VK_CHECK(vkSetKernelArg(*to_fp32_vk, 0, sizeof(vk_buffer), &d_Q));
+//                 VK_CHECK(vkSetKernelArg(*to_fp32_vk, 1, sizeof(vk_buffer), &d_X));
+//                 VK_CHECK(vkEnqueueNDRangeKernel(queue, *to_fp32_vk, 1, NULL, &global, NULL, events.size(), !events.empty() ? events.data() : NULL, NULL));
+//
+//                 // copy src1 to device
+//                 VK_CHECK(ggml_vk_h2d_tensor_2d(queue, d_Y, 0, src1, i03, i02, NULL));
+//
+//                 events.emplace_back();
+//
+//                 // wait for conversion
+//                 VK_CHECK(vkFinish(queue));
+//
+//                 // compute
+//                 vkblast::StatusCode status = vkblast::Gemm<vk_float>(vkblast::Layout::kColMajor,
+//                                                            vkblast::Transpose::kYes, vkblast::Transpose::kNo,
+//                                                            ne01, ne11, ne10,
+//                                                            alpha,
+//                                                            d_X, 0, ne00,
+//                                                            d_Y, 0, ne10,
+//                                                            beta,
+//                                                            d_D, 0, ne01,
+//                                                            &queue, events.data() + ev_idx++);
+//
+//                 if (status != vkblast::StatusCode::kSuccess) {
+//                     GGML_ASSERT(false);
+//                 }
+//             }
+//
+//             // copy dst to host
+//             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
+//             VK_CHECK(vkEnqueueReadBuffer(queue, d_D, true, 0, sizeof(float) * d_ne, d, 1, &events[events.size() - 1], NULL));
+//             for (auto *event : events) {
+//                 vkReleaseEvent(event);
+//             }
+//
+//             ev_idx = 0;
+//             events.vkear();
+//         }
+//     }
+//
+//     if (!mul_mat_vec) {
+//         ggml_vk_pool_free(d_X, x_size);
+//     }
+//     ggml_vk_pool_free(d_Y, y_size);
+//     ggml_vk_pool_free(d_D, d_size);
+//     if (src0->backend == GGML_BACKEND_CPU) {
+//         ggml_vk_pool_free(d_Q, q_size);
+//     }
 }
 
 
