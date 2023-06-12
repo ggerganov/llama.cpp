@@ -32,7 +32,10 @@
             '' else "";
           nativeBuildInputs = with pkgs; [ cmake ];
           buildInputs = osSpecific;
-          cmakeFlags = [ "-DLLAMA_BUILD_SERVER=ON" ] ++ (optionals isM1 [
+          cmakeFlags = [
+            "-DBUILD_SHARED_LIBS=ON"
+            "-DLLAMA_BUILD_SERVER=ON"
+          ] ++ (optionals isM1 [
             "-DCMAKE_C_FLAGS=-D__ARM_FEATURE_DOTPROD=1"
             "-DLLAMA_METAL=ON"
           ]);
@@ -45,6 +48,9 @@
             echo "#!${llama-python}/bin/python" > $out/bin/convert.py
             cat ${./convert.py} >> $out/bin/convert.py
             chmod +x $out/bin/convert.py
+
+            mkdir -p $out/lib/
+            mv libllama.so $out/lib/
           '';
           meta.mainProgram = "llama";
         };
