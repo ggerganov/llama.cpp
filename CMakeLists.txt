@@ -341,10 +341,6 @@ if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES
         if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv8")
             # Raspberry Pi 3, 4, Zero 2 (32-bit)
             add_compile_options(-mfp16-format=ieee -mno-unaligned-access)
-
-            if(DEFINED ANDROID_NDK)
-            add_compile_options(-march=armv8.4a+dotprod)
-            endif()
         endif()
     endif()
 elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$")
