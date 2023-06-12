@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 3.12) # Don't bump this version for no reason
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
+
 project("llama.cpp" C CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -37,46 +42,40 @@ endif()
 #
 
 # general
-option(LLAMA_STATIC                     "llama: static link libraries"                          OFF)
-option(LLAMA_NATIVE                     "llama: enable -march=native flag"                      OFF)
-option(LLAMA_LTO                        "llama: enable link time optimization"                  OFF)
+option(LLAMA_STATIC                 "llama: static link libraries"                          OFF)
+option(LLAMA_NATIVE                 "llama: enable -march=native flag"                      OFF)
+option(LLAMA_LTO                    "llama: enable link time optimization"                  OFF)
 
 # debug
-option(LLAMA_ALL_WARNINGS               "llama: enable all compiler warnings"                   ON)
-option(LLAMA_ALL_WARNINGS_3RD_PARTY     "llama: enable all compiler warnings in 3rd party libs" OFF)
-option(LLAMA_GPROF                      "llama: enable gprof"                                   OFF)
+option(LLAMA_ALL_WARNINGS           "llama: enable all compiler warnings"                   ON)
+option(LLAMA_ALL_WARNINGS_3RD_PARTY "llama: enable all compiler warnings in 3rd party libs" OFF)
+option(LLAMA_GPROF                  "llama: enable gprof"                                   OFF)
 
 # sanitizers
-option(LLAMA_SANITIZE_THREAD            "llama: enable thread sanitizer"                        OFF)
-option(LLAMA_SANITIZE_ADDRESS           "llama: enable address sanitizer"                       OFF)
-option(LLAMA_SANITIZE_UNDEFINED         "llama: enable undefined sanitizer"                     OFF)
+option(LLAMA_SANITIZE_THREAD        "llama: enable thread sanitizer"                        OFF)
+option(LLAMA_SANITIZE_ADDRESS       "llama: enable address sanitizer"                       OFF)
+option(LLAMA_SANITIZE_UNDEFINED     "llama: enable undefined sanitizer"                     OFF)
 
 # instruction set specific
-option(LLAMA_AVX                        "llama: enable AVX"                                     ON)
-option(LLAMA_AVX2                       "llama: enable AVX2"                                    ON)
-option(LLAMA_AVX512                     "llama: enable AVX512"                                  OFF)
-option(LLAMA_AVX512_VBMI                "llama: enable AVX512-VBMI"                             OFF)
-option(LLAMA_AVX512_VNNI                "llama: enable AVX512-VNNI"                             OFF)
-option(LLAMA_FMA                        "llama: enable FMA"                                     ON)
+option(LLAMA_AVX                    "llama: enable AVX"                                     ON)
+option(LLAMA_AVX2                   "llama: enable AVX2"                                    ON)
+option(LLAMA_AVX512                 "llama: enable AVX512"                                  OFF)
+option(LLAMA_AVX512_VBMI            "llama: enable AVX512-VBMI"                             OFF)
+option(LLAMA_AVX512_VNNI            "llama: enable AVX512-VNNI"                             OFF)
+option(LLAMA_FMA                    "llama: enable FMA"                                     ON)
 # in MSVC F16C is implied with AVX2/AVX512
 if (NOT MSVC)
-    option(LLAMA_F16C                   "llama: enable F16C"                                    ON)
+    option(LLAMA_F16C               "llama: enable F16C"                                    ON)
 endif()
 
 # 3rd party libs
-option(LLAMA_ACCELERATE                      "llama: enable Accelerate framework"               ON)
-option(LLAMA_BLAS                            "llama: use BLAS"                                  OFF)
-set(LLAMA_BLAS_VENDOR "Generic" CACHE STRING "llama: BLAS library vendor")
-option(LLAMA_CUBLAS                          "llama: use cuBLAS"                                OFF)
-set(LLAMA_CUDA_DMMV_X      "32" CACHE STRING "llama: x stride for dmmv CUDA kernels")
-set(LLAMA_CUDA_DMMV_Y       "1" CACHE STRING "llama: y block size for dmmv CUDA kernels")
-option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
-option(LLAMA_METAL                           "llama: use Metal"                                 OFF)
-option(LLAMA_K_QUANTS                        "llama: use k-quants"                              ON)
+option(LLAMA_ACCELERATE             "llama: enable Accelerate framework"                    ON)
+option(LLAMA_OPENBLAS               "llama: use OpenBLAS"                                   OFF)
+option(LLAMA_CUBLAS                 "llama: use cuBLAS"                                     OFF)
+option(LLAMA_CLBLAST                "llama: use CLBlast"                                    OFF)
 
-option(LLAMA_BUILD_TESTS                "llama: build tests"    ${LLAMA_STANDALONE})
-option(LLAMA_BUILD_EXAMPLES             "llama: build examples" ${LLAMA_STANDALONE})
-option(LLAMA_BUILD_SERVER               "llama: build server example"                           OFF)
+option(LLAMA_BUILD_TESTS            "llama: build tests"    ${LLAMA_STANDALONE})
+option(LLAMA_BUILD_EXAMPLES         "llama: build examples" ${LLAMA_STANDALONE})
 
 #
 # Build info header
@@ -151,28 +150,36 @@ if (APPLE AND LLAMA_ACCELERATE)
     endif()
 endif()
 
-if (LLAMA_BLAS)
+if (LLAMA_OPENBLAS)
     if (LLAMA_STATIC)
         set(BLA_STATIC ON)
     endif()
-    if ($(CMAKE_VERSION) VERSION_GREATER_EQUAL 3.22)
-        set(BLA_SIZEOF_INTEGER 8)
-    endif()
-    set(BLA_VENDOR ${LLAMA_BLAS_VENDOR})
+
+    set(BLA_VENDOR OpenBLAS)
     find_package(BLAS)
     if (BLAS_FOUND)
-        message(STATUS "BLAS found, Libraries: ${BLAS_LIBRARIES}")
+        message(STATUS "OpenBLAS found")
 
-        add_compile_options(${BLAS_LINKER_FLAGS})
         add_compile_definitions(GGML_USE_OPENBLAS)
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ${BLAS_LIBRARIES})
+        add_link_options(${BLAS_LIBRARIES})
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} openblas)
 
-        message("${BLAS_LIBRARIES} ${BLAS_INCLUDE_DIRS}")
-        include_directories(${BLAS_INCLUDE_DIRS})
+        # find header file
+        set(OPENBLAS_INCLUDE_SEARCH_PATHS
+            /usr/include
+            /usr/include/openblas
+            /usr/include/openblas-base
+            /usr/local/include
+            /usr/local/include/openblas
+            /usr/local/include/openblas-base
+            /opt/OpenBLAS/include
+            $ENV{OpenBLAS_HOME}
+            $ENV{OpenBLAS_HOME}/include
+            )
+        find_path(OPENBLAS_INC NAMES cblas.h PATHS ${OPENBLAS_INCLUDE_SEARCH_PATHS})
+        add_compile_options(-I${OPENBLAS_INC})
     else()
-        message(WARNING "BLAS not found, please refer to "
-        "https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors"
-        " to set correct LLAMA_BLAS_VENDOR")
+        message(WARNING "OpenBLAS not found")
     endif()
 endif()
 
@@ -185,11 +192,9 @@ if (LLAMA_CUBLAS)
 
         enable_language(CUDA)
 
-        set(GGML_SOURCES_CUDA ggml-cuda.cu ggml-cuda.h)
+        set(GGML_CUDA_SOURCES ggml-cuda.cu ggml-cuda.h)
 
         add_compile_definitions(GGML_USE_CUBLAS)
-        add_compile_definitions(GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
-        add_compile_definitions(GGML_CUDA_DMMV_Y=${LLAMA_CUDA_DMMV_Y})
 
         if (LLAMA_STATIC)
             set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas_static CUDA::cublasLt_static)
@@ -202,42 +207,12 @@ if (LLAMA_CUBLAS)
     endif()
 endif()
 
-if (LLAMA_METAL)
-    find_library(FOUNDATION_LIBRARY         Foundation              REQUIRED)
-    find_library(METAL_FRAMEWORK            Metal                   REQUIRED)
-    find_library(METALKIT_FRAMEWORK         MetalKit                REQUIRED)
-    find_library(METALPERFORMANCE_FRAMEWORK MetalPerformanceShaders REQUIRED)
-
-    set(GGML_SOURCES_METAL ggml-metal.m ggml-metal.h)
-
-    add_compile_definitions(GGML_USE_METAL)
-    add_compile_definitions(GGML_METAL_NDEBUG)
-
-    # get full path to the file
-    #add_compile_definitions(GGML_METAL_DIR_KERNELS="${CMAKE_CURRENT_SOURCE_DIR}/")
-
-    # copy ggml-metal.metal to bin directory
-    configure_file(ggml-metal.metal bin/ggml-metal.metal COPYONLY)
-
-    set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS}
-        ${FOUNDATION_LIBRARY}
-        ${METAL_FRAMEWORK}
-        ${METALKIT_FRAMEWORK}
-        ${METALPERFORMANCE_FRAMEWORK}
-        )
-endif()
-
-if (LLAMA_K_QUANTS)
-    set(GGML_SOURCES_EXTRA ${GGML_SOURCES_EXTRA} k_quants.c k_quants.h)
-    add_compile_definitions(GGML_USE_K_QUANTS)
-endif()
-
 if (LLAMA_CLBLAST)
     find_package(CLBlast)
     if (CLBlast_FOUND)
         message(STATUS "CLBlast found")
 
-        set(GGML_SOURCES_OPENCL ggml-opencl.cpp ggml-opencl.h)
+        set(GGML_OPENCL_SOURCES ggml-opencl.c ggml-opencl.h)
 
         add_compile_definitions(GGML_USE_CLBLAST)
 
@@ -402,11 +377,8 @@ endif()
 add_library(ggml OBJECT
             ggml.c
             ggml.h
-            ${GGML_SOURCES_CUDA}
-            ${GGML_SOURCES_OPENCL}
-            ${GGML_SOURCES_METAL}
-            ${GGML_SOURCES_EXTRA}
-            )
+            ${GGML_CUDA_SOURCES}
+            ${GGML_OPENCL_SOURCES})
 
 target_include_directories(ggml PUBLIC .)
 target_compile_features(ggml PUBLIC c_std_11) # don't bump
@@ -419,28 +391,21 @@ endif()
 add_library(llama
             llama.cpp
             llama.h
-            llama-util.h
-            )
+            llama-util.h)
 
 target_include_directories(llama PUBLIC .)
 target_compile_features(llama PUBLIC cxx_std_11) # don't bump
-target_link_libraries(llama PRIVATE
-    ggml
-    ${LLAMA_EXTRA_LIBS}
-    )
+target_link_libraries(llama PRIVATE ggml ${LLAMA_EXTRA_LIBS})
 
 if (BUILD_SHARED_LIBS)
     set_target_properties(llama PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_compile_definitions(llama PRIVATE LLAMA_SHARED LLAMA_BUILD)
-    if (LLAMA_METAL)
-        set_target_properties(llama PROPERTIES RESOURCE "${CMAKE_CURRENT_SOURCE_DIR}/ggml-metal.metal")
-    endif()
 endif()
 
-if (GGML_SOURCES_CUDA)
+if (GGML_CUDA_SOURCES)
     message(STATUS "GGML CUDA sources found, configuring CUDA architecture")
-    set_property(TARGET ggml  PROPERTY CUDA_ARCHITECTURES OFF)
-    set_property(TARGET ggml  PROPERTY CUDA_SELECT_NVCC_ARCH_FLAGS "Auto")
+    set_property(TARGET ggml PROPERTY CUDA_ARCHITECTURES OFF)
+    set_property(TARGET ggml PROPERTY CUDA_SELECT_NVCC_ARCH_FLAGS "Auto")
     set_property(TARGET llama PROPERTY CUDA_ARCHITECTURES OFF)
 endif()
 

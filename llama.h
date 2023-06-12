@@ -1,13 +1,6 @@
 #ifndef LLAMA_H
 #define LLAMA_H
 
-#include "ggml.h"
-#ifdef GGML_USE_CUBLAS
-#include "ggml-cuda.h"
-#define LLAMA_MAX_DEVICES GGML_CUDA_MAX_DEVICES
-#else
-#define LLAMA_MAX_DEVICES 1
-#endif // GGML_USE_CUBLAS
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -26,22 +19,11 @@
 #    define LLAMA_API
 #endif
 
-#define LLAMA_FILE_MAGIC_GGJT        0x67676a74u // 'ggjt'
-#define LLAMA_FILE_MAGIC_GGLA        0x67676c61u // 'ggla'
-#define LLAMA_FILE_MAGIC_GGMF        0x67676d66u // 'ggmf'
-#define LLAMA_FILE_MAGIC_GGML        0x67676d6cu // 'ggml'
-#define LLAMA_FILE_MAGIC_GGSN        0x6767736eu // 'ggsn'
-
-#define LLAMA_FILE_VERSION           3
-#define LLAMA_FILE_MAGIC             LLAMA_FILE_MAGIC_GGJT
-#define LLAMA_FILE_MAGIC_UNVERSIONED LLAMA_FILE_MAGIC_GGML
-#define LLAMA_SESSION_MAGIC          LLAMA_FILE_MAGIC_GGSN
+#define LLAMA_FILE_VERSION           1
+#define LLAMA_FILE_MAGIC             'ggjt'
+#define LLAMA_FILE_MAGIC_UNVERSIONED 'ggml'
+#define LLAMA_SESSION_MAGIC          'ggsn'
 #define LLAMA_SESSION_VERSION        1
-
-#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL)
-// Defined when llama.cpp is compiled with support for offloading model layers to GPU.
-#define LLAMA_SUPPORTS_GPU_OFFLOAD
-#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -58,9 +40,9 @@ extern "C" {
     typedef int llama_token;
 
     typedef struct llama_token_data {
-        llama_token id; // token id
-        float logit;    // log-odds of the token
-        float p;        // probability of the token
+        llama_token id;  // token id
+        float logit; // log-odds of the token
+        float p;     // probability of the token
     } llama_token_data;
 
     typedef struct llama_token_data_array {
@@ -72,12 +54,9 @@ extern "C" {
     typedef void (*llama_progress_callback)(float progress, void *ctx);
 
     struct llama_context_params {
-        int n_ctx;                             // text context
-        int n_batch;                           // prompt processing batch size
-        int n_gpu_layers;                      // number of layers to store in VRAM
-        int main_gpu;                          // the GPU that is used for scratch and small tensors
-        float tensor_split[LLAMA_MAX_DEVICES]; // how to split layers across multiple GPUs
-        int seed;                              // RNG seed, -1 for random
+        int n_ctx;   // text context
+        int n_parts; // -1 for default
+        int seed;    // RNG seed, -1 for random
 
         bool f16_kv;     // use fp16 for KV cache
         bool logits_all; // the llama_eval() call computes all logits, not just the last one
@@ -94,47 +73,22 @@ extern "C" {
 
     // model file types
     enum llama_ftype {
-        LLAMA_FTYPE_ALL_F32              = 0,
-        LLAMA_FTYPE_MOSTLY_F16           = 1, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_0          = 2, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_1          = 3, // except 1d tensors
+        LLAMA_FTYPE_ALL_F32     = 0,
+        LLAMA_FTYPE_MOSTLY_F16  = 1,  // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_0 = 2,  // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_1 = 3,  // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4, // tok_embeddings.weight and output.weight are F16
-        // LLAMA_FTYPE_MOSTLY_Q4_2       = 5, // support has been removed
-        // LLAMA_FTYPE_MOSTLY_Q4_3       = 6, // support has been removed
-        LLAMA_FTYPE_MOSTLY_Q8_0          = 7, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q5_0          = 8, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q5_1          = 9, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q2_K          = 10,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q3_K_S        = 11,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q3_K_M        = 12,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q3_K_L        = 13,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_K_S        = 14,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_K_M        = 15,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q5_K_S        = 16,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q5_K_M        = 17,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q6_K          = 18,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_2 = 5,  // except 1d tensors
+        // LLAMA_FTYPE_MOSTLY_Q4_3 (6) support has been removed
+        LLAMA_FTYPE_MOSTLY_Q8_0 = 7,  // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q5_0 = 8,  // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q5_1 = 9,  // except 1d tensors
     };
 
-    // model quantization parameters
-    typedef struct llama_model_quantize_params {
-        int nthread;                 // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
-        enum llama_ftype   ftype;    // quantize to this llama_ftype
-        bool allow_requantize;       // allow quantizing non-f32/f16 tensors
-        bool quantize_output_tensor; // quantize output.weight
-    } llama_model_quantize_params;
-
     LLAMA_API struct llama_context_params llama_context_default_params();
-    LLAMA_API struct llama_model_quantize_params llama_model_quantize_default_params();
 
     LLAMA_API bool llama_mmap_supported();
     LLAMA_API bool llama_mlock_supported();
-
-    // TODO: not great API - very likely to change
-    // Initialize the llama + ggml backend
-    // Call once at the start of the program
-    LLAMA_API void llama_init_backend();
-
-    LLAMA_API int64_t llama_time_us();
 
     // Various functions for loading a ggml llama model.
     // Allocate (almost) all memory needed for the model.
@@ -146,11 +100,14 @@ extern "C" {
     // Frees all allocated memory
     LLAMA_API void llama_free(struct llama_context * ctx);
 
+    // TODO: not great API - very likely to change
     // Returns 0 on success
+    // nthread - how many threads to use. If <=0, will use std::thread::hardware_concurrency(), else the number given
     LLAMA_API int llama_model_quantize(
             const char * fname_inp,
             const char * fname_out,
-            const llama_model_quantize_params * params);
+      enum llama_ftype   ftype,
+            int          nthread);
 
     // Apply a LoRA adapter to a loaded model
     // path_base_model is the path to a higher quality model to use as a base for
@@ -177,15 +134,18 @@ extern "C" {
     // Copies the state to the specified destination address.
     // Destination needs to have allocated enough memory.
     // Returns the number of bytes copied
-    LLAMA_API size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst);
+    LLAMA_API size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dest);
 
     // Set the state reading from the specified address
     // Returns the number of bytes read
-    LLAMA_API size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src);
+    LLAMA_API size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src);
 
-    // Save/load session file
+    // Save/load session file and binary data
     LLAMA_API bool llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out);
+    LLAMA_API bool llama_load_session_data(struct llama_context * ctx, const uint8_t * data, size_t data_size, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out);
+
     LLAMA_API bool llama_save_session_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count);
+    LLAMA_API bool llama_save_session_data(struct llama_context * ctx, const llama_token * tokens, size_t n_token_count, const char** output, size_t* data_size);
 
     // Run the llama inference to obtain the logits and probabilities for the next token.
     // tokens + n_tokens is the provided batch of new tokens to process
@@ -197,12 +157,6 @@ extern "C" {
                              int   n_tokens,
                              int   n_past,
                              int   n_threads);
-
-    // Export a static computation graph for context of 511 and batch size of 1
-    // NOTE: since this functionality is mostly for debugging and demonstration purposes, we hardcode these
-    //       parameters here to keep things simple
-    // IMPORTANT: do not use for anything else other than debugging and testing!
-    LLAMA_API int llama_eval_export(struct llama_context * ctx, const char * fname);
 
     // Convert the provided text into tokens.
     // The tokens pointer must be large enough to hold the resulting tokens.
@@ -250,6 +204,19 @@ extern "C" {
     /// @details Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.
     LLAMA_API void llama_sample_softmax(struct llama_context * ctx, llama_token_data_array * candidates);
 
+#ifdef __cplusplus
+    /// @details Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
+    LLAMA_API void llama_sample_top_k(struct llama_context * ctx, llama_token_data_array * candidates, int k, size_t min_keep = 1);
+
+    /// @details Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
+    LLAMA_API void llama_sample_top_p(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep = 1);
+
+    /// @details Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
+    LLAMA_API void llama_sample_tail_free(struct llama_context * ctx, llama_token_data_array * candidates, float z, size_t min_keep = 1);
+
+    /// @details Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
+    LLAMA_API void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep = 1);
+#else
     /// @details Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
     LLAMA_API void llama_sample_top_k(struct llama_context * ctx, llama_token_data_array * candidates, int k, size_t min_keep);
 
@@ -261,6 +228,9 @@ extern "C" {
 
     /// @details Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
     LLAMA_API void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep);
+
+#endif // __cplusplus
+    
     LLAMA_API void llama_sample_temperature(struct llama_context * ctx, llama_token_data_array * candidates, float temp);
 
     /// @details Mirostat 1.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
