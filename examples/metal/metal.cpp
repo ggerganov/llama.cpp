@@ -70,7 +70,6 @@ int main(int argc, char ** argv) {
     // debug output
     {
         struct ggml_tensor * logits = gf.nodes[gf.n_nodes - 1];
-        ggml_metal_get_tensor(ctx_metal, logits);
 
         float * ptr = (float *) ggml_get_data(logits);
 

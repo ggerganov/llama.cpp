@@ -223,54 +223,45 @@ bool ggml_metal_add_buffer(
         }
 
         size_t page_size = getpagesize();
-        size_t aligned_size = size;
-        if ((aligned_size % page_size) != 0) {
-            aligned_size += (page_size - (aligned_size % page_size));
+        size_t sys_max_buffer_size = 2ul * 1024ul * 1024ul * 1024ul; // ctx->device.maxBufferLength;
+
+        // Make sure total size is page-aligned
+        size_t total_aligned_size = size;
+        if ((total_aligned_size % page_size) != 0) {
+            total_aligned_size += (page_size - (total_aligned_size % page_size));
         }
 
-        ctx->buffers[ctx->n_buffers].name = name;
-        ctx->buffers[ctx->n_buffers].data = data;
-        ctx->buffers[ctx->n_buffers].size = size;
-
-        if (ctx->device.maxBufferLength < aligned_size) {
-            fprintf(stderr, "%s: buffer '%s' size %zu is larger than buffer maximum of %zu\n", __func__, name, aligned_size, ctx->device.maxBufferLength);
-            return false;
-        }
-        ctx->buffers[ctx->n_buffers].metal = [ctx->device newBufferWithBytesNoCopy:data length:aligned_size options:MTLResourceStorageModeShared deallocator:nil];
-
-        if (ctx->buffers[ctx->n_buffers].metal == nil) {
-            fprintf(stderr, "%s: failed to allocate '%-16s' buffer, size = %8.2f MB\n", __func__, name, aligned_size / 1024.0 / 1024.0);
-            return false;
-        } else {
-            fprintf(stderr, "%s: allocated '%-16s' buffer, size = %8.2f MB\n", __func__, name, aligned_size / 1024.0 / 1024.0);
+        // Make sure chunk size is page-aligned
+        size_t max_chunk_size = sys_max_buffer_size / 2;
+        if ((max_chunk_size % page_size) != 0) {
+            max_chunk_size += (page_size - (max_chunk_size % page_size));
         }
 
-        ++ctx->n_buffers;
+        size_t chunk_offset = 0;
+        while (total_aligned_size > 0) {
+            size_t chunk_logical_size = (max_chunk_size > total_aligned_size) ? total_aligned_size : max_chunk_size;
+            size_t sys_buffer_size = (sys_max_buffer_size > total_aligned_size) ? total_aligned_size : sys_max_buffer_size;
+            void *chunk = (uint8_t *) data + chunk_offset;
+            ctx->buffers[ctx->n_buffers].name = name;
+            ctx->buffers[ctx->n_buffers].data = chunk;
+            ctx->buffers[ctx->n_buffers].size = chunk_logical_size;
+            ctx->buffers[ctx->n_buffers].metal = [ctx->device newBufferWithBytesNoCopy:chunk length:sys_buffer_size options:MTLResourceStorageModeShared deallocator:nil];
+
+            if (ctx->buffers[ctx->n_buffers].metal == nil) {
+                fprintf(stderr, "%s: failed to allocate '%-16s' buffer, size = %8.2f MB\n", __func__, name,
+                        sys_buffer_size / 1024.0 / 1024.0);
+                return false;
+            } else {
+                fprintf(stderr, "%s: allocated '%-16s' buffer, sys_size = %8.2f MB, size = %8.2f MB, max: %zu\n", __func__, name,
+                        sys_buffer_size / 1024.0 / 1024.0, chunk_logical_size / 1024.0 / 1024.0, sys_max_buffer_size);
+            }
+            ++ctx->n_buffers;
+            total_aligned_size -= chunk_logical_size;
+            chunk_offset += chunk_logical_size;
+        }
     }
 
     return true;
-}
-
-void ggml_metal_set_tensor(
-        struct ggml_metal_context * ctx,
-        struct ggml_tensor * t) {
-    metal_printf("%s: set input for tensor '%s'\n", __func__, t->name);
-
-    size_t offs;
-    id<MTLBuffer> id_dst = ggml_metal_get_buffer(ctx, t, &offs);
-
-    memcpy((void *) ((uint8_t *) id_dst.contents + offs), t->data, ggml_nbytes(t));
-}
-
-void ggml_metal_get_tensor(
-        struct ggml_metal_context * ctx,
-        struct ggml_tensor * t) {
-    metal_printf("%s: extract results for tensor '%s'\n", __func__, t->name);
-
-    size_t offs;
-    id<MTLBuffer> id_src = ggml_metal_get_buffer(ctx, t, &offs);
-
-    memcpy(t->data, (void *) ((uint8_t *) id_src.contents + offs), ggml_nbytes(t));
 }
 
 void ggml_metal_graph_compute(
