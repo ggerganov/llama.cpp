@@ -163,7 +163,7 @@ void convert_f16(__global half* x, const int ib, const int iqs, float* v0, float
     *v1 = vload_half(0, &x[ib + 1]);
 }
 
-inline void get_scale_min_k4(int j,  const __global uchar *q, uchar *d, uchar *m) {
+inline void get_scale_min_k4(int j,  const __global uint8_t *q, uint8_t *d, uint8_t *m) {
     if (j < 4) {
         *d = q[j] & 63;
         *m = q[j + 4] & 63;
