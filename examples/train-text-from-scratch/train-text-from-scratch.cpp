@@ -3218,6 +3218,9 @@ int main(int argc, char ** argv) {
         struct ggml_tensor * gfbuf = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, sizeof(struct ggml_cgraph) / ggml_type_size(GGML_TYPE_I32) + (sizeof(struct ggml_cgraph) % ggml_type_size(GGML_TYPE_I32) ? 1 : 0));
         struct ggml_tensor * gbbuf = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, sizeof(struct ggml_cgraph) / ggml_type_size(GGML_TYPE_I32) + (sizeof(struct ggml_cgraph) % ggml_type_size(GGML_TYPE_I32) ? 1 : 0));
 
+        memset(gfbuf->data, 0, ggml_nbytes(gfbuf));
+        memset(gbbuf->data, 0, ggml_nbytes(gbbuf));
+
         struct ggml_cgraph * gf = (struct ggml_cgraph *) gfbuf->data;
         struct ggml_cgraph * gb = (struct ggml_cgraph *) gbbuf->data;
 
