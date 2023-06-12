@@ -1467,6 +1467,7 @@ static bool llama_eval_internal(
 
 #if 1
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
+            offload_func(KQV);
             ggml_set_name(KQV, "KQV");
 #else
             // make V contiguous in memory to speed up the matmul, however we waste time on the copy
@@ -1478,12 +1479,14 @@ static bool llama_eval_internal(
 
             // KQV_merged = KQV.permute(0, 2, 1, 3)
             struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
+            offload_func(KQV_merged);
             ggml_set_name(KQV_merged, "KQV_merged");
 
             // cur = KQV_merged.contiguous().view(n_embd, N)
             cur = ggml_cpy(ctx0,
                     KQV_merged,
                     ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N));
+            offload_func(cur);
             ggml_set_name(cur, "KQV_merged_contiguous");
 
             // projection (no bias)
