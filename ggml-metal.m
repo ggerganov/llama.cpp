@@ -193,10 +193,13 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
 static id<MTLBuffer> ggml_metal_get_buffer(struct ggml_metal_context * ctx, struct ggml_tensor * t, size_t * offs) {
     //fprintf(stderr, "%s: data tensor '%16s', offs_data = %8ld, offs_eval = %8ld, offs_cach = %8ld\n", __func__, t->name, offs_data, offs_eval, offs_cach);
 
+    const int64_t tsize = ggml_nbytes(t);
+
+    // find the view that contains the tensor fully
     for (int i = 0; i < ctx->n_buffers; ++i) {
         const int64_t ioffs = (int64_t) t->data - (int64_t) ctx->buffers[i].data;
 
-        if (ioffs >= 0 && ioffs < (int64_t) ctx->buffers[i].size) {
+        if (ioffs >= 0 && ioffs + tsize <= (int64_t) ctx->buffers[i].size) {
             *offs = (size_t) ioffs;
 
             //fprintf(stderr, "%s: '%s' tensor '%16s', offs = %8ld\n", __func__, ctx->buffers[i].name, t->name, *offs);
@@ -222,39 +225,67 @@ bool ggml_metal_add_buffer(
 
     if (data) {
         // verify that the buffer does not overlap with any of the existing buffers
-        for (int i = 0; i < ctx->n_buffers; ++i) {
-            const int64_t ioffs = (int64_t) data - (int64_t) ctx->buffers[i].data;
+        //for (int i = 0; i < ctx->n_buffers; ++i) {
+        //    const int64_t ioffs = (int64_t) data - (int64_t) ctx->buffers[i].data;
 
-            if (ioffs >= 0 && ioffs < (int64_t) ctx->buffers[i].size) {
-                fprintf(stderr, "%s: error: buffer '%s' overlaps with '%s'\n", __func__, name, ctx->buffers[i].name);
+        //    if (ioffs >= 0 && ioffs < (int64_t) ctx->buffers[i].size) {
+        //        fprintf(stderr, "%s: error: buffer '%s' overlaps with '%s'\n", __func__, name, ctx->buffers[i].name);
+        //        return false;
+        //    }
+        //}
+
+        const size_t size_page = getpagesize();
+
+        size_t size_aligned = size;
+        if ((size_aligned % size_page) != 0) {
+            size_aligned += (size_page - (size_aligned % size_page));
+        }
+
+        // the buffer fits into the max buffer size allowed by the device
+        if (size_aligned <= ctx->device.maxBufferLength) {
+            ctx->buffers[ctx->n_buffers].name = name;
+            ctx->buffers[ctx->n_buffers].data = data;
+            ctx->buffers[ctx->n_buffers].size = size;
+
+            ctx->buffers[ctx->n_buffers].metal = [ctx->device newBufferWithBytesNoCopy:data length:size_aligned options:MTLResourceStorageModeShared deallocator:nil];
+
+            if (ctx->buffers[ctx->n_buffers].metal == nil) {
+                fprintf(stderr, "%s: failed to allocate '%-16s' buffer, size = %8.2f MB\n", __func__, name, size_aligned / 1024.0 / 1024.0);
                 return false;
             }
-        }
 
-        size_t page_size = getpagesize();
-        size_t aligned_size = size;
-        if ((aligned_size % page_size) != 0) {
-            aligned_size += (page_size - (aligned_size % page_size));
-        }
+            fprintf(stderr, "%s: allocated '%-16s' buffer, size = %8.2f MB\n", __func__, name, size_aligned / 1024.0 / 1024.0);
 
-        ctx->buffers[ctx->n_buffers].name = name;
-        ctx->buffers[ctx->n_buffers].data = data;
-        ctx->buffers[ctx->n_buffers].size = size;
-
-        if (ctx->device.maxBufferLength < aligned_size) {
-            fprintf(stderr, "%s: buffer '%s' size %zu is larger than buffer maximum of %zu\n", __func__, name, aligned_size, ctx->device.maxBufferLength);
-            return false;
-        }
-        ctx->buffers[ctx->n_buffers].metal = [ctx->device newBufferWithBytesNoCopy:data length:aligned_size options:MTLResourceStorageModeShared deallocator:nil];
-
-        if (ctx->buffers[ctx->n_buffers].metal == nil) {
-            fprintf(stderr, "%s: failed to allocate '%-16s' buffer, size = %8.2f MB\n", __func__, name, aligned_size / 1024.0 / 1024.0);
-            return false;
+            ++ctx->n_buffers;
         } else {
-            fprintf(stderr, "%s: allocated '%-16s' buffer, size = %8.2f MB\n", __func__, name, aligned_size / 1024.0 / 1024.0);
-        }
+            // Example, say you want to map 16GB buffer. Create 3 views, each 8GB of size:
+            //
+            // view 0 has offset 0, i.e. range [0GB, 8GB]
+            // view 1 has offset 4GB, i.e range [4GB, 8GB]
+            // view 2 has offset 8GB, i.e. range [8GB, 16GB]
+            //
+            const size_t size_step = ctx->device.maxBufferLength/2;
+            const size_t size_view = ctx->device.maxBufferLength;
 
-        ++ctx->n_buffers;
+            for (size_t i = 0; i < size; i += size_step) {
+                const size_t size_step_aligned = (i + size_view <= size) ? size_view : (size_aligned - i);
+
+                ctx->buffers[ctx->n_buffers].name = name;
+                ctx->buffers[ctx->n_buffers].data = (void *) ((uint8_t *) data + i);
+                ctx->buffers[ctx->n_buffers].size = size_step_aligned;
+
+                ctx->buffers[ctx->n_buffers].metal = [ctx->device newBufferWithBytesNoCopy:(void *) ((uint8_t *) data + i) length:size_step_aligned options:MTLResourceStorageModeShared deallocator:nil];
+
+                if (ctx->buffers[ctx->n_buffers].metal == nil) {
+                    fprintf(stderr, "%s: failed to allocate '%-16s' buffer, size = %8.2f MB\n", __func__, name, size_step_aligned / 1024.0 / 1024.0);
+                    return false;
+                }
+
+                fprintf(stderr, "%s: allocated '%-16s' buffer, size = %8.2f MB, offs = %12ld\n", __func__, name, size_step_aligned / 1024.0 / 1024.0, i);
+
+                ++ctx->n_buffers;
+            }
+        }
     }
 
     return true;
