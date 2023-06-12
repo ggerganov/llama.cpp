@@ -25,27 +25,27 @@ typedef uchar uint8_t;
 typedef int int32_t;
 typedef uint uint32_t;
 
-struct __attribute__ ((packed)) block_q4_0
+struct __attribute__((packed)) block_q4_0
 {
     half d;
     uint8_t qs[QK4_0 / 2];
 };
 
-struct __attribute__ ((packed)) block_q4_1
+struct __attribute__((packed)) block_q4_1
 {
     half d;
     half m;
     uint8_t qs[QK4_1 / 2];
 };
 
-struct __attribute__ ((packed)) block_q5_0
+struct __attribute__((packed)) block_q5_0
 {
     half d;
     uint32_t qh;
     uint8_t qs[QK5_0 / 2];
 };
 
-struct __attribute__ ((packed)) block_q5_1
+struct __attribute__((packed)) block_q5_1
 {
     half d;
     half m;
@@ -53,13 +53,13 @@ struct __attribute__ ((packed)) block_q5_1
     uint8_t qs[QK5_1 / 2];
 };
 
-struct __attribute__ ((packed)) block_q8_0
+struct __attribute__((packed)) block_q8_0
 {
     half d;
     int8_t qs[QK8_0];
 };
 
-struct __attribute__ ((packed)) block_q2_K
+struct __attribute__((packed)) block_q2_K
 {
     uint8_t scales[16];
     uint8_t qs[64];
@@ -67,7 +67,7 @@ struct __attribute__ ((packed)) block_q2_K
     half dmin;
 };
 
-struct __attribute__ ((packed)) block_q3_K
+struct __attribute__((packed)) block_q3_K
 {
     uint8_t hmask[32];
     uint8_t qs[64];
@@ -75,7 +75,7 @@ struct __attribute__ ((packed)) block_q3_K
     half d;
 };
 
-struct __attribute__ ((packed)) block_q4_K
+struct __attribute__((packed)) block_q4_K
 {
     half d;
     half dmin;
@@ -83,21 +83,32 @@ struct __attribute__ ((packed)) block_q4_K
     uint8_t qs[128];
 };
 
-struct __attribute__ ((packed)) block_q6_K
+struct __attribute__((packed)) block_q5_K
+{
+    half d;
+    half dmin;
+    uint8_t scales[12];
+    uint8_t qh[32];
+    uint8_t qs[128];
+};
+
+struct __attribute__((packed)) block_q6_K
 {
     uint8_t ql[128];
     uint8_t qh[64];
-    int8_t  scales[16];
-    half    d;
+    int8_t scales[16];
+    half d;
 };
 
-__kernel void convert_fp16_to_fp32(__global half* x, __global float* y) {
+__kernel void convert_fp16_to_fp32(__global half *x, __global float *y)
+{
     const uint i = get_global_id(0);
 
     y[i] = vload_half(0, &x[i]);
 }
 
-void dequantize_q4_0(__global const struct block_q4_0* x, const int ib, const int iqs, float* v0, float* v1) {
+void dequantize_q4_0(__global const struct block_q4_0 *x, const int ib, const int iqs, float *v0, float *v1)
+{
     const float d = vload_half(0, &x[ib].d);
 
     const uint8_t vui = x[ib].qs[iqs];
@@ -105,10 +116,10 @@ void dequantize_q4_0(__global const struct block_q4_0* x, const int ib, const in
     const int8_t vi0 = vui & 0xF;
     const int8_t vi1 = vui >> 4;
 
-    *v0 = (vi0 - 8)*d;
-    *v1 = (vi1 - 8)*d;
-}
-void dequantize_q4_1(__global const struct block_q4_1* x, const int ib, const int iqs, float* v0, float* v1) {
+    *v0 = (vi0 - 8) * d;
+    *v1 = (vi1 - 8) * d;
+} void dequantize_q4_1(__global const struct block_q4_1 *x, const int ib, const int iqs, float *v0, float *v1)
+{
     const float d = vload_half(0, &x[ib].d);
     const float m = vload_half(0, &x[ib].m);
 
@@ -117,63 +128,68 @@ void dequantize_q4_1(__global const struct block_q4_1* x, const int ib, const in
     const int8_t vi0 = vui & 0xF;
     const int8_t vi1 = vui >> 4;
 
-    *v0 = vi0*d + m;
-    *v1 = vi1*d + m;
-}
-void dequantize_q5_0(__global const struct block_q5_0* x, const int ib, const int iqs, float* v0, float* v1) {
+    *v0 = vi0 * d + m;
+    *v1 = vi1 * d + m;
+} void dequantize_q5_0(__global const struct block_q5_0 *x, const int ib, const int iqs, float *v0, float *v1)
+{
     const float d = vload_half(0, &x[ib].d);
 
     uint32_t qh = x[ib].qh;
 
-    const uint8_t xh_0 = ((qh >> (iqs +  0)) << 4) & 0x10;
-    const uint8_t xh_1 = ((qh >> (iqs + 12))     ) & 0x10;
+    const uint8_t xh_0 = ((qh >> (iqs + 0)) << 4) & 0x10;
+    const uint8_t xh_1 = ((qh >> (iqs + 12))) & 0x10;
 
     const int32_t x0 = ((x[ib].qs[iqs] & 0xf) | xh_0) - 16;
-    const int32_t x1 = ((x[ib].qs[iqs] >>  4) | xh_1) - 16;
+    const int32_t x1 = ((x[ib].qs[iqs] >> 4) | xh_1) - 16;
 
-    *v0 = x0*d;
-    *v1 = x1*d;
-}
-void dequantize_q5_1(__global const struct block_q5_1* x, const int ib, const int iqs, float* v0, float* v1) {
+    *v0 = x0 * d;
+    *v1 = x1 * d;
+} void dequantize_q5_1(__global const struct block_q5_1 *x, const int ib, const int iqs, float *v0, float *v1)
+{
     const float d = vload_half(0, &x[ib].d);
     const float m = vload_half(0, &x[ib].m);
 
     uint32_t qh = x[ib].qh;
 
-    const uint8_t xh_0 = ((qh >> (iqs +  0)) << 4) & 0x10;
-    const uint8_t xh_1 = ((qh >> (iqs + 12))     ) & 0x10;
+    const uint8_t xh_0 = ((qh >> (iqs + 0)) << 4) & 0x10;
+    const uint8_t xh_1 = ((qh >> (iqs + 12))) & 0x10;
 
     const int32_t x0 = ((x[ib].qs[iqs] & 0xf) | xh_0);
-    const int32_t x1 = ((x[ib].qs[iqs] >>  4) | xh_1);
+    const int32_t x1 = ((x[ib].qs[iqs] >> 4) | xh_1);
 
-    *v0 = x0*d + m;
-    *v1 = x1*d + m;
-}
-void dequantize_q8_0(__global const struct block_q8_0* x, const int ib, const int iqs, float* v0, float* v1) {
+    *v0 = x0 * d + m;
+    *v1 = x1 * d + m;
+} void dequantize_q8_0(__global const struct block_q8_0 *x, const int ib, const int iqs, float *v0, float *v1)
+{
     const float d = vload_half(0, &x[ib].d);
 
     const int8_t vi0 = x[ib].qs[iqs + 0];
     const int8_t vi1 = x[ib].qs[iqs + 1];
 
-    *v0 = vi0*d;
-    *v1 = vi1*d;
-}
-void convert_f16(__global half* x, const int ib, const int iqs, float* v0, float* v1){
+    *v0 = vi0 * d;
+    *v1 = vi1 * d;
+} void convert_f16(__global half *x, const int ib, const int iqs, float *v0, float *v1)
+{
     *v0 = vload_half(0, &x[ib + 0]);
     *v1 = vload_half(0, &x[ib + 1]);
 }
 
-inline void get_scale_min_k4(int j,  const __global uint8_t *q, uint8_t *d, uint8_t *m) {
-    if (j < 4) {
+inline void get_scale_min_k4(int j, const __global uint8_t *q, uint8_t *d, uint8_t *m)
+{
+    if (j < 4)
+    {
         *d = q[j] & 63;
         *m = q[j + 4] & 63;
-    } else {
+    }
+    else
+    {
         *d = (q[j + 4] & 0xF) | ((q[j - 4] >> 6) << 4);
         *m = (q[j + 4] >> 4) | ((q[j - 0] >> 6) << 4);
     }
 }
 
-__kernel void dequantize_block_q2_K(__global const struct block_q2_K* x, __global float *yy) {
+__kernel void dequantize_block_q2_K(__global const struct block_q2_K *x, __global float *yy)
+{
     const int i = get_group_id(0);
     const int tid = get_local_id(0);
     const int n = tid / 32;
@@ -192,7 +208,8 @@ __kernel void dequantize_block_q2_K(__global const struct block_q2_K* x, __globa
     y[l + 96] = dall * (x[i].scales[is + 6] & 0xF) * ((q >> 6) & 3) - dmin * (x[i].scales[is + 6] >> 4);
 }
 
-__kernel void dequantize_block_q3_K(__global const struct block_q3_K* x, __global float *yy) {
+__kernel void dequantize_block_q3_K(__global const struct block_q3_K *x, __global float *yy)
+{
     int r = get_local_id(0) / 4;
     int i = get_group_id(0);
     int tid = r / 2;
@@ -205,10 +222,9 @@ __kernel void dequantize_block_q3_K(__global const struct block_q3_K* x, __globa
     int is = 8 * n + 2 * j + is0;
     int shift = 2 * j;
 
-    int8_t us = is < 4 ? (x[i].scales[is - 0] & 0xF) | (((x[i].scales[is + 8] >> 0) & 3) << 4) :
-                is < 8 ? (x[i].scales[is - 0] & 0xF) | (((x[i].scales[is + 4] >> 2) & 3) << 4) :
-                is < 12 ? (x[i].scales[is - 8] >> 4) | (((x[i].scales[is + 0] >> 4) & 3) << 4) :
-                          (x[i].scales[is - 8] >> 4) | (((x[i].scales[is - 4] >> 6) & 3) << 4);
+    int8_t us = is < 4 ? (x[i].scales[is - 0] & 0xF) | (((x[i].scales[is + 8] >> 0) & 3) << 4) : is < 8 ? (x[i].scales[is - 0] & 0xF) | (((x[i].scales[is + 4] >> 2) & 3) << 4)
+                                                                                                : is < 12  ? (x[i].scales[is - 8] >> 4) | (((x[i].scales[is + 0] >> 4) & 3) << 4)
+                                                                                                        : (x[i].scales[is - 8] >> 4) | (((x[i].scales[is - 4] >> 6) & 3) << 4);
     float d_all = vload_half(0, &x[i].d);
     float dl = d_all * (us - 32);
 
@@ -218,11 +234,10 @@ __kernel void dequantize_block_q3_K(__global const struct block_q3_K* x, __globa
 
     for (int l = l0; l < l0 + 4; ++l)
         y[l] = dl * ((int8_t)((q[l] >> shift) & 3) - ((hm[l] & m) ? 0 : 4));
-
 }
 
-__kernel void dequantize_block_q4_K(__global const struct block_q4_K* x, __global float *yy) {
-
+__kernel void dequantize_block_q4_K(__global const struct block_q4_K *x, __global float *yy)
+{
     const int i = get_group_id(0);
     const int tid = get_local_id(0);
     const int il = tid / 8;
@@ -244,27 +259,60 @@ __kernel void dequantize_block_q4_K(__global const struct block_q4_K* x, __globa
     get_scale_min_k4(is + 1, x[i].scales, &sc, &m);
     float d2 = dall * sc;
     float m2 = dmin * m;
-    for (int l = 0; l < n; ++l) {
+    for (int l = 0; l < n; ++l)
+    {
         y[l + 0] = d1 * (q[l] & 0xF) - m1;
         y[l + 32] = d2 * (q[l] >> 4) - m2;
     }
 }
 
-__kernel void dequantize_block_q6_K(__global const struct block_q6_K* x, __global float *yy) {
+__kernel void dequantize_block_q5_K(__global const struct block_q5_K *x, __global float *yy)
+{
+    const int i = get_group_id(0);
+    const int tid = get_local_id(0);
+    const int il = tid / 16;
+    const int ir = tid % 16;
+    const int is = 2 * il;
 
+    __global float *y = yy + i * 256 + 64 * il + 2 * ir;
+
+    const float dall = vload_half(0, &x[i].d);
+    const float dmin = vload_half(0, &x[i].dmin);
+
+    __global const uint8_t *ql = x[i].qs + 32 * il + 2 * ir;
+    __global const uint8_t *qh = x[i].qh + 2 * ir;
+
+    uint8_t sc, m;
+    get_scale_min_k4(is + 0, x[i].scales, &sc, &m);
+    const float d1 = dall * sc;
+    const float m1 = dmin * m;
+    get_scale_min_k4(is + 1, x[i].scales, &sc, &m);
+    const float d2 = dall * sc;
+    const float m2 = dmin * m;
+
+    uint8_t hm = 1 << (2 * il);
+    y[0] = d1 * ((ql[0] & 0xF) + (qh[0] & hm ? 16 : 0)) - m1;
+    y[1] = d1 * ((ql[1] & 0xF) + (qh[1] & hm ? 16 : 0)) - m1;
+    hm <<= 1;
+    y[32] = d2 * ((ql[0] >> 4) + (qh[0] & hm ? 16 : 0)) - m2;
+    y[33] = d2 * ((ql[1] >> 4) + (qh[1] & hm ? 16 : 0)) - m2;
+}
+
+__kernel void dequantize_block_q6_K(__global const struct block_q6_K *x, __global float *yy)
+{
     const int i = get_group_id(0);
     const int tid = get_local_id(0);
     const int ip = tid / 32;
     const int il = tid - 32 * ip;
     const int is = 8 * ip + il / 16;
 
-    __global float* y = yy + i * 256 + 128 * ip + il;
+    __global float *y = yy + i * 256 + 128 * ip + il;
 
     const float d = vload_half(0, &x[i].d);
 
-    __global const uint8_t * ql = x[i].ql + 64 * ip + il;
+    __global const uint8_t *ql = x[i].ql + 64 * ip + il;
     const uint8_t qh = x[i].qh[32 * ip + il];
-    __global const int8_t * sc = x[i].scales + is;
+    __global const int8_t *sc = x[i].scales + is;
 
     y[0] = d * sc[0] * ((int8_t)((ql[0] & 0xF) | (((qh >> 0) & 3) << 4)) - 32);
     y[32] = d * sc[2] * ((int8_t)((ql[32] & 0xF) | (((qh >> 2) & 3) << 4)) - 32);
@@ -272,32 +320,85 @@ __kernel void dequantize_block_q6_K(__global const struct block_q6_K* x, __globa
     y[96] = d * sc[6] * ((int8_t)((ql[32] >> 4) | (((qh >> 6) & 3) << 4)) - 32);
 }
 
+
+void vec_dot_q2_K(__global const struct block_q2_K* x, const int ib, const int iqs, const __global float *yy, float *result) {
+
+    int n = iqs / 128;
+    int r = iqs - 128 * n;
+    int l = r / 8;
+
+    __global const float *y = yy + 128 * n + l;
+    __global const uint8_t *q = x[ib].qs + 32 * n + l;
+    __global const uint8_t *s = x[ib].scales + 8 * n;
+
+    const float dall = vload_half(0, &x[ib].d);
+    const float dmin = vload_half(0, &x[ib].dmin);
+
+    float sum = y[  0] * (dall * ((s[0] & 0xF) * ((q[ 0] >> 0) & 3)) - dmin * (s[0] >> 4))
+              + y[ 32] * (dall * ((s[2] & 0xF) * ((q[ 0] >> 2) & 3)) - dmin * (s[2] >> 4))
+              + y[ 64] * (dall * ((s[4] & 0xF) * ((q[ 0] >> 4) & 3)) - dmin * (s[4] >> 4))
+              + y[ 96] * (dall * ((s[6] & 0xF) * ((q[ 0] >> 6) & 3)) - dmin * (s[6] >> 4))
+              + y[ 16] * (dall * ((s[1] & 0xF) * ((q[16] >> 0) & 3)) - dmin * (s[1] >> 4))
+              + y[ 48] * (dall * ((s[3] & 0xF) * ((q[16] >> 2) & 3)) - dmin * (s[3] >> 4))
+              + y[ 80] * (dall * ((s[5] & 0xF) * ((q[16] >> 4) & 3)) - dmin * (s[5] >> 4))
+              + y[112] * (dall * ((s[7] & 0xF) * ((q[16] >> 6) & 3)) - dmin * (s[7] >> 4));
+
+    *result = sum;
+}
+
+void vec_dot_q3_K(__global const struct block_q3_K* x, const int ib, const int iqs, const __global float *yy, float *result) {
+
+    const uint32_t kmask1 = 0x03030303;
+    const uint32_t kmask2 = 0x0f0f0f0f;
+
+    uint32_t aux[3];
+    uint32_t utmp[4];
+
+    int n = iqs/128;
+    int r = iqs - 128*n;
+    int l = r/8;
+
+    __global const float   * y = yy + 128*n + l;
+    __global const uint8_t * q = x[ib].qs + 32*n + l;
+    __global const uint8_t * hm = x[ib].hmask + l;
+    const int8_t * s = (const int8_t *)utmp + 8*n;
+
+    aux[0] |= x[ib].scales[0];
+    aux[0] |= x[ib].scales[1] << 8;
+    aux[0] |= x[ib].scales[2] << 16;
+    aux[0] |= x[ib].scales[3] << 24;
+    aux[1] |= x[ib].scales[4];
+    aux[1] |= x[ib].scales[5] << 8;
+    aux[1] |= x[ib].scales[6] << 16;
+    aux[1] |= x[ib].scales[7] << 24;
+    aux[2] |= x[ib].scales[8];
+    aux[2] |= x[ib].scales[9] << 8;
+    aux[2] |= x[ib].scales[10] << 16;
+    aux[2] |= x[ib].scales[11] << 24;
+
+    utmp[3] = ((aux[1] >> 4) & kmask2) | (((aux[2] >> 6) & kmask1) << 4);
+    utmp[2] = ((aux[0] >> 4) & kmask2) | (((aux[2] >> 4) & kmask1) << 4);
+    utmp[1] = (aux[1] & kmask2) | (((aux[2] >> 2) & kmask1) << 4);
+    utmp[0] = (aux[0] & kmask2) | (((aux[2] >> 0) & kmask1) << 4);
+
+    const float dall = vload_half(0, &x[ib].d);
+    const uint8_t m = 1 << (4*n);
+
+    float sum = y[  0] * (s[0] - 32) * (((q[ 0] >> 0) & 3) - (hm[ 0] & (m << 0) ? 0 : 4))
+              + y[ 32] * (s[2] - 32) * (((q[ 0] >> 2) & 3) - (hm[ 0] & (m << 1) ? 0 : 4))
+              + y[ 64] * (s[4] - 32) * (((q[ 0] >> 4) & 3) - (hm[ 0] & (m << 2) ? 0 : 4))
+              + y[ 96] * (s[6] - 32) * (((q[ 0] >> 6) & 3) - (hm[ 0] & (m << 3) ? 0 : 4))
+              + y[ 16] * (s[1] - 32) * (((q[16] >> 0) & 3) - (hm[16] & (m << 0) ? 0 : 4))
+              + y[ 48] * (s[3] - 32) * (((q[16] >> 2) & 3) - (hm[16] & (m << 1) ? 0 : 4))
+              + y[ 80] * (s[5] - 32) * (((q[16] >> 4) & 3) - (hm[16] & (m << 2) ? 0 : 4))
+              + y[112] * (s[7] - 32) * (((q[16] >> 6) & 3) - (hm[16] & (m << 3) ? 0 : 4));
+
+    *result = sum * dall;
+
+}
+
 );
 
-// __kernel void vec_dot_q2_K(__global const struct block_q2_K* x, const int ib, const int iqs, const __global float *yy, __global float *result) {
-
-//     int n = iqs / 128;    // 0 or 1
-//     int r = iqs - 128 * n;    // 0...120 in steps of 8
-//     int l = r / 8;    // 0...15 in steps of 1
-
-//     __global const float *y = yy + 128 * n + l;
-//     __global const uchar *q = x[ib].qs + 32 * n + l;
-//     __global const uchar *s = x[ib].scales + 8 * n;
-
-//     const float dall = vload_half(0, &x[ib].d);
-//     const float dmin = vload_half(0, &x[ib].dmin);
-
-//     float sum = y[0] * (dall * ((s[0] & 0xF) * ((q[0] >> 0) & 3)) - dmin * (s[0] >> 4))
-//                 + y[32] * (dall * ((s[2] & 0xF) * ((q[0] >> 2) & 3)) - dmin * (s[2] >> 4))
-//                 + y[64] * (dall * ((s[4] & 0xF) * ((q[0] >> 4) & 3)) - dmin * (s[4] >> 4))
-//                 + y[96] * (dall * ((s[6] & 0xF) * ((q[0] >> 6) & 3)) - dmin * (s[6] >> 4))
-//                 + y[16] * (dall * ((s[1] & 0xF) * ((q[16] >> 0) & 3)) - dmin * (s[1] >> 4))
-//                 + y[48] * (dall * ((s[3] & 0xF) * ((q[16] >> 2) & 3)) - dmin * (s[3] >> 4))
-//                 + y[80] * (dall * ((s[5] & 0xF) * ((q[16] >> 4) & 3)) - dmin * (s[5] >> 4))
-//                 + y[112] * (dall * ((s[7] & 0xF) * ((q[16] >> 6) & 3)) - dmin * (s[7] >> 4));
-
-//     *result = sum;
-// }
 
 std::string dequant_template = MULTILINE_QUOTE(
 __kernel void KERNEL_NAME(__global X_TYPE* x, __global float* y) {
@@ -365,44 +466,44 @@ __kernel void KERNEL_NAME(__global X_TYPE* x, __local float* tmp, __global float
 }
 );
 
-// std::string dequant_mul_mat_vec_k_template = MULTILINE_QUOTE(
-// __kernel void KERNEL_NAME(__global X_TYPE* x, __local float* tmp, __global float* y, __global float* dst, const int ncols) {
-//     const int block_size = get_local_size(0);
-//     const int row = get_global_id(0) / block_size;
-//     const int tid = get_local_id(0);
+std::string dequant_mul_mat_vec_k_template = MULTILINE_QUOTE(
+__kernel void KERNEL_NAME(__global X_TYPE* x, __local float* tmp, __global float* y, __global float* dst, const int ncols) {
+    const int block_size = get_local_size(0);
+    const int row = get_global_id(0) / block_size;
+    const int tid = get_local_id(0);
 
-//     const int iter_stride = 256;
-//     const int vals_per_iter = iter_stride;
-//     const int num_blocks_per_row = ncols / 256;
-//     const int ib0 = row*num_blocks_per_row;
+    const int iter_stride = 256;
+    const int vals_per_iter = iter_stride;
+    const int num_blocks_per_row = ncols / 256;
+    const int ib0 = row*num_blocks_per_row;
 
-//     tmp[tid] = 0;
+    tmp[tid] = 0;
 
-//     for (int i = 0; i < ncols; i += iter_stride) {
-//         const int col = i + vals_per_iter*tid;
-//         const int ib = ib0 + col/QK_K; // x block index
-//         const int iqs = col%QK_K; // x quant index
-//         const int iybs = col - col%QK_K; // y block start index
+    for (int i = 0; i < ncols; i += iter_stride) {
+        const int col = i + vals_per_iter*tid;
+        const int ib = ib0 + col/256; // x block index
+        const int iqs = col%256; // x quant index
+        const int iybs = col - col%256; // y block start index
 
-//         // dequantize
-//         float v;
-//         dot_kernel(vx, ib, iqs, y + iybs, v);
-//         tmp += v;
-//     }
+        // dequantize
+        float v;
+        dot_kernel(x, ib, iqs, y + iybs, &v);
+        tmp[tid] += v;
+    }
 
-//     // sum up partial sums and write back result
-//     barrier(CLK_LOCAL_MEM_FENCE);
-//     for (int s=block_size/2; s>0; s>>=1) {
-//         if (tid < s) {
-//             tmp[tid] += tmp[tid + s];
-//         }
-//         barrier(CLK_LOCAL_MEM_FENCE);
-//     }
-//     if (tid == 0) {
-//         dst[row] = tmp[0];
-//     }
-// }
-// );
+    // sum up partial sums and write back result
+    barrier(CLK_LOCAL_MEM_FENCE);
+    for (int s=block_size/2; s>0; s>>=1) {
+        if (tid < s) {
+            tmp[tid] += tmp[tid + s];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+    if (tid == 0) {
+        dst[row] = tmp[0];
+    }
+}
+);
 
 std::string mul_template = MULTILINE_QUOTE(
 __kernel void KERNEL_NAME(__global TYPE* x, const int x_offset, __global TYPE* y, const int y_offset, __global TYPE* dst, const int dst_offset, const int ky) {
@@ -465,6 +566,11 @@ std::array<std::string, 2> mul_str_values = {
     "mul_f32", "float"
 };
 
+std::array<std::string, 6> dmmv_k_str_values = {
+    "dequantize_mul_mat_vec_q2_K", "struct block_q2_K", "vec_dot_q2_K",
+    "dequantize_mul_mat_vec_q3_K", "struct block_q3_K", "vec_dot_q3_K",
+};
+
 std::string& replace(std::string& s, const std::string& from, const std::string& to) {
     size_t pos = 0;
     while ((pos = s.find(from, pos)) != std::string::npos) {
@@ -494,6 +600,15 @@ std::string generate_kernels() {
         }
         src << mul_kernel << '\n';
     }
+    for (size_t i = 0; i < dmmv_k_str_values.size(); i += 3) {
+        std::string dmmv_kernel = dequant_mul_mat_vec_k_template;
+        //just apply quick template fn name replacement for the K quant DMMVs since sizes are known
+        replace(dmmv_kernel, "KERNEL_NAME", dmmv_k_str_values[i]);
+        replace(dmmv_kernel, "X_TYPE", dmmv_k_str_values[i + 1]);
+        replace(dmmv_kernel, "dot_kernel", dmmv_k_str_values[i + 2]);
+        src << dmmv_kernel << '\n';
+    }
+
     return src.str();
 }
 
@@ -505,7 +620,8 @@ static cl_program program;
 static cl_kernel convert_row_f16_cl;
 static cl_kernel dequantize_row_q4_0_cl, dequantize_row_q4_1_cl, dequantize_row_q5_0_cl, dequantize_row_q5_1_cl, dequantize_row_q8_0_cl;
 static cl_kernel dequantize_mul_mat_vec_q4_0_cl, dequantize_mul_mat_vec_q4_1_cl, dequantize_mul_mat_vec_q5_0_cl, dequantize_mul_mat_vec_q5_1_cl, dequantize_mul_mat_vec_q8_0_cl, convert_mul_mat_vec_f16_cl;
-static cl_kernel dequantize_block_q2_k_cl, dequantize_block_q3_k_cl, dequantize_block_q4_k_cl, dequantize_block_q6_k_cl;
+static cl_kernel dequantize_block_q2_k_cl, dequantize_block_q3_k_cl, dequantize_block_q4_k_cl, dequantize_block_q5_k_cl, dequantize_block_q6_k_cl;
+static cl_kernel dequantize_mul_mat_vec_q2_K_cl, dequantize_mul_mat_vec_q3_K_cl, dequantize_mul_mat_vec_q4_K_cl, dequantize_mul_mat_vec_q5_K_cl, dequantize_mul_mat_vec_q6_K_cl;
 static cl_kernel mul_f32_cl;
 static bool fp16_support;
 
@@ -739,6 +855,7 @@ void ggml_cl_init(void) {
     CL_CHECK((dequantize_block_q2_k_cl = clCreateKernel(program, "dequantize_block_q2_K", &err), err));
     CL_CHECK((dequantize_block_q3_k_cl = clCreateKernel(program, "dequantize_block_q3_K", &err), err));
     CL_CHECK((dequantize_block_q4_k_cl = clCreateKernel(program, "dequantize_block_q4_K", &err), err));
+    CL_CHECK((dequantize_block_q5_k_cl = clCreateKernel(program, "dequantize_block_q5_K", &err), err));
     CL_CHECK((dequantize_block_q6_k_cl = clCreateKernel(program, "dequantize_block_q6_K", &err), err));
 
     // dequant mul mat kernel
@@ -748,7 +865,8 @@ void ggml_cl_init(void) {
     CL_CHECK((dequantize_mul_mat_vec_q5_1_cl = clCreateKernel(program, "dequantize_mul_mat_vec_q5_1", &err), err));
     CL_CHECK((dequantize_mul_mat_vec_q8_0_cl = clCreateKernel(program, "dequantize_mul_mat_vec_q8_0", &err), err));
     CL_CHECK((convert_mul_mat_vec_f16_cl = clCreateKernel(program, "convert_mul_mat_vec_f16", &err), err));
-
+    CL_CHECK((dequantize_mul_mat_vec_q2_K_cl = clCreateKernel(program, "dequantize_mul_mat_vec_q2_K", &err), err));
+    CL_CHECK((dequantize_mul_mat_vec_q3_K_cl = clCreateKernel(program, "dequantize_mul_mat_vec_q3_K", &err), err));
 
     // mul kernel
     CL_CHECK((mul_f32_cl = clCreateKernel(program, "mul_f32", &err), err));
@@ -772,6 +890,8 @@ static cl_kernel* ggml_get_to_fp32_cl(ggml_type type) {
             return &dequantize_block_q3_k_cl;
         case GGML_TYPE_Q4_K:
             return &dequantize_block_q4_k_cl;
+        case GGML_TYPE_Q5_K:
+            return &dequantize_block_q5_k_cl;
         case GGML_TYPE_Q6_K:
             return &dequantize_block_q6_k_cl;
         case GGML_TYPE_F16:
@@ -853,6 +973,16 @@ static cl_kernel* ggml_get_dequantize_mul_mat_vec_cl(ggml_type type) {
             return &dequantize_mul_mat_vec_q8_0_cl;
         case GGML_TYPE_F16:
             return &convert_mul_mat_vec_f16_cl;
+        case GGML_TYPE_Q2_K:
+            return &dequantize_mul_mat_vec_q2_K_cl;
+        case GGML_TYPE_Q3_K:
+            return &dequantize_mul_mat_vec_q3_K_cl;
+        case GGML_TYPE_Q4_K:
+            return &dequantize_mul_mat_vec_q4_K_cl;
+        case GGML_TYPE_Q5_K:
+            return &dequantize_mul_mat_vec_q5_K_cl;
+        case GGML_TYPE_Q6_K:
+            return &dequantize_mul_mat_vec_q6_K_cl;
         default:
             return nullptr;
     }
