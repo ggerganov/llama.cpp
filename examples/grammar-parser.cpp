@@ -3,6 +3,8 @@
 #include <cwchar>
 #include <string>
 #include <utility>
+#include <stdexcept>
+#include <exception>
 
 namespace grammar_parser {
     uint16_t get_symbol_id(parse_state & state, const char * src, size_t len) {
