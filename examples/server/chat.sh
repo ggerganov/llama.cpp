@@ -41,23 +41,24 @@ chat_completion() {
 
     ANSWER=''
 
-    curl \
-        --silent \
-        --no-buffer \
-        --request POST \
-        --url "${API_URL}/completion" \
-        --data-raw "${DATA}" | while IFS= read -r LINE; do
+    while IFS= read -r LINE; do
         if [[ $LINE = data:* ]]; then
             CONTENT="$(echo "${LINE:5}" | jq -r '.content')"
             printf "%s" "${CONTENT}"
             ANSWER+="${CONTENT}"
         fi
-    done
+    done < <(curl \
+        --silent \
+        --no-buffer \
+        --request POST \
+        --url "${API_URL}/completion" \
+        --data-raw "${DATA}")
 
     printf "\n"
 
     CHAT+=("$1" "${ANSWER:1}")
 }
+
 
 while true; do
     read -e -p "> " QUESTION
