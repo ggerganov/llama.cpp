@@ -3203,7 +3203,7 @@ static void ggml_vec_dot_qx_0_q8_0(const int n, float * restrict s, const void *
 
     // row_data is a buffer which stores dequantized float values for a current block
     float f32_row_data[QKX_0];
-    
+
     // __AVX2__ doesn't seem to actually make much of a difference,
     // a lot of optimizing could possibly be done, including possibly using AVX2
     // for dequantization...?
@@ -3280,8 +3280,8 @@ static void ggml_vec_dot_qx_0_q8_0(const int n, float * restrict s, const void *
                     const uint8_t data_block_size = 64;
                     // we can take a full 64bit block
                     const uint8_t weights_per_u64_data_block = data_block_size / qbits;
-                    const uint8_t num_of_data_blocks_needed = 64 / weights_per_u64_data_block; // because we have 64 qbit-sized weights here 
-                    
+                    const uint8_t num_of_data_blocks_needed = 64 / weights_per_u64_data_block; // because we have 64 qbit-sized weights here
+
                     for (int i = 0; i < num_of_data_blocks_needed; i++) {
                         for (int k = 0; k < weights_per_u64_data_block; k ++) {
                             row_ptr[i * weights_per_u64_data_block + k] = qvals[(((const uint64_t *) data_start)[0] >> (k * qbits)) & ((1 << qbits) - 1)];
@@ -3340,14 +3340,14 @@ static void ggml_vec_dot_qx_0_q8_0(const int n, float * restrict s, const void *
                     __m128i test = _mm_loadu_si128((const __m128i *) (column[column_i].qs + i * 8));
                     __m256i work = _mm256_cvtepi8_epi32(test);
                     __m256 workf = _mm256_cvtepi32_ps(work);
-                    
+
                     // multiply with our 8 parts of the row at row_data
                     __m256 row = _mm256_loadu_ps(row_ptr + jb * QK8_0 + i * 8);
 
                     workf = _mm256_mul_ps(workf, row);
                     rolling_sum = _mm256_fmadd_ps(workf, column_multiplier, rolling_sum);
                 }
-                
+
                 #else
                 // scalar
                 float sub_sum = 0;
@@ -3370,11 +3370,11 @@ static void ggml_vec_dot_qx_0_q8_0(const int n, float * restrict s, const void *
         GGML_ASSERT(offset % 8 == 0);
         quant_row += offset / 8;
     }
-    
+
     #if defined(__AVX2__)
     float rolling_sum_vec[8];
     _mm256_store_ps(rolling_sum_vec, rolling_sum);
-    
+
     for (int i = 0; i < 8; i++) {
         *s += rolling_sum_vec[i];
     }
@@ -4530,7 +4530,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
     }
 
     result->nb[0] = GGML_TYPE_SIZE[type];
-    
+
     if (type == GGML_TYPE_QX_0) {
         // QX_0 doesn't have a set stride size for a row; that value is stored in the "extra" part of the tensor
         result->nb[1] = 0;
@@ -10464,7 +10464,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
         const int i3 = i03;
 
         void * src0_row;
-        
+
         if (type == GGML_TYPE_QX_0) {
             if (ir > 0) {
                 src0_row = (void *) ((char *) src0->data + ((uint64_t *) src0->extra)[ir - 1]);
@@ -10478,7 +10478,7 @@ static void ggml_compute_forward_mul_mat_q_f32(
 
         char * src1_col =          ((char *)      wdata + (      (0 + i12*ne11 + i13*ne12*ne11)*row_size));
         float * dst_col = (float *) ((char *) dst->data + (i0*nb0 + 0*nb1 + i2*nb2 + i3*nb3));
-        
+
         for (int64_t ic = 0; ic < ne11; ++ic) {
             vec_dot_q(ne00, &dst_col[ic*ne0], src0_row, (void *) (src1_col + ic*row_size));
         }
@@ -16528,7 +16528,7 @@ size_t ggml_quantize_qx_0(const float * src, void * dst, int n, int64_t * hist, 
     assert(n % QKX_0 == 0);
     assert(tensor_width % QKX_0 == 0);
     const int nb = n / QKX_0;
-    
+
     uint8_t * dst_8 = dst;
     uint64_t dst_offset = 0;
 
@@ -16544,7 +16544,7 @@ size_t ggml_quantize_qx_0(const float * src, void * dst, int n, int64_t * hist, 
     // this can be replaced with a max allowed RMSE, a set percentage of weights being within
     // a certain range, etc... The current implementation here is pretty much just an example
     float max_quantization_errors[5] = {0, 0.004, 0.004, 0, 0.004};
-    
+
 
     // How maximum quantization error is implemented here:
     //
@@ -16599,14 +16599,14 @@ size_t ggml_quantize_qx_0(const float * src, void * dst, int n, int64_t * hist, 
         }
 
         uint16_t total_bits = fp16_count * 16 + (QKX_0 - fp16_count) * qbits;
-        
+
         while ((total_bits % 8) != 0) {
             total_bits += 16 - qbits; // simulate the replacement of a quantized weight with a 16bit one (needed for a block's byte alignment)
         }
 
         float min_value = -(max_quantization_errors[qbits] * ((1 << qbits) - 1));
         float mult_range = 2 * max_quantization_errors[qbits];
-        
+
         // The quantizer starts at a QX_0_STARTING_QBITS quantized block (e.g. 4bits), but then
         // attempts to move to a lower precision defined by QX_0_START_OF_ATTEMPTED_QBITS.
         // It keeps looking to see if 3, 2 or 1 bit precision leads to a smaller file size.
@@ -16629,7 +16629,7 @@ size_t ggml_quantize_qx_0(const float * src, void * dst, int n, int64_t * hist, 
                 }
             }
             mean /= (QKX_0 - fp16_count);
-            
+
             uint16_t total_fp16s_in_test_qbit = 0;
             thresh = max_quantization_errors[test_qbit] * (1 << test_qbit);
 
@@ -16645,12 +16645,12 @@ size_t ggml_quantize_qx_0(const float * src, void * dst, int n, int64_t * hist, 
                     total_fp16s_in_test_qbit += 1;
                 }
             }
-            
+
             uint16_t total_bits_in_test_qbit = total_fp16s_in_test_qbit * 16 + test_qbit * (QKX_0 - total_fp16s_in_test_qbit);
             while ((total_bits_in_test_qbit % 8) != 0) {
                 total_bits_in_test_qbit += 16 - test_qbit; // simulate the replacement of a qbit weight with a 16bit one
             }
-            
+
             if (total_bits_in_test_qbit < total_bits) {
                 total_bits = total_bits_in_test_qbit;
                 qbits = test_qbit;
@@ -16686,7 +16686,7 @@ size_t ggml_quantize_qx_0(const float * src, void * dst, int n, int64_t * hist, 
 
             for (int j = 0; j < QKX_0; j++) {
                 float x = src[i * QKX_0 + j];
-                
+
                 // weight is not on 16bit
                 if ((fp16_indicators[j / 64] & ((uint64_t) 1 << (j % 64))) == 0) {
                     float diff = fabsf(x);
@@ -16717,25 +16717,27 @@ size_t ggml_quantize_qx_0(const float * src, void * dst, int n, int64_t * hist, 
         }
 
         dst_offset += (QKX_0 / 64) * sizeof(uint64_t);
-        
+
         // Each weight is stored as min_value + mult * quantized_weight
         // Similar to Zero-point quantization, or Q4_1
 
         // Write min value and multiplier to dst
         *((uint16_t*) (dst_8 + dst_offset)) = ggml_fp32_to_fp16(min_value);
         dst_offset += sizeof(uint16_t);
-        
+
         *((uint16_t*) (dst_8 + dst_offset)) = ggml_fp32_to_fp16(mult_range);
         dst_offset += sizeof(uint16_t);
-        
+
         // Store the "metadata" byte (for now it's just "qbits")
         *((uint8_t*) (dst_8 + dst_offset)) = qbits;
         dst_offset += sizeof(uint8_t);
 
 
         // Store the quantization pivots / points
-        float qvals[1 << qbits];
-        
+        // IMPORTANT: Change qvals's size depending on the maximum qbits expected
+        GGML_ASSERT(qbits <= 8);
+        float qvals[1 << 8];
+
         for (int j = 0; j < (1 << qbits); j++) {
             qvals[j] = min_value + (mult_range * j);
         }
@@ -16744,7 +16746,7 @@ size_t ggml_quantize_qx_0(const float * src, void * dst, int n, int64_t * hist, 
         uint32_t * data = (uint32_t*) (dst_8 + dst_offset);
 
         int fp16_count_chk = 0;
-        
+
         for (int j = 0; j < QKX_0; j++) {
             float x = src[i * QKX_0 + j];
 
@@ -16772,17 +16774,17 @@ size_t ggml_quantize_qx_0(const float * src, void * dst, int n, int64_t * hist, 
                 bit_offset += qbits;
             }
         }
-        
+
         // check that the reported fp16_count is coherent with the bits stored in fp16_indicators
         GGML_ASSERT(fp16_count == fp16_count_chk);
 
         // check that the number of bits from quantized values is divisible by 8
         GGML_ASSERT((((QKX_0 - fp16_count) * qbits) % 8) == 0);
-        
+
         dst_offset += ((QKX_0 - fp16_count) * qbits) / 8;
         dst_offset += fp16_count * 2;
     }
-    
+
     // store the total size of the tensor as the last element of extra_data
     extra_data[n / tensor_width - 1] = dst_offset;
 

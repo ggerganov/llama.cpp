@@ -435,7 +435,7 @@ struct llama_load_tensor {
             GGML_ASSERT(ne.size() == 2);
 
             size = shards.at(0).size;
-            
+
             GGML_ASSERT(size != 0);
         } else {
             size = llama_calc_tensor_size(ne, type);
@@ -566,12 +566,14 @@ struct llama_file_loader {
 
             if (shard.type == GGML_TYPE_QX_0) {
                 shard.extra_data_file_off = file.tell();
-                
-                uint64_t extra_data[shard.ne[1]];
-                file.read_raw(extra_data, sizeof(uint64_t) * shard.ne[1]);
 
-                // set the size of the tensor here
-                shard.size = extra_data[shard.ne[1] - 1];
+                // seek until before the last element of extra_data
+                file.seek(sizeof(uint64_t) * (shard.ne[1] - 1), SEEK_CUR);
+
+                // get the tensor's size from here
+                uint64_t tensor_size = 0;
+                file.read_raw(&tensor_size, sizeof(uint64_t));
+                shard.size = tensor_size;
 
                 // realign, just in case extra_data isn't a multiple of 32B
                 file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
@@ -686,7 +688,7 @@ struct llama_file_saver {
 
         LLAMA_ASSERT(new_size == tensor_size);
         file.write_raw(new_data, new_size);
-        
+
         // QX_0 data may not be 32-byte aligned
         if (new_type == GGML_TYPE_QX_0) {
             file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
@@ -836,7 +838,7 @@ struct llama_model_loader {
             switch(lt.ggml_tensor->backend) {
                 case GGML_BACKEND_CPU:
                     lt.ggml_tensor->data = lt.data;
-        
+
                     if (lt.type == GGML_TYPE_QX_0) {
                         // QX_0 uses the extra field to store byte offsets in *data for each row except row 0
                         // (so extra[0] stores where row 1 starts, extra[1] is for row 2, and the last element
@@ -883,7 +885,7 @@ struct llama_model_loader {
             if (lt.shards.at(0).extra_data_file_off != 0) {
                 lt.extra_data = (uint64_t *) ((uint8_t *) mapping->addr + lt.shards.at(0).extra_data_file_off);
             }
-            
+
         } else if (lt.split_type == SPLIT_NONE) {
             llama_file & file = file_loaders.at(lt.shards.at(0).file_idx)->file;
             file.seek(lt.shards.at(0).file_off, SEEK_SET);
@@ -1746,8 +1748,8 @@ static bool llama_eval_internal(
         lctx.n_p_eval += N;
     }
 
-    fprintf(stderr, "\nmodel eval time: %ldms\n", (ggml_time_us() - t_start_us) / 1000);
-    fflush(stderr);
+    // fprintf(stderr, "\nmodel eval time: %ldms\n", (ggml_time_us() - t_start_us) / 1000);
+    // fflush(stderr);
     return true;
 }
 
@@ -2399,7 +2401,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     if (nthread <= 0) {
         nthread = std::thread::hardware_concurrency();
     }
-    
+
     // multithreaded QX_0 quantization is not compatible with the current multithreaded quantization impl.
     // because, since blocks have an unknown size in bytes, we cannot section the output data in exact
     // chunks assigned to 1 thread. Multithreading would technically only be possible if we quantize
@@ -2558,7 +2560,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                         if (local_hist.empty()) {
                             local_hist.resize(hist_cur.size(), 0);
                         }
-                        
+
                         // pass in NULL for extra_data, since it's only required for QX_0, which doesn't support quantized threading
                         local_size += ggml_quantize_chunk(new_type, f32_data, new_data, first, last - first, local_hist.data(), NULL, 0);
                     }
