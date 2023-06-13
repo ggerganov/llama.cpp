@@ -16301,6 +16301,18 @@ size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, i
                 result = ggml_quantize_q6_K(src + start, block, n, n, hist);
             } break;
 #endif
+        case GGML_TYPE_F16:
+            {
+                int elemsize = sizeof(ggml_fp16_t);
+                ggml_fp32_to_fp16_row(src + start, (ggml_fp16_t *)dst + start, n);
+                result = n * elemsize;
+            } break;
+        case GGML_TYPE_F32:
+            {
+                int elemsize = sizeof(float);
+                result = n * elemsize;
+                memcpy((uint8_t *)dst + start * elemsize, src + start, result);
+            } break;
         default:
             assert(false);
     }
