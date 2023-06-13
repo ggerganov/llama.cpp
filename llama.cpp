@@ -883,12 +883,6 @@ struct llama_model_loader {
             if (lt.shards.at(0).extra_data_file_off != 0) {
                 lt.extra_data = (uint64_t *) ((uint8_t *) mapping->addr + lt.shards.at(0).extra_data_file_off);
             }
-            printf("load data for %s\n", lt.name.c_str());
-            
-            if (lt.extra_data != NULL) {
-                printf("extra_data_file_off: %zu, data: %p, extra_data: %p\n", lt.shards.at(0).extra_data_file_off, lt.data, lt.extra_data);
-                printf("extra_data for %s: %lu %lu ... %lu\n", lt.name.c_str(), lt.extra_data[0], lt.extra_data[1], lt.extra_data[lt.ne[1] - 1]);
-            }
             
         } else if (lt.split_type == SPLIT_NONE) {
             llama_file & file = file_loaders.at(lt.shards.at(0).file_idx)->file;
