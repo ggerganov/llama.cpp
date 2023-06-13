@@ -1206,6 +1206,7 @@ static void llama_model_load_internal(
                 mem_required / 1024.0 / 1024.0, mem_required_state / 1024.0 / 1024.0);
 
         (void) vram_scratch;
+        (void) n_batch;
 #ifdef GGML_USE_CUBLAS
         vram_scratch = n_batch * MB;
         ggml_cuda_set_scratch_size(vram_scratch);
@@ -1233,6 +1234,7 @@ static void llama_model_load_internal(
         model.tensors_by_name.emplace_back(lt.name, lt.ggml_tensor);
     }
 
+    (void) tensor_split;
 #if defined(GGML_USE_CUBLAS)
     {
         ggml_cuda_set_tensor_split(tensor_split);
