@@ -3197,7 +3197,7 @@ static void ggml_vec_dot_qx_0_q8_0(const int n, float * restrict s, const void *
 
     *s = 0;
 
-    uint8_t * quant_row = (uint8_t *) vx;
+    const uint8_t * quant_row = (const uint8_t *) vx;
     const block_q8_0 * restrict column = vy;
     uint32_t column_i = 0; // current index in column
 
@@ -3214,18 +3214,18 @@ static void ggml_vec_dot_qx_0_q8_0(const int n, float * restrict s, const void *
 
     float qvals[1 << 4];
 
-    for (int b = 0; b < nb; b++) {
+    for (uint32_t b = 0; b < nb; b++) {
         float * row_ptr = f32_row_data;
 
-        const uint64_t * block_start = (uint64_t *) quant_row;
+        const uint64_t * block_start = (const uint64_t *) quant_row;
 
-        const float min_value = GGML_FP16_TO_FP32(*((uint16_t *) (block_start + (QKX_0 / 64))));
-        float mult_value = GGML_FP16_TO_FP32(*((uint16_t *) (block_start + (QKX_0 / 64)) + 1));
-        const uint16_t * data_start = (uint16_t *) (block_start + (QKX_0 / 64)) + 2;
-        const uint8_t qbits = *((uint8_t *) data_start);
-        data_start = (uint16_t*) ((uint8_t*) data_start + 1);
+        const float min_value = GGML_FP16_TO_FP32(*((const uint16_t *) (block_start + (QKX_0 / 64))));
+        float mult_value = GGML_FP16_TO_FP32(*((const uint16_t *) (block_start + (QKX_0 / 64)) + 1));
+        const uint16_t * data_start = (const uint16_t *) (block_start + (QKX_0 / 64)) + 2;
+        const uint8_t qbits = *((const uint8_t *) data_start);
+        data_start = (const uint16_t*) ((const uint8_t*) data_start + 1);
 
-        quant_row = (uint8_t * ) data_start;
+        quant_row = (const uint8_t * ) data_start;
 
         // Any qbits are supported, but the size of qvals needs to be changed to 1 << max_expected_qbits.
         // So if you have at most 7bit values, you can change qvals's declaration to qvals[1 << 7].
@@ -3245,8 +3245,8 @@ static void ggml_vec_dot_qx_0_q8_0(const int n, float * restrict s, const void *
         // Parse in sub-blocks of 64 since they are managed by a single uint64_t which decides if a given weight
         // is on 16bit or quantized. This means that we can do a fast fp16_indicator == 0 check (i.e. all weights are quantized)
         // to speed up peformance
-        for (int jb = 0; jb < QKX_0 / 64; jb++) {
-            uint64_t fp16_indicator = block_start[jb];
+        for (int subblock_i = 0; subblock_i < QKX_0 / 64; subblock_i++) {
+            uint64_t fp16_indicator = block_start[subblock_i];
 
             // all weights are quantized in this section; ALSO this ONLY works when qbits is <= 4, since (qbits != 3) simply checks if qbits is a power of 2
             if (fp16_indicator == 0) {
@@ -3255,7 +3255,7 @@ static void ggml_vec_dot_qx_0_q8_0(const int n, float * restrict s, const void *
                     for (int i = 0; i < 5; i++) {
                         for (int k = 0; k < 11; k ++) {
                             // here we cast to 64bit, to make sure that we don't lose bits that are outside the u32 range
-                            row_ptr[i * 11 + k] = qvals[((((uint64_t *) data_start)[0] >> (data_offset + k * qbits)) & ((1 << qbits) - 1))];
+                            row_ptr[i * 11 + k] = qvals[((((const uint64_t *) data_start)[0] >> (data_offset + k * qbits)) & ((1 << qbits) - 1))];
                         }
 
                         data_start += 2; // this is the same event as in if (data_start >= 16), but happening twice
@@ -3264,7 +3264,7 @@ static void ggml_vec_dot_qx_0_q8_0(const int n, float * restrict s, const void *
 
                     for (int k = 0; k < 9; k ++) {
                         // here we cast to 64bit, to make sure that we don't lose bits that are outside the u32 range
-                        row_ptr[55 + k] = qvals[((((uint64_t *) data_start)[0] >> (data_offset + k * qbits)) & ((1 << qbits) - 1))];
+                        row_ptr[55 + k] = qvals[((((const uint64_t *) data_start)[0] >> (data_offset + k * qbits)) & ((1 << qbits) - 1))];
                     }
 
                     data_start += 1;
@@ -3284,7 +3284,7 @@ static void ggml_vec_dot_qx_0_q8_0(const int n, float * restrict s, const void *
                     
                     for (int i = 0; i < num_of_data_blocks_needed; i++) {
                         for (int k = 0; k < weights_per_u64_data_block; k ++) {
-                            row_ptr[i * weights_per_u64_data_block + k] = qvals[(((uint64_t *) data_start)[0] >> (k * qbits)) & ((1 << qbits) - 1)];
+                            row_ptr[i * weights_per_u64_data_block + k] = qvals[(((const uint64_t *) data_start)[0] >> (k * qbits)) & ((1 << qbits) - 1)];
                         }
 
                         data_start += (data_block_size / 8) / sizeof(uint16_t);
@@ -3298,7 +3298,7 @@ static void ggml_vec_dot_qx_0_q8_0(const int n, float * restrict s, const void *
                     for (int i = 0; i < num_of_data_blocks_needed; i++) {
                         for (int k = 0; k < weights_per_u32_data_block; k ++) {
                             // here we cast to 64bit, to make sure that we don't lose bits that are outside the u32 range
-                            row_ptr[i * weights_per_u32_data_block + k] = qvals[((((uint64_t *) data_start)[0] >> (data_offset + k * qbits)) & ((1 << qbits) - 1))];
+                            row_ptr[i * weights_per_u32_data_block + k] = qvals[((((const uint64_t *) data_start)[0] >> (data_offset + k * qbits)) & ((1 << qbits) - 1))];
                         }
 
                         data_start += (data_block_size / 8) / sizeof(uint16_t);
@@ -3311,13 +3311,13 @@ static void ggml_vec_dot_qx_0_q8_0(const int n, float * restrict s, const void *
                     if (fp16_indicator & 1) {
                         // Current weight is fp16
                         offset += 16;
-                        row_ptr[i] = GGML_FP16_TO_FP32((((uint32_t *) data_start)[0] >> data_offset) & ((1 << 16) - 1));
+                        row_ptr[i] = GGML_FP16_TO_FP32((((const uint32_t *) data_start)[0] >> data_offset) & ((1 << 16) - 1));
 
                         data_start += 1;
                     } else {
                         // Current weight is quantized
                         offset += qbits;
-                        row_ptr[i] = qvals[((((uint32_t *) data_start)[0] >> data_offset) & ((1 << qbits) - 1))];
+                        row_ptr[i] = qvals[((((const uint32_t *) data_start)[0] >> data_offset) & ((1 << qbits) - 1))];
 
                         data_offset += qbits;
 
@@ -16529,7 +16529,7 @@ size_t ggml_quantize_qx_0(const float * src, void * dst, int n, int64_t * hist, 
     assert(tensor_width % QKX_0 == 0);
     const int nb = n / QKX_0;
     
-    const uint8_t * dst_8 = dst;
+    uint8_t * dst_8 = dst;
     uint64_t dst_offset = 0;
 
     // define max quantization errors for every bit precision
@@ -16543,7 +16543,7 @@ size_t ggml_quantize_qx_0(const float * src, void * dst, int n, int64_t * hist, 
     //
     // this can be replaced with a max allowed RMSE, a set percentage of weights being within
     // a certain range, etc... The current implementation here is pretty much just an example
-    double max_quantization_errors[5] = {0, 0.004, 0.004, 0, 0.004};
+    float max_quantization_errors[5] = {0, 0.004, 0.004, 0, 0.004};
     
 
     // How maximum quantization error is implemented here:
@@ -16621,7 +16621,7 @@ size_t ggml_quantize_qx_0(const float * src, void * dst, int n, int64_t * hist, 
 
         for (uint8_t test_qbit = QX_0_START_OF_ATTEMPTED_QBITS; test_qbit >= 1; test_qbit--) {
             // calculate the mean of non-fp16 values and define that as the center of the quantization range
-            double mean = 0;
+            float mean = 0;
             for (int j = 0; j < QKX_0; j++) {
                 if ((fp16_indicators[j / 64] & ((uint64_t) 1 << (j % 64))) == 0) {
                     float x_fp32 = src[i * QKX_0 + j];
@@ -16736,8 +16736,8 @@ size_t ggml_quantize_qx_0(const float * src, void * dst, int n, int64_t * hist, 
         // Store the quantization pivots / points
         float qvals[1 << qbits];
         
-        for (int i = 0; i < (1 << qbits); i++) {
-            qvals[i] = min_value + (mult_range * i);
+        for (int j = 0; j < (1 << qbits); j++) {
+            qvals[j] = min_value + (mult_range * j);
         }
 
         uint64_t bit_offset = 0;
