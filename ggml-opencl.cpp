@@ -349,6 +349,7 @@ void vec_dot_q3_K(__global const struct block_q3_K* x, const int ib, const int i
     const uint32_t kmask1 = 0x03030303;
     const uint32_t kmask2 = 0x0f0f0f0f;
 
+    uint32_t aux[3];
     uint32_t utmp[4];
 
     int n = iqs/128;
@@ -360,7 +361,9 @@ void vec_dot_q3_K(__global const struct block_q3_K* x, const int ib, const int i
     __global const uint8_t * hm = x[ib].hmask + l;
     const int8_t * s = (const int8_t *)utmp + 8*n;
 
-    __global const uint32_t* aux = (__global const uint32_t*) x[ib].scales;
+    aux[0] = x[ib].scales[0] | x[ib].scales[1] << 8 | x[ib].scales[2] << 16 | x[ib].scales[3] << 24;
+    aux[1] = x[ib].scales[4] | x[ib].scales[5] << 8 | x[ib].scales[6] << 16 | x[ib].scales[7] << 24;
+    aux[2] = x[ib].scales[8] | x[ib].scales[9] << 8 | x[ib].scales[10] << 16 | x[ib].scales[11] << 24;
 
     utmp[3] = ((aux[1] >> 4) & kmask2) | (((aux[2] >> 6) & kmask1) << 4);
     utmp[2] = ((aux[0] >> 4) & kmask2) | (((aux[2] >> 4) & kmask1) << 4);
