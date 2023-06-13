@@ -1155,19 +1155,26 @@ static void llama_model_load_internal(
             ggml_backend backend_norm;
             ggml_backend backend_output;
             if (n_gpu_layers > int(n_layer)) { // NOLINT
-                backend_norm = LLAMA_BACKEND_OFFLOAD;
+                // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
+                // on Windows however this is detrimental unless everything is on the GPU
+#ifndef _WIN32
+                backend_norm = low_vram ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD;
+#else
+                backend_norm = low_vram || n_gpu_layers <= (int) n_layer + 2 ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD;
+#endif // _WIN32
+
                 backend_output = LLAMA_BACKEND_OFFLOAD_SPLIT;
             } else {
                 backend_norm = GGML_BACKEND_CPU;
                 backend_output = GGML_BACKEND_CPU;
             }
 
-            // norm is not performance relevant on its own but keeping it in VRAM reduces data copying:
             model.norm   = ml->get_tensor("norm.weight",   {n_embd},          backend_norm);
             model.output = ml->get_tensor("output.weight", {n_embd, n_vocab}, backend_output);
-            if (backend_output == GGML_BACKEND_GPU_SPLIT) {
-                LLAMA_ASSERT(backend_norm == GGML_BACKEND_GPU);
+            if (backend_norm == GGML_BACKEND_GPU) {
                 vram_weights += ggml_nbytes(model.norm);
+            }
+            if (backend_output == GGML_BACKEND_GPU_SPLIT) {
                 vram_weights += ggml_nbytes(model.output);
             }
         }
