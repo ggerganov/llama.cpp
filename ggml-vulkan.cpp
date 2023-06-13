@@ -2,6 +2,27 @@
 
 #include <vulkan/vulkan.hpp>
 #define VMA_IMPLEMENTATION
+#if UINTPTR_MAX == 0xFFFFFFFF
+    #define VMA_SYSTEM_MEM_ALIGN 4
+#else
+    #define VMA_SYSTEM_MEM_ALIGN 16
+#endif
+#if defined(_MSC_VER) || defined(__MINGW32__)
+#define VMA_SYSTEM_ALIGNED_MALLOC(size, alignment)  _aligned_malloc(size, alignment)
+#define VMA_SYSTEM_ALIGNED_FREE(ptr)     _aligned_free(ptr)
+#else
+inline static void* ggml_aligned_malloc(size_t size, size_t alignment) {
+    void* aligned_memory = NULL;
+    int result = posix_memalign(&aligned_memory, alignment, size);
+    if (result != 0) {
+        // Handle allocation failure
+        return NULL;
+    }
+    return aligned_memory;
+}
+#define VMA_SYSTEM_ALIGNED_MALLOC(size, alignment)  ggml_aligned_malloc(size, alignment)
+#define VMA_SYSTEM_ALIGNED_FREE(ptr)     free(ptr)
+#endif
 #include "external/vk_mem_alloc.h"
 
 #include <atomic>
