@@ -1241,10 +1241,10 @@ static void llama_model_load_internal(
         } else {
             vram_scratch = n_batch * MB;
             ggml_cuda_set_scratch_size(vram_scratch);
-        }
-        if (n_gpu_layers > 0) {
-            fprintf(stderr, "%s: allocating batch_size x 1 MB = %ld MB VRAM for the scratch buffer\n",
-                    __func__, vram_scratch / MB);
+            if (n_gpu_layers > 0) {
+                fprintf(stderr, "%s: allocating batch_size x 1 MB = %ld MB VRAM for the scratch buffer\n",
+                        __func__, vram_scratch / MB);
+            }
         }
 #endif // GGML_USE_CUBLAS
 #if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
@@ -1572,7 +1572,6 @@ static bool llama_eval_internal(
         }
 
         lctx.use_buf(ctx0, 1);
-        //ggml_cuda_set_scratch(1);
 
         struct ggml_tensor * inpFF = ggml_add(ctx0, cur, inpSA);
         offload_func(inpFF);
@@ -1630,7 +1629,6 @@ static bool llama_eval_internal(
     }
 
     lctx.use_buf(ctx0, 0);
-    //ggml_cuda_set_scratch(0);
 
     // used at the end to optionally extract the embeddings
     struct ggml_tensor * embeddings = NULL;
