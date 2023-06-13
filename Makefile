@@ -270,8 +270,8 @@ main: examples/main/main.cpp                                  build-info.h ggml.
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
-	
-simple: examples/simple/simple.cpp                                  build-info.h ggml.o llama.o common.o $(OBJS)
+
+simple: examples/simple/simple.cpp                            build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./simple -h for help.  ===='
