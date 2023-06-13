@@ -2347,6 +2347,15 @@ void ggml_cuda_set_scratch_size(size_t scratch_size) {
     g_scratch_size = scratch_size;
 }
 
+void ggml_cuda_free_scratch() {
+    if (g_scratch_buffer == nullptr) {
+        return;
+    }
+
+    CUDA_CHECK(cudaFree(g_scratch_buffer));
+    g_scratch_buffer = nullptr;
+}
+
 bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor){
     ggml_cuda_func_t func;
     const bool any_on_device = tensor->backend == GGML_BACKEND_GPU
