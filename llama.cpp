@@ -165,6 +165,11 @@ struct llama_kv_cache {
         if (ctx) {
             ggml_free(ctx);
         }
+
+#ifdef GGML_USE_CUBLAS
+        ggml_cuda_free_data(k);
+        ggml_cuda_free_data(v);
+#endif // GGML_USE_CUBLAS
     }
 };
 
