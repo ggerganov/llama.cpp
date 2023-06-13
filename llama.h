@@ -113,6 +113,7 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_Q5_K_S        = 16,// except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q5_K_M        = 17,// except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q6_K          = 18,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_QX_0          = 19, // except 1d tensors
     };
 
     // model quantization parameters
