@@ -1036,6 +1036,12 @@ static void llama_model_load_internal(
             case 40: model.type = e_model::MODEL_13B; break;
             case 60: model.type = e_model::MODEL_30B; break;
             case 80: model.type = e_model::MODEL_65B; break;
+            default:
+                {
+                    if (hparams.n_layer < 32) {
+                        model.type = e_model::MODEL_7B;
+                    }
+                } break;
         }
 
         hparams.n_ctx = n_ctx;
@@ -1200,6 +1206,7 @@ static void llama_model_load_internal(
                 mem_required / 1024.0 / 1024.0, mem_required_state / 1024.0 / 1024.0);
 
         (void) vram_scratch;
+        (void) n_batch;
 #ifdef GGML_USE_CUBLAS
         vram_scratch = n_batch * MB;
         ggml_cuda_set_scratch_size(vram_scratch);
@@ -1227,6 +1234,7 @@ static void llama_model_load_internal(
         model.tensors_by_name.emplace_back(lt.name, lt.ggml_tensor);
     }
 
+    (void) tensor_split;
 #if defined(GGML_USE_CUBLAS)
     {
         ggml_cuda_set_tensor_split(tensor_split);
@@ -2160,6 +2168,10 @@ llama_token llama_sample_token_mirostat_v2(struct llama_context * ctx, llama_tok
     candidates->size = std::distance(candidates->data, std::find_if(candidates->data, candidates->data + candidates->size, [&](const llama_token_data & candidate) {
         return -log2f(candidate.p) > *mu;
     }));
+
+    if (candidates->size == 0) {
+        candidates->size = 1;
+    }
 
     // Normalize the probabilities of the remaining words
     llama_sample_softmax(ctx, candidates);
@@ -3285,6 +3297,19 @@ int llama_n_ctx(const struct llama_context * ctx) {
 
 int llama_n_embd(const struct llama_context * ctx) {
     return ctx->model.hparams.n_embd;
+}
+
+int llama_get_vocab(
+        const struct llama_context * ctx,
+        const char * * strings,
+        float  * scores,
+        int capacity) {
+    int n = std::min(capacity, (int) ctx->vocab.id_to_token.size());
+    for (int i = 0; i<n; ++i) {
+        strings[i] = ctx->vocab.id_to_token[i].tok.c_str();
+        scores[i]  = ctx->vocab.id_to_token[i].score;
+    }
+    return n;
 }
 
 float * llama_get_logits(struct llama_context * ctx) {
