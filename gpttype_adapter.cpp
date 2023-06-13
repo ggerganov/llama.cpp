@@ -479,7 +479,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         }
         else
         {
-            n_batch = 10; //use sequence mode to speedup
+            n_batch = 8; //use sequence mode to speedup
 
             //setup buffers for rwkv state
             auto padding = 512u;
