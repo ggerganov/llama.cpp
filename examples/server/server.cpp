@@ -37,12 +37,13 @@ enum stop_type {
     STOP_PARTIAL,
 };
 
-bool ends_with(const std::string & str, const std::string & suffix) {
+static bool ends_with(const std::string & str, const std::string & suffix) {
     return str.size() >= suffix.size() &&
         0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
 }
 
-size_t find_partial_stop_string(const std::string & stop, const std::string & text) {
+static size_t find_partial_stop_string(const std::string & stop,
+                                       const std::string & text) {
     if (!text.empty() && !stop.empty()) {
         const char text_last_char = text.back();
         for (int64_t char_index = stop.size() - 1; char_index >= 0; char_index--) {
@@ -419,7 +420,8 @@ struct llama_server_context {
     }
 };
 
-void server_print_usage(const char * argv0, const gpt_params & params, const server_params & sparams) {
+static void server_print_usage(const char * argv0, const gpt_params & params,
+                               const server_params & sparams) {
     fprintf(stderr, "usage: %s [options]\n", argv0);
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
@@ -456,8 +458,8 @@ void server_print_usage(const char * argv0, const gpt_params & params, const ser
     fprintf(stderr, "\n");
 }
 
-void server_params_parse(int argc, char ** argv, server_params & sparams,
-    gpt_params & params) {
+static void server_params_parse(int argc, char ** argv, server_params & sparams,
+                                gpt_params & params) {
     gpt_params default_params;
     server_params default_sparams;
     std::string arg;
