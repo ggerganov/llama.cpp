@@ -1920,7 +1920,8 @@ static void ggml_cuda_op(const ggml_tensor * src0, const ggml_tensor * src1, ggm
                                                     cudaMemcpyDeviceToDevice, cudaStream_memcpy_src1));
                         }
                     } else if (src1_on_device && !src1_is_contiguous) {
-                        CUDA_CHECK(ggml_cuda_tensor_2d(src1_ddf_i, src1, i03, i02, i01_low, i01_high, cudaStream_main));
+                        GGML_ASSERT(!split);
+                        CUDA_CHECK(ggml_cuda_tensor_2d(src1_ddf_i, src1, i03, i02, 0, ne11, cudaStream_main));
                     } else {
                         GGML_ASSERT(false);
                     }
