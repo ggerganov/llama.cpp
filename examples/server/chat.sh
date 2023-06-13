@@ -1,6 +1,6 @@
 #!/bin/bash
 
-API_URL="http://127.0.0.1:8080"
+API_URL="${API_URL:-http://127.0.0.1:8080}"
 
 CHAT=(
     "Hello, Assistant."
