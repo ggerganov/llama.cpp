@@ -18,25 +18,35 @@ static void replaceAll(std::string& str, const std::string& from, const std::str
     }
 }
 
+static std::string hexToUnicode(const std::string& hexString) {
+    std::string unicodeString;
+    for (size_t i = 0; i < hexString.length(); i += 2) {
+        std::string byteString = hexString.substr(i, 2);
+        unsigned int byteValue = std::stoi(byteString, nullptr, 16);
+        unicodeString += static_cast<char>(byteValue);
+    }
+    return unicodeString;
+}
+
 void read_rwkv_vocab()
 {
     std::string line;
     auto filepath = executable_path+ "rwkv_vocab.embd";
-    printf("Reading vocab from %s",filepath.c_str());
+    printf("\nReading vocab from %s",filepath.c_str());
     std::ifstream myfile(filepath);
     if (myfile.is_open())
     {
         int slen = special.size();
         while (myfile.good())
         {
-            getline(myfile, line);            
+            getline(myfile, line);
             for(int i=0;i<slen;++i)
             {
                 std::string swapped = "";
                 swapped.push_back((char)i);
                 replaceAll(line,special[i],swapped);
-            }          
-            rwkv_vocab.push_back(line);            
+            }
+            rwkv_vocab.push_back(line);
         }
         myfile.close();
     }
@@ -44,5 +54,34 @@ void read_rwkv_vocab()
     else
     {
         std::cout << "Unable to open RWKV vocab file";
+    }
+}
+
+void read_rwkv_world_vocab() //its in hexadecimal
+{
+    std::string line;
+    std::string unicodeString;
+    auto filepath = executable_path+ "rwkv_world_vocab.embd";
+    printf("\nReading world vocab from %s",filepath.c_str());
+    std::ifstream myfile(filepath);
+    if (myfile.is_open())
+    {
+        int slen = special.size();
+        int idx = 0;
+        rwkv_vocab.push_back("<<UNUSED_TOKEN>>");
+        while (myfile.good())
+        {
+            getline(myfile, line);
+            unicodeString = hexToUnicode(line);
+            // printf("\n%d: %s",idx,unicodeString.c_str());
+            rwkv_vocab.push_back(unicodeString);
+            ++idx;
+        }
+        myfile.close();
+    }
+
+    else
+    {
+        std::cout << "Unable to open RWKV world vocab file";
     }
 }

@@ -409,8 +409,35 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     }
     else if (file_format == FileFormat::RWKV_1 || file_format==FileFormat::RWKV_2)
     {
+        //start loading the models first
+        bool useWorldTokenizer = false;
+        if (file_format == FileFormat::RWKV_1)
+        {
+            rwkv_ctx_v2 = rwkv_v2_init_from_file(modelname.c_str(), n_threads);
+        }
+        else //rwkv_2
+        {
+            rwkv_ctx_v3 = rwkv_init_from_file(modelname.c_str(), n_threads);
+            const struct rwkv_file_header & header = rwkv_ctx_v3->instance->model.header;
+            const size_t n_vocab = header.n_vocab;
+            printf("\nDetected Vocab: %d",n_vocab);
+            if(n_vocab>60000)
+            {
+                printf("\nUsing WORLD TOKENIZER");
+                useWorldTokenizer = true;
+            }
+        }
+
         std::string word;
-        read_rwkv_vocab();
+        if(useWorldTokenizer)
+        {
+            read_rwkv_world_vocab();
+        }
+        else
+        {
+            read_rwkv_vocab();
+        }
+
         int vocabsiz = rwkv_vocab.size();
         for (int i = 0; i < vocabsiz; i++)
         {
@@ -425,7 +452,6 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         if (file_format == FileFormat::RWKV_1)
         {
             n_batch = 1;
-            rwkv_ctx_v2 = rwkv_v2_init_from_file(modelname.c_str(), n_threads);
 
             //setup buffers for rwkv state
             auto padding = 512u;
@@ -454,7 +480,6 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         else
         {
             n_batch = 10; //use sequence mode to speedup
-            rwkv_ctx_v3 = rwkv_init_from_file(modelname.c_str(), n_threads);
 
             //setup buffers for rwkv state
             auto padding = 512u;
