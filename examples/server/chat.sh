@@ -11,6 +11,17 @@ CHAT=(
 
 INSTRUCTION="A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions."
 
+trim() {
+    shopt -s extglob
+    set -- "${1##+([[:space:]])}"
+    printf "%s" "${1%%+([[:space:]])}"
+}
+
+trim_trailing() {
+    shopt -s extglob
+    printf "%s" "${1%%+([[:space:]])}"
+}
+
 format_prompt() {
     echo -n "${INSTRUCTION}"
     printf "\n### Human: %s\n### Assistant: %s" "${CHAT[@]}" "$1"
@@ -28,7 +39,8 @@ tokenize() {
 N_KEEP=$(tokenize "${INSTRUCTION}" | wc -l)
 
 chat_completion() {
-    DATA="$(format_prompt "$1" | jq -Rs --argjson n_keep $N_KEEP '{
+    PROMPT="$(trim_trailing "$(format_prompt "$1")")"
+    DATA="$(echo -n "$PROMPT" | jq -Rs --argjson n_keep $N_KEEP '{
         prompt: .,
         temperature: 0.2,
         top_k: 40,
@@ -56,11 +68,10 @@ chat_completion() {
 
     printf "\n"
 
-    CHAT+=("$1" "${ANSWER:1}")
+    CHAT+=("$1" "$(trim "$ANSWER")")
 }
 
-
 while true; do
-    read -e -p "> " QUESTION
+    read -r -e -p "> " QUESTION
     chat_completion "${QUESTION}"
 done
