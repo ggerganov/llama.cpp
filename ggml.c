@@ -877,16 +877,19 @@ static_assert(sizeof(block_q8_1) == 2*sizeof(float) + QK8_1, "wrong q8_1 block s
 // max block size is 256 because some feed_forward tensors have a width of 11008 weights, which is not divisible by 512
 #define QKX_0 256
 
-// there is no byte-exact C struct to represent a QX_0 block, but a high-level representation of a block is:
+// There is no byte-exact C struct to represent a QX_0 block, but a high-level representation of a block is:
 // ggml_fp16_t delta;
 // ggml_fp16_t min;
 // uint8_t block_metadata;
 // [bitstream of weights]
 
-// quantization parameters for QX_0 (used only when running ./quantize, irrelevant during inference)
+
+// Quantization parameters for QX_0 (used only when running ./quantize, irrelevant during inference)
+// Quantization starts at QX_0_STARTING_QBITS bits, and then moves down to QX_0_START_OF_ATTEMPTED_QBITS
+// and tries lower and lower bit precisions from there
 // TODO maybe move these to commandline arguments...?
 #define QX_0_STARTING_QBITS 4
-#define QX_0_STARTING_QBITS_DOWNSCALING 2
+#define QX_0_START_OF_ATTEMPTED_QBITS 2
 
 
 // reference implementation for deterministic creation of model files
@@ -3204,7 +3207,7 @@ static void ggml_vec_dot_qx_0_q8_0(const int n, float * restrict s, const void *
     // __AVX2__ doesn't seem to actually make much of a difference,
     // a lot of optimizing could possibly be done, including possibly using AVX2
     // for dequantization...?
-    
+
     #if defined(__AVX2__)
     __m256 rolling_sum = _mm256_setzero_ps();
     #endif
@@ -16604,7 +16607,19 @@ size_t ggml_quantize_qx_0(const float * src, void * dst, int n, int64_t * hist, 
         float min_value = -(max_quantization_errors[qbits] * ((1 << qbits) - 1));
         float mult_range = 2 * max_quantization_errors[qbits];
         
-        for (uint8_t test_qbit = QX_0_STARTING_QBITS_DOWNSCALING; test_qbit >= 1; test_qbit--) {
+        // The quantizer starts at a QX_0_STARTING_QBITS quantized block (e.g. 4bits), but then
+        // attempts to move to a lower precision defined by QX_0_START_OF_ATTEMPTED_QBITS.
+        // It keeps looking to see if 3, 2 or 1 bit precision leads to a smaller file size.
+        //
+        // The decrease in precision does not always lead to a smaller file when we need to maintain
+        // a fixed max quantization error, since lower bits mean a smaller value range, which might lead
+        // to more values being moved to 16bits, which might in the end actually increase our block's size.
+        //
+        // If values are very close to the mean, then a lower precision is more advantageous since we don't
+        // need a large quantization range, but otherwise it's likely more beneficial to stay at a higher precision.
+        // The loop below calculates this ideal trade-off for us!
+
+        for (uint8_t test_qbit = QX_0_START_OF_ATTEMPTED_QBITS; test_qbit >= 1; test_qbit--) {
             // calculate the mean of non-fp16 values and define that as the center of the quantization range
             double mean = 0;
             for (int j = 0; j < QKX_0; j++) {
