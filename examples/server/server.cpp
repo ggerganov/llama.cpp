@@ -385,10 +385,10 @@ struct llama_server_context {
             // 2-byte characters: 110xxxxx 10xxxxxx
             if ((c & 0xE0) == 0xC0) {
                 multibyte_pending = 1;
-                // 3-byte characters: 1110xxxx 10xxxxxx 10xxxxxx
+            // 3-byte characters: 1110xxxx 10xxxxxx 10xxxxxx
             } else if ((c & 0xF0) == 0xE0) {
                 multibyte_pending = 2;
-                // 4-byte characters: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+            // 4-byte characters: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
             } else if ((c & 0xF8) == 0xF0) {
                 multibyte_pending = 3;
             } else {
