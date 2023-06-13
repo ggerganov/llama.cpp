@@ -919,6 +919,7 @@ struct llama_context_params llama_context_default_params() {
         /*.gpu_layers                  =*/ 0,
         /*.main_gpu                    =*/ 0,
         /*.tensor_split                =*/ {0},
+        /*.low_vram                    =*/ false,
         /*.seed                        =*/ -1,
         /*.f16_kv                      =*/ true,
         /*.logits_all                  =*/ false,
@@ -1027,6 +1028,7 @@ static void llama_model_load_internal(
         int n_gpu_layers,
         int main_gpu,
         const float * tensor_split,
+        bool low_vram,
         ggml_type memory_type,
         bool use_mmap,
         bool use_mlock,
@@ -1226,8 +1228,13 @@ static void llama_model_load_internal(
 
         (void) vram_scratch;
 #ifdef GGML_USE_CUBLAS
-        vram_scratch = n_batch * MB;
-        ggml_cuda_set_scratch_size(vram_scratch);
+        if (low_vram) {
+            fprintf(stderr, "%s: not allocating a VRAM scratch buffer due to low VRAM option\n", __func__);
+            ggml_cuda_set_scratch_size(0); // disable scratch
+        } else {
+            vram_scratch = n_batch * MB;
+            ggml_cuda_set_scratch_size(vram_scratch);
+        }
         if (n_gpu_layers > 0) {
             fprintf(stderr, "%s: allocating batch_size x 1 MB = %ld MB VRAM for the scratch buffer\n",
                     __func__, vram_scratch / MB);
@@ -1242,15 +1249,24 @@ static void llama_model_load_internal(
         }
         size_t vram_kv_cache = 0;
         if (n_gpu_layers > (int) hparams.n_layer + 1) {
-            fprintf(stderr, "%s: offloading v cache to GPU\n", __func__);
-            vram_kv_cache += MEM_REQ_KV_SELF().at(model.type) / 2;
+            if (low_vram) {
+                fprintf(stderr, "%s: cannot offload v cache to GPU due to low VRAM option\n", __func__);
+            } else {
+                fprintf(stderr, "%s: offloading v cache to GPU\n", __func__);
+                vram_kv_cache += MEM_REQ_KV_SELF().at(model.type) / 2;
+            }
         }
         if (n_gpu_layers > (int) hparams.n_layer + 2) {
-            fprintf(stderr, "%s: offloading k cache to GPU\n", __func__);
-            vram_kv_cache += MEM_REQ_KV_SELF().at(model.type) / 2;
+            if (low_vram) {
+                fprintf(stderr, "%s: cannot offload k cache to GPU due to low VRAM option\n", __func__);
+            } else {
+                fprintf(stderr, "%s: offloading k cache to GPU\n", __func__);
+                vram_kv_cache += MEM_REQ_KV_SELF().at(model.type) / 2;
+            }
         }
+        const int max_offloadable_layers = low_vram ? hparams.n_layer + 1 : hparams.n_layer + 3;
         fprintf(stderr, "%s: offloaded %d/%d layers to GPU\n",
-                __func__, std::min(n_gpu_layers, (int) hparams.n_layer + 3), hparams.n_layer + 3);
+                __func__, std::min(n_gpu_layers, max_offloadable_layers), hparams.n_layer + 3);
         fprintf(stderr, "%s: total VRAM used: %zu MB\n",
                 __func__, (vram_weights + vram_scratch + vram_kv_cache + MB - 1) / MB); // round up
 #else
@@ -1290,6 +1306,7 @@ static bool llama_model_load(
         int n_gpu_layers,
         int main_gpu,
         float * tensor_split,
+        bool low_vram,
         ggml_type memory_type,
         bool use_mmap,
         bool use_mlock,
@@ -1297,7 +1314,7 @@ static bool llama_model_load(
         llama_progress_callback progress_callback,
         void *progress_callback_user_data) {
     try {
-        llama_model_load_internal(fname, lctx, n_ctx, n_batch, n_gpu_layers, main_gpu, tensor_split, memory_type,
+        llama_model_load_internal(fname, lctx, n_ctx, n_batch, n_gpu_layers, main_gpu, tensor_split, low_vram, memory_type,
                                   use_mmap, use_mlock, vocab_only, progress_callback, progress_callback_user_data);
         return true;
     } catch (const std::exception & err) {
@@ -1375,6 +1392,9 @@ static bool llama_eval_internal(
 
     // offload functions set the tensor output backend to GPU
     // tensors are GPU-accelerated if any input or the output has been offloaded
+    //
+    // with the low VRAM option VRAM scratch is disabled in llama_load_model_internal
+    // in that case ggml_cuda_assign_buffers has no effect
     offload_func_t offload_func_nr = llama_nop; // nr = non-repeating
     offload_func_t offload_func_kq = llama_nop;
     offload_func_t offload_func_v  = llama_nop;
@@ -2608,8 +2628,8 @@ struct llama_context * llama_init_from_file(
 
     ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
-    if (!llama_model_load(path_model, *ctx, params.n_ctx, params.n_batch, params.n_gpu_layers,
-                params.main_gpu, params.tensor_split, memory_type, params.use_mmap, params.use_mlock,
+    if (!llama_model_load(path_model, *ctx, params.n_ctx, params.n_batch, params.n_gpu_layers, params.main_gpu,
+                params.tensor_split, params.low_vram, memory_type, params.use_mmap, params.use_mlock,
                 params.vocab_only, params.progress_callback, params.progress_callback_user_data)) {
         fprintf(stderr, "%s: failed to load model\n", __func__);
         llama_free(ctx);

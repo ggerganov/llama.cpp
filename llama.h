@@ -77,6 +77,7 @@ extern "C" {
         int n_gpu_layers;                      // number of layers to store in VRAM
         int main_gpu;                          // the GPU that is used for scratch and small tensors
         float tensor_split[LLAMA_MAX_DEVICES]; // how to split layers across multiple GPUs
+        bool low_vram;                         // if true, reduce VRAM usage at the cost of performance
         int seed;                              // RNG seed, -1 for random
 
         bool f16_kv;     // use fp16 for KV cache

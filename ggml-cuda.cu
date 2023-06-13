@@ -2263,6 +2263,10 @@ void ggml_cuda_free_data(struct ggml_tensor * tensor) {
 }
 
 void ggml_cuda_assign_buffers_impl(struct ggml_tensor * tensor, bool scratch) {
+    if (scratch && g_scratch_size == 0) {
+        return;
+    }
+
     if (tensor->src0 != nullptr && tensor->src0->backend == GGML_BACKEND_CPU) {
         const ggml_op src0_op = tensor->src0->op;
         if (src0_op == GGML_OP_RESHAPE || src0_op == GGML_OP_TRANSPOSE || src0_op == GGML_OP_VIEW) {
