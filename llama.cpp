@@ -342,8 +342,11 @@ struct llama_load_tensor_shard {
     enum ggml_type type;
     size_t file_idx;
     size_t file_off;
+    size_t extra_data_file_off;
 
     void calc_size() {
+        // For QX_0, the size is manually written-in, since it comes from extra_data
+        GGML_ASSERT(type != GGML_TYPE_QX_0);
         size = llama_calc_tensor_size(ne, type);
     }
 };
@@ -364,6 +367,7 @@ struct llama_load_tensor {
     size_t size;
     struct ggml_tensor * ggml_tensor = NULL;
     uint8_t * data;
+    uint64_t * extra_data = NULL;
 
     llama_load_tensor(const std::string & name) : name(name) {}
 
@@ -424,7 +428,18 @@ struct llama_load_tensor {
     }
 
     void calc_size() {
-        size = llama_calc_tensor_size(ne, type);
+        // For QX_0 the size comes from extra_data, but since extra_data might not be initialized here
+        // we can take it from the shard instead
+        if (type == GGML_TYPE_QX_0) {
+            GGML_ASSERT(shards.size() == 1);
+            GGML_ASSERT(ne.size() == 2);
+
+            size = shards.at(0).size;
+            
+            GGML_ASSERT(size != 0);
+        } else {
+            size = llama_calc_tensor_size(ne, type);
+        }
     }
 };
 
@@ -520,6 +535,7 @@ struct llama_file_loader {
             shard.ne.resize(n_dims);
             file.read_raw(shard.ne.data(), sizeof(shard.ne[0]) * n_dims);
             std::string name = file.read_string(name_len);
+
             if (n_dims < 1 || n_dims > 2) {
                 throw std::runtime_error(format("llama.cpp: tensor '%s' should not be %u-dimensional", name.c_str(), n_dims));
             }
@@ -536,6 +552,7 @@ struct llama_file_loader {
                 case GGML_TYPE_Q4_K:
                 case GGML_TYPE_Q5_K:
                 case GGML_TYPE_Q6_K:
+                case GGML_TYPE_QX_0:
                     break;
                 default: {
                     throw std::runtime_error(format("unrecognized tensor type %u\n", shard.type));
@@ -546,11 +563,35 @@ struct llama_file_loader {
                 // skip to the next multiple of 32 bytes
                 file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
             }
+
+            if (shard.type == GGML_TYPE_QX_0) {
+                shard.extra_data_file_off = file.tell();
+                
+                uint64_t extra_data[shard.ne[1]];
+                file.read_raw(extra_data, sizeof(uint64_t) * shard.ne[1]);
+
+                // set the size of the tensor here
+                shard.size = extra_data[shard.ne[1] - 1];
+
+                // realign, just in case extra_data isn't a multiple of 32B
+                file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
+            } else {
+                shard.extra_data_file_off = 0;
+            }
+
             shard.file_idx = file_idx;
             shard.file_off = file.tell();
 
-            shard.calc_size();
+            if (shard.type != GGML_TYPE_QX_0) {
+                shard.calc_size();
+            }
+
             file.seek(shard.size, SEEK_CUR);
+
+            // QX_0's data may not be 32-byte aligned
+            if (shard.type == GGML_TYPE_QX_0) {
+                file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
+            }
 
             auto it = tensors_map.name_to_idx.find(name);
             size_t idx;
@@ -602,7 +643,9 @@ struct llama_file_saver {
             file.write_raw(&token_score.score, sizeof(token_score.score));
         }
     }
-    void write_tensor(llama_load_tensor & tensor, enum ggml_type new_type, const void * new_data, size_t new_size) {
+
+    // pass extra_data by reference to avoid excessive copying
+    void write_tensor(llama_load_tensor & tensor, enum ggml_type new_type, const void * new_data, size_t new_size, llama_buffer & extra_data) {
         switch (new_type) {
             case GGML_TYPE_F32:
             case GGML_TYPE_F16:
@@ -616,6 +659,7 @@ struct llama_file_saver {
             case GGML_TYPE_Q4_K:
             case GGML_TYPE_Q5_K:
             case GGML_TYPE_Q6_K:
+            case GGML_TYPE_QX_0:
                 break;
             default: LLAMA_ASSERT(false);
         }
@@ -624,9 +668,29 @@ struct llama_file_saver {
         file.write_u32(new_type);
         file.write_raw(tensor.ne.data(), sizeof(tensor.ne[0]) * tensor.ne.size());
         file.write_raw(tensor.name.data(), tensor.name.size());
+
+        size_t tensor_size;
+
         file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
-        LLAMA_ASSERT(new_size == llama_calc_tensor_size(tensor.ne, new_type));
+
+        // The tensor's size for QX_0 is stored in the last element of extra_data
+        if (new_type == GGML_TYPE_QX_0) {
+            file.write_raw(extra_data.addr, sizeof(uint64_t) * tensor.ne[1]);
+            tensor_size = ((uint64_t *) extra_data.addr)[tensor.ne[1] - 1];
+
+            // realign, just in case extra_data isn't a multiple of 32B
+            file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
+        } else {
+            tensor_size = llama_calc_tensor_size(tensor.ne, new_type);
+        }
+
+        LLAMA_ASSERT(new_size == tensor_size);
         file.write_raw(new_data, new_size);
+        
+        // QX_0 data may not be 32-byte aligned
+        if (new_type == GGML_TYPE_QX_0) {
+            file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
+        }
     }
 };
 
@@ -666,7 +730,7 @@ struct llama_model_loader {
     bool alignment_prevents_mmap() {
         for (const llama_load_tensor & lt : tensors_map.tensors) {
             for (const llama_load_tensor_shard & shard : lt.shards) {
-                if (shard.file_off & 3) {
+                if ((shard.file_off & 3)) {
                     return true;
                 }
             }
@@ -725,6 +789,7 @@ struct llama_model_loader {
         tensor->backend = backend;
         lt.ggml_tensor = tensor;
         num_ggml_tensors_created++;
+
         return tensor;
     }
 
@@ -771,6 +836,13 @@ struct llama_model_loader {
             switch(lt.ggml_tensor->backend) {
                 case GGML_BACKEND_CPU:
                     lt.ggml_tensor->data = lt.data;
+        
+                    if (lt.type == GGML_TYPE_QX_0) {
+                        // QX_0 uses the extra field to store byte offsets in *data for each row except row 0
+                        // (so extra[0] stores where row 1 starts, extra[1] is for row 2, and the last element
+                        //  in extra stores the total tensor size)
+                        lt.ggml_tensor->extra = lt.extra_data;
+                    }
                     if (use_mmap && lmlock) {
                         lock_size += lt.size;
                         lmlock->grow_to(lock_size);
@@ -801,9 +873,23 @@ struct llama_model_loader {
     }
 
     void load_data_for(llama_load_tensor & lt) {
+        // QX_0 only supports mmap
+        GGML_ASSERT(use_mmap || lt.type != GGML_TYPE_QX_0);
+
         if (use_mmap) {
             LLAMA_ASSERT(lt.shards.size() == 1);
             lt.data = (uint8_t *) mapping->addr + lt.shards.at(0).file_off;
+
+            if (lt.shards.at(0).extra_data_file_off != 0) {
+                lt.extra_data = (uint64_t *) ((uint8_t *) mapping->addr + lt.shards.at(0).extra_data_file_off);
+            }
+            printf("load data for %s\n", lt.name.c_str());
+            
+            if (lt.extra_data != NULL) {
+                printf("extra_data_file_off: %zu, data: %p, extra_data: %p\n", lt.shards.at(0).extra_data_file_off, lt.data, lt.extra_data);
+                printf("extra_data for %s: %lu %lu ... %lu\n", lt.name.c_str(), lt.extra_data[0], lt.extra_data[1], lt.extra_data[lt.ne[1] - 1]);
+            }
+            
         } else if (lt.split_type == SPLIT_NONE) {
             llama_file & file = file_loaders.at(lt.shards.at(0).file_idx)->file;
             file.seek(lt.shards.at(0).file_off, SEEK_SET);
@@ -988,6 +1074,7 @@ static const char *llama_ftype_name(enum llama_ftype ftype) {
         case LLAMA_FTYPE_MOSTLY_Q5_K_S: return "mostly Q5_K - Small";
         case LLAMA_FTYPE_MOSTLY_Q5_K_M: return "mostly Q5_K - Medium";
         case LLAMA_FTYPE_MOSTLY_Q6_K: return "mostly Q6_K";
+        case LLAMA_FTYPE_MOSTLY_QX_0: return "mostly QX_0";
         default:                      return "unknown, may not work";
     }
 }
@@ -1665,6 +1752,8 @@ static bool llama_eval_internal(
         lctx.n_p_eval += N;
     }
 
+    fprintf(stderr, "\nmodel eval time: %ldms\n", (ggml_time_us() - t_start_us) / 1000);
+    fflush(stderr);
     return true;
 }
 
@@ -2309,11 +2398,21 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         case LLAMA_FTYPE_MOSTLY_Q5_K_S:
         case LLAMA_FTYPE_MOSTLY_Q5_K_M: quantized_type = GGML_TYPE_Q5_K; break;
         case LLAMA_FTYPE_MOSTLY_Q6_K:   quantized_type = GGML_TYPE_Q6_K; break;
+        case LLAMA_FTYPE_MOSTLY_QX_0: quantized_type = GGML_TYPE_QX_0; break;
         default: throw std::runtime_error(format("invalid output file type %d\n", ftype));
     }
 
     if (nthread <= 0) {
         nthread = std::thread::hardware_concurrency();
+    }
+    
+    // multithreaded QX_0 quantization is not compatible with the current multithreaded quantization impl.
+    // because, since blocks have an unknown size in bytes, we cannot section the output data in exact
+    // chunks assigned to 1 thread. Multithreading would technically only be possible if we quantize
+    // multiple entire tensors at once, but the overall implementation doesn't seem to allow that to be done easily
+    if (quantized_type == GGML_TYPE_QX_0) {
+        nthread = 1;
+        printf("Setting nthread to 1 due to the implementation for QX_0 quantization being single-threaded.\n");
     }
 
     std::unique_ptr<llama_model_loader> model_loader(new llama_model_loader(fname_inp, /*use_mmap*/ false,
@@ -2363,12 +2462,23 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         if (!params->quantize_output_tensor && tensor.name == "output.weight") {
            quantize = false;
         }
+
+        // Allow only attention and FFN matrices to be quantized under QX_0, since they only require vec_dot
+        // to be implemented. Output weights and other matrices require more fuctions to be implemented, so
+        // for simplicity we'll only quantize attn and ffn for now.
+        if (quantized_type == GGML_TYPE_QX_0) {
+            if (tensor.name.find("attention") == std::string::npos && tensor.name.find("feed_forward") == std::string::npos) {
+                quantize = false;
+            }
+        }
+
         quantize = quantize && quantized_type != tensor.type;
 
         enum ggml_type new_type;
         void * new_data;
         size_t new_size;
         llama_buffer work;
+        llama_buffer extra_data;
 
         if (!quantize) {
             new_type = tensor.type;
@@ -2421,11 +2531,16 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             new_data = work.addr;
             std::vector<int64_t> hist_cur(1 << 4, 0);
 
+            if (new_type == GGML_TYPE_QX_0) {
+                extra_data.resize(sizeof(uint64_t) * tensor.ne[1]);
+            }
+
             int chunk_size = 32 * 512;
             const int nchunk = (nelements + chunk_size - 1)/chunk_size;
             const int nthread_use = nthread > 1 ? std::max(1, std::min(nthread, nchunk)) : 1;
+
             if (nthread_use < 2) {
-                new_size = ggml_quantize_chunk(new_type, f32_data, new_data, 0, nelements, hist_cur.data());
+                new_size = ggml_quantize_chunk(new_type, f32_data, new_data, 0, nelements, hist_cur.data(), (uint64_t *) extra_data.addr, tensor.ne[0]);
             } else {
                 size_t counter = 0;
                 new_size = 0;
@@ -2449,7 +2564,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                         if (local_hist.empty()) {
                             local_hist.resize(hist_cur.size(), 0);
                         }
-                        local_size += ggml_quantize_chunk(new_type, f32_data, new_data, first, last - first, local_hist.data());
+                        
+                        // pass in NULL for extra_data, since it's only required for QX_0, which doesn't support quantized threading
+                        local_size += ggml_quantize_chunk(new_type, f32_data, new_data, first, last - first, local_hist.data(), NULL, 0);
                     }
                 };
                 if ((int) workers.size() < nthread_use - 1) {
@@ -2480,7 +2597,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         }
         total_size_org += tensor.size;
         total_size_new += new_size;
-        file_saver.write_tensor(tensor, new_type, new_data, new_size);
+        file_saver.write_tensor(tensor, new_type, new_data, new_size, extra_data);
     }
 
     printf("%s: model size  = %8.2f MB\n", __func__, total_size_org/1024.0/1024.0);
