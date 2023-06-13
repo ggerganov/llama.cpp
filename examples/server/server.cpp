@@ -122,8 +122,6 @@ struct llama_server_context {
     bool stopped_word = false;
     bool stopped_limit = false;
     std::string stopping_word;
-
-    int json_indent = -1;
     int32_t multibyte_pending = 0;
 
     ~llama_server_context() {
@@ -808,11 +806,9 @@ int main(int argc, char ** argv) {
 
             llama_print_timings(llama.ctx);
 
-            res.set_content(
-                data.dump(llama.json_indent, ' ', false, json::error_handler_t::replace),
-                "application/json");
-        }
-        else {
+            res.set_content(data.dump(-1, ' ', false, json::error_handler_t::replace),
+                            "application/json");
+        } else {
             const auto chunked_content_provider = [&](size_t, DataSink & sink) {
                 size_t sent_count = 0;
 
@@ -850,8 +846,7 @@ int main(int argc, char ** argv) {
 
                     std::string str =
                         "data: " +
-                        data.dump(llama.has_next_token ? -1 : llama.json_indent, ' ', false,
-                            json::error_handler_t::replace) +
+                        data.dump(-1, ' ', false, json::error_handler_t::replace) +
                         "\n\n";
 
                     LOG_VERBOSE("data stream", {
@@ -882,7 +877,7 @@ int main(int argc, char ** argv) {
         std::string content = body["content"].get<std::string>();
         std::vector<llama_token> tokens = ::llama_tokenize(llama.ctx, content, false);
         json data = format_tokenizer_response(tokens);
-        return res.set_content(data.dump(llama.json_indent), "application/json");
+        return res.set_content(data.dump(), "application/json");
     });
 
     svr.set_logger(log_server_request);
