@@ -24,7 +24,6 @@ struct server_params {
     int32_t port = 8080;
     int32_t read_timeout = 600;
     int32_t write_timeout = 600;
-    bool verbose = false;
 };
 
 static size_t common_part(const std::vector<llama_token> & a, const std::vector<llama_token> & b) {
@@ -87,12 +86,16 @@ static void server_log(const char * level, const char * function, int line, cons
 
 static bool server_verbose = false;
 
-#define LOG_VERBOSE(MSG, ...)                                            \
+#if SERVER_VERBOSE != 1
+#  define LOG_VERBOSE(MSG, ...)
+#else
+#  define LOG_VERBOSE(MSG, ...)                                          \
     do {                                                                 \
         if (server_verbose) {                                            \
             server_log("VERBOSE", __func__, __LINE__, MSG, __VA_ARGS__); \
         }                                                                \
     } while(0)
+#endif
 
 #define LOG_ERROR(MSG, ...) server_log("ERROR", __func__, __LINE__, MSG, __VA_ARGS__)
 #define LOG_WARNING(MSG, ...) server_log("WARNING", __func__, __LINE__, MSG, __VA_ARGS__)
@@ -421,7 +424,7 @@ void server_print_usage(const char * argv0, const gpt_params & params, const ser
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -h, --help            show this help message and exit\n");
-    fprintf(stderr, "  -v, --verbose         verbose output (default: %s)\n", sparams.verbose ? "enabled" : "disabled");
+    fprintf(stderr, "  -v, --verbose         verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
     fprintf(stderr, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
     fprintf(stderr, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
@@ -579,9 +582,10 @@ void server_params_parse(int argc, char ** argv, server_params & sparams,
             }
             params.lora_base = argv[i];
         } else if (arg == "-v" || arg == "--verbose") {
-            sparams.verbose = true;
 #if SERVER_VERBOSE != 1
             LOG_WARNING("server.cpp is not built with verbose logging.", {});
+#else
+            server_verbose = true;
 #endif
         } else if (arg == "--mlock") {
             params.use_mlock = true;
@@ -735,10 +739,6 @@ int main(int argc, char ** argv) {
     llama_server_context llama;
 
     server_params_parse(argc, argv, sparams, params);
-
-#if SERVER_VERBOSE == 1
-    server_verbose = sparams.verbose;
-#endif
 
     if (params.model_alias == "unknown") {
         params.model_alias = params.model;
