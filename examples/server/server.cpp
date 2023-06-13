@@ -82,6 +82,7 @@ static void server_log(const char * level, const char * function, int line, cons
 
     std::string str = log.dump(-1, ' ', false, json::error_handler_t::replace);
     fprintf(stdout, "%.*s\n", (int)str.size(), str.data());
+    fflush(stdout);
 }
 
 static bool server_verbose = false;
