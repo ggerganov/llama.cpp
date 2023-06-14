@@ -217,8 +217,18 @@ int main(void) {
     int workload_arr_len = sizeof(workload_arr) / sizeof(workload_arr[0]);
 
     // skip slow/big n_threads.
+
+    int n_slow = 0;
+
     for (int i = 0; i < threads_arr_len; i++) {
         int n_threads = threads_arr[i];
+
+        // At github, Windows can take more than 20 seconds to start 15 threads.
+        // Let's silently ignore when we saw two adjacent slowness.
+        if (n_slow >= 2) {
+            threads_arr[i] = 0;
+            continue;
+        }
 
         if (n_threads == 1) {
             continue;
@@ -243,10 +253,14 @@ int main(void) {
 
         int elapsed_us = t1 - t0;
         if (elapsed_us > 500 * n_threads) {
-            printf("[test-ggml-threading] warning: it took took %.3f "
-                   "ms to start %d worker thread(s). Loo slow, skip.\n",
+            printf("[test-ggml-threading] warning: it took took %7.3f "
+                   "ms to start %2d worker thread(s). Too slow, skip.\n",
                    1.0 * elapsed_us / 1000, n_threads - 1);
             threads_arr[i] = 0;
+            ++n_slow;
+        } else {
+            // clear.
+            n_slow = 0;
         }
     }
 
