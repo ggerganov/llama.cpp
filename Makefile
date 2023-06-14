@@ -62,7 +62,7 @@ CXXFLAGS += -pthread -s -Wno-multichar -Wno-write-strings
 # TODO: support Windows
 ifeq ($(UNAME_S),Linux)
 	CFLAGS   += -pthread
-	CXXFLAGS += -pthread	
+	CXXFLAGS += -pthread
 endif
 
 ifeq ($(UNAME_S),Darwin)
@@ -99,10 +99,10 @@ endif
 # TODO: probably these flags need to be tweaked on some architectures
 #       feel free to update the Makefile for your architecture and send a pull request or issue
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
-	# Use all CPU extensions that are available:	
+	# Use all CPU extensions that are available:
 # old library NEEDS mf16c to work. so we must build with it. new one doesnt
 	ifeq ($(OS),Windows_NT)
-		CFLAGS += 
+		CFLAGS +=
 		NONECFLAGS += -mno-sse3
 		SIMPLECFLAGS += -mavx -msse3
 		FULLCFLAGS += -mavx2 -msse3 -mfma -mf16c -mavx
@@ -131,7 +131,27 @@ ifndef LLAMA_NO_ACCELERATE
 	endif
 endif
 
-# to ease maintenance burden, please use the CMake file to generate CUDA builds instead.
+# it is recommended to use the CMAKE file to build for cublas if you can - will likely work better
+ifdef LLAMA_CUBLAS
+    CFLAGS    += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
+    CXXFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
+    LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
+    OBJS      += ggml-cuda.o
+    NVCC      = nvcc
+    NVCCFLAGS = --forward-unknown-to-host-compiler -arch=native
+ifdef LLAMA_CUDA_DMMV_X
+    NVCCFLAGS += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
+else
+    NVCCFLAGS += -DGGML_CUDA_DMMV_X=32
+endif # LLAMA_CUDA_DMMV_X
+ifdef LLAMA_CUDA_DMMV_Y
+    NVCCFLAGS += -DGGML_CUDA_DMMV_Y=$(LLAMA_CUDA_DMMV_Y)
+else
+    NVCCFLAGS += -DGGML_CUDA_DMMV_Y=1
+endif # LLAMA_CUDA_DMMV_Y
+ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
+    $(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -Wno-pedantic -c $< -o $@
+endif # LLAMA_CUBLAS
 
 ifdef LLAMA_METAL
 	CFLAGS   += -DGGML_USE_METAL -DGGML_METAL_NDEBUG
@@ -182,7 +202,7 @@ else
 	ifdef LLAMA_OPENBLAS
 	OPENBLAS_BUILD = $(CXX) $(CXXFLAGS) $^ $(ARCH_ADD) -lopenblas -shared -o $@.so $(LDFLAGS)
 	OPENBLAS_NOAVX2_BUILD = $(CXX) $(CXXFLAGS) $^ $(ARCH_ADD) -lopenblas -shared -o $@.so $(LDFLAGS)
-	endif	
+	endif
 	ifdef LLAMA_CLBLAST
 	CLBLAST_BUILD = $(CXX) $(CXXFLAGS) $^ -lclblast -lOpenCL $(ARCH_ADD) -lopenblas -shared -o $@.so $(LDFLAGS)
 	CLBLAST_NOAVX2_BUILD = $(CXX) $(CXXFLAGS) $^ -lclblast -lOpenCL $(ARCH_ADD) -lopenblas -shared -o $@.so $(LDFLAGS)
@@ -290,7 +310,7 @@ main: examples/main/main.cpp build-info.h ggml.o k_quants.o llama.o common.o $(O
 koboldcpp: ggml.o ggml_v2.o ggml_v1.o expose.o common.o gpttype_adapter.o k_quants.o $(OBJS)
 	$(DEFAULT_BUILD)
 koboldcpp_openblas: ggml_openblas.o ggml_v2_openblas.o ggml_v1.o expose.o common.o gpttype_adapter.o k_quants.o $(OBJS)
-	$(OPENBLAS_BUILD)	
+	$(OPENBLAS_BUILD)
 koboldcpp_failsafe: ggml_failsafe.o ggml_v2_failsafe.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter_failsafe.o k_quants_failsafe.o $(OBJS)
 	$(FAILSAFE_BUILD)
 koboldcpp_openblas_noavx2: ggml_openblas_noavx2.o ggml_v2_openblas_noavx2.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter.o k_quants_noavx2.o $(OBJS)
@@ -299,7 +319,7 @@ koboldcpp_clblast: ggml_clblast.o ggml_v2_clblast.o ggml_v1.o expose.o common.o 
 	$(CLBLAST_BUILD)
 koboldcpp_clblast_noavx2: ggml_clblast_noavx2.o ggml_v2_clblast_noavx2.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter_clblast.o ggml-opencl.o ggml_v2-opencl.o ggml_v2-opencl-legacy.o k_quants_noavx2.o $(OBJS)
 	$(CLBLAST_NOAVX2_BUILD)
-		
+
 quantize_llama: examples/quantize/quantize.cpp ggml.o llama.o k_quants.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 quantize_gptj: ggml.o llama.o k_quants.o otherarch/tools/gptj_quantize.cpp otherarch/tools/common-ggml.cpp
@@ -312,5 +332,5 @@ quantize_mpt: ggml.o llama.o k_quants.o otherarch/tools/mpt_quantize.cpp otherar
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 
-build-info.h: 
+build-info.h:
 	$(DONOTHING)
