@@ -662,6 +662,15 @@ static void ggml_cl_pool_free(cl_mem mem, size_t size) {
     clReleaseMemObject(mem);
 }
 
+void ggml_cl_free_data(const struct ggml_tensor* tensor) {
+    if (tensor->backend != GGML_BACKEND_GPU) {
+        return;
+    }
+
+    cl_mem mem = (cl_mem)tensor->data;
+    clReleaseMemObject(mem);
+}
+
 static cl_int ggml_cl_h2d_tensor_2d(cl_command_queue queue, cl_mem dst, size_t offset, const struct ggml_tensor * src, uint64_t i3, uint64_t i2, cl_event* ev) {
     cl_int err;
     const uint64_t ne0 = src->ne[0];
@@ -1158,7 +1167,7 @@ size_t ggml_cl_mul_mat_get_wsize(const struct ggml_tensor * src0, const struct g
     return 0;
 }
 
-void ggml_cl_transform_tensor(ggml_tensor * tensor) {
+void ggml_cl_transform_tensor(void * data, ggml_tensor * tensor) {
     const int64_t ne0 = tensor->ne[0];
     const int64_t ne1 = tensor->ne[1];
     const int64_t ne2 = tensor->ne[2];
@@ -1170,6 +1179,7 @@ void ggml_cl_transform_tensor(ggml_tensor * tensor) {
     size_t q_size;
     cl_mem dst = ggml_cl_pool_malloc(q_sz, &q_size);
 
+    tensor->data = data;
     // copy tensor to device
     for (int64_t i3 = 0; i3 < ne3; i3++) {
         for (int64_t i2 = 0; i2 < ne2; i2++) {
@@ -1181,35 +1191,5 @@ void ggml_cl_transform_tensor(ggml_tensor * tensor) {
     CL_CHECK(clFinish(queue));
 
     tensor->data = dst;
-    tensor->backend = GGML_BACKEND_GPU;
-}
-
-void ggml_cl_load_data(const char * fname, struct ggml_tensor * tensor, const size_t offset) {
-    cl_int err;
-    FILE * fp = fopen(fname, "rb");
-
-    const size_t size = ggml_nbytes(tensor);
-
-    cl_mem dst;
-    CL_CHECK((dst = clCreateBuffer(context, CL_MEM_READ_ONLY, size, nullptr, &err), err));
-    void * buf_host = malloc(size);
-
-#ifdef _WIN32
-    int ret = _fseeki64(fp, (__int64) offset, SEEK_SET);
-#else
-    int ret = fseek(fp, (long) offset, SEEK_SET);
-#endif
-    GGML_ASSERT(ret == 0); // same
-
-    size_t ret2 = fread(buf_host, size, 1, fp);
-    if (ret2 != 1) {
-        fprintf(stderr, "unexpectedly reached end of file");
-        exit(1);
-    }
-
-    clEnqueueWriteBuffer(queue, dst, CL_TRUE, 0, size, buf_host, 0, nullptr, nullptr);
-
-    tensor->data = dst;
-    free(buf_host);
-    fclose(fp);
+    GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
 }

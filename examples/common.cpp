@@ -332,6 +332,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 #else
       fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.\n");
 #endif // GGML_USE_CUBLAS
+        } else if (arg == "--low-vram" || arg == "-lv") {
+#ifdef GGML_USE_CUBLAS
+            params.low_vram = true;
+#else
+      fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n");
+#endif // GGML_USE_CUBLAS
         } else if (arg == "--no-mmap") {
             params.use_mmap = false;
         } else if (arg == "--mtest") {
@@ -479,6 +485,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -ts SPLIT --tensor-split SPLIT\n");
     fprintf(stderr, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
     fprintf(stderr, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n" );
+    fprintf(stderr, "  -lv, --low-vram       don't allocate VRAM scratch buffer\n" );
 #endif
     fprintf(stderr, "  --mtest               compute maximum memory usage\n");
     fprintf(stderr, "  --export              export the computation graph to 'llama.ggml'\n");
@@ -528,6 +535,7 @@ struct llama_context * llama_init_from_gpt_params(const gpt_params & params) {
     lparams.n_gpu_layers = params.n_gpu_layers;
     lparams.main_gpu     = params.main_gpu;
     memcpy(lparams.tensor_split, params.tensor_split, LLAMA_MAX_DEVICES*sizeof(float));
+    lparams.low_vram     = params.low_vram;
     lparams.seed         = params.seed;
     lparams.f16_kv       = params.memory_f16;
     lparams.use_mmap     = params.use_mmap;
@@ -631,6 +639,9 @@ void console_set_color(console_state & con_st, console_color_t color) {
                 break;
             case CONSOLE_COLOR_USER_INPUT:
                 fprintf(con_st.out, ANSI_BOLD ANSI_COLOR_GREEN);
+                break;
+            case CONSOLE_COLOR_ERROR:
+                fprintf(con_st.out, ANSI_BOLD ANSI_COLOR_RED);
                 break;
         }
         con_st.color = color;

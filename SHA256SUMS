@@ -1,6 +1,6 @@
 700df0d3013b703a806d2ae7f1bfb8e59814e3d06ae78be0c66368a50059f33d  models/7B/consolidated.00.pth
 666a4bb533b303bdaf89e1b6a3b6f93535d868de31d903afdc20983dc526c847  models/7B/ggml-model-f16.bin
-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  models/7B/ggml-model-q4_0.bin
+ec2f2d1f0dfb73b72a4cbac7fa121abbe04c37ab327125a38248f930c0f09ddf  models/7B/ggml-model-q4_0.bin
 ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  models/7B/ggml-model-q4_1.bin
 ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  models/7B/ggml-model-q5_0.bin
 ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  models/7B/ggml-model-q5_1.bin
@@ -8,7 +8,7 @@ ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  models/7B/ggml
 745bf4e29a4dd6f411e72976d92b452da1b49168a4f41c951cfcc8051823cf08  models/13B/consolidated.00.pth
 d5ccbcc465c71c0de439a5aeffebe8344c68a519bce70bc7f9f92654ee567085  models/13B/consolidated.01.pth
 2b206e9b21fb1076f11cafc624e2af97c9e48ea09312a0962153acc20d45f808  models/13B/ggml-model-f16.bin
-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  models/13B/ggml-model-q4_0.bin
+fad169e6f0f575402cf75945961cb4a8ecd824ba4da6be2af831f320c4348fa5  models/13B/ggml-model-q4_0.bin
 ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  models/13B/ggml-model-q4_1.bin
 ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  models/13B/ggml-model-q5_0.bin
 ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  models/13B/ggml-model-q5_1.bin
@@ -18,7 +18,7 @@ e23294a58552d8cdec5b7e8abb87993b97ea6eced4178ff2697c02472539d067  models/30B/con
 24a87f01028cbd3a12de551dcedb712346c0b5cbdeff1454e0ddf2df9b675378  models/30B/consolidated.02.pth
 1adfcef71420886119544949767f6a56cb6339b4d5fcde755d80fe68b49de93b  models/30B/consolidated.03.pth
 7e1b524061a9f4b27c22a12d6d2a5bf13b8ebbea73e99f218809351ed9cf7d37  models/30B/ggml-model-f16.bin
-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  models/30B/ggml-model-q4_0.bin
+d2a441403944819492ec8c2002cc36fa38468149bfb4b7b4c52afc7bd9a7166d  models/30B/ggml-model-q4_0.bin
 ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  models/30B/ggml-model-q4_1.bin
 ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  models/30B/ggml-model-q5_0.bin
 ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  models/30B/ggml-model-q5_1.bin
@@ -32,7 +32,7 @@ a287c0dfe49081626567c7fe87f74cce5831f58e459b427b5e05567641f47b78  models/65B/con
 72b4eba67a1a3b18cb67a85b70f8f1640caae9b40033ea943fb166bd80a7b36b  models/65B/consolidated.06.pth
 d27f5b0677d7ff129ceacd73fd461c4d06910ad7787cf217b249948c3f3bc638  models/65B/consolidated.07.pth
 60758f2384d74e423dffddfd020ffed9d3bb186ebc54506f9c4a787d0f5367b0  models/65B/ggml-model-f16.bin
-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  models/65B/ggml-model-q4_0.bin
+cde053439fa4910ae454407e2717cc46cc2c2b4995c00c93297a2b52e790fa92  models/65B/ggml-model-q4_0.bin
 ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  models/65B/ggml-model-q4_1.bin
 ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  models/65B/ggml-model-q5_0.bin
 ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  models/65B/ggml-model-q5_1.bin

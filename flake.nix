@@ -28,7 +28,7 @@
           postPatch =
             if isM1 then ''
               substituteInPlace ./ggml-metal.m \
-                --replace '[[NSBundle mainBundle] pathForResource:@"ggml-metal" ofType:@"metal"];' "@\"$out/ggml-metal.metal\";"
+                --replace '[bundle pathForResource:@"ggml-metal" ofType:@"metal"];' "@\"$out/ggml-metal.metal\";"
             '' else "";
           nativeBuildInputs = with pkgs; [ cmake ];
           buildInputs = osSpecific;
