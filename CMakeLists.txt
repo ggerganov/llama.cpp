@@ -233,18 +233,14 @@ if (LLAMA_K_QUANTS)
 endif()
 
 if (LLAMA_CLBLAST)
-    find_package(CLBlast)
-    if (CLBlast_FOUND)
-        message(STATUS "CLBlast found")
+    # build CLBlast from source
+    add_subdirectory(../CLBlast ${CMAKE_CURRENT_BINARY_DIR}/clblast)
 
-        set(GGML_SOURCES_OPENCL ggml-opencl.cpp ggml-opencl.h)
+    set(GGML_SOURCES_OPENCL ggml-opencl.cpp ggml-opencl.h)
 
-        add_compile_definitions(GGML_USE_CLBLAST)
+    add_compile_definitions(GGML_USE_CLBLAST)
 
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} clblast)
-    else()
-        message(WARNING "CLBlast not found")
-    endif()
+    set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} clblast)
 endif()
 
 if (LLAMA_ALL_WARNINGS)
