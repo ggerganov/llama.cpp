@@ -484,8 +484,8 @@ struct rwkv_ggml_context {
             return;
         }
 
-        const size_t memory_required_overhead = size_t(256) * 1024 * 1024;
-        const size_t memory_required_overhead_sc = size_t(128) * 1024 * 1024;
+        const size_t memory_required_overhead = size_t(128) * 1024 * 1024;
+        const size_t memory_required_overhead_sc = size_t(64) * 1024 * 1024;
 
         ctx = ggml_init({ size.objects_count * GGML_OBJECT_SIZE + size.objects_size + memory_required_overhead, NULL, false});
 
