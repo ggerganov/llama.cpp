@@ -224,7 +224,7 @@ maxctx = 2048
 maxlen = 256
 modelbusy = False
 defaultport = 5001
-KcppVersion = "1.30.1"
+KcppVersion = "1.30.2"
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
     sys_version = ""
