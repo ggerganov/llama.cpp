@@ -1,5 +1,5 @@
 # Define the default target now so that it is always the first target
-BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot
+BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot finetune
 
 ifdef LLAMA_BUILD_SERVER
 	BUILD_TARGETS += server
@@ -98,7 +98,7 @@ endif
 
 # Architecture specific
 # TODO: probably these flags need to be tweaked on some architectures
-#       feel free to update the Makefile for your architecture and send a pull request or issue finetune
+#       feel free to update the Makefile for your architecture and send a pull request or issue
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 	# Use all CPU extensions that are available:
 	CFLAGS   += -march=native -mtune=native
