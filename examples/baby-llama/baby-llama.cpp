@@ -79,34 +79,39 @@ struct ggml_tensor * randomize_tensor_normal(
         int ndims,
         const int64_t ne[],
         struct random_normal_distribution * rnd) {
+    float scale = 1.0; // xavier
     switch (ndims) {
         case 1:
+            scale /= sqrtf(ne[0]);
             for (int i0 = 0; i0 < ne[0]; i0++) {
-                ((float *)tensor->data)[i0] = frand_normal(rnd);
+                ((float *)tensor->data)[i0] = scale * frand_normal(rnd);
             }
             break;
         case 2:
+            scale /= sqrtf(ne[0]+ne[1]);
             for (int i1 = 0; i1 < ne[1]; i1++) {
                 for (int i0 = 0; i0 < ne[0]; i0++) {
-                    ((float *)tensor->data)[i1*ne[0] + i0] = frand_normal(rnd);
+                    ((float *)tensor->data)[i1*ne[0] + i0] = scale * frand_normal(rnd);
                 }
             }
             break;
         case 3:
+            scale /= sqrtf(ne[0]+ne[1]);
             for (int i2 = 0; i2 < ne[2]; i2++) {
                 for (int i1 = 0; i1 < ne[1]; i1++) {
                     for (int i0 = 0; i0 < ne[0]; i0++) {
-                        ((float *)tensor->data)[i2*ne[1]*ne[0] + i1*ne[0] + i0] = frand_normal(rnd);
+                        ((float *)tensor->data)[i2*ne[1]*ne[0] + i1*ne[0] + i0] = scale * frand_normal(rnd);
                     }
                 }
             }
             break;
         case 4:
+            scale /= sqrtf(ne[0]+ne[1]);
             for (int i3 = 0; i3 < ne[3]; i3++) {
                 for (int i2 = 0; i2 < ne[2]; i2++) {
                     for (int i1 = 0; i1 < ne[1]; i1++) {
                         for (int i0 = 0; i0 < ne[0]; i0++) {
-                            ((float *)tensor->data)[i3*ne[2]*ne[1]*ne[0] + i2*ne[1]*ne[0] + i1*ne[0] + i0] = frand_normal(rnd);
+                            ((float *)tensor->data)[i3*ne[2]*ne[1]*ne[0] + i2*ne[1]*ne[0] + i1*ne[0] + i0] = scale * frand_normal(rnd);
                         }
                     }
                 }
@@ -148,8 +153,8 @@ struct llama_hparams_lora {
     uint32_t n_rot   = 64;
     uint32_t n_lora  = 64;
 
-    bool operator!=(const llama_hparams & other) const {
-        return memcmp(this, &other, sizeof(llama_hparams));
+    bool operator!=(const llama_hparams_lora & other) const {
+        return memcmp(this, &other, sizeof(llama_hparams_lora)) != 0;
     }
 };
 
