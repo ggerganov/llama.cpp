@@ -446,6 +446,7 @@ static void server_print_usage(const char * argv0, const gpt_params & params,
     fprintf(stderr, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
     fprintf(stderr, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
     fprintf(stderr, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
+    fprintf(stderr, "  -lv, --low-vram don't allocate VRAM scratch buffer\n");
 #endif
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
     fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
@@ -559,6 +560,14 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
             }
 #else
             LOG_WARNING("llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.", {});
+#endif // GGML_USE_CUBLAS
+        }
+        else if (arg == "--low-vram" || arg == "-lv")
+        {
+#ifdef GGML_USE_CUBLAS
+            params.low_vram = true;
+#else
+            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n");
 #endif // GGML_USE_CUBLAS
         }
         else if (arg == "--main-gpu" || arg == "-mg") {
