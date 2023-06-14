@@ -202,7 +202,7 @@
 #define GGML_MAX_OPT           4
 #define GGML_MAX_NAME          32
 #define GGML_DEFAULT_N_THREADS 4
-#define GGML_MAX_TASK_PROFILES 8
+#define GGML_MAX_TASK_PROFILES 4
 
 #define GGML_ASSERT(x) \
     do { \
@@ -399,17 +399,6 @@ extern "C" {
         uint8_t dev_flags[4];
     };
 
-    struct ggml_task_profile_factory {
-        struct ggml_task_profile f32_f32[GGML_MAX_TASK_PROFILES];
-        int n_f32_f32;
-
-        struct ggml_task_profile f16_f32[GGML_MAX_TASK_PROFILES];
-        int n_f16_f32;
-
-        struct ggml_task_profile qxx_f32[GGML_MAX_TASK_PROFILES];
-        int n_qxx_f32;
-    };
-
     // n-dimensional tensor
     struct ggml_tensor {
         enum ggml_type    type;
@@ -449,6 +438,11 @@ extern "C" {
 
         char padding[12];
     };
+
+    // Fill `profiles` for the `node` and return number of profiles.
+    typedef int (ggml_task_profiles_provider) (
+        struct ggml_tensor *node,
+        struct ggml_task_profile profiles[GGML_MAX_TASK_PROFILES]);
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);
 
@@ -1345,15 +1339,11 @@ extern "C" {
     GGML_API int ggml_cpu_has_vsx        (void);
 
     //
-    // mulmat task profiles
+    // task profiles
     //
-    GGML_API void ggml_mulmat_init_task_profiles(void);
 
-    GGML_API int ggml_mulmat_get_task_profiles(
-        struct ggml_task_profile_factory *pf,
-        enum ggml_type src0_t,
-        enum ggml_type src1_t,
-        struct ggml_task_profile **profiles);
+    // Implements `ggml_task_profiles_provider`.
+    GGML_API int ggml_get_task_profiles (struct ggml_tensor *node, struct ggml_task_profile profiles[GGML_MAX_TASK_PROFILES]);
 
     //
     // Internal types and functions exposed for tests and benchmarks

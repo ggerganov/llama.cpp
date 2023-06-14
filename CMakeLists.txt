@@ -78,7 +78,7 @@ option(LLAMA_K_QUANTS                        "llama: use k-quants"              
 option(LLAMA_BUILD_TESTS                "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES             "llama: build examples" ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_SERVER               "llama: build server example"                           OFF)
-option(LLAMA_MULMAT_TUNE                "llama: mulmat tune"                                    OFF)
+option(LLAMA_TUNE                       "llama: mulmat tune"                                    ON)
 
 #
 # Build info header
@@ -278,9 +278,9 @@ if (LLAMA_METAL)
         )
 endif()
 
-if (LLAMA_MULMAT_TUNE)
-    add_compile_definitions(GGML_USE_MULMAT_TUNE)
-    add_compile_definitions(GGML_MULMAT_TUNE_NDEBUG)
+if (LLAMA_TUNE)
+    add_compile_definitions(GGML_USE_TUNE)
+    add_compile_definitions(GGML_TUNE_NDEBUG)
 endif()
 
 if (LLAMA_K_QUANTS)

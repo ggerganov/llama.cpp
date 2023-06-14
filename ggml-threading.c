@@ -394,7 +394,7 @@ ggml_thread_ret_t ggml_threading_graph_compute_thread(void *data) {
             enum ggml_compute_error err =
                 shared->task_runner(&state->params, state->node);
 
-            GGML_ASSERT(err == GGML_COMPUTE_OK || err == GGML_COMPUTE_FALLBACK);
+            GGML_ASSERT(err == GGML_COMPUTE_OK);
 
             ggml_spin_lock(&shared->spin);
 
@@ -433,7 +433,11 @@ ggml_threading_compute_tensor(struct ggml_threading_context *ctx,
 
     // This is the params for main thread.
     struct ggml_compute_params params;
-    enum ggml_compute_error err;
+    enum ggml_compute_error err = GGML_COMPUTE_OK;
+
+START:
+
+    memset(&params, 0, sizeof(struct ggml_compute_params));
 
     for (int type = GGML_TASK_INIT; type <= GGML_TASK_FINALIZE; type++) {
         if (node->task_profile.stages[type].backend == GGML_TASK_BACKEND_NONE) {
@@ -504,11 +508,19 @@ ggml_threading_compute_tensor(struct ggml_threading_context *ctx,
         }
 
         if (err != GGML_COMPUTE_OK) {
+            if (err == GGML_COMPUTE_FALLBACK) {
+                struct ggml_task_profile profiles[GGML_MAX_TASK_PROFILES];
+                int n = ggml_get_task_profiles(node, profiles);
+                GGML_ASSERT(n > 0);
+                memcpy(&node->task_profile, &profiles[0],
+                       sizeof(struct ggml_task_profile));
+                goto START;
+            }
             return err;
         }
     }
 
-    return GGML_COMPUTE_OK;
+    return err;
 }
 
 struct ggml_threading_context *

@@ -262,8 +262,6 @@ int main(int argc, char **argv) {
     struct ggml_mulmat_tune_params params;
     memset(&params, 0, sizeof(struct ggml_mulmat_tune_params));
 
-    ggml_mulmat_init_task_profiles();
-
     ggml_mulmat_tune_model_init(&params.model, model_name, ftype);
     params.m_num = m_num;
     params.n_pass = n_pass;

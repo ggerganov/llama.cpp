@@ -231,14 +231,14 @@ ifneq ($(filter armv8%,$(UNAME_M)),)
 	CFLAGS += -mfp16-format=ieee -mno-unaligned-access
 endif
 
-ifdef LLAMA_NO_K_QUANTS
+ifndef LLAMA_NO_K_QUANTS
 k_quants.o: k_quants.c k_quants.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_NO_K_QUANTS
 
-ifdef LLAMA_MULMAT_TUNE
-	CFLAGS   += -DGGML_USE_MULMAT_TUNE -DGGML_MULMAT_TUNE_NDEBUG
-	CXXFLAGS += -DGGML_USE_MULMAT_TUNE
+ifndef LLAMA_NO_TUNE
+CFLAGS   += -DGGML_USE_TUNE -DGGML_TUNE_NDEBUG
+CXXFLAGS += -DGGML_USE_TUNE
 endif
 
 #

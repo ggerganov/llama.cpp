@@ -3,6 +3,8 @@
 
 #include <string.h>
 
+#define UNUSED(x) (void)(x)
+
 static int bench(void);
 static int estimate_time_non_zero_NK(void);
 
@@ -77,6 +79,20 @@ static int bench(void) {
     return ok ? 0 : 1;
 }
 
+// implement `ggml_task_profiles_provider`
+static int
+ggml_task_profiles_mock_qxx_provider(struct ggml_tensor *node,
+                                     struct ggml_task_profile *profiles) {
+    UNUSED(node);
+    profiles[0].stages[0].backend = GGML_TASK_BACKEND_CPU;
+    profiles[0].stages[0].backend = GGML_TASK_BACKEND_CPU;
+    profiles[0].stages[1].backend = GGML_TASK_BACKEND_CPU;
+    profiles[1].stages[0].backend = GGML_TASK_BACKEND_CPU;
+    profiles[1].stages[1].backend = GGML_TASK_BACKEND_CPU_BLAS;
+
+    return 2;
+}
+
 int estimate_time_non_zero_NK(void) {
     printf("test: %s\n", __func__);
 
@@ -92,22 +108,10 @@ int estimate_time_non_zero_NK(void) {
 
     const int m_num = 2;
 
-    struct ggml_task_profile_factory pf;
-    memset(&pf, 0, sizeof(struct ggml_task_profile_factory));
-
-    {
-        pf.n_qxx_f32 = 2;
-        pf.qxx_f32[0].stages[0].backend = GGML_TASK_BACKEND_CPU;
-        pf.qxx_f32[0].stages[1].backend = GGML_TASK_BACKEND_CPU;
-
-        pf.qxx_f32[1].stages[0].backend = GGML_TASK_BACKEND_CPU;
-        pf.qxx_f32[1].stages[1].backend = GGML_TASK_BACKEND_CPU_BLAS;
-    }
-
     struct ggml_mulmat_tune_params params;
     init_params(&params, m_num);
 
-    ggml_mulmat_tune_init(&tune, &params, &pf);
+    ggml_mulmat_tune_init(&tune, &params, ggml_task_profiles_mock_qxx_provider);
 
     struct ggml_mulmat_tune_shape *shape = NULL;
     for (int i = 0; i < tune.n_shapes; i++) {

@@ -46,7 +46,7 @@ struct ggml_mulmat_tune_shape {
     enum ggml_type src1_type;
 
     int n_profiles;
-    struct ggml_task_profile *profiles;
+    struct ggml_task_profile profiles[GGML_MAX_TASK_PROFILES];
 
     int m_num;
     int *arr_m;
@@ -69,7 +69,7 @@ struct ggml_mulmat_tune {
 };
 
 struct ggml_mulmat_tune_time {
-    struct ggml_task_profile *profile;
+    const struct ggml_task_profile *profile;
     int stage_time[3];
     int total_time;
 };
@@ -78,7 +78,7 @@ struct mm_cache_element {
     int M;
     int N;
     int K;
-    struct ggml_task_profile *profile;
+    const struct ggml_task_profile *profile;
     int stages_time[3];
 };
 
@@ -108,7 +108,7 @@ void ggml_mulmat_tune_model_init(struct ggml_mulmat_tune_model *model,
 
 bool ggml_mulmat_tune_init(struct ggml_mulmat_tune *tune,
                            struct ggml_mulmat_tune_params *params,
-                           struct ggml_task_profile_factory *profile_factory);
+                           ggml_task_profiles_provider *profiles_provider);
 
 void ggml_mulmat_tune_free(struct ggml_mulmat_tune *tune);
 

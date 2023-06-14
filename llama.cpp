@@ -21,7 +21,7 @@
 #include "ggml-metal.h"
 #endif
 
-#ifdef GGML_USE_MULMAT_TUNE
+#ifdef GGML_USE_TUNE
 #include "ggml-tune.h"
 #endif
 
@@ -285,7 +285,7 @@ struct llama_context {
     int    buf_last = 0;
     size_t buf_max_size[LLAMA_MAX_SCRATCH_BUFFERS] = { 0 };
 
-#ifdef GGML_USE_MULMAT_TUNE
+#ifdef GGML_USE_TUNE
     struct ggml_mulmat_tune *tune = nullptr;
 #endif
 
@@ -1408,7 +1408,7 @@ static bool llama_eval_internal(
     ggml_cgraph gf = {};
     gf.n_threads = n_threads;
 
-#ifdef GGML_USE_MULMAT_TUNE
+#ifdef GGML_USE_TUNE
     gf.tune =lctx.tune;
 #endif
 
@@ -2743,7 +2743,7 @@ struct llama_context * llama_init_from_file(
     return ctx;
 }
 
-#ifdef GGML_USE_MULMAT_TUNE
+#ifdef GGML_USE_TUNE
 bool llama_mulmat_tune(struct llama_context *ctx, int n_threads, bool tune, const char *fname) {
     printf("\n");
     if (ctx->model.n_gpu_layers != 0) {
@@ -2882,7 +2882,7 @@ bool llama_mulmat_tune(struct llama_context *ctx, int n_threads, bool tune, cons
 #endif
 
 void llama_free(struct llama_context * ctx) {
-#ifdef GGML_USE_MULMAT_TUNE
+#ifdef GGML_USE_TUNE
     if (ctx->tune) {
         delete(ctx->tune);
     }

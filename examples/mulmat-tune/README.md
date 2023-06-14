@@ -23,13 +23,13 @@ run bench ahead of time (saving tens of seconds), but there are two shortcomings
 
 Makefile:
 ```
-make clean && LLAMA_MULMAT_TUNE=1 make
+make clean && make
 ```
 
 CMake (with BLAS):
 ```
 cmake --build . --target clean
-cmake .. -DLLAMA_BLAS=ON -DLLAMA_MULMAT_TUNE=ON
+cmake .. -DLLAMA_BLAS=ON
 cmake --build . --config Release
 ```
 
@@ -52,13 +52,13 @@ Run examples:
 
 Makefile:
 ```
-make clean && LLAMA_MULMAT_TUNE=1 make
+make clean && make
 ```
 
 CMake (with BLAS)
 ```
 cmake --build . --target clean
-cmake .. -DLLAMA_BLAS=ON -DLLAMA_MULMAT_TUNE=ON
+cmake .. -DLLAMA_BLAS=ON
 cmake --build . --config Release
 ```
 
@@ -103,22 +103,29 @@ setup properly.
 General steps:
 
 1. run `./mulmat-tune -h` to see how to build for misc vendors.
-   you can build with `GGML_MULMAT_TUNE_NDEBUG=` to enable the the debug, e.g:
+   To enable the debug, comment out `-DGGML_TUNE_NDEBUG` from makefile then run:
+
    ```
-   make clean; LLAMA_MULMAT_TUNE=1 LLAMA_MULMAT_TUNE_NDEBUG=1 LLAMA_NO_ACCELERATE=1 LLAMA_CLBLAST=1 make
+   make clean; make
    ```
+
    On `macOS`, `ACCELERATE` is enabled by default. When `ACCELERATE` is built along
    with `CUDA` or `CL`, you may not see `CUDA` or `CL` from debug because `CPU`
-   or `CPU_BLAS` is more faster (as of the estimation from mulmat tune).
+   or `CPU_BLAS` is more faster (as of the estimation from mulmat tune), try run
+   with `-t 1`?
 2. create a small prompt file:
+
    ```
    head -n 5 ./models/wikitext-2-raw/wiki.valid.raw > ./models/wiki.valid-5.raw
    ```
+
 3. run any of the following example commands.
+
    ```
    ./perplexity -m models/7B/ggml-model-q4_0.bin -f ./models/wiki.valid-5.raw -c 128 --mlock -t 1 -b 32
    ./perplexity -m models/7B/ggml-model-q4_0.bin -f ./models/wiki.valid-5.raw -c 128 --mlock -t 4 -b 64
    ```
+
    * `--mlock` is recommended for `macOS`, you may not want to use it.
    * don't change `-c 128`: too large `context size` causes 0 perplexity trunk.
    * `-t` is the number of threads, recommend `1`, `2`, `4` or `6`.

@@ -356,6 +356,17 @@ int main(void) {
     {
         ++n_tests;
 
+        // required by getting task profiles.
+        node.op = GGML_OP_MUL_MAT;
+        struct ggml_tensor src0 = {
+            .type = GGML_TYPE_Q4_0,
+        };
+        struct ggml_tensor src1 = {
+            .type = GGML_TYPE_F32,
+        };
+        node.src0 = &src0;
+        node.src1 = &src1;
+
         node.backend = GGML_BACKEND_GPU;
         if (test_fallback(&node) == 0) {
             ++n_passed;
