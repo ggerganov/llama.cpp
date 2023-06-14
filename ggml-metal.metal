@@ -1303,16 +1303,17 @@ kernel void kernel_mul_mat_q5_k_f32(
     float sumf = 0;
     for (int i = tpitg.x; i < nb; i += tptg.x) {
 
-        device const uint8_t * q1 = (x + i)->qs + q_offset;
+        device const block_q5_k * xi = x + i;
+        device const uint8_t * q1 = xi->qs + q_offset;
         device const uint8_t * q2 = q1 + 64;
-        device const uint8_t * qh = (x + i)->qh + l0;
+        device const uint8_t * qh = xi->qh + l0;
         device const float   * y1 = yy + i*QK_K + y_offset;
         device const float   * y2 = y1 + 128;
 
-        const float dall = (float)((x + i)->d);
-        const float dmin = (float)((x + i)->dmin);
+        const float dall = (float)(xi->d);
+        const float dmin = (float)(xi->dmin);
 
-        device const uint16_t * a = (device const uint16_t *)(x + i)->scales;
+        device const uint16_t * a = (device const uint16_t *)xi->scales;
         sc1 = as_type<uchar2>((uint16_t)(a[im+0] & kmask1));
         sc2 = as_type<uchar2>((uint16_t)(a[im+2] & kmask1));
         sc3 = as_type<uchar2>((uint16_t)(((a[im+4] >> 0) & kmask2) | ((a[im+0] & kmask3) >> 2)));
