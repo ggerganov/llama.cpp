@@ -98,7 +98,7 @@ endif
 
 # Architecture specific
 # TODO: probably these flags need to be tweaked on some architectures
-#       feel free to update the Makefile for your architecture and send a pull request or issue
+#       feel free to update the Makefile for your architecture and send a pull request or issue finetune
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 	# Use all CPU extensions that are available:
 	CFLAGS   += -march=native -mtune=native
@@ -288,6 +288,9 @@ save-load-state: examples/save-load-state/save-load-state.cpp build-info.h ggml.
 
 server: examples/server/server.cpp examples/server/httplib.h examples/server/json.hpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -Iexamples/server $(filter-out %.h,$(filter-out %.hpp,$^)) -o $@ $(LDFLAGS)
+
+finetune: examples/train-text-from-scratch/train-text-from-scratch.cpp    build-info.h ggml.o llama.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 build-info.h: $(wildcard .git/index) scripts/build-info.sh
 	@sh scripts/build-info.sh > $@.tmp
