@@ -54,9 +54,9 @@ int main(int argc, char ** argv)
 
     if ( argc >= 3 )
     {
-        params.prompt = argv[2]; 
+        params.prompt = argv[2];
     }
-    
+
     if ( params.prompt.empty() )
     {
         params.prompt = "Hello my name is";
@@ -71,8 +71,8 @@ int main(int argc, char ** argv)
     llama_context * ctx ;
 
     ctx = llama_init_from_gpt_params( params );
-    
-    if ( ctx == NULL ) 
+
+    if ( ctx == NULL )
     {
         fprintf( stderr , "%s: error: unable to load model\n" , __func__ );
         return 1;
@@ -84,13 +84,13 @@ int main(int argc, char ** argv)
 
     std::vector<llama_token> tokens_list;
     tokens_list = ::llama_tokenize( ctx , params.prompt , true );
-   
+
     const int max_context_size     = llama_n_ctx( ctx );
     const int max_tokens_list_size = max_context_size - 4 ;
 
-    if ( (int)tokens_list.size() > max_tokens_list_size ) 
+    if ( (int)tokens_list.size() > max_tokens_list_size )
     {
-        fprintf( stderr , "%s: error: prompt too long (%d tokens, max %d)\n" , 
+        fprintf( stderr , "%s: error: prompt too long (%d tokens, max %d)\n" ,
              __func__ , (int)tokens_list.size() , max_tokens_list_size );
         return 1;
     }
@@ -99,7 +99,7 @@ int main(int argc, char ** argv)
 
     // Print the tokens from the prompt :
 
-    for( auto id : tokens_list ) 
+    for( auto id : tokens_list )
     {
         printf( "%s" , llama_token_to_str( ctx , id ) );
     }
@@ -115,19 +115,19 @@ int main(int argc, char ** argv)
     // tokens (see "infinite text generation via context swapping" in the main example), but in this minimalist
     // example, we will just going to stop the loop.
 
-    while ( llama_get_kv_cache_token_count( ctx ) < max_context_size ) 
+    while ( llama_get_kv_cache_token_count( ctx ) < max_context_size )
     {
 
         //---------------------------------
         // Evaluate the tokens :
         //---------------------------------
 
-        if ( llama_eval( ctx , tokens_list.data() , tokens_list.size() , llama_get_kv_cache_token_count( ctx ) , params.n_threads ) ) 
+        if ( llama_eval( ctx , tokens_list.data() , tokens_list.size() , llama_get_kv_cache_token_count( ctx ) , params.n_threads ) )
         {
             fprintf( stderr,  "%s : failed to eval\n" , __func__ );
             return 1;
         }
-  
+
         tokens_list.clear();
 
         //---------------------------------
@@ -135,9 +135,9 @@ int main(int argc, char ** argv)
         //---------------------------------
 
         llama_token new_token_id = 0;
-        
+
         auto logits  = llama_get_logits( ctx );
-        auto n_vocab = llama_n_vocab( ctx ); 
+        auto n_vocab = llama_n_vocab( ctx );
 
         std::vector<llama_token_data> candidates;
         candidates.reserve( n_vocab );
