@@ -60,7 +60,11 @@ mock_task_runner(struct ggml_compute_params *params, struct ggml_tensor *node) {
 }
 
 int test_driver(int id, struct ggml_tensor *node, int n_threads) {
-    printf("\n[test-ggml-threading] #%d, n_threads: %d\n", id, n_threads);
+    uint8_t loops = node->task_profile.dev_flags[1];
+    printf(
+        "\n[test-ggml-threading] #%02d, workload: %2d million(s), n_threads: "
+        "%2d\n",
+        id, loops, n_threads);
 
     for (int i = 0; i < n_threads; i++) {
         work_done_arr[i] = 0;
@@ -86,9 +90,8 @@ int test_driver(int id, struct ggml_tensor *node, int n_threads) {
             ctx, node, /*wdata*/ NULL, /*wsize*/ 0);
         if (err != GGML_COMPUTE_OK) {
             ggml_threading_stop(ctx);
-            fprintf(stderr,
-                    "ggml_threading_compute_tensor failed with error: %d.\n",
-                    err);
+            printf("ggml_threading_compute_tensor failed with error: %d.\n",
+                   err);
             return 1;
         }
     }
@@ -99,9 +102,11 @@ int test_driver(int id, struct ggml_tensor *node, int n_threads) {
 
     int t3 = (int)ggml_time_us();
 
+    const struct ggml_task_stage *stages = node->task_profile.stages;
+
     int expect = 0;
     for (int i = 0; i < 3; i++) {
-        struct ggml_task_stage *ts = &node->task_profile.stages[i];
+        const struct ggml_task_stage *ts = &stages[i];
         if (ts->backend != GGML_TASK_BACKEND_NONE) {
             if (ts->parallel) {
                 expect += n_threads;
@@ -117,16 +122,10 @@ int test_driver(int id, struct ggml_tensor *node, int n_threads) {
         actual += work_done_arr[i];
     }
 
-    uint8_t loops = node->task_profile.dev_flags[1];
-
-    printf("\tloops: %2d million(s), ---wait_on_done---: %d\n\tstage-0: "
-           "(parallel: %d, "
-           "wait: %d)\n"
-           "\tstage-1: (parallel: %d, wait: %d)\n",
-           loops, wait_on_done, node->task_profile.stages[0].parallel,
-           node->task_profile.stages[0].wait,
-           node->task_profile.stages[1].parallel,
-           node->task_profile.stages[1].wait);
+    printf("\tstage-0: parallel: %d, wait: %d\n\tstage-1: parallel: %d, wait: "
+           "%d, wait_on_done: %d %s\n",
+           stages[0].parallel, stages[0].wait, stages[1].parallel,
+           stages[1].wait, wait_on_done, stages[1].wait ? "<--------" : "");
 
     if (actual == expect) {
         printf("\tthreading: init %6.3f ms, compute %6.3f ms, cleanup %6.3f "
@@ -136,8 +135,7 @@ int test_driver(int id, struct ggml_tensor *node, int n_threads) {
         return 0;
     }
 
-    fprintf(stderr, "\t== failed. expect %d done, actual %d done\n\n", expect,
-            actual);
+    printf("\t== failed. expect %d done, actual %d done\n\n", expect, actual);
 
     return 2;
 }
@@ -172,8 +170,7 @@ int test_fallback(struct ggml_tensor *node) {
 
     ggml_threading_stop(ctx);
     if (err != GGML_COMPUTE_OK) {
-        fprintf(stderr,
-                "ggml_threading_compute_tensor failed with error: %d.\n", err);
+        printf("ggml_threading_compute_tensor failed with error: %d.\n", err);
         return 1;
     }
 
@@ -195,8 +192,6 @@ int main(void) {
     int n_passed = 0;
     int n_tests = 0;
 
-    int parallel[3] = {0, 1, 2};
-
     // In github build actions (windows-latest-cmake and ubuntu-latest-cmake):
     // When n_threads >= 4, the thread init time and compute time suddenly goes
     // down to 100x ~ 1000x slow -- comparing to n_threads == 2.
@@ -214,12 +209,46 @@ int main(void) {
     //   average time, thus greatly punishes those small workloads.
     // - wait_on_done is general faster than wait_now, can be 10x faster.
 
-    int threads_arr[] = {1, 2, 4, 8};
+    int threads_arr[] = {1, 2, 4, 6, 8, 16};
     int threads_arr_len = sizeof(threads_arr) / sizeof(threads_arr[0]);
 
     // millions of loops.
     uint8_t workload_arr[] = {0u, 1u, 10u};
     int workload_arr_len = sizeof(workload_arr) / sizeof(workload_arr[0]);
+
+    // skip slow/big n_threads.
+    for (int i = 0; i < threads_arr_len; i++) {
+        int n_threads = threads_arr[i];
+
+        if (n_threads == 1) {
+            continue;
+        } else if (n_threads > MAX_N_THREADS) {
+            printf("[test-ggml-threading] warning: the n_threads (%d) is too "
+                   "big, allow at most %d, skip.\n",
+                   n_threads, MAX_N_THREADS);
+            threads_arr[i] = 0;
+            continue;
+        }
+
+        // skip this n_threads when too slow.
+        int t0 = (int)ggml_time_us();
+
+        struct ggml_threading_context *ctx =
+            ggml_threading_start(n_threads, ggml_threading_graph_compute_thread,
+                                 mock_task_runner, 0, /*stages_time*/ NULL);
+
+        int t1 = (int)ggml_time_us();
+
+        ggml_threading_stop(ctx);
+
+        int elapsed_us = t1 - t0;
+        if (elapsed_us > 500 * n_threads) {
+            printf("[test-ggml-threading] warning: it took took %.3f "
+                   "ms to start %d worker thread(s). Loo slow, skip.\n",
+                   1.0 * elapsed_us / 1000, n_threads - 1);
+            threads_arr[i] = 0;
+        }
+    }
 
     // node.task_profile.dev_flags: byte 0 for wait_on_done, byte 1 for loops.
 
@@ -228,37 +257,13 @@ int main(void) {
 
         for (int i = 0; i < threads_arr_len; i++) {
             int n_threads = threads_arr[i];
-            if (n_threads > MAX_N_THREADS) {
-                abort();
+            if (n_threads <= 0) {
+                continue;
             }
 
-            printf("\n[test-ggml-threading] ==== n_nodes: %d, n_threads: %d, "
-                   "loops: %2d million(s) ====\n",
-                   n_repeat, n_threads, workload_arr[x]);
-
-            if (n_threads > 1) { // skip this n_threads when too slow.
-                int t0 = (int)ggml_time_us();
-
-                struct ggml_threading_context *ctx = ggml_threading_start(
-                    n_threads, ggml_threading_graph_compute_thread,
-                    mock_task_runner, 0, /*stages_time*/ NULL);
-
-                int t1 = (int)ggml_time_us();
-
-                ggml_threading_stop(ctx);
-
-                int elapsed_us = t1 - t0;
-                if (elapsed_us > 500 * n_threads) {
-                    fprintf(stderr,
-                            "[test-ggml-threading] warning: it took took %.3f "
-                            "ms to start %d worker thread(s).\n",
-                            1.0 * elapsed_us / 1000, n_threads - 1);
-                    fprintf(stderr, "[test-ggml-threading] warning: looks like "
-                                    "the environment is too slow to run this "
-                                    "number of threads, skip.\n");
-                    continue;
-                }
-            }
+            printf("\n[test-ggml-threading] ==== workload: %2d million(s), "
+                   "n_threads: %2d ====\n",
+                   workload_arr[x], n_threads);
 
             // multi-threads: parallel + wait_now/wait_on_done
 
@@ -268,6 +273,8 @@ int main(void) {
                 stages[0].wait = false;
                 stages[1].wait = false;
 
+                node.task_profile.dev_flags[0] = 0u;
+
                 n_tests++;
                 if (test_driver(n_tests, &node, n_threads) == 0) {
                     n_passed++;
@@ -275,54 +282,71 @@ int main(void) {
                 continue;
             }
 
-            for (int j = 0; j < 3; j++) {
+            { // no parallel, no wait
+                stages[0].parallel = false;
+                stages[1].parallel = false;
                 stages[0].wait = false;
                 stages[1].wait = false;
+
                 node.task_profile.dev_flags[0] = 0u;
 
-                if (parallel[j] == 0) {
-                    stages[0].parallel = false;
-                    stages[1].parallel = false;
+                n_tests++;
+                if (test_driver(n_tests, &node, n_threads) == 0) {
+                    n_passed++;
+                }
+            }
+
+            { // both parallel, no wait
+                stages[0].parallel = true;
+                stages[1].parallel = true;
+                stages[0].wait = false;
+                stages[1].wait = false;
+
+                node.task_profile.dev_flags[0] = 0u;
+
+                n_tests++;
+                if (test_driver(n_tests, &node, n_threads) == 0) {
+                    n_passed++;
+                }
+            }
+
+            { // stage 0 parallel, stage 1 may wait
+                stages[0].parallel = true;
+                stages[1].parallel = false;
+                stages[0].wait = false;
+
+                { // stage 1 no wait
+                    stages[1].wait = false;
+                    node.task_profile.dev_flags[0] = 0u;
 
                     n_tests++;
                     if (test_driver(n_tests, &node, n_threads) == 0) {
                         n_passed++;
                     }
-                } else if (parallel[j] == 1) {
-                    stages[0].parallel = true;
-                    stages[1].parallel = false;
+                }
 
-                    for (int k = 0; k < 2; k++) {
-                        stages[1].wait = (k == 1);
+                { // stage 1 wait
+                    stages[1].wait = true;
+                    if (stages[1].parallel) {
+                        abort();
+                    }
 
-                        if (!stages[1].wait) {
-                            n_tests++;
-                            if (test_driver(n_tests, &node, n_threads) == 0) {
-                                n_passed++;
-                            }
-                            continue;
-                        }
+                    { // disable wait_on_done
+                        node.task_profile.dev_flags[0] = 0u; // wait now.
 
-                        // wait
-
-                        for (int m = 0; m < 2; m++) {
-                            if (m == 1) {
-                                node.task_profile.dev_flags[0] = 1u;
-                            }
-                            n_tests++;
-                            if (test_driver(n_tests, &node, n_threads) == 0) {
-                                n_passed++;
-                            }
-                            node.task_profile.dev_flags[0] = 0u;
+                        n_tests++;
+                        if (test_driver(n_tests, &node, n_threads) == 0) {
+                            n_passed++;
                         }
                     }
-                } else {
-                    stages[0].parallel = true;
-                    stages[1].parallel = true;
 
-                    n_tests++;
-                    if (test_driver(n_tests, &node, n_threads) == 0) {
-                        n_passed++;
+                    { // enable wait_on_done
+                        node.task_profile.dev_flags[0] = 1u; // wait on done
+
+                        n_tests++;
+                        if (test_driver(n_tests, &node, n_threads) == 0) {
+                            n_passed++;
+                        }
                     }
                 }
             }
