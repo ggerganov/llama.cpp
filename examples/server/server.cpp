@@ -700,7 +700,7 @@ static void parse_options_completion(const json & body, llama_server_context & l
             if (el.is_array() && el.size() == 2 && el[0].is_number_integer()) {
                 llama_token tok = el[0].get<llama_token>();
                 if (tok >= 0 && tok < n_vocab) {
-                    if (el[1].is_number_float()) {
+                    if (el[1].is_number()) {
                         llama.params.logit_bias[tok] = el[1].get<float>();
                     } else if (el[1].is_boolean() && !el[1].get<bool>()) {
                         llama.params.logit_bias[tok] = -INFINITY;
