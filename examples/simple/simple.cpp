@@ -79,7 +79,7 @@ int main(int argc, char ** argv)
     }
 
     //---------------------------------
-    // Tokenize the prompt
+    // Tokenize the prompt :
     //---------------------------------
 
     std::vector<llama_token> tokens_list;
@@ -103,6 +103,7 @@ int main(int argc, char ** argv)
     {
         printf( "%s" , llama_token_to_str( ctx , id ) );
     }
+
     fflush(stdout);
 
 
@@ -113,11 +114,10 @@ int main(int argc, char ** argv)
     // The LLM keeps a contextual cache memory of previous token evaluation.
     // Usually, once this cache is full, it is required to recompute a compressed context based on previous
     // tokens (see "infinite text generation via context swapping" in the main example), but in this minimalist
-    // example, we will just going to stop the loop.
+    // example, we will just stop the loop once this cache is full or once an end of stream is detected.
 
     while ( llama_get_kv_cache_token_count( ctx ) < max_context_size )
     {
-
         //---------------------------------
         // Evaluate the tokens :
         //---------------------------------
@@ -137,7 +137,7 @@ int main(int argc, char ** argv)
         llama_token new_token_id = 0;
 
         auto logits  = llama_get_logits( ctx );
-        auto n_vocab = llama_n_vocab( ctx );
+        auto n_vocab = llama_n_vocab( ctx ); // the size of the LLM vocabulary (in tokens)
 
         std::vector<llama_token_data> candidates;
         candidates.reserve( n_vocab );
@@ -150,7 +150,7 @@ int main(int argc, char ** argv)
         llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
 
         // Select it using the "Greedy sampling" method :
-        new_token_id = llama_sample_token_greedy(ctx, &candidates_p);
+        new_token_id = llama_sample_token_greedy( ctx , &candidates_p );
 
 
         // is it an end of stream ?
@@ -162,14 +162,14 @@ int main(int argc, char ** argv)
 
         // Print the new token :
         printf( "%s" , llama_token_to_str( ctx , new_token_id ) );
-        fflush(stdout);
+        fflush( stdout );
 
         // Push this new token for next evaluation :
         tokens_list.push_back( new_token_id );
 
     } // wend of main loop
 
-    llama_free(ctx);
+    llama_free( ctx );
 
     return 0;
 }
