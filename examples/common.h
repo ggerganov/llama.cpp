@@ -77,6 +77,8 @@ struct gpt_params {
     bool mem_test          = false; // compute maximum memory usage
     bool export_cgraph     = false; // export the computation graph
     bool verbose_prompt    = false; // print prompt tokens before generation
+    bool tune              = false; // mulmat tune: enable
+    std::string tune_file  = "";    // mulmat tune: data file
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);

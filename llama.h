@@ -300,6 +300,9 @@ extern "C" {
     // Print system information
     LLAMA_API const char * llama_print_system_info(void);
 
+    // Experimental utility functionality for mulmat tunning.
+    LLAMA_API bool llama_mulmat_tune(struct llama_context *ctx, int n_threads, bool tune, const char *fname);
+
 #ifdef __cplusplus
 }
 #endif

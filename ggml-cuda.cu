@@ -2571,7 +2571,7 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
             func = ggml_cuda_rms_norm;
             break;
         case GGML_OP_MUL_MAT:
-            if (!any_on_device && !ggml_cuda_can_mul_mat(tensor->src0, tensor->src1, tensor)) {
+            if (!any_on_device/* && !ggml_cuda_can_mul_mat(tensor->src0, tensor->src1, tensor)*/) {
                 return false;
             }
             func = ggml_cuda_mul_mat;

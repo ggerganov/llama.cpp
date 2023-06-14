@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #endif
 
 #include "llama-util.h"
@@ -18,6 +19,10 @@
 
 #ifdef GGML_USE_METAL
 #include "ggml-metal.h"
+#endif
+
+#ifdef GGML_USE_MULMAT_TUNE
+#include "ggml-tune.h"
 #endif
 
 #include <array>
@@ -279,6 +284,10 @@ struct llama_context {
 
     int    buf_last = 0;
     size_t buf_max_size[LLAMA_MAX_SCRATCH_BUFFERS] = { 0 };
+
+#ifdef GGML_USE_MULMAT_TUNE
+    struct ggml_mulmat_tune *tune = nullptr;
+#endif
 
     void use_buf(struct ggml_context * ctx, int i) {
 #if defined(LLAMA_USE_SCRATCH)
@@ -1396,10 +1405,12 @@ static bool llama_eval_internal(
 
     struct ggml_context * ctx0 = ggml_init(params);
 
-    // for big prompts, if BLAS is enabled, it is better to use only one thread
-    // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
     ggml_cgraph gf = {};
-    gf.n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
+    gf.n_threads = n_threads;
+
+#ifdef GGML_USE_MULMAT_TUNE
+    gf.tune =lctx.tune;
+#endif
 
     struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
     ggml_set_name(embd, "embd");
@@ -2732,7 +2743,150 @@ struct llama_context * llama_init_from_file(
     return ctx;
 }
 
+#ifdef GGML_USE_MULMAT_TUNE
+bool llama_mulmat_tune(struct llama_context *ctx, int n_threads, bool tune, const char *fname) {
+    printf("\n");
+    if (ctx->model.n_gpu_layers != 0) {
+        fprintf(stderr, "[mulmat tune] error: is disabled by GPU offloading\n");
+        return false;
+    }
+
+    const char *model_name = llama_model_type_name(ctx->model.type);
+
+    llama_hparams *hparams = &ctx->model.hparams;
+
+    enum ggml_ftype ggml_ftype;
+    switch (hparams->ftype) {
+        case LLAMA_FTYPE_ALL_F32:
+        ggml_ftype = GGML_FTYPE_ALL_F32;
+        break;
+    case LLAMA_FTYPE_MOSTLY_F16:
+        ggml_ftype = GGML_FTYPE_MOSTLY_F16;
+        break;
+    case LLAMA_FTYPE_MOSTLY_Q4_0:
+        ggml_ftype = GGML_FTYPE_MOSTLY_Q4_0;
+        break;
+    case LLAMA_FTYPE_MOSTLY_Q4_1:
+        ggml_ftype = GGML_FTYPE_MOSTLY_Q4_1;
+        break;
+    case LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16:
+        ggml_ftype = GGML_FTYPE_MOSTLY_Q4_1_SOME_F16;
+        break;
+    case LLAMA_FTYPE_MOSTLY_Q5_0:
+        ggml_ftype = GGML_FTYPE_MOSTLY_Q5_0;
+        break;
+    case LLAMA_FTYPE_MOSTLY_Q5_1:
+        ggml_ftype = GGML_FTYPE_MOSTLY_Q5_1;
+        break;
+    case LLAMA_FTYPE_MOSTLY_Q8_0:
+        ggml_ftype = GGML_FTYPE_MOSTLY_Q8_0;
+        break;
+    case LLAMA_FTYPE_MOSTLY_Q2_K:
+        ggml_ftype = GGML_FTYPE_MOSTLY_Q2_K;
+        break;
+    case LLAMA_FTYPE_MOSTLY_Q3_K_S:
+    case LLAMA_FTYPE_MOSTLY_Q3_K_M:
+    case LLAMA_FTYPE_MOSTLY_Q3_K_L:
+        ggml_ftype = GGML_FTYPE_MOSTLY_Q3_K;
+        break;
+    case LLAMA_FTYPE_MOSTLY_Q4_K_S:
+    case LLAMA_FTYPE_MOSTLY_Q4_K_M:
+        ggml_ftype = GGML_FTYPE_MOSTLY_Q4_K;
+        break;
+    case LLAMA_FTYPE_MOSTLY_Q5_K_S:
+    case LLAMA_FTYPE_MOSTLY_Q5_K_M:
+        ggml_ftype = GGML_FTYPE_MOSTLY_Q5_K;
+        break;
+    case LLAMA_FTYPE_MOSTLY_Q6_K:
+        ggml_ftype = GGML_FTYPE_MOSTLY_Q6_K;
+        break;
+    default:
+        throw std::runtime_error(
+            format("invalid output file type %d\n", hparams->ftype));
+    }
+
+    int n_vocab = hparams->n_vocab;
+    int n_embd = hparams->n_embd;
+    int n_rot = hparams->n_rot;
+
+    int n_mult = hparams->n_mult;
+    int n_ff = ((2*(4*n_embd)/3 + n_mult - 1)/n_mult)*n_mult;
+
+    struct ggml_mulmat_tune_params params = {
+        /*.model =*/ {
+            /* .name    =*/ model_name,
+            /* .ftype   =*/ ggml_ftype,
+            /* .n_vocab =*/ n_vocab,
+            /* .n_embd  =*/ n_embd,
+            /* .n_ff    =*/ n_ff,
+            /* .n_rot   =*/ n_rot,
+        },
+        /* .m_num          =*/ 8,
+        /* .n_pass         =*/ 1,
+        /* .n_threads      =*/ n_threads,
+        /* .prrogress      =*/ true,
+        /* .output_console =*/ false,
+        /* .fname          =*/ fname,
+    };
+
+    bool empty_fname = !fname || strcmp(fname, "") == 0;
+
+    ctx->tune = new(struct ggml_mulmat_tune);
+    if (!ctx->tune) {
+        throw std::runtime_error(format("failed to allocate memory for tune\n"));
+    }
+
+    if (tune) {
+        bool ok = ggml_mulmat_tune_bench(ctx->tune, &params);
+        if (!ok) {
+            ggml_mulmat_tune_free(ctx->tune);
+            return false;
+        }
+        if (!empty_fname) {
+            ggml_mulmat_tune_free(ctx->tune);
+            return true;
+        }
+    } else {
+        if (empty_fname) {
+            return false;
+        }
+    }
+
+    if (!empty_fname) {
+        FILE *fp = fopen(fname, "r");
+        if (!fp) {
+            fprintf(stderr, "[mulmat tune] failed to open file %s.\n",
+                    fname);
+        } else {
+            bool ok = ggml_mulmat_tune_read_data(ctx->tune, fp);
+            fclose(fp);
+
+            if (!ok) {
+                fprintf(stderr,
+                        "[mulmat tune] failed to read data from %s\n",
+                        fname);
+                return false;
+            }
+
+            fprintf(stderr, "[mulmat tune] loaded data from %s\n", fname);
+
+            ok = ggml_mulmat_tune_validate(ctx->tune, model_name, ggml_ftype, params.n_threads);
+            if (!ok) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+#endif
+
 void llama_free(struct llama_context * ctx) {
+#ifdef GGML_USE_MULMAT_TUNE
+    if (ctx->tune) {
+        delete(ctx->tune);
+    }
+#endif
     delete ctx;
 }
 

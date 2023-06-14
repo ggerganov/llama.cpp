@@ -1628,7 +1628,7 @@ bool ggml_cl_mul_mat_use_f16(const struct ggml_tensor * src0, const struct ggml_
 }
 
 void ggml_cl_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst, void * wdata, size_t wsize) {
-    GGML_ASSERT(ggml_cl_can_mul_mat(src0, src1, dst));
+    // GGML_ASSERT(ggml_cl_can_mul_mat(src0, src1, dst));
 
     if (src0->type == GGML_TYPE_F32) {
         ggml_cl_mul_mat_f32(src0, src1, dst);

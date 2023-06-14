@@ -61,26 +61,6 @@ static LONG atomic_fetch_sub(atomic_int* ptr, LONG dec) {
     return atomic_fetch_add(ptr, -(dec));
 }
 
-typedef HANDLE pthread_t;
-
-typedef DWORD thread_ret_t;
-static int pthread_create(pthread_t* out, void* unused, thread_ret_t(*func)(void*), void* arg) {
-    (void) unused;
-    HANDLE handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) func, arg, 0, NULL);
-    if (handle == NULL)
-    {
-        return EAGAIN;
-    }
-
-    *out = handle;
-    return 0;
-}
-
-static int pthread_join(pthread_t thread, void* unused) {
-    (void) unused;
-    return (int) WaitForSingleObject(thread, INFINITE);
-}
-
 static int sched_yield (void) {
     Sleep (0);
     return 0;
@@ -88,8 +68,6 @@ static int sched_yield (void) {
 #else
 #include <pthread.h>
 #include <stdatomic.h>
-
-typedef void* thread_ret_t;
 #endif
 
 // __FMA__ and __F16C__ are not defined in MSVC, however they are implied with AVX2/AVX512
@@ -165,6 +143,12 @@ inline static void* ggml_aligned_malloc(size_t size) {
 #elif defined(GGML_USE_CLBLAST)
 #include "ggml-opencl.h"
 #endif
+
+#if defined(GGML_USE_MULMAT_TUNE)
+    #include "ggml-tune.h"
+#endif
+
+#include "ggml-threading.h"
 
 #undef MIN
 #undef MAX
@@ -4059,6 +4043,8 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         ggml_cl_init();
 #endif
 
+        ggml_mulmat_init_task_profiles();
+
         is_first_call = false;
     }
 
@@ -4302,7 +4288,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
         /*.src0         =*/ NULL,
         /*.src1         =*/ NULL,
         /*.opt          =*/ { NULL },
-        /*.n_tasks      =*/ 0,
+        /*.task_profile =*/ { 0 },
         /*.perf_runs    =*/ 0,
         /*.perf_cycles  =*/ 0,
         /*.perf_time_us =*/ 0,
@@ -8516,14 +8502,19 @@ static void ggml_compute_forward_mul_f32(
     const int ith = params->ith;
     const int nth = params->nth;
 
+    enum ggml_task_backend comp_backend = dst->task_profile.stages[GGML_TASK_COMPUTE].backend;
+    if (comp_backend == GGML_TASK_BACKEND_GPU_CL) {
 #ifdef GGML_USE_CLBLAST
-    if (src1->backend == GGML_BACKEND_GPU) {
-        if (ith == 0) {
-            ggml_cl_mul(src0, src1, dst);
+        if (src1->backend == GGML_BACKEND_GPU) {
+            if (ith == 0) {
+                ggml_cl_mul(src0, src1, dst);
+            }
+            return;
         }
-        return;
-    }
+#else
+        GGML_ASSERT(false);
 #endif
+    };
 
     const int64_t nr = ggml_nrows(src0);
 
@@ -9950,36 +9941,6 @@ static void ggml_compute_forward_rms_norm_back(
 }
 
 
-// ggml_compute_forward_mul_mat
-
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-// helper function to determine if it is better to use BLAS or not
-// for large matrices, BLAS is faster
-static bool ggml_compute_forward_mul_mat_use_blas(
-        const struct ggml_tensor * src0,
-        const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
-    //const int64_t ne00 = src0->ne[0];
-    //const int64_t ne01 = src0->ne[1];
-
-    const int64_t ne10 = src1->ne[0];
-
-    const int64_t ne0 = dst->ne[0];
-    const int64_t ne1 = dst->ne[1];
-
-    // TODO: find the optimal values for these
-    if (ggml_is_contiguous(src0) &&
-        ggml_is_contiguous(src1) &&
-        (ne0 >= 32 && ne1 >= 32 && ne10 >= 32)) {
-
-        /*printf("BLAS: %d %d %d %d %d\n", ne0, ne1, ne10, ne00, ne01);*/
-        return true;
-    }
-
-    return false;
-}
-#endif
-
 static void ggml_compute_forward_mul_mat_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
@@ -10050,28 +10011,25 @@ static void ggml_compute_forward_mul_mat_f32(
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
+    enum ggml_task_backend comp_backend = dst->task_profile.stages[GGML_TASK_COMPUTE].backend;
+
+    if (comp_backend == GGML_TASK_BACKEND_GPU_CL) {
 #if defined(GGML_USE_CLBLAST)
-    if (ggml_cl_can_mul_mat(src0, src1, dst)) {
-        if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
-            ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
-        }
+        GGML_ASSERT(params->nth == 1);
+        GGML_ASSERT(params->type == GGML_TASK_COMPUTE);
+        ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
         return;
-    }
+#else
+        GGML_ASSERT(false);
 #endif
+    }
 
+    GGML_ASSERT(comp_backend & GGML_TASK_BACKEND_CPU);
+
+    if (comp_backend == GGML_TASK_BACKEND_CPU_BLAS) {
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-    if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
-        if (params->ith != 0) {
-            return;
-        }
-
-        if (params->type == GGML_TASK_INIT) {
-            return;
-        }
-
-        if (params->type == GGML_TASK_FINALIZE) {
-            return;
-        }
+        GGML_ASSERT(params->nth == 1);
+        GGML_ASSERT(params->type == GGML_TASK_COMPUTE);
 
         for (int64_t i03 = 0; i03 < ne03; i03++) {
             for (int64_t i02 = 0; i02 < ne02; i02++) {
@@ -10089,16 +10047,13 @@ static void ggml_compute_forward_mul_mat_f32(
         //printf("CBLAS F32 = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);
 
         return;
-    }
+#else
+        GGML_ASSERT(false);
 #endif
-
-    if (params->type == GGML_TASK_INIT) {
-        return;
     }
 
-    if (params->type == GGML_TASK_FINALIZE) {
-        return;
-    }
+    GGML_ASSERT(params->type == GGML_TASK_COMPUTE);
+    GGML_ASSERT(comp_backend == GGML_TASK_BACKEND_CPU);
 
     // parallelize by src0 rows using ggml_vec_dot_f32
 
@@ -10215,30 +10170,26 @@ static void ggml_compute_forward_mul_mat_f16_f32(
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
+    enum ggml_task_backend comp_backend = dst->task_profile.stages[GGML_TASK_COMPUTE].backend;
+
+    if (comp_backend == GGML_TASK_BACKEND_GPU_CL) {
 #if defined(GGML_USE_CLBLAST)
-    if (ggml_cl_can_mul_mat(src0, src1, dst)) {
-        if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
-            ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
-        }
+        GGML_ASSERT(params->type == GGML_TASK_COMPUTE);
+        ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
         return;
-    }
+#else
+        GGML_ASSERT(false);
 #endif
+    }
 
+    enum ggml_task_backend init_backend = dst->task_profile.stages[GGML_TASK_INIT].backend;
+    GGML_ASSERT(comp_backend & GGML_TASK_BACKEND_CPU);
+
+    if (comp_backend == GGML_TASK_BACKEND_CPU_BLAS) {
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-    if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
         GGML_ASSERT(nb10 == sizeof(float));
-
-        if (params->ith != 0) {
-            return;
-        }
-
-        if (params->type == GGML_TASK_INIT) {
-            return;
-        }
-
-        if (params->type == GGML_TASK_FINALIZE) {
-            return;
-        }
+        GGML_ASSERT(params->nth == 1);
+        GGML_ASSERT(params->type == GGML_TASK_COMPUTE);
 
         for (int64_t i03 = 0; i03 < ne03; i03++) {
             for (int64_t i02 = 0; i02 < ne02; i02++) {
@@ -10271,8 +10222,14 @@ static void ggml_compute_forward_mul_mat_f16_f32(
         /*printf("CBLAS F16 = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);*/
 
         return;
-    }
+#else
+        GGML_ASSERT(false);
 #endif
+    }
+
+    GGML_ASSERT(params->type == GGML_TASK_INIT || params->type == GGML_TASK_COMPUTE);
+    GGML_ASSERT(init_backend == GGML_TASK_BACKEND_CPU);
+    GGML_ASSERT(comp_backend == GGML_TASK_BACKEND_CPU);
 
     if (params->type == GGML_TASK_INIT) {
         ggml_fp16_t * const wdata = params->wdata;
@@ -10293,9 +10250,7 @@ static void ggml_compute_forward_mul_mat_f16_f32(
         return;
     }
 
-    if (params->type == GGML_TASK_FINALIZE) {
-        return;
-    }
+    GGML_ASSERT (params->type == GGML_TASK_COMPUTE);
 
     // fp16 -> half the size, so divide by 2
     // TODO: do not support transposed src1
@@ -10420,50 +10375,62 @@ static void ggml_compute_forward_mul_mat_q_f32(
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
+    enum ggml_task_backend comp_backend = dst->task_profile.stages[GGML_TASK_COMPUTE].backend;
+
+    if (comp_backend == GGML_TASK_BACKEND_GPU_CL) {
 #if defined(GGML_USE_CLBLAST)
-    if (ggml_cl_can_mul_mat(src0, src1, dst)) {
-        if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
-            ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
-        }
+        GGML_ASSERT(params->nth == 1);
+        GGML_ASSERT(params->type == GGML_TASK_COMPUTE);
+        ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
         return;
-    }
+#else
+        GGML_ASSERT(false);
 #endif
+    }
 
+    enum ggml_task_backend init_backend = dst->task_profile.stages[GGML_TASK_INIT].backend;
+    GGML_ASSERT(comp_backend & GGML_TASK_BACKEND_CPU);
+
+    if (comp_backend == GGML_TASK_BACKEND_CPU_BLAS) {
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-    if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
-        if (params->ith != 0) {
-            return;
-        }
-
-        if (params->type == GGML_TASK_INIT) {
-            return;
-        }
-
-        if (params->type == GGML_TASK_FINALIZE) {
-            return;
-        }
+        GGML_ASSERT (init_backend == GGML_TASK_BACKEND_CPU);
+        GGML_ASSERT(params->type == GGML_TASK_INIT || params->type == GGML_TASK_COMPUTE);
+        GGML_ASSERT(src0->data);
+        GGML_ASSERT(params->wdata);
 
         float * const wdata = params->wdata;
         dequantize_row_q_t const dequantize_row_q = quantize_fns[type].dequantize_row_q;
 
+        if (params->type == GGML_TASK_INIT) {
+            // rows per thread
+            const int dr = (ne01 + nth - 1)/nth;
+
+            // row range for this thread
+            const int ir0 = dr*ith;
+            int ir1 = MIN(ir0 + dr, ne01);
+
+            for (int64_t i03 = 0; i03 < ne03; i03++) {
+                for (int64_t i02 = 0; i02 < ne02; i02++) {
+                    char  * data0_offset = (char *) src0->data + i03*nb03 + i02*nb02;
+                    float * wdata_offset = wdata + i03*ne03 + i02*ne02;
+                    for (int64_t i = ir0; i < ir1; ++i) {
+                        dequantize_row_q(data0_offset + i*nb01, wdata_offset + i*ne00, ne00);
+                    }
+                }
+            }
+            return;
+        }
+
+        GGML_ASSERT(nth == 1);
+        GGML_ASSERT(params->type == GGML_TASK_COMPUTE);
+
         for (int64_t i03 = 0; i03 < ne03; i03++) {
             for (int64_t i02 = 0; i02 < ne02; i02++) {
                 const float * y = (float *) ((char *) src1->data + i02*nb12 + i03*nb13);
-
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
 
-                {
-                    size_t id = 0;
-                    for (int64_t i01 = 0; i01 < ne01; ++i01) {
-                        dequantize_row_q((char *) src0->data + i03*nb03 + i02*nb02 + i01*nb01, wdata + id, ne00);
-                        id += ne00;
-                    }
-
-                    assert(id*sizeof(float) <= params->wsize);
-                }
-
+                // zT = y * xT
                 const float * x = wdata;
-
                 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                         ne11, ne01, ne10,
                         1.0f,    y, ne10,
@@ -10472,13 +10439,19 @@ static void ggml_compute_forward_mul_mat_q_f32(
             }
         }
 
-        //printf("CBLAS = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);
-
         return;
-    }
+#else
+        GGML_ASSERT(false);
 #endif
+    }
+
+    GGML_ASSERT(params->type == GGML_TASK_INIT || params->type == GGML_TASK_COMPUTE);
+    GGML_ASSERT(init_backend == GGML_TASK_BACKEND_CPU);
+    GGML_ASSERT(comp_backend == GGML_TASK_BACKEND_CPU);
 
     if (params->type == GGML_TASK_INIT) {
+        GGML_ASSERT(params->nth == 1);
+
         char * wdata = params->wdata;
         const size_t row_size = ne10*GGML_TYPE_SIZE[vec_dot_type]/GGML_BLCK_SIZE[vec_dot_type];
 
@@ -10490,13 +10463,10 @@ static void ggml_compute_forward_mul_mat_q_f32(
                 }
             }
         }
-
         return;
     }
 
-    if (params->type == GGML_TASK_FINALIZE) {
-        return;
-    }
+    GGML_ASSERT(params->type == GGML_TASK_COMPUTE);
 
     // parallelize by src0 rows using ggml_vec_dot_q
 
@@ -14324,20 +14294,31 @@ static void ggml_compute_forward_cross_entropy_loss_back(
     }
 }
 
-
 /////////////////////////////////
 
-static void ggml_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor) {
+static enum ggml_compute_error ggml_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor) {
     GGML_ASSERT(params);
 
-#ifdef GGML_USE_CUBLAS
-    bool skip_cpu = ggml_cuda_compute_forward(params, tensor);
-    if (skip_cpu) {
-        return;
+    enum ggml_task_backend comp_backend = tensor->task_profile.stages[GGML_TASK_COMPUTE].backend;
+
+    if (comp_backend == GGML_TASK_BACKEND_GPU_CUDA) {
+#if defined(GGML_USE_CUBLAS)
+        bool skip_cpu = ggml_cuda_compute_forward(params, tensor);
+        if (skip_cpu) {
+            return GGML_COMPUTE_OK;
+        }
+        GGML_ASSERT(tensor->src0->backend == GGML_BACKEND_CPU);
+        GGML_ASSERT(tensor->src1 == NULL || tensor->src1->backend == GGML_BACKEND_CPU);
+        return GGML_COMPUTE_FALLBACK;
+#else
+        GGML_ASSERT(false);
+#endif
     }
-    GGML_ASSERT(tensor->src0->backend == GGML_BACKEND_CPU);
-    GGML_ASSERT(tensor->src1 == NULL || tensor->src1->backend == GGML_BACKEND_CPU);
-#endif // GGML_USE_CUBLAS
+
+    // if (tensor->task_profile.stages[params->type].backend > GGML_TASK_BACKEND_CPU) {
+    //     printf("mulmat: test fallback\n");
+    //     return GGML_COMPUTE_FALLBACK;
+    // }
 
     switch (tensor->op) {
         case GGML_OP_DUP:
@@ -14585,6 +14566,15 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
                 GGML_ASSERT(false);
             } break;
     }
+
+    return GGML_COMPUTE_OK;
+}
+
+enum ggml_compute_error ggml_compute_forward_wrapper(struct ggml_compute_params *params,
+    struct ggml_tensor *tensor) {
+    // We call ggml_compute_forward because the CUDA mul_mat entry point
+    // was moved out of `ggml_compute_forward_mul_mat`.
+    return ggml_compute_forward(params, tensor);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -15480,6 +15470,7 @@ struct ggml_cgraph ggml_build_forward(struct ggml_tensor * tensor) {
         /*.n_nodes      =*/ 0,
         /*.n_leafs      =*/ 0,
         /*.n_threads    =*/ GGML_DEFAULT_N_THREADS,
+        /*.tune         =*/ NULL,
         /*.work_size    =*/ 0,
         /*.work         =*/ NULL,
         /*.nodes        =*/ { NULL },
@@ -15533,174 +15524,287 @@ struct ggml_cgraph ggml_build_backward(struct ggml_context * ctx, struct ggml_cg
     return result;
 }
 
-//
-// thread data
-//
-// synchronization is done via busy loops
-// I tried using spin locks, but not sure how to use them correctly - the things I tried were slower than busy loops
-//
+// ---- mulmat task profiles  ----
 
-#ifdef __APPLE__
+static struct ggml_task_profile_factory default_task_profile_factory = {0};
 
-//#include <os/lock.h>
-//
-//typedef os_unfair_lock ggml_lock_t;
-//
-//#define ggml_lock_init(x)    UNUSED(x)
-//#define ggml_lock_destroy(x) UNUSED(x)
-//#define ggml_lock_lock       os_unfair_lock_lock
-//#define ggml_lock_unlock     os_unfair_lock_unlock
-//
-//#define GGML_LOCK_INITIALIZER OS_UNFAIR_LOCK_INIT
+// TODO: thread unsafe. Should be initialized once.
+void ggml_mulmat_init_task_profiles(void) {
+    const size_t sz = sizeof(struct ggml_task_profile_factory);
+    memset(&default_task_profile_factory, 0, sz);
 
-typedef int ggml_lock_t;
+    // f32
+    {
+        struct ggml_task_profile *p = default_task_profile_factory.f32_f32;
+        int i = 0;
 
-#define ggml_lock_init(x)    UNUSED(x)
-#define ggml_lock_destroy(x) UNUSED(x)
-#define ggml_lock_lock(x)    UNUSED(x)
-#define ggml_lock_unlock(x)  UNUSED(x)
+        p[i].stages[1].backend = GGML_TASK_BACKEND_CPU;
+        p[i].stages[1].parallel = true;
+        i++;
 
-#define GGML_LOCK_INITIALIZER 0
-
-typedef pthread_t ggml_thread_t;
-
-#define ggml_thread_create pthread_create
-#define ggml_thread_join   pthread_join
-
-#else
-
-//typedef pthread_spinlock_t ggml_lock_t;
-
-//#define ggml_lock_init(x) pthread_spin_init(x, PTHREAD_PROCESS_PRIVATE)
-//#define ggml_lock_destroy pthread_spin_destroy
-//#define ggml_lock_lock    pthread_spin_lock
-//#define ggml_lock_unlock  pthread_spin_unlock
-
-typedef int ggml_lock_t;
-
-#define ggml_lock_init(x)    UNUSED(x)
-#define ggml_lock_destroy(x) UNUSED(x)
-#if defined(__x86_64__) || (defined(_MSC_VER) && defined(_M_AMD64))
-#define ggml_lock_lock(x)    _mm_pause()
-#else
-#define ggml_lock_lock(x)    UNUSED(x)
-#endif
-#define ggml_lock_unlock(x)  UNUSED(x)
-
-#define GGML_LOCK_INITIALIZER 0
-
-typedef pthread_t ggml_thread_t;
-
-#define ggml_thread_create pthread_create
-#define ggml_thread_join   pthread_join
-
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+        p[i].stages[1].backend = GGML_TASK_BACKEND_CPU_BLAS;
+        p[i].stages[1].wait = true;
+        i++;
 #endif
 
-struct ggml_compute_state_shared {
-    ggml_lock_t spin;
+#if defined(GGML_USE_CUBLAS)
+        p[i].stages[1].backend = GGML_TASK_BACKEND_GPU_CUDA;
+        p[i].stages[1].wait = true;
+        i++;
+#elif defined(GGML_USE_CLBLAST)
+        p[i].stages[1].backend = GGML_TASK_BACKEND_GPU_CL;
+        p[i].stages[1].wait = true;
+        i++;
+#endif
+        default_task_profile_factory.n_f32_f32 = i;
+    }
 
-    int n_threads;
+    // f16
+    {
+        struct ggml_task_profile *p = default_task_profile_factory.f16_f32;
+        int i = 0;
 
-    // synchronization primitives
-    atomic_int  n_ready;
-    atomic_bool has_work;
-    atomic_bool stop; // stop all threads
-};
+        p[i].stages[0].backend = GGML_TASK_BACKEND_CPU;
+        p[i].stages[1].backend = GGML_TASK_BACKEND_CPU;
+        p[i].stages[1].parallel = true;
+        i++;
 
-struct ggml_compute_state {
-    ggml_thread_t thrd;
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+        p[i].stages[1].backend = GGML_TASK_BACKEND_CPU_BLAS;
+        p[i].stages[1].wait = true;
+        i++;
+#endif
 
-    struct ggml_compute_params params;
-    struct ggml_tensor * node;
+#if defined(GGML_USE_CUBLAS)
+        p[i].stages[1].backend = GGML_TASK_BACKEND_GPU_CUDA;
+        p[i].stages[1].wait = true;
+        i++;
+#elif defined(GGML_USE_CLBLAST)
+        p[i].stages[1].backend = GGML_TASK_BACKEND_GPU_CL;
+        p[i].stages[1].wait = true;
+        i++;
+#endif
+        default_task_profile_factory.n_f16_f32 = i;
+    }
 
-    struct ggml_compute_state_shared * shared;
-};
+    // qxx
+    {
+        struct ggml_task_profile *p = default_task_profile_factory.qxx_f32;
+        int i = 0;
 
-static thread_ret_t ggml_graph_compute_thread(void * data) {
-    struct ggml_compute_state * state = (struct ggml_compute_state *) data;
+        p[i].stages[0].backend = GGML_TASK_BACKEND_CPU;
+        p[i].stages[1].backend = GGML_TASK_BACKEND_CPU;
+        p[i].stages[1].parallel = true;
+        i++;
 
-    const int n_threads = state->shared->n_threads;
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+        p[i].stages[0].backend = GGML_TASK_BACKEND_CPU;
+        p[i].stages[0].parallel = true;
+        p[i].stages[1].backend = GGML_TASK_BACKEND_CPU_BLAS;
+        p[i].stages[1].wait = true;
+        i++;
+#endif
 
-    while (true) {
-        if (atomic_fetch_add(&state->shared->n_ready, 1) == n_threads - 1) {
-            atomic_store(&state->shared->has_work, false);
-        } else {
-            while (atomic_load(&state->shared->has_work)) {
-                if (atomic_load(&state->shared->stop)) {
-                    return 0;
+#if defined(GGML_USE_CUBLAS)
+        p[i].stages[1].backend = GGML_TASK_BACKEND_GPU_CUDA;
+        p[i].stages[1].wait = true;
+        i++;
+#elif defined(GGML_USE_CLBLAST)
+        p[i].stages[1].backend = GGML_TASK_BACKEND_GPU_CL;
+        p[i].stages[1].wait = true;
+        i++;
+#endif
+        default_task_profile_factory.n_qxx_f32 = i;
+    }
+}
+
+int ggml_mulmat_get_task_profiles(struct ggml_task_profile_factory *pf,
+                                  enum ggml_type src0_t, enum ggml_type src1_t,
+                                  struct ggml_task_profile **profiles) {
+    GGML_ASSERT(profiles);
+
+    if (pf == NULL) {
+        pf = &default_task_profile_factory;
+    }
+
+    GGML_ASSERT(src1_t == GGML_TYPE_F32);
+
+    if (src0_t == GGML_TYPE_F32) {
+        *profiles = pf->f32_f32;
+        return pf->n_f32_f32;
+    }
+
+    if (src0_t == GGML_TYPE_F16) {
+        *profiles = pf->f16_f32;
+        return pf->n_f16_f32;
+    }
+
+    if (ggml_is_quantized(src0_t)) {
+        *profiles = pf->qxx_f32;
+        return pf->n_qxx_f32;
+    }
+
+    GGML_ASSERT(false);
+}
+
+static const struct ggml_task_profile *
+ggml_mulmat_get_default_task_profile(struct ggml_task_profile_factory *pf,
+                                     enum ggml_type src0_type,
+                                     enum ggml_type src1_type) {
+    GGML_ASSERT(src1_type == GGML_TYPE_F32);
+    if (pf == NULL) {
+        pf = &default_task_profile_factory;
+    }
+
+    struct ggml_task_profile *p = NULL;
+
+    if (src0_type == GGML_TYPE_F32) {
+        p = &pf->f32_f32[0];
+    } else if (src0_type == GGML_TYPE_F16) {
+        p = &pf->f16_f32[0];
+    } else if (ggml_is_quantized(src0_type)) {
+        p = &pf->qxx_f32[0];
+    } else {
+        GGML_ASSERT(false);
+    }
+
+    for (int i = 0; i < 3; i++) {
+        GGML_ASSERT(p->stages[i].backend == GGML_TASK_BACKEND_CPU ||
+                    p->stages[i].backend == GGML_TASK_BACKEND_NONE);
+    }
+
+    return p;
+}
+
+// Set task profile for GGML_OP_MUL_MAT or GGML_OP_OUT_PROD.
+static void ggml_mulmat_set_tensor_task_profile(struct ggml_tensor *node,
+                                         struct ggml_mulmat_tune *tune) {
+    GGML_ASSERT(node);
+    GGML_ASSERT(node->op == GGML_OP_MUL_MAT || node->op == GGML_OP_OUT_PROD);
+
+    enum ggml_type src0_t = node->src0->type;
+    enum ggml_type src1_t = node->src1->type;
+
+    // Type and memory layout requirements for computing mul_mat with BLAS.
+    bool cond_match = (src0_t == GGML_TYPE_F32 || src0_t == GGML_TYPE_F16 ||
+                       ggml_is_quantized(src0_t)) &&
+                      src1_t == GGML_TYPE_F32 && node->type == GGML_TYPE_F32 &&
+                      ggml_is_contiguous(node->src0) &&
+                      ggml_is_contiguous(node->src1);
+
+    int M = (int)node->ne[1];
+    int N = (int)node->ne[0];
+    int K = (int)node->src1->ne[0];
+
+    struct ggml_task_profile *profiles = NULL;
+    int n_profiles = ggml_mulmat_get_task_profiles(NULL, src0_t, src1_t, &profiles);
+    GGML_ASSERT(n_profiles >= 2);
+    GGML_ASSERT(profiles);
+
+    const struct ggml_task_profile *prof = NULL;
+
+    if (cond_match) {
+#if defined(GGML_USE_MULMAT_TUNE)
+        if (tune != NULL) {
+            int stages_time_us[3];
+            prof = ggml_mulmat_tune_select_task_profile(tune, M, N, K, src0_t, src1_t, stages_time_us);
+            if (prof != NULL) {
+                 GGML_ASSERT(prof);
+                 memcpy(&node->task_profile, prof, sizeof(struct ggml_task_profile));
+                 // Do not wait if the estimated execution time is too small (e.g. less than 0.1 ms)
+                 // TODO: need bench actual wait/notify time, see ggml-threading.c
+                 for (int i = 0; i < 3; i++) {
+                    if (node->task_profile.stages[i].wait) {
+                        if (stages_time_us[i] < 100) {
+                            node->task_profile.stages[i].wait = false;
+                        }
+                    }
+                 }
+                 return;
+            }
+        }
+#else
+        UNUSED(tune);
+#endif
+
+        if (prof == NULL && M >= 32 && N >= 32 && K >= 32) {
+            for (int j = 0; j < n_profiles; j++) {
+                enum ggml_task_backend comp_be =
+                    profiles[j].stages[GGML_TASK_COMPUTE].backend;
+
+                switch (comp_be) {
+                    case GGML_TASK_BACKEND_GPU_CUDA: {
+                        GGML_ASSERT(ggml_cpu_has_cublas());
+                        prof = &profiles[j];
+                        break;
+                    }
+                    case GGML_TASK_BACKEND_GPU_CL: {
+                        GGML_ASSERT(ggml_cpu_has_clblast());
+                        prof = &profiles[j];
+                        break;
+                    }
+                    case GGML_TASK_BACKEND_CPU_BLAS: {
+                        GGML_ASSERT(ggml_cpu_has_cpublas());
+                        prof = &profiles[j];
+                        break;
+                    }
+                    default: {
+                        break;
+                    }
                 }
-                ggml_lock_lock  (&state->shared->spin);
-                ggml_lock_unlock(&state->shared->spin);
             }
-        }
-
-        atomic_fetch_sub(&state->shared->n_ready, 1);
-
-        // wait for work
-        while (!atomic_load(&state->shared->has_work)) {
-            if (atomic_load(&state->shared->stop)) {
-                return 0;
-            }
-            ggml_lock_lock  (&state->shared->spin);
-            ggml_lock_unlock(&state->shared->spin);
-        }
-
-        // check if we should stop
-        if (atomic_load(&state->shared->stop)) {
-            break;
-        }
-
-        if (state->node) {
-            if (state->params.ith < state->params.nth) {
-                ggml_compute_forward(&state->params, state->node);
-            }
-
-            state->node = NULL;
-        } else {
-            break;
         }
     }
 
-    return 0;
+    if (prof == NULL) {
+        prof = ggml_mulmat_get_default_task_profile(NULL, src0_t, src1_t);
+    }
+
+    GGML_ASSERT(prof);
+    memcpy(&node->task_profile, prof, sizeof(struct ggml_task_profile));
 }
 
 void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) {
-    const int n_threads = cgraph->n_threads;
+    int n_threads = cgraph->n_threads;
 
-    struct ggml_compute_state_shared state_shared = {
-        /*.spin      =*/ GGML_LOCK_INITIALIZER,
-        /*.n_threads =*/ n_threads,
-        /*.n_ready   =*/ 0,
-        /*.has_work  =*/ false,
-        /*.stop      =*/ false,
-    };
-    struct ggml_compute_state * workers = n_threads > 1 ? alloca(sizeof(struct ggml_compute_state)*(n_threads - 1)) : NULL;
+    if (ggml_cpu_has_blas()) {
+        for (int i = 0; i < cgraph->n_nodes; i++) {
+            struct ggml_tensor *node = cgraph->nodes[i];
 
-    // create thread pool
-    if (n_threads > 1) {
-        ggml_lock_init(&state_shared.spin);
+            memset(&node->task_profile, 0, sizeof(struct ggml_task_profile));
+            struct ggml_task_stage *stages = node->task_profile.stages;
 
-        atomic_store(&state_shared.has_work, true);
+            // Adapt node->backend: assume GPU at COMPUTE stage.
+            if (node->backend > GGML_BACKEND_CPU) {
+                stages[GGML_TASK_INIT].backend = GGML_TASK_BACKEND_NONE;
+                stages[GGML_TASK_FINALIZE].backend = GGML_TASK_BACKEND_NONE;
 
-        for (int j = 0; j < n_threads - 1; j++) {
-            workers[j] = (struct ggml_compute_state) {
-                .thrd   = 0,
-                .params = {
-                    .type  = GGML_TASK_COMPUTE,
-                    .ith   = j + 1,
-                    .nth   = n_threads,
-                    .wsize = cgraph->work ? ggml_nbytes(cgraph->work) : 0,
-                    .wdata = cgraph->work ? cgraph->work->data : NULL,
-                },
-                .node   = NULL,
-                .shared = &state_shared,
-            };
-
-            int rc = ggml_thread_create(&workers[j].thrd, NULL, ggml_graph_compute_thread, &workers[j]);
-            GGML_ASSERT(rc == 0);
-            UNUSED(rc);
+                stages[GGML_TASK_COMPUTE].parallel = false;
+                bool wait = (node->op == GGML_OP_MUL_MAT || node->op == GGML_OP_MUL);
+                stages[GGML_TASK_COMPUTE].wait = wait;
+                if (ggml_cpu_has_cublas()) {
+                    stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_GPU_CUDA;
+                } else if (ggml_cpu_has_clblast()) {
+                    stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_GPU_CL;
+                } else {
+                    GGML_ASSERT(false);
+                }
+            } else if (node->op == GGML_OP_MUL_MAT) {
+                struct ggml_mulmat_tune * tune = NULL;
+#if defined(GGML_USE_MULMAT_TUNE)
+                tune = cgraph->tune;
+#endif
+                ggml_mulmat_set_tensor_task_profile(node, tune);
+            } else if (node->op == GGML_OP_OUT_PROD) {
+                ggml_mulmat_set_tensor_task_profile(node, NULL);
+            }
         }
     }
+
+    struct ggml_threading_context *thrd_ctx = ggml_threading_start(
+        n_threads, ggml_threading_graph_compute_thread, ggml_compute_forward,
+        GGML_THREADING_FEATURE_WAIT_ON_DONE, NULL);
 
     // initialize tasks + work buffer
     {
@@ -15709,13 +15813,13 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         // thread scheduling for the different operations
         for (int i = 0; i < cgraph->n_nodes; i++) {
             struct ggml_tensor * node = cgraph->nodes[i];
+            struct ggml_task_stage *stages = node->task_profile.stages;
 
             switch (node->op) {
                 case GGML_OP_CPY:
                 case GGML_OP_DUP:
                     {
-                        node->n_tasks = n_threads;
-
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
                         size_t cur = 0;
                         if (ggml_is_quantized(node->type)) {
                             cur = GGML_TYPE_SIZE[GGML_TYPE_F32] * node->ne[0] * n_threads;
@@ -15726,7 +15830,8 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                 case GGML_OP_ADD:
                 case GGML_OP_ADD1:
                     {
-                        node->n_tasks = n_threads;
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
+                        stages[GGML_TASK_COMPUTE].parallel = true;
 
                         size_t cur = 0;
 
@@ -15738,7 +15843,9 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                     } break;
                 case GGML_OP_ACC:
                     {
-                        node->n_tasks = n_threads;
+                        stages[GGML_TASK_INIT].backend = GGML_TASK_BACKEND_CPU;
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
+                        stages[GGML_TASK_COMPUTE].parallel = true;
 
                         size_t cur = 0;
 
@@ -15764,9 +15871,15 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                 case GGML_OP_STEP:
                 case GGML_OP_RELU:
                     {
-                        node->n_tasks = 1;
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
                     } break;
                 case GGML_OP_MUL:
+                    {
+                        if (stages[GGML_TASK_COMPUTE].backend == GGML_TASK_BACKEND_NONE) {
+                            stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
+                            stages[GGML_TASK_COMPUTE].parallel = true;
+                        }
+                    } break;
                 case GGML_OP_GELU:
                 case GGML_OP_SILU:
                 case GGML_OP_SILU_BACK:
@@ -15774,66 +15887,65 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                 case GGML_OP_RMS_NORM:
                 case GGML_OP_RMS_NORM_BACK:
                     {
-                        node->n_tasks = n_threads;
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
+                        stages[GGML_TASK_COMPUTE].parallel = true;
                     } break;
                 case GGML_OP_MUL_MAT:
                 case GGML_OP_OUT_PROD:
                     {
-                        node->n_tasks = n_threads;
-
-                        // TODO: use different scheduling for different matrix sizes
-                        //const int nr0 = ggml_nrows(node->src0);
-                        //const int nr1 = ggml_nrows(node->src1);
-
-                        //node->n_tasks = MIN(n_threads, MAX(1, nr0/128));
-                        //printf("nr0 = %8d, nr1 = %8d, nr0*nr1 = %8d, n_tasks = %d\n", nr0, nr1, nr0*nr1, node->n_tasks);
-
                         size_t cur = 0;
+                        enum ggml_task_backend comp_backend = stages[GGML_TASK_COMPUTE].backend;
+                        GGML_ASSERT(comp_backend != GGML_TASK_BACKEND_NONE);
 
-#if defined(GGML_USE_CUBLAS)
-                        if (ggml_cuda_can_mul_mat(node->src0, node->src1, node)) {
-                            node->n_tasks = 1; // TODO: this actually is doing nothing
-                                                //       the threads are still spinning
+                        // TODO: remove this check once we are sure `ggml_mulmat_set_tensor_task_profile()` is correct.
+                        if ((comp_backend & GGML_TASK_BACKEND_GPU) || comp_backend == GGML_TASK_BACKEND_CPU_BLAS) {
+                            enum ggml_type src0_t = node->src0->type;
+                            enum ggml_type src1_t = node->src1->type;
+                            bool cond_match = (src0_t == GGML_TYPE_F32 || src0_t == GGML_TYPE_F16 ||
+                                ggml_is_quantized(src0_t)) &&
+                                src1_t == GGML_TYPE_F32 && node->type == GGML_TYPE_F32 &&
+                                ggml_is_contiguous(node->src0) &&
+                                ggml_is_contiguous(node->src1);
+                            GGML_ASSERT(cond_match);
                         }
-                        else
-#elif defined(GGML_USE_CLBLAST)
-                        if (ggml_cl_can_mul_mat(node->src0, node->src1, node)) {
-                            node->n_tasks = 1; // TODO: this actually is doing nothing
-                                                //       the threads are still spinning
+
+                        if (comp_backend == GGML_TASK_BACKEND_GPU_CL) {
+#if defined(GGML_USE_CLBLAST)
                             cur = ggml_cl_mul_mat_get_wsize(node->src0, node->src1, node);
-                        }
-                        else
+#else
+                            GGML_ASSERT(false);
 #endif
-                        if (node->src0->type == GGML_TYPE_F16 && node->src1->type == GGML_TYPE_F32) {
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-                            if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
-                                node->n_tasks = 1; // TODO: this actually is doing nothing
-                                                   //       the threads are still spinning
+                        } else if (comp_backend == GGML_TASK_BACKEND_CPU_BLAS) {
+                            GGML_ASSERT(ggml_cpu_has_cpublas());
+                            GGML_ASSERT(node->src1->type == GGML_TYPE_F32);
+
+                            if (node->src0->type == GGML_TYPE_F32) {
+                                cur = 0;
+                            } else if (node->src0->type == GGML_TYPE_F16) {
                                 // here we need memory just for single 2D matrix from src0
                                 cur = GGML_TYPE_SIZE[GGML_TYPE_F32]*(node->src0->ne[0]*node->src0->ne[1]);
-                            } else {
-                                cur = GGML_TYPE_SIZE[GGML_TYPE_F16]*ggml_nelements(node->src1);
-                            }
-#else
-                            cur = GGML_TYPE_SIZE[GGML_TYPE_F16]*ggml_nelements(node->src1);
-#endif
-                        } else if (node->src0->type == GGML_TYPE_F32 && node->src1->type == GGML_TYPE_F32) {
-                            cur = 0;
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-                            if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
-                                node->n_tasks = 1;
-                            }
-#endif
-                        } else if (ggml_is_quantized(node->src0->type) && node->src1->type == GGML_TYPE_F32) {
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-                            if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
-                                node->n_tasks = 1;
+                            } else if (ggml_is_quantized(node->src0->type)) {
                                 cur = GGML_TYPE_SIZE[GGML_TYPE_F32]*(node->src0->ne[0]*node->src0->ne[1]);
-                            } else
-#endif
-                            {
+                            } else {
+                                GGML_ASSERT(false);
+                            }
+                        } else if (comp_backend == GGML_TASK_BACKEND_CPU || comp_backend == GGML_TASK_BACKEND_GPU_CUDA) {
+                            // We have to reseve buffer for CUDA because it may fallback to CPU.
+                            if (comp_backend == GGML_TASK_BACKEND_GPU_CUDA) {
+                                GGML_ASSERT(ggml_cpu_has_cublas());
+                            }
+
+                            GGML_ASSERT(node->src1->type == GGML_TYPE_F32);
+
+                            if (node->src0->type == GGML_TYPE_F32) {
+                                cur = 0;
+                            } else if (node->src0->type == GGML_TYPE_F16) {
+                                cur = GGML_TYPE_SIZE[GGML_TYPE_F16]*ggml_nelements(node->src1);
+                            } else if (ggml_is_quantized(node->src0->type)) {
                                 const enum ggml_type type_q = quantize_fns[node->src0->type].vec_dot_type;
                                 cur = GGML_TYPE_SIZE[type_q]*ggml_nelements(node->src1)/GGML_BLCK_SIZE[type_q];
+                            } else {
+                                GGML_ASSERT(false);
                             }
                         } else {
                             GGML_ASSERT(false);
@@ -15843,9 +15955,14 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                     } break;
                 case GGML_OP_SCALE:
                     {
-                        node->n_tasks = n_threads;
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
+                        stages[GGML_TASK_COMPUTE].parallel = true;
                     } break;
                 case GGML_OP_SET:
+                    {
+                        stages[GGML_TASK_INIT].backend = GGML_TASK_BACKEND_CPU;
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
+                    } break;
                 case GGML_OP_CONT:
                 case GGML_OP_RESHAPE:
                 case GGML_OP_VIEW:
@@ -15856,7 +15973,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                 case GGML_OP_DIAG:
                 case GGML_OP_DIAG_MASK_ZERO:
                     {
-                        node->n_tasks = 1;
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
                     } break;
                 case GGML_OP_DIAG_MASK_INF:
                 case GGML_OP_SOFT_MAX:
@@ -15864,20 +15981,23 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                 case GGML_OP_ROPE:
                 case GGML_OP_ROPE_BACK:
                     {
-                        node->n_tasks = n_threads;
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
+                        stages[GGML_TASK_COMPUTE].parallel = true;
                     } break;
                 case GGML_OP_ALIBI:
                     {
-                        node->n_tasks = 1; //TODO
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
                     } break;
                 case GGML_OP_CLAMP:
                     {
-                        node->n_tasks = 1; //TODO
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
                     } break;
                 case GGML_OP_CONV_1D_1S:
                 case GGML_OP_CONV_1D_2S:
                     {
-                        node->n_tasks = n_threads;
+                        stages[GGML_TASK_INIT].backend = GGML_TASK_BACKEND_CPU;
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
+                        stages[GGML_TASK_COMPUTE].parallel = true;
 
                         GGML_ASSERT(node->src0->ne[3] == 1);
                         GGML_ASSERT(node->src1->ne[2] == 1);
@@ -15906,45 +16026,48 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                     } break;
                 case GGML_OP_FLASH_ATTN:
                     {
-                        node->n_tasks = n_threads;
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
+                        stages[GGML_TASK_COMPUTE].parallel = true;
 
                         size_t cur = 0;
 
                         const int64_t ne11 = ggml_up(node->src1->ne[1], GGML_SOFT_MAX_UNROLL);
 
                         if (node->src1->type == GGML_TYPE_F32) {
-                            cur  = sizeof(float)*ne11*node->n_tasks; // TODO: this can become (n_tasks-1)
-                            cur += sizeof(float)*ne11*node->n_tasks; // this is overestimated by x2
+                            cur  = sizeof(float)*ne11*n_threads; // TODO: this can become (n_tasks-1)
+                            cur += sizeof(float)*ne11*n_threads; // this is overestimated by x2
                         }
 
                         if (node->src1->type == GGML_TYPE_F16) {
-                            cur  = sizeof(float)*ne11*node->n_tasks; // TODO: this can become (n_tasks-1)
-                            cur += sizeof(float)*ne11*node->n_tasks; // this is overestimated by x2
+                            cur  = sizeof(float)*ne11*n_threads; // TODO: this can become (n_tasks-1)
+                            cur += sizeof(float)*ne11*n_threads; // this is overestimated by x2
                         }
 
                         work_size = MAX(work_size, cur);
                     } break;
                 case GGML_OP_FLASH_FF:
                     {
-                        node->n_tasks = n_threads;
-
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
+                        stages[GGML_TASK_COMPUTE].parallel = true;
                         size_t cur = 0;
 
                         if (node->src1->type == GGML_TYPE_F32) {
-                            cur  = sizeof(float)*node->src1->ne[1]*node->n_tasks; // TODO: this can become (n_tasks-1)
-                            cur += sizeof(float)*node->src1->ne[1]*node->n_tasks; // this is overestimated by x2
+                            cur  = sizeof(float)*node->src1->ne[1]*n_threads; // TODO: this can become (n_tasks-1)
+                            cur += sizeof(float)*node->src1->ne[1]*n_threads; // this is overestimated by x2
                         }
 
                         if (node->src1->type == GGML_TYPE_F16) {
-                            cur  = sizeof(float)*node->src1->ne[1]*node->n_tasks; // TODO: this can become (n_tasks-1)
-                            cur += sizeof(float)*node->src1->ne[1]*node->n_tasks; // this is overestimated by x2
+                            cur  = sizeof(float)*node->src1->ne[1]*n_threads; // TODO: this can become (n_tasks-1)
+                            cur += sizeof(float)*node->src1->ne[1]*n_threads; // this is overestimated by x2
                         }
 
                         work_size = MAX(work_size, cur);
                     } break;
                 case GGML_OP_FLASH_ATTN_BACK:
                     {
-                        node->n_tasks = n_threads;
+                        stages[GGML_TASK_INIT].backend = GGML_TASK_BACKEND_CPU;
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
+                        stages[GGML_TASK_COMPUTE].parallel = true;
 
                         size_t cur = 0;
 
@@ -15952,13 +16075,13 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                         const int64_t ne11 = ggml_up(node->src1->ne[1], GGML_SOFT_MAX_UNROLL);
                         const int64_t mxDn = MAX(D, ne11) * 2; // *2 because of S and SM in ggml_compute_forward_flash_attn_back
                         if (node->src1->type == GGML_TYPE_F32) {
-                            cur  = sizeof(float)*mxDn*node->n_tasks; // TODO: this can become (n_tasks-1)
-                            cur += sizeof(float)*mxDn*node->n_tasks; // this is overestimated by x2
+                            cur  = sizeof(float)*mxDn*n_threads; // TODO: this can become (n_tasks-1)
+                            cur += sizeof(float)*mxDn*n_threads; // this is overestimated by x2
                         }
 
                         if (node->src1->type == GGML_TYPE_F16) {
-                            cur  = sizeof(float)*mxDn*node->n_tasks; // TODO: this can become (n_tasks-1)
-                            cur += sizeof(float)*mxDn*node->n_tasks; // this is overestimated by x2
+                            cur  = sizeof(float)*mxDn*n_threads; // TODO: this can become (n_tasks-1)
+                            cur += sizeof(float)*mxDn*n_threads; // this is overestimated by x2
                         }
 
                         work_size = MAX(work_size, cur);
@@ -15966,32 +16089,38 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                 case GGML_OP_MAP_UNARY:
                 case GGML_OP_MAP_BINARY:
                     {
-                        node->n_tasks = 1;
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
                     } break;
                 case GGML_OP_CROSS_ENTROPY_LOSS:
                     {
-                        node->n_tasks = n_threads;
+                        stages[GGML_TASK_INIT].backend = GGML_TASK_BACKEND_CPU;
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
+                        stages[GGML_TASK_COMPUTE].parallel = true;
+                        stages[GGML_TASK_FINALIZE].backend = GGML_TASK_BACKEND_CPU;
 
-                        size_t cur = ggml_type_size(node->type)*(node->n_tasks + node->src0->ne[0]*node->n_tasks);
+                        size_t cur = ggml_type_size(node->type)*(n_threads + node->src0->ne[0]*n_threads);
 
                         work_size = MAX(work_size, cur);
                     } break;
                 case GGML_OP_CROSS_ENTROPY_LOSS_BACK:
                     {
-                        node->n_tasks = n_threads;
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
+                        stages[GGML_TASK_COMPUTE].parallel = true;
 
-                        size_t cur = ggml_type_size(node->type)*node->src0->ne[0]*node->n_tasks;
+                        size_t cur = ggml_type_size(node->type)*node->src0->ne[0]*n_threads;
 
                         work_size = MAX(work_size, cur);
                     } break;
                 case GGML_OP_NONE:
                     {
-                        node->n_tasks = 1;
+                        stages[GGML_TASK_COMPUTE].backend = GGML_TASK_BACKEND_CPU;
                     } break;
                 case GGML_OP_COUNT:
                     {
                         GGML_ASSERT(false);
                     } break;
+                default:
+                    GGML_ASSERT(false);
             }
         }
 
@@ -16023,126 +16152,27 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         const int64_t perf_node_start_cycles  = ggml_perf_cycles();
         const int64_t perf_node_start_time_us = ggml_perf_time_us();
 
-        // INIT
-        struct ggml_compute_params params = {
-            /*.type  =*/ GGML_TASK_INIT,
-            /*.ith   =*/ 0,
-            /*.nth   =*/ node->n_tasks,
-            /*.wsize =*/ cgraph->work ? ggml_nbytes(cgraph->work) : 0,
-            /*.wdata =*/ cgraph->work ? cgraph->work->data : NULL,
-        };
-
-        ggml_compute_forward(&params, node);
-
-        // COMPUTE
-        if (node->n_tasks > 1) {
-            if (atomic_fetch_add(&state_shared.n_ready, 1) == n_threads - 1) {
-                atomic_store(&state_shared.has_work, false);
-            }
-
-            while (atomic_load(&state_shared.has_work)) {
-                ggml_lock_lock  (&state_shared.spin);
-                ggml_lock_unlock(&state_shared.spin);
-            }
-
-            // launch thread pool
-            for (int j = 0; j < n_threads - 1; j++) {
-                workers[j].params = (struct ggml_compute_params) {
-                    .type  = GGML_TASK_COMPUTE,
-                    .ith   = j + 1,
-                    .nth   = node->n_tasks,
-                    .wsize = cgraph->work ? ggml_nbytes(cgraph->work) : 0,
-                    .wdata = cgraph->work ? cgraph->work->data : NULL,
-                };
-                workers[j].node = node;
-            }
-
-            atomic_fetch_sub(&state_shared.n_ready, 1);
-
-            while (atomic_load(&state_shared.n_ready) > 0) {
-                ggml_lock_lock  (&state_shared.spin);
-                ggml_lock_unlock(&state_shared.spin);
-            }
-
-            atomic_store(&state_shared.has_work, true);
+        // TODO: can be moved out of loop?
+        void *wdata = NULL;
+        size_t wsize = 0;
+        if (cgraph->work) {
+            wdata = cgraph->work->data;
+            wsize = ggml_nbytes(cgraph->work);
         }
 
-        params.type = GGML_TASK_COMPUTE;
-        ggml_compute_forward(&params, node);
-
-        // wait for thread pool
-        if (node->n_tasks > 1) {
-            if (atomic_fetch_add(&state_shared.n_ready, 1) == n_threads - 1) {
-                atomic_store(&state_shared.has_work, false);
+        enum ggml_compute_error err =
+            ggml_threading_compute_tensor(thrd_ctx, node, wdata, wsize);
+        if (err == GGML_COMPUTE_FALLBACK) {
+            if (node->op == GGML_OP_MUL_MAT) {
+                    const struct ggml_task_profile *p =
+                        ggml_mulmat_get_default_task_profile(
+                            NULL, node->src0->type, node->src1->type);
+                    memcpy(&node->task_profile, p,
+                           sizeof(struct ggml_task_profile));
             }
-
-            while (atomic_load(&state_shared.has_work)) {
-                ggml_lock_lock  (&state_shared.spin);
-                ggml_lock_unlock(&state_shared.spin);
-            }
-
-            atomic_fetch_sub(&state_shared.n_ready, 1);
-
-            while (atomic_load(&state_shared.n_ready) != 0) {
-                ggml_lock_lock  (&state_shared.spin);
-                ggml_lock_unlock(&state_shared.spin);
-            }
+            err = ggml_threading_compute_tensor(thrd_ctx, node, wdata, wsize);
         }
-
-        // FINALIZE
-        if (node->n_tasks > 1) {
-            if (atomic_fetch_add(&state_shared.n_ready, 1) == n_threads - 1) {
-                atomic_store(&state_shared.has_work, false);
-            }
-
-            while (atomic_load(&state_shared.has_work)) {
-                ggml_lock_lock  (&state_shared.spin);
-                ggml_lock_unlock(&state_shared.spin);
-            }
-
-            // launch thread pool
-            for (int j = 0; j < n_threads - 1; j++) {
-                workers[j].params = (struct ggml_compute_params) {
-                    .type  = GGML_TASK_FINALIZE,
-                    .ith   = j + 1,
-                    .nth   = node->n_tasks,
-                    .wsize = cgraph->work ? ggml_nbytes(cgraph->work) : 0,
-                    .wdata = cgraph->work ? cgraph->work->data : NULL,
-                };
-                workers[j].node = node;
-            }
-
-            atomic_fetch_sub(&state_shared.n_ready, 1);
-
-            while (atomic_load(&state_shared.n_ready) > 0) {
-                ggml_lock_lock  (&state_shared.spin);
-                ggml_lock_unlock(&state_shared.spin);
-            }
-
-            atomic_store(&state_shared.has_work, true);
-        }
-
-        params.type = GGML_TASK_FINALIZE;
-        ggml_compute_forward(&params, node);
-
-        // wait for thread pool
-        if (node->n_tasks > 1) {
-            if (atomic_fetch_add(&state_shared.n_ready, 1) == n_threads - 1) {
-                atomic_store(&state_shared.has_work, false);
-            }
-
-            while (atomic_load(&state_shared.has_work)) {
-                ggml_lock_lock  (&state_shared.spin);
-                ggml_lock_unlock(&state_shared.spin);
-            }
-
-            atomic_fetch_sub(&state_shared.n_ready, 1);
-
-            while (atomic_load(&state_shared.n_ready) != 0) {
-                ggml_lock_lock  (&state_shared.spin);
-                ggml_lock_unlock(&state_shared.spin);
-            }
-        }
+        GGML_ASSERT(err == GGML_COMPUTE_OK);
 
         // performance stats (node)
         {
@@ -16155,19 +16185,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         }
     }
 
-    // join thread pool
-    if (n_threads > 1) {
-        atomic_store(&state_shared.stop, true);
-        atomic_store(&state_shared.has_work, true);
-
-        for (int j = 0; j < n_threads - 1; j++) {
-            int rc = ggml_thread_join(workers[j].thrd, NULL);
-            GGML_ASSERT(rc == 0);
-            UNUSED(rc);
-        }
-
-        ggml_lock_destroy(&state_shared.spin);
-    }
+    ggml_threading_stop(thrd_ctx);
 
     // performance stats (graph)
     {
@@ -16242,7 +16260,7 @@ static void ggml_graph_export_node(const struct ggml_tensor * tensor, const char
             tensor->n_dims,
             ne[0], ne[1], ne[2], ne[3],
             nb[0], nb[1], nb[2], nb[3],
-            tensor->n_tasks,
+            tensor->task_profile.stages[0].parallel, // replaceed n_tasks.
             tensor->data,
             tensor->name);
 }
@@ -18024,14 +18042,6 @@ int ggml_cpu_has_wasm_simd(void) {
 #endif
 }
 
-int ggml_cpu_has_blas(void) {
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
-    return 1;
-#else
-    return 0;
-#endif
-}
-
 int ggml_cpu_has_cublas(void) {
 #if defined(GGML_USE_CUBLAS)
     return 1;
@@ -18048,8 +18058,20 @@ int ggml_cpu_has_clblast(void) {
 #endif
 }
 
+int ggml_cpu_has_cpublas(void) {
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 int ggml_cpu_has_gpublas(void) {
     return ggml_cpu_has_cublas() || ggml_cpu_has_clblast();
+}
+
+int ggml_cpu_has_blas(void) {
+    return ggml_cpu_has_cpublas() || ggml_cpu_has_gpublas();
 }
 
 int ggml_cpu_has_sse3(void) {

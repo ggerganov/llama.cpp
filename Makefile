@@ -1,5 +1,5 @@
 # Define the default target now so that it is always the first target
-BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-text-from-scratch simple
+BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-text-from-scratch simple mulmat-tune
 
 ifdef LLAMA_BUILD_SERVER
 	BUILD_TARGETS += server
@@ -47,7 +47,8 @@ endif
 OPT = -O3
 CFLAGS   = -I.              $(OPT) -std=c11   -fPIC
 CXXFLAGS = -I. -I./examples $(OPT) -std=c++11 -fPIC
-LDFLAGS  =
+# -lm fixed error: ggml.o: undefined reference to symbol 'tanhf@@GLIBC_2.2.5' from ubuntu 22.04
+LDFLAGS  = -lm
 
 ifdef LLAMA_DEBUG
 	CFLAGS   += -O0 -g
@@ -134,8 +135,7 @@ ifndef LLAMA_NO_K_QUANTS
 endif
 
 ifndef LLAMA_NO_ACCELERATE
-	# Mac M1 - include Accelerate framework.
-	# `-framework Accelerate` works on Mac Intel as well, with negliable performance boost (as of the predict time).
+	# Mac Intel & M1 - include Accelerate framework.
 	ifeq ($(UNAME_S),Darwin)
 		CFLAGS  += -DGGML_USE_ACCELERATE
 		LDFLAGS += -framework Accelerate
@@ -145,10 +145,16 @@ endif # LLAMA_NO_ACCELERATE
 ifdef LLAMA_OPENBLAS
 	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas -I/usr/include/openblas
 	LDFLAGS += -lopenblas
+	ifeq ($(UNAME_S),Darwin)
+		# openblas installed with Homebew on macOS.
+		CFLAGS  += -I/usr/local/opt/openblas/include
+		LDFLAGS += -L/usr/local/opt/openblas/lib
+	endif
 endif # LLAMA_OPENBLAS
 
 ifdef LLAMA_BLIS
 	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/blis -I/usr/include/blis
+	CFLAGS  += -DGGML_BLAS_VENDOR="\"BLIS\""
 	LDFLAGS += -lblis -L/usr/local/lib
 endif # LLAMA_BLIS
 
@@ -230,6 +236,11 @@ k_quants.o: k_quants.c k_quants.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_NO_K_QUANTS
 
+ifdef LLAMA_MULMAT_TUNE
+	CFLAGS   += -DGGML_USE_MULMAT_TUNE -DGGML_MULMAT_TUNE_NDEBUG
+	CXXFLAGS += -DGGML_USE_MULMAT_TUNE
+endif
+
 #
 # Print build information
 #
@@ -245,6 +256,8 @@ $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
 $(info )
 
+OBJS += ggml-tune.o ggml-threading.o
+
 #
 # Build library
 #
@@ -253,7 +266,12 @@ ggml.o: ggml.c ggml.h ggml-cuda.h
 	$(CC)  $(CFLAGS)   -c $< -o $@
 
 llama.o: llama.cpp ggml.h ggml-cuda.h ggml-metal.h llama.h llama-util.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+ggml-threading.o: ggml-threading.c ggml.h
+	$(CC)  $(CFLAGS) -c $< -o $@
+
+ggml-tune.o: ggml-tune.c ggml.h
+	$(CC)  $(CFLAGS) -c $< -o $@
 
 common.o: examples/common.cpp examples/common.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -297,6 +315,9 @@ server: examples/server/server.cpp examples/server/httplib.h examples/server/jso
 
 train-text-from-scratch: examples/train-text-from-scratch/train-text-from-scratch.cpp    build-info.h ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
+
+mulmat-tune: examples/mulmat-tune/mulmat-tune.cpp build-info.h ggml.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o mulmat-tune $(LDFLAGS)
 
 build-info.h: $(wildcard .git/index) scripts/build-info.sh
 	@sh scripts/build-info.sh > $@.tmp

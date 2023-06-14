@@ -158,6 +158,16 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+#ifdef GGML_USE_MULMAT_TUNE
+    if (params.tune || !params.tune_file.empty()){
+        bool ok = llama_mulmat_tune(ctx, params.n_threads, params.tune, params.tune_file.c_str());
+        if (!ok || (params.tune && !params.tune_file.empty())) {
+            llama_free(ctx);
+            return ok? 0: 1;
+        }
+    }
+#endif
+
     // print system information
     {
         fprintf(stderr, "\n");

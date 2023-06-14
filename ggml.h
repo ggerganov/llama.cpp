@@ -1,5 +1,7 @@
 #pragma once
 
+
+
 //
 // GGML Tensor Library
 //
@@ -200,6 +202,7 @@
 #define GGML_MAX_OPT           4
 #define GGML_MAX_NAME          32
 #define GGML_DEFAULT_N_THREADS 4
+#define GGML_MAX_TASK_PROFILES 8
 
 #define GGML_ASSERT(x) \
     do { \
@@ -347,7 +350,6 @@ extern "C" {
         GGML_OP_COUNT,
     };
 
-
     // ggml object
     struct ggml_object {
         size_t offs;
@@ -359,6 +361,54 @@ extern "C" {
     };
 
     static const size_t GGML_OBJECT_SIZE = sizeof(struct ggml_object);
+
+    // As part of task config profile solution, `ggml_task_backend` defines
+    // backends for each task stage. Similar to `ggml_tensor.backend`,
+    // `ggml_tensor.task_profile` generalizes how to configure tensor computing
+    // at per task-stage level.
+    //
+    // The following enum values are designed as combination of hardware and
+    // optional software interface.
+    enum ggml_task_backend {
+        GGML_TASK_BACKEND_NONE     = 0,
+
+        // [0x10, 0x1F]: CPU
+        GGML_TASK_BACKEND_CPU      = 0x10,
+        GGML_TASK_BACKEND_CPU_BLAS = 0x11,
+
+        // [0x20 - 0x2F]: GPU
+        GGML_TASK_BACKEND_GPU      = 0x20,
+        GGML_TASK_BACKEND_GPU_CUDA = 0x21,
+        GGML_TASK_BACKEND_GPU_CL   = 0x22,
+    };
+
+    // config for computing one of the 3 task stages of a tensor.
+    struct ggml_task_stage {
+        enum ggml_task_backend backend;
+        bool parallel;
+        // hint idle workers go waiting, valid only when parallel is false.
+        bool wait;
+    };
+
+    // config for computing a tensor.
+    struct ggml_task_profile {
+        // index 0: INIT, 1: COMPUTE, 2: FINALIZE
+        struct ggml_task_stage stages[3];
+
+        // MUST be used only in testing codes.
+        uint8_t dev_flags[4];
+    };
+
+    struct ggml_task_profile_factory {
+        struct ggml_task_profile f32_f32[GGML_MAX_TASK_PROFILES];
+        int n_f32_f32;
+
+        struct ggml_task_profile f16_f32[GGML_MAX_TASK_PROFILES];
+        int n_f16_f32;
+
+        struct ggml_task_profile qxx_f32[GGML_MAX_TASK_PROFILES];
+        int n_qxx_f32;
+    };
 
     // n-dimensional tensor
     struct ggml_tensor {
@@ -383,7 +433,8 @@ extern "C" {
         struct ggml_tensor * opt[GGML_MAX_OPT];
 
         // thread scheduling
-        int n_tasks;
+
+        struct ggml_task_profile task_profile;
 
         // performance
         int     perf_runs;
@@ -396,7 +447,7 @@ extern "C" {
 
         void * extra; // extra things e.g. for ggml-cuda.cu
 
-        char padding[4];
+        char padding[12];
     };
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);
@@ -406,6 +457,8 @@ extern "C" {
         int n_nodes;
         int n_leafs;
         int n_threads;
+
+        struct ggml_mulmat_tune *tune;
 
         size_t work_size;
         struct ggml_tensor * work;
@@ -1287,8 +1340,20 @@ extern "C" {
     GGML_API int ggml_cpu_has_cublas     (void);
     GGML_API int ggml_cpu_has_clblast    (void);
     GGML_API int ggml_cpu_has_gpublas    (void);
+    GGML_API int ggml_cpu_has_cpublas    (void);
     GGML_API int ggml_cpu_has_sse3       (void);
     GGML_API int ggml_cpu_has_vsx        (void);
+
+    //
+    // mulmat task profiles
+    //
+    GGML_API void ggml_mulmat_init_task_profiles(void);
+
+    GGML_API int ggml_mulmat_get_task_profiles(
+        struct ggml_task_profile_factory *pf,
+        enum ggml_type src0_t,
+        enum ggml_type src1_t,
+        struct ggml_task_profile **profiles);
 
     //
     // Internal types and functions exposed for tests and benchmarks

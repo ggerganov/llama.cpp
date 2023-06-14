@@ -78,6 +78,7 @@ option(LLAMA_K_QUANTS                        "llama: use k-quants"              
 option(LLAMA_BUILD_TESTS                "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES             "llama: build examples" ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_SERVER               "llama: build server example"                           OFF)
+option(LLAMA_MULMAT_TUNE                "llama: mulmat tune"                                    OFF)
 
 #
 # Build info header
@@ -214,6 +215,7 @@ if (LLAMA_BLAS)
         message(STATUS "BLAS found, Includes: ${BLAS_INCLUDE_DIRS}")
         add_compile_options(${BLAS_LINKER_FLAGS})
         add_compile_definitions(GGML_USE_OPENBLAS)
+        add_compile_definitions(GGML_BLAS_VENDOR="${LLAMA_BLAS_VENDOR}")
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ${BLAS_LIBRARIES})
         set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} ${BLAS_INCLUDE_DIRS})
 
@@ -274,6 +276,11 @@ if (LLAMA_METAL)
         ${METALKIT_FRAMEWORK}
         ${METALPERFORMANCE_FRAMEWORK}
         )
+endif()
+
+if (LLAMA_MULMAT_TUNE)
+    add_compile_definitions(GGML_USE_MULMAT_TUNE)
+    add_compile_definitions(GGML_MULMAT_TUNE_NDEBUG)
 endif()
 
 if (LLAMA_K_QUANTS)
@@ -450,6 +457,8 @@ endif()
 
 add_library(ggml OBJECT
             ggml.c
+            ggml-threading.c
+            ggml-tune.c
             ggml.h
             ${GGML_SOURCES_CUDA}
             ${GGML_SOURCES_OPENCL}
