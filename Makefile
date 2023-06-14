@@ -1,5 +1,5 @@
 # Define the default target now so that it is always the first target
-BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot finetune
+BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-text-from-scratch
 
 ifdef LLAMA_BUILD_SERVER
 	BUILD_TARGETS += server
@@ -289,7 +289,7 @@ save-load-state: examples/save-load-state/save-load-state.cpp build-info.h ggml.
 server: examples/server/server.cpp examples/server/httplib.h examples/server/json.hpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -Iexamples/server $(filter-out %.h,$(filter-out %.hpp,$^)) -o $@ $(LDFLAGS)
 
-finetune: examples/train-text-from-scratch/train-text-from-scratch.cpp    build-info.h ggml.o llama.o $(OBJS)
+train-text-from-scratch: examples/train-text-from-scratch/train-text-from-scratch.cpp    build-info.h ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 build-info.h: $(wildcard .git/index) scripts/build-info.sh
