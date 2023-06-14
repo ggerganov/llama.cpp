@@ -154,7 +154,7 @@ node .
 
     `ignore_eos`: Ignore end of stream token and continue generating (default: false).
 
-    `logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `logit-bias: [[15043,1]]` to increase the likelihood of the token 'Hello', or `logit-bias: [[15043,-1]]` to decrease its likelihood. Setting the value to false, `logit-bias: [[15043,false]]` ensures that the token `Hello` is never produced (default: []).
+    `logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `"logit_bias": [[15043,1.0]]` to increase the likelihood of the token 'Hello', or `"logit_bias": [[15043,-1.0]]` to decrease its likelihood. Setting the value to false, `"logit_bias": [[15043,false]]` ensures that the token `Hello` is never produced (default: []).
 
 -   **POST** `/tokenize`: Tokenize a given text.
 
