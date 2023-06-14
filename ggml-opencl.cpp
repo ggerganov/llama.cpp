@@ -221,9 +221,10 @@ __kernel void dequantize_block_q3_K(__global const struct block_q3_K *x, __globa
     int is = 8 * n + 2 * j + is0;
     int shift = 2 * j;
 
-    int8_t us = is < 4 ? (x[i].scales[is - 0] & 0xF) | (((x[i].scales[is + 8] >> 0) & 3) << 4) : is < 8 ? (x[i].scales[is - 0] & 0xF) | (((x[i].scales[is + 4] >> 2) & 3) << 4)
-                                                                                                : is < 12  ? (x[i].scales[is - 8] >> 4) | (((x[i].scales[is + 0] >> 4) & 3) << 4)
-                                                                                                        : (x[i].scales[is - 8] >> 4) | (((x[i].scales[is - 4] >> 6) & 3) << 4);
+    int8_t us = is < 4 ? (x[i].scales[is - 0] & 0xF) | (((x[i].scales[is + 8] >> 0) & 3) << 4)
+              : is < 8 ? (x[i].scales[is - 0] & 0xF) | (((x[i].scales[is + 4] >> 2) & 3) << 4)
+              : is < 12  ? (x[i].scales[is - 8] >> 4) | (((x[i].scales[is + 0] >> 4) & 3) << 4)
+              : (x[i].scales[is - 8] >> 4) | (((x[i].scales[is - 4] >> 6) & 3) << 4);
     float d_all = vload_half(0, &x[i].d);
     float dl = d_all * (us - 32);
 
@@ -999,27 +1000,20 @@ static cl_kernel* ggml_get_to_fp32_cl(ggml_type type) {
 static size_t ggml_cl_global_denom(ggml_type type) {
     switch (type) {
         case GGML_TYPE_Q4_0:
-            return 1;
         case GGML_TYPE_Q4_1:
-            return 1;
         case GGML_TYPE_Q5_0:
-            return 1;
         case GGML_TYPE_Q5_1:
-            return 1;
         case GGML_TYPE_Q8_0:
             return 1;
         case GGML_TYPE_Q2_K:
-            return 4;
         case GGML_TYPE_Q3_K:
             return 4;
         case GGML_TYPE_Q4_K:
             return 8;
         case GGML_TYPE_Q5_K:
-            return 4;
         case GGML_TYPE_Q6_K:
             return 4;
         case GGML_TYPE_F16:
-            return 1;
         default:
             return 1;
     }
@@ -1028,27 +1022,20 @@ static size_t ggml_cl_global_denom(ggml_type type) {
 static size_t ggml_cl_local_size(ggml_type type) {
     switch (type) {
         case GGML_TYPE_Q4_0:
-            return 0;
         case GGML_TYPE_Q4_1:
-            return 0;
         case GGML_TYPE_Q5_0:
-            return 0;
         case GGML_TYPE_Q5_1:
-            return 0;
         case GGML_TYPE_Q8_0:
             return 0;
         case GGML_TYPE_Q2_K:
-            return 64;
         case GGML_TYPE_Q3_K:
             return 64;
         case GGML_TYPE_Q4_K:
             return 32;
         case GGML_TYPE_Q5_K:
-            return 64;
         case GGML_TYPE_Q6_K:
             return 64;
         case GGML_TYPE_F16:
-            return 0;
         default:
             return 0;
     }
