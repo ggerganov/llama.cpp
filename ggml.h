@@ -485,6 +485,7 @@ extern "C" {
 
     GGML_API bool ggml_is_transposed(const struct ggml_tensor * tensor);
     GGML_API bool ggml_is_contiguous(const struct ggml_tensor * tensor);
+    GGML_API bool ggml_is_permuted  (const struct ggml_tensor * tensor);
 
     // use this to compute the memory overhead of a tensor
     GGML_API size_t ggml_tensor_overhead(void);
