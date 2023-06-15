@@ -8,12 +8,13 @@
 static int bench(void);
 static int estimate_time_non_zero_NK(void);
 
-static void init_params(struct ggml_mulmat_tune_params *params, int m_num) {
+static void init_params(struct ggml_mulmat_tune_params *params,
+                        enum ggml_ftype ftype, int m_num, int n_threads) {
     *params = (struct ggml_mulmat_tune_params){
         .model =
             (struct ggml_mulmat_tune_model){
-                .name = "3B", // fake
-                .ftype = GGML_FTYPE_MOSTLY_Q4_0,
+                .name = "xB", // fake model name
+                .ftype = ftype,
                 .n_vocab = 4096,
                 .n_embd = 1024,
                 .n_ff = 2048,
@@ -21,7 +22,7 @@ static void init_params(struct ggml_mulmat_tune_params *params, int m_num) {
             },
         .m_num = m_num,
         .n_pass = 1,
-        .n_threads = 1,
+        .n_threads = n_threads,
         .progress = false,
         .output_console = true,
         .fname = NULL};
@@ -45,13 +46,11 @@ int main(void) {
 }
 
 static int bench(void) {
-    printf("test: %s\n", __func__);
-
     {
         enum ggml_task_backend backends[16];
         int n_backends = ggml_mulmat_tune_get_builtin_task_backends(backends);
         if (n_backends < 2) {
-            printf("test: %s, skipped because no BLAS\n", __func__);
+            printf("[test-ggml-tune] skipped because no BLAS\n");
             return 0;
         }
     }
@@ -67,16 +66,48 @@ static int bench(void) {
         ggml_free(ctx);
     }
 
-    struct ggml_mulmat_tune tune;
+    // F32: ggml_opencl: ggml_cl_h2d_tensor_2d(queue, d_X, 0, src0, i03, i02,
+    // NULL) error -30 at /Users/mqy/tools/AI/llama.cpp/ggml-opencl.cpp:838
+    enum ggml_ftype ftypes[] = {
+        // GGML_FTYPE_ALL_F32,
+        GGML_FTYPE_MOSTLY_F16,
+        GGML_FTYPE_MOSTLY_Q4_0,
+    };
 
-    struct ggml_mulmat_tune_params params;
+    int n_ftypes = sizeof(ftypes) / sizeof(ftypes[0]);
 
-    init_params(&params, /*m_num*/ 4);
+    const int m_num = 4;
 
-    bool ok = ggml_mulmat_tune_bench(&tune, &params);
-    ggml_mulmat_tune_free(&tune);
+    // Don't use n_threads larger than 2 because Github build hots has limited
+    // resource quota.
+    int threads_arr[] = {1, 2};
+    int thread_arr_len = sizeof(threads_arr) / sizeof(threads_arr[0]);
 
-    return ok ? 0 : 1;
+    int n_passed = 0;
+    int n_tests = 0;
+
+    for (int i = 0; i < n_ftypes; i++) {
+        for (int j = 0; j < thread_arr_len; j++) {
+            printf("\n");
+
+            int n_threads = threads_arr[j];
+            struct ggml_mulmat_tune tune;
+
+            struct ggml_mulmat_tune_params params;
+            memset(&params, 0, sizeof(struct ggml_mulmat_tune_params));
+            init_params(&params, ftypes[i], m_num, n_threads);
+
+            ++n_tests;
+            bool ok = ggml_mulmat_tune_bench(&tune, &params);
+            if (ok) {
+                ++n_passed;
+            }
+            ggml_mulmat_tune_free(&tune);
+        }
+    }
+
+    printf("[test-ggml-tune] %d / %d passed\n", n_passed, n_tests);
+    return (n_passed == n_tests) ? 0 : 1;
 }
 
 // implement `ggml_task_profiles_provider`
@@ -93,7 +124,7 @@ ggml_task_profiles_mock_qxx_provider(struct ggml_tensor *node,
 }
 
 int estimate_time_non_zero_NK(void) {
-    printf("test: %s\n", __func__);
+    printf("test-ggml-tune: %s\n", __func__);
 
     struct test_data_t {
         int M;
@@ -106,9 +137,10 @@ int estimate_time_non_zero_NK(void) {
     };
 
     const int m_num = 2;
+    const int n_threads = 1; // useless.
 
     struct ggml_mulmat_tune_params params;
-    init_params(&params, m_num);
+    init_params(&params, tune.ftype, m_num, n_threads);
 
     ggml_mulmat_tune_init(&tune, &params, ggml_task_profiles_mock_qxx_provider);
 
@@ -123,8 +155,8 @@ int estimate_time_non_zero_NK(void) {
     GGML_ASSERT(shape->n_profiles == 2);
     GGML_ASSERT(ggml_is_quantized(shape->src0_type));
 
-    printf("shape: N: %d, K: %d, n_profiles: %d\n", shape->N, shape->K,
-           shape->n_profiles);
+    printf("[test-ggml-tune] %s, shape: N: %d, K: %d, n_profiles: %d\n",
+           __func__, shape->N, shape->K, shape->n_profiles);
 
     {
         shape->items[0] =

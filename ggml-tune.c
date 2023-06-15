@@ -103,10 +103,9 @@ const struct ggml_task_profile *ggml_mulmat_tune_select_task_profile(
                     names[i] = ggml_mulmat_tune_task_backend_name(
                         prof->stages[i].backend);
                 }
-                printf(
-                    "\n[tune] M: %3d, N: %5d, K: %5d, backends of the "
-                    "fastest profile: %s %s %s\n",
-                    M, N, K, names[0], names[1], names[2]);
+                printf("\n[tune] M: %3d, N: %5d, K: %5d, backends of the "
+                       "fastest profile: %s %s %s\n",
+                       M, N, K, names[0], names[1], names[2]);
 #endif
             }
         }
@@ -707,8 +706,7 @@ static size_t ggml_mulmat_allocate_wdata(int N, int K, char **wdata) {
     void *buf = malloc(sz);
 
     if (!buf) {
-        fprintf(stderr,
-                "[tune] error: failed to allocate %zu MiB memory",
+        fprintf(stderr, "[tune] error: failed to allocate %zu MiB memory",
                 sz / 1024 / 1024);
         return 0;
     }
@@ -835,8 +833,9 @@ bool ggml_mulmat_tune_bench(struct ggml_mulmat_tune *tune,
                         stages_time[j] = 0;
                     }
 
-                    /*enum ggml_compute_error err = */
-                    ggml_threading_compute_tensor(thrd_ctx, node, wdata, wsize);
+                    enum ggml_compute_error err = ggml_threading_compute_tensor(
+                        thrd_ctx, node, wdata, wsize);
+                    GGML_ASSERT(err == GGML_COMPUTE_OK);
 
                     for (int i = 0; i < 3; i++) {
                         int v = (int)stages_time[i];
@@ -892,11 +891,10 @@ bool ggml_mulmat_tune_bench(struct ggml_mulmat_tune *tune,
                 fprintf(stdout, "[tune] data was written to `%s`\n",
                         params->fname);
             } else {
-                fprintf(
-                    stderr,
-                    "[tune] warn: failed to write file `%s`, print to "
-                    "console instead\n\n",
-                    params->fname);
+                fprintf(stderr,
+                        "[tune] warn: failed to write file `%s`, print to "
+                        "console instead\n\n",
+                        params->fname);
                 params->output_console = 1;
             }
         }
