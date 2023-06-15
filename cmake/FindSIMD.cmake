@@ -1,6 +1,6 @@
-INCLUDE(CheckCSourceRuns)
+include(CheckCSourceRuns)
 
-SET(AVX_CODE "
+set(AVX_CODE "
   #include <immintrin.h>
   int main()
   {
@@ -10,7 +10,7 @@ SET(AVX_CODE "
   }
 ")
 
-SET(AVX512_CODE "
+set(AVX512_CODE "
   #include <immintrin.h>
   int main()
   {
@@ -28,7 +28,7 @@ SET(AVX512_CODE "
   }
 ")
 
-SET(AVX2_CODE "
+set(AVX2_CODE "
   #include <immintrin.h>
   int main()
   {
@@ -40,7 +40,7 @@ SET(AVX2_CODE "
   }
 ")
 
-SET(FMA_CODE "
+set(FMA_CODE "
   #include <immintrin.h>
   int main()
   {
@@ -52,48 +52,48 @@ SET(FMA_CODE "
   }
 ")
 
-MACRO(CHECK_SSE type flags)
-  SET(__FLAG_I 1)
-  SET(CMAKE_REQUIRED_FLAGS_SAVE ${CMAKE_REQUIRED_FLAGS})
-  FOREACH(__FLAG ${flags})
-    IF(NOT ${type}_FOUND)
-      SET(CMAKE_REQUIRED_FLAGS ${__FLAG})
+macro(check_sse type flags)
+  set(__FLAG_I 1)
+  set(CMAKE_REQUIRED_FLAGS_SAVE ${CMAKE_REQUIRED_FLAGS})
+  foreach(__FLAG ${flags})
+    if(NOT ${type}_FOUND)
+      set(CMAKE_REQUIRED_FLAGS ${__FLAG})
       CHECK_C_SOURCE_RUNS("${${type}_CODE}" HAS_${type}_${__FLAG_I})
-      IF(HAS_${type}_${__FLAG_I})
-        SET(${type}_FOUND TRUE CACHE BOOL "${type} support")
-        SET(${type}_FLAGS "${__FLAG}" CACHE STRING "${type} flags")
-      ENDIF()
-      MATH(EXPR __FLAG_I "${__FLAG_I}+1")
-    ENDIF()
-  ENDFOREACH()
-  SET(CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS_SAVE})
+      if(HAS_${type}_${__FLAG_I})
+        set(${type}_FOUND TRUE CACHE BOOL "${type} support")
+        set(${type}_FLAGS "${__FLAG}" CACHE STRING "${type} flags")
+      endif()
+      math(EXPR __FLAG_I "${__FLAG_I}+1")
+    endif()
+  endforeach()
+  set(CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS_SAVE})
 
-  IF(NOT ${type}_FOUND)
-    SET(${type}_FOUND FALSE CACHE BOOL "${type} support")
-    SET(${type}_FLAGS "" CACHE STRING "${type} flags")
-  ENDIF()
+  if(NOT ${type}_FOUND)
+    set(${type}_FOUND FALSE CACHE BOOL "${type} support")
+    set(${type}_FLAGS "" CACHE STRING "${type} flags")
+  endif()
 
-  MARK_AS_ADVANCED(${type}_FOUND ${type}_FLAGS)
+  mark_as_advanced(${type}_FOUND ${type}_FLAGS)
 
-ENDMACRO()
+endmacro()
 
-CHECK_SSE("AVX" " ;/arch:AVX")
-IF(NOT ${AVX_FOUND})
+check_sse("AVX" " ;/arch:AVX")
+if(NOT ${AVX_FOUND})
     set(LLAMA_AVX OFF)
-ELSE()
+else()
     set(LLAMA_AVX ON)
-ENDIF()
+endif()
 
-CHECK_SSE("AVX2" " ;/arch:AVX2")
-IF(NOT ${AVX2_FOUND})
+check_sse("AVX2" " ;/arch:AVX2")
+if(NOT ${AVX2_FOUND})
     set(LLAMA_AVX2 OFF)
-ELSE()
+else()
     set(LLAMA_AVX2 ON)
-ENDIF()
+endif()
 
-CHECK_SSE("AVX512" " ;/arch:AVX512")
-IF(NOT ${AVX512_FOUND})
+check_sse("AVX512" " ;/arch:AVX512")
+if(NOT ${AVX512_FOUND})
     set(LLAMA_AVX512 OFF)
-ELSE()
+else()
     set(LLAMA_AVX512 ON)
-ENDIF()
+endif()

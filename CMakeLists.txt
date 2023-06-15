@@ -109,9 +109,9 @@ else()
     message(WARNING "Git repository not found; to enable automatic generation of build info, make sure Git is installed and the project is a Git repository.")
 endif()
 
-IF(LLAMA_NATIVE)
+if(LLAMA_NATIVE)
     include(cmake/FindSIMD.cmake)
-ENDIF()
+endif()
 
 #
 # Compile flags
