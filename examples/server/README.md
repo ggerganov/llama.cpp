@@ -16,6 +16,10 @@ This example allow you to have a llama.cpp http server to interact from a web pa
 To get started right away, run the following command, making sure to use the correct path for the model you have:
 
 #### Unix-based systems (Linux, macOS, etc.):
+Make sure to build with the server option on
+```bash
+LLAMA_BUILD_SERVER=1 make
+```
 
 ```bash
 ./server -m models/7B/ggml-model.bin --ctx_size 2048
