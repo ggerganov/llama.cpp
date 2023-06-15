@@ -284,13 +284,13 @@ void ggml_metal_get_tensor(
 
 void ggml_metal_graph_compute(
         struct ggml_metal_context * ctx,
-             struct ggml_cgraph * gf) {
+               struct ggml_cgraph * gf) {
     metal_printf("%s: evaluating graph\n", __func__);
 
     // create multiple command buffers and enqueue them
     // then, we encode the graph into the command buffers in parallel
 
-    const int n_cb = 8;
+    const int n_cb = gf->n_threads;
 
     NSMutableArray * command_buffers = [NSMutableArray arrayWithCapacity:n_cb];
 
