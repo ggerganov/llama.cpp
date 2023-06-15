@@ -1537,13 +1537,8 @@ extern "C" {
         bool just_initialized;
 
         struct {
-            struct ggml_tensor * x;  // view of the parameters
-            struct ggml_tensor * g1; // gradient
-            struct ggml_tensor * g2; // gradient squared
             struct ggml_tensor * m;  // first moment
             struct ggml_tensor * v;  // second moment
-            struct ggml_tensor * mh; // first moment hat
-            struct ggml_tensor * vh; // second moment hat
             struct ggml_tensor * pf; // past function values
             float fx_best;
             float fx_prev;

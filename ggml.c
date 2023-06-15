@@ -17329,7 +17329,7 @@ static enum ggml_opt_result ggml_opt_adam(
     struct ggml_tensor * ps[GGML_MAX_PARAMS];
 
     int np = 0;
-    int nx = 0;
+    int64_t nx = 0;
     for (int i = 0; i < gf->n_nodes; ++i) {
         if (gf->nodes[i]->is_param) {
             GGML_PRINT_DEBUG("found param %d: grad->op = %d\n", np, gf->nodes[i]->grad->op);
@@ -17355,18 +17355,10 @@ static enum ggml_opt_result ggml_opt_adam(
     const float beta2 = params.adam.beta2;
     const float eps   = params.adam.eps;
 
-    float * x  = opt->adam.x->data;  // view of the parameters
-    float * g1 = opt->adam.g1->data; // gradient
-    float * g2 = opt->adam.g2->data; // gradient squared
     float * m  = opt->adam.m->data;  // first moment
     float * v  = opt->adam.v->data;  // second moment
-    float * mh = opt->adam.mh->data; // first moment hat
-    float * vh = opt->adam.vh->data; // second moment hat
 
     float * pf = params.past > 0 ? opt->adam.pf->data : NULL; // past function values
-
-    // update view
-    ggml_opt_get_params(np, ps, x);
 
     // compute the function value
     ggml_graph_reset  (gf);
@@ -17412,43 +17404,61 @@ static enum ggml_opt_result ggml_opt_adam(
         UNUSED(t_start_cpu);
 
         {
-            // update the gradient
-            ggml_opt_get_grad(np, ps, g1);
-
-            // m_t = beta1*m_t-1 + (1 - beta1)*g_t
-            ggml_vec_scale_f32(nx, m, beta1);
-            ggml_vec_mad_f32  (nx, m, g1, 1.0f - beta1);
-
-            // g2 = g1^2
-            ggml_vec_sqr_f32  (nx, g2, g1);
-
-            // v_t = beta2*v_t-1 + (1 - beta2)*g_t^2
-            ggml_vec_scale_f32(nx, v, beta2);
-            ggml_vec_mad_f32  (nx, v, g2, 1.0f - beta2);
-
-            // m^hat = m_t / (1 - beta1^t)
-            // v^hat = v_t / (1 - beta2^t)
-            // x_t = x_t-1 - sched*(alpha*m^hat/(sqrt(v^hat) + eps) + decay*x_t-1)
-            // x_t = x_t-1 - sched*alpha*m^hat/(sqrt(v^hat) + eps) - sched*decay*x_t-1
-            // x_t = x_t-1*(1-sched*decay) - sched*alpha*m^hat/(sqrt(v^hat) + eps)
-            // x_t = x_t-1*(1-sched*decay) + sched*decay*(-alpha/decay)*m^hat/(sqrt(v^hat) + eps)
-            // x_t = mix(x_t-1, (-alpha/decay)*m^hat/(sqrt(v^hat) + eps), sched*decay)
-            ggml_vec_cpy_f32  (nx, mh, m);
-            ggml_vec_cpy_f32  (nx, vh, v);
-
-            ggml_vec_scale_f32(nx, mh, alpha/(1.0f - powf(beta1, opt->iter)));
-            ggml_vec_scale_f32(nx, vh,  1.0f/(1.0f - powf(beta2, opt->iter)));
-
-            ggml_vec_sqrt_f32 (nx, vh, vh);
-            ggml_vec_acc1_f32 (nx, vh, eps);
-
-            ggml_vec_div_f32  (nx, mh, mh, vh);
-            ggml_vec_scale_f32(nx, x,  1.0f - decay);
-            ggml_vec_sub_f32  (nx, x,  x,  mh);
-
-            // update the parameters
-            ggml_opt_set_params(np, ps, x);
+            int64_t i = 0;
+            for (int p = 0; p < np; ++p) {
+                const int64_t ne = ggml_nelements(ps[p]) ;
+                for (int64_t j = 0; j < ne; ++j) {
+                    float x = ggml_get_f32_1d(ps[p], j);
+                    float g = ggml_get_f32_1d(ps[p]->grad, j);
+                    m[i] = m[i]*beta1 +   g*(1.0f - beta1);
+                    v[i] = v[i]*beta2 + g*g*(1.0f - beta2);
+                    float mh = m[i]*alpha/(1.0f - powf(beta1, opt->iter));
+                    float vh = v[i]*1.0f /(1.0f - powf(beta2, opt->iter));
+                    vh = sqrtf(vh) + eps;
+                    x  = x*(1.0f - decay) - mh/vh;
+                    ggml_set_f32_1d(ps[p], j, x);
+                    ++i;
+                }
+            }
         }
+        // {
+        //     // update the gradient
+        //     ggml_opt_get_grad(np, ps, g1);
+
+        //     // m_t = beta1*m_t-1 + (1 - beta1)*g_t
+        //     ggml_vec_scale_f32(nx, m, beta1);
+        //     ggml_vec_mad_f32  (nx, m, g1, 1.0f - beta1);
+
+        //     // g2 = g1^2
+        //     ggml_vec_sqr_f32  (nx, g2, g1);
+
+        //     // v_t = beta2*v_t-1 + (1 - beta2)*g_t^2
+        //     ggml_vec_scale_f32(nx, v, beta2);
+        //     ggml_vec_mad_f32  (nx, v, g2, 1.0f - beta2);
+
+        //     // m^hat = m_t / (1 - beta1^t)
+        //     // v^hat = v_t / (1 - beta2^t)
+        //     // x_t = x_t-1 - sched*(alpha*m^hat/(sqrt(v^hat) + eps) + decay*x_t-1)
+        //     // x_t = x_t-1 - sched*alpha*m^hat/(sqrt(v^hat) + eps) - sched*decay*x_t-1
+        //     // x_t = x_t-1*(1-sched*decay) - sched*alpha*m^hat/(sqrt(v^hat) + eps)
+        //     // x_t = x_t-1*(1-sched*decay) + sched*decay*(-alpha/decay)*m^hat/(sqrt(v^hat) + eps)
+        //     // x_t = mix(x_t-1, (-alpha/decay)*m^hat/(sqrt(v^hat) + eps), sched*decay)
+        //     ggml_vec_cpy_f32  (nx, mh, m);
+        //     ggml_vec_cpy_f32  (nx, vh, v);
+
+        //     ggml_vec_scale_f32(nx, mh, alpha/(1.0f - powf(beta1, opt->iter)));
+        //     ggml_vec_scale_f32(nx, vh,  1.0f/(1.0f - powf(beta2, opt->iter)));
+
+        //     ggml_vec_sqrt_f32 (nx, vh, vh);
+        //     ggml_vec_acc1_f32 (nx, vh, eps);
+
+        //     ggml_vec_div_f32  (nx, mh, mh, vh);
+        //     ggml_vec_scale_f32(nx, x,  1.0f - decay);
+        //     ggml_vec_sub_f32  (nx, x,  x,  mh);
+
+        //     // update the parameters
+        //     ggml_opt_set_params(np, ps, x);
+        // }
 
         ggml_graph_reset  (gf);
         ggml_set_f32      (f->grad, 1.0f);
@@ -17941,23 +17951,13 @@ GGML_API void ggml_opt_init(
     switch (opt->params.type) {
         case GGML_OPT_ADAM:
             {
-                opt->adam.x  = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
-                opt->adam.g1 = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
-                opt->adam.g2 = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
                 opt->adam.m  = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
                 opt->adam.v  = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
-                opt->adam.mh = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
-                opt->adam.vh = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, nx);
                 opt->adam.pf = params.past > 0
                     ? ggml_new_tensor_1d(ctx, GGML_TYPE_F32, params.past)
                     : NULL;
-                ggml_set_zero(opt->adam.x);
-                ggml_set_zero(opt->adam.g1);
-                ggml_set_zero(opt->adam.g2);
                 ggml_set_zero(opt->adam.m);
                 ggml_set_zero(opt->adam.v);
-                ggml_set_zero(opt->adam.mh);
-                ggml_set_zero(opt->adam.vh);
                 if (opt->adam.pf) {
                     ggml_set_zero(opt->adam.pf);
                 }

@@ -2406,8 +2406,27 @@ void read_tensor(struct llama_file * file, struct ggml_tensor * tensor) {
     file->read_raw(tensor->data, ggml_nbytes(tensor));
 }
 
+void skip_tensor(struct llama_file * file) {
+    int32_t nd = file->read_u32();
+
+    uint32_t name_len       = file->read_u32();
+    enum     ggml_type type = (enum ggml_type) file->read_u32();
+
+    uint32_t ne[4] = { 1, 1, 1, 1 };
+
+    file->read_raw(ne, sizeof(ne[0]) * nd);
+
+    std::string name = file->read_string(name_len);
+
+    file->seek(-file->tell() & 31, SEEK_CUR);
+
+    size_t nelements = ne[0]*ne[1]*ne[2]*ne[3];
+    size_t nbytes = nelements*ggml_type_size(type)/ggml_blck_size(type);
+    file->seek(nbytes, SEEK_CUR);
+}
+
 void write_opt_context(struct llama_file * file, struct ggml_opt_context * opt) {
-    const uint32_t version = 0;
+    const uint32_t version = 1;
     GGML_ASSERT(opt->nx   >= 0);
     GGML_ASSERT(opt->iter >= 0);
     file->write_u32(version);
@@ -2418,14 +2437,10 @@ void write_opt_context(struct llama_file * file, struct ggml_opt_context * opt) 
     switch (opt->params.type) {
         case GGML_OPT_ADAM:
             {
-                GGML_ASSERT(opt->adam.x != NULL);
-                write_tensor(file, opt->adam.x);
-                write_tensor(file, opt->adam.g1);
-                write_tensor(file, opt->adam.g2);
+                GGML_ASSERT(opt->adam.m  != NULL);
+                GGML_ASSERT(opt->adam.v  != NULL);
                 write_tensor(file, opt->adam.m);
                 write_tensor(file, opt->adam.v);
-                write_tensor(file, opt->adam.mh);
-                write_tensor(file, opt->adam.vh);
                 write_tensor(file, opt->adam.pf);
                 file->write_raw(&opt->adam.fx_best,          sizeof(opt->adam.fx_best));
                 file->write_raw(&opt->adam.fx_prev,          sizeof(opt->adam.fx_prev));
@@ -2433,7 +2448,7 @@ void write_opt_context(struct llama_file * file, struct ggml_opt_context * opt) 
             } break;
         case GGML_OPT_LBFGS:
             {
-                GGML_ASSERT(opt->adam.x != NULL);
+                GGML_ASSERT(opt->lbfgs.x != NULL);
                 write_tensor(file, opt->lbfgs.x);
                 write_tensor(file, opt->lbfgs.xp);
                 write_tensor(file, opt->lbfgs.g);
@@ -2454,10 +2469,7 @@ void write_opt_context(struct llama_file * file, struct ggml_opt_context * opt) 
     }
 }
 
-void read_opt_context(struct llama_file * file, struct ggml_context * ctx, struct ggml_opt_context * opt) {
-    uint32_t version = file->read_u32();
-    GGML_ASSERT(version == 0);
-
+void read_opt_context_v0(struct llama_file * file, struct ggml_context * ctx, struct ggml_opt_context * opt) {
     file->read_raw(&opt->params, sizeof(opt->params));
     file->read_raw(&opt->nx,     sizeof(opt->nx));
     ggml_opt_init(ctx, opt, opt->params, opt->nx);
@@ -2468,13 +2480,13 @@ void read_opt_context(struct llama_file * file, struct ggml_context * ctx, struc
     switch (opt->params.type) {
         case GGML_OPT_ADAM:
             {
-                read_tensor(file, opt->adam.x);
-                read_tensor(file, opt->adam.g1);
-                read_tensor(file, opt->adam.g2);
+                skip_tensor(file);
+                skip_tensor(file);
+                skip_tensor(file);
                 read_tensor(file, opt->adam.m);
                 read_tensor(file, opt->adam.v);
-                read_tensor(file, opt->adam.mh);
-                read_tensor(file, opt->adam.vh);
+                skip_tensor(file);
+                skip_tensor(file);
                 if (opt->adam.pf) { read_tensor(file, opt->adam.pf); }
                 file->read_raw(&opt->adam.fx_best,          sizeof(opt->adam.fx_best));
                 file->read_raw(&opt->adam.fx_prev,          sizeof(opt->adam.fx_prev));
@@ -2482,7 +2494,7 @@ void read_opt_context(struct llama_file * file, struct ggml_context * ctx, struc
             } break;
         case GGML_OPT_LBFGS:
             {
-                GGML_ASSERT(opt->adam.x != NULL);
+                GGML_ASSERT(opt->lbfgs.x != NULL);
                 read_tensor(file, opt->lbfgs.x);
                 read_tensor(file, opt->lbfgs.xp);
                 read_tensor(file, opt->lbfgs.g);
@@ -2500,6 +2512,65 @@ void read_opt_context(struct llama_file * file, struct ggml_context * ctx, struc
                 file->read_raw(&opt->lbfgs.end,              sizeof(opt->lbfgs.end));
                 file->read_raw(&opt->lbfgs.n_no_improvement, sizeof(opt->lbfgs.n_no_improvement));
             } break;
+    }
+}
+
+void read_opt_context_v1(struct llama_file * file, struct ggml_context * ctx, struct ggml_opt_context * opt) {
+    file->read_raw(&opt->params, sizeof(opt->params));
+    file->read_raw(&opt->nx,     sizeof(opt->nx));
+    ggml_opt_init(ctx, opt, opt->params, opt->nx);
+
+    file->read_raw(&opt->iter,   sizeof(opt->iter));
+    opt->just_initialized = (bool) file->read_u32();
+
+    switch (opt->params.type) {
+        case GGML_OPT_ADAM:
+            {
+                read_tensor(file, opt->adam.m);
+                read_tensor(file, opt->adam.v);
+                if (opt->adam.pf) { read_tensor(file, opt->adam.pf); }
+                file->read_raw(&opt->adam.fx_best,          sizeof(opt->adam.fx_best));
+                file->read_raw(&opt->adam.fx_prev,          sizeof(opt->adam.fx_prev));
+                file->read_raw(&opt->adam.n_no_improvement, sizeof(opt->adam.n_no_improvement));
+            } break;
+        case GGML_OPT_LBFGS:
+            {
+                GGML_ASSERT(opt->lbfgs.x != NULL);
+                read_tensor(file, opt->lbfgs.x);
+                read_tensor(file, opt->lbfgs.xp);
+                read_tensor(file, opt->lbfgs.g);
+                read_tensor(file, opt->lbfgs.gp);
+                read_tensor(file, opt->lbfgs.d);
+                if (opt->lbfgs.pf) { read_tensor(file, opt->lbfgs.pf); }
+                read_tensor(file, opt->lbfgs.lmal);
+                read_tensor(file, opt->lbfgs.lmys);
+                read_tensor(file, opt->lbfgs.lms);
+                read_tensor(file, opt->lbfgs.lmy);
+                file->read_raw(&opt->lbfgs.fx_best,          sizeof(opt->lbfgs.fx_best));
+                file->read_raw(&opt->lbfgs.step,             sizeof(opt->lbfgs.step));
+                file->read_raw(&opt->lbfgs.j,                sizeof(opt->lbfgs.j));
+                file->read_raw(&opt->lbfgs.k,                sizeof(opt->lbfgs.k));
+                file->read_raw(&opt->lbfgs.end,              sizeof(opt->lbfgs.end));
+                file->read_raw(&opt->lbfgs.n_no_improvement, sizeof(opt->lbfgs.n_no_improvement));
+            } break;
+    }
+}
+
+void read_opt_context(struct llama_file * file, struct ggml_context * ctx, struct ggml_opt_context * opt) {
+    uint32_t version = file->read_u32();
+    switch (version) {
+        case 0:
+            {
+                read_opt_context_v0(file, ctx, opt);
+            } break;
+        case 1:
+            {
+                read_opt_context_v1(file, ctx, opt);
+            } break;
+        default:
+            {
+                fprintf(stderr, "%s: unknown version %ud\n", __func__, version);
+            }
     }
 }
 
