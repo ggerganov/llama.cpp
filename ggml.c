@@ -17354,6 +17354,7 @@ static enum ggml_opt_result ggml_opt_adam(
     const float beta1 = params.adam.beta1;
     const float beta2 = params.adam.beta2;
     const float eps   = params.adam.eps;
+    const float gclip = params.adam.gclip;
 
     float * m  = opt->adam.m->data;  // first moment
     float * v  = opt->adam.v->data;  // second moment
@@ -17404,16 +17405,34 @@ static enum ggml_opt_result ggml_opt_adam(
         UNUSED(t_start_cpu);
 
         {
+            float gnorm = 1.0f;
+            if (gclip > 0.0f) {
+                // gradient clipping
+                ggml_float sum = 0.0;
+                for (int p = 0; p < np; ++p) {
+                    const int64_t ne = ggml_nelements(ps[p]);
+                    for (int64_t j = 0; j < ne; ++j) {
+                        float g = ggml_get_f32_1d(ps[p]->grad, j);
+                        sum += g*g;
+                    }
+                }
+                ggml_float norm = sqrt(sum);
+                if (norm > (ggml_float) gclip) {
+                    gnorm = (float) ((ggml_float) gclip / norm);
+                }
+            }
+            const float beta1h = alpha/(1.0f - powf(beta1, opt->iter));
+            const float beta2h =  1.0f/(1.0f - powf(beta2, opt->iter));
             int64_t i = 0;
             for (int p = 0; p < np; ++p) {
-                const int64_t ne = ggml_nelements(ps[p]) ;
+                const int64_t ne = ggml_nelements(ps[p]);
                 for (int64_t j = 0; j < ne; ++j) {
                     float x = ggml_get_f32_1d(ps[p], j);
-                    float g = ggml_get_f32_1d(ps[p]->grad, j);
+                    float g = ggml_get_f32_1d(ps[p]->grad, j)*gnorm;
                     m[i] = m[i]*beta1 +   g*(1.0f - beta1);
                     v[i] = v[i]*beta2 + g*g*(1.0f - beta2);
-                    float mh = m[i]*alpha/(1.0f - powf(beta1, opt->iter));
-                    float vh = v[i]*1.0f /(1.0f - powf(beta2, opt->iter));
+                    float mh = m[i]*beta1h;
+                    float vh = v[i]*beta2h;
                     vh = sqrtf(vh) + eps;
                     x  = x*(1.0f - decay) - mh/vh;
                     ggml_set_f32_1d(ps[p], j, x);
@@ -17902,6 +17921,7 @@ struct ggml_opt_params ggml_opt_default_params(enum ggml_opt_type type) {
                         .eps    = 1e-8f,
                         .eps_f  = 1e-5f,
                         .eps_g  = 1e-3f,
+                        .gclip  = 0.0f,
                     },
                 };
             } break;
