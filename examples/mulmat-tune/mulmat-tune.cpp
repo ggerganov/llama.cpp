@@ -170,8 +170,8 @@ int main(int argc, char **argv) {
             ftype = (enum ggml_ftype)v;
         }
 
-        if (ftype > GGML_FTYPE_MOSTLY_Q5_1) {
-            fprintf(stderr, "k_quants type %d is not implemented\n", ftype);
+        if (ftype == GGML_FTYPE_ALL_F32 || ftype == GGML_FTYPE_MOSTLY_F16) {
+            fprintf(stderr, "none quantized type %d is not supported\n", ftype);
             return 1;
         }
     }

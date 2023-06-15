@@ -4,10 +4,11 @@
 #include "ggml-tune.h"
 #include "ggml.h"
 
-// MUL_MAT fine tunning for non-GPU-offloading cases.
+#ifdef GGML_USE_K_QUANTS
+#include "k_quants.h"
+#endif
 
-#define GGML_MULMAT_CACHE_LEN 16
-static struct mm_cache_element default_mm_cache[GGML_MULMAT_CACHE_LEN] = {0};
+// MUL_MAT fine tunning for non-GPU-offloading cases.
 
 #define FNV_OFFSET 14695981039346656037UL
 #define FNV_PRIME 1099511628211UL
@@ -49,9 +50,8 @@ const struct ggml_task_profile *ggml_mulmat_tune_select_task_profile(
     GGML_ASSERT(tune);
 
     // TODO: default_mm_cache is thread-unsafe.
-    struct mm_cache_element *mm_cache = default_mm_cache;
     int slot = ggml_mulmat_tune_cache_hash(M, N, K) % GGML_MULMAT_CACHE_LEN;
-    struct mm_cache_element *e = &mm_cache[slot];
+    struct ggml_mulmat_tune_cache_ele *e = &tune->cache[slot];
 
     struct ggml_mulmat_tune_time profiles_time[GGML_MAX_TASK_PROFILES] = {0};
 
@@ -183,7 +183,7 @@ bool ggml_mulmat_tune_init(struct ggml_mulmat_tune *tune,
 
     enum ggml_type type = ggml_ftype_to_ggml_type(model->ftype);
 
-    GGML_ASSERT(GGML_MULMAT_N_SHAPES >= 6);
+    GGML_ASSERT(GGML_MULMAT_N_SHAPES == 4 || GGML_MULMAT_N_SHAPES == 6);
     tune->n_shapes = GGML_MULMAT_N_SHAPES;
 
     // Attention layers
@@ -196,11 +196,26 @@ bool ggml_mulmat_tune_init(struct ggml_mulmat_tune *tune,
         .N = n_ff, .K = n_embd, .src0_type = type, .src1_type = src1_type};
     tune->shapes[3] = (struct ggml_mulmat_tune_shape){
         .N = n_vocab, .K = n_embd, .src0_type = type, .src1_type = src1_type};
-    // RoPE
-    tune->shapes[4] = (struct ggml_mulmat_tune_shape){
-        .N = n_rot, .K = 0, .src0_type = rot_src0_type, .src1_type = src1_type};
-    tune->shapes[5] = (struct ggml_mulmat_tune_shape){
-        .N = 0, .K = n_rot, .src0_type = rot_src0_type, .src1_type = src1_type};
+
+    tune->n_shapes = GGML_MULMAT_N_SHAPES;
+
+    if (GGML_MULMAT_N_SHAPES == 6) {
+        // RoPE.
+        // - very small comparing to previous, almost no need to bench.
+        // - an Illegal instruction exception on Github (mac-latest-cmake).
+        // - CL sometimes throws error on localhost.
+        // So temporarily disabled as a workaround.
+        tune->shapes[4] =
+            (struct ggml_mulmat_tune_shape){.N = n_rot,
+                                            .K = 0,
+                                            .src0_type = rot_src0_type,
+                                            .src1_type = src1_type};
+        tune->shapes[5] =
+            (struct ggml_mulmat_tune_shape){.N = 0,
+                                            .K = n_rot,
+                                            .src0_type = rot_src0_type,
+                                            .src1_type = src1_type};
+    }
 
     for (int i = 0; i < tune->n_shapes; i++) {
         struct ggml_mulmat_tune_shape *shape = &tune->shapes[i];
@@ -225,6 +240,7 @@ bool ggml_mulmat_tune_init(struct ggml_mulmat_tune *tune,
 
         shape->m_num = params->m_num;
         shape->arr_m = malloc(shape->m_num * sizeof(int));
+        GGML_ASSERT(shape->arr_m);
         for (int j = 0; j < shape->m_num; j++) {
             shape->arr_m[j] = 1 << j;
         }
@@ -245,11 +261,13 @@ void ggml_mulmat_tune_free(struct ggml_mulmat_tune *tune) {
         GGML_ASSERT(shape);
 
         // arr_m and items can be NULL only when testing.
-        if (shape->arr_m) {
-            free(shape->arr_m);
-        }
-        if (shape->items) {
-            free(shape->items);
+        if (shape->m_num > 0) {
+            if (shape->arr_m) {
+                free(shape->arr_m);
+            }
+            if (shape->items) {
+                free(shape->items);
+            }
         }
     }
 }
@@ -325,17 +343,19 @@ ggml_mulmat_tune_validate_internal(const struct ggml_mulmat_tune *tune,
         };
 
         struct ggml_task_profile builtin_profiles[GGML_MAX_TASK_PROFILES];
+        memset(builtin_profiles, 0, sizeof(builtin_profiles));
+
         int n_profiles = ggml_get_task_profiles(&node, builtin_profiles);
 
         if (n_profiles != shape->n_profiles) {
-            snprintf(errbuf, errbuf_len - 1, "task profiles mismatch");
+            snprintf(errbuf, errbuf_len - 1, "task profiles mismatch(n_profiles)");
             return false;
         }
 
         // TODO: profiles order is relevant, too strict.
         size_t sz = sizeof(struct ggml_task_profile) * n_profiles;
         if (memcmp(builtin_profiles, shape->profiles, sz) != 0) {
-            snprintf(errbuf, errbuf_len - 1, "task profiles mismatch");
+            snprintf(errbuf, errbuf_len - 1, "task profiles mismatch(profiles)");
 
             printf("=== built-in profiles:\n");
             ggml_mulmat_tune_write_profiles(stderr, builtin_profiles,
@@ -364,6 +384,9 @@ bool ggml_mulmat_tune_validate(const struct ggml_mulmat_tune *tune,
 }
 
 bool ggml_mulmat_tune_read_data(struct ggml_mulmat_tune *tune, FILE *fp) {
+    GGML_ASSERT(tune);
+    memset(tune, 0, sizeof(struct ggml_mulmat_tune));
+
     int rc = fscanf(fp, "%d", &tune->version);
     if (rc <= 0) {
         return false;
@@ -661,27 +684,42 @@ static struct ggml_tensor *ggml_mulmat_new_tensor(int M, int N, int K,
             ggml_new_tensor_2d(*ctx, GGML_TYPE_F32, (int64_t)K, (int64_t)N);
         ggml_set_f32(src0_f32, 0.1f);
 
+        const float *src_data = (const float *)src0_f32->data;
+        int nxk = N * K;
+
         switch (src0_type) {
         case GGML_TYPE_Q4_0:
-            ggml_quantize_q4_0((const float *)src0_f32->data, src0->data, N * K,
-                               K, hist);
+            ggml_quantize_q4_0(src_data, src0->data, nxk, K, hist);
             break;
         case GGML_TYPE_Q4_1:
-            ggml_quantize_q4_1((const float *)src0_f32->data, src0->data, N * K,
-                               K, hist);
+            ggml_quantize_q4_1(src_data, src0->data, nxk, K, hist);
             break;
         case GGML_TYPE_Q5_0:
-            ggml_quantize_q5_0((const float *)src0_f32->data, src0->data, N * K,
-                               K, hist);
+            ggml_quantize_q5_0(src_data, src0->data, nxk, K, hist);
             break;
         case GGML_TYPE_Q5_1:
-            ggml_quantize_q5_1((const float *)src0_f32->data, src0->data, N * K,
-                               K, hist);
+            ggml_quantize_q5_1(src_data, src0->data, nxk, K, hist);
             break;
         case GGML_TYPE_Q8_0:
-            ggml_quantize_q8_0((const float *)src0_f32->data, src0->data, N * K,
-                               K, hist);
+            ggml_quantize_q8_0(src_data, src0->data, nxk, K, hist);
             break;
+#ifdef GGML_USE_K_QUANTS
+        case GGML_TYPE_Q2_K:
+            ggml_quantize_q2_K(src_data, src0->data, nxk, K, hist);
+            break;
+        case GGML_TYPE_Q3_K:
+            ggml_quantize_q3_K(src_data, src0->data, nxk, K, hist);
+            break;
+        case GGML_TYPE_Q4_K:
+            ggml_quantize_q4_K(src_data, src0->data, nxk, K, hist);
+            break;
+        case GGML_TYPE_Q5_K:
+            ggml_quantize_q5_K(src_data, src0->data, nxk, K, hist);
+            break;
+        case GGML_TYPE_Q6_K:
+            ggml_quantize_q6_K(src_data, src0->data, nxk, K, hist);
+            break;
+#endif
         default:
             GGML_ASSERT(false);
         }

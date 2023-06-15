@@ -70,15 +70,16 @@ static int bench(void) {
     // NULL) error -30 at /Users/mqy/tools/AI/llama.cpp/ggml-opencl.cpp:838
     enum ggml_ftype ftypes[] = {
         // GGML_FTYPE_ALL_F32,
-        GGML_FTYPE_MOSTLY_F16,
+        // GGML_FTYPE_MOSTLY_F16,
         GGML_FTYPE_MOSTLY_Q4_0,
+        GGML_FTYPE_MOSTLY_Q4_K,
     };
 
     int n_ftypes = sizeof(ftypes) / sizeof(ftypes[0]);
 
     const int m_num = 4;
 
-    // Don't use n_threads larger than 2 because Github build hots has limited
+    // Don't use n_threads larger than 2 because Github build hosts has limited
     // resource quota.
     int threads_arr[] = {1, 2};
     int thread_arr_len = sizeof(threads_arr) / sizeof(threads_arr[0]);
@@ -124,7 +125,7 @@ ggml_task_profiles_mock_qxx_provider(struct ggml_tensor *node,
 }
 
 int estimate_time_non_zero_NK(void) {
-    printf("test-ggml-tune: %s\n", __func__);
+    printf("[test-ggml-tune] %s\n", __func__);
 
     struct test_data_t {
         int M;

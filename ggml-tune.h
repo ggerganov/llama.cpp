@@ -11,7 +11,8 @@ extern "C" {
 #endif
 
 #define GGML_MULMAT_TUNE_VERSION 8
-#define GGML_MULMAT_N_SHAPES 6
+#define GGML_MULMAT_N_SHAPES 4
+#define GGML_MULMAT_CACHE_LEN 16
 
 #define GGML_MULMAT_MAX_PASS 3
 
@@ -54,6 +55,14 @@ struct ggml_mulmat_tune_shape {
     struct ggml_mulmat_tune_m *items;
 };
 
+ struct ggml_mulmat_tune_cache_ele {
+    int M;
+    int N;
+    int K;
+    const struct ggml_task_profile *profile;
+    int stages_time[3];
+};
+
 struct ggml_mulmat_tune {
     int version;
 
@@ -66,20 +75,15 @@ struct ggml_mulmat_tune {
     struct ggml_mulmat_tune_shape shapes[GGML_MULMAT_N_SHAPES];
 
     int n_threads;
+
+    // Cache for time estimating.
+    struct ggml_mulmat_tune_cache_ele cache[GGML_MULMAT_CACHE_LEN];
 };
 
 struct ggml_mulmat_tune_time {
     const struct ggml_task_profile *profile;
     int stage_time[3];
     int total_time;
-};
-
-struct mm_cache_element {
-    int M;
-    int N;
-    int K;
-    const struct ggml_task_profile *profile;
-    int stages_time[3];
 };
 
 // params for tune/bench.
