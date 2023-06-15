@@ -85,7 +85,6 @@ ggml_task_profiles_mock_qxx_provider(struct ggml_tensor *node,
                                      struct ggml_task_profile *profiles) {
     UNUSED(node);
     profiles[0].stages[0].backend = GGML_TASK_BACKEND_CPU;
-    profiles[0].stages[0].backend = GGML_TASK_BACKEND_CPU;
     profiles[0].stages[1].backend = GGML_TASK_BACKEND_CPU;
     profiles[1].stages[0].backend = GGML_TASK_BACKEND_CPU;
     profiles[1].stages[1].backend = GGML_TASK_BACKEND_CPU_BLAS;

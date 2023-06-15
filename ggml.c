@@ -15938,6 +15938,18 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
 
             struct ggml_task_stage *stages = node->task_profile.stages;
 
+            // Workrounnd to set node->backend.
+            for (int j = 0; j < 3; j++) {
+                if (node->backend == GGML_BACKEND_CPU &&
+                    (stages[j].backend & GGML_TASK_BACKEND_GPU)) {
+                    if (ggml_cpu_has_cublas() || ggml_cpu_has_clblast()) {
+                        node->backend = GGML_BACKEND_GPU;
+                    } else {
+                        GGML_ASSERT(false);
+                    }
+                }
+            }
+
             // compute stage n_tasks.
             int n_tasks = stages[1].parallel ? n_threads : 1;
 
@@ -16008,6 +16020,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
 
                         if (comp_backend == GGML_TASK_BACKEND_GPU_CL) {
 #if defined(GGML_USE_CLBLAST)
+                            GGML_ASSERT(ggml_cl_can_mul_mat(node->src0, node->src1, node));
                             cur = ggml_cl_mul_mat_get_wsize(node->src0, node->src1, node);
 #else
                             GGML_ASSERT(false);
