@@ -127,6 +127,7 @@ endif
 
 ifndef LLAMA_NO_K_QUANTS
 	CFLAGS   += -DGGML_USE_K_QUANTS
+	CXXFLAGS += -DGGML_USE_K_QUANTS
 	OBJS     += k_quants.o
 endif
 
