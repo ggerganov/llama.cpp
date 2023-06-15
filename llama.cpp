@@ -2745,11 +2745,9 @@ struct llama_context * llama_init_from_file(
 
 #ifdef GGML_USE_TUNE
 bool llama_mulmat_tune(struct llama_context *ctx, int n_threads, bool tune, const char *fname) {
+    GGML_ASSERT (ctx->model.n_gpu_layers == 0);
+
     printf("\n");
-    if (ctx->model.n_gpu_layers != 0) {
-        fprintf(stderr, "[mulmat tune] error: is disabled by GPU offloading\n");
-        return false;
-    }
 
     const char *model_name = llama_model_type_name(ctx->model.type);
 
@@ -2855,7 +2853,7 @@ bool llama_mulmat_tune(struct llama_context *ctx, int n_threads, bool tune, cons
     if (!empty_fname) {
         FILE *fp = fopen(fname, "r");
         if (!fp) {
-            fprintf(stderr, "[mulmat tune] failed to open file %s.\n",
+            fprintf(stderr, "[tune] failed to open file %s.\n",
                     fname);
         } else {
             bool ok = ggml_mulmat_tune_read_data(ctx->tune, fp);
@@ -2863,12 +2861,12 @@ bool llama_mulmat_tune(struct llama_context *ctx, int n_threads, bool tune, cons
 
             if (!ok) {
                 fprintf(stderr,
-                        "[mulmat tune] failed to read data from %s\n",
+                        "[tune] failed to read data from %s\n",
                         fname);
                 return false;
             }
 
-            fprintf(stderr, "[mulmat tune] loaded data from %s\n", fname);
+            fprintf(stderr, "[tune] loaded data from %s\n", fname);
 
             ok = ggml_mulmat_tune_validate(ctx->tune, model_name, ggml_ftype, params.n_threads);
             if (!ok) {

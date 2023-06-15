@@ -159,7 +159,7 @@ int main(int argc, char ** argv) {
     }
 
 #ifdef GGML_USE_TUNE
-    if (params.tune || !params.tune_file.empty()){
+    if (params.tune || !params.tune_file.empty()) {
         bool ok = llama_mulmat_tune(ctx, params.n_threads, params.tune, params.tune_file.c_str());
         if (!ok || (params.tune && !params.tune_file.empty())) {
             llama_free(ctx);

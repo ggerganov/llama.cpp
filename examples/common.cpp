@@ -435,6 +435,14 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         process_escapes(params.prompt);
     }
 
+#ifdef GGML_USE_TUNE
+     if (params.n_gpu_layers > 0) {
+        if (params.tune || !params.tune_file.empty()) {
+            fprintf(stderr, "[tune] error: tunning and GPU offloading cannot be used at the same time, abort.\n");
+            exit(1);
+        }
+     }
+#endif
     return true;
 }
 

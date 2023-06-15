@@ -104,7 +104,7 @@ const struct ggml_task_profile *ggml_mulmat_tune_select_task_profile(
                         prof->stages[i].backend);
                 }
                 printf(
-                    "\n[mulmat tune] M: %3d, N: %5d, K: %5d, backends of the "
+                    "\n[tune] M: %3d, N: %5d, K: %5d, backends of the "
                     "fastest profile: %s %s %s\n",
                     M, N, K, names[0], names[1], names[2]);
 #endif
@@ -358,7 +358,7 @@ bool ggml_mulmat_tune_validate(const struct ggml_mulmat_tune *tune,
     bool ok = ggml_mulmat_tune_validate_internal(tune, model, ftype, n_threads,
                                                  errbuf, sizeof(errbuf));
     if (!ok) {
-        fprintf(stderr, "[mulmat tune] error: %s. run bench again.\n", errbuf);
+        fprintf(stderr, "[tune] error: %s. run bench again.\n", errbuf);
     }
 
     return ok;
@@ -371,7 +371,7 @@ bool ggml_mulmat_tune_read_data(struct ggml_mulmat_tune *tune, FILE *fp) {
     }
 
     if (tune->version != GGML_MULMAT_TUNE_VERSION) {
-        fprintf(stderr, "[mulmat tune] version mismatch, run bench again\n");
+        fprintf(stderr, "[tune] version mismatch, run bench again\n");
         return false;
     }
 
@@ -396,7 +396,7 @@ bool ggml_mulmat_tune_read_data(struct ggml_mulmat_tune *tune, FILE *fp) {
                                (shape->n_profiles * shape->m_num);
             shape->items = malloc(item_size);
             if (shape->items == NULL) {
-                fprintf(stderr, "[mulmat tune] failed to allocate memory\n");
+                fprintf(stderr, "[tune] failed to allocate memory\n");
                 return false;
             }
             memset(shape->items, 0, item_size);
@@ -708,7 +708,7 @@ static size_t ggml_mulmat_allocate_wdata(int N, int K, char **wdata) {
 
     if (!buf) {
         fprintf(stderr,
-                "[mulmat tune] error: failed to allocate %zu MiB memory",
+                "[tune] error: failed to allocate %zu MiB memory",
                 sz / 1024 / 1024);
         return 0;
     }
@@ -745,7 +745,7 @@ bool ggml_mulmat_tune_bench(struct ggml_mulmat_tune *tune,
     int n_backends = ggml_mulmat_tune_get_builtin_task_backends(backends);
     if (n_backends < 2) {
         fprintf(stderr,
-                "[mulmat tune] error: this program was not built with BLAS.\n");
+                "[tune] error: this program was not built with BLAS.\n");
         return false;
     }
 
@@ -770,7 +770,7 @@ bool ggml_mulmat_tune_bench(struct ggml_mulmat_tune *tune,
         }
 
         fprintf(stdout,
-                "[mulmat tune] model: %s, ggml ftype: %d, "
+                "[tune] model: %s, ggml ftype: %d, "
                 "n_pass: %d, n_threads: %d, n_shapes: %d, backends: %s\n",
                 params->model.name, params->model.ftype, params->n_pass,
                 params->n_threads, tune->n_shapes, buf);
@@ -871,7 +871,7 @@ bool ggml_mulmat_tune_bench(struct ggml_mulmat_tune *tune,
 
     ggml_threading_stop(thrd_ctx);
 
-    fprintf(stdout, "[mulmat tune] done, elapsed time: %d seconds.\n",
+    fprintf(stdout, "[tune] done, elapsed time: %d seconds.\n",
             (int)(ggml_time_ms() - t0) / 1000);
 
     // output
@@ -880,7 +880,7 @@ bool ggml_mulmat_tune_bench(struct ggml_mulmat_tune *tune,
         FILE *fp = fopen(params->fname, "w");
         if (!fp) {
             fprintf(stderr,
-                    "[mulmat tune] warn: failed to open file `%s`, print to "
+                    "[tune] warn: failed to open file `%s`, print to "
                     "console instead\n\n",
                     params->fname);
             params->output_console = 1;
@@ -889,12 +889,12 @@ bool ggml_mulmat_tune_bench(struct ggml_mulmat_tune *tune,
             fclose(fp);
 
             if (ok) {
-                fprintf(stdout, "[mulmat tune] data was written to `%s`\n",
+                fprintf(stdout, "[tune] data was written to `%s`\n",
                         params->fname);
             } else {
                 fprintf(
                     stderr,
-                    "[mulmat tune] warn: failed to write file `%s`, print to "
+                    "[tune] warn: failed to write file `%s`, print to "
                     "console instead\n\n",
                     params->fname);
                 params->output_console = 1;
