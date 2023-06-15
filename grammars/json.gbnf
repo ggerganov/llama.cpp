@@ -1,6 +1,6 @@
 # Grammar for subset of JSON - doesn't support full string or number syntax
 
-root  ::= object | array
+root  ::= object
 value ::= object | array | string | number | boolean
 
 object ::=
