@@ -21,15 +21,16 @@
 int32_t get_num_physical_cores();
 
 struct gpt_params {
-    int32_t seed                           = -1;   // RNG seed
-    int32_t n_threads                      = get_num_physical_cores();
-    int32_t n_predict                      = -1;   // new tokens to predict
-    int32_t n_ctx                          = 512;  // context size
-    int32_t n_batch                        = 512;  // batch size for prompt processing (must be >=32 to use BLAS)
-    int32_t n_keep                         = 0;    // number of tokens to keep from initial prompt
-    int32_t n_gpu_layers                   = 0;    // number of layers to store in VRAM
-    int32_t main_gpu                       = 0;    // the GPU that is used for scratch and small tensors
+    int32_t seed                            = -1;  // RNG seed
+    int32_t n_threads                       = get_num_physical_cores();
+    int32_t n_predict                       = -1;  // new tokens to predict
+    int32_t n_ctx                           = 512; // context size
+    int32_t n_batch                         = 512; // batch size for prompt processing (must be >=32 to use BLAS)
+    int32_t n_keep                          = 0;   // number of tokens to keep from initial prompt
+    int32_t n_gpu_layers                    = 0;   // number of layers to store in VRAM
+    int32_t main_gpu                        = 0;   // the GPU that is used for scratch and small tensors
     float   tensor_split[LLAMA_MAX_DEVICES] = {0}; // how split tensors should be distributed across GPUs
+    bool    low_vram                        = 0;   // if true, reduce VRAM usage at the cost of performance
 
     // sampling parameters
     std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
