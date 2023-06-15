@@ -244,9 +244,9 @@ extern "C" {
     LLAMA_API const char * llama_token_to_str(const struct llama_context * ctx, llama_token token);
 
     // Special tokens
-    LLAMA_API llama_token llama_token_bos();
-    LLAMA_API llama_token llama_token_eos();
-    LLAMA_API llama_token llama_token_nl();
+    LLAMA_API llama_token llama_token_bos();  // beginning-of-sentence
+    LLAMA_API llama_token llama_token_eos();  // end-of-sentence
+    LLAMA_API llama_token llama_token_nl();   // next-line
 
     // Sampling functions
 
