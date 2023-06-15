@@ -173,7 +173,6 @@ if (LLAMA_BLAS)
                 /usr/include/openblas
         )
 
-        
         message(STATUS "BLAS found, Includes: ${BLAS_INCLUDE_DIRS}")
 
         add_compile_options(${BLAS_LINKER_FLAGS})
