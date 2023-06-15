@@ -163,12 +163,24 @@ if (LLAMA_BLAS)
     if (BLAS_FOUND)
         message(STATUS "BLAS found, Libraries: ${BLAS_LIBRARIES}")
 
+        # BLAS_INCLUDE_DIRS is missing in FindBLAS.cmake.
+        # see https://gitlab.kitware.com/cmake/cmake/-/issues/20268
+        find_path(BLAS_INCLUDE_DIRS
+            NAMES cblas.h
+            HINTS
+                /usr/include
+                /usr/local/include
+                /usr/include/openblas
+        )
+
+        
+        message(STATUS "BLAS found, Includes: ${BLAS_INCLUDE_DIRS}")
+
         add_compile_options(${BLAS_LINKER_FLAGS})
         add_compile_definitions(GGML_USE_OPENBLAS)
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ${BLAS_LIBRARIES})
+        set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} ${BLAS_INCLUDE_DIRS})
 
-        message("${BLAS_LIBRARIES} ${BLAS_INCLUDE_DIRS}")
-        include_directories(${BLAS_INCLUDE_DIRS})
     else()
         message(WARNING "BLAS not found, please refer to "
         "https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors"
@@ -408,7 +420,7 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_EXTRA}
             )
 
-target_include_directories(ggml PUBLIC .)
+target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})
 target_compile_features(ggml PUBLIC c_std_11) # don't bump
 target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
 
