@@ -2481,3 +2481,14 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
     func(tensor->src0, tensor->src1, tensor);
     return true;
 }
+
+bool ggml_cuda_get_data(struct ggml_tensor * tensor, size_t offset, size_t size, void * dst) {
+    //TODO: Do we need support split
+    GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
+    struct ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
+    char * src_ptr = (char *) extra->data_device[g_main_device];
+
+    CUDA_CHECK(cudaMemcpy(dst, src_ptr + offset, size, cudaMemcpyDeviceToHost));
+
+    return true;
+}

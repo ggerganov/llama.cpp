@@ -20,6 +20,8 @@ void ggml_cl_free_data(const struct ggml_tensor* tensor);
 
 void ggml_cl_transform_tensor(void * data, struct ggml_tensor * tensor);
 
+bool ggml_cl_get_data(struct ggml_tensor * tensor, size_t offset, size_t size, void * dst);
+
 #ifdef  __cplusplus
 }
 #endif

@@ -34,6 +34,8 @@ void   ggml_cuda_set_scratch_size(size_t scratch_size);
 void   ggml_cuda_free_scratch(void);
 bool   ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor);
 
+bool   ggml_cuda_get_data(struct ggml_tensor * tensor, size_t offset, size_t size, void * dst);
+
 #ifdef  __cplusplus
 }
 #endif
