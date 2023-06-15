@@ -32,6 +32,7 @@ models/*
 /result
 /perplexity
 /embedding
+/train-text-from-scratch
 /benchmark-matmult
 /vdot
 /Pipfile
