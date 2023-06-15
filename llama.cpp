@@ -2295,7 +2295,9 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
         // full matching prefix of the selected token
         const bool valid = str[0] == ' '
             ? llama_grammar_peek(stacks_after_space, str[1])
-            : llama_grammar_peek(grammar->stacks,    id == eos ? 0 : str[0]);
+            : str[0] || id == eos
+            ? llama_grammar_peek(grammar->stacks,    id == eos ? 0 : str[0])
+            : false;
 
         if (!valid) {
             candidates->data[i].logit = -INFINITY;
@@ -2438,8 +2440,8 @@ llama_token llama_grammar_accept_token(struct llama_context * ctx, struct llama_
             if (stack.empty()) {
                 return token;
             }
-            LLAMA_ASSERT(false);
         }
+        LLAMA_ASSERT(false);
     }
 
     const char * str    = llama_token_to_str(ctx, token);
