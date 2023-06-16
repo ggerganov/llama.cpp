@@ -1402,9 +1402,9 @@ static bool falcon_eval_internal(
     
     struct ggml_tensor * layernorm_output;
 
-    // ggml_type wtype = GGML_TYPE_F32;
+     ggml_type wtype = GGML_TYPE_F32;
     // ggml_type wtype = ggml_ftype_to_ggml_type((ggml_ftype) (model.hparams.ftype));
-    // const int sizeof_wtype = ggml_type_sizef(wtype);
+     const int sizeof_wtype = ggml_type_sizef(wtype);
 
     const int i_gpu_start = n_layer - n_gpu_layers;
     (void) i_gpu_start;
@@ -1462,23 +1462,23 @@ static bool falcon_eval_internal(
 
             struct ggml_tensor * Qcur = ggml_view_3d(
                 ctx0, cur, head_dim, n_head, N,
-                head_dim * ggml_element_size(cur),
-                head_dim * (n_head + 2 * n_head_kv) * ggml_element_size(cur),
+                head_dim * sizeof_wtype,
+                head_dim * (n_head + 2 * n_head_kv) * sizeof_wtype,
                 0);
             ggml_set_name(Qcur, "Qcur");
 
             struct ggml_tensor * Kcur = ggml_view_3d(
                 ctx0, cur, head_dim, n_head_kv, N,
-                head_dim * ggml_element_size(cur),
-                head_dim * (n_head + 2 * n_head_kv) * ggml_element_size(cur),
-                head_dim * n_head * ggml_element_size(cur));
+                head_dim * sizeof_wtype,
+                head_dim * (n_head + 2 * n_head_kv) * sizeof_wtype,
+                head_dim * n_head * sizeof_wtype);
             ggml_set_name(Kcur, "Kcur");
 
             struct ggml_tensor * Vcur = ggml_view_3d(
                 ctx0, cur, head_dim, n_head_kv, N,
-                head_dim * ggml_element_size(cur),
-                head_dim * (n_head + 2 * n_head_kv) * ggml_element_size(cur),
-                head_dim * (n_head + n_head_kv) * ggml_element_size(cur));
+                head_dim * sizeof_wtype,
+                head_dim * (n_head + 2 * n_head_kv) * sizeof_wtype,
+                head_dim * (n_head + n_head_kv) * sizeof_wtype);
             ggml_set_name(Vcur, "Vcur");
 
             // using mode = 2 for neox mode
