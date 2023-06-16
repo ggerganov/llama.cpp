@@ -16,6 +16,10 @@
 #include <iterator>
 #include <algorithm>
 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
+#endif
+
 float tensor_sum_elements(const ggml_tensor * tensor) {
     float sum = 0;
     if (tensor->type==GGML_TYPE_F32) {
@@ -29,9 +33,9 @@ float tensor_sum_elements(const ggml_tensor * tensor) {
 }
 
 void tensor_dump(const ggml_tensor * tensor, const char * name) {
-    printf("%15s: type = %i (%5s) ne = %5d x %5d x %5d, nb = (%5li, %5li, %5li) - ", name,
+    printf("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64 " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi) - ", name,
         tensor->type, ggml_type_name(tensor->type),
-        (int) tensor->ne[0], (int) tensor->ne[1], (int) tensor->ne[2], tensor->nb[0], tensor->nb[1], tensor->nb[2]);
+        tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->nb[0], tensor->nb[1], tensor->nb[2]);
     float sum = tensor_sum_elements(tensor);
     printf("Sum of tensor %s is %6.2f\n", name, sum);
 }
@@ -120,7 +124,7 @@ int main(int argc, char ** argv)  {
     ctx_size += sizex*sizey*ggml_type_sizef(GGML_TYPE_F32); // BLAS
     ctx_size += 1024*1024*16;
 
-    printf("Allocating Memory of size %li bytes, %li MB\n",ctx_size, (ctx_size/1024/1024));
+    printf("Allocating Memory of size %zi bytes, %zi MB\n",ctx_size, (ctx_size/1024/1024));
 
     struct ggml_init_params params = {
         /*.mem_size   =*/ ctx_size,

@@ -23,9 +23,15 @@
 #include <unistd.h>
 #elif defined (_WIN32)
 #define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h>
 #include <signal.h>
+#endif
+
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
 static console_state con_st;
@@ -331,6 +337,13 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd;
 
+    // do one empty run to warm up the model
+    {
+        const std::vector<llama_token> tmp = { llama_token_bos(), };
+        llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads);
+        llama_reset_timings(ctx);
+    }
+
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
         if (embd.size() > 0) {
@@ -341,7 +354,7 @@ int main(int argc, char ** argv) {
             if ((int)embd.size() > max_embd_size) {
                 auto skipped_tokens = embd.size() - max_embd_size;
                 console_set_color(con_st, CONSOLE_COLOR_ERROR);
-                printf("<<input too long: skipped %ld token%s>>", skipped_tokens, skipped_tokens != 1 ? "s" : "");
+                printf("<<input too long: skipped %" PRIu64 "  token%s>>", skipped_tokens, skipped_tokens != 1 ? "s" : "");
                 console_set_color(con_st, CONSOLE_COLOR_DEFAULT);
                 fflush(stdout);
                 embd.resize(max_embd_size);

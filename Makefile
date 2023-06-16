@@ -1,5 +1,5 @@
 # Define the default target now so that it is always the first target
-BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot simple
+BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-text-from-scratch simple
 
 ifdef LLAMA_BUILD_SERVER
 	BUILD_TARGETS += server
@@ -171,6 +171,11 @@ ifdef LLAMA_CUDA_DMMV_Y
 else
 	NVCCFLAGS += -DGGML_CUDA_DMMV_Y=1
 endif # LLAMA_CUDA_DMMV_Y
+ifdef LLAMA_CUDA_KQUANTS_ITER
+	NVCCFLAGS += -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
+else
+	NVCCFLAGS += -DK_QUANTS_PER_ITERATION=2
+endif
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -Wno-pedantic -c $< -o $@
 endif # LLAMA_CUBLAS
@@ -259,7 +264,7 @@ libllama.so: llama.o ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
 clean:
-	rm -vf *.o main quantize quantize-stats perplexity embedding benchmark-matmult save-load-state server vdot build-info.h
+	rm -vf *.o *.so main quantize quantize-stats perplexity embedding benchmark-matmult save-load-state server vdot train-text-from-scratch build-info.h
 
 #
 # Examples
@@ -294,6 +299,9 @@ save-load-state: examples/save-load-state/save-load-state.cpp build-info.h ggml.
 
 server: examples/server/server.cpp examples/server/httplib.h examples/server/json.hpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -Iexamples/server $(filter-out %.h,$(filter-out %.hpp,$^)) -o $@ $(LDFLAGS)
+
+train-text-from-scratch: examples/train-text-from-scratch/train-text-from-scratch.cpp    build-info.h ggml.o llama.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 build-info.h: $(wildcard .git/index) scripts/build-info.sh
 	@sh scripts/build-info.sh > $@.tmp

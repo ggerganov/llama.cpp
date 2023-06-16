@@ -77,6 +77,7 @@ extern "C" {
         int n_gpu_layers;                      // number of layers to store in VRAM
         int main_gpu;                          // the GPU that is used for scratch and small tensors
         float tensor_split[LLAMA_MAX_DEVICES]; // how to split layers across multiple GPUs
+        bool low_vram;                         // if true, reduce VRAM usage at the cost of performance
         int seed;                              // RNG seed, -1 for random
 
         bool f16_kv;     // use fp16 for KV cache
@@ -220,6 +221,14 @@ extern "C" {
     LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
     LLAMA_API int llama_n_embd (const struct llama_context * ctx);
 
+    // Get the vocabulary as output parameters.
+    // Returns number of results.
+    LLAMA_API int llama_get_vocab(
+            const struct llama_context * ctx,
+                          const char * * strings,
+                                 float * scores,
+                                   int   capacity);
+
     // Token logits obtained from the last call to llama_eval()
     // The logits for the last token are stored in the last row
     // Can be mutated in order to change the probabilities of the next token
@@ -235,9 +244,9 @@ extern "C" {
     LLAMA_API const char * llama_token_to_str(const struct llama_context * ctx, llama_token token);
 
     // Special tokens
-    LLAMA_API llama_token llama_token_bos();
-    LLAMA_API llama_token llama_token_eos();
-    LLAMA_API llama_token llama_token_nl();
+    LLAMA_API llama_token llama_token_bos();  // beginning-of-sentence
+    LLAMA_API llama_token llama_token_eos();  // end-of-sentence
+    LLAMA_API llama_token llama_token_nl();   // next-line
 
     // Sampling functions
 
