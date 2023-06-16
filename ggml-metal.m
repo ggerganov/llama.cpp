@@ -177,6 +177,14 @@ struct ggml_metal_context * ggml_metal_init(void) {
 #undef GGML_METAL_ADD_KERNEL
     }
 
+    fprintf(stderr, "%s: recommendedMaxWorkingSetSize = %8.2f MB\n", __func__, ctx->device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
+    fprintf(stderr, "%s: hasUnifiedMemory             = %s\n",       __func__, ctx->device.hasUnifiedMemory ? "true" : "false");
+    if (ctx->device.maxTransferRate != 0) {
+        fprintf(stderr, "%s: maxTransferRate              = %8.2f MB/s\n", __func__, ctx->device.maxTransferRate / 1024.0 / 1024.0);
+    } else {
+        fprintf(stderr, "%s: maxTransferRate              = built-in GPU\n", __func__);
+    }
+
     return ctx;
 }
 
@@ -250,11 +258,11 @@ bool ggml_metal_add_buffer(
             ctx->buffers[ctx->n_buffers].metal = [ctx->device newBufferWithBytesNoCopy:data length:size_aligned options:MTLResourceStorageModeShared deallocator:nil];
 
             if (ctx->buffers[ctx->n_buffers].metal == nil) {
-                fprintf(stderr, "%s: failed to allocate '%-16s' buffer, size = %8.2f MB\n", __func__, name, size_aligned / 1024.0 / 1024.0);
+                fprintf(stderr, "%s: failed to allocate '%-16s' buffer, size = %8.2f MB", __func__, name, size_aligned / 1024.0 / 1024.0);
                 return false;
             }
 
-            fprintf(stderr, "%s: allocated '%-16s' buffer, size = %8.2f MB\n", __func__, name, size_aligned / 1024.0 / 1024.0);
+            fprintf(stderr, "%s: allocated '%-16s' buffer, size = %8.2f MB", __func__, name, size_aligned / 1024.0 / 1024.0);
 
             ++ctx->n_buffers;
         } else {
@@ -281,10 +289,20 @@ bool ggml_metal_add_buffer(
                     return false;
                 }
 
-                fprintf(stderr, "%s: allocated '%-16s' buffer, size = %8.2f MB, offs = %12ld\n", __func__, name, size_step_aligned / 1024.0 / 1024.0, i);
+                fprintf(stderr, "%s: allocated '%-16s' buffer, size = %8.2f MB, offs = %12ld", __func__, name, size_step_aligned / 1024.0 / 1024.0, i);
 
                 ++ctx->n_buffers;
             }
+        }
+
+        fprintf(stderr, ", (%8.2f / %8.2f)",
+                ctx->device.currentAllocatedSize / 1024.0 / 1024.0,
+                ctx->device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
+
+        if (ctx->device.currentAllocatedSize > ctx->device.recommendedMaxWorkingSetSize) {
+            fprintf(stderr, ", warning: current allocated size is greater than the recommended max working set size\n");
+        } else {
+            fprintf(stderr, "\n");
         }
     }
 
@@ -862,4 +880,14 @@ void ggml_metal_graph_compute(
     dispatch_barrier_sync(queue, ^{});
 
     [command_buffers[n_cb - 1] waitUntilCompleted];
+
+    // check status of command buffers
+    // needed to detect if the device ran out-of-memory for example (#1881)
+    for (int i = 0; i < n_cb; i++) {
+        MTLCommandBufferStatus status = (MTLCommandBufferStatus) [command_buffers[i] status];
+        if (status != MTLCommandBufferStatusCompleted) {
+            fprintf(stderr, "%s: command buffer %d failed with status %lu\n", __func__, i, status);
+            GGML_ASSERT(false);
+        }
+    }
 }
