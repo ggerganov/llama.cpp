@@ -171,11 +171,11 @@ ifdef LLAMA_CUDA_DMMV_Y
 else
 	NVCCFLAGS += -DGGML_CUDA_DMMV_Y=1
 endif # LLAMA_CUDA_DMMV_Y
-#ifdef LLAMA_CUDA_KQUANTS_ITER
+ifdef LLAMA_CUDA_KQUANTS_ITER
 	NVCCFLAGS += -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
-#else
+else
 	NVCCFLAGS += -DK_QUANTS_PER_ITERATION=2
-#endif
+endif
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -Wno-pedantic -c $< -o $@
 endif # LLAMA_CUBLAS
