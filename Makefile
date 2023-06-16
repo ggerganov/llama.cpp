@@ -252,7 +252,13 @@ ggml.o: ggml.c ggml.h ggml-cuda.h
 llama.o: llama.cpp ggml.h ggml-cuda.h llama.h llama-util.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+libfalcon.o: libfalcon.cpp ggml.h ggml-cuda.h libfalcon.h llama-util.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 common.o: examples/common.cpp examples/common.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+falcom_common.o: examples/falcon_common.cpp examples/falcon_common.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 libllama.so: llama.o ggml.o $(OBJS)
@@ -272,6 +278,9 @@ main: examples/main/main.cpp                                  build-info.h ggml.
 	@echo
 
 quantize: examples/quantize/quantize.cpp                      build-info.h ggml.o llama.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
+
+falcon_quantize: examples/falcon_quantize/quantize.cpp                      build-info.h ggml.o libfalcon.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 quantize-stats: examples/quantize-stats/quantize-stats.cpp    build-info.h ggml.o llama.o $(OBJS)
@@ -297,6 +306,8 @@ build-info.h: $(wildcard .git/index) scripts/build-info.sh
 		rm $@.tmp; \
 	fi
 
+falcon_main: examples/falcon/falcon_main.cpp                                  build-info.h ggml.o libfalcon.o falcon_common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 #
 # Tests
 #

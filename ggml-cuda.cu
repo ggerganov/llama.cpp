@@ -1663,6 +1663,7 @@ void ggml_cuda_rms_norm(const ggml_tensor * src0, const ggml_tensor * src1, ggml
 }
 
 bool ggml_cuda_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
+    if (src0->backend == GGML_BACKEND_GPU) printf("src0->backend != GGML_BACKEND_GPU (%s)\n",src0->name);
     GGML_ASSERT(src0->backend != GGML_BACKEND_GPU);
     const int64_t ne10 = src1->ne[0];
 
