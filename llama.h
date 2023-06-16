@@ -142,7 +142,7 @@ extern "C" {
     // Return NULL on failure
     LLAMA_API struct llama_context * llama_init_from_file(
                              const char * path_model,
-            struct llama_context_params   params);
+            const struct llama_context_params * params);
 
     // Frees all allocated memory
     LLAMA_API void llama_free(struct llama_context * ctx);

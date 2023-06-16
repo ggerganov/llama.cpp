@@ -35,7 +35,7 @@ int main(int argc, char ** argv) {
     auto last_n_tokens_data = std::vector<llama_token>(params.repeat_last_n, 0);
 
     // init
-    auto ctx = llama_init_from_file(params.model.c_str(), lparams);
+    auto ctx = llama_init_from_file(params.model.c_str(), &lparams);
     auto tokens = std::vector<llama_token>(params.n_ctx);
     auto n_prompt_tokens = llama_tokenize(ctx, params.prompt.c_str(), tokens.data(), int(tokens.size()), true);
 
@@ -95,7 +95,7 @@ int main(int argc, char ** argv) {
     llama_free(ctx);
 
     // load new model
-    auto ctx2 = llama_init_from_file(params.model.c_str(), lparams);
+    auto ctx2 = llama_init_from_file(params.model.c_str(), &lparams);
 
     // Load state (rng, logits, embedding and kv_cache) from file
     {

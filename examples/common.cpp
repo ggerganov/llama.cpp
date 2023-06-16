@@ -555,7 +555,7 @@ struct llama_context * llama_init_from_gpt_params(const gpt_params & params) {
     lparams.logits_all   = params.perplexity;
     lparams.embedding    = params.embedding;
 
-    llama_context * lctx = llama_init_from_file(params.model.c_str(), lparams);
+    llama_context * lctx = llama_init_from_file(params.model.c_str(), &lparams);
 
     if (lctx == NULL) {
         fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());

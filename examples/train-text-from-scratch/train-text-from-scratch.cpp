@@ -3054,7 +3054,7 @@ int main(int argc, char ** argv) {
     struct llama_context_params llama_params = llama_context_default_params();
     llama_params.vocab_only = true;
 
-    struct llama_context * lctx = llama_init_from_file(params.fn_vocab_model, llama_params);
+    struct llama_context * lctx = llama_init_from_file(params.fn_vocab_model, &llama_params);
 
     struct llama_vocab vocab;
     {

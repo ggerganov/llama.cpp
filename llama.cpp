@@ -2618,8 +2618,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
 struct llama_context * llama_init_from_file(
                              const char * path_model,
-            struct llama_context_params   params) {
+         const struct llama_context_params *  params_ptr) {
     ggml_time_init();
+    struct llama_context_params params = *params_ptr;
 
     llama_context * ctx = new llama_context;
 
