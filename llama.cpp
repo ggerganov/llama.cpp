@@ -1742,9 +1742,6 @@ static bool llama_eval_internal(
         embedding_out.resize(n_embd);
         switch(embeddings->backend)
         {
-            case GGML_BACKEND_CPU:
-                memcpy(embedding_out.data(), (float *) ggml_get_data(embeddings) + (n_embd*(N - 1)), sizeof(float)*n_embd);
-                break;
 #if defined(GGML_USE_CUBLAS)
             case GGML_BACKEND_GPU:
             case GGML_BACKEND_GPU_SPLIT:
@@ -1753,9 +1750,13 @@ static bool llama_eval_internal(
 #elif defined(GGML_USE_CLBAST)
             case GGML_BACKEND_GPU:
             case GGML_BACKEND_GPU_SPLIT:
-                ggml_cuda_get_data(embeddings, (n_embd*(N - 1)) * sizeof(float), n_embd * sizeof(float), embedding_out.data());
+                ggml_cl_get_data(embeddings, (n_embd*(N - 1)) * sizeof(float), n_embd * sizeof(float), embedding_out.data());
                 break;
 #endif
+            case GGML_BACKEND_CPU:
+            default:
+                memcpy(embedding_out.data(), (float *) ggml_get_data(embeddings) + (n_embd*(N - 1)), sizeof(float)*n_embd);
+                break;
         }
 
 

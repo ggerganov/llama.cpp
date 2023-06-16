@@ -1195,6 +1195,8 @@ void ggml_cl_transform_tensor(void * data, ggml_tensor * tensor) {
 }
 
 bool ggml_cl_get_data(struct ggml_tensor * tensor, size_t offset, size_t size, void * dst) {
-    CL_CHECK(clEnqueueReadBuffer(queue, tensor->data, true, offset, size, dst, 0, NULL, NULL));
+    CL_CHECK(clEnqueueReadBuffer(queue, (cl_mem)tensor->data, true, offset, size, dst, 0, NULL, NULL));
     CL_CHECK(clFinish(queue));
+
+    return true;
 }
