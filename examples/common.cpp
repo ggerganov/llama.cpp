@@ -594,7 +594,11 @@ void console_init(console_state & con_st) {
     HANDLE hConIn = GetStdHandle(STD_INPUT_HANDLE);
     if (hConIn != INVALID_HANDLE_VALUE && GetConsoleMode(hConIn, &dwMode)) {
         // Set console input codepage to UTF16
+#ifdef __MINGW32__ /* UTF16 requires wmain in MinGW */
+        _setmode(_fileno(stdin), _O_TEXT);
+#else
         _setmode(_fileno(stdin), _O_WTEXT);
+#endif
 
         // Turn off ICANON (ENABLE_LINE_INPUT) and ECHO (ENABLE_ECHO_INPUT)
         dwMode &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
