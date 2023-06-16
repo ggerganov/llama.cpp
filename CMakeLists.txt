@@ -410,7 +410,7 @@ endif()
 # Build libraries
 #
 
-add_library(ggml
+add_library(ggml STATIC
             ggml.c
             ggml.h
             ${GGML_SOURCES_CUDA}
