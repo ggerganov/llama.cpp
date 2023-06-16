@@ -56,3 +56,6 @@ qnt-*.txt
 perf-*.txt
 
 examples/jeopardy/results.txt
+demo_falcon_orig.cpp
+.github/workflows/build.yml
+.github/workflows/build.yml
