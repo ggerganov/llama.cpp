@@ -1348,12 +1348,6 @@ static bool falcon_eval_internal(
             const int    n_threads,
             const char * cgraph_fname) {
 
-    // enforce that the first token is BOS
-    if (n_past == 0 && tokens[0] != falcon_token_bos()) {
-        fprintf(stderr, "%s: first token must be BOS\n", __func__);
-        return false;
-    }
-
     const int64_t t_start_us = ggml_time_us();
 
     const int N = n_tokens;
@@ -3389,11 +3383,11 @@ const char * falcon_token_to_str(const struct falcon_context * ctx, llama_token 
 }
 
 llama_token falcon_token_bos() {
-    return 1;
+    return 11;
 }
 
 llama_token falcon_token_eos() {
-    return 2;
+    return 11;
 }
 
 llama_token falcon_token_nl() {
