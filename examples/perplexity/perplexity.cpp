@@ -5,6 +5,10 @@
 #include <cmath>
 #include <ctime>
 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
+#endif
+
 std::vector<float> softmax(const std::vector<float>& logits) {
     std::vector<float> probs(logits.size());
     float max_logit = logits[0];

@@ -19,6 +19,10 @@
 #include <thread>
 #include <mutex>
 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
+#endif
+
 struct quantize_stats_params {
     std::string model = "models/7B/ggml-model-f16.bin";
     bool verbose = false;

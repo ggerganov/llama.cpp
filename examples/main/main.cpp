@@ -28,6 +28,10 @@
 #include <signal.h>
 #endif
 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
+#endif
+
 static console_state con_st;
 static llama_context ** g_ctx;
 
@@ -348,7 +352,7 @@ int main(int argc, char ** argv) {
             if ((int)embd.size() > max_embd_size) {
                 auto skipped_tokens = embd.size() - max_embd_size;
                 console_set_color(con_st, CONSOLE_COLOR_ERROR);
-                printf("<<input too long: skipped %ld token%s>>", skipped_tokens, skipped_tokens != 1 ? "s" : "");
+                printf("<<input too long: skipped %" PRIu64 "  token%s>>", skipped_tokens, skipped_tokens != 1 ? "s" : "");
                 console_set_color(con_st, CONSOLE_COLOR_DEFAULT);
                 fflush(stdout);
                 embd.resize(max_embd_size);
