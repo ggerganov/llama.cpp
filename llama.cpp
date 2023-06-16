@@ -592,6 +592,9 @@ struct llama_model_loader {
         auto * first_file = new llama_file_loader(fname_base.c_str(), 0, tensors_map);
         file_loaders.emplace_back(first_file);
         uint32_t n_parts = vocab_only ? 1 : guess_n_parts();
+        if (n_parts != 1) {
+            file_loaders.reserve(n_parts - 1);
+        }
         for (uint32_t i = 1; i < n_parts; i++) {
             std::string fname = fname_base + "." + std::to_string(i);
             auto * ith_file = new llama_file_loader(fname.c_str(), i, tensors_map);
@@ -891,10 +894,11 @@ static void llama_model_load_internal(
 
     std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, use_mmap, vocab_only));
 
-    lctx.vocab = std::move(ml->file_loaders.at(0)->vocab);
+    const auto & loader = ml->file_loaders.at(0);
+    lctx.vocab = std::move(loader->vocab);
     auto & model = lctx.model;
-    model.hparams = ml->file_loaders.at(0)->hparams;
-    llama_file_version file_version = ml->file_loaders.at(0)->file_version;
+    model.hparams = loader->hparams;
+    llama_file_version file_version = loader->file_version;
     auto & hparams = model.hparams;
     uint32_t n_ff = ((2*(4*hparams.n_embd)/3 + hparams.n_mult - 1)/hparams.n_mult)*hparams.n_mult;
 
@@ -1019,7 +1023,8 @@ static void llama_model_load_internal(
     ml->done_getting_tensors();
 
     // populate `tensors_by_name`
-    for (llama_load_tensor & lt : ml->tensors_map.tensors) {
+    model.tensors_by_name.reserve(ml->tensors_map.tensors.size());
+    for (const auto & lt : ml->tensors_map.tensors) {
         model.tensors_by_name.emplace_back(lt.name, lt.ggml_tensor);
     }
 
@@ -1143,6 +1148,8 @@ static bool llama_eval_internal(
     struct ggml_tensor * inpL = ggml_get_rows(ctx0, model.tok_embeddings, embd);
 
     for (int il = 0; il < n_layer; ++il) {
+        const auto & layer = model.layers[il];
+
         struct ggml_tensor * inpSA = inpL;
 
         struct ggml_tensor * cur;
@@ -1155,22 +1162,22 @@ static bool llama_eval_internal(
 
             // cur = attention_norm*cur
             cur = ggml_mul(ctx0,
-                        ggml_repeat(ctx0, model.layers[il].attention_norm, cur),
+                        ggml_repeat(ctx0, layer.attention_norm, cur),
                         cur);
         }
 
         // self-attention
         {
             // compute Q and K and RoPE them
-            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
-            struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wk, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
+            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, layer.wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
+            struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, layer.wk, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
             ggml_set_name(Qcur, "Qcur");
             ggml_set_name(Kcur, "Kcur");
 
             // store key and value to memory
             {
                 // compute the transposed [N, n_embd] V matrix
-                struct ggml_tensor * Vcur = ggml_transpose(ctx0, ggml_reshape_2d(ctx0, ggml_mul_mat(ctx0, model.layers[il].wv, cur), n_embd, N));
+                struct ggml_tensor * Vcur = ggml_transpose(ctx0, ggml_reshape_2d(ctx0, ggml_mul_mat(ctx0, layer.wv, cur), n_embd, N));
 
                 struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, N*n_embd, (ggml_element_size(kv_self.k)*n_embd)*(il*n_ctx + n_past));
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, N, n_embd,
@@ -1249,7 +1256,7 @@ static bool llama_eval_internal(
 
             // projection (no bias)
             cur = ggml_mul_mat(ctx0,
-                    model.layers[il].wo,
+                    layer.wo,
                     cur);
         }
 
@@ -1265,16 +1272,16 @@ static bool llama_eval_internal(
 
                 // cur = ffn_norm*cur
                 cur = ggml_mul(ctx0,
-                        ggml_repeat(ctx0, model.layers[il].ffn_norm, cur),
+                        ggml_repeat(ctx0, layer.ffn_norm, cur),
                         cur);
             }
 
             struct ggml_tensor * tmp = ggml_mul_mat(ctx0,
-                    model.layers[il].w3,
+                    layer.w3,
                     cur);
 
             cur = ggml_mul_mat(ctx0,
-                    model.layers[il].w1,
+                    layer.w1,
                     cur);
 
             // SILU activation
@@ -1283,7 +1290,7 @@ static bool llama_eval_internal(
             cur = ggml_mul(ctx0, cur, tmp);
 
             cur = ggml_mul_mat(ctx0,
-                    model.layers[il].w2,
+                    layer.w2,
                     cur);
         }
 
@@ -1450,7 +1457,7 @@ struct llama_tokenizer {
 
         // keep substituting the highest frequency pairs for as long as we can.
         while (!work_queue_.empty()) {
-            auto bigram = work_queue_.top();
+            const auto& bigram = work_queue_.top();
             work_queue_.pop();
 
             auto & left_sym = symbols_[bigram.left];
@@ -1485,6 +1492,7 @@ struct llama_tokenizer {
 
             if (token == vocab_.token_to_id.end()) {
                 // output any symbols that did not form tokens as bytes.
+                output.reserve(symbol.n);
                 for (int j = 0; j < (int) symbol.n; ++j) {
                     llama_vocab::id token_id = static_cast<uint8_t>(symbol.text[j]) + 3;
                     output.push_back(token_id);
@@ -1703,8 +1711,9 @@ void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * c
 
     // Compute the absolute difference between negative log probability and entropy for each candidate
     std::vector<float> shifted_scores;
+    shifted_scores.reserve(candidates->size);
     for (size_t i = 0; i < candidates->size; ++i) {
-        float shifted_score = fabsf(-logf(candidates->data[i].p) - entropy);
+        const float shifted_score = fabsf(-logf(candidates->data[i].p) - entropy);
         shifted_scores.push_back(shifted_score);
     }
 
@@ -1733,6 +1742,7 @@ void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * c
 
     // Resize the output vector to keep only the locally typical tokens
     std::vector<llama_token_data> new_candidates;
+    new_candidates.reserve(last_idx);
     for (size_t i = 0; i < last_idx; ++i) {
         size_t idx = indices[i];
         new_candidates.push_back(candidates->data[idx]);
@@ -2258,7 +2268,8 @@ int llama_apply_lora_from_file_internal(struct llama_context * ctx, const char *
 
     // create a name -> tensor map of the model to accelerate lookups
     std::unordered_map<std::string, struct ggml_tensor*> model_tensors;
-    for (auto & kv: model.tensors_by_name) {
+    model_tensors.reserve(model.tensors_by_name.size());
+    for (const auto & kv: model.tensors_by_name) {
         model_tensors.insert(kv);
     }
 
@@ -2374,12 +2385,13 @@ int llama_apply_lora_from_file_internal(struct llama_context * ctx, const char *
             ggml_tensor * base_t;
             if (model_loader) {
                 // load from base model
-                if (model_loader->tensors_map.name_to_idx.find(base_name) == model_loader->tensors_map.name_to_idx.end()) {
+                auto & tmap = model_loader->tensors_map;
+                if (tmap.name_to_idx.find(base_name) == tmap.name_to_idx.end()) {
                     fprintf(stderr, "%s: error: tensor '%s' not found in base model\n", __func__, base_name.c_str());
                     return 1;
                 }
-                size_t idx = model_loader->tensors_map.name_to_idx[base_name];
-                llama_load_tensor & lt = model_loader->tensors_map.tensors[idx];
+                size_t idx = tmap.name_to_idx[base_name];
+                llama_load_tensor & lt = tmap.tensors[idx];
                 base_t = model_loader->get_tensor(base_name, { (uint32_t)dest_t->ne[0], (uint32_t)dest_t->ne[1] });
                 lt.data = (uint8_t *) lt.ggml_tensor->data;
                 model_loader->load_data_for(lt);
@@ -2513,11 +2525,12 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
         std::stringstream rng_ss;
         rng_ss << ctx->rng;
 
-        const size_t rng_size = rng_ss.str().size();
+        const auto & rng = rng_ss.str();
+        const size_t rng_size = rng.size();
         char rng_buf[LLAMA_MAX_RNG_STATE];
 
         memset(&rng_buf[0], 0, LLAMA_MAX_RNG_STATE);
-        memcpy(&rng_buf[0], rng_ss.str().data(), rng_ss.str().size());
+        memcpy(&rng_buf[0], rng.data(), rng.size());
 
         memcpy(out, &rng_size,   sizeof(rng_size));    out += sizeof(rng_size);
         memcpy(out, &rng_buf[0], LLAMA_MAX_RNG_STATE); out += LLAMA_MAX_RNG_STATE;
@@ -2901,7 +2914,7 @@ void llama_reset_timings(struct llama_context * ctx) {
 const char * llama_print_system_info(void) {
     static std::string s;
 
-    s  = "";
+    s.clear();
     s += "AVX = "         + std::to_string(ggml_cpu_has_avx())         + " | ";
     s += "AVX2 = "        + std::to_string(ggml_cpu_has_avx2())        + " | ";
     s += "AVX512 = "      + std::to_string(ggml_cpu_has_avx512())      + " | ";

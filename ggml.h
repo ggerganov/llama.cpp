@@ -442,7 +442,7 @@ extern "C" {
 
     GGML_API size_t  ggml_used_mem(const struct ggml_context * ctx);
 
-    GGML_API size_t  ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch);
+    GGML_API size_t  ggml_set_scratch(struct ggml_context * ctx, const struct ggml_scratch scratch);
 
     GGML_API struct ggml_tensor * ggml_new_tensor(
             struct ggml_context * ctx,
@@ -1061,7 +1061,7 @@ extern "C" {
     // optimize the function defined by the tensor f
     GGML_API enum ggml_opt_result ggml_opt(
             struct ggml_context * ctx,
-            struct ggml_opt_params params,
+            const struct ggml_opt_params params,
             struct ggml_tensor * f);
 
     //
