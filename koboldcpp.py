@@ -415,6 +415,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"success": ("true" if ag else "false")}).encode())
             print("Generation Aborted")
+            modelbusy = False
             return
 
         if self.path.endswith('/api/extra/generate/check'):
