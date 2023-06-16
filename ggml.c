@@ -35,6 +35,12 @@
 #define static_assert(cond, msg) struct global_scope_noop_trick
 #endif
 
+#if defined(_MSC_VER)
+// disable "possible loss of data" to avoid hundreds of casts
+// we should just be careful :)
+#pragma warning(disable: 4244 4267)
+#endif
+
 #if defined(_WIN32)
 
 #include <windows.h>

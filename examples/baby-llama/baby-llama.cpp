@@ -4,6 +4,10 @@
 #include <random>
 #include <cstring>
 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
+#endif
+
 float frand() {
     return (float)rand()/(float)RAND_MAX;
 }
@@ -1470,7 +1474,7 @@ struct ggml_tensor * square_error_loss(struct ggml_context * ctx, struct ggml_te
 }
 
 struct ggml_tensor * cross_entropy_loss(struct ggml_context * ctx, struct ggml_tensor * a, struct ggml_tensor * b) {
-    const float eps = 1e-3;
+    const float eps = 1e-3f;
     return
         ggml_sum(ctx,
             ggml_neg(ctx,

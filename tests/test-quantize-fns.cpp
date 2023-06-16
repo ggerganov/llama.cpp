@@ -9,12 +9,15 @@
 #include <string>
 #include <vector>
 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
+#endif
 
-const float MAX_QUANTIZATION_REFERENCE_ERROR = 0.0001;
-const float MAX_QUANTIZATION_TOTAL_ERROR = 0.002;
-const float MAX_QUANTIZATION_TOTAL_ERROR_2BITS = 0.0075;
-const float MAX_QUANTIZATION_TOTAL_ERROR_3BITS = 0.0040;
-const float MAX_DOT_PRODUCT_ERROR = 0.02;
+const float MAX_QUANTIZATION_REFERENCE_ERROR = 0.0001f;
+const float MAX_QUANTIZATION_TOTAL_ERROR = 0.002f;
+const float MAX_QUANTIZATION_TOTAL_ERROR_2BITS = 0.0075f;
+const float MAX_QUANTIZATION_TOTAL_ERROR_3BITS = 0.0040f;
+const float MAX_DOT_PRODUCT_ERROR = 0.02f;
 
 const char* RESULT_STR[] = {"ok", "FAILED"};
 
