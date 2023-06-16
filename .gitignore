@@ -29,6 +29,7 @@ build-sanitize-thread/
 /result
 /perplexity
 /embedding
+/train-text-from-scratch
 /benchmark-matmult
 /vdot
 /Pipfile

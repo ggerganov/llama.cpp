@@ -25,7 +25,7 @@ static_assert(sizeof(half) == sizeof(ggml_fp16_t), "wrong fp16 size");
         }                                                                               \
     } while (0)
 
-#if CUDART_VERSION >= 12
+#if CUDART_VERSION >= 12000
 #define CUBLAS_CHECK(err)                                                               \
     do {                                                                                \
         cublasStatus_t err_ = (err);                                                    \
@@ -2366,7 +2366,7 @@ void ggml_cuda_assign_buffers_no_scratch(struct ggml_tensor * tensor) {
 }
 
 void ggml_cuda_set_main_device(int main_device) {
-    if (main_device > g_device_count) {
+    if (main_device >= g_device_count) {
         fprintf(stderr, "warning: cannot set main_device=%d because there are only %d devices. Using device %d instead.\n",
                 main_device, g_device_count, g_main_device);
         return;
