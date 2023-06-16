@@ -22,6 +22,7 @@ build-metal/
 build-no-accel/
 build-sanitize-addr/
 build-sanitize-thread/
+out/
 
 models/*
 *.bin
@@ -41,6 +42,7 @@ models/*
 build-info.h
 arm_neon.h
 compile_commands.json
+CMakeSettings.json
 
 __pycache__
 
