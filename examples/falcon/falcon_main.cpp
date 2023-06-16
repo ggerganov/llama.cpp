@@ -175,10 +175,8 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> embd_inp;
 
     if (params.interactive_first || params.instruct || !params.prompt.empty() || session_tokens.empty()) {
-        // Add a space in front of the first character to match OG llama tokenizer behavior
-        params.prompt.insert(0, 1, ' ');
-
-        embd_inp = ::falcon_tokenize(ctx, params.prompt, true);
+        // Falcon does not have a dedicated bos token (bos==eos), so don't inject it here
+        embd_inp = ::falcon_tokenize(ctx, params.prompt, false);
     } else {
         embd_inp = session_tokens;
     }
