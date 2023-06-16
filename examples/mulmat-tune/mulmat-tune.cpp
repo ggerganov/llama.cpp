@@ -11,6 +11,10 @@
 
 #define UNUSED(x) (void)(x)
 
+// F16 has an pending Illegal Instruction error on macos-latest-cmake.
+// So the workaround is to disable non-quantized ftypes.
+// #define SUPPORT_NONE_Q_TYPE 1
+
 static void print_build_tips(void) {
     const char *a = "LLAMA_NO_ACCELERATE";
     fprintf(stderr, "Tips on how to build with various backend vendors:\n\n");
@@ -62,11 +66,12 @@ static void usage(char *prog) {
         "--model     MODEL    3B | 7B | 13B | 30B | 65B",
         "                     default 7B",
         "--ftype     FTYPE    ggml ftype:",
+#ifdef SUPPORT_NONE_Q_TYPE
         "                     0:  all F32",
         "                     1:  mostly F16",
+#endif
         "                     2:  mostly Q4_0",
         "                     3:  mostly Q4_1",
-        "                     4:  mostly Q4_1, some F16",
         "                     7:  mostly Q8_0",
         "                     8:  mostly Q5_0",
         "                     9:  mostly Q5_1",
@@ -84,7 +89,7 @@ static void usage(char *prog) {
         "                     requires: between [1, 3]",
         "--n_threads NTH      bench with this number of threads",
         "                     requires: between [1, 16]",
-        "                     default 1",
+        "                     default 4",
         "--file      FILE     data file to write",
         "                     default stdout",
         "-y                   always answer \"yes\" to all prompts",
@@ -170,8 +175,22 @@ int main(int argc, char **argv) {
             ftype = (enum ggml_ftype)v;
         }
 
+#ifndef SUPPORT_NONE_Q_TYPE
         if (ftype == GGML_FTYPE_ALL_F32 || ftype == GGML_FTYPE_MOSTLY_F16) {
-            fprintf(stderr, "none quantized type %d is not supported\n", ftype);
+            fprintf(stderr, "error: none quantized type %d is not supported\n",
+                    ftype);
+            return 1;
+        }
+#endif
+
+        bool cond_1 = ftype >= GGML_FTYPE_MOSTLY_Q4_0 &&
+                      ftype <= GGML_FTYPE_MOSTLY_Q4_1;
+        bool cond_2 =
+            ftype >= GGML_FTYPE_MOSTLY_Q8_0 && ftype <= GGML_FTYPE_MOSTLY_Q6_K;
+
+        if (!(cond_1 || cond_2)) {
+            fprintf(stderr, "error: type %d is not a known ggml ftype.\n",
+                    ftype);
             return 1;
         }
     }
@@ -223,7 +242,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    int n_threads = 1;
+    int n_threads = 4;
     {
         if (arg_n_threads != NULL) {
             int v = atoi(arg_n_threads);

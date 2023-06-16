@@ -8500,19 +8500,14 @@ static void ggml_compute_forward_mul_f32(
     const int ith = params->ith;
     const int nth = params->nth;
 
-    enum ggml_task_backend comp_backend = dst->task_profile.stages[GGML_TASK_COMPUTE].backend;
-    if (comp_backend == GGML_TASK_BACKEND_GPU_CL) {
 #ifdef GGML_USE_CLBLAST
-        if (src1->backend == GGML_BACKEND_GPU) {
-            if (ith == 0) {
-                ggml_cl_mul(src0, src1, dst);
-            }
-            return;
+    if (src1->backend == GGML_BACKEND_GPU) {
+        if (ith == 0) {
+            ggml_cl_mul(src0, src1, dst);
         }
-#else
-        GGML_ASSERT(false);
+        return;
+    }
 #endif
-    };
 
     const int64_t nr = ggml_nrows(src0);
 
@@ -9938,7 +9933,7 @@ static void ggml_compute_forward_rms_norm_back(
     }
 }
 
-
+// CPU only
 static void ggml_compute_forward_mul_mat_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
@@ -10010,18 +10005,6 @@ static void ggml_compute_forward_mul_mat_f32(
     //   compute by src0 rows
 
     enum ggml_task_backend comp_backend = dst->task_profile.stages[GGML_TASK_COMPUTE].backend;
-
-    if (comp_backend == GGML_TASK_BACKEND_GPU_CL) {
-#if defined(GGML_USE_CLBLAST)
-        GGML_ASSERT(params->nth == 1);
-        GGML_ASSERT(params->type == GGML_TASK_COMPUTE);
-        ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
-        return;
-#else
-        GGML_ASSERT(false);
-#endif
-    }
-
     GGML_ASSERT(comp_backend & GGML_TASK_BACKEND_CPU);
 
     if (comp_backend == GGML_TASK_BACKEND_CPU_BLAS) {
@@ -10104,6 +10087,7 @@ static void ggml_compute_forward_mul_mat_f32(
     //}
 }
 
+// CPU only.
 static void ggml_compute_forward_mul_mat_f16_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
@@ -10168,19 +10152,9 @@ static void ggml_compute_forward_mul_mat_f16_f32(
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
+    enum ggml_task_backend init_backend = dst->task_profile.stages[GGML_TASK_INIT].backend;
     enum ggml_task_backend comp_backend = dst->task_profile.stages[GGML_TASK_COMPUTE].backend;
 
-    if (comp_backend == GGML_TASK_BACKEND_GPU_CL) {
-#if defined(GGML_USE_CLBLAST)
-        GGML_ASSERT(params->type == GGML_TASK_COMPUTE);
-        ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
-        return;
-#else
-        GGML_ASSERT(false);
-#endif
-    }
-
-    enum ggml_task_backend init_backend = dst->task_profile.stages[GGML_TASK_INIT].backend;
     GGML_ASSERT(comp_backend & GGML_TASK_BACKEND_CPU);
 
     if (comp_backend == GGML_TASK_BACKEND_CPU_BLAS) {
@@ -10304,6 +10278,7 @@ static void ggml_compute_forward_mul_mat_f16_f32(
     //}
 }
 
+// CPU only
 static void ggml_compute_forward_mul_mat_q_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
@@ -10373,20 +10348,8 @@ static void ggml_compute_forward_mul_mat_q_f32(
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
-    enum ggml_task_backend comp_backend = dst->task_profile.stages[GGML_TASK_COMPUTE].backend;
-
-    if (comp_backend == GGML_TASK_BACKEND_GPU_CL) {
-#if defined(GGML_USE_CLBLAST)
-        GGML_ASSERT(params->nth == 1);
-        GGML_ASSERT(params->type == GGML_TASK_COMPUTE);
-        ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
-        return;
-#else
-        GGML_ASSERT(false);
-#endif
-    }
-
     enum ggml_task_backend init_backend = dst->task_profile.stages[GGML_TASK_INIT].backend;
+    enum ggml_task_backend comp_backend = dst->task_profile.stages[GGML_TASK_COMPUTE].backend;
     GGML_ASSERT(comp_backend & GGML_TASK_BACKEND_CPU);
 
     if (comp_backend == GGML_TASK_BACKEND_CPU_BLAS) {
@@ -14294,29 +14257,8 @@ static void ggml_compute_forward_cross_entropy_loss_back(
 
 /////////////////////////////////
 
-static enum ggml_compute_error ggml_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor) {
+static enum ggml_compute_error ggml_compute_forward(const struct ggml_compute_params * params, struct ggml_tensor * tensor) {
     GGML_ASSERT(params);
-
-    enum ggml_task_backend comp_backend = tensor->task_profile.stages[GGML_TASK_COMPUTE].backend;
-
-    if (comp_backend == GGML_TASK_BACKEND_GPU_CUDA) {
-#if defined(GGML_USE_CUBLAS)
-        bool skip_cpu = ggml_cuda_compute_forward(params, tensor);
-        if (skip_cpu) {
-            return GGML_COMPUTE_OK;
-        }
-        GGML_ASSERT(tensor->src0->backend == GGML_BACKEND_CPU);
-        GGML_ASSERT(tensor->src1 == NULL || tensor->src1->backend == GGML_BACKEND_CPU);
-        return GGML_COMPUTE_FALLBACK;
-#else
-        GGML_ASSERT(false);
-#endif
-    }
-
-    // if (tensor->task_profile.stages[params->type].backend > GGML_TASK_BACKEND_CPU) {
-    //     printf("mulmat: test fallback\n");
-    //     return GGML_COMPUTE_FALLBACK;
-    // }
 
     switch (tensor->op) {
         case GGML_OP_DUP:
@@ -14566,13 +14508,6 @@ static enum ggml_compute_error ggml_compute_forward(struct ggml_compute_params *
     }
 
     return GGML_COMPUTE_OK;
-}
-
-enum ggml_compute_error ggml_compute_forward_wrapper(struct ggml_compute_params *params,
-    struct ggml_tensor *tensor) {
-    // We call ggml_compute_forward because the CUDA mul_mat entry point
-    // was moved out of `ggml_compute_forward_mul_mat`.
-    return ggml_compute_forward(params, tensor);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -15524,12 +15459,67 @@ struct ggml_cgraph ggml_build_backward(struct ggml_context * ctx, struct ggml_cg
 
 // ---- task profiles  ----
 
+// TODO: replace with ggml_compute_forward_cuda
+// DO NOT check matrix size further.
+#if defined(GGML_USE_CUBLAS)
+static enum ggml_compute_error ggml_compute_forward_cuda(
+        const struct ggml_compute_params * params,
+        struct ggml_tensor * tensor) {
+    GGML_ASSERT (ggml_cuda_can_mul_mat(tensor->src0, tensor->src1, tensor));
+    if (ggml_cuda_compute_forward(params, tensor)) {
+        return GGML_COMPUTE_OK;
+    }
+    GGML_ASSERT(tensor->src0->backend == GGML_BACKEND_CPU);
+    GGML_ASSERT(tensor->src1 == NULL || tensor->src1->backend == GGML_BACKEND_CPU);
+    return GGML_COMPUTE_FALLBACK;
+}
+#endif
+
+// TODO: replace with ggml_cl_mul_mat.
+// DO NOT check matrix size further.
+#if defined(GGML_USE_CLBLAST)
+static enum ggml_compute_error ggml_compute_forward_cl(
+        const struct ggml_compute_params * params,
+        struct ggml_tensor * tensor) {
+    switch (tensor->op) {
+        case GGML_OP_MUL_MAT:
+            GGML_ASSERT(ggml_cl_can_mul_mat(tensor->src0, tensor->src1, tensor));
+            ggml_cl_mul_mat(tensor->src0, tensor->src1, tensor, params->wdata, params->wsize);
+            return GGML_COMPUTE_OK;
+        default:
+            break;
+    }
+
+    GGML_ASSERT(false);
+}
+
+static int ggml_compute_forward_get_wsize_cl (struct ggml_tensor *tensor) {
+     switch (tensor->op) {
+        case GGML_OP_MUL_MAT:
+            return ggml_cl_mul_mat_get_wsize(tensor->src0, tensor->src1, tensor);
+        default:
+            break;
+     }
+     return -1;
+}
+#endif
+
+// The wrapper for external mulmat tune tool.
+enum ggml_compute_error ggml_compute_forward_wrapper(const struct ggml_compute_params *params,
+    struct ggml_tensor *tensor) {
+    // We call ggml_compute_forward because the CUDA mul_mat entry point
+    // was moved out of `ggml_compute_forward_mul_mat`.
+    return ggml_compute_forward(params, tensor);
+}
+
 // Implement `ggml_task_profiles_provider`.
 // Fill `profiles` for the `node` and return number of profiles.
 //
 // NOTE: the node may be incompleted from testing or tunning, so please assert
 //       everything used here.
-inline int ggml_get_task_profiles(
+//
+// TODO: configure cuda for none mul_mat nodes.
+int ggml_get_task_profiles(
     struct ggml_tensor *node,
     struct ggml_task_profile profiles[GGML_MAX_TASK_PROFILES]) {
     GGML_ASSERT(node);
@@ -15595,6 +15585,8 @@ inline int ggml_get_task_profiles(
     } break;
     case GGML_OP_MUL_MAT:
     case GGML_OP_OUT_PROD: {
+        // CPU only profiles.
+        // CUDA/CL: see end of function.
         GGML_ASSERT(node->src0);
         GGML_ASSERT(node->src1);
 
@@ -15614,16 +15606,6 @@ inline int ggml_get_task_profiles(
             p[i].stages[1].wait = true;
             i++;
 #endif
-
-#if defined(GGML_USE_CUBLAS)
-            p[i].stages[1].backend = GGML_TASK_BACKEND_GPU_CUDA;
-            p[i].stages[1].wait = true;
-            i++;
-#elif defined(GGML_USE_CLBLAST)
-            p[i].stages[1].backend = GGML_TASK_BACKEND_GPU_CL;
-            p[i].stages[1].wait = true;
-            i++;
-#endif
         } else if (src0_t == GGML_TYPE_F16) {
             p[i].stages[0].backend = GGML_TASK_BACKEND_CPU;
             p[i].stages[1].backend = GGML_TASK_BACKEND_CPU;
@@ -15632,16 +15614,6 @@ inline int ggml_get_task_profiles(
 
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
             p[i].stages[1].backend = GGML_TASK_BACKEND_CPU_BLAS;
-            p[i].stages[1].wait = true;
-            i++;
-#endif
-
-#if defined(GGML_USE_CUBLAS)
-            p[i].stages[1].backend = GGML_TASK_BACKEND_GPU_CUDA;
-            p[i].stages[1].wait = true;
-            i++;
-#elif defined(GGML_USE_CLBLAST)
-            p[i].stages[1].backend = GGML_TASK_BACKEND_GPU_CL;
             p[i].stages[1].wait = true;
             i++;
 #endif
@@ -15655,16 +15627,6 @@ inline int ggml_get_task_profiles(
             p[i].stages[0].backend = GGML_TASK_BACKEND_CPU;
             p[i].stages[0].parallel = true;
             p[i].stages[1].backend = GGML_TASK_BACKEND_CPU_BLAS;
-            p[i].stages[1].wait = true;
-            i++;
-#endif
-
-#if defined(GGML_USE_CUBLAS)
-            p[i].stages[1].backend = GGML_TASK_BACKEND_GPU_CUDA;
-            p[i].stages[1].wait = true;
-            i++;
-#elif defined(GGML_USE_CLBLAST)
-            p[i].stages[1].backend = GGML_TASK_BACKEND_GPU_CL;
             p[i].stages[1].wait = true;
             i++;
 #endif
@@ -15757,7 +15719,43 @@ inline int ggml_get_task_profiles(
         GGML_ASSERT(false);
     }
 
+#if defined(GGML_USE_CUBLAS)
+    switch (node->op) {
+        case GGML_OP_ADD:
+        case GGML_OP_MUL:
+        case GGML_OP_SILU:
+        case GGML_OP_RMS_NORM:
+        case GGML_OP_MUL_MAT:
+        case GGML_OP_RESHAPE:
+        case GGML_OP_ROPE: {
+            int i = n_profiles;
+            p[i].runner = ggml_compute_forward_cuda;
+            p[i].stages[1].backend = GGML_TASK_BACKEND_GPU_CUDA;
+            p[i].stages[1].wait = true;
+            ++n_profiles;
+        } break;
+        default: {
+        } break;
+    }
+#elif defined(GGML_USE_CLBLAST)
+    switch (node->op) {
+        case GGML_OP_MUL_MAT: {
+            int i = n_profiles;
+            p[i].runner = ggml_compute_forward_cl;
+            p[i].get_wsize = ggml_compute_forward_get_wsize_cl;
+            p[i].stages[1].backend = GGML_TASK_BACKEND_GPU_CL;
+            p[i].stages[1].wait = true;
+            ++n_profiles;
+        } break;
+        default: {
+        } break;
+    }
+#endif
+
     GGML_ASSERT(n_profiles > 0 && n_profiles <= GGML_MAX_TASK_PROFILES);
+    for (int i = 0; i < n_profiles; i++) {
+        profiles[i].id = i + 1;
+    }
     return n_profiles;
 }
 
@@ -15769,7 +15767,7 @@ static const struct ggml_task_profile *ggml_mulmat_get_task_profile(
     GGML_ASSERT(node);
     GGML_ASSERT(node->op == GGML_OP_MUL_MAT || node->op == GGML_OP_OUT_PROD);
     GGML_ASSERT(profiles);
-    GGML_ASSERT(n_profiles >= 2);
+    GGML_ASSERT(n_profiles > 0);
 
     enum ggml_type src0_t = node->src0->type;
     enum ggml_type src1_t = node->src1->type;
@@ -15777,9 +15775,9 @@ static const struct ggml_task_profile *ggml_mulmat_get_task_profile(
     // Type and memory layout requirements for computing mul_mat with BLAS.
     bool cond_match = (src0_t == GGML_TYPE_F32 || src0_t == GGML_TYPE_F16 ||
                        ggml_is_quantized(src0_t)) &&
-                      src1_t == GGML_TYPE_F32 && node->type == GGML_TYPE_F32 &&
-                      ggml_is_contiguous(node->src0) &&
-                      ggml_is_contiguous(node->src1);
+                       src1_t == GGML_TYPE_F32 && node->type == GGML_TYPE_F32 &&
+                       ggml_is_contiguous(node->src0) &&
+                       ggml_is_contiguous(node->src1);
 
     int M = (int)node->ne[1];
     int N = (int)node->ne[0];
@@ -15790,10 +15788,14 @@ static const struct ggml_task_profile *ggml_mulmat_get_task_profile(
     if (cond_match) {
 #if defined(GGML_USE_TUNE)
         if (tune != NULL) {
-            prof = ggml_mulmat_tune_select_task_profile(tune, M, N, K, src0_t,
+            GGML_ASSERT(n_profiles >= 2);
+            int id = ggml_mulmat_tune_select_task_profile(tune, M, N, K, src0_t,
                                                         src1_t, stages_time_us);
-            if (prof != NULL) {
-                return prof;
+            for (int i = 0; i < n_profiles; i++) {
+                if (profiles[i].id == id) {
+                    prof = &profiles[i];
+                    return prof;
+                }
             }
         }
 #else
@@ -15841,11 +15843,101 @@ static const struct ggml_task_profile *ggml_mulmat_get_task_profile(
     return prof;
 }
 
+void ggml_graph_compute_set_tensor_task_proile(struct ggml_tensor *node,
+                                               struct ggml_cgraph *cgraph) {
+    // Pre-specified.
+    for (int i = 0; i < 3; i++) {
+        if (node->task_profile.stages[i].backend > 0) {
+            return;
+        }
+    }
+
+    struct ggml_task_profile profiles[GGML_MAX_TASK_PROFILES];
+    int n_profiles = ggml_get_task_profiles(node, profiles);
+
+    const struct ggml_task_profile *profile = NULL;
+
+    // GPU offloading. A special case of pre-specified task_profile.
+    if (node->backend == GGML_BACKEND_GPU || node->backend == GGML_BACKEND_GPU_SPLIT) {
+        if (node->op != GGML_OP_MUL_MAT && node->op != GGML_OP_OUT_PROD) {
+            enum ggml_task_backend be;
+            if (ggml_cpu_has_cublas()) {
+                be = GGML_TASK_BACKEND_GPU_CUDA;
+            } else if (ggml_cpu_has_clblast()) {
+                be = GGML_TASK_BACKEND_GPU_CL;
+            } else {
+                GGML_ASSERT(false);
+            }
+
+            for (int j = 0; j < n_profiles; j++) {
+                if (profiles[j].stages[1].backend == be) {
+                    profile = &profiles[j];
+                    break;
+                }
+            }
+            GGML_ASSERT(profile);
+            GGML_ASSERT(!cgraph->tune);
+
+            memcpy(&node->task_profile, profile, sizeof(struct ggml_task_profile));
+            return;
+        }
+    }
+
+    // mul_mat: GGML_OP_MUL_MAT and GGML_OP_OUT_PROD.
+    if (node->op == GGML_OP_MUL_MAT) {
+#if defined(GGML_USE_TUNE)
+        GGML_ASSERT(node->backend == GGML_BACKEND_CPU);
+
+        int stages_time_us[3];
+        profile = ggml_mulmat_get_task_profile(node, profiles, n_profiles,
+                                               cgraph->tune, stages_time_us);
+        GGML_ASSERT(profile);
+
+        memcpy(&node->task_profile, profile, sizeof(struct ggml_task_profile));
+
+        if (cgraph->tune) {
+            memcpy(&node->task_profile, profile,
+                    sizeof(struct ggml_task_profile));
+
+            // Do not wait if the estimated execution time is too small
+            // (e.g. less than 0.1 ms)
+            // TODO: need bench actual wait/notify time, see
+            // ggml-threading.c
+            for (int j = 0; j < 3; j++) {
+                if (node->task_profile.stages[j].wait) {
+                    if (stages_time_us[j] < 100) {
+                        node->task_profile.stages[j].wait = false;
+                    }
+                }
+            }
+        }
+        return;
+#else
+        profile = ggml_mulmat_get_task_profile(node, profiles, n_profiles, NULL,
+                                               NULL);
+        GGML_ASSERT(profile);
+        memcpy(&node->task_profile, profile, sizeof(struct ggml_task_profile));
+        return;
+#endif
+    } else if (node->op == GGML_OP_OUT_PROD) { // FIXME: is this correct?
+        profile = ggml_mulmat_get_task_profile(node, profiles, n_profiles, NULL,
+                                               NULL);
+        GGML_ASSERT(profile);
+        memcpy(&node->task_profile, profile, sizeof(struct ggml_task_profile));
+        return;
+    }
+
+    // default.
+    profile = &profiles[0];
+    GGML_ASSERT(profile->stages[1].backend == GGML_TASK_BACKEND_CPU);
+    memcpy(&node->task_profile, profile, sizeof(struct ggml_task_profile));
+}
+
 void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) {
     int n_threads = cgraph->n_threads;
 
     struct ggml_threading_context *thrd_ctx = ggml_threading_start(
-        n_threads, ggml_threading_graph_compute_thread, ggml_compute_forward,
+        n_threads, NULL, ggml_compute_forward,
         GGML_THREADING_FEATURE_WAIT_ON_DONE, NULL);
 
     // initialize tasks + work buffer
@@ -15854,107 +15946,34 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
 
         size_t work_size = 0;
 
-        struct ggml_task_profile profiles[GGML_MAX_TASK_PROFILES];
-
         // thread scheduling for the different operations
         for (int i = 0; i < cgraph->n_nodes; i++) {
             struct ggml_tensor * node = cgraph->nodes[i];
-            if (node->op == GGML_OP_NONE || node->op == GGML_OP_CONT) {
-                continue;
-            }
 
-            int n_profiles = ggml_get_task_profiles(node, profiles);
-
-            const struct ggml_task_profile *profile = NULL;
-
-            // Adapt node->backend: assume GPU at COMPUTE stage.
-            if (node->backend == GGML_BACKEND_GPU ||
-                node->backend == GGML_BACKEND_GPU_SPLIT) {
-                enum ggml_task_backend be;
-                if (ggml_cpu_has_cublas()) {
-                    be = GGML_TASK_BACKEND_GPU_CUDA;
-                } else if (ggml_cpu_has_clblast()) {
-                    be = GGML_TASK_BACKEND_GPU_CL;
-                } else {
-                    GGML_ASSERT(false);
-                }
-
-                for (int j = 0; j < n_profiles; j++) {
-                    if (profiles[j].stages[1].backend == be) {
-                        profile = &profiles[j];
-                        break;
-                    }
-                }
-                GGML_ASSERT(profile);
-            } else {
-                GGML_ASSERT(node->backend == GGML_BACKEND_CPU);
-            }
-
-            bool profile_copied = false;
-
-            if (node->op == GGML_OP_MUL_MAT) {
-#if defined(GGML_USE_TUNE)
-                int stages_time_us[3];
-                profile = ggml_mulmat_get_task_profile(
-                    node, profiles, n_profiles, cgraph->tune, stages_time_us);
-                GGML_ASSERT(profile);
-
-                if (cgraph->tune) {
-                    memcpy(&node->task_profile, profile,
-                           sizeof(struct ggml_task_profile));
-                    profile_copied = true;
-
-                    // Do not wait if the estimated execution time is too small
-                    // (e.g. less than 0.1 ms)
-                    // TODO: need bench actual wait/notify time, see
-                    // ggml-threading.c
-                    for (int j = 0; j< 3; j++) {
-                        if (node->task_profile.stages[j].wait) {
-                            if (stages_time_us[j] < 100) {
-                                node->task_profile.stages[j].wait = false;
-                            }
-                        }
-                    }
-                }
-#else
-                profile = ggml_mulmat_get_task_profile(node, profiles,
-                                                       n_profiles, NULL, NULL);
-                GGML_ASSERT(profile);
-#endif
-            } else if (node->op == GGML_OP_OUT_PROD) { // FIXME: is is right?
-                profile = ggml_mulmat_get_task_profile(node, profiles,
-                                                       n_profiles, NULL, NULL);
-                GGML_ASSERT(profile);
-            } else {
-                profile = &profiles[0];
-                GGML_ASSERT(profile->stages[1].backend ==
-                            GGML_TASK_BACKEND_CPU);
-            }
-
-            if (!profile_copied) {
-                memcpy(&node->task_profile, profile,
-                       sizeof(struct ggml_task_profile));
-            }
+            GGML_ASSERT (node->op != GGML_OP_NONE);
 
             struct ggml_task_stage *stages = node->task_profile.stages;
 
-            // Workrounnd to set node->backend.
-            for (int j = 0; j < 3; j++) {
-                if (node->backend == GGML_BACKEND_CPU &&
-                    (stages[j].backend & GGML_TASK_BACKEND_GPU)) {
-                    if (ggml_cpu_has_cublas() || ggml_cpu_has_clblast()) {
-                        node->backend = GGML_BACKEND_GPU;
-                    } else {
-                        GGML_ASSERT(false);
-                    }
+            ggml_graph_compute_set_tensor_task_proile(node, cgraph);
+
+            //
+            // Allocate temp buffer `wdata` for CPU.
+            // NOTE: GPU MAY fallback to CPU, so we have to cover all possible cases.
+            //
+
+            if (node->task_profile.get_wsize) {
+                int sz = node->task_profile.get_wsize(node);
+                if (sz >= 0) {
+                    work_size = MAX(work_size, (size_t)sz);
+                    continue;
                 }
             }
+
+            //printf("op: %d, comp backend: %d\n", node->op, node->task_profile.stages[1].backend);
 
             // compute stage n_tasks.
             int n_tasks = stages[1].parallel ? n_threads : 1;
 
-            // Allocate temp buffer `wdata` for CPU.
-            // NOTE: GPU MAY fallback to CPU, so we have to cover all possible cases.
             switch (node->op) {
                 case GGML_OP_CPY:
                 case GGML_OP_DUP:
@@ -16012,20 +16031,12 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                     {
                     } break;
                 case GGML_OP_MUL_MAT:
-                case GGML_OP_OUT_PROD: // FIXME: is is right?
+                case GGML_OP_OUT_PROD: // FIXME: is this correct?
                     {
                         size_t cur = 0;
                         enum ggml_task_backend comp_backend = stages[GGML_TASK_COMPUTE].backend;
                         GGML_ASSERT(comp_backend != GGML_TASK_BACKEND_NONE);
-
-                        if (comp_backend == GGML_TASK_BACKEND_GPU_CL) {
-#if defined(GGML_USE_CLBLAST)
-                            GGML_ASSERT(ggml_cl_can_mul_mat(node->src0, node->src1, node));
-                            cur = ggml_cl_mul_mat_get_wsize(node->src0, node->src1, node);
-#else
-                            GGML_ASSERT(false);
-#endif
-                        } else if (comp_backend == GGML_TASK_BACKEND_CPU_BLAS) {
+                        if (comp_backend == GGML_TASK_BACKEND_CPU_BLAS) {
                             GGML_ASSERT(ggml_cpu_has_cpublas());
                             GGML_ASSERT(node->src1->type == GGML_TYPE_F32);
 
@@ -16039,11 +16050,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                             } else {
                                 GGML_ASSERT(false);
                             }
-                        } else if (comp_backend == GGML_TASK_BACKEND_CPU || comp_backend == GGML_TASK_BACKEND_GPU_CUDA) {
-                            if (comp_backend == GGML_TASK_BACKEND_GPU_CUDA) {
-                                GGML_ASSERT(ggml_cpu_has_cublas());
-                            }
-
+                        } else { // CPU or GPU fallback
                             GGML_ASSERT(node->src1->type == GGML_TYPE_F32);
 
                             if (node->src0->type == GGML_TYPE_F32) {
@@ -16056,8 +16063,6 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                             } else {
                                 GGML_ASSERT(false);
                             }
-                        } else {
-                            GGML_ASSERT(false);
                         }
 
                         work_size = MAX(work_size, cur);

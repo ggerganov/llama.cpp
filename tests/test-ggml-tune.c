@@ -72,7 +72,9 @@ static int bench(void) {
         // GGML_FTYPE_ALL_F32,
         // GGML_FTYPE_MOSTLY_F16,
         GGML_FTYPE_MOSTLY_Q4_0,
+#if defined(GGML_USE_K_QUANTS)
         GGML_FTYPE_MOSTLY_Q4_K,
+#endif
     };
 
     int n_ftypes = sizeof(ftypes) / sizeof(ftypes[0]);
@@ -132,16 +134,14 @@ int estimate_time_non_zero_NK(void) {
         int time[3]; // 3 profiles.
     };
 
-    struct ggml_mulmat_tune tune = {
-        .version = 1,
-        .ftype = GGML_FTYPE_MOSTLY_Q4_0,
-    };
+    struct ggml_mulmat_tune tune;
 
+    enum ggml_ftype ftype = GGML_FTYPE_MOSTLY_Q4_0;
     const int m_num = 2;
     const int n_threads = 1; // useless.
 
     struct ggml_mulmat_tune_params params;
-    init_params(&params, tune.ftype, m_num, n_threads);
+    init_params(&params, ftype, m_num, n_threads);
 
     ggml_mulmat_tune_init(&tune, &params, ggml_task_profiles_mock_qxx_provider);
 

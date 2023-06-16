@@ -10,7 +10,7 @@
 extern "C" {
 #endif
 
-#define GGML_MULMAT_TUNE_VERSION 8
+#define GGML_MULMAT_TUNE_VERSION 9
 #define GGML_MULMAT_N_SHAPES 4
 #define GGML_MULMAT_CACHE_LEN 16
 
@@ -55,7 +55,7 @@ struct ggml_mulmat_tune_shape {
     struct ggml_mulmat_tune_m *items;
 };
 
- struct ggml_mulmat_tune_cache_ele {
+struct ggml_mulmat_tune_cache_ele {
     int M;
     int N;
     int K;
@@ -98,10 +98,11 @@ struct ggml_mulmat_tune_params {
 };
 
 // NOTE: stages_time is filled if not null.
-const struct ggml_task_profile *
-ggml_mulmat_tune_select_task_profile(struct ggml_mulmat_tune *tune, int M,
-                                     int N, int K, enum ggml_type src0_t,
-                                     enum ggml_type src1_t, int stages_time[3]);
+// Return profile id.
+int ggml_mulmat_tune_select_task_profile(struct ggml_mulmat_tune *tune, int M,
+                                         int N, int K, enum ggml_type src0_t,
+                                         enum ggml_type src1_t,
+                                         int stages_time[3]);
 
 bool ggml_mulmat_tune_validate(const struct ggml_mulmat_tune *tune,
                                const char *model_name, int ftype,

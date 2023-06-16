@@ -170,7 +170,8 @@ struct ggml_compute_state_shared {
     atomic_bool wait_on_done;
     atomic_bool stop;
 
-    ggml_threading_task_runner *task_runner;
+    // Default task runner, can be overriden by node.task_profile.runner.
+    ggml_task_runner *task_runner;
 
     struct ggml_threading_context *ctx;
 };
@@ -391,8 +392,10 @@ ggml_thread_ret_t ggml_threading_graph_compute_thread(void *data) {
         }
 
         if (shared->n_tasks > 0 && state->has_work) {
-            enum ggml_compute_error err =
-                shared->task_runner(&state->params, state->node);
+            ggml_task_runner *runner = state->node->task_profile.runner
+                                           ? state->node->task_profile.runner
+                                           : shared->task_runner;
+            enum ggml_compute_error err = runner(&state->params, state->node);
 
             GGML_ASSERT(err == GGML_COMPUTE_OK);
 
@@ -427,8 +430,13 @@ ggml_threading_compute_tensor(struct ggml_threading_context *ctx,
                               size_t wsize) {
     GGML_ASSERT(ctx);
     GGML_ASSERT(node);
-
     GGML_ASSERT(ctx->shared.task_runner);
+
+    ggml_task_runner *runner = ctx->shared.task_runner;
+    if (node->task_profile.runner) {
+        runner = node->task_profile.runner;
+    }
+
     struct ggml_compute_state_shared *state_shared = &ctx->shared;
 
     // This is the params for main thread.
@@ -491,7 +499,7 @@ START:
             params.wsize = wsize;
             params.wdata = wdata;
 
-            err = state_shared->task_runner(&params, node);
+            err = runner(&params, node);
         }
 
         // wait for tasks done.
@@ -509,11 +517,21 @@ START:
 
         if (err != GGML_COMPUTE_OK) {
             if (err == GGML_COMPUTE_FALLBACK) {
+                PRINT_DEBUG("[main] fallback from profile, id=%d\n",
+                            node->task_profile.id);
+                GGML_ASSERT(node->task_profile.stages[1].backend >
+                            GGML_TASK_BACKEND_CPU);
+
                 struct ggml_task_profile profiles[GGML_MAX_TASK_PROFILES];
                 int n = ggml_get_task_profiles(node, profiles);
                 GGML_ASSERT(n > 0);
+                GGML_ASSERT(profiles[0].stages[1].backend ==
+                            GGML_TASK_BACKEND_CPU);
+
                 memcpy(&node->task_profile, &profiles[0],
                        sizeof(struct ggml_task_profile));
+                runner = ctx->shared.task_runner;
+
                 goto START;
             }
             return err;
@@ -525,12 +543,13 @@ START:
 
 struct ggml_threading_context *
 ggml_threading_start(int n_threads, ggml_threading_thread_runner *thread_runner,
-                     ggml_threading_task_runner *task_stage_runner,
+                     ggml_task_runner *task_runner,
                      enum ggml_threading_features features,
                      int64_t stages_time[3]) {
     GGML_ASSERT(n_threads > 0);
-    GGML_ASSERT(thread_runner);
-    GGML_ASSERT(task_stage_runner);
+    if (thread_runner == NULL) {
+        thread_runner = ggml_threading_graph_compute_thread;
+    }
 
     size_t ctx_sz = sizeof(struct ggml_threading_context);
     struct ggml_threading_context *ctx = malloc(ctx_sz);
@@ -545,7 +564,7 @@ ggml_threading_start(int n_threads, ggml_threading_thread_runner *thread_runner,
         .wait_now = false,
         .wait_on_done = false,
         .stop = false,
-        .task_runner = task_stage_runner,
+        .task_runner = task_runner,
         .ctx = ctx,
     };
 

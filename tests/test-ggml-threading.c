@@ -42,7 +42,8 @@ static const int n_repeat = 10;
 static int work_done_arr[MAX_N_THREADS];
 
 static enum ggml_compute_error
-mock_task_runner(struct ggml_compute_params *params, struct ggml_tensor *node) {
+mock_task_runner(const struct ggml_compute_params *params,
+                 struct ggml_tensor *node) {
     int64_t loops = node->task_profile.dev_flags[1] * 1000 * 1000;
     if (node->task_profile.stages[params->type].parallel) {
         loops /= params->nth;
@@ -79,9 +80,8 @@ int test_driver(int id, struct ggml_tensor *node, int n_threads) {
 
     int t0 = (int)ggml_time_us();
 
-    struct ggml_threading_context *ctx =
-        ggml_threading_start(n_threads, ggml_threading_graph_compute_thread,
-                             mock_task_runner, features, /*stages_time*/ NULL);
+    struct ggml_threading_context *ctx = ggml_threading_start(
+        n_threads, NULL, mock_task_runner, features, /*stages_time*/ NULL);
 
     int t1 = (int)ggml_time_us();
 
@@ -141,7 +141,7 @@ int test_driver(int id, struct ggml_tensor *node, int n_threads) {
 }
 
 static enum ggml_compute_error
-mock_task_runner_fallback(struct ggml_compute_params *params,
+mock_task_runner_fallback(const struct ggml_compute_params *params,
                           struct ggml_tensor *node) {
     UNUSED(params);
     if (node->backend == GGML_BACKEND_GPU) {
@@ -158,7 +158,7 @@ mock_task_runner_fallback(struct ggml_compute_params *params,
 // thus it is not parallelled.
 int test_fallback(struct ggml_tensor *node) {
     struct ggml_threading_context *ctx = ggml_threading_start(
-        1, ggml_threading_graph_compute_thread, mock_task_runner_fallback,
+        1, NULL, mock_task_runner_fallback,
         /*features*/ GGML_THREADING_FEATURE_NONE, /*stages_time*/ NULL);
 
     enum ggml_compute_error err =
@@ -172,6 +172,38 @@ int test_fallback(struct ggml_tensor *node) {
     if (err != GGML_COMPUTE_OK) {
         printf("ggml_threading_compute_tensor failed with error: %d.\n", err);
         return 1;
+    }
+
+    return 0;
+}
+
+static enum ggml_compute_error
+customized_node_runner(const struct ggml_compute_params *params,
+                       struct ggml_tensor *node) {
+    UNUSED(params);
+    // Reset runner thus caller will know it was called.
+    node->task_profile.runner = NULL;
+    return GGML_COMPUTE_OK;
+}
+
+// Test when node->task_profile.runner is not NULL.
+int test_customized_node_runner(struct ggml_tensor *node) {
+    struct ggml_threading_context *ctx = ggml_threading_start(
+        1, NULL, mock_task_runner,
+        /*features*/ GGML_THREADING_FEATURE_NONE, /*stages_time*/ NULL);
+
+    node->task_profile.runner = customized_node_runner;
+    enum ggml_compute_error err =
+        ggml_threading_compute_tensor(ctx, node, /*wdata*/ NULL, /*wsize*/ 0);
+
+    ggml_threading_stop(ctx);
+    if (err != GGML_COMPUTE_OK) {
+        // should not happen.
+        abort();
+    }
+
+    if (node->task_profile.runner != NULL) {
+        return 2;
     }
 
     return 0;
@@ -367,7 +399,10 @@ int main(void) {
         }
     }
 
+    // fallback
     {
+        printf("[test-ggml-threading] test fallback ...\n");
+
         ++n_tests;
 
         // required by getting task profiles.
@@ -382,9 +417,21 @@ int main(void) {
         node.src1 = &src1;
 
         node.backend = GGML_BACKEND_GPU;
+        stages[1].backend = GGML_TASK_BACKEND_GPU;
         if (test_fallback(&node) == 0) {
             ++n_passed;
-            printf("\n[test-ggml-threading] test fallback: ok\n\n");
+            printf("[test-ggml-threading] test fallback: ok\n\n");
+        }
+    }
+
+    // customized node runner
+    {
+        printf("[test-ggml-threading] test customized node runner ...\n");
+        ++n_tests;
+
+        if (test_customized_node_runner(&node) == 0) {
+            ++n_passed;
+            printf("[test-ggml-threading] test customized node runner: ok\n\n");
         }
     }
 

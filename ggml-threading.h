@@ -21,27 +21,21 @@ enum ggml_threading_features {
     GGML_THREADING_FEATURE_PERF = 1 << 1,
 };
 
-// Compute errors.
-enum ggml_compute_error {
-    GGML_COMPUTE_OK = 0,
-    GGML_COMPUTE_FALLBACK = 1,
-};
-
-// The task runner to be called by main thread and workers.
-typedef enum ggml_compute_error(ggml_threading_task_runner)(
-    struct ggml_compute_params *params, struct ggml_tensor *node);
-
 // The thread runner to feed into OS threads.
 typedef ggml_thread_ret_t(ggml_threading_thread_runner)(void *data);
 
 // Init and start underlying workers if n_threads > 1.
 //
-// features: optional for configure threading additional features.
-// see `ggml_threading_feature`, default 0.
+// thread: optional OS thread runner, default value:
+// `ggml_threading_graph_compute_thread`.
+//
+// features: optional for configure
+// threading additional features. see `ggml_threading_feature`, default 0.
+//
 // stages_time: optional for collecting per-stage wall clock time.
 struct ggml_threading_context *
 ggml_threading_start(int n_threads, ggml_threading_thread_runner *thread,
-                     ggml_threading_task_runner *task_stage_runner,
+                     ggml_task_runner *task_runner,
                      enum ggml_threading_features features,
                      int64_t stages_time[3]);
 
@@ -60,7 +54,7 @@ ggml_threading_compute_tensor(struct ggml_threading_context *ctx,
 
 // This is an experimental functionality for mulmat tune, as a thin wrapper.
 enum ggml_compute_error
-ggml_compute_forward_wrapper(struct ggml_compute_params *params,
+ggml_compute_forward_wrapper(const struct ggml_compute_params *params,
                              struct ggml_tensor *tensor);
 
 #ifdef __cplusplus

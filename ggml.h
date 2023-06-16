@@ -390,11 +390,40 @@ extern "C" {
         bool wait;
     };
 
+    struct ggml_tensor;
+    struct ggml_compute_params;
+
+    // Compute errors.
+    enum ggml_compute_error {
+        GGML_COMPUTE_OK = 0,
+        GGML_COMPUTE_FALLBACK = 1,
+    };
+
+    // The task runner to be called by main thread and workers.
+    typedef enum ggml_compute_error(ggml_task_runner)(
+        const struct ggml_compute_params *params,
+        struct ggml_tensor *node);
+
+    // Get wsize for node computing.
+    // When return -1: should be explained as `fallback to CPU`, caller MUST
+    // determine how much memory to reserve for this node.
+    typedef int (ggml_task_get_wsize)(struct ggml_tensor *tensor);
+
     // config for computing a tensor.
     struct ggml_task_profile {
+        // profile id, start from 1.
+        int id;
+
         // index 0: INIT, 1: COMPUTE, 2: FINALIZE
         struct ggml_task_stage stages[3];
 
+        // Optional task runner, overrides threading's task runner.
+        ggml_task_runner *runner;
+
+        // Optional function to return required wsize for wdata.
+        ggml_task_get_wsize *get_wsize;
+
+        // Optional flag for development.
         // MUST be used only in testing codes.
         uint8_t dev_flags[4];
     };
