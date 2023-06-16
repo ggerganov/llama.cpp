@@ -359,9 +359,6 @@ int main(int argc, char ** argv) {
             if (n_past + (int) embd.size() > n_ctx) {
                 const int n_left = n_past - params.n_keep;
 
-                // always keep the first token - BOS
-                n_past = std::max(1, params.n_keep);
-
                 // insert n_left/2 tokens at the start of embd from last_n_tokens
                 embd.insert(embd.begin(), last_n_tokens.begin() + n_ctx - n_left/2 - embd.size(), last_n_tokens.end() - embd.size());
 
