@@ -195,7 +195,7 @@ struct llama_model {
 
     // key + value cache for the self attention
     // TODO: move to llama_state
-    struct llama_kv_cache kv_self;
+    struct llama_kv_cache kv_self = {};
 
     // the model memory buffer
     llama_ctx_buffer buf;
