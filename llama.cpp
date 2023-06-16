@@ -1658,7 +1658,7 @@ static bool llama_eval_internal(
 
         // cur = cur*norm(broadcasted)
         cur = ggml_mul(ctx0, cur, model.norm);
-        offload_func_nr(cur);
+        // offload_func_nr(cur); // TODO CPU + GPU mirrored backend
         ggml_set_name(cur, "result_norm");
 
         embeddings = cur;
