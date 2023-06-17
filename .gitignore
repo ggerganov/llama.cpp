@@ -36,6 +36,7 @@ models/*
 /train-text-from-scratch
 /benchmark-matmult
 /vdot
+/server
 /Pipfile
 /libllama.so
 
