@@ -40,6 +40,10 @@
 #include <sstream>
 #include <numeric>
 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
+#endif
+
 #define LLAMA_USE_SCRATCH
 #define LLAMA_MAX_SCRATCH_BUFFERS 16
 
@@ -1654,7 +1658,7 @@ static bool llama_eval_internal(
 
         // cur = cur*norm(broadcasted)
         cur = ggml_mul(ctx0, cur, model.norm);
-        offload_func_nr(cur);
+        // offload_func_nr(cur); // TODO CPU + GPU mirrored backend
         ggml_set_name(cur, "result_norm");
 
         embeddings = cur;
