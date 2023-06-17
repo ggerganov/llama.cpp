@@ -1,7 +1,7 @@
 llama.cpp modification to run Falcon (work in progress)
 
 Status/Bugs:  
-* Quantization works except for Q_K_ types  
+* Quantization with QK_ type appear to fail on 7B models. (Q_ works on both, QK_ works on 40B)
 * CUDA not yet functional
 * python conversion script is very basic (produces ggml v0)
 * On linux Q5_1 7B user reports a batch token ingestion context memory issue, with -b 1 it's gone. Not reproduced on Windows
