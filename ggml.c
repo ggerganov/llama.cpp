@@ -16012,7 +16012,9 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
             /*.wdata =*/ cgraph->work ? cgraph->work->data : NULL,
         };
 
-        ggml_compute_forward(&params, node);
+        if (node->src0) {
+            ggml_compute_forward(&params, node);
+        }
 
         // COMPUTE
         if (node->n_tasks > 1) {
@@ -16048,7 +16050,9 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         }
 
         params.type = GGML_TASK_COMPUTE;
-        ggml_compute_forward(&params, node);
+        if (node->src0) {
+            ggml_compute_forward(&params, node);
+        }
 
         // wait for thread pool
         if (node->n_tasks > 1) {
@@ -16103,7 +16107,9 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         }
 
         params.type = GGML_TASK_FINALIZE;
-        ggml_compute_forward(&params, node);
+        if (node->src0) {
+            ggml_compute_forward(&params, node);
+        }
 
         // wait for thread pool
         if (node->n_tasks > 1) {
