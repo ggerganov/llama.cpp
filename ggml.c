@@ -4177,6 +4177,36 @@ void ggml_scratch_load(struct ggml_context * ctx) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+size_t ggml_sizeof_tensor_data_impl(enum ggml_type type, int n_dims, const int64_t* ne) {
+    size_t size_needed = 0;
+    size_needed += GGML_TYPE_SIZE[type]*(ne[0]/GGML_BLCK_SIZE[type]);
+    for (int i = 1; i < n_dims; i++) {
+        size_needed *= ne[i];
+    }
+    // align to GGML_MEM_ALIGN
+    size_needed = ((size_needed + GGML_MEM_ALIGN - 1)/GGML_MEM_ALIGN)*GGML_MEM_ALIGN;
+    return size_needed;
+}
+
+size_t ggml_sizeof_tensor_1d(enum ggml_type type, int64_t ne0) {
+    return ggml_tensor_overhead() + ggml_sizeof_tensor_data_impl(type, 1, &ne0);
+}
+
+size_t ggml_sizeof_tensor_2d(enum ggml_type type, int64_t ne0, int64_t ne1) {
+    const int64_t ne[2] = {ne0, ne1};
+    return ggml_tensor_overhead() + ggml_sizeof_tensor_data_impl(type, 2, &ne);
+}
+
+size_t ggml_sizeof_tensor_3d(enum ggml_type type, int64_t ne0, int64_t ne1, int64_t ne2) {
+    const int64_t ne[3] = {ne0, ne1, ne2};
+    return ggml_tensor_overhead() + ggml_sizeof_tensor_data_impl(type, 3, &ne);
+}
+
+size_t ggml_sizeof_tensor_4d(enum ggml_type type, int64_t ne0, int64_t ne1, int64_t ne2, int64_t ne3) {
+    const int64_t ne[4] = {ne0, ne1, ne2, ne3};
+    return ggml_tensor_overhead() + ggml_sizeof_tensor_data_impl(type, 4, &ne);
+}
+
 struct ggml_tensor * ggml_new_tensor_impl(
         struct ggml_context * ctx,
         enum   ggml_type type,
