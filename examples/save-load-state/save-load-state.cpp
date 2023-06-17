@@ -37,7 +37,7 @@ int main(int argc, char ** argv) {
     // init
     auto ctx = llama_init_from_file(params.model.c_str(), lparams);
     auto tokens = std::vector<llama_token>(params.n_ctx);
-    auto n_prompt_tokens = llama_tokenize(ctx, params.prompt.c_str(), tokens.data(), tokens.size(), true);
+    auto n_prompt_tokens = llama_tokenize(ctx, params.prompt.c_str(), tokens.data(), int(tokens.size()), true);
 
     if (n_prompt_tokens < 1) {
         fprintf(stderr, "%s : failed to tokenize prompt\n", __func__);
