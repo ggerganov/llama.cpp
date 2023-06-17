@@ -13,6 +13,10 @@
 #include "ggml-cuda.h"
 #include "ggml.h"
 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
+#endif
+
 static_assert(sizeof(half) == sizeof(ggml_fp16_t), "wrong fp16 size");
 
 #define CUDA_CHECK(err)                                                                 \
