@@ -276,9 +276,6 @@ main: examples/main/main.cpp                                  build-info.h ggml.
 
 simple: examples/simple/simple.cpp                            build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
-	@echo
-	@echo '====  Run ./simple -h for help.  ===='
-	@echo
 
 quantize: examples/quantize/quantize.cpp                      build-info.h ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
