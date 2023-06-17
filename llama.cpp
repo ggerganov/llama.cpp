@@ -886,6 +886,7 @@ static bool kv_cache_init(
     const int64_t n_elements = n_embd*n_mem;
 
     cache.buf.resize(2u*n_elements*ggml_type_size(wtype) + 2u*MB);
+    cache.n = 0;
 
     struct ggml_init_params params;
     params.mem_size   = cache.buf.size;
@@ -904,6 +905,7 @@ static bool kv_cache_init(
     ggml_set_name(cache.k, "cache_k");
     ggml_set_name(cache.v, "cache_v");
 
+    (void) n_gpu_layers;
 #ifdef GGML_USE_CUBLAS
     if (n_gpu_layers > n_layer + 1) {
         ggml_cuda_assign_buffers_no_scratch(cache.v);
@@ -1253,7 +1255,7 @@ static void llama_model_load_internal(
             vram_scratch = n_batch * MB;
             ggml_cuda_set_scratch_size(vram_scratch);
             if (n_gpu_layers > 0) {
-                fprintf(stderr, "%s: allocating batch_size x 1 MB = %ld MB VRAM for the scratch buffer\n",
+                fprintf(stderr, "%s: allocating batch_size x 1 MB = %zd MB VRAM for the scratch buffer\n",
                         __func__, vram_scratch / MB);
             }
         }

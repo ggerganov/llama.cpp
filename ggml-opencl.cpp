@@ -15,6 +15,10 @@
 
 #include "ggml.h"
 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
+#endif
+
 #define CL_DMMV_BLOCK_SIZE 32
 
 #define MULTILINE_QUOTE(...) #__VA_ARGS__
