@@ -25,7 +25,7 @@ int main(int argc, char** argv) {
     for (int i=0;i < 500; i++) {
         // int id = sampling_id(mymodel);
         tmp = sampling(mymodel);
-        if (strlen(tmp) == 0) break;
+        if (strcmp(tmp, "</s>")==0) break;
         printf("%s", tmp); // llama_token_to_str(mymodel->ctx, id));
         fflush(stdout);
         // eval_id(mymodel, id);

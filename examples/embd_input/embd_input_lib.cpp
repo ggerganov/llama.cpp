@@ -272,7 +272,10 @@ llama_token sampling_id(struct MyModel* mymodel) {
 const char* sampling(struct MyModel* mymodel) {
     llama_context* ctx = mymodel->ctx;
     int id = sampling_id(mymodel);
-    std::string ret = llama_token_to_str(ctx, id);
+
+    std::string ret;
+    if (id == llama_token_eos()) ret = "</s>";
+    else ret = llama_token_to_str(ctx, id);
     eval_id(mymodel, id);
     return ret.c_str();
 }
