@@ -1,9 +1,10 @@
 llama.cpp modification to run Falcon (work in progress)
 
-Status:  
+Status/Bugs:  
 * Quantization works except for Q_K_ types  
 * CUDA not yet functional
 * python conversion script is very basic (produces ggml v0)
+* On linux Q5_1 7B user reports a batch token ingestion context memory issue, with -b 1 it's gone. Not reproduced on Windows
 
 It appears the Q5 Falcon 40B inference time on CPU is as fast as the A100 fp16 inference time at 2 tk/second  
 CPU inference examples:  
