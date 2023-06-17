@@ -144,11 +144,7 @@ endif # LLAMA_NO_ACCELERATE
 
 ifdef LLAMA_OPENBLAS
 	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas -I/usr/include/openblas
-	ifneq ($(shell grep -e "Arch Linux" -e "ID_LIKE=arch" /etc/os-release 2>/dev/null),)
-		LDFLAGS += -lopenblas -lcblas
-	else
-		LDFLAGS += -lopenblas
-	endif
+	LDFLAGS += -lopenblas
 endif # LLAMA_OPENBLAS
 
 ifdef LLAMA_BLIS
