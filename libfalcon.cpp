@@ -1183,7 +1183,7 @@ static void falcon_model_load_internal(
             } else // FALCON_7B
             {
                 layer.input_layernorm = ml->get_tensor("transformer.h." + str_i +".input_layernorm.weight", {n_embd}, backend);
-                layer.input_layernorm_b = ml->get_tensor("transformer.h." + str_i +".input_layernorm.bias", {n_embd}, backend);
+                layer.input_layernorm_b = ml->get_tensor("transformer.h." + str_i +".input_layernorm.bias", {n_embd}, GGML_BACKEND_CPU);
             }
 
             layer.query_key_value = ml->get_tensor("transformer.h." + str_i +".self_attention.query_key_value.weight", {n_embd, (n_head_kv * 2 + n_head) * head_dim}, backend_split);
@@ -1385,6 +1385,27 @@ static bool falcon_eval_internal(
     const int i_gpu_start = n_layer - n_gpu_layers;
     (void) i_gpu_start;
 
+    // offload functions set the tensor output backend to GPU
+    // tensors are GPU-accelerated if any input or the output has been offloaded
+    //
+    // with the low VRAM option VRAM scratch is disabled in llama_load_model_internal
+    // in that case ggml_cuda_assign_buffers has no effect
+    offload_func_t offload_func_nr = llama_nop; // nr = non-repeating
+    offload_func_t offload_func_kq = llama_nop;
+    offload_func_t offload_func_v  = llama_nop;
+
+#ifdef GGML_USE_CUBLAS
+        if (n_gpu_layers > n_layer) {
+            offload_func_nr = ggml_cuda_assign_buffers;
+        }
+        if (n_gpu_layers > n_layer + 1) {
+            offload_func_v  = ggml_cuda_assign_buffers;
+        }
+        if (n_gpu_layers > n_layer + 2) {
+            offload_func_kq = ggml_cuda_assign_buffers;
+        }
+#endif // GGML_USE_CUBLAS
+
     for (int il = 0; il < n_layer; ++il) {
         offload_func_t offload_func = llama_nop;
 
@@ -1403,11 +1424,13 @@ static bool falcon_eval_internal(
         {
             layernorm_output = ggml_norm(ctx0, inpL);
 
+            ggml_tensor * il_a = ggml_mul(ctx0, layernorm_output, model.layers[il].input_layernorm);
+            offload_func(il_a);
+
             layernorm_output = ggml_add(ctx0,
-                    ggml_mul(ctx0,
-                        ggml_repeat(ctx0, model.layers[il].input_layernorm, layernorm_output),
-                        layernorm_output),
-                    ggml_repeat(ctx0, model.layers[il].input_layernorm_b, layernorm_output));
+                                        il_a,
+                                        ggml_repeat(ctx0, model.layers[il].input_layernorm_b, layernorm_output));
+            offload_func(layernorm_output);
             ggml_set_name(layernorm_output, "layernorm_output");
 
             if (model.type == FALCON_40B || version == 40)
@@ -1426,6 +1449,7 @@ static bool falcon_eval_internal(
             // compute QKV
 
             cur = ggml_mul_mat(ctx0, model.layers[il].query_key_value, cur);
+            // offload_func(cur);
 
             // Note that the strides for Kcur, Vcur are set up so that the
             // resulting views are misaligned with the tensor's storage
