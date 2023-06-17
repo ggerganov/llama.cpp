@@ -240,14 +240,14 @@ bool ggml_metal_add_buffer(
 
     if (data) {
         // verify that the buffer does not overlap with any of the existing buffers
-        //for (int i = 0; i < ctx->n_buffers; ++i) {
-        //    const int64_t ioffs = (int64_t) data - (int64_t) ctx->buffers[i].data;
+        for (int i = 0; i < ctx->n_buffers; ++i) {
+            const int64_t ioffs = (int64_t) data - (int64_t) ctx->buffers[i].data;
 
-        //    if (ioffs >= 0 && ioffs < (int64_t) ctx->buffers[i].size) {
-        //        fprintf(stderr, "%s: error: buffer '%s' overlaps with '%s'\n", __func__, name, ctx->buffers[i].name);
-        //        return false;
-        //    }
-        //}
+            if (ioffs >= 0 && ioffs < (int64_t) ctx->buffers[i].size) {
+                fprintf(stderr, "%s: error: buffer '%s' overlaps with '%s'\n", __func__, name, ctx->buffers[i].name);
+                return false;
+            }
+        }
 
         const size_t size_page = getpagesize();
 
@@ -273,7 +273,9 @@ bool ggml_metal_add_buffer(
 
             ++ctx->n_buffers;
         } else {
-            const size_t size_ovlp = (max_size + size_page - 1) / size_page * size_page;
+            // this overlap between the views will guarantee that the tensor with the maximum size will fully fit into
+            // one of the views
+            const size_t size_ovlp = ((max_size + size_page - 1) / size_page + 1) * size_page; // round-up 2 pages just in case
             const size_t size_step = ctx->device.maxBufferLength - size_ovlp;
             const size_t size_view = ctx->device.maxBufferLength;
 
