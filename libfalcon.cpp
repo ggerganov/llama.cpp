@@ -868,8 +868,10 @@ static bool kv_cache_init(
         const struct falcon_hparams & hparams,
              struct falcon_kv_cache & cache,
                          ggml_type   wtype,
-                               int   n_ctx) {
+                               int   n_ctx,
+                               int   n_gpu_layers) {
 
+    const int64_t n_layer = hparams.n_layer;
     const int64_t head_dim = hparams.n_embd / hparams.n_head;
     const int64_t n_elements =
         hparams.n_layer * n_ctx * head_dim * hparams.n_head_kv;
@@ -892,6 +894,14 @@ static bool kv_cache_init(
     cache.v = ggml_new_tensor_1d(cache.ctx, wtype, n_elements);
     ggml_set_name(cache.k, "cache_k");
     ggml_set_name(cache.v, "cache_v");
+
+    (void) n_gpu_layers;
+#ifdef GGML_USE_CUBLAS
+    if (n_gpu_layers > n_layer + 1) {
+        ggml_cuda_assign_buffers_no_scratch(cache.k);
+        ggml_cuda_assign_buffers_no_scratch(cache.v);
+    }
+#endif // GGML_USE_CUBLAS
 
     return true;
 }
@@ -1391,18 +1401,14 @@ static bool falcon_eval_internal(
     // with the low VRAM option VRAM scratch is disabled in llama_load_model_internal
     // in that case ggml_cuda_assign_buffers has no effect
     offload_func_t offload_func_nr = llama_nop; // nr = non-repeating
-    offload_func_t offload_func_kq = llama_nop;
-    offload_func_t offload_func_v  = llama_nop;
+    offload_func_t offload_func_kqv = llama_nop;
 
 #ifdef GGML_USE_CUBLAS
         if (n_gpu_layers > n_layer) {
             offload_func_nr = ggml_cuda_assign_buffers;
         }
         if (n_gpu_layers > n_layer + 1) {
-            offload_func_v  = ggml_cuda_assign_buffers;
-        }
-        if (n_gpu_layers > n_layer + 2) {
-            offload_func_kq = ggml_cuda_assign_buffers;
+            offload_func_kqv  = ggml_cuda_assign_buffers;
         }
 #endif // GGML_USE_CUBLAS
 
@@ -2622,7 +2628,7 @@ struct falcon_context * falcon_init_from_file(
 
     // reserve memory for context buffers
     if (!params.vocab_only) {
-        if (!kv_cache_init(ctx->model.hparams, ctx->model.kv_self, memory_type, ctx->model.hparams.n_ctx)) {
+        if (!kv_cache_init(ctx->model.hparams, ctx->model.kv_self, memory_type, ctx->model.hparams.n_ctx, params.n_gpu_layers)) {
             fprintf(stderr, "%s: kv_cache_init() failed for self-attention cache\n", __func__);
             llama_free(ctx);
             return nullptr;
