@@ -256,9 +256,9 @@ bool ggml_metal_add_buffer(
         if (ctx->buffers[ctx->n_buffers].metal == nil) {
             fprintf(stderr, "%s: failed to allocate '%-16s' buffer, size = %8.2f MB\n", __func__, name, aligned_size / 1024.0 / 1024.0);
             return false;
-        } else {
-            fprintf(stderr, "%s: allocated '%-16s' buffer, size = %8.2f MB\n", __func__, name, aligned_size / 1024.0 / 1024.0);
         }
+
+        fprintf(stderr, "%s: allocated '%-16s' buffer, size = %8.2f MB\n", __func__, name, aligned_size / 1024.0 / 1024.0);
 
         ++ctx->n_buffers;
     }
@@ -765,18 +765,23 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_ALIBI:
                         {
-                            GGML_ASSERT((src0t == GGML_TYPE_F32));
-                            const int   n_past   = ((int32_t *) src1->data)[0];
-                            const int   n_head   = ((int32_t *) src1->data)[1];
-                            const float max_bias = ((float *)   src1->data)[2];
-                            if (__builtin_popcount(n_head) != 1) {
-                                GGML_ASSERT(false && "only power-of-two n_head implemented");
-                            }
-                            const int n_heads_log2_floor = 1 << (int) floor(log2(n_head));
-                            const float m0 = powf(2.0f, -(max_bias) / n_heads_log2_floor);
                             if (encoder == nil) {
                                 encoder = [command_buffer computeCommandEncoder];
                             }
+
+                            GGML_ASSERT((src0t == GGML_TYPE_F32));
+
+                            const int   n_past   = ((int32_t *) src1->data)[0]; UNUSED(n_past);
+                            const int   n_head   = ((int32_t *) src1->data)[1];
+                            const float max_bias = ((float *)   src1->data)[2];
+
+                            if (__builtin_popcount(n_head) != 1) {
+                                GGML_ASSERT(false && "only power-of-two n_head implemented");
+                            }
+
+                            const int n_heads_log2_floor = 1 << (int) floor(log2(n_head));
+                            const float m0 = powf(2.0f, -(max_bias) / n_heads_log2_floor);
+
                             [encoder setComputePipelineState:ctx->pipeline_alibi_f32];
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
