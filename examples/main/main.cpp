@@ -5,6 +5,7 @@
 
 #include "common.h"
 #include "llama.h"
+#include "ggml.h"
 #include "build-info.h"
 
 #include <cassert>
@@ -97,6 +98,9 @@ int main(int argc, char ** argv) {
     }
 
     llama_init_backend();
+    if (params.numa) {
+        ggml_numa_init();
+    }
 
     llama_context * ctx;
     g_ctx = &ctx;
