@@ -13,6 +13,10 @@
 #include <string>
 #include <vector>
 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
+#endif
+
 #define MAX_ALIGNMENT 64
 #define QK 32
 #define WARMUP 5

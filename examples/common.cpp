@@ -28,6 +28,10 @@
 #include <wchar.h>
 #endif
 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
+#endif
+
 int32_t get_num_physical_cores() {
 #ifdef __linux__
     // enumerate the set of thread siblings, num entries is num cores
@@ -373,7 +377,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 } else {
                     throw std::exception();
                 }
-            } catch (const std::exception &e) {
+            } catch (const std::exception&) {
                 invalid_param = true;
                 break;
             }
@@ -412,6 +416,14 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         gpt_print_usage(argc, argv, default_params);
         exit(1);
     }
+
+#ifdef GGML_USE_CUBLAS
+    if (!params.lora_adapter.empty() && params.n_gpu_layers > 0) {
+        fprintf(stderr, "%s: error: the simultaneous use of LoRAs and GPU acceleration is not supported", __func__);
+        exit(1);
+    }
+#endif // GGML_USE_CUBLAS
+
     if (escape_prompt) {
         process_escapes(params.prompt);
     }
