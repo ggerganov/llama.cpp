@@ -3,8 +3,7 @@ llama.cpp modification to run Falcon (work in progress)
 Status:  
 * Quantization works except for Q_K_ types  
 * CUDA not yet functional
-* context size calculation not proper (cuda as well as cpu)  
-
+* python conversion script is very basic (produces ggml v0)
 
 It appears the Q5 Falcon 40B inference time on CPU is as fast as the A100 fp16 inference time at 2 tk/second  
 CPU inference examples:  
