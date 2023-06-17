@@ -1280,7 +1280,8 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     float pt1 = (time1*1000.0/(embd_inp.size()==0?1:embd_inp.size()));
     int realnpredict = params.n_predict-stopper_unused_tokens;
     float pt2 = (time2*1000.0/(realnpredict==0?1:realnpredict));
-    printf("\nTime Taken - Processing:%.1fs (%.0fms/T), Generation:%.1fs (%.0fms/T), Total:%.1fs", time1, pt1, time2, pt2, (time1 + time2));
+    float tokens_per_second = (realnpredict == 0 ? 0 : realnpredict / (time1 + time2));
+    printf("\nTime Taken - Processing:%.1fs (%.0fms/T), Generation:%.1fs (%.0fms/T), Total:%.1fs (%.1fT/s)", time1, pt1, time2, pt2, (time1 + time2), tokens_per_second);
     fflush(stdout);
     output.status = 1;
     generation_finished = true;
