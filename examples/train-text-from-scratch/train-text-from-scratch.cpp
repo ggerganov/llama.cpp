@@ -1403,8 +1403,8 @@ void graph_set_leafs_grads(struct ggml_cgraph * g) {
         }
     }
     for (int i=n_nodes; i < g->n_nodes; ++i) {
-        g->nodes[n_nodes] = NULL;
-        g->grads[n_nodes] = NULL;
+        g->nodes[i] = NULL;
+        g->grads[i] = NULL;
     }
     g->n_nodes = n_nodes;
 }
