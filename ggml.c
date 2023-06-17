@@ -14064,7 +14064,7 @@ void set_numa_thread_affinity(int thread_n, int n_threads)
 {
     if (!ggml_is_numa()) { return; }
     // run thread on node_num thread_n / (threads per node)
-    int node_num = thread_n / (n_threads / ggml_numa.n_nodes);
+    int node_num = thread_n / ((n_threads + ggml_numa.n_nodes - 1) / ggml_numa.n_nodes);
     struct ggml_numa_node *node = &ggml_numa.nodes[node_num];
     size_t setsize = CPU_ALLOC_SIZE(ggml_numa.total_cpus);
     cpu_set_t *cpus = CPU_ALLOC(ggml_numa.total_cpus);
