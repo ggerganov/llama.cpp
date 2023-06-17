@@ -10,6 +10,10 @@
 
 #include <ggml.h>
 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
+#endif
+
 constexpr int kVecSize = 1 << 18;
 
 float drawFromGaussianPdf(std::mt19937& rndm) {

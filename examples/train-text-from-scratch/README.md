@@ -4,7 +4,7 @@ Basic usage instructions:
 
 ```bash
 # get training data
-wget https://github.com/brunoklein99/deep-learning-notes/blob/master/shakespeare.txt
+wget https://raw.githubusercontent.com/brunoklein99/deep-learning-notes/master/shakespeare.txt
 
 # train
 ./bin/train-text-from-scratch \
