@@ -1144,19 +1144,22 @@ static void falcon_model_load_internal(
 
 
         
+        ggml_backend backend_norm;
         ggml_backend backend_output;
         if (n_gpu_layers > int(n_layer)) { // NOLINT
+            backend_norm = LLAMA_BACKEND_OFFLOAD;
             backend_output = LLAMA_BACKEND_OFFLOAD_SPLIT;
         } else {
+            backend_norm = GGML_BACKEND_CPU;
             backend_output = GGML_BACKEND_CPU;
         }
         
         // "output" tensor
         {
             
-            model.output_norm = ml->get_tensor("transformer.ln_f.weight", {n_embd}, GGML_BACKEND_CPU);
-            model.output_norm_b = ml->get_tensor("transformer.ln_f.bias", {n_embd}, GGML_BACKEND_CPU);
-            model.lm_head = ml->get_tensor("lm_head.weight", {n_embd, n_vocab}, GGML_BACKEND_CPU);
+            model.output_norm = ml->get_tensor("transformer.ln_f.weight", {n_embd}, backend_norm);
+            model.output_norm_b = ml->get_tensor("transformer.ln_f.bias", {n_embd}, backend_norm);
+            model.lm_head = ml->get_tensor("lm_head.weight", {n_embd, n_vocab}, backend_output);
         }
 
         const int i_gpu_start = n_layer - n_gpu_layers;
@@ -1183,11 +1186,11 @@ static void falcon_model_load_internal(
                 layer.input_layernorm_b = ml->get_tensor("transformer.h." + str_i +".input_layernorm.bias", {n_embd}, backend);
             }
 
-            layer.query_key_value = ml->get_tensor("transformer.h." + str_i +".self_attention.query_key_value.weight", {n_embd, (n_head_kv * 2 + n_head) * head_dim}, GGML_BACKEND_CPU);
-            layer.wo = ml->get_tensor("transformer.h." + str_i +".self_attention.dense.weight", {n_embd, n_embd}, GGML_BACKEND_CPU);
+            layer.query_key_value = ml->get_tensor("transformer.h." + str_i +".self_attention.query_key_value.weight", {n_embd, (n_head_kv * 2 + n_head) * head_dim}, backend_split);
+            layer.wo = ml->get_tensor("transformer.h." + str_i +".self_attention.dense.weight", {n_embd, n_embd}, backend_split);
 
-            layer.ffn_up = ml->get_tensor("transformer.h."+str_i + ".mlp.dense_h_to_4h.weight", {n_embd, n_ff}, GGML_BACKEND_CPU); // before gelu
-            layer.ffn_down = ml->get_tensor("transformer.h."+str_i + ".mlp.dense_4h_to_h.weight", {n_ff, n_embd}, GGML_BACKEND_CPU); // after gelu
+            layer.ffn_up = ml->get_tensor("transformer.h."+str_i + ".mlp.dense_h_to_4h.weight", {n_embd, n_ff}, backend_split); // before gelu
+            layer.ffn_down = ml->get_tensor("transformer.h."+str_i + ".mlp.dense_4h_to_h.weight", {n_ff, n_embd}, backend_split); // after gelu
 
             if (backend == GGML_BACKEND_GPU) {
                 // llama:
