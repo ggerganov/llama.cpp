@@ -512,7 +512,11 @@ class LazyTensor:
             if not isinstance(self.data_type, QuantizedDataType):
                 raise Exception(f"Can't turn an unquantized tensor into a quantized type ({data_type})")
             if self.data_type.have_g_idx:
-                sys.stderr.write("Error: Input uses the newer GPTQ-for-LLaMa format (using g_idx), which is not yet natively supported by GGML.  For now you can still convert this model by passing `--outtype f16` to dequantize, but that will result in a much larger output file for no quality benefit.\n")
+                sys.stderr.write(
+                    "Error: Input uses the newer GPTQ-for-LLaMa format (using g_idx), "
+                    "which is not yet natively supported by GGML. "
+                    "For now you can still convert this model by passing `--outtype f16` to dequantize, "
+                    "but that will result in a much larger output file for no quality benefit.\n")
                 sys.exit(1)
             assert not data_type.have_g_idx and self.data_type.have_addends and data_type.have_addends
 
@@ -694,8 +698,9 @@ class LazyUnpickler(pickle.Unpickler):
         description = f'storage data_type={data_type} path-in-zip={filename} path={self.zip_file.filename}'
         return LazyStorage(load=load, kind=pid[1], description=description)
 
-   # @staticmethod
-    def lazy_rebuild_tensor_v2(storage: Any, storage_offset: Any, size: Any, stride: Any,  # pyright: ignore[reportSelfClsParameterName]
+    # @staticmethod
+    def lazy_rebuild_tensor_v2(storage: Any, storage_offset: Any, size: Any, stride: Any,
+                               # pyright: ignore[reportSelfClsParameterName]
                                requires_grad: Any, backward_hooks: Any, metadata: Any = None) -> LazyTensor:
         assert isinstance(storage, LazyStorage)
 
@@ -812,7 +817,7 @@ def lazy_load_ggml_file(fp: io.BufferedReader, path: Path) -> ModelPlus:
     # Use mmap for the actual data to avoid race conditions with the file offset.
     off = fp.raw.tell()
     mapped = memoryview(mmap.mmap(fp.fileno(), 0, access=mmap.ACCESS_READ))
-    fp.raw.seek(off) # needed on Windows
+    fp.raw.seek(off)  # needed on Windows
 
     def read_tensor() -> None:  # this is a function so that variables captured in `load` don't change
         shape_len, name_len, ftype = struct.unpack("iii", must_read(fp, 12))
@@ -1054,7 +1059,7 @@ def load_some_model(path: Path) -> ModelPlus:
         files = list(path.glob("model-00001-of-*.safetensors"))
         if not files:
             # Try the PyTorch patterns too, with lower priority
-            globs = ["consolidated.00.pth", "pytorch_model-00001-of-*.bin", "*.pt", "pytorch_model.bin" ]
+            globs = ["consolidated.00.pth", "pytorch_model-00001-of-*.bin", "*.pt", "pytorch_model.bin"]
             files = [file for glob in globs for file in path.glob(glob)]
         if not files:
             # Try GGML too, but with lower priority, since if both a non-GGML
@@ -1094,7 +1099,9 @@ def load_vocab(path: Path) -> SentencePieceVocab:
         elif path3.exists():
             path = path3
         else:
-            raise FileNotFoundError(f"Could not find tokenizer.model in {path} or its parent; if it's in another directory, pass the directory as --vocab-dir")
+            raise FileNotFoundError(
+                f"Could not find tokenizer.model in {path} or its parent; "
+                "if it's in another directory, pass the directory as --vocab-dir")
     added_tokens_path = path.parent / "added_tokens.json"
     print(f"Loading vocab file {path}")
     return SentencePieceVocab(path, added_tokens_path if added_tokens_path.exists() else None)
@@ -1110,7 +1117,9 @@ def default_outfile(model_paths: List[Path], params: Params) -> Path:
     }[params.file_type]
     ret = model_paths[0].parent / f"ggml-model-{namestr}.bin"
     if ret in model_paths:
-        sys.stderr.write(f"Error: Default output path ({ret}) would overwrite the input.  Please explicitly specify a path using --outfile.\n")
+        sys.stderr.write(
+            f"Error: Default output path ({ret}) would overwrite the input. "
+            "Please explicitly specify a path using --outfile.\n")
         sys.exit(1)
     return ret
 
@@ -1131,7 +1140,8 @@ def main(args_in: Optional[List[str]] = None) -> None:
     parser.add_argument("--outtype", choices=["f32", "f16", "q4_1", "q4_0"], help="output format (default: based on input)")
     parser.add_argument("--vocab-dir", type=Path, help="directory containing tokenizer.model, if separate from model file")
     parser.add_argument("--outfile", type=Path, help="path to write to; default: based on input")
-    parser.add_argument("model", type=Path, help="directory containing model file, or model file itself (*.pth, *.pt, *.bin)")
+    parser.add_argument("model", type=Path,
+                        help="directory containing model file, or model file itself (*.pth, *.pt, *.bin)")
     args = parser.parse_args(args_in)
 
     vocab: Vocab
