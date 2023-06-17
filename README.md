@@ -1,12 +1,12 @@
 llama.cpp modification to run Falcon (work in progress)
 
-Status:
-* Quantization works except for Q_K_ types
-* CUDA not yet functional
-* 
+Status:  
+* Quantization works except for Q_K_ types  
+* CUDA not yet functional  
 
-It appears the Q5 Falcon 40B inference time on CPU is as fast as the A100 fp16 inference time at 2 tk/second
-CPU inference examples:
+
+It appears the Q5 Falcon 40B inference time on CPU is as fast as the A100 fp16 inference time at 2 tk/second  
+CPU inference examples:  
 ```
  Q:\ggllm.cpp> .\build\bin\Release\falcon_main.exe -t 31 -m Q:\models\falcon-40b\q5_1 -p "Love relates to hate like" -n 50 -ngl 0
 main: build = 677 (dd3d346)
