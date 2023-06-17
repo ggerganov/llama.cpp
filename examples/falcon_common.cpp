@@ -529,7 +529,7 @@ struct falcon_context * falcon_init_from_gpt_params(const gpt_params & params) {
     lparams.main_gpu     = params.main_gpu;
     memcpy(lparams.tensor_split, params.tensor_split, LLAMA_MAX_DEVICES*sizeof(float));
     lparams.seed         = params.seed;
-    lparams.f16_kv       = params.memory_f16;
+    lparams.f16_kv       = false; //params.memory_f16; // TODO? unsupported because ggml_repeat2 currently only implemented for f32
     lparams.use_mmap     = params.use_mmap;
     lparams.use_mlock    = params.use_mlock;
     lparams.logits_all   = params.perplexity;
