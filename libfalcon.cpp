@@ -81,16 +81,6 @@ static const std::map<e_model, size_t> & MEM_REQ_SCRATCH1()
     return k_sizes;
 }
 
-// 2*n_embd*n_ctx*n_layer*sizeof(float16)
-static const std::map<e_model, size_t> & MEM_REQ_KV_SELF()
-{
-    static std::map<e_model, size_t> k_sizes = {
-        { FALCON_7B,   1026ull * MB },
-        { FALCON_40B,  5120ull * MB },
-    };
-    return k_sizes;
-}
-
 // this is mostly needed for temporary mul_mat buffers to dequantize the data
 // not actually needed if BLAS is disabled
 static const std::map<e_model, size_t> & MEM_REQ_EVAL()
@@ -117,6 +107,18 @@ struct falcon_hparams {
         return static_cast<bool>(memcmp(this, &other, sizeof(falcon_hparams)));
     }
 };
+
+static size_t MEM_REQ_KV_SELF(
+    const falcon_hparams & hparams, ggml_type wtype, int32_t n_ctx)
+{
+    const int n_head_kv = hparams.n_head_kv;
+    const int head_dim = hparams.n_embd / hparams.n_head;
+    const int n_layer = hparams.n_layer;
+
+    const int64_t ne = n_head_kv * head_dim * n_layer * n_ctx;
+
+    return 2u * (ggml_tensor_overhead() + ne * ggml_type_size(wtype));
+}
 
 struct falcon_layer {
     // normalization
@@ -164,9 +166,6 @@ struct falcon_model {
 
     std::vector<falcon_layer> layers;
 
-    // key + value memory
-    struct ggml_tensor* memory_k;
-    struct ggml_tensor* memory_v;
     int n_gpu_layers;
 
     // context
@@ -687,8 +686,7 @@ struct llama_model_loader {
     void calc_sizes(size_t * ctx_size_p, size_t * mmapped_size_p) const {
         *ctx_size_p = *mmapped_size_p = 0;
         for (const falcon_load_tensor & lt : tensors_map.tensors) {
-            *ctx_size_p += sizeof(struct ggml_tensor) + GGML_OBJECT_SIZE;
-            *ctx_size_p += 64 * MB;
+            *ctx_size_p += ggml_tensor_overhead();
             *(use_mmap ? mmapped_size_p : ctx_size_p) += lt.size;
         }
     }
@@ -871,14 +869,12 @@ static bool kv_cache_init(
              struct falcon_kv_cache & cache,
                          ggml_type   wtype,
                                int   n_ctx) {
-    
-    const int n_embd  = hparams.n_embd;
-    const int n_layer = hparams.n_layer;
 
-    const int64_t n_mem      = n_layer*n_ctx;
-    const int64_t n_elements = n_embd*n_mem;
+    const int64_t head_dim = hparams.n_embd / hparams.n_head;
+    const int64_t n_elements =
+        hparams.n_layer * n_ctx * head_dim * hparams.n_head_kv;
 
-    cache.buf.resize(2u*n_elements*ggml_type_size(wtype) + 2u*MB);
+    cache.buf.resize(MEM_REQ_KV_SELF(hparams, wtype, n_ctx));
 
     struct ggml_init_params params;
     params.mem_size   = cache.buf.size;
@@ -908,7 +904,7 @@ struct falcon_context_params falcon_context_default_params() {
         /*.main_gpu                    =*/ 0,
         /*.tensor_split                =*/ {0},
         /*.seed                        =*/ -1,
-        /*.f16_kv                      =*/ true,
+        /*.f16_kv                      =*/ false,
         /*.logits_all                  =*/ false,
         /*.vocab_only                  =*/ false,
         /*.use_mmap                    =*/ true,
@@ -1220,41 +1216,24 @@ static void falcon_model_load_internal(
         }
     }
 
-    // key + value memory
-    {
-        const int n_layer = hparams.n_layer;
-        const int n_ctx   = hparams.n_ctx;
-        const int n_head_kv = hparams.n_head_kv;
-        const int head_dim = hparams.n_embd / hparams.n_head;
-
-        const int64_t n_mem      = n_layer*n_ctx;
-        const int64_t n_elements = head_dim*n_mem;
-
-        model.memory_k = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_head_kv * n_elements);
-        model.memory_v = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_head_kv * n_elements);
-
-        const size_t memory_size = ggml_nbytes(model.memory_k) + ggml_nbytes(model.memory_v);
-
-        printf("%s: (a) memory_size = %8.2f MB, n_mem = %" PRId64 "\n", __func__, memory_size/1024.0/1024.0, n_mem);
-    }
-
     ml->done_getting_tensors();
 
     // print memory requirements
     {
-        const size_t scale = memory_type == GGML_TYPE_F32 ? 2 : 1;
-
         // this is the total memory required to run the inference
-        const size_t mem_required =
+        // TODO: this calculation is still wrong
+        int64_t mem_required =
             ctx_size +
             mmapped_size - vram_weights + // weights in VRAM not in memory
             MEM_REQ_SCRATCH0().at(model.type) +
             MEM_REQ_SCRATCH1().at(model.type) +
             MEM_REQ_EVAL().at    (model.type);
 
+        if (mem_required < 0) mem_required = 0;
+
         // this is the memory required by one llama_state
         const size_t mem_required_state =
-            scale*MEM_REQ_KV_SELF().at(model.type);
+            MEM_REQ_KV_SELF(model.hparams, memory_type, n_ctx);
 
         fprintf(stderr, "%s: mem required  = %7.2f MB (+ %7.2f MB per state)\n", __func__,
                 mem_required / 1024.0 / 1024.0, mem_required_state / 1024.0 / 1024.0);
@@ -1347,12 +1326,6 @@ static bool falcon_eval_internal(
             const int    n_past,
             const int    n_threads,
             const char * cgraph_fname) {
-
-    // enforce that the first token is BOS
-    if (n_past == 0 && tokens[0] != falcon_token_bos()) {
-        fprintf(stderr, "%s: first token must be BOS\n", __func__);
-        return false;
-    }
 
     const int64_t t_start_us = ggml_time_us();
 
@@ -1488,13 +1461,13 @@ static bool falcon_eval_internal(
             // store key and value to memory
             {
                 struct ggml_tensor* k = ggml_view_1d(
-                    ctx0, model.memory_k, N * n_head_kv * head_dim,
-                    (ggml_element_size(model.memory_k) * n_head_kv * head_dim) *
+                    ctx0, kv_self.k, N * n_head_kv * head_dim,
+                    (ggml_element_size(kv_self.k) * n_head_kv * head_dim) *
                         (il * n_ctx + n_past));
                 ggml_set_name(k, "k");
                 struct ggml_tensor* v = ggml_view_1d(
-                    ctx0, model.memory_v, N * n_head_kv * head_dim,
-                    (ggml_element_size(model.memory_v) * n_head_kv * head_dim) *
+                    ctx0, kv_self.v, N * n_head_kv * head_dim,
+                    (ggml_element_size(kv_self.v) * n_head_kv * head_dim) *
                         (il * n_ctx + n_past));
                 ggml_set_name(v, "v");
 
@@ -1506,9 +1479,9 @@ static bool falcon_eval_internal(
                 ctx0,
                 ggml_reshape_3d(
                     ctx0,
-                    ggml_view_1d(ctx0, model.memory_k, (n_past + N) * n_head_kv * head_dim,
+                    ggml_view_1d(ctx0, kv_self.k, (n_past + N) * n_head_kv * head_dim,
                                  il * n_ctx *
-                                     ggml_element_size(model.memory_k) *
+                                     ggml_element_size(kv_self.k) *
                                      n_head_kv *
                                      head_dim),
                     head_dim, n_head_kv, n_past + N),
@@ -1545,9 +1518,9 @@ static bool falcon_eval_internal(
                 ctx0,
                 ggml_reshape_3d(
                     ctx0,
-                    ggml_view_1d(ctx0, model.memory_v, (n_past + N) * n_head_kv * head_dim,
+                    ggml_view_1d(ctx0, kv_self.v, (n_past + N) * n_head_kv * head_dim,
                                  il * n_ctx *
-                                     ggml_element_size(model.memory_v) *
+                                     ggml_element_size(model.kv_self.v) *
                                      n_head_kv *
                                      head_dim),
                     head_dim, n_head_kv, n_past + N),
@@ -3389,11 +3362,11 @@ const char * falcon_token_to_str(const struct falcon_context * ctx, llama_token 
 }
 
 llama_token falcon_token_bos() {
-    return 1;
+    return 11;
 }
 
 llama_token falcon_token_eos() {
-    return 2;
+    return 11;
 }
 
 llama_token falcon_token_nl() {
