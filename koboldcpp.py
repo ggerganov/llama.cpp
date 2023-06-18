@@ -26,7 +26,7 @@ class load_model_inputs(ctypes.Structure):
                 ("unban_tokens", ctypes.c_bool),
                 ("clblast_info", ctypes.c_int),
                 ("blasbatchsize", ctypes.c_int),
-                ("debugmode", ctypes.c_bool),
+                ("debugmode", ctypes.c_int),
                 ("forceversion", ctypes.c_int),
                 ("gpulayers", ctypes.c_int)]
 
@@ -224,7 +224,8 @@ maxctx = 2048
 maxlen = 256
 modelbusy = False
 defaultport = 5001
-KcppVersion = "1.31"
+KcppVersion = "1.31.1"
+showdebug = True
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
     sys_version = ""
@@ -237,6 +238,12 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def __call__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+    def log_message(self, format, *args):
+        global showdebug
+        if showdebug:
+            super().log_message(format, *args)
+        pass
 
     async def generate_text(self, newprompt, genparams, basic_api_flag, stream_flag):
 
@@ -281,7 +288,8 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         else:
             recvtxt = run_blocking()
 
-        utfprint("\nOutput: " + recvtxt)
+        if args.debugmode!=-1:
+            utfprint("\nOutput: " + recvtxt)
 
         res = {"data": {"seqs":[recvtxt]}} if basic_api_flag else {"results": [{"text": recvtxt}]}
 
@@ -414,7 +422,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(200)
             self.end_headers()
             self.wfile.write(json.dumps({"success": ("true" if ag else "false")}).encode())
-            print("Generation Aborted")
+            print("\nGeneration Aborted")
             modelbusy = False
             return
 
@@ -453,7 +461,8 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 utfprint("Body Err: " + str(body))
                 return self.send_response(503)
 
-            utfprint("\nInput: " + json.dumps(genparams))
+            if args.debugmode!=-1:
+                utfprint("\nInput: " + json.dumps(genparams))
 
             modelbusy = True
 
@@ -714,10 +723,15 @@ def main(args):
             sys.exit(2)
 
     if args.hordeconfig and args.hordeconfig[0]!="":
-        global friendlymodelname, maxlen
+        global friendlymodelname, maxlen, showdebug
         friendlymodelname = "koboldcpp/"+args.hordeconfig[0]
         if len(args.hordeconfig) > 1:
             maxlen = int(args.hordeconfig[1])
+        if args.debugmode == 0:
+            args.debugmode = -1
+
+    if args.debugmode != 1:
+        showdebug = False
 
     if args.highpriority:
         print("Setting process to Higher Priority - Use Caution")
@@ -839,7 +853,7 @@ if __name__ == '__main__':
     parser.add_argument("--nommap", help="If set, do not use mmap to load newer models", action='store_true')
     parser.add_argument("--usemlock", help="For Apple Systems. Force system to keep model in RAM rather than swapping or compressing", action='store_true')
     parser.add_argument("--noavx2", help="Do not use AVX2 instructions, a slower compatibility mode for older devices. Does not work with --clblast.", action='store_true')
-    parser.add_argument("--debugmode", help="Shows additional debug info in the terminal.", action='store_true')
+    parser.add_argument("--debugmode", help="Shows additional debug info in the terminal.", action='store_const', const=1, default=0)
     parser.add_argument("--skiplauncher", help="Doesn't display or use the new GUI launcher.", action='store_true')
     parser.add_argument("--hordeconfig", help="Sets the display model name to something else, for easy use on AI Horde. An optional second parameter sets the horde max gen length.",metavar=('[hordename]', '[hordelength]'), nargs='+')
     compatgroup = parser.add_mutually_exclusive_group()

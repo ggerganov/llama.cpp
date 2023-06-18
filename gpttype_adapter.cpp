@@ -68,7 +68,7 @@ static int n_batch = 8;
 static bool useSmartContext = false;
 static bool unbanTokens = false;
 static int blasbatchsize = 512;
-static bool debugmode = false;
+static int debugmode = 0; //-1 = hide all, 0 = normal, 1 = showall
 static std::string modelname;
 static std::vector<gpt_vocab::id> last_n_tokens;
 static std::vector<gpt_vocab::id> current_context_tokens;
@@ -118,7 +118,7 @@ llama_token sample_token(llama_token_data_array * candidates, std::mt19937 & rng
     std::discrete_distribution<> dist(probs.begin(), probs.end());
     int idx = dist(rng);
 
-    if(debugmode)
+    if(debugmode==1)
     {
         top_picks.push_back(candidates->data[idx]);
         for (size_t i = 0; (i < candidates->size && i<4); ++i)
@@ -981,9 +981,12 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
         printf("Bad format!");
     }
 
-    printf("\n");
+    if(debugmode!=-1)
+    {
+        printf("\n");
+    }
 
-    if (debugmode)
+    if (debugmode==1)
     {
         std::string outstr = "";
         printf("\n[Debug: Dump Input Tokens, format: %d]\n", file_format);
@@ -1013,7 +1016,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
         // predict
         unsigned int embdsize = embd.size();
         //print progress
-        if (!startedsampling)
+        if (!startedsampling && debugmode!=-1)
         {
             printf("\rProcessing Prompt%s (%d / %d tokens)", (blasmode ? " [BLAS]" : ""), input_consumed, embd_inp.size());
         }
@@ -1229,11 +1232,11 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 concat_output += tokenizedstr;
             }
 
-            if (startedsampling)
+            if (startedsampling && debugmode!=-1)
             {
                 printf("\rGenerating (%d / %d tokens)", (params.n_predict - remaining_tokens), params.n_predict);
             }
-            if(debugmode && top_picks.size()>0)
+            if(debugmode==1 && top_picks.size()>0)
             {
                 printf(" [");
                 bool firstloop = true;
@@ -1263,7 +1266,10 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 {
                     stopper_unused_tokens = remaining_tokens;
                     remaining_tokens = 0;
-                    printf("\n(Stop sequence triggered: <%s>)", matched.c_str());
+                    if(debugmode!=-1)
+                    {
+                        printf("\n(Stop sequence triggered: <%s>)", matched.c_str());
+                    }
                     break;
                 }
             }
