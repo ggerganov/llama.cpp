@@ -2544,7 +2544,7 @@ bool ggml_cuda_is_gpu_offloading(struct ggml_tensor * tensor) {
 
 bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor){
     ggml_cuda_func_t func;
-    const bool any_on_device = is_gpu_offloading(tensor);
+    const bool any_on_device = ggml_cuda_is_gpu_offloading(tensor);
 
     switch (tensor->op) {
         case GGML_OP_ADD:
