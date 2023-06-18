@@ -147,6 +147,7 @@ bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftype, std:
 //  ./quantize [--allow-requantize] [--leave-output-tensor] models/llama/ggml-model.bin [models/llama/ggml-model-quant.bin] type [nthreads]
 //
 void usage(const char * executable) {
+    fprintf(stderr, "Falcon quantizer and ggml v3 converter. Important: currently the Q_K variants do not work with the 7B model (use Q_x for now with 7B)\n");
     fprintf(stderr, "usage: %s [--help] [--allow-requantize] [--leave-output-tensor] model-f32.bin [model-quant.bin] type [nthreads]\n\n", executable);
     fprintf(stderr, "  --allow-requantize: Allows requantizing tensors that have already been quantized. Warning: This can severely reduce quality compared to quantizing from 16bit or 32bit\n");
     fprintf(stderr, "  --leave-output-tensor: Will leave output.weight un(re)quantized. Increases model size but may also increase quality, especially when requantizing\n");

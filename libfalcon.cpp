@@ -689,6 +689,8 @@ struct llama_model_loader {
             *ctx_size_p += ggml_tensor_overhead();
             *(use_mmap ? mmapped_size_p : ctx_size_p) += lt.size;
         }
+        printf("calc_sizes(): %zu tensors, %zu bytes in context, %zu bytes mmapped\n",
+               tensors_map.tensors.size(), *ctx_size_p, *mmapped_size_p);
     }
 
     struct ggml_tensor * get_tensor(const std::string & name, const std::vector<uint32_t> & ne, ggml_backend backend) {
@@ -2386,19 +2388,19 @@ static void falcon_model_quantize_internal(const std::string & fname_inp, const 
     llama_file_saver file_saver(fname_out.c_str(), model_loader->file_loaders.at(0).get(), params->ftype);
 
 #ifdef GGML_USE_K_QUANTS
-    int n_attention_wv    = 0;
-    int n_feed_forward_w2 = 0;
-    for (auto& tensor : model_loader->tensors_map.tensors) {
-        if (tensor.name.find("attention.wv.weight") != std::string::npos) {
-            ++n_attention_wv;
-        }
-        else if (tensor.name.find("feed_forward.w2.weight") != std::string::npos) {
-            ++n_feed_forward_w2;
-        }
-    }
+    // int n_attention_wv    = 0;
+    // int n_feed_forward_w2 = 0;
+    // for (auto& tensor : model_loader->tensors_map.tensors) {
+    //     if (tensor.name.find("attention.wv.weight") != std::string::npos) {
+    //         ++n_attention_wv;
+    //     }
+    //     else if (tensor.name.find("feed_forward.w2.weight") != std::string::npos) {
+    //         ++n_feed_forward_w2;
+    //     }
+    // }
 
-    int i_attention_wv = 0;
-    int i_feed_forward_w2 = 0;
+    // int i_attention_wv = 0;
+    // int i_feed_forward_w2 = 0;
 #endif
 
     size_t total_size_org = 0;
@@ -2427,6 +2429,11 @@ static void falcon_model_quantize_internal(const std::string & fname_inp, const 
         quantize &= (tensor.ne.size() == 2);
         quantize &= params->quantize_output_tensor || tensor.name != "output.weight";
         quantize &= quantized_type != tensor.type;
+        if (tensor.name.find("mlp") == std::string::npos) {
+            // quantize = false;
+        }
+
+        
     
         enum ggml_type new_type;
         void * new_data;
@@ -2445,6 +2452,10 @@ static void falcon_model_quantize_internal(const std::string & fname_inp, const 
             //    new_type = GGML_TYPE_Q6_K;
             // } 
             // TODO falcon
+            // if (tensor.name.find("input_layernorm") != std::string::npos) {
+            //     new_type = tensor.type;
+            // }
+
 #endif
 
             float * f32_data;
