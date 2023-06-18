@@ -11865,8 +11865,9 @@ static void ggml_compute_forward_alibi_f32(
         const struct ggml_tensor * src1,
         struct ggml_tensor * dst) {
     assert(params->ith == 0);
-    assert(src1->type == GGML_TYPE_I32);
-    assert(ggml_nelements(src1) == 3);
+
+    GGML_ASSERT(src1->type == GGML_TYPE_I32);
+    GGML_ASSERT(ggml_nelements(src1) == 3);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
@@ -11929,8 +11930,9 @@ static void ggml_compute_forward_alibi_f16(
         const struct ggml_tensor * src1,
         struct ggml_tensor * dst) {
     assert(params->ith == 0);
-    assert(src1->type == GGML_TYPE_I32);
-    assert(ggml_nelements(src1) == 3);
+
+    GGML_ASSERT(src1->type == GGML_TYPE_I32);
+    GGML_ASSERT(ggml_nelements(src1) == 3);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
@@ -12032,8 +12034,9 @@ static void ggml_compute_forward_clamp_f32(
         const struct ggml_tensor * src1,
         struct ggml_tensor * dst) {
     assert(params->ith == 0);
-    assert(src1->type == GGML_TYPE_F32);
-    assert(ggml_nelements(src1) == 2);
+
+    GGML_ASSERT(src1->type == GGML_TYPE_F32);
+    GGML_ASSERT(ggml_nelements(src1) == 2);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
