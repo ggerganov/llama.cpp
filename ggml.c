@@ -15655,8 +15655,7 @@ int ggml_get_task_profiles(
         p[0].stages[1].valid = true;
         p[0].stages[1].parallel = true;
     } break;
-    case GGML_OP_MUL_MAT:
-    case GGML_OP_OUT_PROD: { // FIXME: is this correct?
+    case GGML_OP_MUL_MAT: {
         enum ggml_type src0_t = tensor->src0->type;
         if (src0_t == GGML_TYPE_F32) {
             p[0].stages[1].valid = true;
@@ -15667,6 +15666,15 @@ int ggml_get_task_profiles(
             p[0].stages[1].parallel = true;
         } else if (ggml_is_quantized(src0_t)) {
             p[0].stages[0].valid = true;
+            p[0].stages[1].valid = true;
+            p[0].stages[1].parallel = true;
+        } else {
+            GGML_ASSERT(false);
+        }
+    } break;
+    case GGML_OP_OUT_PROD: {
+        enum ggml_type src0_t = tensor->src0->type;
+        if (src0_t == GGML_TYPE_F32) {
             p[0].stages[1].valid = true;
             p[0].stages[1].parallel = true;
         } else {
@@ -15810,13 +15818,12 @@ static void ggml_optimize_tensor_task_profile(
     struct ggml_tensor *tensor, struct ggml_task_profile *profiles,
     int n_profiles, struct ggml_mulmat_tune *tune) {
 
-    if (tensor->op != GGML_OP_MUL_MAT && tensor->op != GGML_OP_OUT_PROD) {
+    if (tensor->op != GGML_OP_MUL_MAT) {
         return;
     }
 
     GGML_ASSERT(tensor);
-    GGML_ASSERT(tensor->op == GGML_OP_MUL_MAT ||
-                tensor->op == GGML_OP_OUT_PROD);
+    GGML_ASSERT(tensor->op == GGML_OP_MUL_MAT);
     GGML_ASSERT(tensor->task_profile.id == n_profiles);
 
     GGML_ASSERT(profiles);
@@ -15949,7 +15956,9 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         for (int i = 0; i < cgraph->n_nodes; i++) {
             struct ggml_tensor * node = cgraph->nodes[i];
 
-            GGML_ASSERT (node->op != GGML_OP_NONE);
+            if (node->op == GGML_OP_NONE) {
+                continue;
+            }
 
             if (node->task_profile.id == 0) {
                 ggml_set_tensor_task_profile(node, cgraph->tune);
@@ -16031,7 +16040,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                     {
                     } break;
                 case GGML_OP_MUL_MAT:
-                case GGML_OP_OUT_PROD: // FIXME: is this correct?
+                case GGML_OP_OUT_PROD:
                     {
                         size_t cur = 0;
                         GGML_ASSERT(node->src1->type == GGML_TYPE_F32);
