@@ -221,10 +221,11 @@ def utfprint(str):
 #################################################################
 friendlymodelname = "concedo/koboldcpp"  # local kobold api apparently needs a hardcoded known HF model name
 maxctx = 2048
-maxlen = 256
+maxhordectx = 1024
+maxhordelen = 256
 modelbusy = False
 defaultport = 5001
-KcppVersion = "1.31.1"
+KcppVersion = "1.31.2"
 showdebug = True
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -353,7 +354,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
     def do_GET(self):
-        global maxctx, maxlen, friendlymodelname, KcppVersion, streamLock
+        global maxctx, maxhordelen, friendlymodelname, KcppVersion, streamLock
         self.path = self.path.rstrip('/')
         response_body = None
 
@@ -379,10 +380,10 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             response_body = (json.dumps({'result': friendlymodelname }).encode())
 
         elif self.path.endswith(('/api/v1/config/max_length', '/api/latest/config/max_length')):
-            response_body = (json.dumps({"value": maxlen}).encode())
+            response_body = (json.dumps({"value": maxhordelen}).encode())
 
         elif self.path.endswith(('/api/v1/config/max_context_length', '/api/latest/config/max_context_length')):
-            response_body = (json.dumps({"value": maxctx}).encode())
+            response_body = (json.dumps({"value": min(maxctx,maxhordectx)}).encode())
 
         elif self.path.endswith(('/api/v1/config/soft_prompt', '/api/latest/config/soft_prompt')):
             response_body = (json.dumps({"value":""}).encode())
@@ -723,10 +724,12 @@ def main(args):
             sys.exit(2)
 
     if args.hordeconfig and args.hordeconfig[0]!="":
-        global friendlymodelname, maxlen, showdebug
+        global friendlymodelname, maxhordelen, showdebug
         friendlymodelname = "koboldcpp/"+args.hordeconfig[0]
         if len(args.hordeconfig) > 1:
-            maxlen = int(args.hordeconfig[1])
+            maxhordelen = int(args.hordeconfig[1])
+        if len(args.hordeconfig) > 2:
+            maxhordectx = int(args.hordeconfig[2])
         if args.debugmode == 0:
             args.debugmode = -1
 
@@ -855,7 +858,7 @@ if __name__ == '__main__':
     parser.add_argument("--noavx2", help="Do not use AVX2 instructions, a slower compatibility mode for older devices. Does not work with --clblast.", action='store_true')
     parser.add_argument("--debugmode", help="Shows additional debug info in the terminal.", action='store_const', const=1, default=0)
     parser.add_argument("--skiplauncher", help="Doesn't display or use the new GUI launcher.", action='store_true')
-    parser.add_argument("--hordeconfig", help="Sets the display model name to something else, for easy use on AI Horde. An optional second parameter sets the horde max gen length.",metavar=('[hordename]', '[hordelength]'), nargs='+')
+    parser.add_argument("--hordeconfig", help="Sets the display model name to something else, for easy use on AI Horde. Optional additional parameters set the horde max genlength and max ctxlen.",metavar=('[hordename]', '[hordelength] [hordectx]'), nargs='+')
     compatgroup = parser.add_mutually_exclusive_group()
     compatgroup.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
     compatgroup.add_argument("--useclblast", help="Use CLBlast instead of OpenBLAS for prompt ingestion. Must specify exactly 2 arguments, platform ID and device ID (e.g. --useclblast 1 0).", type=int, choices=range(0,9), nargs=2)

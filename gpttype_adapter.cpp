@@ -1129,7 +1129,10 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 params.n_threads = original_threads;
                 time1 = timer_check();
                 timer_start();
-                printf("\n");
+                if(debugmode!=-1)
+                {
+                    printf("\n");
+                }
             }
 
             unsigned int eosID = 0;
