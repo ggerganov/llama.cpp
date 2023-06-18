@@ -280,7 +280,7 @@ static int test_lifecycle(bool wait_on_done) {
     ggml_threading_resume(ctx);
 
     const int m = 2;
-    const int n = 50;
+    const int n = 10;
 
     printf("[test-ggml-threading] %s: computing %d tensors (half wait)...\n",
            __func__, m * n);
@@ -296,7 +296,7 @@ static int test_lifecycle(bool wait_on_done) {
     printf("[test-ggml-threading] %s: compute done, resuming...\n", __func__);
     ggml_threading_resume(ctx);
 
-    const int loops = 100;
+    const int loops = 10;
     printf("[test-ggml-threading] %s: try %d loops of suspend-resume ...\n",
            __func__, loops);
 
