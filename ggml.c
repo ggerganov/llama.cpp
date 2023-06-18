@@ -480,86 +480,6 @@ int64_t ggml_cycles_per_ms(void) {
 #define ggml_perf_cycles_per_ms() 0
 #endif
 
-//
-// NUMA support
-//
-
-#define GGML_NUMA_MAX_NODES 8
-#define GGML_NUMA_MAX_CPUS 512
-
-struct ggml_numa_node
-{
-    uint32_t cpus[GGML_NUMA_MAX_CPUS]; // hardware threads on this node
-    uint32_t n_cpus;
-};
-
-struct ggml_numa_nodes
-{
-    struct ggml_numa_node nodes[GGML_NUMA_MAX_NODES];
-    uint32_t n_nodes;
-    uint32_t total_cpus; // hardware threads on system
-};
-
-struct ggml_numa_nodes ggml_numa = {
-    .n_nodes = 0,
-    .total_cpus = 0,
-};
-
-void ggml_numa_init(void)
-{
-    if (ggml_numa.n_nodes > 0) { return; }
-#ifdef __linux__
-    struct stat st;
-    char path[256];
-    int rv;
-    // enumerate nodes
-    while (ggml_numa.n_nodes < GGML_NUMA_MAX_NODES) {
-        rv = snprintf(path, sizeof(path), "/sys/devices/system/node/node%u", ggml_numa.n_nodes);
-        GGML_ASSERT(rv > 0 && (unsigned)rv < sizeof(path));
-        if (stat(path, &st) != 0) { break; }
-        ++ggml_numa.n_nodes;
-    }
-    // enumerate CPUs
-    while (ggml_numa.total_cpus < GGML_NUMA_MAX_CPUS) {
-        rv = snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%u", ggml_numa.total_cpus);
-        GGML_ASSERT(rv > 0 && (unsigned)rv < sizeof(path));
-        if (stat(path, &st) != 0) { break; }
-        ++ggml_numa.total_cpus;
-    }
-    GGML_PRINT_DEBUG("found %u numa nodes, %u CPUs\n", ggml_numa.n_nodes, ggml_numa.total_cpus);
-    if (ggml_numa.n_nodes < 1 || ggml_numa.total_cpus < 1) {
-        ggml_numa.n_nodes = 0;
-        return;
-    }
-    for (uint32_t n = 0; n < ggml_numa.n_nodes; ++n) {
-        struct ggml_numa_node *node = &ggml_numa.nodes[n];
-        GGML_PRINT_DEBUG("CPUs on node %u:", n);
-        for (uint32_t c = 0; c < ggml_numa.total_cpus; ++c) {
-            rv = snprintf(path, sizeof(path), "/sys/devices/system/node/node%u/cpu%u", n, c);
-            GGML_ASSERT(rv > 0 && (unsigned)rv < sizeof(path));
-            if (stat(path, &st) == 0) {
-                node->cpus[node->n_cpus++] = c;
-                GGML_PRINT_DEBUG(" %u", c);
-            }
-        }
-        GGML_PRINT_DEBUG("\n");
-    }
-    if (ggml_is_numa()) {
-        FILE *fptr = fopen("/proc/sys/kernel/numa_balancing", "r");
-        if (fptr != NULL) {
-            char buf[42];
-            if (fgets(buf, sizeof(buf), fptr) && strncmp(buf, "0\n", sizeof(buf)) != 0) {
-                GGML_PRINT("WARNING: /proc/sys/kernel/numa_balancing is enabled, this has been observed to impair performance\n");
-            }
-            fclose(fptr);
-        }
-    }
-#else
-    // TODO
-#endif
-}
-
-bool ggml_is_numa(void) { return ggml_numa.n_nodes > 1; }
 
 //
 // cache line
@@ -3751,11 +3671,32 @@ struct ggml_compute_params {
 };
 
 //
+// NUMA support
+//
+
+#define GGML_NUMA_MAX_NODES 8
+#define GGML_NUMA_MAX_CPUS 512
+
+struct ggml_numa_node
+{
+    uint32_t cpus[GGML_NUMA_MAX_CPUS]; // hardware threads on this node
+    uint32_t n_cpus;
+};
+
+struct ggml_numa_nodes
+{
+    struct ggml_numa_node nodes[GGML_NUMA_MAX_NODES];
+    uint32_t n_nodes;
+    uint32_t total_cpus; // hardware threads on system
+};
+
+//
 // ggml state
 //
 
 struct ggml_state {
     struct ggml_context_container contexts[GGML_MAX_CONTEXTS];
+    struct ggml_numa_nodes numa;
 };
 
 // global state
@@ -3779,6 +3720,63 @@ inline static void ggml_critical_section_start(void) {
 inline static void ggml_critical_section_end(void) {
     atomic_fetch_sub(&g_state_barrier, 1);
 }
+
+void ggml_numa_init(void)
+{
+    if (g_state.numa.n_nodes > 0) { return; }
+#ifdef __linux__
+    struct stat st;
+    char path[256];
+    int rv;
+    // enumerate nodes
+    while (g_state.numa.n_nodes < GGML_NUMA_MAX_NODES) {
+        rv = snprintf(path, sizeof(path), "/sys/devices/system/node/node%u", g_state.numa.n_nodes);
+        GGML_ASSERT(rv > 0 && (unsigned)rv < sizeof(path));
+        if (stat(path, &st) != 0) { break; }
+        ++g_state.numa.n_nodes;
+    }
+    // enumerate CPUs
+    while (g_state.numa.total_cpus < GGML_NUMA_MAX_CPUS) {
+        rv = snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%u", g_state.numa.total_cpus);
+        GGML_ASSERT(rv > 0 && (unsigned)rv < sizeof(path));
+        if (stat(path, &st) != 0) { break; }
+        ++g_state.numa.total_cpus;
+    }
+    GGML_PRINT_DEBUG("found %u numa nodes, %u CPUs\n", g_state.numa.n_nodes, g_state.numa.total_cpus);
+    if (g_state.numa.n_nodes < 1 || g_state.numa.total_cpus < 1) {
+        g_state.numa.n_nodes = 0;
+        return;
+    }
+    for (uint32_t n = 0; n < g_state.numa.n_nodes; ++n) {
+        struct ggml_numa_node * node = &g_state.numa.nodes[n];
+        GGML_PRINT_DEBUG("CPUs on node %u:", n);
+        node->n_cpus = 0;
+        for (uint32_t c = 0; c < g_state.numa.total_cpus; ++c) {
+            rv = snprintf(path, sizeof(path), "/sys/devices/system/node/node%u/cpu%u", n, c);
+            GGML_ASSERT(rv > 0 && (unsigned)rv < sizeof(path));
+            if (stat(path, &st) == 0) {
+                node->cpus[node->n_cpus++] = c;
+                GGML_PRINT_DEBUG(" %u", c);
+            }
+        }
+        GGML_PRINT_DEBUG("\n");
+    }
+    if (ggml_is_numa()) {
+        FILE *fptr = fopen("/proc/sys/kernel/numa_balancing", "r");
+        if (fptr != NULL) {
+            char buf[42];
+            if (fgets(buf, sizeof(buf), fptr) && strncmp(buf, "0\n", sizeof(buf)) != 0) {
+                GGML_PRINT("WARNING: /proc/sys/kernel/numa_balancing is enabled, this has been observed to impair performance\n");
+            }
+            fclose(fptr);
+        }
+    }
+#else
+    // TODO
+#endif
+}
+
+bool ggml_is_numa(void) { return g_state.numa.n_nodes > 1; }
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -3995,6 +3993,10 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
 
             g_state = (struct ggml_state) {
                 /*.contexts =*/ { { 0 } },
+                /*.numa =*/ {
+                    .n_nodes = 0,
+                    .total_cpus = 0,
+                },
             };
 
             for (int i = 0; i < GGML_MAX_CONTEXTS; ++i) {
@@ -14056,10 +14058,10 @@ void set_numa_thread_affinity(int thread_n, int n_threads)
 {
     if (!ggml_is_numa()) { return; }
     // run thread on node_num thread_n / (threads per node)
-    int node_num = thread_n / ((n_threads + ggml_numa.n_nodes - 1) / ggml_numa.n_nodes);
-    struct ggml_numa_node *node = &ggml_numa.nodes[node_num];
-    size_t setsize = CPU_ALLOC_SIZE(ggml_numa.total_cpus);
-    cpu_set_t *cpus = CPU_ALLOC(ggml_numa.total_cpus);
+    int node_num = thread_n / ((n_threads + g_state.numa.n_nodes - 1) / g_state.numa.n_nodes);
+    struct ggml_numa_node * node = &g_state.numa.nodes[node_num];
+    size_t setsize = CPU_ALLOC_SIZE(g_state.numa.total_cpus);
+    cpu_set_t * cpus = CPU_ALLOC(g_state.numa.total_cpus);
     CPU_ZERO_S(setsize, cpus);
     for (size_t i = 0; i < node->n_cpus; ++i) {
         CPU_SET_S(node->cpus[i], setsize, cpus);
@@ -14074,10 +14076,10 @@ void set_numa_thread_affinity(int thread_n, int n_threads)
 void clear_numa_thread_affinity(void)
 {
     if (!ggml_is_numa()) { return; }
-    size_t setsize = CPU_ALLOC_SIZE(ggml_numa.total_cpus);
-    cpu_set_t *cpus = CPU_ALLOC(ggml_numa.total_cpus);
+    size_t setsize = CPU_ALLOC_SIZE(g_state.numa.total_cpus);
+    cpu_set_t * cpus = CPU_ALLOC(g_state.numa.total_cpus);
     CPU_ZERO_S(setsize, cpus);
-    for (unsigned i = 0; i < ggml_numa.total_cpus; ++i) {
+    for (unsigned i = 0; i < g_state.numa.total_cpus; ++i) {
         CPU_SET_S(i, setsize, cpus);
     }
     int rv = pthread_setaffinity_np(pthread_self(), setsize, cpus);

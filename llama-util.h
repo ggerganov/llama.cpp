@@ -16,6 +16,8 @@
 #include <vector>
 #include <stdexcept>
 
+#include "ggml.h"
+
 #ifdef __has_include
     #if __has_include(<unistd.h>)
         #include <unistd.h>
@@ -163,9 +165,6 @@ static std::string llama_format_win_err(DWORD err) {
 }
 #endif
 
-extern "C" {
-bool ggml_is_numa();
-}
 struct llama_mmap {
     void * addr;
     size_t size;
