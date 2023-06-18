@@ -9688,8 +9688,6 @@ static void ggml_compute_forward_gelu(
                 GGML_ASSERT(false);
             } break;
     }
-
-    //printf("XXXXXXXX gelu\n");
 }
 
 // ggml_compute_forward_gelu_quick
@@ -9749,8 +9747,6 @@ static void ggml_compute_forward_gelu_quick(
                 GGML_ASSERT(false);
             } break;
     }
-
-    //printf("XXXXXXXX quick gelu\n");
 }
 
 // ggml_compute_forward_silu
