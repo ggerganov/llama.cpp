@@ -142,7 +142,7 @@ static int sched_yield(void) {
 #endif
 
 struct ggml_perf_stats {
-    int runs;
+    atomic_int runs;
 
     // total cycles
     atomic_int cycles;
@@ -211,9 +211,9 @@ static inline void ggml_spin_unlock(volatile atomic_flag *obj) {
 
 static inline void ggml_perf_collect(struct ggml_perf_stats *st, int64_t c0,
                                      int64_t t0) {
-    st->runs++;
-    st->cycles += (ggml_cycles() - c0);
-    st->time_us += (ggml_time_us() - t0);
+    atomic_fetch_add(&st->runs, 1);
+    atomic_fetch_add(&st->cycles, (int)(ggml_cycles() - c0));
+    atomic_fetch_add(&st->time_us, (int)(ggml_time_us() - t0));
 }
 
 // A worker thread goes cond waiting.

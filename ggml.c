@@ -15468,7 +15468,7 @@ struct ggml_cgraph ggml_build_backward(struct ggml_context * ctx, struct ggml_cg
 // ---- task profiles  ----
 
 // Check the type and memeory layout for mul_mat on blas(CPU BLAS)
-static bool ggml_mul_mat_check_type_mem(struct ggml_tensor *tensor) {
+static bool ggml_mul_mat_check_type_mem(const struct ggml_tensor *tensor) {
     enum ggml_type src0_t = tensor->src0->type;
     enum ggml_type src1_t = tensor->src1->type;
 
@@ -15669,6 +15669,8 @@ int ggml_get_task_profiles(
             p[0].stages[0].valid = true;
             p[0].stages[1].valid = true;
             p[0].stages[1].parallel = true;
+        } else {
+            GGML_ASSERT(false);
         }
     } break;
     case GGML_OP_SCALE: {
@@ -15717,7 +15719,7 @@ int ggml_get_task_profiles(
     case GGML_OP_FLASH_FF: {
         p[0].stages[1].valid = true;
         p[0].stages[1].parallel = true;
-    }
+    } break;
     case GGML_OP_FLASH_ATTN_BACK: {
         p[0].stages[0].valid = true;
         p[0].stages[1].valid = true;
@@ -15727,11 +15729,12 @@ int ggml_get_task_profiles(
     case GGML_OP_MAP_BINARY: {
         p[0].stages[1].valid = true;
     } break;
-    case GGML_OP_CROSS_ENTROPY_LOSS:
+    case GGML_OP_CROSS_ENTROPY_LOSS: {
         p[0].stages[0].valid = true;
         p[0].stages[1].valid = true;
         p[0].stages[1].parallel = true;
         p[0].stages[2].valid = true;
+    } break;
     case GGML_OP_CROSS_ENTROPY_LOSS_BACK: {
         p[0].stages[1].valid = true;
         p[0].stages[1].parallel = true;
@@ -15764,6 +15767,8 @@ int ggml_get_task_profiles(
             p[i].stages[0].parallel = true;
             p[i].stages[1].valid = true;
             p[i].stages[1].wait = true;
+        } else {
+            GGML_ASSERT(false);
         }
         ++n_profiles;
     }

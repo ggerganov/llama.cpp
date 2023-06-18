@@ -1589,7 +1589,7 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
     }
 }
 
-bool ggml_cl_is_gpu_offloading(struct ggml_tensor * tensor) {
+bool ggml_cl_is_gpu_offloading(const struct ggml_tensor * tensor) {
     GGML_ASSERT(tensor);
     return (tensor->src0 && tensor->src0->backend == GGML_BACKEND_GPU) ||
         (tensor->src1 && tensor->src1->backend == GGML_BACKEND_GPU);

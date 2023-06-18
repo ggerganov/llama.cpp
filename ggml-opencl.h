@@ -8,8 +8,8 @@ extern "C" {
 
 void ggml_cl_init(void);
 
+bool   ggml_cl_is_gpu_offloading(const struct ggml_tensor * tensor);
 void   ggml_cl_mul(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst);
-bool   ggml_cl_is_gpu_offloading(struct ggml_tensor * tensor);
 size_t ggml_cl_mul_mat_get_wsize(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst);
 void   ggml_cl_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst, void * wdata, size_t wsize);
 

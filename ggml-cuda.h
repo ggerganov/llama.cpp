@@ -15,8 +15,8 @@ struct ggml_tensor_extra_gpu {
 void   ggml_init_cublas(void);
 void   ggml_cuda_set_tensor_split(const float * tensor_split);
 
+bool   ggml_cuda_is_gpu_offloading(struct ggml_tensor * tensor);
 void   ggml_cuda_mul(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst);
-bool   ggml_cuda_is_gpu_offloading(const struct ggml_tensor * src0);
 size_t ggml_cuda_mul_mat_get_wsize(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst);
 void   ggml_cuda_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst, void * wdata, size_t wsize);
 
