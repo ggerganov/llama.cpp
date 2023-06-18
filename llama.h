@@ -40,7 +40,7 @@
 #define LLAMA_FILE_MAGIC_GGML        0x67676d6cu // 'ggml'
 #define LLAMA_FILE_MAGIC_GGSN        0x6767736eu // 'ggsn'
 
-#define LLAMA_FILE_VERSION           3
+#define LLAMA_FILE_VERSION           4
 #define LLAMA_FILE_MAGIC             LLAMA_FILE_MAGIC_GGJT
 #define LLAMA_FILE_MAGIC_UNVERSIONED LLAMA_FILE_MAGIC_GGML
 #define LLAMA_SESSION_MAGIC          LLAMA_FILE_MAGIC_GGSN
@@ -372,6 +372,8 @@ extern "C" {
     LLAMA_API llama_token llama_token_bos();  // beginning-of-sentence
     LLAMA_API llama_token llama_token_eos();  // end-of-sentence
     LLAMA_API llama_token llama_token_nl();   // next-line
+
+    LLAMA_API bool llama_is_special_token(const struct llama_context * ctx, llama_token token);
 
     // Grammar
     //

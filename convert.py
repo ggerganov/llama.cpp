@@ -142,6 +142,7 @@ def find_n_mult(n_ff: int, n_embd: int) -> int:
 @dataclass
 class Params:
     n_vocab:   int
+    n_vocab_sp:int
     n_embd:    int
     n_mult:    int
     n_head:    int
@@ -169,6 +170,7 @@ class Params:
 
         return Params(
             n_vocab   = n_vocab,
+            n_vocab_sp= n_vocab,
             n_embd    = n_embd,
             n_mult    = 256,
             n_head    = n_head,
@@ -191,6 +193,7 @@ class Params:
 
         return Params(
             n_vocab   = n_vocab,
+            n_vocab_sp= n_vocab,
             n_embd    = n_embd,
             n_mult    = n_mult,
             n_head    = n_head,
@@ -215,6 +218,7 @@ class Params:
 
         return Params(
             n_vocab   = n_vocab,
+            n_vocab_sp= n_vocab
             n_embd    = n_embd,
             n_mult    = n_mult,
             n_head    = n_head,
@@ -239,7 +243,7 @@ class Params:
 
 
 class SentencePieceVocab:
-    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Optional[Path], vocabtype: Optional[str]) -> None:
+    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Optional[Path], fname_special_tokens: Optional[Path], vocabtype: Optional[str]) -> None:
         self.vocabtype = vocabtype
         if self.vocabtype == "bpe":
           self.sentencepiece_tokenizer = json.loads(open(str(fname_tokenizer)).read())
@@ -264,35 +268,46 @@ class SentencePieceVocab:
         self.vocab_size: int = self.vocab_size_base + len(self.added_tokens_list)
         self.fname_tokenizer = fname_tokenizer
         self.fname_added_tokens = fname_added_tokens
+        special_tokens: Dict[str, Dict[str, Any]]
+        if fname_special_tokens is not None:
+            special_tokens = json.load(open(fname_special_tokens))
+        else:
+            special_tokens = {}
+        token_name_to_id = {"unk_token": self.sentencepiece_tokenizer.unk_id(), "bos_token": self.sentencepiece_tokenizer.bos_id(), "eos_token": self.sentencepiece_tokenizer.eos_id(), "pad_token": self.sentencepiece_tokenizer.pad_id()}
+        self.special_tokens_map = {token_name_to_id[token_name]: info["content"] if isinstance(info, dict) else info for token_name, info in special_tokens.items() if token_name in token_name_to_id and token_name_to_id[token_name] != -1}
+        self.vocab_special_size: int = len(self.added_tokens_list) + len(self.special_tokens_map)
 
     def sentencepiece_tokens(self) -> Iterable[Tuple[bytes, float]]:
         tokenizer = self.sentencepiece_tokenizer
         if self.vocabtype == "bpe":
-          from transformers.models.gpt2 import tokenization_gpt2
-          byte_encoder = tokenization_gpt2.bytes_to_unicode()
-          byte_decoder = {v: k for k, v in byte_encoder.items()}
-          for i, item in enumerate(tokenizer):
-            text: bytes
-            text = b''.join([x.to_bytes(1, byteorder='big') for x in [byte_decoder[y] for y in item]])
-            score: float = -i
-            yield text, score
+            from transformers.models.gpt2 import tokenization_gpt2
+            byte_encoder = tokenization_gpt2.bytes_to_unicode()
+            byte_decoder = {v: k for k, v in byte_encoder.items()}
+            for i, item in enumerate(tokenizer):
+                text: bytes
+                text = b''.join([x.to_bytes(1, byteorder='big') for x in [byte_decoder[y] for y in item]])
+                score: float = -i
+                yield text, score
         else:
-          for i in range(tokenizer.vocab_size()):
-              text: bytes
-              if tokenizer.is_unknown(i):
-                  text = " \u2047 ".encode("utf-8")
-              elif tokenizer.is_control(i):
-                  text = b""
-              elif tokenizer.is_byte(i):
-                  piece = tokenizer.id_to_piece(i)
-                  if len(piece) != 6:
-                      raise Exception(f"Invalid token: {piece}")
-                  byte_value = int(piece[3:-1], 16)
-                  text = struct.pack("B", byte_value)
-              else:
-                  text = tokenizer.id_to_piece(i).replace("\u2581", " ").encode("utf-8")
-              score: float = tokenizer.get_score(i)
-              yield text, score
+            special_tokens = [tokenizer.bos_id(), tokenizer.eos_id(), tokenizer.pad_id()]
+            for i in range(tokenizer.vocab_size()):
+                text: bytes
+                if tokenizer.is_unknown(i):
+                    text = self.special_tokens_map.get(i, " \u2047 ").encode("utf-8")
+                elif i in special_tokens:
+                    text = self.special_tokens_map.get(i, "").encode("utf-8")
+                elif tokenizer.is_control(i):
+                    text = b""
+                elif tokenizer.is_byte(i):
+                    piece = tokenizer.id_to_piece(i)
+                    if len(piece) != 6:
+                        raise Exception(f"Invalid token: {piece}")
+                    byte_value = int(piece[3:-1], 16)
+                    text = struct.pack("B", byte_value)
+                else:
+                    text = tokenizer.id_to_piece(i).replace("\u2581", " ").encode("utf-8")
+                score: float = tokenizer.get_score(i)
+                yield text, score
 
     def added_tokens(self) -> Iterable[Tuple[bytes, float]]:
         for text in self.added_tokens_list:
@@ -303,6 +318,12 @@ class SentencePieceVocab:
         yield from self.sentencepiece_tokens()
         yield from self.added_tokens()
 
+    def all_special_tokens(self) -> Iterable[int]:
+        for token_id in self.special_tokens_map.keys():
+            yield token_id
+        for i in range(len(self.added_tokens_list)):
+            yield self.vocab_size_base + i
+
     def __repr__(self) -> str:
         return f"<SentencePieceVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
 
@@ -310,10 +331,15 @@ class SentencePieceVocab:
 class GGMLVocab:
     def __init__(self, tokens: List[Tuple[bytes, float]]):
         self.tokens = tokens
+        self.special_tokens = []
         self.vocab_size = len(tokens)
+        self.vocab_special_size = 0
 
     def all_tokens(self) -> Iterable[Tuple[bytes, float]]:
         return self.tokens
+
+    def all_special_tokens(self) -> Iterable[int]:
+        return self.special_tokens
 
     def __repr__(self) -> str:
         return f"<GGMLVocab with {self.vocab_size} tokens>"
@@ -1066,8 +1092,9 @@ class OutputFile:
     def write_file_header(self, params: Params, file_type: GGMLFileType) -> None:
         self.fout.write(b"ggjt"[::-1])  # magic
         values = [
-            1,  # file version
+            4,  # file version
             params.n_vocab,
+            params.n_vocab_sp,
             params.n_embd,
             params.n_mult,
             params.n_head,
@@ -1089,11 +1116,14 @@ class OutputFile:
             self.fout.write(struct.pack("i", len(text)))
             self.fout.write(text)
             self.fout.write(struct.pack("f", score))
+        for token_id in vocab.all_special_tokens():
+            self.fout.write(struct.pack("i", token_id))
 
     @staticmethod
     def write_vocab_only(fname_out: Path, vocab: Vocab) -> None:
         of = OutputFile(fname_out)
-        params = Params(n_vocab=vocab.vocab_size, n_embd=0, n_mult=0, n_head=1, n_layer=0)
+        params = Params(n_vocab=vocab.vocab_size, n_vocab_sp=vocab.vocab_special_size, n_embd=0, n_mult=0,
+                        n_head=1, n_layer=0)
         of = OutputFile(fname_out)
         of.write_file_header(params, file_type=GGMLFileType.AllF32)
         of.write_vocab(vocab)
@@ -1249,8 +1279,10 @@ def load_vocab(path: Path, vocabtype: Optional[str]) -> SentencePieceVocab:
                 f"Could not find tokenizer.model in {path} or its parent; "
                 "if it's in another directory, pass the directory as --vocab-dir")
     added_tokens_path = path.parent / "added_tokens.json"
+    special_tokens_path = path.parent / "special_tokens_map.json"
+    tokenizer_config_path = path.parent / "tokenizer_config.json"
     print(f"Loading vocab file {path}")
-    return SentencePieceVocab(path, added_tokens_path if added_tokens_path.exists() else None,
+    return SentencePieceVocab(path, added_tokens_path if added_tokens_path.exists() else None, special_tokens_path if special_tokens_path.exists() else tokenizer_config_path if tokenizer_config_path.exists() else None,
                               vocabtype)
 
 
@@ -1313,6 +1345,7 @@ def main(args_in: Optional[List[str]] = None) -> None:
             vocab_dir = args.vocab_dir if args.vocab_dir else model_plus.paths[0].parent
             vocab = load_vocab(vocab_dir, args.vocabtype)
         params = Params.load(model_plus)
+        params.n_vocab_sp = vocab.vocab_special_size
         model = model_plus.model
         model = do_necessary_conversions(model, params)
         output_type = pick_output_type(model, args.outtype)
