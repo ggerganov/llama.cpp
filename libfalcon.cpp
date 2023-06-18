@@ -12,6 +12,7 @@
 
 #include "ggml.h"
 #ifdef GGML_USE_CUBLAS
+#include <cuda_runtime.h>
 #include "ggml-cuda.h"
 #elif defined(GGML_USE_CLBLAST)
 #include "ggml-opencl.h"
@@ -1010,6 +1011,33 @@ static const char *falcon_model_type_name(e_model type) {
     }
 }
 
+// dynamically gets all tensors from a layer
+std::vector<ggml_tensor*> get_tensors_from_layer(falcon_layer& layer) {
+    std::vector<ggml_tensor*> tensors;
+    ggml_tensor** tensor_ptr = reinterpret_cast<ggml_tensor**>(&layer); // Cast to the pointer to ggml_tensor pointer
+
+    // Iterate through the members and store their addresses in the vector
+    for (std::size_t i = 0; i < sizeof(falcon_layer) / sizeof(ggml_tensor*); ++i) {
+        tensors.push_back(tensor_ptr[i]);
+    }
+
+    return tensors;
+}
+// get vram size of all tensors in a layer (todo: split handling)
+size_t calculate_layer_vram_bytes(const falcon_layer& layer) {
+    size_t size = 0;
+    auto tensors = get_tensors_from_layer(const_cast<falcon_layer&>(layer));
+
+    // Add the size of each member with GPU backend
+    for (const auto& tensor : tensors) {
+        if (tensor != nullptr && tensor->backend != GGML_BACKEND_CPU) {
+            size += ggml_nbytes(tensor);
+        }
+    }
+
+    return size;
+}
+
 static void falcon_model_load_internal(
         const std::string & fname,
         falcon_context & lctx,
@@ -1033,6 +1061,7 @@ static void falcon_model_load_internal(
     auto & model = lctx.model;
     model.hparams = ml->file_loaders.at(0)->hparams;
     model.n_gpu_layers = n_gpu_layers;
+
     llama_file_version file_version = ml->file_loaders.at(0)->file_version;
     auto & hparams = model.hparams;
 
@@ -1123,6 +1152,7 @@ static void falcon_model_load_internal(
 
     (void) main_gpu;
 #if defined(GGML_USE_CUBLAS)
+if (n_gpu_layers > 0)
     fprintf(stderr, "%s: using CUDA for GPU acceleration\n", __func__);
     ggml_cuda_set_main_device(main_gpu);
 #define LLAMA_BACKEND_OFFLOAD       GGML_BACKEND_GPU
@@ -1136,9 +1166,31 @@ static void falcon_model_load_internal(
 #define LLAMA_BACKEND_OFFLOAD_SPLIT GGML_BACKEND_CPU
 #endif
 
+size_t vram_total=0;
+size_t vram_free=0;
+size_t vram_reserved=1024*1024*512; //will be adapted by model
+#if defined(GGML_USE_CUBLAS)
+    cudaMemGetInfo(&vram_free, &vram_total); // this should go in ggml-cuda.cu but I don't want to make Johannes life harder by modifying that yet
+    fprintf(stderr, "%s: VRAM free: %7.2f MB  of %7.2f MB (already used: %7.2f MB)\n", __func__, vram_free/MB*1.0, vram_total/MB*1.0, (vram_total-vram_free)/MB*1.0);
+#endif
+
     // prepare memory for the weights
     size_t vram_weights = 0;
     size_t vram_scratch = 0;
+    size_t vram_overhead = 0;
+        (void) vram_scratch;
+        (void) n_batch;
+    // calculate scratch buffer size and allocate it
+#ifdef GGML_USE_CUBLAS
+        vram_scratch = n_batch * MB;
+        ggml_cuda_set_scratch_size(vram_scratch);
+        if (n_gpu_layers > 0) {
+
+            fprintf(stderr, "%s: allocating batch_size x 1 MB = %ld MB VRAM for the scratch buffer\n",
+                    __func__, vram_scratch / MB);
+        }
+#endif // GGML_USE_CUBLAS
+
     {
         const uint32_t n_embd = hparams.n_embd;
         const uint32_t n_head = hparams.n_head;
@@ -1152,11 +1204,25 @@ static void falcon_model_load_internal(
 
         model.tok_embeddings = ml->get_tensor("transformer.word_embeddings.weight", {n_embd, n_vocab}, GGML_BACKEND_CPU);
 
+        // I did not analyze the cause but that's the overhead that is dynamically added to the VRAM at first inference
+        // same goes with reserved, most likely we can skip both for a proper size calculation. 
+        // If the below values are not correct GPU memory will fill up to 100%, resulting in a extreme slowdown of inference
+        if (model.type == FALCON_40B) 
+        {
+            vram_reserved=1900*MB;
+            vram_overhead+=2700*MB;
+        }
+        else 
+        {
+            vram_reserved=768*MB;
+            vram_overhead+=1200*MB;
+        }
 
         
         ggml_backend backend_norm;
         ggml_backend backend_output;
-        if (n_gpu_layers > int(n_layer)) { // NOLINT
+        // disabled norm/output offloading until further tests, causes silent crash at the moment
+        if (n_gpu_layers > int(n_layer) && false) { // NOLINT
             backend_norm = LLAMA_BACKEND_OFFLOAD;
             backend_output = LLAMA_BACKEND_OFFLOAD_SPLIT;
         } else {
@@ -1172,12 +1238,26 @@ static void falcon_model_load_internal(
             model.lm_head = ml->get_tensor("lm_head.weight", {n_embd, n_vocab}, backend_output);
         }
 
+        if (backend_norm != GGML_BACKEND_CPU)
+        {
+            vram_weights += ggml_nbytes(model.output_norm);
+            vram_weights += ggml_nbytes(model.output_norm_b);
+            vram_free -= ggml_nbytes(model.output_norm);
+            vram_free -= ggml_nbytes(model.output_norm_b);
+        }
+        if (backend_output != GGML_BACKEND_CPU)
+        {
+            vram_weights += ggml_nbytes(model.lm_head);
+            vram_free -= ggml_nbytes(model.lm_head);
+        }
+
         const int i_gpu_start = n_layer - n_gpu_layers;
+        int i_gpu_end = n_layer; // allows to terminate the offloading earlier. TODO: instead do a proper calculation run and determine the start before the loop
 
         model.layers.resize(n_layer);
         for (uint32_t i = 0; i < n_layer; ++i) {
-            const ggml_backend backend = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD; // NOLINT
-            const ggml_backend backend_split = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD_SPLIT; // NOLINT
+            const ggml_backend backend = (int(i) < i_gpu_start || int(i) >= i_gpu_end) ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD; // NOLINT
+            const ggml_backend backend_split = (int(i) < i_gpu_start || int(i) >= i_gpu_end) ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD_SPLIT; // NOLINT
 
             auto & layer = model.layers[i];
 
@@ -1201,31 +1281,26 @@ static void falcon_model_load_internal(
 
             layer.ffn_up = ml->get_tensor("transformer.h."+str_i + ".mlp.dense_h_to_4h.weight", {n_embd, n_ff}, backend_split); // before gelu
             layer.ffn_down = ml->get_tensor("transformer.h."+str_i + ".mlp.dense_4h_to_h.weight", {n_ff, n_embd}, backend_split); // after gelu
+            
+            if (backend != GGML_BACKEND_CPU)
+            {
+                size_t vram_layer = 0;
+                vram_layer = calculate_layer_vram_bytes(layer);
+                vram_weights += vram_layer;
+                vram_free = (vram_layer > vram_free) ? 0 : vram_free - vram_layer; // simulate the layer being loaded in VRAM
 
-            if (backend == GGML_BACKEND_GPU) {
-                // llama:
-                // vram_weights +=
-                //     ggml_nbytes(layer.attention_norm) + ggml_nbytes(layer.wq) + ggml_nbytes(layer.wk)             +
-                //     ggml_nbytes(layer.wv)             + ggml_nbytes(layer.wo) + ggml_nbytes(layer.ffn_norm) +
-                //     ggml_nbytes(layer.w1)             + ggml_nbytes(layer.w2) + ggml_nbytes(layer.w3);
-                // falcon:
-                if (model.type == FALCON_40B)
+                if (vram_free <= (vram_overhead+vram_scratch+vram_reserved))
                 {
-                    vram_weights +=
-                        ggml_nbytes(layer.input_layernorm) + ggml_nbytes(layer.input_layernorm_b) +
-                        ggml_nbytes(layer.attention_norm) + ggml_nbytes(layer.attention_norm_b) +
-                        ggml_nbytes(layer.wo)             + ggml_nbytes(layer.wo)             +
-                        ggml_nbytes(layer.ffn_down)             + ggml_nbytes(layer.ffn_down)             +
-                        ggml_nbytes(layer.ffn_up)         + ggml_nbytes(layer.ffn_up);
-                } else // FALCON_7B
-                {
-                    vram_weights +=
-                        ggml_nbytes(layer.input_layernorm) + ggml_nbytes(layer.input_layernorm_b) +
-                        ggml_nbytes(layer.wo)             + ggml_nbytes(layer.wo)             +
-                        ggml_nbytes(layer.ffn_down)             + ggml_nbytes(layer.ffn_down)             +
-                        ggml_nbytes(layer.ffn_up)         + ggml_nbytes(layer.ffn_up);
+                    // this needs some polishing (instead of fiddling with --ngl I'd like the option to auto-fill the vram with as many layers as possible as an alternative)
+                    fprintf(stderr, "WARNING: Not enough VRAM to load the model as configured - at layer %d of %d\n", i, n_layer);
+                    n_gpu_layers = i+1;
+                    model.n_gpu_layers = n_gpu_layers;    
+                    i_gpu_end = i;
                 }
             }
+
+
+         
         }
     }
 
@@ -1251,25 +1326,17 @@ static void falcon_model_load_internal(
         fprintf(stderr, "%s: mem required  = %7.2f MB (+ %7.2f MB per state)\n", __func__,
                 mem_required / 1024.0 / 1024.0, mem_required_state / 1024.0 / 1024.0);
 
-        (void) vram_scratch;
-        (void) n_batch;
-#ifdef GGML_USE_CUBLAS
-        vram_scratch = n_batch * MB;
-        ggml_cuda_set_scratch_size(vram_scratch);
-        if (n_gpu_layers > 0) {
-            fprintf(stderr, "%s: allocating batch_size x 1 MB = %ld MB VRAM for the scratch buffer\n",
-                    __func__, vram_scratch / MB);
-        }
-#endif // GGML_USE_CUBLAS
+        // moved scratch allocation of vram to top
 #if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
 
-        fprintf(stderr, "%s: offloading %d layers to GPU\n", __func__, n_gpu);
+        fprintf(stderr, "%s: offloading %d of %d layers to GPU, weights offloaded %7.2f MB\n",
+                __func__, n_gpu, hparams.n_layer, vram_weights / 1024.0 / 1024.0);
         if (n_gpu_layers > (int) hparams.n_layer) {
             fprintf(stderr, "%s: offloading output layer to GPU\n", __func__);
         }
         fprintf(stderr, "%s: total VRAM used: %zu MB\n",
-                __func__, (vram_weights + vram_scratch + MB - 1) / MB); // round up
+                __func__, (vram_weights + vram_scratch + vram_overhead + MB - 1) / MB); // round up
 #else
         (void) n_gpu_layers;
 #endif
@@ -1293,13 +1360,22 @@ static void falcon_model_load_internal(
         progress_callback(1.0f, progress_callback_user_data);
     }
 
+    #if defined(GGML_USE_CUBLAS)
+    //size_t vram_free_simulated = vram_free;
+    cudaMemGetInfo(&vram_free, &vram_total); // this should go in ggml-cuda.cu but I don't want to make Johannes life harder by modifying that yet
+    fprintf(stderr, "%s: VRAM free: %7.2f MB  of %7.2f MB (used: %7.2f MB)\n", __func__, vram_free/MB*1.0, vram_total/MB*1.0, (vram_total-vram_free)/MB*1.0);
+
+    #endif
+
+
     model.mapping = std::move(ml->mapping);
 
     // loading time will be recalculate after the first eval, so
     // we take page faults deferred by mmap() into consideration
     lctx.t_load_us = ggml_time_us() - lctx.t_start_us;
+    
 }
-
+#include <windows.h>
 static bool falcon_model_load(
         const std::string & fname,
         falcon_context & lctx,
@@ -2591,7 +2667,7 @@ struct falcon_context * falcon_init_from_file(
     ggml_time_init();
 
     falcon_context * ctx = new falcon_context;
-
+    
     if (params.seed < 0) {
         params.seed = time(NULL);
     }
@@ -2625,6 +2701,7 @@ struct falcon_context * falcon_init_from_file(
         llama_free(ctx);
         return nullptr;
     }
+    params.n_gpu_layers = ctx->model.n_gpu_layers; // model_load_internal() may change this
 
     // reserve memory for context buffers
     if (!params.vocab_only) {
