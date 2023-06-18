@@ -214,7 +214,7 @@ lifecycle_runner(const struct ggml_compute_params *params,
 }
 
 // Test thread lifecycle: start -> suspend -> resume -> stop
-static int test_lifecycle(void) {
+static int test_lifecycle(bool wait_on_done) {
     struct ggml_tensor node;
     memset(&node, 0, sizeof(struct ggml_tensor));
 
@@ -243,14 +243,15 @@ static int test_lifecycle(void) {
     int threads_arr_len = sizeof(threads_arr) / sizeof(threads_arr[0]);
     int n_threads = 1;
 
+    enum ggml_threading_features features =
+        wait_on_done ? GGML_THREADING_FEATURE_NONE
+                     : GGML_THREADING_FEATURE_WAIT_ON_DONE;
     for (int i = 0; i < threads_arr_len; i++) {
         n_threads = threads_arr[i];
         int start_time = (int)ggml_time_ms();
-        ctx = ggml_threading_start(
-            n_threads, NULL, lifecycle_runner,
-            /*features*/ GGML_THREADING_FEATURE_WAIT_ON_DONE |
-                GGML_THREADING_FEATURE_PERF,
-            /*stages_time*/ NULL);
+        ctx = ggml_threading_start(n_threads, NULL, lifecycle_runner,
+                                   features | GGML_THREADING_FEATURE_PERF,
+                                   /*stages_time*/ NULL);
         int elapsed = (int)ggml_time_ms() - start_time;
         if (elapsed > 5 * n_threads) {
             printf("[test-ggml-threading] %s: it took %d ms to start %d worker "
@@ -547,13 +548,17 @@ int main(void) {
     }
 
     // lifecycle.
-    {
-        printf("[test-ggml-threading] test lifecycle ...\n");
+    for (int i = 0; i < 2; i++) {
+        bool wait_on_done = (i == 1);
+        printf("[test-ggml-threading] test lifecycle (want_on_done = %d) ...\n",
+               wait_on_done);
         ++n_tests;
 
-        if (test_lifecycle() == 0) {
+        if (test_lifecycle(wait_on_done) == 0) {
             ++n_passed;
-            printf("[test-ggml-threading] test lifecycle: ok\n\n");
+            printf("[test-ggml-threading] test lifecycle (want_on_done = %d): "
+                   "ok\n\n",
+                   wait_on_done);
         }
     }
 

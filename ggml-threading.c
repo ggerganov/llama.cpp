@@ -260,22 +260,17 @@ void ggml_threading_suspend(struct ggml_threading_context *ctx) {
         return;
     }
 
-    struct ggml_compute_state_shared *shared = &ctx->shared;
-
-    ggml_spin_lock(&shared->spin);
+    PRINT_DEBUG("[main] wait_now will be set, expect %d workers wait\n",
+                n_worker_threads);
     ctx->shared.wait_now = true;
-    ggml_spin_unlock(&shared->spin);
 
     const int n_worker_threads = ctx->n_threads - 1;
-
     while (ctx->shared.n_waiting != n_worker_threads) {
         ggml_spin_pause();
     }
 
-    ggml_spin_lock(&shared->spin);
-    ctx->suspending = true;
-    ggml_spin_unlock(&shared->spin);
     PRINT_DEBUG("[main] saw %d workers waiting\n", n_worker_threads);
+    ctx->suspending = true;
 }
 
 // Wakeup all workers.
@@ -291,7 +286,6 @@ void ggml_threading_resume(struct ggml_threading_context *ctx) {
     }
 
     struct ggml_compute_state_shared *shared = &ctx->shared;
-    ggml_spin_lock(&shared->spin);
 
     int64_t perf_cycles_0 = 0;
     int64_t perf_time_0 = 0;
@@ -307,8 +301,6 @@ void ggml_threading_resume(struct ggml_threading_context *ctx) {
     shared->wait_now = false;
 
     while (shared->n_waiting != 0) {
-        ggml_spin_unlock(&shared->spin);
-
         if (loop_counter > 0) {
             ggml_spin_pause();
             if (loop_counter > 3) {
@@ -326,8 +318,6 @@ void ggml_threading_resume(struct ggml_threading_context *ctx) {
         GGML_ASSERT(pthread_cond_broadcast(&shared->cond) == 0);
         GGML_ASSERT(pthread_mutex_unlock(&shared->mutex) == 0);
         last_signal_time = ggml_time_us();
-
-        ggml_spin_lock(&shared->spin);
     }
 
     ctx->suspending = false;
@@ -335,9 +325,7 @@ void ggml_threading_resume(struct ggml_threading_context *ctx) {
     if (shared->ctx->features & GGML_THREADING_FEATURE_PERF) {
         ggml_perf_collect(&shared->ctx->wakeup_perf, perf_cycles_0,
                           perf_time_0);
-    }
-
-    ggml_spin_unlock(&shared->spin);
+    };
 }
 
 bool ggml_threading_is_suspending(struct ggml_threading_context *ctx) {
@@ -385,8 +373,6 @@ static void ggml_threading_setup_workers(struct ggml_threading_context *ctx,
         }
     } else if (current->wait) {
         if (shared->n_waiting < n_worker_threads) {
-            PRINT_DEBUG("[main] wait_now will be set, expect %d workers wait\n",
-                        n_worker_threads);
             ggml_spin_unlock(&ctx->shared.spin);
             ggml_threading_suspend(ctx);
             ggml_spin_lock(&ctx->shared.spin);
