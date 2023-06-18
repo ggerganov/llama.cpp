@@ -83,7 +83,7 @@ int ggml_mulmat_tune_select_task_profile(struct ggml_mulmat_tune *tune, int M,
 
 #ifndef GGML_TUNE_NDEBUG
                 printf("\n[tune] M: %3d, N: %5d, K: %5d, profile id: %d, "
-                       "backends: %s %s %s\n",
+                       "profile name: %s\n",
                        M, N, K, prof->id, prof->name);
 #endif
             }

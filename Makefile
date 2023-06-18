@@ -237,7 +237,7 @@ k_quants.o: k_quants.c k_quants.h
 endif # LLAMA_NO_K_QUANTS
 
 ifndef LLAMA_NO_TUNE
-CFLAGS   += -DGGML_USE_TUNE -DGGML_TUNE_NDEBUG
+CFLAGS   += -DGGML_USE_TUNE #-DGGML_TUNE_NDEBUG
 CXXFLAGS += -DGGML_USE_TUNE
 endif
 
