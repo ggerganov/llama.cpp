@@ -617,7 +617,12 @@ And after 4.45 hours, you will have the final perplexity.
 
 #### Building the Project using Android NDK
 You can easily run `llama.cpp` on Android device with [termux](https://termux.dev/).
-First, obtain the [Android NDK](https://developer.android.com/ndk) and then build with CMake:
+
+First, install the essential packages for termux:
+```
+pkg install clang wget git cmake
+```
+Second, obtain the [Android NDK](https://developer.android.com/ndk) and then build with CMake:
 ```
 $ mkdir build-android
 $ cd build-android
