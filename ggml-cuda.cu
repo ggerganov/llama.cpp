@@ -483,15 +483,15 @@ static __global__ void dequantize_mul_mat_vec_q2_k(const void * vx, const float 
 
     const block_q2_K * x = (const block_q2_K *)vx + ib0;
 
-    const int tid = threadIdx.x/K_QUANTS_PER_ITERATION;  // 0...31
-    const int ix  = threadIdx.x%K_QUANTS_PER_ITERATION;  // 0
+    const int tid = threadIdx.x/K_QUANTS_PER_ITERATION;  // 0...31 or 0...15
+    const int ix  = threadIdx.x%K_QUANTS_PER_ITERATION;  // 0 or 0,1
 
     const int step = 16/K_QUANTS_PER_ITERATION;
 
-    const int im = tid/step;      // 0 or 1. 0 computes 0..., 1 computes 128...
-    const int in = tid - step*im; // 0...7
+    const int im = tid/step;                             // 0 or 1. 0 computes 0..., 1 computes 128...
+    const int in = tid - step*im;                        // 0...15 or 0...7
 
-    const int l0 = K_QUANTS_PER_ITERATION*in;        // 0...14 in steps of 4
+    const int l0 = K_QUANTS_PER_ITERATION*in;            // 0...15 or 0...14 in steps of 2
     const int q_offset = 32*im + l0;
     const int s_offset = 8*im;
     const int y_offset = 128*im + l0;
@@ -1266,7 +1266,7 @@ static void dequantize_mul_mat_vec_q8_0_cuda(const void * vx, const float * y, f
 
 static void dequantize_mul_mat_vec_q2_K_cuda(const void * vx, const float * y, float * dst, const int ncols, const int nrows, cudaStream_t stream) {
     GGML_ASSERT(ncols % QK_K == 0);
-    const int ny = 2;
+    const int ny = 2; // very slightly faster than 1 even when K_QUANTS_PER_ITERATION = 2
     const int block_num_y = (nrows + ny - 1) / ny;
     const dim3 block_nums(1, block_num_y, 1);
     const dim3 block_dims(32, ny, 1);
