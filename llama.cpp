@@ -886,6 +886,7 @@ static bool kv_cache_init(
     const int64_t n_elements = n_embd*n_mem;
 
     cache.buf.resize(2u*n_elements*ggml_type_size(wtype) + 2u*MB);
+    cache.n = 0;
 
     struct ggml_init_params params;
     params.mem_size   = cache.buf.size;
@@ -904,6 +905,7 @@ static bool kv_cache_init(
     ggml_set_name(cache.k, "cache_k");
     ggml_set_name(cache.v, "cache_v");
 
+    (void) n_gpu_layers;
 #ifdef GGML_USE_CUBLAS
     if (n_gpu_layers > n_layer + 1) {
         ggml_cuda_assign_buffers_no_scratch(cache.v);
@@ -1253,7 +1255,7 @@ static void llama_model_load_internal(
             vram_scratch = n_batch * MB;
             ggml_cuda_set_scratch_size(vram_scratch);
             if (n_gpu_layers > 0) {
-                fprintf(stderr, "%s: allocating batch_size x 1 MB = %ld MB VRAM for the scratch buffer\n",
+                fprintf(stderr, "%s: allocating batch_size x 1 MB = %zd MB VRAM for the scratch buffer\n",
                         __func__, vram_scratch / MB);
             }
         }
@@ -2694,15 +2696,20 @@ struct llama_context * llama_init_from_file(
         // this allocates all Metal resources and memory buffers
         ctx->ctx_metal = ggml_metal_init();
 
-        void *data_ptr = NULL;
+        void * data_ptr  = NULL;
         size_t data_size = 0;
+
         if (params.use_mmap) {
-            data_ptr = ctx->model.mapping->addr;
-            data_size= ctx->model.mapping->size;
+            data_ptr  = ctx->model.mapping->addr;
+            data_size = ctx->model.mapping->size;
         } else {
-            data_ptr = ggml_get_mem_buffer(ctx->model.ctx);
-            data_size= ggml_get_mem_size(ctx->model.ctx);
+            data_ptr  = ggml_get_mem_buffer(ctx->model.ctx);
+            data_size = ggml_get_mem_size  (ctx->model.ctx);
         }
+
+        const size_t max_size = ggml_get_max_tensor_size(ctx->model.ctx);
+
+        printf("%s: max tensor size = %8.2f MB\n", __func__, max_size/1024.0/1024.0);
 
 #define LLAMA_METAL_CHECK_BUF(result)                                          \
     if (!(result)) {                                                           \
@@ -2711,12 +2718,13 @@ struct llama_context * llama_init_from_file(
         return NULL;                                                           \
     }
 
-        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "data", data_ptr, data_size));
-        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "eval", ctx->buf_compute.addr, ctx->buf_compute.size));
+        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "data", data_ptr, data_size, max_size));
 
-        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "kv",   ctx->model.kv_self.buf.addr, ctx->model.kv_self.buf.size));
-        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "scr0", ctx->buf_scratch[0].addr,    ctx->buf_scratch[0].size));
-        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "scr1", ctx->buf_scratch[1].addr,    ctx->buf_scratch[1].size));
+        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "eval", ctx->buf_compute.addr,       ctx->buf_compute.size,       0));
+        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "kv",   ctx->model.kv_self.buf.addr, ctx->model.kv_self.buf.size, 0));
+
+        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "scr0", ctx->buf_scratch[0].addr, ctx->buf_scratch[0].size, 0));
+        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "scr1", ctx->buf_scratch[1].addr, ctx->buf_scratch[1].size, 0));
 #undef LLAMA_METAL_CHECK_BUF
     }
 #endif

@@ -31,6 +31,7 @@ out/
 /perplexity
 /embedding
 /train-text-from-scratch
+/simple
 /benchmark-matmult
 /vdot
 /server

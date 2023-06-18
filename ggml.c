@@ -4154,12 +4154,32 @@ void ggml_set_no_alloc(struct ggml_context * ctx, bool no_alloc) {
     ctx->no_alloc = no_alloc;
 }
 
-void * ggml_get_mem_buffer(struct ggml_context * ctx) {
+void * ggml_get_mem_buffer(const struct ggml_context * ctx) {
     return ctx->mem_buffer;
 }
 
-size_t ggml_get_mem_size(struct ggml_context * ctx) {
+size_t ggml_get_mem_size(const struct ggml_context * ctx) {
     return ctx->mem_size;
+}
+
+size_t ggml_get_max_tensor_size(const struct ggml_context * ctx) {
+    size_t max_size = 0;
+
+    struct ggml_object * obj = ctx->objects_begin;
+
+    while (obj != NULL) {
+        struct ggml_tensor * tensor = (struct ggml_tensor *) ((char *) ctx->mem_buffer + obj->offs);
+
+        const size_t size = ggml_nbytes(tensor);
+
+        if (max_size < size) {
+            max_size = size;
+        }
+
+        obj = obj->next;
+    }
+
+    return max_size;
 }
 
 // IMPORTANT:
