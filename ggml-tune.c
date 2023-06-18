@@ -24,26 +24,7 @@ static uint64_t ggml_mulmat_tune_cache_hash(int M, int N, int K) {
     return hash;
 }
 
-static const char *
-ggml_mulmat_tune_task_backend_name(enum ggml_task_backend backend) {
-    switch (backend) {
-    case GGML_TASK_BACKEND_NONE:
-        return "";
-    case GGML_TASK_BACKEND_CPU:
-        return "CPU";
-    case GGML_TASK_BACKEND_CPU_BLAS:
-        return "BLAS";
-    case GGML_TASK_BACKEND_GPU:
-        return "GPU";
-    case GGML_TASK_BACKEND_GPU_CUDA:
-        return "CUDA";
-    case GGML_TASK_BACKEND_GPU_CL:
-        return "CL";
-    default:
-        GGML_ASSERT(false);
-    }
-}
-
+// Return profile id, -1 when failed (such as unable to match shape).
 // NOTE: we can not use the profile from tune because the profiles do not
 // contain fields such as runner, get_size.
 int ggml_mulmat_tune_select_task_profile(struct ggml_mulmat_tune *tune, int M,
@@ -101,20 +82,15 @@ int ggml_mulmat_tune_select_task_profile(struct ggml_mulmat_tune *tune, int M,
                 e->K = K;
 
 #ifndef GGML_TUNE_NDEBUG
-                const char *names[3];
-                for (int i = 0; i < 3; i++) {
-                    names[i] = ggml_mulmat_tune_task_backend_name(
-                        prof->stages[i].backend);
-                }
                 printf("\n[tune] M: %3d, N: %5d, K: %5d, profile id: %d, "
                        "backends: %s %s %s\n",
-                       M, N, K, prof->id, names[0], names[1], names[2]);
+                       M, N, K, prof->id, prof->name);
 #endif
             }
         }
     }
 
-    return prof->id;
+    return prof ? prof->id : -1;
 }
 
 void ggml_mulmat_tune_model_init(struct ggml_mulmat_tune_model *model,
@@ -283,24 +259,23 @@ static bool ggml_mulmat_tune_write_profiles(
     int rc;
     for (int i = 0; i < n_profiles; i++) {
         const struct ggml_task_profile *profile = &profiles[i];
-        rc = fprintf(fp, "%d ", profile->id);
-        if (rc <= 0) {
-            return false;
-        }
-
         for (int j = 0; j < 3; j++) {
             const struct ggml_task_stage *ts = &profile->stages[j];
-            rc = fprintf(fp, "%2d %d %d", ts->backend, ts->parallel ? 1 : 0,
-                         ts->wait ? 1 : 0);
+            rc = fprintf(fp, "%1d%1d%1d", ts->valid ? 1 : 0,
+                         ts->parallel ? 1 : 0, ts->wait ? 1 : 0);
             if (rc <= 0) {
                 return false;
             }
             if (j < 2) {
-                rc = fprintf(fp, "  ");
+                rc = fprintf(fp, " ");
                 if (rc <= 0) {
                     return false;
                 }
             }
+        }
+        rc = fprintf(fp, " %d %s", profile->id, profile->name);
+        if (rc <= 0) {
+            return false;
         }
         rc = fprintf(fp, "\n");
         if (rc <= 0) {
@@ -407,24 +382,24 @@ bool ggml_mulmat_tune_validate(const struct ggml_mulmat_tune *tune,
     return ok;
 }
 
-bool ggml_mulmat_tune_read_data(struct ggml_mulmat_tune *tune, FILE *fp) {
+int ggml_mulmat_tune_read_data(struct ggml_mulmat_tune *tune, FILE *fp) {
     GGML_ASSERT(tune);
     memset(tune, 0, sizeof(struct ggml_mulmat_tune));
 
     int rc = fscanf(fp, "%d", &tune->version);
     if (rc <= 0) {
-        return false;
+        return 1;
     }
 
     if (tune->version != GGML_MULMAT_TUNE_VERSION) {
         fprintf(stderr, "[tune] version mismatch, run bench again\n");
-        return false;
+        return 2;
     }
 
     rc = fscanf(fp, "%s %d %d %d", tune->model, (int *)&tune->ftype,
                 &tune->n_shapes, &tune->n_threads);
     if (rc <= 0) {
-        return false;
+        return 3;
     }
 
     for (int i_shape = 0; i_shape < tune->n_shapes; i_shape++) {
@@ -434,7 +409,7 @@ bool ggml_mulmat_tune_read_data(struct ggml_mulmat_tune *tune, FILE *fp) {
                     (int *)&shape->src0_type, (int *)&shape->src1_type,
                     &shape->n_profiles, &shape->m_num);
         if (rc <= 0) {
-            return false;
+            return 4;
         }
 
         {
@@ -451,23 +426,23 @@ bool ggml_mulmat_tune_read_data(struct ggml_mulmat_tune *tune, FILE *fp) {
         for (int ip = 0; ip < shape->n_profiles; ip++) {
             struct ggml_task_profile *profile = &shape->profiles[ip];
 
-            rc = fscanf(fp, "%d ", &profile->id);
-            if (rc <= 0) {
-                return false;
-            }
-
             for (int j = 0; j < 3; j++) {
                 struct ggml_task_stage *ts = &profile->stages[j];
-                int backend;
+                int valid;
                 int parallel;
                 int wait;
-                rc = fscanf(fp, "%d %d %d", &backend, &parallel, &wait);
+                rc = fscanf(fp, " %1d%1d%1d", &valid, &parallel, &wait);
                 if (rc <= 0) {
-                    return false;
+                    return 5;
                 }
-                ts->backend = (enum ggml_task_backend)backend;
+                ts->valid = valid ? true : false;
                 ts->parallel = parallel ? true : false;
                 ts->wait = wait ? true : false;
+            }
+
+            rc = fscanf(fp, "%d %s", &profile->id, profile->name);
+            if (rc <= 0) {
+                return 6;
             }
         }
 
@@ -477,7 +452,7 @@ bool ggml_mulmat_tune_read_data(struct ggml_mulmat_tune *tune, FILE *fp) {
                 if (ip == 0) {
                     rc = fscanf(fp, "%d", &M);
                     if (rc <= 0) {
-                        return false;
+                        return 7;
                     }
                 }
                 struct ggml_mulmat_tune_m *item =
@@ -486,13 +461,13 @@ bool ggml_mulmat_tune_read_data(struct ggml_mulmat_tune *tune, FILE *fp) {
                 rc = fscanf(fp, "%d %d %d", &item->stages_time[0],
                             &item->stages_time[1], &item->stages_time[2]);
                 if (rc <= 0) {
-                    return false;
+                    return 8;
                 }
             }
         }
     }
 
-    return true;
+    return 0;
 }
 
 bool ggml_mulmat_tune_write_data(const struct ggml_mulmat_tune *tune,
@@ -535,7 +510,7 @@ bool ggml_mulmat_tune_write_data(const struct ggml_mulmat_tune *tune,
 
                 const struct ggml_task_profile *profile = &shape->profiles[ip];
                 for (int k = 0; k < 3; k++) {
-                    if (profile->stages[k].backend != GGML_TASK_BACKEND_NONE) {
+                    if (profile->stages[k].valid) {
                         rc = fprintf(fp, "%9d", item->stages_time[k]);
                         if (rc <= 0) {
                             return false;
@@ -562,8 +537,6 @@ const struct ggml_mulmat_tune_shape *
 ggml_mulmat_tune_get_shape(const struct ggml_mulmat_tune *tune, const int N,
                            const int K, enum ggml_type src0_type,
                            enum ggml_type src1_type) {
-    GGML_ASSERT(N > 0 && K > 0);
-
     for (int i = 0; i < tune->n_shapes; i++) {
         const struct ggml_mulmat_tune_shape *s = &tune->shapes[i];
         if (s->src0_type != src0_type || s->src1_type != src1_type) {
@@ -574,13 +547,17 @@ ggml_mulmat_tune_get_shape(const struct ggml_mulmat_tune *tune, const int N,
             if (s->N == N && s->K == K) {
                 return s;
             }
-        } else if (s->N > 0 && s->K == 0) {
-            if (s->N == N) {
-                return s;
-            }
-        } else if (s->N == 0 && s->K > 0) {
-            if (s->K == K) {
-                return s;
+        }
+
+        if (GGML_MULMAT_N_SHAPES == 6) {
+            if (s->N > 0 && s->K == 0) {
+                if (s->N == N) {
+                    return s;
+                }
+            } else if (s->N == 0 && s->K > 0) {
+                if (s->K == K) {
+                    return s;
+                }
             }
         }
     }
@@ -639,7 +616,7 @@ void ggml_mulmat_tune_estimate_time(
 
         for (int i_stage = 0; i_stage < 3; i_stage++) {
             const struct ggml_task_stage *stage = &profile->stages[i_stage];
-            if (stage->backend == GGML_TASK_BACKEND_NONE) {
+            if (!stage->valid) {
                 continue;
             }
 
@@ -784,23 +761,6 @@ static size_t ggml_mulmat_allocate_wdata(int N, int K, char **wdata) {
     return sz;
 }
 
-int ggml_mulmat_tune_get_builtin_task_backends(
-    enum ggml_task_backend *backends) {
-    int i = 0;
-    backends[i++] = GGML_TASK_BACKEND_CPU;
-
-    if (ggml_cpu_has_cpublas()) {
-        backends[i++] = GGML_TASK_BACKEND_CPU_BLAS;
-    }
-
-    if (ggml_cpu_has_cublas()) {
-        backends[i++] = GGML_TASK_BACKEND_GPU_CUDA;
-    } else if (ggml_cpu_has_clblast()) {
-        backends[i++] = GGML_TASK_BACKEND_GPU_CL;
-    }
-    return i;
-}
-
 bool ggml_mulmat_tune_bench(struct ggml_mulmat_tune *tune,
                             struct ggml_mulmat_tune_params *params) {
     GGML_ASSERT(tune);
@@ -808,23 +768,6 @@ bool ggml_mulmat_tune_bench(struct ggml_mulmat_tune *tune,
     GGML_ASSERT(params->model.name);
 
     memset(tune, 0, sizeof(struct ggml_mulmat_tune));
-
-    enum ggml_task_backend backends[16];
-    int n_backends = ggml_mulmat_tune_get_builtin_task_backends(backends);
-    if (n_backends < 2) {
-        fprintf(stderr,
-                "[tune] error: this program was not built with BLAS.\n");
-        return false;
-    }
-
-    if (params->model.ftype >= GGML_FTYPE_MOSTLY_Q2_K &&
-        params->model.ftype <= GGML_FTYPE_MOSTLY_Q6_K) {
-#if defined(GGML_USE_CLBLAST)
-        printf("[tune] error: cl implementation does not support k_quants at "
-               "the time of writing this code, skip.\n");
-        return false;
-#endif
-    }
 
     bool ok = ggml_mulmat_tune_init(tune, params, ggml_get_task_profiles);
     if (!ok) {
@@ -835,12 +778,13 @@ bool ggml_mulmat_tune_bench(struct ggml_mulmat_tune *tune,
         char buf[128] = {0};
         int offset = 0;
 
-        for (int i = 0; i < n_backends; i++) {
+        for (int i = 0; i < tune->shapes[0].n_profiles; i++) {
             if (i > 0) {
                 buf[offset++] = ',';
                 buf[offset++] = ' ';
             }
-            const char *name = ggml_mulmat_tune_task_backend_name(backends[i]);
+            const char *name = tune->shapes[0].profiles[i].name;
+            GGML_ASSERT(name != NULL && strcmp(name, "") != 0);
             size_t len = strlen(name);
             memcpy(&buf[offset], name, len);
             offset += (int)len;
@@ -848,17 +792,17 @@ bool ggml_mulmat_tune_bench(struct ggml_mulmat_tune *tune,
 
         fprintf(stdout,
                 "[tune] model: %s, ggml ftype: %d, "
-                "n_pass: %d, n_threads: %d, n_shapes: %d, backends: %s\n",
+                "n_pass: %d, n_shapes: %d, n_threads: %d, profiles: %s\n",
                 params->model.name, params->model.ftype, params->n_pass,
-                params->n_threads, tune->n_shapes, buf);
+                tune->n_shapes, params->n_threads, buf);
     }
 
     int64_t stages_time[3];
     int64_t t0 = ggml_time_ms();
 
-    struct ggml_threading_context *thrd_ctx = ggml_threading_start(
-        tune->n_threads, NULL, ggml_compute_forward_wrapper,
-        GGML_THREADING_FEATURE_WAIT_ON_DONE, stages_time);
+    struct ggml_threading_context *thrd_ctx =
+        ggml_threading_start(tune->n_threads, NULL, NULL,
+                             GGML_THREADING_FEATURE_WAIT_ON_DONE, stages_time);
 
     for (int i_shape = 0; i_shape < tune->n_shapes; i_shape++) {
         const struct ggml_mulmat_tune_shape *shape = &tune->shapes[i_shape];
@@ -896,6 +840,7 @@ bool ggml_mulmat_tune_bench(struct ggml_mulmat_tune *tune,
 
             for (int ip = 0; ip < shape->n_profiles; ip++) {
                 const struct ggml_task_profile *profile = &shape->profiles[ip];
+                // GGML_ASSERT(profile->runner);
 
                 memcpy(&node->task_profile, profile,
                        sizeof(struct ggml_task_profile));
@@ -911,9 +856,15 @@ bool ggml_mulmat_tune_bench(struct ggml_mulmat_tune *tune,
                         stages_time[j] = 0;
                     }
 
-                    enum ggml_compute_error err = ggml_threading_compute_tensor(
-                        thrd_ctx, node, wdata, wsize);
-                    GGML_ASSERT(err == GGML_COMPUTE_OK);
+                    ggml_threading_compute_tensor(thrd_ctx, node, wdata, wsize);
+
+                    if (memcmp(profile, &node->task_profile,
+                               sizeof(struct ggml_task_profile)) != 0) {
+                        printf("[tune] error: task profile changed, tensor op: "
+                               "%d, original id: %d, current id: %d\n",
+                               node->op, profile->id, node->task_profile.id);
+                        exit(1);
+                    }
 
                     for (int i = 0; i < 3; i++) {
                         int v = (int)stages_time[i];

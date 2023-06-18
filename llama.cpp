@@ -2744,8 +2744,9 @@ struct llama_context * llama_init_from_file(
 }
 
 #ifdef GGML_USE_TUNE
-bool llama_mulmat_tune(struct llama_context *ctx, int n_threads, bool tune, const char *fname) {
-    GGML_ASSERT (ctx->model.n_gpu_layers == 0);
+bool llama_mulmat_tune(struct llama_context *ctx, int n_threads, bool tune,
+                       const char *fname) {
+    GGML_ASSERT(ctx->model.n_gpu_layers == 0);
 
     printf("\n");
 
@@ -2755,7 +2756,7 @@ bool llama_mulmat_tune(struct llama_context *ctx, int n_threads, bool tune, cons
 
     enum ggml_ftype ggml_ftype;
     switch (hparams->ftype) {
-        case LLAMA_FTYPE_ALL_F32:
+    case LLAMA_FTYPE_ALL_F32:
         ggml_ftype = GGML_FTYPE_ALL_F32;
         break;
     case LLAMA_FTYPE_MOSTLY_F16:
@@ -2766,9 +2767,6 @@ bool llama_mulmat_tune(struct llama_context *ctx, int n_threads, bool tune, cons
         break;
     case LLAMA_FTYPE_MOSTLY_Q4_1:
         ggml_ftype = GGML_FTYPE_MOSTLY_Q4_1;
-        break;
-    case LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16:
-        ggml_ftype = GGML_FTYPE_MOSTLY_Q4_1_SOME_F16;
         break;
     case LLAMA_FTYPE_MOSTLY_Q5_0:
         ggml_ftype = GGML_FTYPE_MOSTLY_Q5_0;
@@ -2799,8 +2797,8 @@ bool llama_mulmat_tune(struct llama_context *ctx, int n_threads, bool tune, cons
         ggml_ftype = GGML_FTYPE_MOSTLY_Q6_K;
         break;
     default:
-        throw std::runtime_error(
-            format("invalid output file type %d\n", hparams->ftype));
+        fprintf(stderr, "[tune] unsupported file type %d\n", hparams->ftype);
+        return false;
     }
 
     int n_vocab = hparams->n_vocab;
@@ -2808,30 +2806,36 @@ bool llama_mulmat_tune(struct llama_context *ctx, int n_threads, bool tune, cons
     int n_rot = hparams->n_rot;
 
     int n_mult = hparams->n_mult;
-    int n_ff = ((2*(4*n_embd)/3 + n_mult - 1)/n_mult)*n_mult;
+    int n_ff = ((2 * (4 * n_embd) / 3 + n_mult - 1) / n_mult) * n_mult;
 
     struct ggml_mulmat_tune_params params = {
-        /*.model =*/ {
-            /* .name    =*/ model_name,
-            /* .ftype   =*/ ggml_ftype,
-            /* .n_vocab =*/ n_vocab,
-            /* .n_embd  =*/ n_embd,
-            /* .n_ff    =*/ n_ff,
-            /* .n_rot   =*/ n_rot,
+        /*.model =*/{
+            /* .name    =*/model_name,
+            /* .ftype   =*/ggml_ftype,
+            /* .n_vocab =*/n_vocab,
+            /* .n_embd  =*/n_embd,
+            /* .n_ff    =*/n_ff,
+            /* .n_rot   =*/n_rot,
         },
-        /* .m_num          =*/ 8,
-        /* .n_pass         =*/ 1,
-        /* .n_threads      =*/ n_threads,
-        /* .prrogress      =*/ true,
-        /* .output_console =*/ false,
-        /* .fname          =*/ fname,
+        /* .m_num          =*/8,
+        /* .n_pass         =*/1,
+        /* .n_threads      =*/n_threads,
+        /* .prrogress      =*/true,
+        /* .output_console =*/false,
+        /* .fname          =*/fname,
     };
 
     bool empty_fname = !fname || strcmp(fname, "") == 0;
 
-    ctx->tune = new(struct ggml_mulmat_tune);
+    ctx->tune = new (struct ggml_mulmat_tune);
     if (!ctx->tune) {
-        throw std::runtime_error(format("failed to allocate memory for tune\n"));
+        fprintf(stderr, "[tune] failed to allocate memory for tune\n");
+        return false;
+    }
+
+    if (!ggml_cpu_has_blas()) {
+        fprintf(stderr, "[tune] this program is not built with BLAS, abort.\n");
+        return false;
     }
 
     if (tune) {
@@ -2844,31 +2848,30 @@ bool llama_mulmat_tune(struct llama_context *ctx, int n_threads, bool tune, cons
             ggml_mulmat_tune_free(ctx->tune);
             return true;
         }
-    } else {
-        if (empty_fname) {
-            return false;
-        }
+    } else if (empty_fname) {
+        return false;
     }
 
     if (!empty_fname) {
         FILE *fp = fopen(fname, "r");
         if (!fp) {
-            fprintf(stderr, "[tune] failed to open file %s.\n",
-                    fname);
+            fprintf(stderr, "[tune] failed to open file %s.\n", fname);
+            return false;
         } else {
-            bool ok = ggml_mulmat_tune_read_data(ctx->tune, fp);
+            int rc = ggml_mulmat_tune_read_data(ctx->tune, fp);
             fclose(fp);
 
-            if (!ok) {
+            if (rc != 0) {
                 fprintf(stderr,
-                        "[tune] failed to read data from %s\n",
-                        fname);
+                        "[tune] failed to read data from %s, error code: %d\n",
+                        fname, rc);
                 return false;
             }
 
             fprintf(stderr, "[tune] loaded data from %s\n", fname);
 
-            ok = ggml_mulmat_tune_validate(ctx->tune, model_name, ggml_ftype, params.n_threads);
+            bool ok = ggml_mulmat_tune_validate(ctx->tune, model_name, ggml_ftype,
+                                                params.n_threads);
             if (!ok) {
                 return false;
             }

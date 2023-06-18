@@ -46,13 +46,9 @@ int main(void) {
 }
 
 static int bench(void) {
-    {
-        enum ggml_task_backend backends[16];
-        int n_backends = ggml_mulmat_tune_get_builtin_task_backends(backends);
-        if (n_backends < 2) {
-            printf("[test-ggml-tune] skipped because no BLAS\n");
-            return 0;
-        }
+    if (!ggml_cpu_has_blas()) {
+        printf("[test-ggml-tune] skipped because no BLAS\n");
+        return 0;
     }
 
     {
@@ -118,10 +114,13 @@ static int
 ggml_task_profiles_mock_qxx_provider(struct ggml_tensor *node,
                                      struct ggml_task_profile *profiles) {
     UNUSED(node);
-    profiles[0].stages[0].backend = GGML_TASK_BACKEND_CPU;
-    profiles[0].stages[1].backend = GGML_TASK_BACKEND_CPU;
-    profiles[1].stages[0].backend = GGML_TASK_BACKEND_CPU;
-    profiles[1].stages[1].backend = GGML_TASK_BACKEND_CPU_BLAS;
+    profiles[0].id = 1;
+    profiles[0].stages[0].valid = true;
+    profiles[0].stages[1].valid = true;
+
+    profiles[0].id = 2;
+    profiles[1].stages[0].valid = true;
+    profiles[1].stages[1].valid = true;
 
     return 2;
 }

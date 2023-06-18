@@ -1589,18 +1589,17 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
     }
 }
 
+bool ggml_cl_is_gpu_offloading(struct ggml_tensor * tensor) {
+    GGML_ASSERT(tensor);
+    return (tensor->src0 && tensor->src0->backend == GGML_BACKEND_GPU) ||
+        (tensor->src1 && tensor->src1->backend == GGML_BACKEND_GPU);
+}
 
-bool ggml_cl_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
-    const int64_t ne10 = src1->ne[0];
-
-    const int64_t ne0 = dst->ne[0];
-    const int64_t ne1 = dst->ne[1];
-
-    // TODO: find the optimal values for these
+// NOTE: don't check matrix size, otherwise mul_mat tune will fail to run.
+static bool ggml_cl_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
     if ((src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) &&
         src1->type == GGML_TYPE_F32 &&
-        dst->type == GGML_TYPE_F32 /*&&
-        ((ne0 >= 32 && ne1 >= 32 && ne10 >= 32) || src0->backend == GGML_BACKEND_GPU)*/) {
+        dst->type == GGML_TYPE_F32) {
         return true;
     }
 

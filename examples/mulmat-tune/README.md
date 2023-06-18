@@ -214,26 +214,19 @@ The following results are generated with Accelerate compiled.
 **Example**
 
 ```
-5 3B 2 6 1
+[tune] done, elapsed time: 0 seconds.
+10 xB 12 4 2
 
-3200 3200  2 0 3 10
-16 0 0 0  16 1 0 1   0 0 0 0
-16 1 0 2  17 0 1 0   0 0 0 0
- 0 0 0 0  34 0 1 0   0 0 0 0
-   1        1      793 0     9103     2102 0 0     6014 0
-   2        2     1591 0     8034     2305 0 0    30982 0
-   4        4     2236 0     6476     2484 0 0    31388 0
-   8        7     4161 0     6623     2389 0 0    29204 0
-  16       15     8339 0     6434     2752 0 0    34303 0
-  32       32    16919 0     6915     3651 0 0    42511 0
-  64      200    34270 0     6574     4528 0 0    68212 0
- 128      188    69400 0     6325     6839 0 0    74437 0
- 256      303   134597 0     6168    11544 0 0   110180 0
- 512      687   279685 0     6337    29712 0 0   159728 0
+1024 1024 12 0 2 4
+100 110 000 1 CPU
+110 101 000 2 BLAS
+   1       11      309 0     1234       90 0
+   2       23      654 0     1359      215 0
+   4       44     1283 0     1362      421 0
+   8       85     2341 0     1357      347 0
 
-3200 8640  2 0 2 10
-
- ...
+1024 2048 12 0 2 4
+...
 
  ```
 
@@ -249,17 +242,17 @@ shape+
 # head
 version: 1
 model: "3B" | "7B" | "13B" | "30B" | "65B"
-ggml_ftype: 0 - 4, 7 - 14
+ggml_ftype: 0 - 3, 7 - 14
 n_shapes: number of shapes
 n_threads: number of threads
 
-shape := N K  m_num n_profiles
-task_conf_profile+
+shape := N K  src0_ggml_type src1_ggml_type n_profiles m_num
+task_profile+
 bench_item+
 
-task_conf_profile: stage_conf(init) stage_conf(compute) stage_conf(finalize)
-stage_conf: backend parallel wait
-backend: 0 (NONE) | 16 (CPU) | 17 (CPU_BLAS) | 32 (GPU) | 33 (GPU_CUDA) | 34 (GPU_CL)
+task_profile: stage_conf(init) stage_conf(compute) stage_conf(finalize) id name
+stage_conf(bitmap): valid parallel wait
+valid: 0 (false) | 1 (true)
 parallel: 0 (false) | 1 (true)
 wait: 0 (false) | 1 (true)
 

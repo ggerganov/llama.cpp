@@ -2207,17 +2207,12 @@ void ggml_cuda_rms_norm(const ggml_tensor * src0, const ggml_tensor * src1, ggml
     ggml_cuda_op(src0, src1, dst, ggml_cuda_op_rms_norm, true, true);
 }
 
-bool ggml_cuda_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
-    const int64_t ne10 = src1->ne[0];
-
-    const int64_t ne0 = dst->ne[0];
-    const int64_t ne1 = dst->ne[1];
-
+// NOTE: don't check matrix size, otherwise mul_mat tune will fail to run.
+static bool ggml_cuda_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
     // TODO: find the optimal values for these
     if ((src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) &&
         src1->type == GGML_TYPE_F32 &&
-        dst->type == GGML_TYPE_F32 &&
-        (ne0 >= 32 && ne1 >= 32 && ne10 >= 32)) {
+        dst->type == GGML_TYPE_F32) {
         return true;
     }
 
@@ -2539,11 +2534,17 @@ void ggml_cuda_free_scratch() {
     g_scratch_buffer = nullptr;
 }
 
-bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor){
-    ggml_cuda_func_t func;
-    const bool any_on_device = tensor->backend == GGML_BACKEND_GPU
+bool ggml_cuda_is_gpu_offloading(struct ggml_tensor * tensor) {
+    GGML_ASSERT(tensor);
+    GGML_ASSERT(tensor->src0);
+    return tensor->backend == GGML_BACKEND_GPU
         || tensor->src0->backend == GGML_BACKEND_GPU || tensor->src0->backend == GGML_BACKEND_GPU_SPLIT
         || (tensor->src1 != nullptr && tensor->src1->backend == GGML_BACKEND_GPU);
+}
+
+bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor){
+    ggml_cuda_func_t func;
+    const bool any_on_device = is_gpu_offloading(tensor);
 
     switch (tensor->op) {
         case GGML_OP_ADD:
@@ -2571,7 +2572,7 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
             func = ggml_cuda_rms_norm;
             break;
         case GGML_OP_MUL_MAT:
-            if (!any_on_device/* && !ggml_cuda_can_mul_mat(tensor->src0, tensor->src1, tensor)*/) {
+            if (!any_on_device && !ggml_cuda_can_mul_mat(tensor->src0, tensor->src1, tensor)) {
                 return false;
             }
             func = ggml_cuda_mul_mat;

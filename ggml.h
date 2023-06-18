@@ -362,29 +362,10 @@ extern "C" {
 
     static const size_t GGML_OBJECT_SIZE = sizeof(struct ggml_object);
 
-    // As part of task config profile solution, `ggml_task_backend` defines
-    // backends for each task stage. Similar to `ggml_tensor.backend`,
-    // `ggml_tensor.task_profile` generalizes how to configure tensor computing
-    // at per task-stage level.
-    //
-    // The following enum values are designed as combination of hardware and
-    // optional software interface.
-    enum ggml_task_backend {
-        GGML_TASK_BACKEND_NONE     = 0,
-
-        // [0x10, 0x1F]: CPU
-        GGML_TASK_BACKEND_CPU      = 0x10,
-        GGML_TASK_BACKEND_CPU_BLAS = 0x11,
-
-        // [0x20 - 0x2F]: GPU
-        GGML_TASK_BACKEND_GPU      = 0x20,
-        GGML_TASK_BACKEND_GPU_CUDA = 0x21,
-        GGML_TASK_BACKEND_GPU_CL   = 0x22,
-    };
-
     // config for computing one of the 3 task stages of a tensor.
     struct ggml_task_stage {
-        enum ggml_task_backend backend;
+        bool valid;
+
         bool parallel;
         // hint idle workers go waiting, valid only when parallel is false.
         bool wait;
@@ -407,12 +388,15 @@ extern "C" {
     // Get wsize for node computing.
     // When return -1: should be explained as `fallback to CPU`, caller MUST
     // determine how much memory to reserve for this node.
-    typedef int (ggml_task_get_wsize)(struct ggml_tensor *tensor);
+    typedef int (ggml_task_wsize_getter)(struct ggml_tensor *tensor);
 
     // config for computing a tensor.
     struct ggml_task_profile {
         // profile id, start from 1.
         int id;
+
+        // Required, not empty, no whitespaces.
+        char name[16];
 
         // index 0: INIT, 1: COMPUTE, 2: FINALIZE
         struct ggml_task_stage stages[3];
@@ -421,7 +405,7 @@ extern "C" {
         ggml_task_runner *runner;
 
         // Optional function to return required wsize for wdata.
-        ggml_task_get_wsize *get_wsize;
+        ggml_task_wsize_getter *wsize_getter;
 
         // Optional flag for development.
         // MUST be used only in testing codes.

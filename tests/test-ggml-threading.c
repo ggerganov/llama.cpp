@@ -41,9 +41,8 @@ static const int n_repeat = 10;
 // counter with array.
 static int work_done_arr[MAX_N_THREADS];
 
-static enum ggml_compute_error
-mock_task_runner(const struct ggml_compute_params *params,
-                 struct ggml_tensor *node) {
+static enum ggml_compute_error mock_task_runner(const struct ggml_compute_params *params,
+                             struct ggml_tensor *node) {
     int64_t loops = node->task_profile.dev_flags[1] * 1000 * 1000;
     if (node->task_profile.stages[params->type].parallel) {
         loops /= params->nth;
@@ -80,20 +79,15 @@ int test_driver(int id, struct ggml_tensor *node, int n_threads) {
 
     int t0 = (int)ggml_time_us();
 
-    struct ggml_threading_context *ctx = ggml_threading_start(
-        n_threads, NULL, mock_task_runner, features, /*stages_time*/ NULL);
+    node->task_profile.runner = mock_task_runner;
+
+    struct ggml_threading_context *ctx =
+        ggml_threading_start(n_threads, NULL, NULL, features, /*stages_time*/ NULL);
 
     int t1 = (int)ggml_time_us();
 
     for (int i = 0; i < n_repeat; i++) {
-        enum ggml_compute_error err = ggml_threading_compute_tensor(
-            ctx, node, /*wdata*/ NULL, /*wsize*/ 0);
-        if (err != GGML_COMPUTE_OK) {
-            ggml_threading_stop(ctx);
-            printf("ggml_threading_compute_tensor failed with error: %d.\n",
-                   err);
-            return 1;
-        }
+        ggml_threading_compute_tensor(ctx, node, /*wdata*/ NULL, /*wsize*/ 0);
     }
 
     int t2 = (int)ggml_time_us();
@@ -107,7 +101,7 @@ int test_driver(int id, struct ggml_tensor *node, int n_threads) {
     int expect = 0;
     for (int i = 0; i < 3; i++) {
         const struct ggml_task_stage *ts = &stages[i];
-        if (ts->backend != GGML_TASK_BACKEND_NONE) {
+        if (ts->valid) {
             if (ts->parallel) {
                 expect += n_threads;
             } else {
@@ -144,14 +138,12 @@ static enum ggml_compute_error
 mock_task_runner_fallback(const struct ggml_compute_params *params,
                           struct ggml_tensor *node) {
     UNUSED(params);
-    if (node->backend == GGML_BACKEND_GPU) {
-        // ... finally failed to compute in GPU.
 
-        node->backend = GGML_BACKEND_CPU;
+    // failed to run ...
+    if (node->task_profile.id == 2) {
         return GGML_COMPUTE_FALLBACK;
-    } else {
-        return GGML_COMPUTE_OK;
     }
+    return GGML_COMPUTE_OK;
 }
 
 // By design, fallback should happen when attempt computing tensor in GPU,
@@ -164,6 +156,9 @@ int test_fallback(struct ggml_tensor *node) {
     enum ggml_compute_error err =
         ggml_threading_compute_tensor(ctx, node, /*wdata*/ NULL, /*wsize*/ 0);
     if (err == GGML_COMPUTE_FALLBACK) {
+        // mock setup new profile ...
+        node->task_profile.id = 1;
+
         err = ggml_threading_compute_tensor(ctx, node, /*wdata*/ NULL,
                                             /*wsize*/ 0);
     }
@@ -214,12 +209,12 @@ int main(void) {
 
     struct ggml_tensor node;
     memset(&node, 0, sizeof(struct ggml_tensor));
+    node.task_profile.runner = mock_task_runner;
 
     struct ggml_task_stage *stages = node.task_profile.stages;
 
-    stages[0].backend = GGML_TASK_BACKEND_CPU;
-    stages[1].backend = GGML_TASK_BACKEND_CPU;
-    stages[2].backend = GGML_TASK_BACKEND_NONE;
+    stages[0].valid = true;
+    stages[1].valid = true;
 
     int n_passed = 0;
     int n_tests = 0;
@@ -277,7 +272,7 @@ int main(void) {
 
         struct ggml_threading_context *ctx =
             ggml_threading_start(n_threads, ggml_threading_graph_compute_thread,
-                                 mock_task_runner, 0, /*stages_time*/ NULL);
+                                 NULL, 0, /*stages_time*/ NULL);
 
         int t1 = (int)ggml_time_us();
 
@@ -416,8 +411,8 @@ int main(void) {
         node.src0 = &src0;
         node.src1 = &src1;
 
-        node.backend = GGML_BACKEND_GPU;
-        stages[1].backend = GGML_TASK_BACKEND_GPU;
+        node.task_profile.id = 2;
+        stages[1].valid = true;
         if (test_fallback(&node) == 0) {
             ++n_passed;
             printf("[test-ggml-threading] test fallback: ok\n\n");

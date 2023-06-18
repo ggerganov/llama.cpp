@@ -10,7 +10,7 @@
 extern "C" {
 #endif
 
-#define GGML_MULMAT_TUNE_VERSION 9
+#define GGML_MULMAT_TUNE_VERSION 10
 #define GGML_MULMAT_N_SHAPES 4
 #define GGML_MULMAT_CACHE_LEN 16
 
@@ -119,7 +119,7 @@ void ggml_mulmat_tune_free(struct ggml_mulmat_tune *tune);
 
 bool ggml_mulmat_tune_write_data(const struct ggml_mulmat_tune *tune, FILE *fp);
 
-bool ggml_mulmat_tune_read_data(struct ggml_mulmat_tune *tune, FILE *fp);
+int ggml_mulmat_tune_read_data(struct ggml_mulmat_tune *tune, FILE *fp);
 
 const struct ggml_mulmat_tune_shape *
 ggml_mulmat_tune_get_shape(const struct ggml_mulmat_tune *tune, int N, int K,
@@ -128,11 +128,6 @@ ggml_mulmat_tune_get_shape(const struct ggml_mulmat_tune *tune, int N, int K,
 void ggml_mulmat_tune_estimate_time(const struct ggml_mulmat_tune_shape *shape,
                                     int M,
                                     struct ggml_mulmat_tune_time *profile_time);
-
-const char *ggml_task_backend_name(enum ggml_task_backend backend);
-
-int ggml_mulmat_tune_get_builtin_task_backends(
-    enum ggml_task_backend *backends);
 
 bool ggml_mulmat_tune_bench(struct ggml_mulmat_tune *tune,
                             struct ggml_mulmat_tune_params *params);

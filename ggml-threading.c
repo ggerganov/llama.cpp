@@ -376,7 +376,7 @@ ggml_thread_ret_t ggml_threading_graph_compute_thread(void *data) {
 
     struct ggml_compute_state_shared *shared = state->shared;
     GGML_ASSERT(shared);
-    GGML_ASSERT(shared->task_runner);
+    //GGML_ASSERT(shared->task_runner);
 
     shared->n_ready++;
 
@@ -397,7 +397,7 @@ ggml_thread_ret_t ggml_threading_graph_compute_thread(void *data) {
                                            : shared->task_runner;
             enum ggml_compute_error err = runner(&state->params, state->node);
 
-            GGML_ASSERT(err == GGML_COMPUTE_OK);
+            GGML_ASSERT(err == GGML_COMPUTE_OK || err == GGML_COMPUTE_FALLBACK);
 
             ggml_spin_lock(&shared->spin);
 
@@ -430,7 +430,7 @@ ggml_threading_compute_tensor(struct ggml_threading_context *ctx,
                               size_t wsize) {
     GGML_ASSERT(ctx);
     GGML_ASSERT(node);
-    GGML_ASSERT(ctx->shared.task_runner);
+    // GGML_ASSERT(ctx->shared.task_runner);
 
     ggml_task_runner *runner = ctx->shared.task_runner;
     if (node->task_profile.runner) {
@@ -448,7 +448,7 @@ START:
     memset(&params, 0, sizeof(struct ggml_compute_params));
 
     for (int type = GGML_TASK_INIT; type <= GGML_TASK_FINALIZE; type++) {
-        if (node->task_profile.stages[type].backend == GGML_TASK_BACKEND_NONE) {
+        if (!node->task_profile.stages[type].valid) {
             continue;
         }
 
@@ -519,18 +519,17 @@ START:
             if (err == GGML_COMPUTE_FALLBACK) {
                 PRINT_DEBUG("[main] fallback from profile, id=%d\n",
                             node->task_profile.id);
-                GGML_ASSERT(node->task_profile.stages[1].backend >
-                            GGML_TASK_BACKEND_CPU);
+                GGML_ASSERT(node->task_profile.id > 1);
 
                 struct ggml_task_profile profiles[GGML_MAX_TASK_PROFILES];
                 int n = ggml_get_task_profiles(node, profiles);
                 GGML_ASSERT(n > 0);
-                GGML_ASSERT(profiles[0].stages[1].backend ==
-                            GGML_TASK_BACKEND_CPU);
+                GGML_ASSERT(profiles[0].id == 1);
 
                 memcpy(&node->task_profile, &profiles[0],
-                       sizeof(struct ggml_task_profile));
+                    sizeof(struct ggml_task_profile));
                 runner = ctx->shared.task_runner;
+                GGML_ASSERT(runner);
 
                 goto START;
             }

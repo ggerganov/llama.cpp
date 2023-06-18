@@ -29,7 +29,9 @@ typedef ggml_thread_ret_t(ggml_threading_thread_runner)(void *data);
 // thread: optional OS thread runner, default value:
 // `ggml_threading_graph_compute_thread`.
 //
-// features: optional for configure
+// task_runner: default task runner, nullable wheen tensor.runner is not NULL.
+//              Overridden by tensor.runner.
+// features: configure threading behaviour, optional.
 // threading additional features. see `ggml_threading_feature`, default 0.
 //
 // stages_time: optional for collecting per-stage wall clock time.
@@ -51,12 +53,6 @@ enum ggml_compute_error
 ggml_threading_compute_tensor(struct ggml_threading_context *ctx,
                               struct ggml_tensor *node, void *wdata,
                               size_t wsize);
-
-// This is an experimental functionality for mulmat tune, as a thin wrapper.
-enum ggml_compute_error
-ggml_compute_forward_wrapper(const struct ggml_compute_params *params,
-                             struct ggml_tensor *tensor);
-
 #ifdef __cplusplus
 }
 #endif
