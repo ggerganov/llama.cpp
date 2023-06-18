@@ -2,9 +2,29 @@ llama.cpp modification to run Falcon (work in progress)
 
 Status/Bugs:  
 * Quantization with QK_ type appear to fail on 7B models. (Q_ works on both, QK_ works on 40B)
-* CUDA not yet functional
+* CUDA-integration branch demo ready
 * python conversion script is very basic (produces ggml v0)
 * On linux Q5_1 7B user reports a batch token ingestion context memory issue, with -b 1 it's gone. Not reproduced on Windows
+
+CUDA (cuda-integration branch, not in master yet):
+Only some tensors supported currently, only mul_mat operation supported currently
+q3_k timing on 3090 of Falcon 40B:  
+falcon_print_timings: prompt eval time =   702.55 ms /     3 tokens (  234.18 ms per token)  
+falcon_print_timings:        eval time =  3350.65 ms /    24 runs   (  139.61 ms per token)  
+  
+q4_k timing on 3090 of falcon 40B (partial offload):  
+falcon_print_timings: prompt eval time =   590.82 ms /     3 tokens (  196.94 ms per token)  
+falcon_print_timings:        eval time =  2817.37 ms /    24 runs   (  117.39 ms per token)  
+  
+q4_1 timing on 3090 of falcon 7B:  
+falcon_print_timings: prompt eval time =   115.30 ms /     3 tokens (   38.43 ms per token)  
+falcon_print_timings:        eval time =  5926.74 ms /   147 runs   (   40.32 ms per token)  
+
+
+CUDA sidenote:  
+1) use 1 less threads than you have physical processor cores  
+2) If it's too slow and GPU memory is at 100% then the automated tensor skip is not working properly, reduce --ngl until gpu memory does not saturate fully at first inference  
+
 
 It appears the Q5 Falcon 40B inference time on CPU is as fast as the A100 fp16 inference time at 2 tk/second  
 CPU inference examples:  
