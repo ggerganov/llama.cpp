@@ -2293,11 +2293,14 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
 
         // prune tokens based on first char only - in `llama_grammar_accept_token` we will find the
         // full matching prefix of the selected token
-        const bool valid = str[0] == ' '
-            ? llama_grammar_peek(stacks_after_space, str[1])
-            : str[0] || id == eos
-            ? llama_grammar_peek(grammar->stacks,    id == eos ? 0 : str[0])
-            : false;
+        bool valid = false;
+        if (id == eos) {
+            valid = llama_grammar_peek(grammar->stacks, 0);
+        } else if (str[0] == ' ') {
+            valid = llama_grammar_peek(stacks_after_space, str[1]);
+        } else if (str[0] != 0) {
+            valid = llama_grammar_peek(grammar->stacks, str[0]);
+        }
 
         if (!valid) {
             candidates->data[i].logit = -INFINITY;
