@@ -1,13 +1,31 @@
 llama.cpp modification to run Falcon (work in progress)
 
-Status/Bugs:  
-* Quantization with QK_ type appear to fail on 7B models. (Q_ works on both, QK_ works on 40B)
-* CUDA-integration branch demo ready
-* python conversion script is very basic (produces ggml v0)
-* On linux Q5_1 7B user reports a batch token ingestion context memory issue, with -b 1 it's gone. Not reproduced on Windows
+**The Bloke features a well known fine tuned variants with quantization:**  
+https://huggingface.co/TheBloke/falcon-40b-instruct-GGML  
+https://huggingface.co/TheBloke/WizardLM-Uncensored-Falcon-40B-GGML  
 
-CUDA (cuda-integration branch, not in master yet):
-Only some tensors supported currently, only mul_mat operation supported currently
+
+**The official HF models are here:**  
+https://huggingface.co/tiiuae/falcon-40b/
+https://huggingface.co/tiiuae/falcon-7b/  
+https://huggingface.co/tiiuae/falcon-40b-instruct  
+https://huggingface.co/tiiuae/falcon-7b-instruct  
+
+**Conversion:**
+1) use falcon_convert_demo.py to produce a GGMLv0 binary from HF - not recommended to be used directly  
+2) use examples/falcon_quantize to convert these into GGMLv3 binaries of your choice including mmap support from there on  
+_Important: The Falcon 7B model features tensor sizes that do not support K-type quantizers - use the traditional quantization for those_  
+  
+**Status/Bugs:**  
+* CUDA-integration branch demo ready  
+* python conversion script is very basic (produces ggml v0)  
+* On linux Q5_1 7B user reports a batch token ingestion context memory issue, with -b 1 it's gone. Not reproduced on Windows
+* VRAM scratch/overhead calculation on CUDA can fail - if GPU RAM fills to 100% manually reduce the layers of --ngl until it fits  
+  
+  
+  
+**CUDA (cuda-integration branch, not in master yet):**  
+Only some tensors supported currently, only mul_mat operation supported currently  
 q3_k timing on 3090 of Falcon 40B:  
 falcon_print_timings: prompt eval time =   702.55 ms /     3 tokens (  234.18 ms per token)  
 falcon_print_timings:        eval time =  3350.65 ms /    24 runs   (  139.61 ms per token)  
