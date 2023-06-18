@@ -41,8 +41,9 @@ static const int n_repeat = 10;
 // counter with array.
 static int work_done_arr[MAX_N_THREADS];
 
-static enum ggml_compute_error mock_task_runner(const struct ggml_compute_params *params,
-                             struct ggml_tensor *node) {
+static enum ggml_compute_error
+mock_task_runner(const struct ggml_compute_params *params,
+                 struct ggml_tensor *node) {
     int64_t loops = node->task_profile.dev_flags[1] * 1000 * 1000;
     if (node->task_profile.stages[params->type].parallel) {
         loops /= params->nth;
@@ -59,7 +60,7 @@ static enum ggml_compute_error mock_task_runner(const struct ggml_compute_params
     return GGML_COMPUTE_OK;
 }
 
-int test_driver(int id, struct ggml_tensor *node, int n_threads) {
+static int test_driver(int id, struct ggml_tensor *node, int n_threads) {
     uint8_t loops = node->task_profile.dev_flags[1];
     printf(
         "\n[test-ggml-threading] #%02d, workload: %2d million(s), n_threads: "
@@ -81,8 +82,8 @@ int test_driver(int id, struct ggml_tensor *node, int n_threads) {
 
     node->task_profile.runner = mock_task_runner;
 
-    struct ggml_threading_context *ctx =
-        ggml_threading_start(n_threads, NULL, NULL, features, /*stages_time*/ NULL);
+    struct ggml_threading_context *ctx = ggml_threading_start(
+        n_threads, NULL, NULL, features, /*stages_time*/ NULL);
 
     int t1 = (int)ggml_time_us();
 
@@ -148,7 +149,7 @@ mock_task_runner_fallback(const struct ggml_compute_params *params,
 
 // By design, fallback should happen when attempt computing tensor in GPU,
 // thus it is not parallelled.
-int test_fallback(struct ggml_tensor *node) {
+static int test_fallback(struct ggml_tensor *node) {
     struct ggml_threading_context *ctx = ggml_threading_start(
         1, NULL, mock_task_runner_fallback,
         /*features*/ GGML_THREADING_FEATURE_NONE, /*stages_time*/ NULL);
@@ -182,7 +183,7 @@ customized_node_runner(const struct ggml_compute_params *params,
 }
 
 // Test when node->task_profile.runner is not NULL.
-int test_customized_node_runner(struct ggml_tensor *node) {
+static int test_customized_node_runner(struct ggml_tensor *node) {
     struct ggml_threading_context *ctx = ggml_threading_start(
         1, NULL, mock_task_runner,
         /*features*/ GGML_THREADING_FEATURE_NONE, /*stages_time*/ NULL);
@@ -200,6 +201,121 @@ int test_customized_node_runner(struct ggml_tensor *node) {
     if (node->task_profile.runner != NULL) {
         return 2;
     }
+
+    return 0;
+}
+
+static enum ggml_compute_error
+lifecycle_runner(const struct ggml_compute_params *params,
+                 struct ggml_tensor *node) {
+    UNUSED(params);
+    UNUSED(node);
+    return GGML_COMPUTE_OK;
+}
+
+// Test thread lifecycle: start -> suspend -> resume -> stop
+static int test_lifecycle(void) {
+    struct ggml_tensor node;
+    memset(&node, 0, sizeof(struct ggml_tensor));
+
+    struct ggml_task_stage *stages = node.task_profile.stages;
+
+    stages[0].valid = true;
+    stages[1].valid = true;
+    stages[1].parallel = true;
+
+    node.op = GGML_OP_MUL_MAT;
+    struct ggml_tensor src0 = {
+        .type = GGML_TYPE_Q4_0,
+    };
+    struct ggml_tensor src1 = {
+        .type = GGML_TYPE_F32,
+    };
+    node.src0 = &src0;
+    node.src1 = &src1;
+
+    int t0 = (int)ggml_time_ms();
+    // Suppose creating threading when entering session.
+
+    // We have to try affable threads.
+    struct ggml_threading_context *ctx = NULL;
+    int threads_arr[] = {4, 2};
+    int threads_arr_len = sizeof(threads_arr) / sizeof(threads_arr[0]);
+    int n_threads = 1;
+
+    for (int i = 0; i < threads_arr_len; i++) {
+        n_threads = threads_arr[i];
+        int start_time = (int)ggml_time_ms();
+        ctx = ggml_threading_start(
+            n_threads, NULL, lifecycle_runner,
+            /*features*/ GGML_THREADING_FEATURE_WAIT_ON_DONE |
+                GGML_THREADING_FEATURE_PERF,
+            /*stages_time*/ NULL);
+        int elapsed = (int)ggml_time_ms() - start_time;
+        if (elapsed > 5 * n_threads) {
+            printf("[test-ggml-threading] %s: it took %d ms to start %d worker "
+                   "thread(s), skip\n",
+                   __func__, elapsed, n_threads - 1);
+            ggml_threading_stop(ctx);
+        } else {
+            break;
+        }
+    }
+
+    if (n_threads == 1) {
+        printf("[test-ggml-threading] %s: too slow to start at least 1 worker "
+               "thread(s), skip\n",
+               __func__);
+        return 0;
+    }
+
+    // Suppose exiting from previous compute graph ...
+    printf("[test-ggml-threading] %s: %d workers, suspending ...\n", __func__,
+           n_threads - 1);
+    ggml_threading_suspend(ctx);
+
+    // Suppose entering new compute graph ...
+    printf("[test-ggml-threading] test lifecycle: resuming ...\n");
+    ggml_threading_resume(ctx);
+
+    const int m = 2;
+    const int n = 50;
+
+    printf("[test-ggml-threading] %s: computing %d tensors (half wait)...\n",
+           __func__, m * n);
+
+    for (int i = 0; i < m; i++) {
+        stages[0].wait = (i == 0);
+        for (int j = 0; j < n; j++) {
+            ggml_threading_compute_tensor(ctx, &node, /*wdata*/ NULL,
+                                          /*wsize*/ 0);
+        }
+    }
+
+    printf("[test-ggml-threading] %s: compute done, resuming...\n", __func__);
+    ggml_threading_resume(ctx);
+
+    const int loops = 100;
+    printf("[test-ggml-threading] %s: try %d loops of suspend-resume ...\n",
+           __func__, loops);
+
+    for (int i = 0; i < loops; i++) {
+        ggml_threading_suspend(ctx);
+        if (!ggml_threading_is_suspending(ctx)) {
+            abort();
+        }
+
+        ggml_threading_resume(ctx);
+        if (ggml_threading_is_suspending(ctx)) {
+            abort();
+        }
+    }
+
+    printf("[test-ggml-threading] %s: stopping ...\n", __func__);
+    ggml_threading_stop(ctx);
+
+    int elapsed_ms = (int)ggml_time_ms() - t0;
+    printf("[test-ggml-threading] %s: elapsed %d ms\n", __func__, elapsed_ms);
 
     return 0;
 }
@@ -268,21 +384,21 @@ int main(void) {
         }
 
         // skip this n_threads when too slow.
-        int t0 = (int)ggml_time_us();
+        int t0 = (int)ggml_time_ms();
 
         struct ggml_threading_context *ctx =
             ggml_threading_start(n_threads, ggml_threading_graph_compute_thread,
                                  NULL, 0, /*stages_time*/ NULL);
 
-        int t1 = (int)ggml_time_us();
+        int t1 = (int)ggml_time_ms();
 
         ggml_threading_stop(ctx);
 
-        int elapsed_us = t1 - t0;
-        if (elapsed_us > 500 * n_threads) {
+        int elapsed_ms = t1 - t0;
+        if (elapsed_ms > 5 * n_threads) {
             printf("[test-ggml-threading] warning: it took took %7.3f "
                    "ms to start %2d worker thread(s). Too slow, skip.\n",
-                   1.0 * elapsed_us / 1000, n_threads - 1);
+                   1.0 * elapsed_ms, n_threads - 1);
             threads_arr[i] = 0;
             ++n_slow;
         } else {
@@ -427,6 +543,17 @@ int main(void) {
         if (test_customized_node_runner(&node) == 0) {
             ++n_passed;
             printf("[test-ggml-threading] test customized node runner: ok\n\n");
+        }
+    }
+
+    // lifecycle.
+    {
+        printf("[test-ggml-threading] test lifecycle ...\n");
+        ++n_tests;
+
+        if (test_lifecycle() == 0) {
+            ++n_passed;
+            printf("[test-ggml-threading] test lifecycle: ok\n\n");
         }
     }
 

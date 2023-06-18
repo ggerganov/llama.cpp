@@ -25,11 +25,12 @@ enum ggml_threading_features {
 typedef ggml_thread_ret_t(ggml_threading_thread_runner)(void *data);
 
 // Init and start underlying workers if n_threads > 1.
+// n_threads: number of threads (including caller) involving in computing tasks.
 //
 // thread: optional OS thread runner, default value:
 // `ggml_threading_graph_compute_thread`.
 //
-// task_runner: default task runner, nullable wheen tensor.runner is not NULL.
+// task_runner: default task runner, nullable when tensor.runner is not NULL.
 //              Overridden by tensor.runner.
 // features: configure threading behaviour, optional.
 // threading additional features. see `ggml_threading_feature`, default 0.
@@ -41,8 +42,17 @@ ggml_threading_start(int n_threads, ggml_threading_thread_runner *thread,
                      enum ggml_threading_features features,
                      int64_t stages_time[3]);
 
+// Suspend worker threads.
+void ggml_threading_suspend(struct ggml_threading_context *ctx);
+
+// Resume worker threads.
+void ggml_threading_resume(struct ggml_threading_context *ctx);
+
 // Stop workers (if exist), free memories (including the ctx).
 void ggml_threading_stop(struct ggml_threading_context *ctx);
+
+// Is all worker threads suspending?
+bool ggml_threading_is_suspending(struct ggml_threading_context *ctx);
 
 // The default implementation of `ggml_threading_thread_runner`
 ggml_thread_ret_t ggml_threading_graph_compute_thread(void *data);
