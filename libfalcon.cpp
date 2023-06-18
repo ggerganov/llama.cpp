@@ -1375,7 +1375,7 @@ size_t vram_reserved=1024*1024*512; //will be adapted by model
     lctx.t_load_us = ggml_time_us() - lctx.t_start_us;
     
 }
-#include <windows.h>
+
 static bool falcon_model_load(
         const std::string & fname,
         falcon_context & lctx,
