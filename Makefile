@@ -3,6 +3,8 @@ BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-tex
 
 ifdef LLAMA_BUILD_SERVER
 	BUILD_TARGETS += server
+	LLAMA_SERVER_VERBOSE ?= 1
+server: private CXXFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
 endif
 
 default: $(BUILD_TARGETS)
@@ -142,11 +144,7 @@ endif # LLAMA_NO_ACCELERATE
 
 ifdef LLAMA_OPENBLAS
 	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas -I/usr/include/openblas
-	ifneq ($(shell grep -e "Arch Linux" -e "ID_LIKE=arch" /etc/os-release 2>/dev/null),)
-		LDFLAGS += -lopenblas -lcblas
-	else
-		LDFLAGS += -lopenblas
-	endif
+	LDFLAGS += -lopenblas
 endif # LLAMA_OPENBLAS
 
 ifdef LLAMA_BLIS
@@ -254,7 +252,7 @@ $(info )
 ggml.o: ggml.c ggml.h ggml-cuda.h
 	$(CC)  $(CFLAGS)   -c $< -o $@
 
-llama.o: llama.cpp ggml.h ggml-cuda.h llama.h llama-util.h
+llama.o: llama.cpp ggml.h ggml-cuda.h ggml-metal.h llama.h llama-util.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common.o: examples/common.cpp examples/common.h
@@ -278,9 +276,6 @@ main: examples/main/main.cpp                                  build-info.h ggml.
 
 simple: examples/simple/simple.cpp                            build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
-	@echo
-	@echo '====  Run ./simple -h for help.  ===='
-	@echo
 
 quantize: examples/quantize/quantize.cpp                      build-info.h ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
