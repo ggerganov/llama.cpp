@@ -233,7 +233,7 @@ struct llama_model {
 };
 
 struct llama_context {
-    llama_context(const llama_model& model, const llama_vocab& vocab) : model(model), vocab(vocab), t_load_us(model.t_load_us), t_start_us(model.t_start_us) {}
+    llama_context(const llama_model & model, const llama_vocab & vocab) : model(model), vocab(vocab), t_load_us(model.t_load_us), t_start_us(model.t_start_us) {}
 
     std::mt19937 rng;
 
@@ -247,8 +247,8 @@ struct llama_context {
     int32_t n_eval   = 0; // number of eval calls
     int32_t n_p_eval = 0; // number of tokens in eval calls for the prompt (with batch size > 1)
 
-    const llama_model& model;
-    const llama_vocab& vocab;
+    const llama_model & model;
+    const llama_vocab & vocab;
 
     bool model_owner = false;
 
@@ -2536,7 +2536,7 @@ struct llama_model * llama_load_model_from_file(
             struct llama_context_params   params) {
     ggml_time_init();
 
-    llama_model *model = new llama_model;
+    llama_model * model = new llama_model;
 
     ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
@@ -2558,7 +2558,7 @@ struct llama_context * llama_new_context_with_model(
                              struct llama_model * model,
             struct llama_context_params   params) {
 
-    if(!model) {
+    if (!model) {
         return nullptr;
     }
 
@@ -2690,7 +2690,7 @@ int llama_model_quantize(
     }
 }
 
-int llama_apply_lora_from_file_internal(const struct llama_model& model, const char * path_lora, const char * path_base_model, int n_threads) {
+int llama_apply_lora_from_file_internal(const struct llama_model & model, const char * path_lora, const char * path_base_model, int n_threads) {
     fprintf(stderr, "%s: applying lora adapter from '%s' - please wait ...\n", __func__, path_lora);
 
     const int64_t t_start_lora_us = ggml_time_us();
