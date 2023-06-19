@@ -19,21 +19,60 @@ run bench ahead of time (saving tens of seconds), but there are two shortcomings
   outdated format. So I integrated mulmat tune into `main` and `perplexity` as
   a complementary solution.
 
-## Build into main and perplexity
+The `load` mode try validates at least the following fields:
+- version
+- model
+- ftype
+- n_threads
+- n_profiles
+- profiles
 
-Makefile:
+`n_threads` is very critical to performance, to select best n_threads.
+when run `main` or `perplexity`, the n_threads is automatically set, the default
+n_threads generally works well. Example:
+```
+system_info: n_threads = 4 / 12
+```
+This is read as use 4 of total 12 cores(with 6 physical cores).
+
+## Build
+
+Compile options:
+- `LLAMA_TUNE` for CMake (default ON)
+- `LLAMA_NO_TUNE` for Make (default undefined)
+
+`GGML_USE_TUNE` and `GGML_TUNE_NDEBUG` are defined when llama tune is enabled.
+
+When `GGML_USE_TUNE` is defined, mulmat_tune functionalities are compiled into
+main and perplexity:
+- cli args `--tune`, `--tune-file` are visible.
+- try selecting fastest task profile according to tune result for mul_mat.
+
+The standalone tool `mulmat-tune` is always build: no compile options.
+
+**Makefile**
+
+To use tune, at least one of the vendors have to be built:
+- BLAS(ACCELERATE, OpenNBLAS, BLIS)
+- ClBlast
+- CUDA (may not run)
+
+To enable the debug, comment out `-DGGML_TUNE_NDEBUG` from Makefile.
+
 ```
 make clean && make
 ```
 
-CMake (with BLAS):
+**CMake**
+
 ```
-cmake --build . --target clean
-cmake .. -DLLAMA_BLAS=ON
+rm -rf build/*
+cd build
+cmake ..
 cmake --build . --config Release
 ```
 
-Run examples:
+## Run main or perplexity
 
 ```
 # bench and run:
@@ -48,21 +87,7 @@ Run examples:
 ./main -m ./models/3B/open-llama-3b-q4-0.bin -c 512 -b 1024 -n 256 --keep 48 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt -t 4 --tune-file <FILE>
 ```
 
-# Build the standalone `mulmat-tune`
-
-Makefile:
-```
-make clean && make
-```
-
-CMake (with BLAS)
-```
-cmake --build . --target clean
-cmake .. -DLLAMA_BLAS=ON
-cmake --build . --config Release
-```
-
-Run examples:
+## Run mulmat-tune tool
 
 ```
 ./mulmat-tune -h
@@ -82,8 +107,8 @@ Run examples:
 # customized n_pass: run 1 pass only instead of the default 3.
 ./mulmat-tune --n_pass 1
 
-# customized n_threads instead of the default 1.
-./mulmat-tune --n_threads 4
+# customized n_threads instead of the default 4.
+./mulmat-tune --n_threads 6
 
 # save to file
 ./mulmat-tune --file <FILE>
@@ -93,9 +118,7 @@ Run examples:
 
 ```
 
-# End to End Test
-
-## Compare With Master
+## Example: compare With Master
 
 You may want to run the following commands. Make sure the tune result file is
 setup properly.
@@ -103,7 +126,7 @@ setup properly.
 General steps:
 
 1. run `./mulmat-tune -h` to see how to build for misc vendors.
-   To enable the debug, comment out `-DGGML_TUNE_NDEBUG` from makefile then run:
+   then run:
 
    ```
    make clean; make
