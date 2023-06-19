@@ -1177,12 +1177,18 @@ if (n_gpu_layers > 0)
     size_t vram_free=0;
     const size_t vram_reserved=512*MB;    // that amount of VRAM is to stay free on GPU (headroom for other processes - may be reduced in pure server environments)
     size_t vram_overhead = 1250*MB; // this amount of vram is estimated for non weight storage buffers on VRAM (no big difference between 7B and 40B, needs to increase when  more work is offloaded in the future)
+#if defined(GGML_USE_CUBLAS)
     // cublas is used in 32 bit mode, temporary cuda storage/conversion buffers are needed for batch ingestion ( could be run in 16 bit mode without performance downgrade and save half the VRAM)
     if (model.type == FALCON_40B && n_batch > 1)
-        vram_overhead += (1024+288+256) * MB; 
+    {
+        vram_overhead += (1024 + 288 + 256) * MB;
+        fprintf(stderr, "%s: INFO: using n_batch (-b) > 1 will require additional VRAM of: %7.2f MB\n", __func__, vram_overhead/MB*1.0);
+    }
     if (model.type == FALCON_7B && n_batch > 1)
-        vram_overhead += (315+80+78) * MB; 
-#if defined(GGML_USE_CUBLAS)
+    {
+        vram_overhead += (315 + 80 + 78) * MB;
+        fprintf(stderr, "%s: INFO: using n_batch (-b) > 1 will require additional VRAM of: %7.2f MB\n", __func__, vram_overhead/MB*1.0);
+    }
     cudaMemGetInfo(&vram_free, &vram_total); // this should go in ggml-cuda.cu but I don't want to make Johannes life harder by modifying that yet
     fprintf(stderr, "%s: VRAM free: %7.2f MB  of %7.2f MB (in use: %7.2f MB)\n", __func__, vram_free/MB*1.0, vram_total/MB*1.0, (vram_total-vram_free)/MB*1.0);
 #endif
@@ -1248,7 +1254,11 @@ if (n_gpu_layers > 0)
             vram_free -= ggml_nbytes(model.lm_head);
         }
 
-        const int i_gpu_start = n_layer - n_gpu_layers;
+        int i_gpu_start = n_layer - n_gpu_layers;
+        if (i_gpu_start < 0)
+            i_gpu_start = 0; // n_gpu_layers can be larger than n_layer
+
+
         int i_gpu_last = n_layer; // allows to terminate the offloading earlier. TODO: instead do a proper calculation run and determine the start before the loop
         model.i_gpu_start = i_gpu_start;
         model.i_gpu_last = i_gpu_last; // if VRAM doesn't run out i_gpu_last is always the last layer
@@ -1295,6 +1305,7 @@ if (n_gpu_layers > 0)
                     i_gpu_last = i;
                     model.i_gpu_last = i_gpu_last;
                     n_gpu_layers = i_gpu_last - i_gpu_start;
+                    printf("INFO: %d layers will be offloaded to GPU (layers %d to %d)\n", n_gpu_layers, i_gpu_start+1, i_gpu_last+1);
                 }
             }
 
