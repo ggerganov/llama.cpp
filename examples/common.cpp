@@ -28,6 +28,10 @@
 #include <wchar.h>
 #endif
 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
+#endif
+
 int32_t get_num_physical_cores() {
 #ifdef __linux__
     // enumerate the set of thread siblings, num entries is num cores
@@ -102,9 +106,6 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         }
 
         if (arg == "-s" || arg == "--seed") {
-#if defined(GGML_USE_CUBLAS)
-            fprintf(stderr, "WARNING: when using cuBLAS generation results are NOT guaranteed to be reproducible.\n");
-#endif
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -332,6 +333,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 #else
       fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.\n");
 #endif // GGML_USE_CUBLAS
+        } else if (arg == "--low-vram" || arg == "-lv") {
+#ifdef GGML_USE_CUBLAS
+            params.low_vram = true;
+#else
+      fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n");
+#endif // GGML_USE_CUBLAS
         } else if (arg == "--no-mmap") {
             params.use_mmap = false;
         } else if (arg == "--mtest") {
@@ -367,7 +374,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 } else {
                     throw std::exception();
                 }
-            } catch (const std::exception &e) {
+            } catch (const std::exception&) {
                 invalid_param = true;
                 break;
             }
@@ -406,6 +413,14 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         gpt_print_usage(argc, argv, default_params);
         exit(1);
     }
+
+#ifdef GGML_USE_CUBLAS
+    if (!params.lora_adapter.empty() && params.n_gpu_layers > 0) {
+        fprintf(stderr, "%s: error: the simultaneous use of LoRAs and GPU acceleration is not supported", __func__);
+        exit(1);
+    }
+#endif // GGML_USE_CUBLAS
+
     if (escape_prompt) {
         process_escapes(params.prompt);
     }
@@ -479,6 +494,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -ts SPLIT --tensor-split SPLIT\n");
     fprintf(stderr, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
     fprintf(stderr, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n" );
+    fprintf(stderr, "  -lv, --low-vram       don't allocate VRAM scratch buffer\n" );
 #endif
     fprintf(stderr, "  --mtest               compute maximum memory usage\n");
     fprintf(stderr, "  --export              export the computation graph to 'llama.ggml'\n");
@@ -528,6 +544,7 @@ struct llama_context * llama_init_from_gpt_params(const gpt_params & params) {
     lparams.n_gpu_layers = params.n_gpu_layers;
     lparams.main_gpu     = params.main_gpu;
     memcpy(lparams.tensor_split, params.tensor_split, LLAMA_MAX_DEVICES*sizeof(float));
+    lparams.low_vram     = params.low_vram;
     lparams.seed         = params.seed;
     lparams.f16_kv       = params.memory_f16;
     lparams.use_mmap     = params.use_mmap;
@@ -631,6 +648,9 @@ void console_set_color(console_state & con_st, console_color_t color) {
                 break;
             case CONSOLE_COLOR_USER_INPUT:
                 fprintf(con_st.out, ANSI_BOLD ANSI_COLOR_GREEN);
+                break;
+            case CONSOLE_COLOR_ERROR:
+                fprintf(con_st.out, ANSI_BOLD ANSI_COLOR_RED);
                 break;
         }
         con_st.color = color;

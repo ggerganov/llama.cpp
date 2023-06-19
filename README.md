@@ -336,9 +336,15 @@ Building the program with BLAS support may lead to some performance improvements
     cmake .. -DLLAMA_CUBLAS=ON
     cmake --build . --config Release
     ```
-  Note: Because llama.cpp uses multiple CUDA streams for matrix multiplication results [are not guaranteed to be reproducible](https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility). If you need reproducibility, set `GGML_CUDA_MAX_STREAMS` in the file `ggml-cuda.cu` to 1.
 
-  The environment variable [`CUDA_VISIBLE_DEVICES`](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#env-vars) can be used to specify which GPU(s) will be used.
+  The environment variable [`CUDA_VISIBLE_DEVICES`](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#env-vars) can be used to specify which GPU(s) will be used. The following compilation options are also available to tweak performance:
+
+  | Option                  | Legal values           | Default | Description |
+  |-------------------------|------------------------|---------|-------------|
+  | LLAMA_CUDA_DMMV_X       | Positive integer >= 32 |      32 | Number of values in x direction processed by the CUDA dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants. |
+  | LLAMA_CUDA_DMMV_Y       | Positive integer       |       1 | Block size in y direction for the CUDA dequantization + mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. Does not affect k-quants. |
+  | LLAMA_CUDA_DMMV_F16     | Boolean                |   false | If enabled, use half-precision floating point arithmetic for the CUDA dequantization + mul mat vec kernels. Can improve performance on relatively recent GPUs. |
+  | LLAMA_CUDA_KQUANTS_ITER | 1 or 2                 |       2 | Number of values processed per iteration and per CUDA thread for Q2_K and Q6_K quantization formats. Setting this value 2 1 can improve performance for slow GPUs. |
 
 - #### CLBlast
 
@@ -616,8 +622,14 @@ And after 4.45 hours, you will have the final perplexity.
 
 ### Android
 
+#### Building the Project using Android NDK
 You can easily run `llama.cpp` on Android device with [termux](https://termux.dev/).
-First, obtain the [Android NDK](https://developer.android.com/ndk) and then build with CMake:
+
+First, install the essential packages for termux:
+```
+pkg install clang wget git cmake
+```
+Second, obtain the [Android NDK](https://developer.android.com/ndk) and then build with CMake:
 ```
 $ mkdir build-android
 $ cd build-android
@@ -629,6 +641,46 @@ Install [termux](https://termux.dev/) on your device and run `termux-setup-stora
 Finally, copy the `llama` binary and the model files to your device storage. Here is a demo of an interactive session running on Pixel 5 phone:
 
 https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b050-55b0b3b9274c.mp4
+
+#### Building the Project using Termux (F-Droid)
+Termux from F-Droid offers an alternative route to execute the project on an Android device. This method empowers you to construct the project right from within the terminal, negating the requirement for a rooted device or SD Card.
+
+Outlined below are the directives for installing the project using OpenBLAS and CLBlast. This combination is specifically designed to deliver peak performance on recent devices that feature a GPU.
+
+If you opt to utilize OpenBLAS, you'll need to install the corresponding package.
+```
+apt install libopenblas
+```
+
+Subsequently, if you decide to incorporate CLBlast, you'll first need to install the requisite OpenCL packages:
+```
+apt install ocl-icd opencl-headers opencl-clhpp clinfo
+```
+
+In order to compile CLBlast, you'll need to first clone the respective Git repository, which can be found at this URL: https://github.com/CNugteren/CLBlast. Alongside this, clone this repository into your home directory. Once this is done, navigate to the CLBlast folder and execute the commands detailed below:
+```
+cmake .
+make
+cp libclblast.so* $PREFIX/lib
+cp ./include/clblast.h ../llama.cpp
+```
+
+Following the previous steps, navigate to the LlamaCpp directory. To compile it with OpenBLAS and CLBlast, execute the command provided below:
+```
+cp /data/data/com.termux/files/usr/include/openblas/cblas.h .
+cp /data/data/com.termux/files/usr/include/openblas/openblas_config.h .
+make LLAMA_CLBLAST=1 //(sometimes you need to run this command twice)
+```
+
+Upon completion of the aforementioned steps, you will have successfully compiled the project. To run it using CLBlast, a slight adjustment is required: a command must be issued to direct the operations towards your device's physical GPU, rather than the virtual one. The necessary command is detailed below:
+```
+GGML_OPENCL_PLATFORM=0
+GGML_OPENCL_DEVICE=0
+export LD_LIBRARY_PATH=/system/vendor/lib64:$LD_LIBRARY_PATH
+./main (...)
+```
+
+For easy and swift re-execution, consider documenting this final part in a .sh script file. This will enable you to rerun the process with minimal hassle.
 
 ### Docker
 

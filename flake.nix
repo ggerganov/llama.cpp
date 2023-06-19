@@ -48,6 +48,19 @@
           '';
           meta.mainProgram = "llama";
         };
+        apps.llama-server = {
+          type = "app";
+          program = "${self.packages.${system}.default}/bin/llama-server";
+        };
+        apps.llama-embedding = {
+          type = "app";
+          program = "${self.packages.${system}.default}/bin/embedding";
+        };
+        apps.llama = {
+          type = "app";
+          program = "${self.packages.${system}.default}/bin/llama";
+        };
+        apps.default = self.apps.${system}.llama;
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             cmake
