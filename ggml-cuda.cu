@@ -1476,6 +1476,7 @@ static cuda_buffer g_cuda_buffer_pool[GGML_CUDA_MAX_DEVICES][MAX_CUDA_BUFFERS];
 static std::atomic_flag g_cuda_pool_lock = ATOMIC_FLAG_INIT;
 
 static void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
+    static size_t total_size = 0;
     scoped_spin_lock lock(g_cuda_pool_lock);
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
@@ -1492,6 +1493,8 @@ static void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
     }
     void * ptr;
     CUDA_CHECK(cudaMalloc((void **) &ptr, size));
+    total_size += size;
+    fprintf(stderr, "%s: size=%.2f, total_size=%.2f\n", __func__, size / 1024.0f / 1024.0f, total_size / 1024.0f / 1024.0f);
     *actual_size = size;
     return ptr;
 }
@@ -1560,6 +1563,10 @@ void ggml_init_cublas() {
         // CUBLAS_CHECK(cublasLoggerConfigure(1, 1, 0, nullptr));
 
         initialized = true;
+
+        size_t actual_size;
+        void * ptr = ggml_cuda_pool_malloc(813*1024*1024, &actual_size);
+        ggml_cuda_pool_free(ptr, actual_size);
     }
 }
 
