@@ -802,7 +802,7 @@ bool ggml_mulmat_tune_bench(struct ggml_mulmat_tune *tune,
 
     struct ggml_threading_context *thrd_ctx =
         ggml_threading_start(tune->n_threads, NULL, NULL,
-                             GGML_THREADING_FEATURE_WAIT_ON_DONE, stages_time);
+                             GGML_THREADING_FEATURE_NONE, stages_time);
 
     for (int i_shape = 0; i_shape < tune->n_shapes; i_shape++) {
         const struct ggml_mulmat_tune_shape *shape = &tune->shapes[i_shape];

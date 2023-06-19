@@ -71,12 +71,7 @@ static int test_driver(int id, struct ggml_tensor *node, int n_threads) {
         work_done_arr[i] = 0;
     }
 
-    bool wait_on_done = (node->task_profile.dev_flags[0] > 0u);
-
     enum ggml_threading_features features = GGML_THREADING_FEATURE_PERF;
-    if (wait_on_done) {
-        features |= GGML_THREADING_FEATURE_WAIT_ON_DONE;
-    }
 
     int t0 = (int)ggml_time_us();
 
@@ -118,9 +113,9 @@ static int test_driver(int id, struct ggml_tensor *node, int n_threads) {
     }
 
     printf("\tstage-0: parallel: %d, wait: %d\n\tstage-1: parallel: %d, wait: "
-           "%d, wait_on_done: %d %s\n",
+           "%d\n",
            stages[0].parallel, stages[0].wait, stages[1].parallel,
-           stages[1].wait, wait_on_done, stages[1].wait ? "<--------" : "");
+           stages[1].wait);
 
     if (actual == expect) {
         printf("\tthreading: init %6.3f ms, compute %6.3f ms, cleanup %6.3f "
@@ -214,7 +209,7 @@ lifecycle_runner(const struct ggml_compute_params *params,
 }
 
 // Test thread lifecycle: start -> suspend -> resume -> stop
-static int test_lifecycle(bool wait_on_done) {
+static int test_lifecycle() {
     struct ggml_tensor node;
     memset(&node, 0, sizeof(struct ggml_tensor));
 
@@ -243,9 +238,7 @@ static int test_lifecycle(bool wait_on_done) {
     int threads_arr_len = sizeof(threads_arr) / sizeof(threads_arr[0]);
     int n_threads = 1;
 
-    enum ggml_threading_features features =
-        wait_on_done ? GGML_THREADING_FEATURE_NONE
-                     : GGML_THREADING_FEATURE_WAIT_ON_DONE;
+    enum ggml_threading_features features = GGML_THREADING_FEATURE_NONE;
     for (int i = 0; i < threads_arr_len; i++) {
         n_threads = threads_arr[i];
         int start_time = (int)ggml_time_ms();
@@ -351,7 +344,6 @@ int main(void) {
     // physical cores:
     // - the wait/wakeup time varies much: can be up to tens or hundreds of the
     //   average time, thus greatly punishes those small workloads.
-    // - wait_on_done is general faster than wait_now, can be 10x faster.
 
     int threads_arr[] = {1, 2, 4, 6, 8, 16, 32, 64};
     int threads_arr_len = sizeof(threads_arr) / sizeof(threads_arr[0]);
@@ -408,7 +400,7 @@ int main(void) {
         }
     }
 
-    // node.task_profile.dev_flags: byte 0 for wait_on_done, byte 1 for loops.
+    // node.task_profile.dev_flags: byte 0 unused, byte 1 for loops.
 
     for (int x = 0; x < workload_arr_len; x++) {
         node.task_profile.dev_flags[1] = workload_arr[x];
@@ -423,7 +415,7 @@ int main(void) {
                    "n_threads: %2d ====\n",
                    workload_arr[x], n_threads);
 
-            // multi-threads: parallel + wait_now/wait_on_done
+            // multi-threads: parallel + wait
 
             if (n_threads == 1) {
                 stages[0].parallel = false;
@@ -489,22 +481,11 @@ int main(void) {
                         abort();
                     }
 
-                    { // disable wait_on_done
-                        node.task_profile.dev_flags[0] = 0u; // wait now.
+                    node.task_profile.dev_flags[0] = 0u; // wait now.
 
-                        n_tests++;
-                        if (test_driver(n_tests, &node, n_threads) == 0) {
-                            n_passed++;
-                        }
-                    }
-
-                    { // enable wait_on_done
-                        node.task_profile.dev_flags[0] = 1u; // wait on done
-
-                        n_tests++;
-                        if (test_driver(n_tests, &node, n_threads) == 0) {
-                            n_passed++;
-                        }
+                    n_tests++;
+                    if (test_driver(n_tests, &node, n_threads) == 0) {
+                        n_passed++;
                     }
                 }
             }
@@ -548,18 +529,12 @@ int main(void) {
     }
 
     // lifecycle.
-    for (int i = 0; i < 2; i++) {
-        bool wait_on_done = (i == 1);
-        printf("[test-ggml-threading] test lifecycle (wait_on_done = %d) ...\n",
-               wait_on_done);
-        ++n_tests;
+    printf("[test-ggml-threading] test lifecycle ...\n");
+    ++n_tests;
 
-        if (test_lifecycle(wait_on_done) == 0) {
-            ++n_passed;
-            printf("[test-ggml-threading] test lifecycle (wait_on_done = %d): "
-                   "ok\n\n",
-                   wait_on_done);
-        }
+    if (test_lifecycle() == 0) {
+        ++n_passed;
+        printf("[test-ggml-threading] test lifecycle: ok\n\n");
     }
 
     printf("[test-ggml-threading] %d/%d passed.\n", n_passed, n_tests);

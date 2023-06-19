@@ -16203,14 +16203,14 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         }
 
         // ~ 50 us
-        //printf("=== prepare computing took %d us\n", (int)(ggml_time_us() - t0));
+        // printf("=== prepare computing took %d us\n", (int)(ggml_time_us() - t0));
     }
 
     const int64_t perf_start_cycles  = ggml_perf_cycles();
     const int64_t perf_start_time_us = ggml_perf_time_us();
 
     struct ggml_threading_context *thrd_ctx = ggml_threading_start(n_threads,
-        NULL, ggml_compute_forward, GGML_THREADING_FEATURE_WAIT_ON_DONE, NULL);
+        NULL, ggml_compute_forward, GGML_THREADING_FEATURE_NONE, NULL);
 
     for (int i = 0; i < cgraph->n_nodes; i++) {
         GGML_PRINT_DEBUG_5("%s: %d/%d\n", __func__, i, cgraph->n_nodes);

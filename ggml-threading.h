@@ -17,8 +17,7 @@ struct ggml_threading_context;
 // Optional (experimental) features.
 enum ggml_threading_features {
     GGML_THREADING_FEATURE_NONE = 0,
-    GGML_THREADING_FEATURE_WAIT_ON_DONE = 1 << 0,
-    GGML_THREADING_FEATURE_PERF = 1 << 1,
+    GGML_THREADING_FEATURE_PERF = 1,
 };
 
 // The thread runner to feed into OS threads.

@@ -167,7 +167,6 @@ struct ggml_compute_state_shared {
 
     // commands.
     atomic_bool wait_now;
-    atomic_bool wait_on_done;
     atomic_bool stop;
 
     // Default task runner, can be overriden by node.task_profile.runner.
@@ -263,11 +262,12 @@ void ggml_threading_suspend(struct ggml_threading_context *ctx) {
 
     struct ggml_compute_state_shared *shared = &ctx->shared;
 
+    const int n_worker_threads = ctx->n_threads - 1;
+
     ggml_spin_lock(&shared->spin);
     shared->wait_now = true;
     ggml_spin_unlock(&ctx->shared.spin);
 
-    const int n_worker_threads = ctx->n_threads - 1;
     while (shared->n_waiting != n_worker_threads) {
         ggml_spin_pause();
     }
@@ -281,8 +281,8 @@ void ggml_threading_suspend(struct ggml_threading_context *ctx) {
 
 // Wakeup all workers.
 //
-// Workers takes some time to wakeup, and has to lock spin after wakeup. Yield
-// is used to avoid signal frequently. Current implementation is highly
+// Workers takes some time to wakeup.
+// Yield is used to avoid notify frequently. Current implementation is highly
 // experimental. See tests/test-ggml-threading.c for details.
 void ggml_threading_resume(struct ggml_threading_context *ctx) {
     if (ctx->n_threads == 1) {
@@ -302,14 +302,20 @@ void ggml_threading_resume(struct ggml_threading_context *ctx) {
     // Dead lock detection.
     int counter = 0;
     int64_t last_notify_ms = 0;
-    const int max_notify_count = ctx->n_threads - 1;
-    const int max_duration_ms = 100 * max_notify_count;
+    const int max_notify_count = 50;
+    const int max_duration_ms = 1000;
+
+    if (shared->n_waiting != 0 && shared->n_waiting != ctx->n_threads - 1) {
+        fprintf(stderr,
+                "[ggml-threading] expected n_waiting is 0 or %d, actual %d, abort\n",
+                ctx->n_threads - 1, shared->n_waiting);
+        abort();
+    }
 
     ggml_spin_lock(&shared->spin);
     shared->wait_now = false;
 
     while (shared->n_waiting != 0) {
-
         GGML_ASSERT(pthread_mutex_lock(&shared->mutex) == 0);
         if (shared->n_waiting == 0) {
             GGML_ASSERT(pthread_mutex_unlock(&shared->mutex) == 0);
@@ -323,7 +329,11 @@ void ggml_threading_resume(struct ggml_threading_context *ctx) {
         GGML_ASSERT(pthread_mutex_unlock(&shared->mutex) == 0);
         last_notify_ms = ggml_time_ms();
 
-        sched_yield();
+        if (counter % 1 == 0) {
+            ggml_spin_pause();
+        } else {
+            sched_yield();
+        }
 
         int elapsed = last_notify_ms > 0 ? ggml_time_ms() - last_notify_ms : 0;
 
@@ -372,24 +382,6 @@ static void ggml_threading_setup_workers(struct ggml_threading_context *ctx,
             ggml_threading_resume(ctx);
             ggml_spin_lock(&shared->spin);
         }
-
-        if ((ctx->features & GGML_THREADING_FEATURE_WAIT_ON_DONE) > 0) {
-            // Optimize energy: wait_on_done. We MAY also check following nodes,
-            // but that's a bit complicated.
-            shared->wait_on_done = false;
-            for (int i = type + 1; i <= GGML_TASK_FINALIZE; i++) {
-                struct ggml_task_stage *next = &profile->stages[i];
-                if (next->parallel) {
-                    break;
-                }
-                if (next->wait) {
-                    shared->wait_on_done = true;
-                    PRINT_DEBUG("[main] wait_on_done is enabled for "
-                                "current task stage\n");
-                    break;
-                }
-            }
-        }
     } else if (current->wait) {
         if (shared->n_waiting < n_worker_threads) {
             ggml_spin_unlock(&ctx->shared.spin);
@@ -437,17 +429,7 @@ ggml_thread_ret_t ggml_threading_graph_compute_thread(void *data) {
             state->has_work = false;
             shared->n_tasks--;
 
-            bool wait = shared->wait_on_done && !state->has_work;
-            if (wait) {
-                ggml_threading_cond_wait(state);
-            }
-
             ggml_spin_unlock(&shared->spin);
-
-            // no need to pause.
-            if (wait) {
-                continue;
-            }
         }
 
         ggml_spin_pause();
@@ -594,11 +576,11 @@ ggml_threading_start(int n_threads, ggml_threading_thread_runner *thread_runner,
         .n_tasks = 0,
         .n_waiting = 0,
         .wait_now = false,
-        .wait_on_done = false,
         .stop = false,
         .task_runner = task_runner,
         .ctx = ctx,
     };
+    atomic_flag_clear(&ctx->shared.spin);
 
     PRINT_DEBUG("[main] thread start, features: %d\n", features);
 
