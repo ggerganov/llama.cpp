@@ -1251,7 +1251,7 @@ if (n_gpu_layers > 0)
         const int i_gpu_start = n_layer - n_gpu_layers;
         int i_gpu_last = n_layer; // allows to terminate the offloading earlier. TODO: instead do a proper calculation run and determine the start before the loop
         model.i_gpu_start = i_gpu_start;
-        model.i_gpu_last = i_gpu_last;
+        model.i_gpu_last = i_gpu_last; // if VRAM doesn't run out i_gpu_last is always the last layer
 
         model.layers.resize(n_layer);
         for (uint32_t i = 0; i < n_layer; ++i) {
@@ -1287,15 +1287,14 @@ if (n_gpu_layers > 0)
                 vram_layer = calculate_layer_vram_bytes(layer);
                 vram_weights += vram_layer;
                 vram_free = (vram_layer > vram_free) ? 0 : vram_free - vram_layer; // simulate the layer being loaded in VRAM
-                // test if we have enough VRAM to load the next layer
+                // test if we have enough VRAM to offload the next layer
                 if (i < n_layer && vram_free <= (vram_overhead+vram_scratch+vram_reserved+vram_layer))
                 {
-                    // this needs some polishing (instead of fiddling with --ngl I'd like the option to auto-fill the vram with as many layers as possible as an alternative)
                     fprintf(stderr, "INFO: Not enough VRAM to load all requested layers - at layer %d of %d: skipping\n", i, n_layer);
-                    n_gpu_layers = i+1;
                     model.n_gpu_layers = n_gpu_layers;
                     i_gpu_last = i;
                     model.i_gpu_last = i_gpu_last;
+                    n_gpu_layers = i_gpu_last - i_gpu_start;
                 }
             }
 
@@ -1482,6 +1481,7 @@ static bool falcon_eval_internal(
     offload_func_t offload_func_kqv = llama_nop;
 
 #ifdef GGML_USE_CUBLAS
+        // todo: use either a flag in model/params or a backend test to determine if norm/output are on GPU
         if (n_gpu_layers > n_layer) {
             offload_func_nr = ggml_cuda_assign_buffers;
         }
@@ -1700,7 +1700,7 @@ static bool falcon_eval_internal(
     offload_func_t offload_func = llama_nop;
 
 #ifdef GGML_USE_CUBLAS
-        if (n_gpu_layers > n_layer) {
+        if (n_gpu_layers > 0 && n_layer >= i_gpu_start && n_layer <= i_gpu_last) {
             offload_func = ggml_cuda_assign_buffers; // sets the output backend to GPU
         }
 #endif // GGML_USE_CUBLAS
@@ -2726,8 +2726,8 @@ struct falcon_context * falcon_init_from_file(
     }
     // model_load_internal() may change this if VRAM runs out
     params.n_gpu_layers = ctx->model.n_gpu_layers; 
-    params.i_gpu_start = ctx->model.i_gpu_start;
-    params.i_gpu_last = ctx->model.i_gpu_last;
+    params.i_gpu_start = ctx->model.i_gpu_start; // first layer that's GPU accelerated
+    params.i_gpu_last = ctx->model.i_gpu_last; // last layer that's GPU accelerated
     
 
     // reserve memory for context buffers
