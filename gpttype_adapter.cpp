@@ -387,9 +387,15 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         {
             printf("\nAttempting to apply LORA adapter: %s\n", lora_filename.c_str());
 
+            const char * lora_base_arg = NULL;
+            if (lora_base != "") {
+                printf("Using LORA base model: %s\n", lora_base.c_str());
+                lora_base_arg = lora_base.c_str();
+            }
+
             int err = llama_apply_lora_from_file(llama_ctx_v3,
                                                  lora_filename.c_str(),
-                                                 NULL,
+                                                 lora_base_arg,
                                                  n_threads);
             if (err != 0)
             {

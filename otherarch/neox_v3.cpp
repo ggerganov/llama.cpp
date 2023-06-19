@@ -38,21 +38,14 @@ ModelLoadResult gpt_neox_model_load(const std::string & fname, gpt_neox_model & 
     // load hparams
     {
         auto & hparams = model.hparams;
-        hparams.par_res = 1; //true
+
         fin.read((char *) &hparams.n_vocab, sizeof(hparams.n_vocab));
         fin.read((char *) &hparams.n_ctx,   sizeof(hparams.n_ctx));
         fin.read((char *) &hparams.n_embd,  sizeof(hparams.n_embd));
         fin.read((char *) &hparams.n_head,  sizeof(hparams.n_head));
         fin.read((char *) &hparams.n_layer, sizeof(hparams.n_layer));
         fin.read((char *) &hparams.n_rot,   sizeof(hparams.n_rot));
-        if(file_format!=FileFormat::NEOX_1 && file_format!=FileFormat::NEOX_2 && file_format!=FileFormat::NEOX_3)
-        {
-            fin.read((char *) &hparams.par_res, sizeof(hparams.par_res));
-        }
-        if(file_format==FileFormat::NEOX_3)
-        {
-            hparams.par_res = 0;
-        }
+        fin.read((char *) &hparams.par_res, sizeof(hparams.par_res));
         fin.read((char *) &hparams.ftype,   sizeof(hparams.ftype));
 
         const int32_t qntvr = hparams.ftype / GGML_QNT_VERSION_FACTOR;
@@ -107,10 +100,10 @@ ModelLoadResult gpt_neox_model_load(const std::string & fname, gpt_neox_model & 
     {
         const auto & hparams = model.hparams;
 
-        const int n_embd  = hparams.n_embd;
-        const int n_layer = hparams.n_layer;
-        const int n_ctx   = hparams.n_ctx;
-        const int n_vocab = hparams.n_vocab;
+        const size_t n_embd  = hparams.n_embd;
+        const size_t n_layer = hparams.n_layer;
+        const size_t n_ctx   = hparams.n_ctx;
+        const size_t n_vocab = hparams.n_vocab;
 
         ctx_size += n_embd*ggml_type_sizef(GGML_TYPE_F32); // ln_f_g
         ctx_size += n_embd*ggml_type_sizef(GGML_TYPE_F32); // ln_f_b
@@ -141,7 +134,7 @@ ModelLoadResult gpt_neox_model_load(const std::string & fname, gpt_neox_model & 
         ctx_size += n_ctx*n_layer*n_embd*ggml_type_sizef(GGML_TYPE_F16); // memory_k
         ctx_size += n_ctx*n_layer*n_embd*ggml_type_sizef(GGML_TYPE_F16); // memory_v
 
-        ctx_size += (6 + 16*n_layer)*512; // object overhead
+        ctx_size += (6 + 16*n_layer)*1024; // object overhead
 
         printf("%s: ggml ctx size = %6.2f MB\n", __func__, ctx_size/(1024.0*1024.0));
     }
@@ -152,7 +145,7 @@ ModelLoadResult gpt_neox_model_load(const std::string & fname, gpt_neox_model & 
         params.mem_size   = ctx_size;
         params.mem_buffer = NULL;
         params.no_alloc   = false;
-        
+
         model.ctx = ggml_init(params);
         if (!model.ctx) {
             fprintf(stderr, "%s: ggml_init() failed\n", __func__);
@@ -300,22 +293,7 @@ ModelLoadResult gpt_neox_model_load(const std::string & fname, gpt_neox_model & 
                 printf("%24s - [%5d, %5d], type = %6s, %6.2f MB, %9zu bytes\n", name.data(), ne[0], ne[1], ggml_type_name(ggml_type(ttype)), ggml_nbytes(tensor)/1024.0/1024.0, ggml_nbytes(tensor));
             }
 
-            size_t bpe = ggml_type_size(ggml_type(ttype));
-
-            if(file_format==FileFormat::NEOX_1)
-            {
-                switch (ttype) {
-                    case 0: bpe = ggml_type_size(GGML_TYPE_F32);  break;
-                    case 1: bpe = ggml_type_size(GGML_TYPE_F16);  break;
-                    case 2: bpe = ggml_type_size(GGML_TYPE_Q4_0); assert(ne[0] % 64 == 0); break;
-                    case 3: bpe = ggml_type_size(GGML_TYPE_Q4_1); assert(ne[0] % 64 == 0); break;
-                    default:
-                    {
-                        fprintf(stderr, "%s: unknown ftype %d in model file\n", __func__, ttype);
-                        return ModelLoadResult::FAIL;
-                    }
-                };
-            }
+            const size_t bpe = ggml_type_size(ggml_type(ttype));
 
             if ((nelements*bpe)/ggml_blck_size(tensor->type) != ggml_nbytes(tensor)) {
                 fprintf(stderr, "%s: tensor '%s' has wrong size in model file: got %zu, expected %zu\n",
@@ -409,8 +387,16 @@ bool gpt_neox_eval(
     static size_t buf_size = 256u*1024*1024;
     static void * buf = malloc(buf_size);
 
-    if (mem_per_token > 0 && (mem_per_token*N*2 + 64u*1024*1024) > buf_size) {
-        const size_t buf_size_new = 360u*1024*1024 + 1.6*(mem_per_token*N); // add 10% to account for ggml object overhead
+    // use 2 scratch buffers
+    // TODO: very hacky solution - reimplement in a more elegant way
+    static size_t scr0_size = (n_ctx>1024?512u:256u)*1024*1024;
+    static void * scr0 = malloc(scr0_size);
+
+    static size_t scr1_size = (n_ctx>1024?512u:256u)*1024*1024;
+    static void * scr1 = malloc(scr1_size);
+
+    if (mem_per_token > 0 && mem_per_token*N*1.05 > buf_size) {
+        const size_t buf_size_new = 64u*1024*1024 + 1.15*(mem_per_token*N); // add 10% to account for ggml object overhead
         //printf("\n%s: reallocating buffer from %zu to %zu bytes\n", __func__, buf_size, buf_size_new);
 
         // reallocate
@@ -430,7 +416,7 @@ bool gpt_neox_eval(
     params.mem_size   = buf_size;
     params.mem_buffer = buf;
     params.no_alloc   = false;
-    
+
 
     struct ggml_context * ctx0 = ggml_init(params);
     struct ggml_cgraph gf = {};
@@ -444,6 +430,8 @@ bool gpt_neox_eval(
 
     for (int il = 0; il < n_layer; ++il) {
         struct ggml_tensor * cur;
+
+        ggml_set_scratch(ctx0, { 0, scr0_size, scr0, });
 
         // self-attention
         {
@@ -548,6 +536,8 @@ bool gpt_neox_eval(
             }
         }
 
+        ggml_set_scratch(ctx0, { 0, scr1_size, scr1, });
+
         if (hparams.par_res == 0) {
             struct ggml_tensor * inpFF = ggml_add(ctx0, cur, inpL);
 
@@ -570,6 +560,8 @@ bool gpt_neox_eval(
         }
     }
 
+    ggml_set_scratch(ctx0, { 0, scr0_size, scr0, });
+
     // norm
     {
         inpL = ggml_norm(ctx0, inpL);
@@ -581,6 +573,8 @@ bool gpt_neox_eval(
                     inpL),
                 ggml_repeat(ctx0, model.ln_f_b, inpL));
     }
+
+    ggml_set_scratch(ctx0, { 0, 0, nullptr, });
 
     // lm_head
     {

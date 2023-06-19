@@ -126,37 +126,53 @@ std::wstring convert_to_wstring(const std::string & input) {
     return converter.from_bytes(input);
 }
 
+void gpt_split_words(std::string str, std::vector<std::string>& words) {
+    const std::string pattern = R"('s|'t|'re|'ve|'m|'ll|'d| ?[[:alpha:]]+| ?[[:digit:]]+| ?[^\s[:alpha:][:digit:]]+|\s+(?!\S)|\s+)";
+    const std::regex re(pattern);
+    std::smatch m;
+
+    while (std::regex_search(str, m, re)) {
+        for (auto x : m) {
+            words.push_back(x);
+        }
+        str = m.suffix();
+    }
+}
+
 std::vector<gpt_vocab::id> gpt_tokenize(const gpt_vocab & vocab, const std::string & text) {
     std::vector<std::string> words;
 
     // first split the text into words
     {
         std::string str = text;
-        std::string pat = R"('s|'t|'re|'ve|'m|'ll|'d| ?[[:alpha:]]+| ?[[:digit:]]+| ?[^\s[:alpha:][:digit:]]+|\s+(?!\S)|\s+)";
 
         // Generate the subpattern from the special_tokens vector if it's not empty
         if (!vocab.special_tokens.empty()) {
+            const std::regex escape(R"([\[\\\^\$\.\|\?\*\+\(\)\{\}])");
             std::string special_tokens_subpattern;
             for (const auto & token : vocab.special_tokens) {
                 if (!special_tokens_subpattern.empty()) {
                     special_tokens_subpattern += "|";
                 }
-                special_tokens_subpattern += token;
+                special_tokens_subpattern += std::regex_replace(token, escape, R"(\$&)");
             }
 
-            // Modify the regex pattern with the generated special tokens subpattern
-            pat = special_tokens_subpattern + "|" + pat;
-        }
-
-        std::regex re(pat);
-        std::smatch m;
-
-        while (std::regex_search(str, m, re)) {
-            for (auto x : m) {
-                words.push_back(x);
+            std::regex re(special_tokens_subpattern);
+            std::smatch m;
+            // Split the text by special tokens.
+            while (std::regex_search(str, m, re)) {
+                // Split the substrings in-between special tokens into words.
+                gpt_split_words(m.prefix(), words);
+                // Add matched special tokens as words.
+                for (auto x : m) {
+                    words.push_back(x);
+                }
+                str = m.suffix();
             }
-            str = m.suffix();
+            // Remaining text without special tokens will be handled below.
         }
+
+        gpt_split_words(str, words);
     }
 
     // find the longest token that forms each word in words:
@@ -185,15 +201,15 @@ std::vector<gpt_vocab::id> gpt_tokenize(const gpt_vocab & vocab, const std::stri
 
 bool should_transpose_layer(std::string name)
 {
-       
-    if(name.find(".mlp.fc_in.weight")!=std::string::npos || 
-    name.find(".attn.out_proj.weight")!=std::string::npos || 
-    name.find(".attn.q_proj.weight")!=std::string::npos || 
-    name.find(".attn.k_proj.weight")!=std::string::npos || 
+
+    if(name.find(".mlp.fc_in.weight")!=std::string::npos ||
+    name.find(".attn.out_proj.weight")!=std::string::npos ||
+    name.find(".attn.q_proj.weight")!=std::string::npos ||
+    name.find(".attn.k_proj.weight")!=std::string::npos ||
     name.find(".attn.v_proj.weight")!=std::string::npos ||
-    name.find("/attn/c_attn/w")!=std::string::npos || 
-    name.find("/attn/c_proj/w")!=std::string::npos || 
-    name.find("/mlp/c_fc/w")!=std::string::npos || 
+    name.find("/attn/c_attn/w")!=std::string::npos ||
+    name.find("/attn/c_proj/w")!=std::string::npos ||
+    name.find("/mlp/c_fc/w")!=std::string::npos ||
     name.find("/mlp/c_proj/w")!=std::string::npos)
     {
         return true;
