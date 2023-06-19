@@ -281,7 +281,6 @@ struct llama_vocab {
 
     llama_trie special_token_trie;
     std::unordered_map<token, id> special_token_to_id;
-    std::vector<id> special_tokens;
     size_t max_special_token_length;
 };
 
@@ -580,14 +579,13 @@ struct llama_file_loader {
 
         for (uint32_t i = 0; i < hparams.n_vocab_sp; i++) {
             uint32_t token_id = file.read_u32();
-            const auto & token = vocab.id_to_token[token_id].tok;
+            const auto & word = vocab.id_to_token[token_id].tok;
 
-            vocab.special_token_trie.add(token);
-            vocab.special_tokens.push_back(token_id);
-            vocab.special_token_to_id[token] = token_id;
+            vocab.special_token_trie.add(word);
+            vocab.special_token_to_id[word] = token_id;
 
-            if (vocab.max_special_token_length < token.size()) {
-                vocab.max_special_token_length = token.size();
+            if (vocab.max_special_token_length < word.size()) {
+                vocab.max_special_token_length = word.size();
             }
         }
     }
@@ -674,9 +672,8 @@ struct llama_file_saver {
             file.write_raw(token_score.tok.data(), token_score.tok.size());
             file.write_raw(&token_score.score, sizeof(token_score.score));
         }
-        uint32_t n_vocab_sp = any_file_loader->hparams.n_vocab_sp;
-        for (uint32_t i = 0; i < n_vocab; i++) {
-            file.write_u32(any_file_loader->vocab.special_tokens[i]);
+        for (const auto & pair : any_file_loader->vocab.special_token_to_id) {
+            file.write_u32(pair.second);
         }
     }
     void write_tensor(llama_load_tensor & tensor, enum ggml_type new_type, const void * new_data, size_t new_size) {
@@ -2111,24 +2108,23 @@ static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, co
         return output;
     }
 
-    auto offsets = vocab.special_token_trie.split(text);
+    std::vector<int> offsets = vocab.special_token_trie.split(text);
     int start = 0;
     for (int end : offsets) {
         if (start >= end) {
             continue;
         }
 
-        size_t part_length = end - start;
-        //printf("\"%.*s\"\n", (int) part_length, text.c_str() + start);
-
-        if (vocab.max_special_token_length < part_length) {
-            tokenizer.tokenize(text.c_str() + start, part_length, output);
+        const char *part = text.c_str() + start;
+        size_t part_len = end - start;
+        if (vocab.max_special_token_length < part_len) {
+            tokenizer.tokenize(part, part_len, output);
         } else {
-            auto token_it = vocab.special_token_to_id.find(std::string(text.c_str() + start, part_length));
+            auto token_it = vocab.special_token_to_id.find(std::string(part, part_len));
             if (token_it != vocab.special_token_to_id.end()) {
                 output.push_back(token_it->second);
             } else {
-                tokenizer.tokenize(text.c_str() + start, part_length, output);
+                tokenizer.tokenize(part, part_len, output);
             }
         }
         start = end;
@@ -4268,10 +4264,6 @@ llama_token llama_token_eos() {
 
 llama_token llama_token_nl() {
     return 13;
-}
-
-bool llama_is_special_token(const struct llama_context *ctx, llama_token token) {
-    return std::find(ctx->vocab.special_tokens.begin(), ctx->vocab.special_tokens.end(), token) != ctx->vocab.special_tokens.end();
 }
 
 struct llama_timings llama_get_timings(struct llama_context * ctx) {

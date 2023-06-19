@@ -373,8 +373,6 @@ extern "C" {
     LLAMA_API llama_token llama_token_eos();  // end-of-sentence
     LLAMA_API llama_token llama_token_nl();   // next-line
 
-    LLAMA_API bool llama_is_special_token(const struct llama_context * ctx, llama_token token);
-
     // Grammar
     //
     LLAMA_API struct llama_grammar * llama_grammar_init(
