@@ -3126,9 +3126,7 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
         if (kv_size) {
             const size_t elt_size = ggml_element_size(kv_self.k);
 
-            char buffer[4096];
-
-            ggml_context * cpy_ctx = ggml_init({ sizeof(buffer), buffer, /* no_alloc */ true });
+            ggml_context * cpy_ctx = ggml_init({ 4096, NULL, /* no_alloc */ true });
             ggml_cgraph gf{};
             gf.n_threads = 1;
 
@@ -3234,9 +3232,7 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
 
             const size_t elt_size = ggml_element_size(kv_self.k);
 
-            char buffer[4096];
-
-            ggml_context * cpy_ctx = ggml_init({ sizeof(buffer), buffer, /* no_alloc */ true });
+            ggml_context * cpy_ctx = ggml_init({ 4096, NULL, /* no_alloc */ true });
             ggml_cgraph gf{};
             gf.n_threads = 1;
 
