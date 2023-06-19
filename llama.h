@@ -72,14 +72,6 @@ extern "C" {
     typedef void (*llama_progress_callback)(float progress, void *ctx);
 
    struct llama_context_params {
-        bool low_vram;                         // if true, reduce VRAM usage at the cost of performance
-        bool f16_kv;     // use fp16 for KV cache
-        bool logits_all; // the llama_eval() call computes all logits, not just the last one
-        bool vocab_only; // only load the vocabulary, no weights
-        bool use_mmap;   // use mmap if possible
-        bool use_mlock;  // force system to keep model in RAM
-        bool embedding;  // embedding mode only
-
         int seed;                              // RNG seed, -1 for random
         int n_ctx;                             // text context
         int n_batch;                           // prompt processing batch size
@@ -90,6 +82,14 @@ extern "C" {
         llama_progress_callback progress_callback;
         // context pointer passed to the progress callback
         void * progress_callback_user_data;
+
+        bool low_vram;   // if true, reduce VRAM usage at the cost of performance
+        bool f16_kv;     // use fp16 for KV cache
+        bool logits_all; // the llama_eval() call computes all logits, not just the last one
+        bool vocab_only; // only load the vocabulary, no weights
+        bool use_mmap;   // use mmap if possible
+        bool use_mlock;  // force system to keep model in RAM
+        bool embedding;  // embedding mode only
     };
     // model file types
     enum llama_ftype {

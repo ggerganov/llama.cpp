@@ -925,13 +925,6 @@ static bool kv_cache_init(
 
 struct llama_context_params llama_context_default_params() {
     struct llama_context_params result = {
-        /*.low_vram                    =*/ false,
-        /*.f16_kv                      =*/ true,
-        /*.logits_all                  =*/ false,
-        /*.vocab_only                  =*/ false,
-        /*.use_mmap                    =*/ true,
-        /*.use_mlock                   =*/ false,
-        /*.embedding                   =*/ false,
         /*.seed                        =*/ -1,
         /*.n_ctx                       =*/ 512,
         /*.n_batch                     =*/ 512,
@@ -940,6 +933,13 @@ struct llama_context_params llama_context_default_params() {
         /*.tensor_split                =*/ {0},
         /*.progress_callback           =*/ nullptr,
         /*.progress_callback_user_data =*/ nullptr,
+        /*.low_vram                    =*/ false,
+        /*.f16_kv                      =*/ true,
+        /*.logits_all                  =*/ false,
+        /*.vocab_only                  =*/ false,
+        /*.use_mmap                    =*/ true,
+        /*.use_mlock                   =*/ false,
+        /*.embedding                   =*/ false,
     };
 
     return result;
