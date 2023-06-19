@@ -4,6 +4,10 @@
 
 #include <ctime>
 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
+#endif
+
 int main(int argc, char ** argv) {
     gpt_params params;
 

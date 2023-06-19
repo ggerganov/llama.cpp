@@ -7,6 +7,7 @@
 .envrc
 .swiftpm
 .venv
+.clang-tidy
 .vs/
 .vscode/
 
@@ -17,9 +18,11 @@ build-release/
 build-static/
 build-cublas/
 build-opencl/
+build-metal/
 build-no-accel/
 build-sanitize-addr/
 build-sanitize-thread/
+out/
 
 models/*
 *.bin
@@ -30,13 +33,18 @@ models/*
 /result
 /perplexity
 /embedding
+/train-text-from-scratch
+/simple
 /benchmark-matmult
 /vdot
+/server
 /Pipfile
+/libllama.so
 
 build-info.h
 arm_neon.h
 compile_commands.json
+CMakeSettings.json
 
 __pycache__
 

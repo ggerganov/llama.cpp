@@ -23,8 +23,8 @@ CUR_PROMPT_CACHE="${CHAT_SAVE_DIR}/current-cache.bin"
 NEXT_PROMPT_FILE="${CHAT_SAVE_DIR}/next-prompt.txt"
 NEXT_PROMPT_CACHE="${CHAT_SAVE_DIR}/next-cache.bin"
 
-SESSION_SIZE_MSG_PATTERN='main: session file matches \d+ / \d+'
-SAMPLE_TIME_MSG_PATTERN='sample time =\s+\d+.\d+ ms /\s+\d+'
+SESSION_SIZE_MSG_PATTERN='main: session file matches [[:digit:]]+ / [[:digit:]]+'
+SAMPLE_TIME_MSG_PATTERN='sample time =[[:space:]]+[[:digit:]]+.[[:digit:]]+ ms /[[:space:]]+[[:digit:]]+'
 SED_DELETE_MESSAGES="/^(${USER_NAME}:|${AI_NAME}:|\\.\\.\\.)/,\$d"
 
 CTX_SIZE=2048

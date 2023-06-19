@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <sstream>
 #include <unordered_set>
+#include <regex>
 
 #if defined(__APPLE__) && defined(__MACH__)
 #include <sys/types.h>
@@ -25,6 +26,10 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <wchar.h>
+#endif
+
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
 int32_t get_num_physical_cores() {
@@ -101,9 +106,6 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         }
 
         if (arg == "-s" || arg == "--seed") {
-#if defined(GGML_USE_CUBLAS)
-            fprintf(stderr, "WARNING: when using cuBLAS generation results are NOT guaranteed to be reproducible.\n");
-#endif
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -131,6 +133,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.path_prompt_cache = argv[i];
         } else if (arg == "--prompt-cache-all") {
             params.prompt_cache_all = true;
+        } else if (arg == "--prompt-cache-ro") {
+            params.prompt_cache_ro = true;
         } else if (arg == "-f" || arg == "--file") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -251,6 +255,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.model = argv[i];
+        } else if (arg == "-a" || arg == "--alias") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.model_alias = argv[i];
         } else if (arg == "--lora") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -283,13 +293,60 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 invalid_param = true;
                 break;
             }
+#ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
             params.n_gpu_layers = std::stoi(argv[i]);
+#else
+            fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");
+            fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
+#endif
+        } else if (arg == "--main-gpu" || arg == "-mg") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+#ifdef GGML_USE_CUBLAS
+            params.main_gpu = std::stoi(argv[i]);
+#else
+      fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a main GPU.\n");
+#endif
+        } else if (arg == "--tensor-split" || arg == "-ts") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+#ifdef GGML_USE_CUBLAS
+            std::string arg_next = argv[i];
+
+            // split string by , and /
+            const std::regex regex{R"([,/]+)"};
+            std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
+            std::vector<std::string> split_arg{it, {}};
+            GGML_ASSERT(split_arg.size() <= LLAMA_MAX_DEVICES);
+
+            for (size_t i = 0; i < LLAMA_MAX_DEVICES; ++i) {
+                if (i < split_arg.size()) {
+                    params.tensor_split[i] = std::stof(split_arg[i]);
+                } else {
+                    params.tensor_split[i] = 0.0f;
+                }
+            }
+#else
+      fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.\n");
+#endif // GGML_USE_CUBLAS
+        } else if (arg == "--low-vram" || arg == "-lv") {
+#ifdef GGML_USE_CUBLAS
+            params.low_vram = true;
+#else
+      fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n");
+#endif // GGML_USE_CUBLAS
         } else if (arg == "--no-mmap") {
             params.use_mmap = false;
         } else if (arg == "--mtest") {
             params.mem_test = true;
         } else if (arg == "--numa") {
             params.numa = true;
+        } else if (arg == "--export") {
+            params.export_cgraph = true;
         } else if (arg == "--verbose-prompt") {
             params.verbose_prompt = true;
         } else if (arg == "-r" || arg == "--reverse-prompt") {
@@ -319,7 +376,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 } else {
                     throw std::exception();
                 }
-            } catch (const std::exception &e) {
+            } catch (const std::exception&) {
                 invalid_param = true;
                 break;
             }
@@ -358,6 +415,14 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         gpt_print_usage(argc, argv, default_params);
         exit(1);
     }
+
+#ifdef GGML_USE_CUBLAS
+    if (!params.lora_adapter.empty() && params.n_gpu_layers > 0) {
+        fprintf(stderr, "%s: error: the simultaneous use of LoRAs and GPU acceleration is not supported", __func__);
+        exit(1);
+    }
+#endif // GGML_USE_CUBLAS
+
     if (escape_prompt) {
         process_escapes(params.prompt);
     }
@@ -386,6 +451,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  --prompt-cache FNAME  file to cache prompt state for faster startup (default: none)\n");
     fprintf(stderr, "  --prompt-cache-all    if specified, saves user input and generations to cache as well.\n");
     fprintf(stderr, "                        not supported with --interactive or other interactive options\n");
+    fprintf(stderr, "  --prompt-cache-ro     if specified, uses the prompt cache but does not update it.\n");
     fprintf(stderr, "  --random-prompt       start with a randomized prompt.\n");
     fprintf(stderr, "  --in-prefix STRING    string to prefix user inputs with (default: empty)\n");
     fprintf(stderr, "  --in-suffix STRING    string to suffix after user inputs with (default: empty)\n");
@@ -412,7 +478,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
     fprintf(stderr, "  --ignore-eos          ignore end of stream token and continue generating (implies --logit-bias 2-inf)\n");
     fprintf(stderr, "  --no-penalize-nl      do not penalize newline token\n");
-    fprintf(stderr, "  --memory-f32          use f32 instead of f16 for memory key+value\n");
+    fprintf(stderr, "  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
+    fprintf(stderr, "                        not recommended: doubles context memory required and no measurable increase in quality\n");
     fprintf(stderr, "  --temp N              temperature (default: %.1f)\n", (double)params.temp);
     fprintf(stderr, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     fprintf(stderr, "  --perplexity          compute perplexity over the prompt\n");
@@ -426,9 +493,16 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  --numa                attempt optimizations that help on some NUMA systems\n");
     fprintf(stderr, "                        if run without this previously, it is recommended to drop the system page cache before using this\n");
     fprintf(stderr, "                        see https://github.com/ggerganov/llama.cpp/issues/1437\n");
+#ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
     fprintf(stderr, "  -ngl N, --n-gpu-layers N\n");
     fprintf(stderr, "                        number of layers to store in VRAM\n");
+    fprintf(stderr, "  -ts SPLIT --tensor-split SPLIT\n");
+    fprintf(stderr, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
+    fprintf(stderr, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n" );
+    fprintf(stderr, "  -lv, --low-vram       don't allocate VRAM scratch buffer\n" );
+#endif
     fprintf(stderr, "  --mtest               compute maximum memory usage\n");
+    fprintf(stderr, "  --export              export the computation graph to 'llama.ggml'\n");
     fprintf(stderr, "  --verbose-prompt      print prompt before generation\n");
     fprintf(stderr, "  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
     fprintf(stderr, "  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
@@ -471,7 +545,11 @@ struct llama_context * llama_init_from_gpt_params(const gpt_params & params) {
     auto lparams = llama_context_default_params();
 
     lparams.n_ctx        = params.n_ctx;
+    lparams.n_batch      = params.n_batch;
     lparams.n_gpu_layers = params.n_gpu_layers;
+    lparams.main_gpu     = params.main_gpu;
+    memcpy(lparams.tensor_split, params.tensor_split, LLAMA_MAX_DEVICES*sizeof(float));
+    lparams.low_vram     = params.low_vram;
     lparams.seed         = params.seed;
     lparams.f16_kv       = params.memory_f16;
     lparams.use_mmap     = params.use_mmap;
@@ -575,6 +653,9 @@ void console_set_color(console_state & con_st, console_color_t color) {
                 break;
             case CONSOLE_COLOR_USER_INPUT:
                 fprintf(con_st.out, ANSI_BOLD ANSI_COLOR_GREEN);
+                break;
+            case CONSOLE_COLOR_ERROR:
+                fprintf(con_st.out, ANSI_BOLD ANSI_COLOR_RED);
                 break;
         }
         con_st.color = color;

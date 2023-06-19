@@ -21,13 +21,16 @@
 int32_t get_num_physical_cores();
 
 struct gpt_params {
-    int32_t seed          = -1;  // RNG seed
-    int32_t n_threads     = get_num_physical_cores();
-    int32_t n_predict     = -1;  // new tokens to predict
-    int32_t n_ctx         = 512; // context size
-    int32_t n_batch       = 512; // batch size for prompt processing (must be >=32 to use BLAS)
-    int32_t n_keep        = 0;   // number of tokens to keep from initial prompt
-    int32_t n_gpu_layers  = 0;   // number of layers to store in VRAM
+    int32_t seed                            = -1;  // RNG seed
+    int32_t n_threads                       = get_num_physical_cores();
+    int32_t n_predict                       = -1;  // new tokens to predict
+    int32_t n_ctx                           = 512; // context size
+    int32_t n_batch                         = 512; // batch size for prompt processing (must be >=32 to use BLAS)
+    int32_t n_keep                          = 0;   // number of tokens to keep from initial prompt
+    int32_t n_gpu_layers                    = 0;   // number of layers to store in VRAM
+    int32_t main_gpu                        = 0;   // the GPU that is used for scratch and small tensors
+    float   tensor_split[LLAMA_MAX_DEVICES] = {0}; // how split tensors should be distributed across GPUs
+    bool    low_vram                        = 0;   // if true, reduce VRAM usage at the cost of performance
 
     // sampling parameters
     std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
@@ -45,6 +48,7 @@ struct gpt_params {
     float   mirostat_eta      = 0.10f; // learning rate
 
     std::string model             = "models/7B/ggml-model.bin"; // model path
+    std::string model_alias       = "unknown"; // model alias
     std::string prompt            = "";
     std::string path_prompt_cache = "";  // path to file for saving/loading prompt eval state
     std::string input_prefix      = "";  // string to prefix user inputs with
@@ -59,6 +63,7 @@ struct gpt_params {
     bool use_color         = false; // use color to distinguish generations and inputs
     bool interactive       = false; // interactive mode
     bool prompt_cache_all  = false; // save user input and generations to prompt cache
+    bool prompt_cache_ro   = false; // open the prompt cache read-only and do not update it
 
     bool embedding         = false; // get only sentence embedding
     bool interactive_first = false; // wait for user input immediately
@@ -71,6 +76,7 @@ struct gpt_params {
     bool use_mlock         = false; // use mlock to keep model in memory
     bool mem_test          = false; // compute maximum memory usage
     bool numa              = false; // attempt optimizations that help on some NUMA systems
+    bool export_cgraph     = false; // export the computation graph
     bool verbose_prompt    = false; // print prompt tokens before generation
 };
 
@@ -108,7 +114,8 @@ struct llama_context * llama_init_from_gpt_params(const gpt_params & params);
 enum console_color_t {
     CONSOLE_COLOR_DEFAULT=0,
     CONSOLE_COLOR_PROMPT,
-    CONSOLE_COLOR_USER_INPUT
+    CONSOLE_COLOR_USER_INPUT,
+    CONSOLE_COLOR_ERROR
 };
 
 struct console_state {
