@@ -35,7 +35,8 @@ cmake --build . --config Release
 
 
 2) Installing on WSL (Windows Subsystem for Linux)
-# I am getting slightly better timings on WSL than native windows, though currently mmap does not appear to work in WSL (--no-mmap) - either a binary difference or something else
+# I am getting slightly better timings on WSL than native windows
+# Use --no-mmap in WSL OR copy the model into native directory (not /mnt/) or it will get stuck loading (thanks @nauful)
 #Choose a current distro:
 wsl.exe --list --online
 wsl --install -d distro
