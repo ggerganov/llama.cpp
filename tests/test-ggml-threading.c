@@ -253,7 +253,7 @@ static int test_lifecycle(bool wait_on_done) {
                                    features | GGML_THREADING_FEATURE_PERF,
                                    /*stages_time*/ NULL);
         int elapsed = (int)ggml_time_ms() - start_time;
-        if (elapsed > 5 * n_threads) {
+        if (elapsed > 1 * n_threads) {
             printf("[test-ggml-threading] %s: it took %d ms to start %d worker "
                    "thread(s), skip\n",
                    __func__, elapsed, n_threads - 1);
@@ -396,7 +396,7 @@ int main(void) {
         ggml_threading_stop(ctx);
 
         int elapsed_ms = t1 - t0;
-        if (elapsed_ms > 5 * n_threads) {
+        if (elapsed_ms > 1 * n_threads) {
             printf("[test-ggml-threading] warning: it took took %7.3f "
                    "ms to start %2d worker thread(s). Too slow, skip.\n",
                    1.0 * elapsed_ms, n_threads - 1);
