@@ -2543,6 +2543,7 @@ struct llama_model * llama_load_model_from_file(
     if (!llama_model_load(path_model, *model, model->vocab, params.n_ctx, params.n_batch, params.n_gpu_layers,
                 params.main_gpu, params.tensor_split, memory_type, params.use_mmap, params.use_mlock,
                 params.vocab_only, params.progress_callback, params.progress_callback_user_data)) {
+        delete model;
         fprintf(stderr, "%s: failed to load model\n", __func__);
         return nullptr;
     }
