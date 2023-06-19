@@ -22,9 +22,36 @@ _Important: The Falcon 7B model features tensor sizes that do not support K-type
 * On linux Q5_1 7B user reports a batch token ingestion context memory issue, with -b 1 it's gone. Not reproduced on Windows
 * VRAM scratch/overhead calculation on CUDA can fail - if GPU RAM fills to 100% manually reduce the layers of --ngl until it fits  
   
+**How to compile:**
+```
+How to build:
+1) Recommended with cmake: (change the CUBLAS flag to 0 to disable CUDA requirements and support)
+git clone
+cd ggllm.cpp
+rm -rf build; mkdir build; cd build
+cmake -DLLAMA_CUBLAS=1 ..
+cmake --build . --config Release
+# find binaries in ./bin
+
+
+2) Installing on WSL (Windows Subsystem for Linux)
+# I am getting slightly better timings on WSL than native windows, though currently mmap does not appear to work in WSL (--no-mmap) - either a binary difference or something else
+#Choose a current distro:
+wsl.exe --list --online
+wsl --install -d distro
+# cmake 3.16 is required and the cuda toolset
+# If you run an old distro you can upgrade (like apt update; apt upgrade; apt full-upgrade; pico /etc/apt/sources.list/; apt update; apt upgrade; apt full-upgrade; apt autoremove; lsb_release -a); then wsl --shutdown and restart it
+# install cuda WSL toolkit
+wget https://developer.download.nvidia.com/compute/cuda/repos/wsl-ubuntu/x86_64/cuda-keyring_1.0-1_all.deb
+dpkg -i cuda-keyring_1.0-1_all.deb
+apt-get update; apt-get -y install cuda
+# you might need to add it to your path:
+export LD_LIBRARY_PATH="/usr/local/cuda-12.1/lib64:$LD_LIBRARY_PATH"
+export PATH="/usr/local/cuda-12.1/bin:$PATH"
+# now start with a fresh cmake and all should work 
+```
   
-  
-**CUDA (cuda-integration branch, not in master yet):**  
+**CUDA:**  
 Only some tensors supported currently, only mul_mat operation supported currently  
 q3_k timing on 3090 of Falcon 40B:  
 falcon_print_timings: prompt eval time =   702.55 ms /     3 tokens (  234.18 ms per token)  
