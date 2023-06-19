@@ -2748,8 +2748,6 @@ bool llama_mulmat_tune(struct llama_context *ctx, int n_threads, bool tune,
                        const char *fname) {
     GGML_ASSERT(ctx->model.n_gpu_layers == 0);
 
-    printf("\n");
-
     const char *model_name = llama_model_type_name(ctx->model.type);
 
     llama_hparams *hparams = &ctx->model.hparams;
@@ -2820,12 +2818,10 @@ bool llama_mulmat_tune(struct llama_context *ctx, int n_threads, bool tune,
         /* .m_num          =*/8,
         /* .n_pass         =*/1,
         /* .n_threads      =*/n_threads,
-        /* .prrogress      =*/true,
+        /* .progress       =*/true,
         /* .output_console =*/false,
         /* .fname          =*/fname,
     };
-
-    bool empty_fname = !fname || strcmp(fname, "") == 0;
 
     ctx->tune = new (struct ggml_mulmat_tune);
     if (!ctx->tune) {
@@ -2833,58 +2829,14 @@ bool llama_mulmat_tune(struct llama_context *ctx, int n_threads, bool tune,
         return false;
     }
 
-    if (!ggml_cpu_has_blas()) {
-        fprintf(stderr, "[tune] this program is not built with BLAS, abort.\n");
-        return false;
-    }
-
-    if (tune) {
-        bool ok = ggml_mulmat_tune_bench(ctx->tune, &params);
-        if (!ok) {
-            ggml_mulmat_tune_free(ctx->tune);
-            return false;
-        }
-        if (!empty_fname) {
-            ggml_mulmat_tune_free(ctx->tune);
-            return true;
-        }
-    } else if (empty_fname) {
-        return false;
-    }
-
-    if (!empty_fname) {
-        FILE *fp = fopen(fname, "r");
-        if (!fp) {
-            fprintf(stderr, "[tune] failed to open file %s.\n", fname);
-            return false;
-        } else {
-            int rc = ggml_mulmat_tune_read_data(ctx->tune, fp);
-            fclose(fp);
-
-            if (rc != 0) {
-                fprintf(stderr,
-                        "[tune] failed to read data from %s, error code: %d\n",
-                        fname, rc);
-                return false;
-            }
-
-            fprintf(stderr, "[tune] loaded data from %s\n", fname);
-
-            bool ok = ggml_mulmat_tune_validate(ctx->tune, model_name, ggml_ftype,
-                                                params.n_threads);
-            if (!ok) {
-                return false;
-            }
-        }
-    }
-
-    return true;
+    return ggml_mulmat_tune_bench_wrapper(ctx->tune, &params, tune);
 }
 #endif
 
 void llama_free(struct llama_context * ctx) {
 #ifdef GGML_USE_TUNE
     if (ctx->tune) {
+        ggml_mulmat_tune_free(ctx->tune);
         delete(ctx->tune);
     }
 #endif

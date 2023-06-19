@@ -132,6 +132,12 @@ void ggml_mulmat_tune_estimate_time(const struct ggml_mulmat_tune_shape *shape,
 bool ggml_mulmat_tune_bench(struct ggml_mulmat_tune *tune,
                             struct ggml_mulmat_tune_params *params);
 
+// This API is intended to be called by llama, etc.
+// Three modes: bench and run; bench(save) then exit; load and run
+bool ggml_mulmat_tune_bench_wrapper(struct ggml_mulmat_tune *mulmat_tune,
+                                    struct ggml_mulmat_tune_params *params,
+                                    bool run_bench);
+
 #ifdef __cplusplus
 }
 #endif

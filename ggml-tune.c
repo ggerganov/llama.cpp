@@ -935,3 +935,48 @@ bool ggml_mulmat_tune_bench(struct ggml_mulmat_tune *tune,
 
     return true;
 }
+
+bool ggml_mulmat_tune_bench_wrapper(struct ggml_mulmat_tune *mulmat_tune,
+                                    struct ggml_mulmat_tune_params *params,
+                                    bool run_bench) {
+    printf("\n");
+    bool empty_fname = !params->fname || strcmp(params->fname, "") == 0;
+
+    if (!ggml_cpu_has_blas()) {
+        fprintf(stderr, "[tune] this program is not built with BLAS, abort.\n");
+        return 1;
+    }
+
+    if (run_bench) {
+        return ggml_mulmat_tune_bench(mulmat_tune, params);
+    }
+
+    if (!empty_fname) {
+        FILE *fp = fopen(params->fname, "r");
+        if (!fp) {
+            fprintf(stderr, "[tune] failed to open file %s.\n", params->fname);
+            return false;
+        } else {
+            int rc = ggml_mulmat_tune_read_data(mulmat_tune, fp);
+            fclose(fp);
+
+            if (rc != 0) {
+                fprintf(stderr,
+                        "[tune] failed to read data from %s, error code: %d\n",
+                        params->fname, rc);
+                return false;
+            }
+
+            fprintf(stderr, "[tune] loaded data from %s\n", params->fname);
+
+            bool ok = ggml_mulmat_tune_validate(mulmat_tune, mulmat_tune->model,
+                                                params->model.ftype,
+                                                params->n_threads);
+            if (!ok) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
