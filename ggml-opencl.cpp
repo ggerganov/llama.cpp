@@ -452,7 +452,7 @@ __kernel void dequantize_mul_mat_vec_q4_K_fast(__global struct block_q4_K * xx, 
     uint16_t aux[4];
     const uint8_t * sc = (const uint8_t *)aux;
 
-    const struct block_q4_K * x = xx;
+    const struct block_q4_K * x = xx + ib0;
 
     tmp[tid] = 0;
 
