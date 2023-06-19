@@ -433,7 +433,6 @@ struct llama_server_context {
             });
             return std::vector<float>(n_embd, 0.0f);
         }
-        
         const float * data = llama_get_embeddings(ctx);
         std::vector<float> embedding(data, data + n_embd);
         return embedding;
@@ -917,7 +916,7 @@ int main(int argc, char ** argv) {
 
     svr.Post("/embedding", [&llama](const Request & req, Response & res) {
         const json body = json::parse(req.body);
-       
+
         llama.rewind();
         llama_reset_timings(llama.ctx);
         llama.params.prompt = body.value("content", "");
