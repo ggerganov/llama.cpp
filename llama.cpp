@@ -2506,7 +2506,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             if (tensor.name == "output.weight") {
                 int nx = tensor.ne.at(0);
                 int ny = tensor.ne.at(1);
-                if (nx % QK_K == 0 || ny % QK_K == 0) {
+                if (nx % QK_K == 0 && ny % QK_K == 0) {
                     new_type = GGML_TYPE_Q6_K;
                 }
             } else if (tensor.name.find("attention.wv.weight") != std::string::npos) {
