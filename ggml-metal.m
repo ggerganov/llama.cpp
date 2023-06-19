@@ -183,6 +183,14 @@ struct ggml_metal_context * ggml_metal_init(void) {
 #undef GGML_METAL_ADD_KERNEL
     }
 
+    fprintf(stderr, "%s: recommendedMaxWorkingSetSize = %8.2f MB\n", __func__, ctx->device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
+    fprintf(stderr, "%s: hasUnifiedMemory             = %s\n",       __func__, ctx->device.hasUnifiedMemory ? "true" : "false");
+    if (ctx->device.maxTransferRate != 0) {
+        fprintf(stderr, "%s: maxTransferRate              = %8.2f MB/s\n", __func__, ctx->device.maxTransferRate / 1024.0 / 1024.0);
+    } else {
+        fprintf(stderr, "%s: maxTransferRate              = built-in GPU\n", __func__);
+    }
+
     return ctx;
 }
 
@@ -199,10 +207,13 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
 static id<MTLBuffer> ggml_metal_get_buffer(struct ggml_metal_context * ctx, struct ggml_tensor * t, size_t * offs) {
     //fprintf(stderr, "%s: data tensor '%16s', offs_data = %8ld, offs_eval = %8ld, offs_cach = %8ld\n", __func__, t->name, offs_data, offs_eval, offs_cach);
 
+    const int64_t tsize = ggml_nbytes(t);
+
+    // find the view that contains the tensor fully
     for (int i = 0; i < ctx->n_buffers; ++i) {
         const int64_t ioffs = (int64_t) t->data - (int64_t) ctx->buffers[i].data;
 
-        if (ioffs >= 0 && ioffs < (int64_t) ctx->buffers[i].size) {
+        if (ioffs >= 0 && ioffs + tsize <= (int64_t) ctx->buffers[i].size) {
             *offs = (size_t) ioffs;
 
             //fprintf(stderr, "%s: '%s' tensor '%16s', offs = %8ld\n", __func__, ctx->buffers[i].name, t->name, *offs);
@@ -220,7 +231,8 @@ bool ggml_metal_add_buffer(
         struct ggml_metal_context * ctx,
                      const char * name,
                            void * data,
-                         size_t   size) {
+                         size_t   size,
+                         size_t   max_size) {
     if (ctx->n_buffers >= GGML_METAL_MAX_BUFFERS) {
         fprintf(stderr, "%s: too many buffers\n", __func__);
         return false;
@@ -237,30 +249,68 @@ bool ggml_metal_add_buffer(
             }
         }
 
-        size_t page_size = getpagesize();
-        size_t aligned_size = size;
-        if ((aligned_size % page_size) != 0) {
-            aligned_size += (page_size - (aligned_size % page_size));
+        const size_t size_page = getpagesize();
+
+        size_t size_aligned = size;
+        if ((size_aligned % size_page) != 0) {
+            size_aligned += (size_page - (size_aligned % size_page));
         }
 
-        ctx->buffers[ctx->n_buffers].name = name;
-        ctx->buffers[ctx->n_buffers].data = data;
-        ctx->buffers[ctx->n_buffers].size = size;
+        // the buffer fits into the max buffer size allowed by the device
+        if (size_aligned <= ctx->device.maxBufferLength) {
+            ctx->buffers[ctx->n_buffers].name = name;
+            ctx->buffers[ctx->n_buffers].data = data;
+            ctx->buffers[ctx->n_buffers].size = size;
 
-        if (ctx->device.maxBufferLength < aligned_size) {
-            fprintf(stderr, "%s: buffer '%s' size %zu is larger than buffer maximum of %zu\n", __func__, name, aligned_size, ctx->device.maxBufferLength);
-            return false;
+            ctx->buffers[ctx->n_buffers].metal = [ctx->device newBufferWithBytesNoCopy:data length:size_aligned options:MTLResourceStorageModeShared deallocator:nil];
+
+            if (ctx->buffers[ctx->n_buffers].metal == nil) {
+                fprintf(stderr, "%s: failed to allocate '%-16s' buffer, size = %8.2f MB\n", __func__, name, size_aligned / 1024.0 / 1024.0);
+                return false;
+            }
+
+            fprintf(stderr, "%s: allocated '%-16s' buffer, size = %8.2f MB", __func__, name, size_aligned / 1024.0 / 1024.0);
+
+            ++ctx->n_buffers;
+        } else {
+            // this overlap between the views will guarantee that the tensor with the maximum size will fully fit into
+            // one of the views
+            const size_t size_ovlp = ((max_size + size_page - 1) / size_page + 1) * size_page; // round-up 2 pages just in case
+            const size_t size_step = ctx->device.maxBufferLength - size_ovlp;
+            const size_t size_view = ctx->device.maxBufferLength;
+
+            for (size_t i = 0; i < size; i += size_step) {
+                const size_t size_step_aligned = (i + size_view <= size) ? size_view : (size_aligned - i);
+
+                ctx->buffers[ctx->n_buffers].name = name;
+                ctx->buffers[ctx->n_buffers].data = (void *) ((uint8_t *) data + i);
+                ctx->buffers[ctx->n_buffers].size = size_step_aligned;
+
+                ctx->buffers[ctx->n_buffers].metal = [ctx->device newBufferWithBytesNoCopy:(void *) ((uint8_t *) data + i) length:size_step_aligned options:MTLResourceStorageModeShared deallocator:nil];
+
+                if (ctx->buffers[ctx->n_buffers].metal == nil) {
+                    fprintf(stderr, "%s: failed to allocate '%-16s' buffer, size = %8.2f MB\n", __func__, name, size_step_aligned / 1024.0 / 1024.0);
+                    return false;
+                }
+
+                fprintf(stderr, "%s: allocated '%-16s' buffer, size = %8.2f MB, offs = %12ld", __func__, name, size_step_aligned / 1024.0 / 1024.0, i);
+                if (i + size_step < size) {
+                    fprintf(stderr, "\n");
+                }
+
+                ++ctx->n_buffers;
+            }
         }
-        ctx->buffers[ctx->n_buffers].metal = [ctx->device newBufferWithBytesNoCopy:data length:aligned_size options:MTLResourceStorageModeShared deallocator:nil];
 
-        if (ctx->buffers[ctx->n_buffers].metal == nil) {
-            fprintf(stderr, "%s: failed to allocate '%-16s' buffer, size = %8.2f MB\n", __func__, name, aligned_size / 1024.0 / 1024.0);
-            return false;
+        fprintf(stderr, ", (%8.2f / %8.2f)",
+                ctx->device.currentAllocatedSize / 1024.0 / 1024.0,
+                ctx->device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
+
+        if (ctx->device.currentAllocatedSize > ctx->device.recommendedMaxWorkingSetSize) {
+            fprintf(stderr, ", warning: current allocated size is greater than the recommended max working set size\n");
+        } else {
+            fprintf(stderr, "\n");
         }
-
-        fprintf(stderr, "%s: allocated '%-16s' buffer, size = %8.2f MB\n", __func__, name, aligned_size / 1024.0 / 1024.0);
-
-        ++ctx->n_buffers;
     }
 
     return true;
@@ -909,4 +959,14 @@ void ggml_metal_graph_compute(
     dispatch_barrier_sync(queue, ^{});
 
     [command_buffers[n_cb - 1] waitUntilCompleted];
+
+    // check status of command buffers
+    // needed to detect if the device ran out-of-memory for example (#1881)
+    for (int i = 0; i < n_cb; i++) {
+        MTLCommandBufferStatus status = (MTLCommandBufferStatus) [command_buffers[i] status];
+        if (status != MTLCommandBufferStatusCompleted) {
+            fprintf(stderr, "%s: command buffer %d failed with status %lu\n", __func__, i, status);
+            GGML_ASSERT(false);
+        }
+    }
 }

@@ -169,6 +169,9 @@ ifdef LLAMA_CUDA_DMMV_Y
 else
 	NVCCFLAGS += -DGGML_CUDA_DMMV_Y=1
 endif # LLAMA_CUDA_DMMV_Y
+ifdef LLAMA_CUDA_DMMV_F16
+	NVCCFLAGS += -DGGML_CUDA_DMMV_F16
+endif # LLAMA_CUDA_DMMV_F16
 ifdef LLAMA_CUDA_KQUANTS_ITER
 	NVCCFLAGS += -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
 else
@@ -270,7 +273,7 @@ $(info )
 ggml.o: ggml.c ggml.h ggml-cuda.h
 	$(CC)  $(CFLAGS)   -c $< -o $@
 
-llama.o: llama.cpp ggml.h ggml-cuda.h llama.h llama-util.h
+llama.o: llama.cpp ggml.h ggml-cuda.h ggml-metal.h llama.h llama-util.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common.o: examples/common.cpp examples/common.h
