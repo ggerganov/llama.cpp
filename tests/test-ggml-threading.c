@@ -33,7 +33,7 @@
 
 #define UNUSED(x) (void)(x)
 
-#define MAX_N_THREADS 16
+#define MAX_N_THREADS 64
 
 static const int n_repeat = 10;
 
@@ -353,7 +353,7 @@ int main(void) {
     //   average time, thus greatly punishes those small workloads.
     // - wait_on_done is general faster than wait_now, can be 10x faster.
 
-    int threads_arr[] = {1, 2, 4, 6, 8, 16};
+    int threads_arr[] = {1, 2, 4, 6, 8, 16, 32, 64};
     int threads_arr_len = sizeof(threads_arr) / sizeof(threads_arr[0]);
 
     // millions of loops.
