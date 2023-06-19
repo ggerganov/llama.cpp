@@ -16299,13 +16299,15 @@ void clear_numa_thread_affinity(void) {}
 
 struct ggml_compute_state_shared {
     struct ggml_cgraph * cgraph;
+
     int64_t perf_node_start_cycles;
     int64_t perf_node_start_time_us;
+
     int n_threads;
 
     // synchronization primitives
     atomic_int n_active; // num active threads
-    atomic_int node_n; // active graph node
+    atomic_int node_n;   // active graph node
 };
 
 struct ggml_compute_state {
@@ -16314,13 +16316,12 @@ struct ggml_compute_state {
     struct ggml_compute_state_shared * shared;
 };
 
-inline void ggml_graph_compute_perf_stats_node(struct ggml_tensor * node, const struct ggml_compute_state_shared * st)
-{
-    int64_t cycles_cur = ggml_perf_cycles() - st->perf_node_start_cycles;
+static void ggml_graph_compute_perf_stats_node(struct ggml_tensor * node, const struct ggml_compute_state_shared * st) {
+    int64_t cycles_cur  = ggml_perf_cycles()  - st->perf_node_start_cycles;
     int64_t time_us_cur = ggml_perf_time_us() - st->perf_node_start_time_us;
 
     node->perf_runs++;
-    node->perf_cycles += cycles_cur;
+    node->perf_cycles  += cycles_cur;
     node->perf_time_us += time_us_cur;
 }
 
