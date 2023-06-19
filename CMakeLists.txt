@@ -505,7 +505,7 @@ if (GGML_SOURCES_CUDA)
         set_property(TARGET ggml_shared PROPERTY CUDA_ARCHITECTURES "native")
         set_property(TARGET ggml_shared PROPERTY CUDA_SELECT_NVCC_ARCH_FLAGS "Auto")
     endif()
-    
+
     set_property(TARGET llama PROPERTY CUDA_ARCHITECTURES "native")
 endif()
 
