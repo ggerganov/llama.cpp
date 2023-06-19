@@ -469,6 +469,7 @@ add_library(ggml_static STATIC $<TARGET_OBJECTS:ggml>)
 if (BUILD_SHARED_LIBS)
     set_target_properties(ggml PROPERTIES POSITION_INDEPENDENT_CODE ON)
     add_library(ggml_shared SHARED $<TARGET_OBJECTS:ggml>)
+    target_link_libraries(ggml_shared PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
 endif()
 
 add_library(llama
@@ -499,6 +500,11 @@ if (GGML_SOURCES_CUDA)
 
     set_property(TARGET ggml_static PROPERTY CUDA_ARCHITECTURES "native")
     set_property(TARGET ggml_static PROPERTY CUDA_SELECT_NVCC_ARCH_FLAGS "Auto")
+
+    if (BUILD_SHARED_LIBS)
+        set_property(TARGET ggml_shared PROPERTY CUDA_ARCHITECTURES "native")
+        set_property(TARGET ggml_shared PROPERTY CUDA_SELECT_NVCC_ARCH_FLAGS "Auto")
+    endif()
 
     set_property(TARGET llama PROPERTY CUDA_ARCHITECTURES "native")
 endif()
