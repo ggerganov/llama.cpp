@@ -145,7 +145,7 @@ extern "C" {
     LLAMA_API void llama_free_model(struct llama_model * model);
 
     LLAMA_API struct llama_context * llama_new_context_with_model(
-                             struct llama_model * model,
+                     struct llama_model * model,
             struct llama_context_params   params);
 
     // Various functions for loading a ggml llama model.
