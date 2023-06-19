@@ -258,7 +258,7 @@ libfalcon.o: libfalcon.cpp ggml.h ggml-cuda.h libfalcon.h llama-util.h
 common.o: examples/common.cpp examples/common.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-falcom_common.o: examples/falcon_common.cpp examples/falcon_common.h
+falcon_common.o: examples/falcon_common.cpp examples/falcon_common.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 libllama.so: llama.o ggml.o $(OBJS)
