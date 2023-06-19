@@ -1620,7 +1620,7 @@ static bool llama_eval_internal(
                     model.layers[il].w1,
                     cur);
             offload_func(cur);
-            ggml_set_name(cur, "result_w2");
+            ggml_set_name(cur, "result_w1");
 
             // SILU activation
             cur = ggml_silu(ctx0, cur);
