@@ -550,13 +550,13 @@ int main(void) {
     // lifecycle.
     for (int i = 0; i < 2; i++) {
         bool wait_on_done = (i == 1);
-        printf("[test-ggml-threading] test lifecycle (want_on_done = %d) ...\n",
+        printf("[test-ggml-threading] test lifecycle (wait_on_done = %d) ...\n",
                wait_on_done);
         ++n_tests;
 
         if (test_lifecycle(wait_on_done) == 0) {
             ++n_passed;
-            printf("[test-ggml-threading] test lifecycle (want_on_done = %d): "
+            printf("[test-ggml-threading] test lifecycle (wait_on_done = %d): "
                    "ok\n\n",
                    wait_on_done);
         }
