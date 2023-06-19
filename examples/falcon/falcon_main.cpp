@@ -397,7 +397,9 @@ int main(int argc, char ** argv) {
                     embd.erase(embd.begin(), embd.begin() + i);
                 }
             }
-
+            // We have buffers from the warmup run that won't all align with a batched run 
+            if (params.n_batch > 1 && embd.size() > 1)
+                ggml_cuda_pool_free_all(-1);
             // evaluate tokens in batches
             // embd is typically prepared beforehand to fit within a batch, but not always
             for (int i = 0; i < (int) embd.size(); i += params.n_batch) {
@@ -411,7 +413,9 @@ int main(int argc, char ** argv) {
                 }
                 n_past += n_eval;
             }
-
+            // frees unused allocations, those during batch processing are of different size than single token eval
+            if (params.n_batch > 1 && embd.size() > 1)
+                ggml_cuda_pool_free_all(-1);
             if (embd.size() > 0 && !path_session.empty()) {
                 session_tokens.insert(session_tokens.end(), embd.begin(), embd.end());
                 n_session_consumed = session_tokens.size();

@@ -1428,16 +1428,28 @@ static void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
     scoped_spin_lock lock(g_cuda_pool_lock);
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
-
+    size_t min_size_diff = SIZE_MAX;
+    size_t min_size_diff_ok = size * 0.05; // wiggle room
+    cuda_buffer* best_fit = nullptr; // candidate pointer
     for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
         cuda_buffer& b = g_cuda_buffer_pool[id][i];
         if (b.size >= size && b.ptr != nullptr) {
-            void * ptr = b.ptr;
-            *actual_size = b.size;
-            b.ptr = nullptr;
-            b.size = 0;
-            return ptr;
+            size_t size_diff = b.size - size;
+            if (size_diff < min_size_diff) {
+                best_fit = &b;
+                min_size_diff = size_diff;
+                if (size_diff < min_size_diff_ok) {
+                    break;
+                }
+            }
         }
+    }
+    if (best_fit != nullptr) {
+        *actual_size = best_fit->size;
+        void * ptr = best_fit->ptr;
+        best_fit->ptr = nullptr;
+        best_fit->size = 0;
+        return ptr;
     }
     void * ptr;
     CUDA_CHECK(cudaMalloc((void **) &ptr, size));
@@ -1462,6 +1474,30 @@ static void ggml_cuda_pool_free(void * ptr, size_t size) {
     CUDA_CHECK(cudaFree(ptr));
 }
 
+// free all buffers that are not currently in use
+void ggml_cuda_pool_free_all(int device_id) {
+    while (atomic_flag_test_and_set(&g_cuda_pool_lock)) {}
+  
+    int start_id = (device_id < 0) ? 0 : device_id;
+    int end_id = (device_id < 0) ? GGML_CUDA_MAX_DEVICES : device_id + 1;
+
+    for (int id = start_id; id < end_id; ++id) {
+        for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
+            cuda_buffer* b = &(g_cuda_buffer_pool[id][i]);
+            if (b->ptr != NULL) {
+                cudaError_t err = cudaFree(b->ptr);
+                if (err != cudaSuccess) {
+                    fprintf(stderr, "ERROR: CUDA buffer free failed: %s\n", cudaGetErrorString(err));
+                } else {
+                    b->ptr = NULL;
+                    b->size = 0;
+                }
+            }
+        }
+    }
+
+    atomic_flag_clear(&g_cuda_pool_lock);
+}
 
 static void * g_scratch_buffer = nullptr;
 static size_t g_scratch_size = 1024*1024*1024; // 1 GB by default

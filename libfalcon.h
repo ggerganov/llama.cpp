@@ -75,6 +75,8 @@ extern "C" {
         int n_ctx;                             // text context
         int n_batch;                           // prompt processing batch size
         int n_gpu_layers;                      // number of layers to store in VRAM
+        int i_gpu_start;                       // first gpu layer
+        int i_gpu_last;                         // last gpu layer
         int main_gpu;                          // the GPU that is used for scratch and small tensors
         float tensor_split[LLAMA_MAX_DEVICES]; // how to split layers across multiple GPUs
         int seed;                              // RNG seed, -1 for random
