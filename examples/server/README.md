@@ -21,6 +21,7 @@ Command line options:
 -   `-to N`, `--timeout N`: Server read/write timeout in seconds. Default `600`.
 -   `--host`: Set the hostname or ip address to listen. Default `127.0.0.1`.
 -   `--port`: Set the port to listen. Default: `8080`.
+-   `--embedding`: Enable embedding extraction, Default: disabled.
 
 ## Build
 
@@ -119,14 +120,14 @@ node .
 
     `top_p`: Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P (default: 0.9).
 
-    `n_predict`: Set the number of tokens to predict when generating text. **Note:** May exceed the set limit slightly if the last token is a partial multibyte character.  (default: 128, -1 = infinity).
+    `n_predict`: Set the number of tokens to predict when generating text. **Note:** May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache. (default: 128, -1 = infinity).
 
     `n_keep`: Specify the number of tokens from the initial prompt to retain when the model resets its internal context.
     By default, this value is set to 0 (meaning no tokens are kept). Use `-1` to retain all tokens from the initial prompt.
 
     `stream`: It allows receiving each predicted token in real-time instead of waiting for the completion to finish. To enable this, set to `true`.
 
-    `prompt`: Provide a prompt. Internally, the prompt is compared, and it detects if a part has already been evaluated, and the remaining part will be evaluate.
+    `prompt`: Provide a prompt. Internally, the prompt is compared, and it detects if a part has already been evaluated, and the remaining part will be evaluate. A space is inserted in the front like main.cpp does.
 
     `stop`: Specify a JSON array of stopping strings.
     These words will not be included in the completion, so make sure to add them to the prompt for the next iteration (default: []).
@@ -162,6 +163,14 @@ node .
     *Options:*
 
     `content`: Set the text to tokenize.
+
+    Note that the special `BOS` token is not added in fron of the text and also a space character is not inserted automatically as it is for `/completion`.
+
+-   **POST** `/embedding`: Generate embedding of a given text just as [the embedding example](../embedding) does.
+
+    *Options:*
+
+    `content`: Set the text to process.
 
 ## More examples
 
