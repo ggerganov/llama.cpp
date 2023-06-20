@@ -566,7 +566,7 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
     }
 
     if (!params.lora_adapter.empty()) {
-        int err = llama_apply_lora_from_file(lctx,
+        int err = llama_model_apply_lora_from_file(model,
                                              params.lora_adapter.c_str(),
                                              params.lora_base.empty() ? NULL : params.lora_base.c_str(),
                                              params.n_threads);

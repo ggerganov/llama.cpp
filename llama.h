@@ -179,11 +179,12 @@ extern "C" {
     // The model needs to be reloaded before applying a new adapter, otherwise the adapter
     // will be applied on top of the previous one
     // Returns 0 on success
-    LLAMA_API int llama_apply_lora_from_file(
+    LLAMA_API DEPRECATED(int llama_apply_lora_from_file(
             struct llama_context * ctx,
                       const char * path_lora,
                       const char * path_base_model,
-                             int   n_threads);
+                             int   n_threads),
+            "please use llama_model_apply_lora_from_file instead");
 
     LLAMA_API int llama_model_apply_lora_from_file(
             const struct llama_model * model,
