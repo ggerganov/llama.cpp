@@ -115,6 +115,7 @@ struct llama_server_context {
     std::vector<llama_token> embd;
     std::vector<llama_token> last_n_tokens;
 
+    llama_model * model = nullptr;
     llama_context * ctx = nullptr;
     gpt_params params;
 
@@ -129,6 +130,10 @@ struct llama_server_context {
         if (ctx) {
             llama_free(ctx);
             ctx = nullptr;
+        }
+        if (model) {
+            llama_free_model(model);
+            model = nullptr;
         }
     }
 
@@ -150,8 +155,8 @@ struct llama_server_context {
 
     bool loadModel(const gpt_params & params_) {
         params = params_;
-        ctx = llama_init_from_gpt_params(params);
-        if (ctx == nullptr) {
+        std::tie(model, ctx) = llama_init_from_gpt_params(params);
+        if (model == nullptr) {
             LOG_ERROR("unable to load model", { { "model", params_.model } });
             return false;
         }
