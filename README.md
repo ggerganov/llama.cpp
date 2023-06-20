@@ -9,12 +9,8 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
+- p1 : LLM-based code completion engine at the edge : https://github.com/ggml-org/p1/discussions/1
 - Roadmap June 2023: https://github.com/ggerganov/llama.cpp/discussions/1729
-- GPU support with Metal (Apple Silicon): https://github.com/ggerganov/llama.cpp/pull/1642
-- High-quality 2,3,4,5,6-bit quantization: https://github.com/ggerganov/llama.cpp/pull/1684
-- Multi-GPU support: https://github.com/ggerganov/llama.cpp/pull/1607
-- Training LLaMA models from scratch: https://github.com/ggerganov/llama.cpp/pull/1652
-- CPU threading improvements: https://github.com/ggerganov/llama.cpp/pull/1632
 
 <details>
   <summary>Table of Contents</summary>
