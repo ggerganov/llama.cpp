@@ -2634,6 +2634,10 @@ void ggml_cuda_free_scratch() {
 
 bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor){
     ggml_cuda_func_t func;
+
+    if (tensor->op == GGML_OP_NONE)
+        return true;
+
     const bool any_on_device = tensor->backend == GGML_BACKEND_GPU
         || tensor->src0->backend == GGML_BACKEND_GPU || tensor->src0->backend == GGML_BACKEND_GPU_SPLIT
         || (tensor->src1 != nullptr && tensor->src1->backend == GGML_BACKEND_GPU);
