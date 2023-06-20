@@ -13,7 +13,7 @@
 #else
 inline static void* ggml_aligned_malloc(size_t size, size_t alignment) {
     void* aligned_memory = NULL;
-    int result = posix_memalign(&aligned_memory, alignment, size);
+    int result = posix_memalign(&aligned_memory, alignment >= 8 ? alignment : 8, size);
     if (result != 0) {
         // Handle allocation failure
         return NULL;
@@ -143,6 +143,7 @@ struct scoped_spin_lock {
 struct vk_buffer {
     vk::Buffer buffer;
     VmaAllocation allocation;
+    VmaAllocationInfo info;
     size_t size = 0;
 };
 
@@ -170,9 +171,7 @@ static void ggml_vk_pool_malloc(size_t size, vk_buffer* buf) {
     if(best_i != -1) {
         //found the smallest buffer that fits our needs
         vk_buffer& b = g_vk_buffer_pool[best_i];
-        buf->buffer = b.buffer;
-        buf->allocation = b.allocation;
-        buf->size = b.size;
+        *buf = b;
         b.size = 0;
         return;
     }
@@ -194,14 +193,22 @@ static void ggml_vk_pool_malloc(size_t size, vk_buffer* buf) {
     };
 
     VmaAllocationCreateInfo allocation_info = {};
-    allocation_info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    allocation_info.usage = VMA_MEMORY_USAGE_AUTO;
+    allocation_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
     vmaCreateBuffer(vk_allocator,
                     (VkBufferCreateInfo*)&buffer_create_info,
                     &allocation_info,
                     (VkBuffer*)&buf->buffer,
                     &buf->allocation,
-                    nullptr);
+                    &buf->info);
+
+    VkMemoryPropertyFlags mem_prop_flags;
+    vmaGetAllocationMemoryProperties(vk_allocator, buf->allocation, &mem_prop_flags);
+
+    if(!(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
+        printf("Nope\n");
+    }
 }
 
 static void ggml_vk_pool_free(vk_buffer* buffer) {
@@ -210,9 +217,7 @@ static void ggml_vk_pool_free(vk_buffer* buffer) {
     for (int i = 0; i < MAX_VK_BUFFERS; ++i) {
         vk_buffer& b = g_vk_buffer_pool[i];
         if (b.size == 0) {
-            b.buffer = buffer->buffer;
-            b.allocation = buffer->allocation;
-            b.size = buffer->size;
+            b = *buffer;
             return;
         }
     }
@@ -221,7 +226,87 @@ static void ggml_vk_pool_free(vk_buffer* buffer) {
     vmaDestroyBuffer(vk_allocator, buffer->buffer, buffer->allocation);
 }
 
-static void ggml_vk_h2d_tensor_2d(vk_buffer* dst, size_t offset, const struct ggml_tensor * src, uint64_t i3, uint64_t i2) {
+static void ggml_vk_buffer_write(VkCommandBuffer cmd_buf, vk_buffer* dst, size_t offset, const void * src, size_t size) {
+    VkMemoryPropertyFlags mem_prop_flags;
+    vmaGetAllocationMemoryProperties(vk_allocator, dst->allocation, &mem_prop_flags);
+
+    if(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+        memcpy(dst->info.pMappedData, src, size);
+    } else {
+        // Allocation ended up in a non-mappable memory - need to transfer.
+        VkBufferCreateInfo staging_buf_create_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+        staging_buf_create_info.size = size;
+        staging_buf_create_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+        VmaAllocationCreateInfo staging_alloc_create_info = {};
+        staging_alloc_create_info.usage = VMA_MEMORY_USAGE_AUTO;
+        staging_alloc_create_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+            VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+        VkBuffer staging_buf;
+        VmaAllocation staging_alloc;
+        VmaAllocationInfo staging_alloc_info;
+        vmaCreateBuffer(vk_allocator,
+                        &staging_buf_create_info,
+                        &staging_alloc_create_info,
+                        &staging_buf,
+                        &staging_alloc,
+                        &staging_alloc_info);
+
+        // [Executed in runtime]:
+        memcpy(staging_alloc_info.pMappedData + offset, src, size);
+        vmaFlushAllocation(vk_allocator, staging_alloc, 0, VK_WHOLE_SIZE);
+        //vkCmdPipelineBarrier: VK_ACCESS_HOST_WRITE_BIT --> VK_ACCESS_TRANSFER_READ_BIT
+        VkBufferCopy buf_copy = {
+            0, // srcOffset
+            0, // dstOffset,
+            size}; // size
+        vkCmdCopyBuffer(cmd_buf, staging_buf, dst->buffer, 1, &buf_copy);
+        vmaDestroyBuffer(vk_allocator, staging_buf, staging_alloc);
+    }
+}
+
+static void ggml_vk_buffer_read(VkCommandBuffer cmd_buf, vk_buffer* src, size_t offset, void * dst, size_t size) {
+    VkMemoryPropertyFlags mem_prop_flags;
+    vmaGetAllocationMemoryProperties(vk_allocator, src->allocation, &mem_prop_flags);
+
+    if(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+        memcpy(dst, src->info.pMappedData, size);
+    } else {
+        // Allocation ended up in a non-mappable memory - need to transfer.
+        VkBufferCreateInfo staging_buf_create_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+        staging_buf_create_info.size = size;
+        staging_buf_create_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+        VmaAllocationCreateInfo staging_alloc_create_info = {};
+        staging_alloc_create_info.usage = VMA_MEMORY_USAGE_AUTO;
+        staging_alloc_create_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+            VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+        VkBuffer staging_buf;
+        VmaAllocation staging_alloc;
+        VmaAllocationInfo staging_alloc_info;
+        vmaCreateBuffer(vk_allocator,
+                        &staging_buf_create_info,
+                        &staging_alloc_create_info,
+                        &staging_buf,
+                        &staging_alloc,
+                        &staging_alloc_info);
+
+        //vkCmdPipelineBarrier: VK_ACCESS_HOST_WRITE_BIT --> VK_ACCESS_TRANSFER_READ_BIT
+        VkBufferCopy buf_copy = {
+            offset, // srcOffset
+            0, // dstOffset,
+            size}; // size
+        vkCmdCopyBuffer(cmd_buf, src->buffer, staging_buf, 1, &buf_copy);
+        vmaInvalidateAllocation(vk_allocator, staging_alloc, 0, VK_WHOLE_SIZE);
+        // [Executed in runtime]:
+        memcpy(dst, staging_alloc_info.pMappedData, size);
+        vmaDestroyBuffer(vk_allocator, staging_buf, staging_alloc);
+    }
+}
+
+static void ggml_vk_h2d_tensor_2d(VkCommandBuffer cmd_buf, vk_buffer* dst, size_t offset, const struct ggml_tensor * src, uint64_t i3, uint64_t i2) {
     const uint64_t ne0 = src->ne[0];
     const uint64_t ne1 = src->ne[1];
     const uint64_t nb0 = src->nb[0];
@@ -234,31 +319,23 @@ static void ggml_vk_h2d_tensor_2d(vk_buffer* dst, size_t offset, const struct gg
 
     const void * x = (const void *) ((const char *) src->data + i2*nb2 + i3*nb3);
     if (nb0 == ts && nb1 == ts*ne0/bs) {
-        void* dst_ptr = nullptr;
-		vmaMapMemory(vk_allocator, dst->allocation, &dst_ptr);
-        memcpy(dst_ptr + offset, x, ne1*nb1);
-		vmaUnmapMemory(vk_allocator, dst->allocation);
+        ggml_vk_buffer_write(cmd_buf, dst, offset, x, ne1*nb1);
         return;
     }
     if (nb0 == ts) {
-        void* dst_ptr = nullptr;
         // Might be better to use vkCmdCopyBuffer here
-		vmaMapMemory(vk_allocator, dst->allocation, &dst_ptr);
         for (uint64_t i1 = 0; i1 < ne1; i1++) {
-            memcpy(dst_ptr + offset + ne0 * i1, x + ts*ne0/bs, ne0*nb0);
+            ggml_vk_buffer_write(cmd_buf, dst, offset + ne0 * i1, x + ts*ne0/bs, ne0*nb0);
         }
-		vmaUnmapMemory(vk_allocator, dst->allocation);
         return;
     }
-    uint8_t* dst_ptr = nullptr;
+    uint8_t* dst_ptr = (uint8_t*) dst->info.pMappedData;
     uint8_t* xc = (uint8_t*)x;
-    vmaMapMemory(vk_allocator, dst->allocation, (void**) &dst_ptr);
     for (uint64_t i1 = 0; i1 < ne1; i1++) {
         for (uint64_t i0 = 0; i0 < ne0; i0++) {
             dst_ptr[offset + i1 * ts*ne0/bs + i0 * ts] = xc[i1 * nb1 + i0 * nb0];
         }
     }
-    vmaUnmapMemory(vk_allocator, dst->allocation);
     return;
 }
 
@@ -286,48 +363,50 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     if (src0->backend == GGML_BACKEND_GPU) {
         d_X = *(vk_buffer*) src0->data;
     } else {
-        ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &d_X);
+        ggml_vk_pool_malloc(ggml_type_size(src0->type) * x_ne, &d_X);
     }
     ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y);
     ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D);
+
+    vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, 3);
+    vk::DescriptorPoolCreateInfo descriptor_pool_create_info(vk::DescriptorPoolCreateFlags(), 1, descriptor_pool_size);
+    vk::DescriptorPool descriptor_pool = vk_device.createDescriptorPool(descriptor_pool_create_info);
+
+    vk::DescriptorSetAllocateInfo descriptor_set_alloc_info(descriptor_pool, 1, &vk_pipeline_matmul_dsl);
+    const std::vector<vk::DescriptorSet> descriptor_sets = vk_device.allocateDescriptorSets(descriptor_set_alloc_info);
+    vk::DescriptorSet descriptor_set = descriptor_sets.front();
+    vk::DescriptorBufferInfo d_X_buffer_info(d_X.buffer, 0, sizeof(float) * x_ne);
+    vk::DescriptorBufferInfo d_Y_buffer_info(d_Y.buffer, 0, sizeof(float) * y_ne);
+    vk::DescriptorBufferInfo d_D_buffer_info(d_D.buffer, 0, sizeof(float) * d_ne);
+
+    const std::vector<vk::WriteDescriptorSet> write_descriptor_sets = {
+        {descriptor_set, 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_X_buffer_info},
+        {descriptor_set, 1, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_Y_buffer_info},
+        {descriptor_set, 2, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_D_buffer_info},
+    };
+    vk_device.updateDescriptorSets(write_descriptor_sets, {});
+
+    vk::CommandPoolCreateInfo command_pool_create_info(vk::CommandPoolCreateFlags(), vk_compute_queue_family_index);
+    vk::CommandPool command_pool = vk_device.createCommandPool(command_pool_create_info);
+
+    vk::CommandBufferAllocateInfo command_buffer_alloc_info(
+        command_pool,
+        vk::CommandBufferLevel::ePrimary,
+        1);
+    const std::vector<vk::CommandBuffer> cmd_buffers = vk_device.allocateCommandBuffers(command_buffer_alloc_info);
+    vk::CommandBuffer cmd_buffer = cmd_buffers.front();
 
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
             // copy data to device
             if (src0->backend != GGML_BACKEND_GPU) {
-                ggml_vk_h2d_tensor_2d(&d_X, 0, src0, i03, i02);
+                ggml_vk_h2d_tensor_2d(cmd_buffer, &d_X, 0, src0, i03, i02);
             }
-            ggml_vk_h2d_tensor_2d(&d_Y, 0, src1, i03, i02);
+            ggml_vk_h2d_tensor_2d(cmd_buffer, &d_Y, 0, src1, i03, i02);
+
+            printf("Beginning Vulkan kernel call\n");
 
             // compute
-            vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, 3);
-            vk::DescriptorPoolCreateInfo descriptor_pool_create_info(vk::DescriptorPoolCreateFlags(), 1, descriptor_pool_size);
-            vk::DescriptorPool descriptor_pool = vk_device.createDescriptorPool(descriptor_pool_create_info);
-
-            vk::DescriptorSetAllocateInfo descriptor_set_alloc_info(descriptor_pool, 1, &vk_pipeline_matmul_dsl);
-            const std::vector<vk::DescriptorSet> descriptor_sets = vk_device.allocateDescriptorSets(descriptor_set_alloc_info);
-            vk::DescriptorSet descriptor_set = descriptor_sets.front();
-            vk::DescriptorBufferInfo d_X_buffer_info(d_X.buffer, 0, sizeof(float) * x_ne);
-            vk::DescriptorBufferInfo d_Y_buffer_info(d_Y.buffer, 0, sizeof(float) * y_ne);
-            vk::DescriptorBufferInfo d_D_buffer_info(d_D.buffer, 0, sizeof(float) * d_ne);
-
-            const std::vector<vk::WriteDescriptorSet> write_descriptor_sets = {
-                {descriptor_set, 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_X_buffer_info},
-                {descriptor_set, 1, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_Y_buffer_info},
-                {descriptor_set, 2, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_D_buffer_info},
-            };
-            vk_device.updateDescriptorSets(write_descriptor_sets, {});
-
-            vk::CommandPoolCreateInfo command_pool_create_info(vk::CommandPoolCreateFlags(), vk_compute_queue_family_index);
-            vk::CommandPool command_pool = vk_device.createCommandPool(command_pool_create_info);
-
-            vk::CommandBufferAllocateInfo command_buffer_alloc_info(
-                command_pool,
-                vk::CommandBufferLevel::ePrimary,
-                1);
-            const std::vector<vk::CommandBuffer> cmd_buffers = vk_device.allocateCommandBuffers(command_buffer_alloc_info);
-            vk::CommandBuffer cmd_buffer = cmd_buffers.front();
-
             vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
             cmd_buffer.begin(cmd_buffer_begin_info);
             cmd_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, vk_pipeline_matmul);
@@ -352,12 +431,11 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
                                     true,
                                     uint64_t(-1));
 
+            printf("Vulkan kernel call done\n");
+
             // copy dst to host
-            void* src_ptr = nullptr;
             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
-            vmaMapMemory(vk_allocator, d_D.allocation, &src_ptr);
-            memcpy(d, src_ptr, sizeof(float) * d_ne);
-            vmaUnmapMemory(vk_allocator, d_D.allocation);
+            ggml_vk_buffer_read(cmd_buffer, &d_D, 0, d, sizeof(float) * d_ne);
         }
     }
 
