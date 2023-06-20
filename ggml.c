@@ -45,8 +45,7 @@
 
 #include <windows.h>
 
-typedef volatile LONG atomic_int;
-typedef atomic_int atomic_bool;
+
 
 static void atomic_store(atomic_int* ptr, LONG val) {
     InterlockedExchange(ptr, val);
@@ -3761,32 +3760,6 @@ struct ggml_context_container {
     struct ggml_context context;
 };
 
-//
-// compute types
-//
-
-enum ggml_task_type {
-    GGML_TASK_INIT = 0,
-    GGML_TASK_COMPUTE,
-    GGML_TASK_FINALIZE,
-};
-
-struct ggml_compute_params {
-    enum ggml_task_type type;
-
-    int ith, nth;
-
-    // work buffer for all threads
-    size_t wsize;
-    void * wdata;
-
-    // atomic counter used to distribute chunks of work
-    atomic_int * aic;
-};
-
-//
-// ggml state
-//
 
 struct ggml_state {
     struct ggml_context_container contexts[GGML_MAX_CONTEXTS];
@@ -10791,8 +10764,8 @@ static void ggml_compute_forward_mul_mat_q_f32(
 
     // parallelize by src0 rows using ggml_vec_dot_q
 
-    const int nr = ggml_nrows(src0);
-    const int dr = (nr + 8*nth - 1)/(8*nth);
+    const int nr = ggml_nrows(src0); // nr stands for number of rows
+    const int dr = (nr + 8*nth - 1)/(8*nth); // dr stands for delta rows
 
     while (true) {
         const int ir0 = atomic_fetch_add(params->aic, dr);

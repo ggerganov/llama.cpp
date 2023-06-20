@@ -219,6 +219,9 @@ extern "C" {
 #else
     typedef uint16_t ggml_fp16_t;
 #endif
+    typedef long LONG;
+    typedef volatile LONG atomic_int;
+    typedef atomic_int atomic_bool;
 
     // convert FP16 <-> FP32
     GGML_API float       ggml_fp16_to_fp32(ggml_fp16_t x);
@@ -454,7 +457,11 @@ extern "C" {
         // work buffer for all threads
         size_t wsize;
         void * wdata;
+
+        // atomic counter used to distribute chunks of work
+        atomic_int * aic;
     };
+
 
     // misc
 
