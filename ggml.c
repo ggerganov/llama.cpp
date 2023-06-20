@@ -18237,7 +18237,6 @@ GGML_API void ggml_opt_init(
                 ggml_set_zero(opt->lbfgs.g);
                 ggml_set_zero(opt->lbfgs.gp);
                 ggml_set_zero(opt->lbfgs.d);
-                ggml_set_zero(opt->lbfgs.pf);
                 if (opt->lbfgs.pf) {
                     ggml_set_zero(opt->lbfgs.pf);
                 }
