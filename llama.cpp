@@ -2006,8 +2006,8 @@ void llama_sample_top_p(struct llama_context * ctx, llama_token_data_array * can
         cum_sum += candidates->data[i].p;
 
         // Check if the running sum is greater than p or if we have kept at least min_keep tokens
-        if (cum_sum > p && i >= min_keep) {
-            last_idx = i;
+        if (cum_sum > p && i + 1 >= min_keep) {
+            last_idx = i + 1;
             break;
         }
     }
