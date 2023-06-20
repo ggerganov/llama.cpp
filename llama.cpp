@@ -281,7 +281,7 @@ struct llama_vocab {
 
     llama_trie special_token_trie;
     std::unordered_map<token, id> special_token_to_id;
-    size_t max_special_token_length;
+    size_t max_special_token_length = 0;
 };
 
 struct llama_model {
@@ -578,7 +578,7 @@ struct llama_file_loader {
         vocab.special_token_to_id.reserve(hparams.n_vocab_sp);
 
         for (uint32_t i = 0; i < hparams.n_vocab_sp; i++) {
-            uint32_t token_id = file.read_u32();
+            llama_vocab::id token_id = file.read_u32();
             const auto & word = vocab.id_to_token[token_id].tok;
 
             vocab.special_token_trie.add(word);
@@ -2108,9 +2108,9 @@ static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, co
         return output;
     }
 
-    std::vector<int> offsets = vocab.special_token_trie.split(text);
-    int start = 0;
-    for (int end : offsets) {
+    std::vector<size_t> offsets = vocab.special_token_trie.split(text);
+    size_t start = 0;
+    for (size_t end : offsets) {
         if (start >= end) {
             continue;
         }
