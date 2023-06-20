@@ -1265,6 +1265,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
 
             if(unbanTokens && id==eosID)
             {
+                stopper_unused_tokens = remaining_tokens;
                 printf("\n(EOS token triggered!)");
                 remaining_tokens = 0;
             }
