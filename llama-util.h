@@ -545,7 +545,7 @@ typedef llama_buffer llama_ctx_buffer;
 
 struct llama_trie_node {
     llama_trie_node(): is_terminator(false) {}
-    
+
     std::unordered_map<char, llama_trie_node*> children;
     bool is_terminator;
 };
@@ -560,7 +560,7 @@ public:
         if (word.empty()) {
             return;
         }
-            
+
         llama_trie_node *ref = root_;
         for (char c : word) {
             if (ref->children.find(c) == ref->children.end()) {
@@ -630,7 +630,7 @@ public:
                             end = lookahead_index;
                             skip = lookahead_index;
                         }
-                        
+
                         auto looktrie_pointer_it = looktrie_pointer->children.find(next_char);
                         while (looktrie_pointer_it != looktrie_pointer->children.end()) {
                             looktrie_pointer = looktrie_pointer_it->second;
@@ -640,7 +640,7 @@ public:
                                 end = lookahead_index;
                                 skip = lookahead_index;
                             }
-                            
+
                             if (lookahead_index == text.size()) {
                                 // End of string
                                 break;
@@ -649,13 +649,13 @@ public:
                             looktrie_pointer_it = looktrie_pointer->children.find(next_char);
                         }
                     }
-                    
+
                     offsets.push_back(start);
                     offsets.push_back(end);
                     reset = true;
                     break;
-                } 
-                
+                }
+
                 auto trie_pointer_it = trie_pointer->children.find(current_char);
                 if (trie_pointer_it != trie_pointer->children.end()) {
                     // The current character being looked at has a match within the trie
@@ -669,12 +669,12 @@ public:
                     state = states.erase(state);
                 }
             }
-            
+
             if (reset) {
                 // Clear the full start (we found a real match)
                 states.clear();
             }
-            
+
             // If this character is a starting character within the trie
             // start keeping track of this partial match.
             auto children_it = root_->children.find(current_char);
@@ -682,7 +682,7 @@ public:
                 states[current] = children_it->second;
             }
         }
-        
+
         // We have a cut at the end with states.
         for (const auto & state : states) {
             int start = state.first;
@@ -696,7 +696,7 @@ public:
                 break;
             }
         }
-        
+
         offsets.push_back(text.size());
         return offsets;
     }
