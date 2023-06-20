@@ -283,10 +283,12 @@ class SentencePieceVocab:
         else:
             tokenizer_config = {}
         for key, value in tokenizer_config.items():
-            assert isinstance(value, dict) or isinstance(value, str)
-            if key not in TOKEN_NAME_TO_ID or TOKEN_NAME_TO_ID[key] == -1:
+            if not isinstance(value, dict) or not isinstance(value, str):
                 continue
-            self.special_tokens_map[TOKEN_NAME_TO_ID[key]] = value["content"] if isinstance(value, dict) else value
+            token_id = TOKEN_NAME_TO_ID.get(key, -1)
+            if token_id == -1:
+                continue
+            self.special_tokens_map[token_id] = value["content"] if isinstance(value, dict) else value
 
         special_tokens: Dict[str, Any]
         if fname_special_tokens is not None:
@@ -294,10 +296,9 @@ class SentencePieceVocab:
         else:
             special_tokens = {}
         for key, value in special_tokens.items():
-            assert isinstance(value, dict) or isinstance(value, str)
-            if key not in TOKEN_NAME_TO_ID:
+            if not isinstance(value, dict) or not isinstance(value, str):
                 continue
-            token_id = TOKEN_NAME_TO_ID[key]
+            token_id = TOKEN_NAME_TO_ID.get(key, -1)
             if token_id == -1 or token_id in self.special_tokens_map:
                 continue
             self.special_tokens_map[token_id] = value["content"] if isinstance(value, dict) else value
