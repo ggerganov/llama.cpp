@@ -31,7 +31,7 @@ class Llava:
         self.model.eval_string("user: ")
         self.model.eval_string(question)
         self.model.eval_string("\nassistant: ")
-        return self.sampling()
+        return self.model.generate()
 
     def chat_with_image(self, image, question):
         with torch.no_grad():
@@ -49,16 +49,8 @@ class Llava:
         self.model.eval_token(32003-1) # im_end
         self.model.eval_string(question)
         self.model.eval_string("\nassistant: ")
-        return self.sampling()
+        return self.model.generate()
 
-    def sampling(self):
-        ret = b""
-        for _ in range(500):
-            tmp = self.model.sampling() # .decode()
-            if tmp == b"</s>":
-                break
-            ret += tmp
-        return ret.decode()
 
 if __name__=="__main__":
     # model form liuhaotian/LLaVA-13b-delta-v1-1

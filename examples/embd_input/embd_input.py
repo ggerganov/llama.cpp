@@ -33,6 +33,35 @@ class MyModel:
         s = libc.sampling(self.model)
         return s
 
+    def generate(self, end="</s>"):
+        ret = b""
+        end = end.encode()
+        for _ in range(500):
+            tmp = self.sampling() # .decode()
+            if (ret+tmp).endswith(end):
+                break
+            ret += tmp
+        return ret.decode()
+
+    def stream_generate(self, end="</s>"):
+        ret = b""
+        end = end.encode()
+        head = b""
+        for _ in range(500):
+            tmp = self.sampling() # .decode()
+            ret += tmp
+            try:
+                text = (head + tmp).decode()
+                print(text, end="")
+                head = b""
+            except:
+                head += text
+            if ret.endswith(end):
+                break
+        print("")
+        return ret.decode()
+
+
 if __name__ == "__main__":
     model = MyModel(["main", "--model", "../llama.cpp/models/ggml-vic13b-q4_1.bin", "-c", "2048"])
     # print(model)
