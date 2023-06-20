@@ -7,16 +7,43 @@
 #include <exception>
 
 namespace grammar_parser {
-    uint16_t get_symbol_id(parse_state & state, const char * src, size_t len) {
-        uint16_t next_id = static_cast<uint16_t>(state.symbol_ids.size());
+    // NOTE: assumes valid utf8 (but checks for overrun)
+    // copied from llama.cpp
+    std::pair<uint32_t, const char *> decode_utf8(const char * src) {
+        static const int lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4 };
+        uint8_t  first_byte = static_cast<uint8_t>(*src);
+        uint8_t  highbits   = first_byte >> 4;
+        int      len        = lookup[highbits];
+        uint8_t  mask       = (1 << (8 - len)) - 1;
+        uint32_t value      = first_byte & mask;
+        const char * end    = src + len; // may overrun!
+        const char * pos    = src + 1;
+        for ( ; pos < end && *pos; pos++) {
+            value = (value << 6) + (static_cast<uint8_t>(*pos) & 0x3F);
+        }
+        return std::make_pair(value, pos);
+    }
+
+    uint32_t get_symbol_id(parse_state & state, const char * src, size_t len) {
+        uint32_t next_id = static_cast<uint32_t>(state.symbol_ids.size());
         auto result = state.symbol_ids.insert(std::make_pair(std::string(src, len), next_id));
         return result.first->second;
     }
 
-    uint16_t generate_symbol_id(parse_state & state, const std::string & base_name) {
-        uint16_t next_id = static_cast<uint16_t>(state.symbol_ids.size());
+    uint32_t generate_symbol_id(parse_state & state, const std::string & base_name) {
+        uint32_t next_id = static_cast<uint32_t>(state.symbol_ids.size());
         state.symbol_ids[base_name + '_' + std::to_string(next_id)] = next_id;
         return next_id;
+    }
+
+    void add_rule(
+            parse_state & state,
+            uint32_t      rule_id,
+            const std::vector<llama_grammar_element> & rule) {
+        if (state.rules.size() <= rule_id) {
+            state.rules.resize(rule_id + 1);
+        }
+        state.rules[rule_id] = rule;
     }
 
     bool is_word_char(char c) {
@@ -60,9 +87,10 @@ namespace grammar_parser {
         return pos;
     }
 
-    std::pair<uint16_t, const char *> parse_char(const char * src) {
+    std::pair<uint32_t, const char *> parse_char(const char * src) {
         if (*src == '\\') {
             char esc = src[1];
+            // TODO: 16- and 32-bit escapes
             if (esc == 'x') {
                 int first = hex_to_int(src[2]);
                 if (first > -1) {
@@ -83,7 +111,8 @@ namespace grammar_parser {
             }
             throw std::runtime_error(std::string("unknown escape at ") + src);
         } else if (*src) {
-            return std::make_pair(*src, src + 1);
+            auto decoded = decode_utf8(src);
+            return std::make_pair(decoded.first, decoded.second);
         }
         throw std::runtime_error("unexpected end of input");
     }
@@ -92,132 +121,101 @@ namespace grammar_parser {
             parse_state       & state,
             const char        * src,
             const std::string & rule_name,
-            uint16_t            rule_id,
+            uint32_t            rule_id,
             bool                is_nested);
 
     const char * parse_sequence(
-            parse_state           & state,
-            const char            * src,
-            const std::string     & rule_name,
-            std::vector<uint16_t> & outbuf,
-            bool                    is_nested) {
-        size_t out_start = outbuf.size();
-
-        // sequence size, will be replaced at end when known
-        outbuf.push_back(0);
-
-        size_t last_sym_start = outbuf.size();
+            parse_state                        & state,
+            const char                         * src,
+            const std::string                  & rule_name,
+            std::vector<llama_grammar_element> & out_elements,
+            bool                                 is_nested) {
+        size_t last_sym_start = out_elements.size();
         const char * pos = src;
         while (*pos) {
             if (*pos == '"') { // literal string
                 pos++;
-                last_sym_start = outbuf.size();
+                last_sym_start = out_elements.size();
                 while (*pos != '"') {
                     auto char_pair = parse_char(pos);
                          pos       = char_pair.second;
-
-                    // each char of a literal is encoded as a "range" of char - char
-                    outbuf.push_back(2);
-                    outbuf.push_back(char_pair.first);
-                    outbuf.push_back(char_pair.first);
+                    out_elements.push_back({LLAMA_GRETYPE_CHAR, char_pair.first});
                 }
                 pos = parse_space(pos + 1, is_nested);
             } else if (*pos == '[') { // char range(s)
                 pos++;
-                last_sym_start = outbuf.size();
-                // num chars in range - replaced at end of loop
-                outbuf.push_back(0);
+                last_sym_start = out_elements.size();
                 while (*pos != ']') {
                     auto char_pair = parse_char(pos);
                          pos       = char_pair.second;
+                    enum llama_gretype type = last_sym_start < out_elements.size()
+                        ? LLAMA_GRETYPE_CHAR_ALT
+                        : LLAMA_GRETYPE_CHAR;
 
-                    outbuf.push_back(char_pair.first);
+                    out_elements.push_back({type, char_pair.first});
                     if (pos[0] == '-' && pos[1] != ']') {
                         auto endchar_pair = parse_char(pos + 1);
                              pos          = endchar_pair.second;
-                        outbuf.push_back(endchar_pair.first);
-                    } else {
-                        // chars that aren't part of a c1-c2 range are just doubled (i.e., c-c)
-                        outbuf.push_back(char_pair.first);
+                        out_elements.push_back({LLAMA_GRETYPE_CHAR_RNG_UPPER, endchar_pair.first});
                     }
                 }
-                // replace num chars with actual
-                outbuf[last_sym_start] = static_cast<uint16_t>(outbuf.size() - last_sym_start - 1);
                 pos = parse_space(pos + 1, is_nested);
             } else if (is_word_char(*pos)) { // rule reference
                 const char * name_end    = parse_name(pos);
-                uint16_t     ref_rule_id = get_symbol_id(state, pos, name_end - pos);
+                uint32_t     ref_rule_id = get_symbol_id(state, pos, name_end - pos);
                 pos = parse_space(name_end, is_nested);
-                last_sym_start = outbuf.size();
-                outbuf.push_back(1);
-                outbuf.push_back(ref_rule_id);
+                last_sym_start = out_elements.size();
+                out_elements.push_back({LLAMA_GRETYPE_RULE_REF, ref_rule_id});
             } else if (*pos == '(') { // grouping
                 // parse nested alternates into synthesized rule
                 pos = parse_space(pos + 1, true);
-                uint16_t sub_rule_id = generate_symbol_id(state, rule_name);
+                uint32_t sub_rule_id = generate_symbol_id(state, rule_name);
                 pos = parse_alternates(state, pos, rule_name, sub_rule_id, true);
-                last_sym_start = outbuf.size();
+                last_sym_start = out_elements.size();
                 // output reference to synthesized rule
-                outbuf.push_back(1);
-                outbuf.push_back(sub_rule_id);
+                out_elements.push_back({LLAMA_GRETYPE_RULE_REF, sub_rule_id});
                 if (*pos != ')') {
                     throw std::runtime_error(std::string("expecting ')' at ") + pos);
                 }
                 pos = parse_space(pos + 1, is_nested);
             } else if (*pos == '*' || *pos == '+' || *pos == '?') { // repetition operator
-                if (outbuf.size() - out_start - 1 == 0) {
+                if (last_sym_start == out_elements.size()) {
                     throw std::runtime_error(std::string("expecting preceeding item to */+/? at ") + pos);
                 }
-                std::vector<uint16_t> & out_grammar = state.out_grammar;
 
-                // apply transformation to previous symbol (last_sym_start -
-                // end) according to rewrite rules:
+                // apply transformation to previous symbol (last_sym_start to end) according to
+                // rewrite rules:
                 // S* --> S' ::= S S' |
                 // S+ --> S' ::= S S' | S
                 // S? --> S' ::= S |
-                uint16_t sub_rule_id = generate_symbol_id(state, rule_name);
-                out_grammar.push_back(sub_rule_id);
-                size_t   sub_rule_start = out_grammar.size();
-                // placeholder for size of 1st alternate
-                out_grammar.push_back(0);
+                uint32_t sub_rule_id = generate_symbol_id(state, rule_name);
+                std::vector<llama_grammar_element> sub_rule;
                 // add preceding symbol to generated rule
-                out_grammar.insert(out_grammar.end(), outbuf.begin() + last_sym_start, outbuf.end());
+                sub_rule.insert(
+                    sub_rule.end(), out_elements.begin() + last_sym_start, out_elements.end());
                 if (*pos == '*' || *pos == '+') {
                     // cause generated rule to recurse
-                    out_grammar.push_back(1);
-                    out_grammar.push_back(sub_rule_id);
+                    sub_rule.push_back({LLAMA_GRETYPE_RULE_REF, sub_rule_id});
                 }
-                // apply actual size
-                out_grammar[sub_rule_start] = out_grammar.size() - sub_rule_start;
-                // mark end of 1st alternate
-                out_grammar.push_back(0);
-                sub_rule_start = out_grammar.size();
-                // placeholder for size of 2nd alternate
-                out_grammar.push_back(0);
+                // mark start of alternate def
+                sub_rule.push_back({LLAMA_GRETYPE_ALT, 0});
                 if (*pos == '+') {
-                    // add preceding symbol as alternate only for '+'
-                    out_grammar.insert(out_grammar.end(), outbuf.begin() + last_sym_start, outbuf.end());
+                    // add preceding symbol as alternate only for '+' (otherwise empty)
+                    sub_rule.insert(
+                        sub_rule.end(), out_elements.begin() + last_sym_start, out_elements.end());
                 }
-                // apply actual size of 2nd alternate
-                out_grammar[sub_rule_start] = out_grammar.size() - sub_rule_start;
-                // mark end of 2nd alternate, then end of rule
-                out_grammar.push_back(0);
-                out_grammar.push_back(0);
+                sub_rule.push_back({LLAMA_GRETYPE_END, 0});
+                add_rule(state, sub_rule_id, sub_rule);
 
                 // in original rule, replace previous symbol with reference to generated rule
-                outbuf.resize(last_sym_start);
-                outbuf.push_back(1);
-                outbuf.push_back(sub_rule_id);
+                out_elements.resize(last_sym_start);
+                out_elements.push_back({LLAMA_GRETYPE_RULE_REF, sub_rule_id});
 
                 pos = parse_space(pos + 1, is_nested);
             } else {
                 break;
             }
         }
-        // apply actual size of this alternate sequence
-        outbuf[out_start] = static_cast<uint16_t>(outbuf.size() - out_start);
-        // mark end of alternate
-        outbuf.push_back(0);
         return pos;
     }
 
@@ -225,17 +223,17 @@ namespace grammar_parser {
             parse_state       & state,
             const char        * src,
             const std::string & rule_name,
-            uint16_t            rule_id,
+            uint32_t            rule_id,
             bool                is_nested) {
-        std::vector<uint16_t> outbuf;
-        const char * pos = parse_sequence(state, src, rule_name, outbuf, is_nested);
+        std::vector<llama_grammar_element> rule;
+        const char * pos = parse_sequence(state, src, rule_name, rule, is_nested);
         while (*pos == '|') {
+            rule.push_back({LLAMA_GRETYPE_ALT, 0});
             pos = parse_space(pos + 1, true);
-            pos = parse_sequence(state, pos, rule_name, outbuf, is_nested);
+            pos = parse_sequence(state, pos, rule_name, rule, is_nested);
         }
-        state.out_grammar.push_back(rule_id);
-        state.out_grammar.insert(state.out_grammar.end(), outbuf.begin(), outbuf.end());
-        state.out_grammar.push_back(0);
+        rule.push_back({LLAMA_GRETYPE_END, 0});
+        add_rule(state, rule_id, rule);
         return pos;
     }
 
@@ -243,7 +241,7 @@ namespace grammar_parser {
         const char * name_end = parse_name(src);
         const char * pos      = parse_space(name_end, false);
         size_t       name_len = name_end - src;
-        uint16_t     rule_id  = get_symbol_id(state, src, name_len);
+        uint32_t     rule_id  = get_symbol_id(state, src, name_len);
         const std::string name(src, name_len);
 
         if (!(pos[0] == ':' && pos[1] == ':' && pos[2] == '=')) {
@@ -270,7 +268,6 @@ namespace grammar_parser {
             while (*pos) {
                 pos = parse_rule(state, pos);
             }
-            state.out_grammar.push_back(0xffff);
             return state;
         } catch (const std::exception & err) {
             fprintf(stderr, "%s: error parsing grammar: %s\n", __func__, err.what());
@@ -278,53 +275,131 @@ namespace grammar_parser {
         }
     }
 
-    const uint16_t * print_rule(
-            FILE           * file,
-            const uint16_t * base,
-            const uint16_t * src,
-            const std::map<uint16_t, std::string> & symbol_id_names) {
-        uint16_t rule_id = *src;
-        fprintf(file, "<%zu>%s ::= ", src - base, symbol_id_names.at(rule_id).c_str());
-        const uint16_t * pos = src + 1;
-        while (*pos) {
-            if (pos - 1 > src) {
-                fprintf(file, "| ");
-            }
-            pos++; // sequence size, not needed here
-            while (*pos) {
-                if (*pos == 1) {
-                    uint16_t ref_rule_id = pos[1];
-                    fprintf(file, "<%zu>%s ", pos - base, symbol_id_names.at(ref_rule_id).c_str());
-                    pos += 2;
-                } else {
-                    fprintf(file, "<%zu>[", pos - base);
-                    uint16_t num_chars = *pos;
-                    pos++;
+    void print_grammar_char(FILE * file, uint32_t c) {
+        if (0x20 <= c && c <= 0x7f) {
+            fprintf(file, "%c", static_cast<char>(c));
+        } else {
+            // cop out of encoding UTF-8
+            fprintf(file, "<U+%04X>", c);
+        }
+    }
 
-                    for (uint16_t i = 0; i < num_chars; i += 2) {
-                        fprintf(file, "%lc-", static_cast<wint_t>(pos[i])); // REVIEW
-                        if (i + 1 < num_chars) {
-                            fprintf(file, "%lc", static_cast<wint_t>(pos[i + 1]));
-                        }
-                    }
-                    fprintf(file, "] ");
-                    pos += num_chars;
-                }
+    bool is_char_element(llama_grammar_element elem) {
+        switch (elem.type) {
+            case LLAMA_GRETYPE_CHAR:           return true;
+            case LLAMA_GRETYPE_CHAR_ALT:       return true;
+            case LLAMA_GRETYPE_CHAR_RNG_UPPER: return true;
+            default:                           return false;
+        }
+    }
+
+    void print_rule_binary(FILE * file, const std::vector<llama_grammar_element> & rule) {
+        for (auto elem : rule) {
+            switch (elem.type) {
+                case LLAMA_GRETYPE_END:            fprintf(file, "END");            break;
+                case LLAMA_GRETYPE_ALT:            fprintf(file, "ALT");            break;
+                case LLAMA_GRETYPE_RULE_REF:       fprintf(file, "RULE_REF");       break;
+                case LLAMA_GRETYPE_CHAR:           fprintf(file, "CHAR");           break;
+                case LLAMA_GRETYPE_CHAR_RNG_UPPER: fprintf(file, "CHAR_RNG_UPPER"); break;
+                case LLAMA_GRETYPE_CHAR_ALT:       fprintf(file, "CHAR_RNG_UPPER"); break;
             }
-            pos++;
+            switch (elem.type) {
+                case LLAMA_GRETYPE_END:
+                case LLAMA_GRETYPE_ALT:
+                case LLAMA_GRETYPE_RULE_REF:
+                    fprintf(file, "(%u) ", elem.value);
+                    break;
+                case LLAMA_GRETYPE_CHAR:
+                case LLAMA_GRETYPE_CHAR_RNG_UPPER:
+                case LLAMA_GRETYPE_CHAR_ALT:
+                    fprintf(file, "(\"");
+                    print_grammar_char(file, elem.value);
+                    fprintf(file, "\") ");
+                    break;
+            }
         }
         fprintf(file, "\n");
-        return pos + 1;
+    }
+
+    void print_rule(
+            FILE     * file,
+            uint32_t   rule_id,
+            const std::vector<llama_grammar_element> & rule,
+            const std::map<uint32_t, std::string>    & symbol_id_names) {
+        if (rule.empty() || rule.back().type != LLAMA_GRETYPE_END) {
+            throw std::runtime_error(
+                "malformed rule, does not end with LLAMA_GRETYPE_END: " + std::to_string(rule_id));
+        }
+        fprintf(file, "%s ::= ", symbol_id_names.at(rule_id).c_str());
+        for (size_t i = 0, end = rule.size() - 1; i < end; i++) {
+            llama_grammar_element elem = rule[i];
+            switch (elem.type) {
+                case LLAMA_GRETYPE_END:
+                    throw std::runtime_error(
+                        "unexpected end of rule: " + std::to_string(rule_id) + "," +
+                        std::to_string(i));
+                case LLAMA_GRETYPE_ALT:
+                    fprintf(file, "| ");
+                    break;
+                case LLAMA_GRETYPE_RULE_REF:
+                    fprintf(file, "%s ", symbol_id_names.at(elem.value).c_str());
+                    break;
+                case LLAMA_GRETYPE_CHAR:
+                    fprintf(file, "[");
+                    print_grammar_char(file, elem.value);
+                    break;
+                case LLAMA_GRETYPE_CHAR_RNG_UPPER:
+                    if (i == 0 || !is_char_element(rule[i - 1])) {
+                        throw std::runtime_error(
+                            "LLAMA_GRETYPE_CHAR_RNG_UPPER without preceding char: " +
+                            std::to_string(rule_id) + "," + std::to_string(i));
+                    }
+                    fprintf(file, "-");
+                    print_grammar_char(file, elem.value);
+                    break;
+                case LLAMA_GRETYPE_CHAR_ALT:
+                    if (i == 0 || !is_char_element(rule[i - 1])) {
+                        throw std::runtime_error(
+                            "LLAMA_GRETYPE_CHAR_ALT without preceding char: " +
+                            std::to_string(rule_id) + "," + std::to_string(i));
+                    }
+                    print_grammar_char(file, elem.value);
+                    break;
+            }
+            if (is_char_element(elem)) {
+                switch (rule[i + 1].type) {
+                    case LLAMA_GRETYPE_CHAR_ALT:
+                    case LLAMA_GRETYPE_CHAR_RNG_UPPER:
+                        break;
+                    default:
+                        fprintf(file, "] ");
+                }
+            }
+        }
+        fprintf(file, "\n");
     }
 
     void print_grammar(FILE * file, const parse_state & state) {
-        std::map<uint16_t, std::string> symbol_id_names;
-        for (auto kv : state.symbol_ids) {
-            symbol_id_names[kv.second] = kv.first;
+        try {
+            std::map<uint32_t, std::string> symbol_id_names;
+            for (auto kv : state.symbol_ids) {
+                symbol_id_names[kv.second] = kv.first;
+            }
+            for (size_t i = 0, end = state.rules.size(); i < end; i++) {
+                // fprintf(file, "%zu: ", i);
+                // print_rule_binary(file, state.rules[i]);
+                print_rule(file, i, state.rules[i], symbol_id_names);
+            }
+        } catch (const std::exception & err) {
+            fprintf(stderr, "\n%s: error printing grammar: %s\n", __func__, err.what());
         }
-        const uint16_t * pos = state.out_grammar.data();
-        while (*pos != 0xffff) {
-            pos = print_rule(file, state.out_grammar.data(), pos, symbol_id_names);
+    }
+
+    std::vector<const llama_grammar_element *> parse_state::c_rules() {
+        std::vector<const llama_grammar_element *> ret;
+        for (const auto & rule : rules) {
+            ret.push_back(rule.data());
         }
+        return ret;
     }
 }

@@ -55,8 +55,6 @@ extern "C" {
 
     struct llama_context;
 
-    struct llama_grammar;
-
     typedef int llama_token;
 
     typedef struct llama_token_data {
@@ -124,6 +122,37 @@ extern "C" {
         bool allow_requantize;       // allow quantizing non-f32/f16 tensors
         bool quantize_output_tensor; // quantize output.weight
     } llama_model_quantize_params;
+
+    // grammar types
+    struct llama_grammar;
+
+    // grammar element type
+    enum llama_gretype {
+        // end of rule definition
+        LLAMA_GRETYPE_END            = 0,
+
+        // start of alternate definition for rule
+        LLAMA_GRETYPE_ALT            = 1,
+
+        // non-terminal element: reference to rule
+        LLAMA_GRETYPE_RULE_REF       = 2,
+
+        // terminal element: character (code point)
+        LLAMA_GRETYPE_CHAR           = 3,
+
+        // modifies a preceding LLAMA_GRETYPE_CHAR or LLAMA_GRETYPE_CHAR_ALT to
+        // be an inclusive range ([a-z])
+        LLAMA_GRETYPE_CHAR_RNG_UPPER = 4,
+
+        // modifies a preceding LLAMA_GRETYPE_CHAR or
+        // LLAMA_GRETYPE_CHAR_RNG_UPPER to add an alternate char to match ([ab], [a-zA])
+        LLAMA_GRETYPE_CHAR_ALT       = 5,
+    };
+
+    typedef struct llama_grammar_element {
+        enum llama_gretype type;
+        uint32_t           value; // Unicode code point or rule ID
+    } llama_grammar_element;
 
     LLAMA_API struct llama_context_params llama_context_default_params();
     LLAMA_API struct llama_model_quantize_params llama_model_quantize_default_params();
@@ -243,26 +272,11 @@ extern "C" {
 
     // Grammar
     //
-    // Accepts a binary encoding of a context-free grammar. The returned struct can be used to
-    // constrain sampled tokens (see below).
-    //
-    // The binary format represents one or more production rules, each with one or more alternate
-    // defininitions:
-    //
-    // (<rule_id: u16> (<alt_size: u16> <alt_size * u16>)+ 0000)+ FFFF
-    //
-    // rule_ids should be assigned sequentially from zero but may appear out of order. Each
-    // rule alternate is a sequence of zero or more symbols, each prefixed with size:
-    //
-    // (<sym_size: u16> <sym_size * u16>)* 0000
-    //
-    // A symbol of size 1 is interpreted as a rule reference (whose value is the single following
-    // u16). Symbols sized greater than 1 are interpreted as inclusive pairs of 16-bit chars to
-    // match. Note that symbol sizes greater than 7FFF are reserved for future use.
-    //
-    // The provided `src` must be kept valid for the lifetime of the `llama_grammar`.
-    //
-    LLAMA_API struct llama_grammar * llama_grammar_init(const uint16_t * src, uint16_t start_rule_id);
+    LLAMA_API struct llama_grammar * llama_grammar_init(
+            const llama_grammar_element ** rules,
+                                 size_t    n_rules,
+                                 size_t    start_rule_index);
+
     LLAMA_API void llama_grammar_free(struct llama_grammar * grammar);
 
     // Sampling functions

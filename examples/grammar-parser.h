@@ -10,6 +10,7 @@
 // space ::= [ \t\n]*
 
 #pragma once
+#include "llama.h"
 #include <vector>
 #include <map>
 #include <cstdint>
@@ -17,8 +18,10 @@
 
 namespace grammar_parser {
     struct parse_state {
-        std::map<std::string, uint16_t> symbol_ids;
-        std::vector<uint16_t>           out_grammar;
+        std::map<std::string, uint32_t>                 symbol_ids;
+        std::vector<std::vector<llama_grammar_element>> rules;
+
+        std::vector<const llama_grammar_element *> c_rules();
     };
 
     parse_state parse(const char * src);

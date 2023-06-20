@@ -300,14 +300,16 @@ int main(int argc, char ** argv) {
     if (!params.grammar.empty()) {
         parsed_grammar = grammar_parser::parse(params.grammar.c_str());
         // will be empty (default) if there are parse errors
-        if (parsed_grammar.out_grammar.empty()) {
+        if (parsed_grammar.rules.empty()) {
             return 1;
         }
         fprintf(stderr, "%s: grammar:\n", __func__);
         grammar_parser::print_grammar(stderr, parsed_grammar);
         fprintf(stderr, "\n");
+
+        std::vector<const llama_grammar_element *> grammar_rules(parsed_grammar.c_rules());
         grammar = llama_grammar_init(
-            parsed_grammar.out_grammar.data(), parsed_grammar.symbol_ids.at("root"));
+            grammar_rules.data(), grammar_rules.size(), parsed_grammar.symbol_ids.at("root"));
     }
 
     // TODO: replace with ring-buffer
@@ -653,8 +655,12 @@ int main(int argc, char ** argv) {
                     // reset grammar state if we're restarting generation
                     if (grammar != NULL) {
                         llama_grammar_free(grammar);
+
+                        std::vector<const llama_grammar_element *> grammar_rules(
+                            parsed_grammar.c_rules());
                         grammar = llama_grammar_init(
-                            parsed_grammar.out_grammar.data(), parsed_grammar.symbol_ids.at("root"));
+                            grammar_rules.data(), grammar_rules.size(),
+                            parsed_grammar.symbol_ids.at("root"));
                     }
                 }
                 is_interacting = false;
