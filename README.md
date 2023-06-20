@@ -328,7 +328,7 @@ Building the program with BLAS support may lead to some performance improvements
     ```bash
     make LLAMA_CUBLAS=1
     ```
-  - Using `CMake`:
+  - Using `CMake`: (Make sure cmake version is 3.24 or higher. Check via `cmake --version`.)
 
     ```bash
     mkdir build
