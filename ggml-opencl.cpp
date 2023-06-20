@@ -331,14 +331,14 @@ __kernel void dequantize_block_q6_K(__global const struct block_q6_K *x, __globa
     y[96] = d * sc[6] * ((int8_t)((ql[32] >> 4) | (((qh >> 6) & 3) << 4)) - 32);
 }
 
-__kernel void dequantize_mul_mat_vec_q2_K(__global struct block_q2_K * xx, __local float* tmp, __global float* yy, __global float* dst, const int ncols) {
+__kernel void dequantize_mul_mat_vec_q2_K(__global const struct block_q2_K * xx, __local float* tmp, __global float* yy, __global float* dst, const int ncols) {
 
     const int row = get_group_id(0);
 
     const int num_blocks_per_row = ncols / QK_K;
     const int ib0 = row*num_blocks_per_row;
 
-    const struct block_q2_K * x = xx + ib0;
+    __global const struct block_q2_K * x = xx + ib0;
 
     const int tid = get_local_id(0)/K_QUANTS_PER_ITERATION;  // 0...31 or 0...15
     const int ix  = get_local_id(0)%K_QUANTS_PER_ITERATION;  // 0 or 0,1
@@ -404,7 +404,7 @@ __kernel void dequantize_mul_mat_vec_q2_K(__global struct block_q2_K * xx, __loc
     }
 }
 
-__kernel void dequantize_mul_mat_vec_q3_K(__global struct block_q3_K * xx, __local float* tmp, __global float* yy, __global float* dst, const int ncols) {
+__kernel void dequantize_mul_mat_vec_q3_K(__global const struct block_q3_K * xx, __local float* tmp, __global float* yy, __global float* dst, const int ncols) {
     const uint16_t kmask1 = 0x0303;
     const uint16_t kmask2 = 0x0f0f;
 
@@ -413,7 +413,7 @@ __kernel void dequantize_mul_mat_vec_q3_K(__global struct block_q3_K * xx, __loc
     const int num_blocks_per_row = ncols / QK_K;
     const int ib0 = row*num_blocks_per_row;
 
-    const struct block_q3_K * x = xx + ib0;
+    __global const struct block_q3_K * x = xx + ib0;
 
     const int tid = get_local_id(0)/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
     const int ix  = get_local_id(0)%K_QUANTS_PER_ITERATION;  // 0 or 0,1
@@ -478,7 +478,7 @@ __kernel void dequantize_mul_mat_vec_q3_K(__global struct block_q3_K * xx, __loc
     }
 }
 
-__kernel void dequantize_mul_mat_vec_q4_K(__global struct block_q4_K * xx, __local float* tmp, __global float* yy, __global float* dst, const int ncols) {
+__kernel void dequantize_mul_mat_vec_q4_K(__global const struct block_q4_K * xx, __local float* tmp, __global float* yy, __global float* dst, const int ncols) {
 
     //to rename it later, just to test now
     const uint16_t kmask1 = 0x3f3f;
@@ -508,7 +508,7 @@ __kernel void dequantize_mul_mat_vec_q4_K(__global struct block_q4_K * xx, __loc
     uint16_t aux[4];
     const uint8_t * sc = (const uint8_t *)aux;
 
-    const struct block_q4_K * x = xx + ib0;
+    __global const struct block_q4_K * x = xx + ib0;
 
     tmp[16 * ix + tid] = 0;
 
@@ -552,7 +552,7 @@ __kernel void dequantize_mul_mat_vec_q4_K(__global struct block_q4_K * xx, __loc
     }
 }
 
-__kernel void dequantize_mul_mat_vec_q5_K(__global struct block_q5_K * xx, __local float* tmp, __global float* yy, __global float* dst, const int ncols) {
+__kernel void dequantize_mul_mat_vec_q5_K(__global const struct block_q5_K * xx, __local float* tmp, __global float* yy, __global float* dst, const int ncols) {
 
     const uint16_t kmask1 = 0x3f3f;
     const uint16_t kmask2 = 0x0f0f;
@@ -582,7 +582,7 @@ __kernel void dequantize_mul_mat_vec_q5_K(__global struct block_q5_K * xx, __loc
     uint16_t aux[4];
     const uint8_t * sc = (const uint8_t *)aux;
 
-    const struct block_q5_K * x = xx + ib0;
+    __global const struct block_q5_K * x = xx + ib0;
 
     tmp[16 * ix + tid] = 0;
 
@@ -634,14 +634,14 @@ __kernel void dequantize_mul_mat_vec_q5_K(__global struct block_q5_K * xx, __loc
     }
 }
 
-__kernel void dequantize_mul_mat_vec_q6_K(__global struct block_q6_K * xx, __local float* tmp, __global const float * yy, __global float * dst, const int ncols) {
+__kernel void dequantize_mul_mat_vec_q6_K(__global const struct block_q6_K * xx, __local float* tmp, __global const float * yy, __global float * dst, const int ncols) {
 
     const int row = get_group_id(0);
 
     const int num_blocks_per_row = ncols / QK_K;
     const int ib0 = row*num_blocks_per_row;
 
-    const struct block_q6_K * x = xx + ib0;
+    __global const struct block_q6_K * x = xx + ib0;
 
     const int tid = get_local_id(0)/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
     const int ix  = get_local_id(0)%K_QUANTS_PER_ITERATION;  // 0 or 0, 1
