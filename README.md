@@ -542,6 +542,11 @@ The majority (54%) are using public transit. This includes buses, trams and metr
 cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
 >
 ```
+### Using [OpenLLaMA](https://github.com/openlm-research/open_llama)
+OpenLLaMA is an openly licensed reproduction of Meta's original LLaMA model. It uses the same architecture and is a drop-in replacement for the original LLaMA weights.
+
+- Download the [3B](https://huggingface.co/openlm-research/open_llama_3b), [7B](https://huggingface.co/openlm-research/open_llama_7b), or [13B](https://huggingface.co/openlm-research/open_llama_13b) model from Hugging Face.
+- Convert the model to ggml FP16 format using `python convert.py <path to OpenLLaMA directory>`
 
 ### Using [GPT4All](https://github.com/nomic-ai/gpt4all)
 
