@@ -378,7 +378,7 @@ Building the program with BLAS support may lead to some performance improvements
       ```sh
       git clone https://github.com/CNugteren/CLBlast.git
       mkdir CLBlast/build
-      cd CLBLast/build
+      cd CLBlast/build
       cmake .. -DBUILD_SHARED_LIBS=OFF -DTUNERS=OFF
       cmake --build . --config Release
       cmake --install . --prefix /some/path
