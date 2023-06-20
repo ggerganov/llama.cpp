@@ -362,13 +362,13 @@ __kernel void dequantize_mul_mat_vec_q2_K(__global const struct block_q2_K * xx,
 
     for (int i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
 
-        const float   * y = yy + i * QK_K + y_offset;
-        const uint8_t * q = x[i].qs + q_offset;
+        __global const float   * y = yy + i * QK_K + y_offset;
+        __global const uint8_t * q = x[i].qs + q_offset;
 
         const float dall = vload_half(0, &x[i].d);
         const float dmin = vload_half(0, &x[i].dmin);
 
-        const uint32_t * a = (const uint32_t *)(x[i].scales + s_offset);
+        __global const uint32_t * a = (__global const uint32_t *)(x[i].scales + s_offset);
         aux[0] = a[0] & 0x0f0f0f0f;
         aux[1] = a[1] & 0x0f0f0f0f;
         aux[2] = (a[0] >> 4) & 0x0f0f0f0f;
@@ -439,11 +439,11 @@ __kernel void dequantize_mul_mat_vec_q3_K(__global const struct block_q3_K * xx,
 
     for (int i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
 
-        const float   * y  = yy + i * QK_K + y_offset;
-        const uint8_t * q = x[i].qs + q_offset;
-        const uint8_t * h = x[i].hmask + l0;
+        __global const float   * y  = yy + i * QK_K + y_offset;
+        __global const uint8_t * q = x[i].qs + q_offset;
+        __global const uint8_t * h = x[i].hmask + l0;
 
-        const uint16_t * a = (const uint16_t *)x[i].scales;
+        __global const uint16_t * a = (__global const uint16_t *)x[i].scales;
         utmp[0] = ((a[0] >> s_shift) & kmask2) | (((a[4] >> (s_shift + 0)) & kmask1) << 4);
         utmp[1] = ((a[1] >> s_shift) & kmask2) | (((a[5] >> (s_shift + 0)) & kmask1) << 4);
         utmp[2] = ((a[2] >> s_shift) & kmask2) | (((a[4] >> (s_shift + 2)) & kmask1) << 4);
@@ -515,15 +515,15 @@ __kernel void dequantize_mul_mat_vec_q4_K(__global const struct block_q4_K * xx,
 
     for (int i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
 
-        const uint8_t * q1 = x[i].qs + q_offset;
-        const uint8_t * q2 = q1 + 64;
-        const float   * y1 = yy + i*QK_K + y_offset;
-        const float   * y2 = y1 + 128;
+        __global const uint8_t * q1 = x[i].qs + q_offset;
+        __global const uint8_t * q2 = q1 + 64;
+        __global const float   * y1 = yy + i*QK_K + y_offset;
+        __global const float   * y2 = y1 + 128;
 
         const float dall = vload_half(0, &x[i].d);
         const float dmin = vload_half(0, &x[i].dmin);
 
-        const uint16_t * a = (const uint16_t *)x[i].scales;
+        __global const uint16_t * a = (__global const uint16_t *)x[i].scales;
         aux[0] = a[im+0] & kmask1;
         aux[1] = a[im+2] & kmask1;
         aux[2] = ((a[im+4] >> 0) & kmask2) | ((a[im+0] & kmask3) >> 2);
@@ -589,16 +589,16 @@ __kernel void dequantize_mul_mat_vec_q5_K(__global const struct block_q5_K * xx,
 
     for (int i = ix; i < num_blocks_per_row; i += 2) {
 
-        const uint8_t * ql1 = x[i].qs + q_offset;
-        const uint8_t * ql2 = ql1 + 64;
-        const uint8_t * qh  = x[i].qh + l0;
-        const float   * y1  = yy + i*QK_K + y_offset;
-        const float   * y2  = y1 + 128;
+        __global const uint8_t * ql1 = x[i].qs + q_offset;
+        __global const uint8_t * ql2 = ql1 + 64;
+        __global const uint8_t * qh  = x[i].qh + l0;
+        __global const float   * y1  = yy + i*QK_K + y_offset;
+        __global const float   * y2  = y1 + 128;
 
         const float dall = vload_half(0, &x[i].d);
         const float dmin = vload_half(0, &x[i].dmin);
 
-        const uint16_t * a = (const uint16_t *)x[i].scales;
+        __global const uint16_t * a = (__global const uint16_t *)x[i].scales;
         aux[0] = a[im+0] & kmask1;
         aux[1] = a[im+2] & kmask1;
         aux[2] = ((a[im+4] >> 0) & kmask2) | ((a[im+0] & kmask3) >> 2);
@@ -668,10 +668,10 @@ __kernel void dequantize_mul_mat_vec_q6_K(__global const struct block_q6_K * xx,
 
     for (int i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
 
-        const float   * y  = yy + i * QK_K + y_offset;
-        const uint8_t * ql = x[i].ql + ql_offset;
-        const uint8_t * qh = x[i].qh + qh_offset;
-        const int8_t  * s  = x[i].scales + s_offset;
+        __global const float   * y  = yy + i * QK_K + y_offset;
+        __global const uint8_t * ql = x[i].ql + ql_offset;
+        __global const uint8_t * qh = x[i].qh + qh_offset;
+        __global const int8_t  * s  = x[i].scales + s_offset;
 
         const float d = vload_half(0, &x[i].d);
 
