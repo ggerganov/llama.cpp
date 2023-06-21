@@ -150,7 +150,7 @@ ModelLoadResult gptj_model_load(const std::string & fname, gptj_model & model, g
         params.mem_size   = ctx_size;
         params.mem_buffer = NULL;
         params.no_alloc   = false;
-        
+
 
         model.ctx = ggml_init(params);
         if (!model.ctx) {
@@ -281,7 +281,7 @@ ModelLoadResult gptj_model_load(const std::string & fname, gptj_model & model, g
                 fprintf(stderr, "%s: tensor '%s' has wrong size in model file\n", __func__, name.data());
                 return ModelLoadResult::FAIL;
             }
-          
+
 
             if (tensor->ne[0] != ne[0] || tensor->ne[1] != ne[1]) {
 
@@ -298,7 +298,7 @@ ModelLoadResult gptj_model_load(const std::string & fname, gptj_model & model, g
                             __func__, name.data(), tensor->ne[0], tensor->ne[1], ne[0], ne[1]);
                     return ModelLoadResult::FAIL;
                 }
-               
+
             }
 
             // for debugging
@@ -367,8 +367,16 @@ bool gptj_eval(
     static size_t buf_size = 256u*1024*1024;
     static void * buf = malloc(buf_size);
 
-    if (mem_per_token > 0 && (mem_per_token*N*2 + 64u*1024*1024) > buf_size) {
-        const size_t buf_size_new = 320u*1024*1024 + 1.6*(mem_per_token*N); // add 10% to account for ggml object overhead
+    // use 2 scratch buffers
+    // TODO: very hacky solution - reimplement in a more elegant way
+    static size_t scr0_size = (n_ctx>1024?512u:256u)*1024*1024;
+    static void * scr0 = malloc(scr0_size);
+
+    static size_t scr1_size = (n_ctx>1024?512u:256u)*1024*1024;
+    static void * scr1 = malloc(scr1_size);
+
+    if (mem_per_token > 0 && mem_per_token*N*1.05 > buf_size) {
+        const size_t buf_size_new = 64u*1024*1024 + 1.15*(mem_per_token*N); // add 10% to account for ggml object overhead
         //printf("\n%s: reallocating buffer from %zu to %zu bytes\n", __func__, buf_size, buf_size_new);
 
         // reallocate
@@ -388,7 +396,7 @@ bool gptj_eval(
     params.mem_size   = buf_size;
     params.mem_buffer = buf;
     params.no_alloc   = false;
-    
+
 
     struct ggml_context * ctx0 = ggml_init(params);
     struct ggml_cgraph gf = {};
@@ -402,6 +410,8 @@ bool gptj_eval(
 
     for (int il = 0; il < n_layer; ++il) {
         struct ggml_tensor * cur;
+
+        ggml_set_scratch(ctx0, { 0, scr0_size, scr0, });
 
         // norm
         {
@@ -490,6 +500,8 @@ bool gptj_eval(
                     cur);
         }
 
+        ggml_set_scratch(ctx0, { 0, scr1_size, scr1, });
+
         struct ggml_tensor * inpFF = cur;
 
         // feed-forward network
@@ -525,6 +537,8 @@ bool gptj_eval(
         inpL = ggml_add(ctx0, cur, inpL);
     }
 
+    ggml_set_scratch(ctx0, { 0, scr0_size, scr0, });
+
     // norm
     {
         inpL = ggml_norm(ctx0, inpL);
@@ -536,6 +550,8 @@ bool gptj_eval(
                     inpL),
                 ggml_repeat(ctx0, model.ln_f_b, inpL));
     }
+
+    ggml_set_scratch(ctx0, { 0, 0, nullptr, });
 
     // lm_head
     {
