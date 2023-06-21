@@ -18,7 +18,7 @@
 
 
 // load the model's weights from a file
-bool mpt_model_load(const std::string & fname, mpt_model & model, gpt_vocab & vocab) {
+bool mpt_model_load(const std::string & fname, mpt_model & model, gpt_vocab & vocab, int gpulayers) {
     printf("%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
     auto fin = std::ifstream(fname, std::ios::binary);
@@ -75,7 +75,7 @@ bool mpt_model_load(const std::string & fname, mpt_model & model, gpt_vocab & vo
         std::string word;
         std::vector<char> buf(128);
 
-        for (int i = 0; i < n_vocab; i++) {           
+        for (int i = 0; i < n_vocab; i++) {
             uint32_t len;
             fin.read((char *) &len, sizeof(len));
 
@@ -277,6 +277,28 @@ bool mpt_model_load(const std::string & fname, mpt_model & model, gpt_vocab & vo
     }
 
     fin.close();
+
+    //gpu offload
+    #if defined(GGML_USE_CLBLAST)
+    {
+        const auto & hparams = model.hparams;
+        size_t vram_total = 0;
+        const int n_gpu = std::min(gpulayers, int(hparams.n_layers));
+        fprintf(stderr, "%s: [opencl] offloading %d layers to GPU\n", __func__, n_gpu);
+        for (int i = 0; i < n_gpu; ++i) {
+            const auto & layer = model.layers[i];
+            layer.ffn_up_proj->backend = GGML_BACKEND_GPU;
+            layer.ffn_down_proj->backend = GGML_BACKEND_GPU;
+            layer.c_attn_wqkv_weight->backend = GGML_BACKEND_GPU;
+            layer.c_attn_out_proj_weight->backend = GGML_BACKEND_GPU;
+            ggml_cl_transform_tensor(layer.ffn_up_proj->data,layer.ffn_up_proj); vram_total += ggml_nbytes(layer.ffn_up_proj);
+            ggml_cl_transform_tensor(layer.ffn_down_proj->data,layer.ffn_down_proj); vram_total += ggml_nbytes(layer.ffn_down_proj);
+            ggml_cl_transform_tensor(layer.c_attn_wqkv_weight->data,layer.c_attn_wqkv_weight); vram_total += ggml_nbytes(layer.c_attn_wqkv_weight);
+            ggml_cl_transform_tensor(layer.c_attn_out_proj_weight->data,layer.c_attn_out_proj_weight); vram_total += ggml_nbytes(layer.c_attn_out_proj_weight);
+        }
+        fprintf(stderr, "%s: [opencl] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
+    }
+    #endif
 
     return true;
 }

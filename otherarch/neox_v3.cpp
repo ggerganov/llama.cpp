@@ -16,7 +16,7 @@
 
 
 // load the model's weights from a file
-ModelLoadResult gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt_vocab & vocab, FileFormat file_format) {
+ModelLoadResult gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt_vocab & vocab, FileFormat file_format, int gpulayers) {
     printf("%s: loading model from '%s' - please wait ...\n", __func__, fname.c_str());
 
     auto fin = std::ifstream(fname, std::ios::binary);
@@ -317,6 +317,28 @@ ModelLoadResult gpt_neox_model_load(const std::string & fname, gpt_neox_model & 
     }
 
     fin.close();
+
+    //gpu offload
+    #if defined(GGML_USE_CLBLAST)
+    {
+        const auto & hparams = model.hparams;
+        size_t vram_total = 0;
+        const int n_gpu = std::min(gpulayers, int(hparams.n_layer));
+        fprintf(stderr, "%s: [opencl] offloading %d layers to GPU\n", __func__, n_gpu);
+        for (int i = 0; i < n_gpu; ++i) {
+            const auto & layer = model.layers[i];
+            layer.c_attn_attn_w->backend = GGML_BACKEND_GPU;
+            layer.c_attn_proj_w->backend = GGML_BACKEND_GPU;
+            layer.c_mlp_fc_w->backend = GGML_BACKEND_GPU;
+            layer.c_mlp_proj_w->backend = GGML_BACKEND_GPU;
+            ggml_cl_transform_tensor(layer.c_attn_attn_w->data,layer.c_attn_attn_w); vram_total += ggml_nbytes(layer.c_attn_attn_w);
+            ggml_cl_transform_tensor(layer.c_attn_proj_w->data,layer.c_attn_proj_w); vram_total += ggml_nbytes(layer.c_attn_proj_w);
+            ggml_cl_transform_tensor(layer.c_mlp_fc_w->data,layer.c_mlp_fc_w); vram_total += ggml_nbytes(layer.c_mlp_fc_w);
+            ggml_cl_transform_tensor(layer.c_mlp_proj_w->data,layer.c_mlp_proj_w); vram_total += ggml_nbytes(layer.c_mlp_proj_w);
+        }
+        fprintf(stderr, "%s: [opencl] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
+    }
+    #endif
 
     return ModelLoadResult::SUCCESS;
 }

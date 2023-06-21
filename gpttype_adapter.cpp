@@ -671,7 +671,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     {
         if(file_format==FileFormat::NEOX_6|| file_format==FileFormat::NEOX_7)
         {
-            ModelLoadResult res = gpt_neox_model_load(params.model, neox_ctx_v3, vocab, file_format);
+            ModelLoadResult res = gpt_neox_model_load(params.model, neox_ctx_v3, vocab, file_format, inputs.gpulayers);
             if(res==ModelLoadResult::FAIL)
             {
                 fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
@@ -733,7 +733,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     }
     else if(file_format==FileFormat::MPT_1)
     {
-        bool res = mpt_model_load(params.model, mpt_ctx_v3, vocab);
+        bool res = mpt_model_load(params.model, mpt_ctx_v3, vocab, inputs.gpulayers);
         if(res==false)
         {
             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());

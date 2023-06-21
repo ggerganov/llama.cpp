@@ -43,7 +43,6 @@ struct gptj_layer {
     struct ggml_tensor * c_mlp_fc_b;
 
     struct ggml_tensor * c_mlp_proj_w;
-    struct ggml_tensor * c_mlp_proj_w_trans; //for backwards compatibility
     struct ggml_tensor * c_mlp_proj_b;
 };
 struct gptj_layer_v2 {
