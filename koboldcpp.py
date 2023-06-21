@@ -724,7 +724,7 @@ def main(args):
             sys.exit(2)
 
     if args.hordeconfig and args.hordeconfig[0]!="":
-        global friendlymodelname, maxhordelen, showdebug
+        global friendlymodelname, maxhordelen, maxhordectx, showdebug
         friendlymodelname = "koboldcpp/"+args.hordeconfig[0]
         if len(args.hordeconfig) > 1:
             maxhordelen = int(args.hordeconfig[1])
