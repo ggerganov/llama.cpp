@@ -548,7 +548,7 @@ cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
 
 OpenLLaMA is an openly licensed reproduction of Meta's original LLaMA model. It uses the same architecture and is a drop-in replacement for the original LLaMA weights.
 
-- Download the [3B](https://huggingface.co/openlm-research/open_llama_3b), [7B](https://huggingface.co/openlm-research/open_llama_7b), or [13B](https://huggingface.co/openlm-research/open_llama_13b) model from Hugging Face.
+- Download the [7B](https://huggingface.co/openlm-research/open_llama_7b) or [13B](https://huggingface.co/openlm-research/open_llama_13b) model from Hugging Face. The 3B model currently does not work properly.
 - Convert the model to ggml FP16 format using `python convert.py <path to OpenLLaMA directory>`
 
 ### Using [GPT4All](https://github.com/nomic-ai/gpt4all)
