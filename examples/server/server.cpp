@@ -354,6 +354,7 @@ struct llama_server_context {
                     result.tok = llama_sample_token(ctx, &candidates_p);
                 }
             }
+            // Add maximum of 5 most probable tokens to the result
             for (size_t i = 0; i < std::min(candidates_p.size, std::min((size_t) n_probs, size_t(5))); ++i) {
                 result.probs.push_back({candidates_p.data[i].id, candidates_p.data[i].p});
             }
