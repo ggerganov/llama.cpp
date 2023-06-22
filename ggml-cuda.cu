@@ -1913,10 +1913,9 @@ inline void ggml_cuda_op_rope(
     const int mode      = (int)((float *) src1->data)[2];
     const float p_scale = ((float *) src1->data)[3];
     GGML_ASSERT(mode == 0);
-    GGML_ASSERT(p_scale == 1.0);
 
     const float theta_scale = powf(10000.0, -2.0f/n_dims);
-    const float p = ((mode & 1) == 0 ? n_past + i02 : i02);
+    const float p = p_scale * ((mode & 1) == 0 ? n_past + i02 : i02);
 
     // compute
     rope_f32_cuda(src0_ddf_i, dst_ddf_i, ne00, i01_diff, p, theta_scale, cudaStream_main);

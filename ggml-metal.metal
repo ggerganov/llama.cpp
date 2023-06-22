@@ -615,6 +615,7 @@ kernel void kernel_rope(
         constant       int & n_past,
         constant       int & n_dims,
         constant       int & mode,
+        constant     float & p_scale,
         uint3 tpig[[thread_position_in_grid]]) {
     const int64_t i3 = tpig[2];
     const int64_t i2 = tpig[1];
@@ -625,7 +626,7 @@ kernel void kernel_rope(
 
     const int64_t p = ((mode & 1) == 0 ? n_past + i2 : i2);
 
-    float theta = (float)p;
+    float theta = p_scale * (float)p;
 
     if (!is_neox) {
         for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
