@@ -181,14 +181,13 @@ static const std::map<e_model, size_t> & VRAM_REQ_SCRATCH_PER_CONTEXT()
 // default hparams (LLaMA 7B)
 struct llama_hparams {
     uint32_t n_vocab   = 32000;
-    uint32_t n_vocab_sp = 0;
+    uint32_t n_vocab_base = 32000;
     uint32_t n_ctx     = 512;   // this is provided as user input?
     uint32_t n_embd    = 4096;
     uint32_t n_mult    = 256;
     uint32_t n_head    = 32;
     uint32_t n_head_kv = 32;
     uint32_t n_layer   = 32;
-    uint32_t n_rot     = 64;
 
     // LLaMAv2
     // TODO: load from model data hparams
@@ -499,7 +498,6 @@ enum llama_file_version {
     LLAMA_FILE_VERSION_GGJT_V1, // added padding
     LLAMA_FILE_VERSION_GGJT_V2, // changed quantization format
     LLAMA_FILE_VERSION_GGJT_V3, // changed Q4 and Q8 quantization format
-    LLAMA_FILE_VERSION_GGJT_V4, // improved support for added/special tokens
 };
 
 struct llama_file_loader {
@@ -515,6 +513,7 @@ struct llama_file_loader {
         read_hparams();
         read_vocab();
         read_tensor_metadata(tensors_map);
+        set_vocab_sp();
     }
     void read_magic() {
         uint32_t magic = file.read_u32();
@@ -537,7 +536,6 @@ struct llama_file_loader {
                     case 1: file_version = LLAMA_FILE_VERSION_GGJT_V1; return;
                     case 2: file_version = LLAMA_FILE_VERSION_GGJT_V2; return;
                     case 3: file_version = LLAMA_FILE_VERSION_GGJT_V3; return;
-                    case 4: file_version = LLAMA_FILE_VERSION_GGJT_V4; return;
                 }
         }
 
@@ -546,18 +544,18 @@ struct llama_file_loader {
     }
     void read_hparams() {
         hparams.n_vocab = file.read_u32();
-        hparams.n_vocab_sp = file_version >= LLAMA_FILE_VERSION_GGJT_V4 ? file.read_u32() : 0;
         hparams.n_embd  = file.read_u32();
         hparams.n_mult  = file.read_u32();
         hparams.n_head  = file.read_u32();
         hparams.n_layer = file.read_u32();
-        hparams.n_rot   = file.read_u32();
+        hparams.n_vocab_base = file.read_u32();
+        hparams.n_vocab_base = (hparams.n_vocab_base & 0xF0000000) == 0 ? hparams.n_vocab : (hparams.n_vocab_base & ~0xF0000000); // this bitwise operation is necessary for compatibility with older models
         hparams.ftype   = (enum llama_ftype) file.read_u32();
 
         // LLaMAv2
         // TODO: read from header
         hparams.n_head_kv = hparams.n_head;
-    }
+=======
     void read_vocab() {
         vocab.id_to_token.resize(hparams.n_vocab);
 
@@ -573,20 +571,6 @@ struct llama_file_loader {
             auto & tok_score = vocab.id_to_token[i];
             tok_score.tok = std::move(word);
             tok_score.score = score;
-        }
-
-        vocab.special_token_to_id.reserve(hparams.n_vocab_sp);
-
-        for (uint32_t i = 0; i < hparams.n_vocab_sp; i++) {
-            llama_vocab::id token_id = file.read_u32();
-            const auto & word = vocab.id_to_token[token_id].tok;
-
-            vocab.special_token_trie.add(word);
-            vocab.special_token_to_id[word] = token_id;
-
-            if (vocab.max_special_token_length < word.size()) {
-                vocab.max_special_token_length = word.size();
-            }
         }
     }
     void read_tensor_metadata(llama_load_tensors_map & tensors_map) {
@@ -634,6 +618,24 @@ struct llama_file_loader {
             tensors_map.name_to_idx[name] = tensors_map.tensors.size() - 1;
         }
     }
+    void set_vocab_sp() {
+        uint32_t vocab_sp = 3 + hparams.n_vocab - hparams.n_vocab_base;
+        vocab.special_token_to_id.reserve(vocab_sp);
+        for (uint32_t i = 0; i < vocab_sp; i++) {
+            llama_vocab::id token_id = i > 2 ? hparams.n_vocab_base + i : i;
+            const auto & word = vocab.id_to_token[token_id].tok;
+            if (word.empty()) {
+                continue;
+            }
+
+            vocab.special_token_trie.add(word);
+            vocab.special_token_to_id[word] = token_id;
+
+            if (vocab.max_special_token_length < word.size()) {
+                vocab.max_special_token_length = word.size();
+            }
+        }
+    }
 };
 
 struct llama_file_saver {
@@ -653,12 +655,11 @@ struct llama_file_saver {
     void write_hparams(enum llama_ftype new_ftype) {
         const llama_hparams & hparams = any_file_loader->hparams;
         file.write_u32(hparams.n_vocab);
-        file.write_u32(hparams.n_vocab_sp);
         file.write_u32(hparams.n_embd);
         file.write_u32(hparams.n_mult);
         file.write_u32(hparams.n_head);
         file.write_u32(hparams.n_layer);
-        file.write_u32(hparams.n_rot);
+        file.write_u32(hparams.n_vocab_base | 0xF0000000); // this bitwise operation is necessary for compatibility with older models
         file.write_u32(new_ftype);
     }
     void write_vocab() {
@@ -671,9 +672,6 @@ struct llama_file_saver {
             file.write_u32((uint32_t) token_score.tok.size());
             file.write_raw(token_score.tok.data(), token_score.tok.size());
             file.write_raw(&token_score.score, sizeof(token_score.score));
-        }
-        for (const auto & pair : any_file_loader->vocab.special_token_to_id) {
-            file.write_u32(pair.second);
         }
     }
     void write_tensor(llama_load_tensor & tensor, enum ggml_type new_type, const void * new_data, size_t new_size) {
@@ -1001,8 +999,7 @@ static const char *llama_file_version_name(llama_file_version version) {
         case LLAMA_FILE_VERSION_GGMF_V1: return "ggmf v1 (old version with no mmap support)";
         case LLAMA_FILE_VERSION_GGJT_V1: return "ggjt v1 (pre #1405)";
         case LLAMA_FILE_VERSION_GGJT_V2: return "ggjt v2 (pre #1508)";
-        case LLAMA_FILE_VERSION_GGJT_V3: return "ggjt v3 (pre #1931)";
-        case LLAMA_FILE_VERSION_GGJT_V4: return "ggjt v4 (latest)";
+        case LLAMA_FILE_VERSION_GGJT_V3: return "ggjt v3 (latest)";
     }
 
     return "unknown";
@@ -1127,7 +1124,7 @@ static void llama_model_load_internal(
         fprintf(stderr, "%s: n_head     = %u\n",   __func__, hparams.n_head);
         fprintf(stderr, "%s: n_head_kv  = %u\n",   __func__, hparams.n_head_kv);
         fprintf(stderr, "%s: n_layer    = %u\n",   __func__, hparams.n_layer);
-        fprintf(stderr, "%s: n_rot      = %u\n",   __func__, hparams.n_rot); // a.k.a. n_embd_head, n_head_dim
+        fprintf(stderr, "%s: n_rot      = %u\n",   __func__, hparams.n_embd/hparams.n_head); // a.k.a. n_embd_head, n_head_dim
         fprintf(stderr, "%s: n_gqa      = %u\n",   __func__, hparams.n_gqa());
         fprintf(stderr, "%s: rnorm_eps  = %.1e\n", __func__, hparams.f_rms_norm_eps);
         fprintf(stderr, "%s: n_ff       = %u\n",   __func__, n_ff);

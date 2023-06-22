@@ -142,7 +142,7 @@ def find_n_mult(n_ff: int, n_embd: int) -> int:
 @dataclass
 class Params:
     n_vocab:   int
-    n_vocab_sp:int
+    n_vocab_base: int
     n_embd:    int
     n_mult:    int
     n_head:    int
@@ -170,7 +170,7 @@ class Params:
 
         return Params(
             n_vocab   = n_vocab,
-            n_vocab_sp= n_vocab,
+            n_vocab_base=n_vocab,
             n_embd    = n_embd,
             n_mult    = 256,
             n_head    = n_head,
@@ -193,7 +193,7 @@ class Params:
 
         return Params(
             n_vocab   = n_vocab,
-            n_vocab_sp= n_vocab,
+            n_vocab_base=n_vocab,
             n_embd    = n_embd,
             n_mult    = n_mult,
             n_head    = n_head,
@@ -218,7 +218,7 @@ class Params:
 
         return Params(
             n_vocab   = n_vocab,
-            n_vocab_sp= n_vocab
+            n_vocab_base=n_vocab,
             n_embd    = n_embd,
             n_mult    = n_mult,
             n_head    = n_head,
@@ -283,7 +283,7 @@ class SentencePieceVocab:
         else:
             tokenizer_config = {}
         for key, value in tokenizer_config.items():
-            if not isinstance(value, dict) or not isinstance(value, str):
+            if not isinstance(value, dict) and not isinstance(value, str):
                 continue
             token_id = TOKEN_NAME_TO_ID.get(key, -1)
             if token_id == -1:
@@ -296,14 +296,12 @@ class SentencePieceVocab:
         else:
             special_tokens = {}
         for key, value in special_tokens.items():
-            if not isinstance(value, dict) or not isinstance(value, str):
+            if not isinstance(value, dict) and not isinstance(value, str):
                 continue
             token_id = TOKEN_NAME_TO_ID.get(key, -1)
             if token_id == -1 or token_id in self.special_tokens_map:
                 continue
             self.special_tokens_map[token_id] = value["content"] if isinstance(value, dict) else value
-
-        self.vocab_special_size: int = len(self.added_tokens_list) + len(self.special_tokens_map)
 
     def sentencepiece_tokens(self) -> Iterable[Tuple[bytes, float]]:
         tokenizer = self.sentencepiece_tokenizer
@@ -361,7 +359,7 @@ class GGMLVocab:
         self.tokens = tokens
         self.special_tokens = []
         self.vocab_size = len(tokens)
-        self.vocab_special_size = 0
+        self.vocab_size_base = 0
 
     def all_tokens(self) -> Iterable[Tuple[bytes, float]]:
         return self.tokens
@@ -1120,17 +1118,21 @@ class OutputFile:
     def write_file_header(self, params: Params, file_type: GGMLFileType) -> None:
         self.fout.write(b"ggjt"[::-1])  # magic
         values = [
-            4,  # file version
+            1,  # file version
             params.n_vocab,
-            params.n_vocab_sp,
             params.n_embd,
             params.n_mult,
             params.n_head,
             params.n_layer,
+<<<<<<< HEAD
             params.n_embd // params.n_head,  # rot (obsolete)
             file_type.value,
+=======
+            params.n_vocab_base | 0xF0000000, # reuse obsolete rot value to store vocab_base
+            params.file_type.value,
+>>>>>>> bfccc62 (Use some tricks to eliminate the necessity for a new format)
         ]
-        self.fout.write(struct.pack("i" * len(values), *values))
+        self.fout.write(struct.pack("I" * len(values), *values))
 
     def write_tensor_header(self, name: str, shape: Sequence[int], data_type: DataType) -> None:
         sname = name.encode('utf-8')
@@ -1144,13 +1146,11 @@ class OutputFile:
             self.fout.write(struct.pack("i", len(text)))
             self.fout.write(text)
             self.fout.write(struct.pack("f", score))
-        for token_id in vocab.all_special_tokens():
-            self.fout.write(struct.pack("i", token_id))
 
     @staticmethod
     def write_vocab_only(fname_out: Path, vocab: Vocab) -> None:
         of = OutputFile(fname_out)
-        params = Params(n_vocab=vocab.vocab_size, n_vocab_sp=vocab.vocab_special_size, n_embd=0, n_mult=0,
+        params = Params(n_vocab=vocab.vocab_size, n_vocab_base=vocab.vocab_size_base, n_embd=0, n_mult=0,
                         n_head=1, n_layer=0)
         of = OutputFile(fname_out)
         of.write_file_header(params, file_type=GGMLFileType.AllF32)
@@ -1373,7 +1373,7 @@ def main(args_in: Optional[List[str]] = None) -> None:
             vocab_dir = args.vocab_dir if args.vocab_dir else model_plus.paths[0].parent
             vocab = load_vocab(vocab_dir, args.vocabtype)
         params = Params.load(model_plus)
-        params.n_vocab_sp = vocab.vocab_special_size
+        params.n_vocab_base = vocab.vocab_size_base
         model = model_plus.model
         model = do_necessary_conversions(model, params)
         output_type = pick_output_type(model, args.outtype)
