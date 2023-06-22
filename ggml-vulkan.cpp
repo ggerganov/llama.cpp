@@ -9,6 +9,10 @@
 #include <fstream>
 #include <kompute/Kompute.hpp>
 
+#ifndef __STDC_IEC_559__
+#error Your C implementation is not IEC 559 compliant, which is required for proper Vulkan interop.
+#endif
+
 typedef ggml_fp16_t half;
 
 #define MULTILINE_QUOTE(...) #__VA_ARGS__
@@ -53,25 +57,20 @@ layout(binding = 0) buffer tensorBlockQ4_0D { float16_t x_d[]; };
 layout(binding = 1) buffer tensorBlockQ4_0QS { uint8_t x_qs[]; };
 layout(binding = 2) buffer tensorY { float y[]; };
 
-// Push constants
-layout(push_constant) uniform PushConstants {
-    int k;
-} pcs;
-
 void main() {
     const int qk = QK4_0;
 
     const int i = int(gl_GlobalInvocationID.x);
     const int j = int(gl_GlobalInvocationID.y);
 
-    const float16_t d = x_d[i];
-    const uint8_t qs = x_qs[i * (QK4_0 / 2) + j];
+    const float d = float(x_d[i]);
+    const uint8_t qs = x_qs[i * (qk / 2) + j];
 
     const int x0 = (qs & 0x0F) - 8;
     const int x1 = (qs >>   4) - 8;
 
-    y[i*qk + j + 0   ] = float16_t(x0)*d;
-    y[i*qk + j + qk/2] = float16_t(x1)*d;
+    y[i*qk + j + 0   ] = float(x0)*d;
+    y[i*qk + j + qk/2] = float(x1)*d;
 }
 );
 
@@ -97,20 +96,20 @@ void ggml_vk_dequantize_row_q4_0(const void *x_, float *y, int k) {
 
     const auto x = reinterpret_cast<const block_q4_0*>(x_);
 
+    assert(k % qk == 0);
+
     auto getVecBlockQ4_0D = [] (const block_q4_0 *x) {
-        std::vector<half> fres;
-        fres.reserve(nb);
+        std::vector<half> fres(nb);
         for (unsigned it = 0; it != nb; it++) {
-            fres.push_back(x[it].d);
+            fres[it] = x[it].d;
         }
         return fres;
     };
     auto getVecBlockQ4_0QS = [] (const block_q4_0 *x) {
-        std::vector<uint8_t> fres;
-        fres.resize(nb*(qk/2));
+        std::vector<uint8_t> fres(nb*(qk/2));
         for (unsigned x_it = 0; x_it != nb; x_it++) {
             for (unsigned qs_it = 0; qs_it != qk / 2; qs_it++) {
-                fres.push_back(x[x_it].qs[qs_it]);
+                fres[x_it * (qk / 2) + qs_it] = x[x_it].qs[qs_it];
             }
         }
         return fres;
@@ -120,15 +119,9 @@ void ggml_vk_dequantize_row_q4_0(const void *x_, float *y, int k) {
     const auto tensorBlockQ4_0QS = mgr.tensorT<uint8_t>(getVecBlockQ4_0QS(x));
     const auto tensorY = mgr.tensor(std::vector<float>(y, y+y_size));
 
-    struct PushConsts {
-        int k;
-    } pushConsts {
-        k
-    };
-
     mgr.sequence()
             ->record<kp::OpTensorSyncDevice>({tensorBlockQ4_0D, tensorBlockQ4_0QS, tensorY})
-            ->record<kp::OpAlgoDispatch>(mgr.algorithm({tensorBlockQ4_0D, tensorBlockQ4_0QS, tensorY}, spirv, {nb, qk/2, 0}, {}, {0}), std::vector<PushConsts>{pushConsts})
+            ->record<kp::OpAlgoDispatch>(mgr.algorithm({tensorBlockQ4_0D, tensorBlockQ4_0QS, tensorY}, spirv, {nb, qk/2, 0}))
             ->record<kp::OpTensorSyncLocal>({tensorY})
             ->eval();
 
