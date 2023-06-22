@@ -53,6 +53,35 @@ std::vector<uint32_t> compileSource(const std::string& source) {
     return {(uint32_t*)buffer.data(), (uint32_t*)(buffer.data() + buffer.size())};
 }
 
+template<class T>
+std::vector<half> getVecBlockQ4_0D(T *x, unsigned nb) {
+    std::vector<half> fres(nb);
+    for (unsigned it = 0; it != nb; it++) {
+        fres[it] = x[it].d;
+    }
+    return fres;
+}
+
+template<class T>
+std::vector<half> getVecBlockQ4_0M(T *x, unsigned nb) {
+    std::vector<half> fres(nb);
+    for (unsigned it = 0; it != nb; it++) {
+        fres[it] = x[it].m;
+    }
+    return fres;
+}
+
+template<class T>
+std::vector<uint8_t> getVecBlockQ4_0QS(T *x, unsigned nb, unsigned qk) {
+    std::vector<uint8_t> fres(nb*(qk/2));
+    for (unsigned x_it = 0; x_it != nb; x_it++) {
+        for (unsigned qs_it = 0; qs_it != qk / 2; qs_it++) {
+            fres[x_it * (qk / 2) + qs_it] = x[x_it].qs[qs_it];
+        }
+    }
+    return fres;
+};
+
 
 static const std::string program_source_head = R"(
 #version 450
@@ -88,7 +117,6 @@ void main() {
 }
 );
 
-
 void ggml_vk_dequantize_row_q4_0(const void *x_, float *y, int k) {
     static const int qk = QK4_0;
     const unsigned nb = k / qk;
@@ -99,30 +127,63 @@ void ggml_vk_dequantize_row_q4_0(const void *x_, float *y, int k) {
 
     assert(k % qk == 0);
 
-    auto getVecBlockQ4_0D = [x, nb] () {
-        std::vector<half> fres(nb);
-        for (unsigned it = 0; it != nb; it++) {
-            fres[it] = x[it].d;
-        }
-        return fres;
-    };
-    auto getVecBlockQ4_0QS = [x, nb] () {
-        std::vector<uint8_t> fres(nb*(qk/2));
-        for (unsigned x_it = 0; x_it != nb; x_it++) {
-            for (unsigned qs_it = 0; qs_it != qk / 2; qs_it++) {
-                fres[x_it * (qk / 2) + qs_it] = x[x_it].qs[qs_it];
-            }
-        }
-        return fres;
-    };
-
-    const auto tensorBlockQ4_0D = mgr.tensorT<half>(getVecBlockQ4_0D());
-    const auto tensorBlockQ4_0QS = mgr.tensorT<uint8_t>(getVecBlockQ4_0QS());
+    const auto tensorBlockQ4_0D = mgr.tensorT<half>(getVecBlockQ4_0D(x, nb));
+    const auto tensorBlockQ4_0QS = mgr.tensorT<uint8_t>(getVecBlockQ4_0QS(x, nb, qk));
     const auto tensorY = mgr.tensor(std::vector<float>(y, y+y_size));
 
     mgr.sequence()
             ->record<kp::OpTensorSyncDevice>({tensorBlockQ4_0D, tensorBlockQ4_0QS, tensorY})
             ->record<kp::OpAlgoDispatch>(mgr.algorithm({tensorBlockQ4_0D, tensorBlockQ4_0QS, tensorY}, spirv, {nb, qk/2, 0}))
+            ->record<kp::OpTensorSyncLocal>({tensorY})
+            ->eval();
+
+    std::memcpy(y, tensorY->data(), tensorY->size()*sizeof(*y));
+}
+
+
+static const std::string program_dequantize_row_q4_1 =
+        program_source_head+'\n'+MULTILINE_QUOTE(
+layout(binding = 0) buffer tensorBlockQ4_0D { float16_t x_d[]; };
+layout(binding = 1) buffer tensorBlockQ4_0M { float16_t x_m[]; };
+layout(binding = 2) buffer tensorBlockQ4_0QS { uint8_t x_qs[]; };
+layout(binding = 3) buffer tensorY { float y[]; };
+
+void main() {
+    const int qk = QK4_1;
+
+    const int i = int(gl_GlobalInvocationID.x);
+    const int j = int(gl_GlobalInvocationID.y);
+
+    const float d = float(x_d[i]);
+    const float m = float(x_m[i]);
+    const uint8_t qs = x_qs[i * (qk / 2) + j];
+
+    const int x0 = (qs & 0x0F);
+    const int x1 = (qs >>   4);
+
+    y[i*qk + j + 0   ] = x0*d + m;
+    y[i*qk + j + qk/2] = x1*d + m;
+}
+);
+
+void ggml_vk_dequantize_row_q4_1(const void *x_, float *y, int k) {
+    static const int qk = QK4_1;
+    const unsigned nb = k / qk;
+    const unsigned y_size = nb*qk;
+    const static auto spirv = compileSource(program_dequantize_row_q4_1);
+
+    const auto x = reinterpret_cast<const block_q4_1*>(x_);
+
+    assert(k % qk == 0);
+
+    const auto tensorBlockQ4_0D = mgr.tensorT<half>(getVecBlockQ4_0D(x, nb));
+    const auto tensorBlockQ4_0M = mgr.tensorT<half>(getVecBlockQ4_0M(x, nb));
+    const auto tensorBlockQ4_0QS = mgr.tensorT<uint8_t>(getVecBlockQ4_0QS(x, nb, qk));
+    const auto tensorY = mgr.tensor(std::vector<float>(y, y+y_size));
+
+    mgr.sequence()
+            ->record<kp::OpTensorSyncDevice>({tensorBlockQ4_0D, tensorBlockQ4_0M, tensorBlockQ4_0QS, tensorY})
+            ->record<kp::OpAlgoDispatch>(mgr.algorithm({tensorBlockQ4_0D, tensorBlockQ4_0M, tensorBlockQ4_0QS, tensorY}, spirv, {nb, qk/2, 0}))
             ->record<kp::OpTensorSyncLocal>({tensorY})
             ->eval();
 
