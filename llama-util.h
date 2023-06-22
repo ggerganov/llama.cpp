@@ -537,6 +537,48 @@ struct llama_ctx_buffer {
     llama_ctx_buffer& operator=(const llama_ctx_buffer&) = delete;
     llama_ctx_buffer& operator=(llama_ctx_buffer&&) = delete;
 };
+#elif defined(GGML_USE_KOMPUTE)
+#include "ggml-vulkan.h"
+struct llama_ctx_buffer {
+    uint8_t * addr = NULL;
+    size_t size = 0;
+    ggml_vk_memory memory;
+
+    llama_ctx_buffer() = default;
+
+    void resize(size_t size) {
+        free();
+
+        if (!ggml_vk_has_device()) {
+            this->addr = new uint8_t[size];
+            this->size = size;
+        } else {
+            this->memory = ggml_vk_allocate(size);
+            this->addr = (uint8_t*)memory.data;
+            this->size = size;
+        }
+    }
+
+    void free() {
+        if (!ggml_vk_has_device()) {
+            delete[] addr;
+        } else if (memory.data) {
+            ggml_vk_free_memory(memory);
+        }
+        this->addr = NULL;
+        this->size = 0;
+    }
+
+    ~llama_ctx_buffer() {
+        free();
+    }
+
+    // disable copy and move
+    llama_ctx_buffer(const llama_ctx_buffer&) = delete;
+    llama_ctx_buffer(llama_ctx_buffer&&) = delete;
+    llama_ctx_buffer& operator=(const llama_ctx_buffer&) = delete;
+    llama_ctx_buffer& operator=(llama_ctx_buffer&&) = delete;
+};
 #else
 typedef llama_buffer llama_ctx_buffer;
 #endif

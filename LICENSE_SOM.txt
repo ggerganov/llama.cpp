@@ -1,0 +1,30 @@
+Software for Open Models License (SOM)
+Version 1.0 dated August 30th, 2023
+
+This license governs use of the accompanying Software. If you use the Software, you accept this license. If you do not accept the license, do not use the Software.
+
+This license is intended to encourage open release of models created, modified, processed, or otherwise used via the Software under open licensing terms, and should be interpreted in light of that intent.
+
+1. Definitions
+The “Licensor” is the person or entity who is making the Software available under this license. “Software” is the software made available by Licensor under this license.
+A “Model” is the output of a machine learning algorithm, and excludes the Software.
+“Model Source Materials” must include the Model and model weights, and may include any input data, input data descriptions, documentation or training descriptions for the Model.
+“Open Licensing Terms” means: (a) any open source license approved by the Open Source Initiative, or (b) any other terms that make the Model Source Materials publicly available free of charge, and allow recipients to use, modify and distribute the Model Source Materials. Terms described in (b) may include reasonable restrictions such as non-commercial or non-production limitations, or require use in compliance with law.
+
+2. Grant of Rights. Subject to the conditions and limitations in section 3:
+(A) Copyright Grant. Licensor grants you a non-exclusive, worldwide, royalty-free copyright license to copy, modify, and distribute the Software and any modifications of the Software you create under this license. The foregoing license includes without limitation the right to create, modify, and use Models using this Software.
+
+(B) Patent Grant. Licensor grants you a non-exclusive, worldwide, royalty-free license, under any patents owned or controlled by Licensor, to make, have made, use, sell, offer for sale, import, or otherwise exploit the Software.  No license is granted to patent rights that are not embodied in the operation of the Software in the form provided by Licensor.
+
+3. Conditions and Limitations
+(A) Model Licensing and Access. If you use the Software to create, modify, process, or otherwise use any Model, including usage to create inferences with a Model, whether or not you make the Model available to others, you must make that Model Source Materials publicly available under Open Licensing Terms. 
+
+(B) No Re-Licensing. If you redistribute the Software, or modifications to the Software made under the license granted above, you must make it available only under the terms of this license. You may offer additional terms such as warranties, maintenance and support, but You, and not Licensor, are responsible for performing such terms.
+
+(C) No Trademark License. This license does not grant you rights to use the Licensor’s name, logo, or trademarks.
+
+(D) If you assert in writing a claim against any person or entity alleging that the use of the Software infringes any patent, all of your licenses to the Software under Section 2 end automatically as of the date you asserted the claim.
+
+(E) If you distribute any portion of the Software, you must retain all copyright, patent, trademark, and attribution notices that are present in the Software, and you must include a copy of this license.
+
+(F) The Software is licensed “as-is.” You bear the entire risk of using it. Licensor gives You no express warranties, guarantees or conditions. You may have additional consumer rights under your local laws that this license cannot change. To the extent permitted under your local laws, the Licensor disclaims and excludes the implied warranties of merchantability, fitness for a particular purpose and non-infringement. To the extent this disclaimer is unlawful, you, and not Licensor, are responsible for any liability.

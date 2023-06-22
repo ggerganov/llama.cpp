@@ -36,6 +36,10 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+#if defined(GGML_USE_KOMPUTE)
+#include "ggml-vulkan.h"
+#endif
+
 static llama_context ** g_ctx;
 static bool is_interacting = false;
 
@@ -117,6 +121,10 @@ int main(int argc, char ** argv) {
     llama_context * ctx;
     llama_context * ctx_guidance = NULL;
     g_ctx = &ctx;
+
+#if defined(GGML_USE_KOMPUTE)
+    ggml_vk_init_device(0, "gpu");
+#endif
 
     // load the model and apply lora adapter, if any
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
