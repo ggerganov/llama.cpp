@@ -56,3 +56,5 @@ qnt-*.txt
 perf-*.txt
 
 examples/jeopardy/results.txt
+
+CMakeLists.txt.user*
