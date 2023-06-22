@@ -42,7 +42,7 @@
 #define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
 #define LLAMA_SESSION_VERSION 1
 
-#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL)
+#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL) || defined(GGML_USE_KOMPUTE)
 // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
 #define LLAMA_SUPPORTS_GPU_OFFLOAD
 #endif

@@ -9007,7 +9007,7 @@ static void ggml_compute_forward_add_q_f32(
     }
 }
 
-static void ggml_compute_forward_add(
+void ggml_compute_forward_add(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
@@ -9587,7 +9587,7 @@ static void ggml_compute_forward_mul_f32(
     }
 }
 
-static void ggml_compute_forward_mul(
+void ggml_compute_forward_mul(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
@@ -10510,7 +10510,7 @@ static void ggml_compute_forward_elu(
 
 // ggml_compute_forward_relu
 
-static void ggml_compute_forward_relu_f32(
+void ggml_compute_forward_relu_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         struct ggml_tensor * dst) {
@@ -10534,7 +10534,7 @@ static void ggml_compute_forward_relu_f32(
     }
 }
 
-static void ggml_compute_forward_relu(
+void ggml_compute_forward_relu(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         struct ggml_tensor * dst) {
@@ -10552,7 +10552,7 @@ static void ggml_compute_forward_relu(
 
 // ggml_compute_forward_gelu
 
-static void ggml_compute_forward_gelu_f32(
+void ggml_compute_forward_gelu_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         struct ggml_tensor * dst) {
@@ -10593,7 +10593,7 @@ static void ggml_compute_forward_gelu_f32(
     }
 }
 
-static void ggml_compute_forward_gelu(
+void ggml_compute_forward_gelu(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         struct ggml_tensor * dst) {
@@ -10670,7 +10670,7 @@ static void ggml_compute_forward_gelu_quick(
 
 // ggml_compute_forward_silu
 
-static void ggml_compute_forward_silu_f32(
+void ggml_compute_forward_silu_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         struct ggml_tensor * dst) {
@@ -10711,7 +10711,7 @@ static void ggml_compute_forward_silu_f32(
     }
 }
 
-static void ggml_compute_forward_silu(
+void ggml_compute_forward_silu(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         struct ggml_tensor * dst) {
@@ -10844,7 +10844,7 @@ static void ggml_compute_forward_norm_f32(
     }
 }
 
-static void ggml_compute_forward_norm(
+void ggml_compute_forward_norm(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         struct ggml_tensor * dst) {
@@ -10910,7 +10910,7 @@ static void ggml_compute_forward_rms_norm_f32(
     }
 }
 
-static void ggml_compute_forward_rms_norm(
+void ggml_compute_forward_rms_norm(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         struct ggml_tensor * dst) {
@@ -11623,7 +11623,7 @@ static void ggml_compute_forward_scale_f32(
     }
 }
 
-static void ggml_compute_forward_scale(
+void ggml_compute_forward_scale(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
@@ -11744,7 +11744,7 @@ static void ggml_compute_forward_set(
 
 // ggml_compute_forward_cpy
 
-static void ggml_compute_forward_cpy(
+void ggml_compute_forward_cpy(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         struct ggml_tensor * dst) {
@@ -11888,7 +11888,7 @@ static void ggml_compute_forward_get_rows_f32(
     }
 }
 
-static void ggml_compute_forward_get_rows(
+void ggml_compute_forward_get_rows(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
@@ -12164,7 +12164,7 @@ static void ggml_compute_forward_diag_mask_f32(
     }
 }
 
-static void ggml_compute_forward_diag_mask_inf(
+void ggml_compute_forward_diag_mask_inf(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         struct ggml_tensor * dst) {
@@ -12198,7 +12198,7 @@ static void ggml_compute_forward_diag_mask_zero(
 
 // ggml_compute_forward_soft_max
 
-static void ggml_compute_forward_soft_max_f32(
+void ggml_compute_forward_soft_max_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         struct ggml_tensor * dst) {
@@ -12887,7 +12887,7 @@ static void ggml_compute_forward_rope_f16(
     }
 }
 
-static void ggml_compute_forward_rope(
+void ggml_compute_forward_rope(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         struct ggml_tensor * dst) {

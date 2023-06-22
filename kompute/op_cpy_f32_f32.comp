@@ -1,0 +1,168 @@
+#version 450
+
+#extension GL_EXT_shader_16bit_storage: require
+#extension GL_EXT_shader_8bit_storage: require
+#extension GL_EXT_shader_explicit_arithmetic_types_float16: require
+#extension GL_EXT_shader_explicit_arithmetic_types_int8: require
+#extension GL_EXT_shader_explicit_arithmetic_types_int16: require
+#extension GL_EXT_control_flow_attributes: enable
+
+#define QK4_0 32
+#define QR4_0 2
+#define QK4_1 32
+
+#define GELU_COEF_A 0.044715
+#define SQRT_2_OVER_PI 0.79788456080286535587989211986876
+
+#ifndef QK_K
+#define QK_K 256
+#endif
+
+#if QK_K == 256
+#define K_SCALE_SIZE 12
+#else
+#define K_SCALE_SIZE 4
+#endif
+
+#define BM 128
+#define BN 128
+#define BK 8
+#define TM 8
+#define TN 8
+
+#define u8BufToU16(buf, idx) (((uint16_t(buf[idx + 1]) << 8)) | buf[idx])
+#define u8BufToFloat16(buf, idx) uint16BitsToHalf u8BufToU16(buf, idx)
+#define u8BufToU32(buf, idx) (((uint32_t u8BufToU16(buf, idx + 2) << 8 | buf[idx + 1]) << 8) | buf[idx])
+#define u8BufToFloat(buf, idx) uintBitsToFloat u8BufToU32(buf, idx)
+
+#define sizeof_block_q4_0 0x12
+#define sizeof_block_q4_1 0x14
+struct block_q4_0 {
+    float16_t d;
+    uint8_t qs[QK4_0 / 2];
+};
+struct block_q4_1 {
+    float16_t d;
+    float16_t m;
+    uint8_t qs[QK4_1 / 2];
+};
+
+#ifndef QK_K
+#define QK_K 256
+#endif
+
+#if QK_K == 256
+#define K_SCALE_SIZE 12
+#else
+#define K_SCALE_SIZE 4
+#endif
+
+struct block_q2_K {
+    uint8_t scales[QK_K/16]; // scales and mins, quantized with 4 bits
+    uint8_t qs[QK_K/4];      // quants
+    float16_t d;           // super-block scale for quantized scales
+    float16_t dmin;        // super-block scale for quantized mins
+};
+// 84 bytes / block
+
+struct block_q3_K {
+    uint8_t hmask[QK_K/8];     // quants - high bit
+    uint8_t qs[QK_K/4];        // quants - low 2 bits
+#if QK_K == 64
+    uint8_t scales[2];
+#else
+    uint8_t scales[K_SCALE_SIZE]; // scales, quantized with 6 bits
+#endif
+    float16_t d;             // super-block scale
+};
+
+#if QK_K == 64
+typedef struct {
+    float16_t    d[2];          // super-block scales/mins
+    uint8_t scales[2];
+    uint8_t qs[QK_K/2];    // 4-bit quants
+} block_q4_K;
+#else
+struct block_q4_K {
+    float16_t d;             // super-block scale for quantized scales
+    float16_t dmin;          // super-block scale for quantized mins
+    uint8_t scales[K_SCALE_SIZE]; // scales and mins, quantized with 6 bits
+    uint8_t qs[QK_K/2];        // 4--bit quants
+};
+#endif
+
+#if QK_K == 64
+struct block_q5_K {
+    float16_t  d;                     // super-block scales/mins
+    int8_t  scales[QK_K/16];     // 8-bit block scales
+    uint8_t qh[QK_K/8];          // quants, high bit
+    uint8_t qs[QK_K/2];          // quants, low 4 bits
+};
+#else
+struct block_q5_K {
+    float16_t d;                      // super-block scale for quantized scales
+    float16_t dmin;                   // super-block scale for quantized mins
+    uint8_t scales[3*QK_K/64];   // scales and mins, quantized with 6 bits
+    uint8_t qh[QK_K/8];          // quants, high bit
+    uint8_t qs[QK_K/2];          // quants, low 4 bits
+};
+// 176 bytes / block
+#endif
+
+struct block_q6_K {
+    uint8_t ql[QK_K/2];      // quants, lower 4 bits
+    uint8_t qh[QK_K/4];      // quants, upper 2 bits
+    int8_t  scales[QK_K/16]; // scales, quantized with 8 bits
+    float16_t d;                  // super-block scale
+};
+// 210 bytes / block
+
+#define nth 32
+#define IN_TYPE float
+#define IN_TYPE_SIZE 4
+#define OUT_TYPE float
+#define OUT_TYPE_SIZE 4
+
+layout(local_size_x = nth) in;
+
+layout (binding = 0) readonly buffer tensorIn { IN_TYPE in_[]; };
+layout (binding = 1) writeonly buffer tensorOut { OUT_TYPE out_[]; };
+
+layout (push_constant) uniform parameter {
+    uint inOff;
+    uint outOff;
+    int ne00;
+    int ne01;
+    int ne02;
+    uint nb00;
+    uint nb01;
+    uint nb02;
+    uint nb03;
+    int ne0;
+    int ne1;
+    int ne2;
+    uint nb0;
+    uint nb1;
+    uint nb2;
+    uint nb3;
+} pcs;
+
+void main() {
+    const uint i03 = gl_WorkGroupID.z;
+    const uint i02 = gl_WorkGroupID.y;
+    const uint i01 = gl_WorkGroupID.x;
+
+    const int n = int(i03)*pcs.ne02*pcs.ne01*pcs.ne00 + int(i02)*pcs.ne01*pcs.ne00 + int(i01)*pcs.ne00;
+
+    const int i3 = n / (pcs.ne2*pcs.ne1*pcs.ne0);
+    const int i2 = (n - i3*pcs.ne2*pcs.ne1*pcs.ne0) / (pcs.ne1*pcs.ne0);
+    const int i1 = (n - i3*pcs.ne2*pcs.ne1*pcs.ne0 - i2*pcs.ne1*pcs.ne0) / pcs.ne0;
+    const int i0 = (n - i3*pcs.ne2*pcs.ne1*pcs.ne0 - i2*pcs.ne1*pcs.ne0 - i1*pcs.ne0);
+
+    const uint dst_data = (i3*pcs.nb3 + i2*pcs.nb2 + i1*pcs.nb1 + i0*pcs.nb0) / OUT_TYPE_SIZE + pcs.outOff; // Based from out_
+
+    for (uint i00 = gl_LocalInvocationID.x; i00 < pcs.ne00; i00 += nth) {
+        const uint src = uint((i03*pcs.nb03 + i02*pcs.nb02 + i01*pcs.nb01 + i00*pcs.nb00) / IN_TYPE_SIZE) + pcs.inOff; // Based from in_
+        out_[dst_data+i00] = OUT_TYPE(in_[src]);
+    }
+}
