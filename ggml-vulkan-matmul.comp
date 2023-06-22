@@ -1,0 +1,33 @@
+#version 450
+
+layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer A { float A_data[]; };
+layout (binding = 1) readonly buffer B { float B_data[]; };
+layout (binding = 2) writeonly buffer D { float D_data[]; };
+
+layout (push_constant) uniform parameter
+{
+    int M;
+    int N;
+    int K;
+    int stride_a;
+    int stride_b;
+    int stride_d;
+} p;
+
+void main()
+{
+    int i01 = int(gl_GlobalInvocationID.x);
+    int i11 = int(gl_GlobalInvocationID.y);
+
+    if (i01 < p.M && i11 < p.N) {
+        float sum = 0.0f;
+
+        for (int i = 0; i < p.K; i++) {
+            sum += A_data[i01 * p.stride_a + i] * B_data[i11 * p.stride_b + i];
+        }
+
+        D_data[i11 * p.stride_d + i01] = sum;
+    }
+}

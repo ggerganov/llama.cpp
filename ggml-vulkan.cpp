@@ -107,7 +107,13 @@ void ggml_vk_init(void) {
         descriptor_set_layout_binding);
     vk_pipeline_matmul_dsl = vk_device.createDescriptorSetLayout(descriptor_set_layout_create_info);
 
-    vk::PipelineLayoutCreateInfo pipeline_layout_create_info(vk::PipelineLayoutCreateFlags(), vk_pipeline_matmul_dsl);
+    vk::PushConstantRange push_constant_range(
+        vk::ShaderStageFlagBits::eCompute,
+        0,
+        6 * sizeof(int)
+    );
+
+    vk::PipelineLayoutCreateInfo pipeline_layout_create_info(vk::PipelineLayoutCreateFlags(), vk_pipeline_matmul_dsl, push_constant_range);
     vk_pipeline_matmul_layout = vk_device.createPipelineLayout(pipeline_layout_create_info);
     vk::PipelineCache pipeline_cache = vk_device.createPipelineCache(vk::PipelineCacheCreateInfo());
 
@@ -186,7 +192,7 @@ static void ggml_vk_pool_malloc(size_t size, vk_buffer* buf) {
     vk::BufferCreateInfo buffer_create_info{
         vk::BufferCreateFlags(),
         size,
-        vk::BufferUsageFlagBits::eStorageBuffer,
+        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst,
         vk::SharingMode::eExclusive,
         1,
         &vk_compute_queue_family_index
@@ -205,10 +211,6 @@ static void ggml_vk_pool_malloc(size_t size, vk_buffer* buf) {
 
     VkMemoryPropertyFlags mem_prop_flags;
     vmaGetAllocationMemoryProperties(vk_allocator, buf->allocation, &mem_prop_flags);
-
-    if(!(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
-        printf("Nope\n");
-    }
 }
 
 static void ggml_vk_pool_free(vk_buffer* buffer) {
@@ -226,12 +228,27 @@ static void ggml_vk_pool_free(vk_buffer* buffer) {
     vmaDestroyBuffer(vk_allocator, buffer->buffer, buffer->allocation);
 }
 
-static void ggml_vk_buffer_write(VkCommandBuffer cmd_buf, vk_buffer* dst, size_t offset, const void * src, size_t size) {
+static vk::CommandBuffer ggml_vk_cmd_buffer_create() {
+    vk::CommandPoolCreateInfo command_pool_create_info(vk::CommandPoolCreateFlags(), vk_compute_queue_family_index);
+    vk::CommandPool command_pool = vk_device.createCommandPool(command_pool_create_info);
+
+    vk::CommandBufferAllocateInfo command_buffer_alloc_info(
+        command_pool,
+        vk::CommandBufferLevel::ePrimary,
+        1);
+    const std::vector<vk::CommandBuffer> cmd_buffers = vk_device.allocateCommandBuffers(command_buffer_alloc_info);
+    return cmd_buffers.front();
+}
+
+static void ggml_vk_buffer_write(vk_buffer* dst, size_t offset, const void * src, size_t size) {
     VkMemoryPropertyFlags mem_prop_flags;
     vmaGetAllocationMemoryProperties(vk_allocator, dst->allocation, &mem_prop_flags);
 
     if(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
         memcpy(dst->info.pMappedData, src, size);
+        if (!(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+            vmaFlushAllocation(vk_allocator, dst->allocation, 0, VK_WHOLE_SIZE);
+        }
     } else {
         // Allocation ended up in a non-mappable memory - need to transfer.
         VkBufferCreateInfo staging_buf_create_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
@@ -261,16 +278,39 @@ static void ggml_vk_buffer_write(VkCommandBuffer cmd_buf, vk_buffer* dst, size_t
             0, // srcOffset
             0, // dstOffset,
             size}; // size
-        vkCmdCopyBuffer(cmd_buf, staging_buf, dst->buffer, 1, &buf_copy);
+
+        vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create();
+        vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+        cmd_buffer.begin(cmd_buffer_begin_info);
+        vkCmdCopyBuffer(cmd_buffer, staging_buf, dst->buffer, 1, &buf_copy);
+        cmd_buffer.end();
+
+        vk::Queue queue = vk_device.getQueue(vk_compute_queue_family_index, 0);
+        vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
+
+        vk::SubmitInfo submit_info(0,
+                                   nullptr,
+                                   nullptr,
+                                   1,
+                                   &cmd_buffer);
+        queue.submit({ submit_info }, fence);
+        vk_device.waitForFences({ fence },
+                                true,
+                                uint64_t(-1));
         vmaDestroyBuffer(vk_allocator, staging_buf, staging_alloc);
     }
 }
 
-static void ggml_vk_buffer_read(VkCommandBuffer cmd_buf, vk_buffer* src, size_t offset, void * dst, size_t size) {
+static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_t size) {
+    vk::CommandBuffer cmd_buf = ggml_vk_cmd_buffer_create();
+
     VkMemoryPropertyFlags mem_prop_flags;
     vmaGetAllocationMemoryProperties(vk_allocator, src->allocation, &mem_prop_flags);
 
     if(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+        if (!(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+            vmaInvalidateAllocation(vk_allocator, src->allocation, 0, VK_WHOLE_SIZE);
+        }
         memcpy(dst, src->info.pMappedData, size);
     } else {
         // Allocation ended up in a non-mappable memory - need to transfer.
@@ -298,15 +338,32 @@ static void ggml_vk_buffer_read(VkCommandBuffer cmd_buf, vk_buffer* src, size_t 
             offset, // srcOffset
             0, // dstOffset,
             size}; // size
-        vkCmdCopyBuffer(cmd_buf, src->buffer, staging_buf, 1, &buf_copy);
         vmaInvalidateAllocation(vk_allocator, staging_alloc, 0, VK_WHOLE_SIZE);
-        // [Executed in runtime]:
+
+        vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create();
+        vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+        cmd_buffer.begin(cmd_buffer_begin_info);
+        vkCmdCopyBuffer(cmd_buffer, src->buffer, staging_buf, 1, &buf_copy);
+        cmd_buffer.end();
+
+        vk::Queue queue = vk_device.getQueue(vk_compute_queue_family_index, 0);
+        vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
+
+        vk::SubmitInfo submit_info(0,
+                                   nullptr,
+                                   nullptr,
+                                   1,
+                                   &cmd_buffer);
+        queue.submit({ submit_info }, fence);
+        vk_device.waitForFences({ fence },
+                                true,
+                                uint64_t(-1));
         memcpy(dst, staging_alloc_info.pMappedData, size);
         vmaDestroyBuffer(vk_allocator, staging_buf, staging_alloc);
     }
 }
 
-static void ggml_vk_h2d_tensor_2d(VkCommandBuffer cmd_buf, vk_buffer* dst, size_t offset, const struct ggml_tensor * src, uint64_t i3, uint64_t i2) {
+static void ggml_vk_h2d_tensor_2d(vk_buffer* dst, size_t offset, const struct ggml_tensor * src, uint64_t i3, uint64_t i2) {
     const uint64_t ne0 = src->ne[0];
     const uint64_t ne1 = src->ne[1];
     const uint64_t nb0 = src->nb[0];
@@ -319,13 +376,12 @@ static void ggml_vk_h2d_tensor_2d(VkCommandBuffer cmd_buf, vk_buffer* dst, size_
 
     const void * x = (const void *) ((const char *) src->data + i2*nb2 + i3*nb3);
     if (nb0 == ts && nb1 == ts*ne0/bs) {
-        ggml_vk_buffer_write(cmd_buf, dst, offset, x, ne1*nb1);
+        ggml_vk_buffer_write(dst, offset, x, ne1*nb1);
         return;
     }
     if (nb0 == ts) {
-        // Might be better to use vkCmdCopyBuffer here
         for (uint64_t i1 = 0; i1 < ne1; i1++) {
-            ggml_vk_buffer_write(cmd_buf, dst, offset + ne0 * i1, x + ts*ne0/bs, ne0*nb0);
+            ggml_vk_buffer_write(dst, offset + ne0 * i1, (uint8_t *)x + ts*ne0/bs, ne0*nb0);
         }
         return;
     }
@@ -336,7 +392,6 @@ static void ggml_vk_h2d_tensor_2d(VkCommandBuffer cmd_buf, vk_buffer* dst, size_
             dst_ptr[offset + i1 * ts*ne0/bs + i0 * ts] = xc[i1 * nb1 + i0 * nb0];
         }
     }
-    return;
 }
 
 static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
@@ -386,36 +441,30 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     };
     vk_device.updateDescriptorSets(write_descriptor_sets, {});
 
-    vk::CommandPoolCreateInfo command_pool_create_info(vk::CommandPoolCreateFlags(), vk_compute_queue_family_index);
-    vk::CommandPool command_pool = vk_device.createCommandPool(command_pool_create_info);
+    std::array<int, 6> push_constants = { (int)ne01, (int)ne11, (int)ne10, (int)ne00, (int)ne10, (int)ne01 };
+    assert( ( sizeof( push_constants ) <= vk_physical_device.getProperties().limits.maxPushConstantsSize ) && "Too many push constants" );
 
-    vk::CommandBufferAllocateInfo command_buffer_alloc_info(
-        command_pool,
-        vk::CommandBufferLevel::ePrimary,
-        1);
-    const std::vector<vk::CommandBuffer> cmd_buffers = vk_device.allocateCommandBuffers(command_buffer_alloc_info);
-    vk::CommandBuffer cmd_buffer = cmd_buffers.front();
+    vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create();
 
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
             // copy data to device
             if (src0->backend != GGML_BACKEND_GPU) {
-                ggml_vk_h2d_tensor_2d(cmd_buffer, &d_X, 0, src0, i03, i02);
+                ggml_vk_h2d_tensor_2d(&d_X, 0, src0, i03, i02);
             }
-            ggml_vk_h2d_tensor_2d(cmd_buffer, &d_Y, 0, src1, i03, i02);
-
-            printf("Beginning Vulkan kernel call\n");
+            ggml_vk_h2d_tensor_2d(&d_Y, 0, src1, i03, i02);
 
             // compute
             vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
             cmd_buffer.begin(cmd_buffer_begin_info);
+            cmd_buffer.pushConstants<int>(vk_pipeline_matmul_layout, vk::ShaderStageFlagBits::eCompute, 0, push_constants);
             cmd_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, vk_pipeline_matmul);
             cmd_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
                                          vk_pipeline_matmul_layout,
                                          0,
                                          { descriptor_set },
                                          {});
-            cmd_buffer.dispatch(d_ne, 1, 1);
+            cmd_buffer.dispatch((ne01 + 31) / 32, (ne11 + 31) / 32, 1);
             cmd_buffer.end();
 
             vk::Queue queue = vk_device.getQueue(vk_compute_queue_family_index, 0);
@@ -431,11 +480,10 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
                                     true,
                                     uint64_t(-1));
 
-            printf("Vulkan kernel call done\n");
-
             // copy dst to host
             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
-            ggml_vk_buffer_read(cmd_buffer, &d_D, 0, d, sizeof(float) * d_ne);
+            float * d_blas = (float *) malloc(sizeof(float) * d_ne);
+            ggml_vk_buffer_read(&d_D, 0, d, sizeof(float) * d_ne);
         }
     }
 
@@ -447,6 +495,7 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
 }
 
 static void ggml_vk_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    assert(false);
 //     const int64_t ne00 = src0->ne[0];
 //     const int64_t ne01 = src0->ne[1];
 //     const int64_t ne02 = src0->ne[2];
@@ -577,7 +626,7 @@ bool ggml_vk_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tens
     const int64_t ne1 = dst->ne[1];
 
     // TODO: find the optimal values for these
-    if ((src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) &&
+    if ((src0->type == GGML_TYPE_F32 /*|| src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)*/) &&
         src1->type == GGML_TYPE_F32 &&
         dst->type == GGML_TYPE_F32 &&
         ((ne0 >= 32 && ne1 >= 32 && ne10 >= 32) || src0->backend == GGML_BACKEND_GPU)) {
