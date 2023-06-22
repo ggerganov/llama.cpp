@@ -13,7 +13,9 @@
 #include <vector>
 #include <iostream>
 
-
+#if defined(GGML_USE_CLBLAST)
+#include "ggml-opencl.h"
+#endif
 
 // load the model's weights from a file
 ModelLoadResult gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt_vocab & vocab, FileFormat file_format, int gpulayers) {
@@ -320,6 +322,7 @@ ModelLoadResult gpt_neox_model_load(const std::string & fname, gpt_neox_model & 
 
     //gpu offload
     #if defined(GGML_USE_CLBLAST)
+    if(gpulayers>0)
     {
         const auto & hparams = model.hparams;
         size_t vram_total = 0;

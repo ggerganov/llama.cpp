@@ -15,7 +15,9 @@
 
 #include "model_adapter.h"
 
-
+#if defined(GGML_USE_CLBLAST)
+#include "ggml-opencl.h"
+#endif
 
 // load the model's weights from a file
 bool mpt_model_load(const std::string & fname, mpt_model & model, gpt_vocab & vocab, int gpulayers) {
@@ -280,6 +282,7 @@ bool mpt_model_load(const std::string & fname, mpt_model & model, gpt_vocab & vo
 
     //gpu offload
     #if defined(GGML_USE_CLBLAST)
+    if(gpulayers>0)
     {
         const auto & hparams = model.hparams;
         size_t vram_total = 0;

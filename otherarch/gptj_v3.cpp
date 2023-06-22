@@ -335,6 +335,7 @@ ModelLoadResult gptj_model_load(const std::string & fname, gptj_model & model, g
 
     //gpu offload
     #if defined(GGML_USE_CLBLAST)
+    if(gpulayers>0)
     {
         const auto & hparams = model.hparams;
         size_t vram_total = 0;
