@@ -9,12 +9,8 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
+- p1 : LLM-based code completion engine at the edge : https://github.com/ggml-org/p1/discussions/1
 - Roadmap June 2023: https://github.com/ggerganov/llama.cpp/discussions/1729
-- GPU support with Metal (Apple Silicon): https://github.com/ggerganov/llama.cpp/pull/1642
-- High-quality 2,3,4,5,6-bit quantization: https://github.com/ggerganov/llama.cpp/pull/1684
-- Multi-GPU support: https://github.com/ggerganov/llama.cpp/pull/1607
-- Training LLaMA models from scratch: https://github.com/ggerganov/llama.cpp/pull/1652
-- CPU threading improvements: https://github.com/ggerganov/llama.cpp/pull/1632
 
 <details>
   <summary>Table of Contents</summary>
@@ -344,7 +340,7 @@ Building the program with BLAS support may lead to some performance improvements
   | LLAMA_CUDA_DMMV_X       | Positive integer >= 32 |      32 | Number of values in x direction processed by the CUDA dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants. |
   | LLAMA_CUDA_DMMV_Y       | Positive integer       |       1 | Block size in y direction for the CUDA dequantization + mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. Does not affect k-quants. |
   | LLAMA_CUDA_DMMV_F16     | Boolean                |   false | If enabled, use half-precision floating point arithmetic for the CUDA dequantization + mul mat vec kernels. Can improve performance on relatively recent GPUs. |
-  | LLAMA_CUDA_KQUANTS_ITER | 1 or 2                 |       2 | Number of values processed per iteration and per CUDA thread for Q2_K and Q6_K quantization formats. Setting this value 2 1 can improve performance for slow GPUs. |
+  | LLAMA_CUDA_KQUANTS_ITER | 1 or 2                 |       2 | Number of values processed per iteration and per CUDA thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs. |
 
 - #### CLBlast
 
@@ -378,7 +374,7 @@ Building the program with BLAS support may lead to some performance improvements
       ```sh
       git clone https://github.com/CNugteren/CLBlast.git
       mkdir CLBlast/build
-      cd CLBLast/build
+      cd CLBlast/build
       cmake .. -DBUILD_SHARED_LIBS=OFF -DTUNERS=OFF
       cmake --build . --config Release
       cmake --install . --prefix /some/path
