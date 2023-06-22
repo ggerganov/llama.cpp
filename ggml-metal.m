@@ -861,10 +861,13 @@ void ggml_metal_graph_compute(
                                 encoder = [command_buffer computeCommandEncoder];
                             }
 
-                            const int n_dims = ((int32_t *) src1->data)[1];
-                            const int mode   = ((int32_t *) src1->data)[2];
-
-                            const int n_past = ((int32_t *)(src1->data))[0];
+                            assert(src1->type == GGML_TYPE_F32);
+                            assert(ggml_nelements(src1) == 4);
+                            const int n_past    = (int)((float *) src1->data)[0];
+                            const int n_dims    = (int)((float *) src1->data)[1];
+                            const int mode      = (int)((float *) src1->data)[2];
+                            const float p_scale = ((float *) src1->data)[3];
+                            GGML_ASSERT(p_scale == 1.0 && "no Metal support for rope p_scale != 1.0");
 
                             [encoder setComputePipelineState:ctx->pipeline_rope];
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];

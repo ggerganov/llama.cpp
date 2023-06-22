@@ -1906,10 +1906,14 @@ inline void ggml_cuda_op_rope(
     const int64_t ne00 = src0->ne[0];
     const int64_t i01_diff = i01_high - i01_low;
 
-    const int n_past = ((int32_t *) src1->data)[0];
-    const int n_dims = ((int32_t *) src1->data)[1];
-    const int mode   = ((int32_t *) src1->data)[2];
+    assert(src1->type == GGML_TYPE_F32);
+    assert(ggml_nelements(src1) == 4);
+    const int n_past    = (int)((float *) src1->data)[0];
+    const int n_dims    = (int)((float *) src1->data)[1];
+    const int mode      = (int)((float *) src1->data)[2];
+    const float p_scale = ((float *) src1->data)[3];
     GGML_ASSERT(mode == 0);
+    GGML_ASSERT(p_scale == 1.0);
 
     const float theta_scale = powf(10000.0, -2.0f/n_dims);
     const float p = ((mode & 1) == 0 ? n_past + i02 : i02);
