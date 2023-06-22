@@ -7,6 +7,7 @@
 #include <memory>
 #include <cstring>
 #include <fstream>
+#include <immintrin.h>
 #include <kompute/Kompute.hpp>
 
 #ifndef __STDC_IEC_559__
@@ -39,6 +40,20 @@ kp::Manager mgr;
 
 
 
+std::vector<uint32_t> compileSource(const std::string& source) {
+    //FIXME: Terrible solution!!!!
+    std::ofstream fileOut("tmp_kp_shader.comp");
+    fileOut << source;
+    fileOut.close();
+    if (system(std::string("glslangValidator -V tmp_kp_shader.comp -o tmp_kp_shader.comp.spv").c_str()))
+        throw std::runtime_error("Error running glslangValidator command");
+    std::ifstream fileStream("tmp_kp_shader.comp.spv", std::ios::binary);
+    std::vector<char> buffer;
+    buffer.insert(buffer.begin(), std::istreambuf_iterator<char>(fileStream), {});
+    return {(uint32_t*)buffer.data(), (uint32_t*)(buffer.data() + buffer.size())};
+}
+
+
 static const std::string program_source_head = R"(
 #version 450
 #extension GL_EXT_shader_explicit_arithmetic_types_float16: enable
@@ -50,9 +65,8 @@ layout (local_size_x = 1) in;
 )";
 
 
-static const std::string kernel_dequantize_row_q4_0 =
+static const std::string program_dequantize_row_q4_0 =
         program_source_head+'\n'+MULTILINE_QUOTE(
-// Tensors
 layout(binding = 0) buffer tensorBlockQ4_0D { float16_t x_d[]; };
 layout(binding = 1) buffer tensorBlockQ4_0QS { uint8_t x_qs[]; };
 layout(binding = 2) buffer tensorY { float y[]; };
@@ -75,37 +89,24 @@ void main() {
 );
 
 
-std::vector<uint32_t> compileSource(const std::string& source) {
-    //FIXME: Terrible solution!!!!
-    std::ofstream fileOut("tmp_kp_shader.comp");
-    fileOut << source;
-    fileOut.close();
-    if (system(std::string("glslangValidator -V tmp_kp_shader.comp -o tmp_kp_shader.comp.spv").c_str()))
-        throw std::runtime_error("Error running glslangValidator command");
-    std::ifstream fileStream("tmp_kp_shader.comp.spv", std::ios::binary);
-    std::vector<char> buffer;
-    buffer.insert(buffer.begin(), std::istreambuf_iterator<char>(fileStream), {});
-    return {(uint32_t*)buffer.data(), (uint32_t*)(buffer.data() + buffer.size())};
-}
-
 void ggml_vk_dequantize_row_q4_0(const void *x_, float *y, int k) {
     static const int qk = QK4_0;
-    static const unsigned nb = k / qk;
-    static const unsigned y_size = qk*2*nb;
-    const static auto spirv = compileSource(kernel_dequantize_row_q4_0);
+    const unsigned nb = k / qk;
+    const unsigned y_size = nb*qk;
+    const static auto spirv = compileSource(program_dequantize_row_q4_0);
 
     const auto x = reinterpret_cast<const block_q4_0*>(x_);
 
     assert(k % qk == 0);
 
-    auto getVecBlockQ4_0D = [] (const block_q4_0 *x) {
+    auto getVecBlockQ4_0D = [x, nb] () {
         std::vector<half> fres(nb);
         for (unsigned it = 0; it != nb; it++) {
             fres[it] = x[it].d;
         }
         return fres;
     };
-    auto getVecBlockQ4_0QS = [] (const block_q4_0 *x) {
+    auto getVecBlockQ4_0QS = [x, nb] () {
         std::vector<uint8_t> fres(nb*(qk/2));
         for (unsigned x_it = 0; x_it != nb; x_it++) {
             for (unsigned qs_it = 0; qs_it != qk / 2; qs_it++) {
@@ -115,8 +116,8 @@ void ggml_vk_dequantize_row_q4_0(const void *x_, float *y, int k) {
         return fres;
     };
 
-    const auto tensorBlockQ4_0D = mgr.tensorT<half>(getVecBlockQ4_0D(x));
-    const auto tensorBlockQ4_0QS = mgr.tensorT<uint8_t>(getVecBlockQ4_0QS(x));
+    const auto tensorBlockQ4_0D = mgr.tensorT<half>(getVecBlockQ4_0D());
+    const auto tensorBlockQ4_0QS = mgr.tensorT<uint8_t>(getVecBlockQ4_0QS());
     const auto tensorY = mgr.tensor(std::vector<float>(y, y+y_size));
 
     mgr.sequence()
@@ -125,7 +126,7 @@ void ggml_vk_dequantize_row_q4_0(const void *x_, float *y, int k) {
             ->record<kp::OpTensorSyncLocal>({tensorY})
             ->eval();
 
-    std::memcpy(y, tensorY->data(), tensorY->size());
+    std::memcpy(y, tensorY->data(), tensorY->size()*sizeof(*y));
 }
 
 
