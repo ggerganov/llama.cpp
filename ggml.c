@@ -161,6 +161,8 @@ inline static void* ggml_aligned_malloc(size_t size) {
 #endif
 #elif defined(GGML_USE_OPENBLAS)
 #include <cblas.h>
+#elif defined(GGML_USE_KOMPUTE)
+#include "ggml-vulkan.h"
 #elif defined(GGML_USE_CUBLAS)
 #include "ggml-cuda.h"
 #elif defined(GGML_USE_CLBLAST)
@@ -1548,7 +1550,7 @@ static void ggml_vec_dot_q8_0_q8_0(const int n, float * restrict s, const void *
 
 static const quantize_fns_t quantize_fns[GGML_TYPE_COUNT] = {
     [GGML_TYPE_Q4_0] = {
-        .dequantize_row_q         = (dequantize_row_q_t) dequantize_row_q4_0,
+        .dequantize_row_q         = (dequantize_row_q_t) ggml_vk_dequantize_row_q4_0,
         .quantize_row_q           = quantize_row_q4_0,
         .quantize_row_q_reference = (quantize_row_q_t) quantize_row_q4_0_reference,
         .quantize_row_q_dot       = quantize_row_q8_0,

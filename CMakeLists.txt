@@ -73,6 +73,7 @@ set(LLAMA_CUDA_DMMV_Y       "1" CACHE STRING "llama: y block size for dmmv CUDA 
 option(LLAMA_CUDA_DMMV_F16                   "llama: use 16 bit floats for dmmv CUDA kernels"   OFF)
 set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for Q2_K/Q6_K")
 option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
+option(LLAMA_KOMPUTE                         "llama: use Kompute"                               OFF)
 option(LLAMA_METAL                           "llama: use Metal"                                 OFF)
 option(LLAMA_K_QUANTS                        "llama: use k-quants"                              ON)
 
@@ -309,6 +310,22 @@ if (LLAMA_CLBLAST)
     endif()
 endif()
 
+if (LLAMA_KOMPUTE)
+    if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/kompute/CMakeLists.txt")
+        message(STATUS "Kompute found")
+
+        add_subdirectory(kompute)
+
+        set(GGML_SOURCES_KOMPUTE ggml-vulkan.cpp ggml-vulkan.h)
+
+        add_compile_definitions(GGML_USE_KOMPUTE)
+
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} kompute)
+    else()
+        message(WARNING "Kompute not found")
+    endif()
+endif()
+
 if (LLAMA_ALL_WARNINGS)
     if (NOT MSVC)
         set(c_flags
@@ -466,6 +483,7 @@ add_library(ggml OBJECT
             ggml.h
             ${GGML_SOURCES_CUDA}
             ${GGML_SOURCES_OPENCL}
+            ${GGML_SOURCES_KOMPUTE}
             ${GGML_SOURCES_METAL}
             ${GGML_SOURCES_EXTRA}
             )
