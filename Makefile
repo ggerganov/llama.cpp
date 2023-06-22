@@ -133,6 +133,10 @@ ifndef LLAMA_NO_K_QUANTS
 	OBJS     += k_quants.o
 endif
 
+ifdef LLAMA_ROPE_SCALE
+	CXXFLAGS  += -DLLAMA_ROPE_SCALE=$(LLAMA_ROPE_SCALE)
+endif
+
 ifndef LLAMA_NO_ACCELERATE
 	# Mac M1 - include Accelerate framework.
 	# `-framework Accelerate` works on Mac Intel as well, with negliable performance boost (as of the predict time).

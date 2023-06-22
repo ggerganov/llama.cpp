@@ -1044,6 +1044,24 @@ extern "C" {
             int                   n_dims,
             int                   mode);
 
+    // same as ggml_rope but allows specifying p scale factor
+    GGML_API struct ggml_tensor * ggml_rope_scaled(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int                   n_past,
+            int                   n_dims,
+            int                   mode,
+            float                 p_scale);
+
+    // same as ggml_rope_inplace but allows specifying p scale factor
+    GGML_API struct ggml_tensor * ggml_rope_scaled_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int                   n_past,
+            int                   n_dims,
+            int                   mode,
+            float                 p_scale);
+
     // rotary position embedding backward, i.e compute dx from dy
     // a - dy
     GGML_API struct ggml_tensor * ggml_rope_back(
@@ -1052,6 +1070,15 @@ extern "C" {
             int                   n_past,
             int                   n_dims,
             int                   mode);
+
+    // same as ggml_rope_back but allows specifying p scale factor
+    GGML_API struct ggml_tensor * ggml_rope_back_scaled(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int                   n_past,
+            int                   n_dims,
+            int                   mode,
+            float                 p_scale);
 
     // alibi position embedding
     // in-place, returns view(a)

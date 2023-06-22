@@ -6603,6 +6603,7 @@ struct ggml_tensor * ggml_rope_impl(
         int                   n_past,
         int                   n_dims,
         int                   mode,
+        float                 p_scale,
         bool                  inplace) {
     GGML_ASSERT(n_past >= 0);
     bool is_node = false;
@@ -6615,11 +6616,13 @@ struct ggml_tensor * ggml_rope_impl(
 
     ggml_scratch_save(ctx);
 
-    struct ggml_tensor * b = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 3);
+    struct ggml_tensor * b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, 4);
+    ggml_set_name(b, "n_past, n_dims, mode, p_scale");
 
-    ((int32_t *) b->data)[0] = n_past;
-    ((int32_t *) b->data)[1] = n_dims;
-    ((int32_t *) b->data)[2] = mode;
+    ((float *) b->data)[0] = (float)n_past;
+    ((float *) b->data)[1] = (float)n_dims;
+    ((float *) b->data)[2] = (float)mode;
+    ((float *) b->data)[3] = p_scale;
 
     ggml_scratch_load(ctx);
 
@@ -6637,7 +6640,7 @@ struct ggml_tensor * ggml_rope(
         int                   n_past,
         int                   n_dims,
         int                   mode) {
-    return ggml_rope_impl(ctx, a, n_past, n_dims, mode, false);
+    return ggml_rope_impl(ctx, a, n_past, n_dims, mode, false, 1.0);
 }
 
 struct ggml_tensor * ggml_rope_inplace(
@@ -6646,17 +6649,39 @@ struct ggml_tensor * ggml_rope_inplace(
         int                   n_past,
         int                   n_dims,
         int                   mode) {
-    return ggml_rope_impl(ctx, a, n_past, n_dims, mode, true);
+    return ggml_rope_impl(ctx, a, n_past, n_dims, mode, true, 1.0);
 }
 
-// ggml_rope_back
-
-struct ggml_tensor * ggml_rope_back(
+struct ggml_tensor * ggml_rope_scaled(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         int                   n_past,
         int                   n_dims,
-        int                   mode) {
+        int                   mode,
+        float                 p_scale) {
+    return ggml_rope_impl(ctx, a, n_past, n_dims, mode, false, p_scale);
+}
+
+struct ggml_tensor * ggml_rope_scaled_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int                   n_past,
+        int                   n_dims,
+        int                   mode,
+        float                 p_scale) {
+    return ggml_rope_impl(ctx, a, n_past, n_dims, mode, true, p_scale);
+}
+
+
+// ggml_rope_back
+
+struct ggml_tensor * ggml_rope_back_impl(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int                   n_past,
+        int                   n_dims,
+        int                   mode,
+        float                 p_scale) {
     GGML_ASSERT(n_past >= 0);
     bool is_node = false;
 
@@ -6668,12 +6693,13 @@ struct ggml_tensor * ggml_rope_back(
 
     ggml_scratch_save(ctx);
 
-    struct ggml_tensor * b = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 3);
-    ggml_set_name(b, "n_past, n_dims, mode");
+    struct ggml_tensor * b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, 4);
+    ggml_set_name(b, "n_past, n_dims, mode, p_scale");
 
-    ((int32_t *) b->data)[0] = n_past;
-    ((int32_t *) b->data)[1] = n_dims;
-    ((int32_t *) b->data)[2] = mode;
+    ((float *) b->data)[0] = (float)n_past;
+    ((float *) b->data)[1] = (float)n_dims;
+    ((float *) b->data)[2] = (float)mode;
+    ((float *) b->data)[3] = p_scale;
 
     ggml_scratch_load(ctx);
 
@@ -6684,6 +6710,26 @@ struct ggml_tensor * ggml_rope_back(
 
     return result;
 }
+
+struct ggml_tensor * ggml_rope_back(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int                   n_past,
+        int                   n_dims,
+        int                   mode) {
+    return ggml_rope_back_impl(ctx, a, n_past, n_dims, mode, 1.0);
+}
+
+struct ggml_tensor * ggml_rope_back_scaled(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int                   n_past,
+        int                   n_dims,
+        int                   mode,
+        float                 p_scale) {
+    return ggml_rope_back_impl(ctx, a, n_past, n_dims, mode, p_scale);
+}
+
 
 // ggml_alibi
 
@@ -12110,16 +12156,17 @@ static void ggml_compute_forward_rope_f32(
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
         struct ggml_tensor * dst) {
-    GGML_ASSERT(src1->type == GGML_TYPE_I32);
-    GGML_ASSERT(ggml_nelements(src1) == 3);
+    GGML_ASSERT(src1->type == GGML_TYPE_F32);
+    GGML_ASSERT(ggml_nelements(src1) == 4);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
 
-    const int n_past = ((int32_t *) src1->data)[0];
-    const int n_dims = ((int32_t *) src1->data)[1];
-    const int mode   = ((int32_t *) src1->data)[2];
+    const int n_past    = (int)((float *) src1->data)[0];
+    const int n_dims    = (int)((float *) src1->data)[1];
+    const int mode      = (int)((float *) src1->data)[2];
+    const float p_scale = ((float *) src1->data)[3];
 
     assert(n_past >= 0);
 
@@ -12172,7 +12219,7 @@ static void ggml_compute_forward_rope_f32(
                 if (ir++ < ir0) continue;
                 if (ir   > ir1) break;
 
-                float theta = (float)p;
+                float theta = p_scale * (float)p;
 
                 if (!is_neox) {
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
@@ -12223,16 +12270,17 @@ static void ggml_compute_forward_rope_f16(
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
         struct ggml_tensor * dst) {
-    GGML_ASSERT(src1->type == GGML_TYPE_I32);
-    GGML_ASSERT(ggml_nelements(src1) == 3);
+    GGML_ASSERT(src1->type == GGML_TYPE_F32);
+    GGML_ASSERT(ggml_nelements(src1) == 4);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
 
-    const int n_past = ((int32_t *) src1->data)[0];
-    const int n_dims = ((int32_t *) src1->data)[1];
-    const int mode   = ((int32_t *) src1->data)[2];
+    const int n_past    = (int)((float *) src1->data)[0];
+    const int n_dims    = (int)((float *) src1->data)[1];
+    const int mode      = (int)((float *) src1->data)[2];
+    const float p_scale = ((float *) src1->data)[3];
 
     assert(n_past >= 0);
 
@@ -12285,7 +12333,7 @@ static void ggml_compute_forward_rope_f16(
                 if (ir++ < ir0) continue;
                 if (ir   > ir1) break;
 
-                float theta = (float)p;
+                float theta = p_scale * (float)p;
 
                 if (!is_neox) {
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
@@ -12359,8 +12407,8 @@ static void ggml_compute_forward_rope_back_f32(
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
         struct ggml_tensor * dst) {
-    assert(src1->type == GGML_TYPE_I32);
-    assert(ggml_nelements(src1) == 3);
+    assert(src1->type == GGML_TYPE_F32);
+    assert(ggml_nelements(src1) == 4);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
@@ -12370,9 +12418,10 @@ static void ggml_compute_forward_rope_back_f32(
     // dx = rope_back(dy, src1)
     // src0 is dy, src1 contains options
 
-    const int n_past = ((int32_t *) src1->data)[0];
-    const int n_dims = ((int32_t *) src1->data)[1];
-    const int mode   = ((int32_t *) src1->data)[2];
+    const int n_past    = (int)((float *) src1->data)[0];
+    const int n_dims    = (int)((float *) src1->data)[1];
+    const int mode      = (int)((float *) src1->data)[2];
+    const float p_scale = ((float *) src1->data)[3];
 
     assert(n_past >= 0);
 
@@ -12423,7 +12472,7 @@ static void ggml_compute_forward_rope_back_f32(
                 if (ir++ < ir0) continue;
                 if (ir   > ir1) break;
 
-                float theta = (float)p;
+                float theta = p_scale * (float)p;
 
                 if (!is_neox) {
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
@@ -12472,8 +12521,8 @@ static void ggml_compute_forward_rope_back_f16(
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
         struct ggml_tensor * dst) {
-    assert(src1->type == GGML_TYPE_I32);
-    assert(ggml_nelements(src1) == 3);
+    assert(src1->type == GGML_TYPE_F32);
+    assert(ggml_nelements(src1) == 4);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
@@ -12483,9 +12532,10 @@ static void ggml_compute_forward_rope_back_f16(
     // dx = rope_back(dy, src1)
     // src0 is dy, src1 contains options
 
-    const int n_past = ((int32_t *) src1->data)[0];
-    const int n_dims = ((int32_t *) src1->data)[1];
-    const int mode   = ((int32_t *) src1->data)[2];
+    const int n_past    = (int)((float *) src1->data)[0];
+    const int n_dims    = (int)((float *) src1->data)[1];
+    const int mode      = (int)((float *) src1->data)[2];
+    const float p_scale = ((float *) src1->data)[3];
 
     assert(n_past >= 0);
 
@@ -12536,7 +12586,7 @@ static void ggml_compute_forward_rope_back_f16(
                 if (ir++ < ir0) continue;
                 if (ir   > ir1) break;
 
-                float theta = (float)p;
+                float theta = p_scale * (float)p;
 
                 if (!is_neox) {
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
