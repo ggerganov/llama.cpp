@@ -5909,10 +5909,10 @@ struct ggml_tensor * ggml_cpy_impl(
 
     // make a view of the destination
     struct ggml_tensor * result = ggml_view_tensor(ctx, b);
-    if (strlen(a->name) > 0) {
-        ggml_format_name(result, "%s (copy of %s)", a->name, b->name);
+    if (strlen(b->name) > 0) {
+        ggml_format_name(result, "%s (copy of %s)", b->name, a->name);
     } else {
-        ggml_format_name(result, "%s (copy)", b->name);
+        ggml_format_name(result, "%s (copy)", a->name);
     }
 
     result->op   = GGML_OP_CPY;
