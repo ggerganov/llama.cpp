@@ -1,15 +1,16 @@
 #pragma once
 
-#include <cstddef>
-
 #ifdef  __cplusplus
+#include <cstddef>
 extern "C" {
+#else
+#include <stddef.h>
 #endif
 
 struct ggml_kompute_context;
 
 
-ggml_kompute_context * ggml_vk_init(void);
+struct ggml_kompute_context * ggml_vk_init(void);
 void ggml_metal_free(struct ggml_kompute_context * ctx);
 
 // creates a mapping between a host memory buffer and a device memory buffer
