@@ -10,6 +10,7 @@
 #include <exception>
 #include <thread>
 #include <mutex>
+#include <atomic>
 #include <cstring>
 #include <immintrin.h>
 #include <kompute/Kompute.hpp>
@@ -53,8 +54,22 @@ ggml_kompute_context *ggml_vk_init() {
     return new ggml_kompute_context;
 }
 
-void ggml_metal_free(struct ggml_kompute_context * ctx) {
+void ggml_vk_free(struct ggml_kompute_context * ctx) {
     delete ctx;
+}
+
+
+size_t ggml_vk_mem_used(struct ggml_kompute_context * ctx) {
+    size_t fres = 0;
+    ctx->tensors_mutex.lock();
+    for (const auto& tensor : ctx->tensors) {
+        fres += tensor.second->size();
+    }
+    ctx->tensors_mutex.unlock();
+    for (const auto& buffer : ctx->buffers) {
+        fres += buffer.second->size();
+    }
+    return fres;
 }
 
 

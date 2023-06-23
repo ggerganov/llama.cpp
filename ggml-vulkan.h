@@ -11,7 +11,9 @@ struct ggml_kompute_context;
 
 
 struct ggml_kompute_context * ggml_vk_init(void);
-void ggml_metal_free(struct ggml_kompute_context * ctx);
+void ggml_vk_free(struct ggml_kompute_context * ctx);
+
+size_t ggml_vk_mem_used(struct ggml_kompute_context * ctx);
 
 // creates a mapping between a host memory buffer and a device memory buffer
 // - make sure to map all buffers used in the graph before calling ggml_vk_graph_compute
