@@ -99,15 +99,19 @@ static void server_log(const char * level, const char * function, int line,
 
 // format incomplete utf-8 multibyte character for output
 static std::string tokens_to_output_formatted_string(const llama_context * ctx, const llama_token token) {
-    const std::string out = token == -1 ? "" : llama_token_to_str(ctx, token);
-    if (out[0] > 127) {
-        out = "byte: \\x" + std::format("{:x}", out[0]);
+    std::string out = token == -1 ? "" : llama_token_to_str(ctx, token);
+    // if first bit is 1, meaning it's a partial character
+    if ((out[0] & 0x80) == 0x80) {
+        std::stringstream ss;
+        ss<< std::hex << (out[0] & 0xff); 
+        std::string res ( ss.str() );
+        out = "byte: \\x" + res;
     }
     return out;
 }
 
 // convert a vector of completion_token_output to json
-static json probs_vector_to_json(const llama_context * ctx, const vector<completion_token_output> probs) {
+static json probs_vector_to_json(const llama_context * ctx, const std::vector<completion_token_output> probs) {
     json out = json::array();
     for (const auto & prob : probs) {
         json probs_for_token = json::array();
@@ -740,7 +744,7 @@ static json format_final_response(llama_server_context & llama, const std::strin
         { "stopped_word", llama.stopped_word },
         { "stopped_limit", llama.stopped_limit },
         { "stopping_word", llama.stopping_word },
-    }
+    };
 
     if (llama.params.n_probs > 0) {
         json completion_probabilities_json = probs_vector_to_json(llama.ctx, probs);
