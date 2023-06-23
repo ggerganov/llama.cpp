@@ -2817,6 +2817,9 @@ struct llama_context * llama_init_from_file(
 }
 
 void llama_free(struct llama_context * ctx) {
+#ifdef GGML_USE_KOMPUTE
+    ggml_vk_free(ctx->ctx_kompute);
+#endif
     delete ctx;
 }
 
