@@ -308,8 +308,12 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     params.memory_f16 = inputs.f16_kv;
     params.n_ctx = inputs.max_context_length;
 
-    neox_ctx_v2.hparams.n_ctx = gptj_ctx_v1.hparams.n_ctx = gptj_ctx_v2.hparams.n_ctx = gpt2_ctx_v1.hparams.n_ctx = gpt2_ctx_v2.hparams.n_ctx
-    = neox_ctx_v3.hparams.n_ctx = gptj_ctx_v3.hparams.n_ctx = gptj_ctx_v3.hparams.n_ctx = mpt_ctx_v3.hparams.n_ctx = params.n_ctx;
+    neox_ctx_v2.hparams.n_ctx  = neox_ctx_v3.hparams.n_ctx
+    = gptj_ctx_v1.hparams.n_ctx = gptj_ctx_v2.hparams.n_ctx = gptj_ctx_v3.hparams.n_ctx
+    = gpt2_ctx_v1.hparams.n_ctx = gpt2_ctx_v2.hparams.n_ctx = gpt2_ctx_v3.hparams.n_ctx
+    = mpt_ctx_v3.hparams.n_ctx = params.n_ctx;
+
+    bool calc_mem_with_scratch = ggml_cpu_has_gpublas();
 
     printf("System Info: %s\n", llama_print_system_info());
     SetQuantsUnshuffled(false);

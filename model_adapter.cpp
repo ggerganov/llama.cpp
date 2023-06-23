@@ -98,7 +98,7 @@ void print_tok_vec(std::vector<float> &embd)
        //we need to read more to determine
        int32_t vocabsiz = 0;
        fin.read((char *) &vocabsiz, sizeof(int32_t));
-       if(vocabsiz==4096) //actually the d_model for mpt
+       if(vocabsiz==4096 || vocabsiz==7168) //actually the d_model for mpt
        {
            fileformat = FileFormat::MPT_1;
        }

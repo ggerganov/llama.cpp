@@ -59,7 +59,7 @@ static const std::map<e_model2, size_t> & MEM_REQ_SCRATCH0_2()
         { MODEL_UNKNOWN_2, 512ull * MB_2 },
         { MODEL_7B_2,    512ull * MB_2 },
         { MODEL_13B_2,   512ull * MB_2 },
-        { MODEL_30B_2,   512ull * MB_2 },
+        { MODEL_30B_2,   640ull * MB_2 },
         { MODEL_65B_2,  1024ull * MB_2 },
     };
     return k_sizes;
@@ -71,7 +71,7 @@ static const std::map<e_model2, size_t> & MEM_REQ_SCRATCH1_2()
         { MODEL_UNKNOWN_2, 512ull * MB_2 },
         { MODEL_7B_2,    512ull * MB_2 },
         { MODEL_13B_2,   512ull * MB_2 },
-        { MODEL_30B_2,   512ull * MB_2 },
+        { MODEL_30B_2,   640ull * MB_2 },
         { MODEL_65B_2,  1024ull * MB_2 },
     };
     return k_sizes;
