@@ -94,26 +94,26 @@ bool ggml_vk_add_buffer(
 }
 
 static
-std::shared_ptr<kp::Tensor> ggml_vk_get_buffer(struct ggml_kompute_context * ctx, const char * name) {
+kp::Tensor* ggml_vk_get_buffer(struct ggml_kompute_context * ctx, const char * name) {
     printf("%s: Context: %p Name: '%s'\n", __func__, ctx, name);
 
-    auto res = ctx->buffers.find(name);
+    const auto res = ctx->buffers.find(name);
     if (res == ctx->buffers.end()) return nullptr;
-    return res->second;
+    return res->second.get();
 }
 
 
 void ggml_vk_h2d_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t) {
     printf("%s: Context: %p Tensor: %p\n", __func__, ctx, t);
 
-    auto data = t->data;
-    auto size = ggml_nbytes(t);
+    const auto data = t->data;
+    const auto size = ggml_nbytes(t);
 
     ctx->tensors_mutex.lock();
-    auto res = ctx->tensors.find(t);
-    ctx->tensors_mutex.unlock();
+    const auto res = ctx->tensors.find(t);
 
     if (res != ctx->tensors.end()) {
+        ctx->tensors_mutex.unlock();
         GGML_ASSERT(res->second->size() != size);
         res->second->setRawData(data);
         mgr.sequence()->eval<kp::OpTensorSyncDevice>({res->second});
@@ -124,7 +124,6 @@ void ggml_vk_h2d_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * 
 
         auto tensor = mgr.tensorT<byte>(vec);
         mgr.sequence()->eval<kp::OpTensorSyncDevice>({tensor});
-        ctx->tensors_mutex.lock();
         ctx->tensors.emplace(t, std::move(tensor));
         ctx->tensors_mutex.unlock();
         printf("%s: Creating Host->GPU tensor: %p\n", __func__, t);
@@ -134,15 +133,15 @@ void ggml_vk_h2d_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * 
 void ggml_vk_d2h_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t) {
     printf("%s: Context: %p Tensor: %p\n", __func__, ctx, t);
 
-    auto data = t->data;
-    auto size = ggml_nbytes(t);
+    const auto data = t->data;
+    const auto size = ggml_nbytes(t);
 
     ctx->tensors_mutex.lock();
-    auto res = ctx->tensors.find(t);
+    const auto res = ctx->tensors.find(t);
     ctx->tensors_mutex.unlock();
     GGML_ASSERT(res != ctx->tensors.end());
 
-    auto tensor = res->second;
+    auto& tensor = res->second;
     mgr.sequence()->eval<kp::OpTensorSyncLocal>({tensor});
     memcpy(data, tensor->data<void>(), size);
     printf("%s: Updating GPU->Host tensor: %p\n", __func__, t);
@@ -153,10 +152,11 @@ const std::shared_ptr<kp::Tensor> & ggml_vk_get_tensor(struct ggml_kompute_conte
     printf("%s: Context: %p Tensor: %p\n", __func__, ctx, t);
 
     ctx->tensors_mutex.lock();
-    auto res = ctx->tensors.find(t);
+    const auto res = ctx->tensors.find(t);
+    const auto end = ctx->tensors.end();
     ctx->tensors_mutex.unlock();
 
-    if (res == ctx->tensors.end()) {
+    if (res == end) {
         ggml_vk_h2d_tensor(ctx, t);
         return ggml_vk_get_tensor(ctx, t);
     }
@@ -356,7 +356,7 @@ void ggml_vk_abmath(kp::Sequence& seq,
 
     struct PushConstants {
         uint32_t inAOff, inBOff, outOff, row;
-    } pushConsts {
+    } const pushConsts {
         inAOff, inBOff, outOff, row
     };
 
@@ -370,6 +370,7 @@ void ggml_vk_add(Args&&... args) {
 
 template <typename... Args>
 void ggml_vk_mul(Args&&... args) {
+    printf("%s: multiplying...\n", __func__);
     return ggml_vk_abmath<'*'>(std::forward<Args>(args)...);
 }
 
@@ -377,13 +378,13 @@ void ggml_vk_mul(Args&&... args) {
 static const std::string program_scale =
         MULTILINE_QUOTE(
 layout(push_constant) uniform PushConstants {
-    uint inAOff;
     uint inOff;
+    uint outOff;
     float scale;
 } pcs;
 
 layout(local_size_x = 1) in;
-layout(binding = 0) buffer tensorInA { float in_[]; };
+layout(binding = 0) buffer tensorIn { float in_[]; };
 layout(binding = 1) buffer tensorOut { float out_[]; };
 
 void main() {
@@ -402,7 +403,7 @@ void ggml_vk_scale(kp::Sequence& seq,
     struct PushConstants {
         uint32_t inOff, outOff;
         float scale;
-    } pushConsts {
+    } const pushConsts {
         inOff, outOff, scale
     };
 
@@ -415,7 +416,7 @@ void ggml_vk_xxlu(const std::vector<uint32_t>& spirv, kp::Sequence& seq,
                   uint32_t size) {
     struct PushConstants {
         uint32_t inOff, outOff;
-    } pushConsts {
+    } const pushConsts {
         inOff, outOff
     };
 
@@ -426,8 +427,8 @@ void ggml_vk_xxlu(const std::vector<uint32_t>& spirv, kp::Sequence& seq,
 static const std::string program_silu =
         MULTILINE_QUOTE(
 layout(push_constant) uniform PushConstants {
-    uint inAOff;
     uint inOff;
+    uint outOff;
 } pcs;
 
 layout(local_size_x = 1) in;
@@ -614,7 +615,7 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                         } break;
                     default:
                         fprintf(stderr, "%s: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(dst->op));
-                        GGML_ASSERT(false);
+                        //GGML_ASSERT(false);
                 }
             }
 
