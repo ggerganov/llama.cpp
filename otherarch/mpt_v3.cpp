@@ -350,7 +350,7 @@ bool mpt_eval(const mpt_model & model, const int n_threads, const int n_past,
             buf_size = buf_size_new;
             buf = realloc(buf, buf_size);
             if (buf == nullptr) {
-                fprintf(stderr, "%s: failed to allocate %zu bytes\n", __func__, buf_size);
+                fprintf(stderr, "%s: failed to allocate %zu bytes. Try reducing batch size.\n", __func__, buf_size);
                 return false;
             }
         }

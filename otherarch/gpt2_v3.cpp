@@ -422,7 +422,7 @@ bool gpt2_eval(
             buf = realloc(buf, buf_size);
             if (buf == nullptr)
             {
-                fprintf(stderr, "%s: failed to allocate %zu bytes\n", __func__, buf_size);
+                fprintf(stderr, "%s: failed to allocate %zu bytes. Try reducing batch size.\n", __func__, buf_size);
                 return false;
             }
         }
