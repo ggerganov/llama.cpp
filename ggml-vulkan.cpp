@@ -511,6 +511,12 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
             }
         });
     }
+
+    // Wait for all threads to finish
+    for (auto& thread : threads) {
+        if (thread.joinable())
+            thread.join();
+    }
 }
 
 
