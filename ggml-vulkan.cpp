@@ -118,7 +118,7 @@ void ggml_vk_h2d_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * 
     ctx->tensors_mutex.unlock();
 
     if (res != ctx->tensors.end()) {
-        assert(res->second->size() != size);
+        GGML_ASSERT(res->second->size() != size);
         res->second->setRawData(data);
         mgr.sequence()->eval<kp::OpTensorSyncDevice>({res->second});
     } else {
@@ -146,7 +146,7 @@ void ggml_vk_d2h_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * 
     ctx->tensors_mutex.lock();
     auto res = ctx->tensors.find(t);
     ctx->tensors_mutex.unlock();
-    assert(res != ctx->tensors.end());
+    GGML_ASSERT(res != ctx->tensors.end());
 
     auto tensor = res->second;
     mgr.sequence()->eval<kp::OpTensorSyncLocal>({tensor});
@@ -157,12 +157,12 @@ static
 const std::shared_ptr<kp::Tensor> & ggml_vk_get_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t) {
     printf("%s: Context: %p Tensor: %p\n", __func__, ctx, t);
 
-    assert(t->backend != GGML_BACKEND_GPU);
+    GGML_ASSERT(t->backend != GGML_BACKEND_GPU);
 
     ctx->tensors_mutex.lock();
     auto res = ctx->tensors.find(t);
     ctx->tensors_mutex.unlock();
-    assert(res != ctx->tensors.end());
+    GGML_ASSERT(res != ctx->tensors.end());
 
     return res->second;
 }
@@ -258,7 +258,7 @@ void ggml_vk_dequantize_row_q4_0(const void *x_, float *y, int k) {
 
     const auto x = reinterpret_cast<const block_q4_0*>(x_);
 
-    assert(k % qk == 0);
+    GGML_ASSERT(k % qk == 0);
 
     const auto tensorBlockQ4_0D = mgr.tensorT<half>(getVecBlockQ4_0D(x, nb));
     const auto tensorBlockQ4_0QS = mgr.tensorT<uint8_t>(getVecBlockQ4_0QS(x, nb, qk));
@@ -308,7 +308,7 @@ void ggml_vk_dequantize_row_q4_1(const void *x_, float *y, int k) {
 
     const auto x = reinterpret_cast<const block_q4_1*>(x_);
 
-    assert(k % qk == 0);
+    GGML_ASSERT(k % qk == 0);
 
     const auto tensorBlockQ4_0D = mgr.tensorT<half>(getVecBlockQ4_0D(x, nb));
     const auto tensorBlockQ4_0M = mgr.tensorT<half>(getVecBlockQ4_0M(x, nb));
@@ -615,8 +615,14 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                         {
                             ggml_vk_gelu(seq, id_src0, offs_src0, id_dst, offs_dst, ggml_nelements(dst));
                         } break;
+                    default:
+                        fprintf(stderr, "%s: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(dst->op));
+                        GGML_ASSERT(false);
                 }
             }
+
+            // Evaluate sequence
+            seq.eval();
         });
     }
 
