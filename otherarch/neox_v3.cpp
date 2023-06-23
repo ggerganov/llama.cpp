@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 #include <iostream>
+#include <algorithm>
 
 #if defined(GGML_USE_CLBLAST)
 #include "ggml-opencl.h"
@@ -37,6 +38,8 @@ ModelLoadResult gpt_neox_model_load(const std::string & fname, gpt_neox_model & 
         }
     }
 
+    int32_t origmaxctx = model.hparams.n_ctx;
+
     // load hparams
     {
         auto & hparams = model.hparams;
@@ -53,7 +56,7 @@ ModelLoadResult gpt_neox_model_load(const std::string & fname, gpt_neox_model & 
         const int32_t qntvr = hparams.ftype / GGML_QNT_VERSION_FACTOR;
 
         printf("%s: n_vocab = %d\n", __func__, hparams.n_vocab);
-        printf("%s: n_ctx   = %d\n", __func__, hparams.n_ctx);
+        printf("%s: n_ctx   = %d (%d)\n", __func__, hparams.n_ctx,origmaxctx);
         printf("%s: n_embd  = %d\n", __func__, hparams.n_embd);
         printf("%s: n_head  = %d\n", __func__, hparams.n_head);
         printf("%s: n_layer = %d\n", __func__, hparams.n_layer);
@@ -133,8 +136,8 @@ ModelLoadResult gpt_neox_model_load(const std::string & fname, gpt_neox_model & 
         ctx_size += n_layer*(4*n_embd*n_embd*ggml_type_sizef(wtype));         // c_mlp_proj_w
         ctx_size += n_layer*(         n_embd*ggml_type_sizef(GGML_TYPE_F32)); // c_mlp_proj_b
 
-        ctx_size += n_ctx*n_layer*n_embd*ggml_type_sizef(GGML_TYPE_F16); // memory_k
-        ctx_size += n_ctx*n_layer*n_embd*ggml_type_sizef(GGML_TYPE_F16); // memory_v
+        ctx_size += std::max((size_t)origmaxctx,n_ctx)*n_layer*n_embd*ggml_type_sizef(GGML_TYPE_F16); // memory_k
+        ctx_size += std::max((size_t)origmaxctx,n_ctx)*n_layer*n_embd*ggml_type_sizef(GGML_TYPE_F16); // memory_v
 
         ctx_size += (6 + 16*n_layer)*1024; // object overhead
 
@@ -232,7 +235,7 @@ ModelLoadResult gpt_neox_model_load(const std::string & fname, gpt_neox_model & 
         const int n_layer = hparams.n_layer;
         const int n_ctx   = hparams.n_ctx;
 
-        const int64_t n_mem      = n_layer*n_ctx;
+        const int64_t n_mem      = n_layer*std::max(origmaxctx,n_ctx);
         const int64_t n_elements = n_embd*n_mem;
 
         model.memory_k = ggml_new_tensor_1d(ctx, GGML_TYPE_F16, n_elements);
