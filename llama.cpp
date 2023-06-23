@@ -14,6 +14,8 @@
 #include "ggml-cuda.h"
 #elif defined(GGML_USE_CLBLAST)
 #include "ggml-opencl.h"
+#elif defined(GGML_USE_KOMPUTE)
+#include "ggml-vulkan.h"
 #endif
 
 #ifdef GGML_USE_METAL
@@ -280,6 +282,8 @@ struct llama_context {
 
 #ifdef GGML_USE_METAL
     ggml_metal_context * ctx_metal = NULL;
+#elif defined(GGML_USE_KOMPUTE)
+    ggml_kompute_context * ctx_kompute = NULL;
 #endif
 
     int    buf_last = 0;
@@ -1703,6 +1707,26 @@ static bool llama_eval_internal(
 
         ggml_graph_compute(ctx0, &gf);
     }
+#elif defined(GGML_USE_KOMPUTE)
+    if (lctx.ctx_kompute && N == 1) {
+        ggml_vk_graph_compute(lctx.ctx_kompute, &gf);
+        ggml_vk_get_tensor   (lctx.ctx_kompute, cur);
+    } else {
+        // IMPORTANT:
+        // Since we don't have efficient Matrix x Matrix Metal multiplication yet, we fallback to vanilla
+        // ggml_graph_compute().
+        //
+        // When we implement Matrix x Matrix Metal multiplication, we can avoid this branch.
+        // But for now, we have focused only on Matrix x Vector Metal multiplication.
+        //
+        if (lctx.ctx_kompute) {
+            // We need to sync the GPU KV cache with the CPU KV cache
+            ggml_vk_get_tensor(lctx.ctx_kompute, kv_self.k);
+            ggml_vk_get_tensor(lctx.ctx_kompute, kv_self.v);
+        }
+
+        ggml_graph_compute(ctx0, &gf);
+    }
 #else
     ggml_graph_compute(ctx0, &gf);
 #endif
@@ -2741,6 +2765,42 @@ struct llama_context * llama_init_from_file(
 
         LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "scr0", ctx->buf_scratch[0].addr, ctx->buf_scratch[0].size, 0));
         LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "scr1", ctx->buf_scratch[1].addr, ctx->buf_scratch[1].size, 0));
+#undef LLAMA_METAL_CHECK_BUF
+    }
+#elif defined(GGML_USE_KOMPUTE)
+    if (params.n_gpu_layers > 0) {
+        // this allocates all Metal resources and memory buffers
+        ctx->ctx_kompute = ggml_vk_init();
+
+        void * data_ptr  = NULL;
+        size_t data_size = 0;
+
+        if (params.use_mmap) {
+            data_ptr  = ctx->model.mapping->addr;
+            data_size = ctx->model.mapping->size;
+        } else {
+            data_ptr  = ggml_get_mem_buffer(ctx->model.ctx);
+            data_size = ggml_get_mem_size  (ctx->model.ctx);
+        }
+
+        const size_t max_size = ggml_get_max_tensor_size(ctx->model.ctx);
+
+        printf("%s: max tensor size = %8.2f MB\n", __func__, max_size/1024.0/1024.0);
+
+#define LLAMA_METAL_CHECK_BUF(result)                                          \
+    if (!(result)) {                                                           \
+        fprintf(stderr, "%s: failed to add buffer\n", __func__);               \
+        llama_free(ctx);                                                       \
+        return NULL;                                                           \
+    }
+
+        LLAMA_METAL_CHECK_BUF(ggml_vk_add_buffer(ctx->ctx_kompute, "data", data_ptr, data_size, max_size));
+
+        LLAMA_METAL_CHECK_BUF(ggml_vk_add_buffer(ctx->ctx_kompute, "eval", ctx->buf_compute.addr,       ctx->buf_compute.size,       0));
+        LLAMA_METAL_CHECK_BUF(ggml_vk_add_buffer(ctx->ctx_kompute, "kv",   ctx->model.kv_self.buf.addr, ctx->model.kv_self.buf.size, 0));
+
+        LLAMA_METAL_CHECK_BUF(ggml_vk_add_buffer(ctx->ctx_kompute, "scr0", ctx->buf_scratch[0].addr, ctx->buf_scratch[0].size, 0));
+        LLAMA_METAL_CHECK_BUF(ggml_vk_add_buffer(ctx->ctx_kompute, "scr1", ctx->buf_scratch[1].addr, ctx->buf_scratch[1].size, 0));
 #undef LLAMA_METAL_CHECK_BUF
     }
 #endif
