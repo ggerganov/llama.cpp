@@ -549,7 +549,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
                 return res;
             }
             // determine the required inference memory per token:
-            gpt2_eval(gpt2_ctx_v3, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token, file_format);
+            gpt2_eval(gpt2_ctx_v3, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token, calc_mem_with_scratch);
             return ModelLoadResult::SUCCESS;
         }
         else
@@ -616,14 +616,14 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
             }
 
             // determine the required inference memory per token:
-            gptj_eval(gptj_ctx_v3, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);
+            gptj_eval(gptj_ctx_v3, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token, calc_mem_with_scratch);
 
             //if the logits are NAN or duplicated, it means the model is incompatible
             std::vector<float> oldlogits(logits);
 
             //this is another hack because they change the library - we run the eval through the model
             //twice and compare logits. if they give the same logits for different inputs, model is broken
-            gptj_eval(gptj_ctx_v3, params.n_threads, 0, {4, 5, 6, 7}, logits, mem_per_token);
+            gptj_eval(gptj_ctx_v3, params.n_threads, 0, {4, 5, 6, 7}, logits, mem_per_token, calc_mem_with_scratch);
 
             if(logits.size()>0 && (IsNanCheck(logits[0]) || LogitsDuplicated(oldlogits,logits)))
             {
@@ -688,7 +688,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
             }
 
             // determine the required inference memory per token:
-            gpt_neox_eval(neox_ctx_v3, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);
+            gpt_neox_eval(neox_ctx_v3, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token, calc_mem_with_scratch);
 
             return ModelLoadResult::SUCCESS;
         }
@@ -745,7 +745,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         }
 
         // determine the required inference memory per token:
-        mpt_eval(mpt_ctx_v3, params.n_threads, 0, { 0, 1, 2, 3 }, logits, false, mem_per_token);
+        mpt_eval(mpt_ctx_v3, params.n_threads, 0, { 0, 1, 2, 3 }, logits, false, mem_per_token, calc_mem_with_scratch);
         return ModelLoadResult::SUCCESS;
     }
     else
@@ -1078,7 +1078,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             }
             else if(file_format==FileFormat::GPT2_4)
             {
-                evalres = gpt2_eval(gpt2_ctx_v3, params.n_threads, n_past, embd, logits, mem_per_token, file_format);
+                evalres = gpt2_eval(gpt2_ctx_v3, params.n_threads, n_past, embd, logits, mem_per_token);
             }
             else if(file_format==FileFormat::NEOX_1 || file_format == FileFormat::NEOX_2 || file_format == FileFormat::NEOX_3 || file_format==FileFormat::NEOX_4 || file_format==FileFormat::NEOX_5)
             {

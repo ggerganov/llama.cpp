@@ -382,7 +382,8 @@ bool gptj_eval(
         const int n_past,
         const std::vector<gpt_vocab::id> & embd_inp,
               std::vector<float>         & embd_w,
-              size_t                     & mem_per_token) {
+              size_t                     & mem_per_token,
+              bool use_scratch=true) {
     const int N = embd_inp.size();
 
     const auto & hparams = model.hparams;
@@ -400,13 +401,18 @@ bool gptj_eval(
     // use 2 scratch buffers
     // TODO: very hacky solution - reimplement in a more elegant way
     static size_t scr0_size = (n_ctx>1024?512u:256u)*1024*1024;
-    static void * scr0 = malloc(scr0_size);
+    static void * scr0;
 
     static size_t scr1_size = (n_ctx>1024?512u:256u)*1024*1024;
-    static void * scr1 = malloc(scr1_size);
+    static void * scr1;
+    if(use_scratch)
+    {
+        scr0 = malloc(scr0_size);
+        scr1 = malloc(scr1_size);
+    }
 
-    if (mem_per_token > 0 && mem_per_token*N*1.05 > buf_size) {
-        const size_t buf_size_new = 64u*1024*1024 + 1.15*(mem_per_token*N); // add 10% to account for ggml object overhead
+    if (mem_per_token > 0 && 32u*1024*1024 + mem_per_token*N*1.2 > buf_size) {
+        const size_t buf_size_new = 64u*1024*1024 + 1.2*(mem_per_token*N); // add 10% to account for ggml object overhead
         //printf("\n%s: reallocating buffer from %zu to %zu bytes\n", __func__, buf_size, buf_size_new);
 
         // reallocate
@@ -441,7 +447,9 @@ bool gptj_eval(
     for (int il = 0; il < n_layer; ++il) {
         struct ggml_tensor * cur;
 
+        if(use_scratch){
         ggml_set_scratch(ctx0, { 0, scr0_size, scr0, });
+        }
 
         // norm
         {
@@ -530,7 +538,9 @@ bool gptj_eval(
                     cur);
         }
 
+        if(use_scratch){
         ggml_set_scratch(ctx0, { 0, scr1_size, scr1, });
+        }
 
         struct ggml_tensor * inpFF = cur;
 
@@ -567,7 +577,9 @@ bool gptj_eval(
         inpL = ggml_add(ctx0, cur, inpL);
     }
 
+    if(use_scratch){
     ggml_set_scratch(ctx0, { 0, scr0_size, scr0, });
+    }
 
     // norm
     {
@@ -581,7 +593,9 @@ bool gptj_eval(
                 ggml_repeat(ctx0, model.ln_f_b, inpL));
     }
 
+    if(use_scratch){
     ggml_set_scratch(ctx0, { 0, 0, nullptr, });
+    }
 
     // lm_head
     {
