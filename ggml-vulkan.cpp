@@ -293,7 +293,7 @@ layout(binding = 1) buffer tensorInB { float inB[]; };
 layout(binding = 2) buffer tensorOut { float out_[]; };
 
 void main() {
-    const int i = int(gl_GlobalInvocationID.x);
+    const uint i = gl_GlobalInvocationID.x;
 
     out_[pcs.outOff+i] = inA[pcs.inAOff+i] MATH_OP inB[pcs.inBOff+(i ROW_OP)];
 }
@@ -304,7 +304,7 @@ void ggml_vk_abmath(kp::Sequence& seq,
                     const std::shared_ptr<kp::Tensor>& inA, uint32_t inAOff,
                     const std::shared_ptr<kp::Tensor>& inB, uint32_t inBOff,
                     const std::shared_ptr<kp::Tensor>& out, uint32_t outOff,
-                    uint32_t row = 0) {
+                    uint32_t size, uint32_t row = 0) {
     const static auto spirv = compileSource(program_source_head+
                                             "#define MATH_OP "+std::string(1, mathOP)+"\n"
                                             "#define ROW_OP "+(row?"% pcs.row":"")+'\n'+
@@ -316,7 +316,7 @@ void ggml_vk_abmath(kp::Sequence& seq,
         inAOff, inBOff, outOff, row
     };
 
-    seq.record<kp::OpAlgoDispatch>(mgr.algorithm<float, PushConstants>({inA, inB, out}, spirv, {std::min(inA->size()-inAOff, inB->size()-inBOff)}, {}, {pushConsts}));
+    seq.record<kp::OpAlgoDispatch>(mgr.algorithm<float, PushConstants>({inA, inB, out}, spirv, {size}, {}, {pushConsts}));
 }
 
 template <typename... Args>
@@ -343,7 +343,7 @@ layout(binding = 0) buffer tensorInA { float in_[]; };
 layout(binding = 1) buffer tensorOut { float out_[]; };
 
 void main() {
-    const int i = int(gl_GlobalInvocationID.x);
+    const uint i = gl_GlobalInvocationID.x;
 
     out_[pcs.outOff+i] = in_[pcs.inOff+i] * pcs.scale;
 }
@@ -352,7 +352,7 @@ void main() {
 void ggml_vk_scale(kp::Sequence& seq,
                    const std::shared_ptr<kp::Tensor>& in, uint32_t inOff,
                    const std::shared_ptr<kp::Tensor>& out, uint32_t outOff,
-                   float scale) {
+                   uint32_t size, float scale) {
     const static auto spirv = compileSource(program_source_head+program_scale);
 
     struct PushConstants {
@@ -362,7 +362,42 @@ void ggml_vk_scale(kp::Sequence& seq,
         inOff, outOff, scale
     };
 
-    seq.record<kp::OpAlgoDispatch>(mgr.algorithm<float, PushConstants>({in, out}, spirv, {in->size()-inOff}, {}, {pushConsts}));
+    seq.record<kp::OpAlgoDispatch>(mgr.algorithm<float, PushConstants>({in, out}, spirv, {size}, {}, {pushConsts}));
+}
+
+
+static const std::string program_silu =
+        MULTILINE_QUOTE(
+layout(push_constant) uniform PushConstants {
+    uint inAOff;
+    uint inOff;
+} pcs;
+
+layout(local_size_x = 1) in;
+layout(binding = 0) buffer tensorInA { float in_[]; };
+layout(binding = 1) buffer tensorOut { float out_[]; };
+
+void main() {
+    const uint i = gl_GlobalInvocationID.x;
+    const float x = in_[pcs.inOff+i];
+
+    out_[pcs.outOff+i] = x / (1.0f + exp(-x));
+}
+);
+
+void ggml_vk_silu(kp::Sequence& seq,
+                  const std::shared_ptr<kp::Tensor>& in, uint32_t inOff,
+                  const std::shared_ptr<kp::Tensor>& out, uint32_t outOff,
+                  uint32_t size) {
+    const static auto spirv = compileSource(program_source_head+program_silu);
+
+    struct PushConstants {
+        uint32_t inOff, outOff;
+    } pushConsts {
+        inOff, outOff
+    };
+
+    seq.record<kp::OpAlgoDispatch>(mgr.algorithm<float, PushConstants>({in, out}, spirv, {size}, {}, {pushConsts}));
 }
 
 
@@ -447,17 +482,26 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                         } break;
                     case GGML_OP_ADD:
                         {
-                            ggml_vk_add(seq, id_src0, offs_src0, id_src1, offs_src1, id_dst, offs_dst);
+                            ggml_vk_add(seq, id_src0, offs_src0, id_src1, offs_src1, id_dst, offs_dst, ggml_nelements(dst));
                         } break;
                     case GGML_OP_MUL:
-                    {
-                        if (ggml_nelements(src1) == ne10) {
-                            // src1 is a row
-                            ggml_vk_mul(seq, id_src0, offs_src0, id_src1, offs_src1, id_dst, offs_dst, ne00);
-                        } else {
-                            ggml_vk_mul(seq, id_src0, offs_src0, id_src1, offs_src1, id_dst, offs_dst);
-                        }
-                    } break;
+                        {
+                            if (ggml_nelements(src1) == ne10) {
+                                // src1 is a row
+                                ggml_vk_mul(seq, id_src0, offs_src0, id_src1, offs_src1, id_dst, offs_dst, ne00, ggml_nelements(dst));
+                            } else {
+                                ggml_vk_mul(seq, id_src0, offs_src0, id_src1, offs_src1, id_dst, offs_dst, ggml_nelements(dst));
+                            }
+                        } break;
+                    case GGML_OP_SCALE:
+                        {
+                            const float scale = *(const float *) src1->data;
+                            ggml_vk_scale(seq, id_src0, offs_src0, id_dst, offs_dst, ggml_nelements(dst), scale);
+                        } break;
+                    case GGML_OP_SILU:
+                        {
+                            ggml_vk_silu(seq, id_src0, offs_src0, id_dst, offs_dst, ggml_nelements(dst));
+                        } break;
                 }
             }
         });
