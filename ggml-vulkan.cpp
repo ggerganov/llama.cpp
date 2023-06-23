@@ -227,9 +227,9 @@ static const std::string program_source_head = R"(
 static const std::string program_dequantize_row_q4_0 =
         MULTILINE_QUOTE(
 layout(local_size_x = 1, local_size_y = 1) in;
-layout(binding = 0) buffer tensorBlockQ4_0D { float16_t x_d[]; };
-layout(binding = 1) buffer tensorBlockQ4_0QS { uint8_t x_qs[]; };
-layout(binding = 2) buffer tensorY { float y[]; };
+layout(binding = 0) buffer restrict readonly tensorBlockQ4_0D { float16_t x_d[]; };
+layout(binding = 1) buffer restrict readonly tensorBlockQ4_0QS { uint8_t x_qs[]; };
+layout(binding = 2) buffer restrict writeonly tensorY { float y[]; };
 
 void main() {
     const int qk = QK4_0;
@@ -275,10 +275,10 @@ void ggml_vk_dequantize_row_q4_0(const void *x_, float *y, int k) {
 static const std::string program_dequantize_row_q4_1 =
         MULTILINE_QUOTE(
 layout(local_size_x = 1, local_size_y = 1) in;
-layout(binding = 0) buffer tensorBlockQ4_0D { float16_t x_d[]; };
-layout(binding = 1) buffer tensorBlockQ4_0M { float16_t x_m[]; };
-layout(binding = 2) buffer tensorBlockQ4_0QS { uint8_t x_qs[]; };
-layout(binding = 3) buffer tensorY { float y[]; };
+layout(binding = 0) buffer restrict readonly tensorBlockQ4_0D { float16_t x_d[]; };
+layout(binding = 1) buffer restrict readonly tensorBlockQ4_0M { float16_t x_m[]; };
+layout(binding = 2) buffer restrict readonly tensorBlockQ4_0QS { uint8_t x_qs[]; };
+layout(binding = 3) buffer restrict writeonly tensorY { float y[]; };
 
 void main() {
     const int qk = QK4_1;
@@ -333,9 +333,9 @@ layout(push_constant) uniform PushConstants {
 } pcs;
 
 layout(local_size_x = 1) in;
-layout(binding = 0) buffer tensorInA { float inA[]; };
-layout(binding = 1) buffer tensorInB { float inB[]; };
-layout(binding = 2) buffer tensorOut { float out_[]; };
+layout(binding = 0) buffer restrict readonly tensorInA { float inA[]; };
+layout(binding = 1) buffer restrict readonly tensorInB { float inB[]; };
+layout(binding = 2) buffer restrict writeonly tensorOut { float out_[]; };
 
 void main() {
     const uint i = gl_GlobalInvocationID.x;
@@ -384,8 +384,8 @@ layout(push_constant) uniform PushConstants {
 } pcs;
 
 layout(local_size_x = 1) in;
-layout(binding = 0) buffer tensorIn { float in_[]; };
-layout(binding = 1) buffer tensorOut { float out_[]; };
+layout(binding = 0) buffer restrict readonly tensorIn { float in_[]; };
+layout(binding = 1) buffer restrict writeonly tensorOut { float out_[]; };
 
 void main() {
     const uint i = gl_GlobalInvocationID.x;
@@ -432,8 +432,8 @@ layout(push_constant) uniform PushConstants {
 } pcs;
 
 layout(local_size_x = 1) in;
-layout(binding = 0) buffer tensorInA { float in_[]; };
-layout(binding = 1) buffer tensorOut { float out_[]; };
+layout(binding = 0) buffer restrict readonly tensorInA { float in_[]; };
+layout(binding = 1) buffer restrict writeonly tensorOut { float out_[]; };
 
 void main() {
     const uint i = gl_GlobalInvocationID.x;
@@ -459,8 +459,8 @@ layout(push_constant) uniform PushConstants {
 } pcs;
 
 layout(local_size_x = 1) in;
-layout(binding = 0) buffer tensorInA { float in_[]; };
-layout(binding = 1) buffer tensorOut { float out_[]; };
+layout(binding = 0) buffer restrict readonly tensorInA { float in_[]; };
+layout(binding = 1) buffer restrict writeonly tensorOut { float out_[]; };
 
 void main() {
     const uint i = gl_GlobalInvocationID.x;
@@ -485,8 +485,8 @@ layout(push_constant) uniform PushConstants {
 } pcs;
 
 layout(local_size_x = 1) in;
-layout(binding = 0) buffer tensorInA { float in_[]; };
-layout(binding = 1) buffer tensorOut { float out_[]; };
+layout(binding = 0) buffer restrict readonly tensorInA { float in_[]; };
+layout(binding = 1) buffer restrict writeonly tensorOut { float out_[]; };
 
 void main() {
     const uint i = gl_GlobalInvocationID.x;
