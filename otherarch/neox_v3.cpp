@@ -401,7 +401,7 @@ bool gpt_neox_eval(
         const std::vector<gpt_vocab::id> & embd_inp,
               std::vector<float>         & embd_w,
               size_t                     & mem_per_token,
-              bool use_scratch=true) {
+              bool use_scratch) {
     const int N = embd_inp.size();
 
     const auto & hparams = model.hparams;
@@ -418,21 +418,14 @@ bool gpt_neox_eval(
 
     // use 2 scratch buffers
     // TODO: very hacky solution - reimplement in a more elegant way
-    static size_t scr0_size = (n_ctx>1024?512u:256u)*1024*1024;
-    static void * scr0;
+    static size_t scr0_size = (n_embd>2400?512u:256u)*1024*1024;
+    static size_t scr1_size = (n_embd>2400?512u:256u)*1024*1024;
 
-    static size_t scr1_size = (n_ctx>1024?512u:256u)*1024*1024;
-    static void * scr1;
-    if(use_scratch)
-    {
-        scr0 = malloc(scr0_size);
-        scr1 = malloc(scr1_size);
-    }
+    static void * scr0 = malloc(scr0_size);
+    static void * scr1 = malloc(scr1_size);
 
-    size_t scratch_needed_mem = mem_per_token*N;
-
-    if (mem_per_token > 0 && scratch_needed_mem*1.1 > buf_size) {
-        const size_t buf_size_new = 64u*1024*1024 + 1.2*(scratch_needed_mem); // add 10% to account for ggml object overhead
+    if (mem_per_token > 0 && (mem_per_token*N*2 + 64u*1024*1024) > buf_size) {
+        const size_t buf_size_new = 360u*1024*1024 + 1.2*(mem_per_token*N); // add 10% to account for ggml object overhead
         //printf("\n%s: reallocating buffer from %zu to %zu bytes\n", __func__, buf_size, buf_size_new);
 
         // reallocate

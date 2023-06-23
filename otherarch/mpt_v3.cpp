@@ -317,7 +317,7 @@ bool mpt_model_load(const std::string & fname, mpt_model & model, gpt_vocab & vo
 //
 bool mpt_eval(const mpt_model & model, const int n_threads, const int n_past,
               const std::vector<gpt_vocab::id> & embd_inp, std::vector<float> & embd_w,
-              bool logits_all, size_t & mem_per_token, bool use_scratch=true) {
+              bool logits_all, size_t & mem_per_token, bool use_scratch) {
     const int N = embd_inp.size();
 
     const auto & hparams = model.hparams;
@@ -333,26 +333,15 @@ bool mpt_eval(const mpt_model & model, const int n_threads, const int n_past,
 
     // use 2 scratch buffers
     // TODO: very hacky solution - reimplement in a more elegant way
+    //MPT 30B needs more scratch memory
+    static size_t scr0_size = (n_embd>=7168?2048u:1024u)*1024*1024;
+    static size_t scr1_size = (n_embd>=7168?2048u:1024u)*1024*1024;
 
-    static size_t scr0_size = (n_ctx>2048?1024u:512u)*1024*1024;
-    static size_t scr1_size = (n_ctx>2048?1024u:512u)*1024*1024;
+    static void * scr0 = malloc(scr0_size);
+    static void * scr1 = malloc(scr1_size);
 
-    if(n_embd>=7168) //MPT 30B needs more scratch memory
-    {
-        scr0_size *= 2;
-        scr1_size *= 2;
-    }
-
-    static void * scr0;
-    static void * scr1;
-    if(use_scratch)
-    {
-        scr0 = malloc(scr0_size);
-        scr1 = malloc(scr1_size);
-    }
-
-    if (mem_per_token > 0 && mem_per_token * N *1.1 > buf_size) {
-        const size_t buf_size_new = 64u*1024*1024 + 1.2 * (mem_per_token * N); // add 10% to account for ggml object overhead
+    if (mem_per_token > 0 && (mem_per_token*N*2 + 64u*1024*1024) > buf_size) {
+        const size_t buf_size_new = 320u*1024*1024 + 1.2*(mem_per_token*N); // add 10% to account for ggml object overhead
         // printf("\n%s: reallocating buffer from %zu to %zu bytes\n", __func__,
         // buf_size, buf_size_new);
         // reallocate
