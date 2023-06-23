@@ -29,6 +29,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
         <li><a href="#quantization">Quantization</a></li>
         <li><a href="#interactive-mode">Interactive mode</a></li>
         <li><a href="#instruction-mode-with-alpaca">Instruction mode with Alpaca</a></li>
+        <li><a href="#using-openllama">Using OpenLLaMA</a></li>
         <li><a href="#using-gpt4all">Using GPT4All</a></li>
         <li><a href="#using-pygmalion-7b--metharme-7b">Using Pygmalion 7B & Metharme 7B</a></li>
         <li><a href="#obtaining-the-facebook-llama-original-model-and-stanford-alpaca-model-data">Obtaining the Facebook LLaMA original model and Stanford Alpaca model data</a></li>
@@ -542,6 +543,13 @@ The majority (54%) are using public transit. This includes buses, trams and metr
 cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
 >
 ```
+
+### Using [OpenLLaMA](https://github.com/openlm-research/open_llama)
+
+OpenLLaMA is an openly licensed reproduction of Meta's original LLaMA model. It uses the same architecture and is a drop-in replacement for the original LLaMA weights.
+
+- Download the [3B](https://huggingface.co/openlm-research/open_llama_3b), [7B](https://huggingface.co/openlm-research/open_llama_7b), or [13B](https://huggingface.co/openlm-research/open_llama_13b) model from Hugging Face.
+- Convert the model to ggml FP16 format using `python convert.py <path to OpenLLaMA directory>`
 
 ### Using [GPT4All](https://github.com/nomic-ai/gpt4all)
 
