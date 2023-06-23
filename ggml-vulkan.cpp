@@ -378,6 +378,19 @@ void ggml_vk_scale(kp::Sequence& seq,
     seq.record<kp::OpAlgoDispatch>(mgr.algorithm<float, PushConstants>({in, out}, spirv, {size}, {}, {pushConsts}));
 }
 
+void ggml_vk_xxlu(const std::vector<uint32_t>& spirv, kp::Sequence& seq,
+                  const std::shared_ptr<kp::Tensor>& in, uint32_t inOff,
+                  const std::shared_ptr<kp::Tensor>& out, uint32_t outOff,
+                  uint32_t size) {
+    struct PushConstants {
+        uint32_t inOff, outOff;
+    } pushConsts {
+        inOff, outOff
+    };
+
+    seq.record<kp::OpAlgoDispatch>(mgr.algorithm<float, PushConstants>({in, out}, spirv, {size}, {}, {pushConsts}));
+}
+
 
 static const std::string program_silu =
         MULTILINE_QUOTE(
@@ -398,19 +411,64 @@ void main() {
 }
 );
 
-void ggml_vk_silu(kp::Sequence& seq,
-                  const std::shared_ptr<kp::Tensor>& in, uint32_t inOff,
-                  const std::shared_ptr<kp::Tensor>& out, uint32_t outOff,
-                  uint32_t size) {
+template <typename... Args>
+void ggml_vk_silu(Args&&... args) {
     const static auto spirv = compileSource(program_source_head+program_silu);
 
-    struct PushConstants {
-        uint32_t inOff, outOff;
-    } pushConsts {
-        inOff, outOff
-    };
+    ggml_vk_xxlu(spirv, std::forward<Args>(args)...);
+}
 
-    seq.record<kp::OpAlgoDispatch>(mgr.algorithm<float, PushConstants>({in, out}, spirv, {size}, {}, {pushConsts}));
+
+static const std::string program_relu =
+        MULTILINE_QUOTE(
+layout(push_constant) uniform PushConstants {
+    uint inAOff;
+    uint inOff;
+} pcs;
+
+layout(local_size_x = 1) in;
+layout(binding = 0) buffer tensorInA { float in_[]; };
+layout(binding = 1) buffer tensorOut { float out_[]; };
+
+void main() {
+    const uint i = gl_GlobalInvocationID.x;
+
+    out_[pcs.outOff+i] = max(0.0, in_[pcs.inOff+i]);
+}
+);
+
+template <typename... Args>
+void ggml_vk_relu(Args&&... args) {
+    const static auto spirv = compileSource(program_source_head+program_relu);
+
+    ggml_vk_xxlu(spirv, std::forward<Args>(args)...);
+}
+
+
+static const std::string program_gelu =
+        MULTILINE_QUOTE(
+layout(push_constant) uniform PushConstants {
+    uint inAOff;
+    uint inOff;
+} pcs;
+
+layout(local_size_x = 1) in;
+layout(binding = 0) buffer tensorInA { float in_[]; };
+layout(binding = 1) buffer tensorOut { float out_[]; };
+
+void main() {
+    const uint i = gl_GlobalInvocationID.x;
+    const float x = in_[pcs.inOff+i];
+
+    out_[pcs.outOff+i] = 0.5*x*(1.0 + tanh(SQRT_2_OVER_PI*x*(1.0 + GELU_COEF_A*x*x)));
+}
+);
+
+template <typename... Args>
+void ggml_vk_gelu(Args&&... args) {
+    const static auto spirv = compileSource(program_source_head+program_gelu);
+
+    ggml_vk_xxlu(spirv, std::forward<Args>(args)...);
 }
 
 
@@ -514,6 +572,14 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                     case GGML_OP_SILU:
                         {
                             ggml_vk_silu(seq, id_src0, offs_src0, id_dst, offs_dst, ggml_nelements(dst));
+                        } break;
+                    case GGML_OP_RELU:
+                        {
+                            ggml_vk_relu(seq, id_src0, offs_src0, id_dst, offs_dst, ggml_nelements(dst));
+                        } break;
+                    case GGML_OP_GELU:
+                        {
+                            ggml_vk_gelu(seq, id_src0, offs_src0, id_dst, offs_dst, ggml_nelements(dst));
                         } break;
                 }
             }
