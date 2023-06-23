@@ -9,6 +9,7 @@
 #include <fstream>
 #include <exception>
 #include <thread>
+#include <mutex>
 #include <cstring>
 #include <immintrin.h>
 #include <kompute/Kompute.hpp>
@@ -126,6 +127,8 @@ const std::shared_ptr<kp::Tensor> & ggml_vk_get_tensor(struct ggml_kompute_conte
 
 
 static std::vector<uint32_t> compileSource(const std::string& source) {
+    static std::mutex mutex;
+    std::lock_guard<std::mutex> L(mutex);
     //FIXME: Terrible solution!!!!
     std::ofstream fileOut("tmp_kp_shader.comp");
     fileOut << source;
@@ -176,6 +179,8 @@ static const std::string program_source_head = R"(
 #define QK4_0 32
 #define QR4_0 2
 #define QK4_1 32
+#define GELU_COEF_A 0.044715;
+#define SQRT_2_OVER_PI 0.79788456080286535587989211986876;
 )";
 
 
