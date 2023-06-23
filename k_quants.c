@@ -707,6 +707,7 @@ void quantize_row_q4_K_reference(const float * restrict x, block_q4_K * restrict
         uint8_t * q = y[i].qs;
         for (int j = 0; j < QK_K; j += 64) {
             for (int l = 0; l < 32; ++l) q[l] = L[j + l] | (L[j + l + 32] << 4);
+            q += 32;
         }
 
         x += QK_K;
