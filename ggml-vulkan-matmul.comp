@@ -1,10 +1,14 @@
 #version 450
 
-layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+#define BLOCKSIZE 32
 
-layout (binding = 0) readonly buffer A { float A_data[]; };
-layout (binding = 1) readonly buffer B { float B_data[]; };
-layout (binding = 2) writeonly buffer D { float D_data[]; };
+#extension GL_EXT_control_flow_attributes : enable
+
+layout(local_size_x = BLOCKSIZE * BLOCKSIZE, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer A { float data_a[]; };
+layout (binding = 1) readonly buffer B { float data_b[]; };
+layout (binding = 2) writeonly buffer D { float data_d[]; };
 
 layout (push_constant) uniform parameter
 {
@@ -16,18 +20,42 @@ layout (push_constant) uniform parameter
     int stride_d;
 } p;
 
+shared float buf_a[(BLOCKSIZE+1) * BLOCKSIZE];
+shared float buf_b[(BLOCKSIZE+1) * BLOCKSIZE];
+
 void main()
 {
-    int i01 = int(gl_GlobalInvocationID.x);
-    int i11 = int(gl_GlobalInvocationID.y);
+    const int lr = int(gl_LocalInvocationID.x % BLOCKSIZE);
+    const int lc = int(gl_LocalInvocationID.x / BLOCKSIZE);
 
-    if (i01 < p.M && i11 < p.N) {
-        float sum = 0.0f;
+    const int ir = int(gl_WorkGroupID.x);
+    const int ic = int(gl_WorkGroupID.y);
 
-        for (int i = 0; i < p.K; i++) {
-            sum += A_data[i01 * p.stride_a + i] * B_data[i11 * p.stride_b + i];
+    int pos_a = ir * BLOCKSIZE * p.stride_a;
+    int pos_b = ic * BLOCKSIZE * p.stride_b;
+
+    float sum = 0.0f;
+
+    [[unroll]] for (int i = 0; i < p.K; i += BLOCKSIZE) {
+        buf_a[lc * (BLOCKSIZE+1) + lr] = data_a[pos_a + lc * p.stride_a + lr];
+        buf_b[lc * (BLOCKSIZE+1) + lr] = data_b[pos_b + lc * p.stride_b + lr];
+
+        barrier();
+
+        pos_a += BLOCKSIZE;
+        pos_b += BLOCKSIZE;
+
+        [[unroll]] for (int j = 0; j < BLOCKSIZE; j++) {
+            sum += buf_a[lr * (BLOCKSIZE+1) + j] * buf_b[lc * (BLOCKSIZE+1) + j];
         }
 
-        D_data[i11 * p.stride_d + i01] = sum;
+        barrier();
+    }
+
+    const int dr = ir * BLOCKSIZE + lr;
+    const int dc = ic * BLOCKSIZE + lc;
+
+    if (dr < p.M && dc < p.N) {
+        data_d[dc * p.stride_d + dr] = sum;
     }
 }

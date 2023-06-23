@@ -215,12 +215,11 @@ endif # LLAMA_METAL
 
 ifdef LLAMA_VULKAN
 	CFLAGS  += -DGGML_USE_VULKAN
-	LDFLAGS += -lvulkan
+	LDFLAGS += -lvulkan -lopenblas -lcblas
 	OBJS    += ggml-vulkan.o
 ggml-vulkan.o: ggml-vulkan.cpp ggml-vulkan.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
-ggml-vulkan-matmul-shader:
-	glslc -fshader-stage=compute --target-env=vulkan1.2 -O ggml-vulkan-matmul.glsl -o ggml-vulkan-matmul.spv
+	glslc -fshader-stage=compute --target-env=vulkan1.2 -O ggml-vulkan-matmul.comp -o ggml-vulkan-matmul.spv
 endif
 
 ifneq ($(filter aarch64%,$(UNAME_M)),)
@@ -287,7 +286,6 @@ clean:
 #
 # Examples
 #
-
 main: examples/main/main.cpp                                  build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 	@echo

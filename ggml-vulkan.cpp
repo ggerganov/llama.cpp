@@ -1,5 +1,8 @@
 #include "ggml-vulkan.h"
 
+#include <cblas.h>
+#include <cmath>
+
 #include <vulkan/vulkan.hpp>
 #define VMA_IMPLEMENTATION
 #if UINTPTR_MAX == 0xFFFFFFFF
@@ -29,6 +32,7 @@ inline static void* ggml_aligned_malloc(size_t size, size_t alignment) {
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <chrono>
 
 #include "ggml.h"
 
@@ -199,7 +203,7 @@ static void ggml_vk_pool_malloc(size_t size, vk_buffer* buf) {
     };
 
     VmaAllocationCreateInfo allocation_info = {};
-    allocation_info.usage = VMA_MEMORY_USAGE_AUTO;
+    allocation_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
     allocation_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
     vmaCreateBuffer(vk_allocator,
@@ -455,6 +459,8 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
             ggml_vk_h2d_tensor_2d(&d_Y, 0, src1, i03, i02);
 
             // compute
+            auto begin = std::chrono::high_resolution_clock::now();
+
             vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
             cmd_buffer.begin(cmd_buffer_begin_info);
             cmd_buffer.pushConstants<int>(vk_pipeline_matmul_layout, vk::ShaderStageFlagBits::eCompute, 0, push_constants);
@@ -480,10 +486,34 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
                                     true,
                                     uint64_t(-1));
 
+            auto end = std::chrono::high_resolution_clock::now();
+
+            std::cout << "m=" << ne01 << " n=" << ne11 << " k=" << ne10 << " matmul " << std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count() / 1000.0 << "ms" << std::endl;
+
             // copy dst to host
             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
-            float * d_blas = (float *) malloc(sizeof(float) * d_ne);
             ggml_vk_buffer_read(&d_D, 0, d, sizeof(float) * d_ne);
+
+#ifdef false
+            const float * x = (float *) ((char *) src0->data);
+            const float * y = (float *) ((char *) src1->data);
+            float * d_chk = (float *) malloc(sizeof(float) * d_ne);
+
+            cblas_sgemm(CblasColMajor, CblasTrans, CblasNoTrans,
+                    ne01, ne11, ne10,
+                    1.0f,    x, ne00,
+                             y, ne10,
+                    0.0f,    d_chk, ne01);
+
+            for (size_t i = 0; i < d_ne; i++) {
+                if (std::fabs(d[i] - d_chk[i]) > 0.01f) {
+                    printf("d[%ld] = %f d_chk[%ld] = %f\n", i, d[i], i, d_chk[i]);
+                    abort();
+                }
+            }
+
+            free(d_chk);
+#endif
         }
     }
 
