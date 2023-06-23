@@ -183,7 +183,9 @@ void convert_f16(__global half* x, const int ib, const int iqs, float* v0, float
     *v0 = vload_half(0, &x[ib + 0]);
     *v1 = vload_half(0, &x[ib + 1]);
 }
+);
 
+static std::string k_quants_source = MULTILINE_QUOTE(
 inline void get_scale_min_k4(int j, const __global uint8_t *q, uint8_t *d, uint8_t *m)
 {
     if (j < 4)
@@ -853,6 +855,7 @@ std::string& replace(std::string& s, const std::string& from, const std::string&
 std::string generate_kernels() {
     std::stringstream src;
     src << program_source << '\n';
+    src << k_quants_source << '\n';
     for (size_t i = 0; i < dequant_str_values.size(); i += dequant_str_keys.size()) {
         std::string dequant_kernel = dequant_template;
         std::string dmmv_kernel = dequant_mul_mat_vec_template;
