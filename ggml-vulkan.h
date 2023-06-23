@@ -31,6 +31,7 @@ void ggml_vk_set_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * 
 void ggml_vk_get_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t);
 
 void ggml_vk_dequantize_row_q4_0(const void * x, float * y, int k);
+void ggml_vk_dequantize_row_q4_1(const void * x, float * y, int k);
 void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph * cgraph);
 
 #ifdef  __cplusplus

@@ -64,8 +64,8 @@ bool ggml_vk_add_buffer(
                            size_t   size,
                            size_t   max_size) {
     try {
-        std::vector<byte> vec(max_size);
-        std::memcpy(vec.data(), data, std::max(size, max_size));
+        std::vector<byte> vec(std::max(size, max_size));
+        std::memcpy(vec.data(), data, size);
         auto tensor = mgr.tensorT<byte>(vec);
         ctx->buffers.emplace(name, std::move(tensor));
     } catch (const std::exception & e) {

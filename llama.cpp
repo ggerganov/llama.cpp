@@ -1269,7 +1269,7 @@ static void llama_model_load_internal(
             }
         }
 #endif // GGML_USE_CUBLAS
-#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_KOMPUTE)
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
 
         fprintf(stderr, "%s: offloading %d repeating layers to GPU\n", __func__, n_gpu);
@@ -1707,7 +1707,7 @@ static bool llama_eval_internal(
 
         ggml_graph_compute(ctx0, &gf);
     }
-#elif defined(GGML_USE_KOMPUTE)
+#elif defined(GGML_USE_KOMPUTE_TODO)
     if (lctx.ctx_kompute && N == 1) {
         ggml_vk_graph_compute(lctx.ctx_kompute, &gf);
         ggml_vk_get_tensor   (lctx.ctx_kompute, cur);
