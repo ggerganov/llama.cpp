@@ -42,6 +42,7 @@ typedef struct {
 struct ggml_kompute_context {
     std::unordered_map<const char *, std::shared_ptr<kp::Tensor>> buffers;
     std::unordered_map<struct ggml_tensor *, std::shared_ptr<kp::Tensor>> tensors;
+    std::mutex tensors_mutex;
 };
 
 
@@ -63,6 +64,8 @@ bool ggml_vk_add_buffer(
                              void * data,
                            size_t   size,
                            size_t   max_size) {
+    printf("%s: Context: %p Name: '%s'\n", __func__, ctx, name);
+
     try {
         std::vector<byte> vec(std::max(size, max_size));
         std::memcpy(vec.data(), data, size);
@@ -77,6 +80,8 @@ bool ggml_vk_add_buffer(
 
 static
 std::shared_ptr<kp::Tensor> ggml_vk_get_buffer(struct ggml_kompute_context * ctx, const char * name) {
+    printf("%s: Context: %p Name: '%s'\n", __func__, ctx, name);
+
     auto res = ctx->buffers.find(name);
     if (res == ctx->buffers.end()) return nullptr;
     return res->second;
@@ -84,6 +89,8 @@ std::shared_ptr<kp::Tensor> ggml_vk_get_buffer(struct ggml_kompute_context * ctx
 
 
 void ggml_vk_h2d_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t) {
+    printf("%s: Context: %p Tensor: %p\n", __func__, ctx, t);
+
     if (t->backend != GGML_BACKEND_GPU) {
         return;
     }
@@ -91,7 +98,9 @@ void ggml_vk_h2d_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * 
     auto data = t->data;
     auto size = ggml_nbytes(t);
 
+    ctx->tensors_mutex.lock();
     auto res = ctx->tensors.find(t);
+    ctx->tensors_mutex.unlock();
 
     if (res != ctx->tensors.end()) {
         assert(res->second->size() != size);
@@ -103,11 +112,15 @@ void ggml_vk_h2d_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * 
 
         auto tensor = mgr.tensorT<byte>(vec);
         mgr.sequence()->eval<kp::OpTensorSyncDevice>({tensor});
+        ctx->tensors_mutex.lock();
         ctx->tensors.emplace(t, std::move(tensor));
+        ctx->tensors_mutex.unlock();
     }
 }
 
 void ggml_vk_d2h_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t) {
+    printf("%s: Context: %p Tensor: %p\n", __func__, ctx, t);
+
     if (t->backend != GGML_BACKEND_GPU) {
         return;
     }
@@ -115,7 +128,9 @@ void ggml_vk_d2h_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * 
     auto data = t->data;
     auto size = ggml_nbytes(t);
 
+    ctx->tensors_mutex.lock();
     auto res = ctx->tensors.find(t);
+    ctx->tensors_mutex.unlock();
     assert(res != ctx->tensors.end());
 
     auto tensor = res->second;
@@ -125,9 +140,13 @@ void ggml_vk_d2h_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * 
 
 static
 const std::shared_ptr<kp::Tensor> & ggml_vk_get_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t) {
+    printf("%s: Context: %p Tensor: %p\n", __func__, ctx, t);
+
     assert(t->backend != GGML_BACKEND_GPU);
 
+    ctx->tensors_mutex.lock();
     auto res = ctx->tensors.find(t);
+    ctx->tensors_mutex.unlock();
     assert(res != ctx->tensors.end());
 
     return res->second;
