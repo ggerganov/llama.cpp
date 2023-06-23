@@ -395,6 +395,20 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                 std::shared_ptr<kp::Tensor> id_src0 = src0 ? ggml_vk_get_tensor(ctx, src0) : nullptr;
                 std::shared_ptr<kp::Tensor> id_src1 = src1 ? ggml_vk_get_tensor(ctx, src1) : nullptr;
                 std::shared_ptr<kp::Tensor> id_dst  = dst  ? ggml_vk_get_tensor(ctx, dst)  : nullptr;
+
+                switch (dst->op) {
+                    case GGML_OP_RESHAPE:
+                    case GGML_OP_VIEW:
+                    case GGML_OP_TRANSPOSE:
+                    case GGML_OP_PERMUTE:
+                        {
+                            // noop
+                        } break;
+                    case GGML_OP_ADD:
+                        {
+                            ggml_vk_add(id_src0, offs_src0, id_src1, offs_src1, id_dst, offs_dst);
+                        } break;
+                }
             }
         });
     }
