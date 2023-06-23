@@ -91,12 +91,20 @@ void ggml_vk_h2d_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * 
     auto data = t->data;
     auto size = ggml_nbytes(t);
 
-    std::vector<byte> vec(size);
-    memcpy(vec.data(), data, size);
+    auto res = ctx->tensors.find(t);
 
-    auto tensor = mgr.tensorT<byte>(vec);
-    mgr.sequence()->eval<kp::OpTensorSyncDevice>({tensor});
-    ctx->tensors.emplace(t, std::move(tensor));
+    if (res != ctx->tensors.end()) {
+        assert(res->second->size() != size);
+        res->second->setRawData(data);
+        mgr.sequence()->eval<kp::OpTensorSyncDevice>({res->second});
+    } else {
+        std::vector<byte> vec(size);
+        memcpy(vec.data(), data, size);
+
+        auto tensor = mgr.tensorT<byte>(vec);
+        mgr.sequence()->eval<kp::OpTensorSyncDevice>({tensor});
+        ctx->tensors.emplace(t, std::move(tensor));
+    }
 }
 
 void ggml_vk_d2h_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t) {
