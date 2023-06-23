@@ -998,9 +998,9 @@ class OutputFile:
     def write_vocab_only(fname_out: Path, vocab: Vocab) -> None:
         of = OutputFile(fname_out)
         params = Params(n_vocab=vocab.vocab_size, n_embd=0, n_mult=0,
-                        n_head=1, n_layer=0, file_type=GGMLFileType.AllF32)
+                        n_head=1, n_layer=0)
         of = OutputFile(fname_out)
-        of.write_file_header(params)
+        of.write_file_header(params, file_type=GGMLFileType.AllF32)
         of.write_vocab(vocab)
         of.fout.close()
 
