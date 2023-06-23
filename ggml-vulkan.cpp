@@ -165,14 +165,15 @@ const std::shared_ptr<kp::Tensor> & ggml_vk_get_tensor(struct ggml_kompute_conte
 }
 
 
-static std::vector<uint32_t> compileSource(const std::string& source) {
+static std::vector<uint32_t> compileSource(const std::string& source, const char *debug_name) {
+    printf("%s: Compiling compute program: %s\n", __func__, debug_name);
     static std::mutex mutex;
     std::lock_guard<std::mutex> L(mutex);
     //FIXME: Terrible solution!!!!
     std::ofstream fileOut("tmp_kp_shader.comp");
     fileOut << source;
     fileOut.close();
-    if (system(std::string("glslangValidator -V tmp_kp_shader.comp -o tmp_kp_shader.comp.spv").c_str()))
+    if (system(std::string("glslangValidator -V tmp_kp_shader.comp -o tmp_kp_shader.comp.spv > /dev/null").c_str()))
         throw std::runtime_error("Error running glslangValidator command");
     std::ifstream fileStream("tmp_kp_shader.comp.spv", std::ios::binary);
     std::vector<char> buffer;
@@ -251,7 +252,7 @@ void ggml_vk_dequantize_row_q4_0(const void *x_, float *y, int k) {
     static const int qk = QK4_0;
     const unsigned nb = k / qk;
     const unsigned y_size = nb*qk;
-    const static auto spirv = compileSource(program_source_head+program_dequantize_row_q4_0);
+    const static auto spirv = compileSource(program_source_head+program_dequantize_row_q4_0, __func__);
 
     const auto x = reinterpret_cast<const block_q4_0*>(x_);
 
@@ -301,7 +302,7 @@ void ggml_vk_dequantize_row_q4_1(const void *x_, float *y, int k) {
     static const int qk = QK4_1;
     const unsigned nb = k / qk;
     const unsigned y_size = nb*qk;
-    const static auto spirv = compileSource(program_source_head+program_dequantize_row_q4_1);
+    const static auto spirv = compileSource(program_source_head+program_dequantize_row_q4_1, __func__);
 
     const auto x = reinterpret_cast<const block_q4_1*>(x_);
 
@@ -352,7 +353,7 @@ void ggml_vk_abmath(kp::Sequence& seq,
     const static auto spirv = compileSource(program_source_head+
                                             "#define MATH_OP "+std::string(1, mathOP)+"\n"
                                             "#define ROW_OP "+(row?"% pcs.row":"")+'\n'+
-                                            program_abmath);
+                                            program_abmath, __func__);
 
     struct PushConstants {
         uint32_t inAOff, inBOff, outOff, row;
@@ -370,7 +371,6 @@ void ggml_vk_add(Args&&... args) {
 
 template <typename... Args>
 void ggml_vk_mul(Args&&... args) {
-    printf("%s: multiplying...\n", __func__);
     return ggml_vk_abmath<'*'>(std::forward<Args>(args)...);
 }
 
@@ -398,7 +398,7 @@ void ggml_vk_scale(kp::Sequence& seq,
                    const std::shared_ptr<kp::Tensor>& in, uint32_t inOff,
                    const std::shared_ptr<kp::Tensor>& out, uint32_t outOff,
                    uint32_t size, float scale) {
-    const static auto spirv = compileSource(program_source_head+program_scale);
+    const static auto spirv = compileSource(program_source_head+program_scale, __func__);
 
     struct PushConstants {
         uint32_t inOff, outOff;
@@ -445,7 +445,7 @@ void main() {
 
 template <typename... Args>
 void ggml_vk_silu(Args&&... args) {
-    const static auto spirv = compileSource(program_source_head+program_silu);
+    const static auto spirv = compileSource(program_source_head+program_silu, __func__);
 
     ggml_vk_xxlu(spirv, std::forward<Args>(args)...);
 }
@@ -471,7 +471,7 @@ void main() {
 
 template <typename... Args>
 void ggml_vk_relu(Args&&... args) {
-    const static auto spirv = compileSource(program_source_head+program_relu);
+    const static auto spirv = compileSource(program_source_head+program_relu, __func__);
 
     ggml_vk_xxlu(spirv, std::forward<Args>(args)...);
 }
@@ -498,7 +498,7 @@ void main() {
 
 template <typename... Args>
 void ggml_vk_gelu(Args&&... args) {
-    const static auto spirv = compileSource(program_source_head+program_gelu);
+    const static auto spirv = compileSource(program_source_head+program_gelu, __func__);
 
     ggml_vk_xxlu(spirv, std::forward<Args>(args)...);
 }
@@ -514,120 +514,117 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
     for (auto& sequence : sequences) {
         sequence = mgr.sequence();
     }
-
-    std::vector<std::thread> threads(n_seq);
-
     for (int seq_idx = 0; seq_idx < n_seq; ++seq_idx) {
         const int n_nodes_per_seq = (gf->n_nodes + n_seq - 1) / n_seq;
 
-        threads[seq_idx] = std::thread([&, seq_idx, n_nodes_per_seq] () {
-            size_t offs_src0 = 0;
-            size_t offs_src1 = 0;
-            size_t offs_dst  = 0;
+        size_t offs_src0 = 0;
+        size_t offs_src1 = 0;
+        size_t offs_dst  = 0;
 
-            auto& seq = *sequences[seq_idx];
+        auto& seq = *sequences[seq_idx];
 
-            const int node_start = (seq_idx + 0) * n_nodes_per_seq;
-            const int node_end = (seq_idx == n_seq - 1) ? gf->n_nodes : (seq_idx + 1) * n_nodes_per_seq;
+        const int node_start = (seq_idx + 0) * n_nodes_per_seq;
+        const int node_end = (seq_idx == n_seq - 1) ? gf->n_nodes : (seq_idx + 1) * n_nodes_per_seq;
 
-            for (int i = node_start; i < node_end; ++i) {
-                printf("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
+        for (int i = node_start; i < node_end; ++i) {
+            printf("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
 
-                struct ggml_tensor * src0 = gf->nodes[i]->src0;
-                struct ggml_tensor * src1 = gf->nodes[i]->src1;
-                struct ggml_tensor * dst = gf->nodes[i];
+            struct ggml_tensor * src0 = gf->nodes[i]->src0;
+            struct ggml_tensor * src1 = gf->nodes[i]->src1;
+            struct ggml_tensor * dst = gf->nodes[i];
 
-                const int64_t ne00 = src0 ? src0->ne[0] : 0;
-                const int64_t ne01 = src0 ? src0->ne[1] : 0;
-                const int64_t ne02 = src0 ? src0->ne[2] : 0;
-                const int64_t ne03 = src0 ? src0->ne[3] : 0;
+            const int64_t ne00 = src0 ? src0->ne[0] : 0;
+            const int64_t ne01 = src0 ? src0->ne[1] : 0;
+            const int64_t ne02 = src0 ? src0->ne[2] : 0;
+            const int64_t ne03 = src0 ? src0->ne[3] : 0;
 
-                const uint64_t nb00 = src0 ? src0->nb[0] : 0;
-                const uint64_t nb01 = src0 ? src0->nb[1] : 0;
-                const uint64_t nb02 = src0 ? src0->nb[2] : 0;
-                const uint64_t nb03 = src0 ? src0->nb[3] : 0;
+            const uint64_t nb00 = src0 ? src0->nb[0] : 0;
+            const uint64_t nb01 = src0 ? src0->nb[1] : 0;
+            const uint64_t nb02 = src0 ? src0->nb[2] : 0;
+            const uint64_t nb03 = src0 ? src0->nb[3] : 0;
 
-                const int64_t ne10 = src1 ? src1->ne[0] : 0;
-                const int64_t ne11 = src1 ? src1->ne[1] : 0;
-                const int64_t ne12 = src1 ? src1->ne[2] : 0;
-                const int64_t ne13 = src1 ? src1->ne[3] : 0;  (void)ne13;
+            const int64_t ne10 = src1 ? src1->ne[0] : 0;
+            const int64_t ne11 = src1 ? src1->ne[1] : 0;
+            const int64_t ne12 = src1 ? src1->ne[2] : 0;
+            const int64_t ne13 = src1 ? src1->ne[3] : 0;  (void)ne13;
 
-                const uint64_t nb10 = src1 ? src1->nb[0] : 0;
-                const uint64_t nb11 = src1 ? src1->nb[1] : 0;
-                const uint64_t nb12 = src1 ? src1->nb[2] : 0;
-                const uint64_t nb13 = src1 ? src1->nb[3] : 0; (void)nb13;
+            const uint64_t nb10 = src1 ? src1->nb[0] : 0;
+            const uint64_t nb11 = src1 ? src1->nb[1] : 0;
+            const uint64_t nb12 = src1 ? src1->nb[2] : 0;
+            const uint64_t nb13 = src1 ? src1->nb[3] : 0; (void)nb13;
 
-                const int64_t ne0 = dst ? dst->ne[0] : 0;
-                const int64_t ne1 = dst ? dst->ne[1] : 0;
-                const int64_t ne2 = dst ? dst->ne[2] : 0;
-                const int64_t ne3 = dst ? dst->ne[3] : 0;
+            const int64_t ne0 = dst ? dst->ne[0] : 0;
+            const int64_t ne1 = dst ? dst->ne[1] : 0;
+            const int64_t ne2 = dst ? dst->ne[2] : 0;
+            const int64_t ne3 = dst ? dst->ne[3] : 0;
 
-                const uint64_t nb0 = dst ? dst->nb[0] : 0;
-                const uint64_t nb1 = dst ? dst->nb[1] : 0;
-                const uint64_t nb2 = dst ? dst->nb[2] : 0;
-                const uint64_t nb3 = dst ? dst->nb[3] : 0;
+            const uint64_t nb0 = dst ? dst->nb[0] : 0;
+            const uint64_t nb1 = dst ? dst->nb[1] : 0;
+            const uint64_t nb2 = dst ? dst->nb[2] : 0;
+            const uint64_t nb3 = dst ? dst->nb[3] : 0;
 
-                const enum ggml_type src0t = src0 ? src0->type : GGML_TYPE_COUNT;
-                const enum ggml_type src1t = src1 ? src1->type : GGML_TYPE_COUNT;
-                const enum ggml_type dstt = dst ? dst->type : GGML_TYPE_COUNT;
+            const enum ggml_type src0t = src0 ? src0->type : GGML_TYPE_COUNT;
+            const enum ggml_type src1t = src1 ? src1->type : GGML_TYPE_COUNT;
+            const enum ggml_type dstt = dst ? dst->type : GGML_TYPE_COUNT;
 
-                std::shared_ptr<kp::Tensor> id_src0 = src0 ? ggml_vk_get_tensor(ctx, src0) : nullptr;
-                std::shared_ptr<kp::Tensor> id_src1 = src1 ? ggml_vk_get_tensor(ctx, src1) : nullptr;
-                std::shared_ptr<kp::Tensor> id_dst  = dst  ? ggml_vk_get_tensor(ctx, dst)  : nullptr;
 
-                switch (dst->op) {
-                    case GGML_OP_RESHAPE:
-                    case GGML_OP_VIEW:
-                    case GGML_OP_TRANSPOSE:
-                    case GGML_OP_PERMUTE:
-                        {
-                            // noop
-                        } break;
-                    case GGML_OP_ADD:
-                        {
-                            ggml_vk_add(seq, id_src0, offs_src0, id_src1, offs_src1, id_dst, offs_dst, ggml_nelements(dst));
-                        } break;
-                    case GGML_OP_MUL:
-                        {
-                            if (ggml_nelements(src1) == ne10) {
-                                // src1 is a row
-                                ggml_vk_mul(seq, id_src0, offs_src0, id_src1, offs_src1, id_dst, offs_dst, ne00, ggml_nelements(dst));
-                            } else {
-                                ggml_vk_mul(seq, id_src0, offs_src0, id_src1, offs_src1, id_dst, offs_dst, ggml_nelements(dst));
-                            }
-                        } break;
-                    case GGML_OP_SCALE:
-                        {
-                            const float scale = *(const float *) src1->data;
-                            ggml_vk_scale(seq, id_src0, offs_src0, id_dst, offs_dst, ggml_nelements(dst), scale);
-                        } break;
-                    case GGML_OP_SILU:
-                        {
-                            ggml_vk_silu(seq, id_src0, offs_src0, id_dst, offs_dst, ggml_nelements(dst));
-                        } break;
-                    case GGML_OP_RELU:
-                        {
-                            ggml_vk_relu(seq, id_src0, offs_src0, id_dst, offs_dst, ggml_nelements(dst));
-                        } break;
-                    case GGML_OP_GELU:
-                        {
-                            ggml_vk_gelu(seq, id_src0, offs_src0, id_dst, offs_dst, ggml_nelements(dst));
-                        } break;
-                    default:
-                        fprintf(stderr, "%s: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(dst->op));
-                        //GGML_ASSERT(false);
-                }
+            const static std::shared_ptr<kp::Tensor> nullTensor = nullptr;
+            const std::shared_ptr<kp::Tensor>& id_src0 = src0 ? ggml_vk_get_tensor(ctx, src0) : nullTensor;
+            const std::shared_ptr<kp::Tensor>& id_src1 = src1 ? ggml_vk_get_tensor(ctx, src1) : nullTensor;
+            const std::shared_ptr<kp::Tensor>& id_dst  = dst  ? ggml_vk_get_tensor(ctx, dst)  : nullTensor;
+
+            switch (dst->op) {
+                case GGML_OP_RESHAPE:
+                case GGML_OP_VIEW:
+                case GGML_OP_TRANSPOSE:
+                case GGML_OP_PERMUTE:
+                    {
+                        // noop
+                    } break;
+                case GGML_OP_ADD:
+                    {
+                        ggml_vk_add(seq, id_src0, offs_src0, id_src1, offs_src1, id_dst, offs_dst, ggml_nelements(dst));
+                    } break;
+                case GGML_OP_MUL:
+                    {
+                        if (ggml_nelements(src1) == ne10) {
+                            // src1 is a row
+                            ggml_vk_mul(seq, id_src0, offs_src0, id_src1, offs_src1, id_dst, offs_dst, ne00, ggml_nelements(dst));
+                        } else {
+                            ggml_vk_mul(seq, id_src0, offs_src0, id_src1, offs_src1, id_dst, offs_dst, ggml_nelements(dst));
+                        }
+                    } break;
+                case GGML_OP_SCALE:
+                    {
+                        const float scale = *(const float *) src1->data;
+                        ggml_vk_scale(seq, id_src0, offs_src0, id_dst, offs_dst, ggml_nelements(dst), scale);
+                    } break;
+                case GGML_OP_SILU:
+                    {
+                        ggml_vk_silu(seq, id_src0, offs_src0, id_dst, offs_dst, ggml_nelements(dst));
+                    } break;
+                case GGML_OP_RELU:
+                    {
+                        ggml_vk_relu(seq, id_src0, offs_src0, id_dst, offs_dst, ggml_nelements(dst));
+                    } break;
+                case GGML_OP_GELU:
+                    {
+                        ggml_vk_gelu(seq, id_src0, offs_src0, id_dst, offs_dst, ggml_nelements(dst));
+                    } break;
+                //default:
+                    //fprintf(stderr, "%s: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(dst->op));
+                    //GGML_ASSERT(false);
             }
+        }
 
-            // Evaluate sequence
-            seq.eval();
-        });
+        // Evaluate sequence
+        seq.evalAsync();
     }
 
-    // Wait for all threads to finish
-    for (auto& thread : threads) {
-        if (thread.joinable())
-            thread.join();
+    // Wait for all sequences to finish
+    for (auto& sequence : sequences) {
+        if (sequence->isRunning())
+            sequence->evalAwait();
     }
 }
 
