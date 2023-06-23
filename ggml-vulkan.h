@@ -27,12 +27,12 @@ bool ggml_vk_add_buffer(
                            size_t   size,
                            size_t   max_size);
 
-void ggml_vk_set_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t);
-void ggml_vk_get_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t);
+void ggml_vk_h2d_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t);
+void ggml_vk_d2h_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t);
 
 void ggml_vk_dequantize_row_q4_0(const void * x, float * y, int k);
 void ggml_vk_dequantize_row_q4_1(const void * x, float * y, int k);
-void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph * cgraph);
+void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph * gf);
 
 #ifdef  __cplusplus
 }

@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <fstream>
 #include <exception>
+#include <thread>
 #include <cstring>
 #include <immintrin.h>
 #include <kompute/Kompute.hpp>
@@ -75,6 +76,7 @@ bool ggml_vk_add_buffer(
     return true;
 }
 
+static
 std::shared_ptr<kp::Tensor> ggml_vk_get_buffer(struct ggml_kompute_context * ctx, const char * name) {
     auto res = ctx->buffers.find(name);
     if (res == ctx->buffers.end()) return nullptr;
@@ -82,7 +84,7 @@ std::shared_ptr<kp::Tensor> ggml_vk_get_buffer(struct ggml_kompute_context * ctx
 }
 
 
-void ggml_vk_set_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t) {
+void ggml_vk_h2d_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t) {
     if (t->backend != GGML_BACKEND_GPU) {
         return;
     }
@@ -98,7 +100,7 @@ void ggml_vk_set_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * 
     ctx->tensors.emplace(t, std::move(tensor));
 }
 
-void ggml_vk_get_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t) {
+void ggml_vk_d2h_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t) {
     if (t->backend != GGML_BACKEND_GPU) {
         return;
     }
@@ -107,10 +109,21 @@ void ggml_vk_get_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * 
     auto size = ggml_nbytes(t);
 
     auto res = ctx->tensors.find(t);
+    assert(res != ctx->tensors.end());
 
     auto tensor = res->second;
     mgr.sequence()->eval<kp::OpTensorSyncLocal>({tensor});
     memcpy(data, tensor->data<void>(), size);
+}
+
+static
+const std::shared_ptr<kp::Tensor> & ggml_vk_get_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t) {
+    assert(t->backend != GGML_BACKEND_GPU);
+
+    auto res = ctx->tensors.find(t);
+    assert(res != ctx->tensors.end());
+
+    return res->second;
 }
 
 
@@ -302,17 +315,89 @@ void ggml_vk_abmath(const std::shared_ptr<kp::Tensor>& inA, uint32_t inAOff,
     };
 
     mgr.sequence()
-            ->eval<kp::OpAlgoDispatch>(mgr.algorithm<float, PushConstants>({inA, inB, out}, spirv, {std::min(inA->size(), inB->size())}, {}, {pushConsts}));
+            ->eval<kp::OpAlgoDispatch>(mgr.algorithm<float, PushConstants>({inA, inB, out}, spirv, {std::min(inA->size()-inAOff, inB->size()-inBOff)}, {}, {pushConsts}));
 }
 
 template <typename... Args>
 void ggml_vk_add(Args&&... args) {
-  return ggml_vk_abmath<'+'>(std::forward<Args>(args)...);
+    return ggml_vk_abmath<'+'>(std::forward<Args>(args)...);
 }
 
 template <typename... Args>
 void ggml_vk_mul(Args&&... args) {
-  return ggml_vk_abmath<'*'>(std::forward<Args>(args)...);
+    return ggml_vk_abmath<'*'>(std::forward<Args>(args)...);
+}
+
+
+void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph * gf) {
+    printf("%s: evaluating graph\n", __func__);
+
+    const int n_seq = gf->n_threads;
+
+    std::vector<kp::Sequence> sequences(n_seq);
+
+    std::vector<std::thread> threads(n_seq);
+
+    for (int seq_idx = 0; seq_idx < n_seq; ++seq_idx) {
+        const int n_nodes_per_seq = (gf->n_nodes + n_seq - 1) / n_seq;
+
+        threads[seq_idx] = std::thread([&, seq_idx, n_nodes_per_seq] () {
+            size_t offs_src0 = 0;
+            size_t offs_src1 = 0;
+            size_t offs_dst  = 0;
+
+            auto& seq = sequences[seq_idx];
+
+            const int node_start = (seq_idx + 0) * n_nodes_per_seq;
+            const int node_end = (seq_idx == n_seq - 1) ? gf->n_nodes : (seq_idx + 1) * n_nodes_per_seq;
+
+            for (int i = node_start; i < node_end; ++i) {
+                printf("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
+
+                struct ggml_tensor * src0 = gf->nodes[i]->src0;
+                struct ggml_tensor * src1 = gf->nodes[i]->src1;
+                struct ggml_tensor * dst = gf->nodes[i];
+
+                const int64_t ne00 = src0 ? src0->ne[0] : 0;
+                const int64_t ne01 = src0 ? src0->ne[1] : 0;
+                const int64_t ne02 = src0 ? src0->ne[2] : 0;
+                const int64_t ne03 = src0 ? src0->ne[3] : 0;
+
+                const uint64_t nb00 = src0 ? src0->nb[0] : 0;
+                const uint64_t nb01 = src0 ? src0->nb[1] : 0;
+                const uint64_t nb02 = src0 ? src0->nb[2] : 0;
+                const uint64_t nb03 = src0 ? src0->nb[3] : 0;
+
+                const int64_t ne10 = src1 ? src1->ne[0] : 0;
+                const int64_t ne11 = src1 ? src1->ne[1] : 0;
+                const int64_t ne12 = src1 ? src1->ne[2] : 0;
+                const int64_t ne13 = src1 ? src1->ne[3] : 0;  (void)ne13;
+
+                const uint64_t nb10 = src1 ? src1->nb[0] : 0;
+                const uint64_t nb11 = src1 ? src1->nb[1] : 0;
+                const uint64_t nb12 = src1 ? src1->nb[2] : 0;
+                const uint64_t nb13 = src1 ? src1->nb[3] : 0; (void)nb13;
+
+                const int64_t ne0 = dst ? dst->ne[0] : 0;
+                const int64_t ne1 = dst ? dst->ne[1] : 0;
+                const int64_t ne2 = dst ? dst->ne[2] : 0;
+                const int64_t ne3 = dst ? dst->ne[3] : 0;
+
+                const uint64_t nb0 = dst ? dst->nb[0] : 0;
+                const uint64_t nb1 = dst ? dst->nb[1] : 0;
+                const uint64_t nb2 = dst ? dst->nb[2] : 0;
+                const uint64_t nb3 = dst ? dst->nb[3] : 0;
+
+                const enum ggml_type src0t = src0 ? src0->type : GGML_TYPE_COUNT;
+                const enum ggml_type src1t = src1 ? src1->type : GGML_TYPE_COUNT;
+                const enum ggml_type dstt = dst ? dst->type : GGML_TYPE_COUNT;
+
+                std::shared_ptr<kp::Tensor> id_src0 = src0 ? ggml_vk_get_tensor(ctx, src0) : nullptr;
+                std::shared_ptr<kp::Tensor> id_src1 = src1 ? ggml_vk_get_tensor(ctx, src1) : nullptr;
+                std::shared_ptr<kp::Tensor> id_dst  = dst  ? ggml_vk_get_tensor(ctx, dst)  : nullptr;
+            }
+        });
+    }
 }
 
 
