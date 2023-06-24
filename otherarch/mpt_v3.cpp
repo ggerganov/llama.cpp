@@ -87,14 +87,14 @@ bool mpt_model_load(const std::string & fname, mpt_model & model, gpt_vocab & vo
             word.assign(buf.data(), len);
 
             // Convert token from utf-8
-            std::wstring word_multibytes = convert_to_wstring(word);
-            if(word_multibytes!=L"")
-            {
-                word.resize(word_multibytes.size());
-                for (int w = 0; w < word_multibytes.size(); w++) {
-                    word[w] = uint8_t(word_multibytes[w]);
-                }
-            }
+            // std::wstring word_multibytes = convert_to_wstring(word);
+            // if(word_multibytes!=L"")
+            // {
+            //     word.resize(word_multibytes.size());
+            //     for (int w = 0; w < word_multibytes.size(); w++) {
+            //         word[w] = uint8_t(word_multibytes[w]);
+            //     }
+            // }
 
             vocab.token_to_id[word] = i;
             vocab.id_to_token[i] = word;
