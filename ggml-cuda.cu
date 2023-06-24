@@ -147,10 +147,11 @@ typedef struct {
 
 #ifdef GGML_QKK_64
 typedef struct {
-    half    d[2*QK_K/32];  // super-block scales/mins
+    half    d[2];              // super-block scales/mins
+    uint8_t scales[2];         // 4-bit block scales/mins
     uint8_t qs[QK_K/2];        // 4--bit quants
 } block_q4_K;
-static_assert(sizeof(block_q4_K) == 2*QK_K/32*sizeof(ggml_fp16_t) + QK_K/2, "wrong q4_K block size/padding");
+static_assert(sizeof(block_q4_K) == 2*sizeof(ggml_fp16_t) + QK_K/2 + 2, "wrong q4_K block size/padding");
 #else
 typedef struct {
     half d;                    // super-block scale for quantized scales
@@ -503,8 +504,10 @@ static __global__ void dequantize_block_q4_K(const void * vx, float * yy) {
     const int tid = threadIdx.x;
     const uint8_t * q = x[i].qs;
     float * y = yy + i*QK_K;
-    y[tid+ 0] = (float)x[i].d[0] * (q[tid] & 0xF) - (float)x[i].d[1];
-    y[tid+32] = (float)x[i].d[2] * (q[tid] >>  4) - (float)x[i].d[3];
+    const float d = (float)x[i].d[0];
+    const float m = (float)x[i].d[1];
+    y[tid+ 0] = d * (x[i].scales[0] & 0xF) * (q[tid] & 0xF) - m * (x[i].scales[0] >> 4);
+    y[tid+32] = d * (x[i].scales[1] & 0xF) * (q[tid] >>  4) - m * (x[i].scales[1] >> 4);
 #endif
 }
 
@@ -874,20 +877,25 @@ static __global__ void dequantize_mul_mat_vec_q4_k(const void * vx, const float 
 #else
     const int step = tid * K_QUANTS_PER_ITERATION;
 
+    uint16_t aux16[2];
+    const uint8_t * s = (const uint8_t *)aux16;
+
     float tmp = 0;
 
     for (int i = ix; i < num_blocks_per_row; i += 2*K_QUANTS_PER_ITERATION) {
         const uint8_t * q = x[i].qs + step;
         const float   * y = yy + i*QK_K + step;
-        const half2   * d = (const half2 *)x[i].d;
-        float2 df1 = __half22float2(d[0]);
-        float2 df2 = __half22float2(d[1]);
+        const uint16_t * a = (const uint16_t *)x[i].scales;
+        aux16[0] = a[0] & 0x0f0f;
+        aux16[1] = (a[0] >> 4) & 0x0f0f;
+        const float d = (float)x[i].d[0];
+        const float m = (float)x[i].d[1];
         float sum = 0.f;
         for (int j = 0; j < K_QUANTS_PER_ITERATION; ++j) {
-            sum += y[j+ 0] * (df1.x * (q[j+ 0] & 0xF) - df1.y)
-                 + y[j+16] * (df1.x * (q[j+16] & 0xF) - df1.y)
-                 + y[j+32] * (df2.x * (q[j+ 0] >>  4) - df2.y)
-                 + y[j+48] * (df2.x * (q[j+16] >>  4) - df2.y);
+            sum += y[j+ 0] * (d * s[0] * (q[j+ 0] & 0xF) - m * s[2])
+                 + y[j+16] * (d * s[0] * (q[j+16] & 0xF) - m * s[2])
+                 + y[j+32] * (d * s[1] * (q[j+ 0] >>  4) - m * s[3])
+                 + y[j+48] * (d * s[1] * (q[j+16] >>  4) - m * s[3]);
         }
         tmp += sum;
     }

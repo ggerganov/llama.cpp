@@ -59,10 +59,11 @@ static_assert(sizeof(block_q3_K) == sizeof(ggml_fp16_t) + QK_K / 4 + QK_K / 8 + 
 // Effectively 4.5 bits per weight
 #ifdef GGML_QKK_64
 typedef struct {
-    ggml_fp16_t d[2*QK_K/32];  // super-block scales/mins
+    ggml_fp16_t d[2];          // super-block scales/mins
+    uint8_t scales[2];         // 4-bit block scales/mins
     uint8_t qs[QK_K/2];        // 4--bit quants
 } block_q4_K;
-static_assert(sizeof(block_q4_K) == 2*QK_K/32*sizeof(ggml_fp16_t) + QK_K/2, "wrong q4_K block size/padding");
+static_assert(sizeof(block_q4_K) == 2*sizeof(ggml_fp16_t) + QK_K/2 + 2, "wrong q4_K block size/padding");
 #else
 typedef struct {
     ggml_fp16_t d;             // super-block scale for quantized scales
@@ -70,8 +71,8 @@ typedef struct {
     uint8_t scales[K_SCALE_SIZE]; // scales and mins, quantized with 6 bits
     uint8_t qs[QK_K/2];        // 4--bit quants
 } block_q4_K;
-#endif
 static_assert(sizeof(block_q4_K) == 2*sizeof(ggml_fp16_t) + K_SCALE_SIZE + QK_K/2, "wrong q4_K block size/padding");
+#endif
 
 // 5-bit quantization
 // 16 blocks of 32 elements each
