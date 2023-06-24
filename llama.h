@@ -26,6 +26,14 @@
 #    define LLAMA_API
 #endif
 
+#ifdef __GNUC__
+#    define DEPRECATED(func, hint) func __attribute__((deprecated(hint)))
+#elif defined(_MSC_VER)
+#    define DEPRECATED(func, hint) __declspec(deprecated(hint)) func
+#else
+#    define DEPRECATED(func, hint) func
+#endif
+
 #define LLAMA_FILE_MAGIC_GGJT        0x67676a74u // 'ggjt'
 #define LLAMA_FILE_MAGIC_GGLA        0x67676c61u // 'ggla'
 #define LLAMA_FILE_MAGIC_GGMF        0x67676d66u // 'ggmf'
@@ -53,6 +61,7 @@ extern "C" {
     // TODO: show sample usage
     //
 
+    struct llama_model;
     struct llama_context;
 
     typedef int llama_token;
@@ -136,12 +145,23 @@ extern "C" {
 
     LLAMA_API int64_t llama_time_us();
 
+    LLAMA_API struct llama_model * llama_load_model_from_file(
+                             const char * path_model,
+            struct llama_context_params   params);
+
+    LLAMA_API void llama_free_model(struct llama_model * model);
+
+    LLAMA_API struct llama_context * llama_new_context_with_model(
+                     struct llama_model * model,
+            struct llama_context_params   params);
+
     // Various functions for loading a ggml llama model.
     // Allocate (almost) all memory needed for the model.
     // Return NULL on failure
-    LLAMA_API struct llama_context * llama_init_from_file(
+    LLAMA_API DEPRECATED(struct llama_context * llama_init_from_file(
                              const char * path_model,
-            struct llama_context_params   params);
+            struct llama_context_params   params),
+            "please use llama_load_model_from_file combined with llama_new_context_with_model instead");
 
     // Frees all allocated memory
     LLAMA_API void llama_free(struct llama_context * ctx);
@@ -158,8 +178,15 @@ extern "C" {
     // The model needs to be reloaded before applying a new adapter, otherwise the adapter
     // will be applied on top of the previous one
     // Returns 0 on success
-    LLAMA_API int llama_apply_lora_from_file(
+    LLAMA_API DEPRECATED(int llama_apply_lora_from_file(
             struct llama_context * ctx,
+                      const char * path_lora,
+                      const char * path_base_model,
+                             int   n_threads),
+            "please use llama_model_apply_lora_from_file instead");
+
+    LLAMA_API int llama_model_apply_lora_from_file(
+            const struct llama_model * model,
                       const char * path_lora,
                       const char * path_base_model,
                              int   n_threads);
@@ -310,7 +337,7 @@ extern "C" {
 #include <string>
 struct ggml_tensor;
 
-std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx);
+const std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx);
 
 #endif
 
