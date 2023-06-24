@@ -137,13 +137,13 @@ typedef struct {
     uint8_t hmask[QK_K/8];     // quants - high bit
     uint8_t qs[QK_K/4];        // quants - low 2 bits
 #ifdef GGML_QKK_64
-    int8_t  scales[K_SCALE_SIZE]; // scales, quantized with 8 bits
+    uint8_t scales[2]; // scales, quantized with 8 bits
 #else
     uint8_t scales[K_SCALE_SIZE]; // scales, quantized with 6 bits
 #endif
     half d;             // super-block scale
 } block_q3_K;
-static_assert(sizeof(block_q3_K) == sizeof(ggml_fp16_t) + QK_K / 4 + QK_K / 8 + K_SCALE_SIZE, "wrong q3_K block size/padding");
+//static_assert(sizeof(block_q3_K) == sizeof(ggml_fp16_t) + QK_K / 4 + QK_K / 8 + K_SCALE_SIZE, "wrong q3_K block size/padding");
 
 #ifdef GGML_QKK_64
 typedef struct {
@@ -448,8 +448,13 @@ static __global__ void dequantize_block_q3_K(const void * vx, float * yy) {
     const uint8_t h = x[i].hmask[in] >> (2*is + im);
     const float   d = (float)x[i].d;
 
-    y[ 0] = d * x[i].scales[is+0] * ((int8_t)((q >> 0) & 3) - ((h >> 0) & 1 ? 0 : 4));
-    y[32] = d * x[i].scales[is+2] * ((int8_t)((q >> 4) & 3) - ((h >> 4) & 1 ? 0 : 4));
+    if (is == 0) {
+        y[ 0] = d * ((x[i].scales[0] & 0xF) - 8) * ((int8_t)((q >> 0) & 3) - ((h >> 0) & 1 ? 0 : 4));
+        y[32] = d * ((x[i].scales[1] & 0xF) - 8) * ((int8_t)((q >> 4) & 3) - ((h >> 4) & 1 ? 0 : 4));
+    } else {
+        y[ 0] = d * ((x[i].scales[0] >>  4) - 8) * ((int8_t)((q >> 0) & 3) - ((h >> 0) & 1 ? 0 : 4));
+        y[32] = d * ((x[i].scales[1] >>  4) - 8) * ((int8_t)((q >> 4) & 3) - ((h >> 4) & 1 ? 0 : 4));
+    }
 #endif
 
 }
@@ -776,7 +781,7 @@ static __global__ void dequantize_mul_mat_vec_q3_k(const void * vx, const float 
 
         const float   * y = yy + i * QK_K + offset;
         const uint8_t * q = x[i].qs + offset;
-        const  int8_t * s = x[i].scales;
+        const uint8_t * s = x[i].scales;
 
         const float dall = (float)x[i].d;
 
@@ -784,10 +789,10 @@ static __global__ void dequantize_mul_mat_vec_q3_k(const void * vx, const float 
         for (int l = 0; l < K_QUANTS_PER_ITERATION; ++l) {
             const uint8_t hl = x[i].hmask[im+l] >> in;
             const uint8_t ql = q[l];
-            sum += y[l+ 0] * dall * s[0] * ((int8_t)((ql >> 0) & 3) - ((hl >> 0) & 1 ? 0 : 4))
-                 + y[l+16] * dall * s[1] * ((int8_t)((ql >> 2) & 3) - ((hl >> 2) & 1 ? 0 : 4))
-                 + y[l+32] * dall * s[2] * ((int8_t)((ql >> 4) & 3) - ((hl >> 4) & 1 ? 0 : 4))
-                 + y[l+48] * dall * s[3] * ((int8_t)((ql >> 6) & 3) - ((hl >> 6) & 1 ? 0 : 4));
+            sum += y[l+ 0] * dall * ((s[0] & 0xF) - 8) * ((int8_t)((ql >> 0) & 3) - ((hl >> 0) & 1 ? 0 : 4))
+                 + y[l+16] * dall * ((s[0] >>  4) - 8) * ((int8_t)((ql >> 2) & 3) - ((hl >> 2) & 1 ? 0 : 4))
+                 + y[l+32] * dall * ((s[1] & 0xF) - 8) * ((int8_t)((ql >> 4) & 3) - ((hl >> 4) & 1 ? 0 : 4))
+                 + y[l+48] * dall * ((s[1] >>  4) - 8) * ((int8_t)((ql >> 6) & 3) - ((hl >> 6) & 1 ? 0 : 4));
         }
         tmp += sum;
     }

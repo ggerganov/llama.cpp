@@ -799,7 +799,7 @@ typedef struct {
     uint8_t hmask[QK_K/8];     // quants - high bit
     uint8_t qs[QK_K/4];        // quants - low 2 bits
 #if QK_K == 64
-    int8_t  scales[K_SCALE_SIZE];
+    uint8_t scales[2];
 #else
     uint8_t scales[K_SCALE_SIZE]; // scales, quantized with 6 bits
 #endif
@@ -970,10 +970,10 @@ static void dequantize_row_q3_K(device const block_q3_K * x, device float * y, i
         device const uint8_t * q = x[i].qs;
         device const uint8_t * hm = x[i].hmask;
 
-        const float d1 = d_all * x[i].scales[0];
-        const float d2 = d_all * x[i].scales[1];
-        const float d3 = d_all * x[i].scales[2];
-        const float d4 = d_all * x[i].scales[3];
+        const float d1 = d_all * ((x[i].scales[0] & 0xF) - 8);
+        const float d2 = d_all * ((x[i].scales[0] >>  4) - 8);
+        const float d3 = d_all * ((x[i].scales[1] & 0xF) - 8);
+        const float d4 = d_all * ((x[i].scales[1] >>  4) - 8);
 
         for (int l = 0; l < 8; ++l) {
             uint8_t h = hm[l];
@@ -1417,10 +1417,10 @@ kernel void kernel_mul_mat_q3_K_f32(
         device const uint8_t * h = x[i].hmask + in;
         device const float   * y = yy + i * QK_K + il;
 
-        const float d1 = d_all * x[i].scales[0];
-        const float d2 = d_all * x[i].scales[1];
-        const float d3 = d_all * x[i].scales[2];
-        const float d4 = d_all * x[i].scales[3];
+        const float d1 = d_all * ((x[i].scales[0] & 0xF) - 8);
+        const float d2 = d_all * ((x[i].scales[0] >>  4) - 8);
+        const float d3 = d_all * ((x[i].scales[1] & 0xF) - 8);
+        const float d4 = d_all * ((x[i].scales[1] >>  4) - 8);
 
         for (int l = 0; l < 4; ++l) {
             const uint8_t hm = h[l] >> im;
