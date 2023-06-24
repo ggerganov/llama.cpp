@@ -122,8 +122,14 @@ std::string convert_to_utf8(const std::wstring & input) {
 
 
 std::wstring convert_to_wstring(const std::string & input) {
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-    return converter.from_bytes(input);
+    try {
+        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+        return converter.from_bytes(input);
+    } catch (const std::range_error& e) {
+        return L"";
+    } catch (...) {
+        return L"";
+    }
 }
 
 void gpt_split_words(std::string str, std::vector<std::string>& words) {

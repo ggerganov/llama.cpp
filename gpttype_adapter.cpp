@@ -313,6 +313,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     = gpt2_ctx_v1.hparams.n_ctx = gpt2_ctx_v2.hparams.n_ctx = gpt2_ctx_v3.hparams.n_ctx
     = mpt_ctx_v3.hparams.n_ctx = params.n_ctx;
 
+    //this is used for the mem_per_token eval, openblas needs more RAM
     bool use_scratch = ggml_cpu_has_gpublas();
 
     printf("System Info: %s\n", llama_print_system_info());
@@ -904,7 +905,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     concat_output = "";
 
     bool startedsampling = false;
-    bool use_scratch = true;
+    bool use_scratch = true; //for normal inference always use scratch
 
     timer_start();
     double time1 = 0, time2 = 0;

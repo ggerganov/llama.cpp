@@ -105,7 +105,7 @@ static const std::map<e_model, size_t> & MEM_REQ_KV_SELF()
         { MODEL_3B,    682ull * MB },
         { MODEL_7B,   1026ull * MB },
         { MODEL_13B,  1608ull * MB },
-        { MODEL_30B,  3124ull * MB },
+        { MODEL_30B,  3224ull * MB },
         { MODEL_65B,  5120ull * MB },
     };
     return k_sizes;
@@ -119,7 +119,7 @@ static const std::map<e_model, size_t> & MEM_REQ_EVAL()
         { MODEL_3B,   512ull * MB },
         { MODEL_7B,   800ull * MB },
         { MODEL_13B, 1024ull * MB },
-        { MODEL_30B, 1280ull * MB },
+        { MODEL_30B, 1380ull * MB },
         { MODEL_65B, 1536ull * MB },
     };
     return k_sizes;
