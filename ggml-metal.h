@@ -41,12 +41,15 @@ void ggml_metal_free(struct ggml_metal_context * ctx);
 // - make sure to map all buffers used in the graph before calling ggml_metal_graph_compute
 // - the mapping is used during computation to determine the arguments of the compute kernels
 // - you don't need to keep the host memory buffer allocated as it is never accessed by Metal
+// - max_size specifies the maximum size of a tensor and is used to create shared views such
+//   that it is guaranteed that the tensor will fit in at least one of the views
 //
 bool ggml_metal_add_buffer(
         struct ggml_metal_context * ctx,
                        const char * name,
                              void * data,
-                           size_t   size);
+                           size_t   size,
+                           size_t   max_size);
 
 // set data from host memory into the device
 void ggml_metal_set_tensor(struct ggml_metal_context * ctx, struct ggml_tensor * t);
