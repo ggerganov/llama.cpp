@@ -2015,9 +2015,10 @@ void llama_sample_top_p(struct llama_context * ctx, llama_token_data_array * can
     for (size_t i = 0; i < candidates->size; ++i) {
         cum_sum += candidates->data[i].p;
 
-        // Check if the running sum is greater than p or if we have kept at least min_keep tokens
-        if (cum_sum > p && i >= min_keep) {
-            last_idx = i;
+        // Check if the running sum is at least p or if we have kept at least min_keep tokens
+        // we set the last index to i+1 to indicate that the current iterate should be included in the set
+        if (cum_sum >= p && i + 1 >= min_keep) {
+            last_idx = i + 1;
             break;
         }
     }
