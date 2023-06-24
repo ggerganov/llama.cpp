@@ -38,6 +38,8 @@ inline static void* ggml_aligned_malloc(size_t size, size_t alignment) {
 
 #define VK_API_VERSION VK_API_VERSION_1_2
 
+#define CEIL_DIV(M, N) (((M) + (N)-1) / (N))
+
 vk::Instance vk_instance;
 uint32_t vk_compute_queue_family_index;
 vk::PhysicalDevice vk_physical_device;
@@ -470,7 +472,7 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
                                          0,
                                          { descriptor_set },
                                          {});
-            cmd_buffer.dispatch((ne01 + 31) / 32, (ne11 + 31) / 32, 1);
+            cmd_buffer.dispatch(CEIL_DIV(ne01, 64), CEIL_DIV(ne11, 64), 1);
             cmd_buffer.end();
 
             vk::Queue queue = vk_device.getQueue(vk_compute_queue_family_index, 0);
@@ -494,7 +496,7 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
             ggml_vk_buffer_read(&d_D, 0, d, sizeof(float) * d_ne);
 
-#ifdef false
+#if 0
             const float * x = (float *) ((char *) src0->data);
             const float * y = (float *) ((char *) src1->data);
             float * d_chk = (float *) malloc(sizeof(float) * d_ne);
