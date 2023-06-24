@@ -14335,7 +14335,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
     if (skip_cpu) {
         return;
     }
-    GGML_ASSERT(tensor->src0->backend == GGML_BACKEND_CPU);
+    GGML_ASSERT(tensor->src0 == NULL || tensor->src0->backend == GGML_BACKEND_CPU);
     GGML_ASSERT(tensor->src1 == NULL || tensor->src1->backend == GGML_BACKEND_CPU);
 #endif // GGML_USE_CUBLAS
 
@@ -16032,9 +16032,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
             /*.wdata =*/ cgraph->work ? cgraph->work->data : NULL,
         };
 
-        if (node->src0) {
-            ggml_compute_forward(&params, node);
-        }
+        ggml_compute_forward(&params, node);
 
         // COMPUTE
         if (node->n_tasks > 1) {
@@ -16070,9 +16068,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         }
 
         params.type = GGML_TASK_COMPUTE;
-        if (node->src0) {
-            ggml_compute_forward(&params, node);
-        }
+        ggml_compute_forward(&params, node);
 
         // wait for thread pool
         if (node->n_tasks > 1) {
@@ -16127,9 +16123,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         }
 
         params.type = GGML_TASK_FINALIZE;
-        if (node->src0) {
-            ggml_compute_forward(&params, node);
-        }
+        ggml_compute_forward(&params, node);
 
         // wait for thread pool
         if (node->n_tasks > 1) {
