@@ -685,7 +685,7 @@ export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH
 
 For easy and swift re-execution, consider documenting this final part in a .sh script file. This will enable you to rerun the process with minimal hassle.
 
-Place your desired model into the `/llama.cpp/models/` directory and execute the `./main (...)` script. 
+Place your desired model into the `/llama.cpp/models/` directory and execute the `./main (...)` script.
 
 ### Docker
 
