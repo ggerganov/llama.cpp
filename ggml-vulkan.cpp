@@ -472,7 +472,7 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
                                          0,
                                          { descriptor_set },
                                          {});
-            cmd_buffer.dispatch(CEIL_DIV(ne01, 64), CEIL_DIV(ne11, 64), 1);
+            cmd_buffer.dispatch(CEIL_DIV(ne01, 128), CEIL_DIV(ne11, 128), 1);
             cmd_buffer.end();
 
             vk::Queue queue = vk_device.getQueue(vk_compute_queue_family_index, 0);
