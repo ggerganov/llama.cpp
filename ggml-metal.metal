@@ -823,7 +823,8 @@ typedef struct {
 
 #if QK_K == 64
 typedef struct {
-    half4 d;                     // super-block scales/mins
+    half  d;                     // super-block scales/mins
+    int8_t  scales[QK_K/16];     // 8-bit block scales
     uint8_t qh[QK_K/8];          // quants, high bit
     uint8_t qs[QK_K/2];          // quants, low 4 bits
 } block_q5_K;
@@ -1062,20 +1063,21 @@ static void dequantize_row_q5_K(device const block_q5_K * x, device float * y, i
 #else
     for (int i = 0; i < nb; i++) {
 
-        const float4 d = (float4)x[i].d;
+        const float d = (float)x[i].d;
 
         device const uint8_t * ql = x[i].qs;
         device const uint8_t * qh = x[i].qh;
+        device const int8_t  * sc = x[i].scales;
 
         for (int l = 0; l < 8; ++l) {
-            y[l+ 0] = d[0] * ((ql[l+ 0] & 0xF) + (qh[l] & 0x01 ? 16 : 0)) - d[1];
-            y[l+ 8] = d[0] * ((ql[l+ 8] & 0xF) + (qh[l] & 0x02 ? 16 : 0)) - d[1];
-            y[l+16] = d[0] * ((ql[l+16] & 0xF) + (qh[l] & 0x04 ? 16 : 0)) - d[1];
-            y[l+24] = d[0] * ((ql[l+24] & 0xF) + (qh[l] & 0x08 ? 16 : 0)) - d[1];
-            y[l+32] = d[2] * ((ql[l+ 0] >>  4) + (qh[l] & 0x10 ? 16 : 0)) - d[3];
-            y[l+40] = d[2] * ((ql[l+ 8] >>  4) + (qh[l] & 0x20 ? 16 : 0)) - d[3];
-            y[l+48] = d[2] * ((ql[l+16] >>  4) + (qh[l] & 0x40 ? 16 : 0)) - d[3];
-            y[l+56] = d[2] * ((ql[l+24] >>  4) + (qh[l] & 0x80 ? 16 : 0)) - d[3];
+            y[l+ 0] = d * sc[0] * ((ql[l+ 0] & 0xF) - (qh[l] & 0x01 ? 0 : 16));
+            y[l+ 8] = d * sc[0] * ((ql[l+ 8] & 0xF) - (qh[l] & 0x02 ? 0 : 16));
+            y[l+16] = d * sc[1] * ((ql[l+16] & 0xF) - (qh[l] & 0x04 ? 0 : 16));
+            y[l+24] = d * sc[1] * ((ql[l+24] & 0xF) - (qh[l] & 0x08 ? 0 : 16));
+            y[l+32] = d * sc[2] * ((ql[l+ 0] >>  4) - (qh[l] & 0x10 ? 0 : 16));
+            y[l+40] = d * sc[2] * ((ql[l+ 8] >>  4) - (qh[l] & 0x20 ? 0 : 16));
+            y[l+48] = d * sc[3] * ((ql[l+16] >>  4) - (qh[l] & 0x40 ? 0 : 16));
+            y[l+56] = d * sc[3] * ((ql[l+24] >>  4) - (qh[l] & 0x80 ? 0 : 16));
         }
         y += QK_K;
     }
@@ -1336,12 +1338,6 @@ kernel void kernel_mul_mat_q3_K_f32(
         uint2 tpitg[[thread_position_in_threadgroup]],
         uint2  tptg[[threads_per_threadgroup]]) {
 
-    const uint16_t kmask1 = 0x0303;
-    const uint16_t kmask2 = 0x0f0f;
-
-    const uint8_t m3 = 3;
-    const int8_t  m4 = 4;
-
     const int nb = ne00/QK_K;
 
     const int64_t r0 = tgpig.x;
@@ -1354,6 +1350,12 @@ kernel void kernel_mul_mat_q3_K_f32(
     const int ith = tptg.y*tpitg.x + tpitg.y;
 
 #if QK_K == 256
+
+    const uint8_t m3 = 3;
+    const int8_t  m4 = 4;
+
+    const uint16_t kmask1 = 0x0303;
+    const uint16_t kmask2 = 0x0f0f;
 
     const int tid = tpitg.y;        // expecting 16
     const int ip  = tid/8;          // 0 or 1
@@ -1682,18 +1684,18 @@ kernel void kernel_mul_mat_q5_K_f32(
 
     for (int i = tpitg.y; i < nb; i += tptg.y) {
 
+        const float d = (float)x[i].d;
         device const uint8_t * q = x[i].qs + il;
         device const uint8_t * h = x[i].qh + in;
+        device const int8_t  * s = x[i].scales;
         device const float   * y = yy + i*QK_K + il;
-
-        const float4 d = (float4)x[i].d;
 
         for (int l = 0; l < 4; ++l) {
             const uint8_t hl = h[l] >> im;
-            sumf += y[l+ 0] * (d[0] * ((q[l+ 0] & 0xF) + (hl & 0x01 ? 16 : 0)) - d[1])
-                  + y[l+16] * (d[0] * ((q[l+16] & 0xF) + (hl & 0x04 ? 16 : 0)) - d[1])
-                  + y[l+32] * (d[2] * ((q[l+ 0] >>  4) + (hl & 0x10 ? 16 : 0)) - d[3])
-                  + y[l+48] * (d[2] * ((q[l+16] >>  4) + (hl & 0x40 ? 16 : 0)) - d[3]);
+            sumf += y[l+ 0] * d * s[0] * ((q[l+ 0] & 0xF) - (hl & 0x01 ? 0 : 16))
+                  + y[l+16] * d * s[1] * ((q[l+16] & 0xF) - (hl & 0x04 ? 0 : 16))
+                  + y[l+32] * d * s[2] * ((q[l+ 0] >>  4) - (hl & 0x10 ? 0 : 16))
+                  + y[l+48] * d * s[3] * ((q[l+16] >>  4) - (hl & 0x40 ? 0 : 16));
         }
     }
 #endif

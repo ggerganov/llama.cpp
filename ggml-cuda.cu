@@ -164,11 +164,12 @@ static_assert(sizeof(block_q4_K) == 2*sizeof(ggml_fp16_t) + 3*QK_K/64 + QK_K/2, 
 
 #ifdef GGML_QKK_64
 typedef struct {
-    half d[2*QK_K/32];    // super-block scales/mins
-    uint8_t qh[QK_K/8];          // quants, high bit
-    uint8_t qs[QK_K/2];          // quants, low 4 bits
+    half d;                  // super-block scale
+    int8_t scales[QK_K/16];  // block scales
+    uint8_t qh[QK_K/8];      // quants, high bit
+    uint8_t qs[QK_K/2];      // quants, low 4 bits
 } block_q5_K;
-static_assert(sizeof(block_q5_K) == 2*QK_K/32*sizeof(ggml_fp16_t) + QK_K/2 + QK_K/8, "wrong q5_K block size/padding");
+static_assert(sizeof(block_q5_K) == sizeof(ggml_fp16_t) + QK_K/2 + QK_K/8 + QK_K/16, "wrong q5_K block size/padding");
 #else
 typedef struct {
     half d;               // super-block scale for quantized scales
@@ -546,12 +547,14 @@ static __global__ void dequantize_block_q5_K(const void * vx, float * yy) {
 #else
     const int tid = threadIdx.x;
     const uint8_t q = x[i].qs[tid];
-    const int im = tid/8; // 0...3
-    const int in = tid%8; // 0...7
+    const int im = tid/8;  // 0...3
+    const int in = tid%8;  // 0...7
+    const int is = tid/16; // 0 or 1
     const uint8_t h = x[i].qh[in] >> im;
+    const float d = x[i].d;
     float * y = yy + i*QK_K + tid;
-    y[ 0] = (float)x[i].d[0] * ((q & 0xF) + ((h >> 0) & 1 ? 16 : 0)) - (float)x[i].d[1];
-    y[32] = (float)x[i].d[2] * ((q >>  4) + ((h >> 4) & 1 ? 16 : 0)) - (float)x[i].d[3];
+    y[ 0] = d * x[i].scales[is+0] * ((q & 0xF) - ((h >> 0) & 1 ? 0 : 16));
+    y[32] = d * x[i].scales[is+2] * ((q >>  4) - ((h >> 4) & 1 ? 0 : 16));
 #endif
 }
 
@@ -992,17 +995,16 @@ static __global__ void dequantize_mul_mat_vec_q5_k(const void * vx, const float 
 
     for (int i = ix; i < num_blocks_per_row; i += 2*K_QUANTS_PER_ITERATION) {
         const uint8_t * q = x[i].qs + step;
+        const int8_t  * s = x[i].scales;
         const float   * y = yy + i*QK_K + step;
-        const half2   * d = (const half2 *)x[i].d;
-        float2 df1 = __half22float2(d[0]);
-        float2 df2 = __half22float2(d[1]);
+        const float     d = x[i].d;
         float sum = 0.f;
         for (int j = 0; j < K_QUANTS_PER_ITERATION; ++j) {
             const uint8_t h = x[i].qh[in+j] >> im;
-            sum += y[j+ 0] * (df1.x * ((q[j+ 0] & 0xF) + (((h >> 0) & 1) << 4)) - df1.y)
-                 + y[j+16] * (df1.x * ((q[j+16] & 0xF) + (((h >> 2) & 1) << 4)) - df1.y)
-                 + y[j+32] * (df2.x * ((q[j+ 0] >>  4) + (((h >> 4) & 1) << 4)) - df2.y)
-                 + y[j+48] * (df2.x * ((q[j+16] >>  4) + (((h >> 6) & 1) << 4)) - df2.y);
+            sum += y[j+ 0] * d * s[0] * ((q[j+ 0] & 0xF) - ((h >> 0) & 1 ? 0 : 16))
+                 + y[j+16] * d * s[1] * ((q[j+16] & 0xF) - ((h >> 2) & 1 ? 0 : 16))
+                 + y[j+32] * d * s[2] * ((q[j+ 0] >>  4) - ((h >> 4) & 1 ? 0 : 16))
+                 + y[j+48] * d * s[3] * ((q[j+16] >>  4) - ((h >> 6) & 1 ? 0 : 16));
         }
         tmp += sum;
     }
