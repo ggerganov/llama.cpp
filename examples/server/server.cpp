@@ -103,7 +103,7 @@ static std::string tokens_to_output_formatted_string(const llama_context * ctx, 
     // if first bit is 1, meaning it's a partial character
     if ((out[0] & 0x80) == 0x80) {
         std::stringstream ss;
-        ss<< std::hex << (out[0] & 0xff); 
+        ss<< std::hex << (out[0] & 0xff);
         std::string res ( ss.str() );
         out = "byte: \\x" + res;
     }
