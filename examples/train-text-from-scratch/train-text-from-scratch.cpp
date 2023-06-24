@@ -2003,7 +2003,7 @@ void print_tokens_batch(struct llama_context* ctx, struct ggml_tensor * tokens) 
     }
 }
 
-void get_example_targets(const int * train_samples, size_t n_train_samples, const llama_token * train_data, size_t n_train_data, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * target_logits, struct ggml_tensor * target_probs) {
+void get_example_targets(const int * train_samples, size_t n_train_samples, const llama_token * train_data, size_t n_train_data, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * target_logits, struct ggml_tensor * target_probs, llama_token bos_token = 1) {
     int n_tokens = tokens_input->ne[0];
     int n_vocab  = target_logits->ne[0];
 
@@ -2012,7 +2012,7 @@ void get_example_targets(const int * train_samples, size_t n_train_samples, cons
 
     ggml_set_f32(target_logits, -1.0f/n_vocab);
     ggml_set_f32(target_probs, 0.0f);
-    ggml_set_i32_1d(tokens_input, 0, llama_token_bos());
+    ggml_set_i32_1d(tokens_input, 0, bos_token);
     for (int i=1; i<n_tokens+1; ++i) {
         int token = clamp(train_data[sample+i-1], 0, n_vocab-1);
         set_f32_2d(target_logits, token, i-1, +1.0f);
@@ -2023,7 +2023,7 @@ void get_example_targets(const int * train_samples, size_t n_train_samples, cons
     }
 }
 
-void get_example_targets_batch(struct llama_context * /*lctx*/, const int * train_samples, size_t n_train_samples, const llama_token * train_data, size_t n_train_data, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * target_logits, struct ggml_tensor * target_probs) {
+void get_example_targets_batch(struct llama_context * /*lctx*/, const int * train_samples, size_t n_train_samples, const llama_token * train_data, size_t n_train_data, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * target_logits, struct ggml_tensor * target_probs, int bos_token, int eos_token) {
     GGML_ASSERT(tokens_input->n_dims  == 2);
     GGML_ASSERT(target_logits->n_dims == 3);
     GGML_ASSERT(target_probs->n_dims  == 3);
@@ -2043,7 +2043,7 @@ void get_example_targets_batch(struct llama_context * /*lctx*/, const int * trai
         size_t sample = train_samples[(example_id*n_batch + k) % n_train_samples];
         GGML_ASSERT(sample+n_tokens-1 < n_train_data);
 
-        set_i32_2d(tokens_input, 0, k, llama_token_bos());
+        set_i32_2d(tokens_input, 0, k, bos_token);
         for (int i=1; i<n_tokens+1; ++i) {
             int token = clamp(train_data[sample+i-1], 0, n_vocab-1);
             // print_token(lctx, token);
@@ -2198,7 +2198,7 @@ int tokenize_file(struct llama_context * lctx, const char * filename, std::vecto
 
     out.resize(buf.size());
 
-    int n_tokens = llama_tokenize(lctx, buf.data(), out.data(), buf.size(), false);
+    int n_tokens = llama_tokenize(lctx, buf.data(), out.data(), buf.size(), false, false);
     if (n_tokens >= 0) {
         out.resize(n_tokens);
     }
@@ -2697,6 +2697,9 @@ struct train_params {
 
     int print_info_interval;
     int print_details_interval;
+
+    int bos_token;
+    int eos_token;
 
     bool samples_start_after_nl;
     bool use_adam;
@@ -3231,7 +3234,7 @@ int main(int argc, char ** argv) {
         gf->n_threads = params.n_threads;
         gb->n_threads = params.n_threads;
 
-        get_example_targets_batch(lctx, train_samples.data(), train_samples.size(), train_tokens.data(), train_tokens.size(), ex,  tokens_input, target_logits, target_probs);
+        get_example_targets_batch(lctx, train_samples.data(), train_samples.size(), train_tokens.data(), train_tokens.size(), ex,  tokens_input, target_logits, target_probs, params.bos_token, params.eos_token);
 
         GGML_ASSERT(n_past == 0);
 

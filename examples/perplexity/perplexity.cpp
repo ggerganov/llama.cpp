@@ -30,7 +30,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
     // Run `./perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
     // Output: `perplexity: 13.5106 [114/114]`
     // BOS tokens will be added for each chunk before eval
-    auto tokens = ::llama_tokenize(ctx, params.prompt, true);
+    auto tokens = ::llama_tokenize(ctx, params.prompt, true, true);
 
     int count   = 0;
 
@@ -60,10 +60,10 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
 
             // add BOS token for the first batch of each chunk
             if (j == 0) {
-                tokens[batch_start] = llama_token_bos();
+                tokens[batch_start] = params.bos_token;
             }
 
-            if (llama_eval(ctx, tokens.data() + batch_start, batch_size, j * n_batch, params.n_threads)) {
+            if (llama_eval(ctx, tokens.data() + batch_start, batch_size, j * n_batch, params.n_threads, params.bos_token, params.eos_token)) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return;
             }

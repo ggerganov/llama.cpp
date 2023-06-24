@@ -60,7 +60,7 @@ int main(int argc, char ** argv) {
     params.prompt.insert(0, 1, ' ');
 
     // tokenize the prompt
-    auto embd_inp = ::llama_tokenize(ctx, params.prompt, true);
+    auto embd_inp = ::llama_tokenize(ctx, params.prompt, true, true);
 
     if (params.verbose_prompt) {
         fprintf(stderr, "\n");
@@ -74,7 +74,7 @@ int main(int argc, char ** argv) {
 
     if (params.embedding){
         if (embd_inp.size() > 0) {
-            if (llama_eval(ctx, embd_inp.data(), embd_inp.size(), n_past, params.n_threads)) {
+            if (llama_eval(ctx, embd_inp.data(), embd_inp.size(), n_past, params.n_threads, params.bos_token, params.eos_token)) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return 1;
             }

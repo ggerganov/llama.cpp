@@ -223,13 +223,15 @@ extern "C" {
                const llama_token * tokens,
                              int   n_tokens,
                              int   n_past,
-                             int   n_threads);
+                             int   n_threads,
+                             int bos_token,
+                             int eos_token);
 
     // Export a static computation graph for context of 511 and batch size of 1
     // NOTE: since this functionality is mostly for debugging and demonstration purposes, we hardcode these
     //       parameters here to keep things simple
     // IMPORTANT: do not use for anything else other than debugging and testing!
-    LLAMA_API int llama_eval_export(struct llama_context * ctx, const char * fname);
+    LLAMA_API int llama_eval_export(struct llama_context * ctx, const char * fname, int bos_token, int eos_token);
 
     // Convert the provided text into tokens.
     // The tokens pointer must be large enough to hold the resulting tokens.
@@ -241,7 +243,8 @@ extern "C" {
                       const char * text,
                      llama_token * tokens,
                              int   n_max_tokens,
-                            bool   add_bos);
+                            bool   add_bos,
+                            bool   add_eos);
 
     LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
     LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
@@ -270,8 +273,8 @@ extern "C" {
     LLAMA_API const char * llama_token_to_str(const struct llama_context * ctx, llama_token token);
 
     // Special tokens
-    LLAMA_API llama_token llama_token_bos();  // beginning-of-sentence
-    LLAMA_API llama_token llama_token_eos();  // end-of-sentence
+//     LLAMA_API llama_token llama_token_bos();  // beginning-of-sentence
+//     LLAMA_API llama_token llama_token_eos();  // end-of-sentence
     LLAMA_API llama_token llama_token_nl();   // next-line
 
     // Sampling functions

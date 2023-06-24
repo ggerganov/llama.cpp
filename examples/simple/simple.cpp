@@ -84,7 +84,7 @@ int main(int argc, char ** argv)
     //---------------------------------
 
     std::vector<llama_token> tokens_list;
-    tokens_list = ::llama_tokenize( ctx , params.prompt , true );
+    tokens_list = ::llama_tokenize( ctx , params.prompt , true, true );
 
     const int max_context_size     = llama_n_ctx( ctx );
     const int max_tokens_list_size = max_context_size - 4 ;
@@ -123,7 +123,7 @@ int main(int argc, char ** argv)
         // Evaluate the tokens :
         //---------------------------------
 
-        if ( llama_eval( ctx , tokens_list.data() , tokens_list.size() , llama_get_kv_cache_token_count( ctx ) , params.n_threads ) )
+        if ( llama_eval( ctx , tokens_list.data() , tokens_list.size() , llama_get_kv_cache_token_count( ctx ) , params.n_threads, params.bos_token, params.eos_token ) )
         {
             fprintf( stderr,  "%s : failed to eval\n" , __func__ );
             return 1;
@@ -155,7 +155,7 @@ int main(int argc, char ** argv)
 
 
         // is it an end of stream ?
-        if ( new_token_id == llama_token_eos() )
+        if ( new_token_id == params.eos_token )
         {
             fprintf(stderr, " [end of text]\n");
             break;
