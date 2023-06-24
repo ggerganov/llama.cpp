@@ -200,9 +200,9 @@ extern "C" {
                              int   n_threads);
 
     // Same as llama_eval, but use float matrix input directly.
-    LLAMA_API int llama_eval_float(
+    LLAMA_API int llama_eval_embd(
             struct llama_context * ctx,
-               const float * embds,
+                     const float * embd,
                              int   n_tokens,
                              int   n_past,
                              int   n_threads);

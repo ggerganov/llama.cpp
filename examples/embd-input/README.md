@@ -1,6 +1,6 @@
 ### Examples for input embedding directly
 
-## Requirement 
+## Requirement
 build  `libembd_input.so`
 run the following comman in main dir (../../).
 ```

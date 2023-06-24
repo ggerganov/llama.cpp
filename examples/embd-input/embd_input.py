@@ -1,8 +1,9 @@
 import ctypes
 from ctypes import cdll, c_char_p, c_void_p, POINTER, c_float, c_int
 import numpy as np
+import os
 
-libc = cdll.LoadLibrary("./libembd_input.so")
+libc = cdll.LoadLibrary("./libembdinput.so")
 libc.sampling.restype=c_char_p
 libc.create_mymodel.restype=c_void_p
 libc.eval_string.argtypes=[c_void_p, c_char_p]
@@ -16,7 +17,9 @@ class MyModel:
         c_str = [c_char_p(i.encode()) for i in args]
         args_c = (c_char_p * argc)(*c_str)
         self.model = c_void_p(libc.create_mymodel(argc, args_c))
-#         print("self.model", self.model)
+        self.max_tgt_len = 512
+        self.print_string_eval = True
+
     def __del__(self):
         libc.free_mymodel(self.model)
 
@@ -25,6 +28,8 @@ class MyModel:
 
     def eval_string(self, x):
         libc.eval_string(self.model, x.encode()) # c_char_p(x.encode()))
+        if self.print_string_eval:
+            print(x)
 
     def eval_token(self, x):
         libc.eval_id(self.model, x)
@@ -33,49 +38,34 @@ class MyModel:
         s = libc.sampling(self.model)
         return s
 
-    def generate(self, end="</s>"):
-        ret = b""
-        end = end.encode()
-        for _ in range(500):
-            tmp = self.sampling() # .decode()
-            if (ret+tmp).endswith(end):
-                break
-            ret += tmp
-        return ret.decode()
-
     def stream_generate(self, end="</s>"):
         ret = b""
         end = end.encode()
-        head = b""
-        for _ in range(500):
-            tmp = self.sampling() # .decode()
+        for _ in range(self.max_tgt_len):
+            tmp = self.sampling()
             ret += tmp
-            try:
-                text = (head + tmp).decode()
-                print(text, end="")
-                head = b""
-            except:
-                head += text
+            yield tmp
             if ret.endswith(end):
                 break
-        print("")
-        return ret.decode()
 
+    def generate_with_print(self, end="</s>"):
+        ret = b""
+        for i in self.stream_generate(end=end):
+            ret += i
+            print(i.decode(errors="replace"), end="", flush=True)
+        print("")
+        return ret.decode(errors="replace")
+
+
+    def generate(self, end="</s>"):
+        text = b"".join(self.stream_generate(end=end))
+        return text.decode(errors="replace")
 
 if __name__ == "__main__":
     model = MyModel(["main", "--model", "../llama.cpp/models/ggml-vic13b-q4_1.bin", "-c", "2048"])
-    # print(model)
     model.eval_string("""user: what is the color of the flag of UN?""")
-    # model.eval_token(100)
     x = np.random.random((5120,10))# , dtype=np.float32)
     model.eval_float(x)
     model.eval_string("""assistant:""")
-    # print(x[0,0], x[0,1],x[1,0])
-    # model.eval_float(x)
-    # print(libc)
-
-    for i in range(500):
-        tmp = model.sampling().decode()
-        if tmp == "":
-            break
-        print(tmp, end="", flush=True)
+    for i in model.generate():
+        print(i.decode(errors="replace"), end="", flush=True)

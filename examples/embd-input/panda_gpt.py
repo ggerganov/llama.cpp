@@ -7,11 +7,13 @@ from torch import nn
 import torch
 
 # use PandaGPT path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "PandaGPT","code","model"))
+panda_gpt_path = os.path.join(os.path.dirname(__file__), "PandaGPT")
+imagebind_ckpt_path = "./models/panda_gpt/"
+
+sys.path.insert(0, os.path.join(panda_gpt_path,"code","model"))
 from ImageBind.models import imagebind_model
 from ImageBind import data
 
-imagebind_ckpt_path = "./models/panda_gpt/"
 ModalityType = imagebind_model.ModalityType
 max_tgt_len = 400
 
@@ -31,25 +33,25 @@ class PandaGPT:
             "weight": state["llama_proj.weight"],
             "bias": state["llama_proj.bias"]})
 
+    def eval_inputs(self, inputs):
+        self.model.eval_string("<Img>")
+        embds = self.extract_multimoal_feature(inputs)
+        for i in embds:
+            self.model.eval_float(i.T)
+        self.model.eval_string("</Img> ")
+
     def chat(self, question):
-        if self.generated_text == "":
-            self.model.eval_string("###")
-        self.model.eval_string(" Human: ")
-        self.model.eval_string(question)
-        self.model.eval_string("\n### Assistant:")
-        ret = self.model.stream_generate(end="###")
-        self.generated_text += ret
-        return ret
+        return self.chat_with_image(None, question)
 
     def chat_with_image(self, inputs, question):
         if self.generated_text == "":
             self.model.eval_string("###")
-        self.model.eval_string(" Human: <Img>")
-        embds = self.extract_multimoal_feature(inputs)
-        for i in embds:
-            self.model.eval_float(i.T)
-        self.model.eval_string("</Img> " + question + "\n### Assistant:")
-        ret = self.model.stream_generate(end="###")
+        self.model.eval_string(" Human: ")
+        if inputs:
+            self.eval_inputs(inputs)
+        self.model.eval_string(question)
+        self.model.eval_string("\n### Assistant:")
+        ret = self.model.generate_with_print(end="###")
         self.generated_text += ret
         return ret
 
@@ -88,13 +90,9 @@ class PandaGPT:
 
 
 if __name__=="__main__":
-    # model form liuhaotian/LLaVA-13b-delta-v1-1
     a = PandaGPT(["--model", "./models/ggml-vicuna-13b-v0-q4_1.bin", "-c", "2048", "--lora", "./models/panda_gpt/ggml-adapter-model.bin","--temp", "0"])
-    # Extract from https://huggingface.co/liuhaotian/LLaVA-13b-delta-v1-1/blob/main/pytorch_model-00003-of-00003.bin.
-    # Also here can use pytorch_model-00003-of-00003.bin directly.
     a.load_projection("./models/panda_gpt/adapter_model.bin")
     a.chat_with_image(
         {"image_paths": ["./media/llama1-logo.png"]},
         "what is the text in the picture? 'llama' or 'lambda'?")
     a.chat("what is the color of it?")
-

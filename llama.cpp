@@ -1342,15 +1342,33 @@ static bool llama_model_load(
     }
 }
 
-static bool llama_eval_internal_tensor(
-            llama_context& lctx,
-            ggml_context* ctx0,
-            ggml_tensor* inpL,
-            const int   n_tokens,
-            const int   n_past,
-            const int   n_threads,
-            const char * cgraph_fname,
-            const int64_t t_start_us) {
+// evaluate the transformer
+//
+//   - lctx:      llama context
+//   - tokens:    new batch of tokens to process
+//   - n_tokens   number of tokens
+//   - embd       embeddings input
+//   - n_past:    the context size so far
+//   - n_threads: number of threads to use
+//
+static bool llama_eval_internal(
+         llama_context & lctx,
+     const llama_token * tokens,
+             const int   n_tokens,
+           const float * embd,
+             const int   n_past,
+             const int   n_threads,
+            const char * cgraph_fname) {
+
+    LLAMA_ASSERT((!tokens && embd) || (tokens && !embd));
+
+    // enforce that the first token is BOS
+    if (tokens && n_past == 0 && tokens[0] != llama_token_bos()) {
+        fprintf(stderr, "%s: first token must be BOS\n", __func__);
+        return false;
+    }
+
+    const int64_t t_start_us = ggml_time_us();
 
     const int N = n_tokens;
 
@@ -1358,7 +1376,6 @@ static bool llama_eval_internal_tensor(
     const auto & hparams = model.hparams;
 
     const auto & kv_self = model.kv_self;
-
 
     LLAMA_ASSERT(!!kv_self.ctx);
 
@@ -1371,6 +1388,15 @@ static bool llama_eval_internal_tensor(
     const int n_gpu_layers = model.n_gpu_layers;
 
     auto & mem_per_token = lctx.mem_per_token;
+    auto & buf_compute   = lctx.buf_compute;
+
+    struct ggml_init_params params = {
+        /*.mem_size   =*/ buf_compute.size,
+        /*.mem_buffer =*/ buf_compute.addr,
+        /*.no_alloc   =*/ false,
+    };
+
+    struct ggml_context * ctx0 = ggml_init(params);
 
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
@@ -1378,6 +1404,17 @@ static bool llama_eval_internal_tensor(
     gf.n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
 
     struct ggml_tensor * cur;
+    struct ggml_tensor * inpL;
+
+    if (tokens) {
+        struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
+        ggml_set_name(embd, "embd");
+        memcpy(embd->data, tokens, N*ggml_element_size(embd));
+        inpL = ggml_get_rows(ctx0, model.tok_embeddings, embd);
+    } else {
+        inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N);
+        memcpy(inpL->data, embd, N * n_embd * ggml_element_size(inpL));
+    }
 
     const int i_gpu_start = n_layer - n_gpu_layers;
     (void) i_gpu_start;
@@ -1744,53 +1781,6 @@ static bool llama_eval_internal_tensor(
     }
 
     return true;
-}
-
-
-// evaluate the transformer
-//
-//   - lctx:      llama context
-//   - tokens:    new batch of tokens to process
-//   - n_past:    the context size so far
-//   - n_threads: number of threads to use
-//
-static bool llama_eval_internal(
-        llama_context & lctx,
-    const llama_token * tokens,
-            const int   n_tokens,
-            const int   n_past,
-            const int   n_threads,
-            const char * cgraph_fname) {
-
-    // enforce that the first token is BOS
-    if (n_past == 0 && tokens[0] != llama_token_bos()) {
-        fprintf(stderr, "%s: first token must be BOS\n", __func__);
-        return false;
-    }
-
-    const auto & model   = lctx.model;
-
-    const int64_t t_start_us = ggml_time_us();
-
-    const int N = n_tokens;
-
-    auto & buf_compute   = lctx.buf_compute;
-
-    struct ggml_init_params params = {
-        /*.mem_size   =*/ buf_compute.size,
-        /*.mem_buffer =*/ buf_compute.addr,
-        /*.no_alloc   =*/ false,
-    };
-
-    struct ggml_context * ctx0 = ggml_init(params);
-
-
-    struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
-    ggml_set_name(embd, "embd");
-    memcpy(embd->data, tokens, N*ggml_element_size(embd));
-
-    struct ggml_tensor * inpL = ggml_get_rows(ctx0, model.tok_embeddings, embd);
-    return llama_eval_internal_tensor(lctx, ctx0, inpL, N, n_past, n_threads, cgraph_fname, t_start_us);
 }
 
 //
@@ -3357,7 +3347,7 @@ int llama_eval(
                          int   n_tokens,
                          int   n_past,
                          int   n_threads) {
-    if (!llama_eval_internal(*ctx, tokens, n_tokens, n_past, n_threads, nullptr)) {
+    if (!llama_eval_internal(*ctx, tokens, n_tokens, nullptr, n_past, n_threads, nullptr)) {
         fprintf(stderr, "%s: failed to eval\n", __func__);
         return 1;
     }
@@ -3373,32 +3363,13 @@ int llama_eval(
 }
 
 
-int llama_eval_float(
-        struct llama_context * ctx,
-           const float * input,
-                         int   n_tokens,
-                         int   n_past,
-                         int   n_threads) {
-    const auto & model   = ctx->model;
-
-    const int64_t t_start_us = ggml_time_us();
-
-    const int N = n_tokens;
-
-    auto & buf_compute   = ctx->buf_compute;
-
-    struct ggml_init_params params = {
-        /*.mem_size   =*/ buf_compute.size,
-        /*.mem_buffer =*/ buf_compute.addr,
-        /*.no_alloc   =*/ false,
-    };
-
-    struct ggml_context * ctx0 = ggml_init(params);
-
-    struct ggml_tensor *inpL =
-      ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, model.hparams.n_embd, N);
-    memcpy(inpL->data, input, N * model.hparams.n_embd * ggml_element_size(inpL));
-    if (!llama_eval_internal_tensor(*ctx, ctx0, inpL, N, n_past, n_threads, nullptr, t_start_us)) {
+int llama_eval_embd(
+            struct llama_context * ctx,
+                     const float * embd,
+                             int   n_tokens,
+                             int   n_past,
+                             int   n_threads) {
+    if (!llama_eval_internal(*ctx, nullptr, n_tokens, embd, n_past, n_threads, nullptr)) {
         fprintf(stderr, "%s: failed to eval\n", __func__);
         return 1;
     }
@@ -3419,7 +3390,7 @@ int llama_eval_export(struct llama_context * ctx, const char * fname) {
 
     const std::vector<llama_token> tmp(n_batch, llama_token_bos());
 
-    if (!llama_eval_internal(*ctx, tmp.data(), tmp.size(), n_ctx, 1, fname)) {
+    if (!llama_eval_internal(*ctx, tmp.data(), tmp.size(), nullptr, n_ctx, 1, fname)) {
         fprintf(stderr, "%s: failed to eval\n", __func__);
         return 1;
     }

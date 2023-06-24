@@ -31,7 +31,7 @@ class Llava:
         self.model.eval_string("user: ")
         self.model.eval_string(question)
         self.model.eval_string("\nassistant: ")
-        return self.model.generate()
+        return self.model.generate_with_print()
 
     def chat_with_image(self, image, question):
         with torch.no_grad():
@@ -49,7 +49,7 @@ class Llava:
         self.model.eval_token(32003-1) # im_end
         self.model.eval_string(question)
         self.model.eval_string("\nassistant: ")
-        return self.model.generate()
+        return self.model.generate_with_print()
 
 
 if __name__=="__main__":
@@ -63,8 +63,8 @@ if __name__=="__main__":
     respose = a.chat_with_image(
         Image.open("./media/llama1-logo.png").convert('RGB'),
         "what is the text in the picture?")
-    print(respose)
-    print(a.chat("what is the color of it?"))
+    respose
+    a.chat("what is the color of it?")
 
 
 
