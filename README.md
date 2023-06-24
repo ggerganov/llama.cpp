@@ -680,11 +680,12 @@ Upon completion of the aforementioned steps, you will have successfully compiled
 ```
 GGML_OPENCL_PLATFORM=0
 GGML_OPENCL_DEVICE=0
-export LD_LIBRARY_PATH=/system/vendor/lib64:$LD_LIBRARY_PATH
-./main (...)
+export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH
 ```
 
 For easy and swift re-execution, consider documenting this final part in a .sh script file. This will enable you to rerun the process with minimal hassle.
+
+Place your desired model into the `/llama.cpp/models/` directory and execute the `./main (...)` script. 
 
 ### Docker
 
