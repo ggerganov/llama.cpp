@@ -53,6 +53,7 @@ __attribute__((format(gnu_printf, 1, 2)))
 __attribute__((format(printf, 1, 2)))
 #endif
 #endif
+
 static std::string format(const char * fmt, ...) {
     va_list ap, ap2;
     va_start(ap, fmt);

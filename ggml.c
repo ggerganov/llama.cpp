@@ -1,4 +1,3 @@
-#define _GNU_SOURCE // Defines CLOCK_MONOTONIC on Linux
 #define _CRT_SECURE_NO_DEPRECATE // Disables ridiculous "unsafe" warnigns on Windows
 
 #include "ggml.h"
@@ -13387,8 +13386,7 @@ static void ggml_compute_forward_conv_2d_sk_p0_f16_f32(
     const int nk1 = ne01;
 
     // size of the convolution row - the kernel size unrolled across all channels
-    // round-up so it is more suitable for SIMD
-    const int ew0 = ggml_up32(nk0*nk1*ne02);
+    const int ew0 = nk0*nk1*ne02;
 
     GGML_ASSERT(nb00 == sizeof(ggml_fp16_t));
     GGML_ASSERT(nb10 == sizeof(float));

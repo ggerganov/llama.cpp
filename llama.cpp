@@ -1,11 +1,3 @@
-// Defines fileno on msys:
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#endif
-
 #include "llama-util.h"
 #include "llama.h"
 
