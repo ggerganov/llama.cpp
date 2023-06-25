@@ -40,8 +40,6 @@ struct quantize_perf_params {
     int64_t iterations = ITERATIONS;
 };
 
-int64_t iterations = ITERATIONS;
-
 #if defined(__x86_64__) || defined(__i386__)
 
 #include <x86intrin.h>
@@ -78,7 +76,7 @@ void * align_with_offset(void * ptr, int offset) {
     return (char *) std::align(MAX_ALIGNMENT, MAX_ALIGNMENT, ptr, dummy_size) + offset;
 }
 
-void benchmark_function(size_t size, size_t q_size, std::function<size_t(void)> function) {
+void benchmark_function(size_t size, size_t q_size, int64_t iterations, std::function<size_t(void)> function) {
     int64_t min_time_us = INT64_MAX;
     int64_t total_time_us = 0;
     int64_t min_time_cycles = INT64_MAX;
@@ -260,7 +258,7 @@ int main(int argc, char * argv[]) {
     generate_data(0, largest, test_data1);
     generate_data(1, largest, test_data2);
 
-    iterations = params.iterations;
+    int64_t iterations = params.iterations;
 
 
     // Initialize GGML, ensures float conversion tables are initialized
@@ -290,7 +288,7 @@ int main(int argc, char * argv[]) {
                         return test_q1[0];
                     };
                     size_t quantized_size = size / ggml_blck_size(type) * ggml_type_size(type);
-                    benchmark_function(size, quantized_size, quantize_fn);
+                    benchmark_function(size, quantized_size, iterations, quantize_fn);
                 }
                 printf("\n");
             }
@@ -304,7 +302,7 @@ int main(int argc, char * argv[]) {
                         return test_q1[0];
                     };
                     size_t quantized_size = size / ggml_blck_size(type) * ggml_type_size(type);
-                    benchmark_function(size, quantized_size, quantize_fn);
+                    benchmark_function(size, quantized_size, iterations, quantize_fn);
                 }
                 printf("\n");
             }
@@ -319,7 +317,7 @@ int main(int argc, char * argv[]) {
                         return test_out[0];
                     };
                     size_t quantized_size = size / ggml_blck_size(type) * ggml_type_size(type);
-                    benchmark_function(size, quantized_size, quantize_fn);
+                    benchmark_function(size, quantized_size, iterations, quantize_fn);
                 }
                 printf("\n");
             }
@@ -333,7 +331,7 @@ int main(int argc, char * argv[]) {
                         return test_q1[0];
                     };
                     size_t quantized_size = size / ggml_blck_size(type) * ggml_type_size(type);
-                    benchmark_function(size, quantized_size, quantize_fn);
+                    benchmark_function(size, quantized_size, iterations, quantize_fn);
                 }
                 printf("\n");
             }
@@ -350,7 +348,7 @@ int main(int argc, char * argv[]) {
                         return result;
                     };
                     size_t quantized_size = size / ggml_blck_size(type) * ggml_type_size(type);
-                    benchmark_function(size, quantized_size, quantize_fn);
+                    benchmark_function(size, quantized_size, iterations, quantize_fn);
                 }
                 printf("\n");
             }
