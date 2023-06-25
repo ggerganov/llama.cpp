@@ -1,5 +1,5 @@
-// Defines CLOCK_MONOTONIC on Linux
-#define _GNU_SOURCE
+#define _GNU_SOURCE // Defines CLOCK_MONOTONIC on Linux
+#define _CRT_SECURE_NO_DEPRECATE // Disables ridiculous "unsafe" warnigns on Windows
 
 #include "ggml.h"
 
@@ -131,6 +131,34 @@ typedef void* thread_ret_t;
     #define GGML_MEM_ALIGN 16
 #endif
 
+//
+// logging
+//
+
+#if (GGML_DEBUG >= 1)
+#define GGML_PRINT_DEBUG(...) printf(__VA_ARGS__)
+#else
+#define GGML_PRINT_DEBUG(...)
+#endif
+
+#if (GGML_DEBUG >= 5)
+#define GGML_PRINT_DEBUG_5(...) printf(__VA_ARGS__)
+#else
+#define GGML_PRINT_DEBUG_5(...)
+#endif
+
+#if (GGML_DEBUG >= 10)
+#define GGML_PRINT_DEBUG_10(...) printf(__VA_ARGS__)
+#else
+#define GGML_PRINT_DEBUG_10(...)
+#endif
+
+#define GGML_PRINT(...) printf(__VA_ARGS__)
+
+//
+// end of logging block
+//
+
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #define GGML_ALIGNED_MALLOC(size)  _aligned_malloc(size, GGML_MEM_ALIGN)
 #define GGML_ALIGNED_FREE(ptr)     _aligned_free(ptr)
@@ -144,6 +172,17 @@ inline static void* ggml_aligned_malloc(size_t size) {
 #endif
     if (result != 0) {
         // Handle allocation failure
+        const char *error_desc = "unknown allocation error";
+        switch (result) {
+            case EINVAL:
+                error_desc = "invalid alignment value";
+                break;
+            case ENOMEM:
+                error_desc = "insufficient memory";
+                break;
+        }
+        GGML_PRINT("%s: %s (attempted to allocate %6.2f MB)\n",
+            __func__, error_desc, size/(1024.0*1024.0));
         return NULL;
     }
     return aligned_memory;
@@ -3531,30 +3570,6 @@ inline static void ggml_vec_norm_inv_f32(const int n, float * s, const float * x
 }
 
 //
-// logging
-//
-
-#if (GGML_DEBUG >= 1)
-#define GGML_PRINT_DEBUG(...) printf(__VA_ARGS__)
-#else
-#define GGML_PRINT_DEBUG(...)
-#endif
-
-#if (GGML_DEBUG >= 5)
-#define GGML_PRINT_DEBUG_5(...) printf(__VA_ARGS__)
-#else
-#define GGML_PRINT_DEBUG_5(...)
-#endif
-
-#if (GGML_DEBUG >= 10)
-#define GGML_PRINT_DEBUG_10(...) printf(__VA_ARGS__)
-#else
-#define GGML_PRINT_DEBUG_10(...)
-#endif
-
-#define GGML_PRINT(...) printf(__VA_ARGS__)
-
-//
 // data types
 //
 
@@ -3713,11 +3728,15 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "MAP_UNARY",
     "MAP_BINARY",
 
+    "MAP_CUSTOM1",
+    "MAP_CUSTOM2",
+    "MAP_CUSTOM3",
+
     "CROSS_ENTROPY_LOSS",
     "CROSS_ENTROPY_LOSS_BACK",
 };
 
-static_assert(GGML_OP_COUNT == 61, "GGML_OP_COUNT != 61");
+static_assert(GGML_OP_COUNT == 64, "GGML_OP_COUNT != 64");
 
 static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "none",
@@ -3785,11 +3804,15 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "f(x)",
     "f(x,y)",
 
+    "custom(x)",
+    "custom(x,y)",
+    "custom(x,y,z)",
+
     "cross_entropy_loss(x,y)",
     "cross_entropy_loss_back(x,y)",
 };
 
-static_assert(GGML_OP_COUNT == 61, "GGML_OP_COUNT != 61");
+static_assert(GGML_OP_COUNT == 64, "GGML_OP_COUNT != 64");
 
 static_assert(sizeof(struct ggml_object)%GGML_MEM_ALIGN == 0, "ggml_object size must be a multiple of GGML_MEM_ALIGN");
 static_assert(sizeof(struct ggml_tensor)%GGML_MEM_ALIGN == 0, "ggml_tensor size must be a multiple of GGML_MEM_ALIGN");
@@ -7094,9 +7117,14 @@ struct ggml_tensor * ggml_map_unary_impl_f32(
         is_node = true;
     }
 
+    struct ggml_tensor *result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+
+    ggml_scratch_save(ctx);
+
     struct ggml_tensor * addr_tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, sizeof(void *) / sizeof(int32_t));
     *((void (**)(void))addr_tensor->data) = (void (*)(void))fun;
-    struct ggml_tensor *result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+
+    ggml_scratch_load(ctx);
 
     result->op = GGML_OP_MAP_UNARY;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -7136,9 +7164,14 @@ struct ggml_tensor * ggml_map_binary_impl_f32(
         is_node = true;
     }
 
+    struct ggml_tensor *result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+
+    ggml_scratch_save(ctx);
+
     struct ggml_tensor * addr_tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, sizeof(void *) / sizeof(int32_t));
     *((void (**)(void))addr_tensor->data) = (void (*)(void))fun;
-    struct ggml_tensor *result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+
+    ggml_scratch_load(ctx);
 
     result->op = GGML_OP_MAP_BINARY;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -7163,6 +7196,150 @@ struct ggml_tensor * ggml_map_binary_inplace_f32(
         struct ggml_tensor          * b,
         const  ggml_binary_op_f32_t fun) {
     return ggml_map_binary_impl_f32(ctx, a, b, fun, true);
+}
+
+// ggml_map_custom1
+
+struct ggml_tensor * ggml_map_custom1_impl_f32(
+        struct ggml_context          * ctx,
+        struct ggml_tensor           * a,
+        const  ggml_custom1_op_f32_t   fun,
+        bool   inplace) {
+    bool is_node = false;
+
+    if (!inplace && a->grad) {
+        is_node = true;
+    }
+
+    struct ggml_tensor *result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+
+    ggml_scratch_save(ctx);
+
+    struct ggml_tensor * addr_tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, sizeof(void *) / sizeof(int32_t));
+    *((void (**)(void))addr_tensor->data) = (void (*)(void))fun;
+
+    ggml_scratch_load(ctx);
+
+    result->op = GGML_OP_MAP_CUSTOM1;
+    result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
+    result->src0 = a;
+    result->opt[0] = addr_tensor;
+
+    return result;
+}
+
+struct ggml_tensor * ggml_map_custom1_f32(
+        struct ggml_context          * ctx,
+        struct ggml_tensor           * a,
+        const  ggml_custom1_op_f32_t   fun) {
+    return ggml_map_custom1_impl_f32(ctx, a, fun, false);
+}
+
+struct ggml_tensor * ggml_map_custom1_inplace_f32(
+        struct ggml_context          * ctx,
+        struct ggml_tensor           * a,
+        const  ggml_custom1_op_f32_t   fun) {
+    return ggml_map_custom1_impl_f32(ctx, a, fun, true);
+}
+
+// ggml_map_custom2
+
+struct ggml_tensor * ggml_map_custom2_impl_f32(
+        struct ggml_context          * ctx,
+        struct ggml_tensor           * a,
+        struct ggml_tensor           * b,
+        const  ggml_custom2_op_f32_t   fun,
+        bool   inplace) {
+    bool is_node = false;
+
+    if (!inplace && (a->grad || b->grad)) {
+        is_node = true;
+    }
+
+    struct ggml_tensor *result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+
+    ggml_scratch_save(ctx);
+
+    struct ggml_tensor * addr_tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, sizeof(void *) / sizeof(int32_t));
+    *((void (**)(void))addr_tensor->data) = (void (*)(void))fun;
+
+    ggml_scratch_load(ctx);
+
+    result->op = GGML_OP_MAP_CUSTOM2;
+    result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
+    result->src0 = a;
+    result->src1 = b;
+    result->opt[0] = addr_tensor;
+
+    return result;
+}
+
+struct ggml_tensor * ggml_map_custom2_f32(
+        struct ggml_context          * ctx,
+        struct ggml_tensor           * a,
+        struct ggml_tensor           * b,
+        const  ggml_custom2_op_f32_t   fun) {
+    return ggml_map_custom2_impl_f32(ctx, a, b, fun, false);
+}
+
+struct ggml_tensor * ggml_map_custom2_inplace_f32(
+        struct ggml_context          * ctx,
+        struct ggml_tensor           * a,
+        struct ggml_tensor           * b,
+        const  ggml_custom2_op_f32_t   fun) {
+    return ggml_map_custom2_impl_f32(ctx, a, b, fun, true);
+}
+
+// ggml_map_custom3
+
+struct ggml_tensor * ggml_map_custom3_impl_f32(
+        struct ggml_context          * ctx,
+        struct ggml_tensor           * a,
+        struct ggml_tensor           * b,
+        struct ggml_tensor           * c,
+        const  ggml_custom3_op_f32_t   fun,
+        bool   inplace) {
+    bool is_node = false;
+
+    if (!inplace && (a->grad || b->grad || c->grad)) {
+        is_node = true;
+    }
+
+    struct ggml_tensor *result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+
+    ggml_scratch_save(ctx);
+
+    struct ggml_tensor * addr_tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, sizeof(void *) / sizeof(int32_t));
+    *((void (**)(void))addr_tensor->data) = (void (*)(void))fun;
+
+    ggml_scratch_load(ctx);
+
+    result->op = GGML_OP_MAP_CUSTOM3;
+    result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
+    result->src0 = a;
+    result->src1 = b;
+    result->opt[0] = addr_tensor;
+    result->opt[1] = c;
+
+    return result;
+}
+
+struct ggml_tensor * ggml_map_custom3_f32(
+        struct ggml_context          * ctx,
+        struct ggml_tensor           * a,
+        struct ggml_tensor           * b,
+        struct ggml_tensor           * c,
+        const  ggml_custom3_op_f32_t   fun) {
+    return ggml_map_custom3_impl_f32(ctx, a, b, c, fun, false);
+}
+
+struct ggml_tensor * ggml_map_custom3_inplace_f32(
+        struct ggml_context          * ctx,
+        struct ggml_tensor           * a,
+        struct ggml_tensor           * b,
+        struct ggml_tensor           * c,
+        const  ggml_custom3_op_f32_t   fun) {
+    return ggml_map_custom3_impl_f32(ctx, a, b, c, fun, true);
 }
 
 // ggml_cross_entropy_loss
@@ -14621,6 +14798,114 @@ static void ggml_compute_forward_map_binary(
     }
 }
 
+// ggml_compute_forward_map_custom1
+
+static void ggml_compute_forward_map_custom1_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * a,
+        struct ggml_tensor * dst,
+        const ggml_custom1_op_f32_t fun) {
+    assert(params->ith == 0);
+
+    if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
+        return;
+    }
+
+    fun(dst, a);
+}
+
+
+static void ggml_compute_forward_map_custom1(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * a,
+        struct ggml_tensor * dst,
+        const ggml_custom1_op_f32_t fun) {
+    switch (a->type) {
+        case GGML_TYPE_F32:
+            {
+                ggml_compute_forward_map_custom1_f32(params, a, dst, fun);
+            } break;
+        default:
+            {
+                GGML_ASSERT(false);
+            } break;
+    }
+}
+
+// ggml_compute_forward_map_custom2
+
+static void ggml_compute_forward_map_custom2_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * a,
+        const struct ggml_tensor * b,
+        struct ggml_tensor * dst,
+        const ggml_custom2_op_f32_t fun) {
+    assert(params->ith == 0);
+
+    if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
+        return;
+    }
+
+    fun(dst, a, b);
+}
+
+
+static void ggml_compute_forward_map_custom2(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * a,
+        const struct ggml_tensor * b,
+        struct ggml_tensor * dst,
+        const ggml_custom2_op_f32_t fun) {
+    switch (a->type) {
+        case GGML_TYPE_F32:
+            {
+                ggml_compute_forward_map_custom2_f32(params, a, b, dst, fun);
+            } break;
+        default:
+            {
+                GGML_ASSERT(false);
+            } break;
+    }
+}
+
+// ggml_compute_forward_map_custom3
+
+static void ggml_compute_forward_map_custom3_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * a,
+        const struct ggml_tensor * b,
+        const struct ggml_tensor * c,
+        struct ggml_tensor * dst,
+        const ggml_custom3_op_f32_t fun) {
+    assert(params->ith == 0);
+
+    if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
+        return;
+    }
+
+    fun(dst, a, b, c);
+}
+
+
+static void ggml_compute_forward_map_custom3(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * a,
+        const struct ggml_tensor * b,
+        const struct ggml_tensor * c,
+        struct ggml_tensor * dst,
+        const ggml_custom3_op_f32_t fun) {
+    switch (a->type) {
+        case GGML_TYPE_F32:
+            {
+                ggml_compute_forward_map_custom3_f32(params, a, b, c, dst, fun);
+            } break;
+        default:
+            {
+                GGML_ASSERT(false);
+            } break;
+    }
+}
+
 // ggml_compute_forward_cross_entropy_loss
 
 static void ggml_compute_forward_cross_entropy_loss_f32(
@@ -15156,6 +15441,24 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             {
                 const ggml_binary_op_f32_t fun = *((ggml_binary_op_f32_t *)tensor->opt[0]->data);
                 ggml_compute_forward_map_binary(params, tensor->src0, tensor->src1, tensor, fun);
+            }
+            break;
+        case GGML_OP_MAP_CUSTOM1:
+            {
+                const ggml_custom1_op_f32_t fun = *((ggml_custom1_op_f32_t *)tensor->opt[0]->data);
+                ggml_compute_forward_map_custom1(params, tensor->src0, tensor, fun);
+            }
+            break;
+        case GGML_OP_MAP_CUSTOM2:
+            {
+                const ggml_custom2_op_f32_t fun = *((ggml_custom2_op_f32_t *)tensor->opt[0]->data);
+                ggml_compute_forward_map_custom2(params, tensor->src0, tensor->src1, tensor, fun);
+            }
+            break;
+        case GGML_OP_MAP_CUSTOM3:
+            {
+                const ggml_custom3_op_f32_t fun = *((ggml_custom3_op_f32_t *)tensor->opt[0]->data);
+                ggml_compute_forward_map_custom3(params, tensor->src0, tensor->src1, tensor->opt[1], tensor, fun);
             }
             break;
         case GGML_OP_CROSS_ENTROPY_LOSS:
@@ -15964,6 +16267,9 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
         case GGML_OP_WIN_UNPART:
         case GGML_OP_MAP_UNARY:
         case GGML_OP_MAP_BINARY:
+        case GGML_OP_MAP_CUSTOM1:
+        case GGML_OP_MAP_CUSTOM2:
+        case GGML_OP_MAP_CUSTOM3:
             {
                 GGML_ASSERT(false); // not supported
             } break;
@@ -16605,6 +16911,9 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                 case GGML_OP_WIN_UNPART:
                 case GGML_OP_MAP_UNARY:
                 case GGML_OP_MAP_BINARY:
+                case GGML_OP_MAP_CUSTOM1:
+                case GGML_OP_MAP_CUSTOM2:
+                case GGML_OP_MAP_CUSTOM3:
                     {
                         node->n_tasks = 1;
                     } break;
