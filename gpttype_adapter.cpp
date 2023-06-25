@@ -78,6 +78,7 @@ static std::vector<int> smartcontext;
 static std::vector<std::string> stop_sequence;
 static std::vector<llama_token_data> top_picks;
 static int remaining_tokens = 0;
+static int stopper_unused_tokens = 0;
 static std::string concat_output = "";
 
 inline bool IsNanCheck(float f)
@@ -759,6 +760,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
 
 bool gpttype_generate_abort()
 {
+    stopper_unused_tokens = remaining_tokens;
     remaining_tokens = 0;
     return true;
 }
@@ -899,7 +901,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     current_context_tokens.resize(n_past);
 
     remaining_tokens = params.n_predict;
-    int stopper_unused_tokens = 0;
+    stopper_unused_tokens = 0;
     int input_consumed = 0;
     std::mt19937 rng(params.seed);
     concat_output = "";

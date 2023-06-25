@@ -9,6 +9,7 @@
 #include <random>
 #include <thread>
 #include <unordered_map>
+#include <tuple>
 
 #if !defined (_WIN32)
 #include <stdio.h>
@@ -95,7 +96,7 @@ std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::s
 // Model utils
 //
 
-struct llama_context * llama_init_from_gpt_params(const gpt_params & params);
+std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(const gpt_params & params);
 
 //
 // Console utils
