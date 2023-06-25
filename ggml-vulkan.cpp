@@ -1,7 +1,9 @@
 #include "ggml-vulkan.h"
 
+#ifdef VK_CHK_KERNEL
 #include <cblas.h>
 #include <cmath>
+#endif
 
 #include <vulkan/vulkan.hpp>
 #define VMA_IMPLEMENTATION
@@ -33,6 +35,8 @@ inline static void* ggml_aligned_malloc(size_t size, size_t alignment) {
 #include <iostream>
 #include <limits>
 #include <chrono>
+#include <tuple>
+#include <vector>
 
 #include "ggml.h"
 
@@ -42,8 +46,10 @@ inline static void* ggml_aligned_malloc(size_t size, size_t alignment) {
 
 vk::Instance vk_instance;
 uint32_t vk_compute_queue_family_index;
+uint32_t vk_transfer_queue_family_index;
 vk::PhysicalDevice vk_physical_device;
 vk::Device vk_device;
+vk::CommandPool vk_command_pool_compute, vk_command_pool_transfer;
 VmaAllocator vk_allocator;
 vk::DescriptorSetLayout vk_pipeline_matmul_dsl;
 vk::PipelineLayout vk_pipeline_matmul_layout;
@@ -52,6 +58,15 @@ VmaAllocation vk_buffer_qa_alloc, vk_buffer_a_alloc, vk_buffer_b_alloc, vk_buffe
 vk::Buffer vk_buffer_qa, vk_buffer_a, vk_buffer_b, vk_buffer_c;
 
 bool vk_fp16_support = false;
+
+struct vk_buffer {
+    vk::Buffer buffer;
+    VmaAllocation allocation;
+    VmaAllocationInfo info;
+    size_t size = 0;
+};
+
+static std::vector<std::tuple<void*, size_t, vk_buffer>> vk_buf_list;
 
 void ggml_vk_init(void) {
     char* GGML_VULKAN_DEVICE = getenv("GGML_VULKAN_DEVICE");
@@ -67,15 +82,47 @@ void ggml_vk_init(void) {
     std::cout << "ggml_vulkan: Using " << device_props.deviceName << std::endl;
 
     std::vector<vk::QueueFamilyProperties> queue_family_props = vk_physical_device.getQueueFamilyProperties();
-    auto prop_it = std::find_if(queue_family_props.begin(), queue_family_props.end(), [](const vk::QueueFamilyProperties& prop)
-    {
-        return prop.queueFlags & vk::QueueFlagBits::eCompute;
-    });
-    vk_compute_queue_family_index = std::distance(queue_family_props.begin(), prop_it);
 
-    const float queue_priority = 1.0f;
-    vk::DeviceQueueCreateInfo device_queue_create_info(vk::DeviceQueueCreateFlags(), vk_compute_queue_family_index, 1, &queue_priority);
-    vk::DeviceCreateInfo device_create_info(vk::DeviceCreateFlags(), device_queue_create_info);
+    const size_t qfsize = queue_family_props.size();
+
+    // Try to find a non-graphics compute queue and a transfer-focused queue
+    vk_compute_queue_family_index = qfsize;
+    vk_transfer_queue_family_index = qfsize;
+    for (size_t i = 0; i < qfsize; i++) {
+        // std::cout << i << ": " << "compute=" << bool(queue_family_props[i].queueFlags & vk::QueueFlagBits::eCompute) << " transfer=" << bool(queue_family_props[i].queueFlags & vk::QueueFlagBits::eTransfer) << " graphics=" << bool(queue_family_props[i].queueFlags & vk::QueueFlagBits::eGraphics) << " protected=" << bool(queue_family_props[i].queueFlags & vk::QueueFlagBits::eProtected) << " optical_flow_nv=" << bool(queue_family_props[i].queueFlags & vk::QueueFlagBits::eOpticalFlowNV) << " sparse binding=" << bool(queue_family_props[i].queueFlags & vk::QueueFlagBits::eSparseBinding)  << " video decode=" << bool(queue_family_props[i].queueFlags & vk::QueueFlagBits::eVideoDecodeKHR) << std::endl;
+        if (vk_compute_queue_family_index >= qfsize && !(queue_family_props[i].queueFlags & vk::QueueFlagBits::eGraphics) && queue_family_props[i].queueFlags & vk::QueueFlagBits::eCompute) {
+            vk_compute_queue_family_index = i;
+        }
+        if (vk_transfer_queue_family_index >= qfsize && !(queue_family_props[i].queueFlags & (vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eVideoDecodeKHR | vk::QueueFlagBits::eProtected | vk::QueueFlagBits::eOpticalFlowNV)) && queue_family_props[i].queueFlags & vk::QueueFlagBits::eTransfer) {
+            vk_transfer_queue_family_index = i;
+        }
+    }
+
+    // Fall back to graphics and compute queue if not yet found
+    if (vk_compute_queue_family_index == qfsize) {
+        for (size_t i = 0; i < qfsize; i++) {
+            if (vk_compute_queue_family_index >= qfsize && queue_family_props[i].queueFlags & vk::QueueFlagBits::eCompute) {
+                vk_compute_queue_family_index = i;
+            }
+        }
+    }
+
+    if (vk_compute_queue_family_index == qfsize) {
+        std::cerr << "ggml_vulkan: vk_compute_queue_family_index invalid" << std::endl;
+        abort();
+    }
+    if (vk_transfer_queue_family_index == qfsize) {
+        std::cerr << "ggml_vulkan: vk_transfer_queue_family_index invalid" << std::endl;
+        abort();
+    }
+
+    const float compute_queue_priority = 1.0f;
+    const float transfer_queue_priority = 1.0f;
+    vk::DeviceQueueCreateInfo device_queue_create_infos[] = {
+        {vk::DeviceQueueCreateFlags(), vk_compute_queue_family_index, 1, &compute_queue_priority},
+        {vk::DeviceQueueCreateFlags(), vk_transfer_queue_family_index, 1, &transfer_queue_priority},
+    };
+    vk::DeviceCreateInfo device_create_info(vk::DeviceCreateFlags(), device_queue_create_infos);
     vk_device = vk_physical_device.createDevice(device_create_info);
 
     // Allocator
@@ -133,6 +180,12 @@ void ggml_vk_init(void) {
         pipeline_shader_create_info,
         vk_pipeline_matmul_layout);
     vk_pipeline_matmul = vk_device.createComputePipeline(pipeline_cache, compute_pipeline_create_info).value;
+
+    vk::CommandPoolCreateInfo command_pool_create_info_compute(vk::CommandPoolCreateFlags(), vk_compute_queue_family_index);
+    vk_command_pool_compute = vk_device.createCommandPool(command_pool_create_info_compute);
+
+    vk::CommandPoolCreateInfo command_pool_create_info_transfer(vk::CommandPoolCreateFlags(), vk_transfer_queue_family_index);
+    vk_command_pool_transfer = vk_device.createCommandPool(command_pool_create_info_transfer);
 }
 
 // buffer pool for vulkan
@@ -152,17 +205,43 @@ struct scoped_spin_lock {
     scoped_spin_lock& operator=(const scoped_spin_lock&) = delete;
 };
 
-struct vk_buffer {
-    vk::Buffer buffer;
-    VmaAllocation allocation;
-    VmaAllocationInfo info;
-    size_t size = 0;
-};
-
 static vk_buffer g_vk_buffer_pool[MAX_VK_BUFFERS];
 static std::atomic_flag g_vk_pool_lock = ATOMIC_FLAG_INIT;
 
-static void ggml_vk_pool_malloc(size_t size, vk_buffer* buf) {
+static vk_buffer ggml_vk_create_buffer(size_t size, VmaAllocationCreateFlags alloc_flags, VmaMemoryUsage vma_usage, VkMemoryPropertyFlags req_flags = 0) {
+    vk_buffer buf;
+
+    buf.size = size;
+    vk::BufferCreateInfo buffer_create_info{
+        vk::BufferCreateFlags(),
+        size,
+        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst,
+        vk::SharingMode::eExclusive,
+        1,
+        &vk_compute_queue_family_index
+    };
+
+    VmaAllocationCreateInfo allocation_info = {};
+    allocation_info.requiredFlags = req_flags;
+    allocation_info.flags = alloc_flags;
+    allocation_info.usage = vma_usage;
+
+    vmaCreateBuffer(vk_allocator,
+                    (VkBufferCreateInfo*)&buffer_create_info,
+                    &allocation_info,
+                    (VkBuffer*)&buf.buffer,
+                    &buf.allocation,
+                    &buf.info);
+
+    return buf;
+}
+
+static void ggml_vk_destroy_buffer(vk_buffer& buf) {
+    buf.size = 0;
+    vmaDestroyBuffer(vk_allocator, buf.buffer, buf.allocation);
+}
+
+static void ggml_vk_pool_malloc(size_t size, vk_buffer* buf, VmaAllocationCreateFlags alloc_flags) {
     scoped_spin_lock lock(g_vk_pool_lock);
 
     int best_i = -1;
@@ -190,56 +269,72 @@ static void ggml_vk_pool_malloc(size_t size, vk_buffer* buf) {
     if(worst_i != -1) {
         //no buffer that fits our needs, resize largest one to save memory
         vk_buffer& b = g_vk_buffer_pool[worst_i];
-        b.size = 0;
-        vmaDestroyBuffer(vk_allocator, b.buffer, b.allocation);
+        ggml_vk_destroy_buffer(b);
     }
-    buf->size = size;
 
-    vk::BufferCreateInfo buffer_create_info{
-        vk::BufferCreateFlags(),
-        size,
-        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst,
-        vk::SharingMode::eExclusive,
-        1,
-        &vk_compute_queue_family_index
-    };
-
-    VmaAllocationCreateInfo allocation_info = {};
-    allocation_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-    allocation_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
-    vmaCreateBuffer(vk_allocator,
-                    (VkBufferCreateInfo*)&buffer_create_info,
-                    &allocation_info,
-                    (VkBuffer*)&buf->buffer,
-                    &buf->allocation,
-                    &buf->info);
-
-    VkMemoryPropertyFlags mem_prop_flags;
-    vmaGetAllocationMemoryProperties(vk_allocator, buf->allocation, &mem_prop_flags);
+    *buf = ggml_vk_create_buffer(size, alloc_flags, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, 0);
 }
 
-static void ggml_vk_pool_free(vk_buffer* buffer) {
+static void ggml_vk_pool_free(vk_buffer& buffer) {
     scoped_spin_lock lock(g_vk_pool_lock);
 
     for (int i = 0; i < MAX_VK_BUFFERS; ++i) {
         vk_buffer& b = g_vk_buffer_pool[i];
         if (b.size == 0) {
-            b = *buffer;
+            b = buffer;
             return;
         }
     }
     fprintf(stderr, "WARNING: vk buffer pool full, increase MAX_VK_BUFFERS\n");
-    buffer->size = 0;
-    vmaDestroyBuffer(vk_allocator, buffer->buffer, buffer->allocation);
+    ggml_vk_destroy_buffer(buffer);
 }
 
-static vk::CommandBuffer ggml_vk_cmd_buffer_create() {
-    vk::CommandPoolCreateInfo command_pool_create_info(vk::CommandPoolCreateFlags(), vk_compute_queue_family_index);
-    vk::CommandPool command_pool = vk_device.createCommandPool(command_pool_create_info);
+void* ggml_vk_host_malloc(size_t size) {
+    if (getenv("GGML_VK_NO_PINNED") != nullptr) {
+        return nullptr;
+    }
 
+    vk_buffer buf = ggml_vk_create_buffer(size, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_HOST, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+
+    VkMemoryPropertyFlags mem_prop_flags;
+    vmaGetAllocationMemoryProperties(vk_allocator, buf.allocation, &mem_prop_flags);
+
+    if(!(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
+        fprintf(stderr, "WARNING: failed to allocate %.2f MB of pinned memory\n",
+            size/1024.0/1024.0);
+        buf.size = 0;
+        vmaDestroyBuffer(vk_allocator, buf.buffer, buf.allocation);
+        return nullptr;
+    }
+
+    printf("allocate %.2f MB of pinned memory\n", size/1024.0/1024.0);
+
+    vk_buf_list.push_back(std::make_tuple(buf.info.pMappedData, size, buf));
+
+    return buf.info.pMappedData;
+}
+
+void ggml_vk_host_free(void* ptr) {
+    vk_buffer* buf = nullptr;
+    for (size_t i = 0; i < vk_buf_list.size(); i++) {
+        const uint8_t* addr = (const uint8_t*) std::get<0>(vk_buf_list[i]);
+        const uint8_t* endr = addr + std::get<1>(vk_buf_list[i]);
+        if (ptr >= addr && ptr < endr) {
+            buf = &std::get<2>(vk_buf_list[i]);
+            break;
+        }
+    }
+    if (buf == nullptr) {
+        fprintf(stderr, "WARNING: to free pinned memory: memory not in map\n");
+        return;
+    }
+
+    ggml_vk_destroy_buffer(*buf);
+}
+
+static vk::CommandBuffer ggml_vk_cmd_buffer_create(vk::CommandPool& pool) {
     vk::CommandBufferAllocateInfo command_buffer_alloc_info(
-        command_pool,
+        pool,
         vk::CommandBufferLevel::ePrimary,
         1);
     const std::vector<vk::CommandBuffer> cmd_buffers = vk_device.allocateCommandBuffers(command_buffer_alloc_info);
@@ -250,48 +345,72 @@ static void ggml_vk_buffer_write(vk_buffer* dst, size_t offset, const void * src
     VkMemoryPropertyFlags mem_prop_flags;
     vmaGetAllocationMemoryProperties(vk_allocator, dst->allocation, &mem_prop_flags);
 
+    // Buffer is already mapped
     if(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
         memcpy(dst->info.pMappedData, src, size);
         if (!(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
             vmaFlushAllocation(vk_allocator, dst->allocation, 0, VK_WHOLE_SIZE);
         }
     } else {
-        // Allocation ended up in a non-mappable memory - need to transfer.
-        VkBufferCreateInfo staging_buf_create_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-        staging_buf_create_info.size = size;
-        staging_buf_create_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        // Check if src is pinned memory
+        vk_buffer* buf = nullptr;
+        size_t buf_offset = 0;
+        for (size_t i = 0; i < vk_buf_list.size(); i++) {
+            const uint8_t* addr = (const uint8_t*) std::get<0>(vk_buf_list[i]);
+            const uint8_t* endr = addr + std::get<1>(vk_buf_list[i]);
+            if (src >= addr && src < endr) {
+                buf = &std::get<2>(vk_buf_list[i]);
+                buf_offset = ((const uint8_t *)src) - addr;
+                break;
+            }
+        }
 
-        VmaAllocationCreateInfo staging_alloc_create_info = {};
-        staging_alloc_create_info.usage = VMA_MEMORY_USAGE_AUTO;
-        staging_alloc_create_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-            VMA_ALLOCATION_CREATE_MAPPED_BIT;
+        if (buf != nullptr) {
+            // Memory is pinned, use as staging buffer
+            VkBufferCopy buf_copy = {
+                buf_offset, // srcOffset
+                offset, // dstOffset,
+                size}; // size
 
-        VkBuffer staging_buf;
-        VmaAllocation staging_alloc;
-        VmaAllocationInfo staging_alloc_info;
-        vmaCreateBuffer(vk_allocator,
-                        &staging_buf_create_info,
-                        &staging_alloc_create_info,
-                        &staging_buf,
-                        &staging_alloc,
-                        &staging_alloc_info);
+            vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(vk_command_pool_transfer);
+            vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+            cmd_buffer.begin(cmd_buffer_begin_info);
+            vkCmdCopyBuffer(cmd_buffer, buf->buffer, dst->buffer, 1, &buf_copy);
+            cmd_buffer.end();
 
-        // [Executed in runtime]:
-        memcpy(staging_alloc_info.pMappedData + offset, src, size);
-        vmaFlushAllocation(vk_allocator, staging_alloc, 0, VK_WHOLE_SIZE);
-        //vkCmdPipelineBarrier: VK_ACCESS_HOST_WRITE_BIT --> VK_ACCESS_TRANSFER_READ_BIT
+            vk::Queue queue = vk_device.getQueue(vk_transfer_queue_family_index, 0);
+            vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
+
+            vk::SubmitInfo submit_info(0,
+                                       nullptr,
+                                       nullptr,
+                                       1,
+                                       &cmd_buffer);
+            queue.submit({ submit_info }, fence);
+            vk_device.waitForFences({ fence },
+                                    true,
+                                    uint64_t(-1));
+            vk_device.destroyFence(fence);
+            return;
+        }
+
+        // Staging buffer required
+        vk_buffer staging_buf = ggml_vk_create_buffer(size, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_AUTO, 0);
+
+        memcpy(((uint8_t *)staging_buf.info.pMappedData) + offset, src, size);
+        vmaFlushAllocation(vk_allocator, staging_buf.allocation, 0, VK_WHOLE_SIZE);
         VkBufferCopy buf_copy = {
             0, // srcOffset
-            0, // dstOffset,
+            offset, // dstOffset,
             size}; // size
 
-        vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create();
+        vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(vk_command_pool_transfer);
         vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
         cmd_buffer.begin(cmd_buffer_begin_info);
-        vkCmdCopyBuffer(cmd_buffer, staging_buf, dst->buffer, 1, &buf_copy);
+        vkCmdCopyBuffer(cmd_buffer, staging_buf.buffer, dst->buffer, 1, &buf_copy);
         cmd_buffer.end();
 
-        vk::Queue queue = vk_device.getQueue(vk_compute_queue_family_index, 0);
+        vk::Queue queue = vk_device.getQueue(vk_transfer_queue_family_index, 0);
         vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
 
         vk::SubmitInfo submit_info(0,
@@ -303,13 +422,13 @@ static void ggml_vk_buffer_write(vk_buffer* dst, size_t offset, const void * src
         vk_device.waitForFences({ fence },
                                 true,
                                 uint64_t(-1));
-        vmaDestroyBuffer(vk_allocator, staging_buf, staging_alloc);
+
+        vk_device.destroyFence(fence);
+        ggml_vk_destroy_buffer(staging_buf);
     }
 }
 
 static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_t size) {
-    vk::CommandBuffer cmd_buf = ggml_vk_cmd_buffer_create();
-
     VkMemoryPropertyFlags mem_prop_flags;
     vmaGetAllocationMemoryProperties(vk_allocator, src->allocation, &mem_prop_flags);
 
@@ -319,40 +438,62 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
         }
         memcpy(dst, src->info.pMappedData, size);
     } else {
-        // Allocation ended up in a non-mappable memory - need to transfer.
-        VkBufferCreateInfo staging_buf_create_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-        staging_buf_create_info.size = size;
-        staging_buf_create_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        // Check if dst is pinned memory
+        vk_buffer* buf = nullptr;
+        size_t buf_offset = 0;
+        for (size_t i = 0; i < vk_buf_list.size(); i++) {
+            const uint8_t* addr = (const uint8_t*) std::get<0>(vk_buf_list[i]);
+            const uint8_t* endr = addr + std::get<1>(vk_buf_list[i]);
+            if (dst >= addr && dst < endr) {
+                buf = &std::get<2>(vk_buf_list[i]);
+                buf_offset = ((const uint8_t *)dst) - addr;
+                break;
+            }
+        }
 
-        VmaAllocationCreateInfo staging_alloc_create_info = {};
-        staging_alloc_create_info.usage = VMA_MEMORY_USAGE_AUTO;
-        staging_alloc_create_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-            VMA_ALLOCATION_CREATE_MAPPED_BIT;
+        if (buf != nullptr) {
+            // Memory is pinned, use as staging buffer
+            VkBufferCopy buf_copy = {
+                offset, // srcOffset
+                buf_offset, // dstOffset,
+                size}; // size
 
-        VkBuffer staging_buf;
-        VmaAllocation staging_alloc;
-        VmaAllocationInfo staging_alloc_info;
-        vmaCreateBuffer(vk_allocator,
-                        &staging_buf_create_info,
-                        &staging_alloc_create_info,
-                        &staging_buf,
-                        &staging_alloc,
-                        &staging_alloc_info);
+            vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(vk_command_pool_transfer);
+            vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+            cmd_buffer.begin(cmd_buffer_begin_info);
+            vkCmdCopyBuffer(cmd_buffer, src->buffer, buf->buffer, 1, &buf_copy);
+            cmd_buffer.end();
 
-        //vkCmdPipelineBarrier: VK_ACCESS_HOST_WRITE_BIT --> VK_ACCESS_TRANSFER_READ_BIT
+            vk::Queue queue = vk_device.getQueue(vk_transfer_queue_family_index, 0);
+            vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
+
+            vk::SubmitInfo submit_info(0,
+                                       nullptr,
+                                       nullptr,
+                                       1,
+                                       &cmd_buffer);
+            queue.submit({ submit_info }, fence);
+            vk_device.waitForFences({ fence },
+                                    true,
+                                    uint64_t(-1));
+            vk_device.destroyFence(fence);
+            return;
+        }
+        vk_buffer staging_buf = ggml_vk_create_buffer(size, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_AUTO, 0);
+
         VkBufferCopy buf_copy = {
             offset, // srcOffset
             0, // dstOffset,
             size}; // size
-        vmaInvalidateAllocation(vk_allocator, staging_alloc, 0, VK_WHOLE_SIZE);
+        vmaInvalidateAllocation(vk_allocator, staging_buf.allocation, 0, VK_WHOLE_SIZE);
 
-        vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create();
+        vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(vk_command_pool_transfer);
         vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
         cmd_buffer.begin(cmd_buffer_begin_info);
-        vkCmdCopyBuffer(cmd_buffer, src->buffer, staging_buf, 1, &buf_copy);
+        vkCmdCopyBuffer(cmd_buffer, src->buffer, staging_buf.buffer, 1, &buf_copy);
         cmd_buffer.end();
 
-        vk::Queue queue = vk_device.getQueue(vk_compute_queue_family_index, 0);
+        vk::Queue queue = vk_device.getQueue(vk_transfer_queue_family_index, 0);
         vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
 
         vk::SubmitInfo submit_info(0,
@@ -364,8 +505,10 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
         vk_device.waitForFences({ fence },
                                 true,
                                 uint64_t(-1));
-        memcpy(dst, staging_alloc_info.pMappedData, size);
-        vmaDestroyBuffer(vk_allocator, staging_buf, staging_alloc);
+        memcpy(dst, staging_buf.info.pMappedData, size);
+
+        vk_device.destroyFence(fence);
+        ggml_vk_destroy_buffer(staging_buf);
     }
 }
 
@@ -424,10 +567,10 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     if (src0->backend == GGML_BACKEND_GPU) {
         d_X = *(vk_buffer*) src0->data;
     } else {
-        ggml_vk_pool_malloc(ggml_type_size(src0->type) * x_ne, &d_X);
+        ggml_vk_pool_malloc(ggml_type_size(src0->type) * x_ne, &d_X, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
     }
-    ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y);
-    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D);
+    ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
+    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
 
     vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, 3);
     vk::DescriptorPoolCreateInfo descriptor_pool_create_info(vk::DescriptorPoolCreateFlags(), 1, descriptor_pool_size);
@@ -450,7 +593,8 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     std::array<int, 6> push_constants = { (int)ne01, (int)ne11, (int)ne10, (int)ne00, (int)ne10, (int)ne01 };
     assert( ( sizeof( push_constants ) <= vk_physical_device.getProperties().limits.maxPushConstantsSize ) && "Too many push constants" );
 
-    vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create();
+    vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(vk_command_pool_compute);
+    vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
 
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
@@ -476,7 +620,6 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
             cmd_buffer.end();
 
             vk::Queue queue = vk_device.getQueue(vk_compute_queue_family_index, 0);
-            vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
 
             vk::SubmitInfo submit_info(0,
                                        nullptr,
@@ -496,7 +639,7 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
             ggml_vk_buffer_read(&d_D, 0, d, sizeof(float) * d_ne);
 
-#if 0
+#ifdef VK_CHK_KERNEL
             const float * x = (float *) ((char *) src0->data);
             const float * y = (float *) ((char *) src1->data);
             float * d_chk = (float *) malloc(sizeof(float) * d_ne);
@@ -519,11 +662,13 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
         }
     }
 
+    vk_device.destroyFence(fence);
+
     if (src0->backend != GGML_BACKEND_GPU) {
-        ggml_vk_pool_free(&d_X);
+        ggml_vk_pool_free(d_X);
     }
-    ggml_vk_pool_free(&d_Y);
-    ggml_vk_pool_free(&d_D);
+    ggml_vk_pool_free(d_Y);
+    ggml_vk_pool_free(d_D);
 }
 
 static void ggml_vk_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {

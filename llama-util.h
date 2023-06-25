@@ -497,6 +497,52 @@ struct llama_ctx_buffer {
     llama_ctx_buffer& operator=(const llama_ctx_buffer&) = delete;
     llama_ctx_buffer& operator=(llama_ctx_buffer&&) = delete;
 };
+#elif defined(GGML_USE_VULKAN)
+#include "ggml-vulkan.h"
+struct llama_ctx_buffer {
+    uint8_t * addr = NULL;
+    bool is_vk;
+    size_t size = 0;
+
+    llama_ctx_buffer() = default;
+
+    void resize(size_t size) {
+        free();
+
+        addr = (uint8_t *) ggml_vk_host_malloc(size);
+        if (addr) {
+            is_vk = true;
+        }
+        else {
+            // fall back to pageable memory
+            addr = new uint8_t[size];
+            is_vk = false;
+        }
+        this->size = size;
+    }
+
+    void free() {
+        if (addr) {
+            if (is_vk) {
+                ggml_vk_host_free(addr);
+            }
+            else {
+                delete[] addr;
+            }
+        }
+        addr = NULL;
+    }
+
+    ~llama_ctx_buffer() {
+        free();
+    }
+
+    // disable copy and move
+    llama_ctx_buffer(const llama_ctx_buffer&) = delete;
+    llama_ctx_buffer(llama_ctx_buffer&&) = delete;
+    llama_ctx_buffer& operator=(const llama_ctx_buffer&) = delete;
+    llama_ctx_buffer& operator=(llama_ctx_buffer&&) = delete;
+};
 #else
 typedef llama_buffer llama_ctx_buffer;
 #endif
