@@ -40,7 +40,7 @@ models/*
 /vdot
 /server
 /Pipfile
-/embd_input_test
+/embd-input-test
 /libllama.so
 build-info.h
 arm_neon.h
