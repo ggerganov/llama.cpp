@@ -101,7 +101,7 @@ static void server_log(const char * level, const char * function, int line,
 static std::string tokens_to_output_formatted_string(const llama_context * ctx, const llama_token token) {
     std::string out = token == -1 ? "" : llama_token_to_str(ctx, token);
     // if first bit is 1, meaning it's a partial character
-    if ((out[0] & 0x80) == 0x80) {
+    if (out.size() > 0 && (out[0] & 0x80) == 0x80) {
         std::stringstream ss;
         ss<< std::hex << (out[0] & 0xff);
         std::string res ( ss.str() );
@@ -382,8 +382,8 @@ struct llama_server_context {
                     result.tok = llama_sample_token(ctx, &candidates_p);
                 }
             }
-            // Add maximum of 5 most probable tokens to the result
-            for (size_t i = 0; i < std::min(candidates_p.size, std::min((size_t) n_probs, size_t(5))); ++i) {
+
+            for (size_t i = 0; i < std::min(candidates_p.size, (size_t) n_probs); ++i) {
                 result.probs.push_back({candidates_p.data[i].id, candidates_p.data[i].p});
             }
             last_n_tokens.erase(last_n_tokens.begin());
