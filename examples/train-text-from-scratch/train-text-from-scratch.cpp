@@ -2368,7 +2368,7 @@ void write_tensor(struct llama_file * file, struct ggml_tensor * tensor) {
         file->write_u32(0);
         file->write_u32(0);
         file->write_u32(GGML_TYPE_F32);
-        file->seek(0-file->tell() & 31, SEEK_CUR);
+        file->seek((0-file->tell()) & 31, SEEK_CUR);
         return;
     }
     const char * name = ggml_get_name(tensor);
@@ -2383,7 +2383,7 @@ void write_tensor(struct llama_file * file, struct ggml_tensor * tensor) {
     file->write_u32(tensor->type);
     file->write_raw(ne, sizeof(ne[0]) * nd);
     file->write_raw(name, name_len);
-    file->seek(0-file->tell() & 31, SEEK_CUR);
+    file->seek((0-file->tell()) & 31, SEEK_CUR);
     file->write_raw(tensor->data, ggml_nbytes(tensor));
 }
 
@@ -2404,7 +2404,7 @@ void read_tensor(struct llama_file * file, struct ggml_tensor * tensor) {
     std::string name = file->read_string(name_len);
     GGML_ASSERT(strncmp(ggml_get_name(tensor), name.c_str(), sizeof(tensor->name)-1) == 0);
 
-    file->seek(0-file->tell() & 31, SEEK_CUR);
+    file->seek((0-file->tell()) & 31, SEEK_CUR);
     file->read_raw(tensor->data, ggml_nbytes(tensor));
 }
 
