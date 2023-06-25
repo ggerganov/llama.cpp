@@ -9,6 +9,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
+- Azure CI brainstorming: https://github.com/ggerganov/llama.cpp/discussions/1985
 - p1 : LLM-based code completion engine at the edge : https://github.com/ggml-org/p1/discussions/1
 - Roadmap June 2023: https://github.com/ggerganov/llama.cpp/discussions/1729
 
@@ -29,6 +30,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
         <li><a href="#quantization">Quantization</a></li>
         <li><a href="#interactive-mode">Interactive mode</a></li>
         <li><a href="#instruction-mode-with-alpaca">Instruction mode with Alpaca</a></li>
+        <li><a href="#using-openllama">Using OpenLLaMA</a></li>
         <li><a href="#using-gpt4all">Using GPT4All</a></li>
         <li><a href="#using-pygmalion-7b--metharme-7b">Using Pygmalion 7B & Metharme 7B</a></li>
         <li><a href="#obtaining-the-facebook-llama-original-model-and-stanford-alpaca-model-data">Obtaining the Facebook LLaMA original model and Stanford Alpaca model data</a></li>
@@ -543,6 +545,13 @@ cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
 >
 ```
 
+### Using [OpenLLaMA](https://github.com/openlm-research/open_llama)
+
+OpenLLaMA is an openly licensed reproduction of Meta's original LLaMA model. It uses the same architecture and is a drop-in replacement for the original LLaMA weights.
+
+- Download the [3B](https://huggingface.co/openlm-research/open_llama_3b), [7B](https://huggingface.co/openlm-research/open_llama_7b), or [13B](https://huggingface.co/openlm-research/open_llama_13b) model from Hugging Face.
+- Convert the model to ggml FP16 format using `python convert.py <path to OpenLLaMA directory>`
+
 ### Using [GPT4All](https://github.com/nomic-ai/gpt4all)
 
 - Obtain the `tokenizer.model` file from LLaMA model and put it to `models`
@@ -672,11 +681,12 @@ Upon completion of the aforementioned steps, you will have successfully compiled
 ```
 GGML_OPENCL_PLATFORM=0
 GGML_OPENCL_DEVICE=0
-export LD_LIBRARY_PATH=/system/vendor/lib64:$LD_LIBRARY_PATH
-./main (...)
+export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH
 ```
 
 For easy and swift re-execution, consider documenting this final part in a .sh script file. This will enable you to rerun the process with minimal hassle.
+
+Place your desired model into the `/llama.cpp/models/` directory and execute the `./main (...)` script.
 
 ### Docker
 
