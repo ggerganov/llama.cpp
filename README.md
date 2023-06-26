@@ -687,6 +687,8 @@ GGML_OPENCL_DEVICE=0
 export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH
 ```
 
+(Note: some Android devices, like the Zenfone 8, need the following command instead - "export LD_LIBRARY_PATH=/system/vendor/lib64:$LD_LIBRARY_PATH". Source: https://www.reddit.com/r/termux/comments/kc3ynp/opencl_working_in_termux_more_in_comments/ )
+
 For easy and swift re-execution, consider documenting this final part in a .sh script file. This will enable you to rerun the process with minimal hassle.
 
 Place your desired model into the `/llama.cpp/models/` directory and execute the `./main (...)` script.
