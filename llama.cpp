@@ -597,15 +597,6 @@ struct llama_model_loader {
         return false;
     }
 
-    uint32_t guess_n_parts() const {
-        auto it = tensors_map.name_to_idx.find("tok_embeddings.weight");
-        if (it == tensors_map.name_to_idx.end()) {
-            throw std::runtime_error(std::string("missing tok_embeddings.weight"));
-        }
-        const llama_load_tensor & lt = tensors_map.tensors.at(it->second);
-        return file_loader->hparams.n_embd / lt.ne.at(0);
-    }
-
     void calc_sizes(size_t * ctx_size_p, size_t * mmapped_size_p) const {
         *ctx_size_p = *mmapped_size_p = 0;
         for (const llama_load_tensor & lt : tensors_map.tensors) {
