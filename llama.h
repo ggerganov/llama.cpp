@@ -81,7 +81,7 @@ extern "C" {
     typedef void (*llama_progress_callback)(float progress, void *ctx);
 
    struct llama_context_params {
-        int seed;                              // RNG seed, -1 for random
+        unsigned int seed;                     // RNG seed, -1 for random
         int n_ctx;                             // text context
         int n_batch;                           // prompt processing batch size
         int n_gpu_layers;                      // number of layers to store in VRAM
@@ -196,7 +196,7 @@ extern "C" {
     LLAMA_API int llama_get_kv_cache_token_count(const struct llama_context * ctx);
 
     // Sets the current rng seed.
-    LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, int seed);
+    LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, unsigned int seed);
 
     // Returns the maximum size in bytes of the state (rng, logits, embedding
     // and kv_cache) - will often be smaller after compacting tokens
