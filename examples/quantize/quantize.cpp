@@ -180,7 +180,7 @@ int main(int argc, char ** argv) {
         usage(argv[0]);
     }
 
-    llama_init_backend();
+    llama_init_backend(false);
 
     // parse command line arguments
     const std::string fname_inp = argv[arg_idx];
