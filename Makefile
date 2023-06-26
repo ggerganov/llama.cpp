@@ -43,8 +43,11 @@ endif
 
 # keep standard at C11 and C++11
 # -Ofast tends to produce faster code, but may not be available for some compilers.
-#OPT = -Ofast
+ifdef LLAMA_FAST
+OPT = -Ofast
+else
 OPT = -O3
+endif
 CFLAGS   = -I.              $(OPT) -std=c11   -fPIC
 CXXFLAGS = -I. -I./examples $(OPT) -std=c++11 -fPIC
 LDFLAGS  =
@@ -131,6 +134,10 @@ ifndef LLAMA_NO_K_QUANTS
 	CFLAGS   += -DGGML_USE_K_QUANTS
 	CXXFLAGS += -DGGML_USE_K_QUANTS
 	OBJS     += k_quants.o
+ifdef LLAMA_QKK_64
+	CFLAGS   += -DGGML_QKK_64
+	CXXFLAGS += -DGGML_QKK_64
+endif
 endif
 
 ifndef LLAMA_NO_ACCELERATE
