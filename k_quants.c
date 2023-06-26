@@ -1981,7 +1981,8 @@ void ggml_vec_dot_q3_K_q8_K(const int n, float * restrict s, const void * restri
             const __m128i q3bits_1 = _mm_loadu_si128((const __m128i*)q3); q3 += 16;
 
             // prepare low and high bits
-	    const int bit = j << 2;
+            const int bit = j << 2;
+
             const __m128i q3l_0 = _mm_and_si128(q3bits_0, m3);
             const __m128i q3l_1 = _mm_and_si128(q3bits_1, m3);
             const __m128i q3h_0 = _mm_slli_epi16(_mm_srli_epi16(_mm_andnot_si128(hbits_0, _mm_slli_epi16(mone, bit)), bit), 2);
