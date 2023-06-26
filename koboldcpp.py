@@ -16,6 +16,7 @@ class load_model_inputs(ctypes.Structure):
                 ("max_context_length", ctypes.c_int),
                 ("batch_size", ctypes.c_int),
                 ("f16_kv", ctypes.c_bool),
+                ("low_vram", ctypes.c_bool),
                 ("executable_path", ctypes.c_char_p),
                 ("model_filename", ctypes.c_char_p),
                 ("lora_filename", ctypes.c_char_p),
@@ -150,6 +151,7 @@ def load_model(model_filename):
     inputs.batch_size = 8
     inputs.max_context_length = maxctx #initial value to use for ctx, can be overwritten
     inputs.threads = args.threads
+    inputs.low_vram = args.lowvram
     inputs.blasthreads = args.blasthreads
     inputs.f16_kv = True
     inputs.use_mmap = (not args.nommap)
@@ -646,7 +648,7 @@ def show_gui():
         #load all the vars
         args.threads = int(threads_var.get())
         args.gpulayers = int(gpu_layers_var.get())
-
+        
         args.stream = (stream.get()==1)
         args.smartcontext = (smartcontext.get()==1)
         args.launch = (launchbrowser.get()==1)
@@ -861,6 +863,7 @@ if __name__ == '__main__':
     parser.add_argument("--hordeconfig", help="Sets the display model name to something else, for easy use on AI Horde. Optional additional parameters set the horde max genlength and max ctxlen.",metavar=('[hordename]', '[hordelength] [hordectx]'), nargs='+')
     compatgroup = parser.add_mutually_exclusive_group()
     compatgroup.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
+    parser.add_argument("--lowvram", help="Do not allocate a VRAM scratch buffer for holding temporary results. Reduces VRAM usage at the cost of performance, particularly prompt processing speed. Requires CUDA.", action='store_true')
     compatgroup.add_argument("--useclblast", help="Use CLBlast instead of OpenBLAS for prompt ingestion. Must specify exactly 2 arguments, platform ID and device ID (e.g. --useclblast 1 0).", type=int, choices=range(0,9), nargs=2)
     parser.add_argument("--gpulayers", help="Set number of layers to offload to GPU when using CLBlast. Requires CLBlast.",metavar=('[GPU layers]'), type=int, default=0)
     args = parser.parse_args()
