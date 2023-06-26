@@ -1363,16 +1363,16 @@ static bool llama_model_load(
 //
 //   - lctx:      llama context
 //   - tokens:    new batch of tokens to process
-//   - n_tokens   number of tokens
 //   - embd       embeddings input
+//   - n_tokens   number of tokens
 //   - n_past:    the context size so far
 //   - n_threads: number of threads to use
 //
 static bool llama_eval_internal(
          llama_context & lctx,
      const llama_token * tokens,
-             const int   n_tokens,
            const float * embd,
+             const int   n_tokens,
              const int   n_past,
              const int   n_threads,
             const char * cgraph_fname) {
@@ -3420,7 +3420,7 @@ int llama_eval(
                          int   n_tokens,
                          int   n_past,
                          int   n_threads) {
-    if (!llama_eval_internal(*ctx, tokens, n_tokens, nullptr, n_past, n_threads, nullptr)) {
+    if (!llama_eval_internal(*ctx, tokens, nullptr, n_tokens, n_past, n_threads, nullptr)) {
         fprintf(stderr, "%s: failed to eval\n", __func__);
         return 1;
     }
@@ -3442,7 +3442,7 @@ int llama_eval_embd(
                              int   n_tokens,
                              int   n_past,
                              int   n_threads) {
-    if (!llama_eval_internal(*ctx, nullptr, n_tokens, embd, n_past, n_threads, nullptr)) {
+    if (!llama_eval_internal(*ctx, nullptr, embd, n_tokens, n_past, n_threads, nullptr)) {
         fprintf(stderr, "%s: failed to eval\n", __func__);
         return 1;
     }
@@ -3463,7 +3463,7 @@ int llama_eval_export(struct llama_context * ctx, const char * fname) {
 
     const std::vector<llama_token> tmp(n_batch, llama_token_bos());
 
-    if (!llama_eval_internal(*ctx, tmp.data(), tmp.size(), nullptr, n_ctx, 1, fname)) {
+    if (!llama_eval_internal(*ctx, tmp.data(), nullptr, tmp.size(), n_ctx, 1, fname)) {
         fprintf(stderr, "%s: failed to eval\n", __func__);
         return 1;
     }
