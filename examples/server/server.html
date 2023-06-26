@@ -34,21 +34,19 @@
       overflow-wrap: break-word;
       word-wrap: break-word;
       hyphens: auto;
-      text-align: justify;
       margin-top: 0.5em;
       margin-bottom: 0.5em;
     }
 
     form {
-      margin: 1em 0;
-
+      margin: 1em 0 0 0;
       display: flex;
       gap: 0.5em;
       flex-direction: row;
       align-items: center;
     }
 
-    form>* {
+    form > * {
       padding: 4px;
     }
 
@@ -87,9 +85,8 @@
 
     const temperature = signal(0.2)
     const nPredict = signal(80)
-
-
-    let controller;
+    const controller = signal(null)
+    const generating = computed(() => controller.value == null )
 
     // simple template replace
     const template = (str, map) => {
@@ -97,57 +94,55 @@
       if (map) {
         params = { ...params, ...map };
       }
-      const result = String(str).replaceAll(/\{\{(.*?)\}\}/g, (_, key) => template(params[key]));
-      console.log("template", str, params, "=>", result);
-      return result;
-
+      return String(str).replaceAll(/\{\{(.*?)\}\}/g, (_, key) => template(params[key]));
     }
 
 
     // send message to server
     const chat = async (msg) => {
-      if (controller) {
+      if (controller.value) {
         console.log('already running...');
         return;
       }
-      controller = new AbortController();
+      controller.value = new AbortController();
 
       const history = [...transcript.value, ['{{user}}', msg]];
       transcript.value = history;
 
       let additionalParams = {
+        message: msg,
         history: history.flatMap(([name, msg]) => `${name}: ${msg}`).join("\n"),
       }
 
       const payload = template(chatTemplate.value, additionalParams)
-      console.log("payload", payload)
-
 
       let currentMessage = "";
       await fetchEventSource('/completion', {
         method: 'POST',
-        signal: controller.signal,
+        signal: controller.value.signal,
         body: JSON.stringify({
           stream: true,
           prompt: payload,
           n_predict: parseInt(nPredict.value),
           temperature: parseFloat(temperature.value),
-          stop: ["</s>", template("{{bot}}"), template("{{user}}")]
+          stop: ["</s>", template("{{bot}}:"), template("{{user}}:")]
         }),
         onmessage(e) {
           const data = JSON.parse(e.data);
           currentMessage += data.content;
 
           if (data.stop) {
-            console.log("done:", data);
+            console.log("-->", data, ' response was:', currentMessage, 'transcript state:', transcript.value);
           }
 
           transcript.value = [...history, ['{{bot}}', currentMessage]]
           return true;
         },
+        onclose(e) {
+          controller.value = null;
+          return false;
+        },
       });
-      console.log("transcript", transcript.value);
-      controller = null;
     }
 
     function MessageInput() {
@@ -155,9 +150,9 @@
 
       const stop = (e) => {
         e.preventDefault();
-        if (controller) {
-          controller.abort();
-          controller = null;
+        if (controller.value) {
+          controller.value.abort();
+          controller.value = null;
         }
       }
 
@@ -174,9 +169,9 @@
 
       return html`
         <form onsubmit=${submit}>
-          <input type="text" value="${message.value}" oninput=${(e) => message.value = e.target.value} autofocus placeholder="start chat here..."/>
-          <button type="submit">Send</button>
-          <button onclick=${(e) => stop(e)}>Stop</button>
+          <input type="text" value="${message}" oninput=${(e) => message.value = e.target.value} autofocus placeholder="Chat here..."/>
+          <button type="submit" disabled=${!generating.value} >Send</button>
+          <button onclick=${(e) => stop(e)} disabled=${generating.value}>Stop</button>
           <button onclick=${(e) => reset(e)}>Reset</button>
         </form>
       `
@@ -204,8 +199,6 @@
     };
 
     const ConfigForm = (props) => {
-
-
 
       return html`
         <form>
@@ -263,6 +256,8 @@
             <${chatStarted.value ? ChatLog : ConfigForm
         } />
           </section >
+
+          <hr/>
 
           <section class="chat">
             <${MessageInput} />
