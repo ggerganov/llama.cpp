@@ -1,9 +1,10 @@
 import os
 import hashlib
 
+
 def sha256sum(file):
     block_size = 16 * 1024 * 1024  # 16 MB block size
-    b  = bytearray(block_size)
+    b = bytearray(block_size)
     file_hash = hashlib.sha256()
     mv = memoryview(b)
     with open(file, 'rb', buffering=0) as f:
@@ -14,6 +15,7 @@ def sha256sum(file):
             file_hash.update(mv[:n])
 
     return file_hash.hexdigest()
+
 
 # Define the path to the llama directory (parent folder of script directory)
 llama_path = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
