@@ -1,7 +1,6 @@
 <html>
 
 <head>
-  <title>Llama.cpp</title>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>llama.cpp - chat</title>
@@ -9,13 +8,12 @@
   <style>
     #container {
       max-width: 80rem;
-      margin: 10em auto;
+      margin: 4em auto;
     }
 
     main {
       border: 1px solid #ddd;
       padding: 1em;
-
     }
 
     #chat {
@@ -67,11 +65,9 @@
 
 
   <script type="module">
-    import { fetchEventSource } from "https://esm.sh/@microsoft/fetch-event-source"
-
     import {
-      html, h, signal, effect, computed, render, useSignal, useEffect, useRef
-    } from 'https://npm.reversehttp.com/@preact/signals-core,@preact/signals,htm/preact,preact,preact/hooks';
+      html, h, signal, effect, computed, render, useSignal, useEffect, useRef, fetchEventSource
+    } from 'https://npm.reversehttp.com/@preact/signals-core,@preact/signals,htm/preact,preact,preact/hooks,@microsoft/fetch-event-source';
 
     const transcript = signal([])
     const chatStarted = computed(() => transcript.value.length > 0)
@@ -96,7 +92,6 @@
       }
       return String(str).replaceAll(/\{\{(.*?)\}\}/g, (_, key) => template(params[key]));
     }
-
 
     // send message to server
     const chat = async (msg) => {
@@ -276,7 +271,6 @@
 </head>
 
 <body>
-
 </body>
 
 </html>
