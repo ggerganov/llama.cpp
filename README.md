@@ -5,16 +5,16 @@
 [![Actions Status](https://github.com/ggerganov/llama.cpp/workflows/CI/badge.svg)](https://github.com/ggerganov/llama.cpp/actions)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
+[Roadmap](https://github.com/users/ggerganov/projects/7) / [Manifesto](https://github.com/ggerganov/llama.cpp/discussions/205) / [ggml](https://github.com/ggerganov/ggml)
+
 Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
-- Roadmap June 2023: https://github.com/ggerganov/llama.cpp/discussions/1729
-- GPU support with Metal (Apple Silicon): https://github.com/ggerganov/llama.cpp/pull/1642
-- High-quality 2,3,4,5,6-bit quantization: https://github.com/ggerganov/llama.cpp/pull/1684
-- Multi-GPU support: https://github.com/ggerganov/llama.cpp/pull/1607
-- Training LLaMA models from scratch: https://github.com/ggerganov/llama.cpp/pull/1652
-- CPU threading improvements: https://github.com/ggerganov/llama.cpp/pull/1632
+- k-quants now support super-block size of 64: https://github.com/ggerganov/llama.cpp/pull/2001
+- New roadmap: https://github.com/users/ggerganov/projects/7
+- Azure CI brainstorming: https://github.com/ggerganov/llama.cpp/discussions/1985
+- p1 : LLM-based code completion engine at the edge : https://github.com/ggml-org/p1/discussions/1
 
 <details>
   <summary>Table of Contents</summary>
@@ -33,6 +33,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
         <li><a href="#quantization">Quantization</a></li>
         <li><a href="#interactive-mode">Interactive mode</a></li>
         <li><a href="#instruction-mode-with-alpaca">Instruction mode with Alpaca</a></li>
+        <li><a href="#using-openllama">Using OpenLLaMA</a></li>
         <li><a href="#using-gpt4all">Using GPT4All</a></li>
         <li><a href="#using-pygmalion-7b--metharme-7b">Using Pygmalion 7B & Metharme 7B</a></li>
         <li><a href="#obtaining-the-facebook-llama-original-model-and-stanford-alpaca-model-data">Obtaining the Facebook LLaMA original model and Stanford Alpaca model data</a></li>
@@ -344,7 +345,7 @@ Building the program with BLAS support may lead to some performance improvements
   | LLAMA_CUDA_DMMV_X       | Positive integer >= 32 |      32 | Number of values in x direction processed by the CUDA dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants. |
   | LLAMA_CUDA_DMMV_Y       | Positive integer       |       1 | Block size in y direction for the CUDA dequantization + mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. Does not affect k-quants. |
   | LLAMA_CUDA_DMMV_F16     | Boolean                |   false | If enabled, use half-precision floating point arithmetic for the CUDA dequantization + mul mat vec kernels. Can improve performance on relatively recent GPUs. |
-  | LLAMA_CUDA_KQUANTS_ITER | 1 or 2                 |       2 | Number of values processed per iteration and per CUDA thread for Q2_K and Q6_K quantization formats. Setting this value 2 1 can improve performance for slow GPUs. |
+  | LLAMA_CUDA_KQUANTS_ITER | 1 or 2                 |       2 | Number of values processed per iteration and per CUDA thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs. |
 
 - #### CLBlast
 
@@ -378,7 +379,7 @@ Building the program with BLAS support may lead to some performance improvements
       ```sh
       git clone https://github.com/CNugteren/CLBlast.git
       mkdir CLBlast/build
-      cd CLBLast/build
+      cd CLBlast/build
       cmake .. -DBUILD_SHARED_LIBS=OFF -DTUNERS=OFF
       cmake --build . --config Release
       cmake --install . --prefix /some/path
@@ -547,6 +548,13 @@ cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
 >
 ```
 
+### Using [OpenLLaMA](https://github.com/openlm-research/open_llama)
+
+OpenLLaMA is an openly licensed reproduction of Meta's original LLaMA model. It uses the same architecture and is a drop-in replacement for the original LLaMA weights.
+
+- Download the [3B](https://huggingface.co/openlm-research/open_llama_3b), [7B](https://huggingface.co/openlm-research/open_llama_7b), or [13B](https://huggingface.co/openlm-research/open_llama_13b) model from Hugging Face.
+- Convert the model to ggml FP16 format using `python convert.py <path to OpenLLaMA directory>`
+
 ### Using [GPT4All](https://github.com/nomic-ai/gpt4all)
 
 - Obtain the `tokenizer.model` file from LLaMA model and put it to `models`
@@ -676,11 +684,12 @@ Upon completion of the aforementioned steps, you will have successfully compiled
 ```
 GGML_OPENCL_PLATFORM=0
 GGML_OPENCL_DEVICE=0
-export LD_LIBRARY_PATH=/system/vendor/lib64:$LD_LIBRARY_PATH
-./main (...)
+export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH
 ```
 
 For easy and swift re-execution, consider documenting this final part in a .sh script file. This will enable you to rerun the process with minimal hassle.
+
+Place your desired model into the `/llama.cpp/models/` directory and execute the `./main (...)` script.
 
 ### Docker
 

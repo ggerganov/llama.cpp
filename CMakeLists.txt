@@ -75,6 +75,7 @@ set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for
 option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
 option(LLAMA_METAL                           "llama: use Metal"                                 OFF)
 option(LLAMA_K_QUANTS                        "llama: use k-quants"                              ON)
+option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
 
 option(LLAMA_BUILD_TESTS                "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES             "llama: build examples" ${LLAMA_STANDALONE})
@@ -225,6 +226,14 @@ if (LLAMA_BLAS)
     endif()
 endif()
 
+if (LLAMA_K_QUANTS)
+    set(GGML_SOURCES_EXTRA ${GGML_SOURCES_EXTRA} k_quants.c k_quants.h)
+    add_compile_definitions(GGML_USE_K_QUANTS)
+    if (LLAMA_QKK_64)
+        add_compile_definitions(GGML_QKK_64)
+    endif()
+endif()
+
 if (LLAMA_CUBLAS)
     cmake_minimum_required(VERSION 3.17)
 
@@ -249,6 +258,15 @@ if (LLAMA_CUBLAS)
         else()
             set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart CUDA::cublas CUDA::cublasLt)
         endif()
+
+    if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        if (LLAMA_CUDA_DMMV_F16)
+            set(CMAKE_CUDA_ARCHITECTURES "61") # needed for f16 CUDA intrinsics
+        else()
+            set(CMAKE_CUDA_ARCHITECTURES "52") # lowest CUDA 12 standard
+        endif()
+    endif()
+    message(STATUS "Using CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 
     else()
         message(WARNING "cuBLAS not found")
@@ -278,11 +296,6 @@ if (LLAMA_METAL)
         ${METALKIT_FRAMEWORK}
         ${METALPERFORMANCE_FRAMEWORK}
         )
-endif()
-
-if (LLAMA_K_QUANTS)
-    set(GGML_SOURCES_EXTRA ${GGML_SOURCES_EXTRA} k_quants.c k_quants.h)
-    add_compile_definitions(GGML_USE_K_QUANTS)
 endif()
 
 if (LLAMA_CLBLAST)
@@ -491,22 +504,6 @@ if (BUILD_SHARED_LIBS)
     if (LLAMA_METAL)
         set_target_properties(llama PROPERTIES RESOURCE "${CMAKE_CURRENT_SOURCE_DIR}/ggml-metal.metal")
     endif()
-endif()
-
-if (GGML_SOURCES_CUDA)
-    message(STATUS "GGML CUDA sources found, configuring CUDA architecture")
-    set_property(TARGET ggml  PROPERTY CUDA_ARCHITECTURES "native")
-    set_property(TARGET ggml  PROPERTY CUDA_SELECT_NVCC_ARCH_FLAGS "Auto")
-
-    set_property(TARGET ggml_static PROPERTY CUDA_ARCHITECTURES "native")
-    set_property(TARGET ggml_static PROPERTY CUDA_SELECT_NVCC_ARCH_FLAGS "Auto")
-
-    if (BUILD_SHARED_LIBS)
-        set_property(TARGET ggml_shared PROPERTY CUDA_ARCHITECTURES "native")
-        set_property(TARGET ggml_shared PROPERTY CUDA_SELECT_NVCC_ARCH_FLAGS "Auto")
-    endif()
-
-    set_property(TARGET llama PROPERTY CUDA_ARCHITECTURES "native")
 endif()
 
 

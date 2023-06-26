@@ -26,6 +26,14 @@
 #    define LLAMA_API
 #endif
 
+#ifdef __GNUC__
+#    define DEPRECATED(func, hint) func __attribute__((deprecated(hint)))
+#elif defined(_MSC_VER)
+#    define DEPRECATED(func, hint) __declspec(deprecated(hint)) func
+#else
+#    define DEPRECATED(func, hint) func
+#endif
+
 #define LLAMA_FILE_MAGIC_GGJT        0x67676a74u // 'ggjt'
 #define LLAMA_FILE_MAGIC_GGLA        0x67676c61u // 'ggla'
 #define LLAMA_FILE_MAGIC_GGMF        0x67676d66u // 'ggmf'
@@ -53,6 +61,7 @@ extern "C" {
     // TODO: show sample usage
     //
 
+    struct llama_model;
     struct llama_context;
 
     typedef int llama_token;
@@ -71,28 +80,27 @@ extern "C" {
 
     typedef void (*llama_progress_callback)(float progress, void *ctx);
 
-    struct llama_context_params {
+   struct llama_context_params {
+        int seed;                              // RNG seed, -1 for random
         int n_ctx;                             // text context
         int n_batch;                           // prompt processing batch size
         int n_gpu_layers;                      // number of layers to store in VRAM
         int main_gpu;                          // the GPU that is used for scratch and small tensors
         float tensor_split[LLAMA_MAX_DEVICES]; // how to split layers across multiple GPUs
-        bool low_vram;                         // if true, reduce VRAM usage at the cost of performance
-        int seed;                              // RNG seed, -1 for random
+        // called with a progress value between 0 and 1, pass NULL to disable
+        llama_progress_callback progress_callback;
+        // context pointer passed to the progress callback
+        void * progress_callback_user_data;
 
+        // Keep the booleans together to avoid misalignment during copy-by-value.
+        bool low_vram;   // if true, reduce VRAM usage at the cost of performance
         bool f16_kv;     // use fp16 for KV cache
         bool logits_all; // the llama_eval() call computes all logits, not just the last one
         bool vocab_only; // only load the vocabulary, no weights
         bool use_mmap;   // use mmap if possible
         bool use_mlock;  // force system to keep model in RAM
         bool embedding;  // embedding mode only
-
-        // called with a progress value between 0 and 1, pass NULL to disable
-        llama_progress_callback progress_callback;
-        // context pointer passed to the progress callback
-        void * progress_callback_user_data;
     };
-
     // model file types
     enum llama_ftype {
         LLAMA_FTYPE_ALL_F32              = 0,
@@ -137,12 +145,23 @@ extern "C" {
 
     LLAMA_API int64_t llama_time_us();
 
+    LLAMA_API struct llama_model * llama_load_model_from_file(
+                             const char * path_model,
+            struct llama_context_params   params);
+
+    LLAMA_API void llama_free_model(struct llama_model * model);
+
+    LLAMA_API struct llama_context * llama_new_context_with_model(
+                     struct llama_model * model,
+            struct llama_context_params   params);
+
     // Various functions for loading a ggml llama model.
     // Allocate (almost) all memory needed for the model.
     // Return NULL on failure
-    LLAMA_API struct llama_context * llama_init_from_file(
+    LLAMA_API DEPRECATED(struct llama_context * llama_init_from_file(
                              const char * path_model,
-            struct llama_context_params   params);
+            struct llama_context_params   params),
+            "please use llama_load_model_from_file combined with llama_new_context_with_model instead");
 
     // Frees all allocated memory
     LLAMA_API void llama_free(struct llama_context * ctx);
@@ -159,8 +178,15 @@ extern "C" {
     // The model needs to be reloaded before applying a new adapter, otherwise the adapter
     // will be applied on top of the previous one
     // Returns 0 on success
-    LLAMA_API int llama_apply_lora_from_file(
+    LLAMA_API DEPRECATED(int llama_apply_lora_from_file(
             struct llama_context * ctx,
+                      const char * path_lora,
+                      const char * path_base_model,
+                             int   n_threads),
+            "please use llama_model_apply_lora_from_file instead");
+
+    LLAMA_API int llama_model_apply_lora_from_file(
+            const struct llama_model * model,
                       const char * path_lora,
                       const char * path_base_model,
                              int   n_threads);
@@ -311,7 +337,7 @@ extern "C" {
 #include <string>
 struct ggml_tensor;
 
-std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx);
+const std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx);
 
 #endif
 
