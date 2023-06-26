@@ -16765,7 +16765,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             }
 
             atomic_store(&state->shared->n_active, n_threads);
-            atomic_store(&state->shared->node_n, node_n);
+            atomic_store(&state->shared->node_n,   node_n);
         } else {
             // wait for other threads to finish
             const int last = node_n;
@@ -16774,11 +16774,13 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                 node_n = atomic_load(&state->shared->node_n);
             } while (node_n == last);
         }
+
         // check if we should stop
         if (node_n >= cgraph->n_nodes) break;
 
         /* COMPUTE */
         struct ggml_tensor * node = cgraph->nodes[node_n];
+
         struct ggml_compute_params params = {
             /*.type  =*/ GGML_TASK_COMPUTE,
             /*.ith   =*/ state->ith,
@@ -16787,10 +16789,8 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             /*.wdata =*/ cgraph->work ? cgraph->work->data : NULL,
         };
 
-        if(state->ith < node->n_tasks) {
+        if (state->ith < node->n_tasks) {
             ggml_compute_forward(&params, node);
-        } else {
-            break;
         }
     }
 
@@ -16952,7 +16952,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                     } break;
                 case GGML_OP_SCALE:
                     {
-                        node->n_tasks = n_threads;
+                        node->n_tasks = 1;
                     } break;
                 case GGML_OP_SET:
                 case GGML_OP_CONT:
@@ -17165,9 +17165,8 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                 .shared = &state_shared,
             };
 
-            int rc = ggml_thread_create(&workers[j].thrd, NULL, ggml_graph_compute_thread, &workers[j]);
+            const int rc = ggml_thread_create(&workers[j].thrd, NULL, ggml_graph_compute_thread, &workers[j]);
             GGML_ASSERT(rc == 0);
-            UNUSED(rc);
         }
     }
     workers[0].ith = 0;
@@ -17185,9 +17184,8 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
     // join thread pool
     if (n_threads > 1) {
         for (int j = 1; j < n_threads; j++) {
-            int rc = ggml_thread_join(workers[j].thrd, NULL);
+            const int rc = ggml_thread_join(workers[j].thrd, NULL);
             GGML_ASSERT(rc == 0);
-            UNUSED(rc);
         }
     }
 
