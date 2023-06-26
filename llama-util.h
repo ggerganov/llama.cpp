@@ -16,8 +16,6 @@
 #include <vector>
 #include <stdexcept>
 
-#include "ggml.h"
-
 #ifdef __has_include
     #if __has_include(<unistd.h>)
         #include <unistd.h>
@@ -174,12 +172,12 @@ struct llama_mmap {
 #ifdef _POSIX_MAPPED_FILES
     static constexpr bool SUPPORTED = true;
 
-    llama_mmap(struct llama_file * file, size_t prefetch = (size_t) -1 /* -1 = max value */) {
+    llama_mmap(struct llama_file * file, size_t prefetch = (size_t) -1 /* -1 = max value */, bool numa = false) {
         size = file->size;
         int fd = fileno(file->fp);
         int flags = MAP_SHARED;
         // prefetch/readahead impairs performance on NUMA systems
-        if (ggml_is_numa()) { prefetch = 0; }
+        if (numa) { prefetch = 0; }
 #ifdef __linux__
         if (prefetch) { flags |= MAP_POPULATE; }
 #endif
@@ -195,7 +193,7 @@ struct llama_mmap {
                         strerror(errno));
             }
         }
-        if (ggml_is_numa()) {
+        if (numa) {
             // advise the kernel not to use readahead
             // (because the next page might not belong on the same node)
             if (madvise(addr, file->size, MADV_RANDOM)) {
@@ -211,7 +209,9 @@ struct llama_mmap {
 #elif defined(_WIN32)
     static constexpr bool SUPPORTED = true;
 
-    llama_mmap(struct llama_file * file, bool prefetch = true) {
+    llama_mmap(struct llama_file * file, bool prefetch = true, bool numa = false) {
+        (void) numa;
+
         size = file->size;
 
         HANDLE hFile = (HANDLE) _get_osfhandle(_fileno(file->fp));
@@ -256,8 +256,10 @@ struct llama_mmap {
 #else
     static constexpr bool SUPPORTED = false;
 
-    llama_mmap(struct llama_file *, bool prefetch = true) {
-        (void)prefetch;
+    llama_mmap(struct llama_file *, bool prefetch = true, bool numa = false) {
+        (void) prefetch;
+        (void) numa;
+
         throw std::runtime_error(std::string("mmap not supported"));
     }
 #endif
