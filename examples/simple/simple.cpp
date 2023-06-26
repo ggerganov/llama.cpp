@@ -66,7 +66,7 @@ int main(int argc, char ** argv)
     // Init LLM :
     //---------------------------------
 
-    llama_init_backend();
+    llama_init_backend(params.numa);
 
     llama_model * model;
     llama_context * ctx;

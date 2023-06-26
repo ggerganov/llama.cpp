@@ -3879,14 +3879,12 @@ struct ggml_context_container {
 #define GGML_NUMA_MAX_NODES 8
 #define GGML_NUMA_MAX_CPUS 512
 
-struct ggml_numa_node
-{
+struct ggml_numa_node {
     uint32_t cpus[GGML_NUMA_MAX_CPUS]; // hardware threads on this node
     uint32_t n_cpus;
 };
 
-struct ggml_numa_nodes
-{
+struct ggml_numa_nodes {
     struct ggml_numa_node nodes[GGML_NUMA_MAX_NODES];
     uint32_t n_nodes;
     uint32_t total_cpus; // hardware threads on system
@@ -3923,13 +3921,18 @@ inline static void ggml_critical_section_end(void) {
     atomic_fetch_sub(&g_state_barrier, 1);
 }
 
-void ggml_numa_init(void)
-{
-    if (g_state.numa.n_nodes > 0) { return; }
+void ggml_numa_init(void) {
+    if (g_state.numa.n_nodes > 0) {
+        fprintf(stderr, "ggml_numa_init: NUMA already initialized\n");
+
+        return;
+    }
+
 #ifdef __linux__
     struct stat st;
     char path[256];
     int rv;
+
     // enumerate nodes
     while (g_state.numa.n_nodes < GGML_NUMA_MAX_NODES) {
         rv = snprintf(path, sizeof(path), "/sys/devices/system/node/node%u", g_state.numa.n_nodes);
@@ -3937,6 +3940,7 @@ void ggml_numa_init(void)
         if (stat(path, &st) != 0) { break; }
         ++g_state.numa.n_nodes;
     }
+
     // enumerate CPUs
     while (g_state.numa.total_cpus < GGML_NUMA_MAX_CPUS) {
         rv = snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%u", g_state.numa.total_cpus);
@@ -3944,11 +3948,14 @@ void ggml_numa_init(void)
         if (stat(path, &st) != 0) { break; }
         ++g_state.numa.total_cpus;
     }
+
     GGML_PRINT_DEBUG("found %u numa nodes, %u CPUs\n", g_state.numa.n_nodes, g_state.numa.total_cpus);
+
     if (g_state.numa.n_nodes < 1 || g_state.numa.total_cpus < 1) {
         g_state.numa.n_nodes = 0;
         return;
     }
+
     for (uint32_t n = 0; n < g_state.numa.n_nodes; ++n) {
         struct ggml_numa_node * node = &g_state.numa.nodes[n];
         GGML_PRINT_DEBUG("CPUs on node %u:", n);
@@ -3963,6 +3970,7 @@ void ggml_numa_init(void)
         }
         GGML_PRINT_DEBUG("\n");
     }
+
     if (ggml_is_numa()) {
         FILE *fptr = fopen("/proc/sys/kernel/numa_balancing", "r");
         if (fptr != NULL) {
@@ -3978,7 +3986,9 @@ void ggml_numa_init(void)
 #endif
 }
 
-bool ggml_is_numa(void) { return g_state.numa.n_nodes > 1; }
+bool ggml_is_numa(void) {
+    return g_state.numa.n_nodes > 1;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 

@@ -5,7 +5,6 @@
 
 #include "common.h"
 #include "llama.h"
-#include "ggml.h"
 #include "build-info.h"
 
 #include <cassert>
@@ -106,10 +105,7 @@ int main(int argc, char ** argv) {
         params.prompt = gpt_random_prompt(rng);
     }
 
-    llama_init_backend();
-    if (params.numa) {
-        ggml_numa_init();
-    }
+    llama_init_backend(params.numa);
 
     llama_model * model;
     llama_context * ctx;

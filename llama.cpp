@@ -977,7 +977,7 @@ bool llama_mlock_supported() {
     return llama_mlock::SUPPORTED;
 }
 
-void llama_init_backend() {
+void llama_init_backend(bool numa) {
     ggml_time_init();
 
     // needed to initialize f16 tables
@@ -985,6 +985,10 @@ void llama_init_backend() {
         struct ggml_init_params params = { 0, NULL, false };
         struct ggml_context * ctx = ggml_init(params);
         ggml_free(ctx);
+    }
+
+    if (numa) {
+        ggml_numa_init();
     }
 }
 
