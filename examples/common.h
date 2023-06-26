@@ -78,6 +78,7 @@ struct gpt_params {
     bool mem_test          = false; // compute maximum memory usage
     bool export_cgraph     = false; // export the computation graph
     bool verbose_prompt    = false; // print prompt tokens before generation
+    bool verbose           = true;  // print model info on load
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);

@@ -100,6 +100,7 @@ extern "C" {
         bool use_mmap;   // use mmap if possible
         bool use_mlock;  // force system to keep model in RAM
         bool embedding;  // embedding mode only
+        bool verbose;    // show information on stderr on model load. This doesn't affect error messages.
     };
     // model file types
     enum llama_ftype {

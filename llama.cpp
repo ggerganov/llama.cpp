@@ -472,9 +472,11 @@ struct llama_file_loader {
     llama_hparams hparams;
     llama_vocab vocab;
 
-    llama_file_loader(const char * fname, size_t file_idx, llama_load_tensors_map & tensors_map)
+    llama_file_loader(const char * fname, size_t file_idx, llama_load_tensors_map & tensors_map, bool verbose)
         : file(fname, "rb") {
-        fprintf(stderr, "llama.cpp: loading model from %s\n", fname);
+        if (verbose) {
+            fprintf(stderr, "llama.cpp: loading model from %s\n", fname);
+        }
         read_magic();
         read_hparams();
         read_vocab();
@@ -662,13 +664,13 @@ struct llama_model_loader {
     struct ggml_context * ggml_ctx = NULL;
     std::unique_ptr<llama_mmap> mapping;
 
-    llama_model_loader(const std::string & fname_base, bool use_mmap, bool vocab_only) {
-        auto * first_file = new llama_file_loader(fname_base.c_str(), 0, tensors_map);
+    llama_model_loader(const std::string & fname_base, bool use_mmap, bool vocab_only, bool verbose) {
+        auto * first_file = new llama_file_loader(fname_base.c_str(), 0, tensors_map, verbose);
         file_loaders.emplace_back(first_file);
         uint32_t n_parts = vocab_only ? 1 : guess_n_parts();
         for (uint32_t i = 1; i < n_parts; i++) {
             std::string fname = fname_base + "." + std::to_string(i);
-            auto * ith_file = new llama_file_loader(fname.c_str(), i, tensors_map);
+            auto * ith_file = new llama_file_loader(fname.c_str(), i, tensors_map, verbose);
             file_loaders.emplace_back(ith_file);
             if (ith_file->hparams != first_file->hparams) {
                 throw std::runtime_error(format("llama.cpp: hparams inconsistent between files"));
@@ -949,6 +951,7 @@ struct llama_context_params llama_context_default_params() {
         /*.use_mmap                    =*/ true,
         /*.use_mlock                   =*/ false,
         /*.embedding                   =*/ false,
+        /*.verbose                     =*/ true,
     };
 
     return result;
@@ -1055,11 +1058,12 @@ static void llama_model_load_internal(
         bool use_mlock,
         bool vocab_only,
         llama_progress_callback progress_callback,
-        void * progress_callback_user_data) {
+        void * progress_callback_user_data,
+        bool verbose) {
 
     model.t_start_us = ggml_time_us();
 
-    std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, use_mmap, vocab_only));
+    std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, use_mmap, vocab_only, verbose));
 
     vocab = std::move(ml->file_loaders.at(0)->vocab);
     model.hparams = ml->file_loaders.at(0)->hparams;
@@ -1087,7 +1091,7 @@ static void llama_model_load_internal(
 
     const uint32_t n_ff = ((2*(4*hparams.n_embd)/3 + hparams.n_mult - 1)/hparams.n_mult)*hparams.n_mult;
 
-    {
+    if (verbose) {
         fprintf(stderr, "%s: format     = %s\n",  __func__, llama_file_version_name(file_version));
         fprintf(stderr, "%s: n_vocab    = %u\n",  __func__, hparams.n_vocab);
         fprintf(stderr, "%s: n_ctx      = %u\n",  __func__, hparams.n_ctx);
@@ -1127,7 +1131,9 @@ static void llama_model_load_internal(
     size_t ctx_size;
     size_t mmapped_size;
     ml->calc_sizes(&ctx_size, &mmapped_size);
-    fprintf(stderr, "%s: ggml ctx size = %7.2f MB\n", __func__, ctx_size/1024.0/1024.0);
+    if (verbose) {
+        fprintf(stderr, "%s: ggml ctx size = %7.2f MB\n", __func__, ctx_size/1024.0/1024.0);
+    }
 
     // create the ggml context
     {
@@ -1151,12 +1157,16 @@ static void llama_model_load_internal(
 
     (void) main_gpu;
 #if defined(GGML_USE_CUBLAS)
-    fprintf(stderr, "%s: using CUDA for GPU acceleration\n", __func__);
+    if (verbose) {
+        fprintf(stderr, "%s: using CUDA for GPU acceleration\n", __func__);
+    }
     ggml_cuda_set_main_device(main_gpu);
 #define LLAMA_BACKEND_OFFLOAD       GGML_BACKEND_GPU
 #define LLAMA_BACKEND_OFFLOAD_SPLIT GGML_BACKEND_GPU_SPLIT
 #elif defined(GGML_USE_CLBLAST)
-    fprintf(stderr, "%s: using OpenCL for GPU acceleration\n", __func__);
+    if (verbose) {
+        fprintf(stderr, "%s: using OpenCL for GPU acceleration\n", __func__);
+    }
 #define LLAMA_BACKEND_OFFLOAD       GGML_BACKEND_GPU
 #define LLAMA_BACKEND_OFFLOAD_SPLIT GGML_BACKEND_GPU
 #else
@@ -1256,20 +1266,20 @@ static void llama_model_load_internal(
         const size_t mem_required_state =
             scale*MEM_REQ_KV_SELF().at(model.type);
 
-        fprintf(stderr, "%s: mem required  = %7.2f MB (+ %7.2f MB per state)\n", __func__,
+        if (verbose) fprintf(stderr, "%s: mem required  = %7.2f MB (+ %7.2f MB per state)\n", __func__,
                 mem_required / 1024.0 / 1024.0, mem_required_state / 1024.0 / 1024.0);
 
         (void) vram_scratch;
         (void) n_batch;
 #ifdef GGML_USE_CUBLAS
         if (low_vram) {
-            fprintf(stderr, "%s: not allocating a VRAM scratch buffer due to low VRAM option\n", __func__);
+            if (verbose) fprintf(stderr, "%s: not allocating a VRAM scratch buffer due to low VRAM option\n", __func__);
             ggml_cuda_set_scratch_size(0); // disable scratch
         } else {
             vram_scratch = n_batch * MB;
             ggml_cuda_set_scratch_size(vram_scratch);
             if (n_gpu_layers > 0) {
-                fprintf(stderr, "%s: allocating batch_size x 1 MB = %zd MB VRAM for the scratch buffer\n",
+                if (verbose) fprintf(stderr, "%s: allocating batch_size x 1 MB = %zd MB VRAM for the scratch buffer\n",
                         __func__, vram_scratch / MB);
             }
         }
@@ -1277,32 +1287,34 @@ static void llama_model_load_internal(
 #if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
 
-        fprintf(stderr, "%s: offloading %d repeating layers to GPU\n", __func__, n_gpu);
-        if (n_gpu_layers > (int) hparams.n_layer) {
+        if (verbose) fprintf(stderr, "%s: offloading %d repeating layers to GPU\n", __func__, n_gpu);
+        if (verbose && n_gpu_layers > (int) hparams.n_layer) {
             fprintf(stderr, "%s: offloading non-repeating layers to GPU\n", __func__);
         }
         size_t vram_kv_cache = 0;
         if (n_gpu_layers > (int) hparams.n_layer + 1) {
             if (low_vram) {
-                fprintf(stderr, "%s: cannot offload v cache to GPU due to low VRAM option\n", __func__);
+                if (verbose) fprintf(stderr, "%s: cannot offload v cache to GPU due to low VRAM option\n", __func__);
             } else {
-                fprintf(stderr, "%s: offloading v cache to GPU\n", __func__);
+                if (verbose) fprintf(stderr, "%s: offloading v cache to GPU\n", __func__);
                 vram_kv_cache += MEM_REQ_KV_SELF().at(model.type) / 2;
             }
         }
         if (n_gpu_layers > (int) hparams.n_layer + 2) {
             if (low_vram) {
-                fprintf(stderr, "%s: cannot offload k cache to GPU due to low VRAM option\n", __func__);
+                if (verbose) fprintf(stderr, "%s: cannot offload k cache to GPU due to low VRAM option\n", __func__);
             } else {
-                fprintf(stderr, "%s: offloading k cache to GPU\n", __func__);
+                if (verbose) fprintf(stderr, "%s: offloading k cache to GPU\n", __func__);
                 vram_kv_cache += MEM_REQ_KV_SELF().at(model.type) / 2;
             }
         }
-        const int max_offloadable_layers = low_vram ? hparams.n_layer + 1 : hparams.n_layer + 3;
-        fprintf(stderr, "%s: offloaded %d/%d layers to GPU\n",
-                __func__, std::min(n_gpu_layers, max_offloadable_layers), hparams.n_layer + 3);
-        fprintf(stderr, "%s: total VRAM used: %zu MB\n",
-                __func__, (vram_weights + vram_scratch + vram_kv_cache + MB - 1) / MB); // round up
+        if (verbose) {
+            const int max_offloadable_layers = low_vram ? hparams.n_layer + 1 : hparams.n_layer + 3;
+            fprintf(stderr, "%s: offloaded %d/%d layers to GPU\n",
+                    __func__, std::min(n_gpu_layers, max_offloadable_layers), hparams.n_layer + 3);
+            fprintf(stderr, "%s: total VRAM used: %zu MB\n",
+                    __func__, (vram_weights + vram_scratch + vram_kv_cache + MB - 1) / MB); // round up
+        }
 #else
         (void) n_gpu_layers;
 #endif
@@ -1348,10 +1360,11 @@ static bool llama_model_load(
         bool use_mlock,
         bool vocab_only,
         llama_progress_callback progress_callback,
-        void *progress_callback_user_data) {
+        void *progress_callback_user_data,
+        bool verbose) {
     try {
         llama_model_load_internal(fname, model, vocab, n_ctx, n_batch, n_gpu_layers, main_gpu, tensor_split, low_vram, memory_type,
-                                  use_mmap, use_mlock, vocab_only, progress_callback, progress_callback_user_data);
+                                  use_mmap, use_mlock, vocab_only, progress_callback, progress_callback_user_data, verbose);
         return true;
     } catch (const std::exception & err) {
         fprintf(stderr, "error loading model: %s\n", err.what());
@@ -2444,7 +2457,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     }
 
     std::unique_ptr<llama_model_loader> model_loader(new llama_model_loader(fname_inp, /*use_mmap*/ false,
-                                                                            /*vocab_only*/ false));
+                                                                            /*vocab_only*/ false,
+                                                                            /*verbose*/ true));
     llama_file_saver file_saver(fname_out.c_str(), model_loader->file_loaders.at(0).get(), params->ftype);
 
 #ifdef GGML_USE_K_QUANTS
@@ -2656,7 +2670,7 @@ struct llama_model * llama_load_model_from_file(
 
     if (!llama_model_load(path_model, *model, model->vocab, params.n_ctx, params.n_batch, params.n_gpu_layers,
                 params.main_gpu, params.tensor_split, params.low_vram, memory_type, params.use_mmap, params.use_mlock,
-                params.vocab_only, params.progress_callback, params.progress_callback_user_data)) {
+                params.vocab_only, params.progress_callback, params.progress_callback_user_data, params.verbose)) {
         delete model;
         fprintf(stderr, "%s: failed to load model\n", __func__);
         return nullptr;
@@ -2713,7 +2727,7 @@ struct llama_context * llama_new_context_with_model(
             return nullptr;
         }
 
-        {
+        if (params.verbose) {
             const size_t memory_size = ggml_nbytes(ctx->kv_self.k) + ggml_nbytes(ctx->kv_self.v);
             fprintf(stderr, "%s: kv self size  = %7.2f MB\n", __func__, memory_size / 1024.0 / 1024.0);
         }
@@ -2872,7 +2886,7 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
     llama_buffer base_buf;
     if (path_base_model) {
         fprintf(stderr, "%s: loading base model from '%s'\n", __func__, path_base_model);
-        model_loader.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true, /*vocab_only*/ false));
+        model_loader.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true, /*vocab_only*/ false, /*verbose*/ true));
 
         size_t ctx_size;
         size_t mmapped_size;
