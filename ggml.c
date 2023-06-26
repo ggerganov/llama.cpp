@@ -16626,39 +16626,50 @@ typedef pthread_t ggml_thread_t;
 #endif
 
 #ifdef __linux__
-void set_numa_thread_affinity(int thread_n, int n_threads)
-{
-    if (!ggml_is_numa()) { return; }
+void set_numa_thread_affinity(int thread_n, int n_threads) {
+    if (!ggml_is_numa()) {
+        return;
+    }
+
     // run thread on node_num thread_n / (threads per node)
-    int node_num = thread_n / ((n_threads + g_state.numa.n_nodes - 1) / g_state.numa.n_nodes);
+    const int node_num = thread_n / ((n_threads + g_state.numa.n_nodes - 1) / g_state.numa.n_nodes);
     struct ggml_numa_node * node = &g_state.numa.nodes[node_num];
     size_t setsize = CPU_ALLOC_SIZE(g_state.numa.total_cpus);
+
     cpu_set_t * cpus = CPU_ALLOC(g_state.numa.total_cpus);
     CPU_ZERO_S(setsize, cpus);
     for (size_t i = 0; i < node->n_cpus; ++i) {
         CPU_SET_S(node->cpus[i], setsize, cpus);
     }
+
     int rv = pthread_setaffinity_np(pthread_self(), setsize, cpus);
     if (rv) {
             fprintf(stderr, "warning: pthread_setaffinity_np() failed: %s\n",
                     strerror(rv));
     }
+
     CPU_FREE(cpus);
 }
-void clear_numa_thread_affinity(void)
-{
-    if (!ggml_is_numa()) { return; }
+
+void clear_numa_thread_affinity(void) {
+    if (!ggml_is_numa()) {
+        return;
+    }
+
     size_t setsize = CPU_ALLOC_SIZE(g_state.numa.total_cpus);
+
     cpu_set_t * cpus = CPU_ALLOC(g_state.numa.total_cpus);
     CPU_ZERO_S(setsize, cpus);
     for (unsigned i = 0; i < g_state.numa.total_cpus; ++i) {
         CPU_SET_S(i, setsize, cpus);
     }
+
     int rv = pthread_setaffinity_np(pthread_self(), setsize, cpus);
     if (rv) {
         fprintf(stderr, "warning: pthread_setaffinity_np() failed: %s\n",
             strerror(rv));
     }
+
     CPU_FREE(cpus);
 }
 #else
@@ -16699,10 +16710,12 @@ static void ggml_graph_compute_perf_stats_node(struct ggml_tensor * node, const 
 static thread_ret_t ggml_graph_compute_thread(void * data) {
     struct ggml_compute_state * state = (struct ggml_compute_state *) data;
     struct ggml_cgraph * cgraph = state->shared->cgraph;
+
     const int n_threads = state->shared->n_threads;
     set_numa_thread_affinity(state->ith, n_threads);
 
     int node_n = -1;
+
     while (true) {
         if (atomic_fetch_sub(&state->shared->n_active, 1) == 1) {
             // all other threads are finished and spinning
@@ -17165,6 +17178,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
 
     // this is a work thread too
     ggml_graph_compute_thread(&workers[0]);
+
     // don't leave affinity set on the main thread
     clear_numa_thread_affinity();
 
