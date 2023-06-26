@@ -789,7 +789,7 @@ int main(int argc, char ** argv) {
         params.model_alias = params.model;
     }
 
-    llama_init_backend();
+    llama_init_backend(params.numa);
 
     LOG_INFO("build info", {
         { "build", BUILD_NUMBER },
