@@ -774,7 +774,7 @@ struct llama_model_loader {
         }
 
         if (use_mmap) {
-            mapping.reset(new llama_mmap(&file_loaders.at(0)->file, prefetch_size));
+            mapping.reset(new llama_mmap(&file_loaders.at(0)->file, prefetch_size, ggml_is_numa()));
             if (lmlock) {
                 lmlock->init(mapping->addr);
             }
@@ -977,7 +977,7 @@ bool llama_mlock_supported() {
     return llama_mlock::SUPPORTED;
 }
 
-void llama_init_backend() {
+void llama_init_backend(bool numa) {
     ggml_time_init();
 
     // needed to initialize f16 tables
@@ -985,6 +985,10 @@ void llama_init_backend() {
         struct ggml_init_params params = { 0, NULL, false };
         struct ggml_context * ctx = ggml_init(params);
         ggml_free(ctx);
+    }
+
+    if (numa) {
+        ggml_numa_init();
     }
 }
 
@@ -2899,7 +2903,7 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
 
         // maybe this should in llama_model_loader
         if (model_loader->use_mmap) {
-            model_loader->mapping.reset(new llama_mmap(&model_loader->file_loaders.at(0)->file, /* prefetch */ 0));
+            model_loader->mapping.reset(new llama_mmap(&model_loader->file_loaders.at(0)->file, /* prefetch */ 0, ggml_is_numa()));
         }
     }
 

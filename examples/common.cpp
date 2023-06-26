@@ -343,6 +343,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.use_mmap = false;
         } else if (arg == "--mtest") {
             params.mem_test = true;
+        } else if (arg == "--numa") {
+            params.numa = true;
         } else if (arg == "--export") {
             params.export_cgraph = true;
         } else if (arg == "--verbose-prompt") {
@@ -488,6 +490,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     if (llama_mmap_supported()) {
         fprintf(stderr, "  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
     }
+    fprintf(stderr, "  --numa                attempt optimizations that help on some NUMA systems\n");
+    fprintf(stderr, "                        if run without this previously, it is recommended to drop the system page cache before using this\n");
+    fprintf(stderr, "                        see https://github.com/ggerganov/llama.cpp/issues/1437\n");
 #ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
     fprintf(stderr, "  -ngl N, --n-gpu-layers N\n");
     fprintf(stderr, "                        number of layers to store in VRAM\n");
