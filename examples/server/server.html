@@ -206,7 +206,7 @@
             <legend>Settings</legend>
 
             <div>
-              <label for="prompt">Prompt</label> 
+              <label for="prompt">Prompt</label>
               <textarea type="text" id="prompt" value="${settings.value.prompt}" oninput=${(e) => settings.value.prompt = e.target.value} rows="3" cols="60" />
             </div>
 
@@ -224,7 +224,7 @@
               <label for="template">Prompt template</label>
               <textarea id="template" value="${chatTemplate}" oninput=${(e) => chatTemplate.value = e.target.value} rows="8" cols="60" />
             </div>
-            
+
             <div>
               <label for="temperature">Temperature</label>
               <input type="range" id="temperature" min="0.0" max="1.0" step="0.01" value="${temperature.value}" oninput=${(e) => temperature.value = e.target.value} />
@@ -250,7 +250,7 @@
         <header>
           <h1>llama.cpp</h1>
         </header>
-                
+
         <main>
           <section class="chat">
             <${chatStarted.value ? ChatLog : ConfigForm
@@ -262,7 +262,7 @@
           <section class="chat">
             <${MessageInput} />
           </section>
-          
+
         </main >
         <footer>
           <p>Powered by <a href="https://github.com/ggerganov/llama.cpp">llama.cpp</a> and <a href="https://ggml.ai">ggml.ai</a></p>
