@@ -437,14 +437,22 @@ extern "C" {
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);
 
+    // graph compute context
+    struct ggml_cgraph_context {
+        // After call to `ggml_graph_compute_plan()`, `planned` is set as true,
+        // `work_size` will be updated as non-zero when buffer is required. When
+        // need buffer, caller MUST allocate memory for `work_data`.
+        // See https://github.com/ggerganov/ggml/issues/287
+        size_t work_size;
+        void * work_data;
+        bool   planned; // true means ready to compute graph nodes.
+    };
+
     // computation graph
     struct ggml_cgraph {
         int n_nodes;
         int n_leafs;
         int n_threads;
-
-        size_t work_size;
-        struct ggml_tensor * work;
 
         struct ggml_tensor * nodes[GGML_MAX_NODES];
         struct ggml_tensor * grads[GGML_MAX_NODES];
@@ -1297,6 +1305,18 @@ extern "C" {
     GGML_API struct ggml_cgraph ggml_build_forward (struct ggml_tensor * tensor);
     GGML_API struct ggml_cgraph ggml_build_backward(struct ggml_context * ctx, struct ggml_cgraph * gf, bool keep);
 
+    // Since https://github.com/ggerganov/ggml/issues/287
+    GGML_API void ggml_graph_compute_plan(struct ggml_cgraph_context * ctx, struct ggml_cgraph * cgraph);
+    // Since https://github.com/ggerganov/ggml/issues/287
+    // When `ctx` is NULL, `ggml_graph_compute_v2()` calculates work_size and allocates memory for `work_data`.
+    // Another use case: allocate buffer explicitly:
+    // - call `ggml_graph_compute_plan()`;
+    // - allocate memory for `ctx->work_data`;
+    // - finally call `ggml_graph_compute_v2()`.
+    // NOTE: don't manually set `ctx->planned`.
+    GGML_API void ggml_graph_compute_v2(struct ggml_cgraph_context * ctx, struct ggml_cgraph * cgraph);
+    // Deprecated, `ctx` is not required. Use `ggml_graph_compute_v2` instead.
+    // See https://github.com/ggerganov/ggml/issues/287
     GGML_API void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph);
     GGML_API void ggml_graph_reset  (struct ggml_cgraph * cgraph);
 

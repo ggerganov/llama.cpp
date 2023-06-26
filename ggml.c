@@ -15773,8 +15773,6 @@ struct ggml_cgraph ggml_build_forward(struct ggml_tensor * tensor) {
         /*.n_nodes      =*/ 0,
         /*.n_leafs      =*/ 0,
         /*.n_threads    =*/ GGML_DEFAULT_N_THREADS,
-        /*.work_size    =*/ 0,
-        /*.work         =*/ NULL,
         /*.nodes        =*/ { NULL },
         /*.grads        =*/ { NULL },
         /*.leafs        =*/ { NULL },
@@ -15946,6 +15944,7 @@ void clear_numa_thread_affinity(void) {}
 
 struct ggml_compute_state_shared {
     struct ggml_cgraph * cgraph;
+    struct ggml_cgraph_context * cgraph_ctx;
 
     int64_t perf_node_start_cycles;
     int64_t perf_node_start_time_us;
@@ -15975,6 +15974,7 @@ static void ggml_graph_compute_perf_stats_node(struct ggml_tensor * node, const 
 static thread_ret_t ggml_graph_compute_thread(void * data) {
     struct ggml_compute_state * state = (struct ggml_compute_state *) data;
     struct ggml_cgraph * cgraph = state->shared->cgraph;
+    struct ggml_cgraph_context * ctx = state->shared->cgraph_ctx;
 
     const int n_threads = state->shared->n_threads;
     set_numa_thread_affinity(state->ith, n_threads);
@@ -15989,8 +15989,8 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                 /*.type  =*/ GGML_TASK_FINALIZE,
                 /*.ith   =*/ 0,
                 /*.nth   =*/ 0,
-                /*.wsize =*/ cgraph->work ? ggml_nbytes(cgraph->work) : 0,
-                /*.wdata =*/ cgraph->work ? cgraph->work->data : NULL,
+                /*.wsize =*/ ctx->work_size,
+                /*.wdata =*/ ctx->work_data,
             };
 
             if (node_n != -1) {
@@ -16057,8 +16057,8 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             /*.type  =*/ GGML_TASK_COMPUTE,
             /*.ith   =*/ state->ith,
             /*.nth   =*/ node->n_tasks,
-            /*.wsize =*/ cgraph->work ? ggml_nbytes(cgraph->work) : 0,
-            /*.wdata =*/ cgraph->work ? cgraph->work->data : NULL,
+            /*.wsize =*/ ctx->work_size,
+            /*.wdata =*/ ctx->work_data,
         };
 
         if (state->ith < node->n_tasks) {
@@ -16069,23 +16069,20 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
     return 0;
 }
 
-void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) {
-    const int n_threads = cgraph->n_threads;
+// Prepare for graph computing.
+// Will set: node->n_tasks, ctx->{work_size, planned}
+void ggml_graph_compute_plan(struct ggml_cgraph_context * ctx, struct ggml_cgraph * cgraph) {
+    GGML_ASSERT(ctx);
+    // This function is actually reentrant, but duplicate calls is unnecessary.
+    GGML_ASSERT(ctx->work_size == 0);
+    GGML_ASSERT(ctx->work_data == NULL);
+    GGML_ASSERT(!ctx->planned);
 
-    struct ggml_compute_state_shared state_shared = {
-        /*.cgraph                  =*/ cgraph,
-        /*.perf_node_start_cycles  =*/ 0,
-        /*.perf_node_start_time_us =*/ 0,
-        /*.n_threads               =*/ n_threads,
-        /*.n_active                =*/ n_threads,
-        /*.node_n                  =*/ -1,
-    };
-    struct ggml_compute_state * workers = alloca(sizeof(struct ggml_compute_state)*n_threads);
+    int n_threads = cgraph->n_threads;
+    size_t work_size = 0;
 
     // initialize tasks + work buffer
     {
-        size_t work_size = 0;
-
         // thread scheduling for the different operations
         for (int i = 0; i < cgraph->n_nodes; i++) {
             struct ggml_tensor * node = cgraph->nodes[i];
@@ -16399,18 +16396,52 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                     } break;
             }
         }
+    }
 
-        if (cgraph->work != NULL && work_size > cgraph->work_size) {
-            GGML_ASSERT(false); // TODO: better handling
-        }
+    if (work_size > 0) {
+        work_size += CACHE_LINE_SIZE*(n_threads - 1);
+    }
 
-        if (work_size > 0 && cgraph->work == NULL) {
-            cgraph->work_size = work_size + CACHE_LINE_SIZE*(n_threads - 1);
+    ctx->work_size = work_size;
+    ctx->work_data = NULL;
+    ctx->planned = true;
+}
 
-            GGML_PRINT_DEBUG("%s: allocating work buffer for graph (%zu bytes)\n", __func__, cgraph->work_size);
-            cgraph->work = ggml_new_tensor_1d(ctx, GGML_TYPE_I8, cgraph->work_size);
+void ggml_graph_compute_v2(struct ggml_cgraph_context * ctx, struct ggml_cgraph * cgraph) {
+    if (ctx == NULL) {
+        ctx = alloca(sizeof(struct ggml_cgraph_context));
+        GGML_ASSERT(ctx);
+        ctx->work_size = 0;
+        ctx->work_data = NULL;
+        ctx->planned   = false;
+    } else {
+        // The work_size and work_data MAY have default values even if has been planned.
+        if (ctx->work_size > 0) {
+            GGML_ASSERT(ctx->work_data);
         }
     }
+
+    if (!ctx->planned) {
+        ggml_graph_compute_plan(ctx, cgraph);
+        if (ctx->work_size > 0) {
+            ctx->work_data = malloc(ctx->work_size * sizeof(GGML_TYPE_I8));
+            GGML_ASSERT(ctx->work_data);
+            GGML_PRINT_DEBUG("%s: allocating work buffer for graph (%zu bytes)\n", __func__, work_size);
+        }
+    }
+
+    const int n_threads = cgraph->n_threads;
+
+    struct ggml_compute_state_shared state_shared = {
+        /*.cgraph                  =*/ cgraph,
+        /*.cgraph_ctx              =*/ ctx,
+        /*.perf_node_start_cycles  =*/ 0,
+        /*.perf_node_start_time_us =*/ 0,
+        /*.n_threads               =*/ n_threads,
+        /*.n_active                =*/ n_threads,
+        /*.node_n                  =*/ -1,
+    };
+    struct ggml_compute_state * workers = alloca(sizeof(struct ggml_compute_state)*n_threads);
 
     // create thread pool
     if (n_threads > 1) {
@@ -16461,6 +16492,12 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                 (double) perf_time_us_cur     / 1000.0,
                 (double) cgraph->perf_time_us / 1000.0 / cgraph->perf_runs);
     }
+}
+
+// Deprecated, keep it only for backward compatibility.
+void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) {
+    UNUSED(ctx);
+    ggml_graph_compute_v2(NULL, cgraph);
 }
 
 void ggml_graph_reset(struct ggml_cgraph * cgraph) {

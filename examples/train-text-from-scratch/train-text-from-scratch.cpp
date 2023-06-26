@@ -1426,11 +1426,9 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train(
 
     gf->n_nodes = 0;
     gf->n_leafs = 0;
-    gf->work_size = 0;
     gf->perf_runs = 0;
     gf->perf_cycles = 0;
     gf->perf_time_us = 0;
-    gf->work = NULL;
 
     const auto & hparams = model->hparams;
     //const int n_ctx      = hparams.n_ctx;
