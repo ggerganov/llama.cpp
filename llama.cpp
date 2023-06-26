@@ -368,7 +368,6 @@ struct llama_load_tensor_shard {
     std::vector<uint32_t> ne;
     size_t size;
     enum ggml_type type;
-    size_t file_idx;
     size_t file_off;
 
     void calc_size() {
@@ -427,13 +426,13 @@ struct llama_file_loader {
     llama_hparams hparams;
     llama_vocab vocab;
 
-    llama_file_loader(const char * fname, size_t file_idx, llama_load_tensors_map & tensors_map)
+    llama_file_loader(const char * fname, llama_load_tensors_map & tensors_map)
         : file(fname, "rb") {
         fprintf(stderr, "llama.cpp: loading model from %s\n", fname);
         read_magic();
         read_hparams();
         read_vocab();
-        read_tensor_metadata(file_idx, tensors_map);
+        read_tensor_metadata(tensors_map);
     }
     void read_magic() {
         uint32_t magic = file.read_u32();
@@ -490,7 +489,7 @@ struct llama_file_loader {
             tok_score.score = score;
         }
     }
-    void read_tensor_metadata(size_t file_idx, llama_load_tensors_map & tensors_map) {
+    void read_tensor_metadata(llama_load_tensors_map & tensors_map) {
         while (file.tell() < file.size) {
             llama_load_tensor_shard shard;
             uint32_t n_dims = file.read_u32();
@@ -525,7 +524,7 @@ struct llama_file_loader {
                 // skip to the next multiple of 32 bytes
                 file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
             }
-            shard.file_idx = file_idx;
+
             shard.file_off = file.tell();
 
             shard.calc_size();
@@ -610,7 +609,7 @@ struct llama_file_saver {
 };
 
 struct llama_model_loader {
-    std::vector<std::unique_ptr<llama_file_loader>> file_loaders;
+    std::unique_ptr<llama_file_loader> file_loader;
     llama_load_tensors_map tensors_map;
     bool use_mmap;
     size_t num_ggml_tensors_created = 0;
@@ -618,17 +617,7 @@ struct llama_model_loader {
     std::unique_ptr<llama_mmap> mapping;
 
     llama_model_loader(const std::string & fname_base, bool use_mmap, bool vocab_only) {
-        auto * first_file = new llama_file_loader(fname_base.c_str(), 0, tensors_map);
-        file_loaders.emplace_back(first_file);
-        uint32_t n_parts = vocab_only ? 1 : guess_n_parts();
-        for (uint32_t i = 1; i < n_parts; i++) {
-            std::string fname = fname_base + "." + std::to_string(i);
-            auto * ith_file = new llama_file_loader(fname.c_str(), i, tensors_map);
-            file_loaders.emplace_back(ith_file);
-            if (ith_file->hparams != first_file->hparams) {
-                throw std::runtime_error(format("llama.cpp: hparams inconsistent between files"));
-            }
-        }
+        file_loader = std::unique_ptr<llama_file_loader>(new llama_file_loader(fname_base.c_str(), tensors_map));
         if (!llama_mmap::SUPPORTED) {
             use_mmap = false;
         }
@@ -657,7 +646,7 @@ struct llama_model_loader {
             throw std::runtime_error(std::string("missing tok_embeddings.weight"));
         }
         const llama_load_tensor & lt = tensors_map.tensors.at(it->second);
-        return file_loaders.at(0)->hparams.n_embd / lt.first_shard.ne.at(0);
+        return file_loader->hparams.n_embd / lt.first_shard.ne.at(0);
     }
 
     void calc_sizes(size_t * ctx_size_p, size_t * mmapped_size_p) const {
@@ -723,7 +712,7 @@ struct llama_model_loader {
         }
 
         if (use_mmap) {
-            mapping.reset(new llama_mmap(&file_loaders.at(0)->file, prefetch_size, ggml_is_numa()));
+            mapping.reset(new llama_mmap(&file_loader->file, prefetch_size, ggml_is_numa()));
             if (lmlock) {
                 lmlock->init(mapping->addr);
             }
@@ -781,7 +770,7 @@ struct llama_model_loader {
         if (use_mmap) {
             lt.data = (uint8_t *) mapping->addr + lt.first_shard.file_off;
         } else {
-            llama_file & file = file_loaders.at(lt.first_shard.file_idx)->file;
+            llama_file & file = file_loader->file;
             file.seek(lt.first_shard.file_off, SEEK_SET);
             file.read_raw(lt.data, lt.size);
         }
@@ -986,10 +975,10 @@ static void llama_model_load_internal(
 
     std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, use_mmap, vocab_only));
 
-    vocab = std::move(ml->file_loaders.at(0)->vocab);
-    model.hparams = ml->file_loaders.at(0)->hparams;
+    vocab = std::move(ml->file_loader->vocab);
+    model.hparams = ml->file_loader->hparams;
     model.n_gpu_layers = n_gpu_layers;
-    llama_file_version file_version = ml->file_loaders.at(0)->file_version;
+    llama_file_version file_version = ml->file_loader->file_version;
     auto & hparams = model.hparams;
 
     {
@@ -1023,7 +1012,6 @@ static void llama_model_load_internal(
         fprintf(stderr, "%s: n_rot      = %u\n",  __func__, hparams.n_rot);
         fprintf(stderr, "%s: ftype      = %u (%s)\n", __func__, hparams.ftype, llama_ftype_name(hparams.ftype));
         fprintf(stderr, "%s: n_ff       = %u\n",  __func__, n_ff);
-        fprintf(stderr, "%s: n_parts    = %zu\n", __func__, ml->file_loaders.size());
         fprintf(stderr, "%s: model size = %s\n",  __func__, llama_model_type_name(model.type));
     }
 
@@ -2370,7 +2358,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
     std::unique_ptr<llama_model_loader> model_loader(new llama_model_loader(fname_inp, /*use_mmap*/ false,
                                                                             /*vocab_only*/ false));
-    llama_file_saver file_saver(fname_out.c_str(), model_loader->file_loaders.at(0).get(), params->ftype);
+    llama_file_saver file_saver(fname_out.c_str(), model_loader->file_loader.get(), params->ftype);
 
 #ifdef GGML_USE_K_QUANTS
     int n_attention_wv    = 0;
@@ -2820,7 +2808,7 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
 
         // maybe this should in llama_model_loader
         if (model_loader->use_mmap) {
-            model_loader->mapping.reset(new llama_mmap(&model_loader->file_loaders.at(0)->file, /* prefetch */ 0, ggml_is_numa()));
+            model_loader->mapping.reset(new llama_mmap(&model_loader->file_loader->file, /* prefetch */ 0, ggml_is_numa()));
         }
     }
 
