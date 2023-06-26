@@ -889,7 +889,14 @@ int main(int argc, char ** argv) {
     });
 
     svr.Get("/", [](const Request &, Response & res) {
-        res.set_content("<h1>llama.cpp server works</h1>", "text/html");
+        // return content of server.html file
+
+        std::ifstream t("examples/server/server.html");
+        std::stringstream buffer;
+        buffer << t.rdbuf();
+
+        res.set_content(buffer.str(), "text/html");
+        return false;
     });
 
     svr.Post("/completion", [&llama](const Request & req, Response & res) {
