@@ -198,7 +198,7 @@
 #define GGML_MAX_PARAMS        256
 #define GGML_MAX_CONTEXTS      64
 #define GGML_MAX_OPT           4
-#define GGML_MAX_NAME          32
+#define GGML_MAX_NAME          48
 #define GGML_DEFAULT_N_THREADS 4
 
 #define GGML_ASSERT(x) \

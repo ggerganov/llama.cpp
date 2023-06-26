@@ -294,20 +294,9 @@ void init_model(struct my_llama_model * model) {
 
         ggml_set_name(layer.ffn_norm, (layers_i + ".ffn_norm.weight").c_str());
 
-        // 'layers.10.feed_forward.w1.weight' has length of 32.
-        // ggml_tensor->name only has 32 characters, but we need one more for the '\0' terminator.
-        // ggml_set_name will set the last character to '\0', so we can only store 'layers.10.feed_forward.w1.weigh'.
-        // when saving llama compatible model the tensors names will miss a character.
-        // ggml_set_name(layer.w1, (layers_i + ".feed_forward.w1.weight").c_str());
-        // ggml_set_name(layer.w2, (layers_i + ".feed_forward.w2.weight").c_str());
-        // ggml_set_name(layer.w3, (layers_i + ".feed_forward.w3.weight").c_str());
-
-        strncpy(layer.w1->name, (layers_i + ".feed_forward.w1.weight").c_str(), sizeof(layer.w1->name));
-        strncpy(layer.w2->name, (layers_i + ".feed_forward.w2.weight").c_str(), sizeof(layer.w2->name));
-        strncpy(layer.w3->name, (layers_i + ".feed_forward.w3.weight").c_str(), sizeof(layer.w3->name));
-        layer.w1->padding[0] = 0;
-        layer.w2->padding[0] = 0;
-        layer.w3->padding[0] = 0;
+        ggml_format_name(layer.w1, "%s.feed_forward.w1.weight", layers_i.c_str());
+        ggml_format_name(layer.w2, "%s.feed_forward.w2.weight", layers_i.c_str());
+        ggml_format_name(layer.w3, "%s.feed_forward.w3.weight", layers_i.c_str());
     }
 }
 
