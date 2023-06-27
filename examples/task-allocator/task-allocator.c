@@ -105,8 +105,6 @@ typedef pthread_t ggml_thread_t;
 /// Copyright original authors.
 //-----------------------------------------------------------------------------
 
-_Thread_local int32_t thread_local_id;
-
 #define MAX_THREADS 16
 
 struct task_allocator {
@@ -159,8 +157,7 @@ static void allocate_chunk(struct task_allocator *a, int ith, int *chunk_idx,
 
     // all assigned?
     if (atomic_load(&a->global_counter) == total_chunks) {
-        GGML_PRINT_DEBUG_5("[#_%d] %s(): nothing to do.\n", thread_local_id,
-                           __func__);
+        GGML_PRINT_DEBUG("[#_%d] %s(): nothing to do.\n", ith, __func__);
         atomic_fetch_sub(&a->lock, 1); // unlock
         return;
     }
@@ -180,7 +177,7 @@ static void allocate_chunk(struct task_allocator *a, int ith, int *chunk_idx,
             atomic_fetch_add(&a->global_counter, 1);
 
             GGML_PRINT_DEBUG("[#_%d] %s(): take the %3d-th trunk of its own.\n",
-                             thread_local_id, __func__, head + 1);
+                             ith, __func__, head + 1);
 
             *chunk_idx = idx;
             *n_chunks = total_chunks;
@@ -205,8 +202,8 @@ static void allocate_chunk(struct task_allocator *a, int ith, int *chunk_idx,
         atomic_fetch_sub(&a->thread_queue_tails[i], 1);
         atomic_fetch_add(&a->global_counter, 1);
 
-        GGML_PRINT_DEBUG("[#_%d] %s(): steal the %d-th trunk from #_%d\n",
-                         thread_local_id, __func__, tail, i);
+        GGML_PRINT_DEBUG("[#_%d] %s(): steal the %d-th trunk from #_%d\n", ith,
+                         __func__, tail, i);
 
         *chunk_idx = idx;
         *n_chunks = total_chunks;
@@ -299,8 +296,6 @@ static thread_ret_t demo_compute_thread(void *data) {
     int ith = state->ith;
     int n_threads = shared->n_threads;
 
-    thread_local_id = ith;
-
     atomic_int *done_counter = &shared->done_counter;
 
     for (int i = 0; i < shared->n_nodes; ++i) {
@@ -352,10 +347,9 @@ static thread_ret_t demo_compute_thread(void *data) {
 static void test_task_allocator(int n_threads, int n_nodes, int n_compute_units,
                                 int n_multiplier) {
     fprintf(stderr,
-            "\n[#_%d] %s(): n_threads: %d, n_nodes: %d, n_compute_units: %d, "
+            "\n%s(): n_threads: %d, n_nodes: %d, n_compute_units: %d, "
             "n_multiplier: %d ===>\n\n",
-            thread_local_id, __func__, n_threads, n_nodes, n_compute_units,
-            n_multiplier);
+            __func__, n_threads, n_nodes, n_compute_units, n_multiplier);
 
     struct ggml_tensor *nodes = alloca(n_nodes * sizeof(struct ggml_tensor));
 
