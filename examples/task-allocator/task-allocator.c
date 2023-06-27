@@ -167,8 +167,8 @@ static void allocate_chunk(struct task_allocator *a, int ith, int *chunk_idx,
         int head = atomic_load(&a->thread_queue_heads[ith]);
         int tail = atomic_load(&a->thread_queue_tails[ith]);
 
-        GGML_PRINT_DEBUG_5("[#_%d] %s(): head: %d, tail: %d.\n",
-                           thread_local_id, __func__, head, tail);
+        GGML_PRINT_DEBUG_5("[#_%d] %s(): head: %d, tail: %d.\n", ith, __func__,
+                           head, tail);
 
         if (head < tail) {
             int idx = ith * M + head;
@@ -252,7 +252,7 @@ struct params {
 };
 
 void compute_tensor(struct params params, struct ggml_tensor *node) {
-    GGML_PRINT_DEBUG_5("[#_%d] %s(): enter.\n", thread_local_id, __func__);
+    GGML_PRINT_DEBUG_5("[#_%d] %s(): enter.\n", params.ith, __func__);
 
     const int ith = params.ith;
     int chunk_idx;
@@ -280,7 +280,7 @@ void compute_tensor(struct params params, struct ggml_tensor *node) {
         UNUSED(x);
     }
 
-    GGML_PRINT_DEBUG_5("[#_%d] %s(): exit.\n", thread_local_id, __func__);
+    GGML_PRINT_DEBUG_5("[#_%d] %s(): exit.\n", ith, __func__);
 }
 
 static thread_ret_t demo_compute_thread(void *data) {
@@ -312,24 +312,18 @@ static thread_ret_t demo_compute_thread(void *data) {
         compute_tensor(params, node);
         atomic_fetch_add(done_counter, 1);
 
-        while (atomic_load(done_counter) != n_threads) {
-            sched_yield();
-            // main:    go here --> later, main saw cond matched, break out loop
-            //                         --> reset counter
-            // current: go here --stall for a thousand years --> check condition
-            // OOPS! will never break out.
-
-            // So we have to check if the counter has been reset.
-            if (atomic_load(done_counter) == 0) {
-                break;
-            }
-        }
-
-        GGML_PRINT_DEBUG_5(
-            "[#_%d] %s(): saw all threads finished computing the node.\n",
-            thread_local_id, __func__);
+        GGML_PRINT_DEBUG_5("[#_%d] %s(): finished computing the node.\n", ith,
+                           __func__);
 
         if (ith == 0) {
+            while (atomic_load(done_counter) != n_threads) {
+                sched_yield();
+            }
+
+            GGML_PRINT_DEBUG_5(
+                "[#_%d] %s(): saw all threads finished computing the node.\n",
+                ith, __func__);
+
             task_allocator_reset(allocator);
             atomic_store(done_counter, 0);
         } else {
@@ -339,7 +333,7 @@ static thread_ret_t demo_compute_thread(void *data) {
         }
     }
 
-    GGML_PRINT_DEBUG_5("[#_%d] %s(): exited\n", thread_local_id, __func__);
+    GGML_PRINT_DEBUG_5("[#_%d] %s(): exited\n", ith, __func__);
 
     return 0;
 }
