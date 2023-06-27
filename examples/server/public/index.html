@@ -67,7 +67,7 @@
   <script type="module">
     import {
       html, h, signal, effect, computed, render, useSignal, useEffect, useRef, fetchEventSource
-    } from 'https://npm.reversehttp.com/@preact/signals-core,@preact/signals,htm/preact,preact,preact/hooks,@microsoft/fetch-event-source';
+    } from '/index.js';
 
     const transcript = signal([])
     const chatStarted = computed(() => transcript.value.length > 0)

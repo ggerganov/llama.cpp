@@ -12,6 +12,15 @@
 #include "httplib.h"
 #include "json.hpp"
 
+// auto generated files (update with ./deps.sh)
+const char* indexHtml =
+#include "index.html.cpp"
+;
+const char* indexJs =
+#include "index.js.cpp"
+;
+
+
 #ifndef SERVER_VERBOSE
 #define SERVER_VERBOSE 1
 #endif
@@ -21,9 +30,11 @@ using json = nlohmann::json;
 
 struct server_params {
     std::string hostname = "127.0.0.1";
+    std::string public_path = "examples/server/public";
     int32_t port = 8080;
     int32_t read_timeout = 600;
     int32_t write_timeout = 600;
+
 };
 
 // completion token output with probabilities
@@ -539,6 +550,7 @@ static void server_print_usage(const char * argv0, const gpt_params & params,
     fprintf(stderr, "  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
     fprintf(stderr, "  --host                ip address to listen (default  (default: %s)\n", sparams.hostname.c_str());
     fprintf(stderr, "  --port PORT           port to listen (default  (default: %d)\n", sparams.port);
+    fprintf(stderr, "  --path PUBLIC_PATH    path from which to serve static files (default %s)\n", sparams.public_path.c_str());
     fprintf(stderr, "  -to N, --timeout N    server read/write timeout in seconds (default: %d)\n", sparams.read_timeout);
     fprintf(stderr, "  --embedding           enable embedding vector output (default: %s)\n", params.embedding ? "enabled" : "disabled");
     fprintf(stderr, "\n");
@@ -565,6 +577,12 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 break;
             }
             sparams.hostname = argv[i];
+        } else if (arg == "--path") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            sparams.public_path = argv[i];
         } else if (arg == "--timeout" || arg == "-to") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -846,7 +864,7 @@ static void log_server_request(const Request & req, const Response & res) {
         { "status", res.status },
         { "path", req.path },
         { "request", req.body },
-        { "response", res.body },
+//        { "response", res.body },
     });
 }
 
@@ -888,14 +906,15 @@ int main(int argc, char ** argv) {
         { "Access-Control-Allow-Headers", "content-type" }
     });
 
+    // this is only called if no index.js is found in the public --path
+    svr.Get("/index.js", [](const Request &, Response & res) {
+        res.set_content(indexJs, "text/javascript");
+        return false;
+    });
+
+    // this is only called if no index.html is found in the public --path
     svr.Get("/", [](const Request &, Response & res) {
-        // return content of server.html file
-
-        std::ifstream t("examples/server/server.html");
-        std::stringstream buffer;
-        buffer << t.rdbuf();
-
-        res.set_content(buffer.str(), "text/html");
+        res.set_content(indexHtml, "text/html");
         return false;
     });
 
@@ -1051,6 +1070,9 @@ int main(int argc, char ** argv) {
     svr.set_read_timeout(sparams.read_timeout);
     svr.set_write_timeout(sparams.write_timeout);
 
+    // Set the base directory for serving static files
+    svr.set_base_dir(sparams.public_path);
+
     if (!svr.bind_to_port(sparams.hostname, sparams.port)) {
         LOG_ERROR("couldn't bind to server socket", {
             { "hostname", sparams.hostname },
@@ -1059,10 +1081,9 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    LOG_INFO("HTTP server listening", {
-        { "hostname", sparams.hostname },
-        { "port", sparams.port },
-    });
+    std::cout << std::endl;
+    std::cout << "llama server listening at http://" << sparams.hostname << ":" << sparams.port << std::endl;
+    std::cout << std::endl;
 
     if (!svr.listen_after_bind()) {
         return 1;
