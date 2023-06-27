@@ -576,7 +576,7 @@ struct llama_model_loader {
     struct ggml_context * ggml_ctx = NULL;
     std::unique_ptr<llama_mmap> mapping;
 
-    llama_model_loader(const std::string & fname_base, bool use_mmap, bool vocab_only) {
+    llama_model_loader(const std::string & fname_base, bool use_mmap) {
         file_loader = std::unique_ptr<llama_file_loader>(new llama_file_loader(fname_base.c_str(), tensors_map));
         if (!llama_mmap::SUPPORTED) {
             use_mmap = false;
@@ -921,7 +921,7 @@ static void llama_model_load_internal(
 
     model.t_start_us = ggml_time_us();
 
-    std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, use_mmap, vocab_only));
+    std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, use_mmap));
 
     vocab = std::move(ml->file_loader->vocab);
     model.hparams = ml->file_loader->hparams;
@@ -2304,8 +2304,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         nthread = std::thread::hardware_concurrency();
     }
 
-    std::unique_ptr<llama_model_loader> model_loader(new llama_model_loader(fname_inp, /*use_mmap*/ false,
-                                                                            /*vocab_only*/ false));
+    std::unique_ptr<llama_model_loader> model_loader(new llama_model_loader(fname_inp, /*use_mmap*/ false));
     llama_file_saver file_saver(fname_out.c_str(), model_loader->file_loader.get(), params->ftype);
 
 #ifdef GGML_USE_K_QUANTS
@@ -2738,7 +2737,7 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
     llama_buffer base_buf;
     if (path_base_model) {
         fprintf(stderr, "%s: loading base model from '%s'\n", __func__, path_base_model);
-        model_loader.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true, /*vocab_only*/ false));
+        model_loader.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true));
 
         size_t ctx_size;
         size_t mmapped_size;
