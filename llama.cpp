@@ -581,20 +581,7 @@ struct llama_model_loader {
         if (!llama_mmap::SUPPORTED) {
             use_mmap = false;
         }
-        if (use_mmap && alignment_prevents_mmap()) {
-            fprintf(stderr, "llama.cpp: can't use mmap because tensors are not aligned; convert to new format to avoid this\n");
-            use_mmap = false;
-        }
         this->use_mmap = use_mmap;
-    }
-
-    bool alignment_prevents_mmap() {
-        for (const llama_load_tensor & lt : tensors_map.tensors) {
-            if (lt.file_off & 3) {
-                return true;
-            }
-        }
-        return false;
     }
 
     void calc_sizes(size_t * ctx_size_p, size_t * mmapped_size_p) const {
