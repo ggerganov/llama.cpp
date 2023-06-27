@@ -2,8 +2,6 @@
 #include "llama.h"
 #include "build-info.h"
 
-// single thread
-#define CPPHTTPLIB_THREAD_POOL_COUNT 1
 #ifndef NDEBUG
 // crash the server in debug mode, otherwise send an http 500 error
 #define CPPHTTPLIB_NO_EXCEPTIONS 1
@@ -34,7 +32,6 @@ struct server_params {
     int32_t port = 8080;
     int32_t read_timeout = 600;
     int32_t write_timeout = 600;
-
 };
 
 // completion token output with probabilities
@@ -182,6 +179,12 @@ struct llama_server_context {
     bool stopped_limit = false;
     std::string stopping_word;
     int32_t multibyte_pending = 0;
+
+    std::mutex mutex;
+
+    std::unique_lock<std::mutex> lock() {
+        return std::unique_lock<std::mutex>(mutex);
+    }
 
     ~llama_server_context() {
         if (ctx) {
@@ -912,6 +915,7 @@ int main(int argc, char ** argv) {
     Server svr;
 
     svr.set_default_headers({
+        { "Server", "llama.cpp" },
         { "Access-Control-Allow-Origin", "*" },
         { "Access-Control-Allow-Headers", "content-type" }
     });
@@ -929,7 +933,10 @@ int main(int argc, char ** argv) {
     });
 
     svr.Post("/completion", [&llama](const Request & req, Response & res) {
+        auto lock = llama.lock();
+
         llama.rewind();
+
         llama_reset_timings(llama.ctx);
 
         parse_options_completion(json::parse(req.body), llama);
@@ -1038,6 +1045,8 @@ int main(int argc, char ** argv) {
     });
 
     svr.Post("/tokenize", [&llama](const Request & req, Response & res) {
+        auto lock = llama.lock();
+
         const json body = json::parse(req.body);
         const std::string content = body.value("content", "");
         const std::vector<llama_token> tokens = llama_tokenize(llama.ctx, content, false);
@@ -1046,6 +1055,8 @@ int main(int argc, char ** argv) {
     });
 
     svr.Post("/embedding", [&llama](const Request & req, Response & res) {
+        auto lock = llama.lock();
+
         const json body = json::parse(req.body);
 
         llama.rewind();
