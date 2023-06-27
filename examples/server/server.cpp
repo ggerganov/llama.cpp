@@ -857,15 +857,25 @@ static void parse_options_completion(const json & body, llama_server_context & l
     LOG_VERBOSE("completion parameters parsed", format_generation_settings(llama));
 }
 
+
 static void log_server_request(const Request & req, const Response & res) {
-    LOG_INFO("request", {
-        { "remote_addr", req.remote_addr },
-        { "remote_port", req.remote_port },
-        { "status", res.status },
-        { "path", req.path },
-        { "request", req.body },
-//        { "response", res.body },
-    });
+    std::string referrer = req.has_header("Referer") ? req.get_header_value("Referer") : "-";
+    std::string user_agent = req.has_header("User-Agent") ? req.get_header_value("User-Agent") : "-";
+    std::time_t now = std::time(nullptr);
+    char time_str[80];
+    std::strftime(time_str, sizeof(time_str), "%d/%b/%Y:%H:%M:%S %z", std::localtime(&now));
+
+    fprintf(stdout, "%s - - [%s] \"%s %s HTTP/%s\" %d %zu \"%s\" \"%s\"\n",
+        req.remote_addr.c_str(),
+        time_str,
+        req.method.c_str(),
+        req.path.c_str(),
+        "1.1",
+        res.status,
+        res.body.size(),
+        referrer.c_str(),
+        user_agent.c_str()
+    );
 }
 
 int main(int argc, char ** argv) {
@@ -1070,20 +1080,16 @@ int main(int argc, char ** argv) {
     svr.set_read_timeout(sparams.read_timeout);
     svr.set_write_timeout(sparams.write_timeout);
 
-    // Set the base directory for serving static files
-    svr.set_base_dir(sparams.public_path);
-
     if (!svr.bind_to_port(sparams.hostname, sparams.port)) {
-        LOG_ERROR("couldn't bind to server socket", {
-            { "hostname", sparams.hostname },
-            { "port", sparams.port },
-        });
+        fprintf(stderr, "\ncouldn't bind to server socket: hostname=%s port=%d\n\n", sparams.hostname.c_str(), sparams.port);
         return 1;
     }
 
-    std::cout << std::endl;
-    std::cout << "llama server listening at http://" << sparams.hostname << ":" << sparams.port << std::endl;
-    std::cout << std::endl;
+    // Set the base directory for serving static files
+    svr.set_base_dir(sparams.public_path);
+
+    fprintf(stdout, "\nllama server listening at http://%s:%d\n\n", sparams.hostname.c_str(), sparams.port);
+
 
     if (!svr.listen_after_bind()) {
         return 1;
