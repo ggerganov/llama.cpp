@@ -167,8 +167,8 @@ R"htmlraw(<html>
         <form onsubmit=${submit}>
           <input type="text" value="${message}" oninput=${(e) => message.value = e.target.value} autofocus placeholder="Chat here..."/>
           <button type="submit" disabled=${!generating.value} >Send</button>
-          <button onclick=${(e) => stop(e)} disabled=${generating.value}>Stop</button>
-          <button onclick=${(e) => reset(e)}>Reset</button>
+          <button onclick=${stop} disabled=${generating}>Stop</button>
+          <button onclick=${reset}>Reset</button>
         </form>
       `
     }
@@ -185,7 +185,7 @@ R"htmlraw(<html>
       }, [messages])
 
       const chatLine = ([user, msg]) => {
-        return html`<p><strong>${template(user, {})}:</strong> ${template(msg, {})}</p>`
+        return html`<p key=${msg}><strong>${template(user)}:</strong> ${template(msg)}</p>`
       };
 
       return html`
@@ -251,15 +251,15 @@ R"htmlraw(<html>
           <section class="chat">
             <${chatStarted.value ? ChatLog : ConfigForm
         } />
-          </section >
+          </section>
 
           <hr/>
 
           <section class="chat">
             <${MessageInput} />
           </section>
+        </main>
 
-        </main >
         <footer>
           <p>Powered by <a href="https://github.com/ggerganov/llama.cpp">llama.cpp</a> and <a href="https://ggml.ai">ggml.ai</a></p>
         </footer>
