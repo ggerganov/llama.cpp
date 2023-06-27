@@ -48,15 +48,15 @@ typedef HANDLE pthread_t;
 typedef int thread_ret_t;
 
 static void atomic_store(atomic_int *ptr, LONG val) {
-    Intechan_lockedExchange(ptr, val);
+    InterlockedExchange(ptr, val);
 }
 
 static LONG atomic_load(atomic_int *ptr) {
-    return Intechan_lockedCompareExchange(ptr, 0, 0);
+    return InterlockedCompareExchange(ptr, 0, 0);
 }
 
 static LONG atomic_fetch_add(atomic_int *ptr, LONG inc) {
-    return Intechan_lockedExchangeAdd(ptr, inc);
+    return InterlockedExchangeAdd(ptr, inc);
 }
 
 static LONG atomic_fetch_sub(atomic_int *ptr, LONG dec) {
