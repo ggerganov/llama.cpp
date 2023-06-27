@@ -862,23 +862,19 @@ static void parse_options_completion(const json & body, llama_server_context & l
 
 
 static void log_server_request(const Request & req, const Response & res) {
-    std::string referrer = req.has_header("Referer") ? req.get_header_value("Referer") : "-";
-    std::string user_agent = req.has_header("User-Agent") ? req.get_header_value("User-Agent") : "-";
-    std::time_t now = std::time(nullptr);
-    char time_str[80];
-    std::strftime(time_str, sizeof(time_str), "%d/%b/%Y:%H:%M:%S %z", std::localtime(&now));
+    LOG_INFO("request", {
+        { "remote_addr", req.remote_addr },
+        { "remote_port", req.remote_port },
+        { "status", res.status },
+        { "method", req.method },
+        { "path", req.path },
+        { "params", req.params },
+    });
 
-    fprintf(stdout, "%s - - [%s] \"%s %s HTTP/%s\" %d %zu \"%s\" \"%s\"\n",
-        req.remote_addr.c_str(),
-        time_str,
-        req.method.c_str(),
-        req.path.c_str(),
-        "1.1",
-        res.status,
-        res.body.size(),
-        referrer.c_str(),
-        user_agent.c_str()
-    );
+    LOG_VERBOSE("request", {
+        { "request", req.body },
+        { "response", res.body },
+    });
 }
 
 int main(int argc, char ** argv) {
@@ -1099,8 +1095,13 @@ int main(int argc, char ** argv) {
     // Set the base directory for serving static files
     svr.set_base_dir(sparams.public_path);
 
+    // to make it ctrl+clickable:
     fprintf(stdout, "\nllama server listening at http://%s:%d\n\n", sparams.hostname.c_str(), sparams.port);
 
+    LOG_INFO("HTTP server listening", {
+        { "hostname", sparams.hostname },
+        { "port", sparams.port },
+    });
 
     if (!svr.listen_after_bind()) {
         return 1;
