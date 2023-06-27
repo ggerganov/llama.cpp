@@ -3034,7 +3034,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    if (params.seed == -1) {
+    if (params.seed == LLAMA_DEFAULT_SEED) {
         params.seed = time(NULL);
     }
     printf("%s: seed: %u\n", __func__, params.seed);

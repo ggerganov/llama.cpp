@@ -938,7 +938,7 @@ static bool kv_cache_init(
 
 struct llama_context_params llama_context_default_params() {
     struct llama_context_params result = {
-        /*.seed                        =*/ (unsigned int)-1,
+        /*.seed                        =*/ LLAMA_DEFAULT_SEED,
         /*.n_ctx                       =*/ 512,
         /*.n_batch                     =*/ 512,
         /*.gpu_layers                  =*/ 0,
@@ -2692,7 +2692,7 @@ struct llama_context * llama_new_context_with_model(
 
     llama_context * ctx = new llama_context(*model, model->vocab);
 
-    if (params.seed < 0) {
+    if (params.seed == LLAMA_DEFAULT_SEED) {
         params.seed = time(NULL);
     }
 
