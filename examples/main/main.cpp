@@ -129,13 +129,13 @@ int main(int argc, char ** argv) {
     // uncomment the "used_mem" line in llama.cpp to see the results
     if (params.mem_test) {
         {
-            const std::vector<llama_token> tmp(params.n_batch, llama_token_bos());
-            llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads);
+            const std::vector<llama_token> tmp(params.n_batch, params.bos_token);
+            llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads, params.bos_token, params.eos_token);
         }
 
         {
             const std::vector<llama_token> tmp = { 0, };
-            llama_eval(ctx, tmp.data(), tmp.size(), params.n_predict - 1, params.n_threads);
+            llama_eval(ctx, tmp.data(), tmp.size(), params.n_predict - 1, params.n_threads, params.bos_token, params.eos_token);
         }
 
         llama_print_timings(ctx);
@@ -147,7 +147,7 @@ int main(int argc, char ** argv) {
 
     // export the cgraph and exit
     if (params.export_cgraph) {
-        llama_eval_export(ctx, "llama.ggml");
+        llama_eval_export(ctx, "llama.ggml", params.bos_token, params.eos_token);
         llama_free(ctx);
         llama_free_model(model);
 
@@ -187,7 +187,7 @@ int main(int argc, char ** argv) {
         // Add a space in front of the first character to match OG llama tokenizer behavior
         params.prompt.insert(0, 1, ' ');
 
-        embd_inp = ::llama_tokenize(ctx, params.prompt, true);
+        embd_inp = ::llama_tokenize(ctx, params.prompt, true, true);
     } else {
         embd_inp = session_tokens;
     }
@@ -234,8 +234,8 @@ int main(int argc, char ** argv) {
     }
 
     // prefix & suffix for instruct mode
-    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", true);
-    const auto inp_sfx = ::llama_tokenize(ctx, "\n\n### Response:\n\n", false);
+    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", true, true);
+    const auto inp_sfx = ::llama_tokenize(ctx, "\n\n### Response:\n\n", false, false);
 
     // in instruct mode, we inject a prefix and a suffix to each input by the user
     if (params.instruct) {
@@ -249,7 +249,7 @@ int main(int argc, char ** argv) {
     }
 
     // determine newline token
-    auto llama_token_newline = ::llama_tokenize(ctx, "\n", false);
+    auto llama_token_newline = ::llama_tokenize(ctx, "\n", false, false);
 
     if (params.verbose_prompt) {
         fprintf(stderr, "\n");
@@ -342,8 +342,8 @@ int main(int argc, char ** argv) {
 
     // do one empty run to warm up the model
     {
-        const std::vector<llama_token> tmp = { llama_token_bos(), };
-        llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads);
+        const std::vector<llama_token> tmp = { params.bos_token, };
+        llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads, params.bos_token, params.eos_token);
         llama_reset_timings(ctx);
     }
 
@@ -417,7 +417,7 @@ int main(int argc, char ** argv) {
                 if (n_eval > params.n_batch) {
                     n_eval = params.n_batch;
                 }
-                if (llama_eval(ctx, &embd[i], n_eval, n_past, params.n_threads)) {
+                if (llama_eval(ctx, &embd[i], n_eval, n_past, params.n_threads, params.bos_token, params.eos_token)) {
                     fprintf(stderr, "%s : failed to eval\n", __func__);
                     return 1;
                 }
@@ -516,11 +516,11 @@ int main(int argc, char ** argv) {
             }
 
             // replace end of text token with newline token when in interactive mode
-            if (id == llama_token_eos() && params.interactive && !params.instruct) {
+            if (id == params.eos_token && params.interactive && !params.instruct) {
                 id = llama_token_newline.front();
                 if (params.antiprompt.size() != 0) {
                     // tokenize and inject first reverse prompt
-                    const auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false);
+                    const auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false, false);
                     embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
                 }
             }
@@ -626,7 +626,7 @@ int main(int argc, char ** argv) {
                         embd_inp.insert(embd_inp.end(), inp_pfx.begin(), inp_pfx.end());
                     }
 
-                    auto line_inp = ::llama_tokenize(ctx, buffer, false);
+                    auto line_inp = ::llama_tokenize(ctx, buffer, false, false);
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
 
                     // instruct mode: insert response suffix
@@ -646,7 +646,7 @@ int main(int argc, char ** argv) {
         }
 
         // end of text token
-        if (!embd.empty() && embd.back() == llama_token_eos()) {
+        if (!embd.empty() && embd.back() == params.eos_token) {
             if (params.instruct) {
                 is_interacting = true;
             } else {

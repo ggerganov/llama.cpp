@@ -79,6 +79,9 @@ struct gpt_params {
     bool numa              = false; // attempt optimizations that help on some NUMA systems
     bool export_cgraph     = false; // export the computation graph
     bool verbose_prompt    = false; // print prompt tokens before generation
+
+    int bos_token  = 1; // beginning of sentence token
+    int eos_token  = 2; // end of sentence token
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
@@ -91,7 +94,7 @@ std::string gpt_random_prompt(std::mt19937 & rng);
 // Vocab utils
 //
 
-std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::string & text, bool add_bos);
+std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::string & text, bool add_bos, bool add_eos);
 
 //
 // Model utils

@@ -261,7 +261,7 @@ struct llama_server_context {
 
         if (params.n_predict == 0) {
             has_next_token = false;
-            return llama_token_eos();
+            return params.eos_token;
         }
 
         // out of user input, sample next token
@@ -344,7 +344,7 @@ struct llama_server_context {
         // decrement remaining sampling budget
         --n_remain;
 
-        if (!embd.empty() && embd.back() == llama_token_eos()) {
+        if (!embd.empty() && embd.back() == params.eos_token) {
             //stopping_word = llama_token_to_str(ctx, embd.back());
             has_next_token = false;
             stopped_eos = true;
@@ -644,7 +644,7 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
 }
 
 static json format_generation_settings(llama_server_context & llama) {
-    const auto eos_bias = llama.params.logit_bias.find(llama_token_eos());
+    const auto eos_bias = llama.params.logit_bias.find(llama.params.eos_token);
     const bool ignore_eos = eos_bias != llama.params.logit_bias.end() &&
         eos_bias->second < 0.0f && std::isinf(eos_bias->second);
 
@@ -731,7 +731,7 @@ static void parse_options_completion(const json & body, llama_server_context & l
 
     llama.params.logit_bias.clear();
     if (body.value("ignore_eos", false)) {
-        llama.params.logit_bias[llama_token_eos()] = -INFINITY;
+        llama.params.logit_bias[default_params.eos_token] = -INFINITY;
     }
 
     const auto & logit_bias = body.find("logit_bias");

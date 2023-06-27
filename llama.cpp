@@ -1381,13 +1381,21 @@ static bool llama_eval_internal(
             const int    n_tokens,
             const int    n_past,
             const int    n_threads,
-            const char * cgraph_fname) {
+            const char * cgraph_fname,
+            int bos_token,
+            int eos_token) {
 
     // enforce that the first token is BOS
-    if (n_past == 0 && tokens[0] != llama_token_bos()) {
+    if (n_past == 0 && tokens[0] != bos_token) {
         fprintf(stderr, "%s: first token must be BOS\n", __func__);
         return false;
     }
+
+    // enforce that the last token is EOS
+    // if (n_past == 0 && tokens[-1] != eos_token) {
+    //     fprintf(stderr, "%s: last token must be EOS\n", __func__);
+    //     return false;
+    // }
 
     const int64_t t_start_us = ggml_time_us();
 
@@ -1933,7 +1941,7 @@ private:
     llama_sp_bigram::queue work_queue_;
 };
 
-static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, const std::string & text, bool bos) {
+static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, const std::string & text, int bos_token, int eos_token) {
     llama_tokenizer tokenizer(vocab);
     std::vector<llama_vocab::id> output;
 
@@ -1941,11 +1949,16 @@ static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, co
         return output;
     }
 
-    if (bos) {
-        output.push_back(llama_token_bos());
+    if (bos_token != 0) {
+        output.push_back(bos_token);
     }
 
     tokenizer.tokenize(text, output);
+
+    if (eos_token != 0) {
+        output.push_back(eos_token);
+    }
+
     return output;
 }
 
@@ -3420,8 +3433,10 @@ int llama_eval(
            const llama_token * tokens,
                          int   n_tokens,
                          int   n_past,
-                         int   n_threads) {
-    if (!llama_eval_internal(*ctx, tokens, n_tokens, n_past, n_threads, nullptr)) {
+                         int   n_threads,
+                         int bos_token,
+                         int eos_token) {
+    if (!llama_eval_internal(*ctx, tokens, n_tokens, n_past, n_threads, nullptr, bos_token, eos_token)) {
         fprintf(stderr, "%s: failed to eval\n", __func__);
         return 1;
     }
@@ -3436,13 +3451,13 @@ int llama_eval(
     return 0;
 }
 
-int llama_eval_export(struct llama_context * ctx, const char * fname) {
+int llama_eval_export(struct llama_context * ctx, const char * fname, int bos_token = 1, int eos_token = 2) {
     const int n_batch = 1;
     const int n_ctx   = 512 - n_batch;
 
-    const std::vector<llama_token> tmp(n_batch, llama_token_bos());
+    const std::vector<llama_token> tmp(n_batch, bos_token);
 
-    if (!llama_eval_internal(*ctx, tmp.data(), tmp.size(), n_ctx, 1, fname)) {
+    if (!llama_eval_internal(*ctx, tmp.data(), tmp.size(), n_ctx, 1, fname, bos_token, eos_token)) {
         fprintf(stderr, "%s: failed to eval\n", __func__);
         return 1;
     }
@@ -3455,8 +3470,9 @@ int llama_tokenize(
                   const char * text,
                  llama_token * tokens,
                          int   n_max_tokens,
-                        bool   add_bos) {
-    auto res = llama_tokenize(ctx->vocab, text, add_bos);
+                        bool   add_bos,
+                        bool   add_eos) {
+    auto res = llama_tokenize(ctx->vocab, text, add_bos, add_eos);
 
     if (n_max_tokens < (int) res.size()) {
         fprintf(stderr, "%s: too many tokens\n", __func__);
@@ -3509,14 +3525,6 @@ const char * llama_token_to_str(const struct llama_context * ctx, llama_token to
     }
 
     return ctx->vocab.id_to_token[token].tok.c_str();
-}
-
-llama_token llama_token_bos() {
-    return 1;
-}
-
-llama_token llama_token_eos() {
-    return 2;
 }
 
 llama_token llama_token_nl() {
