@@ -72,6 +72,7 @@ set(LLAMA_CUDA_DMMV_X      "32" CACHE STRING "llama: x stride for dmmv CUDA kern
 set(LLAMA_CUDA_DMMV_Y       "1" CACHE STRING "llama: y block size for dmmv CUDA kernels")
 option(LLAMA_CUDA_DMMV_F16                   "llama: use 16 bit floats for dmmv CUDA kernels"   OFF)
 set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for Q2_K/Q6_K")
+set(LLAMA_TRAINIG_CTX    "2176" CACHE STRING "llama: model training maximum context")
 option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
 option(LLAMA_METAL                           "llama: use Metal"                                 OFF)
 option(LLAMA_K_QUANTS                        "llama: use k-quants"                              ON)
@@ -124,6 +125,8 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED true)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
+
+add_compile_definitions(GGML_TRAINING_CTX=${LLAMA_TRAINIG_CTX})
 
 if (NOT MSVC)
     if (LLAMA_SANITIZE_THREAD)

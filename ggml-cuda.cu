@@ -2175,10 +2175,13 @@ inline void ggml_cuda_op_rope(
     const int n_past = ((int32_t *) src1->data)[0];
     const int n_dims = ((int32_t *) src1->data)[1];
     const int mode   = ((int32_t *) src1->data)[2];
+    const int n_ctx  = ((int32_t *) src1->data)[3];
     GGML_ASSERT(mode == 0);
 
     const float theta_scale = powf(10000.0, -2.0f/n_dims);
-    const float p = ((mode & 1) == 0 ? n_past + i02 : i02);
+    const float p0 = ((mode & 1) == 0 ? n_past + i02 : i02);
+
+    const float p = n_ctx <= GGML_TRAINING_CTX ? p0 : p0 * GGML_TRAINING_CTX / n_ctx;
 
     // compute
     rope_f32_cuda(src0_ddf_i, dst_ddf_i, ne00, i01_diff, p, theta_scale, cudaStream_main);
