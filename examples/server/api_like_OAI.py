@@ -8,7 +8,7 @@ import json
 
 app = Flask(__name__)
 
-parser = argparse.ArgumentParser(description="Convert a LLaMa model to a GGML compatible file")
+parser = argparse.ArgumentParser(description="An example of using server.cpp with a similar API to OAI. It must be used together with server.cpp.")
 parser.add_argument("--chat-prompt", type=str, help="the top prompt in chat completions(default: 'A chat between a curious user and an artificial intelligence assistant. The assistant follows the given rules no matter what.\\n')", default='A chat between a curious user and an artificial intelligence assistant. The assistant follows the given rules no matter what.\\n')
 parser.add_argument("--user-name", type=str, help="USER name in chat completions(default: '\\nUSER: ')", default="\\nUSER: ")
 parser.add_argument("--ai-name", type=str, help="ASSISTANT name in chat completions(default: '\\nASSISTANT: ')", default="\\nASSISTANT: ")
@@ -20,9 +20,6 @@ parser.add_argument("--host", type=str, help="Set the ip address to listen.(defa
 parser.add_argument("--port", type=int, help="Set the port to listen.(default: 8081)", default=8081)
 
 args = parser.parse_args()
-
-
-print(len(args.system_name))
 
 def is_present(json, key):
     try:
