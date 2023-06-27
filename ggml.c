@@ -12766,7 +12766,7 @@ static void ggml_compute_forward_rope_back_f32(
     const int n_past = ((int32_t *) src1->data)[0];
     const int n_dims = ((int32_t *) src1->data)[1];
     const int mode   = ((int32_t *) src1->data)[2];
-    const int n_ctx  = ((int64_t *) src1->data)[3];
+    const int n_ctx  = ((int32_t *) src1->data)[3];
 
     assert(n_past >= 0);
 
@@ -12883,7 +12883,7 @@ static void ggml_compute_forward_rope_back_f16(
     const int n_past = ((int32_t *) src1->data)[0];
     const int n_dims = ((int32_t *) src1->data)[1];
     const int mode   = ((int32_t *) src1->data)[2];
-    const int n_ctx  = ((int64_t *) src1->data)[3];
+    const int n_ctx  = ((int32_t *) src1->data)[3];
 
     assert(n_past >= 0);
 
