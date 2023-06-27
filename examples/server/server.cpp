@@ -378,10 +378,10 @@ struct llama_server_context {
                 } else {
                     // Temperature sampling
                     size_t min_keep = std::max(1, n_probs);
+                    llama_sample_top_k(ctx, &candidates_p, top_k, min_keep);
                     llama_sample_tail_free(ctx, &candidates_p, tfs_z, min_keep);
                     llama_sample_typical(ctx, &candidates_p, typical_p, min_keep);
                     llama_sample_top_p(ctx, &candidates_p, top_p, min_keep);
-                    llama_sample_top_k(ctx, &candidates_p, top_k, min_keep);
                     llama_sample_temperature(ctx, &candidates_p, temp);
                     result.tok = llama_sample_token(ctx, &candidates_p);
                 }
