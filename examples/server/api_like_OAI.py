@@ -8,18 +8,21 @@ import json
 
 app = Flask(__name__)
 
-parser = argparse.ArgumentParser(description="An example of using server.cpp with a similar API to OAI. It must be used together with server.cpp.")
-parser.add_argument("--chat-prompt", type=str, help="the top prompt in chat completions(default: A chat between a curious user and an artificial intelligence assistant. The assistant follows the given rules no matter what.)", default='A chat between a curious user and an artificial intelligence assistant. The assistant follows the given rules no matter what.')
-parser.add_argument("--user-name", type=str, help="USER name in chat completions(default: USER:)", default="USER:")
-parser.add_argument("--ai-name", type=str, help="ASSISTANT name in chat completions(default: ASSISTANT:)", default="ASSISTANT:")
-parser.add_argument("--system-name", type=str, help="SYSTEM name in chat completions(default: ASSISTANT's RULE:)", default="ASSISTANT's RULE:")
-parser.add_argument("--stop", type=str, help="the end of response in chat completions(default: </s>)", default="</s>")
+parser = argparse.ArgumentParser(description="Convert a LLaMa model to a GGML compatible file")
+parser.add_argument("--chat-prompt", type=str, help="the top prompt in chat completions(default: 'A chat between a curious user and an artificial intelligence assistant. The assistant follows the given rules no matter what.\\n')", default='A chat between a curious user and an artificial intelligence assistant. The assistant follows the given rules no matter what.\\n')
+parser.add_argument("--user-name", type=str, help="USER name in chat completions(default: '\\nUSER: ')", default="\\nUSER: ")
+parser.add_argument("--ai-name", type=str, help="ASSISTANT name in chat completions(default: '\\nASSISTANT: ')", default="\\nASSISTANT: ")
+parser.add_argument("--system-name", type=str, help="SYSTEM name in chat completions(default: '\\nASSISTANT's RULE: ')", default="\\nASSISTANT's RULE: ")
+parser.add_argument("--stop", type=str, help="the end of response in chat completions(default: '</s>')", default="</s>")
 parser.add_argument("--llama-api", type=str, help="Set the address of server.cpp in llama.cpp(default: http://127.0.0.1:8080)", default='http://127.0.0.1:8080')
 parser.add_argument("--api-key", type=str, help="Set the api key to allow only few user(default: NULL)", default="")
 parser.add_argument("--host", type=str, help="Set the ip address to listen.(default: 127.0.0.1)", default='127.0.0.1')
 parser.add_argument("--port", type=int, help="Set the port to listen.(default: 8081)", default=8081)
 
 args = parser.parse_args()
+
+
+print(len(args.system_name))
 
 def is_present(json, key):
     try:
@@ -28,18 +31,25 @@ def is_present(json, key):
         return False
     return True
 
+
+
 #convert chat to prompt
 def convert_chat(messages):
-    prompt = "" + args.chat_prompt + "\n\n"
+    prompt = "" + args.chat_prompt.replace("\\n", "\n")
+
+    system_n = args.system_name.replace("\\n", "\n")
+    user_n = args.user_name.replace("\\n", "\n")
+    ai_n = args.ai_name.replace("\\n", "\n")
+
 
     for line in messages:
         if (line["role"] == "system"):
-            prompt += f"{args.system_name} {line['content']}\n"
+            prompt += f"{system_n}{line['content']}"
         if (line["role"] == "user"):
-            prompt += f"{args.user_name} {line['content']}\n"
+            prompt += f"{user_n}{line['content']}"
         if (line["role"] == "assistant"):
-            prompt += f"{args.ai_name} {line['content']}{args.stop}\n"
-    prompt += args.ai_name
+            prompt += f"{ai_n}{line['content']}{args.stop}"
+    prompt += ai_n
 
     return prompt
 
@@ -60,8 +70,9 @@ def make_postData(body, chat=False, stream=False):
     if(is_present(body, "mirostat_tau")): postData["mirostat_tau"] = body["mirostat_tau"]
     if(is_present(body, "mirostat_eta")): postData["mirostat_eta"] = body["mirostat_eta"]
     if(is_present(body, "seed")): postData["seed"] = body["seed"]
-    if(is_present(body, "logit_bias")): postData["logit_bias"] = [[int(token), body["logit_bias"][token]] for token in body["logit_bias"].keys()].append(args.stop)
-    if(is_present(body, "stop")): postData["stop"] = body["stop"]
+    if(is_present(body, "logit_bias")): postData["logit_bias"] = [[int(token), body["logit_bias"][token]] for token in body["logit_bias"].keys()]
+    postData["stop"] = [args.stop]
+    if(is_present(body, "stop")): postData["stop"] += body["stop"]
     
     postData["stream"] = stream
 
