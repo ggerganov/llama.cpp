@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <stdbool.h>
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h> // using malloc.h with MSC/MINGW
@@ -93,7 +94,6 @@ typedef void *thread_ret_t;
 
 #include <pthread.h>
 #include <stdatomic.h>
-#include <stdbool.h>
 
 #endif
 
