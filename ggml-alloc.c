@@ -1,8 +1,3 @@
-// defines MAP_ANONYMOUS
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
 #include "ggml-alloc.h"
 #include "ggml.h"
 #include <assert.h>

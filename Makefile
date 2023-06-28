@@ -95,6 +95,20 @@ MK_CFLAGS   = $(CPPFLAGS) $(OPT) -std=c11   -fPIC
 MK_CXXFLAGS = $(CPPFLAGS) $(OPT) -std=c++11 -fPIC
 MK_LDFLAGS  =
 
+# clock_gettime came in POSIX.1b (1993)
+# CLOCK_MONOTONIC came in POSIX.1-2001 / SUSv3 as optional
+# posix_memalign came in POSIX.1-2001 / SUSv3
+# M_PI is an XSI extension since POSIX.1-2001 / SUSv3, came in XPG1 (1985)
+MK_CFLAGS   += -D_XOPEN_SOURCE=600
+MK_CXXFLAGS += -D_XOPEN_SOURCE=600
+
+# Data types, macros and functions related to controlling CPU affinity and
+# some memory allocation are available on Linux through GNU extensions in libc
+ifeq ($(UNAME_S),Linux)
+	MK_CFLAGS   += -D_GNU_SOURCE
+	MK_CXXFLAGS += -D_GNU_SOURCE
+endif
+
 ifdef LLAMA_DEBUG
 	MK_CFLAGS   += -O0 -g
 	MK_CXXFLAGS += -O0 -g
