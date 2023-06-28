@@ -3,6 +3,7 @@
 #ifdef VK_CHK_KERNEL
 #include <cblas.h>
 #include <cmath>
+#include <chrono>
 #endif
 
 #include <vulkan/vulkan.hpp>
@@ -34,7 +35,6 @@ inline static void* ggml_aligned_malloc(size_t size, size_t alignment) {
 #include <fstream>
 #include <iostream>
 #include <limits>
-#include <chrono>
 #include <tuple>
 #include <vector>
 
@@ -44,6 +44,22 @@ inline static void* ggml_aligned_malloc(size_t size, size_t alignment) {
 
 #define CEIL_DIV(M, N) (((M) + (N)-1) / (N))
 
+struct vk_buffer {
+    vk::Buffer buffer;
+    VmaAllocation allocation;
+    VmaAllocationInfo info;
+    size_t size = 0;
+    // Staging buffers
+    vk_buffer * sb_write;
+    vk_buffer * sb_read;
+};
+
+struct vk_pipeline {
+    vk::DescriptorSetLayout dsl;
+    vk::PipelineLayout layout;
+    vk::Pipeline pipeline;
+};
+
 vk::Instance vk_instance;
 uint32_t vk_compute_queue_family_index;
 uint32_t vk_transfer_queue_family_index;
@@ -51,29 +67,71 @@ vk::PhysicalDevice vk_physical_device;
 vk::Device vk_device;
 vk::CommandPool vk_command_pool_compute, vk_command_pool_transfer;
 VmaAllocator vk_allocator;
-vk::DescriptorSetLayout vk_pipeline_matmul_dsl;
-vk::PipelineLayout vk_pipeline_matmul_layout;
-vk::Pipeline vk_pipeline_matmul;
+vk_pipeline vk_pipeline_matmul_f32, vk_pipeline_matmul_f16;
 VmaAllocation vk_buffer_qa_alloc, vk_buffer_a_alloc, vk_buffer_b_alloc, vk_buffer_c_alloc;
 vk::Buffer vk_buffer_qa, vk_buffer_a, vk_buffer_b, vk_buffer_c;
 
 bool vk_fp16_support = false;
 
-struct vk_buffer {
-    vk::Buffer buffer;
-    VmaAllocation allocation;
-    VmaAllocationInfo info;
-    size_t size = 0;
-};
-
 static std::vector<std::tuple<void*, size_t, vk_buffer>> vk_buf_list;
+
+static vk_pipeline ggml_vk_create_pipeline(const std::string& path, const std::string& entrypoint, const std::vector<vk::DescriptorSetLayoutBinding>& dsl_binding, const vk::PushConstantRange& pcr) {
+    vk_pipeline pipeline;
+
+    std::vector<char> matmul_shader_contents;
+    if (std::ifstream shader_file{ path, std::ios::binary | std::ios::ate }) {
+        const size_t file_size = shader_file.tellg();
+        shader_file.seekg(0);
+        matmul_shader_contents.resize(file_size, '\0');
+        shader_file.read(matmul_shader_contents.data(), file_size);
+    } else {
+        std::cerr << "ggml_vulkan: Invalid shader path " << path << std::endl;
+        abort();
+    }
+
+    vk::ShaderModuleCreateInfo shader_module_create_info(
+        vk::ShaderModuleCreateFlags(),
+        matmul_shader_contents.size(),
+        reinterpret_cast<const uint32_t*>(matmul_shader_contents.data())
+    );
+    vk::ShaderModule shader_module = vk_device.createShaderModule(shader_module_create_info);
+
+    vk::DescriptorSetLayoutCreateInfo descriptor_set_layout_create_info(
+        vk::DescriptorSetLayoutCreateFlags(),
+        dsl_binding);
+    pipeline.dsl = vk_device.createDescriptorSetLayout(descriptor_set_layout_create_info);
+
+    vk::PipelineLayoutCreateInfo pipeline_layout_create_info(vk::PipelineLayoutCreateFlags(), pipeline.dsl, pcr);
+    pipeline.layout = vk_device.createPipelineLayout(pipeline_layout_create_info);
+    vk::PipelineCache pipeline_cache = vk_device.createPipelineCache(vk::PipelineCacheCreateInfo());
+
+    vk::PipelineShaderStageCreateInfo pipeline_shader_create_info(
+            vk::PipelineShaderStageCreateFlags(),
+            vk::ShaderStageFlagBits::eCompute,
+            shader_module,
+            entrypoint.c_str());
+    vk::ComputePipelineCreateInfo compute_pipeline_create_info(
+        vk::PipelineCreateFlags(),
+        pipeline_shader_create_info,
+        pipeline.layout);
+    pipeline.pipeline = vk_device.createComputePipeline(pipeline_cache, compute_pipeline_create_info).value;
+
+    return pipeline;
+}
+
+void ggml_vk_test_matmul_f32(size_t m, size_t n, size_t k);
+void ggml_vk_test_matmul_f16(size_t m, size_t n, size_t k);
 
 void ggml_vk_init(void) {
     char* GGML_VULKAN_DEVICE = getenv("GGML_VULKAN_DEVICE");
     int dev_num = (GGML_VULKAN_DEVICE == NULL ? 0 : atoi(GGML_VULKAN_DEVICE));
 
     vk::ApplicationInfo app_info{ "ggml-vulkan", 1, nullptr, 0, VK_API_VERSION };
-    const std::vector<const char*> layers = { "VK_LAYER_KHRONOS_validation" };
+    const std::vector<const char*> layers = {
+#ifdef GGML_DEBUG
+        "VK_LAYER_KHRONOS_validation",
+#endif
+    };
     vk::InstanceCreateInfo instance_create_info(vk::InstanceCreateFlags(), &app_info, layers.size(), layers.data());
     vk_instance = vk::createInstance(instance_create_info);
 
@@ -135,57 +193,35 @@ void ggml_vk_init(void) {
     vmaCreateAllocator(&allocator_info, &vk_allocator);
 
     // Shaders
-    std::vector<char> matmul_shader_contents;
-    if (std::ifstream shader_file{ "ggml-vulkan-matmul.spv", std::ios::binary | std::ios::ate }) {
-        const size_t file_size = shader_file.tellg();
-        shader_file.seekg(0);
-        matmul_shader_contents.resize(file_size, '\0');
-        shader_file.read(matmul_shader_contents.data(), file_size);
-    }
-
-    vk::ShaderModuleCreateInfo shader_module_create_info(
-        vk::ShaderModuleCreateFlags(),
-        matmul_shader_contents.size(),
-        reinterpret_cast<const uint32_t*>(matmul_shader_contents.data())
-    );
-    vk::ShaderModule shader_module = vk_device.createShaderModule(shader_module_create_info);
-
-    const std::vector<vk::DescriptorSetLayoutBinding> descriptor_set_layout_binding = {
+    std::vector<vk::DescriptorSetLayoutBinding> dsl_binding = {
         {0, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute},
         {1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute},
         {2, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute}
     };
-    vk::DescriptorSetLayoutCreateInfo descriptor_set_layout_create_info(
-        vk::DescriptorSetLayoutCreateFlags(),
-        descriptor_set_layout_binding);
-    vk_pipeline_matmul_dsl = vk_device.createDescriptorSetLayout(descriptor_set_layout_create_info);
 
-    vk::PushConstantRange push_constant_range(
+    vk::PushConstantRange pcr(
         vk::ShaderStageFlagBits::eCompute,
         0,
         6 * sizeof(int)
     );
+    vk_pipeline_matmul_f32 = ggml_vk_create_pipeline("vk_shaders/matmul_f32.spv", "main", dsl_binding, pcr);
+    vk_pipeline_matmul_f16 = ggml_vk_create_pipeline("vk_shaders/matmul_f16.spv", "main", dsl_binding, pcr);
 
-    vk::PipelineLayoutCreateInfo pipeline_layout_create_info(vk::PipelineLayoutCreateFlags(), vk_pipeline_matmul_dsl, push_constant_range);
-    vk_pipeline_matmul_layout = vk_device.createPipelineLayout(pipeline_layout_create_info);
-    vk::PipelineCache pipeline_cache = vk_device.createPipelineCache(vk::PipelineCacheCreateInfo());
-
-    vk::PipelineShaderStageCreateInfo pipeline_shader_create_info(
-            vk::PipelineShaderStageCreateFlags(),
-            vk::ShaderStageFlagBits::eCompute,
-            shader_module,
-            "main");
-    vk::ComputePipelineCreateInfo compute_pipeline_create_info(
-        vk::PipelineCreateFlags(),
-        pipeline_shader_create_info,
-        vk_pipeline_matmul_layout);
-    vk_pipeline_matmul = vk_device.createComputePipeline(pipeline_cache, compute_pipeline_create_info).value;
-
+    // Command pools
     vk::CommandPoolCreateInfo command_pool_create_info_compute(vk::CommandPoolCreateFlags(), vk_compute_queue_family_index);
     vk_command_pool_compute = vk_device.createCommandPool(command_pool_create_info_compute);
 
     vk::CommandPoolCreateInfo command_pool_create_info_transfer(vk::CommandPoolCreateFlags(), vk_transfer_queue_family_index);
     vk_command_pool_transfer = vk_device.createCommandPool(command_pool_create_info_transfer);
+
+    // for (size_t m = 1; m < 10; m++) {
+    //     for (size_t n = 1; n < 10; n++) {
+    //         for (size_t k = 1; k < 10; k++) {
+    //             ggml_vk_test_matmul_f32(m * 128, n * 128, k * 128);
+    //             ggml_vk_test_matmul_f16(m * 128, n * 128, k * 128);
+    //         }
+    //     }
+    // }
 }
 
 // buffer pool for vulkan
@@ -233,12 +269,27 @@ static vk_buffer ggml_vk_create_buffer(size_t size, VmaAllocationCreateFlags all
                     &buf.allocation,
                     &buf.info);
 
+    buf.sb_write = nullptr;
+    buf.sb_read = nullptr;
+
     return buf;
 }
 
 static void ggml_vk_destroy_buffer(vk_buffer& buf) {
     buf.size = 0;
     vmaDestroyBuffer(vk_allocator, buf.buffer, buf.allocation);
+
+    // Cleanup staging buffers
+    if (buf.sb_write != nullptr) {
+        vmaDestroyBuffer(vk_allocator, buf.sb_write->buffer, buf.sb_write->allocation);
+        free(buf.sb_write);
+        buf.sb_write = nullptr;
+    }
+    if (buf.sb_read != nullptr) {
+        vmaDestroyBuffer(vk_allocator, buf.sb_read->buffer, buf.sb_read->allocation);
+        free(buf.sb_read);
+        buf.sb_read = nullptr;
+    }
 }
 
 static void ggml_vk_pool_malloc(size_t size, vk_buffer* buf, VmaAllocationCreateFlags alloc_flags) {
@@ -294,7 +345,7 @@ void* ggml_vk_host_malloc(size_t size) {
         return nullptr;
     }
 
-    vk_buffer buf = ggml_vk_create_buffer(size, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_HOST, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+    vk_buffer buf = ggml_vk_create_buffer(size, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_HOST, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
     VkMemoryPropertyFlags mem_prop_flags;
     vmaGetAllocationMemoryProperties(vk_allocator, buf.allocation, &mem_prop_flags);
@@ -306,8 +357,6 @@ void* ggml_vk_host_malloc(size_t size) {
         vmaDestroyBuffer(vk_allocator, buf.buffer, buf.allocation);
         return nullptr;
     }
-
-    printf("allocate %.2f MB of pinned memory\n", size/1024.0/1024.0);
 
     vk_buf_list.push_back(std::make_tuple(buf.info.pMappedData, size, buf));
 
@@ -347,9 +396,9 @@ static void ggml_vk_buffer_write(vk_buffer* dst, size_t offset, const void * src
 
     // Buffer is already mapped
     if(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
-        memcpy(dst->info.pMappedData, src, size);
+        memcpy((uint8_t *)dst->info.pMappedData + offset, src, size);
         if (!(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
-            vmaFlushAllocation(vk_allocator, dst->allocation, 0, VK_WHOLE_SIZE);
+            vmaFlushAllocation(vk_allocator, dst->allocation, offset, size);
         }
     } else {
         // Check if src is pinned memory
@@ -379,26 +428,24 @@ static void ggml_vk_buffer_write(vk_buffer* dst, size_t offset, const void * src
             cmd_buffer.end();
 
             vk::Queue queue = vk_device.getQueue(vk_transfer_queue_family_index, 0);
-            vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
 
             vk::SubmitInfo submit_info(0,
                                        nullptr,
                                        nullptr,
                                        1,
                                        &cmd_buffer);
-            queue.submit({ submit_info }, fence);
-            vk_device.waitForFences({ fence },
-                                    true,
-                                    uint64_t(-1));
-            vk_device.destroyFence(fence);
+            queue.submit({ submit_info }, VK_NULL_HANDLE);
             return;
         }
 
-        // Staging buffer required
-        vk_buffer staging_buf = ggml_vk_create_buffer(size, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_AUTO, 0);
+        // Staging buffer required, malloc because of async transfer
+        if (dst->sb_write == nullptr) {
+            dst->sb_write = (vk_buffer *) malloc(sizeof(vk_buffer));
+            *dst->sb_write = ggml_vk_create_buffer(size, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_AUTO, 0);
+        }
 
-        memcpy(((uint8_t *)staging_buf.info.pMappedData) + offset, src, size);
-        vmaFlushAllocation(vk_allocator, staging_buf.allocation, 0, VK_WHOLE_SIZE);
+        memcpy(((uint8_t *)dst->sb_write->info.pMappedData) + offset, src, size);
+        vmaFlushAllocation(vk_allocator, dst->sb_write->allocation, 0, VK_WHOLE_SIZE);
         VkBufferCopy buf_copy = {
             0, // srcOffset
             offset, // dstOffset,
@@ -407,24 +454,17 @@ static void ggml_vk_buffer_write(vk_buffer* dst, size_t offset, const void * src
         vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(vk_command_pool_transfer);
         vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
         cmd_buffer.begin(cmd_buffer_begin_info);
-        vkCmdCopyBuffer(cmd_buffer, staging_buf.buffer, dst->buffer, 1, &buf_copy);
+        vkCmdCopyBuffer(cmd_buffer, dst->sb_write->buffer, dst->buffer, 1, &buf_copy);
         cmd_buffer.end();
 
         vk::Queue queue = vk_device.getQueue(vk_transfer_queue_family_index, 0);
-        vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
 
         vk::SubmitInfo submit_info(0,
                                    nullptr,
                                    nullptr,
                                    1,
                                    &cmd_buffer);
-        queue.submit({ submit_info }, fence);
-        vk_device.waitForFences({ fence },
-                                true,
-                                uint64_t(-1));
-
-        vk_device.destroyFence(fence);
-        ggml_vk_destroy_buffer(staging_buf);
+        queue.submit({ submit_info }, VK_NULL_HANDLE);
     }
 }
 
@@ -434,9 +474,9 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
 
     if(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
         if (!(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
-            vmaInvalidateAllocation(vk_allocator, src->allocation, 0, VK_WHOLE_SIZE);
+            vmaInvalidateAllocation(vk_allocator, src->allocation, offset, size);
         }
-        memcpy(dst, src->info.pMappedData, size);
+        memcpy(dst, (uint8_t *) src->info.pMappedData + offset, size);
     } else {
         // Check if dst is pinned memory
         vk_buffer* buf = nullptr;
@@ -465,7 +505,7 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
             cmd_buffer.end();
 
             vk::Queue queue = vk_device.getQueue(vk_transfer_queue_family_index, 0);
-            vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
+            vk::Fence fence = vk_device.createFence(vk::FenceCreateFlags{});
 
             vk::SubmitInfo submit_info(0,
                                        nullptr,
@@ -476,25 +516,30 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
             vk_device.waitForFences({ fence },
                                     true,
                                     uint64_t(-1));
+
             vk_device.destroyFence(fence);
             return;
         }
-        vk_buffer staging_buf = ggml_vk_create_buffer(size, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_AUTO, 0);
+
+        if (src->sb_read == nullptr) {
+            src->sb_read = (vk_buffer *) malloc(sizeof(vk_buffer));
+            *src->sb_read = ggml_vk_create_buffer(size, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_AUTO, 0);
+        }
 
         VkBufferCopy buf_copy = {
             offset, // srcOffset
             0, // dstOffset,
             size}; // size
-        vmaInvalidateAllocation(vk_allocator, staging_buf.allocation, 0, VK_WHOLE_SIZE);
+        vmaInvalidateAllocation(vk_allocator, src->sb_read->allocation, 0, VK_WHOLE_SIZE);
 
         vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(vk_command_pool_transfer);
         vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
         cmd_buffer.begin(cmd_buffer_begin_info);
-        vkCmdCopyBuffer(cmd_buffer, src->buffer, staging_buf.buffer, 1, &buf_copy);
+        vkCmdCopyBuffer(cmd_buffer, src->buffer, src->sb_read->buffer, 1, &buf_copy);
         cmd_buffer.end();
 
         vk::Queue queue = vk_device.getQueue(vk_transfer_queue_family_index, 0);
-        vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
+        vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo{});
 
         vk::SubmitInfo submit_info(0,
                                    nullptr,
@@ -505,10 +550,11 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
         vk_device.waitForFences({ fence },
                                 true,
                                 uint64_t(-1));
-        memcpy(dst, staging_buf.info.pMappedData, size);
+        memcpy(dst, src->sb_read->info.pMappedData, size);
 
         vk_device.destroyFence(fence);
-        ggml_vk_destroy_buffer(staging_buf);
+        ggml_vk_destroy_buffer(*src->sb_read);
+        src->sb_read = nullptr;
     }
 }
 
@@ -555,8 +601,6 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     const int nb2  = dst->nb[2];
     const int nb3  = dst->nb[3];
 
-    const float alpha = 1.0f;
-    const float beta = 0.0f;
     const int x_ne = ne01 * ne00;
     const int y_ne = ne11 * ne10;
     const int d_ne = ne11 * ne01;
@@ -567,16 +611,16 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     if (src0->backend == GGML_BACKEND_GPU) {
         d_X = *(vk_buffer*) src0->data;
     } else {
-        ggml_vk_pool_malloc(ggml_type_size(src0->type) * x_ne, &d_X, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
+        ggml_vk_pool_malloc(ggml_type_size(src0->type) * x_ne, &d_X, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
     }
-    ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
-    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
+    ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
 
     vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, 3);
     vk::DescriptorPoolCreateInfo descriptor_pool_create_info(vk::DescriptorPoolCreateFlags(), 1, descriptor_pool_size);
     vk::DescriptorPool descriptor_pool = vk_device.createDescriptorPool(descriptor_pool_create_info);
 
-    vk::DescriptorSetAllocateInfo descriptor_set_alloc_info(descriptor_pool, 1, &vk_pipeline_matmul_dsl);
+    vk::DescriptorSetAllocateInfo descriptor_set_alloc_info(descriptor_pool, 1, &vk_pipeline_matmul_f32.dsl);
     const std::vector<vk::DescriptorSet> descriptor_sets = vk_device.allocateDescriptorSets(descriptor_set_alloc_info);
     vk::DescriptorSet descriptor_set = descriptor_sets.front();
     vk::DescriptorBufferInfo d_X_buffer_info(d_X.buffer, 0, sizeof(float) * x_ne);
@@ -605,14 +649,16 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
             ggml_vk_h2d_tensor_2d(&d_Y, 0, src1, i03, i02);
 
             // compute
+#ifdef VK_CHK_KERNEL
             auto begin = std::chrono::high_resolution_clock::now();
+#endif
 
             vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
             cmd_buffer.begin(cmd_buffer_begin_info);
-            cmd_buffer.pushConstants<int>(vk_pipeline_matmul_layout, vk::ShaderStageFlagBits::eCompute, 0, push_constants);
-            cmd_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, vk_pipeline_matmul);
+            cmd_buffer.pushConstants<int>(vk_pipeline_matmul_f32.layout, vk::ShaderStageFlagBits::eCompute, 0, push_constants);
+            cmd_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, vk_pipeline_matmul_f32.pipeline);
             cmd_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-                                         vk_pipeline_matmul_layout,
+                                         vk_pipeline_matmul_f32.layout,
                                          0,
                                          { descriptor_set },
                                          {});
@@ -626,14 +672,20 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
                                        nullptr,
                                        1,
                                        &cmd_buffer);
+
+            // Wait for transfers to finish
+            vk_device.getQueue(vk_transfer_queue_family_index, 0).waitIdle();
+
             queue.submit({ submit_info }, fence);
             vk_device.waitForFences({ fence },
                                     true,
                                     uint64_t(-1));
 
+#ifdef VK_CHK_KERNEL
             auto end = std::chrono::high_resolution_clock::now();
 
             std::cout << "m=" << ne01 << " n=" << ne11 << " k=" << ne10 << " matmul " << std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count() / 1000.0 << "ms" << std::endl;
+#endif
 
             // copy dst to host
             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
@@ -658,6 +710,165 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
             }
 
             free(d_chk);
+#endif
+        }
+    }
+
+    vk_device.destroyFence(fence);
+
+    if (src0->backend != GGML_BACKEND_GPU) {
+        ggml_vk_pool_free(d_X);
+    }
+    ggml_vk_pool_free(d_Y);
+    ggml_vk_pool_free(d_D);
+}
+
+static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, void * wdata) {
+    GGML_ASSERT(vk_fp16_support);
+
+    GGML_ASSERT(src0->type == GGML_TYPE_F16);
+    GGML_ASSERT(src1->type == GGML_TYPE_F32);
+
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    const int64_t ne03 = src0->ne[3];
+
+    const int64_t ne10 = src1->ne[0];
+    const int64_t ne11 = src1->ne[1];
+
+    const int nb00 = src0->nb[0];
+    const int nb01 = src0->nb[1];
+    const int nb02 = src0->nb[2];
+    const int nb03 = src0->nb[3];
+
+    const int nb2  = dst->nb[2];
+    const int nb3  = dst->nb[3];
+
+    const int x_ne = ne01 * ne00;
+    const int y_ne = ne11 * ne10;
+    const int d_ne = ne11 * ne01;
+
+    vk_buffer d_X;
+    vk_buffer d_Y;
+    vk_buffer d_D;
+    if (src0->backend == GGML_BACKEND_GPU) {
+        d_X = *(vk_buffer*) src0->data;
+    } else {
+        ggml_vk_pool_malloc(sizeof(float) * x_ne, &d_X, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    }
+    ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+
+    bool src0_cont_rows = nb00 == sizeof(float);
+    bool src0_cont_cols = (size_t)nb01 == ne01*sizeof(float);
+
+    vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, 3);
+    vk::DescriptorPoolCreateInfo descriptor_pool_create_info(vk::DescriptorPoolCreateFlags(), 1, descriptor_pool_size);
+    vk::DescriptorPool descriptor_pool = vk_device.createDescriptorPool(descriptor_pool_create_info);
+
+    vk::DescriptorSetAllocateInfo descriptor_set_alloc_info(descriptor_pool, 1, &vk_pipeline_matmul_f16.dsl);
+    const std::vector<vk::DescriptorSet> descriptor_sets = vk_device.allocateDescriptorSets(descriptor_set_alloc_info);
+    vk::DescriptorSet descriptor_set = descriptor_sets.front();
+    vk::DescriptorBufferInfo d_X_buffer_info(d_X.buffer, 0, sizeof(float) * x_ne);
+    vk::DescriptorBufferInfo d_Y_buffer_info(d_Y.buffer, 0, sizeof(float) * y_ne);
+    vk::DescriptorBufferInfo d_D_buffer_info(d_D.buffer, 0, sizeof(float) * d_ne);
+
+    const std::vector<vk::WriteDescriptorSet> write_descriptor_sets = {
+        {descriptor_set, 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_X_buffer_info},
+        {descriptor_set, 1, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_Y_buffer_info},
+        {descriptor_set, 2, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_D_buffer_info},
+    };
+    vk_device.updateDescriptorSets(write_descriptor_sets, {});
+
+    std::array<int, 6> push_constants = { (int)ne01, (int)ne11, (int)ne10, (int)ne00, (int)ne10, (int)ne01 };
+    assert( ( sizeof( push_constants ) <= vk_physical_device.getProperties().limits.maxPushConstantsSize ) && "Too many push constants" );
+
+    vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(vk_command_pool_compute);
+    vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
+
+    for (int64_t i03 = 0; i03 < ne03; i03++) {
+        for (int64_t i02 = 0; i02 < ne02; i02++) {
+            // copy data to device
+            if (src1->backend != GGML_BACKEND_GPU) {
+                ggml_vk_h2d_tensor_2d(&d_Y, 0, src1, i03, i02);
+            }
+            // convert src1 to fp16
+            // TODO: use multiple threads
+            float * const tmp = (float *) wdata + (ne11 * ne10) * (i03 * ne02 + i02);
+            char * src0i = (char *) src0->data + i03*nb03 + i02*nb02;
+            if (src0_cont_rows) {
+                if (src0_cont_cols) {
+                    ggml_fp16_to_fp32_row((ggml_fp16_t *) src0i, tmp, ne00*ne01);
+                }
+                else {
+                    for (int64_t i01 = 0; i01 < ne01; i01++) {
+                        ggml_fp16_to_fp32_row((ggml_fp16_t *) (src0i + i01*nb01), tmp + i01*ne00, ne00);
+                    }
+                }
+            }
+            else {
+                for (int64_t i01 = 0; i01 < ne01; i01++) {
+                    for (int64_t i00 = 0; i00 < ne00; i00++) {
+                        // very slow due to no inlining
+                        tmp[i01*ne10 + i00] = ggml_fp16_to_fp32(*(ggml_fp16_t *) (src0i + i01*nb01 + i00*nb00));
+                    }
+                }
+            }
+            ggml_vk_buffer_write(&d_X, 0, tmp, sizeof(float) * x_ne);
+
+            // compute
+#ifdef VK_CHK_KERNEL
+            auto begin = std::chrono::high_resolution_clock::now();
+#endif
+
+            vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+            cmd_buffer.begin(cmd_buffer_begin_info);
+            cmd_buffer.pushConstants<int>(vk_pipeline_matmul_f32.layout, vk::ShaderStageFlagBits::eCompute, 0, push_constants);
+            cmd_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, vk_pipeline_matmul_f32.pipeline);
+            cmd_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+                                         vk_pipeline_matmul_f32.layout,
+                                         0,
+                                         { descriptor_set },
+                                         {});
+            cmd_buffer.dispatch(CEIL_DIV(ne01, 128), CEIL_DIV(ne11, 128), 1);
+            cmd_buffer.end();
+
+            vk::Queue queue = vk_device.getQueue(vk_compute_queue_family_index, 0);
+
+            vk::SubmitInfo submit_info(0,
+                                       nullptr,
+                                       nullptr,
+                                       1,
+                                       &cmd_buffer);
+
+            // Wait for transfers to finish
+            vk_device.getQueue(vk_transfer_queue_family_index, 0).waitIdle();
+
+            queue.submit({ submit_info }, fence);
+            vk_device.waitForFences({ fence },
+                                    true,
+                                    uint64_t(-1));
+
+#ifdef VK_CHK_KERNEL
+            auto end = std::chrono::high_resolution_clock::now();
+
+            std::cout << "m=" << ne01 << " n=" << ne11 << " k=" << ne10 << " matmul " << std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count() / 1000.0 << "ms" << std::endl;
+#endif
+
+            // copy dst to host
+            float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
+            ggml_vk_buffer_read(&d_D, 0, tmp, sizeof(float) * d_ne);
+
+#ifdef VK_CHK_KERNEL
+            for (size_t i = 0; i < d_ne; i++) {
+                if (std::fabs(tmp[i] - d[i]) > 0.01f) {
+                    printf("d[%ld] = %f d_chk[%ld] = %f\n", i, tmp[i], i, d[i]);
+                    abort();
+                }
+            }
+#else
+            // ggml_fp16_to_fp32_row(tmp, d, d_ne);
 #endif
         }
     }
@@ -841,7 +1052,7 @@ void ggml_vk_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor *
     }
     else if (src0->type == GGML_TYPE_F16) {
         if (ggml_vk_mul_mat_use_f16(src0, src1, dst)) {
-            // ggml_vk_mul_mat_f16(src0, src1, dst, wdata, wsize);
+            ggml_vk_mul_mat_f16(src0, src1, dst, wdata);
         }
         else {
             ggml_vk_mul_mat_q_f32(src0, src1, dst);
@@ -861,3 +1072,246 @@ size_t ggml_vk_mul_mat_get_wsize(const struct ggml_tensor * src0, const struct g
     }
     return 0;
 }
+
+#ifdef VK_CHK_KERNEL
+void ggml_vk_test_matmul_f32(size_t m, size_t n, size_t k) {
+    const size_t x_ne = m * k;
+    const size_t y_ne = k * n;
+    const size_t d_ne = m * n;
+
+    vk_buffer d_X;
+    vk_buffer d_Y;
+    vk_buffer d_D;
+    ggml_vk_pool_malloc(sizeof(float) * x_ne, &d_X, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+
+    vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, 3);
+    vk::DescriptorPoolCreateInfo descriptor_pool_create_info(vk::DescriptorPoolCreateFlags(), 1, descriptor_pool_size);
+    vk::DescriptorPool descriptor_pool = vk_device.createDescriptorPool(descriptor_pool_create_info);
+
+    vk::DescriptorSetAllocateInfo descriptor_set_alloc_info(descriptor_pool, 1, &vk_pipeline_matmul_f32.dsl);
+    const std::vector<vk::DescriptorSet> descriptor_sets = vk_device.allocateDescriptorSets(descriptor_set_alloc_info);
+    vk::DescriptorSet descriptor_set = descriptor_sets.front();
+    vk::DescriptorBufferInfo d_X_buffer_info(d_X.buffer, 0, sizeof(float) * x_ne);
+    vk::DescriptorBufferInfo d_Y_buffer_info(d_Y.buffer, 0, sizeof(float) * y_ne);
+    vk::DescriptorBufferInfo d_D_buffer_info(d_D.buffer, 0, sizeof(float) * d_ne);
+
+    const std::vector<vk::WriteDescriptorSet> write_descriptor_sets = {
+        {descriptor_set, 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_X_buffer_info},
+        {descriptor_set, 1, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_Y_buffer_info},
+        {descriptor_set, 2, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_D_buffer_info},
+    };
+    vk_device.updateDescriptorSets(write_descriptor_sets, {});
+
+    std::array<int, 6> push_constants = { (int)m, (int)n, (int)k, (int)k, (int)k, (int)m };
+    assert( ( sizeof( push_constants ) <= vk_physical_device.getProperties().limits.maxPushConstantsSize ) && "Too many push constants" );
+
+    float* x = (float *) malloc(sizeof(float) * x_ne);
+    float* y = (float *) malloc(sizeof(float) * y_ne);
+    float* d = (float *) malloc(sizeof(float) * d_ne);
+
+    for (size_t i = 0; i < x_ne; i++) {
+        x[i] = rand() / (float)RAND_MAX;
+    }
+    for (size_t i = 0; i < y_ne; i++) {
+        y[i] = rand() / (float)RAND_MAX;
+    }
+
+    ggml_vk_buffer_write(&d_X, 0, x, sizeof(float) * x_ne);
+    ggml_vk_buffer_write(&d_Y, 0, y, sizeof(float) * y_ne);
+
+    vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(vk_command_pool_compute);
+    vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
+
+    // compute
+    auto begin = std::chrono::high_resolution_clock::now();
+
+    vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+    cmd_buffer.begin(cmd_buffer_begin_info);
+    cmd_buffer.pushConstants<int>(vk_pipeline_matmul_f32.layout, vk::ShaderStageFlagBits::eCompute, 0, push_constants);
+    cmd_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, vk_pipeline_matmul_f32.pipeline);
+    cmd_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+                                 vk_pipeline_matmul_f32.layout,
+                                 0,
+                                 { descriptor_set },
+                                 {});
+    cmd_buffer.dispatch(CEIL_DIV(m, 128), CEIL_DIV(n, 128), 1);
+    cmd_buffer.end();
+
+    vk::Queue queue = vk_device.getQueue(vk_compute_queue_family_index, 0);
+
+    vk::SubmitInfo submit_info(0,
+                               nullptr,
+                               nullptr,
+                               1,
+                               &cmd_buffer);
+
+    // Wait for transfers to finish
+    vk_device.getQueue(vk_transfer_queue_family_index, 0).waitIdle();
+
+    queue.submit({ submit_info }, fence);
+    vk_device.waitForFences({ fence },
+                            true,
+                            uint64_t(-1));
+
+    auto end = std::chrono::high_resolution_clock::now();
+
+    // copy dst to host
+    ggml_vk_buffer_read(&d_D, 0, d, sizeof(float) * d_ne);
+
+    float * d_chk = (float *) malloc(sizeof(float) * d_ne);
+
+    cblas_sgemm(CblasColMajor, CblasTrans, CblasNoTrans,
+            m, n, k,
+            1.0f,    x, k,
+                     y, k,
+            0.0f,    d_chk, m);
+
+    double avg_err = 0.0;
+
+    for (size_t r = 0; r < m; r++) {
+        for (size_t c = 0; c < n; c++) {
+            avg_err += std::fabs(d[c * m + r] - d_chk[c * m + r]);
+        }
+    }
+
+    std::cout << "TEST FP32 m=" << m << " n=" << n << " k=" << k << " matmul " << std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count() / 1000.0 << "ms avg_err=" << avg_err / (m * n) << std::endl;
+
+    free(d_chk);
+
+    vk_device.destroyFence(fence);
+
+    ggml_vk_pool_free(d_X);
+    ggml_vk_pool_free(d_Y);
+    ggml_vk_pool_free(d_D);
+
+    free(x);
+    free(y);
+    free(d);
+}
+
+void ggml_vk_test_matmul_f16(size_t m, size_t n, size_t k) {
+    const size_t x_ne = m * k;
+    const size_t y_ne = k * n;
+    const size_t d_ne = m * n;
+
+    vk_buffer d_X;
+    vk_buffer d_Y;
+    vk_buffer d_D;
+    ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &d_X, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * y_ne, &d_Y, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+
+    vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, 3);
+    vk::DescriptorPoolCreateInfo descriptor_pool_create_info(vk::DescriptorPoolCreateFlags(), 1, descriptor_pool_size);
+    vk::DescriptorPool descriptor_pool = vk_device.createDescriptorPool(descriptor_pool_create_info);
+
+    vk::DescriptorSetAllocateInfo descriptor_set_alloc_info(descriptor_pool, 1, &vk_pipeline_matmul_f32.dsl);
+    const std::vector<vk::DescriptorSet> descriptor_sets = vk_device.allocateDescriptorSets(descriptor_set_alloc_info);
+    vk::DescriptorSet descriptor_set = descriptor_sets.front();
+    vk::DescriptorBufferInfo d_X_buffer_info(d_X.buffer, 0, sizeof(ggml_fp16_t) * x_ne);
+    vk::DescriptorBufferInfo d_Y_buffer_info(d_Y.buffer, 0, sizeof(ggml_fp16_t) * y_ne);
+    vk::DescriptorBufferInfo d_D_buffer_info(d_D.buffer, 0, sizeof(ggml_fp16_t) * d_ne);
+
+    const std::vector<vk::WriteDescriptorSet> write_descriptor_sets = {
+        {descriptor_set, 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_X_buffer_info},
+        {descriptor_set, 1, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_Y_buffer_info},
+        {descriptor_set, 2, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_D_buffer_info},
+    };
+    vk_device.updateDescriptorSets(write_descriptor_sets, {});
+
+    std::array<int, 6> push_constants = { (int)m, (int)n, (int)k, (int)k, (int)k, (int)m };
+    assert( ( sizeof( push_constants ) <= vk_physical_device.getProperties().limits.maxPushConstantsSize ) && "Too many push constants" );
+
+    ggml_fp16_t* x = (ggml_fp16_t *) malloc(sizeof(ggml_fp16_t) * x_ne);
+    ggml_fp16_t* y = (ggml_fp16_t *) malloc(sizeof(ggml_fp16_t) * y_ne);
+    ggml_fp16_t* d = (ggml_fp16_t *) malloc(sizeof(ggml_fp16_t) * d_ne);
+
+    for (size_t i = 0; i < x_ne; i++) {
+        x[i] = ggml_fp32_to_fp16(rand() / (float)RAND_MAX);
+    }
+    for (size_t i = 0; i < y_ne; i++) {
+        y[i] = ggml_fp32_to_fp16(rand() / (float)RAND_MAX);
+    }
+
+    ggml_vk_buffer_write(&d_X, 0, x, sizeof(ggml_fp16_t) * x_ne);
+    ggml_vk_buffer_write(&d_Y, 0, y, sizeof(ggml_fp16_t) * y_ne);
+
+    vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(vk_command_pool_compute);
+    vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
+
+    // compute
+    auto begin = std::chrono::high_resolution_clock::now();
+
+    vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+    cmd_buffer.begin(cmd_buffer_begin_info);
+    cmd_buffer.pushConstants<int>(vk_pipeline_matmul_f32.layout, vk::ShaderStageFlagBits::eCompute, 0, push_constants);
+    cmd_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, vk_pipeline_matmul_f32.pipeline);
+    cmd_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+                                 vk_pipeline_matmul_f32.layout,
+                                 0,
+                                 { descriptor_set },
+                                 {});
+    cmd_buffer.dispatch(CEIL_DIV(m, 32), CEIL_DIV(n, 32), 1);
+    cmd_buffer.end();
+
+    vk::Queue queue = vk_device.getQueue(vk_compute_queue_family_index, 0);
+
+    vk::SubmitInfo submit_info(0,
+                               nullptr,
+                               nullptr,
+                               1,
+                               &cmd_buffer);
+
+    // Wait for transfers to finish
+    vk_device.getQueue(vk_transfer_queue_family_index, 0).waitIdle();
+
+    queue.submit({ submit_info }, fence);
+    vk_device.waitForFences({ fence },
+                            true,
+                            uint64_t(-1));
+
+    auto end = std::chrono::high_resolution_clock::now();
+
+    // copy dst to host
+    ggml_vk_buffer_read(&d_D, 0, d, sizeof(ggml_fp16_t) * d_ne);
+
+    float * fx = (float *) malloc(sizeof(float) * x_ne);
+    float * fy = (float *) malloc(sizeof(float) * y_ne);
+    float * d_chk = (float *) malloc(sizeof(float) * d_ne);
+
+    ggml_fp16_to_fp32_row(x, fx, x_ne);
+    ggml_fp16_to_fp32_row(y, fy, y_ne);
+
+    cblas_sgemm(CblasColMajor, CblasTrans, CblasNoTrans,
+            m, n, k,
+            1.0f,    fx, k,
+                     fy, k,
+            0.0f,    d_chk, m);
+
+    double avg_err = 0.0;
+
+    for (size_t r = 0; r < m; r++) {
+        for (size_t c = 0; c < n; c++) {
+            avg_err += std::fabs(ggml_fp16_to_fp32(d[c * m + r]) - d_chk[c * m + r]);
+        }
+    }
+
+    std::cout << "TEST FP16 m=" << m << " n=" << n << " k=" << k << " matmul " << std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count() / 1000.0 << "ms avg_err=" << avg_err / (m * n) << std::endl;
+
+    free(fx);
+    free(fy);
+    free(d_chk);
+
+    vk_device.destroyFence(fence);
+
+    ggml_vk_pool_free(d_X);
+    ggml_vk_pool_free(d_Y);
+    ggml_vk_pool_free(d_D);
+
+    free(x);
+    free(y);
+    free(d);
+}
+#endif
