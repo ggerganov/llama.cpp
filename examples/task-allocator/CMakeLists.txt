@@ -1,0 +1,7 @@
+set(TARGET task-allocator)
+add_executable(${TARGET} task-allocator.c)
+target_link_libraries(${TARGET} PRIVATE)
+target_compile_features(${TARGET} PRIVATE c_std_11)
+if(TARGET BUILD_INFO)
+  add_dependencies(${TARGET} BUILD_INFO)
+endif()
