@@ -1461,6 +1461,7 @@ extern "C" {
 
     GGML_API size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, int start, int n, int64_t * hist);
 
+    GGML_API void quantize_upgrade(enum ggml_type type, void* data, size_t *size, bool needShuffle);
     //
     // system info
     //

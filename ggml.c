@@ -914,6 +914,124 @@ typedef struct {
 } block_q8_1;
 static_assert(sizeof(block_q8_1) == 2*sizeof(float) + QK8_1, "wrong q8_1 block size/padding");
 
+static void quantize_shuffle_block(const uint8_t* src, uint8_t* dest, int half_size)
+{
+    for (int j = 0; j < half_size; j++) {
+        // old: d0, d1, d2, d3, d4, ....... d_half, d_half1
+        // new: d0, d_half, d1, d_half1
+        uint8_t d1;
+        uint8_t d2;
+
+        d1 = src[0 + j];
+        d2 = src[half_size + j];
+
+        dest[0 + j * 2] = (d1 & 0x0f) | ((d2 & 0x0f) << 4);
+        dest[1 + j * 2] = (d1 >> 4) | (d2 & 0xf0);
+    }
+}
+
+typedef struct {
+    float   d;              // delta
+    uint8_t qs[QK4_0 / 2];  // nibbles / quants
+}block_q4_0_old;
+typedef struct {
+    float   d;              // delta
+    float   m;              // min
+    uint8_t qs[QK4_1 / 2];  // nibbles / quants
+} block_q4_1_old;
+typedef struct {
+    float   d;              // delta
+    int8_t  qs[QK8_0];      // quants
+} block_q8_0_old;
+
+void quantize_upgrade(enum ggml_type type, void* data, size_t * size, bool shuffle) {
+    if (type == GGML_TYPE_Q4_0) {
+        int qk = ggml_blck_size(type);
+        const size_t nb = *size / sizeof(block_q4_0_old);
+        block_q4_0_old *blk = (block_q4_0_old *)data;
+        block_q4_0 *new_blk = (block_q4_0 *)data;
+        block_q4_0 new_blk_buf;
+        *size = nb * sizeof(block_q4_0);
+
+        for (size_t i = 0; i < nb ; i++) {
+
+            new_blk_buf.d = GGML_FP32_TO_FP16(blk[i].d);
+
+            if (shuffle) {
+                quantize_shuffle_block(blk[i].qs, new_blk_buf.qs, qk/4);
+            } else {
+                memcpy(new_blk_buf.qs, blk[i].qs, qk / 2);
+            }
+
+            memcpy(&new_blk[i], &new_blk_buf, sizeof(block_q4_0));
+        }
+    } else if (type == GGML_TYPE_Q4_1) {
+        int qk = ggml_blck_size(type);
+        const size_t nb = *size / sizeof(block_q4_1_old);
+        block_q4_1_old *blk = (block_q4_1_old *)data;
+        block_q4_1 *new_blk = (block_q4_1 *)data;
+        block_q4_1 new_blk_buf;
+        *size = nb * sizeof(block_q4_1);
+
+        for (size_t i = 0; i < nb ; i++) {
+            new_blk_buf.d = GGML_FP32_TO_FP16(blk[i].d);
+            new_blk_buf.m = GGML_FP32_TO_FP16(blk[i].m);
+
+            if (shuffle) {
+                quantize_shuffle_block(blk[i].qs, new_blk_buf.qs, qk/4);
+            } else {
+                memcpy(new_blk_buf.qs, blk[i].qs, qk / 2);
+            }
+            memcpy(&new_blk[i], &new_blk_buf, sizeof(block_q4_1));
+        }
+    } else if (type == GGML_TYPE_Q5_0) {
+        // No size diff
+        int qk = ggml_blck_size(type);
+        const size_t nb = *size / sizeof(block_q5_0);
+        block_q5_0 *blk = (block_q5_0 *)data;
+        block_q5_0 new_blk;
+
+        for (size_t i = 0; i < nb ; i++) {
+            if (shuffle) {
+                quantize_shuffle_block(blk[i].qs, new_blk.qs, qk/4);
+            } else {
+                memcpy(new_blk.qs, blk[i].qs, qk / 2);
+            }
+            memcpy(blk[i].qs, new_blk.qs, sizeof(new_blk.qs));
+        }
+    } else if (type == GGML_TYPE_Q5_1) {
+        // No size diff
+        int qk = ggml_blck_size(type);
+        const size_t nb = *size / sizeof(block_q5_1);
+        block_q5_1 *blk = (block_q5_1 *)data;
+        block_q5_1 new_blk;
+
+        for (size_t i = 0; i < nb ; i++) {
+            if (shuffle) {
+                quantize_shuffle_block(blk[i].qs, new_blk.qs, qk/4);
+            } else {
+                memcpy(new_blk.qs, blk[i].qs, qk / 2);
+            }
+            memcpy(&blk[i], &new_blk, sizeof(new_blk));
+        }
+    } else if (type == GGML_TYPE_Q8_0) {
+        // no shuffle
+        int qk = ggml_blck_size(type);
+        const size_t nb = *size / sizeof(block_q8_0_old);
+        block_q8_0_old *blk = (block_q8_0_old *)data;
+        block_q8_0 *new_blk = (block_q8_0 *)data;
+        block_q8_0 new_blk_buf;
+        *size = nb * sizeof(block_q8_0);
+
+        for (size_t i = 0; i < nb ; i++) {
+            new_blk_buf.d = GGML_FP32_TO_FP16(blk[i].d);
+
+            memcpy(new_blk_buf.qs, blk[i].qs, qk / 2);
+            memcpy(&new_blk[i], &new_blk_buf, sizeof(block_q8_0));
+        }
+    }
+}
+
 // reference implementation for deterministic creation of model files
 static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * restrict y, int k) {
     static const int qk = QK4_0;

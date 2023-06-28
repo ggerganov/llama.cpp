@@ -330,6 +330,14 @@ struct llama_context {
     }
 };
 
+enum llama_file_version {
+    LLAMA_FILE_VERSION_GGML,
+    LLAMA_FILE_VERSION_GGMF_V1, // added version field and scores in vocab
+    LLAMA_FILE_VERSION_GGJT_V1, // added padding
+    LLAMA_FILE_VERSION_GGJT_V2, // changed quantization format
+    LLAMA_FILE_VERSION_GGJT_V3, // changed Q4 and Q8 quantization format
+};
+
 template <typename T>
 static T checked_mul(T a, T b) {
     T ret = a * b;
@@ -364,6 +372,30 @@ static size_t llama_calc_tensor_size(const std::vector<uint32_t> & ne, enum ggml
     return size / ggml_blck_size(type);
 }
 
+static size_t llama_calc_tensor_size_prev3(const std::vector<uint32_t> & ne, enum ggml_type type) {
+    size_t size = ggml_type_size(type);
+
+    switch (type)
+    {
+        case GGML_TYPE_Q4_0:
+            size += 2;
+            break;
+        case GGML_TYPE_Q4_1:
+            size += 4;
+            break;
+        case GGML_TYPE_Q8_0:
+            size += 2;
+            break;
+        default:
+            break;
+    }
+
+    for (uint32_t dim : ne) {
+        size = checked_mul<size_t>(size, dim);
+    }
+    return size / ggml_blck_size(type);
+}
+
 struct llama_load_tensor_shard {
     std::vector<uint32_t> ne;
     size_t size;
@@ -371,8 +403,12 @@ struct llama_load_tensor_shard {
     size_t file_idx;
     size_t file_off;
 
-    void calc_size() {
-        size = llama_calc_tensor_size(ne, type);
+    void calc_size(llama_file_version file_version) {
+        if (file_version == LLAMA_FILE_VERSION_GGJT_V3) {
+            size = llama_calc_tensor_size(ne, type);
+        } else {
+            size = llama_calc_tensor_size_prev3(ne, type);
+        }
     }
 };
 
@@ -395,11 +431,11 @@ struct llama_load_tensor {
 
     llama_load_tensor(const std::string & name) : name(name) {}
 
-    void calc_all() {
+    void calc_all(llama_file_version file_version) {
         calc_type();
         calc_split_type();
         calc_ne();
-        calc_size();
+        calc_size(file_version);
     }
 
     void calc_type() {
@@ -451,8 +487,12 @@ struct llama_load_tensor {
         }
     }
 
-    void calc_size() {
-        size = llama_calc_tensor_size(ne, type);
+    void calc_size(llama_file_version file_version) {
+        if (file_version == LLAMA_FILE_VERSION_GGJT_V3) {
+            size = llama_calc_tensor_size(ne, type);
+        } else {
+            size = llama_calc_tensor_size_prev3(ne, type);
+        }
     }
 };
 
@@ -460,14 +500,6 @@ struct llama_load_tensors_map {
     // tensors is kept in a separate vector to preserve file order
     std::vector<llama_load_tensor> tensors;
     std::unordered_map<std::string, size_t> name_to_idx;
-};
-
-enum llama_file_version {
-    LLAMA_FILE_VERSION_GGML,
-    LLAMA_FILE_VERSION_GGMF_V1, // added version field and scores in vocab
-    LLAMA_FILE_VERSION_GGJT_V1, // added padding
-    LLAMA_FILE_VERSION_GGJT_V2, // changed quantization format
-    LLAMA_FILE_VERSION_GGJT_V3, // changed Q4 and Q8 quantization format
 };
 
 struct llama_file_loader {
@@ -577,7 +609,7 @@ struct llama_file_loader {
             shard.file_idx = file_idx;
             shard.file_off = file.tell();
 
-            shard.calc_size();
+            shard.calc_size(file_version);
             file.seek(shard.size, SEEK_CUR);
 
             auto it = tensors_map.name_to_idx.find(name);
@@ -687,7 +719,7 @@ struct llama_model_loader {
         }
         this->use_mmap = use_mmap;
         for (llama_load_tensor & lt : tensors_map.tensors) {
-            lt.calc_all();
+            lt.calc_all(first_file->file_version);
         }
     }
 
@@ -2507,7 +2539,22 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         size_t new_size;
         llama_buffer work;
 
-        if (!quantize) {
+        bool needShuffle = (model_loader->file_loaders.at(0)->file_version == LLAMA_FILE_VERSION_GGJT_V1);
+
+        if (model_loader->file_loaders.at(0)->file_version < LLAMA_FILE_VERSION_GGJT_V3 && quantize) {
+            if ((quantized_type == tensor.type) &&
+                (tensor.type == GGML_TYPE_Q4_0 || tensor.type == GGML_TYPE_Q4_1 || tensor.type == GGML_TYPE_Q5_0 || tensor.type == GGML_TYPE_Q5_1 || tensor.type == GGML_TYPE_Q8_0)) {
+                // convet
+                new_type = tensor.type;
+                new_data = tensor.data;
+                new_size = tensor.size;
+                quantize_upgrade(new_type, new_data, &new_size, needShuffle);
+                printf("Upgrade - size = %8.3f MB\n", new_size/1024.0/1024.0);
+            }
+            else {
+                throw format("type %s unsupported for quantization format upgrade", ggml_type_name(tensor.type));
+            }
+        } else if (!quantize) {
             new_type = tensor.type;
             new_data = tensor.data;
             new_size = tensor.size;
