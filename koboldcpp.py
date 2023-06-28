@@ -77,15 +77,17 @@ lib_failsafe = pick_existant_file("koboldcpp_failsafe.dll","koboldcpp_failsafe.s
 lib_openblas = pick_existant_file("koboldcpp_openblas.dll","koboldcpp_openblas.so")
 lib_openblas_noavx2 = pick_existant_file("koboldcpp_openblas_noavx2.dll","koboldcpp_openblas_noavx2.so")
 lib_clblast = pick_existant_file("koboldcpp_clblast.dll","koboldcpp_clblast.so")
+lib_cublas = pick_existant_file("koboldcpp_cublas.dll","koboldcpp_cublas.so")
 
 
 def init_library():
     global handle
-    global lib_default,lib_failsafe,lib_openblas,lib_openblas_noavx2,lib_clblast
+    global lib_default,lib_failsafe,lib_openblas,lib_openblas_noavx2,lib_clblast,lib_cublas
 
     libname = ""
     use_blas = False # if true, uses OpenBLAS for acceleration. libopenblas.dll must exist in the same dir.
     use_clblast = False #uses CLBlast instead
+    use_cublas = False #uses cublas instead
     use_noavx2 = False #uses openblas with no avx2 instructions
 
     if args.noavx2:
@@ -103,6 +105,12 @@ def init_library():
         else:
             print("Attempting to use CLBlast library for faster prompt ingestion. A compatible clblast will be required.")
             use_clblast = True
+    elif args.usecublas:
+        if not file_exists(lib_cublas):
+            print("Warning: CuBLAS library file not found. Non-BLAS library will be used.")
+        else:
+            print("Attempting to use CuBLAS library for faster prompt ingestion. A compatible CuBLAS will be required.")
+            use_cublas = True
     else:
         if not file_exists(lib_openblas) or (os.name=='nt' and not file_exists("libopenblas.dll")):
             print("Warning: OpenBLAS library file not found. Non-BLAS library will be used.")
@@ -122,6 +130,8 @@ def init_library():
     else:
         if use_clblast:
             libname = lib_clblast
+        if use_cublas:
+            libname = lib_cublas
         elif use_blas:
             libname = lib_openblas
         else:
@@ -581,13 +591,13 @@ def show_gui():
         blaschoice = tk.StringVar()
         blaschoice.set("BLAS = 512")
 
-        runopts = ["Use OpenBLAS","Use CLBLast GPU #1","Use CLBLast GPU #2","Use CLBLast GPU #3","Use No BLAS","Use OpenBLAS (Old CPU, noavx2)","Failsafe Mode (Old CPU, noavx)"]
+        runopts = ["Use OpenBLAS","Use CLBLast GPU #1","Use CLBLast GPU #2","Use CLBLast GPU #3","Use CuBLAS GPU","Use No BLAS","Use OpenBLAS (Old CPU, noavx2)","Failsafe Mode (Old CPU, noavx)"]
         runchoice = tk.StringVar()
         runchoice.set("Use OpenBLAS")
 
         def onDropdownChange(event):
             sel = runchoice.get()
-            if sel==runopts[1] or sel==runopts[2] or sel==runopts[3]:
+            if sel==runopts[1] or sel==runopts[2] or sel==runopts[3] or sel==runopts[4]:
                 frameC.grid(row=4,column=0,pady=4)
             else:
                 frameC.grid_forget()
@@ -609,7 +619,7 @@ def show_gui():
         frameC = tk.Frame(root)
         gpu_layers_var=tk.StringVar()
         gpu_layers_var.set("0")
-        gpu_lbl = tk.Label(frameC, text = 'GPU Layers (CLBlast only): ', font=('calibre',10, 'bold'))
+        gpu_lbl = tk.Label(frameC, text = 'GPU Layers: ', font=('calibre',10, 'bold'))
         gpu_layers_input = tk.Entry(frameC,textvariable = gpu_layers_var, font=('calibre',10,'normal'))
         gpu_lbl.grid(row=0,column=0)
         gpu_layers_input.grid(row=0,column=1)
@@ -663,10 +673,12 @@ def show_gui():
         if selrunchoice==runopts[3]:
             args.useclblast = [0,1]
         if selrunchoice==runopts[4]:
-            args.noblas = True
+            args.usecublas = True
         if selrunchoice==runopts[5]:
-            args.noavx2 = True
+            args.noblas = True
         if selrunchoice==runopts[6]:
+            args.noavx2 = True
+        if selrunchoice==runopts[7]:
             args.noavx2 = True
             args.noblas = True
             args.nommap = True
@@ -861,7 +873,8 @@ if __name__ == '__main__':
     parser.add_argument("--hordeconfig", help="Sets the display model name to something else, for easy use on AI Horde. Optional additional parameters set the horde max genlength and max ctxlen.",metavar=('[hordename]', '[hordelength] [hordectx]'), nargs='+')
     compatgroup = parser.add_mutually_exclusive_group()
     compatgroup.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
-    compatgroup.add_argument("--useclblast", help="Use CLBlast instead of OpenBLAS for prompt ingestion. Must specify exactly 2 arguments, platform ID and device ID (e.g. --useclblast 1 0).", type=int, choices=range(0,9), nargs=2)
-    parser.add_argument("--gpulayers", help="Set number of layers to offload to GPU when using CLBlast. Requires CLBlast.",metavar=('[GPU layers]'), type=int, default=0)
+    compatgroup.add_argument("--useclblast", help="Use CLBlast for GPU Acceleration. Must specify exactly 2 arguments, platform ID and device ID (e.g. --useclblast 1 0).", type=int, choices=range(0,9), nargs=2)
+    compatgroup.add_argument("--usecublas", help="Use CuBLAS for GPU Acceleration. Requires Nvidia GPU.", action='store_true')
+    parser.add_argument("--gpulayers", help="Set number of layers to offload to GPU when using GPU. Requires GPU.",metavar=('[GPU layers]'), type=int, default=0)
     args = parser.parse_args()
     main(args)
