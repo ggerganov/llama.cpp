@@ -21,8 +21,8 @@ ifndef UNAME_M
 UNAME_M := $(shell uname -m)
 endif
 
-CCV  = $(shell $(CC)  --version | head -n 1)
-CXXV = $(shell $(CXX) --version | head -n 1)
+CCV := $(shell $(CC) --version | head -n 1)
+CXXV := $(shell $(CXX) --version | head -n 1)
 
 # Mac OS + Arm can report x86_64
 # ref: https://github.com/ggerganov/whisper.cpp/issues/66#issuecomment-1282546789
@@ -207,13 +207,18 @@ ifdef LLAMA_HIPBLAS
 	ROCM_PATH  ?= /opt/rocm
 	CC         := $(ROCM_PATH)/llvm/bin/clang
 	CXX        := $(ROCM_PATH)/llvm/bin/clang++
-	GPU_TARGETS = gfx900 gfx906 gfx908 gfx90a gfx1030
+	GPU_TARGETS = gfx803 gfx900 gfx906 gfx908 gfx90a gfx1030
 	LLAMA_CUDA_DMMV_X ?= 32
 	LLAMA_CUDA_DMMV_Y ?= 1
 	CFLAGS     += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS $(shell $(ROCM_PATH)/bin/hipconfig -C)
 	CXXFLAGS   += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS $(shell $(ROCM_PATH)/bin/hipconfig -C)
 	LDFLAGS    += -L/opt/rocm/lib -Wl,-rpath=$(ROCM_PATH)/lib -lhipblas -lamdhip64
 	OBJS       += ggml-cuda.o
+ifdef LLAMA_CUDA_KQUANTS_ITER
+	CXXFLAGS += -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
+else
+	CXXFLAGS += -DK_QUANTS_PER_ITERATION=2
+endif
 ggml-cuda.o: CXXFLAGS += $(addprefix --offload-arch=,$(GPU_TARGETS))
 ggml-cuda.o: CXXFLAGS += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
 ggml-cuda.o: CXXFLAGS += -DGGML_CUDA_DMMV_Y=$(LLAMA_CUDA_DMMV_Y)

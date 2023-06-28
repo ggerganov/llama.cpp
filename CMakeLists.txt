@@ -335,6 +335,7 @@ if (LLAMA_HIPBLAS)
         target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_DMMV_Y=${LLAMA_CUDA_DMMV_Y})
         set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE CXX)
         target_link_libraries(ggml-rocm PRIVATE hip::device PUBLIC hip::host roc::hipblas)
+        add_compile_definitions(K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
 
         if (LLAMA_STATIC)
             message(FATAL_ERROR "Static linking not supported for HIP/ROCm")

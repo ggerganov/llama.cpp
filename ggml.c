@@ -230,9 +230,11 @@ inline static void* ggml_aligned_malloc(size_t size) {
 #endif
 #elif defined(GGML_USE_OPENBLAS)
 #include <cblas.h>
-#elif defined(GGML_USE_CUBLAS) | defined(GGML_USE_HIPBLAS)
+#endif
+#if defined(GGML_USE_CUBLAS)
 #include "ggml-cuda.h"
-#elif defined(GGML_USE_CLBLAST)
+#endif
+#if defined(GGML_USE_CLBLAST)
 #include "ggml-opencl.h"
 #endif
 
