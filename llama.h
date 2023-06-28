@@ -198,7 +198,7 @@ extern "C" {
     LLAMA_API int llama_get_kv_cache_token_count(const struct llama_context * ctx);
 
     // Sets the current rng seed.
-    LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, unsigned int seed);
+    LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, uint32_t seed);
 
     // Returns the maximum size in bytes of the state (rng, logits, embedding
     // and kv_cache) - will often be smaller after compacting tokens
