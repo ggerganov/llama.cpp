@@ -1244,7 +1244,7 @@ static __global__ void dequantize_mul_mat_vec(const void * vx, const dfloat * y,
 }
 
 static __global__ void mul_mat_p021_f16_f32(const void * vx, const float * y, float * dst, const int ncols_x, const int nrows_x, const int nchannels_x) {
-    const half * x = (half *) vx;
+    const half * x = (const half *) vx;
 
     const int row_x = blockDim.y*blockIdx.y + threadIdx.y;
     const int channel = blockDim.z*blockIdx.z + threadIdx.z;
@@ -1294,7 +1294,7 @@ static __global__ void mul_mat_vec_nc_f16_f32( // nc == non-contiguous
     const void * vx, const float * y, float * dst, const int ncols_x, const int nrows_x,
     const int row_stride_x, const int nchannels_x, const int channel_stride_x) {
 
-    const half * x = (half *) vx;
+    const half * x = (const half *) vx;
 
     const int row_x = blockDim.y*blockIdx.y + threadIdx.y;
     const int channel = blockDim.z*blockIdx.z + threadIdx.z;
@@ -1337,14 +1337,14 @@ static __global__ void mul_mat_vec_nc_f16_f32( // nc == non-contiguous
 }
 
 static __device__ void cpy_1_f32_f32(const char * cxi, char * cdsti) {
-    const float * xi = (float *) cxi;
+    const float * xi = (const float *) cxi;
     float * dsti = (float *) cdsti;
 
     *dsti = *xi;
 }
 
 static __device__ void cpy_1_f32_f16(const char * cxi, char * cdsti) {
-    const float * xi = (float *) cxi;
+    const float * xi = (const float *) cxi;
     half * dsti = (half *) cdsti;
 
     *dsti = __float2half(*xi);
