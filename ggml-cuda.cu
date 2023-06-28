@@ -1763,15 +1763,40 @@ static void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
 
+    int best_i = -1;
+    size_t best_size = std::numeric_limits<size_t>::max(); //smallest unused buffer that fits our needs
+    int worst_i = -1;
+    size_t worst_size = 0; //largest unused buffer seen so far
+
     for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
         cuda_buffer& b = g_cuda_buffer_pool[id][i];
-        if (b.size >= size && b.ptr != nullptr) {
-            void * ptr = b.ptr;
-            *actual_size = b.size;
-            b.ptr = nullptr;
-            b.size = 0;
-            return ptr;
+        if (b.size > 0 && b.size >= size && b.size < best_size)
+        {
+            best_i = i;
+            best_size = b.size;
         }
+        if (b.size > 0 && b.size > worst_size)
+        {
+            worst_i = i;
+            worst_size = b.size;
+        }
+    }
+    if(best_i!=-1) //found the smallest buffer that fits our needs
+    {
+        cuda_buffer& b = g_cuda_buffer_pool[id][best_i];
+        void * ptr = b.ptr;
+        *actual_size = b.size;
+        b.ptr = nullptr;
+        b.size = 0;
+        return ptr;
+    }
+    if(worst_i!=-1) //no buffer that fits our needs, resize largest one to save memory
+    {
+        cuda_buffer& b = g_cuda_buffer_pool[id][worst_i];
+        b.size = 0;
+        void * ptr = b.ptr;
+        cudaFree(ptr);
+        b.ptr = ptr = nullptr;
     }
     void * ptr;
     CUDA_CHECK(cudaMalloc((void **) &ptr, size));

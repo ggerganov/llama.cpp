@@ -141,6 +141,7 @@ inline static void* ggml_v2_aligned_malloc(size_t size) {
 #include <cblas.h>
 #elif defined(GGML_USE_CUBLAS)
 #include "ggml_v2-cuda.h"
+#include "ggml_v2-cuda-legacy.h"
 #endif
 #if defined(GGML_USE_CLBLAST)
 #include "ggml_v2-opencl.h"
@@ -1524,9 +1525,9 @@ quantize_fns_t2 ggml_v2_internal_get_quantize_fn(size_t i) {
 
 bool quants_unshuffled = false; //new GGJT_2 is unshuffled, all old ones are shuffled
 static const quantize_fns_t2 quantize_fns_v2[GGML_V2_TYPE_COUNT]; //forward decl
-static inline quantize_fns_t2 get_quantize_fn(size_t i) 
+static inline quantize_fns_t2 get_quantize_fn(size_t i)
 {
-    return(quants_unshuffled?quantize_fns[i]:quantize_fns_v2[i]);  
+    return(quants_unshuffled?quantize_fns[i]:quantize_fns_v2[i]);
 }
 
 
@@ -3895,7 +3896,14 @@ struct ggml_v2_context * ggml_v2_init(struct ggml_v2_init_params params) {
         }
 
 #if defined(GGML_USE_CUBLAS)
-        ggml_v2_init_cublas();
+        if(quants_unshuffled)
+        {
+            ggml_v2_init_cublas();
+        }
+        else
+        {
+            ggml_v2_init_cublas_legacy();
+        }
 #elif defined(GGML_USE_CLBLAST)
         if(quants_unshuffled)
         {
@@ -9451,7 +9459,13 @@ static void ggml_v2_compute_forward_mul_mat_f32(
 #if defined(GGML_USE_CUBLAS)
     if (ggml_v2_cuda_can_mul_mat(src0, src1, dst)) {
         if (params->ith == 0 && params->type == GGML_V2_TASK_COMPUTE) {
+            if(quants_unshuffled)
+            {
             ggml_v2_cuda_mul_mat(src0, src1, dst, params->wdata, params->wsize);
+            }else
+            {
+            ggml_v2_cuda_mul_mat_legacy(src0, src1, dst, params->wdata, params->wsize);
+            }
         }
         return;
     }
@@ -9645,7 +9659,13 @@ static void ggml_v2_compute_forward_mul_mat_f16_f32(
 #if defined(GGML_USE_CUBLAS)
     if (ggml_v2_cuda_can_mul_mat(src0, src1, dst)) {
         if (params->ith == 0 && params->type == GGML_V2_TASK_COMPUTE) {
+            if(quants_unshuffled)
+            {
             ggml_v2_cuda_mul_mat(src0, src1, dst, params->wdata, params->wsize);
+            }else
+            {
+            ggml_v2_cuda_mul_mat_legacy(src0, src1, dst, params->wdata, params->wsize);
+            }
         }
         return;
     }
@@ -9884,7 +9904,13 @@ static void ggml_v2_compute_forward_mul_mat_q_f32(
 #if defined(GGML_USE_CUBLAS)
     if (ggml_v2_cuda_can_mul_mat(src0, src1, dst)) {
         if (params->ith == 0 && params->type == GGML_V2_TASK_COMPUTE) {
+            if(quants_unshuffled)
+            {
             ggml_v2_cuda_mul_mat(src0, src1, dst, params->wdata, params->wsize);
+            }else
+            {
+            ggml_v2_cuda_mul_mat_legacy(src0, src1, dst, params->wdata, params->wsize);
+            }
         }
         return;
     }

@@ -16,7 +16,9 @@
 
 #include "model_adapter.h"
 
-#if defined(GGML_USE_CLBLAST)
+#ifdef GGML_USE_CUBLAS
+#include "ggml-cuda.h"
+#elif defined(GGML_USE_CLBLAST)
 #include "ggml-opencl.h"
 #endif
 
@@ -349,25 +351,32 @@ ModelLoadResult gpt2_model_load(const std::string & fname, gpt2_model & model, g
     fin.close();
 
     //gpu offload
-    #if defined(GGML_USE_CLBLAST)
+    #if defined(GGML_USE_CLBLAST) || defined(GGML_USE_CUBLAS)
     if(gpulayers>0)
     {
         const auto & hparams = model.hparams;
         size_t vram_total = 0;
         const int n_gpu = std::min(gpulayers, int(hparams.n_layer));
-        fprintf(stderr, "%s: [opencl] offloading %d layers to GPU\n", __func__, n_gpu);
+        fprintf(stderr, "%s: [GPU] offloading %d layers to GPU\n", __func__, n_gpu);
         for (int i = 0; i < n_gpu; ++i) {
             const auto & layer = model.layers[i];
             layer.c_attn_attn_w->backend = GGML_BACKEND_GPU;
             layer.c_attn_proj_w->backend = GGML_BACKEND_GPU;
             layer.c_mlp_fc_w->backend = GGML_BACKEND_GPU;
             layer.c_mlp_proj_w->backend = GGML_BACKEND_GPU;
+            #if defined(GGML_USE_CLBLAST)
             ggml_cl_transform_tensor(layer.c_attn_attn_w->data,layer.c_attn_attn_w); vram_total += ggml_nbytes(layer.c_attn_attn_w);
             ggml_cl_transform_tensor(layer.c_attn_proj_w->data,layer.c_attn_proj_w); vram_total += ggml_nbytes(layer.c_attn_proj_w);
             ggml_cl_transform_tensor(layer.c_mlp_fc_w->data,layer.c_mlp_fc_w); vram_total += ggml_nbytes(layer.c_mlp_fc_w);
             ggml_cl_transform_tensor(layer.c_mlp_proj_w->data,layer.c_mlp_proj_w); vram_total += ggml_nbytes(layer.c_mlp_proj_w);
+            #else
+            ggml_cuda_transform_tensor(layer.c_attn_attn_w->data,layer.c_attn_attn_w); vram_total += ggml_nbytes(layer.c_attn_attn_w);
+            ggml_cuda_transform_tensor(layer.c_attn_proj_w->data,layer.c_attn_proj_w); vram_total += ggml_nbytes(layer.c_attn_proj_w);
+            ggml_cuda_transform_tensor(layer.c_mlp_fc_w->data,layer.c_mlp_fc_w); vram_total += ggml_nbytes(layer.c_mlp_fc_w);
+            ggml_cuda_transform_tensor(layer.c_mlp_proj_w->data,layer.c_mlp_proj_w); vram_total += ggml_nbytes(layer.c_mlp_proj_w);
+            #endif
         }
-        fprintf(stderr, "%s: [opencl] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
+        fprintf(stderr, "%s: [GPU] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
     }
     #endif
 

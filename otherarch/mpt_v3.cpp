@@ -16,7 +16,9 @@
 
 #include "model_adapter.h"
 
-#if defined(GGML_USE_CLBLAST)
+#ifdef GGML_USE_CUBLAS
+#include "ggml-cuda.h"
+#elif defined(GGML_USE_CLBLAST)
 #include "ggml-opencl.h"
 #endif
 
@@ -292,7 +294,7 @@ bool mpt_model_load(const std::string & fname, mpt_model & model, gpt_vocab & vo
     fin.close();
 
     //gpu offload
-    #if defined(GGML_USE_CLBLAST)
+    #if defined(GGML_USE_CLBLAST) || defined(GGML_USE_CUBLAS)
     if(gpulayers>0)
     {
         const auto & hparams = model.hparams;
@@ -305,10 +307,17 @@ bool mpt_model_load(const std::string & fname, mpt_model & model, gpt_vocab & vo
             layer.ffn_down_proj->backend = GGML_BACKEND_GPU;
             layer.c_attn_wqkv_weight->backend = GGML_BACKEND_GPU;
             layer.c_attn_out_proj_weight->backend = GGML_BACKEND_GPU;
+            #if defined(GGML_USE_CLBLAST)
             ggml_cl_transform_tensor(layer.ffn_up_proj->data,layer.ffn_up_proj); vram_total += ggml_nbytes(layer.ffn_up_proj);
             ggml_cl_transform_tensor(layer.ffn_down_proj->data,layer.ffn_down_proj); vram_total += ggml_nbytes(layer.ffn_down_proj);
             ggml_cl_transform_tensor(layer.c_attn_wqkv_weight->data,layer.c_attn_wqkv_weight); vram_total += ggml_nbytes(layer.c_attn_wqkv_weight);
             ggml_cl_transform_tensor(layer.c_attn_out_proj_weight->data,layer.c_attn_out_proj_weight); vram_total += ggml_nbytes(layer.c_attn_out_proj_weight);
+            #else
+            ggml_cuda_transform_tensor(layer.ffn_up_proj->data,layer.ffn_up_proj); vram_total += ggml_nbytes(layer.ffn_up_proj);
+            ggml_cuda_transform_tensor(layer.ffn_down_proj->data,layer.ffn_down_proj); vram_total += ggml_nbytes(layer.ffn_down_proj);
+            ggml_cuda_transform_tensor(layer.c_attn_wqkv_weight->data,layer.c_attn_wqkv_weight); vram_total += ggml_nbytes(layer.c_attn_wqkv_weight);
+            ggml_cuda_transform_tensor(layer.c_attn_out_proj_weight->data,layer.c_attn_out_proj_weight); vram_total += ggml_nbytes(layer.c_attn_out_proj_weight);
+            #endif
         }
         fprintf(stderr, "%s: [opencl] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
     }
