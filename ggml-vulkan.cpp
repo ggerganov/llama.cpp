@@ -366,9 +366,9 @@ void ggml_vk_abmath(kp::Sequence& seq,
     seq.record<kp::OpAlgoDispatch>(mgr.algorithm<float, PushConstants>({inA, inB, out}, spirv, {size}, {}, {pushConsts}));
 }
 
-template <typename... Args>
+template <bool with_row = false, typename... Args>
 void ggml_vk_add(Args&&... args) {
-    return ggml_vk_abmath<'+'>(std::forward<Args>(args)...);
+    return ggml_vk_abmath<'+', with_row>(std::forward<Args>(args)...);
 }
 
 template <bool with_row = false, typename... Args>
