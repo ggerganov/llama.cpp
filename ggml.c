@@ -1122,12 +1122,11 @@ static void quantize_row_q8_0_reference(const float * restrict x, block_q8_0 * r
 static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int k) {
     assert(QK8_0 == 32);
     assert(k % QK8_0 == 0);
-    const int nb = k / QK8_0;
 
     block_q8_0 * restrict y = vy;
 
 #if defined(__ARM_NEON)
-    for (int i = 0; i < nb; i++) {
+    for (int i = 0; i < k / QK8_0; i++) {
         float32x4_t srcv [8];
         float32x4_t asrcv[8];
         float32x4_t amaxv[8];
@@ -1157,7 +1156,7 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
         }
     }
 #elif defined(__wasm_simd128__)
-    for (int i = 0; i < nb; i++) {
+    for (int i = 0; i < k / QK8_0; i++) {
         v128_t srcv [8];
         v128_t asrcv[8];
         v128_t amaxv[8];
@@ -1190,7 +1189,7 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
         }
     }
 #elif defined(__AVX2__) || defined(__AVX__)
-    for (int i = 0; i < nb; i++) {
+    for (int i = 0; i < k / QK8_0; i++) {
         // Load elements into 4 AVX vectors
         __m256 v0 = _mm256_loadu_ps( x );
         __m256 v1 = _mm256_loadu_ps( x + 8 );
@@ -1317,12 +1316,11 @@ static void quantize_row_q8_1_reference(const float * restrict x, block_q8_1 * r
 
 static void quantize_row_q8_1(const float * restrict x, void * restrict vy, int k) {
     assert(k % QK8_1 == 0);
-    const int nb = k / QK8_1;
 
     block_q8_1 * restrict y = vy;
 
 #if defined(__ARM_NEON)
-    for (int i = 0; i < nb; i++) {
+    for (int i = 0; i < k / QK8_1; i++) {
         float32x4_t srcv [8];
         float32x4_t asrcv[8];
         float32x4_t amaxv[8];
@@ -1358,7 +1356,7 @@ static void quantize_row_q8_1(const float * restrict x, void * restrict vy, int 
         y[i].s = d * vaddvq_s32(accv);
     }
 #elif defined(__wasm_simd128__)
-    for (int i = 0; i < nb; i++) {
+    for (int i = 0; i < k / QK8_1; i++) {
         v128_t srcv [8];
         v128_t asrcv[8];
         v128_t amaxv[8];
@@ -1400,7 +1398,7 @@ static void quantize_row_q8_1(const float * restrict x, void * restrict vy, int 
                       wasm_i32x4_extract_lane(accv, 3));
     }
 #elif defined(__AVX2__) || defined(__AVX__)
-    for (int i = 0; i < nb; i++) {
+    for (int i = 0; i < k / QK8_1; i++) {
         // Load elements into 4 AVX vectors
         __m256 v0 = _mm256_loadu_ps( x );
         __m256 v1 = _mm256_loadu_ps( x + 8 );
