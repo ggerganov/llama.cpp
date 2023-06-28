@@ -1292,7 +1292,7 @@ static __global__ void mul_mat_p021_f16_f32(const void * vx, const float * y, fl
 
 static __global__ void mul_mat_vec_nc_f16_f32( // nc == non-contiguous
     const void * vx, const float * y, float * dst, const int ncols_x, const int nrows_x,
-    const int row_stride_x, const int nchannels_x, const int channel_stride_x) {
+    const int row_stride_x, const int channel_stride_x) {
 
     const half * x = (const half *) vx;
 
@@ -1698,7 +1698,7 @@ static void ggml_mul_mat_vec_nc_f16_f32_cuda(
     const dim3 block_nums(1, nrows_x, nchannels_x);
     const dim3 block_dims(WARP_SIZE, 1, 1);
     mul_mat_vec_nc_f16_f32<<<block_nums, block_dims, 0, stream>>>
-        (vx, y, dst, ncols_x, nrows_x, row_stride_x, nchannels_x, channel_stride_x);
+        (vx, y, dst, ncols_x, nrows_x, row_stride_x, channel_stride_x);
 }
 
 static void ggml_cpy_f32_f32_cuda(
