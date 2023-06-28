@@ -81,13 +81,14 @@ def make_resData(data, chat=False, promptToken=[]):
         "object": "chat.completion" if (chat) else "text_completion",
         "created": int(time.time()),
         "model": "LLaMA_CPP",
-        "promptToken": promptToken,
         "usage": {
-            "prompt_tokens": len(promptToken),
+            "prompt_tokens": data["tokens_evaluated"],
             "completion_tokens": data["tokens_predicted"],
-            "total_tokens": len(promptToken) + data["tokens_predicted"]
+            "total_tokens": data["tokens_evaluated"] + data["tokens_predicted"]
         }
     }
+    if (len(promptToken) != 0):
+        resData["promptToken"] = promptToken
     if (chat):
         #only one choice is supported
         resData["choices"] = [{
@@ -146,11 +147,15 @@ def chat_completions():
         return Response(status=403)
     body = request.get_json()
     stream = False
+    tokenize = False
     if(is_present(body, "stream")): stream = body["stream"]
+    if(is_present(body, "tokenize")): tokenize = body["tokenize"]
     postData = make_postData(body, chat=True, stream=stream)
 
-    tokenData = requests.request("POST", urllib.parse.urljoin(args.llama_api, "/tokenize"), data=json.dumps({"content": postData["prompt"]})).json()
-    promptToken = tokenData["tokens"]
+    promptToken = []
+    if (tokenize):
+        tokenData = requests.request("POST", urllib.parse.urljoin(args.llama_api, "/tokenize"), data=json.dumps({"content": postData["prompt"]})).json()
+        promptToken = tokenData["tokens"]
 
     if (not stream):
         data = requests.request("POST", urllib.parse.urljoin(args.llama_api, "/completion"), data=json.dumps(postData))
@@ -176,11 +181,15 @@ def completion():
         return Response(status=403)
     body = request.get_json()
     stream = False
+    tokenize = False
     if(is_present(body, "stream")): stream = body["stream"]
+    if(is_present(body, "tokenize")): tokenize = body["tokenize"]
     postData = make_postData(body, chat=False, stream=stream)
 
-    tokenData = requests.request("POST", urllib.parse.urljoin(args.llama_api, "/tokenize"), data=json.dumps({"content": postData["prompt"]})).json()
-    promptToken = tokenData["tokens"]
+    promptToken = []
+    if (tokenize):
+        tokenData = requests.request("POST", urllib.parse.urljoin(args.llama_api, "/tokenize"), data=json.dumps({"content": postData["prompt"]})).json()
+        promptToken = tokenData["tokens"]
 
     if (not stream):
         data = requests.request("POST", urllib.parse.urljoin(args.llama_api, "/completion"), data=json.dumps(postData))

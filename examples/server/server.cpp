@@ -108,6 +108,7 @@ struct llama_server_context {
     bool has_next_token = false;
     std::string generated_text;
 
+    size_t num_prompt_tokens = 0;
     size_t num_tokens_predicted = 0;
     size_t n_past = 0;
     size_t n_remain = 0;
@@ -139,6 +140,7 @@ struct llama_server_context {
 
     void rewind() {
         params.antiprompt.clear();
+        num_prompt_tokens = 0;
         num_tokens_predicted = 0;
         generated_text = "";
         generated_text.reserve(params.n_ctx);
@@ -169,17 +171,18 @@ struct llama_server_context {
     void loadPrompt() {
         params.prompt.insert(0, 1, ' '); // always add a first space
         std::vector<llama_token> prompt_tokens = ::llama_tokenize(ctx, params.prompt, true);
+        num_prompt_tokens = prompt_tokens.size();
 
         if (params.n_keep < 0) {
-            params.n_keep = (int)prompt_tokens.size();
+            params.n_keep = (int)num_prompt_tokens;
         }
         params.n_keep = std::min(params.n_ctx - 4, params.n_keep);
 
         // if input prompt is too big, truncate like normal
-        if (prompt_tokens.size() >= (size_t)params.n_ctx) {
+        if (num_prompt_tokens>= (size_t)params.n_ctx) {
             const int n_left = (params.n_ctx - params.n_keep) / 2;
             std::vector<llama_token> new_tokens(prompt_tokens.begin(), prompt_tokens.begin() + params.n_keep);
-            const int erased_blocks = (prompt_tokens.size() - params.n_keep - n_left - 1) / n_left;
+            const int erased_blocks = (num_prompt_tokens - params.n_keep - n_left - 1) / n_left;
             new_tokens.insert(new_tokens.end(), prompt_tokens.begin() + params.n_keep + erased_blocks * n_left, prompt_tokens.end());
             std::copy(prompt_tokens.end() - params.n_ctx, prompt_tokens.end(), last_n_tokens.begin());
 
@@ -193,7 +196,7 @@ struct llama_server_context {
             truncated = true;
             prompt_tokens = new_tokens;
         } else {
-            const size_t ps = prompt_tokens.size();
+            const size_t ps = num_prompt_tokens;
             std::fill(last_n_tokens.begin(), last_n_tokens.end() - ps, 0);
             std::copy(prompt_tokens.begin(), prompt_tokens.end(), last_n_tokens.end() - ps);
         }
@@ -201,7 +204,7 @@ struct llama_server_context {
         // compare the evaluated prompt with the new prompt
         n_past = common_part(embd, prompt_tokens);
         embd = prompt_tokens;
-        if (n_past == prompt_tokens.size()) {
+        if (n_past == num_prompt_tokens) {
             // we have to evaluate at least 1 token to generate logits.
             n_past--;
         }
@@ -684,6 +687,7 @@ static json format_final_response(llama_server_context & llama, const std::strin
         { "stop", true },
         { "model", llama.params.model_alias },
         { "tokens_predicted", llama.num_tokens_predicted },
+        { "tokens_evaluated", llama.num_prompt_tokens },
         { "generation_settings", format_generation_settings(llama) },
         { "prompt", llama.params.prompt },
         { "truncated", llama.truncated },
