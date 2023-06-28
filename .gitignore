@@ -1,5 +1,6 @@
 *.o
 *.a
+*.so
 .DS_Store
 .build/
 .cache/
@@ -39,8 +40,8 @@ models/*
 /vdot
 /server
 /Pipfile
+/embd-input-test
 /libllama.so
-
 build-info.h
 arm_neon.h
 compile_commands.json
