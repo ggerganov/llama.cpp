@@ -364,96 +364,14 @@ static size_t llama_calc_tensor_size(const std::vector<uint32_t> & ne, enum ggml
     return size / ggml_blck_size(type);
 }
 
-struct llama_load_tensor_shard {
-    std::vector<uint32_t> ne;
-    size_t size;
-    enum ggml_type type;
-    size_t file_idx;
-    size_t file_off;
-
-    void calc_size() {
-        size = llama_calc_tensor_size(ne, type);
-    }
-};
-
-enum llama_split_type {
-    SPLIT_NONE,
-    SPLIT_BY_COLUMNS,
-    SPLIT_BY_ROWS
-};
-
 struct llama_load_tensor {
-    std::vector<llama_load_tensor_shard> shards;
-
     std::string name;
     enum ggml_type type = GGML_TYPE_F32;
-    llama_split_type split_type = SPLIT_NONE;
     std::vector<uint32_t> ne;
+    size_t file_off;
     size_t size;
     struct ggml_tensor * ggml_tensor = NULL;
     uint8_t * data;
-
-    llama_load_tensor(const std::string & name) : name(name) {}
-
-    void calc_all() {
-        calc_type();
-        calc_split_type();
-        calc_ne();
-        calc_size();
-    }
-
-    void calc_type() {
-        const auto & first_shard = shards.at(0);
-        for (const auto & shard : shards) {
-            if (shard.type != first_shard.type) {
-                throw std::runtime_error(format("inconsistent tensor shard type in '%s'", name.c_str()));
-            }
-        }
-        type = first_shard.type;
-    }
-
-    void calc_split_type() {
-        if (shards.at(0).ne.size() == 1 || // 1D tensors are just duplicated in every file
-            shards.size() == 1) { // only one file?
-            split_type = SPLIT_NONE;
-        } else if (name.find("tok_embeddings.") == 0 ||
-            name.find(".attention.wo.weight") != std::string::npos ||
-            name.find(".feed_forward.w2.weight") != std::string::npos) {
-            split_type = SPLIT_BY_COLUMNS;
-        } else {
-            split_type = SPLIT_BY_ROWS;
-        }
-    }
-
-    void calc_ne() {
-        const auto & first_shard = shards.at(0);
-        for (const auto & shard : shards) {
-            if (shard.ne != first_shard.ne) {
-                throw std::runtime_error(format("inconsistent tensor shard shape in '%s': first was %s, other was %s",
-                             name.c_str(), llama_format_tensor_shape(first_shard.ne).c_str(), llama_format_tensor_shape(shard.ne).c_str()));
-            }
-        }
-        ne = first_shard.ne;
-        LLAMA_ASSERT(shards.size() <= UINT32_MAX);
-        uint32_t n_shards = (uint32_t) shards.size();
-        switch (split_type) {
-            case SPLIT_NONE:
-                ne = first_shard.ne;
-                break;
-            case SPLIT_BY_COLUMNS:
-                ne = {checked_mul<uint32_t>(first_shard.ne[0], n_shards),
-                      first_shard.ne[1]};
-                break;
-            case SPLIT_BY_ROWS:
-                ne = {first_shard.ne[0],
-                      checked_mul<uint32_t>(first_shard.ne[1], n_shards)};
-                break;
-        }
-    }
-
-    void calc_size() {
-        size = llama_calc_tensor_size(ne, type);
-    }
 };
 
 struct llama_load_tensors_map {
@@ -476,13 +394,13 @@ struct llama_file_loader {
     llama_hparams hparams;
     llama_vocab vocab;
 
-    llama_file_loader(const char * fname, size_t file_idx, llama_load_tensors_map & tensors_map)
+    llama_file_loader(const char * fname, llama_load_tensors_map & tensors_map)
         : file(fname, "rb") {
         fprintf(stderr, "llama.cpp: loading model from %s\n", fname);
         read_magic();
         read_hparams();
         read_vocab();
-        read_tensor_metadata(file_idx, tensors_map);
+        read_tensor_metadata(tensors_map);
     }
     void read_magic() {
         uint32_t magic = file.read_u32();
@@ -539,19 +457,19 @@ struct llama_file_loader {
             tok_score.score = score;
         }
     }
-    void read_tensor_metadata(size_t file_idx, llama_load_tensors_map & tensors_map) {
+    void read_tensor_metadata(llama_load_tensors_map & tensors_map) {
         while (file.tell() < file.size) {
-            llama_load_tensor_shard shard;
+            llama_load_tensor tensor;
             uint32_t n_dims = file.read_u32();
             uint32_t name_len = file.read_u32();
-            shard.type = (enum ggml_type) file.read_u32();
-            shard.ne.resize(n_dims);
-            file.read_raw(shard.ne.data(), sizeof(shard.ne[0]) * n_dims);
+            tensor.type = (enum ggml_type) file.read_u32();
+            tensor.ne.resize(n_dims);
+            file.read_raw(tensor.ne.data(), sizeof(tensor.ne[0]) * n_dims);
             std::string name = file.read_string(name_len);
             if (n_dims < 1 || n_dims > 2) {
                 throw std::runtime_error(format("llama.cpp: tensor '%s' should not be %u-dimensional", name.c_str(), n_dims));
             }
-            switch (shard.type) {
+            switch (tensor.type) {
                 case GGML_TYPE_F32:
                 case GGML_TYPE_F16:
                 case GGML_TYPE_Q4_0:
@@ -566,30 +484,20 @@ struct llama_file_loader {
                 case GGML_TYPE_Q6_K:
                     break;
                 default: {
-                    throw std::runtime_error(format("unrecognized tensor type %u\n", shard.type));
+                    throw std::runtime_error(format("unrecognized tensor type %u\n", tensor.type));
                 }
             }
 
-            if (file_version >= LLAMA_FILE_VERSION_GGJT_V1) {
-                // skip to the next multiple of 32 bytes
-                file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
-            }
-            shard.file_idx = file_idx;
-            shard.file_off = file.tell();
+            // skip to the next multiple of 32 bytes
+            file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
 
-            shard.calc_size();
-            file.seek(shard.size, SEEK_CUR);
+            tensor.file_off = file.tell();
+            tensor.name = name;
+            tensor.size = llama_calc_tensor_size(tensor.ne, tensor.type);
+            file.seek(tensor.size, SEEK_CUR);
 
-            auto it = tensors_map.name_to_idx.find(name);
-            size_t idx;
-            if (it != tensors_map.name_to_idx.end()) {
-                idx = it->second;
-            } else {
-                tensors_map.tensors.emplace_back(name);
-                idx = tensors_map.tensors.size() - 1;
-                tensors_map.name_to_idx.emplace(name, idx);
-            }
-            tensors_map.tensors.at(idx).shards.push_back(shard);
+            tensors_map.tensors.push_back(tensor);
+            tensors_map.name_to_idx[name] = tensors_map.tensors.size() - 1;
         }
     }
 };
@@ -659,56 +567,19 @@ struct llama_file_saver {
 };
 
 struct llama_model_loader {
-    std::vector<std::unique_ptr<llama_file_loader>> file_loaders;
+    std::unique_ptr<llama_file_loader> file_loader;
     llama_load_tensors_map tensors_map;
     bool use_mmap;
     size_t num_ggml_tensors_created = 0;
     struct ggml_context * ggml_ctx = NULL;
     std::unique_ptr<llama_mmap> mapping;
 
-    llama_model_loader(const std::string & fname_base, bool use_mmap, bool vocab_only) {
-        auto * first_file = new llama_file_loader(fname_base.c_str(), 0, tensors_map);
-        file_loaders.emplace_back(first_file);
-        uint32_t n_parts = vocab_only ? 1 : guess_n_parts();
-        for (uint32_t i = 1; i < n_parts; i++) {
-            std::string fname = fname_base + "." + std::to_string(i);
-            auto * ith_file = new llama_file_loader(fname.c_str(), i, tensors_map);
-            file_loaders.emplace_back(ith_file);
-            if (ith_file->hparams != first_file->hparams) {
-                throw std::runtime_error(format("llama.cpp: hparams inconsistent between files"));
-            }
-        }
+    llama_model_loader(const std::string & fname_base, bool use_mmap) {
+        file_loader = std::unique_ptr<llama_file_loader>(new llama_file_loader(fname_base.c_str(), tensors_map));
         if (!llama_mmap::SUPPORTED) {
             use_mmap = false;
         }
-        if (use_mmap && alignment_prevents_mmap()) {
-            fprintf(stderr, "llama.cpp: can't use mmap because tensors are not aligned; convert to new format to avoid this\n");
-            use_mmap = false;
-        }
         this->use_mmap = use_mmap;
-        for (llama_load_tensor & lt : tensors_map.tensors) {
-            lt.calc_all();
-        }
-    }
-
-    bool alignment_prevents_mmap() {
-        for (const llama_load_tensor & lt : tensors_map.tensors) {
-            for (const llama_load_tensor_shard & shard : lt.shards) {
-                if (shard.file_off & 3) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    uint32_t guess_n_parts() const {
-        auto it = tensors_map.name_to_idx.find("tok_embeddings.weight");
-        if (it == tensors_map.name_to_idx.end()) {
-            throw std::runtime_error(std::string("missing tok_embeddings.weight"));
-        }
-        const llama_load_tensor & lt = tensors_map.tensors.at(it->second);
-        return file_loaders.at(0)->hparams.n_embd / lt.shards.at(0).ne.at(0);
     }
 
     void calc_sizes(size_t * ctx_size_p, size_t * mmapped_size_p) const {
@@ -774,7 +645,7 @@ struct llama_model_loader {
         }
 
         if (use_mmap) {
-            mapping.reset(new llama_mmap(&file_loaders.at(0)->file, prefetch_size, ggml_is_numa()));
+            mapping.reset(new llama_mmap(&file_loader->file, prefetch_size, ggml_is_numa()));
             if (lmlock) {
                 lmlock->init(mapping->addr);
             }
@@ -830,45 +701,13 @@ struct llama_model_loader {
 
     void load_data_for(llama_load_tensor & lt) {
         if (use_mmap) {
-            LLAMA_ASSERT(lt.shards.size() == 1);
-            lt.data = (uint8_t *) mapping->addr + lt.shards.at(0).file_off;
-        } else if (lt.split_type == SPLIT_NONE) {
-            llama_file & file = file_loaders.at(lt.shards.at(0).file_idx)->file;
-            file.seek(lt.shards.at(0).file_off, SEEK_SET);
+            lt.data = (uint8_t *) mapping->addr + lt.file_off;
+        } else {
+            llama_file & file = file_loader->file;
+            file.seek(lt.file_off, SEEK_SET);
             file.read_raw(lt.data, lt.size);
-        } else if (lt.split_type == SPLIT_BY_ROWS) {
-            size_t offset = 0;
-            for (llama_load_tensor_shard & shard : lt.shards) {
-                llama_file & file = file_loaders.at(shard.file_idx)->file;
-                file.seek(shard.file_off, SEEK_SET);
-                file.read_raw(lt.data + offset, shard.size);
-                offset += shard.size;
-            }
-            LLAMA_ASSERT(offset == lt.size);
-        } else if (lt.split_type == SPLIT_BY_COLUMNS) {
-            // Let's load the data into temporary buffers to ensure the OS performs large loads.
-            std::vector<llama_buffer> tmp_bufs(lt.shards.size());
-            for (size_t i = 0; i < lt.shards.size(); i++) {
-                llama_load_tensor_shard & shard = lt.shards.at(i);
-                llama_file & file = file_loaders.at(shard.file_idx)->file;
-                file.seek(shard.file_off, SEEK_SET);
-                tmp_bufs.at(i).resize(shard.size);
-                file.read_raw(tmp_bufs.at(i).addr, shard.size);
-            }
-            // Then reshape.
-            size_t num_rows = lt.ne.at(1);
-            size_t per_shard_row_size = lt.shards.at(0).size / num_rows;
-            size_t out_offset = 0;
-            for (size_t row = 0; row < num_rows; row++) {
-                for (llama_buffer & tmp_buf : tmp_bufs) {
-                    memcpy(lt.data + out_offset,
-                           tmp_buf.addr + row * per_shard_row_size,
-                           per_shard_row_size);
-                    out_offset += per_shard_row_size;
-                }
-            }
-            LLAMA_ASSERT(out_offset == lt.size);
         }
+
         if (0) {
             print_checksum(lt);
         }
@@ -1067,12 +906,12 @@ static void llama_model_load_internal(
 
     model.t_start_us = ggml_time_us();
 
-    std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, use_mmap, vocab_only));
+    std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, use_mmap));
 
-    vocab = std::move(ml->file_loaders.at(0)->vocab);
-    model.hparams = ml->file_loaders.at(0)->hparams;
+    vocab = std::move(ml->file_loader->vocab);
+    model.hparams = ml->file_loader->hparams;
     model.n_gpu_layers = n_gpu_layers;
-    llama_file_version file_version = ml->file_loaders.at(0)->file_version;
+    llama_file_version file_version = ml->file_loader->file_version;
     auto & hparams = model.hparams;
 
     {
@@ -1106,7 +945,6 @@ static void llama_model_load_internal(
         fprintf(stderr, "%s: n_rot      = %u\n",  __func__, hparams.n_rot);
         fprintf(stderr, "%s: ftype      = %u (%s)\n", __func__, hparams.ftype, llama_ftype_name(hparams.ftype));
         fprintf(stderr, "%s: n_ff       = %u\n",  __func__, n_ff);
-        fprintf(stderr, "%s: n_parts    = %zu\n", __func__, ml->file_loaders.size());
         fprintf(stderr, "%s: model size = %s\n",  __func__, llama_model_type_name(model.type));
     }
 
@@ -2461,9 +2299,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         nthread = std::thread::hardware_concurrency();
     }
 
-    std::unique_ptr<llama_model_loader> model_loader(new llama_model_loader(fname_inp, /*use_mmap*/ false,
-                                                                            /*vocab_only*/ false));
-    llama_file_saver file_saver(fname_out.c_str(), model_loader->file_loaders.at(0).get(), params->ftype);
+    std::unique_ptr<llama_model_loader> model_loader(new llama_model_loader(fname_inp, /*use_mmap*/ false));
+    llama_file_saver file_saver(fname_out.c_str(), model_loader->file_loader.get(), params->ftype);
 
 #ifdef GGML_USE_K_QUANTS
     int n_attention_wv    = 0;
@@ -2897,7 +2734,7 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
     llama_buffer base_buf;
     if (path_base_model) {
         fprintf(stderr, "%s: loading base model from '%s'\n", __func__, path_base_model);
-        model_loader.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true, /*vocab_only*/ false));
+        model_loader.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true));
 
         size_t ctx_size;
         size_t mmapped_size;
@@ -2915,7 +2752,7 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
 
         // maybe this should in llama_model_loader
         if (model_loader->use_mmap) {
-            model_loader->mapping.reset(new llama_mmap(&model_loader->file_loaders.at(0)->file, /* prefetch */ 0, ggml_is_numa()));
+            model_loader->mapping.reset(new llama_mmap(&model_loader->file_loader->file, /* prefetch */ 0, ggml_is_numa()));
         }
     }
 
