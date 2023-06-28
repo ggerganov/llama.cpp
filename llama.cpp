@@ -2723,7 +2723,7 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
 
     // create a name -> tensor map of the model to accelerate lookups
     std::unordered_map<std::string, struct ggml_tensor*> model_tensors;
-    for (auto & kv: model.tensors_by_name) {
+    for (const auto & kv: model.tensors_by_name) {
         model_tensors.insert(kv);
     }
 
