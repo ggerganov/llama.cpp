@@ -109,6 +109,13 @@ ifeq ($(UNAME_S),Linux)
 	MK_CXXFLAGS += -D_GNU_SOURCE
 endif
 
+# RLIMIT_MEMLOCK came in BSD, is not specified in POSIX.1,
+# and on macOS its availability depends on enabling Darwin extensions
+ifeq ($(UNAME_S),Darwin)
+	MK_CFLAGS   += -D_DARWIN_C_SOURCE
+	MK_CXXFLAGS += -D_DARWIN_C_SOURCE
+endif
+
 ifdef LLAMA_DEBUG
 	MK_CFLAGS   += -O0 -g
 	MK_CXXFLAGS += -O0 -g
