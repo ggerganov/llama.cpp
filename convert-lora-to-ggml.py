@@ -113,6 +113,10 @@ with open(output_path, "wb") as fout:
 
     write_file_header(fout, params)
     for k, v in model.items():
+        if k.endswith(".default.weight"):
+            k = k.replace(".default.weight", ".weight")
+        if k in ["llama_proj.weight", "llama_proj.bias"]:
+            continue
         if k.endswith("lora_A.weight"):
             if v.dtype != torch.float16 and v.dtype != torch.float32:
                 v = v.float()
@@ -120,7 +124,7 @@ with open(output_path, "wb") as fout:
         else:
             v = v.float()
 
-        t = v.numpy()
+        t = v.detach().numpy()
         tname = translate_tensor_name(k)
         print(f"{k} => {tname} {t.shape} {t.dtype} {t.nbytes/1024/1024:.2f}MB")
         write_tensor_header(fout, tname, t.shape, t.dtype)

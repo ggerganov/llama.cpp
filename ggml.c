@@ -16684,7 +16684,8 @@ typedef pthread_t ggml_thread_t;
 
 #endif
 
-#ifdef __linux__
+// Android's libc implementation "bionic" does not support setting affinity
+#if defined(__linux__) && !defined(__BIONIC__)
 void set_numa_thread_affinity(int thread_n, int n_threads) {
     if (!ggml_is_numa()) {
         return;
