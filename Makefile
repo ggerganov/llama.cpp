@@ -222,6 +222,7 @@ ggml-vulkan.o: ggml-vulkan.cpp ggml-vulkan.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 	glslc -fshader-stage=compute --target-env=vulkan1.2 -O vk_shaders/matmul_f32.glsl -o vk_shaders/matmul_f32.spv
 	glslc -fshader-stage=compute --target-env=vulkan1.2 -O vk_shaders/matmul_f16.glsl -o vk_shaders/matmul_f16.spv
+	glslc -fshader-stage=compute --target-env=vulkan1.2 -O vk_shaders/f16_to_f32.glsl -o vk_shaders/f16_to_f32.spv
 endif
 
 ifneq ($(filter aarch64%,$(UNAME_M)),)

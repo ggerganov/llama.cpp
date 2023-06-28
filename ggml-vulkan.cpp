@@ -58,6 +58,9 @@ struct vk_pipeline {
     vk::DescriptorSetLayout dsl;
     vk::PipelineLayout layout;
     vk::Pipeline pipeline;
+    uint32_t push_constant_size;
+    uint32_t parameter_count;
+    std::array<uint32_t, 3> wg_denoms;
 };
 
 vk::Instance vk_instance;
@@ -68,6 +71,7 @@ vk::Device vk_device;
 vk::CommandPool vk_command_pool_compute, vk_command_pool_transfer;
 VmaAllocator vk_allocator;
 vk_pipeline vk_pipeline_matmul_f32, vk_pipeline_matmul_f16;
+vk_pipeline vk_pipeline_f16_to_f32;
 VmaAllocation vk_buffer_qa_alloc, vk_buffer_a_alloc, vk_buffer_b_alloc, vk_buffer_c_alloc;
 vk::Buffer vk_buffer_qa, vk_buffer_a, vk_buffer_b, vk_buffer_c;
 
@@ -75,8 +79,21 @@ bool vk_fp16_support = false;
 
 static std::vector<std::tuple<void*, size_t, vk_buffer>> vk_buf_list;
 
-static vk_pipeline ggml_vk_create_pipeline(const std::string& path, const std::string& entrypoint, const std::vector<vk::DescriptorSetLayoutBinding>& dsl_binding, const vk::PushConstantRange& pcr) {
+static vk::CommandBuffer ggml_vk_cmd_buffer_create(vk::CommandPool& pool) {
+    vk::CommandBufferAllocateInfo command_buffer_alloc_info(
+        pool,
+        vk::CommandBufferLevel::ePrimary,
+        1);
+    const std::vector<vk::CommandBuffer> cmd_buffers = vk_device.allocateCommandBuffers(command_buffer_alloc_info);
+    return cmd_buffers.front();
+}
+
+static vk_pipeline ggml_vk_create_pipeline(const std::string& path, const std::string& entrypoint, uint32_t parameter_count, uint32_t push_constant_count, std::array<uint32_t, 3> wg_denoms) {
     vk_pipeline pipeline;
+
+    pipeline.parameter_count = parameter_count;
+    pipeline.push_constant_size = push_constant_count * sizeof(int);
+    pipeline.wg_denoms = wg_denoms;
 
     std::vector<char> matmul_shader_contents;
     if (std::ifstream shader_file{ path, std::ios::binary | std::ios::ate }) {
@@ -95,6 +112,17 @@ static vk_pipeline ggml_vk_create_pipeline(const std::string& path, const std::s
         reinterpret_cast<const uint32_t*>(matmul_shader_contents.data())
     );
     vk::ShaderModule shader_module = vk_device.createShaderModule(shader_module_create_info);
+
+    std::vector<vk::DescriptorSetLayoutBinding> dsl_binding;
+    for (uint32_t i = 0; i < parameter_count; i++) {
+        dsl_binding.push_back({i, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute});
+    }
+
+    vk::PushConstantRange pcr(
+        vk::ShaderStageFlagBits::eCompute,
+        0,
+        pipeline.push_constant_size
+    );
 
     vk::DescriptorSetLayoutCreateInfo descriptor_set_layout_create_info(
         vk::DescriptorSetLayoutCreateFlags(),
@@ -119,6 +147,55 @@ static vk_pipeline ggml_vk_create_pipeline(const std::string& path, const std::s
     return pipeline;
 }
 
+static void ggml_vk_dispatch_pipeline(vk_pipeline& pipeline, std::vector<vk_buffer *> buffers, std::vector<int> push_constants, std::array<uint32_t, 3> elements, vk::Fence& fence) {
+    vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, pipeline.parameter_count);
+    vk::DescriptorPoolCreateInfo descriptor_pool_create_info(vk::DescriptorPoolCreateFlags(), 1, descriptor_pool_size);
+    vk::DescriptorPool descriptor_pool = vk_device.createDescriptorPool(descriptor_pool_create_info);
+
+    vk::DescriptorSetAllocateInfo descriptor_set_alloc_info(descriptor_pool, 1, &pipeline.dsl);
+    const std::vector<vk::DescriptorSet> descriptor_sets = vk_device.allocateDescriptorSets(descriptor_set_alloc_info);
+    vk::DescriptorSet descriptor_set = descriptor_sets.front();
+
+    std::vector<vk::DescriptorBufferInfo> descriptor_buffer_infos;
+    std::vector<vk::WriteDescriptorSet> write_descriptor_sets;
+    for (uint32_t i = 0; i < pipeline.parameter_count; i++) {
+        descriptor_buffer_infos.push_back({buffers[i]->buffer, 0, buffers[i]->size});
+    }
+    for (uint32_t i = 0; i < pipeline.parameter_count; i++) {
+        write_descriptor_sets.push_back({descriptor_set, i, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &descriptor_buffer_infos[i]});
+    }
+
+    vk_device.updateDescriptorSets(write_descriptor_sets, {});
+
+    vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(vk_command_pool_compute);
+
+    vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+    cmd_buffer.begin(cmd_buffer_begin_info);
+    cmd_buffer.pushConstants<int>(pipeline.layout, vk::ShaderStageFlagBits::eCompute, 0, push_constants);
+    cmd_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline.pipeline);
+    cmd_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+                                 pipeline.layout,
+                                 0,
+                                 { descriptor_set },
+
+                                 {});
+    cmd_buffer.dispatch(CEIL_DIV(elements[0], pipeline.wg_denoms[0]), CEIL_DIV(elements[1], pipeline.wg_denoms[1]), CEIL_DIV(elements[2], pipeline.wg_denoms[2]));
+    cmd_buffer.end();
+
+    vk::Queue queue = vk_device.getQueue(vk_compute_queue_family_index, 0);
+
+    vk::SubmitInfo submit_info(0,
+                               nullptr,
+                               nullptr,
+                               1,
+                               &cmd_buffer);
+
+    // Wait for transfers to finish
+    vk_device.getQueue(vk_transfer_queue_family_index, 0).waitIdle();
+
+    queue.submit({ submit_info }, fence);
+}
+
 void ggml_vk_test_matmul_f32(size_t m, size_t n, size_t k);
 void ggml_vk_test_matmul_f16(size_t m, size_t n, size_t k);
 
@@ -128,9 +205,7 @@ void ggml_vk_init(void) {
 
     vk::ApplicationInfo app_info{ "ggml-vulkan", 1, nullptr, 0, VK_API_VERSION };
     const std::vector<const char*> layers = {
-#ifdef GGML_DEBUG
         "VK_LAYER_KHRONOS_validation",
-#endif
     };
     vk::InstanceCreateInfo instance_create_info(vk::InstanceCreateFlags(), &app_info, layers.size(), layers.data());
     vk_instance = vk::createInstance(instance_create_info);
@@ -193,19 +268,10 @@ void ggml_vk_init(void) {
     vmaCreateAllocator(&allocator_info, &vk_allocator);
 
     // Shaders
-    std::vector<vk::DescriptorSetLayoutBinding> dsl_binding = {
-        {0, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute},
-        {1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute},
-        {2, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute}
-    };
+    vk_pipeline_matmul_f32 = ggml_vk_create_pipeline("vk_shaders/matmul_f32.spv", "main", 3, 6, {128, 128, 1});
+    vk_pipeline_matmul_f16 = ggml_vk_create_pipeline("vk_shaders/matmul_f16.spv", "main", 3, 6, {128, 128, 1});
 
-    vk::PushConstantRange pcr(
-        vk::ShaderStageFlagBits::eCompute,
-        0,
-        6 * sizeof(int)
-    );
-    vk_pipeline_matmul_f32 = ggml_vk_create_pipeline("vk_shaders/matmul_f32.spv", "main", dsl_binding, pcr);
-    vk_pipeline_matmul_f16 = ggml_vk_create_pipeline("vk_shaders/matmul_f16.spv", "main", dsl_binding, pcr);
+    vk_pipeline_f16_to_f32 = ggml_vk_create_pipeline("vk_shaders/f16_to_f32.spv", "main", 2, 1, {32, 1, 1});
 
     // Command pools
     vk::CommandPoolCreateInfo command_pool_create_info_compute(vk::CommandPoolCreateFlags(), vk_compute_queue_family_index);
@@ -214,14 +280,35 @@ void ggml_vk_init(void) {
     vk::CommandPoolCreateInfo command_pool_create_info_transfer(vk::CommandPoolCreateFlags(), vk_transfer_queue_family_index);
     vk_command_pool_transfer = vk_device.createCommandPool(command_pool_create_info_transfer);
 
-    // for (size_t m = 1; m < 10; m++) {
-    //     for (size_t n = 1; n < 10; n++) {
-    //         for (size_t k = 1; k < 10; k++) {
-    //             ggml_vk_test_matmul_f32(m * 128, n * 128, k * 128);
-    //             ggml_vk_test_matmul_f16(m * 128, n * 128, k * 128);
-    //         }
-    //     }
-    // }
+#ifdef VK_CHK_KERNEL
+    for (size_t m = 1; m < 10; m++) {
+        for (size_t n = 1; n < 10; n++) {
+            for (size_t k = 1; k < 10; k++) {
+                ggml_vk_test_matmul_f32(m * 128, n * 128, k * 128);
+                ggml_vk_test_matmul_f16(m * 128, n * 128, k * 128);
+            }
+        }
+    }
+#endif
+}
+
+static vk_pipeline* ggml_get_to_fp32_vk(ggml_type type) {
+    switch (type) {
+        // case GGML_TYPE_Q4_0:
+        //     return &dequantize_row_q4_0_cl;
+        // case GGML_TYPE_Q4_1:
+        //     return &dequantize_row_q4_1_cl;
+        // case GGML_TYPE_Q5_0:
+        //     return &dequantize_row_q5_0_cl;
+        // case GGML_TYPE_Q5_1:
+        //     return &dequantize_row_q5_1_cl;
+        // case GGML_TYPE_Q8_0:
+        //     return &dequantize_row_q8_0_cl;
+        case GGML_TYPE_F16:
+            return &vk_pipeline_f16_to_f32;
+        default:
+            return nullptr;
+    }
 }
 
 // buffer pool for vulkan
@@ -379,15 +466,6 @@ void ggml_vk_host_free(void* ptr) {
     }
 
     ggml_vk_destroy_buffer(*buf);
-}
-
-static vk::CommandBuffer ggml_vk_cmd_buffer_create(vk::CommandPool& pool) {
-    vk::CommandBufferAllocateInfo command_buffer_alloc_info(
-        pool,
-        vk::CommandBufferLevel::ePrimary,
-        1);
-    const std::vector<vk::CommandBuffer> cmd_buffers = vk_device.allocateCommandBuffers(command_buffer_alloc_info);
-    return cmd_buffers.front();
 }
 
 static void ggml_vk_buffer_write(vk_buffer* dst, size_t offset, const void * src, size_t size) {
@@ -616,30 +694,6 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
     ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
 
-    vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, 3);
-    vk::DescriptorPoolCreateInfo descriptor_pool_create_info(vk::DescriptorPoolCreateFlags(), 1, descriptor_pool_size);
-    vk::DescriptorPool descriptor_pool = vk_device.createDescriptorPool(descriptor_pool_create_info);
-
-    vk::DescriptorSetAllocateInfo descriptor_set_alloc_info(descriptor_pool, 1, &vk_pipeline_matmul_f32.dsl);
-    const std::vector<vk::DescriptorSet> descriptor_sets = vk_device.allocateDescriptorSets(descriptor_set_alloc_info);
-    vk::DescriptorSet descriptor_set = descriptor_sets.front();
-    vk::DescriptorBufferInfo d_X_buffer_info(d_X.buffer, 0, sizeof(float) * x_ne);
-    vk::DescriptorBufferInfo d_Y_buffer_info(d_Y.buffer, 0, sizeof(float) * y_ne);
-    vk::DescriptorBufferInfo d_D_buffer_info(d_D.buffer, 0, sizeof(float) * d_ne);
-
-    const std::vector<vk::WriteDescriptorSet> write_descriptor_sets = {
-        {descriptor_set, 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_X_buffer_info},
-        {descriptor_set, 1, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_Y_buffer_info},
-        {descriptor_set, 2, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_D_buffer_info},
-    };
-    vk_device.updateDescriptorSets(write_descriptor_sets, {});
-
-    std::array<int, 6> push_constants = { (int)ne01, (int)ne11, (int)ne10, (int)ne00, (int)ne10, (int)ne01 };
-    assert( ( sizeof( push_constants ) <= vk_physical_device.getProperties().limits.maxPushConstantsSize ) && "Too many push constants" );
-
-    vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(vk_command_pool_compute);
-    vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
-
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
             // copy data to device
@@ -649,34 +703,16 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
             ggml_vk_h2d_tensor_2d(&d_Y, 0, src1, i03, i02);
 
             // compute
+            vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
 #ifdef VK_CHK_KERNEL
             auto begin = std::chrono::high_resolution_clock::now();
 #endif
 
-            vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-            cmd_buffer.begin(cmd_buffer_begin_info);
-            cmd_buffer.pushConstants<int>(vk_pipeline_matmul_f32.layout, vk::ShaderStageFlagBits::eCompute, 0, push_constants);
-            cmd_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, vk_pipeline_matmul_f32.pipeline);
-            cmd_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-                                         vk_pipeline_matmul_f32.layout,
-                                         0,
-                                         { descriptor_set },
-                                         {});
-            cmd_buffer.dispatch(CEIL_DIV(ne01, 128), CEIL_DIV(ne11, 128), 1);
-            cmd_buffer.end();
-
-            vk::Queue queue = vk_device.getQueue(vk_compute_queue_family_index, 0);
-
-            vk::SubmitInfo submit_info(0,
-                                       nullptr,
-                                       nullptr,
-                                       1,
-                                       &cmd_buffer);
-
             // Wait for transfers to finish
             vk_device.getQueue(vk_transfer_queue_family_index, 0).waitIdle();
 
-            queue.submit({ submit_info }, fence);
+            ggml_vk_dispatch_pipeline(vk_pipeline_matmul_f32, {&d_X, &d_Y, &d_D}, { (int)ne01, (int)ne11, (int)ne10, (int)ne00, (int)ne10, (int)ne01 }, { (uint32_t)ne01, (uint32_t)ne11, 1}, fence);
+
             vk_device.waitForFences({ fence },
                                     true,
                                     uint64_t(-1));
@@ -686,6 +722,8 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
 
             std::cout << "m=" << ne01 << " n=" << ne11 << " k=" << ne10 << " matmul " << std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count() / 1000.0 << "ms" << std::endl;
 #endif
+
+            vk_device.destroyFence(fence);
 
             // copy dst to host
             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
@@ -713,8 +751,6 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
 #endif
         }
     }
-
-    vk_device.destroyFence(fence);
 
     if (src0->backend != GGML_BACKEND_GPU) {
         ggml_vk_pool_free(d_X);
@@ -763,30 +799,6 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
     bool src0_cont_rows = nb00 == sizeof(float);
     bool src0_cont_cols = (size_t)nb01 == ne01*sizeof(float);
 
-    vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, 3);
-    vk::DescriptorPoolCreateInfo descriptor_pool_create_info(vk::DescriptorPoolCreateFlags(), 1, descriptor_pool_size);
-    vk::DescriptorPool descriptor_pool = vk_device.createDescriptorPool(descriptor_pool_create_info);
-
-    vk::DescriptorSetAllocateInfo descriptor_set_alloc_info(descriptor_pool, 1, &vk_pipeline_matmul_f16.dsl);
-    const std::vector<vk::DescriptorSet> descriptor_sets = vk_device.allocateDescriptorSets(descriptor_set_alloc_info);
-    vk::DescriptorSet descriptor_set = descriptor_sets.front();
-    vk::DescriptorBufferInfo d_X_buffer_info(d_X.buffer, 0, sizeof(float) * x_ne);
-    vk::DescriptorBufferInfo d_Y_buffer_info(d_Y.buffer, 0, sizeof(float) * y_ne);
-    vk::DescriptorBufferInfo d_D_buffer_info(d_D.buffer, 0, sizeof(float) * d_ne);
-
-    const std::vector<vk::WriteDescriptorSet> write_descriptor_sets = {
-        {descriptor_set, 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_X_buffer_info},
-        {descriptor_set, 1, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_Y_buffer_info},
-        {descriptor_set, 2, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_D_buffer_info},
-    };
-    vk_device.updateDescriptorSets(write_descriptor_sets, {});
-
-    std::array<int, 6> push_constants = { (int)ne01, (int)ne11, (int)ne10, (int)ne00, (int)ne10, (int)ne01 };
-    assert( ( sizeof( push_constants ) <= vk_physical_device.getProperties().limits.maxPushConstantsSize ) && "Too many push constants" );
-
-    vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(vk_command_pool_compute);
-    vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
-
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
             // copy data to device
@@ -818,34 +830,12 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
             ggml_vk_buffer_write(&d_X, 0, tmp, sizeof(float) * x_ne);
 
             // compute
+            vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
 #ifdef VK_CHK_KERNEL
             auto begin = std::chrono::high_resolution_clock::now();
 #endif
 
-            vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-            cmd_buffer.begin(cmd_buffer_begin_info);
-            cmd_buffer.pushConstants<int>(vk_pipeline_matmul_f32.layout, vk::ShaderStageFlagBits::eCompute, 0, push_constants);
-            cmd_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, vk_pipeline_matmul_f32.pipeline);
-            cmd_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-                                         vk_pipeline_matmul_f32.layout,
-                                         0,
-                                         { descriptor_set },
-                                         {});
-            cmd_buffer.dispatch(CEIL_DIV(ne01, 128), CEIL_DIV(ne11, 128), 1);
-            cmd_buffer.end();
-
-            vk::Queue queue = vk_device.getQueue(vk_compute_queue_family_index, 0);
-
-            vk::SubmitInfo submit_info(0,
-                                       nullptr,
-                                       nullptr,
-                                       1,
-                                       &cmd_buffer);
-
-            // Wait for transfers to finish
-            vk_device.getQueue(vk_transfer_queue_family_index, 0).waitIdle();
-
-            queue.submit({ submit_info }, fence);
+            ggml_vk_dispatch_pipeline(vk_pipeline_matmul_f32, {&d_X, &d_Y, &d_D}, { (int)ne01, (int)ne11, (int)ne10, (int)ne00, (int)ne10, (int)ne01 }, { (uint32_t)ne01, (uint32_t)ne11, 1}, fence);
             vk_device.waitForFences({ fence },
                                     true,
                                     uint64_t(-1));
@@ -856,9 +846,11 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
             std::cout << "m=" << ne01 << " n=" << ne11 << " k=" << ne10 << " matmul " << std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count() / 1000.0 << "ms" << std::endl;
 #endif
 
+            vk_device.destroyFence(fence);
+
             // copy dst to host
             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
-            ggml_vk_buffer_read(&d_D, 0, tmp, sizeof(float) * d_ne);
+            ggml_vk_buffer_read(&d_D, 0, d, sizeof(float) * d_ne);
 
 #ifdef VK_CHK_KERNEL
             for (size_t i = 0; i < d_ne; i++) {
@@ -873,8 +865,6 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
         }
     }
 
-    vk_device.destroyFence(fence);
-
     if (src0->backend != GGML_BACKEND_GPU) {
         ggml_vk_pool_free(d_X);
     }
@@ -883,127 +873,117 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
 }
 
 static void ggml_vk_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
-    assert(false);
-//     const int64_t ne00 = src0->ne[0];
-//     const int64_t ne01 = src0->ne[1];
-//     const int64_t ne02 = src0->ne[2];
-//     const int64_t ne03 = src0->ne[3];
-//
-//     const int64_t ne10 = src1->ne[0];
-//     const int64_t ne11 = src1->ne[1];
-//
-//     const int nb2  = dst->nb[2];
-//     const int nb3  = dst->nb[3];
-//     const ggml_type type = src0->type;
-//     const bool mul_mat_vec = ne11 == 1;
-//
-//     const float alpha = 1.0f;
-//     const float beta = 0.0f;
-//     const int x_ne = ne01 * ne00;
-//     const int y_ne = ne11 * ne10;
-//     const int d_ne = ne11 * ne01;
-//     const size_t q_sz = ggml_type_size(type) * x_ne / ggml_blck_size(type);
-//
-//     size_t x_size;
-//     size_t y_size;
-//     size_t d_size;
-//     size_t q_size;
-//     vk_buffer d_X;
-//     if (!mul_mat_vec) {
-//         d_X = ggml_vk_pool_malloc(sizeof(float) * x_ne, &x_size);
-//     }
-//     vk_buffer d_Y = ggml_vk_pool_malloc(sizeof(float) * y_ne, &y_size);
-//     vk_buffer d_D = ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_size);
-//     vk_buffer d_Q;
-//     if (src0->backend == GGML_BACKEND_CPU) {
-//         d_Q = ggml_vk_pool_malloc(q_sz, &q_size);
-//     }
-//
-//     vk_kernel* to_fp32_vk = ggml_get_to_fp32_vk(type);
-//     vk_kernel* dmmv = ggml_get_dequantize_mul_mat_vec_vk(type);
-//     GGML_ASSERT(to_fp32_vk != nullptr);
-//
-//     size_t ev_idx = 0;
-//     std::vector<vk_event> events;
-//
-//     for (int64_t i03 = 0; i03 < ne03; i03++) {
-//         for (int64_t i02 = 0; i02 < ne02; i02++) {
-//             // copy src0 to device if necessary
-//             if (src0->backend == GGML_BACKEND_CPU) {
-//                 events.emplace_back();
-//                 VK_CHECK(ggml_vk_h2d_tensor_2d(queue, d_Q, 0, src0, i03, i02, events.data() + ev_idx++));
-//             } else if (src0->backend == GGML_BACKEND_GPU) {
-//                 d_Q = (vk_buffer) src0->data;
-//             } else {
-//                 GGML_ASSERT(false);
-//             }
-//             if (mul_mat_vec) { // specialized dequantize_mul_mat_vec kernel
-//                 // copy src1 to device
-//                 events.emplace_back();
-//                 VK_CHECK(ggml_vk_h2d_tensor_2d(queue, d_Y, 0, src1, i03, i02, events.data() + ev_idx++));
-//
-//                 // compute
-//                 const size_t global = ne01 * VK_DMMV_BLOCK_SIZE;
-//                 const size_t local = VK_DMMV_BLOCK_SIZE;
-//                 const vk_int ncols = ne00;
-//                 events.emplace_back();
-//                 VK_CHECK(vkSetKernelArg(*dmmv, 0, sizeof(vk_buffer), &d_Q));
-//                 VK_CHECK(vkSetKernelArg(*dmmv, 1, sizeof(float) * local, NULL));
-//                 VK_CHECK(vkSetKernelArg(*dmmv, 2, sizeof(vk_buffer), &d_Y));
-//                 VK_CHECK(vkSetKernelArg(*dmmv, 3, sizeof(vk_buffer), &d_D));
-//                 VK_CHECK(vkSetKernelArg(*dmmv, 4, sizeof(vk_int), &ncols));
-//                 VK_CHECK(vkEnqueueNDRangeKernel(queue, *dmmv, 1, NULL, &global, &local, events.size() - 1, events.data(), events.data() + ev_idx++));
-//             } else { // general dequantization kernel + VKBlast matrix matrix multiplication
-//                 // convert src0 to fp32 on device
-//                 const size_t global = x_ne;
-//                 VK_CHECK(vkSetKernelArg(*to_fp32_vk, 0, sizeof(vk_buffer), &d_Q));
-//                 VK_CHECK(vkSetKernelArg(*to_fp32_vk, 1, sizeof(vk_buffer), &d_X));
-//                 VK_CHECK(vkEnqueueNDRangeKernel(queue, *to_fp32_vk, 1, NULL, &global, NULL, events.size(), !events.empty() ? events.data() : NULL, NULL));
-//
-//                 // copy src1 to device
-//                 VK_CHECK(ggml_vk_h2d_tensor_2d(queue, d_Y, 0, src1, i03, i02, NULL));
-//
-//                 events.emplace_back();
-//
-//                 // wait for conversion
-//                 VK_CHECK(vkFinish(queue));
-//
-//                 // compute
-//                 vkblast::StatusCode status = vkblast::Gemm<vk_float>(vkblast::Layout::kColMajor,
-//                                                            vkblast::Transpose::kYes, vkblast::Transpose::kNo,
-//                                                            ne01, ne11, ne10,
-//                                                            alpha,
-//                                                            d_X, 0, ne00,
-//                                                            d_Y, 0, ne10,
-//                                                            beta,
-//                                                            d_D, 0, ne01,
-//                                                            &queue, events.data() + ev_idx++);
-//
-//                 if (status != vkblast::StatusCode::kSuccess) {
-//                     GGML_ASSERT(false);
-//                 }
-//             }
-//
-//             // copy dst to host
-//             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
-//             VK_CHECK(vkEnqueueReadBuffer(queue, d_D, true, 0, sizeof(float) * d_ne, d, 1, &events[events.size() - 1], NULL));
-//             for (auto *event : events) {
-//                 vkReleaseEvent(event);
-//             }
-//
-//             ev_idx = 0;
-//             events.vkear();
-//         }
-//     }
-//
-//     if (!mul_mat_vec) {
-//         ggml_vk_pool_free(d_X, x_size);
-//     }
-//     ggml_vk_pool_free(d_Y, y_size);
-//     ggml_vk_pool_free(d_D, d_size);
-//     if (src0->backend == GGML_BACKEND_CPU) {
-//         ggml_vk_pool_free(d_Q, q_size);
-//     }
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    const int64_t ne03 = src0->ne[3];
+
+    const int64_t ne10 = src1->ne[0];
+    const int64_t ne11 = src1->ne[1];
+
+    const int nb2  = dst->nb[2];
+    const int nb3  = dst->nb[3];
+    const ggml_type type = src0->type;
+    const bool mul_mat_vec = false;  // ne11 == 1;
+
+    const float alpha = 1.0f;
+    const float beta = 0.0f;
+    const int x_ne = ne01 * ne00;
+    const int y_ne = ne11 * ne10;
+    const int d_ne = ne11 * ne01;
+    const size_t q_sz = ggml_type_size(type) * x_ne / ggml_blck_size(type);
+
+    vk_buffer d_X;
+    vk_buffer d_Y;
+    vk_buffer d_D;
+    if (!mul_mat_vec) {
+        ggml_vk_pool_malloc(sizeof(float) * x_ne, &d_X, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    }
+    ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    vk_buffer d_Q;
+    if (src0->backend == GGML_BACKEND_CPU) {
+        ggml_vk_pool_malloc(q_sz, &d_Q, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    }
+
+    vk_pipeline* to_fp32_vk = ggml_get_to_fp32_vk(type);
+    // vk_pipeline* dmmv = ggml_get_dequantize_mul_mat_vec_vk(type);
+    GGML_ASSERT(to_fp32_vk != nullptr);
+
+    size_t ev_idx = 0;
+
+    for (int64_t i03 = 0; i03 < ne03; i03++) {
+        for (int64_t i02 = 0; i02 < ne02; i02++) {
+            // copy src0 to device if necessary
+            if (src0->backend == GGML_BACKEND_CPU) {
+                ggml_vk_h2d_tensor_2d(&d_Q, 0, src0, i03, i02);
+            } else if (src0->backend == GGML_BACKEND_GPU) {
+                d_Q = *(vk_buffer *) src0->data;
+            } else {
+                GGML_ASSERT(false);
+            }
+            if (mul_mat_vec) { // specialized dequantize_mul_mat_vec kernel
+                GGML_ASSERT(false);
+                // // copy src1 to device
+                // events.emplace_back();
+                // VK_CHECK(ggml_vk_h2d_tensor_2d(queue, d_Y, 0, src1, i03, i02, events.data() + ev_idx++));
+
+                // // compute
+                // const size_t global = ne01 * VK_DMMV_BLOCK_SIZE;
+                // const size_t local = VK_DMMV_BLOCK_SIZE;
+                // const vk_int ncols = ne00;
+                // events.emplace_back();
+                // VK_CHECK(vkSetKernelArg(*dmmv, 0, sizeof(vk_buffer), &d_Q));
+                // VK_CHECK(vkSetKernelArg(*dmmv, 1, sizeof(float) * local, NULL));
+                // VK_CHECK(vkSetKernelArg(*dmmv, 2, sizeof(vk_buffer), &d_Y));
+                // VK_CHECK(vkSetKernelArg(*dmmv, 3, sizeof(vk_buffer), &d_D));
+                // VK_CHECK(vkSetKernelArg(*dmmv, 4, sizeof(vk_int), &ncols));
+                // VK_CHECK(vkEnqueueNDRangeKernel(queue, *dmmv, 1, NULL, &global, &local, events.size() - 1, events.data(), events.data() + ev_idx++));
+            } else { // general dequantization kernel + VK matrix matrix multiplication
+                // convert src0 to fp32 on device
+                // Wait for transfers to finish
+                vk_device.getQueue(vk_transfer_queue_family_index, 0).waitIdle();
+
+                vk::Fence fence = vk_device.createFence(vk::FenceCreateFlags{});
+
+                ggml_vk_dispatch_pipeline(*to_fp32_vk, {&d_Q, &d_X}, { (int)x_ne }, { (uint32_t)x_ne, 1, 1}, fence);
+
+                // copy src1 to device
+                ggml_vk_h2d_tensor_2d(&d_Y, 0, src1, i03, i02);
+
+                // wait for conversion
+                vk_device.waitForFences({ fence },
+                                        true,
+                                        uint64_t(-1));
+
+                vk_device.destroyFence(fence);
+
+                // compute
+                fence = vk_device.createFence(vk::FenceCreateFlags{});
+
+                ggml_vk_dispatch_pipeline(vk_pipeline_matmul_f32, {&d_X, &d_Y, &d_D}, { (int)ne01, (int)ne11, (int)ne10, (int)ne00, (int)ne10, (int)ne01 }, { (uint32_t)ne01, (uint32_t)ne11, 1}, fence);
+
+                vk_device.waitForFences({ fence },
+                                        true,
+                                        uint64_t(-1));
+
+                vk_device.destroyFence(fence);
+            }
+
+            // copy dst to host
+            float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
+            ggml_vk_buffer_read(&d_D, 0, d, sizeof(float) * d_ne);
+        }
+    }
+
+    if (!mul_mat_vec) {
+        ggml_vk_pool_free(d_X);
+    }
+    ggml_vk_pool_free(d_Y);
+    ggml_vk_pool_free(d_D);
+    if (src0->backend == GGML_BACKEND_CPU) {
+        ggml_vk_pool_free(d_Q);
+    }
 }
 
 
@@ -1017,7 +997,7 @@ bool ggml_vk_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tens
     if ((src0->type == GGML_TYPE_F32 /*|| src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)*/) &&
         src1->type == GGML_TYPE_F32 &&
         dst->type == GGML_TYPE_F32 &&
-        ((ne0 >= 32 && ne1 >= 32 && ne10 >= 32) || src0->backend == GGML_BACKEND_GPU)) {
+        ((ne0 >= 128 && ne1 >= 32 && ne10 >= 128) || src0->backend == GGML_BACKEND_GPU)) {
         return true;
     }
 
@@ -1086,24 +1066,6 @@ void ggml_vk_test_matmul_f32(size_t m, size_t n, size_t k) {
     ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
     ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
 
-    vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, 3);
-    vk::DescriptorPoolCreateInfo descriptor_pool_create_info(vk::DescriptorPoolCreateFlags(), 1, descriptor_pool_size);
-    vk::DescriptorPool descriptor_pool = vk_device.createDescriptorPool(descriptor_pool_create_info);
-
-    vk::DescriptorSetAllocateInfo descriptor_set_alloc_info(descriptor_pool, 1, &vk_pipeline_matmul_f32.dsl);
-    const std::vector<vk::DescriptorSet> descriptor_sets = vk_device.allocateDescriptorSets(descriptor_set_alloc_info);
-    vk::DescriptorSet descriptor_set = descriptor_sets.front();
-    vk::DescriptorBufferInfo d_X_buffer_info(d_X.buffer, 0, sizeof(float) * x_ne);
-    vk::DescriptorBufferInfo d_Y_buffer_info(d_Y.buffer, 0, sizeof(float) * y_ne);
-    vk::DescriptorBufferInfo d_D_buffer_info(d_D.buffer, 0, sizeof(float) * d_ne);
-
-    const std::vector<vk::WriteDescriptorSet> write_descriptor_sets = {
-        {descriptor_set, 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_X_buffer_info},
-        {descriptor_set, 1, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_Y_buffer_info},
-        {descriptor_set, 2, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_D_buffer_info},
-    };
-    vk_device.updateDescriptorSets(write_descriptor_sets, {});
-
     std::array<int, 6> push_constants = { (int)m, (int)n, (int)k, (int)k, (int)k, (int)m };
     assert( ( sizeof( push_constants ) <= vk_physical_device.getProperties().limits.maxPushConstantsSize ) && "Too many push constants" );
 
@@ -1121,36 +1083,15 @@ void ggml_vk_test_matmul_f32(size_t m, size_t n, size_t k) {
     ggml_vk_buffer_write(&d_X, 0, x, sizeof(float) * x_ne);
     ggml_vk_buffer_write(&d_Y, 0, y, sizeof(float) * y_ne);
 
-    vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(vk_command_pool_compute);
-    vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
-
-    // compute
-    auto begin = std::chrono::high_resolution_clock::now();
-
-    vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-    cmd_buffer.begin(cmd_buffer_begin_info);
-    cmd_buffer.pushConstants<int>(vk_pipeline_matmul_f32.layout, vk::ShaderStageFlagBits::eCompute, 0, push_constants);
-    cmd_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, vk_pipeline_matmul_f32.pipeline);
-    cmd_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-                                 vk_pipeline_matmul_f32.layout,
-                                 0,
-                                 { descriptor_set },
-                                 {});
-    cmd_buffer.dispatch(CEIL_DIV(m, 128), CEIL_DIV(n, 128), 1);
-    cmd_buffer.end();
-
-    vk::Queue queue = vk_device.getQueue(vk_compute_queue_family_index, 0);
-
-    vk::SubmitInfo submit_info(0,
-                               nullptr,
-                               nullptr,
-                               1,
-                               &cmd_buffer);
-
     // Wait for transfers to finish
     vk_device.getQueue(vk_transfer_queue_family_index, 0).waitIdle();
 
-    queue.submit({ submit_info }, fence);
+    vk::Fence fence = vk_device.createFence(vk::FenceCreateFlags{});
+
+    auto begin = std::chrono::high_resolution_clock::now();
+
+    ggml_vk_dispatch_pipeline(vk_pipeline_matmul_f32, {&d_X, &d_Y, &d_D}, { (int)m, (int)n, (int)k, (int)k, (int)k, (int)m }, { (uint32_t)m, (uint32_t)n, 1}, fence);
+
     vk_device.waitForFences({ fence },
                             true,
                             uint64_t(-1));
@@ -1203,24 +1144,6 @@ void ggml_vk_test_matmul_f16(size_t m, size_t n, size_t k) {
     ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * y_ne, &d_Y, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
     ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
 
-    vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, 3);
-    vk::DescriptorPoolCreateInfo descriptor_pool_create_info(vk::DescriptorPoolCreateFlags(), 1, descriptor_pool_size);
-    vk::DescriptorPool descriptor_pool = vk_device.createDescriptorPool(descriptor_pool_create_info);
-
-    vk::DescriptorSetAllocateInfo descriptor_set_alloc_info(descriptor_pool, 1, &vk_pipeline_matmul_f32.dsl);
-    const std::vector<vk::DescriptorSet> descriptor_sets = vk_device.allocateDescriptorSets(descriptor_set_alloc_info);
-    vk::DescriptorSet descriptor_set = descriptor_sets.front();
-    vk::DescriptorBufferInfo d_X_buffer_info(d_X.buffer, 0, sizeof(ggml_fp16_t) * x_ne);
-    vk::DescriptorBufferInfo d_Y_buffer_info(d_Y.buffer, 0, sizeof(ggml_fp16_t) * y_ne);
-    vk::DescriptorBufferInfo d_D_buffer_info(d_D.buffer, 0, sizeof(ggml_fp16_t) * d_ne);
-
-    const std::vector<vk::WriteDescriptorSet> write_descriptor_sets = {
-        {descriptor_set, 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_X_buffer_info},
-        {descriptor_set, 1, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_Y_buffer_info},
-        {descriptor_set, 2, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &d_D_buffer_info},
-    };
-    vk_device.updateDescriptorSets(write_descriptor_sets, {});
-
     std::array<int, 6> push_constants = { (int)m, (int)n, (int)k, (int)k, (int)k, (int)m };
     assert( ( sizeof( push_constants ) <= vk_physical_device.getProperties().limits.maxPushConstantsSize ) && "Too many push constants" );
 
@@ -1238,36 +1161,12 @@ void ggml_vk_test_matmul_f16(size_t m, size_t n, size_t k) {
     ggml_vk_buffer_write(&d_X, 0, x, sizeof(ggml_fp16_t) * x_ne);
     ggml_vk_buffer_write(&d_Y, 0, y, sizeof(ggml_fp16_t) * y_ne);
 
-    vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(vk_command_pool_compute);
-    vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
+    vk::Fence fence = vk_device.createFence(vk::FenceCreateFlags{});
 
-    // compute
     auto begin = std::chrono::high_resolution_clock::now();
 
-    vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-    cmd_buffer.begin(cmd_buffer_begin_info);
-    cmd_buffer.pushConstants<int>(vk_pipeline_matmul_f32.layout, vk::ShaderStageFlagBits::eCompute, 0, push_constants);
-    cmd_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, vk_pipeline_matmul_f32.pipeline);
-    cmd_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-                                 vk_pipeline_matmul_f32.layout,
-                                 0,
-                                 { descriptor_set },
-                                 {});
-    cmd_buffer.dispatch(CEIL_DIV(m, 32), CEIL_DIV(n, 32), 1);
-    cmd_buffer.end();
+    ggml_vk_dispatch_pipeline(vk_pipeline_matmul_f16, {&d_X, &d_Y, &d_D}, { (int)m, (int)n, (int)k, (int)k, (int)k, (int)m }, { (uint32_t)m, (uint32_t)n, 1}, fence);
 
-    vk::Queue queue = vk_device.getQueue(vk_compute_queue_family_index, 0);
-
-    vk::SubmitInfo submit_info(0,
-                               nullptr,
-                               nullptr,
-                               1,
-                               &cmd_buffer);
-
-    // Wait for transfers to finish
-    vk_device.getQueue(vk_transfer_queue_family_index, 0).waitIdle();
-
-    queue.submit({ submit_info }, fence);
     vk_device.waitForFences({ fence },
                             true,
                             uint64_t(-1));
