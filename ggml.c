@@ -12535,6 +12535,9 @@ static void ggml_compute_forward_rope_f32(
                         dst_data[n_dims/2*3] = x2*sin_block_theta + x3*cos_block_theta;
                     }
                 } else if (!is_neox) {
+                    if (n_ctx > GGML_TRAINING_CTX) {
+                        theta = theta * GGML_TRAINING_CTX / n_ctx;
+                    }
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
                         const float cos_theta = cosf(theta);
                         const float sin_theta = sinf(theta);
@@ -12675,6 +12678,9 @@ static void ggml_compute_forward_rope_f16(
                         dst_data[n_dims/2*3] = GGML_FP32_TO_FP16(x2*sin_block_theta + x3*cos_block_theta);
                     }
                 } if (!is_neox) {
+                    if (n_ctx > GGML_TRAINING_CTX) {
+                        theta = theta * GGML_TRAINING_CTX / n_ctx;
+                    }
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
                         const float cos_theta = cosf(theta);
                         const float sin_theta = sinf(theta);
@@ -12760,6 +12766,7 @@ static void ggml_compute_forward_rope_back_f32(
     const int n_past = ((int32_t *) src1->data)[0];
     const int n_dims = ((int32_t *) src1->data)[1];
     const int mode   = ((int32_t *) src1->data)[2];
+    const int n_ctx  = ((int32_t *) src1->data)[3];
 
     assert(n_past >= 0);
 
@@ -12813,6 +12820,9 @@ static void ggml_compute_forward_rope_back_f32(
                 float theta = (float)p;
 
                 if (!is_neox) {
+                    if (n_ctx > GGML_TRAINING_CTX) {
+                        theta = theta * GGML_TRAINING_CTX / n_ctx;
+                    }
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
                         const float cos_theta = cosf(theta);
                         const float sin_theta = sinf(theta);
@@ -12873,6 +12883,7 @@ static void ggml_compute_forward_rope_back_f16(
     const int n_past = ((int32_t *) src1->data)[0];
     const int n_dims = ((int32_t *) src1->data)[1];
     const int mode   = ((int32_t *) src1->data)[2];
+    const int n_ctx  = ((int32_t *) src1->data)[3];
 
     assert(n_past >= 0);
 
@@ -12926,6 +12937,9 @@ static void ggml_compute_forward_rope_back_f16(
                 float theta = (float)p;
 
                 if (!is_neox) {
+                    if (n_ctx > GGML_TRAINING_CTX) {
+                        theta = theta * GGML_TRAINING_CTX / n_ctx;
+                    }
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
                         const float cos_theta = cosf(theta);
                         const float sin_theta = sinf(theta);
