@@ -214,6 +214,21 @@ void ggml_vk_init(void) {
     vk::PhysicalDeviceProperties device_props = vk_physical_device.getProperties();
     std::cout << "ggml_vulkan: Using " << device_props.deviceName << std::endl;
 
+    std::vector<vk::ExtensionProperties> ext_props = vk_physical_device.enumerateDeviceExtensionProperties();
+
+    bool fp16_storage = false;
+    bool fp16_compute = false;
+
+    for (auto properties : ext_props) {
+        if (strcmp("VK_KHR_16bit_storage", properties.extensionName) == 0) {
+            fp16_storage = true;
+        } else if (strcmp("VK_KHR_shader_float16_int8", properties.extensionName) == 0) {
+            fp16_compute = true;
+        }
+    }
+
+    vk_fp16_support = fp16_storage && fp16_compute;
+
     std::vector<vk::QueueFamilyProperties> queue_family_props = vk_physical_device.getQueueFamilyProperties();
 
     const size_t qfsize = queue_family_props.size();
@@ -255,7 +270,39 @@ void ggml_vk_init(void) {
         {vk::DeviceQueueCreateFlags(), vk_compute_queue_family_index, 1, &compute_queue_priority},
         {vk::DeviceQueueCreateFlags(), vk_transfer_queue_family_index, 1, &transfer_queue_priority},
     };
-    vk::DeviceCreateInfo device_create_info(vk::DeviceCreateFlags(), device_queue_create_infos);
+    vk::DeviceCreateInfo device_create_info;
+    std::vector<const char *> device_extensions;
+    vk::PhysicalDeviceFeatures device_features = vk_physical_device.getFeatures();
+
+    VkPhysicalDeviceFeatures2 device_features2;
+    device_features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    device_features2.pNext = nullptr;
+    device_features2.features = device_features;
+
+    VkPhysicalDeviceVulkan11Features vk11_features;
+    vk11_features.pNext = nullptr;
+    vk11_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+    device_features2.pNext = &vk11_features;
+
+    VkPhysicalDeviceVulkan12Features vk12_features;
+    vk12_features.pNext = nullptr;
+    vk12_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    vk11_features.pNext = &vk12_features;
+
+    vkGetPhysicalDeviceFeatures2(vk_physical_device, &device_features2);
+
+    if (vk_fp16_support) {
+        std::cout << "ggml_vulkan: 16-bit enabled" << std::endl;
+        device_extensions.push_back("VK_KHR_16bit_storage");
+        device_extensions.push_back("VK_KHR_shader_float16_int8");
+    }
+    device_create_info = {
+        vk::DeviceCreateFlags(),
+        device_queue_create_infos,
+        {},
+        device_extensions
+    };
+    device_create_info.setPNext(&device_features2);
     vk_device = vk_physical_device.createDevice(device_create_info);
 
     // Allocator
@@ -773,10 +820,10 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
     const int64_t ne10 = src1->ne[0];
     const int64_t ne11 = src1->ne[1];
 
-    const int nb00 = src0->nb[0];
-    const int nb01 = src0->nb[1];
-    const int nb02 = src0->nb[2];
-    const int nb03 = src0->nb[3];
+    const int nb10 = src0->nb[0];
+    const int nb11 = src0->nb[1];
+    const int nb12 = src0->nb[2];
+    const int nb13 = src0->nb[3];
 
     const int nb2  = dst->nb[2];
     const int nb3  = dst->nb[3];
@@ -791,43 +838,43 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
     if (src0->backend == GGML_BACKEND_GPU) {
         d_X = *(vk_buffer*) src0->data;
     } else {
-        ggml_vk_pool_malloc(sizeof(float) * x_ne, &d_X, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+        ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &d_X, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
     }
-    ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
-    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * y_ne, &d_Y, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
 
-    bool src0_cont_rows = nb00 == sizeof(float);
-    bool src0_cont_cols = (size_t)nb01 == ne01*sizeof(float);
+    bool src1_cont_rows = nb10 == sizeof(float);
+    bool src1_cont_cols = (size_t)nb11 == ne01*sizeof(float);
 
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
             // copy data to device
             if (src1->backend != GGML_BACKEND_GPU) {
-                ggml_vk_h2d_tensor_2d(&d_Y, 0, src1, i03, i02);
+                ggml_vk_h2d_tensor_2d(&d_X, 0, src0, i03, i02);
             }
             // convert src1 to fp16
             // TODO: use multiple threads
-            float * const tmp = (float *) wdata + (ne11 * ne10) * (i03 * ne02 + i02);
-            char * src0i = (char *) src0->data + i03*nb03 + i02*nb02;
-            if (src0_cont_rows) {
-                if (src0_cont_cols) {
-                    ggml_fp16_to_fp32_row((ggml_fp16_t *) src0i, tmp, ne00*ne01);
+            ggml_fp16_t * const tmp = (ggml_fp16_t *) wdata + (ne11 * ne10) * (i03 * ne02 + i02);
+            char * src1i = (char *) src1->data + i03*nb13 + i02*nb12;
+            if (src1_cont_rows) {
+                if (src1_cont_cols) {
+                    ggml_fp32_to_fp16_row((float *) src1i, tmp, ne10*ne11);
                 }
                 else {
-                    for (int64_t i01 = 0; i01 < ne01; i01++) {
-                        ggml_fp16_to_fp32_row((ggml_fp16_t *) (src0i + i01*nb01), tmp + i01*ne00, ne00);
+                    for (int64_t i01 = 0; i01 < ne11; i01++) {
+                        ggml_fp32_to_fp16_row((float *) (src1i + i01*nb11), tmp + i01*ne10, ne10);
                     }
                 }
             }
             else {
-                for (int64_t i01 = 0; i01 < ne01; i01++) {
-                    for (int64_t i00 = 0; i00 < ne00; i00++) {
+                for (int64_t i01 = 0; i01 < ne11; i01++) {
+                    for (int64_t i00 = 0; i00 < ne10; i00++) {
                         // very slow due to no inlining
-                        tmp[i01*ne10 + i00] = ggml_fp16_to_fp32(*(ggml_fp16_t *) (src0i + i01*nb01 + i00*nb00));
+                        tmp[i01*ne10 + i00] = ggml_fp32_to_fp16(*(float *) (src1i + i01*nb11 + i00*nb10));
                     }
                 }
             }
-            ggml_vk_buffer_write(&d_X, 0, tmp, sizeof(float) * x_ne);
+            ggml_vk_buffer_write(&d_Y, 0, tmp, sizeof(ggml_fp16_t) * y_ne);
 
             // compute
             vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
@@ -835,7 +882,7 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
             auto begin = std::chrono::high_resolution_clock::now();
 #endif
 
-            ggml_vk_dispatch_pipeline(vk_pipeline_matmul_f32, {&d_X, &d_Y, &d_D}, { (int)ne01, (int)ne11, (int)ne10, (int)ne00, (int)ne10, (int)ne01 }, { (uint32_t)ne01, (uint32_t)ne11, 1}, fence);
+            ggml_vk_dispatch_pipeline(vk_pipeline_matmul_f16, {&d_X, &d_Y, &d_D}, { (int)ne01, (int)ne11, (int)ne10, (int)ne00, (int)ne10, (int)ne01 }, { (uint32_t)ne01, (uint32_t)ne11, 1}, fence);
             vk_device.waitForFences({ fence },
                                     true,
                                     uint64_t(-1));
@@ -849,8 +896,7 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
             vk_device.destroyFence(fence);
 
             // copy dst to host
-            float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
-            ggml_vk_buffer_read(&d_D, 0, d, sizeof(float) * d_ne);
+            ggml_vk_buffer_read(&d_D, 0, tmp, sizeof(ggml_fp16_t) * d_ne);
 
 #ifdef VK_CHK_KERNEL
             for (size_t i = 0; i < d_ne; i++) {
@@ -860,7 +906,8 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
                 }
             }
 #else
-            // ggml_fp16_to_fp32_row(tmp, d, d_ne);
+            float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
+            ggml_fp16_to_fp32_row(tmp, d, d_ne);
 #endif
         }
     }
@@ -994,7 +1041,7 @@ bool ggml_vk_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tens
     const int64_t ne1 = dst->ne[1];
 
     // TODO: find the optimal values for these
-    if ((src0->type == GGML_TYPE_F32 /*|| src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)*/) &&
+    if ((src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 /*|| ggml_is_quantized(src0->type)*/) &&
         src1->type == GGML_TYPE_F32 &&
         dst->type == GGML_TYPE_F32 &&
         ((ne0 >= 128 && ne1 >= 32 && ne10 >= 128) || src0->backend == GGML_BACKEND_GPU)) {
