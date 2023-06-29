@@ -777,7 +777,7 @@ static bool kv_cache_init(
 
 struct llama_context_params llama_context_default_params() {
     struct llama_context_params result = {
-        /*.seed                        =*/ -1,
+        /*.seed                        =*/ LLAMA_DEFAULT_SEED,
         /*.n_ctx                       =*/ 512,
         /*.n_batch                     =*/ 512,
         /*.gpu_layers                  =*/ 0,
@@ -2541,7 +2541,7 @@ struct llama_context * llama_new_context_with_model(
 
     llama_context * ctx = new llama_context(*model, model->vocab);
 
-    if (params.seed < 0) {
+    if (params.seed == LLAMA_DEFAULT_SEED) {
         params.seed = time(NULL);
     }
 
@@ -2974,8 +2974,8 @@ int llama_get_kv_cache_token_count(const struct llama_context * ctx) {
 
 #define LLAMA_MAX_RNG_STATE (64*1024)
 
-void llama_set_rng_seed(struct llama_context * ctx, int seed) {
-    if (seed < 0) {
+void llama_set_rng_seed(struct llama_context * ctx, uint32_t seed) {
+    if (seed == LLAMA_DEFAULT_SEED) {
         seed = time(NULL);
     }
     ctx->rng.seed(seed);

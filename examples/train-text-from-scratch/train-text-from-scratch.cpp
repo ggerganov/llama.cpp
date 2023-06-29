@@ -2768,7 +2768,7 @@ void train_print_usage(int /*argc*/, char ** argv, const struct train_params * p
     fprintf(stderr, "  --checkpoint-in FNAME      path from which to load training checkpoint (default '%s')\n", params->fn_checkpoint_in);
     fprintf(stderr, "  --checkpoint-out FNAME     path to save training checkpoint (default '%s')\n", params->fn_checkpoint_out);
     fprintf(stderr, "  --model-out FNAME          path to save ggml model (default '%s')\n", params->fn_model_out);
-    fprintf(stderr, "  -s SEED, --seed SEED       RNG seed (default: -1, use random seed for < 0)\n");
+    fprintf(stderr, "  -s SEED, --seed SEED       RNG seed (default: -1, use random seed for -1)\n");
     fprintf(stderr, "  -c N, --ctx N              Context size used during training (default %d)\n", params->n_ctx);
     fprintf(stderr, "  --embd N                   Embedding size used for new models (default %d)\n", params->n_embd);
     fprintf(stderr, "  --mult N                   Mult size used for new models, influences feedforward size. (default %d)\n", params->n_mult);
@@ -3034,10 +3034,10 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    if (params.seed < 0) {
+    if (params.seed == LLAMA_DEFAULT_SEED) {
         params.seed = time(NULL);
     }
-    printf("%s: seed: %d\n", __func__, params.seed);
+    printf("%s: seed: %u\n", __func__, params.seed);
     srand(params.seed);
 
     struct llama_context_params llama_params = llama_context_default_params();
