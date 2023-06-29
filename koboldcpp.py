@@ -130,7 +130,7 @@ def init_library():
     else:
         if use_clblast:
             libname = lib_clblast
-        if use_cublas:
+        elif use_cublas:
             libname = lib_cublas
         elif use_blas:
             libname = lib_openblas
