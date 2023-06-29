@@ -753,7 +753,7 @@ struct llama_model_loader {
         }
     }
 
-    void load_all_data(llama_context & lctx, llama_progress_callback progress_callback, void *  progress_callback_user_data, llama_mlock * lmlock) {
+    void load_all_data(llama_progress_callback progress_callback, void *  progress_callback_user_data, llama_mlock * lmlock) {
         size_t data_size = 0;
         size_t prefetch_size = 0;
         size_t lock_size = 0;
@@ -806,14 +806,6 @@ struct llama_model_loader {
 #elif defined(GGML_USE_CLBLAST)
                 case GGML_BACKEND_GPU:
                     ggml_cl_transform_tensor(lt.data, lt.ggml_tensor);
-                    if (!use_mmap) {
-                        free(lt.data);
-                    }
-                    break;
-#elif defined(GGML_USE_KOMPUTE)
-                case GGML_BACKEND_GPU:
-                    lt.ggml_tensor->data = lt.data;
-                    ggml_vk_h2d_tensor(lctx.ctx_kompute, lt.ggml_tensor);
                     if (!use_mmap) {
                         free(lt.data);
                     }
@@ -1323,7 +1315,7 @@ static void llama_model_load_internal(
     }
 #endif
 
-    ml->load_all_data(lctx, progress_callback, progress_callback_user_data, use_mlock ? &lctx.model.mlock_mmap : NULL);
+    ml->load_all_data(progress_callback, progress_callback_user_data, use_mlock ? &lctx.model.mlock_mmap : NULL);
 
     if (progress_callback) {
         progress_callback(1.0f, progress_callback_user_data);
