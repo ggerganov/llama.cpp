@@ -1063,6 +1063,8 @@ static void llama_v2_model_load_internal(
 #if defined(GGML_USE_CUBLAS)
     {
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
+        if(GetQuantsUnshuffled())
+        {
 
         fprintf(stderr, "%s: [old cublas] offloading %d layers to GPU\n", __func__, n_gpu);
 
@@ -1085,6 +1087,14 @@ static void llama_v2_model_load_internal(
         }
 
         fprintf(stderr, "%s: [old cublas] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
+        }
+        else
+        {
+            if(n_gpu>0)
+            {
+                printf("\n[WARNING: Old format does not support GPU offloading! It will be deactivated!]\n");
+            }
+        }
     }
 #elif defined(GGML_USE_CLBLAST)
     {
