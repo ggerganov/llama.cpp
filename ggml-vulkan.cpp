@@ -318,7 +318,9 @@ void ggml_vk_init(void) {
 
     // Shaders
     vk_pipeline_matmul_f32 = ggml_vk_create_pipeline("vk_shaders/matmul_f32.spv", "main", 3, 6, {128, 128, 1});
-    vk_pipeline_matmul_f16 = ggml_vk_create_pipeline("vk_shaders/matmul_f16.spv", "main", 3, 6, {128, 128, 1});
+    if (vk_fp16_support) {
+        vk_pipeline_matmul_f16 = ggml_vk_create_pipeline("vk_shaders/matmul_f16.spv", "main", 3, 6, {128, 128, 1});
+    }
 
     vk_pipeline_f16_to_f32 = ggml_vk_create_pipeline("vk_shaders/f16_to_f32.spv", "main", 2, 1, {32, 1, 1});
 
@@ -816,7 +818,7 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
         ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &d_X, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
     }
     ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * y_ne, &d_Y, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
-    ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
 
     bool src1_cont_rows = nb10 == sizeof(float);
     bool src1_cont_cols = (size_t)nb11 == ne11*sizeof(float);
@@ -873,10 +875,8 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
             vk_device.destroyFence(fence);
 
             // copy dst to host
-            ggml_vk_buffer_read(&d_D, 0, tmp, sizeof(ggml_fp16_t) * d_ne);
-
             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
-            ggml_fp16_to_fp32_row(tmp, d, d_ne);
+            ggml_vk_buffer_read(&d_D, 0, d, sizeof(float) * d_ne);
         }
     }
 

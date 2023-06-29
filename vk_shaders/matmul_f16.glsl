@@ -13,7 +13,7 @@ layout(local_size_x = (BM * BN) / (TM * TN), local_size_y = 1, local_size_z = 1)
 
 layout (binding = 0) readonly buffer A { float16_t data_a[]; };
 layout (binding = 1) readonly buffer B { float16_t data_b[]; };
-layout (binding = 2) writeonly buffer D { float16_t data_d[]; };
+layout (binding = 2) writeonly buffer D { float data_d[]; };
 
 layout (push_constant) uniform parameter
 {
@@ -45,7 +45,7 @@ void main() {
     int pos_a = ir * BM * p.stride_a;
     int pos_b = ic * BN * p.stride_b;
 
-    float16_t sums[TM * TN];
+    float sums[TM * TN];
     float16_t cache_a[TM];
     float16_t cache_b[TN];
 
@@ -81,7 +81,7 @@ void main() {
 
             [[unroll]] for (int cc = 0; cc < TN; cc++) {
                 [[unroll]] for (int cr = 0; cr < TM; cr++) {
-                    sums[cc * TM + cr] += cache_a[cr] * cache_b[cc];
+                    sums[cc * TM + cr] += float(cache_a[cr]) * float(cache_b[cc]);
                 }
             }
         }
