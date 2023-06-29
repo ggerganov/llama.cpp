@@ -1091,11 +1091,12 @@ static void llama_model_load_internal(
         const size_t scale = memory_type == GGML_TYPE_F32 ? 2 : 1;
 
         // this is the total memory required to run the inference
+        const size_t bigctxmul = (hparams.n_ctx>2048?2:1);
         const size_t mem_required =
             ctx_size +
             mmapped_size - vram_weights + // weights in VRAM not in memory
-            MEM_REQ_SCRATCH0().at(model.type) +
-            MEM_REQ_SCRATCH1().at(model.type) +
+            MEM_REQ_SCRATCH0().at(model.type)*bigctxmul +
+            MEM_REQ_SCRATCH1().at(model.type)*bigctxmul +
             MEM_REQ_EVAL().at    (model.type);
 
         // this is the memory required by one llama_state
@@ -2593,8 +2594,9 @@ struct llama_context * llama_new_context_with_model(
 
         ctx->buf_compute.resize(MEM_REQ_EVAL().at(ctx->model.type));
 
-        ctx->buf_scratch[0].resize(MEM_REQ_SCRATCH0().at(ctx->model.type));
-        ctx->buf_scratch[1].resize(MEM_REQ_SCRATCH1().at(ctx->model.type));
+        const size_t bigctxmul = (hparams.n_ctx>2048?2:1);
+        ctx->buf_scratch[0].resize(MEM_REQ_SCRATCH0().at(ctx->model.type)*bigctxmul);
+        ctx->buf_scratch[1].resize(MEM_REQ_SCRATCH1().at(ctx->model.type)*bigctxmul);
     }
 
 #ifdef GGML_USE_METAL
