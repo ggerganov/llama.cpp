@@ -3416,7 +3416,7 @@ struct train_params get_default_train_params() {
     params.lbfgs_n_iter      = 16;
     params.adam_n_iter       = 16;
     params.adam_alpha        = 1e-3f;
-    params.adam_decay        = 1e-3f;
+    params.adam_decay        = 1e-1f;
     params.adam_beta1        = 0.9f;
     params.adam_beta2        = 0.999f;
     params.adam_gclip        = 1.0f;
