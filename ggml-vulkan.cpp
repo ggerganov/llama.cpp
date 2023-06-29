@@ -165,7 +165,7 @@ const std::shared_ptr<kp::Tensor> & ggml_vk_get_tensor(struct ggml_kompute_conte
 }
 
 
-static std::vector<uint32_t> compileSource(const std::string& source, const char *debug_name) {
+static std::vector<uint32_t> glsl_compile_source(const std::string& source, const char *debug_name) {
     printf("%s: Compiling compute program: %s\n", __func__, debug_name);
     static std::mutex mutex;
     std::lock_guard<std::mutex> L(mutex);
@@ -183,7 +183,7 @@ static std::vector<uint32_t> compileSource(const std::string& source, const char
 
 
 template<class T>
-std::vector<half> getVecBlockQ4_0D(T *x, unsigned nb) {
+std::vector<half> get_vec_block_Q4_0D(T *x, unsigned nb) {
     std::vector<half> fres(nb);
     for (unsigned it = 0; it != nb; it++) {
         fres[it] = x[it].d;
@@ -192,7 +192,7 @@ std::vector<half> getVecBlockQ4_0D(T *x, unsigned nb) {
 }
 
 template<class T>
-std::vector<half> getVecBlockQ4_0M(T *x, unsigned nb) {
+std::vector<half> get_vec_block_Q4_0M(T *x, unsigned nb) {
     std::vector<half> fres(nb);
     for (unsigned it = 0; it != nb; it++) {
         fres[it] = x[it].m;
@@ -201,7 +201,7 @@ std::vector<half> getVecBlockQ4_0M(T *x, unsigned nb) {
 }
 
 template<class T>
-std::vector<uint8_t> getVecBlockQ4_0QS(T *x, unsigned nb, unsigned qk) {
+std::vector<uint8_t> get_vec_block_Q4_0QS(T *x, unsigned nb, unsigned qk) {
     std::vector<uint8_t> fres(nb*(qk/2));
     for (unsigned x_it = 0; x_it != nb; x_it++) {
         for (unsigned qs_it = 0; qs_it != qk / 2; qs_it++) {
@@ -265,14 +265,14 @@ void ggml_vk_dequantize_row_q4_0(const void *x_, float *y, int k) {
     static const int qk = QK4_0;
     const unsigned nb = k / qk;
     const unsigned y_size = nb*qk;
-    const static auto spirv = compileSource(program_source_head+program_dequantize_row_q4_0, __func__);
+    const static auto spirv = glsl_compile_source(program_source_head+program_dequantize_row_q4_0, __func__);
 
     const auto x = reinterpret_cast<const block_q4_0*>(x_);
 
     GGML_ASSERT(k % qk == 0);
 
-    const auto tensorBlockQ4_0D = mgr.tensorT<half>(getVecBlockQ4_0D(x, nb));
-    const auto tensorBlockQ4_0QS = mgr.tensorT<uint8_t>(getVecBlockQ4_0QS(x, nb, qk));
+    const auto tensorBlockQ4_0D = mgr.tensorT<half>(get_vec_block_Q4_0D(x, nb));
+    const auto tensorBlockQ4_0QS = mgr.tensorT<uint8_t>(get_vec_block_Q4_0QS(x, nb, qk));
     const auto tensorY = mgr.tensor(std::vector<float>(y, y+y_size));
 
     mgr.sequence()
@@ -315,15 +315,15 @@ void ggml_vk_dequantize_row_q4_1(const void *x_, float *y, int k) {
     static const int qk = QK4_1;
     const unsigned nb = k / qk;
     const unsigned y_size = nb*qk;
-    const static auto spirv = compileSource(program_source_head+program_dequantize_row_q4_1, __func__);
+    const static auto spirv = glsl_compile_source(program_source_head+program_dequantize_row_q4_1, __func__);
 
     const auto x = reinterpret_cast<const block_q4_1*>(x_);
 
     GGML_ASSERT(k % qk == 0);
 
-    const auto tensorBlockQ4_0D = mgr.tensorT<half>(getVecBlockQ4_0D(x, nb));
-    const auto tensorBlockQ4_0M = mgr.tensorT<half>(getVecBlockQ4_0M(x, nb));
-    const auto tensorBlockQ4_0QS = mgr.tensorT<uint8_t>(getVecBlockQ4_0QS(x, nb, qk));
+    const auto tensorBlockQ4_0D = mgr.tensorT<half>(get_vec_block_Q4_0D(x, nb));
+    const auto tensorBlockQ4_0M = mgr.tensorT<half>(get_vec_block_Q4_0M(x, nb));
+    const auto tensorBlockQ4_0QS = mgr.tensorT<uint8_t>(get_vec_block_Q4_0QS(x, nb, qk));
     const auto tensorY = mgr.tensor(std::vector<float>(y, y+y_size));
 
     mgr.sequence()
@@ -365,7 +365,7 @@ void ggml_vk_abmath(kp::Sequence& seq,
                     uint32_t size, uint32_t row = 0) {
     GGML_ASSERT(with_row?row:!row);
 
-    const static auto spirv = compileSource(program_source_head+
+    const static auto spirv = glsl_compile_source(program_source_head+
                                             "#define MATH_OP "+std::string(1, mathOP)+"\n"
                                             "#define ROW_OP "+(with_row?"% pcs.row":"")+'\n'+
                                             program_abmath, __func__);
@@ -403,7 +403,7 @@ void ggml_vk_scale(kp::Sequence& seq,
                    const std::shared_ptr<kp::Tensor>& in, uint32_t inOff,
                    const std::shared_ptr<kp::Tensor>& out, uint32_t outOff,
                    uint32_t size, float scale) {
-    const static auto spirv = compileSource(program_source_head+program_scale, __func__);
+    const static auto spirv = glsl_compile_source(program_source_head+program_scale, __func__);
 
     struct PushConstants {
         uint32_t inOff, outOff;
@@ -450,7 +450,7 @@ void main() {
 
 template <typename... Args>
 void ggml_vk_silu(Args&&... args) {
-    const static auto spirv = compileSource(program_source_head+program_silu, __func__);
+    const static auto spirv = glsl_compile_source(program_source_head+program_silu, __func__);
 
     ggml_vk_xxlu(spirv, std::forward<Args>(args)...);
 }
@@ -476,7 +476,7 @@ void main() {
 
 template <typename... Args>
 void ggml_vk_relu(Args&&... args) {
-    const static auto spirv = compileSource(program_source_head+program_relu, __func__);
+    const static auto spirv = glsl_compile_source(program_source_head+program_relu, __func__);
 
     ggml_vk_xxlu(spirv, std::forward<Args>(args)...);
 }
@@ -503,7 +503,7 @@ void main() {
 
 template <typename... Args>
 void ggml_vk_gelu(Args&&... args) {
-    const static auto spirv = compileSource(program_source_head+program_gelu, __func__);
+    const static auto spirv = glsl_compile_source(program_source_head+program_gelu, __func__);
 
     ggml_vk_xxlu(spirv, std::forward<Args>(args)...);
 }
@@ -599,7 +599,7 @@ void ggml_vk_soft_max(kp::Sequence& seq,
                       const std::shared_ptr<kp::Tensor>& out, uint32_t outOff,
                       int64_t ne00, int64_t ne01, int64_t ne02, uint64_t ne03) {
     const static unsigned nth = 32;
-    const static auto spirv = compileSource(program_source_head+"#define nth "+std::to_string(nth)+"\n"+program_soft_max, __func__);
+    const static auto spirv = glsl_compile_source(program_source_head+"#define nth "+std::to_string(nth)+"\n"+program_soft_max, __func__);
 
     struct PushConstants {
         int64_t ne00, ne01, ne02;
