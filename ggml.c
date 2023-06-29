@@ -17916,7 +17916,7 @@ struct ggml_opt_params ggml_opt_default_params(enum ggml_opt_type type) {
                     .adam = {
                         .n_iter = 10000,
                         .sched  = 1.000f,
-                        .decay  = 0.001f,
+                        .decay  = 0.0f,
                         .alpha  = 0.001f,
                         .beta1  = 0.9f,
                         .beta2  = 0.999f,
