@@ -17351,8 +17351,8 @@ static enum ggml_opt_result ggml_opt_adam(
 
     // constants
     const float sched = params.adam.sched;
-    const float decay = params.adam.decay * sched;
     const float alpha = params.adam.alpha * sched;
+    const float decay = params.adam.decay * alpha;
     const float beta1 = params.adam.beta1;
     const float beta2 = params.adam.beta2;
     const float eps   = params.adam.eps;
