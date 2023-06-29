@@ -90,7 +90,6 @@ def init_library():
     use_clblast = False #uses CLBlast instead
     use_cublas = False #uses cublas instead
     use_noavx2 = False #uses openblas with no avx2 instructions
-    print(args.usecublas)
     if args.noavx2:
         use_noavx2 = True
         if not file_exists(lib_openblas_noavx2) or (os.name=='nt' and not file_exists("libopenblas.dll")):
