@@ -1,5 +1,6 @@
 *.o
 *.a
+*.so
 .DS_Store
 .build/
 .cache/
@@ -36,6 +37,7 @@ out/
 /vdot
 /server
 /Pipfile
+/embd-input-test
 /libllama.so
 
 arm_neon.h
@@ -65,3 +67,4 @@ koboldcpp_failsafe.dll
 koboldcpp_openblas.dll
 koboldcpp_openblas_noavx2.dll
 koboldcpp_clblast.dll
+koboldcpp_cublas.dll

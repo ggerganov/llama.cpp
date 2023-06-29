@@ -416,13 +416,6 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         exit(1);
     }
 
-#ifdef GGML_USE_CUBLAS
-    if (!params.lora_adapter.empty() && params.n_gpu_layers > 0) {
-        fprintf(stderr, "%s: error: the simultaneous use of LoRAs and GPU acceleration is not supported", __func__);
-        exit(1);
-    }
-#endif // GGML_USE_CUBLAS
-
     if (escape_prompt) {
         process_escapes(params.prompt);
     }
