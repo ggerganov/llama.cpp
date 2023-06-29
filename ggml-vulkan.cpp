@@ -205,7 +205,7 @@ void ggml_vk_init(void) {
 
     vk::ApplicationInfo app_info{ "ggml-vulkan", 1, nullptr, 0, VK_API_VERSION };
     const std::vector<const char*> layers = {
-        "VK_LAYER_KHRONOS_validation",
+        // "VK_LAYER_KHRONOS_validation",
     };
     vk::InstanceCreateInfo instance_create_info(vk::InstanceCreateFlags(), &app_info, layers.size(), layers.data());
     vk_instance = vk::createInstance(instance_create_info);
@@ -291,6 +291,8 @@ void ggml_vk_init(void) {
 
     vkGetPhysicalDeviceFeatures2(vk_physical_device, &device_features2);
 
+    vk_fp16_support = vk_fp16_support && vk12_features.shaderFloat16 && vk11_features.storageBuffer16BitAccess;
+
     if (vk_fp16_support) {
         std::cout << "ggml_vulkan: 16-bit enabled" << std::endl;
         device_extensions.push_back("VK_KHR_16bit_storage");
@@ -327,7 +329,7 @@ void ggml_vk_init(void) {
     vk::CommandPoolCreateInfo command_pool_create_info_transfer(vk::CommandPoolCreateFlags(), vk_transfer_queue_family_index);
     vk_command_pool_transfer = vk_device.createCommandPool(command_pool_create_info_transfer);
 
-#ifdef VK_CHK_KERNEL
+#if 0 && defined(VK_CHK_KERNEL)
     for (size_t m = 1; m < 10; m++) {
         for (size_t n = 1; n < 10; n++) {
             for (size_t k = 1; k < 10; k++) {
@@ -638,9 +640,7 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
                                        1,
                                        &cmd_buffer);
             queue.submit({ submit_info }, fence);
-            vk_device.waitForFences({ fence },
-                                    true,
-                                    uint64_t(-1));
+            vk::resultCheck(vk_device.waitForFences({ fence }, true, uint64_t(-1)), "vk_buffer_read pinned waitForFences");
 
             vk_device.destroyFence(fence);
             return;
@@ -672,9 +672,7 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
                                    1,
                                    &cmd_buffer);
         queue.submit({ submit_info }, fence);
-        vk_device.waitForFences({ fence },
-                                true,
-                                uint64_t(-1));
+        vk::resultCheck(vk_device.waitForFences({ fence }, true, uint64_t(-1)), "vk_buffer_read staging waitForFences");
         memcpy(dst, src->sb_read->info.pMappedData, size);
 
         vk_device.destroyFence(fence);
@@ -760,9 +758,7 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
 
             ggml_vk_dispatch_pipeline(vk_pipeline_matmul_f32, {&d_X, &d_Y, &d_D}, { (int)ne01, (int)ne11, (int)ne10, (int)ne00, (int)ne10, (int)ne01 }, { (uint32_t)ne01, (uint32_t)ne11, 1}, fence);
 
-            vk_device.waitForFences({ fence },
-                                    true,
-                                    uint64_t(-1));
+            vk::resultCheck(vk_device.waitForFences({ fence }, true, uint64_t(-1)), "matmul_f32 waitForFences");
 
 #ifdef VK_CHK_KERNEL
             auto end = std::chrono::high_resolution_clock::now();
@@ -775,27 +771,6 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
             // copy dst to host
             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
             ggml_vk_buffer_read(&d_D, 0, d, sizeof(float) * d_ne);
-
-#ifdef VK_CHK_KERNEL
-            const float * x = (float *) ((char *) src0->data);
-            const float * y = (float *) ((char *) src1->data);
-            float * d_chk = (float *) malloc(sizeof(float) * d_ne);
-
-            cblas_sgemm(CblasColMajor, CblasTrans, CblasNoTrans,
-                    ne01, ne11, ne10,
-                    1.0f,    x, ne00,
-                             y, ne10,
-                    0.0f,    d_chk, ne01);
-
-            for (size_t i = 0; i < d_ne; i++) {
-                if (std::fabs(d[i] - d_chk[i]) > 0.01f) {
-                    printf("d[%ld] = %f d_chk[%ld] = %f\n", i, d[i], i, d_chk[i]);
-                    abort();
-                }
-            }
-
-            free(d_chk);
-#endif
         }
     }
 
@@ -820,10 +795,10 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
     const int64_t ne10 = src1->ne[0];
     const int64_t ne11 = src1->ne[1];
 
-    const int nb10 = src0->nb[0];
-    const int nb11 = src0->nb[1];
-    const int nb12 = src0->nb[2];
-    const int nb13 = src0->nb[3];
+    const int nb10 = src1->nb[0];
+    const int nb11 = src1->nb[1];
+    const int nb12 = src1->nb[2];
+    const int nb13 = src1->nb[3];
 
     const int nb2  = dst->nb[2];
     const int nb3  = dst->nb[3];
@@ -844,7 +819,7 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
     ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
 
     bool src1_cont_rows = nb10 == sizeof(float);
-    bool src1_cont_cols = (size_t)nb11 == ne01*sizeof(float);
+    bool src1_cont_cols = (size_t)nb11 == ne11*sizeof(float);
 
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
@@ -852,6 +827,7 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
             if (src1->backend != GGML_BACKEND_GPU) {
                 ggml_vk_h2d_tensor_2d(&d_X, 0, src0, i03, i02);
             }
+
             // convert src1 to fp16
             // TODO: use multiple threads
             ggml_fp16_t * const tmp = (ggml_fp16_t *) wdata + (ne11 * ne10) * (i03 * ne02 + i02);
@@ -876,6 +852,9 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
             }
             ggml_vk_buffer_write(&d_Y, 0, tmp, sizeof(ggml_fp16_t) * y_ne);
 
+            // Wait for transfers to finish
+            vk_device.getQueue(vk_transfer_queue_family_index, 0).waitIdle();
+
             // compute
             vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
 #ifdef VK_CHK_KERNEL
@@ -883,9 +862,7 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
 #endif
 
             ggml_vk_dispatch_pipeline(vk_pipeline_matmul_f16, {&d_X, &d_Y, &d_D}, { (int)ne01, (int)ne11, (int)ne10, (int)ne00, (int)ne10, (int)ne01 }, { (uint32_t)ne01, (uint32_t)ne11, 1}, fence);
-            vk_device.waitForFences({ fence },
-                                    true,
-                                    uint64_t(-1));
+            vk::resultCheck(vk_device.waitForFences({ fence }, true, uint64_t(-1)), "matmul_f16 waitForFences");
 
 #ifdef VK_CHK_KERNEL
             auto end = std::chrono::high_resolution_clock::now();
@@ -898,17 +875,8 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
             // copy dst to host
             ggml_vk_buffer_read(&d_D, 0, tmp, sizeof(ggml_fp16_t) * d_ne);
 
-#ifdef VK_CHK_KERNEL
-            for (size_t i = 0; i < d_ne; i++) {
-                if (std::fabs(tmp[i] - d[i]) > 0.01f) {
-                    printf("d[%ld] = %f d_chk[%ld] = %f\n", i, tmp[i], i, d[i]);
-                    abort();
-                }
-            }
-#else
             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
             ggml_fp16_to_fp32_row(tmp, d, d_ne);
-#endif
         }
     }
 
@@ -999,9 +967,7 @@ static void ggml_vk_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
                 ggml_vk_h2d_tensor_2d(&d_Y, 0, src1, i03, i02);
 
                 // wait for conversion
-                vk_device.waitForFences({ fence },
-                                        true,
-                                        uint64_t(-1));
+                vk::resultCheck(vk_device.waitForFences({ fence }, true, uint64_t(-1)), "matmul_q_f32 src0 convert waitForFences");
 
                 vk_device.destroyFence(fence);
 
@@ -1010,9 +976,7 @@ static void ggml_vk_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
 
                 ggml_vk_dispatch_pipeline(vk_pipeline_matmul_f32, {&d_X, &d_Y, &d_D}, { (int)ne01, (int)ne11, (int)ne10, (int)ne00, (int)ne10, (int)ne01 }, { (uint32_t)ne01, (uint32_t)ne11, 1}, fence);
 
-                vk_device.waitForFences({ fence },
-                                        true,
-                                        uint64_t(-1));
+                vk::resultCheck(vk_device.waitForFences({ fence }, true, uint64_t(-1)), "matmul_q_f32 matmul waitForFences");
 
                 vk_device.destroyFence(fence);
             }
