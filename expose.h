@@ -8,6 +8,7 @@ struct load_model_inputs
     const int max_context_length;
     const int batch_size;
     const bool f16_kv;
+    const bool low_vram;
     const char * executable_path;
     const char * model_filename;
     const char * lora_filename;

@@ -16,6 +16,7 @@ class load_model_inputs(ctypes.Structure):
                 ("max_context_length", ctypes.c_int),
                 ("batch_size", ctypes.c_int),
                 ("f16_kv", ctypes.c_bool),
+                ("low_vram", ctypes.c_bool),
                 ("executable_path", ctypes.c_char_p),
                 ("model_filename", ctypes.c_char_p),
                 ("lora_filename", ctypes.c_char_p),
@@ -89,7 +90,7 @@ def init_library():
     use_clblast = False #uses CLBlast instead
     use_cublas = False #uses cublas instead
     use_noavx2 = False #uses openblas with no avx2 instructions
-
+    print(args.usecublas)
     if args.noavx2:
         use_noavx2 = True
         if not file_exists(lib_openblas_noavx2) or (os.name=='nt' and not file_exists("libopenblas.dll")):
@@ -105,7 +106,7 @@ def init_library():
         else:
             print("Attempting to use CLBlast library for faster prompt ingestion. A compatible clblast will be required.")
             use_clblast = True
-    elif args.usecublas:
+    elif (args.usecublas and args.usecublas!=""):
         if not file_exists(lib_cublas):
             print("Warning: CuBLAS library file not found. Non-BLAS library will be used.")
         else:
@@ -160,6 +161,7 @@ def load_model(model_filename):
     inputs.batch_size = 8
     inputs.max_context_length = maxctx #initial value to use for ctx, can be overwritten
     inputs.threads = args.threads
+    inputs.low_vram = (True if args.usecublas=="lowvram" else False)
     inputs.blasthreads = args.blasthreads
     inputs.f16_kv = True
     inputs.use_mmap = (not args.nommap)
@@ -874,7 +876,7 @@ if __name__ == '__main__':
     compatgroup = parser.add_mutually_exclusive_group()
     compatgroup.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
     compatgroup.add_argument("--useclblast", help="Use CLBlast for GPU Acceleration. Must specify exactly 2 arguments, platform ID and device ID (e.g. --useclblast 1 0).", type=int, choices=range(0,9), nargs=2)
-    compatgroup.add_argument("--usecublas", help="Use CuBLAS for GPU Acceleration. Requires Nvidia GPU.", action='store_true')
+    compatgroup.add_argument("--usecublas", help="Use CuBLAS for GPU Acceleration. Requires Nvidia GPU. Select lowvram to not allocate VRAM scratch buffer.", default='', const='normal', nargs='?', choices=['normal', 'lowvram'])
     parser.add_argument("--gpulayers", help="Set number of layers to offload to GPU when using GPU. Requires GPU.",metavar=('[GPU layers]'), type=int, default=0)
     args = parser.parse_args()
     main(args)
