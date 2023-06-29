@@ -48,7 +48,7 @@ For more information, be sure to run the program with the `--help` flag.
 - See https://github.com/ggerganov/llama.cpp/pull/1828/files
 
 ## CuBLAS?
-- You can attempt a CuBLAS build with LLAMA_CUBLAS=1 or using the provided CMake file (best for visual studio users). Note that support for CuBLAS is limited.
+- You can attempt a CuBLAS build with `LLAMA_CUBLAS=1` or using the provided CMake file (best for visual studio users). If you use the CMake file to build, copy the `koboldcpp_cublas.dll` generated into the same directory as the `koboldcpp.py` file. If you are bundling executables, you may need to include CUDA dynamic libraries (such as `cublasLt64_11.dll` and `cublas64_11.dll`) in order for the executable to work correctly on a different PC. Note that support for CuBLAS is limited.
 
 ## Considerations
 - For Windows: No installation, single file executable, (It Just Works)
