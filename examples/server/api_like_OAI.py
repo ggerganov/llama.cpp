@@ -70,7 +70,7 @@ def make_postData(body, chat=False, stream=False):
     if(is_present(body, "logit_bias")): postData["logit_bias"] = [[int(token), body["logit_bias"][token]] for token in body["logit_bias"].keys()]
     postData["stop"] = [args.stop]
     if(is_present(body, "stop")): postData["stop"] += body["stop"]
-    
+
     postData["stream"] = stream
 
     return postData
