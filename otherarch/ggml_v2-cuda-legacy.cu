@@ -9,6 +9,7 @@
 #include <cuda_fp16.h>
 
 #include "ggml_v2-cuda-legacy.h"
+#include "ggml_v2-cuda.h"
 #include "ggml_v2.h"
 
 static_assert(sizeof(half) == sizeof(ggml_v2_fp16_t), "wrong fp16 size");
@@ -62,7 +63,7 @@ typedef struct {
     __half  m;              // min
     uint8_t qs[QK4_3 / 2];  // nibbles / quants
 } block_q4_3;
-static_assert(sizeof(block_q4_3) == 2 * sizeof(ggml_fp16_t) + QK4_3 / 2, "wrong q4_3 block size/padding");
+static_assert(sizeof(block_q4_3) == 2 * sizeof(ggml_v2_fp16_t) + QK4_3 / 2, "wrong q4_3 block size/padding");
 
 #define QK5_0 32
 typedef struct {
@@ -672,7 +673,7 @@ static void ggml_v2_cuda_mul_mat_q_f32(const ggml_v2_tensor * src0, const ggml_v
     ggml_v2_cuda_pool_free(d_Q, q_size);
 }
 
-bool ggml_v2_cuda_mul_mat_use_f16(const struct ggml_v2_tensor * src0, const struct ggml_v2_tensor * src1, struct ggml_v2_tensor * /* dst */) {
+static bool ggml_v2_cuda_mul_mat_use_f16(const struct ggml_v2_tensor * src0, const struct ggml_v2_tensor * src1, struct ggml_v2_tensor * /* dst */) {
     size_t src0_sz = ggml_v2_nbytes(src0);
     size_t src1_sz = ggml_v2_nbytes(src1);
 
