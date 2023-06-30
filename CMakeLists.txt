@@ -41,8 +41,12 @@ if (NOT MSVC)
 endif()
 
 # 3rd party libs
-option(LLAMA_CUBLAS                 "llama: use cuBLAS"                                     ON)
-
+option(LLAMA_CUBLAS                          "llama: use cuBLAS"                                ON)
+set(LLAMA_CUDA_DMMV_X      "32" CACHE STRING "llama: x stride for dmmv CUDA kernels")
+set(LLAMA_CUDA_DMMV_Y       "1" CACHE STRING "llama: y block size for dmmv CUDA kernels")
+option(LLAMA_CUDA_DMMV_F16                   "llama: use 16 bit floats for dmmv CUDA kernels"   OFF)
+set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for Q2_K/Q6_K")
+option(LLAMA_K_QUANTS                        "llama: use k-quants"                              ON)
 
 
 #
@@ -72,6 +76,12 @@ if (LLAMA_CUBLAS)
         set(GGML_V2_LEGACY_CUDA_SOURCES otherarch/ggml_v2-cuda-legacy.cu otherarch/ggml_v2-cuda-legacy.h)
 
         add_compile_definitions(GGML_USE_CUBLAS)
+        add_compile_definitions(GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
+        add_compile_definitions(GGML_CUDA_DMMV_Y=${LLAMA_CUDA_DMMV_Y})
+        if (LLAMA_CUDA_DMMV_F16)
+            add_compile_definitions(GGML_CUDA_DMMV_F16)
+        endif()
+        add_compile_definitions(K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
 
         if (LLAMA_STATIC)
             set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas_static CUDA::cublasLt_static)
@@ -83,8 +93,6 @@ if (LLAMA_CUBLAS)
         message(WARNING "cuBLAS not found")
     endif()
 endif()
-
-
 
 if (LLAMA_ALL_WARNINGS)
     if (NOT MSVC)
@@ -298,4 +306,3 @@ set_target_properties(${TARGET} PROPERTIES OUTPUT_NAME "koboldcpp_cublas")
 set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(${TARGET} PUBLIC ggml ggml_v1 ggml_v2 common2 gpttype_adapter ${CMAKE_THREAD_LIBS_INIT})
 target_compile_features(${TARGET} PRIVATE cxx_std_11)
-
