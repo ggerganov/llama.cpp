@@ -751,10 +751,10 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     if (src0->backend == GGML_BACKEND_GPU) {
         d_X = *(vk_buffer*) src0->data;
     } else {
-        ggml_vk_pool_malloc(ggml_type_size(src0->type) * x_ne, &d_X, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+        ggml_vk_pool_malloc(ggml_type_size(src0->type) * x_ne, &d_X, 0);
     }
-    ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
-    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y, 0);
+    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, 0);
 
     vk::Fence fence = vk_device.createFence(vk::FenceCreateInfo());
 
@@ -833,10 +833,10 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
     if (src0->backend == GGML_BACKEND_GPU) {
         d_X = *(vk_buffer*) src0->data;
     } else {
-        ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &d_X, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+        ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &d_X, 0);
     }
-    ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * y_ne, &d_Y, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
-    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * y_ne, &d_Y, 0);
+    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, 0);
 
     bool src1_cont_rows = nb10 == sizeof(float);
     bool src1_cont_cols = (size_t)nb11 == ne11*sizeof(float);
@@ -931,13 +931,13 @@ static void ggml_vk_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
     vk_buffer d_Y;
     vk_buffer d_D;
     if (!mul_mat_vec) {
-        ggml_vk_pool_malloc(sizeof(float) * x_ne, &d_X, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+        ggml_vk_pool_malloc(sizeof(float) * x_ne, &d_X, 0);
     }
-    ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
-    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y, 0);
+    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, 0);
     vk_buffer d_Q;
     if (src0->backend == GGML_BACKEND_CPU) {
-        ggml_vk_pool_malloc(q_sz, &d_Q, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+        ggml_vk_pool_malloc(q_sz, &d_Q, 0);
     }
 
     vk_pipeline* to_fp32_vk = ggml_get_to_fp32_vk(type);
@@ -1091,9 +1091,9 @@ void ggml_vk_test_matmul_f32(size_t m, size_t n, size_t k) {
     vk_buffer d_X;
     vk_buffer d_Y;
     vk_buffer d_D;
-    ggml_vk_pool_malloc(sizeof(float) * x_ne, &d_X, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
-    ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
-    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    ggml_vk_pool_malloc(sizeof(float) * x_ne, &d_X, 0);
+    ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y, 0);
+    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, 0);
 
     float* x = (float *) malloc(sizeof(float) * x_ne);
     float* y = (float *) malloc(sizeof(float) * y_ne);
@@ -1167,9 +1167,9 @@ void ggml_vk_test_matmul_f16(size_t m, size_t n, size_t k) {
     vk_buffer d_X;
     vk_buffer d_Y;
     vk_buffer d_D;
-    ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &d_X, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
-    ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * y_ne, &d_Y, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
-    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &d_X, 0);
+    ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * y_ne, &d_Y, 0);
+    ggml_vk_pool_malloc(sizeof(float) * d_ne, &d_D, 0);
 
     ggml_fp16_t* x = (ggml_fp16_t *) malloc(sizeof(ggml_fp16_t) * x_ne);
     ggml_fp16_t* y = (ggml_fp16_t *) malloc(sizeof(ggml_fp16_t) * y_ne);
@@ -1241,8 +1241,8 @@ void ggml_vk_test_matmul_f16(size_t m, size_t n, size_t k) {
 void ggml_vk_test_f16_to_f32(size_t m) {
     vk_buffer d_X;
     vk_buffer d_D;
-    ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * m, &d_X, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
-    ggml_vk_pool_malloc(sizeof(float) * m, &d_D, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    ggml_vk_pool_malloc(sizeof(ggml_fp16_t) * m, &d_X, 0);
+    ggml_vk_pool_malloc(sizeof(float) * m, &d_D, 0);
 
     ggml_fp16_t* x = (ggml_fp16_t *) malloc(sizeof(ggml_fp16_t) * m);
     float* d = (float *) malloc(sizeof(float) * m);
