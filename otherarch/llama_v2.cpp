@@ -9,11 +9,14 @@
 #include "llama_v2.h"
 
 #include "ggml_v2.h"
+
 #ifdef GGML_USE_CUBLAS
 #include "ggml_v2-cuda.h"
-#elif defined(GGML_USE_CLBLAST)
+#endif
+#if defined(GGML_USE_CLBLAST)
 #include "ggml_v2-opencl.h"
 #endif
+
 
 #include <array>
 #include <ctime>

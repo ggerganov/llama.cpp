@@ -16,7 +16,8 @@
 
 #ifdef GGML_USE_CUBLAS
 #include "ggml-cuda.h"
-#elif defined(GGML_USE_CLBLAST)
+#endif
+#if defined(GGML_USE_CLBLAST)
 #include "ggml-opencl.h"
 #endif
 

@@ -18,9 +18,11 @@
 
 #ifdef GGML_USE_CUBLAS
 #include "ggml-cuda.h"
-#elif defined(GGML_USE_CLBLAST)
+#endif
+#if defined(GGML_USE_CLBLAST)
 #include "ggml-opencl.h"
 #endif
+
 
 // load the model's weights from a file
 ModelLoadResult gpt2_model_load(const std::string & fname, gpt2_model & model, gpt_vocab & vocab, FileFormat file_format, int gpulayers) {

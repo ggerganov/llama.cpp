@@ -12,7 +12,8 @@
 #include "ggml.h"
 #ifdef GGML_USE_CUBLAS
 #include "ggml-cuda.h"
-#elif defined(GGML_USE_CLBLAST)
+#endif
+#if defined(GGML_USE_CLBLAST)
 #include "ggml-opencl.h"
 #endif
 
@@ -1113,7 +1114,7 @@ static void llama_model_load_internal(
             fprintf(stderr, "%s: not allocating a VRAM scratch buffer due to low VRAM option\n", __func__);
             ggml_cuda_set_scratch_size(0); // disable scratch
         } else {
-            vram_scratch = n_batch * MB;
+            vram_scratch = n_batch * MB * bigctxmul;
             ggml_cuda_set_scratch_size(vram_scratch);
             if (n_gpu_layers > 0) {
                 fprintf(stderr, "%s: allocating batch_size x 1 MB = %zd MB VRAM for the scratch buffer\n",
