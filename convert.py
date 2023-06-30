@@ -4,6 +4,7 @@ import copy
 import enum
 import faulthandler
 import functools
+import importlib
 import io
 import itertools
 import json
@@ -201,6 +202,28 @@ class Params:
         return params
 
 
+class XgenVocab:
+    def __init__(self, path: Path) -> None:
+        self.fname_tokenizer = path
+        self.fname_added_tokens = None
+        path = str((path / "tokenization_xgen.py").absolute())
+        spec = importlib.util.spec_from_file_location(path, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.xt = module.XgenTokenizer()
+        self.vocab_size_base: int = self.xt.vocab_size
+        self.vocab_size: int = self.xt.vocab_size
+        self.added_tokens_list = []
+
+    def all_tokens(self) -> Iterable[Tuple[bytes, float]]:
+        for index in range(0, self.vocab_size_base):
+            token = self.xt._convert_id_to_token(index)
+            yield (token, float(index))
+
+    def __repr__(self) -> str:
+        return f"<XgenVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
+
+
 class SentencePieceVocab:
     def __init__(self, fname_tokenizer: Path, fname_added_tokens: Optional[Path]) -> None:
         self.sentencepiece_tokenizer = SentencePieceProcessor(str(fname_tokenizer))
@@ -265,7 +288,7 @@ class GGMLVocab:
         return f"<GGMLVocab with {self.vocab_size} tokens>"
 
 
-Vocab = Union[SentencePieceVocab, GGMLVocab]
+Vocab = Union[XgenVocab, SentencePieceVocab, GGMLVocab]
 
 
 def permute(weights: NDArray, n_head: int) -> NDArray:
@@ -948,7 +971,7 @@ def bounded_parallel_map(func: Callable[[In], Out], iterable: Iterable[In], conc
 def check_vocab_size(params: Params, vocab: Vocab) -> None:
     if params.n_vocab != vocab.vocab_size:
         # GGMLVocab comes from the same file as the model so shouldn't mismatch:
-        assert isinstance(vocab, SentencePieceVocab)
+        assert isinstance(vocab, SentencePieceVocab) or isinstance(vocab, XgenVocab)
         if params.n_vocab == vocab.vocab_size_base:
             print("Ignoring added_tokens.json since model matches vocab size without it.")
             vocab.added_tokens_list = []
@@ -1133,11 +1156,13 @@ def filter_and_sort_tensors(model: LazyModel) -> LazyModel:
     return {name: model[name] for name in TENSORS_LIST if name in model}
 
 
-def load_vocab(path: Path) -> SentencePieceVocab:
+def load_vocab(path: Path) -> Vocab:
     # Be extra-friendly and accept either a file or a directory.  Also, if it's
     # a directory, it might be the model directory, and tokenizer.model might
     # be in the parent of that.
     if path.is_dir():
+        if (path / "tokenization_xgen.py").exists():
+            return XgenVocab(path)
         path2 = path / "tokenizer.model"
         # Use `.parent` instead of /.. to handle the symlink case better.
         path3 = path.parent / "tokenizer.model"
