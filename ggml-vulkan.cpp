@@ -843,7 +843,7 @@ void ggml_vk_mul_mat_f16(kp::Sequence& seq,
                 }
             }
 
-            seq.record<kp::OpAlgoDispatch>(mgr.algorithm<float, PushConstants>({inA, tmp, out}, spirv, {(uint32_t)ne01, (uint32_t)ne11}, {}, {pushConsts}));
+            seq.record<kp::OpAlgoDispatch>(mgr.algorithm<float, PushConstants>({inA, tmp, out}, spirv, {uint32_t(ne01/128), uint32_t(ne11/128)}, {}, {pushConsts}));
         }
     }
 }
@@ -968,7 +968,7 @@ void ggml_vk_mul_mat_f32(kp::Sequence& seq,
             pushConsts.inAOff = inAOff + off;
             pushConsts.inBOff = inBOff + off;
             pushConsts.outOff = outOff + off;
-            seq.record<kp::OpAlgoDispatch>(mgr.algorithm<float, PushConstants>({inA, inB, out}, spirv, {(uint32_t)ne01, (uint32_t)ne11}, {}, {pushConsts}));
+            seq.record<kp::OpAlgoDispatch>(mgr.algorithm<float, PushConstants>({inA, inB, out}, spirv, {uint32_t(ne01/128), uint32_t(ne11/128)}, {}, {pushConsts}));
         }
     }
 }
@@ -1036,7 +1036,6 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
             const enum ggml_type src0t = src0 ? src0->type : GGML_TYPE_COUNT;
             const enum ggml_type src1t = src1 ? src1->type : GGML_TYPE_COUNT;
             const enum ggml_type dstt = dst ? dst->type : GGML_TYPE_COUNT;
-
 
             const static std::shared_ptr<kp::Tensor> nullTensor = nullptr;
             const std::shared_ptr<kp::Tensor>& id_src0 = src0 ? ggml_vk_get_tensor(ctx, src0) : nullTensor;
