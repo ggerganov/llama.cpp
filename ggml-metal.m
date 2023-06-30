@@ -202,7 +202,9 @@ struct ggml_metal_context * ggml_metal_init(void) {
 
 void ggml_metal_free(struct ggml_metal_context * ctx) {
     fprintf(stderr, "%s: deallocating\n", __func__);
-
+    for (int i = 0; i < ctx->n_buffers; ++i) {
+        [ctx->buffers[i].metal release];
+    }
     free(ctx);
 }
 

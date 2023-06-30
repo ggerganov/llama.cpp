@@ -253,7 +253,13 @@ struct llama_model {
 
 struct llama_context {
     llama_context(const llama_model & model, const llama_vocab & vocab) : model(model), vocab(vocab), t_load_us(model.t_load_us), t_start_us(model.t_start_us) {}
-
+#ifdef GGML_USE_METAL
+    ~llama_context() {
+        if (ctx_metal) {
+            ggml_metal_free(ctx_metal);
+        }
+    }
+#endif
     std::mt19937 rng;
 
     bool has_evaluated_once = false;
