@@ -1097,6 +1097,7 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                         } else if (src0->type == GGML_TYPE_F16
                                 && src1->type == GGML_TYPE_F32) {
                             ggml_vk_mul_mat_f16(seq, id_src0, offs_src0, id_src1, offs_src1, id_dst, offs_dst, ne00, ne01, ne02, ne03, ne10, ne11, nb10, nb11, nb12, nb13, nb2, nb3);
+                            break;
                         }
                     }
                 default:
