@@ -136,7 +136,7 @@ def find_n_mult(n_ff: int, n_embd: int) -> int:
         calc_ff = (((8*n_embd) // 3 + n_mult - 1) // n_mult)*n_mult
         if calc_ff == n_ff:
             return n_mult
-    return 1
+    raise Exception(f"failed to find n_mult for (n_ff={n_ff}, n_embd={n_embd}).")
 
 @dataclass
 class Params:
@@ -321,6 +321,10 @@ class Tensor(metaclass=ABCMeta):
     @abstractmethod
     def permute(self, n_head: int) -> 'Tensor': ...
     @abstractmethod
+    def permute_part(self, n_part: int, n_head: int) -> 'UnquantizedTensor': ...
+    @abstractmethod
+    def part(self, n_part: int) -> 'UnquantizedTensor': ...
+    @abstractmethod
     def to_ggml(self) -> 'GGMLCompatibleTensor': ...
 
 
@@ -344,6 +348,14 @@ class UnquantizedTensor(Tensor):
 
     def to_ggml(self) -> 'UnquantizedTensor':
         return self
+
+    def permute_part(self, n_part: int, n_head: int) -> 'UnquantizedTensor':
+        r = self.ndarray.shape[0] // 3
+        return UnquantizedTensor(permute(self.ndarray[r * n_part : r * n_part + r, ...], n_head))
+
+    def part(self, n_part: int) -> 'UnquantizedTensor':
+        r = self.ndarray.shape[0] // 3
+        return UnquantizedTensor(self.ndarray[r * n_part : r * n_part + r, ...])
 
     def permute(self, n_head: int) -> 'UnquantizedTensor':
         return UnquantizedTensor(permute(self.ndarray, n_head))
@@ -642,6 +654,19 @@ def permute_lazy(lazy_tensor: LazyTensor, n_head: int) -> LazyTensor:
         return lazy_tensor.load().permute(n_head)
     return LazyTensor(load, lazy_tensor.shape, lazy_tensor.data_type, f'permute({n_head}) ' + lazy_tensor.description)
 
+def permute_part_lazy(lazy_tensor: LazyTensor, n_part: int, n_head: int) -> LazyTensor:
+    def load() -> Tensor:
+        return lazy_tensor.load().permute_part(n_part, n_head)
+    s = lazy_tensor.shape.copy()
+    s[0] = s[0] // 3
+    return LazyTensor(load, s, lazy_tensor.data_type, f'permute({n_head}) ' + lazy_tensor.description)
+
+def part_lazy(lazy_tensor: LazyTensor, n_part: int) -> LazyTensor:
+    def load() -> Tensor:
+        return lazy_tensor.load().part(n_part)
+    s = lazy_tensor.shape.copy()
+    s[0] = s[0] // 3
+    return LazyTensor(load, s, lazy_tensor.data_type, 'part ' + lazy_tensor.description)
 
 def convert_transformers_to_orig(model: LazyModel, params: Params) -> LazyModel:
     out: LazyModel = {}
@@ -650,11 +675,17 @@ def convert_transformers_to_orig(model: LazyModel, params: Params) -> LazyModel:
     out["output.weight"] = model["lm_head.weight"]
 
     for i in itertools.count():
-        if f"model.layers.{i}.self_attn.q_proj.weight" not in model:
+        if f"model.layers.{i}.self_attn.q_proj.weight" in model:
+            out[f"layers.{i}.attention.wq.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.q_proj.weight"], params.n_head)
+            out[f"layers.{i}.attention.wk.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.k_proj.weight"], params.n_head)
+            out[f"layers.{i}.attention.wv.weight"] = model[f"model.layers.{i}.self_attn.v_proj.weight"]
+        elif f"model.layers.{i}.self_attn.W_pack.weight" in model:
+            out[f"layers.{i}.attention.wq.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 0, params.n_head)
+            out[f"layers.{i}.attention.wk.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 1, params.n_head)
+            out[f"layers.{i}.attention.wv.weight"] = part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 2)
+        else:
             break
-        out[f"layers.{i}.attention.wq.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.q_proj.weight"], params.n_head)
-        out[f"layers.{i}.attention.wk.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.k_proj.weight"], params.n_head)
-        out[f"layers.{i}.attention.wv.weight"] = model[f"model.layers.{i}.self_attn.v_proj.weight"]
+
         out[f"layers.{i}.attention.wo.weight"] = model[f"model.layers.{i}.self_attn.o_proj.weight"]
 
         out[f"layers.{i}.feed_forward.w1.weight"] = model[f"model.layers.{i}.mlp.gate_proj.weight"]
