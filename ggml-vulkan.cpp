@@ -71,7 +71,7 @@ vk::Device vk_device;
 vk::CommandPool vk_command_pool_compute, vk_command_pool_transfer;
 VmaAllocator vk_allocator;
 vk_pipeline vk_pipeline_matmul_f32, vk_pipeline_matmul_f16;
-vk_pipeline vk_pipeline_f16_to_f32;
+vk_pipeline vk_pipeline_f16_to_f32, vk_pipeline_dequant_q4_0;
 VmaAllocation vk_buffer_qa_alloc, vk_buffer_a_alloc, vk_buffer_b_alloc, vk_buffer_c_alloc;
 vk::Buffer vk_buffer_qa, vk_buffer_a, vk_buffer_b, vk_buffer_c;
 
@@ -332,6 +332,7 @@ void ggml_vk_init(void) {
     }
 
     vk_pipeline_f16_to_f32 = ggml_vk_create_pipeline("vk_shaders/f16_to_f32.spv", "main", 2, 1, {32, 1, 1});
+    vk_pipeline_dequant_q4_0 = ggml_vk_create_pipeline("vk_shaders/dequant_q4_0.spv", "main", 2, 1, {32, 1, 1});
 
     // Command pools
     vk::CommandPoolCreateInfo command_pool_create_info_compute(vk::CommandPoolCreateFlags(), vk_compute_queue_family_index);
@@ -359,8 +360,8 @@ void ggml_vk_init(void) {
 
 static vk_pipeline* ggml_get_to_fp32_vk(ggml_type type) {
     switch (type) {
-        // case GGML_TYPE_Q4_0:
-        //     return &dequantize_row_q4_0_cl;
+        case GGML_TYPE_Q4_0:
+            return &vk_pipeline_dequant_q4_0;
         // case GGML_TYPE_Q4_1:
         //     return &dequantize_row_q4_1_cl;
         // case GGML_TYPE_Q5_0:
@@ -1022,7 +1023,7 @@ bool ggml_vk_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tens
     const int64_t ne1 = dst->ne[1];
 
     // TODO: find the optimal values for these
-    if ((src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 /*|| ggml_is_quantized(src0->type)*/) &&
+    if ((src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) &&
         src1->type == GGML_TYPE_F32 &&
         dst->type == GGML_TYPE_F32 &&
         ((ne0 >= 128 && ne1 >= 32 && ne10 >= 128) || src0->backend == GGML_BACKEND_GPU)) {
