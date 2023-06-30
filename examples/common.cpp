@@ -168,6 +168,18 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.n_ctx = std::stoi(argv[i]);
+        } else if (arg == "--rope-freq-base") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.rope_freq_base = std::stof(argv[i]);
+        } else if (arg == "--rope-freq-scale") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.rope_freq_scale = std::stof(argv[i]);
         } else if (arg == "--memory-f32") {
             params.memory_f16 = false;
         } else if (arg == "--top-p") {
@@ -469,6 +481,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "                        i.e. `--logit-bias 15043+1` to increase likelihood of token ' Hello',\n");
     fprintf(stderr, "                        or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'\n");
     fprintf(stderr, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
+    fprintf(stderr, "  --rope_freq_base N    RoPE base frequency (default: %.1f)\n", params.rope_freq_base);
+    fprintf(stderr, "  --rope_freq_scale N   RoPE frequency scaling factor (default: %g)\n", params.rope_freq_scale);
     fprintf(stderr, "  --ignore-eos          ignore end of stream token and continue generating (implies --logit-bias 2-inf)\n");
     fprintf(stderr, "  --no-penalize-nl      do not penalize newline token\n");
     fprintf(stderr, "  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
@@ -549,6 +563,8 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
     lparams.use_mlock    = params.use_mlock;
     lparams.logits_all   = params.perplexity;
     lparams.embedding    = params.embedding;
+    lparams.rope_freq_base  = params.rope_freq_base;
+    lparams.rope_freq_scale = params.rope_freq_scale;
 
     llama_model * model  = llama_load_model_from_file(params.model.c_str(), lparams);
     if (model == NULL) {

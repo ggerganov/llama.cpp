@@ -874,6 +874,10 @@ void ggml_metal_graph_compute(
 
                             const int n_past = ((int32_t *)(src1->data))[0];
 
+                            float freq_base, freq_scale;
+                            memcpy(&freq_base, (int32_t *) src1->data + 4, sizeof(float));
+                            memcpy(&freq_scale, (int32_t *) src1->date + 5, sizeof(float));
+
                             [encoder setComputePipelineState:ctx->pipeline_rope];
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
@@ -896,6 +900,8 @@ void ggml_metal_graph_compute(
                             [encoder setBytes:&n_past length:sizeof(     int) atIndex:18];
                             [encoder setBytes:&n_dims length:sizeof(     int) atIndex:19];
                             [encoder setBytes:&mode   length:sizeof(     int) atIndex:20];
+                            [encoder setBytes:&freq_base  length:sizeof(float) atIndex:21];
+                            [encoder setBytes:&freq_scale length:sizeof(float) atIndex:22];
 
                             [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                         } break;

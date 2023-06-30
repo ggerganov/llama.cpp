@@ -608,6 +608,8 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     fprintf(stderr, "  -v, --verbose         verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
     fprintf(stderr, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
+    fprintf(stderr, "  --rope-freq-base N    RoPE base frequency (default: %.1f)\n", params.rope_freq_base);
+    fprintf(stderr, "  --rope-freq-scale N   RoPE frequency scaling factor (default: %g)\n", params.rope_freq_scale);
     fprintf(stderr, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     fprintf(stderr, "  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
     fprintf(stderr, "                        not recommended: doubles context memory required and no measurable increase in quality\n");
@@ -721,6 +723,22 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
             params.n_ctx = std::stoi(argv[i]);
+        }
+        else if (arg == "--rope-freq-base")
+        {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.rope_freq_base = std::stof(argv[i]);
+        }
+        else if (arg == "--rope-freq-scale")
+        {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.rope_freq_scale = std::stof(argv[i]);
         }
         else if (arg == "--memory-f32" || arg == "--memory_f32")
         {

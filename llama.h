@@ -85,6 +85,8 @@ extern "C" {
    struct llama_context_params {
         uint32_t seed;                         // RNG seed, -1 for random
         int32_t  n_ctx;                        // text context
+        float    rope_freq_base;               // RoPE base frequency
+        float    rope_freq_scale;              // RoPE frequency scaling factor
         int32_t  n_batch;                      // prompt processing batch size
         int32_t  n_gpu_layers;                 // number of layers to store in VRAM
         int32_t  main_gpu;                     // the GPU that is used for scratch and small tensors
