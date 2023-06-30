@@ -13,7 +13,7 @@ layout (push_constant) uniform parameter
 } p;
 
 void main() {
-    const int idx = int(gl_LocalInvocationID.x);
+    const int idx = int(gl_GlobalInvocationID.x);
 
     if (idx < p.N) {
         data_b[idx] = float(data_a[idx]);
