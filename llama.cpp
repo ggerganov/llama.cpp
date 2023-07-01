@@ -3219,7 +3219,7 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
     return nread;
 }
 
-bool llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+static bool llama_load_session_file_internal(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
     llama_file file(path_session, "rb");
 
     // sanity checks
@@ -3269,8 +3269,15 @@ bool llama_load_session_file(struct llama_context * ctx, const char * path_sessi
 
         llama_set_state_data(ctx, state_data.data());
     }
+}
 
-    return true;
+bool llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+    try {
+        return llama_load_session_file_internal(ctx, path_session, tokens_out, n_token_capacity, n_token_count_out);
+    } catch (const std::exception & err) {
+        fprintf(stderr, "error loading session file: %s\n", err.what());
+        return false;
+    }
 }
 
 bool llama_save_session_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count) {
