@@ -2204,7 +2204,7 @@ struct llama_v2_context * llama_v2_init_from_file(
 
     llama_v2_context * ctx = new llama_v2_context;
 
-    if (params.seed < 0) {
+    if (params.seed < 0 || params.seed==0xFFFFFFFF) {
         params.seed = time(NULL);
     }
 
@@ -2552,7 +2552,7 @@ int llama_v2_get_kv_cache_token_count(const struct llama_v2_context * ctx) {
 #define LLAMA_V2_MAX_RNG_STATE (64*1024)
 
 void llama_v2_set_rng_seed(struct llama_v2_context * ctx, int seed) {
-    if (seed < 0) {
+    if (seed < 0 || seed==0xFFFFFFFF) {
         seed = time(NULL);
     }
     ctx->rng.seed(seed);
