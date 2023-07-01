@@ -432,10 +432,10 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         {
             rwkv_ctx_v3 = rwkv_init_from_file(modelname.c_str(), n_threads);
 
-            if(inputs.gpulayers>0)
-            {
-                rwkv_gpu_offload_layers(rwkv_ctx_v3,inputs.gpulayers);
-            }
+            // if(inputs.gpulayers>0)
+            // {
+            //     rwkv_gpu_offload_layers(rwkv_ctx_v3,inputs.gpulayers);
+            // }
 
             const struct rwkv_file_header & header = rwkv_ctx_v3->instance->model.header;
             const size_t n_vocab = header.n_vocab;
