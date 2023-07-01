@@ -3269,6 +3269,8 @@ static bool llama_load_session_file_internal(struct llama_context * ctx, const c
 
         llama_set_state_data(ctx, state_data.data());
     }
+
+    return true;
 }
 
 bool llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
