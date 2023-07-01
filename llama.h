@@ -46,6 +46,8 @@
 #define LLAMA_SESSION_MAGIC          LLAMA_FILE_MAGIC_GGSN
 #define LLAMA_SESSION_VERSION        1
 
+#define LLAMA_DEFAULT_SEED           0xFFFFFFFF
+
 #if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL)
 // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
 #define LLAMA_SUPPORTS_GPU_OFFLOAD
@@ -81,11 +83,11 @@ extern "C" {
     typedef void (*llama_progress_callback)(float progress, void *ctx);
 
    struct llama_context_params {
-        int seed;                              // RNG seed, -1 for random
-        int n_ctx;                             // text context
-        int n_batch;                           // prompt processing batch size
-        int n_gpu_layers;                      // number of layers to store in VRAM
-        int main_gpu;                          // the GPU that is used for scratch and small tensors
+        uint32_t seed;                         // RNG seed, -1 for random
+        int32_t  n_ctx;                        // text context
+        int32_t  n_batch;                      // prompt processing batch size
+        int32_t  n_gpu_layers;                 // number of layers to store in VRAM
+        int32_t  main_gpu;                     // the GPU that is used for scratch and small tensors
         float tensor_split[LLAMA_MAX_DEVICES]; // how to split layers across multiple GPUs
         // called with a progress value between 0 and 1, pass NULL to disable
         llama_progress_callback progress_callback;
@@ -196,7 +198,7 @@ extern "C" {
     LLAMA_API int llama_get_kv_cache_token_count(const struct llama_context * ctx);
 
     // Sets the current rng seed.
-    LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, int seed);
+    LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, uint32_t seed);
 
     // Returns the maximum size in bytes of the state (rng, logits, embedding
     // and kv_cache) - will often be smaller after compacting tokens
