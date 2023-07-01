@@ -2671,7 +2671,8 @@ struct train_params {
     const char * fn_checkpoint_out;
     const char * fn_model_out;
 
-    int seed;
+    uint32_t seed;
+
     int n_ctx;
     int n_embd;
     int n_mult;
