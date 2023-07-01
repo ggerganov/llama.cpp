@@ -66,6 +66,7 @@ enum e_model {
     MODEL_65B,
 };
 
+static const size_t kB = 1024;
 static const size_t MB = 1024*1024;
 
 // computed for n_ctx == 2048
@@ -125,6 +126,34 @@ static const std::map<e_model, size_t> & MEM_REQ_EVAL()
         { MODEL_13B, 1024ull * MB },
         { MODEL_30B, 1280ull * MB },
         { MODEL_65B, 1536ull * MB },
+    };
+    return k_sizes;
+}
+
+// amount of VRAM needed per batch size to hold temporary results
+// the values for 3b and 65b are not derived from testing but instead chosen conservatively
+static const std::map<e_model, size_t> & VRAM_REQ_SCRATCH_BASE()
+{
+    static std::map<e_model, size_t> k_sizes = {
+        { MODEL_3B,   512ull * kB },
+        { MODEL_7B,   512ull * kB },
+        { MODEL_13B,  640ull * kB },
+        { MODEL_30B,  768ull * kB },
+        { MODEL_65B, 1536ull * kB },
+    };
+    return k_sizes;
+}
+
+// amount of VRAM needed per batch size and context to hold temporary results
+// the values for 3b and 65b are not derived from testing but instead chosen conservatively
+static const std::map<e_model, size_t> & VRAM_REQ_SCRATCH_PER_CONTEXT()
+{
+    static std::map<e_model, size_t> k_sizes = {
+        { MODEL_3B,  128ull },
+        { MODEL_7B,  128ull },
+        { MODEL_13B, 160ull },
+        { MODEL_30B, 208ull },
+        { MODEL_65B, 416ull },
     };
     return k_sizes;
 }
@@ -1118,11 +1147,14 @@ static void llama_model_load_internal(
             fprintf(stderr, "%s: not allocating a VRAM scratch buffer due to low VRAM option\n", __func__);
             ggml_cuda_set_scratch_size(0); // disable scratch
         } else {
-            vram_scratch = n_batch * MB;
+            const size_t vram_scratch_base = VRAM_REQ_SCRATCH_BASE().at(model.type);
+            const size_t vram_scratch_per_context = VRAM_REQ_SCRATCH_PER_CONTEXT().at(model.type);
+            vram_scratch = n_batch * (vram_scratch_base + n_ctx * vram_scratch_per_context);
             ggml_cuda_set_scratch_size(vram_scratch);
             if (n_gpu_layers > 0) {
-                fprintf(stderr, "%s: allocating batch_size x 1 MB = %zd MB VRAM for the scratch buffer\n",
-                        __func__, vram_scratch / MB);
+                fprintf(stderr, "%s: allocating batch_size x (%zd kB + n_ctx x %zd B) = %zd MB VRAM for the scratch buffer\n",
+                        __func__, vram_scratch_base / kB, vram_scratch_per_context,
+                        (vram_scratch + MB - 1) / MB); // round up
             }
         }
 #endif // GGML_USE_CUBLAS
