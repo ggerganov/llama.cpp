@@ -5,7 +5,6 @@
 #include "llama.h"
 #include "build-info.h"
 
-
 extern "C" {
 
 typedef struct MyModel {
@@ -14,14 +13,13 @@ typedef struct MyModel {
     int n_past = 0;
 } MyModel;
 
-
 struct MyModel* create_mymodel(int argc, char ** argv);
 
 bool eval_float(void* model, float* input, int N);
 bool eval_tokens(void* model, std::vector<llama_token> tokens);
 bool eval_id(struct MyModel* mymodel, int id);
 bool eval_string(struct MyModel* mymodel, const char* str);
-const char* sampling(struct MyModel* mymodel);
+const char * sampling(struct MyModel* mymodel);
 llama_token sampling_id(struct MyModel* mymodel);
 void free_mymodel(struct MyModel* mymodel);
 

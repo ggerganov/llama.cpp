@@ -3846,6 +3846,40 @@ static_assert(GGML_OP_COUNT == 64, "GGML_OP_COUNT != 64");
 static_assert(sizeof(struct ggml_object)%GGML_MEM_ALIGN == 0, "ggml_object size must be a multiple of GGML_MEM_ALIGN");
 static_assert(sizeof(struct ggml_tensor)%GGML_MEM_ALIGN == 0, "ggml_tensor size must be a multiple of GGML_MEM_ALIGN");
 
+// WARN:
+// Mis-confguration can lead to problem that's hard to reason about:
+// * At best  it crash or talks nosense.
+// * At worst it talks slightly difference but hard to perceive.
+//
+// An op has to enable INIT or FINALIZE when any of it's branch needs that pass.
+// Take care about compile options (e.g., GGML_USE_xxx).
+static bool GGML_OP_HAS_INIT    [GGML_OP_COUNT] = { 0 };
+static bool GGML_OP_HAS_FINALIZE[GGML_OP_COUNT] = { 0 };
+static void ggml_setup_op_has_task_pass(void) {
+    {   // INIT
+        bool * I = GGML_OP_HAS_INIT;
+
+        I[GGML_OP_ACC                    ] = true;
+        I[GGML_OP_MUL_MAT                ] = true;
+        I[GGML_OP_OUT_PROD               ] = true;
+        I[GGML_OP_SET                    ] = true;
+        I[GGML_OP_GET_ROWS_BACK          ] = true;
+        I[GGML_OP_DIAG_MASK_INF          ] = true;
+        I[GGML_OP_DIAG_MASK_ZERO         ] = true;
+        I[GGML_OP_CONV_1D_S1_PH          ] = true;
+        I[GGML_OP_CONV_1D_S2_PH          ] = true;
+        I[GGML_OP_CONV_2D_SK_P0          ] = true;
+        I[GGML_OP_FLASH_ATTN_BACK        ] = true;
+        I[GGML_OP_CROSS_ENTROPY_LOSS     ] = true;
+    }
+
+    {   // FINALIZE
+        bool * F = GGML_OP_HAS_FINALIZE;
+
+        F[GGML_OP_CROSS_ENTROPY_LOSS     ] = true;
+    }
+}
+
 //
 // ggml context
 //
@@ -4266,6 +4300,8 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
 #elif defined(GGML_USE_CLBLAST)
         ggml_cl_init();
 #endif
+
+        ggml_setup_op_has_task_pass();
 
         is_first_call = false;
     }
@@ -16791,9 +16827,11 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             if (node_n != -1) {
                 /* FINALIZE */
                 struct ggml_tensor * node = state->shared->cgraph->nodes[node_n];
-                params.nth = node->n_tasks;
-                ggml_compute_forward(&params, node);
-                ggml_graph_compute_perf_stats_node(node, state->shared);
+                if (GGML_OP_HAS_FINALIZE[node->op]) {
+                    params.nth = node->n_tasks;
+                    ggml_compute_forward(&params, node);
+                    ggml_graph_compute_perf_stats_node(node, state->shared);
+                }
             }
 
             // distribute new work or execute it direct if 1T
@@ -16805,10 +16843,13 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                 state->shared->perf_node_start_cycles  = ggml_perf_cycles();
                 state->shared->perf_node_start_time_us = ggml_perf_time_us();
 
+                params.nth = node->n_tasks;
+
                 /* INIT */
-                params.type = GGML_TASK_INIT;
-                params.nth  = node->n_tasks;
-                ggml_compute_forward(&params, node);
+                if (GGML_OP_HAS_INIT[node->op]) {
+                    params.type = GGML_TASK_INIT;
+                    ggml_compute_forward(&params, node);
+                }
 
                 if (node->n_tasks == 1) {
                     // TODO: maybe push node_n to the atomic but if other threads see n_tasks is 1,
@@ -16816,9 +16857,11 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                     params.type = GGML_TASK_COMPUTE;
                     ggml_compute_forward(&params, node);
 
-                    params.type = GGML_TASK_FINALIZE;
-                    ggml_compute_forward(&params, node);
-                    ggml_graph_compute_perf_stats_node(node, state->shared);
+                    if (GGML_OP_HAS_FINALIZE[node->op]) {
+                        params.type = GGML_TASK_FINALIZE;
+                        ggml_compute_forward(&params, node);
+                        ggml_graph_compute_perf_stats_node(node, state->shared);
+                    }
                 } else {
                     break;
                 }
