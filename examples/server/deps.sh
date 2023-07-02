@@ -5,7 +5,7 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 PUBLIC=$DIR/public
 
-curl https://npm.reversehttp.com/@preact/signals-core,@preact/signals,htm/preact,preact,preact/hooks,@microsoft/fetch-event-source > $PUBLIC/index.js
+curl https://npm.reversehttp.com/@preact/signals-core,@preact/signals,htm/preact,preact,preact/hooks > $PUBLIC/index.js
 echo >> $PUBLIC/index.js # add newline
 
 echo "// Generated file, run deps.sh to update. Do not edit directly

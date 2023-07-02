@@ -66,7 +66,7 @@
 
   <script type="module">
     import {
-      html, h, signal, effect, computed, render, useSignal, useEffect, useRef, fetchEventSource
+      html, h, signal, effect, computed, render, useSignal, useEffect, useRef
     } from '/index.js';
 
     const transcript = signal([])
@@ -93,50 +93,101 @@
       return String(str).replaceAll(/\{\{(.*?)\}\}/g, (_, key) => template(params[key]));
     }
 
+    const llamaCompletionStream = async (params) => {
+      controller.value = new AbortController();
+      const sig = controller.value.signal;
+
+      const data = JSON.stringify({
+        stream: true,
+        prompt: params.prompt,
+        n_predict: parseInt(nPredict.value),
+        temperature: parseFloat(temperature.value),
+        stop: ["</s>", template("{{bot}}:"), template("{{user}}:")]
+      });
+
+      // we use fetch directly here becasue the built in fetchEventSource does not support POST
+      const response = await fetch("/completion", {
+        method: 'POST',
+        body: data,
+        headers: {
+          'Connection': 'keep-alive',
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream'
+        },
+        signal: sig,
+      });
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      try {
+
+        while (true) {
+          const result = await reader.read();
+          if (result.done) {
+            break;
+          }
+
+          // sse answers in the form multiple lines of: value\n with data always present as a key. in our case we
+          // mainly care about the data: key here, which we expect as json
+          const text = decoder.decode(result.value);
+
+          // parse all sse events and add them to result
+          const regex = /^(\S+):\s(.*)$/gm;
+          for (const match of text.matchAll(regex)) {
+            result[match[1]] = match[2]
+          }
+
+          // since we know this is llama.cpp, let's just decode the json in data
+          result.data = JSON.parse(result.data);
+
+          // callack
+          params.onmessage(result);
+
+          // if we got a stop token from server, we will break here
+          if (result.data.stop) {
+            break;
+          }
+        }
+      } catch (e) {
+        console.error(e);
+        throw e;
+      }
+      finally {
+        controller.value.abort();
+        controller.value = null;
+      }
+    }
+
+
     // send message to server
     const chat = async (msg) => {
       if (controller.value) {
         console.log('already running...');
         return;
       }
-      controller.value = new AbortController();
+      transcript.value = [...transcript.value, ['{{user}}', msg]];
 
-      const history = [...transcript.value, ['{{user}}', msg]];
-      transcript.value = history;
-
-      let additionalParams = {
+      const payload = template(chatTemplate.value, {
         message: msg,
-        history: history.flatMap(([name, msg]) => `${name}: ${msg}`).join("\n"),
-      }
+        history: transcript.value.flatMap(([name, msg]) => `${name}: ${msg}`).join("\n"),
+      });
 
-      const payload = template(chatTemplate.value, additionalParams)
+      let currentMessage = '';
+      let history = transcript.value;
 
-      let currentMessage = "";
-      await fetchEventSource('/completion', {
-        method: 'POST',
-        signal: controller.value.signal,
-        body: JSON.stringify({
-          stream: true,
-          prompt: payload,
-          n_predict: parseInt(nPredict.value),
-          temperature: parseFloat(temperature.value),
-          stop: ["</s>", template("{{bot}}:"), template("{{user}}:")]
-        }),
-        onmessage(e) {
-          const data = JSON.parse(e.data);
+      llamaCompletionStream({
+        prompt: payload,
+        onmessage: (message) => {
+          const data = message.data;
           currentMessage += data.content;
+
+          transcript.value = [...history,["{{bot}}", currentMessage]];
 
           if (data.stop) {
             console.log("-->", data, ' response was:', currentMessage, 'transcript state:', transcript.value);
           }
-
-          transcript.value = [...history, ['{{bot}}', currentMessage]]
-          return true;
-        },
-        onclose(e) {
-          controller.value = null;
-          return false;
-        },
+        }
       });
     }
 
