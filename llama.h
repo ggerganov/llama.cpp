@@ -252,7 +252,8 @@ extern "C" {
                       const char * text,
                      llama_token * tokens,
                              int   n_max_tokens,
-                            bool   add_bos);
+                            bool   add_bos,
+                            float  dropout);
 
     LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
     LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);

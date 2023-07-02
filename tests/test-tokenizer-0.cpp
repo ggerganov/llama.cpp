@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
 
     for (const auto & test_kv : k_tests()) {
         std::vector<llama_token> res(test_kv.first.size());
-        const int n = llama_tokenize(ctx, test_kv.first.c_str(), res.data(), int(res.size()), true);
+        const int n = llama_tokenize(ctx, test_kv.first.c_str(), res.data(), int(res.size()), true, 0.0);
         res.resize(n);
 
         bool correct = res.size() == test_kv.second.size();

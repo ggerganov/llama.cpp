@@ -48,6 +48,7 @@
 #include <mutex>
 #include <sstream>
 #include <numeric>
+#include <random>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -1717,7 +1718,7 @@ struct llama_sp_bigram {
 // original implementation:
 // https://github.com/ggerganov/llama.cpp/commit/074bea2eb1f1349a0118239c4152914aecaa1be4
 struct llama_tokenizer {
-    llama_tokenizer(const llama_vocab & vocab): vocab_(vocab) {}
+    llama_tokenizer(const llama_vocab & vocab, float dropout): vocab_(vocab), dropout_(dropout) {}
 
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
         // split string into utf8 chars
@@ -1759,6 +1760,9 @@ struct llama_tokenizer {
             right_sym.n = 0;
 
             //printf("left = '%*s' size = %zu\n", (int) left_sym.n, left_sym.text, bigram.size);
+            if (skip_merge()) {
+                continue;
+            }
 
             // remove the right sym from the chain
             left_sym.next = right_sym.next;
@@ -1814,13 +1818,26 @@ private:
         work_queue_.push(bigram);
     }
 
+    bool skip_merge()
+    {
+        std::uniform_real_distribution<> gen(0.0, 1.0);
+        if (dropout_ <= 0.0) {
+            return false;
+        }
+        if (dropout_ >= 1.0)
+            return true;
+        return gen(rng) < dropout_;
+    }
+
     const llama_vocab & vocab_;
     std::vector<llama_sp_symbol> symbols_;
     llama_sp_bigram::queue work_queue_;
+    float dropout_;
+    std::mt19937 rng;
 };
 
-static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, const std::string & text, bool bos) {
-    llama_tokenizer tokenizer(vocab);
+static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, const std::string & text, bool bos, float dropout) {
+    llama_tokenizer tokenizer(vocab, dropout);
     std::vector<llama_vocab::id> output;
 
     if (text.empty()) {
@@ -3407,8 +3424,9 @@ int llama_tokenize(
                   const char * text,
                  llama_token * tokens,
                          int   n_max_tokens,
-                        bool   add_bos) {
-    auto res = llama_tokenize(ctx->vocab, text, add_bos);
+                        bool   add_bos,
+                        float  dropout) {
+    auto res = llama_tokenize(ctx->vocab, text, add_bos, dropout);
 
     if (n_max_tokens < (int) res.size()) {
         fprintf(stderr, "%s: too many tokens\n", __func__);

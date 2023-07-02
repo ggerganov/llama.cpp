@@ -2187,7 +2187,7 @@ int tokenize_file(struct llama_context * lctx, const char * filename, std::vecto
 
     out.resize(buf.size());
 
-    int n_tokens = llama_tokenize(lctx, buf.data(), out.data(), buf.size(), false);
+    int n_tokens = llama_tokenize(lctx, buf.data(), out.data(), buf.size(), false, 0.1f);
     if (n_tokens >= 0) {
         out.resize(n_tokens);
     }

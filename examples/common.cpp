@@ -527,7 +527,7 @@ std::string gpt_random_prompt(std::mt19937 & rng) {
 std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::string & text, bool add_bos) {
     // initialize to prompt numer of chars, since n_tokens <= n_prompt_chars
     std::vector<llama_token> res(text.size() + (int) add_bos);
-    const int n = llama_tokenize(ctx, text.c_str(), res.data(), res.size(), add_bos);
+    const int n = llama_tokenize(ctx, text.c_str(), res.data(), res.size(), add_bos, 0.0);
     assert(n >= 0);
     res.resize(n);
 
