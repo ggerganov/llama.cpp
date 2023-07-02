@@ -1358,15 +1358,26 @@ int main(int argc, const char ** argv) {
             int64_t ne2[4];
             get_random_dims(ne2, 4);
 
-            for (int ndims = 1; ndims <= 3; ++ndims) {
-                x[0] = get_random_tensor_f32(ctx0, ndims, ne2, -1.0f, 1.0f);
+            for (int ndims = 1; ndims <= 4; ++ndims) {
+                x[0] = get_random_tensor_f32(ctx0, ndims, ne2, -0.1f, 0.1f);
                 x[1] = get_random_tensor_f32(ctx0, ndims, ne2, 0.0f, 1.0f);
+                // the second argument to cross_entropy_loss must sum up to 1 for each row
+                int nr = ggml_nrows(x[1]);
+                int nc = ggml_nelements(x[1]) / nr;
+                for (int ir = 0; ir < nr; ++ir) {
+                    float sum = 0;
+                    for (int ic = 0; ic < nc; ++ic) {
+                        sum += ((float *) x[1]->data)[ic + ir*nc];
+                    }
+                    for (int ic = 0; ic < nc; ++ic) {
+                        ((float *) x[1]->data)[ic + ir*nc] /= sum;
+                    }
+                }
                 ggml_set_param(ctx0, x[0]);
 
-                struct ggml_tensor * f = ggml_sum(ctx0, ggml_cross_entropy_loss(ctx0, x[0], x[1]));
+                struct ggml_tensor * f = ggml_cross_entropy_loss(ctx0, x[0], x[1]);
 
-                check_gradient("cross_entropy_loss", ctx0, x, f, ndims, nargs, 1e-1f, 1e-2f, INFINITY);
-                // finite differences regularly fails!
+                check_gradient("cross_entropy_loss", ctx0, x, f, ndims, nargs, 1e-4f, 1e-1f, INFINITY);
             }
         }
 
