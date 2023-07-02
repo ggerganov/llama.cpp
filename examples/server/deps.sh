@@ -5,13 +5,10 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 PUBLIC=$DIR/public
 
+echo "download js bundle files"
 curl https://npm.reversehttp.com/@preact/signals-core,@preact/signals,htm/preact,preact,preact/hooks > $PUBLIC/index.js
 echo >> $PUBLIC/index.js # add newline
 
-echo "// Generated file, run deps.sh to update. Do not edit directly
-R\"htmlraw($(cat $PUBLIC/index.html))htmlraw\"
-" > $DIR/index.html.cpp
-
-echo "// Generated file, run deps.sh to update. Do not edit directly
-R\"jsraw($(cat $PUBLIC/index.js))jsraw\"
-" > $DIR/index.js.cpp
+echo "generate hpp files"
+xxd -n index_html -i $PUBLIC/index.html  > $DIR/index.html.hpp
+xxd -n index_js -i $PUBLIC/index.js   > $DIR/index.js.hpp

@@ -11,13 +11,8 @@
 #include "json.hpp"
 
 // auto generated files (update with ./deps.sh)
-const char* indexHtml =
-#include "index.html.cpp"
-;
-const char* indexJs =
-#include "index.js.cpp"
-;
-
+#include "index.html.hpp"
+#include "index.js.hpp"
 
 #ifndef SERVER_VERBOSE
 #define SERVER_VERBOSE 1
@@ -918,13 +913,13 @@ int main(int argc, char ** argv) {
 
     // this is only called if no index.js is found in the public --path
     svr.Get("/index.js", [](const Request &, Response & res) {
-        res.set_content(indexJs, "text/javascript");
+        res.set_content(reinterpret_cast<const char *>(&index_js), index_js_len, "text/javascript");
         return false;
     });
 
     // this is only called if no index.html is found in the public --path
     svr.Get("/", [](const Request &, Response & res) {
-        res.set_content(indexHtml, "text/html");
+        res.set_content(reinterpret_cast<const char*>(&index_html), index_html_len, "text/html");
         return false;
     });
 
