@@ -1127,7 +1127,7 @@ static void llama_model_load_internal(
         const size_t scale = memory_type == GGML_TYPE_F32 ? 2 : 1;
 
         // this is the total memory required to run the inference
-        const size_t bigctxmul = (hparams.n_ctx>2048?2:1);
+        const size_t bigctxmul = (hparams.n_ctx>4096?3:(hparams.n_ctx>2048?2:1));
         const size_t mem_required =
             ctx_size +
             mmapped_size - vram_weights + // weights in VRAM not in memory
