@@ -2119,7 +2119,7 @@ struct llama_file {
         return (size_t) ret;
     }
 
-    void seek(size_t offset, int whence) {
+    void seek(size_t offset, int whence) const {
 #ifdef _WIN32
         int ret = _fseeki64(fp, (__int64) offset, whence);
 #else
@@ -2128,7 +2128,7 @@ struct llama_file {
         GGML_ASSERT(ret == 0); // same
     }
 
-    void read_raw(void * ptr, size_t size) {
+    void read_raw(void * ptr, size_t size) const {
         if (size == 0) {
             return;
         }
@@ -2142,19 +2142,19 @@ struct llama_file {
         }
     }
 
-    std::uint32_t read_u32() {
+    std::uint32_t read_u32() const {
         std::uint32_t ret;
         read_raw(&ret, sizeof(ret));
         return ret;
     }
 
-    std::string read_string(std::uint32_t len) {
+    std::string read_string(std::uint32_t len) const {
         std::vector<char> chars(len);
         read_raw(chars.data(), len);
         return std::string(chars.data(), len);
     }
 
-    void write_raw(const void * ptr, size_t size) {
+    void write_raw(const void * ptr, size_t size) const {
         if (size == 0) {
             return;
         }
@@ -2165,7 +2165,7 @@ struct llama_file {
         }
     }
 
-    void write_u32(std::uint32_t val) {
+    void write_u32(std::uint32_t val) const {
         write_raw(&val, sizeof(val));
     }
 

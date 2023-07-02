@@ -734,7 +734,7 @@ struct llama_model_loader {
         }
     }
 
-    void load_data_for(llama_load_tensor & lt) {
+    void load_data_for(llama_load_tensor & lt) const {
         if (use_mmap) {
             lt.data = (uint8_t *) mapping->addr + lt.file_off;
         } else {
