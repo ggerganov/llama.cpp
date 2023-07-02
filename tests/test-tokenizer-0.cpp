@@ -14,6 +14,7 @@ static const std::map<std::string, std::vector<llama_token>> & k_tests()
         { " this is 🦙.cpp",    { 1,    445,    338,  29871,    243,    162,    169,    156,  29889,   8223, }, },
         { "w048 7tuijk dsdfhu", { 1,  29893,  29900,  29946,  29947,  29871,  29955,   9161,  13535,  18031,   2176,   6905, }, },
         { "нещо на Български",  { 1,    821,   4851,    665,   1386,  29713,   1305, }, },
+        { ">>>>ANSWER<<",       { 1,   6778,   6778,   2190,  23066,   1001,   9314,}, },
     };
     return _k_tests;
 };
@@ -93,6 +94,38 @@ int main(int argc, char **argv) {
             return 3;
         }
     }
+
+#if 0
+    // how many tokens would not tokenize to themselves
+    for (llama_token i = 1; i < llama_n_vocab(ctx); i++)
+    {
+        const char* str = llama_token_to_str(ctx, i);
+        std::vector<llama_token> res(100);
+
+        const int n = llama_tokenize(ctx, str, res.data(), int(res.size()), false);
+        res.resize(n);
+
+        for (const auto & t : res)
+        {
+            //if (t == 1) continue;
+
+            if (t != i) {
+                fprintf(stderr, "%s : failed test: '%s'\n", __func__, str);
+                fprintf(stderr, "%s : expected tokens: %d\n", __func__, i);
+                fprintf(stderr, "%s : got tokens:      ", __func__);
+                for (const auto & t : res) {
+                    fprintf(stderr, "%6d, ", t);
+                }
+                for (const auto & t : res) {
+                    fprintf(stderr, "%s|", llama_token_to_str(ctx, t));
+                }
+
+                fprintf(stderr, "\n");
+            }
+        }
+
+    }
+#endif
 
     llama_free_model(model);
     llama_free(ctx);
