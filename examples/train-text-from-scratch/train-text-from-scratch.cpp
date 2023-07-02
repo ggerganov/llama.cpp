@@ -3975,6 +3975,8 @@ int main(int argc, char ** argv) {
 
     printf("%s: begin training\n", __func__);
 
+    int64_t t0 = ggml_time_ms();
+
     for (int ex = 0; ex < params.n_examples; ++ex) {
         if (ex*n_batch >= (int) train_samples.size()) {
             shuffle_ints(train_samples.data(), train_samples.data() + train_samples.size());
@@ -4111,6 +4113,11 @@ int main(int argc, char ** argv) {
 
         ggml_free(ctx0);
     }
+
+    int64_t t1 = ggml_time_ms();
+    int64_t d  = t1-t0;
+    double  dd = (double) d * 1e-3;
+    printf("%s: total training time=%f seconds\n", __func__, dd);
 
     if (params.n_examples > 0) {
         save_checkpoint(&model, opt, params.fn_checkpoint_out);
