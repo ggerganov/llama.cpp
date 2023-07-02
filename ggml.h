@@ -201,12 +201,6 @@
 #define GGML_MAX_NAME          48
 #define GGML_DEFAULT_N_THREADS 4
 
-// Maximum training context of the model in use
-// For the LLaMA models this is normally 2048, but somehow "stepping out" by 128 gives better results (tested at 7B and 13B)
-#ifndef GGML_TRAINING_CTX
-#define GGML_TRAINING_CTX 2176
-#endif
-
 #define GGML_ASSERT(x) \
     do { \
         if (!(x)) { \
@@ -509,6 +503,8 @@ extern "C" {
 
     // use this to compute the memory overhead of a tensor
     GGML_API size_t ggml_tensor_overhead(void);
+
+    GGML_API float get_theta_scale(int n_dims,int n_past,int n_ctx);
 
     // main
 
