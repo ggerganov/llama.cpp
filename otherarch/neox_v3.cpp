@@ -68,6 +68,8 @@ ModelLoadResult gpt_neox_model_load(const std::string & fname, gpt_neox_model & 
         printf("%s: ftype   = %d\n", __func__, hparams.ftype);
         printf("%s: qntvr   = %d\n", __func__, qntvr);
 
+        hparams.n_ctx = std::max(origmaxctx,hparams.n_ctx);
+
         hparams.ftype %= GGML_QNT_VERSION_FACTOR;
     }
 
@@ -502,8 +504,8 @@ bool gpt_neox_eval(
             struct ggml_tensor * Vcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd/n_head, n_head, N, cur->nb[1]/n_head, cur->nb[1], 2*sizeof(float)*n_embd/n_head));
 
             // using mode = 2 for GPT-NeoX mode
-            Qcur = ggml_rope_inplace(ctx0, Qcur, n_past, n_rot, 2, 0);
-            Kcur = ggml_rope_inplace(ctx0, Kcur, n_past, n_rot, 2, 0);
+            Qcur = ggml_rope_inplace(ctx0, Qcur, n_past, n_rot, 2, n_ctx);
+            Kcur = ggml_rope_inplace(ctx0, Kcur, n_past, n_rot, 2, n_ctx);
 
             // store key and value to memory
             {
