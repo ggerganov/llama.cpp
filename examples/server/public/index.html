@@ -2,29 +2,60 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <title>llama.cpp - chat</title>
 
   <style>
+
+
+    body {
+      background-color: #fff;
+      color: #000;
+      font-family: system-ui;
+      font-size: 90%;
+    }
     #container {
-      max-width: 80rem;
-      margin: 4em auto;
+      margin: 0em auto;
+
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      height: 100%;
+    }
+
+    header, footer {
+      text-align: center;
     }
 
     main {
-      border: 1px solid #ddd;
+      margin: 3px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 1em;
+
+      flex-grow: 1;
+      border-style: outset;
       padding: 1em;
     }
 
-    #chat {
-      height: 50vh;
+    main .content {
+      flex-grow: 1;
+    }
+
+    main .content > * {
       overflow-y: auto;
     }
 
+    footer {
+      font-size: smaller;
+      color: #999;
+    }
+
     body {
-      max-width: 650px;
+      max-width: 600px;
+      min-width: 300px;
       line-height: 1.2;
-      font-size: 16px;
       margin: 0 auto;
     }
 
@@ -50,6 +81,12 @@
 
     form input {
       flex-grow: 1;
+    }
+
+    form textarea {
+      flex-grow: 1;
+      min-height: 5em;
+      width: 100%;
     }
 
     fieldset {
@@ -194,7 +231,7 @@
 
             <div>
               <label for="prompt">Prompt</label>
-              <textarea type="text" id="prompt" value="${settings.value.prompt}" oninput=${(e) => settings.value.prompt = e.target.value} rows="3" cols="60" />
+              <textarea type="text" id="prompt" value="${settings.value.prompt}" oninput=${(e) => settings.value.prompt = e.target.value}/>
             </div>
 
             <div>
@@ -209,7 +246,7 @@
 
             <div>
               <label for="template">Prompt template</label>
-              <textarea id="template" value="${chatTemplate}" oninput=${(e) => chatTemplate.value = e.target.value} rows="8" cols="60" />
+              <textarea id="template" value="${chatTemplate}" oninput=${(e) => chatTemplate.value = e.target.value}/>
             </div>
 
             <div>
@@ -223,8 +260,7 @@
               <input type="range" id="nPredict" min="1" max="2048" step="1" value="${nPredict.value}" oninput=${(e) => nPredict.value = e.target.value} />
               <span>${nPredict}</span>
             </div>
-            </fieldset>
-
+          </fieldset>
         </form>
       `
 
@@ -239,16 +275,12 @@
         </header>
 
         <main>
-          <section class="chat">
-            <${chatStarted.value ? ChatLog : ConfigForm
-        } />
-          </section>
-
-          <hr/>
-
-          <section class="chat">
-            <${MessageInput} />
-          </section>
+          <div id="content">
+          <${chatStarted.value ? ChatLog : ConfigForm} />
+          </div>
+          <div>
+          <${MessageInput} />
+          </div>
         </main>
 
         <footer>
