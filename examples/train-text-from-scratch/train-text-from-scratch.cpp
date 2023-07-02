@@ -2179,9 +2179,9 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train_grad_checkpointing(
         struct my_llama_layer & layer = model->layers[il];
         // tensors with values necessary for backward pass are in persistent buf(-1)
         // other tensors with buf(0), buf(1), etc are only temporary needed, and their memory reused
-        bool is_checkpoint = (chk_idx < checkpoints.size() && il == checkpoints[chk_idx]);
+        bool is_checkpoint = (chk_idx < n_check && il == checkpoints[chk_idx]);
         if (is_checkpoint) {
-            printf("%s: layer %d is_checkpoint\n", __func__, il);
+            // printf("%s: layer %d is_checkpoint\n", __func__, il);
             chk_idx += 1;
         }
         const int prs = 0; // in first forward pass even persistent tensors are only temporary
@@ -2263,11 +2263,11 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train_grad_checkpointing(
     struct ggml_tensor * back_layer_inp = t31;
     struct ggml_tensor * grad_layer_inp = NULL;
 
-    printf("%s: checkpoints.size() = %zu\n", __func__, checkpoints.size());
-    chk_idx = checkpoints.size()-1;
+    // printf("%s: n_check = %u\n", __func__, n_check);
+    chk_idx = n_check-1;
     int avail_begin = n_layer;
     int avail_end = n_layer;
-    printf("%s: chk_idx=%d avail_begin=%d avail_end=%d\n", __func__, chk_idx, avail_begin, avail_end);
+    // printf("%s: chk_idx=%d avail_begin=%d avail_end=%d\n", __func__, chk_idx, avail_begin, avail_end);
     for (int k = 0; k < n_layer; ++k) {
         // second forward pass for checkpointing
         int il = n_layer-1-k;
@@ -2278,14 +2278,14 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train_grad_checkpointing(
             int begin = (chk_idx == -1)
                         ? 0
                         : checkpoints[chk_idx] + 1; // checkpoint[chk_idx] contains t30 for computing following layers -> +1
-            int end   = (chk_idx+1 < checkpoints.size())
+            int end   = (chk_idx+1 < n_check)
                         ? (checkpoints[chk_idx+1] + 1)
                         : n_layer;
             GGML_ASSERT(begin <= il);
             GGML_ASSERT(il < end);
             cur = (chk_idx == -1) ? t01 : t30L[checkpoints[chk_idx]];
             clr_buf(2);
-            printf("%s: second forward pass chk_idx=%d begin=%d end=%d\n", __func__, chk_idx, begin, end);
+            // printf("%s: second forward pass chk_idx=%d begin=%d end=%d\n", __func__, chk_idx, begin, end);
             for (int i = begin; i < end; ++i) {
                 struct my_llama_layer & layer = model->layers[i];
                 const int prs = 2; // persistent until next checkpoint
@@ -2357,9 +2357,9 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train_grad_checkpointing(
             --chk_idx;
             avail_begin = begin;
             avail_end   = end;
-            printf("%s: chk_idx=%d avail_begin=%d avail_end=%d\n", __func__, chk_idx, avail_begin, avail_end);
+            // printf("%s: chk_idx=%d avail_begin=%d avail_end=%d\n", __func__, chk_idx, avail_begin, avail_end);
         }
-        printf("%s: backward pass il=%d\n", __func__, il);
+        // printf("%s: backward pass il=%d\n", __func__, il);
 
         struct my_llama_layer & layer = model->layers[il];
 
@@ -2452,7 +2452,7 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train_grad_checkpointing(
         layer.w2->grad             = expand(gb, add_or_set(layer.w2->grad,             ggml_out_prod(ctx0, t28, t29->grad)));                       assert_shape_2d(layer.w2->grad,             n_ff, n_embd);
         layer.w3->grad             = expand(gb, add_or_set(layer.w3->grad,             ggml_out_prod(ctx0, t24, t25->grad)));                       assert_shape_2d(layer.w3->grad,             n_embd, n_ff);
     }
-    printf("%s: chk_idx=%d avail_begin=%d avail_end=%d\n", __func__, chk_idx, avail_begin, avail_end);
+    // printf("%s: chk_idx=%d avail_begin=%d avail_end=%d\n", __func__, chk_idx, avail_begin, avail_end);
     GGML_ASSERT(chk_idx == -2);
     GGML_ASSERT(avail_begin == 0);
     clr_buf(0);
