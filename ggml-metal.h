@@ -13,9 +13,6 @@
 // are mapped to the device memory with the ggml_metal_add_buffer() function. This mapping is
 // used during the graph evaluation to determine the arguments of the compute kernels.
 //
-// Synchronization between device and host memory (for example for input and output tensors)
-// is done with the ggml_metal_set_tensor() and ggml_metal_get_tensor() functions.
-//
 
 #pragma once
 
@@ -23,7 +20,7 @@
 #include <stdbool.h>
 
 // max memory buffers that can be mapped to the device
-#define GGML_METAL_MAX_BUFFERS 16
+#define GGML_METAL_MAX_BUFFERS 256
 
 struct ggml_tensor;
 struct ggml_cgraph;
@@ -50,12 +47,6 @@ bool ggml_metal_add_buffer(
                              void * data,
                            size_t   size,
                            size_t   max_size);
-
-// set data from host memory into the device
-void ggml_metal_set_tensor(struct ggml_metal_context * ctx, struct ggml_tensor * t);
-
-// get data from the device into host memory
-void ggml_metal_get_tensor(struct ggml_metal_context * ctx, struct ggml_tensor * t);
 
 // same as ggml_graph_compute but uses Metal
 // creates gf->n_threads command buffers in parallel

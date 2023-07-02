@@ -50,8 +50,6 @@ int main(int argc, char ** argv) {
         struct ggml_tensor * input = ggml_graph_get_tensor(&gf, "embd");
         *(int32_t *) input->data = 1; // BOS
 
-        ggml_metal_set_tensor(ctx_metal, input);
-
         // warmup
         ggml_metal_graph_compute(ctx_metal, &gf);
 
@@ -72,7 +70,6 @@ int main(int argc, char ** argv) {
     // debug output
     {
         struct ggml_tensor * logits = gf.nodes[gf.n_nodes - 1];
-        ggml_metal_get_tensor(ctx_metal, logits);
 
         float * ptr = (float *) ggml_get_data(logits);
 
