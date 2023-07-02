@@ -37,6 +37,7 @@ def convert_chat(messages):
     system_n = args.system_name.replace("\\n", "\n")
     user_n = args.user_name.replace("\\n", "\n")
     ai_n = args.ai_name.replace("\\n", "\n")
+    stop = args.stop.replace("\\n", "\n")
 
 
     for line in messages:
@@ -45,8 +46,8 @@ def convert_chat(messages):
         if (line["role"] == "user"):
             prompt += f"{user_n}{line['content']}"
         if (line["role"] == "assistant"):
-            prompt += f"{ai_n}{line['content']}{args.stop}"
-    prompt += ai_n
+            prompt += f"{ai_n}{line['content']}{stop}"
+    prompt += ai_n.rstrip()
 
     return prompt
 
