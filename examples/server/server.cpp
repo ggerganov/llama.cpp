@@ -13,6 +13,7 @@
 // auto generated files (update with ./deps.sh)
 #include "index.html.hpp"
 #include "index.js.hpp"
+#include "completion.js.hpp"
 
 #ifndef SERVER_VERBOSE
 #define SERVER_VERBOSE 1
@@ -872,6 +873,7 @@ static void log_server_request(const Request & req, const Response & res) {
     });
 }
 
+
 int main(int argc, char ** argv) {
     // own arguments required by this example
     gpt_params params;
@@ -920,6 +922,12 @@ int main(int argc, char ** argv) {
     // this is only called if no index.html is found in the public --path
     svr.Get("/", [](const Request &, Response & res) {
         res.set_content(reinterpret_cast<const char*>(&index_html), index_html_len, "text/html");
+        return false;
+    });
+
+    // this is only called if no index.html is found in the public --path
+    svr.Get("/completion.js", [](const Request &, Response & res) {
+        res.set_content(reinterpret_cast<const char*>(&completion_js), completion_js_len, "application/javascript");
         return false;
     });
 
@@ -1077,6 +1085,12 @@ int main(int argc, char ** argv) {
         res.set_content(buf, "text/plain");
         res.status = 500;
     });
+
+    svr.set_error_handler([](const Request &, Response & res) {
+        res.set_content("File Not Found", "text/plain");
+        res.status = 404;
+    });
+
 
     // set timeouts and change hostname and port
     svr.set_read_timeout(sparams.read_timeout);

@@ -4,11 +4,19 @@
 # get the directory of this script file
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 PUBLIC=$DIR/public
+OUTPUT=$DIR/templats.hpp
+
+echo "// Generated file, do not edit" > $OUTPUT
+echo "" > $OUTPUT
 
 echo "download js bundle files"
 curl https://npm.reversehttp.com/@preact/signals-core,@preact/signals,htm/preact,preact,preact/hooks > $PUBLIC/index.js
 echo >> $PUBLIC/index.js # add newline
 
-echo "generate hpp files"
-xxd -n index_html -i $PUBLIC/index.html  > $DIR/index.html.hpp
-xxd -n index_js -i $PUBLIC/index.js   > $DIR/index.js.hpp
+FILES=$(ls $PUBLIC)
+
+for FILE in $FILES; do
+  func=$(echo $FILE | tr '.' '_')
+  echo "generate $FILE.hpp ($func)"
+  xxd -n $func -i $PUBLIC/$FILE > $DIR/$FILE.hpp
+done
