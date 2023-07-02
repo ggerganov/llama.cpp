@@ -283,7 +283,13 @@ struct llama_model {
 
 struct llama_context {
     llama_context(const llama_model & model, const llama_vocab & vocab) : model(model), vocab(vocab), t_load_us(model.t_load_us), t_start_us(model.t_start_us) {}
-
+#ifdef GGML_USE_METAL
+    ~llama_context() {
+        if (ctx_metal) {
+            ggml_metal_free(ctx_metal);
+        }
+    }
+#endif
     std::mt19937 rng;
 
     bool has_evaluated_once = false;
@@ -3252,7 +3258,7 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
     return nread;
 }
 
-bool llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+static bool llama_load_session_file_internal(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
     llama_file file(path_session, "rb");
 
     // sanity checks
@@ -3304,6 +3310,15 @@ bool llama_load_session_file(struct llama_context * ctx, const char * path_sessi
     }
 
     return true;
+}
+
+bool llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+    try {
+        return llama_load_session_file_internal(ctx, path_session, tokens_out, n_token_capacity, n_token_count_out);
+    } catch (const std::exception & err) {
+        fprintf(stderr, "error loading session file: %s\n", err.what());
+        return false;
+    }
 }
 
 bool llama_save_session_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count) {
