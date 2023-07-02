@@ -3855,28 +3855,29 @@ static_assert(sizeof(struct ggml_tensor)%GGML_MEM_ALIGN == 0, "ggml_tensor size 
 // Take care about compile options (e.g., GGML_USE_xxx).
 static bool GGML_OP_HAS_INIT    [GGML_OP_COUNT] = { 0 };
 static bool GGML_OP_HAS_FINALIZE[GGML_OP_COUNT] = { 0 };
+
 static void ggml_setup_op_has_task_pass(void) {
     {   // INIT
-        bool * I = GGML_OP_HAS_INIT;
+        bool * p = GGML_OP_HAS_INIT;
 
-        I[GGML_OP_ACC                    ] = true;
-        I[GGML_OP_MUL_MAT                ] = true;
-        I[GGML_OP_OUT_PROD               ] = true;
-        I[GGML_OP_SET                    ] = true;
-        I[GGML_OP_GET_ROWS_BACK          ] = true;
-        I[GGML_OP_DIAG_MASK_INF          ] = true;
-        I[GGML_OP_DIAG_MASK_ZERO         ] = true;
-        I[GGML_OP_CONV_1D_S1_PH          ] = true;
-        I[GGML_OP_CONV_1D_S2_PH          ] = true;
-        I[GGML_OP_CONV_2D_SK_P0          ] = true;
-        I[GGML_OP_FLASH_ATTN_BACK        ] = true;
-        I[GGML_OP_CROSS_ENTROPY_LOSS     ] = true;
+        p[GGML_OP_ACC                    ] = true;
+        p[GGML_OP_MUL_MAT                ] = true;
+        p[GGML_OP_OUT_PROD               ] = true;
+        p[GGML_OP_SET                    ] = true;
+        p[GGML_OP_GET_ROWS_BACK          ] = true;
+        p[GGML_OP_DIAG_MASK_INF          ] = true;
+        p[GGML_OP_DIAG_MASK_ZERO         ] = true;
+        p[GGML_OP_CONV_1D_S1_PH          ] = true;
+        p[GGML_OP_CONV_1D_S2_PH          ] = true;
+        p[GGML_OP_CONV_2D_SK_P0          ] = true;
+        p[GGML_OP_FLASH_ATTN_BACK        ] = true;
+        p[GGML_OP_CROSS_ENTROPY_LOSS     ] = true;
     }
 
     {   // FINALIZE
-        bool * F = GGML_OP_HAS_FINALIZE;
+        bool * p = GGML_OP_HAS_FINALIZE;
 
-        F[GGML_OP_CROSS_ENTROPY_LOSS     ] = true;
+        p[GGML_OP_CROSS_ENTROPY_LOSS     ] = true;
     }
 }
 
