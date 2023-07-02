@@ -17316,6 +17316,7 @@ static enum ggml_opt_result ggml_opt_adam(
     const float beta2 = params.adam.beta2;
     const float eps   = params.adam.eps;
     const float gclip = params.adam.gclip;
+    const int decay_min_ndim = params.adam.decay_min_ndim;
 
     float * m  = opt->adam.m->data;  // first moment
     float * v  = opt->adam.v->data;  // second moment
@@ -17394,7 +17395,7 @@ static enum ggml_opt_result ggml_opt_adam(
             int64_t i = 0;
             for (int p = 0; p < np; ++p) {
                 const int64_t ne = ggml_nelements(ps[p]);
-                const float p_decay = decay * sched;
+                const float p_decay = ((ps[p]->n_dims >= decay_min_ndim) ? decay : 0.0) * sched;
                 for (int64_t j = 0; j < ne; ++j) {
                     float x = ggml_get_f32_1d(ps[p], j);
                     float g = ggml_get_f32_1d(ps[p]->grad, j)*gnorm;
@@ -17911,6 +17912,7 @@ struct ggml_opt_params ggml_opt_default_params(enum ggml_opt_type type) {
                         .n_iter = 10000,
                         .sched  = 1.000f,
                         .decay  = 0.0f,
+                        .decay_min_ndim = 2,
                         .alpha  = 0.001f,
                         .beta1  = 0.9f,
                         .beta2  = 0.999f,
