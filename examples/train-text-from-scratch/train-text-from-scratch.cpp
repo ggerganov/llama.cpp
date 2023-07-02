@@ -4046,11 +4046,7 @@ int main(int argc, char ** argv) {
             ggml_build_backward_expand(ctx0, gf, gb, true);
         }
 
-        ggml_graph_compute_helper(work_buffer, gf, params.n_threads);
-
         size_t used_mem_before_opt = ggml_used_mem(ctx0);
-
-        float error_before_opt = ggml_get_f32_1d(loss, 0);
 
         opt->params.adam.sched = (opt->iter < params.warmup)
             ? (float) opt->iter / (float) params.warmup
@@ -4066,7 +4062,7 @@ int main(int argc, char ** argv) {
 
         printf("%s: opt->params.adam.sched %.5f\n", __func__, opt->params.adam.sched);
 
-        ggml_opt_resume_g(ctx0, opt, loss, gf, gb);
+        ggml_opt_resume_g(ctx0, opt, loss, gf, gb, NULL, NULL);
 
         size_t used_mem_after_opt = ggml_used_mem(ctx0);
 
@@ -4074,14 +4070,10 @@ int main(int argc, char ** argv) {
         model.train_samples += n_batch;
         model.train_tokens  += n_batch * n_tokens;
 
-        ggml_graph_compute_helper(work_buffer, gf, params.n_threads);
-
-        float error_after_opt = ggml_get_f32_1d(loss, 0);
-
         if (params.print_info_interval > 0 && ex % params.print_info_interval == 0) {
             printf("Example %d, opt iter %d\n", ex, opt->iter);
-            printf("error_before_opt: %.6f\n", error_before_opt);
-            printf("error_after_opt:  %.6f\n", error_after_opt);
+            printf("error_before_opt: %.6f\n", opt->loss_before);
+            printf("error_after_opt:  %.6f\n", opt->loss_after);
             printf("used_mem_before_opt: %zu bytes\n", used_mem_before_opt);
             printf("used_mem_after_opt:  %zu bytes\n", used_mem_after_opt);
         }

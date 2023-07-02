@@ -1469,6 +1469,8 @@ extern "C" {
         GGML_LINESEARCH_INVALID_PARAMETERS,
     };
 
+    typedef void (*ggml_opt_callback)(void * data, float * sched);
+
     // optimization parameters
     //
     //   see ggml.c (ggml_opt_default_params) for default values
@@ -1538,6 +1540,9 @@ extern "C" {
 
         bool just_initialized;
 
+        float loss_before;
+        float loss_after;
+
         struct {
             struct ggml_tensor * m;  // first moment
             struct ggml_tensor * v;  // second moment
@@ -1577,10 +1582,10 @@ extern "C" {
 
     // initialize optimizer context
     GGML_API void ggml_opt_init(
-            struct ggml_context * ctx,
+            struct ggml_context     * ctx,
             struct ggml_opt_context * opt,
-            struct ggml_opt_params params,
-            int64_t nx);
+            struct ggml_opt_params    params,
+            int64_t                   nx);
 
     // continue optimizing the function defined by the tensor f
     GGML_API enum ggml_opt_result ggml_opt_resume(
@@ -1594,7 +1599,9 @@ extern "C" {
             struct ggml_opt_context * opt,
             struct ggml_tensor * f,
             struct ggml_cgraph * gf,
-            struct ggml_cgraph * gb);
+            struct ggml_cgraph * gb,
+            ggml_opt_callback callback,
+            void * callback_data);
 
     //
     // quantization
