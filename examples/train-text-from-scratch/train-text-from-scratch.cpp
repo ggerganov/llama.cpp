@@ -3321,23 +3321,23 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     }
 }
 
-float cosine_decay(const int decay_steps, const float alpha, int step) {
+float cosine_decay(const int decay_steps, const float minimum, int step) {
     if (step > decay_steps) {
         step = decay_steps;
     }
     const float cosine_decay = 0.50f*(1.0f + cosf(3.14159265359f*step/decay_steps));
-    const float decay = (1 - alpha)*cosine_decay + alpha;
+    const float decay = (1 - minimum)*cosine_decay + minimum;
     return decay;
 }
 
-float cosine_decay_restart(int decay_steps, const float alpha, int step, float restart_step_mult, bool enable_restart) {
+float cosine_decay_restart(int decay_steps, const float minimum, int step, float restart_step_mult, bool enable_restart) {
     if (enable_restart) {
         while (step > decay_steps) {
             step -= decay_steps;
             decay_steps = (int) restart_step_mult * decay_steps;
         }
     }
-    return cosine_decay(decay_steps, alpha, step);
+    return cosine_decay(decay_steps, minimum, step);
 }
 
 struct train_params {
@@ -3374,7 +3374,7 @@ struct train_params {
     int   warmup;
     int   cos_decay_steps;
     float cos_decay_restart;
-    float cos_decay_alpha;
+    float cos_decay_min;
     bool  enable_restart;
 
     int   opt_past;
@@ -3439,21 +3439,21 @@ struct train_params get_default_train_params() {
     params.warmup            =  100;
     params.cos_decay_steps   = 1000;
     params.cos_decay_restart = 1.1f;
-    params.cos_decay_alpha   = 0.0f;
+    params.cos_decay_min     = 0.1f;
     params.enable_restart    = false;
 
-    params.lbfgs_n_iter      = 256;
-    params.adam_n_iter       = 256;
-    params.adam_alpha        = 1e-3f;
-    params.adam_min_alpha    = 1e-4f;
-    params.adam_decay        = 1e-1f;
+    params.lbfgs_n_iter        = 256;
+    params.adam_n_iter         = 256;
+    params.adam_alpha          = 1e-3f;
+    params.adam_min_alpha      = 0;
+    params.adam_decay          = 1e-1f;
     params.adam_decay_min_ndim = 2;
-    params.adam_beta1        = 0.9f;
-    params.adam_beta2        = 0.999f;
-    params.adam_gclip        = 1.0f;
-    params.adam_eps_f        = 0.0f;
+    params.adam_beta1          = 0.9f;
+    params.adam_beta2          = 0.999f;
+    params.adam_gclip          = 1.0f;
+    params.adam_eps_f          = 0.0f;
 
-    params.mem_model_gb   = 2;
+    params.mem_model_gb   =  2;
     params.mem_compute_gb = 24;
     params.mem_compute0_gb = 8;
     params.mem_compute1_gb = 1;
@@ -3496,7 +3496,7 @@ void train_print_usage(int /*argc*/, char ** argv, const struct train_params * p
     fprintf(stderr, "  --warmup N                 Only for Adam optimizer. Number of warmup steps (default %d)\n", params->warmup);
     fprintf(stderr, "  --cos-decay-steps N        Only for Adam optimizer. Number of cosine decay steps (default %d)\n", params->cos_decay_steps);
     fprintf(stderr, "  --cos-decay-restart N      Only for Adam optimizer. Increase of cosine decay steps after restart (default %f)\n", params->cos_decay_restart);
-    fprintf(stderr, "  --cos-decay-alpha N        Only for Adam optimizer. Cosine decay alpha (default %f)\n", params->cos_decay_alpha);
+    fprintf(stderr, "  --cos-decay-min N          Only for Adam optimizer. Cosine decay minimum (default %f)\n", params->cos_decay_min);
     fprintf(stderr, "  --enable-restart N         Only for Adam optimizer. Enable restarts of cos-decay %s\n", params->enable_restart ? "(default)" : "");
     fprintf(stderr, "  --disable-restart N        Only for Adam optimizer. Disable restarts of cos-decay %s\n", !params->enable_restart ? "(default)" : "");
     fprintf(stderr, "  --opt-past N               Number of optimization iterations to track for delta convergence test. Disabled when zero. (default %d)\n", params->opt_past);
@@ -3505,7 +3505,7 @@ void train_print_usage(int /*argc*/, char ** argv, const struct train_params * p
     fprintf(stderr, "  --adam-epsf N              AdamW epsilon for convergence test. Disabled when <= zero. (default %f)\n", params->adam_eps_f);
     fprintf(stderr, "  --adam-iter N              Maximum number of Adam optimization iterations for each batch (default %d)\n", params->adam_n_iter);
     fprintf(stderr, "  --adam-alpha N             Adam learning rate alpha (default %f)\n", params->adam_alpha);
-    fprintf(stderr, "  --adam-min-alpha N         Adam minimum learning rate alpha, usually 0.1 * alpha (default %f)\n", params->adam_min_alpha);
+    fprintf(stderr, "  --adam-min-alpha N         Adam minimum learning rate alpha - including warmup phase (default %f)\n", params->adam_min_alpha);
     fprintf(stderr, "  --adam-decay N             AdamW weight decay. Values greater zero enable AdamW instead of regular Adam. (default %f)\n", params->adam_decay);
     fprintf(stderr, "  --adam-decay-min-ndim N    Minimum number of tensor dimensions to apply AdamW weight decay. Weight decay is not applied to tensors with less n_dims. (default %d)\n", params->adam_decay_min_ndim);
     fprintf(stderr, "  --adam-beta1 N             AdamW beta1 in interval [0,1). How much to smooth the first moment of gradients. (default %f)\n", params->adam_beta1);
@@ -3676,12 +3676,12 @@ bool train_params_parse(int argc, char ** argv, struct train_params * params) {
                 break;
             }
             params->cos_decay_restart = std::stof(argv[i]);
-        } else if (arg == "--cos-decay-alpha") {
+        } else if (arg == "--cos-decay-min") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params->cos_decay_alpha = std::stof(argv[i]);
+            params->cos_decay_min = std::stof(argv[i]);
         } else if (arg == "--enable-restart") {
             params->enable_restart = true;
         } else if (arg == "--disable-restart") {
@@ -3835,7 +3835,7 @@ void opt_callback(void * vdata, float * sched) {
                 ? (float) opt->iter / (float) params->warmup
                 : cosine_decay_restart(
                     params->cos_decay_steps,
-                    params->cos_decay_alpha,
+                    params->cos_decay_min,
                     opt->iter - params->warmup,
                     params->cos_decay_restart,
                     params->enable_restart);
@@ -4131,7 +4131,7 @@ int main(int argc, char ** argv) {
             ? (float) opt->iter / (float) params.warmup
             : cosine_decay_restart(
                 params.cos_decay_steps,
-                params.cos_decay_alpha,
+                params.cos_decay_min,
                 opt->iter - params.warmup,
                 params.cos_decay_restart,
                 params.enable_restart);
