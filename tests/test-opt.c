@@ -140,7 +140,19 @@ int main(int argc, const char ** argv) {
 
     struct ggml_cgraph ge = ggml_build_forward(e);
     ggml_graph_reset  (&ge);
-    ggml_graph_compute(ctx, &ge);
+
+    {
+        struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&ge, /*n_threads*/ 1);
+        if (plan.work_size > 0) {
+            plan.work_data = malloc(plan.work_size);
+            GGML_ASSERT(plan.work_data);
+        }
+        ggml_graph_compute(&plan, &ge);
+        if (plan.work_data) {
+            free(plan.work_data);
+        }
+    }
+
     const float fe = ggml_get_f32_1d(e, 0);
     printf("%s: e = %.4f\n", __func__, fe);
 
@@ -149,7 +161,19 @@ int main(int argc, const char ** argv) {
     ggml_opt(ctx, opt_params, e);
 
     ggml_graph_reset  (&ge);
-    ggml_graph_compute(ctx, &ge);
+
+    {
+        struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&ge, /*n_threads*/ 1);
+        if (plan.work_size > 0) {
+            plan.work_data = malloc(plan.work_size);
+            GGML_ASSERT(plan.work_data);
+        }
+        ggml_graph_compute(&plan, &ge);
+        if (plan.work_data) {
+            free(plan.work_data);
+        }
+    }
+
     const float fe_opt = ggml_get_f32_1d(e, 0);
     printf("%s: original  e = %.4f\n", __func__, fe);
     printf("%s: optimized e = %.4f\n", __func__, fe_opt);

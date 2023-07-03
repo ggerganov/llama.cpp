@@ -1586,7 +1586,6 @@ int main(int argc, char ** argv) {
         int n_past = 0;
 
         ggml_cgraph gf = {};
-        gf.n_threads = 1;
 
         get_example_targets_batch(ctx0, 64*ex+0,  tokens_input, targets);
 
@@ -1595,7 +1594,18 @@ int main(int argc, char ** argv) {
         struct ggml_tensor * e = square_error_loss(ctx0, targets, logits);
 
         ggml_build_forward_expand(&gf, e);
-        ggml_graph_compute(ctx0, &gf);
+
+        {
+            struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, /*n_threads*/ 1);
+            if (plan.work_size > 0) {
+                plan.work_data = malloc(plan.work_size);
+                GGML_ASSERT(plan.work_data);
+            }
+            ggml_graph_compute(&plan, &gf);
+            if (plan.work_data) {
+                free(plan.work_data);
+            }
+        }
 
         float error_before_opt = ggml_get_f32_1d(e, 0);
 
@@ -1611,7 +1621,18 @@ int main(int argc, char ** argv) {
         ggml_opt(ctx0, opt_params_lbfgs, e);
         //
         ggml_build_forward_expand(&gf, e);
-        ggml_graph_compute(ctx0, &gf);
+
+        {
+            struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, /*n_threads*/ 1);
+            if (plan.work_size > 0) {
+                plan.work_data = malloc(plan.work_size);
+                GGML_ASSERT(plan.work_data);
+            }
+            ggml_graph_compute(&plan, &gf);
+            if (plan.work_data) {
+                free(plan.work_data);
+            }
+        }
 
         float error_after_opt = ggml_get_f32_1d(e, 0);
 
@@ -1659,13 +1680,23 @@ int main(int argc, char ** argv) {
             struct ggml_context * ctx0 = ggml_init(params);
 
             ggml_cgraph gf = {};
-            gf.n_threads = 1;
 
             int n_past = 0;
             struct ggml_tensor * logits = forward(&model, &kv_self, ctx0, &gf, tokens_input, sample_ctx, n_past);
 
             ggml_build_forward_expand(&gf, logits);
-            ggml_graph_compute(ctx0, &gf);
+
+            {
+                struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, /*n_threads*/ 1);
+                if (plan.work_size > 0) {
+                    plan.work_data = malloc(plan.work_size);
+                    GGML_ASSERT(plan.work_data);
+                }
+                ggml_graph_compute(&plan, &gf);
+                if (plan.work_data) {
+                    free(plan.work_data);
+                }
+            }
 
             struct ggml_tensor * best_samples = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, sample_ctx);
             struct ggml_tensor * probs        = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_vocab, sample_ctx);

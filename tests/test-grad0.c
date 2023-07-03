@@ -215,15 +215,36 @@ bool check_gradient(
     }
 
     struct ggml_cgraph gf = ggml_build_forward (f);
-    gf.n_threads = n_threads;
 
     struct ggml_cgraph gb = ggml_build_backward(ctx0, &gf, false);
-    gb.n_threads = n_threads;
 
     ggml_graph_compute(ctx0, &gf);
+    {
+        struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, n_threads);
+        if (plan.work_size > 0) {
+            plan.work_data = malloc(plan.work_size);
+            GGML_ASSERT(plan.work_data);
+        }
+        ggml_graph_compute(&plan, &gf);
+        if (plan.work_data) {
+            free(plan.work_data);
+        }
+    }
+
     ggml_graph_reset  (&gf);
     ggml_set_f32      (f->grad, 1.0f);
-    ggml_graph_compute(ctx0, &gb);
+
+    {
+        struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gb, n_threads);
+        if (plan.work_size > 0) {
+            plan.work_data = malloc(plan.work_size);
+            GGML_ASSERT(plan.work_data);
+        }
+        ggml_graph_compute(&plan, &gb);
+        if (plan.work_data) {
+            free(plan.work_data);
+        }
+    }
 
     // ggml_graph_dump_dot(&gf, NULL, "test-grad0-forward.dot");
     // ggml_graph_dump_dot(&gb, &gf,  "test-grad0-backward.dot");
@@ -236,12 +257,34 @@ bool check_gradient(
             const float xm = x0 - eps;
             const float xp = x0 + eps;
             set_element(x[i], k, xp);
-            ggml_graph_compute(ctx0, &gf);
+
+            {
+                struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, n_threads);
+                if (plan.work_size > 0) {
+                    plan.work_data = malloc(plan.work_size);
+                    GGML_ASSERT(plan.work_data);
+                }
+                ggml_graph_compute(&plan, &gf);
+                if (plan.work_data) {
+                    free(plan.work_data);
+                }
+            }
 
             const float f0 = ggml_get_f32_1d(f, 0);
 
             set_element(x[i], k, xm);
-            ggml_graph_compute(ctx0, &gf);
+
+            {
+                struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, n_threads);
+                if (plan.work_size > 0) {
+                    plan.work_data = malloc(plan.work_size);
+                    GGML_ASSERT(plan.work_data);
+                }
+                ggml_graph_compute(&plan, &gf);
+                if (plan.work_data) {
+                    free(plan.work_data);
+                }
+            }
 
             const float f1 = ggml_get_f32_1d(f, 0);
 
@@ -252,7 +295,18 @@ bool check_gradient(
             // compute gradient using backward graph
             ggml_graph_reset  (&gf);
             ggml_set_f32      (f->grad, 1.0f);
-            ggml_graph_compute(ctx0, &gb);
+
+            {
+                struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gb, n_threads);
+                if (plan.work_size > 0) {
+                    plan.work_data = malloc(plan.work_size);
+                    GGML_ASSERT(plan.work_data);
+                }
+                ggml_graph_compute(&plan, &gb);
+                if (plan.work_data) {
+                    free(plan.work_data);
+                }
+            }
 
             const float g1 = get_element(x[i]->grad, k);
 

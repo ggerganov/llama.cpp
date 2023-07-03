@@ -65,7 +65,16 @@
 //       ggml_set_f32(a, 3.0f);
 //       ggml_set_f32(b, 4.0f);
 //
-//       ggml_graph_compute(ctx0, &gf);
+//       const int n_threads = 1;
+//       struct ggml_graph_compute_plan ctx = ggml_graph_compute_make_plan(&gf, n_threads);
+//       if (ctx.work_size > 0) {
+//           ctx.work_data = malloc(ctx.work_size);
+//           GGML_ASSERT(ctx.work_data);
+//       }
+//       ggml_graph_compute(&ctx, &gf);
+//       if (ctx.work_data) {
+//           free(ctx.work_data);
+//       }
 //
 //       printf("f = %f\n", ggml_get_f32_1d(f, 0));
 //
@@ -418,9 +427,6 @@ extern "C" {
         struct ggml_tensor * src1;
         struct ggml_tensor * opt[GGML_MAX_OPT];
 
-        // thread scheduling
-        int n_tasks;
-
         // performance
         int     perf_runs;
         int64_t perf_cycles;
@@ -432,27 +438,30 @@ extern "C" {
 
         void * extra; // extra things e.g. for ggml-cuda.cu
 
-        char padding[4];
+        char padding[8];
     };
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);
 
-    // graph compute context
-    struct ggml_cgraph_context {
-        // After call to `ggml_graph_compute_plan()`, `planned` is set as true,
-        // `work_size` will be updated as non-zero when buffer is required. When
-        // need buffer, caller MUST allocate memory for `work_data`.
-        // See https://github.com/ggerganov/ggml/issues/287
+    // The default graph compute plan that needs to be prepared for ggml_graph_compute().
+    // Since https://github.com/ggerganov/ggml/issues/287
+    struct ggml_graph_compute_plan {
+        // Size of work buffer, calculated by `ggml_graph_compute_make_plan()`.
         size_t work_size;
+        // Worker buffer.
+        // Expect allocate/free by caller before/after calling to `ggml_graph_compute()`.
         void * work_data;
-        bool   planned; // true means ready to compute graph nodes.
+
+        int n_threads;
+
+        // The `n_tasks` of nodes, 1:1 mapping to cgraph nodes.
+        int n_tasks[GGML_MAX_NODES];
     };
 
     // computation graph
     struct ggml_cgraph {
         int n_nodes;
         int n_leafs;
-        int n_threads;
 
         struct ggml_tensor * nodes[GGML_MAX_NODES];
         struct ggml_tensor * grads[GGML_MAX_NODES];
@@ -1305,19 +1314,10 @@ extern "C" {
     GGML_API struct ggml_cgraph ggml_build_forward (struct ggml_tensor * tensor);
     GGML_API struct ggml_cgraph ggml_build_backward(struct ggml_context * ctx, struct ggml_cgraph * gf, bool keep);
 
-    // Since https://github.com/ggerganov/ggml/issues/287
-    GGML_API void ggml_graph_compute_plan(struct ggml_cgraph_context * ctx, struct ggml_cgraph * cgraph);
-    // Since https://github.com/ggerganov/ggml/issues/287
-    // When `ctx` is NULL, `ggml_graph_compute_v2()` calculates work_size and allocates memory for `work_data`.
-    // Another use case: allocate buffer explicitly:
-    // - call `ggml_graph_compute_plan()`;
-    // - allocate memory for `ctx->work_data`;
-    // - finally call `ggml_graph_compute_v2()`.
-    // NOTE: don't manually set `ctx->planned`.
-    GGML_API void ggml_graph_compute_v2(struct ggml_cgraph_context * ctx, struct ggml_cgraph * cgraph);
-    // Deprecated, `ctx` is not required. Use `ggml_graph_compute_v2` instead.
-    // See https://github.com/ggerganov/ggml/issues/287
-    GGML_API void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph);
+    // ggml_graph_compute_make_plan() needs to be called before ggml_graph_compute().
+    // Returns a plan object. When plan.work_size > 0, caller must allocate memory for plan.work_data.
+    GGML_API struct ggml_graph_compute_plan ggml_graph_compute_make_plan(struct ggml_cgraph * cgraph, const int n_threads/*=GGML_DEFAULT_N_THREADS*/);
+    GGML_API void ggml_graph_compute(struct ggml_graph_compute_plan * plan, struct ggml_cgraph * cgraph);
     GGML_API void ggml_graph_reset  (struct ggml_cgraph * cgraph);
 
     GGML_API struct ggml_tensor * ggml_graph_get_tensor(struct ggml_cgraph * cgraph, const char * name);

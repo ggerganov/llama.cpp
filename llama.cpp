@@ -1309,7 +1309,7 @@ static bool llama_eval_internal(
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
     ggml_cgraph gf = {};
-    gf.n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
+    const int actual_n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
 
     struct ggml_tensor * cur;
     struct ggml_tensor * inpL;
@@ -1612,10 +1612,30 @@ static bool llama_eval_internal(
             ggml_metal_get_tensor(lctx.ctx_metal, kv_self.v);
         }
 
-        ggml_graph_compute(ctx0, &gf);
+        {
+            struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, actual_n_threads);
+            if (plan.work_size > 0) {
+                plan.work_data = malloc(plan.work_size);
+                GGML_ASSERT(plan.work_data);
+            }
+            ggml_graph_compute(&plan, &gf);
+            if (plan.work_data) {
+                free(plan.work_data);
+            }
+        }
     }
 #else
-    ggml_graph_compute(ctx0, &gf);
+    {
+        struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, actual_n_threads);
+        if (plan.work_size > 0) {
+            plan.work_data = malloc(plan.work_size);
+            GGML_ASSERT(plan.work_data);
+        }
+        ggml_graph_compute(&plan, &gf);
+        if (plan.work_data) {
+            free(plan.work_data);
+        }
+    }
 #endif
 
     if (cgraph_fname) {
@@ -2966,8 +2986,18 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
             }
 
             struct ggml_cgraph gf = ggml_build_forward(r);
-            gf.n_threads = n_threads;
-            ggml_graph_compute(lora_ctx, &gf);
+
+            {
+                struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, n_threads);
+                if (plan.work_size > 0) {
+                    plan.work_data = malloc(plan.work_size);
+                    GGML_ASSERT(plan.work_data);
+                }
+                ggml_graph_compute(&plan, &gf);
+                if (plan.work_data) {
+                    free(plan.work_data);
+                }
+            }
 
             // we won't need these tensors again, reset the context to save memory
             ggml_free(lora_ctx);
@@ -3120,7 +3150,6 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
 
             ggml_context * cpy_ctx = ggml_init({ 4096, NULL, /* no_alloc */ true });
             ggml_cgraph gf{};
-            gf.n_threads = 1;
 
             ggml_tensor * kout3d = ggml_new_tensor_3d(cpy_ctx, kv_self.k->type, n_embd, kv_ntok, n_layer);
             kout3d->data = out;
@@ -3140,7 +3169,18 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
 
             ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, k3d, kout3d));
             ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, v3d, vout3d));
-            ggml_graph_compute(cpy_ctx, &gf);
+
+            {
+                struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, /*n_threads*/ 1);
+                if (plan.work_size > 0) {
+                    plan.work_data = malloc(plan.work_size);
+                    GGML_ASSERT(plan.work_data);
+                }
+                ggml_graph_compute(&plan, &gf);
+                if (plan.work_data) {
+                    free(plan.work_data);
+                }
+            }
 
             ggml_free(cpy_ctx);
         }
@@ -3226,7 +3266,6 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
 
             ggml_context * cpy_ctx = ggml_init({ 4096, NULL, /* no_alloc */ true });
             ggml_cgraph gf{};
-            gf.n_threads = 1;
 
             ggml_tensor * kin3d = ggml_new_tensor_3d(cpy_ctx, kv_self.k->type, n_embd, kv_ntok, n_layer);
             kin3d->data = (void *) inp;
@@ -3246,7 +3285,18 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
 
             ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, kin3d, k3d));
             ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, vin3d, v3d));
-            ggml_graph_compute(cpy_ctx, &gf);
+
+            {
+                struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, /*n_threads*/ 1);
+                if (plan.work_size > 0) {
+                    plan.work_data = malloc(plan.work_size);
+                    GGML_ASSERT(plan.work_data);
+                }
+                ggml_graph_compute(&plan, &gf);
+                if (plan.work_data) {
+                    free(plan.work_data);
+                }
+            }
 
             ggml_free(cpy_ctx);
         }
