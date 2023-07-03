@@ -194,8 +194,8 @@ struct llama_layer {
 };
 
 struct llama_kv_cache {
-    struct ggml_tensor * k;
-    struct ggml_tensor * v;
+    struct ggml_tensor * k = NULL;
+    struct ggml_tensor * v = NULL;
 
     struct ggml_context * ctx = NULL;
 
@@ -481,9 +481,7 @@ struct llama_file_loader {
             std::string word = file.read_string(len);
 
             float score = 0.0f;
-            if (file_version >= LLAMA_FILE_VERSION_GGMF_V1) {
-                file.read_raw(&score, sizeof(score));
-            }
+            file.read_raw(&score, sizeof(score));
 
             vocab.token_to_id[word] = i;
 
