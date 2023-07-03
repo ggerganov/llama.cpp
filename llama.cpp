@@ -1824,8 +1824,9 @@ private:
         if (dropout_ <= 0.0) {
             return false;
         }
-        if (dropout_ >= 1.0)
+        if (dropout_ >= 1.0) {
             return true;
+        }
         return gen(rng) < dropout_;
     }
 
