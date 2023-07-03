@@ -432,10 +432,10 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         {
             rwkv_ctx_v3 = rwkv_init_from_file(modelname.c_str(), n_threads);
 
-            // if(inputs.gpulayers>0)
-            // {
-            //     rwkv_gpu_offload_layers(rwkv_ctx_v3,inputs.gpulayers);
-            // }
+            if(inputs.gpulayers>0)
+            {
+                rwkv_gpu_offload_layers(rwkv_ctx_v3,inputs.gpulayers);
+            }
 
             const struct rwkv_file_header & header = rwkv_ctx_v3->instance->model.header;
             const size_t n_vocab = header.n_vocab;
@@ -1066,15 +1066,15 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 }
                 else
                 {
-                    // if(embd.size()>1)
-                    // {
-                    //     evalres = rwkv_eval_sequence(rwkv_ctx_v3, (uint32_t*)embd.data(), embd.size(), rwkv_ctx_v3->state_in, rwkv_ctx_v3->state_out, rwkv_ctx_v3->logits_out);
-                    // }
-                    // else
-                    // {
+                    if(embd.size()>1)
+                    {
+                        evalres = rwkv_eval_sequence(rwkv_ctx_v3, (uint32_t*)embd.data(), embd.size(), rwkv_ctx_v3->state_in, rwkv_ctx_v3->state_out, rwkv_ctx_v3->logits_out);
+                    }
+                    else
+                    {
                     bool ignoreLogits = (!startedsampling && ((int)embd_inp.size() > input_consumed + 2));
                     evalres = rwkv_eval(rwkv_ctx_v3, embd[0], rwkv_ctx_v3->state_in, rwkv_ctx_v3->state_out, ignoreLogits?nullptr:rwkv_ctx_v3->logits_out);
-                    //}
+                    }
 
                     memcpy(logits.data(), rwkv_ctx_v3->logits_out, sizeof(float) * rwkv_vocab.size());
                     rwkv_ctx_v3->state_in = rwkv_ctx_v3->state_out;
