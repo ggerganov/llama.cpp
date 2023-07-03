@@ -4145,9 +4145,10 @@ int main(int argc, char ** argv) {
 
         size_t used_mem_after_opt = ggml_used_mem(ctx0);
 
+        int n_iter = params.use_adam ? params.adam_n_iter : params.lbfgs_n_iter;
         model.train_its = opt->iter;
-        model.train_samples += n_batch;
-        model.train_tokens  += n_batch * n_tokens;
+        model.train_samples += n_batch * n_iter;
+        model.train_tokens  += n_batch * n_tokens * n_iter;
 
         if (params.print_info_interval > 0 && ex % params.print_info_interval == 0) {
             printf("Example %d, opt iter %d\n", ex, opt->iter);
