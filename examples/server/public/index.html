@@ -16,7 +16,6 @@
 
     #container {
       margin: 0em auto;
-
       display: flex;
       flex-direction: column;
       justify-content: space-between;
@@ -35,21 +34,11 @@
       gap: 1em;
 
       flex-grow: 1;
-      border-style: outset;
-      padding: 1em;
-    }
-
-    main .content {
-      flex-grow: 1;
-    }
-
-    main .content > * {
       overflow-y: auto;
-    }
 
-    footer {
-      font-size: smaller;
-      color: #999;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 0.5em;
     }
 
     body {
@@ -57,6 +46,7 @@
       min-width: 300px;
       line-height: 1.2;
       margin: 0 auto;
+      padding: 0 0.5em;
     }
 
     p {
@@ -67,31 +57,30 @@
       margin-bottom: 0.5em;
     }
 
-    form {
+    #write form {
       margin: 1em 0 0 0;
       display: flex;
+      flex-direction: column;
       gap: 0.5em;
+      align-items: stretch;
+    }
+
+    .right {
+      display: flex;
       flex-direction: row;
-      align-items: center;
-    }
-
-    form > * {
-      padding: 4px;
-    }
-
-    form input {
-      flex-grow: 1;
-    }
-
-    form textarea {
-      flex-grow: 1;
-      min-height: 5em;
-      width: 100%;
+      gap: 0.5em;
+      justify-content: flex-end;
     }
 
     fieldset {
+      border: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    textarea {
+      flex-grow: 1;
       width: 100%;
-      padding: 1em;
     }
 
     fieldset label {
@@ -209,12 +198,23 @@
         message.value = "";
       }
 
+      const enterSubmits = (event) => {
+        if (event.which === 13 && !event.shiftKey) {
+          submit(event);
+        }
+      }
+
       return html`
         <form onsubmit=${submit}>
-          <input type="text" value="${message}" oninput=${(e) => message.value = e.target.value} autofocus placeholder="Chat here..."/>
+          <div>
+          <textarea type="text" rows=2 onkeypress=${enterSubmits} value="${message}" oninput=${(e) => message.value = e.target.value} placeholder="Start here..."/>
+
+          </div>
+          <div class="right">
           <button type="submit" disabled=${!generating.value} >Send</button>
           <button onclick=${stop} disabled=${generating}>Stop</button>
           <button onclick=${reset}>Reset</button>
+          </div>
         </form>
       `
     }
@@ -241,21 +241,16 @@
     };
 
     const ConfigForm = (props) => {
-
       const updateSession = (el) => session.value = { ...session.value, [el.target.name]: el.target.value }
       const updateParams = (el) => params.value = { ...params.value, [el.target.name]: el.target.value }
       const updateParamsFloat = (el) => params.value = { ...params.value, [el.target.name]: parseFloat(el.target.value) }
-      const updateParamsInt = (el) => params.value = { ...params.value, [el.target.name]: parseInt(el.target.value) }
-
 
       return html`
         <form>
           <fieldset>
-            <legend>Settings</legend>
-
             <div>
               <label for="prompt">Prompt</label>
-              <textarea type="text" name="prompt" value="${session.value.prompt}" oninput=${updateSession}/>
+              <textarea type="text" name="prompt" value="${session.value.prompt}" rows=4 oninput=${updateSession}/>
             </div>
 
             <div>
@@ -270,12 +265,12 @@
 
             <div>
               <label for="template">Prompt template</label>
-              <textarea id="template" name="template" value="${session.value.template}" oninput=${updateSession}/>
+              <textarea id="template" name="template" value="${session.value.template}" rows=4 oninput=${updateSession}/>
             </div>
 
             <div>
               <label for="template">Chat history template</label>
-              <textarea id="template" name="historyTemplate" value="${session.value.historyTemplate}" oninput=${updateSession}/>
+              <textarea id="template" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
             </div>
 
             <div>
@@ -286,9 +281,22 @@
 
             <div>
               <label for="nPredict">Predictions</label>
-              <input type="range" id="nPredict" min="1" max="2048" step="1" name="n_predict" value="${params.value.n_predict}" oninput=${updateParamsInt} />
+              <input type="range" id="nPredict" min="1" max="2048" step="1" name="n_predict" value="${params.value.n_predict}" oninput=${updateParamsFloat} />
               <span>${params.value.n_predict}</span>
             </div>
+
+            <div>
+              <label for="repeat_penalty">Penalize repeat sequence</label>
+              <input type="range" id="repeat_penalty" min="0.0" max="2.0" step="0.01" name="repeat_penalty" value="${params.value.repeat_penalty}" oninput=${updateParamsFloat} />
+              <span>${params.value.repeat_penalty}</span>
+            </div>
+
+            <div>
+              <label for="repeat_last_n">Consider N tokens for penalize</label>
+              <input type="range" id="repeat_last_n" min="0.0" max="2048" name="repeat_last_n" value="${params.value.repeat_last_n}" oninput=${updateParamsFloat} />
+              <span>${params.value.repeat_last_n}</span>
+            </div>
+
           </fieldset>
         </form>
       `
@@ -303,14 +311,13 @@
           <h1>llama.cpp</h1>
         </header>
 
-        <main>
-          <div id="content">
+        <main id="content">
           <${chatStarted.value ? ChatLog : ConfigForm} />
-          </div>
-          <div>
-          <${MessageInput} />
-          </div>
         </main>
+
+        <footer id="write">
+          <${MessageInput} />
+        </footer>
 
         <footer>
           <p>Powered by <a href="https://github.com/ggerganov/llama.cpp">llama.cpp</a> and <a href="https://ggml.ai">ggml.ai</a></p>
