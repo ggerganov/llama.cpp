@@ -218,7 +218,6 @@ bool check_gradient(
 
     struct ggml_cgraph gb = ggml_build_backward(ctx0, &gf, false);
 
-    ggml_graph_compute(ctx0, &gf);
     {
         struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, n_threads);
         if (plan.work_size > 0) {
