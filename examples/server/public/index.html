@@ -79,8 +79,20 @@
     }
 
     textarea {
+      padding: 5px;
       flex-grow: 1;
       width: 100%;
+    }
+
+    pre code {
+      display: block;
+      background-color: #222;
+      color: #ddd;
+    }
+    code {
+      font-family: monospace;
+      padding: 0.1em 0.3em;
+      border-radius: 3px;
     }
 
     fieldset label {
@@ -97,7 +109,7 @@
     import { llamaComplete } from '/completion.js';
 
     const session = signal({
-      prompt: "This is a conversation between user and llama, a friendly chatbot.",
+      prompt: "This is a conversation between user and llama, a friendly chatbot. respond in markdown.",
       template: "{{prompt}}\n\n{{history}}\n{{char}}:",
       historyTemplate: "{{name}}: {{message}}",
       transcript: [],
@@ -116,7 +128,7 @@
     const chatStarted = computed(() => session.value.transcript.length > 0)
 
     const params = signal({
-      n_predict: 200,
+      n_predict: 400,
       temperature: 0.7,
       repeat_last_n: 256,
       repeat_penalty: 1.18,
@@ -207,7 +219,7 @@
       return html`
         <form onsubmit=${submit}>
           <div>
-          <textarea type="text" rows=2 onkeypress=${enterSubmits} value="${message}" oninput=${(e) => message.value = e.target.value} placeholder="Start here..."/>
+          <textarea type="text" rows=2 onkeypress=${enterSubmits} value="${message}" oninput=${(e) => message.value = e.target.value} placeholder="Say something..."/>
 
           </div>
           <div class="right">
@@ -225,13 +237,13 @@
 
       useEffect(() => {
         // scroll to bottom (if needed)
-        if (container.current && container.current.scrollHeight <= container.current.scrollTop + container.current.offsetHeight + 100) {
+        if (container.current && container.current.scrollHeight <= container.current.scrollTop + container.current.offsetHeight + 300) {
           container.current.scrollTo(0, container.current.scrollHeight)
         }
       }, [messages])
 
       const chatLine = ([user, msg]) => {
-        return html`<p key=${msg}><strong>${template(user)}:</strong> ${template(msg)}</p>`
+        return html`<p key=${msg}><strong>${template(user)}:</strong> <${Markdown} text=${template(msg)} /></p>`
       };
 
       return html`
@@ -300,8 +312,19 @@
           </fieldset>
         </form>
       `
-
     }
+const Markdown = (params) => {
+  const md = params.text
+    .replace(/^#{1,6} (.*)$/gim, '<h3>$1</h3>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.*?)__/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/_(.*?)_/g, '<em>$1</em>')
+    .replace(/```.*?\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+    .replace(/`(.*?)`/g, '<code>$1</code>')
+    .replace(/\n/gim, '<br />');
+  return html`<span dangerouslySetInnerHTML=${{ __html: md }} />`;
+};
 
     function App(props) {
 
