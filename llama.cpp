@@ -180,12 +180,8 @@ struct llama_kv_cache {
         }
 
 #ifdef GGML_USE_CUBLAS
-    if (k) {
         ggml_cuda_free_data(k);
-    }
-    if (v) {
         ggml_cuda_free_data(v);
-    }
 #endif // GGML_USE_CUBLAS
     }
 };

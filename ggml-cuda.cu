@@ -2809,7 +2809,7 @@ void ggml_cuda_transform_tensor(void * data, struct ggml_tensor * tensor) {
 }
 
 void ggml_cuda_free_data(struct ggml_tensor * tensor) {
-    if (tensor->backend != GGML_BACKEND_GPU && tensor->backend != GGML_BACKEND_GPU_SPLIT) {
+    if (!tensor || (tensor->backend != GGML_BACKEND_GPU && tensor->backend != GGML_BACKEND_GPU_SPLIT) ) {
         return;
     }
 
