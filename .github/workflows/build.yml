@@ -111,6 +111,7 @@ jobs:
 
       - name: Dependencies
         id: depends
+        continue-on-error: true
         run: |
           brew update
 
@@ -129,6 +130,7 @@ jobs:
 
       - name: Dependencies
         id: depends
+        continue-on-error: true
         run: |
           brew update
 
