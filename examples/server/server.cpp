@@ -906,7 +906,7 @@ int main(int argc, char ** argv) {
 
             while (llama.has_next_token) {
                 const completion_token_output token_with_probs = llama.doCompletion();
-                const std::string token_text = llama_token_to_str(llama.ctx, token_with_probs.tok);
+                const std::string token_text = token_with_probs.tok == -1 ? "" : llama_token_to_str(llama.ctx, token_with_probs.tok);
 
                 stop_pos = llama.findStoppingStrings(llama.generated_text,
                     token_text.size(), STOP_FULL);
@@ -933,7 +933,7 @@ int main(int argc, char ** argv) {
 
                 while (llama.has_next_token) {
                     const completion_token_output token_with_probs = llama.doCompletion();
-                    const std::string token_text = llama_token_to_str(llama.ctx, token_with_probs.tok);
+                    const std::string token_text = token_with_probs.tok == -1 ? "" : llama_token_to_str(llama.ctx, token_with_probs.tok);
                     if (llama.multibyte_pending > 0) {
                         continue;
                     }
