@@ -66,14 +66,14 @@
 //       ggml_set_f32(b, 4.0f);
 //
 //       const int n_threads = 1;
-//       struct ggml_graph_compute_plan ctx = ggml_graph_compute_make_plan(&gf, n_threads);
-//       if (ctx.work_size > 0) {
-//           ctx.work_data = malloc(ctx.work_size);
-//           GGML_ASSERT(ctx.work_data);
+//       struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, n_threads);
+//       if (plan.work_size > 0) {
+//           plan.work_data = malloc(plan.work_size);
+//           GGML_ASSERT(plan.work_data);
 //       }
-//       ggml_graph_compute(&ctx, &gf);
-//       if (ctx.work_data) {
-//           free(ctx.work_data);
+//       ggml_graph_compute(&plan, &gf);
+//       if (plan.work_data) {
+//           free(plan.work_data);
 //       }
 //
 //       printf("f = %f\n", ggml_get_f32_1d(f, 0));

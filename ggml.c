@@ -15941,13 +15941,13 @@ void clear_numa_thread_affinity(void) {}
 #endif
 
 struct ggml_compute_state_shared {
-    struct ggml_cgraph * cgraph;
-    struct ggml_graph_compute_plan * cgraph_ctx;
+    const struct ggml_cgraph * cgraph;
+    const struct ggml_graph_compute_plan * plan;
 
     int64_t perf_node_start_cycles;
     int64_t perf_node_start_time_us;
 
-    int n_threads;
+    const int n_threads;
 
     // synchronization primitives
     atomic_int n_active; // num active threads
@@ -15971,10 +15971,10 @@ static void ggml_graph_compute_perf_stats_node(struct ggml_tensor * node, const 
 
 static thread_ret_t ggml_graph_compute_thread(void * data) {
     struct ggml_compute_state * state = (struct ggml_compute_state *) data;
-    struct ggml_cgraph * cgraph = state->shared->cgraph;
+    const struct ggml_cgraph * cgraph = state->shared->cgraph;
 
-    struct ggml_graph_compute_plan * ctx = state->shared->cgraph_ctx;
-    const int *n_tasks_arr = ctx->n_tasks;
+    const struct ggml_graph_compute_plan * plan = state->shared->plan;
+    const int *n_tasks_arr = plan->n_tasks;
 
     const int n_threads = state->shared->n_threads;
     set_numa_thread_affinity(state->ith, n_threads);
@@ -15989,8 +15989,8 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                 /*.type  =*/ GGML_TASK_FINALIZE,
                 /*.ith   =*/ 0,
                 /*.nth   =*/ 0,
-                /*.wsize =*/ ctx->work_size,
-                /*.wdata =*/ ctx->work_data,
+                /*.wsize =*/ plan->work_size,
+                /*.wdata =*/ plan->work_data,
             };
 
             if (node_n != -1) {
@@ -16059,8 +16059,8 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             /*.type  =*/ GGML_TASK_COMPUTE,
             /*.ith   =*/ state->ith,
             /*.nth   =*/ n_tasks,
-            /*.wsize =*/ ctx->work_size,
-            /*.wdata =*/ ctx->work_data,
+            /*.wsize =*/ plan->work_size,
+            /*.wdata =*/ plan->work_data,
         };
 
         if (state->ith < n_tasks) {
@@ -16077,9 +16077,9 @@ struct ggml_graph_compute_plan ggml_graph_compute_make_plan(struct ggml_cgraph *
         n_threads = GGML_DEFAULT_N_THREADS;
     }
 
-    struct ggml_graph_compute_plan ctx;
-    memset(&ctx, 0, sizeof(struct ggml_graph_compute_plan));
-    int * n_tasks = ctx.n_tasks;
+    struct ggml_graph_compute_plan plan;
+    memset(&plan, 0, sizeof(struct ggml_graph_compute_plan));
+    int * n_tasks = plan.n_tasks;
     size_t work_size = 0;
 
     // initialize tasks + work buffer
@@ -16403,35 +16403,35 @@ struct ggml_graph_compute_plan ggml_graph_compute_make_plan(struct ggml_cgraph *
         work_size += CACHE_LINE_SIZE*(n_threads - 1);
     }
 
-    ctx.n_threads = n_threads;
-    ctx.work_size = work_size;
-    ctx.work_data = NULL;
+    plan.n_threads = n_threads;
+    plan.work_size = work_size;
+    plan.work_data = NULL;
 
-    return ctx;
+    return plan;
 }
 
-void ggml_graph_compute(struct ggml_graph_compute_plan * ctx, struct ggml_cgraph * cgraph) {
+void ggml_graph_compute(struct ggml_graph_compute_plan * plan, struct ggml_cgraph * cgraph) {
     {
-        GGML_ASSERT(ctx);
-        GGML_ASSERT(ctx->n_threads > 0);
+        GGML_ASSERT(plan);
+        GGML_ASSERT(plan->n_threads > 0);
 
-        if (ctx->work_size > 0) {
-            GGML_ASSERT(ctx->work_data);
+        if (plan->work_size > 0) {
+            GGML_ASSERT(plan->work_data);
         }
 
         for (int i = 0; i < cgraph->n_nodes; ++i) {
             if (cgraph->nodes[i]->op != GGML_OP_NONE) {
-                GGML_ASSERT(ctx->n_tasks[i] > 0);
+                GGML_ASSERT(plan->n_tasks[i] > 0);
             }
         }
 
     }
 
-    const int n_threads = ctx->n_threads;
+    const int n_threads = plan->n_threads;
 
     struct ggml_compute_state_shared state_shared = {
         /*.cgraph                  =*/ cgraph,
-        /*.cgraph_ctx              =*/ ctx,
+        /*.cgraph_plan             =*/ plan,
         /*.perf_node_start_cycles  =*/ 0,
         /*.perf_node_start_time_us =*/ 0,
         /*.n_threads               =*/ n_threads,
