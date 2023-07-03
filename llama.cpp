@@ -194,8 +194,8 @@ struct llama_layer {
 };
 
 struct llama_kv_cache {
-    struct ggml_tensor * k;
-    struct ggml_tensor * v;
+    struct ggml_tensor * k = NULL;
+    struct ggml_tensor * v = NULL;
 
     struct ggml_context * ctx = NULL;
 
