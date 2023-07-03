@@ -7,13 +7,13 @@
 
   <style>
 
-
     body {
       background-color: #fff;
       color: #000;
       font-family: system-ui;
       font-size: 90%;
     }
+
     #container {
       margin: 0em auto;
 
@@ -107,28 +107,44 @@
 
     import { llamaComplete } from '/completion.js';
 
-    const transcript = signal([])
-    const chatStarted = computed(() => transcript.value.length > 0)
-
-    const chatTemplate = signal("{{prompt}}\n\n{{history}}\n{{bot}}:")
-    const settings = signal({
+    const session = signal({
       prompt: "This is a conversation between user and llama, a friendly chatbot.",
-      bot: "llama",
-      user: "User"
+      template: "{{prompt}}\n\n{{history}}\n{{char}}:",
+      historyTemplate: "{{name}}: {{message}}",
+      transcript: [],
+      type: "chat",
+      char: "llama",
+      user: "User",
     })
 
-    const temperature = signal(0.2)
-    const nPredict = signal(80)
+    const transcriptUpdate = (transcript) => {
+      session.value = {
+        ...session.value,
+        transcript
+      }
+    }
+
+    const chatStarted = computed(() => session.value.transcript.length > 0)
+
+    const params = signal({
+      n_predict: 200,
+      temperature: 0.7,
+      repeat_last_n: 256,
+      repeat_penalty: 1.18,
+      top_k: 40,
+      top_p: 0.5,
+    })
+
     const controller = signal(null)
     const generating = computed(() => controller.value == null )
 
     // simple template replace
-    const template = (str, map) => {
-      let params = settings.value;
-      if (map) {
-        params = { ...params, ...map };
+    const template = (str, extraSettings) => {
+      let settings = session.value;
+      if (extraSettings) {
+        settings = { ...settings, ...extraSettings };
       }
-      return String(str).replaceAll(/\{\{(.*?)\}\}/g, (_, key) => template(params[key]));
+      return String(str).replaceAll(/\{\{(.*?)\}\}/g, (_, key) => template(settings[key]));
     }
 
     // send message to server
@@ -138,31 +154,33 @@
         return;
       }
       controller.value = new AbortController();
-      transcript.value = [...transcript.value, ['{{user}}', msg]];
 
-      const payload = template(chatTemplate.value, {
+      transcriptUpdate([...session.value.transcript, ["{{user}}", msg]])
+
+      const payload = template(session.value.template, {
         message: msg,
-        history: transcript.value.flatMap(([name, msg]) => `${name}: ${msg}`).join("\n"),
+        history: session.value.transcript.flatMap(([name, message]) => template(session.value.historyTemplate, {name, message})).join("\n"),
       });
 
       let currentMessage = '';
-      let history = transcript.value;
+      const history = session.value.transcript
 
-      const params = {
+      const llamaParams = {
+        ...params.value,
         prompt: payload,
-        n_predict: parseInt(nPredict.value),
-        temperature: parseFloat(temperature.value),
-        stop: ["</s>", template("{{bot}}:"), template("{{user}}:")],
+        stop: ["</s>", template("{{char}}:"), template("{{user}}:")],
       }
 
-      await llamaComplete(params, controller.value, (message) => {
+      await llamaComplete(llamaParams, controller.value, (message) => {
         const data = message.data;
         currentMessage += data.content;
+        // remove leading whitespace
+        currentMessage = currentMessage.replace(/^\s+/, "")
 
-        transcript.value = [...history,["{{bot}}", currentMessage]];
+        transcriptUpdate([...history, ["{{char}}", currentMessage]])
 
         if (data.stop) {
-          console.log("-->", data, ' response was:', currentMessage, 'transcript state:', transcript.value);
+          console.log("-->", data, ' response was:', currentMessage, 'transcript state:', session.value.transcript);
         }
       })
 
@@ -182,7 +200,7 @@
 
       const reset = (e) => {
         stop(e);
-        transcript.value = [];
+        transcriptUpdate([]);
       }
 
       const submit = (e) => {
@@ -202,7 +220,7 @@
     }
 
     const ChatLog = (props) => {
-      const messages = transcript.value;
+      const messages = session.value.transcript;
       const container = useRef(null)
 
       useEffect(() => {
@@ -218,11 +236,17 @@
 
       return html`
         <section id="chat" ref=${container}>
-          ${messages.flatMap((m) => chatLine(m))}
+          ${messages.flatMap(chatLine)}
         </section>`;
     };
 
     const ConfigForm = (props) => {
+
+      const updateSession = (el) => session.value = { ...session.value, [el.target.name]: el.target.value }
+      const updateParams = (el) => params.value = { ...params.value, [el.target.name]: el.target.value }
+      const updateParamsFloat = (el) => params.value = { ...params.value, [el.target.name]: parseFloat(el.target.value) }
+      const updateParamsInt = (el) => params.value = { ...params.value, [el.target.name]: parseInt(el.target.value) }
+
 
       return html`
         <form>
@@ -231,34 +255,39 @@
 
             <div>
               <label for="prompt">Prompt</label>
-              <textarea type="text" id="prompt" value="${settings.value.prompt}" oninput=${(e) => settings.value.prompt = e.target.value}/>
+              <textarea type="text" name="prompt" value="${session.value.prompt}" oninput=${updateSession}/>
             </div>
 
             <div>
               <label for="user">User name</label>
-              <input type="text" id="user" value="${settings.value.user}" oninput=${(e) => settings.value.user = e.target.value} />
+              <input type="text" name="user" value="${session.value.user}" oninput=${updateSession} />
             </div>
 
             <div>
               <label for="bot">Bot name</label>
-              <input type="text" id="bot" value="${settings.value.bot}" oninput=${(e) => settings.value.bot = e.target.value} />
+              <input type="text" name="char" value="${session.value.char}" oninput=${updateSession} />
             </div>
 
             <div>
               <label for="template">Prompt template</label>
-              <textarea id="template" value="${chatTemplate}" oninput=${(e) => chatTemplate.value = e.target.value}/>
+              <textarea id="template" name="template" value="${session.value.template}" oninput=${updateSession}/>
+            </div>
+
+            <div>
+              <label for="template">Chat history template</label>
+              <textarea id="template" name="historyTemplate" value="${session.value.historyTemplate}" oninput=${updateSession}/>
             </div>
 
             <div>
               <label for="temperature">Temperature</label>
-              <input type="range" id="temperature" min="0.0" max="1.0" step="0.01" value="${temperature.value}" oninput=${(e) => temperature.value = e.target.value} />
-              <span>${temperature}</span>
+              <input type="range" id="temperature" min="0.0" max="1.0" step="0.01" name="temperature" value="${params.value.temperature}" oninput=${updateParamsFloat} />
+              <span>${params.value.temperature}</span>
             </div>
 
             <div>
               <label for="nPredict">Predictions</label>
-              <input type="range" id="nPredict" min="1" max="2048" step="1" value="${nPredict.value}" oninput=${(e) => nPredict.value = e.target.value} />
-              <span>${nPredict}</span>
+              <input type="range" id="nPredict" min="1" max="2048" step="1" name="n_predict" value="${params.value.n_predict}" oninput=${updateParamsInt} />
+              <span>${params.value.n_predict}</span>
             </div>
           </fieldset>
         </form>
