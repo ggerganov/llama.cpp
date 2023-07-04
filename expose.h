@@ -4,13 +4,13 @@ const int stop_token_max = 10;
 // match kobold's sampler list and order
 enum samplers
 {
-    KCPP_SAMPLER_TOP_K,
-    KCPP_SAMPLER_TOP_A,
-    KCPP_SAMPLER_TOP_P,
-    KCPP_SAMPLER_TFS,
-    KCPP_SAMPLER_TYP,
-    KCPP_SAMPLER_TEMP,
-    KCPP_SAMPLER_REP_PEN,
+    KCPP_SAMPLER_TOP_K=0,
+    KCPP_SAMPLER_TOP_A=1,
+    KCPP_SAMPLER_TOP_P=2,
+    KCPP_SAMPLER_TFS=3,
+    KCPP_SAMPLER_TYP=4,
+    KCPP_SAMPLER_TEMP=5,
+    KCPP_SAMPLER_REP_PEN=6,
     KCPP_SAMPLER_MAX
 };
 struct load_model_inputs
