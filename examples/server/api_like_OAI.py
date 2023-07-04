@@ -165,6 +165,7 @@ def chat_completions():
 
     if (not stream):
         data = requests.request("POST", urllib.parse.urljoin(args.llama_api, "/completion"), data=json.dumps(postData))
+        print(data.json())
         resData = make_resData(data.json(), chat=True, promptToken=promptToken)
         return jsonify(resData)
     else:
@@ -213,13 +214,6 @@ def completion():
                     resData = make_resData_stream(json.loads(decoded_line[6:]), chat=False, time_now=time_now)
                     yield 'data: {}\n'.format(json.dumps(resData))
         return Response(generate(), mimetype='text/event-stream')
-
-
-
-
-
-
-
 
 if __name__ == '__main__':
     app.run(args.host, port=args.port)
