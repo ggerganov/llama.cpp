@@ -721,7 +721,7 @@ static void ggml_vk_buffer_write_2d(vk_buffer* dst, size_t offset, const void * 
             // Memory is pinned, use as staging buffer
             std::vector<VkBufferCopy> slices(height);
             for (size_t i = 0; i < height; i++) {
-                slices[i].srcOffset = i * spitch;
+                slices[i].srcOffset = buf_offset + i * spitch;
                 slices[i].dstOffset = offset + i * width;
                 slices[i].size = width;
             }
@@ -888,9 +888,11 @@ static void ggml_vk_h2d_tensor_2d(vk_buffer* dst, size_t offset, const struct gg
         return;
     }
     if (nb0 == ts) {
-        // TODO: Get rid of this loop
         PROFILE("ggml_vk_buffer_write_2d",
-        ggml_vk_buffer_write_2d(dst, offset, (uint8_t *)x, nb1, row_length, ne1, q);
+        // for (uint64_t i1 = 0; i1 < ne1; i1++) {
+        //     ggml_vk_buffer_write(dst, offset + i1 * row_length, (uint8_t *)x + i1 * nb1, row_length, q);
+        // }
+        ggml_vk_buffer_write_2d(dst, offset, x, nb1, row_length, ne1, q);
         );
         return;
     }
