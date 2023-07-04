@@ -267,6 +267,35 @@ Any value larger than 0 will offload the computation to the GPU. For example:
 ./main -m ./models/7B/ggml-model-q4_0.bin -n 128 -ngl 1
 ```
 
+### MPI Build
+
+MPI lets you distribute the computation over a cluster of machines. Because of the serial nature of LLM prediction, this won't yield any end-to-end speed-ups, but it will let you run larger models than would otherwise fit into RAM on a single machine.
+
+First, build llama.cpp and download/convert the weights on all of the machines in your cluster. The paths to the weights and programs should be identical on all machines. You will need to build llama.cpp with an MPI-capable compiler, for example,
+
+```bash
+make CC=mpicc CXX=mpicxx LLAMA_MPI=1
+```
+
+Once the programs are built and the weights are downloaded on all machines, ensure password-less SSH access to each machine from the primary host.
+
+Next, create a `hostfile` with a list of the hostnames and their relative "weights" (slots). If you want to use localhost for computation, use its local subnet IP address rather than the loopback address or "localhost".
+
+Here is an example hostfile:
+
+```
+192.168.0.1:2
+malvolio.local:1
+```
+
+The above will distribute the computation across 2 processes on the first host and 1 process on the second host. Each process will use roughly an equal amount of RAM. Try to keep these numbers small, as inter-process (intra-host) communication is expensive.
+
+Finally, you're ready to run a computation using `mpirun`:
+
+```bash
+mpirun -hostfile hostfile -n 3 ./main -m ./models/7B/ggml-model-q4_0.bin -n 128
+```
+
 ### BLAS Build
 
 Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). BLAS doesn't affect the normal generation performance. There are currently three different implementations of it:

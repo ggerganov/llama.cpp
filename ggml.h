@@ -561,11 +561,11 @@ extern "C" {
 
     GGML_API struct ggml_tensor * ggml_send_tensor(
             struct ggml_context * ctx,
-            const struct ggml_tensor *src,
+            struct ggml_tensor *src,
             int dst_rank);
     GGML_API struct ggml_tensor * ggml_recv_tensor(
             struct ggml_context * ctx,
-            const struct ggml_tensor *parent,
+            struct ggml_tensor *parent,
             struct ggml_tensor *dst,
             int src_rank);
 

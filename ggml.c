@@ -4652,7 +4652,7 @@ struct ggml_tensor * ggml_dup_tensor(struct ggml_context * ctx, const struct ggm
 
 struct ggml_tensor * ggml_send_tensor(
         struct ggml_context * ctx,
-        const struct ggml_tensor *src,
+        struct ggml_tensor *src,
         int dst_rank) {
 
     struct ggml_tensor * result = ggml_new_i32(ctx, 0);
@@ -4666,9 +4666,10 @@ struct ggml_tensor * ggml_send_tensor(
 
 struct ggml_tensor * ggml_recv_tensor(
         struct ggml_context * ctx,
-        const struct ggml_tensor *parent,
+        struct ggml_tensor *parent,
         struct ggml_tensor *dst,
         int src_rank) {
+    UNUSED(ctx);
 
     struct ggml_tensor * result = dst;
 
