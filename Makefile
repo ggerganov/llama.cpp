@@ -1,11 +1,5 @@
 # Define the default target now so that it is always the first target
-BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-text-from-scratch simple libembdinput.so embd-input-test
-
-ifdef LLAMA_BUILD_SERVER
-	BUILD_TARGETS += server
-	LLAMA_SERVER_VERBOSE ?= 1
-server: private CXXFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
-endif
+BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-text-from-scratch simple server libembdinput.so embd-input-test
 
 default: $(BUILD_TARGETS)
 
@@ -59,6 +53,10 @@ ifdef LLAMA_DEBUG
 else
 	CFLAGS   += -DNDEBUG
 	CXXFLAGS += -DNDEBUG
+endif
+
+ifdef LLAMA_SERVER_VERBOSE
+	CXXFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
 endif
 
 # warnings
@@ -272,7 +270,7 @@ libllama.so: llama.o ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
 clean:
-	rm -vf *.o *.so main quantize quantize-stats perplexity embedding benchmark-matmult save-load-state server vdot train-text-from-scratch embd-input-test build-info.h
+	rm -vf *.o *.so main quantize quantize-stats perplexity embedding benchmark-matmult save-load-state server simple vdot train-text-from-scratch embd-input-test build-info.h
 
 #
 # Examples
