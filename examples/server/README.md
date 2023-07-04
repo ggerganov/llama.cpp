@@ -190,3 +190,19 @@ Run with bash:
 ```sh
 bash chat.sh
 ```
+
+### API like OAI
+
+API example using Python Flask: [api_like_OAI.py](api_like_OAI.py)
+This example must be used with server.cpp
+
+```sh
+python api_like_OAI.py
+```
+
+After running the API server, you can use it in Python by setting the API base URL.
+```python
+openai.api_base = "http://<Your api-server IP>:port"
+```
+
+Then you can utilize llama.cpp as an OpenAI's **chat.completion** or **text_completion** API
