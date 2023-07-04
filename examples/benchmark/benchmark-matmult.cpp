@@ -164,16 +164,15 @@ int main(int argc, char ** argv)  {
     TENSOR_DUMP(m11);
     TENSOR_DUMP(m2);
 
+    auto compute_plan_buffer = std::vector<uint8_t>();
+
     {
-        struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, benchmark_params.n_threads);
+        auto plan = ggml_graph_compute_make_plan(&gf, benchmark_params.n_threads);
         if (plan.work_size > 0) {
-            plan.work_data = malloc(plan.work_size);
-            GGML_ASSERT(plan.work_data);
+            compute_plan_buffer.resize(plan.work_size);
+            plan.work_data = compute_plan_buffer.data();
         }
         ggml_graph_compute(&plan, &gf);
-        if (plan.work_data) {
-            free(plan.work_data);
-        }
     }
 
     TENSOR_DUMP(gf.nodes[0]);
@@ -229,15 +228,12 @@ int main(int argc, char ** argv)  {
         long long int start = ggml_time_us();
         //printf("Running ggml_graph_compute\n");
         {
-            struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf31, benchmark_params.n_threads);
+            auto plan = ggml_graph_compute_make_plan(&gf31, benchmark_params.n_threads);
             if (plan.work_size > 0) {
-                plan.work_data = malloc(plan.work_size);
-                GGML_ASSERT(plan.work_data);
+                compute_plan_buffer.resize(plan.work_size);
+                plan.work_data = compute_plan_buffer.data();
             }
             ggml_graph_compute(&plan, &gf31);
-            if (plan.work_data) {
-                free(plan.work_data);
-            }
         }
 
         long long int stop = ggml_time_us();
@@ -272,15 +268,12 @@ int main(int argc, char ** argv)  {
 
         // Running a different graph computation to make sure we override the CPU cache lines
         {
-            struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf32, benchmark_params.n_threads);
+            auto plan = ggml_graph_compute_make_plan(&gf32, benchmark_params.n_threads);
             if (plan.work_size > 0) {
-                plan.work_data = malloc(plan.work_size);
-                GGML_ASSERT(plan.work_data);
+                compute_plan_buffer.resize(plan.work_size);
+                plan.work_data = compute_plan_buffer.data();
             }
             ggml_graph_compute(&plan, &gf32);
-            if (plan.work_data) {
-                free(plan.work_data);
-            }
         }
     }
     printf("\n");

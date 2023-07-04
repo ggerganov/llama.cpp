@@ -321,6 +321,10 @@ struct llama_context {
     // input embedding (1-dimensional array: [n_embd])
     std::vector<float> embedding;
 
+    // reusable buffer for `struct ggml_graph_compute_plan.work_data`
+    // std::vector guarantees the elements are stored contiguously.
+    std::vector<uint8_t> compute_plan_buffer;
+
     // memory buffers used to evaluate the model
     // TODO: move in llama_state
     llama_ctx_buffer buf_compute;
@@ -1591,10 +1595,13 @@ static bool llama_eval_internal(
     // run the computation
     ggml_build_forward_expand(&gf, cur);
 
+    bool call_ggml_graph_compute = true;
+
 #ifdef GGML_USE_METAL
     if (lctx.ctx_metal && N == 1) {
         ggml_metal_graph_compute(lctx.ctx_metal, &gf);
         ggml_metal_get_tensor   (lctx.ctx_metal, cur);
+        call_ggml_graph_compute = false;
     } else {
         // IMPORTANT:
         // Since we don't have efficient Matrix x Matrix Metal multiplication yet, we fallback to vanilla
@@ -1611,32 +1618,17 @@ static bool llama_eval_internal(
             ggml_metal_get_tensor(lctx.ctx_metal, kv_self.k);
             ggml_metal_get_tensor(lctx.ctx_metal, kv_self.v);
         }
-
-        {
-            struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, actual_n_threads);
-            if (plan.work_size > 0) {
-                plan.work_data = malloc(plan.work_size);
-                GGML_ASSERT(plan.work_data);
-            }
-            ggml_graph_compute(&plan, &gf);
-            if (plan.work_data) {
-                free(plan.work_data);
-            }
-        }
-    }
-#else
-    {
-        struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, actual_n_threads);
-        if (plan.work_size > 0) {
-            plan.work_data = malloc(plan.work_size);
-            GGML_ASSERT(plan.work_data);
-        }
-        ggml_graph_compute(&plan, &gf);
-        if (plan.work_data) {
-            free(plan.work_data);
-        }
     }
 #endif
+
+    if (call_ggml_graph_compute) {
+        auto plan = ggml_graph_compute_make_plan(&gf, actual_n_threads);
+        if (plan.work_size > 0) {
+            lctx.compute_plan_buffer.resize(plan.work_size);
+            plan.work_data = lctx.compute_plan_buffer.data();
+        }
+        ggml_graph_compute(&plan, &gf);
+    }
 
     if (cgraph_fname) {
         ggml_graph_export(&gf, cgraph_fname);
@@ -2822,6 +2814,9 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
     // read tensors and apply
     bool warned = false;
     int n_tensors = 0;
+
+    auto compute_plan_buffer = std::vector<uint8_t>();
+
     while (true) {
         int32_t n_dims;
         int32_t length;
@@ -2988,15 +2983,12 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
             struct ggml_cgraph gf = ggml_build_forward(r);
 
             {
-                struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, n_threads);
+                auto plan = ggml_graph_compute_make_plan(&gf, n_threads);
                 if (plan.work_size > 0) {
-                    plan.work_data = malloc(plan.work_size);
-                    GGML_ASSERT(plan.work_data);
+                    compute_plan_buffer.resize(plan.work_size);
+                    plan.work_data = compute_plan_buffer.data();
                 }
                 ggml_graph_compute(&plan, &gf);
-                if (plan.work_data) {
-                    free(plan.work_data);
-                }
             }
 
             // we won't need these tensors again, reset the context to save memory
@@ -3171,15 +3163,12 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
             ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, v3d, vout3d));
 
             {
-                struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, /*n_threads*/ 1);
+                auto plan = ggml_graph_compute_make_plan(&gf, /*n_threads*/ 1);
                 if (plan.work_size > 0) {
-                    plan.work_data = malloc(plan.work_size);
-                    GGML_ASSERT(plan.work_data);
+                    ctx->compute_plan_buffer.resize(plan.work_size);
+                    plan.work_data = ctx->compute_plan_buffer.data();
                 }
                 ggml_graph_compute(&plan, &gf);
-                if (plan.work_data) {
-                    free(plan.work_data);
-                }
             }
 
             ggml_free(cpy_ctx);
@@ -3287,15 +3276,12 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
             ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, vin3d, v3d));
 
             {
-                struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, /*n_threads*/ 1);
+                auto plan = ggml_graph_compute_make_plan(&gf, /*n_threads*/ 1);
                 if (plan.work_size > 0) {
-                    plan.work_data = malloc(plan.work_size);
-                    GGML_ASSERT(plan.work_data);
+                    ctx->compute_plan_buffer.resize(plan.work_size);
+                    plan.work_data = ctx->compute_plan_buffer.data();
                 }
                 ggml_graph_compute(&plan, &gf);
-                if (plan.work_data) {
-                    free(plan.work_data);
-                }
             }
 
             ggml_free(cpy_ctx);

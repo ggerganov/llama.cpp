@@ -191,6 +191,32 @@ void print_elements(const char* label, const struct ggml_tensor * t) {
 
 }
 
+struct compute_plan_buffer {
+    size_t    size;
+    uint8_t * data;
+};
+
+static uint8_t * ensure_plan_work_data(struct compute_plan_buffer *buf, size_t size) {
+    if (size == 0) {
+        return NULL;
+    }
+
+    GGML_ASSERT(buf);
+
+    if (buf->size == 0) {
+        buf->data = malloc(size);
+        buf->size = size;
+    } else if (buf->size < size) {
+        buf->data = realloc(buf->data, size);
+        buf->size = size;
+    } else {
+        // skip shrinking.
+    }
+
+    GGML_ASSERT(buf->data);
+    return buf->data;
+}
+
 bool check_gradient(
         const char * op_name,
         struct ggml_context * ctx0,
@@ -218,6 +244,8 @@ bool check_gradient(
 
     struct ggml_cgraph gb = ggml_build_backward(ctx0, &gf, false);
 
+    struct compute_plan_buffer plan_buf = { /*.size = */ 0, /*.data =*/ NULL };
+
     {
         struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, n_threads);
         if (plan.work_size > 0) {
@@ -235,14 +263,8 @@ bool check_gradient(
 
     {
         struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gb, n_threads);
-        if (plan.work_size > 0) {
-            plan.work_data = malloc(plan.work_size);
-            GGML_ASSERT(plan.work_data);
-        }
+        plan.work_data = ensure_plan_work_data(&plan_buf, plan.work_size);
         ggml_graph_compute(&plan, &gb);
-        if (plan.work_data) {
-            free(plan.work_data);
-        }
     }
 
     // ggml_graph_dump_dot(&gf, NULL, "test-grad0-forward.dot");
@@ -259,14 +281,8 @@ bool check_gradient(
 
             {
                 struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, n_threads);
-                if (plan.work_size > 0) {
-                    plan.work_data = malloc(plan.work_size);
-                    GGML_ASSERT(plan.work_data);
-                }
+                plan.work_data = ensure_plan_work_data(&plan_buf, plan.work_size);
                 ggml_graph_compute(&plan, &gf);
-                if (plan.work_data) {
-                    free(plan.work_data);
-                }
             }
 
             const float f0 = ggml_get_f32_1d(f, 0);
@@ -275,14 +291,8 @@ bool check_gradient(
 
             {
                 struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, n_threads);
-                if (plan.work_size > 0) {
-                    plan.work_data = malloc(plan.work_size);
-                    GGML_ASSERT(plan.work_data);
-                }
+                plan.work_data = ensure_plan_work_data(&plan_buf, plan.work_size);
                 ggml_graph_compute(&plan, &gf);
-                if (plan.work_data) {
-                    free(plan.work_data);
-                }
             }
 
             const float f1 = ggml_get_f32_1d(f, 0);
@@ -297,14 +307,8 @@ bool check_gradient(
 
             {
                 struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gb, n_threads);
-                if (plan.work_size > 0) {
-                    plan.work_data = malloc(plan.work_size);
-                    GGML_ASSERT(plan.work_data);
-                }
+                plan.work_data = ensure_plan_work_data(&plan_buf, plan.work_size);
                 ggml_graph_compute(&plan, &gb);
-                if (plan.work_data) {
-                    free(plan.work_data);
-                }
             }
 
             const float g1 = get_element(x[i]->grad, k);
@@ -319,6 +323,10 @@ bool check_gradient(
                 return false;
             }
         }
+    }
+
+    if (plan_buf.data) {
+        free(plan_buf.data);
     }
 
     return true;

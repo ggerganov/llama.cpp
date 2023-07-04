@@ -449,7 +449,7 @@ extern "C" {
         // Size of work buffer, calculated by `ggml_graph_compute_make_plan()`.
         size_t work_size;
         // Work buffer, to be allocated by caller before calling to `ggml_graph_compute()`.
-        void * work_data;
+        uint8_t * work_data;
 
         int n_threads;
 

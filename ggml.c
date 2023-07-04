@@ -15974,7 +15974,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
     const struct ggml_cgraph * cgraph = state->shared->cgraph;
 
     const struct ggml_graph_compute_plan * plan = state->shared->plan;
-    const int *n_tasks_arr = plan->n_tasks;
+    const int * n_tasks_arr = plan->n_tasks;
 
     const int n_threads = state->shared->n_threads;
     set_numa_thread_affinity(state->ith, n_threads);
@@ -16490,6 +16490,7 @@ void ggml_graph_compute(struct ggml_graph_compute_plan * plan, struct ggml_cgrap
     }
 }
 
+// TODO: avoid allocating memory frequently.
 static void ggml_graph_compute_sugar(struct ggml_cgraph * cgraph, int n_threads) {
     struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(cgraph, n_threads);
     if (plan.work_size > 0) {

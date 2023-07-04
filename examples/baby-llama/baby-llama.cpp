@@ -1569,6 +1569,8 @@ int main(int argc, char ** argv) {
     int n_tokens = model.hparams.n_ctx;
     int n_vocab  = model.hparams.n_vocab;
 
+    auto compute_plan_buffer = std::vector<uint8_t>();
+
     for (int ex=0; ex<n_examples; ++ex) {
         struct ggml_init_params params = {
             /*.mem_size   =*/ compute_size,
@@ -1598,13 +1600,10 @@ int main(int argc, char ** argv) {
         {
             struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, /*n_threads*/ 1);
             if (plan.work_size > 0) {
-                plan.work_data = malloc(plan.work_size);
-                GGML_ASSERT(plan.work_data);
+                compute_plan_buffer.resize(plan.work_size);
+                plan.work_data = compute_plan_buffer.data();
             }
             ggml_graph_compute(&plan, &gf);
-            if (plan.work_data) {
-                free(plan.work_data);
-            }
         }
 
         float error_before_opt = ggml_get_f32_1d(e, 0);
@@ -1625,13 +1624,10 @@ int main(int argc, char ** argv) {
         {
             struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, /*n_threads*/ 1);
             if (plan.work_size > 0) {
-                plan.work_data = malloc(plan.work_size);
-                GGML_ASSERT(plan.work_data);
+                compute_plan_buffer.resize(plan.work_size);
+                plan.work_data = compute_plan_buffer.data();
             }
             ggml_graph_compute(&plan, &gf);
-            if (plan.work_data) {
-                free(plan.work_data);
-            }
         }
 
         float error_after_opt = ggml_get_f32_1d(e, 0);
@@ -1689,13 +1685,10 @@ int main(int argc, char ** argv) {
             {
                 struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, /*n_threads*/ 1);
                 if (plan.work_size > 0) {
-                    plan.work_data = malloc(plan.work_size);
-                    GGML_ASSERT(plan.work_data);
+                    compute_plan_buffer.resize(plan.work_size);
+                    plan.work_data = compute_plan_buffer.data();
                 }
                 ggml_graph_compute(&plan, &gf);
-                if (plan.work_data) {
-                    free(plan.work_data);
-                }
             }
 
             struct ggml_tensor * best_samples = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, sample_ctx);

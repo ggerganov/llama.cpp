@@ -114,6 +114,31 @@ void set_element(struct ggml_tensor * t, int idx, float value) {
     ((float *)t->data)[idx] = value;
 }
 
+
+struct compute_plan_buffer {
+    size_t    size;
+    uint8_t * data;
+};
+
+static uint8_t * ensure_plan_work_data(struct compute_plan_buffer *buf, size_t size) {
+    if (size == 0) {
+        return NULL;
+    }
+
+    if (buf->size == 0) {
+        buf->data = malloc(size);
+        buf->size = size;
+    } else if (buf->size < size) {
+        buf->data = realloc(buf->data, size);
+        buf->size = size;
+    } else {
+        // skip shrinking.
+    }
+
+    GGML_ASSERT(buf->data);
+    return buf->data;
+}
+
 int main(int argc, const char ** argv) {
     struct ggml_init_params params = {
         .mem_size   = 1024*1024*1024,
@@ -141,16 +166,11 @@ int main(int argc, const char ** argv) {
     struct ggml_cgraph ge = ggml_build_forward(e);
     ggml_graph_reset  (&ge);
 
+    struct compute_plan_buffer plan_buf = { /*.size = */ 0, /*.data =*/ NULL };
     {
         struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&ge, /*n_threads*/ 1);
-        if (plan.work_size > 0) {
-            plan.work_data = malloc(plan.work_size);
-            GGML_ASSERT(plan.work_data);
-        }
+        plan.work_data = ensure_plan_work_data(&plan_buf, plan.work_size);
         ggml_graph_compute(&plan, &ge);
-        if (plan.work_data) {
-            free(plan.work_data);
-        }
     }
 
     const float fe = ggml_get_f32_1d(e, 0);
@@ -164,14 +184,12 @@ int main(int argc, const char ** argv) {
 
     {
         struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&ge, /*n_threads*/ 1);
-        if (plan.work_size > 0) {
-            plan.work_data = malloc(plan.work_size);
-            GGML_ASSERT(plan.work_data);
-        }
+        plan.work_data = ensure_plan_work_data(&plan_buf, plan.work_size);
         ggml_graph_compute(&plan, &ge);
-        if (plan.work_data) {
-            free(plan.work_data);
-        }
+    }
+
+    if (plan_buf.data) {
+        free(plan_buf.data);
     }
 
     const float fe_opt = ggml_get_f32_1d(e, 0);
