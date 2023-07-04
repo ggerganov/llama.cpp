@@ -69,7 +69,10 @@ def make_postData(body, chat=False, stream=False):
     if(is_present(body, "mirostat_eta")): postData["mirostat_eta"] = body["mirostat_eta"]
     if(is_present(body, "seed")): postData["seed"] = body["seed"]
     if(is_present(body, "logit_bias")): postData["logit_bias"] = [[int(token), body["logit_bias"][token]] for token in body["logit_bias"].keys()]
-    postData["stop"] = [args.stop]
+    if (args.stop != ""):
+        postData["stop"] = [args.stop]
+    else:
+        postData["stop"] = []
     if(is_present(body, "stop")): postData["stop"] += body["stop"]
     postData["n_keep"] = -1
     postData["stream"] = stream
@@ -81,6 +84,7 @@ def make_resData(data, chat=False, promptToken=[]):
         "id": "chatcmpl" if (chat) else "cmpl",
         "object": "chat.completion" if (chat) else "text_completion",
         "created": int(time.time()),
+        "truncated": data["truncated"],
         "model": "LLaMA_CPP",
         "usage": {
             "prompt_tokens": data["tokens_evaluated"],
@@ -196,6 +200,7 @@ def completion():
 
     if (not stream):
         data = requests.request("POST", urllib.parse.urljoin(args.llama_api, "/completion"), data=json.dumps(postData))
+        print(data.json())
         resData = make_resData(data.json(), chat=False, promptToken=promptToken)
         return jsonify(resData)
     else:
@@ -208,6 +213,12 @@ def completion():
                     resData = make_resData_stream(json.loads(decoded_line[6:]), chat=False, time_now=time_now)
                     yield 'data: {}\n'.format(json.dumps(resData))
         return Response(generate(), mimetype='text/event-stream')
+
+
+
+
+
+
 
 
 if __name__ == '__main__':
