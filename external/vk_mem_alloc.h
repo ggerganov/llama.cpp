@@ -2355,7 +2355,7 @@ VMA_CALL_PRE VkResult VMA_CALL_POST vmaCreateAliasingBuffer(
 \param allocator
 \param allocation Allocation that provides memory to be used for binding new buffer to it.
 \param allocationLocalOffset Additional offset to be added while binding, relative to the beginning of the allocation. Normally it should be 0.
-\param pBufferCreateInfo 
+\param pBufferCreateInfo
 \param[out] pBuffer Buffer that was created.
 
 This function automatically:
