@@ -1581,17 +1581,17 @@ static bool llama_eval_internal(
     // used at the end to optionally extract the embeddings
     struct ggml_tensor * embeddings = NULL;
 
-#ifdef GGML_USE_MPI
-    cur = ggml_send_tensor(ctx0, cur, (lctx.mpi_rank+1)%lctx.mpi_size);
-    ggml_set_name(cur, "send");
-#endif
+    if (lctx.mpi_size > 1) {
+        cur = ggml_send_tensor(ctx0, cur, (lctx.mpi_rank+1)%lctx.mpi_size);
+        ggml_set_name(cur, "send");
+    }
     if (lctx.mpi_rank == 0) {
-#ifdef GGML_USE_MPI
-        cur = ggml_recv_tensor(ctx0, cur,
-                ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N),
-                lctx.mpi_size-1);
-        ggml_set_name(cur, "recv");
-#endif
+        if (lctx.mpi_size > 1) {
+            cur = ggml_recv_tensor(ctx0, cur,
+                    ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N),
+                    lctx.mpi_size-1);
+            ggml_set_name(cur, "recv");
+        }
         // norm
         {
             cur = ggml_rms_norm(ctx0, cur);

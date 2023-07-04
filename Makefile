@@ -150,8 +150,8 @@ ifndef LLAMA_NO_ACCELERATE
 endif # LLAMA_NO_ACCELERATE
 
 ifdef LLAMA_MPI
-	CFLAGS += -DGGML_USE_MPI
-	CXXFLAGS += -DGGML_USE_MPI
+	CFLAGS += -DGGML_USE_MPI -Wno-cast-qual -Wno-int-to-void-pointer-cast -Wno-void-pointer-to-int-cast
+	CXXFLAGS += -DGGML_USE_MPI -Wno-cast-qual
 endif # LLAMA_MPI
 
 ifdef LLAMA_OPENBLAS
