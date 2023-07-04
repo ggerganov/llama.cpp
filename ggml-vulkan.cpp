@@ -4,6 +4,16 @@
 #include <cblas.h>
 #include <cmath>
 #include <chrono>
+
+#define PROFILE(name, block) do { \
+    auto begin = std::chrono::high_resolution_clock::now(); \
+    block \
+    auto end = std::chrono::high_resolution_clock::now(); \
+    double time_taken = std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count() / 1000.0; \
+    printf("%s: %lf ms\n", name, time_taken); \
+} while(0)
+#else
+#define PROFILE(name, block) block
 #endif
 
 #include <vulkan/vulkan.hpp>
@@ -174,6 +184,7 @@ static vk_pipeline ggml_vk_create_pipeline(const std::string& path, const std::s
 }
 
 static void ggml_vk_dispatch_pipeline(vk_pipeline& pipeline, std::vector<vk_buffer *> buffers, const std::vector<int>&& push_constants, std::array<uint32_t, 3> elements, vk::CommandBuffer& cmd_buffer, vk::Fence& fence) {
+    PROFILE("ggml_vk_dispatch_pipeline",
     std::vector<vk::DescriptorBufferInfo> descriptor_buffer_infos;
     std::vector<vk::WriteDescriptorSet> write_descriptor_sets;
     for (uint32_t i = 0; i < pipeline.parameter_count; i++) {
@@ -207,64 +218,49 @@ static void ggml_vk_dispatch_pipeline(vk_pipeline& pipeline, std::vector<vk_buff
                                &cmd_buffer);
 
     vk_compute_queue.queue.submit({ submit_info }, fence);
+    );
 }
 
-static void ggml_vk_find_queue_family_index(std::vector<uint32_t>& indices, uint32_t num_indices, std::vector<vk::QueueFamilyProperties>& queue_family_props, const vk::QueueFlags& required, const vk::QueueFlags& avoid, int32_t compute_index) {
+static uint32_t ggml_vk_find_queue_family_index(std::vector<vk::QueueFamilyProperties>& queue_family_props, const vk::QueueFlags& required, const vk::QueueFlags& avoid, int32_t compute_index) {
     const uint32_t qfsize = queue_family_props.size();
 
-    bool done;
-
-    for (uint32_t idx = 0; idx < num_indices; idx++) {
-        done = false;
-        // Try with avoid preferences first
-        for (uint32_t i = 0; i < qfsize; i++) {
-            if ((compute_index < 0 || i != compute_index) && std::find(indices.begin(), indices.end(), i) == indices.end() && queue_family_props[i].queueFlags & required && !(queue_family_props[i].queueFlags & avoid)) {
-                indices.push_back(i);
-                done = true;
-                break;
-            }
-        }
-
-        if (!done) {
-            // Fall back to only required
-            for (size_t i = 0; i < qfsize; i++) {
-                if ((compute_index < 0 || i != compute_index) && std::find(indices.begin(), indices.end(), i) == indices.end() && queue_family_props[i].queueFlags & required) {
-                    indices.push_back(i);
-                    done = true;
-                    break;
-                }
-            }
-        }
-
-        if (!done) {
-            // Fall back to reusing compute queue
-            for (size_t i = 0; i < qfsize; i++) {
-                if (std::find(indices.begin(), indices.end(), i) == indices.end() && queue_family_props[i].queueFlags & required) {
-                    indices.push_back(i);
-                    done = true;
-                    break;
-                }
-            }
-        }
-
-        if (!done) {
-            std::cerr << "ggml_vulkan: No suitable queue family index found." << std::endl;
-            for (uint32_t i = 0; i < qfsize; i++) {
-                std::cerr << i << ": " << "compute=" << bool(queue_family_props[i].queueFlags & vk::QueueFlagBits::eCompute) << " transfer=" << bool(queue_family_props[i].queueFlags & vk::QueueFlagBits::eTransfer) << " graphics=" << bool(queue_family_props[i].queueFlags & vk::QueueFlagBits::eGraphics) << " protected=" << bool(queue_family_props[i].queueFlags & vk::QueueFlagBits::eProtected) << " optical_flow_nv=" << bool(queue_family_props[i].queueFlags & vk::QueueFlagBits::eOpticalFlowNV) << " sparse binding=" << bool(queue_family_props[i].queueFlags & vk::QueueFlagBits::eSparseBinding)  << " video decode=" << bool(queue_family_props[i].queueFlags & vk::QueueFlagBits::eVideoDecodeKHR) << std::endl;
-            }
-            abort();
+    // Try with avoid preferences first
+    for (uint32_t i = 0; i < qfsize; i++) {
+        if ((compute_index < 0 || i != compute_index) && queue_family_props[i].queueFlags & required && !(queue_family_props[i].queueFlags & avoid)) {
+            return i;
         }
     }
+
+    // Fall back to only required
+    for (size_t i = 0; i < qfsize; i++) {
+        if ((compute_index < 0 || i != compute_index) && queue_family_props[i].queueFlags & required) {
+            return i;
+        }
+    }
+
+    // Fall back to reusing compute queue
+    for (size_t i = 0; i < qfsize; i++) {
+        if (queue_family_props[i].queueFlags & required) {
+            return i;
+        }
+    }
+
+    std::cerr << "ggml_vulkan: No suitable queue family index found." << std::endl;
+
+    for(auto &q_family : queue_family_props) {
+        std::cout << "Queue number: "  + std::to_string(q_family.queueCount) << " flags: " + to_string(q_family.queueFlags) << std::endl;
+    }
+    abort();
 }
 
-static vk_queue ggml_vk_create_queue(uint32_t queue_family_index) {
+static vk_queue ggml_vk_create_queue(uint32_t queue_family_index, uint32_t queue_index) {
     vk_queue q;
     q.queue_family_index = queue_family_index;
 
     vk::CommandPoolCreateInfo command_pool_create_info_compute(vk::CommandPoolCreateFlags(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT), queue_family_index);
     q.pool = vk_device.createCommandPool(command_pool_create_info_compute);
 
-    q.queue = vk_device.getQueue(queue_family_index, 0);
+    q.queue = vk_device.getQueue(queue_family_index, queue_index);
 
     return q;
 }
@@ -306,12 +302,14 @@ static vk_buffer ggml_vk_create_buffer(size_t size, VmaAllocationCreateFlags all
     allocation_info.flags = alloc_flags;
     allocation_info.usage = vma_usage;
 
+    PROFILE("ggml_vk_create_buffer",
     vmaCreateBuffer(vk_allocator,
                     (VkBufferCreateInfo*)&buffer_create_info,
                     &allocation_info,
                     (VkBuffer*)&buf.buffer,
                     &buf.allocation,
                     &buf.info);
+    );
 
     buf.sb_write = nullptr;
     buf.sb_read = nullptr;
@@ -321,6 +319,7 @@ static vk_buffer ggml_vk_create_buffer(size_t size, VmaAllocationCreateFlags all
 
 static void ggml_vk_destroy_buffer(vk_buffer& buf) {
     buf.size = 0;
+    PROFILE("ggml_vk_destroy_buffer",
     vmaDestroyBuffer(vk_allocator, buf.buffer, buf.allocation);
 
     // Cleanup staging buffers
@@ -334,6 +333,7 @@ static void ggml_vk_destroy_buffer(vk_buffer& buf) {
         delete buf.sb_read;
         buf.sb_read = nullptr;
     }
+    );
 }
 
 void ggml_vk_test_transfer(size_t ne);
@@ -346,7 +346,7 @@ void ggml_vk_init(void) {
 
     vk::ApplicationInfo app_info{ "ggml-vulkan", 1, nullptr, 0, VK_API_VERSION };
     const std::vector<const char*> layers = {
-        "VK_LAYER_KHRONOS_validation",
+        // "VK_LAYER_KHRONOS_validation",
     };
     vk::InstanceCreateInfo instance_create_info(vk::InstanceCreateFlags(), &app_info, layers.size(), layers.data());
     vk_instance = vk::createInstance(instance_create_info);
@@ -373,20 +373,14 @@ void ggml_vk_init(void) {
     std::vector<vk::QueueFamilyProperties> queue_family_props = vk_physical_device.getQueueFamilyProperties();
 
     // Try to find a non-graphics compute queue and transfer-focused queues
-    std::vector<uint32_t> compute_queue_family_index_vec;
-    ggml_vk_find_queue_family_index(compute_queue_family_index_vec, 1, queue_family_props, vk::QueueFlagBits::eCompute, vk::QueueFlagBits::eGraphics, -1);
-    uint32_t compute_queue_family_index = compute_queue_family_index_vec[0];
-    std::vector<uint32_t> transfer_queue_family_index;
-    ggml_vk_find_queue_family_index(transfer_queue_family_index, VK_TRANSFER_QUEUE_COUNT, queue_family_props, vk::QueueFlagBits::eTransfer, vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eVideoDecodeKHR | vk::QueueFlagBits::eProtected | vk::QueueFlagBits::eOpticalFlowNV, compute_queue_family_index);
+    uint32_t compute_queue_family_index = ggml_vk_find_queue_family_index(queue_family_props, vk::QueueFlagBits::eCompute, vk::QueueFlagBits::eGraphics, -1);
+    uint32_t transfer_queue_family_index = ggml_vk_find_queue_family_index(queue_family_props, vk::QueueFlagBits::eTransfer, vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eVideoDecodeKHR | vk::QueueFlagBits::eProtected | vk::QueueFlagBits::eOpticalFlowNV, compute_queue_family_index);
 
     const float compute_queue_priority = 1.0f;
-    const float transfer_queue_priority = 1.0f;
+    const float transfer_queue_priority[] = { 1.0f, 1.0f };
     std::vector<vk::DeviceQueueCreateInfo> device_queue_create_infos;
     device_queue_create_infos.push_back({vk::DeviceQueueCreateFlags(), compute_queue_family_index, 1, &compute_queue_priority});
-
-    for (int i = 0; i < VK_TRANSFER_QUEUE_COUNT; i++) {
-        device_queue_create_infos.push_back({vk::DeviceQueueCreateFlags(), transfer_queue_family_index[i], 1, &transfer_queue_priority});
-    };
+    device_queue_create_infos.push_back({vk::DeviceQueueCreateFlags(), transfer_queue_family_index, VK_TRANSFER_QUEUE_COUNT, transfer_queue_priority});
     vk::DeviceCreateInfo device_create_info;
     std::vector<const char *> device_extensions;
     vk::PhysicalDeviceFeatures device_features = vk_physical_device.getFeatures();
@@ -448,9 +442,9 @@ void ggml_vk_init(void) {
     vk_pipeline_dequant_q4_0 = ggml_vk_create_pipeline("vk_shaders/dequant_q4_0.spv", "main", 2, 1, {32, 1, 1});
 
     // Queues
-    vk_compute_queue = ggml_vk_create_queue(compute_queue_family_index);
+    vk_compute_queue = ggml_vk_create_queue(compute_queue_family_index, 0);
     for (int i = 0; i < VK_TRANSFER_QUEUE_COUNT; i++) {
-        vk_transfer_queues[i] = ggml_vk_create_queue(transfer_queue_family_index[i]);
+        vk_transfer_queues[i] = ggml_vk_create_queue(transfer_queue_family_index, i);
     }
 
 #if defined(VK_CHK_KERNEL)
@@ -514,6 +508,7 @@ static vk_buffer g_vk_buffer_pool[MAX_VK_BUFFERS];
 static std::atomic_flag g_vk_pool_lock = ATOMIC_FLAG_INIT;
 
 static void ggml_vk_pool_malloc(size_t size, vk_buffer* buf, VmaAllocationCreateFlags alloc_flags) {
+    PROFILE("ggml_vk_pool_malloc",
     scoped_spin_lock lock(g_vk_pool_lock);
 
     int best_i = -1;
@@ -545,9 +540,11 @@ static void ggml_vk_pool_malloc(size_t size, vk_buffer* buf, VmaAllocationCreate
     }
 
     *buf = ggml_vk_create_buffer(size, alloc_flags, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, 0);
+    );
 }
 
 static void ggml_vk_pool_free(vk_buffer& buffer) {
+    PROFILE("ggml_vk_pool_free",
     scoped_spin_lock lock(g_vk_pool_lock);
 
     for (int i = 0; i < MAX_VK_BUFFERS; ++i) {
@@ -559,6 +556,7 @@ static void ggml_vk_pool_free(vk_buffer& buffer) {
     }
     fprintf(stderr, "WARNING: vk buffer pool full, increase MAX_VK_BUFFERS\n");
     ggml_vk_destroy_buffer(buffer);
+    );
 }
 
 void* ggml_vk_host_malloc(size_t size) {
@@ -610,11 +608,14 @@ static void ggml_vk_buffer_write(vk_buffer* dst, size_t offset, const void * src
     if(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
         GGML_ASSERT(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
+        PROFILE("ggml_vk_buffer_write visible",
         memcpy((uint8_t *)dst->info.pMappedData + offset, src, size);
+        );
     } else {
         // Check if src is pinned memory
         vk_buffer* buf = nullptr;
         size_t buf_offset = 0;
+        PROFILE("ggml_vk_buffer_write pinned check",
         for (size_t i = 0; i < vk_buf_list.size(); i++) {
             const uint8_t* addr = (const uint8_t*) std::get<0>(vk_buf_list[i]);
             const uint8_t* endr = addr + std::get<1>(vk_buf_list[i]);
@@ -624,6 +625,7 @@ static void ggml_vk_buffer_write(vk_buffer* dst, size_t offset, const void * src
                 break;
             }
         }
+        );
 
         if (buf != nullptr) {
             // Memory is pinned, use as staging buffer
@@ -633,10 +635,12 @@ static void ggml_vk_buffer_write(vk_buffer* dst, size_t offset, const void * src
                 size}; // size
 
             vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(q);
+            PROFILE("ggml_vk_buffer_write pinned write",
             vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
             cmd_buffer.begin(cmd_buffer_begin_info);
             vkCmdCopyBuffer(cmd_buffer, buf->buffer, dst->buffer, 1, &buf_copy);
             cmd_buffer.end();
+            );
 
             vk::SubmitInfo submit_info(0,
                                        nullptr,
@@ -664,6 +668,7 @@ static void ggml_vk_buffer_write(vk_buffer* dst, size_t offset, const void * src
             offset, // dstOffset,
             size}; // size
 
+        PROFILE("ggml_vk_buffer_write staging",
         vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(q);
         vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
         cmd_buffer.begin(cmd_buffer_begin_info);
@@ -679,6 +684,101 @@ static void ggml_vk_buffer_write(vk_buffer* dst, size_t offset, const void * src
                                    &cmd_buffer);
         std::lock_guard<std::mutex> guard(q.mutex);
         q.queue.submit({ submit_info }, VK_NULL_HANDLE);
+        );
+    }
+}
+
+static void ggml_vk_buffer_write_2d(vk_buffer* dst, size_t offset, const void * src, size_t spitch, size_t width, size_t height, vk_queue& q) {
+    VkMemoryPropertyFlags mem_prop_flags;
+    vmaGetAllocationMemoryProperties(vk_allocator, dst->allocation, &mem_prop_flags);
+
+    // Buffer is already mapped
+    if(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+        GGML_ASSERT(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        PROFILE("ggml_vk_buffer_write visible",
+        for (size_t i = 0; i < height; i++) {
+            memcpy((uint8_t *)dst->info.pMappedData + offset + i * width, (uint8_t *) src + i * spitch, width);
+        }
+        );
+    } else {
+        // Check if src is pinned memory
+        vk_buffer* buf = nullptr;
+        size_t buf_offset = 0;
+        PROFILE("ggml_vk_buffer_write pinned check",
+        for (size_t i = 0; i < vk_buf_list.size(); i++) {
+            const uint8_t* addr = (const uint8_t*) std::get<0>(vk_buf_list[i]);
+            const uint8_t* endr = addr + std::get<1>(vk_buf_list[i]);
+            if (src >= addr && src < endr) {
+                buf = &std::get<2>(vk_buf_list[i]);
+                buf_offset = ((const uint8_t *)src) - addr;
+                break;
+            }
+        }
+        );
+
+        if (buf != nullptr) {
+            // Memory is pinned, use as staging buffer
+            std::vector<VkBufferCopy> slices(height);
+            for (size_t i = 0; i < height; i++) {
+                slices[i].srcOffset = i * spitch;
+                slices[i].dstOffset = offset + i * width;
+                slices[i].size = width;
+            }
+
+            vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(q);
+            PROFILE("ggml_vk_buffer_write pinned write",
+            vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+            cmd_buffer.begin(cmd_buffer_begin_info);
+            vkCmdCopyBuffer(cmd_buffer, buf->buffer, dst->buffer, height, slices.data());
+            cmd_buffer.end();
+            );
+
+            vk::SubmitInfo submit_info(0,
+                                       nullptr,
+                                       nullptr,
+                                       1,
+                                       &cmd_buffer);
+            std::lock_guard<std::mutex> guard(q.mutex);
+            q.queue.submit({ submit_info }, VK_NULL_HANDLE);
+
+            return;
+        }
+
+        // Staging buffer required, malloc because of async transfer
+        if (dst->sb_write == nullptr) {
+            dst->sb_write = new vk_buffer;
+            *dst->sb_write = ggml_vk_create_buffer(dst->size, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_HOST, 0);
+        }
+
+        VkMemoryPropertyFlags mpf_staging;
+        vmaGetAllocationMemoryProperties(vk_allocator, dst->sb_write->allocation, &mpf_staging);
+        GGML_ASSERT(mpf_staging & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        VkBufferCopy buf_copy = {
+            0,
+            offset,
+            width * height};
+
+        PROFILE("ggml_vk_buffer_write staging",
+        vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(q);
+        vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+        cmd_buffer.begin(cmd_buffer_begin_info);
+        vkCmdCopyBuffer(cmd_buffer, dst->sb_write->buffer, dst->buffer, 1, &buf_copy);
+        cmd_buffer.end();
+
+        for (size_t i = 0; i < height; i++) {
+            memcpy((uint8_t *)dst->info.pMappedData + offset + i * width, (uint8_t *) src + i * spitch, width);
+        }
+
+        vk::SubmitInfo submit_info(0,
+                                   nullptr,
+                                   nullptr,
+                                   1,
+                                   &cmd_buffer);
+        std::lock_guard<std::mutex> guard(q.mutex);
+        q.queue.submit({ submit_info }, VK_NULL_HANDLE);
+        );
     }
 }
 
@@ -689,11 +789,14 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
     if(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
         GGML_ASSERT(mem_prop_flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
+        PROFILE("ggml_vk_buffer_read visible",
         memcpy(dst, (uint8_t *) src->info.pMappedData + offset, size);
+        );
     } else {
         // Check if dst is pinned memory
         vk_buffer* buf = nullptr;
         size_t buf_offset = 0;
+        PROFILE("ggml_vk_buffer_write pinned check",
         for (size_t i = 0; i < vk_buf_list.size(); i++) {
             const uint8_t* addr = (const uint8_t*) std::get<0>(vk_buf_list[i]);
             const uint8_t* endr = addr + std::get<1>(vk_buf_list[i]);
@@ -703,6 +806,7 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
                 break;
             }
         }
+        );
 
         if (buf != nullptr) {
             // Memory is pinned, use as staging buffer
@@ -711,6 +815,7 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
                 buf_offset, // dstOffset,
                 size}; // size
 
+            PROFILE("ggml_vk_buffer_write pinned read",
             vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(q);
             vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
             cmd_buffer.begin(cmd_buffer_begin_info);
@@ -724,6 +829,7 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
                                        &cmd_buffer);
             std::lock_guard<std::mutex> guard(q.mutex);
             q.queue.submit({ submit_info }, VK_NULL_HANDLE);
+            );
             return;
         }
 
@@ -741,6 +847,7 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
             0, // dstOffset,
             size}; // size
 
+        PROFILE("ggml_vk_buffer_write staging",
         vk::CommandBuffer cmd_buffer = ggml_vk_cmd_buffer_create(q);
         vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
         cmd_buffer.begin(cmd_buffer_begin_info);
@@ -759,6 +866,7 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
         vk::resultCheck(vk_device.waitForFences({ fence }, true, uint64_t(-1)), "vk_buffer_read staging waitForFences");
         vk_device.destroyFence(fence);
         memcpy(dst, src->sb_read->info.pMappedData, size);
+        );
     }
 }
 
@@ -780,9 +888,10 @@ static void ggml_vk_h2d_tensor_2d(vk_buffer* dst, size_t offset, const struct gg
         return;
     }
     if (nb0 == ts) {
-        for (uint64_t i1 = 0; i1 < ne1; i1++) {
-            ggml_vk_buffer_write(dst, offset + i1 * row_length, (uint8_t *)x + i1 * nb1, row_length, q);
-        }
+        // TODO: Get rid of this loop
+        PROFILE("ggml_vk_buffer_write_2d",
+        ggml_vk_buffer_write_2d(dst, offset, (uint8_t *)x, nb1, row_length, ne1, q);
+        );
         return;
     }
     GGML_ASSERT(false);
