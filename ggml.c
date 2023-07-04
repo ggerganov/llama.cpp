@@ -26,7 +26,9 @@
 #include <limits.h>
 #include <stdarg.h>
 
+#ifdef GGML_USE_MPI
 #include <mpi.h>
+#endif
 
 #ifdef GGML_USE_METAL
 #include <unistd.h>
