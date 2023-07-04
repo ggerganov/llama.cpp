@@ -181,7 +181,7 @@ struct llama_mmap {
 #ifdef __linux__
         if (prefetch) { flags |= MAP_POPULATE; }
 #endif
-        addr = mmap(NULL, file->size, PROT_READ, flags, fd, 0);
+        addr = mmap(NULL, file->size, PROT_READ | PROT_WRITE, flags, fd, 0);
         if (addr == MAP_FAILED) {
             throw std::runtime_error(format("mmap failed: %s", strerror(errno)));
         }
@@ -223,7 +223,7 @@ struct llama_mmap {
             throw std::runtime_error(format("CreateFileMappingA failed: %s", llama_format_win_err(error).c_str()));
         }
 
-        addr = MapViewOfFile(hMapping, FILE_MAP_READ, 0, 0, 0);
+        addr = MapViewOfFile(hMapping, FILE_MAP_COPY, 0, 0, 0);
         error = GetLastError();
         CloseHandle(hMapping);
 

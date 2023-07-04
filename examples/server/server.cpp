@@ -820,7 +820,6 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
             params.lora_adapter = argv[i];
-            params.use_mmap = false;
         }
         else if (arg == "--lora-base")
         {

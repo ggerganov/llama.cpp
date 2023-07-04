@@ -267,7 +267,6 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.lora_adapter = argv[i];
-            params.use_mmap = false;
         } else if (arg == "--lora-base") {
             if (++i >= argc) {
                 invalid_param = true;
