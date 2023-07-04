@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+#-*- coding: utf-8 -*-
+
 # A hacky little script from Concedo that exposes llama.cpp function bindings
 # allowing it to be used via a simulated kobold api endpoint
 # generation delay scales linearly with original prompt length.
