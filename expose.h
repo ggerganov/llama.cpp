@@ -1,6 +1,18 @@
 #pragma once
 
 const int stop_token_max = 10;
+// match kobold's sampler list and order
+enum samplers
+{
+    KCPP_SAMPLER_TOP_K,
+    KCPP_SAMPLER_TOP_A,
+    KCPP_SAMPLER_TOP_P,
+    KCPP_SAMPLER_TFS,
+    KCPP_SAMPLER_TYP,
+    KCPP_SAMPLER_TEMP,
+    KCPP_SAMPLER_REP_PEN,
+    KCPP_SAMPLER_MAX
+};
 struct load_model_inputs
 {
     const int threads;
@@ -40,6 +52,8 @@ struct generation_inputs
     const int mirostat = 0;
     const float mirostat_eta;
     const float mirostat_tau;
+    const samplers sampler_order[KCPP_SAMPLER_MAX];
+    const int sampler_len;
     const char * stop_sequence[stop_token_max];
     const bool stream_sse;
 };
