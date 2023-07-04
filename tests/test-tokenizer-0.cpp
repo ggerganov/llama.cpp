@@ -8,14 +8,14 @@
 static const std::map<std::string, std::vector<llama_token>> & k_tests()
 {
     static std::map<std::string, std::vector<llama_token>> _k_tests = {
-        // { "Hello World",        { 1,  10994,   2787, }, },
-        // { " Hello World",       { 1,  15043,   2787, }, },
-        // { " Hello World!",      { 1,  15043,   2787,  29991, }, },
-        // { " this is 🦙.cpp",    { 1,    445,    338,  29871,    243,    162,    169,    156,  29889,   8223, }, },
-        // { "w048 7tuijk dsdfhu", { 1,  29893,  29900,  29946,  29947,  29871,  29955,   9161,  13535,  18031,   2176,   6905, }, },
-        // { "нещо на Български",  { 1,    821,   4851,    665,   1386,  29713,   1305, }, },
-        // { ">>>>ANSWER<<",       { 1,   6778,   6778,   2190,  23066,   1001,   9314,}, },
-        { "\xe2\x96\x81\xe2\x80\x93",                 { 1, 100, }, },
+        { "Hello World",        { 1,  10994,   2787, }, },
+        { " Hello World",       { 1,  15043,   2787, }, },
+        { " Hello World!",      { 1,  15043,   2787,  29991, }, },
+        { " this is 🦙.cpp",    { 1,    445,    338,  29871,    243,    162,    169,    156,  29889,   8223, }, },
+        { "w048 7tuijk dsdfhu", { 1,  29893,  29900,  29946,  29947,  29871,  29955,   9161,  13535,  18031,   2176,   6905, }, },
+        { "нещо на Български",  { 1,    821,   4851,    665,   1386,  29713,   1305, }, },
+        { "\xe6\x88\x91\xe4\xbb\xac\xe5\xa4\xa7\xe5\xae\xb6\xe4\xb8\x80\xe8\xb5\xb7",                 { 1, 30672, 31381, 30257, 30613, 30287, 31558, }, },
+        { ">>>>ANSWER<<", {1, 5099, 6778, 2190, 23066, 1001, 9314}, },
     };
     return _k_tests;
 };
@@ -84,9 +84,17 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "%6d, ", t);
             }
             fprintf(stderr, "\n");
+            for (const auto & t : test_kv.second) {
+                fprintf(stderr, "%7s ", llama_token_to_str(ctx, t));
+            }
+            fprintf(stderr, "\n");
             fprintf(stderr, "%s : got tokens:      ", __func__);
             for (const auto & t : res) {
                 fprintf(stderr, "%6d, ", t);
+            }
+            fprintf(stderr, "\n");
+            for (const auto & t : res) {
+                fprintf(stderr, "%7s ", llama_token_to_str(ctx, t));
             }
             fprintf(stderr, "\n");
 
