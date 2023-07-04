@@ -145,6 +145,8 @@ extern "C" {
     // If numa is true, use NUMA optimizations
     // Call once at the start of the program
     LLAMA_API void llama_init_backend(bool numa);
+    // Call once at the end of the program - currently only used for MPI
+    LLAMA_API void llama_finalize_backend();
 
     LLAMA_API int64_t llama_time_us();
 
@@ -257,6 +259,8 @@ extern "C" {
     LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
     LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
     LLAMA_API int llama_n_embd (const struct llama_context * ctx);
+    LLAMA_API int llama_mpi_rank (const struct llama_context * ctx);
+    LLAMA_API int llama_mpi_size (const struct llama_context * ctx);
 
     // Get the vocabulary as output parameters.
     // Returns number of results.

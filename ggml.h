@@ -353,6 +353,9 @@ extern "C" {
         GGML_OP_CROSS_ENTROPY_LOSS_BACK,
 
         GGML_OP_COUNT,
+
+        GGML_OP_SEND,
+        GGML_OP_RECV,
     };
 
 
@@ -555,6 +558,16 @@ extern "C" {
 
     GGML_API struct ggml_tensor * ggml_dup_tensor (struct ggml_context * ctx, const struct ggml_tensor * src);
     GGML_API struct ggml_tensor * ggml_view_tensor(struct ggml_context * ctx, const struct ggml_tensor * src);
+
+    GGML_API struct ggml_tensor * ggml_send_tensor(
+            struct ggml_context * ctx,
+            const struct ggml_tensor *src,
+            int dst_rank);
+    GGML_API struct ggml_tensor * ggml_recv_tensor(
+            struct ggml_context * ctx,
+            const struct ggml_tensor *parent,
+            struct ggml_tensor *dst,
+            int src_rank);
 
     GGML_API struct ggml_tensor * ggml_get_tensor(struct ggml_context * ctx, const char * name);
 

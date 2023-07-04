@@ -172,5 +172,7 @@ int main(int argc, char ** argv) {
     llama_free(ctx);
     llama_free_model(model);
 
+    llama_finalize_backend();
+
     return 0;
 }
