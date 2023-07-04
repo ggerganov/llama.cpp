@@ -2,8 +2,6 @@
 #include "llama.h"
 #include "build-info.h"
 
-// single thread
-#define CPPHTTPLIB_THREAD_POOL_COUNT 1
 #ifndef NDEBUG
 // crash the server in debug mode, otherwise send an http 500 error
 #define CPPHTTPLIB_NO_EXCEPTIONS 1
@@ -11,6 +9,11 @@
 
 #include "httplib.h"
 #include "json.hpp"
+
+// auto generated files (update with ./deps.sh)
+#include "index.html.hpp"
+#include "index.js.hpp"
+#include "completion.js.hpp"
 
 #ifndef SERVER_VERBOSE
 #define SERVER_VERBOSE 1
@@ -21,9 +24,21 @@ using json = nlohmann::json;
 
 struct server_params {
     std::string hostname = "127.0.0.1";
+    std::string public_path = "examples/server/public";
     int32_t port = 8080;
     int32_t read_timeout = 600;
     int32_t write_timeout = 600;
+};
+
+// completion token output with probabilities
+struct completion_token_output {
+    struct token_prob {
+        llama_token tok;
+        float prob;
+    };
+
+    std::vector<token_prob> probs;
+    llama_token tok;
 };
 
 static size_t common_part(const std::vector<llama_token> & a, const std::vector<llama_token> & b) {
@@ -86,6 +101,40 @@ static void server_log(const char * level, const char * function, int line,
     fflush(stdout);
 }
 
+// format incomplete utf-8 multibyte character for output
+static std::string tokens_to_output_formatted_string(const llama_context * ctx, const llama_token token) {
+    std::string out = token == -1 ? "" : llama_token_to_str(ctx, token);
+    // if first bit is 1, meaning it's a partial character
+    if (out.size() > 0 && (out[0] & 0x80) == 0x80) {
+        std::stringstream ss;
+        ss<< std::hex << (out[0] & 0xff);
+        std::string res ( ss.str() );
+        out = "byte: \\x" + res;
+    }
+    return out;
+}
+
+// convert a vector of completion_token_output to json
+static json probs_vector_to_json(const llama_context * ctx, const std::vector<completion_token_output> probs) {
+    json out = json::array();
+    for (const auto & prob : probs) {
+        json probs_for_token = json::array();
+        for (const auto & p : prob.probs) {
+            std::string tok_str = tokens_to_output_formatted_string(ctx, p.tok);
+            probs_for_token.push_back(json {
+                { "tok_str", tok_str },
+                { "prob", p.prob },
+            });
+        }
+        std::string tok_str = tokens_to_output_formatted_string(ctx, prob.tok);
+        out.push_back(json {
+            {"content", tok_str},
+            {"probs", probs_for_token},
+        });
+    }
+    return out;
+}
+
 static bool server_verbose = false;
 
 #if SERVER_VERBOSE != 1
@@ -107,6 +156,7 @@ struct llama_server_context {
     bool stream = false;
     bool has_next_token = false;
     std::string generated_text;
+    std::vector<completion_token_output> generated_token_probs;
 
     size_t num_tokens_predicted = 0;
     size_t n_past = 0;
@@ -126,6 +176,12 @@ struct llama_server_context {
     std::string stopping_word;
     int32_t multibyte_pending = 0;
 
+    std::mutex mutex;
+
+    std::unique_lock<std::mutex> lock() {
+        return std::unique_lock<std::mutex>(mutex);
+    }
+
     ~llama_server_context() {
         if (ctx) {
             llama_free(ctx);
@@ -142,6 +198,7 @@ struct llama_server_context {
         num_tokens_predicted = 0;
         generated_text = "";
         generated_text.reserve(params.n_ctx);
+        generated_token_probs.clear();
         truncated = false;
         stopped_eos = false;
         stopped_word = false;
@@ -221,8 +278,9 @@ struct llama_server_context {
         llama_set_rng_seed(ctx, params.seed);
     }
 
-    llama_token nextToken() {
-        llama_token result = -1;
+    completion_token_output nextToken() {
+        completion_token_output result;
+        result.tok = -1;
 
         if (embd.size() >= (size_t)params.n_ctx) {
             // Reset context
@@ -261,7 +319,8 @@ struct llama_server_context {
 
         if (params.n_predict == 0) {
             has_next_token = false;
-            return llama_token_eos();
+            result.tok = llama_token_eos();
+            return result;
         }
 
         // out of user input, sample next token
@@ -278,7 +337,7 @@ struct llama_server_context {
         const float mirostat_tau = params.mirostat_tau;
         const float mirostat_eta = params.mirostat_eta;
         const bool penalize_nl = params.penalize_nl;
-        llama_token id = 0;
+        const int32_t n_probs = params.n_probs;
 
         {
             auto * logits = llama_get_logits(ctx);
@@ -312,35 +371,42 @@ struct llama_server_context {
 
             if (temp <= 0) {
                 // Greedy sampling
-                id = llama_sample_token_greedy(ctx, &candidates_p);
+                result.tok = llama_sample_token_greedy(ctx, &candidates_p);
+                if (n_probs > 0) {
+                    llama_sample_softmax(ctx, &candidates_p);
+                }
             } else {
                 if (mirostat == 1) {
                     static float mirostat_mu = 2.0f * mirostat_tau;
                     const int mirostat_m = 100;
                     llama_sample_temperature(ctx, &candidates_p, temp);
-                    id = llama_sample_token_mirostat(ctx, &candidates_p, mirostat_tau, mirostat_eta, mirostat_m, &mirostat_mu);
+                    result.tok = llama_sample_token_mirostat(ctx, &candidates_p, mirostat_tau, mirostat_eta, mirostat_m, &mirostat_mu);
                 } else if (mirostat == 2) {
                     static float mirostat_mu = 2.0f * mirostat_tau;
                     llama_sample_temperature(ctx, &candidates_p, temp);
-                    id = llama_sample_token_mirostat_v2(ctx, &candidates_p, mirostat_tau, mirostat_eta, &mirostat_mu);
+                    result.tok = llama_sample_token_mirostat_v2(ctx, &candidates_p, mirostat_tau, mirostat_eta, &mirostat_mu);
                 } else {
                     // Temperature sampling
-                    llama_sample_top_k(ctx, &candidates_p, top_k, 1);
-                    llama_sample_tail_free(ctx, &candidates_p, tfs_z, 1);
-                    llama_sample_typical(ctx, &candidates_p, typical_p, 1);
-                    llama_sample_top_p(ctx, &candidates_p, top_p, 1);
+                    size_t min_keep = std::max(1, n_probs);
+                    llama_sample_top_k(ctx, &candidates_p, top_k, min_keep);
+                    llama_sample_tail_free(ctx, &candidates_p, tfs_z, min_keep);
+                    llama_sample_typical(ctx, &candidates_p, typical_p, min_keep);
+                    llama_sample_top_p(ctx, &candidates_p, top_p, min_keep);
                     llama_sample_temperature(ctx, &candidates_p, temp);
-                    id = llama_sample_token(ctx, &candidates_p);
+                    result.tok = llama_sample_token(ctx, &candidates_p);
                 }
             }
+
+            for (size_t i = 0; i < std::min(candidates_p.size, (size_t) n_probs); ++i) {
+                result.probs.push_back({candidates_p.data[i].id, candidates_p.data[i].p});
+            }
             last_n_tokens.erase(last_n_tokens.begin());
-            last_n_tokens.push_back(id);
+            last_n_tokens.push_back(result.tok);
             num_tokens_predicted++;
         }
 
         // add it to the context
-        embd.push_back(id);
-        result = id;
+        embd.push_back(result.tok);
         // decrement remaining sampling budget
         --n_remain;
 
@@ -382,11 +448,15 @@ struct llama_server_context {
         return stop_pos;
     }
 
-    std::string doCompletion() {
-        const llama_token token = nextToken();
+    completion_token_output doCompletion() {
+        const completion_token_output token_with_probs = nextToken();
 
-        const std::string token_text = token == -1 ? "" : llama_token_to_str(ctx, token);
+        const std::string token_text = token_with_probs.tok == -1 ? "" : llama_token_to_str(ctx, token_with_probs.tok);
         generated_text += token_text;
+
+        if (params.n_probs > 0) {
+            generated_token_probs.push_back(token_with_probs);
+        }
 
         if (multibyte_pending > 0) {
             multibyte_pending -= token_text.size();
@@ -416,8 +486,8 @@ struct llama_server_context {
         }
 
         LOG_VERBOSE("next token", {
-            { "token", token },
-            { "token_text", llama_token_to_str(ctx, token) },
+            { "token", token_with_probs.tok },
+            { "token_text", tokens_to_output_formatted_string(ctx, token_with_probs.tok) },
             { "has_next_token", has_next_token },
             { "n_remain", n_remain },
             { "num_tokens_predicted", num_tokens_predicted },
@@ -427,7 +497,7 @@ struct llama_server_context {
             { "stopping_word", stopping_word },
         });
 
-        return token_text;
+        return token_with_probs;
     }
 
     std::vector<float> getEmbedding() {
@@ -479,6 +549,7 @@ static void server_print_usage(const char * argv0, const gpt_params & params,
     fprintf(stderr, "  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
     fprintf(stderr, "  --host                ip address to listen (default  (default: %s)\n", sparams.hostname.c_str());
     fprintf(stderr, "  --port PORT           port to listen (default  (default: %d)\n", sparams.port);
+    fprintf(stderr, "  --path PUBLIC_PATH    path from which to serve static files (default %s)\n", sparams.public_path.c_str());
     fprintf(stderr, "  -to N, --timeout N    server read/write timeout in seconds (default: %d)\n", sparams.read_timeout);
     fprintf(stderr, "  --embedding           enable embedding vector output (default: %s)\n", params.embedding ? "enabled" : "disabled");
     fprintf(stderr, "\n");
@@ -505,6 +576,12 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 break;
             }
             sparams.hostname = argv[i];
+        } else if (arg == "--path") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            sparams.public_path = argv[i];
         } else if (arg == "--timeout" || arg == "-to") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -669,6 +746,7 @@ static json format_generation_settings(llama_server_context & llama) {
         { "ignore_eos", ignore_eos },
         { "stream", llama.stream },
         { "logit_bias", llama.params.logit_bias },
+        { "n_probs", llama.params.n_probs },
     };
 }
 
@@ -678,8 +756,9 @@ static json format_embedding_response(llama_server_context & llama) {
     };
 }
 
-static json format_final_response(llama_server_context & llama, const std::string & content) {
-    return json {
+static json format_final_response(llama_server_context & llama, const std::string & content, const std::vector<completion_token_output> & probs) {
+
+    json res = json {
         { "content", content },
         { "stop", true },
         { "model", llama.params.model_alias },
@@ -692,13 +771,25 @@ static json format_final_response(llama_server_context & llama, const std::strin
         { "stopped_limit", llama.stopped_limit },
         { "stopping_word", llama.stopping_word },
     };
+
+    if (llama.params.n_probs > 0) {
+        res["completion_probabilities"] = probs_vector_to_json(llama.ctx, probs);
+    }
+
+    return res;
 }
 
-static json format_partial_response(const std::string & content) {
-    return json {
+static json format_partial_response(llama_server_context & llama, const std::string & content, const std::vector<completion_token_output> & probs) {
+    json res = json {
         { "content", content },
         { "stop", false },
     };
+
+    if (llama.params.n_probs > 0) {
+        res["completion_probabilities"] = probs_vector_to_json(llama.ctx, probs);
+    }
+
+    return res;
 }
 
 static json format_tokenizer_response(const std::vector<llama_token> & tokens) {
@@ -728,6 +819,7 @@ static void parse_options_completion(const json & body, llama_server_context & l
     llama.params.n_keep = body.value("n_keep", default_params.n_keep);
     llama.params.seed = body.value("seed", default_params.seed);
     llama.params.prompt = body.value("prompt", default_params.prompt);
+    llama.params.n_probs = body.value("n_probs", default_params.n_probs);
 
     llama.params.logit_bias.clear();
     if (body.value("ignore_eos", false)) {
@@ -764,16 +856,23 @@ static void parse_options_completion(const json & body, llama_server_context & l
     LOG_VERBOSE("completion parameters parsed", format_generation_settings(llama));
 }
 
+
 static void log_server_request(const Request & req, const Response & res) {
     LOG_INFO("request", {
         { "remote_addr", req.remote_addr },
         { "remote_port", req.remote_port },
         { "status", res.status },
+        { "method", req.method },
         { "path", req.path },
+        { "params", req.params },
+    });
+
+    LOG_VERBOSE("request", {
         { "request", req.body },
         { "response", res.body },
     });
 }
+
 
 int main(int argc, char ** argv) {
     // own arguments required by this example
@@ -809,16 +908,34 @@ int main(int argc, char ** argv) {
     Server svr;
 
     svr.set_default_headers({
+        { "Server", "llama.cpp" },
         { "Access-Control-Allow-Origin", "*" },
         { "Access-Control-Allow-Headers", "content-type" }
     });
 
+    // this is only called if no index.js is found in the public --path
+    svr.Get("/index.js", [](const Request &, Response & res) {
+        res.set_content(reinterpret_cast<const char *>(&index_js), index_js_len, "text/javascript");
+        return false;
+    });
+
+    // this is only called if no index.html is found in the public --path
     svr.Get("/", [](const Request &, Response & res) {
-        res.set_content("<h1>llama.cpp server works</h1>", "text/html");
+        res.set_content(reinterpret_cast<const char*>(&index_html), index_html_len, "text/html");
+        return false;
+    });
+
+    // this is only called if no index.html is found in the public --path
+    svr.Get("/completion.js", [](const Request &, Response & res) {
+        res.set_content(reinterpret_cast<const char*>(&completion_js), completion_js_len, "application/javascript");
+        return false;
     });
 
     svr.Post("/completion", [&llama](const Request & req, Response & res) {
+        auto lock = llama.lock();
+
         llama.rewind();
+
         llama_reset_timings(llama.ctx);
 
         parse_options_completion(json::parse(req.body), llama);
@@ -830,7 +947,8 @@ int main(int argc, char ** argv) {
             size_t stop_pos = std::string::npos;
 
             while (llama.has_next_token) {
-                const std::string token_text = llama.doCompletion();
+                const completion_token_output token_with_probs = llama.doCompletion();
+                const std::string token_text = token_with_probs.tok == -1 ? "" : llama_token_to_str(llama.ctx, token_with_probs.tok);
 
                 stop_pos = llama.findStoppingStrings(llama.generated_text,
                     token_text.size(), STOP_FULL);
@@ -844,7 +962,7 @@ int main(int argc, char ** argv) {
                     llama.generated_text.end());
             }
 
-            const json data = format_final_response(llama, llama.generated_text);
+            const json data = format_final_response(llama, llama.generated_text, llama.generated_token_probs);
 
             llama_print_timings(llama.ctx);
 
@@ -853,9 +971,11 @@ int main(int argc, char ** argv) {
         } else {
             const auto chunked_content_provider = [&](size_t, DataSink & sink) {
                 size_t sent_count = 0;
+                size_t sent_token_probs_index = 0;
 
                 while (llama.has_next_token) {
-                    const std::string token_text = llama.doCompletion();
+                    const completion_token_output token_with_probs = llama.doCompletion();
+                    const std::string token_text = token_with_probs.tok == -1 ? "" : llama_token_to_str(llama.ctx, token_with_probs.tok);
                     if (llama.multibyte_pending > 0) {
                         continue;
                     }
@@ -878,10 +998,22 @@ int main(int argc, char ** argv) {
                     const std::string to_send = llama.generated_text.substr(pos, stop_pos);
                     sent_count += to_send.size();
 
+                    std::vector<completion_token_output> probs_output = {};
+
+                    if (llama.params.n_probs > 0) {
+                        const std::vector<llama_token> to_send_toks = llama_tokenize(llama.ctx, to_send, false);
+                        size_t probs_pos = std::min(sent_token_probs_index, llama.generated_token_probs.size());
+                        size_t probs_stop_pos = std::min(sent_token_probs_index + to_send_toks.size(), llama.generated_token_probs.size());
+                        if (probs_pos < probs_stop_pos) {
+                            probs_output = std::vector<completion_token_output>(llama.generated_token_probs.begin() + probs_pos, llama.generated_token_probs.begin() + probs_stop_pos);
+                        }
+                        sent_token_probs_index = probs_stop_pos;
+                    }
+
                     const json data = llama.has_next_token
-                                          ? format_partial_response(to_send)
+                                          ? format_partial_response(llama, to_send, probs_output)
                                           // Generation is done, send extra information.
-                                          : format_final_response(llama, to_send);
+                                          : format_final_response(llama, to_send, llama.generated_token_probs);
 
                     const std::string str =
                         "data: " +
@@ -912,6 +1044,8 @@ int main(int argc, char ** argv) {
     });
 
     svr.Post("/tokenize", [&llama](const Request & req, Response & res) {
+        auto lock = llama.lock();
+
         const json body = json::parse(req.body);
         const std::string content = body.value("content", "");
         const std::vector<llama_token> tokens = llama_tokenize(llama.ctx, content, false);
@@ -920,6 +1054,8 @@ int main(int argc, char ** argv) {
     });
 
     svr.Post("/embedding", [&llama](const Request & req, Response & res) {
+        auto lock = llama.lock();
+
         const json body = json::parse(req.body);
 
         llama.rewind();
@@ -950,17 +1086,26 @@ int main(int argc, char ** argv) {
         res.status = 500;
     });
 
+    svr.set_error_handler([](const Request &, Response & res) {
+        res.set_content("File Not Found", "text/plain");
+        res.status = 404;
+    });
+
+
     // set timeouts and change hostname and port
     svr.set_read_timeout(sparams.read_timeout);
     svr.set_write_timeout(sparams.write_timeout);
 
     if (!svr.bind_to_port(sparams.hostname, sparams.port)) {
-        LOG_ERROR("couldn't bind to server socket", {
-            { "hostname", sparams.hostname },
-            { "port", sparams.port },
-        });
+        fprintf(stderr, "\ncouldn't bind to server socket: hostname=%s port=%d\n\n", sparams.hostname.c_str(), sparams.port);
         return 1;
     }
+
+    // Set the base directory for serving static files
+    svr.set_base_dir(sparams.public_path);
+
+    // to make it ctrl+clickable:
+    fprintf(stdout, "\nllama server listening at http://%s:%d\n\n", sparams.hostname.c_str(), sparams.port);
 
     LOG_INFO("HTTP server listening", {
         { "hostname", sparams.hostname },
