@@ -726,6 +726,8 @@ static json format_generation_settings(llama_server_context & llama) {
         eos_bias->second < 0.0f && std::isinf(eos_bias->second);
 
     return json {
+        { "n_ctx", llama.params.n_ctx },
+        { "model", llama.params.model_alias },
         { "seed", llama.params.seed },
         { "temp", llama.params.temp },
         { "top_k", llama.params.top_k },
@@ -756,13 +758,29 @@ static json format_embedding_response(llama_server_context & llama) {
     };
 }
 
+static json format_timings(llama_server_context & llama) {
+    const auto timings = llama_get_timings(llama.ctx);
+
+    assert(timings.n_eval == llama.num_tokens_predicted);
+
+    return json {
+            { "prompt_n", timings.n_eval },
+            { "prompt_ms", timings.prompt_eval_time_ms },
+            { "prompt_per_token_ms", timings.prompt_eval_time_ms / timings.n_p_eval },
+            { "prompt_per_second", 1e3 / timings.prompt_eval_time_ms * timings.n_p_eval },
+
+            { "predicted_n", timings.n_eval },
+            { "predicted_ms", timings.eval_time_ms },
+            { "predicted_per_token_ms", timings.eval_time_ms / timings.n_eval },
+            { "predicted_per_second", 1e3 / timings.eval_time_ms * timings.n_eval },
+    };
+}
+
 static json format_final_response(llama_server_context & llama, const std::string & content, const std::vector<completion_token_output> & probs) {
 
     json res = json {
         { "content", content },
         { "stop", true },
-        { "model", llama.params.model_alias },
-        { "tokens_predicted", llama.num_tokens_predicted },
         { "generation_settings", format_generation_settings(llama) },
         { "prompt", llama.params.prompt },
         { "truncated", llama.truncated },
@@ -770,6 +788,9 @@ static json format_final_response(llama_server_context & llama, const std::strin
         { "stopped_word", llama.stopped_word },
         { "stopped_limit", llama.stopped_limit },
         { "stopping_word", llama.stopping_word },
+        { "tokens_cached", llama.n_past },
+        { "tokens_predicted", llama.num_tokens_predicted },
+        { "timings", format_timings(llama) },
     };
 
     if (llama.params.n_probs > 0) {
@@ -913,15 +934,15 @@ int main(int argc, char ** argv) {
         { "Access-Control-Allow-Headers", "content-type" }
     });
 
-    // this is only called if no index.js is found in the public --path
-    svr.Get("/index.js", [](const Request &, Response & res) {
-        res.set_content(reinterpret_cast<const char *>(&index_js), index_js_len, "text/javascript");
-        return false;
-    });
-
     // this is only called if no index.html is found in the public --path
     svr.Get("/", [](const Request &, Response & res) {
         res.set_content(reinterpret_cast<const char*>(&index_html), index_html_len, "text/html");
+        return false;
+    });
+
+    // this is only called if no index.js is found in the public --path
+    svr.Get("/index.js", [](const Request &, Response & res) {
+        res.set_content(reinterpret_cast<const char *>(&index_js), index_js_len, "text/javascript");
         return false;
     });
 
@@ -1037,6 +1058,11 @@ int main(int argc, char ** argv) {
             };
             res.set_chunked_content_provider("text/event-stream", chunked_content_provider);
         }
+    });
+
+    svr.Get("/model.json", [&llama](const Request &, Response & res) {
+        const json data = format_generation_settings(llama);
+        return res.set_content(data.dump(), "application/json");
     });
 
     svr.Options(R"(/.*)", [](const Request &, Response & res) {

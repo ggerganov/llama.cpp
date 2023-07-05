@@ -5,6 +5,8 @@ const paramDefaults = {
   stop: ["</s>"]
 };
 
+let generation_settings = null;
+
 /**
  * This function completes the input text using a llama dictionary.
  * @param {object} params - The parameters for the completion request.
@@ -66,6 +68,9 @@ export const llamaComplete = async (params, controller, callback) => {
 
       // if we got a stop token from server, we will break here
       if (result.data.stop) {
+        if(result.data.generation_settings) {
+          generation_settings = result.data.generation_settings;
+        }
         break;
       }
     }
@@ -79,3 +84,11 @@ export const llamaComplete = async (params, controller, callback) => {
 
   return content;
 }
+
+export const llamaModelInfo = async () => {
+  if (!generation_settings) {
+    generation_settings = await fetch("/model.json").then(r => r.json());
+  }
+  return generation_settings;
+}
+
