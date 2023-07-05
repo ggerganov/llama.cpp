@@ -201,6 +201,8 @@
 #define GGML_MAX_NAME          48
 #define GGML_DEFAULT_N_THREADS 4
 
+#define GGML_UNUSED(x) (void)(x)
+
 #define GGML_ASSERT(x) \
     do { \
         if (!(x)) { \
@@ -208,6 +210,30 @@
             abort(); \
         } \
     } while (0)
+
+// used to copy the number of elements and stride in bytes of tensors into local variables.
+// main purpose is to reduce code duplication and improve readability.
+//
+// example:
+//
+//    GGML_TENSOR_LOCALS(int64_t, ne1, src1, ne);
+//    GGML_TENSOR_LOCALS(size_t,  nb1, src1, nb);
+//
+#define GGML_TENSOR_LOCALS_1(type, prefix, pointer, array) \
+    const type prefix##0 = (pointer)->array[0]; \
+    GGML_UNUSED(prefix##0);
+#define GGML_TENSOR_LOCALS_2(type, prefix, pointer, array) \
+    GGML_TENSOR_LOCALS_1    (type, prefix, pointer, array) \
+    const type prefix##1 = (pointer)->array[1]; \
+    GGML_UNUSED(prefix##1);
+#define GGML_TENSOR_LOCALS_3(type, prefix, pointer, array) \
+    GGML_TENSOR_LOCALS_2    (type, prefix, pointer, array) \
+    const type prefix##2 = (pointer)->array[2]; \
+    GGML_UNUSED(prefix##2);
+#define GGML_TENSOR_LOCALS(type, prefix, pointer, array) \
+    GGML_TENSOR_LOCALS_3  (type, prefix, pointer, array) \
+    const type prefix##3 = (pointer)->array[3]; \
+    GGML_UNUSED(prefix##3);
 
 #ifdef  __cplusplus
 extern "C" {
@@ -295,12 +321,15 @@ extern "C" {
         GGML_OP_SUM,
         GGML_OP_SUM_ROWS,
         GGML_OP_MEAN,
+        GGML_OP_ARGMAX,
         GGML_OP_REPEAT,
         GGML_OP_REPEAT_BACK,
         GGML_OP_ABS,
         GGML_OP_SGN,
         GGML_OP_NEG,
         GGML_OP_STEP,
+        GGML_OP_TANH,
+        GGML_OP_ELU,
         GGML_OP_RELU,
         GGML_OP_GELU,
         GGML_OP_GELU_QUICK,
@@ -332,9 +361,8 @@ extern "C" {
         GGML_OP_ROPE_BACK,
         GGML_OP_ALIBI,
         GGML_OP_CLAMP,
-        GGML_OP_CONV_1D_S1_PH,
-        GGML_OP_CONV_1D_S2_PH,
-        GGML_OP_CONV_2D_SK_P0,
+        GGML_OP_CONV_1D,
+        GGML_OP_CONV_2D,
 
         GGML_OP_FLASH_ATTN,
         GGML_OP_FLASH_FF,
@@ -690,6 +718,11 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
 
+    // argmax along rows
+    GGML_API struct ggml_tensor * ggml_argmax(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
     // if a is the same shape as b, and a is not parameter, return a
     // otherwise, return a new tensor: repeat(a) to fit in b
     GGML_API struct ggml_tensor * ggml_repeat(
@@ -731,6 +764,22 @@ extern "C" {
             struct ggml_tensor  * a);
 
     GGML_API struct ggml_tensor * ggml_step_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
+    GGML_API struct ggml_tensor * ggml_tanh(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
+    GGML_API struct ggml_tensor * ggml_tanh_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
+    GGML_API struct ggml_tensor * ggml_elu(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
+    GGML_API struct ggml_tensor * ggml_elu_inplace(
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
 
@@ -1084,58 +1133,33 @@ extern "C" {
             float                 min,
             float                 max);
 
-    // TODO: implement general-purpose convolutions
-    // GGML_API struct ggml_tensor * ggml_conv_1d(
-    //        struct ggml_context * ctx,
-    //        struct ggml_tensor  * a,
-    //        struct ggml_tensor  * b,
-    //        int                   s0
-    //        int                   p0,
-    //        int                   d0);
-    //
-    // GGML_API struct ggml_tensor * ggml_conv_2d(
-    //        struct ggml_context * ctx,
-    //        struct ggml_tensor  * a,
-    //        struct ggml_tensor  * b,
-    //        int                   s0,
-    //        int                   s1,
-    //        int                   p0,
-    //        int                   p1,
-    //        int                   d0,
-    //        int                   d1);
-
-    // padding = half
-    // TODO: we don't support extra parameters for now
-    //       that's why we are hard-coding the stride, padding, and dilation
-    //       not great ..
-    // example:
-    // a:      3   80  768    1
-    // b:   3000   80    1    1
-    // res: 3000  768    1    1
-    // used in whisper
-    GGML_API struct ggml_tensor * ggml_conv_1d_s1_ph(
+    GGML_API struct ggml_tensor * ggml_conv_1d(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            struct ggml_tensor  * b);
+            struct ggml_tensor  * b,
+            int                   s0,  // stride
+            int                   p0,  // padding
+            int                   d0); // dilation
 
-    // used in whisper
-    GGML_API struct ggml_tensor * ggml_conv_1d_s2_ph(
+    GGML_API struct ggml_tensor * ggml_conv_2d(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            struct ggml_tensor  * b);
+            struct ggml_tensor  * b,
+            int                   s0,
+            int                   s1,
+            int                   p0,
+            int                   p1,
+            int                   d0,
+            int                   d1);
 
-    // kernel size is a->ne[0] x a->ne[1]
-    // stride is equal to kernel size
-    // padding is zero
-    // example:
-    // a:     16   16    3  768
-    // b:   1024 1024    3    1
-    // res:   64   64  768    1
-    // used in sam
-    GGML_API struct ggml_tensor * ggml_conv_2d_sk_p0(
+    // conv_1d with padding = half
+    // alias for ggml_conv_1d(a, b, s, a->ne[0]/2, d)
+    GGML_API struct ggml_tensor* ggml_conv_1d_ph(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            struct ggml_tensor  * b);
+            struct ggml_tensor  * b,
+            int                   s,
+            int                   d);
 
     GGML_API struct ggml_tensor * ggml_flash_attn(
             struct ggml_context * ctx,

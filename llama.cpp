@@ -1156,6 +1156,7 @@ static void llama_model_load_internal(
             }
         }
 #endif // GGML_USE_CUBLAS
+
 #if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
 
@@ -1164,6 +1165,10 @@ static void llama_model_load_internal(
             fprintf(stderr, "%s: offloading non-repeating layers to GPU\n", __func__);
         }
         size_t vram_kv_cache = 0;
+
+#ifdef GGML_USE_CUBLAS
+        const int max_backend_supported_layers = hparams.n_layer + 3;
+        const int max_offloadable_layers = low_vram ? hparams.n_layer + 1 : hparams.n_layer + 3;
         if (n_gpu_layers > (int) hparams.n_layer + 1) {
             if (low_vram) {
                 fprintf(stderr, "%s: cannot offload v cache to GPU due to low VRAM option\n", __func__);
@@ -1180,14 +1185,18 @@ static void llama_model_load_internal(
                 vram_kv_cache += MEM_REQ_KV_SELF().at(model.type) / 2;
             }
         }
-        const int max_offloadable_layers = low_vram ? hparams.n_layer + 1 : hparams.n_layer + 3;
+#elif defined(GGML_USE_CLBLAST)
+        const int max_backend_supported_layers = hparams.n_layer + 1;
+        const int max_offloadable_layers = hparams.n_layer + 1;
+#endif // GGML_USE_CUBLAS
+
         fprintf(stderr, "%s: offloaded %d/%d layers to GPU\n",
-                __func__, std::min(n_gpu_layers, max_offloadable_layers), hparams.n_layer + 3);
+                __func__, std::min(n_gpu_layers, max_offloadable_layers), max_backend_supported_layers);
         fprintf(stderr, "%s: total VRAM used: %zu MB\n",
                 __func__, (vram_weights + vram_scratch + vram_kv_cache + MB - 1) / MB); // round up
 #else
         (void) n_gpu_layers;
-#endif
+#endif // defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
     }
 
     // populate `tensors_by_name`
@@ -1896,9 +1905,9 @@ void llama_sample_top_p(struct llama_context * ctx, llama_token_data_array * can
         return;
     }
 
-    const int64_t t_start_sample_us = ggml_time_us();
-
     llama_sample_softmax(ctx, candidates);
+
+    const int64_t t_start_sample_us = ggml_time_us();
 
     // Compute the cumulative probabilities
     float cum_sum = 0.0f;
@@ -1928,9 +1937,8 @@ void llama_sample_tail_free(struct llama_context * ctx, llama_token_data_array *
         return;
     }
 
-    const int64_t t_start_sample_us = ggml_time_us();
-
     llama_sample_softmax(nullptr, candidates);
+    const int64_t t_start_sample_us = ggml_time_us();
 
     // Compute the first and second derivatives
     std::vector<float> first_derivatives(candidates->size - 1);
@@ -1982,10 +1990,10 @@ void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * c
         return;
     }
 
-    const int64_t t_start_sample_us = ggml_time_us();
-
     // Compute the softmax of logits and calculate entropy
     llama_sample_softmax(nullptr, candidates);
+
+    const int64_t t_start_sample_us = ggml_time_us();
 
     float entropy = 0.0f;
     for (size_t i = 0; i < candidates->size; ++i) {
@@ -2155,13 +2163,11 @@ llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_
 
     if (ctx) {
         ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
-        ctx->n_sample++;
     }
     return X;
 }
 
 llama_token llama_sample_token_mirostat_v2(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, float * mu) {
-    assert(ctx);
     int64_t t_start_sample_us;
     t_start_sample_us = ggml_time_us();
 
@@ -2176,13 +2182,14 @@ llama_token llama_sample_token_mirostat_v2(struct llama_context * ctx, llama_tok
         candidates->size = 1;
     }
 
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    }
+
     // Normalize the probabilities of the remaining words
     llama_sample_softmax(ctx, candidates);
 
     // Sample the next word X from the remaining words
-    if (ctx) {
-        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
-    }
     llama_token X = llama_sample_token(ctx, candidates);
     t_start_sample_us = ggml_time_us();
 
