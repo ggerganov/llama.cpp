@@ -72,6 +72,9 @@ export async function* llama(prompt, params = {}, config = {}) {
 
       // if we got a stop token from server, we will break here
       if (result.data.stop) {
+        if (result.data.generation_settings) {
+          generation_settings = result.data.generation_settings;
+        }
         break;
       }
     }
