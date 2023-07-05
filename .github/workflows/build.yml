@@ -137,6 +137,7 @@ jobs:
       - name: Build
         id: cmake_build
         run: |
+          sysctl -a
           mkdir build
           cd build
           cmake -DLLAMA_AVX2=OFF ..
