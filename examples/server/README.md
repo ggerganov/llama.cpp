@@ -26,20 +26,17 @@ Command line options:
 
 ## Build
 
-Build llama.cpp with server from repository root with either make or CMake.
+server is build alongside everything else from the root of the project
 
 - Using `make`:
 
   ```bash
-  LLAMA_BUILD_SERVER=1 make
+  make
   ```
 
 - Using `CMake`:
 
   ```bash
-  mkdir build-server
-  cd build-server
-  cmake -DLLAMA_BUILD_SERVER=ON ..
   cmake --build . --config Release
   ```
 
@@ -208,24 +205,30 @@ openai.api_base = "http://<Your api-server IP>:port"
 
 Then you can utilize llama.cpp as an OpenAI's **chat.completion** or **text_completion** API
 
-### Extending the Web Front End
+### Extending or building alternative Web Front End
 
-The default location for the static files is `examples/server/public`. You can extend the front end by running the server binary with `--path` set to `./your-directory` and importing `/completion.js` to get access to the llamaComplete() method. A simple example is below:
+The default location for the static files is `examples/server/public`. You can extend the front end by running the server binary with `--path` set to `./your-directory` and importing `/completion.js` to get access to the llamaComplete() method.
 
-```
+Read the documentation in `/completion.js` to see convenient ways to access llama.
+
+A simple example is below:
+
+```html
 <html>
   <body>
     <pre>
       <script type="module">
-        import { llamaComplete } from '/completion.js'
+        import { llama } from '/completion.js'
 
-        llamaComplete({
-            prompt: "### Instruction:\nWrite dad jokes, each one paragraph. You can use html formatting if needed.\n\n### Response:",
-            n_predict: 1024,
-          },
-          null,
-          (chunk) => document.write(chunk.data.content)
-        )
+        const prompt = `### Instruction:
+Write dad jokes, each one paragraph.
+You can use html formatting if needed.
+
+### Response:`
+
+        for await (const chunk of llama(prompt)) {
+          document.write(chunk.data.content)
+        }
       </script>
     </pre>
   </body>

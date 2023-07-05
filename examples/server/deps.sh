@@ -4,10 +4,6 @@
 # get the directory of this script file
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 PUBLIC=$DIR/public
-OUTPUT=$DIR/templats.hpp
-
-echo "// Generated file, do not edit" > $OUTPUT
-echo "" > $OUTPUT
 
 echo "download js bundle files"
 curl https://npm.reversehttp.com/@preact/signals-core,@preact/signals,htm/preact,preact,preact/hooks > $PUBLIC/index.js
