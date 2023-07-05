@@ -1,6 +1,6 @@
 # llama.cpp/example/server
 
-This example demonstrates a simple HTTP API server and a simple web front end and a simple web front end to interact with llama.cpp.
+This example demonstrates a simple HTTP API server and a simple web front end to interact with llama.cpp.
 
 Command line options:
 
