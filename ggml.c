@@ -16202,7 +16202,7 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                         if (node->src1->type != vec_dot_type) {
                             cur = GGML_TYPE_SIZE[vec_dot_type]*ggml_nelements(node->src1)/GGML_BLCK_SIZE[vec_dot_type];
                         } else {
-                            GGML_ASSERT(false);
+                            cur = 0;
                         }
 
                         work_size = MAX(work_size, cur);
