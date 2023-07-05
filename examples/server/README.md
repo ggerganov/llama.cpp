@@ -21,7 +21,7 @@ Command line options:
 -   `-to N`, `--timeout N`: Server read/write timeout in seconds. Default `600`.
 -   `--host`: Set the hostname or ip address to listen. Default `127.0.0.1`.
 -   `--port`: Set the port to listen. Default: `8080`.
--   `--public`: path from which to serve static files (default examples/server/public)
+-   `--path`: path from which to serve static files (default examples/server/public)
 -   `--embedding`: Enable embedding extraction, Default: disabled.
 
 ## Build
@@ -207,3 +207,27 @@ openai.api_base = "http://<Your api-server IP>:port"
 ```
 
 Then you can utilize llama.cpp as an OpenAI's **chat.completion** or **text_completion** API
+
+### Extending the Web Front End
+
+The default location for the static files is `examples/server/public`. You can extend the front end by running the server binary with `--path` set to `./your-directory` and importing `/completion.js` to get access to the llamaComplete() method. A simple example is below:
+
+```
+<html>
+  <body>
+    <pre>
+      <script type="module">
+        import { llamaComplete } from '/completion.js'
+
+        llamaComplete({
+            prompt: "### Instruction:\nWrite dad jokes, each one paragraph. You can use html formatting if needed.\n\n### Response:",
+            n_predict: 1024,
+          },
+          null,
+          (chunk) => document.write(chunk.data.content)
+        )
+      </script>
+    </pre>
+  </body>
+</html>
+```
