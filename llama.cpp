@@ -1156,6 +1156,7 @@ static void llama_model_load_internal(
             }
         }
 #endif // GGML_USE_CUBLAS
+
 #if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
 
@@ -1164,6 +1165,10 @@ static void llama_model_load_internal(
             fprintf(stderr, "%s: offloading non-repeating layers to GPU\n", __func__);
         }
         size_t vram_kv_cache = 0;
+
+#ifdef GGML_USE_CUBLAS
+        const int max_backend_supported_layers = hparams.n_layer + 3;
+        const int max_offloadable_layers = low_vram ? hparams.n_layer + 1 : hparams.n_layer + 3;
         if (n_gpu_layers > (int) hparams.n_layer + 1) {
             if (low_vram) {
                 fprintf(stderr, "%s: cannot offload v cache to GPU due to low VRAM option\n", __func__);
@@ -1180,14 +1185,18 @@ static void llama_model_load_internal(
                 vram_kv_cache += MEM_REQ_KV_SELF().at(model.type) / 2;
             }
         }
-        const int max_offloadable_layers = low_vram ? hparams.n_layer + 1 : hparams.n_layer + 3;
+#elif defined(GGML_USE_CLBLAST)
+        const int max_backend_supported_layers = hparams.n_layer + 1;
+        const int max_offloadable_layers = hparams.n_layer + 1;
+#endif // GGML_USE_CUBLAS
+
         fprintf(stderr, "%s: offloaded %d/%d layers to GPU\n",
-                __func__, std::min(n_gpu_layers, max_offloadable_layers), hparams.n_layer + 3);
+                __func__, std::min(n_gpu_layers, max_offloadable_layers), max_backend_supported_layers);
         fprintf(stderr, "%s: total VRAM used: %zu MB\n",
                 __func__, (vram_weights + vram_scratch + vram_kv_cache + MB - 1) / MB); // round up
 #else
         (void) n_gpu_layers;
-#endif
+#endif // defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
     }
 
     // populate `tensors_by_name`
