@@ -8,4 +8,7 @@ cp -rpv ../ggml/src/ggml-opencl.cpp  ./ggml-opencl.cpp
 cp -rpv ../ggml/src/ggml-metal.h     ./ggml-metal.h
 cp -rpv ../ggml/src/ggml-metal.m     ./ggml-metal.m
 cp -rpv ../ggml/src/ggml-metal.metal ./ggml-metal.metal
-cp -rpv ../ggml/include/ggml/ggml.h ./ggml.h
+cp -rpv ../ggml/include/ggml/ggml.h  ./ggml.h
+
+cp -rpv ../ggml/tests/test-opt.c    ./tests/test-opt.c
+cp -rpv ../ggml/tests/test-grad0.c  ./tests/test-grad0.c
