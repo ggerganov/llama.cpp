@@ -3480,34 +3480,34 @@ llama_token llama_token_nl() {
     return 13;
 }
 
-llama_timings llama_get_timings(struct llama_context * ctx) {
-    llama_timings timings;
+struct llama_timings llama_get_timings(struct llama_context * ctx) {
+    struct llama_timings result = {
+        /*.t_start_ms  =*/ 1e-3 * ctx->t_start_us,
+        /*.t_end_ms    =*/ 1.00 * ggml_time_ms(),
+        /*.t_load_ms   =*/ 1e-3 * ctx->t_load_us,
+        /*.t_sample_ms =*/ 1e-3 * ctx->t_sample_us,
+        /*.t_p_eval_ms =*/ 1e-3 * ctx->t_p_eval_us,
+        /*.t_eval_ms   =*/ 1e-3 * ctx->t_eval_us,
 
-    timings.t_end_ms = ggml_time_ms();
-    timings.t_start_ms = 1e-3 * ctx->t_start_us;
-    timings.load_time_ms = 1e-3 * ctx->t_load_us;
-    timings.sample_time_ms = 1e-3 * ctx->t_sample_us;
-    timings.prompt_eval_time_ms = 1e-3 * ctx->t_p_eval_us;
-    timings.eval_time_ms = 1e-3 * ctx->t_eval_us;
+        /*.n_sample =*/ std::max(1, ctx->n_sample),
+        /*.n_p_eval =*/ std::max(1, ctx->n_p_eval),
+        /*.n_eval   =*/ std::max(1, ctx->n_eval),
+    };
 
-    timings.n_sample = std::max(1, ctx->n_sample);
-    timings.n_p_eval = std::max(1, ctx->n_p_eval);
-    timings.n_eval = std::max(1, ctx->n_eval);
-
-    return timings;
+    return result;
 }
 
 void llama_print_timings(struct llama_context * ctx) {
-    llama_timings timings = llama_get_timings(ctx);
+    const llama_timings timings = llama_get_timings(ctx);
 
     fprintf(stderr, "\n");
-    fprintf(stderr, "%s:        load time = %8.2f ms\n", __func__, timings.load_time_ms);
+    fprintf(stderr, "%s:        load time = %8.2f ms\n", __func__, timings.t_load_ms);
     fprintf(stderr, "%s:      sample time = %8.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
-            __func__, timings.sample_time_ms, timings.n_sample, timings.sample_time_ms / timings.n_sample, 1e3 / timings.sample_time_ms * timings.n_sample);
+            __func__, timings.t_sample_ms, timings.n_sample, timings.t_sample_ms / timings.n_sample, 1e3 / timings.t_sample_ms * timings.n_sample);
     fprintf(stderr, "%s: prompt eval time = %8.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n",
-            __func__, timings.prompt_eval_time_ms, timings.n_p_eval, timings.prompt_eval_time_ms / timings.n_p_eval, 1e3 / timings.prompt_eval_time_ms * timings.n_p_eval);
+            __func__, timings.t_p_eval_ms, timings.n_p_eval, timings.t_p_eval_ms / timings.n_p_eval, 1e3 / timings.t_p_eval_ms * timings.n_p_eval);
     fprintf(stderr, "%s:        eval time = %8.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
-            __func__, timings.eval_time_ms, timings.n_eval, timings.eval_time_ms / timings.n_eval, 1e3 / timings.eval_time_ms * timings.n_eval);
+            __func__, timings.t_eval_ms, timings.n_eval, timings.t_eval_ms / timings.n_eval, 1e3 / timings.t_eval_ms * timings.n_eval);
     fprintf(stderr, "%s:       total time = %8.2f ms\n", __func__, (timings.t_end_ms - timings.t_start_ms));
 }
 

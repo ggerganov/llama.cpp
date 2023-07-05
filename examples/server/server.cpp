@@ -915,14 +915,14 @@ static json format_timings(llama_server_context &llama)
 
     return json{
         {"prompt_n", timings.n_eval},
-        {"prompt_ms", timings.prompt_eval_time_ms},
-        {"prompt_per_token_ms", timings.prompt_eval_time_ms / timings.n_p_eval},
-        {"prompt_per_second", 1e3 / timings.prompt_eval_time_ms * timings.n_p_eval},
+        {"prompt_ms", timings.t_p_eval_ms},
+        {"prompt_per_token_ms", timings.t_p_eval_ms / timings.n_p_eval},
+        {"prompt_per_second", 1e3 / timings.t_p_eval_ms * timings.n_p_eval},
 
         {"predicted_n", timings.n_eval},
-        {"predicted_ms", timings.eval_time_ms},
-        {"predicted_per_token_ms", timings.eval_time_ms / timings.n_eval},
-        {"predicted_per_second", 1e3 / timings.eval_time_ms * timings.n_eval},
+        {"predicted_ms", timings.t_eval_ms},
+        {"predicted_per_token_ms", timings.t_eval_ms / timings.n_eval},
+        {"predicted_per_second", 1e3 / timings.t_eval_ms * timings.n_eval},
     };
 }
 

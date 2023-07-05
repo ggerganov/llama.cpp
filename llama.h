@@ -138,10 +138,10 @@ extern "C" {
     struct llama_timings {
         double t_start_ms;
         double t_end_ms;
-        double load_time_ms;
-        double sample_time_ms;
-        double prompt_eval_time_ms;
-        double eval_time_ms;
+        double t_load_ms;
+        double t_sample_ms;
+        double t_p_eval_ms;
+        double t_eval_ms;
 
         int32_t n_sample;
         int32_t n_p_eval;
@@ -345,7 +345,7 @@ extern "C" {
     LLAMA_API llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_array * candidates);
 
     // Performance information
-    LLAMA_API llama_timings llama_get_timings(struct llama_context * ctx);
+    LLAMA_API struct llama_timings llama_get_timings(struct llama_context * ctx);
     LLAMA_API void llama_print_timings(struct llama_context * ctx);
     LLAMA_API void llama_reset_timings(struct llama_context * ctx);
 
