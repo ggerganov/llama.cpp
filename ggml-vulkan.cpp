@@ -4,7 +4,9 @@
 #include <cblas.h>
 #include <cmath>
 #include <chrono>
+#endif
 
+#ifdef VK_PROFILE
 #define PROFILE(name, block) do { \
     auto begin = std::chrono::high_resolution_clock::now(); \
     block \
@@ -893,9 +895,6 @@ static void ggml_vk_h2d_tensor_2d(vk_buffer* dst, size_t offset, const struct gg
     }
     if (nb0 == ts) {
         PROFILE("ggml_vk_buffer_write_2d",
-        // for (uint64_t i1 = 0; i1 < ne1; i1++) {
-        //     ggml_vk_buffer_write(dst, offset + i1 * row_length, (uint8_t *)x + i1 * nb1, row_length, q);
-        // }
         ggml_vk_buffer_write_2d(dst, offset, x, nb1, row_length, ne1, q);
         );
         return;
@@ -1169,15 +1168,15 @@ static void ggml_vk_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
                 // VK_CHECK(vkSetKernelArg(*dmmv, 4, sizeof(vk_int), &ncols));
                 // VK_CHECK(vkEnqueueNDRangeKernel(queue, *dmmv, 1, NULL, &global, &local, events.size() - 1, events.data(), events.data() + ev_idx++));
             } else { // general dequantization kernel + VK matrix matrix multiplication
-                // copy src1 to device
-                ggml_vk_h2d_tensor_2d(&d_Y, 0, src1, i03, i02, vk_transfer_queues[1]);
-
                 // convert src0 to fp32 on device
                 // Wait for transfers to finish
                 vk_transfer_queues[0].queue.waitIdle();
 
                 vk_device.resetFences({ fence });
                 ggml_vk_dispatch_pipeline(*to_fp32_vk, {&d_Q, &d_X}, { (int)x_ne }, { (uint32_t)x_ne, 1, 1}, cmd_buffer, fence);
+
+                // copy src1 to device
+                ggml_vk_h2d_tensor_2d(&d_Y, 0, src1, i03, i02, vk_transfer_queues[1]);
 
                 // wait for conversion
                 vk::resultCheck(vk_device.waitForFences({ fence }, true, uint64_t(-1)), "matmul_q_f32 src0 convert waitForFences");
