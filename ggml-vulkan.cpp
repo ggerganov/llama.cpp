@@ -16,7 +16,7 @@
 #include <kompute/Kompute.hpp>
 
 #ifndef __STDC_IEC_559__
-#error Your C implementation is not IEC 559 compliant, which is required for proper Vulkan interop.
+#warning Your C implementation is not IEC 559 compliant, which is required for proper Vulkan interop.
 #endif
 
 #define MULTILINE_QUOTE(...) #__VA_ARGS__
