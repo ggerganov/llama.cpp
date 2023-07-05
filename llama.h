@@ -134,6 +134,20 @@ extern "C" {
         bool quantize_output_tensor; // quantize output.weight
     } llama_model_quantize_params;
 
+    // performance timing information
+    struct llama_timings {
+        double t_start_ms;
+        double t_end_ms;
+        double t_load_ms;
+        double t_sample_ms;
+        double t_p_eval_ms;
+        double t_eval_ms;
+
+        int32_t n_sample;
+        int32_t n_p_eval;
+        int32_t n_eval;
+    };
+
     LLAMA_API struct llama_context_params llama_context_default_params();
     LLAMA_API struct llama_model_quantize_params llama_model_quantize_default_params();
 
@@ -331,6 +345,7 @@ extern "C" {
     LLAMA_API llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_array * candidates);
 
     // Performance information
+    LLAMA_API struct llama_timings llama_get_timings(struct llama_context * ctx);
     LLAMA_API void llama_print_timings(struct llama_context * ctx);
     LLAMA_API void llama_reset_timings(struct llama_context * ctx);
 
