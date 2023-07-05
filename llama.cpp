@@ -2404,9 +2404,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 int ny = tensor.ne.at(1);
                 if (nx % QK_K != 0 || ny % QK_K != 0) {
                     fprintf(stderr, "\n\n========================= Tensor sizes %d x %d are not divisible by %d\n",nx,ny,QK_K);
-                    fprintf(stderr, "This is required to be able to use k-quants for now!\n");
+                    fprintf(stderr, "Verify before using\n");
                     fprintf(stderr, "========================================================================================\n\n");
-                    throw std::runtime_error("Unsupported tensor size encountered\n");
+                   // throw std::runtime_error("Unsupported tensor size encountered\n");
                 }
             }
             if (tensor.name == "output.weight") {
