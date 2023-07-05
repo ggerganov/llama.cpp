@@ -1,6 +1,6 @@
 # llama.cpp/example/server
 
-This example demonstrates a simple HTTP API server to interact with llama.cpp.
+This example demonstrates a simple HTTP API server and a simple web front end to interact with llama.cpp.
 
 Command line options:
 
@@ -21,6 +21,7 @@ Command line options:
 -   `-to N`, `--timeout N`: Server read/write timeout in seconds. Default `600`.
 -   `--host`: Set the hostname or ip address to listen. Default `127.0.0.1`.
 -   `--port`: Set the port to listen. Default: `8080`.
+-   `--public`: path from which to serve static files (default examples/server/public)
 -   `--embedding`: Enable embedding extraction, Default: disabled.
 
 ## Build
@@ -59,7 +60,7 @@ server.exe -m models\7B\ggml-model.bin -c 2048
 ```
 
 The above command will start a server that by default listens on `127.0.0.1:8080`.
-You can consume the endpoints with Postman or NodeJS with axios library.
+You can consume the endpoints with Postman or NodeJS with axios library. You can visit the web front end at the same url.
 
 ## Testing with CURL
 
