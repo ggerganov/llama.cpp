@@ -16176,31 +16176,29 @@ struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
                     if (ggml_cuda_can_mul_mat(node->src0, node->src1, node)) {
                         n_tasks = 1; // TODO: this actually is doing nothing
                                      //       the threads are still spinning
-                    }
-                    else
+                    } else
 #elif defined(GGML_USE_CLBLAST)
-                        if (ggml_cl_can_mul_mat(node->src0, node->src1, node)) {
-                            n_tasks = 1; // TODO: this actually is doing nothing
-                                         //       the threads are still spinning
-                            cur = ggml_cl_mul_mat_get_wsize(node->src0, node->src1, node);
-                        }
-                        else
+                    if (ggml_cl_can_mul_mat(node->src0, node->src1, node)) {
+                        n_tasks = 1; // TODO: this actually is doing nothing
+                                     //       the threads are still spinning
+                        cur = ggml_cl_mul_mat_get_wsize(node->src0, node->src1, node);
+                    } else
 #endif
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-                            if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
-                                n_tasks = 1; // TODO: this actually is doing nothing
-                                             //       the threads are still spinning
-                                if (node->src0->type != GGML_TYPE_F32) {
-                                    // here we need memory just for single 2D matrix from src0
-                                    cur = GGML_TYPE_SIZE[GGML_TYPE_F32]*(node->src0->ne[0]*node->src0->ne[1]);
-                                }
-                            } else
+                    if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
+                        n_tasks = 1; // TODO: this actually is doing nothing
+                                     //       the threads are still spinning
+                        if (node->src0->type != GGML_TYPE_F32) {
+                            // here we need memory just for single 2D matrix from src0
+                            cur = GGML_TYPE_SIZE[GGML_TYPE_F32]*(node->src0->ne[0]*node->src0->ne[1]);
+                        }
+                    } else
 #endif
-                                if (node->src1->type != vec_dot_type) {
-                                    cur = GGML_TYPE_SIZE[vec_dot_type]*ggml_nelements(node->src1)/GGML_BLCK_SIZE[vec_dot_type];
-                                } else {
-                                    cur = 0;
-                                }
+                    if (node->src1->type != vec_dot_type) {
+                        cur = GGML_TYPE_SIZE[vec_dot_type]*ggml_nelements(node->src1)/GGML_BLCK_SIZE[vec_dot_type];
+                    } else {
+                        cur = 0;
+                    }
 
                     work_size = MAX(work_size, cur);
                 } break;
