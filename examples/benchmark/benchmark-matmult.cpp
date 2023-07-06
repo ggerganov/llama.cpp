@@ -20,6 +20,17 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, int n_threads) {
+    struct ggml_cplan plan = ggml_graph_plan(graph, n_threads);
+
+    if (plan.work_size > 0) {
+        buf.resize(plan.work_size);
+        plan.work_data = buf.data();
+    }
+
+    ggml_graph_compute(graph, &plan);
+}
+
 float tensor_sum_elements(const ggml_tensor * tensor) {
     float sum = 0;
     if (tensor->type==GGML_TYPE_F32) {
@@ -166,14 +177,7 @@ int main(int argc, char ** argv)  {
 
     std::vector<uint8_t> work_buffer;
 
-    {
-        ggml_cplan pf = ggml_graph_plan(&gf, benchmark_params.n_threads);
-        if (pf.work_size > 0) {
-            work_buffer.resize(pf.work_size);
-            pf.work_data = work_buffer.data();
-        }
-        ggml_graph_compute(&gf, &pf);
-    }
+    ggml_graph_compute_helper(work_buffer, &gf, benchmark_params.n_threads);
 
     TENSOR_DUMP(gf.nodes[0]);
 
@@ -227,14 +231,7 @@ int main(int argc, char ** argv)  {
 
         long long int start = ggml_time_us();
         //printf("Running ggml_graph_compute\n");
-        {
-            ggml_cplan pf31 = ggml_graph_plan(&gf31, benchmark_params.n_threads);
-            if (pf31.work_size > 0) {
-                work_buffer.resize(pf31.work_size);
-                pf31.work_data = work_buffer.data();
-            }
-            ggml_graph_compute(&gf31, &pf31);
-        }
+        ggml_graph_compute_helper(work_buffer, &gf31, benchmark_params.n_threads);
 
         long long int stop = ggml_time_us();
         long long int usec = stop-start;
@@ -267,14 +264,7 @@ int main(int argc, char ** argv)  {
         }
 
         // Running a different graph computation to make sure we override the CPU cache lines
-        {
-            ggml_cplan pf32 = ggml_graph_plan(&gf32, benchmark_params.n_threads);
-            if (pf32.work_size > 0) {
-                work_buffer.resize(pf32.work_size);
-                pf32.work_data = work_buffer.data();
-            }
-            ggml_graph_compute(&gf32, &pf32);
-        }
+        ggml_graph_compute_helper(work_buffer, &gf32, benchmark_params.n_threads);
     }
     printf("\n");
     printf("Average%78.2f\n",gflops_sum/((double)benchmark_params.n_iterations));
