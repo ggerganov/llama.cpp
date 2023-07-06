@@ -60,6 +60,17 @@ float frand_uniform(struct random_uniform_distribution * rnd) {
     return rnd->rd(rnd->gen);
 }
 
+void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, int n_threads) {
+    struct ggml_cplan plan = ggml_graph_plan(graph, n_threads);
+
+    if (plan.work_size > 0) {
+        buf.resize(plan.work_size);
+        plan.work_data = buf.data();
+    }
+
+    ggml_graph_compute(graph, &plan);
+}
+
 struct ggml_tensor * randomize_tensor_normal(struct ggml_tensor * tensor, struct random_normal_distribution * rnd) {
     float scale = 1.0f; // xavier
     switch (tensor->n_dims) {
@@ -3246,14 +3257,7 @@ int main(int argc, char ** argv) {
             *gb = ggml_build_backward(ctx0, gf, true);
         }
 
-        {
-            ggml_cplan pf = ggml_graph_plan(gf, params.n_threads);
-            if (pf.work_size > 0) {
-                work_buffer.resize(pf.work_size);
-                pf.work_data = work_buffer.data();
-            }
-            ggml_graph_compute(gf, &pf);
-        }
+        ggml_graph_compute_helper(work_buffer, gf, params.n_threads);
 
         size_t used_mem_before_opt = ggml_used_mem(ctx0);
 
@@ -3277,14 +3281,7 @@ int main(int argc, char ** argv) {
         model.train_samples += n_batch;
         model.train_tokens  += n_batch * n_tokens;
 
-        {
-            ggml_cplan pf = ggml_graph_plan(gf, params.n_threads);
-            if (pf.work_size > 0) {
-                work_buffer.resize(pf.work_size);
-                pf.work_data = work_buffer.data();
-            }
-            ggml_graph_compute(gf, &pf);
-        }
+        ggml_graph_compute_helper(work_buffer, gf, params.n_threads);
 
         float error_after_opt = ggml_get_f32_1d(loss, 0);
 
@@ -3371,15 +3368,7 @@ int main(int argc, char ** argv) {
             struct ggml_tensor * logits = forward(&model, &kv_self, ctx0, &gf, tokens_input, sample_ctx, n_past);
 
             ggml_build_forward_expand(&gf, logits);
-
-            {
-                ggml_cplan pf = ggml_graph_plan(&gf, params.n_threads);
-                if (pf.work_size > 0) {
-                    work_buffer.resize(pf.work_size);
-                    pf.work_data = work_buffer.data();
-                }
-                ggml_graph_compute(&gf, &pf);
-            }
+            ggml_graph_compute_helper(work_buffer, &gf, params.n_threads);
 
             //struct ggml_tensor * best_samples = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, sample_ctx);
             //struct ggml_tensor * probs        = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_vocab, sample_ctx);

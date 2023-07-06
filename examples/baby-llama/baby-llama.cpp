@@ -31,6 +31,17 @@ float frand_normal(struct random_normal_distribution * rnd) {
     return ((r < rnd->min) ? (rnd->min) : (r > rnd->max) ? (rnd->max) : r);
 }
 
+void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, int n_threads) {
+    struct ggml_cplan plan = ggml_graph_plan(graph, n_threads);
+
+    if (plan.work_size > 0) {
+        buf.resize(plan.work_size);
+        plan.work_data = buf.data();
+    }
+
+    ggml_graph_compute(graph, &plan);
+}
+
 struct ggml_tensor * randomize_tensor(
         struct ggml_tensor * tensor,
         int ndims,
@@ -1596,15 +1607,7 @@ int main(int argc, char ** argv) {
         struct ggml_tensor * e = square_error_loss(ctx0, targets, logits);
 
         ggml_build_forward_expand(&gf, e);
-
-        {
-            struct ggml_cplan pf = ggml_graph_plan(&gf, /*n_threads*/ 1);
-            if (pf.work_size > 0) {
-                work_buffer.resize(pf.work_size);
-                pf.work_data = work_buffer.data();
-            }
-            ggml_graph_compute(&gf, &pf);
-        }
+        ggml_graph_compute_helper(work_buffer, &gf, /*n_threads*/ 1);
 
         float error_before_opt = ggml_get_f32_1d(e, 0);
 
@@ -1620,15 +1623,7 @@ int main(int argc, char ** argv) {
         ggml_opt(ctx0, opt_params_lbfgs, e);
         //
         ggml_build_forward_expand(&gf, e);
-
-        {
-            struct ggml_cplan pf = ggml_graph_plan(&gf, /*n_threads*/ 1);
-            if (pf.work_size > 0) {
-                work_buffer.resize(pf.work_size);
-                pf.work_data = work_buffer.data();
-            }
-            ggml_graph_compute(&gf, &pf);
-        }
+        ggml_graph_compute_helper(work_buffer, &gf, /*n_threads*/ 1);
 
         float error_after_opt = ggml_get_f32_1d(e, 0);
 
@@ -1681,15 +1676,7 @@ int main(int argc, char ** argv) {
             struct ggml_tensor * logits = forward(&model, &kv_self, ctx0, &gf, tokens_input, sample_ctx, n_past);
 
             ggml_build_forward_expand(&gf, logits);
-
-            {
-                struct ggml_cplan pf = ggml_graph_plan(&gf, /*n_threads*/ 1);
-                if (pf.work_size > 0) {
-                    work_buffer.resize(pf.work_size);
-                    pf.work_data = work_buffer.data();
-                }
-                ggml_graph_compute(&gf, &pf);
-            }
+            ggml_graph_compute_helper(work_buffer, &gf, /*n_threads*/ 1);
 
             struct ggml_tensor * best_samples = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, sample_ctx);
             struct ggml_tensor * probs        = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_vocab, sample_ctx);
@@ -1711,10 +1698,11 @@ int main(int argc, char ** argv) {
     }
 
     print_matrix(model.tok_embeddings);
-
     printf("done\n");
+
     // ggml_free(kv_self.ctx);
     // ggml_free(model_lora.ctx);
     ggml_free(model.ctx);
+
     return 0;
 }

@@ -65,18 +65,7 @@
 //       ggml_set_f32(a, 3.0f);
 //       ggml_set_f32(b, 4.0f);
 //
-//       struct ggml_cplan pf = ggml_graph_compute_make_plan(&gf, n_threads);
-//
-//       if (pf.work_size > 0) {
-//           pf.work_data = malloc(pf.work_size);
-//           GGML_ASSERT(pf.work_data);
-//       }
-//
-//       ggml_graph_compute(&gf, &pf);
-//
-//       if (pf.work_data) {
-//           free(pf.work_data);
-//       }
+//       ggml_graph_compute_with_ctx(ctx, &gf, n_threads);
 //
 //       printf("f = %f\n", ggml_get_f32_1d(f, 0));
 //
