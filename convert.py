@@ -219,6 +219,8 @@ class XgenVocab:
         for index in range(0, self.vocab_size_base):
             token = self.xt._convert_id_to_token(index)
             yield (token, float(index))
+        for index in range(self.vocab_size_base, self.vocab_size):
+            yield (b'', float(index))
 
     def __repr__(self) -> str:
         return f"<XgenVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
@@ -976,6 +978,9 @@ def check_vocab_size(params: Params, vocab: Vocab) -> None:
             print("Ignoring added_tokens.json since model matches vocab size without it.")
             vocab.added_tokens_list = []
             vocab.vocab_size = vocab.vocab_size_base
+            return
+        if isinstance(vocab, XgenVocab):
+            vocab.vocab_size = params.n_vocab
             return
         msg = f"Vocab size mismatch (model has {params.n_vocab}, but {vocab.fname_tokenizer}"
         if vocab.fname_added_tokens is not None:
