@@ -1613,14 +1613,11 @@ static bool llama_eval_internal(
     // run the computation
     ggml_build_forward_expand(&gf, cur);
 
-    bool call_ggml_graph_compute = true;
-
 #ifdef GGML_USE_METAL
     if (lctx.ctx_metal && N == 1) {
         ggml_metal_set_n_cb     (lctx.ctx_metal, n_threads);
         ggml_metal_graph_compute(lctx.ctx_metal, &gf);
         ggml_metal_get_tensor   (lctx.ctx_metal, cur);
-        call_ggml_graph_compute = false;
     } else {
         // IMPORTANT:
         // Since we don't have efficient Matrix x Matrix Metal multiplication yet, we fallback to vanilla
@@ -1637,12 +1634,12 @@ static bool llama_eval_internal(
             ggml_metal_get_tensor(lctx.ctx_metal, kv_self.k);
             ggml_metal_get_tensor(lctx.ctx_metal, kv_self.v);
         }
-    }
-#endif
 
-    if (call_ggml_graph_compute) {
         ggml_graph_compute_helper(lctx.work_buffer, &gf, n_threads);
     }
+#else
+    ggml_graph_compute_helper(lctx.work_buffer, &gf, n_threads);
+#endif
 
     if (cgraph_fname) {
         ggml_graph_export(&gf, cgraph_fname);
