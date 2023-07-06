@@ -126,6 +126,16 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_Q6_K          = 18,// except 1d tensors
     };
 
+    enum llama_finetune_type {
+        LLAMA_FINETUNE_FULL             = 0x01,
+        LLAMA_FINETUNE_LORA             = 0x10,
+
+        LLAMA_FINETUNE_LORA_W           = 0x1000, // valid only LoRA
+        LLAMA_FINETUNE_LORA_K           = 0x2000,
+        LLAMA_FINETUNE_LORA_Q           = 0x4000,
+        LLAMA_FINETUNE_LORA_V           = 0x8000,
+    };
+
     // model quantization parameters
     typedef struct llama_model_quantize_params {
         int nthread;                 // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
@@ -241,6 +251,11 @@ extern "C" {
     //       parameters here to keep things simple
     // IMPORTANT: do not use for anything else other than debugging and testing!
     LLAMA_API int llama_eval_export(struct llama_context * ctx, const char * fname);
+
+    // Enable finetune on the context, flags indicate what type of finetune
+    LLAMA_API int llama_enable_finetune(struct llama_context * ctx, enum llama_finetune_type flags);
+
+    LLAMA_API int llama_finetune(struct llama_context * ctx, void * input, void * output);
 
     // Convert the provided text into tokens.
     // The tokens pointer must be large enough to hold the resulting tokens.

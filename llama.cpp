@@ -193,6 +193,14 @@ struct llama_layer {
     struct ggml_tensor * w3;
 };
 
+struct llama_lora_layers {
+    // LoRA optional
+    struct ggml_tensor * wq_a;
+    struct ggml_tensor * wq_b;
+    struct ggml_tensor * wv_a;
+    struct ggml_tensor * wv_b;
+};
+
 struct llama_kv_cache {
     struct ggml_tensor * k = NULL;
     struct ggml_tensor * v = NULL;
@@ -303,6 +311,7 @@ struct llama_context {
 
     const llama_model & model;
     const llama_vocab & vocab;
+    std::vector<llama_lora_layers> lora_layers;
 
     bool model_owner = false;
 
@@ -2709,7 +2718,7 @@ int llama_model_quantize(
     }
 }
 
-int llama_apply_lora_from_file_internal(const struct llama_model & model, const char * path_lora, const char * path_base_model, int n_threads) {
+static int llama_apply_lora_from_file_internal(const struct llama_model & model, const char * path_lora, const char * path_base_model, int n_threads) {
     fprintf(stderr, "%s: applying lora adapter from '%s' - please wait ...\n", __func__, path_lora);
 
     const int64_t t_start_lora_us = ggml_time_us();
@@ -3524,4 +3533,55 @@ const char * llama_print_system_info(void) {
 // For internal test use
 const std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx) {
     return ctx->model.tensors_by_name;
+}
+
+// finetune related code
+int llama_enable_finetune(struct llama_context * ctx, enum llama_finetune_type flags, int n_lora) {
+    auto model = &ctx->model;
+    const auto& hparams = model->hparams;
+
+    const uint32_t n_layer = hparams.n_layer;
+    const uint32_t n_embd  = hparams.n_embd;
+
+    struct ggml_context* ctx0 = model->ctx;
+
+    if (flags & LLAMA_FINETUNE_FULL) {
+        ggml_set_param(ctx0, model->tok_embeddings);
+        ggml_set_param(ctx0, model->norm);
+
+        for (uint32_t i = 0; i < n_layer; ++i) {
+            auto & layer = model->layers[i];
+
+            ggml_set_param(ctx0, layer.attention_norm);
+            ggml_set_param(ctx0, layer.wq);
+            ggml_set_param(ctx0, layer.wk);
+            ggml_set_param(ctx0, layer.wv);
+            ggml_set_param(ctx0, layer.wo);
+            ggml_set_param(ctx0, layer.ffn_norm);
+            ggml_set_param(ctx0, layer.w1);
+            ggml_set_param(ctx0, layer.w2);
+            ggml_set_param(ctx0, layer.w3);
+        }
+    } else if (flags & LLAMA_FINETUNE_LORA) {
+        // create AB tensor if they are not present
+        for (uint32_t i = 0; i < n_layer; ++i) {
+            llama_lora_layers layer = {0};
+
+            if (flags & LLAMA_FINETUNE_LORA_Q) {
+                if (layer.wq_a == nullptr || layer.wq_b == nullptr) {
+                    layer.wq_a = ggml_new_tensor_2d(ctx0, GGML_TYPE_F16, n_lora, n_embd);
+                    layer.wq_b = ggml_new_tensor_2d(ctx0, GGML_TYPE_F16, n_embd, n_lora);
+                    // initialize
+                }
+                ggml_set_param(ctx0, layer.wq_a);
+                ggml_set_param(ctx0, layer.wq_b);
+            }
+
+            if (flags & LLAMA_FINETUNE_LORA_Q) {
+
+            }
+        }
+    }
+
+    return 0;
 }
