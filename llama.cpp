@@ -1268,7 +1268,7 @@ static bool llama_eval_internal(
            const float * embd,
              const int   n_tokens,
              const int   n_past,
-             const int   n_threads,
+                   int   n_threads,
             const char * cgraph_fname) {
 
     LLAMA_ASSERT((!tokens && embd) || (tokens && !embd));
@@ -1309,10 +1309,11 @@ static bool llama_eval_internal(
 
     struct ggml_context * ctx0 = ggml_init(params);
 
+    ggml_cgraph gf = {};
+
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
-    ggml_cgraph gf = {};
-    const int actual_n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
+    n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
 
     struct ggml_tensor * cur;
     struct ggml_tensor * inpL;
@@ -1622,7 +1623,7 @@ static bool llama_eval_internal(
 #endif
 
     if (call_ggml_graph_compute) {
-        ggml_cplan pf = ggml_graph_plan(&gf, actual_n_threads);
+        ggml_cplan pf = ggml_graph_plan(&gf, n_threads);
         if (pf.work_size > 0) {
             lctx.work_buffer.resize(pf.work_size);
             pf.work_data = lctx.work_buffer.data();
