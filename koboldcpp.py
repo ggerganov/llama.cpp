@@ -608,7 +608,7 @@ def show_new_gui():
         return
 
     nextstate = 0 #0=exit, 1=launch, 2=oldgui
-    windowwidth = 480
+    windowwidth = 520
     windowheight = 480
     ctk.set_appearance_mode("dark")
     root = ctk.CTk()
@@ -617,7 +617,7 @@ def show_new_gui():
     root.title("KoboldCpp v"+KcppVersion)
     root.resizable(False,False)
 
-    tabs = ctk.CTkFrame(root, corner_radius = 0, width=windowwidth, height=windowheight-40)
+    tabs = ctk.CTkFrame(root, corner_radius = 0, width=windowwidth, height=windowheight-50)
     tabs.grid(row=0, stick="nsew")
     tabnames= ["Quick Launch", "Hardware", "Tokens", "Model", "Network"]
     navbuttons = {}
@@ -786,7 +786,7 @@ def show_new_gui():
     # presets selector
     makelabel(quick_tab, "Presets:", 1)
 
-    runoptbox = ctk.CTkComboBox(quick_tab, values=runopts, width=150,variable=runopts_var, state="readonly")
+    runoptbox = ctk.CTkComboBox(quick_tab, values=runopts, width=180,variable=runopts_var, state="readonly")
     runoptbox.grid(row=1, column=1,padx=8, stick="nw")
     runoptbox.set("Use OpenBLAS")
 
@@ -818,7 +818,7 @@ def show_new_gui():
 
     # presets selector
     makelabel(hardware_tab, "Presets:", 1)
-    runoptbox = ctk.CTkComboBox(hardware_tab, values=runopts,  width=150,variable=runopts_var, state="readonly")
+    runoptbox = ctk.CTkComboBox(hardware_tab, values=runopts,  width=180,variable=runopts_var, state="readonly")
     runoptbox.grid(row=1, column=1,padx=8, stick="nw")
     runoptbox.set("Use OpenBLAS")
     runopts_var.trace('w', changerunmode)
@@ -914,12 +914,12 @@ def show_new_gui():
         root.destroy()
         pass
 
-    ctk.CTkButton(tabs , text = "Launch", fg_color="#2f8d3c", command = guilaunch, width=50, height = 25 ).grid(row=1,column=1, stick="se", padx= 25, pady=5)
+    ctk.CTkButton(tabs , text = "Launch", fg_color="#2f8d3c", command = guilaunch, width=80, height = 35 ).grid(row=1,column=1, stick="se", padx= 25, pady=5)
 
-    # ctk.CTkButton(tabs , text = "Save", fg_color="#084a66", command = save_config, width=60, height = 25 ).grid(row=1,column=1, stick="sw", padx= 5, pady=5)
-    # ctk.CTkButton(tabs , text = "Load", fg_color="#084a66", command = load_config, width=60, height = 25 ).grid(row=1,column=1, stick="sw", padx= 70, pady=5)
+    # ctk.CTkButton(tabs , text = "Save", fg_color="#084a66", command = save_config, width=60, height = 35 ).grid(row=1,column=1, stick="sw", padx= 5, pady=5)
+    # ctk.CTkButton(tabs , text = "Load", fg_color="#084a66", command = load_config, width=60, height = 35 ).grid(row=1,column=1, stick="sw", padx= 70, pady=5)
 
-    ctk.CTkButton(tabs , text = "Old GUI", fg_color="#084a66", command = switch_old_gui, width=100, height = 25 ).grid(row=1,column=0, stick="sw", padx= 5, pady=5)
+    ctk.CTkButton(tabs , text = "Old GUI", fg_color="#084a66", command = switch_old_gui, width=100, height = 35 ).grid(row=1,column=0, stick="sw", padx= 5, pady=5)
     # runs main loop until closed or launch clicked
     root.mainloop()
 
