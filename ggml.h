@@ -1514,9 +1514,15 @@ extern "C" {
     // Internal types and functions exposed for tests and benchmarks
     //
 
-    typedef void (*ggml_to_float_t)(const void * x, float * y, int k);
-    typedef void (*ggml_from_float_t)(const float * x, void * y, int k);
-    typedef void (*ggml_vec_dot_t)(const int n, float * s, const void * x, const void * y);
+#ifdef  __cplusplus
+// restrict not standard in C++
+#define GGML_RESTRICT
+#else
+#define GGML_RESTRICT restrict
+#endif
+    typedef void (*ggml_to_float_t)  (const void  * GGML_RESTRICT x, float * GGML_RESTRICT y, int k);
+    typedef void (*ggml_from_float_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int k);
+    typedef void (*ggml_vec_dot_t)   (const int n, float * GGML_RESTRICT s, const void * GGML_RESTRICT x, const void * GGML_RESTRICT y);
 
     typedef struct {
         ggml_to_float_t   to_float;
