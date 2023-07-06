@@ -164,15 +164,15 @@ int main(int argc, char ** argv)  {
     TENSOR_DUMP(m11);
     TENSOR_DUMP(m2);
 
-    auto compute_plan_buffer = std::vector<uint8_t>();
+    std::vector<uint8_t> work_buffer;
 
     {
-        auto plan = ggml_graph_compute_make_plan(&gf, benchmark_params.n_threads);
-        if (plan.work_size > 0) {
-            compute_plan_buffer.resize(plan.work_size);
-            plan.work_data = compute_plan_buffer.data();
+        ggml_cplan pf = ggml_graph_plan(&gf, benchmark_params.n_threads);
+        if (pf.work_size > 0) {
+            work_buffer.resize(pf.work_size);
+            pf.work_data = work_buffer.data();
         }
-        ggml_graph_compute(&plan, &gf);
+        ggml_graph_compute(&gf, &pf);
     }
 
     TENSOR_DUMP(gf.nodes[0]);
@@ -228,12 +228,12 @@ int main(int argc, char ** argv)  {
         long long int start = ggml_time_us();
         //printf("Running ggml_graph_compute\n");
         {
-            auto plan = ggml_graph_compute_make_plan(&gf31, benchmark_params.n_threads);
-            if (plan.work_size > 0) {
-                compute_plan_buffer.resize(plan.work_size);
-                plan.work_data = compute_plan_buffer.data();
+            ggml_cplan pf31 = ggml_graph_plan(&gf31, benchmark_params.n_threads);
+            if (pf31.work_size > 0) {
+                work_buffer.resize(pf31.work_size);
+                pf31.work_data = work_buffer.data();
             }
-            ggml_graph_compute(&plan, &gf31);
+            ggml_graph_compute(&gf31, &pf31);
         }
 
         long long int stop = ggml_time_us();
@@ -268,12 +268,12 @@ int main(int argc, char ** argv)  {
 
         // Running a different graph computation to make sure we override the CPU cache lines
         {
-            auto plan = ggml_graph_compute_make_plan(&gf32, benchmark_params.n_threads);
-            if (plan.work_size > 0) {
-                compute_plan_buffer.resize(plan.work_size);
-                plan.work_data = compute_plan_buffer.data();
+            ggml_cplan pf32 = ggml_graph_plan(&gf32, benchmark_params.n_threads);
+            if (pf32.work_size > 0) {
+                work_buffer.resize(pf32.work_size);
+                pf32.work_data = work_buffer.data();
             }
-            ggml_graph_compute(&plan, &gf32);
+            ggml_graph_compute(&gf32, &pf32);
         }
     }
     printf("\n");

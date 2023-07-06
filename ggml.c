@@ -15942,7 +15942,7 @@ void clear_numa_thread_affinity(void) {}
 
 struct ggml_compute_state_shared {
     const struct ggml_cgraph * cgraph;
-    const struct ggml_graph_compute_plan * plan;
+    const struct ggml_cplan  * cplan;
 
     int64_t perf_node_start_cycles;
     int64_t perf_node_start_time_us;
@@ -15971,12 +15971,13 @@ static void ggml_graph_compute_perf_stats_node(struct ggml_tensor * node, const 
 
 static thread_ret_t ggml_graph_compute_thread(void * data) {
     struct ggml_compute_state * state = (struct ggml_compute_state *) data;
+
     const struct ggml_cgraph * cgraph = state->shared->cgraph;
+    const struct ggml_cplan  * cplan  = state->shared->cplan;
 
-    const struct ggml_graph_compute_plan * plan = state->shared->plan;
-    const int * n_tasks_arr = plan->n_tasks;
+    const int * n_tasks_arr = cplan->n_tasks;
+    const int   n_threads   = state->shared->n_threads;
 
-    const int n_threads = state->shared->n_threads;
     set_numa_thread_affinity(state->ith, n_threads);
 
     int node_n = -1;
@@ -15989,8 +15990,8 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                 /*.type  =*/ GGML_TASK_FINALIZE,
                 /*.ith   =*/ 0,
                 /*.nth   =*/ 0,
-                /*.wsize =*/ plan->work_size,
-                /*.wdata =*/ plan->work_data,
+                /*.wsize =*/ cplan->work_size,
+                /*.wdata =*/ cplan->work_data,
             };
 
             if (node_n != -1) {
@@ -16059,8 +16060,8 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             /*.type  =*/ GGML_TASK_COMPUTE,
             /*.ith   =*/ state->ith,
             /*.nth   =*/ n_tasks,
-            /*.wsize =*/ plan->work_size,
-            /*.wdata =*/ plan->work_data,
+            /*.wsize =*/ cplan->work_size,
+            /*.wdata =*/ cplan->work_data,
         };
 
         if (state->ith < n_tasks) {
@@ -16072,14 +16073,16 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 }
 
 // Prepare for graph computing.
-struct ggml_graph_compute_plan ggml_graph_compute_make_plan(struct ggml_cgraph * cgraph, int n_threads) {
+struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
     if (n_threads <= 0) {
         n_threads = GGML_DEFAULT_N_THREADS;
     }
 
-    struct ggml_graph_compute_plan plan;
-    memset(&plan, 0, sizeof(struct ggml_graph_compute_plan));
-    int * n_tasks = plan.n_tasks;
+    struct ggml_cplan cplan;
+    memset(&cplan, 0, sizeof(struct ggml_cplan));
+
+    int * n_tasks = cplan.n_tasks;
+
     size_t work_size = 0;
 
     // initialize tasks + work buffer
@@ -16403,34 +16406,34 @@ struct ggml_graph_compute_plan ggml_graph_compute_make_plan(struct ggml_cgraph *
         work_size += CACHE_LINE_SIZE*(n_threads - 1);
     }
 
-    plan.n_threads = n_threads;
-    plan.work_size = work_size;
-    plan.work_data = NULL;
+    cplan.n_threads = n_threads;
+    cplan.work_size = work_size;
+    cplan.work_data = NULL;
 
-    return plan;
+    return cplan;
 }
 
-void ggml_graph_compute(struct ggml_graph_compute_plan * plan, struct ggml_cgraph * cgraph) {
+void ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
     {
-        GGML_ASSERT(plan);
-        GGML_ASSERT(plan->n_threads > 0);
+        GGML_ASSERT(cplan);
+        GGML_ASSERT(cplan->n_threads > 0);
 
-        if (plan->work_size > 0) {
-            GGML_ASSERT(plan->work_data);
+        if (cplan->work_size > 0) {
+            GGML_ASSERT(cplan->work_data);
         }
 
         for (int i = 0; i < cgraph->n_nodes; ++i) {
             if (cgraph->nodes[i]->op != GGML_OP_NONE) {
-                GGML_ASSERT(plan->n_tasks[i] > 0);
+                GGML_ASSERT(cplan->n_tasks[i] > 0);
             }
         }
     }
 
-    const int n_threads = plan->n_threads;
+    const int n_threads = cplan->n_threads;
 
     struct ggml_compute_state_shared state_shared = {
         /*.cgraph                  =*/ cgraph,
-        /*.cgraph_plan             =*/ plan,
+        /*.cgraph_plan             =*/ cplan,
         /*.perf_node_start_cycles  =*/ 0,
         /*.perf_node_start_time_us =*/ 0,
         /*.n_threads               =*/ n_threads,
@@ -16491,17 +16494,19 @@ void ggml_graph_compute(struct ggml_graph_compute_plan * plan, struct ggml_cgrap
 }
 
 // TODO: avoid allocating memory frequently.
-static void ggml_graph_compute_sugar(struct ggml_cgraph * cgraph, int n_threads) {
-    struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(cgraph, n_threads);
-    if (plan.work_size > 0) {
-        plan.work_data = malloc(plan.work_size);
-        GGML_ASSERT(plan.work_data);
+// TODO: make part of public API - use different name and put warning that it makes allocations
+static void ggml_graph_compute_helper(struct ggml_cgraph * cgraph, int n_threads) {
+    struct ggml_cplan cplan = ggml_graph_plan(cgraph, n_threads);
+
+    if (cplan.work_size > 0) {
+        cplan.work_data = malloc(cplan.work_size);
+        GGML_ASSERT(cplan.work_data);
     }
 
-    ggml_graph_compute(&plan, cgraph);
+    ggml_graph_compute(cgraph, &cplan);
 
-    if (plan.work_data) {
-        free(plan.work_data);
+    if (cplan.work_data) {
+        free(cplan.work_data);
     }
 }
 
@@ -17341,7 +17346,7 @@ static enum ggml_opt_result ggml_opt_adam(
     ggml_graph_reset  (gf);
     ggml_set_f32      (f->grad, 1.0f);
 
-    ggml_graph_compute_sugar(gb, params.n_threads);
+    ggml_graph_compute_helper(gb, params.n_threads);
 
     opt->adam.fx_prev = ggml_get_f32_1d(f, 0);
     opt->adam.fx_best = opt->adam.fx_prev;
@@ -17422,7 +17427,7 @@ static enum ggml_opt_result ggml_opt_adam(
         ggml_graph_reset  (gf);
         ggml_set_f32      (f->grad, 1.0f);
 
-        ggml_graph_compute_sugar(gb, params.n_threads);
+        ggml_graph_compute_helper(gb, params.n_threads);
 
         const float fx = ggml_get_f32_1d(f, 0);
 
@@ -17544,7 +17549,7 @@ static enum ggml_opt_result linesearch_backtracking(
             ggml_graph_reset  (gf);
             ggml_set_f32      (f->grad, 1.0f);
 
-            ggml_graph_compute_sugar(gb, params->n_threads);
+            ggml_graph_compute_helper(gb, params->n_threads);
 
             ggml_opt_get_grad(np, ps, g);
 
@@ -17664,7 +17669,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         ggml_graph_reset  (gf);
         ggml_set_f32      (f->grad, 1.0f);
 
-        ggml_graph_compute_sugar(gb, params.n_threads);
+        ggml_graph_compute_helper(gb, params.n_threads);
 
         ggml_opt_get_grad(np, ps, g);
 

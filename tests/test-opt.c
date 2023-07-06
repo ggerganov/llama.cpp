@@ -7,6 +7,7 @@
 
 #define MAX_NARGS 2
 
+#pragma GCC diagnostic ignored "-Wdouble-promotion"
 
 //
 // logging
@@ -33,7 +34,7 @@
 #define GGML_PRINT(...) printf(__VA_ARGS__)
 
 
-float frand() {
+float frand(void) {
     return (float)rand()/(float)RAND_MAX;
 }
 
@@ -115,12 +116,12 @@ void set_element(struct ggml_tensor * t, int idx, float value) {
 }
 
 
-struct compute_plan_buffer {
+struct work_buffer {
     size_t    size;
     uint8_t * data;
 };
 
-static uint8_t * ensure_plan_work_data(struct compute_plan_buffer *buf, size_t size) {
+static uint8_t * work_buffer_resize(struct work_buffer * buf, size_t size) {
     if (size == 0) {
         return NULL;
     }
@@ -139,7 +140,7 @@ static uint8_t * ensure_plan_work_data(struct compute_plan_buffer *buf, size_t s
     return buf->data;
 }
 
-int main(int argc, const char ** argv) {
+int main(void) {
     struct ggml_init_params params = {
         .mem_size   = 1024*1024*1024,
         .mem_buffer = NULL,
@@ -166,11 +167,11 @@ int main(int argc, const char ** argv) {
     struct ggml_cgraph ge = ggml_build_forward(e);
     ggml_graph_reset  (&ge);
 
-    struct compute_plan_buffer plan_buf = { /*.size = */ 0, /*.data =*/ NULL };
+    struct work_buffer buf = { /*.size = */ 0, /*.data =*/ NULL };
     {
-        struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&ge, /*n_threads*/ 1);
-        plan.work_data = ensure_plan_work_data(&plan_buf, plan.work_size);
-        ggml_graph_compute(&plan, &ge);
+        struct ggml_cplan pe = ggml_graph_plan(&ge, /*n_threads*/ 1);
+        pe.work_data = work_buffer_resize(&buf, pe.work_size);
+        ggml_graph_compute(&ge, &pe);
     }
 
     const float fe = ggml_get_f32_1d(e, 0);
@@ -183,13 +184,13 @@ int main(int argc, const char ** argv) {
     ggml_graph_reset  (&ge);
 
     {
-        struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&ge, /*n_threads*/ 1);
-        plan.work_data = ensure_plan_work_data(&plan_buf, plan.work_size);
-        ggml_graph_compute(&plan, &ge);
+        struct ggml_cplan pe = ggml_graph_plan(&ge, /*n_threads*/ 1);
+        pe.work_data = work_buffer_resize(&buf, pe.work_size);
+        ggml_graph_compute(&ge, &pe);
     }
 
-    if (plan_buf.data) {
-        free(plan_buf.data);
+    if (buf.data) {
+        free(buf.data);
     }
 
     const float fe_opt = ggml_get_f32_1d(e, 0);

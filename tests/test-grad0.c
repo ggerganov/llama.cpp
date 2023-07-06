@@ -10,6 +10,8 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+#pragma GCC diagnostic ignored "-Wdouble-promotion"
+
 #define MAX_NARGS 3
 
 #undef MIN
@@ -49,7 +51,7 @@ float frand(void) {
 
 int irand(int n) {
     if (n == 0) return 0;
-    else return rand()%n;
+    return rand()%n;
 }
 
 void get_random_dims(int64_t * dims, int ndims) {
@@ -159,12 +161,14 @@ struct ggml_tensor * get_random_tensor_int(
 float get_element(const struct ggml_tensor * t, int idx) {
     if (t->type == GGML_TYPE_F32) {
         return ((float *)t->data)[idx];
-    } else if (t->type == GGML_TYPE_I32) {
-        return ((int32_t *)t->data)[idx];
-    } else {
-        assert(false);
-        return INFINITY;
     }
+
+    if (t->type == GGML_TYPE_I32) {
+        return ((int32_t *)t->data)[idx];
+    }
+
+    assert(false);
+    return INFINITY;
 }
 
 void set_element(struct ggml_tensor * t, int idx, float value) {
@@ -191,12 +195,12 @@ void print_elements(const char* label, const struct ggml_tensor * t) {
 
 }
 
-struct compute_plan_buffer {
+struct work_buffer {
     size_t    size;
     uint8_t * data;
 };
 
-static uint8_t * ensure_plan_work_data(struct compute_plan_buffer *buf, size_t size) {
+static uint8_t * work_buffer_resize(struct work_buffer * buf, size_t size) {
     if (size == 0) {
         return NULL;
     }
@@ -241,20 +245,19 @@ bool check_gradient(
     }
 
     struct ggml_cgraph gf = ggml_build_forward (f);
-
     struct ggml_cgraph gb = ggml_build_backward(ctx0, &gf, false);
 
-    struct compute_plan_buffer plan_buf = { /*.size = */ 0, /*.data =*/ NULL };
+    struct work_buffer buf = { /*.size = */ 0, /*.data =*/ NULL };
 
     {
-        struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, n_threads);
-        if (plan.work_size > 0) {
-            plan.work_data = malloc(plan.work_size);
-            GGML_ASSERT(plan.work_data);
+        struct ggml_cplan pf = ggml_graph_plan(&gf, n_threads);
+        if (pf.work_size > 0) {
+            pf.work_data = malloc(pf.work_size);
+            GGML_ASSERT(pf.work_data);
         }
-        ggml_graph_compute(&plan, &gf);
-        if (plan.work_data) {
-            free(plan.work_data);
+        ggml_graph_compute(&gf, &pf);
+        if (pf.work_data) {
+            free(pf.work_data);
         }
     }
 
@@ -262,9 +265,9 @@ bool check_gradient(
     ggml_set_f32      (f->grad, 1.0f);
 
     {
-        struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gb, n_threads);
-        plan.work_data = ensure_plan_work_data(&plan_buf, plan.work_size);
-        ggml_graph_compute(&plan, &gb);
+        struct ggml_cplan pf = ggml_graph_plan(&gb, n_threads);
+        pf.work_data = work_buffer_resize(&buf, pf.work_size);
+        ggml_graph_compute(&gf, &pf);
     }
 
     // ggml_graph_dump_dot(&gf, NULL, "test-grad0-forward.dot");
@@ -280,9 +283,9 @@ bool check_gradient(
             set_element(x[i], k, xp);
 
             {
-                struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, n_threads);
-                plan.work_data = ensure_plan_work_data(&plan_buf, plan.work_size);
-                ggml_graph_compute(&plan, &gf);
+                struct ggml_cplan pf = ggml_graph_plan(&gf, n_threads);
+                pf.work_data = work_buffer_resize(&buf, pf.work_size);
+                ggml_graph_compute(&gf, &pf);
             }
 
             const float f0 = ggml_get_f32_1d(f, 0);
@@ -290,9 +293,9 @@ bool check_gradient(
             set_element(x[i], k, xm);
 
             {
-                struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gf, n_threads);
-                plan.work_data = ensure_plan_work_data(&plan_buf, plan.work_size);
-                ggml_graph_compute(&plan, &gf);
+                struct ggml_cplan pf = ggml_graph_plan(&gf, n_threads);
+                pf.work_data = work_buffer_resize(&buf, pf.work_size);
+                ggml_graph_compute(&gf, &pf);
             }
 
             const float f1 = ggml_get_f32_1d(f, 0);
@@ -306,15 +309,15 @@ bool check_gradient(
             ggml_set_f32      (f->grad, 1.0f);
 
             {
-                struct ggml_graph_compute_plan plan = ggml_graph_compute_make_plan(&gb, n_threads);
-                plan.work_data = ensure_plan_work_data(&plan_buf, plan.work_size);
-                ggml_graph_compute(&plan, &gb);
+                struct ggml_cplan pf = ggml_graph_plan(&gb, n_threads);
+                pf.work_data = work_buffer_resize(&buf, pf.work_size);
+                ggml_graph_compute(&gf, &pf);
             }
 
             const float g1 = get_element(x[i]->grad, k);
 
             const float error_abs = fabsf(g0 - g1);
-            const float error_rel = g0 != 0 ? fabsf(g0 - g1)/fabs(g0) : 0;
+            const float error_rel = g0 != 0 ? fabsf(g0 - g1)/fabsf(g0) : 0;
 
             if (error_abs > max_error_abs || error_rel > max_error_rel) {
                 printf("%s: ndims=%d, i=%d, k=%d, x0=%f, xm=%f, xp=%f, f0=%f, f1=%f, g0=%f, g1=%f, eps=%f, error_abs=%f, error_rel=%f\n",
@@ -325,8 +328,8 @@ bool check_gradient(
         }
     }
 
-    if (plan_buf.data) {
-        free(plan_buf.data);
+    if (buf.data) {
+        free(buf.data);
     }
 
     return true;

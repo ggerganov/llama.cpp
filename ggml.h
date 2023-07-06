@@ -443,17 +443,15 @@ extern "C" {
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);
 
-    // The default graph compute plan that needs to be prepared for ggml_graph_compute().
-    // Since https://github.com/ggerganov/ggml/issues/287
-    struct ggml_graph_compute_plan {
-        // Size of work buffer, calculated by `ggml_graph_compute_make_plan()`.
-        size_t work_size;
-        // Work buffer, to be allocated by caller before calling to `ggml_graph_compute()`.
-        uint8_t * work_data;
+    // the compute plan that needs to be prepared for ggml_graph_compute()
+    // since https://github.com/ggerganov/ggml/issues/287
+    struct ggml_cplan {
+        size_t    work_size; // size of work buffer, calculated by `ggml_graph_plan()`
+        uint8_t * work_data; // work buffer, to be allocated by caller before calling to `ggml_graph_compute()`
 
         int n_threads;
 
-        // The `n_tasks` of nodes, 1:1 mapping to cgraph nodes.
+        // the `n_tasks` of nodes, 1:1 mapping to cgraph nodes
         int n_tasks[GGML_MAX_NODES];
     };
 
@@ -1313,11 +1311,11 @@ extern "C" {
     GGML_API struct ggml_cgraph ggml_build_forward (struct ggml_tensor * tensor);
     GGML_API struct ggml_cgraph ggml_build_backward(struct ggml_context * ctx, struct ggml_cgraph * gf, bool keep);
 
-    // ggml_graph_compute_make_plan() needs to be called before ggml_graph_compute().
-    // Returns a plan object. When plan.work_size > 0, caller must allocate memory for plan.work_data.
-    GGML_API struct ggml_graph_compute_plan ggml_graph_compute_make_plan(struct ggml_cgraph * cgraph, const int n_threads/*=GGML_DEFAULT_N_THREADS*/);
-    GGML_API void ggml_graph_compute(struct ggml_graph_compute_plan * plan, struct ggml_cgraph * cgraph);
-    GGML_API void ggml_graph_reset  (struct ggml_cgraph * cgraph);
+    // ggml_graph_plan() has to be called before ggml_graph_compute()
+    // when plan.work_size > 0, caller must allocate memory for plan.work_data
+    GGML_API struct ggml_cplan ggml_graph_plan   (struct ggml_cgraph * cgraph, int n_threads /*= GGML_DEFAULT_N_THREADS*/);
+    GGML_API              void ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan);
+    GGML_API              void ggml_graph_reset  (struct ggml_cgraph * cgraph);
 
     GGML_API struct ggml_tensor * ggml_graph_get_tensor(struct ggml_cgraph * cgraph, const char * name);
 

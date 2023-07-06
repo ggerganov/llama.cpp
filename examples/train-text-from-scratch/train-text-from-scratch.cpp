@@ -3160,6 +3160,7 @@ int main(int argc, char ** argv) {
     printf("used_mem model+cache: %zu bytes\n", ggml_used_mem(model.ctx));
     // ggml_print_tensor_objects(model.ctx);
 
+    // TODO: use std::vector<uint8_t> intead of "new"
     size_t    compute_size = 1024ll*1024ll*1024ll*((size_t) params.mem_compute_gb);
     uint8_t * compute_addr = new uint8_t[compute_size];
 
@@ -3181,7 +3182,7 @@ int main(int argc, char ** argv) {
         GGML_ASSERT(train_samples[i]+n_tokens-1 < (int) train_tokens.size());
     }
 
-    auto compute_plan_buffer = std::vector<uint8_t>();
+    std::vector<uint8_t> work_buffer;
 
     printf("%s: begin training\n", __func__);
 
@@ -3246,12 +3247,12 @@ int main(int argc, char ** argv) {
         }
 
         {
-            auto plan = ggml_graph_compute_make_plan(gf, params.n_threads);
-            if (plan.work_size > 0) {
-                compute_plan_buffer.resize(plan.work_size);
-                plan.work_data = compute_plan_buffer.data();
+            ggml_cplan pf = ggml_graph_plan(gf, params.n_threads);
+            if (pf.work_size > 0) {
+                work_buffer.resize(pf.work_size);
+                pf.work_data = work_buffer.data();
             }
-            ggml_graph_compute(&plan, gf);
+            ggml_graph_compute(gf, &pf);
         }
 
         size_t used_mem_before_opt = ggml_used_mem(ctx0);
@@ -3277,12 +3278,12 @@ int main(int argc, char ** argv) {
         model.train_tokens  += n_batch * n_tokens;
 
         {
-            auto plan = ggml_graph_compute_make_plan(gf, params.n_threads);
-            if (plan.work_size > 0) {
-                compute_plan_buffer.resize(plan.work_size);
-                plan.work_data = compute_plan_buffer.data();
+            ggml_cplan pf = ggml_graph_plan(gf, params.n_threads);
+            if (pf.work_size > 0) {
+                work_buffer.resize(pf.work_size);
+                pf.work_data = work_buffer.data();
             }
-            ggml_graph_compute(&plan, gf);
+            ggml_graph_compute(gf, &pf);
         }
 
         float error_after_opt = ggml_get_f32_1d(loss, 0);
@@ -3372,12 +3373,12 @@ int main(int argc, char ** argv) {
             ggml_build_forward_expand(&gf, logits);
 
             {
-                auto plan = ggml_graph_compute_make_plan(&gf, params.n_threads);
-                if (plan.work_size > 0) {
-                    compute_plan_buffer.resize(plan.work_size);
-                    plan.work_data = compute_plan_buffer.data();
+                ggml_cplan pf = ggml_graph_plan(&gf, params.n_threads);
+                if (pf.work_size > 0) {
+                    work_buffer.resize(pf.work_size);
+                    pf.work_data = work_buffer.data();
                 }
-                ggml_graph_compute(&plan, &gf);
+                ggml_graph_compute(&gf, &pf);
             }
 
             //struct ggml_tensor * best_samples = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, sample_ctx);
@@ -3404,6 +3405,7 @@ int main(int argc, char ** argv) {
     delete[] compute_addr;
     delete[] compute_buf_0;
     delete[] compute_buf_1;
+
     llama_free(lctx);
     llama_free_model(lmodel);
     ggml_free(model.ctx);
