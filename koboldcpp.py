@@ -30,6 +30,7 @@ class load_model_inputs(ctypes.Structure):
                 ("use_smartcontext", ctypes.c_bool),
                 ("unban_tokens", ctypes.c_bool),
                 ("clblast_info", ctypes.c_int),
+                ("cublas_info", ctypes.c_int),
                 ("blasbatchsize", ctypes.c_int),
                 ("debugmode", ctypes.c_int),
                 ("forceversion", ctypes.c_int),
@@ -111,7 +112,7 @@ def init_library():
         else:
             print("Attempting to use CLBlast library for faster prompt ingestion. A compatible clblast will be required.")
             use_clblast = True
-    elif (args.usecublas and args.usecublas!=""):
+    elif (args.usecublas is not None):
         if not file_exists(lib_cublas):
             print("Warning: CuBLAS library file not found. Non-BLAS library will be used.")
         else:
@@ -166,7 +167,7 @@ def load_model(model_filename):
     inputs.batch_size = 8
     inputs.max_context_length = maxctx #initial value to use for ctx, can be overwritten
     inputs.threads = args.threads
-    inputs.low_vram = (True if args.usecublas=="lowvram" else False)
+    inputs.low_vram = (True if (args.usecublas and "lowvram" in args.usecublas) else False)
     inputs.blasthreads = args.blasthreads
     inputs.f16_kv = True
     inputs.use_mmap = (not args.nommap)
@@ -187,6 +188,11 @@ def load_model(model_filename):
     if args.useclblast:
         clblastids = 100 + int(args.useclblast[0])*10 + int(args.useclblast[1])
     inputs.clblast_info = clblastids
+    inputs.cublas_info = 0
+    if (args.usecublas and "1" in args.usecublas):
+        inputs.cublas_info = 1
+    elif (args.usecublas and "2" in args.usecublas):
+        inputs.cublas_info = 2
     inputs.executable_path = (getdirpath()+"/").encode("UTF-8")
     inputs.debugmode = args.debugmode
     ret = handle.load_model(inputs)
@@ -805,7 +811,7 @@ def show_new_gui():
     makeslider(quick_tab, "Context Size:", contextsize_text, context_var, 0, len(contextsize_text)-1, 30, set=2)
 
     # load model
-    makefileentry(quick_tab, "Model:", "Select Model File", model_var, 40, 170)
+    makefileentry(quick_tab, "Model:", "Select GGML Model File", model_var, 40, 170)
 
     # Hardware Tab
     hardware_tab = tabcontent["Hardware"]
@@ -867,7 +873,7 @@ def show_new_gui():
     # Model Tab
     model_tab = tabcontent["Model"]
 
-    makefileentry(model_tab, "Model:", "Select Model File", model_var, 1)
+    makefileentry(model_tab, "Model:", "Select GGML Model File", model_var, 1)
     makefileentry(model_tab, "Lora:", "Select Lora File",lora_var, 3)
     makefileentry(model_tab, "Lora Base:", "Select Lora Base File", lora_base_var, 5)
 
@@ -947,7 +953,7 @@ def show_new_gui():
         if runopts_var.get() == runopts[1]:
             args.useclblast = [[0,0], [1,0], [0,1]][int(gpu_choice_var.get())-1]
         if runopts_var.get() == runopts[2]:
-            args.usecublas = "lowvram" if lowvram_var.get() == 1 else "normal"
+            args.usecublas = ["lowvram"] if lowvram_var.get() == 1 else ["normal"]
         if gpulayers_var.get():
             args.gpulayers = int(gpulayers_var.get())
         if runopts_var.get()==runopts[3]:
@@ -1094,7 +1100,7 @@ def show_old_gui():
         if selrunchoice==runopts[3]:
             args.useclblast = [0,1]
         if selrunchoice==runopts[4]:
-            args.usecublas = True
+            args.usecublas = ["normal"]
         if selrunchoice==runopts[5]:
             args.noblas = True
         if selrunchoice==runopts[6]:
@@ -1290,7 +1296,8 @@ if __name__ == '__main__':
     parser.add_argument("--blasbatchsize", help="Sets the batch size used in BLAS processing (default 512). Setting it to -1 disables BLAS mode, but keeps other benefits like GPU offload.", type=int,choices=[-1,32,64,128,256,512,1024], default=512)
     parser.add_argument("--stream", help="Uses streaming when generating tokens. Only for the Kobold Lite UI.", action='store_true')
     parser.add_argument("--smartcontext", help="Reserving a portion of context to try processing less frequently.", action='store_true')
-    parser.add_argument("--unbantokens", help="Normally, KoboldAI prevents certain tokens such as EOS and Square Brackets. This flag unbans them.", action='store_true')
+    parser.add_argument("--unbantokens", help="Normally, KoboldAI prevents the EOS token from being generated. This flag unbans it.", action='store_true')
+    parser.add_argument("--bantokens", help="You can manually specify a list of token IDs that the AI cannot use.", metavar=('[elements]'), nargs='+')
     parser.add_argument("--usemirostat", help="Experimental! Replaces your samplers with mirostat. Takes 3 params = [type(0/1/2), tau(5.0), eta(0.1)].",metavar=('[type]', '[tau]', '[eta]'), type=float, nargs=3)
     parser.add_argument("--forceversion", help="If the model file format detection fails (e.g. rogue modified model) you can set this to override the detected format (enter desired version, e.g. 401 for GPTNeoX-Type2).",metavar=('[version]'), type=int, default=0)
     parser.add_argument("--nommap", help="If set, do not use mmap to load newer models", action='store_true')
@@ -1302,7 +1309,7 @@ if __name__ == '__main__':
     compatgroup = parser.add_mutually_exclusive_group()
     compatgroup.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
     compatgroup.add_argument("--useclblast", help="Use CLBlast for GPU Acceleration. Must specify exactly 2 arguments, platform ID and device ID (e.g. --useclblast 1 0).", type=int, choices=range(0,9), nargs=2)
-    compatgroup.add_argument("--usecublas", help="Use CuBLAS for GPU Acceleration. Requires Nvidia GPU. Select lowvram to not allocate VRAM scratch buffer.", default='', const='normal', nargs='?', choices=['normal', 'lowvram'])
+    compatgroup.add_argument("--usecublas", help="Use CuBLAS for GPU Acceleration. Requires Nvidia GPU. Select lowvram to not allocate VRAM scratch buffer. Enter a number after to select a different main GPU.", nargs='*',metavar=('[lowvram|normal] [main GPU ID]'), choices=['normal', 'lowvram', '0', '1', '2'])
     parser.add_argument("--gpulayers", help="Set number of layers to offload to GPU when using GPU. Requires GPU.",metavar=('[GPU layers]'), type=int, default=0)
     args = parser.parse_args()
     main(args)

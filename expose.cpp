@@ -47,14 +47,14 @@ extern "C"
         }
 
         //first digit is whether configured, second is platform, third is devices
-        int parseinfo = inputs.clblast_info;
+        int cl_parseinfo = inputs.clblast_info;
 
-        std::string usingclblast = "GGML_OPENCL_CONFIGURED="+std::to_string(parseinfo>0?1:0);
+        std::string usingclblast = "GGML_OPENCL_CONFIGURED="+std::to_string(cl_parseinfo>0?1:0);
         putenv((char*)usingclblast.c_str());
 
-        parseinfo = parseinfo%100; //keep last 2 digits
-        int platform = parseinfo/10;
-        int devices = parseinfo%10;
+        cl_parseinfo = cl_parseinfo%100; //keep last 2 digits
+        int platform = cl_parseinfo/10;
+        int devices = cl_parseinfo%10;
         platformenv = "GGML_OPENCL_PLATFORM="+std::to_string(platform);
         deviceenv = "GGML_OPENCL_DEVICE="+std::to_string(devices);
         putenv((char*)platformenv.c_str());

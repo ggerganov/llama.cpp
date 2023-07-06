@@ -347,7 +347,16 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     //this is used for the mem_per_token eval, openblas needs more RAM
     bool use_scratch = ggml_cpu_has_gpublas();
 
+    int cu_parseinfo_maindevice = inputs.cublas_info<0?0:inputs.cublas_info;
+
     printf("System Info: %s\n", llama_print_system_info());
+    #if defined(GGML_USE_CUBLAS)
+    if(ggml_cpu_has_gpublas() && cu_parseinfo_maindevice>0)
+    {
+        printf("CUBLAS: Set main device to %d\n",cu_parseinfo_maindevice);
+        ggml_cuda_set_main_device(cu_parseinfo_maindevice);
+    }
+    #endif
     SetQuantsUnshuffled(false);
     if(file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2)
     {
@@ -412,6 +421,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         llama_ctx_params.use_mmap = inputs.use_mmap;
         llama_ctx_params.use_mlock = inputs.use_mlock;
         llama_ctx_params.n_gpu_layers = inputs.gpulayers;
+        llama_ctx_params.main_gpu = cu_parseinfo_maindevice;
 
         llama_ctx_v3 = llama_init_from_file(modelname.c_str(), llama_ctx_params);
 
