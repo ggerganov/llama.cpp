@@ -68,15 +68,19 @@ option(LLAMA_ACCELERATE                      "llama: enable Accelerate framework
 option(LLAMA_BLAS                            "llama: use BLAS"                                  OFF)
 set(LLAMA_BLAS_VENDOR "Generic" CACHE STRING "llama: BLAS library vendor")
 option(LLAMA_CUBLAS                          "llama: use cuBLAS"                                OFF)
+option(LLAMA_CUDA_FORCE_DMMV                 "llama: use dmmv instead of mmvq CUDA kernels"     OFF)
 set(LLAMA_CUDA_DMMV_X      "32" CACHE STRING "llama: x stride for dmmv CUDA kernels")
-set(LLAMA_CUDA_DMMV_Y       "1" CACHE STRING "llama: y block size for dmmv CUDA kernels")
+set(LLAMA_CUDA_MMV_Y        "1" CACHE STRING "llama: y block size for mmv CUDA kernels")
+option(LLAMA_CUDA_DMMV_F16                   "llama: use 16 bit floats for dmmv CUDA kernels"   OFF)
+set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for Q2_K/Q6_K")
 option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
 option(LLAMA_METAL                           "llama: use Metal"                                 OFF)
 option(LLAMA_K_QUANTS                        "llama: use k-quants"                              ON)
+option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
 
 option(LLAMA_BUILD_TESTS                "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES             "llama: build examples" ${LLAMA_STANDALONE})
-option(LLAMA_BUILD_SERVER               "llama: build server example"                           OFF)
+option(LLAMA_BUILD_SERVER               "llama: build server example"                           ON)
 
 #
 # Build info header
@@ -158,21 +162,76 @@ if (LLAMA_BLAS)
     if ($(CMAKE_VERSION) VERSION_GREATER_EQUAL 3.22)
         set(BLA_SIZEOF_INTEGER 8)
     endif()
+
     set(BLA_VENDOR ${LLAMA_BLAS_VENDOR})
     find_package(BLAS)
+
     if (BLAS_FOUND)
         message(STATUS "BLAS found, Libraries: ${BLAS_LIBRARIES}")
 
+        if ("${BLAS_INCLUDE_DIRS}" STREQUAL "")
+            # BLAS_INCLUDE_DIRS is missing in FindBLAS.cmake.
+            # see https://gitlab.kitware.com/cmake/cmake/-/issues/20268
+            find_package(PkgConfig REQUIRED)
+            if (${LLAMA_BLAS_VENDOR} MATCHES "Generic")
+                pkg_check_modules(DepBLAS REQUIRED blas)
+            elseif (${LLAMA_BLAS_VENDOR} MATCHES "OpenBLAS")
+                pkg_check_modules(DepBLAS REQUIRED openblas)
+            elseif (${LLAMA_BLAS_VENDOR} MATCHES "FLAME")
+                pkg_check_modules(DepBLAS REQUIRED blis)
+            elseif (${LLAMA_BLAS_VENDOR} MATCHES "ATLAS")
+                pkg_check_modules(DepBLAS REQUIRED blas-atlas)
+            elseif (${LLAMA_BLAS_VENDOR} MATCHES "FlexiBLAS")
+                pkg_check_modules(DepBLAS REQUIRED flexiblas_api)
+            elseif (${LLAMA_BLAS_VENDOR} MATCHES "Intel")
+                # all Intel* libraries share the same include path
+                pkg_check_modules(DepBLAS REQUIRED mkl-sdl)
+            elseif (${LLAMA_BLAS_VENDOR} MATCHES "NVHPC")
+                # this doesn't provide pkg-config
+                # suggest to assign BLAS_INCLUDE_DIRS on your own
+                if ("${NVHPC_VERSION}" STREQUAL "")
+                    message(WARNING "Better to set NVHPC_VERSION")
+                else()
+                    set(DepBLAS_FOUND ON)
+                    set(DepBLAS_INCLUDE_DIRS "/opt/nvidia/hpc_sdk/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/${NVHPC_VERSION}/math_libs/include")
+                endif()
+            endif()
+            if (DepBLAS_FOUND)
+                set(BLAS_INCLUDE_DIRS ${DepBLAS_INCLUDE_DIRS})
+            else()
+                message(WARNING "BLAS_INCLUDE_DIRS neither been provided nor been automatically"
+                " detected by pkgconfig, trying to find cblas.h from possible paths...")
+                find_path(BLAS_INCLUDE_DIRS
+                    NAMES cblas.h
+                    HINTS
+                        /usr/include
+                        /usr/local/include
+                        /usr/include/openblas
+                        /opt/homebrew/opt/openblas/include
+                        /usr/local/opt/openblas/include
+                        /usr/include/x86_64-linux-gnu/openblas/include
+                )
+            endif()
+        endif()
+
+        message(STATUS "BLAS found, Includes: ${BLAS_INCLUDE_DIRS}")
         add_compile_options(${BLAS_LINKER_FLAGS})
         add_compile_definitions(GGML_USE_OPENBLAS)
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ${BLAS_LIBRARIES})
+        set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} ${BLAS_INCLUDE_DIRS})
 
-        message("${BLAS_LIBRARIES} ${BLAS_INCLUDE_DIRS}")
-        include_directories(${BLAS_INCLUDE_DIRS})
     else()
         message(WARNING "BLAS not found, please refer to "
         "https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors"
         " to set correct LLAMA_BLAS_VENDOR")
+    endif()
+endif()
+
+if (LLAMA_K_QUANTS)
+    set(GGML_SOURCES_EXTRA ${GGML_SOURCES_EXTRA} k_quants.c k_quants.h)
+    add_compile_definitions(GGML_USE_K_QUANTS)
+    if (LLAMA_QKK_64)
+        add_compile_definitions(GGML_QKK_64)
     endif()
 endif()
 
@@ -188,14 +247,33 @@ if (LLAMA_CUBLAS)
         set(GGML_SOURCES_CUDA ggml-cuda.cu ggml-cuda.h)
 
         add_compile_definitions(GGML_USE_CUBLAS)
+        if (LLAMA_CUDA_FORCE_DMMV)
+            add_compile_definitions(GGML_CUDA_FORCE_DMMV)
+        endif()
         add_compile_definitions(GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
-        add_compile_definitions(GGML_CUDA_DMMV_Y=${LLAMA_CUDA_DMMV_Y})
+        add_compile_definitions(GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
+        if (DEFINED LLAMA_CUDA_DMMV_Y)
+            add_compile_definitions(GGML_CUDA_MMV_Y=${LLAMA_CUDA_DMMV_Y}) # for backwards compatibility
+        endif()
+        if (LLAMA_CUDA_DMMV_F16)
+            add_compile_definitions(GGML_CUDA_DMMV_F16)
+        endif()
+        add_compile_definitions(K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
 
         if (LLAMA_STATIC)
             set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas_static CUDA::cublasLt_static)
         else()
             set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart CUDA::cublas CUDA::cublasLt)
         endif()
+
+    if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        if (LLAMA_CUDA_DMMV_F16)
+            set(CMAKE_CUDA_ARCHITECTURES "61") # needed for f16 CUDA intrinsics
+        else()
+            set(CMAKE_CUDA_ARCHITECTURES "52;61") # lowest CUDA 12 standard + lowest for integer intrinsics
+        endif()
+    endif()
+    message(STATUS "Using CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 
     else()
         message(WARNING "cuBLAS not found")
@@ -225,11 +303,6 @@ if (LLAMA_METAL)
         ${METALKIT_FRAMEWORK}
         ${METALPERFORMANCE_FRAMEWORK}
         )
-endif()
-
-if (LLAMA_K_QUANTS)
-    set(GGML_SOURCES_EXTRA ${GGML_SOURCES_EXTRA} k_quants.c k_quants.h)
-    add_compile_definitions(GGML_USE_K_QUANTS)
 endif()
 
 if (LLAMA_CLBLAST)
@@ -320,11 +393,6 @@ if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES
     if (MSVC)
         # TODO: arm msvc?
     else()
-        if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
-            # Apple M1, M2, etc.
-            # Raspberry Pi 3, 4, Zero 2 (64-bit)
-            add_compile_options(-mcpu=native)
-        endif()
         if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv6")
             # Raspberry Pi 1, Zero
             add_compile_options(-mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access)
@@ -408,12 +476,15 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_EXTRA}
             )
 
-target_include_directories(ggml PUBLIC .)
+target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})
 target_compile_features(ggml PUBLIC c_std_11) # don't bump
 target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
 
+add_library(ggml_static STATIC $<TARGET_OBJECTS:ggml>)
 if (BUILD_SHARED_LIBS)
     set_target_properties(ggml PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    add_library(ggml_shared SHARED $<TARGET_OBJECTS:ggml>)
+    target_link_libraries(ggml_shared PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
 endif()
 
 add_library(llama
@@ -435,13 +506,6 @@ if (BUILD_SHARED_LIBS)
     if (LLAMA_METAL)
         set_target_properties(llama PROPERTIES RESOURCE "${CMAKE_CURRENT_SOURCE_DIR}/ggml-metal.metal")
     endif()
-endif()
-
-if (GGML_SOURCES_CUDA)
-    message(STATUS "GGML CUDA sources found, configuring CUDA architecture")
-    set_property(TARGET ggml  PROPERTY CUDA_ARCHITECTURES OFF)
-    set_property(TARGET ggml  PROPERTY CUDA_SELECT_NVCC_ARCH_FLAGS "Auto")
-    set_property(TARGET llama PROPERTY CUDA_ARCHITECTURES OFF)
 endif()
 
 

@@ -28,6 +28,10 @@
 #include <wchar.h>
 #endif
 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
+#endif
+
 int32_t get_num_physical_cores() {
 #ifdef __linux__
     // enumerate the set of thread siblings, num entries is num cores
@@ -102,14 +106,11 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         }
 
         if (arg == "-s" || arg == "--seed") {
-#if defined(GGML_USE_CUBLAS)
-            fprintf(stderr, "WARNING: when using cuBLAS generation results are NOT guaranteed to be reproducible.\n");
-#endif
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params.seed = std::stoi(argv[i]);
+            params.seed = std::stoul(argv[i]);
         } else if (arg == "-t" || arg == "--threads") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -332,10 +333,18 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 #else
       fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.\n");
 #endif // GGML_USE_CUBLAS
+        } else if (arg == "--low-vram" || arg == "-lv") {
+#ifdef GGML_USE_CUBLAS
+            params.low_vram = true;
+#else
+      fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n");
+#endif // GGML_USE_CUBLAS
         } else if (arg == "--no-mmap") {
             params.use_mmap = false;
         } else if (arg == "--mtest") {
             params.mem_test = true;
+        } else if (arg == "--numa") {
+            params.numa = true;
         } else if (arg == "--export") {
             params.export_cgraph = true;
         } else if (arg == "--verbose-prompt") {
@@ -367,7 +376,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 } else {
                     throw std::exception();
                 }
-            } catch (const std::exception &e) {
+            } catch (const std::exception&) {
                 invalid_param = true;
                 break;
             }
@@ -428,6 +437,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         gpt_print_usage(argc, argv, default_params);
         exit(1);
     }
+
     if (escape_prompt) {
         process_escapes(params.prompt);
     }
@@ -497,12 +507,16 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     if (llama_mmap_supported()) {
         fprintf(stderr, "  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
     }
+    fprintf(stderr, "  --numa                attempt optimizations that help on some NUMA systems\n");
+    fprintf(stderr, "                        if run without this previously, it is recommended to drop the system page cache before using this\n");
+    fprintf(stderr, "                        see https://github.com/ggerganov/llama.cpp/issues/1437\n");
 #ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
     fprintf(stderr, "  -ngl N, --n-gpu-layers N\n");
     fprintf(stderr, "                        number of layers to store in VRAM\n");
     fprintf(stderr, "  -ts SPLIT --tensor-split SPLIT\n");
     fprintf(stderr, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
     fprintf(stderr, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n" );
+    fprintf(stderr, "  -lv, --low-vram       don't allocate VRAM scratch buffer\n" );
 #endif
     fprintf(stderr, "  --mtest               compute maximum memory usage\n");
     fprintf(stderr, "  --export              export the computation graph to 'llama.ggml'\n");
@@ -544,7 +558,7 @@ std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::s
     return res;
 }
 
-struct llama_context * llama_init_from_gpt_params(const gpt_params & params) {
+std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(const gpt_params & params) {
     auto lparams = llama_context_default_params();
 
     lparams.n_ctx        = params.n_ctx;
@@ -552,6 +566,7 @@ struct llama_context * llama_init_from_gpt_params(const gpt_params & params) {
     lparams.n_gpu_layers = params.n_gpu_layers;
     lparams.main_gpu     = params.main_gpu;
     memcpy(lparams.tensor_split, params.tensor_split, LLAMA_MAX_DEVICES*sizeof(float));
+    lparams.low_vram     = params.low_vram;
     lparams.seed         = params.seed;
     lparams.f16_kv       = params.memory_f16;
     lparams.use_mmap     = params.use_mmap;
@@ -559,25 +574,33 @@ struct llama_context * llama_init_from_gpt_params(const gpt_params & params) {
     lparams.logits_all   = params.perplexity;
     lparams.embedding    = params.embedding;
 
-    llama_context * lctx = llama_init_from_file(params.model.c_str(), lparams);
-
-    if (lctx == NULL) {
+    llama_model * model  = llama_load_model_from_file(params.model.c_str(), lparams);
+    if (model == NULL) {
         fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
-        return NULL;
+        return std::make_tuple(nullptr, nullptr);
+    }
+
+    llama_context * lctx = llama_new_context_with_model(model, lparams);
+    if (lctx == NULL) {
+        fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, params.model.c_str());
+        llama_free_model(model);
+        return std::make_tuple(nullptr, nullptr);
     }
 
     if (!params.lora_adapter.empty()) {
-        int err = llama_apply_lora_from_file(lctx,
+        int err = llama_model_apply_lora_from_file(model,
                                              params.lora_adapter.c_str(),
                                              params.lora_base.empty() ? NULL : params.lora_base.c_str(),
                                              params.n_threads);
         if (err != 0) {
             fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
-            return NULL;
+            llama_free(lctx);
+            llama_free_model(model);
+            return std::make_tuple(nullptr, nullptr);
         }
     }
 
-    return lctx;
+    return std::make_tuple(model, lctx);
 }
 
 void console_init(console_state & con_st) {

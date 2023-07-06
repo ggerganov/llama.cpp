@@ -28,6 +28,7 @@ int main(int argc, char **argv) {
 
     fprintf(stderr, "%s : reading vocab from: '%s'\n", __func__, fname.c_str());
 
+    llama_model * model;
     llama_context * ctx;
 
     // load the vocab
@@ -36,10 +37,18 @@ int main(int argc, char **argv) {
 
         lparams.vocab_only = true;
 
-        ctx = llama_init_from_file(fname.c_str(), lparams);
+        model = llama_load_model_from_file(fname.c_str(), lparams);
+
+        if (model == NULL) {
+            fprintf(stderr, "%s: error: failed to load vocab '%s'\n", __func__, fname.c_str());
+            return 1;
+        }
+
+        ctx = llama_new_context_with_model(model, lparams);
 
         if (ctx == NULL) {
             fprintf(stderr, "%s: error: failed to load vocab '%s'\n", __func__, fname.c_str());
+            llama_free_model(model);
             return 1;
         }
     }
@@ -48,12 +57,14 @@ int main(int argc, char **argv) {
 
     if (n_vocab != 32000) {
         fprintf(stderr, "%s : expected 32000 tokens, got %d\n", __func__, n_vocab);
+        llama_free_model(model);
+        llama_free(ctx);
         return 2;
     }
 
     for (const auto & test_kv : k_tests()) {
         std::vector<llama_token> res(test_kv.first.size());
-        const int n = llama_tokenize(ctx, test_kv.first.c_str(), res.data(), res.size(), true);
+        const int n = llama_tokenize(ctx, test_kv.first.c_str(), res.data(), int(res.size()), true);
         res.resize(n);
 
         bool correct = res.size() == test_kv.second.size();
@@ -77,10 +88,13 @@ int main(int argc, char **argv) {
             }
             fprintf(stderr, "\n");
 
+            llama_free_model(model);
+            llama_free(ctx);
             return 3;
         }
     }
 
+    llama_free_model(model);
     llama_free(ctx);
 
     return 0;

@@ -10,10 +10,10 @@ on:
   push:
     branches:
       - master
-    paths: ['.github/workflows/**', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp']
+    paths: ['.github/workflows/**', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu']
   pull_request:
     types: [opened, synchronize, reopened]
-    paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp']
+    paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu']
 
 env:
  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
@@ -111,6 +111,7 @@ jobs:
 
       - name: Dependencies
         id: depends
+        continue-on-error: true
         run: |
           brew update
 
@@ -129,15 +130,17 @@ jobs:
 
       - name: Dependencies
         id: depends
+        continue-on-error: true
         run: |
           brew update
 
       - name: Build
         id: cmake_build
         run: |
+          sysctl -a
           mkdir build
           cd build
-          cmake -DLLAMA_AVX2=OFF ..
+          cmake -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF ..
           cmake --build . --config Release
 
       - name: Test
