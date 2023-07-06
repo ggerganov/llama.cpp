@@ -1306,7 +1306,7 @@ extern "C" {
 
     GGML_API void ggml_set_param(
             struct ggml_context * ctx,
-            struct ggml_tensor * tensor);
+            struct ggml_tensor  * tensor);
 
     GGML_API void ggml_build_forward_expand(struct ggml_cgraph * cgraph, struct ggml_tensor * tensor);
 
@@ -1318,6 +1318,10 @@ extern "C" {
     GGML_API struct ggml_cplan ggml_graph_plan   (struct ggml_cgraph * cgraph, int n_threads /*= GGML_DEFAULT_N_THREADS*/);
     GGML_API              void ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan);
     GGML_API              void ggml_graph_reset  (struct ggml_cgraph * cgraph);
+
+    // same as ggml_graph_compute() but the work data is allocated as a part of the context
+    // note: the drawback of this API is that you must have ensured that the context has enough memory for the work data
+    GGML_API void ggml_graph_compute_with_ctx(struct ggml_context * ctx, struct ggml_cgraph * cgraph, int n_threads);
 
     GGML_API struct ggml_tensor * ggml_graph_get_tensor(struct ggml_cgraph * cgraph, const char * name);
 

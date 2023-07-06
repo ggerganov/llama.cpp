@@ -16493,21 +16493,17 @@ void ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) 
     }
 }
 
-// TODO: avoid allocating memory frequently.
-// TODO: make part of public API - use different name and put warning that it makes allocations
-static void ggml_graph_compute_helper(struct ggml_cgraph * cgraph, int n_threads) {
+// same as ggml_graph_compute() but the work data is allocated as a part of the context
+// note: the drawback of this API is that you must have ensured that the context has enough memory for the work data
+void ggml_graph_compute_with_ctx(struct ggml_context * ctx, struct ggml_cgraph * cgraph, int n_threads) {
     struct ggml_cplan cplan = ggml_graph_plan(cgraph, n_threads);
 
-    if (cplan.work_size > 0) {
-        cplan.work_data = malloc(cplan.work_size);
-        GGML_ASSERT(cplan.work_data);
-    }
+    struct ggml_tensor * buf = ggml_new_tensor_1d(ctx, GGML_TYPE_I8, cplan.work_size);
+    GGML_ASSERT(buf);
+
+    cplan.work_data = buf->data;
 
     ggml_graph_compute(cgraph, &cplan);
-
-    if (cplan.work_data) {
-        free(cplan.work_data);
-    }
 }
 
 void ggml_graph_reset(struct ggml_cgraph * cgraph) {
@@ -17292,6 +17288,7 @@ static void ggml_opt_get_grad(int np, struct ggml_tensor * const ps[], float * g
 //
 
 static enum ggml_opt_result ggml_opt_adam(
+        struct ggml_context * ctx,
         struct ggml_opt_context * opt,
         struct ggml_opt_params params,
         struct ggml_tensor * f,
@@ -17346,7 +17343,7 @@ static enum ggml_opt_result ggml_opt_adam(
     ggml_graph_reset  (gf);
     ggml_set_f32      (f->grad, 1.0f);
 
-    ggml_graph_compute_helper(gb, params.n_threads);
+    ggml_graph_compute_with_ctx(ctx, gb, params.n_threads);
 
     opt->adam.fx_prev = ggml_get_f32_1d(f, 0);
     opt->adam.fx_best = opt->adam.fx_prev;
@@ -17427,7 +17424,7 @@ static enum ggml_opt_result ggml_opt_adam(
         ggml_graph_reset  (gf);
         ggml_set_f32      (f->grad, 1.0f);
 
-        ggml_graph_compute_helper(gb, params.n_threads);
+        ggml_graph_compute_with_ctx(ctx, gb, params.n_threads);
 
         const float fx = ggml_get_f32_1d(f, 0);
 
@@ -17498,6 +17495,7 @@ struct ggml_lbfgs_iteration_data {
 };
 
 static enum ggml_opt_result linesearch_backtracking(
+        struct ggml_context * ctx,
         const struct ggml_opt_params * params,
         int nx,
         float * x,
@@ -17549,7 +17547,7 @@ static enum ggml_opt_result linesearch_backtracking(
             ggml_graph_reset  (gf);
             ggml_set_f32      (f->grad, 1.0f);
 
-            ggml_graph_compute_helper(gb, params->n_threads);
+            ggml_graph_compute_with_ctx(ctx, gb, params->n_threads);
 
             ggml_opt_get_grad(np, ps, g);
 
@@ -17669,7 +17667,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         ggml_graph_reset  (gf);
         ggml_set_f32      (f->grad, 1.0f);
 
-        ggml_graph_compute_helper(gb, params.n_threads);
+        ggml_graph_compute_with_ctx(ctx, gb, params.n_threads);
 
         ggml_opt_get_grad(np, ps, g);
 
@@ -17728,7 +17726,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         ggml_vec_cpy_f32(nx, xp, x);
         ggml_vec_cpy_f32(nx, gp, g);
 
-        ls = linesearch_backtracking(&params, nx, x, &fx, g, d, step, xp, f, gf, gb, np, ps);
+        ls = linesearch_backtracking(ctx, &params, nx, x, &fx, g, d, step, xp, f, gf, gb, np, ps);
 
         if (ls < 0) {
             // linesearch failed - go back to the previous point and return
@@ -18030,7 +18028,7 @@ enum ggml_opt_result ggml_opt_resume_g(
     switch (opt->params.type) {
         case GGML_OPT_ADAM:
             {
-                result = ggml_opt_adam(opt, opt->params, f, gf, gb);
+                result = ggml_opt_adam(ctx, opt, opt->params, f, gf, gb);
             } break;
         case GGML_OPT_LBFGS:
             {

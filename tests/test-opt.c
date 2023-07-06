@@ -115,31 +115,6 @@ void set_element(struct ggml_tensor * t, int idx, float value) {
     ((float *)t->data)[idx] = value;
 }
 
-
-struct work_buffer {
-    size_t    size;
-    uint8_t * data;
-};
-
-static uint8_t * work_buffer_resize(struct work_buffer * buf, size_t size) {
-    if (size == 0) {
-        return NULL;
-    }
-
-    if (buf->size == 0) {
-        buf->data = malloc(size);
-        buf->size = size;
-    } else if (buf->size < size) {
-        buf->data = realloc(buf->data, size);
-        buf->size = size;
-    } else {
-        // skip shrinking.
-    }
-
-    GGML_ASSERT(buf->data);
-    return buf->data;
-}
-
 int main(void) {
     struct ggml_init_params params = {
         .mem_size   = 1024*1024*1024,
@@ -163,16 +138,10 @@ int main(void) {
     struct ggml_tensor * d  = ggml_sub(ctx, c, ab);
     struct ggml_tensor * e  = ggml_sum(ctx, ggml_sqr(ctx, d));
 
-
     struct ggml_cgraph ge = ggml_build_forward(e);
-    ggml_graph_reset  (&ge);
+    ggml_graph_reset(&ge);
 
-    struct work_buffer buf = { /*.size = */ 0, /*.data =*/ NULL };
-    {
-        struct ggml_cplan pe = ggml_graph_plan(&ge, /*n_threads*/ 1);
-        pe.work_data = work_buffer_resize(&buf, pe.work_size);
-        ggml_graph_compute(&ge, &pe);
-    }
+    ggml_graph_compute_with_ctx(ctx, &ge, /*n_threads*/ 1);
 
     const float fe = ggml_get_f32_1d(e, 0);
     printf("%s: e = %.4f\n", __func__, fe);
@@ -181,17 +150,9 @@ int main(void) {
 
     ggml_opt(ctx, opt_params, e);
 
-    ggml_graph_reset  (&ge);
+    ggml_graph_reset(&ge);
 
-    {
-        struct ggml_cplan pe = ggml_graph_plan(&ge, /*n_threads*/ 1);
-        pe.work_data = work_buffer_resize(&buf, pe.work_size);
-        ggml_graph_compute(&ge, &pe);
-    }
-
-    if (buf.data) {
-        free(buf.data);
-    }
+    ggml_graph_compute_with_ctx(ctx, &ge, /*n_threads*/ 1);
 
     const float fe_opt = ggml_get_f32_1d(e, 0);
     printf("%s: original  e = %.4f\n", __func__, fe);
