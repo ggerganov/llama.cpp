@@ -1,6 +1,7 @@
 #pragma once
 
 const int stop_token_max = 10;
+const int ban_token_max = 10;
 // match kobold's sampler list and order
 enum samplers
 {
@@ -35,6 +36,7 @@ struct load_model_inputs
     const int debugmode = 0;
     const int forceversion = 0;
     const int gpulayers = 0;
+    const char * banned_tokens[ban_token_max];
 };
 struct generation_inputs
 {
