@@ -16,7 +16,9 @@ on:
     paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu']
 
 env:
- BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+  GGML_NLOOP: 3
+  GGML_NITER: 1
 
 jobs:
   ubuntu-focal-make:
@@ -40,10 +42,6 @@ jobs:
 
   ubuntu-latest-cmake:
     runs-on: ubuntu-latest
-
-    env:
-      GGML_NLOOP: 3
-      GGML_NITER: 1
 
     steps:
       - name: Clone
@@ -72,10 +70,6 @@ jobs:
 
   ubuntu-latest-cmake-sanitizer:
     runs-on: ubuntu-latest
-
-    env:
-      GGML_NLOOP: 3
-      GGML_NITER: 1
 
     continue-on-error: true
 
@@ -131,10 +125,6 @@ jobs:
   macOS-latest-cmake:
     runs-on: macos-latest
 
-    env:
-      GGML_NLOOP: 3
-      GGML_NITER: 1
-
     steps:
       - name: Clone
         id: checkout
@@ -163,10 +153,6 @@ jobs:
 
   windows-latest-cmake:
     runs-on: windows-latest
-
-    env:
-      GGML_NLOOP: 3
-      GGML_NITER: 1
 
     env:
       OPENBLAS_VERSION: 0.3.23
