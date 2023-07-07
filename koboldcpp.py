@@ -623,7 +623,7 @@ def show_new_gui():
 
     nextstate = 0 #0=exit, 1=launch, 2=oldgui
     windowwidth = 520
-    windowheight = 480
+    windowheight = 500
     ctk.set_appearance_mode("dark")
     root = ctk.CTk()
     root.geometry(str(windowwidth) + "x" + str(windowheight))
@@ -767,11 +767,11 @@ def show_new_gui():
     # hides gpu options when CLBlast is not chosen
     def changerunmode(a,b,c):
         index = runopts_var.get()
-        if index == "Use CLBlast":
+        if index == "Use CLBlast" or index == "Use CuBLAS":
             gpu_selector_label.grid(row=3, column=0, padx = 8, pady=1, stick="nw")
-            gpu_selector_box .grid(row=3, column=1, padx=8, pady=1, stick="nw")
+            gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
             quick_gpu_selector_label.grid(row=3, column=0, padx = 8, pady=1, stick="nw")
-            quick_gpu_selector_box .grid(row=3, column=1, padx=8, pady=1, stick="nw")
+            quick_gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
         else:
             gpu_selector_label.grid_forget()
             gpu_selector_box.grid_forget()
@@ -779,17 +779,17 @@ def show_new_gui():
             quick_gpu_selector_box.grid_forget()
 
         if index == "Use CuBLAS":
-            lowvram_box.grid(row=3, column=0, padx=8, pady=1,  stick="nw")
-            quick_lowvram_box.grid(row=3, column=0, padx=8, pady=1,  stick="nw")
+            lowvram_box.grid(row=4, column=0, padx=8, pady=1,  stick="nw")
+            quick_lowvram_box.grid(row=4, column=0, padx=8, pady=1,  stick="nw")
         else:
             lowvram_box.grid_forget()
             quick_lowvram_box.grid_forget()
 
         if index == "Use CLBlast" or index == "Use CuBLAS":
-            gpu_layers_label.grid(row=4, column=0, padx = 8, pady=1, stick="nw")
-            gpu_layers_entry.grid(row=4, column=1, padx=8, pady=1, stick="nw")
-            quick_gpu_layers_label.grid(row=4, column=0, padx = 8, pady=1, stick="nw")
-            quick_gpu_layers_entry.grid(row=4, column=1, padx=8, pady=1, stick="nw")
+            gpu_layers_label.grid(row=5, column=0, padx = 8, pady=1, stick="nw")
+            gpu_layers_entry.grid(row=5, column=1, padx=8, pady=1, stick="nw")
+            quick_gpu_layers_label.grid(row=5, column=0, padx = 8, pady=1, stick="nw")
+            quick_gpu_layers_entry.grid(row=5, column=1, padx=8, pady=1, stick="nw")
         else:
             gpu_layers_label.grid_forget()
             gpu_layers_entry.grid_forget()
@@ -871,7 +871,7 @@ def show_new_gui():
                 item.grid_forget()
 
 
-    mirostat_box = makecheckbox(tokens_tab, "Use Mirostat", row=10, variable=usemirostat, command=togglemiro)
+    makecheckbox(tokens_tab, "Use Mirostat", row=10, variable=usemirostat, command=togglemiro)
     togglemiro(1,1,1)
 
     # context size
@@ -957,10 +957,11 @@ def show_new_gui():
         args.smartcontext = smartcontext.get()==1
         args.unbantokens = unbantokens.get()==1
 
+        gpuchoiceidx = int(gpu_choice_var.get())-1
         if runopts_var.get() == runopts[1]:
-            args.useclblast = [[0,0], [1,0], [0,1]][int(gpu_choice_var.get())-1]
+            args.useclblast = [[0,0], [1,0], [0,1]][gpuchoiceidx]
         if runopts_var.get() == runopts[2]:
-            args.usecublas = ["lowvram"] if lowvram_var.get() == 1 else ["normal"]
+            args.usecublas = ["lowvram",str(gpuchoiceidx)] if lowvram_var.get() == 1 else ["normal",str(gpuchoiceidx)]
         if gpulayers_var.get():
             args.gpulayers = int(gpulayers_var.get())
         if runopts_var.get()==runopts[3]:
