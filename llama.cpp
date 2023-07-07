@@ -2163,6 +2163,8 @@ void llama_sample_classifier_free_guidance(
           struct llama_context * guidance_ctx,
                          float   scale,
                          float   smooth_factor) {
+    int64_t t_start_sample_us = t_start_sample_us = ggml_time_us();
+
     assert(ctx);
     auto n_vocab = llama_n_vocab(ctx);
     assert(n_vocab == (int)candidates->size);
@@ -2194,6 +2196,10 @@ void llama_sample_classifier_free_guidance(
         float guidance_logit = guidance_logits[i];
 
         candidates->data[i].logit = smooth_factor * guidance_logit + (1.f - smooth_factor) * base_logit;
+    }
+
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
     }
 }
 
