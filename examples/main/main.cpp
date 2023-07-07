@@ -772,6 +772,7 @@ int main(int argc, char ** argv) {
     }
 
     llama_print_timings(ctx);
+    llama_free(guidance_ctx);
     llama_free(ctx);
     llama_free_model(model);
 
