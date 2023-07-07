@@ -16070,7 +16070,6 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
     return 0;
 }
 
-// Prepare for graph computing.
 struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
     if (n_threads <= 0) {
         n_threads = GGML_DEFAULT_N_THREADS;
@@ -16488,8 +16487,16 @@ void ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) 
     }
 }
 
-// same as ggml_graph_compute() but the work data is allocated as a part of the context
-// note: the drawback of this API is that you must have ensured that the context has enough memory for the work data
+void ggml_graph_reset(struct ggml_cgraph * cgraph) {
+    for (int i = 0; i < cgraph->n_nodes; i++) {
+        struct ggml_tensor * grad = cgraph->grads[i];
+
+        if (grad) {
+            ggml_set_zero(grad);
+        }
+    }
+}
+
 void ggml_graph_compute_with_ctx(struct ggml_context * ctx, struct ggml_cgraph * cgraph, int n_threads) {
     struct ggml_cplan cplan = ggml_graph_plan(cgraph, n_threads);
 
@@ -16499,16 +16506,6 @@ void ggml_graph_compute_with_ctx(struct ggml_context * ctx, struct ggml_cgraph *
     cplan.work_data = buf->data;
 
     ggml_graph_compute(cgraph, &cplan);
-}
-
-void ggml_graph_reset(struct ggml_cgraph * cgraph) {
-    for (int i = 0; i < cgraph->n_nodes; i++) {
-        struct ggml_tensor * grad = cgraph->grads[i];
-
-        if (grad) {
-            ggml_set_zero(grad);
-        }
-    }
 }
 
 struct ggml_tensor * ggml_graph_get_tensor(struct ggml_cgraph * cgraph, const char * name) {
