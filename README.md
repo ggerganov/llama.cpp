@@ -751,5 +751,10 @@ docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:light -m /mode
 
 ### Docs
 
+- [main](./examples/main/README.md)
+- [server](./examples/server/README.md)
+- [embd-input](./examples/embd-input/README.md)
+- [jeopardy](./examples/jeopardy/README.md)
 - [GGML tips & tricks](https://github.com/ggerganov/llama.cpp/wiki/GGML-Tips-&-Tricks)
 - [Performance troubleshooting](./docs/token_generation_performance_tips.md)
+- [BLIS](./docs/BLIS.md)
