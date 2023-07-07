@@ -16042,7 +16042,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             // wait for other threads to finish
             const int last = node_n;
             do {
-                sched_yield();
+                //sched_yield();
                 node_n = atomic_load(&state->shared->node_n);
             } while (node_n == last);
         }
