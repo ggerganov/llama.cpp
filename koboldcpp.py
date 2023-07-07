@@ -198,7 +198,6 @@ def load_model(model_filename):
     inputs.executable_path = (getdirpath()+"/").encode("UTF-8")
     inputs.debugmode = args.debugmode
     banned_tokens = args.bantokens
-    print(banned_tokens)
     for n in range(ban_token_max):
         if not banned_tokens or n >= len(banned_tokens):
             inputs.banned_tokens[n] = "".encode("UTF-8")

@@ -7,7 +7,7 @@
 cd `dirname $0`
 cd ..
 
-./main -m ./models/ggml-alpaca-7b-q4.bin \
+./main -m ./models/alpaca.13b.ggmlv3.q8_0.bin \
        --color \
        -f ./prompts/alpaca.txt \
        --ctx_size 2048 \
