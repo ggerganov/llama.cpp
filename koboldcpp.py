@@ -997,10 +997,18 @@ def show_new_gui():
             time.sleep(2)
             sys.exit(2)
 
+def show_gui_warning():
+    from tkinter import messagebox
+    import tkinter as tk
+    root = tk.Tk()
+    root.attributes("-alpha", 0)
+    messagebox.showerror(title="New GUI failed, using Old GUI", message="The new GUI failed to load.\n\nTo use new GUI, please install the customtkinter python module.")
+    root.destroy()
 
 def show_old_gui():
     import tkinter as tk
     from tkinter.filedialog import askopenfilename
+    from tkinter import messagebox
 
     if len(sys.argv) == 1:
         #no args passed at all. Show nooby gui
@@ -1078,7 +1086,7 @@ def show_old_gui():
 
         # Create button, it will change label text
         tk.Button(root , text = "Launch", font = ("Impact", 18), bg='#54FA9B', command = guilaunch ).grid(row=6,column=0)
-        tk.Label(root, text = "(Please use the Command Line for more advanced options)",
+        tk.Label(root, text = "(Please use the Command Line for more advanced options)\nThis GUI is deprecated. Please install customtkinter.",
                 font = ("Arial", 9)).grid(row=7,column=0)
 
         root.mainloop()
@@ -1166,9 +1174,11 @@ def main(args):
             show_new_gui()
         except Exception as ex:
             print("Failed to use new GUI. Reason: " + str(ex))
-            print("Attempting to us old GUI...")
+            print("Make sure customtkinter is installed!!!")
+            print("Attempting to use old GUI...")
             if not args.model_param:
                 try:
+                    show_gui_warning()
                     show_old_gui()
                 except Exception as ex2:
                     print("File selection GUI unsupported. Please check command line: script.py --help")
