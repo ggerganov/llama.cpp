@@ -479,11 +479,11 @@ int main(int argc, char ** argv) {
 
                     input_buf = guidance_embd.data();
                     input_size = guidance_embd.size();
-                    fprintf(stderr, "\n---------------------\n");
-                    for (int i = 0; i < (int) guidance_embd.size(); i++) {
-                        fprintf(stderr, "%s", llama_token_to_str(ctx, guidance_embd[i]));
-                    }
-                    fprintf(stderr, "\n---------------------\n");
+                    //fprintf(stderr, "\n---------------------\n");
+                    //for (int i = 0; i < (int) guidance_embd.size(); i++) {
+                        //fprintf(stderr, "%s", llama_token_to_str(ctx, guidance_embd[i]));
+                    //}
+                    //fprintf(stderr, "\n---------------------\n");
                 } else {
                     input_buf = embd.data();
                     input_size = embd.size();
