@@ -4583,14 +4583,13 @@ struct ggml_tensor * ggml_new_tensor_impl(
         /*.src0         =*/ NULL,
         /*.src1         =*/ NULL,
         /*.opt          =*/ { NULL },
-        /*.n_tasks      =*/ 0,
         /*.perf_runs    =*/ 0,
         /*.perf_cycles  =*/ 0,
         /*.perf_time_us =*/ 0,
         /*.data         =*/ (data == NULL && !ctx->no_alloc) ? (void *)(result + 1) : data,
         /*.name         =*/ { 0 },
         /*.extra        =*/ NULL,
-        /*.pad          =*/ { 0 },
+        /*.padding      =*/ { 0 },
     };
 
     // TODO: this should not be needed as long as we don't rely on aligned SIMD loads
@@ -10718,8 +10717,6 @@ static void ggml_compute_forward_mul_mat(
 
         float * dst_col = (float *) ((char *) dst->data + (i0*nb0 + 0*nb1 + i2*nb2 + i3*nb3));
 
-        assert(ne00 % 32 == 0);
-
         for (int64_t ic = 0; ic < ne11; ++ic) {
             vec_dot(ne00, &dst_col[ic*ne0], src0_row, (void *) (src1_col + ic*row_size));
         }
@@ -15772,9 +15769,6 @@ struct ggml_cgraph ggml_build_forward(struct ggml_tensor * tensor) {
     struct ggml_cgraph result = {
         /*.n_nodes      =*/ 0,
         /*.n_leafs      =*/ 0,
-        /*.n_threads    =*/ GGML_DEFAULT_N_THREADS,
-        /*.work_size    =*/ 0,
-        /*.work         =*/ NULL,
         /*.nodes        =*/ { NULL },
         /*.grads        =*/ { NULL },
         /*.leafs        =*/ { NULL },
@@ -15945,12 +15939,13 @@ void clear_numa_thread_affinity(void) {}
 #endif
 
 struct ggml_compute_state_shared {
-    struct ggml_cgraph * cgraph;
+    const struct ggml_cgraph * cgraph;
+    const struct ggml_cplan  * cplan;
 
     int64_t perf_node_start_cycles;
     int64_t perf_node_start_time_us;
 
-    int n_threads;
+    const int n_threads;
 
     // synchronization primitives
     atomic_int n_active; // num active threads
@@ -15974,9 +15969,13 @@ static void ggml_graph_compute_perf_stats_node(struct ggml_tensor * node, const 
 
 static thread_ret_t ggml_graph_compute_thread(void * data) {
     struct ggml_compute_state * state = (struct ggml_compute_state *) data;
-    struct ggml_cgraph * cgraph = state->shared->cgraph;
 
-    const int n_threads = state->shared->n_threads;
+    const struct ggml_cgraph * cgraph = state->shared->cgraph;
+    const struct ggml_cplan  * cplan  = state->shared->cplan;
+
+    const int * n_tasks_arr = cplan->n_tasks;
+    const int   n_threads   = state->shared->n_threads;
+
     set_numa_thread_affinity(state->ith, n_threads);
 
     int node_n = -1;
@@ -15989,15 +15988,15 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                 /*.type  =*/ GGML_TASK_FINALIZE,
                 /*.ith   =*/ 0,
                 /*.nth   =*/ 0,
-                /*.wsize =*/ cgraph->work ? ggml_nbytes(cgraph->work) : 0,
-                /*.wdata =*/ cgraph->work ? cgraph->work->data : NULL,
+                /*.wsize =*/ cplan->work_size,
+                /*.wdata =*/ cplan->work_data,
             };
 
             if (node_n != -1) {
                 /* FINALIZE */
                 struct ggml_tensor * node = state->shared->cgraph->nodes[node_n];
                 if (GGML_OP_HAS_FINALIZE[node->op]) {
-                    params.nth = node->n_tasks;
+                    params.nth = n_tasks_arr[node_n];
                     ggml_compute_forward(&params, node);
                     ggml_graph_compute_perf_stats_node(node, state->shared);
                 }
@@ -16008,11 +16007,12 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                 GGML_PRINT_DEBUG_5("%s: %d/%d\n", __func__, node_n, cgraph->n_nodes);
 
                 struct ggml_tensor * node = cgraph->nodes[node_n];
+                const int n_tasks = n_tasks_arr[node_n];
 
                 state->shared->perf_node_start_cycles  = ggml_perf_cycles();
                 state->shared->perf_node_start_time_us = ggml_perf_time_us();
 
-                params.nth = node->n_tasks;
+                params.nth = n_tasks;
 
                 /* INIT */
                 if (GGML_OP_HAS_INIT[node->op]) {
@@ -16020,7 +16020,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                     ggml_compute_forward(&params, node);
                 }
 
-                if (node->n_tasks == 1) {
+                if (n_tasks == 1) {
                     // TODO: maybe push node_n to the atomic but if other threads see n_tasks is 1,
                     // they do something more efficient than spinning (?)
                     params.type = GGML_TASK_COMPUTE;
@@ -16052,16 +16052,17 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 
         /* COMPUTE */
         struct ggml_tensor * node = cgraph->nodes[node_n];
+        const int n_tasks = n_tasks_arr[node_n];
 
         struct ggml_compute_params params = {
             /*.type  =*/ GGML_TASK_COMPUTE,
             /*.ith   =*/ state->ith,
-            /*.nth   =*/ node->n_tasks,
-            /*.wsize =*/ cgraph->work ? ggml_nbytes(cgraph->work) : 0,
-            /*.wdata =*/ cgraph->work ? cgraph->work->data : NULL,
+            /*.nth   =*/ n_tasks,
+            /*.wsize =*/ cplan->work_size,
+            /*.wdata =*/ cplan->work_data,
         };
 
-        if (state->ith < node->n_tasks) {
+        if (state->ith < n_tasks) {
             ggml_compute_forward(&params, node);
         }
     }
@@ -16069,11 +16070,364 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
     return 0;
 }
 
-void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) {
-    const int n_threads = cgraph->n_threads;
+struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
+    if (n_threads <= 0) {
+        n_threads = GGML_DEFAULT_N_THREADS;
+    }
+
+    size_t work_size = 0;
+
+    struct ggml_cplan cplan;
+    memset(&cplan, 0, sizeof(struct ggml_cplan));
+
+    // thread scheduling for the different operations + work buffer size estimation
+    for (int i = 0; i < cgraph->n_nodes; i++) {
+        int n_tasks = 1;
+
+        struct ggml_tensor * node = cgraph->nodes[i];
+
+        switch (node->op) {
+            case GGML_OP_CPY:
+            case GGML_OP_DUP:
+                {
+                    n_tasks = n_threads;
+
+                    size_t cur = 0;
+                    if (ggml_is_quantized(node->type)) {
+                        cur = GGML_TYPE_SIZE[GGML_TYPE_F32] * node->ne[0] * n_tasks;
+                    }
+
+                    work_size = MAX(work_size, cur);
+                } break;
+            case GGML_OP_ADD:
+            case GGML_OP_ADD1:
+                {
+                    n_tasks = n_threads;
+
+                    size_t cur = 0;
+
+                    if (ggml_is_quantized(node->src0->type)) {
+                        cur = GGML_TYPE_SIZE[GGML_TYPE_F32] * node->src0->ne[0] * n_tasks;
+                    }
+
+                    work_size = MAX(work_size, cur);
+                } break;
+            case GGML_OP_ACC:
+                {
+                    n_tasks = n_threads;
+
+                    size_t cur = 0;
+
+                    if (ggml_is_quantized(node->src0->type)) {
+                        cur = GGML_TYPE_SIZE[GGML_TYPE_F32] * node->src1->ne[0] * n_tasks;
+                    }
+
+                    work_size = MAX(work_size, cur);
+                } break;
+            case GGML_OP_SUB:
+            case GGML_OP_DIV:
+            case GGML_OP_SQR:
+            case GGML_OP_SQRT:
+            case GGML_OP_LOG:
+            case GGML_OP_SUM:
+            case GGML_OP_SUM_ROWS:
+            case GGML_OP_MEAN:
+            case GGML_OP_ARGMAX:
+            case GGML_OP_REPEAT:
+            case GGML_OP_REPEAT_BACK:
+            case GGML_OP_ABS:
+            case GGML_OP_SGN:
+            case GGML_OP_NEG:
+            case GGML_OP_STEP:
+            case GGML_OP_TANH:
+            case GGML_OP_ELU:
+            case GGML_OP_RELU:
+                {
+                    n_tasks = 1;
+                } break;
+            case GGML_OP_MUL:
+            case GGML_OP_GELU:
+            case GGML_OP_GELU_QUICK:
+            case GGML_OP_SILU:
+            case GGML_OP_SILU_BACK:
+            case GGML_OP_NORM:
+            case GGML_OP_RMS_NORM:
+            case GGML_OP_RMS_NORM_BACK:
+                {
+                    n_tasks = n_threads;
+                } break;
+            case GGML_OP_MUL_MAT:
+            case GGML_OP_OUT_PROD:
+                {
+                    n_tasks = n_threads;
+
+                    // TODO: use different scheduling for different matrix sizes
+                    //const int nr0 = ggml_nrows(node->src0);
+                    //const int nr1 = ggml_nrows(node->src1);
+
+                    //n_tasks = MIN(n_threads, MAX(1, nr0/128));
+                    //printf("nr0 = %8d, nr1 = %8d, nr0*nr1 = %8d, n_tasks%d\n", nr0, nr1, nr0*nr1, n_tasks);
+
+                    size_t cur = 0;
+                    const enum ggml_type vec_dot_type = type_traits[node->src0->type].vec_dot_type;
+
+#if defined(GGML_USE_CUBLAS)
+                    if (ggml_cuda_can_mul_mat(node->src0, node->src1, node)) {
+                        n_tasks = 1; // TODO: this actually is doing nothing
+                                     //       the threads are still spinning
+                    } else
+#elif defined(GGML_USE_CLBLAST)
+                    if (ggml_cl_can_mul_mat(node->src0, node->src1, node)) {
+                        n_tasks = 1; // TODO: this actually is doing nothing
+                                     //       the threads are still spinning
+                        cur = ggml_cl_mul_mat_get_wsize(node->src0, node->src1, node);
+                    } else
+#endif
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+                    if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
+                        n_tasks = 1; // TODO: this actually is doing nothing
+                                     //       the threads are still spinning
+                        if (node->src0->type != GGML_TYPE_F32) {
+                            // here we need memory just for single 2D matrix from src0
+                            cur = GGML_TYPE_SIZE[GGML_TYPE_F32]*(node->src0->ne[0]*node->src0->ne[1]);
+                        }
+                    } else
+#endif
+                    if (node->src1->type != vec_dot_type) {
+                        cur = GGML_TYPE_SIZE[vec_dot_type]*ggml_nelements(node->src1)/GGML_BLCK_SIZE[vec_dot_type];
+                    } else {
+                        cur = 0;
+                    }
+
+                    work_size = MAX(work_size, cur);
+                } break;
+            case GGML_OP_SCALE:
+                {
+                    n_tasks = 1;
+                } break;
+            case GGML_OP_SET:
+            case GGML_OP_CONT:
+            case GGML_OP_RESHAPE:
+            case GGML_OP_VIEW:
+            case GGML_OP_PERMUTE:
+            case GGML_OP_TRANSPOSE:
+            case GGML_OP_GET_ROWS:
+            case GGML_OP_GET_ROWS_BACK:
+            case GGML_OP_DIAG:
+            case GGML_OP_DIAG_MASK_ZERO:
+                {
+                    n_tasks = 1;
+                } break;
+            case GGML_OP_DIAG_MASK_INF:
+            case GGML_OP_SOFT_MAX:
+            case GGML_OP_SOFT_MAX_BACK:
+            case GGML_OP_ROPE:
+            case GGML_OP_ROPE_BACK:
+                {
+                    n_tasks = n_threads;
+                } break;
+            case GGML_OP_ALIBI:
+                {
+                    n_tasks = 1; //TODO
+                } break;
+            case GGML_OP_CLAMP:
+                {
+                    n_tasks = 1; //TODO
+                } break;
+            case GGML_OP_CONV_1D:
+                {
+                    n_tasks = n_threads;
+
+                    GGML_ASSERT(node->src0->ne[3] == 1);
+                    GGML_ASSERT(node->src1->ne[2] == 1);
+                    GGML_ASSERT(node->src1->ne[3] == 1);
+
+                    size_t cur = 0;
+                    const int nk = node->src0->ne[0];
+
+                    if (node->src0->type == GGML_TYPE_F16 &&
+                            node->src1->type == GGML_TYPE_F32) {
+                        cur = sizeof(ggml_fp16_t)*(
+                                nk*ggml_up32(node->src0->ne[1])*node->src0->ne[2] +
+                                ( 2*(nk/2) + node->src1->ne[0])*node->src1->ne[1]
+                                );
+                    } else if (node->src0->type == GGML_TYPE_F32 &&
+                            node->src1->type == GGML_TYPE_F32) {
+                        cur = sizeof(float)*(
+                                nk*ggml_up32(node->src0->ne[1])*node->src0->ne[2] +
+                                ( 2*(nk/2) + node->src1->ne[0])*node->src1->ne[1]
+                                );
+                    } else {
+                        GGML_ASSERT(false);
+                    }
+
+                    work_size = MAX(work_size, cur);
+                } break;
+            case GGML_OP_CONV_2D:
+                {
+                    n_tasks = n_threads;
+
+                    GGML_ASSERT(node->src1->ne[3] == 1);
+
+                    const int64_t ne00 = node->src0->ne[0]; // W
+                    const int64_t ne01 = node->src0->ne[1]; // H
+                    const int64_t ne02 = node->src0->ne[2]; // C
+                    const int64_t ne03 = node->src0->ne[3]; // N
+
+                    const int64_t ne10 = node->src1->ne[0]; // W
+                    const int64_t ne11 = node->src1->ne[1]; // H
+                    const int64_t ne12 = node->src1->ne[2]; // C
+
+                    const int64_t nk = ne00*ne01;
+
+                    UNUSED(ne02);
+                    UNUSED(ne03);
+                    UNUSED(nk);
+
+                    size_t cur = 0;
+
+                    if (node->src0->type == GGML_TYPE_F16 &&
+                            node->src1->type == GGML_TYPE_F32) {
+                        cur = sizeof(ggml_fp16_t)*(ne10*ne11*ne12);
+                    } else if (node->src0->type == GGML_TYPE_F32 &&
+                            node->src1->type == GGML_TYPE_F32) {
+                        cur = sizeof(float)*      (ne10*ne11*ne12);
+                    } else {
+                        GGML_ASSERT(false);
+                    }
+
+                    work_size = MAX(work_size, cur);
+                } break;
+            case GGML_OP_FLASH_ATTN:
+                {
+                    n_tasks = n_threads;
+
+                    size_t cur = 0;
+
+                    const int64_t ne11 = ggml_up(node->src1->ne[1], GGML_SOFT_MAX_UNROLL);
+
+                    if (node->src1->type == GGML_TYPE_F32) {
+                        cur  = sizeof(float)*ne11*n_tasks; // TODO: this can become (n_tasks-1)
+                        cur += sizeof(float)*ne11*n_tasks; // this is overestimated by x2
+                    }
+
+                    if (node->src1->type == GGML_TYPE_F16) {
+                        cur  = sizeof(float)*ne11*n_tasks; // TODO: this can become (n_tasks-1)
+                        cur += sizeof(float)*ne11*n_tasks; // this is overestimated by x2
+                    }
+
+                    work_size = MAX(work_size, cur);
+                } break;
+            case GGML_OP_FLASH_FF:
+                {
+                    n_tasks = n_threads;
+
+                    size_t cur = 0;
+
+                    if (node->src1->type == GGML_TYPE_F32) {
+                        cur  = sizeof(float)*node->src1->ne[1]*n_tasks; // TODO: this can become (n_tasks-1)
+                        cur += sizeof(float)*node->src1->ne[1]*n_tasks; // this is overestimated by x2
+                    }
+
+                    if (node->src1->type == GGML_TYPE_F16) {
+                        cur  = sizeof(float)*node->src1->ne[1]*n_tasks; // TODO: this can become (n_tasks-1)
+                        cur += sizeof(float)*node->src1->ne[1]*n_tasks; // this is overestimated by x2
+                    }
+
+                    work_size = MAX(work_size, cur);
+                } break;
+            case GGML_OP_FLASH_ATTN_BACK:
+                {
+                    n_tasks = n_threads;
+
+                    size_t cur = 0;
+
+                    const int64_t    D = node->src0->ne[0];
+                    const int64_t ne11 = ggml_up(node->src1->ne[1], GGML_SOFT_MAX_UNROLL);
+                    const int64_t mxDn = MAX(D, ne11) * 2; // *2 because of S and SM in ggml_compute_forward_flash_attn_back
+                    if (node->src1->type == GGML_TYPE_F32) {
+                        cur  = sizeof(float)*mxDn*n_tasks; // TODO: this can become (n_tasks-1)
+                        cur += sizeof(float)*mxDn*n_tasks; // this is overestimated by x2
+                    }
+
+                    if (node->src1->type == GGML_TYPE_F16) {
+                        cur  = sizeof(float)*mxDn*n_tasks; // TODO: this can become (n_tasks-1)
+                        cur += sizeof(float)*mxDn*n_tasks; // this is overestimated by x2
+                    }
+
+                    work_size = MAX(work_size, cur);
+                } break;
+            case GGML_OP_WIN_PART:
+            case GGML_OP_WIN_UNPART:
+            case GGML_OP_MAP_UNARY:
+            case GGML_OP_MAP_BINARY:
+            case GGML_OP_MAP_CUSTOM1:
+            case GGML_OP_MAP_CUSTOM2:
+            case GGML_OP_MAP_CUSTOM3:
+                {
+                    n_tasks = 1;
+                } break;
+            case GGML_OP_CROSS_ENTROPY_LOSS:
+                {
+                    n_tasks = n_threads;
+
+                    size_t cur = ggml_type_size(node->type)*(n_tasks + node->src0->ne[0]*n_tasks);
+
+                    work_size = MAX(work_size, cur);
+                } break;
+            case GGML_OP_CROSS_ENTROPY_LOSS_BACK:
+                {
+                    n_tasks = n_threads;
+
+                    size_t cur = ggml_type_size(node->type)*node->src0->ne[0]*n_tasks;
+
+                    work_size = MAX(work_size, cur);
+                } break;
+            case GGML_OP_NONE:
+                {
+                    n_tasks = 1;
+                } break;
+            case GGML_OP_COUNT:
+                {
+                    GGML_ASSERT(false);
+                } break;
+        }
+
+        cplan.n_tasks[i] = n_tasks;
+    }
+
+    if (work_size > 0) {
+        work_size += CACHE_LINE_SIZE*(n_threads - 1);
+    }
+
+    cplan.n_threads = n_threads;
+    cplan.work_size = work_size;
+    cplan.work_data = NULL;
+
+    return cplan;
+}
+
+void ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
+    {
+        GGML_ASSERT(cplan);
+        GGML_ASSERT(cplan->n_threads > 0);
+
+        if (cplan->work_size > 0) {
+            GGML_ASSERT(cplan->work_data);
+        }
+
+        for (int i = 0; i < cgraph->n_nodes; ++i) {
+            if (cgraph->nodes[i]->op != GGML_OP_NONE) {
+                GGML_ASSERT(cplan->n_tasks[i] > 0);
+            }
+        }
+    }
+
+    const int n_threads = cplan->n_threads;
 
     struct ggml_compute_state_shared state_shared = {
         /*.cgraph                  =*/ cgraph,
+        /*.cgraph_plan             =*/ cplan,
         /*.perf_node_start_cycles  =*/ 0,
         /*.perf_node_start_time_us =*/ 0,
         /*.n_threads               =*/ n_threads,
@@ -16081,336 +16435,6 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
         /*.node_n                  =*/ -1,
     };
     struct ggml_compute_state * workers = alloca(sizeof(struct ggml_compute_state)*n_threads);
-
-    // initialize tasks + work buffer
-    {
-        size_t work_size = 0;
-
-        // thread scheduling for the different operations
-        for (int i = 0; i < cgraph->n_nodes; i++) {
-            struct ggml_tensor * node = cgraph->nodes[i];
-
-            switch (node->op) {
-                case GGML_OP_CPY:
-                case GGML_OP_DUP:
-                    {
-                        node->n_tasks = n_threads;
-
-                        size_t cur = 0;
-                        if (ggml_is_quantized(node->type)) {
-                            cur = GGML_TYPE_SIZE[GGML_TYPE_F32] * node->ne[0] * n_threads;
-                        }
-
-                        work_size = MAX(work_size, cur);
-                    } break;
-                case GGML_OP_ADD:
-                case GGML_OP_ADD1:
-                    {
-                        node->n_tasks = n_threads;
-
-                        size_t cur = 0;
-
-                        if (ggml_is_quantized(node->src0->type)) {
-                            cur = GGML_TYPE_SIZE[GGML_TYPE_F32] * node->src0->ne[0] * n_threads;
-                        }
-
-                        work_size = MAX(work_size, cur);
-                    } break;
-                case GGML_OP_ACC:
-                    {
-                        node->n_tasks = n_threads;
-
-                        size_t cur = 0;
-
-                        if (ggml_is_quantized(node->src0->type)) {
-                            cur = GGML_TYPE_SIZE[GGML_TYPE_F32] * node->src1->ne[0] * n_threads;
-                        }
-
-                        work_size = MAX(work_size, cur);
-                    } break;
-                case GGML_OP_SUB:
-                case GGML_OP_DIV:
-                case GGML_OP_SQR:
-                case GGML_OP_SQRT:
-                case GGML_OP_LOG:
-                case GGML_OP_SUM:
-                case GGML_OP_SUM_ROWS:
-                case GGML_OP_MEAN:
-                case GGML_OP_ARGMAX:
-                case GGML_OP_REPEAT:
-                case GGML_OP_REPEAT_BACK:
-                case GGML_OP_ABS:
-                case GGML_OP_SGN:
-                case GGML_OP_NEG:
-                case GGML_OP_STEP:
-                case GGML_OP_TANH:
-                case GGML_OP_ELU:
-                case GGML_OP_RELU:
-                    {
-                        node->n_tasks = 1;
-                    } break;
-                case GGML_OP_MUL:
-                case GGML_OP_GELU:
-                case GGML_OP_GELU_QUICK:
-                case GGML_OP_SILU:
-                case GGML_OP_SILU_BACK:
-                case GGML_OP_NORM:
-                case GGML_OP_RMS_NORM:
-                case GGML_OP_RMS_NORM_BACK:
-                    {
-                        node->n_tasks = n_threads;
-                    } break;
-                case GGML_OP_MUL_MAT:
-                case GGML_OP_OUT_PROD:
-                    {
-                        node->n_tasks = n_threads;
-
-                        // TODO: use different scheduling for different matrix sizes
-                        //const int nr0 = ggml_nrows(node->src0);
-                        //const int nr1 = ggml_nrows(node->src1);
-
-                        //node->n_tasks = MIN(n_threads, MAX(1, nr0/128));
-                        //printf("nr0 = %8d, nr1 = %8d, nr0*nr1 = %8d, n_tasks = %d\n", nr0, nr1, nr0*nr1, node->n_tasks);
-
-                        size_t cur = 0;
-                        const enum ggml_type vec_dot_type = type_traits[node->src0->type].vec_dot_type;
-
-#if defined(GGML_USE_CUBLAS)
-                        if (ggml_cuda_can_mul_mat(node->src0, node->src1, node)) {
-                            node->n_tasks = 1; // TODO: this actually is doing nothing
-                                                //       the threads are still spinning
-                        }
-                        else
-#elif defined(GGML_USE_CLBLAST)
-                        if (ggml_cl_can_mul_mat(node->src0, node->src1, node)) {
-                            node->n_tasks = 1; // TODO: this actually is doing nothing
-                                                //       the threads are still spinning
-                            cur = ggml_cl_mul_mat_get_wsize(node->src0, node->src1, node);
-                        }
-                        else
-#endif
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-                        if (ggml_compute_forward_mul_mat_use_blas(node->src0, node->src1, node)) {
-                            node->n_tasks = 1; // TODO: this actually is doing nothing
-                                               //       the threads are still spinning
-                            if (node->src0->type != GGML_TYPE_F32) {
-                                // here we need memory just for single 2D matrix from src0
-                                cur = GGML_TYPE_SIZE[GGML_TYPE_F32]*(node->src0->ne[0]*node->src0->ne[1]);
-                            }
-                        } else
-#endif
-                        if (node->src1->type != vec_dot_type) {
-                            cur = GGML_TYPE_SIZE[vec_dot_type]*ggml_nelements(node->src1)/GGML_BLCK_SIZE[vec_dot_type];
-                        } else {
-                            cur = 0;
-                        }
-
-                        work_size = MAX(work_size, cur);
-                    } break;
-                case GGML_OP_SCALE:
-                    {
-                        node->n_tasks = 1;
-                    } break;
-                case GGML_OP_SET:
-                case GGML_OP_CONT:
-                case GGML_OP_RESHAPE:
-                case GGML_OP_VIEW:
-                case GGML_OP_PERMUTE:
-                case GGML_OP_TRANSPOSE:
-                case GGML_OP_GET_ROWS:
-                case GGML_OP_GET_ROWS_BACK:
-                case GGML_OP_DIAG:
-                case GGML_OP_DIAG_MASK_ZERO:
-                    {
-                        node->n_tasks = 1;
-                    } break;
-                case GGML_OP_DIAG_MASK_INF:
-                case GGML_OP_SOFT_MAX:
-                case GGML_OP_SOFT_MAX_BACK:
-                case GGML_OP_ROPE:
-                case GGML_OP_ROPE_BACK:
-                    {
-                        node->n_tasks = n_threads;
-                    } break;
-                case GGML_OP_ALIBI:
-                    {
-                        node->n_tasks = 1; //TODO
-                    } break;
-                case GGML_OP_CLAMP:
-                    {
-                        node->n_tasks = 1; //TODO
-                    } break;
-                case GGML_OP_CONV_1D:
-                    {
-                        node->n_tasks = n_threads;
-
-                        GGML_ASSERT(node->src0->ne[3] == 1);
-                        GGML_ASSERT(node->src1->ne[2] == 1);
-                        GGML_ASSERT(node->src1->ne[3] == 1);
-
-                        size_t cur = 0;
-                        const int nk = node->src0->ne[0];
-
-                        if (node->src0->type == GGML_TYPE_F16 &&
-                            node->src1->type == GGML_TYPE_F32) {
-                            cur = sizeof(ggml_fp16_t)*(
-                                    nk*ggml_up32(node->src0->ne[1])*node->src0->ne[2] +
-                                    ( 2*(nk/2) + node->src1->ne[0])*node->src1->ne[1]
-                                    );
-                        } else if (node->src0->type == GGML_TYPE_F32 &&
-                                   node->src1->type == GGML_TYPE_F32) {
-                            cur = sizeof(float)*(
-                                    nk*ggml_up32(node->src0->ne[1])*node->src0->ne[2] +
-                                    ( 2*(nk/2) + node->src1->ne[0])*node->src1->ne[1]
-                                    );
-                        } else {
-                            GGML_ASSERT(false);
-                        }
-
-                        work_size = MAX(work_size, cur);
-                    } break;
-                case GGML_OP_CONV_2D:
-                    {
-                        node->n_tasks = n_threads;
-
-                        GGML_ASSERT(node->src1->ne[3] == 1);
-
-                        const int64_t ne00 = node->src0->ne[0]; // W
-                        const int64_t ne01 = node->src0->ne[1]; // H
-                        const int64_t ne02 = node->src0->ne[2]; // C
-                        const int64_t ne03 = node->src0->ne[3]; // N
-
-                        const int64_t ne10 = node->src1->ne[0]; // W
-                        const int64_t ne11 = node->src1->ne[1]; // H
-                        const int64_t ne12 = node->src1->ne[2]; // C
-
-                        const int64_t nk = ne00*ne01;
-
-                        UNUSED(ne02);
-                        UNUSED(ne03);
-                        UNUSED(nk);
-
-                        size_t cur = 0;
-
-                        if (node->src0->type == GGML_TYPE_F16 &&
-                            node->src1->type == GGML_TYPE_F32) {
-                            cur = sizeof(ggml_fp16_t)*(ne10*ne11*ne12);
-                        } else if (node->src0->type == GGML_TYPE_F32 &&
-                                   node->src1->type == GGML_TYPE_F32) {
-                            cur = sizeof(float)*      (ne10*ne11*ne12);
-                        } else {
-                            GGML_ASSERT(false);
-                        }
-
-                        work_size = MAX(work_size, cur);
-                    } break;
-                case GGML_OP_FLASH_ATTN:
-                    {
-                        node->n_tasks = n_threads;
-
-                        size_t cur = 0;
-
-                        const int64_t ne11 = ggml_up(node->src1->ne[1], GGML_SOFT_MAX_UNROLL);
-
-                        if (node->src1->type == GGML_TYPE_F32) {
-                            cur  = sizeof(float)*ne11*node->n_tasks; // TODO: this can become (n_tasks-1)
-                            cur += sizeof(float)*ne11*node->n_tasks; // this is overestimated by x2
-                        }
-
-                        if (node->src1->type == GGML_TYPE_F16) {
-                            cur  = sizeof(float)*ne11*node->n_tasks; // TODO: this can become (n_tasks-1)
-                            cur += sizeof(float)*ne11*node->n_tasks; // this is overestimated by x2
-                        }
-
-                        work_size = MAX(work_size, cur);
-                    } break;
-                case GGML_OP_FLASH_FF:
-                    {
-                        node->n_tasks = n_threads;
-
-                        size_t cur = 0;
-
-                        if (node->src1->type == GGML_TYPE_F32) {
-                            cur  = sizeof(float)*node->src1->ne[1]*node->n_tasks; // TODO: this can become (n_tasks-1)
-                            cur += sizeof(float)*node->src1->ne[1]*node->n_tasks; // this is overestimated by x2
-                        }
-
-                        if (node->src1->type == GGML_TYPE_F16) {
-                            cur  = sizeof(float)*node->src1->ne[1]*node->n_tasks; // TODO: this can become (n_tasks-1)
-                            cur += sizeof(float)*node->src1->ne[1]*node->n_tasks; // this is overestimated by x2
-                        }
-
-                        work_size = MAX(work_size, cur);
-                    } break;
-                case GGML_OP_FLASH_ATTN_BACK:
-                    {
-                        node->n_tasks = n_threads;
-
-                        size_t cur = 0;
-
-                        const int64_t    D = node->src0->ne[0];
-                        const int64_t ne11 = ggml_up(node->src1->ne[1], GGML_SOFT_MAX_UNROLL);
-                        const int64_t mxDn = MAX(D, ne11) * 2; // *2 because of S and SM in ggml_compute_forward_flash_attn_back
-                        if (node->src1->type == GGML_TYPE_F32) {
-                            cur  = sizeof(float)*mxDn*node->n_tasks; // TODO: this can become (n_tasks-1)
-                            cur += sizeof(float)*mxDn*node->n_tasks; // this is overestimated by x2
-                        }
-
-                        if (node->src1->type == GGML_TYPE_F16) {
-                            cur  = sizeof(float)*mxDn*node->n_tasks; // TODO: this can become (n_tasks-1)
-                            cur += sizeof(float)*mxDn*node->n_tasks; // this is overestimated by x2
-                        }
-
-                        work_size = MAX(work_size, cur);
-                    } break;
-                case GGML_OP_WIN_PART:
-                case GGML_OP_WIN_UNPART:
-                case GGML_OP_MAP_UNARY:
-                case GGML_OP_MAP_BINARY:
-                case GGML_OP_MAP_CUSTOM1:
-                case GGML_OP_MAP_CUSTOM2:
-                case GGML_OP_MAP_CUSTOM3:
-                    {
-                        node->n_tasks = 1;
-                    } break;
-                case GGML_OP_CROSS_ENTROPY_LOSS:
-                    {
-                        node->n_tasks = n_threads;
-
-                        size_t cur = ggml_type_size(node->type)*(node->n_tasks + node->src0->ne[0]*node->n_tasks);
-
-                        work_size = MAX(work_size, cur);
-                    } break;
-                case GGML_OP_CROSS_ENTROPY_LOSS_BACK:
-                    {
-                        node->n_tasks = n_threads;
-
-                        size_t cur = ggml_type_size(node->type)*node->src0->ne[0]*node->n_tasks;
-
-                        work_size = MAX(work_size, cur);
-                    } break;
-                case GGML_OP_NONE:
-                    {
-                        node->n_tasks = 1;
-                    } break;
-                case GGML_OP_COUNT:
-                    {
-                        GGML_ASSERT(false);
-                    } break;
-            }
-        }
-
-        if (cgraph->work != NULL && work_size > cgraph->work_size) {
-            GGML_ASSERT(false); // TODO: better handling
-        }
-
-        if (work_size > 0 && cgraph->work == NULL) {
-            cgraph->work_size = work_size + CACHE_LINE_SIZE*(n_threads - 1);
-
-            GGML_PRINT_DEBUG("%s: allocating work buffer for graph (%zu bytes)\n", __func__, cgraph->work_size);
-            cgraph->work = ggml_new_tensor_1d(ctx, GGML_TYPE_I8, cgraph->work_size);
-        }
-    }
 
     // create thread pool
     if (n_threads > 1) {
@@ -16473,6 +16497,17 @@ void ggml_graph_reset(struct ggml_cgraph * cgraph) {
     }
 }
 
+void ggml_graph_compute_with_ctx(struct ggml_context * ctx, struct ggml_cgraph * cgraph, int n_threads) {
+    struct ggml_cplan cplan = ggml_graph_plan(cgraph, n_threads);
+
+    struct ggml_tensor * buf = ggml_new_tensor_1d(ctx, GGML_TYPE_I8, cplan.work_size);
+    GGML_ASSERT(buf);
+
+    cplan.work_data = buf->data;
+
+    ggml_graph_compute(cgraph, &cplan);
+}
+
 struct ggml_tensor * ggml_graph_get_tensor(struct ggml_cgraph * cgraph, const char * name) {
     for (int i = 0; i < cgraph->n_leafs; i++) {
         struct ggml_tensor * leaf = cgraph->leafs[i];
@@ -16511,14 +16546,13 @@ static void ggml_graph_export_node(const struct ggml_tensor * tensor, const char
     const int64_t * ne = tensor->ne;
     const size_t  * nb = tensor->nb;
 
-    fprintf(fout, "%-6s %-6s %-12s %8d %" PRId64 " %" PRId64 " %" PRId64 " %" PRId64 " %16zu %16zu %16zu %16zu %8d %16p %32s\n",
+    fprintf(fout, "%-6s %-6s %-12s %8d %" PRId64 " %" PRId64 " %" PRId64 " %" PRId64 " %16zu %16zu %16zu %16zu %16p %32s\n",
             arg,
             ggml_type_name(tensor->type),
             ggml_op_name  (tensor->op),
             tensor->n_dims,
             ne[0], ne[1], ne[2], ne[3],
             nb[0], nb[1], nb[2], nb[3],
-            tensor->n_tasks,
             tensor->data,
             tensor->name);
 }
@@ -17254,9 +17288,6 @@ static enum ggml_opt_result ggml_opt_adam(
         struct ggml_cgraph * gb) {
     GGML_ASSERT(ggml_is_scalar(f));
 
-    gf->n_threads = params.n_threads;
-    gb->n_threads = params.n_threads;
-
     // these will store the parameters we want to optimize
     struct ggml_tensor * ps[GGML_MAX_PARAMS];
 
@@ -17303,7 +17334,8 @@ static enum ggml_opt_result ggml_opt_adam(
     // compute the function value
     ggml_graph_reset  (gf);
     ggml_set_f32      (f->grad, 1.0f);
-    ggml_graph_compute(ctx, gb);
+
+    ggml_graph_compute_with_ctx(ctx, gb, params.n_threads);
 
     opt->adam.fx_prev = ggml_get_f32_1d(f, 0);
     opt->adam.fx_best = opt->adam.fx_prev;
@@ -17383,7 +17415,8 @@ static enum ggml_opt_result ggml_opt_adam(
 
         ggml_graph_reset  (gf);
         ggml_set_f32      (f->grad, 1.0f);
-        ggml_graph_compute(ctx, gb);
+
+        ggml_graph_compute_with_ctx(ctx, gb, params.n_threads);
 
         const float fx = ggml_get_f32_1d(f, 0);
 
@@ -17505,7 +17538,8 @@ static enum ggml_opt_result linesearch_backtracking(
 
             ggml_graph_reset  (gf);
             ggml_set_f32      (f->grad, 1.0f);
-            ggml_graph_compute(ctx, gb);
+
+            ggml_graph_compute_with_ctx(ctx, gb, params->n_threads);
 
             ggml_opt_get_grad(np, ps, g);
 
@@ -17573,9 +17607,6 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         }
     }
 
-    gf->n_threads = params.n_threads;
-    gb->n_threads = params.n_threads;
-
     const int m = params.lbfgs.m;
 
     // these will store the parameters we want to optimize
@@ -17627,7 +17658,8 @@ static enum ggml_opt_result ggml_opt_lbfgs(
 
         ggml_graph_reset  (gf);
         ggml_set_f32      (f->grad, 1.0f);
-        ggml_graph_compute(ctx, gb);
+
+        ggml_graph_compute_with_ctx(ctx, gb, params.n_threads);
 
         ggml_opt_get_grad(np, ps, g);
 
