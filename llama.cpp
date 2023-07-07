@@ -2157,7 +2157,7 @@ void llama_log_softmax(T * array, int size, LogitAccessor logit_accessor) {
     }
 }
 
-void llama_sample_context_free_guidance(
+void llama_sample_classifier_free_guidance(
           struct llama_context * ctx,
         llama_token_data_array * candidates,
           struct llama_context * guidance_ctx,
