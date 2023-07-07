@@ -248,7 +248,7 @@ inline static void* ggml_aligned_malloc(size_t size) {
 #endif
 #elif defined(GGML_USE_OPENBLAS)
 #if defined(GGML_BLAS_USE_MKL)
-#include "mkl.h"
+#include <mkl.h>
 #else
 #include <cblas.h>
 #endif
