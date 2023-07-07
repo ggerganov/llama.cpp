@@ -329,7 +329,7 @@ if (LLAMA_VULKAN)
                 COMMAND "${Vulkan_GLSLC_EXECUTABLE}"
                     -fshader-stage=compute
                     --target-env=vulkan1.2
-                    -O "${CMAKE_CURRENT_SOURCE_DIR}/vk_shaders/${s}.glsl"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/vk_shaders/${s}.glsl"
                     -o "${CMAKE_CURRENT_BINARY_DIR}/vk_shaders/${s}.spv"
                 DEPENDS "vk_shaders/${s}.glsl"
             )
