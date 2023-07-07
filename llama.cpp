@@ -119,14 +119,14 @@ static const std::map<e_model, size_t> & MEM_REQ_KV_SELF()
 
 // this is mostly needed for temporary mul_mat buffers to dequantize the data
 // not actually needed if BLAS is disabled
-static const std::map<e_model, size_t> & MEM_REQ_EVAL()
+static const std::map<e_model, size_t> & MEM_REQ_EVAL(int n_ctx)
 {
     static std::map<e_model, size_t> k_sizes = {
-        { MODEL_3B,   640ull * MB },
-        { MODEL_7B,   768ull * MB },
-        { MODEL_13B, 1024ull * MB },
-        { MODEL_30B, 1280ull * MB },
-        { MODEL_65B, 1536ull * MB },
+        { MODEL_3B,  ((size_t) n_ctx / 256ull +  512ull) * MB },
+        { MODEL_7B,  ((size_t) n_ctx / 256ull +  768ull) * MB },
+        { MODEL_13B, ((size_t) n_ctx / 256ull + 1024ull) * MB },
+        { MODEL_30B, ((size_t) n_ctx / 256ull + 1280ull) * MB },
+        { MODEL_65B, ((size_t) n_ctx / 256ull + 1536ull) * MB },
     };
     return k_sizes;
 }
@@ -1140,7 +1140,7 @@ static void llama_model_load_internal(
             mmapped_size - vram_weights + // weights in VRAM not in memory
             MEM_REQ_SCRATCH0(hparams.n_ctx).at(model.type) +
             MEM_REQ_SCRATCH1().at(model.type) +
-            MEM_REQ_EVAL().at    (model.type);
+            MEM_REQ_EVAL(hparams.n_ctx).at(model.type);
 
         // this is the memory required by one llama_state
         const size_t mem_required_state =
@@ -2652,7 +2652,7 @@ struct llama_context * llama_new_context_with_model(
             ctx->embedding.resize(hparams.n_embd);
         }
 
-        ctx->buf_compute.resize(MEM_REQ_EVAL().at(ctx->model.type));
+        ctx->buf_compute.resize(MEM_REQ_EVAL(hparams.n_ctx).at(ctx->model.type));
 
         ctx->buf_scratch[0].resize(MEM_REQ_SCRATCH0(hparams.n_ctx).at(ctx->model.type));
         ctx->buf_scratch[1].resize(MEM_REQ_SCRATCH1().at(ctx->model.type));
