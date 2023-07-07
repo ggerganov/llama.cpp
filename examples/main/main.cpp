@@ -124,12 +124,12 @@ int main(int argc, char ** argv) {
     llama_model * model;
     llama_context * ctx;
     llama_context * guidance_ctx = NULL;
-    struct llama_context_params lparams;
     g_ctx = &ctx;
 
     // load the model and apply lora adapter, if any
-    std::tie(model, ctx, lparams) = llama_init_from_gpt_params(params);
+    std::tie(model, ctx) = llama_init_from_gpt_params(params);
     if (params.cfg_scale > 1.f) {
+        struct llama_context_params lparams = llama_get_context_params_from_gpt_params(params);
         guidance_ctx = llama_new_context_with_model(model, lparams);
     }
 

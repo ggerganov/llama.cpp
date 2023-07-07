@@ -41,7 +41,7 @@ int main(int argc, char ** argv) {
     llama_context * ctx;
 
     // load the model
-    std::tie(model, ctx, std::ignore) = llama_init_from_gpt_params(params);
+    std::tie(model, ctx) = llama_init_from_gpt_params(params);
     if (model == NULL) {
         fprintf(stderr, "%s: error: unable to load model\n", __func__);
         return 1;

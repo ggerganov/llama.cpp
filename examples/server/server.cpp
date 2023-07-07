@@ -245,7 +245,7 @@ struct llama_server_context
     bool loadModel(const gpt_params &params_)
     {
         params = params_;
-        std::tie(model, ctx, std::ignore) = llama_init_from_gpt_params(params);
+        std::tie(model, ctx) = llama_init_from_gpt_params(params);
         if (model == nullptr)
         {
             LOG_ERROR("unable to load model", {{"model", params_.model}});
