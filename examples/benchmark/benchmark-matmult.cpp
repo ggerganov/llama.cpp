@@ -16,6 +16,21 @@
 #include <iterator>
 #include <algorithm>
 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
+#endif
+
+void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, int n_threads) {
+    struct ggml_cplan plan = ggml_graph_plan(graph, n_threads);
+
+    if (plan.work_size > 0) {
+        buf.resize(plan.work_size);
+        plan.work_data = buf.data();
+    }
+
+    ggml_graph_compute(graph, &plan);
+}
+
 float tensor_sum_elements(const ggml_tensor * tensor) {
     float sum = 0;
     if (tensor->type==GGML_TYPE_F32) {
@@ -29,9 +44,9 @@ float tensor_sum_elements(const ggml_tensor * tensor) {
 }
 
 void tensor_dump(const ggml_tensor * tensor, const char * name) {
-    printf("%15s: type = %i (%5s) ne = %5d x %5d x %5d, nb = (%5li, %5li, %5li) - ", name,
+    printf("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64 " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi) - ", name,
         tensor->type, ggml_type_name(tensor->type),
-        (int) tensor->ne[0], (int) tensor->ne[1], (int) tensor->ne[2], tensor->nb[0], tensor->nb[1], tensor->nb[2]);
+        tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->nb[0], tensor->nb[1], tensor->nb[2]);
     float sum = tensor_sum_elements(tensor);
     printf("Sum of tensor %s is %6.2f\n", name, sum);
 }
@@ -120,7 +135,7 @@ int main(int argc, char ** argv)  {
     ctx_size += sizex*sizey*ggml_type_sizef(GGML_TYPE_F32); // BLAS
     ctx_size += 1024*1024*16;
 
-    printf("Allocating Memory of size %li bytes, %li MB\n",ctx_size, (ctx_size/1024/1024));
+    printf("Allocating Memory of size %zi bytes, %zi MB\n",ctx_size, (ctx_size/1024/1024));
 
     struct ggml_init_params params = {
         /*.mem_size   =*/ ctx_size,
@@ -155,13 +170,14 @@ int main(int argc, char ** argv)  {
     // printf("Creating compute graph\n");
     struct ggml_cgraph gf = ggml_build_forward(m11xm2);
 
-    gf.n_threads=benchmark_params.n_threads;
-    printf("cgraph->n_threads=%i\n",gf.n_threads);
+    printf("n_threads=%i\n", benchmark_params.n_threads);
 
     TENSOR_DUMP(m11);
     TENSOR_DUMP(m2);
 
-    ggml_graph_compute(ctx, &gf);
+    std::vector<uint8_t> work_buffer;
+
+    ggml_graph_compute_helper(work_buffer, &gf, benchmark_params.n_threads);
 
     TENSOR_DUMP(gf.nodes[0]);
 
@@ -183,7 +199,6 @@ int main(int argc, char ** argv)  {
 
     // printf("Creating compute graph\n");
     struct ggml_cgraph gf31 = ggml_build_forward(q31);
-    gf31.n_threads=benchmark_params.n_threads;
 
     // Set up a second graph computation to make sure we override the CPU cache lines
     // printf("Creating new tensor q12 & Running quantize\n");
@@ -195,8 +210,7 @@ int main(int argc, char ** argv)  {
 
     //printf("Creating compute graph\n");
     struct ggml_cgraph gf32 = ggml_build_forward(q32);
-    gf32.n_threads=benchmark_params.n_threads;
-    printf("cgraph->n_threads=%i\n",gf31.n_threads);
+    printf("n_threads=%i\n", benchmark_params.n_threads);
 
     const int dimx = sizex;
     const int dimy = sizey;
@@ -217,14 +231,15 @@ int main(int argc, char ** argv)  {
 
         long long int start = ggml_time_us();
         //printf("Running ggml_graph_compute\n");
-        ggml_graph_compute(ctx, &gf31);
+        ggml_graph_compute_helper(work_buffer, &gf31, benchmark_params.n_threads);
+
         long long int stop = ggml_time_us();
         long long int usec = stop-start;
         double gflops = (double)(flops_per_matrix)/usec/1000.0;
         gflops_sum += gflops;
         printf("%9i;%8i;%6i;%6i;%6i;%15lli;%18lli;%10.2f\n",
             i,
-            gf31.n_threads,
+            benchmark_params.n_threads,
             sizex, sizey, sizez, flops_per_matrix,
             usec,gflops);
 
@@ -249,7 +264,7 @@ int main(int argc, char ** argv)  {
         }
 
         // Running a different graph computation to make sure we override the CPU cache lines
-        ggml_graph_compute(ctx, &gf32);
+        ggml_graph_compute_helper(work_buffer, &gf32, benchmark_params.n_threads);
     }
     printf("\n");
     printf("Average%78.2f\n",gflops_sum/((double)benchmark_params.n_iterations));

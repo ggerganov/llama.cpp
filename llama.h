@@ -1,6 +1,13 @@
 #ifndef LLAMA_H
 #define LLAMA_H
 
+#include "ggml.h"
+#ifdef GGML_USE_CUBLAS
+#include "ggml-cuda.h"
+#define LLAMA_MAX_DEVICES GGML_CUDA_MAX_DEVICES
+#else
+#define LLAMA_MAX_DEVICES 1
+#endif // GGML_USE_CUBLAS
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -19,6 +26,14 @@
 #    define LLAMA_API
 #endif
 
+#ifdef __GNUC__
+#    define DEPRECATED(func, hint) func __attribute__((deprecated(hint)))
+#elif defined(_MSC_VER)
+#    define DEPRECATED(func, hint) __declspec(deprecated(hint)) func
+#else
+#    define DEPRECATED(func, hint) func
+#endif
+
 #define LLAMA_FILE_MAGIC_GGJT        0x67676a74u // 'ggjt'
 #define LLAMA_FILE_MAGIC_GGLA        0x67676c61u // 'ggla'
 #define LLAMA_FILE_MAGIC_GGMF        0x67676d66u // 'ggmf'
@@ -30,6 +45,8 @@
 #define LLAMA_FILE_MAGIC_UNVERSIONED LLAMA_FILE_MAGIC_GGML
 #define LLAMA_SESSION_MAGIC          LLAMA_FILE_MAGIC_GGSN
 #define LLAMA_SESSION_VERSION        1
+
+#define LLAMA_DEFAULT_SEED           0xFFFFFFFF
 
 #if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL)
 // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
@@ -46,6 +63,7 @@ extern "C" {
     // TODO: show sample usage
     //
 
+    struct llama_model;
     struct llama_context;
 
     typedef int llama_token;
@@ -64,24 +82,27 @@ extern "C" {
 
     typedef void (*llama_progress_callback)(float progress, void *ctx);
 
-    struct llama_context_params {
-        int n_ctx;        // text context
-        int n_gpu_layers; // number of layers to store in VRAM
-        int seed;         // RNG seed, -1 for random
+   struct llama_context_params {
+        uint32_t seed;                         // RNG seed, -1 for random
+        int32_t  n_ctx;                        // text context
+        int32_t  n_batch;                      // prompt processing batch size
+        int32_t  n_gpu_layers;                 // number of layers to store in VRAM
+        int32_t  main_gpu;                     // the GPU that is used for scratch and small tensors
+        float tensor_split[LLAMA_MAX_DEVICES]; // how to split layers across multiple GPUs
+        // called with a progress value between 0 and 1, pass NULL to disable
+        llama_progress_callback progress_callback;
+        // context pointer passed to the progress callback
+        void * progress_callback_user_data;
 
+        // Keep the booleans together to avoid misalignment during copy-by-value.
+        bool low_vram;   // if true, reduce VRAM usage at the cost of performance
         bool f16_kv;     // use fp16 for KV cache
         bool logits_all; // the llama_eval() call computes all logits, not just the last one
         bool vocab_only; // only load the vocabulary, no weights
         bool use_mmap;   // use mmap if possible
         bool use_mlock;  // force system to keep model in RAM
         bool embedding;  // embedding mode only
-
-        // called with a progress value between 0 and 1, pass NULL to disable
-        llama_progress_callback progress_callback;
-        // context pointer passed to the progress callback
-        void * progress_callback_user_data;
     };
-
     // model file types
     enum llama_ftype {
         LLAMA_FTYPE_ALL_F32              = 0,
@@ -105,36 +126,68 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_Q6_K          = 18,// except 1d tensors
     };
 
+    // model quantization parameters
+    typedef struct llama_model_quantize_params {
+        int nthread;                 // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
+        enum llama_ftype   ftype;    // quantize to this llama_ftype
+        bool allow_requantize;       // allow quantizing non-f32/f16 tensors
+        bool quantize_output_tensor; // quantize output.weight
+    } llama_model_quantize_params;
+
+    // performance timing information
+    struct llama_timings {
+        double t_start_ms;
+        double t_end_ms;
+        double t_load_ms;
+        double t_sample_ms;
+        double t_p_eval_ms;
+        double t_eval_ms;
+
+        int32_t n_sample;
+        int32_t n_p_eval;
+        int32_t n_eval;
+    };
+
     LLAMA_API struct llama_context_params llama_context_default_params();
+    LLAMA_API struct llama_model_quantize_params llama_model_quantize_default_params();
 
     LLAMA_API bool llama_mmap_supported();
     LLAMA_API bool llama_mlock_supported();
 
     // TODO: not great API - very likely to change
     // Initialize the llama + ggml backend
+    // If numa is true, use NUMA optimizations
     // Call once at the start of the program
-    LLAMA_API void llama_init_backend();
+    LLAMA_API void llama_init_backend(bool numa);
 
     LLAMA_API int64_t llama_time_us();
+
+    LLAMA_API struct llama_model * llama_load_model_from_file(
+                             const char * path_model,
+            struct llama_context_params   params);
+
+    LLAMA_API void llama_free_model(struct llama_model * model);
+
+    LLAMA_API struct llama_context * llama_new_context_with_model(
+                     struct llama_model * model,
+            struct llama_context_params   params);
 
     // Various functions for loading a ggml llama model.
     // Allocate (almost) all memory needed for the model.
     // Return NULL on failure
-    LLAMA_API struct llama_context * llama_init_from_file(
+    LLAMA_API DEPRECATED(struct llama_context * llama_init_from_file(
                              const char * path_model,
-            struct llama_context_params   params);
+            struct llama_context_params   params),
+            "please use llama_load_model_from_file combined with llama_new_context_with_model instead");
 
     // Frees all allocated memory
     LLAMA_API void llama_free(struct llama_context * ctx);
 
-    // TODO: not great API - very likely to change
     // Returns 0 on success
-    // nthread - how many threads to use. If <=0, will use std::thread::hardware_concurrency(), else the number given
     LLAMA_API int llama_model_quantize(
             const char * fname_inp,
             const char * fname_out,
-      enum llama_ftype   ftype,
-            int          nthread);
+            const llama_model_quantize_params * params);
 
     // Apply a LoRA adapter to a loaded model
     // path_base_model is the path to a higher quality model to use as a base for
@@ -142,8 +195,15 @@ extern "C" {
     // The model needs to be reloaded before applying a new adapter, otherwise the adapter
     // will be applied on top of the previous one
     // Returns 0 on success
-    LLAMA_API int llama_apply_lora_from_file(
+    LLAMA_API DEPRECATED(int llama_apply_lora_from_file(
             struct llama_context * ctx,
+                      const char * path_lora,
+                      const char * path_base_model,
+                             int   n_threads),
+            "please use llama_model_apply_lora_from_file instead");
+
+    LLAMA_API int llama_model_apply_lora_from_file(
+            const struct llama_model * model,
                       const char * path_lora,
                       const char * path_base_model,
                              int   n_threads);
@@ -152,7 +212,7 @@ extern "C" {
     LLAMA_API int llama_get_kv_cache_token_count(const struct llama_context * ctx);
 
     // Sets the current rng seed.
-    LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, int seed);
+    LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, uint32_t seed);
 
     // Returns the maximum size in bytes of the state (rng, logits, embedding
     // and kv_cache) - will often be smaller after compacting tokens
@@ -182,6 +242,14 @@ extern "C" {
                              int   n_past,
                              int   n_threads);
 
+    // Same as llama_eval, but use float matrix input directly.
+    LLAMA_API int llama_eval_embd(
+            struct llama_context * ctx,
+                     const float * embd,
+                             int   n_tokens,
+                             int   n_past,
+                             int   n_threads);
+
     // Export a static computation graph for context of 511 and batch size of 1
     // NOTE: since this functionality is mostly for debugging and demonstration purposes, we hardcode these
     //       parameters here to keep things simple
@@ -204,6 +272,14 @@ extern "C" {
     LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
     LLAMA_API int llama_n_embd (const struct llama_context * ctx);
 
+    // Get the vocabulary as output parameters.
+    // Returns number of results.
+    LLAMA_API int llama_get_vocab(
+            const struct llama_context * ctx,
+                          const char * * strings,
+                                 float * scores,
+                                   int   capacity);
+
     // Token logits obtained from the last call to llama_eval()
     // The logits for the last token are stored in the last row
     // Can be mutated in order to change the probabilities of the next token
@@ -219,9 +295,9 @@ extern "C" {
     LLAMA_API const char * llama_token_to_str(const struct llama_context * ctx, llama_token token);
 
     // Special tokens
-    LLAMA_API llama_token llama_token_bos();
-    LLAMA_API llama_token llama_token_eos();
-    LLAMA_API llama_token llama_token_nl();
+    LLAMA_API llama_token llama_token_bos();  // beginning-of-sentence
+    LLAMA_API llama_token llama_token_eos();  // end-of-sentence
+    LLAMA_API llama_token llama_token_nl();   // next-line
 
     // Sampling functions
 
@@ -269,6 +345,7 @@ extern "C" {
     LLAMA_API llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_array * candidates);
 
     // Performance information
+    LLAMA_API struct llama_timings llama_get_timings(struct llama_context * ctx);
     LLAMA_API void llama_print_timings(struct llama_context * ctx);
     LLAMA_API void llama_reset_timings(struct llama_context * ctx);
 
@@ -286,7 +363,7 @@ extern "C" {
 #include <string>
 struct ggml_tensor;
 
-std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx);
+const std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx);
 
 #endif
 

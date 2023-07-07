@@ -23,9 +23,15 @@
 #include <unistd.h>
 #elif defined (_WIN32)
 #define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h>
 #include <signal.h>
+#endif
+
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
 static console_state con_st;
@@ -79,31 +85,35 @@ int main(int argc, char ** argv) {
     }
 
     if (params.n_ctx > 2048) {
-        fprintf(stderr, "%s: warning: model does not support context sizes greater than 2048 tokens (%d specified);"
+        fprintf(stderr, "%s: warning: model might not support context sizes greater than 2048 tokens (%d specified);"
                 "expect poor results\n", __func__, params.n_ctx);
+    } else if (params.n_ctx < 8) {
+        fprintf(stderr, "%s: warning: minimum context size is 8, using minimum size.\n", __func__);
+        params.n_ctx = 8;
     }
 
     fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
 
-    if (params.seed < 0) {
+    if (params.seed == LLAMA_DEFAULT_SEED) {
         params.seed = time(NULL);
     }
 
-    fprintf(stderr, "%s: seed  = %d\n", __func__, params.seed);
+    fprintf(stderr, "%s: seed  = %u\n", __func__, params.seed);
 
     std::mt19937 rng(params.seed);
     if (params.random_prompt) {
         params.prompt = gpt_random_prompt(rng);
     }
 
-    llama_init_backend();
+    llama_init_backend(params.numa);
 
+    llama_model * model;
     llama_context * ctx;
     g_ctx = &ctx;
 
     // load the model and apply lora adapter, if any
-    ctx = llama_init_from_gpt_params(params);
-    if (ctx == NULL) {
+    std::tie(model, ctx) = llama_init_from_gpt_params(params);
+    if (model == NULL) {
         fprintf(stderr, "%s: error: unable to load model\n", __func__);
         return 1;
     }
@@ -130,6 +140,7 @@ int main(int argc, char ** argv) {
 
         llama_print_timings(ctx);
         llama_free(ctx);
+        llama_free_model(model);
 
         return 0;
     }
@@ -138,6 +149,7 @@ int main(int argc, char ** argv) {
     if (params.export_cgraph) {
         llama_eval_export(ctx, "llama.ggml");
         llama_free(ctx);
+        llama_free_model(model);
 
         return 0;
     }
@@ -328,9 +340,29 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd;
 
+    // do one empty run to warm up the model
+    {
+        const std::vector<llama_token> tmp = { llama_token_bos(), };
+        llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads);
+        llama_reset_timings(ctx);
+    }
+
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
         if (embd.size() > 0) {
+            // Note: n_ctx - 4 here is to match the logic for commandline prompt handling via
+            // --prompt or --file which uses the same value.
+            auto max_embd_size = n_ctx - 4;
+            // Ensure the input doesn't exceed the context size by truncating embd if necessary.
+            if ((int)embd.size() > max_embd_size) {
+                auto skipped_tokens = embd.size() - max_embd_size;
+                console_set_color(con_st, CONSOLE_COLOR_ERROR);
+                printf("<<input too long: skipped %zu token%s>>", skipped_tokens, skipped_tokens != 1 ? "s" : "");
+                console_set_color(con_st, CONSOLE_COLOR_DEFAULT);
+                fflush(stdout);
+                embd.resize(max_embd_size);
+            }
+
             // infinite text generation via context swapping
             // if we run out of context:
             // - take the n_keep first tokens from the original prompt (via n_past)
@@ -417,7 +449,7 @@ int main(int argc, char ** argv) {
             const bool    penalize_nl     = params.penalize_nl;
 
             // optionally save the session on first sample (for faster prompt loading next time)
-            if (!path_session.empty() && need_to_save_session) {
+            if (!path_session.empty() && need_to_save_session && !params.prompt_cache_ro) {
                 need_to_save_session = false;
                 llama_save_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
             }
@@ -630,13 +662,14 @@ int main(int argc, char ** argv) {
         }
     }
 
-    if (!path_session.empty() && params.prompt_cache_all) {
+    if (!path_session.empty() && params.prompt_cache_all && !params.prompt_cache_ro) {
         fprintf(stderr, "\n%s: saving final output to session file '%s'\n", __func__, path_session.c_str());
         llama_save_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
     }
 
     llama_print_timings(ctx);
     llama_free(ctx);
+    llama_free_model(model);
 
     return 0;
 }

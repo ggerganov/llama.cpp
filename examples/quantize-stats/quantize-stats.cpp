@@ -19,6 +19,10 @@
 #include <thread>
 #include <mutex>
 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
+#endif
+
 struct quantize_stats_params {
     std::string model = "models/7B/ggml-model-f16.bin";
     bool verbose = false;
@@ -143,7 +147,7 @@ void test_roundtrip_on_chunk(
         const ggml_tensor * layer,
         int64_t offset,
         int64_t chunk_size,
-        const quantize_fns_t & qfns,
+        const ggml_type_traits_t & qfns,
         bool use_reference,
         float * input_scratch,
         char * quantized_scratch,
@@ -159,11 +163,11 @@ void test_roundtrip_on_chunk(
     }
 
     if (use_reference) {
-        qfns.quantize_row_q_reference(input_scratch, quantized_scratch, chunk_size);
+        qfns.from_float_reference(input_scratch, quantized_scratch, chunk_size);
     } else {
-        qfns.quantize_row_q(input_scratch, quantized_scratch, chunk_size);
+        qfns.from_float(input_scratch, quantized_scratch, chunk_size);
     }
-    qfns.dequantize_row_q(quantized_scratch, output_scratch, chunk_size);
+    qfns.to_float(quantized_scratch, output_scratch, chunk_size);
 
     update_error_stats(chunk_size, input_scratch, output_scratch, stats);
 }
@@ -173,7 +177,7 @@ void test_roundtrip_on_chunk(
 void test_roundtrip_on_layer(
         std::string & name,
         bool print_layer_stats,
-        const quantize_fns_t & qfns,
+        const ggml_type_traits_t & qfns,
         bool use_reference,
         const ggml_tensor * layer,
         std::vector<float> & input_scratch,
@@ -316,6 +320,7 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "Loading model\n");
 
     const int64_t t_main_start_us = ggml_time_us();
+    llama_model * model;
     llama_context * ctx;
 
     {
@@ -326,10 +331,18 @@ int main(int argc, char ** argv) {
         lparams.f16_kv     = false;
         lparams.use_mlock  = false;
 
-        ctx = llama_init_from_file(params.model.c_str(), lparams);
+        model = llama_load_model_from_file(params.model.c_str(), lparams);
+
+        if (model == NULL) {
+            fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
+            return 1;
+        }
+
+        ctx = llama_new_context_with_model(model, lparams);
 
         if (ctx == NULL) {
-            fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
+            fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, params.model.c_str());
+            llama_free_model(model);
             return 1;
         }
     }
@@ -353,6 +366,7 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "%s: error: Quantization should be tested with a float model, "
                 "this model contains already quantized layers (%s is type %d)\n", __func__, kv_tensor.first.c_str(), kv_tensor.second->type);
             llama_free(ctx);
+            llama_free_model(model);
             return 1;
         }
         included_layers++;
@@ -374,8 +388,8 @@ int main(int argc, char ** argv) {
         if (!params.include_types.empty() && std::find(params.include_types.begin(), params.include_types.end(), i) == params.include_types.end()) {
             continue;
         }
-        quantize_fns_t qfns = ggml_internal_get_quantize_fn(i);
-        if (qfns.quantize_row_q && qfns.dequantize_row_q) {
+        ggml_type_traits_t qfns = ggml_internal_get_type_traits(type);
+        if (qfns.from_float && qfns.to_float) {
             if (params.verbose) {
                 printf("testing %s ...\n",  ggml_type_name(type));
             }
@@ -411,6 +425,7 @@ int main(int argc, char ** argv) {
 
 
     llama_free(ctx);
+    llama_free_model(model);
     // report timing
     {
         const int64_t t_main_end_us = ggml_time_us();
