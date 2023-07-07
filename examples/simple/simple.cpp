@@ -71,7 +71,7 @@ int main(int argc, char ** argv)
     llama_model * model;
     llama_context * ctx;
 
-    std::tie(model, ctx) = llama_init_from_gpt_params( params );
+    std::tie(model, ctx, std::ignore) = llama_init_from_gpt_params( params );
 
     if ( model == NULL )
     {

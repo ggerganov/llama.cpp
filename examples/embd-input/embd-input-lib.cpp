@@ -42,7 +42,7 @@ struct MyModel* create_mymodel(int argc, char ** argv) {
     g_ctx = &ctx;
 
     // load the model and apply lora adapter, if any
-    std::tie(model, ctx) = llama_init_from_gpt_params(params);
+    std::tie(model, ctx, std::ignore) = llama_init_from_gpt_params(params);
     if (model == NULL) {
         fprintf(stderr, "%s: error: unable to load model\n", __func__);
         return nullptr;

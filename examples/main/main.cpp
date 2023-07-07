@@ -54,6 +54,20 @@ void sigint_handler(int signo) {
 }
 #endif
 
+void inplace_log_softmax(float* logits, int n_vocab) {
+    float sum = 0.f;
+    for (int i = 0; i < n_vocab; ++i) {
+        float p = expf(logits[i]);
+        logits[i] = p;
+        sum += p;
+    }
+
+    for (int i = 0; i < n_vocab; ++i) {
+        float p = logits[i];
+        logits[i] = logf(p/ sum);
+    }
+}
+
 int main(int argc, char ** argv) {
     gpt_params params;
 
@@ -109,10 +123,16 @@ int main(int argc, char ** argv) {
 
     llama_model * model;
     llama_context * ctx;
+    llama_context * guidance_ctx = NULL;
+    struct llama_context_params lparams;
     g_ctx = &ctx;
 
     // load the model and apply lora adapter, if any
-    std::tie(model, ctx) = llama_init_from_gpt_params(params);
+    std::tie(model, ctx, lparams) = llama_init_from_gpt_params(params);
+    if (params.cfg_scale > 1.f) {
+        guidance_ctx = llama_new_context_with_model(model, lparams);
+    }
+
     if (model == NULL) {
         fprintf(stderr, "%s: error: unable to load model\n", __func__);
         return 1;
@@ -183,13 +203,26 @@ int main(int argc, char ** argv) {
     // tokenize the prompt
     std::vector<llama_token> embd_inp;
 
-    if (params.interactive_first || params.instruct || !params.prompt.empty() || session_tokens.empty()) {
-        // Add a space in front of the first character to match OG llama tokenizer behavior
-        params.prompt.insert(0, 1, ' ');
+    // Add a space in front of the first character to match OG llama tokenizer behavior
+    params.prompt.insert(0, 1, ' ');
 
+    if (params.interactive_first || params.instruct || !params.prompt.empty() || session_tokens.empty()) {
         embd_inp = ::llama_tokenize(ctx, params.prompt, true);
     } else {
         embd_inp = session_tokens;
+    }
+
+    // Tokenize negative prompt
+    std::vector<llama_token> guidance_inp;
+    int guidance_offset = 0;
+    int original_prompt_len = 0;
+    if (guidance_ctx) {
+        params.cfg_negative_prompt.insert(0, 1, ' ');
+        guidance_inp = ::llama_tokenize(guidance_ctx, params.cfg_negative_prompt, true);
+
+        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, true);
+        original_prompt_len = original_inp.size();
+        guidance_offset = (int)guidance_inp.size() - original_prompt_len;
     }
 
     const int n_ctx = llama_n_ctx(ctx);
@@ -258,6 +291,16 @@ int main(int argc, char ** argv) {
         for (int i = 0; i < (int) embd_inp.size(); i++) {
             fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], llama_token_to_str(ctx, embd_inp[i]));
         }
+
+        if (guidance_ctx) {
+            fprintf(stderr, "\n");
+            fprintf(stderr, "%s: negative prompt: '%s'\n", __func__, params.cfg_negative_prompt.c_str());
+            fprintf(stderr, "%s: number of tokens in negative prompt = %zu\n", __func__, guidance_inp.size());
+            for (int i = 0; i < (int) guidance_inp.size(); i++) {
+                fprintf(stderr, "%6d -> '%s'\n", guidance_inp[i], llama_token_to_str(ctx, guidance_inp[i]));
+            }
+        }
+
         if (params.n_keep > 0) {
         fprintf(stderr, "%s: static prompt based on n_keep: '", __func__);
             for (int i = 0; i < params.n_keep; i++) {
@@ -334,11 +377,13 @@ int main(int argc, char ** argv) {
     int n_remain           = params.n_predict;
     int n_consumed         = 0;
     int n_session_consumed = 0;
+    int guidance_n_past    = 0;
 
     // the first thing we will do is to output the prompt, so set color accordingly
     console_set_color(con_st, CONSOLE_COLOR_PROMPT);
 
     std::vector<llama_token> embd;
+    std::vector<llama_token> guidance_embd;
 
     // do one empty run to warm up the model
     {
@@ -367,11 +412,12 @@ int main(int argc, char ** argv) {
             // if we run out of context:
             // - take the n_keep first tokens from the original prompt (via n_past)
             // - take half of the last (n_ctx - n_keep) tokens and recompute the logits in batches
-            if (n_past + (int) embd.size() > n_ctx) {
+            if (n_past + (int) embd.size() + std::max<int>(0, guidance_offset) > n_ctx) {
                 const int n_left = n_past - params.n_keep;
 
                 // always keep the first token - BOS
                 n_past = std::max(1, params.n_keep);
+                guidance_n_past = std::max(1, params.n_keep + guidance_offset);
 
                 // insert n_left/2 tokens at the start of embd from last_n_tokens
                 embd.insert(embd.begin(), last_n_tokens.begin() + n_ctx - n_left/2 - embd.size(), last_n_tokens.end() - embd.size());
@@ -412,6 +458,48 @@ int main(int argc, char ** argv) {
 
             // evaluate tokens in batches
             // embd is typically prepared beforehand to fit within a batch, but not always
+
+            if (guidance_ctx) {
+                int input_size = 0;
+                llama_token* input_buf = NULL;
+
+                if (guidance_n_past < (int) guidance_inp.size()) {
+                    // Guidance context should have the same data with these modifications:
+                    //
+                    // * Replace the initial prompt
+                    // * Shift everything by guidance_offset
+                    guidance_embd = guidance_inp;
+                    if (embd.begin() + original_prompt_len < embd.end()) {
+                        guidance_embd.insert(
+                            guidance_embd.end(),
+                            embd.begin() + original_prompt_len,
+                            embd.end()
+                        );
+                    }
+
+                    input_buf = guidance_embd.data();
+                    input_size = guidance_embd.size();
+                    fprintf(stderr, "\n---------------------\n");
+                    for (int i = 0; i < (int) guidance_embd.size(); i++) {
+                        fprintf(stderr, "%s", llama_token_to_str(ctx, guidance_embd[i]));
+                    }
+                    fprintf(stderr, "\n---------------------\n");
+                } else {
+                    input_buf = embd.data();
+                    input_size = embd.size();
+                }
+
+                for (int i = 0; i < input_size; i += params.n_batch) {
+                    int n_eval = std::min(input_size - i, params.n_batch);
+                    if (llama_eval(guidance_ctx, input_buf + i, n_eval, guidance_n_past, params.n_threads)) {
+                        fprintf(stderr, "%s : failed to eval\n", __func__);
+                        return 1;
+                    }
+
+                    guidance_n_past += n_eval;
+                }
+            }
+
             for (int i = 0; i < (int) embd.size(); i += params.n_batch) {
                 int n_eval = (int) embd.size() - i;
                 if (n_eval > params.n_batch) {
@@ -431,6 +519,7 @@ int main(int argc, char ** argv) {
         }
 
         embd.clear();
+        guidance_embd.clear();
 
         if ((int) embd_inp.size() <= n_consumed && !is_interacting) {
             // out of user input, sample next token
@@ -463,6 +552,21 @@ int main(int argc, char ** argv) {
                 // Apply params.logit_bias map
                 for (auto it = params.logit_bias.begin(); it != params.logit_bias.end(); it++) {
                     logits[it->first] += it->second;
+                }
+
+                if (guidance_ctx) {
+                    inplace_log_softmax(logits, n_vocab);
+                    auto* guidance_logits = llama_get_logits(guidance_ctx);
+                    inplace_log_softmax(guidance_logits, n_vocab);
+
+                    for (int i = 0; i < n_vocab; ++i) {
+                        guidance_logits[i] = params.cfg_scale * (logits[i] - guidance_logits[i]) + guidance_logits[i];
+                    }
+                    inplace_log_softmax(guidance_logits, n_vocab);
+
+                    for (int i = 0; i < n_vocab; ++i) {
+                        logits[i] = guidance_logits[i] * params.cfg_smooth_factor + logits[i] * (1 - params.cfg_smooth_factor);
+                    }
                 }
 
                 std::vector<llama_token_data> candidates;
