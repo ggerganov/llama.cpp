@@ -44,6 +44,7 @@ endif()
 option(LLAMA_CUBLAS                          "llama: use cuBLAS"                                ON)
 set(LLAMA_CUDA_DMMV_X      "32" CACHE STRING "llama: x stride for dmmv CUDA kernels")
 set(LLAMA_CUDA_DMMV_Y       "1" CACHE STRING "llama: y block size for dmmv CUDA kernels")
+set(LLAMA_CUDA_MMV_Y        "1" CACHE STRING "llama: y block size for mmv CUDA kernels")
 option(LLAMA_CUDA_DMMV_F16                   "llama: use 16 bit floats for dmmv CUDA kernels"   OFF)
 set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for Q2_K/Q6_K")
 option(LLAMA_K_QUANTS                        "llama: use k-quants"                              ON)
@@ -76,8 +77,11 @@ if (LLAMA_CUBLAS)
         set(GGML_V2_LEGACY_CUDA_SOURCES otherarch/ggml_v2-cuda-legacy.cu otherarch/ggml_v2-cuda-legacy.h)
 
         add_compile_definitions(GGML_USE_CUBLAS)
+        add_compile_definitions(GGML_CUDA_FORCE_DMMV) #non dmmv broken for me
+        
         add_compile_definitions(GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
         add_compile_definitions(GGML_CUDA_DMMV_Y=${LLAMA_CUDA_DMMV_Y})
+        add_compile_definitions(GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})    
         if (LLAMA_CUDA_DMMV_F16)
             add_compile_definitions(GGML_CUDA_DMMV_F16)
         endif()
@@ -88,6 +92,15 @@ if (LLAMA_CUBLAS)
         else()
             set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart CUDA::cublas CUDA::cublasLt)
         endif()
+
+    if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        if (LLAMA_CUDA_DMMV_F16)
+            set(CMAKE_CUDA_ARCHITECTURES "61") # needed for f16 CUDA intrinsics
+        else()
+            set(CMAKE_CUDA_ARCHITECTURES "52;61") # lowest CUDA 12 standard + lowest for integer intrinsics
+        endif()
+    endif()
+    message(STATUS "Using CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 
     else()
         message(WARNING "cuBLAS not found")

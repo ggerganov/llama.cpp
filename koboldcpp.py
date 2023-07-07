@@ -191,10 +191,12 @@ def load_model(model_filename):
         clblastids = 100 + int(args.useclblast[0])*10 + int(args.useclblast[1])
     inputs.clblast_info = clblastids
     inputs.cublas_info = 0
-    if (args.usecublas and "1" in args.usecublas):
-        inputs.cublas_info = 1
+    if (args.usecublas and "0" in args.usecublas):
+        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    elif (args.usecublas and "1" in args.usecublas):
+        os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     elif (args.usecublas and "2" in args.usecublas):
-        inputs.cublas_info = 2
+        os.environ["CUDA_VISIBLE_DEVICES"] = "2"
     inputs.executable_path = (getdirpath()+"/").encode("UTF-8")
     inputs.debugmode = args.debugmode
     banned_tokens = args.bantokens
@@ -267,7 +269,7 @@ maxhordectx = 1024
 maxhordelen = 256
 modelbusy = False
 defaultport = 5001
-KcppVersion = "1.34"
+KcppVersion = "1.34.2"
 showdebug = True
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
