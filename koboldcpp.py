@@ -626,7 +626,6 @@ def show_new_gui():
     windowheight = 480
     ctk.set_appearance_mode("dark")
     root = ctk.CTk()
-    root.iconbitmap("niko.ico")
     root.geometry(str(windowwidth) + "x" + str(windowheight))
     root.title("KoboldCpp v"+KcppVersion)
     root.resizable(False,False)
