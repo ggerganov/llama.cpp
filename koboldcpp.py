@@ -763,7 +763,7 @@ def show_new_gui():
     # gpu options
     quick_gpu_layers_entry,quick_gpu_layers_label = makelabelentry(quick_tab,"GPU Layers:", gpulayers_var, 4, 50)
     quick_gpu_selector_label = makelabel(quick_tab, "GPU ID:", 3)
-    quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=["1","2","3"], width=60, variable=gpu_choice_var, state="readonly")
+    quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=["1","2","3","All"], width=60, variable=gpu_choice_var, state="readonly")
     quick_lowvram_box = makecheckbox(quick_tab,  "Low VRAM", lowvram_var, 5)
 
     # hides gpu options when CLBlast is not chosen
@@ -828,7 +828,7 @@ def show_new_gui():
     # gpu options
     gpu_layers_entry,gpu_layers_label = makelabelentry(hardware_tab,"GPU Layers:", gpulayers_var, 4, 50)
     gpu_selector_label = makelabel(hardware_tab, "GPU ID:", 3)
-    gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=["1","2","3"], width=60, variable=gpu_choice_var, state="readonly")
+    gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=["1","2","3","All"], width=60, variable=gpu_choice_var, state="readonly")
     lowvram_box = makecheckbox(hardware_tab,  "Low VRAM", lowvram_var, 5)
 
     # presets selector
@@ -959,11 +959,16 @@ def show_new_gui():
         args.smartcontext = smartcontext.get()==1
         args.unbantokens = unbantokens.get()==1
 
-        gpuchoiceidx = int(gpu_choice_var.get())-1
+        gpuchoiceidx = 0
+        if gpu_choice_var.get()!="All":
+            gpuchoiceidx = int(gpu_choice_var.get())-1
         if runopts_var.get() == runopts[1]:
             args.useclblast = [[0,0], [1,0], [0,1]][gpuchoiceidx]
         if runopts_var.get() == runopts[2]:
-            args.usecublas = ["lowvram",str(gpuchoiceidx)] if lowvram_var.get() == 1 else ["normal",str(gpuchoiceidx)]
+            if gpu_choice_var.get()=="All":
+                args.usecublas = ["lowvram"] if lowvram_var.get() == 1 else ["normal"]
+            else:
+                args.usecublas = ["lowvram",str(gpuchoiceidx)] if lowvram_var.get() == 1 else ["normal",str(gpuchoiceidx)]
         if gpulayers_var.get():
             args.gpulayers = int(gpulayers_var.get())
         if runopts_var.get()==runopts[3]:
