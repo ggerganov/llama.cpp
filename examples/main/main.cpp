@@ -54,20 +54,6 @@ void sigint_handler(int signo) {
 }
 #endif
 
-void inplace_log_softmax(float* logits, int n_vocab) {
-    float sum = 0.f;
-    for (int i = 0; i < n_vocab; ++i) {
-        float p = expf(logits[i]);
-        logits[i] = p;
-        sum += p;
-    }
-
-    for (int i = 0; i < n_vocab; ++i) {
-        float p = logits[i];
-        logits[i] = logf(p/ sum);
-    }
-}
-
 int main(int argc, char ** argv) {
     gpt_params params;
 
@@ -554,21 +540,6 @@ int main(int argc, char ** argv) {
                     logits[it->first] += it->second;
                 }
 
-                if (guidance_ctx) {
-                    inplace_log_softmax(logits, n_vocab);
-                    auto* guidance_logits = llama_get_logits(guidance_ctx);
-                    inplace_log_softmax(guidance_logits, n_vocab);
-
-                    for (int i = 0; i < n_vocab; ++i) {
-                        guidance_logits[i] = params.cfg_scale * (logits[i] - guidance_logits[i]) + guidance_logits[i];
-                    }
-                    inplace_log_softmax(guidance_logits, n_vocab);
-
-                    for (int i = 0; i < n_vocab; ++i) {
-                        logits[i] = guidance_logits[i] * params.cfg_smooth_factor + logits[i] * (1 - params.cfg_smooth_factor);
-                    }
-                }
-
                 std::vector<llama_token_data> candidates;
                 candidates.reserve(n_vocab);
                 for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
@@ -576,6 +547,10 @@ int main(int argc, char ** argv) {
                 }
 
                 llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
+
+                if (guidance_ctx) {
+                    llama_sample_context_free_guidance(ctx, &candidates_p, guidance_ctx, params.cfg_scale, params.cfg_smooth_factor);
+                }
 
                 // Apply penalties
                 float nl_logit = logits[llama_token_nl()];

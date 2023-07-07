@@ -2141,6 +2141,61 @@ void llama_sample_frequency_and_presence_penalties(struct llama_context * ctx, l
     }
 }
 
+template<typename T, typename LogitAccessor>
+void llama_log_softmax(T * array, int size, LogitAccessor logit_accessor) {
+    float sum = 0.f;
+    for (int i = 0; i < size; ++i) {
+        float& logit = logit_accessor(array[i]);
+        float p = expf(logit);
+        sum += p;
+        logit = p;
+    }
+
+    for (int i = 0; i < size; ++i) {
+        float& logit = logit_accessor(array[i]);
+        logit = logf(logit / sum);
+    }
+}
+
+void llama_sample_context_free_guidance(
+          struct llama_context * ctx,
+        llama_token_data_array * candidates,
+          struct llama_context * guidance_ctx,
+                         float   scale,
+                         float   smooth_factor) {
+    assert(ctx);
+    auto n_vocab = llama_n_vocab(ctx);
+    assert(n_vocab == (int)candidates->size);
+    assert(!candidates->sorted);
+
+    auto logit_from_token_data = [](llama_token_data& data) -> float& {
+        return data.logit;
+    };
+
+    auto logit_from_float = [](float& item) -> float& {
+        return item;
+    };
+
+    llama_log_softmax(candidates->data, candidates->size, logit_from_token_data);
+
+    auto* guidance_logits = llama_get_logits(guidance_ctx);
+    llama_log_softmax(guidance_logits, n_vocab, logit_from_float);
+
+    for (int i = 0; i < n_vocab; ++i) {
+        float guidance_logit = guidance_logits[i];
+        float base_logit = candidates->data[i].logit;
+        guidance_logits[i] = scale * (base_logit - guidance_logit) + guidance_logit;
+    }
+
+    llama_log_softmax(guidance_logits, n_vocab, logit_from_float);
+
+    for (int i = 0; i < n_vocab; ++i) {
+        float base_logit = candidates->data[i].logit;
+        float guidance_logit = guidance_logits[i];
+
+        candidates->data[i].logit = smooth_factor * guidance_logit + (1.f - smooth_factor) * base_logit;
+    }
+}
 
 llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, int m, float * mu) {
     assert(ctx);
