@@ -33,6 +33,8 @@ std::string executable_path = "";
 std::string lora_filename = "";
 std::string lora_base = "";
 bool generation_finished;
+float prompt_process_time;
+float prompt_eval_time;
 std::vector<std::string> generated_tokens;
 
 //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt)
@@ -807,6 +809,8 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     bool stream_sse = inputs.stream_sse;
 
     generation_finished = false; // Set current generation status
+    prompt_eval_time = 0;
+    prompt_process_time = 0;
     generated_tokens.clear(); // New Generation, new tokens
 
     if (params.repeat_last_n < 1)
@@ -1327,6 +1331,8 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     fflush(stdout);
     output.status = 1;
     generation_finished = true;
+    prompt_eval_time = pt2;
+    prompt_process_time = pt1;
     snprintf(output.text, sizeof(output.text), "%s", concat_output.c_str());
 
     return output;
