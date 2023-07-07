@@ -272,15 +272,25 @@ Any value larger than 0 will offload the computation to the GPU. For example:
 
 MPI lets you distribute the computation over a cluster of machines. Because of the serial nature of LLM prediction, this won't yield any end-to-end speed-ups, but it will let you run larger models than would otherwise fit into RAM on a single machine.
 
-First, build llama.cpp and download/convert the weights on all of the machines in your cluster. The paths to the weights and programs should be identical on all machines. You will need to build llama.cpp with an MPI-capable compiler, for example,
+First you will need MPI libraries installed on your system. The two most popular (only?) options are [MPICH](https://www.mpich.org) and [OpenMPI](https://www.open-mpi.org). Either can be installed with a package manager (`apt`, Homebrew, MacPorts, etc).
 
-```bash
-make CC=mpicc CXX=mpicxx LLAMA_MPI=1
-```
+Next you will need to build the project with `LLAMA_MPI` set to true on all machines; if you're building with `make`, you will also need to specify an MPI-capable compiler (when building with CMake, this is configured automatically):
 
-Once the programs are built and the weights are downloaded on all machines, ensure password-less SSH access to each machine from the primary host.
+- Using `make`:
 
-Next, create a `hostfile` with a list of the hostnames and their relative "weights" (slots). If you want to use localhost for computation, use its local subnet IP address rather than the loopback address or "localhost".
+  ```bash
+  make CC=mpicc CXX=mpicxx LLAMA_MPI=1
+  ```
+
+- Using `CMake`:
+
+  ```bash
+  cmake -S . -B build -DLLAMA_MPI=ON
+  ```
+
+Once the programs are built, download/convert the weights on all of the machines in your cluster. The paths to the weights and programs should be identical on all machines.
+
+Next, ensure password-less SSH access to each machine from the primary host, and create a `hostfile` with a list of the hostnames and their relative "weights" (slots). If you want to use localhost for computation, use its local subnet IP address rather than the loopback address or "localhost".
 
 Here is an example hostfile:
 
