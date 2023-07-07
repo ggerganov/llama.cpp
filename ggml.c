@@ -26,10 +26,6 @@
 #include <limits.h>
 #include <stdarg.h>
 
-#ifdef GGML_USE_MPI
-#include <mpi.h>
-#endif
-
 #ifdef GGML_USE_METAL
 #include <unistd.h>
 #endif
@@ -4688,36 +4684,6 @@ struct ggml_tensor * ggml_dup_tensor(struct ggml_context * ctx, const struct ggm
     return ggml_new_tensor_impl(ctx, src->type, src->n_dims, src->ne, NULL);
 }
 
-struct ggml_tensor * ggml_send_tensor(
-        struct ggml_context * ctx,
-        struct ggml_tensor *src,
-        int dst_rank) {
-
-    struct ggml_tensor * result = ggml_new_i32(ctx, 0);
-
-    result->op   = GGML_OP_SEND;
-    result->src0 = src;
-    result->extra = (void *)dst_rank;
-
-    return result;
-}
-
-struct ggml_tensor * ggml_recv_tensor(
-        struct ggml_context * ctx,
-        struct ggml_tensor *parent,
-        struct ggml_tensor *dst,
-        int src_rank) {
-    UNUSED(ctx);
-
-    struct ggml_tensor * result = dst;
-
-    result->op   = GGML_OP_RECV;
-    result->src0 = parent; // just used for graph computation
-    result->extra = (void *)src_rank;
-
-    return result;
-}
-
 struct ggml_tensor * ggml_set_zero(struct ggml_tensor * tensor) {
     memset(tensor->data, 0, ggml_nbytes(tensor));
     return tensor;
@@ -8321,52 +8287,6 @@ static void ggml_compute_forward_dup(
                 GGML_ASSERT(false);
             } break;
     }
-}
-
-// ggml_compute_forward_recv
-
-static void ggml_compute_forward_recv(
-        const struct ggml_compute_params * params,
-        struct ggml_tensor * dst) {
-    if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
-        return;
-    }
-    GGML_ASSERT(dst->type == GGML_TYPE_F32);
-#ifdef GGML_USE_MPI
-    MPI_Status status;
-    int my_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
-    // fprintf(stderr, "(%d) Receiving from (%d)\n", my_rank, (int)dst->extra);
-    int retval = MPI_Recv(dst->data, dst->ne[0] * dst->ne[1], MPI_FLOAT, (int)dst->extra, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-    // fprintf(stderr, "(%d) Received from (%d)\n", my_rank, (int)dst->extra);
-    GGML_ASSERT(retval == MPI_SUCCESS);
-#else
-    GGML_ASSERT(false);
-#endif
-}
-
-// ggml_compute_forward_send
-
-static void ggml_compute_forward_send(
-        const struct ggml_compute_params * params,
-        struct ggml_tensor * src,
-        struct ggml_tensor * dst) {
-    if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
-        return;
-    }
-    GGML_ASSERT(src->type == GGML_TYPE_F32);
-    GGML_ASSERT(dst->type == GGML_TYPE_I32);
-#ifdef GGML_USE_MPI
-    int my_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
-    // fprintf(stderr, "(%d) Sending to (%d)\n", my_rank, (int)dst->extra);
-    int retval = MPI_Send(src->data, src->ne[0] * src->ne[1], MPI_FLOAT, (int)dst->extra, 0, MPI_COMM_WORLD);
-    // fprintf(stderr, "(%d) Sent to (%d)\n", my_rank, (int)dst->extra);
-    ggml_set_i32(dst, retval);
-    GGML_ASSERT(retval == MPI_SUCCESS);
-#else
-    GGML_ASSERT(false);
-#endif
 }
 
 // ggml_compute_forward_add
@@ -14655,14 +14575,6 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             {
                 ggml_compute_forward_dup(params, tensor->src0, tensor);
             } break;
-        case GGML_OP_SEND:
-            {
-                ggml_compute_forward_send(params, tensor->src0, tensor);
-            } break;
-        case GGML_OP_RECV:
-            {
-                ggml_compute_forward_recv(params, tensor);
-            } break;
         case GGML_OP_ADD:
             {
                 ggml_compute_forward_add(params, tensor->src0, tensor->src1, tensor);
@@ -14960,14 +14872,6 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 if (src0->grad) {
                     src0->grad = ggml_add_impl(ctx, src0->grad, tensor->grad, inplace);
                 }
-            } break;
-        case GGML_OP_SEND:
-            {
-                GGML_ASSERT(false); // TODO: not implemented
-            } break;
-        case GGML_OP_RECV:
-            {
-                GGML_ASSERT(false); // TODO: not implemented
             } break;
         case GGML_OP_ADD:
             {
@@ -16307,8 +16211,6 @@ void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph) 
                     {
                         node->n_tasks = 1;
                     } break;
-                case GGML_OP_SEND:
-                case GGML_OP_RECV:
                 case GGML_OP_SET:
                 case GGML_OP_CONT:
                 case GGML_OP_RESHAPE:

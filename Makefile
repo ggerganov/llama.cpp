@@ -148,8 +148,12 @@ ifndef LLAMA_NO_ACCELERATE
 endif # LLAMA_NO_ACCELERATE
 
 ifdef LLAMA_MPI
-	CFLAGS += -DGGML_USE_MPI -Wno-cast-qual -Wno-int-to-void-pointer-cast -Wno-void-pointer-to-int-cast
+	CFLAGS += -DGGML_USE_MPI -Wno-cast-qual
 	CXXFLAGS += -DGGML_USE_MPI -Wno-cast-qual
+	OBJS     += ggml-mpi.o
+
+ggml-mpi.o: ggml-mpi.c ggml-mpi.h
+	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_MPI
 
 ifdef LLAMA_OPENBLAS

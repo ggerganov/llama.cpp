@@ -19,6 +19,9 @@
 #ifdef GGML_USE_METAL
 #include "ggml-metal.h"
 #endif
+#ifdef GGML_USE_MPI
+#include "ggml-mpi.h"
+#endif
 #ifdef GGML_USE_K_QUANTS
 #ifndef QK_K
 #ifdef GGML_QKK_64
@@ -1332,10 +1335,10 @@ static bool llama_eval_internal(
 
     if (lctx.mpi_rank > 0) {
 #ifdef GGML_USE_MPI
-        inpL = ggml_recv_tensor(ctx0, NULL,
+        inpL = ggml_mpi_recv_tensor(ctx0, NULL,
                 ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N),
                 lctx.mpi_rank-1);
-        ggml_set_name(inpL, "recv");
+        ggml_set_name(inpL, "mpi_recv");
 #else
         GGML_ASSERT(false);
 #endif
@@ -1591,15 +1594,23 @@ static bool llama_eval_internal(
     struct ggml_tensor * embeddings = NULL;
 
     if (lctx.mpi_size > 1) {
-        cur = ggml_send_tensor(ctx0, cur, (lctx.mpi_rank+1)%lctx.mpi_size);
-        ggml_set_name(cur, "send");
+#ifdef GGML_USE_MPI
+        cur = ggml_mpi_send_tensor(ctx0, cur, (lctx.mpi_rank+1)%lctx.mpi_size);
+        ggml_set_name(cur, "mpi_send");
+#else
+        GGML_ASSERT(false);
+#endif
     }
     if (lctx.mpi_rank == 0) {
         if (lctx.mpi_size > 1) {
-            cur = ggml_recv_tensor(ctx0, cur,
+#ifdef GGML_USE_MPI
+            cur = ggml_mpi_recv_tensor(ctx0, cur,
                     ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N),
                     lctx.mpi_size-1);
-            ggml_set_name(cur, "recv");
+            ggml_set_name(cur, "mpi_recv");
+#else
+            GGML_ASSERT(false);
+#endif
         }
         // norm
         {
@@ -3502,14 +3513,6 @@ int llama_n_ctx(const struct llama_context * ctx) {
 
 int llama_n_embd(const struct llama_context * ctx) {
     return ctx->model.hparams.n_embd;
-}
-
-int llama_mpi_rank(const struct llama_context * ctx) {
-    return ctx->mpi_rank;
-}
-
-int llama_mpi_size(const struct llama_context * ctx) {
-    return ctx->mpi_size;
 }
 
 int llama_get_vocab(
