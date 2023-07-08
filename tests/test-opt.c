@@ -7,6 +7,7 @@
 
 #define MAX_NARGS 2
 
+#pragma GCC diagnostic ignored "-Wdouble-promotion"
 
 //
 // logging
@@ -33,7 +34,7 @@
 #define GGML_PRINT(...) printf(__VA_ARGS__)
 
 
-float frand() {
+float frand(void) {
     return (float)rand()/(float)RAND_MAX;
 }
 
@@ -114,7 +115,7 @@ void set_element(struct ggml_tensor * t, int idx, float value) {
     ((float *)t->data)[idx] = value;
 }
 
-int main(int argc, const char ** argv) {
+int main(void) {
     struct ggml_init_params params = {
         .mem_size   = 1024*1024*1024,
         .mem_buffer = NULL,
@@ -137,10 +138,11 @@ int main(int argc, const char ** argv) {
     struct ggml_tensor * d  = ggml_sub(ctx, c, ab);
     struct ggml_tensor * e  = ggml_sum(ctx, ggml_sqr(ctx, d));
 
-
     struct ggml_cgraph ge = ggml_build_forward(e);
-    ggml_graph_reset  (&ge);
-    ggml_graph_compute(ctx, &ge);
+    ggml_graph_reset(&ge);
+
+    ggml_graph_compute_with_ctx(ctx, &ge, /*n_threads*/ 1);
+
     const float fe = ggml_get_f32_1d(e, 0);
     printf("%s: e = %.4f\n", __func__, fe);
 
@@ -148,8 +150,10 @@ int main(int argc, const char ** argv) {
 
     ggml_opt(ctx, opt_params, e);
 
-    ggml_graph_reset  (&ge);
-    ggml_graph_compute(ctx, &ge);
+    ggml_graph_reset(&ge);
+
+    ggml_graph_compute_with_ctx(ctx, &ge, /*n_threads*/ 1);
+
     const float fe_opt = ggml_get_f32_1d(e, 0);
     printf("%s: original  e = %.4f\n", __func__, fe);
     printf("%s: optimized e = %.4f\n", __func__, fe_opt);
