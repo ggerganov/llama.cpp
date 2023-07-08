@@ -4588,8 +4588,6 @@ struct ggml_tensor * ggml_new_tensor_impl(
         /*.perf_time_us =*/ 0,
         /*.data         =*/ (data == NULL && !ctx->no_alloc) ? (void *)(result + 1) : data,
         /*.name         =*/ { 0 },
-        /*.extra        =*/ NULL,
-        /*.padding      =*/ { 0 },
     };
 
     // TODO: this should not be needed as long as we don't rely on aligned SIMD loads

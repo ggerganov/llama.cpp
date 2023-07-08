@@ -235,6 +235,10 @@
     const type prefix##3 = (pointer)->array[3]; \
     GGML_UNUSED(prefix##3);
 
+#ifdef GGML_USE_CUBLAS
+#include "ggml-cuda.h"
+#endif
+
 #ifdef  __cplusplus
 extern "C" {
 #endif
@@ -427,9 +431,9 @@ extern "C" {
 
         char name[GGML_MAX_NAME];
 
-        void * extra; // extra things e.g. for ggml-cuda.cu
-
-        char padding[8];
+#ifdef GGML_USE_CUBLAS
+        char extra[sizeof(struct ggml_tensor_extra_gpu)]; // extra things e.g. for ggml-cuda.cu
+#endif
     };
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);
