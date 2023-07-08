@@ -194,7 +194,7 @@ ifdef LLAMA_CUBLAS
 	CXXFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
 	LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
 	OBJS      += ggml-cuda.o
-	NVCCFLAGS = --forward-unknown-to-host-compiler
+	NVCCFLAGS = --forward-unknown-to-host-compiler -use_fast_math
 ifdef LLAMA_CUDA_NVCC
 	NVCC = $(LLAMA_CUDA_NVCC)
 else
