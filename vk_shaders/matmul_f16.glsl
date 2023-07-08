@@ -28,13 +28,16 @@ layout (push_constant) uniform parameter
     int stride_a;
     int stride_b;
     int stride_d;
+    int k_split;
 } p;
 
 shared float16_t buf_a[BM * (BK+1)];
 shared float16_t buf_b[BN * (BK+1)];
 
 void main() {
-    const int ir = int(gl_WorkGroupID.x);
+    const int blocks_x = (p.M + BM - 1) / BM;
+    const int ir = int(gl_WorkGroupID.x) % blocks_x;
+    const int ik = int(gl_WorkGroupID.x) / blocks_x;
     const int ic = int(gl_WorkGroupID.y);
 
     const int warp_i = int(gl_LocalInvocationID.x / WARP);
@@ -54,18 +57,21 @@ void main() {
 
     const int loadstride = int(gl_WorkGroupSize.x);
 
-    int pos_a = ir * BM * p.stride_a;
-    int pos_b = ic * BN * p.stride_b;
+    const int start_k = ik * p.k_split;
+    const int end_k = (ik + 1) * p.k_split;
+
+    int pos_a = ir * BM * p.stride_a + start_k;
+    int pos_b = ic * BN * p.stride_b + start_k;
 
     float sums[WMITER * TM * WNITER * TN];
     float16_t cache_a[WMITER * TM];
     float16_t cache_b[WNITER * TN];
 
     [[unroll]] for (int i = 0; i < WMITER*TM*WNITER*TN; i++) {
-        sums[i] = 0.0hf;
+        sums[i] = 0.0f;
     }
 
-    [[unroll]] for (int block = 0; block < p.K; block += BK) {
+    [[unroll]] for (int block = start_k; block < end_k; block += BK) {
         [[unroll]] for (int l = 0; l < BM * BK; l += loadstride) {
             const int lr = l % BK;
             const int lc = l / BK;
@@ -90,7 +96,7 @@ void main() {
         pos_a += BK;
         pos_b += BK;
 
-        [[unroll]] for (int i = 0; i < BK; i++) {
+        for (int i = 0; i < min(BK, p.K - block); i++) {
             // Load from shared into cache
             [[unroll]] for (int wsir = 0; wsir < WMITER; wsir++) {
                 [[unroll]] for (int j = 0; j < TM; j++) {
@@ -120,6 +126,8 @@ void main() {
     const int dr = ir * BM + warp_r * WM;
     const int dc = ic * BN + warp_c * WN;
 
+    const int k_split_offset = ik * p.M * p.N;
+
     [[unroll]] for (int wsic = 0; wsic < WNITER; wsic++) {
         [[unroll]] for (int wsir = 0; wsir < WMITER; wsir++) {
 
@@ -128,7 +136,7 @@ void main() {
             [[unroll]] for (int cc = 0; cc < TN; cc++) {
                 [[unroll]] for (int cr = 0; cr < TM; cr++) {
                     if (dr_warp + cr < p.M && dc_warp + cc < p.N) {
-                        data_d[(dc_warp + cc) * p.stride_d + dr_warp + cr] = sums[(wsic * TN + cc) * (WMITER * TM) + wsir * TM + cr];
+                        data_d[k_split_offset + (dc_warp + cc) * p.stride_d + dr_warp + cr] = sums[(wsic * TN + cc) * (WMITER * TM) + wsir * TM + cr];
                     }
                 }
             }
