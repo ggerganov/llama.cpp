@@ -154,8 +154,14 @@ class Params:
         # try transformer naming first
         if "model.layers.0.self_attn.q_proj.weight" in model:
             n_layer=next(i for i in itertools.count() if f"model.layers.{i}.self_attn.q_proj.weight" not in model)
+        elif "model.layers.0.self_attn.W_pack.weight" in model:   # next: try baichuan naming
+            n_layer=next(i for i in itertools.count() if f"model.layers.{i}.self_attn.W_pack.weight" not in model)
         else:
             n_layer=next(i for i in itertools.count() if f"layers.{i}.attention.wq.weight" not in model)
+
+        if n_layer < 1:
+            raise Exception("failed to guess 'n_layer'. This model is unknown or unsupported.\n"
+                            "Suggestion: provide 'config.json' of the model in the same directory containing model files.")
 
         n_head=n_embd // 128 # guessed
 

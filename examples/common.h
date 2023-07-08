@@ -31,7 +31,7 @@ struct gpt_params {
     int32_t n_gpu_layers                    = 0;   // number of layers to store in VRAM
     int32_t main_gpu                        = 0;   // the GPU that is used for scratch and small tensors
     float   tensor_split[LLAMA_MAX_DEVICES] = {0}; // how split tensors should be distributed across GPUs
-    bool    low_vram                        = 0;   // if true, reduce VRAM usage at the cost of performance
+    int32_t n_probs                         = 0;   // if greater than 0, output the probabilities of top n_probs tokens.
 
     // sampling parameters
     std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
@@ -59,6 +59,7 @@ struct gpt_params {
     std::string lora_adapter = "";  // lora adapter path
     std::string lora_base    = "";  // base model path for the lora adapter
 
+    bool low_vram          = false;   // if true, reduce VRAM usage at the cost of performance
     bool memory_f16        = true;  // use f16 instead of f32 for memory kv
     bool random_prompt     = false; // do not randomize prompt if none provided
     bool use_color         = false; // use color to distinguish generations and inputs

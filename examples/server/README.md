@@ -1,13 +1,13 @@
 # llama.cpp/example/server
 
-This example demonstrates a simple HTTP API server to interact with llama.cpp.
+This example demonstrates a simple HTTP API server and a simple web front end to interact with llama.cpp.
 
 Command line options:
 
 -   `--threads N`, `-t N`: Set the number of threads to use during computation.
 -   `-m FNAME`, `--model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.bin`).
 -   `-m ALIAS`, `--alias ALIAS`: Set an alias for the model. The alias will be returned in API responses.
--   `-c N`, `--ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference.
+-   `-c N`, `--ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference. The size may differ in other models, for example, baichuan models were build with a context of 4096.
 -   `-ngl N`, `--n-gpu-layers N`: When compiled with appropriate support (currently CLBlast or cuBLAS), this option allows offloading some layers to the GPU for computation. Generally results in increased performance.
 -   `-mg i, --main-gpu i`: When using multiple GPUs this option controls which GPU is used for small tensors for which the overhead of splitting the computation across all GPUs is not worthwhile. The GPU in question will use slightly more VRAM to store a scratch buffer for temporary results. By default GPU 0 is used. Requires cuBLAS.
 -   `-ts SPLIT, --tensor-split SPLIT`: When using multiple GPUs this option controls how large tensors should be split across all GPUs. `SPLIT` is a comma-separated list of non-negative values that assigns the proportion of data that each GPU should get in order. For example, "3,2" will assign 60% of the data to GPU 0 and 40% to GPU 1. By default the data is split in proportion to VRAM but this may not be optimal for performance. Requires cuBLAS.
@@ -21,24 +21,22 @@ Command line options:
 -   `-to N`, `--timeout N`: Server read/write timeout in seconds. Default `600`.
 -   `--host`: Set the hostname or ip address to listen. Default `127.0.0.1`.
 -   `--port`: Set the port to listen. Default: `8080`.
+-   `--path`: path from which to serve static files (default examples/server/public)
 -   `--embedding`: Enable embedding extraction, Default: disabled.
 
 ## Build
 
-Build llama.cpp with server from repository root with either make or CMake.
+server is build alongside everything else from the root of the project
 
 - Using `make`:
 
   ```bash
-  LLAMA_BUILD_SERVER=1 make
+  make
   ```
 
 - Using `CMake`:
 
   ```bash
-  mkdir build-server
-  cd build-server
-  cmake -DLLAMA_BUILD_SERVER=ON ..
   cmake --build . --config Release
   ```
 
@@ -59,7 +57,7 @@ server.exe -m models\7B\ggml-model.bin -c 2048
 ```
 
 The above command will start a server that by default listens on `127.0.0.1:8080`.
-You can consume the endpoints with Postman or NodeJS with axios library.
+You can consume the endpoints with Postman or NodeJS with axios library. You can visit the web front end at the same url.
 
 ## Testing with CURL
 
@@ -189,4 +187,50 @@ Run with bash:
 
 ```sh
 bash chat.sh
+```
+
+### API like OAI
+
+API example using Python Flask: [api_like_OAI.py](api_like_OAI.py)
+This example must be used with server.cpp
+
+```sh
+python api_like_OAI.py
+```
+
+After running the API server, you can use it in Python by setting the API base URL.
+```python
+openai.api_base = "http://<Your api-server IP>:port"
+```
+
+Then you can utilize llama.cpp as an OpenAI's **chat.completion** or **text_completion** API
+
+### Extending or building alternative Web Front End
+
+The default location for the static files is `examples/server/public`. You can extend the front end by running the server binary with `--path` set to `./your-directory` and importing `/completion.js` to get access to the llamaComplete() method.
+
+Read the documentation in `/completion.js` to see convenient ways to access llama.
+
+A simple example is below:
+
+```html
+<html>
+  <body>
+    <pre>
+      <script type="module">
+        import { llama } from '/completion.js'
+
+        const prompt = `### Instruction:
+Write dad jokes, each one paragraph.
+You can use html formatting if needed.
+
+### Response:`
+
+        for await (const chunk of llama(prompt)) {
+          document.write(chunk.data.content)
+        }
+      </script>
+    </pre>
+  </body>
+</html>
 ```

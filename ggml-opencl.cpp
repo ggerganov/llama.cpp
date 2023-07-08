@@ -654,13 +654,17 @@ __kernel void dequantize_mul_mat_vec_q6_K(__global const struct block_q6_K * xx,
     const int im = tid/step;                             // 0 or 1. 0 computes 0..., 1 computes 128...
     const int in = tid - step*im;                        // 0...15 or 0...7
 
-#if K_QUANTS_PER_ITERATION == 1
+\n#if K_QUANTS_PER_ITERATION == 1\n
     const int l0 = K_QUANTS_PER_ITERATION*in;            // 0...15
     const int is = 0;
-#else
+
+\n#else\n
+
     const int l0 = 4 * in;                               // 0, 4, 8, ..., 28
     const int is = in / 4;
-#endif
+
+\n#endif\n
+
     const int ql_offset = 64*im + l0;
     const int qh_offset = 32*im + l0;
     const int s_offset  =  8*im + is;
@@ -677,7 +681,7 @@ __kernel void dequantize_mul_mat_vec_q6_K(__global const struct block_q6_K * xx,
 
         const float d = vload_half(0, &x[i].d);
 
-#if K_QUANTS_PER_ITERATION == 1
+\n#if K_QUANTS_PER_ITERATION == 1\n
         float sum = y[ 0] * s[0] * d * ((int8_t)((ql[ 0] & 0xF) | ((qh[ 0] & 0x03) << 4)) - 32)
                   + y[16] * s[1] * d * ((int8_t)((ql[16] & 0xF) | ((qh[16] & 0x03) << 4)) - 32)
                   + y[32] * s[2] * d * ((int8_t)((ql[32] & 0xF) | ((qh[ 0] & 0x0c) << 2)) - 32)
@@ -687,7 +691,7 @@ __kernel void dequantize_mul_mat_vec_q6_K(__global const struct block_q6_K * xx,
                   + y[96] * s[6] * d * ((int8_t)((ql[32]  >> 4) | ((qh[ 0] & 0xc0) >> 2)) - 32)
                   +y[112] * s[7] * d * ((int8_t)((ql[48]  >> 4) | ((qh[16] & 0xc0) >> 2)) - 32);
         tmp[16 * ix + tid] += sum;
-#else
+\n#else\n
         float sum = 0;
         for (int l = 0; l < 4; ++l) {
             sum += y[l+ 0] * s[0] * d * ((int8_t)((ql[l+ 0] & 0xF) | (((qh[l] >> 0) & 3) << 4)) - 32)
@@ -696,7 +700,7 @@ __kernel void dequantize_mul_mat_vec_q6_K(__global const struct block_q6_K * xx,
                  + y[l+96] * s[6] * d * ((int8_t)((ql[l+32]  >> 4) | (((qh[l] >> 6) & 3) << 4)) - 32);
         }
         tmp[16 * ix + tid] += sum;
-#endif
+\n#endif\n
 
     }
 
@@ -1384,7 +1388,7 @@ static void ggml_cl_mul_f32(const ggml_tensor * src0, const ggml_tensor * src1, 
     const int64_t ne00 = src0->ne[0];
     const int64_t ne01 = src0->ne[1];
     const int64_t ne02 = src0->ne[2];
-    const int64_t ne03 = src0->ne[2];
+    const int64_t ne03 = src0->ne[3];
     const int64_t ne0 = ne00 * ne01 * ne02 * ne03;
     const int64_t ne10 = src1->ne[0];
     const int64_t ne11 = src1->ne[1];

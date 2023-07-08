@@ -301,7 +301,7 @@ bool mpt_model_load(const std::string & fname, mpt_model & model, gpt_vocab & vo
         const auto & hparams = model.hparams;
         size_t vram_total = 0;
         const int n_gpu = std::min(gpulayers, int(hparams.n_layers));
-        fprintf(stderr, "%s: [opencl] offloading %d layers to GPU\n", __func__, n_gpu);
+        fprintf(stderr, "%s: [GPU] offloading %d layers to GPU\n", __func__, n_gpu);
         for (int i = 0; i < n_gpu; ++i) {
             const auto & layer = model.layers[i];
             layer.ffn_up_proj->backend = GGML_BACKEND_GPU;
@@ -320,7 +320,7 @@ bool mpt_model_load(const std::string & fname, mpt_model & model, gpt_vocab & vo
             ggml_cuda_transform_tensor(layer.c_attn_out_proj_weight->data,layer.c_attn_out_proj_weight); vram_total += ggml_nbytes(layer.c_attn_out_proj_weight);
             #endif
         }
-        fprintf(stderr, "%s: [opencl] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
+        fprintf(stderr, "%s: [GPU] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
     }
     #endif
 

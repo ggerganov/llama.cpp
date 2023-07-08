@@ -78,6 +78,8 @@ static size_t mem_per_token = 0;
 static std::vector<float> logits;
 static std::vector<int> smartcontext;
 static std::vector<std::string> stop_sequence;
+static std::vector<std::string> banned_tokens;
+static std::vector<int> banned_token_ids;
 static std::vector<llama_token_data> top_picks;
 static int remaining_tokens = 0;
 static int stopper_unused_tokens = 0;
@@ -221,8 +223,31 @@ void sample_top_a(llama_token_data_array * candidates, float a, size_t min_keep)
     candidates->size = last_idx;
 }
 
+void sample_rep_pen(int n_ctx, int rep_pen_range, float rep_pen, llama_token_data_array * candidates_p)
+{
+    auto last_n_repeat = std::min(std::min((int)last_n_tokens.size(), rep_pen_range), n_ctx);
+    llama_sample_repetition_penalty(nullptr, candidates_p,
+        last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
+        last_n_repeat, rep_pen);
+}
+
+void sample_temperature(llama_token_data_array * candidates_p, float temp)
+{
+    if (temp <= 0)
+    {
+        // Imitate greedy sampling
+        temp = 0.01f; //cannot be zero else div0
+        llama_sample_temperature(nullptr, candidates_p, temp);
+        llama_sample_top_k(nullptr, candidates_p, 1, 1); //only want first candidate
+    }
+    else
+    {
+        llama_sample_temperature(nullptr, candidates_p, temp);
+    }
+}
+
 int SampleLogits(const float * logits, int n_ctx, int n_vocab, int rep_pen_range, float rep_pen, float top_k, float top_a, float top_p, float typical_p, float tfs, float temp, std::mt19937 & rng,
-int mirostat, float mirostat_tau, float mirostat_eta)
+int mirostat, float mirostat_tau, float mirostat_eta, const std::vector<samplers> & sampler_order)
 {
     int id = 0;
     std::vector<llama_token_data> candidates;
@@ -233,47 +258,54 @@ int mirostat, float mirostat_tau, float mirostat_eta)
 
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
 
-    // Apply penalties
-    auto last_n_repeat = std::min(std::min((int)last_n_tokens.size(), rep_pen_range), n_ctx);
-    llama_sample_repetition_penalty(nullptr, &candidates_p,
-        last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
-        last_n_repeat, rep_pen);
-
-    // llama_sample_frequency_and_presence_penalties(nullptr, &candidates_p,
-    //     last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
-    //     last_n_repeat, alpha_frequency, alpha_presence);
-
-    if (temp <= 0)
+    if (mirostat == 1 || mirostat == 2)
     {
-        // Greedy sampling
-        id = llama_sample_token_greedy(nullptr, &candidates_p);
-    }
-    else
-    {
+        static float mirostat_mu = 2.0f * mirostat_tau;
+        const int mirostat_m = 100;
+        sample_rep_pen(n_ctx, rep_pen_range, rep_pen, &candidates_p);
+        sample_temperature(&candidates_p, temp);
         if (mirostat == 1)
         {
-            static float mirostat_mu = 2.0f * mirostat_tau;
-            const int mirostat_m = 100;
-            llama_sample_temperature(nullptr, &candidates_p, temp);
             id = sample_token_mirostat(n_vocab, &candidates_p, rng, mirostat_tau, mirostat_eta, mirostat_m, &mirostat_mu);
-        }
-        else if (mirostat == 2)
-        {
-            static float mirostat_mu = 2.0f * mirostat_tau;
-            llama_sample_temperature(nullptr, &candidates_p, temp);
-            id = sample_token_mirostat_v2(&candidates_p, rng, mirostat_tau, mirostat_eta, &mirostat_mu);
         }
         else
         {
-            // Temperature sampling
-            llama_sample_top_k(nullptr, &candidates_p, top_k,1);
-            sample_top_a(&candidates_p,top_a,1);
-            llama_sample_tail_free(nullptr, &candidates_p, tfs,1);
-            llama_sample_typical(nullptr, &candidates_p, typical_p,1);
-            llama_sample_top_p(nullptr, &candidates_p, top_p,1);
-            llama_sample_temperature(nullptr, &candidates_p, temp);
-            id = sample_token(&candidates_p, rng);
+            id = sample_token_mirostat_v2(&candidates_p, rng, mirostat_tau, mirostat_eta, &mirostat_mu);
         }
+    }
+    else
+    {
+        for (int i = 0; i < sampler_order.size(); i++)
+        {
+            switch (sampler_order[i])
+            {
+                case KCPP_SAMPLER_TOP_K:
+                    llama_sample_top_k(nullptr, &candidates_p, top_k,1);
+                    break;
+                case KCPP_SAMPLER_TOP_A:
+                    sample_top_a(&candidates_p,top_a,1);
+                    break;
+                case KCPP_SAMPLER_TOP_P:
+                    llama_sample_top_p(nullptr, &candidates_p, top_p,1);
+                    break;
+                case KCPP_SAMPLER_TFS:
+                    llama_sample_tail_free(nullptr, &candidates_p, tfs,1);
+                    break;
+                case KCPP_SAMPLER_TYP:
+                    llama_sample_typical(nullptr, &candidates_p, typical_p,1);
+                    break;
+                case KCPP_SAMPLER_TEMP:
+                    sample_temperature(&candidates_p, temp);
+                    break;
+                case KCPP_SAMPLER_REP_PEN:
+                    sample_rep_pen(n_ctx, rep_pen_range, rep_pen, &candidates_p);
+                    break;
+                default:
+                    printf("\nSampleLogits: Unknown Sampler : %d",sampler_order[i]);
+                    break;
+            }
+        }
+        id = sample_token(&candidates_p, rng);
     }
 
     return id;
@@ -316,10 +348,30 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     = gpt2_ctx_v1.hparams.n_ctx = gpt2_ctx_v2.hparams.n_ctx = gpt2_ctx_v3.hparams.n_ctx
     = mpt_ctx_v3.hparams.n_ctx = params.n_ctx;
 
+    //handle custom token bans
+    banned_tokens.clear();
+    for(int x=0;x<ban_token_max;++x)
+    {
+        std::string word = inputs.banned_tokens[x];
+        if(word!="")
+        {
+            banned_tokens.push_back(word);
+        }
+    }
+
     //this is used for the mem_per_token eval, openblas needs more RAM
     bool use_scratch = ggml_cpu_has_gpublas();
 
+    int cu_parseinfo_maindevice = inputs.cublas_info<0?0:inputs.cublas_info;
+
     printf("System Info: %s\n", llama_print_system_info());
+    #if defined(GGML_USE_CUBLAS)
+    if(ggml_cpu_has_gpublas() && cu_parseinfo_maindevice>0)
+    {
+        printf("CUBLAS: Set main device to %d\n",cu_parseinfo_maindevice);
+        ggml_cuda_set_main_device(cu_parseinfo_maindevice);
+    }
+    #endif
     SetQuantsUnshuffled(false);
     if(file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2)
     {
@@ -384,6 +436,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         llama_ctx_params.use_mmap = inputs.use_mmap;
         llama_ctx_params.use_mlock = inputs.use_mlock;
         llama_ctx_params.n_gpu_layers = inputs.gpulayers;
+        llama_ctx_params.main_gpu = cu_parseinfo_maindevice;
 
         llama_ctx_v3 = llama_init_from_file(modelname.c_str(), llama_ctx_params);
 
@@ -434,10 +487,10 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         {
             rwkv_ctx_v3 = rwkv_init_from_file(modelname.c_str(), n_threads);
 
-            // if(inputs.gpulayers>0)
-            // {
-            //     rwkv_gpu_offload_layers(rwkv_ctx_v3,inputs.gpulayers);
-            // }
+            if(inputs.gpulayers>0)
+            {
+                rwkv_gpu_offload_layers(rwkv_ctx_v3,inputs.gpulayers);
+            }
 
             const struct rwkv_file_header & header = rwkv_ctx_v3->instance->model.header;
             const size_t n_vocab = header.n_vocab;
@@ -917,6 +970,28 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     std::mt19937 rng(params.seed);
     concat_output = "";
 
+    //prepare sampler order
+    std::vector<samplers> sampler_order;
+    if(inputs.sampler_len<=0) //list by value
+    {
+        sampler_order = {
+            KCPP_SAMPLER_REP_PEN,
+            KCPP_SAMPLER_TOP_K,
+            KCPP_SAMPLER_TOP_A,
+            KCPP_SAMPLER_TFS,
+            KCPP_SAMPLER_TYP,
+            KCPP_SAMPLER_TOP_P,
+            KCPP_SAMPLER_TEMP
+        };
+    }
+    else
+    {
+        for(int i=0;i<inputs.sampler_len;++i)
+        {
+            sampler_order.push_back(inputs.sampler_order[i]);
+        }
+    }
+
     bool startedsampling = false;
     bool use_scratch = true; //for normal inference always use scratch
 
@@ -1006,6 +1081,25 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
         printf("Bad format!");
     }
 
+    //prepare banned tokens
+    if(banned_token_ids.size()==0 && banned_tokens.size()>0)
+    {
+        printf("\n[First Run] Banning %d token sequences...",banned_tokens.size());
+        for(int v=0;v<n_vocab;++v)
+        {
+            std::string word = FileFormatTokenizeID(v,file_format);
+            for(int i=0;i<banned_tokens.size();++i)
+            {
+                if (word.find(banned_tokens[i]) != std::string::npos)
+                {
+                    banned_token_ids.push_back(v);
+                    break;
+                }
+            }
+        }
+        printf("\nBanned a total of %d tokens.\n",banned_token_ids.size());
+    }
+
     if(debugmode!=-1)
     {
         printf("\n");
@@ -1070,15 +1164,15 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 }
                 else
                 {
-                    // if(embd.size()>1)
-                    // {
-                    //     evalres = rwkv_eval_sequence(rwkv_ctx_v3, (uint32_t*)embd.data(), embd.size(), rwkv_ctx_v3->state_in, rwkv_ctx_v3->state_out, rwkv_ctx_v3->logits_out);
-                    // }
-                    // else
-                    // {
+                    if(embd.size()>1)
+                    {
+                        evalres = rwkv_eval_sequence(rwkv_ctx_v3, (uint32_t*)embd.data(), embd.size(), rwkv_ctx_v3->state_in, rwkv_ctx_v3->state_out, rwkv_ctx_v3->logits_out);
+                    }
+                    else
+                    {
                     bool ignoreLogits = (!startedsampling && ((int)embd_inp.size() > input_consumed + 2));
                     evalres = rwkv_eval(rwkv_ctx_v3, embd[0], rwkv_ctx_v3->state_in, rwkv_ctx_v3->state_out, ignoreLogits?nullptr:rwkv_ctx_v3->logits_out);
-                    //}
+                    }
 
                     memcpy(logits.data(), rwkv_ctx_v3->logits_out, sizeof(float) * rwkv_vocab.size());
                     rwkv_ctx_v3->state_in = rwkv_ctx_v3->state_out;
@@ -1163,6 +1257,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
 
             unsigned int eosID = 0;
             float * logitsPtr;
+            int btsize = banned_token_ids.size();
             if(file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2 || file_format == FileFormat::GGJT_3)
             {
                 if(file_format == FileFormat::GGJT_3)
@@ -1180,6 +1275,14 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 {
                     // set the logit of the eos token (2) to zero to avoid sampling it
                     logitsPtr[eosID] = 0;
+                }
+
+                if(btsize>0)
+                {
+                    for(int t=0;t<btsize;++t)
+                    {
+                        logitsPtr[banned_token_ids[t]]=0;
+                    }
                 }
             }
             else
@@ -1235,11 +1338,19 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                     }
                 }
 
+                if(btsize>0)
+                {
+                    int topid = std::min_element(logits.begin(), logits.end()) - logits.begin();
+                    for (int t = 0; t < btsize; ++t)
+                    {
+                        logits[banned_token_ids[t]] = (logits[topid] < 0 ? logits[topid] : 0);
+                    }
+                }
             }
 
             id = SampleLogits(logitsPtr, nctx, n_vocab, last_n_size, repeat_penalty,
             top_k, top_a, top_p, typical_p, tfs_z, temp, rng,
-            params.mirostat,params.mirostat_tau,params.mirostat_eta);
+            params.mirostat, params.mirostat_tau, params.mirostat_eta, sampler_order);
 
             last_n_tokens.erase(last_n_tokens.begin());
             last_n_tokens.push_back(id);

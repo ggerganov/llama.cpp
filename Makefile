@@ -144,16 +144,18 @@ ifdef LLAMA_CUBLAS
 	CUBLASLD_FLAGS = -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
 	CUBLAS_OBJS = ggml-cuda.o ggml_v2-cuda.o ggml_v2-cuda-legacy.o
 	NVCC      = nvcc
-	NVCCFLAGS = --forward-unknown-to-host-compiler -arch=native
+	NVCCFLAGS = --forward-unknown-to-host-compiler -arch=native -DGGML_CUDA_FORCE_DMMV
 ifdef LLAMA_CUDA_DMMV_X
 	NVCCFLAGS += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
 else
 	NVCCFLAGS += -DGGML_CUDA_DMMV_X=32
 endif # LLAMA_CUDA_DMMV_X
 ifdef LLAMA_CUDA_DMMV_Y
+	NVCCFLAGS += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_MMV_Y)
 	NVCCFLAGS += -DGGML_CUDA_DMMV_Y=$(LLAMA_CUDA_DMMV_Y)
 else
 	NVCCFLAGS += -DGGML_CUDA_DMMV_Y=1
+	NVCCFLAGS += -DGGML_CUDA_MMV_Y=1
 endif # LLAMA_CUDA_DMMV_Y
 ifdef LLAMA_CUDA_DMMV_F16
 	NVCCFLAGS += -DGGML_CUDA_DMMV_F16
