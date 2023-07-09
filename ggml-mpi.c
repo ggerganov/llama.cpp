@@ -78,7 +78,8 @@ void ggml_mpi_graph_compute(
         struct ggml_mpi_context * ctx_mpi,
         struct ggml_context     * ctx,
              struct ggml_cgraph * gf,
-                            int   n_layers) {
+                            int   n_layers,
+                            int   n_threads) {
     const int mpi_rank = ctx_mpi->rank;
     const int mpi_size = ctx_mpi->size;
 
@@ -194,7 +195,7 @@ void ggml_mpi_graph_compute(
         //fprintf(stderr, "%s: node %d: processing %d nodes [%d, %d)\n", __func__, mpi_rank, gf->n_nodes, il0, il1);
     }
 
-    ggml_graph_compute(ctx, gf);
+    ggml_graph_compute_with_ctx(ctx, gf, n_threads);
 
     //fprintf(stderr, "%s: node %d: done\n", __func__, mpi_rank);
 
