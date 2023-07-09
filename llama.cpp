@@ -1287,6 +1287,10 @@ static bool llama_eval_internal(
 
     LLAMA_ASSERT((!tokens && embd) || (tokens && !embd));
 
+#ifdef GGML_USE_MPI
+    ggml_mpi_eval_init(lctx.ctx_mpi, &n_tokens, &n_past, &n_threads);
+#endif
+
     // enforce that the first token is BOS
     if (tokens && n_past == 0 && tokens[0] != llama_token_bos()) {
         fprintf(stderr, "%s: first token must be BOS\n", __func__);
@@ -1330,10 +1334,6 @@ static bool llama_eval_internal(
 
     struct ggml_tensor * cur;
     struct ggml_tensor * inpL;
-
-#ifdef GGML_USE_MPI
-    ggml_mpi_eval_init(lctx.ctx_mpi, &n_tokens, &n_past, &n_threads);
-#endif
 
     if (tokens) {
         struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
@@ -1636,7 +1636,7 @@ static bool llama_eval_internal(
         ggml_graph_compute(ctx0, &gf);
     }
 #elif GGML_USE_MPI
-    ggml_mpi_graph_compute(lctx.ctx_mpi, ctx0, &gf, n_layer, n_embd, n_tokens);
+    ggml_mpi_graph_compute(lctx.ctx_mpi, ctx0, &gf, n_layer);
 #else
     ggml_graph_compute(ctx0, &gf);
 #endif

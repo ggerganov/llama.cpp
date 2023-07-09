@@ -108,19 +108,17 @@ void ggml_mpi_graph_compute(
 
             const int mpi_rank_src = mpi_rank - 1;
 
-            // fprintf(stderr, "(%d) Receiving from (%d)\n", mpi_rank, mpi_rank_src);
-            const int retval = MPI_Recv(embd, ggml_nelements(embd), MPI_FLOAT, mpi_rank_src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+            //printf("%s: node %d: waiting for %d elements from %d\n", __func__, mpi_rank, (int) ggml_nelements(embd), mpi_rank_src);
+            const int retval = MPI_Recv(embd->data, ggml_nelements(embd), MPI_FLOAT, mpi_rank_src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
             GGML_ASSERT(retval == MPI_SUCCESS);
-            // fprintf(stderr, "(%d) Received from (%d)\n", mpi_rank, mpi_rank_src);
         }
     } else {
         // node 0 sends the input data to node 1
         {
             const int mpi_rank_dst = mpi_rank + 1;
 
-            const int retval = MPI_Send(embd, ggml_nelements(embd), MPI_FLOAT, mpi_rank_dst, 0, MPI_COMM_WORLD);
+            const int retval = MPI_Send(embd->data, ggml_nelements(embd), MPI_FLOAT, mpi_rank_dst, 0, MPI_COMM_WORLD);
             GGML_ASSERT(retval == MPI_SUCCESS);
-            // fprintf(stderr, "(%d) Sent to (%d)\n", mpi_rank, mpi_rank_dst);
         }
 
         // recv the output data from the last node
@@ -129,7 +127,8 @@ void ggml_mpi_graph_compute(
 
             const int mpi_rank_src = mpi_size - 1;
 
-            const int retval = MPI_Recv(embd, ggml_nelements(embd), MPI_FLOAT, mpi_rank_src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+            //fprintf(stderr, "%s: node %d: waiting for %d elements from %d\n", __func__, mpi_rank, (int) ggml_nelements(embd), mpi_rank_src);
+            const int retval = MPI_Recv(embd->data, ggml_nelements(embd), MPI_FLOAT, mpi_rank_src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
             GGML_ASSERT(retval == MPI_SUCCESS);
         }
     }
@@ -165,12 +164,18 @@ void ggml_mpi_graph_compute(
         for (int i = 1; i < idx_l1 - idx_l0; i++) {
             gf->nodes[i] = gf->nodes[idx_l0 + i];
             gf->grads[i] = gf->grads[idx_l0 + i];
+
+            //fprintf(stderr, "%s: node %d: %d -> %d\n", __func__, mpi_rank, idx_l0 + i, i);
         }
 
         gf->n_nodes = idx_l1 - idx_l0;
+
+        //fprintf(stderr, "%s: node %d: processing %d nodes [%d, %d)\n", __func__, mpi_rank, gf->n_nodes, il0, il1);
     }
 
     ggml_graph_compute(ctx, gf);
+
+    //fprintf(stderr, "%s: node %d: done\n", __func__, mpi_rank);
 
     // send the output data to the next node
     if (mpi_rank > 0) {
@@ -178,7 +183,9 @@ void ggml_mpi_graph_compute(
 
         const int mpi_rank_dst = (mpi_rank + 1) % mpi_size;
 
-        const int retval = MPI_Send(output, ggml_nelements(output), MPI_FLOAT, mpi_rank_dst, 0, MPI_COMM_WORLD);
+        //fprintf(stderr, "%s: node %d: sending %d elements to node %d\n", __func__, mpi_rank, ggml_nelements(output), mpi_rank_dst);
+
+        const int retval = MPI_Send(output->data, ggml_nelements(output), MPI_FLOAT, mpi_rank_dst, 0, MPI_COMM_WORLD);
         GGML_ASSERT(retval == MPI_SUCCESS);
     }
 }
