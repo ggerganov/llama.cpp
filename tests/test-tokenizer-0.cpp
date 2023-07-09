@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
     llama_model * model;
     llama_context * ctx;
 
-    llama_init_backend(false);
+    llama_backend_init(false);
 
     // load the vocab
     {
@@ -99,7 +99,7 @@ int main(int argc, char **argv) {
     llama_free_model(model);
     llama_free(ctx);
 
-    llama_finalize_backend();
+    llama_backend_free();
 
     return 0;
 }
