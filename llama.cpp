@@ -86,6 +86,25 @@ void llama_nop(struct ggml_tensor * tensor) { // don't offload by default
     (void) tensor;
 }
 
+//
+// ggml helpers
+//
+
+static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, int n_threads) {
+    struct ggml_cplan plan = ggml_graph_plan(graph, n_threads);
+
+    if (plan.work_size > 0) {
+        buf.resize(plan.work_size);
+        plan.work_data = buf.data();
+    }
+
+    ggml_graph_compute(graph, &plan);
+}
+
+//
+// memory sizes
+//
+
 static const std::map<e_model, size_t> & MEM_REQ_SCRATCH0()
 {
     static std::map<e_model, size_t> k_sizes = {
@@ -327,6 +346,9 @@ struct llama_context {
 
     // input embedding (1-dimensional array: [n_embd])
     std::vector<float> embedding;
+
+    // reusable buffer for `struct ggml_graph_plan.work_data`
+    std::vector<uint8_t> work_buffer;
 
     // memory buffers used to evaluate the model
     // TODO: move in llama_state
@@ -767,7 +789,6 @@ struct llama_model_loader {
     }
 
 };
-
 
 //
 // kv cache
@@ -1284,16 +1305,10 @@ static bool llama_eval_internal(
            const float * embd,
              const int   n_tokens,
              const int   n_past,
-             const int   n_threads,
+                   int   n_threads,
             const char * cgraph_fname) {
 
     LLAMA_ASSERT((!tokens && embd) || (tokens && !embd));
-
-    // enforce that the first token is BOS
-    if (tokens && n_past == 0 && tokens[0] != llama_token_bos()) {
-        fprintf(stderr, "%s: first token must be BOS\n", __func__);
-        return false;
-    }
 
     const int64_t t_start_us = ggml_time_us();
 
@@ -1325,10 +1340,11 @@ static bool llama_eval_internal(
 
     struct ggml_context * ctx0 = ggml_init(params);
 
+    ggml_cgraph gf = {};
+
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
-    ggml_cgraph gf = {};
-    gf.n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
+    n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
 
     struct ggml_tensor * cur;
     struct ggml_tensor * inpL;
@@ -1642,6 +1658,7 @@ static bool llama_eval_internal(
 
 #ifdef GGML_USE_METAL
     if (lctx.ctx_metal && N == 1) {
+        ggml_metal_set_n_cb     (lctx.ctx_metal, n_threads);
         ggml_metal_graph_compute(lctx.ctx_metal, &gf);
         ggml_metal_get_tensor   (lctx.ctx_metal, cur);
     } else {
@@ -1661,10 +1678,10 @@ static bool llama_eval_internal(
             ggml_metal_get_tensor(lctx.ctx_metal, kv_self.v);
         }
 
-        ggml_graph_compute(ctx0, &gf);
+        ggml_graph_compute_helper(lctx.work_buffer, &gf, n_threads);
     }
 #else
-    ggml_graph_compute(ctx0, &gf);
+    ggml_graph_compute_helper(lctx.work_buffer, &gf, n_threads);
 #endif
 
     if (cgraph_fname) {
@@ -2626,8 +2643,8 @@ void llama_free_model(struct llama_model * model) {
 }
 
 struct llama_context * llama_new_context_with_model(
-                             struct llama_model * model,
-            struct llama_context_params   params) {
+                 struct llama_model * model,
+        struct llama_context_params   params) {
 
     if (!model) {
         return nullptr;
@@ -2704,7 +2721,7 @@ struct llama_context * llama_new_context_with_model(
 #ifdef GGML_USE_METAL
     if (params.n_gpu_layers > 0) {
         // this allocates all Metal resources and memory buffers
-        ctx->ctx_metal = ggml_metal_init();
+        ctx->ctx_metal = ggml_metal_init(1);
 
         void * data_ptr  = NULL;
         size_t data_size = 0;
@@ -2871,6 +2888,9 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
     // read tensors and apply
     bool warned = false;
     int n_tensors = 0;
+
+    std::vector<uint8_t> work_buffer;
+
     while (true) {
         int32_t n_dims;
         int32_t length;
@@ -3035,8 +3055,8 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
             }
 
             struct ggml_cgraph gf = ggml_build_forward(r);
-            gf.n_threads = n_threads;
-            ggml_graph_compute(lora_ctx, &gf);
+
+            ggml_graph_compute_helper(work_buffer, &gf, n_threads);
 
             // we won't need these tensors again, reset the context to save memory
             ggml_free(lora_ctx);
@@ -3189,7 +3209,6 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
 
             ggml_context * cpy_ctx = ggml_init({ 4096, NULL, /* no_alloc */ true });
             ggml_cgraph gf{};
-            gf.n_threads = 1;
 
             ggml_tensor * kout3d = ggml_new_tensor_3d(cpy_ctx, kv_self.k->type, n_embd, kv_ntok, n_layer);
             kout3d->data = out;
@@ -3209,7 +3228,7 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
 
             ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, k3d, kout3d));
             ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, v3d, vout3d));
-            ggml_graph_compute(cpy_ctx, &gf);
+            ggml_graph_compute_helper(ctx->work_buffer, &gf, /*n_threads*/ 1);
 
             ggml_free(cpy_ctx);
         }
@@ -3295,7 +3314,6 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
 
             ggml_context * cpy_ctx = ggml_init({ 4096, NULL, /* no_alloc */ true });
             ggml_cgraph gf{};
-            gf.n_threads = 1;
 
             ggml_tensor * kin3d = ggml_new_tensor_3d(cpy_ctx, kv_self.k->type, n_embd, kv_ntok, n_layer);
             kin3d->data = (void *) inp;
@@ -3315,7 +3333,7 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
 
             ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, kin3d, k3d));
             ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, vin3d, v3d));
-            ggml_graph_compute(cpy_ctx, &gf);
+            ggml_graph_compute_helper(ctx->work_buffer, &gf, /*n_threads*/ 1);
 
             ggml_free(cpy_ctx);
         }
