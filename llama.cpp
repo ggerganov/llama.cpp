@@ -79,6 +79,25 @@ void llama_nop(struct ggml_tensor * tensor) { // don't offload by default
     (void) tensor;
 }
 
+//
+// ggml helpers
+//
+
+static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, int n_threads) {
+    struct ggml_cplan plan = ggml_graph_plan(graph, n_threads);
+
+    if (plan.work_size > 0) {
+        buf.resize(plan.work_size);
+        plan.work_data = buf.data();
+    }
+
+    ggml_graph_compute(graph, &plan);
+}
+
+//
+// memory sizes
+//
+
 static const std::map<e_model, size_t> & MEM_REQ_SCRATCH0()
 {
     static std::map<e_model, size_t> k_sizes = {
@@ -320,6 +339,9 @@ struct llama_context {
 
     // input embedding (1-dimensional array: [n_embd])
     std::vector<float> embedding;
+
+    // reusable buffer for `struct ggml_graph_plan.work_data`
+    std::vector<uint8_t> work_buffer;
 
     // memory buffers used to evaluate the model
     // TODO: move in llama_state
@@ -758,7 +780,6 @@ struct llama_model_loader {
 
 };
 
-
 //
 // kv cache
 //
@@ -1156,6 +1177,7 @@ static void llama_model_load_internal(
             }
         }
 #endif // GGML_USE_CUBLAS
+
 #if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
 
@@ -1164,6 +1186,10 @@ static void llama_model_load_internal(
             fprintf(stderr, "%s: offloading non-repeating layers to GPU\n", __func__);
         }
         size_t vram_kv_cache = 0;
+
+#ifdef GGML_USE_CUBLAS
+        const int max_backend_supported_layers = hparams.n_layer + 3;
+        const int max_offloadable_layers = low_vram ? hparams.n_layer + 1 : hparams.n_layer + 3;
         if (n_gpu_layers > (int) hparams.n_layer + 1) {
             if (low_vram) {
                 fprintf(stderr, "%s: cannot offload v cache to GPU due to low VRAM option\n", __func__);
@@ -1180,14 +1206,18 @@ static void llama_model_load_internal(
                 vram_kv_cache += MEM_REQ_KV_SELF().at(model.type) / 2;
             }
         }
-        const int max_offloadable_layers = low_vram ? hparams.n_layer + 1 : hparams.n_layer + 3;
+#elif defined(GGML_USE_CLBLAST)
+        const int max_backend_supported_layers = hparams.n_layer + 1;
+        const int max_offloadable_layers = hparams.n_layer + 1;
+#endif // GGML_USE_CUBLAS
+
         fprintf(stderr, "%s: offloaded %d/%d layers to GPU\n",
-                __func__, std::min(n_gpu_layers, max_offloadable_layers), hparams.n_layer + 3);
+                __func__, std::min(n_gpu_layers, max_offloadable_layers), max_backend_supported_layers);
         fprintf(stderr, "%s: total VRAM used: %zu MB\n",
                 __func__, (vram_weights + vram_scratch + vram_kv_cache + MB - 1) / MB); // round up
 #else
         (void) n_gpu_layers;
-#endif
+#endif // defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
     }
 
     // populate `tensors_by_name`
@@ -1256,16 +1286,10 @@ static bool llama_eval_internal(
            const float * embd,
              const int   n_tokens,
              const int   n_past,
-             const int   n_threads,
+                   int   n_threads,
             const char * cgraph_fname) {
 
     LLAMA_ASSERT((!tokens && embd) || (tokens && !embd));
-
-    // enforce that the first token is BOS
-    if (tokens && n_past == 0 && tokens[0] != llama_token_bos()) {
-        fprintf(stderr, "%s: first token must be BOS\n", __func__);
-        return false;
-    }
 
     const int64_t t_start_us = ggml_time_us();
 
@@ -1297,10 +1321,11 @@ static bool llama_eval_internal(
 
     struct ggml_context * ctx0 = ggml_init(params);
 
+    ggml_cgraph gf = {};
+
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
-    ggml_cgraph gf = {};
-    gf.n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
+    n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
 
     struct ggml_tensor * cur;
     struct ggml_tensor * inpL;
@@ -1584,6 +1609,7 @@ static bool llama_eval_internal(
 
 #ifdef GGML_USE_METAL
     if (lctx.ctx_metal && N == 1) {
+        ggml_metal_set_n_cb     (lctx.ctx_metal, n_threads);
         ggml_metal_graph_compute(lctx.ctx_metal, &gf);
         ggml_metal_get_tensor   (lctx.ctx_metal, cur);
     } else {
@@ -1603,10 +1629,10 @@ static bool llama_eval_internal(
             ggml_metal_get_tensor(lctx.ctx_metal, kv_self.v);
         }
 
-        ggml_graph_compute(ctx0, &gf);
+        ggml_graph_compute_helper(lctx.work_buffer, &gf, n_threads);
     }
 #else
-    ggml_graph_compute(ctx0, &gf);
+    ggml_graph_compute_helper(lctx.work_buffer, &gf, n_threads);
 #endif
 
     if (cgraph_fname) {
@@ -1896,9 +1922,9 @@ void llama_sample_top_p(struct llama_context * ctx, llama_token_data_array * can
         return;
     }
 
-    const int64_t t_start_sample_us = ggml_time_us();
-
     llama_sample_softmax(ctx, candidates);
+
+    const int64_t t_start_sample_us = ggml_time_us();
 
     // Compute the cumulative probabilities
     float cum_sum = 0.0f;
@@ -1928,9 +1954,8 @@ void llama_sample_tail_free(struct llama_context * ctx, llama_token_data_array *
         return;
     }
 
-    const int64_t t_start_sample_us = ggml_time_us();
-
     llama_sample_softmax(nullptr, candidates);
+    const int64_t t_start_sample_us = ggml_time_us();
 
     // Compute the first and second derivatives
     std::vector<float> first_derivatives(candidates->size - 1);
@@ -1982,10 +2007,10 @@ void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * c
         return;
     }
 
-    const int64_t t_start_sample_us = ggml_time_us();
-
     // Compute the softmax of logits and calculate entropy
     llama_sample_softmax(nullptr, candidates);
+
+    const int64_t t_start_sample_us = ggml_time_us();
 
     float entropy = 0.0f;
     for (size_t i = 0; i < candidates->size; ++i) {
@@ -2155,13 +2180,11 @@ llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_
 
     if (ctx) {
         ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
-        ctx->n_sample++;
     }
     return X;
 }
 
 llama_token llama_sample_token_mirostat_v2(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, float * mu) {
-    assert(ctx);
     int64_t t_start_sample_us;
     t_start_sample_us = ggml_time_us();
 
@@ -2176,13 +2199,14 @@ llama_token llama_sample_token_mirostat_v2(struct llama_context * ctx, llama_tok
         candidates->size = 1;
     }
 
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    }
+
     // Normalize the probabilities of the remaining words
     llama_sample_softmax(ctx, candidates);
 
     // Sample the next word X from the remaining words
-    if (ctx) {
-        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
-    }
     llama_token X = llama_sample_token(ctx, candidates);
     t_start_sample_us = ggml_time_us();
 
@@ -2250,10 +2274,10 @@ static void llama_convert_tensor_internal(const llama_load_tensor & tensor, llam
     }
     float * f32_output = (float *) output.addr;
 
-    quantize_fns_t qtype;
+    ggml_type_traits_t qtype;
     if (ggml_is_quantized(tensor.type)) {
-        qtype = ggml_internal_get_quantize_fn(tensor.type);
-        if (qtype.dequantize_row_q == NULL) {
+        qtype = ggml_internal_get_type_traits(tensor.type);
+        if (qtype.to_float == NULL) {
             throw std::runtime_error(format("type %s unsupported for integer quantization: no dequantization available", ggml_type_name(tensor.type)));
         }
     } else if (tensor.type != GGML_TYPE_F16) {
@@ -2264,7 +2288,7 @@ static void llama_convert_tensor_internal(const llama_load_tensor & tensor, llam
         if (tensor.type == GGML_TYPE_F16) {
             ggml_fp16_to_fp32_row((ggml_fp16_t *)tensor.data, f32_output, nelements);
         } else if (ggml_is_quantized(tensor.type)) {
-            qtype.dequantize_row_q(tensor.data, f32_output, nelements);
+            qtype.to_float(tensor.data, f32_output, nelements);
         } else {
             LLAMA_ASSERT(false); // unreachable
         }
@@ -2289,7 +2313,7 @@ static void llama_convert_tensor_internal(const llama_load_tensor & tensor, llam
             if (typ == GGML_TYPE_F16) {
                 ggml_fp16_to_fp32_row((ggml_fp16_t *)inbuf, outbuf, nels);
             } else {
-                qtype.dequantize_row_q(inbuf, outbuf, nels);
+                qtype.to_float(inbuf, outbuf, nels);
             }
         };
         workers.push_back(std::thread(compute, tensor.type, tensor.data + in_buff_offs, f32_output + out_buff_offs, thr_elems));
@@ -2568,8 +2592,8 @@ void llama_free_model(struct llama_model * model) {
 }
 
 struct llama_context * llama_new_context_with_model(
-                             struct llama_model * model,
-            struct llama_context_params   params) {
+                 struct llama_model * model,
+        struct llama_context_params   params) {
 
     if (!model) {
         return nullptr;
@@ -2638,7 +2662,7 @@ struct llama_context * llama_new_context_with_model(
 #ifdef GGML_USE_METAL
     if (params.n_gpu_layers > 0) {
         // this allocates all Metal resources and memory buffers
-        ctx->ctx_metal = ggml_metal_init();
+        ctx->ctx_metal = ggml_metal_init(1);
 
         void * data_ptr  = NULL;
         size_t data_size = 0;
@@ -2795,6 +2819,9 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
     // read tensors and apply
     bool warned = false;
     int n_tensors = 0;
+
+    std::vector<uint8_t> work_buffer;
+
     while (true) {
         int32_t n_dims;
         int32_t length;
@@ -2959,8 +2986,8 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
             }
 
             struct ggml_cgraph gf = ggml_build_forward(r);
-            gf.n_threads = n_threads;
-            ggml_graph_compute(lora_ctx, &gf);
+
+            ggml_graph_compute_helper(work_buffer, &gf, n_threads);
 
             // we won't need these tensors again, reset the context to save memory
             ggml_free(lora_ctx);
@@ -3113,7 +3140,6 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
 
             ggml_context * cpy_ctx = ggml_init({ 4096, NULL, /* no_alloc */ true });
             ggml_cgraph gf{};
-            gf.n_threads = 1;
 
             ggml_tensor * kout3d = ggml_new_tensor_3d(cpy_ctx, kv_self.k->type, n_embd, kv_ntok, n_layer);
             kout3d->data = out;
@@ -3133,7 +3159,7 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
 
             ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, k3d, kout3d));
             ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, v3d, vout3d));
-            ggml_graph_compute(cpy_ctx, &gf);
+            ggml_graph_compute_helper(ctx->work_buffer, &gf, /*n_threads*/ 1);
 
             ggml_free(cpy_ctx);
         }
@@ -3219,7 +3245,6 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
 
             ggml_context * cpy_ctx = ggml_init({ 4096, NULL, /* no_alloc */ true });
             ggml_cgraph gf{};
-            gf.n_threads = 1;
 
             ggml_tensor * kin3d = ggml_new_tensor_3d(cpy_ctx, kv_self.k->type, n_embd, kv_ntok, n_layer);
             kin3d->data = (void *) inp;
@@ -3239,7 +3264,7 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
 
             ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, kin3d, k3d));
             ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, vin3d, v3d));
-            ggml_graph_compute(cpy_ctx, &gf);
+            ggml_graph_compute_helper(ctx->work_buffer, &gf, /*n_threads*/ 1);
 
             ggml_free(cpy_ctx);
         }
@@ -3473,23 +3498,35 @@ llama_token llama_token_nl() {
     return 13;
 }
 
+struct llama_timings llama_get_timings(struct llama_context * ctx) {
+    struct llama_timings result = {
+        /*.t_start_ms  =*/ 1e-3 * ctx->t_start_us,
+        /*.t_end_ms    =*/ 1.00 * ggml_time_ms(),
+        /*.t_load_ms   =*/ 1e-3 * ctx->t_load_us,
+        /*.t_sample_ms =*/ 1e-3 * ctx->t_sample_us,
+        /*.t_p_eval_ms =*/ 1e-3 * ctx->t_p_eval_us,
+        /*.t_eval_ms   =*/ 1e-3 * ctx->t_eval_us,
+
+        /*.n_sample =*/ std::max(1, ctx->n_sample),
+        /*.n_p_eval =*/ std::max(1, ctx->n_p_eval),
+        /*.n_eval   =*/ std::max(1, ctx->n_eval),
+    };
+
+    return result;
+}
 
 void llama_print_timings(struct llama_context * ctx) {
-    const int64_t t_end_us = ggml_time_us();
-
-    const int32_t n_sample = std::max(1, ctx->n_sample);
-    const int32_t n_eval   = std::max(1, ctx->n_eval);
-    const int32_t n_p_eval = std::max(1, ctx->n_p_eval);
+    const llama_timings timings = llama_get_timings(ctx);
 
     fprintf(stderr, "\n");
-    fprintf(stderr, "%s:        load time = %8.2f ms\n", __func__, ctx->t_load_us / 1000.0);
+    fprintf(stderr, "%s:        load time = %8.2f ms\n", __func__, timings.t_load_ms);
     fprintf(stderr, "%s:      sample time = %8.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
-            __func__, 1e-3 * ctx->t_sample_us, n_sample, 1e-3 * ctx->t_sample_us / n_sample, 1e6 / ctx->t_sample_us * n_sample);
+            __func__, timings.t_sample_ms, timings.n_sample, timings.t_sample_ms / timings.n_sample, 1e3 / timings.t_sample_ms * timings.n_sample);
     fprintf(stderr, "%s: prompt eval time = %8.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n",
-            __func__, 1e-3 * ctx->t_p_eval_us, n_p_eval, 1e-3 * ctx->t_p_eval_us / n_p_eval, 1e6 / ctx->t_p_eval_us * n_p_eval);
+            __func__, timings.t_p_eval_ms, timings.n_p_eval, timings.t_p_eval_ms / timings.n_p_eval, 1e3 / timings.t_p_eval_ms * timings.n_p_eval);
     fprintf(stderr, "%s:        eval time = %8.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
-            __func__, 1e-3 * ctx->t_eval_us,   n_eval,   1e-3 * ctx->t_eval_us   / n_eval,   1e6 / ctx->t_eval_us   * n_eval);
-    fprintf(stderr, "%s:       total time = %8.2f ms\n", __func__, (t_end_us - ctx->t_start_us)/1000.0);
+            __func__, timings.t_eval_ms, timings.n_eval, timings.t_eval_ms / timings.n_eval, 1e3 / timings.t_eval_ms * timings.n_eval);
+    fprintf(stderr, "%s:       total time = %8.2f ms\n", __func__, (timings.t_end_ms - timings.t_start_ms));
 }
 
 void llama_reset_timings(struct llama_context * ctx) {

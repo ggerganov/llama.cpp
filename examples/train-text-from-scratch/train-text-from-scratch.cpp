@@ -60,6 +60,17 @@ float frand_uniform(struct random_uniform_distribution * rnd) {
     return rnd->rd(rnd->gen);
 }
 
+void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, int n_threads) {
+    struct ggml_cplan plan = ggml_graph_plan(graph, n_threads);
+
+    if (plan.work_size > 0) {
+        buf.resize(plan.work_size);
+        plan.work_data = buf.data();
+    }
+
+    ggml_graph_compute(graph, &plan);
+}
+
 struct ggml_tensor * randomize_tensor_normal(struct ggml_tensor * tensor, struct random_normal_distribution * rnd) {
     float scale = 1.0f; // xavier
     switch (tensor->n_dims) {
@@ -1426,11 +1437,9 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train(
 
     gf->n_nodes = 0;
     gf->n_leafs = 0;
-    gf->work_size = 0;
     gf->perf_runs = 0;
     gf->perf_cycles = 0;
     gf->perf_time_us = 0;
-    gf->work = NULL;
 
     const auto & hparams = model->hparams;
     //const int n_ctx      = hparams.n_ctx;
@@ -3162,6 +3171,7 @@ int main(int argc, char ** argv) {
     printf("used_mem model+cache: %zu bytes\n", ggml_used_mem(model.ctx));
     // ggml_print_tensor_objects(model.ctx);
 
+    // TODO: use std::vector<uint8_t> intead of "new"
     size_t    compute_size = 1024ll*1024ll*1024ll*((size_t) params.mem_compute_gb);
     uint8_t * compute_addr = new uint8_t[compute_size];
 
@@ -3182,6 +3192,8 @@ int main(int argc, char ** argv) {
     for (int i = 0; i < (int) train_samples.size(); ++i) {
         GGML_ASSERT(train_samples[i]+n_tokens-1 < (int) train_tokens.size());
     }
+
+    std::vector<uint8_t> work_buffer;
 
     printf("%s: begin training\n", __func__);
 
@@ -3217,9 +3229,6 @@ int main(int argc, char ** argv) {
         struct ggml_cgraph * gf = (struct ggml_cgraph *) gfbuf->data;
         struct ggml_cgraph * gb = (struct ggml_cgraph *) gbbuf->data;
 
-        // ggml_cgraph gf = {};
-        gf->n_threads = params.n_threads;
-        gb->n_threads = params.n_threads;
 
         get_example_targets_batch(lctx, train_samples.data(), train_samples.size(), train_tokens.data(), train_tokens.size(), ex,  tokens_input, target_logits, target_probs);
 
@@ -3248,7 +3257,7 @@ int main(int argc, char ** argv) {
             *gb = ggml_build_backward(ctx0, gf, true);
         }
 
-        ggml_graph_compute(ctx0, gf);
+        ggml_graph_compute_helper(work_buffer, gf, params.n_threads);
 
         size_t used_mem_before_opt = ggml_used_mem(ctx0);
 
@@ -3272,7 +3281,7 @@ int main(int argc, char ** argv) {
         model.train_samples += n_batch;
         model.train_tokens  += n_batch * n_tokens;
 
-        ggml_graph_compute(ctx0, gf);
+        ggml_graph_compute_helper(work_buffer, gf, params.n_threads);
 
         float error_after_opt = ggml_get_f32_1d(loss, 0);
 
@@ -3354,13 +3363,12 @@ int main(int argc, char ** argv) {
             struct ggml_context * ctx0 = ggml_init(cparams);
 
             ggml_cgraph gf = {};
-            gf.n_threads = params.n_threads;
 
             int n_past = 0;
             struct ggml_tensor * logits = forward(&model, &kv_self, ctx0, &gf, tokens_input, sample_ctx, n_past);
 
             ggml_build_forward_expand(&gf, logits);
-            ggml_graph_compute(ctx0, &gf);
+            ggml_graph_compute_helper(work_buffer, &gf, params.n_threads);
 
             //struct ggml_tensor * best_samples = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, sample_ctx);
             //struct ggml_tensor * probs        = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_vocab, sample_ctx);
@@ -3386,6 +3394,7 @@ int main(int argc, char ** argv) {
     delete[] compute_addr;
     delete[] compute_buf_0;
     delete[] compute_buf_1;
+
     llama_free(lctx);
     llama_free_model(lmodel);
     ggml_free(model.ctx);

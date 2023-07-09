@@ -34,8 +34,12 @@ extern "C" {
 
 struct ggml_metal_context;
 
-struct ggml_metal_context * ggml_metal_init(void);
+// number of command buffers to use
+struct ggml_metal_context * ggml_metal_init(int n_cb);
 void ggml_metal_free(struct ggml_metal_context * ctx);
+
+// set the number of command buffers to use
+void ggml_metal_set_n_cb(struct ggml_metal_context * ctx, int n_cb);
 
 // creates a mapping between a host memory buffer and a device memory buffer
 // - make sure to map all buffers used in the graph before calling ggml_metal_graph_compute

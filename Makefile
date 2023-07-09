@@ -163,17 +163,27 @@ ifdef LLAMA_CUBLAS
 	LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
 	OBJS      += ggml-cuda.o
 	NVCC      = nvcc
-	NVCCFLAGS = --forward-unknown-to-host-compiler -arch=native
+	NVCCFLAGS = --forward-unknown-to-host-compiler
+ifdef CUDA_DOCKER_ARCH
+	NVCCFLAGS += -Wno-deprecated-gpu-targets -arch=$(CUDA_DOCKER_ARCH)
+else
+	NVCCFLAGS += -arch=native
+endif # CUDA_DOCKER_ARCH
+ifdef LLAMA_CUDA_FORCE_DMMV
+	NVCCFLAGS += -DGGML_CUDA_FORCE_DMMV
+endif # LLAMA_CUDA_FORCE_DMMV
 ifdef LLAMA_CUDA_DMMV_X
 	NVCCFLAGS += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
 else
 	NVCCFLAGS += -DGGML_CUDA_DMMV_X=32
 endif # LLAMA_CUDA_DMMV_X
-ifdef LLAMA_CUDA_DMMV_Y
-	NVCCFLAGS += -DGGML_CUDA_DMMV_Y=$(LLAMA_CUDA_DMMV_Y)
+ifdef LLAMA_CUDA_MMV_Y
+	NVCCFLAGS += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_MMV_Y)
+else ifdef LLAMA_CUDA_DMMV_Y
+	NVCCFLAGS += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_DMMV_Y) # for backwards compatibility
 else
-	NVCCFLAGS += -DGGML_CUDA_DMMV_Y=1
-endif # LLAMA_CUDA_DMMV_Y
+	NVCCFLAGS += -DGGML_CUDA_MMV_Y=1
+endif # LLAMA_CUDA_MMV_Y
 ifdef LLAMA_CUDA_DMMV_F16
 	NVCCFLAGS += -DGGML_CUDA_DMMV_F16
 endif # LLAMA_CUDA_DMMV_F16
@@ -182,6 +192,7 @@ ifdef LLAMA_CUDA_KQUANTS_ITER
 else
 	NVCCFLAGS += -DK_QUANTS_PER_ITERATION=2
 endif
+
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -Wno-pedantic -c $< -o $@
 endif # LLAMA_CUBLAS

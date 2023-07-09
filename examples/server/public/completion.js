@@ -5,20 +5,29 @@ const paramDefaults = {
   stop: ["</s>"]
 };
 
-/**
- * This function completes the input text using a llama dictionary.
- * @param {object} params - The parameters for the completion request.
- * @param {object} controller - an instance of AbortController if you need one, or null.
- * @param {function} callback - The callback function to call when the completion is done.
- * @returns {string} the completed text as a string. Ideally ignored, and you get at it via the callback.
- */
-export const llamaComplete = async (params, controller, callback) => {
+let generation_settings = null;
+
+
+// Completes the prompt as a generator. Recommended for most use cases.
+//
+// Example:
+//
+//    import { llama } from '/completion.js'
+//
+//    const request = llama("Tell me a joke", {n_predict: 800})
+//    for await (const chunk of request) {
+//      document.write(chunk.data.content)
+//    }
+//
+export async function* llama(prompt, params = {}, config = {}) {
+  let controller = config.controller;
+
   if (!controller) {
     controller = new AbortController();
   }
-  const completionParams = { ...paramDefaults, ...params };
 
-  // we use fetch directly here becasue the built in fetchEventSource does not support POST
+  const completionParams = { ...paramDefaults, ...params, prompt };
+
   const response = await fetch("/completion", {
     method: 'POST',
     body: JSON.stringify(completionParams),
@@ -36,7 +45,6 @@ export const llamaComplete = async (params, controller, callback) => {
   let content = "";
 
   try {
-
     let cont = true;
 
     while (cont) {
@@ -59,18 +67,21 @@ export const llamaComplete = async (params, controller, callback) => {
       result.data = JSON.parse(result.data);
       content += result.data.content;
 
-      // callack
-      if (callback) {
-        cont = callback(result) != false;
-      }
+      // yield
+      yield result;
 
       // if we got a stop token from server, we will break here
       if (result.data.stop) {
+        if (result.data.generation_settings) {
+          generation_settings = result.data.generation_settings;
+        }
         break;
       }
     }
   } catch (e) {
-    console.error("llama error: ", e);
+    if (e.name !== 'AbortError') {
+      console.error("llama error: ", e);
+    }
     throw e;
   }
   finally {
@@ -78,4 +89,80 @@ export const llamaComplete = async (params, controller, callback) => {
   }
 
   return content;
+}
+
+// Call llama, return an event target that you can subcribe to
+//
+// Example:
+//
+//    import { llamaEventTarget } from '/completion.js'
+//
+//    const conn = llamaEventTarget(prompt)
+//    conn.addEventListener("message", (chunk) => {
+//      document.write(chunk.detail.content)
+//    })
+//
+export const llamaEventTarget = (prompt, params = {}, config = {}) => {
+  const eventTarget = new EventTarget();
+  (async () => {
+    let content = "";
+    for await (const chunk of llama(prompt, params, config)) {
+      if (chunk.data) {
+        content += chunk.data.content;
+        eventTarget.dispatchEvent(new CustomEvent("message", { detail: chunk.data }));
+      }
+      if (chunk.data.generation_settings) {
+        eventTarget.dispatchEvent(new CustomEvent("generation_settings", { detail: chunk.data.generation_settings }));
+      }
+      if (chunk.data.timings) {
+        eventTarget.dispatchEvent(new CustomEvent("timings", { detail: chunk.data.timings }));
+      }
+    }
+    eventTarget.dispatchEvent(new CustomEvent("done", { detail: { content } }));
+  })();
+  return eventTarget;
+}
+
+// Call llama, return a promise that resolves to the completed text. This does not support streaming
+//
+// Example:
+//
+//     llamaPromise(prompt).then((content) => {
+//       document.write(content)
+//     })
+//
+//     or
+//
+//     const content = await llamaPromise(prompt)
+//     document.write(content)
+//
+export const llamaPromise = (prompt, params = {}, config = {}) => {
+  return new Promise(async (resolve, reject) => {
+    let content = "";
+    try {
+      for await (const chunk of llama(prompt, params, config)) {
+        content += chunk.data.content;
+      }
+      resolve(content);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+/**
+ * (deprecated)
+ */
+export const llamaComplete = async (params, controller, callback) => {
+  for await (const chunk of llama(params.prompt, params, { controller })) {
+    callback(chunk);
+  }
+}
+
+// Get the model info from the server. This is useful for getting the context window and so on.
+export const llamaModelInfo = async () => {
+  if (!generation_settings) {
+    generation_settings = await fetch("/model.json").then(r => r.json());
+  }
+  return generation_settings;
 }

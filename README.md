@@ -11,6 +11,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 **Hot topics:**
 
+- Simple web chat example: https://github.com/ggerganov/llama.cpp/pull/1998
 - k-quants now support super-block size of 64: https://github.com/ggerganov/llama.cpp/pull/2001
 - New roadmap: https://github.com/users/ggerganov/projects/7
 - Azure CI brainstorming: https://github.com/ggerganov/llama.cpp/discussions/1985
@@ -85,7 +86,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [OpenBuddy 🐶 (Multilingual)](https://github.com/OpenBuddy/OpenBuddy)
 - [X] [Pygmalion 7B / Metharme 7B](#using-pygmalion-7b--metharme-7b)
 - [X] [WizardLM](https://github.com/nlpxucan/WizardLM)
-- [X] [Baichuan-7B](https://huggingface.co/baichuan-inc/baichuan-7B)
+- [X] [Baichuan-7B](https://huggingface.co/baichuan-inc/baichuan-7B) and its derivations (such as [baichuan-7b-sft](https://huggingface.co/hiyouga/baichuan-7b-sft))
 
 **Bindings:**
 
@@ -344,8 +345,9 @@ Building the program with BLAS support may lead to some performance improvements
 
   | Option                  | Legal values           | Default | Description |
   |-------------------------|------------------------|---------|-------------|
+  | LLAMA_CUDA_FORCE_DMMV   | Boolean                |   false | Force the use of dequantization + matrix vector multiplication kernels instead of using kernels that do matrix vector multiplication on quantized data. By default the decision is made based on compute capability (MMVQ for 7.0/Turing/RTX 2000 or higher). Does not affect k-quants. |
   | LLAMA_CUDA_DMMV_X       | Positive integer >= 32 |      32 | Number of values in x direction processed by the CUDA dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants. |
-  | LLAMA_CUDA_DMMV_Y       | Positive integer       |       1 | Block size in y direction for the CUDA dequantization + mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. Does not affect k-quants. |
+  | LLAMA_CUDA_MMV_Y       | Positive integer       |       1 | Block size in y direction for the CUDA mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. Does not affect k-quants. |
   | LLAMA_CUDA_DMMV_F16     | Boolean                |   false | If enabled, use half-precision floating point arithmetic for the CUDA dequantization + mul mat vec kernels. Can improve performance on relatively recent GPUs. |
   | LLAMA_CUDA_KQUANTS_ITER | 1 or 2                 |       2 | Number of values processed per iteration and per CUDA thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs. |
 
@@ -693,7 +695,7 @@ export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH
 
 For easy and swift re-execution, consider documenting this final part in a .sh script file. This will enable you to rerun the process with minimal hassle.
 
-Place your desired model into the `/llama.cpp/models/` directory and execute the `./main (...)` script.
+Place your desired model into the `~/llama.cpp/models/` directory and execute the `./main (...)` script.
 
 ### Docker
 
@@ -729,6 +731,38 @@ or with a light image:
 docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
 ```
 
+### Docker With CUDA
+
+Assuming one has the [nvidia-container-toolkit](https://github.com/NVIDIA/nvidia-container-toolkit) properly installed on Linux, or is using a GPU enabled cloud, `cuBLAS` should be accessible inside the container.
+
+#### Building Locally
+
+```bash
+docker build -t local/llama.cpp:full-cuda -f .devops/full-cuda.Dockerfile .
+docker build -t local/llama.cpp:light-cuda -f .devops/main-cuda.Dockerfile .
+```
+
+You may want to pass in some different `ARGS`, depending on the CUDA environment supported by your container host, as well as the GPU architecture.
+
+The defaults are:
+
+- `CUDA_VERSION` set to `11.7.1`
+- `CUDA_DOCKER_ARCH` set to `all`
+
+The resulting images, are essentially the same as the non-CUDA images:
+
+1. `local/llama.cpp:full-cuda`: This image includes both the main executable file and the tools to convert LLaMA models into ggml and convert into 4-bit quantization.
+2. `local/llama.cpp:light-cuda`: This image only includes the main executable file.
+
+#### Usage
+
+After building locally, Usage is similar to the non-CUDA examples, but you'll need to add the `--gpus` flag. You will also want to use the `--n-gpu-layers` flag.
+
+```bash
+docker run --gpus all -v /path/to/models:/models local/llama.cpp:full-cuda --run -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512 --n-gpu-layers 1
+docker run --gpus all -v /path/to/models:/models local/llama.cpp:light-cuda -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512 --n-gpu-layers 1
+```
+
 ### Contributing
 
 - Contributors can open PRs
@@ -749,5 +783,10 @@ docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:light -m /mode
 
 ### Docs
 
-- [GGML tips & tricks](https://github.com/ggerganov/llama.cpp/wiki/GGML-Tips-&-Tricks)
+- [main](./examples/main/README.md)
+- [server](./examples/server/README.md)
+- [embd-input](./examples/embd-input/README.md)
+- [jeopardy](./examples/jeopardy/README.md)
+- [BLIS](./docs/BLIS.md)
 - [Performance troubleshooting](./docs/token_generation_performance_tips.md)
+- [GGML tips & tricks](https://github.com/ggerganov/llama.cpp/wiki/GGML-Tips-&-Tricks)

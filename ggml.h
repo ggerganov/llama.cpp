@@ -65,7 +65,7 @@
 //       ggml_set_f32(a, 3.0f);
 //       ggml_set_f32(b, 4.0f);
 //
-//       ggml_graph_compute(ctx0, &gf);
+//       ggml_graph_compute_with_ctx(ctx, &gf, n_threads);
 //
 //       printf("f = %f\n", ggml_get_f32_1d(f, 0));
 //
@@ -201,6 +201,8 @@
 #define GGML_MAX_NAME          48
 #define GGML_DEFAULT_N_THREADS 4
 
+#define GGML_UNUSED(x) (void)(x)
+
 #define GGML_ASSERT(x) \
     do { \
         if (!(x)) { \
@@ -208,6 +210,30 @@
             abort(); \
         } \
     } while (0)
+
+// used to copy the number of elements and stride in bytes of tensors into local variables.
+// main purpose is to reduce code duplication and improve readability.
+//
+// example:
+//
+//    GGML_TENSOR_LOCALS(int64_t, ne1, src1, ne);
+//    GGML_TENSOR_LOCALS(size_t,  nb1, src1, nb);
+//
+#define GGML_TENSOR_LOCALS_1(type, prefix, pointer, array) \
+    const type prefix##0 = (pointer)->array[0]; \
+    GGML_UNUSED(prefix##0);
+#define GGML_TENSOR_LOCALS_2(type, prefix, pointer, array) \
+    GGML_TENSOR_LOCALS_1    (type, prefix, pointer, array) \
+    const type prefix##1 = (pointer)->array[1]; \
+    GGML_UNUSED(prefix##1);
+#define GGML_TENSOR_LOCALS_3(type, prefix, pointer, array) \
+    GGML_TENSOR_LOCALS_2    (type, prefix, pointer, array) \
+    const type prefix##2 = (pointer)->array[2]; \
+    GGML_UNUSED(prefix##2);
+#define GGML_TENSOR_LOCALS(type, prefix, pointer, array) \
+    GGML_TENSOR_LOCALS_3  (type, prefix, pointer, array) \
+    const type prefix##3 = (pointer)->array[3]; \
+    GGML_UNUSED(prefix##3);
 
 #ifdef  __cplusplus
 extern "C" {
@@ -224,8 +250,8 @@ extern "C" {
     GGML_API float       ggml_fp16_to_fp32(ggml_fp16_t x);
     GGML_API ggml_fp16_t ggml_fp32_to_fp16(float x);
 
-    GGML_API void ggml_fp16_to_fp32_row(const ggml_fp16_t * x, float * y, size_t n);
-    GGML_API void ggml_fp32_to_fp16_row(const float * x, ggml_fp16_t * y, size_t n);
+    GGML_API void ggml_fp16_to_fp32_row(const ggml_fp16_t * x, float * y, int n);
+    GGML_API void ggml_fp32_to_fp16_row(const float * x, ggml_fp16_t * y, int n);
 
     struct ggml_object;
     struct ggml_context;
@@ -295,12 +321,15 @@ extern "C" {
         GGML_OP_SUM,
         GGML_OP_SUM_ROWS,
         GGML_OP_MEAN,
+        GGML_OP_ARGMAX,
         GGML_OP_REPEAT,
         GGML_OP_REPEAT_BACK,
         GGML_OP_ABS,
         GGML_OP_SGN,
         GGML_OP_NEG,
         GGML_OP_STEP,
+        GGML_OP_TANH,
+        GGML_OP_ELU,
         GGML_OP_RELU,
         GGML_OP_GELU,
         GGML_OP_GELU_QUICK,
@@ -332,9 +361,8 @@ extern "C" {
         GGML_OP_ROPE_BACK,
         GGML_OP_ALIBI,
         GGML_OP_CLAMP,
-        GGML_OP_CONV_1D_S1_PH,
-        GGML_OP_CONV_1D_S2_PH,
-        GGML_OP_CONV_2D_SK_P0,
+        GGML_OP_CONV_1D,
+        GGML_OP_CONV_2D,
 
         GGML_OP_FLASH_ATTN,
         GGML_OP_FLASH_FF,
@@ -390,9 +418,6 @@ extern "C" {
         struct ggml_tensor * src1;
         struct ggml_tensor * opt[GGML_MAX_OPT];
 
-        // thread scheduling
-        int n_tasks;
-
         // performance
         int     perf_runs;
         int64_t perf_cycles;
@@ -404,19 +429,27 @@ extern "C" {
 
         void * extra; // extra things e.g. for ggml-cuda.cu
 
-        char padding[4];
+        char padding[8];
     };
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);
+
+    // the compute plan that needs to be prepared for ggml_graph_compute()
+    // since https://github.com/ggerganov/ggml/issues/287
+    struct ggml_cplan {
+        size_t    work_size; // size of work buffer, calculated by `ggml_graph_plan()`
+        uint8_t * work_data; // work buffer, to be allocated by caller before calling to `ggml_graph_compute()`
+
+        int n_threads;
+
+        // the `n_tasks` of nodes, 1:1 mapping to cgraph nodes
+        int n_tasks[GGML_MAX_NODES];
+    };
 
     // computation graph
     struct ggml_cgraph {
         int n_nodes;
         int n_leafs;
-        int n_threads;
-
-        size_t work_size;
-        struct ggml_tensor * work;
 
         struct ggml_tensor * nodes[GGML_MAX_NODES];
         struct ggml_tensor * grads[GGML_MAX_NODES];
@@ -690,6 +723,11 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
 
+    // argmax along rows
+    GGML_API struct ggml_tensor * ggml_argmax(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
     // if a is the same shape as b, and a is not parameter, return a
     // otherwise, return a new tensor: repeat(a) to fit in b
     GGML_API struct ggml_tensor * ggml_repeat(
@@ -731,6 +769,22 @@ extern "C" {
             struct ggml_tensor  * a);
 
     GGML_API struct ggml_tensor * ggml_step_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
+    GGML_API struct ggml_tensor * ggml_tanh(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
+    GGML_API struct ggml_tensor * ggml_tanh_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
+    GGML_API struct ggml_tensor * ggml_elu(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
+    GGML_API struct ggml_tensor * ggml_elu_inplace(
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
 
@@ -1084,58 +1138,33 @@ extern "C" {
             float                 min,
             float                 max);
 
-    // TODO: implement general-purpose convolutions
-    // GGML_API struct ggml_tensor * ggml_conv_1d(
-    //        struct ggml_context * ctx,
-    //        struct ggml_tensor  * a,
-    //        struct ggml_tensor  * b,
-    //        int                   s0
-    //        int                   p0,
-    //        int                   d0);
-    //
-    // GGML_API struct ggml_tensor * ggml_conv_2d(
-    //        struct ggml_context * ctx,
-    //        struct ggml_tensor  * a,
-    //        struct ggml_tensor  * b,
-    //        int                   s0,
-    //        int                   s1,
-    //        int                   p0,
-    //        int                   p1,
-    //        int                   d0,
-    //        int                   d1);
-
-    // padding = half
-    // TODO: we don't support extra parameters for now
-    //       that's why we are hard-coding the stride, padding, and dilation
-    //       not great ..
-    // example:
-    // a:      3   80  768    1
-    // b:   3000   80    1    1
-    // res: 3000  768    1    1
-    // used in whisper
-    GGML_API struct ggml_tensor * ggml_conv_1d_s1_ph(
+    GGML_API struct ggml_tensor * ggml_conv_1d(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            struct ggml_tensor  * b);
+            struct ggml_tensor  * b,
+            int                   s0,  // stride
+            int                   p0,  // padding
+            int                   d0); // dilation
 
-    // used in whisper
-    GGML_API struct ggml_tensor * ggml_conv_1d_s2_ph(
+    GGML_API struct ggml_tensor * ggml_conv_2d(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            struct ggml_tensor  * b);
+            struct ggml_tensor  * b,
+            int                   s0,
+            int                   s1,
+            int                   p0,
+            int                   p1,
+            int                   d0,
+            int                   d1);
 
-    // kernel size is a->ne[0] x a->ne[1]
-    // stride is equal to kernel size
-    // padding is zero
-    // example:
-    // a:     16   16    3  768
-    // b:   1024 1024    3    1
-    // res:   64   64  768    1
-    // used in sam
-    GGML_API struct ggml_tensor * ggml_conv_2d_sk_p0(
+    // conv_1d with padding = half
+    // alias for ggml_conv_1d(a, b, s, a->ne[0]/2, d)
+    GGML_API struct ggml_tensor* ggml_conv_1d_ph(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            struct ggml_tensor  * b);
+            struct ggml_tensor  * b,
+            int                   s,
+            int                   d);
 
     GGML_API struct ggml_tensor * ggml_flash_attn(
             struct ggml_context * ctx,
@@ -1266,15 +1295,22 @@ extern "C" {
 
     GGML_API void ggml_set_param(
             struct ggml_context * ctx,
-            struct ggml_tensor * tensor);
+            struct ggml_tensor  * tensor);
 
     GGML_API void ggml_build_forward_expand(struct ggml_cgraph * cgraph, struct ggml_tensor * tensor);
 
     GGML_API struct ggml_cgraph ggml_build_forward (struct ggml_tensor * tensor);
     GGML_API struct ggml_cgraph ggml_build_backward(struct ggml_context * ctx, struct ggml_cgraph * gf, bool keep);
 
-    GGML_API void ggml_graph_compute(struct ggml_context * ctx, struct ggml_cgraph * cgraph);
-    GGML_API void ggml_graph_reset  (struct ggml_cgraph * cgraph);
+    // ggml_graph_plan() has to be called before ggml_graph_compute()
+    // when plan.work_size > 0, caller must allocate memory for plan.work_data
+    GGML_API struct ggml_cplan ggml_graph_plan   (struct ggml_cgraph * cgraph, int n_threads /*= GGML_DEFAULT_N_THREADS*/);
+    GGML_API              void ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan);
+    GGML_API              void ggml_graph_reset  (struct ggml_cgraph * cgraph);
+
+    // same as ggml_graph_compute() but the work data is allocated as a part of the context
+    // note: the drawback of this API is that you must have ensured that the context has enough memory for the work data
+    GGML_API void ggml_graph_compute_with_ctx(struct ggml_context * ctx, struct ggml_cgraph * cgraph, int n_threads);
 
     GGML_API struct ggml_tensor * ggml_graph_get_tensor(struct ggml_cgraph * cgraph, const char * name);
 
@@ -1491,25 +1527,24 @@ extern "C" {
     //
 
 #ifdef  __cplusplus
-    // restrict not standard in C++
+// restrict not standard in C++
 #define GGML_RESTRICT
 #else
 #define GGML_RESTRICT restrict
 #endif
-    typedef void (*dequantize_row_q_t)(const void * GGML_RESTRICT x, float * GGML_RESTRICT y, int k);
-    typedef void (*quantize_row_q_t)  (const float * GGML_RESTRICT x, void * GGML_RESTRICT y, int k);
-    typedef void (*vec_dot_q_t)       (const int n, float * GGML_RESTRICT s, const void * GGML_RESTRICT x, const void * GGML_RESTRICT y);
+    typedef void (*ggml_to_float_t)  (const void  * GGML_RESTRICT x, float * GGML_RESTRICT y, int k);
+    typedef void (*ggml_from_float_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int k);
+    typedef void (*ggml_vec_dot_t)   (const int n, float * GGML_RESTRICT s, const void * GGML_RESTRICT x, const void * GGML_RESTRICT y);
 
     typedef struct {
-        dequantize_row_q_t dequantize_row_q;
-        quantize_row_q_t   quantize_row_q;
-        quantize_row_q_t   quantize_row_q_reference;
-        quantize_row_q_t   quantize_row_q_dot;
-        vec_dot_q_t        vec_dot_q;
-        enum ggml_type     vec_dot_type;
-    } quantize_fns_t;
+        ggml_to_float_t   to_float;
+        ggml_from_float_t from_float;
+        ggml_from_float_t from_float_reference;
+        ggml_vec_dot_t    vec_dot;
+        enum ggml_type    vec_dot_type;
+    } ggml_type_traits_t;
 
-    quantize_fns_t ggml_internal_get_quantize_fn(size_t i);
+    ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type i);
 
 #ifdef  __cplusplus
 }
