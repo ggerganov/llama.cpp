@@ -1657,7 +1657,7 @@ static bool llama_eval_internal(
         ggml_graph_compute_helper(lctx.work_buffer, &gf, n_threads);
     }
 #elif GGML_USE_MPI
-    ggml_mpi_graph_compute(lctx.ctx_mpi, ctx0, &gf, n_layer);
+    ggml_mpi_graph_compute(lctx.ctx_mpi, ctx0, &gf, n_layer, n_threads);
 
     cur = gf.nodes[gf.n_nodes - 1];
 #else

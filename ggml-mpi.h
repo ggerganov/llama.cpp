@@ -28,7 +28,8 @@ void ggml_mpi_graph_compute(
         struct ggml_mpi_context * ctx_mpi,
         struct ggml_context     * ctx,
              struct ggml_cgraph * gf,
-                            int   n_layers);
+                            int   n_layers,
+                            int   n_threads);
 
 #ifdef __cplusplus
 }
