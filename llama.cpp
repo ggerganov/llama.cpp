@@ -1332,21 +1332,19 @@ static bool llama_eval_internal(
     struct ggml_tensor * inpL;
 
 #ifdef GGML_USE_MPI
-    inpL = ggml_mpi_eval_init(lctx.ctx_mpi, ctx0, n_embd, &n_tokens, &n_past, &n_threads);
-
-    if (inpL) {
-        // only rank 0 loads uses the input
-    } else
+    ggml_mpi_eval_init(lctx.ctx_mpi, &n_tokens, &n_past, &n_threads);
 #endif
+
     if (tokens) {
         struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
-        ggml_set_name(embd, "embd");
         memcpy(embd->data, tokens, N*ggml_element_size(embd));
         inpL = ggml_get_rows(ctx0, model.tok_embeddings, embd);
     } else {
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N);
         memcpy(inpL->data, embd, N * n_embd * ggml_element_size(inpL));
     }
+
+    ggml_set_name(inpL, "embd");
 
     const int i_gpu_start = n_layer - n_gpu_layers;
     (void) i_gpu_start;
@@ -1638,7 +1636,7 @@ static bool llama_eval_internal(
         ggml_graph_compute(ctx0, &gf);
     }
 #elif GGML_USE_MPI
-    ggml_mpi_graph_compute(lctx.ctx_mpi, &gf, n_layer, n_embd, n_tokens);
+    ggml_mpi_graph_compute(lctx.ctx_mpi, ctx0, &gf, n_layer, n_embd, n_tokens);
 #else
     ggml_graph_compute(ctx0, &gf);
 #endif
@@ -2716,7 +2714,7 @@ struct llama_context * llama_new_context_with_model(
 
     if (ggml_mpi_rank(ctx->ctx_mpi) > 0) {
         // Enter a blocking eval loop with dummy input, letting rank=0 drive the process
-        const std::vector<llama_token> tmp = { llama_token_bos(), };
+        const std::vector<llama_token> tmp(ctx->model.hparams.n_ctx, llama_token_bos());
         while (!llama_eval(ctx, tmp.data(), tmp.size(), 0, 0)) {};
         llama_backend_free();
         exit(1);

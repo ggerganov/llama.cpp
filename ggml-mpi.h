@@ -8,16 +8,6 @@ struct ggml_cgraph;
 extern "C" {
 #endif
 
-struct ggml_tensor * ggml_mpi_send_tensor(
-        struct ggml_context * ctx,
-         struct ggml_tensor * src,
-                        int   dst_rank);
-struct ggml_tensor * ggml_mpi_recv_tensor(
-        struct ggml_context * ctx,
-         struct ggml_tensor * parent,
-         struct ggml_tensor * dst,
-                        int   src_rank);
-
 struct ggml_mpi_context;
 
 void ggml_mpi_backend_init(void);
@@ -28,20 +18,17 @@ void ggml_mpi_free(struct ggml_mpi_context * ctx);
 
 int ggml_mpi_rank(struct ggml_mpi_context * ctx);
 
-struct ggml_tensor * ggml_mpi_eval_init(
+void ggml_mpi_eval_init(
         struct ggml_mpi_context * ctx_mpi,
-        struct ggml_context     * ctx,
-                            int   n_embd,
                             int * n_tokens,
                             int * n_past,
                             int * n_threads);
 
 void ggml_mpi_graph_compute(
         struct ggml_mpi_context * ctx_mpi,
+        struct ggml_context     * ctx,
              struct ggml_cgraph * gf,
-                            int   n_layers,
-                            int   n_embd,
-                            int   n_tokens);
+                            int   n_layers);
 
 #ifdef __cplusplus
 }
