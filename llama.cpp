@@ -1291,12 +1291,6 @@ static bool llama_eval_internal(
 
     LLAMA_ASSERT((!tokens && embd) || (tokens && !embd));
 
-    // enforce that the first token is BOS
-    if (tokens && n_past == 0 && tokens[0] != llama_token_bos()) {
-        fprintf(stderr, "%s: first token must be BOS\n", __func__);
-        return false;
-    }
-
     const int64_t t_start_us = ggml_time_us();
 
     const int N = n_tokens;
