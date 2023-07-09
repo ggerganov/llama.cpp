@@ -114,7 +114,7 @@ void ggml_mpi_graph_compute(
 
             const int mpi_rank_src = mpi_rank - 1;
 
-            const int retval = MPI_Recv(inp_tokens->data, ggml_nelements(inp_tokens), MPI_INT, mpi_rank_src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+            const int retval = MPI_Recv(inp_tokens->data, ggml_nelements(inp_tokens), MPI_INT32_T, mpi_rank_src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
             GGML_ASSERT(retval == MPI_SUCCESS);
         } else { // recv input data for each node into the "inp0" tensor (i.e. the first node in the compute graph)
             MPI_Status status; UNUSED(status);
@@ -130,7 +130,7 @@ void ggml_mpi_graph_compute(
         {
             const int mpi_rank_dst = mpi_rank + 1;
 
-            const int retval = MPI_Send(inp_tokens->data, ggml_nelements(inp_tokens), MPI_INT, mpi_rank_dst, 0, MPI_COMM_WORLD);
+            const int retval = MPI_Send(inp_tokens->data, ggml_nelements(inp_tokens), MPI_INT32_T, mpi_rank_dst, 0, MPI_COMM_WORLD);
             GGML_ASSERT(retval == MPI_SUCCESS);
         }
 
