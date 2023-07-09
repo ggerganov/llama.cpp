@@ -6,7 +6,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
@@ -168,7 +167,8 @@ void ggml_mpi_graph_compute(
             return;
         }
 
-        // attach the input data to the first layer for this node
+        // attach the input data to all nodes that need it
+        // TODO: not great - should be able to do this without modifying the compute graph (see next TODO below)
         for (int i = idx_l0; i < idx_l1; i++) {
             if (gf->nodes[i]->src0 == gf->nodes[idx_l0]) {
                 gf->nodes[i]->src0 =  inp0;

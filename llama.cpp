@@ -1342,6 +1342,10 @@ static bool llama_eval_internal(
 
         inpL = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
     } else {
+#ifdef GGML_USE_MPI
+        GGML_ASSERT(false && "not implemented");
+#endif
+
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N);
         memcpy(inpL->data, embd, N * n_embd * ggml_element_size(inpL));
     }
