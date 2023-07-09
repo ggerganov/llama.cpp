@@ -52,10 +52,6 @@
 #include <sstream>
 #include <numeric>
 
-#ifdef GGML_USE_MPI
-#include <mpi.h>
-#endif
-
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
@@ -337,8 +333,9 @@ struct llama_context {
     ggml_metal_context * ctx_metal = NULL;
 #endif
 
-    int    mpi_rank;
-    int    mpi_size;
+#ifdef GGML_USE_MPI
+    ggml_mpi_context * ctx_mpi = NULL;
+#endif
 
     int    buf_last = 0;
     size_t buf_max_size[LLAMA_MAX_SCRATCH_BUFFERS] = { 0 };
@@ -859,7 +856,7 @@ bool llama_mlock_supported() {
     return llama_mlock::SUPPORTED;
 }
 
-void llama_init_backend(bool numa) {
+void llama_backend_init(bool numa) {
     ggml_time_init();
 
     // needed to initialize f16 tables
@@ -872,14 +869,15 @@ void llama_init_backend(bool numa) {
     if (numa) {
         ggml_numa_init();
     }
+
 #ifdef GGML_USE_MPI
-    MPI_Init(NULL, NULL);
+    ggml_mpi_backend_init();
 #endif
 }
 
-void llama_finalize_backend() {
+void llama_backend_free() {
 #ifdef GGML_USE_MPI
-    MPI_Finalize();
+    ggml_mpi_backend_free();
 #endif
 }
 
@@ -1282,9 +1280,9 @@ static bool llama_eval_internal(
          llama_context & lctx,
      const llama_token * tokens,
            const float * embd,
-             const int   n_tokens,
-             const int   n_past,
-             const int   n_threads,
+                   int   n_tokens,
+                   int   n_past,
+                   int   n_threads,
             const char * cgraph_fname) {
 
     LLAMA_ASSERT((!tokens && embd) || (tokens && !embd));
@@ -1333,16 +1331,14 @@ static bool llama_eval_internal(
     struct ggml_tensor * cur;
     struct ggml_tensor * inpL;
 
-    if (lctx.mpi_rank > 0) {
 #ifdef GGML_USE_MPI
-        inpL = ggml_mpi_recv_tensor(ctx0, NULL,
-                ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N),
-                lctx.mpi_rank-1);
-        ggml_set_name(inpL, "mpi_recv");
-#else
-        GGML_ASSERT(false);
+    inpL = ggml_mpi_eval_init(lctx.ctx_mpi, ctx0, n_embd, &n_tokens, &n_past, &n_threads);
+
+    if (inpL) {
+        // only rank 0 loads uses the input
+    } else
 #endif
-    } else if (tokens) {
+    if (tokens) {
         struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
         ggml_set_name(embd, "embd");
         memcpy(embd->data, tokens, N*ggml_element_size(embd));
@@ -1585,7 +1581,6 @@ static bool llama_eval_internal(
 
         // input for next layer
         inpL = cur;
-
     }
 
     lctx.use_buf(ctx0, 0);
@@ -1601,6 +1596,7 @@ static bool llama_eval_internal(
         GGML_ASSERT(false);
 #endif
     }
+
     if (lctx.mpi_rank == 0) {
         if (lctx.mpi_size > 1) {
 #ifdef GGML_USE_MPI
@@ -1688,7 +1684,11 @@ static bool llama_eval_internal(
     // update kv token count
     lctx.kv_self.n = n_past + N;
 
-    if (lctx.mpi_rank == 0) {
+#ifdef GGML_USE_MPI
+    if (ggml_mpi_rank(lctx.ctx_mpi) == 0) {
+#else
+    {
+#endif
         // extract logits
         {
             auto & logits_out = lctx.logits;
@@ -2659,14 +2659,6 @@ struct llama_context * llama_new_context_with_model(
     ctx->rng = std::mt19937(params.seed);
     ctx->logits_all = params.logits_all;
 
-#ifdef GGML_USE_MPI
-    MPI_Comm_size(MPI_COMM_WORLD, &ctx->mpi_size);
-    MPI_Comm_rank(MPI_COMM_WORLD, &ctx->mpi_rank);
-#else
-    ctx->mpi_size = 1;
-    ctx->mpi_rank = 0;
-#endif
-
     ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
     // reserve memory for context buffers
@@ -2739,15 +2731,17 @@ struct llama_context * llama_new_context_with_model(
     }
 #endif
 
-    if (ctx->mpi_rank > 0) {
+#ifdef GGML_USE_MPI
+    ctx->ctx_mpi = ggml_mpi_init();
+
+    if (ggml_mpi_rank(ctx->ctx_mpi) > 0) {
         // Enter a blocking eval loop with dummy input, letting rank=0 drive the process
         const std::vector<llama_token> tmp = { llama_token_bos(), };
-        while (!llama_eval(ctx, tmp.data(), tmp.size(), 0, 0));
-#ifdef GGML_USE_MPI
-        MPI_Finalize();
-#endif
+        while (!llama_eval(ctx, tmp.data(), tmp.size(), 0, 0)) {};
+        llama_backend_free();
         exit(1);
     }
+#endif
 
     return ctx;
 }
@@ -3425,13 +3419,6 @@ int llama_eval(
                          int   n_tokens,
                          int   n_past,
                          int   n_threads) {
-#ifdef GGML_USE_MPI
-    // Synchronize the worker node parameters with the root node
-    MPI_Barrier(MPI_COMM_WORLD);
-    MPI_Bcast(&n_past, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(&n_tokens, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(&n_threads, 1, MPI_INT, 0, MPI_COMM_WORLD);
-#endif
     if (!llama_eval_internal(*ctx, tokens, nullptr, n_tokens, n_past, n_threads, nullptr)) {
         fprintf(stderr, "%s: failed to eval\n", __func__);
         return 1;
