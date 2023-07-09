@@ -321,6 +321,11 @@ if (LLAMA_MPI)
         set(c_flags   ${c_flags}   -Wno-cast-qual)
         set(LLAMA_EXTRA_LIBS     ${LLAMA_EXTRA_LIBS}     ${MPI_C_LIBRARIES})
         set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} ${MPI_C_INCLUDE_DIRS})
+        # Even if you're only using the C header, C++ programs may bring in MPI
+        # C++ functions, so more linkage is needed
+        if (MPI_CXX_FOUND)
+            set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS}     ${MPI_CXX_LIBRARIES})
+        endif()
     else()
         message(WARNING "MPI not found")
     endif()
