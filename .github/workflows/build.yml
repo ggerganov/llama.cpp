@@ -107,6 +107,10 @@ jobs:
   ubuntu-latest-cmake-mpi:
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        mpi_library: [mpich, libopenmpi-dev]
+
     steps:
       - name: Clone
         id: checkout
@@ -116,7 +120,7 @@ jobs:
         id: depends
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential mpich
+          sudo apt-get install build-essential ${{ matrix.mpi_library }}
 
       - name: Build
         id: cmake_build
