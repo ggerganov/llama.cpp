@@ -1336,15 +1336,15 @@ static bool llama_eval_internal(
     struct ggml_tensor * inpL;
 
     if (tokens) {
-        struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
-        memcpy(embd->data, tokens, N*ggml_element_size(embd));
-        inpL = ggml_get_rows(ctx0, model.tok_embeddings, embd);
+        struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
+        memcpy(inp_tokens->data, tokens, N*ggml_element_size(inp_tokens));
+        ggml_set_name(inp_tokens, "inp_tokens");
+
+        inpL = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
     } else {
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N);
         memcpy(inpL->data, embd, N * n_embd * ggml_element_size(inpL));
     }
-
-    ggml_set_name(inpL, "embd");
 
     const int i_gpu_start = n_layer - n_gpu_layers;
     (void) i_gpu_start;

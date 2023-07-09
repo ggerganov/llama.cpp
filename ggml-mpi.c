@@ -74,6 +74,7 @@ int ggml_graph_get_node_idx(struct ggml_cgraph * gf, const char * name) {
     return -1;
 }
 
+// TODO: there are many improvements that can be done to this implementation
 void ggml_mpi_graph_compute(
         struct ggml_mpi_context * ctx_mpi,
         struct ggml_context     * ctx,
@@ -82,18 +83,24 @@ void ggml_mpi_graph_compute(
     const int mpi_rank = ctx_mpi->rank;
     const int mpi_size = ctx_mpi->size;
 
-    struct ggml_tensor * embd = ggml_graph_get_tensor(gf, "layer_inp_0");
-    if (embd == NULL) {
-        fprintf(stderr, "%s: tensor 'embd' not found\n", __func__);
+    struct ggml_tensor * inp_tokens = ggml_graph_get_tensor(gf, "inp_tokens");
+    if (inp_tokens == NULL) {
+        fprintf(stderr, "%s: tensor 'inp_tokens' not found\n", __func__);
         return;
     }
 
-    GGML_ASSERT(embd == gf->nodes[0]);
+    struct ggml_tensor * inp0 = ggml_graph_get_tensor(gf, "layer_inp_0");
+    if (inp0 == NULL) {
+        fprintf(stderr, "%s: tensor 'inp0' not found\n", __func__);
+        return;
+    }
+
+    GGML_ASSERT(inp0 == gf->nodes[0]);
 
     // distribute the compute graph into slices across the MPI nodes
     //
     // the main node (0) processes the last layers + the remainder of the compute graph
-    // and is responsible to pass the input embeddings to the first node (1)
+    // and is responsible to pass the input tokens to the first node (1)
     //
     // node 1:   [(  0) * n_per_node, (  1) * n_per_node)
     // node 2:   [(  1) * n_per_node, (  2) * n_per_node)
@@ -102,22 +109,28 @@ void ggml_mpi_graph_compute(
     // node 0:   [(n-1) * n_per_node,            n_nodes)
     //
     if (mpi_rank > 0) {
-        // recv input data for each node into the "embd" tensor (i.e. the first node in the compute graph)
-        {
+        if (mpi_rank == 1) { // the first node receives the input tokens from the main node
             MPI_Status status; UNUSED(status);
 
             const int mpi_rank_src = mpi_rank - 1;
 
-            //printf("%s: node %d: waiting for %d elements from %d\n", __func__, mpi_rank, (int) ggml_nelements(embd), mpi_rank_src);
-            const int retval = MPI_Recv(embd->data, ggml_nelements(embd), MPI_FLOAT, mpi_rank_src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+            const int retval = MPI_Recv(inp_tokens->data, ggml_nelements(inp_tokens), MPI_INT, mpi_rank_src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+            GGML_ASSERT(retval == MPI_SUCCESS);
+        } else { // recv input data for each node into the "inp0" tensor (i.e. the first node in the compute graph)
+            MPI_Status status; UNUSED(status);
+
+            const int mpi_rank_src = mpi_rank - 1;
+
+            //printf("%s: node %d: waiting for %d elements from %d\n", __func__, mpi_rank, (int) ggml_nelements(inp0), mpi_rank_src);
+            const int retval = MPI_Recv(inp0->data, ggml_nelements(inp0), MPI_FLOAT, mpi_rank_src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
             GGML_ASSERT(retval == MPI_SUCCESS);
         }
-    } else {
-        // node 0 sends the input data to node 1
+    } else if (mpi_size > 1) {
+        // node 0 sends the input tokens to node 1
         {
             const int mpi_rank_dst = mpi_rank + 1;
 
-            const int retval = MPI_Send(embd->data, ggml_nelements(embd), MPI_FLOAT, mpi_rank_dst, 0, MPI_COMM_WORLD);
+            const int retval = MPI_Send(inp_tokens->data, ggml_nelements(inp_tokens), MPI_INT, mpi_rank_dst, 0, MPI_COMM_WORLD);
             GGML_ASSERT(retval == MPI_SUCCESS);
         }
 
@@ -127,8 +140,8 @@ void ggml_mpi_graph_compute(
 
             const int mpi_rank_src = mpi_size - 1;
 
-            //fprintf(stderr, "%s: node %d: waiting for %d elements from %d\n", __func__, mpi_rank, (int) ggml_nelements(embd), mpi_rank_src);
-            const int retval = MPI_Recv(embd->data, ggml_nelements(embd), MPI_FLOAT, mpi_rank_src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+            //fprintf(stderr, "%s: node %d: waiting for %d elements from %d\n", __func__, mpi_rank, (int) ggml_nelements(inp0), mpi_rank_src);
+            const int retval = MPI_Recv(inp0->data, ggml_nelements(inp0), MPI_FLOAT, mpi_rank_src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
             GGML_ASSERT(retval == MPI_SUCCESS);
         }
     }
@@ -148,7 +161,7 @@ void ggml_mpi_graph_compute(
         snprintf(name_l1, sizeof(name_l1), "layer_inp_%d", il1);
 
         const int idx_l0 =                ggml_graph_get_node_idx(gf, name_l0);
-        const int idx_l1 = mpi_rank > 0 ? ggml_graph_get_node_idx(gf, name_l1) : gf->n_nodes;
+        const int idx_l1 = mpi_rank > 0 ? ggml_graph_get_node_idx(gf, name_l1) + 1 : gf->n_nodes;
 
         if (idx_l0 < 0 || idx_l1 < 0) {
             fprintf(stderr, "%s: layer input nodes not found\n", __func__);
@@ -156,16 +169,24 @@ void ggml_mpi_graph_compute(
         }
 
         // attach the input data to the first layer for this node
-        gf->nodes[idx_l0 + 1]->src0 = gf->nodes[1]->src0;
-        gf->nodes[idx_l0 + 1]->src1 = gf->nodes[1]->src1;
+        for (int i = idx_l0; i < idx_l1; i++) {
+            if (gf->nodes[i]->src0 == gf->nodes[idx_l0]) {
+                gf->nodes[i]->src0 =  inp0;
+            }
+            if (gf->nodes[i]->src1 == gf->nodes[idx_l0]) {
+                gf->nodes[i]->src1 =  inp0;
+            }
+        }
 
-        memcpy(gf->nodes[idx_l0 + 1]->opt, gf->nodes[1]->opt, sizeof(gf->nodes[idx_l0 + 1]->opt));
-
+        // TODO: instead of rearranging the nodes, we should be able to execute a subset of the compute graph
         for (int i = 1; i < idx_l1 - idx_l0; i++) {
             gf->nodes[i] = gf->nodes[idx_l0 + i];
             gf->grads[i] = gf->grads[idx_l0 + i];
+        }
 
-            //fprintf(stderr, "%s: node %d: %d -> %d\n", __func__, mpi_rank, idx_l0 + i, i);
+        // the first node performs the "get_rows" operation, the rest of the nodes get the data from the previous node
+        if (mpi_idx != 0) {
+            gf->nodes[0]->op = GGML_OP_NONE;
         }
 
         gf->n_nodes = idx_l1 - idx_l0;
@@ -174,11 +195,6 @@ void ggml_mpi_graph_compute(
     }
 
     ggml_graph_compute(ctx, gf);
-
-    //if (mpi_rank == 0) {
-    //    ggml_graph_print(gf);
-    //    ggml_graph_dump_dot(gf, NULL, "llama.dot");
-    //}
 
     //fprintf(stderr, "%s: node %d: done\n", __func__, mpi_rank);
 
