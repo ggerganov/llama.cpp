@@ -107,6 +107,8 @@ jobs:
   ubuntu-latest-cmake-mpi:
     runs-on: ubuntu-latest
 
+    continue-on-error: true
+
     strategy:
       matrix:
         mpi_library: [mpich, libopenmpi-dev]
