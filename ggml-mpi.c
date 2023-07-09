@@ -57,7 +57,7 @@ void ggml_mpi_eval_init(
     MPI_Bcast(n_threads, 1, MPI_INT, 0, MPI_COMM_WORLD);
 }
 
-int ggml_graph_get_node_idx( struct ggml_cgraph * gf, const char * name) {
+int ggml_graph_get_node_idx(struct ggml_cgraph * gf, const char * name) {
     struct ggml_tensor * t = ggml_graph_get_tensor(gf, name);
     if (t == NULL) {
         fprintf(stderr, "%s: tensor %s not found\n", __func__, name);
@@ -141,8 +141,8 @@ void ggml_mpi_graph_compute(
         const int il0 =               (mpi_idx + 0) * n_per_node;
         const int il1 = MIN(n_layers, (mpi_idx + 1) * n_per_node);
 
-        char name_l0[64];
-        char name_l1[64];
+        char name_l0[GGML_MAX_NAME];
+        char name_l1[GGML_MAX_NAME];
 
         snprintf(name_l0, sizeof(name_l0), "layer_inp_%d", il0);
         snprintf(name_l1, sizeof(name_l1), "layer_inp_%d", il1);
@@ -174,6 +174,11 @@ void ggml_mpi_graph_compute(
     }
 
     ggml_graph_compute(ctx, gf);
+
+    //if (mpi_rank == 0) {
+    //    ggml_graph_print(gf);
+    //    ggml_graph_dump_dot(gf, NULL, "llama.dot");
+    //}
 
     //fprintf(stderr, "%s: node %d: done\n", __func__, mpi_rank);
 
