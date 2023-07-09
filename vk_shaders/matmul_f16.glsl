@@ -1,20 +1,11 @@
 #version 450
 
-#define BM 64
-#define BN 64
-#define BK 16
-#define WM 32
-#define WN 32
-#define WMITER 2
-#define TM 4
-#define TN 2
-
 #define WARP 32
 
 #extension GL_EXT_control_flow_attributes : enable
 #extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
 
-layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 
 layout (binding = 0) readonly buffer A { float16_t data_a[]; };
 layout (binding = 1) readonly buffer B { float16_t data_b[]; };
@@ -30,6 +21,15 @@ layout (push_constant) uniform parameter
     int stride_d;
     int k_split;
 } p;
+
+layout (constant_id = 1) const int BM = 64;
+layout (constant_id = 2) const int BN = 64;
+layout (constant_id = 3) const int BK = 16;
+layout (constant_id = 4) const int WM = 32;
+layout (constant_id = 5) const int WN = 32;
+layout (constant_id = 6) const int WMITER = 2;
+layout (constant_id = 7) const int TM = 4;
+layout (constant_id = 8) const int TN = 2;
 
 shared float16_t buf_a[BM * (BK+1)];
 shared float16_t buf_b[BN * (BK+1)];
