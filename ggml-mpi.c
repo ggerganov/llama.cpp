@@ -135,3 +135,12 @@ struct ggml_tensor * ggml_mpi_eval_init(
 
     return res;
 }
+
+void ggml_mpi_graph_compute(
+        struct ggml_mpi_context * ctx_mpi,
+             struct ggml_cgraph * gf,
+                            int   n_layers,
+                            int   n_embd,
+                            int   n_tokens) {
+
+}

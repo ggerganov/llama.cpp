@@ -2,6 +2,7 @@
 
 struct ggml_context;
 struct ggml_tensor;
+struct ggml_cgraph;
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,6 +35,13 @@ struct ggml_tensor * ggml_mpi_eval_init(
                             int * n_tokens,
                             int * n_past,
                             int * n_threads);
+
+void ggml_mpi_graph_compute(
+        struct ggml_mpi_context * ctx_mpi,
+             struct ggml_cgraph * gf,
+                            int   n_layers,
+                            int   n_embd,
+                            int   n_tokens);
 
 #ifdef __cplusplus
 }

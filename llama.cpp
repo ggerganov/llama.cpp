@@ -1361,20 +1361,20 @@ static bool llama_eval_internal(
     offload_func_t offload_func_v  = llama_nop;
 
 #ifdef GGML_USE_CUBLAS
-        if (n_gpu_layers > n_layer) {
-            offload_func_nr = ggml_cuda_assign_buffers;
-        }
-        if (n_gpu_layers > n_layer + 1) {
-            offload_func_v  = ggml_cuda_assign_buffers;
-        }
-        if (n_gpu_layers > n_layer + 2) {
-            offload_func_kq = ggml_cuda_assign_buffers;
-        }
+    if (n_gpu_layers > n_layer) {
+        offload_func_nr = ggml_cuda_assign_buffers;
+    }
+    if (n_gpu_layers > n_layer + 1) {
+        offload_func_v  = ggml_cuda_assign_buffers;
+    }
+    if (n_gpu_layers > n_layer + 2) {
+        offload_func_kq = ggml_cuda_assign_buffers;
+    }
 #endif // GGML_USE_CUBLAS
 
-    // EMM TODO distribute work more evenly - maybe rank=0 gets the smallest amount?
-    int slice_size = (n_layer + (lctx.mpi_size - 1)) / lctx.mpi_size;
-    for (int il = lctx.mpi_rank * slice_size; il < n_layer && il < (lctx.mpi_rank + 1) * slice_size; ++il) {
+    for (int il = 0; il < n_layer; ++il) {
+        ggml_format_name(inpL, "layer_inp_%d", il);
+
         offload_func_t offload_func = llama_nop;
 
 #ifdef GGML_USE_CUBLAS
@@ -1588,45 +1588,23 @@ static bool llama_eval_internal(
     // used at the end to optionally extract the embeddings
     struct ggml_tensor * embeddings = NULL;
 
-    if (lctx.mpi_size > 1) {
-#ifdef GGML_USE_MPI
-        cur = ggml_mpi_send_tensor(ctx0, cur, (lctx.mpi_rank+1)%lctx.mpi_size);
-        ggml_set_name(cur, "mpi_send");
-#else
-        GGML_ASSERT(false);
-#endif
+    // norm
+    {
+        cur = ggml_rms_norm(ctx0, inpL);
+        offload_func_nr(cur);
+        ggml_set_name(cur, "rms_norm_2");
+
+        // cur = cur*norm(broadcasted)
+        cur = ggml_mul(ctx0, cur, model.norm);
+        // offload_func_nr(cur); // TODO CPU + GPU mirrored backend
+        ggml_set_name(cur, "result_norm");
+
+        embeddings = cur;
     }
 
-    if (lctx.mpi_rank == 0) {
-        if (lctx.mpi_size > 1) {
-#ifdef GGML_USE_MPI
-            cur = ggml_mpi_recv_tensor(ctx0, cur,
-                    ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N),
-                    lctx.mpi_size-1);
-            ggml_set_name(cur, "mpi_recv");
-#else
-            GGML_ASSERT(false);
-#endif
-        }
-        // norm
-        {
-            cur = ggml_rms_norm(ctx0, cur);
-            offload_func_nr(cur);
-            ggml_set_name(cur, "rms_norm_2");
-
-            // cur = cur*norm(broadcasted)
-            cur = ggml_mul(ctx0, cur, model.norm);
-            // offload_func_nr(cur); // TODO CPU + GPU mirrored backend
-            ggml_set_name(cur, "result_norm");
-
-            embeddings = cur;
-        }
-
-
-        // lm_head
-        cur = ggml_mul_mat(ctx0, model.output, cur);
-        ggml_set_name(cur, "result_output");
-    }
+    // lm_head
+    cur = ggml_mul_mat(ctx0, model.output, cur);
+    ggml_set_name(cur, "result_output");
 
     lctx.use_buf(ctx0, -1);
 
@@ -1659,6 +1637,8 @@ static bool llama_eval_internal(
 
         ggml_graph_compute(ctx0, &gf);
     }
+#elif GGML_USE_MPI
+    ggml_mpi_graph_compute(lctx.ctx_mpi, &gf, n_layer, n_embd, n_tokens);
 #else
     ggml_graph_compute(ctx0, &gf);
 #endif
