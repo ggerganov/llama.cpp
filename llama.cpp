@@ -2431,7 +2431,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 int ny = tensor.ne.at(1);
                 if (nx % QK_K != 0 || ny % QK_K != 0) {
                     fprintf(stderr, "\n\nTensor sizes %d x %d are not divisible by %d, required for k-quants.\n",nx,ny,QK_K);
-                    fprintf(stderr, "Q8_0 will be used for this tensor instead.\n");
                     convert_incompatible_tensor = true;
                 }
             }
@@ -2460,9 +2459,16 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 if      (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q4_K;
                 else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
             }
-            if(convert_incompatible_tensor)
-            {
-                new_type = GGML_TYPE_Q8_0; //fall back to Q8_0 instead of just failing.
+            if (convert_incompatible_tensor) {
+                if (tensor.name == "output.weight") {
+                    new_type = GGML_TYPE_F16; //fall back to F16 instead of just failing.
+                    fprintf(stderr, "F16 will be used for this tensor instead.\n");
+                } else if (tensor.name == "tok_embeddings.weight") {
+                    new_type = GGML_TYPE_Q4_0; //fall back to Q4_0 instead of just failing.
+                    fprintf(stderr, "Q4_0 will be used for this tensor instead.\n");
+                } else {
+                    throw std::runtime_error("Unsupported tensor size encountered\n");
+                }
             }
 #endif
 
