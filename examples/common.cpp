@@ -556,7 +556,7 @@ std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::s
     return res;
 }
 
-struct llama_context_params llama_get_context_params_from_gpt_params(const gpt_params & params) {
+struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params) {
     auto lparams = llama_context_default_params();
 
     lparams.n_ctx        = params.n_ctx;
@@ -576,7 +576,7 @@ struct llama_context_params llama_get_context_params_from_gpt_params(const gpt_p
 }
 
 std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(const gpt_params & params) {
-    auto lparams = llama_get_context_params_from_gpt_params(params);
+    auto lparams = llama_context_params_from_gpt_params(params);
 
     llama_model * model  = llama_load_model_from_file(params.model.c_str(), lparams);
     if (model == NULL) {

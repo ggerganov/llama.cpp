@@ -2141,27 +2141,17 @@ void llama_sample_frequency_and_presence_penalties(struct llama_context * ctx, l
     }
 }
 
-template<typename T, typename LogitAccessor>
-void llama_log_softmax(T * array, int size, LogitAccessor logit_accessor) {
-    T* element = std::max_element(
-        array, array + size,
-        [&logit_accessor](T& lhs, T& rhs) {
-            return logit_accessor(lhs) < logit_accessor(rhs);
-        }
-    );
-
-    float max_l = logit_accessor(*element);
+static void llama_log_softmax(float * array, size_t size) {
+    float max_l = *std::max_element(array, array + size);
     float sum = 0.f;
-    for (int i = 0; i < size; ++i) {
-        float& logit = logit_accessor(array[i]);
-        float p = expf(logit - max_l);
+    for (size_t i = 0; i < size; ++i) {
+        float p = expf(array[i] - max_l);
         sum += p;
-        logit = p;
+        array[i] = p;
     }
 
-    for (int i = 0; i < size; ++i) {
-        float& logit = logit_accessor(array[i]);
-        logit = logf(logit / sum);
+    for (size_t i = 0; i < size; ++i) {
+        array[i] = logf(array[i] / sum);
     }
 }
 
@@ -2178,32 +2168,29 @@ void llama_sample_classifier_free_guidance(
     assert(n_vocab == (int)candidates->size);
     assert(!candidates->sorted);
 
-    auto logit_from_token_data = [](llama_token_data& data) -> float& {
-        return data.logit;
-    };
+    std::vector<float> logits_base;
+    logits_base.reserve(candidates->size);
+    for (size_t i = 0; i < candidates->size; ++i) {
+        logits_base.push_back(candidates->data[i].logit);
+    }
+    llama_log_softmax(logits_base.data(), candidates->size);
 
-    auto logit_from_float = [](float& item) -> float& {
-        return item;
-    };
-
-    llama_log_softmax(candidates->data, candidates->size, logit_from_token_data);
-
-    auto* guidance_logits = llama_get_logits(guidance_ctx);
-    llama_log_softmax(guidance_logits, n_vocab, logit_from_float);
+    float* logits_guidance = llama_get_logits(guidance_ctx);
+    llama_log_softmax(logits_guidance, n_vocab);
 
     for (int i = 0; i < n_vocab; ++i) {
-        float guidance_logit = guidance_logits[i];
-        float base_logit = candidates->data[i].logit;
-        guidance_logits[i] = scale * (base_logit - guidance_logit) + guidance_logit;
+        float logit_guidance = logits_guidance[i];
+        float logit_base = logits_base[i];
+        logits_guidance[i] = scale * (logit_base - logit_guidance) + logit_guidance;
     }
 
-    llama_log_softmax(guidance_logits, n_vocab, logit_from_float);
+    llama_log_softmax(logits_guidance, n_vocab);
 
     for (int i = 0; i < n_vocab; ++i) {
-        float base_logit = candidates->data[i].logit;
-        float guidance_logit = guidance_logits[i];
+        float logit_base = logits_base[i];
+        float logit_guidance = logits_guidance[i];
 
-        candidates->data[i].logit = smooth_factor * guidance_logit + (1.f - smooth_factor) * base_logit;
+        candidates->data[i].logit = smooth_factor * logit_guidance + (1.f - smooth_factor) * logit_base;
     }
 
     if (ctx) {
