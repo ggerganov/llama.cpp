@@ -9,7 +9,6 @@ import ctypes
 import os
 import argparse
 import json, sys, http.server, time, asyncio, socket, threading
-import re
 from concurrent.futures import ThreadPoolExecutor
 
 stop_token_max = 10
