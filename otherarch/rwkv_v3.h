@@ -111,7 +111,7 @@ extern "C" {
     // - state_in: FP32 buffer of size rwkv_get_state_len(); or NULL, if this is a first pass.
     // - state_out: FP32 buffer of size rwkv_get_state_len(). This buffer will be written to if non-NULL.
     // - logits_out: FP32 buffer of size rwkv_get_logits_len(). This buffer will be written to if non-NULL.
-    RWKV_API bool rwkv_eval(struct rwkv_context * ctx, const uint32_t token, const float * state_in, float * state_out, float * logits_out);
+    RWKV_API bool rwkv_eval(struct rwkv_context *, const int n_threads, const uint32_t token, const float * state_in, float * state_out, float * logits_out);
 
     // Evaluates the model for a sequence of tokens.
     // Uses a faster algorithm than rwkv_eval if you do not need the state and logits for every token. Best used with batch sizes of 64 or so.
@@ -125,7 +125,7 @@ extern "C" {
     // - state_in: FP32 buffer of size rwkv_get_state_len(), or NULL if this is a first pass.
     // - state_out: FP32 buffer of size rwkv_get_state_len(). This buffer will be written to if non-NULL.
     // - logits_out: FP32 buffer of size rwkv_get_logits_len(). This buffer will be written to if non-NULL.
-    RWKV_API bool rwkv_eval_sequence(struct rwkv_context * ctx, const uint32_t * tokens, size_t sequence_len, const float * state_in, float * state_out, float * logits_out);
+    RWKV_API bool rwkv_eval_sequence(struct rwkv_context * ctx, const int n_threads, const uint32_t * tokens, size_t sequence_len, const float * state_in, float * state_out, float * logits_out);
 
     // Returns the number of tokens in the given model's vocabulary.
     // Useful for telling 20B_tokenizer models (n_vocab = 50277) apart from World models (n_vocab = 65536).
