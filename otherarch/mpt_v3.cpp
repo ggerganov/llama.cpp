@@ -542,7 +542,7 @@ bool mpt_eval(const mpt_model & model, const int n_threads, const int n_past,
 
     // run the computation
     ggml_build_forward_expand(&gf, inpL);
-    ggml_graph_compute_with_ctx(ctx0, &gf, n_threads);
+    kcpp_graph_compute_helper(&gf, n_threads);
 
     // std::cout << "Qcur" << std::endl;
     // print_tensor(Qcur);

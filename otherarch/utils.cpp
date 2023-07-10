@@ -222,3 +222,15 @@ bool should_transpose_layer(std::string name)
     }
     return false;
 }
+
+static std::vector<uint8_t> kcpp_compute_buf;
+void kcpp_graph_compute_helper(ggml_cgraph *graph, int n_threads)
+{
+    struct ggml_cplan plan = ggml_graph_plan(graph, n_threads);
+    if (plan.work_size > 0)
+    {
+        kcpp_compute_buf.resize(plan.work_size);
+        plan.work_data = kcpp_compute_buf.data();
+    }
+    ggml_graph_compute(graph, &plan);
+}
