@@ -2464,8 +2464,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 if      (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q4_K;
                 else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
             }
-            if(convert_incompatible_tensor)
-            {
+            if (convert_incompatible_tensor) {
                 new_type = GGML_TYPE_Q8_0; //fall back to Q8_0 instead of just failing.
             }
 #endif
