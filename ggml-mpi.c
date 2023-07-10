@@ -102,12 +102,10 @@ static void ggml_mpi_tensor_recv(struct ggml_tensor * t, int mpi_rank_src) {
 }
 
 // TODO: there are many improvements that can be done to this implementation
-void ggml_mpi_graph_compute(
+void ggml_mpi_graph_compute_pre(
         struct ggml_mpi_context * ctx_mpi,
-        struct ggml_context     * ctx,
              struct ggml_cgraph * gf,
-                            int   n_layers,
-                            int   n_threads) {
+                            int   n_layers) {
     const int mpi_rank = ctx_mpi->rank;
     const int mpi_size = ctx_mpi->size;
 
@@ -200,10 +198,16 @@ void ggml_mpi_graph_compute(
 
         //fprintf(stderr, "%s: node %d: processing %d nodes [%d, %d)\n", __func__, mpi_rank, gf->n_nodes, il0, il1);
     }
+}
 
-    ggml_graph_compute_with_ctx(ctx, gf, n_threads);
+void ggml_mpi_graph_compute_post(
+        struct ggml_mpi_context * ctx_mpi,
+             struct ggml_cgraph * gf,
+                            int   n_layers) {
+    UNUSED(n_layers);
 
-    //fprintf(stderr, "%s: node %d: done\n", __func__, mpi_rank);
+    const int mpi_rank = ctx_mpi->rank;
+    const int mpi_size = ctx_mpi->size;
 
     // send the output data to the next node
     if (mpi_rank > 0) {

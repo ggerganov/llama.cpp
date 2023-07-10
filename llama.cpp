@@ -1632,6 +1632,10 @@ static bool llama_eval_internal(
     // run the computation
     ggml_build_forward_expand(&gf, cur);
 
+#if GGML_USE_MPI
+    ggml_mpi_graph_compute_pre(lctx.ctx_mpi, &gf, n_layer);
+#endif
+
 #ifdef GGML_USE_METAL
     if (lctx.ctx_metal && N == 1) {
         ggml_metal_set_n_cb     (lctx.ctx_metal, n_threads);
@@ -1656,13 +1660,18 @@ static bool llama_eval_internal(
 
         ggml_graph_compute_helper(lctx.work_buffer, &gf, n_threads);
     }
-#elif GGML_USE_MPI
-    ggml_mpi_graph_compute(lctx.ctx_mpi, ctx0, &gf, n_layer, n_threads);
-
-    cur = gf.nodes[gf.n_nodes - 1];
 #else
     ggml_graph_compute_helper(lctx.work_buffer, &gf, n_threads);
 #endif
+
+#if GGML_USE_MPI
+    ggml_mpi_graph_compute_post(lctx.ctx_mpi, &gf, n_layer);
+#endif
+
+    // update kv token count
+    lctx.kv_self.n = n_past + N;
+
+    struct ggml_tensor * res = gf.nodes[gf.n_nodes - 1];
 
     if (cgraph_fname) {
         ggml_graph_export(&gf, cgraph_fname);
@@ -1679,38 +1688,26 @@ static bool llama_eval_internal(
     //    ggml_graph_dump_dot(&gf, NULL, "llama.dot");
     //}
 
-    //embd_w.resize(n_vocab*N);
-    //memcpy(embd_w.data(), ggml_get_data(cur), sizeof(float)*n_vocab*N);
-
-    // update kv token count
-    lctx.kv_self.n = n_past + N;
-
-#ifdef GGML_USE_MPI
-    if (ggml_mpi_rank(lctx.ctx_mpi) == 0) {
-#else
+    // extract logits
     {
-#endif
-        // extract logits
-        {
-            auto & logits_out = lctx.logits;
+        auto & logits_out = lctx.logits;
 
-            if (lctx.logits_all) {
-                logits_out.resize(n_vocab * N);
-                memcpy(logits_out.data(), (float *) ggml_get_data(cur), sizeof(float)*n_vocab*N);
-            } else {
-                // return result for just the last token
-                logits_out.resize(n_vocab);
-                memcpy(logits_out.data(), (float *) ggml_get_data(cur) + (n_vocab*(N-1)), sizeof(float)*n_vocab);
-            }
+        if (lctx.logits_all) {
+            logits_out.resize(n_vocab * N);
+            memcpy(logits_out.data(), (float *) ggml_get_data(res), sizeof(float)*n_vocab*N);
+        } else {
+            // return result for just the last token
+            logits_out.resize(n_vocab);
+            memcpy(logits_out.data(), (float *) ggml_get_data(res) + (n_vocab*(N-1)), sizeof(float)*n_vocab);
         }
+    }
 
-        // extract embeddings
-        if (!lctx.embedding.empty()) {
-            auto & embedding_out = lctx.embedding;
+    // extract embeddings
+    if (!lctx.embedding.empty()) {
+        auto & embedding_out = lctx.embedding;
 
-            embedding_out.resize(n_embd);
-            memcpy(embedding_out.data(), (float *) ggml_get_data(embeddings) + (n_embd*(N - 1)), sizeof(float)*n_embd);
-        }
+        embedding_out.resize(n_embd);
+        memcpy(embedding_out.data(), (float *) ggml_get_data(embeddings) + (n_embd*(N - 1)), sizeof(float)*n_embd);
     }
 
     if (mem_per_token == 0) {

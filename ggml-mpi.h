@@ -24,12 +24,15 @@ void ggml_mpi_eval_init(
                             int * n_past,
                             int * n_threads);
 
-void ggml_mpi_graph_compute(
+void ggml_mpi_graph_compute_pre(
         struct ggml_mpi_context * ctx_mpi,
-        struct ggml_context     * ctx,
              struct ggml_cgraph * gf,
-                            int   n_layers,
-                            int   n_threads);
+                            int   n_layers);
+
+void ggml_mpi_graph_compute_post(
+        struct ggml_mpi_context * ctx_mpi,
+             struct ggml_cgraph * gf,
+                            int   n_layers);
 
 #ifdef __cplusplus
 }

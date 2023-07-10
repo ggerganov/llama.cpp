@@ -450,6 +450,7 @@ void ggml_metal_graph_compute(
                 //}
 
                 switch (dst->op) {
+                    case GGML_OP_NONE:
                     case GGML_OP_RESHAPE:
                     case GGML_OP_VIEW:
                     case GGML_OP_TRANSPOSE:
