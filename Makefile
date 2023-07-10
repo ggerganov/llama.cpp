@@ -55,6 +55,12 @@ else
 	CXXFLAGS += -DNDEBUG
 endif
 
+ifdef LLAMA_SANITIZE
+	CFLAGS   += -g -fsanitize=$(LLAMA_SANITIZE) -fno-omit-frame-pointer
+	CXXFLAGS += -g -fsanitize=$(LLAMA_SANITIZE) -fno-omit-frame-pointer
+	LDFLAGS  += -g -fsanitize=$(LLAMA_SANITIZE)
+endif
+
 ifdef LLAMA_SERVER_VERBOSE
 	CXXFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
 endif
@@ -157,13 +163,16 @@ ifdef LLAMA_BLIS
 	LDFLAGS += -lblis -L/usr/local/lib
 endif # LLAMA_BLIS
 
-ifdef LLAMA_CUBLAS
-	CFLAGS    += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
-	CXXFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
+ifdef LLAMA_CUDA
+	CFLAGS    += -DGGML_USE_CUDA -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
+	CXXFLAGS  += -DGGML_USE_CUDA -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
 	LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
 	OBJS      += ggml-cuda.o
 	NVCC      = nvcc
 	NVCCFLAGS = --forward-unknown-to-host-compiler
+ifdef LLAMA_DEBUG
+	NVCCFLAGS += -lineinfo
+endif # LLAMA_DEBUG
 ifdef CUDA_DOCKER_ARCH
 	NVCCFLAGS += -Wno-deprecated-gpu-targets -arch=$(CUDA_DOCKER_ARCH)
 else
@@ -192,10 +201,9 @@ ifdef LLAMA_CUDA_KQUANTS_ITER
 else
 	NVCCFLAGS += -DK_QUANTS_PER_ITERATION=2
 endif
-
-ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
+ggml-cuda.o: ggml-cuda.cu ggml-cuda.h ggml-cuda-kern.h ggml-cuda-quant.h
 	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -Wno-pedantic -c $< -o $@
-endif # LLAMA_CUBLAS
+endif # LLAMA_CUDA
 
 ifdef LLAMA_CLBLAST
 	CFLAGS   += -DGGML_USE_CLBLAST
@@ -262,6 +270,9 @@ $(info I CXXFLAGS: $(CXXFLAGS))
 $(info I LDFLAGS:  $(LDFLAGS))
 $(info I CC:       $(CCV))
 $(info I CXX:      $(CXXV))
+ifdef LLAMA_CUDA
+$(info I NVCC:     $(NVCCV))
+endif # LLAMA_CUDA
 $(info )
 
 #
@@ -270,6 +281,12 @@ $(info )
 
 ggml.o: ggml.c ggml.h ggml-cuda.h
 	$(CC)  $(CFLAGS)   -c $< -o $@
+
+# temporary, probably will be added to ggml.c
+ggml-backend.o: ggml-backend.c ggml-backend.h ggml.h
+	$(CC)  $(CFLAGS)   -c $< -o $@
+
+OBJS += ggml-backend.o
 
 llama.o: llama.cpp ggml.h ggml-cuda.h ggml-metal.h llama.h llama-util.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@

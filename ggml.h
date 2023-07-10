@@ -199,6 +199,7 @@
 #define GGML_MAX_CONTEXTS      64
 #define GGML_MAX_OPT           4
 #define GGML_MAX_NAME          48
+#define GGML_MAX_OP_PARAMS     16
 #define GGML_DEFAULT_N_THREADS 4
 
 #define GGML_UNUSED(x) (void)(x)
@@ -278,12 +279,6 @@ extern "C" {
         GGML_TYPE_I16,
         GGML_TYPE_I32,
         GGML_TYPE_COUNT,
-    };
-
-    enum ggml_backend {
-        GGML_BACKEND_CPU = 0,
-        GGML_BACKEND_GPU = 10,
-        GGML_BACKEND_GPU_SPLIT = 20,
     };
 
     // model file types
@@ -398,8 +393,9 @@ extern "C" {
 
     // n-dimensional tensor
     struct ggml_tensor {
-        enum ggml_type    type;
-        enum ggml_backend backend;
+        struct ggml_backend * backend;
+
+        enum ggml_type type;
 
         int     n_dims;
         int64_t ne[GGML_MAX_DIMS]; // number of elements
@@ -423,13 +419,19 @@ extern "C" {
         int64_t perf_cycles;
         int64_t perf_time_us;
 
+        // op params
+        // allocated as int32_t to avoid alignment issues
+        int32_t params[GGML_MAX_OP_PARAMS / sizeof(uint32_t)];
+
         void * data;
 
         char name[GGML_MAX_NAME];
 
         void * extra; // extra things e.g. for ggml-cuda.cu
 
-        char padding[8];
+        bool visited; // used to build graphs
+
+        char padding[4];
     };
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);
@@ -450,6 +452,7 @@ extern "C" {
     struct ggml_cgraph {
         int n_nodes;
         int n_leafs;
+        bool closed;
 
         struct ggml_tensor * nodes[GGML_MAX_NODES];
         struct ggml_tensor * grads[GGML_MAX_NODES];
@@ -461,23 +464,27 @@ extern "C" {
         int64_t perf_time_us;
     };
 
-    // scratch buffer
-    struct ggml_scratch {
-        size_t offs;
-        size_t size;
-        void * data;
+    /*
+    TODO
+    enum ggml_alloc_mode {
+        GGML_ALLOC_IMMEDIATE,
+        GGML_ALLOC_NONE,
+        GGML_ALLOC_COMPUTE_SEQ,
+        GGML_ALLOC_COMPUTE_PAR,
     };
+    */
 
+    // context parameters
     struct ggml_init_params {
-        // memory pool
-        size_t mem_size;   // bytes
-        void * mem_buffer; // if NULL, memory will be allocated internally
+        struct ggml_buffer * buffer;
+
         bool   no_alloc;   // don't allocate memory for the tensor data
+        //enum ggml_alloc_mode alloc_mode; // TODO: replace the above with this
+
+        enum ggml_type compute_type;         // type of intermediate results
     };
 
-
-    // compute types
-
+    // task types
     // NOTE: the INIT or FINALIZE pass is not scheduled unless explicitly enabled.
     // This behavior was changed since https://github.com/ggerganov/llama.cpp/pull/1995.
     enum ggml_task_type {
@@ -538,18 +545,19 @@ extern "C" {
     GGML_API size_t ggml_tensor_overhead(void);
 
     // main
-
-    GGML_API struct ggml_context * ggml_init(struct ggml_init_params params);
-    GGML_API void                  ggml_free(struct ggml_context * ctx);
+    GGML_API struct ggml_init_params ggml_init_params_default(void);
+    GGML_API struct ggml_context *   ggml_init(struct ggml_init_params params);
+    GGML_API void                    ggml_free(struct ggml_context * ctx);
 
     GGML_API size_t  ggml_used_mem(const struct ggml_context * ctx);
 
-    GGML_API size_t  ggml_set_scratch (struct ggml_context * ctx, struct ggml_scratch scratch);
     GGML_API void    ggml_set_no_alloc(struct ggml_context * ctx, bool no_alloc);
 
     GGML_API void *  ggml_get_mem_buffer     (const struct ggml_context * ctx);
     GGML_API size_t  ggml_get_mem_size       (const struct ggml_context * ctx);
     GGML_API size_t  ggml_get_max_tensor_size(const struct ggml_context * ctx);
+
+    GGML_API struct ggml_backend * ggml_get_ctx_backend(struct ggml_context * ctx);
 
     GGML_API struct ggml_tensor * ggml_new_tensor(
             struct ggml_context * ctx,
@@ -1302,6 +1310,8 @@ extern "C" {
     GGML_API struct ggml_cgraph ggml_build_forward (struct ggml_tensor * tensor);
     GGML_API struct ggml_cgraph ggml_build_backward(struct ggml_context * ctx, struct ggml_cgraph * gf, bool keep);
 
+    GGML_API void ggml_graph_close  (struct ggml_cgraph * cgraph);
+
     // ggml_graph_plan() has to be called before ggml_graph_compute()
     // when plan.work_size > 0, caller must allocate memory for plan.work_data
     GGML_API struct ggml_cplan ggml_graph_plan   (struct ggml_cgraph * cgraph, int n_threads /*= GGML_DEFAULT_N_THREADS*/);
@@ -1516,9 +1526,8 @@ extern "C" {
     GGML_API int ggml_cpu_has_fp16_va    (void);
     GGML_API int ggml_cpu_has_wasm_simd  (void);
     GGML_API int ggml_cpu_has_blas       (void);
-    GGML_API int ggml_cpu_has_cublas     (void);
+    GGML_API int ggml_cpu_has_cuda       (void);
     GGML_API int ggml_cpu_has_clblast    (void);
-    GGML_API int ggml_cpu_has_gpublas    (void);
     GGML_API int ggml_cpu_has_sse3       (void);
     GGML_API int ggml_cpu_has_vsx        (void);
 
@@ -1549,3 +1558,6 @@ extern "C" {
 #ifdef  __cplusplus
 }
 #endif
+
+
+#include "ggml-backend.h"

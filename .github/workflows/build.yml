@@ -274,13 +274,13 @@ jobs:
           path: |
             llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-${{ matrix.build }}-x64.zip
 
-  windows-latest-cmake-cublas:
+  windows-latest-cmake-cuda:
     runs-on: windows-latest
 
     strategy:
       matrix:
         cuda: ['12.1.0', '11.7.1']
-        build: ['cublas']
+        build: ['cuda']
 
     steps:
       - name: Clone
@@ -299,7 +299,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON
+          cmake .. -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUDA=ON
           cmake --build . --config Release
 
       - name: Get commit hash
@@ -361,7 +361,7 @@ jobs:
       - macOS-latest-make
       - macOS-latest-cmake
       - windows-latest-cmake
-      - windows-latest-cmake-cublas
+      - windows-latest-cmake-cuda
 
     steps:
       - name: Download artifacts
