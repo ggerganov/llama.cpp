@@ -2,12 +2,7 @@
 #define LLAMA_H
 
 #include "ggml.h"
-#ifdef GGML_USE_CUBLAS
-#include "ggml-cuda.h"
-#define LLAMA_MAX_DEVICES GGML_CUDA_MAX_DEVICES
-#else
 #define LLAMA_MAX_DEVICES 1
-#endif // GGML_USE_CUBLAS
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -48,7 +43,7 @@
 
 #define LLAMA_DEFAULT_SEED           0xFFFFFFFF
 
-#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL)
+#if defined(GGML_USE_CUDA) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL)
 // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
 #define LLAMA_SUPPORTS_GPU_OFFLOAD
 #endif

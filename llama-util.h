@@ -203,6 +203,17 @@ struct llama_mmap {
         }
     }
 
+    void discard(void * addr, size_t len) {
+        // align to the page size
+        int page_size = sysconf(_SC_PAGESIZE);
+        addr = (void *) (((uintptr_t) addr) & ~(page_size - 1));
+        len = (len + page_size - 1) & ~(page_size - 1);
+        if (madvise(addr, len, MADV_DONTNEED)) {
+            fprintf(stderr, "warning: madvise(.., MADV_DONTNEED) failed: %s\n",
+                    strerror(errno));
+        }
+    }
+
     ~llama_mmap() {
         munmap(addr, size);
     }
@@ -247,6 +258,10 @@ struct llama_mmap {
         #endif // _WIN32_WINNT >= _WIN32_WINNT_WIN8
     }
 
+    void discard(void * addr, size_t len) {
+        VirtualAlloc(addr, len, MEM_RESET, PAGE_NOACCESS);
+    }
+
     ~llama_mmap() {
         if (!UnmapViewOfFile(addr)) {
             fprintf(stderr, "warning: UnmapViewOfFile failed: %s\n",
@@ -259,6 +274,13 @@ struct llama_mmap {
     llama_mmap(struct llama_file *, bool prefetch = true, bool numa = false) {
         (void) prefetch;
         (void) numa;
+
+        throw std::runtime_error(std::string("mmap not supported"));
+    }
+
+    void discard(void * addr, size_t len) {
+        (void) addr;
+        (void) len;
 
         throw std::runtime_error(std::string("mmap not supported"));
     }
@@ -451,14 +473,14 @@ struct llama_buffer {
     llama_buffer& operator=(llama_buffer&&) = delete;
 };
 
-#ifdef GGML_USE_CUBLAS
+#if defined(GGML_USE_CUDA)
 #include "ggml-cuda.h"
-struct llama_ctx_buffer {
+struct llama_host_buffer {
     uint8_t * addr = NULL;
     bool is_cuda;
     size_t size = 0;
 
-    llama_ctx_buffer() = default;
+    llama_host_buffer() = default;
 
     void resize(size_t size) {
         free();
@@ -487,18 +509,19 @@ struct llama_ctx_buffer {
         addr = NULL;
     }
 
-    ~llama_ctx_buffer() {
+    ~llama_host_buffer() {
         free();
     }
 
     // disable copy and move
-    llama_ctx_buffer(const llama_ctx_buffer&) = delete;
-    llama_ctx_buffer(llama_ctx_buffer&&) = delete;
-    llama_ctx_buffer& operator=(const llama_ctx_buffer&) = delete;
-    llama_ctx_buffer& operator=(llama_ctx_buffer&&) = delete;
+    llama_host_buffer(const llama_host_buffer&) = delete;
+    llama_host_buffer(llama_host_buffer&&) = delete;
+    llama_host_buffer& operator=(const llama_host_buffer&) = delete;
+    llama_host_buffer& operator=(llama_host_buffer&&) = delete;
 };
 #else
-typedef llama_buffer llama_ctx_buffer;
+typedef llama_buffer llama_host_buffer;
 #endif
+typedef llama_buffer llama_ctx_buffer;
 
 #endif
