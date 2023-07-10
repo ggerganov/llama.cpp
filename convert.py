@@ -217,13 +217,13 @@ class XgenVocab:
 
     def all_tokens(self) -> Iterable[Tuple[bytes, float]]:
         for index in range(0, self.vocab_size_base):
-            token = self.xt._convert_id_to_token(index)
+            token = self.xt.encoder.decode_single_token_bytes(index)
             yield (token, float(index))
         for index in range(self.vocab_size_base, self.vocab_size):
             yield (b'', float(index))
 
     def __repr__(self) -> str:
-        return f"<XgenVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
+        return f"<XgenVocab with {self.vocab_size_base} base tokens and {self.vocab_size-self.vocab_size_base} extra tokens>"
 
 
 class SentencePieceVocab:
