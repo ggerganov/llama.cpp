@@ -269,7 +269,7 @@ maxhordectx = 1024
 maxhordelen = 256
 modelbusy = False
 defaultport = 5001
-KcppVersion = "1.34.2"
+KcppVersion = "1.35"
 showdebug = True
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -929,24 +929,7 @@ def show_new_gui():
         root.destroy()
         pass
 
-    ctk.CTkButton(tabs , text = "Launch", fg_color="#2f8d3c", command = guilaunch, width=80, height = 35 ).grid(row=1,column=1, stick="se", padx= 25, pady=5)
-
-    # ctk.CTkButton(tabs , text = "Save", fg_color="#084a66", command = save_config, width=60, height = 35 ).grid(row=1,column=1, stick="sw", padx= 5, pady=5)
-    # ctk.CTkButton(tabs , text = "Load", fg_color="#084a66", command = load_config, width=60, height = 35 ).grid(row=1,column=1, stick="sw", padx= 70, pady=5)
-
-    ctk.CTkButton(tabs , text = "Old GUI", fg_color="#084a66", command = switch_old_gui, width=100, height = 35 ).grid(row=1,column=0, stick="sw", padx= 5, pady=5)
-    # runs main loop until closed or launch clicked
-    root.mainloop()
-
-    if nextstate==0:
-        print("Exiting by user request.")
-        time.sleep(2)
-        sys.exit()
-    elif nextstate==2:
-        time.sleep(0.1)
-        show_old_gui()
-    else:
-        # processing vars
+    def export_vars():
         args.threads = int(threads_var.get())
 
         args.usemlock   = usemlock.get() == 1
@@ -979,9 +962,6 @@ def show_new_gui():
             args.noavx2 = True
             args.noblas = True
             args.nommap = True
-            print("[Failsafe Mode : mmap is disabled.]")
-
-
 
         args.blasthreads = None if blas_threads_var.get()=="" else int(blas_threads_var.get())
 
@@ -998,6 +978,120 @@ def show_new_gui():
         args.host = host_var.get()
 
         args.hordeconfig = None if usehorde_var.get() == 0 else [horde_name_var.get(), horde_gen_var.get(), horde_context_var.get()]
+
+    def import_vars(dict):
+        threads_var.set(dict["threads"])
+        usemlock.set(1 if dict["usemlock"] else 0)
+        debugmode.set(1 if dict["debugmode"] else 0)
+        launchbrowser.set(1 if dict["launch"] else 0)
+        highpriority.set(1 if dict["highpriority"] else 0)
+        disablemmap.set(1 if dict["nommap"] else 0)
+        psutil.set(1 if dict["psutil_set_threads"] else 0)
+        stream.set(1 if dict["stream"] else 0)
+        smartcontext.set(1 if dict["smartcontext"] else 0)
+        unbantokens.set(1 if dict["unbantokens"] else 0)
+        runopts_var.set(runopts[0])
+        if dict["useclblast"]:
+            runopts_var.set(runopts[1])
+            gpu_choice_var.set(str(["0 0", "1 0", "0 1"].index(str(dict["useclblast"][0]) + " " + str(dict["useclblast"][1])) + 1))
+        elif dict["usecublas"]:
+            runopts_var.set(runopts[2])
+            if len(dict["usecublas"])==1:
+                lowvram_var.set(1 if dict["usecublas"][0]=="lowvram" else 0)
+            else:
+                lowvram_var.set(1 if "lowvram" in dict["usecublas"] else 0)
+                gpu_choice_var.set("1")
+                for g in range(3):
+                    if str(g) in dict["usecublas"]:
+                        gpu_choice_var.set(str(g+1))
+                        break
+        if dict["gpulayers"]:
+            gpulayers_var.set(dict["gpulayers"])
+
+        if dict["noblas"] and dict["noavx2"]:
+            runopts_var.set(runopts[5])
+        elif dict["noavx2"]:
+            runopts_var.set(runopts[5])
+        elif dict["noblas"]:
+            runopts_var.set(runopts[3])
+        if dict["blasthreads"]:
+            blas_threads_var.set(str(dict["blasthreads"]))
+        else:
+            blas_threads_var.set("")
+
+        if dict["contextsize"]:
+            context_var.set(contextsize_text.index(str(dict["contextsize"])))
+        if dict["blasbatchsize"]:
+            blas_size_var.set(blasbatchsize_values.index(str(dict["blasbatchsize"])))
+        if dict["forceversion"]:
+            version_var.set(str(dict["forceversion"]))
+
+        if dict["mirostat"] and len(dict["mirostat"])>1:
+            usemirostat.set(0 if str(dict["mirostat"][0])=="0" else 1)
+            mirostat_var.set(str(dict["mirostat"][0]))
+            mirostat_tau.set(str(dict["mirostat"][1]))
+            mirostat_eta.set(str(dict["mirostat"][2]))
+
+        if dict["model_param"]:
+            model_var.set(dict["model_param"])
+
+        if dict["lora"]:
+            if len(dict["lora"]) > 1:
+                lora_var.set(dict["lora"][0])
+                lora_base_var.set(dict["lora"][1])
+            else:
+                lora_var.set(dict["lora"][0])
+
+        if dict["port_param"]:
+            port_var.set(dict["port_param"])
+
+        if dict["host"]:
+            host_var.set(dict["host"])
+
+        if dict["hordeconfig"] and len(dict["hordeconfig"]) > 1:
+            horde_name_var.set(dict["hordeconfig"][0])
+            horde_gen_var.set(dict["hordeconfig"][1])
+            horde_context_var.set(dict["hordeconfig"][2])
+
+    def save_config():
+        file_type = [("KoboldCpp Settings", "*.kcpps")]
+        filename = asksaveasfile(filetypes=file_type, defaultextension=file_type)
+        if filename == None: return
+        export_vars()
+        file = open(str(filename.name), 'a')
+        file.write(json.dumps(args.__dict__))
+        file.close()
+        pass
+
+    def load_config():
+        file_type = [("KoboldCpp Settings", "*.kcpps")]
+        filename = askopenfilename(filetypes=file_type, defaultextension=file_type)
+        if not filename or filename=="":
+            return
+        with open(filename, 'r') as f:
+            dict = json.load(f)
+            import_vars(dict)
+        pass
+
+    ctk.CTkButton(tabs , text = "Launch", fg_color="#2f8d3c", command = guilaunch, width=80, height = 35 ).grid(row=1,column=1, stick="se", padx= 25, pady=5)
+
+    ctk.CTkButton(tabs , text = "Save", fg_color="#084a66", command = save_config, width=60, height = 35 ).grid(row=1,column=1, stick="sw", padx= 5, pady=5)
+    ctk.CTkButton(tabs , text = "Load", fg_color="#084a66", command = load_config, width=60, height = 35 ).grid(row=1,column=1, stick="sw", padx= 70, pady=5)
+
+    ctk.CTkButton(tabs , text = "Old GUI", fg_color="#084a66", command = switch_old_gui, width=100, height = 35 ).grid(row=1,column=0, stick="sw", padx= 5, pady=5)
+    # runs main loop until closed or launch clicked
+    root.mainloop()
+
+    if nextstate==0:
+        print("Exiting by user request.")
+        time.sleep(2)
+        sys.exit()
+    elif nextstate==2:
+        time.sleep(0.1)
+        show_old_gui()
+    else:
+        # processing vars
+        export_vars()
 
         if not args.model_param:
             print("\nNo ggml model file was selected. Exiting.")
