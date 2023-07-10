@@ -19,6 +19,9 @@
 #ifdef GGML_USE_METAL
 #include "ggml-metal.h"
 #endif
+#ifdef GGML_USE_MPI
+#include "ggml-mpi.h"
+#endif
 #ifdef GGML_USE_K_QUANTS
 #ifndef QK_K
 #ifdef GGML_QKK_64
@@ -350,6 +353,10 @@ struct llama_context {
 
 #ifdef GGML_USE_METAL
     ggml_metal_context * ctx_metal = NULL;
+#endif
+
+#ifdef GGML_USE_MPI
+    ggml_mpi_context * ctx_mpi = NULL;
 #endif
 
     int    buf_last = 0;
@@ -870,7 +877,7 @@ bool llama_mlock_supported() {
     return llama_mlock::SUPPORTED;
 }
 
-void llama_init_backend(bool numa) {
+void llama_backend_init(bool numa) {
     ggml_time_init();
 
     // needed to initialize f16 tables
@@ -883,6 +890,16 @@ void llama_init_backend(bool numa) {
     if (numa) {
         ggml_numa_init();
     }
+
+#ifdef GGML_USE_MPI
+    ggml_mpi_backend_init();
+#endif
+}
+
+void llama_backend_free() {
+#ifdef GGML_USE_MPI
+    ggml_mpi_backend_free();
+#endif
 }
 
 int64_t llama_time_us() {
@@ -1284,12 +1301,16 @@ static bool llama_eval_internal(
          llama_context & lctx,
      const llama_token * tokens,
            const float * embd,
-             const int   n_tokens,
-             const int   n_past,
+                   int   n_tokens,
+                   int   n_past,
                    int   n_threads,
             const char * cgraph_fname) {
 
     LLAMA_ASSERT((!tokens && embd) || (tokens && !embd));
+
+#ifdef GGML_USE_MPI
+    ggml_mpi_eval_init(lctx.ctx_mpi, &n_tokens, &n_past, &n_threads);
+#endif
 
     const int64_t t_start_us = ggml_time_us();
 
@@ -1331,11 +1352,16 @@ static bool llama_eval_internal(
     struct ggml_tensor * inpL;
 
     if (tokens) {
-        struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
-        ggml_set_name(embd, "embd");
-        memcpy(embd->data, tokens, N*ggml_element_size(embd));
-        inpL = ggml_get_rows(ctx0, model.tok_embeddings, embd);
+        struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
+        memcpy(inp_tokens->data, tokens, N*ggml_element_size(inp_tokens));
+        ggml_set_name(inp_tokens, "inp_tokens");
+
+        inpL = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
     } else {
+#ifdef GGML_USE_MPI
+        GGML_ASSERT(false && "not implemented");
+#endif
+
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N);
         memcpy(inpL->data, embd, N * n_embd * ggml_element_size(inpL));
     }
@@ -1353,18 +1379,20 @@ static bool llama_eval_internal(
     offload_func_t offload_func_v  = llama_nop;
 
 #ifdef GGML_USE_CUBLAS
-        if (n_gpu_layers > n_layer) {
-            offload_func_nr = ggml_cuda_assign_buffers;
-        }
-        if (n_gpu_layers > n_layer + 1) {
-            offload_func_v  = ggml_cuda_assign_buffers;
-        }
-        if (n_gpu_layers > n_layer + 2) {
-            offload_func_kq = ggml_cuda_assign_buffers;
-        }
+    if (n_gpu_layers > n_layer) {
+        offload_func_nr = ggml_cuda_assign_buffers;
+    }
+    if (n_gpu_layers > n_layer + 1) {
+        offload_func_v  = ggml_cuda_assign_buffers;
+    }
+    if (n_gpu_layers > n_layer + 2) {
+        offload_func_kq = ggml_cuda_assign_buffers;
+    }
 #endif // GGML_USE_CUBLAS
 
     for (int il = 0; il < n_layer; ++il) {
+        ggml_format_name(inpL, "layer_inp_%d", il);
+
         offload_func_t offload_func = llama_nop;
 
 #ifdef GGML_USE_CUBLAS
@@ -1571,14 +1599,12 @@ static bool llama_eval_internal(
 
         // input for next layer
         inpL = cur;
-
     }
 
     lctx.use_buf(ctx0, 0);
 
     // used at the end to optionally extract the embeddings
     struct ggml_tensor * embeddings = NULL;
-
 
     // norm
     {
@@ -1594,7 +1620,6 @@ static bool llama_eval_internal(
         embeddings = cur;
     }
 
-
     // lm_head
     cur = ggml_mul_mat(ctx0, model.output, cur);
     ggml_set_name(cur, "result_output");
@@ -1606,6 +1631,10 @@ static bool llama_eval_internal(
 
     // run the computation
     ggml_build_forward_expand(&gf, cur);
+
+#if GGML_USE_MPI
+    ggml_mpi_graph_compute_pre(lctx.ctx_mpi, &gf, n_layer);
+#endif
 
 #ifdef GGML_USE_METAL
     if (lctx.ctx_metal && N == 1) {
@@ -1635,6 +1664,15 @@ static bool llama_eval_internal(
     ggml_graph_compute_helper(lctx.work_buffer, &gf, n_threads);
 #endif
 
+#if GGML_USE_MPI
+    ggml_mpi_graph_compute_post(lctx.ctx_mpi, &gf, n_layer);
+#endif
+
+    // update kv token count
+    lctx.kv_self.n = n_past + N;
+
+    struct ggml_tensor * res = gf.nodes[gf.n_nodes - 1];
+
     if (cgraph_fname) {
         ggml_graph_export(&gf, cgraph_fname);
     }
@@ -1650,23 +1688,17 @@ static bool llama_eval_internal(
     //    ggml_graph_dump_dot(&gf, NULL, "llama.dot");
     //}
 
-    //embd_w.resize(n_vocab*N);
-    //memcpy(embd_w.data(), ggml_get_data(cur), sizeof(float)*n_vocab*N);
-
-    // update kv token count
-    lctx.kv_self.n = n_past + N;
-
     // extract logits
     {
         auto & logits_out = lctx.logits;
 
         if (lctx.logits_all) {
             logits_out.resize(n_vocab * N);
-            memcpy(logits_out.data(), (float *) ggml_get_data(cur), sizeof(float)*n_vocab*N);
+            memcpy(logits_out.data(), (float *) ggml_get_data(res), sizeof(float)*n_vocab*N);
         } else {
             // return result for just the last token
             logits_out.resize(n_vocab);
-            memcpy(logits_out.data(), (float *) ggml_get_data(cur) + (n_vocab*(N-1)), sizeof(float)*n_vocab);
+            memcpy(logits_out.data(), (float *) ggml_get_data(res) + (n_vocab*(N-1)), sizeof(float)*n_vocab);
         }
     }
 
@@ -2694,6 +2726,18 @@ struct llama_context * llama_new_context_with_model(
         LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "scr0", ctx->buf_scratch[0].addr, ctx->buf_scratch[0].size, 0));
         LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "scr1", ctx->buf_scratch[1].addr, ctx->buf_scratch[1].size, 0));
 #undef LLAMA_METAL_CHECK_BUF
+    }
+#endif
+
+#ifdef GGML_USE_MPI
+    ctx->ctx_mpi = ggml_mpi_init();
+
+    if (ggml_mpi_rank(ctx->ctx_mpi) > 0) {
+        // Enter a blocking eval loop with dummy input, letting rank=0 drive the process
+        const std::vector<llama_token> tmp(ctx->model.hparams.n_ctx, llama_token_bos());
+        while (!llama_eval(ctx, tmp.data(), tmp.size(), 0, 0)) {};
+        llama_backend_free();
+        exit(1);
     }
 #endif
 
