@@ -161,6 +161,8 @@ def init_library():
     handle.new_token.argtypes = [ctypes.c_int]
     handle.get_stream_count.restype = ctypes.c_int
     handle.has_finished.restype = ctypes.c_bool
+    handle.get_prompt_eval_time.restype = ctypes.c_float
+    handle.get_prompt_process_time.restype = ctypes.c_float
     handle.abort_generate.restype = ctypes.c_bool
     handle.get_pending_output.restype = ctypes.c_char_p
 
@@ -530,7 +532,8 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             newprompt = fullprompt
 
             gen = asyncio.run(self.handle_request(genparams, newprompt, basic_api_flag, kai_sse_stream_flag))
-
+            gen['prompt_process_time'] = handle.get_prompt_process_time()
+            gen['prompt_eval_time'] = handle.get_prompt_eval_time()
             try:
                 self.send_response(200)
                 self.end_headers()
