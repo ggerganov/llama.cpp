@@ -3200,36 +3200,36 @@ void ggml_cuda_assign_buffers_impl(struct ggml_tensor * tensor, bool scratch, bo
     }
 
     // recursively assign CUDA buffers until a compute tensor is found
-    if (tensor->src0 != nullptr && tensor->src0->backend == GGML_BACKEND_CPU) {
-        const ggml_op src0_op = tensor->src0->op;
+    if (tensor->src[0] != nullptr && tensor->src[0]->backend == GGML_BACKEND_CPU) {
+        const ggml_op src0_op = tensor->src[0]->op;
         if (src0_op == GGML_OP_RESHAPE || src0_op == GGML_OP_TRANSPOSE || src0_op == GGML_OP_VIEW) {
-            ggml_cuda_assign_buffers_impl(tensor->src0, scratch, force_inplace);
+            ggml_cuda_assign_buffers_impl(tensor->src[0], scratch, force_inplace);
         }
     }
-    if (tensor->op == GGML_OP_CPY && tensor->src1->backend == GGML_BACKEND_CPU) {
-        ggml_cuda_assign_buffers_impl(tensor->src1, scratch, force_inplace);
+    if (tensor->op == GGML_OP_CPY && tensor->src[1]->backend == GGML_BACKEND_CPU) {
+        ggml_cuda_assign_buffers_impl(tensor->src[1], scratch, force_inplace);
     }
 
     tensor->backend = GGML_BACKEND_GPU;
     struct ggml_tensor_extra_gpu * extra = new ggml_tensor_extra_gpu;
     memset(extra, 0, sizeof(*extra));
 
-    const bool inplace = (tensor->src0 != nullptr && tensor->src0->data == tensor->data) ||
+    const bool inplace = (tensor->src[0] != nullptr && tensor->src[0]->data == tensor->data) ||
         tensor->op == GGML_OP_VIEW ||
         force_inplace;
     const size_t size = ggml_nbytes(tensor);
 
     CUDA_CHECK(cudaSetDevice(g_main_device));
-    if (inplace && (tensor->src0->backend == GGML_BACKEND_GPU || tensor->src0->backend == GGML_BACKEND_GPU_SPLIT)) {
-        struct ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu * ) tensor->src0->extra;
+    if (inplace && (tensor->src[0]->backend == GGML_BACKEND_GPU || tensor->src[0]->backend == GGML_BACKEND_GPU_SPLIT)) {
+        struct ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu * ) tensor->src[0]->extra;
         char * src0_ddc = (char *) src0_extra->data_device[g_main_device];
         size_t offset = 0;
         if (tensor->op == GGML_OP_VIEW) {
-            memcpy(&offset, tensor->opt[0]->data, sizeof(size_t));
+            memcpy(&offset, tensor->src[2]->data, sizeof(size_t));
         }
         extra->data_device[g_main_device] = src0_ddc + offset;
     } else if (tensor->op == GGML_OP_CPY) {
-        struct ggml_tensor_extra_gpu * src1_extra = (ggml_tensor_extra_gpu * ) tensor->src1->extra;
+        struct ggml_tensor_extra_gpu * src1_extra = (ggml_tensor_extra_gpu * ) tensor->src[1]->extra;
         void * src1_ddv = src1_extra->data_device[g_main_device];
         extra->data_device[g_main_device] = src1_ddv;
     } else if (scratch) {
@@ -3300,8 +3300,8 @@ void ggml_cuda_free_scratch() {
 bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor){
     ggml_cuda_func_t func;
     const bool any_on_device = tensor->backend == GGML_BACKEND_GPU
-        || (tensor->src0 != nullptr && (tensor->src0->backend == GGML_BACKEND_GPU || tensor->src0->backend == GGML_BACKEND_GPU_SPLIT))
-        || (tensor->src1 != nullptr && tensor->src1->backend == GGML_BACKEND_GPU);
+        || (tensor->src[0] != nullptr && (tensor->src[0]->backend == GGML_BACKEND_GPU || tensor->src[0]->backend == GGML_BACKEND_GPU_SPLIT))
+        || (tensor->src[1] != nullptr && tensor->src[1]->backend == GGML_BACKEND_GPU);
 
     switch (tensor->op) {
         case GGML_OP_ADD:
@@ -3329,7 +3329,7 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
             func = ggml_cuda_rms_norm;
             break;
         case GGML_OP_MUL_MAT:
-            if (!any_on_device && !ggml_cuda_can_mul_mat(tensor->src0, tensor->src1, tensor)) {
+            if (!any_on_device && !ggml_cuda_can_mul_mat(tensor->src[0], tensor->src[1], tensor)) {
                 return false;
             }
             func = ggml_cuda_mul_mat;
@@ -3383,6 +3383,6 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return true;
     }
-    func(tensor->src0, tensor->src1, tensor);
+    func(tensor->src[0], tensor->src[1], tensor);
     return true;
 }
