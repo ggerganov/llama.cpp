@@ -180,7 +180,7 @@ int main(int argc, char ** argv) {
         usage(argv[0]);
     }
 
-    llama_init_backend(false);
+    llama_backend_init(false);
 
     // parse command line arguments
     const std::string fname_inp = argv[arg_idx];
@@ -256,6 +256,8 @@ int main(int argc, char ** argv) {
         printf("%s: quantize time = %8.2f ms\n", __func__, t_quantize_us/1000.0);
         printf("%s:    total time = %8.2f ms\n", __func__, (t_main_end_us - t_main_start_us)/1000.0);
     }
+
+    llama_backend_free();
 
     return 0;
 }

@@ -158,7 +158,9 @@ extern "C" {
     // Initialize the llama + ggml backend
     // If numa is true, use NUMA optimizations
     // Call once at the start of the program
-    LLAMA_API void llama_init_backend(bool numa);
+    LLAMA_API void llama_backend_init(bool numa);
+    // Call once at the end of the program - currently only used for MPI
+    LLAMA_API void llama_backend_free();
 
     LLAMA_API int64_t llama_time_us();
 

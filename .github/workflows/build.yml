@@ -104,6 +104,40 @@ jobs:
           cd build
           ctest --verbose --timeout 900
 
+  ubuntu-latest-cmake-mpi:
+    runs-on: ubuntu-latest
+
+    continue-on-error: true
+
+    strategy:
+      matrix:
+        mpi_library: [mpich, libopenmpi-dev]
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v1
+
+      - name: Dependencies
+        id: depends
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential ${{ matrix.mpi_library }}
+
+      - name: Build
+        id: cmake_build
+        run: |
+          mkdir build
+          cd build
+          cmake -DLLAMA_MPI=ON ..
+          cmake --build . --config Release
+
+      - name: Test
+        id: cmake_test
+        run: |
+          cd build
+          ctest --verbose
+
   macOS-latest-make:
     runs-on: macos-latest
 
