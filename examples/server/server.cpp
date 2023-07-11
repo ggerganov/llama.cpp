@@ -1079,7 +1079,7 @@ int main(int argc, char **argv)
         params.model_alias = params.model;
     }
 
-    llama_init_backend(params.numa);
+    llama_backend_init(params.numa);
 
     LOG_INFO("build info", {{"build", BUILD_NUMBER},
                             {"commit", BUILD_COMMIT}});
@@ -1308,6 +1308,8 @@ int main(int argc, char **argv)
     {
         return 1;
     }
+
+    llama_backend_free();
 
     return 0;
 }
