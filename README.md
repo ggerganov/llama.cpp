@@ -239,7 +239,7 @@ In order to build llama.cpp you have three different options.
 - Using `Zig`:
 
     ```bash
-    zig build -Drelease-fast
+    zig build -Doptimize=ReleaseFast
     ```
 
 ### Metal Build
