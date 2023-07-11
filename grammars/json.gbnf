@@ -15,10 +15,15 @@ array  ::=
     ("," ws value)*
   )? "]"
 
-# Subset of JSON primitives: strings without escapes and only regular integers
-string  ::= "\"" [ \t!#-\[\]-~]* "\"" ws
+string  ::=
+  "\"" (
+    [\x20\x21\x23-\x5b\x5d-\U0010FFFF] | # any code point except " (\x22) and \ (\x5c)
+    "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]) # escapes
+  )* "\""
+
+# Only plain integers currently
 number  ::= "-"? [0-9]+ ws
 boolean ::= ("true" | "false") ws
 
 # Optional space: by convention, applied in this grammar after literal chars when allowed
-ws ::= [ \t\n] ws |
+ws ::= ([ \t\n] ws)?

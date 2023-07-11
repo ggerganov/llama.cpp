@@ -50,15 +50,27 @@ namespace grammar_parser {
         return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '-' || ('0' <= c && c <= '9');
     }
 
-    int hex_to_int(char c) {
-        if ('a' <= c && c <= 'f') {
-            return c - 'a' + 10;
-        } else if ('A' <= c && c <= 'F') {
-            return c - 'A' + 10;
-        } else if ('0' <= c && c <= '9') {
-            return c - '0';
+    std::pair<uint32_t, const char *> parse_hex(const char * src, int size) {
+        const char * pos   = src;
+        const char * end   = src + size;
+        uint32_t     value = 0;
+        for ( ; pos < end && *pos; pos++) {
+            value <<= 4;
+            char c = *pos;
+            if ('a' <= c && c <= 'f') {
+                value += c - 'a' + 10;
+            } else if ('A' <= c && c <= 'F') {
+                value += c - 'A' + 10;
+            } else if ('0' <= c && c <= '9') {
+                value += c - '0';
+            } else {
+                break;
+            }
         }
-        return -1;
+        if (pos != end) {
+            throw std::runtime_error("expecting " + std::to_string(size) + " hex chars at " + src);
+        }
+        return std::make_pair(value, pos);
     }
 
     const char * parse_space(const char * src, bool newline_ok) {
@@ -89,30 +101,23 @@ namespace grammar_parser {
 
     std::pair<uint32_t, const char *> parse_char(const char * src) {
         if (*src == '\\') {
-            char esc = src[1];
-            // TODO: 16- and 32-bit escapes
-            if (esc == 'x') {
-                int first = hex_to_int(src[2]);
-                if (first > -1) {
-                    int second = hex_to_int(src[3]);
-                    if (second > -1) {
-                        return std::make_pair((first << 4) + second, src + 4);
-                    }
-                }
-                throw std::runtime_error(std::string("expecting \\xNN at ") + src);
-            } else if (esc == '"' || esc == '[' || esc == ']') {
-                return std::make_pair(esc, src + 2);
-            } else if (esc == 'r') {
-                return std::make_pair('\r', src + 2);
-            } else if (esc == 'n') {
-                return std::make_pair('\n', src + 2);
-            } else if (esc == 't') {
-                return std::make_pair('\t', src + 2);
+            switch (src[1]) {
+                case 'x': return parse_hex(src + 2, 2);
+                case 'u': return parse_hex(src + 2, 4);
+                case 'U': return parse_hex(src + 2, 8);
+                case 't': return std::make_pair('\t', src + 2);
+                case 'r': return std::make_pair('\r', src + 2);
+                case 'n': return std::make_pair('\n', src + 2);
+                case '\\':
+                case '"':
+                case '[':
+                case ']':
+                    return std::make_pair(src[1], src + 2);
+                default:
+                    throw std::runtime_error(std::string("unknown escape at ") + src);
             }
-            throw std::runtime_error(std::string("unknown escape at ") + src);
         } else if (*src) {
-            auto decoded = decode_utf8(src);
-            return std::make_pair(decoded.first, decoded.second);
+            return decode_utf8(src);
         }
         throw std::runtime_error("unexpected end of input");
     }
