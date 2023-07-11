@@ -393,8 +393,8 @@ void ggml_metal_graph_compute(
             for (int i = node_start; i < node_end; ++i) {
                 metal_printf("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
 
-                struct ggml_tensor * src0 = gf->nodes[i]->src0;
-                struct ggml_tensor * src1 = gf->nodes[i]->src1;
+                struct ggml_tensor * src0 = gf->nodes[i]->src[0];
+                struct ggml_tensor * src1 = gf->nodes[i]->src[1];
                 struct ggml_tensor * dst  = gf->nodes[i];
 
                 const int64_t  ne00 = src0 ? src0->ne[0] : 0;
