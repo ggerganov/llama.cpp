@@ -768,22 +768,28 @@ def show_new_gui():
     # gpu options
     quick_gpu_layers_entry,quick_gpu_layers_label = makelabelentry(quick_tab,"GPU Layers:", gpulayers_var, 4, 50)
     quick_gpu_selector_label = makelabel(quick_tab, "GPU ID:", 3)
-    quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=["1","2","3","All"], width=60, variable=gpu_choice_var, state="readonly")
+    quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=["1","2","3"], width=60, variable=gpu_choice_var, state="readonly")
+    CUDA_quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=["1","2","3","All"], width=60, variable=gpu_choice_var, state="readonly")
     quick_lowvram_box = makecheckbox(quick_tab,  "Low VRAM", lowvram_var, 5)
 
-    # hides gpu options when CLBlast is not chosen
     def changerunmode(a,b,c):
         index = runopts_var.get()
         if index == "Use CLBlast" or index == "Use CuBLAS":
             gpu_selector_label.grid(row=3, column=0, padx = 8, pady=1, stick="nw")
-            gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
             quick_gpu_selector_label.grid(row=3, column=0, padx = 8, pady=1, stick="nw")
-            quick_gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
+            if index == "Use CLBlast":
+                gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
+                quick_gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
+            elif index == "Use CuBLAS":
+                CUDA_gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
+                CUDA_quick_gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
         else:
             gpu_selector_label.grid_forget()
             gpu_selector_box.grid_forget()
+            CUDA_gpu_selector_box.grid_forget()
             quick_gpu_selector_label.grid_forget()
             quick_gpu_selector_box.grid_forget()
+            CUDA_quick_gpu_selector_box.grid_forget()
 
         if index == "Use CuBLAS":
             lowvram_box.grid(row=4, column=0, padx=8, pady=1,  stick="nw")
@@ -833,7 +839,8 @@ def show_new_gui():
     # gpu options
     gpu_layers_entry,gpu_layers_label = makelabelentry(hardware_tab,"GPU Layers:", gpulayers_var, 4, 50)
     gpu_selector_label = makelabel(hardware_tab, "GPU ID:", 3)
-    gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=["1","2","3","All"], width=60, variable=gpu_choice_var, state="readonly")
+    gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=["1","2","3"], width=60, variable=gpu_choice_var, state="readonly")
+    CUDA_gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=["1","2","3", "All"], width=60, variable=gpu_choice_var, state="readonly")
     lowvram_box = makecheckbox(hardware_tab,  "Low VRAM", lowvram_var, 5)
 
     # presets selector
@@ -1434,7 +1441,7 @@ if __name__ == '__main__':
     compatgroup = parser.add_mutually_exclusive_group()
     compatgroup.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
     compatgroup.add_argument("--useclblast", help="Use CLBlast for GPU Acceleration. Must specify exactly 2 arguments, platform ID and device ID (e.g. --useclblast 1 0).", type=int, choices=range(0,9), nargs=2)
-    compatgroup.add_argument("--usecublas", help="Use CuBLAS for GPU Acceleration. Requires Nvidia GPU. Select lowvram to not allocate VRAM scratch buffer. Enter a number after to select a different main GPU.", nargs='*',metavar=('[lowvram|normal] [main GPU ID]'), choices=['normal', 'lowvram', '0', '1', '2'])
+    compatgroup.add_argument("--usecublas", help="Use CuBLAS for GPU Acceleration. Requires CUDA. Select lowvram to not allocate VRAM scratch buffer. Enter a number afterwards to select and use 1 GPU. Leaving no number will use all GPUs.", nargs='*',metavar=('[lowvram|normal] [main GPU ID]'), choices=['normal', 'lowvram', '0', '1', '2'])
     parser.add_argument("--gpulayers", help="Set number of layers to offload to GPU when using GPU. Requires GPU.",metavar=('[GPU layers]'), type=int, default=0)
     args = parser.parse_args()
     main(args)
