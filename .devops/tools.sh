@@ -26,6 +26,8 @@ elif [[ $arg1 == '--all-in-one' || $arg1 == '-a' ]]; then
             ./quantize "$i" "${i/f16/q4_0}" q4_0
         fi
     done
+elif [[ $arg1 == '--server' || $arg1 == '-s' ]]; then
+    ./server $arg2
 else
     echo "Unknown command: $arg1"
     echo "Available commands: "
@@ -37,4 +39,6 @@ else
     echo "              ex: \"/models/7B/ggml-model-f16.bin\" \"/models/7B/ggml-model-q4_0.bin\" 2"
     echo "  --all-in-one (-a): Execute --convert & --quantize"
     echo "              ex: \"/models/\" 7B"
+    echo "  --server (-s): Run a model on the server"
+    echo "              ex: -m /models/7B/ggml-model-q4_0.bin -c 2048 -ngl 43 -mg 1 --port 8080"
 fi
