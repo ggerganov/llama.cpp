@@ -10,7 +10,9 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+#if defined(__GNUC__)
 #pragma GCC diagnostic ignored "-Wdouble-promotion"
+#endif
 
 #define MAX_NARGS 3
 
