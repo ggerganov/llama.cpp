@@ -175,11 +175,11 @@ void ggml_mpi_graph_compute_pre(
         // attach the input data to all nodes that need it
         // TODO: not great - should be able to do this without modifying the compute graph (see next TODO below)
         for (int i = idx_l0; i < idx_l1; i++) {
-            if (gf->nodes[i]->src0 == gf->nodes[idx_l0]) {
-                gf->nodes[i]->src0 =  inp0;
+            if (gf->nodes[i]->src[0] == gf->nodes[idx_l0]) {
+                gf->nodes[i]->src[0] =  inp0;
             }
-            if (gf->nodes[i]->src1 == gf->nodes[idx_l0]) {
-                gf->nodes[i]->src1 =  inp0;
+            if (gf->nodes[i]->src[1] == gf->nodes[idx_l0]) {
+                gf->nodes[i]->src[1] =  inp0;
             }
         }
 
