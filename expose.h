@@ -72,5 +72,5 @@ extern std::string lora_filename;
 extern std::string lora_base;
 extern std::vector<std::string> generated_tokens;
 extern bool generation_finished;
-extern float prompt_eval_time;
-extern float prompt_process_time;
+extern float last_eval_time;
+extern float last_process_time;

@@ -161,8 +161,8 @@ def init_library():
     handle.new_token.argtypes = [ctypes.c_int]
     handle.get_stream_count.restype = ctypes.c_int
     handle.has_finished.restype = ctypes.c_bool
-    handle.get_prompt_eval_time.restype = ctypes.c_float
-    handle.get_prompt_process_time.restype = ctypes.c_float
+    handle.get_last_eval_time.restype = ctypes.c_float
+    handle.get_last_process_time.restype = ctypes.c_float
     handle.abort_generate.restype = ctypes.c_bool
     handle.get_pending_output.restype = ctypes.c_char_p
 
@@ -455,6 +455,11 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         elif self.path.endswith(('/api/extra/version')):
             response_body = (json.dumps({"result":"KoboldCpp","version":KcppVersion}).encode())
 
+        elif self.path.endswith(('/api/extra/perf')):
+            lastp = handle.get_last_process_time()
+            laste = handle.get_last_eval_time()
+            response_body = (json.dumps({"last_process":lastp,"last_eval":laste}).encode())
+
         if response_body is None:
             self.send_response(404)
             self.end_headers()
@@ -532,8 +537,6 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             newprompt = fullprompt
 
             gen = asyncio.run(self.handle_request(genparams, newprompt, basic_api_flag, kai_sse_stream_flag))
-            gen['prompt_process_time'] = handle.get_prompt_process_time()
-            gen['prompt_eval_time'] = handle.get_prompt_eval_time()
             try:
                 self.send_response(200)
                 self.end_headers()
