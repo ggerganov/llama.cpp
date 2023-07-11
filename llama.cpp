@@ -2454,15 +2454,14 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         } else {
             new_type = quantized_type;
 #ifdef GGML_USE_K_QUANTS
+            bool convert_incompatible_tensor = false;
             if (quantized_type == GGML_TYPE_Q2_K || quantized_type == GGML_TYPE_Q3_K || quantized_type == GGML_TYPE_Q4_K ||
                 quantized_type == GGML_TYPE_Q5_K || quantized_type == GGML_TYPE_Q6_K) {
                 int nx = tensor.ne.at(0);
                 int ny = tensor.ne.at(1);
                 if (nx % QK_K != 0 || ny % QK_K != 0) {
-                    fprintf(stderr, "\n\n========================= Tensor sizes %d x %d are not divisible by %d\n",nx,ny,QK_K);
-                    fprintf(stderr, "This is required to be able to use k-quants for now!\n");
-                    fprintf(stderr, "========================================================================================\n\n");
-                    throw std::runtime_error("Unsupported tensor size encountered\n");
+                    fprintf(stderr, "\n\nTensor sizes %d x %d are not divisible by %d, required for k-quants.\n",nx,ny,QK_K);
+                    convert_incompatible_tensor = true;
                 }
             }
             if (tensor.name == "output.weight") {
@@ -2489,6 +2488,17 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             } else if (tensor.name.find("attention.wo.weight") != std::string::npos) {
                 if      (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q4_K;
                 else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
+            }
+            if (convert_incompatible_tensor) {
+                if (tensor.name == "output.weight") {
+                    new_type = GGML_TYPE_F16; //fall back to F16 instead of just failing.
+                    fprintf(stderr, "F16 will be used for this tensor instead.\n");
+                } else if (tensor.name == "tok_embeddings.weight") {
+                    new_type = GGML_TYPE_Q4_0; //fall back to Q4_0 instead of just failing.
+                    fprintf(stderr, "Q4_0 will be used for this tensor instead.\n");
+                } else {
+                    throw std::runtime_error("Unsupported tensor size encountered\n");
+                }
             }
 #endif
 
