@@ -2548,6 +2548,10 @@ inline void ggml_cuda_op_rope(
     const float p0 = ((mode & 1) == 0 ? n_past + i02 : i02);
 
     const float p = p0;
+    if(!get_ntk_rope_scale_mode())
+    {
+        p = n_ctx <= GGML_TRAINING_CTX ? p0 : p0 * GGML_TRAINING_CTX / n_ctx;
+    }
 
     // compute
     rope_f32_cuda(src0_ddf_i, dst_ddf_i, ne00, i01_diff, p, theta_scale, cudaStream_main);

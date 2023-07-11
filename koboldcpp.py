@@ -36,6 +36,7 @@ class load_model_inputs(ctypes.Structure):
                 ("debugmode", ctypes.c_int),
                 ("forceversion", ctypes.c_int),
                 ("gpulayers", ctypes.c_int),
+                ("linear_rope", ctypes.c_bool),
                 ("banned_tokens", ctypes.c_char_p * ban_token_max)]
 
 class generation_inputs(ctypes.Structure):
@@ -186,6 +187,7 @@ def load_model(model_filename):
     inputs.blasbatchsize = args.blasbatchsize
     inputs.forceversion = args.forceversion
     inputs.gpulayers = args.gpulayers
+    inputs.linear_rope = args.linearrope
     clblastids = 0
     if args.useclblast:
         clblastids = 100 + int(args.useclblast[0])*10 + int(args.useclblast[1])
@@ -238,6 +240,8 @@ def generate(prompt,max_length=20, max_context_length=512, temperature=0.8, top_
             for i, sampler in enumerate(sampler_order):
                 inputs.sampler_order[i] = sampler
             inputs.sampler_len = len(sampler_order)
+            if inputs.sampler_len>0 and (inputs.sampler_order[0]!=6 or inputs.sampler_order[inputs.sampler_len-1]!=5):
+                print("\n(Warning!!! Poor sampler_order detected! You will have reduced quality. Recommended values are [6,0,1,3,4,2,5])")
         except TypeError as e:
             print("ERROR: sampler_order must be a list of integers: " + str(e))
     inputs.seed = seed
@@ -606,14 +610,13 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None):
 
 # note: customtkinter-5.2.0
 def show_new_gui():
-    import customtkinter as ctk
     from tkinter.filedialog import askopenfilename
     from tkinter.filedialog import asksaveasfile
 
     # if args received, launch
     if len(sys.argv) != 1:
-        root = ctk.CTk()
-         #we dont want the useless window to be visible, but we want it in taskbar
+        import tkinter as tk
+        root = tk.Tk() #we dont want the useless window to be visible, but we want it in taskbar
         root.attributes("-alpha", 0)
         args.model_param = askopenfilename(title="Select ggml model .bin files")
         root.destroy()
@@ -622,6 +625,8 @@ def show_new_gui():
             time.sleep(2)
             sys.exit(2)
         return
+
+    import customtkinter as ctk
 
     nextstate = 0 #0=exit, 1=launch, 2=oldgui
     windowwidth = 520
@@ -1413,6 +1418,7 @@ if __name__ == '__main__':
     parser.add_argument("--highpriority", help="Experimental flag. If set, increases the process CPU priority, potentially speeding up generation. Use caution.", action='store_true')
     parser.add_argument("--contextsize", help="Controls the memory allocated for maximum context size, only change if you need more RAM for big contexts. (default 2048)", type=int,choices=[512,1024,2048,3072,4096,6144,8192], default=2048)
     parser.add_argument("--blasbatchsize", help="Sets the batch size used in BLAS processing (default 512). Setting it to -1 disables BLAS mode, but keeps other benefits like GPU offload.", type=int,choices=[-1,32,64,128,256,512,1024], default=512)
+    parser.add_argument("--linearrope", help="If set, uses linear RoPE scaling. Otherwise, uses NTK-Aware scaling.", action='store_true')
     parser.add_argument("--stream", help="Uses streaming when generating tokens. Only for the Kobold Lite UI.", action='store_true')
     parser.add_argument("--smartcontext", help="Reserving a portion of context to try processing less frequently.", action='store_true')
     parser.add_argument("--unbantokens", help="Normally, KoboldAI prevents the EOS token from being generated. This flag unbans it.", action='store_true')

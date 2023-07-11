@@ -36,6 +36,7 @@ struct load_model_inputs
     const int debugmode = 0;
     const int forceversion = 0;
     const int gpulayers = 0;
+    const bool linear_rope;
     const char * banned_tokens[ban_token_max];
 };
 struct generation_inputs

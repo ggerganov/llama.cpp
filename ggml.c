@@ -4284,20 +4284,33 @@ static inline int ggml_up(int n, int m) {
 #define ggml_assert_aligned(ptr) \
     GGML_ASSERT(((uintptr_t) (ptr))%GGML_MEM_ALIGN == 0)
 
+static bool useNtkRope = true; //uses linear rope if not NTK
+void set_ntk_rope_scale_mode(bool useNtk)
+{
+    useNtkRope = useNtk;
+}
+bool get_ntk_rope_scale_mode()
+{
+    return useNtkRope;
+}
 float get_theta_scale(int n_dims,int n_past,int n_ctx)
 {
-   if(n_ctx<=2048) //normie mode
-   {
-        return powf(10000.0, -2.0f/n_dims);
-   }
-   else
-   {
-       //using scaled NTK aware ctx
-       float a = (n_ctx<=4096?4.0:8.0);
-       float m = powf(a, n_dims / (n_dims - 2.0));
-       float s = powf(10000.0 * m, -2.0f/n_dims);
-       return s;
-   }
+    if (!get_ntk_rope_scale_mode())
+    {
+        return powf(10000.0, -2.0f / n_dims);
+    }
+    if (n_ctx <= 2048) //normie mode
+    {
+        return powf(10000.0, -2.0f / n_dims);
+    }
+    else
+    {
+        //using scaled NTK aware ctx
+        float a = (n_ctx <= 4096 ? 4.0 : 8.0);
+        float m = powf(a, n_dims / (n_dims - 2.0));
+        float s = powf(10000.0 * m, -2.0f / n_dims);
+        return s;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -12044,7 +12057,9 @@ static void ggml_compute_forward_rope_f32(
                         dst_data[n_dims/2*3] = x2*sin_block_theta + x3*cos_block_theta;
                     }
                 } else if (!is_neox) {
-
+                    if (!get_ntk_rope_scale_mode() && n_ctx > GGML_TRAINING_CTX) {
+                        theta = theta * GGML_TRAINING_CTX / n_ctx;
+                    }
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
                         const float cos_theta = cosf(theta);
                         const float sin_theta = sinf(theta);
@@ -12172,6 +12187,9 @@ static void ggml_compute_forward_rope_f16(
                         dst_data[n_dims/2*3] = GGML_FP32_TO_FP16(x2*sin_block_theta + x3*cos_block_theta);
                     }
                 } if (!is_neox) {
+                    if (!get_ntk_rope_scale_mode() && n_ctx > GGML_TRAINING_CTX) {
+                        theta = theta * GGML_TRAINING_CTX / n_ctx;
+                    }
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
                         const float cos_theta = cosf(theta);
                         const float sin_theta = sinf(theta);
@@ -12297,6 +12315,9 @@ static void ggml_compute_forward_rope_back_f32(
                 float theta = (float)p;
 
                 if (!is_neox) {
+                    if (!get_ntk_rope_scale_mode() && n_ctx > GGML_TRAINING_CTX) {
+                        theta = theta * GGML_TRAINING_CTX / n_ctx;
+                    }
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
                         const float cos_theta = cosf(theta);
                         const float sin_theta = sinf(theta);
@@ -12397,6 +12418,9 @@ static void ggml_compute_forward_rope_back_f16(
                 float theta = (float)p;
 
                 if (!is_neox) {
+                    if (!get_ntk_rope_scale_mode() && n_ctx > GGML_TRAINING_CTX) {
+                        theta = theta * GGML_TRAINING_CTX / n_ctx;
+                    }
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
                         const float cos_theta = cosf(theta);
                         const float sin_theta = sinf(theta);

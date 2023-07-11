@@ -346,6 +346,13 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     = gpt2_ctx_v1.hparams.n_ctx = gpt2_ctx_v2.hparams.n_ctx = gpt2_ctx_v3.hparams.n_ctx
     = mpt_ctx_v3.hparams.n_ctx = params.n_ctx;
 
+    //handle linear rope
+    if(inputs.linear_rope)
+    {
+        printf("Using Linear RoPE scaling instead of NTK-Aware scaling.\n");
+    }
+    set_ntk_rope_scale_mode(!inputs.linear_rope);
+
     //handle custom token bans
     banned_tokens.clear();
     for(int x=0;x<ban_token_max;++x)
