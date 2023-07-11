@@ -841,6 +841,7 @@ const std::string & gpttype_get_pending_output()
 
 generation_outputs gpttype_generate(const generation_inputs inputs, generation_outputs &output)
 {
+    concat_output = "";
     stop_sequence.clear();
     for(int x=0;x<stop_token_max;++x)
     {
@@ -973,7 +974,6 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     stopper_unused_tokens = 0;
     int input_consumed = 0;
     std::mt19937 rng(params.seed);
-    concat_output = "";
 
     //prepare sampler order
     std::vector<samplers> sampler_order;
