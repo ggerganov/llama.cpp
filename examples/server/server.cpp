@@ -632,7 +632,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
     fprintf(stderr, "  -a ALIAS, --alias ALIAS\n");
     fprintf(stderr, "                        set an alias for the model, will be added as `model` field in completion response\n");
-    fprintf(stderr, "  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
+    fprintf(stderr, "  --lora FNAME          apply LoRA adapter\n");
     fprintf(stderr, "  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
     fprintf(stderr, "  --host                ip address to listen (default  (default: %s)\n", sparams.hostname.c_str());
     fprintf(stderr, "  --port PORT           port to listen (default  (default: %d)\n", sparams.port);
@@ -820,7 +820,6 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
             params.lora_adapter = argv[i];
-            params.use_mmap = false;
         }
         else if (arg == "--lora-base")
         {
