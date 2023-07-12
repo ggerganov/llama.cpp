@@ -172,16 +172,16 @@ struct llama_mmap {
 #ifdef _POSIX_MAPPED_FILES
     static constexpr bool SUPPORTED = true;
 
-    llama_mmap(struct llama_file * file, size_t prefetch = (size_t) -1 /* -1 = max value */, bool numa = false, bool lora = false) {
+    llama_mmap(struct llama_file * file, size_t prefetch = (size_t) -1 /* -1 = max value */, bool numa = false, bool has_lora = false) {
         size = file->size;
         int fd = fileno(file->fp);
-        int flags = (lora) ? MAP_PRIVATE : MAP_SHARED;
+        int flags = (has_lora) ? MAP_PRIVATE : MAP_SHARED;
         // prefetch/readahead impairs performance on NUMA systems
         if (numa) { prefetch = 0; }
 #ifdef __linux__
         if (prefetch) { flags |= MAP_POPULATE; }
 #endif
-        addr = mmap(NULL, file->size, (lora) ? PROT_READ | PROT_WRITE : PROT_READ, flags, fd, 0);
+        addr = mmap(NULL, file->size, (has_lora) ? PROT_READ | PROT_WRITE : PROT_READ, flags, fd, 0);
         if (addr == MAP_FAILED) {
             throw std::runtime_error(format("mmap failed: %s", strerror(errno)));
         }
