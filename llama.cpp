@@ -3534,13 +3534,13 @@ int llama_eval_export(struct llama_context * ctx, const char * fname) {
     return 0;
 }
 
-int llama_tokenize(
-        struct llama_context * ctx,
+int llama_tokenize_with_model(
+    const struct llama_model * model,
                   const char * text,
                  llama_token * tokens,
                          int   n_max_tokens,
                         bool   add_bos) {
-    auto res = llama_tokenize(ctx->model.vocab, text, add_bos);
+    auto res = llama_tokenize(model->vocab, text, add_bos);
 
     if (n_max_tokens < (int) res.size()) {
         fprintf(stderr, "%s: too many tokens\n", __func__);
@@ -3552,6 +3552,27 @@ int llama_tokenize(
     }
 
     return res.size();
+}
+
+int llama_tokenize(
+        struct llama_context * ctx,
+                  const char * text,
+                 llama_token * tokens,
+                         int   n_max_tokens,
+                        bool   add_bos) {
+    return llama_tokenize_with_model(&ctx->model, text, tokens, n_max_tokens, add_bos);
+}
+
+int llama_n_vocab_from_model(const struct llama_model * model) {
+    return model->vocab.id_to_token.size();
+}
+
+int llama_n_ctx_from_model(const struct llama_model * model) {
+    return model->hparams.n_ctx;
+}
+
+int llama_n_embd_from_model(const struct llama_model * model) {
+    return model->hparams.n_embd;
 }
 
 int llama_n_vocab(const struct llama_context * ctx) {
@@ -3566,17 +3587,25 @@ int llama_n_embd(const struct llama_context * ctx) {
     return ctx->model.hparams.n_embd;
 }
 
+int llama_get_vocab_from_model(
+        const struct llama_model * model,
+        const char * * strings,
+        float  * scores,
+        int capacity) {
+    int n = std::min(capacity, (int) model->vocab.id_to_token.size());
+    for (int i = 0; i<n; ++i) {
+        strings[i] = model->vocab.id_to_token[i].tok.c_str();
+        scores[i]  = model->vocab.id_to_token[i].score;
+    }
+    return n;
+}
+
 int llama_get_vocab(
         const struct llama_context * ctx,
         const char * * strings,
         float  * scores,
         int capacity) {
-    int n = std::min(capacity, (int) ctx->model.vocab.id_to_token.size());
-    for (int i = 0; i<n; ++i) {
-        strings[i] = ctx->model.vocab.id_to_token[i].tok.c_str();
-        scores[i]  = ctx->model.vocab.id_to_token[i].score;
-    }
-    return n;
+    return llama_get_vocab_from_model(&ctx->model, strings, scores, capacity);
 }
 
 float * llama_get_logits(struct llama_context * ctx) {
@@ -3587,12 +3616,16 @@ float * llama_get_embeddings(struct llama_context * ctx) {
     return ctx->embedding.data();
 }
 
-const char * llama_token_to_str(const struct llama_context * ctx, llama_token token) {
-    if (token >= llama_n_vocab(ctx)) {
+const char * llama_token_to_str_with_model(const struct llama_model * model, llama_token token) {
+    if (token >= llama_n_vocab_from_model(model)) {
         return nullptr;
     }
 
-    return ctx->model.vocab.id_to_token[token].tok.c_str();
+    return model->vocab.id_to_token[token].tok.c_str();
+}
+
+const char * llama_token_to_str(const struct llama_context * ctx, llama_token token) {
+    return llama_token_to_str_with_model(&ctx->model, token);
 }
 
 llama_token llama_token_bos() {
