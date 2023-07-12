@@ -572,6 +572,7 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     lparams.use_mlock    = params.use_mlock;
     lparams.logits_all   = params.perplexity;
     lparams.embedding    = params.embedding;
+    lparams.has_lora     = !params.lora_adapter.empty();
 
     return lparams;
 }
