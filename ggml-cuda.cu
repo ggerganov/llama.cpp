@@ -239,6 +239,11 @@ struct ggml_tensor_extra_gpu {
     cudaEvent_t events[GGML_CUDA_MAX_DEVICES]; // events for synchronizing multiple GPUs
 };
 
+struct ggml_tensor_extra_gpu_tmp {
+    struct ggml_tensor_extra_gpu main;
+    struct ggml_tensor_extra_gpu_tmp * next;
+};
+
 static __global__ void add_f32(const float * x, const float * y, float * dst, const int k) {
     const int i = blockDim.x*blockIdx.x + threadIdx.x;
 
@@ -2080,6 +2085,9 @@ struct cuda_buffer {
     size_t size = 0;
 };
 
+// TODO: Make this TLS?
+static struct ggml_tensor_extra_gpu_tmp * g_eval_extras = NULL;
+static bool g_evaluating = false;
 static cuda_buffer g_cuda_buffer_pool[GGML_CUDA_MAX_DEVICES][MAX_CUDA_BUFFERS];
 static std::atomic_flag g_cuda_pool_lock = ATOMIC_FLAG_INIT;
 
@@ -3260,6 +3268,38 @@ void ggml_cuda_free_data(struct ggml_tensor * tensor) {
     delete extra;
 }
 
+void ggml_cuda_begin_eval() {
+    GGML_ASSERT(!g_evaluating);
+    g_evaluating = true;
+}
+
+struct ggml_tensor_extra_gpu * ggml_cuda_alloc_extra() {
+    if (g_evaluating) {
+        struct ggml_tensor_extra_gpu_tmp * extra = new ggml_tensor_extra_gpu_tmp;
+        memset(extra, 0, sizeof(*extra));
+        extra->next = g_eval_extras;
+        g_eval_extras = extra;
+        return &extra->main;
+    } else {
+        struct ggml_tensor_extra_gpu * extra = new ggml_tensor_extra_gpu;
+        memset(extra, 0, sizeof(*extra));
+        return extra;
+    }
+}
+
+void ggml_cuda_end_eval() {
+    GGML_ASSERT(g_evaluating);
+
+    for (struct ggml_tensor_extra_gpu_tmp * i = g_eval_extras; i != nullptr;) {
+        struct ggml_tensor_extra_gpu_tmp * next = i->next;
+        delete i;
+        i = next;
+    }
+
+    g_eval_extras = nullptr;
+    g_evaluating = false;
+}
+
 void ggml_cuda_assign_buffers_impl(struct ggml_tensor * tensor, bool scratch, bool force_inplace) {
     if (scratch && g_scratch_size == 0) {
         return;
@@ -3277,8 +3317,7 @@ void ggml_cuda_assign_buffers_impl(struct ggml_tensor * tensor, bool scratch, bo
     }
 
     tensor->backend = GGML_BACKEND_GPU;
-    struct ggml_tensor_extra_gpu * extra = new ggml_tensor_extra_gpu;
-    memset(extra, 0, sizeof(*extra));
+    struct ggml_tensor_extra_gpu * extra = ggml_cuda_alloc_extra();
 
     const bool inplace = (tensor->src[0] != nullptr && tensor->src[0]->data == tensor->data) ||
         tensor->op == GGML_OP_VIEW ||

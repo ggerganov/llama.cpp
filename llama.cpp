@@ -1379,6 +1379,8 @@ static bool llama_eval_internal(
     offload_func_t offload_func_v  = llama_nop;
 
 #ifdef GGML_USE_CUBLAS
+    ggml_cuda_begin_eval();
+
     if (n_gpu_layers > n_layer) {
         offload_func_nr = ggml_cuda_assign_buffers;
     }
@@ -1719,6 +1721,10 @@ static bool llama_eval_internal(
             ggml_used_mem(ctx0)/1024.0/1024.0,
             lctx.get_buf_max_mem(0)/1024.0/1024.0,
             lctx.get_buf_max_mem(1)/1024.0/1024.0);
+#endif
+
+#ifdef GGML_USE_CUBLAS
+    ggml_cuda_end_eval();
 #endif
 
     ggml_free(ctx0);

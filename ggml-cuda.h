@@ -30,6 +30,8 @@ void   ggml_cuda_set_main_device(int main_device);
 void   ggml_cuda_set_scratch_size(size_t scratch_size);
 void   ggml_cuda_free_scratch(void);
 bool   ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor);
+void   ggml_cuda_begin_eval(void);
+void   ggml_cuda_end_eval(void);
 
 #ifdef  __cplusplus
 }
