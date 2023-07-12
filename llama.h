@@ -102,6 +102,7 @@ extern "C" {
         bool use_mmap;   // use mmap if possible
         bool use_mlock;  // force system to keep model in RAM
         bool embedding;  // embedding mode only
+        bool has_lora;   // model has LoRA layers
     };
     // model file types
     enum llama_ftype {
