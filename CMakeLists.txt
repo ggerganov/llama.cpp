@@ -28,6 +28,8 @@ set(LLAMA_SANITIZE_THREAD OFF)
 set(LLAMA_SANITIZE_ADDRESS OFF)
 set(LLAMA_SANITIZE_UNDEFINED OFF)
 
+option(MAKE_MISC_FILES              "MAKE_MISC_FILES"                                       OFF)
+
 # instruction set specific
 option(LLAMA_AVX                    "llama: enable AVX"                                     ON)
 option(LLAMA_AVX2                   "llama: enable AVX2"                                    ON)
@@ -72,16 +74,16 @@ if (LLAMA_CUBLAS)
 
         enable_language(CUDA)
 
-        set(GGML_CUDA_SOURCES ggml-cuda.cu ggml-cuda.h)
+        set(GGML_SOURCES_CUDA ggml-cuda.cu ggml-cuda.h)
         set(GGML_V2_CUDA_SOURCES otherarch/ggml_v2-cuda.cu otherarch/ggml_v2-cuda.h)
         set(GGML_V2_LEGACY_CUDA_SOURCES otherarch/ggml_v2-cuda-legacy.cu otherarch/ggml_v2-cuda-legacy.h)
 
         add_compile_definitions(GGML_USE_CUBLAS)
-        add_compile_definitions(GGML_CUDA_FORCE_DMMV) #non dmmv broken for me
-        
+        #add_compile_definitions(GGML_CUDA_FORCE_DMMV) #non dmmv broken for me
+
         add_compile_definitions(GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
         add_compile_definitions(GGML_CUDA_DMMV_Y=${LLAMA_CUDA_DMMV_Y})
-        add_compile_definitions(GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})    
+        add_compile_definitions(GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
         if (LLAMA_CUDA_DMMV_F16)
             add_compile_definitions(GGML_CUDA_DMMV_F16)
         endif()
@@ -259,7 +261,7 @@ add_library(ggml OBJECT
             ggml.h
             k_quants.h
             k_quants.c
-            ${GGML_CUDA_SOURCES})
+            ${GGML_SOURCES_CUDA})
 target_include_directories(ggml PUBLIC . ./otherarch ./otherarch/tools)
 target_compile_features(ggml PUBLIC c_std_11) # don't bump
 target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
@@ -299,12 +301,6 @@ target_link_libraries(gpttype_adapter PRIVATE common2 ggml ${LLAMA_EXTRA_LIBS})
 set_target_properties(gpttype_adapter PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 
-if (GGML_CUDA_SOURCES)
-    message(STATUS "GGML CUDA sources found, configuring CUDA architecture")
-    set_property(TARGET ggml PROPERTY CUDA_ARCHITECTURES OFF)
-    set_property(TARGET ggml PROPERTY CUDA_SELECT_NVCC_ARCH_FLAGS "Auto")
-endif()
-
 set(TARGET koboldcpp_cublas)
 add_library(${TARGET} SHARED expose.cpp expose.h)
 target_include_directories(${TARGET} PUBLIC . ./otherarch ./otherarch/tools ./examples)
@@ -314,3 +310,19 @@ set_target_properties(${TARGET} PROPERTIES OUTPUT_NAME "koboldcpp_cublas")
 set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(${TARGET} PUBLIC ggml ggml_v1 ggml_v2 common2 gpttype_adapter ${CMAKE_THREAD_LIBS_INIT})
 target_compile_features(${TARGET} PRIVATE cxx_std_11)
+
+
+if (MAKE_MISC_FILES)
+add_library(llama
+        llama.cpp
+        llama.h
+        llama-util.h
+        )
+target_include_directories(llama PUBLIC .)
+target_compile_features(llama PUBLIC cxx_std_11) # don't bump
+target_link_libraries(llama PRIVATE
+    ggml
+    ${LLAMA_EXTRA_LIBS}
+    )
+add_subdirectory(examples)
+endif()
