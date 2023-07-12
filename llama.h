@@ -158,7 +158,9 @@ extern "C" {
     // Initialize the llama + ggml backend
     // If numa is true, use NUMA optimizations
     // Call once at the start of the program
-    LLAMA_API void llama_init_backend(bool numa);
+    LLAMA_API void llama_backend_init(bool numa);
+    // Call once at the end of the program - currently only used for MPI
+    LLAMA_API void llama_backend_free();
 
     LLAMA_API int64_t llama_time_us();
 
@@ -306,6 +308,18 @@ extern "C" {
 
     /// @details Frequency and presence penalties described in OpenAI API https://platform.openai.com/docs/api-reference/parameter-details.
     LLAMA_API void llama_sample_frequency_and_presence_penalties(struct llama_context * ctx, llama_token_data_array * candidates, const llama_token * last_tokens, size_t last_tokens_size, float alpha_frequency, float alpha_presence);
+
+    /// @details Apply classifier-free guidance to the logits as described in academic paper "Stay on topic with Classifier-Free Guidance" https://arxiv.org/abs/2306.17806
+    /// @param candidates A vector of `llama_token_data` containing the candidate tokens, the logits must be directly extracted from the original generation context without being sorted.
+    /// @params guidance_ctx A separate context from the same model. Other than a negative prompt at the beginning, it should have all generated and user input tokens copied from the main context.
+    /// @params scale Guidance strength. 1.0f means no guidance. Higher values mean stronger guidance.
+    /// @params smooth_factor Smooth factor between guidance logits and original logits. 1.0f means only use guidance logits. 0.0f means only original logits.
+    LLAMA_API void llama_sample_classifier_free_guidance(
+              struct llama_context * ctx,
+            llama_token_data_array * candidates,
+              struct llama_context * guidance_ctx,
+                             float   scale,
+                             float   smooth_factor);
 
     /// @details Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.
     LLAMA_API void llama_sample_softmax(struct llama_context * ctx, llama_token_data_array * candidates);

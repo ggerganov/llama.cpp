@@ -34,7 +34,7 @@ struct MyModel* create_mymodel(int argc, char ** argv) {
     }
     fprintf(stderr, "%s: seed  = %d\n", __func__, params.seed);
 
-    llama_init_backend(params.numa);
+    llama_backend_init(params.numa);
 
     llama_model * model;
     llama_context * ctx;

@@ -48,6 +48,12 @@ struct gpt_params {
     float   mirostat_tau      = 5.00f; // target entropy
     float   mirostat_eta      = 0.10f; // learning rate
 
+    // Classifier-Free Guidance
+    // https://arxiv.org/abs/2306.17806
+    std::string cfg_negative_prompt;       // string to help guidance
+    float       cfg_scale         = 1.f;   // How strong is guidance
+    float       cfg_smooth_factor = 1.f;   // Smooth factor between old and new logits
+
     std::string model             = "models/7B/ggml-model.bin"; // model path
     std::string model_alias       = "unknown"; // model alias
     std::string prompt            = "";
@@ -99,6 +105,7 @@ std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::s
 //
 
 std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(const gpt_params & params);
+struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
 
 //
 // Console utils

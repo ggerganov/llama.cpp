@@ -365,6 +365,10 @@ kernel void kernel_rms_norm(
     }
 }
 
+// putting them in the kernel cause a significant performance penalty
+#define N_DST 4 // each SIMD group works on 4 rows
+#define N_SIMDGROUP 2 // number of SIMD groups in a thread group
+#define N_SIMDWIDTH 32 // assuming SIMD group size is 32
 kernel void kernel_mul_mat_q4_0_f32(
         device const  void * src0,
         device const float * src1,
@@ -372,64 +376,69 @@ kernel void kernel_mul_mat_q4_0_f32(
         constant   int64_t & ne00,
         constant   int64_t & ne10,
         constant   int64_t & ne0,
-        threadgroup float  * sum [[threadgroup(0)]],
+        constant   int64_t & ne01[[buffer(4)]],
         uint2 tgpig[[threadgroup_position_in_grid]],
-        uint2 tpitg[[thread_position_in_threadgroup]],
-        uint2  tptg[[threads_per_threadgroup]]) {
+        uint tiisg[[thread_index_in_simdgroup]],
+        uint sgitg[[simdgroup_index_in_threadgroup]]) {
     const int nb = ne00/QK4_0;
-
-    const int64_t r0 = tgpig.x;
-    const int64_t r1 = tgpig.y;
-
-    device const block_q4_0 * x = (device const block_q4_0 *) src0 + r0*nb;
+    const int r0 = tgpig.x;
+    const int r1 = tgpig.y;
+    device const block_q4_0 * x = (device const block_q4_0 *) src0 + (r0 * N_SIMDGROUP + sgitg) * N_DST * nb;
     device const float      * y = (device const float      *) src1 + r1*ne10;
+    block_q4_0 qb_curr, qb_next;
+    float4 y_curr[8];       // src1 vector cache
+    float sumf[N_DST]={0.f}, all_sum;
+    thread float * yl=(thread float *)y_curr;
 
-    const int nth = tptg.x*tptg.y;
-    const int ith = tptg.y*tpitg.x + tpitg.y;
+    // bootstrap
+    qb_curr = x[tiisg];
+    // each thread in a SIMD group deals with 1 block.
+    for (int column = 0; column < nb / N_SIMDWIDTH; column++) {
 
-    const int ix = tpitg.y/4;           // 0 or 1
-    const int iy = tpitg.y - 4*ix;      // 0...3
-
-    const int first = 4 * iy;
-
-    float sumf = 0;
-
-    for (int i = 2*tpitg.x + ix; i < nb; i += 2*tptg.x) {
-
-        const float d = (float)x[i].d;
-
-        device const uint8_t * xl = x[i].qs + first;
-        device const float   * yl = y + i * QK4_0 + first;
-
-        float2 acc = {0.0f, 0.0f};
-
-        for (int j = 0; j < 4; ++j) {
-
-            acc[0] += yl[j] * (xl[j] & 0xF) + yl[j+16] * (xl[j] >> 4);
-            acc[1] += yl[j] + yl[j+16];
-
+        for (int i = 0; i < QK4_0 / 4; i++) {
+            y_curr[i] = *((device float4  *)(y + N_SIMDWIDTH * (tiisg + column * QK4_0) + 4 * i));
         }
 
-        sumf += d * (acc[0] - 8.f*acc[1]);
+        for (int row = 0; row < N_DST; row++) {
+            // prefetch next x block
+            qb_next = x[tiisg + ((row + 1) % N_DST) * nb + (column + ((row + 1) / N_DST)) * N_SIMDWIDTH];
+
+            // calculate
+            float d = qb_curr.d;
+            float2 acc = {0.0f, 0.0f};
+            for (int i = 0; i < 16; i++) {
+                acc[0] += yl[i] * (qb_curr.qs[i] & 0xF) + yl[i+16] * (qb_curr.qs[i] >> 4);
+                acc[1] += yl[i] + yl[i+16];
+            }
+            sumf[row] += d * (acc[0] - 8.f*acc[1]);
+            qb_curr = qb_next;
+        }
     }
 
-    sum[ith] = sumf;
+    for (int i = 0; i < QK4_0 / 4; i++) {
+        y_curr[i] = *((device float4 *)(y + N_SIMDWIDTH * (tiisg + (nb / N_SIMDWIDTH) * QK4_0) + 4 * i));
+    }
 
-    //
-    // Accumulate the sum from all threads in the threadgroup
-    //
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-    if (ith%4 == 0) {
-        sum[ith] += sum[ith+1] + sum[ith+2] + sum[ith+3];
-    }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-    if (ith%16 == 0) {
-        sum[ith] += sum[ith+4] + sum[ith+8] + sum[ith+12];
-    }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-    if (ith == 0) {
-        for (int i = 16; i < nth; i += 16) sum[0] += sum[i];
-        dst[r1*ne0 + r0] = sum[0];
+    for (int row = 0; row < N_DST; row++) {
+        // prefetch next x block
+        qb_next = x[tiisg + ((row + 1) % N_DST) * nb + (nb / N_SIMDWIDTH + ((row + 1) / N_DST)) * N_SIMDWIDTH];
+
+        // calculate
+        float d = qb_curr.d;
+        float2 acc = {0.0f, 0.0f};
+        for (int i = 0; i < 16; i++) {
+            acc[0] += yl[i] * (qb_curr.qs[i] & 0xF) + yl[i+16] * (qb_curr.qs[i] >> 4);
+            acc[1] += yl[i] + yl[i+16];
+        }
+        if (tiisg < nb % N_SIMDWIDTH) {
+            sumf[row] += d * (acc[0] - 8.f*acc[1]);
+        }
+        qb_curr = qb_next;
+
+        all_sum = simd_sum(sumf[row]);
+        if (tiisg == 0 && ((r0 * N_SIMDGROUP + sgitg) * N_DST + row) < ne01) {
+            dst[r1*ne0 + (r0 * N_SIMDGROUP + sgitg) * N_DST + row] = all_sum;
+        }
     }
 }
 
