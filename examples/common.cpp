@@ -236,6 +236,24 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.mirostat_tau = std::stof(argv[i]);
+        } else if (arg == "--cfg-negative-prompt") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.cfg_negative_prompt = argv[i];
+        } else if (arg == "--cfg-scale") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.cfg_scale = std::stof(argv[i]);
+        } else if (arg == "--cfg-smooth-factor") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.cfg_smooth_factor = std::stof(argv[i]);
         } else if (arg == "-b" || arg == "--batch-size") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -267,7 +285,6 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.lora_adapter = argv[i];
-            params.use_mmap = false;
         } else if (arg == "--lora-base") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -470,6 +487,10 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "                        modifies the likelihood of token appearing in the completion,\n");
     fprintf(stderr, "                        i.e. `--logit-bias 15043+1` to increase likelihood of token ' Hello',\n");
     fprintf(stderr, "                        or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'\n");
+    fprintf(stderr, "  --cfg-negative-prompt PROMPT \n");
+    fprintf(stderr, "                        negative prompt to use for guidance. (default: empty)\n");
+    fprintf(stderr, "  --cfg-scale N         strength of guidance (default: %f, 1.0 = disable)\n", params.cfg_scale);
+    fprintf(stderr, "  --cfg-smooth-factor N smooth factor between old and new logits (default: %f, 1.0 = no smoothing)\n", params.cfg_smooth_factor);
     fprintf(stderr, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
     fprintf(stderr, "  --ignore-eos          ignore end of stream token and continue generating (implies --logit-bias 2-inf)\n");
     fprintf(stderr, "  --no-penalize-nl      do not penalize newline token\n");
@@ -499,7 +520,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  --mtest               compute maximum memory usage\n");
     fprintf(stderr, "  --export              export the computation graph to 'llama.ggml'\n");
     fprintf(stderr, "  --verbose-prompt      print prompt before generation\n");
-    fprintf(stderr, "  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
+    fprintf(stderr, "  --lora FNAME          apply LoRA adapter\n");
     fprintf(stderr, "  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
     fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
@@ -536,7 +557,7 @@ std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::s
     return res;
 }
 
-std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(const gpt_params & params) {
+struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params) {
     auto lparams = llama_context_default_params();
 
     lparams.n_ctx        = params.n_ctx;
@@ -551,6 +572,12 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
     lparams.use_mlock    = params.use_mlock;
     lparams.logits_all   = params.perplexity;
     lparams.embedding    = params.embedding;
+
+    return lparams;
+}
+
+std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(const gpt_params & params) {
+    auto lparams = llama_context_params_from_gpt_params(params);
 
     llama_model * model  = llama_load_model_from_file(params.model.c_str(), lparams);
     if (model == NULL) {
