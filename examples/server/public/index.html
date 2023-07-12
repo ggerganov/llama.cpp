@@ -264,6 +264,7 @@
       const updateSession = (el) => session.value = { ...session.value, [el.target.name]: el.target.value }
       const updateParams = (el) => params.value = { ...params.value, [el.target.name]: el.target.value }
       const updateParamsFloat = (el) => params.value = { ...params.value, [el.target.name]: parseFloat(el.target.value) }
+      const updateParamsInt = (el) => params.value = { ...params.value, [el.target.name]: parseInt(el.target.value, 10) }
 
       return html`
         <form>
@@ -297,6 +298,12 @@
               <label for="temperature">Temperature</label>
               <input type="range" id="temperature" min="0.0" max="1.0" step="0.01" name="temperature" value="${params.value.temperature}" oninput=${updateParamsFloat} />
               <span>${params.value.temperature}</span>
+            </div>
+
+            <div>
+              <label for="top-k">Top-K</label>
+              <input type="range" id="top-k" min="1" max="100" step="1" name="top_k" value="${params.value.top_k}" oninput=${updateParamsInt} />
+              <span>${params.value.top_k}</span>
             </div>
 
             <div>
