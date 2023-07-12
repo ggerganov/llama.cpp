@@ -10815,7 +10815,13 @@ static void ggml_compute_forward_mul_mat(
 
         const int64_t ir0 = (ir1/ne11)%(ne02*ne03);
         const int64_t i03 = (ir0/(ne02));
-        const int64_t i02 = (ir0 - i03*ne02);
+        // Hack for "Falcon multi-query-attention key stutter" / alternative to ggml_repeat2.
+        // See https://github.com/ggerganov/llama.cpp/issues/1602#issuecomment-1606087470:
+        // GG: this is likely the correct way to broadcast, though need some more thought
+        //     therefore leaving the comments to remind us for now
+        const int64_t i02 = (i12 / (ne12 / ne02));
+        // Original from PR/224 (and also essential/correct for non-broadcast matmuls in Falcon)
+        // const int64_t i02 = (ir0 - i03*ne02);
 
         const int64_t i1 = i11;
         const int64_t i2 = i12;
