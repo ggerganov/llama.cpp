@@ -2927,7 +2927,7 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
 
         // maybe this should in llama_model_loader
         if (model_loader->use_mmap) {
-            model_loader->mapping.reset(new llama_mmap(&model_loader->file_loader->file, /* prefetch */ 0, ggml_is_numa(), true));
+            model_loader->mapping.reset(new llama_mmap(&model_loader->file_loader->file, /* prefetch */ 0, ggml_is_numa(), model_loader->has_lora));
         }
     }
 
