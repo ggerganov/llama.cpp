@@ -2547,7 +2547,7 @@ inline void ggml_cuda_op_rope(
     const float theta_scale = get_theta_scale(n_dims,n_past,n_ctx);
     const float p0 = ((mode & 1) == 0 ? n_past + i02 : i02);
 
-    const float p = p0;
+    float p = p0;
     if(!get_ntk_rope_scale_mode())
     {
         p = n_ctx <= GGML_TRAINING_CTX ? p0 : p0 * GGML_TRAINING_CTX / n_ctx;
