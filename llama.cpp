@@ -303,7 +303,7 @@ struct llama_model {
 };
 
 struct llama_context {
-    llama_context(const llama_model & model, const llama_vocab & vocab) : model(model), vocab(vocab), t_load_us(model.t_load_us), t_start_us(model.t_start_us) {}
+    llama_context(const llama_model & model) : model(model), t_load_us(model.t_load_us), t_start_us(model.t_start_us) {}
 #ifdef GGML_USE_METAL
     ~llama_context() {
         if (ctx_metal) {
@@ -324,7 +324,6 @@ struct llama_context {
     int32_t n_p_eval = 0; // number of tokens in eval calls for the prompt (with batch size > 1)
 
     const llama_model & model;
-    const llama_vocab & vocab;
 
     bool model_owner = false;
 
@@ -2697,7 +2696,7 @@ struct llama_context * llama_new_context_with_model(
         return nullptr;
     }
 
-    llama_context * ctx = new llama_context(*model, model->vocab);
+    llama_context * ctx = new llama_context(*model);
 
     if (params.seed == LLAMA_DEFAULT_SEED) {
         params.seed = time(NULL);
@@ -3541,7 +3540,7 @@ int llama_tokenize(
                  llama_token * tokens,
                          int   n_max_tokens,
                         bool   add_bos) {
-    auto res = llama_tokenize(ctx->vocab, text, add_bos);
+    auto res = llama_tokenize(ctx->model.vocab, text, add_bos);
 
     if (n_max_tokens < (int) res.size()) {
         fprintf(stderr, "%s: too many tokens\n", __func__);
@@ -3556,7 +3555,7 @@ int llama_tokenize(
 }
 
 int llama_n_vocab(const struct llama_context * ctx) {
-    return ctx->vocab.id_to_token.size();
+    return ctx->model.vocab.id_to_token.size();
 }
 
 int llama_n_ctx(const struct llama_context * ctx) {
@@ -3572,10 +3571,10 @@ int llama_get_vocab(
         const char * * strings,
         float  * scores,
         int capacity) {
-    int n = std::min(capacity, (int) ctx->vocab.id_to_token.size());
+    int n = std::min(capacity, (int) ctx->model.vocab.id_to_token.size());
     for (int i = 0; i<n; ++i) {
-        strings[i] = ctx->vocab.id_to_token[i].tok.c_str();
-        scores[i]  = ctx->vocab.id_to_token[i].score;
+        strings[i] = ctx->model.vocab.id_to_token[i].tok.c_str();
+        scores[i]  = ctx->model.vocab.id_to_token[i].score;
     }
     return n;
 }
@@ -3593,7 +3592,7 @@ const char * llama_token_to_str(const struct llama_context * ctx, llama_token to
         return nullptr;
     }
 
-    return ctx->vocab.id_to_token[token].tok.c_str();
+    return ctx->model.vocab.id_to_token[token].tok.c_str();
 }
 
 llama_token llama_token_bos() {
