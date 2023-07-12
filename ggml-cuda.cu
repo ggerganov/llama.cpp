@@ -1258,7 +1258,7 @@ static __global__ void dequantize_block(const void * __restrict__ vx, float * __
 }
 
 static __device__ __forceinline__ float vec_dot_q4_0_q8_1(const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int iqs) {
-#if __CUDA_ARCH__ >= 600 // lowest compute capability for integer intrinsics
+#if __CUDA_ARCH__ >= 610 // lowest compute capability for integer intrinsics
     const block_q4_0 * bq4_0 = (const block_q4_0 *) vbq;
 
     int vi;
@@ -1279,11 +1279,11 @@ static __device__ __forceinline__ float vec_dot_q4_0_q8_1(const void * __restric
     return sumi*d;
 #else
     return 0.0f; // only to satisfy the compiler
-#endif // __CUDA_ARCH__ >= 600
+#endif // __CUDA_ARCH__ >= 610
 }
 
 static __device__ __forceinline__ float vec_dot_q4_1_q8_1(const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int iqs) {
-#if __CUDA_ARCH__ >= 600 // lowest compute capability for integer intrinsics
+#if __CUDA_ARCH__ >= 610 // lowest compute capability for integer intrinsics
     const block_q4_1 * bq4_1 = (const block_q4_1 *) vbq;
 
     const int vi  = *((int *) &bq4_1->qs[sizeof(int) * (iqs + 0)]);
@@ -1304,11 +1304,11 @@ static __device__ __forceinline__ float vec_dot_q4_1_q8_1(const void * __restric
     return sumi*d + m*s / QI4_1; // scale sum by QI4_1 because there are QI4_1 threads working on this block
 #else
     return 0.0f; // only to satisfy the compiler
-#endif // __CUDA_ARCH__ >= 600
+#endif // __CUDA_ARCH__ >= 610
 }
 
 static __device__ __forceinline__ float vec_dot_q5_0_q8_1(const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int iqs) {
-#if __CUDA_ARCH__ >= 600 // lowest compute capability for integer intrinsics
+#if __CUDA_ARCH__ >= 610 // lowest compute capability for integer intrinsics
     const block_q5_0 * bq5_0 = (const block_q5_0 *) vbq;
 
     int qs;
@@ -1339,11 +1339,11 @@ static __device__ __forceinline__ float vec_dot_q5_0_q8_1(const void * __restric
     return sumi*d;
 #else
     return 0.0f; // only to satisfy the compiler
-#endif // __CUDA_ARCH__ >= 600
+#endif // __CUDA_ARCH__ >= 610
 }
 
 static __device__ __forceinline__ float vec_dot_q5_1_q8_1(const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int iqs) {
-#if __CUDA_ARCH__ >= 600 // lowest compute capability for integer intrinsics
+#if __CUDA_ARCH__ >= 610 // lowest compute capability for integer intrinsics
     const block_q5_1 * bq5_1 = (const block_q5_1 *) vbq;
 
     const int qs  = *((int *) &bq5_1->qs[sizeof(int) * (iqs + 0)]);
@@ -1373,11 +1373,11 @@ static __device__ __forceinline__ float vec_dot_q5_1_q8_1(const void * __restric
     return sumi*d + m*s / QI5_1; // scale sum by QI5_1 because there are QI5_1 threads working on this block
 #else
     return 0.0f; // only to satisfy the compiler
-#endif // __CUDA_ARCH__ >= 600
+#endif // __CUDA_ARCH__ >= 610
 }
 
 static __device__ __forceinline__ float vec_dot_q8_0_q8_1(const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int iqs) {
-#if __CUDA_ARCH__ >= 600 // lowest compute capability for integer intrinsics
+#if __CUDA_ARCH__ >= 610 // lowest compute capability for integer intrinsics
     const block_q8_0 * bq8_0 = (const block_q8_0 *) vbq;
 
     int vi;
@@ -1392,7 +1392,7 @@ static __device__ __forceinline__ float vec_dot_q8_0_q8_1(const void * __restric
     return sumi*d;
 #else
     return 0.0f; // only to satisfy the compiler
-#endif // __CUDA_ARCH__ >= 600
+#endif // __CUDA_ARCH__ >= 610
 }
 
 template <int qk, int qi, typename block_q_t, vec_dot_q_cuda_t vec_dot_q_cuda>
@@ -2417,7 +2417,7 @@ inline void ggml_cuda_op_mul_mat_vec(
         src0->type == GGML_TYPE_Q5_1 ||
         src0->type == GGML_TYPE_Q8_0;
 
-    const bool use_mul_mat_vec_q = g_compute_capabilities[id] >= 600 && mul_mat_vec_q_implemented;
+    const bool use_mul_mat_vec_q = g_compute_capabilities[id] >= 610 && mul_mat_vec_q_implemented;
 #endif
 
     if (use_mul_mat_vec_q) {
