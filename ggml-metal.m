@@ -25,6 +25,8 @@ struct ggml_metal_buffer {
 };
 
 struct ggml_metal_context {
+    int n_cb;
+
     float * logits;
 
     id<MTLDevice>       device;
@@ -86,11 +88,12 @@ static NSString * const msl_library_source = @"see metal.metal";
 @implementation GGMLMetalClass
 @end
 
-struct ggml_metal_context * ggml_metal_init(void) {
+struct ggml_metal_context * ggml_metal_init(int n_cb) {
     fprintf(stderr, "%s: allocating\n", __func__);
 
     struct ggml_metal_context * ctx = malloc(sizeof(struct ggml_metal_context));
 
+    ctx->n_cb   = n_cb;
     ctx->device = MTLCreateSystemDefaultDevice();
     ctx->queue  = [ctx->device newCommandQueue];
     ctx->n_buffers = 0;
@@ -206,6 +209,10 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
         [ctx->buffers[i].metal release];
     }
     free(ctx);
+}
+
+void ggml_metal_set_n_cb(struct ggml_metal_context * ctx, int n_cb) {
+    ctx->n_cb = n_cb;
 }
 
 // finds the Metal buffer that contains the tensor data on the GPU device
@@ -354,7 +361,7 @@ void ggml_metal_graph_compute(
     // create multiple command buffers and enqueue them
     // then, we encode the graph into the command buffers in parallel
 
-    const int n_cb = gf->n_threads;
+    const int n_cb = ctx->n_cb;
 
     NSMutableArray * command_buffers = [NSMutableArray arrayWithCapacity:n_cb];
 
@@ -386,8 +393,8 @@ void ggml_metal_graph_compute(
             for (int i = node_start; i < node_end; ++i) {
                 metal_printf("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
 
-                struct ggml_tensor * src0 = gf->nodes[i]->src0;
-                struct ggml_tensor * src1 = gf->nodes[i]->src1;
+                struct ggml_tensor * src0 = gf->nodes[i]->src[0];
+                struct ggml_tensor * src1 = gf->nodes[i]->src[1];
                 struct ggml_tensor * dst  = gf->nodes[i];
 
                 const int64_t  ne00 = src0 ? src0->ne[0] : 0;
@@ -443,6 +450,7 @@ void ggml_metal_graph_compute(
                 //}
 
                 switch (dst->op) {
+                    case GGML_OP_NONE:
                     case GGML_OP_RESHAPE:
                     case GGML_OP_VIEW:
                     case GGML_OP_TRANSPOSE:

@@ -18,7 +18,7 @@ int main(int argc, char ** argv) {
     params.embedding = true;
 
     if (params.n_ctx > 2048) {
-        fprintf(stderr, "%s: warning: model does not support context sizes greater than 2048 tokens (%d specified);"
+        fprintf(stderr, "%s: warning: model might not support context sizes greater than 2048 tokens (%d specified);"
                 "expect poor results\n", __func__, params.n_ctx);
     }
 
@@ -35,7 +35,7 @@ int main(int argc, char ** argv) {
         params.prompt = gpt_random_prompt(rng);
     }
 
-    llama_init_backend(params.numa);
+    llama_backend_init(params.numa);
 
     llama_model * model;
     llama_context * ctx;
@@ -92,6 +92,8 @@ int main(int argc, char ** argv) {
     llama_print_timings(ctx);
     llama_free(ctx);
     llama_free_model(model);
+
+    llama_backend_free();
 
     return 0;
 }
