@@ -11,7 +11,7 @@
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    if (gpt_params_parse(argc, argv, params) == false) {
+    if (!gpt_params_parse(argc, argv, params)) {
         return 1;
     }
 
@@ -73,7 +73,7 @@ int main(int argc, char ** argv) {
     }
 
     if (params.embedding){
-        if (embd_inp.size() > 0) {
+        if (!embd_inp.empty()) {
             if (llama_eval(ctx, embd_inp.data(), embd_inp.size(), n_past, params.n_threads)) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return 1;
