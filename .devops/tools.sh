@@ -10,13 +10,13 @@ shift
 # Join the remaining arguments into a single string
 arg2="$@"
 
-if [[ $arg1 == '--convert' || $arg1 == '-c' ]]; then
-    python3 ./convert.py $arg2
-elif [[ $arg1 == '--quantize' || $arg1 == '-q' ]]; then
-    ./quantize $arg2
-elif [[ $arg1 == '--run' || $arg1 == '-r' ]]; then
-    ./main $arg2
-elif [[ $arg1 == '--all-in-one' || $arg1 == '-a' ]]; then
+if [[ "$arg1" == '--convert' || "$arg1" == '-c' ]]; then
+    python3 ./convert.py "$arg2"
+elif [[ "$arg1" == '--quantize' || "$arg1" == '-q' ]]; then
+    ./quantize "$arg2"
+elif [[ "$arg1" == '--run' || "$arg1" == '-r' ]]; then
+    ./main "$arg2"
+elif [[ "$arg1" == '--all-in-one' || "$arg1" == '-a' ]]; then
     echo "Converting PTH to GGML..."
     for i in `ls $1/$2/ggml-model-f16.bin*`; do
         if [ -f "${i/f16/q4_0}" ]; then
@@ -26,8 +26,8 @@ elif [[ $arg1 == '--all-in-one' || $arg1 == '-a' ]]; then
             ./quantize "$i" "${i/f16/q4_0}" q4_0
         fi
     done
-elif [[ $arg1 == '--server' || $arg1 == '-s' ]]; then
-    ./server $arg2
+elif [[ "$arg1" == '--server' || "$arg1" == '-s' ]]; then
+    ./server "$arg2"
 else
     echo "Unknown command: $arg1"
     echo "Available commands: "
