@@ -7,7 +7,9 @@
 
 #define MAX_NARGS 2
 
+#if defined(__GNUC__)
 #pragma GCC diagnostic ignored "-Wdouble-promotion"
+#endif
 
 //
 // logging
