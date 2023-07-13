@@ -248,6 +248,24 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.mirostat_tau = std::stof(argv[i]);
+        } else if (arg == "--cfg-negative-prompt") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.cfg_negative_prompt = argv[i];
+        } else if (arg == "--cfg-scale") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.cfg_scale = std::stof(argv[i]);
+        } else if (arg == "--cfg-smooth-factor") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.cfg_smooth_factor = std::stof(argv[i]);
         } else if (arg == "-b" || arg == "--batch-size") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -430,6 +448,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 
     if (escape_prompt) {
         process_escapes(params.prompt);
+        process_escapes(params.input_prefix);
+        process_escapes(params.input_suffix);
     }
 
     return true;
@@ -480,6 +500,10 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "                        modifies the likelihood of token appearing in the completion,\n");
     fprintf(stderr, "                        i.e. `--logit-bias 15043+1` to increase likelihood of token ' Hello',\n");
     fprintf(stderr, "                        or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'\n");
+    fprintf(stderr, "  --cfg-negative-prompt PROMPT \n");
+    fprintf(stderr, "                        negative prompt to use for guidance. (default: empty)\n");
+    fprintf(stderr, "  --cfg-scale N         strength of guidance (default: %f, 1.0 = disable)\n", params.cfg_scale);
+    fprintf(stderr, "  --cfg-smooth-factor N smooth factor between old and new logits (default: %f, 1.0 = no smoothing)\n", params.cfg_smooth_factor);
     fprintf(stderr, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
     fprintf(stderr, "  --rope-freq-base N    RoPE base frequency (default: %.1f)\n", params.rope_freq_base);
     fprintf(stderr, "  --rope-freq-scale N   RoPE frequency scaling factor (default: %g)\n", params.rope_freq_scale);
@@ -548,7 +572,7 @@ std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::s
     return res;
 }
 
-std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(const gpt_params & params) {
+struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params) {
     auto lparams = llama_context_default_params();
 
     lparams.n_ctx        = params.n_ctx;
@@ -565,6 +589,12 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
     lparams.embedding    = params.embedding;
     lparams.rope_freq_base  = params.rope_freq_base;
     lparams.rope_freq_scale = params.rope_freq_scale;
+
+    return lparams;
+}
+
+std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(const gpt_params & params) {
+    auto lparams = llama_context_params_from_gpt_params(params);
 
     llama_model * model  = llama_load_model_from_file(params.model.c_str(), lparams);
     if (model == NULL) {

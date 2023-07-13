@@ -239,7 +239,7 @@ In order to build llama.cpp you have three different options.
 - Using `Zig`:
 
     ```bash
-    zig build -Drelease-fast
+    zig build -Doptimize=ReleaseFast
     ```
 
 ### Metal Build
@@ -266,6 +266,45 @@ Any value larger than 0 will offload the computation to the GPU. For example:
 
 ```bash
 ./main -m ./models/7B/ggml-model-q4_0.bin -n 128 -ngl 1
+```
+
+### MPI Build
+
+MPI lets you distribute the computation over a cluster of machines. Because of the serial nature of LLM prediction, this won't yield any end-to-end speed-ups, but it will let you run larger models than would otherwise fit into RAM on a single machine.
+
+First you will need MPI libraries installed on your system. The two most popular (only?) options are [MPICH](https://www.mpich.org) and [OpenMPI](https://www.open-mpi.org). Either can be installed with a package manager (`apt`, Homebrew, MacPorts, etc).
+
+Next you will need to build the project with `LLAMA_MPI` set to true on all machines; if you're building with `make`, you will also need to specify an MPI-capable compiler (when building with CMake, this is configured automatically):
+
+- Using `make`:
+
+  ```bash
+  make CC=mpicc CXX=mpicxx LLAMA_MPI=1
+  ```
+
+- Using `CMake`:
+
+  ```bash
+  cmake -S . -B build -DLLAMA_MPI=ON
+  ```
+
+Once the programs are built, download/convert the weights on all of the machines in your cluster. The paths to the weights and programs should be identical on all machines.
+
+Next, ensure password-less SSH access to each machine from the primary host, and create a `hostfile` with a list of the hostnames and their relative "weights" (slots). If you want to use localhost for computation, use its local subnet IP address rather than the loopback address or "localhost".
+
+Here is an example hostfile:
+
+```
+192.168.0.1:2
+malvolio.local:1
+```
+
+The above will distribute the computation across 2 processes on the first host and 1 process on the second host. Each process will use roughly an equal amount of RAM. Try to keep these numbers small, as inter-process (intra-host) communication is expensive.
+
+Finally, you're ready to run a computation using `mpirun`:
+
+```bash
+mpirun -hostfile hostfile -n 3 ./main -m ./models/7B/ggml-model-q4_0.bin -n 128
 ```
 
 ### BLAS Build
@@ -695,7 +734,7 @@ export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH
 
 For easy and swift re-execution, consider documenting this final part in a .sh script file. This will enable you to rerun the process with minimal hassle.
 
-Place your desired model into the `/llama.cpp/models/` directory and execute the `./main (...)` script.
+Place your desired model into the `~/llama.cpp/models/` directory and execute the `./main (...)` script.
 
 ### Docker
 
@@ -731,6 +770,38 @@ or with a light image:
 docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
 ```
 
+### Docker With CUDA
+
+Assuming one has the [nvidia-container-toolkit](https://github.com/NVIDIA/nvidia-container-toolkit) properly installed on Linux, or is using a GPU enabled cloud, `cuBLAS` should be accessible inside the container.
+
+#### Building Locally
+
+```bash
+docker build -t local/llama.cpp:full-cuda -f .devops/full-cuda.Dockerfile .
+docker build -t local/llama.cpp:light-cuda -f .devops/main-cuda.Dockerfile .
+```
+
+You may want to pass in some different `ARGS`, depending on the CUDA environment supported by your container host, as well as the GPU architecture.
+
+The defaults are:
+
+- `CUDA_VERSION` set to `11.7.1`
+- `CUDA_DOCKER_ARCH` set to `all`
+
+The resulting images, are essentially the same as the non-CUDA images:
+
+1. `local/llama.cpp:full-cuda`: This image includes both the main executable file and the tools to convert LLaMA models into ggml and convert into 4-bit quantization.
+2. `local/llama.cpp:light-cuda`: This image only includes the main executable file.
+
+#### Usage
+
+After building locally, Usage is similar to the non-CUDA examples, but you'll need to add the `--gpus` flag. You will also want to use the `--n-gpu-layers` flag.
+
+```bash
+docker run --gpus all -v /path/to/models:/models local/llama.cpp:full-cuda --run -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512 --n-gpu-layers 1
+docker run --gpus all -v /path/to/models:/models local/llama.cpp:light-cuda -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512 --n-gpu-layers 1
+```
+
 ### Contributing
 
 - Contributors can open PRs
@@ -751,5 +822,10 @@ docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:light -m /mode
 
 ### Docs
 
-- [GGML tips & tricks](https://github.com/ggerganov/llama.cpp/wiki/GGML-Tips-&-Tricks)
+- [main](./examples/main/README.md)
+- [server](./examples/server/README.md)
+- [embd-input](./examples/embd-input/README.md)
+- [jeopardy](./examples/jeopardy/README.md)
+- [BLIS](./docs/BLIS.md)
 - [Performance troubleshooting](./docs/token_generation_performance_tips.md)
+- [GGML tips & tricks](https://github.com/ggerganov/llama.cpp/wiki/GGML-Tips-&-Tricks)

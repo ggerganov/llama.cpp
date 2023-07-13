@@ -35,10 +35,9 @@ int main(int argc, char ** argv) {
     struct ggml_context * ctx_eval = NULL;
 
     struct ggml_cgraph gf = ggml_graph_import(fname_cgraph, &ctx_data, &ctx_eval);
-    gf.n_threads = 1;
 
     // this allocates all Metal resources and memory buffers
-    auto * ctx_metal = ggml_metal_init();
+    auto * ctx_metal = ggml_metal_init(1);
 
     const size_t max_size_data = ggml_get_max_tensor_size(ctx_data);
     const size_t max_size_eval = ggml_get_max_tensor_size(ctx_eval);
