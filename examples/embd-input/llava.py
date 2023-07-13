@@ -59,7 +59,7 @@ if __name__=="__main__":
     # Also here can use pytorch_model-00003-of-00003.bin directly.
     a.load_projection(os.path.join(
         os.path.dirname(__file__) ,
-        "llava_projetion.pth"))
+        "llava_projection.pth"))
     respose = a.chat_with_image(
         Image.open("./media/llama1-logo.png").convert('RGB'),
         "what is the text in the picture?")
