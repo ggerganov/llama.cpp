@@ -151,9 +151,6 @@ ifdef LLAMA_MPI
 	CFLAGS += -DGGML_USE_MPI -Wno-cast-qual
 	CXXFLAGS += -DGGML_USE_MPI -Wno-cast-qual
 	OBJS     += ggml-mpi.o
-
-ggml-mpi.o: ggml-mpi.c ggml-mpi.h
-	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_MPI
 
 ifdef LLAMA_OPENBLAS
@@ -226,9 +223,6 @@ ifdef LLAMA_METAL
 	CXXFLAGS += -DGGML_USE_METAL
 	LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit -framework MetalPerformanceShaders
 	OBJS     += ggml-metal.o
-
-ggml-metal.o: ggml-metal.m ggml-metal.h
-	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_METAL
 
 ifneq ($(filter aarch64%,$(UNAME_M)),)
@@ -252,6 +246,16 @@ ifneq ($(filter armv8%,$(UNAME_M)),)
 	# Raspberry Pi 3, 4, Zero 2 (32-bit)
 	CFLAGS += -mfp16-format=ieee -mno-unaligned-access
 endif
+
+ifdef LLAMA_METAL
+ggml-metal.o: ggml-metal.m ggml-metal.h
+	$(CC) $(CFLAGS) -c $< -o $@
+endif # LLAMA_METAL
+
+ifdef LLAMA_MPI
+ggml-mpi.o: ggml-mpi.c ggml-mpi.h
+	$(CC) $(CFLAGS) -c $< -o $@
+endif # LLAMA_MPI
 
 ifdef LLAMA_NO_K_QUANTS
 k_quants.o: k_quants.c k_quants.h
