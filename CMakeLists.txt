@@ -272,7 +272,7 @@ if (LLAMA_CUBLAS)
 
     if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
         if (LLAMA_CUDA_DMMV_F16)
-            set(CMAKE_CUDA_ARCHITECTURES "61") # needed for f16 CUDA intrinsics
+            set(CMAKE_CUDA_ARCHITECTURES "60;61") # needed for f16 CUDA intrinsics
         else()
             set(CMAKE_CUDA_ARCHITECTURES "52;61") # lowest CUDA 12 standard + lowest for integer intrinsics
         endif()
