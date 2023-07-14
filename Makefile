@@ -154,8 +154,8 @@ ifdef LLAMA_MPI
 endif # LLAMA_MPI
 
 ifdef LLAMA_OPENBLAS
-	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas -I/usr/include/openblas
-	LDFLAGS += -lopenblas
+	CFLAGS  += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags openblas)
+	LDFLAGS += $(shell pkg-config --libs openblas)
 endif # LLAMA_OPENBLAS
 
 ifdef LLAMA_BLIS
