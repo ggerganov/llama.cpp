@@ -1,9 +1,19 @@
 const std = @import("std");
+const commit_hash = @embedFile(".git/refs/heads/master");
 
-// Zig Version: 0.11.0-dev.3379+629f0d23b
+// Zig Version: 0.11.0-dev.3986+e05c242cd
 pub fn build(b: *std.build.Builder) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+
+    const config_header = b.addConfigHeader(
+        .{ .style = .blank, .include_path = "build-info.h" },
+        .{
+            .BUILD_NUMBER = 0,
+            .BUILD_COMMIT = commit_hash[0 .. commit_hash.len - 1], // omit newline
+        },
+    );
+
     const lib = b.addStaticLibrary(.{
         .name = "llama",
         .target = target,
@@ -13,24 +23,21 @@ pub fn build(b: *std.build.Builder) void {
     lib.linkLibCpp();
     lib.addIncludePath(".");
     lib.addIncludePath("./examples");
-    lib.addCSourceFiles(&.{
-        "ggml.c",
-    }, &.{"-std=c11"});
-    lib.addCSourceFiles(&.{
-        "llama.cpp",
-    }, &.{"-std=c++11"});
+    lib.addConfigHeader(config_header);
+    lib.addCSourceFiles(&.{"ggml.c"}, &.{"-std=c11"});
+    lib.addCSourceFiles(&.{"llama.cpp"}, &.{"-std=c++11"});
     b.installArtifact(lib);
 
     const examples = .{
         "main",
         "baby-llama",
         "embedding",
-        // "metal",
+        "metal",
         "perplexity",
         "quantize",
         "quantize-stats",
         "save-load-state",
-        // "server",
+        "server",
         "simple",
         "train-text-from-scratch",
     };
@@ -43,16 +50,19 @@ pub fn build(b: *std.build.Builder) void {
         });
         exe.addIncludePath(".");
         exe.addIncludePath("./examples");
+        exe.addConfigHeader(config_header);
         exe.addCSourceFiles(&.{
-            std.fmt.comptimePrint("examples/{s}/{s}.cpp", .{example_name, example_name}),
+            std.fmt.comptimePrint("examples/{s}/{s}.cpp", .{ example_name, example_name }),
             "examples/common.cpp",
         }, &.{"-std=c++11"});
         exe.linkLibrary(lib);
         b.installArtifact(exe);
+
         const run_cmd = b.addRunArtifact(exe);
         run_cmd.step.dependOn(b.getInstallStep());
         if (b.args) |args| run_cmd.addArgs(args);
-        const run_step = b.step("run_" ++ example_name, "Run the app");
+
+        const run_step = b.step("run-" ++ example_name, "Run the app");
         run_step.dependOn(&run_cmd.step);
     }
 }
