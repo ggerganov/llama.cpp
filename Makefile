@@ -151,6 +151,12 @@ ifdef LLAMA_MPI
 	CFLAGS += -DGGML_USE_MPI -Wno-cast-qual
 	CXXFLAGS += -DGGML_USE_MPI -Wno-cast-qual
 	OBJS     += ggml-mpi.o
+	ifeq ($(UNAME_S),Darwin)
+		CFLAGS   += -I/opt/homebrew/include
+		CXXFLAGS += -I/opt/homebrew/include
+		CC        = mpicc
+		CXX       = mpic++
+	endif
 
 ggml-mpi.o: ggml-mpi.c ggml-mpi.h
 	$(CC) $(CFLAGS) -c $< -o $@
