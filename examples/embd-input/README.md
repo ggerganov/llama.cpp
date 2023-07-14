@@ -17,7 +17,7 @@ make
 import torch
 
 bin_path = "../LLaVA-13b-delta-v1-1/pytorch_model-00003-of-00003.bin"
-pth_path = "./examples/embd_input/llava_projection.pth"
+pth_path = "./examples/embd-input/llava_projection.pth"
 
 dic = torch.load(bin_path)
 used_key = ["model.mm_projector.weight","model.mm_projector.bias"]
