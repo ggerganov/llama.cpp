@@ -71,9 +71,11 @@ struct vk_buffer {
     // Staging buffers
     vk_buffer * sb_write;
     vk_buffer * sb_read;
+    uint32_t qf_owner;
 };
 
 struct vk_pipeline {
+    std::string name;
     vk::DescriptorSetLayout dsl;
     vk::DescriptorPool descriptor_pool;
     vk::DescriptorSet descriptor_set;
@@ -121,7 +123,7 @@ uint32_t vk_device_vendor_id;
 vk_queue vk_compute_queue;
 vk_queue vk_transfer_queues[VK_TRANSFER_QUEUE_COUNT];
 VmaAllocator vk_allocator;
-vk::PipelineStageFlags vk_stage_flags[8] = { vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands };
+vk::PipelineStageFlags vk_stage_flags[8] = { vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader };
 vk_pipeline vk_pipeline_matmul_f32_l, vk_pipeline_matmul_f32_m, vk_pipeline_matmul_f32_s, vk_pipeline_matmul_f16_l, vk_pipeline_matmul_f16_m, vk_pipeline_matmul_f16_s;
 vk_pipeline vk_pipeline_matmul_split_k_reduce;
 vk_pipeline vk_pipeline_f16_to_f32, vk_pipeline_dequant_q4_0;
@@ -133,11 +135,15 @@ bool vk_fp16_support = false;
 static std::vector<std::tuple<void*, size_t, vk_buffer>> vk_buf_list;
 
 static vk_pipeline ggml_vk_create_pipeline(const std::string& path, const std::string& entrypoint, uint32_t parameter_count, uint32_t push_constant_count, std::array<uint32_t, 3> wg_denoms, std::vector<int>&& specialization_constants) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_create_pipeline(" << path << ", " << entrypoint << ", " << parameter_count << ", " << push_constant_count << ", (" << wg_denoms[0] << "," << wg_denoms[1] << "," << wg_denoms[2] << "), specialization_constants)" << std::endl;
+#endif
     GGML_ASSERT(parameter_count > 0);
     GGML_ASSERT(wg_denoms[0] > 0 && wg_denoms[1] > 0 && wg_denoms[2] > 0);
 
     vk_pipeline pipeline;
 
+    pipeline.name = path;
     pipeline.parameter_count = parameter_count;
     pipeline.push_constant_size = push_constant_count * sizeof(int);
     pipeline.wg_denoms = wg_denoms;
@@ -227,6 +233,9 @@ static vk_pipeline ggml_vk_create_pipeline(const std::string& path, const std::s
 }
 
 static vk::CommandBuffer ggml_vk_create_cmd_buffer(vk_queue& q) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_create_cmd_buffer()" << std::endl;
+#endif
     if (q.cmd_buffers.size() > q.cmd_buffer_idx) {
         // Reuse command buffer
         return q.cmd_buffers[q.cmd_buffer_idx++];
@@ -246,6 +255,9 @@ static vk::CommandBuffer ggml_vk_create_cmd_buffer(vk_queue& q) {
 }
 
 static vk_submission ggml_vk_create_submission(vk_queue& q, std::vector<vk::Semaphore>&& wait_semaphores, std::vector<vk::Semaphore>&& signal_semaphores) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_create_submission()" << std::endl;
+#endif
     vk_submission s;
     s.buffer = ggml_vk_create_cmd_buffer(q);
     s.wait_semaphores = wait_semaphores;
@@ -254,10 +266,16 @@ static vk_submission ggml_vk_create_submission(vk_queue& q, std::vector<vk::Sema
 }
 
 static vk_sequence ggml_vk_create_sequence_1(vk_queue& q, std::vector<vk::Semaphore>&& wait_semaphores, std::vector<vk::Semaphore>&& signal_semaphores) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_create_sequence_1()" << std::endl;
+#endif
     return { ggml_vk_create_submission(q, std::move(wait_semaphores), std::move(signal_semaphores)) };
 }
 
 static void ggml_vk_submit(vk_queue& q, std::vector<vk_sequence>& sequences, vk::Fence fence) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_submit()" << std::endl;
+#endif
     if (sequences.empty()) {
         return;
     }
@@ -285,39 +303,10 @@ static void ggml_vk_submit(vk_queue& q, std::vector<vk_sequence>& sequences, vk:
     sequences.clear();
 }
 
-static vk_submission ggml_vk_submit_pipeline(vk_pipeline& pipeline, std::vector<vk_buffer *> buffers, const std::vector<int>&& push_constants, std::array<uint32_t, 3> elements, vk_queue& q, std::vector<vk::Semaphore>&& wait_semaphores, std::vector<vk::Semaphore>&& signal_semaphores) {
-    std::vector<vk::DescriptorBufferInfo> descriptor_buffer_infos;
-    std::vector<vk::WriteDescriptorSet> write_descriptor_sets;
-    for (uint32_t i = 0; i < pipeline.parameter_count; i++) {
-        descriptor_buffer_infos.push_back({buffers[i]->buffer, 0, buffers[i]->size});
-    }
-    for (uint32_t i = 0; i < pipeline.parameter_count; i++) {
-        write_descriptor_sets.push_back({pipeline.descriptor_set, i, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &descriptor_buffer_infos[i]});
-    }
-
-    vk_device.updateDescriptorSets(write_descriptor_sets, {});
-
-    vk_submission s;
-    s.buffer = ggml_vk_create_cmd_buffer(q);
-
-    s.buffer.begin({ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
-    s.buffer.pushConstants<int>(pipeline.layout, vk::ShaderStageFlagBits::eCompute, 0, push_constants);
-    s.buffer.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline.pipeline);
-    s.buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-                                pipeline.layout,
-                                0,
-                                { pipeline.descriptor_set },
-                                {});
-    s.buffer.dispatch(CEIL_DIV(elements[0], pipeline.wg_denoms[0]), CEIL_DIV(elements[1], pipeline.wg_denoms[1]), CEIL_DIV(elements[2], pipeline.wg_denoms[2]));
-    s.buffer.end();
-
-    s.wait_semaphores = wait_semaphores;
-    s.signal_semaphores = signal_semaphores;
-
-    return s;
-}
-
 static uint32_t ggml_vk_find_queue_family_index(std::vector<vk::QueueFamilyProperties>& queue_family_props, const vk::QueueFlags& required, const vk::QueueFlags& avoid, int32_t compute_index, uint32_t min_num_queues) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_find_queue_family_index()" << std::endl;
+#endif
     const uint32_t qfsize = queue_family_props.size();
 
     // Try with avoid preferences first
@@ -341,6 +330,13 @@ static uint32_t ggml_vk_find_queue_family_index(std::vector<vk::QueueFamilyPrope
         }
     }
 
+    // Fall back to ignoring min_num_queries
+    for (size_t i = 0; i < qfsize; i++) {
+        if (queue_family_props[i].queueFlags & required) {
+            return i;
+        }
+    }
+
     std::cerr << "ggml_vulkan: No suitable queue family index found." << std::endl;
 
     for(auto &q_family : queue_family_props) {
@@ -350,6 +346,9 @@ static uint32_t ggml_vk_find_queue_family_index(std::vector<vk::QueueFamilyPrope
 }
 
 static vk_queue ggml_vk_create_queue(uint32_t queue_family_index, uint32_t queue_index) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_create_queue()" << std::endl;
+#endif
     vk_queue q;
     q.queue_family_index = queue_family_index;
 
@@ -364,6 +363,9 @@ static vk_queue ggml_vk_create_queue(uint32_t queue_family_index, uint32_t queue
 }
 
 static vk::Semaphore ggml_vk_create_semaphore(vk_queue& q) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_create_semaphore()" << std::endl;
+#endif
     vk::Semaphore semaphore = vk_device.createSemaphore({});
     q.semaphores.push_back(semaphore);
 
@@ -371,6 +373,9 @@ static vk::Semaphore ggml_vk_create_semaphore(vk_queue& q) {
 }
 
 static void ggml_vk_queue_cleanup(vk_queue& q) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_queue_cleanup()" << std::endl;
+#endif
     q.queue.waitIdle();
 
     for (auto semaphore : q.semaphores) {
@@ -383,6 +388,9 @@ static void ggml_vk_queue_cleanup(vk_queue& q) {
 }
 
 static vk_buffer ggml_vk_create_buffer(size_t size, VmaAllocationCreateFlags alloc_flags, VmaMemoryUsage vma_usage, VkMemoryPropertyFlags req_flags = 0) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_create_buffer(" << size << ")" << std::endl;
+#endif
     vk_buffer buf;
 
     buf.size = size;
@@ -391,7 +399,7 @@ static vk_buffer ggml_vk_create_buffer(size_t size, VmaAllocationCreateFlags all
         size,
         vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst,
         vk::SharingMode::eExclusive,
-        1,
+        0,
         nullptr,
     };
 
@@ -412,10 +420,47 @@ static vk_buffer ggml_vk_create_buffer(size_t size, VmaAllocationCreateFlags all
     buf.sb_write = nullptr;
     buf.sb_read = nullptr;
 
+    buf.qf_owner = vk::QueueFamilyIgnored;
+
     return buf;
 }
 
+static void ggml_vk_sync_buffers(vk::CommandBuffer& cmd_buffer, std::vector<vk_buffer>&& buffers, vk_queue& q, vk::AccessFlags src_mask, vk::AccessFlags dst_mask) {
+    std::vector<vk::BufferMemoryBarrier> bmem_barriers;
+
+    uint32_t sfi;
+    uint32_t dfi;
+
+    for (auto& buf : buffers) {
+        if (buf.qf_owner != vk::QueueFamilyIgnored && buf.qf_owner != q.queue_family_index) {
+            sfi = buf.qf_owner;
+            dfi = q.queue_family_index;
+            buf.qf_owner = dfi;
+        } else {
+            sfi = vk::QueueFamilyIgnored;
+            dfi = vk::QueueFamilyIgnored;
+        }
+        bmem_barriers.push_back({ src_mask, dst_mask, sfi, dfi, buf.buffer, 0, VK_WHOLE_SIZE });
+    }
+
+    if (bmem_barriers.empty()) {
+        return;
+    }
+
+    cmd_buffer.pipelineBarrier(
+        vk::PipelineStageFlagBits::eComputeShader,
+        vk::PipelineStageFlagBits::eComputeShader,
+        {},
+        {},
+        bmem_barriers,
+        {}
+    );
+}
+
 static void ggml_vk_destroy_buffer(vk_buffer& buf) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_destroy_buffer(" << buf.size << ")" << std::endl;
+#endif
     buf.size = 0;
     PROFILE("ggml_vk_destroy_buffer",
     vmaDestroyBuffer(vk_allocator, buf.buffer, buf.allocation);
@@ -439,12 +484,17 @@ void ggml_vk_test_matmul_f32(size_t m, size_t n, size_t k, size_t num_it, int sp
 void ggml_vk_test_matmul_f16(size_t m, size_t n, size_t k, size_t num_it, int split_k, int shader_size);
 
 void ggml_vk_init(void) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_init()" << std::endl;
+#endif
     char* GGML_VULKAN_DEVICE = getenv("GGML_VULKAN_DEVICE");
     int dev_num = (GGML_VULKAN_DEVICE == NULL ? 0 : atoi(GGML_VULKAN_DEVICE));
 
     vk::ApplicationInfo app_info{ "ggml-vulkan", 1, nullptr, 0, VK_API_VERSION };
     const std::vector<const char*> layers = {
-        // "VK_LAYER_KHRONOS_validation",
+#ifdef VK_VALIDATE
+        "VK_LAYER_KHRONOS_validation",
+#endif
     };
     vk::InstanceCreateInfo instance_create_info(vk::InstanceCreateFlags(), &app_info, layers.size(), layers.data());
     vk_instance = vk::createInstance(instance_create_info);
@@ -560,7 +610,7 @@ void ggml_vk_init(void) {
     vk_pipeline_matmul_split_k_reduce = ggml_vk_create_pipeline("vk_shaders/matmul_split_k_reduce.spv", "main", 1, 3, {32, 32, 1}, {});
 
     vk_pipeline_f16_to_f32 = ggml_vk_create_pipeline("vk_shaders/f16_to_f32.spv", "main", 2, 1, {64, 1, 1}, {});
-    vk_pipeline_dequant_q4_0 = ggml_vk_create_pipeline("vk_shaders/dequant_q4_0.spv", "main", 2, 1, {32, 1, 1}, {});
+    vk_pipeline_dequant_q4_0 = ggml_vk_create_pipeline("vk_shaders/dequant_q4_0.spv", "main", 2, 1, {256*32, 1, 1}, {});  // Group size * values per quant group
 
     // Queues
     vk_compute_queue = ggml_vk_create_queue(compute_queue_family_index, 0);
@@ -612,6 +662,9 @@ void ggml_vk_init(void) {
 }
 
 static vk_pipeline* ggml_get_to_fp32_vk(ggml_type type) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_get_to_fp32_vk()" << std::endl;
+#endif
     switch (type) {
         case GGML_TYPE_Q4_0:
             return &vk_pipeline_dequant_q4_0;
@@ -651,6 +704,9 @@ static vk_buffer g_vk_buffer_pool[MAX_VK_BUFFERS];
 static std::atomic_flag g_vk_pool_lock = ATOMIC_FLAG_INIT;
 
 static void ggml_vk_pool_malloc(size_t size, vk_buffer* buf, VmaAllocationCreateFlags alloc_flags) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_pool_malloc(" << size << ")" << std::endl;
+#endif
     PROFILE("ggml_vk_pool_malloc",
     scoped_spin_lock lock(g_vk_pool_lock);
 
@@ -687,6 +743,9 @@ static void ggml_vk_pool_malloc(size_t size, vk_buffer* buf, VmaAllocationCreate
 }
 
 static void ggml_vk_pool_free(vk_buffer& buffer) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_pool_free(" << buffer.size << ")" << std::endl;
+#endif
     PROFILE("ggml_vk_pool_free",
     scoped_spin_lock lock(g_vk_pool_lock);
 
@@ -694,6 +753,8 @@ static void ggml_vk_pool_free(vk_buffer& buffer) {
         vk_buffer& b = g_vk_buffer_pool[i];
         if (b.size == 0) {
             b = buffer;
+            // Set owning queue family index to ignored to avoid synchronization on next use
+            b.qf_owner = VK_QUEUE_FAMILY_IGNORED;
             return;
         }
     }
@@ -703,6 +764,9 @@ static void ggml_vk_pool_free(vk_buffer& buffer) {
 }
 
 void* ggml_vk_host_malloc(size_t size) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_host_malloc(" << size << ")" << std::endl;
+#endif
     if (getenv("GGML_VK_NO_PINNED") != nullptr) {
         return nullptr;
     }
@@ -726,6 +790,9 @@ void* ggml_vk_host_malloc(size_t size) {
 }
 
 void ggml_vk_host_free(void* ptr) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_host_free()" << std::endl;
+#endif
     vk_buffer* buf = nullptr;
     for (size_t i = 0; i < vk_buf_list.size(); i++) {
         const uint8_t* addr = (const uint8_t*) std::get<0>(vk_buf_list[i]);
@@ -743,7 +810,55 @@ void ggml_vk_host_free(void* ptr) {
     ggml_vk_destroy_buffer(*buf);
 }
 
+static vk_submission ggml_vk_begin_submission(vk_queue& q) {
+    vk_submission s;
+    s.buffer = ggml_vk_create_cmd_buffer(q);
+    s.buffer.begin({ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+
+    return s;
+}
+
+static void ggml_vk_dispatch_pipeline(vk_submission& s, vk_pipeline& pipeline, std::vector<vk_buffer>&& buffers, const std::vector<int>&& push_constants, std::array<uint32_t, 3> elements, vk_queue& q) {
+    uint32_t wg0 = CEIL_DIV(elements[0], pipeline.wg_denoms[0]);
+    uint32_t wg1 = CEIL_DIV(elements[1], pipeline.wg_denoms[1]);
+    uint32_t wg2 = CEIL_DIV(elements[2], pipeline.wg_denoms[2]);
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_dispatch_pipeline(" << pipeline.name << ", (" << wg0 << "," << wg1 << "," << wg2 << "))" << std::endl;
+#endif
+    std::vector<vk::DescriptorBufferInfo> descriptor_buffer_infos;
+    std::vector<vk::WriteDescriptorSet> write_descriptor_sets;
+    for (uint32_t i = 0; i < pipeline.parameter_count; i++) {
+        descriptor_buffer_infos.push_back({buffers[i].buffer, 0, buffers[i].size});
+    }
+    for (uint32_t i = 0; i < pipeline.parameter_count; i++) {
+        write_descriptor_sets.push_back({pipeline.descriptor_set, i, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &descriptor_buffer_infos[i]});
+    }
+
+    vk_device.updateDescriptorSets(write_descriptor_sets, {});
+
+    ggml_vk_sync_buffers(s.buffer, std::move(buffers), q, vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead);
+
+    s.buffer.pushConstants<int>(pipeline.layout, vk::ShaderStageFlagBits::eCompute, 0, push_constants);
+    s.buffer.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline.pipeline);
+    s.buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+                                pipeline.layout,
+                                0,
+                                { pipeline.descriptor_set },
+                                {});
+    s.buffer.dispatch(wg0, wg1, wg2);
+}
+
+static void ggml_vk_end_submission(vk_submission& s, std::vector<vk::Semaphore>&& wait_semaphores, std::vector<vk::Semaphore>&& signal_semaphores) {
+    s.buffer.end();
+
+    s.wait_semaphores = wait_semaphores;
+    s.signal_semaphores = signal_semaphores;
+}
+
 static vk_sequence ggml_vk_buffer_write_2d_async(vk_buffer* dst, size_t offset, const void * src, size_t spitch, size_t width, size_t height, vk_queue& q, std::vector<vk::Semaphore>&& wait_semaphores, std::vector<vk::Semaphore>&& signal_semaphores) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_buffer_write_2d_async(" << width << ", " << height << ")" << std::endl;
+#endif
     VkMemoryPropertyFlags mem_prop_flags;
     vmaGetAllocationMemoryProperties(vk_allocator, dst->allocation, &mem_prop_flags);
 
@@ -778,6 +893,7 @@ static vk_sequence ggml_vk_buffer_write_2d_async(vk_buffer* dst, size_t offset, 
         }
 
         s.buffer.begin({ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+        ggml_vk_sync_buffers(s.buffer, { *dst }, q, vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eMemoryWrite);
         vkCmdCopyBuffer(s.buffer, buf->buffer, dst->buffer, height, slices.data());
         s.buffer.end();
         return { s };
@@ -799,6 +915,7 @@ static vk_sequence ggml_vk_buffer_write_2d_async(vk_buffer* dst, size_t offset, 
         width * height};
 
     s.buffer.begin({ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+    ggml_vk_sync_buffers(s.buffer, { *dst }, q, vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eMemoryWrite);
     vkCmdCopyBuffer(s.buffer, dst->sb_write->buffer, dst->buffer, 1, &buf_copy);
     s.buffer.end();
 
@@ -810,6 +927,9 @@ static vk_sequence ggml_vk_buffer_write_2d_async(vk_buffer* dst, size_t offset, 
 }
 
 static void ggml_vk_buffer_write_2d(vk_buffer* dst, size_t offset, const void * src, size_t spitch, size_t width, size_t height, vk_queue& q) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_buffer_write_2d(" << width << ", " << height << ")" << std::endl;
+#endif
     VkMemoryPropertyFlags mem_prop_flags;
     vmaGetAllocationMemoryProperties(vk_allocator, dst->allocation, &mem_prop_flags);
 
@@ -831,14 +951,23 @@ static void ggml_vk_buffer_write_2d(vk_buffer* dst, size_t offset, const void * 
 }
 
 static vk_sequence ggml_vk_buffer_write_async(vk_buffer* dst, size_t offset, const void * src, size_t size, vk_queue& q, std::vector<vk::Semaphore>&& wait_semaphores, std::vector<vk::Semaphore>&& signal_semaphores) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_buffer_write_async(" << size << ")" << std::endl;
+#endif
     return ggml_vk_buffer_write_2d_async(dst, offset, src, 0, size, 1, q, std::move(wait_semaphores), std::move(signal_semaphores));
 }
 
 static void ggml_vk_buffer_write(vk_buffer* dst, size_t offset, const void * src, size_t size, vk_queue& q) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_buffer_write(" << size << ")" << std::endl;
+#endif
     ggml_vk_buffer_write_2d(dst, offset, src, 0, size, 1, q);
 }
 
 static vk_sequence ggml_vk_buffer_read_async(vk_buffer* src, size_t offset, void * dst, size_t size, vk_queue& q, std::vector<vk::Semaphore>&& wait_semaphores, std::vector<vk::Semaphore>&& signal_semaphores) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_buffer_read_async(" << size << ")" << std::endl;
+#endif
     // Check if dst is pinned memory
     vk_buffer* buf = nullptr;
     size_t buf_offset = 0;
@@ -864,6 +993,7 @@ static vk_sequence ggml_vk_buffer_read_async(vk_buffer* src, size_t offset, void
 
     vk_submission s = ggml_vk_create_submission(q, std::move(wait_semaphores), std::move(signal_semaphores));
     s.buffer.begin({ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+    ggml_vk_sync_buffers(s.buffer, { *src }, q, vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead);
     vkCmdCopyBuffer(s.buffer, src->buffer, buf->buffer, 1, &buf_copy);
     s.buffer.end();
 
@@ -871,6 +1001,9 @@ static vk_sequence ggml_vk_buffer_read_async(vk_buffer* src, size_t offset, void
 }
 
 static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_t size, vk_queue& q) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_buffer_read(" << size << ")" << std::endl;
+#endif
     VkMemoryPropertyFlags mem_prop_flags;
     vmaGetAllocationMemoryProperties(vk_allocator, src->allocation, &mem_prop_flags);
 
@@ -902,6 +1035,7 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
 
             std::vector<vk_sequence> s = { ggml_vk_create_sequence_1(q, {}, {}) };
             s[0][0].buffer.begin({ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+            ggml_vk_sync_buffers(s[0][0].buffer, { *src }, q, vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead);
             vkCmdCopyBuffer(s[0][0].buffer, src->buffer, buf->buffer, 1, &buf_copy);
             s[0][0].buffer.end();
             ggml_vk_submit(q, s, fence);
@@ -926,6 +1060,7 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
         vk::CommandBuffer cmd_buffer = ggml_vk_create_cmd_buffer(q);
         vk::CommandBufferBeginInfo cmd_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
         cmd_buffer.begin(cmd_buffer_begin_info);
+        ggml_vk_sync_buffers(cmd_buffer, { *src }, q, vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead);
         vkCmdCopyBuffer(cmd_buffer, src->buffer, src->sb_read->buffer, 1, &buf_copy);
         cmd_buffer.end();
 
@@ -945,6 +1080,9 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
 }
 
 static vk_sequence ggml_vk_h2d_tensor_2d(vk_buffer* dst, size_t offset, const struct ggml_tensor * src, uint64_t i3, uint64_t i2, vk_queue& q, std::vector<vk::Semaphore>&& wait_semaphores, std::vector<vk::Semaphore>&& signal_semaphores) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_h2d_tensor_2d()" << std::endl;
+#endif
     const uint64_t ne0 = src->ne[0];
     const uint64_t ne1 = src->ne[1];
     const uint64_t nb0 = src->nb[0];
@@ -975,6 +1113,9 @@ static vk_sequence ggml_vk_h2d_tensor_2d(vk_buffer* dst, size_t offset, const st
 }
 
 static int ggml_vk_guess_split_k(int m, int n, int k) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_guess_split_k()" << std::endl;
+#endif
     if (k > 128 && (m < 128 || n < 128)) {
         return 4;
     }
@@ -983,6 +1124,9 @@ static int ggml_vk_guess_split_k(int m, int n, int k) {
 }
 
 static vk_pipeline* ggml_vk_guess_matmul_pipeline(bool bit16, int m, int n) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_guess_matmul_pipeline()" << std::endl;
+#endif
     if (bit16) {
         if (m <= 32 || n <= 32) {
             return &vk_pipeline_matmul_f16_s;
@@ -1003,20 +1147,37 @@ static vk_pipeline* ggml_vk_guess_matmul_pipeline(bool bit16, int m, int n) {
 }
 
 static vk_sequence ggml_vk_matmul(vk_pipeline& pipeline, vk_buffer& a, vk_buffer& b, vk_buffer& d, int m, int n, int k, int split_k, vk_queue& q, std::vector<vk::Semaphore>&& wait_semaphores, std::vector<vk::Semaphore>&& signal_semaphores) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_matmul(" << m << ", " << n << ", " << k << ")" << std::endl;
+#endif
+    vk_submission s = ggml_vk_begin_submission(q);
     if (split_k == 1) {
-        return { ggml_vk_submit_pipeline(pipeline, { &a, &b, &d }, { m, n, k, k, k, m, k }, { (uint32_t)m, (uint32_t)n, 1 }, q, std::move(wait_semaphores), std::move(signal_semaphores)) };
+        ggml_vk_dispatch_pipeline(s, pipeline, { a, b, d }, { m, n, k, k, k, m, k }, { (uint32_t)m, (uint32_t)n, 1 }, q);
+        ggml_vk_end_submission(s, std::move(wait_semaphores), std::move(signal_semaphores));
+        return { s };
     }
 
     // Synchronize the two submissions
-    vk::Semaphore semaphore = ggml_vk_create_semaphore(q);
+    ggml_vk_dispatch_pipeline(s, pipeline, { a, b, d }, { m, n, k, k, k, m, CEIL_DIV(k, split_k) }, { (uint32_t)m * split_k, (uint32_t)n, 1 }, q);
+    s.buffer.pipelineBarrier(
+        vk::PipelineStageFlagBits::eComputeShader,
+        vk::PipelineStageFlagBits::eComputeShader,
+        {},
+        {},
+        {
+            { vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite, vk::QueueFamilyIgnored, vk::QueueFamilyIgnored, d.buffer, 0, VK_WHOLE_SIZE } },
+        {}
+    );
+    ggml_vk_dispatch_pipeline(s, vk_pipeline_matmul_split_k_reduce, { d }, { m, n, split_k }, { (uint32_t)m, (uint32_t)n, 1 }, q);
+    ggml_vk_end_submission(s, std::move(wait_semaphores), std::move(signal_semaphores));
 
-    vk_submission s1 = ggml_vk_submit_pipeline(pipeline, { &a, &b, &d }, { m, n, k, k, k, m, CEIL_DIV(k, split_k) }, { (uint32_t)m * split_k, (uint32_t)n, 1 }, q, std::move(wait_semaphores), { semaphore });
-    vk_submission s2 = ggml_vk_submit_pipeline(vk_pipeline_matmul_split_k_reduce, { &d }, { m, n, split_k }, { (uint32_t)m, (uint32_t)n, 1 }, q, { semaphore }, std::move(signal_semaphores));
-
-    return { s1, s2 };
+    return { s };
 }
 
 static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_mul_mat_f32()" << std::endl;
+#endif
     const int64_t ne00 = src0->ne[0];
     const int64_t ne01 = src0->ne[1];
     const int64_t ne02 = src0->ne[2];
@@ -1050,26 +1211,55 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     std::vector<vk_sequence> transfer_0_seqs;
     std::vector<vk_sequence> transfer_1_seqs;
 
+    vk::Semaphore s_it_x;
+    vk::Semaphore s_it_y;
+
+    const bool load_x = src0->backend != GGML_BACKEND_CPU;
+
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
+            const bool first = i03 == 0 && i02 == 0;
+            const bool last = i03 == ne03 - 1 && i02 == ne02 - 1;
+
             vk::Semaphore s_x;
             vk::Semaphore s_y = ggml_vk_create_semaphore(vk_compute_queue);
             std::vector<vk::Semaphore> semaphores = { s_y };
             // copy data to device
-            if (src0->backend != GGML_BACKEND_GPU) {
+            if (load_x) {
                 s_x = ggml_vk_create_semaphore(vk_compute_queue);
                 semaphores.push_back(s_x);
-                transfer_0_seqs.push_back(ggml_vk_h2d_tensor_2d(&d_X, 0, src0, i03, i02, vk_transfer_queues[0], {}, { s_x }));
+                if (first) {
+                    transfer_0_seqs.push_back(ggml_vk_h2d_tensor_2d(&d_X, 0, src0, i03, i02, vk_transfer_queues[0], {}, { s_x }));
+                } else {
+                    // Wait for previous matmul to be done before writing to the input buffers again
+                    transfer_0_seqs.push_back(ggml_vk_h2d_tensor_2d(&d_X, 0, src0, i03, i02, vk_transfer_queues[0], { s_it_x }, { s_x }));
+                }
             }
 
             ggml_vk_submit(vk_transfer_queues[0], transfer_0_seqs, VK_NULL_HANDLE);
 
-            transfer_1_seqs.push_back(ggml_vk_h2d_tensor_2d(&d_Y, 0, src1, i03, i02, vk_transfer_queues[1], {}, { s_y }));
+            if (first) {
+                transfer_1_seqs.push_back(ggml_vk_h2d_tensor_2d(&d_Y, 0, src1, i03, i02, vk_transfer_queues[1], {}, { s_y }));
+            } else {
+                // Wait for previous matmul to be done before writing to the input buffers again
+                transfer_1_seqs.push_back(ggml_vk_h2d_tensor_2d(&d_Y, 0, src1, i03, i02, vk_transfer_queues[1], { s_it_y }, { s_y }));
+            }
 
             // compute
             vk::Semaphore s_mm = ggml_vk_create_semaphore(vk_compute_queue);
 
-            compute_seqs.push_back(ggml_vk_matmul(*pipeline, d_X, d_Y, d_D, ne01, ne11, ne10, split_k, vk_compute_queue, std::move(semaphores), { s_mm }));
+            if (!last) {
+                if (load_x) {
+                    s_it_x = ggml_vk_create_semaphore(vk_compute_queue);
+                    s_it_y = ggml_vk_create_semaphore(vk_compute_queue);
+                    compute_seqs.push_back(ggml_vk_matmul(*pipeline, d_X, d_Y, d_D, ne01, ne11, ne10, split_k, vk_compute_queue, std::move(semaphores), { s_mm, s_it_x, s_it_y }));
+                } else {
+                    s_it_y = ggml_vk_create_semaphore(vk_compute_queue);
+                    compute_seqs.push_back(ggml_vk_matmul(*pipeline, d_X, d_Y, d_D, ne01, ne11, ne10, split_k, vk_compute_queue, std::move(semaphores), { s_mm, s_it_y }));
+                }
+            } else {
+                compute_seqs.push_back(ggml_vk_matmul(*pipeline, d_X, d_Y, d_D, ne01, ne11, ne10, split_k, vk_compute_queue, std::move(semaphores), { s_mm }));
+            }
 
             // copy dst to host
             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
@@ -1095,6 +1285,9 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
 }
 
 static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, void * wdata) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_mul_mat_f16()" << std::endl;
+#endif
     GGML_ASSERT(vk_fp16_support);
 
     GGML_ASSERT(src0->type == GGML_TYPE_F16);
@@ -1141,17 +1334,30 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
     std::vector<vk_sequence> transfer_0_seqs;
     std::vector<vk_sequence> transfer_1_seqs;
 
+    vk::Semaphore s_it_x;
+    vk::Semaphore s_it_y;
+
+    const bool load_x = src1->backend != GGML_BACKEND_GPU;
+
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
+            const bool first = i03 == 0 && i02 == 0;
+            const bool last = i03 == ne03 - 1 && i02 == ne02 - 1;
+
             vk::Semaphore s_x;
             vk::Semaphore s_y = ggml_vk_create_semaphore(vk_compute_queue);
             std::vector<vk::Semaphore> semaphores = { s_y };
 
             // copy data to device
-            if (src1->backend != GGML_BACKEND_GPU) {
+            if (load_x) {
                 s_x = ggml_vk_create_semaphore(vk_compute_queue);
                 semaphores.push_back(s_x);
-                transfer_0_seqs.push_back(ggml_vk_h2d_tensor_2d(&d_X, 0, src0, i03, i02, vk_transfer_queues[0], {}, { s_x }));
+                if (first) {
+                    transfer_0_seqs.push_back(ggml_vk_h2d_tensor_2d(&d_X, 0, src0, i03, i02, vk_transfer_queues[0], {}, { s_x }));
+                } else {
+                    // Wait for previous matmul to be done before writing to the input buffers again
+                    transfer_0_seqs.push_back(ggml_vk_h2d_tensor_2d(&d_X, 0, src0, i03, i02, vk_transfer_queues[0], { s_it_x }, { s_x }));
+                }
             }
 
             ggml_vk_submit(vk_transfer_queues[0], transfer_0_seqs, VK_NULL_HANDLE);
@@ -1179,11 +1385,27 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
                 }
             }
 
-            transfer_1_seqs.push_back(ggml_vk_buffer_write_async(&d_Y, 0, tmp, sizeof(ggml_fp16_t) * y_ne, vk_transfer_queues[1], {}, { s_y }));
+            if (first) {
+                transfer_1_seqs.push_back(ggml_vk_buffer_write_async(&d_Y, 0, tmp, sizeof(ggml_fp16_t) * y_ne, vk_transfer_queues[1], {}, { s_y }));
+            } else {
+                // Wait for previous matmul to be done before writing to the input buffers again
+                transfer_1_seqs.push_back(ggml_vk_buffer_write_async(&d_Y, 0, tmp, sizeof(ggml_fp16_t) * y_ne, vk_transfer_queues[1], { s_it_y }, { s_y }));
+            }
 
             // compute
             vk::Semaphore s_mm = ggml_vk_create_semaphore(vk_compute_queue);
-            compute_seqs.push_back(ggml_vk_matmul(*pipeline, d_X, d_Y, d_D, ne01, ne11, ne10, split_k, vk_compute_queue, std::move(semaphores), { s_mm }));
+            if (!last) {
+                if (load_x) {
+                    s_it_x = ggml_vk_create_semaphore(vk_compute_queue);
+                    s_it_y = ggml_vk_create_semaphore(vk_compute_queue);
+                    compute_seqs.push_back(ggml_vk_matmul(*pipeline, d_X, d_Y, d_D, ne01, ne11, ne10, split_k, vk_compute_queue, std::move(semaphores), { s_mm, s_it_x, s_it_y }));
+                } else {
+                    s_it_y = ggml_vk_create_semaphore(vk_compute_queue);
+                    compute_seqs.push_back(ggml_vk_matmul(*pipeline, d_X, d_Y, d_D, ne01, ne11, ne10, split_k, vk_compute_queue, std::move(semaphores), { s_mm, s_it_y }));
+                }
+            } else {
+                compute_seqs.push_back(ggml_vk_matmul(*pipeline, d_X, d_Y, d_D, ne01, ne11, ne10, split_k, vk_compute_queue, std::move(semaphores), { s_mm }));
+            }
 
             // copy dst to host
             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
@@ -1195,6 +1417,7 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
     }
 
     ggml_vk_submit(vk_transfer_queues[0], transfer_0_seqs, VK_NULL_HANDLE);
+    // vk_transfer_queues[0].queue.waitIdle();
 
     // cleanup waits for the queue to be done
     ggml_vk_queue_cleanup(vk_transfer_queues[0]);
@@ -1209,6 +1432,9 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
 }
 
 static void ggml_vk_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_mul_mat_q_f32()" << std::endl;
+#endif
     const int64_t ne00 = src0->ne[0];
     const int64_t ne01 = src0->ne[1];
     const int64_t ne02 = src0->ne[2];
@@ -1251,8 +1477,16 @@ static void ggml_vk_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
     std::vector<vk_sequence> transfer_0_seqs;
     std::vector<vk_sequence> transfer_1_seqs;
 
+    vk::Semaphore s_it_x;
+    vk::Semaphore s_it_y;
+
+    const bool load_x = src0->backend != GGML_BACKEND_GPU;
+
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
+            const bool first = i03 == 0 && i02 == 0;
+            const bool last = i03 == ne03 - 1 && i02 == ne02 - 1;
+
             vk::Semaphore s_x;
             vk::Semaphore s_y = ggml_vk_create_semaphore(vk_compute_queue);
             vk::Semaphore s_q = ggml_vk_create_semaphore(vk_compute_queue);
@@ -1263,10 +1497,15 @@ static void ggml_vk_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
             vk::Semaphore s_mm = ggml_vk_create_semaphore(vk_compute_queue);
 
             // copy src0 to device if necessary
-            if (src0->backend == GGML_BACKEND_CPU) {
+            if (load_x) {
                 s_x = ggml_vk_create_semaphore(vk_compute_queue);
-                transfer_0_seqs.push_back(ggml_vk_h2d_tensor_2d(&d_Q, 0, src0, i03, i02, vk_transfer_queues[0], {}, { s_x }));
                 q_semaphores.push_back(s_x);
+                if (first) {
+                    transfer_0_seqs.push_back(ggml_vk_h2d_tensor_2d(&d_Q, 0, src0, i03, i02, vk_transfer_queues[0], {}, { s_x }));
+                } else {
+                    // Wait for previous dequant to be done before writing to the input buffers again
+                    transfer_0_seqs.push_back(ggml_vk_h2d_tensor_2d(&d_Q, 0, src0, i03, i02, vk_transfer_queues[0], { s_it_x }, { s_x }));
+                }
             } else if (src0->backend == GGML_BACKEND_GPU) {
                 d_Q = *(vk_buffer *) src0->data;
             } else {
@@ -1276,7 +1515,12 @@ static void ggml_vk_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
             ggml_vk_submit(vk_transfer_queues[0], transfer_0_seqs, VK_NULL_HANDLE);
 
             // copy src1 to device
-            transfer_1_seqs.push_back(ggml_vk_h2d_tensor_2d(&d_Y, 0, src1, i03, i02, vk_transfer_queues[1], {}, { s_y }));
+            if (first) {
+                transfer_1_seqs.push_back(ggml_vk_h2d_tensor_2d(&d_Y, 0, src1, i03, i02, vk_transfer_queues[1], {}, { s_y }));
+            } else {
+                // Wait for previous matmul to be done before writing to the input buffers again
+                transfer_1_seqs.push_back(ggml_vk_h2d_tensor_2d(&d_Y, 0, src1, i03, i02, vk_transfer_queues[1], { s_it_y }, { s_y }));
+            }
 
             if (mul_mat_vec) { // specialized dequantize_mul_mat_vec kernel
                 GGML_ASSERT(false);
@@ -1298,10 +1542,23 @@ static void ggml_vk_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
             } else { // general dequantization kernel + VK matrix matrix multiplication
 
                 // convert src0 to fp32 on device
-                compute_seqs.push_back({ ggml_vk_submit_pipeline(*to_fp32_vk, {&d_Q, &d_X}, { (int)x_ne }, { (uint32_t)x_ne, 1, 1}, vk_compute_queue, std::move(q_semaphores), { s_q }) });
+                vk_submission s = ggml_vk_begin_submission(vk_compute_queue);
+                ggml_vk_dispatch_pipeline(s, *to_fp32_vk, {d_Q, d_X}, { (int)x_ne }, { (uint32_t)x_ne, 1, 1}, vk_compute_queue);
+                if (load_x && !last) {
+                    s_it_x = ggml_vk_create_semaphore(vk_compute_queue);
+                    ggml_vk_end_submission(s, std::move(q_semaphores), { s_q, s_it_x });
+                } else {
+                    ggml_vk_end_submission(s, std::move(q_semaphores), { s_q });
+                }
+                compute_seqs.push_back({ s });
 
                 // compute
-                compute_seqs.push_back(ggml_vk_matmul(*pipeline, d_X, d_Y, d_D, ne01, ne11, ne10, split_k, vk_compute_queue, std::move(semaphores), { s_mm }));
+                if (!last) {
+                    s_it_y = ggml_vk_create_semaphore(vk_compute_queue);
+                    compute_seqs.push_back(ggml_vk_matmul(*pipeline, d_X, d_Y, d_D, ne01, ne11, ne10, split_k, vk_compute_queue, std::move(semaphores), { s_mm, s_it_y }));
+                } else {
+                    compute_seqs.push_back(ggml_vk_matmul(*pipeline, d_X, d_Y, d_D, ne01, ne11, ne10, split_k, vk_compute_queue, std::move(semaphores), { s_mm }));
+                }
             }
 
             // copy dst to host
