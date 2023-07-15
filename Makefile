@@ -176,6 +176,7 @@ ifdef LLAMA_CUDA
 	OBJS      += ggml-cuda.o
 	NVCC      = nvcc
 	NVCCFLAGS = --forward-unknown-to-host-compiler
+	NVCCV 	  := $(shell $(NVCC) --version | tail -n 1)
 ifdef LLAMA_DEBUG
 	NVCCFLAGS += -lineinfo
 endif # LLAMA_DEBUG
