@@ -680,20 +680,20 @@ void ggml_vk_init(void) {
         128, 512, 512,
     };
     for (size_t i = 0; i < vals.size(); i += 3) {
-        ggml_vk_test_matmul_f32(vals[i], vals[i + 1], vals[i + 2], 10, 1, 0);
-        ggml_vk_test_matmul_f32(vals[i], vals[i + 1], vals[i + 2], 10, 4, 0);
-        ggml_vk_test_matmul_f32(vals[i], vals[i + 1], vals[i + 2], 10, 1, 1);
-        ggml_vk_test_matmul_f32(vals[i], vals[i + 1], vals[i + 2], 10, 4, 1);
-        ggml_vk_test_matmul_f32(vals[i], vals[i + 1], vals[i + 2], 10, 1, 2);
-        ggml_vk_test_matmul_f32(vals[i], vals[i + 1], vals[i + 2], 10, 4, 2);
+        ggml_vk_test_matmul_f32(vals[i], vals[i + 1], vals[i + 2], 1000, 1, 0);
+        ggml_vk_test_matmul_f32(vals[i], vals[i + 1], vals[i + 2], 1000, 4, 0);
+        ggml_vk_test_matmul_f32(vals[i], vals[i + 1], vals[i + 2], 1000, 1, 1);
+        ggml_vk_test_matmul_f32(vals[i], vals[i + 1], vals[i + 2], 1000, 4, 1);
+        ggml_vk_test_matmul_f32(vals[i], vals[i + 1], vals[i + 2], 1000, 1, 2);
+        ggml_vk_test_matmul_f32(vals[i], vals[i + 1], vals[i + 2], 1000, 4, 2);
         std::cerr << std::endl;
 
-        ggml_vk_test_matmul_f16(vals[i], vals[i + 1], vals[i + 2], 10, 1, 0);
-        ggml_vk_test_matmul_f16(vals[i], vals[i + 1], vals[i + 2], 10, 4, 0);
-        ggml_vk_test_matmul_f16(vals[i], vals[i + 1], vals[i + 2], 10, 1, 1);
-        ggml_vk_test_matmul_f16(vals[i], vals[i + 1], vals[i + 2], 10, 4, 1);
-        ggml_vk_test_matmul_f16(vals[i], vals[i + 1], vals[i + 2], 10, 1, 2);
-        ggml_vk_test_matmul_f16(vals[i], vals[i + 1], vals[i + 2], 10, 4, 2);
+        ggml_vk_test_matmul_f16(vals[i], vals[i + 1], vals[i + 2], 1000, 1, 0);
+        ggml_vk_test_matmul_f16(vals[i], vals[i + 1], vals[i + 2], 1000, 4, 0);
+        ggml_vk_test_matmul_f16(vals[i], vals[i + 1], vals[i + 2], 1000, 1, 1);
+        ggml_vk_test_matmul_f16(vals[i], vals[i + 1], vals[i + 2], 1000, 4, 1);
+        ggml_vk_test_matmul_f16(vals[i], vals[i + 1], vals[i + 2], 1000, 1, 2);
+        ggml_vk_test_matmul_f16(vals[i], vals[i + 1], vals[i + 2], 1000, 4, 2);
         std::cerr << std::endl << std::endl;
     }
 #endif
