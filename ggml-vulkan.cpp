@@ -104,6 +104,7 @@ struct vk_queue {
     vk::CommandPool pool;
     uint32_t cmd_buffer_idx;
     std::vector<vk::CommandBuffer> cmd_buffers;
+    uint32_t semaphore_idx;
     std::vector<vk::Semaphore> semaphores;
     std::mutex mutex;
 };
@@ -356,6 +357,7 @@ static vk_queue ggml_vk_create_queue(uint32_t queue_family_index, uint32_t queue
     q.pool = vk_device.createCommandPool(command_pool_create_info_compute);
 
     q.cmd_buffer_idx = 0;
+    q.semaphore_idx = 0;
 
     q.queue = vk_device.getQueue(queue_family_index, queue_index);
 
@@ -366,8 +368,14 @@ static vk::Semaphore ggml_vk_create_semaphore(vk_queue& q) {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_create_semaphore()" << std::endl;
 #endif
+    if (q.semaphores.size() > q.semaphore_idx) {
+        // Reuse semaphore
+        return q.semaphores[q.semaphore_idx++];
+    }
+
     vk::Semaphore semaphore = vk_device.createSemaphore({});
     q.semaphores.push_back(semaphore);
+    q.semaphore_idx++;
 
     return semaphore;
 }
@@ -378,10 +386,7 @@ static void ggml_vk_queue_cleanup(vk_queue& q) {
 #endif
     q.queue.waitIdle();
 
-    for (auto semaphore : q.semaphores) {
-        vk_device.destroySemaphore(semaphore);
-    }
-    q.semaphores.clear();
+    q.semaphore_idx = 0;
 
     vk_device.resetCommandPool(q.pool);
     q.cmd_buffer_idx = 0;
