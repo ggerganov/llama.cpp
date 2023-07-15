@@ -82,6 +82,11 @@ extern "C" {
 
     typedef void (*llama_progress_callback)(float progress, void *ctx);
 
+    typedef void (*llama_log_callback)(int level, const char* text, void *ctx);
+    #define LLAMA_LOG_LEVEL_ERROR 2
+    #define LLAMA_LOG_LEVEL_WARN 3
+    #define LLAMA_LOG_LEVEL_INFO 4
+
    struct llama_context_params {
         uint32_t seed;                         // RNG seed, -1 for random
         int32_t  n_ctx;                        // text context
@@ -98,6 +103,12 @@ extern "C" {
         llama_progress_callback progress_callback;
         // context pointer passed to the progress callback
         void * progress_callback_user_data;
+
+        // Called for every error, warning and information.
+        // If this is NULL, everything is output on stderr.
+        llama_log_callback log_callback;
+        // context pointer passed to the log callback
+        void * log_callback_user_data;
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool low_vram;   // if true, reduce VRAM usage at the cost of performance
