@@ -242,12 +242,8 @@ class SentencePieceVocab:
           byte_decoder = {v: k for k, v in byte_encoder.items()}
           for i, item in enumerate(tokenizer):
             text: bytes
-            if i == 0:
-                text = " \u2047 ".encode("utf-8")
-                score = 0.0
-            else:
-                text = b''.join([x.to_bytes(1, byteorder='big') for x in [byte_decoder[y] for y in item]])
-                score: float = -i
+            text = b''.join([x.to_bytes(1, byteorder='big') for x in [byte_decoder[y] for y in item]])
+            score: float = -i
             yield text, score
         else:
           for i in range(tokenizer.vocab_size()):
