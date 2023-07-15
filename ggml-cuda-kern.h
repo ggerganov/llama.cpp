@@ -14,7 +14,7 @@ template<> struct vec2_t_impl<float>  { typedef float2 type; };
 template<typename T> using vec2_t = typename vec2_t_impl<T>::type;
 
 template<typename T> inline __host__ __device__ vec2_t<T> make_vec2_t(const T & x, const T & y);
-template<> inline __host__ __device__ vec2_t<half>  make_vec2_t(const  half & x, const  half & y) { return __halves2half2(x, y); }
+template<> inline __host__ __device__ vec2_t<half>  make_vec2_t(const  half & x, const  half & y) { return make_half2 (x, y); }
 template<> inline __host__ __device__ vec2_t<float> make_vec2_t(const float & x, const float & y) { return make_float2(x, y); }
 
 // the cuda headers define operators for half2, but not for float2
