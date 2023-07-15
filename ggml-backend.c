@@ -14,7 +14,7 @@ struct ggml_buffer ggml_backend_alloc_buffer(struct ggml_backend * backend, size
     buffer.mem_size = ggml_tensor_overhead() * max_tensors;
     buffer.mem_buffer = malloc(buffer.mem_size);
     buffer.backend = backend;
-    // size += 128 * max_tensors; // alignment overhead
+    size += 128 * max_tensors; // alignment overhead
     buffer.backend_buffer = backend->interface->alloc_buffer(backend->context, size);
     return buffer;
 }
@@ -172,7 +172,7 @@ static void ggml_backend_cpu_cpy_tensor_from(ggml_backend_context_t ctx, struct 
 }
 
 static void ggml_backend_cpu_cpy_tensor_to(ggml_backend_context_t ctx, struct ggml_tensor * src, struct ggml_tensor * dst) {
-    ggml_backend_set_tensor(dst, src->data, 0, ggml_nbytes(src));
+    ggml_backend_set_tensor_async(dst, src->data, 0, ggml_nbytes(src));
 
     UNUSED(ctx);
 }
@@ -409,7 +409,7 @@ void ggml_graph_splits_compute(struct ggml_graph_splits * splits) {
                 ggml_backend_cpy_tensor(split->dst_inputs[j], split->src_inputs[j]);
             }
         }
-        ggml_backend_synchronize(split->dst_inputs[0]->backend);
+        // ggml_backend_synchronize(split->dst_inputs[0]->backend);
         copy_us += ggml_time_us() - copy_start_us;
 
 #if 0
@@ -419,7 +419,7 @@ void ggml_graph_splits_compute(struct ggml_graph_splits * splits) {
 #endif
         uint64_t start = ggml_time_us();
         ggml_backend_graph_compute(split->dst_inputs[0]->backend, split->graph);
-        ggml_backend_synchronize(split->dst_inputs[0]->backend);
+        //ggml_backend_synchronize(split->dst_inputs[0]->backend);
         uint64_t end = ggml_time_us();
         if (strcmp(ggml_backend_name(split->dst_inputs[0]->backend), "CPU") == 0) {
             compute_cpu_us += end - start;
