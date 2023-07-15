@@ -58,9 +58,9 @@
 
 void llama_log_internal(llama_log_callback log_callback, void * log_callback_user_data, int level, const char* format, ...);
 void llama_log_callback_default(int level, const char * text, void * ctx);
-#define LLAMA_LOG_INFO(model, format, ...) llama_log_internal((model).log_callback, (model).log_callback_user_data, LLAMA_LOG_LEVEL_INFO, format, __VA_ARGS__)
-#define LLAMA_LOG_WARN(model, format, ...) llama_log_internal((model).log_callback, (model).log_callback_user_data, LLAMA_LOG_LEVEL_WARN, format, __VA_ARGS__)
-#define LLAMA_LOG_ERROR(model, format, ...) llama_log_internal((model).log_callback, (model).log_callback_user_data, LLAMA_LOG_LEVEL_ERROR, format, __VA_ARGS__)
+#define LLAMA_LOG_INFO(model, ...) llama_log_internal((model).log_callback, (model).log_callback_user_data, LLAMA_LOG_LEVEL_INFO, __VA_ARGS__)
+#define LLAMA_LOG_WARN(model, ...) llama_log_internal((model).log_callback, (model).log_callback_user_data, LLAMA_LOG_LEVEL_WARN, __VA_ARGS__)
+#define LLAMA_LOG_ERROR(model, ...) llama_log_internal((model).log_callback, (model).log_callback_user_data, LLAMA_LOG_LEVEL_ERROR, __VA_ARGS__)
 
 
 #define LLAMA_USE_SCRATCH
@@ -3775,5 +3775,7 @@ void llama_log_internal(llama_log_callback log_callback, void * log_callback_use
 }
 
 void llama_log_callback_default(int level, const char * text, void *ctx) {
+    (void) level;
+    (void) ctx;
     fprintf(stderr, "%s\n", text);
 }
