@@ -4410,7 +4410,7 @@ void ggml_free(struct ggml_context * ctx) {
         if (&g_state.contexts[i].context == ctx) {
             g_state.contexts[i].used = false;
 
-            GGML_PRINT_DEBUG("%s: context %d with %d objects has been freed. memory used = %zu\n",
+            GGML_PRINT_DEBUG("%s: context %d has been freed. memory used = %zu\n",
                     __func__, i, ggml_used_mem(ctx));
 
             if (ctx->mem_buffer_owned) {
@@ -16249,7 +16249,6 @@ struct ggml_compute_state {
     struct ggml_compute_state_shared * shared;
 };
 
-#ifdef GGML_PERF
 static void ggml_graph_compute_perf_stats_node(struct ggml_tensor * node, const struct ggml_compute_state_shared * st) {
     int64_t cycles_cur  = ggml_perf_cycles()  - st->perf_node_start_cycles;
     int64_t time_us_cur = ggml_perf_time_us() - st->perf_node_start_time_us;
@@ -16258,7 +16257,6 @@ static void ggml_graph_compute_perf_stats_node(struct ggml_tensor * node, const 
     node->perf_cycles  += cycles_cur;
     node->perf_time_us += time_us_cur;
 }
-#endif
 
 static thread_ret_t ggml_graph_compute_thread(void * data) {
     struct ggml_compute_state * state = (struct ggml_compute_state *) data;
@@ -16296,9 +16294,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                     params.nth = n_tasks_arr[node_n];
                     ggml_compute_forward(&params, node);
                 }
-#ifdef GGML_PERF
                 ggml_graph_compute_perf_stats_node(node, state->shared);
-#endif
             }
 
             // distribute new work or execute it direct if 1T
@@ -16307,10 +16303,10 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 
                 struct ggml_tensor * node = cgraph->nodes[node_n];
                 const int n_tasks = n_tasks_arr[node_n];
-#ifdef GGML_PERF
+
                 state->shared->perf_node_start_cycles  = ggml_perf_cycles();
                 state->shared->perf_node_start_time_us = ggml_perf_time_us();
-#endif
+
                 params.nth = n_tasks;
 
                 /* INIT */
@@ -16329,9 +16325,8 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                         params.type = GGML_TASK_FINALIZE;
                         ggml_compute_forward(&params, node);
                     }
-#ifdef GGML_PERF
+
                     ggml_graph_compute_perf_stats_node(node, state->shared);
-#endif
                 } else {
                     break;
                 }
