@@ -101,14 +101,15 @@ static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * 
 // memory sizes
 //
 
-static const std::map<e_model, size_t> & MEM_REQ_SCRATCH0()
+static const std::map<e_model, size_t> & MEM_REQ_SCRATCH0(int n_ctx)
 {
     static std::map<e_model, size_t> k_sizes = {
-        { MODEL_3B,    256ull * MB },
-        { MODEL_7B,    512ull * MB },
-        { MODEL_13B,   512ull * MB },
-        { MODEL_30B,   512ull * MB },
-        { MODEL_65B,  1024ull * MB },
+        /* empirical scaling, still a guess */
+        { MODEL_3B,   ((size_t) n_ctx / 16ull + 128ull) * MB },
+        { MODEL_7B,   ((size_t) n_ctx / 16ull + 256ull) * MB },
+        { MODEL_13B,  ((size_t) n_ctx / 12ull + 256ull) * MB },
+        { MODEL_30B,  ((size_t) n_ctx / 10ull + 256ull) * MB },
+        { MODEL_65B,  ((size_t) n_ctx /  8ull + 512ull) * MB },
     };
     return k_sizes;
 }
@@ -140,14 +141,14 @@ static const std::map<e_model, size_t> & MEM_REQ_KV_SELF()
 
 // this is mostly needed for temporary mul_mat buffers to dequantize the data
 // not actually needed if BLAS is disabled
-static const std::map<e_model, size_t> & MEM_REQ_EVAL()
+static const std::map<e_model, size_t> & MEM_REQ_EVAL(int n_ctx)
 {
     static std::map<e_model, size_t> k_sizes = {
-        { MODEL_3B,   512ull * MB },
-        { MODEL_7B,   768ull * MB },
-        { MODEL_13B, 1024ull * MB },
-        { MODEL_30B, 1280ull * MB },
-        { MODEL_65B, 1536ull * MB },
+        { MODEL_3B,  ((size_t) n_ctx / 256ull +  512ull) * MB },
+        { MODEL_7B,  ((size_t) n_ctx / 256ull +  768ull) * MB },
+        { MODEL_13B, ((size_t) n_ctx / 256ull + 1024ull) * MB },
+        { MODEL_30B, ((size_t) n_ctx / 256ull + 1280ull) * MB },
+        { MODEL_65B, ((size_t) n_ctx / 256ull + 1536ull) * MB },
     };
     return k_sizes;
 }
@@ -189,6 +190,10 @@ struct llama_hparams {
     uint32_t n_head  = 32;
     uint32_t n_layer = 32;
     uint32_t n_rot   = 64;
+
+    float rope_freq_base  = 10000.0f;
+    float rope_freq_scale = 1.0f;
+
     enum llama_ftype ftype = LLAMA_FTYPE_MOSTLY_F16;
 
     bool operator!=(const llama_hparams & other) const {
@@ -647,7 +652,7 @@ struct llama_model_loader {
         *ctx_size_p = *mmapped_size_p = 0;
         for (const llama_load_tensor & lt : tensors_map.tensors) {
             *ctx_size_p += sizeof(struct ggml_tensor) + GGML_OBJECT_SIZE;
-            *(use_mmap ? mmapped_size_p : ctx_size_p) += lt.size;
+            *(use_mmap ? mmapped_size_p : ctx_size_p) += lt.size + 16;
         }
     }
 
@@ -843,6 +848,8 @@ struct llama_context_params llama_context_default_params() {
         /*.gpu_layers                  =*/ 0,
         /*.main_gpu                    =*/ 0,
         /*.tensor_split                =*/ {0},
+        /*.rope_freq_base              =*/ 10000.0f,
+        /*.rope_freq_scale             =*/ 1.0f,
         /*.progress_callback           =*/ nullptr,
         /*.progress_callback_user_data =*/ nullptr,
         /*.low_vram                    =*/ false,
@@ -966,6 +973,8 @@ static void llama_model_load_internal(
         int n_gpu_layers,
         int main_gpu,
         const float * tensor_split,
+        float rope_freq_base,
+        float rope_freq_scale,
         bool low_vram,
         ggml_type memory_type,
         bool use_mmap,
@@ -1000,22 +1009,27 @@ static void llama_model_load_internal(
         }
 
         hparams.n_ctx = n_ctx;
+
+        hparams.rope_freq_base  = rope_freq_base;
+        hparams.rope_freq_scale = rope_freq_scale;
     }
 
     const uint32_t n_ff = ((2*(4*hparams.n_embd)/3 + hparams.n_mult - 1)/hparams.n_mult)*hparams.n_mult;
 
     {
-        fprintf(stderr, "%s: format     = %s\n",  __func__, llama_file_version_name(file_version));
-        fprintf(stderr, "%s: n_vocab    = %u\n",  __func__, hparams.n_vocab);
-        fprintf(stderr, "%s: n_ctx      = %u\n",  __func__, hparams.n_ctx);
-        fprintf(stderr, "%s: n_embd     = %u\n",  __func__, hparams.n_embd);
-        fprintf(stderr, "%s: n_mult     = %u\n",  __func__, hparams.n_mult);
-        fprintf(stderr, "%s: n_head     = %u\n",  __func__, hparams.n_head);
-        fprintf(stderr, "%s: n_layer    = %u\n",  __func__, hparams.n_layer);
-        fprintf(stderr, "%s: n_rot      = %u\n",  __func__, hparams.n_rot);
+        fprintf(stderr, "%s: format     = %s\n",   __func__, llama_file_version_name(file_version));
+        fprintf(stderr, "%s: n_vocab    = %u\n",   __func__, hparams.n_vocab);
+        fprintf(stderr, "%s: n_ctx      = %u\n",   __func__, hparams.n_ctx);
+        fprintf(stderr, "%s: n_embd     = %u\n",   __func__, hparams.n_embd);
+        fprintf(stderr, "%s: n_mult     = %u\n",   __func__, hparams.n_mult);
+        fprintf(stderr, "%s: n_head     = %u\n",   __func__, hparams.n_head);
+        fprintf(stderr, "%s: n_layer    = %u\n",   __func__, hparams.n_layer);
+        fprintf(stderr, "%s: n_rot      = %u\n",   __func__, hparams.n_rot);
+        fprintf(stderr, "%s: freq_base  = %.1f\n", __func__, hparams.rope_freq_base);
+        fprintf(stderr, "%s: freq_scale = %g\n",   __func__, hparams.rope_freq_scale);
         fprintf(stderr, "%s: ftype      = %u (%s)\n", __func__, hparams.ftype, llama_ftype_name(hparams.ftype));
-        fprintf(stderr, "%s: n_ff       = %u\n",  __func__, n_ff);
-        fprintf(stderr, "%s: model size = %s\n",  __func__, llama_model_type_name(model.type));
+        fprintf(stderr, "%s: n_ff       = %u\n",   __func__, n_ff);
+        fprintf(stderr, "%s: model size = %s\n",   __func__, llama_model_type_name(model.type));
     }
 
     if (file_version < LLAMA_FILE_VERSION_GGJT_V2) {
@@ -1164,9 +1178,9 @@ static void llama_model_load_internal(
         const size_t mem_required =
             ctx_size +
             mmapped_size - vram_weights + // weights in VRAM not in memory
-            MEM_REQ_SCRATCH0().at(model.type) +
+            MEM_REQ_SCRATCH0(hparams.n_ctx).at(model.type) +
             MEM_REQ_SCRATCH1().at(model.type) +
-            MEM_REQ_EVAL().at    (model.type);
+            MEM_REQ_EVAL(hparams.n_ctx).at(model.type);
 
         // this is the memory required by one llama_state
         const size_t mem_required_state =
@@ -1270,6 +1284,8 @@ static bool llama_model_load(
         int n_gpu_layers,
         int main_gpu,
         float * tensor_split,
+        float rope_freq_base,
+        float rope_freq_scale,
         bool low_vram,
         ggml_type memory_type,
         bool use_mmap,
@@ -1278,7 +1294,7 @@ static bool llama_model_load(
         llama_progress_callback progress_callback,
         void *progress_callback_user_data) {
     try {
-        llama_model_load_internal(fname, model, vocab, n_ctx, n_batch, n_gpu_layers, main_gpu, tensor_split, low_vram, memory_type,
+        llama_model_load_internal(fname, model, vocab, n_ctx, n_batch, n_gpu_layers, main_gpu, tensor_split, rope_freq_base, rope_freq_scale, low_vram, memory_type,
                                   use_mmap, use_mlock, vocab_only, progress_callback, progress_callback_user_data);
         return true;
     } catch (const std::exception & err) {
@@ -1329,6 +1345,9 @@ static bool llama_eval_internal(
     const int n_vocab      = hparams.n_vocab;
     const int n_rot        = hparams.n_embd/hparams.n_head;
     const int n_gpu_layers = model.n_gpu_layers;
+
+    const float freq_base  = hparams.rope_freq_base;
+    const float freq_scale = hparams.rope_freq_scale;
 
     auto & mem_per_token = lctx.mem_per_token;
     auto & buf_compute   = lctx.buf_compute;
@@ -1427,11 +1446,11 @@ static bool llama_eval_internal(
             offload_func_kq(tmpq);
             ggml_set_name(tmpq, "tmpq");
 
-            struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd/n_head, n_head, N), n_past, n_rot, 0, 0);
+            struct ggml_tensor * Kcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd/n_head, n_head, N), n_past, n_rot, 0, freq_base, freq_scale, 0);
             offload_func_kq(Kcur);
             ggml_set_name(Kcur, "Kcur");
 
-            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd/n_head, n_head, N), n_past, n_rot, 0, 0);
+            struct ggml_tensor * Qcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd/n_head, n_head, N), n_past, n_rot, 0, freq_base, freq_scale, 0);
             offload_func_kq(Qcur);
             ggml_set_name(Qcur, "Qcur");
 
@@ -2674,8 +2693,9 @@ struct llama_model * llama_load_model_from_file(
     ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
     if (!llama_model_load(path_model, *model, model->vocab, params.n_ctx, params.n_batch, params.n_gpu_layers,
-                params.main_gpu, params.tensor_split, params.low_vram, memory_type, params.use_mmap, params.use_mlock,
-                params.vocab_only, params.progress_callback, params.progress_callback_user_data)) {
+                params.main_gpu, params.tensor_split, params.rope_freq_base, params.rope_freq_scale,params.low_vram,
+                memory_type, params.use_mmap, params.use_mlock, params.vocab_only, params.progress_callback,
+                params.progress_callback_user_data)) {
         delete model;
         fprintf(stderr, "%s: failed to load model\n", __func__);
         return nullptr;
@@ -2750,9 +2770,9 @@ struct llama_context * llama_new_context_with_model(
             ctx->embedding.resize(hparams.n_embd);
         }
 
-        ctx->buf_compute.resize(MEM_REQ_EVAL().at(ctx->model.type));
+        ctx->buf_compute.resize(MEM_REQ_EVAL(hparams.n_ctx).at(ctx->model.type));
 
-        ctx->buf_scratch[0].resize(MEM_REQ_SCRATCH0().at(ctx->model.type));
+        ctx->buf_scratch[0].resize(MEM_REQ_SCRATCH0(hparams.n_ctx).at(ctx->model.type));
         ctx->buf_scratch[1].resize(MEM_REQ_SCRATCH1().at(ctx->model.type));
     }
 
