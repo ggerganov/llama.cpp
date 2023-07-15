@@ -7,6 +7,7 @@
 #include "llama.h"
 #include "build-info.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cinttypes>
 #include <cmath>
@@ -664,6 +665,12 @@ int main(int argc, char ** argv) {
                     size_t search_start_pos = last_output.length() > static_cast<size_t>(antiprompt.length() + extra_padding)
                         ? last_output.length() - static_cast<size_t>(antiprompt.length() + extra_padding)
                         : 0;
+
+                    if (params.reverse_prompt_case_insensitive) {
+                        // convert both strings to lower case
+                        std::transform(antiprompt.begin(), antiprompt.end(), antiprompt.begin(), ::tolower);
+                        std::transform(last_output.begin(), last_output.end(), last_output.begin(), ::tolower);
+                    }
 
                     if (last_output.find(antiprompt.c_str(), search_start_pos) != std::string::npos) {
                         if (params.interactive) {

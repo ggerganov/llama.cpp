@@ -88,6 +88,7 @@ struct gpt_params {
     bool numa              = false; // attempt optimizations that help on some NUMA systems
     bool export_cgraph     = false; // export the computation graph
     bool verbose_prompt    = false; // print prompt tokens before generation
+    bool reverse_prompt_case_insensitive = false; // make the reverse prompt case insensitive
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
