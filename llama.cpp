@@ -190,8 +190,10 @@ struct llama_hparams {
     uint32_t n_head  = 32;
     uint32_t n_layer = 32;
     uint32_t n_rot   = 64;
+
     float rope_freq_base  = 10000.0f;
     float rope_freq_scale = 1.0f;
+
     enum llama_ftype ftype = LLAMA_FTYPE_MOSTLY_F16;
 
     bool operator!=(const llama_hparams & other) const {
@@ -843,12 +845,12 @@ struct llama_context_params llama_context_default_params() {
     struct llama_context_params result = {
         /*.seed                        =*/ LLAMA_DEFAULT_SEED,
         /*.n_ctx                       =*/ 512,
-        /*.rope_freq_base              =*/ 10000.0f,
-        /*.rope_freq_scale             =*/ 1.0f,
         /*.n_batch                     =*/ 512,
         /*.gpu_layers                  =*/ 0,
         /*.main_gpu                    =*/ 0,
         /*.tensor_split                =*/ {0},
+        /*.rope_freq_base              =*/ 10000.0f,
+        /*.rope_freq_scale             =*/ 1.0f,
         /*.progress_callback           =*/ nullptr,
         /*.progress_callback_user_data =*/ nullptr,
         /*.low_vram                    =*/ false,
@@ -968,12 +970,12 @@ static void llama_model_load_internal(
         llama_model & model,
         llama_vocab & vocab,
         int n_ctx,
-        float rope_freq_base,
-        float rope_freq_scale,
         int n_batch,
         int n_gpu_layers,
         int main_gpu,
         const float * tensor_split,
+        float rope_freq_base,
+        float rope_freq_scale,
         bool low_vram,
         ggml_type memory_type,
         bool use_mmap,
@@ -1008,26 +1010,27 @@ static void llama_model_load_internal(
         }
 
         hparams.n_ctx = n_ctx;
-        hparams.rope_freq_base = rope_freq_base;
+
+        hparams.rope_freq_base  = rope_freq_base;
         hparams.rope_freq_scale = rope_freq_scale;
     }
 
     const uint32_t n_ff = ((2*(4*hparams.n_embd)/3 + hparams.n_mult - 1)/hparams.n_mult)*hparams.n_mult;
 
     {
-        fprintf(stderr, "%s: format     = %s\n",  __func__, llama_file_version_name(file_version));
-        fprintf(stderr, "%s: n_vocab    = %u\n",  __func__, hparams.n_vocab);
-        fprintf(stderr, "%s: n_ctx      = %u\n",  __func__, hparams.n_ctx);
-        fprintf(stderr, "%s: n_embd     = %u\n",  __func__, hparams.n_embd);
-        fprintf(stderr, "%s: n_mult     = %u\n",  __func__, hparams.n_mult);
-        fprintf(stderr, "%s: n_head     = %u\n",  __func__, hparams.n_head);
-        fprintf(stderr, "%s: n_layer    = %u\n",  __func__, hparams.n_layer);
-        fprintf(stderr, "%s: n_rot      = %u\n",  __func__, hparams.n_rot);
-        fprintf(stderr, "%s: freq_base  = %.1f\n",  __func__, hparams.rope_freq_base);
-        fprintf(stderr, "%s: freq_scale = %g\n",  __func__, hparams.rope_freq_scale);
+        fprintf(stderr, "%s: format     = %s\n",   __func__, llama_file_version_name(file_version));
+        fprintf(stderr, "%s: n_vocab    = %u\n",   __func__, hparams.n_vocab);
+        fprintf(stderr, "%s: n_ctx      = %u\n",   __func__, hparams.n_ctx);
+        fprintf(stderr, "%s: n_embd     = %u\n",   __func__, hparams.n_embd);
+        fprintf(stderr, "%s: n_mult     = %u\n",   __func__, hparams.n_mult);
+        fprintf(stderr, "%s: n_head     = %u\n",   __func__, hparams.n_head);
+        fprintf(stderr, "%s: n_layer    = %u\n",   __func__, hparams.n_layer);
+        fprintf(stderr, "%s: n_rot      = %u\n",   __func__, hparams.n_rot);
+        fprintf(stderr, "%s: freq_base  = %.1f\n", __func__, hparams.rope_freq_base);
+        fprintf(stderr, "%s: freq_scale = %g\n",   __func__, hparams.rope_freq_scale);
         fprintf(stderr, "%s: ftype      = %u (%s)\n", __func__, hparams.ftype, llama_ftype_name(hparams.ftype));
-        fprintf(stderr, "%s: n_ff       = %u\n",  __func__, n_ff);
-        fprintf(stderr, "%s: model size = %s\n",  __func__, llama_model_type_name(model.type));
+        fprintf(stderr, "%s: n_ff       = %u\n",   __func__, n_ff);
+        fprintf(stderr, "%s: model size = %s\n",   __func__, llama_model_type_name(model.type));
     }
 
     if (file_version < LLAMA_FILE_VERSION_GGJT_V2) {
@@ -1278,12 +1281,12 @@ static bool llama_model_load(
         llama_model & model,
         llama_vocab & vocab,
         int n_ctx,
-        float rope_freq_base,
-        float rope_freq_scale,
         int n_batch,
         int n_gpu_layers,
         int main_gpu,
         float * tensor_split,
+        float rope_freq_base,
+        float rope_freq_scale,
         bool low_vram,
         ggml_type memory_type,
         bool use_mmap,
@@ -1292,7 +1295,7 @@ static bool llama_model_load(
         llama_progress_callback progress_callback,
         void *progress_callback_user_data) {
     try {
-        llama_model_load_internal(fname, model, vocab, n_ctx, rope_freq_base, rope_freq_scale, n_batch, n_gpu_layers, main_gpu, tensor_split, low_vram, memory_type,
+        llama_model_load_internal(fname, model, vocab, n_ctx, n_batch, n_gpu_layers, main_gpu, tensor_split, rope_freq_base, rope_freq_scale, low_vram, memory_type,
                                   use_mmap, use_mlock, vocab_only, progress_callback, progress_callback_user_data);
         return true;
     } catch (const std::exception & err) {
@@ -1342,9 +1345,10 @@ static bool llama_eval_internal(
     const int n_head       = hparams.n_head;
     const int n_vocab      = hparams.n_vocab;
     const int n_rot        = hparams.n_embd/hparams.n_head;
+    const int n_gpu_layers = model.n_gpu_layers;
+
     const float freq_base  = hparams.rope_freq_base;
     const float freq_scale = hparams.rope_freq_scale;
-    const int n_gpu_layers = model.n_gpu_layers;
 
     auto & mem_per_token = lctx.mem_per_token;
     auto & buf_compute   = lctx.buf_compute;
@@ -2689,9 +2693,9 @@ struct llama_model * llama_load_model_from_file(
 
     ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
-    if (!llama_model_load(path_model, *model, model->vocab, params.n_ctx, params.rope_freq_base, params.rope_freq_scale,
-                params.n_batch, params.n_gpu_layers, params.main_gpu, params.tensor_split, params.low_vram, memory_type,
-                params.use_mmap, params.use_mlock, params.vocab_only, params.progress_callback,
+    if (!llama_model_load(path_model, *model, model->vocab, params.n_ctx, params.n_batch, params.n_gpu_layers,
+                params.main_gpu, params.tensor_split, params.rope_freq_base, params.rope_freq_scale,params.low_vram,
+                memory_type, params.use_mmap, params.use_mlock, params.vocab_only, params.progress_callback,
                 params.progress_callback_user_data)) {
         delete model;
         fprintf(stderr, "%s: failed to load model\n", __func__);

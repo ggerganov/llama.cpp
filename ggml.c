@@ -6975,7 +6975,7 @@ struct ggml_tensor * ggml_rope_impl(
     ((int32_t *) b->data)[1] = n_dims;
     ((int32_t *) b->data)[2] = mode;
     ((int32_t *) b->data)[3] = n_ctx;
-    memcpy((int32_t *) b->data + 4, &freq_base, sizeof(float));
+    memcpy((int32_t *) b->data + 4, &freq_base,  sizeof(float));
     memcpy((int32_t *) b->data + 5, &freq_scale, sizeof(float));
 
     ggml_scratch_load(ctx);
@@ -12084,12 +12084,14 @@ static void ggml_compute_forward_rope_f32(
         return;
     }
 
+    float freq_base;
+    float freq_scale;
+
     const int n_past = ((int32_t *) src1->data)[0];
     const int n_dims = ((int32_t *) src1->data)[1];
     const int mode   = ((int32_t *) src1->data)[2];
     const int n_ctx  = ((int32_t *) src1->data)[3];
-    float freq_base, freq_scale;
-    memcpy(&freq_base, (int32_t *) src1->data + 4, sizeof(float));
+    memcpy(&freq_base,  (int32_t *) src1->data + 4, sizeof(float));
     memcpy(&freq_scale, (int32_t *) src1->data + 5, sizeof(float));
 
     assert(n_past >= 0);
@@ -12214,12 +12216,14 @@ static void ggml_compute_forward_rope_f16(
         return;
     }
 
+    float freq_base;
+    float freq_scale;
+
     const int n_past = ((int32_t *) src1->data)[0];
     const int n_dims = ((int32_t *) src1->data)[1];
     const int mode   = ((int32_t *) src1->data)[2];
     const int n_ctx  = ((int32_t *) src1->data)[3];
-    float freq_base, freq_scale;
-    memcpy(&freq_base, (int32_t *) src1->data + 4, sizeof(float));
+    memcpy(&freq_base,  (int32_t *) src1->data + 4, sizeof(float));
     memcpy(&freq_scale, (int32_t *) src1->data + 5, sizeof(float));
 
     assert(n_past >= 0);
@@ -12322,7 +12326,7 @@ static void ggml_compute_forward_rope_f16(
                             const float x0 = GGML_FP16_TO_FP32(src[0]);
                             const float x1 = GGML_FP16_TO_FP32(src[n_dims/2]);
 
-                            dst_data[0]     = GGML_FP32_TO_FP16(x0*cos_theta - x1*sin_theta);
+                            dst_data[0]        = GGML_FP32_TO_FP16(x0*cos_theta - x1*sin_theta);
                             dst_data[n_dims/2] = GGML_FP32_TO_FP16(x0*sin_theta + x1*cos_theta);
                         }
                     }
