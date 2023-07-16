@@ -547,5 +547,4 @@ endif ()
 
 if (LLAMA_BUILD_EXAMPLES)
     add_subdirectory(examples)
-    add_subdirectory(pocs)
 endif()

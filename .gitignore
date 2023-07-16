@@ -38,7 +38,6 @@ models/*
 /train-text-from-scratch
 /simple
 /benchmark-matmult
-/vdot
 /server
 /Pipfile
 /embd-input-test
