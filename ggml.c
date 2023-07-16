@@ -6855,7 +6855,9 @@ struct ggml_tensor * ggml_rope_impl(
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
 
     // TODO: just use a struct
-    int32_t params[] = { n_past, n_dims, mode, n_ctx, *(int32_t*)&freq_base, *(int32_t*)&freq_scale};
+    int32_t params[6] = { n_past, n_dims, mode, n_ctx };
+    memcpy(params + 4, &freq_base, sizeof(float));
+    memcpy(params + 5, &freq_scale, sizeof(float));
     assert(GGML_MAX_OP_PARAMS >= sizeof(params));
     memcpy(result->params, &params, sizeof(params));
 
@@ -7127,13 +7129,11 @@ struct ggml_tensor* ggml_pool_1d(
     };
     struct ggml_tensor* result = ggml_new_tensor(ctx, GGML_TYPE_F32, 2, ne);
 
-    ggml_scratch_save(ctx);
     struct ggml_tensor* c = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 4);
     ((int32_t*)c->data)[0] = op;
     ((int32_t*)c->data)[1] = k0;
     ((int32_t*)c->data)[2] = s0;
     ((int32_t*)c->data)[3] = p0;
-    ggml_scratch_load(ctx);
 
     result->op = GGML_OP_POOL_1D;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -7170,7 +7170,6 @@ struct ggml_tensor* ggml_pool_2d(
     };
     struct ggml_tensor* result = ggml_new_tensor(ctx, GGML_TYPE_F32, 3, ne);
 
-    ggml_scratch_save(ctx);
     struct ggml_tensor* c = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 7);
     ((int32_t*)c->data)[0] = op;
     ((int32_t*)c->data)[1] = k0;
@@ -7179,7 +7178,6 @@ struct ggml_tensor* ggml_pool_2d(
     ((int32_t*)c->data)[4] = s1;
     ((int32_t*)c->data)[5] = p0;
     ((int32_t*)c->data)[6] = p1;
-    ggml_scratch_load(ctx);
 
     result->op = GGML_OP_POOL_2D;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -15823,7 +15821,8 @@ static void ggml_visit_parents(struct ggml_cgraph * cgraph, struct ggml_tensor *
         }
     }
 
-    if (node->op == GGML_OP_NONE && node->src0 == NULL && node->src1 == NULL && node->grad == NULL) {
+    // TODO: add ggml_dependency instead of checking for NULL
+    if (node->op == GGML_OP_NONE && node->src[0] == NULL && node->src[1] == NULL && node->grad == NULL) {
         // reached a leaf node, not part of the gradient graph (e.g. a constant)
         GGML_ASSERT(cgraph->n_leafs < GGML_MAX_NODES);
 

@@ -289,7 +289,7 @@ void ggml_graph_splits_add_n_va(struct ggml_graph_splits * splits, struct ggml_t
 
     if ((*inputs[0])->backend == ggml_get_ctx_backend(ctx)) {
         if (splits->n_splits > 0) {
-            char name[GGML_MAX_NAME - 1]; // silence -Wformat-truncation
+            char name[GGML_MAX_NAME];
             vsnprintf(name, sizeof(name), fmt, args);
             char new_name[GGML_MAX_NAME];
             snprintf(new_name, sizeof(new_name), "%s,%s", splits->splits[splits->n_splits - 1].name, name);

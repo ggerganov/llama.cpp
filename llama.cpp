@@ -1168,7 +1168,7 @@ static ggml_graph_splits llama_build_graph(
 
     struct ggml_graph_splits splits = ggml_graph_split_init();
 
-    // initalize contexts for every backend
+    // initialize contexts for every backend
 
     struct ggml_context * ctx_cpu = nullptr;
     // TODO: don't create context if there are no CPU layers
@@ -1295,8 +1295,8 @@ static ggml_graph_splits llama_build_graph(
                 // TODO: replace with ggml_dependency / ggml_depends_on
                 k = ggml_view_tensor(ctx_kv, kv_self.k);
                 v = ggml_view_tensor(ctx_kv, kv_self.v);
-                k->src0 = k_cpy;
-                v->src0 = v_cpy;
+                k->src[0] = k_cpy;
+                v->src[0] = v_cpy;
             }
 
             struct ggml_tensor * Q =

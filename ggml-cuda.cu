@@ -1475,8 +1475,8 @@ static void ggml_cuda_mul_mat(ggml_cuda_context * ctx, ggml_tensor * src0, ggml_
 }
 
 static void ggml_cuda_exec_node(ggml_cuda_context * ctx, ggml_tensor * node, cudaStream_t stream) {
-    ggml_tensor * src0 = node->src0;
-    ggml_tensor * src1 = node->src1;
+    ggml_tensor * src0 = node->src[0];
+    ggml_tensor * src1 = node->src[1];
     ggml_tensor * dst  = node;
 
 #if 0
@@ -1551,8 +1551,6 @@ static void ggml_cuda_exec_node(ggml_cuda_context * ctx, ggml_tensor * node, cud
     }
 }
 
-static const int GGML_MAX_PARENTS = 2 + GGML_MAX_OPT;
-
 static bool ggml_is_noop(ggml_tensor * t) {
     return t->op == GGML_OP_RESHAPE || t->op == GGML_OP_VIEW || t->op == GGML_OP_TRANSPOSE ||
            t->op == GGML_OP_PERMUTE || t->op == GGML_OP_NONE;
@@ -1581,26 +1579,20 @@ static void ggml_cuda_graph_exec_parallel(ggml_cuda_context * ctx, ggml_cgraph *
         ggml_tensor * node = gf->nodes[i];
         const bool is_noop = ggml_is_noop(node);
 
-        // build a list of parents
-        ggml_tensor * parents[GGML_MAX_PARENTS] = { node->src0, node->src1 };
-        for (int j = 0; j < GGML_MAX_OPT; j++) {
-            parents[j + 2] = node->opt[j];
-        }
-
         // assign an stream for the node
         cudaStream_t stream = nullptr;
 
         // take a stream from a parent
-        for (int j = 0; j < GGML_MAX_PARENTS; j++) {
-            if (parents[j] && stream_map.count(parents[j]) && stream_map[parents[j]] != nullptr) {
-                stream = stream_map[parents[j]];
-                stream_map.erase(parents[j]);
+        for (int j = 0; j < GGML_MAX_SRC; j++) {
+            if (node->src[j] && stream_map.count(node->src[j]) && stream_map[node->src[j]] != nullptr) {
+                stream = stream_map[node->src[j]];
+                stream_map.erase(node->src[j]);
 
                 if (is_noop) {
                     // if this is a noop, we can use the parent's event
                     stream_map[node] = stream;
-                    if (event_map.count(parents[j]) > 0) {
-                        event_map[node] = event_map[parents[j]];
+                    if (event_map.count(node->src[j]) > 0) {
+                        event_map[node] = event_map[node->src[j]];
                     }
                 }
                 break;
@@ -1624,9 +1616,9 @@ static void ggml_cuda_graph_exec_parallel(ggml_cuda_context * ctx, ggml_cgraph *
 
         // wait on parent streams
         bool waited = false;
-        for (int j = 0; j < GGML_MAX_PARENTS; j++) {
-            if (parents[j] && event_map.count(parents[j]) > 0) {
-                CUDA_CHECK(cudaStreamWaitEvent(stream, event_map[parents[j]], 0));
+        for (int j = 0; j < GGML_MAX_SRC; j++) {
+            if (node->src[j] && event_map.count(node->src[j]) > 0) {
+                CUDA_CHECK(cudaStreamWaitEvent(stream, event_map[node->src[j]], 0));
                 waited = true;
             }
         }
