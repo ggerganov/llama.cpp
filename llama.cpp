@@ -2205,7 +2205,7 @@ void llama_sample_classifier_free_guidance(
           struct llama_context * guidance_ctx,
                          float   scale,
                          float   smooth_factor) {
-    int64_t t_start_sample_us = t_start_sample_us = ggml_time_us();
+    int64_t t_start_sample_us = ggml_time_us();
 
     assert(ctx);
     auto n_vocab = llama_n_vocab(ctx);
