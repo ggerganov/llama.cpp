@@ -4412,8 +4412,8 @@ void ggml_free(struct ggml_context * ctx) {
         if (&g_state.contexts[i].context == ctx) {
             g_state.contexts[i].used = false;
 
-            GGML_PRINT_DEBUG("%s: context %d with %d objects has been freed. memory used = %zu\n",
-                    __func__, i, ctx->n_objects, ctx->objects_end->offs + ctx->objects_end->size);
+            GGML_PRINT_DEBUG("%s: context %d has been freed. memory used = %zu\n",
+                    __func__, i, ggml_used_mem(ctx));
 
             if (ctx->mem_buffer_owned) {
                 GGML_ALIGNED_FREE(ctx->mem_buffer);
@@ -16317,8 +16317,8 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                 if (GGML_OP_HAS_FINALIZE[node->op]) {
                     params.nth = n_tasks_arr[node_n];
                     ggml_compute_forward(&params, node);
-                    ggml_graph_compute_perf_stats_node(node, state->shared);
                 }
+                ggml_graph_compute_perf_stats_node(node, state->shared);
             }
 
             // distribute new work or execute it direct if 1T
@@ -16348,8 +16348,9 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                     if (GGML_OP_HAS_FINALIZE[node->op]) {
                         params.type = GGML_TASK_FINALIZE;
                         ggml_compute_forward(&params, node);
-                        ggml_graph_compute_perf_stats_node(node, state->shared);
                     }
+
+                    ggml_graph_compute_perf_stats_node(node, state->shared);
                 } else {
                     break;
                 }
@@ -16891,9 +16892,6 @@ static void ggml_graph_export_node(const struct ggml_tensor * tensor, const char
 }
 
 void ggml_graph_export(const struct ggml_cgraph * cgraph, const char * fname) {
-    //assert(cgraph->work      == NULL);
-    //assert(cgraph->work_size == 0);
-
     uint64_t size_eval = 0;
 
     // compute size of intermediate results
@@ -17331,9 +17329,6 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
     int64_t perf_total_per_op_us[GGML_OP_COUNT] = {0};
 
     GGML_PRINT("=== GRAPH ===\n");
-
-    GGML_PRINT_DEBUG("n_threads       = %d\n",        cgraph->n_threads);
-    GGML_PRINT_DEBUG("total work size = %zu bytes\n", cgraph->work_size);
 
     GGML_PRINT("n_nodes = %d\n", cgraph->n_nodes);
     for (int i = 0; i < cgraph->n_nodes; i++) {
