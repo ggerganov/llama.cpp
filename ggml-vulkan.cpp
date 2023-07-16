@@ -1241,7 +1241,7 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     if (src0->backend == GGML_BACKEND_GPU) {
         d_X = *(vk_buffer*) src0->data;
     } else {
-        ggml_vk_pool_malloc(ggml_type_size(src0->type) * x_ne, &d_X, 0);
+        ggml_vk_pool_malloc(sizeof(float) * x_ne, &d_X, 0);
     }
     ggml_vk_pool_malloc(sizeof(float) * y_ne, &d_Y, 0);
     ggml_vk_pool_malloc(sizeof(float) * d_ne * split_k, &d_D, 0);
@@ -1253,7 +1253,7 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     vk::Semaphore s_it_x;
     vk::Semaphore s_it_y;
 
-    const bool load_x = src0->backend != GGML_BACKEND_CPU;
+    const bool load_x = src0->backend != GGML_BACKEND_GPU;
 
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
