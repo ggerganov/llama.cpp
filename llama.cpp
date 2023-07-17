@@ -2709,9 +2709,18 @@ struct llama_context * llama_new_context_with_model(
 
     fprintf(stderr, "%s: layer backends: ", __func__);
     fprintf(stderr, "input: %s, ", ggml_backend_name(ctx->model.backend_input));
-    for (int i = 0; i < (int)ctx->model.hparams.n_layer; i++) {
-        if (i == 0 || ctx->model.backend_layers[i] != ctx->model.backend_layers[i-1]) {
-            fprintf(stderr, "layer %d: %s, ", i, ggml_backend_name(ctx->model.backend_layers[i]));
+
+    int start = 0;
+    struct ggml_backend * prev_backend = ctx->model.backend_layers[0];
+    for (int i = 1; i <= (int)ctx->model.hparams.n_layer; i++) {
+        if (i == (int)ctx->model.hparams.n_layer || ctx->model.backend_layers[i] != prev_backend) {
+            if (start == i - 1) {
+                fprintf(stderr, "layer %d: %s, ", start, ggml_backend_name(prev_backend));
+            } else {
+                fprintf(stderr, "layers %d-%d: %s, ", start, i - 1, ggml_backend_name(prev_backend));
+            }
+            start = i;
+            prev_backend = ctx->model.backend_layers[i];
         }
     }
     fprintf(stderr, "output: %s, ", ggml_backend_name(ctx->model.backend_output));
