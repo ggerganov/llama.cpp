@@ -650,8 +650,6 @@ struct llama_model_loader {
                     // hint the OS that we don't need the data anymore
                     // TODO: this may be a bad idea with devices that use the system memory (Metal?)
                     mapping->discard(lt.data, lt.size);
-                } else {
-                    free(lt.data);
                 }
             }
 
