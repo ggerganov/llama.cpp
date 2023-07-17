@@ -147,7 +147,7 @@ void test_roundtrip_on_chunk(
         const ggml_tensor * layer,
         int64_t offset,
         int64_t chunk_size,
-        const quantize_fns_t & qfns,
+        const ggml_type_traits_t & qfns,
         bool use_reference,
         float * input_scratch,
         char * quantized_scratch,
@@ -163,11 +163,11 @@ void test_roundtrip_on_chunk(
     }
 
     if (use_reference) {
-        qfns.quantize_row_q_reference(input_scratch, quantized_scratch, chunk_size);
+        qfns.from_float_reference(input_scratch, quantized_scratch, chunk_size);
     } else {
-        qfns.quantize_row_q(input_scratch, quantized_scratch, chunk_size);
+        qfns.from_float(input_scratch, quantized_scratch, chunk_size);
     }
-    qfns.dequantize_row_q(quantized_scratch, output_scratch, chunk_size);
+    qfns.to_float(quantized_scratch, output_scratch, chunk_size);
 
     update_error_stats(chunk_size, input_scratch, output_scratch, stats);
 }
@@ -177,7 +177,7 @@ void test_roundtrip_on_chunk(
 void test_roundtrip_on_layer(
         std::string & name,
         bool print_layer_stats,
-        const quantize_fns_t & qfns,
+        const ggml_type_traits_t & qfns,
         bool use_reference,
         const ggml_tensor * layer,
         std::vector<float> & input_scratch,
@@ -388,8 +388,8 @@ int main(int argc, char ** argv) {
         if (!params.include_types.empty() && std::find(params.include_types.begin(), params.include_types.end(), i) == params.include_types.end()) {
             continue;
         }
-        quantize_fns_t qfns = ggml_internal_get_quantize_fn(i);
-        if (qfns.quantize_row_q && qfns.dequantize_row_q) {
+        ggml_type_traits_t qfns = ggml_internal_get_type_traits(type);
+        if (qfns.from_float && qfns.to_float) {
             if (params.verbose) {
                 printf("testing %s ...\n",  ggml_type_name(type));
             }

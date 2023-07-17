@@ -235,7 +235,7 @@ int main(int argc, char** argv) {
     int n4 = useQ4_1 ? kVecSize / QK4_1 : kVecSize / QK4_0; n4 = 64*((n4 + 63)/64);
     int n8 = kVecSize / QK8_0; n8 = 64*((n8 + 63)/64);
 
-    auto funcs = useQ4_1 ? ggml_internal_get_quantize_fn(GGML_TYPE_Q4_1) : ggml_internal_get_quantize_fn(GGML_TYPE_Q4_0);
+    auto funcs = useQ4_1 ? ggml_internal_get_type_traits(GGML_TYPE_Q4_1) : ggml_internal_get_type_traits(GGML_TYPE_Q4_0);
 
     std::vector<block_q4_0> q40;
     std::vector<block_q4_1> q41;
@@ -261,9 +261,9 @@ int main(int argc, char** argv) {
         // Note, we do not include this in the timing as in practical application
         // we already have the quantized model weights.
         if (useQ4_1) {
-            funcs.quantize_row_q(x1.data(), q41.data(), kVecSize);
+            funcs.from_float(x1.data(), q41.data(), kVecSize);
         } else {
-            funcs.quantize_row_q(x1.data(), q40.data(), kVecSize);
+            funcs.from_float(x1.data(), q40.data(), kVecSize);
         }
 
         // Now measure time the dot product needs using the "scalar" version above
@@ -282,9 +282,10 @@ int main(int argc, char** argv) {
             dot_q4_q8(kVecSize, &result, q40.data(), q8.data());
         }
         else {
-            funcs.quantize_row_q_dot(y1.data(), q8.data(), kVecSize);
-            if (useQ4_1) funcs.vec_dot_q(kVecSize, &result, q41.data(), q8.data());
-            else funcs.vec_dot_q(kVecSize, &result, q40.data(), q8.data());
+            auto vdot = ggml_internal_get_type_traits(funcs.vec_dot_type);
+            vdot.from_float(y1.data(), q8.data(), kVecSize);
+            if (useQ4_1) funcs.vec_dot(kVecSize, &result, q41.data(), q8.data());
+            else funcs.vec_dot(kVecSize, &result, q40.data(), q8.data());
         }
         sumq += result;
         t2 = std::chrono::high_resolution_clock::now();

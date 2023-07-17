@@ -20,6 +20,7 @@ build-static/
 build-cublas/
 build-opencl/
 build-metal/
+build-mpi/
 build-no-accel/
 build-sanitize-addr/
 build-sanitize-thread/

@@ -25,6 +25,8 @@ struct ggml_metal_buffer {
 };
 
 struct ggml_metal_context {
+    int n_cb;
+
     float * logits;
 
     id<MTLDevice>       device;
@@ -86,11 +88,12 @@ static NSString * const msl_library_source = @"see metal.metal";
 @implementation GGMLMetalClass
 @end
 
-struct ggml_metal_context * ggml_metal_init(void) {
+struct ggml_metal_context * ggml_metal_init(int n_cb) {
     fprintf(stderr, "%s: allocating\n", __func__);
 
     struct ggml_metal_context * ctx = malloc(sizeof(struct ggml_metal_context));
 
+    ctx->n_cb   = n_cb;
     ctx->device = MTLCreateSystemDefaultDevice();
     ctx->queue  = [ctx->device newCommandQueue];
     ctx->n_buffers = 0;
@@ -202,8 +205,14 @@ struct ggml_metal_context * ggml_metal_init(void) {
 
 void ggml_metal_free(struct ggml_metal_context * ctx) {
     fprintf(stderr, "%s: deallocating\n", __func__);
-
+    for (int i = 0; i < ctx->n_buffers; ++i) {
+        [ctx->buffers[i].metal release];
+    }
     free(ctx);
+}
+
+void ggml_metal_set_n_cb(struct ggml_metal_context * ctx, int n_cb) {
+    ctx->n_cb = n_cb;
 }
 
 // finds the Metal buffer that contains the tensor data on the GPU device
@@ -352,7 +361,7 @@ void ggml_metal_graph_compute(
     // create multiple command buffers and enqueue them
     // then, we encode the graph into the command buffers in parallel
 
-    const int n_cb = gf->n_threads;
+    const int n_cb = ctx->n_cb;
 
     NSMutableArray * command_buffers = [NSMutableArray arrayWithCapacity:n_cb];
 
@@ -384,8 +393,8 @@ void ggml_metal_graph_compute(
             for (int i = node_start; i < node_end; ++i) {
                 metal_printf("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
 
-                struct ggml_tensor * src0 = gf->nodes[i]->src0;
-                struct ggml_tensor * src1 = gf->nodes[i]->src1;
+                struct ggml_tensor * src0 = gf->nodes[i]->src[0];
+                struct ggml_tensor * src1 = gf->nodes[i]->src[1];
                 struct ggml_tensor * dst  = gf->nodes[i];
 
                 const int64_t  ne00 = src0 ? src0->ne[0] : 0;
@@ -441,6 +450,7 @@ void ggml_metal_graph_compute(
                 //}
 
                 switch (dst->op) {
+                    case GGML_OP_NONE:
                     case GGML_OP_RESHAPE:
                     case GGML_OP_VIEW:
                     case GGML_OP_TRANSPOSE:
@@ -730,8 +740,7 @@ void ggml_metal_graph_compute(
                                 [encoder setBytes:&ne1  length:sizeof(ne1)  atIndex:14];
 
                                 if (src0t == GGML_TYPE_Q4_0 || src0t == GGML_TYPE_Q4_1) {
-                                    [encoder setThreadgroupMemoryLength:nth0*nth1*sizeof(float) atIndex:0];
-                                    [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne11, 1) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                    [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7) / 8, ne11, 1) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                                 }
                                 else if (src0t == GGML_TYPE_Q2_K ||
                                          src0t == GGML_TYPE_Q3_K ||
@@ -872,28 +881,35 @@ void ggml_metal_graph_compute(
 
                             const int n_past = ((int32_t *)(src1->data))[0];
 
+                            float freq_base;
+                            float freq_scale;
+                            memcpy(&freq_base,  (int32_t *) src1->data + 4, sizeof(float));
+                            memcpy(&freq_scale, (int32_t *) src1->data + 5, sizeof(float));
+
                             [encoder setComputePipelineState:ctx->pipeline_rope];
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
-                            [encoder setBytes:&ne00   length:sizeof( int64_t) atIndex:2];
-                            [encoder setBytes:&ne01   length:sizeof( int64_t) atIndex:3];
-                            [encoder setBytes:&ne02   length:sizeof( int64_t) atIndex:4];
-                            [encoder setBytes:&ne03   length:sizeof( int64_t) atIndex:5];
-                            [encoder setBytes:&nb00   length:sizeof(uint64_t) atIndex:6];
-                            [encoder setBytes:&nb01   length:sizeof(uint64_t) atIndex:7];
-                            [encoder setBytes:&nb02   length:sizeof(uint64_t) atIndex:8];
-                            [encoder setBytes:&nb03   length:sizeof(uint64_t) atIndex:9];
-                            [encoder setBytes:&ne0    length:sizeof( int64_t) atIndex:10];
-                            [encoder setBytes:&ne1    length:sizeof( int64_t) atIndex:11];
-                            [encoder setBytes:&ne2    length:sizeof( int64_t) atIndex:12];
-                            [encoder setBytes:&ne3    length:sizeof( int64_t) atIndex:13];
-                            [encoder setBytes:&nb0    length:sizeof(uint64_t) atIndex:14];
-                            [encoder setBytes:&nb1    length:sizeof(uint64_t) atIndex:15];
-                            [encoder setBytes:&nb2    length:sizeof(uint64_t) atIndex:16];
-                            [encoder setBytes:&nb3    length:sizeof(uint64_t) atIndex:17];
-                            [encoder setBytes:&n_past length:sizeof(     int) atIndex:18];
-                            [encoder setBytes:&n_dims length:sizeof(     int) atIndex:19];
-                            [encoder setBytes:&mode   length:sizeof(     int) atIndex:20];
+                            [encoder setBytes:&ne00    length:sizeof( int64_t) atIndex:2];
+                            [encoder setBytes:&ne01    length:sizeof( int64_t) atIndex:3];
+                            [encoder setBytes:&ne02    length:sizeof( int64_t) atIndex:4];
+                            [encoder setBytes:&ne03    length:sizeof( int64_t) atIndex:5];
+                            [encoder setBytes:&nb00    length:sizeof(uint64_t) atIndex:6];
+                            [encoder setBytes:&nb01    length:sizeof(uint64_t) atIndex:7];
+                            [encoder setBytes:&nb02    length:sizeof(uint64_t) atIndex:8];
+                            [encoder setBytes:&nb03    length:sizeof(uint64_t) atIndex:9];
+                            [encoder setBytes:&ne0     length:sizeof( int64_t) atIndex:10];
+                            [encoder setBytes:&ne1     length:sizeof( int64_t) atIndex:11];
+                            [encoder setBytes:&ne2     length:sizeof( int64_t) atIndex:12];
+                            [encoder setBytes:&ne3     length:sizeof( int64_t) atIndex:13];
+                            [encoder setBytes:&nb0     length:sizeof(uint64_t) atIndex:14];
+                            [encoder setBytes:&nb1     length:sizeof(uint64_t) atIndex:15];
+                            [encoder setBytes:&nb2     length:sizeof(uint64_t) atIndex:16];
+                            [encoder setBytes:&nb3     length:sizeof(uint64_t) atIndex:17];
+                            [encoder setBytes:&n_past  length:sizeof(     int) atIndex:18];
+                            [encoder setBytes:&n_dims  length:sizeof(     int) atIndex:19];
+                            [encoder setBytes:&mode    length:sizeof(     int) atIndex:20];
+                            [encoder setBytes:&freq_base  length:sizeof(float) atIndex:21];
+                            [encoder setBytes:&freq_scale length:sizeof(float) atIndex:22];
 
                             [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                         } break;

@@ -43,6 +43,8 @@
             "-DLLAMA_METAL=ON"
           ]);
           installPhase = ''
+            runHook preInstall
+
             mkdir -p $out/bin
             mv bin/* $out/bin/
             mv $out/bin/main $out/bin/llama
@@ -51,6 +53,8 @@
             echo "#!${llama-python}/bin/python" > $out/bin/convert.py
             cat ${./convert.py} >> $out/bin/convert.py
             chmod +x $out/bin/convert.py
+
+            runHook postInstall
           '';
           meta.mainProgram = "llama";
         };

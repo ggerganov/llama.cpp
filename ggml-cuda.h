@@ -8,10 +8,6 @@ extern "C" {
 
 #define GGML_CUDA_MAX_DEVICES       16
 
-struct ggml_tensor_extra_gpu {
-    void * data_device[GGML_CUDA_MAX_DEVICES]; // 1 pointer for each device for split tensors
-};
-
 void   ggml_init_cublas(void);
 void   ggml_cuda_set_tensor_split(const float * tensor_split);
 
