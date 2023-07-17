@@ -125,14 +125,25 @@ function gg_run_open_llama_3b_v2 {
     set -e
 
     path_models="../models-mnt/open-llama/3B-v2"
+
     model_f16="${path_models}/ggml-model-f16.bin"
     model_q4_0="${path_models}/ggml-model-q4_0.bin"
+    model_q4_1="${path_models}/ggml-model-q4_1.bin"
+    model_q5_0="${path_models}/ggml-model-q5_0.bin"
+    model_q5_1="${path_models}/ggml-model-q5_1.bin"
 
     python3 ../convert.py ${path_models}
-    ./bin/quantize ${model_f16} ${model_q4_0} q4_0
 
-    (time ./bin/main --model ${model_f16}  -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg.log
-    (time ./bin/main --model ${model_q4_0} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg.log
+    ./bin/quantize ${model_f16} ${model_q4_0} q4_0
+    ./bin/quantize ${model_f16} ${model_q4_1} q4_1
+    ./bin/quantize ${model_f16} ${model_q5_0} q5_0
+    ./bin/quantize ${model_f16} ${model_q5_1} q5_1
+
+    (time ./bin/main --model ${model_f16}  -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-f16.log
+    (time ./bin/main --model ${model_q4_0} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q4_0.log
+    (time ./bin/main --model ${model_q4_1} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
+    (time ./bin/main --model ${model_q5_0} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
+    (time ./bin/main --model ${model_q5_1} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
 
     set +e
 }
@@ -140,11 +151,13 @@ function gg_run_open_llama_3b_v2 {
 function gg_sum_open_llama_3b_v2 {
     gg_printf '### %s\n\n' "${ci}"
 
-    gg_printf 'OpenLLaMA 3B-v2\n'
+    gg_printf 'OpenLLaMA 3B-v2: text generation\n'
     gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
-    gg_printf '```\n'
-    gg_printf '%s\n' "$(cat $OUT/${ci}-tg.log)"
-    gg_printf '```\n'
+    gg_printf '- f16: \n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-f16.log)"
+    gg_printf '- q4_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_0.log)"
+    gg_printf '- q4_1:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_1.log)"
+    gg_printf '- q5_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_0.log)"
+    gg_printf '- q5_1:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_1.log)"
 }
 
 ## main
