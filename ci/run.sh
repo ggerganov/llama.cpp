@@ -108,45 +108,44 @@ function gg_sum_ctest_release {
     gg_printf '```\n'
 }
 
-# mpt
+# open_llama_3b_v2
 
-#function gg_run_mpt {
-#    cd ${SRC}
-#
-#    gg_wget models/mpt/7B/ https://huggingface.co/mosaicml/mpt-7b/raw/main/config.json
-#    gg_wget models/mpt/7B/ https://huggingface.co/mosaicml/mpt-7b/raw/main/tokenizer.json
-#    gg_wget models/mpt/7B/ https://huggingface.co/mosaicml/mpt-7b/raw/main/tokenizer_config.json
-#    gg_wget models/mpt/7B/ https://huggingface.co/mosaicml/mpt-7b/raw/main/pytorch_model.bin.index.json
-#    gg_wget models/mpt/7B/ https://huggingface.co/mosaicml/mpt-7b/raw/main/configuration_mpt.py
-#    gg_wget models/mpt/7B/ https://huggingface.co/mosaicml/mpt-7b/resolve/main/pytorch_model-00001-of-00002.bin
-#    gg_wget models/mpt/7B/ https://huggingface.co/mosaicml/mpt-7b/resolve/main/pytorch_model-00002-of-00002.bin
-#
-#    cd build-ci-release
-#
-#    set -e
-#
-#    path_models="../models/mpt/7B"
-#    model_f16="${path_models}/ggml-model-f16.bin"
-#    model_q4_0="${path_models}/ggml-model-q4_0.bin"
-#
-#    python3 ../examples/mpt/convert-h5-to-ggml.py ${path_models} 1
-#    ./bin/mpt-quantize ${model_f16} ${model_q4_0} q4_0
-#
-#    (time ./bin/mpt --model ${model_f16} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg.log
-#    (time ./bin/mpt --model ${model_q4_0} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg.log
-#
-#    set +e
-#}
-#
-#function gg_sum_mpt {
-#    gg_printf '### %s\n\n' "${ci}"
-#
-#    gg_printf 'Runs short MPT text generation\n'
-#    gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
-#    gg_printf '```\n'
-#    gg_printf '%s\n' "$(cat $OUT/${ci}-tg.log)"
-#    gg_printf '```\n'
-#}
+function gg_run_open_llama_3b_v2 {
+    cd ${SRC}
+
+    gg_wget models-mnt/open-llama/3B-v2/ https://huggingface.co/openlm-research/open_llama_3b_v2/raw/main/config.json
+    gg_wget models-mnt/open-llama/3B-v2/ https://huggingface.co/openlm-research/open_llama_3b_v2/resolve/main/tokenizer.model
+    gg_wget models-mnt/open-llama/3B-v2/ https://huggingface.co/openlm-research/open_llama_3b_v2/raw/main/tokenizer_config.json
+    gg_wget models-mnt/open-llama/3B-v2/ https://huggingface.co/openlm-research/open_llama_3b_v2/raw/main/special_tokens_map.json
+    gg_wget models-mnt/open-llama/3B-v2/ https://huggingface.co/openlm-research/open_llama_3b_v2/resolve/main/pytorch_model.bin
+    gg_wget models-mnt/open-llama/3B-v2/ https://huggingface.co/openlm-research/open_llama_3b_v2/raw/main/generation_config.json
+
+    cd build-ci-release
+
+    set -e
+
+    path_models="../models-mnt/open-llama/3B-v2"
+    model_f16="${path_models}/ggml-model-f16.bin"
+    model_q4_0="${path_models}/ggml-model-q4_0.bin"
+
+    python3 ../convert.py ${path_models}
+    ./bin/quantize ${model_f16} ${model_q4_0} q4_0
+
+    (time ./bin/main --model ${model_f16}  -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg.log
+    (time ./bin/main --model ${model_q4_0} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg.log
+
+    set +e
+}
+
+function gg_sum_open_llama_3b_v2 {
+    gg_printf '### %s\n\n' "${ci}"
+
+    gg_printf 'OpenLLaMA 3B-v2\n'
+    gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
+    gg_printf '```\n'
+    gg_printf '%s\n' "$(cat $OUT/${ci}-tg.log)"
+    gg_printf '```\n'
+}
 
 ## main
 
@@ -164,8 +163,8 @@ ret=0
 test $ret -eq 0 && gg_run ctest_debug
 test $ret -eq 0 && gg_run ctest_release
 
-#if [ -z $GG_BUILD_LOW_PERF ]; then
-#    test $ret -eq 0 && gg_run mpt
-#fi
+if [ -z $GG_BUILD_LOW_PERF ]; then
+    test $ret -eq 0 && gg_run open_llama_3b_v2
+fi
 
 exit $ret
