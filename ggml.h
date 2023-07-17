@@ -414,19 +414,21 @@ extern "C" {
         // compute data
         enum ggml_op op;
 
+        // op params - allocated as int32_t for alignment
+        int32_t op_params[GGML_MAX_OP_PARAMS / sizeof(uint32_t)];
+
         bool is_param;
 
         struct ggml_tensor * grad;
         struct ggml_tensor * src[GGML_MAX_SRC];
+
+        int node_id; // used to build graphs
 
         // performance
         int     perf_runs;
         int64_t perf_cycles;
         int64_t perf_time_us;
 
-        // op params
-        // allocated as int32_t to avoid alignment issues
-        int32_t params[GGML_MAX_OP_PARAMS / sizeof(uint32_t)];
 
         void * data;
 
@@ -434,7 +436,6 @@ extern "C" {
 
         void * extra; // extra things e.g. for ggml-cuda.cu
 
-        bool visited; // used to build graphs
 
         char padding[4];
     };

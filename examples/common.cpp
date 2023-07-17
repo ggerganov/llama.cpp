@@ -327,24 +327,24 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.n_gpu_layers = std::stoi(argv[i]);
 #else
             fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");
-            fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
+            fprintf(stderr, "warning: see main README.md for information on enabling GPU support\n");
 #endif
         } else if (arg == "--main-gpu" || arg == "-mg") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-#ifdef GGML_USE_CUBLAS
+#ifdef GGML_USE_CUDA
             params.main_gpu = std::stoi(argv[i]);
 #else
-      fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a main GPU.\n");
+      fprintf(stderr, "warning: llama.cpp was compiled without CUDA. It is not possible to set a main GPU.\n");
 #endif
         } else if (arg == "--tensor-split" || arg == "-ts") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-#ifdef GGML_USE_CUBLAS
+#ifdef GGML_USE_CUDA
             std::string arg_next = argv[i];
 
             // split string by , and /
@@ -361,14 +361,14 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 }
             }
 #else
-      fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.\n");
-#endif // GGML_USE_CUBLAS
+      fprintf(stderr, "warning: llama.cpp was compiled without CUDA. It is not possible to set a tensor split.\n");
+#endif // GGML_USE_CUDA
         } else if (arg == "--low-vram" || arg == "-lv") {
-#ifdef GGML_USE_CUBLAS
+#ifdef GGML_USE_CUDA
             params.low_vram = true;
 #else
-      fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n");
-#endif // GGML_USE_CUBLAS
+      fprintf(stderr, "warning: llama.cpp was compiled without CUDA. It is not possible to set lower vram usage.\n");
+#endif // GGML_USE_CUDA
         } else if (arg == "--no-mmap") {
             params.use_mmap = false;
         } else if (arg == "--mtest") {
