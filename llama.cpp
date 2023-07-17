@@ -191,9 +191,7 @@ struct llama_layer {
     struct ggml_tensor * w1;
     struct ggml_tensor * w2;
     struct ggml_tensor * w3;
-};
 
-struct llama_lora_layers {
     // LoRA optional
     struct ggml_tensor * wq_a;
     struct ggml_tensor * wq_b;
@@ -1375,12 +1373,37 @@ static bool llama_eval_internal(
 
         // self-attention
         {
+            struct ggml_tensor * wq = model.layers[il].wq;
+            struct ggml_tensor * wk = model.layers[il].wk;
+
+            if (model.layers[il].wq_a != nullptr) {
+                // apply lora
+                ggml_tensor * BA = ggml_mul_mat(ctx0, model.layers[il].wq_a, model.layers[il].wq_b);
+                offload_func(BA);
+                ggml_set_name(BA, "BA");
+
+#if 0
+                if (scaling != 1.0f) {
+                    ggml_tensor * scale_tensor = ggml_new_f32(lora_ctx, scaling);
+                    ggml_set_name(scale_tensor, "scale_tensor");
+
+                    BA = ggml_scale_inplace(lora_ctx, BA, scale_tensor);
+                    offload_func(BA);
+                    ggml_set_name(BA, "BA_scaled");
+                }
+#endif
+
+                wq = ggml_add(ctx0, wq, BA);
+                offload_func(wq);
+                ggml_set_name(wq, "lora_wq");
+            }
+
             // compute Q and K and RoPE them
-            struct ggml_tensor * tmpk = ggml_mul_mat(ctx0, model.layers[il].wk, cur);
+            struct ggml_tensor * tmpk = ggml_mul_mat(ctx0, wk, cur);
             offload_func_kq(tmpk);
             ggml_set_name(tmpk, "tmpk");
 
-            struct ggml_tensor * tmpq = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
+            struct ggml_tensor * tmpq = ggml_mul_mat(ctx0, wq, cur);
             offload_func_kq(tmpq);
             ggml_set_name(tmpq, "tmpq");
 
@@ -1395,8 +1418,30 @@ static bool llama_eval_internal(
             // store key and value to memory
             {
                 // compute the transposed [N, n_embd] V matrix
+                struct ggml_tensor * wv = model.layers[il].wv;
+                if (model.layers[il].wv_a != nullptr) {
+                    // apply lora
+                    ggml_tensor * BA = ggml_mul_mat(ctx0, model.layers[il].wv_a, model.layers[il].wv_b);
+                    offload_func(BA);
+                    ggml_set_name(BA, "BA");
 
-                struct ggml_tensor * tmpv = ggml_mul_mat(ctx0, model.layers[il].wv, cur);
+#if 0
+                    if (scaling != 1.0f) {
+                        ggml_tensor * scale_tensor = ggml_new_f32(lora_ctx, scaling);
+                        ggml_set_name(scale_tensor, "scale_tensor");
+
+                        BA = ggml_scale_inplace(lora_ctx, BA, scale_tensor);
+                        offload_func(BA);
+                        ggml_set_name(BA, "BA_scaled");
+                    }
+#endif
+
+                    wv = ggml_add(ctx0, wv, BA);
+                    offload_func(wv);
+                    ggml_set_name(wv, "lora_wv");
+                }
+
+                struct ggml_tensor * tmpv = ggml_mul_mat(ctx0, wv, cur);
                 offload_func_v(tmpv);
                 ggml_set_name(tmpv, "tmpv");
 
@@ -3536,8 +3581,7 @@ const std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_
 }
 
 // finetune related code
-int llama_enable_finetune(struct llama_context * ctx, enum llama_finetune_type flags, int n_lora) {
-    auto model = &ctx->model;
+int llama_enable_finetune(struct llama_model * model, enum llama_finetune_type flags, int n_lora) {
     const auto& hparams = model->hparams;
 
     const uint32_t n_layer = hparams.n_layer;
@@ -3565,20 +3609,32 @@ int llama_enable_finetune(struct llama_context * ctx, enum llama_finetune_type f
     } else if (flags & LLAMA_FINETUNE_LORA) {
         // create AB tensor if they are not present
         for (uint32_t i = 0; i < n_layer; ++i) {
-            llama_lora_layers layer = {0};
+            auto & layer = model->layers[i];
 
             if (flags & LLAMA_FINETUNE_LORA_Q) {
                 if (layer.wq_a == nullptr || layer.wq_b == nullptr) {
                     layer.wq_a = ggml_new_tensor_2d(ctx0, GGML_TYPE_F16, n_lora, n_embd);
                     layer.wq_b = ggml_new_tensor_2d(ctx0, GGML_TYPE_F16, n_embd, n_lora);
                     // initialize
+
+                    // offload
+                    
                 }
                 ggml_set_param(ctx0, layer.wq_a);
                 ggml_set_param(ctx0, layer.wq_b);
             }
 
-            if (flags & LLAMA_FINETUNE_LORA_Q) {
+            if (flags & LLAMA_FINETUNE_LORA_V) {
+                if (layer.wv_a == nullptr || layer.wv_b == nullptr) {
+                    layer.wv_a = ggml_new_tensor_2d(ctx0, GGML_TYPE_F16, n_lora, n_embd);
+                    layer.wv_b = ggml_new_tensor_2d(ctx0, GGML_TYPE_F16, n_embd, n_lora);
+                    // initialize
 
+                    // offload
+
+                }
+                ggml_set_param(ctx0, layer.wv_a);
+                ggml_set_param(ctx0, layer.wv_b);
             }
         }
     }
