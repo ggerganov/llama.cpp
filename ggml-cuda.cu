@@ -2977,10 +2977,8 @@ inline void ggml_cuda_op_rope(
     const int mode   = ((int32_t *) src1->data)[2];
     const int n_ctx  = ((int32_t *) src1->data)[3];
 
-    const float theta_scale = get_theta_scale(n_dims,n_past,n_ctx);
-    const float p0 = ((mode & 1) == 0 ? n_past + i02 : i02);
-
-    const float p = get_ntk_rope_scale_mode()?p0:(n_ctx <= GGML_TRAINING_CTX ? p0 : p0 * GGML_TRAINING_CTX / n_ctx);
+    const float theta_scale = powf(10000.0, -2.0f/n_dims);
+    const float p = ((mode & 1) == 0 ? n_past + i02 : i02);
 
     bool is_glm = mode & 4;
 
@@ -3564,6 +3562,11 @@ void ggml_cuda_cpy(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tens
     (void) dst;
 }
 
+void ggml_cuda_dup(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    ggml_cuda_cpy(src0, dst, nullptr);
+    (void) src1;
+}
+
 void ggml_cuda_diag_mask_inf(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     GGML_ASSERT(src0->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32);
     ggml_cuda_op(src0, src1, dst, ggml_cuda_op_diag_mask_inf, true, true);
@@ -3697,7 +3700,7 @@ void ggml_cuda_assign_buffers_impl(struct ggml_tensor * tensor, bool scratch, bo
     // recursively assign CUDA buffers until a compute tensor is found
     if (tensor->src[0] != nullptr && tensor->src[0]->backend == GGML_BACKEND_CPU) {
         const ggml_op src0_op = tensor->src[0]->op;
-        if (src0_op == GGML_OP_RESHAPE || src0_op == GGML_OP_TRANSPOSE || src0_op == GGML_OP_VIEW) {
+        if (src0_op == GGML_OP_RESHAPE || src0_op == GGML_OP_TRANSPOSE || src0_op == GGML_OP_VIEW || src0_op == GGML_OP_PERMUTE) {
             ggml_cuda_assign_buffers_impl(tensor->src[0], scratch, force_inplace);
         }
     }
@@ -3803,6 +3806,12 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
         || (tensor->src[1] != nullptr && tensor->src[1]->backend == GGML_BACKEND_GPU);
 
     switch (tensor->op) {
+        case GGML_OP_DUP:
+            if (!any_on_device) {
+                return false;
+            }
+            func = ggml_cuda_dup;
+            break;
         case GGML_OP_ADD:
             if (!any_on_device) {
                 return false;
@@ -3856,6 +3865,12 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
                 return false;
             }
             func = ggml_cuda_cpy;
+            break;
+        case GGML_OP_CONT:
+            if (!any_on_device) {
+                return false;
+            }
+            func = ggml_cuda_dup;
             break;
         case GGML_OP_RESHAPE:
         case GGML_OP_VIEW:

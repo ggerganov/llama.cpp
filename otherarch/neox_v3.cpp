@@ -425,6 +425,9 @@ bool gpt_neox_eval(
     const int n_vocab = hparams.n_vocab;
     const int n_rot   = hparams.n_rot;
 
+    const float freq_base  = hparams.rope_freq_base;
+    const float freq_scale = hparams.rope_freq_scale;
+
     static size_t buf_size = 256u*1024*1024;
     static void * buf = malloc(buf_size);
 
@@ -503,8 +506,8 @@ bool gpt_neox_eval(
             struct ggml_tensor * Vcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd/n_head, n_head, N, cur->nb[1]/n_head, cur->nb[1], 2*sizeof(float)*n_embd/n_head));
 
             // using mode = 2 for GPT-NeoX mode
-            Qcur = ggml_rope_inplace(ctx0, Qcur, n_past, n_rot, 2, n_ctx);
-            Kcur = ggml_rope_inplace(ctx0, Kcur, n_past, n_rot, 2, n_ctx);
+            Qcur = ggml_rope_custom_inplace(ctx0, Qcur, n_past, n_rot, 2, freq_base, freq_scale, n_ctx);
+            Kcur = ggml_rope_custom_inplace(ctx0, Kcur, n_past, n_rot, 2, freq_base, freq_scale, n_ctx);
 
             // store key and value to memory
             {

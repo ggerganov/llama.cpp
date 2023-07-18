@@ -24,6 +24,9 @@ struct gptj_hparams {
     int32_t n_layer = 28;
     int32_t n_rot   = 64;
     int32_t ftype   = 1;
+
+    float rope_freq_base  = 10000.0f;
+    float rope_freq_scale = 1.0f;
 };
 
 struct gptj_layer {
@@ -309,6 +312,9 @@ struct gpt_neox_hparams {
     int32_t n_rot   = 32; // rotary_pct * (n_embd / n_head)
     int32_t par_res = 1; // 1 = true, 0 = false
     int32_t ftype   = 1;
+
+    float rope_freq_base  = 10000.0f;
+    float rope_freq_scale = 1.0f;
 };
 
 struct gpt_neox_layer_v2 {

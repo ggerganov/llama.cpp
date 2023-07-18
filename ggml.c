@@ -4292,35 +4292,6 @@ static inline int ggml_up(int n, int m) {
 #define ggml_assert_aligned(ptr) \
     GGML_ASSERT(((uintptr_t) (ptr))%GGML_MEM_ALIGN == 0)
 
-static bool useNtkRope = true; //uses linear rope if not NTK
-void set_ntk_rope_scale_mode(bool useNtk)
-{
-    useNtkRope = useNtk;
-}
-bool get_ntk_rope_scale_mode()
-{
-    return useNtkRope;
-}
-float get_theta_scale(int n_dims,int n_past,int n_ctx)
-{
-    if (!get_ntk_rope_scale_mode())
-    {
-        return powf(10000.0, -2.0f / n_dims);
-    }
-    if (n_ctx <= 2048) //normie mode
-    {
-        return powf(10000.0, -2.0f / n_dims);
-    }
-    else
-    {
-        //using scaled NTK aware ctx
-        float a = (n_ctx <= 4096 ? 4.0 : 8.0);
-        float m = powf(a, n_dims / (n_dims - 2.0));
-        float s = powf(10000.0 * m, -2.0f / n_dims);
-        return s;
-    }
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 
 struct ggml_context * ggml_init(struct ggml_init_params params) {
@@ -4442,8 +4413,8 @@ void ggml_free(struct ggml_context * ctx) {
         if (&g_state.contexts[i].context == ctx) {
             g_state.contexts[i].used = false;
 
-            GGML_PRINT_DEBUG("%s: context %d with %d objects has been freed. memory used = %zu\n",
-                    __func__, i, ctx->n_objects, ctx->objects_end->offs + ctx->objects_end->size);
+            GGML_PRINT_DEBUG("%s: context %d has been freed. memory used = %zu\n",
+                    __func__, i, ggml_used_mem(ctx));
 
             if (ctx->mem_buffer_owned) {
                 GGML_ALIGNED_FREE(ctx->mem_buffer);
@@ -6986,6 +6957,8 @@ struct ggml_tensor * ggml_rope_impl(
         int                   n_past,
         int                   n_dims,
         int                   mode,
+        float                 freq_base,
+        float                 freq_scale,
         int                   n_ctx,
         bool                  inplace) {
     GGML_ASSERT(n_past >= 0);
@@ -6999,12 +6972,14 @@ struct ggml_tensor * ggml_rope_impl(
 
     ggml_scratch_save(ctx);
 
-    struct ggml_tensor * b = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 4);
+    struct ggml_tensor * b = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 6);
 
     ((int32_t *) b->data)[0] = n_past;
     ((int32_t *) b->data)[1] = n_dims;
     ((int32_t *) b->data)[2] = mode;
     ((int32_t *) b->data)[3] = n_ctx;
+    memcpy((int32_t *) b->data + 4, &freq_base,  sizeof(float));
+    memcpy((int32_t *) b->data + 5, &freq_scale, sizeof(float));
 
     ggml_scratch_load(ctx);
 
@@ -7023,7 +6998,7 @@ struct ggml_tensor * ggml_rope(
         int                   n_dims,
         int                   mode,
         int                   n_ctx) {
-    return ggml_rope_impl(ctx, a, n_past, n_dims, mode, n_ctx, false);
+    return ggml_rope_impl(ctx, a, n_past, n_dims, mode, 10000.0f, 1.0f, n_ctx, false);
 }
 
 struct ggml_tensor * ggml_rope_inplace(
@@ -7033,7 +7008,19 @@ struct ggml_tensor * ggml_rope_inplace(
         int                   n_dims,
         int                   mode,
         int                   n_ctx) {
-    return ggml_rope_impl(ctx, a, n_past, n_dims, mode, n_ctx, true);
+    return ggml_rope_impl(ctx, a, n_past, n_dims, mode, 10000.0f, 1.0f, n_ctx, true);
+}
+
+struct ggml_tensor * ggml_rope_custom_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int                   n_past,
+        int                   n_dims,
+        int                   mode,
+        float                 freq_base,
+        float                 freq_scale,
+        int                   n_ctx) {
+    return ggml_rope_impl(ctx, a, n_past, n_dims, mode, freq_base, freq_scale, n_ctx, true);
 }
 
 // ggml_rope_back
@@ -12104,16 +12091,21 @@ static void ggml_compute_forward_rope_f32(
         const struct ggml_tensor * src1,
         struct ggml_tensor * dst) {
     GGML_ASSERT(src1->type == GGML_TYPE_I32);
-    GGML_ASSERT(ggml_nelements(src1) == 4);
+    GGML_ASSERT(ggml_nelements(src1) == 6);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
 
+    float freq_base;
+    float freq_scale;
+
     const int n_past = ((int32_t *) src1->data)[0];
     const int n_dims = ((int32_t *) src1->data)[1];
     const int mode   = ((int32_t *) src1->data)[2];
     const int n_ctx  = ((int32_t *) src1->data)[3];
+    memcpy(&freq_base,  (int32_t *) src1->data + 4, sizeof(float));
+    memcpy(&freq_scale, (int32_t *) src1->data + 5, sizeof(float));
 
     assert(n_past >= 0);
 
@@ -12142,7 +12134,7 @@ static void ggml_compute_forward_rope_f32(
     // row index used to determine which thread to use
     int ir = 0;
 
-    const float theta_scale = get_theta_scale(n_dims,n_past,n_ctx);
+    const float theta_scale = powf(freq_base, -2.0f/n_dims);
 
     const bool is_neox = mode & 2;
     const bool is_glm  = mode & 4;
@@ -12154,7 +12146,7 @@ static void ggml_compute_forward_rope_f32(
                 if (ir++ < ir0) continue;
                 if (ir   > ir1) break;
 
-                float theta = (float)p;
+                float theta = freq_scale * (float)p;
 
                 if (is_glm) {
                     theta = MIN(p, n_ctx - 2);
@@ -12182,9 +12174,6 @@ static void ggml_compute_forward_rope_f32(
                         dst_data[n_dims/2*3] = x2*sin_block_theta + x3*cos_block_theta;
                     }
                 } else if (!is_neox) {
-                    if (!get_ntk_rope_scale_mode() && n_ctx > GGML_TRAINING_CTX) {
-                        theta = theta * GGML_TRAINING_CTX / n_ctx;
-                    }
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
                         const float cos_theta = cosf(theta);
                         const float sin_theta = sinf(theta);
@@ -12234,16 +12223,21 @@ static void ggml_compute_forward_rope_f16(
         const struct ggml_tensor * src1,
         struct ggml_tensor * dst) {
     GGML_ASSERT(src1->type == GGML_TYPE_I32);
-    GGML_ASSERT(ggml_nelements(src1) == 4);
+    GGML_ASSERT(ggml_nelements(src1) == 6);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
 
+    float freq_base;
+    float freq_scale;
+
     const int n_past = ((int32_t *) src1->data)[0];
     const int n_dims = ((int32_t *) src1->data)[1];
     const int mode   = ((int32_t *) src1->data)[2];
     const int n_ctx  = ((int32_t *) src1->data)[3];
+    memcpy(&freq_base,  (int32_t *) src1->data + 4, sizeof(float));
+    memcpy(&freq_scale, (int32_t *) src1->data + 5, sizeof(float));
 
     assert(n_past >= 0);
 
@@ -12272,7 +12266,7 @@ static void ggml_compute_forward_rope_f16(
     // row index used to determine which thread to use
     int ir = 0;
 
-    const float theta_scale = get_theta_scale(n_dims,n_past,n_ctx);
+    const float theta_scale = powf(freq_base, -2.0f/n_dims);
 
     const bool is_neox = mode & 2;
     const bool is_glm  = mode & 4;
@@ -12284,7 +12278,7 @@ static void ggml_compute_forward_rope_f16(
                 if (ir++ < ir0) continue;
                 if (ir   > ir1) break;
 
-                float theta = (float)p;
+                float theta = freq_scale * (float)p;
 
                 if (is_glm) {
                     theta = MIN(p, n_ctx - 2);
@@ -12312,9 +12306,6 @@ static void ggml_compute_forward_rope_f16(
                         dst_data[n_dims/2*3] = GGML_FP32_TO_FP16(x2*sin_block_theta + x3*cos_block_theta);
                     }
                 } if (!is_neox) {
-                    if (!get_ntk_rope_scale_mode() && n_ctx > GGML_TRAINING_CTX) {
-                        theta = theta * GGML_TRAINING_CTX / n_ctx;
-                    }
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
                         const float cos_theta = cosf(theta);
                         const float sin_theta = sinf(theta);
@@ -12348,7 +12339,7 @@ static void ggml_compute_forward_rope_f16(
                             const float x0 = GGML_FP16_TO_FP32(src[0]);
                             const float x1 = GGML_FP16_TO_FP32(src[n_dims/2]);
 
-                            dst_data[0]     = GGML_FP32_TO_FP16(x0*cos_theta - x1*sin_theta);
+                            dst_data[0]        = GGML_FP32_TO_FP16(x0*cos_theta - x1*sin_theta);
                             dst_data[n_dims/2] = GGML_FP32_TO_FP16(x0*sin_theta + x1*cos_theta);
                         }
                     }
@@ -12400,7 +12391,6 @@ static void ggml_compute_forward_rope_back_f32(
     const int n_past = ((int32_t *) src1->data)[0];
     const int n_dims = ((int32_t *) src1->data)[1];
     const int mode   = ((int32_t *) src1->data)[2];
-    const int n_ctx  = ((int32_t *) src1->data)[3];
 
     assert(n_past >= 0);
 
@@ -12426,7 +12416,7 @@ static void ggml_compute_forward_rope_back_f32(
     // row index used to determine which thread to use
     int ir = 0;
 
-    const float theta_scale = get_theta_scale(n_dims,n_past,n_ctx);
+    const float theta_scale = powf(10000.0, -2.0f/n_dims);
 
     const bool is_neox = mode & 2;
 
@@ -12440,9 +12430,6 @@ static void ggml_compute_forward_rope_back_f32(
                 float theta = (float)p;
 
                 if (!is_neox) {
-                    if (!get_ntk_rope_scale_mode() && n_ctx > GGML_TRAINING_CTX) {
-                        theta = theta * GGML_TRAINING_CTX / n_ctx;
-                    }
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
                         const float cos_theta = cosf(theta);
                         const float sin_theta = sinf(theta);
@@ -12503,7 +12490,6 @@ static void ggml_compute_forward_rope_back_f16(
     const int n_past = ((int32_t *) src1->data)[0];
     const int n_dims = ((int32_t *) src1->data)[1];
     const int mode   = ((int32_t *) src1->data)[2];
-    const int n_ctx  = ((int32_t *) src1->data)[3];
 
     assert(n_past >= 0);
 
@@ -12529,7 +12515,7 @@ static void ggml_compute_forward_rope_back_f16(
     // row index used to determine which thread to use
     int ir = 0;
 
-    const float theta_scale = get_theta_scale(n_dims,n_past,n_ctx);
+    const float theta_scale = powf(10000.0, -2.0f/n_dims);
 
     const bool is_neox = mode & 2;
 
@@ -12543,9 +12529,6 @@ static void ggml_compute_forward_rope_back_f16(
                 float theta = (float)p;
 
                 if (!is_neox) {
-                    if (!get_ntk_rope_scale_mode() && n_ctx > GGML_TRAINING_CTX) {
-                        theta = theta * GGML_TRAINING_CTX / n_ctx;
-                    }
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
                         const float cos_theta = cosf(theta);
                         const float sin_theta = sinf(theta);
@@ -15754,7 +15737,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 // necessary for llama
                 if (src0->grad) {
                     assert(src1->type == GGML_TYPE_I32);
-                    assert(ggml_nelements(src1) == 4);
+                    assert(ggml_nelements(src1) == 6);
                     const int n_past = ((int32_t *) src1->data)[0];
                     const int n_dims = ((int32_t *) src1->data)[1];
                     const int mode   = ((int32_t *) src1->data)[2];
@@ -15775,7 +15758,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             {
                 if (src0->grad) {
                     assert(src1->type == GGML_TYPE_I32);
-                    assert(ggml_nelements(src1) == 4);
+                    assert(ggml_nelements(src1) == 3);
                     const int n_past = ((int32_t *) src1->data)[0];
                     const int n_dims = ((int32_t *) src1->data)[1];
                     const int mode   = ((int32_t *) src1->data)[2];
@@ -16335,8 +16318,8 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                 if (GGML_OP_HAS_FINALIZE[node->op]) {
                     params.nth = n_tasks_arr[node_n];
                     ggml_compute_forward(&params, node);
-                    ggml_graph_compute_perf_stats_node(node, state->shared);
                 }
+                ggml_graph_compute_perf_stats_node(node, state->shared);
             }
 
             // distribute new work or execute it direct if 1T
@@ -16366,8 +16349,9 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                     if (GGML_OP_HAS_FINALIZE[node->op]) {
                         params.type = GGML_TASK_FINALIZE;
                         ggml_compute_forward(&params, node);
-                        ggml_graph_compute_perf_stats_node(node, state->shared);
                     }
+
+                    ggml_graph_compute_perf_stats_node(node, state->shared);
                 } else {
                     break;
                 }
@@ -16909,9 +16893,6 @@ static void ggml_graph_export_node(const struct ggml_tensor * tensor, const char
 }
 
 void ggml_graph_export(const struct ggml_cgraph * cgraph, const char * fname) {
-    //assert(cgraph->work      == NULL);
-    //assert(cgraph->work_size == 0);
-
     uint64_t size_eval = 0;
 
     // compute size of intermediate results
@@ -17349,9 +17330,6 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
     int64_t perf_total_per_op_us[GGML_OP_COUNT] = {0};
 
     GGML_PRINT("=== GRAPH ===\n");
-
-    GGML_PRINT_DEBUG("n_threads       = %d\n",        cgraph->n_threads);
-    GGML_PRINT_DEBUG("total work size = %zu bytes\n", cgraph->work_size);
 
     GGML_PRINT("n_nodes = %d\n", cgraph->n_nodes);
     for (int i = 0; i < cgraph->n_nodes; i++) {

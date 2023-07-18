@@ -32,13 +32,15 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
     // BOS tokens will be added for each chunk before eval
     auto tokens = ::llama_tokenize(ctx, params.prompt, true);
 
-    int count   = 0;
+    const int n_chunk_max = tokens.size() / params.n_ctx;
 
-    const int n_chunk = tokens.size() / params.n_ctx;
+    const int n_chunk = params.n_chunks < 0 ? n_chunk_max : std::min(params.n_chunks, n_chunk_max);
     const int n_vocab = llama_n_vocab(ctx);
     const int n_batch = params.n_batch;
 
+    int count = 0;
     double nll = 0.0;
+
     fprintf(stderr, "%s: calculating perplexity over %d chunks, batch_size=%d\n", __func__, n_chunk, n_batch);
 
     for (int i = 0; i < n_chunk; ++i) {
