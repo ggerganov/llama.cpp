@@ -1834,8 +1834,9 @@ ggml_backend ggml_backend_cuda_init(void) {
     ggml_backend_cuda_context * ctx = new ggml_backend_cuda_context;
 
     ggml_backend cuda_backend = {
-        /* .interface = */ &cuda_backend_interface,
-        /* .context   = */ ctx
+        /* .interface =   = */ &cuda_backend_interface,
+        /* .context       = */ ctx,
+        /* .is_ram_shared = */ false,
     };
     return cuda_backend;
 }

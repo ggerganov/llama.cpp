@@ -225,6 +225,7 @@ struct llama_model {
     llama_vocab vocab;
 
     // backends
+    // TODO: change to pointers
     ggml_backend   backend_cpu;
     ggml_buffer    buf_cpu;
     ggml_context * ctx_cpu = NULL;
@@ -298,6 +299,7 @@ struct llama_context {
 
     // memory buffers used to evaluate the model
     ggml_buffer buf_compute_cpu = {};
+
 #ifdef GGML_USE_CUDA
     ggml_buffer buf_compute_cuda = {};
 #endif
@@ -612,7 +614,7 @@ struct llama_model_loader {
         }
     }
 
-    void load_all_data(llama_progress_callback progress_callback, void *  progress_callback_user_data, llama_mlock * lmlock) {
+    void load_all_data(llama_progress_callback progress_callback, void * progress_callback_user_data, llama_mlock * lmlock) {
         size_t data_size = 0;
         size_t lock_size = 0;
         for (const llama_load_tensor & lt : tensors_map.tensors) {
@@ -634,11 +636,11 @@ struct llama_model_loader {
             }
             LLAMA_ASSERT(lt.ggml_tensor); // unused tensors should have been caught by load_data already
 
-            bool is_cpu = lt.ggml_tensor->backend == &model->backend_cpu;
+            const bool is_ram_shared = lt.ggml_tensor->backend->is_ram_shared;
 
             // select buffer to load data into
             if (!use_mmap) {
-                if (is_cpu) {
+                if (is_ram_shared) {
                     lt.data = (uint8_t *) lt.ggml_tensor->data;
                 } else {
                     // read to temporary buffer
@@ -649,7 +651,7 @@ struct llama_model_loader {
 
             load_data_for(lt);
 
-            if (is_cpu) {
+            if (is_ram_shared) {
                 if (use_mmap) {
                     lt.ggml_tensor->data = lt.data;
                     // TODO: this assumes that the data to lock is contiguous, which may not always be the case
@@ -671,7 +673,7 @@ struct llama_model_loader {
         }
     }
 
-    void load_data_for(llama_load_tensor & lt) {
+    void load_data_for(llama_load_tensor & lt) const {
         if (use_mmap) {
             lt.data = (uint8_t *) mapping->addr + lt.file_off;
         } else {
@@ -957,6 +959,7 @@ static void llama_model_load_internal(
 
     ggml_backend * backend_cpu = &model.backend_cpu;
     ggml_backend * backend_gpu = &model.backend_cpu; // hack until we have a proper backend selection
+
 #ifdef GGML_USE_CUDA
     if (n_gpu_layers > 0) {
         model.backend_cuda = ggml_backend_cuda_init();
@@ -965,13 +968,14 @@ static void llama_model_load_internal(
 #endif
 #ifdef GGML_USE_METAL
     if (n_gpu_layers > 0) {
-        model.backend_metal = ggml_backend_cpu_init();
+        model.backend_metal = ggml_backend_metal_init();
         backend_gpu = &model.backend_metal;
     }
 #endif
 
     // assign splits to the backends
     const int i_gpu_start = std::max(0, (int)n_layer - n_gpu_layers);
+
     model.backend_inp = n_gpu_layers > (int)n_layer ? backend_gpu : backend_cpu;
     model.backend_out = n_gpu_layers > 0            ? backend_gpu : backend_cpu;
 
@@ -1011,7 +1015,7 @@ static void llama_model_load_internal(
     fprintf(stderr, "%s: ggml ctx sizes:\n", __func__);
     for (const auto & it : ctx_sizes) {
         fprintf(stderr, "%8s = %7.2f MB", ggml_backend_name(it.first), it.second / 1024.0 / 1024.0);
-        if (it.first == backend_cpu && ml->use_mmap) {
+        if (it.first->is_ram_shared && ml->use_mmap) {
             fprintf(stderr, " + %7.2f MB (mmap)", mmap_size / 1024.0 / 1024.0);
         }
         fprintf(stderr, "\n");
@@ -1135,12 +1139,10 @@ static void llama_model_load_internal(
             ctx_sum += it.second;
         }
 
-        const size_t mem_required =
-            ctx_sum + MEM_REQ_EVAL().at(model.type);
+        const size_t mem_required = ctx_sum + MEM_REQ_EVAL().at(model.type);
 
         // this is the memory required by one llama_state
-        const size_t mem_required_state =
-            scale*MEM_REQ_KV_SELF().at(model.type);
+        const size_t mem_required_state = scale*MEM_REQ_KV_SELF().at(model.type);
 
         fprintf(stderr, "%s: mem required  = %7.2f MB (+ %7.2f MB per state)\n", __func__,
                 mem_required / 1024.0 / 1024.0, mem_required_state / 1024.0 / 1024.0);
@@ -1162,6 +1164,7 @@ static void llama_model_load_internal(
     // loading time will be recalculate after the first eval, so
     // we take page faults deferred by mmap() into consideration
     model.t_load_us = ggml_time_us() - model.t_start_us;
+
 }
 
 static bool llama_model_load(
@@ -1226,6 +1229,7 @@ static ggml_graph_splits llama_build_graph(
     // initialize contexts for every backend
 
     struct ggml_context * ctx_cpu = nullptr;
+
     if (lctx.buf_compute_cpu.mem_size > 0) {
         struct ggml_init_params params = ggml_init_params_default();
         params.buffer = &lctx.buf_compute_cpu;
@@ -1235,6 +1239,7 @@ static ggml_graph_splits llama_build_graph(
 
 #ifdef GGML_USE_CUDA
     struct ggml_context * ctx_cuda = nullptr;
+
     if (lctx.buf_compute_cuda.mem_size > 0) {
         struct ggml_init_params params = ggml_init_params_default();
         params.buffer = &lctx.buf_compute_cuda;
@@ -1243,29 +1248,53 @@ static ggml_graph_splits llama_build_graph(
     }
 #endif
 
+#ifdef GGML_USE_METAL
+    struct ggml_context * ctx_metal = nullptr;
+
+    if (lctx.buf_compute_metal.mem_size > 0) {
+        struct ggml_init_params params = ggml_init_params_default();
+        params.buffer = &lctx.buf_compute_metal;
+        params.compute_type = compute_type;
+        ctx_metal = ggml_init(params);
+    }
+#endif
+
     // TODO: clean this
     struct ggml_context * ctx_i      = nullptr;
-    struct ggml_context * ctx_ls[80] = {nullptr};
     struct ggml_context * ctx_o      = nullptr;
     struct ggml_context * ctx_kv     = nullptr;
+    struct ggml_context * ctx_ls[80] = {nullptr};
 
     if (lctx.model.backend_inp == &lctx.model.backend_cpu) ctx_i = ctx_cpu;
     if (lctx.model.backend_out == &lctx.model.backend_cpu) ctx_o = ctx_cpu;
+
 #ifdef GGML_USE_CUDA
     if (lctx.model.backend_inp == &lctx.model.backend_cuda) ctx_i = ctx_cuda;
     if (lctx.model.backend_out == &lctx.model.backend_cuda) ctx_o = ctx_cuda;
 #endif
+#ifdef GGML_USE_METAL
+    if (lctx.model.backend_inp == &lctx.model.backend_metal) ctx_i = ctx_metal;
+    if (lctx.model.backend_out == &lctx.model.backend_metal) ctx_o = ctx_metal;
+#endif
 
     for (int il = 0; il < n_layer; il++) {
-        if (lctx.model.backend_layers[il] == &lctx.model.backend_cpu)  ctx_ls[il] = ctx_cpu;
+        if (lctx.model.backend_layers[il] == &lctx.model.backend_cpu) ctx_ls[il] = ctx_cpu;
+
 #ifdef GGML_USE_CUDA
         if (lctx.model.backend_layers[il] == &lctx.model.backend_cuda) ctx_ls[il] = ctx_cuda;
 #endif
+#ifdef GGML_USE_METAL
+        if (lctx.model.backend_layers[il] == &lctx.model.backend_metal) ctx_ls[il] = ctx_metal;
+#endif
     }
 
-    if (lctx.backend_kv == &lctx.model.backend_cpu)  ctx_kv = ctx_cpu;
+    if (lctx.backend_kv == &lctx.model.backend_cpu) ctx_kv = ctx_cpu;
+
 #ifdef GGML_USE_CUDA
     if (lctx.backend_kv == &lctx.model.backend_cuda) ctx_kv = ctx_cuda;
+#endif
+#ifdef GGML_USE_METAL
+    if (lctx.backend_kv == &lctx.model.backend_metal) ctx_kv = ctx_metal;
 #endif
 
     struct ggml_tensor * inpL;
@@ -1522,7 +1551,7 @@ static ggml_graph_splits llama_build_graph(
     //}
 
 #ifdef LLAMA_1L_GRAPH_DUMP
-    if (N==1 && n_past == 0) {
+    if (N == 1 && n_past == 0) {
         ggml_graph_dump_dot(gf, NULL, "llama.dot");
         printf("graph for N=%i, n_past=%i dumped to llama.dot\n", N, n_past);
         exit(0);
@@ -1545,6 +1574,11 @@ static ggml_graph_splits llama_build_graph(
 #ifdef GGML_USE_CUDA
     if (ctx_cuda != nullptr) {
         ggml_free(ctx_cuda);
+    }
+#endif
+#ifdef GGML_USE_METAL
+    if (ctx_metal != nullptr) {
+        ggml_free(ctx_metal);
     }
 #endif
 
@@ -2650,7 +2684,6 @@ struct llama_context * llama_new_context_with_model(
 
     ctx->rng = std::mt19937(params.seed);
     ctx->logits_all = params.logits_all;
-
 
     // TODO: choose backend depending on n_layers/low_vram
 #ifdef GGML_USE_CUDA

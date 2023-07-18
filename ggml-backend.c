@@ -255,8 +255,9 @@ struct ggml_backend ggml_backend_cpu_init(void) {
     ctx->work_size = 0;
 
     struct ggml_backend cpu_backend = {
-        /* .interface = */ &cpu_backend_interface,
-        /* .context   = */ ctx
+        /* .interface     = */ &cpu_backend_interface,
+        /* .context       = */ ctx,
+        /* .is_ram_shared = */ true,
     };
     return cpu_backend;
 }

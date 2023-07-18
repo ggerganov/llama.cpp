@@ -61,7 +61,10 @@ extern "C" {
 
     struct ggml_backend {
         struct ggml_backend_interface * interface;
+
         ggml_backend_context_t context;
+
+        bool is_ram_shared;
     };
 
     // backend helper functions
@@ -78,7 +81,16 @@ extern "C" {
     static inline void ggml_backend_graph_compute(struct ggml_backend * backend, struct ggml_cgraph * cgraph) { backend->interface->graph_compute(backend->context, cgraph); }
 
     // buffer and tensor allocation
-    GGML_API struct ggml_buffer ggml_backend_alloc_buffer(struct ggml_backend * backend, size_t size, size_t max_tensors); // GG: probably return ptr
+    // TODO:
+    //  - return "struct ggml_buffer *"
+    //  - fix namings:
+    //    - ggml_backend_alloc_buffer -> ggml_backend_buffer_alloc
+    //    - ggml_backend_free_buffer  -> ggml_backend_buffer_free
+    //    - ggml_backend_reset_buffer -> ggml_backend_buffer_reset
+    //    - ggml_backend_alloc_tensor -> ggml_backend_tensor_alloc
+    //    - ggml_backend_tensor_cpy   -> ggml_backend_tensor_copy
+    //
+    GGML_API struct ggml_buffer ggml_backend_alloc_buffer(struct ggml_backend * backend, size_t size, size_t max_tensors);
     GGML_API void               ggml_backend_free_buffer(struct ggml_buffer * buffer);
     static inline void          ggml_backend_reset_buffer(struct ggml_buffer * buffer) { buffer->backend->interface->reset_buffer(buffer->backend->context, buffer->backend_buffer); }
     static inline void          ggml_backend_alloc_tensor(struct ggml_buffer * buffer, struct ggml_tensor * tensor) { buffer->backend->interface->alloc_tensor(buffer->backend->context, buffer->backend_buffer, tensor); }
