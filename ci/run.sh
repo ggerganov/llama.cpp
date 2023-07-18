@@ -11,6 +11,10 @@ mkdir -p "$2"
 OUT=$(realpath "$1")
 MNT=$(realpath "$2")
 
+rm -v $OUT/*.log
+rm -v $OUT/*.exit
+rm -v $OUT/*.md
+
 sd=`dirname $0`
 cd $sd/../
 SRC=`pwd`
@@ -128,14 +132,19 @@ function gg_run_open_llama_3b_v2 {
     gg_wget models-mnt/open-llama/3B-v2/ https://huggingface.co/openlm-research/open_llama_3b_v2/resolve/main/pytorch_model.bin
     gg_wget models-mnt/open-llama/3B-v2/ https://huggingface.co/openlm-research/open_llama_3b_v2/raw/main/generation_config.json
 
+    gg_wget models-mnt/wikitext/ https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip
+    unzip -o models-mnt/wikitext/wikitext-2-raw-v1.zip -d models-mnt/wikitext/
+    head -n 60 models-mnt/wikitext/wikitext-2-raw/wiki.test.raw > models-mnt/wikitext/wikitext-2-raw/wiki.test-60.raw
+
+    path_models="../models-mnt/open-llama/3B-v2"
+    path_wiki="../models-mnt/wikitext/wikitext-2-raw"
+
     rm -rf build-ci-release && mkdir build-ci-release && cd build-ci-release
 
     set -e
 
     (time cmake -DCMAKE_BUILD_TYPE=Release -DLLAMA_QKK_64=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
     (time make -j                                              ) 2>&1 | tee -a $OUT/${ci}-make.log
-
-    path_models="../models-mnt/open-llama/3B-v2"
 
     python3 ../convert.py ${path_models}
 
@@ -150,6 +159,8 @@ function gg_run_open_llama_3b_v2 {
     model_q5_k="${path_models}/ggml-model-q5_k.bin"
     model_q6_k="${path_models}/ggml-model-q6_k.bin"
 
+    wiki_test_60="${path_wiki}/wiki.test-60.raw"
+
     ./bin/quantize ${model_f16} ${model_q8_0} q8_0
     ./bin/quantize ${model_f16} ${model_q4_0} q4_0
     ./bin/quantize ${model_f16} ${model_q4_1} q4_1
@@ -160,16 +171,52 @@ function gg_run_open_llama_3b_v2 {
     ./bin/quantize ${model_f16} ${model_q5_k} q5_k
     ./bin/quantize ${model_f16} ${model_q6_k} q6_k
 
-    (time ./bin/main --model ${model_f16}  -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-f16.log
-    (time ./bin/main --model ${model_q8_0} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q8_0.log
-    (time ./bin/main --model ${model_q4_0} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q4_0.log
-    (time ./bin/main --model ${model_q4_1} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
-    (time ./bin/main --model ${model_q5_0} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
-    (time ./bin/main --model ${model_q5_1} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
-    (time ./bin/main --model ${model_q3_k} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
-    (time ./bin/main --model ${model_q4_k} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
-    (time ./bin/main --model ${model_q5_k} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
-    (time ./bin/main --model ${model_q6_k} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q6_k.log
+    (time ./bin/main --model ${model_f16}  -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-f16.log
+    (time ./bin/main --model ${model_q8_0} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q8_0.log
+    (time ./bin/main --model ${model_q4_0} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_0.log
+    (time ./bin/main --model ${model_q4_1} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
+    (time ./bin/main --model ${model_q5_0} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
+    (time ./bin/main --model ${model_q5_1} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
+    (time ./bin/main --model ${model_q3_k} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
+    (time ./bin/main --model ${model_q4_k} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
+    (time ./bin/main --model ${model_q5_k} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
+    (time ./bin/main --model ${model_q6_k} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q6_k.log
+
+    (time ./bin/perplexity --model ${model_f16}  -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-f16.log
+    (time ./bin/perplexity --model ${model_q8_0} -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-q8_0.log
+    (time ./bin/perplexity --model ${model_q4_0} -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_0.log
+    (time ./bin/perplexity --model ${model_q4_1} -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
+    (time ./bin/perplexity --model ${model_q5_0} -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
+    (time ./bin/perplexity --model ${model_q5_1} -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
+    (time ./bin/perplexity --model ${model_q3_k} -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
+    (time ./bin/perplexity --model ${model_q4_k} -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
+    (time ./bin/perplexity --model ${model_q5_k} -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
+    (time ./bin/perplexity --model ${model_q6_k} -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-q6_k.log
+
+    function check_ppl {
+        qnt="$1"
+        ppl=$(echo "$2" | grep -oE "[0-9]+\.[0-9]+" | tail -n 1)
+
+        if [ $(echo "$ppl > 100.0" | bc) -eq 1 ]; then
+            printf '  - %s @ %s (FAIL: ppl > 100.0)\n' "$qnt" "$ppl"
+            return 100
+        fi
+
+        printf '  - %s @ %s OK\n' "$qnt" "$ppl"
+        return 0
+    }
+
+    check_ppl "f16"  "$(cat $OUT/${ci}-tg-f16.log  | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q8_0" "$(cat $OUT/${ci}-tg-q8_0.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q4_0" "$(cat $OUT/${ci}-tg-q4_0.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q4_1" "$(cat $OUT/${ci}-tg-q4_1.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q5_0" "$(cat $OUT/${ci}-tg-q5_0.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q5_1" "$(cat $OUT/${ci}-tg-q5_1.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q3_k" "$(cat $OUT/${ci}-tg-q3_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q4_k" "$(cat $OUT/${ci}-tg-q4_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q5_k" "$(cat $OUT/${ci}-tg-q5_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q6_k" "$(cat $OUT/${ci}-tg-q6_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+
 
     set +e
 }
@@ -177,8 +224,9 @@ function gg_run_open_llama_3b_v2 {
 function gg_sum_open_llama_3b_v2 {
     gg_printf '### %s\n\n' "${ci}"
 
-    gg_printf 'OpenLLaMA 3B-v2: text generation\n'
+    gg_printf 'OpenLLaMA 3B-v2:\n'
     gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
+    gg_printf '- perplexity:\n%s\n' "$(cat $OUT/${ci}-ppl.log)"
     gg_printf '- f16: \n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-f16.log)"
     gg_printf '- q8_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q8_0.log)"
     gg_printf '- q4_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_0.log)"
