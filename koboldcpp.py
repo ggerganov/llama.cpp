@@ -275,7 +275,7 @@ maxhordectx = 1024
 maxhordelen = 256
 modelbusy = False
 defaultport = 5001
-KcppVersion = "1.35"
+KcppVersion = "1.36"
 showdebug = True
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):

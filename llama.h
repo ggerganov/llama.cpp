@@ -270,14 +270,31 @@ extern "C" {
                              int   n_max_tokens,
                             bool   add_bos);
 
+    LLAMA_API int llama_tokenize_with_model(
+        const struct llama_model * model,
+                      const char * text,
+                     llama_token * tokens,
+                             int   n_max_tokens,
+                            bool   add_bos);
+
     LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
     LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
     LLAMA_API int llama_n_embd (const struct llama_context * ctx);
+
+    LLAMA_API int llama_n_vocab_from_model(const struct llama_model * model);
+    LLAMA_API int llama_n_ctx_from_model  (const struct llama_model * model);
+    LLAMA_API int llama_n_embd_from_model (const struct llama_model * model);
 
     // Get the vocabulary as output parameters.
     // Returns number of results.
     LLAMA_API int llama_get_vocab(
             const struct llama_context * ctx,
+                          const char * * strings,
+                                 float * scores,
+                                   int   capacity);
+
+    LLAMA_API int llama_get_vocab_from_model(
+              const struct llama_model * model,
                           const char * * strings,
                                  float * scores,
                                    int   capacity);
@@ -294,7 +311,13 @@ extern "C" {
     LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 
     // Token Id -> String. Uses the vocabulary in the provided context
-    LLAMA_API const char * llama_token_to_str(const struct llama_context * ctx, llama_token token);
+    LLAMA_API const char * llama_token_to_str(
+            const struct llama_context * ctx,
+                           llama_token   token);
+
+    LLAMA_API const char * llama_token_to_str_with_model(
+              const struct llama_model * model,
+                           llama_token   token);
 
     // Special tokens
     LLAMA_API llama_token llama_token_bos();  // beginning-of-sentence
