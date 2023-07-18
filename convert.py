@@ -1189,6 +1189,7 @@ def filter_and_sort_tensors(model: LazyModel) -> LazyModel:
 
 
 def load_vocab(path: Path, vocabtype: Optional[str]) -> SentencePieceVocab:
+    print(f"vocabtype: {vocabtype}")
     # Be extra-friendly and accept either a file or a directory.  Also, if it's
     # a directory, it might be the model directory, and tokenizer.model might
     # be in the parent of that.
@@ -1210,7 +1211,7 @@ def load_vocab(path: Path, vocabtype: Optional[str]) -> SentencePieceVocab:
     added_tokens_path = path.parent / "added_tokens.json"
     print(f"Loading vocab file {path}")
     return SentencePieceVocab(path, added_tokens_path if added_tokens_path.exists() else None,
-                              vocab_file)
+                              vocabtype)
 
 
 def default_outfile(model_paths: List[Path], file_type: GGMLFileType) -> Path:
