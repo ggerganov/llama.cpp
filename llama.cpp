@@ -233,6 +233,11 @@ struct llama_model {
     ggml_buffer    buf_cuda;
     ggml_context * ctx_cuda = NULL;
 #endif
+#ifdef GGML_USE_METAL
+    ggml_backend   backend_metal;
+    ggml_buffer    buf_metal;
+    ggml_context * ctx_metal = NULL;
+#endif
 
     // backend assigned to each layer
     ggml_backend * backend_input = NULL;
@@ -248,6 +253,12 @@ struct llama_model {
         if (ctx_cuda) {
             ggml_free(ctx_cuda);
             ggml_backend_free_buffer(&buf_cuda);
+        }
+#endif
+#ifdef GGML_USE_METAL
+        if (ctx_metal) {
+            ggml_free(ctx_metal);
+            ggml_backend_free_buffer(&buf_metal);
         }
 #endif
     }
@@ -289,6 +300,9 @@ struct llama_context {
     ggml_buffer buf_compute_cpu = {};
 #ifdef GGML_USE_CUDA
     ggml_buffer buf_compute_cuda = {};
+#endif
+#ifdef GGML_USE_METAL
+    ggml_buffer buf_compute_metal = {};
 #endif
 
     // input tensors
@@ -940,6 +954,8 @@ static void llama_model_load_internal(
     const uint32_t n_layer = hparams.n_layer;
 
     model.backend_cpu = ggml_backend_cpu_init();
+
+    ggml_backend * backend_cpu = &model.backend_cpu;
     ggml_backend * backend_gpu = &model.backend_cpu; // hack until we have a proper backend selection
 #ifdef GGML_USE_CUDA
     if (n_gpu_layers > 0) {
@@ -947,14 +963,21 @@ static void llama_model_load_internal(
         backend_gpu = &model.backend_cuda;
     }
 #endif
+#ifdef GGML_USE_METAL
+    if (n_gpu_layers > 0) {
+        model.backend_metal = ggml_backend_metal_init();
+        backend_gpu = &model.backend_metal;
+    }
+#endif
 
     // assign splits to the backends
     const int i_gpu_start = std::max(0, (int)n_layer - n_gpu_layers);
-    model.backend_input = n_gpu_layers > (int)n_layer ? backend_gpu : &model.backend_cpu;
-    model.backend_output = n_gpu_layers > 0 ? backend_gpu : &model.backend_cpu;
+    model.backend_input  = n_gpu_layers > (int)n_layer ? backend_gpu : backend_cpu;
+    model.backend_output = n_gpu_layers > 0            ? backend_gpu : backend_cpu;
+
     model.backend_layers.resize(n_layer);
-    std::fill(model.backend_layers.begin(), model.backend_layers.begin() + i_gpu_start, &model.backend_cpu);
-    std::fill(model.backend_layers.begin() + i_gpu_start, model.backend_layers.end(), backend_gpu);
+    std::fill(model.backend_layers.begin(),               model.backend_layers.begin() + i_gpu_start, backend_cpu);
+    std::fill(model.backend_layers.begin() + i_gpu_start, model.backend_layers.end(),                 backend_gpu);
 
     // calculate the size of each context
     std::unordered_map<struct ggml_backend *, size_t> ctx_sizes;
@@ -977,17 +1000,18 @@ static void llama_model_load_internal(
             ctx_sizes[model.backend_layers[layer]] += lt.size;
         }
     }
+
     // TODO: generalize support for mmap
     size_t mmap_size = 0;
     if (ml->use_mmap) {
-        mmap_size = ctx_sizes[&model.backend_cpu];
-        ctx_sizes[&model.backend_cpu] = 0;
+        mmap_size = ctx_sizes[backend_cpu];
+        ctx_sizes[backend_cpu] = 0;
     }
 
     fprintf(stderr, "%s: ggml ctx sizes:\n", __func__);
     for (const auto & it : ctx_sizes) {
         fprintf(stderr, "%8s = %7.2f MB", ggml_backend_name(it.first), it.second / 1024.0 / 1024.0);
-        if (it.first == &model.backend_cpu && ml->use_mmap) {
+        if (it.first == backend_cpu && ml->use_mmap) {
             fprintf(stderr, " + %7.2f MB (mmap)", mmap_size / 1024.0 / 1024.0);
         }
         fprintf(stderr, "\n");
@@ -996,8 +1020,8 @@ static void llama_model_load_internal(
     // create the buffers and contexts
     {
         size_t cpu_num_tensors = ml->tensors_map.tensors.size();
-        size_t ctx_size = ctx_sizes[&model.backend_cpu];
-        model.buf_cpu = ggml_backend_alloc_buffer(&model.backend_cpu, ctx_size, cpu_num_tensors);
+        size_t ctx_size = ctx_sizes[backend_cpu];
+        model.buf_cpu = ggml_backend_alloc_buffer(backend_cpu, ctx_size, cpu_num_tensors);
         struct ggml_init_params params = ggml_init_params_default();
         params.buffer = &model.buf_cpu;
         params.no_alloc = ml->use_mmap;
@@ -1028,6 +1052,7 @@ static void llama_model_load_internal(
     if (model.backend_input == backend_gpu) ctx_input = ctx_gpu;
     ggml_context * ctx_output = model.ctx_cpu;
     if (model.backend_output == backend_gpu) ctx_output = ctx_gpu;
+
     std::vector<ggml_context *> ctx_layers(n_layer, model.ctx_cpu);
     for (uint32_t i = 0; i < n_layer; ++i) {
         if (model.backend_layers[i] == backend_gpu) {

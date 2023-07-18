@@ -992,3 +992,31 @@ void ggml_metal_graph_compute(
         }
     }
 }
+
+static struct ggml_backend_interface metal_backend_interface = {
+    /* .get_name            = */ //ggml_backend_metal_name,
+    /* .free_context        = */ //ggml_backend_metal_free_context,
+    /* .alloc_buffer        = */ //ggml_backend_metal_alloc_buffer,
+    /* .free_buffer         = */ //ggml_backend_metal_free_buffer,
+    /* .reset_buffer        = */ //ggml_backend_metal_reset_buffer,
+    /* .alloc_tensor        = */ //ggml_backend_metal_alloc_tensor,
+    /* .set_tensor_async    = */ //ggml_backend_metal_set_tensor_async,
+    /* .get_tensor_async    = */ //ggml_backend_metal_get_tensor_async,
+    /* .synchronize         = */ //ggml_backend_metal_synchronize,
+    /* .cpy_tensor_from     = */ //nullptr,
+    /* .cpy_tensor_to       = */ //nullptr,
+    /* .graph_plan_create   = */ //ggml_backend_metal_graph_plan_create,
+    /* .graph_plan_free     = */ //ggml_backend_metal_graph_plan_free,
+    /* .graph_plan_compute  = */ //ggml_backend_metal_graph_plan_compute,
+    /* .graph_compute       = */ //ggml_backend_metal_graph_compute
+};
+
+struct ggml_backend ggml_backend_metal_init(void) {
+    struct ggml_metal_context * ctx = malloc(sizeof(struct ggml_metal_context));
+
+    struct ggml_backend metal_backend = {
+        /* .interface = */ &metal_backend_interface,
+        /* .context   = */ ctx
+    };
+    return metal_backend;
+}
