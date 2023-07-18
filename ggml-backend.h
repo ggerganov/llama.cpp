@@ -78,7 +78,7 @@ extern "C" {
     static inline void ggml_backend_graph_compute(struct ggml_backend * backend, struct ggml_cgraph * cgraph) { backend->interface->graph_compute(backend->context, cgraph); }
 
     // buffer and tensor allocation
-    GGML_API struct ggml_buffer ggml_backend_alloc_buffer(struct ggml_backend * backend, size_t size, size_t max_tensors);
+    GGML_API struct ggml_buffer ggml_backend_alloc_buffer(struct ggml_backend * backend, size_t size, size_t max_tensors); // GG: probably return ptr
     GGML_API void               ggml_backend_free_buffer(struct ggml_buffer * buffer);
     static inline void          ggml_backend_reset_buffer(struct ggml_buffer * buffer) { buffer->backend->interface->reset_buffer(buffer->backend->context, buffer->backend_buffer); }
     static inline void          ggml_backend_alloc_tensor(struct ggml_buffer * buffer, struct ggml_tensor * tensor) { buffer->backend->interface->alloc_tensor(buffer->backend->context, buffer->backend_buffer, tensor); }

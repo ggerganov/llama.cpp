@@ -240,8 +240,8 @@ struct llama_model {
 #endif
 
     // backend assigned to each layer
-    ggml_backend * backend_input = NULL;
-    ggml_backend * backend_output = NULL;
+    ggml_backend * backend_inp = NULL;
+    ggml_backend * backend_out = NULL;
     std::vector<ggml_backend *> backend_layers;
 
     ~llama_model() {
@@ -965,15 +965,15 @@ static void llama_model_load_internal(
 #endif
 #ifdef GGML_USE_METAL
     if (n_gpu_layers > 0) {
-        model.backend_metal = ggml_backend_metal_init();
+        model.backend_metal = ggml_backend_cpu_init();
         backend_gpu = &model.backend_metal;
     }
 #endif
 
     // assign splits to the backends
     const int i_gpu_start = std::max(0, (int)n_layer - n_gpu_layers);
-    model.backend_input  = n_gpu_layers > (int)n_layer ? backend_gpu : backend_cpu;
-    model.backend_output = n_gpu_layers > 0            ? backend_gpu : backend_cpu;
+    model.backend_inp = n_gpu_layers > (int)n_layer ? backend_gpu : backend_cpu;
+    model.backend_out = n_gpu_layers > 0            ? backend_gpu : backend_cpu;
 
     model.backend_layers.resize(n_layer);
     std::fill(model.backend_layers.begin(),               model.backend_layers.begin() + i_gpu_start, backend_cpu);
@@ -983,10 +983,10 @@ static void llama_model_load_internal(
     std::unordered_map<struct ggml_backend *, size_t> ctx_sizes;
     for (const llama_load_tensor & lt : ml->tensors_map.tensors) {
         if (lt.name == "tok_embeddings.weight") {
-            ctx_sizes[model.backend_input] += lt.size;
+            ctx_sizes[model.backend_inp] += lt.size;
         }
         else if (lt.name == "norm.weight" || lt.name == "output.weight") {
-            ctx_sizes[model.backend_output] += lt.size;
+            ctx_sizes[model.backend_out] += lt.size;
         }
         else {
             // parse layer number from name
@@ -1032,6 +1032,7 @@ static void llama_model_load_internal(
     }
 
     ggml_context * ctx_gpu = model.ctx_cpu;
+
 #ifdef GGML_USE_CUDA
     if (n_gpu_layers > 0) {
         size_t gpu_num_tensors = ml->tensors_map.tensors.size();
@@ -1043,15 +1044,35 @@ static void llama_model_load_internal(
         if (!model.ctx_cuda) {
             throw std::runtime_error(format("ggml_init() failed for CUDA backend"));
         }
+
         ctx_gpu = model.ctx_cuda;
     }
 #endif
 
+#ifdef GGML_USE_METAL
+    if (n_gpu_layers > 0) {
+        // the metal context is actually a CPU context because we have unified memory
+        const size_t ctx_size  = ctx_sizes[&model.backend_metal];
+        const size_t n_tensors = ml->tensors_map.tensors.size();
+
+        model.buf_metal = ggml_backend_alloc_buffer(&model.backend_metal, ctx_size, n_tensors);
+
+        struct ggml_init_params params = ggml_init_params_default();
+        params.buffer   = &model.buf_metal;
+        params.no_alloc = ml->use_mmap;
+
+        model.ctx_metal = ggml_init(params);
+        if (!model.ctx_metal) {
+            throw std::runtime_error(format("ggml_init() failed for CPU backend"));
+        }
+
+        ctx_gpu = model.ctx_metal;
+    }
+#endif
+
     // TODO: clean this
-    ggml_context * ctx_input = model.ctx_cpu;
-    if (model.backend_input == backend_gpu) ctx_input = ctx_gpu;
-    ggml_context * ctx_output = model.ctx_cpu;
-    if (model.backend_output == backend_gpu) ctx_output = ctx_gpu;
+    ggml_context * ctx_input  = (model.backend_inp == backend_gpu) ? ctx_gpu : model.ctx_cpu;
+    ggml_context * ctx_output = (model.backend_out == backend_gpu) ? ctx_gpu : model.ctx_cpu;
 
     std::vector<ggml_context *> ctx_layers(n_layer, model.ctx_cpu);
     for (uint32_t i = 0; i < n_layer; ++i) {
@@ -1101,7 +1122,6 @@ static void llama_model_load_internal(
     (void) tensor_split;
     (void) low_vram;
     (void) n_batch;
-
 
     // print memory requirements
     {
@@ -1224,28 +1244,29 @@ static ggml_graph_splits llama_build_graph(
 #endif
 
     // TODO: clean this
-    struct ggml_context * ctx_i = nullptr;
+    struct ggml_context * ctx_i      = nullptr;
     struct ggml_context * ctx_ls[80] = {nullptr};
-    struct ggml_context * ctx_o = nullptr;
-    struct ggml_context * ctx_kv = nullptr;
+    struct ggml_context * ctx_o      = nullptr;
+    struct ggml_context * ctx_kv     = nullptr;
 
-    if (lctx.model.backend_input == &lctx.model.backend_cpu) ctx_i = ctx_cpu;
-    if (lctx.model.backend_output == &lctx.model.backend_cpu) ctx_o = ctx_cpu;
+    if (lctx.model.backend_inp == &lctx.model.backend_cpu) ctx_i = ctx_cpu;
+    if (lctx.model.backend_out == &lctx.model.backend_cpu) ctx_o = ctx_cpu;
 #ifdef GGML_USE_CUDA
-    if (lctx.model.backend_input == &lctx.model.backend_cuda) ctx_i = ctx_cuda;
-    if (lctx.model.backend_output == &lctx.model.backend_cuda) ctx_o = ctx_cuda;
+    if (lctx.model.backend_inp == &lctx.model.backend_cuda) ctx_i = ctx_cuda;
+    if (lctx.model.backend_out == &lctx.model.backend_cuda) ctx_o = ctx_cuda;
 #endif
+
     for (int il = 0; il < n_layer; il++) {
-        if (lctx.model.backend_layers[il] == &lctx.model.backend_cpu) ctx_ls[il] = ctx_cpu;
+        if (lctx.model.backend_layers[il] == &lctx.model.backend_cpu)  ctx_ls[il] = ctx_cpu;
 #ifdef GGML_USE_CUDA
         if (lctx.model.backend_layers[il] == &lctx.model.backend_cuda) ctx_ls[il] = ctx_cuda;
 #endif
     }
-    if (lctx.backend_kv == &lctx.model.backend_cpu) ctx_kv = ctx_cpu;
+
+    if (lctx.backend_kv == &lctx.model.backend_cpu)  ctx_kv = ctx_cpu;
 #ifdef GGML_USE_CUDA
     if (lctx.backend_kv == &lctx.model.backend_cuda) ctx_kv = ctx_cuda;
 #endif
-
 
     struct ggml_tensor * inpL;
 
@@ -2678,7 +2699,7 @@ struct llama_context * llama_new_context_with_model(
             buf_input_size += hparams.n_ctx * ggml_type_size(GGML_TYPE_F32); // input tokens
             // TODO: input embeddings should be optional to save memory
             buf_input_size += hparams.n_embd * hparams.n_ctx * ggml_type_size(GGML_TYPE_F32); // input embeddings
-            ctx->buf_input = ggml_backend_alloc_buffer(model->backend_input, buf_input_size, 2);
+            ctx->buf_input = ggml_backend_alloc_buffer(model->backend_inp, buf_input_size, 2);
 
             struct ggml_init_params ggml_params = ggml_init_params_default();
             ggml_params.buffer = &ctx->buf_input;
@@ -2702,7 +2723,7 @@ struct llama_context * llama_new_context_with_model(
             if (params.embedding) {
                 buf_output_size += hparams.n_embd * ggml_type_size(GGML_TYPE_F32);
             }
-            ctx->buf_output = ggml_backend_alloc_buffer(model->backend_output, buf_output_size, 2);
+            ctx->buf_output = ggml_backend_alloc_buffer(model->backend_out, buf_output_size, 2);
 
             struct ggml_init_params ggml_params = ggml_init_params_default();
             ggml_params.buffer = &ctx->buf_output;
@@ -2731,7 +2752,7 @@ struct llama_context * llama_new_context_with_model(
     }
 
     fprintf(stderr, "%s: layer backends: ", __func__);
-    fprintf(stderr, "input: %s, ", ggml_backend_name(ctx->model.backend_input));
+    fprintf(stderr, "input: %s, ", ggml_backend_name(ctx->model.backend_inp));
 
     int start = 0;
     struct ggml_backend * prev_backend = ctx->model.backend_layers[0];
@@ -2746,7 +2767,7 @@ struct llama_context * llama_new_context_with_model(
             prev_backend = ctx->model.backend_layers[i];
         }
     }
-    fprintf(stderr, "output: %s, ", ggml_backend_name(ctx->model.backend_output));
+    fprintf(stderr, "output: %s, ", ggml_backend_name(ctx->model.backend_out));
     fprintf(stderr, "kv: %s\n", ggml_backend_name(ctx->backend_kv));
 
 #ifdef GGML_USE_MPI
