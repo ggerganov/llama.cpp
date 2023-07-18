@@ -1194,7 +1194,9 @@ extern "C" {
             int                   mode,
             int                   n_ctx,
             float                 freq_base,
-            float                 freq_scale);
+            float                 freq_scale,
+            float                 ntk_factor,
+            float                 ext_factor);
 
     // in-place, returns view(a)
     GGML_API struct ggml_tensor * ggml_rope_custom_inplace(
@@ -1205,7 +1207,9 @@ extern "C" {
             int                   mode,
             int                   n_ctx,
             float                 freq_base,
-            float                 freq_scale);
+            float                 freq_scale,
+            float                 ntk_factor,
+            float                 ext_factor);
 
     // rotary position embedding backward, i.e compute dx from dy
     // a - dy

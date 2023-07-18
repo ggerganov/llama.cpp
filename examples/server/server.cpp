@@ -612,6 +612,8 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     fprintf(stdout, "  -eps N, --rms-norm-eps N rms norm eps (TEMP!!! use 1e-5 for LLaMAv2) (default: %.1e)\n", params.rms_norm_eps);
     fprintf(stdout, "  --rope-freq-base N    RoPE base frequency (default: %.1f)\n", params.rope_freq_base);
     fprintf(stdout, "  --rope-freq-scale N   RoPE frequency scaling factor (default: %g)\n", params.rope_freq_scale);
+    fprintf(stdout, "  --rope-ntk-factor N   RoPE NTK mix factor (default: %.1f)\n", params.rope_ntk_factor);
+    fprintf(stdout, "  --rope-ext-factor N   RoPE extrapolation mix factor (default: %.1f)\n", params.rope_ext_factor);
     fprintf(stdout, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     fprintf(stdout, "  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
     fprintf(stdout, "                        not recommended: doubles context memory required and no measurable increase in quality\n");
@@ -763,6 +765,22 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
             params.rope_freq_scale = std::stof(argv[i]);
+        }
+        else if (arg == "--rope-ntk-factor")
+        {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.rope_ntk_factor = std::stof(argv[i]);
+        }
+        else if (arg == "--rope-ext-factor")
+        {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.rope_ext_factor = std::stof(argv[i]);
         }
         else if (arg == "--memory-f32" || arg == "--memory_f32")
         {

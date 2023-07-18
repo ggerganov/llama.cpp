@@ -100,6 +100,8 @@ extern "C" {
         // ref: https://github.com/ggerganov/llama.cpp/pull/2054
         float    rope_freq_base;  // RoPE base frequency
         float    rope_freq_scale; // RoPE frequency scaling factor
+        float    rope_ntk_factor; // RoPE NTK mix factor
+        float    rope_ext_factor; // RoPE extrapolation mix factor
 
         // called with a progress value between 0 and 1, pass NULL to disable
         llama_progress_callback progress_callback;

@@ -196,6 +196,8 @@ struct llama_hparams {
 
     float rope_freq_base  = 10000.0f;
     float rope_freq_scale = 1.0f;
+    float rope_ntk_factor = 0.0f;
+    float rope_ext_factor = 0.0f;
 
     enum llama_ftype ftype = LLAMA_FTYPE_MOSTLY_F16;
 
@@ -898,6 +900,8 @@ struct llama_context_params llama_context_default_params() {
         /*.tensor_split                =*/ nullptr,
         /*.rope_freq_base              =*/ 10000.0f,
         /*.rope_freq_scale             =*/ 1.0f,
+        /*.rope_ntk_factor             =*/ 0.0f,
+        /*.rope_ext_factor             =*/ 0.0f,
         /*.progress_callback           =*/ nullptr,
         /*.progress_callback_user_data =*/ nullptr,
         /*.low_vram                    =*/ false,
@@ -1032,6 +1036,8 @@ static void llama_model_load_internal(
         const bool mul_mat_q,
         float rope_freq_base,
         float rope_freq_scale,
+        float rope_ntk_factor,
+        float rope_ext_factor,
         bool low_vram,
         ggml_type memory_type,
         bool use_mmap,
@@ -1083,6 +1089,8 @@ static void llama_model_load_internal(
 
         hparams.rope_freq_base  = rope_freq_base;
         hparams.rope_freq_scale = rope_freq_scale;
+        hparams.rope_ntk_factor = rope_ntk_factor;
+        hparams.rope_ext_factor = rope_ext_factor;
     }
 
     // ref: https://github.com/facebookresearch/llama/blob/6c7fe276574e78057f917549435a2554000a876d/llama/model.py#L194-L199
@@ -1106,6 +1114,8 @@ static void llama_model_load_internal(
         fprintf(stderr, "%s: n_ff       = %u\n",   __func__, n_ff);
         fprintf(stderr, "%s: freq_base  = %.1f\n", __func__, hparams.rope_freq_base);
         fprintf(stderr, "%s: freq_scale = %g\n",   __func__, hparams.rope_freq_scale);
+        fprintf(stderr, "%s: ntk_factor = %g\n",   __func__, hparams.rope_ntk_factor);
+        fprintf(stderr, "%s: ext_factor = %g\n",   __func__, hparams.rope_ext_factor);
         fprintf(stderr, "%s: ftype      = %u (%s)\n", __func__, hparams.ftype, llama_ftype_name(hparams.ftype));
         fprintf(stderr, "%s: model size = %s\n",   __func__, llama_model_type_name(model.type));
     }
@@ -1374,6 +1384,8 @@ static bool llama_model_load(
         const bool mul_mat_q,
         float rope_freq_base,
         float rope_freq_scale,
+        float rope_ntk_factor,
+        float rope_ext_factor,
         bool low_vram,
         ggml_type memory_type,
         bool use_mmap,
@@ -1382,9 +1394,10 @@ static bool llama_model_load(
         llama_progress_callback progress_callback,
         void *progress_callback_user_data) {
     try {
-        llama_model_load_internal(fname, model, vocab, n_ctx, n_batch, n_gqa, rms_norm_eps, n_gpu_layers,
-                                  main_gpu, tensor_split, mul_mat_q, rope_freq_base, rope_freq_scale, low_vram, memory_type,
-                                  use_mmap, use_mlock, vocab_only, progress_callback, progress_callback_user_data);
+        llama_model_load_internal(fname, model, vocab, n_ctx, n_batch, n_gqa, rms_norm_eps, n_gpu_layers, main_gpu,
+                                  tensor_split, mul_mat_q, rope_freq_base, rope_freq_scale, rope_ntk_factor,
+                                  rope_ext_factor, low_vram, memory_type, use_mmap, use_mlock, vocab_only,
+                                  progress_callback, progress_callback_user_data);
         return true;
     } catch (const std::exception & err) {
         fprintf(stderr, "error loading model: %s\n", err.what());
@@ -1422,6 +1435,8 @@ static struct ggml_cgraph * llama_build_graph(
 
     const float freq_base  = hparams.rope_freq_base;
     const float freq_scale = hparams.rope_freq_scale;
+    const float ntk_factor = hparams.rope_ntk_factor;
+    const float ext_factor = hparams.rope_ext_factor;
     const float rms_norm_eps = hparams.f_rms_norm_eps;
 
     const int n_gpu_layers = model.n_gpu_layers;
@@ -1551,11 +1566,15 @@ static struct ggml_cgraph * llama_build_graph(
             offload_func_kq(tmpq);
             ggml_set_name(tmpq, "tmpq");
 
-            struct ggml_tensor * Kcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, N), n_past, n_embd_head, 0, 0, freq_base, freq_scale);
+            struct ggml_tensor * Kcur = ggml_rope_custom_inplace(
+                    ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, N), n_past, n_embd_head, 0, 0, freq_base,
+                    freq_scale, ntk_factor, ext_factor);
             offload_func_kq(Kcur);
             ggml_set_name(Kcur, "Kcur");
 
-            struct ggml_tensor * Qcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, N),    n_past, n_embd_head, 0, 0, freq_base, freq_scale);
+            struct ggml_tensor * Qcur = ggml_rope_custom_inplace(
+                    ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, N),    n_past, n_embd_head, 0, 0, freq_base,
+                    freq_scale, ntk_factor, ext_factor);
             offload_func_kq(Qcur);
             ggml_set_name(Qcur, "Qcur");
 
@@ -3197,10 +3216,11 @@ struct llama_model * llama_load_model_from_file(
 
     ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
-    if (!llama_model_load(path_model, *model, model->vocab, params.n_ctx, params.n_batch, params.n_gqa, params.rms_norm_eps, params.n_gpu_layers,
-                params.main_gpu, params.tensor_split, params.mul_mat_q, params.rope_freq_base, params.rope_freq_scale,params.low_vram,
-                memory_type, params.use_mmap, params.use_mlock, params.vocab_only, params.progress_callback,
-                params.progress_callback_user_data)) {
+    if (!llama_model_load(path_model, *model, model->vocab, params.n_ctx, params.n_batch, params.n_gqa,
+                params.rms_norm_eps, params.n_gpu_layers, params.main_gpu, params.tensor_split, params.mul_mat_q,
+                params.rope_freq_base, params.rope_freq_scale, params.rope_ntk_factor, params.rope_ext_factor,
+                params.low_vram, memory_type, params.use_mmap, params.use_mlock, params.vocab_only,
+                params.progress_callback, params.progress_callback_user_data)) {
         delete model;
         fprintf(stderr, "%s: failed to load model\n", __func__);
         return nullptr;

@@ -194,6 +194,18 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.rope_freq_scale = std::stof(argv[i]);
+        } else if (arg == "--rope-ntk-factor") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.rope_ntk_factor = std::stof(argv[i]);
+        } else if (arg == "--rope-ext-factor") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.rope_ext_factor = std::stof(argv[i]);
         } else if (arg == "--memory-f32") {
             params.memory_f16 = false;
         } else if (arg == "--top-p") {
@@ -566,6 +578,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "  --cfg-scale N         strength of guidance (default: %f, 1.0 = disable)\n", params.cfg_scale);
     fprintf(stdout, "  --rope-freq-base N    RoPE base frequency (default: %.1f)\n", params.rope_freq_base);
     fprintf(stdout, "  --rope-freq-scale N   RoPE frequency scaling factor (default: %g)\n", params.rope_freq_scale);
+    fprintf(stdout, "  --rope-ntk-factor N   RoPE NTK mix factor (default: %.1f)\n", params.rope_ntk_factor);
+    fprintf(stdout, "  --rope-ext-factor N   RoPE extrapolation mix factor (default: %.1f)\n", params.rope_ext_factor);
     fprintf(stdout, "  --ignore-eos          ignore end of stream token and continue generating (implies --logit-bias 2-inf)\n");
     fprintf(stdout, "  --no-penalize-nl      do not penalize newline token\n");
     fprintf(stdout, "  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
@@ -657,6 +671,8 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     lparams.embedding       = params.embedding;
     lparams.rope_freq_base  = params.rope_freq_base;
     lparams.rope_freq_scale = params.rope_freq_scale;
+    lparams.rope_ntk_factor = params.rope_ntk_factor;
+    lparams.rope_ext_factor = params.rope_ext_factor;
 
     return lparams;
 }

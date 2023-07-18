@@ -32,6 +32,8 @@ struct gpt_params {
     float   rms_norm_eps                    = LLAMA_DEFAULT_RMS_EPS; // rms norm epsilon
     float   rope_freq_base                  = 10000.0f; // RoPE base frequency
     float   rope_freq_scale                 = 1.0f;     // RoPE frequency scaling factor
+    float   rope_ntk_factor                 = 0.0f;     // RoPE NTK mix factor
+    float   rope_ext_factor                 = 0.0f;     // RoPE extrapolation mix factor
 
     // sampling parameters
     std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
