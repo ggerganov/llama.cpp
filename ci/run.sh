@@ -182,24 +182,24 @@ function gg_run_open_llama_3b_v2 {
     (time ./bin/main --model ${model_q5_k} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
     (time ./bin/main --model ${model_q6_k} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q6_k.log
 
-    (time ./bin/perplexity --model ${model_f16}  -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-f16.log
-    (time ./bin/perplexity --model ${model_q8_0} -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-q8_0.log
-    (time ./bin/perplexity --model ${model_q4_0} -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_0.log
-    (time ./bin/perplexity --model ${model_q4_1} -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
-    (time ./bin/perplexity --model ${model_q5_0} -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
-    (time ./bin/perplexity --model ${model_q5_1} -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
-    (time ./bin/perplexity --model ${model_q3_k} -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
-    (time ./bin/perplexity --model ${model_q4_k} -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
-    (time ./bin/perplexity --model ${model_q5_k} -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
-    (time ./bin/perplexity --model ${model_q6_k} -f ${wiki_test_60} -c 2048 ) 2>&1 | tee -a $OUT/${ci}-tg-q6_k.log
+    (time ./bin/perplexity --model ${model_f16}  -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-f16.log
+    (time ./bin/perplexity --model ${model_q8_0} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q8_0.log
+    (time ./bin/perplexity --model ${model_q4_0} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_0.log
+    (time ./bin/perplexity --model ${model_q4_1} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
+    (time ./bin/perplexity --model ${model_q5_0} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
+    (time ./bin/perplexity --model ${model_q5_1} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
+    (time ./bin/perplexity --model ${model_q3_k} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
+    (time ./bin/perplexity --model ${model_q4_k} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
+    (time ./bin/perplexity --model ${model_q5_k} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
+    (time ./bin/perplexity --model ${model_q6_k} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q6_k.log
 
     function check_ppl {
         qnt="$1"
         ppl=$(echo "$2" | grep -oE "[0-9]+\.[0-9]+" | tail -n 1)
 
-        if [ $(echo "$ppl > 100.0" | bc) -eq 1 ]; then
-            printf '  - %s @ %s (FAIL: ppl > 100.0)\n' "$qnt" "$ppl"
-            return 100
+        if [ $(echo "$ppl > 20.0" | bc) -eq 1 ]; then
+            printf '  - %s @ %s (FAIL: ppl > 20.0)\n' "$qnt" "$ppl"
+            return 20
         fi
 
         printf '  - %s @ %s OK\n' "$qnt" "$ppl"
@@ -216,7 +216,6 @@ function gg_run_open_llama_3b_v2 {
     check_ppl "q4_k" "$(cat $OUT/${ci}-tg-q4_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q5_k" "$(cat $OUT/${ci}-tg-q5_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q6_k" "$(cat $OUT/${ci}-tg-q6_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
-
 
     set +e
 }
