@@ -4,9 +4,10 @@ In addition to [Github Actions](https://github.com/ggerganov/llama.cpp/actions) 
 
 https://github.com/ggml-org/ci
 
-It monitors the `master` branch for new commits and runs the [[ci/run.sh]] script on dedicated cloud instances. This
-allows us to execute heavier workloads compared to just using Github Actions. Also with time, the cloud instances will
-be scaled to cover various hardware architectures, including GPU and Apple Silicon instances.
+It monitors the `master` branch for new commits and runs the
+[ci/run.sh](https://github.com/ggerganov/llama.cpp/blob/master/ci/run.sh) script on dedicated cloud instances. This allows us
+to execute heavier workloads compared to just using Github Actions. Also with time, the cloud instances will be scaled
+to cover various hardware architectures, including GPU and Apple Silicon instances.
 
 Collaborators can optionally trigger the CI run by adding the `ggml-ci` keyword to their commit message.
 Only the branches of this repo are monitored for this keyword.
