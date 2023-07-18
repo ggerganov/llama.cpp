@@ -1616,7 +1616,6 @@ static bool llama_eval_internal(
 
     LLAMA_ASSERT(lctx.graph_logits != nullptr);
 
-
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
     n_threads = N >= 32 && ggml_cpu_has_blas() ? 1 : n_threads;
@@ -2719,9 +2718,15 @@ struct llama_context * llama_new_context_with_model(
 
         // TODO: size the buffers more accurately - depends on improved memory management
         ctx->buf_compute_cpu = ggml_backend_alloc_buffer(&model->backend_cpu, MEM_REQ_EVAL().at(ctx->model.type), 2048);
+
 #ifdef GGML_USE_CUDA
         if (params.n_gpu_layers > 0) {
             ctx->buf_compute_cuda = ggml_backend_alloc_buffer(&model->backend_cuda, MEM_REQ_EVAL().at(ctx->model.type), 2048);
+        }
+#endif
+#ifdef GGML_USE_METAL
+        if (params.n_gpu_layers > 0) {
+            ctx->buf_compute_metal = ggml_backend_alloc_buffer(&model->backend_metal, MEM_REQ_EVAL().at(ctx->model.type), 2048);
         }
 #endif
 
