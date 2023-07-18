@@ -144,7 +144,7 @@ ifdef LLAMA_CUBLAS
 	CUBLASLD_FLAGS = -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
 	CUBLAS_OBJS = ggml-cuda.o ggml_v2-cuda.o ggml_v2-cuda-legacy.o
 	NVCC      = nvcc
-	NVCCFLAGS = --forward-unknown-to-host-compiler
+	NVCCFLAGS = --forward-unknown-to-host-compiler -use_fast_math
 ifdef CUDA_DOCKER_ARCH
 	NVCCFLAGS += -Wno-deprecated-gpu-targets -arch=$(CUDA_DOCKER_ARCH)
 else
@@ -358,7 +358,7 @@ koboldcpp_openblas: ggml_openblas.o ggml_v2_openblas.o ggml_v1.o expose.o common
 	$(OPENBLAS_BUILD)
 koboldcpp_failsafe: ggml_failsafe.o ggml_v2_failsafe.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter_failsafe.o k_quants_failsafe.o $(OBJS)
 	$(FAILSAFE_BUILD)
-koboldcpp_openblas_noavx2: ggml_openblas_noavx2.o ggml_v2_openblas_noavx2.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter.o k_quants_noavx2.o $(OBJS)
+koboldcpp_openblas_noavx2: ggml_openblas_noavx2.o ggml_v2_openblas_noavx2.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter_failsafe.o k_quants_noavx2.o $(OBJS)
 	$(OPENBLAS_NOAVX2_BUILD)
 koboldcpp_clblast: ggml_clblast.o ggml_v2_clblast.o ggml_v1.o expose.o common.o gpttype_adapter_clblast.o ggml-opencl.o ggml_v2-opencl.o ggml_v2-opencl-legacy.o k_quants.o $(OBJS)
 	$(CLBLAST_BUILD)

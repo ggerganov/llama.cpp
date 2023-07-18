@@ -242,8 +242,10 @@ def generate(prompt,max_length=20, max_context_length=512, temperature=0.8, top_
             for i, sampler in enumerate(sampler_order):
                 inputs.sampler_order[i] = sampler
             inputs.sampler_len = len(sampler_order)
-            if inputs.sampler_len>0 and (inputs.sampler_order[0]!=6 or inputs.sampler_order[inputs.sampler_len-1]!=5):
-                print("\n(Warning!!! Poor sampler_order detected! You will have reduced quality. Recommended values are [6,0,1,3,4,2,5])")
+            global showsamplerwarning
+            if showsamplerwarning and inputs.sampler_len>0 and (inputs.sampler_order[0]!=6 or inputs.sampler_order[inputs.sampler_len-1]!=5):
+                print("\n(Note: Sub-optimal sampler_order detected. You may have reduced quality. Recommended sampler values are [6,0,1,3,4,2,5]. This message will only show once per session.)")
+                showsamplerwarning = False
         except TypeError as e:
             print("ERROR: sampler_order must be a list of integers: " + str(e))
     inputs.seed = seed
@@ -277,6 +279,7 @@ modelbusy = False
 defaultport = 5001
 KcppVersion = "1.36"
 showdebug = True
+showsamplerwarning = True
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
     sys_version = ""
