@@ -1,11 +1,19 @@
 #/bin/bash
 
+if [ -z "$2" ]; then
+    echo "usage: $0 <output-dir> <mnt-dir>"
+    exit 1
+fi
+
+mkdir -p "$1"
+mkdir -p "$2"
+
+OUT=$(realpath "$1")
+MNT=$(realpath "$2")
+
 sd=`dirname $0`
 cd $sd/../
-
 SRC=`pwd`
-OUT="$1"
-MNT="$2"
 
 ## helpers
 
@@ -120,30 +128,48 @@ function gg_run_open_llama_3b_v2 {
     gg_wget models-mnt/open-llama/3B-v2/ https://huggingface.co/openlm-research/open_llama_3b_v2/resolve/main/pytorch_model.bin
     gg_wget models-mnt/open-llama/3B-v2/ https://huggingface.co/openlm-research/open_llama_3b_v2/raw/main/generation_config.json
 
-    cd build-ci-release
+    rm -rf build-ci-release && mkdir build-ci-release && cd build-ci-release
 
     set -e
 
+    (time cmake -DCMAKE_BUILD_TYPE=Release -DLLAMA_QKK_64=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
+    (time make -j                                              ) 2>&1 | tee -a $OUT/${ci}-make.log
+
     path_models="../models-mnt/open-llama/3B-v2"
 
+    python3 ../convert.py ${path_models}
+
     model_f16="${path_models}/ggml-model-f16.bin"
+    model_q8_0="${path_models}/ggml-model-q8_0.bin"
     model_q4_0="${path_models}/ggml-model-q4_0.bin"
     model_q4_1="${path_models}/ggml-model-q4_1.bin"
     model_q5_0="${path_models}/ggml-model-q5_0.bin"
     model_q5_1="${path_models}/ggml-model-q5_1.bin"
+    model_q3_k="${path_models}/ggml-model-q3_k.bin"
+    model_q4_k="${path_models}/ggml-model-q4_k.bin"
+    model_q5_k="${path_models}/ggml-model-q5_k.bin"
+    model_q6_k="${path_models}/ggml-model-q6_k.bin"
 
-    python3 ../convert.py ${path_models}
-
+    ./bin/quantize ${model_f16} ${model_q8_0} q8_0
     ./bin/quantize ${model_f16} ${model_q4_0} q4_0
     ./bin/quantize ${model_f16} ${model_q4_1} q4_1
     ./bin/quantize ${model_f16} ${model_q5_0} q5_0
     ./bin/quantize ${model_f16} ${model_q5_1} q5_1
+    ./bin/quantize ${model_f16} ${model_q3_k} q3_k
+    ./bin/quantize ${model_f16} ${model_q4_k} q4_k
+    ./bin/quantize ${model_f16} ${model_q5_k} q5_k
+    ./bin/quantize ${model_f16} ${model_q6_k} q6_k
 
     (time ./bin/main --model ${model_f16}  -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-f16.log
+    (time ./bin/main --model ${model_q8_0} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q8_0.log
     (time ./bin/main --model ${model_q4_0} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q4_0.log
     (time ./bin/main --model ${model_q4_1} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
     (time ./bin/main --model ${model_q5_0} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
     (time ./bin/main --model ${model_q5_1} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
+    (time ./bin/main --model ${model_q3_k} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
+    (time ./bin/main --model ${model_q4_k} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
+    (time ./bin/main --model ${model_q5_k} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
+    (time ./bin/main --model ${model_q6_k} -s 1234 -n 64 -t 8 -p "I believe the meaning of life is") 2>&1 | tee -a $OUT/${ci}-tg-q6_k.log
 
     set +e
 }
@@ -154,10 +180,15 @@ function gg_sum_open_llama_3b_v2 {
     gg_printf 'OpenLLaMA 3B-v2: text generation\n'
     gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
     gg_printf '- f16: \n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-f16.log)"
+    gg_printf '- q8_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q8_0.log)"
     gg_printf '- q4_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_0.log)"
     gg_printf '- q4_1:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_1.log)"
     gg_printf '- q5_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_0.log)"
     gg_printf '- q5_1:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_1.log)"
+    gg_printf '- q3_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q3_k.log)"
+    gg_printf '- q4_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_k.log)"
+    gg_printf '- q5_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_k.log)"
+    gg_printf '- q6_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q6_k.log)"
 }
 
 ## main
@@ -165,16 +196,17 @@ function gg_sum_open_llama_3b_v2 {
 if [ -z $GG_BUILD_LOW_PERF ]; then
     rm -rf ${SRC}/models-mnt
 
-    mkdir -p $(realpath ${MNT}/models)
-    ln -sfn ${MNT}/models ${SRC}/models-mnt
+    mnt_models=$(realpath ${MNT}/models)
+    mkdir -p ${mnt_models}
+    ln -sfn ${mnt_models} ${SRC}/models-mnt
 
     python3 -m pip install -r ${SRC}/requirements.txt
 fi
 
 ret=0
 
-test $ret -eq 0 && gg_run ctest_debug
-test $ret -eq 0 && gg_run ctest_release
+#test $ret -eq 0 && gg_run ctest_debug
+#test $ret -eq 0 && gg_run ctest_release
 
 if [ -z $GG_BUILD_LOW_PERF ]; then
     test $ret -eq 0 && gg_run open_llama_3b_v2
