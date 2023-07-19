@@ -875,6 +875,10 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
     return result;
 }
 
+int llama_max_devices() {
+    return LLAMA_MAX_DEVICES;
+}
+
 bool llama_mmap_supported() {
     return llama_mmap::SUPPORTED;
 }
