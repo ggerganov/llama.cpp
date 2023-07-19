@@ -10745,7 +10745,7 @@ static void ggml_compute_forward_mul_mat(
 #elif defined(GGML_USE_VULKAN)
     if (ggml_vk_can_mul_mat(src0, src1, dst)) {
         if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
-            ggml_vk_mul_mat(src0, src1, dst, params->wdata, params->wsize);
+            ggml_vk_mul_mat(src0, src1, dst);
         }
         return;
     }

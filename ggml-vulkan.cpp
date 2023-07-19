@@ -1447,7 +1447,7 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     ggml_vk_pool_free(d_D);
 }
 
-static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, void * wdata) {
+static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_mul_mat_f16((type=" << src0->type << ", ne0=" << src0->ne[0] << ", ne1=" << src0->ne[1] << ", ne2=" << src0->ne[2] << ", ne3=" << src0->ne[3];
     std::cerr << "), (type=" << src1->type << ", ne0=" << src1->ne[0] << ", ne1=" << src1->ne[1] << ", ne2=" << src1->ne[2] << ", ne3=" << src1->ne[3];
@@ -1503,6 +1503,8 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
 
     const bool load_x = src1->backend != GGML_BACKEND_GPU;
 
+    ggml_fp16_t * fp16_staging = (ggml_fp16_t *) ggml_vk_host_malloc(sizeof(ggml_fp16_t) * (ne11 * ne10) * (ne02 * ne03));
+
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
             const bool first = i03 == 0 && i02 == 0;
@@ -1529,7 +1531,7 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
             // convert src1 to fp16
             // TODO: use multiple threads
             // TODO: This memory isn't pinned
-            ggml_fp16_t * const tmp = (ggml_fp16_t *) wdata + (ne11 * ne10) * (i03 * ne02 + i02);
+            ggml_fp16_t * const tmp = fp16_staging + (ne11 * ne10) * (i03 * ne02 + i02);
             char * src1i = (char *) src1->data + i03*nb13 + i02*nb12;
             if (src1_cont_rows) {
                 if (src1_cont_cols) {
@@ -1579,6 +1581,8 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
             ggml_vk_submit(vk_compute_queue, compute_seqs, VK_NULL_HANDLE);
         }
     }
+
+    ggml_vk_host_free(fp16_staging);
 
     ggml_vk_submit(vk_transfer_queues[0], transfer_0_seqs, VK_NULL_HANDLE);
 
@@ -1795,7 +1799,7 @@ bool ggml_vk_mul_mat_use_f16(const struct ggml_tensor * src0, const struct ggml_
     return mul_mat_f16_transfer < mul_mat_q_transfer;
 }
 
-void ggml_vk_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst, void * wdata, size_t wsize) {
+void ggml_vk_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_vk_can_mul_mat(src0, src1, dst));
 
     if (src0->type == GGML_TYPE_F32) {
@@ -1803,7 +1807,7 @@ void ggml_vk_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor *
     }
     else if (src0->type == GGML_TYPE_F16) {
         if (ggml_vk_mul_mat_use_f16(src0, src1, dst)) {
-            ggml_vk_mul_mat_f16(src0, src1, dst, wdata);
+            ggml_vk_mul_mat_f16(src0, src1, dst);
         }
         else {
             ggml_vk_mul_mat_q_f32(src0, src1, dst);
