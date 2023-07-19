@@ -360,7 +360,7 @@ Building the program with BLAS support may lead to some performance improvements
   ```bash
   mkdir build
   cd build
-  cmake .. -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=Intel10_64lp -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
+  cmake .. -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=Intel10_lp64 -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
   cmake --build . --config Release
   ```
 
@@ -640,7 +640,7 @@ Please verify the [sha256 checksums](SHA256SUMS) of all downloaded model files t
 
 ```bash
 # run the verification script
-python3 .\scripts\verify-checksum-models.py
+./scripts/verify-checksum-models.py
 ```
 
 - On linux or macOS it is also possible to run the following commands to verify if you have all possible latest files in your self-installed `./models` subdirectory:

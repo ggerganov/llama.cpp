@@ -16,6 +16,8 @@ build/
 build-em/
 build-debug/
 build-release/
+build-ci-debug/
+build-ci-release/
 build-static/
 build-cublas/
 build-opencl/
@@ -25,9 +27,10 @@ build-no-accel/
 build-sanitize-addr/
 build-sanitize-thread/
 out/
+tmp/
 
 models/*
-*.bin
+models-mnt
 
 /main
 /quantize
