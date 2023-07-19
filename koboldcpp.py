@@ -248,7 +248,7 @@ def generate(prompt,max_length=20, max_context_length=512, temperature=0.8, top_
                 inputs.sampler_order[i] = sampler
             inputs.sampler_len = len(sampler_order)
             global showsamplerwarning
-            if showsamplerwarning and inputs.sampler_len>0 and (inputs.sampler_order[0]!=6 or inputs.sampler_order[inputs.sampler_len-1]!=5):
+            if showsamplerwarning and inputs.mirostat==0 and inputs.sampler_len>0 and (inputs.sampler_order[0]!=6 or inputs.sampler_order[inputs.sampler_len-1]!=5):
                 print("\n(Note: Sub-optimal sampler_order detected. You may have reduced quality. Recommended sampler values are [6,0,1,3,4,2,5]. This message will only show once per session.)")
                 showsamplerwarning = False
         except TypeError as e:

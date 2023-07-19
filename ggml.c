@@ -16367,7 +16367,11 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             // wait for other threads to finish
             const int last = node_n;
             do {
+                #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_METAL)
+                //apple does nothing
+                #else
                 sched_yield();
+                #endif
                 node_n = atomic_load(&state->shared->node_n);
             } while (node_n == last);
         }
