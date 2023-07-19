@@ -1925,6 +1925,31 @@ static bool llama_grammar_is_end_of_sequence(const llama_grammar_element * pos) 
     }
 }
 
+// returns true iff chr satisfies the char range at pos (regular or inverse range)
+// asserts that pos is pointing to a char range element
+static std::pair<bool, const llama_grammar_element *> llama_grammar_match_char(
+        const llama_grammar_element * pos,
+        const uint32_t                chr) {
+
+    bool found            = false;
+    bool is_positive_char = pos->type == LLAMA_GRETYPE_CHAR;
+    LLAMA_ASSERT(is_positive_char || pos->type == LLAMA_GRETYPE_CHAR_NOT);
+
+    do {
+        if (pos[1].type == LLAMA_GRETYPE_CHAR_RNG_UPPER) {
+            // inclusive range, e.g. [a-z]
+            found = found || (pos->value <= chr && chr <= pos[1].value);
+            pos += 2;
+        } else {
+            // exact char match, e.g. [a] or "a"
+            found = found || pos->value == chr;
+            pos += 1;
+        }
+    } while (pos->type == LLAMA_GRETYPE_CHAR_ALT);
+
+    return std::make_pair(found == is_positive_char, pos);
+}
+
 // transforms a grammar pushdown stack into N possible stacks, all ending
 // at a character range (terminal element)
 static void llama_grammar_advance_stack(
@@ -1969,6 +1994,7 @@ static void llama_grammar_advance_stack(
             break;
         }
         case LLAMA_GRETYPE_CHAR:
+        case LLAMA_GRETYPE_CHAR_NOT:
             new_stacks.push_back(stack);
             break;
         default:
@@ -1995,34 +2021,17 @@ static std::vector<std::vector<const llama_grammar_element *>> llama_grammar_acc
             continue;
         }
 
-        const llama_grammar_element * pos = stack.back();
-        LLAMA_ASSERT(pos->type == LLAMA_GRETYPE_CHAR);
+        auto match = llama_grammar_match_char(stack.back(), chr);
+        if (match.first) {
+            const llama_grammar_element * pos = match.second;
 
-        bool found = false;
-        do {
-            bool matches_range;
-            if (pos[1].type == LLAMA_GRETYPE_CHAR_RNG_UPPER) {
-                // inclusive range, e.g. [a-z]
-                matches_range = pos->value <= chr && chr <= pos[1].value;
-                pos += 2;
-            } else {
-                // exact char match, e.g. [a] or "a"
-                matches_range = pos->value == chr;
-                pos += 1;
+            // update top of stack to next element, if any
+            std::vector<const llama_grammar_element *> new_stack(stack.begin(), stack.end() - 1);
+            if (!llama_grammar_is_end_of_sequence(pos)) {
+                new_stack.push_back(pos);
             }
-            found = found || matches_range;
-        } while (pos->type == LLAMA_GRETYPE_CHAR_ALT);
-
-        if (!found) {
-            continue;
+            llama_grammar_advance_stack(rules, new_stack, new_stacks);
         }
-
-        // update top of stack to next element, if any
-        std::vector<const llama_grammar_element *> new_stack(stack.begin(), stack.end() - 1);
-        if (!llama_grammar_is_end_of_sequence(pos)) {
-            new_stack.push_back(pos);
-        }
-        llama_grammar_advance_stack(rules, new_stack, new_stacks);
     }
 
     return new_stacks;
@@ -2038,25 +2047,8 @@ static bool llama_grammar_peek(
             if (!chr) {
                 return true;
             }
-        } else {
-            const llama_grammar_element * pos = stack.back();
-            LLAMA_ASSERT(pos->type == LLAMA_GRETYPE_CHAR);
-
-            do {
-                if (pos[1].type == LLAMA_GRETYPE_CHAR_RNG_UPPER) {
-                    // inclusive range, e.g. [a-z]
-                    if (pos->value <= chr && chr <= pos[1].value) {
-                        return true;
-                    }
-                    pos += 2;
-                } else {
-                    // exact char match, e.g. [a] or "a"
-                    if (pos->value == chr) {
-                        return true;
-                    }
-                    pos += 1;
-                }
-            } while (pos->type == LLAMA_GRETYPE_CHAR_ALT);
+        } else if (llama_grammar_match_char(stack.back(), chr).first) {
+            return true;
         }
     }
     return false;

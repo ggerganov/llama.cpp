@@ -151,13 +151,16 @@ extern "C" {
         // terminal element: character (code point)
         LLAMA_GRETYPE_CHAR           = 3,
 
+        // inverse char(s) ([^a], [^a-b] [^abc])
+        LLAMA_GRETYPE_CHAR_NOT       = 4,
+
         // modifies a preceding LLAMA_GRETYPE_CHAR or LLAMA_GRETYPE_CHAR_ALT to
         // be an inclusive range ([a-z])
-        LLAMA_GRETYPE_CHAR_RNG_UPPER = 4,
+        LLAMA_GRETYPE_CHAR_RNG_UPPER = 5,
 
         // modifies a preceding LLAMA_GRETYPE_CHAR or
         // LLAMA_GRETYPE_CHAR_RNG_UPPER to add an alternate char to match ([ab], [a-zA])
-        LLAMA_GRETYPE_CHAR_ALT       = 5,
+        LLAMA_GRETYPE_CHAR_ALT       = 6,
     };
 
     typedef struct llama_grammar_element {

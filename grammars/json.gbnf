@@ -1,7 +1,7 @@
 # Grammar for subset of JSON - doesn't support full string or number syntax
 
 root  ::= object
-value ::= object | array | string | number | boolean
+value ::= object | array | string | number | boolean | "null"
 
 object ::=
   "{" ws (
@@ -17,9 +17,9 @@ array  ::=
 
 string  ::=
   "\"" (
-    [\x20\x21\x23-\x5b\x5d-\U0010FFFF] | # any code point except " (\x22) and \ (\x5c)
+    [^"\\] |
     "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]) # escapes
-  )* "\""
+  )* "\"" ws
 
 # Only plain integers currently
 number  ::= "-"? [0-9]+ ws

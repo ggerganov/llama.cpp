@@ -149,13 +149,18 @@ namespace grammar_parser {
                 pos = parse_space(pos + 1, is_nested);
             } else if (*pos == '[') { // char range(s)
                 pos++;
+                enum llama_gretype start_type = LLAMA_GRETYPE_CHAR;
+                if (*pos == '^') {
+                    pos++;
+                    start_type = LLAMA_GRETYPE_CHAR_NOT;
+                }
                 last_sym_start = out_elements.size();
                 while (*pos != ']') {
                     auto char_pair = parse_char(pos);
                          pos       = char_pair.second;
                     enum llama_gretype type = last_sym_start < out_elements.size()
                         ? LLAMA_GRETYPE_CHAR_ALT
-                        : LLAMA_GRETYPE_CHAR;
+                        : start_type;
 
                     out_elements.push_back({type, char_pair.first});
                     if (pos[0] == '-' && pos[1] != ']') {
@@ -292,6 +297,7 @@ namespace grammar_parser {
     bool is_char_element(llama_grammar_element elem) {
         switch (elem.type) {
             case LLAMA_GRETYPE_CHAR:           return true;
+            case LLAMA_GRETYPE_CHAR_NOT:       return true;
             case LLAMA_GRETYPE_CHAR_ALT:       return true;
             case LLAMA_GRETYPE_CHAR_RNG_UPPER: return true;
             default:                           return false;
@@ -305,8 +311,9 @@ namespace grammar_parser {
                 case LLAMA_GRETYPE_ALT:            fprintf(file, "ALT");            break;
                 case LLAMA_GRETYPE_RULE_REF:       fprintf(file, "RULE_REF");       break;
                 case LLAMA_GRETYPE_CHAR:           fprintf(file, "CHAR");           break;
+                case LLAMA_GRETYPE_CHAR_NOT:       fprintf(file, "CHAR_NOT");       break;
                 case LLAMA_GRETYPE_CHAR_RNG_UPPER: fprintf(file, "CHAR_RNG_UPPER"); break;
-                case LLAMA_GRETYPE_CHAR_ALT:       fprintf(file, "CHAR_RNG_UPPER"); break;
+                case LLAMA_GRETYPE_CHAR_ALT:       fprintf(file, "CHAR_ALT");       break;
             }
             switch (elem.type) {
                 case LLAMA_GRETYPE_END:
@@ -315,6 +322,7 @@ namespace grammar_parser {
                     fprintf(file, "(%u) ", elem.value);
                     break;
                 case LLAMA_GRETYPE_CHAR:
+                case LLAMA_GRETYPE_CHAR_NOT:
                 case LLAMA_GRETYPE_CHAR_RNG_UPPER:
                 case LLAMA_GRETYPE_CHAR_ALT:
                     fprintf(file, "(\"");
@@ -351,6 +359,10 @@ namespace grammar_parser {
                     break;
                 case LLAMA_GRETYPE_CHAR:
                     fprintf(file, "[");
+                    print_grammar_char(file, elem.value);
+                    break;
+                case LLAMA_GRETYPE_CHAR_NOT:
+                    fprintf(file, "[^");
                     print_grammar_char(file, elem.value);
                     break;
                 case LLAMA_GRETYPE_CHAR_RNG_UPPER:
@@ -394,6 +406,7 @@ namespace grammar_parser {
                 // fprintf(file, "%zu: ", i);
                 // print_rule_binary(file, state.rules[i]);
                 print_rule(file, i, state.rules[i], symbol_id_names);
+                // fprintf(file, "\n");
             }
         } catch (const std::exception & err) {
             fprintf(stderr, "\n%s: error printing grammar: %s\n", __func__, err.what());
