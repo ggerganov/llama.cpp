@@ -439,7 +439,7 @@ struct llama_server_context {
 
             if (cfg_enabled) {
                 llama_sample_classifier_free_guidance(
-                    ctx, &candidates_p, evaluator_guidance.ctx, params.cfg_scale, params.cfg_smooth_factor);
+                    ctx, &candidates_p, evaluator_guidance.ctx, params.cfg_scale, 1.0);
             }
 
             // Apply penalties
@@ -833,7 +833,6 @@ static json format_generation_settings(llama_server_context & llama) {
         { "logit_bias", llama.params.logit_bias },
         { "n_probs", llama.params.n_probs },
         { "cfg_scale", llama.params.cfg_scale },
-        { "cfg_smooth_factor", llama.params.cfg_smooth_factor },
         { "cfg_n_keep", llama.n_keep_guidance },
     };
 }
@@ -931,7 +930,6 @@ static void parse_options_completion(const json & body, llama_server_context & l
     llama.params.prompt = body.value("prompt", default_params.prompt);
     llama.params.cfg_negative_prompt = body.value("cfg_negative_prompt", default_params.cfg_negative_prompt);
     llama.params.cfg_scale = body.value("cfg_scale", default_params.cfg_scale);
-    llama.params.cfg_smooth_factor = body.value("cfg_smooth_factor", default_params.cfg_smooth_factor);
     llama.n_keep_guidance = body.value("cfg_n_keep", 0);
     llama.params.n_probs = body.value("n_probs", default_params.n_probs);
 
