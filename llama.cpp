@@ -968,7 +968,7 @@ static void llama_model_load_internal(
 #endif
 #ifdef GGML_USE_METAL
     if (n_gpu_layers > 0) {
-        model.backend_metal = ggml_backend_metal_init();
+        model.backend_metal = ggml_backend_metal_init(backend_cpu);
         backend_gpu = &model.backend_metal;
     }
 #endif
@@ -1008,17 +1008,20 @@ static void llama_model_load_internal(
     // TODO: generalize support for mmap
     size_t mmap_size = 0;
     if (ml->use_mmap) {
-        mmap_size = ctx_sizes[backend_cpu];
-        ctx_sizes[backend_cpu] = 0;
+        for (auto & it : ctx_sizes) {
+            if (it.first->is_ram_shared) {
+                mmap_size += it.second;
+                ctx_sizes[it.first] = 0;
+            }
+        }
     }
 
     fprintf(stderr, "%s: ggml ctx sizes:\n", __func__);
     for (const auto & it : ctx_sizes) {
-        fprintf(stderr, "%8s = %7.2f MB", ggml_backend_name(it.first), it.second / 1024.0 / 1024.0);
-        if (it.first->is_ram_shared && ml->use_mmap) {
-            fprintf(stderr, " + %7.2f MB (mmap)", mmap_size / 1024.0 / 1024.0);
-        }
-        fprintf(stderr, "\n");
+        fprintf(stderr, "%8s = %7.2f MB\n", ggml_backend_name(it.first), it.second / 1024.0 / 1024.0);
+    }
+    if (mmap_size > 0) {
+        fprintf(stderr, "%8s = %7.2f MB\n", "mmap", mmap_size / 1024.0 / 1024.0);
     }
 
     // create the buffers and contexts
