@@ -1023,29 +1023,27 @@ static struct ggml_backend_interface metal_backend_interface = {
     /* .graph_compute       = */ ggml_backend_metal_graph_compute,
 };
 
-struct ggml_backend ggml_backend_metal_init(struct ggml_backend * backend_cpu) {
+struct ggml_backend * ggml_backend_metal_init(struct ggml_backend * backend_cpu) {
     struct ggml_metal_context * ctx = malloc(sizeof(struct ggml_metal_context));
 
-    struct ggml_backend backend_metal = {
-        /* .interface     = */ &metal_backend_interface,
+    struct ggml_backend * backend_metal = malloc(sizeof(struct ggml_backend));
+    *backend_metal = (struct ggml_backend){
+        /* .interface     = */ metal_backend_interface,
         /* .context       = */ ctx,
         /* .is_ram_shared = */ true,
     };
 
     // reuses CPU calls for now
-    backend_metal.interface->free_context       = backend_cpu->interface->free_context;
-    backend_metal.interface->alloc_buffer       = backend_cpu->interface->alloc_buffer;
-    backend_metal.interface->free_buffer        = backend_cpu->interface->free_buffer;
-    backend_metal.interface->reset_buffer       = backend_cpu->interface->reset_buffer;
-    backend_metal.interface->alloc_tensor       = backend_cpu->interface->alloc_tensor;
-    backend_metal.interface->set_tensor_async   = backend_cpu->interface->set_tensor_async;
-    backend_metal.interface->get_tensor_async   = backend_cpu->interface->get_tensor_async;
-    backend_metal.interface->synchronize        = backend_cpu->interface->synchronize;
-    backend_metal.interface->cpy_tensor_from    = backend_cpu->interface->cpy_tensor_from;
-    backend_metal.interface->cpy_tensor_to      = backend_cpu->interface->cpy_tensor_to;
-    backend_metal.interface->graph_plan_create  = backend_cpu->interface->graph_plan_create;
-    backend_metal.interface->graph_plan_free    = backend_cpu->interface->graph_plan_free;
-    backend_metal.interface->graph_plan_compute = backend_cpu->interface->graph_plan_compute;
+    backend_metal->interface.free               = backend_cpu->interface.free;
+    backend_metal->interface.alloc_buffer       = backend_cpu->interface.alloc_buffer;
+    backend_metal->interface.set_tensor_async   = backend_cpu->interface.set_tensor_async;
+    backend_metal->interface.get_tensor_async   = backend_cpu->interface.get_tensor_async;
+    backend_metal->interface.synchronize        = backend_cpu->interface.synchronize;
+    backend_metal->interface.cpy_tensor_from    = backend_cpu->interface.cpy_tensor_from;
+    backend_metal->interface.cpy_tensor_to      = backend_cpu->interface.cpy_tensor_to;
+    backend_metal->interface.graph_plan_create  = backend_cpu->interface.graph_plan_create;
+    backend_metal->interface.graph_plan_free    = backend_cpu->interface.graph_plan_free;
+    backend_metal->interface.graph_plan_compute = backend_cpu->interface.graph_plan_compute;
 
     return backend_metal;
 }

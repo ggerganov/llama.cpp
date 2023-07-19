@@ -585,6 +585,14 @@ void ggml_cuda_host_free(void * ptr) {
     CUDA_CHECK(cudaFreeHost(ptr));
 }
 
+void ggml_cuda_host_register(void * ptr, size_t size) {
+    CUDA_CHECK(cudaHostRegister(ptr, size, 0));
+}
+
+void ggml_cuda_host_unregister(void * ptr) {
+    CUDA_CHECK(cudaHostUnregister(ptr));
+}
+
 template<typename src0_t, typename src1_t, typename dst_t>
 static void ggml_cuda_op_add(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
@@ -792,9 +800,9 @@ static void ggml_cuda_op_rope(
     const int64_t ne00 = src0->ne[0];
     const int64_t i01_diff = i01_high - i01_low;
 
-    const int n_past = ((int32_t *) dst->params)[0];
-    const int n_dims = ((int32_t *) dst->params)[1];
-    const int mode   = ((int32_t *) dst->params)[2];
+    const int n_past = ((int32_t *) dst->op_params)[0];
+    const int n_dims = ((int32_t *) dst->op_params)[1];
+    const int mode   = ((int32_t *) dst->op_params)[2];
     //const int n_ctx  = ((int32_t *) dst->params)[3];
     GGML_ASSERT(mode == 0);
 
@@ -822,7 +830,7 @@ static void ggml_cuda_op_diag_mask_inf(
     const int64_t ne01 = src0->ne[1];
     const int64_t i01_diff = i01_high - i01_low;
 
-    const int n_past = ((int32_t *) dst->params)[0];
+    const int n_past = ((int32_t *) dst->op_params)[0];
 
     // compute
     diag_mask_inf_cuda((src0_t *)src0_d, (dst_t *)dst_d, ne00, i01_diff, ne01, n_past, stream);
@@ -1689,16 +1697,17 @@ struct ggml_backend_cuda_context {
     ggml_cuda_context * cuda_ctx = ggml_cuda_init();
 };
 
-static const char * ggml_backend_cuda_name(ggml_backend_context_t ctx) {
+static const char * ggml_backend_cuda_name(ggml_backend * backend) {
     return "CUDA";
 
-    UNUSED(ctx);
+    UNUSED(backend);
 }
 
-static void ggml_backend_cuda_free_context(ggml_backend_context_t ctx) {
-    ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)ctx;
+static void ggml_backend_cuda_free(ggml_backend * backend) {
+    ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
     ggml_cuda_free(cuda_ctx->cuda_ctx);
     delete cuda_ctx;
+    delete backend;
 }
 
 struct cuda_backend_buffer {
@@ -1709,116 +1718,82 @@ struct cuda_backend_buffer {
 
 static const size_t TENSOR_ALIGNMENT = 128;
 
-static size_t aligned_offset(const void * buffer, size_t offset, size_t alignment) {
-    assert(alignment && !(alignment & (alignment - 1))); // power of 2
-    size_t align = (alignment - (((uintptr_t)buffer + offset) % alignment)) % alignment;
-    return offset + align;
+static void ggml_backend_cuda_free_buffer(struct ggml_backend_buffer * alloc) {
+    CUDA_CHECK(cudaFree(alloc->backend_data));
 }
 
-static ggml_backend_buffer_t ggml_backend_cuda_alloc_buffer(ggml_backend_context_t ctx, size_t size) {
-    cuda_backend_buffer * buffer = new cuda_backend_buffer;
+static ggml_backend_buffer * ggml_backend_cuda_alloc_buffer(ggml_backend * backend, size_t size) {
+    void * data;
+    CUDA_CHECK(cudaMalloc(&data, size));
 
-    CUDA_CHECK(cudaMalloc(&buffer->data, size));
-    buffer->offset = 0; // cudaMalloc returns aligned pointers
-    buffer->size = size;
+    ggml_backend_buffer * buffer = ggml_allocator_simple_init(data, size, TENSOR_ALIGNMENT);
+    buffer->interface.free_data = ggml_backend_cuda_free_buffer;
+    buffer->backend_data = data;
 
     return buffer;
 
-    UNUSED(ctx);
+    UNUSED(backend);
 }
 
-static void ggml_backend_cuda_free_buffer(ggml_backend_context_t ctx, ggml_backend_buffer_t buffer) {
-    cuda_backend_buffer * cuda_buffer = (cuda_backend_buffer *)buffer;
-    CUDA_CHECK(cudaFree(cuda_buffer->data));
-    delete cuda_buffer;
-
-    UNUSED(ctx);
-}
-
-static void ggml_backend_cuda_reset_buffer(ggml_backend_context_t ctx, ggml_backend_buffer_t buffer) {
-    cuda_backend_buffer * cuda_buffer = (cuda_backend_buffer *)buffer;
-    cuda_buffer->offset = 0;
-
-    UNUSED(ctx);
-}
-
-static void ggml_backend_cuda_alloc_tensor(ggml_backend_context_t ctx, ggml_backend_buffer_t buffer, ggml_tensor * tensor) {
-    cuda_backend_buffer * cuda_buffer = (cuda_backend_buffer *)buffer;
-
-    if (cuda_buffer->offset + ggml_nbytes(tensor) > cuda_buffer->size) {
-        fprintf(stderr, "%s: not enough space in the CUDA buffer (needed %zu, available %zu)\n",
-                __func__, ggml_nbytes(tensor), cuda_buffer->size - cuda_buffer->offset);
-        GGML_ASSERT(false);
-    }
-
-    tensor->data = (char*)cuda_buffer->data + cuda_buffer->offset;
-    cuda_buffer->offset = aligned_offset(cuda_buffer->data, cuda_buffer->offset + ggml_nbytes(tensor), TENSOR_ALIGNMENT);
-
-    UNUSED(ctx);
-}
-
-static void ggml_backend_cuda_set_tensor_async(ggml_backend_context_t ctx, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
+static void ggml_backend_cuda_set_tensor_async(ggml_backend * backend, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
     GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor write out of bounds");
     GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
 
-    //ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)ctx;
+    //ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
 
     CUDA_CHECK(cudaMemcpyAsync((char*)tensor->data + offset, data, size, cudaMemcpyHostToDevice, g_cudaStream_main));
 
-    UNUSED(ctx);
+    UNUSED(backend);
 }
 
-static void ggml_backend_cuda_get_tensor_async(ggml_backend_context_t ctx, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
+static void ggml_backend_cuda_get_tensor_async(ggml_backend * backend, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
     GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor read out of bounds");
     GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
 
-    //ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)ctx;
+    //ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
 
     CUDA_CHECK(cudaMemcpyAsync(data, (const char*)tensor->data + offset, size, cudaMemcpyDeviceToHost, g_cudaStream_main));
 
-    UNUSED(ctx);
+    UNUSED(backend);
 }
 
-static void ggml_backend_cuda_synchronize(ggml_backend_context_t ctx) {
-    ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)ctx;
+static void ggml_backend_cuda_synchronize(ggml_backend * backend) {
+    ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
     ggml_cuda_synchronize(cuda_ctx->cuda_ctx);
 }
 
-static ggml_graph_plan_t ggml_backend_cuda_graph_plan_create(ggml_backend_context_t ctx, ggml_cgraph * cgraph) {
+static ggml_graph_plan_t ggml_backend_cuda_graph_plan_create(ggml_backend * backend, ggml_cgraph * cgraph) {
     GGML_ASSERT(false);
 
     return nullptr;
 
-    UNUSED(ctx);
+    UNUSED(backend);
     UNUSED(cgraph);
 }
 
-static void ggml_backend_cuda_graph_plan_free(ggml_backend_context_t ctx, ggml_graph_plan_t plan) {
+static void ggml_backend_cuda_graph_plan_free(ggml_backend * backend, ggml_graph_plan_t plan) {
     GGML_ASSERT(false);
 
-    UNUSED(ctx);
+    UNUSED(backend);
     UNUSED(plan);
 }
 
-static void ggml_backend_cuda_graph_plan_compute(ggml_backend_context_t ctx, ggml_graph_plan_t plan) {
+static void ggml_backend_cuda_graph_plan_compute(ggml_backend * backend, ggml_graph_plan_t plan) {
     GGML_ASSERT(false);
 
-    UNUSED(ctx);
+    UNUSED(backend);
     UNUSED(plan);
 }
 
-static void ggml_backend_cuda_graph_compute(ggml_backend_context_t ctx, ggml_cgraph * cgraph) {
-    ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)ctx;
+static void ggml_backend_cuda_graph_compute(ggml_backend * backend, ggml_cgraph * cgraph) {
+    ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
     ggml_cuda_cgraph_compute(cuda_ctx->cuda_ctx, cgraph);
 }
 
 static ggml_backend_interface cuda_backend_interface = {
     /* .get_name            = */ ggml_backend_cuda_name,
-    /* .free_context        = */ ggml_backend_cuda_free_context,
+    /* .free                = */ ggml_backend_cuda_free,
     /* .alloc_buffer        = */ ggml_backend_cuda_alloc_buffer,
-    /* .free_buffer         = */ ggml_backend_cuda_free_buffer,
-    /* .reset_buffer        = */ ggml_backend_cuda_reset_buffer,
-    /* .alloc_tensor        = */ ggml_backend_cuda_alloc_tensor,
     /* .set_tensor_async    = */ ggml_backend_cuda_set_tensor_async,
     /* .get_tensor_async    = */ ggml_backend_cuda_get_tensor_async,
     /* .synchronize         = */ ggml_backend_cuda_synchronize,
@@ -1830,12 +1805,13 @@ static ggml_backend_interface cuda_backend_interface = {
     /* .graph_compute       = */ ggml_backend_cuda_graph_compute
 };
 
-ggml_backend ggml_backend_cuda_init(void) {
+ggml_backend * ggml_backend_cuda_init(void) {
     ggml_backend_cuda_context * ctx = new ggml_backend_cuda_context;
 
-    ggml_backend cuda_backend = {
-        /* .interface =   = */ &cuda_backend_interface,
-        /* .context       = */ ctx,
+    ggml_backend * cuda_backend = new ggml_backend;
+    *cuda_backend = (ggml_backend){
+        /* .interface     = */ cuda_backend_interface,
+        /* .context       = */ ctx
         /* .is_ram_shared = */ false,
     };
     return cuda_backend;

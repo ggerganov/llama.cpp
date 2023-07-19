@@ -35,7 +35,7 @@ extern "C" {
 #endif
 
 // GG: maybe return ptr and avoid the "ggml.h" include
-struct ggml_backend ggml_backend_metal_init(struct ggml_backend * backend_cpu);
+struct ggml_backend * ggml_backend_metal_init(struct ggml_backend * backend_cpu);
 
 //struct ggml_metal_context;
 //
