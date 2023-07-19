@@ -25,6 +25,8 @@ fi
 
 ./main "${GEN_OPTIONS[@]}" \
     --model "$MODEL" \
+    --in-prefix " " \
+    --in-suffix "${AI_NAME}:" \
     --n_predict "$N_PREDICTS" \
     --color --interactive \
     --reverse-prompt "${USER_NAME}:" \
