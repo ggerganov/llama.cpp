@@ -9,13 +9,17 @@ layout (binding = 1) writeonly buffer D { float data_b[]; };
 
 layout (push_constant) uniform parameter
 {
-    int N;
+    int M;
+    int K;
+    int stride_a;
+    int stride_b;
 } p;
 
 void main() {
-    const int idx = int(gl_GlobalInvocationID.x);
+    const int row = int(gl_GlobalInvocationID.x % p.K);
+    const int col = int(gl_GlobalInvocationID.x / p.K);
 
-    if (idx < p.N) {
-        data_b[idx] = float(data_a[idx]);
+    if (row < p.M && col < p.K) {
+        data_b[col * p.stride_b + row] = float(data_a[col * p.stride_a + row]);
     }
 }
