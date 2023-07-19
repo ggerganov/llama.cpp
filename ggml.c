@@ -12012,11 +12012,6 @@ static void ggml_compute_forward_clamp(
 
 // ggml_compute_forward_rope
 
-// Apparently solving `n_rot = 2pi * x * base^((2 * max_pos_emb) / n_dims)` for x, we get
-// `corr_fac(n_rot) = n_dims * log(max_pos_emb / (n_rot * 2pi)) / (2 * log(base))`
-#define NTKV2_MAX_POS_EMB 2048
-#define NTKV2_CORRECTION_FACTOR(n_rot) (__builtin_logf(NTKV2_MAX_POS_EMB / ((n_rot) * 2 * (float)M_PI)) / 2)
-
 static inline float rope_ntkv2_ramp(const float low, const float high, const int i0) {
     const float y = (i0 / 2 - low) / MIN(0.001f, high - low);
     return 1 - MIN(1, MAX(0, y));
@@ -12026,36 +12021,43 @@ static inline float rope_ntkv2_ramp(const float low, const float high, const int
 // MIT licensed. Copyright (c) 2023 Jeffrey Quesnelle and Bowen Peng.
 static float rope_ntkv2(
         const float theta_base,
+        const float theta_linear,
         const float theta_ntk,
-        const float dims_over_base,
-        const float freq_scale,
+        const float corr_factors[4],
         const int64_t i0,
         const float ntk_factor,
-        const float ext_factor,
-        const int n_dims) {
+        const float ext_factor) {
+    float ramp_mix;
+    float theta;
+
+    ramp_mix = rope_ntkv2_ramp(corr_factors[0], corr_factors[1], i0) * ntk_factor;
+    theta = theta_linear * (1 - ramp_mix) + theta_ntk  * ramp_mix;
+
+    ramp_mix = rope_ntkv2_ramp(corr_factors[2], corr_factors[3], i0) * ext_factor;
+    theta = theta        * (1 - ramp_mix) + theta_base * ramp_mix;
+    return theta;
+}
+
+// Apparently solving `n_rot = 2pi * x * base^((2 * max_pos_emb) / n_dims)` for x, we get
+// `corr_fac(n_rot) = n_dims * log(max_pos_emb / (n_rot * 2pi)) / (2 * log(base))`
+static float ggml_rope_ntkv2_corr_factor(const int n_dims, const float n_rot, const float base) {
+    static const float max_pos_emb = 2048;
+    return n_dims * logf(max_pos_emb / (n_rot * 2 * (float)M_PI)) / (2 * logf(base));
+}
+
+void ggml_rope_ntkv2_corr_factors(int n_dims, const float freq_base, float factors[4]) {
     // Interpolation constants found experimentally for LLaMA (might not be totally optimal though)
     // Do not change unless there is a good reason for doing so!
-    static const float BETA_0 = 1.75f;
-    static const float BETA_1 = 1.25f;
+    static const float BETA_0  = 1.75f;
+    static const float BETA_1  = 1.25f;
     static const float GAMMA_0 = 16.0f;
     static const float GAMMA_1 = 2.0f;
 
-    static const float low_1p  = NTKV2_CORRECTION_FACTOR(BETA_0);
-    static const float high_1p = NTKV2_CORRECTION_FACTOR(BETA_1);
-    static const float low_2p  = NTKV2_CORRECTION_FACTOR(GAMMA_0);
-    static const float high_2p = NTKV2_CORRECTION_FACTOR(GAMMA_1);
-
     // start and end correction factors
-    const float low_1  = MAX(0, floorf(low_1p * dims_over_base));
-    const float high_1 = MIN(n_dims - 1, ceilf(high_1p * dims_over_base));
-    const float low_2  = MAX(0, floorf(low_2p * dims_over_base));
-    const float high_2 = MIN(n_dims - 1, ceilf(high_2p * dims_over_base));
-
-    const float theta_linear = freq_scale * theta_base;
-    const float ramp_mix = rope_ntkv2_ramp(low_1, high_1, i0) * ntk_factor;
-    const float theta_mix = theta_linear * (1 - ramp_mix) + theta_ntk * ramp_mix;
-    const float ramp_final = rope_ntkv2_ramp(low_2, high_2, i0) * ext_factor;
-    return theta_mix * (1 - ramp_final) + theta_base * ramp_final;
+    factors[0] = MAX(0,         floorf(ggml_rope_ntkv2_corr_factor(n_dims, BETA_0,  freq_base)));
+    factors[1] = MIN(n_dims - 1, ceilf(ggml_rope_ntkv2_corr_factor(n_dims, BETA_1,  freq_base)));
+    factors[2] = MAX(0,         floorf(ggml_rope_ntkv2_corr_factor(n_dims, GAMMA_0, freq_base)));
+    factors[3] = MIN(n_dims - 1, ceilf(ggml_rope_ntkv2_corr_factor(n_dims, GAMMA_1, freq_base)));
 }
 
 static void ggml_compute_forward_rope_f32(
@@ -12110,7 +12112,8 @@ static void ggml_compute_forward_rope_f32(
 
     const float theta_scale = powf(freq_base, -2.0f/n_dims);
     const float theta_ntk_scale = powf(freq_base * powf(freq_scale, (n_dims / (n_dims - 2.0f))), -2.0f/n_dims);
-    const float dims_over_base = n_dims / logf(freq_base);
+    float corr_factors[4];
+    ggml_rope_ntkv2_corr_factors(n_dims, freq_base, corr_factors);
 
     const bool is_neox = mode & 2;
     const bool is_glm  = mode & 4;
@@ -12152,8 +12155,9 @@ static void ggml_compute_forward_rope_f32(
                     }
                 } else if (!is_neox) {
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
-                        const float theta = rope_ntkv2(theta_base, theta_ntk, dims_over_base,
-                                freq_scale, i0, ntk_factor, ext_factor, n_dims);
+                        const float theta_linear = freq_scale * theta_base;
+                        const float theta = rope_ntkv2(theta_base, theta_linear, theta_ntk, corr_factors,
+                                i0, ntk_factor, ext_factor);
                         const float cos_theta = cosf(theta);
                         const float sin_theta = sinf(theta);
 
@@ -12250,7 +12254,8 @@ static void ggml_compute_forward_rope_f16(
 
     const float theta_scale = powf(freq_base, -2.0f/n_dims);
     const float theta_ntk_scale = powf(freq_base * powf(freq_scale, (n_dims / (n_dims - 2.0f))), -2.0f/n_dims);
-    const float dims_over_base = n_dims / logf(freq_base);
+    float corr_factors[4];
+    ggml_rope_ntkv2_corr_factors(n_dims, freq_base, corr_factors);
 
     const bool is_neox = mode & 2;
     const bool is_glm  = mode & 4;
@@ -12292,8 +12297,9 @@ static void ggml_compute_forward_rope_f16(
                     }
                 } if (!is_neox) {
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
-                        const float theta = rope_ntkv2(theta_base, theta_ntk, dims_over_base,
-                                freq_scale, i0, ntk_factor, ext_factor, n_dims);
+                        const float theta_linear = freq_scale * theta_base;
+                        const float theta = rope_ntkv2(theta_base, theta_linear, theta_ntk, corr_factors,
+                                i0, ntk_factor, ext_factor);
                         const float cos_theta = cosf(theta);
                         const float sin_theta = sinf(theta);
 

@@ -1211,6 +1211,9 @@ extern "C" {
             float                 ntk_factor,
             float                 ext_factor);
 
+    // compute correction factors for NTKv2 RoPE scaling
+    void ggml_rope_ntkv2_corr_factors(int n_dims, const float freq_base, float factors[4]);
+
     // rotary position embedding backward, i.e compute dx from dy
     // a - dy
     GGML_API struct ggml_tensor * ggml_rope_back(
