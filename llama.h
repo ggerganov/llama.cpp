@@ -153,6 +153,8 @@ extern "C" {
         int32_t n_eval;
     };
 
+    LLAMA_API int llama_max_devices();
+
     LLAMA_API struct llama_context_params llama_context_default_params();
     LLAMA_API struct llama_model_quantize_params llama_model_quantize_default_params();
 
