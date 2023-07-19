@@ -6,8 +6,8 @@
 
 layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A { vec4 data_a[]; };
-layout (binding = 1) readonly buffer B { vec4 data_b[]; };
+layout (binding = 0) readonly buffer A { float data_a[]; };
+layout (binding = 1) readonly buffer B { float data_b[]; };
 layout (binding = 2) writeonly buffer D { float data_d[]; };
 
 layout (push_constant) uniform parameter
@@ -51,16 +51,16 @@ void main() {
     const int tiwr = tiw % (WSUBM / TM);
     const int tiwc = tiw / (WSUBM / TM);
 
-    const int loadr = int(gl_LocalInvocationID.x % (BK / 4));
-    const int loadc = int(gl_LocalInvocationID.x / (BK / 4));
+    const int loadr = int(gl_LocalInvocationID.x % BK);
+    const int loadc = int(gl_LocalInvocationID.x / BK);
 
-    const int loadstride = int(gl_WorkGroupSize.x * 4) / BK;
+    const int loadstride = int(gl_WorkGroupSize.x);
 
     const int start_k = ik * p.k_split;
     const int end_k = (ik + 1) * p.k_split;
 
-    int pos_a = ir * BM * p.stride_a / 4 + start_k / 4;
-    int pos_b = ic * BN * p.stride_b / 4 + start_k / 4;
+    int pos_a = ir * BM * p.stride_a + start_k;
+    int pos_b = ic * BN * p.stride_b + start_k;
 
     float sums[WMITER * TM * WNITER * TN];
     float cache_a[WMITER * TM];
@@ -71,25 +71,29 @@ void main() {
     }
 
     [[unroll]] for (int block = start_k; block < end_k; block += BK) {
-        [[unroll]] for (int l = 0; l < BM; l += loadstride) {
-            vec4 tmp = data_a[pos_a + (loadc + l) * p.stride_a / 4 + loadr];
-            buf_a[(loadc + l) * (BK+1) + loadr * 4 + 0] = tmp.x;
-            buf_a[(loadc + l) * (BK+1) + loadr * 4 + 1] = tmp.y;
-            buf_a[(loadc + l) * (BK+1) + loadr * 4 + 2] = tmp.z;
-            buf_a[(loadc + l) * (BK+1) + loadr * 4 + 3] = tmp.w;
+        [[unroll]] for (int l = 0; l < BM * BK; l += loadstride) {
+            const int lr = l % BK;
+            const int lc = l / BK;
+            if (ir * BM + loadc + lc < p.M && block + loadr + lr < p.K) {
+                buf_a[(loadc + lc) * (BK+1) + loadr + lr] = data_a[pos_a + (loadc + lc) * p.stride_a + loadr + lr];
+            } else {
+                buf_a[(loadc + lc) * (BK+1) + loadr + lr] = 0.0f;
+            }
         }
-        [[unroll]] for (int l = 0; l < BN; l += loadstride) {
-            vec4 tmp = data_b[pos_b + (loadc + l) * p.stride_b / 4 + loadr];
-            buf_b[(loadc + l) * (BK+1) + loadr * 4 + 0] = tmp.x;
-            buf_b[(loadc + l) * (BK+1) + loadr * 4 + 1] = tmp.y;
-            buf_b[(loadc + l) * (BK+1) + loadr * 4 + 2] = tmp.z;
-            buf_b[(loadc + l) * (BK+1) + loadr * 4 + 3] = tmp.w;
+        [[unroll]] for (int l = 0; l < BN * BK; l += loadstride) {
+            const int lr = l % BK;
+            const int lc = l / BK;
+            if (ic * BN + loadc + lc < p.N && block + loadr + lr < p.K) {
+                buf_b[(loadc + lc) * (BK+1) + loadr + lr] = data_b[pos_b + (loadc + lc) * p.stride_b + loadr + lr];
+            } else {
+                buf_b[(loadc + lc) * (BK+1) + loadr + lr] = 0.0f;
+            }
         }
 
         barrier();
 
-        pos_a += BK / 4;
-        pos_b += BK / 4;
+        pos_a += BK;
+        pos_b += BK;
 
         for (int i = 0; i < min(BK, p.K - block); i++) {
             // Load from shared into cache
