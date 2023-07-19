@@ -2,7 +2,7 @@
 set -e
 
 AI_NAME="${AI_NAME:-Miku}"
-MODEL="${MODEL:-./models/gpt4all-7B/gpt4all-lora-unfiltered-quantized.bin}"
+MODEL="${MODEL:-./models/llama-2-7b-chat.ggmlv3.q4_K_M.bin}"
 USER_NAME="${USER_NAME:-Anon}"
 
 # Uncomment and adjust to the number of CPU cores you want to use.
