@@ -11,7 +11,11 @@
       color: #000;
       font-family: system-ui;
       font-size: 90%;
-    }
+      max-width: 600px;
+      min-width: 300px;
+      line-height: 1.2;
+      margin: 0 auto;
+      padding: 0 0.5em;    }
 
     #container {
       margin: 0em auto;
@@ -36,12 +40,29 @@
       padding: 0.5em;
     }
 
-    body {
-      max-width: 600px;
-      min-width: 300px;
-      line-height: 1.2;
-      margin: 0 auto;
-      padding: 0 0.5em;
+    .bubble {
+      border: 1px solid;
+      border-radius: 10px;
+      padding: 5px;
+    }
+
+    .user {
+      background-color: #161616;
+      color: #d6d6d6;
+      margin-left: 20%;
+    }
+
+    .asst {
+      background-color: #d6d6d6;
+      color: #161616;
+      text-align: left;
+      margin-right: 20%;
+    }
+
+    .typing {
+      color: #888;
+      text-align: left;
+      font-size: 120%;
     }
 
     p {
@@ -113,13 +134,14 @@
     import { llama } from '/completion.js'
 
     const session = signal({
-      prompt: "This is a conversation between user and llama, a friendly chatbot. respond in simple markdown.",
-      template: "{{prompt}}\n\n{{history}}\n{{char}}:",
-      historyTemplate: "{{name}}: {{message}}",
+      system: "A chat between a curious user and a pirate.",
+      message: "{{system}}\n\n### Instruction:\n{{user}}\n\n### Response:\n{{assistant}}",
+      stop: ["###"],
       transcript: [],
       type: "chat",
       char: "llama",
       user: "User",
+      fullprompt: "",
     })
 
     const params = signal({
@@ -161,19 +183,17 @@
       }
       controller.value = new AbortController()
 
-      transcriptUpdate([...session.value.transcript, ["{{user}}", msg]])
-
-      const prompt = template(session.value.template, {
-        message: msg,
-        history: session.value.transcript.flatMap(([name, message]) => template(session.value.historyTemplate, {name, message})).join("\n"),
-      })
-
-      let currentMessage = ''
       const history = session.value.transcript
+      const system = history.length == 0 ? session.value.system : ""
+      transcriptUpdate([...history, { system, user: msg, assistant: "" }])
+
+      const prompt = session.value.transcript.map(t => template(session.value.message, t)).join("").trimEnd()
+      session.value = { ...session.value, fullprompt: prompt } // debug
+      let currentMessage = ''
 
       const llamaParams = {
         ...params.value,
-        stop: ["</s>", template("{{char}}:"), template("{{user}}:")],
+        stop: session.stop,
       }
 
       for await (const chunk of llama(prompt, llamaParams, { controller: controller.value })) {
@@ -183,7 +203,7 @@
         // remove leading whitespace
         currentMessage = currentMessage.replace(/^\s+/, "")
 
-        transcriptUpdate([...history, ["{{char}}", currentMessage]])
+        transcriptUpdate([...history, { system, user: msg, assistant: currentMessage }])
 
         if (data.stop) {
           console.log("Completion finished: '", currentMessage, "', summary: ", data)
@@ -235,6 +255,7 @@
             <button onclick=${stop} disabled=${generating}>Stop</button>
             <button onclick=${reset}>Reset</button>
           </div>
+          <pre>${session.value.fullprompt/* debug */}</pre>
         </form>
       `
     }
@@ -250,52 +271,56 @@
         }
       }, [messages])
 
-      const chatLine = ([user, msg]) => {
-        return html`<p key=${msg}><strong>${template(user)}:</strong> <${Markdownish} text=${template(msg)} /></p>`
-      }
-
       return html`
         <section id="chat" ref=${container}>
-          ${messages.flatMap(chatLine)}
-        </section>`
+          ${messages.map(({system, user, assistant}) => html`
+            ${system !== "" && html`<p><em><${Markdownish} text=${system} /></em></p>`}
+            <p class="user bubble"><${Markdownish} text=${user} /></p>
+            ${assistant !== "" ?
+              html`<p class="asst bubble"><${Markdownish} text=${assistant} /></p>` :
+              html`<p class="typing">...</p>`}
+          `)}
+        </section>
+        <pre>${JSON.stringify(session.value.transcript, null, 2)}</pre>` // debug
     }
 
     const ConfigForm = (props) => {
       const updateSession = (el) => session.value = { ...session.value, [el.target.name]: el.target.value }
       const updateParams = (el) => params.value = { ...params.value, [el.target.name]: el.target.value }
       const updateParamsFloat = (el) => params.value = { ...params.value, [el.target.name]: parseFloat(el.target.value) }
+      const appendArray = () => session.value = { ...session.value, stop: [...session.value.stop, ""] }
+      const updateArray = (el) => {
+        const [name, index] = el.target.name.split(".")
+        const newarr = session.value[name].map((v, i) => i == index ? el.target.value : v).filter(x => x !== "")
+        session.value = { ...session.value, [name]: newarr }
+      }
 
       return html`
         <form>
           <fieldset>
             <div>
-              <label for="prompt">Prompt</label>
-              <textarea type="text" name="prompt" value="${session.value.prompt}" rows=4 oninput=${updateSession}/>
+              <label for="system">System prompt</label>
+              <textarea type="text" name="system" value="${session.value.system}" rows=4 oninput=${updateSession}/>
             </div>
 
             <div>
-              <label for="user">User name</label>
-              <input type="text" name="user" value="${session.value.user}" oninput=${updateSession} />
+              <label for="message">Message template</label>
+              <textarea type="text" name="message" value="${session.value.message}" rows=7 oninput=${updateSession}/>
             </div>
 
             <div>
-              <label for="bot">Bot name</label>
-              <input type="text" name="char" value="${session.value.char}" oninput=${updateSession} />
-            </div>
+              <label for="stop">Stop strings</label>
+              ${session.value.stop.map((stop, i) => html`
+                <p><input type="text" name="stop.${i}" value="${stop}" oninput=${updateArray}/></p>
+              `)}
+              <input type="button" value="+" onclick=${appendArray} />
 
-            <div>
-              <label for="template">Prompt template</label>
-              <textarea id="template" name="template" value="${session.value.template}" rows=4 oninput=${updateSession}/>
-            </div>
-
-            <div>
-              <label for="template">Chat history template</label>
-              <textarea id="template" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
+              <pre>${JSON.stringify(session.value.stop)/* debug */}</pre>
             </div>
 
             <div>
               <label for="temperature">Temperature</label>
-              <input type="range" id="temperature" min="0.0" max="1.0" step="0.01" name="temperature" value="${params.value.temperature}" oninput=${updateParamsFloat} />
+              <input type="range" id="temperature" min="0.0" max="2.0" step="0.01" name="temperature" value="${params.value.temperature}" oninput=${updateParamsFloat} />
               <span>${params.value.temperature}</span>
             </div>
 
@@ -307,7 +332,7 @@
 
             <div>
               <label for="repeat_penalty">Penalize repeat sequence</label>
-              <input type="range" id="repeat_penalty" min="0.0" max="2.0" step="0.01" name="repeat_penalty" value="${params.value.repeat_penalty}" oninput=${updateParamsFloat} />
+              <input type="range" id="repeat_penalty" min="0.0" max="4.0" step="0.01" name="repeat_penalty" value="${params.value.repeat_penalty}" oninput=${updateParamsFloat} />
               <span>${params.value.repeat_penalty}</span>
             </div>
 
