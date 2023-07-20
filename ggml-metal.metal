@@ -1254,7 +1254,7 @@ kernel void kernel_mul_mat_q2_K_f32(
 
             float4 acc1 = {0.f, 0.f, 0.f, 0.f};
             float4 acc2 = {0.f, 0.f, 0.f, 0.f};
-            for (int i = 0; i < 8; i += 2) { 
+            for (int i = 0; i < 8; i += 2) {
                 acc1[0] += yl[i+ 0] * (qs[i/2] & 0x0003);
                 acc2[0] += yl[i+ 1] * (qs[i/2] & 0x0300);
                 acc1[1] += yl[i+ 8] * (qs[i/2] & 0x000c);
