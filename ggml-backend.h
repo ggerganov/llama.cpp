@@ -126,9 +126,10 @@ extern "C" {
 
     struct ggml_graph_split {
         char name[GGML_MAX_NAME];
-        struct ggml_tensor * src_inputs[GGML_MAX_SPLIT_INPUTS + 1];
-        struct ggml_tensor * dst_inputs[GGML_MAX_SPLIT_INPUTS + 1];
-        struct ggml_cgraph * graph;
+        struct ggml_context * ctx;
+        struct ggml_tensor  * src_inputs[GGML_MAX_SPLIT_INPUTS + 1];
+        struct ggml_tensor  * dst_inputs[GGML_MAX_SPLIT_INPUTS + 1];
+        struct ggml_cgraph  * graph;
     };
 
     // TODO: this shouldn't be fixed size, allocate from ggml_context
@@ -153,8 +154,8 @@ extern "C" {
     GGML_API void ggml_graph_splits_compute(struct ggml_graph_splits * splits);
 
     // graph tensor allocator
-    GGML_API void ggml_graph_allocate_tensors(struct ggml_cgraph * graph);
-    GGML_API void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs);
+    GGML_API void ggml_graph_allocate_tensors(struct ggml_cgraph * graph, struct ggml_context * ctx);
+    GGML_API void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs, struct ggml_context * ctx);
     GGML_API void ggml_graph_splits_allocate_tensors(struct ggml_graph_splits * splits);
 
 #ifdef  __cplusplus

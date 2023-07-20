@@ -474,24 +474,18 @@ extern "C" {
         int64_t perf_time_us;
     };
 
-    /*
-    TODO
     enum ggml_alloc_mode {
-        GGML_ALLOC_IMMEDIATE,
-        GGML_ALLOC_NONE,
-        GGML_ALLOC_COMPUTE_SEQ,
-        GGML_ALLOC_COMPUTE_PAR,
+        GGML_ALLOC_NONE,            // do not allocate tensors
+        GGML_ALLOC_IMMEDIATE,       // allocate tensors immediately
+        GGML_ALLOC_COMPUTE_SEQ,     // delay allocation until graph build time, allocate tensors for sequential graph computation
+        //GGML_ALLOC_COMPUTE_PAR,     // allocate tensors for parallel graph computation
     };
-    */
 
     // context parameters
     struct ggml_init_params {
         struct ggml_buffer * buffer;
-
-        bool   no_alloc;   // don't allocate memory for the tensor data
-        //enum ggml_alloc_mode alloc_mode; // TODO: replace the above with this
-
-        enum ggml_type compute_type;         // type of intermediate results
+        enum ggml_alloc_mode alloc_mode;   // tensor allocation mode
+        enum ggml_type       compute_type; // type of intermediate results
     };
 
     // task types
@@ -559,15 +553,15 @@ extern "C" {
     GGML_API struct ggml_context *   ggml_init(struct ggml_init_params params);
     GGML_API void                    ggml_free(struct ggml_context * ctx);
 
+    GGML_API void    ggml_set_alloc_mode(struct ggml_context * ctx, enum ggml_alloc_mode mode);
+
+    // TODO: update for ggml_buffer
     GGML_API size_t  ggml_used_mem(const struct ggml_context * ctx);
-
-    GGML_API void    ggml_set_no_alloc(struct ggml_context * ctx, bool no_alloc);
-
     GGML_API void *  ggml_get_mem_buffer     (const struct ggml_context * ctx);
     GGML_API size_t  ggml_get_mem_size       (const struct ggml_context * ctx);
     GGML_API size_t  ggml_get_max_tensor_size(const struct ggml_context * ctx);
 
-    GGML_API struct ggml_backend * ggml_get_ctx_backend(struct ggml_context * ctx);
+    GGML_API struct ggml_buffer * ggml_get_buffer(const struct ggml_context * ctx);
 
     GGML_API struct ggml_tensor * ggml_new_tensor(
             struct ggml_context * ctx,
@@ -1128,6 +1122,17 @@ extern "C" {
             int                   n_past,
             int                   n_dims,
             int                   mode,
+            int                   n_ctx);
+
+    // custom RoPE
+    GGML_API struct ggml_tensor * ggml_rope_custom(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int                   n_past,
+            int                   n_dims,
+            int                   mode,
+            float                 freq_base,
+            float                 freq_scale,
             int                   n_ctx);
 
     // custom RoPE, in-place, returns view(a)

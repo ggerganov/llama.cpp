@@ -1008,7 +1008,9 @@ static void llama_model_load_internal(
         backend_data.buf = ggml_buffer_alloc(backend, ctx_size, num_tensors);
         struct ggml_init_params params = ggml_init_params_default();
         params.buffer   = backend_data.buf;
-        params.no_alloc = backend == model.backend_cpu && ml->use_mmap;
+        if (backend == model.backend_cpu && ml->use_mmap) {
+            params.alloc_mode = GGML_ALLOC_NONE;
+        }
         backend_data.ctx = ggml_init(params);
         if (!backend_data.ctx) {
             throw std::runtime_error(format("ggml_init() failed for backend context"));
@@ -1184,6 +1186,8 @@ static ggml_graph_splits llama_build_graph(
     for (ggml_buffer * buf_compute : lctx.bufs_compute) {
         struct ggml_init_params params = ggml_init_params_default();
         params.buffer = buf_compute;
+        params.alloc_mode = GGML_ALLOC_COMPUTE_SEQ;
+        //params.alloc_mode = GGML_ALLOC_IMMEDIATE;
         params.compute_type = compute_type;
         ggml_context * ctx_buf = ggml_init(params);
         ctxs.push_back(ctx_buf);
@@ -1198,15 +1202,19 @@ static ggml_graph_splits llama_build_graph(
         }
     }
 
-    bool measuring = lctx.bufs_compute[0]->backend_buffer->measure;
 
     struct ggml_tensor * inpL;
 
     // reuse the scale tensor for all layers since it requires a memory transfer
-    //struct ggml_tensor * KQ_scale = ggml_new_f32(ctx_kv, 1.0f/sqrtf(float(n_embd)/n_head));
+    // struct ggml_tensor * KQ_scale = ggml_new_f32(ctx_kv, 1.0f/sqrtf(float(n_embd)/n_head));
     // TODO: this shouldn't be necessary
+    bool measuring = lctx.bufs_compute[0]->backend_buffer->measure;
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx_kv, GGML_TYPE_F32, 1);
     if (!measuring) {
+        // this should be automatic
+        if (KQ_scale->data == NULL) {
+            ggml_backend_buffer_tensor_alloc(ggml_get_buffer(ctx_kv)->backend_buffer, KQ_scale);
+        }
         ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd)/n_head));
     }
     ggml_set_name(KQ_scale, "1/sqrt(n_embd/n_head)");
@@ -1254,10 +1262,10 @@ static ggml_graph_splits llama_build_graph(
             struct ggml_tensor * tmpv = ggml_mul_mat(ctx_l, model.layers[il].wv, cur);
             ggml_set_name(tmpv, "tmpv");
 
-            struct ggml_tensor * Kcur = ggml_rope_custom_inplace(ctx_l, ggml_reshape_3d(ctx_l, tmpk, n_embd/n_head, n_head, N), n_past, n_rot, 0, freq_base, freq_scale, 0);
+            struct ggml_tensor * Kcur = ggml_rope_custom(ctx_l, ggml_reshape_3d(ctx_l, tmpk, n_embd/n_head, n_head, N), n_past, n_rot, 0, freq_base, freq_scale, 0);
             ggml_set_name(Kcur, "Kcur");
 
-            struct ggml_tensor * Qcur = ggml_rope_custom_inplace(ctx_l, ggml_reshape_3d(ctx_l, tmpq, n_embd/n_head, n_head, N), n_past, n_rot, 0, freq_base, freq_scale, 0);
+            struct ggml_tensor * Qcur = ggml_rope_custom(ctx_l, ggml_reshape_3d(ctx_l, tmpq, n_embd/n_head, n_head, N), n_past, n_rot, 0, freq_base, freq_scale, 0);
             ggml_set_name(Qcur, "Qcur");
 
             struct ggml_tensor * Vcur = ggml_transpose(ctx_l, ggml_reshape_2d(ctx_l, tmpv, n_embd, N));
@@ -1310,15 +1318,15 @@ static ggml_graph_splits llama_build_graph(
 
             // KQ_scaled = KQ / sqrt(n_embd/n_head)
             // KQ_scaled shape [n_past + N, N, n_head, 1]
-            struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx_kv, KQ, KQ_scale);
+            struct ggml_tensor * KQ_scaled = ggml_scale(ctx_kv, KQ, KQ_scale);
             ggml_set_name(KQ_scaled, "KQ_scaled");
 
             // KQ_masked = mask_past(KQ_scaled)
-            struct ggml_tensor * KQ_masked = ggml_diag_mask_inf_inplace(ctx_kv, KQ_scaled, n_past);
+            struct ggml_tensor * KQ_masked = ggml_diag_mask_inf(ctx_kv, KQ_scaled, n_past);
             ggml_set_name(KQ_masked, "KQ_masked");
 
             // KQ = soft_max(KQ_masked)
-            struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx_kv, KQ_masked);
+            struct ggml_tensor * KQ_soft_max = ggml_soft_max(ctx_kv, KQ_masked);
             ggml_set_name(KQ_soft_max, "KQ_soft_max");
 
             // split cached V into n_head heads
@@ -1349,10 +1357,11 @@ static ggml_graph_splits llama_build_graph(
 
             // cur = KQV_merged.contiguous().view(n_embd, N)
             cur = ggml_cpy(ctx_l,
-                    KQV_merged,
-                    //ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N));
-                    //ggml_new_tensor_2d(ctx0, GGML_TYPE_F16, n_embd, N));
-                    ggml_new_tensor_2d(ctx_l, compute_type, n_embd, N)); // support both automatically?
+                    KQV_merged, ggml_set_name(
+                    //ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N),
+                    //ggml_new_tensor_2d(ctx0, GGML_TYPE_F16, n_embd, N),
+                    ggml_new_tensor_2d(ctx_l, compute_type, n_embd, N), // support both automatically?
+                    "KQV_merged_contiguous_dst"));
             ggml_set_name(cur, "KQV_merged_contiguous");
 
             // projection (no bias)
@@ -2676,17 +2685,16 @@ struct llama_context * llama_new_context_with_model(
         int n_past = hparams.n_ctx - n_tokens;
         /*ggml_graph_splits splits =*/ llama_build_graph(*ctx, n_tokens, n_past);
 
-        fprintf(stderr, "%s: compute ctx sizes:\n", __func__);
+        fprintf(stderr, "%s: compute buffer sizes:\n", __func__);
         for (size_t i = 0; i < ctx->bufs_compute.size(); ++i) {
             ggml_buffer * buf = ctx->bufs_compute[i];
             ggml_backend * backend = buf->backend_buffer->backend;
             size_t size = buf->backend_buffer->max_size;
             fprintf(stderr, "%8s = %7.2f MB\n", ggml_backend_name(backend), size / 1024.0 / 1024.0);
-            ggml_buffer_free(buf);
 
             // reallocate with the correct size
-            buf = ggml_buffer_alloc(buf->backend_buffer->backend, size, 2048);
-            ctx->bufs_compute[i] = buf;
+            ggml_buffer_free(buf);
+            ctx->bufs_compute[i] = ggml_buffer_alloc(buf->backend_buffer->backend, size, 2048);
         }
 
         // TODO: use pinned memory for faster host-device transfers

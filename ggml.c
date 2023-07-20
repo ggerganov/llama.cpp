@@ -3936,7 +3936,7 @@ struct ggml_context {
 
     struct ggml_buffer * buffer;
 
-    bool   no_alloc;
+    enum ggml_alloc_mode alloc_mode;
 
     int    n_objects;
 
@@ -4292,7 +4292,7 @@ static inline int ggml_up(int n, int m) {
 struct ggml_init_params ggml_init_params_default(void) {
     struct ggml_init_params default_params = {
         /*.buffer       =*/ NULL,
-        /*.no_alloc     =*/ false,
+        /*.alloc_mode   =*/ GGML_ALLOC_IMMEDIATE,
         /*.compute_type =*/ GGML_TYPE_F32
     };
     return default_params;
@@ -4386,7 +4386,7 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         /*.mem_size           =*/ params.buffer->mem_size,
         /*.mem_buffer         =*/ params.buffer->mem_buffer,
         /*.buffer             =*/ params.buffer,
-        /*.no_alloc           =*/ params.no_alloc,
+        /*.alloc_mode         =*/ params.alloc_mode,
         /*.n_objects          =*/ 0,
         /*.objects_begin      =*/ NULL,
         /*.objects_end        =*/ NULL,
@@ -4435,8 +4435,8 @@ size_t ggml_used_mem(const struct ggml_context * ctx) {
     return ctx->objects_end == NULL ? 0 : ctx->objects_end->offs + ctx->objects_end->size;
 }
 
-void ggml_set_no_alloc(struct ggml_context * ctx, bool no_alloc) {
-    ctx->no_alloc = no_alloc;
+void ggml_set_alloc_mode(struct ggml_context * ctx, enum ggml_alloc_mode alloc_mode) {
+    ctx->alloc_mode = alloc_mode;
 }
 
 void * ggml_get_mem_buffer(const struct ggml_context * ctx) {
@@ -4467,8 +4467,8 @@ size_t ggml_get_max_tensor_size(const struct ggml_context * ctx) {
     return max_size;
 }
 
-struct ggml_backend * ggml_get_ctx_backend(struct ggml_context * ctx) {
-    return ctx->buffer->backend_buffer->backend;
+struct ggml_buffer * ggml_get_buffer(const struct ggml_context * ctx) {
+    return ctx->buffer;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4520,7 +4520,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
     ggml_assert_aligned(result);
 
     *result = (struct ggml_tensor) {
-        /*.backend      =*/ ggml_get_ctx_backend(ctx),
+        /*.backend      =*/ ctx->buffer->backend_buffer->backend,
         /*.type         =*/ type,
         /*.n_dims       =*/ n_dims,
         /*.ne           =*/ { 1, 1, 1, 1 },
@@ -4537,7 +4537,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
         /*.data         =*/ data,
         /*.name         =*/ { 0 },
         /*.extra        =*/ NULL,
-        /*.pad          =*/ { 0 },
+        /*.padding      =*/ { 0 },
     };
 
     for (int i = 0; i < n_dims; i++) {
@@ -4550,13 +4550,9 @@ struct ggml_tensor * ggml_new_tensor_impl(
         result->nb[i] = result->nb[i - 1]*result->ne[i - 1];
     }
 
-    if (data == NULL && !ctx->no_alloc) {
-         ggml_backend_buffer_tensor_alloc(ctx->buffer->backend_buffer, result);
+    if (data == NULL && ctx->alloc_mode == GGML_ALLOC_IMMEDIATE) {
+        ggml_backend_buffer_tensor_alloc(ctx->buffer->backend_buffer, result);
     }
-
-    // TODO: this should not be needed as long as we don't rely on aligned SIMD loads
-    //ggml_assert_aligned(result->data);
-
 
     ctx->n_objects++;
 
@@ -6387,7 +6383,7 @@ struct ggml_tensor * ggml_view_1d(
         is_node = true;
     }
 
-    struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 1, &ne0, (char *) a->data + offset);
+    struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 1, &ne0, a->data ? (char *) a->data + offset : NULL);
     ggml_format_name(result, "%s (view)", a->name);
 
     ggml_set_op_params(result, &offset, sizeof(offset));
@@ -6418,7 +6414,7 @@ struct ggml_tensor * ggml_view_2d(
 
     const int64_t ne[GGML_MAX_DIMS] = { ne0, ne1, 1, 1 };
 
-    struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 2, ne, (char *) a->data + offset);
+    struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 2, ne, a->data ? (char *) a->data + offset : NULL);
     ggml_format_name(result, "%s (view)", a->name);
 
     ggml_set_op_params(result, &offset, sizeof(offset));
@@ -6455,7 +6451,7 @@ struct ggml_tensor * ggml_view_3d(
 
     const int64_t ne[GGML_MAX_DIMS] = { ne0, ne1, ne2, 1 };
 
-    struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 3, ne, (char *) a->data + offset);
+    struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 3, ne, a->data ? (char *) a->data + offset : NULL);
     ggml_format_name(result, "%s (view)", a->name);
 
     ggml_set_op_params(result, &offset, sizeof(offset));
@@ -6494,7 +6490,7 @@ struct ggml_tensor * ggml_view_4d(
 
     const int64_t ne[GGML_MAX_DIMS] = { ne0, ne1, ne2, ne3 };
 
-    struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 4, ne, (char *) a->data + offset);
+    struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 4, ne, a->data ? (char *) a->data + offset : NULL);
     ggml_format_name(result, "%s (view)", a->name);
 
     ggml_set_op_params(result, &offset, sizeof(offset));
@@ -6883,6 +6879,18 @@ struct ggml_tensor * ggml_rope_inplace(
         int                   mode,
         int                   n_ctx) {
     return ggml_rope_impl(ctx, a, n_past, n_dims, mode, 10000.0f, 1.0f, n_ctx, true);
+}
+
+struct ggml_tensor * ggml_rope_custom(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int                   n_past,
+        int                   n_dims,
+        int                   mode,
+        float                 freq_base,
+        float                 freq_scale,
+        int                   n_ctx) {
+    return ggml_rope_impl(ctx, a, n_past, n_dims, mode, freq_base, freq_scale, n_ctx, false);
 }
 
 struct ggml_tensor * ggml_rope_custom_inplace(

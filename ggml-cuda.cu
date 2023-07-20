@@ -1752,6 +1752,8 @@ static void ggml_backend_cuda_get_tensor_async(ggml_backend * backend, const ggm
 
     //ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
 
+    //printf("get tensor %s %p\n", tensor->name, tensor->data);
+
     CUDA_CHECK(cudaMemcpyAsync(data, (const char*)tensor->data + offset, size, cudaMemcpyDeviceToHost, g_cudaStream_main));
 
     UNUSED(backend);
