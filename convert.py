@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import argparse
 import concurrent.futures
 import copy
