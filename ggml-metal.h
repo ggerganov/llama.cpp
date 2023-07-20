@@ -34,8 +34,16 @@
 extern "C" {
 #endif
 
-// GG: maybe return ptr and avoid the "ggml.h" include
 struct ggml_backend * ggml_backend_metal_init(struct ggml_backend * backend_cpu);
+
+// TODO: temporary - move to backend interface
+bool ggml_backend_metal_map_buffer(
+        struct ggml_backend * backend,
+                 const char * name,
+                       void * data,
+                     size_t   size,
+                     size_t   max_size);
+
 
 //struct ggml_metal_context;
 //

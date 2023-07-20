@@ -27,6 +27,7 @@ extern "C" {
     struct ggml_backend_buffer {
         struct ggml_backend_buffer_interface interface;
         ggml_buffer_context_t context;
+        size_t backend_size;
         void * backend_data;
     };
 

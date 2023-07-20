@@ -94,6 +94,7 @@ struct ggml_backend_buffer * ggml_allocator_simple_init(void * data, size_t size
     *allocator = (struct ggml_backend_buffer){
         /* .interface    = */ ggml_allocator_simple_interface,
         /* .context      = */ ctx,
+        /* .backend_size = */ 0,
         /* .backend_data = */ NULL,
     };
     return allocator;
@@ -192,6 +193,7 @@ static struct ggml_backend_buffer * ggml_backend_cpu_alloc_buffer(struct ggml_ba
 
     struct ggml_backend_buffer * buffer = ggml_allocator_simple_init(data, size, TENSOR_ALIGNMENT);
     buffer->interface.free_data = ggml_backend_cpu_free_buffer;
+    buffer->backend_size = size;
     buffer->backend_data = data;
 
     return buffer;

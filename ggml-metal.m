@@ -242,12 +242,13 @@ static id<MTLBuffer> ggml_metal_get_buffer(struct ggml_metal_context * ctx, stru
     return nil;
 }
 
+// TODO: rename to ggml_metal_map_buffer
 bool ggml_metal_add_buffer(
         struct ggml_metal_context * ctx,
-                     const char * name,
-                           void * data,
-                         size_t   size,
-                         size_t   max_size) {
+                       const char * name,
+                             void * data,
+                           size_t   size,
+                           size_t   max_size) {
     if (ctx->n_buffers >= GGML_METAL_MAX_BUFFERS) {
         fprintf(stderr, "%s: too many buffers\n", __func__);
         return false;
@@ -993,38 +994,42 @@ void ggml_metal_graph_compute(
     }
 }
 
-static const char * ggml_backend_metal_name(ggml_backend_context_t ctx) {
+bool ggml_backend_metal_map_buffer(
+        struct ggml_backend * backend,
+        const char * name,
+        void * data,
+        size_t   size,
+        size_t   max_size) {
+    return ggml_metal_add_buffer(backend->context, name, data, size, max_size);
+}
+
+static const char * ggml_backend_metal_name(struct ggml_backend * ctx) {
     return "Metal";
 
     UNUSED(ctx);
 }
 
-static void ggml_backend_metal_graph_compute(ggml_backend_context_t ctx, struct ggml_cgraph * cgraph) {
-    struct ggml_metal_context * ctx_metal = (struct ggml_metal_context *) ctx;
-
-    ggml_metal_graph_compute(ctx_metal, cgraph);
+static void ggml_backend_metal_graph_compute(struct ggml_backend * backend, struct ggml_cgraph * cgraph) {
+    ggml_metal_graph_compute(backend->context, cgraph);
 }
 
 static struct ggml_backend_interface metal_backend_interface = {
     /* .get_name            = */ ggml_backend_metal_name,
-    /* .free_context        = */ NULL, //ggml_backend_metal_free_context,
-    /* .alloc_buffer        = */ NULL, //ggml_backend_metal_alloc_buffer,
-    /* .free_buffer         = */ NULL, //ggml_backend_metal_free_buffer,
-    /* .reset_buffer        = */ NULL, //ggml_backend_metal_reset_buffer,
-    /* .alloc_tensor        = */ NULL, //ggml_backend_metal_alloc_tensor,
-    /* .set_tensor_async    = */ NULL, //ggml_backend_metal_set_tensor_async,
-    /* .get_tensor_async    = */ NULL, //ggml_backend_metal_get_tensor_async,
-    /* .synchronize         = */ NULL, //ggml_backend_metal_synchronize,
-    /* .cpy_tensor_from     = */ NULL, //nullptr,
-    /* .cpy_tensor_to       = */ NULL, //nullptr,
-    /* .graph_plan_create   = */ NULL, //ggml_backend_metal_graph_plan_create,
-    /* .graph_plan_free     = */ NULL, //ggml_backend_metal_graph_plan_free,
-    /* .graph_plan_compute  = */ NULL, //ggml_backend_metal_graph_plan_compute,
+    /* .free                = */ NULL, //ggml_backend_metal_alloc_buffer,
+    /* .alloc_buffer        = */ NULL, //ggml_backend_metal_free_buffer,
+    /* .set_tensor_async    = */ NULL, //ggml_backend_metal_reset_buffer,
+    /* .get_tensor_async    = */ NULL, //ggml_backend_metal_alloc_tensor,
+    /* .synchronize         = */ NULL, //ggml_backend_metal_set_tensor_async,
+    /* .cpy_tensor_from     = */ NULL, //ggml_backend_metal_get_tensor_async,
+    /* .cpy_tensor_to       = */ NULL, //ggml_backend_metal_synchronize,
+    /* .graph_plan_create   = */ NULL, //nullptr,
+    /* .graph_plan_free     = */ NULL, //nullptr,
+    /* .graph_plan_compute  = */ NULL, //ggml_backend_metal_graph_plan_create,
     /* .graph_compute       = */ ggml_backend_metal_graph_compute,
 };
 
 struct ggml_backend * ggml_backend_metal_init(struct ggml_backend * backend_cpu) {
-    struct ggml_metal_context * ctx = malloc(sizeof(struct ggml_metal_context));
+    struct ggml_metal_context * ctx = ggml_metal_init(8);
 
     struct ggml_backend * backend_metal = malloc(sizeof(struct ggml_backend));
     *backend_metal = (struct ggml_backend){

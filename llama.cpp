@@ -2817,6 +2817,44 @@ struct llama_context * llama_new_context_with_model(
         }
     }
 
+#ifdef GGML_USE_METAL
+    if (params.n_gpu_layers > 0) {
+        void * data_ptr  = NULL;
+        size_t data_size = 0;
+
+        if (params.use_mmap) {
+            data_ptr  = ctx->model.mapping->addr;
+            data_size = ctx->model.mapping->size;
+        } else {
+            data_ptr  = ggml_get_mem_buffer(ctx->model.ctx_metal);
+            data_size = ggml_get_mem_size  (ctx->model.ctx_metal);
+        }
+
+        const size_t max_size = ggml_get_max_tensor_size(ctx->model.ctx_metal);
+
+        printf("%s: max tensor size = %8.2f MB\n", __func__, max_size/1024.0/1024.0);
+
+#define LLAMA_METAL_CHECK_BUF(result)                                          \
+        if (!(result)) {                                                           \
+            fprintf(stderr, "%s: failed to add buffer\n", __func__);               \
+            llama_free(ctx);                                                       \
+            return NULL;                                                           \
+        }
+
+        LLAMA_METAL_CHECK_BUF(ggml_backend_metal_map_buffer(ctx->model.backend_metal, "data", data_ptr, data_size, max_size));
+
+        struct ggml_backend_buffer * buf_compute = ctx->buf_compute_metal->backend_buffer;
+        struct ggml_backend_buffer * buf_kv      = ctx->kv_self.buf->backend_buffer;
+
+        LLAMA_METAL_CHECK_BUF(ggml_backend_metal_map_buffer(ctx->model.backend_metal, "eval", buf_compute->backend_data, buf_compute->backend_size, 0));
+        LLAMA_METAL_CHECK_BUF(ggml_backend_metal_map_buffer(ctx->model.backend_metal, "kv",   buf_kv->backend_data,      buf_kv->backend_size,      0));
+
+        //LLAMA_METAL_CHECK_BUF(ggml_backend_metal_map_buffer(ctx->model.backend_metal, "scr0", ctx->buf_scratch[0].addr, ctx->buf_scratch[0].size, 0));
+        //LLAMA_METAL_CHECK_BUF(ggml_backend_metal_map_buffer(ctx->model.backend_metal, "scr1", ctx->buf_scratch[1].addr, ctx->buf_scratch[1].size, 0));
+#undef LLAMA_METAL_CHECK_BUF
+    }
+#endif
+
     fprintf(stderr, "%s: layer backends: ", __func__);
     fprintf(stderr, "input: %s, ", ggml_backend_name(ctx->model.backend_inp));
 
