@@ -55,9 +55,21 @@
             runHook preInstall
 
             install -D bin/* -t $out/bin
-            install -Dm644 lib*.so -t $out/lib
             mv $out/bin/main $out/bin/llama
             mv $out/bin/server $out/bin/llama-server
+
+            ${if pkgs.stdenv.isDarwin then ''
+              install -Dm644 lib*.dylib -t $out/lib
+              for f in $out/lib/*.dylib; do
+                install_name_tool -id "$f" "$f"
+              done
+              for f in "$out"/bin/*; do
+                [[ $(${pkgs.file}/bin/file "$f") = *Mach-O* ]] || continue
+                install_name_tool -add_rpath "$out/lib" "$f"
+              done
+            '' else ''
+              install -Dm644 lib*.so -t $out/lib
+            ''}
 
             echo "#!${llama-python}/bin/python" > $out/bin/convert.py
             cat ${./convert.py} >> $out/bin/convert.py
