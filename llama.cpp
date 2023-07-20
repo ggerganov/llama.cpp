@@ -555,7 +555,9 @@ struct llama_file_loader {
             }
 
             // skip to the next multiple of 32 bytes
-            file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
+            if (file_version >= LLAMA_FILE_VERSION_GGJT_V1) {
+                file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
+            }
 
             tensor.file_off = file.tell();
             tensor.name = name;
