@@ -4468,7 +4468,7 @@ size_t ggml_get_max_tensor_size(const struct ggml_context * ctx) {
 }
 
 struct ggml_backend * ggml_get_ctx_backend(struct ggml_context * ctx) {
-    return ctx->buffer->backend;
+    return ctx->buffer->backend_buffer->backend;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4520,7 +4520,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
     ggml_assert_aligned(result);
 
     *result = (struct ggml_tensor) {
-        /*.backend      =*/ ctx->buffer->backend,
+        /*.backend      =*/ ggml_get_ctx_backend(ctx),
         /*.type         =*/ type,
         /*.n_dims       =*/ n_dims,
         /*.ne           =*/ { 1, 1, 1, 1 },

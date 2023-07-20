@@ -7,8 +7,7 @@ extern "C" {
 #endif
     struct ggml_backend;
 
-
-    // backend buffers
+    // backend buffer
     typedef void * ggml_buffer_context_t;
     struct ggml_backend_buffer;
 
@@ -27,7 +26,10 @@ extern "C" {
     struct ggml_backend_buffer {
         struct ggml_backend_buffer_interface interface;
         ggml_buffer_context_t context;
+        struct ggml_backend * backend;
         void * backend_data;
+        bool measure;
+        size_t max_size;
     };
 
     // backend buffer helper functions
@@ -36,11 +38,8 @@ extern "C" {
     static inline void ggml_backend_buffer_free_tensor(struct ggml_backend_buffer * alloc, struct ggml_tensor * tensor) { alloc->interface.free_tensor(alloc, tensor); }
     static inline void ggml_backend_buffer_reset(struct ggml_backend_buffer * alloc) { alloc->interface.reset(alloc); }
 
-    // default buffer allocators
-    // simple buffer allocator: cannot free tensors, good for weights and small contexts
-    // default buffer allocator: can free tensors, good for compute contexts
-    GGML_API struct ggml_backend_buffer * ggml_allocator_simple_init(void * data, size_t size, size_t alignment);
-    GGML_API struct ggml_backend_buffer * ggml_allocator_default_init(void * data, size_t size, size_t alignment, int max_free_blocks);
+    // default buffer allocator
+    GGML_API struct ggml_backend_buffer * ggml_allocator_default_init(void * data, size_t size, size_t alignment);
 
     // buffer
 
@@ -51,11 +50,12 @@ extern "C" {
         void * mem_buffer;
 
         // tensor data
-        struct ggml_backend * backend;
         struct ggml_backend_buffer * backend_buffer;
     };
 
-    GGML_API struct ggml_buffer * ggml_buffer_alloc(struct ggml_backend * backend, size_t size, size_t max_tensors);
+    GGML_API struct ggml_buffer * ggml_buffer_alloc        (struct ggml_backend * backend, size_t size, size_t max_tensors);
+    GGML_API struct ggml_buffer * ggml_buffer_measure_alloc(struct ggml_backend * backend, size_t max_tensors);
+    // measure buffers only calculate the maximum size of the buffer without allocating it - useful for pre-allocation
     GGML_API void ggml_buffer_free(struct ggml_buffer * buffer);
 
     // backend
@@ -151,6 +151,11 @@ extern "C" {
 
     // compute
     GGML_API void ggml_graph_splits_compute(struct ggml_graph_splits * splits);
+
+    // graph tensor allocator
+    GGML_API void ggml_graph_allocate_tensors(struct ggml_cgraph * graph);
+    GGML_API void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs);
+    GGML_API void ggml_graph_splits_allocate_tensors(struct ggml_graph_splits * splits);
 
 #ifdef  __cplusplus
 }

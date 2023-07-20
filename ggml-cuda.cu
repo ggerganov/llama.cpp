@@ -1726,7 +1726,7 @@ static ggml_backend_buffer * ggml_backend_cuda_alloc_buffer(ggml_backend * backe
     void * data;
     CUDA_CHECK(cudaMalloc(&data, size));
 
-    ggml_backend_buffer * buffer = ggml_allocator_simple_init(data, size, TENSOR_ALIGNMENT);
+    ggml_backend_buffer * buffer = ggml_allocator_default_init(data, size, TENSOR_ALIGNMENT);
     buffer->interface.free_data = ggml_backend_cuda_free_buffer;
     buffer->backend_data = data;
 

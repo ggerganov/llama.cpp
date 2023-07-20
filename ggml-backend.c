@@ -15,16 +15,20 @@ static size_t aligned_offset(const void * buffer, size_t offset, size_t alignmen
     return offset + align;
 }
 
-static inline size_t ggml_backend_buffer_get_alloc_size(struct ggml_backend_buffer * alloc, struct ggml_tensor * tensor) { return alloc->interface.get_alloc_size(alloc, tensor); }
-static inline void   ggml_backend_buffer_init_tensor(struct ggml_backend_buffer * alloc, struct ggml_tensor * tensor) { alloc->interface.init_tensor(alloc, tensor); }
+static inline size_t ggml_backend_buffer_get_alloc_size(struct ggml_backend_buffer * alloc, struct ggml_tensor * tensor) {
+    return alloc->interface.get_alloc_size(alloc, tensor);
+}
 
+static inline void ggml_backend_buffer_init_tensor(struct ggml_backend_buffer * alloc, struct ggml_tensor * tensor) {
+    alloc->interface.init_tensor(alloc, tensor);
+}
 
 void ggml_backend_buffer_free(struct ggml_backend_buffer * alloc) {
     alloc->interface.free_buffer(alloc);
     free(alloc);
 }
 
-// backend buffer allocator - simple
+// backend buffer allocator - simple - cannot free tensors, good for weights and small contexts
 
 struct ggml_allocator_simple_context {
     void * data;
@@ -38,21 +42,32 @@ static void ggml_allocator_simple_free_buffer(struct ggml_backend_buffer * alloc
     free(context);
 }
 
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
 static void ggml_allocator_simple_alloc_tensor(struct ggml_backend_buffer * alloc, struct ggml_tensor * tensor) {
     struct ggml_allocator_simple_context * context = (struct ggml_allocator_simple_context *)alloc->context;
+
     size_t size = ggml_backend_buffer_get_alloc_size(alloc, tensor);
-    if (context->offset + size > context->size) {
+
+    if (!alloc->measure && context->offset + size > context->size) {
         fprintf(stderr, "%s: not enough space in the buffer (needed %zu, available %zu)\n",
                 __func__, size, context->size - context->offset);
         GGML_ASSERT(!"not enough space in the buffer");
         return;
     }
-    void * ptr = (char*)context->data + context->offset;
-    context->offset = aligned_offset(context->data, context->offset + size, context->alignment);
-    tensor->data = ptr;
-    if (alloc->interface.init_tensor) {
-        alloc->interface.init_tensor(alloc, tensor);
+
+    alloc->max_size = MAX(alloc->max_size, context->offset + size);
+
+    if (alloc->measure) {
+        tensor->data = NULL;
+    } else {
+        tensor->data = (char*)context->data + context->offset;
+        if (alloc->interface.init_tensor) {
+            ggml_backend_buffer_init_tensor(alloc, tensor);
+        }
     }
+
+    context->offset = aligned_offset(context->data, context->offset + size, context->alignment);
 }
 
 static void ggml_allocator_simple_free_tensor(struct ggml_backend_buffer * alloc, struct ggml_tensor * tensor) {
@@ -83,7 +98,7 @@ static const struct ggml_backend_buffer_interface ggml_allocator_simple_interfac
     /* .free_data      = */ NULL,
 };
 
-struct ggml_backend_buffer * ggml_allocator_simple_init(void * data, size_t size, size_t alignment) {
+static struct ggml_backend_buffer * ggml_allocator_simple_init(void * data, size_t size, size_t alignment) {
     struct ggml_allocator_simple_context * ctx = malloc(sizeof(struct ggml_allocator_simple_context));
     ctx->data = data;
     ctx->size = size;
@@ -94,9 +109,18 @@ struct ggml_backend_buffer * ggml_allocator_simple_init(void * data, size_t size
     *allocator = (struct ggml_backend_buffer){
         /* .interface    = */ ggml_allocator_simple_interface,
         /* .context      = */ ctx,
+        /* .backend      = */ NULL,
         /* .backend_data = */ NULL,
+        /* .measure      = */ false,
+        /* .max_size     = */ 0,
     };
     return allocator;
+}
+
+//
+
+struct ggml_backend_buffer * ggml_allocator_default_init(void * data, size_t size, size_t alignment) {
+    return ggml_allocator_simple_init(data, size, alignment);
 }
 
 // buffer
@@ -105,9 +129,15 @@ struct ggml_buffer * ggml_buffer_alloc(struct ggml_backend * backend, size_t siz
     struct ggml_buffer * buffer = malloc(sizeof(struct ggml_buffer));
     buffer->mem_size = ggml_tensor_overhead() * max_tensors;
     buffer->mem_buffer = malloc(buffer->mem_size);
-    buffer->backend = backend;
     size += 128 * max_tensors; // alignment overhead
     buffer->backend_buffer = backend->interface.alloc_buffer(backend, size);
+    buffer->backend_buffer->backend = backend;
+    return buffer;
+}
+
+struct ggml_buffer * ggml_buffer_measure_alloc(struct ggml_backend * backend, size_t max_tensors) {
+    struct ggml_buffer * buffer = ggml_buffer_alloc(backend, 0, max_tensors);
+    buffer->backend_buffer->measure = true;
     return buffer;
 }
 
@@ -190,7 +220,7 @@ static void ggml_backend_cpu_free_buffer(struct ggml_backend_buffer * alloc) {
 static struct ggml_backend_buffer * ggml_backend_cpu_alloc_buffer(struct ggml_backend * backend, size_t size) {
     void * data = malloc(size);
 
-    struct ggml_backend_buffer * buffer = ggml_allocator_simple_init(data, size, TENSOR_ALIGNMENT);
+    struct ggml_backend_buffer * buffer = ggml_allocator_default_init(data, size, TENSOR_ALIGNMENT);
     buffer->interface.free_data = ggml_backend_cpu_free_buffer;
     buffer->backend_data = data;
 
@@ -674,3 +704,33 @@ void allocate_graph(struct ggml_cgraph * gf, struct ggml_buffer * buffer) {
 }
 
 #endif
+
+void ggml_graph_allocate_tensors(struct ggml_cgraph * graph) {
+    ggml_graph_allocate_tensors_n(&graph, 1);
+}
+
+void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs) {
+}
+
+
+void ggml_graph_splits_allocate_tensors(struct ggml_graph_splits * splits) {
+    bool visited[GGML_MAX_SPLITS] = {false};
+    for (int i = 0; i < splits->n_splits; i++) {
+        if (!visited[i]) {
+            struct ggml_graph_split * split = &splits->splits[i];
+            struct ggml_backend * backend = split->dst_inputs[0]->backend; // not great
+            struct ggml_cgraph * backend_graphs[GGML_MAX_SPLITS];
+            int num_graphs = 0;
+            for (int j = i; j < splits->n_splits; j++) {
+                if (splits->splits[j].dst_inputs[0]->backend == backend) {
+                    backend_graphs[num_graphs++] = splits->splits[j].graph;
+                    visited[j] = true;
+                    // TODO: need to ensure that the output tensors are never freed
+                    // maybe this can be done automatically in ggml_graph_calc_compute_buffer_size by assuming that n_childs == 0 => output tensor
+                }
+            }
+            ggml_graph_allocate_tensors_n(backend_graphs, num_graphs);
+        }
+    }
+}
+

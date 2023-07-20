@@ -113,20 +113,6 @@ static const std::map<e_model, size_t> & MEM_REQ_KV_SELF() {
     return k_sizes;
 }
 
-// this is mostly needed for temporary mul_mat buffers to dequantize the data
-// not actually needed if BLAS is disabled
-static const std::map<e_model, size_t> & MEM_REQ_EVAL() {
-    static std::map<e_model, size_t> k_sizes = {
-        { MODEL_3B,   512ull * MB },
-        //{ MODEL_7B,   768ull * MB }, // FIXME: increased until improved memory management
-        { MODEL_7B,  2048ull * MB },
-        { MODEL_13B, 1024ull * MB },
-        { MODEL_30B, 1280ull * MB },
-        { MODEL_65B, 1536ull * MB },
-    };
-    return k_sizes;
-}
-
 // default hparams (LLaMA 7B)
 struct llama_hparams {
     uint32_t n_vocab = 32000;
@@ -1099,8 +1085,7 @@ static void llama_model_load_internal(
             ctx_sum += it.second;
         }
 
-        const size_t mem_required =
-            ctx_sum + MEM_REQ_EVAL().at(model.type);
+        const size_t mem_required = ctx_sum;
 
         // this is the memory required by one llama_state
         const size_t mem_required_state =
@@ -1191,7 +1176,8 @@ static ggml_graph_splits llama_build_graph(
     struct ggml_context * ctx_i = nullptr;
     struct ggml_context * ctx_o = nullptr;
     struct ggml_context * ctx_kv = nullptr;
-    // TODO: reuse vectors to avoid allocations
+
+    // TODO: reuse these vectors to avoid allocations during eval
     std::vector<ggml_context *> ctx_ls(n_layer);
     std::vector<struct ggml_context *> ctxs;
 
@@ -1212,10 +1198,17 @@ static ggml_graph_splits llama_build_graph(
         }
     }
 
+    bool measuring = lctx.bufs_compute[0]->backend_buffer->measure;
+
     struct ggml_tensor * inpL;
 
     // reuse the scale tensor for all layers since it requires a memory transfer
-    struct ggml_tensor * KQ_scale = ggml_new_f32(ctx_kv, 1.0f/sqrtf(float(n_embd)/n_head));
+    //struct ggml_tensor * KQ_scale = ggml_new_f32(ctx_kv, 1.0f/sqrtf(float(n_embd)/n_head));
+    // TODO: this shouldn't be necessary
+    struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx_kv, GGML_TYPE_F32, 1);
+    if (!measuring) {
+        ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd)/n_head));
+    }
     ggml_set_name(KQ_scale, "1/sqrt(n_embd/n_head)");
 
     if (embeddings_input) {
@@ -1459,6 +1452,8 @@ static ggml_graph_splits llama_build_graph(
     }
 
     ggml_graph_splits_build_forward(&splits, cur);
+    // TODO: this probably should be automatic on ggml_graph_splits_build_forward (and ggml_build_forward)
+    ggml_graph_splits_allocate_tensors(&splits);
 
     // plot the computation graph in dot format (for debugging purposes)
     //if (n_past%100 == 0) {
@@ -2621,17 +2616,6 @@ struct llama_context * llama_new_context_with_model(
             ctx->embedding.resize(hparams.n_embd);
         }
 
-        // initialize compute buffers
-        // TODO: size the buffers more accurately - depends on improved memory management
-        // TODO: skip if no cpu layers
-        for (auto & backend_data : model->backends) {
-            ggml_buffer * buf_compute = ggml_buffer_alloc(backend_data.backend, MEM_REQ_EVAL().at(ctx->model.type), 2048);
-            ctx->bufs_compute.push_back(buf_compute);
-        }
-        // TODO: pinned memory for faster host-device transfers
-        //ggml_cuda_host_register(*(void**)ctx->buf_compute_cpu.backend_buffer, MEM_REQ_EVAL().at(ctx->model.type) + 128*2048);
-
-
         // initialize the graph input/output buffers
         // input buffer
         {
@@ -2678,6 +2662,36 @@ struct llama_context * llama_new_context_with_model(
 
             ggml_free(ctx0);
         }
+
+        // initialize compute buffers
+        // calculate the required memory size
+
+        // create dummy compute buffers - not great, but we need backend-specific buffers to account for their requirements (e.g. alignment)
+        for (auto & backend_data : model->backends) {
+            ggml_buffer * buf_compute = ggml_buffer_measure_alloc(backend_data.backend, 2048);
+            ctx->bufs_compute.push_back(buf_compute);
+        }
+        // build worst-case graph
+        int n_tokens = std::min((int)hparams.n_ctx, params.n_batch);
+        int n_past = hparams.n_ctx - n_tokens;
+        /*ggml_graph_splits splits =*/ llama_build_graph(*ctx, n_tokens, n_past);
+
+        fprintf(stderr, "%s: compute ctx sizes:\n", __func__);
+        for (size_t i = 0; i < ctx->bufs_compute.size(); ++i) {
+            ggml_buffer * buf = ctx->bufs_compute[i];
+            ggml_backend * backend = buf->backend_buffer->backend;
+            size_t size = buf->backend_buffer->max_size;
+            fprintf(stderr, "%8s = %7.2f MB\n", ggml_backend_name(backend), size / 1024.0 / 1024.0);
+            ggml_buffer_free(buf);
+
+            // reallocate with the correct size
+            buf = ggml_buffer_alloc(buf->backend_buffer->backend, size, 2048);
+            ctx->bufs_compute[i] = buf;
+        }
+
+        // TODO: use pinned memory for faster host-device transfers
+        //ggml_cuda_host_register(*(void**)ctx->buf_compute_cpu.backend_buffer, MEM_REQ_EVAL().at(ctx->model.type) + 128*2048);
+
 
         // resized during inference
         if (params.logits_all) {
