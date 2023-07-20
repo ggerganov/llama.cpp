@@ -61,3 +61,7 @@ qnt-*.txt
 perf-*.txt
 
 examples/jeopardy/results.txt
+
+pyproject.toml
+poetry.lock
+poetry.toml
