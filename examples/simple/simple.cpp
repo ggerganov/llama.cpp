@@ -175,8 +175,6 @@ int main(int argc, char ** argv)
 
     llama_backend_free();
 
-    llama_backend_free();
-
     return 0;
 }
 

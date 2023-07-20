@@ -57,11 +57,9 @@ static void ggml_allocator_simple_alloc_tensor(struct ggml_backend_buffer * allo
     }
 
     alloc->max_size = MAX(alloc->max_size, context->offset + size);
+    tensor->data = (char*)context->data + context->offset;
 
-    if (alloc->measure) {
-        tensor->data = NULL;
-    } else {
-        tensor->data = (char*)context->data + context->offset;
+    if (!alloc->measure) {
         if (alloc->interface.init_tensor) {
             ggml_backend_buffer_init_tensor(alloc, tensor);
         }
@@ -71,7 +69,7 @@ static void ggml_allocator_simple_alloc_tensor(struct ggml_backend_buffer * allo
 }
 
 static void ggml_allocator_simple_free_tensor(struct ggml_backend_buffer * alloc, struct ggml_tensor * tensor) {
-    GGML_ASSERT(!"ggml_simple_allocator cannot free individual tensors");
+    GGML_ASSERT(!"ggml_allocator_simple cannot free individual tensors");
 
     UNUSED(alloc);
     UNUSED(tensor);
@@ -117,11 +115,205 @@ static struct ggml_backend_buffer * ggml_allocator_simple_init(void * data, size
     return allocator;
 }
 
-//
+//////////////////////////////////////////////////////////////
+
+// backend buffer allocator - default - can free tensors
+
+struct free_block {
+    void * addr;
+    size_t size;
+};
+
+#define MAX_FREE_BLOCKS 128
+
+struct ggml_allocator_default_context {
+    void * data;
+    size_t size;
+    size_t alignment;
+    int n_free_blocks;
+    struct free_block free_blocks[1024];
+};
+
+void ggml_allocator_default_free_buffer(struct ggml_backend_buffer * alloc) {
+    struct ggml_allocator_default_context * allocator_ctx = (struct ggml_allocator_default_context *)alloc->context;
+    free(allocator_ctx);
+}
+
+static const size_t MAX_SIZE_INIT = (1ULL<<40)-1;
+void ggml_allocator_default_alloc_tensor(struct ggml_backend_buffer * alloc, struct ggml_tensor * tensor) {
+    struct ggml_allocator_default_context * allocator_ctx = (struct ggml_allocator_default_context *)alloc->context;
+
+    /////
+    if (alloc->measure && allocator_ctx->size != MAX_SIZE_INIT) {
+        allocator_ctx->size = MAX_SIZE_INIT;
+        //allocator_ctx->data = 0;
+        allocator_ctx->free_blocks[0].size = MAX_SIZE_INIT;
+        //allocator_ctx->free_blocks[0].addr = 0;
+    }
+    /////
+
+    size_t size = ggml_backend_buffer_get_alloc_size(alloc, tensor);
+    size = aligned_offset(NULL, size, allocator_ctx->alignment);
+
+    // printf("%s: allocating %s (%zu bytes) - ", __func__, tensor->name, size);
+
+    size_t max_avail = 0;
+
+    //fprintf(stderr, "%s: allocating %s - %zu bytes\n", __func__, tensor->name, size);
+
+    // find the best fitting free block
+    int best_fit_block = -1;
+    size_t best_fit_size = SIZE_MAX;
+    for (int i = 0; i < allocator_ctx->n_free_blocks; i++) {
+        struct free_block * block = &allocator_ctx->free_blocks[i];
+        max_avail = MAX(max_avail, block->size);
+        if (block->size >= size && block->size <= best_fit_size) {
+            best_fit_block = i;
+            best_fit_size = block->size;
+        }
+    }
+
+    // printf("block %d\n", best_fit_block);
+
+    if (best_fit_block == -1) {
+        fprintf(stderr, "%s: not enough space in the buffer (needed %zu, largest block available %zu)\n",
+                __func__, size, max_avail);
+        GGML_ASSERT(!"not enough space in the buffer");
+        return;
+    }
+    struct free_block * block = &allocator_ctx->free_blocks[best_fit_block];
+    void * addr = block->addr;
+    block->addr = (char*)block->addr + size;
+    block->size -= size;
+    if (block->size == 0) {
+        // remove block if empty
+        allocator_ctx->n_free_blocks--;
+        for (int j = best_fit_block; j < allocator_ctx->n_free_blocks; j++) {
+            allocator_ctx->free_blocks[j] = allocator_ctx->free_blocks[j+1];
+        }
+    }
+
+    alloc->max_size = MAX(alloc->max_size, (char*)addr - (char*)allocator_ctx->data + size);
+    tensor->data = addr;
+
+    if (!alloc->measure) {
+        if (alloc->interface.init_tensor) {
+            ggml_backend_buffer_init_tensor(alloc, tensor);
+        }
+    }
+}
+
+// this is a very naive implementation, but for our case the number of free blocks should be very small
+void ggml_allocator_default_free_tensor(struct ggml_backend_buffer * alloc, struct ggml_tensor * tensor) {
+    struct ggml_allocator_default_context * allocator_ctx = (struct ggml_allocator_default_context *)alloc->context;
+
+    void * ptr = tensor->data;
+
+    if (ptr < allocator_ctx->data || (char*)ptr >= (char*)allocator_ctx->data + alloc->max_size) {
+        //fprintf(stderr, "%s: %s - tensor not in this buffer (%p - %p - %zu)\n", __func__, tensor->name, ptr, allocator_ctx->data, allocator_ctx->size);
+        //GGML_ASSERT(!"trying to free a tensor that was not allocated by this allocator");
+        return;
+    }
+
+    size_t size = ggml_backend_buffer_get_alloc_size(alloc, tensor);
+    size = aligned_offset(NULL, size, allocator_ctx->alignment);
+    //printf("%s: freeing %s (%zu bytes) - n_free_blocks = %d\n", __func__, tensor->name, size, allocator_ctx->n_free_blocks);
+
+    // see if we can merge with an existing block
+    for (int i = 0; i < allocator_ctx->n_free_blocks; i++) {
+        struct free_block * block = &allocator_ctx->free_blocks[i];
+        // check if ptr is at the end of the block
+        if ((char*)block->addr + block->size == ptr) {
+            block->size += size;
+            // check if we can merge with the next block
+            if (i < allocator_ctx->n_free_blocks - 1 && (char*)block->addr + block->size == allocator_ctx->free_blocks[i+1].addr) {
+                block->size += allocator_ctx->free_blocks[i+1].size;
+                allocator_ctx->n_free_blocks--;
+                for (int j = i+1; j < allocator_ctx->n_free_blocks; j++) {
+                    allocator_ctx->free_blocks[j] = allocator_ctx->free_blocks[j+1];
+                }
+            }
+            return;
+        }
+        // check if ptr is at the beginning of the block
+        if ((char*)ptr + size == block->addr) {
+            block->addr = ptr;
+            block->size += size;
+            // check if we can merge with the previous block
+            if (i > 0 && (char*)allocator_ctx->free_blocks[i-1].addr + allocator_ctx->free_blocks[i-1].size == block->addr) {
+                allocator_ctx->free_blocks[i-1].size += block->size;
+                allocator_ctx->n_free_blocks--;
+                for (int j = i; j < allocator_ctx->n_free_blocks; j++) {
+                    allocator_ctx->free_blocks[j] = allocator_ctx->free_blocks[j+1];
+                }
+            }
+            return;
+        }
+    }
+    // otherwise, add a new block
+    if (allocator_ctx->n_free_blocks < MAX_FREE_BLOCKS) {
+        // insert the new block in the correct position to keep the array sorted
+        int insert_pos = 0;
+        while (insert_pos < allocator_ctx->n_free_blocks && allocator_ctx->free_blocks[insert_pos].addr < ptr) {
+            insert_pos++;
+        }
+        // shift all blocks from insert_pos onward to make room for the new block
+        for (int i = allocator_ctx->n_free_blocks; i > insert_pos; i--) {
+            allocator_ctx->free_blocks[i] = allocator_ctx->free_blocks[i-1];
+        }
+        // insert the new block
+        allocator_ctx->free_blocks[insert_pos].addr = ptr;
+        allocator_ctx->free_blocks[insert_pos].size = size;
+        allocator_ctx->n_free_blocks++;
+    }
+    else {
+        GGML_ASSERT(!"out of free blocks");
+    }
+}
+
+static void ggml_allocator_default_reset(struct ggml_backend_buffer * alloc) {
+    struct ggml_allocator_default_context * ctx = (struct ggml_allocator_default_context *)alloc->context;
+    ctx->n_free_blocks = 1; // TODO
+    size_t align_offset = aligned_offset(ctx->data, 0, ctx->alignment);
+    ctx->free_blocks[0].addr = (char *)ctx->data + align_offset;
+    ctx->free_blocks[0].size = ctx->size - align_offset;
+}
+
+static const struct ggml_backend_buffer_interface ggml_allocator_default_interface = {
+    /* .free_buffer    = */ ggml_allocator_default_free_buffer,
+    /* .alloc_tensor   = */ ggml_allocator_default_alloc_tensor,
+    /* .free_tensor    = */ ggml_allocator_default_free_tensor,
+    /* .reset          = */ ggml_allocator_default_reset,
+    /* .get_alloc_size = */ ggml_allocator_simple_get_alloc_size,
+    /* .init_tensor    = */ NULL,
+    /* .free_data      = */ NULL,
+};
 
 struct ggml_backend_buffer * ggml_allocator_default_init(void * data, size_t size, size_t alignment) {
-    return ggml_allocator_simple_init(data, size, alignment);
+    struct ggml_allocator_default_context * ctx = malloc(sizeof(struct ggml_allocator_default_context) /* + n_free_blocks * sizeof(struct free_block) */);
+    ctx->data = data;
+    ctx->size = size;
+    ctx->alignment = alignment;
+    ctx->n_free_blocks = 1; // TODO
+    size_t align_offset = aligned_offset(data, 0, alignment);
+    ctx->free_blocks[0].addr = (char *)data + align_offset;
+    ctx->free_blocks[0].size = size - align_offset;
+
+    struct ggml_backend_buffer * allocator = malloc(sizeof(struct ggml_backend_buffer));
+    *allocator = (struct ggml_backend_buffer){
+        /* .interface    = */ ggml_allocator_default_interface,
+        /* .context      = */ ctx,
+        /* .backend      = */ NULL,
+        /* .backend_data = */ NULL,
+        /* .measure      = */ false,
+        /* .max_size     = */ 0,
+    };
+    return allocator;
 }
+
+//struct ggml_backend_buffer * ggml_allocator_default_init(void * data, size_t size, size_t alignment) {
+//    return ggml_allocator_simple_init(data, size, alignment);
+//}
 
 // buffer
 
@@ -524,190 +716,6 @@ void ggml_graph_splits_compute(struct ggml_graph_splits * splits) {
     //exit(0);
 }
 
-#if 0
-// default allocator
-struct free_block {
-    void * addr;
-    size_t size;
-};
-
-struct ggml_backend_default_allocator_context {
-    void * data;
-    size_t alignment;
-    int n_free_blocks;
-    struct free_block free_blocks[];
-};
-
-void ggml_backend_default_allocator_free_context(ggml_allocator_context_t ctx) {
-    struct ggml_backend_default_allocator_context * allocator_ctx = ctx;
-    free(allocator_ctx);
-}
-
-ggml_allocator_context_t ggml_backend_default_allocator_context(void * data, size_t size, size_t alignment, int n_free_blocks) {
-    struct ggml_backend_default_allocator_context * ctx = malloc(sizeof(struct ggml_backend_default_allocator_context) + n_free_blocks * sizeof(struct free_block));
-    ctx->data = data;
-    ctx->alignment = alignment;
-    ctx->n_free_blocks = 1;
-    size_t align_offset = align_offset(data, alignment);
-    ctx->free_blocks[0].addr = (char *)data + align_offset;
-    ctx->free_blocks[0].size = size - align_offset;
-    return ctx;
-}
-
-void * ggml_backend_default_allocator_alloc(ggml_allocator_context_t ctx, size_t size) {
-    struct ggml_backend_default_allocator_context * allocator_ctx = ctx;
-    size = align_size(size, allocator_ctx->alignment);
-    // find a free block
-    for (int i = 0; i < allocator_ctx->n_free_blocks; i++) {
-        struct free_block * block = &allocator_ctx->free_blocks[i];
-        if (block->size >= size) {
-            void * addr = block->addr;
-            block->addr += size;
-            block->size -= size;
-            if (block->size == 0) {
-                // remove block if empty
-                allocator_ctx->n_free_blocks--;
-                for (int j = i; j < allocator_ctx->n_free_blocks; j++) {
-                    allocator_ctx->free_blocks[j] = allocator_ctx->free_blocks[j+1];
-                }
-            }
-            return addr;
-        }
-    }
-    return NULL;
-}
-
-// this is a very naive implementation, but for our case the number of free blocks should be very small
-void ggml_backend_default_allocator_free(ggml_allocator_context_t ctx, void * ptr, size_t size) {
-    struct ggml_backend_default_allocator_context * allocator_ctx = ctx;
-    size = align_size(size, allocator_ctx->alignment);
-    // see if we can merge with an existing block
-    for (int i = 0; i < allocator_ctx->n_free_blocks; i++) {
-        struct free_block * block = &allocator_ctx->free_blocks[i];
-        // check if ptr is at the end of the block
-        if (block->addr + block->size == ptr) {
-            block->size += size;
-            // check if we can merge with the next block
-            if (i < allocator_ctx->n_free_blocks - 1 && block->addr + block->size == allocator_ctx->free_blocks[i+1].addr) {
-                block->size += allocator_ctx->free_blocks[i+1].size;
-                allocator_ctx->n_free_blocks--;
-                for (int j = i+1; j < allocator_ctx->n_free_blocks; j++) {
-                    allocator_ctx->free_blocks[j] = allocator_ctx->free_blocks[j+1];
-                }
-            }
-            return;
-        }
-        // check if ptr is at the beginning of the block
-        if (ptr + size == block->addr) {
-            block->addr = ptr;
-            block->size += size;
-            // check if we can merge with the previous block
-            if (i > 0 && allocator_ctx->free_blocks[i-1].addr + allocator_ctx->free_blocks[i-1].size == block->addr) {
-                allocator_ctx->free_blocks[i-1].size += block->size;
-                allocator_ctx->n_free_blocks--;
-                for (int j = i; j < allocator_ctx->n_free_blocks; j++) {
-                    allocator_ctx->free_blocks[j] = allocator_ctx->free_blocks[j+1];
-                }
-            }
-            return;
-        }
-    }
-    // otherwise, add a new block
-    if (allocator_ctx->n_free_blocks < MAX_FREE_BLOCKS) {
-        // insert the new block in the correct position to keep the array sorted
-        int insert_pos = 0;
-        while (insert_pos < allocator_ctx->n_free_blocks && allocator_ctx->free_blocks[insert_pos].addr < ptr) {
-            insert_pos++;
-        }
-        // shift all blocks from insert_pos onward to make room for the new block
-        for (int i = allocator_ctx->n_free_blocks; i > insert_pos; i--) {
-            allocator_ctx->free_blocks[i] = allocator_ctx->free_blocks[i-1];
-        }
-        // insert the new block
-        allocator_ctx->free_blocks[insert_pos].addr = ptr;
-        allocator_ctx->free_blocks[insert_pos].size = size;
-        allocator_ctx->n_free_blocks++;
-    }
-    else {
-        GGML_ASSERT(!"out of free blocks");
-    }
-}
-
-static bool ggml_is_view(struct ggml_tensor * t) {
-    return t->op == GGML_OP_RESHAPE || t->op == GGML_OP_VIEW || t->op == GGML_OP_TRANSPOSE ||
-           t->op == GGML_OP_PERMUTE || t->op == GGML_OP_NONE;
-}
-
-
-NOTE: id can be n_leaf OR n_node instead, we can determine the type by checking if the node is a leaf or not
-
-void allocate_graph(struct ggml_cgraph * gf, struct ggml_buffer * buffer) {
-    int node_children_count[GGML_MAX_NODES*2];
-    int node_view_count[GGML_MAX_NODES*2];
-    memset(node_children_count, 0, sizeof(int) * (gf->n_nodes + gf->n_leafs));
-    memset(node_view_count, 0, sizeof(int) * (gf->n_nodes + gf->n_leafs));
-
-    // count number of children and views
-    for (int i = 0; i < gf->n_nodes; i++) {
-        struct ggml_tensor * node = gf->nodes[i];
-        for (int j = 0; j < GGML_MAX_SRC; j++) {
-            struct ggml_tensor * parent = node->src[j];
-            if (parent == NULL) {
-                break;
-            }
-            // todo: ....
-            node_children_count[parent->id] += 1;
-            if (ggml_is_view(parent)) {
-                struct ggml_tensor * ancestor = parent;
-                do {
-                    node_view_count[ancestor->id] += 1;
-                    ancestor = ancestor->src[0];
-                } while (ggml_is_view(ancestor));
-            }
-        }
-    }
-
-    // allocate tensors
-    for (int i = 0; i < gf->n_nodes; i++) {
-        struct ggml_tensor * node = gf->nodes[i];
-        bool is_view = ggml_is_view(node);
-        if (is_view) {
-            // allocate view accordingly to the OP
-            node->data = node->src[0]->data; // + offset
-            struct ggml_tensor * ancestor = node->src[0];
-            while (ggml_is_view(ancestor)) {
-                ancestor = ancestor->src[0];
-            }
-            node_view_count[ancestor->id] -= 1;
-        } else {
-            if (node->data == NULL) {
-                // allocate tensor
-                // TODO: if last children and size == parent.size, then reuse parent tensor (auto in-place)
-                // may need a list of ops that can be in-place
-                ggml_backend_alloc_tensor(buffer, node);
-            }
-        }
-
-        // update parents
-        for (int j = 0; j < GGML_MAX_SRC; j++) {
-            struct ggml_tensor * parent = node->src[j];
-            if (parent == NULL) {
-                break;
-            }
-            if (is_view) {
-                node_view_count[parent->id] -= 1;
-            }
-            node_children_count[parent->id] -= 1;
-            if (node_children_count[parent->id] == 0 && node_view_count[parent->id] == 0) {
-                // free parent
-                ggml_backend_free_tensor(buffer, parent);
-            }
-        }
-    }
-}
-
-#endif
-
 void ggml_graph_allocate_tensors(struct ggml_cgraph * graph, struct ggml_context * ctx) {
     ggml_graph_allocate_tensors_n(&graph, 1, ctx);
 }
@@ -717,6 +725,21 @@ static bool ggml_is_view(struct ggml_tensor * t) {
            t->op == GGML_OP_PERMUTE || t->op == GGML_OP_CPY;
 }
 
+struct ggml_tensor * view_parent(struct ggml_tensor * t) {
+    switch (t->op) {
+        case GGML_OP_RESHAPE:
+        case GGML_OP_VIEW:
+        case GGML_OP_TRANSPOSE:
+        case GGML_OP_PERMUTE:
+            return t->src[0];
+        case GGML_OP_CPY:
+            return t->src[1];
+        default:
+            return NULL;
+    }
+}
+
+#if 0
 void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs, struct ggml_context * ctx) {
     struct ggml_buffer * buffer = ggml_get_buffer(ctx);
     for (int i = 0; i < n_graphs; i++) {
@@ -763,6 +786,134 @@ void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs, s
     }
     //printf("\n\n\n");
 }
+#else
+
+void allocate_node(struct ggml_buffer * buffer, struct ggml_tensor * node) {
+    if (node->data == NULL) {
+        if (ggml_is_view(node)) {
+            size_t offset;
+            switch(node->op) {
+                case GGML_OP_VIEW:
+                    memcpy(&offset, node->op_params, sizeof(size_t));
+                    node->data = (char *) node->src[0]->data + offset;
+                    break;
+                case GGML_OP_RESHAPE:
+                case GGML_OP_TRANSPOSE:
+                case GGML_OP_PERMUTE:
+                    node->data = node->src[0]->data;
+                    break;
+                case GGML_OP_CPY:
+                    node->data = node->src[1]->data;
+                    break;
+                default:
+                    GGML_ASSERT(!"unknown view op");
+                    break;
+            }
+        } else {
+            //printf("allocating tensor %s\n", node->name);
+            ggml_backend_buffer_tensor_alloc(buffer->backend_buffer, node);
+        }
+    }
+}
+
+void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs, struct ggml_context * ctx) {
+    struct ggml_buffer * buffer = ggml_get_buffer(ctx);
+
+    // reset counters
+    for (int g = 0; g < n_graphs; g++) {
+        struct ggml_cgraph * gf = graphs[g];
+        for (int i = 0; i < gf->n_nodes; i++) {
+            struct ggml_tensor * node = gf->nodes[i];
+            node->n_children = 0;
+            node->n_views = 0;
+        }
+        for (int i = 0; i < gf->n_leafs; i++) {
+            struct ggml_tensor * leaf = gf->leafs[i];
+            leaf->n_children = 0;
+            leaf->n_views = 0;
+        }
+    }
+
+    // count number of children and views
+    for (int g = 0; g < n_graphs; g++) {
+        struct ggml_cgraph * gf = graphs[g];
+        for (int i = 0; i < gf->n_nodes; i++) {
+            struct ggml_tensor * node = gf->nodes[i];
+            for (int j = 0; j < GGML_MAX_SRC; j++) {
+                struct ggml_tensor * parent = node->src[j];
+                if (parent == NULL) {
+                    break;
+                }
+                parent->n_children += 1;
+                if (ggml_is_view(parent)) {
+                    struct ggml_tensor * ancestor = parent;
+                    do {
+                        ancestor = view_parent(ancestor);
+                    } while (ggml_is_view(ancestor));
+                    ancestor->n_views += 1;
+                }
+            }
+        }
+    }
+
+    // allocate tensors
+    for (int g = 0; g < n_graphs; g++) {
+        struct ggml_cgraph * gf = graphs[g];
+        for (int i = 0; i < gf->n_nodes; i++) {
+            struct ggml_tensor * node = gf->nodes[i];
+            bool is_view = ggml_is_view(node);
+
+            // allocate parents (leafs)
+            for (int j = 0; j < GGML_MAX_SRC; j++) {
+                struct ggml_tensor * parent = node->src[j];
+                if (parent == NULL) {
+                    break;
+                }
+                allocate_node(buffer, parent);
+            }
+
+            // allocate node
+            allocate_node(buffer, node);
+
+            // update parents
+            if (is_view) {
+                struct ggml_tensor * ancestor = node;
+                do {
+                    ancestor = view_parent(ancestor);
+                } while (ggml_is_view(ancestor));
+                ancestor->n_views -= 1;
+                if (ancestor->n_views == 0) {
+                    ggml_backend_buffer_tensor_free(buffer->backend_buffer, ancestor);
+                }
+            } else {
+                for (int j = 0; j < GGML_MAX_SRC; j++) {
+                    struct ggml_tensor * parent = node->src[j];
+                    if (parent == NULL) {
+                        break;
+                    }
+                    if (ggml_is_view(parent)) {
+                        struct ggml_tensor * ancestor = parent;
+                        do {
+                            ancestor = view_parent(ancestor);
+                        } while (ggml_is_view(ancestor));
+                        ancestor->n_views -= 1;
+                        if (ancestor->n_views == 0) {
+                            ggml_backend_buffer_tensor_free(buffer->backend_buffer, ancestor);
+                        }
+                    }
+                    else {
+                        parent->n_children -= 1;
+                        if (parent->n_children == 0) {
+                            // free parent
+                            ggml_backend_buffer_tensor_free(buffer->backend_buffer, parent);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+#endif
 
 void ggml_graph_splits_allocate_tensors(struct ggml_graph_splits * splits) {
     bool visited[GGML_MAX_SPLITS] = {false};

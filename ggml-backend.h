@@ -35,7 +35,7 @@ extern "C" {
     // backend buffer helper functions
     GGML_API      void ggml_backend_buffer_free(struct ggml_backend_buffer * alloc);
     static inline void ggml_backend_buffer_tensor_alloc(struct ggml_backend_buffer * alloc, struct ggml_tensor * tensor) { alloc->interface.alloc_tensor(alloc, tensor); }
-    static inline void ggml_backend_buffer_free_tensor(struct ggml_backend_buffer * alloc, struct ggml_tensor * tensor) { alloc->interface.free_tensor(alloc, tensor); }
+    static inline void ggml_backend_buffer_tensor_free(struct ggml_backend_buffer * alloc, struct ggml_tensor * tensor) { alloc->interface.free_tensor(alloc, tensor); }
     static inline void ggml_backend_buffer_reset(struct ggml_backend_buffer * alloc) { alloc->interface.reset(alloc); }
 
     // default buffer allocator

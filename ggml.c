@@ -4531,6 +4531,8 @@ struct ggml_tensor * ggml_new_tensor_impl(
         /*.grad         =*/ NULL,
         /*.src          =*/ { NULL },
         /*.node_id      =*/ -1,
+        /*.n_children   =*/ 0,
+        /*.n_views      =*/ 0,
         /*.perf_runs    =*/ 0,
         /*.perf_cycles  =*/ 0,
         /*.perf_time_us =*/ 0,

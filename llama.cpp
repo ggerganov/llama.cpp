@@ -164,6 +164,7 @@ struct llama_kv_cache {
 
     ~llama_kv_cache() {
         if (ctx) {
+            ggml_buffer_free(buf);
             ggml_free(ctx);
         }
     }
@@ -1210,6 +1211,7 @@ static ggml_graph_splits llama_build_graph(
     // TODO: this shouldn't be necessary
     bool measuring = lctx.bufs_compute[0]->backend_buffer->measure;
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx_kv, GGML_TYPE_F32, 1);
+    ggml_set_name(KQ_scale, "1/sqrt(n_embd/n_head)");
     if (!measuring) {
         // this should be automatic
         if (KQ_scale->data == NULL) {
@@ -1217,7 +1219,6 @@ static ggml_graph_splits llama_build_graph(
         }
         ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd)/n_head));
     }
-    ggml_set_name(KQ_scale, "1/sqrt(n_embd/n_head)");
 
     if (embeddings_input) {
         // use embeddings as input
