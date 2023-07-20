@@ -613,7 +613,7 @@ int main(int argc, char ** argv) {
                 // printf("`%d`", candidates_p.size);
 
                 if (grammar != NULL) {
-                    id = llama_grammar_accept_token(ctx, grammar, id);
+                    llama_grammar_accept_token(ctx, grammar, id);
                 }
 
                 last_n_tokens.erase(last_n_tokens.begin());
