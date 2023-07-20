@@ -94,7 +94,6 @@ struct ggml_backend_buffer * ggml_allocator_simple_init(void * data, size_t size
     *allocator = (struct ggml_backend_buffer){
         /* .interface    = */ ggml_allocator_simple_interface,
         /* .context      = */ ctx,
-        /* .backend_size = */ 0,
         /* .backend_data = */ NULL,
     };
     return allocator;
@@ -146,6 +145,9 @@ void ggml_backend_tensor_copy(struct ggml_tensor * src, struct ggml_tensor * dst
         return;
     }
 
+    //printf("src->data = %p, src->extra = %p\n", src->data, src->extra);
+    //printf("dst->data = %p, dst->extra = %p\n", dst->data, dst->extra);
+
     if (dst->backend->interface.cpy_tensor_from != NULL) {
         dst->backend->interface.cpy_tensor_from(dst->backend->context, src, dst);
     } else if (src->backend->interface.cpy_tensor_to != NULL) {
@@ -193,7 +195,6 @@ static struct ggml_backend_buffer * ggml_backend_cpu_alloc_buffer(struct ggml_ba
 
     struct ggml_backend_buffer * buffer = ggml_allocator_simple_init(data, size, TENSOR_ALIGNMENT);
     buffer->interface.free_data = ggml_backend_cpu_free_buffer;
-    buffer->backend_size = size;
     buffer->backend_data = data;
 
     return buffer;

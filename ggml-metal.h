@@ -19,13 +19,8 @@
 
 #pragma once
 
-#include "ggml.h"
-
 #include <stddef.h>
 #include <stdbool.h>
-
-// max memory buffers that can be mapped to the device
-#define GGML_METAL_MAX_BUFFERS 16
 
 //struct ggml_tensor;
 //struct ggml_cgraph;
@@ -34,16 +29,9 @@
 extern "C" {
 #endif
 
-struct ggml_backend * ggml_backend_metal_init(struct ggml_backend * backend_cpu);
+struct ggml_backend;
 
-// TODO: temporary - move to backend interface
-bool ggml_backend_metal_map_buffer(
-        struct ggml_backend * backend,
-                 const char * name,
-                       void * data,
-                     size_t   size,
-                     size_t   max_size);
-
+struct ggml_backend * ggml_backend_metal_init(void);
 
 //struct ggml_metal_context;
 //

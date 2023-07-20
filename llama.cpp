@@ -226,7 +226,7 @@ struct llama_model {
 
     // backends
     ggml_backend * backend_cpu = NULL;
-    ggml_buffer  *  buf_cpu = NULL;
+    ggml_buffer  * buf_cpu = NULL;
     ggml_context * ctx_cpu = NULL;
 #ifdef GGML_USE_CUDA
     ggml_backend * backend_cuda = NULL;
@@ -234,8 +234,8 @@ struct llama_model {
     ggml_context * ctx_cuda = NULL;
 #endif
 #ifdef GGML_USE_METAL
-    ggml_backend * backend_metal;
-    ggml_buffer  * buf_metal;
+    ggml_backend * backend_metal = NULL;
+    ggml_buffer  * buf_metal = NULL;
     ggml_context * ctx_metal = NULL;
 #endif
 
@@ -991,7 +991,7 @@ static void llama_model_load_internal(
 #endif
 #ifdef GGML_USE_METAL
     if (n_gpu_layers > 0) {
-        model.backend_metal = ggml_backend_metal_init(backend_cpu);
+        model.backend_metal = ggml_backend_metal_init();
         backend_gpu = model.backend_metal;
     }
 #endif
@@ -1081,15 +1081,13 @@ static void llama_model_load_internal(
 
 #ifdef GGML_USE_METAL
     if (n_gpu_layers > 0) {
-        // the metal context is actually a CPU context because we have unified memory
         const size_t ctx_size  = ctx_sizes[model.backend_metal];
         const size_t n_tensors = ml->tensors_map.tensors.size();
 
         model.buf_metal = ggml_buffer_alloc(model.backend_metal, ctx_size, n_tensors);
 
         struct ggml_init_params params = ggml_init_params_default();
-        params.buffer   = model.buf_metal;
-        params.no_alloc = ml->use_mmap;
+        params.buffer = model.buf_metal;
 
         model.ctx_metal = ggml_init(params);
         if (!model.ctx_metal) {
@@ -1372,10 +1370,10 @@ static ggml_graph_splits llama_build_graph(
             struct ggml_tensor * tmpv = ggml_mul_mat(ctx_l, model.layers[il].wv, cur);
             ggml_set_name(tmpv, "tmpv");
 
-            struct ggml_tensor * Kcur = ggml_rope_custom_inplace(ctx_l, ggml_reshape_3d(ctx_l, tmpk, n_embd/n_head, n_head, N), n_past, n_rot, 0, freq_base, freq_scale, 0);
+            struct ggml_tensor * Kcur = ggml_rope(ctx_l, ggml_reshape_3d(ctx_l, tmpk, n_embd/n_head, n_head, N), n_past, n_rot, 0, 0);
             ggml_set_name(Kcur, "Kcur");
 
-            struct ggml_tensor * Qcur = ggml_rope_custom_inplace(ctx_l, ggml_reshape_3d(ctx_l, tmpq, n_embd/n_head, n_head, N), n_past, n_rot, 0, freq_base, freq_scale, 0);
+            struct ggml_tensor * Qcur = ggml_rope(ctx_l, ggml_reshape_3d(ctx_l, tmpq, n_embd/n_head, n_head, N), n_past, n_rot, 0, 0);
             ggml_set_name(Qcur, "Qcur");
 
             struct ggml_tensor * Vcur = ggml_transpose(ctx_l, ggml_reshape_2d(ctx_l, tmpv, n_embd, N));
@@ -1428,15 +1426,15 @@ static ggml_graph_splits llama_build_graph(
 
             // KQ_scaled = KQ / sqrt(n_embd/n_head)
             // KQ_scaled shape [n_past + N, N, n_head, 1]
-            struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx_kv, KQ, KQ_scale);
+            struct ggml_tensor * KQ_scaled = ggml_scale(ctx_kv, KQ, KQ_scale);
             ggml_set_name(KQ_scaled, "KQ_scaled");
 
             // KQ_masked = mask_past(KQ_scaled)
-            struct ggml_tensor * KQ_masked = ggml_diag_mask_inf_inplace(ctx_kv, KQ_scaled, n_past);
+            struct ggml_tensor * KQ_masked = ggml_diag_mask_inf(ctx_kv, KQ_scaled, n_past);
             ggml_set_name(KQ_masked, "KQ_masked");
 
             // KQ = soft_max(KQ_masked)
-            struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx_kv, KQ_masked);
+            struct ggml_tensor * KQ_soft_max = ggml_soft_max(ctx_kv, KQ_masked);
             ggml_set_name(KQ_soft_max, "KQ_soft_max");
 
             // split cached V into n_head heads
@@ -2717,6 +2715,12 @@ struct llama_context * llama_new_context_with_model(
     } else {
         ctx->backend_kv = model->backend_cpu;
     }
+#elif GGML_USE_METAL
+    if ((uint32_t)params.n_gpu_layers >= model->hparams.n_layer/2 && !params.low_vram) {
+        ctx->backend_kv = model->backend_metal;
+    } else {
+        ctx->backend_kv = model->backend_cpu;
+    }
 #else
     ctx->backend_kv = model->backend_cpu;
 #endif
@@ -2816,49 +2820,6 @@ struct llama_context * llama_new_context_with_model(
             ctx->embedding.resize(hparams.n_embd);
         }
     }
-
-#ifdef GGML_USE_METAL
-    if (params.n_gpu_layers > 0) {
-        void * data_ptr  = NULL;
-        size_t data_size = 0;
-
-        if (params.use_mmap) {
-            data_ptr  = ctx->model.mapping->addr;
-            data_size = ctx->model.mapping->size;
-        } else {
-            data_ptr  = ggml_get_mem_buffer(ctx->model.ctx_metal);
-            data_size = ggml_get_mem_size  (ctx->model.ctx_metal);
-        }
-
-        const size_t max_size = ggml_get_max_tensor_size(ctx->model.ctx_metal);
-
-        printf("%s: max tensor size = %8.2f MB\n", __func__, max_size/1024.0/1024.0);
-
-#define LLAMA_METAL_CHECK_BUF(result)                                          \
-        if (!(result)) {                                                           \
-            fprintf(stderr, "%s: failed to add buffer\n", __func__);               \
-            llama_free(ctx);                                                       \
-            return NULL;                                                           \
-        }
-
-        LLAMA_METAL_CHECK_BUF(ggml_backend_metal_map_buffer(ctx->model.backend_metal, "data", data_ptr, data_size, max_size));
-
-        struct ggml_backend_buffer * buf_compute = ctx->buf_compute_metal->backend_buffer;
-        struct ggml_backend_buffer * buf_kv      = ctx->kv_self.buf->backend_buffer;
-        struct ggml_backend_buffer * buf_input   = ctx->buf_input->backend_buffer;
-        struct ggml_backend_buffer * buf_output  = ctx->buf_output->backend_buffer;
-
-        LLAMA_METAL_CHECK_BUF(ggml_backend_metal_map_buffer(ctx->model.backend_metal, "eval", buf_compute->backend_data, buf_compute->backend_size, 0));
-        LLAMA_METAL_CHECK_BUF(ggml_backend_metal_map_buffer(ctx->model.backend_metal, "kv",   buf_kv->backend_data,      buf_kv->backend_size,      0));
-
-        LLAMA_METAL_CHECK_BUF(ggml_backend_metal_map_buffer(ctx->model.backend_metal, "inp", buf_input->backend_data,  buf_input->backend_size,  0));
-        LLAMA_METAL_CHECK_BUF(ggml_backend_metal_map_buffer(ctx->model.backend_metal, "inp", buf_output->backend_data, buf_output->backend_size, 0));
-
-        //LLAMA_METAL_CHECK_BUF(ggml_backend_metal_map_buffer(ctx->model.backend_metal, "scr0", ctx->buf_scratch[0].addr, ctx->buf_scratch[0].size, 0));
-        //LLAMA_METAL_CHECK_BUF(ggml_backend_metal_map_buffer(ctx->model.backend_metal, "scr1", ctx->buf_scratch[1].addr, ctx->buf_scratch[1].size, 0));
-#undef LLAMA_METAL_CHECK_BUF
-    }
-#endif
 
     fprintf(stderr, "%s: layer backends: ", __func__);
     fprintf(stderr, "input: %s, ", ggml_backend_name(ctx->model.backend_inp));
@@ -3150,14 +3111,14 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
                 ggml_tensor * scale_tensor = ggml_new_f32(lora_ctx, scaling);
                 ggml_set_name(scale_tensor, "scale_tensor");
 
-                BA = ggml_scale_inplace(lora_ctx, BA, scale_tensor);
+                BA = ggml_scale(lora_ctx, BA, scale_tensor);
                 ggml_set_name(BA, "BA_scaled");
             }
 
             ggml_tensor * r;
             if (base_t == dest_t) {
-                r = ggml_add_inplace(lora_ctx, dest_t, BA);
-                ggml_set_name(r, "r_add_inplace");
+                r = ggml_add(lora_ctx, dest_t, BA);
+                ggml_set_name(r, "r_add");
             }
             else {
                 r = ggml_add(lora_ctx, base_t, BA);

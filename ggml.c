@@ -4927,6 +4927,7 @@ struct ggml_tensor * ggml_view_tensor(
     result->nb[1] = src->nb[1];
     result->nb[2] = src->nb[2];
     result->nb[3] = src->nb[3];
+    result->extra = src->extra;
 
     return result;
 }
@@ -6262,6 +6263,7 @@ struct ggml_tensor * ggml_reshape(
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = NULL;
+    result->extra  = a->extra;
 
     return result;
 }
@@ -6287,6 +6289,7 @@ struct ggml_tensor * ggml_reshape_1d(
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = NULL;
+    result->extra  = a->extra;
 
     return result;
 }
@@ -6313,6 +6316,7 @@ struct ggml_tensor * ggml_reshape_2d(
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = NULL;
+    result->extra  = a->extra;
 
     return result;
 }
@@ -6340,6 +6344,7 @@ struct ggml_tensor * ggml_reshape_3d(
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = NULL;
+    result->extra  = a->extra;
 
     return result;
 }
@@ -6369,6 +6374,7 @@ struct ggml_tensor * ggml_reshape_4d(
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = NULL;
+    result->extra  = a->extra;
 
     return result;
 }
@@ -6396,6 +6402,7 @@ struct ggml_tensor * ggml_view_1d(
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = NULL;
+    result->extra  = a->extra;
 
     return result;
 }
@@ -6431,6 +6438,7 @@ struct ggml_tensor * ggml_view_2d(
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = NULL;
+    result->extra  = a->extra;
 
     return result;
 }
@@ -6468,6 +6476,7 @@ struct ggml_tensor * ggml_view_3d(
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = NULL;
+    result->extra  = a->extra;
 
     return result;
 }
@@ -6507,6 +6516,7 @@ struct ggml_tensor * ggml_view_4d(
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = NULL;
+    result->extra  = a->extra;
 
     return result;
 }
@@ -6568,6 +6578,7 @@ struct ggml_tensor * ggml_permute(
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = NULL;
+    result->extra  = a->extra;
 
     int32_t params[] = { axis0, axis1, axis2, axis3 };
     ggml_set_op_params(result, &params, sizeof(params));
@@ -6599,6 +6610,7 @@ struct ggml_tensor * ggml_transpose(
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = NULL;
+    result->extra  = a->extra;
 
     return result;
 }
