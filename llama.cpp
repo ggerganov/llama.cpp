@@ -2845,9 +2845,14 @@ struct llama_context * llama_new_context_with_model(
 
         struct ggml_backend_buffer * buf_compute = ctx->buf_compute_metal->backend_buffer;
         struct ggml_backend_buffer * buf_kv      = ctx->kv_self.buf->backend_buffer;
+        struct ggml_backend_buffer * buf_input   = ctx->buf_input->backend_buffer;
+        struct ggml_backend_buffer * buf_output  = ctx->buf_output->backend_buffer;
 
         LLAMA_METAL_CHECK_BUF(ggml_backend_metal_map_buffer(ctx->model.backend_metal, "eval", buf_compute->backend_data, buf_compute->backend_size, 0));
         LLAMA_METAL_CHECK_BUF(ggml_backend_metal_map_buffer(ctx->model.backend_metal, "kv",   buf_kv->backend_data,      buf_kv->backend_size,      0));
+
+        LLAMA_METAL_CHECK_BUF(ggml_backend_metal_map_buffer(ctx->model.backend_metal, "inp", buf_input->backend_data,  buf_input->backend_size,  0));
+        LLAMA_METAL_CHECK_BUF(ggml_backend_metal_map_buffer(ctx->model.backend_metal, "inp", buf_output->backend_data, buf_output->backend_size, 0));
 
         //LLAMA_METAL_CHECK_BUF(ggml_backend_metal_map_buffer(ctx->model.backend_metal, "scr0", ctx->buf_scratch[0].addr, ctx->buf_scratch[0].size, 0));
         //LLAMA_METAL_CHECK_BUF(ggml_backend_metal_map_buffer(ctx->model.backend_metal, "scr1", ctx->buf_scratch[1].addr, ctx->buf_scratch[1].size, 0));
