@@ -1602,14 +1602,14 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
         }
     }
 
-    ggml_vk_host_free(fp16_staging);
-
     ggml_vk_submit(vk_transfer_queues[0], transfer_0_seqs, VK_NULL_HANDLE);
 
     // cleanup waits for the queue to be done
     ggml_vk_queue_cleanup(vk_transfer_queues[0]);
     ggml_vk_queue_cleanup(vk_transfer_queues[1]);
     ggml_vk_queue_cleanup(vk_compute_queue);
+
+    ggml_vk_host_free(fp16_staging);
 
     if (src0->backend != GGML_BACKEND_GPU) {
         ggml_vk_pool_free(d_X);
