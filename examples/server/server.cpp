@@ -398,7 +398,7 @@ struct llama_server_context {
         evaluator.evaluate(params.n_threads, params.n_batch);
 
         if (cfg_enabled) {
-           evaluator_guidance.evaluate(params.n_threads, params.n_batch);
+            evaluator_guidance.evaluate(params.n_threads, params.n_batch);
         }
 
         if (params.n_predict == 0) {
@@ -1067,7 +1067,7 @@ int main(int argc, char ** argv) {
         llama.loadPrompt();
         llama.beginCompletion();
 
-        if (llama.params.cfg_negative_prompt.size() > 0) {
+        if (llama.params.cfg_scale > 1.0f && llama.params.cfg_negative_prompt.size() > 0) {
             llama.cfg_enabled = true;
             llama.loadGuidancePrompt();
         }
