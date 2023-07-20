@@ -223,9 +223,11 @@ extern "C"
     float get_last_eval_time() {
         return last_eval_time;
     }
-
     float get_last_process_time() {
         return last_process_time;
+    }
+    int get_last_token_count() {
+        return last_token_count;
     }
 
     const char* get_pending_output() {

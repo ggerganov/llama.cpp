@@ -75,3 +75,4 @@ extern std::vector<std::string> generated_tokens;
 extern bool generation_finished;
 extern float last_eval_time;
 extern float last_process_time;
+extern int last_token_count;

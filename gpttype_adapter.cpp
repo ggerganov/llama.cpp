@@ -35,6 +35,7 @@ std::string lora_base = "";
 bool generation_finished;
 float last_process_time = 0;
 float last_eval_time = 0;
+int last_token_count = 0;
 std::vector<std::string> generated_tokens;
 
 //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt)
@@ -1471,6 +1472,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     generation_finished = true;
     last_eval_time = pt2;
     last_process_time = pt1;
+    last_token_count = realnpredict;
     snprintf(output.text, sizeof(output.text), "%s", concat_output.c_str());
 
     return output;
