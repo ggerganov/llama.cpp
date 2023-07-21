@@ -2,7 +2,7 @@
 This script converts Hugging Face llama models to GGML and quantizes them.
 
 Usage:
-python make_ggml.py --model {model_dir_or_hf_repo_name} [--outname {output_name} (Optional)] [--outdir {output_directory} (Optional)] [--quants {quant_types} (Optional)] [--keep_fp16 (Optional)]
+python make-ggml.py --model {model_dir_or_hf_repo_name} [--outname {output_name} (Optional)] [--outdir {output_directory} (Optional)] [--quants {quant_types} (Optional)] [--keep_fp16 (Optional)]
 
 Arguments:
 - --model: (Required) The directory of the downloaded Hugging Face model or the name of the Hugging Face model repository. If the model directory does not exist, it will be downloaded from the Hugging Face model hub.
