@@ -1128,9 +1128,9 @@ extern "C" {
             int                   n_past,
             int                   n_dims,
             int                   mode,
+            int                   n_ctx,
             float                 freq_base,
-            float                 freq_scale,
-            int                   n_ctx);
+            float                 freq_scale);
 
     // rotary position embedding backward, i.e compute dx from dy
     // a - dy
@@ -1139,7 +1139,8 @@ extern "C" {
             struct ggml_tensor  * a,
             int                   n_past,
             int                   n_dims,
-            int                   mode);
+            int                   mode,
+            int                   n_ctx);
 
     // alibi position embedding
     // in-place, returns view(a)
