@@ -62,6 +62,11 @@ perf-*.txt
 
 examples/jeopardy/results.txt
 
+
+pyproject.toml
+poetry.lock
+poetry.toml
+
 # Test binaries
 tests/test-double-float
 tests/test-grad0
