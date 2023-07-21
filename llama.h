@@ -88,7 +88,8 @@ extern "C" {
         int32_t  n_batch;                      // prompt processing batch size
         int32_t  n_gpu_layers;                 // number of layers to store in VRAM
         int32_t  main_gpu;                     // the GPU that is used for scratch and small tensors
-        float tensor_split[LLAMA_MAX_DEVICES]; // how to split layers across multiple GPUs
+
+        const float * tensor_split; // how to split layers across multiple GPUs (size: LLAMA_MAX_DEVICES)
 
         // ref: https://github.com/ggerganov/llama.cpp/pull/2054
         float    rope_freq_base;  // RoPE base frequency

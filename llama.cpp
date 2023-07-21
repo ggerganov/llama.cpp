@@ -555,7 +555,9 @@ struct llama_file_loader {
             }
 
             // skip to the next multiple of 32 bytes
-            file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
+            if (file_version >= LLAMA_FILE_VERSION_GGJT_V1) {
+                file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
+            }
 
             tensor.file_off = file.tell();
             tensor.name = name;
@@ -847,7 +849,7 @@ struct llama_context_params llama_context_default_params() {
         /*.n_batch                     =*/ 512,
         /*.gpu_layers                  =*/ 0,
         /*.main_gpu                    =*/ 0,
-        /*.tensor_split                =*/ {0},
+        /*.tensor_split                =*/ nullptr,
         /*.rope_freq_base              =*/ 10000.0f,
         /*.rope_freq_scale             =*/ 1.0f,
         /*.progress_callback           =*/ nullptr,
@@ -1287,7 +1289,7 @@ static bool llama_model_load(
         int n_batch,
         int n_gpu_layers,
         int main_gpu,
-        float * tensor_split,
+        const float * tensor_split,
         float rope_freq_base,
         float rope_freq_scale,
         bool low_vram,
