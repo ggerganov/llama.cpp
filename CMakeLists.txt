@@ -186,7 +186,16 @@ if (LLAMA_BLAS)
                 pkg_check_modules(DepBLAS REQUIRED flexiblas_api)
             elseif (${LLAMA_BLAS_VENDOR} MATCHES "Intel")
                 # all Intel* libraries share the same include path
-                pkg_check_modules(DepBLAS REQUIRED mkl-sdl)
+                pkg_check_modules(DepBLAS mkl-sdl)
+                if (NOT DepBLAS)
+                    if (BUILD_SHARED_LIBS)
+                        set(LINK_METHOD dynamic)
+                    else()
+                        set(LINK_METHOD static)
+                    endif()
+                    string(REGEX REPLACE ".*_" "" DATA_TYPE_MODEL ${LLAMA_BLAS_VENDOR})
+                    pkg_check_modules(DepBLAS REQUIRED mkl-${LINK_METHOD}-${DATA_TYPE_MODEL}-iomp)
+                endif()
             elseif (${LLAMA_BLAS_VENDOR} MATCHES "NVHPC")
                 # this doesn't provide pkg-config
                 # suggest to assign BLAS_INCLUDE_DIRS on your own
@@ -512,6 +521,7 @@ if (BUILD_SHARED_LIBS)
     set_target_properties(ggml PROPERTIES POSITION_INDEPENDENT_CODE ON)
     add_library(ggml_shared SHARED $<TARGET_OBJECTS:ggml>)
     target_link_libraries(ggml_shared PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
+    install(TARGETS ggml_shared LIBRARY)
 endif()
 
 add_library(llama
@@ -533,8 +543,32 @@ if (BUILD_SHARED_LIBS)
     if (LLAMA_METAL)
         set_target_properties(llama PROPERTIES RESOURCE "${CMAKE_CURRENT_SOURCE_DIR}/ggml-metal.metal")
     endif()
+    install(TARGETS llama LIBRARY)
 endif()
 
+include(GNUInstallDirs)
+install(
+    FILES convert.py
+    PERMISSIONS
+        OWNER_READ
+        OWNER_WRITE
+        OWNER_EXECUTE
+        GROUP_READ
+        GROUP_EXECUTE
+        WORLD_READ
+        WORLD_EXECUTE
+    DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(
+    FILES convert-lora-to-ggml.py
+    PERMISSIONS
+        OWNER_READ
+        OWNER_WRITE
+        OWNER_EXECUTE
+        GROUP_READ
+        GROUP_EXECUTE
+        WORLD_READ
+        WORLD_EXECUTE
+    DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 #
 # programs, examples and tests

@@ -555,7 +555,9 @@ struct llama_file_loader {
             }
 
             // skip to the next multiple of 32 bytes
-            file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
+            if (file_version >= LLAMA_FILE_VERSION_GGJT_V1) {
+                file.seek(-static_cast<ptrdiff_t>(file.tell()) & 31, SEEK_CUR);
+            }
 
             tensor.file_off = file.tell();
             tensor.name = name;
@@ -873,6 +875,10 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
     };
 
     return result;
+}
+
+int llama_max_devices() {
+    return LLAMA_MAX_DEVICES;
 }
 
 bool llama_mmap_supported() {
@@ -2024,9 +2030,18 @@ void llama_sample_tail_free(struct llama_context * ctx, llama_token_data_array *
     }
 
     // Normalize the second derivatives
-    float second_derivatives_sum = std::accumulate(second_derivatives.begin(), second_derivatives.end(), 0.0f);
-    for (float & value : second_derivatives) {
-        value /= second_derivatives_sum;
+    {
+        const float second_derivatives_sum = std::accumulate(second_derivatives.begin(), second_derivatives.end(), 0.0f);
+
+        if (second_derivatives_sum > 1e-6f) {
+            for (float & value : second_derivatives) {
+                value /= second_derivatives_sum;
+            }
+        } else {
+            for (float & value : second_derivatives) {
+                value = 1.0f / second_derivatives.size();
+            }
+        }
     }
 
     float cum_sum = 0.0f;
@@ -2205,7 +2220,7 @@ void llama_sample_classifier_free_guidance(
           struct llama_context * guidance_ctx,
                          float   scale,
                          float   smooth_factor) {
-    int64_t t_start_sample_us = t_start_sample_us = ggml_time_us();
+    int64_t t_start_sample_us = ggml_time_us();
 
     assert(ctx);
     auto n_vocab = llama_n_vocab(ctx);
