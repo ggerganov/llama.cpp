@@ -421,6 +421,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             exit(0);
         } else if (arg == "--random-prompt") {
             params.random_prompt = true;
+        } else if (arg == "--in-prefix-bos") {
+            params.input_prefix_bos = true;
         } else if (arg == "--in-prefix") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -484,6 +486,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "                        not supported with --interactive or other interactive options\n");
     fprintf(stderr, "  --prompt-cache-ro     if specified, uses the prompt cache but does not update it.\n");
     fprintf(stderr, "  --random-prompt       start with a randomized prompt.\n");
+    fprintf(stderr, "  --in-prefix-bos       prefix BOS to user inputs, preceding the `--in-prefix` string\n");
     fprintf(stderr, "  --in-prefix STRING    string to prefix user inputs with (default: empty)\n");
     fprintf(stderr, "  --in-suffix STRING    string to suffix after user inputs with (default: empty)\n");
     fprintf(stderr, "  -f FNAME, --file FNAME\n");

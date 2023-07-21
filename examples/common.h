@@ -64,6 +64,7 @@ struct gpt_params {
     std::string input_prefix      = "";  // string to prefix user inputs with
     std::string input_suffix      = "";  // string to suffix user inputs with
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
+    bool input_prefix_bos         = false;  // if true, prefix BOS to user inputs, before input_prefix
 
     std::string lora_adapter = "";  // lora adapter path
     std::string lora_base    = "";  // base model path for the lora adapter
