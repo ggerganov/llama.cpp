@@ -3807,9 +3807,10 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
 
     "CROSS_ENTROPY_LOSS",
     "CROSS_ENTROPY_LOSS_BACK",
+    "BARRIER",
 };
 
-static_assert(GGML_OP_COUNT == 68, "GGML_OP_COUNT != 68");
+static_assert(GGML_OP_COUNT == 69, "GGML_OP_COUNT != 69");
 
 static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "none",
@@ -3887,9 +3888,10 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
 
     "cross_entropy_loss(x,y)",
     "cross_entropy_loss_back(x,y)",
+    "memory barrier",
 };
 
-static_assert(GGML_OP_COUNT == 68, "GGML_OP_COUNT != 68");
+static_assert(GGML_OP_COUNT == 69, "GGML_OP_COUNT != 69");
 
 static_assert(GGML_OP_POOL_COUNT == 2, "GGML_OP_POOL_COUNT != 2");
 
@@ -15164,6 +15166,10 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             {
                 // nop
             } break;
+        case GGML_OP_BARRIER:
+            {
+                // nop
+            } break;
         case GGML_OP_COUNT:
             {
                 GGML_ASSERT(false);
@@ -15999,6 +16005,10 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             {
                 // nop
             } break;
+        case GGML_OP_BARRIER:
+            {
+                // nop
+            } break;
         case GGML_OP_COUNT:
             {
                 GGML_ASSERT(false);
@@ -16075,6 +16085,66 @@ static void ggml_build_forward_impl(struct ggml_cgraph * cgraph, struct ggml_ten
         // the last added node should always be starting point
         GGML_ASSERT(cgraph->nodes[cgraph->n_nodes - 1] == tensor);
     }
+}
+
+void ggml_graph_find_concurrency(struct ggml_context * ctx, struct ggml_cgraph * cgraph) {
+    int search_depth = 40; //we only find concurrency in this range to avoiding waste to much time
+    struct ggml_tensor * nodes_bak[GGML_MAX_NODES]={NULL};
+    struct ggml_tensor * barrier_node;
+    barrier_node = ggml_new_tensor_1d(ctx,GGML_TYPE_F32,0);
+    barrier_node->op=GGML_OP_BARRIER;
+
+    for (int i=0; i < cgraph->n_nodes; i++) {
+        nodes_bak[i] = cgraph->nodes[i];
+        cgraph->nodes[i] = NULL;
+    }
+
+    int n_left = cgraph->n_nodes;
+    int n_start = 0; // all nodes before n_start at nodes_bak array have been sorted and store back to cgraph->nodes
+    int level_pos = 0;  // at cgraph->nodes, the last layer (level) ends at level_pos
+    while (n_left > 0) {
+        // number of nodes at a layer (that can be issued concurrently)
+        int concurrency = 0;
+        for (int i = n_start; i < n_start + search_depth; i++) {
+            if (nodes_bak[i]) {
+
+                // if the requirements for nodes_bak[i] are satisfied
+                int exe_flag=1;
+                // scan all srcs
+                for (int src_ind = 0; src_ind < GGML_MAX_SRC; src_ind++) {
+                    struct ggml_tensor * src_cur = nodes_bak[i]->src[src_ind];
+                    if (src_cur) {
+                        // if is leaf nodes it's satisfied.
+                        if (src_cur->op == GGML_OP_NONE && src_cur->grad == NULL) {continue;}
+                        // otherwise if this src is the output from previous nodes.
+
+                        int is_found = 0;
+                        // scan 2*search_depth back because we insert barrier nodes.
+                        for (int j = ((level_pos - 2*search_depth) < 0 ? 0 : (level_pos - 2*search_depth)); j < level_pos; j++) {
+                            if (cgraph->nodes[j] == src_cur) {is_found = 1; break;}
+                        }
+                        if (is_found == 0) {exe_flag = 0; break;}
+                    }
+                }
+                if (exe_flag) {
+                    cgraph->nodes[level_pos + concurrency] = nodes_bak[i];
+                    nodes_bak[i] = NULL;
+                    concurrency++;
+                }
+            }
+        }
+        n_left -= concurrency;
+        // adding a barrier between different layer
+        cgraph->nodes[level_pos + concurrency] = barrier_node;
+        cgraph->n_nodes++;
+        // jump all sorted nodes at nodes_bak
+        while (!nodes_bak[n_start]) {n_start++;}
+        level_pos += concurrency + 1;
+    }
+    //remove the last barrier after result_output
+    cgraph->nodes[cgraph->n_nodes-1] = NULL;
+    cgraph->n_nodes--;
+
 }
 
 void ggml_build_forward_expand(struct ggml_cgraph * cgraph, struct ggml_tensor * tensor) {
@@ -16720,6 +16790,10 @@ struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
             case GGML_OP_NONE:
                 {
                     n_tasks = 1;
+                } break;
+            case GGML_OP_BARRIER:
+                {
+                    // nop
                 } break;
             case GGML_OP_COUNT:
                 {

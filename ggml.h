@@ -194,7 +194,7 @@
 #define GGML_QNT_VERSION_FACTOR 1000 // do not change this
 
 #define GGML_MAX_DIMS          4
-#define GGML_MAX_NODES         4096
+#define GGML_MAX_NODES         8192
 #define GGML_MAX_PARAMS        256
 #define GGML_MAX_CONTEXTS      64
 #define GGML_MAX_SRC           6
@@ -387,6 +387,8 @@ extern "C" {
         GGML_OP_CROSS_ENTROPY_LOSS,
         GGML_OP_CROSS_ENTROPY_LOSS_BACK,
 
+        GGML_OP_BARRIER, // Any operation between two barriers can be issued concurrently.
+        
         GGML_OP_COUNT,
     };
 
@@ -1363,6 +1365,9 @@ extern "C" {
     GGML_API void               ggml_graph_export(const struct ggml_cgraph * cgraph, const char * fname);
     GGML_API struct ggml_cgraph ggml_graph_import(const char * fname, struct ggml_context ** ctx_data, struct ggml_context ** ctx_eval);
 
+    //sort all nodes in a graph to find operations that can be issued concurrently, insert memory barrier if necessary
+    GGML_API void ggml_graph_find_concurrency(struct ggml_context * ctx, struct ggml_cgraph * cgraph);
+    
     // print info and performance information for the graph
     GGML_API void ggml_graph_print(const struct ggml_cgraph * cgraph);
 
