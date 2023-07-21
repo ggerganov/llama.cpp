@@ -75,3 +75,4 @@ tests/test-quantize-fns
 tests/test-quantize-perf
 tests/test-sampling
 tests/test-tokenizer-0
+
