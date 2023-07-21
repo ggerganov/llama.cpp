@@ -4533,6 +4533,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
         /*.node_id      =*/ -1,
         /*.n_children   =*/ 0,
         /*.n_views      =*/ 0,
+        /*.freed        =*/ false,
         /*.perf_runs    =*/ 0,
         /*.perf_cycles  =*/ 0,
         /*.perf_time_us =*/ 0,

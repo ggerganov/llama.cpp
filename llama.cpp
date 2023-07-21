@@ -703,7 +703,9 @@ static bool kv_cache_init(
     const int64_t n_mem      = n_layer*n_ctx;
     const int64_t n_elements = n_embd*n_mem;
 
-    size_t size = 2u*n_elements*ggml_type_size(wtype) + 2u*MB;
+    size_t size = 2u*n_elements*ggml_type_size(wtype);
+
+    fprintf(stderr, "%s: allocating %.2f MB for kv cache\n", __func__, size / 1024.0 / 1024.0);
 
     cache.buf = ggml_buffer_alloc(backend, size, 2);
     cache.n = 0;

@@ -425,6 +425,7 @@ extern "C" {
         int node_id; // used to build graphs
         int n_children;
         int n_views;
+        bool freed; // debug
 
         // performance
         int     perf_runs;
@@ -437,7 +438,7 @@ extern "C" {
 
         void * extra; // extra things e.g. for ggml-cuda.cu
 
-        char padding[12];
+        char padding[8];
     };
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);

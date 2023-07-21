@@ -7,6 +7,9 @@
 
 #define UNUSED(x) (void)(x)
 
+//#define AT_PRINTF printf
+#define AT_PRINTF(...) ((void)0)
+
 // allocator
 
 static size_t aligned_offset(const void * buffer, size_t offset, size_t alignment) {
@@ -146,16 +149,16 @@ void ggml_allocator_default_alloc_tensor(struct ggml_backend_buffer * alloc, str
     /////
     if (alloc->measure && allocator_ctx->size != MAX_SIZE_INIT) {
         allocator_ctx->size = MAX_SIZE_INIT;
-        //allocator_ctx->data = 0;
+        allocator_ctx->data = 0x1000;
         allocator_ctx->free_blocks[0].size = MAX_SIZE_INIT;
-        //allocator_ctx->free_blocks[0].addr = 0;
+        allocator_ctx->free_blocks[0].addr = 0x1000;
     }
     /////
 
     size_t size = ggml_backend_buffer_get_alloc_size(alloc, tensor);
     size = aligned_offset(NULL, size, allocator_ctx->alignment);
 
-    // printf("%s: allocating %s (%zu bytes) - ", __func__, tensor->name, size);
+    AT_PRINTF("%s: allocating %s (%zu bytes) - ", __func__, tensor->name, size);
 
     size_t max_avail = 0;
 
@@ -173,7 +176,7 @@ void ggml_allocator_default_alloc_tensor(struct ggml_backend_buffer * alloc, str
         }
     }
 
-    // printf("block %d\n", best_fit_block);
+    AT_PRINTF("block %d\n", best_fit_block);
 
     if (best_fit_block == -1) {
         fprintf(stderr, "%s: not enough space in the buffer (needed %zu, largest block available %zu)\n",
@@ -217,7 +220,8 @@ void ggml_allocator_default_free_tensor(struct ggml_backend_buffer * alloc, stru
 
     size_t size = ggml_backend_buffer_get_alloc_size(alloc, tensor);
     size = aligned_offset(NULL, size, allocator_ctx->alignment);
-    //printf("%s: freeing %s (%zu bytes) - n_free_blocks = %d\n", __func__, tensor->name, size, allocator_ctx->n_free_blocks);
+    AT_PRINTF("%s: freeing %s (%zu bytes) - n_free_blocks = %d\n", __func__, tensor->name, size, allocator_ctx->n_free_blocks);
+    tensor->freed = true;
 
     // see if we can merge with an existing block
     for (int i = 0; i < allocator_ctx->n_free_blocks; i++) {
@@ -826,11 +830,13 @@ void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs, s
             struct ggml_tensor * node = gf->nodes[i];
             node->n_children = 0;
             node->n_views = 0;
+            //node->freed = false;
         }
         for (int i = 0; i < gf->n_leafs; i++) {
             struct ggml_tensor * leaf = gf->leafs[i];
             leaf->n_children = 0;
             leaf->n_views = 0;
+            //leaf->freed = false;
         }
     }
 
@@ -839,6 +845,13 @@ void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs, s
         struct ggml_cgraph * gf = graphs[g];
         for (int i = 0; i < gf->n_nodes; i++) {
             struct ggml_tensor * node = gf->nodes[i];
+            if (ggml_is_view(node)) {
+                struct ggml_tensor * ancestor = node;
+                do {
+                    ancestor = view_parent(ancestor);
+                } while (ggml_is_view(ancestor));
+                ancestor->n_views += 1;
+            }
             for (int j = 0; j < GGML_MAX_SRC; j++) {
                 struct ggml_tensor * parent = node->src[j];
                 if (parent == NULL) {
@@ -869,47 +882,74 @@ void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs, s
                 if (parent == NULL) {
                     break;
                 }
+                if (parent->freed) {
+                    printf("!!!!!! tensor %s used after free\n", parent->name);
+                }
+                if (ggml_is_view(parent)) {
+                    struct ggml_tensor * ancestor = parent;
+                    do {
+                        ancestor = view_parent(ancestor);
+                    } while (ggml_is_view(ancestor));
+                    if (ancestor->freed) {
+                        printf("!!!!!! tensor %s used after free (as view %s)\n", ancestor->name, parent->name);
+                    }
+                    allocate_node(buffer, ancestor);
+                }
                 allocate_node(buffer, parent);
             }
 
             // allocate node
             allocate_node(buffer, node);
 
-            // update parents
-            if (is_view) {
-                struct ggml_tensor * ancestor = node;
-                do {
-                    ancestor = view_parent(ancestor);
-                } while (ggml_is_view(ancestor));
-                ancestor->n_views -= 1;
-                if (ancestor->n_views == 0) {
-                    ggml_backend_buffer_tensor_free(buffer->backend_buffer, ancestor);
+            AT_PRINTF("exec: %s (%s) <= ", ggml_op_name(node->op), node->name);
+            for (int j = 0; j < GGML_MAX_SRC; j++) {
+                struct ggml_tensor * parent = node->src[j];
+                if (parent == NULL) {
+                    break;
                 }
-            } else {
-                for (int j = 0; j < GGML_MAX_SRC; j++) {
-                    struct ggml_tensor * parent = node->src[j];
-                    if (parent == NULL) {
-                        break;
-                    }
+                AT_PRINTF("%s", parent->name);
+                if (j < GGML_MAX_SRC - 1 && node->src[j + 1] != NULL) {
+                    AT_PRINTF(", ");
+                }
+            }
+            AT_PRINTF("\n");
+
+            // update parents
+            for (int j = 0; j < GGML_MAX_SRC; j++) {
+                struct ggml_tensor * parent = node->src[j];
+                if (parent == NULL) {
+                    break;
+                }
+                parent->n_children -= 1;
+                if (parent->n_children == 0 && parent->n_views == 0) {
                     if (ggml_is_view(parent)) {
                         struct ggml_tensor * ancestor = parent;
                         do {
                             ancestor = view_parent(ancestor);
                         } while (ggml_is_view(ancestor));
                         ancestor->n_views -= 1;
-                        if (ancestor->n_views == 0) {
+                        if (ancestor->n_views == 0 && ancestor->n_children == 0) {
                             ggml_backend_buffer_tensor_free(buffer->backend_buffer, ancestor);
                         }
                     }
                     else {
-                        parent->n_children -= 1;
-                        if (parent->n_children == 0) {
-                            // free parent
-                            ggml_backend_buffer_tensor_free(buffer->backend_buffer, parent);
-                        }
+                        ggml_backend_buffer_tensor_free(buffer->backend_buffer, parent);
                     }
                 }
             }
+
+            if (is_view) {
+                struct ggml_tensor * ancestor = node;
+                do {
+                    ancestor = view_parent(ancestor);
+                } while (ggml_is_view(ancestor));
+                ancestor->n_views -= 1;
+                if (ancestor->n_views == 0 && ancestor->n_children == 0) {
+                    ggml_backend_buffer_tensor_free(buffer->backend_buffer, ancestor);
+                }
+            }
+
+            AT_PRINTF("\n");
         }
     }
 }
