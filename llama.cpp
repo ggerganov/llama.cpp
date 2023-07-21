@@ -1230,6 +1230,7 @@ static ggml_graph_splits llama_build_graph(
         ggml_tensor * token_in = ggml_view_1d(ctx_i, lctx.graph_tokens_in, N, 0);
         ggml_graph_splits_add(&splits, &token_in, ctx_i, "input_tokens");
         inpL = ggml_get_rows(ctx_i, model.tok_embeddings, token_in);
+        ggml_set_name(inpL, "input_embd");
     }
 
     struct ggml_tensor * cur = nullptr;
@@ -1550,11 +1551,6 @@ static bool llama_eval_internal(
 
     // update kv token count
     lctx.kv_self.n = n_past + N;
-
-    // TODO: this is not easy to do with split graphs - maybe just remove
-    //if (cgraph_fname) {
-    //    ggml_graph_export(&gf, cgraph_fname);
-    //}
 
 #ifdef GGML_PERF
     // print timing information per ggml operation (for debugging purposes)
@@ -3083,7 +3079,6 @@ void llama_set_rng_seed(struct llama_context * ctx, uint32_t seed) {
 
 // Returns the *maximum* size of the state
 size_t llama_get_state_size(const struct llama_context * ctx) {
-#if 0
     // we don't know size of rng until we actually serialize it. so reserve more than enough memory for its serialized state.
     // for reference, std::mt19937(1337) serializes to 6701 bytes.
     const size_t s_rng_size        = sizeof(size_t);
@@ -3095,7 +3090,7 @@ size_t llama_get_state_size(const struct llama_context * ctx) {
     const size_t s_embedding       = ctx->embedding.size() * sizeof(float);
     const size_t s_kv_size         = sizeof(size_t);
     const size_t s_kv_ntok         = sizeof(int);
-    const size_t s_kv              = ctx->kv_self.buf.size;
+    const size_t s_kv              = ggml_nbytes(ctx->kv_self.k) + ggml_nbytes(ctx->kv_self.v);
 
     const size_t s_total = (
         + s_rng_size
@@ -3111,12 +3106,10 @@ size_t llama_get_state_size(const struct llama_context * ctx) {
     );
 
     return s_total;
-#endif
 }
 
 // Copies the state to the specified destination address
 size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
-#if 0
     uint8_t * out = dst;
 
     // copy rng
@@ -3161,18 +3154,20 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
     // copy kv cache
     {
         const auto & kv_self = ctx->kv_self;
-        const auto & hparams = ctx->model.hparams;
-        const int    n_layer = hparams.n_layer;
-        const int    n_embd  = hparams.n_embd;
-        const int    n_ctx   = hparams.n_ctx;
+        //const auto & hparams = ctx->model.hparams;
+        //const int    n_layer = hparams.n_layer;
+        //const int    n_embd  = hparams.n_embd;
+        //const int    n_ctx   = hparams.n_ctx;
 
-        const size_t kv_size = kv_self.buf.size;
+        const size_t kv_size = ggml_nbytes(kv_self.k) + ggml_nbytes(kv_self.v);
         const int    kv_ntok = llama_get_kv_cache_token_count(ctx);
 
         memcpy(out, &kv_size, sizeof(kv_size)); out += sizeof(kv_size);
         memcpy(out, &kv_ntok, sizeof(kv_ntok)); out += sizeof(kv_ntok);
 
         if (kv_size) {
+            LLAMA_ASSERT(!"unimplemented");
+#if 0
             const size_t elt_size = ggml_element_size(kv_self.k);
 
             ggml_init_params params = ggml_init_params_default();
@@ -3203,6 +3198,7 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
             ggml_graph_compute_helper(ctx->work_buffer, &gf, /*n_threads*/ 1);
 
             ggml_free(cpy_ctx);
+#endif
         }
     }
 
@@ -3212,12 +3208,10 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
     LLAMA_ASSERT(written <= max_size);
 
     return written;
-#endif
 }
 
 // Sets the state reading from the specified source address
 size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
-#if 0
     uint8_t * inp = src;
 
     // set rng
@@ -3265,11 +3259,11 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
 
     // set kv cache
     {
-        const auto & kv_self = ctx->kv_self;
-        const auto & hparams = ctx->model.hparams;
-        const int    n_layer = hparams.n_layer;
-        const int    n_embd  = hparams.n_embd;
-        const int    n_ctx   = hparams.n_ctx;
+        //const auto & kv_self = ctx->kv_self;
+        //const auto & hparams = ctx->model.hparams;
+        //const int    n_layer = hparams.n_layer;
+        //const int    n_embd  = hparams.n_embd;
+        //const int    n_ctx   = hparams.n_ctx;
 
         size_t kv_size;
         int kv_ntok;
@@ -3278,6 +3272,8 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
         memcpy(&kv_ntok, inp, sizeof(kv_ntok)); inp += sizeof(kv_ntok);
 
         if (kv_size) {
+            LLAMA_ASSERT(!"unimplemented");
+#if 0
             LLAMA_ASSERT(kv_self.buf.size == kv_size);
 
             const size_t elt_size = ggml_element_size(kv_self.k);
@@ -3310,6 +3306,7 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
             ggml_graph_compute_helper(ctx->work_buffer, &gf, /*n_threads*/ 1);
 
             ggml_free(cpy_ctx);
+#endif
         }
 
         ctx->kv_self.n = kv_ntok;
@@ -3321,7 +3318,6 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
     LLAMA_ASSERT(nread <= max_size);
 
     return nread;
-#endif
 }
 
 static bool llama_load_session_file_internal(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
@@ -3433,7 +3429,6 @@ int llama_eval(
     return 0;
 }
 
-
 int llama_eval_embd(
             struct llama_context * ctx,
                      const float * embd,
@@ -3456,19 +3451,16 @@ int llama_eval_embd(
 }
 
 int llama_eval_export(struct llama_context * ctx, const char * fname) {
-    // TODO: use llama_build_graph if possible
-    LLAMA_ASSERT(false);
+    const int n_batch = 1;
+    const int n_ctx   = 512 - n_batch;
 
-    //const int n_batch = 1;
-    //const int n_ctx   = 512 - n_batch;
+    const std::vector<llama_token> tmp(n_batch, llama_token_bos());
 
-    //const std::vector<llama_token> tmp(n_batch, llama_token_bos());
+    ggml_graph_splits splits = llama_build_graph(*ctx, n_batch, n_ctx);
 
+    LLAMA_ASSERT(splits.n_splits == 1 && "cannot export graph while using multiple backends");
 
-    //if (!llama_eval_internal(*ctx, tmp.data(), nullptr, tmp.size(), n_ctx, 1, fname)) {
-    //    fprintf(stderr, "%s: failed to eval\n", __func__);
-    //    return 1;
-    //}
+    ggml_graph_export(splits.splits[0].graph, fname);
 
     return 0;
 }
