@@ -379,7 +379,10 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.export_cgraph = true;
         } else if (arg == "--verbose-prompt") {
             params.verbose_prompt = true;
-        } else if (arg == "-r" || arg == "--reverse-prompt") {
+        } else if (arg == "-r_ci" || arg == "--reverse_prompt_case_insensitive") {
+            params.reverse_prompt_case_insensitive = true;
+        }
+        else if (arg == "-r" || arg == "--reverse-prompt") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -465,6 +468,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
     fprintf(stderr, "  --multiline-input     allows you to write or paste multiple lines without ending each in '\\'\n");
     fprintf(stderr, "  -r PROMPT, --reverse-prompt PROMPT\n");
+    fprintf(stderr, "  -r_ci                 make the check for the reverse prompt case insensitive\n");
     fprintf(stderr, "                        halt generation at PROMPT, return control in interactive mode\n");
     fprintf(stderr, "                        (can be specified more than once for multiple prompts).\n");
     fprintf(stderr, "  --color               colorise output to distinguish prompt and user input from generations\n");
