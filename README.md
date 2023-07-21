@@ -360,7 +360,7 @@ Building the program with BLAS support may lead to some performance improvements
   ```bash
   mkdir build
   cd build
-  cmake .. -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=Intel10_lp64 -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
+  cmake .. -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=Intel10_64lp -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
   cmake --build . --config Release
   ```
 
