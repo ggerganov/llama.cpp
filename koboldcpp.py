@@ -286,6 +286,7 @@ defaultport = 5001
 KcppVersion = "1.36"
 showdebug = True
 showsamplerwarning = True
+exited = False
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
     sys_version = ""
@@ -581,6 +582,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 def RunServerMultiThreaded(addr, port, embedded_kailite = None):
+    global exited
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind((addr, port))
@@ -601,12 +603,15 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None):
                     self.httpd.server_bind = self.server_close = lambda self: None
                     self.httpd.serve_forever()
                 except (KeyboardInterrupt,SystemExit):
+                    exited = True
                     self.httpd.server_close()
                     sys.exit(0)
                 finally:
+                    exited = True
                     self.httpd.server_close()
                     sys.exit(0)
         def stop(self):
+            exited = True
             self.httpd.server_close()
 
     numThreads = 6
@@ -617,6 +622,7 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None):
         try:
             time.sleep(10)
         except KeyboardInterrupt:
+            exited = True
             for i in range(numThreads):
                 threadArr[i].stop()
             sys.exit(0)
@@ -777,6 +783,8 @@ def show_new_gui():
     horde_name_var = ctk.StringVar(value="koboldcpp")
     horde_gen_var = ctk.StringVar(value=maxhordelen)
     horde_context_var = ctk.StringVar(value=maxhordectx)
+    horde_apikey_var = ctk.StringVar(value="")
+    horde_workername_var = ctk.StringVar(value="")
     usehorde_var = ctk.IntVar()
 
     # Quick Launch Tab
@@ -938,13 +946,15 @@ def show_new_gui():
     # horde
     makelabel(network_tab, "Horde:", 3).grid(pady=10)
 
-    horde_name_entry,  horde_name_label = makelabelentry(network_tab, "Horde Name:", horde_name_var, 5, 200)
+    horde_name_entry,  horde_name_label = makelabelentry(network_tab, "Horde Model Name:", horde_name_var, 5, 180)
     horde_gen_entry,  horde_gen_label = makelabelentry(network_tab, "Gen. Length:", horde_gen_var, 6, 50)
     horde_context_entry,  horde_context_label = makelabelentry(network_tab, "Max Context:",horde_context_var, 7, 50)
+    horde_apikey_entry,  horde_apikey_label = makelabelentry(network_tab, "API Key (If Embedded Worker):",horde_apikey_var, 8, 180)
+    horde_workername_entry,  horde_workername_label = makelabelentry(network_tab, "Horde Worker Name:",horde_workername_var, 9, 180)
 
     def togglehorde(a,b,c):
-        labels = [horde_name_label, horde_gen_label, horde_context_label]
-        for idx, item in enumerate([horde_name_entry, horde_gen_entry, horde_context_entry]):
+        labels = [horde_name_label, horde_gen_label, horde_context_label, horde_apikey_label, horde_workername_label]
+        for idx, item in enumerate([horde_name_entry, horde_gen_entry, horde_context_entry, horde_apikey_entry, horde_workername_entry]):
             if usehorde_var.get() == 1:
                 item.grid(row=5 + idx, column = 1, padx=8, pady=1, stick="nw")
                 labels[idx].grid(row=5 + idx, padx=8, pady=1, stick="nw")
@@ -1022,7 +1032,10 @@ def show_new_gui():
         args.port_param = defaultport if port_var.get()=="" else int(port_var.get())
         args.host = host_var.get()
 
-        args.hordeconfig = None if usehorde_var.get() == 0 else [horde_name_var.get(), horde_gen_var.get(), horde_context_var.get()]
+        if horde_apikey_var.get()=="" or horde_workername_var.get()=="":
+            args.hordeconfig = None if usehorde_var.get() == 0 else [horde_name_var.get(), horde_gen_var.get(), horde_context_var.get()]
+        else:
+            args.hordeconfig = None if usehorde_var.get() == 0 else [horde_name_var.get(), horde_gen_var.get(), horde_context_var.get(), horde_apikey_var.get(), horde_workername_var.get()]
 
     def import_vars(dict):
         threads_var.set(dict["threads"])
@@ -1106,6 +1119,9 @@ def show_new_gui():
             horde_name_var.set(dict["hordeconfig"][0])
             horde_gen_var.set(dict["hordeconfig"][1])
             horde_context_var.set(dict["hordeconfig"][2])
+            if len(dict["hordeconfig"]) > 4:
+                horde_apikey_var.set(dict["hordeconfig"][3])
+                horde_workername_var.set(dict["hordeconfig"][4])
 
     def save_config():
         file_type = [("KoboldCpp Settings", "*.kcpps")]
@@ -1316,8 +1332,96 @@ def show_old_gui():
             time.sleep(2)
             sys.exit(2)
 
-def main(args):
+#A very simple and stripped down embedded horde worker with no dependencies
+def run_horde_worker(args, api_key, worker_name):
+    import urllib.request
+    global friendlymodelname, maxhordectx, maxhordelen, exited
 
+    def make_url_request(url, data, method='POST'):
+        try:
+            request = None
+            headers = {"apikey": api_key,'User-Agent':'KoboldCpp Embedded Worker v1'}
+            if method=='POST':
+                json_payload = json.dumps(data).encode('utf-8')
+                request = urllib.request.Request(url, data=json_payload, headers=headers, method=method)
+                request.add_header('Content-Type', 'application/json')
+            else:
+                request = urllib.request.Request(url, headers=headers, method=method)
+            response_data = ""
+            with urllib.request.urlopen(request) as response:
+                response_data = response.read().decode('utf-8')
+                json_response = json.loads(response_data)
+                return json_response
+        except urllib.error.HTTPError as e:
+            try:
+                errmsg = e.read().decode('utf-8')
+                print(f"Error: {e} - {errmsg}, Make sure your Horde API key and worker name is valid.")
+            except Exception as e:
+                print(f"Error: {e}, Make sure your Horde API key and worker name is valid.")
+            return None
+        except Exception as e:
+            print(f"Error: {e} - {response_data}, Make sure your Horde API key and worker name is valid.")
+            return None
+
+    current_id = None
+    current_payload = None
+    print("Embedded Horde Worker '"+worker_name+"' Starting...")
+    BRIDGE_AGENT = f"KoboldCppEmbedWorker:1:https://github.com/LostRuins/koboldcpp"
+    cluster = "https://aihorde.net"
+    while not exited:
+        time.sleep(2)
+        readygo = make_url_request(f'http://localhost:{args.port}/api/v1/info/version', None,'GET')
+        if readygo:
+            print("Embedded Horde Worker is started.")
+            break
+
+    while not exited:
+        #pop new request
+        gen_dict = {
+            "name": worker_name,
+            "models": [friendlymodelname],
+            "max_length": maxhordelen,
+            "max_context_length": maxhordectx,
+            "priority_usernames": [],
+            "softprompts": [],
+            "bridge_agent": BRIDGE_AGENT,
+        }
+        pop = make_url_request(f'{cluster}/api/v2/generate/text/pop',gen_dict)
+        if not pop:
+            print(f"Failed to fetch job from {cluster}. Waiting 5 seconds...")
+            time.sleep(5)
+            continue
+        if not pop["id"]:
+            print(f"Server {cluster} has no valid generations to do for us.")
+            time.sleep(3)
+            continue
+        current_id = pop['id']
+        current_payload = pop['payload']
+        print(f"Job received from {cluster} for {current_payload.get('max_length',80)} tokens and {current_payload.get('max_context_length',1024)} max context. Starting generation...")
+
+        #do gen
+        while not exited:
+            current_generation = make_url_request(f'http://localhost:{args.port}/api/v1/generate', current_payload)
+            if current_generation:
+                break
+            print("Server Busy - Not ready to generate...")
+            time.sleep(5)
+
+        #submit reply
+        submit_dict = {
+            "id": current_id,
+            "generation": current_generation,
+        }
+        reply = make_url_request(cluster + '/api/v2/generate/text/submit', submit_dict)
+        if not reply:
+            print("Error: Job submit failed.")
+        else:
+            print(f'Submitted generation to {cluster} with id {current_id} and contributed for {reply["reward"]}')
+        current_id = None
+        current_payload = None
+        time.sleep(5)
+
+def main(args):
     embedded_kailite = None
     if not args.model_param:
         args.model_param = args.model
@@ -1441,6 +1545,11 @@ def main(args):
             wb.open(epurl)
         except:
             print("--launch was set, but could not launch web browser automatically.")
+
+    if len(args.hordeconfig)>4:
+        horde_thread = threading.Thread(target=run_horde_worker,args=(args,args.hordeconfig[3],args.hordeconfig[4]))
+        horde_thread.start()
+
     print(f"Please connect to custom endpoint at {epurl}")
     asyncio.run(RunServerMultiThreaded(args.host, args.port, embedded_kailite))
 
@@ -1479,7 +1588,7 @@ if __name__ == '__main__':
     parser.add_argument("--noavx2", help="Do not use AVX2 instructions, a slower compatibility mode for older devices. Does not work with --clblast.", action='store_true')
     parser.add_argument("--debugmode", help="Shows additional debug info in the terminal.", action='store_const', const=1, default=0)
     parser.add_argument("--skiplauncher", help="Doesn't display or use the new GUI launcher.", action='store_true')
-    parser.add_argument("--hordeconfig", help="Sets the display model name to something else, for easy use on AI Horde. Optional additional parameters set the horde max genlength and max ctxlen.",metavar=('[hordename]', '[hordelength] [hordectx]'), nargs='+')
+    parser.add_argument("--hordeconfig", help="Sets the display model name to something else, for easy use on AI Horde. Optional additional parameters set the horde max genlength, max ctxlen, API key and worker name.",metavar=('[hordemodelname]', '[hordelength] [hordemaxctx] [hordeapikey] [hordeworkername]'), nargs='+')
     compatgroup = parser.add_mutually_exclusive_group()
     compatgroup.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
     compatgroup.add_argument("--useclblast", help="Use CLBlast for GPU Acceleration. Must specify exactly 2 arguments, platform ID and device ID (e.g. --useclblast 1 0).", type=int, choices=range(0,9), nargs=2)
