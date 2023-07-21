@@ -61,3 +61,12 @@ qnt-*.txt
 perf-*.txt
 
 examples/jeopardy/results.txt
+
+# Test binaries
+tests/test-double-float
+tests/test-grad0
+tests/test-opt
+tests/test-quantize-fns
+tests/test-quantize-perf
+tests/test-sampling
+tests/test-tokenizer-0
