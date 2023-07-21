@@ -2466,7 +2466,7 @@ static void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
             (uint32_t)(max_size/1024/1024), (uint32_t)(tot_size/1024/1024), (uint32_t)(size/1024/1024));
 #endif
     void * ptr;
-    size_t look_ahead_size = (size_t) (1.25 * size);
+    size_t look_ahead_size = (size_t) (1.05 * size);
     look_ahead_size = 256 * ((look_ahead_size + 255)/256);
     CUDA_CHECK(cudaMalloc((void **) &ptr, look_ahead_size));
     *actual_size = look_ahead_size;
