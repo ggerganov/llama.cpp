@@ -441,28 +441,13 @@ struct llama_buffer {
     llama_buffer() = default;
 
     void resize(size_t len) {
-#ifdef GGML_USE_METAL
-        free(addr);
-        int result = posix_memalign((void **) &addr, getpagesize(), len);
-        if (result == 0) {
-            memset(addr, 0, len);
-        }
-        else {
-            addr = NULL;
-        }
-#else
         delete[] addr;
         addr = new uint8_t[len];
-#endif
         size = len;
     }
 
     ~llama_buffer() {
-#ifdef GGML_USE_METAL
-        free(addr);
-#else
         delete[] addr;
-#endif
         addr = NULL;
     }
 
@@ -472,56 +457,5 @@ struct llama_buffer {
     llama_buffer& operator=(const llama_buffer&) = delete;
     llama_buffer& operator=(llama_buffer&&) = delete;
 };
-
-#if defined(GGML_USE_CUDA)
-#include "ggml-cuda.h"
-struct llama_host_buffer {
-    uint8_t * addr = NULL;
-    bool is_cuda;
-    size_t size = 0;
-
-    llama_host_buffer() = default;
-
-    void resize(size_t size) {
-        free();
-
-        addr = (uint8_t *) ggml_cuda_host_malloc(size);
-        if (addr) {
-            is_cuda = true;
-        }
-        else {
-            // fall back to pageable memory
-            addr = new uint8_t[size];
-            is_cuda = false;
-        }
-        this->size = size;
-    }
-
-    void free() {
-        if (addr) {
-            if (is_cuda) {
-                ggml_cuda_host_free(addr);
-            }
-            else {
-                delete[] addr;
-            }
-        }
-        addr = NULL;
-    }
-
-    ~llama_host_buffer() {
-        free();
-    }
-
-    // disable copy and move
-    llama_host_buffer(const llama_host_buffer&) = delete;
-    llama_host_buffer(llama_host_buffer&&) = delete;
-    llama_host_buffer& operator=(const llama_host_buffer&) = delete;
-    llama_host_buffer& operator=(llama_host_buffer&&) = delete;
-};
-#else
-typedef llama_buffer llama_host_buffer;
-#endif
-typedef llama_buffer llama_ctx_buffer;
 
 #endif
