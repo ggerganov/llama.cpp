@@ -6,11 +6,12 @@
 #include <string.h>
 
 #define UNUSED(x) (void)(x)
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
+//#define GGML_ALLOCATOR_DEBUG
 
 //#define AT_PRINTF printf
 #define AT_PRINTF(...) ((void)0)
-
-
 
 // allocator
 
@@ -33,6 +34,7 @@ void ggml_backend_buffer_free(struct ggml_backend_buffer * alloc) {
     free(alloc);
 }
 
+#if 0
 // backend buffer allocator - simple - cannot free tensors, good for weights and small contexts
 
 struct ggml_allocator_simple_context {
@@ -46,8 +48,6 @@ static void ggml_allocator_simple_free_buffer(struct ggml_backend_buffer * alloc
     struct ggml_allocator_simple_context * context = (struct ggml_allocator_simple_context *)alloc->context;
     free(context);
 }
-
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 static void ggml_allocator_simple_alloc_tensor(struct ggml_backend_buffer * alloc, struct ggml_tensor * tensor) {
     struct ggml_allocator_simple_context * context = (struct ggml_allocator_simple_context *)alloc->context;
@@ -120,7 +120,7 @@ static struct ggml_backend_buffer * ggml_allocator_simple_init(void * data, size
     return allocator;
 }
 
-//////////////////////////////////////////////////////////////
+#endif
 
 // backend buffer allocator - default - can free tensors
 
@@ -136,7 +136,7 @@ struct ggml_allocator_default_context {
     size_t size;
     size_t alignment;
     int n_free_blocks;
-    struct free_block free_blocks[1024];
+    struct free_block free_blocks[MAX_FREE_BLOCKS];
 
 #ifdef GGML_ALLOCATOR_DEBUG
     struct ggml_tensor * allocated_tensors[1024];
@@ -190,8 +190,6 @@ void ggml_allocator_default_alloc_tensor(struct ggml_backend_buffer * alloc, str
 
     size_t max_avail = 0;
 
-    //fprintf(stderr, "%s: allocating %s - %zu bytes\n", __func__, tensor->name, size);
-
     // find the best fitting free block
     int best_fit_block = -1;
     size_t best_fit_size = SIZE_MAX;
@@ -230,13 +228,13 @@ void ggml_allocator_default_alloc_tensor(struct ggml_backend_buffer * alloc, str
     add_allocated_tensor(allocator_ctx, tensor);
     size_t cur_max = (char*)addr - (char*)allocator_ctx->data + size;
     if (cur_max > alloc->max_size) {
-        fprintf(stderr, "max_size = %.2f MB: tensors: ", cur_max / 1024.0 / 1024.0);
+        printf("max_size = %.2f MB: tensors: ", cur_max / 1024.0 / 1024.0);
         for (int i = 0; i < 1024; i++) {
             if (allocator_ctx->allocated_tensors[i]) {
-                fprintf(stderr, "%s (%.2f MB) ", allocator_ctx->allocated_tensors[i]->name, ggml_nbytes(allocator_ctx->allocated_tensors[i]) / 1024.0 / 1024.0);
+                printf("%s (%.2f MB) ", allocator_ctx->allocated_tensors[i]->name, ggml_nbytes(allocator_ctx->allocated_tensors[i]) / 1024.0 / 1024.0);
             }
         }
-        fprintf(stderr, "\n");
+        printf("\n");
     }
 #endif
 
@@ -257,8 +255,9 @@ void ggml_allocator_default_free_tensor(struct ggml_backend_buffer * alloc, stru
     void * ptr = tensor->data;
 
     if (ptr < allocator_ctx->data || (char*)ptr >= (char*)allocator_ctx->data + alloc->max_size) {
-        //fprintf(stderr, "%s: %s - tensor not in this buffer (%p - %p - %zu)\n", __func__, tensor->name, ptr, allocator_ctx->data, allocator_ctx->size);
-        //GGML_ASSERT(!"trying to free a tensor that was not allocated by this allocator");
+        // the tensor was not allocated in this buffer
+        // this can happen because the allocator can try to free weights and other constants
+        // the easiest way to deal with this is to just ignore it
         return;
     }
 
@@ -303,32 +302,34 @@ void ggml_allocator_default_free_tensor(struct ggml_backend_buffer * alloc, stru
         }
     }
     // otherwise, add a new block
-    if (allocator_ctx->n_free_blocks < MAX_FREE_BLOCKS) {
-        // insert the new block in the correct position to keep the array sorted
-        int insert_pos = 0;
-        while (insert_pos < allocator_ctx->n_free_blocks && allocator_ctx->free_blocks[insert_pos].addr < ptr) {
-            insert_pos++;
-        }
-        // shift all blocks from insert_pos onward to make room for the new block
-        for (int i = allocator_ctx->n_free_blocks; i > insert_pos; i--) {
-            allocator_ctx->free_blocks[i] = allocator_ctx->free_blocks[i-1];
-        }
-        // insert the new block
-        allocator_ctx->free_blocks[insert_pos].addr = ptr;
-        allocator_ctx->free_blocks[insert_pos].size = size;
-        allocator_ctx->n_free_blocks++;
+    GGML_ASSERT(allocator_ctx->n_free_blocks < MAX_FREE_BLOCKS && "out of free blocks");
+    // insert the new block in the correct position to keep the array sorted
+    int insert_pos = 0;
+    while (insert_pos < allocator_ctx->n_free_blocks && allocator_ctx->free_blocks[insert_pos].addr < ptr) {
+        insert_pos++;
     }
-    else {
-        GGML_ASSERT(!"out of free blocks");
+    // shift all blocks from insert_pos onward to make room for the new block
+    for (int i = allocator_ctx->n_free_blocks; i > insert_pos; i--) {
+        allocator_ctx->free_blocks[i] = allocator_ctx->free_blocks[i-1];
     }
+    // insert the new block
+    allocator_ctx->free_blocks[insert_pos].addr = ptr;
+    allocator_ctx->free_blocks[insert_pos].size = size;
+    allocator_ctx->n_free_blocks++;
 }
 
 static void ggml_allocator_default_reset(struct ggml_backend_buffer * alloc) {
     struct ggml_allocator_default_context * ctx = (struct ggml_allocator_default_context *)alloc->context;
-    ctx->n_free_blocks = 1; // TODO
+    ctx->n_free_blocks = 1;
     size_t align_offset = aligned_offset(ctx->data, 0, ctx->alignment);
     ctx->free_blocks[0].addr = (char *)ctx->data + align_offset;
     ctx->free_blocks[0].size = ctx->size - align_offset;
+}
+
+size_t ggml_allocator_default_get_alloc_size(struct ggml_backend_buffer * alloc, struct ggml_tensor * tensor) {
+    return ggml_nbytes(tensor);
+
+    UNUSED(alloc);
 }
 
 static const struct ggml_backend_buffer_interface ggml_allocator_default_interface = {
@@ -336,7 +337,7 @@ static const struct ggml_backend_buffer_interface ggml_allocator_default_interfa
     /* .alloc_tensor   = */ ggml_allocator_default_alloc_tensor,
     /* .free_tensor    = */ ggml_allocator_default_free_tensor,
     /* .reset          = */ ggml_allocator_default_reset,
-    /* .get_alloc_size = */ ggml_allocator_simple_get_alloc_size,
+    /* .get_alloc_size = */ ggml_allocator_default_get_alloc_size,
     /* .init_tensor    = */ NULL,
     /* .free_data      = */ NULL,
 };
@@ -349,7 +350,7 @@ struct ggml_backend_buffer * ggml_allocator_default_init(void * data, size_t siz
     ctx->data = data;
     ctx->size = size;
     ctx->alignment = alignment;
-    ctx->n_free_blocks = 1; // TODO
+    ctx->n_free_blocks = 1;
     size_t align_offset = aligned_offset(data, 0, alignment);
     ctx->free_blocks[0].addr = (char *)data + align_offset;
     ctx->free_blocks[0].size = size - align_offset;
@@ -651,7 +652,7 @@ void ggml_graph_splits_add_n_va(struct ggml_graph_splits * splits, struct ggml_t
             split->src_inputs[i] = *inputs[i];
             split->dst_inputs[i] = ggml_dup_tensor(ctx, *inputs[i]);
             ggml_format_name(split->dst_inputs[i], "%s (split output)", split->src_inputs[i]->name);
-            // TODO: maybe support different layings in ggml_backend_cpy_tensor instead
+            // TODO: maybe support different layouts in ggml_backend_cpy_tensor instead
             for (int j = 0; j < GGML_MAX_DIMS; j++) {
                 split->dst_inputs[i]->nb[j] = split->src_inputs[i]->nb[j];
             }
@@ -771,10 +772,6 @@ void ggml_graph_splits_compute(struct ggml_graph_splits * splits) {
     //exit(0);
 }
 
-void ggml_graph_allocate_tensors(struct ggml_cgraph * graph, struct ggml_context * ctx) {
-    ggml_graph_allocate_tensors_n(&graph, 1, ctx);
-}
-
 static bool ggml_is_view(struct ggml_tensor * t) {
     return t->op == GGML_OP_RESHAPE || t->op == GGML_OP_VIEW || t->op == GGML_OP_TRANSPOSE ||
            t->op == GGML_OP_PERMUTE || t->op == GGML_OP_CPY;
@@ -794,56 +791,7 @@ struct ggml_tensor * view_parent(struct ggml_tensor * t) {
     }
 }
 
-#if 0
-void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs, struct ggml_context * ctx) {
-    struct ggml_buffer * buffer = ggml_get_buffer(ctx);
-    for (int i = 0; i < n_graphs; i++) {
-        struct ggml_cgraph * graph = graphs[i];
-        for (int j = 0; j < graph->n_leafs; j++) {
-            struct ggml_tensor * leaf = graph->leafs[j];
-            GGML_ASSERT(leaf->backend == buffer->backend_buffer->backend);
-            if (leaf->data == NULL) {
-                //printf("allocating leaf %s\n", leaf->name);
-                ggml_backend_buffer_tensor_alloc(buffer->backend_buffer, leaf);
-            }
-        }
-
-        for (int j = 0; j < graph->n_nodes; j++) {
-            struct ggml_tensor * node = graph->nodes[j];
-            GGML_ASSERT(node->backend == buffer->backend_buffer->backend);
-            if (node->data == NULL) {
-                if (ggml_is_view(node)) {
-                    size_t offset;
-                    memcpy(&offset, node->op_params, sizeof(size_t));
-                    switch(node->op) {
-                        case GGML_OP_VIEW:
-                            //printf("view %s (%s), offset %zu\n", node->name, ggml_op_name(node->op), offset);
-                            node->data = (char *) node->src[0]->data + offset;
-                            break;
-                        case GGML_OP_RESHAPE:
-                        case GGML_OP_TRANSPOSE:
-                        case GGML_OP_PERMUTE:
-                            node->data = node->src[0]->data;
-                            break;
-                        case GGML_OP_CPY:
-                            node->data = node->src[1]->data;
-                            break;
-                        default:
-                            GGML_ASSERT(!"unknown view op");
-                            break;
-                    }
-                } else {
-                    //printf("allocating tensor %s\n", node->name);
-                    ggml_backend_buffer_tensor_alloc(buffer->backend_buffer, node);
-                }
-            }
-        }
-    }
-    //printf("\n\n\n");
-}
-#else
-
-void allocate_node(struct ggml_buffer * buffer, struct ggml_tensor * node) {
+static void allocate_node(struct ggml_buffer * buffer, struct ggml_tensor * node) {
     if (node->data == NULL) {
         if (ggml_is_view(node)) {
             size_t offset;
@@ -865,7 +813,6 @@ void allocate_node(struct ggml_buffer * buffer, struct ggml_tensor * node) {
                     break;
             }
         } else {
-            //printf("allocating tensor %s\n", node->name);
             // see if we can reuse a parent's buffer (inplace)
             for (int i = 0; i < GGML_MAX_SRC; i++) {
                 struct ggml_tensor * parent = node->src[i];
@@ -897,7 +844,11 @@ void allocate_node(struct ggml_buffer * buffer, struct ggml_tensor * node) {
     }
 }
 
-void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs, struct ggml_context * ctx) {
+static void ggml_graph_allocate_tensors_n(
+    struct ggml_cgraph ** graphs, int n_graphs,
+    struct ggml_tensor *** inputs, struct ggml_tensor *** outputs,
+    struct ggml_context * ctx) {
+
     struct ggml_buffer * buffer = ggml_get_buffer(ctx);
 
     // reset counters
@@ -922,6 +873,7 @@ void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs, s
         struct ggml_cgraph * gf = graphs[g];
         for (int i = 0; i < gf->n_nodes; i++) {
             struct ggml_tensor * node = gf->nodes[i];
+
             if (ggml_is_view(node)) {
                 struct ggml_tensor * ancestor = node;
                 do {
@@ -929,19 +881,13 @@ void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs, s
                 } while (ggml_is_view(ancestor));
                 ancestor->n_views += 1;
             }
+
             for (int j = 0; j < GGML_MAX_SRC; j++) {
                 struct ggml_tensor * parent = node->src[j];
                 if (parent == NULL) {
                     break;
                 }
                 parent->n_children += 1;
-                if (ggml_is_view(parent)) {
-                    struct ggml_tensor * ancestor = parent;
-                    do {
-                        ancestor = view_parent(ancestor);
-                    } while (ggml_is_view(ancestor));
-                    ancestor->n_views += 1;
-                }
             }
         }
     }
@@ -949,9 +895,16 @@ void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs, s
     // allocate tensors
     for (int g = 0; g < n_graphs; g++) {
         struct ggml_cgraph * gf = graphs[g];
+        AT_PRINTF("####### graph %d/%d\n", g, n_graphs);
+        if (inputs != NULL && inputs[g] != NULL) {
+            for (int i = 0; inputs[g][i] != NULL; i++) {
+                struct ggml_tensor * input = inputs[g][i];
+                AT_PRINTF("input: %s\n", input->name);
+                allocate_node(buffer, input);
+            }
+        }
         for (int i = 0; i < gf->n_nodes; i++) {
             struct ggml_tensor * node = gf->nodes[i];
-            bool is_view = ggml_is_view(node);
 
             // allocate parents (leafs)
             for (int j = 0; j < GGML_MAX_SRC; j++) {
@@ -959,19 +912,7 @@ void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs, s
                 if (parent == NULL) {
                     break;
                 }
-                if (parent->freed) {
-                    printf("!!!!!! tensor %s used after free\n", parent->name);
-                }
-                if (ggml_is_view(parent)) {
-                    struct ggml_tensor * ancestor = parent;
-                    do {
-                        ancestor = view_parent(ancestor);
-                    } while (ggml_is_view(ancestor));
-                    if (ancestor->freed) {
-                        printf("!!!!!! tensor %s used after free (as view %s)\n", ancestor->name, parent->name);
-                    }
-                    allocate_node(buffer, ancestor);
-                }
+                GGML_ASSERT(!parent->freed && "tensor used after free");
                 allocate_node(buffer, parent);
             }
 
@@ -998,6 +939,9 @@ void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs, s
                     break;
                 }
                 parent->n_children -= 1;
+
+                //AT_PRINTF("parent %s: %d children, %d views\n", parent->name, parent->n_children, parent->n_views);
+
                 if (parent->n_children == 0 && parent->n_views == 0) {
                     if (ggml_is_view(parent)) {
                         struct ggml_tensor * ancestor = parent;
@@ -1005,34 +949,36 @@ void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs, s
                             ancestor = view_parent(ancestor);
                         } while (ggml_is_view(ancestor));
                         ancestor->n_views -= 1;
+                        AT_PRINTF("ancestor %s: %d children, %d views\n", ancestor->name, ancestor->n_children, ancestor->n_views);
                         if (ancestor->n_views == 0 && ancestor->n_children == 0 && ancestor->data != node->data) {
+                            //AT_PRINTF("free1\n");
                             ggml_backend_buffer_tensor_free(buffer->backend_buffer, ancestor);
                         }
                     }
                     else {
                         if (parent->data != node->data) {
+                            //AT_PRINTF("free2\n");
                             ggml_backend_buffer_tensor_free(buffer->backend_buffer, parent);
                         }
                     }
                 }
             }
 
-            if (is_view) {
-                struct ggml_tensor * ancestor = node;
-                do {
-                    ancestor = view_parent(ancestor);
-                } while (ggml_is_view(ancestor));
-                ancestor->n_views -= 1;
-                if (ancestor->n_views == 0 && ancestor->n_children == 0) {
-                    ggml_backend_buffer_tensor_free(buffer->backend_buffer, ancestor);
-                }
-            }
-
             AT_PRINTF("\n");
+        }
+        if (outputs != NULL && outputs[g] != NULL) {
+            for (int i = 0; outputs[g][i] != NULL; i++) {
+                struct ggml_tensor * output = outputs[g][i];
+                AT_PRINTF("output: %s\n", output->name);
+                ggml_backend_buffer_tensor_free(buffer->backend_buffer, output);
+            }
         }
     }
 }
-#endif
+
+void ggml_graph_allocate_tensors(struct ggml_cgraph * graph, struct ggml_context * ctx) {
+    ggml_graph_allocate_tensors_n(&graph, 1, NULL, NULL, ctx);
+}
 
 void ggml_graph_splits_allocate_tensors(struct ggml_graph_splits * splits) {
     bool visited[GGML_MAX_SPLITS] = {false};
@@ -1041,20 +987,21 @@ void ggml_graph_splits_allocate_tensors(struct ggml_graph_splits * splits) {
             struct ggml_graph_split * split = &splits->splits[i];
             struct ggml_context * ctx = split->ctx;
             struct ggml_cgraph * backend_graphs[GGML_MAX_SPLITS];
-            int num_graphs = 0;
+            struct ggml_tensor ** graph_inputs[GGML_MAX_SPLITS];
+            struct ggml_tensor ** graph_outputs[GGML_MAX_SPLITS];
+            int n_graphs = 0;
+
             for (int j = i; j < splits->n_splits; j++) {
                 if (splits->splits[j].ctx == ctx) {
-                    backend_graphs[num_graphs] = splits->splits[j].graph;
+                    graph_inputs[n_graphs] = splits->splits[j].dst_inputs;
+                    graph_outputs[n_graphs] = j < splits->n_splits - 1 ? splits->splits[j + 1].src_inputs : NULL;
+                    backend_graphs[n_graphs] = splits->splits[j].graph;
                     visited[j] = true;
-                    num_graphs++;
-                    // TODO: need to ensure that the output tensors are never freed
-                    // maybe this can be done automatically in ggml_graph_allocate_tensors_n by assuming that n_childs == 0 => output tensor
+                    n_graphs++;
                 }
             }
-            //printf("allocating tensors for %s [%d graphs/%d splits]\n", ggml_backend_name(ggml_get_buffer(ctx)->backend_buffer->backend), num_graphs, splits->n_splits);
-            ggml_graph_allocate_tensors_n(backend_graphs, num_graphs, ctx);
+            AT_PRINTF("allocating tensors for %s [%d graphs/%d splits]\n", ggml_backend_name(ggml_get_buffer(ctx)->backend_buffer->backend), n_graphs, splits->n_splits);
+            ggml_graph_allocate_tensors_n(backend_graphs, n_graphs, graph_inputs, graph_outputs, ctx);
         }
     }
-    //printf("done allocating tensors\n");
 }
-

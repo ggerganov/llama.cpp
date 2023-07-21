@@ -155,7 +155,6 @@ extern "C" {
 
     // graph tensor allocator
     GGML_API void ggml_graph_allocate_tensors(struct ggml_cgraph * graph, struct ggml_context * ctx);
-    GGML_API void ggml_graph_allocate_tensors_n(struct ggml_cgraph ** graphs, int n_graphs, struct ggml_context * ctx);
     GGML_API void ggml_graph_splits_allocate_tensors(struct ggml_graph_splits * splits);
 
 #ifdef  __cplusplus

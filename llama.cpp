@@ -1390,10 +1390,10 @@ static ggml_graph_splits llama_build_graph(
                 ggml_set_name(cur, "ffn_norm");
             }
 
-            struct ggml_tensor * tmp = ggml_mul_mat(ctx_l,
+            struct ggml_tensor * rw3 = ggml_mul_mat(ctx_l,
                     model.layers[il].w3,
                     cur);
-            ggml_set_name(tmp, "result_w3");
+            ggml_set_name(rw3, "result_w3");
 
             cur = ggml_mul_mat(ctx_l,
                     model.layers[il].w1,
@@ -1404,7 +1404,7 @@ static ggml_graph_splits llama_build_graph(
             cur = ggml_silu(ctx_l, cur);
             ggml_set_name(cur, "silu");
 
-            cur = ggml_mul(ctx_l, cur, tmp);
+            cur = ggml_mul(ctx_l, cur, rw3);
             ggml_set_name(cur, "silu_x_result_w3");
 
             cur = ggml_mul_mat(ctx_l,
@@ -1534,8 +1534,7 @@ static bool llama_eval_internal(
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
     n_threads = N >= 32 && ggml_cpu_has_blas() ? 1 : n_threads;
-    // TODO: fix this - probably should be set during the model creation
-    // ggml_backend_cpu_set_n_threads(const_cast<ggml_backend*>(model.backend_cpu), n_threads);
+    ggml_backend_cpu_set_n_threads(const_cast<ggml_backend*>(model.backend_cpu), n_threads);
 
     struct ggml_graph_splits splits = llama_build_graph(lctx, N, n_past, embd_input);
 
