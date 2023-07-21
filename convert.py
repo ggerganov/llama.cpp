@@ -231,7 +231,7 @@ class SentencePieceVocab:
     def sentencepiece_tokens(self) -> Iterable[Tuple[bytes, float]]:
         tokenizer = self.sentencepiece_tokenizer
         for i in range(tokenizer.vocab_size()):
-            # TODO: How do we want to support is_unknown, is_control, is_byte and is_unused(i)?
+            # TODO: How do we want to support is_unknown, is_control, is_byte and is_unused?
             piece = tokenizer.id_to_piece(i)
             text: bytes = piece.encode("utf-8")
 
