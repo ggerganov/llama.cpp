@@ -1035,10 +1035,11 @@ void ggml_metal_graph_compute(
                             const int n_dims = ((int32_t *) dst->op_params)[1];
                             const int mode   = ((int32_t *) dst->op_params)[2];
 
-                            float freq_base;
-                            float freq_scale;
+                            float freq_base, freq_scale, ntk_factor, ext_factor;
                             memcpy(&freq_base,  (int32_t *) dst->op_params + 4, sizeof(float));
                             memcpy(&freq_scale, (int32_t *) dst->op_params + 5, sizeof(float));
+                            memcpy(&ntk_factor, (int32_t *) dst->op_params + 6, sizeof(float));
+                            memcpy(&ext_factor, (int32_t *) dst->op_params + 7, sizeof(float));
 
                             [encoder setComputePipelineState:ctx->pipeline_rope];
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
@@ -1064,6 +1065,8 @@ void ggml_metal_graph_compute(
                             [encoder setBytes:&mode    length:sizeof(     int) atIndex:20];
                             [encoder setBytes:&freq_base  length:sizeof(float) atIndex:21];
                             [encoder setBytes:&freq_scale length:sizeof(float) atIndex:22];
+                            [encoder setBytes:&ntk_factor length:sizeof(float) atIndex:23];
+                            [encoder setBytes:&ext_factor length:sizeof(float) atIndex:24];
 
                             [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                         } break;
