@@ -586,7 +586,7 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     lparams.n_batch      = params.n_batch;
     lparams.n_gpu_layers = params.n_gpu_layers;
     lparams.main_gpu     = params.main_gpu;
-    memcpy(lparams.tensor_split, params.tensor_split, LLAMA_MAX_DEVICES*sizeof(float));
+    lparams.tensor_split = params.tensor_split;
     lparams.low_vram     = params.low_vram;
     lparams.seed         = params.seed;
     lparams.f16_kv       = params.memory_f16;
