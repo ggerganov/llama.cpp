@@ -2442,8 +2442,7 @@ void llama_sample_frequency_and_presence_penalties(struct llama_context * ctx, l
 
 void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * candidates, const struct llama_grammar * grammar) {
     assert(ctx);
-    const int64_t     t_start_sample_us  = ggml_time_us();
-    const llama_token eos                = llama_token_eos();
+    const int64_t t_start_sample_us = ggml_time_us();
 
     bool allow_eos = false;
     for (const auto & stack : grammar->stacks) {
@@ -2453,8 +2452,10 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
         }
     }
 
-    std::vector<std::vector<uint32_t>>   decoded_candidates;
-    std::vector<llama_grammar_candidate> grammar_candidates;
+    const llama_token eos = llama_token_eos();
+
+    std::vector<std::vector<uint32_t>>   candidates_decoded;
+    std::vector<llama_grammar_candidate> candidates_grammar;
 
     for (size_t i = 0; i < candidates->size; ++i) {
         const llama_token id  = candidates->data[i].id;
@@ -2466,14 +2467,14 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
         } else if (*str == 0) {
             candidates->data[i].logit = -INFINITY;
         } else {
-            decoded_candidates.push_back(decode_utf8(str));
-            grammar_candidates.push_back({ i, decoded_candidates.back().data() });
+            candidates_decoded.push_back(decode_utf8(str));
+            candidates_grammar.push_back({ i, candidates_decoded.back().data() });
         }
     }
 
-    auto rejects =
-        llama_grammar_reject_candidates(grammar->rules, grammar->stacks, grammar_candidates);
-    for (auto reject : rejects) {
+    const auto rejects =
+        llama_grammar_reject_candidates(grammar->rules, grammar->stacks, candidates_grammar);
+    for (auto & reject : rejects) {
         candidates->data[reject.index].logit = -INFINITY;
     }
 
