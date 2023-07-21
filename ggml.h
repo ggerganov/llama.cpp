@@ -388,7 +388,7 @@ extern "C" {
         GGML_OP_CROSS_ENTROPY_LOSS_BACK,
 
         GGML_OP_BARRIER, // Any operation between two barriers can be issued concurrently.
-        
+
         GGML_OP_COUNT,
     };
 
@@ -1367,7 +1367,7 @@ extern "C" {
 
     //sort all nodes in a graph to find operations that can be issued concurrently, insert memory barrier if necessary
     GGML_API void ggml_graph_find_concurrency(struct ggml_context * ctx, struct ggml_cgraph * cgraph);
-    
+
     // print info and performance information for the graph
     GGML_API void ggml_graph_print(const struct ggml_cgraph * cgraph);
 
