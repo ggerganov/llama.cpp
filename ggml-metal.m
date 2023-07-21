@@ -364,7 +364,7 @@ void ggml_metal_graph_compute(
     size_t offs_src1 = 0;
     size_t offs_dst  = 0;
 
-    id<MTLComputeCommandEncoder> encoder = nil;
+    id<MTLComputeCommandEncoder> encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
 
     for (int i = 0; i < gf->n_nodes; ++i) {
         metal_printf("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
@@ -434,10 +434,14 @@ void ggml_metal_graph_compute(
                 {
                     // noop
                 } break;
+            case GGML_OP_BARRIER:
+                {
+                    [encoder memoryBarrierWithScope:MTLBarrierScopeBuffers | MTLBarrierScopeRenderTargets | MTLBarrierScopeTextures];
+                } break;
             case GGML_OP_ADD:
                 {
                     if (encoder == nil) {
-                        encoder = [command_buffer computeCommandEncoder];
+                        encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
                     }
 
                     [encoder setComputePipelineState:ctx->pipeline_add];
@@ -452,7 +456,7 @@ void ggml_metal_graph_compute(
             case GGML_OP_MUL:
                 {
                     if (encoder == nil) {
-                        encoder = [command_buffer computeCommandEncoder];
+                        encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
                     }
 
                     if (ggml_nelements(src1) == ne10) {
@@ -473,7 +477,7 @@ void ggml_metal_graph_compute(
             case GGML_OP_SCALE:
                 {
                     if (encoder == nil) {
-                        encoder = [command_buffer computeCommandEncoder];
+                        encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
                     }
 
                     const float scale = *(const float *) src1->data;
@@ -490,7 +494,7 @@ void ggml_metal_graph_compute(
             case GGML_OP_SILU:
                 {
                     if (encoder == nil) {
-                        encoder = [command_buffer computeCommandEncoder];
+                        encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
                     }
 
                     [encoder setComputePipelineState:ctx->pipeline_silu];
@@ -504,7 +508,7 @@ void ggml_metal_graph_compute(
             case GGML_OP_RELU:
                 {
                     if (encoder == nil) {
-                        encoder = [command_buffer computeCommandEncoder];
+                        encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
                     }
 
                     [encoder setComputePipelineState:ctx->pipeline_relu];
@@ -518,7 +522,7 @@ void ggml_metal_graph_compute(
             case GGML_OP_GELU:
             {
                     if (encoder == nil) {
-                        encoder = [command_buffer computeCommandEncoder];
+                        encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
                     }
 
                     [encoder setComputePipelineState:ctx->pipeline_gelu];
@@ -532,7 +536,7 @@ void ggml_metal_graph_compute(
             case GGML_OP_SOFT_MAX:
                 {
                     if (encoder == nil) {
-                        encoder = [command_buffer computeCommandEncoder];
+                        encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
                     }
 
                     const int nth = 32;
@@ -550,7 +554,7 @@ void ggml_metal_graph_compute(
             case GGML_OP_DIAG_MASK_INF:
                 {
                     if (encoder == nil) {
-                        encoder = [command_buffer computeCommandEncoder];
+                        encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
                     }
 
                     const int n_past = ((int32_t *)(src1->data))[0];
@@ -613,7 +617,7 @@ void ggml_metal_graph_compute(
                         }
                     } else {
                         if (encoder == nil) {
-                            encoder = [command_buffer computeCommandEncoder];
+                            encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
                         }
 
                         int nth0 = 32;
@@ -740,7 +744,7 @@ void ggml_metal_graph_compute(
             case GGML_OP_GET_ROWS:
                 {
                     if (encoder == nil) {
-                        encoder = [command_buffer computeCommandEncoder];
+                        encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
                     }
 
                     switch (src0->type) {
@@ -769,7 +773,7 @@ void ggml_metal_graph_compute(
             case GGML_OP_RMS_NORM:
                 {
                     if (encoder == nil) {
-                        encoder = [command_buffer computeCommandEncoder];
+                        encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
                     }
 
                     const float eps = 1e-6f;
@@ -791,7 +795,7 @@ void ggml_metal_graph_compute(
             case GGML_OP_NORM:
                 {
                     if (encoder == nil) {
-                        encoder = [command_buffer computeCommandEncoder];
+                        encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
                     }
 
                     const float eps = 1e-5f;
@@ -813,7 +817,7 @@ void ggml_metal_graph_compute(
             case GGML_OP_ALIBI:
                 {
                     if (encoder == nil) {
-                        encoder = [command_buffer computeCommandEncoder];
+                        encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
                     }
 
                     GGML_ASSERT((src0t == GGML_TYPE_F32));
@@ -855,7 +859,7 @@ void ggml_metal_graph_compute(
             case GGML_OP_ROPE:
                 {
                     if (encoder == nil) {
-                        encoder = [command_buffer computeCommandEncoder];
+                        encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
                     }
 
                     const int n_dims = ((int32_t *) src1->data)[1];
@@ -898,7 +902,7 @@ void ggml_metal_graph_compute(
             case GGML_OP_CPY:
                 {
                     if (encoder == nil) {
-                        encoder = [command_buffer computeCommandEncoder];
+                        encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
                     }
 
                     const int nth = 32;
