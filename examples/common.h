@@ -55,7 +55,6 @@ struct gpt_params {
     // https://arxiv.org/abs/2306.17806
     std::string cfg_negative_prompt;       // string to help guidance
     float       cfg_scale         = 1.f;   // How strong is guidance
-    float       cfg_smooth_factor = 1.f;   // Smooth factor between old and new logits
 
     std::string model             = "models/7B/ggml-model.bin"; // model path
     std::string model_alias       = "unknown"; // model alias
