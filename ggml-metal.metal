@@ -1246,7 +1246,7 @@ kernel void kernel_mul_mat_q2_K_f32(
             yl[i+24] = y4[i+96]; sumy[3] += yl[i+24];
         }
 
-        device const uint8_t  * sc = (device const uint8_t  *)x[ib].scales + is;
+        device const uint8_t  * sc = (device const uint8_t  *)x[ib].scales + 8*im + is;
         device const uint16_t * qs = (device const uint16_t *)x[ib].qs + 16 * im + 4 * ir;
         device const half     * dh = &x[ib].d;
 
