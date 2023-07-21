@@ -387,6 +387,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.antiprompt.push_back(argv[i]);
         } else if (arg == "--perplexity") {
             params.perplexity = true;
+        } else if (arg == "--perplexity-lines") {
+            params.perplexity_lines = true;
         } else if (arg == "--ignore-eos") {
             params.logit_bias[llama_token_eos()] = -INFINITY;
         } else if (arg == "--no-penalize-nl") {
@@ -512,7 +514,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "                        not recommended: doubles context memory required and no measurable increase in quality\n");
     fprintf(stderr, "  --temp N              temperature (default: %.1f)\n", (double)params.temp);
     fprintf(stderr, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
-    fprintf(stderr, "  --perplexity          compute perplexity over the prompt\n");
+    fprintf(stderr, "  --perplexity          compute perplexity over each ctx window of the prompt\n");
+    fprintf(stderr, "  --perplexity-lines    compute perplexity over each line of the prompt\n");
     fprintf(stderr, "  --keep                number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
     fprintf(stderr, "  --chunks N            max number of chunks to process (default: %d, -1 = all)\n", params.n_chunks);
     if (llama_mlock_supported()) {
