@@ -228,7 +228,7 @@ else
 	NVCCFLAGS += -DK_QUANTS_PER_ITERATION=2
 endif
 ifdef LLAMA_CUDA_CCBIN
-    NVCCFLAGS += -ccbin $(LLAMA_CUDA_CCBIN)
+	NVCCFLAGS += -ccbin $(LLAMA_CUDA_CCBIN)
 endif
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -Wno-pedantic -c $< -o $@
