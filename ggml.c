@@ -12379,7 +12379,7 @@ static void ggml_compute_forward_rope_back_f32(
         const struct ggml_tensor * src1,
         struct ggml_tensor * dst) {
     assert(src1->type == GGML_TYPE_I32);
-    assert(ggml_nelements(src1) == 3);
+    assert(ggml_nelements(src1) == 4);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
