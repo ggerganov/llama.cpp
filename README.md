@@ -633,6 +633,12 @@ python3 convert.py pygmalion-7b/ --outtype q4_1
 - The LLaMA models are officially distributed by Facebook and will **never** be provided through this repository.
 - Refer to [Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to request access to the model data.
 
+### Obtaining the Facebook LLaMA 2 model
+
+- **Under no circumstances should IPFS, magnet links, or any other links to model downloads be shared anywhere in this repository, including in issues, discussions, or pull requests. They will be immediately deleted.**
+- The LLaMA 2 models are officially distributed by Facebook and will **never** be provided through this repository.
+- Refer to [Facebook's LLaMA download page](https://ai.meta.com/resources/models-and-libraries/llama-downloads/) if you want to access the model data.
+
 ### Verifying the model files
 
 Please verify the [sha256 checksums](SHA256SUMS) of all downloaded model files to confirm that you have the correct model data files before creating an issue relating to your model files.
