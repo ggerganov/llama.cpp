@@ -1805,7 +1805,8 @@ struct llama_tokenizer {
         size_t offs = 0;
         while (offs < text.size()) {
             llama_sp_symbol sym;
-            size_t char_len = std::min(text.size() - offs, utf8_len(text[offs]));
+            assert(utf8_len(text[offs]) <= text.size() - offs);
+            size_t char_len = utf8_len(text[offs]);
             sym.text = text.c_str() + offs;
             sym.n = char_len;
             offs += char_len;
