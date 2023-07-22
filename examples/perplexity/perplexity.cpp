@@ -180,9 +180,9 @@ void perplexity_lines(llama_context * ctx, const gpt_params & params) {
             nllline += -std::log(prob);
             ++countline;
         }
-
-		nll += nllline;
-		counttotal += countline;
+        
+        nll += nllline;
+        counttotal += countline;
 
         // perplexity is e^(average negative log-likelihood)
         printf("%lu\t%.8lf\t%.8lf\n", i + 1, std::exp(nllline/countline), std::exp(nll / counttotal) );
@@ -245,7 +245,7 @@ int main(int argc, char ** argv) {
     } else {
         perplexity(ctx, params);
     }
-    
+
     llama_print_timings(ctx);
     llama_free(ctx);
     llama_free_model(model);
