@@ -807,6 +807,8 @@ def show_new_gui():
             if index == "Use CLBlast":
                 gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
                 quick_gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
+                if gpu_choice_var.get()=="All":
+                    gpu_choice_var.set("1")
             elif index == "Use CuBLAS":
                 CUDA_gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
                 CUDA_quick_gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
@@ -1040,21 +1042,22 @@ def show_new_gui():
             args.hordeconfig = None if usehorde_var.get() == 0 else [horde_name_var.get(), horde_gen_var.get(), horde_context_var.get(), horde_apikey_var.get(), horde_workername_var.get()]
 
     def import_vars(dict):
-        threads_var.set(dict["threads"])
-        usemlock.set(1 if dict["usemlock"] else 0)
-        debugmode.set(1 if dict["debugmode"] else 0)
-        launchbrowser.set(1 if dict["launch"] else 0)
-        highpriority.set(1 if dict["highpriority"] else 0)
-        disablemmap.set(1 if dict["nommap"] else 0)
-        psutil.set(1 if dict["psutil_set_threads"] else 0)
-        stream.set(1 if dict["stream"] else 0)
-        smartcontext.set(1 if dict["smartcontext"] else 0)
-        unbantokens.set(1 if dict["unbantokens"] else 0)
+        if "threads" in dict:
+            threads_var.set(dict["threads"])
+        usemlock.set(1 if "usemlock" in dict and dict["usemlock"] else 0)
+        debugmode.set(1 if "debugmode" in dict and dict["debugmode"] else 0)
+        launchbrowser.set(1 if "launch" in dict and dict["launch"] else 0)
+        highpriority.set(1 if "highpriority" in dict and dict["highpriority"] else 0)
+        disablemmap.set(1 if "nommap" in dict and dict["nommap"] else 0)
+        psutil.set(1 if "psutil_set_threads" in dict and dict["psutil_set_threads"] else 0)
+        stream.set(1 if "stream" in dict and dict["stream"] else 0)
+        smartcontext.set(1 if "smartcontext" in dict and dict["smartcontext"] else 0)
+        unbantokens.set(1 if "unbantokens" in dict and dict["unbantokens"] else 0)
         runopts_var.set(runopts[0])
-        if dict["useclblast"]:
+        if "useclblast" in dict and dict["useclblast"]:
             runopts_var.set(runopts[1])
             gpu_choice_var.set(str(["0 0", "1 0", "0 1"].index(str(dict["useclblast"][0]) + " " + str(dict["useclblast"][1])) + 1))
-        elif dict["usecublas"]:
+        elif "usecublas" in dict and dict["usecublas"]:
             runopts_var.set(runopts[2])
             if len(dict["usecublas"])==1:
                 lowvram_var.set(1 if dict["usecublas"][0]=="lowvram" else 0)
@@ -1065,24 +1068,24 @@ def show_new_gui():
                     if str(g) in dict["usecublas"]:
                         gpu_choice_var.set(str(g+1))
                         break
-        if dict["gpulayers"]:
+        if "gpulayers" in dict and dict["gpulayers"]:
             gpulayers_var.set(dict["gpulayers"])
 
-        if dict["noblas"] and dict["noavx2"]:
+        if  "noavx2" in dict and "noblas" in dict and dict["noblas"] and dict["noavx2"]:
             runopts_var.set(runopts[5])
-        elif dict["noavx2"]:
-            runopts_var.set(runopts[5])
-        elif dict["noblas"]:
+        elif "noavx2" in dict and dict["noavx2"]:
+            runopts_var.set(runopts[4])
+        elif "noblas" in dict and dict["noblas"]:
             runopts_var.set(runopts[3])
-        if dict["blasthreads"]:
+        if "blasthreads" in dict and dict["blasthreads"]:
             blas_threads_var.set(str(dict["blasthreads"]))
         else:
             blas_threads_var.set("")
 
-        if dict["contextsize"]:
+        if "contextsize" in dict and dict["contextsize"]:
             context_var.set(contextsize_text.index(str(dict["contextsize"])))
 
-        if dict["ropeconfig"] and len(dict["ropeconfig"])>1:
+        if "ropeconfig" in dict and dict["ropeconfig"] and len(dict["ropeconfig"])>1:
             if dict["ropeconfig"][0]>0:
                 customrope_var.set(1)
                 customrope_scale.set(str(dict["ropeconfig"][0]))
@@ -1090,34 +1093,34 @@ def show_new_gui():
             else:
                 customrope_var.set(0)
 
-        if dict["blasbatchsize"]:
+        if "blasbatchsize" in dict and dict["blasbatchsize"]:
             blas_size_var.set(blasbatchsize_values.index(str(dict["blasbatchsize"])))
-        if dict["forceversion"]:
+        if "forceversion" in dict and dict["forceversion"]:
             version_var.set(str(dict["forceversion"]))
 
-        if dict["mirostat"] and len(dict["mirostat"])>1:
+        if "mirostat" in dict and dict["mirostat"] and len(dict["mirostat"])>1:
             usemirostat.set(0 if str(dict["mirostat"][0])=="0" else 1)
             mirostat_var.set(str(dict["mirostat"][0]))
             mirostat_tau.set(str(dict["mirostat"][1]))
             mirostat_eta.set(str(dict["mirostat"][2]))
 
-        if dict["model_param"]:
+        if "model_param" in dict and dict["model_param"]:
             model_var.set(dict["model_param"])
 
-        if dict["lora"]:
+        if "lora" in dict and dict["lora"]:
             if len(dict["lora"]) > 1:
                 lora_var.set(dict["lora"][0])
                 lora_base_var.set(dict["lora"][1])
             else:
                 lora_var.set(dict["lora"][0])
 
-        if dict["port_param"]:
+        if "port_param" in dict and dict["port_param"]:
             port_var.set(dict["port_param"])
 
-        if dict["host"]:
+        if "host" in dict and dict["host"]:
             host_var.set(dict["host"])
 
-        if dict["hordeconfig"] and len(dict["hordeconfig"]) > 1:
+        if "hordeconfig" in dict and dict["hordeconfig"] and len(dict["hordeconfig"]) > 1:
             horde_name_var.set(dict["hordeconfig"][0])
             horde_gen_var.set(dict["hordeconfig"][1])
             horde_context_var.set(dict["hordeconfig"][2])
