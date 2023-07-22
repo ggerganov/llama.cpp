@@ -180,7 +180,7 @@ void perplexity_lines(llama_context * ctx, const gpt_params & params) {
             nllline += -std::log(prob);
             ++countline;
         }
-        
+
         nll += nllline;
         counttotal += countline;
 
