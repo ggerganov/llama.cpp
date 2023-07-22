@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <ctime>
+#include <sstream>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -124,17 +125,11 @@ void perplexity_lines(llama_context * ctx, const gpt_params & params) {
     // Calculates perplexity over each line of the prompt
 
     std::vector<std::string> prompt_lines;
+    std::istringstream strstream(params.prompt);
+    std::string line;
 
-    size_t pos=0;
-    while( pos < params.prompt.size() ) {
-        std::string line;
-        while( true ) {
-            if( params.prompt[pos] == '\n' || pos == params.prompt.size() )
-                break;
-            line += params.prompt[pos++];
-        }
-        pos++;
-        prompt_lines.push_back( line );
+    while (std::getline(strstream,line,'\n')) {
+        prompt_lines.push_back(line);
     }
 
     const int n_vocab = llama_n_vocab(ctx);
@@ -245,7 +240,7 @@ int main(int argc, char ** argv) {
                 params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
     }
 
-    if( params.perplexity_lines ) {
+    if (params.perplexity_lines) {
         perplexity_lines(ctx, params);
     } else {
         perplexity(ctx, params);
