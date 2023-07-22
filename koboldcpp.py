@@ -1370,7 +1370,7 @@ def run_horde_worker(args, api_key, worker_name):
 
     current_id = None
     current_payload = None
-    print("Embedded Horde Worker '"+worker_name+"' Starting...")
+    print("Embedded Horde Worker '"+worker_name+"' Starting...\n(To use your own KAI Bridge/Scribe worker instead, don't set your API key)")
     BRIDGE_AGENT = f"KoboldCppEmbedWorker:1:https://github.com/LostRuins/koboldcpp"
     cluster = "https://aihorde.net"
     while exitcounter < 10:
