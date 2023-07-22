@@ -8,7 +8,7 @@
 #include <map>
 #include <vector>
 
-std::string detokenize(llama_context * ctx, llama_token * tokens, int count) {
+std::string detokenize(llama_context * ctx, const llama_token * tokens, int count) {
     std::string result;
     for (int i = 0; i < count; ++i) {
         result += llama_token_to_str(ctx, tokens[i]);
@@ -67,31 +67,34 @@ int main(int argc, char **argv) {
 
     for (int i = 0; i < n_vocab; ++i) {
         const char * forward = llama_token_to_str(ctx, i);
-        llama_token tokens[strlen(forward)];
-        auto n = llama_tokenize(ctx, forward, tokens, strlen(forward), false);
+        std::vector<llama_token> tokens(strlen(forward));
+        auto n = llama_tokenize(ctx, forward, tokens.data(), strlen(forward), false);
         if (n == 1) {
             if (i != tokens[0]) {
                 const char* backward = llama_token_to_str(ctx, tokens[0]);
-                fprintf(stderr, "%s : error: token %d is string %s but tokenize() returns token %d %s\n", __func__, i, forward, tokens[0], backward);
+                fprintf(stderr, "%s : error: token %d is string %s but tokenize() returns token %d %s\n", 
+                    __func__, i, forward, tokens[0], backward);
             }
         } else {
             if (i <= 258) {
-                fprintf(stderr, "%s : info: token %d is string %s and tokenize() returns tokens %s\n", __func__, i, forward, detokenize(ctx, tokens, n).c_str());
+                fprintf(stderr, "%s : info: token %d is string %s and tokenize() returns tokens %s\n", 
+                    __func__, i, forward, detokenize(ctx, tokens.data(), n).c_str());
             } else {
-                fprintf(stderr, "%s : error: token %d is string %s but tokenize() returns tokens %s\n", __func__, i, forward, detokenize(ctx, tokens, n).c_str());
+                fprintf(stderr, "%s : error: token %d is string %s but tokenize() returns tokens %s\n", 
+                    __func__, i, forward, detokenize(ctx, tokens.data(), n).c_str());
             }
         }
     }
 
-    std::wstring string_to_convert;
     std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> converter;
     for (wchar_t ch = 0x0000; ch < 0xffff; ++ch) {
         std::wstring wstr(1, ch);
         std::string str = converter.to_bytes(wstr);
-        llama_token tokens[strlen(str.c_str())];
-        auto n = llama_tokenize(ctx, str.c_str(), tokens, str.length(), false);
+        std::vector<llama_token> tokens(strlen(str.c_str()));
+        auto n = llama_tokenize(ctx, str.c_str(), tokens.data(), str.length(), false);
         if (n == 1) {
-            fprintf(stderr, "%s : info: %s tokenized to %d \n", __func__, str.c_str(), tokens[0]);
+            fprintf(stderr, "%s : info: %s tokenized to %d \n", 
+                __func__, str.c_str(), tokens[0]);
         }
     }
 
