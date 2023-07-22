@@ -380,7 +380,7 @@ static void ggml_vk_queue_cleanup(vk_queue& q) {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_queue_cleanup()" << std::endl;
 #endif
-    q.queue.waitIdle();
+    // Requires semaphores and command buffers to be done
 
     q.semaphore_idx = 0;
 
@@ -702,7 +702,7 @@ void ggml_vk_init(void) {
 
 static vk_pipeline* ggml_vk_get_to_fp32(ggml_type type) {
 #ifdef VK_DEBUG
-    std::cerr << "ggml_vk_get_to_fp32_vk()" << std::endl;
+    std::cerr << "ggml_vk_get_to_fp32()" << std::endl;
 #endif
     switch (type) {
         case GGML_TYPE_Q4_0:
@@ -723,6 +723,9 @@ static vk_pipeline* ggml_vk_get_to_fp32(ggml_type type) {
 }
 
 static vk_pipeline* ggml_vk_get_dequantize_mul_mat_vec(ggml_type type) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_get_dequantize_mul_mat_vec()" << std::endl;
+#endif
     switch (type) {
         case GGML_TYPE_Q4_0:
             return &vk_pipeline_dequant_mul_mat_vec_q4_0;
@@ -828,6 +831,9 @@ static void ggml_vk_pool_free(vk_buffer& buffer) {
 }
 
 void ggml_vk_free_data(const struct ggml_tensor* tensor) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_free_data(" << tensor << ")" << std::endl;
+#endif
     if (tensor->backend != GGML_BACKEND_GPU) {
         return;
     }
@@ -1452,7 +1458,8 @@ static void ggml_vk_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
 
     ggml_vk_submit(vk_transfer_queues[0], transfer_0_seqs, VK_NULL_HANDLE);
 
-    // cleanup waits for the queue to be done
+    vk_transfer_queues[0].queue.waitIdle();
+
     ggml_vk_queue_cleanup(vk_transfer_queues[0]);
     ggml_vk_queue_cleanup(vk_transfer_queues[1]);
     ggml_vk_queue_cleanup(vk_compute_queue);
@@ -1605,7 +1612,8 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
 
     ggml_vk_submit(vk_transfer_queues[0], transfer_0_seqs, VK_NULL_HANDLE);
 
-    // cleanup waits for the queue to be done
+    vk_transfer_queues[0].queue.waitIdle();
+
     ggml_vk_queue_cleanup(vk_transfer_queues[0]);
     ggml_vk_queue_cleanup(vk_transfer_queues[1]);
     ggml_vk_queue_cleanup(vk_compute_queue);
@@ -1781,7 +1789,8 @@ static void ggml_vk_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
 
     ggml_vk_submit(vk_transfer_queues[0], transfer_0_seqs, VK_NULL_HANDLE);
 
-    // cleanup waits for the queue to be done
+    vk_transfer_queues[0].queue.waitIdle();
+
     ggml_vk_queue_cleanup(vk_transfer_queues[0]);
     ggml_vk_queue_cleanup(vk_transfer_queues[1]);
     ggml_vk_queue_cleanup(vk_compute_queue);
@@ -2000,7 +2009,8 @@ static void ggml_vk_mul_f32(const ggml_tensor * src0, const ggml_tensor * src1, 
         }
     }
 
-    // cleanup waits for the queue to be done
+    vk_transfer_queues[1].queue.waitIdle();
+
     ggml_vk_queue_cleanup(vk_transfer_queues[0]);
     ggml_vk_queue_cleanup(vk_transfer_queues[1]);
     ggml_vk_queue_cleanup(vk_compute_queue);
