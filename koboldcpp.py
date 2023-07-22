@@ -286,7 +286,7 @@ defaultport = 5001
 KcppVersion = "1.36"
 showdebug = True
 showsamplerwarning = True
-exited = False
+exitcounter = 0
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
     sys_version = ""
@@ -582,7 +582,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 def RunServerMultiThreaded(addr, port, embedded_kailite = None):
-    global exited
+    global exitcounter
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind((addr, port))
@@ -596,6 +596,7 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None):
             self.start()
 
         def run(self):
+            global exitcounter
             handler = ServerRequestHandler(addr, port, embedded_kailite)
             with http.server.HTTPServer((addr, port), handler, False) as self.httpd:
                 try:
@@ -603,15 +604,16 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None):
                     self.httpd.server_bind = self.server_close = lambda self: None
                     self.httpd.serve_forever()
                 except (KeyboardInterrupt,SystemExit):
-                    exited = True
+                    exitcounter = 999
                     self.httpd.server_close()
                     sys.exit(0)
                 finally:
-                    exited = True
+                    exitcounter = 999
                     self.httpd.server_close()
                     sys.exit(0)
         def stop(self):
-            exited = True
+            global exitcounter
+            exitcounter = 999
             self.httpd.server_close()
 
     numThreads = 6
@@ -622,7 +624,7 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None):
         try:
             time.sleep(10)
         except KeyboardInterrupt:
-            exited = True
+            exitcounter = 999
             for i in range(numThreads):
                 threadArr[i].stop()
             sys.exit(0)
@@ -1335,7 +1337,7 @@ def show_old_gui():
 #A very simple and stripped down embedded horde worker with no dependencies
 def run_horde_worker(args, api_key, worker_name):
     import urllib.request
-    global friendlymodelname, maxhordectx, maxhordelen, exited
+    global friendlymodelname, maxhordectx, maxhordelen, exitcounter
 
     def make_url_request(url, data, method='POST'):
         try:
@@ -1368,14 +1370,14 @@ def run_horde_worker(args, api_key, worker_name):
     print("Embedded Horde Worker '"+worker_name+"' Starting...")
     BRIDGE_AGENT = f"KoboldCppEmbedWorker:1:https://github.com/LostRuins/koboldcpp"
     cluster = "https://aihorde.net"
-    while not exited:
+    while exitcounter < 10:
         time.sleep(2)
         readygo = make_url_request(f'http://localhost:{args.port}/api/v1/info/version', None,'GET')
         if readygo:
             print("Embedded Horde Worker is started.")
             break
 
-    while not exited:
+    while exitcounter < 10:
         #pop new request
         gen_dict = {
             "name": worker_name,
@@ -1388,11 +1390,12 @@ def run_horde_worker(args, api_key, worker_name):
         }
         pop = make_url_request(f'{cluster}/api/v2/generate/text/pop',gen_dict)
         if not pop:
+            exitcounter += 1
             print(f"Failed to fetch job from {cluster}. Waiting 5 seconds...")
             time.sleep(5)
             continue
         if not pop["id"]:
-            print(f"Server {cluster} has no valid generations to do for us.")
+            #print(f"Server {cluster} has no valid generations to do for us.")
             time.sleep(3)
             continue
         current_id = pop['id']
@@ -1400,7 +1403,7 @@ def run_horde_worker(args, api_key, worker_name):
         print(f"Job received from {cluster} for {current_payload.get('max_length',80)} tokens and {current_payload.get('max_context_length',1024)} max context. Starting generation...")
 
         #do gen
-        while not exited:
+        while exitcounter < 10:
             current_generation = make_url_request(f'http://localhost:{args.port}/api/v1/generate', current_payload)
             if current_generation:
                 break
@@ -1410,16 +1413,22 @@ def run_horde_worker(args, api_key, worker_name):
         #submit reply
         submit_dict = {
             "id": current_id,
-            "generation": current_generation,
+            "generation": current_generation["results"][0]["text"],
+            "state": "ok"
         }
         reply = make_url_request(cluster + '/api/v2/generate/text/submit', submit_dict)
         if not reply:
-            print("Error: Job submit failed.")
+            exitcounter += 1
+            print("\nError: Job submit failed.")
         else:
-            print(f'Submitted generation to {cluster} with id {current_id} and contributed for {reply["reward"]}')
+            print(f'\nSubmitted generation to {cluster} with id {current_id} and contributed for {reply["reward"]}')
         current_id = None
         current_payload = None
         time.sleep(5)
+    if exitcounter<100:
+        print("Horde Worker Shutdown - Too many errors.")
+    else:
+        print("Horde Worker Shutdown - Server Closing.")
 
 def main(args):
     embedded_kailite = None
@@ -1546,7 +1555,7 @@ def main(args):
         except:
             print("--launch was set, but could not launch web browser automatically.")
 
-    if len(args.hordeconfig)>4:
+    if args.hordeconfig and len(args.hordeconfig)>4:
         horde_thread = threading.Thread(target=run_horde_worker,args=(args,args.hordeconfig[3],args.hordeconfig[4]))
         horde_thread.start()
 
