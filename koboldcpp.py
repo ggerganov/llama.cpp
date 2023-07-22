@@ -965,6 +965,9 @@ def show_new_gui():
             else:
                 item.grid_forget()
                 labels[idx].grid_forget()
+        if usehorde_var.get()==1 and horde_name_var.get()=="koboldcpp" and model_var.get()!="":
+            basefile = os.path.basename(model_var.get())
+            horde_name_var.set(os.path.splitext(basefile)[0])
 
     usehorde_box = makecheckbox(network_tab, "Configure for Horde", usehorde_var, 4, command=togglehorde)
     togglehorde(1,1,1)
