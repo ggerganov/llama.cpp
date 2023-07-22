@@ -106,11 +106,11 @@ static const std::map<e_model, size_t> & MEM_REQ_SCRATCH0(int n_ctx)
 {
     static std::map<e_model, size_t> k_sizes = {
         /* empirical scaling, still a guess */
-        { MODEL_3B,   ((size_t) n_ctx / 16ull + 180ull) * MB },
-        { MODEL_7B,   ((size_t) n_ctx / 16ull + 320ull) * MB },
-        { MODEL_13B,  ((size_t) n_ctx / 12ull + 460ull) * MB },
-        { MODEL_30B,  ((size_t) n_ctx / 10ull + 620ull) * MB },
-        { MODEL_65B,  ((size_t) n_ctx /  8ull + 860ull) * MB },
+        { MODEL_3B,   ((size_t) n_ctx / 11ull + 320ull) * MB },
+        { MODEL_7B,   ((size_t) n_ctx / 11ull + 440ull) * MB },
+        { MODEL_13B,  ((size_t) n_ctx / 10ull + 560ull) * MB },
+        { MODEL_30B,  ((size_t) n_ctx / 9ull + 680ull) * MB },
+        { MODEL_65B,  ((size_t) n_ctx / 8ull + 1000ull) * MB },
     };
     return k_sizes;
 }
