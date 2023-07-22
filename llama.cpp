@@ -242,6 +242,13 @@ struct llama_kv_cache {
     }
 };
 
+struct llama_trie {
+    std::unordered_map<std::string, llama_trie> map;
+};
+
+void llama_trie_insert(struct llama_trie& trie, const std::string& text, size_t offs);
+size_t llama_trie_find(const struct llama_trie& trie, const std::string& text, size_t offs);
+
 struct llama_vocab {
     using id    = int32_t;
     using token = std::string;
@@ -253,6 +260,7 @@ struct llama_vocab {
 
     std::unordered_map<token, id> token_to_id;
     std::vector<token_score> id_to_token;
+    struct llama_trie trie;
 };
 
 struct llama_model {
@@ -519,8 +527,10 @@ struct llama_file_loader {
             vocab.token_to_id[word] = i;
 
             auto & tok_score = vocab.id_to_token[i];
-            tok_score.tok = std::move(word);
+            tok_score.tok = word;
             tok_score.score = score;
+
+            llama_trie_insert(vocab.trie, word, 0);
         }
     }
     void read_tensor_metadata(llama_load_tensors_map & tensors_map) {
@@ -1794,6 +1804,28 @@ struct llama_sp_bigram {
     size_t size;
 };
 
+void llama_trie_insert(struct llama_trie& trie, const std::string& text, size_t offs) {
+    if (offs < text.size()) {
+        size_t char_len = utf8_len(text[offs]);
+        std::string key = text.substr(offs, char_len);
+        if (trie.map.find(key) == trie.map.end()) {
+            trie.map[key] = llama_trie();
+        }
+        llama_trie_insert(trie.map.at(key), text, offs + char_len);
+    }
+}
+
+size_t llama_trie_find(const struct llama_trie& trie, const std::string & text, size_t offs) {
+    if (offs < text.size()) {
+        size_t char_len = utf8_len(text[offs]);
+        std::string key = text.substr(offs, char_len);
+        if (trie.map.find(key) != trie.map.end()) {
+            return char_len + llama_trie_find(trie.map.at(key), text, offs + char_len);
+        }
+    }
+    return 0;
+}
+
 // original implementation:
 // https://github.com/ggerganov/llama.cpp/commit/074bea2eb1f1349a0118239c4152914aecaa1be4
 struct llama_tokenizer {
@@ -1805,11 +1837,14 @@ struct llama_tokenizer {
         size_t offs = 0;
         while (offs < text.size()) {
             llama_sp_symbol sym;
-            assert(utf8_len(text[offs]) <= text.size() - offs);
-            size_t char_len = utf8_len(text[offs]);
+            // size_t len = utf8_len(text[offs]);
+            size_t len = llama_trie_find(vocab_.trie, text, offs);
+            if (len == 0) {
+                len = utf8_len(text[offs]);
+            }
             sym.text = text.c_str() + offs;
-            sym.n = char_len;
-            offs += char_len;
+            sym.n = len;
+            offs += len;
             sym.prev = index - 1;
             sym.next = offs == text.size() ? -1 : index + 1;
             index++;
@@ -1854,21 +1889,36 @@ struct llama_tokenizer {
 
         for (int i = 0; i != -1; i = symbols_[i].next) {
             auto & symbol = symbols_[i];
-            auto token = vocab_.token_to_id.find(std::string(symbol.text, symbol.n));
-
-            if (token == vocab_.token_to_id.end()) {
-                // output any symbols that did not form tokens as bytes.
-                for (int j = 0; j < (int) symbol.n; ++j) {
-                    llama_vocab::id token_id = static_cast<uint8_t>(symbol.text[j]) + 3;
-                    output.push_back(token_id);
-                }
-            } else {
-                output.push_back((*token).second);
-            }
+            resegment(symbol, output);
         }
     }
 
 private:
+    void resegment(llama_sp_symbol &symbol, std::vector<llama_vocab::id> &output) {
+        auto text = std::string(symbol.text, symbol.n);
+        auto token = vocab_.token_to_id.find(text);
+
+        // Do we need to support is_unused?
+        if (token != vocab_.token_to_id.end()) {
+            output.push_back((*token).second);
+            return;
+        }
+
+        const auto p = rev_merge.find(text);
+
+        if (p == rev_merge.end()) {
+            // output any symbols that did not form tokens as bytes.
+            for (int j = 0; j < (int) symbol.n; ++j) {
+                llama_vocab::id token_id = static_cast<uint8_t>(symbol.text[j]) + 3;
+                output.push_back(token_id);
+            }
+            return;
+        }
+
+        resegment(symbols_[p->second.first], output);
+        resegment(symbols_[p->second.second], output);
+    }
+
     void try_add_bigram(int left, int right) {
         if (left == -1 || right == -1) {
             return;
@@ -1893,11 +1943,15 @@ private:
         bigram.score = tok_score.score;
         bigram.size = text.size();
         work_queue_.push(bigram);
+
+        // Do we need to support is_unused?
+        rev_merge[text] = std::make_pair(left, right);
     }
 
     const llama_vocab & vocab_;
     std::vector<llama_sp_symbol> symbols_;
     llama_sp_bigram::queue work_queue_;
+    std::map<std::string, std::pair<int, int> > rev_merge;
 };
 
 static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, const std::string & text, bool bos) {

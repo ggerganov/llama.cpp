@@ -5,6 +5,17 @@
 #include <map>
 #include <vector>
 
+std::string detokenize(llama_context * ctx, const llama_token * tokens, int count) {
+    std::string result;
+    for (int i = 0; i < count; ++i) {
+        result += llama_token_to_str(ctx, tokens[i]);
+        if (i < count - 1) {
+            result += "_";
+        }
+    }
+    return result;
+}
+
 static const std::map<std::string, std::vector<llama_token>> & k_tests()
 {
     static std::map<std::string, std::vector<llama_token>> _k_tests = {
@@ -67,6 +78,8 @@ int main(int argc, char **argv) {
     for (const auto & test_kv : k_tests()) {
         std::vector<llama_token> res(test_kv.first.size());
         const int n = llama_tokenize(ctx, test_kv.first.c_str(), res.data(), int(res.size()), true);
+        fprintf(stderr, "%s : '%s' tokenized to '%s'\n", 
+            __func__, test_kv.first.c_str(), detokenize(ctx, res.data(), n).c_str());
         res.resize(n);
 
         bool correct = res.size() == test_kv.second.size();
