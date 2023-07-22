@@ -5,13 +5,44 @@
 #include <map>
 #include <vector>
 
-std::string detokenize(llama_context * ctx, const llama_token * tokens, int count) {
+static std::string escape_whitespace(const std::string& text) {
+    std::string result;
+    bool escaping = false;
+    result += char(0xe2);
+    result += char(0x96);
+    result += char(0x81);
+    for (size_t offs = 0; offs < text.length(); ++offs) {
+        if (text[offs] == ' ' || text[offs] == '\t' || text[offs] == '\n') {
+            if (!escaping) {
+                result += char(0xe2);
+                result += char(0x96);
+                result += char(0x81);
+                escaping = true;
+            }
+        }
+        else {
+            escaping = false;
+            result += text[offs];
+        }
+    }
+    return result;
+}
+
+static std::string unescape_whitespace(llama_context* ctx, llama_token token) {
+    const char* word = llama_token_to_str(ctx, token);
+    if (strlen(word) >= 3 &&
+        word[0] == char(0xe2) &&
+        word[1] == char(0x96) &&
+        word[2] == char(0x81)) {
+        return std::string(" ") + (word + 3);
+    } 
+    return word;
+}
+
+static std::string unescape_whitespace(llama_context* ctx, const llama_token* tokens, int count) {
     std::string result;
     for (int i = 0; i < count; ++i) {
-        result += llama_token_to_str(ctx, tokens[i]);
-        if (i < count - 1) {
-            result += "_";
-        }
+        result += unescape_whitespace(ctx, tokens[i]);
     }
     return result;
 }
@@ -19,12 +50,14 @@ std::string detokenize(llama_context * ctx, const llama_token * tokens, int coun
 static const std::map<std::string, std::vector<llama_token>> & k_tests()
 {
     static std::map<std::string, std::vector<llama_token>> _k_tests = {
-        { "Hello World",        { 1,  10994,   2787, }, },
-        { " Hello World",       { 1,  15043,   2787, }, },
-        { " Hello World!",      { 1,  15043,   2787,  29991, }, },
-        { " this is 🦙.cpp",    { 1,    445,    338,  29871,    243,    162,    169,    156,  29889,   8223, }, },
-        { "w048 7tuijk dsdfhu", { 1,  29893,  29900,  29946,  29947,  29871,  29955,   9161,  13535,  18031,   2176,   6905, }, },
-        { "нещо на Български",  { 1,    821,   4851,    665,   1386,  29713,   1305, }, },
+        { "Hello world",        { 1,  15043,   3186, }, },
+        { " Hello world",       { 1,  29871,  15043,   3186, }, },
+        { "Hello World",        { 1,  15043,   2787, }, },
+        { " Hello World",       { 1,  29871,  15043,   2787, }, },
+        {" Hello World!",       { 1,  29871,  15043,   2787,  29991, }, },
+        {" this is 🦙.cpp",    { 1,  29871,    445,    338,  29871,    243,    162,    169,    156,  29889,   8223, }, },
+        {"w048 7tuijk dsdfhu",  { 1,    281,  29900,  29946,  29947,  29871,  29955,   9161,  13535,  18031,   2176,   6905, }, },
+        {"нещо на Български",   { 1,   1538,   4851,    665,   1386,  29713,   1305, }, },
     };
     return _k_tests;
 };
@@ -77,9 +110,9 @@ int main(int argc, char **argv) {
 
     for (const auto & test_kv : k_tests()) {
         std::vector<llama_token> res(test_kv.first.size());
-        const int n = llama_tokenize(ctx, test_kv.first.c_str(), res.data(), int(res.size()), true);
+        const int n = llama_tokenize(ctx, escape_whitespace(test_kv.first.c_str()).c_str(), res.data(), int(res.size()), true);
         fprintf(stderr, "%s : '%s' tokenized to '%s'\n", 
-            __func__, test_kv.first.c_str(), detokenize(ctx, res.data(), n).c_str());
+            __func__, test_kv.first.c_str(), unescape_whitespace(ctx, res.data(), n).c_str());
         res.resize(n);
 
         bool correct = res.size() == test_kv.second.size();

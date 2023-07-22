@@ -1832,13 +1832,13 @@ struct llama_tokenizer {
     llama_tokenizer(const llama_vocab & vocab): vocab_(vocab) {}
 
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
-        // split string into utf8 chars
+        // split string into utf8 chars / token?
         int index = 0;
         size_t offs = 0;
         while (offs < text.size()) {
             llama_sp_symbol sym;
-            // size_t len = utf8_len(text[offs]);
-            size_t len = llama_trie_find(vocab_.trie, text, offs);
+            size_t len = utf8_len(text[offs]);
+            // size_t len = llama_trie_find(vocab_.trie, text, offs);
             if (len == 0) {
                 len = utf8_len(text[offs]);
             }

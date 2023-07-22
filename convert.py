@@ -233,12 +233,7 @@ class SentencePieceVocab:
         for i in range(tokenizer.vocab_size()):
             # TODO: How do we want to support is_unknown, is_control, is_byte and is_unused?
             piece = tokenizer.id_to_piece(i)
-            text: bytes
-            if tokenizer.is_unknown(i) or tokenizer.is_control(i) or tokenizer.is_byte(i):
-                text: bytes = piece.encode("utf-8")
-            else:
-                text = piece.replace("\u2581", " ").encode("utf-8")
-
+            text: bytes = piece.encode("utf-8")
             score: float = tokenizer.get_score(i)
             yield text, score
 
