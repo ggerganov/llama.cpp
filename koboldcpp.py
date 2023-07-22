@@ -1427,7 +1427,7 @@ def run_horde_worker(args, api_key, worker_name):
             print(f'\nSubmitted generation to {cluster} with id {current_id} and contributed for {reply["reward"]}')
         current_id = None
         current_payload = None
-        time.sleep(5)
+        time.sleep(1)
     if exitcounter<100:
         print("Horde Worker Shutdown - Too many errors.")
     else:
