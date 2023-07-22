@@ -578,18 +578,18 @@ std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::s
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params) {
     auto lparams = llama_context_default_params();
 
-    lparams.n_ctx        = params.n_ctx;
-    lparams.n_batch      = params.n_batch;
-    lparams.n_gpu_layers = params.n_gpu_layers;
-    lparams.main_gpu     = params.main_gpu;
-    lparams.tensor_split = params.tensor_split;
-    lparams.low_vram     = params.low_vram;
-    lparams.seed         = params.seed;
-    lparams.f16_kv       = params.memory_f16;
-    lparams.use_mmap     = params.use_mmap;
-    lparams.use_mlock    = params.use_mlock;
-    lparams.logits_all   = params.perplexity;
-    lparams.embedding    = params.embedding;
+    lparams.n_ctx           = params.n_ctx;
+    lparams.n_batch         = params.n_batch;
+    lparams.n_gpu_layers    = params.n_gpu_layers;
+    lparams.main_gpu        = params.main_gpu;
+    lparams.tensor_split    = params.tensor_split;
+    lparams.low_vram        = params.low_vram;
+    lparams.seed            = params.seed;
+    lparams.f16_kv          = params.memory_f16;
+    lparams.use_mmap        = params.use_mmap;
+    lparams.use_mlock       = params.use_mlock;
+    lparams.logits_all      = params.perplexity;
+    lparams.embedding       = params.embedding;
     lparams.rope_freq_base  = params.rope_freq_base;
     lparams.rope_freq_scale = params.rope_freq_scale;
 
