@@ -1,4 +1,15 @@
 #/bin/bash
+#
+# sample usage:
+#
+# mkdir tmp
+#
+# # CPU-only build
+# bash ./ci/run.sh ./tmp/results ./tmp/mnt
+#
+# # with CUDA support
+# GG_BUILD_CUDA=1 bash ./ci/run.sh ./tmp/results ./tmp/mnt
+#
 
 if [ -z "$2" ]; then
     echo "usage: $0 <output-dir> <mnt-dir>"
@@ -101,7 +112,7 @@ function gg_run_ctest_release {
     (time cmake -DCMAKE_BUILD_TYPE=Release ..   ) 2>&1 | tee -a $OUT/${ci}-cmake.log
     (time make -j                               ) 2>&1 | tee -a $OUT/${ci}-make.log
 
-    if [ -z $GG_BUILD_LOW_PERF ]; then
+    if [ -z ${GG_BUILD_LOW_PERF} ]; then
         (time ctest --output-on-failure ) 2>&1 | tee -a $OUT/${ci}-ctest.log
     else
         (time ctest --output-on-failure -E test-opt ) 2>&1 | tee -a $OUT/${ci}-ctest.log
@@ -154,6 +165,7 @@ function gg_run_open_llama_3b_v2 {
     model_q4_1="${path_models}/ggml-model-q4_1.bin"
     model_q5_0="${path_models}/ggml-model-q5_0.bin"
     model_q5_1="${path_models}/ggml-model-q5_1.bin"
+    model_q2_k="${path_models}/ggml-model-q2_k.bin"
     model_q3_k="${path_models}/ggml-model-q3_k.bin"
     model_q4_k="${path_models}/ggml-model-q4_k.bin"
     model_q5_k="${path_models}/ggml-model-q5_k.bin"
@@ -166,21 +178,23 @@ function gg_run_open_llama_3b_v2 {
     ./bin/quantize ${model_f16} ${model_q4_1} q4_1
     ./bin/quantize ${model_f16} ${model_q5_0} q5_0
     ./bin/quantize ${model_f16} ${model_q5_1} q5_1
+    ./bin/quantize ${model_f16} ${model_q2_k} q2_k
     ./bin/quantize ${model_f16} ${model_q3_k} q3_k
     ./bin/quantize ${model_f16} ${model_q4_k} q4_k
     ./bin/quantize ${model_f16} ${model_q5_k} q5_k
     ./bin/quantize ${model_f16} ${model_q6_k} q6_k
 
-    (time ./bin/main --model ${model_f16}  -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-f16.log
-    (time ./bin/main --model ${model_q8_0} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q8_0.log
-    (time ./bin/main --model ${model_q4_0} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_0.log
-    (time ./bin/main --model ${model_q4_1} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
-    (time ./bin/main --model ${model_q5_0} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
-    (time ./bin/main --model ${model_q5_1} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
-    (time ./bin/main --model ${model_q3_k} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
-    (time ./bin/main --model ${model_q4_k} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
-    (time ./bin/main --model ${model_q5_k} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
-    (time ./bin/main --model ${model_q6_k} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q6_k.log
+    (time ./bin/main --model ${model_f16}  -s 1234 -n 64 -p --ignore-eos "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-f16.log
+    (time ./bin/main --model ${model_q8_0} -s 1234 -n 64 -p --ignore-eos "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q8_0.log
+    (time ./bin/main --model ${model_q4_0} -s 1234 -n 64 -p --ignore-eos "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_0.log
+    (time ./bin/main --model ${model_q4_1} -s 1234 -n 64 -p --ignore-eos "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
+    (time ./bin/main --model ${model_q5_0} -s 1234 -n 64 -p --ignore-eos "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
+    (time ./bin/main --model ${model_q5_1} -s 1234 -n 64 -p --ignore-eos "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
+    (time ./bin/main --model ${model_q2_k} -s 1234 -n 64 -p --ignore-eos "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q2_k.log
+    (time ./bin/main --model ${model_q3_k} -s 1234 -n 64 -p --ignore-eos "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
+    (time ./bin/main --model ${model_q4_k} -s 1234 -n 64 -p --ignore-eos "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
+    (time ./bin/main --model ${model_q5_k} -s 1234 -n 64 -p --ignore-eos "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
+    (time ./bin/main --model ${model_q6_k} -s 1234 -n 64 -p --ignore-eos "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q6_k.log
 
     (time ./bin/perplexity --model ${model_f16}  -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-f16.log
     (time ./bin/perplexity --model ${model_q8_0} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q8_0.log
@@ -188,6 +202,7 @@ function gg_run_open_llama_3b_v2 {
     (time ./bin/perplexity --model ${model_q4_1} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
     (time ./bin/perplexity --model ${model_q5_0} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
     (time ./bin/perplexity --model ${model_q5_1} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
+    (time ./bin/perplexity --model ${model_q2_k} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q2_k.log
     (time ./bin/perplexity --model ${model_q3_k} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
     (time ./bin/perplexity --model ${model_q4_k} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
     (time ./bin/perplexity --model ${model_q5_k} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
@@ -212,6 +227,7 @@ function gg_run_open_llama_3b_v2 {
     check_ppl "q4_1" "$(cat $OUT/${ci}-tg-q4_1.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q5_0" "$(cat $OUT/${ci}-tg-q5_0.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q5_1" "$(cat $OUT/${ci}-tg-q5_1.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q2_k" "$(cat $OUT/${ci}-tg-q2_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q3_k" "$(cat $OUT/${ci}-tg-q3_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q4_k" "$(cat $OUT/${ci}-tg-q4_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q5_k" "$(cat $OUT/${ci}-tg-q5_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
@@ -232,6 +248,133 @@ function gg_sum_open_llama_3b_v2 {
     gg_printf '- q4_1:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_1.log)"
     gg_printf '- q5_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_0.log)"
     gg_printf '- q5_1:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_1.log)"
+    gg_printf '- q2_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q2_k.log)"
+    gg_printf '- q3_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q3_k.log)"
+    gg_printf '- q4_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_k.log)"
+    gg_printf '- q5_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_k.log)"
+    gg_printf '- q6_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q6_k.log)"
+}
+
+# open_llama_7b_v2
+# requires: GG_BUILD_CUDA
+
+function gg_run_open_llama_7b_v2 {
+    cd ${SRC}
+
+    gg_wget models-mnt/open-llama/7B-v2/ https://huggingface.co/openlm-research/open_llama_7b_v2/raw/main/config.json
+    gg_wget models-mnt/open-llama/7B-v2/ https://huggingface.co/openlm-research/open_llama_7b_v2/resolve/main/tokenizer.model
+    gg_wget models-mnt/open-llama/7B-v2/ https://huggingface.co/openlm-research/open_llama_7b_v2/raw/main/tokenizer_config.json
+    gg_wget models-mnt/open-llama/7B-v2/ https://huggingface.co/openlm-research/open_llama_7b_v2/raw/main/special_tokens_map.json
+    gg_wget models-mnt/open-llama/7B-v2/ https://huggingface.co/openlm-research/open_llama_7b_v2/raw/main/pytorch_model.bin.index.json
+    gg_wget models-mnt/open-llama/7B-v2/ https://huggingface.co/openlm-research/open_llama_7b_v2/resolve/main/pytorch_model-00001-of-00002.bin
+    gg_wget models-mnt/open-llama/7B-v2/ https://huggingface.co/openlm-research/open_llama_7b_v2/resolve/main/pytorch_model-00002-of-00002.bin
+    gg_wget models-mnt/open-llama/7B-v2/ https://huggingface.co/openlm-research/open_llama_7b_v2/raw/main/generation_config.json
+
+    gg_wget models-mnt/wikitext/ https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip
+    unzip -o models-mnt/wikitext/wikitext-2-raw-v1.zip -d models-mnt/wikitext/
+
+    path_models="../models-mnt/open-llama/7B-v2"
+    path_wiki="../models-mnt/wikitext/wikitext-2-raw"
+
+    rm -rf build-ci-release && mkdir build-ci-release && cd build-ci-release
+
+    set -e
+
+    (time cmake -DCMAKE_BUILD_TYPE=Release -DLLAMA_CUBLAS=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
+    (time make -j                                              ) 2>&1 | tee -a $OUT/${ci}-make.log
+
+    python3 ../convert.py ${path_models}
+
+    model_f16="${path_models}/ggml-model-f16.bin"
+    model_q8_0="${path_models}/ggml-model-q8_0.bin"
+    model_q4_0="${path_models}/ggml-model-q4_0.bin"
+    model_q4_1="${path_models}/ggml-model-q4_1.bin"
+    model_q5_0="${path_models}/ggml-model-q5_0.bin"
+    model_q5_1="${path_models}/ggml-model-q5_1.bin"
+    model_q2_k="${path_models}/ggml-model-q2_k.bin"
+    model_q3_k="${path_models}/ggml-model-q3_k.bin"
+    model_q4_k="${path_models}/ggml-model-q4_k.bin"
+    model_q5_k="${path_models}/ggml-model-q5_k.bin"
+    model_q6_k="${path_models}/ggml-model-q6_k.bin"
+
+    wiki_test="${path_wiki}/wiki.test.raw"
+
+    ./bin/quantize ${model_f16} ${model_q8_0} q8_0
+    ./bin/quantize ${model_f16} ${model_q4_0} q4_0
+    ./bin/quantize ${model_f16} ${model_q4_1} q4_1
+    ./bin/quantize ${model_f16} ${model_q5_0} q5_0
+    ./bin/quantize ${model_f16} ${model_q5_1} q5_1
+    ./bin/quantize ${model_f16} ${model_q2_k} q2_k
+    ./bin/quantize ${model_f16} ${model_q3_k} q3_k
+    ./bin/quantize ${model_f16} ${model_q4_k} q4_k
+    ./bin/quantize ${model_f16} ${model_q5_k} q5_k
+    ./bin/quantize ${model_f16} ${model_q6_k} q6_k
+
+    (time ./bin/main --model ${model_f16}  -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-f16.log
+    (time ./bin/main --model ${model_q8_0} -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q8_0.log
+    (time ./bin/main --model ${model_q4_0} -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_0.log
+    (time ./bin/main --model ${model_q4_1} -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
+    (time ./bin/main --model ${model_q5_0} -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
+    (time ./bin/main --model ${model_q5_1} -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
+    (time ./bin/main --model ${model_q2_k} -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q2_k.log
+    (time ./bin/main --model ${model_q3_k} -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
+    (time ./bin/main --model ${model_q4_k} -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
+    (time ./bin/main --model ${model_q5_k} -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
+    (time ./bin/main --model ${model_q6_k} -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q6_k.log
+
+    (time ./bin/perplexity --model ${model_f16}  -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-f16.log
+    (time ./bin/perplexity --model ${model_q8_0} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q8_0.log
+    (time ./bin/perplexity --model ${model_q4_0} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_0.log
+    (time ./bin/perplexity --model ${model_q4_1} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
+    (time ./bin/perplexity --model ${model_q5_0} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
+    (time ./bin/perplexity --model ${model_q5_1} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
+    (time ./bin/perplexity --model ${model_q2_k} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q2_k.log
+    (time ./bin/perplexity --model ${model_q3_k} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
+    (time ./bin/perplexity --model ${model_q4_k} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
+    (time ./bin/perplexity --model ${model_q5_k} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
+    (time ./bin/perplexity --model ${model_q6_k} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q6_k.log
+
+    function check_ppl {
+        qnt="$1"
+        ppl=$(echo "$2" | grep -oE "[0-9]+\.[0-9]+" | tail -n 1)
+
+        if [ $(echo "$ppl > 20.0" | bc) -eq 1 ]; then
+            printf '  - %s @ %s (FAIL: ppl > 20.0)\n' "$qnt" "$ppl"
+            return 20
+        fi
+
+        printf '  - %s @ %s OK\n' "$qnt" "$ppl"
+        return 0
+    }
+
+    check_ppl "f16"  "$(cat $OUT/${ci}-tg-f16.log  | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q8_0" "$(cat $OUT/${ci}-tg-q8_0.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q4_0" "$(cat $OUT/${ci}-tg-q4_0.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q4_1" "$(cat $OUT/${ci}-tg-q4_1.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q5_0" "$(cat $OUT/${ci}-tg-q5_0.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q5_1" "$(cat $OUT/${ci}-tg-q5_1.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q2_k" "$(cat $OUT/${ci}-tg-q2_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q3_k" "$(cat $OUT/${ci}-tg-q3_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q4_k" "$(cat $OUT/${ci}-tg-q4_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q5_k" "$(cat $OUT/${ci}-tg-q5_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q6_k" "$(cat $OUT/${ci}-tg-q6_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+
+    set +e
+}
+
+function gg_sum_open_llama_7b_v2 {
+    gg_printf '### %s\n\n' "${ci}"
+
+    gg_printf 'OpenLLaMA 7B-v2:\n'
+    gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
+    gg_printf '- perplexity:\n%s\n' "$(cat $OUT/${ci}-ppl.log)"
+    gg_printf '- f16: \n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-f16.log)"
+    gg_printf '- q8_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q8_0.log)"
+    gg_printf '- q4_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_0.log)"
+    gg_printf '- q4_1:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_1.log)"
+    gg_printf '- q5_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_0.log)"
+    gg_printf '- q5_1:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_1.log)"
+    gg_printf '- q2_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q2_k.log)"
     gg_printf '- q3_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q3_k.log)"
     gg_printf '- q4_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_k.log)"
     gg_printf '- q5_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_k.log)"
@@ -240,7 +383,7 @@ function gg_sum_open_llama_3b_v2 {
 
 ## main
 
-if [ -z $GG_BUILD_LOW_PERF ]; then
+if [ -z ${GG_BUILD_LOW_PERF} ]; then
     rm -rf ${SRC}/models-mnt
 
     mnt_models=${MNT}/models
@@ -252,11 +395,15 @@ fi
 
 ret=0
 
-#test $ret -eq 0 && gg_run ctest_debug
-#test $ret -eq 0 && gg_run ctest_release
+test $ret -eq 0 && gg_run ctest_debug
+test $ret -eq 0 && gg_run ctest_release
 
-if [ -z $GG_BUILD_LOW_PERF ]; then
-    test $ret -eq 0 && gg_run open_llama_3b_v2
+if [ -z ${GG_BUILD_LOW_PERF} ]; then
+    if [ -z ${GG_BUILD_CUDA} ]; then
+        test $ret -eq 0 && gg_run open_llama_3b_v2
+    else
+        test $ret -eq 0 && gg_run open_llama_7b_v2
+    fi
 fi
 
 exit $ret
