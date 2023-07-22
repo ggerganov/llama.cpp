@@ -15465,7 +15465,6 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             {
                 // necessary for llama
                 if (src0->grad) {
-                    assert(src1->type == GGML_TYPE_I32);
                     const int n_past = ((int32_t *) tensor->op_params)[0];
                     src0->grad =
                         ggml_add_impl(ctx, src0->grad,
