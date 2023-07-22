@@ -557,7 +557,7 @@ int main(int argc, char ** argv) {
                 llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
 
                 if (ctx_guidance) {
-                    llama_sample_classifier_free_guidance(ctx, &candidates_p, ctx_guidance, params.cfg_scale, params.cfg_smooth_factor);
+                    llama_sample_classifier_free_guidance(ctx, &candidates_p, ctx_guidance, params.cfg_scale);
                 }
 
                 // Apply penalties

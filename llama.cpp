@@ -850,7 +850,7 @@ struct llama_context_params llama_context_default_params() {
         /*.n_batch                     =*/ 512,
         /*.gpu_layers                  =*/ 0,
         /*.main_gpu                    =*/ 0,
-        /*.tensor_split                =*/ {0},
+        /*.tensor_split                =*/ nullptr,
         /*.rope_freq_base              =*/ 10000.0f,
         /*.rope_freq_scale             =*/ 1.0f,
         /*.progress_callback           =*/ nullptr,
@@ -1290,7 +1290,7 @@ static bool llama_model_load(
         int n_batch,
         int n_gpu_layers,
         int main_gpu,
-        float * tensor_split,
+        const float * tensor_split,
         float rope_freq_base,
         float rope_freq_scale,
         bool low_vram,
@@ -1453,11 +1453,11 @@ static bool llama_eval_internal(
             offload_func_kq(tmpq);
             ggml_set_name(tmpq, "tmpq");
 
-            struct ggml_tensor * Kcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd/n_head, n_head, N), n_past, n_rot, 0, freq_base, freq_scale, 0);
+            struct ggml_tensor * Kcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd/n_head, n_head, N), n_past, n_rot, 0, 0, freq_base, freq_scale);
             offload_func_kq(Kcur);
             ggml_set_name(Kcur, "Kcur");
 
-            struct ggml_tensor * Qcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd/n_head, n_head, N), n_past, n_rot, 0, freq_base, freq_scale, 0);
+            struct ggml_tensor * Qcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd/n_head, n_head, N), n_past, n_rot, 0, 0, freq_base, freq_scale);
             offload_func_kq(Qcur);
             ggml_set_name(Qcur, "Qcur");
 
@@ -2219,8 +2219,7 @@ void llama_sample_classifier_free_guidance(
           struct llama_context * ctx,
         llama_token_data_array * candidates,
           struct llama_context * guidance_ctx,
-                         float   scale,
-                         float   smooth_factor) {
+                         float   scale) {
     int64_t t_start_sample_us = ggml_time_us();
 
     assert(ctx);
@@ -2241,16 +2240,7 @@ void llama_sample_classifier_free_guidance(
     for (int i = 0; i < n_vocab; ++i) {
         float logit_guidance = logits_guidance[i];
         float logit_base = logits_base[i];
-        logits_guidance[i] = scale * (logit_base - logit_guidance) + logit_guidance;
-    }
-
-    llama_log_softmax(logits_guidance, n_vocab);
-
-    for (int i = 0; i < n_vocab; ++i) {
-        float logit_base = logits_base[i];
-        float logit_guidance = logits_guidance[i];
-
-        candidates->data[i].logit = smooth_factor * logit_guidance + (1.f - smooth_factor) * logit_base;
+        candidates->data[i].logit = scale * (logit_base - logit_guidance) + logit_guidance;
     }
 
     if (ctx) {

@@ -260,12 +260,6 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.cfg_scale = std::stof(argv[i]);
-        } else if (arg == "--cfg-smooth-factor") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.cfg_smooth_factor = std::stof(argv[i]);
         } else if (arg == "-b" || arg == "--batch-size") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -509,7 +503,6 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stderr, "  --cfg-negative-prompt PROMPT \n");
     fprintf(stderr, "                        negative prompt to use for guidance. (default: empty)\n");
     fprintf(stderr, "  --cfg-scale N         strength of guidance (default: %f, 1.0 = disable)\n", params.cfg_scale);
-    fprintf(stderr, "  --cfg-smooth-factor N smooth factor between old and new logits (default: %f, 1.0 = no smoothing)\n", params.cfg_smooth_factor);
     fprintf(stderr, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
     fprintf(stderr, "  --rope-freq-base N    RoPE base frequency (default: %.1f)\n", params.rope_freq_base);
     fprintf(stderr, "  --rope-freq-scale N   RoPE frequency scaling factor (default: %g)\n", params.rope_freq_scale);
@@ -586,7 +579,7 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     lparams.n_batch      = params.n_batch;
     lparams.n_gpu_layers = params.n_gpu_layers;
     lparams.main_gpu     = params.main_gpu;
-    memcpy(lparams.tensor_split, params.tensor_split, LLAMA_MAX_DEVICES*sizeof(float));
+    lparams.tensor_split = params.tensor_split;
     lparams.low_vram     = params.low_vram;
     lparams.seed         = params.seed;
     lparams.f16_kv       = params.memory_f16;

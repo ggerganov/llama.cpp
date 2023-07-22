@@ -2537,6 +2537,9 @@ void ggml_init_cublas() {
 }
 
 void ggml_cuda_set_tensor_split(const float * tensor_split) {
+    if (tensor_split == nullptr) {
+        return;
+    }
     bool all_zero = true;
     for (int i = 0; i < g_device_count; ++i) {
         if (tensor_split[i] != 0.0f) {
@@ -2972,19 +2975,18 @@ inline void ggml_cuda_op_rope(
     const int64_t ne00 = src0->ne[0];
     const int64_t i01_diff = i01_high - i01_low;
 
-    float freq_base;
-    float freq_scale;
-
     const int n_past = ((int32_t *) src1->data)[0];
     const int n_dims = ((int32_t *) src1->data)[1];
     const int mode   = ((int32_t *) src1->data)[2];
     const int n_ctx  = ((int32_t *) src1->data)[3];
+
+    // RoPE alteration for extended context
+    float freq_base, freq_scale;
     memcpy(&freq_base,  (int32_t *) src1->data + 4, sizeof(float));
     memcpy(&freq_scale, (int32_t *) src1->data + 5, sizeof(float));
 
     const float theta_scale = powf(freq_base, -2.0f/n_dims);
-    const float p0 = ((mode & 1) == 0 ? n_past + i02 : i02);
-    const float p = p0 * freq_scale;
+    const float p = (((mode & 1) == 0 ? n_past + i02 : i02)) * freq_scale;
 
     bool is_glm = mode & 4;
 

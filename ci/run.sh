@@ -243,7 +243,7 @@ function gg_sum_open_llama_3b_v2 {
 if [ -z $GG_BUILD_LOW_PERF ]; then
     rm -rf ${SRC}/models-mnt
 
-    mnt_models=$(realpath ${MNT}/models)
+    mnt_models=${MNT}/models
     mkdir -p ${mnt_models}
     ln -sfn ${mnt_models} ${SRC}/models-mnt
 
