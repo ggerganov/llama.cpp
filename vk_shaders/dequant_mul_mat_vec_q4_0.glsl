@@ -33,11 +33,11 @@ void main() {
     const int row = int(gl_WorkGroupID.x);
     const int tid = int(gl_LocalInvocationID.x);
 
-    const int y_offset = QUANT_R == 1 ? 1 : QUANT_K/2;
+    const int y_offset = QUANT_K/2;
 
     tmp[tid] = 0;
 
-    for (int i = 0; i < p.ncols/block_size; i += 2) {
+    [[unroll]] for (int i = 0; i < p.ncols/block_size; i += 2) {
         const int col = i*block_size + 2*tid;
         const int ib = (row*p.ncols + col)/QUANT_K; // block index
         const int iqs = (col%QUANT_K)/QUANT_R; // quant index
@@ -61,7 +61,7 @@ void main() {
 
     // sum up partial sums and write back result
     barrier();
-    for (int s=block_size/2; s>0; s>>=1) {
+    [[unroll]] for (int s=block_size/2; s>0; s>>=1) {
         if (tid < s) {
             tmp[tid] += tmp[tid + s];
         }
