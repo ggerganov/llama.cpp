@@ -844,7 +844,8 @@ void ggml_metal_graph_compute(
 
                             const int   n_past   = ((int32_t *) dst->op_params)[0]; UNUSED(n_past);
                             const int   n_head   = ((int32_t *) dst->op_params)[1];
-                            const float max_bias = ((float *)   dst->op_params)[2];
+                            float max_bias;
+                            memcpy(&max_bias, (int32_t *) dst->op_params + 2, sizeof(float));
 
                             if (__builtin_popcount(n_head) != 1) {
                                 GGML_ASSERT(false && "only power-of-two n_head implemented");

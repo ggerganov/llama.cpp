@@ -11660,7 +11660,8 @@ static void ggml_compute_forward_alibi_f32(
 
     const int   n_past   = ((int32_t *) dst->op_params)[0];
     const int   n_head   = ((int32_t *) dst->op_params)[1];
-    const float max_bias = ((float *)   dst->op_params)[2];
+    float max_bias;
+    memcpy(&max_bias, (int32_t *) dst->op_params + 2, sizeof(float));
 
     assert(n_past >= 0);
 
@@ -11722,7 +11723,8 @@ static void ggml_compute_forward_alibi_f16(
 
     const int   n_past   = ((int32_t *) dst->op_params)[0];
     const int   n_head   = ((int32_t *) dst->op_params)[1];
-    const float max_bias = ((float *)   dst->op_params)[2];
+    float max_bias;
+    memcpy(&max_bias, (int32_t *) dst->op_params + 2, sizeof(float));
 
     assert(n_past >= 0);
 
