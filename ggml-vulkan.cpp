@@ -559,8 +559,20 @@ void ggml_vk_init(void) {
     std::vector<vk::QueueFamilyProperties> queue_family_props = vk_physical_device.getQueueFamilyProperties();
 
     // Try to find a non-graphics compute queue and transfer-focused queues
-    uint32_t compute_queue_family_index = ggml_vk_find_queue_family_index(queue_family_props, vk::QueueFlagBits::eCompute, vk::QueueFlagBits::eGraphics, -1, 1);
-    uint32_t transfer_queue_family_index = ggml_vk_find_queue_family_index(queue_family_props, vk::QueueFlagBits::eTransfer, vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eVideoDecodeKHR | vk::QueueFlagBits::eProtected | vk::QueueFlagBits::eOpticalFlowNV, compute_queue_family_index, 2);
+    const uint32_t compute_queue_family_index = ggml_vk_find_queue_family_index(queue_family_props, vk::QueueFlagBits::eCompute, vk::QueueFlagBits::eGraphics, -1, 1);
+    const uint32_t transfer_queue_family_index = ggml_vk_find_queue_family_index(queue_family_props, vk::QueueFlagBits::eTransfer, vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eVideoDecodeKHR | vk::QueueFlagBits::eProtected | vk::QueueFlagBits::eOpticalFlowNV, compute_queue_family_index, 2);
+
+    uint32_t transfer_queue_count = VK_TRANSFER_QUEUE_COUNT;
+
+    // If not enough transfer queues are available
+    if (transfer_queue_count > queue_family_props[transfer_queue_family_index].queueCount) {
+        // If compute and transfer queues are same family
+        if (compute_queue_family_index == transfer_queue_family_index) {
+            transfer_queue_count = queue_family_props[transfer_queue_family_index].queueCount - 1;
+        } else {
+            transfer_queue_count = queue_family_props[transfer_queue_family_index].queueCount;
+        }
+    }
 
     std::cerr << "Queue Families:" << std::endl;
     for(size_t i = 0; i < queue_family_props.size(); i++) {
@@ -574,9 +586,10 @@ void ggml_vk_init(void) {
     std::vector<vk::DeviceQueueCreateInfo> device_queue_create_infos;
     if (compute_queue_family_index != transfer_queue_family_index) {
         device_queue_create_infos.push_back({vk::DeviceQueueCreateFlags(), compute_queue_family_index, 1, &compute_queue_priority});
-        device_queue_create_infos.push_back({vk::DeviceQueueCreateFlags(), transfer_queue_family_index, VK_TRANSFER_QUEUE_COUNT, transfer_queue_priority});
+        GGML_ASSERT(transfer_queue_count > 0);
+        device_queue_create_infos.push_back({vk::DeviceQueueCreateFlags(), transfer_queue_family_index, transfer_queue_count, transfer_queue_priority});
     } else {
-        device_queue_create_infos.push_back({vk::DeviceQueueCreateFlags(), transfer_queue_family_index, 1 + VK_TRANSFER_QUEUE_COUNT, transfer_queue_priority});
+        device_queue_create_infos.push_back({vk::DeviceQueueCreateFlags(), transfer_queue_family_index, 1 + transfer_queue_count, transfer_queue_priority});
     }
     vk::DeviceCreateInfo device_create_info;
     std::vector<const char *> device_extensions;
@@ -653,9 +666,15 @@ void ggml_vk_init(void) {
     vk_pipeline_mul_f32 = ggml_vk_create_pipeline("vk_shaders/mul_f32.spv", "main", 3, 8 * sizeof(int), {32, 32, 1}, {}, 1);
 
     // Queues
+    uint32_t queue_index_offset = compute_queue_family_index == transfer_queue_family_index ? 1 : 0;
+
     vk_compute_queue = ggml_vk_create_queue(compute_queue_family_index, 0, { vk::PipelineStageFlagBits::eComputeShader });
     for (int i = 0; i < VK_TRANSFER_QUEUE_COUNT; i++) {
-        vk_transfer_queues[i] = ggml_vk_create_queue(transfer_queue_family_index, i, { vk::PipelineStageFlagBits::eTransfer });
+        if (transfer_queue_count > 0) {
+            vk_transfer_queues[i] = ggml_vk_create_queue(transfer_queue_family_index, (queue_index_offset + i) % transfer_queue_count, { vk::PipelineStageFlagBits::eTransfer });
+        } else {
+            vk_transfer_queues[i] = vk_compute_queue;
+        }
     }
 
 #if defined(VK_CHK_KERNEL)
@@ -668,7 +687,7 @@ void ggml_vk_init(void) {
         ggml_vk_test_transfer(1024 * 1024 * m);
     }
     const std::vector<size_t> vals {
-        4096, 1, 11008,
+        512, 1, 256,
         128, 110, 622,
         511, 511, 127,
         511, 511, 7,
