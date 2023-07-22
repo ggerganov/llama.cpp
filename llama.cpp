@@ -705,7 +705,7 @@ static bool kv_cache_init(
 
     size_t size = 2u*n_elements*ggml_type_size(wtype);
 
-    fprintf(stderr, "%s: allocating %.2f MB for kv cache\n", __func__, size / 1024.0 / 1024.0);
+    // fprintf(stderr, "%s: allocating %.2f MB for kv cache\n", __func__, size / 1024.0 / 1024.0);
 
     cache.buf = ggml_buffer_alloc(backend, size, 2);
     cache.n = 0;
@@ -993,13 +993,15 @@ static void llama_model_load_internal(
     }
 
     // print the context sizes
-    fprintf(stderr, "%s: ggml ctx sizes:\n", __func__);
+    fprintf(stderr, "%s: model buffer size:\n", __func__);
     for (const auto & it : ctx_sizes) {
-        fprintf(stderr, "%8s = %7.2f MB", ggml_backend_name(it.first), it.second / 1024.0 / 1024.0);
-        if (it.first == model.backend_cpu && ml->use_mmap) {
-            fprintf(stderr, " + %7.2f MB (mmap)", mmap_size / 1024.0 / 1024.0);
+        if (it.second > 0 || (it.first == model.backend_cpu && ml->use_mmap && mmap_size > 0)) {
+            fprintf(stderr, "%8s = %7.2f MB", ggml_backend_name(it.first), it.second / 1024.0 / 1024.0);
+            if (it.first == model.backend_cpu && ml->use_mmap) {
+                fprintf(stderr, " + %7.2f MB (mmap)", mmap_size / 1024.0 / 1024.0);
+            }
+            fprintf(stderr, "\n");
         }
-        fprintf(stderr, "\n");
     }
 
     // create the buffers and contexts for each backend
@@ -2613,8 +2615,9 @@ struct llama_context * llama_new_context_with_model(
         }
 
         {
-            const size_t memory_size = ggml_nbytes(ctx->kv_self.k) + ggml_nbytes(ctx->kv_self.v);
-            fprintf(stderr, "%s: kv self size  = %7.2f MB\n", __func__, memory_size / 1024.0 / 1024.0);
+            const size_t kv_size = ggml_nbytes(ctx->kv_self.k) + ggml_nbytes(ctx->kv_self.v);
+            fprintf(stderr, "%s: kv cache size:\n", __func__);
+            fprintf(stderr, "%8s = %7.2f MB\n", ggml_backend_name(ctx->kv_self.buf->backend_buffer->backend), kv_size / 1024.0 / 1024.0);
         }
 
         const auto & hparams = ctx->model.hparams;
@@ -2642,6 +2645,9 @@ struct llama_context * llama_new_context_with_model(
             ggml_set_name(ctx->graph_embeddings_in, "embeddings_in");
 
             ggml_free(ctx0);
+
+            fprintf(stderr, "%s: input buffer size:\n", __func__);
+            fprintf(stderr, "%8s = %7.2f MB\n", ggml_backend_name(ctx->buf_input->backend_buffer->backend), buf_input_size / 1024.0 / 1024.0);
         }
         // output buffer
         {
@@ -2668,6 +2674,9 @@ struct llama_context * llama_new_context_with_model(
             }
 
             ggml_free(ctx0);
+
+            fprintf(stderr, "%s: output buffer size:\n", __func__);
+            fprintf(stderr, "%8s = %7.2f MB\n", ggml_backend_name(ctx->buf_output->backend_buffer->backend), buf_output_size / 1024.0 / 1024.0);
         }
 
         // initialize compute buffers
@@ -2683,15 +2692,18 @@ struct llama_context * llama_new_context_with_model(
         int n_past = hparams.n_ctx - n_tokens;
         /*ggml_graph_splits splits =*/ llama_build_graph(*ctx, n_tokens, n_past);
 
-        fprintf(stderr, "%s: compute buffer sizes:\n", __func__);
+        fprintf(stderr, "%s: compute buffer size:\n", __func__);
         for (size_t i = 0; i < ctx->bufs_compute.size(); ++i) {
             ggml_buffer * buf = ctx->bufs_compute[i];
             ggml_backend * backend = buf->backend_buffer->backend;
             size_t size = buf->backend_buffer->max_size;
-            fprintf(stderr, "%8s = %7.2f MB\n", ggml_backend_name(backend), size / 1024.0 / 1024.0);
 
-            // reallocate with the correct size
+            if (size > 0) {
+                fprintf(stderr, "%8s = %7.2f MB\n", ggml_backend_name(backend), size / 1024.0 / 1024.0);
+            }
+
             ggml_buffer_free(buf);
+            // reallocate with the correct size
             ctx->bufs_compute[i] = ggml_buffer_alloc(buf->backend_buffer->backend, size, 2048);
         }
 
@@ -2729,6 +2741,8 @@ struct llama_context * llama_new_context_with_model(
     }
     fprintf(stderr, "output: %s, ", ggml_backend_name(ctx->model.backend_out));
     fprintf(stderr, "kv: %s\n", ggml_backend_name(ctx->backend_kv));
+
+    // TODO: print total memory usage per backend
 
 #ifdef GGML_USE_MPI
     ctx->ctx_mpi = ggml_mpi_init();
