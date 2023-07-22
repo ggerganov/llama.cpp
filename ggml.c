@@ -7449,7 +7449,7 @@ struct ggml_tensor * ggml_map_binary_impl_f32(
         is_node = true;
     }
 
-    struct ggml_tensor *result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
 
     ggml_set_op_params(result, (const void *) &fun, sizeof(fun));
 
@@ -7490,7 +7490,7 @@ struct ggml_tensor * ggml_map_custom1_impl_f32(
         is_node = true;
     }
 
-    struct ggml_tensor *result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
 
     ggml_set_op_params(result, (const void *) &fun, sizeof(fun));
 
@@ -7529,7 +7529,7 @@ struct ggml_tensor * ggml_map_custom2_impl_f32(
         is_node = true;
     }
 
-    struct ggml_tensor *result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
 
     ggml_set_op_params(result, (const void *) &fun, sizeof(fun));
 
@@ -7572,7 +7572,7 @@ struct ggml_tensor * ggml_map_custom3_impl_f32(
         is_node = true;
     }
 
-    struct ggml_tensor *result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
 
     ggml_set_op_params(result, (const void *) &fun, sizeof(fun));
 
