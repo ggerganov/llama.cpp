@@ -969,7 +969,7 @@ def show_new_gui():
             basefile = os.path.basename(model_var.get())
             horde_name_var.set(os.path.splitext(basefile)[0])
 
-    usehorde_box = makecheckbox(network_tab, "Configure for Horde", usehorde_var, 4, command=togglehorde)
+    makecheckbox(network_tab, "Configure for Horde", usehorde_var, 4, command=togglehorde)
     togglehorde(1,1,1)
 
     # launch
@@ -1130,6 +1130,7 @@ def show_new_gui():
             if len(dict["hordeconfig"]) > 4:
                 horde_apikey_var.set(dict["hordeconfig"][3])
                 horde_workername_var.set(dict["hordeconfig"][4])
+                usehorde_var.set("1")
 
     def save_config():
         file_type = [("KoboldCpp Settings", "*.kcpps")]
@@ -1343,7 +1344,7 @@ def show_old_gui():
 #A very simple and stripped down embedded horde worker with no dependencies
 def run_horde_worker(args, api_key, worker_name):
     import urllib.request
-    global friendlymodelname, maxhordectx, maxhordelen, exitcounter
+    global friendlymodelname, maxhordectx, maxhordelen, exitcounter, modelbusy
 
     def make_url_request(url, data, method='POST'):
         try:
@@ -1384,6 +1385,12 @@ def run_horde_worker(args, api_key, worker_name):
             break
 
     while exitcounter < 10:
+
+        #first, make sure we are not generating
+        if modelbusy.locked():
+            time.sleep(0.5)
+            continue
+
         #pop new request
         gen_dict = {
             "name": worker_name,
@@ -1406,13 +1413,14 @@ def run_horde_worker(args, api_key, worker_name):
             continue
         current_id = pop['id']
         current_payload = pop['payload']
-        print(f"Job received from {cluster} for {current_payload.get('max_length',80)} tokens and {current_payload.get('max_context_length',1024)} max context. Starting generation...")
+        print(f"\nJob received from {cluster} for {current_payload.get('max_length',80)} tokens and {current_payload.get('max_context_length',1024)} max context. Starting generation...")
 
         #do gen
         while exitcounter < 10:
-            current_generation = make_url_request(f'http://localhost:{args.port}/api/v1/generate', current_payload)
-            if current_generation:
-                break
+            if not modelbusy.locked():
+                current_generation = make_url_request(f'http://localhost:{args.port}/api/v1/generate', current_payload)
+                if current_generation:
+                    break
             print("Server Busy - Not ready to generate...")
             time.sleep(5)
 
