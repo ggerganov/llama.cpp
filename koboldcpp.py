@@ -1374,7 +1374,8 @@ def run_horde_worker(args, api_key, worker_name):
 
     current_id = None
     current_payload = None
-    print("Embedded Horde Worker '"+worker_name+"' Starting...\n(To use your own KAI Bridge/Scribe worker instead, don't set your API key)")
+    current_generation = None
+    print("===\nEmbedded Horde Worker '"+worker_name+"' Starting...\n(To use your own KAI Bridge/Scribe worker instead, don't set your API key)")
     BRIDGE_AGENT = f"KoboldCppEmbedWorker:1:https://github.com/LostRuins/koboldcpp"
     cluster = "https://horde.koboldai.net"
     while exitcounter < 10:
@@ -1385,6 +1386,8 @@ def run_horde_worker(args, api_key, worker_name):
             break
 
     while exitcounter < 10:
+        currentjob_attempts = 0
+        current_generation = None
 
         #first, make sure we are not generating
         if modelbusy.locked():
@@ -1421,28 +1424,38 @@ def run_horde_worker(args, api_key, worker_name):
                 current_generation = make_url_request(f'http://localhost:{args.port}/api/v1/generate', current_payload)
                 if current_generation:
                     break
+                else:
+                    currentjob_attempts += 1
+                    if currentjob_attempts>10:
+                        break
             print("Server Busy - Not ready to generate...")
             time.sleep(5)
 
         #submit reply
-        submit_dict = {
-            "id": current_id,
-            "generation": current_generation["results"][0]["text"],
-            "state": "ok"
-        }
-        reply = make_url_request(cluster + '/api/v2/generate/text/submit', submit_dict)
-        if not reply:
-            exitcounter += 1
-            print("\nError: Job submit failed.")
+        if current_generation:
+            submit_dict = {
+                "id": current_id,
+                "generation": current_generation["results"][0]["text"],
+                "state": "ok"
+            }
+            reply = make_url_request(cluster + '/api/v2/generate/text/submit', submit_dict)
+            if not reply:
+                exitcounter += 1
+                print("\nError: Job submit failed.")
+            else:
+                print(f'\nSubmitted generation to {cluster} with id {current_id} and contributed for {reply["reward"]}')
         else:
-            print(f'\nSubmitted generation to {cluster} with id {current_id} and contributed for {reply["reward"]}')
+            print("\nError: Abandoned current job due to errors. Getting new job.")
         current_id = None
         current_payload = None
         time.sleep(1)
     if exitcounter<100:
         print("Horde Worker Shutdown - Too many errors.")
+        time.sleep(2)
     else:
         print("Horde Worker Shutdown - Server Closing.")
+        time.sleep(1)
+    sys.exit(2)
 
 def main(args):
     embedded_kailite = None
