@@ -6,55 +6,51 @@
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        inherit (pkgs.stdenv) isAarch64 isDarwin;
-        inherit (pkgs.lib) optionals;
-        isM1 = isAarch64 && isDarwin;
-        osSpecific = if isM1 then
-          with pkgs.darwin.apple_sdk_11_0.frameworks; [
-            Accelerate
-            MetalKit
-            MetalPerformanceShaders
-            MetalPerformanceShadersGraph
-          ]
-        else if isDarwin then
-          with pkgs.darwin.apple_sdk.frameworks; [
-            Accelerate
-            CoreGraphics
-            CoreVideo
-          ]
-        else
-          [ ];
+        inherit (pkgs.stdenv) isAarch32 isAarch64 isDarwin;
+        osSpecific = with pkgs; [ openmpi ] ++
+        (
+          if isAarch64 && isDarwin then
+            with pkgs.darwin.apple_sdk_11_0.frameworks; [
+              Accelerate
+              MetalKit
+              MetalPerformanceShaders
+              MetalPerformanceShadersGraph
+            ]
+          else if isAarch32 && isDarwin then
+            with pkgs.darwin.apple_sdk.frameworks; [
+              Accelerate
+              CoreGraphics
+              CoreVideo
+            ]
+          else
+            with pkgs; [ openblas ]
+        );
         pkgs = import nixpkgs { inherit system; };
+        nativeBuildInputs = with pkgs; [ cmake pkgconfig ];
         llama-python =
-          pkgs.python310.withPackages (ps: with ps; [ numpy sentencepiece ]);
+          pkgs.python3.withPackages (ps: with ps; [ numpy sentencepiece ]);
       in {
         packages.default = pkgs.stdenv.mkDerivation {
           name = "llama.cpp";
           src = ./.;
-          postPatch = if isM1 then ''
+          postPatch = ''
             substituteInPlace ./ggml-metal.m \
               --replace '[bundle pathForResource:@"ggml-metal" ofType:@"metal"];' "@\"$out/bin/ggml-metal.metal\";"
-          '' else
-            "";
-          nativeBuildInputs = with pkgs; [ cmake ];
+            substituteInPlace ./*.py --replace '/usr/bin/env python' '${llama-python}/bin/python'
+          '';
+          nativeBuildInputs = nativeBuildInputs;
           buildInputs = osSpecific;
-          cmakeFlags = [ "-DLLAMA_BUILD_SERVER=ON" ] ++ (optionals isM1 [
-            "-DCMAKE_C_FLAGS=-D__ARM_FEATURE_DOTPROD=1"
-            "-DLLAMA_METAL=ON"
+          cmakeFlags = [ "-DLLAMA_BUILD_SERVER=ON" "-DLLAMA_MPI=ON" "-DBUILD_SHARED_LIBS=ON" "-DCMAKE_SKIP_BUILD_RPATH=ON" ]
+            ++ (if isAarch64 && isDarwin then [
+              "-DCMAKE_C_FLAGS=-D__ARM_FEATURE_DOTPROD=1"
+              "-DLLAMA_METAL=ON"
+            ] else [
+              "-DLLAMA_BLAS=ON"
+              "-DLLAMA_BLAS_VENDOR=OpenBLAS"
           ]);
-          installPhase = ''
-            runHook preInstall
-
-            mkdir -p $out/bin
-            mv bin/* $out/bin/
+          postInstall = ''
             mv $out/bin/main $out/bin/llama
             mv $out/bin/server $out/bin/llama-server
-
-            echo "#!${llama-python}/bin/python" > $out/bin/convert.py
-            cat ${./convert.py} >> $out/bin/convert.py
-            chmod +x $out/bin/convert.py
-
-            runHook postInstall
           '';
           meta.mainProgram = "llama";
         };
@@ -72,7 +68,7 @@
         };
         apps.default = self.apps.${system}.llama;
         devShells.default = pkgs.mkShell {
-          packages = with pkgs; [ cmake llama-python ] ++ osSpecific;
+          packages = nativeBuildInputs ++ osSpecific;
         };
       });
 }

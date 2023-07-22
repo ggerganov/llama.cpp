@@ -2423,20 +2423,53 @@ static void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
     scoped_spin_lock lock(g_cuda_pool_lock);
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
-
+#ifdef DEBUG_CUDA_MALLOC
+    int nnz = 0;
+    size_t max_size = 0, tot_size = 0;
+#endif
+    size_t best_diff = 1ull << 36;
+    int ibest = -1;
     for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
         cuda_buffer& b = g_cuda_buffer_pool[id][i];
-        if (b.size >= size && b.ptr != nullptr) {
-            void * ptr = b.ptr;
-            *actual_size = b.size;
-            b.ptr = nullptr;
-            b.size = 0;
-            return ptr;
+        if (b.ptr != nullptr) {
+#ifdef DEBUG_CUDA_MALLOC
+            ++nnz;
+            tot_size += b.size;
+            if (b.size > max_size) max_size = b.size;
+#endif
+            if (b.size >= size) {
+                size_t diff = b.size - size;
+                if (diff < best_diff) {
+                    best_diff = diff;
+                    ibest = i;
+                    if (!best_diff) {
+                        void * ptr = b.ptr;
+                        *actual_size = b.size;
+                        b.ptr = nullptr;
+                        b.size = 0;
+                        return ptr;
+                    }
+                }
+            }
         }
     }
+    if (ibest >= 0) {
+        cuda_buffer& b = g_cuda_buffer_pool[id][ibest];
+        void * ptr = b.ptr;
+        *actual_size = b.size;
+        b.ptr = nullptr;
+        b.size = 0;
+        return ptr;
+    }
+#ifdef DEBUG_CUDA_MALLOC
+    fprintf(stderr, "%s: %d buffers, max_size = %u MB, tot_size = %u MB, requested %u MB\n", __func__, nnz,
+            (uint32_t)(max_size/1024/1024), (uint32_t)(tot_size/1024/1024), (uint32_t)(size/1024/1024));
+#endif
     void * ptr;
-    CUDA_CHECK(cudaMalloc((void **) &ptr, size));
-    *actual_size = size;
+    size_t look_ahead_size = (size_t) (1.05 * size);
+    look_ahead_size = 256 * ((look_ahead_size + 255)/256);
+    CUDA_CHECK(cudaMalloc((void **) &ptr, look_ahead_size));
+    *actual_size = look_ahead_size;
     return ptr;
 }
 
@@ -2512,6 +2545,9 @@ void ggml_init_cublas() {
 }
 
 void ggml_cuda_set_tensor_split(const float * tensor_split) {
+    if (tensor_split == nullptr) {
+        return;
+    }
     bool all_zero = true;
     for (int i = 0; i < g_device_count; ++i) {
         if (tensor_split[i] != 0.0f) {
@@ -2952,8 +2988,13 @@ inline void ggml_cuda_op_rope(
     const int mode   = ((int32_t *) src1->data)[2];
     const int n_ctx  = ((int32_t *) src1->data)[3];
 
-    const float theta_scale = powf(10000.0, -2.0f/n_dims);
-    const float p = ((mode & 1) == 0 ? n_past + i02 : i02);
+    // RoPE alteration for extended context
+    float freq_base, freq_scale;
+    memcpy(&freq_base,  (int32_t *) src1->data + 4, sizeof(float));
+    memcpy(&freq_scale, (int32_t *) src1->data + 5, sizeof(float));
+
+    const float theta_scale = powf(freq_base, -2.0f/n_dims);
+    const float p = (((mode & 1) == 0 ? n_past + i02 : i02)) * freq_scale;
 
     bool is_glm = mode & 4;
 
@@ -3537,6 +3578,11 @@ void ggml_cuda_cpy(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tens
     (void) dst;
 }
 
+void ggml_cuda_dup(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    ggml_cuda_cpy(src0, dst, nullptr);
+    (void) src1;
+}
+
 void ggml_cuda_diag_mask_inf(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     GGML_ASSERT(src0->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32);
     ggml_cuda_op(src0, src1, dst, ggml_cuda_op_diag_mask_inf, true, true);
@@ -3670,7 +3716,7 @@ void ggml_cuda_assign_buffers_impl(struct ggml_tensor * tensor, bool scratch, bo
     // recursively assign CUDA buffers until a compute tensor is found
     if (tensor->src[0] != nullptr && tensor->src[0]->backend == GGML_BACKEND_CPU) {
         const ggml_op src0_op = tensor->src[0]->op;
-        if (src0_op == GGML_OP_RESHAPE || src0_op == GGML_OP_TRANSPOSE || src0_op == GGML_OP_VIEW) {
+        if (src0_op == GGML_OP_RESHAPE || src0_op == GGML_OP_TRANSPOSE || src0_op == GGML_OP_VIEW || src0_op == GGML_OP_PERMUTE) {
             ggml_cuda_assign_buffers_impl(tensor->src[0], scratch, force_inplace);
         }
     }
@@ -3776,6 +3822,12 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
         || (tensor->src[1] != nullptr && tensor->src[1]->backend == GGML_BACKEND_GPU);
 
     switch (tensor->op) {
+        case GGML_OP_DUP:
+            if (!any_on_device) {
+                return false;
+            }
+            func = ggml_cuda_dup;
+            break;
         case GGML_OP_ADD:
             if (!any_on_device) {
                 return false;
@@ -3829,6 +3881,12 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
                 return false;
             }
             func = ggml_cuda_cpy;
+            break;
+        case GGML_OP_CONT:
+            if (!any_on_device) {
+                return false;
+            }
+            func = ggml_cuda_dup;
             break;
         case GGML_OP_RESHAPE:
         case GGML_OP_VIEW:

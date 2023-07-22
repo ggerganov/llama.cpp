@@ -200,4 +200,6 @@ int main(void) {
     test_frequency_presence_penalty({0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, {0, 1, 2, 0, 0}, {0.499977f, 0.499977f, 0.000023f, 0.000023f, 0.000000f}, 5.0f, 5.0f);
 
     printf("OK\n");
+
+    return 0;
 }

@@ -16,6 +16,8 @@ build/
 build-em/
 build-debug/
 build-release/
+build-ci-debug/
+build-ci-release/
 build-static/
 build-cublas/
 build-opencl/
@@ -25,9 +27,10 @@ build-no-accel/
 build-sanitize-addr/
 build-sanitize-thread/
 out/
+tmp/
 
 models/*
-*.bin
+models-mnt
 
 /main
 /quantize
@@ -58,3 +61,18 @@ qnt-*.txt
 perf-*.txt
 
 examples/jeopardy/results.txt
+
+
+pyproject.toml
+poetry.lock
+poetry.toml
+
+# Test binaries
+tests/test-double-float
+tests/test-grad0
+tests/test-opt
+tests/test-quantize-fns
+tests/test-quantize-perf
+tests/test-sampling
+tests/test-tokenizer-0
+
