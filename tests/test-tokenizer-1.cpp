@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> converter;
+    std::wstring_convert<typename std::codecvt_utf8<wchar_t>, wchar_t> converter;
     for (wchar_t ch = 0x0000; ch < 0xffff; ++ch) {
         std::wstring wstr(1, ch);
         std::string str = converter.to_bytes(wstr);
