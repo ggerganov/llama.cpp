@@ -117,6 +117,9 @@ vk_pipeline vk_pipeline_dequant_mul_mat_vec_q4_0;
 vk_pipeline vk_pipeline_mul_f32;
 vk_pipeline vk_pipeline_f16_to_f32, vk_pipeline_dequant_q4_0;
 
+void * vk_pinned_workspace;
+size_t vk_pinned_workspace_size;
+
 bool vk_fp16_support = false;
 
 static std::vector<std::tuple<void*, size_t, vk_buffer>> vk_pinned_memory;
@@ -616,6 +619,9 @@ void ggml_vk_init(void) {
     };
     device_create_info.setPNext(&device_features2);
     vk_device = vk_physical_device.createDevice(device_create_info);
+
+    vk_pinned_workspace = nullptr;
+    vk_pinned_workspace_size = 0;
 
     // Prepare matmul values
     auto warptile_l = { 128, 128, 128, 16, 64, 64, 2, 4, 4 };
@@ -1532,7 +1538,18 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
 
     const bool load_x = src0->backend != GGML_BACKEND_GPU;
 
-    ggml_fp16_t * fp16_staging = (ggml_fp16_t *) ggml_vk_host_malloc(sizeof(ggml_fp16_t) * (ne11 * ne10) * (ne02 * ne03));
+    const size_t workspace_size = sizeof(ggml_fp16_t) * (ne11 * ne10) * (ne02 * ne03);
+
+    if (vk_pinned_workspace == nullptr) {
+        vk_pinned_workspace = ggml_vk_host_malloc(workspace_size);
+        vk_pinned_workspace_size = workspace_size;
+    } else if (vk_pinned_workspace_size < workspace_size) {
+        ggml_vk_host_free(vk_pinned_workspace);
+        vk_pinned_workspace = ggml_vk_host_malloc(workspace_size);
+        vk_pinned_workspace_size = workspace_size;
+    }
+
+    ggml_fp16_t * fp16_staging = (ggml_fp16_t *) vk_pinned_workspace;
 
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
@@ -1617,8 +1634,6 @@ static void ggml_vk_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
     ggml_vk_queue_cleanup(vk_transfer_queues[0]);
     ggml_vk_queue_cleanup(vk_transfer_queues[1]);
     ggml_vk_queue_cleanup(vk_compute_queue);
-
-    ggml_vk_host_free(fp16_staging);
 
     if (src0->backend != GGML_BACKEND_GPU) {
         ggml_vk_pool_free(d_X);
