@@ -4594,6 +4594,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
         /*.is_param     =*/ false,
         /*.grad         =*/ NULL,
         /*.src          =*/ { NULL },
+        /*.visited      =*/ false,
         /*.perf_runs    =*/ 0,
         /*.perf_cycles  =*/ 0,
         /*.perf_time_us =*/ 0,
@@ -15752,17 +15753,11 @@ static void ggml_visit_parents(struct ggml_cgraph * cgraph, struct ggml_tensor *
     }
 
     // check if already visited
-    for (int i = 0; i < cgraph->n_nodes; i++) {
-        if (cgraph->nodes[i] == node) {
-            return;
-        }
+    if (node->visited) {
+        GGML_ASSERT(cgraph->n_nodes > 0 || cgraph->n_leafs > 0); // to fix this, call ggml_graph_close() after building the graph
+        return;
     }
-
-    for (int i = 0; i < cgraph->n_leafs; i++) {
-        if (cgraph->leafs[i] == node) {
-            return;
-        }
-    }
+    node->visited = true;
 
     for (int i = 0; i < GGML_MAX_SRC; ++i) {
         if (node->src[i]) {
@@ -15814,13 +15809,28 @@ static void ggml_build_forward_impl(struct ggml_cgraph * cgraph, struct ggml_ten
 }
 
 void ggml_build_forward_expand(struct ggml_cgraph * cgraph, struct ggml_tensor * tensor) {
+    GGML_ASSERT(!cgraph->closed && "graph is closed");
     ggml_build_forward_impl(cgraph, tensor, true);
+}
+
+void ggml_graph_close(struct ggml_cgraph * cgraph) {
+    if (cgraph->closed) {
+        return;
+    }
+    for (int i = 0; i < cgraph->n_nodes; ++i) {
+        cgraph->nodes[i]->visited = false;
+    }
+    for (int i = 0; i < cgraph->n_leafs; ++i) {
+        cgraph->leafs[i]->visited = false;
+    }
+    cgraph->closed = true;
 }
 
 struct ggml_cgraph ggml_build_forward(struct ggml_tensor * tensor) {
     struct ggml_cgraph result = {
         /*.n_nodes      =*/ 0,
         /*.n_leafs      =*/ 0,
+        /*.closed       =*/ false,
         /*.nodes        =*/ { NULL },
         /*.grads        =*/ { NULL },
         /*.leafs        =*/ { NULL },
@@ -15865,7 +15875,7 @@ struct ggml_cgraph ggml_build_backward(struct ggml_context * ctx, struct ggml_cg
 
         if (node->is_param) {
             GGML_PRINT_DEBUG("%s: found root node %p\n", __func__, (void *) node);
-            ggml_build_forward_impl(&result, node->grad, true);
+            ggml_build_forward_expand(&result, node->grad);
         }
     }
 
@@ -16135,6 +16145,8 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 }
 
 struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
+    ggml_graph_close(cgraph);
+
     if (n_threads <= 0) {
         n_threads = GGML_DEFAULT_N_THREADS;
     }

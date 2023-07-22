@@ -1342,17 +1342,10 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn(
 // expand the graph nodes without creating leafs.
 struct ggml_tensor * expand(struct ggml_cgraph * g, struct ggml_tensor * t) {
     // check if already visited
-    for (int i = 0; i < g->n_nodes; i++) {
-        if (g->nodes[i] == t) {
-            return t;
-        }
+    if (t->visited) {
+        return t;
     }
-
-    for (int i = 0; i < g->n_leafs; i++) {
-        if (g->leafs[i] == t) {
-            return t;
-        }
-    }
+    t->visited = true;
 
     for (int i = 0; i < GGML_MAX_SRC; ++i) {
         if (t->src[i]) {

@@ -427,6 +427,8 @@ extern "C" {
         struct ggml_tensor * grad;
         struct ggml_tensor * src[GGML_MAX_SRC];
 
+        bool visited;   // used to build graphs
+
         // performance
         int     perf_runs;
         int64_t perf_cycles;
@@ -438,7 +440,7 @@ extern "C" {
 
         void * extra; // extra things e.g. for ggml-cuda.cu
 
-        char padding[8];
+        char padding[4];
     };
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);
@@ -463,6 +465,7 @@ extern "C" {
     struct ggml_cgraph {
         int n_nodes;
         int n_leafs;
+        bool closed;
 
         struct ggml_tensor * nodes[GGML_MAX_NODES];
         struct ggml_tensor * grads[GGML_MAX_NODES];
@@ -1348,6 +1351,11 @@ extern "C" {
             struct ggml_tensor  * tensor);
 
     GGML_API void ggml_build_forward_expand(struct ggml_cgraph * cgraph, struct ggml_tensor * tensor);
+
+    // resets the visited flag for all the tensors in the graph
+    // called by ggml_graph_plan()
+    // shouldn't be necessary to call manually except building when building multiple graphs without computing them
+    GGML_API void ggml_graph_close(struct ggml_cgraph * cgraph);
 
     GGML_API struct ggml_cgraph ggml_build_forward (struct ggml_tensor * tensor);
     GGML_API struct ggml_cgraph ggml_build_backward(struct ggml_context * ctx, struct ggml_cgraph * gf, bool keep);

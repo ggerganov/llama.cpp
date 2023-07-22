@@ -1701,6 +1701,8 @@ static bool llama_eval_internal(
     // logits -> probs
     //cur = ggml_soft_max_inplace(ctx0, cur);
 
+    //fprintf(stderr, "graph build time: %.3f ms\n", (ggml_time_us() - t_start_us)/1000.0);
+
     // run the computation
     ggml_build_forward_expand(&gf, cur);
 
@@ -1710,6 +1712,7 @@ static bool llama_eval_internal(
 
 #ifdef GGML_USE_METAL
     if (lctx.ctx_metal && N == 1) {
+        ggml_graph_close(&gf); // should only be required for the Metal backend, as ggml_graph_plan() does this automatically
         ggml_metal_set_n_cb     (lctx.ctx_metal, n_threads);
         ggml_metal_graph_compute(lctx.ctx_metal, &gf);
         ggml_metal_get_tensor   (lctx.ctx_metal, cur);
