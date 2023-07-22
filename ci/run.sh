@@ -165,6 +165,7 @@ function gg_run_open_llama_3b_v2 {
     model_q4_1="${path_models}/ggml-model-q4_1.bin"
     model_q5_0="${path_models}/ggml-model-q5_0.bin"
     model_q5_1="${path_models}/ggml-model-q5_1.bin"
+    model_q2_k="${path_models}/ggml-model-q2_k.bin"
     model_q3_k="${path_models}/ggml-model-q3_k.bin"
     model_q4_k="${path_models}/ggml-model-q4_k.bin"
     model_q5_k="${path_models}/ggml-model-q5_k.bin"
@@ -177,6 +178,7 @@ function gg_run_open_llama_3b_v2 {
     ./bin/quantize ${model_f16} ${model_q4_1} q4_1
     ./bin/quantize ${model_f16} ${model_q5_0} q5_0
     ./bin/quantize ${model_f16} ${model_q5_1} q5_1
+    ./bin/quantize ${model_f16} ${model_q2_k} q2_k
     ./bin/quantize ${model_f16} ${model_q3_k} q3_k
     ./bin/quantize ${model_f16} ${model_q4_k} q4_k
     ./bin/quantize ${model_f16} ${model_q5_k} q5_k
@@ -188,6 +190,7 @@ function gg_run_open_llama_3b_v2 {
     (time ./bin/main --model ${model_q4_1} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
     (time ./bin/main --model ${model_q5_0} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
     (time ./bin/main --model ${model_q5_1} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
+    (time ./bin/main --model ${model_q2_k} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q2_k.log
     (time ./bin/main --model ${model_q3_k} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
     (time ./bin/main --model ${model_q4_k} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
     (time ./bin/main --model ${model_q5_k} -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
@@ -199,6 +202,7 @@ function gg_run_open_llama_3b_v2 {
     (time ./bin/perplexity --model ${model_q4_1} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
     (time ./bin/perplexity --model ${model_q5_0} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
     (time ./bin/perplexity --model ${model_q5_1} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
+    (time ./bin/perplexity --model ${model_q2_k} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q2_k.log
     (time ./bin/perplexity --model ${model_q3_k} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
     (time ./bin/perplexity --model ${model_q4_k} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
     (time ./bin/perplexity --model ${model_q5_k} -f ${wiki_test_60} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
@@ -223,6 +227,7 @@ function gg_run_open_llama_3b_v2 {
     check_ppl "q4_1" "$(cat $OUT/${ci}-tg-q4_1.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q5_0" "$(cat $OUT/${ci}-tg-q5_0.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q5_1" "$(cat $OUT/${ci}-tg-q5_1.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q2_k" "$(cat $OUT/${ci}-tg-q2_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q3_k" "$(cat $OUT/${ci}-tg-q3_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q4_k" "$(cat $OUT/${ci}-tg-q4_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q5_k" "$(cat $OUT/${ci}-tg-q5_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
@@ -243,6 +248,7 @@ function gg_sum_open_llama_3b_v2 {
     gg_printf '- q4_1:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_1.log)"
     gg_printf '- q5_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_0.log)"
     gg_printf '- q5_1:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_1.log)"
+    gg_printf '- q2_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q2_k.log)"
     gg_printf '- q3_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q3_k.log)"
     gg_printf '- q4_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_k.log)"
     gg_printf '- q5_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_k.log)"
@@ -286,6 +292,7 @@ function gg_run_open_llama_7b_v2 {
     model_q4_1="${path_models}/ggml-model-q4_1.bin"
     model_q5_0="${path_models}/ggml-model-q5_0.bin"
     model_q5_1="${path_models}/ggml-model-q5_1.bin"
+    model_q2_k="${path_models}/ggml-model-q2_k.bin"
     model_q3_k="${path_models}/ggml-model-q3_k.bin"
     model_q4_k="${path_models}/ggml-model-q4_k.bin"
     model_q5_k="${path_models}/ggml-model-q5_k.bin"
@@ -298,6 +305,7 @@ function gg_run_open_llama_7b_v2 {
     ./bin/quantize ${model_f16} ${model_q4_1} q4_1
     ./bin/quantize ${model_f16} ${model_q5_0} q5_0
     ./bin/quantize ${model_f16} ${model_q5_1} q5_1
+    ./bin/quantize ${model_f16} ${model_q2_k} q2_k
     ./bin/quantize ${model_f16} ${model_q3_k} q3_k
     ./bin/quantize ${model_f16} ${model_q4_k} q4_k
     ./bin/quantize ${model_f16} ${model_q5_k} q5_k
@@ -309,6 +317,7 @@ function gg_run_open_llama_7b_v2 {
     (time ./bin/main --model ${model_q4_1} -ngl 999 -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
     (time ./bin/main --model ${model_q5_0} -ngl 999 -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
     (time ./bin/main --model ${model_q5_1} -ngl 999 -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
+    (time ./bin/main --model ${model_q2_k} -ngl 999 -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q2_k.log
     (time ./bin/main --model ${model_q3_k} -ngl 999 -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
     (time ./bin/main --model ${model_q4_k} -ngl 999 -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
     (time ./bin/main --model ${model_q5_k} -ngl 999 -s 1234 -n 64 -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
@@ -320,6 +329,7 @@ function gg_run_open_llama_7b_v2 {
     (time ./bin/perplexity --model ${model_q4_1} -f ${wiki_test_60} -ngl 999 -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
     (time ./bin/perplexity --model ${model_q5_0} -f ${wiki_test_60} -ngl 999 -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
     (time ./bin/perplexity --model ${model_q5_1} -f ${wiki_test_60} -ngl 999 -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
+    (time ./bin/perplexity --model ${model_q2_k} -f ${wiki_test_60} -ngl 999 -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q2_k.log
     (time ./bin/perplexity --model ${model_q3_k} -f ${wiki_test_60} -ngl 999 -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
     (time ./bin/perplexity --model ${model_q4_k} -f ${wiki_test_60} -ngl 999 -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
     (time ./bin/perplexity --model ${model_q5_k} -f ${wiki_test_60} -ngl 999 -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
@@ -344,6 +354,7 @@ function gg_run_open_llama_7b_v2 {
     check_ppl "q4_1" "$(cat $OUT/${ci}-tg-q4_1.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q5_0" "$(cat $OUT/${ci}-tg-q5_0.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q5_1" "$(cat $OUT/${ci}-tg-q5_1.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q2_k" "$(cat $OUT/${ci}-tg-q2_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q3_k" "$(cat $OUT/${ci}-tg-q3_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q4_k" "$(cat $OUT/${ci}-tg-q4_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q5_k" "$(cat $OUT/${ci}-tg-q5_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
@@ -364,6 +375,7 @@ function gg_sum_open_llama_7b_v2 {
     gg_printf '- q4_1:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_1.log)"
     gg_printf '- q5_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_0.log)"
     gg_printf '- q5_1:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_1.log)"
+    gg_printf '- q2_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q2_k.log)"
     gg_printf '- q3_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q3_k.log)"
     gg_printf '- q4_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_k.log)"
     gg_printf '- q5_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_k.log)"
