@@ -264,7 +264,6 @@ void ggml_allocator_default_free_tensor(struct ggml_backend_buffer * alloc, stru
     size_t size = ggml_backend_buffer_get_alloc_size(alloc, tensor);
     size = aligned_offset(NULL, size, allocator_ctx->alignment);
     AT_PRINTF("%s: freeing %s (%zu bytes) - n_free_blocks = %d\n", __func__, tensor->name, size, allocator_ctx->n_free_blocks);
-    tensor->freed = true;
 
 #ifdef GGML_ALLOCATOR_DEBUG
     remove_allocated_tensor(allocator_ctx, tensor);
@@ -858,13 +857,12 @@ static void ggml_graph_allocate_tensors_n(
             struct ggml_tensor * node = gf->nodes[i];
             node->n_children = 0;
             node->n_views = 0;
-            //node->freed = false;
         }
+
         for (int i = 0; i < gf->n_leafs; i++) {
             struct ggml_tensor * leaf = gf->leafs[i];
             leaf->n_children = 0;
             leaf->n_views = 0;
-            //leaf->freed = false;
         }
     }
 
@@ -912,7 +910,6 @@ static void ggml_graph_allocate_tensors_n(
                 if (parent == NULL) {
                     break;
                 }
-                GGML_ASSERT(!parent->freed && "tensor used after free");
                 allocate_node(buffer, parent);
             }
 

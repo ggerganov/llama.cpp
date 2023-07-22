@@ -422,10 +422,9 @@ extern "C" {
         struct ggml_tensor * grad;
         struct ggml_tensor * src[GGML_MAX_SRC];
 
-        int node_id; // used to build graphs
-        int n_children;
+        bool visited;   // used to build graphs
+        int n_children; // used by the allocator
         int n_views;
-        bool freed; // debug
 
         // performance
         int     perf_runs;
@@ -434,11 +433,11 @@ extern "C" {
 
         void * data;
 
-        char name[GGML_MAX_NAME];
-
         void * extra; // extra things e.g. for ggml-cuda.cu
 
-        char padding[8];
+        char name[GGML_MAX_NAME];
+
+        char padding[12];
     };
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);

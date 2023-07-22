@@ -4530,16 +4530,15 @@ struct ggml_tensor * ggml_new_tensor_impl(
         /*.is_param     =*/ false,
         /*.grad         =*/ NULL,
         /*.src          =*/ { NULL },
-        /*.node_id      =*/ -1,
+        /*.visited      =*/ false,
         /*.n_children   =*/ 0,
         /*.n_views      =*/ 0,
-        /*.freed        =*/ false,
         /*.perf_runs    =*/ 0,
         /*.perf_cycles  =*/ 0,
         /*.perf_time_us =*/ 0,
         /*.data         =*/ data,
-        /*.name         =*/ { 0 },
         /*.extra        =*/ NULL,
+        /*.name         =*/ { 0 },
         /*.padding      =*/ { 0 },
     };
 
@@ -15818,9 +15817,10 @@ static void ggml_visit_parents(struct ggml_cgraph * cgraph, struct ggml_tensor *
     }
 
     // check if already visited
-    if (node->node_id != -1) {
+    if (node->visited) {
         return;
     }
+    node->visited = true;
 
     for (int i = 0; i < GGML_MAX_SRC; ++i) {
         if (node->src[i]) {
@@ -15839,7 +15839,6 @@ static void ggml_visit_parents(struct ggml_cgraph * cgraph, struct ggml_tensor *
             ggml_format_name(node, "leaf_%d", cgraph->n_leafs);
         }
 
-        node->node_id = cgraph->n_leafs;
         cgraph->leafs[cgraph->n_leafs] = node;
         cgraph->n_leafs++;
     } else {
@@ -15849,7 +15848,6 @@ static void ggml_visit_parents(struct ggml_cgraph * cgraph, struct ggml_tensor *
             ggml_format_name(node, "node_%d", cgraph->n_nodes);
         }
 
-        node->node_id = cgraph->n_nodes;
         cgraph->nodes[cgraph->n_nodes] = node;
         cgraph->grads[cgraph->n_nodes] = node->grad;
         cgraph->n_nodes++;
@@ -15883,10 +15881,10 @@ void ggml_build_forward_expand(struct ggml_cgraph * cgraph, struct ggml_tensor *
 // TODO: this can be removed when ggml_build_forward_expand is removed
 void ggml_graph_close(struct ggml_cgraph * cgraph) {
     for (int i = 0; i < cgraph->n_nodes; ++i) {
-        cgraph->nodes[i]->node_id = -1;
+        cgraph->nodes[i]->visited = false;
     }
     for (int i = 0; i < cgraph->n_leafs; ++i) {
-        cgraph->leafs[i]->node_id = -1;
+        cgraph->leafs[i]->visited = false;
     }
     cgraph->closed = true;
 }
