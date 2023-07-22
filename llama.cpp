@@ -14,6 +14,8 @@
 #include "ggml-cuda.h"
 #elif defined(GGML_USE_CLBLAST)
 #include "ggml-opencl.h"
+#elif defined(GGML_USE_VULKAN)
+#include "ggml-vulkan.h"
 #endif
 
 #ifdef GGML_USE_METAL
@@ -302,6 +304,10 @@ struct llama_model {
 #elif defined(GGML_USE_CLBLAST)
         for (size_t i = 0; i < tensors_by_name.size(); ++i) {
             ggml_cl_free_data(tensors_by_name[i].second);
+        }
+#elif defined(GGML_USE_VULKAN)
+        for (size_t i = 0; i < tensors_by_name.size(); ++i) {
+            ggml_vk_free_data(tensors_by_name[i].second);
         }
 #endif
     }
@@ -756,6 +762,13 @@ struct llama_model_loader {
                         free(lt.data);
                     }
                     break;
+#elif defined(GGML_USE_VULKAN)
+                case GGML_BACKEND_GPU:
+                    ggml_vk_transform_tensor(lt.data, lt.ggml_tensor);
+                    if (!use_mmap) {
+                        free(lt.data);
+                    }
+                    break;
 #endif
                 default:
                     continue;
@@ -1089,6 +1102,10 @@ static void llama_model_load_internal(
     fprintf(stderr, "%s: using OpenCL for GPU acceleration\n", __func__);
 #define LLAMA_BACKEND_OFFLOAD       GGML_BACKEND_GPU
 #define LLAMA_BACKEND_OFFLOAD_SPLIT GGML_BACKEND_GPU
+#elif defined(GGML_USE_VULKAN)
+    fprintf(stderr, "%s: using Vulkan for GPU acceleration\n", __func__);
+#define LLAMA_BACKEND_OFFLOAD       GGML_BACKEND_GPU
+#define LLAMA_BACKEND_OFFLOAD_SPLIT GGML_BACKEND_GPU
 #else
 #define LLAMA_BACKEND_OFFLOAD       GGML_BACKEND_CPU
 #define LLAMA_BACKEND_OFFLOAD_SPLIT GGML_BACKEND_CPU
@@ -1208,7 +1225,7 @@ static void llama_model_load_internal(
         }
 #endif // GGML_USE_CUBLAS
 
-#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_VULKAN)
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
 
         fprintf(stderr, "%s: offloading %d repeating layers to GPU\n", __func__, n_gpu);
@@ -1236,10 +1253,10 @@ static void llama_model_load_internal(
                 vram_kv_cache += MEM_REQ_KV_SELF().at(model.type) / 2;
             }
         }
-#elif defined(GGML_USE_CLBLAST)
+#elif defined(GGML_USE_CLBLAST) || defined(GGML_USE_VULKAN)
         const int max_backend_supported_layers = hparams.n_layer + 1;
         const int max_offloadable_layers = hparams.n_layer + 1;
-#endif // GGML_USE_CUBLAS
+#endif
 
         fprintf(stderr, "%s: offloaded %d/%d layers to GPU\n",
                 __func__, std::min(n_gpu_layers, max_offloadable_layers), max_backend_supported_layers);
@@ -1247,7 +1264,7 @@ static void llama_model_load_internal(
                 __func__, (vram_weights + vram_scratch + vram_kv_cache + MB - 1) / MB); // round up
 #else
         (void) n_gpu_layers;
-#endif // defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+#endif // defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_VULKAN)
     }
 
     // populate `tensors_by_name`

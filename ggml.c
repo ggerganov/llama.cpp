@@ -9190,10 +9190,17 @@ static void ggml_compute_forward_mul_f32(
     const int ith = params->ith;
     const int nth = params->nth;
 
-#ifdef GGML_USE_CLBLAST
+#if defined(GGML_USE_CLBLAST)
     if (src1->backend == GGML_BACKEND_GPU) {
         if (ith == 0) {
             ggml_cl_mul(src0, src1, dst);
+        }
+        return;
+    }
+#elif defined(GGML_USE_VULKAN)
+    if (src1->backend == GGML_BACKEND_GPU) {
+        if (ith == 0) {
+            ggml_vk_mul(src0, src1, dst);
         }
         return;
     }
