@@ -199,6 +199,7 @@
 #define GGML_MAX_CONTEXTS      64
 #define GGML_MAX_SRC           6
 #define GGML_MAX_NAME          48
+#define GGML_MAX_OP_PARAMS     32
 #define GGML_DEFAULT_N_THREADS 4
 
 
@@ -417,6 +418,9 @@ extern "C" {
 
         // compute data
         enum ggml_op op;
+
+        // op params - allocated as int32_t for alignment
+        int32_t op_params[GGML_MAX_OP_PARAMS / sizeof(uint32_t)];
 
         bool is_param;
 
@@ -1121,6 +1125,17 @@ extern "C" {
             int                   mode,
             int                   n_ctx);
 
+    // custom RoPE, in-place, returns view(a)
+    GGML_API struct ggml_tensor * ggml_rope_custom_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int                   n_past,
+            int                   n_dims,
+            int                   mode,
+            int                   n_ctx,
+            float                 freq_base,
+            float                 freq_scale);
+
     // rotary position embedding backward, i.e compute dx from dy
     // a - dy
     GGML_API struct ggml_tensor * ggml_rope_back(
@@ -1128,7 +1143,8 @@ extern "C" {
             struct ggml_tensor  * a,
             int                   n_past,
             int                   n_dims,
-            int                   mode);
+            int                   mode,
+            int                   n_ctx);
 
     // alibi position embedding
     // in-place, returns view(a)

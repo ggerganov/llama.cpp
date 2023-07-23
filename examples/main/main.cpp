@@ -84,9 +84,17 @@ int main(int argc, char ** argv) {
         return 0;
     }
 
+    if (params.rope_freq_base != 10000.0) {
+        fprintf(stderr, "%s: warning: changing RoPE frequency base to %g (default 10000.0)\n", __func__, params.rope_freq_base);
+    }
+
+    if (params.rope_freq_scale != 1.0) {
+        fprintf(stderr, "%s: warning: scaling RoPE frequency by %g (default 1.0)\n", __func__, params.rope_freq_scale);
+    }
+
     if (params.n_ctx > 2048) {
-        fprintf(stderr, "%s: warning: model might not support context sizes greater than 2048 tokens (%d specified);"
-                "expect poor results\n", __func__, params.n_ctx);
+        // TODO: determine the actual max context of the model (e.g. 4096 for LLaMA v2) and use that instead of 2048
+        fprintf(stderr, "%s: warning: base model only supports context sizes no greater than 2048 tokens (%d specified)\n", __func__, params.n_ctx);
     } else if (params.n_ctx < 8) {
         fprintf(stderr, "%s: warning: minimum context size is 8, using minimum size.\n", __func__);
         params.n_ctx = 8;
@@ -131,17 +139,14 @@ int main(int argc, char ** argv) {
                 params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
     }
 
-    // determine the maximum memory usage needed to do inference for the given n_batch and n_predict parameters
+    // determine the maximum memory usage needed to do inference for the given n_batch and n_ctx parameters
     // uncomment the "used_mem" line in llama.cpp to see the results
     if (params.mem_test) {
         {
-            const std::vector<llama_token> tmp(params.n_batch, llama_token_bos());
-            llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads);
-        }
+            fprintf(stderr, "%s: testing memory usage for n_batch = %d, n_ctx = %d\n", __func__, params.n_batch, params.n_ctx);
 
-        {
-            const std::vector<llama_token> tmp = { 0, };
-            llama_eval(ctx, tmp.data(), tmp.size(), params.n_predict - 1, params.n_threads);
+            const std::vector<llama_token> tmp(params.n_batch, llama_token_bos());
+            llama_eval(ctx, tmp.data(), tmp.size(), params.n_ctx, params.n_threads);
         }
 
         llama_print_timings(ctx);
@@ -549,7 +554,7 @@ int main(int argc, char ** argv) {
                 llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
 
                 if (ctx_guidance) {
-                    llama_sample_classifier_free_guidance(ctx, &candidates_p, ctx_guidance, params.cfg_scale, params.cfg_smooth_factor);
+                    llama_sample_classifier_free_guidance(ctx, &candidates_p, ctx_guidance, params.cfg_scale);
                 }
 
                 // Apply penalties
