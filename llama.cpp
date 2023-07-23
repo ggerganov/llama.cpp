@@ -590,7 +590,7 @@ struct llama_file_saver {
     llama_file_loader * any_file_loader;
     llama_file_saver(const char * fname, llama_file_loader * any_file_loader, enum llama_ftype new_ftype)
         : file(fname, "wb"), any_file_loader(any_file_loader) {
-        fprintf(stderr, "llama.cpp: saving model to %s\n", fname);
+        LLAMA_LOG_INFO("llama.cpp: saving model to %s", fname);
         write_magic();
         write_hparams(new_ftype);
         write_vocab();
@@ -611,7 +611,7 @@ struct llama_file_saver {
     }
     void write_vocab() {
         if (any_file_loader->file_version == LLAMA_FILE_VERSION_GGML) {
-            fprintf(stderr, "llama.cpp: WARNING: input is an old file that doesn't have scores; will add dummy scores\n");
+            LLAMA_LOG_WARN("llama.cpp: WARNING: input is an old file that doesn't have scores; will add dummy scores");
         }
         uint32_t n_vocab = any_file_loader->hparams.n_vocab;
         for (uint32_t i = 0; i < n_vocab; i++) {
@@ -802,7 +802,7 @@ struct llama_model_loader {
             uint8_t byte = lt.data[i];
             sum = byte + (sum << 6) + (sum << 16) - sum; // sdbm hash
         }
-        fprintf(stderr, "%s checksum: %#08x (%s, size %zu)\n", lt.name.c_str(), sum,
+        LLAMA_LOG_INFO("%s checksum: %#08x (%s, size %zu)", lt.name.c_str(), sum,
                 llama_format_tensor_shape(lt.ne).c_str(), lt.size);
     }
 
@@ -835,7 +835,7 @@ static bool kv_cache_init(
     cache.ctx = ggml_init(params);
 
     if (!cache.ctx) {
-        fprintf(stderr, "%s: failed to allocate memory for kv cache\n", __func__);
+        LLAMA_LOG_ERROR("%s: failed to allocate memory for kv cache", __func__);
         return false;
     }
 
@@ -1107,7 +1107,7 @@ static void llama_model_load_internal(
 #define LLAMA_BACKEND_OFFLOAD       GGML_BACKEND_GPU
 #define LLAMA_BACKEND_OFFLOAD_SPLIT GGML_BACKEND_GPU_SPLIT
 #elif defined(GGML_USE_CLBLAST)
-    fprintf(stderr, "%s: using OpenCL for GPU acceleration", __func__);
+    LLAMA_LOG_INFO("%s: using OpenCL for GPU acceleration", __func__);
 #define LLAMA_BACKEND_OFFLOAD       GGML_BACKEND_GPU
 #define LLAMA_BACKEND_OFFLOAD_SPLIT GGML_BACKEND_GPU
 #else
@@ -2554,7 +2554,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 int nx = tensor.ne.at(0);
                 int ny = tensor.ne.at(1);
                 if (nx % QK_K != 0 || ny % QK_K != 0) {
-                    fprintf(stderr, "\n\nTensor sizes %d x %d are not divisible by %d, required for k-quants.\n",nx,ny,QK_K);
+                    LLAMA_LOG_INFO("\n\nTensor sizes %d x %d are not divisible by %d, required for k-quants.",nx,ny,QK_K);
                     convert_incompatible_tensor = true;
                 }
             }
@@ -2586,10 +2586,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             if (convert_incompatible_tensor) {
                 if (tensor.name == "output.weight") {
                     new_type = GGML_TYPE_F16; //fall back to F16 instead of just failing.
-                    fprintf(stderr, "F16 will be used for this tensor instead.\n");
+                    LLAMA_LOG_WARN("F16 will be used for this tensor instead.\n");
                 } else if (tensor.name == "tok_embeddings.weight") {
                     new_type = GGML_TYPE_Q4_0; //fall back to Q4_0 instead of just failing.
-                    fprintf(stderr, "Q4_0 will be used for this tensor instead.\n");
+                    LLAMA_LOG_WARN("Q4_0 will be used for this tensor instead.\n");
                 } else {
                     throw std::runtime_error("Unsupported tensor size encountered\n");
                 }
@@ -2814,11 +2814,11 @@ struct llama_context * llama_new_context_with_model(
 
         const size_t max_size = ggml_get_max_tensor_size(ctx->model.ctx);
 
-        printf("%s: max tensor size = %8.2f MB\n", __func__, max_size/1024.0/1024.0);
+        LLAMA_LOG_INFO("%s: max tensor size = %8.2f MB\n", __func__, max_size/1024.0/1024.0);
 
 #define LLAMA_METAL_CHECK_BUF(result)                                          \
     if (!(result)) {                                                           \
-        LLAMA_LOG_ERROR("%s: failed to add buffer", __func__);         \
+        LLAMA_LOG_ERROR("%s: failed to add buffer", __func__);                 \
         llama_free(ctx);                                                       \
         return NULL;                                                           \
     }
@@ -2877,7 +2877,7 @@ int llama_model_quantize(
         llama_model_quantize_internal(fname_inp, fname_out, params);
         return 0;
     } catch (const std::exception & err) {
-        fprintf(stderr, "%s: failed to quantize: %s\n", __func__, err.what());
+        LLAMA_LOG_ERROR("%s: failed to quantize: %s", __func__, err.what());
         return 1;
     }
 }
