@@ -13035,7 +13035,7 @@ static void ggml_compute_forward_pool_2d_sk_p0(
 static void ggml_compute_forward_pool_2d(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-            struct ggml_tensor * dst) {
+              struct ggml_tensor * dst) {
 
     const int32_t * opts = (const int32_t *)dst->op_params;
     enum ggml_op_pool op = opts[0];
