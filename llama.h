@@ -87,7 +87,7 @@ extern "C" {
     #define LLAMA_LOG_LEVEL_WARN 3
     #define LLAMA_LOG_LEVEL_INFO 4
 
-   struct llama_context_params {
+    struct llama_context_params {
         uint32_t seed;                         // RNG seed, -1 for random
         int32_t  n_ctx;                        // text context
         int32_t  n_batch;                      // prompt processing batch size
@@ -104,12 +104,6 @@ extern "C" {
         llama_progress_callback progress_callback;
         // context pointer passed to the progress callback
         void * progress_callback_user_data;
-
-        // Called for every error, warning and information.
-        // If this is NULL, everything is output on stderr.
-        llama_log_callback log_callback;
-        // context pointer passed to the log callback
-        void * log_callback_user_data;
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool low_vram;   // if true, reduce VRAM usage at the cost of performance
@@ -164,6 +158,10 @@ extern "C" {
         int32_t n_p_eval;
         int32_t n_eval;
     };
+
+    // Set callback for logging events. If this is not called, or NULL is supplied,
+    // everything is output on stderr.
+    LLAMA_API void llama_log_set(llama_log_callback log_callback, void * user_data);
 
     LLAMA_API int llama_max_devices();
 
