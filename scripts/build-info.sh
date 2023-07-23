@@ -17,6 +17,6 @@ echo "#ifndef BUILD_INFO_H"
 echo "#define BUILD_INFO_H"
 echo ""
 echo "#define BUILD_NUMBER $BUILD_NUMBER"
-echo "#define BUILD_COMMIT \"$BUILD_COMMIT\""
+echo "#define BUILD_COMMIT \"$BUILD_COMMIT\"" | tr -d '\n'
 echo ""
 echo "#endif // BUILD_INFO_H"
