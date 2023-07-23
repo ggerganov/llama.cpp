@@ -422,12 +422,11 @@ extern "C" {
         // op params - allocated as int32_t for alignment
         int32_t op_params[GGML_MAX_OP_PARAMS / sizeof(uint32_t)];
 
-        bool is_param;
+        uint32_t is_param:1;
+        uint32_t visited:1;  // used to build graphs
 
         struct ggml_tensor * grad;
         struct ggml_tensor * src[GGML_MAX_SRC];
-
-        bool visited;   // used to build graphs
 
         // performance
         int     perf_runs;
