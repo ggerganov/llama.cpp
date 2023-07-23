@@ -4592,7 +4592,6 @@ struct ggml_tensor * ggml_new_tensor_impl(
         /*.op           =*/ GGML_OP_NONE,
         /*.op_params    =*/ {0},
         /*.is_param     =*/ false,
-        /*.visited      =*/ false,
         /*.grad         =*/ NULL,
         /*.src          =*/ { NULL },
         /*.perf_runs    =*/ 0,
@@ -15743,6 +15742,34 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
     }
 }
 
+static_assert(GGML_GRAPH_HASHTABLE_SIZE > GGML_MAX_NODES * 2, "GGML_GRAPH_HT_SIZE is too small");
+
+static size_t hash(void * p) {
+    return (size_t)p % GGML_GRAPH_HASHTABLE_SIZE;
+}
+
+static bool hash_insert(void * hash_table[], void * p) {
+    size_t h = hash(p);
+
+    // linear probing
+    size_t i = h;
+    while (hash_table[i] != NULL && hash_table[i] != p) {
+        i = (i + 1) % GGML_GRAPH_HASHTABLE_SIZE;
+        if (i == h) {
+            // hash table is full
+            GGML_ASSERT(false);
+        }
+    }
+
+    if (hash_table[i] == p) {
+        return true;
+    }
+
+    // insert
+    hash_table[i] = p;
+    return false;
+}
+
 static void ggml_visit_parents(struct ggml_cgraph * cgraph, struct ggml_tensor * node) {
     if (node->grad == NULL) {
         // this usually happens when we generate intermediate nodes from constants in the backward pass
@@ -15753,11 +15780,9 @@ static void ggml_visit_parents(struct ggml_cgraph * cgraph, struct ggml_tensor *
     }
 
     // check if already visited
-    if (node->visited) {
-        GGML_ASSERT(cgraph->n_nodes > 0 || cgraph->n_leafs > 0); // to fix this, call ggml_graph_close() after building the graph
+    if (hash_insert(cgraph->visited_hash_table, node)) {
         return;
     }
-    node->visited = true;
 
     for (int i = 0; i < GGML_MAX_SRC; ++i) {
         if (node->src[i]) {
@@ -15809,31 +15834,17 @@ static void ggml_build_forward_impl(struct ggml_cgraph * cgraph, struct ggml_ten
 }
 
 void ggml_build_forward_expand(struct ggml_cgraph * cgraph, struct ggml_tensor * tensor) {
-    GGML_ASSERT(!cgraph->closed && "graph is closed");
     ggml_build_forward_impl(cgraph, tensor, true);
-}
-
-void ggml_graph_close(struct ggml_cgraph * cgraph) {
-    if (cgraph->closed) {
-        return;
-    }
-    for (int i = 0; i < cgraph->n_nodes; ++i) {
-        cgraph->nodes[i]->visited = false;
-    }
-    for (int i = 0; i < cgraph->n_leafs; ++i) {
-        cgraph->leafs[i]->visited = false;
-    }
-    cgraph->closed = true;
 }
 
 struct ggml_cgraph ggml_build_forward(struct ggml_tensor * tensor) {
     struct ggml_cgraph result = {
         /*.n_nodes      =*/ 0,
         /*.n_leafs      =*/ 0,
-        /*.closed       =*/ false,
         /*.nodes        =*/ { NULL },
         /*.grads        =*/ { NULL },
         /*.leafs        =*/ { NULL },
+        /*.hash_table   =*/ { NULL },
         /*.perf_runs    =*/ 0,
         /*.perf_cycles  =*/ 0,
         /*.perf_time_us =*/ 0,
@@ -16145,8 +16156,6 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 }
 
 struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
-    ggml_graph_close(cgraph);
-
     if (n_threads <= 0) {
         n_threads = GGML_DEFAULT_N_THREADS;
     }

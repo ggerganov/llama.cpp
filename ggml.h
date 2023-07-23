@@ -422,8 +422,7 @@ extern "C" {
         // op params - allocated as int32_t for alignment
         int32_t op_params[GGML_MAX_OP_PARAMS / sizeof(uint32_t)];
 
-        uint32_t is_param:1;
-        uint32_t visited:1;  // used to build graphs
+        bool is_param;
 
         struct ggml_tensor * grad;
         struct ggml_tensor * src[GGML_MAX_SRC];
@@ -460,15 +459,21 @@ extern "C" {
         void * abort_callback_data;
     };
 
+    // next prime after GGML_MAX_NODES
+    // #define GGML_GRAPH_HASHTABLE_SIZE 4099
+    // next prime after GGML_MAX_NODES * 2 (nodes + leafs)
+    #define GGML_GRAPH_HASHTABLE_SIZE 8273
+
     // computation graph
     struct ggml_cgraph {
         int n_nodes;
         int n_leafs;
-        bool closed;
 
         struct ggml_tensor * nodes[GGML_MAX_NODES];
         struct ggml_tensor * grads[GGML_MAX_NODES];
         struct ggml_tensor * leafs[GGML_MAX_NODES];
+
+        void * visited_hash_table[GGML_GRAPH_HASHTABLE_SIZE];
 
         // performance
         int     perf_runs;
@@ -1350,11 +1355,6 @@ extern "C" {
             struct ggml_tensor  * tensor);
 
     GGML_API void ggml_build_forward_expand(struct ggml_cgraph * cgraph, struct ggml_tensor * tensor);
-
-    // resets the visited flag for all the tensors in the graph
-    // called by ggml_graph_plan()
-    // shouldn't be necessary to call manually except building when building multiple graphs without computing them
-    GGML_API void ggml_graph_close(struct ggml_cgraph * cgraph);
 
     GGML_API struct ggml_cgraph ggml_build_forward (struct ggml_tensor * tensor);
     GGML_API struct ggml_cgraph ggml_build_backward(struct ggml_context * ctx, struct ggml_cgraph * gf, bool keep);
