@@ -11626,8 +11626,8 @@ static void ggml_compute_forward_alibi_f32(
         return;
     }
 
-    const int   n_past   = ((int32_t *) dst->op_params)[0];
-    const int   n_head   = ((int32_t *) dst->op_params)[1];
+    const int n_past = ((int32_t *) dst->op_params)[0];
+    const int n_head = ((int32_t *) dst->op_params)[1];
     float max_bias;
     memcpy(&max_bias, (int32_t *) dst->op_params + 2, sizeof(float));
 
@@ -11689,8 +11689,8 @@ static void ggml_compute_forward_alibi_f16(
         return;
     }
 
-    const int   n_past   = ((int32_t *) dst->op_params)[0];
-    const int   n_head   = ((int32_t *) dst->op_params)[1];
+    const int n_past = ((int32_t *) dst->op_params)[0];
+    const int n_head = ((int32_t *) dst->op_params)[1];
     float max_bias;
     memcpy(&max_bias, (int32_t *) dst->op_params + 2, sizeof(float));
 
@@ -12534,7 +12534,7 @@ static void ggml_compute_forward_conv_1d_s1_ph(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+              struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F16:
             {
@@ -12737,7 +12737,7 @@ static void ggml_compute_forward_conv_1d_s2_ph(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+              struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F16:
             {
@@ -12757,10 +12757,10 @@ static void ggml_compute_forward_conv_1d_s2_ph(
 // ggml_compute_forward_conv_1d
 
 static void ggml_compute_forward_conv_1d(
-    const struct ggml_compute_params * params,
-    const struct ggml_tensor * src0,
-    const struct ggml_tensor * src1,
-    struct ggml_tensor * dst) {
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+              struct ggml_tensor * dst) {
     const int32_t s0 = ((const int32_t*)(dst->op_params))[0];
     const int32_t p0 = ((const int32_t*)(dst->op_params))[1];
     const int32_t d0 = ((const int32_t*)(dst->op_params))[2];
@@ -12877,8 +12877,7 @@ static void ggml_compute_forward_conv_2d(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst
-        ) {
+              struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F16:
             {
@@ -12951,9 +12950,9 @@ static void ggml_compute_forward_pool_1d_sk_p0(
 // ggml_compute_forward_pool_1d
 
 static void ggml_compute_forward_pool_1d(
-    const struct ggml_compute_params* params,
-    const struct ggml_tensor* src0,
-    struct ggml_tensor* dst) {
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+              struct ggml_tensor * dst) {
 
     const int32_t* opts = (const int32_t*)dst->op_params;
     enum ggml_op_pool op = opts[0];
@@ -12969,12 +12968,12 @@ static void ggml_compute_forward_pool_1d(
 // ggml_compute_forward_pool_2d_sk_p0
 
 static void ggml_compute_forward_pool_2d_sk_p0(
-    const struct ggml_compute_params * params,
-    const enum ggml_op_pool op,
-    const struct ggml_tensor * src,
-    const int k0,
-    const int k1,
-    struct ggml_tensor * dst) {
+        const struct ggml_compute_params * params,
+        const enum   ggml_op_pool op,
+        const struct ggml_tensor * src,
+        const int k0,
+        const int k1,
+        struct ggml_tensor * dst) {
     assert(src->type == GGML_TYPE_F32);
     assert(params->ith == 0);
 
@@ -13034,9 +13033,9 @@ static void ggml_compute_forward_pool_2d_sk_p0(
 // ggml_compute_forward_pool_2d
 
 static void ggml_compute_forward_pool_2d(
-    const struct ggml_compute_params * params,
-    const struct ggml_tensor * src0,
-    struct ggml_tensor * dst) {
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+            struct ggml_tensor * dst) {
 
     const int32_t * opts = (const int32_t *)dst->op_params;
     enum ggml_op_pool op = opts[0];
@@ -13063,7 +13062,7 @@ static void ggml_compute_forward_flash_attn_f32(
         const struct ggml_tensor * k,
         const struct ggml_tensor * v,
         const bool masked,
-             struct ggml_tensor * dst) {
+        struct ggml_tensor * dst) {
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
@@ -13241,7 +13240,7 @@ static void ggml_compute_forward_flash_attn_f16(
         const struct ggml_tensor * k,
         const struct ggml_tensor * v,
         const bool masked,
-             struct ggml_tensor * dst) {
+        struct ggml_tensor * dst) {
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
