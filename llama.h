@@ -11,6 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <string>
 
 #ifdef LLAMA_SHARED
 #    if defined(_WIN32) && !defined(__MINGW32__)
@@ -278,6 +279,13 @@ extern "C" {
                              int   n_max_tokens,
                             bool   add_bos);
 
+    LLAMA_API int llama_tokenize_bpe(
+            struct llama_context * ctx,
+                      const char * text,
+                     llama_token * tokens,
+                             int   n_max_tokens,
+                            bool   add_bos);
+
     LLAMA_API int llama_tokenize_with_model(
         const struct llama_model * model,
                       const char * text,
@@ -319,11 +327,15 @@ extern "C" {
     LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 
     // Token Id -> String. Uses the vocabulary in the provided context
-    LLAMA_API const char * llama_token_to_str(
+    LLAMA_API std::string llama_token_to_str(
             const struct llama_context * ctx,
                            llama_token   token);
 
-    LLAMA_API const char * llama_token_to_str_with_model(
+    LLAMA_API std::string llama_token_to_str_bpe(
+            const struct llama_context * ctx,
+                           llama_token   token);
+
+    LLAMA_API std::string llama_token_to_str_with_model(
               const struct llama_model * model,
                            llama_token   token);
 

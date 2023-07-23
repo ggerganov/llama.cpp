@@ -242,13 +242,6 @@ struct llama_kv_cache {
     }
 };
 
-struct llama_trie {
-    std::unordered_map<std::string, llama_trie> map;
-};
-
-void llama_trie_insert(struct llama_trie& trie, const std::string& text, size_t offs);
-size_t llama_trie_find(const struct llama_trie& trie, const std::string& text, size_t offs);
-
 struct llama_vocab {
     using id    = int32_t;
     using token = std::string;
@@ -260,7 +253,6 @@ struct llama_vocab {
 
     std::unordered_map<token, id> token_to_id;
     std::vector<token_score> id_to_token;
-    struct llama_trie trie;
 };
 
 struct llama_model {
@@ -524,13 +516,12 @@ struct llama_file_loader {
             float score = 0.0f;
             file.read_raw(&score, sizeof(score));
 
+            assert(vocab.token_to_id.find(word) == vocab.token_to_id.end());
             vocab.token_to_id[word] = i;
 
             auto & tok_score = vocab.id_to_token[i];
             tok_score.tok = word;
             tok_score.score = score;
-
-            llama_trie_insert(vocab.trie, word, 0);
         }
     }
     void read_tensor_metadata(llama_load_tensors_map & tensors_map) {
@@ -1804,26 +1795,37 @@ struct llama_sp_bigram {
     size_t size;
 };
 
-void llama_trie_insert(struct llama_trie& trie, const std::string& text, size_t offs) {
-    if (offs < text.size()) {
-        size_t char_len = utf8_len(text[offs]);
-        std::string key = text.substr(offs, char_len);
-        if (trie.map.find(key) == trie.map.end()) {
-            trie.map[key] = llama_trie();
+static std::string llama_escape_whitespace(const std::string& text) {
+    std::string result;
+    bool escaping = false;
+    result += char(0xe2);
+    result += char(0x96);
+    result += char(0x81);
+    for (size_t offs = 0; offs < text.length(); ++offs) {
+        if (text[offs] == ' ') {
+            if (!escaping) {
+                result += char(0xe2);
+                result += char(0x96);
+                result += char(0x81);
+                escaping = true;
+            }
         }
-        llama_trie_insert(trie.map.at(key), text, offs + char_len);
+        else {
+            escaping = false;
+            result += text[offs];
+        }
     }
+    return result;
 }
 
-size_t llama_trie_find(const struct llama_trie& trie, const std::string & text, size_t offs) {
-    if (offs < text.size()) {
-        size_t char_len = utf8_len(text[offs]);
-        std::string key = text.substr(offs, char_len);
-        if (trie.map.find(key) != trie.map.end()) {
-            return char_len + llama_trie_find(trie.map.at(key), text, offs + char_len);
-        }
-    }
-    return 0;
+static std::string llama_unescape_whitespace(const std::string& word) {
+    if (word.length() >= 3 &&
+        word[0] == char(0xe2) &&
+        word[1] == char(0x96) &&
+        word[2] == char(0x81)) {
+        return std::string(" ") + word.substr(3);
+    } 
+    return word;
 }
 
 // original implementation:
@@ -1832,13 +1834,12 @@ struct llama_tokenizer {
     llama_tokenizer(const llama_vocab & vocab): vocab_(vocab) {}
 
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
-        // split string into utf8 chars / token?
+        // split string into utf8 chars
         int index = 0;
         size_t offs = 0;
         while (offs < text.size()) {
             llama_sp_symbol sym;
             size_t len = utf8_len(text[offs]);
-            // size_t len = llama_trie_find(vocab_.trie, text, offs);
             if (len == 0) {
                 len = utf8_len(text[offs]);
             }
@@ -1908,7 +1909,7 @@ private:
 
         if (p == rev_merge.end()) {
             // output any symbols that did not form tokens as bytes.
-            for (int j = 0; j < (int) symbol.n; ++j) {
+            for (int j = 0; j < (int)symbol.n; ++j) {
                 llama_vocab::id token_id = static_cast<uint8_t>(symbol.text[j]) + 3;
                 output.push_back(token_id);
             }
@@ -1954,16 +1955,23 @@ private:
     std::map<std::string, std::pair<int, int> > rev_merge;
 };
 
-static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, const std::string & text, bool bos) {
+static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, const std::string & raw_text, bool bos, bool escape) {
     llama_tokenizer tokenizer(vocab);
     std::vector<llama_vocab::id> output;
 
-    if (text.empty()) {
+    if (raw_text.empty()) {
         return output;
     }
 
     if (bos) {
         output.push_back(llama_token_bos());
+    }
+
+    std::string text;
+    if (escape) {
+        text = llama_escape_whitespace(raw_text);
+    } else {
+        text = raw_text;
     }
 
     tokenizer.tokenize(text, output);
@@ -3620,7 +3628,7 @@ int llama_tokenize_with_model(
                  llama_token * tokens,
                          int   n_max_tokens,
                         bool   add_bos) {
-    auto res = llama_tokenize(model->vocab, text, add_bos);
+    auto res = llama_tokenize(model->vocab, text, add_bos, true);
 
     if (n_max_tokens < (int) res.size()) {
         fprintf(stderr, "%s: too many tokens\n", __func__);
@@ -3642,6 +3650,27 @@ int llama_tokenize(
                         bool   add_bos) {
     return llama_tokenize_with_model(&ctx->model, text, tokens, n_max_tokens, add_bos);
 }
+
+int llama_tokenize_bpe(
+        struct llama_context * ctx,
+                  const char * text,
+                 llama_token * tokens,
+                         int   n_max_tokens,
+                        bool   add_bos) {
+    auto res = llama_tokenize(ctx->model.vocab, text, add_bos, false);
+
+    if (n_max_tokens < (int) res.size()) {
+        fprintf(stderr, "%s: too many tokens\n", __func__);
+        return -((int) res.size());
+    }
+
+    for (size_t i = 0; i < res.size(); i++) {
+        tokens[i] = res[i];
+    }
+
+    return res.size();
+}
+
 
 int llama_n_vocab_from_model(const struct llama_model * model) {
     return model->vocab.id_to_token.size();
@@ -3696,16 +3725,24 @@ float * llama_get_embeddings(struct llama_context * ctx) {
     return ctx->embedding.data();
 }
 
-const char * llama_token_to_str_with_model(const struct llama_model * model, llama_token token) {
+std::string llama_token_to_str_with_model(const struct llama_model * model, llama_token token) {
     if (token >= llama_n_vocab_from_model(model)) {
         return nullptr;
     }
 
-    return model->vocab.id_to_token[token].tok.c_str();
+    return llama_unescape_whitespace(model->vocab.id_to_token[token].tok);
 }
 
-const char * llama_token_to_str(const struct llama_context * ctx, llama_token token) {
+std::string llama_token_to_str(const struct llama_context * ctx, llama_token token) {
     return llama_token_to_str_with_model(&ctx->model, token);
+}
+
+std::string llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token) {
+    if (token >= llama_n_vocab_from_model(&ctx->model)) {
+        return nullptr;
+    }
+
+    return ctx->model.vocab.id_to_token[token].tok;
 }
 
 llama_token llama_token_bos() {

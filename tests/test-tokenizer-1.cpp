@@ -15,7 +15,7 @@ static std::string escape_whitespace(const std::string& text) {
     result += char(0x96);
     result += char(0x81);
     for (size_t offs = 0; offs < text.length(); ++offs) {
-        if (text[offs] == ' ' || text[offs] == '\t' || text[offs] == '\n') {
+        if (text[offs] == ' ') {
             if (!escaping) {
                 result += char(0xe2);
                 result += char(0x96);
@@ -31,21 +31,10 @@ static std::string escape_whitespace(const std::string& text) {
     return result;
 }
 
-static std::string unescape_whitespace(llama_context* ctx, llama_token token) {
-    const char* word = llama_token_to_str(ctx, token);
-    if (strlen(word) >= 3 &&
-        word[0] == char(0xe2) &&
-        word[1] == char(0x96) &&
-        word[2] == char(0x81)) {
-        return std::string(" ") + (word + 3);
-    }
-    return word;
-}
-
 static std::string unescape_whitespace(llama_context* ctx, const llama_token* tokens, int count) {
     std::string result;
     for (int i = 0; i < count; ++i) {
-        result += unescape_whitespace(ctx, tokens[i]);
+        result += llama_token_to_str(ctx, tokens[i]);
     }
     return result;
 }
@@ -97,22 +86,22 @@ int main(int argc, char **argv) {
     }
 
     for (int i = 0; i < n_vocab; ++i) {
-        std::string forward = llama_token_to_str(ctx, i);
+        std::string forward = llama_token_to_str_bpe(ctx, i);
         std::vector<llama_token> tokens(forward.length());
-        int n = llama_tokenize(ctx, forward.c_str(), tokens.data(), forward.length(), false);
+        int n = llama_tokenize_bpe(ctx, forward.c_str(), tokens.data(), forward.length(), false);
         if (n == 1) {
             if (i != tokens[0]) {
-                std::string backward = unescape_whitespace(ctx, tokens[0]);
+                std::string backward = llama_token_to_str(ctx, tokens[0]);
                 fprintf(stderr, "%s : error: token %d is string %s but tokenize() returns token %d %s\n", 
-                    __func__, i, unescape_whitespace(ctx, i).c_str(), tokens[0], backward.c_str());
+                    __func__, i, llama_token_to_str(ctx, i).c_str(), tokens[0], backward.c_str());
             }
         } else {
             if (i <= 258) {
                 fprintf(stderr, "%s : info: token %d is string %s and tokenize() returns tokens %s\n", 
-                    __func__, i, unescape_whitespace(ctx, i).c_str(), unescape_whitespace(ctx, tokens.data(), n).c_str());
+                    __func__, i, llama_token_to_str(ctx, i).c_str(), unescape_whitespace(ctx, tokens.data(), n).c_str());
             } else {
                 fprintf(stderr, "%s : error: token %d is string %s but tokenize() returns tokens %s\n", 
-                    __func__, i, unescape_whitespace(ctx, i).c_str(), unescape_whitespace(ctx, tokens.data(), n).c_str());
+                    __func__, i, llama_token_to_str(ctx, i).c_str(), unescape_whitespace(ctx, tokens.data(), n).c_str());
             }
         }
     }
@@ -121,8 +110,8 @@ int main(int argc, char **argv) {
     for (wchar_t ch = 0x0000; ch < 0xffff; ++ch) {
         std::wstring wstr(1, ch);
         std::string str = converter.to_bytes(wstr);
-        std::vector<llama_token> tokens(strlen(str.c_str()));
-        auto n = llama_tokenize(ctx, escape_whitespace(str).c_str(), tokens.data(), str.length(), false);
+        std::vector<llama_token> tokens(str.length() + 1);
+        auto n = llama_tokenize(ctx, escape_whitespace(str).c_str(), tokens.data(), str.length() + 1, false);
         if (n == 1) {
             fprintf(stderr, "%s : info: %s tokenized to %d \n", 
                 __func__, str.c_str(), tokens[0]);

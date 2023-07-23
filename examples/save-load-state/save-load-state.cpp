@@ -91,7 +91,7 @@ int main(int argc, char ** argv) {
         auto next_token_str = llama_token_to_str(ctx, next_token);
         last_n_tokens_data.push_back(next_token);
 
-        printf("%s", next_token_str);
+        printf("%s", next_token_str.c_str());
         if (llama_eval(ctx, &next_token, 1, n_past, params.n_threads)) {
             fprintf(stderr, "\n%s : failed to evaluate\n", __func__);
             llama_free(ctx);
@@ -151,7 +151,7 @@ int main(int argc, char ** argv) {
         auto next_token_str = llama_token_to_str(ctx2, next_token);
         last_n_tokens_data.push_back(next_token);
 
-        printf("%s", next_token_str);
+        printf("%s", next_token_str.c_str());
         if (llama_eval(ctx2, &next_token, 1, n_past, params.n_threads)) {
             fprintf(stderr, "\n%s : failed to evaluate\n", __func__);
             llama_free(ctx2);
