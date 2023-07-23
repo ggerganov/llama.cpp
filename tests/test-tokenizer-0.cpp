@@ -16,9 +16,10 @@ static std::string unescape_whitespace(llama_context* ctx, const llama_token* to
 static const std::map<std::string, std::vector<llama_token>> & k_tests()
 {
     static std::map<std::string, std::vector<llama_token>> _k_tests = {
-        {" ",                  {1,    259,},},
+        { " ",                  {1,    259, }, },
         { "\t",                 { 1,    29871,   12, }, },
         { "\n",                 { 1,    29871,   13, }, },
+        { "\t\n",               { 1,    29871,   12,     13, }, },
         { "Hello world",        { 1,  15043,   3186, }, },
         { " Hello world",       { 1,  29871,  15043,   3186, }, },
         { "Hello World",        { 1,  15043,   2787, }, },
