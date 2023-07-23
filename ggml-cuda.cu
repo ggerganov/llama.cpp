@@ -1613,11 +1613,20 @@ static __device__ __forceinline__ float vec_dot_q5_K_q8_1(
 
     const int vh = (*((int *) &bq5_K->qh[sizeof(int) * (iqs % (QI5_K/4))])) >> bq8_offset;
 
-    for (int i = 0; i < QR5_K; ++i) {
-        const int isc = bq8_offset + i;
+    const uint16_t * scales = (const uint16_t *)bq5_K->scales;
+    uint16_t aux[2];
+    const int j = bq8_offset/2;
+    if (j < 2) {
+        aux[0] = scales[j+0] & 0x3f3f;
+        aux[1] = scales[j+2] & 0x3f3f;
+    } else {
+        aux[0] = ((scales[j+2] >> 0) & 0x0f0f) | ((scales[j-2] & 0xc0c0) >> 2);
+        aux[1] = ((scales[j+2] >> 4) & 0x0f0f) | ((scales[j-0] & 0xc0c0) >> 2);
+    }
+    const uint8_t * sc = (const uint8_t *)aux;
+    const uint8_t * m  = sc + 2;
 
-        uint8_t sc, m;
-        get_scale_min_k4(isc, bq5_K->scales, sc, m);
+    for (int i = 0; i < QR5_K; ++i) {
 
         const block_q8_1 * bq8i = bq8_1 + bq8_offset + i;
         const int ui = *((int*) &bq8i->qs[sizeof(int) * (iqs % QI8_1)]);
@@ -1629,8 +1638,8 @@ static __device__ __forceinline__ float vec_dot_q5_K_q8_1(
 
         const int vi = vil | vih;
 
-        sumf_d += d8i * (__dp4a(vi,         ui, 0) * sc); // SIMD dot product
-        sumf_m += d8i * (__dp4a(0x01010101, ui, 0) * m);  // multiply constant part of q5_K with sum of q8_1 values
+        sumf_d += d8i * (__dp4a(vi,         ui, 0) * sc[i]); // SIMD dot product
+        sumf_m += d8i * (__dp4a(0x01010101, ui, 0) * m[i]);  // multiply constant part of q5_K with sum of q8_1 values
     }
 
     return d*sumf_d - dmin*sumf_m;
