@@ -2742,6 +2742,7 @@ inline void ggml_cuda_op_mul(
     (void) dst;
     (void) src0_ddq_i;
     (void) i02;
+    (void) i1;
 }
 
 inline void ggml_cuda_op_gelu(
@@ -3037,15 +3038,15 @@ inline void ggml_cuda_op_rope(
     const int64_t ne00 = src0->ne[0];
     const int64_t i01_diff = i01_high - i01_low;
 
-    const int n_past = ((int32_t *) src1->data)[0];
-    const int n_dims = ((int32_t *) src1->data)[1];
-    const int mode   = ((int32_t *) src1->data)[2];
-    const int n_ctx  = ((int32_t *) src1->data)[3];
-
+    const int n_past = ((int32_t *) dst->op_params)[0];
+    const int n_dims = ((int32_t *) dst->op_params)[1];
+    const int mode   = ((int32_t *) dst->op_params)[2];
+    const int n_ctx  = ((int32_t *) dst->op_params)[3];
     // RoPE alteration for extended context
+
     float freq_base, freq_scale;
-    memcpy(&freq_base,  (int32_t *) src1->data + 4, sizeof(float));
-    memcpy(&freq_scale, (int32_t *) src1->data + 5, sizeof(float));
+    memcpy(&freq_base,  (int32_t *) dst->op_params + 4, sizeof(float));
+    memcpy(&freq_scale, (int32_t *) dst->op_params + 5, sizeof(float));
 
     const float theta_scale = powf(freq_base, -2.0f/n_dims);
     const float p = (((mode & 1) == 0 ? n_past + i02 : i02)) * freq_scale;
@@ -3061,6 +3062,7 @@ inline void ggml_cuda_op_rope(
         rope_f32_cuda(src0_ddf_i, dst_ddf_i, ne00, i01_diff, p, theta_scale, cudaStream_main);
     }
 
+    (void) src1;
     (void) dst;
     (void) src0_ddq_i;
     (void) src1_ddf_i;
@@ -3079,11 +3081,12 @@ inline void ggml_cuda_op_diag_mask_inf(
     const int64_t ne01 = src0->ne[1];
     const int64_t i01_diff = i01_high - i01_low;
 
-    const int n_past = ((int32_t *) src1->data)[0];
+    const int n_past = ((int32_t *) dst->op_params)[0];
 
     // compute
     diag_mask_inf_f32_cuda(src0_ddf_i, dst_ddf_i, ne00, i01_diff, ne01, n_past, cudaStream_main);
 
+    (void) src1;
     (void) dst;
     (void) src0_ddq_i;
     (void) src1_ddf_i;
@@ -3803,7 +3806,7 @@ void ggml_cuda_assign_buffers_impl(struct ggml_tensor * tensor, bool scratch, bo
         char * src0_ddc = (char *) src0_extra->data_device[g_main_device];
         size_t offset = 0;
         if (tensor->op == GGML_OP_VIEW) {
-            memcpy(&offset, tensor->src[2]->data, sizeof(size_t));
+            memcpy(&offset, tensor->op_params, sizeof(size_t));
         }
         extra = ggml_cuda_alloc_temp_tensor_extra();
         extra->data_device[g_main_device] = src0_ddc + offset;
