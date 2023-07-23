@@ -188,7 +188,7 @@ typedef struct {
 static_assert(sizeof(block_q4_K) == 2*sizeof(ggml_fp16_t) + 3*QK_K/64 + QK_K/2, "wrong q4_K block size/padding");
 #endif
 
-#define QR5_K 2
+#define QR5_K 4
 #define QI5_K (QK_K / (4*QR5_K))
 #ifdef GGML_QKK_64
 typedef struct {
@@ -1627,7 +1627,9 @@ static __device__ __forceinline__ float vec_dot_q5_K_q8_1(
 #if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
     const block_q5_K * bq5_K = (const block_q5_K *) vbq;
 
-    const int bq8_offset = QR5_K * (iqs / QI8_1);
+    const int bq8_offset = (QR5_K/2) * (iqs / (QI8_1/2));
+    const int * ql = (const int *)(bq5_K->qs + 16 * bq8_offset + 4 * (iqs%4));
+    const int * qh = (const int *)(bq5_K->qh + 4 * (iqs%4));
 
     float sumf_d = 0.0f;
     float sumf_m = 0.0f;
@@ -1635,9 +1637,11 @@ static __device__ __forceinline__ float vec_dot_q5_K_q8_1(
     const float    d = bq5_K->d;
     const float dmin = bq5_K->dmin;
 
-    const int vl = *((int *) &bq5_K->qs[sizeof(int) * iqs]);
+    const int vl1 = ql[0];
+    const int vl2 = ql[4];
 
-    const int vh = (*((int *) &bq5_K->qh[sizeof(int) * (iqs % (QI5_K/4))])) >> bq8_offset;
+    const int vh1 = qh[0] >> bq8_offset;
+    const int vh2 = qh[4] >> bq8_offset;
 
     const uint16_t * scales = (const uint16_t *)bq5_K->scales;
     uint16_t aux[2];
@@ -1652,20 +1656,29 @@ static __device__ __forceinline__ float vec_dot_q5_K_q8_1(
     const uint8_t * sc = (const uint8_t *)aux;
     const uint8_t * m  = sc + 2;
 
-    for (int i = 0; i < QR5_K; ++i) {
+    for (int i = 0; i < QR5_K/2; ++i) {
 
         const block_q8_1 * bq8i = bq8_1 + bq8_offset + i;
-        const int ui = *((int*) &bq8i->qs[sizeof(int) * (iqs % QI8_1)]);
         const float d8i = bq8i->d;
+        const int * q8 = (const int *)bq8i->qs + (iqs%4);
+        const int ui1 = q8[0];
+        const int ui2 = q8[4];
 
-        const int vil = (vl >> (4*i)) & 0x0F0F0F0F;
+        const int vil1 = (vl1 >> (4*i)) & 0x0F0F0F0F;
+        const int vil2 = (vl2 >> (4*i)) & 0x0F0F0F0F;
 
-        const int vih = ((vh >> i) << 4) & 0x10101010;
+        const int vih1 = ((vh1 >> i) << 4) & 0x10101010;
+        const int vih2 = ((vh2 >> i) << 4) & 0x10101010;
 
-        const int vi = vil | vih;
+        const int vi1 = vil1 | vih1;
+        const int vi2 = vil2 | vih2;
 
-        sumf_d += d8i * (__dp4a(vi,         ui, 0) * sc[i]); // SIMD dot product
-        sumf_m += d8i * (__dp4a(0x01010101, ui, 0) * m[i]);  // multiply constant part of q5_K with sum of q8_1 values
+        const int dot1 = __dp4a(vi2, ui2, __dp4a(vi1, ui1, 0));
+        const int dot2 = __dp4a(0x01010101, ui2, __dp4a(0x01010101, ui1, 0));
+
+        sumf_d += d8i * (dot1 * sc[i]); // SIMD dot product
+        sumf_m += d8i * (dot2 * m[i]);  // multiply constant part of q4_K with sum of q8_1 values
+
     }
 
     return d*sumf_d - dmin*sumf_m;
