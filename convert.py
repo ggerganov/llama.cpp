@@ -219,12 +219,12 @@ class Params:
 
     @staticmethod
     def load(model_plus: 'ModelPlus') -> 'Params':
-        hf_transformer_config_path = model_plus.paths[0].parent / "config.json"
-        orig_config_path           = model_plus.paths[0].parent / "params.json"
+        hf_config_path   = model_plus.paths[0].parent / "config.json"
+        orig_config_path = model_plus.paths[0].parent / "params.json"
 
-        if hf_transformer_config_path.exists():
-            params = Params.loadHFTransformerJson(model_plus.model, hf_transformer_config_path)
-        if orig_config_path.exists():
+        if hf_config_path.exists():
+            params = Params.loadHFTransformerJson(model_plus.model, hf_config_path)
+        else if orig_config_path.exists():
             params = Params.loadOriginalParamsJson(model_plus.model, orig_config_path)
         else:
             params = Params.guessed(model_plus.model)
