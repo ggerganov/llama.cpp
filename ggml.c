@@ -16278,6 +16278,9 @@ struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
             case GGML_OP_GET_ROWS:
             case GGML_OP_GET_ROWS_BACK:
             case GGML_OP_DIAG:
+                {
+                    n_tasks = 1;
+                } break;
             case GGML_OP_DIAG_MASK_ZERO:
             case GGML_OP_DIAG_MASK_INF:
             case GGML_OP_SOFT_MAX:
