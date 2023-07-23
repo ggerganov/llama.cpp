@@ -57,7 +57,7 @@
 #endif
 
 void llama_log_internal(int level, const char* format, ...);
-void llama_log_callback_default(int level, const char * text, void * ctx);
+void llama_log_callback_default(llama_log_level level, const char * text, void * user_data);
 #define LLAMA_LOG_INFO(...)  llama_log_internal(LLAMA_LOG_LEVEL_INFO , __VA_ARGS__)
 #define LLAMA_LOG_WARN(...)  llama_log_internal(LLAMA_LOG_LEVEL_WARN , __VA_ARGS__)
 #define LLAMA_LOG_ERROR(...) llama_log_internal(LLAMA_LOG_LEVEL_ERROR, __VA_ARGS__)
@@ -3759,7 +3759,7 @@ void llama_log_set(llama_log_callback log_callback, void * user_data) {
 #define vsnprintf _vsnprintf
 #endif
 
-void llama_log_internal_v(int level, const char * format, va_list args) {
+static void llama_log_internal_v(llama_log_level level, const char * format, va_list args) {
     va_list args_copy;
     va_copy(args_copy, args);
     char buffer[128];
@@ -3776,15 +3776,15 @@ void llama_log_internal_v(int level, const char * format, va_list args) {
     va_end(args_copy);
 }
 
-void llama_log_internal(int level, const char * format, ...) {
+static void llama_log_internal(llama_log_level level, const char * format, ...) {
     va_list args;
     va_start(args, format);
     llama_log_internal_v(level, format, args);
     va_end(args);
 }
 
-void llama_log_callback_default(int level, const char * text, void *ctx) {
+static void llama_log_callback_default(llama_log_level level, const char * text, void * user_data) {
     (void) level;
-    (void) ctx;
+    (void) user_data;
     fprintf(stderr, "%s\n", text);
 }

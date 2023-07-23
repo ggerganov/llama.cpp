@@ -82,10 +82,12 @@ extern "C" {
 
     typedef void (*llama_progress_callback)(float progress, void *ctx);
 
-    typedef void (*llama_log_callback)(int level, const char* text, void *ctx);
-    #define LLAMA_LOG_LEVEL_ERROR 2
-    #define LLAMA_LOG_LEVEL_WARN 3
-    #define LLAMA_LOG_LEVEL_INFO 4
+    enum llama_log_level {
+        LLAMA_LOG_LEVEL_ERROR = 2,
+        LLAMA_LOG_LEVEL_WARN  = 3,
+        LLAMA_LOG_LEVEL_INFO  = 4
+    };
+    typedef void (*llama_log_callback)(llama_log_level level, const char* text, void *ctx);
 
     struct llama_context_params {
         uint32_t seed;                         // RNG seed, -1 for random
