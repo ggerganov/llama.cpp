@@ -56,7 +56,7 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-void llama_log_internal(int level, const char* format, ...);
+void llama_log_internal(llama_log_level level, const char* format, ...);
 void llama_log_callback_default(llama_log_level level, const char * text, void * user_data);
 #define LLAMA_LOG_INFO(...)  llama_log_internal(LLAMA_LOG_LEVEL_INFO , __VA_ARGS__)
 #define LLAMA_LOG_WARN(...)  llama_log_internal(LLAMA_LOG_LEVEL_WARN , __VA_ARGS__)
@@ -407,8 +407,8 @@ struct llama_context {
 
 struct llama_state {
     // We save the log callback globally
-    llama_log_callback log_callback;
-    void * log_callback_user_data;
+    llama_log_callback log_callback = llama_log_callback_default;
+    void * log_callback_user_data = nullptr;
 };
 // global state
 static llama_state g_state;
