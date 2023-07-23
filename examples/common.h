@@ -27,6 +27,7 @@ struct gpt_params {
     int32_t n_predict                       = -1;  // new tokens to predict
     int32_t n_ctx                           = 512; // context size
     int32_t n_batch                         = 512; // batch size for prompt processing (must be >=32 to use BLAS)
+    int32_t n_gqa                           = 1;   // grouped-query attention factor (TODO: move to hparams)
     int32_t n_keep                          = 0;   // number of tokens to keep from initial prompt
     int32_t n_chunks                        = -1;  // max number of chunks to process (-1 = unlimited)
     int32_t n_gpu_layers                    = 0;   // number of layers to store in VRAM
@@ -47,7 +48,7 @@ struct gpt_params {
     int32_t repeat_last_n     = 64;    // last n tokens to penalize (0 = disable penalty, -1 = context size)
     float   frequency_penalty = 0.00f; // 0.0 = disabled
     float   presence_penalty  = 0.00f; // 0.0 = disabled
-    int     mirostat          = 0;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
+    int32_t mirostat          = 0;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
     float   mirostat_tau      = 5.00f; // target entropy
     float   mirostat_eta      = 0.10f; // learning rate
 

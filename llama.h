@@ -83,11 +83,12 @@ extern "C" {
     typedef void (*llama_progress_callback)(float progress, void *ctx);
 
    struct llama_context_params {
-        uint32_t seed;                         // RNG seed, -1 for random
-        int32_t  n_ctx;                        // text context
-        int32_t  n_batch;                      // prompt processing batch size
-        int32_t  n_gpu_layers;                 // number of layers to store in VRAM
-        int32_t  main_gpu;                     // the GPU that is used for scratch and small tensors
+        uint32_t seed;         // RNG seed, -1 for random
+        int32_t  n_ctx;        // text context
+        int32_t  n_batch;      // prompt processing batch size
+        int32_t  n_gqa;        // grouped-query attention (TEMP - will be moved to model hparams)
+        int32_t  n_gpu_layers; // number of layers to store in VRAM
+        int32_t  main_gpu;     // the GPU that is used for scratch and small tensors
 
         const float * tensor_split; // how to split layers across multiple GPUs (size: LLAMA_MAX_DEVICES)
 
