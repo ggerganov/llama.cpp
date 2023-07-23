@@ -178,6 +178,11 @@ llama_token sample_token_mirostat_v2(llama_token_data_array * candidates, std::m
     candidates->size = std::distance(candidates->data, std::find_if(candidates->data, candidates->data + candidates->size, [&](const llama_token_data & candidate) {
         return -log2f(candidate.p) > *mu;
     }));
+
+    if (candidates->size == 0) {
+        candidates->size = 1;
+    }
+
     // Normalize the probabilities of the remaining words
     llama_sample_softmax(nullptr, candidates);
     // Sample the next word X from the remaining words
