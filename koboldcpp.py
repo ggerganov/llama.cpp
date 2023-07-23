@@ -222,6 +222,8 @@ def generate(prompt,max_length=20, max_context_length=512, temperature=0.8, top_
     inputs = generation_inputs()
     outputs = ctypes.create_unicode_buffer(ctypes.sizeof(generation_outputs))
     inputs.prompt = prompt.encode("UTF-8")
+    if max_length >= max_context_length:
+        max_length = max_context_length-1
     inputs.max_context_length = max_context_length   # this will resize the context buffer if changed
     inputs.max_length = max_length
     inputs.temperature = temperature
@@ -1426,7 +1428,7 @@ def run_horde_worker(args, api_key, worker_name):
                     break
                 else:
                     currentjob_attempts += 1
-                    if currentjob_attempts>10:
+                    if currentjob_attempts>5:
                         break
             print("Server Busy - Not ready to generate...")
             time.sleep(5)
