@@ -235,13 +235,15 @@ ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 endif # LLAMA_CUBLAS
 
 ifdef LLAMA_CLBLAST
-	CFLAGS   += -DGGML_USE_CLBLAST
-	CXXFLAGS += -DGGML_USE_CLBLAST
+
+	CFLAGS   += -DGGML_USE_CLBLAST $(shell pkg-config --cflags clblast OpenCL)
+	CXXFLAGS += -DGGML_USE_CLBLAST $(shell pkg-config --cflags clblast OpenCL)
+
 	# Mac provides OpenCL as a framework
 	ifeq ($(UNAME_S),Darwin)
 		LDFLAGS += -lclblast -framework OpenCL
 	else
-		LDFLAGS += -lclblast -lOpenCL
+		LDFLAGS += $(shell pkg-config --libs clblast OpenCL)
 	endif
 	OBJS    += ggml-opencl.o
 

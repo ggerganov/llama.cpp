@@ -242,6 +242,23 @@ In order to build llama.cpp you have three different options.
     zig build -Doptimize=ReleaseFast
     ```
 
+-   Using `gmake` (FreeBSD):
+
+    1. Install and activate [DRM in FreeBSD](https://wiki.freebsd.org/Graphics)
+    2. Add your user to **video** group
+    3. Install compilation dependencies.
+
+        ```bash
+        sudo pkg install gmake automake autoconf pkgconf llvm15 clinfo clover \
+            opencl clblast openblas
+
+            gmake CC=/usr/local/bin/clang15 CXX=/usr/local/bin/clang++15 -j4
+        ```
+
+    **Notes:** With this packages you can build llama.cpp with OPENBLAS and
+    CLBLAST support for use OpenCL GPU acceleration in FreeBSD. Please read
+    the instructions for use and activate this options in this document below.
+
 ### Metal Build
 
 Using Metal allows the computation to be executed on the GPU for Apple devices:
