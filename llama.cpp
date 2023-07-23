@@ -2795,7 +2795,7 @@ struct llama_context * llama_new_context_with_model(
 
         const size_t max_size = ggml_get_max_tensor_size(ctx->model.ctx);
 
-        printf("%s: max tensor size = %8.2f MB\n", __func__, max_size/1024.0/1024.0);
+        fprintf(stderr, "%s: max tensor size = %8.2f MB\n", __func__, max_size/1024.0/1024.0);
 
 #define LLAMA_METAL_CHECK_BUF(result)                                          \
     if (!(result)) {                                                           \
