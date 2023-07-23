@@ -472,6 +472,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         llama_ctx_params.main_gpu = cu_parseinfo_maindevice;
         llama_ctx_params.rope_freq_base = rope_freq_base;
         llama_ctx_params.rope_freq_scale = rope_freq_scale;
+        llama_ctx_params.n_batch = blasbatchsize;
 
         llama_ctx_v3 = llama_init_from_file(modelname.c_str(), llama_ctx_params);
 
