@@ -56,8 +56,8 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-void llama_log_internal(llama_log_level level, const char* format, ...);
-void llama_log_callback_default(llama_log_level level, const char * text, void * user_data);
+static void llama_log_internal(llama_log_level level, const char* format, ...);
+static void llama_log_callback_default(llama_log_level level, const char * text, void * user_data);
 #define LLAMA_LOG_INFO(...)  llama_log_internal(LLAMA_LOG_LEVEL_INFO , __VA_ARGS__)
 #define LLAMA_LOG_WARN(...)  llama_log_internal(LLAMA_LOG_LEVEL_WARN , __VA_ARGS__)
 #define LLAMA_LOG_ERROR(...) llama_log_internal(LLAMA_LOG_LEVEL_ERROR, __VA_ARGS__)
