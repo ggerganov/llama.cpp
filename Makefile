@@ -236,20 +236,14 @@ endif # LLAMA_CUBLAS
 
 ifdef LLAMA_CLBLAST
 
-	# If FreeBSD system is detected and env GGML_USE_CLBLAST=1 is used, we compile llama.cpp with this support
-	ifeq ($(UNAME_S),FreeBSD)
-		CFLAGS   += -DGGML_USE_CLBLAST $(shell pkg-config --cflags clblast)
-		CXXFLAGS += -DGGML_USE_CLBLAST $(shell pkg-config --cflags clblast)
-	else
-		CFLAGS   += -DGGML_USE_CLBLAST
-		CXXFLAGS += -DGGML_USE_CLBLAST
-	endif
+	CFLAGS   += -DGGML_USE_CLBLAST $(shell pkg-config --cflags clblast OpenCL)
+	CXXFLAGS += -DGGML_USE_CLBLAST $(shell pkg-config --cflags clblast OpenCL)
 
 	# Mac provides OpenCL as a framework
 	ifeq ($(UNAME_S),Darwin)
 		LDFLAGS += -lclblast -framework OpenCL
 	else
-		LDFLAGS += -lclblast -lOpenCL
+		LDFLAGS += $(shell pkg-config --libs clblast OpenCL)
 	endif
 	OBJS    += ggml-opencl.o
 
