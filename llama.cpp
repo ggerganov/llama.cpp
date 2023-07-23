@@ -477,13 +477,9 @@ struct llama_file_loader {
     llama_hparams hparams;
     llama_vocab vocab;
 
-    llama_file_loader(const char * fname, llama_load_tensors_map & tensors_map, const llama_model * model_for_logging)
+    llama_file_loader(const char * fname, llama_load_tensors_map & tensors_map)
         : file(fname, "rb") {
-        if (model_for_logging) {
-            LLAMA_LOG_INFO("llama.cpp: loading model from %s", fname);
-        } else {
-            fprintf(stderr, "llama.cpp: loading model from %s\n", fname);
-        }
+        LLAMA_LOG_INFO("llama.cpp: loading model from %s", fname);
         read_magic();
         read_hparams();
         read_vocab();
@@ -661,8 +657,8 @@ struct llama_model_loader {
     struct ggml_context * ggml_ctx = NULL;
     std::unique_ptr<llama_mmap> mapping;
 
-    llama_model_loader(const std::string & fname_base, bool use_mmap, const llama_model * model_for_logging) {
-        file_loader = std::unique_ptr<llama_file_loader>(new llama_file_loader(fname_base.c_str(), tensors_map, model_for_logging));
+    llama_model_loader(const std::string & fname_base, bool use_mmap) {
+        file_loader = std::unique_ptr<llama_file_loader>(new llama_file_loader(fname_base.c_str(), tensors_map));
         if (!llama_mmap::SUPPORTED) {
             use_mmap = false;
         }
@@ -1010,7 +1006,7 @@ static void llama_model_load_internal(
 
     model.t_start_us = ggml_time_us();
 
-    std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, use_mmap, &model));
+    std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, use_mmap));
 
     vocab = std::move(ml->file_loader->vocab);
     model.hparams = ml->file_loader->hparams;
@@ -2489,7 +2485,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         nthread = std::thread::hardware_concurrency();
     }
 
-    std::unique_ptr<llama_model_loader> model_loader(new llama_model_loader(fname_inp, /*use_mmap*/ false, nullptr));
+    std::unique_ptr<llama_model_loader> model_loader(new llama_model_loader(fname_inp, /*use_mmap*/ false));
     llama_file_saver file_saver(fname_out.c_str(), model_loader->file_loader.get(), params->ftype);
 
 #ifdef GGML_USE_K_QUANTS
@@ -2947,7 +2943,7 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
     llama_buffer base_buf;
     if (path_base_model) {
         LLAMA_LOG_INFO("%s: loading base model from '%s'", __func__, path_base_model);
-        model_loader.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true, &model));
+        model_loader.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true));
 
         size_t ctx_size;
         size_t mmapped_size;

@@ -87,7 +87,7 @@ extern "C" {
         LLAMA_LOG_LEVEL_WARN  = 3,
         LLAMA_LOG_LEVEL_INFO  = 4
     };
-    typedef void (*llama_log_callback)(llama_log_level level, const char* text, void *ctx);
+    typedef void (*llama_log_callback)(llama_log_level level, const char * text, void * user_data);
 
     struct llama_context_params {
         uint32_t seed;                         // RNG seed, -1 for random
@@ -161,8 +161,8 @@ extern "C" {
         int32_t n_eval;
     };
 
-    // Set callback for logging events. If this is not called, or NULL is supplied,
-    // everything is output on stderr.
+    // Set callback for all future logging events.
+    // If this is not called, or NULL is supplied, everything is output on stderr.
     LLAMA_API void llama_log_set(llama_log_callback log_callback, void * user_data);
 
     LLAMA_API int llama_max_devices();
