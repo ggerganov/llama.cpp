@@ -224,7 +224,7 @@ class Params:
 
         if hf_config_path.exists():
             params = Params.loadHFTransformerJson(model_plus.model, hf_config_path)
-        else if orig_config_path.exists():
+        elif orig_config_path.exists():
             params = Params.loadOriginalParamsJson(model_plus.model, orig_config_path)
         else:
             params = Params.guessed(model_plus.model)
