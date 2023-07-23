@@ -368,7 +368,7 @@ if (LLAMA_VULKAN)
             )
             target_sources(ggml-vulkan PRIVATE "vk_shaders/${s}.spv")
         endforeach()
-        
+
         add_compile_definitions(GGML_USE_VULKAN)
 
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ggml-vulkan)
