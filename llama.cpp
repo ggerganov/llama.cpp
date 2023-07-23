@@ -1061,7 +1061,7 @@ static void llama_model_load_internal(
         LLAMA_ASSERT(hparams.n_head % n_gqa == 0);
         hparams.n_head_kv = hparams.n_head / n_gqa;
         if (model.type == e_model::MODEL_65B && n_gqa == 8) {
-            fprintf(stderr, "%s: warning: assuming 70B model based on GQA == %d\n", __func__, n_gqa);
+            LLAMA_LOG_WARN("%s: warning: assuming 70B model based on GQA == %d", __func__, n_gqa);
             model.type = e_model::MODEL_70B;
             hparams.f_ffn_mult = 1.3f; // from the params.json of the 70B model
         }
@@ -1077,21 +1077,21 @@ static void llama_model_load_internal(
     //const uint32_t n_ff = 28672;
 
     {
-        fprintf(stderr, "%s: format     = %s\n",   __func__, llama_file_version_name(file_version));
-        fprintf(stderr, "%s: n_vocab    = %u\n",   __func__, hparams.n_vocab);
-        fprintf(stderr, "%s: n_ctx      = %u\n",   __func__, hparams.n_ctx);
-        fprintf(stderr, "%s: n_embd     = %u\n",   __func__, hparams.n_embd);
-        fprintf(stderr, "%s: n_mult     = %u\n",   __func__, hparams.n_mult);
-        fprintf(stderr, "%s: n_head     = %u\n",   __func__, hparams.n_head);
-        fprintf(stderr, "%s: n_head_kv  = %u\n",   __func__, hparams.n_head_kv);
-        fprintf(stderr, "%s: n_layer    = %u\n",   __func__, hparams.n_layer);
-        fprintf(stderr, "%s: n_rot      = %u\n",   __func__, hparams.n_rot); // a.k.a. n_embd_head, n_head_dim
-        fprintf(stderr, "%s: n_gqa      = %u\n",   __func__, hparams.n_gqa());
-        fprintf(stderr, "%s: n_ff       = %u\n",   __func__, n_ff);
-        fprintf(stderr, "%s: freq_base  = %.1f\n", __func__, hparams.rope_freq_base);
-        fprintf(stderr, "%s: freq_scale = %g\n",   __func__, hparams.rope_freq_scale);
-        fprintf(stderr, "%s: ftype      = %u (%s)\n", __func__, hparams.ftype, llama_ftype_name(hparams.ftype));
-        fprintf(stderr, "%s: model size = %s\n",   __func__, llama_model_type_name(model.type));
+        LLAMA_LOG_INFO("%s: format     = %s",      __func__, llama_file_version_name(file_version));
+        LLAMA_LOG_INFO("%s: n_vocab    = %u",      __func__, hparams.n_vocab);
+        LLAMA_LOG_INFO("%s: n_ctx      = %u",      __func__, hparams.n_ctx);
+        LLAMA_LOG_INFO("%s: n_embd     = %u",      __func__, hparams.n_embd);
+        LLAMA_LOG_INFO("%s: n_mult     = %u",      __func__, hparams.n_mult);
+        LLAMA_LOG_INFO("%s: n_head     = %u",      __func__, hparams.n_head);
+        LLAMA_LOG_INFO("%s: n_head_kv  = %u",      __func__, hparams.n_head_kv);
+        LLAMA_LOG_INFO("%s: n_layer    = %u",      __func__, hparams.n_layer);
+        LLAMA_LOG_INFO("%s: n_rot      = %u",      __func__, hparams.n_rot); // a.k.a. n_embd_head, n_head_dim
+        LLAMA_LOG_INFO("%s: n_gqa      = %u",      __func__, hparams.n_gqa());
+        LLAMA_LOG_INFO("%s: n_ff       = %u",      __func__, n_ff);
+        LLAMA_LOG_INFO("%s: freq_base  = %.1f",    __func__, hparams.rope_freq_base);
+        LLAMA_LOG_INFO("%s: freq_scale = %g",      __func__, hparams.rope_freq_scale);
+        LLAMA_LOG_INFO("%s: ftype      = %u (%s)", __func__, hparams.ftype, llama_ftype_name(hparams.ftype));
+        LLAMA_LOG_INFO("%s: model size = %s",      __func__, llama_model_type_name(model.type));
     }
 
     if (file_version < LLAMA_FILE_VERSION_GGJT_V2) {
@@ -2629,7 +2629,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 int nx = tensor.ne.at(0);
                 int ny = tensor.ne.at(1);
                 if (nx % QK_K != 0 || ny % QK_K != 0) {
-                    fprintf(stderr, "\n\nTensor sizes %d x %d are not divisible by %d, required for k-quants.\n",nx,ny,QK_K);
+                    LLAMA_LOG_INFO("\n\nTensor sizes %d x %d are not divisible by %d, required for k-quants.",nx,ny,QK_K);
                     convert_incompatible_tensor = true;
                 }
             }
@@ -2864,7 +2864,7 @@ struct llama_context * llama_new_context_with_model(
 
         const size_t max_size = ggml_get_max_tensor_size(ctx->model.ctx);
 
-        fprintf(stderr, "%s: max tensor size = %8.2f MB\n", __func__, max_size/1024.0/1024.0);
+        LLAMA_LOG_INFO("%s: max tensor size = %8.2f MB\n", __func__, max_size/1024.0/1024.0);
 
 #define LLAMA_METAL_CHECK_BUF(result)                                          \
     if (!(result)) {                                                           \
