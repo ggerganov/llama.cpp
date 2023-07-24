@@ -995,6 +995,11 @@ static void llama_model_load_internal(
     std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, use_mmap));
 
     vocab = std::move(ml->file_loader->vocab);
+
+    if (vocab_only) {
+        return;
+    }
+
     model.hparams = ml->file_loader->hparams;
     model.n_gpu_layers = n_gpu_layers;
     llama_file_version file_version = ml->file_loader->file_version;
@@ -1053,10 +1058,6 @@ static void llama_model_load_internal(
             hparams.ftype == LLAMA_FTYPE_MOSTLY_Q8_0) {
             throw std::runtime_error(format("this format is no longer supported (see https://github.com/ggerganov/llama.cpp/pull/1508)"));
         }
-    }
-
-    if (vocab_only) {
-        return;
     }
 
     auto & ctx = model.ctx;
