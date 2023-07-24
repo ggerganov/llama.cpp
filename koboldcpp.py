@@ -978,7 +978,7 @@ def show_new_gui():
             else:
                 item.grid_forget()
                 labels[idx].grid_forget()
-        if usehorde_var.get()==1 and horde_name_var.get()=="koboldcpp" and model_var.get()!="":
+        if usehorde_var.get()==1 and (horde_name_var.get()=="koboldcpp" or horde_name_var.get()=="") and model_var.get()!="":
             basefile = os.path.basename(model_var.get())
             horde_name_var.set(os.path.splitext(basefile)[0])
 
@@ -1388,6 +1388,7 @@ def run_horde_worker(args, api_key, worker_name):
     current_id = None
     current_payload = None
     current_generation = None
+    sleepy_counter = 0 #if this exceeds a value, worker becomes sleepy (slower)
     print("===\nEmbedded Horde Worker '"+worker_name+"' Starting...\n(To use your own KAI Bridge/Scribe worker instead, don't set your API key)")
     BRIDGE_AGENT = f"KoboldCppEmbedWorker:1:https://github.com/LostRuins/koboldcpp"
     cluster = "https://horde.koboldai.net"
@@ -1424,9 +1425,13 @@ def run_horde_worker(args, api_key, worker_name):
             time.sleep(5)
             continue
         if not pop["id"]:
-            #print(f"Server {cluster} has no valid generations to do for us.")
-            time.sleep(3)
+            slp = (2 if sleepy_counter<10 else (3 if sleepy_counter<20 else 4))
+            #print(f"Server {cluster} has no valid generations for us. Sleep for {slp}s")
+            time.sleep(slp)
+            sleepy_counter += 1
             continue
+
+        sleepy_counter = 0
         current_id = pop['id']
         current_payload = pop['payload']
         print(f"\nJob received from {cluster} for {current_payload.get('max_length',80)} tokens and {current_payload.get('max_context_length',1024)} max context. Starting generation...")
