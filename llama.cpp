@@ -1866,9 +1866,6 @@ struct llama_tokenizer {
         while (offs < text.size()) {
             llama_sp_symbol sym;
             size_t len = utf8_len(text[offs]);
-            if (len == 0) {
-                len = utf8_len(text[offs]);
-            }
             sym.text = text.c_str() + offs;
             sym.n = len;
             offs += len;
