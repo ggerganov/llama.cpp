@@ -324,6 +324,8 @@
     // poor mans markdown replacement
     const Markdownish = (params) => {
       const md = params.text
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
         .replace(/^#{1,6} (.*)$/gim, '<h3>$1</h3>')
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/__(.*?)__/g, '<strong>$1</strong>')
