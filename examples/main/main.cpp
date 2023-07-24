@@ -6,6 +6,7 @@
 #include "common.h"
 #include "llama.h"
 #include "build-info.h"
+#include "grammar-parser.h"
 
 #include <cassert>
 #include <cinttypes>
@@ -337,6 +338,31 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
     fprintf(stderr, "\n\n");
 
+    grammar_parser::parse_state parsed_grammar;
+    llama_grammar *             grammar = NULL;
+    if (!params.grammar.empty()) {
+        parsed_grammar = grammar_parser::parse(params.grammar.c_str());
+        // will be empty (default) if there are parse errors
+        if (parsed_grammar.rules.empty()) {
+            return 1;
+        }
+        fprintf(stderr, "%s: grammar:\n", __func__);
+        grammar_parser::print_grammar(stderr, parsed_grammar);
+        fprintf(stderr, "\n");
+
+        {
+            auto it = params.logit_bias.find(llama_token_eos());
+            if (it != params.logit_bias.end() && it->second == -INFINITY) {
+                fprintf(stderr,
+                    "%s: warning: EOS token is disabled, which will cause most grammars to fail\n", __func__);
+            }
+        }
+
+        std::vector<const llama_grammar_element *> grammar_rules(parsed_grammar.c_rules());
+        grammar = llama_grammar_init(
+            grammar_rules.data(), grammar_rules.size(), parsed_grammar.symbol_ids.at("root"));
+    }
+
     // TODO: replace with ring-buffer
     std::vector<llama_token> last_n_tokens(n_ctx);
     std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
@@ -570,6 +596,10 @@ int main(int argc, char ** argv) {
                     logits[llama_token_nl()] = nl_logit;
                 }
 
+                if (grammar != NULL) {
+                    llama_sample_grammar(ctx, &candidates_p, grammar);
+                }
+
                 if (temp <= 0) {
                     // Greedy sampling
                     id = llama_sample_token_greedy(ctx, &candidates_p);
@@ -594,6 +624,10 @@ int main(int argc, char ** argv) {
                     }
                 }
                 // printf("`%d`", candidates_p.size);
+
+                if (grammar != NULL) {
+                    llama_grammar_accept_token(ctx, grammar, id);
+                }
 
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(id);
@@ -725,6 +759,18 @@ int main(int argc, char ** argv) {
             }
 
             if (n_past > 0) {
+                if (is_interacting) {
+                    // reset grammar state if we're restarting generation
+                    if (grammar != NULL) {
+                        llama_grammar_free(grammar);
+
+                        std::vector<const llama_grammar_element *> grammar_rules(
+                            parsed_grammar.c_rules());
+                        grammar = llama_grammar_init(
+                            grammar_rules.data(), grammar_rules.size(),
+                            parsed_grammar.symbol_ids.at("root"));
+                    }
+                }
                 is_interacting = false;
             }
         }
@@ -756,6 +802,9 @@ int main(int argc, char ** argv) {
     llama_free(ctx);
     llama_free_model(model);
 
+    if (grammar != NULL) {
+        llama_grammar_free(grammar);
+    }
     llama_backend_free();
 
     return 0;
