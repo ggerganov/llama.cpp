@@ -359,6 +359,7 @@ if (LLAMA_HIPBLAS)
 
     find_package(hip)
     find_package(hipblas)
+    find_package(rocblas)
 
     if (${hipblas_FOUND} AND ${hip_FOUND})
         message(STATUS "HIP and hipBLAS found")
@@ -369,7 +370,7 @@ if (LLAMA_HIPBLAS)
         target_compile_definitions(ggml-rocm PRIVATE K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
         target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_FORCE_DMMV)
         set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE CXX)
-        target_link_libraries(ggml-rocm PRIVATE hip::device PUBLIC hip::host roc::hipblas)
+        target_link_libraries(ggml-rocm PRIVATE hip::device PUBLIC hip::host roc::rocblas roc::hipblas)
 
         if (LLAMA_STATIC)
             message(FATAL_ERROR "Static linking not supported for HIP/ROCm")
