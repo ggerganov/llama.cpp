@@ -242,6 +242,23 @@ In order to build llama.cpp you have three different options.
     zig build -Doptimize=ReleaseFast
     ```
 
+-   Using `gmake` (FreeBSD):
+
+    1. Install and activate [DRM in FreeBSD](https://wiki.freebsd.org/Graphics)
+    2. Add your user to **video** group
+    3. Install compilation dependencies.
+
+        ```bash
+        sudo pkg install gmake automake autoconf pkgconf llvm15 clinfo clover \
+            opencl clblast openblas
+
+            gmake CC=/usr/local/bin/clang15 CXX=/usr/local/bin/clang++15 -j4
+        ```
+
+    **Notes:** With this packages you can build llama.cpp with OPENBLAS and
+    CLBLAST support for use OpenCL GPU acceleration in FreeBSD. Please read
+    the instructions for use and activate this options in this document below.
+
 ### Metal Build
 
 Using Metal allows the computation to be executed on the GPU for Apple devices:
@@ -384,7 +401,7 @@ Building the program with BLAS support may lead to some performance improvements
 
   | Option                  | Legal values           | Default | Description |
   |-------------------------|------------------------|---------|-------------|
-  | LLAMA_CUDA_FORCE_DMMV   | Boolean                |   false | Force the use of dequantization + matrix vector multiplication kernels instead of using kernels that do matrix vector multiplication on quantized data. By default the decision is made based on compute capability (MMVQ for 7.0/Turing/RTX 2000 or higher). Does not affect k-quants. |
+  | LLAMA_CUDA_FORCE_DMMV   | Boolean                |   false | Force the use of dequantization + matrix vector multiplication kernels instead of using kernels that do matrix vector multiplication on quantized data. By default the decision is made based on compute capability (MMVQ for 6.1/Pascal/GTX 1000 or higher). Does not affect k-quants. |
   | LLAMA_CUDA_DMMV_X       | Positive integer >= 32 |      32 | Number of values in x direction processed by the CUDA dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants. |
   | LLAMA_CUDA_MMV_Y       | Positive integer       |       1 | Block size in y direction for the CUDA mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. Does not affect k-quants. |
   | LLAMA_CUDA_DMMV_F16     | Boolean                |   false | If enabled, use half-precision floating point arithmetic for the CUDA dequantization + mul mat vec kernels. Can improve performance on relatively recent GPUs. |
@@ -640,7 +657,7 @@ Please verify the [sha256 checksums](SHA256SUMS) of all downloaded model files t
 
 ```bash
 # run the verification script
-python3 .\scripts\verify-checksum-models.py
+./scripts/verify-checksum-models.py
 ```
 
 - On linux or macOS it is also possible to run the following commands to verify if you have all possible latest files in your self-installed `./models` subdirectory:

@@ -64,7 +64,7 @@ class MiniGPT4(Blip2Base):
         self.max_txt_len = max_txt_len
         self.end_sym = end_sym
         self.model = MyModel(["main", *args])
-        # system promt
+        # system prompt
         self.model.eval_string("Give the following image: <Img>ImageContent</Img>. "
            "You will be able to see the image once I provide it to you. Please answer my questions."
            "###")
