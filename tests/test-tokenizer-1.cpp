@@ -91,6 +91,7 @@ int main(int argc, char **argv) {
                 std::string backward = llama_token_to_str(ctx, tokens[0]);
                 fprintf(stderr, "%s : error: token %d is string %s but bpe returns token %d %s\n", 
                     __func__, i, llama_token_to_str(ctx, i).c_str(), tokens[0], backward.c_str());
+                return 3;
             }
         } else {
             if (i <= 258) {
@@ -99,6 +100,7 @@ int main(int argc, char **argv) {
             } else {
                 fprintf(stderr, "%s : error: token %d is string %s but bpe returns tokens %s\n", 
                     __func__, i, llama_token_to_str(ctx, i).c_str(), unescape_whitespace(ctx, tokens.data(), n).c_str());
+                return 3;
             }
         }
     }
