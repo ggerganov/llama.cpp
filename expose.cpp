@@ -229,6 +229,9 @@ extern "C"
     int get_last_token_count() {
         return last_token_count;
     }
+    int get_last_stop_reason() {
+        return (int)last_stop_reason;
+    }
 
     const char* get_pending_output() {
        return gpttype_get_pending_output().c_str();

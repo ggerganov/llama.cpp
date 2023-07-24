@@ -14,6 +14,13 @@ enum samplers
     KCPP_SAMPLER_REP_PEN=6,
     KCPP_SAMPLER_MAX
 };
+enum stop_reason
+{
+    INVALID=-1,
+    OUT_OF_TOKENS=0,
+    EOS_TOKEN=1,
+    CUSTOM_STOPPER=2,
+};
 struct load_model_inputs
 {
     const int threads;
@@ -76,3 +83,4 @@ extern bool generation_finished;
 extern float last_eval_time;
 extern float last_process_time;
 extern int last_token_count;
+extern stop_reason last_stop_reason;

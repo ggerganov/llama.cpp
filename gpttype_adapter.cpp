@@ -36,6 +36,7 @@ bool generation_finished;
 float last_process_time = 0;
 float last_eval_time = 0;
 int last_token_count = 0;
+stop_reason last_stop_reason = stop_reason::INVALID;
 std::vector<std::string> generated_tokens;
 
 //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt)
@@ -871,6 +872,7 @@ const std::string & gpttype_get_pending_output()
 generation_outputs gpttype_generate(const generation_inputs inputs, generation_outputs &output)
 {
     concat_output = "";
+    last_stop_reason = stop_reason::OUT_OF_TOKENS;
     stop_sequence.clear();
     for(int x=0;x<stop_token_max;++x)
     {
@@ -1433,6 +1435,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 stopper_unused_tokens = remaining_tokens;
                 printf("\n(EOS token triggered!)");
                 remaining_tokens = 0;
+                last_stop_reason = stop_reason::EOS_TOKEN;
             }
 
             for (const auto &matched : stop_sequence)
@@ -1445,6 +1448,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                     {
                         printf("\n(Stop sequence triggered: <%s>)", matched.c_str());
                     }
+                    last_stop_reason = stop_reason::CUSTOM_STOPPER;
                     break;
                 }
             }

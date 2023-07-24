@@ -165,6 +165,7 @@ def init_library():
     handle.get_last_eval_time.restype = ctypes.c_float
     handle.get_last_process_time.restype = ctypes.c_float
     handle.get_last_token_count.restype = ctypes.c_int
+    handle.get_last_stop_reason.restype = ctypes.c_int
     handle.abort_generate.restype = ctypes.c_bool
     handle.get_pending_output.restype = ctypes.c_char_p
 
@@ -470,7 +471,8 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             lastp = handle.get_last_process_time()
             laste = handle.get_last_eval_time()
             lastc = handle.get_last_token_count()
-            response_body = (json.dumps({"last_process":lastp,"last_eval":laste,"last_token_count":lastc}).encode())
+            stopreason = handle.get_last_stop_reason()
+            response_body = (json.dumps({"last_process":lastp,"last_eval":laste,"last_token_count":lastc, "stop_reason":stopreason}).encode())
 
         if response_body is None:
             self.send_response(404)
