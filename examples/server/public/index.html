@@ -73,6 +73,12 @@
       margin: 0;
     }
 
+    fieldset.two {
+      display: grid;
+      grid-template: "a a";
+      gap: 1em;
+    }
+
     textarea {
       padding: 5px;
       flex-grow: 1;
@@ -272,7 +278,9 @@
               <label for="prompt">Prompt</label>
               <textarea type="text" name="prompt" value="${session.value.prompt}" rows=4 oninput=${updateSession}/>
             </div>
+          </fieldset>
 
+          <fieldset class="two">
             <div>
               <label for="user">User name</label>
               <input type="text" name="user" value="${session.value.user}" oninput=${updateSession} />
@@ -282,7 +290,9 @@
               <label for="bot">Bot name</label>
               <input type="text" name="char" value="${session.value.char}" oninput=${updateSession} />
             </div>
+          </fieldset>
 
+          <fieldset>
             <div>
               <label for="template">Prompt template</label>
               <textarea id="template" name="template" value="${session.value.template}" rows=4 oninput=${updateSession}/>
@@ -292,7 +302,9 @@
               <label for="template">Chat history template</label>
               <textarea id="template" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
             </div>
+          </fieldset>
 
+          <fieldset class="two">
             <div>
               <label for="temperature">Temperature</label>
               <input type="range" id="temperature" min="0.0" max="1.0" step="0.01" name="temperature" value="${params.value.temperature}" oninput=${updateParamsFloat} />
@@ -316,7 +328,6 @@
               <input type="range" id="repeat_last_n" min="0.0" max="2048" name="repeat_last_n" value="${params.value.repeat_last_n}" oninput=${updateParamsFloat} />
               <span>${params.value.repeat_last_n}</span>
             </div>
-
           </fieldset>
         </form>
       `
