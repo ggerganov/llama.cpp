@@ -16,5 +16,10 @@ It is a good practice, before publishing changes to execute the full CI locally 
 
 ```bash
 mkdir tmp
+
+# CPU-only build
 bash ./ci/run.sh ./tmp/results ./tmp/mnt
+
+# with CUDA support
+GG_BUILD_CUDA=1 bash ./ci/run.sh ./tmp/results ./tmp/mnt
 ```
