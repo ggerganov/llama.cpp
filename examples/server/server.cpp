@@ -601,47 +601,48 @@ struct llama_server_context
 static void server_print_usage(const char *argv0, const gpt_params &params,
                                const server_params &sparams)
 {
-    fprintf(stderr, "usage: %s [options]\n", argv0);
-    fprintf(stderr, "\n");
-    fprintf(stderr, "options:\n");
-    fprintf(stderr, "  -h, --help            show this help message and exit\n");
-    fprintf(stderr, "  -v, --verbose         verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
-    fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
-    fprintf(stderr, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
-    fprintf(stderr, "  --rope-freq-base N    RoPE base frequency (default: %.1f)\n", params.rope_freq_base);
-    fprintf(stderr, "  --rope-freq-scale N   RoPE frequency scaling factor (default: %g)\n", params.rope_freq_scale);
-    fprintf(stderr, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
-    fprintf(stderr, "  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
-    fprintf(stderr, "                        not recommended: doubles context memory required and no measurable increase in quality\n");
+    fprintf(stdout, "usage: %s [options]\n", argv0);
+    fprintf(stdout, "\n");
+    fprintf(stdout, "options:\n");
+    fprintf(stdout, "  -h, --help            show this help message and exit\n");
+    fprintf(stdout, "  -v, --verbose         verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
+    fprintf(stdout, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
+    fprintf(stdout, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
+    fprintf(stdout, "  -gqa N, --gqa N       grouped-query attention factor (TEMP!!! use 8 for LLaMAv2 70B) (default: %d)\n", params.n_gqa);
+    fprintf(stdout, "  --rope-freq-base N    RoPE base frequency (default: %.1f)\n", params.rope_freq_base);
+    fprintf(stdout, "  --rope-freq-scale N   RoPE frequency scaling factor (default: %g)\n", params.rope_freq_scale);
+    fprintf(stdout, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
+    fprintf(stdout, "  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
+    fprintf(stdout, "                        not recommended: doubles context memory required and no measurable increase in quality\n");
     if (llama_mlock_supported())
     {
-        fprintf(stderr, "  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
+        fprintf(stdout, "  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
     }
     if (llama_mmap_supported())
     {
-        fprintf(stderr, "  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
+        fprintf(stdout, "  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
     }
 #ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
-    fprintf(stderr, "  -ngl N, --n-gpu-layers N\n");
-    fprintf(stderr, "                        number of layers to store in VRAM\n");
-    fprintf(stderr, "  -ts SPLIT --tensor-split SPLIT\n");
-    fprintf(stderr, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
-    fprintf(stderr, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
-    fprintf(stderr, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
-    fprintf(stderr, "  -lv, --low-vram don't allocate VRAM scratch buffer\n");
+    fprintf(stdout, "  -ngl N, --n-gpu-layers N\n");
+    fprintf(stdout, "                        number of layers to store in VRAM\n");
+    fprintf(stdout, "  -ts SPLIT --tensor-split SPLIT\n");
+    fprintf(stdout, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
+    fprintf(stdout, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
+    fprintf(stdout, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
+    fprintf(stdout, "  -lv, --low-vram don't allocate VRAM scratch buffer\n");
 #endif
-    fprintf(stderr, "  -m FNAME, --model FNAME\n");
-    fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
-    fprintf(stderr, "  -a ALIAS, --alias ALIAS\n");
-    fprintf(stderr, "                        set an alias for the model, will be added as `model` field in completion response\n");
-    fprintf(stderr, "  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
-    fprintf(stderr, "  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
-    fprintf(stderr, "  --host                ip address to listen (default  (default: %s)\n", sparams.hostname.c_str());
-    fprintf(stderr, "  --port PORT           port to listen (default  (default: %d)\n", sparams.port);
-    fprintf(stderr, "  --path PUBLIC_PATH    path from which to serve static files (default %s)\n", sparams.public_path.c_str());
-    fprintf(stderr, "  -to N, --timeout N    server read/write timeout in seconds (default: %d)\n", sparams.read_timeout);
-    fprintf(stderr, "  --embedding           enable embedding vector output (default: %s)\n", params.embedding ? "enabled" : "disabled");
-    fprintf(stderr, "\n");
+    fprintf(stdout, "  -m FNAME, --model FNAME\n");
+    fprintf(stdout, "                        model path (default: %s)\n", params.model.c_str());
+    fprintf(stdout, "  -a ALIAS, --alias ALIAS\n");
+    fprintf(stdout, "                        set an alias for the model, will be added as `model` field in completion response\n");
+    fprintf(stdout, "  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
+    fprintf(stdout, "  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
+    fprintf(stdout, "  --host                ip address to listen (default  (default: %s)\n", sparams.hostname.c_str());
+    fprintf(stdout, "  --port PORT           port to listen (default  (default: %d)\n", sparams.port);
+    fprintf(stdout, "  --path PUBLIC_PATH    path from which to serve static files (default %s)\n", sparams.public_path.c_str());
+    fprintf(stdout, "  -to N, --timeout N    server read/write timeout in seconds (default: %d)\n", sparams.read_timeout);
+    fprintf(stdout, "  --embedding           enable embedding vector output (default: %s)\n", params.embedding ? "enabled" : "disabled");
+    fprintf(stdout, "\n");
 }
 
 static void server_params_parse(int argc, char **argv, server_params &sparams,
@@ -724,9 +725,19 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             }
             params.n_ctx = std::stoi(argv[i]);
         }
+        else if (arg == "-gqa" || arg == "--gqa")
+        {
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            params.n_gqa = std::stoi(argv[i]);
+        }
         else if (arg == "--rope-freq-base")
         {
-            if (++i >= argc) {
+            if (++i >= argc)
+            {
                 invalid_param = true;
                 break;
             }
@@ -734,7 +745,8 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
         }
         else if (arg == "--rope-freq-scale")
         {
-            if (++i >= argc) {
+            if (++i >= argc)
+            {
                 invalid_param = true;
                 break;
             }
