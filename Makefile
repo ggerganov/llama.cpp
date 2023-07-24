@@ -335,13 +335,16 @@ grammar-parser.o: examples/grammar-parser.cpp examples/grammar-parser.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 expose.o: expose.cpp expose.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
-gpttype_adapter_failsafe.o: gpttype_adapter.cpp
+
+# idiotic "for easier compilation"
+GPTTYPE_ADAPTER = gpttype_adapter.cpp otherarch/llama_v2.cpp llama.cpp otherarch/utils.cpp otherarch/gptj_v1.cpp otherarch/gptj_v2.cpp otherarch/gptj_v3.cpp otherarch/gpt2_v1.cpp otherarch/gpt2_v2.cpp otherarch/gpt2_v3.cpp otherarch/rwkv_v2.cpp otherarch/rwkv_v3.cpp otherarch/neox_v2.cpp otherarch/neox_v3.cpp otherarch/mpt_v3.cpp ggml.h ggml-cuda.h llama.h llama-util.h
+gpttype_adapter_failsafe.o: $(GPTTYPE_ADAPTER)
 	$(CXX) $(CXXFLAGS) $(FAILSAFE_FLAGS) -c $< -o $@
-gpttype_adapter.o: gpttype_adapter.cpp
+gpttype_adapter.o: $(GPTTYPE_ADAPTER)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
-gpttype_adapter_clblast.o: gpttype_adapter.cpp
+gpttype_adapter_clblast.o: $(GPTTYPE_ADAPTER)
 	$(CXX) $(CXXFLAGS) $(CLBLAST_FLAGS) -c $< -o $@
-gpttype_adapter_cublas.o: gpttype_adapter.cpp
+gpttype_adapter_cublas.o: $(GPTTYPE_ADAPTER)
 	$(CXX) $(CXXFLAGS) $(CUBLAS_FLAGS) -c $< -o $@
 
 clean:
