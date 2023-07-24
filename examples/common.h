@@ -3,6 +3,7 @@
 #pragma once
 
 #include "llama.h"
+#include "llama.cpp.h"
 
 #include <string>
 #include <vector>

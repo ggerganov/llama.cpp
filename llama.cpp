@@ -520,7 +520,7 @@ struct llama_file_loader {
             vocab.token_to_id[word] = i;
 
             auto & tok_score = vocab.id_to_token[i];
-            tok_score.tok = word;
+            tok_score.tok = std::move(word);
             tok_score.score = score;
         }
     }
@@ -3725,24 +3725,32 @@ float * llama_get_embeddings(struct llama_context * ctx) {
     return ctx->embedding.data();
 }
 
-std::string llama_token_to_str_with_model(const struct llama_model * model, llama_token token) {
-    if (token >= llama_n_vocab_from_model(model)) {
-        return nullptr;
+int llama_token_to_str_with_model(const struct llama_model * model, llama_token token, char * str, int length) {
+    if (0 <= token && token < llama_n_vocab_from_model(model)) {
+        std::string result = llama_unescape_whitespace(model->vocab.id_to_token[token].tok);
+        if(result.length() > length) {
+            return - result.length();
+        }
+        strcpy(str, result.c_str());
+        return result.length();
     }
-
-    return llama_unescape_whitespace(model->vocab.id_to_token[token].tok);
+    return 0;
 }
 
-std::string llama_token_to_str(const struct llama_context * ctx, llama_token token) {
-    return llama_token_to_str_with_model(&ctx->model, token);
+int llama_token_to_str(const struct llama_context * ctx, llama_token token, char * str, int length) {
+    return llama_token_to_str_with_model(&ctx->model, token, str, length);
 }
 
-std::string llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token) {
-    if (token >= llama_n_vocab_from_model(&ctx->model)) {
-        return nullptr;
+int llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token, char * str, int length) {
+    if (0 <= token && token < llama_n_vocab_from_model(&ctx->model)) {
+        std::string result = ctx->model.vocab.id_to_token[token].tok;
+        if (result.length() > length) {
+            return -result.length();
+        }
+        strcpy(str, result.c_str());
+        return result.length();
     }
-
-    return ctx->model.vocab.id_to_token[token].tok;
+    return 0;
 }
 
 llama_token llama_token_bos() {

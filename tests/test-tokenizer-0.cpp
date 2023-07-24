@@ -1,4 +1,5 @@
 #include "llama.h"
+#include "llama.cpp.h"
 
 #include <cstdio>
 #include <string>
