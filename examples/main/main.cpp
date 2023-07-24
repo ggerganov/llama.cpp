@@ -350,6 +350,14 @@ int main(int argc, char ** argv) {
         grammar_parser::print_grammar(stderr, parsed_grammar);
         fprintf(stderr, "\n");
 
+        {
+            auto it = params.logit_bias.find(llama_token_eos());
+            if (it != params.logit_bias.end() && it->second == -INFINITY) {
+                fprintf(stderr,
+                    "%s: warning: EOS token is disabled, which will cause most grammars to fail\n", __func__);
+            }
+        }
+
         std::vector<const llama_grammar_element *> grammar_rules(parsed_grammar.c_rules());
         grammar = llama_grammar_init(
             grammar_rules.data(), grammar_rules.size(), parsed_grammar.symbol_ids.at("root"));
