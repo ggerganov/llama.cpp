@@ -414,7 +414,6 @@ inline float block_q_n_dot_y(device const block_q4_1 * qb_curr, float sumy, thre
     device const uint16_t * qs = ((device const uint16_t *)qb_curr + 2 + il/2);
     float2 acc = 0.f;
     for (int i = 0; i < 8; i+=2) {
-        const uint16_t qss = qs[i / 2] >> 8;
         acc[0] += yl[i + 0] * (qs[i / 2] & 0x000F)
                 + yl[i + 1] * (qs[i / 2] & 0x0F00);
         acc[1] += yl[i + 8] * (qs[i / 2] & 0x00F0)
@@ -427,22 +426,22 @@ inline float block_q_n_dot_y(device const block_q4_1 * qb_curr, float sumy, thre
 #define N_DST 4 // each SIMD group works on 4 rows
 #define N_SIMDGROUP 2 // number of SIMD groups in a thread group
 #define N_SIMDWIDTH 32 // assuming SIMD group size is 32
-# Note: This is a template, but strictly speaking it only applies to
-#       quantizations where the block size is 32. It also does not
-#       giard against the number of rows not being divisible by
-#       N_DST, so this is another explicit assumption of the implementation.
-template<typename block_q_type>
+//Note: This is a template, but strictly speaking it only applies to
+//      quantizations where the block size is 32. It also does not
+//      giard against the number of rows not being divisible by
+//      N_DST, so this is another explicit assumption of the implementation.
+template<typename block_q_type, int nr, int nsg, int nw>
 void mul_vec_q_n_f32(device const void * src0, device const float * src1, device float * dst,
                     int64_t ne00, int64_t ne10, int64_t ne0, int64_t ne01,
                     uint2 tgpig, uint tiisg, uint sgitg) {
     const int nb = ne00/QK4_0;
     const int r0 = tgpig.x;
     const int r1 = tgpig.y;
-    const int first_row = (r0 * N_SIMDGROUP + sgitg) * N_DST;
+    const int first_row = (r0 * nsg + sgitg) * nr;
     device const block_q_type * x = (device const block_q_type *) src0 + first_row * nb;
     device const float      * y = (device const float      *) src1 + r1*ne10;
     float yl[16];       // src1 vector cache
-    float sumf[N_DST]={0.f};
+    float sumf[nr]={0.f};
 
     const int ix = tiisg/2;
     const int il = 8*(tiisg%2);
@@ -450,7 +449,7 @@ void mul_vec_q_n_f32(device const void * src0, device const float * src1, device
     device const float * yb = y + ix * QK4_0 + il;
 
     // each thread in a SIMD group deals with half a block.
-    for (int ib = ix; ib < nb; ib += N_SIMDWIDTH/2) {
+    for (int ib = ix; ib < nb; ib += nw/2) {
         float sumy = 0;
         for (int i = 0; i < 8; i += 2) {
             sumy += yb[i] + yb[i+1];
@@ -461,14 +460,14 @@ void mul_vec_q_n_f32(device const void * src0, device const float * src1, device
             yl[i+9] = yb[i+17]/4096.f;
         }
 
-        for (int row = 0; row < N_DST; row++) {
+        for (int row = 0; row < nr; row++) {
             sumf[row] += block_q_n_dot_y(x+ib+row*nb, sumy, yl, il);
         }
 
         yb += QK4_0 * 16;
     }
 
-    for (int row = 0; row < N_DST; ++row) {
+    for (int row = 0; row < nr; ++row) {
         const float tot = simd_sum(sumf[row]);
         if (tiisg == 0 && first_row + row < ne01) {
             dst[r1*ne0 + first_row + row] = tot;
@@ -487,7 +486,7 @@ kernel void kernel_mul_mat_q4_0_f32(
         uint2 tgpig[[threadgroup_position_in_grid]],
         uint tiisg[[thread_index_in_simdgroup]],
         uint sgitg[[simdgroup_index_in_threadgroup]]) {
-    mul_vec_q_n_f32<block_q4_0>(src0,src1,dst,ne00,ne10,ne0,ne01,tgpig,tiisg,sgitg);
+    mul_vec_q_n_f32<block_q4_0, N_DST, N_SIMDGROUP, N_SIMDWIDTH>(src0,src1,dst,ne00,ne10,ne0,ne01,tgpig,tiisg,sgitg);
 }
 
 kernel void kernel_mul_mat_q4_1_f32(
@@ -501,7 +500,7 @@ kernel void kernel_mul_mat_q4_1_f32(
         uint2 tgpig[[threadgroup_position_in_grid]],
         uint tiisg[[thread_index_in_simdgroup]],
         uint sgitg[[simdgroup_index_in_threadgroup]]) {
-     mul_vec_q_n_f32<block_q4_1>(src0,src1,dst,ne00,ne10,ne0,ne01,tgpig,tiisg,sgitg);
+     mul_vec_q_n_f32<block_q4_1, N_DST, N_SIMDGROUP, N_SIMDWIDTH>(src0,src1,dst,ne00,ne10,ne0,ne01,tgpig,tiisg,sgitg);
 }
 
 kernel void kernel_mul_mat_f16_f32(
