@@ -221,6 +221,13 @@ void ggml_metal_set_n_cb(struct ggml_metal_context * ctx, int n_cb) {
     ctx->n_cb = n_cb;
 }
 
+bool ggml_metal_if_optimized(struct ggml_metal_context * ctx) {
+    if (ctx->concur_list_len) {
+        return true;
+    }
+    return false;
+}
+
 // finds the Metal buffer that contains the tensor data on the GPU device
 // the assumption is that there is 1-to-1 mapping between the host and device memory buffers, so we can find the
 // Metal buffer based on the host memory pointer
@@ -441,9 +448,15 @@ void ggml_metal_graph_compute(
         struct ggml_metal_context * ctx,
                struct ggml_cgraph * gf) {
     metal_printf("%s: evaluating graph\n", __func__);
-
-    if (!ctx->concur_list_len) {
-        ggml_metal_graph_find_concurrency(ctx,gf);
+    
+    // if there is ctx->concur_list, dispatch concurrently
+    // else fallback to serial dispatch
+    MTLComputePassDescriptor * encoder_descriptor = MTLComputePassDescriptor.computePassDescriptor;
+    encoder_descriptor.dispatchType = MTLDispatchTypeSerial;
+    int all_nodes_len = gf->n_nodes;
+    if (ctx->concur_list_len) {
+        encoder_descriptor.dispatchType = MTLDispatchTypeConcurrent;
+        all_nodes_len = ctx->concur_list_len;
     }
     // create multiple command buffers and enqueue them
     // then, we encode the graph into the command buffers in parallel
@@ -463,7 +476,7 @@ void ggml_metal_graph_compute(
     dispatch_queue_t queue = dispatch_queue_create("llama.cpp", DISPATCH_QUEUE_CONCURRENT);
 
     for (int cb_idx = 0; cb_idx < n_cb; ++cb_idx) {
-        const int n_nodes_per_cb = (ctx->concur_list_len + n_cb - 1) / n_cb;
+        const int n_nodes_per_cb = (all_nodes_len + n_cb - 1) / n_cb;
 
         dispatch_async(queue, ^{
             size_t offs_src0 = 0;
@@ -475,13 +488,16 @@ void ggml_metal_graph_compute(
             id<MTLComputeCommandEncoder> encoder = nil;
 
             const int node_start =                                      (cb_idx + 0) * n_nodes_per_cb;
-            const int node_end   = (cb_idx == n_cb - 1) ? ctx->concur_list_len : (cb_idx + 1) * n_nodes_per_cb;
+            const int node_end   = (cb_idx == n_cb - 1) ? all_nodes_len : (cb_idx + 1) * n_nodes_per_cb;
 
             for (int ind = node_start; ind < node_end; ++ind) {
-                int i = ctx->concur_list[ind];
+                int i = ind;
+                if (ctx->concur_list_len) {
+                    i = ctx->concur_list[ind];
+                }
                 if (i == -1) {
                     if (encoder == nil) {
-                        encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
+                        encoder = [command_buffer computeCommandEncoderWithDescriptor: encoder_descriptor];
                         continue;
                     }
                     [encoder memoryBarrierWithScope:MTLBarrierScopeBuffers];
@@ -557,7 +573,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_ADD:
                         {
                             if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
+                                encoder = [command_buffer computeCommandEncoderWithDescriptor: encoder_descriptor];
                             }
 
                             if (ggml_nelements(src1) == ne10) {
@@ -578,7 +594,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_MUL:
                         {
                             if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
+                                encoder = [command_buffer computeCommandEncoderWithDescriptor: encoder_descriptor];
                             }
 
                             if (ggml_nelements(src1) == ne10) {
@@ -599,7 +615,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_SCALE:
                         {
                             if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
+                                encoder = [command_buffer computeCommandEncoderWithDescriptor: encoder_descriptor];
                             }
 
                             const float scale = *(const float *) src1->data;
@@ -616,7 +632,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_SILU:
                         {
                             if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
+                                encoder = [command_buffer computeCommandEncoderWithDescriptor: encoder_descriptor];
                             }
 
                             [encoder setComputePipelineState:ctx->pipeline_silu];
@@ -630,7 +646,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_RELU:
                         {
                             if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
+                                encoder = [command_buffer computeCommandEncoderWithDescriptor: encoder_descriptor];
                             }
 
                             [encoder setComputePipelineState:ctx->pipeline_relu];
@@ -644,7 +660,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_GELU:
                     {
                             if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
+                                encoder = [command_buffer computeCommandEncoderWithDescriptor: encoder_descriptor];
                             }
 
                             [encoder setComputePipelineState:ctx->pipeline_gelu];
@@ -658,7 +674,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_SOFT_MAX:
                         {
                             if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
+                                encoder = [command_buffer computeCommandEncoderWithDescriptor: encoder_descriptor];
                             }
 
                             const int nth = 32;
@@ -676,7 +692,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_DIAG_MASK_INF:
                         {
                             if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
+                                encoder = [command_buffer computeCommandEncoderWithDescriptor: encoder_descriptor];
                             }
 
                             const int n_past = ((int32_t *)(dst->op_params))[0];
@@ -739,7 +755,7 @@ void ggml_metal_graph_compute(
                                 }
                             } else {
                                 if (encoder == nil) {
-                                    encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
+                                    encoder = [command_buffer computeCommandEncoderWithDescriptor: encoder_descriptor];
                                 }
 
                                 int nth0 = 32;
@@ -866,7 +882,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_GET_ROWS:
                         {
                             if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
+                                encoder = [command_buffer computeCommandEncoderWithDescriptor: encoder_descriptor];
                             }
 
                             switch (src0->type) {
@@ -895,7 +911,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_RMS_NORM:
                         {
                             if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
+                                encoder = [command_buffer computeCommandEncoderWithDescriptor: encoder_descriptor];
                             }
 
                             const float eps = 1e-6f;
@@ -917,7 +933,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_NORM:
                         {
                             if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
+                                encoder = [command_buffer computeCommandEncoderWithDescriptor: encoder_descriptor];
                             }
 
                             const float eps = 1e-5f;
@@ -939,7 +955,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_ALIBI:
                         {
                             if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
+                                encoder = [command_buffer computeCommandEncoderWithDescriptor: encoder_descriptor];
                             }
 
                             GGML_ASSERT((src0t == GGML_TYPE_F32));
@@ -982,7 +998,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_ROPE:
                         {
                             if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
+                                encoder = [command_buffer computeCommandEncoderWithDescriptor: encoder_descriptor];
                             }
 
                             const int n_past = ((int32_t *) dst->op_params)[0];
@@ -1026,7 +1042,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_CONT:
                         {
                             if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDispatchType: MTLDispatchTypeConcurrent];
+                                encoder = [command_buffer computeCommandEncoderWithDescriptor: encoder_descriptor];
                             }
 
                             const int nth = 32;
