@@ -11,6 +11,11 @@
       color: #000;
       font-family: system-ui;
       font-size: 90%;
+      max-width: 600px;
+      min-width: 300px;
+      line-height: 1.2;
+      margin: 0 auto;
+      padding: 0 0.5em;
     }
 
     #container {
@@ -36,12 +41,37 @@
       padding: 0.5em;
     }
 
-    body {
-      max-width: 600px;
-      min-width: 300px;
-      line-height: 1.2;
-      margin: 0 auto;
-      padding: 0 0.5em;
+    #chat {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .bubble {
+      border: 1px solid;
+      border-radius: 1.0em;
+      padding: 0.5em;
+      max-width: 75%;
+      margin-top: 0;
+    }
+
+    .user {
+      background-color: #161616;
+      color: #d6d6d6;
+      border-bottom-right-radius: 0;
+      place-self: flex-end;
+    }
+
+    .asst {
+      background-color: #d6d6d6;
+      color: #161616;
+      border-bottom-left-radius: 0;
+      place-self: flex-start;
+    }
+
+    .typing {
+      color: #888;
+      text-align: left;
+      font-size: 120%;
     }
 
     p {
@@ -92,7 +122,7 @@
 
     fieldset label {
       margin: 0.5em 0;
-      display: block;
+      /*display: block;*/
     }
 
     header, footer {
@@ -108,27 +138,35 @@
   <script type="module">
     import {
       html, h, signal, effect, computed, render, useSignal, useEffect, useRef
-    } from '/index.js';
+    } from '/index.js'
 
-    import { llama } from '/completion.js';
+    import { llama } from '/completion.js'
 
     const session = signal({
-      prompt: "This is a conversation between user and llama, a friendly chatbot. respond in simple markdown.",
-      template: "{{prompt}}\n\n{{history}}\n{{char}}:",
-      historyTemplate: "{{name}}: {{message}}",
+      system: "A chat between a curious user and a pirate.",
+      system_cfg: "A chat between a curious user and an artificial intelligence assistant.",
+      message: "{{system}}\n\n### Instruction:\n{{user}}\n\n### Response:\n{{assistant}}",
+      stop: ["###"],
       transcript: [],
       type: "chat",
-      char: "llama",
-      user: "User",
     })
 
     const params = signal({
       n_predict: 400,
-      temperature: 0.7,
-      repeat_last_n: 256,
-      repeat_penalty: 1.18,
       top_k: 40,
-      top_p: 0.5,
+      top_p: 0.95,
+      tfs_z: 1.0,
+      typical_p: 1.0,
+      temperature: 0.7,
+      repeat_penalty: 1.18,
+      frequency_penalty: 0.0,
+      presence_penalty: 0.0,
+      repeat_last_n: 256,
+      mirostat: 0,
+      mirostat_tau: 5.0,
+      mirostat_eta: 0.1,
+      cfg_scale: 4.0,
+      penalize_nl: true,
     })
 
     const llamaStats = signal(null)
@@ -140,88 +178,92 @@
     const transcriptUpdate = (transcript) => {
       session.value = {
         ...session.value,
-        transcript
+        transcript,
       }
     }
 
     // simple template replace
     const template = (str, extraSettings) => {
-      let settings = session.value;
+      let settings = session.value
       if (extraSettings) {
-        settings = { ...settings, ...extraSettings };
+        settings = { ...settings, ...extraSettings }
       }
-      return String(str).replaceAll(/\{\{(.*?)\}\}/g, (_, key) => template(settings[key]));
+      return String(str).replaceAll(/\{\{(.*?)\}\}/g, (_, key) => template(settings[key]))
     }
 
     // send message to server
     const chat = async (msg) => {
       if (controller.value) {
-        console.log('already running...');
-        return;
+        console.log('already running...')
+        return
       }
-      controller.value = new AbortController();
+      controller.value = new AbortController()
 
-      transcriptUpdate([...session.value.transcript, ["{{user}}", msg]])
-
-      const prompt = template(session.value.template, {
-        message: msg,
-        history: session.value.transcript.flatMap(([name, message]) => template(session.value.historyTemplate, {name, message})).join("\n"),
-      });
-
-      let currentMessage = '';
       const history = session.value.transcript
+      const system = history.length == 0 ? session.value.system : ""
+      transcriptUpdate([...history, { system, user: msg, assistant: "" }])
+
+      const prompt = session.value.transcript.map(t =>
+        template(session.value.message, t)).join("").trimEnd()
+
+      const cfg_negative_prompt = params.value.cfg_scale > 1 ? session.value.transcript.map(t =>
+        template(session.value.message, { ...t, system: session.value.system_cfg })
+      ).join("").trimEnd() : ""
+
+      let currentMessage = ''
 
       const llamaParams = {
         ...params.value,
-        stop: ["</s>", template("{{char}}:"), template("{{user}}:")],
+        cfg_negative_prompt,
+        stop: session.stop,
       }
 
       for await (const chunk of llama(prompt, llamaParams, { controller: controller.value })) {
-        const data = chunk.data;
-        currentMessage += data.content;
+        const data = chunk.data
+        currentMessage += data.content
 
         // remove leading whitespace
         currentMessage = currentMessage.replace(/^\s+/, "")
 
-        transcriptUpdate([...history, ["{{char}}", currentMessage]])
+        transcriptUpdate([...history, { system, user: msg, assistant: currentMessage }])
 
         if (data.stop) {
-          console.log("Completion finished: '", currentMessage, "', summary: ", data);
+          console.log("Completion finished: '", currentMessage, "', summary: ", data)
         }
 
         if (data.timings) {
-          llamaStats.value = data.timings;
+          llamaStats.value = data.timings
         }
       }
 
-      controller.value = null;
+      controller.value = null
     }
 
     function MessageInput() {
       const message = useSignal("")
 
       const stop = (e) => {
-        e.preventDefault();
+        e.preventDefault()
         if (controller.value) {
-          controller.value.abort();
-          controller.value = null;
+          controller.value.abort()
+          controller.value = null
         }
       }
 
       const reset = (e) => {
-        stop(e);
-        transcriptUpdate([]);
+        stop(e)
+        transcriptUpdate([])
       }
 
       const submit = (e) => {
-        stop(e);
-        chat(message.value);
-        message.value = "";
+        stop(e)
+        chat(message.value)
+        message.value = ""
       }
 
       const enterSubmits = (event) => {
         if (event.which === 13 && !event.shiftKey) {
-          submit(event);
+          submit(event)
         }
       }
 
@@ -240,7 +282,7 @@
     }
 
     const ChatLog = (props) => {
-      const messages = session.value.transcript;
+      const messages = session.value.transcript
       const container = useRef(null)
 
       useEffect(() => {
@@ -250,73 +292,102 @@
         }
       }, [messages])
 
-      const chatLine = ([user, msg]) => {
-        return html`<p key=${msg}><strong>${template(user)}:</strong> <${Markdownish} text=${template(msg)} /></p>`
-      };
-
       return html`
         <section id="chat" ref=${container}>
-          ${messages.flatMap(chatLine)}
-        </section>`;
-    };
+          ${messages.map(({system, user, assistant}) => html`
+            ${system !== "" && html`<p><em><${Markdownish} text=${system} /></em></p>`}
+            <p class="user bubble"><${Markdownish} text=${user} /></p>
+            ${assistant !== "" ?
+              html`<p class="asst bubble"><${Markdownish} text=${assistant} /></p>` :
+              html`<p class="typing">...</p>`}
+          `)}
+        </section>
+      `
+    }
+
+    const ParamSlider = ({param, min, max, step, children}) => {
+      const updateParamsFloat = (el) => params.value = { ...params.value, [param]: parseFloat(el.target.value) }
+      return html`
+        <div>
+          <label for="${param}"><code>${param}</code></label>
+          <input type="range" id="${param}" min="${min}" max="${max}" step="${step}" name="${param}" value="${params.value[param]}" oninput=${updateParamsFloat} />
+          <span>${params.value[param]}</span>
+          <span>${children}</span>
+        </div>
+      `
+    }
 
     const ConfigForm = (props) => {
       const updateSession = (el) => session.value = { ...session.value, [el.target.name]: el.target.value }
       const updateParams = (el) => params.value = { ...params.value, [el.target.name]: el.target.value }
       const updateParamsFloat = (el) => params.value = { ...params.value, [el.target.name]: parseFloat(el.target.value) }
+      const appendArray = () => session.value = { ...session.value, stop: [...session.value.stop, ""] }
+      const updateArray = (el) => {
+        const [name, index] = el.target.name.split(".")
+        const newarr = session.value[name].map((v, i) => i == index ? el.target.value : v).filter(x => x !== "")
+        session.value = { ...session.value, [name]: newarr }
+      }
 
       return html`
         <form>
           <fieldset>
             <div>
-              <label for="prompt">Prompt</label>
-              <textarea type="text" name="prompt" value="${session.value.prompt}" rows=4 oninput=${updateSession}/>
+              <label for="system">System prompt</label>
+              <textarea type="text" name="system" value="${session.value.system}" rows=4 oninput=${updateSession}/>
             </div>
 
             <div>
-              <label for="user">User name</label>
-              <input type="text" name="user" value="${session.value.user}" oninput=${updateSession} />
+              <label for="message">Message template</label>
+              <textarea type="text" name="message" value="${session.value.message}" rows=7 oninput=${updateSession}/>
             </div>
 
             <div>
-              <label for="bot">Bot name</label>
-              <input type="text" name="char" value="${session.value.char}" oninput=${updateSession} />
+              <label for="stop">Stop strings</label>
+              ${session.value.stop.map((stop, i) => html`
+                <p><input type="text" name="stop.${i}" value="${stop}" oninput=${updateArray}/></p>
+              `)}
+              <input type="button" value="+" onclick=${appendArray} />
             </div>
 
-            <div>
-              <label for="template">Prompt template</label>
-              <textarea id="template" name="template" value="${session.value.template}" rows=4 oninput=${updateSession}/>
-            </div>
+            <${ParamSlider} min=1 max=10 step=0.1 param=cfg_scale>CFG scale<//>
+            ${params.value.cfg_scale > 1 && html`
+              <div>
+                <label for="system_cfg">CFG System prompt</label>
+                <textarea type="text" name="system_cfg" value="${session.value.system_cfg}" rows=4 oninput=${updateSession}/>
+              </div>
+            `}
 
-            <div>
-              <label for="template">Chat history template</label>
-              <textarea id="template" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
-            </div>
+            <${ParamSlider} min=1 max=1000 step=1 param=n_predict>Predict N tokens<//>
+            <${ParamSlider} min=0 max=1000 step=1 param=repeat_last_n>Penalize last N tokens<//>
+            ${params.value.repeat_last_n > 0 && html`
+              <${ParamSlider} min=0 max=4 step=0.01 param=repeat_penalty>Penalize repeat sequence<//>
+              <${ParamSlider} min=0 max=4 step=0.01 param=frequency_penalty>Penalize frequent tokens<//>
+              <${ParamSlider} min=0 max=4 step=0.01 param=presence_penalty>Penalize tokens not present in prompt<//>
+            `}
+            <${ParamSlider} min=0 max=2 step=0.01 param=temperature>Temperature<//>
+            ${params.value.temperature > 0 && html`
+              <div>
+                <input id=mirostat_0 type=radio name=mirostat checked=${params.value.mirostat == 0} value=0 oninput=${updateParamsFloat} />
+                <label for=mirostat_0>Temperature</label>
 
-            <div>
-              <label for="temperature">Temperature</label>
-              <input type="range" id="temperature" min="0.0" max="1.0" step="0.01" name="temperature" value="${params.value.temperature}" oninput=${updateParamsFloat} />
-              <span>${params.value.temperature}</span>
-            </div>
+                <input id=mirostat_1 type=radio name=mirostat checked=${params.value.mirostat == 1} value=1 oninput=${updateParamsFloat} />
+                <label for=mirostat_1>Mirostat v1</label>
 
-            <div>
-              <label for="nPredict">Predictions</label>
-              <input type="range" id="nPredict" min="1" max="2048" step="1" name="n_predict" value="${params.value.n_predict}" oninput=${updateParamsFloat} />
-              <span>${params.value.n_predict}</span>
-            </div>
+                <input id=mirostat_2 type=radio name=mirostat checked=${params.value.mirostat == 2} value=2 oninput=${updateParamsFloat} />
+                <label for=mirostat_2>Mirostat v2</label>
+              </div>
 
-            <div>
-              <label for="repeat_penalty">Penalize repeat sequence</label>
-              <input type="range" id="repeat_penalty" min="0.0" max="2.0" step="0.01" name="repeat_penalty" value="${params.value.repeat_penalty}" oninput=${updateParamsFloat} />
-              <span>${params.value.repeat_penalty}</span>
-            </div>
-
-            <div>
-              <label for="repeat_last_n">Consider N tokens for penalize</label>
-              <input type="range" id="repeat_last_n" min="0.0" max="2048" name="repeat_last_n" value="${params.value.repeat_last_n}" oninput=${updateParamsFloat} />
-              <span>${params.value.repeat_last_n}</span>
-            </div>
-
+              ${params.value.mirostat == 0 && html`
+                <${ParamSlider} min=1 max=1000 step=1 param=top_k>Top K<//>
+                <${ParamSlider} min=0 max=1 step=0.01 param=tfs_z>Tail free sampling<//>
+                <${ParamSlider} min=0 max=1 step=0.01 param=typical_p>Typical P<//>
+                <${ParamSlider} min=0 max=1 step=0.01 param=top_p>Top P<//>
+              `}
+              ${params.value.mirostat > 0 && html`
+                <${ParamSlider} min=0 max=1 step=0.01 param=mirostat_eta>Mirostat eta, learning rate<//>
+                <${ParamSlider} min=0 max=1000 step=1 param=mirostat_tau>Mirostat tau, target entropy<//>
+              `}
+            `}
           </fieldset>
         </form>
       `
@@ -331,9 +402,9 @@
         .replace(/_(.*?)_/g, '<em>$1</em>')
         .replace(/```.*?\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
         .replace(/`(.*?)`/g, '<code>$1</code>')
-        .replace(/\n/gim, '<br />');
-      return html`<span dangerouslySetInnerHTML=${{ __html: md }} />`;
-    };
+        .replace(/\n/gim, '<br />')
+      return html`<span dangerouslySetInnerHTML=${{ __html: md }} />`
+    }
 
     const ModelGenerationInfo = (params) => {
       if (!llamaStats.value) {
@@ -367,10 +438,10 @@
             <p>Powered by <a href="https://github.com/ggerganov/llama.cpp">llama.cpp</a> and <a href="https://ggml.ai">ggml.ai</a>.</p>
           </footer>
         </div>
-      `;
+      `
     }
 
-    render(h(App), document.body);
+    render(h(App), document.body)
   </script>
 </head>
 
