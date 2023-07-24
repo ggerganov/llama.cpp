@@ -1396,10 +1396,14 @@ static bool llama_eval_internal(
     const int64_t n_vocab     = hparams.n_vocab;
     const int64_t n_embd_gqa  = hparams.n_embd_gqa();
 
+
     LLAMA_ASSERT(n_embd_head == hparams.n_rot);
 
     const float freq_base  = hparams.rope_freq_base;
     const float freq_scale = hparams.rope_freq_scale;
+
+    // TODO: read from hparams
+    const float rms_norm_eps = 1e-6f;
 
     const int n_gpu_layers = model.n_gpu_layers;
 
@@ -1479,7 +1483,7 @@ static bool llama_eval_internal(
 
         // norm
         {
-            cur = ggml_rms_norm(ctx0, inpL);
+            cur = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
             offload_func(cur);
             ggml_set_name(cur, "rms_norm_0");
 
@@ -1627,7 +1631,7 @@ static bool llama_eval_internal(
         {
             // norm
             {
-                cur = ggml_rms_norm(ctx0, inpFF);
+                cur = ggml_rms_norm(ctx0, inpFF, rms_norm_eps);
                 offload_func(cur);
                 ggml_set_name(cur, "rms_norm_1");
 
@@ -1680,7 +1684,7 @@ static bool llama_eval_internal(
 
     // norm
     {
-        cur = ggml_rms_norm(ctx0, inpL);
+        cur = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
         offload_func_nr(cur);
         ggml_set_name(cur, "rms_norm_2");
 
