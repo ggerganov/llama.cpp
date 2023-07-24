@@ -3962,18 +3962,23 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
             }
             func = ggml_cuda_mul;
             break;
-        case GGML_OP_GELU:
-            if (!any_on_device) {
-                return false;
-            }
-            func = ggml_cuda_gelu;
-            break;
-        case GGML_OP_SILU:
-            if (!any_on_device) {
-                return false;
-            }
-            func = ggml_cuda_silu;
-            break;
+        case GGML_OP_UNARY:
+            switch (ggml_get_unary_op(tensor)) {
+                case GGML_UNARY_OP_GELU:
+                    if (!any_on_device) {
+                        return false;
+                    }
+                    func = ggml_cuda_gelu;
+                    break;
+                case GGML_UNARY_OP_SILU:
+                    if (!any_on_device) {
+                        return false;
+                    }
+                    func = ggml_cuda_silu;
+                    break;
+                default:
+                    return false;
+            } break;
         case GGML_OP_NORM:
             if (!any_on_device) {
                 return false;
