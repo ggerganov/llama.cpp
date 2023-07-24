@@ -41,25 +41,31 @@
       padding: 0.5em;
     }
 
+    #chat {
+      display: flex;
+      flex-direction: column;
+    }
+
     .bubble {
       border: 1px solid;
-      border-radius: 10px;
-      padding: 5px;
+      border-radius: 1.0em;
+      padding: 0.5em;
+      max-width: 75%;
+      margin-top: 0;
     }
 
     .user {
       background-color: #161616;
       color: #d6d6d6;
-      margin-left: 20%;
       border-bottom-right-radius: 0;
+      place-self: flex-end;
     }
 
     .asst {
       background-color: #d6d6d6;
       color: #161616;
-      text-align: left;
-      margin-right: 20%;
-      border-top-left-radius: 0;
+      border-bottom-left-radius: 0;
+      place-self: flex-start;
     }
 
     .typing {
@@ -143,7 +149,6 @@
       stop: ["###"],
       transcript: [],
       type: "chat",
-      fullprompt: "", // debug
     })
 
     const params = signal({
@@ -160,7 +165,7 @@
       mirostat: 0,
       mirostat_tau: 5.0,
       mirostat_eta: 0.1,
-      cfg_scale: 1.0,
+      cfg_scale: 4.0,
       penalize_nl: true,
     })
 
@@ -204,7 +209,6 @@
       const cfg_negative_prompt = params.value.cfg_scale > 1 ? session.value.transcript.map(t =>
         template(session.value.message, { ...t, system: session.value.system_cfg })
       ).join("").trimEnd() : ""
-      session.value = { ...session.value, fullprompt: cfg_negative_prompt } // debug
 
       let currentMessage = ''
 
@@ -273,7 +277,6 @@
             <button onclick=${stop} disabled=${generating}>Stop</button>
             <button onclick=${reset}>Reset</button>
           </div>
-          <pre>${session.value.fullprompt/* debug */}</pre>
         </form>
       `
     }
@@ -299,7 +302,7 @@
               html`<p class="typing">...</p>`}
           `)}
         </section>
-        <pre>${JSON.stringify(session.value.transcript, null, 2)}</pre>` // debug
+      `
     }
 
     const ParamSlider = ({param, min, max, step, children}) => {
@@ -344,8 +347,6 @@
                 <p><input type="text" name="stop.${i}" value="${stop}" oninput=${updateArray}/></p>
               `)}
               <input type="button" value="+" onclick=${appendArray} />
-
-              <pre>${JSON.stringify(session.value.stop)/* debug */}</pre>
             </div>
 
             <${ParamSlider} min=1 max=10 step=0.1 param=cfg_scale>CFG scale<//>
@@ -387,7 +388,6 @@
                 <${ParamSlider} min=0 max=1000 step=1 param=mirostat_tau>Mirostat tau, target entropy<//>
               `}
             `}
-            <pre>${JSON.stringify(params.value, null, 2)/*debug*/}</pre>
           </fieldset>
         </form>
       `
