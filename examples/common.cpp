@@ -438,6 +438,28 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.input_suffix = argv[i];
+        } else if (arg == "--grammar") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.grammar = argv[i];
+        } else if (arg == "--grammar-file") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            std::ifstream file(argv[i]);
+            if (!file) {
+                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+                invalid_param = true;
+                break;
+            }
+            std::copy(
+                std::istreambuf_iterator<char>(file),
+                std::istreambuf_iterator<char>(),
+                std::back_inserter(params.grammar)
+            );
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             gpt_print_usage(argc, argv, default_params);
@@ -514,6 +536,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "                        modifies the likelihood of token appearing in the completion,\n");
     fprintf(stdout, "                        i.e. `--logit-bias 15043+1` to increase likelihood of token ' Hello',\n");
     fprintf(stdout, "                        or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'\n");
+    fprintf(stdout, "  --grammar GRAMMAR     BNF-like grammar to constrain generations (see samples in grammars/ dir)\n");
+    fprintf(stdout, "  --grammar-file FNAME  file to read grammar from\n");
     fprintf(stdout, "  --cfg-negative-prompt PROMPT \n");
     fprintf(stdout, "                        negative prompt to use for guidance. (default: empty)\n");
     fprintf(stdout, "  --cfg-scale N         strength of guidance (default: %f, 1.0 = disable)\n", params.cfg_scale);
