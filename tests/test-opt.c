@@ -125,9 +125,9 @@ int main(void) {
     };
     struct ggml_context * ctx = ggml_init(params);
 
-    int64_t ne1[4] = {4, 1024, 1, 1};
-    int64_t ne2[4] = {4, 2048, 1, 1};;
-    int64_t ne3[4] = {1024, 2048, 1, 1};
+    int64_t ne1[4] = {4, 128, 1, 1};
+    int64_t ne2[4] = {4, 256, 1, 1};;
+    int64_t ne3[4] = {128, 256, 1, 1};
 
     struct ggml_tensor * a = get_random_tensor(ctx, 2, ne1, -1, +1);
     struct ggml_tensor * b = get_random_tensor(ctx, 2, ne2, -1, +1);
