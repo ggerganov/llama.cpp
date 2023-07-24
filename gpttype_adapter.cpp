@@ -475,6 +475,21 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         llama_ctx_params.rope_freq_scale = rope_freq_scale;
         llama_ctx_params.n_batch = blasbatchsize;
 
+        #if defined(GGML_USE_CUBLAS)
+        bool ts_all_zero = true;
+        for (int i = 0; i < tensor_split_max; ++i) {
+            if (inputs.tensor_split[i] != 0.0f) {
+                ts_all_zero = false;
+                break;
+            }
+        }
+        if(!ts_all_zero)
+        {
+            llama_ctx_params.tensor_split = inputs.tensor_split;
+            printf("CUBLAS: Applying Custom Tensor Split!\n");
+        }
+        #endif
+
         llama_ctx_v3 = llama_init_from_file(modelname.c_str(), llama_ctx_params);
 
         if (llama_ctx_v3 == NULL)

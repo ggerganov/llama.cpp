@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 stop_token_max = 10
 sampler_order_max = 7
 ban_token_max = 10
+tensor_split_max = 16
 
 class load_model_inputs(ctypes.Structure):
     _fields_ = [("threads", ctypes.c_int),
@@ -38,7 +39,8 @@ class load_model_inputs(ctypes.Structure):
                 ("gpulayers", ctypes.c_int),
                 ("rope_freq_scale", ctypes.c_float),
                 ("rope_freq_base", ctypes.c_float),
-                ("banned_tokens", ctypes.c_char_p * ban_token_max)]
+                ("banned_tokens", ctypes.c_char_p * ban_token_max),
+                ("tensor_split", ctypes.c_float * tensor_split_max)]
 
 class generation_inputs(ctypes.Structure):
     _fields_ = [("seed", ctypes.c_int),
@@ -208,6 +210,13 @@ def load_model(model_filename):
         os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     elif (args.usecublas and "2" in args.usecublas):
         os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+
+    for n in range(tensor_split_max):
+        if args.has_advanced=='advanced' and args.tensor_split and n < len(args.tensor_split):
+            inputs.tensor_split[n] = float(args.tensor_split[n])
+        else:
+            inputs.tensor_split[n] = 0
+
     inputs.executable_path = (getdirpath()+"/").encode("UTF-8")
     inputs.debugmode = args.debugmode
     banned_tokens = args.bantokens
@@ -1634,5 +1643,11 @@ if __name__ == '__main__':
     compatgroup.add_argument("--useclblast", help="Use CLBlast for GPU Acceleration. Must specify exactly 2 arguments, platform ID and device ID (e.g. --useclblast 1 0).", type=int, choices=range(0,9), nargs=2)
     compatgroup.add_argument("--usecublas", help="Use CuBLAS for GPU Acceleration. Requires CUDA. Select lowvram to not allocate VRAM scratch buffer. Enter a number afterwards to select and use 1 GPU. Leaving no number will use all GPUs.", nargs='*',metavar=('[lowvram|normal] [main GPU ID]'), choices=['normal', 'lowvram', '0', '1', '2'])
     parser.add_argument("--gpulayers", help="Set number of layers to offload to GPU when using GPU. Requires GPU.",metavar=('[GPU layers]'), type=int, default=0)
+
+    # for the seldom used esoteric commands
+    subparsers = parser.add_subparsers(title="Advanced Configs (For Experts)", dest="has_advanced")
+    advanced_subparser = subparsers.add_parser("advanced", help="Additional settings for experts. Run 'koboldcpp.py advanced --help' for more info")
+    advanced_subparser.add_argument("--tensor_split", help="CUDA with ALL set only. How to split tensors across multiple GPUs, space-separated list of proportions, e.g. 3 1", type=float, nargs='+')
+
     args = parser.parse_args()
     main(args)

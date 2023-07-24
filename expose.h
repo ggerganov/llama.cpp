@@ -2,6 +2,7 @@
 
 const int stop_token_max = 10;
 const int ban_token_max = 10;
+const int tensor_split_max = 16;
 // match kobold's sampler list and order
 enum samplers
 {
@@ -46,6 +47,7 @@ struct load_model_inputs
     const float rope_freq_scale = 1.0f;
     const float rope_freq_base = 10000.0f;
     const char * banned_tokens[ban_token_max];
+    const float tensor_split[tensor_split_max];
 };
 struct generation_inputs
 {
