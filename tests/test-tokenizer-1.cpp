@@ -12,15 +12,11 @@
 static std::string escape_whitespace(const std::string& text) {
     std::string result;
     bool escaping = false;
-    result += char(0xe2);
-    result += char(0x96);
-    result += char(0x81);
+    result += "\xe2\x96\x81";
     for (size_t offs = 0; offs < text.length(); ++offs) {
         if (text[offs] == ' ') {
             if (!escaping) {
-                result += char(0xe2);
-                result += char(0x96);
-                result += char(0x81);
+                result += "\xe2\x96\x81";
                 escaping = true;
             }
         }
@@ -93,15 +89,15 @@ int main(int argc, char **argv) {
         if (n == 1) {
             if (i != tokens[0]) {
                 std::string backward = llama_token_to_str(ctx, tokens[0]);
-                fprintf(stderr, "%s : error: token %d is string %s but tokenize() returns token %d %s\n", 
+                fprintf(stderr, "%s : error: token %d is string %s but bpe returns token %d %s\n", 
                     __func__, i, llama_token_to_str(ctx, i).c_str(), tokens[0], backward.c_str());
             }
         } else {
             if (i <= 258) {
-                fprintf(stderr, "%s : info: token %d is string %s and tokenize() returns tokens %s\n", 
+                fprintf(stderr, "%s : info: token %d is string %s and bpe returns tokens %s\n", 
                     __func__, i, llama_token_to_str(ctx, i).c_str(), unescape_whitespace(ctx, tokens.data(), n).c_str());
             } else {
-                fprintf(stderr, "%s : error: token %d is string %s but tokenize() returns tokens %s\n", 
+                fprintf(stderr, "%s : error: token %d is string %s but bpe returns tokens %s\n", 
                     __func__, i, llama_token_to_str(ctx, i).c_str(), unescape_whitespace(ctx, tokens.data(), n).c_str());
             }
         }

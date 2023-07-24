@@ -1,4 +1,5 @@
 #include "ggml.h"
+#include "common.h"
 #include "llama.h"
 #include <unordered_map>
 #include <vector>
