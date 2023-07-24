@@ -79,6 +79,12 @@
       gap: 1em;
     }
 
+    fieldset.three {
+      display: grid;
+      grid-template: "a a a";
+      gap: 1em;
+    }
+
     details {
       border: 1px solid #aaa;
       border-radius: 4px;
@@ -366,7 +372,14 @@
               ${FloatField({label: "Typical P", max: 1.0, min: 0.0, name: "typical_p", step: 0.01, value: params.value.typical_p})}
               ${FloatField({label: "Presence penalty", max: 1.0, min: 0.0, name: "presence_penalty", step: 0.01, value: params.value.presence_penalty})}
               ${FloatField({label: "Frequency penalty", max: 1.0, min: 0.0, name: "frequency_penalty", step: 0.01, value: params.value.frequency_penalty})}
-              ${IntField({label: "Mirostat", max: 2, min: 0, name: "mirostat", value: params.value.mirostat})}
+            </fieldset>
+            <hr />
+            <fieldset class="three">
+              <div>
+                <label><input type="radio" name="mirostat" value="0" checked=${params.value.mirostat == 0} oninput=${updateParamsInt} /> no Mirostat</label>
+                <label><input type="radio" name="mirostat" value="1" checked=${params.value.mirostat == 1} oninput=${updateParamsInt} /> Mirostat v1</label>
+                <label><input type="radio" name="mirostat" value="2" checked=${params.value.mirostat == 2} oninput=${updateParamsInt} /> Mirostat v2</label>
+              </div>
               ${FloatField({label: "Mirostat tau", max: 10.0, min: 0.0, name: "mirostat_tau", step: 0.01, value: params.value.mirostat_tau})}
               ${FloatField({label: "Mirostat eta", max: 1.0, min: 0.0, name: "mirostat_eta", step: 0.01, value: params.value.mirostat_eta})}
             </fieldset>
