@@ -536,7 +536,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "                        modifies the likelihood of token appearing in the completion,\n");
     fprintf(stdout, "                        i.e. `--logit-bias 15043+1` to increase likelihood of token ' Hello',\n");
     fprintf(stdout, "                        or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'\n");
-    fprintf(stdout, "  --grammar GRAMMAR     BNF-like grammar (TODO explain) to constrain generations\n");
+    fprintf(stdout, "  --grammar GRAMMAR     BNF-like grammar to constrain generations (see samples in grammars/ dir)\n");
     fprintf(stdout, "  --grammar-file FNAME  file to read grammar from\n");
     fprintf(stdout, "  --cfg-negative-prompt PROMPT \n");
     fprintf(stdout, "                        negative prompt to use for guidance. (default: empty)\n");
