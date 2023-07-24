@@ -270,6 +270,7 @@
       const updateSession = (el) => session.value = { ...session.value, [el.target.name]: el.target.value }
       const updateParams = (el) => params.value = { ...params.value, [el.target.name]: el.target.value }
       const updateParamsFloat = (el) => params.value = { ...params.value, [el.target.name]: parseFloat(el.target.value) }
+      const updateParamsInt = (el) => params.value = { ...params.value, [el.target.name]: Math.floor(parseFloat(el.target.value)) }
 
       return html`
         <form>
@@ -307,13 +308,13 @@
           <fieldset class="two">
             <div>
               <label for="temperature">Temperature</label>
-              <input type="range" id="temperature" min="0.0" max="1.0" step="0.01" name="temperature" value="${params.value.temperature}" oninput=${updateParamsFloat} />
+              <input type="range" id="temperature" min="0.0" max="1.5" step="0.01" name="temperature" value="${params.value.temperature}" oninput=${updateParamsFloat} />
               <span>${params.value.temperature}</span>
             </div>
 
             <div>
               <label for="nPredict">Predictions</label>
-              <input type="range" id="nPredict" min="1" max="2048" step="1" name="n_predict" value="${params.value.n_predict}" oninput=${updateParamsFloat} />
+              <input type="range" id="nPredict" min="-1" max="2048" step="1" name="n_predict" value="${params.value.n_predict}" oninput=${updateParamsFloat} />
               <span>${params.value.n_predict}</span>
             </div>
 
@@ -327,6 +328,18 @@
               <label for="repeat_last_n">Consider N tokens for penalize</label>
               <input type="range" id="repeat_last_n" min="0.0" max="2048" name="repeat_last_n" value="${params.value.repeat_last_n}" oninput=${updateParamsFloat} />
               <span>${params.value.repeat_last_n}</span>
+            </div>
+
+            <div>
+              <label for="top_k">Top-K sampling</label>
+              <input type="range" id="top_k" min="-1" max="100" name="top_k" value="${params.value.top_k}" oninput=${updateParamsInt} />
+              <span>${params.value.top_k}</span>
+            </div>
+
+            <div>
+              <label for="top_p">Top-P sampling</label>
+              <input type="range" id="top_p" min="0" max="1" step="0.01" name="top_p" value="${params.value.top_p}" oninput=${updateParamsFloat} />
+              <span>${params.value.top_p}</span>
             </div>
           </fieldset>
         </form>
