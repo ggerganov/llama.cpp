@@ -106,12 +106,12 @@ static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * 
 static const std::map<e_model, size_t> & MEM_REQ_SCRATCH0(int n_ctx)
 {
     static std::map<e_model, size_t> k_sizes = {
-        { MODEL_3B,   ((size_t) n_ctx / 16ull +  92ull) * MB },
-        { MODEL_7B,   ((size_t) n_ctx / 16ull + 100ull) * MB },
-        { MODEL_13B,  ((size_t) n_ctx / 12ull + 120ull) * MB },
-        { MODEL_30B,  ((size_t) n_ctx /  9ull + 160ull) * MB },
-        { MODEL_65B,  ((size_t) n_ctx /  6ull + 256ull) * MB }, // guess
-        { MODEL_70B,  ((size_t) n_ctx /  7ull + 164ull) * MB },
+        { MODEL_3B,   ((size_t) n_ctx / 16ull + 156ull) * MB },
+        { MODEL_7B,   ((size_t) n_ctx / 16ull + 164ull) * MB },
+        { MODEL_13B,  ((size_t) n_ctx / 12ull + 184ull) * MB },
+        { MODEL_30B,  ((size_t) n_ctx /  9ull + 224ull) * MB },
+        { MODEL_65B,  ((size_t) n_ctx /  6ull + 320ull) * MB }, // guess
+        { MODEL_70B,  ((size_t) n_ctx /  6ull + 320ull) * MB },
     };
     return k_sizes;
 }
@@ -119,12 +119,12 @@ static const std::map<e_model, size_t> & MEM_REQ_SCRATCH0(int n_ctx)
 static const std::map<e_model, size_t> & MEM_REQ_SCRATCH1()
 {
     static std::map<e_model, size_t> k_sizes = {
-        { MODEL_3B,  128ull * MB },
-        { MODEL_7B,  160ull * MB },
-        { MODEL_13B, 192ull * MB },
-        { MODEL_30B, 256ull * MB },
-        { MODEL_65B, 384ull * MB }, // guess
-        { MODEL_70B, 304ull * MB },
+        { MODEL_3B,  192ull * MB },
+        { MODEL_7B,  224ull * MB },
+        { MODEL_13B, 256ull * MB },
+        { MODEL_30B, 320ull * MB },
+        { MODEL_65B, 448ull * MB }, // guess
+        { MODEL_70B, 448ull * MB },
     };
     return k_sizes;
 }
@@ -133,12 +133,12 @@ static const std::map<e_model, size_t> & MEM_REQ_SCRATCH1()
 static const std::map<e_model, size_t> & MEM_REQ_EVAL()
 {
     static std::map<e_model, size_t> k_sizes = {
-        { MODEL_3B,   8ull * MB },
-        { MODEL_7B,  10ull * MB },
-        { MODEL_13B, 12ull * MB },
-        { MODEL_30B, 16ull * MB },
-        { MODEL_65B, 24ull * MB }, // guess
-        { MODEL_70B, 24ull * MB },
+        { MODEL_3B,  16ull * MB },
+        { MODEL_7B,  20ull * MB },
+        { MODEL_13B, 24ull * MB },
+        { MODEL_30B, 32ull * MB },
+        { MODEL_65B, 48ull * MB }, // guess
+        { MODEL_70B, 48ull * MB },
     };
     return k_sizes;
 }
