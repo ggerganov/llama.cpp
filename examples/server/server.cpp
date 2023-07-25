@@ -1075,7 +1075,7 @@ static void parse_options_completion(const json &body, llama_server_context &lla
     llama.params.seed = body.value("seed", default_params.seed);
     llama.params.n_probs = body.value("n_probs", default_params.n_probs);
 
-    if (body.count("content") != 0)
+    if (body.count("prompt") != 0)
     {
         llama.prompt = body["prompt"];
     }
