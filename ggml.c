@@ -16576,10 +16576,9 @@ void ggml_graph_reset(struct ggml_cgraph * cgraph) {
 void ggml_graph_compute_with_ctx(struct ggml_context * ctx, struct ggml_cgraph * cgraph, int n_threads) {
     struct ggml_cplan cplan = ggml_graph_plan(cgraph, n_threads);
 
-    struct ggml_tensor * buf = ggml_new_tensor_1d(ctx, GGML_TYPE_I8, cplan.work_size);
-    GGML_ASSERT(buf);
+    struct ggml_object * obj = ggml_new_object(ctx, GGML_OBJECT_WORK_BUFFER, cplan.work_size);
 
-    cplan.work_data = buf->data;
+    cplan.work_data = (uint8_t *)ctx->mem_buffer + obj->offs;
 
     ggml_graph_compute(cgraph, &cplan);
 }
