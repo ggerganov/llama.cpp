@@ -22,18 +22,19 @@
 int32_t get_num_physical_cores();
 
 struct gpt_params {
-    uint32_t seed                           = -1;  // RNG seed
+    uint32_t seed                           = -1;   // RNG seed
     int32_t n_threads                       = get_num_physical_cores();
-    int32_t n_predict                       = -1;  // new tokens to predict
-    int32_t n_ctx                           = 512; // context size
-    int32_t n_batch                         = 512; // batch size for prompt processing (must be >=32 to use BLAS)
-    int32_t n_gqa                           = 1;   // grouped-query attention factor (TODO: move to hparams)
-    int32_t n_keep                          = 0;   // number of tokens to keep from initial prompt
-    int32_t n_chunks                        = -1;  // max number of chunks to process (-1 = unlimited)
-    int32_t n_gpu_layers                    = 0;   // number of layers to store in VRAM
-    int32_t main_gpu                        = 0;   // the GPU that is used for scratch and small tensors
-    float   tensor_split[LLAMA_MAX_DEVICES] = {0}; // how split tensors should be distributed across GPUs
-    int32_t n_probs                         = 0;   // if greater than 0, output the probabilities of top n_probs tokens.
+    int32_t n_predict                       = -1;   // new tokens to predict
+    int32_t n_ctx                           = 512;  // context size
+    int32_t n_batch                         = 512;  // batch size for prompt processing (must be >=32 to use BLAS)
+    int32_t n_gqa                           = 1;    // grouped-query attention factor (TODO: move to hparams)
+    int32_t n_keep                          = 0;    // number of tokens to keep from initial prompt
+    int32_t n_chunks                        = -1;   // max number of chunks to process (-1 = unlimited)
+    int32_t n_gpu_layers                    = 0;    // number of layers to store in VRAM
+    int32_t main_gpu                        = 0;    // the GPU that is used for scratch and small tensors
+    float   tensor_split[LLAMA_MAX_DEVICES] = {0};  // how split tensors should be distributed across GPUs
+    int32_t n_probs                         = 0;    // if greater than 0, output the probabilities of top n_probs tokens.
+    float   rms_norm_eps                    = 1e-6; // rms norm epsilon
     float   rope_freq_base                  = 10000.0f; // RoPE base frequency
     float   rope_freq_scale                 = 1.0f;     // RoPE frequency scaling factor
 
