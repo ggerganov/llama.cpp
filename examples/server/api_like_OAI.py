@@ -1,18 +1,23 @@
 import argparse
 from flask import Flask, jsonify, request, Response
-from flask_cors import CORS
 import urllib.parse
 import requests
 import time
 import json
-from fastchat import conversation
-
+try:
+    from fastchat import conversation
+except ImportError:
+    conversation = None
 
 app = Flask(__name__)
-CORS(app)
+try:
+    from flask_cors import CORS
+    CORS(app)
+except ImportError:
+    pass
 
 parser = argparse.ArgumentParser(description="An example of using server.cpp with a similar API to OAI. It must be used together with server.cpp.")
-parser.add_argument("--chat-prompt-model", type=str, help="Set the model", default="")
+parser.add_argument("--chat-prompt-model", type=str, help="Set the model name of conversation template", default="")
 parser.add_argument("--chat-prompt", type=str, help="the top prompt in chat completions(default: 'A chat between a curious user and an artificial intelligence assistant. The assistant follows the given rules no matter what.\\n')", default='A chat between a curious user and an artificial intelligence assistant. The assistant follows the given rules no matter what.\\n')
 parser.add_argument("--user-name", type=str, help="USER name in chat completions(default: '\\nUSER: ')", default="\\nUSER: ")
 parser.add_argument("--ai-name", type=str, help="ASSISTANT name in chat completions(default: '\\nASSISTANT: ')", default="\\nASSISTANT: ")
@@ -33,7 +38,7 @@ def is_present(json, key):
     return True
 
 
-use_conversation_template = args.chat_prompt_model != ""
+use_conversation_template = args.chat_prompt_model != "" and conversation is not None
 
 if use_conversation_template:
     conv = conversation.get_conv_template(args.chat_prompt_model)

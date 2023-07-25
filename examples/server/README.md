@@ -195,6 +195,14 @@ bash chat.sh
 API example using Python Flask: [api_like_OAI.py](api_like_OAI.py)
 This example must be used with server.cpp
 
+requirements:
+
+```shell
+pip install flask flask-cors fschat  # flask-cors and fschat are optional. flask-cors is used to allow cross-origin requests, fschat is used for integration of chat template
+```
+
+Run the server:
+
 ```sh
 python api_like_OAI.py
 ```
@@ -203,6 +211,8 @@ After running the API server, you can use it in Python by setting the API base U
 ```python
 openai.api_base = "http://<Your api-server IP>:port"
 ```
+
+For better integration with the model, it is recommended to utilize the `--chat-prompt-model` parameter when starting up the system, rather than relying solely on parameters like `--user-name`. This specific parameter accepts model names that have been registered within the [FastChat/conversation.py](https://github.com/lm-sys/FastChat/blob/main/fastchat/conversation.py) file, an example would be `llama-2`.
 
 Then you can utilize llama.cpp as an OpenAI's **chat.completion** or **text_completion** API
 
