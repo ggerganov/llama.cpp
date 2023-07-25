@@ -10537,6 +10537,12 @@ static void ggml_compute_forward_mul_mat(
 
     //printf("ir010 = %6lld, ir011 = %6lld, ir110 = %6lld, ir111 = %6lld\n", ir010, ir011, ir110, ir111);
 
+    // threads with no work simply yield (not sure if it helps)
+    if (ir010 >= ir011 || ir110 >= ir111) {
+        sched_yield();
+        return;
+    }
+
     assert(ne12 % ne02 == 0);
     assert(ne13 % ne03 == 0);
 
