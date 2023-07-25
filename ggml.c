@@ -9197,13 +9197,6 @@ static void ggml_compute_forward_mul_f32(
         }
         return;
     }
-#elif defined(GGML_USE_VULKAN)
-    if (src1->backend == GGML_BACKEND_GPU) {
-        if (ith == 0) {
-            ggml_vk_mul(src0, src1, dst);
-        }
-        return;
-    }
 #endif
 
     const int64_t nr = ggml_nrows(src0);
@@ -10746,13 +10739,6 @@ static void ggml_compute_forward_mul_mat(
 
         if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
             ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
-        }
-        return;
-    }
-#elif defined(GGML_USE_VULKAN)
-    if (ggml_vk_can_mul_mat(src0, src1, dst)) {
-        if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
-            ggml_vk_mul_mat(src0, src1, dst);
         }
         return;
     }
@@ -14882,6 +14868,13 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
 
 #ifdef GGML_USE_CUBLAS
     bool skip_cpu = ggml_cuda_compute_forward(params, tensor);
+    if (skip_cpu) {
+        return;
+    }
+    GGML_ASSERT(tensor->src[0] == NULL || tensor->src[0]->backend == GGML_BACKEND_CPU);
+    GGML_ASSERT(tensor->src[1] == NULL || tensor->src[1]->backend == GGML_BACKEND_CPU);
+#elif defined(GGML_USE_VULKAN)
+    bool skip_cpu = ggml_vk_compute_forward(params, tensor);
     if (skip_cpu) {
         return;
     }

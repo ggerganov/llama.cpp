@@ -44,6 +44,8 @@
 #define VK_DEVICE_DESCRIPTOR_POOL_MODE_MULTI 1
 #define VK_DEVICE_DESCRIPTOR_POOL_MODE_SINGLE 2
 
+typedef void (*ggml_vk_func_t)(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst);
+
 struct vk_buffer {
     vk::Buffer buffer;
     vk::DeviceMemory device_memory;
@@ -1889,7 +1891,7 @@ static void ggml_vk_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
 }
 
 
-bool ggml_vk_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
+static bool ggml_vk_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
     const int64_t ne10 = src1->ne[0];
 
     const int64_t ne0 = dst->ne[0];
@@ -1906,7 +1908,7 @@ bool ggml_vk_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tens
     return false;
 }
 
-bool ggml_vk_mul_mat_use_f16(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * /* dst */) {
+static bool ggml_vk_mul_mat_use_f16(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * /* dst */) {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_mul_mat_use_f16(" << src0 << ", " << src1 << ")" << std::endl;
 #endif
@@ -1929,7 +1931,7 @@ bool ggml_vk_mul_mat_use_f16(const struct ggml_tensor * src0, const struct ggml_
     return mul_mat_f16_transfer < mul_mat_q_transfer;
 }
 
-void ggml_vk_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
+static void ggml_vk_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_mul_mat(" << src0 << ", " << src1 << ", " << dst << ")" << std::endl;
 #endif
@@ -1952,16 +1954,6 @@ void ggml_vk_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor *
     else {
         GGML_ASSERT(false);
     }
-}
-
-size_t ggml_vk_mul_mat_get_wsize(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
-#ifdef VK_DEBUG
-    std::cerr << "ggml_vk_mul_mat_get_wsize(" << src0 << ", " << src1 << ", " << dst << ")" << std::endl;
-#endif
-    if (ggml_vk_mul_mat_use_f16(src0, src1, dst)) {
-        return ggml_nelements(src1) * sizeof(ggml_fp16_t);
-    }
-    return 0;
 }
 
 static void ggml_vk_mul_f32(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
@@ -2062,7 +2054,7 @@ static void ggml_vk_mul_f32(const ggml_tensor * src0, const ggml_tensor * src1, 
     ggml_vk_pool_free(d_D);
 }
 
-void ggml_vk_mul(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
+static void ggml_vk_mul(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
     GGML_ASSERT(src0->type == GGML_TYPE_F32 && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32);
     ggml_vk_mul_f32(src0, src1, dst);
 }
@@ -2095,6 +2087,45 @@ void ggml_vk_transform_tensor(void * data, ggml_tensor * tensor) {
     tensor->data = malloc(sizeof(vk_buffer));
     *(vk_buffer*) tensor->data = dst;
     GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
+}
+
+bool ggml_vk_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor){
+    ggml_vk_func_t func;
+    const bool any_on_device = tensor->backend == GGML_BACKEND_GPU
+        || (tensor->src[0] != nullptr && (tensor->src[0]->backend == GGML_BACKEND_GPU || tensor->src[0]->backend == GGML_BACKEND_GPU_SPLIT))
+        || (tensor->src[1] != nullptr && tensor->src[1]->backend == GGML_BACKEND_GPU);
+
+    switch (tensor->op) {
+    case GGML_OP_MUL:
+        if (!any_on_device) {
+            return false;
+        }
+
+        func = ggml_vk_mul;
+
+        break;
+    case GGML_OP_MUL_MAT:
+        if (!any_on_device && !ggml_vk_can_mul_mat(tensor->src[0], tensor->src[1], tensor)) {
+            return false;
+        }
+
+        func = ggml_vk_mul_mat;
+
+        break;
+    default:
+        return false;
+    }
+
+    if (params->ith != 0) {
+        return true;
+    }
+    if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
+        return true;
+    }
+
+    func(tensor->src[0], tensor->src[1], tensor);
+
+    return true;
 }
 
 #ifdef VK_CHK_KERNEL
