@@ -16,6 +16,8 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+static const float rms_norm_eps = 1e-6f;
+
 struct random_normal_distribution {
     std::mt19937 gen;
     std::normal_distribution<float> rd;
@@ -439,7 +441,7 @@ struct ggml_tensor * forward(
         // norm
         {
             // cur shape [n_embd,N,1,1]
-            cur = ggml_rms_norm(ctx0, inpL);
+            cur = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
 
             // cur = attention_norm*cur
             cur = ggml_mul(ctx0,
@@ -562,7 +564,7 @@ struct ggml_tensor * forward(
             // norm
             {
                 // cur shape [n_embd,N,1,1]
-                cur = ggml_rms_norm(ctx0, inpFF);
+                cur = ggml_rms_norm(ctx0, inpFF, rms_norm_eps);
 
                 // cur = ffn_norm*cur
                 // cur shape [n_embd,N,1,1]
@@ -606,7 +608,7 @@ struct ggml_tensor * forward(
     {
 
         // inpL shape [n_embd,N,1,1]
-        inpL = ggml_rms_norm(ctx0, inpL);
+        inpL = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
 
         // inpL = norm*inpL
         // inpL shape [n_embd,N,1,1]
@@ -694,7 +696,7 @@ struct ggml_tensor * forward_batch(
         // norm
         {
             // cur shape [n_embd,N*n_batch,1,1]
-            cur = ggml_rms_norm(ctx0, inpL);
+            cur = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
             assert_shape_2d(cur, n_embd, N*n_batch);
 
             // cur = attention_norm*cur
@@ -857,7 +859,7 @@ struct ggml_tensor * forward_batch(
             // norm
             {
                 // cur shape [n_embd,N*n_batch,1,1]
-                cur = ggml_rms_norm(ctx0, inpFF);
+                cur = ggml_rms_norm(ctx0, inpFF, rms_norm_eps);
                 assert_shape_2d(cur, n_embd, N*n_batch);
 
                 // cur = ffn_norm*cur
@@ -910,7 +912,7 @@ struct ggml_tensor * forward_batch(
     {
 
         // inpL shape [n_embd,N*n_batch,1,1]
-        inpL = ggml_rms_norm(ctx0, inpL);
+        inpL = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
         assert_shape_2d(inpL, n_embd, N*n_batch);
 
         // inpL = norm*inpL
@@ -979,7 +981,7 @@ struct ggml_tensor * forward_batch_wo_cache(
         // norm
         {
             // cur shape [n_embd,N*n_batch,1,1]
-            cur = ggml_rms_norm(ctx0, inpL);
+            cur = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
             assert_shape_2d(cur, n_embd, N*n_batch);
 
             // cur = attention_norm*cur
@@ -1085,7 +1087,7 @@ struct ggml_tensor * forward_batch_wo_cache(
             // norm
             {
                 // cur shape [n_embd,N*n_batch,1,1]
-                cur = ggml_rms_norm(ctx0, inpFF);
+                cur = ggml_rms_norm(ctx0, inpFF, rms_norm_eps);
                 assert_shape_2d(cur, n_embd, N*n_batch);
 
                 // cur = ffn_norm*cur
@@ -1138,7 +1140,7 @@ struct ggml_tensor * forward_batch_wo_cache(
     {
 
         // inpL shape [n_embd,N*n_batch,1,1]
-        inpL = ggml_rms_norm(ctx0, inpL);
+        inpL = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
         assert_shape_2d(inpL, n_embd, N*n_batch);
 
         // inpL = norm*inpL
@@ -1203,7 +1205,7 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn(
 
         // norm
         {
-            cur = ggml_rms_norm(ctx0, inpL);
+            cur = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
             assert_shape_2d(cur, n_embd, N*n_batch);
 
             // cur = attention_norm*cur
@@ -1267,7 +1269,7 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn(
         {
             // norm
             {
-                cur = ggml_rms_norm(ctx0, inpFF);
+                cur = ggml_rms_norm(ctx0, inpFF, rms_norm_eps);
                 assert_shape_2d(cur, n_embd, N*n_batch);
 
                 // cur = ffn_norm*cur
@@ -1311,7 +1313,7 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn(
     // norm
     {
 
-        inpL = ggml_rms_norm(ctx0, inpL);
+        inpL = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
         assert_shape_2d(inpL, n_embd, N*n_batch);
 
         // inpL = norm*inpL
@@ -1603,7 +1605,7 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train(
         struct my_llama_layer & layer = model->layers[il];
         // tensors with values necessary for backward pass are in persistent buf(-1)
         // other tensors with buf(0) and buf(1) are only temporary needed, and their memory reused after layer is completed.
-        use_buf(-1); struct ggml_tensor * t02 = expand(gf, ggml_rms_norm     (ctx0, cur));                                    assert_shape_2d(t02, n_embd, N*n_batch);
+        use_buf(-1); struct ggml_tensor * t02 = expand(gf, ggml_rms_norm     (ctx0, cur, rms_norm_eps));                      assert_shape_2d(t02, n_embd, N*n_batch);
         use_buf( 0); struct ggml_tensor * t03 = expand(gf, ggml_repeat       (ctx0, layer.attention_norm, t02));              assert_shape_2d(t03, n_embd, N*n_batch);
         use_buf(-1); struct ggml_tensor * t04 = expand(gf, ggml_mul          (ctx0, t02, t03));                               assert_shape_2d(t04, n_embd, N*n_batch);
         use_buf(-1); struct ggml_tensor * t05 = expand(gf, ggml_mul_mat      (ctx0, layer.wq, t04));                          assert_shape_2d(t05, n_embd, N*n_batch);
@@ -1623,7 +1625,7 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train(
         use_buf(-1); struct ggml_tensor * t19 = expand(gf, ggml_reshape_2d   (ctx0, t18, n_embd, N*n_batch));                 assert_shape_2d(t19, n_embd, N*n_batch);
         use_buf( 0); struct ggml_tensor * t20 = expand(gf, ggml_mul_mat      (ctx0, layer.wo, t19));                          assert_shape_2d(t20, n_embd, N*n_batch);
         use_buf(-1); struct ggml_tensor * t21 = expand(gf, ggml_add          (ctx0, t20, cur));                               assert_shape_2d(t21, n_embd, N*n_batch);
-        use_buf(-1); struct ggml_tensor * t22 = expand(gf, ggml_rms_norm     (ctx0, t21));                                    assert_shape_2d(t22, n_embd, N*n_batch);
+        use_buf(-1); struct ggml_tensor * t22 = expand(gf, ggml_rms_norm     (ctx0, t21, rms_norm_eps));                      assert_shape_2d(t22, n_embd, N*n_batch);
         use_buf( 0); struct ggml_tensor * t23 = expand(gf, ggml_repeat       (ctx0, layer.ffn_norm, t22));                    assert_shape_2d(t23, n_embd, N*n_batch);
         use_buf(-1); struct ggml_tensor * t24 = expand(gf, ggml_mul          (ctx0, t23, t22));                               assert_shape_2d(t24, n_embd, N*n_batch);
         use_buf(-1); struct ggml_tensor * t25 = expand(gf, ggml_mul_mat      (ctx0, layer.w3, t24));                          assert_shape_2d(t25, n_ff, N*n_batch);
@@ -1666,7 +1668,7 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train(
     }
     clr_buf(0);
     use_buf(0);
-    struct ggml_tensor * t31   = expand(gf, ggml_rms_norm  (ctx0, cur));                       assert_shape_2d(t31, n_embd, N*n_batch);
+    struct ggml_tensor * t31   = expand(gf, ggml_rms_norm  (ctx0, cur, rms_norm_eps));         assert_shape_2d(t31, n_embd, N*n_batch);
     struct ggml_tensor * t32   = expand(gf, ggml_repeat    (ctx0, model->norm, t31));          assert_shape_2d(t32, n_embd, N*n_batch);
     struct ggml_tensor * t33   = expand(gf, ggml_mul       (ctx0, t32, t31));                  assert_shape_2d(t33, n_embd, N*n_batch);
     use_buf(-1);
