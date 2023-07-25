@@ -950,7 +950,7 @@ static json format_timings(llama_server_context &llama)
 {
     const auto timings = llama_get_timings(llama.ctx);
 
-    // assert(timings.n_eval == llama.num_tokens_predicted);
+    assert(timings.n_eval == llama.num_tokens_predicted);
 
     return json{
         {"prompt_n", timings.n_eval},
