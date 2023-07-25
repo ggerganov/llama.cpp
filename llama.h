@@ -415,15 +415,29 @@ extern "C" {
 }
 #endif
 
-// Internal API to be implemented by llama.cpp and used by tests/benchmarks only
-#ifdef LLAMA_API_INTERNAL
+// C++ API, will be moving to common.h soon (TM)
+#ifdef LLAMA_API_CPP
 
 #include <vector>
 #include <string>
+
+static std::string llama_token_to_str(
+        const struct llama_context * ctx,
+                       llama_token   token);
+
+static std::string llama_token_to_str_bpe(
+    const struct llama_context * ctx,
+                   llama_token   token);
+
+// Internal API to be implemented by llama.cpp and used by tests/benchmarks only
+#ifdef LLAMA_API_INTERNAL
+
 struct ggml_tensor;
 
 const std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx);
 
-#endif
+#endif // LLAMA_API_CPP
+
+#endif // LLAMA_API_INTERNAL
 
 #endif // LLAMA_H

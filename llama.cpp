@@ -3694,7 +3694,6 @@ int llama_tokenize_bpe(
     return res.size();
 }
 
-
 int llama_n_vocab_from_model(const struct llama_model * model) {
     return model->vocab.id_to_token.size();
 }
@@ -3781,6 +3780,24 @@ int llama_token_to_str(const struct llama_context * ctx, llama_token token, char
     return llama_token_to_str_with_model(&ctx->model, token, str, length);
 }
 
+std::string llama_token_to_str(
+        const struct llama_context * ctx,
+                       llama_token   token) {
+    std::string result;
+    int length = 8;
+    result.resize(length);
+    length = llama_token_to_str(ctx, token, (char *)result.data(), result.length());
+    if (length < 0) {
+        result.resize(-length);
+        int check = llama_token_to_str(ctx, token, (char *)result.data(), result.length());
+        assert(check == -length);
+        GGML_UNUSED(check);
+    } else {
+        result.resize(length);
+    }
+    return result;
+}
+
 int llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token, char * str, int length) {
     if (0 <= token && token < llama_n_vocab_from_model(&ctx->model)) {
         std::string result = ctx->model.vocab.id_to_token[token].tok;
@@ -3791,6 +3808,24 @@ int llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token, 
         return result.length();
     }
     return 0;
+}
+
+std::string llama_token_to_str_bpe(
+    const struct llama_context * ctx,
+                   llama_token   token) {
+    std::string result;
+    int length = 8;
+    result.resize(length);
+    length = llama_token_to_str_bpe(ctx, token, (char*)result.data(), result.length());
+    if (length < 0) {
+        result.resize(-length);
+        int check = llama_token_to_str_bpe(ctx, token, (char*)result.data(), result.length());
+        assert(check == -length);
+        GGML_UNUSED(check);
+    } else {
+        result.resize(length);
+    }
+    return result;
 }
 
 llama_token llama_token_bos() {

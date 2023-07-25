@@ -1,6 +1,7 @@
 #include "ggml.h"
 #include "build-info.h"
 
+#define LLAMA_API_CPP // TODO: eliminate me
 #define LLAMA_API_INTERNAL
 #include "llama.h"
 

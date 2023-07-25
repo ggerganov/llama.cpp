@@ -2,8 +2,8 @@
 
 #pragma once
 
+#define LLAMA_API_CPP // TODO: eliminate me
 #include "llama.h"
-#include "llama.cpp.h"
 
 #include <string>
 #include <vector>
