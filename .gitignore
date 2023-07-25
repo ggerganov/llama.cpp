@@ -39,6 +39,7 @@ models-mnt
 /perplexity
 /embedding
 /train-text-from-scratch
+/convert-llama2c
 /simple
 /benchmark-matmult
 /vdot
