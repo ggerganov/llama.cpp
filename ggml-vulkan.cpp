@@ -40,6 +40,10 @@
 #define VK_VENDOR_ID_INTEL 0x8086
 #define VK_VENDOR_ID_NVIDIA 0x10de
 
+#define VK_DEVICE_DESCRIPTOR_POOL_MODE_UNKNOWN 0
+#define VK_DEVICE_DESCRIPTOR_POOL_MODE_MULTI 1
+#define VK_DEVICE_DESCRIPTOR_POOL_MODE_SINGLE 2
+
 struct vk_buffer {
     vk::Buffer buffer;
     vk::DeviceMemory device_memory;
@@ -61,7 +65,7 @@ struct vk_subbuffer {
 struct vk_pipeline {
     std::string name;
     vk::DescriptorSetLayout dsl;
-    vk::DescriptorPool descriptor_pool;
+    std::vector<vk::DescriptorPool> descriptor_pools;
     std::vector<vk::DescriptorSet> descriptor_sets;
     uint32_t descriptor_set_index;
     vk::PipelineLayout layout;
@@ -117,6 +121,7 @@ struct vk_device {
     uint32_t vendor_id;
     vk_queue compute_queue;
     vk_queue transfer_queues[VK_TRANSFER_QUEUE_COUNT];
+    uint32_t descriptor_set_mode;
 };
 
 typedef std::vector<vk_submission> vk_sequence;
@@ -189,9 +194,35 @@ static vk_pipeline ggml_vk_create_pipeline(const std::string& path, const std::s
     descriptor_set_layout_create_info.setPNext(&dslbfci);
     pipeline.dsl = vk_device.device.createDescriptorSetLayout(descriptor_set_layout_create_info);
 
-    vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, pipeline.parameter_count);
-    vk::DescriptorPoolCreateInfo descriptor_pool_create_info({}, 128, descriptor_pool_size);
-    pipeline.descriptor_pool = vk_device.device.createDescriptorPool(descriptor_pool_create_info);
+    // Check if device supports multiple descriptors per pool
+    if (vk_device.descriptor_set_mode == VK_DEVICE_DESCRIPTOR_POOL_MODE_UNKNOWN) {
+        const uint32_t alloc_count = 2;
+
+        // Try allocating multiple sets from one pool
+        // This fails on AMD for some reason, so add a fall back to allocating one pool per set
+        vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, pipeline.parameter_count);
+        vk::DescriptorPoolCreateInfo descriptor_pool_create_info({}, alloc_count, descriptor_pool_size);
+        vk::DescriptorPool pool = vk_device.device.createDescriptorPool(descriptor_pool_create_info);
+
+        std::vector<vk::DescriptorSetLayout> layouts(alloc_count);
+        for (uint32_t i = 0; i < alloc_count; i++) {
+            layouts[i] = pipeline.dsl;
+        }
+        try {
+            vk::DescriptorSetAllocateInfo descriptor_set_alloc_info(pool, alloc_count, layouts.data());
+            std::vector<vk::DescriptorSet> sets = vk_device.device.allocateDescriptorSets(descriptor_set_alloc_info);
+        } catch(vk::OutOfPoolMemoryError const&) {
+            vk_device.descriptor_set_mode = VK_DEVICE_DESCRIPTOR_POOL_MODE_SINGLE;
+        }
+
+        vk_device.device.destroyDescriptorPool(pool);
+    }
+
+    if (vk_device.descriptor_set_mode == VK_DEVICE_DESCRIPTOR_POOL_MODE_MULTI) {
+        vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, pipeline.parameter_count);
+        vk::DescriptorPoolCreateInfo descriptor_pool_create_info({}, 128, descriptor_pool_size);
+        pipeline.descriptor_pools.push_back(vk_device.device.createDescriptorPool(descriptor_pool_create_info));
+    }
 
     pipeline.descriptor_set_index = 0;
 
@@ -237,13 +268,27 @@ static void ggml_vk_pipeline_allocate_descriptor_sets(vk_pipeline& pipeline, uin
         return;
     }
 
-    std::vector<vk::DescriptorSetLayout> layouts(n);
-    for (uint32_t i = 0; i < n; i++) {
-        layouts[i] = pipeline.dsl;
+    if (vk_device.descriptor_set_mode == VK_DEVICE_DESCRIPTOR_POOL_MODE_MULTI) {
+        const uint32_t alloc_count = n - pipeline.descriptor_sets.size();
+
+        std::vector<vk::DescriptorSetLayout> layouts(alloc_count);
+        for (uint32_t i = 0; i < alloc_count; i++) {
+            layouts[i] = pipeline.dsl;
+        }
+        vk::DescriptorSetAllocateInfo descriptor_set_alloc_info(pipeline.descriptor_pools[0], alloc_count, layouts.data());
+        std::vector<vk::DescriptorSet> sets = vk_device.device.allocateDescriptorSets(descriptor_set_alloc_info);
+        pipeline.descriptor_sets.insert(pipeline.descriptor_sets.end(), sets.begin(), sets.end());
+    } else {
+        for (uint32_t i = pipeline.descriptor_sets.size(); i < n; i++) {
+            vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, pipeline.parameter_count);
+            vk::DescriptorPoolCreateInfo descriptor_pool_create_info({}, 1, descriptor_pool_size);
+            pipeline.descriptor_pools.push_back(vk_device.device.createDescriptorPool(descriptor_pool_create_info));
+
+            vk::DescriptorSetAllocateInfo descriptor_set_alloc_info(pipeline.descriptor_pools[i], 1, &pipeline.dsl);
+            std::vector<vk::DescriptorSet> sets = vk_device.device.allocateDescriptorSets(descriptor_set_alloc_info);
+            pipeline.descriptor_sets.push_back(sets[0]);
+        }
     }
-    vk::DescriptorSetAllocateInfo descriptor_set_alloc_info(pipeline.descriptor_pool, n - pipeline.descriptor_sets.size(), layouts.data());
-    std::vector<vk::DescriptorSet> sets = vk_device.device.allocateDescriptorSets(descriptor_set_alloc_info);
-    pipeline.descriptor_sets.insert(pipeline.descriptor_sets.end(), sets.begin(), sets.end());
 }
 
 static void ggml_vk_pipeline_cleanup(vk_pipeline& pipeline) {
@@ -666,6 +711,8 @@ void ggml_vk_init(void) {
     };
     device_create_info.setPNext(&device_features2);
     vk_device.device = vk_device.physical_device.createDevice(device_create_info);
+
+    vk_device.descriptor_set_mode = VK_DEVICE_DESCRIPTOR_POOL_MODE_UNKNOWN;
 
     vk_pinned_workspace = nullptr;
     vk_pinned_workspace_size = 0;
