@@ -442,7 +442,7 @@ extern "C" {
 
         void * extra; // extra things e.g. for ggml-cuda.cu
 
-        char padding[8];
+        char padding[4];
     };
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);
@@ -463,6 +463,11 @@ extern "C" {
         void * abort_callback_data;
     };
 
+    // next prime after GGML_MAX_NODES
+    // #define GGML_GRAPH_HASHTABLE_SIZE 4099
+    // next prime after GGML_MAX_NODES * 2 (nodes + leafs)
+    #define GGML_GRAPH_HASHTABLE_SIZE 8273
+
     // computation graph
     struct ggml_cgraph {
         int n_nodes;
@@ -471,6 +476,8 @@ extern "C" {
         struct ggml_tensor * nodes[GGML_MAX_NODES];
         struct ggml_tensor * grads[GGML_MAX_NODES];
         struct ggml_tensor * leafs[GGML_MAX_NODES];
+
+        void * visited_hash_table[GGML_GRAPH_HASHTABLE_SIZE];
 
         // performance
         int     perf_runs;
