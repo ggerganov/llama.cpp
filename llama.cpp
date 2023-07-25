@@ -1717,7 +1717,7 @@ static bool llama_eval_internal(
     // fprintf(stderr, "graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf.n_nodes, gf.n_leafs);
 
 #if GGML_USE_MPI
-    ggml_mpi_graph_compute_pre(lctx.ctx_mpi, &gf, n_layer);
+    ggml_mpi_graph_compute_pre(lctx.ctx_mpi, gf, n_layer);
 #endif
 
 #ifdef GGML_USE_METAL
