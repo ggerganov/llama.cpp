@@ -10544,34 +10544,50 @@ static void ggml_compute_forward_mul_mat(
     const int64_t r2 = ne12/ne02;
     const int64_t r3 = ne13/ne03;
 
-    for (int64_t ir1 = ir110; ir1 < ir111; ++ir1) {
-        const int64_t i13 = (ir1/(ne12*ne11));
-        const int64_t i12 = (ir1 - i13*ne12*ne11)/ne11;
-        const int64_t i11 = (ir1 - i13*ne12*ne11 - i12*ne11);
+    // block-tiling attempt
+    const int64_t blck_0 = 16;
+    const int64_t blck_1 = 16;
 
-        // broadcast src0 into src1
-        const int64_t i03 = i13/r3;
-        const int64_t i02 = i12/r2;
+    // attempt to reduce false-sharing (does not seem to make a difference)
+    float tmp[16];
 
-        const int64_t i1 = i11;
-        const int64_t i2 = i12;
-        const int64_t i3 = i13;
+    for (int64_t iir1 = ir110; iir1 < ir111; iir1 += blck_1) {
+        for (int64_t iir0 = ir010; iir0 < ir011; iir0 += blck_0) {
+            for (int64_t ir1 = iir1; ir1 < iir1 + blck_1 && ir1 < ir111; ++ir1) {
+                const int64_t i13 = (ir1/(ne12*ne11));
+                const int64_t i12 = (ir1 - i13*ne12*ne11)/ne11;
+                const int64_t i11 = (ir1 - i13*ne12*ne11 - i12*ne11);
 
-        const char * src0_row = (const char *) src0->data + (0 + i02*nb02 + i03*nb03);
+                // broadcast src0 into src1
+                const int64_t i03 = i13/r3;
+                const int64_t i02 = i12/r2;
 
-        // desc: when src1 is not a contiguous memory block we have to calculate the offset using the strides
-        //       if it is, then we have either copied the data to params->wdata and made it contiguous or we are using
-        //       the original src1 data pointer, so we should index using the indices directly
-        // TODO: this is a bit of a hack, we should probably have a better way to handle this
-        const char * src1_col = (const char *) wdata +
-            (src1_cont || src1->type != vec_dot_type
-             ? (i11      + i12*ne11 + i13*ne12*ne11)*row_size
-             : (i11*nb11 + i12*nb12 + i13*nb13));
+                const int64_t i1 = i11;
+                const int64_t i2 = i12;
+                const int64_t i3 = i13;
 
-        float * dst_col = (float *) ((char *) dst->data + (i1*nb1 + i2*nb2 + i3*nb3));
+                const char * src0_row = (const char *) src0->data + (0 + i02*nb02 + i03*nb03);
 
-        for (int64_t ir0 = ir010; ir0 < ir011; ++ir0) {
-            vec_dot(ne00, &dst_col[ir0], src0_row + ir0*nb01, src1_col);
+                // desc: when src1 is not a contiguous memory block we have to calculate the offset using the strides
+                //       if it is, then we have either copied the data to params->wdata and made it contiguous or we are using
+                //       the original src1 data pointer, so we should index using the indices directly
+                // TODO: this is a bit of a hack, we should probably have a better way to handle this
+                const char * src1_col = (const char *) wdata +
+                    (src1_cont || src1->type != vec_dot_type
+                     ? (i11      + i12*ne11 + i13*ne12*ne11)*row_size
+                     : (i11*nb11 + i12*nb12 + i13*nb13));
+
+                float * dst_col = (float *) ((char *) dst->data + (i1*nb1 + i2*nb2 + i3*nb3));
+
+                //for (int64_t ir0 = iir0; ir0 < iir0 + blck_0 && ir0 < ir011; ++ir0) {
+                //    vec_dot(ne00, &dst_col[ir0], src0_row + ir0*nb01, src1_col);
+                //}
+
+                for (int64_t ir0 = iir0; ir0 < iir0 + blck_0 && ir0 < ir011; ++ir0) {
+                    vec_dot(ne00, &tmp[ir0 - iir0], src0_row + ir0*nb01, src1_col);
+                }
+                memcpy(&dst_col[iir0], tmp, (MIN(iir0 + blck_0, ir011) - iir0)*sizeof(float));
+            }
         }
     }
 }
