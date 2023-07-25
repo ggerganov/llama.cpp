@@ -495,7 +495,7 @@ int main(int argc, char *argv[]) {
     // read in the Karpathy model.bin file
     Config config; // Configs are stashed in the bin file as header
     TransformerWeights weights;
-
+    struct my_llama_model model;
     {
         FILE *file = fopen(checkpoint, "rb");
         if (!file) {
@@ -514,15 +514,110 @@ int main(int argc, char *argv[]) {
         printf("reading the opened model file...\n");
         if(checkpoint_init_weights(&weights, &config, file)) { return 1; }
         print_sample_weights(&weights);
+
+        // copy weights to ggml tensors.
+        //model.tok_embeddings <<< weights.token_embedding_table;
+
+
         printf("Closing model file..bye...\n");
         fclose(file);
     }
 
     // read in the tokenizer.bin file
+    // char** vocab_ak = (char**)malloc(config.vocab_size * sizeof(char*));
+    // {
+    //     FILE *file = fopen(tokenizer, "rb");
+    //     if (!file) {
+    //         printf("Unable to open the tokenizer file tokenizer.bin! Run "
+    //         "python tokenizer.py to convert tokenizer.model -> tokenizer.bin\n");
+    //         return 1;
+    //     }
+    //     int len;
+    //     printf("karpathy vocab size = %d\n", config.vocab_size);
+
+    //     for (int i = 0; i < config.vocab_size; i++) {
+    //         if(fread(&len, sizeof(int), 1, file) != 1) { return 1; }
+    //         vocab_ak[i] = (char *)malloc(len + 1);
+    //         if(fread(vocab_ak[i], len, 1, file) != 1) { return 1; }
+    //         vocab_ak[i][len] = '\0'; // add the string terminating token
+    //         printf("len = %d, %s\n", len, vocab_ak[i]);
+
+    //     }
+    //     fclose(file);
+    // }
+
+    //TODO:-------------------------------------------------------------------------------
+    
+    // struct train_params params = get_default_train_params();
+    // struct llama_context_params llama_params = llama_context_default_params();
+    // struct llama_model * lmodel = llama_load_model_from_file(params.fn_vocab_model, llama_params);
+    // struct llama_context * lctx = llama_new_context_with_model(lmodel, llama_params);
+    // struct llama_vocab vocab;
+    // {
+    //     std::vector<const char *> strings;
+    //     std::vector<float> scores;
+    //     int n_vocab = llama_n_vocab(lctx);
+    //     strings.resize(n_vocab, NULL);
+    //     scores.resize(n_vocab, 0);
+    //     n_vocab = llama_get_vocab(lctx, strings.data(), scores.data(), n_vocab);
+    //     GGML_ASSERT(n_vocab == llama_n_vocab(lctx));
+    //     vocab.id_to_token.resize(n_vocab);
+    //     for (int i=0; i<n_vocab; ++i) {
+    //         std::string tok   = std::string(strings[i]);
+    //         float       score = scores[i];
+    //         vocab.id_to_token[i].tok   = tok;
+    //         vocab.id_to_token[i].score = score;
+    //         vocab.token_to_id.emplace(tok, i);
+    //     }
+    // }
+
+    // save_as_llama_model(&vocab, &model, params.fn_model_out);
+
+
+    // --------------------------------------------- save
+    struct llama_file file("ak_model.bin", "wb");
+    if (file.fp == NULL) {
+        return 0;
+    }
+
+    // write_magic
+    file.write_u32(LLAMA_FILE_MAGIC);   // magic
+    file.write_u32(LLAMA_FILE_VERSION); // version
+    // write_hparams
+
+    // printf("config.dim %d\n", p->dim);
+    // printf("config.hidden_dim %d\n", p->hidden_dim);
+    // printf("config.n_layers %d\n", p->n_layers);
+    // printf("config.n_heads %d\n", p->n_heads );
+    // printf("config.n_kv_heads %d\n", p->n_kv_heads);
+    // printf("config.vocab_size %d\n", p->vocab_size);
+    // printf("config.seq_len %d\n", p->seq_len);
+
+    // file.write_u32(model->hparams.n_vocab);
+    file.write_u32(config.vocab_size); // 32000
+
+    // file.write_u32(model->hparams.n_embd);
+    file.write_u32(config.dim);             /// <<<<<<<<<<<<<< NEEDS CHECKING
+
+    // file.write_u32(model->hparams.n_mult);
+    file.write_u32(config.dim);     /// <<<<<<<<<<<<<< JUST PLACEHOLDER
+
+    // file.write_u32(model->hparams.n_head);
+    file.write_u32(config.n_heads);
+
+    // file.write_u32(model->hparams.n_layer);
+    file.write_u32(config.n_layers);
+
+    // file.write_u32(model->hparams.n_rot);
+    file.write_u32(config.dim); /// <<<<<<<<<<<<<< JUST PLACEHOLDER
+    
+    file.write_u32(LLAMA_FTYPE_ALL_F32);
+
+    // write_vocab /////////////////////////////////////////////////////////////////
     char** vocab_ak = (char**)malloc(config.vocab_size * sizeof(char*));
     {
-        FILE *file = fopen(tokenizer, "rb");
-        if (!file) {
+        FILE *file_tok_ak = fopen(tokenizer, "rb");
+        if (!file_tok_ak) {
             printf("Unable to open the tokenizer file tokenizer.bin! Run "
             "python tokenizer.py to convert tokenizer.model -> tokenizer.bin\n");
             return 1;
@@ -531,42 +626,47 @@ int main(int argc, char *argv[]) {
         printf("karpathy vocab size = %d\n", config.vocab_size);
 
         for (int i = 0; i < config.vocab_size; i++) {
-            if(fread(&len, sizeof(int), 1, file) != 1) { return 1; }
+            if(fread(&len, sizeof(int), 1, file_tok_ak) != 1) { return 1; }
+            file.write_u32((uint32_t) len);
+            
             vocab_ak[i] = (char *)malloc(len + 1);
-            if(fread(vocab_ak[i], len, 1, file) != 1) { return 1; }
+            if(fread(vocab_ak[i], len, 1, file_tok_ak) != 1) { return 1; }
             vocab_ak[i][len] = '\0'; // add the string terminating token
-            printf("len = %d, %s\n", len, vocab_ak[i]);
+            file.write_raw(vocab_ak[i], len+1);
+            float x = 0.0f;
+            file.write_raw(&x, sizeof(float));
+            // printf("len = %d, %s\n", len, vocab_ak[i]);
 
         }
-        fclose(file);
+        fclose(file_tok_ak);
     }
 
-    //TODO:-------------------------------------------------------------------------------
-    struct my_llama_model model;
-    struct train_params params = get_default_train_params();
-    struct llama_context_params llama_params = llama_context_default_params();
-    struct llama_model * lmodel = llama_load_model_from_file(params.fn_vocab_model, llama_params);
-    struct llama_context * lctx = llama_new_context_with_model(lmodel, llama_params);
-    struct llama_vocab vocab;
-    {
-        std::vector<const char *> strings;
-        std::vector<float> scores;
-        int n_vocab = llama_n_vocab(lctx);
-        strings.resize(n_vocab, NULL);
-        scores.resize(n_vocab, 0);
-        n_vocab = llama_get_vocab(lctx, strings.data(), scores.data(), n_vocab);
-        GGML_ASSERT(n_vocab == llama_n_vocab(lctx));
-        vocab.id_to_token.resize(n_vocab);
-        for (int i=0; i<n_vocab; ++i) {
-            std::string tok   = std::string(strings[i]);
-            float       score = scores[i];
-            vocab.id_to_token[i].tok   = tok;
-            vocab.id_to_token[i].score = score;
-            vocab.token_to_id.emplace(tok, i);
-        }
-    }
+    // uint32_t n_vocab = config.vocab_size;//model->hparams.n_vocab;
+    // for (uint32_t i = 0; i < n_vocab; i++) {
+    //     const auto & token_score = vocab->id_to_token.at(i);
+    //     file.write_u32((uint32_t) token_score.tok.size());
+    //     file.write_raw(token_score.tok.data(), token_score.tok.size());
+    //     file.write_raw(&token_score.score, sizeof(token_score.score));
+    // }
+    /////////////////////////////////////////////////////////////////
 
-    save_as_llama_model(&vocab, &model, params.fn_model_out);
+    // write tensors
+    write_tensor(&file, model.tok_embeddings);
+    // write_tensor(&file, model.norm);
+    // write_tensor(&file, model.output);
+    // for (int i = 0; i < config.n_layers; ++i) {
+    //     auto & layer = model.layers[i];
+
+    //     write_tensor(&file, layer.attention_norm);
+    //     write_tensor(&file, layer.wq);
+    //     write_tensor(&file, layer.wk);
+    //     write_tensor(&file, layer.wv);
+    //     write_tensor(&file, layer.wo);
+    //     write_tensor(&file, layer.ffn_norm);
+    //     write_tensor(&file, layer.w1);
+    //     write_tensor(&file, layer.w2);
+    //     write_tensor(&file, layer.w3);
+    // }
 
     printf("\n");
     free_weights(&weights);
