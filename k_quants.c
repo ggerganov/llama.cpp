@@ -3297,8 +3297,7 @@ void ggml_vec_dot_q5_K_q8_K(const int n, float * restrict s, const void * restri
 
 #else
 
-
-    uint8_t aux8[QK_K];
+    int8_t aux8[QK_K];
     int16_t aux16[16];
     float   sums [8];
     memset(sums, 0, 8*sizeof(float));
@@ -3308,7 +3307,7 @@ void ggml_vec_dot_q5_K_q8_K(const int n, float * restrict s, const void * restri
         const uint8_t * restrict q4 = x[i].qs;
         const uint8_t * restrict hm = x[i].qh;
         const  int8_t * restrict q8 = y[i].qs;
-        uint8_t * restrict a = aux8;
+        int8_t * restrict a = aux8;
         for (int l = 0; l < 32; ++l) {
             a[l+ 0] = q4[l] & 0xF;
             a[l+32] = q4[l]  >> 4;

@@ -142,9 +142,9 @@ def find_n_mult(n_ff: int, n_embd: int) -> int:
 @dataclass
 class Params:
     n_vocab: int
-    n_embd: int
-    n_mult: int
-    n_head: int
+    n_embd:  int
+    n_mult:  int
+    n_head:  int
     n_layer: int
 
     @staticmethod
@@ -167,11 +167,11 @@ class Params:
         n_head=n_embd // 128 # guessed
 
         return Params(
-            n_vocab=n_vocab,
-            n_embd=n_embd,
-            n_mult=256,
-            n_head=n_head,
-            n_layer=n_layer,
+            n_vocab = n_vocab,
+            n_embd  = n_embd,
+            n_mult  = 256,
+            n_head  = n_head,
+            n_layer = n_layer,
         )
 
     @staticmethod
@@ -179,28 +179,53 @@ class Params:
         config = json.load(open(config_path))
 
         n_vocab = config["vocab_size"];
-        n_embd = config["hidden_size"];
-        n_head = config["num_attention_heads"];
+        n_embd  = config["hidden_size"];
+        n_head  = config["num_attention_heads"];
         n_layer = config["num_hidden_layers"];
-        n_ff = config["intermediate_size"];
+        n_ff    = config["intermediate_size"];
 
         n_mult = find_n_mult(n_ff, n_embd);
 
         return Params(
-            n_vocab=n_vocab,
-            n_embd=n_embd,
-            n_mult=n_mult,
-            n_head=n_head,
-            n_layer=n_layer,
+            n_vocab = n_vocab,
+            n_embd  = n_embd,
+            n_mult  = n_mult,
+            n_head  = n_head,
+            n_layer = n_layer,
+        )
+
+    # LLaMA v2 70B params.json
+    # {"dim": 8192, "multiple_of": 4096, "ffn_dim_multiplier": 1.3, "n_heads": 64, "n_kv_heads": 8, "n_layers": 80, "norm_eps": 1e-05, "vocab_size": -1
+    @staticmethod
+    def loadOriginalParamsJson(model: 'LazyModel', config_path: 'Path') -> 'Params':
+        config = json.load(open(config_path))
+
+        n_vocab = config["vocab_size"];
+        n_embd  = config["dim"];
+        n_head  = config["n_heads"];
+        n_layer = config["n_layers"];
+        n_mult  = config["multiple_of"];
+
+        if n_vocab == -1:
+            n_vocab = model["tok_embeddings.weight"].shape[0]
+
+        return Params(
+            n_vocab = n_vocab,
+            n_embd  = n_embd,
+            n_mult  = n_mult,
+            n_head  = n_head,
+            n_layer = n_layer,
         )
 
     @staticmethod
     def load(model_plus: 'ModelPlus') -> 'Params':
+        hf_config_path   = model_plus.paths[0].parent / "config.json"
         orig_config_path = model_plus.paths[0].parent / "params.json"
-        hf_transformer_config_path = model_plus.paths[0].parent / "config.json"
 
-        if hf_transformer_config_path.exists():
-            params = Params.loadHFTransformerJson(model_plus.model, hf_transformer_config_path)
+        if hf_config_path.exists():
+            params = Params.loadHFTransformerJson(model_plus.model, hf_config_path)
+        elif orig_config_path.exists():
+            params = Params.loadOriginalParamsJson(model_plus.model, orig_config_path)
         else:
             params = Params.guessed(model_plus.model)
 
@@ -1036,8 +1061,7 @@ class OutputFile:
     @staticmethod
     def write_vocab_only(fname_out: Path, vocab: Vocab) -> None:
         of = OutputFile(fname_out)
-        params = Params(n_vocab=vocab.vocab_size, n_embd=0, n_mult=0,
-                        n_head=1, n_layer=0)
+        params = Params(n_vocab=vocab.vocab_size, n_embd=0, n_mult=0, n_head=1, n_layer=0)
         of = OutputFile(fname_out)
         of.write_file_header(params, file_type=GGMLFileType.AllF32)
         of.write_vocab(vocab)
