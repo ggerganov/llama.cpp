@@ -22,17 +22,19 @@
 int32_t get_num_physical_cores();
 
 struct gpt_params {
-    uint32_t seed                           = -1;  // RNG seed
+    uint32_t seed                           = -1;   // RNG seed
     int32_t n_threads                       = get_num_physical_cores();
-    int32_t n_predict                       = -1;  // new tokens to predict
-    int32_t n_ctx                           = 512; // context size
-    int32_t n_batch                         = 512; // batch size for prompt processing (must be >=32 to use BLAS)
-    int32_t n_keep                          = 0;   // number of tokens to keep from initial prompt
-    int32_t n_chunks                        = -1;  // max number of chunks to process (-1 = unlimited)
-    int32_t n_gpu_layers                    = 0;   // number of layers to store in VRAM
-    int32_t main_gpu                        = 0;   // the GPU that is used for scratch and small tensors
-    float   tensor_split[LLAMA_MAX_DEVICES] = {0}; // how split tensors should be distributed across GPUs
-    int32_t n_probs                         = 0;   // if greater than 0, output the probabilities of top n_probs tokens.
+    int32_t n_predict                       = -1;   // new tokens to predict
+    int32_t n_ctx                           = 512;  // context size
+    int32_t n_batch                         = 512;  // batch size for prompt processing (must be >=32 to use BLAS)
+    int32_t n_gqa                           = 1;    // grouped-query attention factor (TODO: move to hparams)
+    int32_t n_keep                          = 0;    // number of tokens to keep from initial prompt
+    int32_t n_chunks                        = -1;   // max number of chunks to process (-1 = unlimited)
+    int32_t n_gpu_layers                    = 0;    // number of layers to store in VRAM
+    int32_t main_gpu                        = 0;    // the GPU that is used for scratch and small tensors
+    float   tensor_split[LLAMA_MAX_DEVICES] = {0};  // how split tensors should be distributed across GPUs
+    int32_t n_probs                         = 0;    // if greater than 0, output the probabilities of top n_probs tokens.
+    float   rms_norm_eps                    = 1e-6; // rms norm epsilon
     float   rope_freq_base                  = 10000.0f; // RoPE base frequency
     float   rope_freq_scale                 = 1.0f;     // RoPE frequency scaling factor
 
@@ -47,7 +49,7 @@ struct gpt_params {
     int32_t repeat_last_n     = 64;    // last n tokens to penalize (0 = disable penalty, -1 = context size)
     float   frequency_penalty = 0.00f; // 0.0 = disabled
     float   presence_penalty  = 0.00f; // 0.0 = disabled
-    int     mirostat          = 0;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
+    int32_t mirostat          = 0;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
     float   mirostat_tau      = 5.00f; // target entropy
     float   mirostat_eta      = 0.10f; // learning rate
 
@@ -55,7 +57,6 @@ struct gpt_params {
     // https://arxiv.org/abs/2306.17806
     std::string cfg_negative_prompt;       // string to help guidance
     float       cfg_scale         = 1.f;   // How strong is guidance
-    float       cfg_smooth_factor = 1.f;   // Smooth factor between old and new logits
 
     std::string model             = "models/7B/ggml-model.bin"; // model path
     std::string model_alias       = "unknown"; // model alias
@@ -63,6 +64,7 @@ struct gpt_params {
     std::string path_prompt_cache = "";  // path to file for saving/loading prompt eval state
     std::string input_prefix      = "";  // string to prefix user inputs with
     std::string input_suffix      = "";  // string to suffix user inputs with
+    std::string grammar           = "";  // optional BNF-like grammar to constrain sampling
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
 
     std::string lora_adapter = "";  // lora adapter path
@@ -83,6 +85,7 @@ struct gpt_params {
     bool instruct          = false; // instruction mode (used for Alpaca models)
     bool penalize_nl       = true;  // consider newlines as a repeatable token
     bool perplexity        = false; // compute perplexity over the prompt
+    bool perplexity_lines  = false; // compute perplexity over each line of the prompt
     bool use_mmap          = true;  // use mmap for faster loads
     bool use_mlock         = false; // use mlock to keep model in memory
     bool mem_test          = false; // compute maximum memory usage

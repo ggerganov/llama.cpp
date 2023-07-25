@@ -8,6 +8,8 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+static const float rms_norm_eps = 1e-6f;
+
 float frand() {
     return (float)rand()/(float)RAND_MAX;
 }
@@ -562,7 +564,7 @@ struct ggml_tensor * forward(
         // norm
         {
             // cur shape [n_embd,N,1,1]
-            cur = ggml_rms_norm(ctx0, inpL);
+            cur = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
 
             // cur = attention_norm*cur
             cur = ggml_mul(ctx0,
@@ -685,7 +687,7 @@ struct ggml_tensor * forward(
             // norm
             {
                 // cur shape [n_embd,N,1,1]
-                cur = ggml_rms_norm(ctx0, inpFF);
+                cur = ggml_rms_norm(ctx0, inpFF, rms_norm_eps);
 
                 // cur = ffn_norm*cur
                 // cur shape [n_embd,N,1,1]
@@ -729,7 +731,7 @@ struct ggml_tensor * forward(
     {
 
         // inpL shape [n_embd,N,1,1]
-        inpL = ggml_rms_norm(ctx0, inpL);
+        inpL = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
 
         // inpL = norm*inpL
         // inpL shape [n_embd,N,1,1]
@@ -817,7 +819,7 @@ struct ggml_tensor * forward_batch(
         // norm
         {
             // cur shape [n_embd,N*n_batch,1,1]
-            cur = ggml_rms_norm(ctx0, inpL);
+            cur = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
             assert_shape_2d(cur, n_embd, N*n_batch);
 
             // cur = attention_norm*cur
@@ -981,7 +983,7 @@ struct ggml_tensor * forward_batch(
             // norm
             {
                 // cur shape [n_embd,N*n_batch,1,1]
-                cur = ggml_rms_norm(ctx0, inpFF);
+                cur = ggml_rms_norm(ctx0, inpFF, rms_norm_eps);
                 assert_shape_2d(cur, n_embd, N*n_batch);
 
                 // cur = ffn_norm*cur
@@ -1034,7 +1036,7 @@ struct ggml_tensor * forward_batch(
     {
 
         // inpL shape [n_embd,N*n_batch,1,1]
-        inpL = ggml_rms_norm(ctx0, inpL);
+        inpL = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
         assert_shape_2d(inpL, n_embd, N*n_batch);
 
         // inpL = norm*inpL
@@ -1104,7 +1106,7 @@ struct ggml_tensor * forward_lora(
         // norm
         {
             // cur shape [n_embd,N,1,1]
-            cur = ggml_rms_norm(ctx0, inpL);
+            cur = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
 
             // cur = attention_norm*cur
             cur = ggml_mul(ctx0,
@@ -1251,7 +1253,7 @@ struct ggml_tensor * forward_lora(
             // norm
             {
                 // cur shape [n_embd,N,1,1]
-                cur = ggml_rms_norm(ctx0, inpFF);
+                cur = ggml_rms_norm(ctx0, inpFF, rms_norm_eps);
 
                 // cur = ffn_norm*cur
                 // cur shape [n_embd,N,1,1]
@@ -1295,7 +1297,7 @@ struct ggml_tensor * forward_lora(
     {
 
         // inpL shape [n_embd,N,1,1]
-        inpL = ggml_rms_norm(ctx0, inpL);
+        inpL = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
 
         // inpL = norm*inpL
         // inpL shape [n_embd,N,1,1]
