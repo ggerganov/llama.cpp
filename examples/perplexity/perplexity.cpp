@@ -159,8 +159,9 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
     bool prepend_bos = true;
 
     // Number of examples to use when computing the score
-    if ( params.hellaswag_tasks < hs_task_count  )
+    if ( params.hellaswag_tasks < hs_task_count  ) {
         hs_task_count = params.hellaswag_tasks;
+    }
 
     // The examples should be randomized so the score stabilizes quickly.
     bool randomize_tasks = true;
@@ -196,7 +197,7 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
             hs_data[i].ending[j] = " " + prompt_lines[idx*6+2+j];
         }
 
-        // Delete the select random example from the prompt
+        // Delete the selected random example from the prompt
         if (randomize_tasks) {
             prompt_lines.erase( std::next(prompt_lines.begin(),idx*6)  , std::next(prompt_lines.begin(),idx*6+6) );
         }
