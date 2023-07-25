@@ -4212,7 +4212,7 @@ enum ggml_type ggml_ftype_to_ggml_type(enum ggml_ftype ftype) {
 }
 
 size_t ggml_tensor_overhead(void) {
-    return GGML_OBJECT_SIZE + GGML_TENSOR_SIZE; // REVIEW: i don't think we need to 16 here because GGML_OBJECT_SIZE and GGML_TENSOR_SIZE are already aligned
+    return GGML_OBJECT_SIZE + GGML_TENSOR_SIZE; // REVIEW: i don't think we need to add 16 here because GGML_OBJECT_SIZE and GGML_TENSOR_SIZE are already aligned
 }
 
 bool ggml_is_transposed(const struct ggml_tensor * tensor) {
