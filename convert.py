@@ -234,14 +234,21 @@ class Params:
 
 
 class SentencePieceVocab:
-    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Optional[Path]) -> None:
-        self.sentencepiece_tokenizer = SentencePieceProcessor(str(fname_tokenizer))
+    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Optional[Path], vocabtype: Optional[str]) -> None:
+        self.vocabtype = vocabtype
+        if self.vocabtype == "bpe":
+          self.sentencepiece_tokenizer = json.loads(open(str(fname_tokenizer)).read())
+        else:
+          self.sentencepiece_tokenizer = SentencePieceProcessor(str(fname_tokenizer))
         added_tokens: Dict[str, int]
         if fname_added_tokens is not None:
             added_tokens = json.load(open(fname_added_tokens))
         else:
             added_tokens = {}
-        vocab_size: int = self.sentencepiece_tokenizer.vocab_size()
+        if self.vocabtype == "bpe":
+          vocab_size: int = len(self.sentencepiece_tokenizer)
+        else:
+          vocab_size: int = self.sentencepiece_tokenizer.vocab_size()
         expected_ids = list(range(vocab_size, vocab_size + len(added_tokens)))
         actual_ids = sorted(added_tokens.values())
         if expected_ids != actual_ids:
@@ -255,22 +262,32 @@ class SentencePieceVocab:
 
     def sentencepiece_tokens(self) -> Iterable[Tuple[bytes, float]]:
         tokenizer = self.sentencepiece_tokenizer
-        for i in range(tokenizer.vocab_size()):
+        if self.vocabtype == "bpe":
+          from transformers.models.gpt2 import tokenization_gpt2
+          byte_encoder = tokenization_gpt2.bytes_to_unicode()
+          byte_decoder = {v: k for k, v in byte_encoder.items()}
+          for i, item in enumerate(tokenizer):
             text: bytes
-            if tokenizer.is_unknown(i):
-                text = " \u2047 ".encode("utf-8")
-            elif tokenizer.is_control(i):
-                text = b""
-            elif tokenizer.is_byte(i):
-                piece = tokenizer.id_to_piece(i)
-                if len(piece) != 6:
-                    raise Exception(f"Invalid token: {piece}")
-                byte_value = int(piece[3:-1], 16)
-                text = struct.pack("B", byte_value)
-            else:
-                text = tokenizer.id_to_piece(i).replace("\u2581", " ").encode("utf-8")
-            score: float = tokenizer.get_score(i)
+            text = b''.join([x.to_bytes(1, byteorder='big') for x in [byte_decoder[y] for y in item]])
+            score: float = -i
             yield text, score
+        else:
+          for i in range(tokenizer.vocab_size()):
+              text: bytes
+              if tokenizer.is_unknown(i):
+                  text = " \u2047 ".encode("utf-8")
+              elif tokenizer.is_control(i):
+                  text = b""
+              elif tokenizer.is_byte(i):
+                  piece = tokenizer.id_to_piece(i)
+                  if len(piece) != 6:
+                      raise Exception(f"Invalid token: {piece}")
+                  byte_value = int(piece[3:-1], 16)
+                  text = struct.pack("B", byte_value)
+              else:
+                  text = tokenizer.id_to_piece(i).replace("\u2581", " ").encode("utf-8")
+              score: float = tokenizer.get_score(i)
+              yield text, score
 
     def added_tokens(self) -> Iterable[Tuple[bytes, float]]:
         for text in self.added_tokens_list:
@@ -1196,14 +1213,18 @@ def filter_and_sort_tensors(model: LazyModel) -> LazyModel:
     return {name: model[name] for name in TENSORS_LIST if name in model}
 
 
-def load_vocab(path: Path) -> SentencePieceVocab:
+def load_vocab(path: Path, vocabtype: Optional[str]) -> SentencePieceVocab:
+    print(f"vocabtype: {vocabtype}")
     # Be extra-friendly and accept either a file or a directory.  Also, if it's
     # a directory, it might be the model directory, and tokenizer.model might
     # be in the parent of that.
     if path.is_dir():
-        path2 = path / "tokenizer.model"
+        vocab_file = "tokenizer.model"
+        if vocabtype == 'bpe':
+          vocab_file = "vocab.json"
+        path2 = path / vocab_file
         # Use `.parent` instead of /.. to handle the symlink case better.
-        path3 = path.parent / "tokenizer.model"
+        path3 = path.parent / vocab_file
         if path2.exists():
             path = path2
         elif path3.exists():
@@ -1214,7 +1235,8 @@ def load_vocab(path: Path) -> SentencePieceVocab:
                 "if it's in another directory, pass the directory as --vocab-dir")
     added_tokens_path = path.parent / "added_tokens.json"
     print(f"Loading vocab file {path}")
-    return SentencePieceVocab(path, added_tokens_path if added_tokens_path.exists() else None)
+    return SentencePieceVocab(path, added_tokens_path if added_tokens_path.exists() else None,
+                              vocabtype)
 
 
 def default_outfile(model_paths: List[Path], file_type: GGMLFileType) -> Path:
@@ -1252,6 +1274,7 @@ def main(args_in: Optional[List[str]] = None) -> None:
     parser.add_argument("--outfile", type=Path, help="path to write to; default: based on input")
     parser.add_argument("model", type=Path,
                         help="directory containing model file, or model file itself (*.pth, *.pt, *.bin)")
+    parser.add_argument("--vocabtype", default='spm', choices=["spm", "bpe"], help="vocab format (default: spm)")
     args = parser.parse_args(args_in)
 
     vocab: Vocab
@@ -1259,7 +1282,7 @@ def main(args_in: Optional[List[str]] = None) -> None:
         model_plus = lazy_load_file(args.model)
         do_dump_model(model_plus)
     elif args.vocab_only:
-        vocab = load_vocab(args.vocab_dir or args.model)
+        vocab = load_vocab(args.vocab_dir or args.model, args.vocabtype)
         assert args.outfile, "need --outfile if using --vocab-only"
         outfile = args.outfile
         OutputFile.write_vocab_only(outfile, vocab)
@@ -1273,7 +1296,7 @@ def main(args_in: Optional[List[str]] = None) -> None:
             vocab = model_plus.vocab
         else:
             vocab_dir = args.vocab_dir if args.vocab_dir else model_plus.paths[0].parent
-            vocab = load_vocab(vocab_dir)
+            vocab = load_vocab(vocab_dir, args.vocabtype)
         params = Params.load(model_plus)
         model = model_plus.model
         model = do_necessary_conversions(model, params)
