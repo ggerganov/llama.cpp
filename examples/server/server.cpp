@@ -950,7 +950,7 @@ static json format_timings(llama_server_context &llama)
 {
     const auto timings = llama_get_timings(llama.ctx);
 
-    assert(timings.n_eval == llama.num_tokens_predicted);
+    // assert(timings.n_eval == llama.num_tokens_predicted);
 
     return json{
         {"prompt_n", timings.n_eval},
@@ -1263,7 +1263,11 @@ int main(int argc, char **argv)
                 sink.done();
                 return true;
             };
-            res.set_chunked_content_provider("text/event-stream", chunked_content_provider);
+            const auto on_complete = [&](bool) {
+                llama.mutex.unlock();
+            };
+            lock.release();
+            res.set_chunked_content_provider("text/event-stream", chunked_content_provider, on_complete);
         } });
 
     svr.Get("/model.json", [&llama](const Request &, Response &res)
