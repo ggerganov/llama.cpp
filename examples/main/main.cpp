@@ -6,6 +6,7 @@
 #include "common.h"
 #include "llama.h"
 #include "build-info.h"
+#include "grammar-parser.h"
 
 #include <cassert>
 #include <cinttypes>
@@ -93,8 +94,8 @@ int main(int argc, char ** argv) {
     }
 
     if (params.n_ctx > 2048) {
-        fprintf(stderr, "%s: warning: base model only supports context sizes no greater than 2048 tokens (%d specified);"
-                " you are on your own\n", __func__, params.n_ctx);
+        // TODO: determine the actual max context of the model (e.g. 4096 for LLaMA v2) and use that instead of 2048
+        fprintf(stderr, "%s: warning: base model only supports context sizes no greater than 2048 tokens (%d specified)\n", __func__, params.n_ctx);
     } else if (params.n_ctx < 8) {
         fprintf(stderr, "%s: warning: minimum context size is 8, using minimum size.\n", __func__);
         params.n_ctx = 8;
@@ -139,17 +140,14 @@ int main(int argc, char ** argv) {
                 params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
     }
 
-    // determine the maximum memory usage needed to do inference for the given n_batch and n_predict parameters
+    // determine the maximum memory usage needed to do inference for the given n_batch and n_ctx parameters
     // uncomment the "used_mem" line in llama.cpp to see the results
     if (params.mem_test) {
         {
-            const std::vector<llama_token> tmp(params.n_batch, llama_token_bos());
-            llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads);
-        }
+            fprintf(stderr, "%s: testing memory usage for n_batch = %d, n_ctx = %d\n", __func__, params.n_batch, params.n_ctx);
 
-        {
-            const std::vector<llama_token> tmp = { 0, };
-            llama_eval(ctx, tmp.data(), tmp.size(), params.n_predict - 1, params.n_threads);
+            const std::vector<llama_token> tmp(params.n_batch, llama_token_bos());
+            llama_eval(ctx, tmp.data(), tmp.size(), params.n_ctx, params.n_threads);
         }
 
         llama_print_timings(ctx);
@@ -323,6 +321,10 @@ int main(int argc, char ** argv) {
             }
         }
 
+        if (params.input_prefix_bos) {
+            fprintf(stderr, "Input prefix with BOS\n");
+        }
+
         if (!params.input_prefix.empty()) {
             fprintf(stderr, "Input prefix: '%s'\n", params.input_prefix.c_str());
         }
@@ -335,6 +337,31 @@ int main(int argc, char ** argv) {
             params.repeat_last_n, params.repeat_penalty, params.presence_penalty, params.frequency_penalty, params.top_k, params.tfs_z, params.top_p, params.typical_p, params.temp, params.mirostat, params.mirostat_eta, params.mirostat_tau);
     fprintf(stderr, "generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
     fprintf(stderr, "\n\n");
+
+    grammar_parser::parse_state parsed_grammar;
+    llama_grammar *             grammar = NULL;
+    if (!params.grammar.empty()) {
+        parsed_grammar = grammar_parser::parse(params.grammar.c_str());
+        // will be empty (default) if there are parse errors
+        if (parsed_grammar.rules.empty()) {
+            return 1;
+        }
+        fprintf(stderr, "%s: grammar:\n", __func__);
+        grammar_parser::print_grammar(stderr, parsed_grammar);
+        fprintf(stderr, "\n");
+
+        {
+            auto it = params.logit_bias.find(llama_token_eos());
+            if (it != params.logit_bias.end() && it->second == -INFINITY) {
+                fprintf(stderr,
+                    "%s: warning: EOS token is disabled, which will cause most grammars to fail\n", __func__);
+            }
+        }
+
+        std::vector<const llama_grammar_element *> grammar_rules(parsed_grammar.c_rules());
+        grammar = llama_grammar_init(
+            grammar_rules.data(), grammar_rules.size(), parsed_grammar.symbol_ids.at("root"));
+    }
 
     // TODO: replace with ring-buffer
     std::vector<llama_token> last_n_tokens(n_ctx);
@@ -569,6 +596,10 @@ int main(int argc, char ** argv) {
                     logits[llama_token_nl()] = nl_logit;
                 }
 
+                if (grammar != NULL) {
+                    llama_sample_grammar(ctx, &candidates_p, grammar);
+                }
+
                 if (temp <= 0) {
                     // Greedy sampling
                     id = llama_sample_token_greedy(ctx, &candidates_p);
@@ -594,18 +625,12 @@ int main(int argc, char ** argv) {
                 }
                 // printf("`%d`", candidates_p.size);
 
+                if (grammar != NULL) {
+                    llama_grammar_accept_token(ctx, grammar, id);
+                }
+
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(id);
-            }
-
-            // replace end of text token with newline token when in interactive mode
-            if (id == llama_token_eos() && params.interactive && !params.instruct) {
-                id = llama_token_newline.front();
-                if (params.antiprompt.size() != 0) {
-                    // tokenize and inject first reverse prompt
-                    const auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false);
-                    embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
-                }
             }
 
             // add it to the context
@@ -673,9 +698,32 @@ int main(int argc, char ** argv) {
                 }
             }
 
+            // deal with end of text token in interactive mode
+            if (last_n_tokens.back() == llama_token_eos()) {
+                if (params.interactive) {
+                    if (params.antiprompt.size() != 0) {
+                        // tokenize and inject first reverse prompt
+                        const auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false);
+                        embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
+                        is_antiprompt = true;
+                    }
+
+                    is_interacting = true;
+                    printf("\n");
+                    console_set_color(con_st, CONSOLE_COLOR_USER_INPUT);
+                    fflush(stdout);
+                } else if (params.instruct) {
+                    is_interacting = true;
+                }
+            }
+
             if (n_past > 0 && is_interacting) {
                 if (params.instruct) {
                     printf("\n> ");
+                }
+
+                if (params.input_prefix_bos) {
+                    embd_inp.push_back(llama_token_bos());
                 }
 
                 std::string buffer;
@@ -724,18 +772,26 @@ int main(int argc, char ** argv) {
             }
 
             if (n_past > 0) {
+                if (is_interacting) {
+                    // reset grammar state if we're restarting generation
+                    if (grammar != NULL) {
+                        llama_grammar_free(grammar);
+
+                        std::vector<const llama_grammar_element *> grammar_rules(
+                            parsed_grammar.c_rules());
+                        grammar = llama_grammar_init(
+                            grammar_rules.data(), grammar_rules.size(),
+                            parsed_grammar.symbol_ids.at("root"));
+                    }
+                }
                 is_interacting = false;
             }
         }
 
         // end of text token
-        if (!embd.empty() && embd.back() == llama_token_eos()) {
-            if (params.instruct) {
-                is_interacting = true;
-            } else {
-                fprintf(stderr, " [end of text]\n");
-                break;
-            }
+        if (!embd.empty() && embd.back() == llama_token_eos() && !(params.instruct || params.interactive)) {
+            fprintf(stderr, " [end of text]\n");
+            break;
         }
 
         // In interactive mode, respect the maximum number of tokens and drop back to user input when reached.
@@ -755,6 +811,9 @@ int main(int argc, char ** argv) {
     llama_free(ctx);
     llama_free_model(model);
 
+    if (grammar != NULL) {
+        llama_grammar_free(grammar);
+    }
     llama_backend_free();
 
     return 0;

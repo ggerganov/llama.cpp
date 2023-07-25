@@ -142,9 +142,9 @@ def find_n_mult(n_ff: int, n_embd: int) -> int:
 @dataclass
 class Params:
     n_vocab: int
-    n_embd: int
-    n_mult: int
-    n_head: int
+    n_embd:  int
+    n_mult:  int
+    n_head:  int
     n_layer: int
 
     @staticmethod
@@ -167,11 +167,11 @@ class Params:
         n_head=n_embd // 128 # guessed
 
         return Params(
-            n_vocab=n_vocab,
-            n_embd=n_embd,
-            n_mult=256,
-            n_head=n_head,
-            n_layer=n_layer,
+            n_vocab = n_vocab,
+            n_embd  = n_embd,
+            n_mult  = 256,
+            n_head  = n_head,
+            n_layer = n_layer,
         )
 
     @staticmethod
@@ -179,28 +179,53 @@ class Params:
         config = json.load(open(config_path))
 
         n_vocab = config["vocab_size"];
-        n_embd = config["hidden_size"];
-        n_head = config["num_attention_heads"];
+        n_embd  = config["hidden_size"];
+        n_head  = config["num_attention_heads"];
         n_layer = config["num_hidden_layers"];
-        n_ff = config["intermediate_size"];
+        n_ff    = config["intermediate_size"];
 
         n_mult = find_n_mult(n_ff, n_embd);
 
         return Params(
-            n_vocab=n_vocab,
-            n_embd=n_embd,
-            n_mult=n_mult,
-            n_head=n_head,
-            n_layer=n_layer,
+            n_vocab = n_vocab,
+            n_embd  = n_embd,
+            n_mult  = n_mult,
+            n_head  = n_head,
+            n_layer = n_layer,
+        )
+
+    # LLaMA v2 70B params.json
+    # {"dim": 8192, "multiple_of": 4096, "ffn_dim_multiplier": 1.3, "n_heads": 64, "n_kv_heads": 8, "n_layers": 80, "norm_eps": 1e-05, "vocab_size": -1
+    @staticmethod
+    def loadOriginalParamsJson(model: 'LazyModel', config_path: 'Path') -> 'Params':
+        config = json.load(open(config_path))
+
+        n_vocab = config["vocab_size"];
+        n_embd  = config["dim"];
+        n_head  = config["n_heads"];
+        n_layer = config["n_layers"];
+        n_mult  = config["multiple_of"];
+
+        if n_vocab == -1:
+            n_vocab = model["tok_embeddings.weight"].shape[0]
+
+        return Params(
+            n_vocab = n_vocab,
+            n_embd  = n_embd,
+            n_mult  = n_mult,
+            n_head  = n_head,
+            n_layer = n_layer,
         )
 
     @staticmethod
     def load(model_plus: 'ModelPlus') -> 'Params':
+        hf_config_path   = model_plus.paths[0].parent / "config.json"
         orig_config_path = model_plus.paths[0].parent / "params.json"
-        hf_transformer_config_path = model_plus.paths[0].parent / "config.json"
 
-        if hf_transformer_config_path.exists():
-            params = Params.loadHFTransformerJson(model_plus.model, hf_transformer_config_path)
+        if hf_config_path.exists():
+            params = Params.loadHFTransformerJson(model_plus.model, hf_config_path)
+        elif orig_config_path.exists():
+            params = Params.loadOriginalParamsJson(model_plus.model, orig_config_path)
         else:
             params = Params.guessed(model_plus.model)
 
@@ -209,14 +234,21 @@ class Params:
 
 
 class SentencePieceVocab:
-    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Optional[Path]) -> None:
-        self.sentencepiece_tokenizer = SentencePieceProcessor(str(fname_tokenizer))
+    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Optional[Path], vocabtype: Optional[str]) -> None:
+        self.vocabtype = vocabtype
+        if self.vocabtype == "bpe":
+          self.sentencepiece_tokenizer = json.loads(open(str(fname_tokenizer)).read())
+        else:
+          self.sentencepiece_tokenizer = SentencePieceProcessor(str(fname_tokenizer))
         added_tokens: Dict[str, int]
         if fname_added_tokens is not None:
             added_tokens = json.load(open(fname_added_tokens))
         else:
             added_tokens = {}
-        vocab_size: int = self.sentencepiece_tokenizer.vocab_size()
+        if self.vocabtype == "bpe":
+          vocab_size: int = len(self.sentencepiece_tokenizer)
+        else:
+          vocab_size: int = self.sentencepiece_tokenizer.vocab_size()
         expected_ids = list(range(vocab_size, vocab_size + len(added_tokens)))
         actual_ids = sorted(added_tokens.values())
         if expected_ids != actual_ids:
@@ -230,11 +262,20 @@ class SentencePieceVocab:
 
     def sentencepiece_tokens(self) -> Iterable[Tuple[bytes, float]]:
         tokenizer = self.sentencepiece_tokenizer
-        for i in range(tokenizer.vocab_size()):
-            piece = tokenizer.id_to_piece(i)
-            text: bytes = piece.encode("utf-8")
-            score: float = tokenizer.get_score(i)
+        if self.vocabtype == "bpe":
+          from transformers.models.gpt2 import tokenization_gpt2
+          byte_encoder = tokenization_gpt2.bytes_to_unicode()
+          byte_decoder = {v: k for k, v in byte_encoder.items()}
+          for i, item in enumerate(tokenizer):
+            text: bytes
+            text = b''.join([x.to_bytes(1, byteorder='big') for x in [byte_decoder[y] for y in item]])
+            score: float = -i
             yield text, score
+        else:
+          for i in range(tokenizer.vocab_size()):
+              piece = tokenizer.id_to_piece(i)
+              text: bytes = piece.encode("utf-8")
+              score: float = tokenizer.get_score(i)
 
     def added_tokens(self) -> Iterable[Tuple[bytes, float]]:
         for text in self.added_tokens_list:
@@ -1025,8 +1066,7 @@ class OutputFile:
     @staticmethod
     def write_vocab_only(fname_out: Path, vocab: Vocab) -> None:
         of = OutputFile(fname_out)
-        params = Params(n_vocab=vocab.vocab_size, n_embd=0, n_mult=0,
-                        n_head=1, n_layer=0)
+        params = Params(n_vocab=vocab.vocab_size, n_embd=0, n_mult=0, n_head=1, n_layer=0)
         of = OutputFile(fname_out)
         of.write_file_header(params, file_type=GGMLFileType.AllF32)
         of.write_vocab(vocab)
@@ -1161,14 +1201,18 @@ def filter_and_sort_tensors(model: LazyModel) -> LazyModel:
     return {name: model[name] for name in TENSORS_LIST if name in model}
 
 
-def load_vocab(path: Path) -> SentencePieceVocab:
+def load_vocab(path: Path, vocabtype: Optional[str]) -> SentencePieceVocab:
+    print(f"vocabtype: {vocabtype}")
     # Be extra-friendly and accept either a file or a directory.  Also, if it's
     # a directory, it might be the model directory, and tokenizer.model might
     # be in the parent of that.
     if path.is_dir():
-        path2 = path / "tokenizer.model"
+        vocab_file = "tokenizer.model"
+        if vocabtype == 'bpe':
+          vocab_file = "vocab.json"
+        path2 = path / vocab_file
         # Use `.parent` instead of /.. to handle the symlink case better.
-        path3 = path.parent / "tokenizer.model"
+        path3 = path.parent / vocab_file
         if path2.exists():
             path = path2
         elif path3.exists():
@@ -1179,7 +1223,8 @@ def load_vocab(path: Path) -> SentencePieceVocab:
                 "if it's in another directory, pass the directory as --vocab-dir")
     added_tokens_path = path.parent / "added_tokens.json"
     print(f"Loading vocab file {path}")
-    return SentencePieceVocab(path, added_tokens_path if added_tokens_path.exists() else None)
+    return SentencePieceVocab(path, added_tokens_path if added_tokens_path.exists() else None,
+                              vocabtype)
 
 
 def default_outfile(model_paths: List[Path], file_type: GGMLFileType) -> Path:
@@ -1217,6 +1262,7 @@ def main(args_in: Optional[List[str]] = None) -> None:
     parser.add_argument("--outfile", type=Path, help="path to write to; default: based on input")
     parser.add_argument("model", type=Path,
                         help="directory containing model file, or model file itself (*.pth, *.pt, *.bin)")
+    parser.add_argument("--vocabtype", default='spm', choices=["spm", "bpe"], help="vocab format (default: spm)")
     args = parser.parse_args(args_in)
 
     vocab: Vocab
@@ -1224,7 +1270,7 @@ def main(args_in: Optional[List[str]] = None) -> None:
         model_plus = lazy_load_file(args.model)
         do_dump_model(model_plus)
     elif args.vocab_only:
-        vocab = load_vocab(args.vocab_dir or args.model)
+        vocab = load_vocab(args.vocab_dir or args.model, args.vocabtype)
         assert args.outfile, "need --outfile if using --vocab-only"
         outfile = args.outfile
         OutputFile.write_vocab_only(outfile, vocab)
@@ -1238,7 +1284,7 @@ def main(args_in: Optional[List[str]] = None) -> None:
             vocab = model_plus.vocab
         else:
             vocab_dir = args.vocab_dir if args.vocab_dir else model_plus.paths[0].parent
-            vocab = load_vocab(vocab_dir)
+            vocab = load_vocab(vocab_dir, args.vocabtype)
         params = Params.load(model_plus)
         model = model_plus.model
         model = do_necessary_conversions(model, params)
