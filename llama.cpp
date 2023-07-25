@@ -1030,7 +1030,7 @@ static void llama_model_load_internal(
     auto & hparams = model.hparams;
 
     // TODO: read from file
-    hparams.f_rms_norm_eps = rms_norm_eps;
+    hparams.f_rms_norm_eps = 5e-6;
 
     {
         switch (hparams.n_layer) {
