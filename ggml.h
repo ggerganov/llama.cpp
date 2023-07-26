@@ -204,6 +204,7 @@
 #define GGML_MAX_NAME          48
 #define GGML_MAX_OP_PARAMS     32
 #define GGML_DEFAULT_N_THREADS 4
+#define GGUF_DEFAULT_ALIGNMENT 32
 
 #define GGML_EXIT_SUCCESS 0
 #define GGML_EXIT_ABORTED 1
@@ -1617,23 +1618,47 @@ extern "C" {
     // gguf
     //
 
-    enum gguf_metadata_value_type {
-        GGUF_METADATA_VALUE_TYPE_UINT8   = 0,
-        GGUF_METADATA_VALUE_TYPE_INT8    = 1,
-        GGUF_METADATA_VALUE_TYPE_UINT16  = 2,
-        GGUF_METADATA_VALUE_TYPE_INT16   = 3,
-        GGUF_METADATA_VALUE_TYPE_UINT32  = 4,
-        GGUF_METADATA_VALUE_TYPE_INT32   = 5,
-        GGUF_METADATA_VALUE_TYPE_FLOAT32 = 6,
-        GGUF_METADATA_VALUE_TYPE_BOOL    = 7,
-        GGUF_METADATA_VALUE_TYPE_STRING  = 8,
-        GGUF_METADATA_VALUE_TYPE_ARRAY   = 9,
+    enum gguf_type {
+        GGUF_TYPE_UINT8   = 0,
+        GGUF_TYPE_INT8    = 1,
+        GGUF_TYPE_UINT16  = 2,
+        GGUF_TYPE_INT16   = 3,
+        GGUF_TYPE_UINT32  = 4,
+        GGUF_TYPE_INT32   = 5,
+        GGUF_TYPE_FLOAT32 = 6,
+        GGUF_TYPE_BOOL    = 7,
+        GGUF_TYPE_STRING  = 8,
+        GGUF_TYPE_ARRAY   = 9,
     };
 
-    struct gguf_string {
-        uint32_t n;
-        char * data;
-    };
+    struct gguf_context;
+
+    GGML_API struct gguf_context * gguf_gguf_init(const char * path);
+    GGML_API void                  gguf_gguf_free(struct gguf_context * ctx);
+
+    GGML_API int    gguf_get_version    (struct gguf_context * ctx);
+    GGML_API size_t gguf_get_alignment  (struct gguf_context * ctx);
+    GGML_API size_t gguf_get_data_offset(struct gguf_context * ctx);
+
+    GGML_API int            gguf_get_n_kv(struct gguf_context * ctx);
+    GGML_API const char *   gguf_get_key (struct gguf_context * ctx, int i);
+    GGML_API enum gguf_type gguf_get_type(struct gguf_context * ctx, int i);
+    GGML_API void           gguf_get_val (struct gguf_context * ctx, int i, void * val);
+
+    GGML_API uint8_t      gguf_get_val_u8  (struct gguf_context * ctx, int i);
+    GGML_API int8_t       gguf_get_val_i8  (struct gguf_context * ctx, int i);
+    GGML_API uint16_t     gguf_get_val_u16 (struct gguf_context * ctx, int i);
+    GGML_API int16_t      gguf_get_val_i16 (struct gguf_context * ctx, int i);
+    GGML_API uint32_t     gguf_get_val_u32 (struct gguf_context * ctx, int i);
+    GGML_API int32_t      gguf_get_val_i32 (struct gguf_context * ctx, int i);
+    GGML_API float        gguf_get_val_f32 (struct gguf_context * ctx, int i);
+    GGML_API bool         gguf_get_val_bool(struct gguf_context * ctx, int i);
+    GGML_API const char * gguf_get_val_str (struct gguf_context * ctx, int i);
+    // TODO: arr
+
+    GGML_API int    gguf_get_n_tensors    (struct gguf_context * ctx);
+    GGML_API size_t gguf_get_tensor_offset(struct gguf_context * ctx, int i);
+
     //
     // system info
     //

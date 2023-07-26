@@ -18297,6 +18297,75 @@ size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, i
 
 ////////////////////////////////////////////////////////////////////////////////
 
+struct gguf_string {
+    uint32_t n;
+    char * data;
+};
+
+union gguf_value;
+
+union gguf_value {
+    uint8_t  uint8;
+    int8_t   int8;
+    uint16_t uint16;
+    int16_t  int16;
+    uint32_t uint32;
+    int32_t  int32;
+    float    float32;
+    bool     bool_;
+
+    struct gguf_string str;
+
+    struct {
+        enum gguf_type type;
+
+        uint32_t n;
+        union gguf_value * arr;
+    } arr;
+};
+
+struct gguf_kv {
+    struct gguf_string key;
+
+    uint32_t n_bytes; // TODO: is this actually needed?
+
+    enum  gguf_type  type;
+    union gguf_value value;
+};
+
+struct gguf_header {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t n_tensors;
+
+    uint32_t n_kv;
+    struct gguf_kv * kv;
+};
+
+struct gguf_tensor_info {
+    struct gguf_string name;
+
+    uint32_t n_dims;
+    uint32_t ne[GGML_MAX_DIMS];
+    uint32_t n_elements; // TODO: is this needed?
+
+    enum ggml_type type;
+
+    uint64_t offset; // must be a multiple of `ALIGNMENT`.
+};
+
+struct gguf_context {
+    struct gguf_header        header;
+    struct gguf_tensor_info * infos;
+
+    size_t alignment;
+
+    uint8_t * padding;
+    uint8_t * data;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+
 int ggml_cpu_has_avx(void) {
 #if defined(__AVX__)
     return 1;
