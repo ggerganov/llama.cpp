@@ -81,6 +81,8 @@ while True:
         sys.stdout.flush()
         answer += content
 
+answer = answer.rstrip('\n')
+
 # Write the answer to the temporary file
 with open('$TEMPFILE', 'w') as f:
     f.write(answer)
