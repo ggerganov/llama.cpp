@@ -1670,6 +1670,7 @@ extern "C" {
 
     GGML_API int    gguf_get_n_tensors    (struct gguf_context * ctx);
     GGML_API size_t gguf_get_tensor_offset(struct gguf_context * ctx, int i);
+    GGML_API char * gguf_get_tensor_name  (struct gguf_context * ctx, int i);
 
     //
     // system info

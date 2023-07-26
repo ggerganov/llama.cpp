@@ -18770,6 +18770,10 @@ size_t gguf_get_tensor_offset(struct gguf_context * ctx, int i) {
     return ctx->infos[i].offset;
 }
 
+char * gguf_get_tensor_name(struct gguf_context * ctx, int i) {
+    return ctx->infos[i].name.data;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 int ggml_cpu_has_avx(void) {
