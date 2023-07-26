@@ -18347,7 +18347,7 @@ struct gguf_tensor_info {
 
     uint32_t n_dims;
     uint32_t ne[GGML_MAX_DIMS];
-    uint32_t n_elements; // TODO: is this needed?
+    uint32_t n_elms; // TODO: is this needed?
 
     enum ggml_type type;
 
@@ -18359,8 +18359,9 @@ struct gguf_context {
     struct gguf_tensor_info * infos;
 
     size_t alignment;
+    size_t offset;
 
-    uint8_t * padding;
+    //uint8_t * padding;
     uint8_t * data;
 };
 
@@ -18461,9 +18462,55 @@ struct gguf_context * gguf_init(const char * path, bool load) {
         return NULL;
     }
 
+    ctx->infos = GGML_ALIGNED_MALLOC(ctx->header.n_tensors * sizeof(struct gguf_tensor_info));
+
+    for (uint32_t i = 0; i < ctx->header.n_tensors; ++i) {
+        struct gguf_tensor_info * info = &ctx->infos[i];
+
+        memset(info->ne, 0, sizeof(info->ne));
+
+        ok = ok && gguf_fread_str(&info->name,                          file, &offset);
+        ok = ok && gguf_fread_el (&info->n_dims, sizeof(info->n_dims),  file, &offset);
+        for (uint32_t j = 0; j < info->n_dims; ++j) {
+            ok = ok && gguf_fread_el (&info->ne[j], sizeof(info->ne[j]), file, &offset);
+        }
+      //ok = ok && gguf_fread_el (&info->n_elms, sizeof(info->n_elms),  file, &offset);
+        ok = ok && gguf_fread_el (&info->type,    sizeof(info->type),   file, &offset);
+        ok = ok && gguf_fread_el (&info->offset,  sizeof(info->offset), file, &offset);
+
+        if (!ok) {
+            fprintf(stderr, "gguf: failed to read tensor info\n");
+            free(ctx->header.kv);
+            free(ctx->infos);
+            fclose(file);
+            gguf_free(ctx);
+            return NULL;
+        }
+    }
+
     ctx->alignment = GGUF_DEFAULT_ALIGNMENT;
 
+    // TODO: determine new alignment from kv if available
 
+    {
+        const size_t offset_pad = offset % ctx->alignment;
+
+        if (offset_pad != 0) {
+            offset += ctx->alignment - offset_pad;
+            fseek(file, offset, SEEK_SET);
+        }
+    }
+
+    ctx->offset = offset;
+
+    if (load) {
+        GGML_ASSERT("gguf: load not implemented");
+        // - compute total tensor size
+        // - allocate buffer
+        // - read tensor data into buffer
+        // - add gguf_get_tensor_data() API
+        // - maybe create a ggml_context and return it
+    }
 
     return ctx;
 }
