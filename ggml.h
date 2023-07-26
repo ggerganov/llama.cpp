@@ -208,6 +208,7 @@
 
 #define GGML_UNUSED(x) (void)(x)
 
+#define GGML_PAD(x, n) (((x) + (n) - 1) & ~((n) - 1))
 
 #define GGML_ASSERT(x) \
     do { \
@@ -396,6 +397,12 @@ extern "C" {
         GGML_UNARY_OP_SILU,
     };
 
+    enum ggml_object_type {
+        GGML_OBJECT_TENSOR,
+        GGML_OBJECT_GRAPH,
+        GGML_OBJECT_WORK_BUFFER
+    };
+
     // ggml object
     struct ggml_object {
         size_t offs;
@@ -403,7 +410,9 @@ extern "C" {
 
         struct ggml_object * next;
 
-        char padding[8];
+        enum ggml_object_type type;
+
+        char padding[4];
     };
 
     static const size_t GGML_OBJECT_SIZE = sizeof(struct ggml_object);
@@ -424,7 +433,7 @@ extern "C" {
         enum ggml_op op;
 
         // op params - allocated as int32_t for alignment
-        int32_t op_params[GGML_MAX_OP_PARAMS / sizeof(uint32_t)];
+        int32_t op_params[GGML_MAX_OP_PARAMS / sizeof(int32_t)];
 
         bool is_param;
 
@@ -484,6 +493,8 @@ extern "C" {
         int64_t perf_cycles;
         int64_t perf_time_us;
     };
+
+    static const size_t GGML_GRAPH_SIZE = sizeof(struct ggml_cgraph);
 
     // scratch buffer
     struct ggml_scratch {
@@ -1391,10 +1402,16 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * tensor);
 
+
     GGML_API void ggml_build_forward_expand(struct ggml_cgraph * cgraph, struct ggml_tensor * tensor);
 
     GGML_API struct ggml_cgraph ggml_build_forward (struct ggml_tensor * tensor);
     GGML_API struct ggml_cgraph ggml_build_backward(struct ggml_context * ctx, struct ggml_cgraph * gf, bool keep);
+
+    // graph allocation in a context
+    GGML_API struct ggml_cgraph * ggml_new_graph        (struct ggml_context * ctx);
+    GGML_API struct ggml_cgraph * ggml_build_forward_ctx(struct ggml_context * ctx, struct ggml_tensor * tensor);
+    GGML_API size_t ggml_graph_overhead(void);
 
     // ggml_graph_plan() has to be called before ggml_graph_compute()
     // when plan.work_size > 0, caller must allocate memory for plan.work_data
