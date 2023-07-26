@@ -4212,7 +4212,7 @@ enum ggml_type ggml_ftype_to_ggml_type(enum ggml_ftype ftype) {
 }
 
 size_t ggml_tensor_overhead(void) {
-    return GGML_OBJECT_SIZE + GGML_TENSOR_SIZE; // REVIEW: i don't think we need to add 16 here because GGML_OBJECT_SIZE and GGML_TENSOR_SIZE are already aligned
+    return GGML_OBJECT_SIZE + GGML_TENSOR_SIZE;
 }
 
 bool ggml_is_transposed(const struct ggml_tensor * tensor) {
@@ -4511,7 +4511,7 @@ static void ggml_scratch_load(struct ggml_context * ctx) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static struct ggml_object * ggml_new_object( struct ggml_context * ctx, enum ggml_object_type type, size_t size) {
+static struct ggml_object * ggml_new_object(struct ggml_context * ctx, enum ggml_object_type type, size_t size) {
     // always insert objects at the end of the context's memory pool
     struct ggml_object * obj_cur = ctx->objects_end;
 
@@ -4574,7 +4574,7 @@ static struct ggml_tensor * ggml_new_tensor_impl(
     }
 
     if (ctx->scratch.data != NULL && data == NULL) {
-        // allocate tensor data on scratch buffer
+        // allocate tensor data in the scratch buffer
         if (ctx->scratch.offs + data_size > ctx->scratch.size) {
             GGML_PRINT("%s: not enough space in the scratch memory pool (needed %zu, available %zu)\n",
                     __func__, ctx->scratch.offs + data_size, ctx->scratch.size);
@@ -15858,7 +15858,7 @@ struct ggml_cgraph * ggml_build_forward_ctx(struct ggml_context * ctx, struct gg
 }
 
 size_t ggml_graph_overhead(void) {
-    return GGML_OBJECT_SIZE + GGML_GRAPH_SIZE + 16;
+    return GGML_OBJECT_SIZE + ((GGML_GRAPH_SIZE + GGML_MEM_ALIGN - 1)/GGML_MEM_ALIGN)*GGML_MEM_ALIGN;
 }
 
 //
