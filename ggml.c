@@ -18351,7 +18351,7 @@ struct gguf_tensor_info {
 
     enum ggml_type type;
 
-    uint64_t offset; // must be a multiple of `ALIGNMENT`.
+    uint64_t offset; // offset from beginning of file, must be a multiple of `ALIGNMENT`
 };
 
 struct gguf_context {
@@ -18359,7 +18359,8 @@ struct gguf_context {
     struct gguf_tensor_info * infos;
 
     size_t alignment;
-    size_t offset;
+    size_t offset;    // offset of `data` from beginning of file
+    size_t size_data; // size of `data` in bytes
 
     //uint8_t * padding;
     uint8_t * data;
@@ -18379,14 +18380,15 @@ static bool gguf_fread_str(void * dst, FILE * file, size_t * offset) {
 
     bool ok = true;
 
-    ok = ok && gguf_fread_el(&p->n,    sizeof(p->n), file, offset);
+    // TODO: how to avoid mallocs for strings?
+    ok = ok && gguf_fread_el(&p->n,    sizeof(p->n), file, offset); p->data = calloc(p->n + 1, 1);
     ok = ok && gguf_fread_el(&p->data, p->n,         file, offset);
 
     return ok;
 }
 
-struct gguf_context * gguf_init(const char * path, bool load) {
-    FILE * file = fopen(path, "rb");
+struct gguf_context * gguf_init(const char * fname, struct gguf_init_params params) {
+    FILE * file = fopen(fname, "rb");
     if (!file) {
         return NULL;
     }
@@ -18398,7 +18400,7 @@ struct gguf_context * gguf_init(const char * path, bool load) {
     uint32_t magic = 0;
     gguf_fread_el(&magic, sizeof(magic), file, &offset);
     if (magic != GGUF_MAGIC) {
-        fprintf(stderr, "gguf: invalid magic number %08x\n", magic);
+        fprintf(stderr, "%s: invalid magic number %08x\n", __func__, magic);
         fclose(file);
         return NULL;
     }
@@ -18408,13 +18410,17 @@ struct gguf_context * gguf_init(const char * path, bool load) {
     struct gguf_context * ctx = GGML_ALIGNED_MALLOC(sizeof(struct gguf_context));
 
     ctx->header.magic = magic;
+    ctx->header.kv    = NULL;
+
+    ctx->infos = NULL;
+    ctx->data  = NULL;
 
     ok = ok && gguf_fread_el(&ctx->header.version,   sizeof(ctx->header.version),   file, &offset);
     ok = ok && gguf_fread_el(&ctx->header.n_tensors, sizeof(ctx->header.n_tensors), file, &offset);
     ok = ok && gguf_fread_el(&ctx->header.n_kv,      sizeof(ctx->header.n_kv),      file, &offset);
 
     if (!ok) {
-        fprintf(stderr, "gguf: failed to read header\n");
+        fprintf(stderr, "%s: failed to read header\n", __func__);
         fclose(file);
         gguf_free(ctx);
         return NULL;
@@ -18430,24 +18436,15 @@ struct gguf_context * gguf_init(const char * path, bool load) {
         ok = ok && gguf_fread_el (&kv->type,    sizeof(kv->type),    file, &offset);
 
         switch (kv->type) {
-            case GGUF_TYPE_UINT8:
-                ok = ok && gguf_fread_el (&kv->value.uint8,   sizeof(kv->value.uint8),   file, &offset); break;
-            case GGUF_TYPE_INT8:
-                ok = ok && gguf_fread_el (&kv->value.int8,    sizeof(kv->value.int8),    file, &offset); break;
-            case GGUF_TYPE_UINT16:
-                ok = ok && gguf_fread_el (&kv->value.uint16,  sizeof(kv->value.uint16),  file, &offset); break;
-            case GGUF_TYPE_INT16:
-                ok = ok && gguf_fread_el (&kv->value.int16,   sizeof(kv->value.int16),   file, &offset); break;
-            case GGUF_TYPE_UINT32:
-                ok = ok && gguf_fread_el (&kv->value.uint32,  sizeof(kv->value.uint32),  file, &offset); break;
-            case GGUF_TYPE_INT32:
-                ok = ok && gguf_fread_el (&kv->value.int32,   sizeof(kv->value.int32),   file, &offset); break;
-            case GGUF_TYPE_FLOAT32:
-                ok = ok && gguf_fread_el (&kv->value.float32, sizeof(kv->value.float32), file, &offset); break;
-            case GGUF_TYPE_BOOL:
-                ok = ok && gguf_fread_el (&kv->value.bool_,   sizeof(kv->value.bool_),   file, &offset); break;
-            case GGUF_TYPE_STRING:
-                ok = ok && gguf_fread_str(&kv->value.str,                                file, &offset); break;
+            case GGUF_TYPE_UINT8:   ok = ok && gguf_fread_el (&kv->value.uint8,   sizeof(kv->value.uint8),   file, &offset); break;
+            case GGUF_TYPE_INT8:    ok = ok && gguf_fread_el (&kv->value.int8,    sizeof(kv->value.int8),    file, &offset); break;
+            case GGUF_TYPE_UINT16:  ok = ok && gguf_fread_el (&kv->value.uint16,  sizeof(kv->value.uint16),  file, &offset); break;
+            case GGUF_TYPE_INT16:   ok = ok && gguf_fread_el (&kv->value.int16,   sizeof(kv->value.int16),   file, &offset); break;
+            case GGUF_TYPE_UINT32:  ok = ok && gguf_fread_el (&kv->value.uint32,  sizeof(kv->value.uint32),  file, &offset); break;
+            case GGUF_TYPE_INT32:   ok = ok && gguf_fread_el (&kv->value.int32,   sizeof(kv->value.int32),   file, &offset); break;
+            case GGUF_TYPE_FLOAT32: ok = ok && gguf_fread_el (&kv->value.float32, sizeof(kv->value.float32), file, &offset); break;
+            case GGUF_TYPE_BOOL:    ok = ok && gguf_fread_el (&kv->value.bool_,   sizeof(kv->value.bool_),   file, &offset); break;
+            case GGUF_TYPE_STRING:  ok = ok && gguf_fread_str(&kv->value.str,                                file, &offset); break;
             case GGUF_TYPE_ARRAY:
                 GGML_ASSERT("gguf: array type not implemented");
                 break;
@@ -18455,8 +18452,7 @@ struct gguf_context * gguf_init(const char * path, bool load) {
     }
 
     if (!ok) {
-        fprintf(stderr, "gguf: failed to read key-value pairs\n");
-        free(ctx->header.kv);
+        fprintf(stderr, "%s: failed to read key-value pairs\n", __func__);
         fclose(file);
         gguf_free(ctx);
         return NULL;
@@ -18467,7 +18463,7 @@ struct gguf_context * gguf_init(const char * path, bool load) {
     for (uint32_t i = 0; i < ctx->header.n_tensors; ++i) {
         struct gguf_tensor_info * info = &ctx->infos[i];
 
-        memset(info->ne, 0, sizeof(info->ne));
+        memset(info->ne, 1, sizeof(info->ne));
 
         ok = ok && gguf_fread_str(&info->name,                          file, &offset);
         ok = ok && gguf_fread_el (&info->n_dims, sizeof(info->n_dims),  file, &offset);
@@ -18479,9 +18475,7 @@ struct gguf_context * gguf_init(const char * path, bool load) {
         ok = ok && gguf_fread_el (&info->offset,  sizeof(info->offset), file, &offset);
 
         if (!ok) {
-            fprintf(stderr, "gguf: failed to read tensor info\n");
-            free(ctx->header.kv);
-            free(ctx->infos);
+            fprintf(stderr, "%s: failed to read tensor info\n", __func__);
             fclose(file);
             gguf_free(ctx);
             return NULL;
@@ -18503,20 +18497,277 @@ struct gguf_context * gguf_init(const char * path, bool load) {
 
     ctx->offset = offset;
 
-    if (load) {
-        GGML_ASSERT("gguf: load not implemented");
-        // - compute total tensor size
-        // - allocate buffer
-        // - read tensor data into buffer
-        // - add gguf_get_tensor_data() API
-        // - maybe create a ggml_context and return it
+    ctx->size_data = 0;
+
+    for (uint32_t i = 0; i < ctx->header.n_tensors; ++i) {
+        struct gguf_tensor_info * info = &ctx->infos[i];
+
+        const int64_t ne =
+            (int64_t) info->ne[0] *
+            (int64_t) info->ne[1] *
+            (int64_t) info->ne[2] *
+            (int64_t) info->ne[3];
+
+        if (ne % ggml_blck_size(info->type) != 0) {
+            fprintf(stderr, "%s: tensor '%s' number of elements (%" PRId64 ") is not a multiple of block size (%d)\n",
+                    __func__, info->name.data, ne, ggml_blck_size(info->type));
+            fclose(file);
+            gguf_free(ctx);
+            return NULL;
+        }
+
+        const size_t size_cur = (ne*ggml_type_size(info->type))/ggml_blck_size(info->type);
+
+        // TODO: pad size_cur to alignment
+        ctx->size_data += size_cur;
+    }
+
+    // TODO: simplify
+    if (params.load) {
+        if (params.malloc) {
+            ctx->data = GGML_ALIGNED_MALLOC(ctx->size_data);
+            fseek(file, ctx->offset, SEEK_SET);
+            ok = ok && gguf_fread_el(ctx->data, ctx->size_data, file, &offset);
+        } else if (params.ctx != NULL) {
+            bool ctx_new = false;
+            bool ctx_no_alloc = false;
+
+            if (*params.ctx == NULL) {
+                const size_t mem_size =
+                    ctx->header.n_tensors*ggml_tensor_overhead() + 1 +
+                    ctx->size_data;
+
+                struct ggml_init_params pdata = {
+                    .mem_size   = mem_size,
+                    .mem_buffer = NULL,
+                    .no_alloc   = false,
+                };
+
+                *params.ctx = ggml_init(pdata);
+
+                ctx_new = true;
+            } else {
+                ctx_no_alloc = ggml_get_no_alloc(*params.ctx);
+                ggml_set_no_alloc(*params.ctx, false);
+            }
+
+            struct ggml_context * ctx_data = *params.ctx;
+
+            struct ggml_tensor * data = ggml_new_tensor_1d(ctx_data, GGML_TYPE_I8, ctx->size_data);
+
+            // read the tensor data
+            ok = ok && gguf_fread_el(data->data, ctx->size_data, file, &offset);
+
+            if (!ok) {
+                fprintf(stderr, "%s: failed to read tensor data\n", __func__);
+                fclose(file);
+                if (ctx_new) {
+                    ggml_free(ctx_data);
+                } else {
+                    ggml_set_no_alloc(ctx_data, ctx_no_alloc);
+                }
+                gguf_free(ctx);
+                return NULL;
+            }
+
+            ctx->data = data->data;
+
+            // create the tensors
+            ggml_set_no_alloc(ctx_data, true);
+
+            for (uint32_t i = 0; i < ctx->header.n_tensors; ++i) {
+                const int64_t ne[GGML_MAX_DIMS] = {
+                    ctx->infos[i].ne[0],
+                    ctx->infos[i].ne[1],
+                    ctx->infos[i].ne[2],
+                    ctx->infos[i].ne[3],
+                };
+
+                struct ggml_tensor * cur = ggml_new_tensor(ctx_data, ctx->infos[i].type, ctx->infos[i].n_dims, ne);
+
+                ok = ok && cur != NULL;
+
+                if (!ok) {
+                    break;
+                }
+
+                cur->data = (char *) data->data + ctx->infos[i].offset - ctx->offset;
+            }
+
+            if (!ok) {
+                fprintf(stderr, "%s: failed to create tensors\n", __func__);
+                fclose(file);
+                if (ctx_new) {
+                    ggml_free(ctx_data);
+                } else {
+                    ggml_set_no_alloc(ctx_data, ctx_no_alloc);
+                }
+                gguf_free(ctx);
+                return NULL;
+            }
+
+            ggml_set_no_alloc(ctx_data, ctx_no_alloc);
+        } else {
+            GGML_ASSERT("gguf: invalid params - load requires malloc or ctx");
+        }
+    }
+
+    if (!ok) {
+        fprintf(stderr, "%s: failed to read tensor data\n", __func__);
+        fclose(file);
+        gguf_free(ctx);
+        return NULL;
     }
 
     return ctx;
 }
 
 void gguf_free(struct gguf_context * ctx) {
+    if (ctx == NULL) {
+        return;
+    }
+
+    if (ctx->header.kv) {
+        // free string memory - not great..
+        for (uint32_t i = 0; i < ctx->header.n_kv; ++i) {
+            struct gguf_kv * kv = &ctx->header.kv[i];
+
+            if (kv->key.data) {
+                free(kv->key.data);
+            }
+
+            if (kv->type == GGUF_TYPE_STRING) {
+                if (kv->value.str.data) {
+                    free(kv->value.str.data);
+                }
+            }
+        }
+
+        GGML_ALIGNED_FREE(ctx->header.kv);
+    }
+
+    if (ctx->infos) {
+        for (uint32_t i = 0; i < ctx->header.n_tensors; ++i) {
+            struct gguf_tensor_info * info = &ctx->infos[i];
+
+            if (info->name.data) {
+                free(info->name.data);
+            }
+        }
+
+        GGML_ALIGNED_FREE(ctx->infos);
+    }
+
     GGML_ALIGNED_FREE(ctx);
+}
+
+int gguf_get_version(struct gguf_context * ctx) {
+    return ctx->header.version;
+}
+
+size_t gguf_get_alignment(struct gguf_context * ctx) {
+    return ctx->alignment;
+}
+
+size_t gguf_get_data_offset(struct gguf_context * ctx) {
+    return ctx->offset;
+}
+
+void * gguf_get_data(struct gguf_context * ctx) {
+    return ctx->data;
+}
+
+int gguf_get_n_kv(struct gguf_context * ctx) {
+    return ctx->header.n_kv;
+}
+
+const char * gguf_get_key(struct gguf_context * ctx, int i) {
+    return ctx->header.kv[i].key.data;
+}
+
+enum gguf_type gguf_get_type(struct gguf_context * ctx, int i) {
+    return ctx->header.kv[i].type;
+}
+
+void gguf_get_val(struct gguf_context * ctx, int i, void * val) {
+    struct gguf_kv * kv = &ctx->header.kv[i];
+
+    switch (kv->type) {
+        case GGUF_TYPE_UINT8:   memcpy(val, &kv->value.uint8,    sizeof(uint8_t));  break;
+        case GGUF_TYPE_INT8:    memcpy(val, &kv->value.int8,     sizeof(int8_t));   break;
+        case GGUF_TYPE_UINT16:  memcpy(val, &kv->value.uint16,   sizeof(uint16_t)); break;
+        case GGUF_TYPE_INT16:   memcpy(val, &kv->value.int16,    sizeof(int16_t));  break;
+        case GGUF_TYPE_UINT32:  memcpy(val, &kv->value.uint32,   sizeof(uint32_t)); break;
+        case GGUF_TYPE_INT32:   memcpy(val, &kv->value.int32,    sizeof(int32_t));  break;
+        case GGUF_TYPE_FLOAT32: memcpy(val, &kv->value.float32,  sizeof(float));    break;
+        case GGUF_TYPE_BOOL:    memcpy(val, &kv->value.bool_,    sizeof(bool));     break;
+        case GGUF_TYPE_STRING:  memcpy(val, &kv->value.str.data, sizeof(char *));   break;
+        default:
+            GGML_ASSERT("gguf: not implemented");
+            break;
+    }
+}
+
+uint8_t gguf_get_val_u8(struct gguf_context * ctx, int i) {
+    uint8_t val;
+    gguf_get_val(ctx, i, &val);
+    return val;
+}
+
+int8_t gguf_get_val_i8(struct gguf_context * ctx, int i) {
+    int8_t val;
+    gguf_get_val(ctx, i, &val);
+    return val;
+}
+
+uint16_t gguf_get_val_u16(struct gguf_context * ctx, int i) {
+    uint16_t val;
+    gguf_get_val(ctx, i, &val);
+    return val;
+}
+
+int16_t gguf_get_val_i16(struct gguf_context * ctx, int i) {
+    int16_t val;
+    gguf_get_val(ctx, i, &val);
+    return val;
+}
+
+uint32_t gguf_get_val_u32(struct gguf_context * ctx, int i) {
+    uint32_t val;
+    gguf_get_val(ctx, i, &val);
+    return val;
+}
+
+int32_t gguf_get_val_i32(struct gguf_context * ctx, int i) {
+    int32_t val;
+    gguf_get_val(ctx, i, &val);
+    return val;
+}
+
+float gguf_get_val_f32(struct gguf_context * ctx, int i) {
+    float val;
+    gguf_get_val(ctx, i, &val);
+    return val;
+}
+
+bool gguf_get_val_bool(struct gguf_context * ctx, int i) {
+    bool val;
+    gguf_get_val(ctx, i, &val);
+    return val;
+}
+
+const char * gguf_get_val_str (struct gguf_context * ctx, int i) {
+    char * val;
+    gguf_get_val(ctx, i, &val);
+    return val;
+}
+
+int gguf_get_n_tensors(struct gguf_context * ctx) {
+    return ctx->header.n_tensors;
+}
+
+size_t gguf_get_tensor_offset(struct gguf_context * ctx, int i) {
+    return ctx->infos[i].offset;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

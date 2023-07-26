@@ -1634,12 +1634,23 @@ extern "C" {
 
     struct gguf_context;
 
-    GGML_API struct gguf_context * gguf_init(const char * path, bool load);
+    struct gguf_init_params {
+        bool load;   // load the tensor data
+        bool malloc; // if false, use the provided ggml_context to allocate the tensor data
+                     //           it no ggml_context is provided, it will be created
+                     // if true,  use malloc to allocate the tensor data
+
+        struct ggml_context ** ctx;
+    };
+
+    GGML_API struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_params params);
+    //GGML_API struct gguf_context * gguf_init_from_buffer(..);
     GGML_API void                  gguf_free(struct gguf_context * ctx);
 
     GGML_API int    gguf_get_version    (struct gguf_context * ctx);
     GGML_API size_t gguf_get_alignment  (struct gguf_context * ctx);
     GGML_API size_t gguf_get_data_offset(struct gguf_context * ctx);
+    GGML_API void * gguf_get_data       (struct gguf_context * ctx);
 
     GGML_API int            gguf_get_n_kv(struct gguf_context * ctx);
     GGML_API const char *   gguf_get_key (struct gguf_context * ctx, int i);
