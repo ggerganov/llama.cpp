@@ -1636,9 +1636,8 @@ extern "C" {
 
     struct gguf_init_params {
         bool load;   // load the tensor data
-        bool malloc; // if false, use the provided ggml_context to allocate the tensor data
-                     //           it no ggml_context is provided, it will be created
-                     // if true,  use malloc to allocate the tensor data
+        bool malloc; // if false, create a ggml_context and allocate the tensor data in it
+                     // if  true, use malloc to allocate the tensor data instead
 
         struct ggml_context ** ctx;
     };

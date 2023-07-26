@@ -18388,6 +18388,8 @@ static bool gguf_fread_str(void * dst, FILE * file, size_t * offset) {
 }
 
 struct gguf_context * gguf_init(const char * fname, struct gguf_init_params params) {
+    GGML_ASSERT(!params.load || params.malloc || params.ctx != NULL);
+
     FILE * file = fopen(fname, "rb");
     if (!file) {
         return NULL;
@@ -18518,8 +18520,7 @@ struct gguf_context * gguf_init(const char * fname, struct gguf_init_params para
 
         const size_t size_cur = (ne*ggml_type_size(info->type))/ggml_blck_size(info->type);
 
-        // TODO: pad size_cur to alignment
-        ctx->size_data += size_cur;
+        ctx->size_data += GGML_PAD(size_cur, ctx->alignment);
     }
 
     // TODO: simplify
@@ -18528,28 +18529,18 @@ struct gguf_context * gguf_init(const char * fname, struct gguf_init_params para
             ctx->data = GGML_ALIGNED_MALLOC(ctx->size_data);
             fseek(file, ctx->offset, SEEK_SET);
             ok = ok && gguf_fread_el(ctx->data, ctx->size_data, file, &offset);
-        } else if (params.ctx != NULL) {
-            bool ctx_new = false;
-            bool ctx_no_alloc = false;
+        } else {
+            const size_t mem_size =
+                ctx->header.n_tensors*ggml_tensor_overhead() + 1 +
+                ctx->size_data;
 
-            if (*params.ctx == NULL) {
-                const size_t mem_size =
-                    ctx->header.n_tensors*ggml_tensor_overhead() + 1 +
-                    ctx->size_data;
+            struct ggml_init_params pdata = {
+                .mem_size   = mem_size,
+                .mem_buffer = NULL,
+                .no_alloc   = false,
+            };
 
-                struct ggml_init_params pdata = {
-                    .mem_size   = mem_size,
-                    .mem_buffer = NULL,
-                    .no_alloc   = false,
-                };
-
-                *params.ctx = ggml_init(pdata);
-
-                ctx_new = true;
-            } else {
-                ctx_no_alloc = ggml_get_no_alloc(*params.ctx);
-                ggml_set_no_alloc(*params.ctx, false);
-            }
+            *params.ctx = ggml_init(pdata);
 
             struct ggml_context * ctx_data = *params.ctx;
 
@@ -18561,11 +18552,7 @@ struct gguf_context * gguf_init(const char * fname, struct gguf_init_params para
             if (!ok) {
                 fprintf(stderr, "%s: failed to read tensor data\n", __func__);
                 fclose(file);
-                if (ctx_new) {
-                    ggml_free(ctx_data);
-                } else {
-                    ggml_set_no_alloc(ctx_data, ctx_no_alloc);
-                }
+                ggml_free(ctx_data);
                 gguf_free(ctx);
                 return NULL;
             }
@@ -18597,18 +18584,12 @@ struct gguf_context * gguf_init(const char * fname, struct gguf_init_params para
             if (!ok) {
                 fprintf(stderr, "%s: failed to create tensors\n", __func__);
                 fclose(file);
-                if (ctx_new) {
-                    ggml_free(ctx_data);
-                } else {
-                    ggml_set_no_alloc(ctx_data, ctx_no_alloc);
-                }
+                ggml_free(ctx_data);
                 gguf_free(ctx);
                 return NULL;
             }
 
-            ggml_set_no_alloc(ctx_data, ctx_no_alloc);
-        } else {
-            GGML_ASSERT("gguf: invalid params - load requires malloc or ctx");
+            ggml_set_no_alloc(ctx_data, false);
         }
     }
 
