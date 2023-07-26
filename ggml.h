@@ -208,6 +208,7 @@
 
 #define GGML_UNUSED(x) (void)(x)
 
+#define GGML_PAD(x, n) (((x) + (n) - 1) & ~((n) - 1))
 
 #define GGML_ASSERT(x) \
     do { \
