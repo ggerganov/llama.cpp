@@ -190,6 +190,9 @@
 #define GGML_FILE_MAGIC   0x67676d6c // "ggml"
 #define GGML_FILE_VERSION 1
 
+#define GGUF_FILE_MAGIC   0x47475546 // "GGUF"
+#define GGUF_FILE_VERSION 1
+
 #define GGML_QNT_VERSION        2    // bump this on quantization format changes
 #define GGML_QNT_VERSION_FACTOR 1000 // do not change this
 
@@ -201,7 +204,6 @@
 #define GGML_MAX_NAME          48
 #define GGML_MAX_OP_PARAMS     32
 #define GGML_DEFAULT_N_THREADS 4
-
 
 #define GGML_EXIT_SUCCESS 0
 #define GGML_EXIT_ABORTED 1
@@ -1611,6 +1613,27 @@ extern "C" {
 
     GGML_API size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, int start, int n, int64_t * hist);
 
+    //
+    // gguf
+    //
+
+    enum gguf_metadata_value_type {
+        GGUF_METADATA_VALUE_TYPE_UINT8   = 0,
+        GGUF_METADATA_VALUE_TYPE_INT8    = 1,
+        GGUF_METADATA_VALUE_TYPE_UINT16  = 2,
+        GGUF_METADATA_VALUE_TYPE_INT16   = 3,
+        GGUF_METADATA_VALUE_TYPE_UINT32  = 4,
+        GGUF_METADATA_VALUE_TYPE_INT32   = 5,
+        GGUF_METADATA_VALUE_TYPE_FLOAT32 = 6,
+        GGUF_METADATA_VALUE_TYPE_BOOL    = 7,
+        GGUF_METADATA_VALUE_TYPE_STRING  = 8,
+        GGUF_METADATA_VALUE_TYPE_ARRAY   = 9,
+    };
+
+    struct gguf_string {
+        uint32_t n;
+        char * data;
+    };
     //
     // system info
     //

@@ -45,6 +45,7 @@ models-mnt
 /server
 /Pipfile
 /embd-input-test
+/gguf
 /libllama.so
 build-info.h
 arm_neon.h
