@@ -258,8 +258,10 @@ struct llama_server_context
         return true;
     }
 
-    std::vector<llama_token> tokenizePrompt(json json_prompt)
+    std::vector<llama_token> tokenize(json json_prompt, bool add_bos)
     {
+        // If `add_bos` is true, we only add BOS, when json_prompt is a string,
+        // or the first element of the json_prompt array is a string.
         std::vector<llama_token> prompt_tokens;
 
         if (json_prompt.is_array())
@@ -274,7 +276,7 @@ struct llama_server_context
                     if (first)
                     {
                         s.insert(0, 1, ' '); // add a space if it's the first
-                        p = ::llama_tokenize(ctx, s, true); // also add BOS
+                        p = ::llama_tokenize(ctx, s, add_bos);
                         first = false;
                     }
                     else
@@ -297,7 +299,7 @@ struct llama_server_context
         {
             auto s = json_prompt.template get<std::string>();
             s.insert(0, 1, ' '); // always add a first space
-            prompt_tokens = ::llama_tokenize(ctx, s, true);
+            prompt_tokens = ::llama_tokenize(ctx, s, add_bos);
         }
 
         return prompt_tokens;
@@ -305,7 +307,7 @@ struct llama_server_context
 
     void loadPrompt()
     {
-        auto prompt_tokens = tokenizePrompt(prompt);
+        auto prompt_tokens = tokenize(prompt, true);  // always add BOS
 
         num_prompt_tokens = prompt_tokens.size();
 
@@ -1327,7 +1329,7 @@ int main(int argc, char **argv)
         std::vector<llama_token> tokens;
         if (body.count("content") != 0)
         {
-            tokens = llama.tokenizePrompt(body["content"]);
+            tokens = llama.tokenize(body["content"], false);
         }
         const json data = format_tokenizer_response(tokens);
         return res.set_content(data.dump(), "application/json"); });
