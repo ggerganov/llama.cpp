@@ -4610,6 +4610,8 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         /*.data         =*/ (data == NULL && !ctx->no_alloc) ? (void *)(result + 1) : data,
         /*.name         =*/ { 0 },
         /*.extra        =*/ NULL,
+        /*.n_children   =*/ 0,
+        /*.n_views      =*/ 0,
         /*.padding      =*/ { 0 },
     };
 
@@ -6739,6 +6741,18 @@ struct ggml_tensor * ggml_rope_inplace(
         int                   mode,
         int                   n_ctx) {
     return ggml_rope_impl(ctx, a, n_past, n_dims, mode, n_ctx, 10000.0f, 1.0f, true);
+}
+
+struct ggml_tensor * ggml_rope_custom(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int                   n_past,
+        int                   n_dims,
+        int                   mode,
+        int                   n_ctx,
+        float                 freq_base,
+        float                 freq_scale) {
+    return ggml_rope_impl(ctx, a, n_past, n_dims, mode, n_ctx, freq_base, freq_scale, false);
 }
 
 struct ggml_tensor * ggml_rope_custom_inplace(
