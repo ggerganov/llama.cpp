@@ -18407,99 +18407,112 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
     // offset from start of file
     size_t offset = 0;
 
-    // check the magic before making allocations
     uint32_t magic = 0;
-    gguf_fread_el(&magic, sizeof(magic), file, &offset);
-    if (magic != GGUF_MAGIC) {
-        fprintf(stderr, "%s: invalid magic number %08x\n", __func__, magic);
-        fclose(file);
-        return NULL;
+
+    // check the magic before making allocations
+    {
+        gguf_fread_el(&magic, sizeof(magic), file, &offset);
+
+        if (magic != GGUF_MAGIC) {
+            fprintf(stderr, "%s: invalid magic number %08x\n", __func__, magic);
+            fclose(file);
+            return NULL;
+        }
     }
 
     bool ok = true;
 
     struct gguf_context * ctx = GGML_ALIGNED_MALLOC(sizeof(struct gguf_context));
 
-    ctx->header.magic = magic;
-    ctx->header.kv    = NULL;
+    // read the header
+    {
+        ctx->header.magic = magic;
+        ctx->header.kv    = NULL;
 
-    ctx->infos = NULL;
-    ctx->data  = NULL;
+        ctx->infos = NULL;
+        ctx->data  = NULL;
 
-    ok = ok && gguf_fread_el(&ctx->header.version,   sizeof(ctx->header.version),   file, &offset);
-    ok = ok && gguf_fread_el(&ctx->header.n_tensors, sizeof(ctx->header.n_tensors), file, &offset);
-    ok = ok && gguf_fread_el(&ctx->header.n_kv,      sizeof(ctx->header.n_kv),      file, &offset);
-
-    if (!ok) {
-        fprintf(stderr, "%s: failed to read header\n", __func__);
-        fclose(file);
-        gguf_free(ctx);
-        return NULL;
-    }
-
-    ctx->header.kv = GGML_ALIGNED_MALLOC(ctx->header.n_kv * sizeof(struct gguf_kv));
-
-    for (uint32_t i = 0; i < ctx->header.n_kv; ++i) {
-        struct gguf_kv * kv = &ctx->header.kv[i];
-
-        //fprintf(stderr, "%s: reading kv %d\n", __func__, i);
-
-        ok = ok && gguf_fread_str(&kv->key,                          file, &offset);
-      //ok = ok && gguf_fread_el (&kv->n_bytes, sizeof(kv->n_bytes), file, &offset);
-        ok = ok && gguf_fread_el (&kv->type,    sizeof(kv->type),    file, &offset);
-
-        //fprintf(stderr, "%s: reading kv with key %s\n", __func__, kv->key.data);
-
-        switch (kv->type) {
-            case GGUF_TYPE_UINT8:   ok = ok && gguf_fread_el (&kv->value.uint8,   sizeof(kv->value.uint8),   file, &offset); break;
-            case GGUF_TYPE_INT8:    ok = ok && gguf_fread_el (&kv->value.int8,    sizeof(kv->value.int8),    file, &offset); break;
-            case GGUF_TYPE_UINT16:  ok = ok && gguf_fread_el (&kv->value.uint16,  sizeof(kv->value.uint16),  file, &offset); break;
-            case GGUF_TYPE_INT16:   ok = ok && gguf_fread_el (&kv->value.int16,   sizeof(kv->value.int16),   file, &offset); break;
-            case GGUF_TYPE_UINT32:  ok = ok && gguf_fread_el (&kv->value.uint32,  sizeof(kv->value.uint32),  file, &offset); break;
-            case GGUF_TYPE_INT32:   ok = ok && gguf_fread_el (&kv->value.int32,   sizeof(kv->value.int32),   file, &offset); break;
-            case GGUF_TYPE_FLOAT32: ok = ok && gguf_fread_el (&kv->value.float32, sizeof(kv->value.float32), file, &offset); break;
-            case GGUF_TYPE_BOOL:    ok = ok && gguf_fread_el (&kv->value.bool_,   sizeof(kv->value.bool_),   file, &offset); break;
-            case GGUF_TYPE_STRING:  ok = ok && gguf_fread_str(&kv->value.str,                                file, &offset); break;
-            case GGUF_TYPE_ARRAY:
-                                    GGML_ASSERT("gguf: array type not implemented");
-                                    break;
-        };
+        ok = ok && gguf_fread_el(&ctx->header.version,   sizeof(ctx->header.version),   file, &offset);
+        ok = ok && gguf_fread_el(&ctx->header.n_tensors, sizeof(ctx->header.n_tensors), file, &offset);
+        ok = ok && gguf_fread_el(&ctx->header.n_kv,      sizeof(ctx->header.n_kv),      file, &offset);
 
         if (!ok) {
-            break;
-        }
-    }
-
-    if (!ok) {
-        fprintf(stderr, "%s: failed to read key-value pairs\n", __func__);
-        fclose(file);
-        gguf_free(ctx);
-        return NULL;
-    }
-
-    ctx->infos = GGML_ALIGNED_MALLOC(ctx->header.n_tensors * sizeof(struct gguf_tensor_info));
-
-    for (uint32_t i = 0; i < ctx->header.n_tensors; ++i) {
-        struct gguf_tensor_info * info = &ctx->infos[i];
-
-        for (int j = 0; j < GGML_MAX_DIMS; ++j) {
-            info->ne[j] = 1;
-        }
-
-        ok = ok && gguf_fread_str(&info->name,                          file, &offset);
-        ok = ok && gguf_fread_el (&info->n_dims, sizeof(info->n_dims),  file, &offset);
-        for (uint32_t j = 0; j < info->n_dims; ++j) {
-            ok = ok && gguf_fread_el(&info->ne[j], sizeof(info->ne[j]), file, &offset);
-        }
-      //ok = ok && gguf_fread_el (&info->n_elms, sizeof(info->n_elms),  file, &offset);
-        ok = ok && gguf_fread_el (&info->type,    sizeof(info->type),   file, &offset);
-        ok = ok && gguf_fread_el (&info->offset,  sizeof(info->offset), file, &offset);
-
-        if (!ok) {
-            fprintf(stderr, "%s: failed to read tensor info\n", __func__);
+            fprintf(stderr, "%s: failed to read header\n", __func__);
             fclose(file);
             gguf_free(ctx);
             return NULL;
+        }
+    }
+
+    // read the kv pairs
+    {
+        ctx->header.kv = GGML_ALIGNED_MALLOC(ctx->header.n_kv * sizeof(struct gguf_kv));
+
+        for (uint32_t i = 0; i < ctx->header.n_kv; ++i) {
+            struct gguf_kv * kv = &ctx->header.kv[i];
+
+            //fprintf(stderr, "%s: reading kv %d\n", __func__, i);
+
+            ok = ok && gguf_fread_str(&kv->key,                          file, &offset);
+          //ok = ok && gguf_fread_el (&kv->n_bytes, sizeof(kv->n_bytes), file, &offset);
+            ok = ok && gguf_fread_el (&kv->type,    sizeof(kv->type),    file, &offset);
+
+            //fprintf(stderr, "%s: reading kv with key %s\n", __func__, kv->key.data);
+
+            switch (kv->type) {
+                case GGUF_TYPE_UINT8:   ok = ok && gguf_fread_el (&kv->value.uint8,   sizeof(kv->value.uint8),   file, &offset); break;
+                case GGUF_TYPE_INT8:    ok = ok && gguf_fread_el (&kv->value.int8,    sizeof(kv->value.int8),    file, &offset); break;
+                case GGUF_TYPE_UINT16:  ok = ok && gguf_fread_el (&kv->value.uint16,  sizeof(kv->value.uint16),  file, &offset); break;
+                case GGUF_TYPE_INT16:   ok = ok && gguf_fread_el (&kv->value.int16,   sizeof(kv->value.int16),   file, &offset); break;
+                case GGUF_TYPE_UINT32:  ok = ok && gguf_fread_el (&kv->value.uint32,  sizeof(kv->value.uint32),  file, &offset); break;
+                case GGUF_TYPE_INT32:   ok = ok && gguf_fread_el (&kv->value.int32,   sizeof(kv->value.int32),   file, &offset); break;
+                case GGUF_TYPE_FLOAT32: ok = ok && gguf_fread_el (&kv->value.float32, sizeof(kv->value.float32), file, &offset); break;
+                case GGUF_TYPE_BOOL:    ok = ok && gguf_fread_el (&kv->value.bool_,   sizeof(kv->value.bool_),   file, &offset); break;
+                case GGUF_TYPE_STRING:  ok = ok && gguf_fread_str(&kv->value.str,                                file, &offset); break;
+                case GGUF_TYPE_ARRAY:
+                                        GGML_ASSERT("gguf: array type not implemented");
+                                        break;
+            };
+
+            if (!ok) {
+                break;
+            }
+        }
+
+        if (!ok) {
+            fprintf(stderr, "%s: failed to read key-value pairs\n", __func__);
+            fclose(file);
+            gguf_free(ctx);
+            return NULL;
+        }
+    }
+
+    // read the tensor infos
+    {
+        ctx->infos = GGML_ALIGNED_MALLOC(ctx->header.n_tensors * sizeof(struct gguf_tensor_info));
+
+        for (uint32_t i = 0; i < ctx->header.n_tensors; ++i) {
+            struct gguf_tensor_info * info = &ctx->infos[i];
+
+            for (int j = 0; j < GGML_MAX_DIMS; ++j) {
+                info->ne[j] = 1;
+            }
+
+            ok = ok && gguf_fread_str(&info->name,                          file, &offset);
+            ok = ok && gguf_fread_el (&info->n_dims, sizeof(info->n_dims),  file, &offset);
+            for (uint32_t j = 0; j < info->n_dims; ++j) {
+                ok = ok && gguf_fread_el(&info->ne[j], sizeof(info->ne[j]), file, &offset);
+            }
+          //ok = ok && gguf_fread_el (&info->n_elms, sizeof(info->n_elms),  file, &offset);
+            ok = ok && gguf_fread_el (&info->type,   sizeof(info->type),    file, &offset);
+            ok = ok && gguf_fread_el (&info->offset, sizeof(info->offset),  file, &offset);
+
+            if (!ok) {
+                fprintf(stderr, "%s: failed to read tensor info\n", __func__);
+                fclose(file);
+                gguf_free(ctx);
+                return NULL;
+            }
         }
     }
 
@@ -18507,6 +18520,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
     // TODO: determine new alignment from kv if available
 
+    // we require the data section to be aligned, so take into account any padding
     {
         const size_t offset_pad = offset % ctx->alignment;
 
@@ -18516,38 +18530,46 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         }
     }
 
+    // store the current file offset - this is where the data section starts
     ctx->offset = offset;
 
-    ctx->size_data = 0;
+    // compute the total size of the data section, taking into account the alignment
+    {
 
-    for (uint32_t i = 0; i < ctx->header.n_tensors; ++i) {
-        struct gguf_tensor_info * info = &ctx->infos[i];
+        ctx->size_data = 0;
+        for (uint32_t i = 0; i < ctx->header.n_tensors; ++i) {
+            struct gguf_tensor_info * info = &ctx->infos[i];
 
-        const int64_t ne =
-            (int64_t) info->ne[0] *
-            (int64_t) info->ne[1] *
-            (int64_t) info->ne[2] *
-            (int64_t) info->ne[3];
+            const int64_t ne =
+                (int64_t) info->ne[0] *
+                (int64_t) info->ne[1] *
+                (int64_t) info->ne[2] *
+                (int64_t) info->ne[3];
 
-        if (ne % ggml_blck_size(info->type) != 0) {
-            fprintf(stderr, "%s: tensor '%s' number of elements (%" PRId64 ") is not a multiple of block size (%d)\n",
-                    __func__, info->name.data, ne, ggml_blck_size(info->type));
-            fclose(file);
-            gguf_free(ctx);
-            return NULL;
+            if (ne % ggml_blck_size(info->type) != 0) {
+                fprintf(stderr, "%s: tensor '%s' number of elements (%" PRId64 ") is not a multiple of block size (%d)\n",
+                        __func__, info->name.data, ne, ggml_blck_size(info->type));
+                fclose(file);
+                gguf_free(ctx);
+                return NULL;
+            }
+
+            const size_t size_cur = (ne*ggml_type_size(info->type))/ggml_blck_size(info->type);
+
+            ctx->size_data += GGML_PAD(size_cur, ctx->alignment);
         }
-
-        const size_t size_cur = (ne*ggml_type_size(info->type))/ggml_blck_size(info->type);
-
-        ctx->size_data += GGML_PAD(size_cur, ctx->alignment);
     }
 
-    // load the tensor data
-    // TODO: simplify
+    // load the tensor data only if requested
     if (params.ctx != NULL) {
+        // if the provided gguf_context is no_alloc, then we create "empty" tensors and do not read the binary blob
+        // otherwise, we load the binary blob into the created ggml_context as well, and point the "data" members of
+        // the ggml_tensor structs to the appropriate locations in the binary blob
+
+        // compute the exact size needed for the new ggml_context
         const size_t mem_size =
             params.no_alloc ?
-            (ctx->header.n_tensors + 1)*ggml_tensor_overhead() :
+            (ctx->header.n_tensors    )*ggml_tensor_overhead() :
             (ctx->header.n_tensors + 1)*ggml_tensor_overhead() + ctx->size_data;
 
         struct ggml_init_params pdata = {
@@ -18567,7 +18589,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
             ok = ok && data != NULL;
 
-            // read the tensor data
+            // read the binary blob with the tensor data
             ok = ok && gguf_fread_el(data->data, ctx->size_data, file, &offset);
 
             if (!ok) {
@@ -18602,6 +18624,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                 break;
             }
 
+            // point the data member to the appropriate location in the binary blob using the tensor infos
             if (params.no_alloc == false) {
               //cur->data = (char *) data->data + ctx->infos[i].offset - ctx->offset; // offset from start of file
                 cur->data = (char *) data->data + ctx->infos[i].offset;               // offset from data
@@ -18609,7 +18632,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         }
 
         if (!ok) {
-            fprintf(stderr, "%s: failed to create tensors\n", __func__);
+            fprintf(stderr, "%s: failed to read the tensor data\n", __func__);
             fclose(file);
             ggml_free(ctx_data);
             gguf_free(ctx);
@@ -18617,13 +18640,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         }
 
         ggml_set_no_alloc(ctx_data, params.no_alloc);
-    }
-
-    if (!ok) {
-        fprintf(stderr, "%s: failed to read tensor data\n", __func__);
-        fclose(file);
-        gguf_free(ctx);
-        return NULL;
     }
 
     return ctx;
