@@ -1619,19 +1619,6 @@ extern "C" {
     // gguf
     //
 
-    enum gguf_type {
-        GGUF_TYPE_UINT8   = 0,
-        GGUF_TYPE_INT8    = 1,
-        GGUF_TYPE_UINT16  = 2,
-        GGUF_TYPE_INT16   = 3,
-        GGUF_TYPE_UINT32  = 4,
-        GGUF_TYPE_INT32   = 5,
-        GGUF_TYPE_FLOAT32 = 6,
-        GGUF_TYPE_BOOL    = 7,
-        GGUF_TYPE_STRING  = 8,
-        GGUF_TYPE_ARRAY   = 9,
-    };
-
     struct gguf_context;
 
     struct gguf_init_params {
@@ -1651,10 +1638,9 @@ extern "C" {
     GGML_API size_t gguf_get_data_offset(struct gguf_context * ctx);
     GGML_API void * gguf_get_data       (struct gguf_context * ctx);
 
-    GGML_API int            gguf_get_n_kv(struct gguf_context * ctx);
-    GGML_API const char *   gguf_get_key (struct gguf_context * ctx, int i);
-    GGML_API enum gguf_type gguf_get_type(struct gguf_context * ctx, int i);
-    GGML_API void           gguf_get_val (struct gguf_context * ctx, int i, void * val);
+    GGML_API int          gguf_get_n_kv(struct gguf_context * ctx);
+    GGML_API const char * gguf_get_key (struct gguf_context * ctx, int i);
+    GGML_API void         gguf_get_val (struct gguf_context * ctx, int i, void * val);
 
     GGML_API uint8_t      gguf_get_val_u8  (struct gguf_context * ctx, int i);
     GGML_API int8_t       gguf_get_val_i8  (struct gguf_context * ctx, int i);
