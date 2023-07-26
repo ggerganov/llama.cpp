@@ -34,7 +34,7 @@ struct gpt_params {
     int32_t main_gpu                        = 0;    // the GPU that is used for scratch and small tensors
     float   tensor_split[LLAMA_MAX_DEVICES] = {0};  // how split tensors should be distributed across GPUs
     int32_t n_probs                         = 0;    // if greater than 0, output the probabilities of top n_probs tokens.
-    float   rms_norm_eps                    = 1e-6; // rms norm epsilon
+    float   rms_norm_eps                    = LLAMA_DEFAULT_RMS_EPS; // rms norm epsilon
     float   rope_freq_base                  = 10000.0f; // RoPE base frequency
     float   rope_freq_scale                 = 1.0f;     // RoPE frequency scaling factor
 
@@ -82,6 +82,7 @@ struct gpt_params {
     bool interactive_first = false; // wait for user input immediately
     bool multiline_input   = false; // reverse the usage of `\`
 
+    bool input_prefix_bos  = false; // prefix BOS to user inputs, preceding input_prefix
     bool instruct          = false; // instruction mode (used for Alpaca models)
     bool penalize_nl       = true;  // consider newlines as a repeatable token
     bool perplexity        = false; // compute perplexity over the prompt
