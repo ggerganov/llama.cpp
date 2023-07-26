@@ -4535,10 +4535,10 @@ static struct ggml_object * ggml_new_object( struct ggml_context * ctx, enum ggm
     }
 
     *obj_new = (struct ggml_object) {
-        .type = type,
         .offs = cur_end + GGML_OBJECT_SIZE,
         .size = size_needed,
         .next = NULL,
+        .type = type,
     };
 
     ggml_assert_aligned(mem_buffer + obj_new->offs);
