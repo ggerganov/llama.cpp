@@ -476,11 +476,11 @@ extern "C" {
 #include <vector>
 #include <string>
 
-static std::string llama_token_to_str(
+std::string llama_token_to_str(
         const struct llama_context * ctx,
                        llama_token   token);
 
-static std::string llama_token_to_str_bpe(
+std::string llama_token_to_str_bpe(
     const struct llama_context * ctx,
                    llama_token   token);
 

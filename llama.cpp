@@ -4205,7 +4205,7 @@ int llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token, 
     if (0 <= token && token < llama_n_vocab_from_model(&ctx->model)) {
         std::string result = ctx->model.vocab.id_to_token[token].tok;
         if (result.length() > length) {
-            return -result.length();
+            return - result.length();
         }
         strcpy(str, result.c_str());
         return result.length();
