@@ -18297,7 +18297,7 @@ size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, i
 
 ////////////////////////////////////////////////////////////////////////////////
 
-struct gguf_string {
+struct gguf_str {
     uint32_t n;
     char * data;
 };
@@ -18314,7 +18314,7 @@ union gguf_value {
     float    float32;
     bool     bool_;
 
-    struct gguf_string str;
+    struct gguf_str str;
 
     struct {
         enum gguf_type type;
@@ -18325,7 +18325,7 @@ union gguf_value {
 };
 
 struct gguf_kv {
-    struct gguf_string key;
+    struct gguf_str key;
 
     uint32_t n_bytes; // TODO: is this actually needed?
 
@@ -18337,13 +18337,13 @@ struct gguf_header {
     uint32_t magic;
     uint32_t version;
     uint32_t n_tensors;
-
     uint32_t n_kv;
+
     struct gguf_kv * kv;
 };
 
 struct gguf_tensor_info {
-    struct gguf_string name;
+    struct gguf_str name;
 
     uint32_t n_dims;
     uint32_t ne[GGML_MAX_DIMS];
@@ -18363,6 +18363,114 @@ struct gguf_context {
     uint8_t * padding;
     uint8_t * data;
 };
+
+static bool gguf_fread_el(void * dst, size_t size, FILE * file, size_t * offset) {
+    const size_t n = fread(dst, 1, size, file);
+    *offset += n;
+    return n == size;
+}
+
+static bool gguf_fread_str(void * dst, FILE * file, size_t * offset) {
+    struct gguf_str * p = (struct gguf_str *) dst;
+
+    p->n    = 0;
+    p->data = NULL;
+
+    bool ok = true;
+
+    ok = ok && gguf_fread_el(&p->n,    sizeof(p->n), file, offset);
+    ok = ok && gguf_fread_el(&p->data, p->n,         file, offset);
+
+    return ok;
+}
+
+struct gguf_context * gguf_init(const char * path, bool load) {
+    FILE * file = fopen(path, "rb");
+    if (!file) {
+        return NULL;
+    }
+
+    // offset from start of file
+    size_t offset = 0;
+
+    // check the magic before making allocations
+    uint32_t magic = 0;
+    gguf_fread_el(&magic, sizeof(magic), file, &offset);
+    if (magic != GGUF_MAGIC) {
+        fprintf(stderr, "gguf: invalid magic number %08x\n", magic);
+        fclose(file);
+        return NULL;
+    }
+
+    bool ok = true;
+
+    struct gguf_context * ctx = GGML_ALIGNED_MALLOC(sizeof(struct gguf_context));
+
+    ctx->header.magic = magic;
+
+    ok = ok && gguf_fread_el(&ctx->header.version,   sizeof(ctx->header.version),   file, &offset);
+    ok = ok && gguf_fread_el(&ctx->header.n_tensors, sizeof(ctx->header.n_tensors), file, &offset);
+    ok = ok && gguf_fread_el(&ctx->header.n_kv,      sizeof(ctx->header.n_kv),      file, &offset);
+
+    if (!ok) {
+        fprintf(stderr, "gguf: failed to read header\n");
+        fclose(file);
+        gguf_free(ctx);
+        return NULL;
+    }
+
+    ctx->header.kv = GGML_ALIGNED_MALLOC(ctx->header.n_kv * sizeof(struct gguf_kv));
+
+    for (uint32_t i = 0; i < ctx->header.n_kv; ++i) {
+        struct gguf_kv * kv = &ctx->header.kv[i];
+
+        ok = ok && gguf_fread_str(&kv->key,                          file, &offset);
+      //ok = ok && gguf_fread_el (&kv->n_bytes, sizeof(kv->n_bytes), file, &offset);
+        ok = ok && gguf_fread_el (&kv->type,    sizeof(kv->type),    file, &offset);
+
+        switch (kv->type) {
+            case GGUF_TYPE_UINT8:
+                ok = ok && gguf_fread_el (&kv->value.uint8,   sizeof(kv->value.uint8),   file, &offset); break;
+            case GGUF_TYPE_INT8:
+                ok = ok && gguf_fread_el (&kv->value.int8,    sizeof(kv->value.int8),    file, &offset); break;
+            case GGUF_TYPE_UINT16:
+                ok = ok && gguf_fread_el (&kv->value.uint16,  sizeof(kv->value.uint16),  file, &offset); break;
+            case GGUF_TYPE_INT16:
+                ok = ok && gguf_fread_el (&kv->value.int16,   sizeof(kv->value.int16),   file, &offset); break;
+            case GGUF_TYPE_UINT32:
+                ok = ok && gguf_fread_el (&kv->value.uint32,  sizeof(kv->value.uint32),  file, &offset); break;
+            case GGUF_TYPE_INT32:
+                ok = ok && gguf_fread_el (&kv->value.int32,   sizeof(kv->value.int32),   file, &offset); break;
+            case GGUF_TYPE_FLOAT32:
+                ok = ok && gguf_fread_el (&kv->value.float32, sizeof(kv->value.float32), file, &offset); break;
+            case GGUF_TYPE_BOOL:
+                ok = ok && gguf_fread_el (&kv->value.bool_,   sizeof(kv->value.bool_),   file, &offset); break;
+            case GGUF_TYPE_STRING:
+                ok = ok && gguf_fread_str(&kv->value.str,                                file, &offset); break;
+            case GGUF_TYPE_ARRAY:
+                GGML_ASSERT("gguf: array type not implemented");
+                break;
+            };
+    }
+
+    if (!ok) {
+        fprintf(stderr, "gguf: failed to read key-value pairs\n");
+        free(ctx->header.kv);
+        fclose(file);
+        gguf_free(ctx);
+        return NULL;
+    }
+
+    ctx->alignment = GGUF_DEFAULT_ALIGNMENT;
+
+
+
+    return ctx;
+}
+
+void gguf_free(struct gguf_context * ctx) {
+    GGML_ALIGNED_FREE(ctx);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 

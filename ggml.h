@@ -190,9 +190,6 @@
 #define GGML_FILE_MAGIC   0x67676d6c // "ggml"
 #define GGML_FILE_VERSION 1
 
-#define GGUF_FILE_MAGIC   0x47475546 // "GGUF"
-#define GGUF_FILE_VERSION 1
-
 #define GGML_QNT_VERSION        2    // bump this on quantization format changes
 #define GGML_QNT_VERSION_FACTOR 1000 // do not change this
 
@@ -204,10 +201,14 @@
 #define GGML_MAX_NAME          48
 #define GGML_MAX_OP_PARAMS     32
 #define GGML_DEFAULT_N_THREADS 4
-#define GGUF_DEFAULT_ALIGNMENT 32
 
 #define GGML_EXIT_SUCCESS 0
 #define GGML_EXIT_ABORTED 1
+
+#define GGUF_MAGIC   0x47475546 // "GGUF"
+#define GGUF_VERSION 1
+
+#define GGUF_DEFAULT_ALIGNMENT 32
 
 #define GGML_UNUSED(x) (void)(x)
 
@@ -1633,8 +1634,8 @@ extern "C" {
 
     struct gguf_context;
 
-    GGML_API struct gguf_context * gguf_gguf_init(const char * path);
-    GGML_API void                  gguf_gguf_free(struct gguf_context * ctx);
+    GGML_API struct gguf_context * gguf_init(const char * path, bool load);
+    GGML_API void                  gguf_free(struct gguf_context * ctx);
 
     GGML_API int    gguf_get_version    (struct gguf_context * ctx);
     GGML_API size_t gguf_get_alignment  (struct gguf_context * ctx);
