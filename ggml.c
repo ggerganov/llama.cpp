@@ -4383,7 +4383,6 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         return NULL;
     }
 
-    // REVIEW: this was probably a bug - the size was always padded even if the user provided the buffer
     const size_t mem_size = params.mem_buffer ? params.mem_size : GGML_PAD(params.mem_size, GGML_MEM_ALIGN);
 
     *ctx = (struct ggml_context) {
