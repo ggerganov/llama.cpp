@@ -57,13 +57,13 @@
 #endif
 
 #if !defined(GGML_USE_CUBLAS) && !defined(GGML_USE_METAL)
-#  include "ggml-alloc.h"
-#  define LLAMA_USE_ALLOCATOR
+#include "ggml-alloc.h"
+#define LLAMA_USE_ALLOCATOR
 #else
-#  define LLAMA_USE_SCRATCH
+#define LLAMA_USE_SCRATCH
+#define LLAMA_MAX_SCRATCH_BUFFERS 16
 #endif
 
-#define LLAMA_MAX_SCRATCH_BUFFERS 16
 
 // available llama models
 enum e_model {
@@ -333,13 +333,22 @@ struct llama_model {
 
 struct llama_context {
     llama_context(const llama_model & model) : model(model), t_load_us(model.t_load_us), t_start_us(model.t_start_us) {}
-#ifdef GGML_USE_METAL
     ~llama_context() {
+        if (model_owner) {
+            delete &model;
+        }
+#ifdef GGML_USE_METAL
         if (ctx_metal) {
             ggml_metal_free(ctx_metal);
         }
-    }
 #endif
+#ifdef LLAMA_USE_ALLOCATOR
+        if (alloc) {
+            ggml_allocator_free(alloc);
+        }
+#endif
+    }
+
     std::mt19937 rng;
 
     bool has_evaluated_once = false;
@@ -1397,7 +1406,6 @@ static struct ggml_cgraph * llama_build_graph(
     const int64_t n_head      = hparams.n_head;
     const int64_t n_head_kv   = hparams.n_head_kv;
     const int64_t n_embd_head = hparams.n_embd_head();
-    //const int64_t n_vocab     = hparams.n_vocab;
     const int64_t n_embd_gqa  = hparams.n_embd_gqa();
 
     LLAMA_ASSERT(n_embd_head == hparams.n_rot);
@@ -1408,6 +1416,7 @@ static struct ggml_cgraph * llama_build_graph(
 
     const int n_gpu_layers = model.n_gpu_layers;
 
+    auto & mem_per_token = lctx.mem_per_token;
     auto & buf_compute   = lctx.buf_compute;
 
 
@@ -1730,9 +1739,22 @@ static struct ggml_cgraph * llama_build_graph(
 
     ggml_build_forward_expand(gf, cur);
 
-    // outputs: cur, embeddings
+    if (mem_per_token == 0) {
+        mem_per_token = ggml_used_mem(ctx0)/N;
+    }
+
+#if 0
+    printf("\n%s: used_mem: eval ctx %.3f MB, scratch %.3f MB %.3f MB, work buf %.3f MB, n_past = %d, N = %d\n", __func__,
+            ggml_used_mem(ctx0)/1024.0/1024.0,
+            lctx.get_buf_max_mem(0)/1024.0/1024.0,
+            lctx.get_buf_max_mem(1)/1024.0/1024.0,
+            lctx.work_buffer.size()/1024.0/1024.0,
+            n_past, N);
+#endif
+
     ggml_free(ctx0);
 
+    // outputs: cur, embeddings
     return gf;
 
 #ifdef LLAMA_USE_ALLOCATOR
@@ -1779,15 +1801,7 @@ static bool llama_eval_internal(
     LLAMA_ASSERT(!!kv_self.ctx);
 
     const int64_t n_embd      = hparams.n_embd;
-    const int64_t n_layer     = hparams.n_layer;
-    //const int64_t n_ctx       = hparams.n_ctx;
-    //const int64_t n_head      = hparams.n_head;
-    //const int64_t n_head_kv   = hparams.n_head_kv;
-    //const int64_t n_embd_head = hparams.n_embd_head();
     const int64_t n_vocab     = hparams.n_vocab;
-    //const int64_t n_embd_gqa  = hparams.n_embd_gqa();
-
-    //auto & mem_per_token = lctx.mem_per_token;
 
 #ifdef LLAMA_USE_ALLOCATOR
     ggml_allocator_reset(lctx.alloc);
@@ -1796,8 +1810,7 @@ static bool llama_eval_internal(
     ggml_cgraph * gf = llama_build_graph(lctx, tokens, embd, n_tokens, n_past);
 
 #ifdef LLAMA_USE_ALLOCATOR
-    size_t sz = ggml_allocator_alloc_graph_tensors(lctx.alloc, gf);
-    //fprintf(stderr, "%s: compute buffer size: %.3f MB\n", __func__, sz / 1024.0 / 1024.0);
+    ggml_allocator_alloc_graph_tensors(lctx.alloc, gf);
 #endif
 
     // fprintf(stderr, "graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf.n_nodes, gf.n_leafs);
@@ -1807,6 +1820,7 @@ static bool llama_eval_internal(
     n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
 
 #if GGML_USE_MPI
+    const int64_t n_layer = hparams.n_layer;
     ggml_mpi_graph_compute_pre(lctx.ctx_mpi, gf, n_layer);
 #endif
 
@@ -1891,19 +1905,6 @@ static bool llama_eval_internal(
         embedding_out.resize(n_embd);
         memcpy(embedding_out.data(), (float *) ggml_get_data(embeddings) + (n_embd*(N - 1)), sizeof(float)*n_embd);
     }
-
-    //if (mem_per_token == 0) {
-    //    mem_per_token = ggml_used_mem(ctx0)/N;
-    //}
-
-#if 0
-    printf("\n%s: used_mem: eval ctx %.3f MB, scratch %.3f MB %.3f MB, work buf %.3f MB, n_past = %d, N = %d\n", __func__,
-            ggml_used_mem(ctx0)/1024.0/1024.0,
-            lctx.get_buf_max_mem(0)/1024.0/1024.0,
-            lctx.get_buf_max_mem(1)/1024.0/1024.0,
-            lctx.work_buffer.size()/1024.0/1024.0,
-            n_past, N);
-#endif
 
     // measure the performance only for the single-token evals
     if (N == 1) {
@@ -3272,7 +3273,7 @@ struct llama_context * llama_new_context_with_model(
 
 #ifdef LLAMA_USE_ALLOCATOR
         static const size_t tensor_alignment = 32;
-        ctx->buf_compute.resize(ggml_tensor_overhead() * 3072 + ggml_graph_overhead());
+        ctx->buf_compute.resize(ggml_tensor_overhead()*GGML_MAX_NODES + ggml_graph_overhead());
 
         // measure memory requirements for worst-case graph
         ctx->alloc = ggml_allocator_new_measure(tensor_alignment);
@@ -3372,9 +3373,6 @@ struct llama_context * llama_init_from_file(
 }
 
 void llama_free(struct llama_context * ctx) {
-    if (ctx->model_owner) {
-        delete &ctx->model;
-    }
     delete ctx;
 }
 
