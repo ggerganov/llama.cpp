@@ -124,30 +124,30 @@ class GGUFWriter:
         if vtype is None:
             vtype = GGUFValueType.get_type(val)
 
-        self.buffered_writer.write(struct.pack("<I", vtype))
+        self.fout.write(struct.pack("<I", vtype))
 
         if vtype == GGUFValueType.UINT8:
-            self.buffered_writer.write(struct.pack("<B", val))
+            self.fout.write(struct.pack("<B", val))
         elif vtype == GGUFValueType.INT8:
-            self.buffered_writer.write(struct.pack("<b", val))
+            self.fout.write(struct.pack("<b", val))
         elif vtype == GGUFValueType.UINT16:
-            self.buffered_writer.write(struct.pack("<H", val))
+            self.fout.write(struct.pack("<H", val))
         elif vtype == GGUFValueType.INT16:
-            self.buffered_writer.write(struct.pack("<h", val))
+            self.fout.write(struct.pack("<h", val))
         elif vtype == GGUFValueType.UINT32:
-            self.buffered_writer.write(struct.pack("<I", val))
+            self.fout.write(struct.pack("<I", val))
         elif vtype == GGUFValueType.INT32:
-            self.buffered_writer.write(struct.pack("<i", val))
+            self.fout.write(struct.pack("<i", val))
         elif vtype == GGUFValueType.FLOAT32:
-            self.buffered_writer.write(struct.pack("<f", val))
+            self.fout.write(struct.pack("<f", val))
         elif vtype == GGUFValueType.BOOL:
-            self.buffered_writer.write(struct.pack("?", val))
+            self.fout.write(struct.pack("?", val))
         elif vtype == GGUFValueType.STRING:
             encoded_val = val.encode("utf8")
-            self.buffered_writer.write(struct.pack("<I", len(encoded_val)))
-            self.buffered_writer.write(encoded_val)
+            self.fout.write(struct.pack("<I", len(encoded_val)))
+            self.fout.write(encoded_val)
         elif vtype == GGUFValueType.ARRAY:
-            self.buffered_writer.write(struct.pack("<I", len(val)))
+            self.fout.write(struct.pack("<I", len(val)))
             for item in val:
                 self.write_val(item)
         else:
@@ -158,12 +158,13 @@ class GGUFWriter:
         return ((x + n - 1) // n) * n
 
     def write_tensor_info(self, name: str, tensor: np.ndarray):
-        self.write_val(key, GGUFValueType.STRING)
+        self.write_val(name, GGUFValueType.STRING)
         n_dims = len(tensor.shape)
         self.write_val(n_dims, GGUFValueType.INT32)
         for i in range(n_dims):
-            self.write_val(tensor.shape[N_dims - 1 - i], GGUFValueType.INT32)
+            self.write_val(tensor.shape[n_dims - 1 - i], GGUFValueType.INT32)
 
+        assert tensor.dtype in (np.float32, np.float16), "Only F32 and F16 tensors are supported for now"
         dtype = GGMLQuantizationType.F32 if tensor.dtype == np.float32 else GGMLQuantizationType.F16
         self.write_val(dtype, GGUFValueType.INT32)
         self.fout.write(struct.pack("<Q", self.offset_tensor))
@@ -268,14 +269,15 @@ class GGUFWriter:
 if __name__ == "__main__":
     # Example usage with a file
     gguf_writer = GGUFWriter.open("example.gguf")
-    gguf_writer.write_header(0, 3)
+    gguf_writer.write_header(2, 3)
 
-gguf_writer.write_architecture("llama")
-gguf_writer.write_uint32("answer", 42)  # Write a 32-bit integer
-gguf_writer.write_float32("answer_in_float", 42.0)  # Write a 32-bit float
-# Write an array of integers
-#gguf_writer.write_array("simple_array", [1, 2, 3, 4])
-# Write a nested array
-#gguf_writer.write_array("nested", [1, "nested", [2, 3]])
+    gguf_writer.write_architecture("llama")
+    gguf_writer.write_uint32("answer", 42)  # Write a 32-bit integer
+    gguf_writer.write_float32("answer_in_float", 42.0)  # Write a 32-bit float
+    tensor1 = np.random.random(size=(7, 10)).astype(np.float32)
+    tensor2 = np.random.random(size=(16, 12)).astype(np.float16)
+    gguf_writer.write_tensor_info("tensor1", tensor1)
+    gguf_writer.write_tensor_info("tensor2", tensor2)
+    gguf_writer.write_tensors()
 
 gguf_writer.close()
