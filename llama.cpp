@@ -1252,12 +1252,16 @@ static void llama_model_load_internal(
         const size_t scale = memory_type == GGML_TYPE_F32 ? 2 : 1;
 
         // this is the total memory required to run the inference
-        const size_t mem_required =
+        size_t mem_required =
             ctx_size +
-            mmapped_size - vram_weights + // weights in VRAM not in memory
+            mmapped_size - vram_weights; // weights in VRAM not in memory
+
+#ifndef LLAMA_USE_ALLOCATOR
+        mem_required +=
             MEM_REQ_SCRATCH0(hparams.n_ctx).at(model.type) +
             MEM_REQ_SCRATCH1().at(model.type) +
             MEM_REQ_EVAL().at(model.type);
+#endif
 
         // this is the memory required by one llama_state
         const size_t mem_required_state =
@@ -3272,30 +3276,38 @@ struct llama_context * llama_new_context_with_model(
         }
 
 #ifdef LLAMA_USE_ALLOCATOR
-        static const size_t tensor_alignment = 32;
-        ctx->buf_compute.resize(ggml_tensor_overhead()*GGML_MAX_NODES + ggml_graph_overhead());
+        {
+            static const size_t tensor_alignment = 32;
+            // the compute buffer is used to store the tensor and graph structs, while the allocator buffer is used for the tensor data
+            ctx->buf_compute.resize(ggml_tensor_overhead()*GGML_MAX_NODES + ggml_graph_overhead());
 
-        // measure memory requirements for worst-case graph
-        ctx->alloc = ggml_allocator_new_measure(tensor_alignment);
+            // create measure allocator
+            ctx->alloc = ggml_allocator_new_measure(tensor_alignment);
 
-        // build worst-case graph
-        int n_tokens = std::min((int)hparams.n_ctx, params.n_batch);
-        int n_past = hparams.n_ctx - n_tokens;
-        llama_token token = llama_token_bos();
-        ggml_cgraph * gf = llama_build_graph(*ctx, &token, NULL, n_tokens, n_past);
+            // build worst-case graph
+            int n_tokens = std::min((int)hparams.n_ctx, params.n_batch);
+            int n_past = hparams.n_ctx - n_tokens;
+            llama_token token = llama_token_bos(); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
+            ggml_cgraph * gf = llama_build_graph(*ctx, &token, NULL, n_tokens, n_past);
 
-        size_t size = ggml_allocator_alloc_graph_tensors(ctx->alloc, gf) + tensor_alignment;
-        fprintf(stderr, "%s: worst-case graph size = %7.2f MB\n", __func__, size / 1024.0 / 1024.0);
-        fprintf(stderr, "%s: compute buffer total size: %7.2f MB\n", __func__, (ctx->buf_compute.size + size) / 1024.0 / 1024.0);
+            // measure memory requirements for the graph
+            size_t alloc_size = ggml_allocator_alloc_graph_tensors(ctx->alloc, gf) + tensor_alignment;
 
-        size_t prev_req = MEM_REQ_SCRATCH0(hparams.n_ctx).at(ctx->model.type) + MEM_REQ_SCRATCH1().at(ctx->model.type) + MEM_REQ_EVAL().at(ctx->model.type);
-        fprintf(stderr, "%s: equivalent with scratch buffer: %7.2f MB\n", __func__, prev_req / 1024.0 / 1024.0);
+            fprintf(stderr, "%s: compute buffer total size = %7.2f MB\n", __func__, (ctx->buf_compute.size + alloc_size) / 1024.0 / 1024.0);
 
+            // debug - for comparison with scratch buffer
+            //size_t prev_req =
+            //    MEM_REQ_SCRATCH0(hparams.n_ctx).at(ctx->model.type) +
+            //    MEM_REQ_SCRATCH1().at(ctx->model.type) +
+            //    MEM_REQ_EVAL().at(ctx->model.type);
+            //fprintf(stderr, "%s: (debug) equivalent with scratch buffer = %7.2f MB\n", __func__, prev_req / 1024.0 / 1024.0);
 
-        // recreate allocator with exact memory requirements
-        ggml_allocator_free(ctx->alloc);
-        ctx->buf_alloc.resize(size);
-        ctx->alloc = ggml_allocator_new(ctx->buf_alloc.addr, ctx->buf_alloc.size, tensor_alignment);
+            // recreate allocator with exact memory requirements
+            ggml_allocator_free(ctx->alloc);
+
+            ctx->buf_alloc.resize(alloc_size);
+            ctx->alloc = ggml_allocator_new(ctx->buf_alloc.addr, ctx->buf_alloc.size, tensor_alignment);
+        }
 #else
         ctx->buf_compute.resize(MEM_REQ_EVAL().at(ctx->model.type) + ggml_graph_overhead());
 #endif
