@@ -71,63 +71,56 @@ class GGUFWriter:
         f = open(path, "wb")
         return cls(f)
 
-    def write_key(self, key: str, value_type: GGUFValueType):
-        encoded_key = key.encode("utf8")
-        self.buffered_writer.write(struct.pack("<I", len(encoded_key)))
-        self.buffered_writer.write(encoded_key)
-        self.buffered_writer.write(struct.pack("<I", value_type))
+    def write_key(self, key: str):
+        self.write_value(key, GGUFValueType.STRING)
 
     def write_uint8(self, key: str, value: int):
-        self.write_key(key, GGUFValueType.UINT8)
-        self.buffered_writer.write(struct.pack("<B", value))
+        self.write_key(key)
+        self.write_value(value, GGUFValueType.UINT8)
 
     def write_int8(self, key: str, value: int):
-        self.write_key(key, GGUFValueType.INT8)
-        self.buffered_writer.write(struct.pack("<b", value))
+        self.write_key(key)
+        self.write_value(value, GGUFValueType.INT8)
 
     def write_uint16(self, key: str, value: int):
-        self.write_key(key, GGUFValueType.UINT16)
-        self.buffered_writer.write(struct.pack("<H", value))
+        self.write_key(key)
+        self.write_value(value, GGUFValueType.UINT16)
 
     def write_int16(self, key: str, value: int):
-        self.write_key(key, GGUFValueType.INT16)
-        self.buffered_writer.write(struct.pack("<h", value))
+        self.write_key(key)
+        self.write_value(value, GGUFValueType.INT16)
 
     def write_uint32(self, key: str, value: int):
-        self.write_key(key, GGUFValueType.UINT32)
-        self.buffered_writer.write(struct.pack("<I", value))
+        self.write_key(key)
+        self.write(value, GGUFValueType.UINT32)
 
     def write_int32(self, key: str, value: int):
-        self.write_key(key, GGUFValueType.INT32)
-        self.buffered_writer.write(struct.pack("<i", value))
+        self.write_key(key)
+        self.write_value(value, GGUFValueType.INT32)
 
     def write_float32(self, key: str, value: float):
-        self.write_key(key, GGUFValueType.FLOAT32)
-        self.buffered_writer.write(struct.pack("<f", value))
+        self.write_key(key)
+        self.write_value(value, GGUFValueType.FLOAT32)
 
     def write_bool(self, key: str, value: bool):
-        self.write_key(key, GGUFValueType.BOOL)
-        self.buffered_writer.write(struct.pack("<?", value))
+        self.write_key(key)
+        self.write_value(value, GGUFValueType.BOOL)
 
     def write_string(self, key: str, value: str):
-        self.write_key(key, GGUFValueType.STRING)
-        encoded_string = value.encode('utf-8')
-        self.buffered_writer.write(struct.pack("<I", len(encoded_string)))
-        self.buffered_writer.write(encoded_string)
+        self.write_key(key)
+        self.write_value(value, GGUFValueType.STRING)
 
     def write_array(self, key: str, value: list):
         if not isinstance(value, list):
             raise ValueError("Value must be a list for array type")
 
-        self.write_key(key, GGUFValueType.ARRAY)
+        self.write_key(key)
+        self.write_value(value, GGUFValueType.ARRAY)
 
-        self.buffered_writer.write(struct.pack("<I", len(value)))
+    def write_value(self: str, value: Any, value_type: GGUFValueType = None):
+        if value_type is None:
+            value_type = GGUFValueType.get_type(value)
 
-        for item in value:
-            self.write_value(item)
-
-    def write_value(self: str, value: Any):
-        value_type = GGUFValueType.get_type(value)
         self.buffered_writer.write(struct.pack("<I", value_type))
 
         if value_type == GGUFValueType.UINT8:
