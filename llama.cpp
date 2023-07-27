@@ -1923,7 +1923,7 @@ struct llama_tokenizer {
             if (token == vocab_.token_to_id.end()) {
                 // output any symbols that did not form tokens as bytes.
                 for (int j = 0; j < (int) symbol.n; ++j) {
-                    llama_vocab::id token_id = static_cast<uint8_t>(symbol.text[j]) + 3;
+                    llama_vocab::id token_id = vocab_.token_to_id.at(std::string(1, symbol.text[j]));
                     output.push_back(token_id);
                 }
             } else {
