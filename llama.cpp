@@ -1708,9 +1708,6 @@ static struct ggml_cgraph * llama_build_graph(
 
     lctx.use_buf(ctx0, 0);
 
-    // used at the end to optionally extract the embeddings
-    struct ggml_tensor * embeddings = NULL;
-
     // norm
     {
         cur = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
@@ -1721,11 +1718,6 @@ static struct ggml_cgraph * llama_build_graph(
         cur = ggml_mul(ctx0, cur, model.norm);
         // offload_func_nr(cur); // TODO CPU + GPU mirrored backend
         ggml_set_name(cur, "result_norm");
-
-        embeddings = cur;
-#ifdef LLAMA_USE_ALLOCATOR
-    // TODO: ensure that embeddings is not freed
-#endif
     }
 
     // lm_head
@@ -1754,7 +1746,6 @@ static struct ggml_cgraph * llama_build_graph(
 
     ggml_free(ctx0);
 
-    // outputs: cur, embeddings
     return gf;
 
 #ifdef LLAMA_USE_ALLOCATOR
@@ -1864,10 +1855,10 @@ static bool llama_eval_internal(
     lctx.kv_self.n = n_past + N;
 
     struct ggml_tensor * res = gf->nodes[gf->n_nodes - 1];
-    struct ggml_tensor * embeddings = NULL;
+    struct ggml_tensor * embeddings = gf->nodes[gf->n_nodes - 2];
 
     LLAMA_ASSERT(strcmp(res->name, "result_output") == 0);
-    //LLAMA_ASSERT(strcmp(embeddings->name, "result_norm") == 0);
+    LLAMA_ASSERT(strcmp(embeddings->name, "result_norm") == 0);
 
     if (cgraph_fname) {
         ggml_graph_export(gf, cgraph_fname);
