@@ -1,9 +1,8 @@
 # Define the default target now so that it is always the first target
-BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-text-from-scratch
+BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-text-from-scratch simple server embd-input-test
 
-ifdef LLAMA_BUILD_SERVER
-	BUILD_TARGETS += server
-endif
+# Binaries only useful for tests
+TEST_TARGETS = tests/test-double-float tests/test-grad0 tests/test-opt tests/test-quantize-fns tests/test-quantize-perf tests/test-sampling tests/test-tokenizer-0
 
 default: $(BUILD_TARGETS)
 
@@ -41,8 +40,11 @@ endif
 
 # keep standard at C11 and C++11
 # -Ofast tends to produce faster code, but may not be available for some compilers.
-#OPT = -Ofast
+ifdef LLAMA_FAST
+OPT = -Ofast
+else
 OPT = -O3
+endif
 CFLAGS   = -I.              $(OPT) -std=c11   -fPIC
 CXXFLAGS = -I. -I./examples $(OPT) -std=c++11 -fPIC
 LDFLAGS  =
@@ -56,8 +58,13 @@ else
 	CXXFLAGS += -DNDEBUG
 endif
 
+ifdef LLAMA_SERVER_VERBOSE
+	CXXFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
+endif
+
 # warnings
-CFLAGS   += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith
+CFLAGS   += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith \
+			-Wmissing-prototypes
 CXXFLAGS += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-multichar
 
 # OS specific
@@ -87,6 +94,28 @@ ifeq ($(UNAME_S),Haiku)
 	CXXFLAGS += -pthread
 endif
 
+# detect Windows
+ifneq ($(findstring _NT,$(UNAME_S)),)
+	_WIN32 := 1
+endif
+
+# library name prefix
+ifneq ($(_WIN32),1)
+	LIB_PRE := lib
+endif
+
+# Dynamic Shared Object extension
+ifneq ($(_WIN32),1)
+	DSO_EXT := .so
+else
+	DSO_EXT := .dll
+endif
+
+# Windows Sockets 2 (Winsock) for network-capable apps
+ifeq ($(_WIN32),1)
+	LWINSOCK2 := -lws2_32
+endif
+
 ifdef LLAMA_GPROF
 	CFLAGS   += -pg
 	CXXFLAGS += -pg
@@ -99,7 +128,7 @@ endif
 # Architecture specific
 # TODO: probably these flags need to be tweaked on some architectures
 #       feel free to update the Makefile for your architecture and send a pull request or issue
-ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
+ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
 	# Use all CPU extensions that are available:
 	CFLAGS   += -march=native -mtune=native
 	CXXFLAGS += -march=native -mtune=native
@@ -129,6 +158,10 @@ ifndef LLAMA_NO_K_QUANTS
 	CFLAGS   += -DGGML_USE_K_QUANTS
 	CXXFLAGS += -DGGML_USE_K_QUANTS
 	OBJS     += k_quants.o
+ifdef LLAMA_QKK_64
+	CFLAGS   += -DGGML_QKK_64
+	CXXFLAGS += -DGGML_QKK_64
+endif
 endif
 
 ifndef LLAMA_NO_ACCELERATE
@@ -140,13 +173,15 @@ ifndef LLAMA_NO_ACCELERATE
 	endif
 endif # LLAMA_NO_ACCELERATE
 
+ifdef LLAMA_MPI
+	CFLAGS += -DGGML_USE_MPI -Wno-cast-qual
+	CXXFLAGS += -DGGML_USE_MPI -Wno-cast-qual
+	OBJS     += ggml-mpi.o
+endif # LLAMA_MPI
+
 ifdef LLAMA_OPENBLAS
-	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/openblas -I/usr/include/openblas
-	ifneq ($(shell grep -e "Arch Linux" -e "ID_LIKE=arch" /etc/os-release 2>/dev/null),)
-		LDFLAGS += -lopenblas -lcblas
-	else
-		LDFLAGS += -lopenblas
-	endif
+	CFLAGS  += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags openblas)
+	LDFLAGS += $(shell pkg-config --libs openblas)
 endif # LLAMA_OPENBLAS
 
 ifdef LLAMA_BLIS
@@ -159,30 +194,57 @@ ifdef LLAMA_CUBLAS
 	CXXFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
 	LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
 	OBJS      += ggml-cuda.o
-	NVCC      = nvcc
-	NVCCFLAGS = --forward-unknown-to-host-compiler -arch=native
+	NVCCFLAGS = --forward-unknown-to-host-compiler
+ifdef LLAMA_CUDA_NVCC
+	NVCC = $(LLAMA_CUDA_NVCC)
+else
+	NVCC = nvcc
+endif #LLAMA_CUDA_NVCC
+ifdef CUDA_DOCKER_ARCH
+	NVCCFLAGS += -Wno-deprecated-gpu-targets -arch=$(CUDA_DOCKER_ARCH)
+else
+	NVCCFLAGS += -arch=native
+endif # CUDA_DOCKER_ARCH
+ifdef LLAMA_CUDA_FORCE_DMMV
+	NVCCFLAGS += -DGGML_CUDA_FORCE_DMMV
+endif # LLAMA_CUDA_FORCE_DMMV
 ifdef LLAMA_CUDA_DMMV_X
 	NVCCFLAGS += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
 else
 	NVCCFLAGS += -DGGML_CUDA_DMMV_X=32
 endif # LLAMA_CUDA_DMMV_X
-ifdef LLAMA_CUDA_DMMV_Y
-	NVCCFLAGS += -DGGML_CUDA_DMMV_Y=$(LLAMA_CUDA_DMMV_Y)
+ifdef LLAMA_CUDA_MMV_Y
+	NVCCFLAGS += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_MMV_Y)
+else ifdef LLAMA_CUDA_DMMV_Y
+	NVCCFLAGS += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_DMMV_Y) # for backwards compatibility
 else
-	NVCCFLAGS += -DGGML_CUDA_DMMV_Y=1
-endif # LLAMA_CUDA_DMMV_Y
+	NVCCFLAGS += -DGGML_CUDA_MMV_Y=1
+endif # LLAMA_CUDA_MMV_Y
+ifdef LLAMA_CUDA_DMMV_F16
+	NVCCFLAGS += -DGGML_CUDA_DMMV_F16
+endif # LLAMA_CUDA_DMMV_F16
+ifdef LLAMA_CUDA_KQUANTS_ITER
+	NVCCFLAGS += -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
+else
+	NVCCFLAGS += -DK_QUANTS_PER_ITERATION=2
+endif
+ifdef LLAMA_CUDA_CCBIN
+	NVCCFLAGS += -ccbin $(LLAMA_CUDA_CCBIN)
+endif
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -Wno-pedantic -c $< -o $@
 endif # LLAMA_CUBLAS
 
 ifdef LLAMA_CLBLAST
-	CFLAGS   += -DGGML_USE_CLBLAST
-	CXXFLAGS += -DGGML_USE_CLBLAST
+
+	CFLAGS   += -DGGML_USE_CLBLAST $(shell pkg-config --cflags clblast OpenCL)
+	CXXFLAGS += -DGGML_USE_CLBLAST $(shell pkg-config --cflags clblast OpenCL)
+
 	# Mac provides OpenCL as a framework
 	ifeq ($(UNAME_S),Darwin)
 		LDFLAGS += -lclblast -framework OpenCL
 	else
-		LDFLAGS += -lclblast -lOpenCL
+		LDFLAGS += $(shell pkg-config --libs clblast OpenCL)
 	endif
 	OBJS    += ggml-opencl.o
 
@@ -195,9 +257,6 @@ ifdef LLAMA_METAL
 	CXXFLAGS += -DGGML_USE_METAL
 	LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit -framework MetalPerformanceShaders
 	OBJS     += ggml-metal.o
-
-ggml-metal.o: ggml-metal.m ggml-metal.h
-	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_METAL
 
 ifneq ($(filter aarch64%,$(UNAME_M)),)
@@ -221,6 +280,16 @@ ifneq ($(filter armv8%,$(UNAME_M)),)
 	# Raspberry Pi 3, 4, Zero 2 (32-bit)
 	CFLAGS += -mfp16-format=ieee -mno-unaligned-access
 endif
+
+ifdef LLAMA_METAL
+ggml-metal.o: ggml-metal.m ggml-metal.h
+	$(CC) $(CFLAGS) -c $< -o $@
+endif # LLAMA_METAL
+
+ifdef LLAMA_MPI
+ggml-mpi.o: ggml-mpi.c ggml-mpi.h
+	$(CC) $(CFLAGS) -c $< -o $@
+endif # LLAMA_MPI
 
 ifdef LLAMA_NO_K_QUANTS
 k_quants.o: k_quants.c k_quants.h
@@ -249,27 +318,33 @@ $(info )
 ggml.o: ggml.c ggml.h ggml-cuda.h
 	$(CC)  $(CFLAGS)   -c $< -o $@
 
-llama.o: llama.cpp ggml.h ggml-cuda.h llama.h llama-util.h
+llama.o: llama.cpp ggml.h ggml-cuda.h ggml-metal.h llama.h llama-util.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common.o: examples/common.cpp examples/common.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+grammar-parser.o: examples/grammar-parser.cpp examples/grammar-parser.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 libllama.so: llama.o ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
 clean:
-	rm -vf *.o *.so main quantize quantize-stats perplexity embedding benchmark-matmult save-load-state server vdot train-text-from-scratch build-info.h
+	rm -vf *.o *.so *.dll main quantize quantize-stats perplexity embedding benchmark-matmult save-load-state server simple vdot train-text-from-scratch embd-input-test build-info.h $(TEST_TARGETS)
 
 #
 # Examples
 #
 
-main: examples/main/main.cpp                                  build-info.h ggml.o llama.o common.o $(OBJS)
+main: examples/main/main.cpp                                  build-info.h ggml.o llama.o common.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
+
+simple: examples/simple/simple.cpp                            build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 quantize: examples/quantize/quantize.cpp                      build-info.h ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
@@ -286,8 +361,15 @@ embedding: examples/embedding/embedding.cpp                   build-info.h ggml.
 save-load-state: examples/save-load-state/save-load-state.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-server: examples/server/server.cpp examples/server/httplib.h examples/server/json.hpp build-info.h ggml.o llama.o common.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -Iexamples/server $(filter-out %.h,$(filter-out %.hpp,$^)) -o $@ $(LDFLAGS)
+server: examples/server/server.cpp examples/server/httplib.h examples/server/json.hpp examples/server/index.html.hpp examples/server/index.js.hpp examples/server/completion.js.hpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) -Iexamples/server $(filter-out %.h,$(filter-out %.hpp,$^)) -o $@ $(LDFLAGS) $(LWINSOCK2)
+
+$(LIB_PRE)embdinput$(DSO_EXT): examples/embd-input/embd-input.h examples/embd-input/embd-input-lib.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) --shared $(CXXFLAGS) $(filter-out %.h,$(filter-out %.hpp,$^)) -o $@ $(LDFLAGS)
+
+
+embd-input-test: $(LIB_PRE)embdinput$(DSO_EXT) examples/embd-input/embd-input-test.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %$(DSO_EXT),$(filter-out %.h,$(filter-out %.hpp,$^))) -o $@ $(LDFLAGS) -L. -lembdinput
 
 train-text-from-scratch: examples/train-text-from-scratch/train-text-from-scratch.cpp    build-info.h ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
@@ -304,6 +386,8 @@ build-info.h: $(wildcard .git/index) scripts/build-info.sh
 # Tests
 #
 
+tests: $(TEST_TARGETS)
+
 benchmark-matmult: examples/benchmark/benchmark-matmult.cpp build-info.h ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 	./$@
@@ -311,6 +395,23 @@ benchmark-matmult: examples/benchmark/benchmark-matmult.cpp build-info.h ggml.o 
 vdot: pocs/vdot/vdot.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-.PHONY: tests clean
-tests:
-	bash ./tests/run-tests.sh
+tests/test-double-float: tests/test-double-float.c build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
+
+tests/test-grad0: tests/test-grad0.c build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
+
+tests/test-opt: tests/test-opt.c build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
+
+tests/test-quantize-fns: tests/test-quantize-fns.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
+
+tests/test-quantize-perf: tests/test-quantize-perf.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
+
+tests/test-sampling: tests/test-sampling.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
+
+tests/test-tokenizer-0: tests/test-tokenizer-0.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)

@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-import sys, os
+import os
 import csv
 
 labels = []
@@ -8,6 +8,7 @@ numEntries = 1
 
 rows = []
 
+
 def bar_chart(numbers, labels, pos):
     plt.bar(pos, numbers, color='blue')
     plt.xticks(ticks=pos, labels=labels)
@@ -15,6 +16,7 @@ def bar_chart(numbers, labels, pos):
     plt.xlabel("Model")
     plt.ylabel("Questions Correct")
     plt.show()
+
 
 def calculatecorrect():
     directory = os.fsencode("./examples/jeopardy/results/")
@@ -38,12 +40,11 @@ def calculatecorrect():
                     print(line)
                 else:
                     print("Correct answer: " + rows[i][2] + "\n")
-                    i+=1
+                    i += 1
                     print("Did the AI get the question right? (y/n)")
                     if input() == "y":
                         totalcorrect += 1
             numbers.append(totalcorrect)
-
 
 
 if __name__ == '__main__':

@@ -4,6 +4,16 @@
 #include <random>
 #include <cstring>
 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
+#endif
+
+#ifdef LLAMA_DEFAULT_RMS_EPS
+static const float rms_norm_eps = LLAMA_DEFAULT_RMS_EPS;
+#else
+static const float rms_norm_eps = 5e-6f;
+#endif
+
 float frand() {
     return (float)rand()/(float)RAND_MAX;
 }
@@ -25,6 +35,17 @@ void init_random_normal_distribution(struct random_normal_distribution * rnd, in
 float frand_normal(struct random_normal_distribution * rnd) {
     const float r = rnd->nd(rnd->gen);
     return ((r < rnd->min) ? (rnd->min) : (r > rnd->max) ? (rnd->max) : r);
+}
+
+void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, int n_threads) {
+    struct ggml_cplan plan = ggml_graph_plan(graph, n_threads);
+
+    if (plan.work_size > 0) {
+        buf.resize(plan.work_size);
+        plan.work_data = buf.data();
+    }
+
+    ggml_graph_compute(graph, &plan);
 }
 
 struct ggml_tensor * randomize_tensor(
@@ -547,7 +568,7 @@ struct ggml_tensor * forward(
         // norm
         {
             // cur shape [n_embd,N,1,1]
-            cur = ggml_rms_norm(ctx0, inpL);
+            cur = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
 
             // cur = attention_norm*cur
             cur = ggml_mul(ctx0,
@@ -562,8 +583,8 @@ struct ggml_tensor * forward(
             // wk   shape [n_embd, n_embd, 1, 1]
             // Qcur shape [n_embd/n_head, n_head, N, 1]
             // Kcur shape [n_embd/n_head, n_head, N, 1]
-            struct ggml_tensor * Qcur = ggml_rope(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
-            struct ggml_tensor * Kcur = ggml_rope(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wk, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0);
+            struct ggml_tensor * Qcur = ggml_rope(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0, 0);
+            struct ggml_tensor * Kcur = ggml_rope(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wk, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0, 0);
 
             // store key and value to memory
             {
@@ -670,7 +691,7 @@ struct ggml_tensor * forward(
             // norm
             {
                 // cur shape [n_embd,N,1,1]
-                cur = ggml_rms_norm(ctx0, inpFF);
+                cur = ggml_rms_norm(ctx0, inpFF, rms_norm_eps);
 
                 // cur = ffn_norm*cur
                 // cur shape [n_embd,N,1,1]
@@ -714,7 +735,7 @@ struct ggml_tensor * forward(
     {
 
         // inpL shape [n_embd,N,1,1]
-        inpL = ggml_rms_norm(ctx0, inpL);
+        inpL = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
 
         // inpL = norm*inpL
         // inpL shape [n_embd,N,1,1]
@@ -802,7 +823,7 @@ struct ggml_tensor * forward_batch(
         // norm
         {
             // cur shape [n_embd,N*n_batch,1,1]
-            cur = ggml_rms_norm(ctx0, inpL);
+            cur = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
             assert_shape_2d(cur, n_embd, N*n_batch);
 
             // cur = attention_norm*cur
@@ -819,8 +840,8 @@ struct ggml_tensor * forward_batch(
             // wk   shape [n_embd, n_embd, 1, 1]
             // Qcur shape [n_embd/n_head, n_head, N, n_batch]
             // Kcur shape [n_embd/n_head, n_head, N, n_batch]
-            struct ggml_tensor * Qcur = ggml_rope(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wq, cur), n_embd/n_head, n_head, N, n_batch), n_past, n_rot, 0);
-            struct ggml_tensor * Kcur = ggml_rope(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wk, cur), n_embd/n_head, n_head, N, n_batch), n_past, n_rot, 0);
+            struct ggml_tensor * Qcur = ggml_rope(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wq, cur), n_embd/n_head, n_head, N, n_batch), n_past, n_rot, 0, 0);
+            struct ggml_tensor * Kcur = ggml_rope(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wk, cur), n_embd/n_head, n_head, N, n_batch), n_past, n_rot, 0, 0);
             assert_shape_4d(Qcur, n_embd/n_head, n_head, N, n_batch);
             assert_shape_4d(Kcur, n_embd/n_head, n_head, N, n_batch);
 
@@ -966,7 +987,7 @@ struct ggml_tensor * forward_batch(
             // norm
             {
                 // cur shape [n_embd,N*n_batch,1,1]
-                cur = ggml_rms_norm(ctx0, inpFF);
+                cur = ggml_rms_norm(ctx0, inpFF, rms_norm_eps);
                 assert_shape_2d(cur, n_embd, N*n_batch);
 
                 // cur = ffn_norm*cur
@@ -1019,7 +1040,7 @@ struct ggml_tensor * forward_batch(
     {
 
         // inpL shape [n_embd,N*n_batch,1,1]
-        inpL = ggml_rms_norm(ctx0, inpL);
+        inpL = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
         assert_shape_2d(inpL, n_embd, N*n_batch);
 
         // inpL = norm*inpL
@@ -1089,7 +1110,7 @@ struct ggml_tensor * forward_lora(
         // norm
         {
             // cur shape [n_embd,N,1,1]
-            cur = ggml_rms_norm(ctx0, inpL);
+            cur = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
 
             // cur = attention_norm*cur
             cur = ggml_mul(ctx0,
@@ -1112,7 +1133,7 @@ struct ggml_tensor * forward_lora(
                                                         model->layers[il].wqb,
                                                         cur)),
                                                 n_embd/n_head, n_head, N),
-                                            n_past, n_rot, 0);
+                                            n_past, n_rot, 0, 0);
             struct ggml_tensor * Kcur = ggml_rope(ctx0,
                                             ggml_reshape_3d(ctx0,
                                                 ggml_mul_mat(ctx0,
@@ -1121,7 +1142,7 @@ struct ggml_tensor * forward_lora(
                                                         model->layers[il].wkb,
                                                         cur)),
                                                 n_embd/n_head, n_head, N),
-                                            n_past, n_rot, 0);
+                                            n_past, n_rot, 0, 0);
 
             // store key and value to memory
             {
@@ -1236,7 +1257,7 @@ struct ggml_tensor * forward_lora(
             // norm
             {
                 // cur shape [n_embd,N,1,1]
-                cur = ggml_rms_norm(ctx0, inpFF);
+                cur = ggml_rms_norm(ctx0, inpFF, rms_norm_eps);
 
                 // cur = ffn_norm*cur
                 // cur shape [n_embd,N,1,1]
@@ -1280,7 +1301,7 @@ struct ggml_tensor * forward_lora(
     {
 
         // inpL shape [n_embd,N,1,1]
-        inpL = ggml_rms_norm(ctx0, inpL);
+        inpL = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
 
         // inpL = norm*inpL
         // inpL shape [n_embd,N,1,1]
@@ -1470,7 +1491,7 @@ struct ggml_tensor * square_error_loss(struct ggml_context * ctx, struct ggml_te
 }
 
 struct ggml_tensor * cross_entropy_loss(struct ggml_context * ctx, struct ggml_tensor * a, struct ggml_tensor * b) {
-    const float eps = 1e-3;
+    const float eps = 1e-3f;
     return
         ggml_sum(ctx,
             ggml_neg(ctx,
@@ -1565,6 +1586,8 @@ int main(int argc, char ** argv) {
     int n_tokens = model.hparams.n_ctx;
     int n_vocab  = model.hparams.n_vocab;
 
+    std::vector<uint8_t> work_buffer;
+
     for (int ex=0; ex<n_examples; ++ex) {
         struct ggml_init_params params = {
             /*.mem_size   =*/ compute_size,
@@ -1582,7 +1605,6 @@ int main(int argc, char ** argv) {
         int n_past = 0;
 
         ggml_cgraph gf = {};
-        gf.n_threads = 1;
 
         get_example_targets_batch(ctx0, 64*ex+0,  tokens_input, targets);
 
@@ -1591,7 +1613,7 @@ int main(int argc, char ** argv) {
         struct ggml_tensor * e = square_error_loss(ctx0, targets, logits);
 
         ggml_build_forward_expand(&gf, e);
-        ggml_graph_compute(ctx0, &gf);
+        ggml_graph_compute_helper(work_buffer, &gf, /*n_threads*/ 1);
 
         float error_before_opt = ggml_get_f32_1d(e, 0);
 
@@ -1607,7 +1629,7 @@ int main(int argc, char ** argv) {
         ggml_opt(ctx0, opt_params_lbfgs, e);
         //
         ggml_build_forward_expand(&gf, e);
-        ggml_graph_compute(ctx0, &gf);
+        ggml_graph_compute_helper(work_buffer, &gf, /*n_threads*/ 1);
 
         float error_after_opt = ggml_get_f32_1d(e, 0);
 
@@ -1655,13 +1677,12 @@ int main(int argc, char ** argv) {
             struct ggml_context * ctx0 = ggml_init(params);
 
             ggml_cgraph gf = {};
-            gf.n_threads = 1;
 
             int n_past = 0;
             struct ggml_tensor * logits = forward(&model, &kv_self, ctx0, &gf, tokens_input, sample_ctx, n_past);
 
             ggml_build_forward_expand(&gf, logits);
-            ggml_graph_compute(ctx0, &gf);
+            ggml_graph_compute_helper(work_buffer, &gf, /*n_threads*/ 1);
 
             struct ggml_tensor * best_samples = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, sample_ctx);
             struct ggml_tensor * probs        = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_vocab, sample_ctx);
@@ -1683,10 +1704,11 @@ int main(int argc, char ** argv) {
     }
 
     print_matrix(model.tok_embeddings);
-
     printf("done\n");
+
     // ggml_free(kv_self.ctx);
     // ggml_free(model_lora.ctx);
     ggml_free(model.ctx);
+
     return 0;
 }

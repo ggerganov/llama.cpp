@@ -35,13 +35,14 @@ int main(int argc, char ** argv) {
     struct ggml_context * ctx_eval = NULL;
 
     struct ggml_cgraph gf = ggml_graph_import(fname_cgraph, &ctx_data, &ctx_eval);
-    gf.n_threads = 1;
 
     // this allocates all Metal resources and memory buffers
-    auto * ctx_metal = ggml_metal_init();
+    auto * ctx_metal = ggml_metal_init(1);
 
-    ggml_metal_add_buffer(ctx_metal, "data", ggml_get_mem_buffer(ctx_data), ggml_get_mem_size(ctx_data));
-    ggml_metal_add_buffer(ctx_metal, "eval", ggml_get_mem_buffer(ctx_eval), ggml_get_mem_size(ctx_eval));
+    const size_t max_size_data = ggml_get_max_tensor_size(ctx_data);
+    const size_t max_size_eval = ggml_get_max_tensor_size(ctx_eval);
+    ggml_metal_add_buffer(ctx_metal, "data", ggml_get_mem_buffer(ctx_data), ggml_get_mem_size(ctx_data), max_size_data);
+    ggml_metal_add_buffer(ctx_metal, "eval", ggml_get_mem_buffer(ctx_eval), ggml_get_mem_size(ctx_eval), max_size_eval);
 
     // main
     {
