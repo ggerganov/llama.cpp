@@ -1443,6 +1443,7 @@ static struct ggml_cgraph * llama_build_graph(
 
     if (tokens) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
+
 #ifdef LLAMA_USE_ALLOCATOR
         ggml_allocator_alloc_tensor(lctx.alloc, inp_tokens);
         if (!ggml_allocator_is_measure(lctx.alloc)) {
@@ -1460,7 +1461,15 @@ static struct ggml_cgraph * llama_build_graph(
 #endif
 
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N);
+
+#ifdef LLAMA_USE_ALLOCATOR
+        ggml_allocator_alloc_tensor(lctx.alloc, inpL);
+        if (!ggml_allocator_is_measure(lctx.alloc)) {
+            memcpy(inpL->data, embd, N * n_embd * ggml_element_size(inpL));
+        }
+#else
         memcpy(inpL->data, embd, N * n_embd * ggml_element_size(inpL));
+#endif
     }
 
     const int i_gpu_start = n_layer - n_gpu_layers;
