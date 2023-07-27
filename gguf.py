@@ -62,7 +62,7 @@ class GGUFWriter:
     def __init__(self, fout: IO):
         self.fout = fout
         self.offset_tensor = 0
-        self.tensors = []
+        self.tensors: List[np.ndarray] = []
 
     def write_header(self, tensor_count: int, metadata_kv_count: int):
         self.fout.write(struct.pack("<I", constants.GGUF_MAGIC))
@@ -175,6 +175,12 @@ class GGUFWriter:
         self.fout.write(bytes([0] * pad))
 
         self.tensors.append(tensor)
+
+    def write_tensors(self):
+        for tensor in self.tensors:
+            tensor.tofile(self.fout)
+            pad = GGUFWriter.ggml_pad(tensor.nbytes, constants.GGUF_DEFAULT_ALIGNMENT) - tensor.nbytes
+            self.fout.write(bytes([0] * pad))
 
     def flush(self):
         self.fout.flush()
