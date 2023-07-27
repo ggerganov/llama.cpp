@@ -9,8 +9,11 @@ SPACE_RULE = '" "?'
 
 PRIMITIVE_RULES = {
     'boolean': '("true" | "false") space',
-    'number': '[0-9]+ space', # TODO complete
-    'string': r'"\"" [ \t!#-\[\]-~]* "\"" space', # TODO complete
+    'number': '("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space',
+    'string': r''' "\"" (
+        [^"\\] |
+        "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+      )* "\"" space ''',
     'null': '"null" space',
 }
 
