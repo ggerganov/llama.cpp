@@ -56,7 +56,7 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-#if !defined(GGML_USE_CUBLAS) && !defined(GGML_USE_CLBLAST) && !defined(GGML_USE_METAL)
+#if !defined(GGML_USE_CUBLAS) && !defined(GGML_USE_METAL)
 #  include "ggml-alloc.h"
 #  define LLAMA_USE_ALLOCATOR
 #else
