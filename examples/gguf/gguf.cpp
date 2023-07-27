@@ -29,7 +29,7 @@ void gguf_ex_write_u64(std::ofstream & fout, size_t val) {
 }
 
 template<typename T>
-void gguf_ex_write_param(std::ofstream & fout, const std::string & key, enum gguf_type type, const T & val) {
+void gguf_ex_write_val(std::ofstream & fout, const std::string & key, enum gguf_type type, const T & val) {
     gguf_ex_write_str(fout, key);
     fout.write((const char *) &type, sizeof(type));
     fout.write((const char *) &val,  sizeof(val));
@@ -38,13 +38,65 @@ void gguf_ex_write_param(std::ofstream & fout, const std::string & key, enum ggu
 }
 
 template<>
-void gguf_ex_write_param<std::string>(std::ofstream & fout, const std::string & key, enum gguf_type type, const std::string & val) {
+void gguf_ex_write_val<std::string>(std::ofstream & fout, const std::string & key, enum gguf_type type, const std::string & val) {
     gguf_ex_write_str(fout, key);
     fout.write((const char *) &type, sizeof(type));
 
     const int32_t n = val.size();
     fout.write((const char *) &n, sizeof(n));
     fout.write(val.c_str(), n);
+
+    fprintf(stdout, "%s: write param: %s = %s\n", __func__, key.c_str(), val.c_str());
+}
+
+template<typename T>
+void gguf_ex_write_arr(std::ofstream & fout, const std::string & key, enum gguf_type type, const std::vector<T> & val) {
+    gguf_ex_write_str(fout, key);
+    {
+        const enum gguf_type tarr = GGUF_TYPE_ARRAY;
+        fout.write((const char *) &tarr, sizeof(tarr));
+    }
+
+    const int32_t n = val.size();
+    fout.write((const char *) &type, sizeof(type));
+    fout.write((const char *) &n,    sizeof(n));
+    fout.write((const char *) val.data(), n * sizeof(T));
+
+    fprintf(stdout, "%s: write param: %s = [", __func__, key.c_str());
+    for (int i = 0; i < n; ++i) {
+        fprintf(stdout, "%s", to_string(val[i]).c_str());
+        if (i < n - 1) {
+            fprintf(stdout, ", ");
+        }
+    }
+    fprintf(stdout, "]\n");
+}
+
+template<>
+void gguf_ex_write_arr<std::string>(std::ofstream & fout, const std::string & key, enum gguf_type type, const std::vector<std::string> & val) {
+    gguf_ex_write_str(fout, key);
+    {
+        const enum gguf_type tarr = GGUF_TYPE_ARRAY;
+        fout.write((const char *) &tarr, sizeof(tarr));
+    }
+
+    const int32_t n = val.size();
+    fout.write((const char *) &type, sizeof(type));
+    fout.write((const char *) &n,    sizeof(n));
+    for (int i = 0; i < n; ++i) {
+        const int32_t nstr = val[i].size();
+        fout.write((const char *) &nstr, sizeof(nstr));
+        fout.write(val[i].c_str(), nstr);
+    }
+
+    fprintf(stdout, "%s: write param: %s = [", __func__, key.c_str());
+    for (int i = 0; i < n; ++i) {
+        fprintf(stdout, "%s", val[i].c_str());
+        if (i < n - 1) {
+            fprintf(stdout, ", ");
+        }
+    }
+    fprintf(stdout, "]\n");
 }
 
 bool gguf_ex_write(const std::string & fname) {
@@ -60,8 +112,9 @@ bool gguf_ex_write(const std::string & fname) {
         fout.write((const char *) &version, sizeof(version));
     }
 
+    // NOTE: these have to match the output below!
     const int n_tensors = 10;
-    const int n_kv = 9;
+    const int n_kv      = 12;
 
     fout.write((const char*) &n_tensors, sizeof(n_tensors));
     fout.write((const char*) &n_kv, sizeof(n_kv));
@@ -70,17 +123,21 @@ bool gguf_ex_write(const std::string & fname) {
 
     // kv data
     {
-        gguf_ex_write_param< uint8_t>(fout, "some.parameter.uint8",   GGUF_TYPE_UINT8,   0x12);
-        gguf_ex_write_param<  int8_t>(fout, "some.parameter.int8",    GGUF_TYPE_INT8,   -0x13);
-        gguf_ex_write_param<uint16_t>(fout, "some.parameter.uint16",  GGUF_TYPE_UINT16,  0x1234);
-        gguf_ex_write_param< int16_t>(fout, "some.parameter.int16",   GGUF_TYPE_INT16,  -0x1235);
-        gguf_ex_write_param<uint32_t>(fout, "some.parameter.uint32",  GGUF_TYPE_UINT32,  0x12345678);
-        gguf_ex_write_param< int32_t>(fout, "some.parameter.int32",   GGUF_TYPE_INT32,  -0x12345679);
+        gguf_ex_write_val< uint8_t>(fout, "some.parameter.uint8",   GGUF_TYPE_UINT8,   0x12);
+        gguf_ex_write_val<  int8_t>(fout, "some.parameter.int8",    GGUF_TYPE_INT8,   -0x13);
+        gguf_ex_write_val<uint16_t>(fout, "some.parameter.uint16",  GGUF_TYPE_UINT16,  0x1234);
+        gguf_ex_write_val< int16_t>(fout, "some.parameter.int16",   GGUF_TYPE_INT16,  -0x1235);
+        gguf_ex_write_val<uint32_t>(fout, "some.parameter.uint32",  GGUF_TYPE_UINT32,  0x12345678);
+        gguf_ex_write_val< int32_t>(fout, "some.parameter.int32",   GGUF_TYPE_INT32,  -0x12345679);
 
-        gguf_ex_write_param<float>   (fout, "some.parameter.float32", GGUF_TYPE_FLOAT32, 0.123456789f);
-        gguf_ex_write_param<bool>    (fout, "some.parameter.bool",    GGUF_TYPE_BOOL,    true);
+        gguf_ex_write_val<float>   (fout, "some.parameter.float32", GGUF_TYPE_FLOAT32, 0.123456789f);
+        gguf_ex_write_val<bool>    (fout, "some.parameter.bool",    GGUF_TYPE_BOOL,    true);
 
-        gguf_ex_write_param<std::string>(fout, "some.parameter.string",  GGUF_TYPE_STRING,  "hello world");
+        gguf_ex_write_val<std::string>(fout, "some.parameter.string",  GGUF_TYPE_STRING,  "hello world");
+
+        gguf_ex_write_arr<int16_t>    (fout, "some.parameter.arr.i16", GGUF_TYPE_INT16,   { 1, 2, 3, 4, });
+        gguf_ex_write_arr<float>      (fout, "some.parameter.arr.f32", GGUF_TYPE_FLOAT32, { 3.145f, 2.718f, 1.414f, });
+        gguf_ex_write_arr<std::string>(fout, "some.parameter.arr.str", GGUF_TYPE_STRING,  { "hello", "world", "!" });
     }
 
     uint64_t offset_tensor = 0;
@@ -203,12 +260,14 @@ bool gguf_ex_read_0(const std::string & fname) {
         fprintf(stdout, "%s: n_tensors: %d\n", __func__, n_tensors);
 
         for (int i = 0; i < n_tensors; ++i) {
-            const char * name = gguf_get_tensor_name(ctx, i);
+            const char * name   = gguf_get_tensor_name  (ctx, i);
             const size_t offset = gguf_get_tensor_offset(ctx, i);
 
             fprintf(stdout, "%s: tensor[%d]: name = %s, offset = %zu\n", __func__, i, name, offset);
         }
     }
+
+    gguf_free(ctx);
 
     return true;
 }
@@ -248,7 +307,7 @@ bool gguf_ex_read_1(const std::string & fname) {
         fprintf(stdout, "%s: n_tensors: %d\n", __func__, n_tensors);
 
         for (int i = 0; i < n_tensors; ++i) {
-            const char * name = gguf_get_tensor_name(ctx, i);
+            const char * name   = gguf_get_tensor_name  (ctx, i);
             const size_t offset = gguf_get_tensor_offset(ctx, i);
 
             fprintf(stdout, "%s: tensor[%d]: name = %s, offset = %zu\n", __func__, i, name, offset);

@@ -1631,6 +1631,7 @@ extern "C" {
         GGUF_TYPE_BOOL    = 7,
         GGUF_TYPE_STRING  = 8,
         GGUF_TYPE_ARRAY   = 9,
+        GGUF_TYPE_COUNT,       // marks the end of the enum
     };
 
     struct gguf_context;
@@ -1664,7 +1665,8 @@ extern "C" {
     GGML_API float        gguf_get_val_f32 (struct gguf_context * ctx, int i);
     GGML_API bool         gguf_get_val_bool(struct gguf_context * ctx, int i);
     GGML_API const char * gguf_get_val_str (struct gguf_context * ctx, int i);
-    // TODO: arr
+    GGML_API int          gguf_get_arr_n   (struct gguf_context * ctx, int i);
+    GGML_API void         gguf_get_arr_data(struct gguf_context * ctx, int i, void * data);
 
     GGML_API int    gguf_get_n_tensors    (struct gguf_context * ctx);
     GGML_API size_t gguf_get_tensor_offset(struct gguf_context * ctx, int i);
