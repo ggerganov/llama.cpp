@@ -14,6 +14,35 @@
 //#define AT_PRINTF printf
 #define AT_PRINTF(...) ((void)0)
 
+struct hash_node {
+    struct ggml_tensor * t;
+    int n_children;
+    int n_views;
+};
+
+static size_t hash(void * p) {
+    return (size_t)p % GGML_GRAPH_HASHTABLE_SIZE;
+}
+
+static struct hash_node * hash_get(struct hash_node hash_table[], struct ggml_tensor * t) {
+    size_t h = hash(t);
+
+    // linear probing
+    size_t i = h;
+    while (hash_table[i].t != NULL) {
+        if (hash_table[i].t == t) {
+            return &hash_table[i];
+        }
+        i = (i + 1) % GGML_GRAPH_HASHTABLE_SIZE;
+        if (i == h) {
+            // hash table is full
+            GGML_ASSERT(false);
+        }
+    }
+
+    hash_table[i].t = t;
+    return &hash_table[i];
+}
 
 // TODO: GGML_PAD ?
 static size_t aligned_offset(const void * buffer, size_t offset, size_t alignment) {
@@ -35,6 +64,7 @@ struct ggml_allocator {
     size_t alignment;
     int n_free_blocks;
     struct free_block free_blocks[MAX_FREE_BLOCKS];
+    struct hash_node hash_table[GGML_GRAPH_HASHTABLE_SIZE];
     size_t max_size;
     bool measure;
 
@@ -215,6 +245,7 @@ struct ggml_allocator * ggml_allocator_new(void * data, size_t size, size_t alig
         /*.alignment     = */ alignment,
         /*.n_free_blocks = */ 0,
         /*.free_blocks   = */ {{0}},
+        /*.hash_table    = */ {{0}},
         /*.max_size      = */ 0,
         /*.measure       = */ false,
 #ifdef GGML_ALLOCATOR_DEBUG
@@ -241,6 +272,7 @@ struct ggml_allocator * ggml_allocator_new_measure(size_t alignment) {
         /*.alignment     = */ alignment,
         /*.n_free_blocks = */ 0,
         /*.free_blocks   = */ {{0}},
+        /*.hash_table    = */ {{0}},
         /*.max_size      = */ 0,
         /*.measure       = */ true,
 #ifdef GGML_ALLOCATOR_DEBUG
@@ -305,7 +337,7 @@ static struct ggml_tensor * get_view_source(struct ggml_tensor * t) {
     return parent;
 }
 
-bool ggml_op_can_inplace(enum ggml_op op) {
+static bool ggml_op_can_inplace(enum ggml_op op) {
     switch (op) {
         case GGML_OP_SCALE:
         case GGML_OP_DIAG_MASK_ZERO:
@@ -333,6 +365,7 @@ bool ggml_op_can_inplace(enum ggml_op op) {
 }
 
 static void allocate_node(struct ggml_allocator * alloc, struct ggml_tensor * node) {
+    struct hash_node * ht = alloc->hash_table;
     if (node->data == NULL) {
         if (ggml_is_view(node)) {
             size_t offset;
@@ -360,10 +393,12 @@ static void allocate_node(struct ggml_allocator * alloc, struct ggml_tensor * no
                 if (parent == NULL) {
                     break;
                 }
-                if (parent->data != NULL && parent->n_children == 1 && parent->n_views == 0 && ggml_are_same_layout(node, parent) && ggml_op_can_inplace(node->op)) {
+                struct hash_node * p_hn = hash_get(ht, parent);
+                if (parent->data != NULL && p_hn->n_children == 1 && p_hn->n_views == 0 && ggml_are_same_layout(node, parent) && ggml_op_can_inplace(node->op)) {
                     if (ggml_is_view(parent)) {
                         struct ggml_tensor * view_src = get_view_source(parent);
-                        if (view_src->n_views == 1 && view_src->n_children == 0 && view_src->data == parent->data) {
+                        struct hash_node * view_src_hn = hash_get(ht, view_src);
+                        if (view_src_hn->n_views == 1 && view_src_hn->n_children == 0 && view_src->data == parent->data) {
                             // TODO: the offset of the view parent must be kept to ensure that the op doesn't overwrite
                             // the parent's data that it will need later (same layout requirement). the problem is that then
                             // we cannot free the tensor because the original address of the allocation is lost.
@@ -391,21 +426,9 @@ static size_t ggml_allocator_alloc_graph_tensors_n(
     struct ggml_cgraph ** graphs, int n_graphs,
     struct ggml_tensor *** inputs, struct ggml_tensor *** outputs) {
 
-    // reset counters
-    for (int g = 0; g < n_graphs; g++) {
-        struct ggml_cgraph * gf = graphs[g];
-        for (int i = 0; i < gf->n_nodes; i++) {
-            struct ggml_tensor * node = gf->nodes[i];
-            node->n_children = 0;
-            node->n_views = 0;
-        }
-
-        for (int i = 0; i < gf->n_leafs; i++) {
-            struct ggml_tensor * leaf = gf->leafs[i];
-            leaf->n_children = 0;
-            leaf->n_views = 0;
-        }
-    }
+    // reset hash table
+    struct hash_node * ht = alloc->hash_table;
+    memset(ht, 0, sizeof(struct hash_node) * GGML_GRAPH_HASHTABLE_SIZE);
 
     // count number of children and views
     for (int g = 0; g < n_graphs; g++) {
@@ -415,7 +438,7 @@ static size_t ggml_allocator_alloc_graph_tensors_n(
 
             if (ggml_is_view(node)) {
                 struct ggml_tensor * view_src = get_view_source(node);
-                view_src->n_views += 1;
+                hash_get(ht, view_src)->n_views += 1;
             }
 
             for (int j = 0; j < GGML_MAX_SRC; j++) {
@@ -423,7 +446,7 @@ static size_t ggml_allocator_alloc_graph_tensors_n(
                 if (parent == NULL) {
                     break;
                 }
-                parent->n_children += 1;
+                hash_get(ht, parent)->n_children += 1;
             }
         }
     }
@@ -474,16 +497,18 @@ static size_t ggml_allocator_alloc_graph_tensors_n(
                 if (parent == NULL) {
                     break;
                 }
-                parent->n_children -= 1;
+                struct hash_node * p_hn = hash_get(ht, parent);
+                p_hn->n_children -= 1;
 
                 //AT_PRINTF("parent %s: %d children, %d views\n", parent->name, parent->n_children, parent->n_views);
 
-                if (parent->n_children == 0 && parent->n_views == 0) {
+                if (p_hn->n_children == 0 && p_hn->n_views == 0) {
                     if (ggml_is_view(parent)) {
                         struct ggml_tensor * view_src = get_view_source(parent);
-                        view_src->n_views -= 1;
+                        struct hash_node * view_src_hn = hash_get(ht, view_src);
+                        view_src_hn->n_views -= 1;
                         AT_PRINTF("view_src %s: %d children, %d views\n", view_src->name, view_src->n_children, view_src->n_views);
-                        if (view_src->n_views == 0 && view_src->n_children == 0 && view_src->data != node->data) {
+                        if (view_src_hn->n_views == 0 && view_src_hn->n_children == 0 && view_src->data != node->data) {
                             ggml_allocator_free_tensor(alloc, view_src);
                         }
                     }

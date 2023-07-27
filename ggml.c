@@ -4612,8 +4612,6 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         /*.data         =*/ (data == NULL && !ctx->no_alloc) ? (void *)(result + 1) : data,
         /*.name         =*/ { 0 },
         /*.extra        =*/ NULL,
-        /*.n_children   =*/ 0,
-        /*.n_views      =*/ 0,
         /*.padding      =*/ { 0 },
     };
 

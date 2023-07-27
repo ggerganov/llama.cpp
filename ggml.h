@@ -451,11 +451,7 @@ extern "C" {
 
         void * extra; // extra things e.g. for ggml-cuda.cu
 
-        // temp - used by allocator
-        int n_children;
-        int n_views;
-
-        char padding[16];
+        char padding[4];
     };
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);
