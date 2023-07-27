@@ -1,6 +1,7 @@
 *.o
 *.a
 *.so
+*.gguf
 .DS_Store
 .build/
 .cache/
