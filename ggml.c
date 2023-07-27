@@ -6251,7 +6251,14 @@ static struct ggml_tensor * ggml_view_tensor_offset(
     if (a->data != NULL) {
         data = (char *) a->data + offset;
     }
-    return ggml_new_tensor_impl(ctx, a->type, n_dims, ne, data);
+
+    struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, n_dims, ne, data);
+
+    ggml_format_name(result, "%s (view)", a->name);
+
+    ggml_set_op_params(result, &offset, sizeof(offset));
+
+    return result;
 }
 
 struct ggml_tensor * ggml_view_1d(
@@ -6267,9 +6274,6 @@ struct ggml_tensor * ggml_view_1d(
     }
 
     struct ggml_tensor * result = ggml_view_tensor_offset(ctx, a, 1, &ne0, offset);
-    ggml_format_name(result, "%s (view)", a->name);
-
-    ggml_set_op_params(result, &offset, sizeof(offset));
 
     result->op   = GGML_OP_VIEW;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6297,10 +6301,6 @@ struct ggml_tensor * ggml_view_2d(
     const int64_t ne[GGML_MAX_DIMS] = { ne0, ne1, 1, 1 };
 
     struct ggml_tensor * result = ggml_view_tensor_offset(ctx, a, 2, ne, offset);
-
-    ggml_format_name(result, "%s (view)", a->name);
-
-    ggml_set_op_params(result, &offset, sizeof(offset));
 
     result->nb[1] = nb1;
     result->nb[2] = result->nb[1]*ne1;
@@ -6334,10 +6334,6 @@ struct ggml_tensor * ggml_view_3d(
     const int64_t ne[GGML_MAX_DIMS] = { ne0, ne1, ne2, 1 };
 
     struct ggml_tensor * result = ggml_view_tensor_offset(ctx, a, 3, ne, offset);
-
-    ggml_format_name(result, "%s (view)", a->name);
-
-    ggml_set_op_params(result, &offset, sizeof(offset));
 
     result->nb[1] = nb1;
     result->nb[2] = nb2;
@@ -6373,9 +6369,6 @@ struct ggml_tensor * ggml_view_4d(
     const int64_t ne[GGML_MAX_DIMS] = { ne0, ne1, ne2, ne3 };
 
     struct ggml_tensor * result = ggml_view_tensor_offset(ctx, a, 4, ne, offset);
-    ggml_format_name(result, "%s (view)", a->name);
-
-    ggml_set_op_params(result, &offset, sizeof(offset));
 
     result->nb[1] = nb1;
     result->nb[2] = nb2;
