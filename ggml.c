@@ -4557,10 +4557,12 @@ static struct ggml_object * ggml_new_object(struct ggml_context * ctx, enum ggml
 
 static struct ggml_tensor * ggml_new_tensor_impl(
         struct ggml_context * ctx,
-        enum   ggml_type type,
-        int    n_dims,
-        const int64_t* ne,
-        void*  data) {
+        enum   ggml_type      type,
+        int                   n_dims,
+        const int64_t       * ne,
+        void                * data) {
+
+    assert(n_dims >= 1 && n_dims <= GGML_MAX_DIMS);
 
     size_t data_size = 0;
 
@@ -4650,22 +4652,22 @@ static void ggml_set_op_params_i32(struct ggml_tensor * tensor, uint32_t i, int3
 
 struct ggml_tensor * ggml_new_tensor(
         struct ggml_context * ctx,
-        enum   ggml_type type,
-        int    n_dims,
-        const int64_t * ne) {
+        enum   ggml_type      type,
+        int                   n_dims,
+        const int64_t       * ne) {
     return ggml_new_tensor_impl(ctx, type, n_dims, ne, NULL);
 }
 
 struct ggml_tensor * ggml_new_tensor_1d(
         struct ggml_context * ctx,
-        enum   ggml_type type,
+        enum   ggml_type      type,
         int64_t ne0) {
     return ggml_new_tensor(ctx, type, 1, &ne0);
 }
 
 struct ggml_tensor * ggml_new_tensor_2d(
         struct ggml_context * ctx,
-        enum   ggml_type type,
+        enum   ggml_type      type,
         int64_t ne0,
         int64_t ne1) {
     const int64_t ne[2] = { ne0, ne1 };
@@ -4674,7 +4676,7 @@ struct ggml_tensor * ggml_new_tensor_2d(
 
 struct ggml_tensor * ggml_new_tensor_3d(
         struct ggml_context * ctx,
-        enum   ggml_type type,
+        enum   ggml_type      type,
         int64_t ne0,
         int64_t ne1,
         int64_t ne2) {
@@ -6240,6 +6242,20 @@ struct ggml_tensor * ggml_reshape_4d(
 
 // ggml_view_1d
 
+static struct ggml_tensor * ggml_view_tensor_offset(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int                   n_dims,
+        const int64_t       * ne,
+        size_t                offset) {
+    // don't calculate an offset from an unallocated tensor
+    void * data = NULL;
+    if (a->data != NULL) {
+        data = (char *) a->data + offset;
+    }
+    return ggml_new_tensor_impl(ctx, a->type, n_dims, ne, data);
+}
+
 struct ggml_tensor * ggml_view_1d(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
@@ -6252,7 +6268,7 @@ struct ggml_tensor * ggml_view_1d(
         is_node = true;
     }
 
-    struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 1, &ne0, (char *) a->data + offset);
+    struct ggml_tensor * result = ggml_view_tensor_offset(ctx, a, 1, &ne0, offset);
     ggml_format_name(result, "%s (view)", a->name);
 
     ggml_set_op_params(result, &offset, sizeof(offset));
@@ -6282,7 +6298,8 @@ struct ggml_tensor * ggml_view_2d(
 
     const int64_t ne[GGML_MAX_DIMS] = { ne0, ne1, 1, 1 };
 
-    struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 2, ne, (char *) a->data + offset);
+    struct ggml_tensor * result = ggml_view_tensor_offset(ctx, a, 2, ne, offset);
+
     ggml_format_name(result, "%s (view)", a->name);
 
     ggml_set_op_params(result, &offset, sizeof(offset));
@@ -6318,7 +6335,8 @@ struct ggml_tensor * ggml_view_3d(
 
     const int64_t ne[GGML_MAX_DIMS] = { ne0, ne1, ne2, 1 };
 
-    struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 3, ne, (char *) a->data + offset);
+    struct ggml_tensor * result = ggml_view_tensor_offset(ctx, a, 3, ne, offset);
+
     ggml_format_name(result, "%s (view)", a->name);
 
     ggml_set_op_params(result, &offset, sizeof(offset));
@@ -6356,7 +6374,7 @@ struct ggml_tensor * ggml_view_4d(
 
     const int64_t ne[GGML_MAX_DIMS] = { ne0, ne1, ne2, ne3 };
 
-    struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, 4, ne, (char *) a->data + offset);
+    struct ggml_tensor * result = ggml_view_tensor_offset(ctx, a, 4, ne, offset);
     ggml_format_name(result, "%s (view)", a->name);
 
     ggml_set_op_params(result, &offset, sizeof(offset));
