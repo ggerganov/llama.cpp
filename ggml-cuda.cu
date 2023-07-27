@@ -74,14 +74,17 @@ typedef void (*ggml_cuda_op_t)(
 // QR = QK / number of values before dequantization
 // QI = number of 32 bit integers before dequantization
 
+#define Q4_0DM   (1.0f/8.0f)
+#define Q4_0D(x) (((x)*Q4_0DM) / 127.0f)
+
 #define QK4_0 32
 #define QR4_0 2
 #define QI4_0 (QK4_0 / (4 * QR4_0))
 typedef struct {
-    half    d;              // delta
+    int8_t  d;              // delta
     uint8_t qs[QK4_0 / 2];  // nibbles / quants
 } block_q4_0;
-static_assert(sizeof(block_q4_0) == sizeof(ggml_fp16_t) + QK4_0 / 2, "wrong q4_0 block size/padding");
+static_assert(sizeof(block_q4_0) == sizeof(int8_t) + QK4_0 / 2, "wrong q4_0 block size/padding");
 
 #define QK4_1 32
 #define QR4_1 2
@@ -103,16 +106,20 @@ typedef struct {
 } block_q5_0;
 static_assert(sizeof(block_q5_0) == sizeof(ggml_fp16_t) + sizeof(uint32_t) + QK5_0 / 2, "wrong q5_0 block size/padding");
 
+#define Q5_1DM   (2.0f/31.0f)
+#define Q5_1MM   (2.0f      )
+#define Q5_1D(x) (        (((x) &  0x0F)*Q5_1DM) / 15.0f)
+#define Q5_1M(x) (-1.0f + (((x) >>    4)*Q5_1MM) / 15.0f)
+
 #define QK5_1 32
 #define QR5_1 2
 #define QI5_1 (QK5_1 / (4 * QR5_1))
 typedef struct {
-    half d;                 // delta
-    half m;                 // min
+    uint8_t dm;             // 4-bit delta + 4-bit min
     uint8_t qh[4];          // 5-th bit of quants
     uint8_t qs[QK5_1 / 2];  // nibbles / quants
 } block_q5_1;
-static_assert(sizeof(block_q5_1) == 2 * sizeof(ggml_fp16_t) + sizeof(uint32_t) + QK5_1 / 2, "wrong q5_1 block size/padding");
+static_assert(sizeof(block_q5_1) == sizeof(uint8_t) + sizeof(uint32_t) + QK5_1 / 2, "wrong q5_1 block size/padding");
 
 #define QK8_0 32
 #define QR8_0 1
@@ -360,7 +367,7 @@ static __global__ void rms_norm_f32(const float * x, float * dst, const int ncol
 static __device__ __forceinline__ void dequantize_q4_0(const void * vx, const int ib, const int iqs, dfloat2 & v){
     const block_q4_0 * x = (const block_q4_0 *) vx;
 
-    const dfloat d = x[ib].d;
+    const dfloat d = Q4_0D(x[ib].d);
 
     const int vui = x[ib].qs[iqs];
 
@@ -422,8 +429,8 @@ static __device__ __forceinline__ void dequantize_q5_0(const void * vx, const in
 static __device__ __forceinline__ void dequantize_q5_1(const void * vx, const int ib, const int iqs, dfloat2 & v){
     const block_q5_1 * x = (const block_q5_1 *) vx;
 
-    const dfloat d = x[ib].d;
-    const dfloat m = x[ib].m;
+    const dfloat d = Q5_1D(x[ib].dm);
+    const dfloat m = Q5_1M(x[ib].dm);
 
     uint32_t qh;
     memcpy(&qh, x[ib].qh, sizeof(qh));
@@ -1336,7 +1343,7 @@ static __device__ __forceinline__ float vec_dot_q4_0_q8_1(
     const int ui0 = *((int *) &bq8_1->qs[sizeof(int) * (iqs + 0)]);
     const int ui1 = *((int *) &bq8_1->qs[sizeof(int) * (iqs + QI4_0)]);
 
-    const float d = __half2float(bq4_0->d) * __half2float(bq8_1->d);
+    const float d = Q4_0D(bq4_0->d) * __half2float(bq8_1->d);
 
     // subtract 8 from each quantized value
     const int vi0 = __vsub4((vi >> 0) & 0x0F0F0F0F, 0x08080808);
@@ -1419,14 +1426,15 @@ static __device__ __forceinline__ float vec_dot_q5_1_q8_1(
 #if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
     const block_q5_1 * bq5_1 = (const block_q5_1 *) vbq;
 
+    // TODO: fix misaligned access
     const int qs  = *((int *) &bq5_1->qs[sizeof(int) * (iqs + 0)]);
     const int qh0 = bq5_1->qh[iqs/2 + 0] >> 4*(iqs%2);
     const int qh1 = bq5_1->qh[iqs/2 + 2] >> 4*(iqs%2);
     const int ui0 = *((int *) &bq8_1->qs[sizeof(int) * (iqs + 0)]);
     const int ui1 = *((int *) &bq8_1->qs[sizeof(int) * (iqs + QI5_1)]);
 
-    const float d = __half2float(bq5_1->d) * __half2float(bq8_1->d);
-    const float m = bq5_1->m;
+    const float d = Q5_1D(bq5_1->dm) * __half2float(bq8_1->d);
+    const float m = Q5_1M(bq5_1->dm);
     const float s = bq8_1->s;
 
     int vi0 = (qs  >>  0) & 0x0F0F0F0F; // lower 4 qs bits, still need qh0 as 5th bits

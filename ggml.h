@@ -281,9 +281,9 @@ extern "C" {
         GGML_TYPE_Q5_K = 13,
         GGML_TYPE_Q6_K = 14,
         GGML_TYPE_Q8_K = 15,
-        GGML_TYPE_I8,
-        GGML_TYPE_I16,
-        GGML_TYPE_I32,
+        GGML_TYPE_I8   = 16,
+        GGML_TYPE_I16  = 17,
+        GGML_TYPE_I32  = 18,
         GGML_TYPE_COUNT,
     };
 

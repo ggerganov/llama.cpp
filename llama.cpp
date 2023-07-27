@@ -119,7 +119,7 @@ static const std::map<e_model, size_t> & MEM_REQ_SCRATCH1()
 {
     static std::map<e_model, size_t> k_sizes = {
         { MODEL_3B,  128ull * MB },
-        { MODEL_7B,  160ull * MB },
+        { MODEL_7B,  200ull * MB },
         { MODEL_13B, 192ull * MB },
         { MODEL_30B, 256ull * MB },
         { MODEL_65B, 384ull * MB }, // guess
@@ -229,6 +229,11 @@ struct llama_layer {
     struct ggml_tensor * wv;
     struct ggml_tensor * wo;
 
+    struct ggml_tensor * wq_a;
+    struct ggml_tensor * wk_a;
+    struct ggml_tensor * wv_a;
+    struct ggml_tensor * wo_a;
+
     // normalization
     struct ggml_tensor * ffn_norm;
 
@@ -236,6 +241,10 @@ struct llama_layer {
     struct ggml_tensor * w1;
     struct ggml_tensor * w2;
     struct ggml_tensor * w3;
+
+    struct ggml_tensor * w1_a;
+    struct ggml_tensor * w2_a;
+    struct ggml_tensor * w3_a;
 };
 
 struct llama_kv_cache {
@@ -1208,17 +1217,29 @@ static void llama_model_load_internal(
             layer.wv = ml->get_tensor(layers_i + ".attention.wv.weight", {n_embd, n_embd_gqa}, backend_split);
             layer.wo = ml->get_tensor(layers_i + ".attention.wo.weight", {n_embd, n_embd},     backend_split);
 
+            layer.wq_a = ml->get_tensor(layers_i + ".attention.wq.weight.a", {n_embd},     backend);
+            layer.wk_a = ml->get_tensor(layers_i + ".attention.wk.weight.a", {n_embd_gqa}, backend);
+            layer.wv_a = ml->get_tensor(layers_i + ".attention.wv.weight.a", {n_embd_gqa}, backend);
+            layer.wo_a = ml->get_tensor(layers_i + ".attention.wo.weight.a", {n_embd},     backend);
+
             layer.ffn_norm = ml->get_tensor(layers_i + ".ffn_norm.weight", {n_embd}, backend);
 
             layer.w1 = ml->get_tensor(layers_i + ".feed_forward.w1.weight", {n_embd,   n_ff}, backend_split);
             layer.w2 = ml->get_tensor(layers_i + ".feed_forward.w2.weight", {  n_ff, n_embd}, backend_split);
             layer.w3 = ml->get_tensor(layers_i + ".feed_forward.w3.weight", {n_embd,   n_ff}, backend_split);
 
+            layer.w1_a = ml->get_tensor(layers_i + ".feed_forward.w1.weight.a", {  n_ff}, backend);
+            layer.w2_a = ml->get_tensor(layers_i + ".feed_forward.w2.weight.a", {n_embd}, backend);
+            layer.w3_a = ml->get_tensor(layers_i + ".feed_forward.w3.weight.a", {  n_ff}, backend);
+
             if (backend == GGML_BACKEND_GPU) {
                 vram_weights +=
-                    ggml_nbytes(layer.attention_norm) + ggml_nbytes(layer.wq) + ggml_nbytes(layer.wk)             +
-                    ggml_nbytes(layer.wv)             + ggml_nbytes(layer.wo) + ggml_nbytes(layer.ffn_norm) +
-                    ggml_nbytes(layer.w1)             + ggml_nbytes(layer.w2) + ggml_nbytes(layer.w3);
+                    ggml_nbytes(layer.attention_norm) + ggml_nbytes(layer.wq)   + ggml_nbytes(layer.wk)       +
+                    ggml_nbytes(layer.wv)             + ggml_nbytes(layer.wo)   + ggml_nbytes(layer.ffn_norm) +
+                    ggml_nbytes(layer.w1)             + ggml_nbytes(layer.w2)   + ggml_nbytes(layer.w3)       +
+                    ggml_nbytes(layer.wq_a)           + ggml_nbytes(layer.wk_a) + ggml_nbytes(layer.wv_a)     +
+                    ggml_nbytes(layer.wo_a)           + ggml_nbytes(layer.w1_a) + ggml_nbytes(layer.w2_a)     +
+                    ggml_nbytes(layer.w3_a);
             }
         }
     }
@@ -1358,6 +1379,34 @@ static bool llama_model_load(
         fprintf(stderr, "error loading model: %s\n", err.what());
         return false;
     }
+}
+
+// computes: Z = (X @ Y) * a
+// a is vector with size equal to rows of X. each element is the scaling factor used to normalize X's rows
+// the ggml_mul() is broadcasted row-wise to restore the normalization
+struct ggml_tensor * ggml_mul_mat_ex(
+        struct ggml_context * ctx0,
+        struct ggml_tensor * t,
+        struct ggml_tensor * a,
+        //struct ggml_tensor * b,
+        struct ggml_tensor * cur,
+        offload_func_t offload_func) {
+    cur = ggml_mul_mat(ctx0, t, cur);
+    offload_func(cur);
+
+    cur = ggml_mul(ctx0, cur, a);
+    offload_func(cur);
+
+    return cur;
+
+    //struct ggml_tensor * tmp = ggml_mul_mat(ctx0, t, cur);
+    //tmp = ggml_mul(ctx0, tmp, a);
+    //cur = ggml_add(ctx0, tmp,
+    //        ggml_mul(ctx0,
+    //            ggml_repeat(ctx0, ggml_sum_rows(ctx0, cur), tmp),
+    //            b)
+    //        );
+    //return cur;
 }
 
 // evaluate the transformer
@@ -1502,12 +1551,10 @@ static bool llama_eval_internal(
         // self-attention
         {
             // compute Q and K and RoPE them
-            struct ggml_tensor * tmpk = ggml_mul_mat(ctx0, model.layers[il].wk, cur);
-            offload_func_kq(tmpk);
+            struct ggml_tensor * tmpk = ggml_mul_mat_ex(ctx0, model.layers[il].wk, model.layers[il].wk_a, cur, offload_func_kq);
             ggml_set_name(tmpk, "tmpk");
 
-            struct ggml_tensor * tmpq = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
-            offload_func_kq(tmpq);
+            struct ggml_tensor * tmpq = ggml_mul_mat_ex(ctx0, model.layers[il].wq, model.layers[il].wq_a, cur, offload_func_kq);
             ggml_set_name(tmpq, "tmpq");
 
             struct ggml_tensor * Kcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, N), n_past, n_embd_head, 0, 0, freq_base, freq_scale);
@@ -1522,8 +1569,7 @@ static bool llama_eval_internal(
             {
                 // compute the transposed [N, n_embd] V matrix
 
-                struct ggml_tensor * tmpv = ggml_mul_mat(ctx0, model.layers[il].wv, cur);
-                offload_func_v(tmpv);
+                struct ggml_tensor * tmpv = ggml_mul_mat_ex(ctx0, model.layers[il].wv, model.layers[il].wv_a, cur, offload_func_v);
                 ggml_set_name(tmpv, "tmpv");
 
                 struct ggml_tensor * Vcur = ggml_transpose(ctx0, ggml_reshape_2d(ctx0, tmpv, n_embd_gqa, N));
@@ -1620,10 +1666,7 @@ static bool llama_eval_internal(
             ggml_set_name(cur, "KQV_merged_contiguous");
 
             // projection (no bias)
-            cur = ggml_mul_mat(ctx0,
-                    model.layers[il].wo,
-                    cur);
-            offload_func(cur);
+            cur = ggml_mul_mat_ex(ctx0, model.layers[il].wo, model.layers[il].wo_a, cur, offload_func);
             ggml_set_name(cur, "result_wo");
         }
 
@@ -1647,16 +1690,10 @@ static bool llama_eval_internal(
                 ggml_set_name(cur, "ffn_norm");
             }
 
-            struct ggml_tensor * tmp = ggml_mul_mat(ctx0,
-                    model.layers[il].w3,
-                    cur);
-            offload_func(tmp);
+            struct ggml_tensor * tmp = ggml_mul_mat_ex(ctx0, model.layers[il].w3, model.layers[il].w3_a, cur, offload_func);
             ggml_set_name(tmp, "result_w3");
 
-            cur = ggml_mul_mat(ctx0,
-                    model.layers[il].w1,
-                    cur);
-            offload_func(cur);
+            cur = ggml_mul_mat_ex(ctx0, model.layers[il].w1, model.layers[il].w1_a, cur, offload_func);
             ggml_set_name(cur, "result_w1");
 
             // SILU activation
@@ -1668,10 +1705,7 @@ static bool llama_eval_internal(
             offload_func(cur);
             ggml_set_name(cur, "silu_x_result_w3");
 
-            cur = ggml_mul_mat(ctx0,
-                    model.layers[il].w2,
-                    cur);
-            offload_func(cur);
+            cur = ggml_mul_mat_ex(ctx0, model.layers[il].w2, model.layers[il].w2_a, cur, offload_func);
             ggml_set_name(cur, "result_w2");
         }
 
@@ -2936,7 +2970,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         } else {
             new_type = quantized_type;
 #ifdef GGML_USE_K_QUANTS
-            if (tensor.name == "output.weight") {
+            if (tensor.name == "output.weight" || tensor.name == "tok_embeddings.weight") {
                 int nx = tensor.ne.at(0);
                 int ny = tensor.ne.at(1);
                 if (nx % QK_K == 0 && ny % QK_K == 0) {
@@ -2995,6 +3029,43 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             } else {
                 llama_convert_tensor_internal(tensor, f32_conv_buf, nelements, nthread);
                 f32_data = (float *) f32_conv_buf.addr;
+            }
+
+            // TODO: this is temporary since we only implemented Q4_0 and Q5_1 as POC
+            if (new_type == GGML_TYPE_Q4_0 || new_type == GGML_TYPE_Q5_1) {
+                //printf("\n dims: %d x %d\n", tensor.ne.at(0), tensor.ne.at(1));
+
+                const uint32_t nr = tensor.ne.at(1);
+
+                std::vector<float> va(nr);
+                std::vector<float> vb(nr);
+
+                // normalize to -1..1 per rows
+                for (uint32_t r = 0; r < nr; ++r) {
+                    const uint32_t n = tensor.ne.at(0);
+                    float * p = f32_data + r * n;
+
+                    float amax = 0.0f;
+                    for (size_t i = 0; i < n; ++i) {
+                        amax = std::max(amax, std::abs(p[i]));
+                    }
+
+                    for (size_t i = 0; i < n; ++i) {
+                        p[i] = p[i] / amax;
+                    }
+
+                    va[r] = amax;
+                }
+
+                {
+                    llama_load_tensor ta;
+                    ta.name = tensor.name + ".a";
+                    ta.type = GGML_TYPE_F32;
+                    ta.ne = std::vector<uint32_t>(1, nr);
+                    ta.size = nr * sizeof(float);
+                    ta.data = (uint8_t *) va.data();
+                    file_saver.write_tensor(ta, GGML_TYPE_F32, ta.data, ta.size);
+                }
             }
 
             printf("quantizing to %s .. ", ggml_type_name(new_type));
