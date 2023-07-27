@@ -6,14 +6,13 @@
 """
 
 import struct
+import constants
 from enum import IntEnum
 from typing import List, Any
-import constants
-
 
 class GGMLQuantizationType(IntEnum):
-    F32 = 0
-    F16 = 1
+    F32  = 0
+    F16  = 1
     QR_0 = 2
     Q4_1 = 3
     # Q4_2 = 4 # support has been removed
@@ -31,30 +30,29 @@ class GGMLQuantizationType(IntEnum):
 
 
 class GGUFValueType(IntEnum):
-    UINT8 = 0
-    INT8 = 1
-    UINT16 = 2
-    INT16 = 3
-    UINT32 = 4
-    INT32 = 5
+    UINT8   = 0
+    INT8    = 1
+    UINT16  = 2
+    INT16   = 3
+    UINT32  = 4
+    INT32   = 5
     FLOAT32 = 6
-    BOOL = 7
-    STRING = 8
-    ARRAY = 9
+    BOOL    = 7
+    STRING  = 8
+    ARRAY   = 9
 
     @staticmethod
-    def get_type(value):
-        if isinstance(value, str):
+    def get_type(val):
+        if isinstance(val, str):
             return GGUFValueType.STRING
-        elif isinstance(value, list):
+        elif isinstance(val, list):
             return GGUFValueType.ARRAY
-        elif isinstance(value, float):
+        elif isinstance(val, float):
             return GGUFValueType.FLOAT32
-        elif isinstance(value, bool):
+        elif isinstance(val, bool):
             return GGUFValueType.BOOL
         else:
             return GGUFValueType.INT32
-
 
 class GGUFWriter:
     def __init__(self, buffered_writer):
@@ -72,81 +70,81 @@ class GGUFWriter:
         return cls(f)
 
     def write_key(self, key: str):
-        self.write_value(key, GGUFValueType.STRING)
+        self.write_val(key, GGUFValueType.STRING)
 
-    def write_uint8(self, key: str, value: int):
+    def write_uint8(self, key: str, val: int):
         self.write_key(key)
-        self.write_value(value, GGUFValueType.UINT8)
+        self.write_val(val, GGUFValueType.UINT8)
 
-    def write_int8(self, key: str, value: int):
+    def write_int8(self, key: str, val: int):
         self.write_key(key)
-        self.write_value(value, GGUFValueType.INT8)
+        self.write_val(val, GGUFValueType.INT8)
 
-    def write_uint16(self, key: str, value: int):
+    def write_uint16(self, key: str, val: int):
         self.write_key(key)
-        self.write_value(value, GGUFValueType.UINT16)
+        self.write_val(val, GGUFValueType.UINT16)
 
-    def write_int16(self, key: str, value: int):
+    def write_int16(self, key: str, val: int):
         self.write_key(key)
-        self.write_value(value, GGUFValueType.INT16)
+        self.write_val(val, GGUFValueType.INT16)
 
-    def write_uint32(self, key: str, value: int):
+    def write_uint32(self, key: str, val: int):
         self.write_key(key)
-        self.write(value, GGUFValueType.UINT32)
+        self.write_val(val, GGUFValueType.UINT32)
 
-    def write_int32(self, key: str, value: int):
+    def write_int32(self, key: str, val: int):
         self.write_key(key)
-        self.write_value(value, GGUFValueType.INT32)
+        self.write_val(val, GGUFValueType.INT32)
 
-    def write_float32(self, key: str, value: float):
+    def write_float32(self, key: str, val: float):
         self.write_key(key)
-        self.write_value(value, GGUFValueType.FLOAT32)
+        self.write_val(val, GGUFValueType.FLOAT32)
 
-    def write_bool(self, key: str, value: bool):
+    def write_bool(self, key: str, val: bool):
         self.write_key(key)
-        self.write_value(value, GGUFValueType.BOOL)
+        self.write_val(val, GGUFValueType.BOOL)
 
-    def write_string(self, key: str, value: str):
+    def write_string(self, key: str, val: str):
         self.write_key(key)
-        self.write_value(value, GGUFValueType.STRING)
+        self.write_val(val, GGUFValueType.STRING)
 
-    def write_array(self, key: str, value: list):
-        if not isinstance(value, list):
+    def write_array(self, key: str, val: list):
+        if not isinstance(val, list):
             raise ValueError("Value must be a list for array type")
 
         self.write_key(key)
-        self.write_value(value, GGUFValueType.ARRAY)
+        self.write_val(val, GGUFValueType.ARRAY)
 
-    def write_value(self: str, value: Any, value_type: GGUFValueType = None):
-        if value_type is None:
-            value_type = GGUFValueType.get_type(value)
+    def write_val(self: str, val: Any, vtype: GGUFValueType = None):
+        if vtype is None:
+            vtype = GGUFValueType.get_type(val)
 
-        self.buffered_writer.write(struct.pack("<I", value_type))
+        self.buffered_writer.write(struct.pack("<I", vtype))
 
-        if value_type == GGUFValueType.UINT8:
-            self.buffered_writer.write(struct.pack("<B", value))
-        elif value_type == GGUFValueType.INT8:
-            self.buffered_writer.write(struct.pack("<b", value))
-        elif value_type == GGUFValueType.UINT16:
-            self.buffered_writer.write(struct.pack("<H", value))
-        elif value_type == GGUFValueType.INT16:
-            self.buffered_writer.write(struct.pack("<h", value))
-        elif value_type == GGUFValueType.UINT32:
-            self.buffered_writer.write(struct.pack("<I", value))
-        elif value_type == GGUFValueType.INT32:
-            self.buffered_writer.write(struct.pack("<i", value))
-        elif value_type == GGUFValueType.FLOAT32:
-            self.buffered_writer.write(struct.pack("<f", value))
-        elif value_type == GGUFValueType.BOOL:
-            self.buffered_writer.write(struct.pack("?", value))
-        elif value_type == GGUFValueType.STRING:
-            encoded_value = value.encode("utf8")
-            self.buffered_writer.write(struct.pack("<I", len(encoded_value)))
-            self.buffered_writer.write(encoded_value)
-        elif value_type == GGUFValueType.ARRAY:
-            self.buffered_writer.write(struct.pack("<I", len(value)))
-            for item in value:
-                self.write_value(item)
+        if vtype == GGUFValueType.UINT8:
+            self.buffered_writer.write(struct.pack("<B", val))
+        elif vtype == GGUFValueType.INT8:
+            self.buffered_writer.write(struct.pack("<b", val))
+        elif vtype == GGUFValueType.UINT16:
+            self.buffered_writer.write(struct.pack("<H", val))
+        elif vtype == GGUFValueType.INT16:
+            self.buffered_writer.write(struct.pack("<h", val))
+        elif vtype == GGUFValueType.UINT32:
+            self.buffered_writer.write(struct.pack("<I", val))
+        elif vtype == GGUFValueType.INT32:
+            self.buffered_writer.write(struct.pack("<i", val))
+        elif vtype == GGUFValueType.FLOAT32:
+            self.buffered_writer.write(struct.pack("<f", val))
+        elif vtype == GGUFValueType.BOOL:
+            self.buffered_writer.write(struct.pack("?", val))
+        elif vtype == GGUFValueType.STRING:
+            encoded_val = val.encode("utf8")
+            self.buffered_writer.write(struct.pack("<I", len(encoded_val)))
+            self.buffered_writer.write(encoded_val)
+        elif vtype == GGUFValueType.ARRAY:
+            self.buffered_writer.write(struct.pack("<I", len(val)))
+            for item in val:
+                self.write_val(item)
         else:
             raise ValueError("Invalid GGUF metadata value type")
 
