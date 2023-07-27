@@ -1779,7 +1779,7 @@ static bool llama_eval_internal(
     LLAMA_ASSERT(!!kv_self.ctx);
 
     const int64_t n_embd      = hparams.n_embd;
-    //const int64_t n_layer     = hparams.n_layer;
+    const int64_t n_layer     = hparams.n_layer;
     //const int64_t n_ctx       = hparams.n_ctx;
     //const int64_t n_head      = hparams.n_head;
     //const int64_t n_head_kv   = hparams.n_head_kv;
