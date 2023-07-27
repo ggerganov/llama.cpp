@@ -71,7 +71,7 @@ struct gpt_params {
     std::string lora_base    = "";  // base model path for the lora adapter
 
     bool hellaswag         = false; // compute HellaSwag score over random examples from datafile supplied in prompt
-    size_t hellaswag_tasks = 200;   // number of examples to use when computing the HellaSwag score
+    size_t hellaswag_tasks = 400;   // number of examples to use when computing the HellaSwag score
 
     bool low_vram          = false; // if true, reduce VRAM usage at the cost of performance
     bool memory_f16        = true;  // use f16 instead of f32 for memory kv
