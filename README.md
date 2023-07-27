@@ -77,6 +77,7 @@ as the main playground for developing new features for the [ggml](https://github
 **Supported models:**
 
 - [X] LLaMA 🦙
+- [x] LLaMA 2 🦙🦙
 - [X] [Alpaca](https://github.com/ggerganov/llama.cpp#instruction-mode-with-alpaca)
 - [X] [GPT4All](https://github.com/ggerganov/llama.cpp#using-gpt4all)
 - [X] [Chinese LLaMA / Alpaca](https://github.com/ymcui/Chinese-LLaMA-Alpaca)
