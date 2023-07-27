@@ -1,14 +1,13 @@
 """TODOs
-1. Implement writing tensor data with alignment.
-2. Implement writers for known architectures, LLaMA in particular.
-3. Add docstrings from the format specs.
-4. After development is done, Convert it to a proper pip-installable Python package, and possibly move it to its own repo under ggml-org.
+1. Implement writers for known architectures, LLaMA in particular.
+2. Add docstrings from the format specs.
+3. After development is done, Convert it to a proper pip-installable Python package, and possibly move it to its own repo under ggml-org.
 """
 
 import struct
 import constants
 from enum import IntEnum
-from typing import Any, IO, List, Sequence
+from typing import Any, IO, List
 
 import numpy as np
 
