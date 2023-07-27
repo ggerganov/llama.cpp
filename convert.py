@@ -146,7 +146,7 @@ class Params:
     n_mult:    int
     n_head:    int
     n_layer:   int
-    n_kv_head: int  # This parameter is only used for Llama 2
+    n_kv_head: Optional[int]  # This parameter is only used for Llama 2
 
     @staticmethod
     def guessed(model: 'LazyModel') -> 'Params':
@@ -185,10 +185,7 @@ class Params:
         n_head  = config["num_attention_heads"];
         n_layer = config["num_hidden_layers"];
         n_ff    = config["intermediate_size"];
-        if "num_key_value_heads" in config:
-            n_kv_head = config["num_key_value_heads"]
-        else:
-            n_kv_head = None
+        n_kv_head = config.get("num_key_value_heads")
 
         n_mult = find_n_mult(n_ff, n_embd);
 
