@@ -278,19 +278,7 @@ class SentencePieceVocab:
         return f"<SentencePieceVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
 
 
-class GGMLVocab:
-    def __init__(self, tokens: List[Tuple[bytes, float]]):
-        self.tokens = tokens
-        self.vocab_size = len(tokens)
-
-    def all_tokens(self) -> Iterable[Tuple[bytes, float]]:
-        return self.tokens
-
-    def __repr__(self) -> str:
-        return f"<GGMLVocab with {self.vocab_size} tokens>"
-
-
-Vocab = Union[SentencePieceVocab, GGMLVocab]
+Vocab = Union[SentencePieceVocab]
 
 
 def permute(weights: NDArray, n_head: int) -> NDArray:
@@ -691,7 +679,6 @@ def bounded_parallel_map(func: Callable[[In], Out], iterable: Iterable[In], conc
 
 def check_vocab_size(params: Params, vocab: Vocab) -> None:
     if params.n_vocab != vocab.vocab_size:
-        # GGMLVocab comes from the same file as the model so shouldn't mismatch:
         assert isinstance(vocab, SentencePieceVocab)
         if params.n_vocab == vocab.vocab_size_base:
             print("Ignoring added_tokens.json since model matches vocab size without it.")
@@ -874,7 +861,7 @@ def load_vocab(path: Path, vocabtype: Optional[str]) -> SentencePieceVocab:
     if path.is_dir():
         vocab_file = "tokenizer.model"
         if vocabtype == 'bpe':
-          vocab_file = "vocab.json"
+            vocab_file = "vocab.json"
         path2 = path / vocab_file
         # Use `.parent` instead of /.. to handle the symlink case better.
         path3 = path.parent / vocab_file
@@ -916,15 +903,14 @@ def do_dump_model(model_plus: ModelPlus) -> None:
 
 def main(args_in: Optional[List[str]] = None) -> None:
     parser = argparse.ArgumentParser(description="Convert a LLaMa model to a GGML compatible file")
-    parser.add_argument("--dump", action="store_true", help="don't convert, just show what's in the model")
-    parser.add_argument("--dump-single", action="store_true", help="don't convert, just show what's in a single model file")
-    parser.add_argument("--vocab-only", action="store_true", help="extract only the vocab")
-    parser.add_argument("--outtype", choices=["f32", "f16", "q4_1", "q4_0"], help="output format (default: based on input)")
-    parser.add_argument("--vocab-dir", type=Path, help="directory containing tokenizer.model, if separate from model file")
-    parser.add_argument("--outfile", type=Path, help="path to write to; default: based on input")
-    parser.add_argument("model", type=Path,
-                        help="directory containing model file, or model file itself (*.pth, *.pt, *.bin)")
-    parser.add_argument("--vocabtype", default='spm', choices=["spm", "bpe"], help="vocab format (default: spm)")
+    parser.add_argument("--dump",        action="store_true",    help="don't convert, just show what's in the model")
+    parser.add_argument("--dump-single", action="store_true",    help="don't convert, just show what's in a single model file")
+    parser.add_argument("--vocab-only",  action="store_true",    help="extract only the vocab")
+    parser.add_argument("--outtype",     choices=["f32", "f16"], help="output format (default: based on input)")
+    parser.add_argument("--vocab-dir",   type=Path,              help="directory containing tokenizer.model, if separate from model file")
+    parser.add_argument("--outfile",     type=Path,              help="path to write to; default: based on input")
+    parser.add_argument("model",         type=Path,              help="directory containing model file, or model file itself (*.pth, *.pt, *.bin)")
+    parser.add_argument("--vocabtype",   choices=["spm", "bpe"], help="vocab format (default: spm)")
     args = parser.parse_args(args_in)
 
     vocab: Vocab
@@ -947,12 +933,14 @@ def main(args_in: Optional[List[str]] = None) -> None:
         else:
             vocab_dir = args.vocab_dir if args.vocab_dir else model_plus.paths[0].parent
             vocab = load_vocab(vocab_dir, args.vocabtype)
-        params = Params.load(model_plus)
-        model = model_plus.model
-        model = do_necessary_conversions(model, params)
+
+        params      = Params.load(model_plus)
+        model       = model_plus.model
+        model       = do_necessary_conversions(model, params)
         output_type = pick_output_type(model, args.outtype)
-        model = convert_to_output_type(model, output_type)
-        outfile = args.outfile or default_outfile(model_plus.paths, output_type)
+        model       = convert_to_output_type(model, output_type)
+        outfile     = args.outfile or default_outfile(model_plus.paths, output_type)
+
         OutputFile.write_all(outfile, params, output_type, model, vocab)
         print(f"Wrote {outfile}")
 
