@@ -903,13 +903,17 @@ typedef struct {
 } block_q4_0;
 static_assert(sizeof(block_q4_0) == sizeof(int8_t) + QK4_0 / 2, "wrong q4_0 block size/padding");
 
+#define Q4_1DM   (2.0f/15.0f)
+#define Q4_1MM   (2.0f      )
+#define Q4_1D(x) (        (((x) &  0xFF)*Q4_1DM) / 255.0f)
+#define Q4_1M(x) (-1.0f + (((x) >>    8)*Q4_1MM) / 255.0f)
+
 #define QK4_1 32
 typedef struct {
-    ggml_fp16_t d;          // delta
-    ggml_fp16_t m;          // min
-    uint8_t qs[QK4_1 / 2];  // nibbles / quants
+    uint16_t dm;             // 8-bit delta + 8-bit min (can be adjusted easily)
+    uint8_t  qs[QK4_1 / 2];  // nibbles / quants
 } block_q4_1;
-static_assert(sizeof(block_q4_1) == 2 * sizeof(ggml_fp16_t) + QK4_1 / 2, "wrong q4_1 block size/padding");
+static_assert(sizeof(block_q4_1) == sizeof(uint16_t) + QK4_1 / 2, "wrong q4_1 block size/padding");
 
 #define QK5_0 32
 typedef struct {
@@ -929,7 +933,7 @@ static_assert(sizeof(block_q5_0) == sizeof(ggml_fp16_t) + sizeof(uint32_t) + QK5
 
 #define QK5_1 32
 typedef struct {
-    uint8_t dm;            // 4-bit delta + 4-bit min
+    uint8_t dm;            // 4-bit delta + 4-bit min (can be adjusted easily)
     uint8_t qh[4];         // 5-th bit of quants
     uint8_t qs[QK5_1 / 2]; // nibbles / quants
 } block_q5_1;
@@ -1013,11 +1017,17 @@ static void quantize_row_q4_1_reference(const float * restrict x, block_q4_1 * r
             if (v > max) max = v;
         }
 
-        const float d  = (max - min) / ((1 << 4) - 1);
-        const float id = d ? 1.0f/d : 0.0f;
+        y[i].dm = (uint16_t)(floorf((255.0f * (min + 1.0f)) / Q4_1MM)) << 8;
 
-        y[i].d = GGML_FP32_TO_FP16(d);
-        y[i].m = GGML_FP32_TO_FP16(min);
+        min = Q4_1M(y[i].dm);
+
+        float d = (max - min) / ((1 << 4) - 1);
+
+        y[i].dm |= (uint16_t)(ceilf((255.0f * d) / Q4_1DM));
+
+        d = Q4_1D(y[i].dm);
+
+        const float id = d ? 1.0f/d : 0.0f;
 
         for (int j = 0; j < qk/2; ++j) {
             const float x0 = (x[i*qk + 0    + j] - min)*id;
@@ -1570,8 +1580,8 @@ static void dequantize_row_q4_1(const block_q4_1 * restrict x, float * restrict 
     const int nb = k / qk;
 
     for (int i = 0; i < nb; i++) {
-        const float d = GGML_FP16_TO_FP32(x[i].d);
-        const float m = GGML_FP16_TO_FP32(x[i].m);
+        const float d = Q4_1D(x[i].dm);
+        const float m = Q4_1M(x[i].dm);
 
         for (int j = 0; j < qk/2; ++j) {
             const int x0 = (x[i].qs[j] & 0x0F);
@@ -2671,7 +2681,7 @@ static void ggml_vec_dot_q4_1_q8_1(const int n, float * restrict s, const void *
         const block_q8_1 * restrict y0 = &y[i + 0];
         const block_q8_1 * restrict y1 = &y[i + 1];
 
-        summs += GGML_FP16_TO_FP32(x0->m) * y0->s + GGML_FP16_TO_FP32(x1->m) * y1->s;
+        summs += Q4_1M(x0->dm) * y0->s + GGML_FP16_TO_FP32(x1->m) * y1->s;
 
         const uint8x16_t m4b = vdupq_n_u8(0x0F);
 
@@ -2695,8 +2705,8 @@ static void ggml_vec_dot_q4_1_q8_1(const int n, float * restrict s, const void *
         const int32x4_t p_0 = vdotq_s32(vdotq_s32(vdupq_n_s32(0), v0_0l, v1_0l), v0_0h, v1_0h);
         const int32x4_t p_1 = vdotq_s32(vdotq_s32(vdupq_n_s32(0), v0_1l, v1_1l), v0_1h, v1_1h);
 
-        sumv0 = vmlaq_n_f32(sumv0, vcvtq_f32_s32(p_0), GGML_FP16_TO_FP32(x0->d)*y0->d);
-        sumv1 = vmlaq_n_f32(sumv1, vcvtq_f32_s32(p_1), GGML_FP16_TO_FP32(x1->d)*y1->d);
+        sumv0 = vmlaq_n_f32(sumv0, vcvtq_f32_s32(p_0), Q4_1D(x0->dm)*y0->d);
+        sumv1 = vmlaq_n_f32(sumv1, vcvtq_f32_s32(p_1), Q4_1D(x1->dm)*y1->d);
 #else
         const int16x8_t pl0l = vmull_s8(vget_low_s8 (v0_0l), vget_low_s8 (v1_0l));
         const int16x8_t pl0h = vmull_s8(vget_high_s8(v0_0l), vget_high_s8(v1_0l));
@@ -2713,8 +2723,8 @@ static void ggml_vec_dot_q4_1_q8_1(const int n, float * restrict s, const void *
         const int32x4_t pl1 = vaddq_s32(vpaddlq_s16(pl1l), vpaddlq_s16(pl1h));
         const int32x4_t ph1 = vaddq_s32(vpaddlq_s16(ph1l), vpaddlq_s16(ph1h));
 
-        sumv0 = vmlaq_n_f32(sumv0, vcvtq_f32_s32(vaddq_s32(pl0, ph0)), GGML_FP16_TO_FP32(x0->d)*y0->d);
-        sumv1 = vmlaq_n_f32(sumv1, vcvtq_f32_s32(vaddq_s32(pl1, ph1)), GGML_FP16_TO_FP32(x1->d)*y1->d);
+        sumv0 = vmlaq_n_f32(sumv0, vcvtq_f32_s32(vaddq_s32(pl0, ph0)), Q4_1D(x0->dm)*y0->d);
+        sumv1 = vmlaq_n_f32(sumv1, vcvtq_f32_s32(vaddq_s32(pl1, ph1)), Q4_1D(x1->dm)*y1->d);
 #endif
     }
 
@@ -2727,10 +2737,10 @@ static void ggml_vec_dot_q4_1_q8_1(const int n, float * restrict s, const void *
 
     // Main loop
     for (int i = 0; i < nb; ++i) {
-        const float d0 = GGML_FP16_TO_FP32(x[i].d);
+        const float d0 = Q4_1D(x[i].dm);
         const float d1 = y[i].d;
 
-        summs += GGML_FP16_TO_FP32(x[i].m) * y[i].s;
+        summs += Q4_1M(x[i].dm) * y[i].s;
 
         const __m256 d0v = _mm256_set1_ps( d0 );
         const __m256 d1v = _mm256_set1_ps( d1 );
@@ -2767,7 +2777,7 @@ static void ggml_vec_dot_q4_1_q8_1(const int n, float * restrict s, const void *
             sumi += (v0 * y[i].qs[j]) + (v1 * y[i].qs[j + qk/2]);
         }
 
-        sumf += (GGML_FP16_TO_FP32(x[i].d)*y[i].d)*sumi + GGML_FP16_TO_FP32(x[i].m)*y[i].s;
+        sumf += (Q4_1D(x[i].dm)*y[i].d)*sumi + Q4_1M(x[i].dm)*y[i].s;
     }
 
     *s = sumf;

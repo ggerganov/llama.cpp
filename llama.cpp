@@ -3031,8 +3031,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 f32_data = (float *) f32_conv_buf.addr;
             }
 
-            // TODO: this is temporary since we only implemented Q4_0 and Q5_1 as POC
-            if (new_type == GGML_TYPE_Q4_0 || new_type == GGML_TYPE_Q5_1) {
+            // TODO: this is temporary since we only implemented Q4_0, Q4_1 and Q5_1 as PoC
+            if (new_type == GGML_TYPE_Q4_0 || new_type == GGML_TYPE_Q4_1 || new_type == GGML_TYPE_Q5_1) {
                 //printf("\n dims: %d x %d\n", tensor.ne.at(0), tensor.ne.at(1));
 
                 const uint32_t nr = tensor.ne.at(1);
