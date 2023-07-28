@@ -456,8 +456,8 @@ struct ggml_tensor * forward(
             // wk   shape [n_embd, n_embd, 1, 1]
             // Qcur shape [n_embd/n_head, n_head, N, 1]
             // Kcur shape [n_embd/n_head, n_head, N, 1]
-            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0, 0);
-            struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wk, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0, 0);
+            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0, n_ctx);
+            struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wk, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0, n_ctx);
 
             // store key and value to memory
             {
@@ -713,8 +713,8 @@ struct ggml_tensor * forward_batch(
             // wk   shape [n_embd, n_embd, 1, 1]
             // Qcur shape [n_embd/n_head, n_head, N, n_batch]
             // Kcur shape [n_embd/n_head, n_head, N, n_batch]
-            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wq, cur), n_embd/n_head, n_head, N, n_batch), n_past, n_rot, 0, 0);
-            struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wk, cur), n_embd/n_head, n_head, N, n_batch), n_past, n_rot, 0, 0);
+            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wq, cur), n_embd/n_head, n_head, N, n_batch), n_past, n_rot, 0, n_ctx);
+            struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wk, cur), n_embd/n_head, n_head, N, n_batch), n_past, n_rot, 0, n_ctx);
             assert_shape_4d(Qcur, n_embd/n_head, n_head, N, n_batch);
             assert_shape_4d(Kcur, n_embd/n_head, n_head, N, n_batch);
 
@@ -957,7 +957,7 @@ struct ggml_tensor * forward_batch_wo_cache(
     const int N = n_tokens;
 
     const auto & hparams = model->hparams;
-    //const int n_ctx   = hparams.n_ctx;
+    const int n_ctx   = hparams.n_ctx;
     const int n_vocab = hparams.n_vocab;
     const int n_embd  = hparams.n_embd;
     const int n_layer = hparams.n_layer;
@@ -998,8 +998,8 @@ struct ggml_tensor * forward_batch_wo_cache(
             // wk   shape [n_embd, n_embd, 1, 1]
             // Qcur shape [n_embd/n_head, n_head, N, n_batch]
             // Kcur shape [n_embd/n_head, n_head, N, n_batch]
-            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wq, cur), n_embd/n_head, n_head, N, n_batch), n_past, n_rot, 0, 0);
-            struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wk, cur), n_embd/n_head, n_head, N, n_batch), n_past, n_rot, 0, 0);
+            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wq, cur), n_embd/n_head, n_head, N, n_batch), n_past, n_rot, 0, n_ctx);
+            struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wk, cur), n_embd/n_head, n_head, N, n_batch), n_past, n_rot, 0, n_ctx);
             assert_shape_4d(Qcur, n_embd/n_head, n_head, N, n_batch);
             assert_shape_4d(Kcur, n_embd/n_head, n_head, N, n_batch);
 
@@ -1185,7 +1185,7 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn(
     const int N = n_tokens;
 
     const auto & hparams = model->hparams;
-    //const int n_ctx   = hparams.n_ctx;
+    const int n_ctx   = hparams.n_ctx;
     const int n_vocab = hparams.n_vocab;
     const int n_embd  = hparams.n_embd;
     const int n_layer = hparams.n_layer;
@@ -1220,8 +1220,8 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn(
             // compute Q and K and RoPE them
             // wq   shape [n_embd, n_embd, 1, 1]
             // wk   shape [n_embd, n_embd, 1, 1]
-            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wq, cur), n_embd/n_head, n_head, N, n_batch), n_past, n_rot, 0, 0);
-            struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wk, cur), n_embd/n_head, n_head, N, n_batch), n_past, n_rot, 0, 0);
+            struct ggml_tensor * Qcur = ggml_rope_inplace(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wq, cur), n_embd/n_head, n_head, N, n_batch), n_past, n_rot, 0, n_ctx);
+            struct ggml_tensor * Kcur = ggml_rope_inplace(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wk, cur), n_embd/n_head, n_head, N, n_batch), n_past, n_rot, 0, n_ctx);
             assert_shape_4d(Qcur, n_embd/n_head, n_head, N, n_batch);
             assert_shape_4d(Kcur, n_embd/n_head, n_head, N, n_batch);
 
@@ -1613,10 +1613,10 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train(
         use_buf(-1); struct ggml_tensor * t04 = expand(gf, ggml_mul          (ctx0, t02, t03));                               assert_shape_2d(t04, n_embd, N*n_batch);
         use_buf(-1); struct ggml_tensor * t05 = expand(gf, ggml_mul_mat      (ctx0, layer.wq, t04));                          assert_shape_2d(t05, n_embd, N*n_batch);
         use_buf(-1); struct ggml_tensor * t06 = expand(gf, ggml_reshape_4d   (ctx0, t05, n_embd/n_head, n_head, N, n_batch)); assert_shape_4d(t06, n_embd/n_head, n_head, N, n_batch);
-        use_buf(-1); struct ggml_tensor * t07 = expand(gf, ggml_rope_inplace (ctx0, t06, n_past, n_rot, rope_mode, 0));       assert_shape_4d(t07, n_embd/n_head, n_head, N, n_batch);
+        use_buf(-1); struct ggml_tensor * t07 = expand(gf, ggml_rope_inplace (ctx0, t06, n_past, n_rot, rope_mode, n_ctx));   assert_shape_4d(t07, n_embd/n_head, n_head, N, n_batch);
         use_buf(-1); struct ggml_tensor * t08 = expand(gf, ggml_mul_mat      (ctx0, layer.wk, t04));                          assert_shape_2d(t08, n_embd, N*n_batch);
         use_buf(-1); struct ggml_tensor * t09 = expand(gf, ggml_reshape_4d   (ctx0, t08, n_embd/n_head, n_head, N, n_batch)); assert_shape_4d(t09, n_embd/n_head, n_head, N, n_batch);
-        use_buf(-1); struct ggml_tensor * t10 = expand(gf, ggml_rope_inplace (ctx0, t09, n_past, n_rot, rope_mode, 0));       assert_shape_4d(t10, n_embd/n_head, n_head, N, n_batch);
+        use_buf(-1); struct ggml_tensor * t10 = expand(gf, ggml_rope_inplace (ctx0, t09, n_past, n_rot, rope_mode, n_ctx));   assert_shape_4d(t10, n_embd/n_head, n_head, N, n_batch);
         use_buf(-1); struct ggml_tensor * t11 = expand(gf, ggml_mul_mat      (ctx0, t04, layer.wv));                          assert_shape_2d(t11, N*n_batch, n_embd);
         use_buf(-1); struct ggml_tensor * t12 = expand(gf, ggml_reshape_4d   (ctx0, t11, N, n_batch, n_embd/n_head, n_head)); assert_shape_4d(t12, N, n_batch, n_embd/n_head, n_head);
         use_buf(-1); struct ggml_tensor * t13 = expand(gf, ggml_permute      (ctx0, t07, 0, 2, 1, 3));                        assert_shape_4d(t13, n_embd/n_head, N, n_head, n_batch);
@@ -1952,7 +1952,7 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train_grad_checkpointing(
     gf->perf_time_us = 0;
 
     const auto & hparams = model->hparams;
-    //const int n_ctx      = hparams.n_ctx;
+    const int n_ctx      = hparams.n_ctx;
     const int n_vocab    = hparams.n_vocab;
     const int n_embd     = hparams.n_embd;
     const int n_layer    = hparams.n_layer;
@@ -2196,10 +2196,10 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train_grad_checkpointing(
         use_buf(prs); struct ggml_tensor * t04 = expand(gf, ggml_mul          (ctx0, t02, t03));                               assert_shape_2d(t04, n_embd, N*n_batch);
         use_buf(prs); struct ggml_tensor * t05 = expand(gf, ggml_mul_mat      (ctx0, layer.wq, t04));                          assert_shape_2d(t05, n_embd, N*n_batch);
         use_buf(prs); struct ggml_tensor * t06 = expand(gf, ggml_reshape_4d   (ctx0, t05, n_embd/n_head, n_head, N, n_batch)); assert_shape_4d(t06, n_embd/n_head, n_head, N, n_batch);
-        use_buf(prs); struct ggml_tensor * t07 = expand(gf, ggml_rope_inplace (ctx0, t06, n_past, n_rot, rope_mode));          assert_shape_4d(t07, n_embd/n_head, n_head, N, n_batch);
+        use_buf(prs); struct ggml_tensor * t07 = expand(gf, ggml_rope_inplace (ctx0, t06, n_past, n_rot, rope_mode, n_ctx));   assert_shape_4d(t07, n_embd/n_head, n_head, N, n_batch);
         use_buf(prs); struct ggml_tensor * t08 = expand(gf, ggml_mul_mat      (ctx0, layer.wk, t04));                          assert_shape_2d(t08, n_embd, N*n_batch);
         use_buf(prs); struct ggml_tensor * t09 = expand(gf, ggml_reshape_4d   (ctx0, t08, n_embd/n_head, n_head, N, n_batch)); assert_shape_4d(t09, n_embd/n_head, n_head, N, n_batch);
-        use_buf(prs); struct ggml_tensor * t10 = expand(gf, ggml_rope_inplace (ctx0, t09, n_past, n_rot, rope_mode));          assert_shape_4d(t10, n_embd/n_head, n_head, N, n_batch);
+        use_buf(prs); struct ggml_tensor * t10 = expand(gf, ggml_rope_inplace (ctx0, t09, n_past, n_rot, rope_mode, n_ctx));   assert_shape_4d(t10, n_embd/n_head, n_head, N, n_batch);
         use_buf(prs); struct ggml_tensor * t11 = expand(gf, ggml_mul_mat      (ctx0, t04, layer.wv));                          assert_shape_2d(t11, N*n_batch, n_embd);
         use_buf(prs); struct ggml_tensor * t12 = expand(gf, ggml_reshape_4d   (ctx0, t11, N, n_batch, n_embd/n_head, n_head)); assert_shape_4d(t12, N, n_batch, n_embd/n_head, n_head);
         use_buf(prs); struct ggml_tensor * t13 = expand(gf, ggml_permute      (ctx0, t07, 0, 2, 1, 3));                        assert_shape_4d(t13, n_embd/n_head, N, n_head, n_batch);
@@ -2297,10 +2297,10 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train_grad_checkpointing(
                 use_buf(prs); struct ggml_tensor * t04 = expand(gb, ggml_mul          (ctx0, t02, t03));                               assert_shape_2d(t04, n_embd, N*n_batch);
                 use_buf(prs); struct ggml_tensor * t05 = expand(gb, ggml_mul_mat      (ctx0, layer.wq, t04));                          assert_shape_2d(t05, n_embd, N*n_batch);
                 use_buf(prs); struct ggml_tensor * t06 = expand(gb, ggml_reshape_4d   (ctx0, t05, n_embd/n_head, n_head, N, n_batch)); assert_shape_4d(t06, n_embd/n_head, n_head, N, n_batch);
-                use_buf(prs); struct ggml_tensor * t07 = expand(gb, ggml_rope_inplace (ctx0, t06, n_past, n_rot, rope_mode));          assert_shape_4d(t07, n_embd/n_head, n_head, N, n_batch);
+                use_buf(prs); struct ggml_tensor * t07 = expand(gb, ggml_rope_inplace (ctx0, t06, n_past, n_rot, rope_mode, n_ctx));   assert_shape_4d(t07, n_embd/n_head, n_head, N, n_batch);
                 use_buf(prs); struct ggml_tensor * t08 = expand(gb, ggml_mul_mat      (ctx0, layer.wk, t04));                          assert_shape_2d(t08, n_embd, N*n_batch);
                 use_buf(prs); struct ggml_tensor * t09 = expand(gb, ggml_reshape_4d   (ctx0, t08, n_embd/n_head, n_head, N, n_batch)); assert_shape_4d(t09, n_embd/n_head, n_head, N, n_batch);
-                use_buf(prs); struct ggml_tensor * t10 = expand(gb, ggml_rope_inplace (ctx0, t09, n_past, n_rot, rope_mode));          assert_shape_4d(t10, n_embd/n_head, n_head, N, n_batch);
+                use_buf(prs); struct ggml_tensor * t10 = expand(gb, ggml_rope_inplace (ctx0, t09, n_past, n_rot, rope_mode, n_ctx));   assert_shape_4d(t10, n_embd/n_head, n_head, N, n_batch);
                 use_buf(prs); struct ggml_tensor * t11 = expand(gb, ggml_mul_mat      (ctx0, t04, layer.wv));                          assert_shape_2d(t11, N*n_batch, n_embd);
                 use_buf(prs); struct ggml_tensor * t12 = expand(gb, ggml_reshape_4d   (ctx0, t11, N, n_batch, n_embd/n_head, n_head)); assert_shape_4d(t12, N, n_batch, n_embd/n_head, n_head);
                 use_buf(prs); struct ggml_tensor * t13 = expand(gb, ggml_permute      (ctx0, t07, 0, 2, 1, 3));                        assert_shape_4d(t13, n_embd/n_head, N, n_head, n_batch);
@@ -2426,10 +2426,10 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train_grad_checkpointing(
         t12->grad = expand(gb, ggml_permute(ctx0, t15->grad, 0, 2, 3, 1));                                            assert_shape_4d(t12->grad, N, n_batch, n_embd/n_head, n_head);
         t11->grad = expand(gb, ggml_reshape_2d(ctx0, ggml_cont(ctx0, t12->grad), N*n_batch, n_embd));                 assert_shape_2d(t11->grad, N*n_batch, n_embd);
         t10->grad = expand(gb, ggml_permute(ctx0, t14->grad, 0, 2, 1, 3));                                            assert_shape_4d(t10->grad, n_embd/n_head, n_head, N, n_batch);
-        t09->grad = expand(gb, ggml_rope_back(ctx0, t10->grad, n_past, n_rot, rope_mode));                            assert_shape_4d(t09->grad, n_embd/n_head, n_head, N, n_batch);
+        t09->grad = expand(gb, ggml_rope_back(ctx0, t10->grad, n_past, n_rot, rope_mode, n_ctx));                     assert_shape_4d(t09->grad, n_embd/n_head, n_head, N, n_batch);
         t08->grad = expand(gb, ggml_reshape_2d(ctx0, t09->grad, n_embd, N*n_batch));                                  assert_shape_2d(t08->grad, n_embd, N*n_batch);
         t07->grad = expand(gb, ggml_permute(ctx0, t13->grad, 0, 2, 1, 3));                                            assert_shape_4d(t07->grad, n_embd/n_head, n_head, N, n_batch);
-        t06->grad = expand(gb, ggml_rope_back(ctx0, t07->grad, n_past, n_rot, rope_mode));                            assert_shape_4d(t06->grad, n_embd/n_head, n_head, N, n_batch);
+        t06->grad = expand(gb, ggml_rope_back(ctx0, t07->grad, n_past, n_rot, rope_mode, n_ctx));                     assert_shape_4d(t06->grad, n_embd/n_head, n_head, N, n_batch);
         t05->grad = expand(gb, ggml_reshape_2d(ctx0, t06->grad, n_embd, N*n_batch));                                  assert_shape_2d(t05->grad, n_embd, N*n_batch);
         t04->grad = expand(gb, ggml_add_inplace(ctx0,
                         ggml_add_inplace(ctx0,
