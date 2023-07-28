@@ -18745,6 +18745,21 @@ int gguf_get_n_kv(struct gguf_context * ctx) {
     return ctx->header.n_kv;
 }
 
+int gguf_find_key(struct gguf_context * ctx, const char * key) {
+    // return -1 if key not found
+    const int n_kv = gguf_get_n_kv(ctx);
+    int keyfound   = -1;
+
+    for (int i = 0; i < n_kv; ++i) {
+        if (strcmp(key, gguf_get_key(ctx, i)) == 0) {
+            keyfound = i;
+            break;
+        }
+    }
+
+    return keyfound;
+}
+
 const char * gguf_get_key(struct gguf_context * ctx, int i) {
     return ctx->header.kv[i].key.data;
 }
