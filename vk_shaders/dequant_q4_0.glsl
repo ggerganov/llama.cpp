@@ -17,7 +17,7 @@ struct block_q4_0
 };
 
 layout (binding = 0) readonly buffer A { block_q4_0 x[]; };
-layout (binding = 1) writeonly buffer D { float y[]; };
+layout (binding = 1) writeonly buffer D { float16_t y[]; };
 
 layout (push_constant) uniform parameter
 {
@@ -41,11 +41,11 @@ void main() {
     const int stride_a = p.stride_a / QUANT_K;
 
     const block_q4_0 blk = x[col * stride_a + row];
-    const float d = float(blk.d);
+    const float16_t d = blk.d;
 
     [[unroll]] for (int j = 0; j < QUANT_K/2; ++j) {
-        const int x0 = (blk.qs[j] & 0x0F) - 8;
-        const int x1 = (blk.qs[j] >>   4) - 8;
+        const float16_t x0 = float16_t((blk.qs[j] & 0x0F) - 8);
+        const float16_t x1 = float16_t((blk.qs[j] >>   4) - 8);
 
         y[col * p.stride_b + row*QUANT_K + j + 0   ] = x0*d;
         y[col * p.stride_b + row*QUANT_K + j + QUANT_K/2] = x1*d;

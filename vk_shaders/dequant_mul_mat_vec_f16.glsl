@@ -11,7 +11,7 @@
 layout(local_size_x = BLOCK_SIZE, local_size_y = 1, local_size_z = 1) in;
 
 layout (binding = 0) readonly buffer A { float16_t x[]; };
-layout (binding = 1) readonly buffer B { float y[]; };
+layout (binding = 1) readonly buffer B { float16_t y[]; };
 layout (binding = 2) writeonly buffer D { float dst[]; };
 
 layout (push_constant) uniform parameter
@@ -19,7 +19,7 @@ layout (push_constant) uniform parameter
     int ncols;
 } p;
 
-shared float tmp[BLOCK_SIZE];
+shared float16_t tmp[BLOCK_SIZE];
 
 void main() {
     const int block_size = int(gl_WorkGroupSize.x);
@@ -28,7 +28,7 @@ void main() {
 
     const int y_offset = QUANT_K/2;
 
-    tmp[tid] = 0;
+    tmp[tid] = 0.0hf;
 
     [[unroll]] for (int i = 0; i < p.ncols/block_size; i += 2) {
         const int col = i*block_size + 2*tid;
@@ -37,8 +37,8 @@ void main() {
         const int iybs = col - col%QUANT_K; // y block start index
 
         // dequantize
-        float v0 = float(x[ib + 0]);
-        float v1 = float(x[ib + 1]);
+        float16_t v0 = x[ib + 0];
+        float16_t v1 = x[ib + 1];
 
         // matrix multiplication
         tmp[tid] += v0 * y[iybs + iqs + 0];
@@ -54,6 +54,6 @@ void main() {
         barrier();
     }
     if (tid == 0) {
-        dst[row] = tmp[0];
+        dst[row] = float(tmp[0]);
     }
 }

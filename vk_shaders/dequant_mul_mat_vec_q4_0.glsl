@@ -18,7 +18,7 @@ struct block_q4_0
 };
 
 layout (binding = 0) readonly buffer A { block_q4_0 x[]; };
-layout (binding = 1) readonly buffer B { float y[]; };
+layout (binding = 1) readonly buffer B { float16_t y[]; };
 layout (binding = 2) writeonly buffer D { float dst[]; };
 
 layout (push_constant) uniform parameter
@@ -26,7 +26,7 @@ layout (push_constant) uniform parameter
     int ncols;
 } p;
 
-shared float tmp[BLOCK_SIZE];
+shared float16_t tmp[BLOCK_SIZE];
 
 void main() {
     const int block_size = int(gl_WorkGroupSize.x);
@@ -35,7 +35,7 @@ void main() {
 
     const int y_offset = QUANT_K/2;
 
-    tmp[tid] = 0;
+    tmp[tid] = 0.0hf;
 
     [[unroll]] for (int i = 0; i < p.ncols/block_size; i += 2) {
         const int col = i*block_size + 2*tid;
@@ -44,15 +44,15 @@ void main() {
         const int iybs = col - col%QUANT_K; // y block start index
 
         // dequantize
-        const float d = float(x[ib].d);
+        const float16_t d = x[ib].d;
 
         const uint8_t vui = x[ib].qs[iqs];
 
         const int8_t vi0 = int8_t(vui & 0xF);
         const int8_t vi1 = int8_t(vui >> 4);
 
-        float v0 = (vi0 - 8)*d;
-        float v1 = (vi1 - 8)*d;
+        float16_t v0 = float16_t(vi0 - 8)*d;
+        float16_t v1 = float16_t(vi1 - 8)*d;
 
         // matrix multiplication
         tmp[tid] += v0 * y[iybs + iqs + 0];
@@ -68,6 +68,6 @@ void main() {
         barrier();
     }
     if (tid == 0) {
-        dst[row] = tmp[0];
+        dst[row] = float(tmp[0]);
     }
 }
