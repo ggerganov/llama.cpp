@@ -1,8 +1,6 @@
 # koboldcpp
 
-A self contained distributable from Concedo that exposes llama.cpp function bindings, allowing it to be used via a simulated Kobold API endpoint.
-
-What does it mean? You get llama.cpp with a fancy UI, persistent stories, editing tools, save formats, memory, world info, author's note, characters, scenarios and everything Kobold and Kobold Lite have to offer. In a tiny package around 20 MB in size, excluding model weights.
+KoboldCpp is an easy-to-use AI text-generation software for GGML models. It's a single self contained distributable from Concedo, that builds off llama.cpp, and adds a versatile Kobold API endpoint, additional format support, backward compatibility, as well as a fancy UI with persistent stories, editing tools, save formats, memory, world info, author's note, characters, scenarios and everything Kobold and Kobold Lite have to offer.
 
 ![Preview](media/preview.png)
 
@@ -49,9 +47,13 @@ For more information, be sure to run the program with the `--help` flag.
 ## Android (Termux) Alternative method
 - See https://github.com/ggerganov/llama.cpp/pull/1828/files
 
-## CuBLAS?
+## Using CuBLAS
 - If you're on Windows with an Nvidia GPU you can get CUDA support out of the box using the `--usecublas` flag, make sure you select the correct .exe with CUDA support.
-- You can attempt a CuBLAS build with `LLAMA_CUBLAS=1` or using the provided CMake file (best for visual studio users). If you use the CMake file to build, copy the `koboldcpp_cublas.dll` generated into the same directory as the `koboldcpp.py` file. If you are bundling executables, you may need to include CUDA dynamic libraries (such as `cublasLt64_11.dll` and `cublas64_11.dll`) in order for the executable to work correctly on a different PC. Note that support for CuBLAS is limited.
+- You can attempt a CuBLAS build with `LLAMA_CUBLAS=1` or using the provided CMake file (best for visual studio users). If you use the CMake file to build, copy the `koboldcpp_cublas.dll` generated into the same directory as the `koboldcpp.py` file. If you are bundling executables, you may need to include CUDA dynamic libraries (such as `cublasLt64_11.dll` and `cublas64_11.dll`) in order for the executable to work correctly on a different PC.
+
+## Questions and Help
+- **First, please check out [The KoboldCpp FAQ and Knowledgebase](https://github.com/LostRuins/koboldcpp/wiki/The-KoboldCpp-FAQ-and-Knowledgebase) which may already have answers to your questions! Also please search through past issues and discussions.**
+- If you cannot find an answer, open an issue on this github, or find us on the [KoboldAI Discord](https://koboldai.org/discord).
 
 ## Considerations
 - For Windows: No installation, single file executable, (It Just Works)
@@ -68,11 +70,11 @@ For more information, be sure to run the program with the `--help` flag.
 ## Notes
 - Generation delay scales linearly with original prompt length. If OpenBLAS is enabled then prompt ingestion becomes about 2-3x faster. This is automatic on windows, but will require linking on OSX and Linux. CLBlast speeds this up even further, and `--gpulayers` + `--useclblast` more so.
 - I have heard of someone claiming a false AV positive report. The exe is a simple pyinstaller bundle that includes the necessary python scripts and dlls to run. If this still concerns you, you might wish to rebuild everything from source code using the makefile, and you can rebuild the exe yourself with pyinstaller by using `make_pyinstaller.bat`
-- Supported GGML models:
-  - LLAMA (All versions including ggml, ggmf, ggjt v1,v2,v3, openllama, gpt4all). Supports CLBlast and OpenBLAS acceleration for all versions.
-  - GPT-2 (All versions, including legacy f16, newer format + quanitzed, cerebras, starcoder) Supports CLBlast and OpenBLAS acceleration for newer formats, no GPU layer offload.
-  - GPT-J (All versions including legacy f16, newer format + quantized, pyg.cpp, new pygmalion, janeway etc.) Supports CLBlast and OpenBLAS acceleration for newer formats, no GPU layer offload.
-  - RWKV (all formats except Q4_1_O).
+- Supported GGML models (Includes backward compatibility for older versions/legacy GGML models, though some newer features might be unavailable):
+  - LLAMA and LLAMA2 (LLaMA / Alpaca / GPT4All / Vicuna / Koala / Pygmalion 7B / Metharme 7B / WizardLM and many more)
+  - GPT-2 / Cerebras
+  - GPT-J
+  - RWKV
   - GPT-NeoX / Pythia / StableLM / Dolly / RedPajama
-  - MPT models (ggjt v3)
-  - Basically every single current and historical GGML format that has ever existed should be supported, except for bloomz.cpp due to lack of demand.
+  - MPT models
+
