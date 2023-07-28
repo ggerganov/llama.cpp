@@ -13,9 +13,9 @@ import numpy as np
 
 
 class GGMLQuantizationType(IntEnum):
-    F32  = 0
-    F16  = 1
-    QR_0 = 2
+    F32 = 0
+    F16 = 1
+    Q4_0 = 2
     Q4_1 = 3
     # Q4_2 = 4 # support has been removed
     # Q4_3 = 5 # support has been removed
@@ -32,16 +32,16 @@ class GGMLQuantizationType(IntEnum):
 
 
 class GGUFValueType(IntEnum):
-    UINT8   = 0
-    INT8    = 1
-    UINT16  = 2
-    INT16   = 3
-    UINT32  = 4
-    INT32   = 5
+    UINT8 = 0
+    INT8 = 1
+    UINT16 = 2
+    INT16 = 3
+    UINT32 = 4
+    INT32 = 5
     FLOAT32 = 6
-    BOOL    = 7
-    STRING  = 8
-    ARRAY   = 9
+    BOOL = 7
+    STRING = 8
+    ARRAY = 9
 
     @staticmethod
     def get_type(val):
@@ -75,7 +75,9 @@ class GGUFWriter:
         return cls(f)
 
     def write_key(self, key: str):
-        self.write_val(key, GGUFValueType.STRING)
+        encoded_key = key.encode("utf8")
+        self.fout.write(struct.pack("<I", len(encoded_key)))
+        self.fout.write(encoded_key)
 
     def write_uint8(self, key: str, val: int):
         self.write_key(key)
@@ -158,29 +160,35 @@ class GGUFWriter:
         return ((x + n - 1) // n) * n
 
     def write_tensor_info(self, name: str, tensor: np.ndarray):
-        self.write_val(name, GGUFValueType.STRING)
+        self.write_key(name)
         n_dims = len(tensor.shape)
-        self.write_val(n_dims, GGUFValueType.INT32)
+        self.fout.write(struct.pack("<i", n_dims))
         for i in range(n_dims):
-            self.write_val(tensor.shape[n_dims - 1 - i], GGUFValueType.INT32)
+            self.fout.write(struct.pack("<i", tensor.shape[n_dims - 1 - i]))
 
         assert tensor.dtype in (np.float32, np.float16), "Only F32 and F16 tensors are supported for now"
         dtype = GGMLQuantizationType.F32 if tensor.dtype == np.float32 else GGMLQuantizationType.F16
-        self.write_val(dtype, GGUFValueType.INT32)
+        self.fout.write(struct.pack("<i", dtype))
         self.fout.write(struct.pack("<Q", self.offset_tensor))
         self.offset_tensor += GGUFWriter.ggml_pad(tensor.nbytes, constants.GGUF_DEFAULT_ALIGNMENT)
 
-        offset_data = GGUFWriter.ggml_pad(self.fout.tell(), constants.GGUF_DEFAULT_ALIGNMENT)
-        pad = offset_data - self.fout.tell()
-        self.fout.write(bytes([0] * pad))
+        self.flush()
 
         self.tensors.append(tensor)
 
     def write_tensors(self):
+        offset_data = GGUFWriter.ggml_pad(self.fout.tell(), constants.GGUF_DEFAULT_ALIGNMENT)
+        pad = offset_data - self.fout.tell()
+        print(f"pad: {pad}")
+        if pad != 0:
+            self.fout.write(bytes([0] * pad))
+
         for tensor in self.tensors:
             tensor.tofile(self.fout)
             pad = GGUFWriter.ggml_pad(tensor.nbytes, constants.GGUF_DEFAULT_ALIGNMENT) - tensor.nbytes
-            self.fout.write(bytes([0] * pad))
+            print(f"pad: {pad}")
+            if pad != 0:
+                self.fout.write(bytes([0] * pad))
 
     def flush(self):
         self.fout.flush()
@@ -274,10 +282,10 @@ if __name__ == "__main__":
     gguf_writer.write_architecture("llama")
     gguf_writer.write_uint32("answer", 42)  # Write a 32-bit integer
     gguf_writer.write_float32("answer_in_float", 42.0)  # Write a 32-bit float
-    tensor1 = np.random.random(size=(7, 10)).astype(np.float32)
-    tensor2 = np.random.random(size=(16, 12)).astype(np.float16)
+    tensor1 = np.ones((7, 8, 3), dtype=np.float32)
+    tensor2 = np.ones((7, 8, 3), dtype=np.float32)
     gguf_writer.write_tensor_info("tensor1", tensor1)
     gguf_writer.write_tensor_info("tensor2", tensor2)
     gguf_writer.write_tensors()
 
-gguf_writer.close()
+    gguf_writer.close()
