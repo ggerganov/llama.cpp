@@ -1433,7 +1433,9 @@ static __device__ __forceinline__ float vec_dot_q5_1_q8_1(
     const block_q5_1 * bq5_1 = (const block_q5_1 *) vbq;
 
     // TODO: fix misaligned access
-    const int qs  = *((int *) &bq5_1->qs[sizeof(int) * (iqs + 0)]);
+    int qs;
+    memcpy(&qs, &bq5_1->qs[sizeof(int) * (iqs + 0)], sizeof(qs));
+    //const int qs  = *((int *) &bq5_1->qs[sizeof(int) * (iqs + 0)]);
     const int qh0 = bq5_1->qh[iqs/2 + 0] >> 4*(iqs%2);
     const int qh1 = bq5_1->qh[iqs/2 + 2] >> 4*(iqs%2);
     const int ui0 = *((int *) &bq8_1->qs[sizeof(int) * (iqs + 0)]);
