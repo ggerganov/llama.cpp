@@ -1720,7 +1720,8 @@ static __device__ __forceinline__ float vec_dot_q8_0_q8_1_mul_mat(
 #define VDR_q2_K_q8_1 1
 
 static __device__ __forceinline__ float vec_dot_q2_K_q8_1_impl(
-    const int & v, const int * u, const uint8_t * scales, const half2 & dm, const float * d8) {
+    const int & v, const int * __restrict__ u, const uint8_t * __restrict__ scales,
+    const half2 & dm, const float * __restrict__ d8) {
 
 #if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
     float sumf_d = 0.0f;
@@ -1817,8 +1818,8 @@ static __device__ __forceinline__ float vec_dot_q2_K_q8_1_mul_mat(
 #define VDR_q3_K_q8_1 1
 
 static __device__ __forceinline__ float vec_dot_q3_K_q8_1_impl(
-    const int & vl, const int & vh, const int * u, const uint8_t * scales, const int & scale_offset,
-    const float & d, const float * d8) {
+    const int & vl, const int & vh, const int * __restrict__ u, const uint8_t * __restrict__ scales,
+    const int & scale_offset, const float & d, const float * __restrict__ d8) {
 
 #if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
     float sumf = 0.0f;
@@ -1935,7 +1936,8 @@ static __device__ __forceinline__ float vec_dot_q3_K_q8_1_mul_mat(
 #define VDR_q4_K_q8_1 2
 
 static __device__ __forceinline__ float vec_dot_q4_K_q8_1_impl(
-    const int * v, const int * u, const uint8_t * sc, const uint8_t * m, const half2 & dm4, const float * d8) {
+    const int * __restrict__ v, const int * __restrict__ u, const uint8_t * __restrict__ sc,
+    const uint8_t * __restrict__ m, const half2 & dm4, const float * __restrict__ d8) {
 
 #if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
     float sumf_d = 0.0f;
@@ -2124,7 +2126,8 @@ static __device__ __forceinline__ float vec_dot_q4_K_q8_1_mul_mat(
 #define VDR_q5_K_q8_1 2
 
 static __device__ __forceinline__ float vec_dot_q5_K_q8_1_impl(
-    const int * vl, const int * vh, const int * u, const uint8_t * sc, const uint8_t * m, const half2 & dm5, const float * d8) {
+    const int * __restrict__ vl, const int * __restrict__ vh, const int * __restrict__ u, const uint8_t * __restrict__ sc,
+    const uint8_t * __restrict__ m, const half2 & dm5, const float * __restrict__ d8) {
 
 #if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
     float sumf_d = 0.0f;
