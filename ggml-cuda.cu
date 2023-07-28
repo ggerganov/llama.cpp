@@ -1357,6 +1357,10 @@ static __global__ void dequantize_block(const void * __restrict__ vx, float * __
     y[iybs + iqs + y_offset] = v.y;
 }
 
+// VDR = vec dot ratio, how many contiguous integers each thread processes when the vec dot kernel is called
+
+#define VDR_q4_0_q8_1 1
+
 static __device__ __forceinline__ float vec_dot_q4_0_q8_1_impl(
     const int & vi, const int & ui0, const int & ui1, const half & d4, const half2 & ds8) {
 
@@ -1419,6 +1423,8 @@ static __device__ __forceinline__ float vec_dot_q4_0_q8_1_mul_mat(
         x_ql[i * (WARP_SIZE + 1) + k], y_qs[j * (2*WARP_SIZE) + kyqs], y_qs[j * (2*WARP_SIZE) + kyqs + (QI8_1/2)],
         x_dm[i * (WARP_SIZE/QI4_0) + k/QI4_0].x, y_ds[j * (2*WARP_SIZE/QI8_1) + 2*k/QI8_1]);
 }
+
+#define VDR_q4_1_q8_1 1
 
 static __device__ __forceinline__ float vec_dot_q4_1_q8_1_impl(
     const int & vi, const int & ui0, const int & ui1, const half2 & dm4, const half2 & ds8) {
@@ -1491,6 +1497,8 @@ static __device__ __forceinline__ float vec_dot_q4_1_q8_1_mul_mat(
         x_ql[i * (WARP_SIZE + 1) + k], y_qs[j * (2*WARP_SIZE) + kyqs], y_qs[j * (2*WARP_SIZE) + kyqs + (QI8_1/2)],
         x_dm[i * (WARP_SIZE/QI4_1) + k/QI4_1], y_ds[j * (2*WARP_SIZE/QI8_1) + 2*k/QI8_1]);
 }
+
+#define VDR_q5_0_q8_1 1
 
 static __device__ __forceinline__ float vec_dot_q5_0_q8_1_impl(
     const int & qs, const int & qh, const int & ui0, const int & ui1, const half & d5, const half2 & ds8) {
@@ -1565,6 +1573,8 @@ static __device__ __forceinline__ float vec_dot_q5_0_q8_1_mul_mat(
         x_ql[i * (WARP_SIZE + 1) + k], x_qh[index_bx] >> (4 * (k % QI5_0)), y_qs[j * (2*WARP_SIZE) + kyqs],
         y_qs[j * (2*WARP_SIZE) + kyqs + (QI8_1/2)], x_dm[index_bx].x, y_ds[j * (2*WARP_SIZE/QI8_1) + 2*k/QI8_1]);
 }
+
+#define VDR_q5_1_q8_1 1
 
 static __device__ __forceinline__ float vec_dot_q5_1_q8_1_impl(
     const int & qs, const int & qh, const int & ui0, const int & ui1, const half2 & dm5, const half2 & ds8) {
@@ -1650,6 +1660,8 @@ static __device__ __forceinline__ float vec_dot_q5_1_q8_1_mul_mat(
         y_qs[j * (2*WARP_SIZE) + kyqs + (QI8_1/2)], x_dm[index_bx], y_ds[j * (2*WARP_SIZE/QI8_1) + 2*k/QI8_1]);
 }
 
+#define VDR_q8_0_q8_1 1
+
 static __device__ __forceinline__ float vec_dot_q8_0_q8_1_impl(
     const int & vi, const int & ui, const half & d8_0, const half2 & ds8_1) {
 
@@ -1704,6 +1716,8 @@ static __device__ __forceinline__ float vec_dot_q8_0_q8_1_mul_mat(
         x_ql[i * (WARP_SIZE + 1) + k], y_qs[j*WARP_SIZE + k],
         x_dm[i * (WARP_SIZE/QI8_0) + k/QI8_0].x, y_ds[j * (WARP_SIZE/QI8_1) + k/QI8_1]);
 }
+
+#define VDR_q2_K_q8_1 1
 
 static __device__ __forceinline__ float vec_dot_q2_K_q8_1_impl(
     const int & v, const int * u, const uint8_t * scales, const half2 & dm, const float * d8) {
@@ -1799,6 +1813,8 @@ static __device__ __forceinline__ float vec_dot_q2_K_q8_1_mul_mat(
 
     return vec_dot_q2_K_q8_1_impl(x_ql[i * (WARP_SIZE + 1) + k], u, scales, x_dm[i * (WARP_SIZE/QI2_K) + kbx], d8);
 }
+
+#define VDR_q3_K_q8_1 1
 
 static __device__ __forceinline__ float vec_dot_q3_K_q8_1_impl(
     const int & vl, const int & vh, const int * u, const uint8_t * scales, const int & scale_offset,
@@ -1915,6 +1931,8 @@ static __device__ __forceinline__ float vec_dot_q3_K_q8_1_mul_mat(
 
     return vec_dot_q3_K_q8_1_impl(x_ql[i * (WARP_SIZE + 1) + k], vh, u, scales, scale_offset, x_dm[i * (WARP_SIZE/QI3_K) + kbx].x, d8);
 }
+
+#define VDR_q4_K_q8_1 2
 
 static __device__ __forceinline__ float vec_dot_q4_K_q8_1_impl(
     const int * v, const int * u, const uint8_t * sc, const uint8_t * m, const half2 & dm4, const float * d8) {
@@ -2063,10 +2081,6 @@ static __device__ __forceinline__ float vec_dot_q4_K_q8_1_mul_mat(
     const int * __restrict__ x_ql, const half2 * __restrict__ x_dm, const int * __restrict__ x_qh, const int * __restrict__ x_sc,
     const int * __restrict__ y_qs, const half2 * __restrict__ y_ds, const int & i, const int & j, const int & k) {
 
-    if (k >= WARP_SIZE/2) {
-        return 0.0f;
-    }
-
     __builtin_assume(i < 2*WARP_SIZE);
     __builtin_assume(j < WARP_SIZE);
     __builtin_assume(k < WARP_SIZE);
@@ -2106,6 +2120,8 @@ static __device__ __forceinline__ float vec_dot_q4_K_q8_1_mul_mat(
 
     return vec_dot_q4_K_q8_1_impl(v, u, sc, m, x_dm[i * (WARP_SIZE/QI4_K) + kbx], d8);
 }
+
+#define VDR_q5_K_q8_1 1
 
 static __device__ __forceinline__ float vec_dot_q5_K_q8_1_impl(
     const int * vl, const int * vh, const int * u, const uint8_t * sc, const uint8_t * m, const half2 & dm5, const float * d8) {
@@ -2227,6 +2243,8 @@ static __device__ __forceinline__ float vec_dot_q5_K_q8_1(
 #endif
 }
 
+#define VDR_q6_K_q8_1 1
+
 static __device__ __forceinline__ float vec_dot_q6_K_q8_1_impl(
     const int & vl, const int & vh, const int * __restrict__ u, const int8_t * __restrict__ scales,
     const float & d, const float * __restrict__ d8) {
@@ -2338,7 +2356,7 @@ static __device__ __forceinline__ float vec_dot_q6_K_q8_1_mul_mat(
 }
 
 template <int qk, int qr, int qi, typename block_q_t,
-              allocate_tiles_cuda_t allocate_tiles, load_tiles_cuda_t load_tiles, vec_dot_q_mul_mat_cuda_t vec_dot>
+              allocate_tiles_cuda_t allocate_tiles, load_tiles_cuda_t load_tiles, int vdr, vec_dot_q_mul_mat_cuda_t vec_dot>
 static __global__ void mul_mat_q(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst) {
@@ -2399,7 +2417,7 @@ static __global__ void mul_mat_q(
 
         __syncthreads();
 
-        for (int k = 0; k < WARP_SIZE; ++k) {
+        for (int k = 0; k < WARP_SIZE/vdr; ++k) {
             for (int j = 0; j < WARP_SIZE; j += 8) {
                 sum[0][j/8] += vec_dot(tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc, tile_y_qs, tile_y_ds,
                                        tid_x,             tid_y + j, k);
@@ -2428,7 +2446,7 @@ static __global__ void mul_mat_q(
     }
 }
 
-template <int qk, int qi, typename block_q_t, vec_dot_q_cuda_t vec_dot_q_cuda>
+template <int qk, int qi, typename block_q_t, int vdr, vec_dot_q_cuda_t vec_dot_q_cuda>
 static __global__ void mul_mat_vec_q(const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst, const int ncols, const int nrows) {
     const int row = blockIdx.y*blockDim.y + threadIdx.y;
 
@@ -2437,7 +2455,7 @@ static __global__ void mul_mat_vec_q(const void * __restrict__ vx, const void * 
     }
 
     const int blocks_per_row = ncols / qk;
-    const int blocks_per_warp = WARP_SIZE / qi;
+    const int blocks_per_warp = vdr * WARP_SIZE / qi;
 
 // partial sum for each thread
     float tmp = 0.0f;
@@ -2446,11 +2464,11 @@ static __global__ void mul_mat_vec_q(const void * __restrict__ vx, const void * 
     const block_q8_1 * y = (const block_q8_1 *) vy;
 
     for (int i = 0; i < blocks_per_row; i += blocks_per_warp) {
-        const int ibx = row*blocks_per_row + i + threadIdx.x / qi; // x block index
+        const int ibx = row*blocks_per_row + i + threadIdx.x / (qi/vdr); // x block index
 
-        const int iby = (i + threadIdx.x / qi) * qk/QK8_1; // y block index that aligns with ibx
+        const int iby = (i + threadIdx.x / (qi/vdr)) * qk/QK8_1; // y block index that aligns with ibx
 
-        const int iqs  = threadIdx.x % qi; // x block quant index when casting the quants to int
+        const int iqs  = threadIdx.x % (qi/vdr); // x block quant index when casting the quants to int
 
         tmp += vec_dot_q_cuda(&x[ibx], &y[iby], iqs);
     }
@@ -2992,7 +3010,7 @@ static void mul_mat_vec_q4_0_q8_1_cuda(const void * vx, const void * vy, float *
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const dim3 block_nums(1, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, GGML_CUDA_MMV_Y, 1);
-    mul_mat_vec_q<QK4_0, QI4_0, block_q4_0, vec_dot_q4_0_q8_1>
+    mul_mat_vec_q<QK4_0, QI4_0, block_q4_0, VDR_q4_0_q8_1, vec_dot_q4_0_q8_1>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols, nrows);
 }
 
@@ -3001,7 +3019,7 @@ static void mul_mat_vec_q4_1_q8_1_cuda(const void * vx, const void * vy, float *
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const dim3 block_nums(1, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, GGML_CUDA_MMV_Y, 1);
-    mul_mat_vec_q<QK4_0, QI4_1, block_q4_1, vec_dot_q4_1_q8_1>
+    mul_mat_vec_q<QK4_0, QI4_1, block_q4_1, VDR_q4_1_q8_1, vec_dot_q4_1_q8_1>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols, nrows);
 }
 
@@ -3010,7 +3028,7 @@ static void mul_mat_vec_q5_0_q8_1_cuda(const void * vx, const void * vy, float *
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const dim3 block_nums(1, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, GGML_CUDA_MMV_Y, 1);
-    mul_mat_vec_q<QK5_0, QI5_0, block_q5_0, vec_dot_q5_0_q8_1>
+    mul_mat_vec_q<QK5_0, QI5_0, block_q5_0, VDR_q5_0_q8_1, vec_dot_q5_0_q8_1>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols, nrows);
 }
 
@@ -3019,7 +3037,7 @@ static void mul_mat_vec_q5_1_q8_1_cuda(const void * vx, const void * vy, float *
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const dim3 block_nums(1, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, GGML_CUDA_MMV_Y, 1);
-    mul_mat_vec_q<QK5_1, QI5_1, block_q5_1, vec_dot_q5_1_q8_1>
+    mul_mat_vec_q<QK5_1, QI5_1, block_q5_1, VDR_q5_1_q8_1, vec_dot_q5_1_q8_1>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols, nrows);
 }
 
@@ -3028,7 +3046,7 @@ static void mul_mat_vec_q8_0_q8_1_cuda(const void * vx, const void * vy, float *
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const dim3 block_nums(1, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, GGML_CUDA_MMV_Y, 1);
-    mul_mat_vec_q<QK8_0, QI8_0, block_q8_0, vec_dot_q8_0_q8_1>
+    mul_mat_vec_q<QK8_0, QI8_0, block_q8_0, VDR_q8_0_q8_1, vec_dot_q8_0_q8_1>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols, nrows);
 }
 
@@ -3037,7 +3055,7 @@ static void mul_mat_vec_q2_K_q8_1_cuda(const void * vx, const void * vy, float *
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const dim3 block_nums(1, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, GGML_CUDA_MMV_Y, 1);
-    mul_mat_vec_q<QK_K, QI2_K, block_q2_K, vec_dot_q2_K_q8_1>
+    mul_mat_vec_q<QK_K, QI2_K, block_q2_K, VDR_q2_K_q8_1, vec_dot_q2_K_q8_1>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols, nrows);
 }
 
@@ -3046,7 +3064,7 @@ static void mul_mat_vec_q3_K_q8_1_cuda(const void * vx, const void * vy, float *
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const dim3 block_nums(1, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, GGML_CUDA_MMV_Y, 1);
-    mul_mat_vec_q<QK_K, QI3_K, block_q3_K, vec_dot_q3_K_q8_1>
+    mul_mat_vec_q<QK_K, QI3_K, block_q3_K, VDR_q3_K_q8_1, vec_dot_q3_K_q8_1>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols, nrows);
 }
 
@@ -3055,10 +3073,7 @@ static void mul_mat_vec_q4_K_q8_1_cuda(const void * vx, const void * vy, float *
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const dim3 block_nums(1, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, GGML_CUDA_MMV_Y, 1);
-    // Note: we use QI4_K/2 instead of QI4_K to make the dot product template require 4 groups of quants to be processed per
-    //       kernel call instead of 2. This results in a better perfmance because the cost of computing the k-quant scales
-    //       is better amortized.
-    mul_mat_vec_q<QK_K, QI4_K/2, block_q4_K, vec_dot_q4_K_q8_1>
+    mul_mat_vec_q<QK_K, QI4_K, block_q4_K, VDR_q4_K_q8_1, vec_dot_q4_K_q8_1>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols, nrows);
 }
 
@@ -3067,10 +3082,7 @@ static void mul_mat_vec_q5_K_q8_1_cuda(const void * vx, const void * vy, float *
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const dim3 block_nums(1, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, GGML_CUDA_MMV_Y, 1);
-    // Note: we use QI5_K/2 instead of QI5_K to make the dot product template require 4 groups of quants to be processed per
-    //       kernel call instead of 2. This results in a better perfmance because the cost of computing the k-quant scales
-    //       is better amortized.
-    mul_mat_vec_q<QK_K, QI5_K/2, block_q5_K, vec_dot_q5_K_q8_1>
+    mul_mat_vec_q<QK_K, QI5_K, block_q5_K, VDR_q5_K_q8_1, vec_dot_q5_K_q8_1>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols, nrows);
 }
 
@@ -3079,7 +3091,7 @@ static void mul_mat_vec_q6_K_q8_1_cuda(const void * vx, const void * vy, float *
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const dim3 block_nums(1, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, GGML_CUDA_MMV_Y, 1);
-    mul_mat_vec_q<QK_K, QI6_K, block_q6_K, vec_dot_q6_K_q8_1>
+    mul_mat_vec_q<QK_K, QI6_K, block_q6_K, VDR_q6_K_q8_1, vec_dot_q6_K_q8_1>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols, nrows);
 }
 
@@ -3134,7 +3146,7 @@ static void ggml_mul_mat_q4_0_q8_1_cuda(
     const int block_num_y = (ncols_y + WARP_SIZE - 1) / WARP_SIZE;
     const dim3 block_nums(block_num_x, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, WARP_SIZE/4, 1);
-    mul_mat_q<QK4_0, QR4_0, QI4_0, block_q4_0, allocate_tiles_q4_0, load_tiles_q4_0, vec_dot_q4_0_q8_1_mul_mat>
+    mul_mat_q<QK4_0, QR4_0, QI4_0, block_q4_0, allocate_tiles_q4_0, load_tiles_q4_0, VDR_q4_0_q8_1, vec_dot_q4_0_q8_1_mul_mat>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 }
 
@@ -3146,7 +3158,7 @@ static void ggml_mul_mat_q4_1_q8_1_cuda(
     const int block_num_y = (ncols_y + WARP_SIZE - 1) / WARP_SIZE;
     const dim3 block_nums(block_num_x, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, WARP_SIZE/4, 1);
-    mul_mat_q<QK4_1, QR4_1, QI4_1, block_q4_1, allocate_tiles_q4_1, load_tiles_q4_1, vec_dot_q4_1_q8_1_mul_mat>
+    mul_mat_q<QK4_1, QR4_1, QI4_1, block_q4_1, allocate_tiles_q4_1, load_tiles_q4_1, VDR_q4_1_q8_1, vec_dot_q4_1_q8_1_mul_mat>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 }
 
@@ -3158,7 +3170,7 @@ static void ggml_mul_mat_q5_0_q8_1_cuda(
     const int block_num_y = (ncols_y + WARP_SIZE - 1) / WARP_SIZE;
     const dim3 block_nums(block_num_x, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, WARP_SIZE/4, 1);
-    mul_mat_q<QK5_0, QR5_0, QI5_0, block_q5_0, allocate_tiles_q5_0, load_tiles_q5_0, vec_dot_q5_0_q8_1_mul_mat>
+    mul_mat_q<QK5_0, QR5_0, QI5_0, block_q5_0, allocate_tiles_q5_0, load_tiles_q5_0, VDR_q5_0_q8_1, vec_dot_q5_0_q8_1_mul_mat>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 }
 
@@ -3170,7 +3182,7 @@ static void ggml_mul_mat_q5_1_q8_1_cuda(
     const int block_num_y = (ncols_y + WARP_SIZE - 1) / WARP_SIZE;
     const dim3 block_nums(block_num_x, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, WARP_SIZE/4, 1);
-    mul_mat_q<QK5_1, QR5_1, QI5_1, block_q5_1, allocate_tiles_q5_1, load_tiles_q5_1, vec_dot_q5_1_q8_1_mul_mat>
+    mul_mat_q<QK5_1, QR5_1, QI5_1, block_q5_1, allocate_tiles_q5_1, load_tiles_q5_1, VDR_q5_1_q8_1, vec_dot_q5_1_q8_1_mul_mat>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 }
 
@@ -3182,7 +3194,7 @@ static void ggml_mul_mat_q8_0_q8_1_cuda(
     const int block_num_y = (ncols_y + WARP_SIZE - 1) / WARP_SIZE;
     const dim3 block_nums(block_num_x, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, WARP_SIZE/4, 1);
-    mul_mat_q<QK8_0, QR8_0, QI8_0, block_q8_0, allocate_tiles_q8_0, load_tiles_q8_0, vec_dot_q8_0_q8_1_mul_mat>
+    mul_mat_q<QK8_0, QR8_0, QI8_0, block_q8_0, allocate_tiles_q8_0, load_tiles_q8_0, VDR_q8_0_q8_1, vec_dot_q8_0_q8_1_mul_mat>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 }
 
@@ -3194,7 +3206,7 @@ static void ggml_mul_mat_q2_K_q8_1_cuda(
     const int block_num_y = (ncols_y + WARP_SIZE - 1) / WARP_SIZE;
     const dim3 block_nums(block_num_x, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, WARP_SIZE/4, 1);
-    mul_mat_q<QK_K, QR2_K, QI2_K, block_q2_K, allocate_tiles_q2_K, load_tiles_q2_K, vec_dot_q2_K_q8_1_mul_mat>
+    mul_mat_q<QK_K, QR2_K, QI2_K, block_q2_K, allocate_tiles_q2_K, load_tiles_q2_K, VDR_q2_K_q8_1, vec_dot_q2_K_q8_1_mul_mat>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 }
 
@@ -3206,7 +3218,7 @@ static void ggml_mul_mat_q3_K_q8_1_cuda(
     const int block_num_y = (ncols_y + WARP_SIZE - 1) / WARP_SIZE;
     const dim3 block_nums(block_num_x, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, WARP_SIZE/4, 1);
-    mul_mat_q<QK_K, QR3_K, QI3_K, block_q3_K, allocate_tiles_q3_K, load_tiles_q3_K, vec_dot_q3_K_q8_1_mul_mat>
+    mul_mat_q<QK_K, QR3_K, QI3_K, block_q3_K, allocate_tiles_q3_K, load_tiles_q3_K, VDR_q3_K_q8_1, vec_dot_q3_K_q8_1_mul_mat>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 }
 
@@ -3218,7 +3230,7 @@ static void ggml_mul_mat_q4_K_q8_1_cuda(
     const int block_num_y = (ncols_y + WARP_SIZE - 1) / WARP_SIZE;
     const dim3 block_nums(block_num_x, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, WARP_SIZE/4, 1);
-    mul_mat_q<QK_K, QR4_K, QI4_K, block_q4_K, allocate_tiles_q4_K, load_tiles_q4_K, vec_dot_q4_K_q8_1_mul_mat>
+    mul_mat_q<QK_K, QR4_K, QI4_K, block_q4_K, allocate_tiles_q4_K, load_tiles_q4_K, VDR_q4_K_q8_1, vec_dot_q4_K_q8_1_mul_mat>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 }
 
@@ -3230,7 +3242,7 @@ static void ggml_mul_mat_q6_K_q8_1_cuda(
     const int block_num_y = (ncols_y + WARP_SIZE - 1) / WARP_SIZE;
     const dim3 block_nums(block_num_x, block_num_y, 1);
     const dim3 block_dims(WARP_SIZE, WARP_SIZE/4, 1);
-    mul_mat_q<QK_K, QR6_K, QI6_K, block_q6_K, allocate_tiles_q6_K, load_tiles_q6_K, vec_dot_q6_K_q8_1_mul_mat>
+    mul_mat_q<QK_K, QR6_K, QI6_K, block_q6_K, allocate_tiles_q6_K, load_tiles_q6_K, VDR_q6_K_q8_1, vec_dot_q6_K_q8_1_mul_mat>
         <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 }
 
