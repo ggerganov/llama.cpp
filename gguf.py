@@ -13,8 +13,8 @@ import numpy as np
 
 
 class GGMLQuantizationType(IntEnum):
-    F32 = 0
-    F16 = 1
+    F32  = 0
+    F16  = 1
     QR_0 = 2
     Q4_1 = 3
     # Q4_2 = 4 # support has been removed
@@ -32,16 +32,16 @@ class GGMLQuantizationType(IntEnum):
 
 
 class GGUFValueType(IntEnum):
-    UINT8 = 0
-    INT8 = 1
-    UINT16 = 2
-    INT16 = 3
-    UINT32 = 4
-    INT32 = 5
+    UINT8   = 0
+    INT8    = 1
+    UINT16  = 2
+    INT16   = 3
+    UINT32  = 4
+    INT32   = 5
     FLOAT32 = 6
-    BOOL = 7
-    STRING = 8
-    ARRAY = 9
+    BOOL    = 7
+    STRING  = 8
+    ARRAY   = 9
 
     @staticmethod
     def get_type(val):
