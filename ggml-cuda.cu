@@ -1368,7 +1368,9 @@ static __device__ __forceinline__ float vec_dot_q4_1_q8_1(
 #if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
     const block_q4_1 * bq4_1 = (const block_q4_1 *) vbq;
 
-    const int vi  = *((int *) &bq4_1->qs[sizeof(int) * (iqs + 0)]);
+    int vi;
+    memcpy(&vi, &bq4_1->qs[sizeof(int) * (iqs + 0)], sizeof(vi));
+    //const int vi  = *((int *) &bq4_1->qs[sizeof(int) * (iqs + 0)]);
     const int ui0 = *((int *) &bq8_1->qs[sizeof(int) * (iqs + 0)]);
     const int ui1 = *((int *) &bq8_1->qs[sizeof(int) * (iqs + QI4_1)]);
 
