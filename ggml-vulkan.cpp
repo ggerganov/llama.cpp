@@ -138,6 +138,7 @@ vk_pipeline vk_pipeline_matmul_f16_f32_l, vk_pipeline_matmul_f16_f32_m, vk_pipel
 vk_pipeline vk_pipeline_matmul_f16_f32_aligned_l, vk_pipeline_matmul_f16_f32_aligned_m, vk_pipeline_matmul_f16_f32_aligned_s;
 vk_pipeline vk_pipeline_matmul_split_k_reduce;
 vk_pipeline vk_pipeline_dequant_mul_mat_vec_f16, vk_pipeline_dequant_mul_mat_vec_q4_0;
+vk_pipeline vk_pipeline_dequant_mul_mat_vec_f16_f32, vk_pipeline_dequant_mul_mat_vec_q4_0_f32;
 vk_pipeline vk_pipeline_mul_f32;
 vk_pipeline vk_pipeline_f32_to_f16, vk_pipeline_dequant_q4_0;
 
@@ -750,14 +751,17 @@ void ggml_vk_init(void) {
         vk_pipeline_matmul_f16_f32_aligned_l = ggml_vk_create_pipeline("vk_shaders/matmul_f16_f32_aligned.spv", "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
         vk_pipeline_matmul_f16_f32_aligned_m = ggml_vk_create_pipeline("vk_shaders/matmul_f16_f32_aligned.spv", "main", 3, 7 * sizeof(int), { 64,  64, 1}, warptile_m, 64);
         vk_pipeline_matmul_f16_f32_aligned_s = ggml_vk_create_pipeline("vk_shaders/matmul_f16_f32_aligned.spv", "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
+
+        vk_pipeline_dequant_mul_mat_vec_f16 = ggml_vk_create_pipeline("vk_shaders/dequant_mul_mat_vec_f16.spv", "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_q4_0 = ggml_vk_create_pipeline("vk_shaders/dequant_mul_mat_vec_q4_0.spv", "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
     }
     vk_pipeline_matmul_split_k_reduce = ggml_vk_create_pipeline("vk_shaders/matmul_split_k_reduce.spv", "main", 1, 3 * sizeof(int), {32, 32, 1}, {}, 1);
 
     vk_pipeline_f32_to_f16 = ggml_vk_create_pipeline("vk_shaders/f32_to_f16.spv", "main", 2, 4 * sizeof(int), {64, 1, 1}, {}, 1);
     vk_pipeline_dequant_q4_0 = ggml_vk_create_pipeline("vk_shaders/dequant_q4_0.spv", "main", 2, 4 * sizeof(int), {256*32, 1, 1}, {}, 1);
 
-    vk_pipeline_dequant_mul_mat_vec_f16 = ggml_vk_create_pipeline("vk_shaders/dequant_mul_mat_vec_f16.spv", "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
-    vk_pipeline_dequant_mul_mat_vec_q4_0 = ggml_vk_create_pipeline("vk_shaders/dequant_mul_mat_vec_q4_0.spv", "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+    vk_pipeline_dequant_mul_mat_vec_f16_f32 = ggml_vk_create_pipeline("vk_shaders/dequant_mul_mat_vec_f16_f32.spv", "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+    vk_pipeline_dequant_mul_mat_vec_q4_0_f32 = ggml_vk_create_pipeline("vk_shaders/dequant_mul_mat_vec_q4_0_f32.spv", "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
 
     vk_pipeline_mul_f32 = ggml_vk_create_pipeline("vk_shaders/mul_f32.spv", "main", 3, 8 * sizeof(int), {32, 32, 1}, {}, 1);
 
@@ -840,15 +844,15 @@ static vk_pipeline* ggml_vk_get_to_fp16(ggml_type type) {
     }
 }
 
-static vk_pipeline* ggml_vk_get_dequantize_mul_mat_vec(ggml_type type) {
+static vk_pipeline* ggml_vk_get_dequantize_mul_mat_vec(ggml_type type, bool f16_y) {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_get_dequantize_mul_mat_vec()" << std::endl;
 #endif
     switch (type) {
         case GGML_TYPE_Q4_0:
-            return &vk_pipeline_dequant_mul_mat_vec_q4_0;
+            return f16_y ? &vk_pipeline_dequant_mul_mat_vec_q4_0 : &vk_pipeline_dequant_mul_mat_vec_q4_0_f32;
         case GGML_TYPE_F16:
-            return &vk_pipeline_dequant_mul_mat_vec_f16;
+            return f16_y ? &vk_pipeline_dequant_mul_mat_vec_f16 : &vk_pipeline_dequant_mul_mat_vec_f16_f32;
         default:
             return nullptr;
     }
@@ -1850,7 +1854,7 @@ static void ggml_vk_mul_mat_q_f16(const ggml_tensor * src0, const ggml_tensor * 
     const int nb3  = dst->nb[3];
     const bool mul_mat_vec = ne11 == 1 && src0->type != GGML_TYPE_F16;
 
-    const bool f16_f32_kernel = src1->type == GGML_TYPE_F32 && !mul_mat_vec;
+    const bool f16_f32_kernel = src1->type == GGML_TYPE_F32;
 
     const bool qx_needs_dequant = src0->type != GGML_TYPE_F16 && !mul_mat_vec;
     const bool qy_needs_dequant = src1->type != GGML_TYPE_F16 && !f16_f32_kernel;
@@ -1906,7 +1910,7 @@ static void ggml_vk_mul_mat_q_f16(const ggml_tensor * src0, const ggml_tensor * 
 
     vk_pipeline* to_fp16_vk_0 = ggml_vk_get_to_fp16(src0->type);
     vk_pipeline* to_fp16_vk_1 = ggml_vk_get_to_fp16(src1->type);
-    vk_pipeline* dmmv = ggml_vk_get_dequantize_mul_mat_vec(src0->type);
+    vk_pipeline* dmmv = ggml_vk_get_dequantize_mul_mat_vec(src0->type, !f16_f32_kernel);
     GGML_ASSERT(!qx_needs_dequant || to_fp16_vk_0 != nullptr);  // NOLINT
     GGML_ASSERT(!qy_needs_dequant || to_fp16_vk_1 != nullptr);  // NOLINT
     GGML_ASSERT(dmmv != nullptr);
