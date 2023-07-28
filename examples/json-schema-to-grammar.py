@@ -90,7 +90,10 @@ class SchemaConverter:
 
         else:
             assert schema_type in PRIMITIVE_RULES, f'Unrecognized schema: {schema}'
-            return self._add_rule(schema_type, PRIMITIVE_RULES[schema_type])
+            return self._add_rule(
+                'root' if rule_name == 'root' else schema_type,
+                PRIMITIVE_RULES[schema_type]
+            )
 
     def format_grammar(self):
         return '\n'.join((f'{name} ::= {rule}' for name, rule in self._rules.items()))
