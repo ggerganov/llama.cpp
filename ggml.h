@@ -894,11 +894,11 @@ extern "C" {
 
     // a - x
     // b - dy
-    // TODO: update with configurable eps
     GGML_API struct ggml_tensor * ggml_rms_norm_back(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            struct ggml_tensor  * b);
+            struct ggml_tensor  * b,
+            float                 eps);
 
     // A: n columns, m rows
     // B: n columns, p rows  (i.e. we transpose it internally)
