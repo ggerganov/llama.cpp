@@ -3663,7 +3663,7 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
         const auto & kv_self = ctx->kv_self;
         const auto & hparams = ctx->model.hparams;
         const int    n_layer = hparams.n_layer;
-        const int    n_embd  = hparams.n_embd;
+        const int    n_embd  = hparams.n_embd_gqa();
         const int    n_ctx   = hparams.n_ctx;
 
         const size_t kv_size = kv_self.buf.size;
@@ -3766,7 +3766,7 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
         const auto & kv_self = ctx->kv_self;
         const auto & hparams = ctx->model.hparams;
         const int    n_layer = hparams.n_layer;
-        const int    n_embd  = hparams.n_embd;
+        const int    n_embd  = hparams.n_embd_gqa();
         const int    n_ctx   = hparams.n_ctx;
 
         size_t kv_size;
