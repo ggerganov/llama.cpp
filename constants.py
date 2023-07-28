@@ -1,5 +1,6 @@
-GGUF_MAGIC   = 0x47475546
-GGUF_VERSION = 1
+GGUF_MAGIC             = 0x47475546
+GGUF_VERSION           = 1
+GGUF_DEFAULT_ALIGNMENT = 32
 
 # general
 KEY_GENERAL_ARCHITECTURE         = "general.architecture"
