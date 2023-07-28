@@ -21,6 +21,6 @@ GEN_OPTIONS="${GEN_OPTIONS:---ctx_size 4096 --batch-size 1024}"
   --threads "$N_THREAD" \
   --rope-freq-scale 1.0 \
   "$@"
-  
-  # I used this to test the model with mps, but omitted it from the general purpose. If you want to use it, just specify it on the command line.
-  # -ngl 1 \ 
+
+# I used this to test the model with mps, but omitted it from the general purpose. If you want to use it, just specify it on the command line.
+# -ngl 1 \
