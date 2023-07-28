@@ -213,7 +213,7 @@ struct my_llama_model {
     struct ggml_tensor * tok_embeddings;
 
     struct ggml_tensor * norm;
-    struct ggml_tensor * output;
+    // struct ggml_tensor * output;
 
     struct ggml_tensor * freq_cis_real;
     struct ggml_tensor * freq_cis_imag;
@@ -262,8 +262,8 @@ void init_model(struct my_llama_model * model) {
     model->norm           = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_embd);
     printf("[%s:GG] Allocating [%d] float space for model->norm\n",__func__,n_embd);
 
-    model->output         = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_vocab);
-    printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for model->output\n",__func__,n_embd, n_vocab, n_embd * n_vocab);
+    // model->output         = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_vocab);
+    // printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for model->output\n",__func__,n_embd, n_vocab, n_embd * n_vocab);
 
     model->freq_cis_real         = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_embd/2);
     printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for model->freq_cis_real\n",__func__,n_embd, n_embd / 2, n_embd * n_embd / 2);
@@ -286,7 +286,7 @@ void init_model(struct my_llama_model * model) {
 
     ggml_set_name(model->tok_embeddings, "tok_embeddings.weight");
     ggml_set_name(model->norm,           "norm.weight");
-    ggml_set_name(model->output,         "output.weight");
+    // ggml_set_name(model->output,         "output.weight");
     ggml_set_name(model->freq_cis_real,         "output.freq_cis_real");
     ggml_set_name(model->freq_cis_imag,         "output.freq_cis_imag");
 
@@ -681,7 +681,7 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     // write tensors
     write_tensor(&file, model->tok_embeddings);
     write_tensor(&file, model->norm);
-    write_tensor(&file, model->output); // ?
+    // write_tensor(&file, model->output); // ?
     write_tensor(&file, model->freq_cis_real);
     write_tensor(&file, model->freq_cis_imag);
     for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {        
