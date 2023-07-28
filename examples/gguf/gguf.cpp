@@ -253,6 +253,20 @@ bool gguf_ex_read_0(const std::string & fname) {
         }
     }
 
+    // find kv string
+    {
+        char findkey[32];
+        sprintf(findkey, "some.parameter.string");
+
+        int keyidx = gguf_find_key(ctx, findkey);
+        if (keyidx == -1) {
+            fprintf(stdout, "%s: find key: %s not found.\n", __func__, findkey);
+        } else {
+            const char * key_value = gguf_get_val_str(ctx, keyidx);
+            fprintf(stdout, "%s: find key: %s found, kv[%d] value = %s\n", __func__, findkey, keyidx, key_value);
+        }
+    }
+
     // tensor info
     {
         const int n_tensors = gguf_get_n_tensors(ctx);

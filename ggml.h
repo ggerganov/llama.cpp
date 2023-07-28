@@ -1653,6 +1653,7 @@ extern "C" {
     GGML_API void * gguf_get_data       (struct gguf_context * ctx);
 
     GGML_API int          gguf_get_n_kv(struct gguf_context * ctx);
+    GGML_API int          gguf_find_key(struct gguf_context * ctx, const char * key);
     GGML_API const char * gguf_get_key (struct gguf_context * ctx, int i);
     GGML_API void         gguf_get_val (struct gguf_context * ctx, int i, void * val);
 
