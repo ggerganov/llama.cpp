@@ -640,8 +640,10 @@ python3 convert.py pygmalion-7b/ --outtype q4_1
 - Alternatively, if you want to save time and space, you can download already converted and quantized models from [TheBloke](https://huggingface.co/TheBloke), including:
   - [LLaMA 2 7B base](https://huggingface.co/TheBloke/Llama-2-7B-GGML)
   - [LLaMA 2 13B base](https://huggingface.co/TheBloke/Llama-2-13B-GGML)
+  - [LLaMA 2 70B base](https://huggingface.co/TheBloke/Llama-2-70B-GGML)
   - [LLaMA 2 7B chat](https://huggingface.co/TheBloke/Llama-2-7B-chat-GGML)
   - [LLaMA 2 13B chat](https://huggingface.co/TheBloke/Llama-2-13B-chat-GGML)
+  - [LLaMA 2 70B chat](https://huggingface.co/TheBloke/Llama-2-70B-chat-GGML)
 - Specify `-eps 1e-5` for best generation quality
 - Specify `-gqa 8` for 70B models to work
 
