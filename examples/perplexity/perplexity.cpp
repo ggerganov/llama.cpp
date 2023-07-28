@@ -127,7 +127,7 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
     // Data extracted from the HellaSwag validation dataset (MIT license) https://github.com/rowanz/hellaswag/blob/master/data/hellaswag_val.jsonl
     // All used data fields are preprocessed as in https://github.com/EleutherAI/lm-evaluation-harness/blob/df3da98c5405deafd519c2ddca52bb7c3fe36bef/lm_eval/tasks/hellaswag.py#L62-L68
     //
-    // All 10042 examples should be extracted to keep the results standardized like other implementations.
+    // All 10042 tasks should be extracted to keep the results standardized like other implementations.
     //
     // Datafile layout:
     // ['??'] denotes json fields
@@ -153,20 +153,20 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
     }
 
     size_t hs_task_count = prompt_lines.size()/6;
-    fprintf(stderr, "%s : loaded %lu examples from prompt.\n", __func__, hs_task_count);
+    fprintf(stderr, "%s : loaded %lu tasks from prompt.\n", __func__, hs_task_count);
 
     // This is needed as usual for LLaMA models
     bool prepend_bos = true;
 
-    // Number of examples to use when computing the score
+    // Number of tasks to use when computing the score
     if ( params.hellaswag_tasks < hs_task_count  ) {
         hs_task_count = params.hellaswag_tasks;
     }
 
-    // The examples should be randomized so the score stabilizes quickly.
+    // The tasks should be randomized so the score stabilizes quickly.
     bool randomize_tasks = true;
 
-    // The random seed should not impact the final result if the computation is done over enough examples, so kept hardcoded for now
+    // The random seed should not impact the final result if the computation is done over enough tasks, so kept hardcoded for now
     std::mt19937 rng(1);
 
     // Dataholder for hellaswag tasks
@@ -178,7 +178,7 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
         double ending_logprob[4];
     };
 
-    fprintf(stderr, "%s : selecting %lu %s examples.\n", __func__, hs_task_count, (randomize_tasks?"randomized":"the first")  );
+    fprintf(stderr, "%s : selecting %lu %s tasks.\n", __func__, hs_task_count, (randomize_tasks?"randomized":"the first")  );
 
     // Select and read data from prompt lines
     hs_data_t *hs_data = new hs_data_t[hs_task_count];
@@ -203,7 +203,7 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
         }
     }
 
-    fprintf(stderr, "%s : calculating hellaswag score over selected examples.\n", __func__);
+    fprintf(stderr, "%s : calculating hellaswag score over selected tasks.\n", __func__);
     printf("\ntask\tacc_norm\n");
 
     double acc = 0.0f;
