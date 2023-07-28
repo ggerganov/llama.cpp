@@ -1348,9 +1348,9 @@ int main(int argc, const char ** argv) {
                 float eps = 1e-6f;
                 // dont use only sum as aggregation, because sum of softmax is always 1 -> finite differences should not work
                 // instead use sum(log(soft_max()*(1-eps)+eps)); use eps to avoid log(0)
-                struct ggml_tensor * f = ggml_sum(ctx0, 
-                                            ggml_log(ctx0, 
-                                                ggml_add1(ctx0, 
+                struct ggml_tensor * f = ggml_sum(ctx0,
+                                            ggml_log(ctx0,
+                                                ggml_add1(ctx0,
                                                     ggml_scale(ctx0,
                                                         ggml_soft_max(ctx0, x[0]),
                                                         ggml_new_f32(ctx0, 1.0f - eps)),
