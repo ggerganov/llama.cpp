@@ -18768,6 +18768,16 @@ enum gguf_type gguf_get_type(struct gguf_context * ctx, int i) {
     return ctx->header.kv[i].type;
 }
 
+const char * gguf_get_arr_str(struct gguf_context * ctx, int key_id, int i) {
+    struct gguf_kv * kv = &ctx->header.kv[key_id];
+    struct gguf_str * str = &((struct gguf_str *) kv->value.arr.data)[i];
+    return str->data;
+}
+
+float gguf_get_arr_f32(struct gguf_context * ctx, int key_id, int i) {
+    return ((float *) ctx->header.kv[key_id].value.arr.data)[i];
+}
+
 uint8_t gguf_get_val_u8(struct gguf_context * ctx, int i) {
     return ctx->header.kv[i].value.uint8;
 }
