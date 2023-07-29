@@ -147,9 +147,10 @@ class GGUFWriter:
             self.fout.write(struct.pack("<I", len(encoded_val)))
             self.fout.write(encoded_val)
         elif vtype == GGUFValueType.ARRAY:
+            ltype = set([GGUFValueType.get_type(item) for item in val])
+            assert len(ltype) == 1, "All items in a GGUF array should be of the same type"
+            self.fout.write(struct.pack("<I", ltype[0]))
             self.fout.write(struct.pack("<I", len(val)))
-            # TODO: verify that all elements are of the same type
-            self.fout.write(struct.pack("<I", GGUFValueType.get_type(val[0])))
             for item in val:
                 self.write_val(item, write_vtype=False)
         else:
