@@ -149,7 +149,7 @@ class GGUFWriter:
         elif vtype == GGUFValueType.ARRAY:
             ltype = set([GGUFValueType.get_type(item) for item in val])
             assert len(ltype) == 1, "All items in a GGUF array should be of the same type"
-            self.fout.write(struct.pack("<I", ltype[0]))
+            self.fout.write(struct.pack("<I", list(ltype)[0]))
             self.fout.write(struct.pack("<I", len(val)))
             for item in val:
                 self.write_val(item, write_vtype=False)
@@ -273,7 +273,7 @@ class GGUFWriter:
     def write_token_list(self, tokens: List):
         self.write_array(constants.KEY_TOKENIZER_LIST, tokens)
 
-    def write_token_scores(self, scores: List:
+    def write_token_scores(self, scores: List[float]):
         self.write_array(constants.KEY_TOKENIZER_SCORES, scores)
 
 
