@@ -4300,7 +4300,10 @@ static void ggml_cuda_op(const ggml_tensor * src0, const ggml_tensor * src1, ggm
         int64_t row_low, row_high;
         if (split) {
             row_low = id == 0 ? 0 : nrows0*g_tensor_split[id];
+            row_low -= row_low % GGML_CUDA_MMQ_Y;
+
             row_high = id == g_device_count - 1 ? nrows0 : nrows0*g_tensor_split[id + 1];
+            row_high -= row_high % GGML_CUDA_MMQ_Y;
         } else {
             row_low = 0;
             row_high = nrows0*i02_divisor;
@@ -4774,7 +4777,10 @@ void ggml_cuda_transform_tensor(void * data, struct ggml_tensor * tensor) {
             row_high = nrows;
         } else if (backend == GGML_BACKEND_GPU_SPLIT) {
             row_low = id == 0 ? 0 : nrows*g_tensor_split[id];
+            row_low -= row_low % GGML_CUDA_MMQ_Y;
+
             row_high = id == g_device_count - 1 ? nrows : nrows*g_tensor_split[id + 1];
+            row_high -= row_high % GGML_CUDA_MMQ_Y;
         } else {
             GGML_ASSERT(false);
         }
