@@ -283,6 +283,7 @@ if __name__ == "__main__":
     tensor2 = np.ones((32,), dtype=np.float32) * 101.0
     gguf_writer.write_tensor_info("tensor0", tensor1)
     gguf_writer.write_tensor_info("tensor1", tensor2)
-    gguf_writer.write_tensors()
+    gguf_writer.write_tensor(tensor1)
+    gguf_writer.write_tensor(tensor2)
 
     gguf_writer.close()
