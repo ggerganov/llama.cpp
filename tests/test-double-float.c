@@ -32,7 +32,8 @@ inline static float silu_float(float x) {
 int main(void) {
     uint32_t x = UINT32_MAX;
     do {
-        float f = *(float *)&x;
+        float *y = (float *)&x;
+        float f = *y;
         assert(!isfinite(f) || (round_orig(f) == round_float(f)));
     } while (x--);
 
