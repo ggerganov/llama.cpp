@@ -5,13 +5,13 @@ import sys
 import struct
 import json
 import numpy as np
-from typing import List
+from typing import Any, List
 from pathlib import Path
 from transformers import AutoModelForCausalLM
 from sentencepiece import SentencePieceProcessor
 
 
-NDArray: 'TypeAlias' = 'np.ndarray[Any, Any]'
+NDArray = np.ndarray[Any, Any]
 
 
 def permute(weights: NDArray, n_head: int) -> NDArray:
