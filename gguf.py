@@ -267,6 +267,15 @@ class GGUFWriter:
     def write_rope_scale(self, llm: str, value:  float):
         self.write_float32(constants.KEY_ROPE_SCALE.format(llm=llm), value)
 
+    def write_tokenizer_model(self, model: str):
+        self.write_string(constants.KEY_TOKENIZER_MODEL, model)
+
+    def write_token_list(self, tokens: List[str]):
+        self.write_array(constants.KEY_TOKENIZER_LIST, tokens)
+
+    def write_token_scores(self, scores: List[float]):
+        self.write_array(constants.KEY_TOKENIZER_SCORES, scores)
+
 
 # Example usage:
 if __name__ == "__main__":
