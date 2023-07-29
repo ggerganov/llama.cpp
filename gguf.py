@@ -270,10 +270,10 @@ class GGUFWriter:
     def write_tokenizer_model(self, model: str):
         self.write_string(constants.KEY_TOKENIZER_MODEL, model)
 
-    def write_token_list(self, tokens: List[str]):
+    def write_token_list(self, tokens: List):
         self.write_array(constants.KEY_TOKENIZER_LIST, tokens)
 
-    def write_token_scores(self, scores: List[float]):
+    def write_token_scores(self, scores: List:
         self.write_array(constants.KEY_TOKENIZER_SCORES, scores)
 
 
