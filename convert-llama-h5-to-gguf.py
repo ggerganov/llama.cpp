@@ -91,11 +91,13 @@ gguf_writer.write_float32(llm_arch + ".attention.layer_norm_rms_epsilon", hparam
 
 # TOKENIZATION
 
+print("write gguf tokenizer")
+
 tokens: List[str] = []
 scores: List[float] = []
 
 if Path(dir_model + "/tokenizer.model").is_file():
-    # vocab type SPIECE
+    # vocab type sentencepiece
     print("Adding sentencepiece tokenizer vocab.")
     tokenizer = SentencePieceProcessor(dir_model + "/tokenizer.model")
 
@@ -123,14 +125,11 @@ if Path(dir_model + "/tokenizer.model").is_file():
         tokens.append(text)
         scores.append(score)
 
-print("write gguf tokens")
-
 gguf_writer.write_tokenizer_model("llama")
 gguf_writer.write_token_list(tokens)
 gguf_writer.write_token_scores(scores)
 
 # TENSORS
-
 
 # tensor info
 print("write gguf tensor info")
