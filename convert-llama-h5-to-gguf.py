@@ -120,7 +120,7 @@ if Path(dir_model + "/tokenizer.model").is_file():
             text = tokenizer.id_to_piece(i).replace("\u2581", " ").encode("utf-8")
         score: float = tokenizer.get_score(i)
 
-        tokens.append(str(text))
+        tokens.append(text)
         scores.append(score)
 
 print("write gguf tokens")
@@ -183,6 +183,22 @@ for name in list_vars.keys():
             if name == "model.layers." + str(i) + ".mlp.up_proj.weight":
                 name = "layers." + str(i) + ".feed_forward.w3.weight"
                 break
+
+    n_dims = len(data.shape)
+
+    # ftype == 0 -> float32, ftype == 1 -> float16
+    ftype_cur = 0
+    if ftype != 0:
+        if name.endswith(".weight") and n_dims == 2:
+            data = data.astype(np.float16)
+            ftype_cur = 1
+        else:
+            data = data.astype(np.float32)
+            ftype_cur = 0
+    else:
+        if data.dtype != np.float32:
+            data = data.astype(np.float32)
+            ftype_cur = 0
 
     gguf_writer.write_tensor_info(name, data)
 
