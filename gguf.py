@@ -175,8 +175,6 @@ class GGUFWriter:
 
         self.flush()
 
-        self.tensors.append(tensor)
-
     def write_tensor(self, tensor: np.ndarray):
         pad = GGUFWriter.ggml_pad(self.fout.tell(), constants.GGUF_DEFAULT_ALIGNMENT) - self.fout.tell()
         if pad != 0:
