@@ -120,6 +120,7 @@ if (LLAMA_ALL_WARNINGS)
             -Wshadow
             -Wstrict-prototypes
             -Wpointer-arith
+            -Wmissing-prototypes
         )
         set(cxx_flags
             -Wall

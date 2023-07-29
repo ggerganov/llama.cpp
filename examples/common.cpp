@@ -402,8 +402,14 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.antiprompt.push_back(argv[i]);
         } else if (arg == "--perplexity") {
             params.perplexity = true;
-        } else if (arg == "--perplexity-lines") {
-            params.perplexity_lines = true;
+        } else if (arg == "--hellaswag") {
+            params.hellaswag = true;
+        } else if (arg == "--hellaswag-tasks") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.hellaswag_tasks = std::stoi(argv[i]);
         } else if (arg == "--ignore-eos") {
             params.logit_bias[llama_token_eos()] = -INFINITY;
         } else if (arg == "--no-penalize-nl") {
@@ -559,8 +565,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "                        not recommended: doubles context memory required and no measurable increase in quality\n");
     fprintf(stdout, "  --temp N              temperature (default: %.1f)\n", (double)params.temp);
     fprintf(stdout, "  --perplexity          compute perplexity over each ctx window of the prompt\n");
-    fprintf(stdout, "  --perplexity-lines    compute perplexity over each line of the prompt\n");
-    fprintf(stdout, "  --keep                number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
+    fprintf(stdout, "  --hellaswag           compute HellaSwag score over random tasks from datafile supplied with -f\n");
+    fprintf(stdout, "  --hellaswag-tasks N   number of tasks to use when computing the HellaSwag score (default: %d)\n", params.hellaswag_tasks);
+    fprintf(stdout, "  --keep N              number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
     fprintf(stdout, "  --chunks N            max number of chunks to process (default: %d, -1 = all)\n", params.n_chunks);
     if (llama_mlock_supported()) {
         fprintf(stdout, "  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
