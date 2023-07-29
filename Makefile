@@ -194,7 +194,7 @@ ifdef LLAMA_CUBLAS
 	CXXFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
 	LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
 	OBJS      += ggml-cuda.o
-	NVCCFLAGS = --forward-unknown-to-host-compiler
+	NVCCFLAGS = --forward-unknown-to-host-compiler -use_fast_math
 ifdef LLAMA_CUDA_NVCC
 	NVCC = $(LLAMA_CUDA_NVCC)
 else
@@ -220,14 +220,25 @@ else ifdef LLAMA_CUDA_DMMV_Y
 else
 	NVCCFLAGS += -DGGML_CUDA_MMV_Y=1
 endif # LLAMA_CUDA_MMV_Y
+ifdef LLAMA_CUDA_F16
+	NVCCFLAGS += -DGGML_CUDA_F16
+endif # LLAMA_CUDA_F16
 ifdef LLAMA_CUDA_DMMV_F16
-	NVCCFLAGS += -DGGML_CUDA_DMMV_F16
+	NVCCFLAGS += -DGGML_CUDA_F16
 endif # LLAMA_CUDA_DMMV_F16
 ifdef LLAMA_CUDA_KQUANTS_ITER
 	NVCCFLAGS += -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
 else
 	NVCCFLAGS += -DK_QUANTS_PER_ITERATION=2
 endif
+ifdef LLAMA_CUDA_MMQ_Y
+	NVCCFLAGS += -DGGML_CUDA_MMQ_Y=$(LLAMA_CUDA_MMQ_Y)
+else
+	NVCCFLAGS += -DGGML_CUDA_MMQ_Y=64
+endif # LLAMA_CUDA_MMQ_Y
+ifdef LLAMA_CUDA_CUBLAS
+	NVCCFLAGS += -DGGML_CUDA_CUBLAS
+endif # LLAMA_CUDA_CUBLAS
 ifdef LLAMA_CUDA_CCBIN
 	NVCCFLAGS += -ccbin $(LLAMA_CUDA_CCBIN)
 endif
