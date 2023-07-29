@@ -53,6 +53,10 @@
 #define LLAMA_SUPPORTS_GPU_OFFLOAD
 #endif
 
+#ifndef LLAMA_DEFAULT_RMS_EPS
+#define LLAMA_DEFAULT_RMS_EPS 5e-6f
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

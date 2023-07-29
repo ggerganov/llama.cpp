@@ -186,7 +186,7 @@ struct llama_hparams {
     // LLaMAv2
     // TODO: load from model data hparams
     float f_ffn_mult = 1.0f;
-    float f_rms_norm_eps = 1e-6f;
+    float f_rms_norm_eps = LLAMA_DEFAULT_RMS_EPS;
 
     float rope_freq_base  = 10000.0f;
     float rope_freq_scale = 1.0f;
@@ -870,7 +870,7 @@ struct llama_context_params llama_context_default_params() {
         /*.n_ctx                       =*/ 512,
         /*.n_batch                     =*/ 512,
         /*.n_gqa                       =*/ 1,
-        /*.rms_norm_eps                =*/ 1e-6f,
+        /*.rms_norm_eps                =*/ LLAMA_DEFAULT_RMS_EPS,
         /*.gpu_layers                  =*/ 0,
         /*.main_gpu                    =*/ 0,
         /*.tensor_split                =*/ nullptr,
@@ -1424,7 +1424,7 @@ static bool llama_eval_internal(
 
     struct ggml_context * ctx0 = ggml_init(params);
 
-    ggml_cgraph gf = {};
+    ggml_cgraph * gf = ggml_new_graph(ctx0);
 
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
@@ -1541,8 +1541,8 @@ static bool llama_eval_internal(
                 ggml_set_name(v, "v");
 
                 // important: storing RoPE-ed version of K in the KV cache!
-                ggml_build_forward_expand(&gf, ggml_cpy(ctx0, Kcur, k));
-                ggml_build_forward_expand(&gf, ggml_cpy(ctx0, Vcur, v));
+                ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
+                ggml_build_forward_expand(gf, ggml_cpy(ctx0, Vcur, v));
             }
 
             struct ggml_tensor * Q =
@@ -1712,19 +1712,22 @@ static bool llama_eval_internal(
     //cur = ggml_soft_max_inplace(ctx0, cur);
 
     // run the computation
-    ggml_build_forward_expand(&gf, cur);
+    ggml_build_forward_expand(gf, cur);
+
+    // fprintf(stderr, "graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf.n_nodes, gf.n_leafs);
 
 #if GGML_USE_MPI
-    ggml_mpi_graph_compute_pre(lctx.ctx_mpi, &gf, n_layer);
+    ggml_mpi_graph_compute_pre(lctx.ctx_mpi, gf, n_layer);
 #endif
 
 #ifdef GGML_USE_METAL
     if (lctx.ctx_metal && N == 1) {
-        if (!ggml_metal_if_optimized(lctx.ctx_metal)) {
-            ggml_metal_graph_find_concurrency(lctx.ctx_metal,&gf);
-        }
+        // TODO: disabled until #2413 is resolved
+        //if (!ggml_metal_if_optimized(lctx.ctx_metal)) {
+        //    ggml_metal_graph_find_concurrency(lctx.ctx_metal, gf);
+        //}
         ggml_metal_set_n_cb     (lctx.ctx_metal, n_threads);
-        ggml_metal_graph_compute(lctx.ctx_metal, &gf);
+        ggml_metal_graph_compute(lctx.ctx_metal, gf);
         ggml_metal_get_tensor   (lctx.ctx_metal, cur);
     } else {
         // IMPORTANT:
@@ -1743,34 +1746,34 @@ static bool llama_eval_internal(
             ggml_metal_get_tensor(lctx.ctx_metal, kv_self.v);
         }
 
-        ggml_graph_compute_helper(lctx.work_buffer, &gf, n_threads);
+        ggml_graph_compute_helper(lctx.work_buffer, gf, n_threads);
     }
 #else
-    ggml_graph_compute_helper(lctx.work_buffer, &gf, n_threads);
+    ggml_graph_compute_helper(lctx.work_buffer, gf, n_threads);
 #endif
 
 #if GGML_USE_MPI
-    ggml_mpi_graph_compute_post(lctx.ctx_mpi, &gf, n_layer);
+    ggml_mpi_graph_compute_post(lctx.ctx_mpi, gf, n_layer);
 #endif
 
     // update kv token count
     lctx.kv_self.n = n_past + N;
 
-    struct ggml_tensor * res = gf.nodes[gf.n_nodes - 1];
+    struct ggml_tensor * res = gf->nodes[gf->n_nodes - 1];
 
     if (cgraph_fname) {
-        ggml_graph_export(&gf, cgraph_fname);
+        ggml_graph_export(gf, cgraph_fname);
     }
 
 #ifdef GGML_PERF
     // print timing information per ggml operation (for debugging purposes)
     // requires GGML_PERF to be defined
-    ggml_graph_print(&gf);
+    ggml_graph_print(gf);
 #endif
 
     // plot the computation graph in dot format (for debugging purposes)
     //if (n_past%100 == 0) {
-    //    ggml_graph_dump_dot(&gf, NULL, "llama.dot");
+    //    ggml_graph_dump_dot(gf, NULL, "llama.dot");
     //}
 
     // extract logits
@@ -1921,7 +1924,9 @@ struct llama_tokenizer {
             if (token == vocab_.token_to_id.end()) {
                 // output any symbols that did not form tokens as bytes.
                 for (int j = 0; j < (int) symbol.n; ++j) {
-                    llama_vocab::id token_id = static_cast<uint8_t>(symbol.text[j]) + 3;
+                    // NOTE: old version, before #2420 - not sure what are the implications of this
+                    //llama_vocab::id token_id = static_cast<uint8_t>(symbol.text[j]) + 3;
+                    llama_vocab::id token_id = vocab_.token_to_id.at(std::string(1, symbol.text[j]));
                     output.push_back(token_id);
                 }
             } else {
@@ -3175,7 +3180,7 @@ struct llama_context * llama_new_context_with_model(
             ctx->embedding.resize(hparams.n_embd);
         }
 
-        ctx->buf_compute.resize(MEM_REQ_EVAL().at(ctx->model.type));
+        ctx->buf_compute.resize(MEM_REQ_EVAL().at(ctx->model.type) + ggml_graph_overhead());
 
         ctx->buf_scratch[0].resize(MEM_REQ_SCRATCH0(hparams.n_ctx).at(ctx->model.type));
         ctx->buf_scratch[1].resize(MEM_REQ_SCRATCH1().at(ctx->model.type));
@@ -3660,7 +3665,7 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
         const auto & kv_self = ctx->kv_self;
         const auto & hparams = ctx->model.hparams;
         const int    n_layer = hparams.n_layer;
-        const int    n_embd  = hparams.n_embd;
+        const int    n_embd  = hparams.n_embd_gqa();
         const int    n_ctx   = hparams.n_ctx;
 
         const size_t kv_size = kv_self.buf.size;
@@ -3763,7 +3768,7 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
         const auto & kv_self = ctx->kv_self;
         const auto & hparams = ctx->model.hparams;
         const int    n_layer = hparams.n_layer;
-        const int    n_embd  = hparams.n_embd;
+        const int    n_embd  = hparams.n_embd_gqa();
         const int    n_ctx   = hparams.n_ctx;
 
         size_t kv_size;

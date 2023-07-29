@@ -77,6 +77,7 @@ as the main playground for developing new features for the [ggml](https://github
 **Supported models:**
 
 - [X] LLaMA 🦙
+- [x] LLaMA 2 🦙🦙
 - [X] [Alpaca](https://github.com/ggerganov/llama.cpp#instruction-mode-with-alpaca)
 - [X] [GPT4All](https://github.com/ggerganov/llama.cpp#using-gpt4all)
 - [X] [Chinese LLaMA / Alpaca](https://github.com/ymcui/Chinese-LLaMA-Alpaca)
@@ -649,6 +650,19 @@ python3 convert.py pygmalion-7b/ --outtype q4_1
 - **Under no circumstances should IPFS, magnet links, or any other links to model downloads be shared anywhere in this repository, including in issues, discussions, or pull requests. They will be immediately deleted.**
 - The LLaMA models are officially distributed by Facebook and will **never** be provided through this repository.
 - Refer to [Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to request access to the model data.
+
+### Obtaining and using the Facebook LLaMA 2 model
+
+- Refer to [Facebook's LLaMA download page](https://ai.meta.com/resources/models-and-libraries/llama-downloads/) if you want to access the model data.
+- Alternatively, if you want to save time and space, you can download already converted and quantized models from [TheBloke](https://huggingface.co/TheBloke), including:
+  - [LLaMA 2 7B base](https://huggingface.co/TheBloke/Llama-2-7B-GGML)
+  - [LLaMA 2 13B base](https://huggingface.co/TheBloke/Llama-2-13B-GGML)
+  - [LLaMA 2 70B base](https://huggingface.co/TheBloke/Llama-2-70B-GGML)
+  - [LLaMA 2 7B chat](https://huggingface.co/TheBloke/Llama-2-7B-chat-GGML)
+  - [LLaMA 2 13B chat](https://huggingface.co/TheBloke/Llama-2-13B-chat-GGML)
+  - [LLaMA 2 70B chat](https://huggingface.co/TheBloke/Llama-2-70B-chat-GGML)
+- Specify `-eps 1e-5` for best generation quality
+- Specify `-gqa 8` for 70B models to work
 
 ### Verifying the model files
 
