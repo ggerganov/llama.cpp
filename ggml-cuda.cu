@@ -4655,10 +4655,12 @@ void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1, ggml_
         if (src1->ne[1] == 1 && src0->ne[0] % GGML_CUDA_DMMV_X == 0) {
             ggml_cuda_op(src0, src1, dst, ggml_cuda_op_mul_mat_vec, false, false);
         } else {
-            if (src0->type == GGML_TYPE_Q4_0 || src0->type == GGML_TYPE_Q4_1 || src0->type == GGML_TYPE_Q5_0 ||
-                src0->type == GGML_TYPE_Q5_1 || src0->type == GGML_TYPE_Q8_0 ||
-                src0->type == GGML_TYPE_Q2_K || src0->type == GGML_TYPE_Q3_K || src0->type == GGML_TYPE_Q4_K ||
-                src0->type == GGML_TYPE_Q5_K || src0->type == GGML_TYPE_Q6_K) {
+#ifdef GGML_CUDA_CUBLAS
+            const bool use_mul_mat_q = false;
+#else
+            const bool use_mul_mat_q = ggml_is_quantized(src0->type);
+#endif // GGML_CUDA_CUBLAS
+            if (use_mul_mat_q) {
                 ggml_cuda_op(src0, src1, dst, ggml_cuda_op_mul_mat_q, false, false);
             } else {
                 ggml_cuda_op(src0, src1, dst, ggml_cuda_op_mul_mat_cublas, true, false);
