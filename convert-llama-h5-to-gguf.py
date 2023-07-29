@@ -12,10 +12,13 @@ from sentencepiece import SentencePieceProcessor
 
 
 NDArray: 'TypeAlias' = 'np.ndarray[Any, Any]'
+
+
 def permute(weights: NDArray, n_head: int) -> NDArray:
     return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
                    .swapaxes(1, 2)
                    .reshape(weights.shape))
+
 
 if len(sys.argv) < 3:
     print("Usage: convert-h5-to-ggml.py dir-model ftype\n")
@@ -45,7 +48,7 @@ if len(sys.argv) > 2:
     fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".gguf"
 
 
-model = AutoModelForCausalLM.from_pretrained( dir_model, low_cpu_mem_usage=True, trust_remote_code=True )
+model = AutoModelForCausalLM.from_pretrained(dir_model, low_cpu_mem_usage=True, trust_remote_code=True)
 list_vars = model.state_dict()
 
 # count tensors to be converted
@@ -56,7 +59,6 @@ for name in list_vars.keys():
         continue
     tensor_count += 1
 
-#fout = open(fname_out, "wb")
 gguf_writer = gguf.GGUFWriter.open(fname_out)
 
 with open(dir_model + "/config.json", "r", encoding="utf-8") as f:
@@ -65,7 +67,7 @@ with open(dir_model + "/config.json", "r", encoding="utf-8") as f:
 # This mmust be changed when adding/deleting kv
 kv_count = 13
 
-print("tensors " + str(tensor_count) + " kv " + str(kv_count) )
+print("tensors " + str(tensor_count) + " kv " + str(kv_count))
 
 print("write gguf header")
 
@@ -92,10 +94,10 @@ gguf_writer.write_float32(llm_arch + ".attention.layer_norm_rms_epsilon", hparam
 tokens: List[str] = []
 scores: List[float] = []
 
-if Path( dir_model + "/tokenizer.model").is_file():
+if Path(dir_model + "/tokenizer.model").is_file():
     # vocab type SPIECE
-    print( "Adding sentencepiece tokenizer vocab." )
-    tokenizer = SentencePieceProcessor( dir_model + "/tokenizer.model" )
+    print("Adding sentencepiece tokenizer vocab.")
+    tokenizer = SentencePieceProcessor(dir_model + "/tokenizer.model")
 
     # output vocab_size followed by all piece/score pairs
     outbytes: bytes
@@ -118,14 +120,14 @@ if Path( dir_model + "/tokenizer.model").is_file():
             text = tokenizer.id_to_piece(i).replace("\u2581", " ").encode("utf-8")
         score: float = tokenizer.get_score(i)
 
-        tokens.append( str(text) );
-        scores.append( score );
+        tokens.append(str(text))
+        scores.append(score)
 
 print("write gguf tokens")
 
-gguf_writer.write_string("tokenizer.ggml.model", "llama")
-gguf_writer.write_array("tokenizer.ggml.tokens",tokens)
-gguf_writer.write_array("tokenizer.ggml.scores",scores)
+gguf_writer.write_tokenizer_model("llama")
+gguf_writer.write_token_list(tokens)
+gguf_writer.write_token_scores(scores)
 
 # TENSORS
 
@@ -142,7 +144,7 @@ for name in list_vars.keys():
 
     # permute these
     if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
-        data = permute( data, hparams["num_attention_heads"] )
+        data = permute(data, hparams["num_attention_heads"])
 
     # chnage tensor name
 
@@ -197,10 +199,10 @@ for name in list_vars.keys():
         print("  Skip tensor: " + name)
         continue
 
-    ## permute these
+    # permute these
     if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
         print("  Permute tensor: " + name)
-        data = permute( data, hparams["num_attention_heads"] )
+        data = permute(data, hparams["num_attention_heads"])
 
     n_dims = len(data.shape)
 
@@ -221,7 +223,6 @@ for name in list_vars.keys():
             data = data.astype(np.float32)
             ftype_cur = 0
 
-    gguf_writer.write_tensor_padding()
     gguf_writer.write_tensor(data)
 
 gguf_writer.close()
