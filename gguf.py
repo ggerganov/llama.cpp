@@ -45,7 +45,7 @@ class GGUFValueType(IntEnum):
 
     @staticmethod
     def get_type(val):
-        if isinstance(val, str):
+        if isinstance(val, str) or isinstance(val, bytes):
             return GGUFValueType.STRING
         elif isinstance(val, list):
             return GGUFValueType.ARRAY
@@ -143,7 +143,7 @@ class GGUFWriter:
         elif vtype == GGUFValueType.BOOL:
             self.fout.write(struct.pack("?", val))
         elif vtype == GGUFValueType.STRING:
-            encoded_val = val.encode("utf8")
+            encoded_val = val.encode("utf8") if isinstance(val, str) else val
             self.fout.write(struct.pack("<I", len(encoded_val)))
             self.fout.write(encoded_val)
         elif vtype == GGUFValueType.ARRAY:
