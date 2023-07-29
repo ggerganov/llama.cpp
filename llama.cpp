@@ -344,7 +344,7 @@ struct llama_context {
 #endif
 #ifdef LLAMA_USE_ALLOCATOR
         if (alloc) {
-            ggml_allocator_free(alloc);
+            ggml_allocr_free(alloc);
         }
 #endif
     }
@@ -389,7 +389,7 @@ struct llama_context {
 
 #ifdef LLAMA_USE_ALLOCATOR
     llama_ctx_buffer buf_alloc;
-    ggml_allocator * alloc = NULL;
+    ggml_allocr * alloc = NULL;
 #endif
 
 #ifdef LLAMA_USE_SCRATCH
@@ -1431,10 +1431,6 @@ static struct ggml_cgraph * llama_build_graph(
     };
 
 #ifdef LLAMA_USE_ALLOCATOR
-#  define ggml_rope_custom_inplace ggml_rope_custom
-#  define ggml_scale_inplace ggml_scale
-#  define ggml_diag_mask_inf_inplace ggml_diag_mask_inf
-#  define ggml_soft_max_inplace ggml_soft_max
     params.no_alloc = true;
 #endif
 
@@ -1449,8 +1445,8 @@ static struct ggml_cgraph * llama_build_graph(
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
 
 #ifdef LLAMA_USE_ALLOCATOR
-        ggml_allocator_alloc_tensor(lctx.alloc, inp_tokens);
-        if (!ggml_allocator_is_measure(lctx.alloc)) {
+        ggml_allocr_alloc(lctx.alloc, inp_tokens);
+        if (!ggml_allocr_is_measure(lctx.alloc)) {
             memcpy(inp_tokens->data, tokens, N*ggml_element_size(inp_tokens));
         }
 #else
@@ -1467,8 +1463,8 @@ static struct ggml_cgraph * llama_build_graph(
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N);
 
 #ifdef LLAMA_USE_ALLOCATOR
-        ggml_allocator_alloc_tensor(lctx.alloc, inpL);
-        if (!ggml_allocator_is_measure(lctx.alloc)) {
+        ggml_allocr_alloc(lctx.alloc, inpL);
+        if (!ggml_allocr_is_measure(lctx.alloc)) {
             memcpy(inpL->data, embd, N * n_embd * ggml_element_size(inpL));
         }
 #else
@@ -1502,8 +1498,8 @@ static struct ggml_cgraph * llama_build_graph(
 
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
 #ifdef LLAMA_USE_ALLOCATOR
-    ggml_allocator_alloc_tensor(lctx.alloc, KQ_scale);
-    if (!ggml_allocator_is_measure(lctx.alloc)) {
+    ggml_allocr_alloc(lctx.alloc, KQ_scale);
+    if (!ggml_allocr_is_measure(lctx.alloc)) {
         ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd)/n_head));
     }
 #else
@@ -1760,13 +1756,6 @@ static struct ggml_cgraph * llama_build_graph(
     ggml_free(ctx0);
 
     return gf;
-
-#ifdef LLAMA_USE_ALLOCATOR
-#  undef ggml_rope_custom
-#  undef ggml_scale
-#  undef ggml_diag_mask_inf
-#  undef ggml_soft_max
-#endif
 }
 
 // evaluate the transformer
@@ -1808,13 +1797,13 @@ static bool llama_eval_internal(
     const int64_t n_vocab     = hparams.n_vocab;
 
 #ifdef LLAMA_USE_ALLOCATOR
-    ggml_allocator_reset(lctx.alloc);
+    ggml_allocr_reset(lctx.alloc);
 #endif
 
     ggml_cgraph * gf = llama_build_graph(lctx, tokens, embd, n_tokens, n_past);
 
 #ifdef LLAMA_USE_ALLOCATOR
-    ggml_allocator_alloc_graph_tensors(lctx.alloc, gf);
+    ggml_allocr_alloc_graph(lctx.alloc, gf);
 #endif
 
     // fprintf(stderr, "graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
@@ -3282,7 +3271,7 @@ struct llama_context * llama_new_context_with_model(
             ctx->buf_compute.resize(ggml_tensor_overhead()*GGML_MAX_NODES + ggml_graph_overhead());
 
             // create measure allocator
-            ctx->alloc = ggml_allocator_new_measure(tensor_alignment);
+            ctx->alloc = ggml_allocr_new_measure(tensor_alignment);
 
             // build worst-case graph
             int n_tokens = std::min((int)hparams.n_ctx, params.n_batch);
@@ -3291,7 +3280,7 @@ struct llama_context * llama_new_context_with_model(
             ggml_cgraph * gf = llama_build_graph(*ctx, &token, NULL, n_tokens, n_past);
 
             // measure memory requirements for the graph
-            size_t alloc_size = ggml_allocator_alloc_graph_tensors(ctx->alloc, gf) + tensor_alignment;
+            size_t alloc_size = ggml_allocr_alloc_graph(ctx->alloc, gf) + tensor_alignment;
 
             fprintf(stderr, "%s: compute buffer total size = %7.2f MB\n", __func__, (ctx->buf_compute.size + alloc_size) / 1024.0 / 1024.0);
 
@@ -3303,10 +3292,10 @@ struct llama_context * llama_new_context_with_model(
             //fprintf(stderr, "%s: (debug) equivalent with scratch buffer = %7.2f MB\n", __func__, prev_req / 1024.0 / 1024.0);
 
             // recreate allocator with exact memory requirements
-            ggml_allocator_free(ctx->alloc);
+            ggml_allocr_free(ctx->alloc);
 
             ctx->buf_alloc.resize(alloc_size);
-            ctx->alloc = ggml_allocator_new(ctx->buf_alloc.addr, ctx->buf_alloc.size, tensor_alignment);
+            ctx->alloc = ggml_allocr_new(ctx->buf_alloc.addr, ctx->buf_alloc.size, tensor_alignment);
         }
 #else
         ctx->buf_compute.resize(MEM_REQ_EVAL().at(ctx->model.type) + ggml_graph_overhead());

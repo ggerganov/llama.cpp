@@ -58,7 +58,7 @@ struct free_block {
 
 #define MAX_FREE_BLOCKS 128
 
-struct ggml_allocator {
+struct ggml_allocr {
     void * data;
     size_t size;
     size_t alignment;
@@ -97,13 +97,13 @@ static void remove_allocated_tensor(struct ggml_allocator * alloc, struct ggml_t
 #endif
 
 
-static size_t ggml_allocator_get_alloc_size(struct ggml_allocator * alloc, struct ggml_tensor * tensor) {
+static size_t ggml_allocator_get_alloc_size(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
     return ggml_nbytes(tensor);
 
     UNUSED(alloc);
 }
 
-void ggml_allocator_alloc_tensor(struct ggml_allocator * alloc, struct ggml_tensor * tensor) {
+void ggml_allocr_alloc(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
     size_t size = ggml_allocator_get_alloc_size(alloc, tensor);
     size = aligned_offset(NULL, size, alloc->alignment);
 
@@ -163,7 +163,7 @@ void ggml_allocator_alloc_tensor(struct ggml_allocator * alloc, struct ggml_tens
 }
 
 // this is a very naive implementation, but for our case the number of free blocks should be very small
-static void ggml_allocator_free_tensor(struct ggml_allocator * alloc, struct ggml_tensor * tensor) {
+static void ggml_allocator_free_tensor(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
     void * ptr = tensor->data;
 
     if (ptr < alloc->data || (char*)ptr >= (char*)alloc->data + alloc->max_size) {
@@ -229,17 +229,17 @@ static void ggml_allocator_free_tensor(struct ggml_allocator * alloc, struct ggm
     alloc->n_free_blocks++;
 }
 
-void ggml_allocator_reset(struct ggml_allocator * alloc) {
+void ggml_allocr_reset(struct ggml_allocr * alloc) {
     alloc->n_free_blocks = 1;
     size_t align_offset = aligned_offset(alloc->data, 0, alloc->alignment);
     alloc->free_blocks[0].addr = (char *)alloc->data + align_offset;
     alloc->free_blocks[0].size = alloc->size - align_offset;
 }
 
-struct ggml_allocator * ggml_allocator_new(void * data, size_t size, size_t alignment) {
-    struct ggml_allocator * alloc = (struct ggml_allocator *)malloc(sizeof(struct ggml_allocator) /* + n_free_blocks * sizeof(struct free_block) */);
+struct ggml_allocr * ggml_allocr_new(void * data, size_t size, size_t alignment) {
+    struct ggml_allocr * alloc = (struct ggml_allocr *)malloc(sizeof(struct ggml_allocr) /* + n_free_blocks * sizeof(struct free_block) */);
 
-    *alloc = (struct ggml_allocator){
+    *alloc = (struct ggml_allocr){
         /*.data          = */ data,
         /*.size          = */ size,
         /*.alignment     = */ alignment,
@@ -253,7 +253,7 @@ struct ggml_allocator * ggml_allocator_new(void * data, size_t size, size_t alig
 #endif
     };
 
-    ggml_allocator_reset(alloc);
+    ggml_allocr_reset(alloc);
 
     return alloc;
 }
@@ -263,10 +263,10 @@ struct ggml_allocator * ggml_allocator_new(void * data, size_t size, size_t alig
 static void * const MEASURE_BASE_ADDR = (void *) 0x1000;
 static const size_t MEASURE_MAX_SIZE  = 1ULL<<40; // 1 TB
 
-struct ggml_allocator * ggml_allocator_new_measure(size_t alignment) {
-    struct ggml_allocator * alloc = (struct ggml_allocator *)malloc(sizeof(struct ggml_allocator) /* + n_free_blocks * sizeof(struct free_block) */);
+struct ggml_allocr * ggml_allocr_new_measure(size_t alignment) {
+    struct ggml_allocr * alloc = (struct ggml_allocr *)malloc(sizeof(struct ggml_allocr) /* + n_free_blocks * sizeof(struct free_block) */);
 
-    *alloc = (struct ggml_allocator){
+    *alloc = (struct ggml_allocr){
         /*.data          = */ MEASURE_BASE_ADDR,
         /*.size          = */ MEASURE_MAX_SIZE,
         /*.alignment     = */ alignment,
@@ -280,16 +280,16 @@ struct ggml_allocator * ggml_allocator_new_measure(size_t alignment) {
 #endif
     };
 
-    ggml_allocator_reset(alloc);
+    ggml_allocr_reset(alloc);
 
     return alloc;
 }
 
-void ggml_allocator_free(struct ggml_allocator * alloc) {
+void ggml_allocr_free(struct ggml_allocr * alloc) {
     free(alloc);
 }
 
-bool ggml_allocator_is_measure(struct ggml_allocator * alloc) {
+bool ggml_allocr_is_measure(struct ggml_allocr * alloc) {
     return alloc->measure;
 }
 
@@ -364,7 +364,7 @@ static bool ggml_op_can_inplace(enum ggml_op op) {
     }
 }
 
-static void allocate_node(struct ggml_allocator * alloc, struct ggml_tensor * node) {
+static void allocate_node(struct ggml_allocr * alloc, struct ggml_tensor * node) {
     struct hash_node * ht = alloc->hash_table;
     if (node->data == NULL) {
         if (ggml_is_view(node)) {
@@ -388,41 +388,43 @@ static void allocate_node(struct ggml_allocator * alloc, struct ggml_tensor * no
             }
         } else {
             // see if we can reuse a parent's buffer (inplace)
-            for (int i = 0; i < GGML_MAX_SRC; i++) {
-                struct ggml_tensor * parent = node->src[i];
-                if (parent == NULL) {
-                    break;
-                }
-                struct hash_node * p_hn = hash_get(ht, parent);
-                if (parent->data != NULL && p_hn->n_children == 1 && p_hn->n_views == 0 && ggml_are_same_layout(node, parent) && ggml_op_can_inplace(node->op)) {
-                    if (ggml_is_view(parent)) {
-                        struct ggml_tensor * view_src = get_view_source(parent);
-                        struct hash_node * view_src_hn = hash_get(ht, view_src);
-                        if (view_src_hn->n_views == 1 && view_src_hn->n_children == 0 && view_src->data == parent->data) {
-                            // TODO: the offset of the view parent must be kept to ensure that the op doesn't overwrite
-                            // the parent's data that it will need later (same layout requirement). the problem is that then
-                            // we cannot free the tensor because the original address of the allocation is lost.
-                            // adding a view_src pointer to the tensor would solve this and simplify the code dealing with views
-                            // for now, we only reuse the parent's data if the offset is zero (view_src->data == parent->data)
-                            AT_PRINTF("reusing view parent %s (%s) for %s\n", parent->name, view_src->name, node->name);
-                            node->data = parent->data;
-                            return;
+            if (ggml_op_can_inplace(node->op)) {
+                for (int i = 0; i < GGML_MAX_SRC; i++) {
+                    struct ggml_tensor * parent = node->src[i];
+                    if (parent == NULL) {
+                        break;
+                    }
+                    struct hash_node * p_hn = hash_get(ht, parent);
+                    if (parent->data != NULL && p_hn->n_children == 1 && p_hn->n_views == 0 && ggml_are_same_layout(node, parent)) {
+                        if (ggml_is_view(parent)) {
+                            struct ggml_tensor * view_src = get_view_source(parent);
+                            struct hash_node * view_src_hn = hash_get(ht, view_src);
+                            if (view_src_hn->n_views == 1 && view_src_hn->n_children == 0 && view_src->data == parent->data) {
+                                // TODO: the offset of the view parent must be kept to ensure that the op doesn't overwrite
+                                // the parent's data that it will need later (same layout requirement). the problem is that then
+                                // we cannot free the tensor because the original address of the allocation is lost.
+                                // adding a view_src pointer to the tensor would solve this and simplify the code dealing with views
+                                // for now, we only reuse the parent's data if the offset is zero (view_src->data == parent->data)
+                                AT_PRINTF("reusing view parent %s (%s) for %s\n", parent->name, view_src->name, node->name);
+                                node->data = parent->data;
+                                return;
+                            }
                         }
+                        else {
+                            AT_PRINTF("reusing parent %s for %s\n", parent->name, node->name);
+                            node->data = parent->data;
+                        }
+                        return;
                     }
-                    else {
-                        AT_PRINTF("reusing parent %s for %s\n", parent->name, node->name);
-                        node->data = parent->data;
-                    }
-                    return;
                 }
             }
-            ggml_allocator_alloc_tensor(alloc, node);
+            ggml_allocr_alloc(alloc, node);
         }
     }
 }
 
 static size_t ggml_allocator_alloc_graph_tensors_n(
-    struct ggml_allocator * alloc,
+    struct ggml_allocr * alloc,
     struct ggml_cgraph ** graphs, int n_graphs,
     struct ggml_tensor *** inputs, struct ggml_tensor *** outputs) {
 
@@ -455,7 +457,7 @@ static size_t ggml_allocator_alloc_graph_tensors_n(
     for (int g = 0; g < n_graphs; g++) {
         struct ggml_cgraph * gf = graphs[g];
         AT_PRINTF("####### graph %d/%d\n", g, n_graphs);
-        // graph inputs are allocated first to ensure that they are never overwritten
+        // graph inputs are allocated first to ensure that they are not overwritten by each other
         if (inputs != NULL && inputs[g] != NULL) {
             for (int i = 0; inputs[g][i] != NULL; i++) {
                 struct ggml_tensor * input = inputs[g][i];
@@ -534,6 +536,6 @@ static size_t ggml_allocator_alloc_graph_tensors_n(
     return alloc->max_size;
 }
 
-size_t ggml_allocator_alloc_graph_tensors(struct ggml_allocator * alloc, struct ggml_cgraph * graph) {
+size_t ggml_allocr_alloc_graph(struct ggml_allocr * alloc, struct ggml_cgraph * graph) {
     return ggml_allocator_alloc_graph_tensors_n(alloc, &graph, 1, NULL, NULL);
 }
