@@ -121,8 +121,23 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
     printf("\n");
 }
 
-void perplexity_lines(llama_context * ctx, const gpt_params & params) {
-    // Calculates perplexity over each line of the prompt
+void hellaswag_score(llama_context * ctx, const gpt_params & params) {
+    // Calculates hellaswag score (acc_norm) from prompt
+    //
+    // Data extracted from the HellaSwag validation dataset (MIT license) https://github.com/rowanz/hellaswag/blob/master/data/hellaswag_val.jsonl
+    // All used data fields are preprocessed as in https://github.com/EleutherAI/lm-evaluation-harness/blob/df3da98c5405deafd519c2ddca52bb7c3fe36bef/lm_eval/tasks/hellaswag.py#L62-L68
+    //
+    // All 10042 tasks should be extracted to keep the results standardized like other implementations.
+    //
+    // Datafile layout:
+    // ['??'] denotes json fields
+    // 6 lines per task:
+    // ['activity_label'] + ": " +['ctx']  - The first part of the query, the context
+    // ['label'] - The index the best common sense ending aka gold ending
+    // ['endings'][0] - Endings added to the first part of the query
+    // ['endings'][1]
+    // ['endings'][2]
+    // ['endings'][3]
 
     std::vector<std::string> prompt_lines;
     std::istringstream strstream(params.prompt);
@@ -132,62 +147,148 @@ void perplexity_lines(llama_context * ctx, const gpt_params & params) {
         prompt_lines.push_back(line);
     }
 
+    if( prompt_lines.size() % 6 != 0) {
+        fprintf(stderr, "%s : number of lines in prompt not a multiple of 6.\n", __func__);
+        return;
+    }
+
+    size_t hs_task_count = prompt_lines.size()/6;
+    fprintf(stderr, "%s : loaded %lu tasks from prompt.\n", __func__, hs_task_count);
+
+    // This is needed as usual for LLaMA models
+    bool prepend_bos = true;
+
+    // Number of tasks to use when computing the score
+    if ( params.hellaswag_tasks < hs_task_count  ) {
+        hs_task_count = params.hellaswag_tasks;
+    }
+
+    // The tasks should be randomized so the score stabilizes quickly.
+    bool randomize_tasks = true;
+
+    // The random seed should not impact the final result if the computation is done over enough tasks, so kept hardcoded for now
+    std::mt19937 rng(1);
+
+    // Dataholder for hellaswag tasks
+    struct hs_data_t {
+        std::string context;
+        size_t gold_ending_idx;
+        std::string ending[4];
+        size_t ending_logprob_count[4];
+        double ending_logprob[4];
+    };
+
+    fprintf(stderr, "%s : selecting %lu %s tasks.\n", __func__, hs_task_count, (randomize_tasks?"randomized":"the first")  );
+
+    // Select and read data from prompt lines
+    hs_data_t *hs_data = new hs_data_t[hs_task_count];
+    for (size_t i=0; i < hs_task_count; i++) {
+        size_t idx = i;
+
+        // Select a random example of those left in the prompt
+        if (randomize_tasks) {
+            std::uniform_int_distribution<size_t> dist(0, prompt_lines.size()/6-1 ) ;
+            idx = dist(rng);
+        }
+
+        hs_data[i].context = prompt_lines[idx*6];
+        hs_data[i].gold_ending_idx = std::stoi( prompt_lines[idx*6+1] );
+        for (size_t j=0; j < 4; j++) {
+            hs_data[i].ending[j] = " " + prompt_lines[idx*6+2+j];
+        }
+
+        // Delete the selected random example from the prompt
+        if (randomize_tasks) {
+            prompt_lines.erase( std::next(prompt_lines.begin(),idx*6)  , std::next(prompt_lines.begin(),idx*6+6) );
+        }
+    }
+
+    fprintf(stderr, "%s : calculating hellaswag score over selected tasks.\n", __func__);
+    printf("\ntask\tacc_norm\n");
+
+    double acc = 0.0f;
     const int n_vocab = llama_n_vocab(ctx);
 
-    int counttotal   = 0;
-    size_t n_lines = prompt_lines.size();
+    for (size_t task_idx = 0; task_idx < hs_task_count; task_idx++) {
 
-    double nll = 0.0;
+        // Tokenize the context to count tokens
+        std::vector<int> context_embd = ::llama_tokenize(ctx, hs_data[task_idx].context, prepend_bos);
+        size_t context_size = context_embd.size();
 
-    fprintf(stderr, "%s: calculating perplexity over %lu lines\n", __func__, n_lines);
+        for (size_t ending_idx=0;ending_idx<4;ending_idx++) {
 
-    printf("\nLine\tPPL line\tPPL cumulative\n");
+            // Tokenize the query
+            std::vector<int> query_embd = ::llama_tokenize(ctx, hs_data[task_idx].context + hs_data[task_idx].ending[ending_idx], prepend_bos);
+            size_t query_size = query_embd.size();
 
-    for (size_t i = 0; i < n_lines; ++i) {
+            // Stop if query wont fit the ctx window
+            if (query_size > (size_t)params.n_ctx) {
+                fprintf(stderr, "%s : number of tokens in query %lu > n_ctxl\n", __func__, query_size);
+                return;
+            }
 
-        // Tokenize and insert BOS at start
-        std::vector<int> batch_embd = ::llama_tokenize(ctx, prompt_lines[i], true);
+            // Speedup small evaluations by evaluating atleast 32 tokens
+            if (query_size < 32) {
+                query_embd.resize(32);
+            }
 
-        size_t batch_size  = batch_embd.size();
+            // Evaluate the query
+            if (llama_eval(ctx, query_embd.data(), query_embd.size(), 0, params.n_threads)) {
+                fprintf(stderr, "%s : failed to eval\n", __func__);
+                return;
+            }
 
-        // Stop if line is too long
-        if( batch_size > (size_t)params.n_ctx ) {
-            fprintf(stderr, "%s : tokens in line %lu > n_ctxl\n", __func__, i);
-            return;
+            const auto query_logits = llama_get_logits(ctx);
+            std::vector<float> logits;
+            logits.insert(logits.end(), query_logits, query_logits + query_size * n_vocab);
+
+            hs_data[task_idx].ending_logprob_count[ending_idx] = 0;
+            hs_data[task_idx].ending_logprob[ending_idx] = 0.0f;
+
+            // Calculate the logprobs over the ending
+            for (size_t j = context_size-1; j < query_size - 1; j++) {
+                // Calculate probability of next token, given the previous ones.
+                const std::vector<float> tok_logits(
+                    logits.begin() + (j + 0) * n_vocab,
+                    logits.begin() + (j + 1) * n_vocab);
+
+                const float prob = softmax(tok_logits)[query_embd[ j + 1]];
+
+                hs_data[task_idx].ending_logprob[ending_idx] += std::log(prob);
+                hs_data[task_idx].ending_logprob_count[ending_idx]++;
+            }
+
+            // Calculate the mean token logprob for acc_norm
+            hs_data[task_idx].ending_logprob[ending_idx] /= hs_data[task_idx].ending_logprob_count[ending_idx];
+
+
+//            printf("task %lu, ending %lu, whole_len %lu, context_len %lu, ending_logprob_count %lu, ending_logprob %.4f\n",
+//                task_idx,ending_idx,whole_size,context_size, hs_data[task_idx].ending_logprob_count[ending_idx], hs_data[task_idx].ending_logprob[ending_idx] );
         }
 
-        if (llama_eval(ctx, batch_embd.data(), batch_size, 0, params.n_threads)) {
-            fprintf(stderr, "%s : failed to eval\n", __func__);
-            return;
+        // Find the ending with maximum logprob
+        size_t ending_logprob_max_idx = -1;
+        double ending_logprob_max_val = -INFINITY;
+        for (size_t j=0; j < 4; j++) {
+            if (hs_data[task_idx].ending_logprob[j] > ending_logprob_max_val) {
+                ending_logprob_max_idx = j;
+                ending_logprob_max_val =  hs_data[task_idx].ending_logprob[j];
+            }
         }
 
-        const auto batch_logits = llama_get_logits(ctx);
-        std::vector<float> logits;
-        logits.insert(logits.end(), batch_logits, batch_logits + batch_size * n_vocab);
+//        printf("max logprob ending idx %lu, gold ending idx %lu\n", ending_logprob_max_idx, hs_data[task_idx].gold_ending_idx);
 
-        double nllline = 0.0;
-        int countline = 0;
-
-        // Perplexity over second half of the line
-        for (size_t j = batch_size/2; j < batch_size - 1; ++j) {
-            // Calculate probability of next token, given the previous ones.
-            const std::vector<float> tok_logits(
-                logits.begin() + (j + 0) * n_vocab,
-                logits.begin() + (j + 1) * n_vocab);
-
-            const float prob = softmax(tok_logits)[batch_embd[ j + 1]];
-
-            nllline += -std::log(prob);
-            ++countline;
+        // If the gold ending got the maximum logprobe add one accuracy point
+        if (ending_logprob_max_idx == hs_data[task_idx].gold_ending_idx) {
+            acc += 1.0;
         }
 
-        nll += nllline;
-        counttotal += countline;
-
-        // perplexity is e^(average negative log-likelihood)
-        printf("%lu\t%.8lf\t%.8lf\n", i + 1, std::exp(nllline/countline), std::exp(nll / counttotal) );
+        // Print the accumulated accuracy mean x 100
+        printf("%li\t%.8lf\n",task_idx+1, acc/double(task_idx+1)*100.0);
         fflush(stdout);
     }
+
+    delete [] hs_data;
 
     printf("\n");
 }
@@ -240,8 +341,8 @@ int main(int argc, char ** argv) {
                 params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
     }
 
-    if (params.perplexity_lines) {
-        perplexity_lines(ctx, params);
+    if (params.hellaswag) {
+        hellaswag_score(ctx, params);
     } else {
         perplexity(ctx, params);
     }

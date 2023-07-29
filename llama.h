@@ -53,6 +53,10 @@
 #define LLAMA_SUPPORTS_GPU_OFFLOAD
 #endif
 
+#ifndef LLAMA_DEFAULT_RMS_EPS
+#define LLAMA_DEFAULT_RMS_EPS 5e-6f
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -87,6 +91,7 @@ extern "C" {
         int32_t  n_ctx;        // text context
         int32_t  n_batch;      // prompt processing batch size
         int32_t  n_gqa;        // grouped-query attention (TEMP - will be moved to model hparams)
+        float    rms_norm_eps; // rms norm epsilon (TEMP - will be moved to model hparams)
         int32_t  n_gpu_layers; // number of layers to store in VRAM
         int32_t  main_gpu;     // the GPU that is used for scratch and small tensors
 
