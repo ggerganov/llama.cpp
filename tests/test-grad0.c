@@ -47,16 +47,16 @@
 
 #define GGML_PRINT(...) printf(__VA_ARGS__)
 
-float frand(void) {
+static float frand(void) {
     return (float)rand()/(float)RAND_MAX;
 }
 
-int irand(int n) {
+static int irand(int n) {
     if (n == 0) return 0;
     return rand()%n;
 }
 
-void get_random_dims(int64_t * dims, int ndims) {
+static void get_random_dims(int64_t * dims, int ndims) {
     dims[0] = dims[1] = dims[2] = dims[3] = 1;
 
     for (int i = 0; i < ndims; i++) {
@@ -64,7 +64,7 @@ void get_random_dims(int64_t * dims, int ndims) {
     }
 }
 
-struct ggml_tensor * get_random_tensor_f32(
+static struct ggml_tensor * get_random_tensor_f32(
         struct ggml_context * ctx0,
         int ndims,
         int64_t ne[],
@@ -112,7 +112,7 @@ struct ggml_tensor * get_random_tensor_f32(
     return result;
 }
 
-struct ggml_tensor * get_random_tensor_f16(
+static struct ggml_tensor * get_random_tensor_f16(
         struct ggml_context * ctx0,
         int ndims,
         int64_t ne[],
@@ -160,7 +160,7 @@ struct ggml_tensor * get_random_tensor_f16(
     return result;
 }
 
-struct ggml_tensor * get_random_tensor_i32(
+static struct ggml_tensor * get_random_tensor_i32(
         struct ggml_context * ctx0,
         int ndims,
         int64_t ne[],
@@ -208,7 +208,7 @@ struct ggml_tensor * get_random_tensor_i32(
     return result;
 }
 
-void print_elements(const char* label, const struct ggml_tensor * t) {
+static void print_elements(const char* label, const struct ggml_tensor * t) {
     if (!t) {
         printf("%s: %s = null\n", __func__, label);
         return;
@@ -228,7 +228,7 @@ void print_elements(const char* label, const struct ggml_tensor * t) {
 
 }
 
-bool check_gradient(
+static bool check_gradient(
         const char * op_name,
         struct ggml_context * ctx0,
         struct ggml_tensor * x[],
@@ -310,7 +310,7 @@ bool check_gradient(
 }
 
 // TODO: clean-up this ..
-bool check_mat_mul(
+static bool check_mat_mul(
         const struct ggml_tensor * y,
         const struct ggml_tensor * x0,
         const struct ggml_tensor * x1) {
