@@ -179,14 +179,12 @@ class GGUFWriter:
     def write_tensors(self):
         offset_data = GGUFWriter.ggml_pad(self.fout.tell(), constants.GGUF_DEFAULT_ALIGNMENT)
         pad = offset_data - self.fout.tell()
-        print(f"pad: {pad}")
         if pad != 0:
             self.fout.write(bytes([0] * pad))
 
         for tensor in self.tensors:
             tensor.tofile(self.fout)
             pad = GGUFWriter.ggml_pad(tensor.nbytes, constants.GGUF_DEFAULT_ALIGNMENT) - tensor.nbytes
-            print(f"pad: {pad}")
             if pad != 0:
                 self.fout.write(bytes([0] * pad))
 
@@ -282,10 +280,10 @@ if __name__ == "__main__":
     gguf_writer.write_architecture("llama")
     gguf_writer.write_uint32("answer", 42)  # Write a 32-bit integer
     gguf_writer.write_float32("answer_in_float", 42.0)  # Write a 32-bit float
-    tensor1 = np.ones((7, 8, 3), dtype=np.float32)
-    tensor2 = np.ones((7, 8, 3), dtype=np.float32)
-    gguf_writer.write_tensor_info("tensor1", tensor1)
-    gguf_writer.write_tensor_info("tensor2", tensor2)
+    tensor1 = np.ones((32,), dtype=np.float32) * 100.0
+    tensor2 = np.ones((32,), dtype=np.float32) * 101.0
+    gguf_writer.write_tensor_info("tensor0", tensor1)
+    gguf_writer.write_tensor_info("tensor1", tensor2)
     gguf_writer.write_tensors()
 
     gguf_writer.close()
