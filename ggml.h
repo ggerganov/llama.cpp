@@ -1657,6 +1657,9 @@ extern "C" {
     GGML_API const char * gguf_get_key (struct gguf_context * ctx, int i);
     GGML_API void         gguf_get_val (struct gguf_context * ctx, int i, void * val);
 
+    GGML_API const char * gguf_get_arr_str(struct gguf_context * ctx, int key_id, int i);
+    GGML_API float        gguf_get_arr_f32(struct gguf_context * ctx, int key_id, int i);
+
     GGML_API uint8_t      gguf_get_val_u8  (struct gguf_context * ctx, int i);
     GGML_API int8_t       gguf_get_val_i8  (struct gguf_context * ctx, int i);
     GGML_API uint16_t     gguf_get_val_u16 (struct gguf_context * ctx, int i);
