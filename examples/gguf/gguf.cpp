@@ -296,7 +296,7 @@ bool gguf_ex_read_1(const std::string & fname) {
     };
 
     struct gguf_context * ctx = gguf_init_from_file(fname.c_str(), params);
-
+    
     fprintf(stdout, "%s: version:      %d\n", __func__, gguf_get_version(ctx));
     fprintf(stdout, "%s: alignment:   %zu\n", __func__, gguf_get_alignment(ctx));
     fprintf(stdout, "%s: data offset: %zu\n", __func__, gguf_get_data_offset(ctx));
@@ -335,9 +335,9 @@ bool gguf_ex_read_1(const std::string & fname) {
         for (int i = 0; i < n_tensors; ++i) {
             fprintf(stdout, "%s: reading tensor %d data\n", __func__, i);
 
-            const std::string name = "tensor_" + to_string(i);
+            const char * name = gguf_get_tensor_name(ctx, i);
 
-            struct ggml_tensor * cur = ggml_get_tensor(ctx_data, name.c_str());
+            struct ggml_tensor * cur = ggml_get_tensor(ctx_data, name);
 
             fprintf(stdout, "%s: tensor[%d]: n_dims = %d, name = %s, data = %p\n",
                     __func__, i, cur->n_dims, cur->name, cur->data);
