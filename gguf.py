@@ -122,11 +122,12 @@ class GGUFWriter:
         self.write_key(key)
         self.write_val(val, GGUFValueType.ARRAY)
 
-    def write_val(self: str, val: Any, vtype: GGUFValueType = None):
+    def write_val(self: str, val: Any, vtype: GGUFValueType = None, write_vtype: bool = True):
         if vtype is None:
             vtype = GGUFValueType.get_type(val)
 
-        self.fout.write(struct.pack("<I", vtype))
+        if write_vtype:
+            self.fout.write(struct.pack("<I", vtype))
 
         if vtype == GGUFValueType.UINT8:
             self.fout.write(struct.pack("<B", val))
@@ -150,8 +151,10 @@ class GGUFWriter:
             self.fout.write(encoded_val)
         elif vtype == GGUFValueType.ARRAY:
             self.fout.write(struct.pack("<I", len(val)))
+            # TODO: verify that all elements are of the same type
+            self.fout.write(struct.pack("<I", GGUFValueType.get_type(val[0])))
             for item in val:
-                self.write_val(item)
+                self.write_val(item, write_vtype=False)
         else:
             raise ValueError("Invalid GGUF metadata value type")
 
@@ -177,8 +180,7 @@ class GGUFWriter:
         self.tensors.append(tensor)
 
     def write_tensors(self):
-        offset_data = GGUFWriter.ggml_pad(self.fout.tell(), constants.GGUF_DEFAULT_ALIGNMENT)
-        pad = offset_data - self.fout.tell()
+        pad = GGUFWriter.ggml_pad(self.fout.tell(), constants.GGUF_DEFAULT_ALIGNMENT) - self.fout.tell()
         if pad != 0:
             self.fout.write(bytes([0] * pad))
 
