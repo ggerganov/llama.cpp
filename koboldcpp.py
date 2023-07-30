@@ -1114,11 +1114,11 @@ def show_new_gui():
         if "forceversion" in dict and dict["forceversion"]:
             version_var.set(str(dict["forceversion"]))
 
-        if "mirostat" in dict and dict["mirostat"] and len(dict["mirostat"])>1:
-            usemirostat.set(0 if str(dict["mirostat"][0])=="0" else 1)
-            mirostat_var.set(str(dict["mirostat"][0]))
-            mirostat_tau.set(str(dict["mirostat"][1]))
-            mirostat_eta.set(str(dict["mirostat"][2]))
+        if "usemirostat" in dict and dict["usemirostat"] and len(dict["usemirostat"])>1:
+            usemirostat.set(0 if str(dict["usemirostat"][0])=="0" else 1)
+            mirostat_var.set(str(dict["usemirostat"][0]))
+            mirostat_tau.set(str(dict["usemirostat"][1]))
+            mirostat_eta.set(str(dict["usemirostat"][2]))
 
         if "model_param" in dict and dict["model_param"]:
             model_var.set(dict["model_param"])
