@@ -260,6 +260,14 @@ class GGUFWriter:
         self.write_float32(
             constants.KEY_ATTENTION_CLAMP_KQV.format(llm=llm), value)
 
+    def write_layer_norm_eps(self, llm: str, value: float):
+        self.write_float32(
+            constants.KEY_ATTENTION_LAYERNORM_EPS.format(llm=llm), value)
+
+    def write_layer_norm_rms_eps(self, llm: str, value: float):
+        self.write_float32(
+            constants.KEY_ATTENTION_LAYERNORM_RMS_EPS.format(llm=llm), value)
+
     def write_rope_dimension_count(self, llm: str, count: int):
         self.write_uint32(
             constants.KEY_ROPE_DIMENSION_COUNT.format(llm=llm), count)
@@ -272,6 +280,9 @@ class GGUFWriter:
 
     def write_token_list(self, tokens: List):
         self.write_array(constants.KEY_TOKENIZER_LIST, tokens)
+
+    def write_token_merges(self, merges: List):
+        self.write_array(constants.KEY_TOKENIZER_MERGES, merges)
 
     def write_token_scores(self, scores: List[float]):
         self.write_array(constants.KEY_TOKENIZER_SCORES, scores)
