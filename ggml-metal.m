@@ -65,6 +65,7 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(rms_norm);
     GGML_METAL_DECL_KERNEL(norm);
     GGML_METAL_DECL_KERNEL(mul_mat_f16_f32);
+    GGML_METAL_DECL_KERNEL(mul_mat_f16_f32_gqa8);
     GGML_METAL_DECL_KERNEL(mul_mat_q4_0_f32);
     GGML_METAL_DECL_KERNEL(mul_mat_q4_1_f32);
     GGML_METAL_DECL_KERNEL(mul_mat_q2_K_f32);
@@ -182,6 +183,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(rms_norm);
         GGML_METAL_ADD_KERNEL(norm);
         GGML_METAL_ADD_KERNEL(mul_mat_f16_f32);
+        GGML_METAL_ADD_KERNEL(mul_mat_f16_f32_gqa8);
         GGML_METAL_ADD_KERNEL(mul_mat_q4_0_f32);
         GGML_METAL_ADD_KERNEL(mul_mat_q4_1_f32);
         GGML_METAL_ADD_KERNEL(mul_mat_q2_K_f32);
@@ -718,7 +720,8 @@ void ggml_metal_graph_compute(
                             // TODO: needs to be updated after PR: https://github.com/ggerganov/ggml/pull/224
 
                             GGML_ASSERT(ne00 == ne10);
-                            GGML_ASSERT(ne02 == ne12);
+                            int llama_2_70_gqa_step = ne02 == 8 && ne12 == 64;
+                            GGML_ASSERT(ne02 == ne12 || llama_2_70_gqa_step);
 
                             if (ggml_is_contiguous(src0) &&
                                 ggml_is_contiguous(src1) &&
@@ -749,8 +752,8 @@ void ggml_metal_graph_compute(
                                 // we need to do ne02 multiplications
                                 // TODO: is there a way to do this in parallel - currently very slow ..
                                 // TODO: might be possible to offload part of the computation to ANE using Accelerate's CBLAS
-                                for (int64_t i02 = 0; i02 < ne02; ++i02) {
-                                    size_t offs_src0_cur = offs_src0 + i02*nb02;
+                                for (int64_t i02 = 0; i02 < ne12; ++i02) {
+                                    size_t offs_src0_cur = offs_src0 + i02/(ne12/ne02)*nb02; // gqa not used for now
                                     size_t offs_src1_cur = offs_src1 + i02*nb12;
                                     size_t offs_dst_cur  = offs_dst  + i02*nb2;
 
@@ -772,11 +775,15 @@ void ggml_metal_graph_compute(
                                 switch (src0t) {
                                     case GGML_TYPE_F16:
                                         {
-                                            GGML_ASSERT(ne02 == ne12);
+                                            GGML_ASSERT(ne02 == ne12 || llama_2_70_gqa_step);
 
                                             nth0 = 64;
                                             nth1 = 1;
-                                            [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32];
+                                            if (llama_2_70_gqa_step) {
+                                                [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32_gqa8];
+                                            } else {
+                                                [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32];
+                                            }
                                         } break;
                                     case GGML_TYPE_Q4_0:
                                         {
