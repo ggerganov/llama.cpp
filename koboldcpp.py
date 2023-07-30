@@ -400,6 +400,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         current_token = 0
 
+        incomplete_token_buffer = bytearray()
         while not handle.has_finished():
             if current_token < handle.get_stream_count():
                 token = handle.new_token(current_token)
@@ -409,10 +410,14 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 current_token += 1
 
-                tokenStr = ctypes.string_at(token).decode("UTF-8","ignore")
-                event_data = {"token": tokenStr}
-                event_str = json.dumps(event_data)
-                await self.send_sse_event("message", event_str)
+                newbyte = ctypes.string_at(token)
+                incomplete_token_buffer += bytearray(newbyte)
+                tokenStr = incomplete_token_buffer.decode("UTF-8","ignore")
+                if tokenStr!="":
+                    incomplete_token_buffer.clear()
+                    event_data = {"token": tokenStr}
+                    event_str = json.dumps(event_data)
+                    await self.send_sse_event("message", event_str)
 
             await asyncio.sleep(0)
 
