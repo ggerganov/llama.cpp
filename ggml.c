@@ -18778,6 +18778,10 @@ float gguf_get_arr_f32(struct gguf_context * ctx, int key_id, int i) {
     return ((float *) ctx->header.kv[key_id].value.arr.data)[i];
 }
 
+int gguf_get_arr_n(struct gguf_context * ctx, int i) {
+    return ctx->header.kv[i].value.arr.n;
+}
+
 uint8_t gguf_get_val_u8(struct gguf_context * ctx, int i) {
     return ctx->header.kv[i].value.uint8;
 }
