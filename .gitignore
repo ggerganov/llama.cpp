@@ -81,12 +81,12 @@ tests/test-tokenizer-0
 koboldcpp.so
 koboldcpp_failsafe.so
 koboldcpp_openblas.so
-koboldcpp_openblas_noavx2.so
+koboldcpp_noavx2.so
 koboldcpp_clblast.so
 koboldcpp.dll
 koboldcpp_failsafe.dll
 koboldcpp_openblas.dll
-koboldcpp_openblas_noavx2.dll
+koboldcpp_noavx2.dll
 koboldcpp_clblast.dll
 koboldcpp_cublas.dll
 cublas64_11.dll

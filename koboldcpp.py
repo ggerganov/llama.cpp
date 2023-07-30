@@ -89,29 +89,30 @@ def pick_existant_file(ntoption,nonntoption):
 lib_default = pick_existant_file("koboldcpp.dll","koboldcpp.so")
 lib_failsafe = pick_existant_file("koboldcpp_failsafe.dll","koboldcpp_failsafe.so")
 lib_openblas = pick_existant_file("koboldcpp_openblas.dll","koboldcpp_openblas.so")
-lib_openblas_noavx2 = pick_existant_file("koboldcpp_openblas_noavx2.dll","koboldcpp_openblas_noavx2.so")
+lib_noavx2 = pick_existant_file("koboldcpp_noavx2.dll","koboldcpp_noavx2.so")
 lib_clblast = pick_existant_file("koboldcpp_clblast.dll","koboldcpp_clblast.so")
 lib_cublas = pick_existant_file("koboldcpp_cublas.dll","koboldcpp_cublas.so")
 
 
 def init_library():
     global handle
-    global lib_default,lib_failsafe,lib_openblas,lib_openblas_noavx2,lib_clblast,lib_cublas
+    global lib_default,lib_failsafe,lib_openblas,lib_noavx2,lib_clblast,lib_cublas
 
     libname = ""
-    use_blas = False # if true, uses OpenBLAS for acceleration. libopenblas.dll must exist in the same dir.
+    use_openblas = False # if true, uses OpenBLAS for acceleration. libopenblas.dll must exist in the same dir.
     use_clblast = False #uses CLBlast instead
     use_cublas = False #uses cublas instead
-    use_noavx2 = False #uses openblas with no avx2 instructions
+    use_noavx2 = False #uses no avx2 instructions
+    use_failsafe = False #uses no intrinsics, failsafe mode
     if args.noavx2:
         use_noavx2 = True
-        if not file_exists(lib_openblas_noavx2) or (os.name=='nt' and not file_exists("libopenblas.dll")):
-            print("Warning: OpenBLAS library file not found. Non-BLAS library will be used.")
-        elif args.noblas:
+        if not file_exists(lib_noavx2):
+            print("Warning: NoAVX2 library file not found. Failsafe library will be used.")
+        elif (args.noblas and args.nommap):
+            use_failsafe = True
             print("!!! Attempting to use FAILSAFE MODE !!!")
         else:
-            use_blas = True
-            print("Attempting to use non-avx2 compatibility library with OpenBLAS. A compatible libopenblas will be required.")
+            print("Attempting to use non-avx2 compatibility library.")
     elif args.useclblast:
         if not file_exists(lib_clblast) or (os.name=='nt' and not file_exists("clblast.dll")):
             print("Warning: CLBlast library file not found. Non-BLAS library will be used.")
@@ -130,22 +131,22 @@ def init_library():
         elif args.noblas:
             print("Attempting to library without OpenBLAS.")
         else:
-            use_blas = True
+            use_openblas = True
             print("Attempting to use OpenBLAS library for faster prompt ingestion. A compatible libopenblas will be required.")
             if sys.platform=="darwin":
                 print("Mac OSX note: Some people have found Accelerate actually faster than OpenBLAS. To compare, run Koboldcpp with --noblas instead.")
 
     if use_noavx2:
-        if use_blas:
-            libname = lib_openblas_noavx2
-        else:
+        if use_failsafe:
             libname = lib_failsafe
+        else:
+            libname = lib_noavx2
     else:
         if use_clblast:
             libname = lib_clblast
         elif use_cublas:
             libname = lib_cublas
-        elif use_blas:
+        elif use_openblas:
             libname = lib_openblas
         else:
             libname = lib_default
@@ -1326,7 +1327,6 @@ def show_old_gui():
             args.noavx2 = True
             args.noblas = True
             args.nommap = True
-            print("[Failsafe Mode : mmap is disabled.]")
 
         if selblaschoice==blasbatchopts[0]:
             args.blasbatchsize = -1

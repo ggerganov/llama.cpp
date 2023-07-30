@@ -225,7 +225,7 @@ struct llama_v2_mmap {
         #pragma message("warning: You are building for pre-Windows 8; prefetch not supported")
         #endif // _WIN32_WINNT >= _WIN32_WINNT_WIN8
         #else
-        printf("\nPrefetchVirtualMemory skipped in failsafe mode.");
+        printf("\nPrefetchVirtualMemory skipped in compatibility mode.\n");
         #endif
     }
 
