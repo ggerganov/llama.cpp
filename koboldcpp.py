@@ -230,12 +230,17 @@ def load_model(model_filename):
     return ret
 
 def generate(prompt,max_length=20, max_context_length=512, temperature=0.8, top_k=120, top_a=0.0, top_p=0.85, typical_p=1.0, tfs=1.0, rep_pen=1.1, rep_pen_range=128, mirostat=0, mirostat_tau=5.0, mirostat_eta=0.1, sampler_order=[6,0,1,3,4,2,5], seed=-1, stop_sequence=[], stream_sse=False):
+    global maxctx
     inputs = generation_inputs()
     outputs = ctypes.create_unicode_buffer(ctypes.sizeof(generation_outputs))
     inputs.prompt = prompt.encode("UTF-8")
     if max_length >= max_context_length:
         max_length = max_context_length-1
     inputs.max_context_length = max_context_length   # this will resize the context buffer if changed
+    global showmaxctxwarning
+    if showmaxctxwarning and max_context_length > maxctx:
+        print(f"\n(Warning! Request max_context_length={max_context_length} exceeds allocated context size of {maxctx}. Consider launching with increased --contextsize to avoid errors. This message will only show once per session.)")
+        showmaxctxwarning = False
     inputs.max_length = max_length
     inputs.temperature = temperature
     inputs.top_k = top_k
@@ -296,9 +301,10 @@ maxhordectx = 1024
 maxhordelen = 256
 modelbusy = threading.Lock()
 defaultport = 5001
-KcppVersion = "1.37.1"
+KcppVersion = "1.38"
 showdebug = True
 showsamplerwarning = True
+showmaxctxwarning = True
 exitcounter = 0
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
