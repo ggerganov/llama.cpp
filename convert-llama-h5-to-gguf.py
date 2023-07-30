@@ -87,6 +87,7 @@ gguf_writer.write_feed_forward_length(llm_arch, hparams["intermediate_size"])
 gguf_writer.write_rope_dimension_count(llm_arch, hparams["hidden_size"] // hparams["num_attention_heads"])
 gguf_writer.write_head_count(llm_arch, hparams["num_attention_heads"])
 gguf_writer.write_float32(llm_arch + ".attention.layer_norm_rms_epsilon", hparams["rms_norm_eps"])
+gguf_writer.write_layer_norm_rms_eps(llm_arch, hparams["rms_norm_eps"])
 
 
 # TOKENIZATION
