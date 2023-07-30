@@ -2661,7 +2661,7 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
 
     const auto rejects =
         llama_grammar_reject_candidates(grammar->rules, grammar->stacks, candidates_grammar);
-    for (auto & reject : rejects) {
+    for (const auto & reject : rejects) {
         candidates->data[reject.index].logit = -INFINITY;
     }
 
