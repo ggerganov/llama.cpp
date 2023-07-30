@@ -1815,6 +1815,9 @@ static bool llama_eval_internal(
     struct ggml_tensor * res = gf->nodes[gf->n_nodes - 1];
     struct ggml_tensor * embeddings = gf->nodes[gf->n_nodes - 2];
 
+    LLAMA_ASSERT(strcmp(res->name, "result_output") == 0);
+    LLAMA_ASSERT(strcmp(embeddings->name, "result_norm") == 0);
+
 #if GGML_USE_MPI
     const int64_t n_layer = hparams.n_layer;
     ggml_mpi_graph_compute_pre(lctx.ctx_mpi, gf, n_layer);
@@ -1861,9 +1864,6 @@ static bool llama_eval_internal(
 
     // update kv token count
     lctx.kv_self.n = n_past + N;
-
-    LLAMA_ASSERT(strcmp(res->name, "result_output") == 0);
-    LLAMA_ASSERT(strcmp(embeddings->name, "result_norm") == 0);
 
     if (cgraph_fname) {
         ggml_graph_export(gf, cgraph_fname);
