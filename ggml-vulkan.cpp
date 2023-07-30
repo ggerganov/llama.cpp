@@ -2276,6 +2276,8 @@ static void ggml_vk_mul_f32(const ggml_tensor * src0, const ggml_tensor * src1, 
     const int nb2  = dst->nb[2];
     const int nb3  = dst->nb[3];
 
+    GGML_ASSERT(nb10 == sizeof(float));
+
     const uint32_t buf_sz = ggml_vk_align_size(sizeof(float) * ne0, vk_device.properties.limits.minStorageBufferOffsetAlignment);
 
     vk_buffer d_X;
@@ -2293,60 +2295,71 @@ static void ggml_vk_mul_f32(const ggml_tensor * src0, const ggml_tensor * src1, 
 
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
-            const uint32_t buf_offset = buf_sz * (i03 * ne02 + i02);
+            if (ne03 > 1 || ne02 > 1) {
+                const uint32_t buf_offset = buf_sz * (i03 * ne02 + i02);
 
-            vk::Semaphore s_x = ggml_vk_create_semaphore(vk_device.compute_queue);
-            vk::Semaphore s_mm = ggml_vk_create_semaphore(vk_device.compute_queue);
-            // copy src0 to device
-            transfer_0_seqs.push_back(ggml_vk_h2d_tensor_2d(&d_X, buf_offset, src0, i03, i02, vk_device.transfer_queues[0], {}, { s_x }));
+                vk::Semaphore s_x = ggml_vk_create_semaphore(vk_device.compute_queue);
+                vk::Semaphore s_mm = ggml_vk_create_semaphore(vk_device.compute_queue);
+                // copy src0 to device
+                transfer_0_seqs.push_back(ggml_vk_h2d_tensor_2d(&d_X, buf_offset, src0, i03, i02, vk_device.transfer_queues[0], {}, { s_x }));
 
-            ggml_vk_submit(vk_device.transfer_queues[0], transfer_0_seqs, VK_NULL_HANDLE);
+                ggml_vk_submit(vk_device.transfer_queues[0], transfer_0_seqs, VK_NULL_HANDLE);
 
-            if (nb10 == sizeof(float)) {
-                // Contiguous, avoid overhead from queueing many kernel runs
                 const int64_t i13 = i03%ne13;
                 const int64_t i12 = i02%ne12;
                 const int i1 = i13*ne12*ne11 + i12*ne11;
 
                 const std::vector<int> pc = { (int)ne00, (int)ne01, (int)ne00, (int)ne00, (int)ne00, 0, (int)(i1 * ne10), 0 };
                 vk_submission s = ggml_vk_begin_submission(vk_device.compute_queue);
-                ggml_vk_sync_buffers(s.buffer, { ggml_vk_subbuffer(d_X), ggml_vk_subbuffer(d_Y) }, vk_device.compute_queue, vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eShaderRead, false);
-                ggml_vk_sync_buffers(s.buffer, { ggml_vk_subbuffer(d_D) }, vk_device.compute_queue, vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eShaderWrite, false);
+                ggml_vk_sync_buffers(s.buffer, { ggml_vk_subbuffer(d_X), ggml_vk_subbuffer(d_Y) }, vk_device.compute_queue, vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, false);
+                ggml_vk_sync_buffers(s.buffer, { ggml_vk_subbuffer(d_D) }, vk_device.compute_queue, vk::AccessFlagBits::eTransferRead, vk::AccessFlagBits::eShaderWrite, false);
                 ggml_vk_dispatch_pipeline(s, vk_pipeline_mul_f32, { { d_X, buf_offset, buf_sz }, { d_Y, 0, (uint32_t) d_Y.size }, { d_D, buf_offset, buf_sz } }, sizeof(int) * pc.size(), pc.data(), { (uint32_t)ne00, (uint32_t)ne01, 1});
                 ggml_vk_end_submission(s, { s_x }, { s_mm });
                 compute_seqs.push_back({ s });
+
+                // copy dst to host
+                float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
+                transfer_1_seqs.push_back(ggml_vk_buffer_read_async(&d_D, buf_offset, d, sizeof(float) * ne00 * ne01, vk_device.transfer_queues[1], { s_mm }, {}));
+
+                ggml_vk_submit(vk_device.compute_queue, compute_seqs, VK_NULL_HANDLE);
+                ggml_vk_submit(vk_device.transfer_queues[1], transfer_1_seqs, VK_NULL_HANDLE);
             } else {
-                GGML_ASSERT(false);
-                for (int64_t i01 = 0; i01 < ne01; i01++) {
-                    const int64_t i13 = i03%ne13;
-                    const int64_t i12 = i02%ne12;
-                    const int64_t i11 = i01%ne11;
-                    const int i1 = i13*ne12*ne11 + i12*ne11 + i11;
+                vk_submission s = ggml_vk_begin_submission(vk_device.compute_queue);
+                // copy src0 to device
+                ggml_vk_h2d_tensor_2d(&d_X, 0, src0, i03, i02, vk_device.compute_queue, {}, {}, &s);
 
-                    const std::vector<int> pc = { (int)ne00, 1, (int)ne00, (int)ne00, (int)ne00, (int)(i01 * ne00), (int)(i1 * ne10), (int)(i01*ne00) };
-                    vk_submission s = ggml_vk_begin_submission(vk_device.compute_queue);
-                    ggml_vk_sync_buffers(s.buffer, { ggml_vk_subbuffer(d_X), ggml_vk_subbuffer(d_Y) }, vk_device.compute_queue, vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eShaderRead, false);
-                    ggml_vk_sync_buffers(s.buffer, { ggml_vk_subbuffer(d_D) }, vk_device.compute_queue, vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eShaderWrite, false);
-                    ggml_vk_dispatch_pipeline(s, vk_pipeline_mul_f32, { { d_X, buf_offset, buf_sz }, { d_Y, 0, (uint32_t) d_Y.size }, { d_D, buf_offset, buf_sz } }, sizeof(int) * pc.size(), pc.data(), { (uint32_t)ne00, 1, 1});
-                    ggml_vk_end_submission(s, { s_x }, { s_mm });
-                    compute_seqs.push_back({ s });
-                }
+                const int64_t i13 = i03%ne13;
+                const int64_t i12 = i02%ne12;
+                const int i1 = i13*ne12*ne11 + i12*ne11;
+
+                const std::vector<int> pc = { (int)ne00, (int)ne01, (int)ne00, (int)ne00, (int)ne00, 0, (int)(i1 * ne10), 0 };
+                ggml_vk_sync_buffers(s.buffer, { ggml_vk_subbuffer(d_X), ggml_vk_subbuffer(d_Y) }, vk_device.compute_queue, vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, true);
+                ggml_vk_sync_buffers(s.buffer, { ggml_vk_subbuffer(d_D) }, vk_device.compute_queue, vk::AccessFlagBits::eTransferRead, vk::AccessFlagBits::eShaderWrite, false);
+                ggml_vk_dispatch_pipeline(s, vk_pipeline_mul_f32, { { d_X, 0, buf_sz }, { d_Y, 0, (uint32_t) d_Y.size }, { d_D, 0, buf_sz } }, sizeof(int) * pc.size(), pc.data(), { (uint32_t)ne00, (uint32_t)ne01, 1});
+
+                // copy dst to host
+                float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
+                ggml_vk_buffer_read_async(&d_D, 0, d, sizeof(float) * ne00 * ne01, vk_device.compute_queue, {}, {}, &s);
+                ggml_vk_end_submission(s, {}, {});
+
+                compute_seqs.push_back({ s });
+
+                ggml_vk_submit(vk_device.compute_queue, compute_seqs, VK_NULL_HANDLE);
             }
-
-            // copy dst to host
-            float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
-            transfer_1_seqs.push_back(ggml_vk_buffer_read_async(&d_D, buf_offset, d, sizeof(float) * ne00 * ne01, vk_device.transfer_queues[1], { s_mm }, {}));
-
-            ggml_vk_submit(vk_device.compute_queue, compute_seqs, VK_NULL_HANDLE);
-            ggml_vk_submit(vk_device.transfer_queues[1], transfer_1_seqs, VK_NULL_HANDLE);
         }
     }
 
-    vk_device.transfer_queues[1].queue.waitIdle();
+    if (ne03 > 1 || ne02 > 1) {
+        vk_device.transfer_queues[1].queue.waitIdle();
 
-    ggml_vk_queue_cleanup(vk_device.transfer_queues[0]);
-    ggml_vk_queue_cleanup(vk_device.transfer_queues[1]);
-    ggml_vk_queue_cleanup(vk_device.compute_queue);
+        ggml_vk_queue_cleanup(vk_device.transfer_queues[0]);
+        ggml_vk_queue_cleanup(vk_device.transfer_queues[1]);
+        ggml_vk_queue_cleanup(vk_device.compute_queue);
+    } else {
+        vk_device.compute_queue.queue.waitIdle();
+
+        ggml_vk_queue_cleanup(vk_device.compute_queue);
+    }
 
     ggml_vk_pipeline_cleanup(vk_pipeline_mul_f32);
 
