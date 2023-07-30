@@ -127,7 +127,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
                 std::replace(arg.begin(), arg.end(), '_', '-');
             }
-    
+
             if (arg == "-s" || arg == "--seed") {
                 validate_params(arg, argc, i, argv, default_params);
                 params.seed = std::stoul(argv[i]);
@@ -279,13 +279,13 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 validate_params(arg, argc, i, argv, default_params);
     #ifdef GGML_USE_CUBLAS
                 std::string arg_next = argv[i];
-    
+
                 // split string by , and /
                 const std::regex regex{R"([,/]+)"};
                 std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
                 std::vector<std::string> split_arg{it, {}};
                 GGML_ASSERT(split_arg.size() <= LLAMA_MAX_DEVICES);
-    
+
                 for (size_t i = 0; i < LLAMA_MAX_DEVICES; ++i) {
                     if (i < split_arg.size()) {
                         params.tensor_split[i] = std::stof(split_arg[i]);
@@ -378,15 +378,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 throw std::runtime_error(errorMessage);
             }
         }
-    
-    /* Code block obsolete, as check is now performed in void validate_params
-            if (invalid_param) {
-                fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
-                gpt_print_usage(argc, argv, default_params);
-                exit(1);
-            }
-    */
-    
+
         if (params.prompt_cache_all &&
                 (params.interactive || params.interactive_first ||
                  params.instruct)) {
@@ -395,13 +387,13 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             // gpt_print_usage(argc, argv, default_params);
             exit(1);
         }
-    
+
         if (escape_prompt) {
             process_escapes(params.prompt);
             process_escapes(params.input_prefix);
             process_escapes(params.input_suffix);
         }
-    
+
         return true;
     } catch (const std::exception& e) {
         // Handle exceptions thrown by validate_params or other parts of the function
