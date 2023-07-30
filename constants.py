@@ -27,6 +27,8 @@ KEY_ATTENTION_HEAD_COUNT         = "{llm}.attention.head_count"
 KEY_ATTENTION_HEAD_COUNT_KV      = "{llm}.attention.head_count_kv"
 KEY_ATTENTION_MAX_ALIBI_BIAS     = "{llm}.attention.max_alibi_bias"
 KEY_ATTENTION_CLAMP_KQV          = "{llm}.attention.clamp_kqv"
+KEY_ATTENTION_LAYERNORM_EPS      = "{llm}.attention.layer_norm_epsilon"
+KEY_ATTENTION_LAYERNORM_RMS_EPS  = "{llm}.attention.layer_norm_rms_epsilon"
 
 # RoPE
 KEY_ROPE_DIMENSION_COUNT         = "{llm}.rope.dimension_count"
