@@ -65,7 +65,7 @@ with open(dir_model + "/config.json", "r", encoding="utf-8") as f:
     hparams = json.load(f)
 
 # This mmust be changed when adding/deleting kv
-kv_count = 13
+kv_count = 14
 
 print("tensors " + str(tensor_count) + " kv " + str(kv_count))
 
