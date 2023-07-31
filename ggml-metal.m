@@ -719,6 +719,7 @@ void ggml_metal_graph_compute(
 
                             GGML_ASSERT(ne00 == ne10);
                             // GGML_ASSERT(ne02 == ne12); // Should be checked on individual data types until broadcast is implemented everywhere
+                            GGML_ASSERT(ne03 == ne13);
 
                             if (ggml_is_contiguous(src0) &&
                                 ggml_is_contiguous(src1) &&
