@@ -604,7 +604,9 @@ void stuff_karpathy_weights_into_gg(struct ggml_tensor * gg_weights, float * kar
             for (int i0 = 0; i0 < gg_weights->ne[0]; i0++){
                 float * ptr = (float *) ((char *) gg_weights->data + i0*gg_weights->nb[0]);
                 *ptr = karpathy_weights[ct];
+                ct++;
             }
+            break;
         case 2:
             ct = 0;
             for (int i1 = 0; i1 < gg_weights->ne[1]; i1++) {
@@ -661,10 +663,9 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     // float*                   -> struct ggml_tensor
     stuff_karpathy_weights_into_gg(model->tok_embeddings, w->token_embedding_table);
     stuff_karpathy_weights_into_gg(model->output, w->token_embedding_table);
-    // print_row(model->tok_embeddings, 0);
 
     stuff_karpathy_weights_into_gg(model->norm, w->rms_final_weight);         
-    print_row(model->norm, 0);
+    //print_row(model->norm, 0);
     //stuff_karpathy_weights_into_gg(model->freq_cis_real, w->freq_cis_real);
     //stuff_karpathy_weights_into_gg(model->freq_cis_imag, w->freq_cis_imag);
 
@@ -678,8 +679,18 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
 
     for (uint32_t i = 0; i < model->hparams.n_layer; ++i){
         auto & layer = model->layers[i];
-        // 1d        
+        // 1d
+        //if (i == 0){
+        //    printf("%f %f\n", w->rms_att_weight[0],  w->rms_att_weight[1]);
+        //}       
+        //printf("layer.attention_norm->n_dims = %d\n", layer.attention_norm->n_dims);
         stuff_karpathy_weights_into_gg(layer.attention_norm, &w->rms_att_weight[i*row_length]);
+        //if (i == 0){
+        //    print_row(layer.attention_norm, 0);
+        //    printf("%f\n", layer.attention_norm[0]);
+       // }
+        //printf("AFTER---\n");
+        //print_row(layer.attention_norm, 0);
         stuff_karpathy_weights_into_gg(layer.ffn_norm      , &w->rms_ffn_weight[i*row_length]);
 
         // from 3d matrix layer x dim x dim to 2d matrix dim x dim
