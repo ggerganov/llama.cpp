@@ -7,6 +7,7 @@
 #include <immintrin.h>
 #include <math.h>
 #include <stdint.h>
+#include <string.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdouble-promotion"
@@ -32,8 +33,8 @@ inline static float silu_float(float x) {
 int main(void) {
     uint32_t x = UINT32_MAX;
     do {
-        float *y = (float *)&x;
-        float f = *y;
+        float f;
+        memcpy(&f, &x, sizeof(x));
         assert(!isfinite(f) || (round_orig(f) == round_float(f)));
     } while (x--);
 
