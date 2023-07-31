@@ -92,6 +92,27 @@ void process_escapes(std::string& input) {
     input.resize(output_idx);
 }
 
+bool validate_params(const std::string& arg, int argc, int& i, char** argv, bool optional = false) {
+    if (++i >= argc) {
+        if (optional) {
+            // Argument is optional and not present, return false
+            return false;
+        } else {
+            fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
+            throw std::runtime_error("Invalid parameter for argument: " + arg);
+        }
+    }
+
+    const std::string& nextArg = argv[i];
+
+    if (nextArg.empty() || (nextArg.size() >= 2 && nextArg[0] == '-' && !std::isdigit(nextArg[1]))) {
+        throw std::runtime_error("Missing value for parameter: " + arg);
+    }
+
+    // Validation succeeded, return true to indicate that
+    return true;
+}
+
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     bool invalid_param = false;
     bool escape_prompt = false;
@@ -99,407 +120,287 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     gpt_params default_params;
     const std::string arg_prefix = "--";
 
-    for (int i = 1; i < argc; i++) {
-        arg = argv[i];
-        if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
-            std::replace(arg.begin(), arg.end(), '_', '-');
+    try{
+
+        for (int i = 1; i < argc; i++) {
+            arg = argv[i];
+            if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
+                std::replace(arg.begin(), arg.end(), '_', '-');
+            }
+
+            if (arg == "-s" || arg == "--seed") {
+                validate_params(arg, argc, i, argv);
+                params.seed = std::stoul(argv[i]);
+            } else if (arg == "-t" || arg == "--threads") {
+                validate_params(arg, argc, i, argv);
+                params.n_threads = std::stoi(argv[i]);
+                if (params.n_threads <= 0) {
+                    params.n_threads = std::thread::hardware_concurrency();
+                }
+            } else if (arg == "-p" || arg == "--prompt") {
+                validate_params(arg, argc, i, argv);
+                params.prompt = argv[i];
+            } else if (arg == "-e") {
+                escape_prompt = true;
+            } else if (arg == "--prompt-cache") {
+                validate_params(arg, argc, i, argv);
+                params.path_prompt_cache = argv[i];
+            } else if (arg == "--prompt-cache-all") {
+                params.prompt_cache_all = true;
+            } else if (arg == "--prompt-cache-ro") {
+                params.prompt_cache_ro = true;
+            } else if (arg == "-f" || arg == "--file") {
+                validate_params(arg, argc, i, argv);
+                std::ifstream file(argv[i]);
+                if (!file) {
+                    fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+                    invalid_param = true;
+                    break;
+                }
+                std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(params.prompt));
+                if (params.prompt.back() == '\n') {
+                    params.prompt.pop_back();
+                }
+            } else if (arg == "-n" || arg == "--n-predict") {
+                validate_params(arg, argc, i, argv);
+                params.n_predict = std::stoi(argv[i]);
+            } else if (arg == "--top-k") {
+                validate_params(arg, argc, i, argv);
+                params.top_k = std::stoi(argv[i]);
+            } else if (arg == "-c" || arg == "--ctx-size") {
+                validate_params(arg, argc, i, argv);
+                params.n_ctx = std::stoi(argv[i]);
+            } else if (arg == "-gqa" || arg == "--gqa") {
+                validate_params(arg, argc, i, argv);
+                params.n_gqa = std::stoi(argv[i]);
+            } else if (arg == "-eps" || arg == "--rms-norm-eps") {
+                validate_params(arg, argc, i, argv);
+                params.rms_norm_eps = std::stof(argv[i]);
+            } else if (arg == "--rope-freq-base") {
+                validate_params(arg, argc, i, argv);
+                params.rope_freq_base = std::stof(argv[i]);
+            } else if (arg == "--rope-freq-scale") {
+                validate_params(arg, argc, i, argv);
+                params.rope_freq_scale = std::stof(argv[i]);
+            } else if (arg == "--memory-f32") {
+                params.memory_f16 = false;
+            } else if (arg == "--top-p") {
+                validate_params(arg, argc, i, argv);
+                params.top_p = std::stof(argv[i]);
+            } else if (arg == "--temp") {
+                validate_params(arg, argc, i, argv);
+                params.temp = std::stof(argv[i]);
+            } else if (arg == "--tfs") {
+                validate_params(arg, argc, i, argv);
+                params.tfs_z = std::stof(argv[i]);
+            } else if (arg == "--typical") {
+                validate_params(arg, argc, i, argv);
+                params.typical_p = std::stof(argv[i]);
+            } else if (arg == "--repeat-last-n") {
+                validate_params(arg, argc, i, argv);
+                params.repeat_last_n = std::stoi(argv[i]);
+            } else if (arg == "--repeat-penalty") {
+                validate_params(arg, argc, i, argv);
+                params.repeat_penalty = std::stof(argv[i]);
+            } else if (arg == "--frequency-penalty") {
+                validate_params(arg, argc, i, argv);
+                params.frequency_penalty = std::stof(argv[i]);
+            } else if (arg == "--presence-penalty") {
+                validate_params(arg, argc, i, argv);
+                params.presence_penalty = std::stof(argv[i]);
+            } else if (arg == "--mirostat") {
+                validate_params(arg, argc, i, argv);
+                params.mirostat = std::stoi(argv[i]);
+            } else if (arg == "--mirostat-lr") {
+                validate_params(arg, argc, i, argv);
+                params.mirostat_eta = std::stof(argv[i]);
+            } else if (arg == "--mirostat-ent") {
+                validate_params(arg, argc, i, argv);
+                params.mirostat_tau = std::stof(argv[i]);
+            } else if (arg == "--cfg-negative-prompt") {
+                validate_params(arg, argc, i, argv);
+                params.cfg_negative_prompt = argv[i];
+            } else if (arg == "--cfg-scale") {
+                validate_params(arg, argc, i, argv);
+                params.cfg_scale = std::stof(argv[i]);
+            } else if (arg == "-b" || arg == "--batch-size") {
+                validate_params(arg, argc, i, argv);
+                params.n_batch = std::stoi(argv[i]);
+                params.n_batch = std::min(512, params.n_batch);
+            } else if (arg == "--keep") {
+                validate_params(arg, argc, i, argv);
+                params.n_keep = std::stoi(argv[i]);
+            } else if (arg == "--chunks") {
+                validate_params(arg, argc, i, argv);
+                params.n_chunks = std::stoi(argv[i]);
+            } else if (arg == "-m" || arg == "--model") {
+                validate_params(arg, argc, i, argv);
+                params.model = argv[i];
+            } else if (arg == "-a" || arg == "--alias") {
+                validate_params(arg, argc, i, argv);
+                params.model_alias = argv[i];
+            } else if (arg == "--lora") {
+                validate_params(arg, argc, i, argv);
+                params.lora_adapter = argv[i];
+                params.use_mmap = false;
+            } else if (arg == "--lora-base") {
+                validate_params(arg, argc, i, argv);
+                params.lora_base = argv[i];
+            } else if (arg == "-i" || arg == "--interactive") {
+                params.interactive = true;
+            } else if (arg == "--embedding") {
+                params.embedding = true;
+            } else if (arg == "--interactive-first") {
+                params.interactive_first = true;
+            } else if (arg == "-ins" || arg == "--instruct") {
+                params.instruct = true;
+            } else if (arg == "--multiline-input") {
+                params.multiline_input = true;
+            } else if (arg == "--color") {
+                params.use_color = true;
+            } else if (arg == "--mlock") {
+                params.use_mlock = true;
+            } else if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers") {
+                validate_params(arg, argc, i, argv);
+    #ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
+                params.n_gpu_layers = std::stoi(argv[i]);
+    #else
+                fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");
+                fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
+    #endif
+            } else if (arg == "--main-gpu" || arg == "-mg") {
+                validate_params(arg, argc, i, argv);
+    #ifdef GGML_USE_CUBLAS
+                params.main_gpu = std::stoi(argv[i]);
+    #else
+          fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a main GPU.\n");
+    #endif
+            } else if (arg == "--tensor-split" || arg == "-ts") {
+                validate_params(arg, argc, i, argv);
+    #ifdef GGML_USE_CUBLAS
+                std::string arg_next = argv[i];
+
+                // split string by , and /
+                const std::regex regex{R"([,/]+)"};
+                std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
+                std::vector<std::string> split_arg{it, {}};
+                GGML_ASSERT(split_arg.size() <= LLAMA_MAX_DEVICES);
+
+                for (size_t i = 0; i < LLAMA_MAX_DEVICES; ++i) {
+                    if (i < split_arg.size()) {
+                        params.tensor_split[i] = std::stof(split_arg[i]);
+                    } else {
+                        params.tensor_split[i] = 0.0f;
+                    }
+                }
+    #else
+          fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.\n");
+    #endif // GGML_USE_CUBLAS
+            } else if (arg == "--low-vram" || arg == "-lv") {
+    #ifdef GGML_USE_CUBLAS
+                params.low_vram = true;
+    #else
+          fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n");
+    #endif // GGML_USE_CUBLAS
+            } else if (arg == "--no-mmap") {
+                params.use_mmap = false;
+            } else if (arg == "--mtest") {
+                params.mem_test = true;
+            } else if (arg == "--numa") {
+                params.numa = true;
+            } else if (arg == "--export") {
+                params.export_cgraph = true;
+            } else if (arg == "--verbose-prompt") {
+                params.verbose_prompt = true;
+            } else if (arg == "-r" || arg == "--reverse-prompt") {
+                validate_params(arg, argc, i, argv);
+                params.antiprompt.push_back(argv[i]);
+            } else if (arg == "--perplexity") {
+                params.perplexity = true;
+            } else if (arg == "--hellaswag") {
+                params.hellaswag = true;
+            } else if (arg == "--hellaswag-tasks") {
+                validate_params(arg, argc, i, argv);
+                params.hellaswag_tasks = std::stoi(argv[i]);
+            } else if (arg == "--ignore-eos") {
+                params.logit_bias[llama_token_eos()] = -INFINITY;
+            } else if (arg == "--no-penalize-nl") {
+                params.penalize_nl = false;
+            } else if (arg == "-l" || arg == "--logit-bias") {
+                validate_params(arg, argc, i, argv);
+                std::stringstream ss(argv[i]);
+                llama_token key;
+                char sign;
+                std::string value_str;
+                try {
+                    if (ss >> key && ss >> sign && std::getline(ss, value_str) && (sign == '+' || sign == '-')) {
+                        params.logit_bias[key] = std::stof(value_str) * ((sign == '-') ? -1.0f : 1.0f);
+                    } else {
+                        throw std::exception();
+                    }
+                } catch (const std::exception&) {
+                    invalid_param = true;
+                    break;
+                }
+            } else if (arg == "-h" || arg == "--help") {
+                gpt_print_usage(argc, argv, default_params);
+                exit(0);
+            } else if (arg == "--random-prompt") {
+                params.random_prompt = true;
+            } else if (arg == "--in-prefix-bos") {
+                params.input_prefix_bos = true;
+            } else if (arg == "--in-prefix") {
+                validate_params(arg, argc, i, argv);
+                params.input_prefix = argv[i];
+            } else if (arg == "--in-suffix") {
+                validate_params(arg, argc, i, argv);
+                params.input_suffix = argv[i];
+            } else if (arg == "--grammar") {
+                validate_params(arg, argc, i, argv);
+                params.grammar = argv[i];
+            } else if (arg == "--grammar-file") {
+                validate_params(arg, argc, i, argv);
+                std::ifstream file(argv[i]);
+                if (!file) {
+                    fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+                    invalid_param = true;
+                    break;
+                }
+                std::copy(
+                    std::istreambuf_iterator<char>(file),
+                    std::istreambuf_iterator<char>(),
+                    std::back_inserter(params.grammar)
+                );
+            } else {
+                // fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
+                // gpt_print_usage(argc, argv, default_params);
+                std::string errorMessage = "Unknown argument: " + arg;
+                throw std::runtime_error(errorMessage);
+            }
         }
 
-        if (arg == "-s" || arg == "--seed") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.seed = std::stoul(argv[i]);
-        } else if (arg == "-t" || arg == "--threads") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_threads = std::stoi(argv[i]);
-            if (params.n_threads <= 0) {
-                params.n_threads = std::thread::hardware_concurrency();
-            }
-        } else if (arg == "-p" || arg == "--prompt") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.prompt = argv[i];
-        } else if (arg == "-e") {
-            escape_prompt = true;
-        } else if (arg == "--prompt-cache") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.path_prompt_cache = argv[i];
-        } else if (arg == "--prompt-cache-all") {
-            params.prompt_cache_all = true;
-        } else if (arg == "--prompt-cache-ro") {
-            params.prompt_cache_ro = true;
-        } else if (arg == "-f" || arg == "--file") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::ifstream file(argv[i]);
-            if (!file) {
-                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
-                invalid_param = true;
-                break;
-            }
-            std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(params.prompt));
-            if (params.prompt.back() == '\n') {
-                params.prompt.pop_back();
-            }
-        } else if (arg == "-n" || arg == "--n-predict") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_predict = std::stoi(argv[i]);
-        } else if (arg == "--top-k") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.top_k = std::stoi(argv[i]);
-        } else if (arg == "-c" || arg == "--ctx-size") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_ctx = std::stoi(argv[i]);
-        } else if (arg == "-gqa" || arg == "--gqa") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_gqa = std::stoi(argv[i]);
-        } else if (arg == "-eps" || arg == "--rms-norm-eps") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.rms_norm_eps = std::stof(argv[i]);
-        } else if (arg == "--rope-freq-base") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.rope_freq_base = std::stof(argv[i]);
-        } else if (arg == "--rope-freq-scale") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.rope_freq_scale = std::stof(argv[i]);
-        } else if (arg == "--memory-f32") {
-            params.memory_f16 = false;
-        } else if (arg == "--top-p") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.top_p = std::stof(argv[i]);
-        } else if (arg == "--temp") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.temp = std::stof(argv[i]);
-        } else if (arg == "--tfs") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.tfs_z = std::stof(argv[i]);
-        } else if (arg == "--typical") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.typical_p = std::stof(argv[i]);
-        } else if (arg == "--repeat-last-n") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.repeat_last_n = std::stoi(argv[i]);
-        } else if (arg == "--repeat-penalty") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.repeat_penalty = std::stof(argv[i]);
-        } else if (arg == "--frequency-penalty") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.frequency_penalty = std::stof(argv[i]);
-        } else if (arg == "--presence-penalty") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.presence_penalty = std::stof(argv[i]);
-        } else if (arg == "--mirostat") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.mirostat = std::stoi(argv[i]);
-        } else if (arg == "--mirostat-lr") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.mirostat_eta = std::stof(argv[i]);
-        } else if (arg == "--mirostat-ent") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.mirostat_tau = std::stof(argv[i]);
-        } else if (arg == "--cfg-negative-prompt") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.cfg_negative_prompt = argv[i];
-        } else if (arg == "--cfg-scale") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.cfg_scale = std::stof(argv[i]);
-        } else if (arg == "-b" || arg == "--batch-size") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_batch = std::stoi(argv[i]);
-            params.n_batch = std::min(512, params.n_batch);
-        } else if (arg == "--keep") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_keep = std::stoi(argv[i]);
-        } else if (arg == "--chunks") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_chunks = std::stoi(argv[i]);
-        } else if (arg == "-m" || arg == "--model") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.model = argv[i];
-        } else if (arg == "-a" || arg == "--alias") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.model_alias = argv[i];
-        } else if (arg == "--lora") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.lora_adapter = argv[i];
-            params.use_mmap = false;
-        } else if (arg == "--lora-base") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.lora_base = argv[i];
-        } else if (arg == "-i" || arg == "--interactive") {
-            params.interactive = true;
-        } else if (arg == "--embedding") {
-            params.embedding = true;
-        } else if (arg == "--interactive-first") {
-            params.interactive_first = true;
-        } else if (arg == "-ins" || arg == "--instruct") {
-            params.instruct = true;
-        } else if (arg == "--multiline-input") {
-            params.multiline_input = true;
-        } else if (arg == "--color") {
-            params.use_color = true;
-        } else if (arg == "--mlock") {
-            params.use_mlock = true;
-        } else if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-#ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
-            params.n_gpu_layers = std::stoi(argv[i]);
-#else
-            fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");
-            fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
-#endif
-        } else if (arg == "--main-gpu" || arg == "-mg") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-#ifdef GGML_USE_CUBLAS
-            params.main_gpu = std::stoi(argv[i]);
-#else
-      fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a main GPU.\n");
-#endif
-        } else if (arg == "--tensor-split" || arg == "-ts") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-#ifdef GGML_USE_CUBLAS
-            std::string arg_next = argv[i];
-
-            // split string by , and /
-            const std::regex regex{R"([,/]+)"};
-            std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
-            std::vector<std::string> split_arg{it, {}};
-            GGML_ASSERT(split_arg.size() <= LLAMA_MAX_DEVICES);
-
-            for (size_t i = 0; i < LLAMA_MAX_DEVICES; ++i) {
-                if (i < split_arg.size()) {
-                    params.tensor_split[i] = std::stof(split_arg[i]);
-                } else {
-                    params.tensor_split[i] = 0.0f;
-                }
-            }
-#else
-      fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.\n");
-#endif // GGML_USE_CUBLAS
-        } else if (arg == "--low-vram" || arg == "-lv") {
-#ifdef GGML_USE_CUBLAS
-            params.low_vram = true;
-#else
-      fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n");
-#endif // GGML_USE_CUBLAS
-        } else if (arg == "--no-mmap") {
-            params.use_mmap = false;
-        } else if (arg == "--mtest") {
-            params.mem_test = true;
-        } else if (arg == "--numa") {
-            params.numa = true;
-        } else if (arg == "--export") {
-            params.export_cgraph = true;
-        } else if (arg == "--verbose-prompt") {
-            params.verbose_prompt = true;
-        } else if (arg == "-r" || arg == "--reverse-prompt") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.antiprompt.push_back(argv[i]);
-        } else if (arg == "--perplexity") {
-            params.perplexity = true;
-        } else if (arg == "--hellaswag") {
-            params.hellaswag = true;
-        } else if (arg == "--hellaswag-tasks") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.hellaswag_tasks = std::stoi(argv[i]);
-        } else if (arg == "--ignore-eos") {
-            params.logit_bias[llama_token_eos()] = -INFINITY;
-        } else if (arg == "--no-penalize-nl") {
-            params.penalize_nl = false;
-        } else if (arg == "-l" || arg == "--logit-bias") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::stringstream ss(argv[i]);
-            llama_token key;
-            char sign;
-            std::string value_str;
-            try {
-                if (ss >> key && ss >> sign && std::getline(ss, value_str) && (sign == '+' || sign == '-')) {
-                    params.logit_bias[key] = std::stof(value_str) * ((sign == '-') ? -1.0f : 1.0f);
-                } else {
-                    throw std::exception();
-                }
-            } catch (const std::exception&) {
-                invalid_param = true;
-                break;
-            }
-        } else if (arg == "-h" || arg == "--help") {
-            gpt_print_usage(argc, argv, default_params);
-            exit(0);
-        } else if (arg == "--random-prompt") {
-            params.random_prompt = true;
-        } else if (arg == "--in-prefix-bos") {
-            params.input_prefix_bos = true;
-        } else if (arg == "--in-prefix") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.input_prefix = argv[i];
-        } else if (arg == "--in-suffix") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.input_suffix = argv[i];
-        } else if (arg == "--grammar") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.grammar = argv[i];
-        } else if (arg == "--grammar-file") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::ifstream file(argv[i]);
-            if (!file) {
-                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
-                invalid_param = true;
-                break;
-            }
-            std::copy(
-                std::istreambuf_iterator<char>(file),
-                std::istreambuf_iterator<char>(),
-                std::back_inserter(params.grammar)
-            );
-        } else {
-            fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
-            gpt_print_usage(argc, argv, default_params);
+        if (params.prompt_cache_all &&
+                (params.interactive || params.interactive_first ||
+                 params.instruct)) {
+            // fprintf(stderr, "error: --prompt-cache-all not supported in interactive mode yet\n");
+            throw std::runtime_error("--prompt-cache-all not supported in interactive mode yet. Exiting.");
+            // gpt_print_usage(argc, argv, default_params);
             exit(1);
         }
-    }
-    if (invalid_param) {
-        fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
-        gpt_print_usage(argc, argv, default_params);
-        exit(1);
-    }
-    if (params.prompt_cache_all &&
-            (params.interactive || params.interactive_first ||
-             params.instruct)) {
-        fprintf(stderr, "error: --prompt-cache-all not supported in interactive mode yet\n");
-        gpt_print_usage(argc, argv, default_params);
-        exit(1);
-    }
 
-    if (escape_prompt) {
-        process_escapes(params.prompt);
-        process_escapes(params.input_prefix);
-        process_escapes(params.input_suffix);
-    }
+        if (escape_prompt) {
+            process_escapes(params.prompt);
+            process_escapes(params.input_prefix);
+            process_escapes(params.input_suffix);
+        }
 
-    return true;
+        return true;
+    } catch (const std::exception& e) {
+        // Handle exceptions thrown by validate_params or other parts of the function
+        fprintf(stderr, "\nError: Parameter '%s':\n  %s\n\n", arg.c_str(), e.what());
+        fprintf(stderr, "For detailed help, use: -h or --help\n");
+        return false; // Return false to indicate an error in parameter parsing
+    }
 }
 
 void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
