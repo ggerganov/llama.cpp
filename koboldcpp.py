@@ -1137,10 +1137,7 @@ def show_new_gui():
                         if str(g) in dict["usecublas"]:
                             gpu_choice_var.set(str(g+1))
                             break
-        if "gpulayers" in dict and dict["gpulayers"]:
-            gpulayers_var.set(dict["gpulayers"])
-
-        if  "noavx2" in dict and "noblas" in dict and dict["noblas"] and dict["noavx2"]:
+        elif  "noavx2" in dict and "noblas" in dict and dict["noblas"] and dict["noavx2"]:
             if failsafe_option is not None:
                 runopts_var.set(failsafe_option)
         elif "noavx2" in dict and dict["noavx2"]:
@@ -1151,6 +1148,8 @@ def show_new_gui():
                 runopts_var.set(default_option)
         elif openblas_option is not None:
                 runopts_var.set(openblas_option)
+        if "gpulayers" in dict and dict["gpulayers"]:
+            gpulayers_var.set(dict["gpulayers"])
         if "blasthreads" in dict and dict["blasthreads"]:
             blas_threads_var.set(str(dict["blasthreads"]))
         else:
