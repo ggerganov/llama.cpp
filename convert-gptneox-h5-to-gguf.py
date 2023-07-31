@@ -37,6 +37,12 @@ if len(sys.argv) > 2:
         sys.exit(1)
     fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".gguf"
 
+with open(dir_model + "/config.json", "r", encoding="utf-8") as f:
+    hparams = json.load(f)
+
+if hparams["architectures"][0] != "GPTNeoXForCausalLM":
+    print("Model architecture not supported: " + hparams["architectures"][0] )
+    sys.exit()
 
 model = AutoModelForCausalLM.from_pretrained(dir_model, low_cpu_mem_usage=True, trust_remote_code=True)
 list_vars = model.state_dict()
@@ -50,9 +56,6 @@ for name in list_vars.keys():
     tensor_count += 1
 
 gguf_writer = gguf.GGUFWriter.open(fname_out)
-
-with open(dir_model + "/config.json", "r", encoding="utf-8") as f:
-    hparams = json.load(f)
 
 # This must be changed when adding/deleting kv
 kv_count = 14
