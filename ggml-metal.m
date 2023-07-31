@@ -65,7 +65,6 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(rms_norm);
     GGML_METAL_DECL_KERNEL(norm);
     GGML_METAL_DECL_KERNEL(mul_mat_f16_f32);
-    GGML_METAL_DECL_KERNEL(mul_mat_f16_f32_gqa8);
     GGML_METAL_DECL_KERNEL(mul_mat_q4_0_f32);
     GGML_METAL_DECL_KERNEL(mul_mat_q4_1_f32);
     GGML_METAL_DECL_KERNEL(mul_mat_q2_K_f32);
@@ -183,7 +182,6 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(rms_norm);
         GGML_METAL_ADD_KERNEL(norm);
         GGML_METAL_ADD_KERNEL(mul_mat_f16_f32);
-        GGML_METAL_ADD_KERNEL(mul_mat_f16_f32_gqa8);
         GGML_METAL_ADD_KERNEL(mul_mat_q4_0_f32);
         GGML_METAL_ADD_KERNEL(mul_mat_q4_1_f32);
         GGML_METAL_ADD_KERNEL(mul_mat_q2_K_f32);
@@ -720,8 +718,7 @@ void ggml_metal_graph_compute(
                             // TODO: needs to be updated after PR: https://github.com/ggerganov/ggml/pull/224
 
                             GGML_ASSERT(ne00 == ne10);
-                            int llama_2_70_gqa_step = ne02 == 8 && ne12 == 64;
-                            GGML_ASSERT(ne02 == ne12 || llama_2_70_gqa_step);
+                            // GGML_ASSERT(ne02 == ne12); // Should be checked on individual data types until broadcast is implemented everywhere
 
                             if (ggml_is_contiguous(src0) &&
                                 ggml_is_contiguous(src1) &&
@@ -775,15 +772,9 @@ void ggml_metal_graph_compute(
                                 switch (src0t) {
                                     case GGML_TYPE_F16:
                                         {
-                                            GGML_ASSERT(ne02 == ne12 || llama_2_70_gqa_step);
-
                                             nth0 = 64;
                                             nth1 = 1;
-                                            if (llama_2_70_gqa_step) {
-                                                [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32_gqa8];
-                                            } else {
-                                                [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32];
-                                            }
+                                            [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32];
                                         } break;
                                     case GGML_TYPE_Q4_0:
                                         {
@@ -860,16 +851,18 @@ void ggml_metal_graph_compute(
                                 [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
                                 [encoder setBytes:&ne00 length:sizeof(ne00) atIndex:3];
                                 [encoder setBytes:&ne01 length:sizeof(ne01) atIndex:4];
-                                [encoder setBytes:&nb00 length:sizeof(nb00) atIndex:5];
-                                [encoder setBytes:&nb01 length:sizeof(nb01) atIndex:6];
-                                [encoder setBytes:&nb02 length:sizeof(nb02) atIndex:7];
-                                [encoder setBytes:&ne10 length:sizeof(ne10) atIndex:8];
-                                [encoder setBytes:&ne11 length:sizeof(ne11) atIndex:9];
-                                [encoder setBytes:&nb10 length:sizeof(nb10) atIndex:10];
-                                [encoder setBytes:&nb11 length:sizeof(nb11) atIndex:11];
-                                [encoder setBytes:&nb12 length:sizeof(nb12) atIndex:12];
-                                [encoder setBytes:&ne0  length:sizeof(ne0)  atIndex:13];
-                                [encoder setBytes:&ne1  length:sizeof(ne1)  atIndex:14];
+                                [encoder setBytes:&ne02 length:sizeof(ne02) atIndex:5];
+                                [encoder setBytes:&nb00 length:sizeof(nb00) atIndex:6];
+                                [encoder setBytes:&nb01 length:sizeof(nb01) atIndex:7];
+                                [encoder setBytes:&nb02 length:sizeof(nb02) atIndex:8];
+                                [encoder setBytes:&ne10 length:sizeof(ne10) atIndex:9];
+                                [encoder setBytes:&ne11 length:sizeof(ne11) atIndex:10];
+                                [encoder setBytes:&ne12 length:sizeof(ne12) atIndex:11];
+                                [encoder setBytes:&nb10 length:sizeof(nb10) atIndex:12];
+                                [encoder setBytes:&nb11 length:sizeof(nb11) atIndex:13];
+                                [encoder setBytes:&nb12 length:sizeof(nb12) atIndex:14];
+                                [encoder setBytes:&ne0  length:sizeof(ne0)  atIndex:15];
+                                [encoder setBytes:&ne1  length:sizeof(ne1)  atIndex:16];
 
                                 if (src0t == GGML_TYPE_Q4_0 || src0t == GGML_TYPE_Q4_1 ||
                                     src0t == GGML_TYPE_Q2_K || src0t == GGML_TYPE_Q4_K) {

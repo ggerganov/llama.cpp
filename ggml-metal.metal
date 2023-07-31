@@ -509,11 +509,13 @@ kernel void kernel_mul_mat_f16_f32(
         device       float * dst,
         constant   int64_t & ne00,
         constant   int64_t & ne01,
+        constant   int64_t & ne02,
         constant  uint64_t & nb00,
         constant  uint64_t & nb01,
         constant  uint64_t & nb02,
         constant   int64_t & ne10,
         constant   int64_t & ne11,
+        constant   int64_t & ne12,
         constant  uint64_t & nb10,
         constant  uint64_t & nb11,
         constant  uint64_t & nb12,
@@ -529,56 +531,7 @@ kernel void kernel_mul_mat_f16_f32(
     const int64_t r1 = tgpig.y;
     const int64_t im = tgpig.z;
 
-    device const half  * x = (device const half  *) (src0 + r0*nb01 + im*nb02);
-    device const float * y = (device const float *) (src1 + r1*nb11 + im*nb12);
-
-    sum[tpitg.x] = 0.0f;
-
-    for (int i = tpitg.x; i < ne00; i += tptg.x) {
-        sum[tpitg.x] += (float) x[i] * (float) y[i];
-    }
-
-    // accumulate the sum from all threads in the threadgroup
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-    for (uint i = tptg.x/2; i > 0; i /= 2) {
-        if (tpitg.x < i) {
-            sum[tpitg.x] += sum[tpitg.x + i];
-        }
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-    }
-
-    if (tpitg.x == 0) {
-        dst[im*ne1*ne0 + r1*ne0 + r0] = sum[0];
-    }
-}
-
-kernel void kernel_mul_mat_f16_f32_gqa8(
-        device const  char * src0,
-        device const  char * src1,
-        device       float * dst,
-        constant   int64_t & ne00,
-        constant   int64_t & ne01,
-        constant  uint64_t & nb00,
-        constant  uint64_t & nb01,
-        constant  uint64_t & nb02,
-        constant   int64_t & ne10,
-        constant   int64_t & ne11,
-        constant  uint64_t & nb10,
-        constant  uint64_t & nb11,
-        constant  uint64_t & nb12,
-        constant   int64_t & ne0,
-        constant   int64_t & ne1,
-        threadgroup float  * sum [[threadgroup(0)]],
-        uint3 tgpig[[threadgroup_position_in_grid]],
-        uint3  tpig[[thread_position_in_grid]],
-        uint3 tpitg[[thread_position_in_threadgroup]],
-        uint3  tptg[[threads_per_threadgroup]]) {
-
-    const int64_t r0 = tgpig.x;
-    const int64_t r1 = tgpig.y;
-    const int64_t im = tgpig.z;
-
-    device const half  * x = (device const half  *) (src0 + r0*nb01 + im/8*nb02);
+    device const half  * x = (device const half  *) (src0 + r0*nb01 + im/(ne12/ne02)*nb02);
     device const float * y = (device const float *) (src1 + r1*nb11 + im*nb12);
 
     sum[tpitg.x] = 0.0f;
