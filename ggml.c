@@ -18543,7 +18543,10 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
     ctx->alignment = GGUF_DEFAULT_ALIGNMENT;
 
-    // TODO: determine new alignment from kv if available
+    int alignment_idx = gguf_find_key(ctx, "general.alignment");
+    if (alignment_idx != -1) {
+        ctx->alignment = gguf_get_u32(ctx, alignment_idx);
+    }
 
     // we require the data section to be aligned, so take into account any padding
     {

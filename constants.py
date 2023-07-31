@@ -5,6 +5,7 @@ GGUF_DEFAULT_ALIGNMENT = 32
 # general
 KEY_GENERAL_ARCHITECTURE         = "general.architecture"
 KEY_GENERAL_QUANTIZATION_VERSION = "general.quantization_version"
+KEY_GENERAL_ALIGNMENT            = "general.alignment"
 KEY_GENERAL_NAME                 = "general.name"
 KEY_GENERAL_AUTHOR               = "general.author"
 KEY_GENERAL_URL                  = "general.url"

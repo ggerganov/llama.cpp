@@ -220,6 +220,9 @@ class GGUFWriter:
         self.write_uint32(
             constants.KEY_GENERAL_QUANTIZATION_VERSION, quantization_version)
 
+    def write_custom_alignment(self, alignment: int):
+        self.write_uint32(constants.KEY_GENERAL_ALIGNMENT, alignment)
+
     def write_context_length(self, llm: str, length: int):
         self.write_uint32(
             constants.KEY_LLM_CONTEXT_LENGTH.format(llm=llm), length)
@@ -292,11 +295,12 @@ class GGUFWriter:
 if __name__ == "__main__":
     # Example usage with a file
     gguf_writer = GGUFWriter.open("example.gguf")
-    gguf_writer.write_header(2, 3)
+    gguf_writer.write_header(2, 4)
 
     gguf_writer.write_architecture("llama")
     gguf_writer.write_uint32("answer", 42)  # Write a 32-bit integer
     gguf_writer.write_float32("answer_in_float", 42.0)  # Write a 32-bit float
+    gguf_writer.write_custom_alignment(64)
     tensor1 = np.ones((32,), dtype=np.float32) * 100.0
     tensor2 = np.ones((32,), dtype=np.float32) * 101.0
     gguf_writer.write_tensor_info("tensor0", tensor1)
