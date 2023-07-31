@@ -749,7 +749,7 @@ void ggml_metal_graph_compute(
                                     initWithDevice:ctx->device transposeLeft:false transposeRight:true
                                         resultRows:ne11 resultColumns:ne01 interiorColumns:ne00 alpha:1.0 beta:0.0];
 
-                                // we need to do ne02 multiplications
+                                // we need to do ne12 multiplications
                                 // TODO: is there a way to do this in parallel - currently very slow ..
                                 // TODO: might be possible to offload part of the computation to ANE using Accelerate's CBLAS
                                 for (int64_t i02 = 0; i02 < ne12; ++i02) {
