@@ -46,13 +46,13 @@ if len(sys.argv) > 2:
         print("Invalid ftype: " + str(ftype))
         sys.exit(1)
     fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".gguf"
+    
+with open(dir_model + "/config.json", "r", encoding="utf-8") as f:
+    hparams = json.load(f)
 
 if hparams["architectures"][0] != "LlamaForCausalLM":
     print("Model architecture not supported: " + hparams["architectures"][0] )
     sys.exit()
-    
-with open(dir_model + "/config.json", "r", encoding="utf-8") as f:
-    hparams = json.load(f)
 
 model = AutoModelForCausalLM.from_pretrained(dir_model, low_cpu_mem_usage=True, trust_remote_code=True)
 list_vars = model.state_dict()
