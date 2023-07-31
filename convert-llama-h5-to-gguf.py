@@ -104,11 +104,6 @@ if Path(dir_model + "/tokenizer.model").is_file():
     print("Adding sentencepiece tokenizer vocab.")
     tokenizer = SentencePieceProcessor(dir_model + "/tokenizer.model")
 
-    # output vocab_size followed by all piece/score pairs
-    outbytes: bytes
-    outbytes = b""
-    outbytes += struct.pack("I", tokenizer.vocab_size())
-
     for i in range(tokenizer.vocab_size()):
         text: bytes
         if tokenizer.is_unknown(i):
