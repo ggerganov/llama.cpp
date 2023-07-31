@@ -674,7 +674,7 @@ def show_new_gui():
 
     import customtkinter as ctk
     nextstate = 0 #0=exit, 1=launch, 2=oldgui
-    windowwidth = 520
+    windowwidth = 530
     windowheight = 500
     ctk.set_appearance_mode("dark")
     root = ctk.CTk()
@@ -700,7 +700,7 @@ def show_new_gui():
         (lib_clblast, "Use CLBlast"),
         (lib_cublas, "Use CuBLAS"),
         (lib_default, "Use No BLAS"),
-        (lib_noavx2, "Use NoAVX2 Mode (Old CPU)"),
+        (lib_noavx2, "NoAVX2 Mode (Old CPU)"),
         (lib_failsafe, "Failsafe Mode (Old CPU)")]
     openblas_option, clblast_option, cublas_option, default_option, openblas_noavx2_option, failsafe_option = (opt if file_exists(lib) or (os.name == 'nt' and file_exists(opt + ".dll")) else None for lib, opt in lib_option_pairs)
     # slider data
@@ -1080,7 +1080,7 @@ def show_new_gui():
             args.gpulayers = int(gpulayers_var.get())
         if runopts_var.get()=="Use No BLAS":
             args.noblas = True
-        if runopts_var.get()=="Use NoAVX2 Mode (Old CPU)":
+        if runopts_var.get()=="NoAVX2 Mode (Old CPU)":
             args.noavx2 = True
         if runopts_var.get()=="Failsafe Mode (Old CPU)":
             args.noavx2 = True
@@ -1297,7 +1297,7 @@ def show_old_gui():
         blaschoice = tk.StringVar()
         blaschoice.set("BLAS = 512")
 
-        runopts = ["Use OpenBLAS","Use CLBLast GPU #1","Use CLBLast GPU #2","Use CLBLast GPU #3","Use CuBLAS GPU","Use No BLAS","Use NoAVX2 Mode (Old CPU)","Failsafe Mode (Old CPU)"]
+        runopts = ["Use OpenBLAS","Use CLBLast GPU #1","Use CLBLast GPU #2","Use CLBLast GPU #3","Use CuBLAS GPU","Use No BLAS","NoAVX2 Mode (Old CPU)","Failsafe Mode (Old CPU)"]
         runchoice = tk.StringVar()
         runchoice.set("Use OpenBLAS")
 
