@@ -243,7 +243,7 @@ ifdef LLAMA_CUDA_CCBIN
 	NVCCFLAGS += -ccbin $(LLAMA_CUDA_CCBIN)
 endif
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
-	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -Wno-pedantic -c $< -o $@
+	$(NVCC) $(NVCCFLAGS) $(subst -Ofast,-O3,$(CXXFLAGS)) -Wno-pedantic -c $< -o $@
 endif # LLAMA_CUBLAS
 
 ifdef LLAMA_CLBLAST
