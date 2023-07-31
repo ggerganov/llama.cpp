@@ -45,8 +45,8 @@ typedef struct {
     // final rmsnorm
     float* rms_final_weight; // (dim,)
     // freq_cis for RoPE relatively positional embeddings
-    float* freq_cis_real; // (seq_len, dim/2)
-    float* freq_cis_imag; // (seq_len, dim/2)
+    // float* freq_cis_real; // (seq_len, dim/2)
+    // float* freq_cis_imag; // (seq_len, dim/2)
     // (optional) classifier weights for the logits, on the last layer
     float* wcls;
 } TransformerWeights;
@@ -63,9 +63,9 @@ int checkpoint_init_weights(TransformerWeights *w, Config* p, FILE* f) {
     if (fread(w->w2, sizeof(float), p->n_layers * p->hidden_dim * p->dim, f) != static_cast<size_t>(p->n_layers * p->hidden_dim * p->dim)) return 1;
     if (fread(w->w3, sizeof(float), p->n_layers * p->dim * p->hidden_dim, f) != static_cast<size_t>(p->n_layers * p->dim * p->hidden_dim)) return 1;
     if (fread(w->rms_final_weight, sizeof(float), p->dim, f) != static_cast<size_t>(p->dim)) return 1;
-    int head_size = p->dim / p->n_heads;
-    if (fread(w->freq_cis_real, sizeof(float), p->seq_len * head_size / 2, f) != static_cast<size_t>(p->seq_len * head_size / 2)) return 1;
-    if (fread(w->freq_cis_imag, sizeof(float), p->seq_len * head_size / 2, f) != static_cast<size_t>(p->seq_len * head_size / 2)) return 1;
+    //int head_size = p->dim / p->n_heads;
+    // if (fread(w->freq_cis_real, sizeof(float), p->seq_len * head_size / 2, f) != static_cast<size_t>(p->seq_len * head_size / 2)) return 1;
+    // if (fread(w->freq_cis_imag, sizeof(float), p->seq_len * head_size / 2, f) != static_cast<size_t>(p->seq_len * head_size / 2)) return 1;
     return 0;
 }
 
@@ -96,7 +96,7 @@ void malloc_weights(TransformerWeights* w, Config* p) {
     printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->w1\n",__func__,p->n_layers, p->hidden_dim, p->dim, p->n_layers * p->hidden_dim * p->dim);
 
     w->w2 = new float[p->n_layers * p->hidden_dim * p->dim](); //calloc(p->n_layers * p->dim * p->hidden_dim, sizeof(float));
-    printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->w2\n",__func__,p->n_layers, p->hidden_dim, p->dim, p->n_layers * p->hidden_dim * p->dim);
+    printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->w2\n",__func__,p->n_layers, p->dim, p->hidden_dim, p->n_layers * p->hidden_dim * p->dim);
 
     w->w3 = new float[p->n_layers * p->hidden_dim * p->dim](); //calloc(p->n_layers * p->hidden_dim * p->dim, sizeof(float));
     printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->w3\n",__func__,p->n_layers, p->hidden_dim, p->dim, p->n_layers * p->hidden_dim * p->dim);
@@ -104,11 +104,11 @@ void malloc_weights(TransformerWeights* w, Config* p) {
     w->rms_final_weight = new float[p->dim](); //calloc(p->dim, sizeof(float));
     printf("[%s:AK] Allocating [%d] float space for w->rms_final_weight\n",__func__,p->dim);
 
-    w->freq_cis_real = new float[p->seq_len * p->dim / 2](); //calloc(p->seq_len * p->dim / 2, sizeof(float));
-    printf("[%s:AK] Allocating [%d] x [%d] = [%d] float space for w->freq_cis_real\n",__func__,p->seq_len, p->dim / 2, p->seq_len * p->dim / 2);
+    // w->freq_cis_real = new float[p->seq_len * p->dim / 2](); //calloc(p->seq_len * p->dim / 2, sizeof(float));
+    // printf("[%s:AK] Allocating [%d] x [%d] = [%d] float space for w->freq_cis_real\n",__func__,p->seq_len, p->dim / 2, p->seq_len * p->dim / 2);
 
-    w->freq_cis_imag = new float[p->seq_len * p->dim / 2](); //calloc(p->seq_len * p->dim / 2, sizeof(float));
-    printf("[%s:AK] Allocating [%d] x [%d] = [%d] float space for w->freq_cis_imag\n\n",__func__,p->seq_len, p->dim / 2, p->seq_len * p->dim / 2);
+    // w->freq_cis_imag = new float[p->seq_len * p->dim / 2](); //calloc(p->seq_len * p->dim / 2, sizeof(float));
+    // printf("[%s:AK] Allocating [%d] x [%d] = [%d] float space for w->freq_cis_imag\n\n",__func__,p->seq_len, p->dim / 2, p->seq_len * p->dim / 2);
 
     // ensure all mallocs went fine
     // if (!w->token_embedding_table || !w->rms_att_weight || !w->rms_ffn_weight 
@@ -131,8 +131,8 @@ void free_weights(TransformerWeights* w) {
     free(w->w2);
     free(w->w3);
     free(w->rms_final_weight);
-    free(w->freq_cis_real);
-    free(w->freq_cis_imag);
+    // free(w->freq_cis_real);
+    // free(w->freq_cis_imag);
 }
 
 void print_sample_weights(TransformerWeights *w){
@@ -149,8 +149,8 @@ void print_sample_weights(TransformerWeights *w){
     printf("%f\n", w->w2[0]);
     printf("%f\n", w->w3[0]);
     printf("%f\n", w->rms_att_weight[0]);
-    printf("%f\n", w->freq_cis_real[0]);
-    printf("%f\n", w->freq_cis_imag[0]);
+    // printf("%f\n", w->freq_cis_real[0]);
+    // printf("%f\n", w->freq_cis_imag[0]);
     printf("------------------------------------------------------------------\n");
 
     
@@ -213,10 +213,10 @@ struct my_llama_model {
     struct ggml_tensor * tok_embeddings;
 
     struct ggml_tensor * norm;
-    // struct ggml_tensor * output;
+    struct ggml_tensor * output;
 
-    struct ggml_tensor * freq_cis_real;
-    struct ggml_tensor * freq_cis_imag;
+    // struct ggml_tensor * freq_cis_real;
+    // struct ggml_tensor * freq_cis_imag;
 
     std::vector<my_llama_layer> layers;
 
@@ -262,33 +262,33 @@ void init_model(struct my_llama_model * model) {
     model->norm           = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_embd);
     printf("[%s:GG] Allocating [%d] float space for model->norm\n",__func__,n_embd);
 
-    // model->output         = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_vocab);
-    // printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for model->output\n",__func__,n_embd, n_vocab, n_embd * n_vocab);
+    model->output         = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_vocab);
+    printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for model->output\n",__func__,n_embd, n_vocab, n_embd * n_vocab);
 
-    model->freq_cis_real         = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_embd/2);
-    printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for model->freq_cis_real\n",__func__,n_embd, n_embd / 2, n_embd * n_embd / 2);
+    // model->freq_cis_real         = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_embd/2);
+    // printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for model->freq_cis_real\n",__func__,n_embd, n_embd / 2, n_embd * n_embd / 2);
     
-    model->freq_cis_imag         = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_embd/2);
-    printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for model->freq_cis_imag\n",__func__,n_embd, n_embd / 2, n_embd * n_embd / 2);
+    // model->freq_cis_imag         = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_embd/2);
+    // printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for model->freq_cis_imag\n",__func__,n_embd, n_embd / 2, n_embd * n_embd / 2);
 
     // printing the per-layer allocations here so we dont print in the for loop.
-    printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for layer.wq for [%d] layers\n",__func__,n_embd, n_embd, n_embd * n_embd, n_layer);
-    printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for layer.wk for [%d] layers\n",__func__,n_embd, n_embd, n_embd * n_embd, n_layer);
-    printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for layer.wv for [%d] layers\n",__func__,n_embd, n_embd, n_embd * n_embd, n_layer);
-    printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for layer.wo for [%d] layers\n",__func__,n_embd, n_embd, n_embd * n_embd, n_layer);
+    printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for layer.wq for [%d] layers\n",__func__, n_embd, n_embd, n_embd * n_embd, n_layer);
+    printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for layer.wk for [%d] layers\n",__func__, n_embd, n_embd, n_embd * n_embd, n_layer);
+    printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for layer.wv for [%d] layers\n",__func__, n_embd, n_embd, n_embd * n_embd, n_layer);
+    printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for layer.wo for [%d] layers\n",__func__, n_embd, n_embd, n_embd * n_embd, n_layer);
 
     printf("[%s:GG] Allocating [%d] float space for layer.ffn_norm for [%d] layers\n",__func__,n_embd, n_layer);
 
-    printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for layer.w1 for [%d] layers\n",__func__,n_embd, n_ff, n_embd * n_ff, n_layer);
-    printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for layer.w2 for [%d] layers\n",__func__,n_ff, n_embd, n_ff * n_embd, n_layer);
-    printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for layer.w3 for [%d] layers\n",__func__,n_embd, n_ff, n_embd * n_ff, n_layer);
+    printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for layer.w1 for [%d] layers\n",__func__, n_ff, n_embd, n_embd * n_ff, n_layer);
+    printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for layer.w2 for [%d] layers\n",__func__, n_embd, n_ff, n_ff * n_embd, n_layer);
+    printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for layer.w3 for [%d] layers\n",__func__, n_ff, n_embd, n_embd * n_ff, n_layer);
     
 
     ggml_set_name(model->tok_embeddings, "tok_embeddings.weight");
     ggml_set_name(model->norm,           "norm.weight");
-    // ggml_set_name(model->output,         "output.weight");
-    ggml_set_name(model->freq_cis_real,         "output.freq_cis_real");
-    ggml_set_name(model->freq_cis_imag,         "output.freq_cis_imag");
+    ggml_set_name(model->output,         "output.weight");
+    // ggml_set_name(model->freq_cis_real,         "output.freq_cis_real");
+    // ggml_set_name(model->freq_cis_imag,         "output.freq_cis_imag");
 
     model->layers.resize(n_layer);
     for (uint32_t i = 0; i < n_layer; ++i) {
@@ -305,10 +305,14 @@ void init_model(struct my_llama_model * model) {
 
         layer.ffn_norm = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_embd);
 
-        layer.w1 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd,   n_ff);
-        layer.w2 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32,   n_ff, n_embd);
-        layer.w3 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd,   n_ff);
+        layer.w1 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_ff);
+        layer.w2 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_ff, n_embd);
+        layer.w3 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_ff);
 
+        // layer.w1 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_ff, n_embd);
+        // layer.w2 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_ff);
+        // layer.w3 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_ff, n_embd);
+ 
         ggml_set_name(layer.attention_norm, (layers_i + ".attention_norm.weight").c_str());
 
         ggml_set_name(layer.wq, (layers_i + ".attention.wq.weight").c_str());
@@ -352,7 +356,7 @@ int32_t get_i32_2d(struct ggml_tensor * tensor, int64_t i0, int64_t i1) {
 void print_row(struct ggml_tensor * probs, int i) {
     for (int k = 0; k < probs->ne[0]; ++k) {
         float p = get_f32_2d(probs, k, i);
-        printf(" %.2f", p);
+        printf(" %f", p);
     }
     printf("\n");
 }
@@ -656,34 +660,50 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     // w->token_embedding_table -> model->tok_embeddings
     // float*                   -> struct ggml_tensor
     stuff_karpathy_weights_into_gg(model->tok_embeddings, w->token_embedding_table);
+    stuff_karpathy_weights_into_gg(model->output, w->token_embedding_table);
     // print_row(model->tok_embeddings, 0);
 
     stuff_karpathy_weights_into_gg(model->norm, w->rms_final_weight);         
-    stuff_karpathy_weights_into_gg(model->freq_cis_real, w->freq_cis_real);
-    stuff_karpathy_weights_into_gg(model->freq_cis_imag, w->freq_cis_imag);
+    print_row(model->norm, 0);
+    //stuff_karpathy_weights_into_gg(model->freq_cis_real, w->freq_cis_real);
+    //stuff_karpathy_weights_into_gg(model->freq_cis_imag, w->freq_cis_imag);
 
     // for rms-att-weight 
     int row_length = model->hparams.n_embd;
+    const auto & hparams = model->hparams;
+    int n_ff = get_n_ff(&hparams);
+    //int n_ff = model->hparams.n_embd;
+    //const auto & hparams = model->hparams;
+    //int row_length = get_n_ff(&hparams);
+
     for (uint32_t i = 0; i < model->hparams.n_layer; ++i){
         auto & layer = model->layers[i];
-        // 2d        
+        // 1d        
         stuff_karpathy_weights_into_gg(layer.attention_norm, &w->rms_att_weight[i*row_length]);
         stuff_karpathy_weights_into_gg(layer.ffn_norm      , &w->rms_ffn_weight[i*row_length]);
-        stuff_karpathy_weights_into_gg(layer.wq            , &w->wq[i*row_length]);
-        stuff_karpathy_weights_into_gg(layer.wk            , &w->wk[i*row_length]);
-        stuff_karpathy_weights_into_gg(layer.wv            , &w->wv[i*row_length]);
-        stuff_karpathy_weights_into_gg(layer.wo            , &w->wo[i*row_length]);
-        stuff_karpathy_weights_into_gg(layer.w1            , &w->w1[i*row_length]);
-        stuff_karpathy_weights_into_gg(layer.w2            , &w->w2[i*row_length]);
-        stuff_karpathy_weights_into_gg(layer.w3            , &w->w3[i*row_length]);
+
+        // from 3d matrix layer x dim x dim to 2d matrix dim x dim
+        stuff_karpathy_weights_into_gg(layer.wq            , &w->wq[i*row_length*row_length]);
+        stuff_karpathy_weights_into_gg(layer.wk            , &w->wk[i*row_length*row_length]);
+        stuff_karpathy_weights_into_gg(layer.wv            , &w->wv[i*row_length*row_length]);
+        stuff_karpathy_weights_into_gg(layer.wo            , &w->wo[i*row_length*row_length]);
+        
+        //stuff_karpathy_weights_into_gg(layer.w1            , &w->w1[i*row_length]);
+        stuff_karpathy_weights_into_gg(layer.w1            , &w->w1[i*row_length*n_ff]);
+        
+        stuff_karpathy_weights_into_gg(layer.w2            , &w->w2[i*n_ff*row_length]);
+        //stuff_karpathy_weights_into_gg(layer.w2            , &w->w2[i*n_ff]);
+        
+        //stuff_karpathy_weights_into_gg(layer.w3            , &w->w3[i*row_length]);
+        stuff_karpathy_weights_into_gg(layer.w3            , &w->w3[i*n_ff*row_length]);
     }
     
     // write tensors
     write_tensor(&file, model->tok_embeddings);
     write_tensor(&file, model->norm);
-    // write_tensor(&file, model->output); // ?
-    write_tensor(&file, model->freq_cis_real);
-    write_tensor(&file, model->freq_cis_imag);
+    write_tensor(&file, model->output); // ?
+    // write_tensor(&file, model->freq_cis_real);
+    // write_tensor(&file, model->freq_cis_imag);
     for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {        
         auto & layer = model->layers[i];
 
