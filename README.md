@@ -80,7 +80,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [x] LLaMA 2 🦙🦙
 - [X] [Alpaca](https://github.com/ggerganov/llama.cpp#instruction-mode-with-alpaca)
 - [X] [GPT4All](https://github.com/ggerganov/llama.cpp#using-gpt4all)
-- [X] [Chinese LLaMA / Alpaca](https://github.com/ymcui/Chinese-LLaMA-Alpaca)
+- [X] [Chinese LLaMA / Alpaca](https://github.com/ymcui/Chinese-LLaMA-Alpaca) and [Chinese LLaMA-2 / Alpaca-2](https://github.com/ymcui/Chinese-LLaMA-Alpaca-2)
 - [X] [Vigogne (French)](https://github.com/bofenghuang/vigogne)
 - [X] [Vicuna](https://github.com/ggerganov/llama.cpp/discussions/643#discussioncomment-5533894)
 - [X] [Koala](https://bair.berkeley.edu/blog/2023/04/03/koala/)
@@ -252,7 +252,7 @@ In order to build llama.cpp you have three different options.
         ```bash
         sudo pkg install gmake automake autoconf pkgconf llvm15 clinfo clover \
             opencl clblast openblas
-
+        
             gmake CC=/usr/local/bin/clang15 CXX=/usr/local/bin/clang++15 -j4
         ```
 
