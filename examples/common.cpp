@@ -778,34 +778,26 @@ void console_set_color(console_state & con_st, console_color_t color) {
 
 char32_t getchar32() {
 #if defined(_WIN32)
-    HANDLE hConsole = GetStdHandle(STD_INPUT_HANDLE);
     wchar_t high_surrogate = 0;
 
     while (true) {
-        INPUT_RECORD record;
-        DWORD count;
-        if (!ReadConsoleInputW(hConsole, &record, 1, &count) || count == 0) {
+        wint_t wc = std::getwchar(); // Use std::getwchar() to read a wide character from std::wcin
+
+        if (wc == WEOF) {
             return WEOF;
         }
 
-        if (record.EventType == KEY_EVENT && record.Event.KeyEvent.bKeyDown) {
-            wchar_t wc = record.Event.KeyEvent.uChar.UnicodeChar;
-            if (wc == 0) {
-                continue;
+        if ((wc >= 0xD800) && (wc <= 0xDBFF)) { // Check if wc is a high surrogate
+            high_surrogate = wc;
+            continue;
+        } else if ((wc >= 0xDC00) && (wc <= 0xDFFF)) { // Check if wc is a low surrogate
+            if (high_surrogate != 0) { // Check if we have a high surrogate
+                return ((high_surrogate - 0xD800) << 10) + (wc - 0xDC00) + 0x10000;
             }
-
-            if ((wc >= 0xD800) && (wc <= 0xDBFF)) { // Check if wc is a high surrogate
-                high_surrogate = wc;
-                continue;
-            } else if ((wc >= 0xDC00) && (wc <= 0xDFFF)) { // Check if wc is a low surrogate
-                if (high_surrogate != 0) { // Check if we have a high surrogate
-                    return ((high_surrogate - 0xD800) << 10) + (wc - 0xDC00) + 0x10000;
-                }
-            }
-
-            high_surrogate = 0; // Reset the high surrogate
-            return static_cast<char32_t>(wc);
         }
+
+        high_surrogate = 0; // Reset the high surrogate
+        return static_cast<char32_t>(wc);
     }
 #else
     wchar_t wc = getwchar();
