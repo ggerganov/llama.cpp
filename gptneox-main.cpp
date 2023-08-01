@@ -716,6 +716,9 @@ int main(int argc, char ** argv) {
 
     }
 
+    uint32_t eos_token_id = 0;
+    int keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.eos_token_id"); if( keyidx != -1 ) {  eos_token_id = gguf_get_val_u32(ggufctx, keyidx); }    
+
     int n_past = 0;
 
     int64_t t_sample_us  = 0;
@@ -794,7 +797,7 @@ int main(int argc, char ** argv) {
         fflush(stdout);
 
         // end of text token
-        if (embd.back() == 0) {
+        if (embd.back() == eos_token_id) {
             break;
         }
     }
