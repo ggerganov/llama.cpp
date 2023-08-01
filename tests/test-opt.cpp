@@ -1,9 +1,9 @@
 #include "ggml.h"
 
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <assert.h>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cassert>
 
 #define MAX_NARGS 2
 

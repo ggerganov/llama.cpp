@@ -3,11 +3,11 @@
 // This is done by checking all finite (non-NaN, non-infinite) floats.
 
 #undef NDEBUG
-#include <assert.h>
+#include <cassert>
 #include <immintrin.h>
-#include <math.h>
-#include <stdint.h>
-#include <string.h>
+#include <cmath>
+#include <cstdint>
+#include <cstring>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdouble-promotion"
@@ -35,7 +35,7 @@ int main(void) {
     do {
         float f;
         memcpy(&f, &x, sizeof(x));
-        assert(!isfinite(f) || (round_orig(f) == round_float(f)));
+        assert(!std::isfinite(f) || (round_orig(f) == round_float(f)));
     } while (x--);
 
 #ifdef __F16C__
