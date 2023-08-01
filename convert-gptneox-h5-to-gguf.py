@@ -58,7 +58,7 @@ for name in list_vars.keys():
 gguf_writer = gguf.GGUFWriter.open(fname_out)
 
 # This must be changed when adding/deleting kv
-kv_count = 14
+kv_count = 17
 
 print("tensors " + str(tensor_count) + " kv " + str(kv_count))
 
@@ -101,9 +101,43 @@ if Path(dir_model + "/tokenizer.json").is_file():
 
     merges = tokenizer["model"]["merges"]
 
-gguf_writer.write_tokenizer_model("gpt2")
-gguf_writer.write_token_list(tokens)
-gguf_writer.write_token_merges(merges)
+    gguf_writer.write_tokenizer_model("gpt2")
+    gguf_writer.write_token_list(tokens)
+    gguf_writer.write_token_merges(merges)
+
+    if "added_tokens" in tokenizer and Path(dir_model + "/tokenizer_config.json").is_file():
+        print("Adding special token ids")
+
+        with open(dir_model + "/tokenizer_config.json", "r", encoding="utf-8") as f:
+            tokenizer_config = json.load(f)
+
+        # find special token ids
+
+        if "bos_token" in tokenizer_config:
+            for key in tokenizer["added_tokens"]:
+                if key["content"] == tokenizer_config["bos_token"]:
+                    gguf_writer.write_uint32("tokenizer.ggml.bos_token_id", key["id"] )
+
+        if "eos_token" in tokenizer_config:
+            for key in tokenizer["added_tokens"]:
+                if key["content"] == tokenizer_config["eos_token"]:
+                    gguf_writer.write_uint32("tokenizer.ggml.eos_token_id", key["id"] )
+
+        if "unk_token" in tokenizer_config:
+            for key in tokenizer["added_tokens"]:
+                if key["content"] == tokenizer_config["unk_token"]:
+                    gguf_writer.write_uint32("tokenizer.ggml.unknown_token_id", key["id"] )
+
+        if "sep_token" in tokenizer_config:
+            for key in tokenizer["added_tokens"]:
+                if key["content"] == tokenizer_config["sep_token"]:
+                    gguf_writer.write_uint32("tokenizer.ggml.separator_token_id", key["id"] )
+
+        if "pad_token" in tokenizer_config:
+            for key in tokenizer["added_tokens"]:
+                if key["content"] == tokenizer_config["pad_token"]:
+                    gguf_writer.write_uint32("tokenizer.ggml.padding_token_id", key["id"] )
+
 
 # TENSORS
 
