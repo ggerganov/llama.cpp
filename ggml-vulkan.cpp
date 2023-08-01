@@ -2598,6 +2598,11 @@ void ggml_vk_test_matmul_f32(size_t m, size_t n, size_t k, size_t num_it, int sp
 
     const size_t kpad = ggml_vk_align_size(k, p->align);
 
+    ggml_vk_pipeline_allocate_descriptor_sets(*p, num_it);
+    if (split_k > 1) {
+        ggml_vk_pipeline_allocate_descriptor_sets(vk_pipeline_matmul_split_k_reduce, num_it);
+    }
+
     vk_buffer d_X;
     vk_buffer d_Y;
     vk_buffer d_D;
@@ -2667,6 +2672,9 @@ void ggml_vk_test_matmul_f32(size_t m, size_t n, size_t k, size_t num_it, int sp
     ggml_vk_pool_free(d_Y);
     ggml_vk_pool_free(d_D);
 
+    ggml_vk_pipeline_cleanup(*p);
+    ggml_vk_pipeline_cleanup(vk_pipeline_matmul_split_k_reduce);
+
     free(x);
     free(y);
     free(d);
@@ -2701,6 +2709,11 @@ void ggml_vk_test_matmul_f16(size_t m, size_t n, size_t k, size_t num_it, int sp
     }
 
     const size_t kpad = ggml_vk_align_size(k, p->align);
+
+    ggml_vk_pipeline_allocate_descriptor_sets(*p, num_it);
+    if (split_k > 1) {
+        ggml_vk_pipeline_allocate_descriptor_sets(vk_pipeline_matmul_split_k_reduce, num_it);
+    }
 
     vk_buffer d_X;
     vk_buffer d_Y;
@@ -2776,8 +2789,10 @@ void ggml_vk_test_matmul_f16(size_t m, size_t n, size_t k, size_t num_it, int sp
 
     ggml_vk_pool_free(d_X);
     ggml_vk_pool_free(d_Y);
-
     ggml_vk_pool_free(d_D);
+
+    ggml_vk_pipeline_cleanup(*p);
+    ggml_vk_pipeline_cleanup(vk_pipeline_matmul_split_k_reduce);
 
     free(x);
     free(y);
