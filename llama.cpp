@@ -1766,7 +1766,7 @@ static struct ggml_cgraph * llama_build_graph(
     }
 
 #if 0
-    printf("\n%s: used_mem: eval ctx %.3f MB, scratch %.3f MB %.3f MB, work buf %.3f MB, n_past = %d, N = %d\n", __func__,
+    LLAMA_LOG_INFO("\n%s: used_mem: eval ctx %.3f MB, scratch %.3f MB %.3f MB, work buf %.3f MB, n_past = %d, N = %d\n", __func__,
             ggml_used_mem(ctx0)/1024.0/1024.0,
             lctx.get_buf_max_mem(0)/1024.0/1024.0,
             lctx.get_buf_max_mem(1)/1024.0/1024.0,
@@ -1827,7 +1827,7 @@ static bool llama_eval_internal(
     ggml_allocr_alloc_graph(lctx.alloc, gf);
 #endif
 
-    // fprintf(stderr, "graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
+    // LLAMA_LOG_INFO("graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
 
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
@@ -2014,7 +2014,7 @@ struct llama_tokenizer {
             left_sym.n += right_sym.n;
             right_sym.n = 0;
 
-            //printf("left = '%*s' size = %zu\n", (int) left_sym.n, left_sym.text, bigram.size);
+            //LLAMA_LOG_INFO("left = '%*s' size = %zu\n", (int) left_sym.n, left_sym.text, bigram.size);
 
             // remove the right sym from the chain
             left_sym.next = right_sym.next;
@@ -3022,7 +3022,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         tensor.data = read_data.addr;
         model_loader->load_data_for(tensor);
 
-        printf("[%4zu/%4zu] %36s - %16s, type = %6s, ",
+        LLAMA_LOG_INFO("[%4zu/%4zu] %36s - %16s, type = %6s, ",
                ++idx, model_loader->tensors_map.tensors.size(),
                tensor.name.c_str(), llama_format_tensor_shape(tensor.ne).c_str(),
                ggml_type_name(tensor.type));
@@ -3044,7 +3044,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             new_type = tensor.type;
             new_data = tensor.data;
             new_size = tensor.size;
-            printf("size = %8.3f MB\n", tensor.size/1024.0/1024.0);
+            LLAMA_LOG_INFO("size = %8.3f MB\n", tensor.size/1024.0/1024.0);
         } else {
             new_type = quantized_type;
 #ifdef GGML_USE_K_QUANTS
@@ -3109,7 +3109,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 f32_data = (float *) f32_conv_buf.addr;
             }
 
-            printf("quantizing to %s .. ", ggml_type_name(new_type));
+            LLAMA_LOG_INFO("quantizing to %s .. ", ggml_type_name(new_type));
             fflush(stdout);
 
             work.resize(nelements * 4); // upper bound on size
@@ -3159,7 +3159,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 }
             }
 
-            printf("size = %8.2f MB -> %8.2f MB | hist: ", tensor.size/1024.0/1024.0, new_size/1024.0/1024.0);
+            LLAMA_LOG_INFO("size = %8.2f MB -> %8.2f MB | hist: ", tensor.size/1024.0/1024.0, new_size/1024.0/1024.0);
             int64_t tot_count = 0;
             for (size_t i = 0; i < hist_cur.size(); i++) {
                 hist_all[i] += hist_cur[i];
@@ -3168,18 +3168,18 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
             if (tot_count > 0) {
                 for (size_t i = 0; i < hist_cur.size(); i++) {
-                    printf("%5.3f ", hist_cur[i] / float(nelements));
+                    LLAMA_LOG_INFO("%5.3f ", hist_cur[i] / float(nelements));
                 }
             }
-            printf("\n");
+            LLAMA_LOG_INFO("\n");
         }
         total_size_org += tensor.size;
         total_size_new += new_size;
         file_saver.write_tensor(tensor, new_type, new_data, new_size);
     }
 
-    printf("%s: model size  = %8.2f MB\n", __func__, total_size_org/1024.0/1024.0);
-    printf("%s: quant size  = %8.2f MB\n", __func__, total_size_new/1024.0/1024.0);
+    LLAMA_LOG_INFO("%s: model size  = %8.2f MB\n", __func__, total_size_org/1024.0/1024.0);
+    LLAMA_LOG_INFO("%s: quant size  = %8.2f MB\n", __func__, total_size_new/1024.0/1024.0);
 
     {
         int64_t sum_all = 0;
@@ -3188,11 +3188,11 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         }
 
         if (sum_all > 0) {
-            printf("%s: hist: ", __func__);
+            LLAMA_LOG_INFO("%s: hist: ", __func__);
             for (size_t i = 0; i < hist_all.size(); i++) {
-                printf("%5.3f ", hist_all[i] / float(sum_all));
+                LLAMA_LOG_INFO("%5.3f ", hist_all[i] / float(sum_all));
             }
-            printf("\n");
+            LLAMA_LOG_INFO("\n");
         }
     }
 }
@@ -3250,10 +3250,9 @@ struct llama_context * llama_new_context_with_model(
             unsigned percentage = (unsigned) (100 * progress);
             while (percentage > *cur_percentage_p) {
                 *cur_percentage_p = percentage;
-                fprintf(stderr, ".");
-                fflush(stderr);
+                LLAMA_LOG_INFO(".");
                 if (percentage >= 100) {
-                    fprintf(stderr, "\n");
+                    LLAMA_LOG_INFO("\n");
                 }
             }
         };
@@ -3308,14 +3307,14 @@ struct llama_context * llama_new_context_with_model(
             // measure memory requirements for the graph
             size_t alloc_size = ggml_allocr_alloc_graph(ctx->alloc, gf) + tensor_alignment;
 
-            fprintf(stderr, "%s: compute buffer total size = %7.2f MB\n", __func__, (ctx->buf_compute.size + alloc_size) / 1024.0 / 1024.0);
+            LLAMA_LOG_INFO("%s: compute buffer total size = %7.2f MB\n", __func__, (ctx->buf_compute.size + alloc_size) / 1024.0 / 1024.0);
 
             // debug - for comparison with scratch buffer
             //size_t prev_req =
             //    MEM_REQ_SCRATCH0(hparams.n_ctx).at(ctx->model.type) +
             //    MEM_REQ_SCRATCH1().at(ctx->model.type) +
             //    MEM_REQ_EVAL().at(ctx->model.type);
-            //fprintf(stderr, "%s: (debug) equivalent with scratch buffer = %7.2f MB\n", __func__, prev_req / 1024.0 / 1024.0);
+            //LLAMA_LOG_INFO("%s: (debug) equivalent with scratch buffer = %7.2f MB\n", __func__, prev_req / 1024.0 / 1024.0);
 
             // recreate allocator with exact memory requirements
             ggml_allocr_free(ctx->alloc);
@@ -3679,7 +3678,7 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
 
             n_tensors++;
             if (n_tensors % 4 == 0) {
-                fprintf(stderr, ".");
+                LLAMA_LOG_INFO(".");
             }
         }
     }
@@ -4316,5 +4315,6 @@ static void llama_log_internal(llama_log_level level, const char * format, ...) 
 static void llama_log_callback_default(llama_log_level level, const char * text, void * user_data) {
     (void) level;
     (void) user_data;
-    fprintf(stderr, "%s", text);
+    fputs(text, stderr);
+    fflush(stderr);
 }

@@ -91,6 +91,12 @@ extern "C" {
         LLAMA_LOG_LEVEL_WARN  = 3,
         LLAMA_LOG_LEVEL_INFO  = 4
     };
+
+    // Signature for logging events
+    // Note that text includes the new line character at the end for most events.
+    // If your logging mechanism cannot handle that, check if the last character is '\n' and strip it
+    // if it exists.
+    // It might not exist for progress report where '.' is output repeatedly.
     typedef void (*llama_log_callback)(llama_log_level level, const char * text, void * user_data);
 
     struct llama_context_params {
