@@ -2293,8 +2293,12 @@ static void ggml_vk_mul_f32(const ggml_tensor * src0, const ggml_tensor * src1, 
     // Allocate descriptor sets
     ggml_vk_pipeline_allocate_descriptor_sets(vk_pipeline_mul_f32, ne02 * ne03);
 
+    int submit_counter = 0;
+
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         for (int64_t i02 = 0; i02 < ne02; i02++) {
+            const uint32_t it_idx = (i03 * ne02 + i02);
+            submit_counter++;
             if (ne03 > 1 || ne02 > 1) {
                 const uint32_t buf_offset = buf_sz * (i03 * ne02 + i02);
 
@@ -2303,7 +2307,9 @@ static void ggml_vk_mul_f32(const ggml_tensor * src0, const ggml_tensor * src1, 
                 // copy src0 to device
                 transfer_0_seqs.push_back(ggml_vk_h2d_tensor_2d(&d_X, buf_offset, src0, i03, i02, vk_device.transfer_queues[0], {}, { s_x }));
 
-                ggml_vk_submit(vk_device.transfer_queues[0], transfer_0_seqs, VK_NULL_HANDLE);
+                if (it_idx == 0 || submit_counter >= VK_SUBMIT_BATCH) {
+                    ggml_vk_submit(vk_device.transfer_queues[0], transfer_0_seqs, VK_NULL_HANDLE);
+                }
 
                 const int64_t i13 = i03%ne13;
                 const int64_t i12 = i02%ne12;
@@ -2321,8 +2327,11 @@ static void ggml_vk_mul_f32(const ggml_tensor * src0, const ggml_tensor * src1, 
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
                 transfer_1_seqs.push_back(ggml_vk_buffer_read_async(&d_D, buf_offset, d, sizeof(float) * ne00 * ne01, vk_device.transfer_queues[1], { s_mm }, {}));
 
-                ggml_vk_submit(vk_device.compute_queue, compute_seqs, VK_NULL_HANDLE);
-                ggml_vk_submit(vk_device.transfer_queues[1], transfer_1_seqs, VK_NULL_HANDLE);
+                if (it_idx == 0 || submit_counter >= VK_SUBMIT_BATCH) {
+                    ggml_vk_submit(vk_device.compute_queue, compute_seqs, VK_NULL_HANDLE);
+                    ggml_vk_submit(vk_device.transfer_queues[1], transfer_1_seqs, VK_NULL_HANDLE);
+                    submit_counter = 0;
+                }
             } else {
                 vk_submission s = ggml_vk_begin_submission(vk_device.compute_queue);
                 // copy src0 to device
@@ -2344,7 +2353,10 @@ static void ggml_vk_mul_f32(const ggml_tensor * src0, const ggml_tensor * src1, 
 
                 compute_seqs.push_back({ s });
 
-                ggml_vk_submit(vk_device.compute_queue, compute_seqs, VK_NULL_HANDLE);
+                if (it_idx == 0 || submit_counter >= VK_SUBMIT_BATCH) {
+                    ggml_vk_submit(vk_device.compute_queue, compute_seqs, VK_NULL_HANDLE);
+                    submit_counter = 0;
+                }
             }
         }
     }
