@@ -257,6 +257,11 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt_
             vocab.id_to_token[i] = word;
         }
 
+        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.bos_token_id"); if( keyidx != -1 ) {       printf("bos id = %d\n", gguf_get_val_u32(ggufctx, keyidx) ); }
+        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.eos_token_id"); if( keyidx != -1 ) {       printf("eos id = %d\n", gguf_get_val_u32(ggufctx, keyidx) ); }
+        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.unknown_token_id"); if( keyidx != -1 ) {   printf("unk id = %d\n", gguf_get_val_u32(ggufctx, keyidx) ); }
+        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.separator_token_id"); if( keyidx != -1 ) { printf("sep id = %d\n", gguf_get_val_u32(ggufctx, keyidx) ); }
+        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.padding_token_id"); if( keyidx != -1 ) {   printf("pad id = %d\n", gguf_get_val_u32(ggufctx, keyidx) ); }
 
     }
 
