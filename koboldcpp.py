@@ -23,6 +23,7 @@ class load_model_inputs(ctypes.Structure):
                 ("batch_size", ctypes.c_int),
                 ("f16_kv", ctypes.c_bool),
                 ("low_vram", ctypes.c_bool),
+                ("use_mmq", ctypes.c_bool),
                 ("executable_path", ctypes.c_char_p),
                 ("model_filename", ctypes.c_char_p),
                 ("lora_filename", ctypes.c_char_p),
@@ -179,6 +180,7 @@ def load_model(model_filename):
     inputs.max_context_length = maxctx #initial value to use for ctx, can be overwritten
     inputs.threads = args.threads
     inputs.low_vram = (True if (args.usecublas and "lowvram" in args.usecublas) else False)
+    inputs.use_mmq = (True if (args.usecublas and "mmq" in args.usecublas) else False)
     inputs.blasthreads = args.blasthreads
     inputs.f16_kv = True
     inputs.use_mmap = (not args.nommap)
@@ -816,6 +818,7 @@ def show_new_gui():
     debugmode = ctk.IntVar()
 
     lowvram_var = ctk.IntVar()
+    mmq_var = ctk.IntVar()
 
     blas_threads_var = ctk.StringVar()
     blas_size_var = ctk.IntVar()
@@ -852,11 +855,13 @@ def show_new_gui():
     quick_tab = tabcontent["Quick Launch"]
 
     # gpu options
-    quick_gpu_layers_entry,quick_gpu_layers_label = makelabelentry(quick_tab,"GPU Layers:", gpulayers_var, 4, 50)
+    quick_gpu_layers_entry,quick_gpu_layers_label = makelabelentry(quick_tab,"GPU Layers:", gpulayers_var, 5, 50)
     quick_gpu_selector_label = makelabel(quick_tab, "GPU ID:", 3)
     quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=["1","2","3"], width=60, variable=gpu_choice_var, state="readonly")
     CUDA_quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=["1","2","3","All"], width=60, variable=gpu_choice_var, state="readonly")
-    quick_lowvram_box = makecheckbox(quick_tab,  "Low VRAM", lowvram_var, 5)
+    quick_lowvram_box = makecheckbox(quick_tab,  "Low VRAM", lowvram_var, 4,0)
+    quick_mmq_box = makecheckbox(quick_tab,  "Use QuantMatMul (mmq)", mmq_var, 4,1)
+
 
     def changerunmode(a,b,c):
         index = runopts_var.get()
@@ -882,9 +887,13 @@ def show_new_gui():
         if index == "Use CuBLAS":
             lowvram_box.grid(row=4, column=0, padx=8, pady=1,  stick="nw")
             quick_lowvram_box.grid(row=4, column=0, padx=8, pady=1,  stick="nw")
+            mmq_box.grid(row=4, column=1, padx=8, pady=1,  stick="nw")
+            quick_mmq_box.grid(row=4, column=1, padx=8, pady=1,  stick="nw")
         else:
             lowvram_box.grid_forget()
             quick_lowvram_box.grid_forget()
+            mmq_box.grid_forget()
+            quick_mmq_box.grid_forget()
 
         if index == "Use CLBlast" or index == "Use CuBLAS":
             gpu_layers_label.grid(row=5, column=0, padx = 8, pady=1, stick="nw")
@@ -927,11 +936,12 @@ def show_new_gui():
     hardware_tab = tabcontent["Hardware"]
 
     # gpu options
-    gpu_layers_entry,gpu_layers_label = makelabelentry(hardware_tab,"GPU Layers:", gpulayers_var, 4, 50)
+    gpu_layers_entry,gpu_layers_label = makelabelentry(hardware_tab,"GPU Layers:", gpulayers_var, 5, 50)
     gpu_selector_label = makelabel(hardware_tab, "GPU ID:", 3)
     gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=["1","2","3"], width=60, variable=gpu_choice_var, state="readonly")
     CUDA_gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=["1","2","3", "All"], width=60, variable=gpu_choice_var, state="readonly")
-    lowvram_box = makecheckbox(hardware_tab,  "Low VRAM", lowvram_var, 5)
+    lowvram_box = makecheckbox(hardware_tab,  "Low VRAM", lowvram_var, 4,0)
+    mmq_box = makecheckbox(hardware_tab,  "Use QuantMatMul (mmq)", mmq_var, 4,1)
 
     # presets selector
     makelabel(hardware_tab, "Presets:", 1)
@@ -1076,6 +1086,8 @@ def show_new_gui():
                 args.usecublas = ["lowvram"] if lowvram_var.get() == 1 else ["normal"]
             else:
                 args.usecublas = ["lowvram",str(gpuchoiceidx)] if lowvram_var.get() == 1 else ["normal",str(gpuchoiceidx)]
+            if mmq_var.get()==1:
+                args.usecublas.append("mmq")
         if gpulayers_var.get():
             args.gpulayers = int(gpulayers_var.get())
         if runopts_var.get()=="Use No BLAS":
@@ -1128,15 +1140,13 @@ def show_new_gui():
         elif "usecublas" in dict and dict["usecublas"]:
             if cublas_option is not None:
                 runopts_var.set(cublas_option)
-                if len(dict["usecublas"])==1:
-                    lowvram_var.set(1 if dict["usecublas"][0]=="lowvram" else 0)
-                else:
-                    lowvram_var.set(1 if "lowvram" in dict["usecublas"] else 0)
-                    gpu_choice_var.set("1")
-                    for g in range(3):
-                        if str(g) in dict["usecublas"]:
-                            gpu_choice_var.set(str(g+1))
-                            break
+                lowvram_var.set(1 if "lowvram" in dict["usecublas"] else 0)
+                mmq_var.set(1 if "mmq" in dict["usecublas"] else 0)
+                gpu_choice_var.set("All")
+                for g in range(3):
+                    if str(g) in dict["usecublas"]:
+                        gpu_choice_var.set(str(g+1))
+                        break
         elif  "noavx2" in dict and "noblas" in dict and dict["noblas"] and dict["noavx2"]:
             if failsafe_option is not None:
                 runopts_var.set(failsafe_option)
@@ -1718,7 +1728,7 @@ if __name__ == '__main__':
     compatgroup = parser.add_mutually_exclusive_group()
     compatgroup.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
     compatgroup.add_argument("--useclblast", help="Use CLBlast for GPU Acceleration. Must specify exactly 2 arguments, platform ID and device ID (e.g. --useclblast 1 0).", type=int, choices=range(0,9), nargs=2)
-    compatgroup.add_argument("--usecublas", help="Use CuBLAS for GPU Acceleration. Requires CUDA. Select lowvram to not allocate VRAM scratch buffer. Enter a number afterwards to select and use 1 GPU. Leaving no number will use all GPUs.", nargs='*',metavar=('[lowvram|normal] [main GPU ID]'), choices=['normal', 'lowvram', '0', '1', '2'])
+    compatgroup.add_argument("--usecublas", help="Use CuBLAS for GPU Acceleration. Requires CUDA. Select lowvram to not allocate VRAM scratch buffer. Enter a number afterwards to select and use 1 GPU. Leaving no number will use all GPUs.", nargs='*',metavar=('[lowvram|normal] [main GPU ID] [mmq]'), choices=['normal', 'lowvram', '0', '1', '2', 'mmq'])
     parser.add_argument("--gpulayers", help="Set number of layers to offload to GPU when using GPU. Requires GPU.",metavar=('[GPU layers]'), type=int, default=0)
     parser.add_argument("--tensor_split", help="For CUDA with ALL GPU set only, ratio to split tensors across multiple GPUs, space-separated list of proportions, e.g. 7 3", metavar=('[Ratios]'), type=float, nargs='+')
 

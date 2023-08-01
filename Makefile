@@ -314,7 +314,7 @@ k_quants_failsafe.o: k_quants.c k_quants.h ggml.h ggml-cuda.h
 
 #there's no intrinsics or special gpu ops used here, so we can have a universal object
 ggml-alloc.o: ggml-alloc.c ggml.h ggml-alloc.h
-    $(CC)  $(CFLAGS) -c $< -o $@
+	$(CC)  $(CFLAGS) -c $< -o $@
 
 #version 2 libs
 ggml_v2.o: otherarch/ggml_v2.c otherarch/ggml_v2.h

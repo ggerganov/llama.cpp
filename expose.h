@@ -30,6 +30,7 @@ struct load_model_inputs
     const int batch_size;
     const bool f16_kv;
     const bool low_vram;
+    const bool use_mmq;
     const char * executable_path;
     const char * model_filename;
     const char * lora_filename;
