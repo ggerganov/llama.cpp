@@ -38,7 +38,7 @@
 #include <sstream>
 #include <numeric>
 
-#define LLAMA_USE_SCRATCH
+#define LLAMA_V2_USE_SCRATCH
 #define LLAMA_V2_MAX_SCRATCH_BUFFERS 16
 
 // available llama models
@@ -247,7 +247,7 @@ struct llama_v2_context {
     size_t buf_max_size[LLAMA_V2_MAX_SCRATCH_BUFFERS] = { 0 };
 
     void use_buf(struct ggml_v2_context * ctx, int i) {
-#if defined(LLAMA_USE_SCRATCH)
+#if defined(LLAMA_V2_USE_SCRATCH)
         size_t last_size = 0;
 
         if (i == -1) {
@@ -269,7 +269,7 @@ struct llama_v2_context {
     }
 
     size_t get_buf_max_mem(int i) const {
-#if defined(LLAMA_USE_SCRATCH)
+#if defined(LLAMA_V2_USE_SCRATCH)
         return buf_max_size[i];
 #else
         (void) i;
