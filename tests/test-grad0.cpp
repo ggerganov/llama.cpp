@@ -372,10 +372,11 @@ static bool check_mat_mul(
 #define NUM_PERMUTATIONS (4*3*2*1)
 
 int main(int argc, const char ** argv) {
-    struct ggml_init_params params;
-    params.mem_size   = 128*1024*1024;
-    params.mem_buffer = NULL;
-    params.no_alloc   = false;
+    struct ggml_init_params params = {
+        /* .mem_size   = */ 128*1024*1024,
+        /* .mem_buffer = */ NULL,
+        /* .no_alloc   = */ false,
+    };
 
     int64_t ne[4];
 
