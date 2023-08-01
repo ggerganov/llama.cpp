@@ -47,51 +47,35 @@ if hparams["architectures"][0] != "GPTNeoXForCausalLM":
 model = AutoModelForCausalLM.from_pretrained(dir_model, low_cpu_mem_usage=True, trust_remote_code=True)
 list_vars = model.state_dict()
 
-# count tensors to be converted
-tensor_count = 0
-for name in list_vars.keys():
-    # we don't need these
-    if name.endswith(".attention.masked_bias") or name.endswith(".attention.bias") or name.endswith(".attention.rotary_emb.inv_freq"):
-        continue
-    tensor_count += 1
-
 gguf_writer = gguf.GGUFWriter.open(fname_out)
 
-# This must be changed when adding/deleting kv
-kv_count = 17
 
-print("tensors " + str(tensor_count) + " kv " + str(kv_count))
-
-print("write gguf header")
-
-gguf_writer.write_header(tensor_count, kv_count)
-
-print("write gguf hparams")
+print("gguf: add key-values, metadata")
 
 llm_arch = "gptneox"
 
-gguf_writer.write_name("pythia-70b-deduped")
-gguf_writer.write_description("gguf test model")
-gguf_writer.write_architecture(llm_arch)
-gguf_writer.write_context_length(llm_arch, hparams["max_position_embeddings"])
-gguf_writer.write_embedding_length(llm_arch, hparams["hidden_size"])
-gguf_writer.write_layer_count(llm_arch, hparams["num_hidden_layers"])
-gguf_writer.write_feed_forward_length(llm_arch, hparams["intermediate_size"])
-gguf_writer.write_rope_dimension_count(llm_arch, int( hparams["rotary_pct"]*(hparams["hidden_size"]//hparams["num_attention_heads"])) )
-gguf_writer.write_head_count(llm_arch, hparams["num_attention_heads"])
-gguf_writer.write_parallel_residual(llm_arch, hparams["use_parallel_residual"] if "use_parallel_residual" in hparams else True)
-gguf_writer.write_layer_norm_eps(llm_arch, hparams["layer_norm_eps"])
+gguf_writer.add_name("pythia-70b-deduped")
+gguf_writer.add_description("gguf test model")
+gguf_writer.add_architecture(llm_arch)
+gguf_writer.add_context_length(llm_arch, hparams["max_position_embeddings"])
+gguf_writer.add_embedding_length(llm_arch, hparams["hidden_size"])
+gguf_writer.add_layer_count(llm_arch, hparams["num_hidden_layers"])
+gguf_writer.add_feed_forward_length(llm_arch, hparams["intermediate_size"])
+gguf_writer.add_rope_dimension_count(llm_arch, int( hparams["rotary_pct"]*(hparams["hidden_size"]//hparams["num_attention_heads"])) )
+gguf_writer.add_head_count(llm_arch, hparams["num_attention_heads"])
+gguf_writer.add_parallel_residual(llm_arch, hparams["use_parallel_residual"] if "use_parallel_residual" in hparams else True)
+gguf_writer.add_layer_norm_eps(llm_arch, hparams["layer_norm_eps"])
 
 # TOKENIZATION
 
-print("write gguf tokenizer")
+print("gguf: add key-values, tokenizer")
 
 tokens: List[str] = []
 merges: List[str] = []
 
 if Path(dir_model + "/tokenizer.json").is_file():
     # vocab type gpt2
-    print("Adding gpt2 tokenizer vocab")
+    print("gguf: adding gpt2 tokenizer vocab")
 
     with open(dir_model + "/tokenizer.json", "r", encoding="utf-8") as f:
         tokenizer = json.load(f)
@@ -101,12 +85,12 @@ if Path(dir_model + "/tokenizer.json").is_file():
 
     merges = tokenizer["model"]["merges"]
 
-    gguf_writer.write_tokenizer_model("gpt2")
-    gguf_writer.write_token_list(tokens)
-    gguf_writer.write_token_merges(merges)
+    gguf_writer.add_tokenizer_model("gpt2")
+    gguf_writer.add_token_list(tokens)
+    gguf_writer.add_token_merges(merges)
 
     if "added_tokens" in tokenizer and Path(dir_model + "/tokenizer_config.json").is_file():
-        print("Adding special token ids")
+        print("gguf: adding special token ids")
 
         with open(dir_model + "/tokenizer_config.json", "r", encoding="utf-8") as f:
             tokenizer_config = json.load(f)
@@ -116,33 +100,33 @@ if Path(dir_model + "/tokenizer.json").is_file():
         if "bos_token" in tokenizer_config:
             for key in tokenizer["added_tokens"]:
                 if key["content"] == tokenizer_config["bos_token"]:
-                    gguf_writer.write_uint32("tokenizer.ggml.bos_token_id", key["id"] )
+                    gguf_writer.add_bos_token_id(key["id"])
 
         if "eos_token" in tokenizer_config:
             for key in tokenizer["added_tokens"]:
                 if key["content"] == tokenizer_config["eos_token"]:
-                    gguf_writer.write_uint32("tokenizer.ggml.eos_token_id", key["id"] )
+                    gguf_writer.add_eos_token_id(key["id"])
 
         if "unk_token" in tokenizer_config:
             for key in tokenizer["added_tokens"]:
                 if key["content"] == tokenizer_config["unk_token"]:
-                    gguf_writer.write_uint32("tokenizer.ggml.unknown_token_id", key["id"] )
+                    gguf_writer.add_unk_token_id(key["id"])
 
         if "sep_token" in tokenizer_config:
             for key in tokenizer["added_tokens"]:
                 if key["content"] == tokenizer_config["sep_token"]:
-                    gguf_writer.write_uint32("tokenizer.ggml.separator_token_id", key["id"] )
+                    gguf_writer.add_sep_token_id(key["id"])
 
         if "pad_token" in tokenizer_config:
             for key in tokenizer["added_tokens"]:
                 if key["content"] == tokenizer_config["pad_token"]:
-                    gguf_writer.write_uint32("tokenizer.ggml.padding_token_id", key["id"] )
+                    gguf_writer.add_pad_token_id(key["id"])
 
 
 # TENSORS
 
 # tensor info
-print("write gguf tensor info")
+print("gguf: add gguf tensor info")
 
 for name in list_vars.keys():
     data = list_vars[name].squeeze().numpy()
@@ -167,19 +151,25 @@ for name in list_vars.keys():
             data = data.astype(np.float32)
             ftype_cur = 0
 
-    gguf_writer.write_tensor_info(name, data)
+    gguf_writer.add_tensor_info(name, data)
 
+print("gguf: write header")
+gguf_writer.write_header_to_file()
+print("gguf: write key-values")
+gguf_writer.write_kv_data_to_file()
+print("gguf: write tensor info")
+gguf_writer.write_ti_data_to_file()
 
 # tensor data
-print("write gguf tensor data")
+print("gguf: write tensor data")
 
 for name in list_vars.keys():
     data = list_vars[name].squeeze().numpy()
-    print("Process tensor: " + name + " with shape: ", data.shape)
+#    print("Process tensor: " + name + " with shape: ", data.shape)
 
     # we don't need these
     if name.endswith(".attention.masked_bias") or name.endswith(".attention.bias") or name.endswith(".attention.rotary_emb.inv_freq"):
-        print("  Skip tensor: " + name)
+#        print("  Skip tensor: " + name)
         continue
 
     n_dims = len(data.shape)
@@ -188,23 +178,23 @@ for name in list_vars.keys():
     ftype_cur = 0
     if ftype != 0:
         if name.endswith(".weight") and n_dims == 2:
-            print("  Converting to float16")
+#            print("  Converting to float16")
             data = data.astype(np.float16)
             ftype_cur = 1
         else:
-            print("  Converting to float32")
+#            print("  Converting to float32")
             data = data.astype(np.float32)
             ftype_cur = 0
     else:
         if data.dtype != np.float32:
-            print("  Converting to float32")
+#            print("  Converting to float32")
             data = data.astype(np.float32)
             ftype_cur = 0
 
-    gguf_writer.write_tensor(data)
+    gguf_writer.write_tensor_to_file(data)
 
 gguf_writer.close()
 
 
-print("Done. Output file: " + fname_out)
+print("gguf: conversion done, output file: " + fname_out)
 print("")
