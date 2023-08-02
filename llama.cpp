@@ -406,7 +406,7 @@ struct llama_context {
     ggml_mpi_context * ctx_mpi = NULL;
 #endif
 
-    void use_buf(struct ggml_context * ctx, int i) {
+    static void use_buf(struct ggml_context * ctx, int i) {
 #if defined(LLAMA_USE_SCRATCH)
         size_t last_size = 0;
 
@@ -428,7 +428,7 @@ struct llama_context {
 #endif
     }
 
-    size_t get_buf_max_mem(int i) const {
+    static size_t get_buf_max_mem(int i)  {
 #if defined(LLAMA_USE_SCRATCH)
         return buf_max_size[i];
 #else
