@@ -404,7 +404,46 @@
       `
     }
 
-    const Probabilites = (params) => { /* Not implemented yet */ }
+    const probColor = (p) => {
+      const r = Math.floor(192 * (1 - p));
+      const g = Math.floor(192 * p);
+      return `rgba(${r},${g},0,0.75)`;
+    }
+
+    const Probabilites = (params) => {
+      return params.data.map(msg => {
+        const { completion_probabilities } = msg;
+
+        let pColor = 'transparent';
+        if (completion_probabilities.length === 1) {
+          const { probs } = completion_probabilities[0]
+          const found = probs.find(p => p.tok_str === msg.content)
+          pColor = probColor(found ? found.prob : 0)
+        }
+
+        const popoverChildren = html`
+          <div>
+            ${completion_probabilities.map((cp, i) => {
+              return cp.probs.map((p, j) => {
+                return html`
+                  <div style=${{
+                    padding: '0.3em',
+                    backgroundColor: p.tok_str === msg.content ? probColor(p.prob) : 'transparent'
+                  }}>
+                    <span>${p.tok_str}: </span>
+                    <span>${p.prob}</span>
+                  </div>
+                `
+              })
+            })}
+          </div>
+        `
+
+        return html`
+          <${Popover} style=${{ backgroundColor: pColor}} popoverChildren=${popoverChildren}>${msg.content}</>
+        `
+      });
+    }
 
     // poor mans markdown replacement
     const Markdownish = (params) => {
@@ -552,7 +591,7 @@
     function App(props) {
 
       return html`
-        <div id="container">
+        <div>
           <header>
             <h1>llama.cpp</h1>
           </header>
@@ -573,11 +612,13 @@
       `;
     }
 
-    render(h(App), document.body);
+    render(h(App), document.querySelector('#container'));
   </script>
 </head>
 
 <body>
+  <div id="container"></div>
+  <div id="portal"></div>
 </body>
 
 </html>
