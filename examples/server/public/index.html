@@ -424,17 +424,21 @@
         const popoverChildren = html`
           <div>
             ${completion_probabilities.map((cp, i) => {
-              return cp.probs.map((p, j) => {
-                return html`
-                  <div style=${{
-                    padding: '0.3em',
-                    backgroundColor: p.tok_str === msg.content ? probColor(p.prob) : 'transparent'
-                  }}>
-                    <span>${p.tok_str}: </span>
-                    <span>${p.prob}</span>
-                  </div>
-                `
-              })
+              return html`
+                <div key={i} style=${{ borderBottom: '1px solid #ccc', padding: '0.3em' }}>
+                  ${cp.probs.map((p, j) => {
+                    return html`
+                      <div key=${`${i}-${j}`} style=${{
+                        padding: '0.3em',
+                        backgroundColor: p.tok_str === cp.content ? probColor(p.prob) : 'transparent'
+                      }}>
+                        <span>${p.tok_str}: </span>
+                        <span>${p.prob}</span>
+                      </div>
+                    `
+                  })}
+                </div>
+              `
             })}
           </div>
         `
