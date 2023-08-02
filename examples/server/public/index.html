@@ -102,6 +102,18 @@
       padding: 0.5em;
     }
 
+    .prob-set {
+      padding: 0.3em;
+      border-bottom: 1px solid #ccc;
+    }
+
+    .popover-content {
+      position: absolute;
+      background-color: #777;
+      border: 1px solid #ccc;
+      padding: 0.2em;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
 
     textarea {
       padding: 5px;
@@ -397,7 +409,7 @@
               ${FloatField({label: "Mirostat eta", max: 1.0, min: 0.0, name: "mirostat_eta", step: 0.01, value: params.value.mirostat_eta})}
             </fieldset>
             <fieldset>
-              ${IntField({label: "Show Probabilities", max: 100, min: 0, name: "n_probs", value: params.value.n_probs})}
+              ${IntField({label: "Show Probabilities", max: 10, min: 0, name: "n_probs", value: params.value.n_probs})}
             </fieldset>
           </details>
         </form>
@@ -425,7 +437,7 @@
           <div>
             ${completion_probabilities.map((cp, i) => {
               return html`
-                <div key={i} style=${{ borderBottom: '1px solid #ccc', padding: '0.3em' }}>
+                <div key={i} class="prob-set">
                   ${cp.probs.map((p, j) => {
                     return html`
                       <div key=${`${i}-${j}`} style=${{
@@ -514,14 +526,10 @@
           <${Portal} into="#portal">
             <div
               ref=${popoverRef}
+              class="popover-content"
               style=${{
-                position: 'absolute',
                 top: position.value.top,
                 left: position.value.left,
-                backgroundColor: '#777',
-                border: '1px solid #ccc',
-                padding: '4px',
-                boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)',
               }}
             >
               ${props.popoverChildren}
