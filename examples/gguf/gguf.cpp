@@ -1,5 +1,5 @@
 #include "ggml.h"
-#include "llama-util.h"
+#include "gguf-util.h"
 
 #include <cstdio>
 #include <cinttypes>
@@ -375,11 +375,8 @@ bool gguf_ex_read_2(const std::string & fname) {
 
     struct gguf_context * ctx = gguf_init_from_file(fname.c_str(), params);
 
-    // TODO: mmap based on tensor infos
-
-    
-    struct llama_file file(fname.c_str(), "rb");
-    llama_mmap data_mmap(&file, 0, false);
+    struct gguf_file file(fname.c_str(), "rb");
+    gguf_mmap data_mmap(&file, 0, false);
     const int n_tensors = gguf_get_n_tensors(ctx);
 
     for (int i = 0; i < n_tensors; ++i) {
@@ -405,7 +402,7 @@ fprintf(stdout, "%s: ctx_data size: %zu\n", __func__, ggml_get_mem_size(ctx_data
 
     ggml_free(ctx_data);
     gguf_free(ctx);
-
+    
     return true;
 }
 
