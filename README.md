@@ -252,7 +252,7 @@ In order to build llama.cpp you have three different options.
         ```bash
         sudo pkg install gmake automake autoconf pkgconf llvm15 clinfo clover \
             opencl clblast openblas
-        
+
             gmake CC=/usr/local/bin/clang15 CXX=/usr/local/bin/clang++15 -j4
         ```
 
