@@ -128,27 +128,27 @@ if Path(dir_model + "/tokenizer.json").is_file():
 
         if "bos_token" in tokenizer_config and tokenizer_config["bos_token"] != None:
             for key in tokenizer["added_tokens"]:
-                if key["content"] == tokenizer_config["bos_token"] or key["content"] == tokenizer_config["bos_token"]["content"]:
+                if key["content"] == tokenizer_config["bos_token"]["content"]:
                     gguf_writer.add_bos_token_id(key["id"])
 
         if "eos_token" in tokenizer_config and tokenizer_config["eos_token"] != None:
             for key in tokenizer["added_tokens"]:
-                if key["content"] == tokenizer_config["eos_token"] or key["content"] == tokenizer_config["eos_token"]["content"]:
+                if key["content"] == tokenizer_config["eos_token"]["content"]:
                     gguf_writer.add_eos_token_id(key["id"])
 
         if "unk_token" in tokenizer_config and tokenizer_config["unk_token"] != None:
             for key in tokenizer["added_tokens"]:
-                if key["content"] == tokenizer_config["unk_token"] or key["content"] == tokenizer_config["unk_token"]["content"]:
+                if key["content"] == tokenizer_config["unk_token"]["content"]:
                     gguf_writer.add_unk_token_id(key["id"])
 
         if "sep_token" in tokenizer_config and tokenizer_config["sep_token"] != None:
             for key in tokenizer["added_tokens"]:
-                if key["content"] == tokenizer_config["sep_token"] or key["content"] == tokenizer_config["sep_token"]["content"]:
+                if key["content"] == tokenizer_config["sep_token"]["content"]:
                     gguf_writer.add_sep_token_id(key["id"])
 
         if "pad_token" in tokenizer_config and tokenizer_config["pad_token"] != None:
             for key in tokenizer["added_tokens"]:
-                if key["content"] == tokenizer_config["pad_token"] or key["content"] == tokenizer_config["pad_token"]["content"]:
+                if key["content"] == tokenizer_config["pad_token"]["content"]:
                     gguf_writer.add_pad_token_id(key["id"])
 
 
