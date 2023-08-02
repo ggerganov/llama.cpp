@@ -109,8 +109,7 @@
 
     .popover-content {
       position: absolute;
-      background-color: #777;
-      border: 1px solid #ccc;
+      background-color: white;
       padding: 0.2em;
       box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     }
@@ -144,6 +143,12 @@
     footer {
       font-size: 80%;
       color: #888;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .popover-content {
+        background-color: #777;
+      }
     }
   </style>
 
@@ -419,7 +424,7 @@
     const probColor = (p) => {
       const r = Math.floor(192 * (1 - p));
       const g = Math.floor(192 * p);
-      return `rgba(${r},${g},0,0.75)`;
+      return `rgba(${r},${g},0,0.3)`;
     }
 
     const Probabilites = (params) => {
@@ -456,7 +461,7 @@
         `
 
         return html`
-          <${Popover} style=${{ backgroundColor: pColor}} popoverChildren=${popoverChildren}>${msg.content}</>
+          <${Popover} style=${{ backgroundColor: pColor }} popoverChildren=${popoverChildren}>${msg.content}</>
         `
       });
     }
