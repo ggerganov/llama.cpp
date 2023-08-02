@@ -48,8 +48,44 @@ typedef struct {
     // float* freq_cis_real; // (seq_len, dim/2)
     // float* freq_cis_imag; // (seq_len, dim/2)
     // (optional) classifier weights for the logits, on the last layer
-    float* wcls;
+    //float* wcls;
 } TransformerWeights;
+
+void malloc_weights(TransformerWeights* w, Config* p) {
+    // we calloc instead of malloc to keep valgrind happy
+    w->token_embedding_table = new float[p->vocab_size * p->dim]();
+    printf("[%s:AK] Allocating [%d] x [%d] = [%d] float space for w->token_embedding_table\n",__func__,p->vocab_size , p->dim, p->vocab_size * p->dim);
+    
+    w->rms_att_weight = new float[p->n_layers * p->dim]();
+    printf("[%s:AK] Allocating [%d] x [%d] = [%d] float space for w->rms_att_weight\n",__func__,p->n_layers, p->dim, p->n_layers * p->dim);
+
+    w->rms_ffn_weight = new float[p->n_layers * p->dim]();
+    printf("[%s:AK] Allocating [%d] x [%d] = [%d] float space for w->rms_ffn_weight\n",__func__,p->n_layers , p->dim, p->n_layers * p->dim);
+
+    w->wq = new float[p->n_layers * p->dim * p->dim](); 
+    printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->wq\n",__func__,p->n_layers, p->dim, p->dim, p->n_layers * p->dim * p->dim);
+
+    w->wk = new float[p->n_layers * p->dim * p->dim](); 
+    printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->wk\n",__func__,p->n_layers, p->dim, p->dim, p->n_layers * p->dim * p->dim);
+
+    w->wv = new float[p->n_layers * p->dim * p->dim]();
+    printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->wv\n",__func__, p->n_layers, p->dim, p->dim, p->n_layers * p->dim * p->dim);
+
+    w->wo = new float[p->n_layers * p->dim * p->dim]();
+    printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->wo\n",__func__,p->n_layers, p->dim, p->dim, p->n_layers * p->dim * p->dim);
+
+    w->w1 = new float[p->n_layers * p->hidden_dim * p->dim]();
+    printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->w1\n",__func__,p->n_layers, p->hidden_dim, p->dim, p->n_layers * p->hidden_dim * p->dim);
+
+    w->w2 = new float[p->n_layers * p->hidden_dim * p->dim]();
+    printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->w2\n",__func__,p->n_layers, p->dim, p->hidden_dim, p->n_layers * p->hidden_dim * p->dim);
+
+    w->w3 = new float[p->n_layers * p->hidden_dim * p->dim]();
+    printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->w3\n",__func__,p->n_layers, p->hidden_dim, p->dim, p->n_layers * p->hidden_dim * p->dim);
+
+    w->rms_final_weight = new float[p->dim]();
+    printf("[%s:AK] Allocating [%d] float space for w->rms_final_weight\n",__func__,p->dim);
+}
 
 int checkpoint_init_weights(TransformerWeights *w, Config* p, FILE* f) {
     if (fread(w->token_embedding_table, sizeof(float), p->vocab_size * p->dim, f) != static_cast<size_t>(p->vocab_size * p->dim)) return 1;
@@ -63,76 +99,21 @@ int checkpoint_init_weights(TransformerWeights *w, Config* p, FILE* f) {
     if (fread(w->w2, sizeof(float), p->n_layers * p->hidden_dim * p->dim, f) != static_cast<size_t>(p->n_layers * p->hidden_dim * p->dim)) return 1;
     if (fread(w->w3, sizeof(float), p->n_layers * p->dim * p->hidden_dim, f) != static_cast<size_t>(p->n_layers * p->dim * p->hidden_dim)) return 1;
     if (fread(w->rms_final_weight, sizeof(float), p->dim, f) != static_cast<size_t>(p->dim)) return 1;
-    //int head_size = p->dim / p->n_heads;
-    // if (fread(w->freq_cis_real, sizeof(float), p->seq_len * head_size / 2, f) != static_cast<size_t>(p->seq_len * head_size / 2)) return 1;
-    // if (fread(w->freq_cis_imag, sizeof(float), p->seq_len * head_size / 2, f) != static_cast<size_t>(p->seq_len * head_size / 2)) return 1;
     return 0;
 }
 
-void malloc_weights(TransformerWeights* w, Config* p) {
-    // we calloc instead of malloc to keep valgrind happy
-    w->token_embedding_table = new float[p->vocab_size * p->dim]();//calloc(p->vocab_size * p->dim, sizeof(float));
-    printf("[%s:AK] Allocating [%d] x [%d] = [%d] float space for w->token_embedding_table\n",__func__,p->vocab_size , p->dim, p->vocab_size * p->dim);
-    
-    w->rms_att_weight = new float[p->n_layers * p->dim](); //calloc(p->n_layers * p->dim, sizeof(float));
-    printf("[%s:AK] Allocating [%d] x [%d] = [%d] float space for w->rms_att_weight\n",__func__,p->n_layers, p->dim, p->n_layers * p->dim);
-
-    w->rms_ffn_weight = new float[p->n_layers * p->dim](); //calloc(p->n_layers * p->dim, sizeof(float));
-    printf("[%s:AK] Allocating [%d] x [%d] = [%d] float space for w->rms_ffn_weight\n",__func__,p->n_layers , p->dim, p->n_layers * p->dim);
-
-    w->wq = new float[p->n_layers * p->dim * p->dim](); //calloc(p->n_layers * p->dim * p->dim, sizeof(float));
-    printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->wq\n",__func__,p->n_layers, p->dim, p->dim, p->n_layers * p->dim * p->dim);
-
-    w->wk = new float[p->n_layers * p->dim * p->dim](); //calloc(p->n_layers * p->dim * p->dim, sizeof(float));
-    printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->wk\n",__func__,p->n_layers, p->dim, p->dim, p->n_layers * p->dim * p->dim);
-
-    w->wv = new float[p->n_layers * p->dim * p->dim](); //calloc(p->n_layers * p->dim * p->dim, sizeof(float));
-    printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->wv\n",__func__, p->n_layers, p->dim, p->dim, p->n_layers * p->dim * p->dim);
-
-    w->wo = new float[p->n_layers * p->dim * p->dim](); //calloc(p->n_layers * p->dim * p->dim, sizeof(float));
-    printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->wo\n",__func__,p->n_layers, p->dim, p->dim, p->n_layers * p->dim * p->dim);
-
-    w->w1 = new float[p->n_layers * p->hidden_dim * p->dim](); //calloc(p->n_layers * p->hidden_dim * p->dim, sizeof(float));
-    printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->w1\n",__func__,p->n_layers, p->hidden_dim, p->dim, p->n_layers * p->hidden_dim * p->dim);
-
-    w->w2 = new float[p->n_layers * p->hidden_dim * p->dim](); //calloc(p->n_layers * p->dim * p->hidden_dim, sizeof(float));
-    printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->w2\n",__func__,p->n_layers, p->dim, p->hidden_dim, p->n_layers * p->hidden_dim * p->dim);
-
-    w->w3 = new float[p->n_layers * p->hidden_dim * p->dim](); //calloc(p->n_layers * p->hidden_dim * p->dim, sizeof(float));
-    printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->w3\n",__func__,p->n_layers, p->hidden_dim, p->dim, p->n_layers * p->hidden_dim * p->dim);
-
-    w->rms_final_weight = new float[p->dim](); //calloc(p->dim, sizeof(float));
-    printf("[%s:AK] Allocating [%d] float space for w->rms_final_weight\n",__func__,p->dim);
-
-    // w->freq_cis_real = new float[p->seq_len * p->dim / 2](); //calloc(p->seq_len * p->dim / 2, sizeof(float));
-    // printf("[%s:AK] Allocating [%d] x [%d] = [%d] float space for w->freq_cis_real\n",__func__,p->seq_len, p->dim / 2, p->seq_len * p->dim / 2);
-
-    // w->freq_cis_imag = new float[p->seq_len * p->dim / 2](); //calloc(p->seq_len * p->dim / 2, sizeof(float));
-    // printf("[%s:AK] Allocating [%d] x [%d] = [%d] float space for w->freq_cis_imag\n\n",__func__,p->seq_len, p->dim / 2, p->seq_len * p->dim / 2);
-
-    // ensure all mallocs went fine
-    // if (!w->token_embedding_table || !w->rms_att_weight || !w->rms_ffn_weight 
-    //  || !w->wq || !w->wk || !w->wv || !w->wo || !w->w1 || !w->w2 || !w->w3 || 
-    //     !w->rms_final_weight || !w->freq_cis_real || !w->freq_cis_imag) {
-    //     printf("malloc failed!\n");
-    //     exit(1);
-    // }
-}
-
 void free_weights(TransformerWeights* w) {
-    free(w->token_embedding_table);
-    free(w->rms_att_weight);
-    free(w->rms_ffn_weight);
-    free(w->wq);
-    free(w->wk);
-    free(w->wv);
-    free(w->wo);
-    free(w->w1);
-    free(w->w2);
-    free(w->w3);
-    free(w->rms_final_weight);
-    // free(w->freq_cis_real);
-    // free(w->freq_cis_imag);
+    delete w->token_embedding_table;
+    delete w->rms_att_weight;
+    delete w->rms_ffn_weight;
+    delete w->wq;
+    delete w->wk;
+    delete w->wv;
+    delete w->wo;
+    delete w->w1;
+    delete w->w2;
+    delete w->w3;
+    delete w->rms_final_weight;
 }
 
 void print_sample_weights(TransformerWeights *w){
@@ -149,11 +130,6 @@ void print_sample_weights(TransformerWeights *w){
     printf("%f\n", w->w2[0]);
     printf("%f\n", w->w3[0]);
     printf("%f\n", w->rms_att_weight[0]);
-    // printf("%f\n", w->freq_cis_real[0]);
-    // printf("%f\n", w->freq_cis_imag[0]);
-    printf("------------------------------------------------------------------\n");
-
-    
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -180,7 +156,6 @@ struct my_llama_hparams {
     uint32_t n_head  = 32;
     uint32_t n_layer = 32;
     uint32_t n_rot   = 64;
-
     bool operator!=(const my_llama_hparams& other) const {
         return memcmp(this, &other, sizeof(my_llama_hparams));
     }
@@ -215,14 +190,59 @@ struct my_llama_model {
     struct ggml_tensor * norm;
     struct ggml_tensor * output;
 
-    // struct ggml_tensor * freq_cis_real;
-    // struct ggml_tensor * freq_cis_imag;
-
     std::vector<my_llama_layer> layers;
 
     uint32_t train_its = 0;
     uint32_t train_samples = 0;
     uint32_t train_tokens = 0;
+};
+
+struct train_params {
+    const char * fn_vocab_model;
+    const char * fn_llama2c_model;
+    const char * fn_llama2c_output_model;    
+    const char * fn_train_data;
+    const char * fn_checkpoint_in;
+    const char * fn_checkpoint_out;
+    const char * fn_model_out;
+
+    uint32_t seed;
+
+    int n_ctx;
+    int n_embd;
+    int n_mult;
+    int n_head;
+    int n_layer;
+    int n_rotmax;
+
+    int n_threads;
+    int n_batch;
+    int n_examples;
+    int n_predict;
+
+    int print_info_interval;
+    int print_details_interval;
+
+    bool samples_start_after_nl;
+    bool use_adam;
+    bool use_flash;
+    bool use_scratch;
+
+    // only adam
+    int   warmup;
+    int   cos_decay_steps;
+    float cos_decay_restart;
+    float cos_decay_alpha;
+
+    int   lbfgs_n_iter;
+    int   adam_n_iter;
+    float adam_alpha;
+    float adam_decay;
+
+    int mem_model_gb;
+    int mem_compute_gb;
+    int mem_compute0_gb;
+    int mem_compute1_gb;
 };
 
 uint32_t get_n_ff(const struct my_llama_hparams* hparams) {
@@ -249,7 +269,6 @@ void init_model(struct my_llama_model * model) {
     const uint32_t n_vocab = hparams.n_vocab;
 
     const uint32_t n_ff = get_n_ff(&hparams);
-
     struct ggml_context * ctx = model->ctx;
 
     model->train_its = 0;
@@ -264,12 +283,6 @@ void init_model(struct my_llama_model * model) {
 
     model->output         = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_vocab);
     printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for model->output\n",__func__,n_embd, n_vocab, n_embd * n_vocab);
-
-    // model->freq_cis_real         = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_embd/2);
-    // printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for model->freq_cis_real\n",__func__,n_embd, n_embd / 2, n_embd * n_embd / 2);
-    
-    // model->freq_cis_imag         = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_embd/2);
-    // printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for model->freq_cis_imag\n",__func__,n_embd, n_embd / 2, n_embd * n_embd / 2);
 
     // printing the per-layer allocations here so we dont print in the for loop.
     printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for layer.wq for [%d] layers\n",__func__, n_embd, n_embd, n_embd * n_embd, n_layer);
@@ -287,8 +300,6 @@ void init_model(struct my_llama_model * model) {
     ggml_set_name(model->tok_embeddings, "tok_embeddings.weight");
     ggml_set_name(model->norm,           "norm.weight");
     ggml_set_name(model->output,         "output.weight");
-    // ggml_set_name(model->freq_cis_real,         "output.freq_cis_real");
-    // ggml_set_name(model->freq_cis_imag,         "output.freq_cis_imag");
 
     model->layers.resize(n_layer);
     for (uint32_t i = 0; i < n_layer; ++i) {
@@ -309,10 +320,6 @@ void init_model(struct my_llama_model * model) {
         layer.w2 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_ff, n_embd);
         layer.w3 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_ff);
 
-        // layer.w1 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_ff, n_embd);
-        // layer.w2 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_ff);
-        // layer.w3 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_ff, n_embd);
- 
         ggml_set_name(layer.attention_norm, (layers_i + ".attention_norm.weight").c_str());
 
         ggml_set_name(layer.wq, (layers_i + ".attention.wq.weight").c_str());
@@ -326,21 +333,6 @@ void init_model(struct my_llama_model * model) {
         ggml_format_name(layer.w2, "%s.feed_forward.w2.weight", layers_i.c_str());
         ggml_format_name(layer.w3, "%s.feed_forward.w3.weight", layers_i.c_str());
     }
-}
-
-void set_f32_3d(struct ggml_tensor * tensor, int64_t i0, int64_t i1, int64_t i2, float value) {
-    float * ptr = (float *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1] + i2*tensor->nb[2]);
-    *ptr = value;
-}
-
-void set_f32_2d(struct ggml_tensor * tensor, int64_t i0, int64_t i1, float value) {
-    float * ptr = (float *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1]);
-    *ptr = value;
-}
-
-void set_i32_2d(struct ggml_tensor * tensor, int64_t i0, int64_t i1, int32_t value) {
-    int32_t * ptr = (int32_t *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1]);
-    *ptr = value;
 }
 
 float get_f32_2d(struct ggml_tensor * tensor, int64_t i0, int64_t i1) {
@@ -369,41 +361,6 @@ void print_matrix(struct ggml_tensor * probs) {
             printf(" %.2f", p);
         }
         printf("\n");
-    }
-}
-
-void print_token(struct llama_context * ctx, llama_token token) {
-    printf("%s", llama_token_to_str(ctx, token));
-}
-
-void print_tokens(struct llama_context* ctx, struct ggml_tensor * tokens) {
-    for (int i=0; i<tokens->ne[0]; ++i) {
-        int token = ggml_get_i32_1d(tokens, i);
-        print_token(ctx, token);
-    }
-}
-
-void print_tokens_batch(struct llama_context* ctx, struct ggml_tensor * tokens) {
-    for (int i1=0; i1<tokens->ne[1]; ++i1) {
-        //int num_newline = 0;
-        for (int i0=0; i0<tokens->ne[0]; ++i0) {
-            int token = get_i32_2d(tokens, i0, i1);
-            print_token(ctx, token);
-            // bool isnl = (token == llama_token_nl());
-            // if (isnl) {
-            //     ++num_newline;
-            // }
-            // if (isnl) {
-            //     if (num_newline < 2) {
-            //         print_token(ctx, token);
-            //     } else {
-            //         printf("\\n");
-            //     }
-            // } else {
-            //     print_token(ctx, token);
-            // }
-        }
-        printf("\n--\n");
     }
 }
 
@@ -511,45 +468,6 @@ struct llama_file {
     }
 };
 
-int tokenize_file(struct llama_context * lctx, const char * filename, std::vector<llama_token>& out) {
-    struct llama_file f(filename, "rb");
-
-    std::vector<char> buf;
-    buf.resize(f.size+1);
-
-    f.read_raw(buf.data(), f.size);
-    buf[f.size] = '\0';
-
-    out.resize(buf.size());
-
-    int n_tokens = llama_tokenize(lctx, buf.data(), out.data(), buf.size(), false);
-    if (n_tokens >= 0) {
-        out.resize(n_tokens);
-    }
-
-    bool verify = false;
-    if (verify) {
-        const char * in  = buf.data();
-        const char * end = buf.data() + buf.size();
-        for (int i = 0; i < (int) out.size(); ++i) {
-            const char * s = llama_token_to_str(lctx, out[i]);
-            int len = strlen(s);
-            if (in >= end) {
-                printf("%s: unexpected end of original text.\n", __func__);
-                break;
-            }
-            const bool matches = (strncmp(in, s, len) == 0);
-            if (matches) {
-                in += len;
-            } else {
-                printf("%s: mismatch: expected '%s', but got '%s'\n", __func__, std::string(in, len).c_str(), s);
-            }
-        }
-    }
-
-    return n_tokens;
-}
-
 void write_tensor(struct llama_file * file, struct ggml_tensor * tensor) {
     if (tensor == NULL) {
         file->write_u32(0);
@@ -574,29 +492,7 @@ void write_tensor(struct llama_file * file, struct ggml_tensor * tensor) {
     file->write_raw(tensor->data, ggml_nbytes(tensor));
 }
 
-void read_tensor(struct llama_file * file, struct ggml_tensor * tensor) {
-    int32_t nd = file->read_u32();
-    GGML_ASSERT(nd == tensor->n_dims);
-
-    uint32_t name_len       = file->read_u32();
-    enum     ggml_type type = (enum ggml_type) file->read_u32();
-    GGML_ASSERT(type == tensor->type);
-
-    uint32_t ne[4];
-    file->read_raw(ne, sizeof(ne[0]) * nd);
-    for (int i=0; i<nd; ++i) {
-        GGML_ASSERT(ne[i] == tensor->ne[i]);
-    }
-
-    std::string name = file->read_string(name_len);
-    GGML_ASSERT(strncmp(ggml_get_name(tensor), name.c_str(), sizeof(tensor->name)-1) == 0);
-
-    file->seek((0-file->tell()) & 31, SEEK_CUR);
-    file->read_raw(tensor->data, ggml_nbytes(tensor));
-}
-
 void stuff_karpathy_weights_into_gg(struct ggml_tensor * gg_weights, float * karpathy_weights){
-    
     int ct;
     switch (gg_weights->n_dims){
         case 1:
@@ -663,34 +559,20 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     // float*                   -> struct ggml_tensor
     stuff_karpathy_weights_into_gg(model->tok_embeddings, w->token_embedding_table);
     stuff_karpathy_weights_into_gg(model->output, w->token_embedding_table);
-
+    
     stuff_karpathy_weights_into_gg(model->norm, w->rms_final_weight);         
     //print_row(model->norm, 0);
-    //stuff_karpathy_weights_into_gg(model->freq_cis_real, w->freq_cis_real);
-    //stuff_karpathy_weights_into_gg(model->freq_cis_imag, w->freq_cis_imag);
 
     // for rms-att-weight 
     int row_length = model->hparams.n_embd;
     const auto & hparams = model->hparams;
-    int n_ff = get_n_ff(&hparams);
     //int n_ff = model->hparams.n_embd;
-    //const auto & hparams = model->hparams;
-    //int row_length = get_n_ff(&hparams);
-
+    int n_ff = get_n_ff(&hparams);
+    
     for (uint32_t i = 0; i < model->hparams.n_layer; ++i){
         auto & layer = model->layers[i];
         // 1d
-        //if (i == 0){
-        //    printf("%f %f\n", w->rms_att_weight[0],  w->rms_att_weight[1]);
-        //}       
-        //printf("layer.attention_norm->n_dims = %d\n", layer.attention_norm->n_dims);
         stuff_karpathy_weights_into_gg(layer.attention_norm, &w->rms_att_weight[i*row_length]);
-        //if (i == 0){
-        //    print_row(layer.attention_norm, 0);
-        //    printf("%f\n", layer.attention_norm[0]);
-       // }
-        //printf("AFTER---\n");
-        //print_row(layer.attention_norm, 0);
         stuff_karpathy_weights_into_gg(layer.ffn_norm      , &w->rms_ffn_weight[i*row_length]);
 
         // from 3d matrix layer x dim x dim to 2d matrix dim x dim
@@ -699,22 +581,16 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
         stuff_karpathy_weights_into_gg(layer.wv            , &w->wv[i*row_length*row_length]);
         stuff_karpathy_weights_into_gg(layer.wo            , &w->wo[i*row_length*row_length]);
         
-        //stuff_karpathy_weights_into_gg(layer.w1            , &w->w1[i*row_length]);
         stuff_karpathy_weights_into_gg(layer.w1            , &w->w1[i*row_length*n_ff]);
         
         stuff_karpathy_weights_into_gg(layer.w2            , &w->w2[i*n_ff*row_length]);
-        //stuff_karpathy_weights_into_gg(layer.w2            , &w->w2[i*n_ff]);
         
-        //stuff_karpathy_weights_into_gg(layer.w3            , &w->w3[i*row_length]);
-        stuff_karpathy_weights_into_gg(layer.w3            , &w->w3[i*n_ff*row_length]);
+        stuff_karpathy_weights_into_gg(layer.w3            , &w->w3[i*row_length*n_ff]);
     }
-    
     // write tensors
     write_tensor(&file, model->tok_embeddings);
     write_tensor(&file, model->norm);
     write_tensor(&file, model->output); // ?
-    // write_tensor(&file, model->freq_cis_real);
-    // write_tensor(&file, model->freq_cis_imag);
     for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {        
         auto & layer = model->layers[i];
 
@@ -729,54 +605,6 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
         write_tensor(&file, layer.w3);
     }
 }
-
-struct train_params {
-    const char * fn_vocab_model;
-    const char * fn_llama2c_model;
-    const char * fn_llama2c_output_model;    
-    const char * fn_train_data;
-    const char * fn_checkpoint_in;
-    const char * fn_checkpoint_out;
-    const char * fn_model_out;
-
-    uint32_t seed;
-
-    int n_ctx;
-    int n_embd;
-    int n_mult;
-    int n_head;
-    int n_layer;
-    int n_rotmax;
-
-    int n_threads;
-    int n_batch;
-    int n_examples;
-    int n_predict;
-
-    int print_info_interval;
-    int print_details_interval;
-
-    bool samples_start_after_nl;
-    bool use_adam;
-    bool use_flash;
-    bool use_scratch;
-
-    // only adam
-    int   warmup;
-    int   cos_decay_steps;
-    float cos_decay_restart;
-    float cos_decay_alpha;
-
-    int   lbfgs_n_iter;
-    int   adam_n_iter;
-    float adam_alpha;
-    float adam_decay;
-
-    int mem_model_gb;
-    int mem_compute_gb;
-    int mem_compute0_gb;
-    int mem_compute1_gb;
-};
 
 struct train_params get_default_train_params() {
     struct train_params params;
@@ -828,7 +656,7 @@ struct train_params get_default_train_params() {
     return params;
 }
 
-void train_print_usage(int /*argc*/, char ** argv, const struct train_params * params) {
+void print_usage(int /*argc*/, char ** argv, const struct train_params * params) {
     fprintf(stderr, "usage: %s [options]\n", argv[0]);
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
@@ -839,7 +667,7 @@ void train_print_usage(int /*argc*/, char ** argv, const struct train_params * p
     fprintf(stderr, "\n");
 }
 
-bool train_params_parse(int argc, char ** argv, struct train_params * params) {
+bool params_parse(int argc, char ** argv, struct train_params * params) {
     bool invalid_param = false;
     std::string arg;
     struct train_params default_params = get_default_train_params();
@@ -870,17 +698,17 @@ bool train_params_parse(int argc, char ** argv, struct train_params * params) {
             }
             params->fn_llama2c_output_model = argv[i]; 
         } else if (arg == "-h" || arg == "--help") {
-            train_print_usage(argc, argv, &default_params);
+            print_usage(argc, argv, &default_params);
             exit(0);
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
-            train_print_usage(argc, argv, &default_params);
+            print_usage(argc, argv, &default_params);
             exit(1);
         }
     }
     if (invalid_param) {
         fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
-        train_print_usage(argc, argv, &default_params);
+        print_usage(argc, argv, &default_params);
         exit(1);
     }
 
@@ -889,7 +717,7 @@ bool train_params_parse(int argc, char ** argv, struct train_params * params) {
 
 int main(int argc, char ** argv) {
     struct train_params params = get_default_train_params();
-    if (!train_params_parse(argc, argv, &params)) {
+    if (!params_parse(argc, argv, &params)) {
         return 1;
     }
     Config config;
@@ -933,11 +761,10 @@ int main(int argc, char ** argv) {
     model.hparams.n_vocab = config.vocab_size; //llama_n_vocab(lctx);
     model.hparams.n_ctx   = params.n_ctx;
     model.hparams.n_embd  = config.dim; //params.n_embd;
-    model.hparams.n_mult  = params.n_mult; 
+    model.hparams.n_mult  = 32;//params.n_mult; 
     model.hparams.n_head  = config.n_heads; //params.n_head;
     model.hparams.n_layer = config.n_layers; //params.n_layer;
     model.hparams.n_rot   = std::min((uint32_t)params.n_rotmax, model.hparams.n_embd / model.hparams.n_head);
-
     print_params(&model.hparams);
     struct ggml_init_params lcparams;
     lcparams.mem_size   = 1024ll*1024ll*1024ll*((size_t) params.mem_model_gb);
