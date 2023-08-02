@@ -54,7 +54,7 @@ def convert_chat(messages):
         for line in messages:
             if (line["role"] == "system"):
                 try:
-                    conv.set_system_msg(line["content"])
+                    conv.set_system_message(line["content"])
                 except Exception:
                     pass
             elif (line["role"] == "user"):
