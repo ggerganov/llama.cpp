@@ -2181,6 +2181,7 @@ static void ggml_vk_mul_mat_vec_q_f16(const ggml_tensor * src0, const ggml_tenso
 
             // copy dst to host
             float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
+            ggml_vk_sync_buffers(s.buffer, { { d_D, d_offset, d_sz } }, compq, vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eTransferRead, true);
             ggml_vk_buffer_read_async(&d_D, d_offset, d, sizeof(float) * d_ne, compq, {}, {}, &s);
 
             ggml_vk_end_submission(s, {}, {});
