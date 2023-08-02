@@ -137,7 +137,7 @@
 
   <script type="module">
     import {
-      html, h, signal, effect, computed, render, useSignal, useEffect, useRef
+      html, h, signal, effect, computed, render, useSignal, useEffect, useRef, Component
     } from '/index.js';
 
     import { llama } from '/completion.js';
@@ -288,7 +288,13 @@
       const chatLine = ([user, data], index) => {
         let message
         const isArrayMessage = Array.isArray(data)
-        if (isArrayMessage && data.every(msg => msg.completion_probabilities.length > 0)) {
+        if (
+          isArrayMessage &&
+          data.every(msg =>
+            msg.completion_probabilities &&
+            msg.completion_probabilities.length > 0
+          )
+        ) {
           message = html`<${Probabilites} data=${data} />`
         } else {
           const text = isArrayMessage ?
