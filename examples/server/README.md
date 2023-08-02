@@ -66,6 +66,7 @@ Using [curl](https://curl.se/). On Windows `curl.exe` should be available in the
 ```sh
 curl --request POST \
     --url http://localhost:8080/completion \
+    --header "Content-Type: application/json" \
     --data '{"prompt": "Building a website can be done in 10 simple steps:","n_predict": 128}'
 ```
 
@@ -162,7 +163,7 @@ node .
 
     `content`: Set the text to tokenize.
 
-    Note that the special `BOS` token is not added in fron of the text and also a space character is not inserted automatically as it is for `/completion`.
+    Note that the special `BOS` token is not added in front of the text and also a space character is not inserted automatically as it is for `/completion`.
 
 -   **POST** `/embedding`: Generate embedding of a given text just as [the embedding example](../embedding) does.
 
