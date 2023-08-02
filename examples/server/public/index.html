@@ -166,6 +166,7 @@
       mirostat: 0, // 0/1/2
       mirostat_tau: 5, // target entropy
       mirostat_eta: 0.1, // learning rate
+      n_probs: 0, // no completion_probabilities
     })
 
     const llamaStats = signal(null)
@@ -381,6 +382,9 @@
               </div>
               ${FloatField({label: "Mirostat tau", max: 10.0, min: 0.0, name: "mirostat_tau", step: 0.01, value: params.value.mirostat_tau})}
               ${FloatField({label: "Mirostat eta", max: 1.0, min: 0.0, name: "mirostat_eta", step: 0.01, value: params.value.mirostat_eta})}
+            </fieldset>
+            <fieldset>
+              ${IntField({label: "Show Probabilities", max: 100, min: 0, name: "n_probs", value: params.value.n_probs})}
             </fieldset>
           </details>
         </form>
