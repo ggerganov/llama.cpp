@@ -428,6 +428,121 @@
       `
     }
 
+    // simple popover impl
+    const Popover = (props) => {
+      const isOpen = useSignal(false);
+      const position = useSignal({ top: '0px', left: '0px' });
+      const buttonRef = useRef(null);
+      const popoverRef = useRef(null);
+
+      const togglePopover = () => {
+        if (buttonRef.current) {
+          const rect = buttonRef.current.getBoundingClientRect();
+          position.value = {
+            top: `${rect.bottom + window.scrollY}px`,
+            left: `${rect.left + window.scrollX}px`,
+          };
+        }
+        isOpen.value = !isOpen.value;
+      };
+
+      const handleClickOutside = (event) => {
+        if (popoverRef.current && !popoverRef.current.contains(event.target) && !buttonRef.current.contains(event.target)) {
+          isOpen.value = false;
+        }
+      };
+
+      useEffect(() => {
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+          document.removeEventListener('mousedown', handleClickOutside);
+        };
+      }, []);
+
+      return html`
+        <span style=${props.style} ref=${buttonRef} onClick=${togglePopover}>${props.children}</span>
+        ${isOpen.value && html`
+          <${Portal} into="#portal">
+            <div
+              ref=${popoverRef}
+              style=${{
+                position: 'absolute',
+                top: position.value.top,
+                left: position.value.left,
+                backgroundColor: '#777',
+                border: '1px solid #ccc',
+                padding: '4px',
+                boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)',
+              }}
+            >
+              ${props.popoverChildren}
+            </div>
+          </${Portal}>
+        `}
+      `;
+    };
+
+    // Source: preact-portal (https://github.com/developit/preact-portal/blob/master/src/preact-portal.js)
+    /** Redirect rendering of descendants into the given CSS selector */
+    class Portal extends Component {
+      componentDidUpdate(props) {
+        for (let i in props) {
+          if (props[i] !== this.props[i]) {
+            return setTimeout(this.renderLayer);
+          }
+        }
+      }
+
+      componentDidMount() {
+        this.isMounted = true;
+        this.renderLayer = this.renderLayer.bind(this);
+        this.renderLayer();
+      }
+
+      componentWillUnmount() {
+        this.renderLayer(false);
+        this.isMounted = false;
+        if (this.remote && this.remote.parentNode) this.remote.parentNode.removeChild(this.remote);
+      }
+
+      findNode(node) {
+        return typeof node === 'string' ? document.querySelector(node) : node;
+      }
+
+      renderLayer(show = true) {
+        if (!this.isMounted) return;
+
+        // clean up old node if moving bases:
+        if (this.props.into !== this.intoPointer) {
+          this.intoPointer = this.props.into;
+          if (this.into && this.remote) {
+            this.remote = render(html`<${PortalProxy} />`, this.into, this.remote);
+          }
+          this.into = this.findNode(this.props.into);
+        }
+
+        this.remote = render(html`
+          <${PortalProxy} context=${this.context}>
+            ${show && this.props.children || null}
+          </${PortalProxy}>
+        `, this.into, this.remote);
+      }
+
+      render() {
+        return null;
+      }
+    }
+    // high-order component that renders its first child if it exists.
+    // used as a conditional rendering proxy.
+    class PortalProxy extends Component {
+      getChildContext() {
+        return this.props.context;
+      }
+      render({ children }) {
+        return children || null;
+      }
+    }
+
     function App(props) {
 
       return html`
