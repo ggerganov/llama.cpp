@@ -88,7 +88,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [Pygmalion 7B / Metharme 7B](#using-pygmalion-7b--metharme-7b)
 - [X] [WizardLM](https://github.com/nlpxucan/WizardLM)
 - [X] [Baichuan-7B](https://huggingface.co/baichuan-inc/baichuan-7B) and its derivations (such as [baichuan-7b-sft](https://huggingface.co/hiyouga/baichuan-7b-sft))
-- [X] [Aquila-7B](https://huggingface.co/BAAI/Aquila-7B) and its derivations (such as [AquilaChat-7B](https://huggingface.co/BAAI/AquilaChat-7B))
+- [X] [Aquila-7B](https://huggingface.co/BAAI/Aquila-7B) / [AquilaChat-7B](https://huggingface.co/BAAI/AquilaChat-7B)
 
 **Bindings:**
 
