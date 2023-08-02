@@ -1,5 +1,6 @@
 // GGUF counterpart of llama-util.h.
 // we may consider making it a part of ggml.c once GGUF work is complete.
+// this will require extra work to migrate this to pure C.
 // Contains wrappers around OS interfaces.
 
 #ifndef GGUF_UTIL_H
