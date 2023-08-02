@@ -147,7 +147,7 @@
 
     @media (prefers-color-scheme: dark) {
       .popover-content {
-        background-color: #777;
+        background-color: black;
       }
     }
   </style>
@@ -220,7 +220,18 @@
 
       const prompt = template(session.value.template, {
         message: msg,
-        history: session.value.transcript.flatMap(([name, message]) => template(session.value.historyTemplate, {name, message})).join("\n"),
+        history: session.value.transcript.flatMap(
+          ([name, data]) =>
+            template(
+              session.value.historyTemplate,
+              {
+                name,
+                message: Array.isArray(data) ?
+                  data.map(msg => msg.content).join('').replace(/^\s/, '') :
+                  data,
+              }
+            )
+        ).join("\n"),
       });
 
       const currentMessages = [];
