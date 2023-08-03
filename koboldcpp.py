@@ -573,11 +573,13 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 gen = asyncio.run(self.handle_request(genparams, newprompt, basic_api_flag, kai_sse_stream_flag))
 
-                if not kai_sse_stream_flag:
-                    try:
+                try:
+                    # Headers are already sent when streaming
+                    if not kai_sse_stream_flag:
                         self.send_response(200)
                         self.end_headers()
-                        self.wfile.write(json.dumps(gen).encode())
+
+                    self.wfile.write(json.dumps(gen).encode())
                     except:
                         print("Generate: The response could not be sent, maybe connection was terminated?")
 
