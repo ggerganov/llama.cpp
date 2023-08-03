@@ -3743,7 +3743,19 @@ size_t llama_get_state_size(const struct llama_context * ctx) {
     return s_total;
 }
 
-// copy state data into either a buffer or file depending on the passed in context
+/** copy state data into either a buffer or file depending on the passed in context
+ * 
+ * file context:
+ * llama_file file("/path", "wb");
+ * llama_data_file_context data_ctx(&file);
+ * llama_copy_state_data(ctx, &data_ctx);
+ * 
+ * buffer context:
+ * std::vector<uint8_t> buf(max_size, 0);
+ * llama_data_buffer_context data_ctx(&buf.data());
+ * llama_copy_state_data(ctx, &data_ctx);
+ * 
+*/
 void llama_copy_state_data(struct llama_context * ctx, llama_data_context * data_ctx) {
     // copy rng
     {
