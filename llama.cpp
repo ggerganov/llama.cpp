@@ -3743,14 +3743,6 @@ size_t llama_get_state_size(const struct llama_context * ctx) {
     return s_total;
 }
 
-size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst)
-{
-    llama_data_buffer_context data_ctx(dst);
-    llama_copy_state_data_internal(ctx, &data_ctx);
-
-    return data_ctx.get_size_written();
-}
-
 /** copy state data into either a buffer or file depending on the passed in context
  *
  * file context:
@@ -3859,6 +3851,14 @@ void llama_copy_state_data_internal(struct llama_context * ctx, llama_data_conte
             data_ctx->write(vout3d_data.data(), vout3d_data.size());
         }
     }
+}
+
+size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst)
+{
+    llama_data_buffer_context data_ctx(dst);
+    llama_copy_state_data_internal(ctx, &data_ctx);
+
+    return data_ctx.get_size_written();
 }
 
 // Sets the state reading from the specified source address
