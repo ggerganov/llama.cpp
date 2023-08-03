@@ -67,9 +67,10 @@ int main(int argc, char ** argv) {
 
     // Save state (rng, logits, embedding and kv_cache) to file
     {
-        llama_file file("dump_state.bin", "wb");
-        llama_data_file_context data_ctx(&file);
-        llama_copy_state_data(ctx, &data_ctx); // can also copy to memory buffer
+         FILE *fp_write = fopen("dump_state.bin", "wb");
+        llama_copy_state_data(ctx, state_mem); // could also copy directly to memory mapped file
+        fwrite(state_mem, 1, state_size, fp_write);
+        fclose(fp_write);
     }
 
     // save state (last tokens)
