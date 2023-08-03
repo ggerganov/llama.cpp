@@ -10056,7 +10056,7 @@ enum ggml_v1_opt_result ggml_v1_opt(
         struct ggml_v1_init_params params_ctx;
         params_ctx.mem_size   = 16*1024*1024;
         params_ctx.mem_buffer = NULL;
-       
+
 
         ctx = ggml_v1_init(params_ctx);
         if (ctx == NULL) {
@@ -10199,3 +10199,31 @@ int ggml_v1_cpu_has_vsx(void) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+
+
+#if __ARM_NEON
+#if !defined(__aarch64__)
+int8x8_t vzip1_s8(int8x8_t a, int8x8_t b) {
+    int8x8_t res;
+
+    res[0] = a[0]; res[1] = b[0];
+    res[2] = a[1]; res[3] = b[1];
+    res[4] = a[2]; res[5] = b[2];
+    res[6] = a[3]; res[7] = b[3];
+
+    return res;
+}
+
+int8x8_t vzip2_s8(int8x8_t a, int8x8_t b) {
+    int8x8_t res;
+
+    res[0] = a[4]; res[1] = b[4];
+    res[2] = a[5]; res[3] = b[5];
+    res[4] = a[6]; res[5] = b[6];
+    res[6] = a[7]; res[7] = b[7];
+
+    return res;
+}
+
+#endif
+#endif
