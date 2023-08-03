@@ -10,6 +10,7 @@ SPACE_RULE = '" "?'
 PRIMITIVE_RULES = {
     'boolean': '("true" | "false") space',
     'number': '("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space',
+    'integer': '("-"? ([0-9] | [1-9] [0-9]*)) space',
     'string': r''' "\"" (
         [^"\\] |
         "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
@@ -101,13 +102,21 @@ class SchemaConverter:
 
 def main(args_in = None):
     parser = argparse.ArgumentParser(
-        description='Generates a grammar (suitable for use in ./main) that produces JSON conforming to a given schema'
+        description='''
+            Generates a grammar (suitable for use in ./main) that produces JSON conforming to a
+            given JSON schema. Only a subset of JSON schema features are supported; more may be
+            added in the future.
+        ''',
     )
     parser.add_argument(
         '--prop-order',
         default=[],
         type=lambda s: s.split(','),
-        help='comma-separated property names defining the order of precedence for object properties; properties not specified here are given lower precedence than those that are, and are sorted alphabetically'
+        help='''
+            comma-separated property names defining the order of precedence for object properties;
+            properties not specified here are given lower precedence than those that are, and are
+            sorted alphabetically
+        '''
     )
     parser.add_argument('schema', help='file containing JSON schema ("-" for stdin)')
     args = parser.parse_args(args_in)
