@@ -3743,6 +3743,14 @@ size_t llama_get_state_size(const struct llama_context * ctx) {
     return s_total;
 }
 
+size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst)
+{
+    llama_data_buffer_context data_ctx(dst);
+    llama_copy_state_data_internal(ctx, &data_ctx);
+
+    return data_ctx.get_size_written();
+}
+
 /** copy state data into either a buffer or file depending on the passed in context
  *
  * file context:
@@ -3756,7 +3764,7 @@ size_t llama_get_state_size(const struct llama_context * ctx) {
  * llama_copy_state_data(ctx, &data_ctx);
  *
 */
-void llama_copy_state_data(struct llama_context * ctx, llama_data_context * data_ctx) {
+void llama_copy_state_data_internal(struct llama_context * ctx, llama_data_context * data_ctx) {
     // copy rng
     {
         std::stringstream rng_ss;
@@ -4037,7 +4045,7 @@ bool llama_save_session_file(struct llama_context * ctx, const char * path_sessi
 
     // save the context state using stream saving
     llama_data_file_context data_ctx(&file);
-    llama_copy_state_data(ctx, &data_ctx);
+    llama_copy_state_data_internal(ctx, &data_ctx);
 
     return true;
 }
