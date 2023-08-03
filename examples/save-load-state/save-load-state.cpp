@@ -66,11 +66,7 @@ int main(int argc, char ** argv) {
     uint8_t * state_mem = new uint8_t[state_size];
 
     // Save state (rng, logits, embedding and kv_cache) to file
-    {
-        llama_file file("dump_state.bin", "wb");
-        llama_data_file_context data_ctx(&file);
-        llama_copy_state_data(ctx, &data_ctx); // can also copy to memory buffer
-    }
+    llama_save_session_file(ctx, "dump_state.bin", tokens.data(), tokens.size());
 
     // save state (last tokens)
     const auto last_n_tokens_data_saved = std::vector<llama_token>(last_n_tokens_data);
