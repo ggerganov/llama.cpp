@@ -5347,7 +5347,8 @@ void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1, ggml_
         } else {
             int min_compute_capability = INT_MAX;
             for (int id = 0; id < g_device_count; ++id) {
-                if (min_compute_capability > g_compute_capabilities[id]) {
+                if (min_compute_capability > g_compute_capabilities[id]
+                        && g_tensor_split[id] < (id + 1 < g_device_count ? g_tensor_split[id + 1] : 1.0f)) {
                     min_compute_capability = g_compute_capabilities[id];
                 }
             }
