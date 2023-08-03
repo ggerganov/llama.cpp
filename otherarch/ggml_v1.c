@@ -1577,63 +1577,6 @@ inline static void ggml_v1_vec_mad_q4_0(const int n, float * restrict y, void * 
     const float   * restrict pd = (const float *)   (x);
     const uint8_t * restrict pb = (const uint8_t *) (pd + nb);
 
-#if __ARM_NEON
-#if QK == 32
-    for (int i = 0; i < nb; ++i) {
-        const float d0 = pd[i]*v;
-
-        const uint8_t * restrict pp = pb + i*16;
-
-        const uint8x8_t m4b = vdup_n_u8(0xf);
-        const int8x8_t  s8b = vdup_n_s8(0x8);
-
-        const float32x4_t vd = vdupq_n_f32(d0);
-
-        for (int j = 0; j < 2; j++) {
-            const uint8x8_t vx = vld1_u8(pp + j*8);
-
-            const int8x8_t vxl = vreinterpret_s8_u8(vand_u8(vx, m4b));
-            const int8x8_t vxh = vreinterpret_s8_u8(vshr_n_u8(vx, 4));
-
-            // sub 8
-            const int8x8_t vxls = vsub_s8(vxl, s8b);
-            const int8x8_t vxhs = vsub_s8(vxh, s8b);
-
-            //const int8x8_t vxlt = vzip_s8(vxls, vxhs)[0];
-            //const int8x8_t vxht = vzip_s8(vxls, vxhs)[1];
-            const int8x8_t vxlt = vzip1_s8(vxls, vxhs);
-            const int8x8_t vxht = vzip2_s8(vxls, vxhs);
-
-            const int8x16_t vxq = vcombine_s8(vxlt, vxht);
-
-            // convert to 2x int16x8_t
-            const int16x8_t vxq0 = vmovl_s8(vget_low_s8 (vxq));
-            const int16x8_t vxq1 = vmovl_s8(vget_high_s8(vxq));
-
-            // convert to 4x float32x4_t
-            const float32x4_t vx0 = vcvtq_f32_s32(vmovl_s16(vget_low_s16 (vxq0)));
-            const float32x4_t vx1 = vcvtq_f32_s32(vmovl_s16(vget_high_s16(vxq0)));
-            const float32x4_t vx2 = vcvtq_f32_s32(vmovl_s16(vget_low_s16 (vxq1)));
-            const float32x4_t vx3 = vcvtq_f32_s32(vmovl_s16(vget_high_s16(vxq1)));
-
-            const float32x4_t vy0 = vld1q_f32(y + i*32 + j*16 + 0);
-            const float32x4_t vy1 = vld1q_f32(y + i*32 + j*16 + 4);
-            const float32x4_t vy2 = vld1q_f32(y + i*32 + j*16 + 8);
-            const float32x4_t vy3 = vld1q_f32(y + i*32 + j*16 + 12);
-
-            const float32x4_t vr0 = vfmaq_f32(vy0, vx0, vd);
-            const float32x4_t vr1 = vfmaq_f32(vy1, vx1, vd);
-            const float32x4_t vr2 = vfmaq_f32(vy2, vx2, vd);
-            const float32x4_t vr3 = vfmaq_f32(vy3, vx3, vd);
-
-            vst1q_f32(y + i*32 + j*16 + 0,  vr0);
-            vst1q_f32(y + i*32 + j*16 + 4,  vr1);
-            vst1q_f32(y + i*32 + j*16 + 8,  vr2);
-            vst1q_f32(y + i*32 + j*16 + 12, vr3);
-        }
-    }
-#endif
-#else
     // scalar
     for (int i = 0; i < nb; i++) {
         const float d = pd[i];
@@ -1658,7 +1601,6 @@ inline static void ggml_v1_vec_mad_q4_0(const int n, float * restrict y, void * 
             assert(!isinf(y[i*QK + l + 1]));
         }
     }
-#endif
 }
 
 inline static void ggml_v1_vec_mad_q4_1(const int n, float * restrict y, void * restrict x, const float v) {
@@ -10199,31 +10141,3 @@ int ggml_v1_cpu_has_vsx(void) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-
-
-#if __ARM_NEON
-#if !defined(__aarch64__)
-int8x8_t vzip1_s8(int8x8_t a, int8x8_t b) {
-    int8x8_t res;
-
-    res[0] = a[0]; res[1] = b[0];
-    res[2] = a[1]; res[3] = b[1];
-    res[4] = a[2]; res[5] = b[2];
-    res[6] = a[3]; res[7] = b[3];
-
-    return res;
-}
-
-int8x8_t vzip2_s8(int8x8_t a, int8x8_t b) {
-    int8x8_t res;
-
-    res[0] = a[4]; res[1] = b[4];
-    res[2] = a[5]; res[3] = b[5];
-    res[4] = a[6]; res[5] = b[6];
-    res[6] = a[7]; res[7] = b[7];
-
-    return res;
-}
-
-#endif
-#endif

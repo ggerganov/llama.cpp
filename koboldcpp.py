@@ -704,7 +704,7 @@ def show_new_gui():
         (lib_default, "Use No BLAS"),
         (lib_noavx2, "NoAVX2 Mode (Old CPU)"),
         (lib_failsafe, "Failsafe Mode (Old CPU)")]
-    openblas_option, clblast_option, cublas_option, default_option, openblas_noavx2_option, failsafe_option = (opt if file_exists(lib) or (os.name == 'nt' and file_exists(opt + ".dll")) else None for lib, opt in lib_option_pairs)
+    openblas_option, clblast_option, cublas_option, default_option, noavx2_option, failsafe_option = (opt if file_exists(lib) or (os.name == 'nt' and file_exists(opt + ".dll")) else None for lib, opt in lib_option_pairs)
     # slider data
     blasbatchsize_values = ["-1", "32", "64", "128", "256", "512", "1024"]
     blasbatchsize_text = ["Don't Batch BLAS","32","64","128","256","512","1024"]
@@ -1151,8 +1151,8 @@ def show_new_gui():
             if failsafe_option is not None:
                 runopts_var.set(failsafe_option)
         elif "noavx2" in dict and dict["noavx2"]:
-            if openblas_noavx2_option is not None:
-                runopts_var.set(openblas_noavx2_option)
+            if noavx2_option is not None:
+                runopts_var.set(noavx2_option)
         elif "noblas" in dict and dict["noblas"]:
             if default_option is not None:
                 runopts_var.set(default_option)
