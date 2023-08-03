@@ -56,7 +56,7 @@ struct free_block {
     size_t size;
 };
 
-#define MAX_FREE_BLOCKS 128
+#define MAX_FREE_BLOCKS 256
 
 struct ggml_allocr {
     void * data;
