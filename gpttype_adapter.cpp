@@ -374,7 +374,8 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         else
         {
             //approximate NTK aware ctx
-            rope_freq_base = (params.n_ctx <= 3072 ? 26000.0f : (params.n_ctx <= 4096 ? 32000.0f : (params.n_ctx <= 6144 ? 54000.0f : 82684.0f)));
+            rope_freq_base = (params.n_ctx <= 3072 ? 26000.0f : (params.n_ctx <= 4096 ? 32000.0f : (params.n_ctx <= 6144 ? 54000.0f : (params.n_ctx <= 8192 ? 82684.0f : (params.n_ctx <= 12288 ? 140000.0f : 200000.0f)))));
+
         }
 
         printf("Using automatic RoPE scaling (scale:%.3f, base:%.1f)\n",rope_freq_scale,rope_freq_base);

@@ -417,7 +417,7 @@ bool gptj_eval(
 
     // use 2 scratch buffers
     // TODO: very hacky solution - reimplement in a more elegant way
-    static size_t scr0_size = 512u*1024*1024;
+    static size_t scr0_size = 512u*1024*1024*(hparams.n_ctx>8192?2:1);
     static size_t scr1_size = 512u*1024*1024;
 
     static void * scr0 = malloc(scr0_size);

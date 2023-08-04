@@ -66,7 +66,7 @@ class generation_inputs(ctypes.Structure):
 
 class generation_outputs(ctypes.Structure):
     _fields_ = [("status", ctypes.c_int),
-                ("text", ctypes.c_char * 16384)]
+                ("text", ctypes.c_char * 24576)]
 
 handle = None
 
@@ -303,7 +303,7 @@ maxhordectx = 1024
 maxhordelen = 256
 modelbusy = threading.Lock()
 defaultport = 5001
-KcppVersion = "1.38"
+KcppVersion = "1.39"
 showdebug = True
 showsamplerwarning = True
 showmaxctxwarning = True
@@ -711,7 +711,7 @@ def show_new_gui():
     # slider data
     blasbatchsize_values = ["-1", "32", "64", "128", "256", "512", "1024"]
     blasbatchsize_text = ["Don't Batch BLAS","32","64","128","256","512","1024"]
-    contextsize_text = ["512", "1024", "2048", "3072", "4096", "6144", "8192"]
+    contextsize_text = ["512", "1024", "2048", "3072", "4096", "6144", "8192", "12288", "16384"]
     runopts = [opt for lib, opt in lib_option_pairs if file_exists(lib) or os.name == 'nt' and file_exists(opt + ".dll")]
     antirunopts = [opt.replace("Use ", "") for lib, opt in lib_option_pairs if not file_exists(lib) or os.name == 'nt' and not file_exists(opt + ".dll")]
     if not any(runopts):
@@ -1713,7 +1713,7 @@ if __name__ == '__main__':
     parser.add_argument("--blasthreads", help="Use a different number of threads during BLAS if specified. Otherwise, has the same value as --threads",metavar=('[threads]'), type=int, default=0)
     parser.add_argument("--psutil_set_threads", help="Experimental flag. If set, uses psutils to determine thread count based on physical cores.", action='store_true')
     parser.add_argument("--highpriority", help="Experimental flag. If set, increases the process CPU priority, potentially speeding up generation. Use caution.", action='store_true')
-    parser.add_argument("--contextsize", help="Controls the memory allocated for maximum context size, only change if you need more RAM for big contexts. (default 2048)", type=int,choices=[512,1024,2048,3072,4096,6144,8192], default=2048)
+    parser.add_argument("--contextsize", help="Controls the memory allocated for maximum context size, only change if you need more RAM for big contexts. (default 2048)", type=int,choices=[512,1024,2048,3072,4096,6144,8192,12288,16384], default=2048)
     parser.add_argument("--blasbatchsize", help="Sets the batch size used in BLAS processing (default 512). Setting it to -1 disables BLAS mode, but keeps other benefits like GPU offload.", type=int,choices=[-1,32,64,128,256,512,1024], default=512)
     parser.add_argument("--ropeconfig", help="If set, uses customized RoPE scaling from configured frequency scale and frequency base (e.g. --ropeconfig 0.25 10000). Otherwise, uses NTK-Aware scaling set automatically based on context size. For linear rope, simply set the freq-scale and ignore the freq-base",metavar=('[rope-freq-scale]', '[rope-freq-base]'), default=[0.0, 10000.0], type=float, nargs='+')
     parser.add_argument("--stream", help="Uses streaming when generating tokens. Only for the Kobold Lite UI.", action='store_true')

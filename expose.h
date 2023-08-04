@@ -75,7 +75,7 @@ struct generation_inputs
 struct generation_outputs
 {
     int status = -1;
-    char text[16384]; //16kb should be enough for any response
+    char text[24576]; //24kb should be enough for any response
 };
 
 extern std::string executable_path;

@@ -354,7 +354,7 @@ bool mpt_eval(const mpt_model & model, const int n_threads, const int n_past,
     // use 2 scratch buffers
     // TODO: very hacky solution - reimplement in a more elegant way
     //MPT 30B needs more scratch memory
-    static size_t scr0_size = (n_embd>=7168?2048u:1024u)*1024*1024;
+    static size_t scr0_size = (n_embd>=7168?2048u:1024u)*1024*1024*(hparams.n_ctx>8192?2:1);
     static size_t scr1_size = (n_embd>=7168?2048u:1024u)*1024*1024;
 
     static void * scr0 = malloc(scr0_size);
