@@ -68,21 +68,19 @@ const Maker = struct {
 pub fn build(b: *std.build.Builder) void {
     const make = Maker.init(b);
 
-    const objs = .{
-        .ggml = make.obj("ggml", "ggml.c"),
-        .ggml_alloc = make.obj("ggml-alloc", "ggml-alloc.c"),
-        .llama = make.obj("llama", "llama.cpp"),
-        .common = make.obj("common", "examples/common.cpp"),
-        .grammar_parser = make.obj("grammar-parser", "examples/grammar-parser.cpp"),
-    };
+    const ggml = make.obj("ggml", "ggml.c");
+    const ggml_alloc = make.obj("ggml-alloc", "ggml-alloc.c");
+    const llama = make.obj("llama", "llama.cpp");
+    const common = make.obj("common", "examples/common.cpp");
+    const grammar_parser = make.obj("grammar-parser", "examples/grammar-parser.cpp");
 
-    _ = make.exe("main", "examples/main/main.cpp", &.{ objs.ggml, objs.ggml_alloc, objs.llama, objs.common, objs.grammar_parser });
-    _ = make.exe("quantize", "examples/quantize/quantize.cpp", &.{ objs.ggml, objs.ggml_alloc, objs.llama });
-    _ = make.exe("perplexity", "examples/perplexity/perplexity.cpp", &.{ objs.ggml, objs.ggml_alloc, objs.llama, objs.common });
-    _ = make.exe("embedding", "examples/embedding/embedding.cpp", &.{ objs.ggml, objs.ggml_alloc, objs.llama, objs.common });
-    _ = make.exe("train-text-from-scratch", "examples/train-text-from-scratch/train-text-from-scratch.cpp", &.{ objs.ggml, objs.ggml_alloc, objs.llama });
+    _ = make.exe("main", "examples/main/main.cpp", &.{ ggml, ggml_alloc, llama, common, grammar_parser });
+    _ = make.exe("quantize", "examples/quantize/quantize.cpp", &.{ ggml, ggml_alloc, llama });
+    _ = make.exe("perplexity", "examples/perplexity/perplexity.cpp", &.{ ggml, ggml_alloc, llama, common });
+    _ = make.exe("embedding", "examples/embedding/embedding.cpp", &.{ ggml, ggml_alloc, llama, common });
+    _ = make.exe("train-text-from-scratch", "examples/train-text-from-scratch/train-text-from-scratch.cpp", &.{ ggml, ggml_alloc, llama });
 
-    const server = make.exe("server", "examples/server/server.cpp", &.{ objs.ggml, objs.ggml_alloc, objs.llama, objs.common, objs.grammar_parser });
+    const server = make.exe("server", "examples/server/server.cpp", &.{ ggml, ggml_alloc, llama, common, grammar_parser });
     if (server.target.isWindows()) {
         server.linkSystemLibrary("ws2_32");
     }
