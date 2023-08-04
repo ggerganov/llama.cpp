@@ -10,7 +10,7 @@ from enum import IntEnum
 from typing import Any, IO, List
 
 import numpy as np
-
+import sys
 
 class GGMLQuantizationType(IntEnum):
     F32 = 0
@@ -45,7 +45,7 @@ class GGUFValueType(IntEnum):
 
     @staticmethod
     def get_type(val):
-        if isinstance(val, str) or isinstance(val, bytes):
+        if isinstance(val, str) or isinstance(val, bytes) or isinstance(val, bytearray):
             return GGUFValueType.STRING
         elif isinstance(val, list):
             return GGUFValueType.ARRAY
@@ -53,8 +53,11 @@ class GGUFValueType(IntEnum):
             return GGUFValueType.FLOAT32
         elif isinstance(val, bool):
             return GGUFValueType.BOOL
-        else:
+        elif isinstance(val, int):
             return GGUFValueType.INT32
+        else:
+            print("Unknown type: "+str(type(val)))
+            sys.exit()
 
 
 class GGUFWriter:
