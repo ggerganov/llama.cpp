@@ -329,9 +329,6 @@ grammar-parser.o: examples/grammar-parser.cpp examples/grammar-parser.h
 libllama.so: llama.o ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
-gptneox-common.o: gptneox-common.cpp gptneox-common.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
 clean:
 	rm -vf *.o *.so *.dll main quantize quantize-stats perplexity embedding benchmark-matmult save-load-state server simple vdot train-text-from-scratch embd-input-test gguf build-info.h $(TEST_TARGETS)
 
@@ -376,7 +373,7 @@ embd-input-test: $(LIB_PRE)embdinput$(DSO_EXT) examples/embd-input/embd-input-te
 gguf: examples/gguf/gguf.cpp                                  build-info.h ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-gptneox-main: gptneox-main.cpp gptneox-common.o ggml.o $(OBJS)
+gptneox-main: gptneox-main.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 train-text-from-scratch: examples/train-text-from-scratch/train-text-from-scratch.cpp    build-info.h ggml.o llama.o $(OBJS)
