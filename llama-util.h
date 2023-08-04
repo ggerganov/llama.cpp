@@ -151,7 +151,7 @@ struct llama_file {
 
 // llama_context_data
 struct llama_data_context {
-    virtual void write(const void* src, size_t size) = 0;
+    virtual void write(const void * src, size_t size) = 0;
     virtual size_t get_size_written() = 0;
     virtual ~llama_data_context() = default;
 };
@@ -160,9 +160,9 @@ struct llama_data_buffer_context : llama_data_context {
     uint8_t* ptr;
     size_t size_written = 0;
 
-    llama_data_buffer_context(uint8_t* p) : ptr(p) {}
+    llama_data_buffer_context(uint8_t * p) : ptr(p) {}
 
-    void write(const void* src, size_t size) override {
+    void write(const void * src, size_t size) override {
         memcpy(ptr, src, size);
         ptr += size;
         size_written += size;
@@ -177,9 +177,9 @@ struct llama_data_file_context : llama_data_context {
     llama_file* file;
     size_t size_written = 0;
 
-    llama_data_file_context(llama_file* f) : file(f) {}
+    llama_data_file_context(llama_file * f) : file(f) {}
 
-    void write(const void* src, size_t size) override {
+    void write(const void * src, size_t size) override {
         file->write_raw(src, size);
         size_written += size;
     }
