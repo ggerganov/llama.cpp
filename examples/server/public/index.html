@@ -457,12 +457,16 @@
                 <div key={i} class="prob-set">
                   ${cp.probs.map((p, j) => {
                     return html`
-                      <div key=${`${i}-${j}`} style=${{
-                        padding: '0.3em',
-                        backgroundColor: p.tok_str === cp.content ? probColor(p.prob) : 'transparent'
-                      }}>
+                      <div
+                        key=${`${i}-${j}`}
+                        title=${`prob: ${p.prob}`}
+                        style=${{
+                          padding: '0.3em',
+                          backgroundColor: p.tok_str === cp.content ? probColor(p.prob) : 'transparent'
+                        }}
+                      >
                         <span>${p.tok_str}: </span>
-                        <span>${p.prob}</span>
+                        <span>${Math.floor(p.prob * 100)}%</span>
                       </div>
                     `
                   })}
