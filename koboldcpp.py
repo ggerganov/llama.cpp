@@ -578,10 +578,9 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     if not kai_sse_stream_flag:
                         self.send_response(200)
                         self.end_headers()
-
                     self.wfile.write(json.dumps(gen).encode())
-                    except:
-                        print("Generate: The response could not be sent, maybe connection was terminated?")
+                except:
+                    print("Generate: The response could not be sent, maybe connection was terminated?")
 
                 return
         finally:
@@ -647,7 +646,7 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None):
             exitcounter = 999
             self.httpd.server_close()
 
-    numThreads = 6
+    numThreads = 8
     threadArr = []
     for i in range(numThreads):
         threadArr.append(Thread(i))
