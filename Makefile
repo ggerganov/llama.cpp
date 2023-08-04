@@ -340,6 +340,9 @@ llama.o: llama.cpp ggml.h ggml-alloc.h ggml-cuda.h ggml-metal.h llama.h llama-ut
 common.o: examples/common.cpp examples/common.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+console.o: examples/console.cpp examples/console.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 grammar-parser.o: examples/grammar-parser.cpp examples/grammar-parser.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
@@ -353,7 +356,7 @@ clean:
 # Examples
 #
 
-main: examples/main/main.cpp                                  build-info.h ggml.o llama.o common.o grammar-parser.o $(OBJS)
+main: examples/main/main.cpp                                  build-info.h ggml.o llama.o common.o console.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
@@ -411,13 +414,13 @@ benchmark-matmult: examples/benchmark/benchmark-matmult.cpp build-info.h ggml.o 
 vdot: pocs/vdot/vdot.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-tests/test-double-float: tests/test-double-float.c build-info.h ggml.o llama.o common.o $(OBJS)
+tests/test-double-float: tests/test-double-float.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
 
-tests/test-grad0: tests/test-grad0.c build-info.h ggml.o llama.o common.o $(OBJS)
+tests/test-grad0: tests/test-grad0.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
 
-tests/test-opt: tests/test-opt.c build-info.h ggml.o llama.o common.o $(OBJS)
+tests/test-opt: tests/test-opt.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
 
 tests/test-quantize-fns: tests/test-quantize-fns.cpp build-info.h ggml.o llama.o common.o $(OBJS)
