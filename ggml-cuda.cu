@@ -5203,7 +5203,7 @@ static void ggml_cuda_op(const ggml_tensor * src0, const ggml_tensor * src1, ggm
     if (split && g_device_count > 1) {
         CUDA_CHECK(cudaSetDevice(g_main_device));
         for (int id = 0; id < g_device_count; ++id) {
-            if (id != g_main_device) {
+            if (id != g_main_device && src0_extra->events[id]) {
                 CUDA_CHECK(cudaStreamWaitEvent(g_cudaStreams_main[g_main_device], src0_extra->events[id]));
             }
         }
