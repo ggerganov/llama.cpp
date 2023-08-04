@@ -1,6 +1,5 @@
 #include "ggml.h"
-
-#include "gptneox-common.h"
+#include "cmpnct_gpt2bpe.hpp"
 
 #include <cassert>
 #include <cmath>
@@ -11,6 +10,8 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <thread>
+#include <random>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -20,11 +21,11 @@
 struct gpt_neox_hparams {
     size_t n_merges = 0;
     size_t n_vocab  = 0;
-    int32_t n_ctx    = 0;
-    int32_t n_embd   = 0;
-    int32_t n_head   = 0;
-    int32_t n_layer  = 0;
-    int32_t n_rot    = 0; // rotary_pct * (n_embd / n_head)
+    uint32_t n_ctx    = 0;
+    uint32_t n_embd   = 0;
+    uint32_t n_head   = 0;
+    uint32_t n_layer  = 0;
+    uint32_t n_rot    = 0; // rotary_pct * (n_embd / n_head)
     bool par_res = true;
     float norm_eps = 1e-5;
 };
@@ -78,6 +79,241 @@ struct gpt_neox_model {
     std::map<std::string, struct ggml_tensor *> tensors;
 };
 
+struct gpt_params {
+    int32_t seed      = -1;  // RNG seed
+    int32_t n_threads = std::min(4, (int32_t) std::thread::hardware_concurrency());
+    uint32_t n_predict = 200; // new tokens to predict
+    uint32_t n_batch   = 512;   // batch size for prompt processing
+
+    // sampling parameters
+    int32_t top_k          = 40;
+    float top_p            = 1.0f;
+    float temp             = 0.8f;
+    int32_t repeat_last_n  = 64;
+    float repeat_penalty   = 1.02f;
+
+    std::string model      = ""; // model path
+    std::string prompt     = "";
+
+    std::string token_test = "";
+    bool    interactive      = false;
+    int32_t interactive_port = -1;
+    int32_t n_gpu_layers     = 0;
+};
+
+void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
+    fprintf(stderr, "usage: %s [options]\n", argv[0]);
+    fprintf(stderr, "\n");
+    fprintf(stderr, "options:\n");
+    fprintf(stderr, "  -h, --help            show this help message and exit\n");
+    fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1)\n");
+    fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
+    fprintf(stderr, "  -ngl N, --gpu-layers N  number of layers to offload to GPU on supported models (default: %d)\n", params.n_gpu_layers);
+    fprintf(stderr, "  -p PROMPT, --prompt PROMPT\n");
+    fprintf(stderr, "                        prompt to start generation with (default: random)\n");
+    fprintf(stderr, "  -f FNAME, --file FNAME\n");
+    fprintf(stderr, "                        load prompt from a file\n");
+    fprintf(stderr, "  -tt TOKEN_TEST, --token_test TOKEN_TEST\n");
+    fprintf(stderr, "                        test tokenization\n");
+    fprintf(stderr, "  -n N, --n_predict N   number of tokens to predict (default: %d)\n", params.n_predict);
+    fprintf(stderr, "  --top_k N             top-k sampling, 0 = n_vocab (default: %d)\n", params.top_k);
+    fprintf(stderr, "  --top_p N             top-p sampling (default: %.1f)\n", params.top_p);
+    fprintf(stderr, "  --temp N              temperature (default: %.1f)\n", params.temp);
+    fprintf(stderr, "  --repeat-last-n N     last n tokens to consider for penalize (default: %d, 0 = disabled)\n", params.repeat_last_n);
+    fprintf(stderr, "  --repeat-penalty N    penalize repeat sequence of tokens (default: %.2f, 1.0 = disabled)\n", (double)params.repeat_penalty);
+    fprintf(stderr, "  -b N, --batch_size N  batch size for prompt processing (default: %d)\n", params.n_batch);
+    fprintf(stderr, "  -m FNAME, --model FNAME\n");
+    fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
+    fprintf(stderr, "\n");
+}
+
+// Function to check if the next argument exists
+std::string get_next_arg(int& i, int argc, char** argv, const std::string& flag, gpt_params& params) {
+    if (i + 1 < argc && argv[i + 1][0] != '-') {
+        return argv[++i];
+    } else {
+        fprintf(stderr, "error: %s requires one argument.\n", flag.c_str());
+        gpt_print_usage(argc, argv, params);
+        exit(0);
+    }
+}
+
+bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+
+        if (arg == "-s" || arg == "--seed") {
+            params.seed = std::stoi(get_next_arg(i, argc, argv, arg, params));
+        } else if (arg == "-t" || arg == "--threads") {
+            params.n_threads = std::stoi(get_next_arg(i, argc, argv, arg, params));
+        } else if (arg == "-ngl" || arg == "--gpu-layers" || arg == "--n-gpu-layers") {
+            params.n_gpu_layers = std::stoi(get_next_arg(i, argc, argv, arg, params));
+        } else if (arg == "-p" || arg == "--prompt") {
+            params.prompt = get_next_arg(i, argc, argv, arg, params);
+        } else if (arg == "-n" || arg == "--n_predict") {
+            params.n_predict = std::stoi(get_next_arg(i, argc, argv, arg, params));
+        } else if (arg == "--top_k") {
+            params.top_k = std::stoi(get_next_arg(i, argc, argv, arg, params));
+        } else if (arg == "--top_p") {
+            params.top_p = std::stof(get_next_arg(i, argc, argv, arg, params));
+        } else if (arg == "--temp") {
+            params.temp = std::stof(get_next_arg(i, argc, argv, arg, params));
+        } else if (arg == "--repeat-last-n") {
+            params.repeat_last_n = std::stoi(get_next_arg(i, argc, argv, arg, params));
+        } else if (arg == "--repeat-penalty") {
+            params.repeat_penalty = std::stof(get_next_arg(i, argc, argv, arg, params));
+        } else if (arg == "-b" || arg == "--batch_size") {
+            params.n_batch= std::stoi(get_next_arg(i, argc, argv, arg, params));
+        } else if (arg == "-m" || arg == "--model") {
+            params.model = get_next_arg(i, argc, argv, arg, params);
+        } else if (arg == "-i" || arg == "--interactive") {
+            params.interactive = true;
+        } else if (arg == "-ip" || arg == "--interactive-port") {
+            params.interactive = true;
+            params.interactive_port = std::stoi(get_next_arg(i, argc, argv, arg, params));
+        } else if (arg == "-h" || arg == "--help") {
+            gpt_print_usage(argc, argv, params);
+            exit(0);
+        } else if (arg == "-f" || arg == "--file") {
+            get_next_arg(i, argc, argv, arg, params);
+            std::ifstream file(argv[i]);
+            if (!file) {
+                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+                break;
+            }
+            std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(params.prompt));
+            if (params.prompt.back() == '\n') {
+                params.prompt.pop_back();
+            }
+        } else if (arg == "-tt" || arg == "--token_test") {
+            params.token_test = get_next_arg(i, argc, argv, arg, params);
+        }
+        else {
+            fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
+            gpt_print_usage(argc, argv, params);
+            exit(0);
+        }
+    }
+
+    return true;
+}
+
+gpt2bpe_vocab::id sample_top_k_top_p_repeat(
+        const gpt2bpe_vocab & vocab,
+        const float * logits,
+        const int32_t * last_n_tokens_data,
+        size_t last_n_tokens_data_size,
+        int    top_k,
+        double top_p,
+        double temp,
+        int repeat_last_n,
+        float repeat_penalty,
+        std::mt19937 & rng) {
+
+    int n_logits = vocab.id_to_token.size();
+
+    const auto * plogits = logits;
+
+    const auto last_n_tokens = std::vector<int32_t>(last_n_tokens_data, last_n_tokens_data + last_n_tokens_data_size);
+
+    if (temp <= 0) {
+        // select the token with the highest logit directly
+        float max_logit = plogits[0];
+        gpt2bpe_vocab::id max_id = 0;
+
+        for (int i = 1; i < n_logits; ++i) {
+            if (plogits[i] > max_logit) {
+                max_logit = plogits[i];
+                max_id = i;
+            }
+        }
+        return max_id;
+    }
+
+
+    std::vector<std::pair<double, gpt2bpe_vocab::id>> logits_id;
+    logits_id.reserve(n_logits);
+
+    {
+        const float scale = 1.0f/temp;
+        for (int i = 0; i < n_logits; ++i) {
+            // repetition penalty from ctrl paper (https://arxiv.org/abs/1909.05858)
+            // credit https://github.com/facebookresearch/llama/compare/main...shawwn:llama:main
+            if (repeat_last_n > 0 && std::find(last_n_tokens.end()-repeat_last_n, last_n_tokens.end(), i) != last_n_tokens.end()) {
+                // if score < 0 then repetition penalty has to multiplied to reduce the previous token probability
+                if (plogits[i] < 0.0f) {
+                    logits_id.push_back(std::make_pair(plogits[i]*scale*repeat_penalty, i));
+                } else {
+                    logits_id.push_back(std::make_pair(plogits[i]*scale/repeat_penalty, i));
+                }
+            } else {
+                logits_id.push_back(std::make_pair(plogits[i]*scale, i));
+            }
+        }
+    }
+
+    // find the top K tokens
+    std::partial_sort(
+            logits_id.begin(),
+            logits_id.begin() + top_k, logits_id.end(),
+            [](const std::pair<double, gpt2bpe_vocab::id> & a, const std::pair<double, gpt2bpe_vocab::id> & b) {
+        return a.first > b.first;
+    });
+
+    logits_id.resize(top_k);
+
+    double maxl = -INFINITY;
+    for (const auto & kv : logits_id) {
+        maxl = std::max(maxl, kv.first);
+    }
+
+    // compute probs for the top K tokens
+    std::vector<double> probs;
+    probs.reserve(logits_id.size());
+
+    double sum = 0.0;
+    for (const auto & kv : logits_id) {
+        double p = exp(kv.first - maxl);
+        probs.push_back(p);
+        sum += p;
+    }
+
+    // normalize the probs
+    for (auto & p : probs) {
+        p /= sum;
+    }
+
+    if (top_p < 1.0f) {
+        double cumsum = 0.0f;
+        for (int i = 0; i < top_k; i++) {
+            cumsum += probs[i];
+            if (cumsum >= top_p) {
+                top_k = i + 1;
+                probs.resize(top_k);
+                logits_id.resize(top_k);
+                break;
+            }
+        }
+
+        cumsum = 1.0/cumsum;
+        for (int i = 0; i < (int) probs.size(); i++) {
+            probs[i] *= cumsum;
+        }
+    }
+
+//    printf("\n");
+//    for (int i = 0; i < (int) probs.size(); i++) {
+//    for (int i = 0; i < 10; i++) {
+//        printf("%d: '%s' %f\n", i, vocab.id_to_token.at(logits_id[i].second).c_str(), probs[i]);
+//    }
+
+    std::discrete_distribution<> dist(probs.begin(), probs.end());
+    int idx = dist(rng);
+
+    return logits_id[idx].second;
+
+}
+
 struct ggml_tensor * get_tensor_ex( struct ggml_context * ctx, std::string name){
 
     struct ggml_tensor * cur = ggml_get_tensor(ctx, name.c_str());
@@ -91,7 +327,7 @@ struct ggml_tensor * get_tensor_ex( struct ggml_context * ctx, std::string name)
 }
 
 // load the model's weights from a file
-bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt_vocab & vocab) {
+bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt2bpe_vocab & vocab) {
     printf("%s: loading model from '%s'..\n", __func__, fname.c_str());
 
     model.ctx = NULL;
@@ -115,7 +351,7 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt_
     fprintf(stdout, "%s: gguf data offset = %zu\n", __func__, gguf_get_data_offset(ggufctx));
 
     // print all kv
-    if( false )
+    #if 0
     {
         const int n_kv = gguf_get_n_kv(ggufctx);
 
@@ -127,6 +363,7 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt_
             fprintf(stdout, "%s: kv[%d]: key = %s\n", __func__, i, key);
         }
     }
+    #endif
 
     // print some standard metadata
     {
@@ -249,20 +486,47 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt_
 
 
             // TEMP until a better bpe tokenizer is implemented
-            word = replace(word, "Ġ", " ");
-            word = replace(word, "Ċ", "\n");
+//            word = replace(word, "Ġ", " ");
+//            word = replace(word, "Ċ", "\n");
 
+//            printf("token %d = '%s'\n",i,word.c_str() );
 
             vocab.token_to_id[word] = i;
             vocab.id_to_token[i] = word;
+
         }
 
-        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.bos_token_id"); if( keyidx != -1 ) {       printf("bos id = %d\n", gguf_get_val_u32(ggufctx, keyidx) ); }
-        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.eos_token_id"); if( keyidx != -1 ) {       printf("eos id = %d\n", gguf_get_val_u32(ggufctx, keyidx) ); }
-        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.unknown_token_id"); if( keyidx != -1 ) {   printf("unk id = %d\n", gguf_get_val_u32(ggufctx, keyidx) ); }
-        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.separator_token_id"); if( keyidx != -1 ) { printf("sep id = %d\n", gguf_get_val_u32(ggufctx, keyidx) ); }
-        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.padding_token_id"); if( keyidx != -1 ) {   printf("pad id = %d\n", gguf_get_val_u32(ggufctx, keyidx) ); }
+        std::vector<std::pair<std::string, std::string>> bpe_merges;
 
+        for (size_t i = 0; i < hparams.n_merges; i++) {
+
+            std::string word = gguf_get_arr_str(ggufctx, merges_keyidx, i);
+
+            // Split the merges
+            std::string first, second;
+            size_t pos = word.find(' ', 1); // Start the search from the second character
+            if (pos != std::string::npos) {
+                first = word.substr(0, pos);
+                second = word.substr(pos + 1);
+            }
+
+            bpe_merges.push_back(std::make_pair(first, second));
+        }
+
+        vocab.populate_bpe_ranks(bpe_merges);
+
+
+        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.bos_token_id"); if( keyidx != -1 ) {       vocab.special_bos_id = (int32_t)gguf_get_val_u32(ggufctx, keyidx); vocab.special_have_bos=true; }
+        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.eos_token_id"); if( keyidx != -1 ) {       vocab.special_eos_id = (int32_t)gguf_get_val_u32(ggufctx, keyidx); vocab.special_have_eos=true; }
+        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.unknown_token_id"); if( keyidx != -1 ) {   vocab.special_unk_id = (int32_t)gguf_get_val_u32(ggufctx, keyidx); vocab.special_have_unk=true; }
+        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.separator_token_id"); if( keyidx != -1 ) { vocab.special_sep_id = (int32_t)gguf_get_val_u32(ggufctx, keyidx); vocab.special_have_sep=true; }
+        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.padding_token_id"); if( keyidx != -1 ) {   vocab.special_pad_id = (int32_t)gguf_get_val_u32(ggufctx, keyidx); vocab.special_have_pad=true; }
+
+        if( vocab.special_have_bos ) { fprintf(stdout, "%s: bos token = %d '%s'\n", __func__, vocab.special_bos_id, vocab.id_to_token[vocab.special_bos_id].c_str() ); }
+        if( vocab.special_have_eos ) { fprintf(stdout, "%s: eos token = %d '%s'\n", __func__, vocab.special_eos_id, vocab.id_to_token[vocab.special_eos_id].c_str() ); }
+        if( vocab.special_have_unk ) { fprintf(stdout, "%s: unk token = %d '%s'\n", __func__, vocab.special_unk_id, vocab.id_to_token[vocab.special_unk_id].c_str() ); }
+        if( vocab.special_have_sep ) { fprintf(stdout, "%s: sep token = %d '%s'\n", __func__, vocab.special_sep_id, vocab.id_to_token[vocab.special_sep_id].c_str() ); }
+        if( vocab.special_have_pad ) { fprintf(stdout, "%s: pad token = %d '%s'\n", __func__, vocab.special_pad_id, vocab.id_to_token[vocab.special_pad_id].c_str() ); }
     }
 
 
@@ -272,7 +536,7 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt_
     printf("%s: ggml ctx size = %6.2f MB\n", __func__, ctx_size/(1024.0*1024.0));
 
     // print tensor info
-    if( false )
+    #if 0
     {
         const int n_tensors = gguf_get_n_tensors(ggufctx);
 
@@ -285,7 +549,7 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt_
             fprintf(stdout, "%s: tensor[%d]: name = %s, offset = %zu\n", __func__, i, name, offset);
         }
     }
-
+    #endif
 
     // prepare memory for the weights
     {
@@ -435,7 +699,7 @@ bool gpt_neox_eval(
         const gpt_neox_model & model,
         const int n_threads,
         const int n_past,
-        const std::vector<gpt_vocab::id> & embd_inp,
+        const std::vector<gpt2bpe_vocab::id> & embd_inp,
               std::vector<float>         & embd_w,
               size_t                     & mem_per_token) {
     const int N = embd_inp.size();
@@ -687,20 +951,9 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    if (params.seed < 0) {
-        params.seed = time(NULL);
-    }
-
-    printf("%s: seed = %d\n", __func__, params.seed);
-
-    std::mt19937 rng(params.seed);
-    if (params.prompt.empty()) {
-        params.prompt = gpt_random_prompt(rng);
-    }
-
     int64_t t_load_us = 0;
 
-    gpt_vocab vocab;
+    gpt2bpe_vocab vocab;
     gpt_neox_model model;
 
     // load the model
@@ -716,8 +969,29 @@ int main(int argc, char ** argv) {
 
     }
 
-    uint32_t eos_token_id = 0;
-    int keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.eos_token_id"); if( keyidx != -1 ) {  eos_token_id = gguf_get_val_u32(ggufctx, keyidx); }    
+    if (params.seed < 0) {
+        params.seed = time(NULL);
+    }
+
+    if (params.top_k == 0) {
+        params.top_k = model.hparams.n_vocab;
+    }
+
+    printf("%s: seed           = %d\n",   __func__, params.seed);
+    printf("%s: temp           = %.3f\n", __func__, params.temp);
+    printf("%s: top_k          = %d\n",   __func__, params.top_k);
+    printf("%s: top_p          = %.3f\n", __func__, params.top_p);
+    printf("%s: repeat_last_n  = %d\n",   __func__, params.repeat_last_n);
+    printf("%s: repeat_penalty = %.3f\n", __func__, params.repeat_penalty);
+
+    std::mt19937 rng(params.seed);
+
+    if (params.prompt.empty()) {
+        params.prompt = "Once upon";
+    }
+
+    std::vector<int32_t> last_n_tokens(model.hparams.n_ctx);
+    std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
 
     int n_past = 0;
 
@@ -727,23 +1001,29 @@ int main(int argc, char ** argv) {
     std::vector<float> logits;
 
     // tokenize the prompt
-    std::vector<gpt_vocab::id> embd_inp = ::gpt_tokenize(vocab, params.prompt);
+    std::vector<gpt2bpe_vocab::id> embd_inp = gpt2bpe_tokenize(vocab, params.prompt,false, false);
 
     params.n_predict = std::min(params.n_predict, model.hparams.n_ctx - (int) embd_inp.size());
 
     printf("%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
-    for (int i = 0; i < embd_inp.size(); i++) {
-        printf("%s: token[%d] = %6d, %s\n", __func__, i, embd_inp[i], vocab.id_to_token.at(embd_inp[i]).c_str());
+//    for (size_t i = 0; i < embd_inp.size(); i++) {
+//        printf("%s: token[%zu] = %6d, %s\n", __func__, i, embd_inp[i], vocab.id_to_token[embd_inp[i]].c_str());
+//    }
+
+    if( model.hparams.n_ctx < params.n_predict+embd_inp.size() ) {
+        params.n_predict = model.hparams.n_ctx-embd_inp.size();
     }
+
+    printf("%s: n_predict = %d\n", __func__, params.n_predict);
     printf("\n");
 
-    std::vector<gpt_vocab::id> embd;
+    std::vector<gpt2bpe_vocab::id> embd;
 
     // determine the required inference memory per token:
     size_t mem_per_token = 0;
     gpt_neox_eval(model, params.n_threads, 0, { 0, 1, 2, 3 }, logits, mem_per_token);
 
-    for (int i = embd.size(); i < embd_inp.size() + params.n_predict; i++) {
+    for (size_t i = embd.size(); i < embd_inp.size() + params.n_predict; i++) {
         // predict
         if (embd.size() > 0) {
             const int64_t t_start_us = ggml_time_us();
@@ -764,15 +1044,21 @@ int main(int argc, char ** argv) {
             const int   top_k = params.top_k;
             const float top_p = params.top_p;
             const float temp  = params.temp;
+            const int repeat_last_n = params.repeat_last_n;
+            const float repeat_penalty = params.repeat_penalty;
 
             const int n_vocab = model.hparams.n_vocab;
 
-            gpt_vocab::id id = 0;
+            gpt2bpe_vocab::id id = 0;
 
             {
                 const int64_t t_start_sample_us = ggml_time_us();
 
-                id = gpt_sample_top_k_top_p(vocab, logits.data() + (logits.size() - n_vocab), top_k, top_p, temp, rng);
+//                id = sample_top_k_top_p(vocab, logits.data() + (logits.size() - n_vocab), top_k, top_p, temp, repeat_last_n, repeat_penalty, rng);
+                id = sample_top_k_top_p_repeat(vocab, logits.data() + (logits.size() - n_vocab), last_n_tokens.data(), last_n_tokens.size(), top_k, top_p, temp, repeat_last_n, repeat_penalty, rng);
+
+                last_n_tokens.erase(last_n_tokens.begin());
+                last_n_tokens.push_back(id);
 
                 t_sample_us += ggml_time_us() - t_start_sample_us;
             }
@@ -781,7 +1067,7 @@ int main(int argc, char ** argv) {
             embd.push_back(id);
         } else {
             // if here, it means we are still processing the input prompt
-            for (int k = i; k < embd_inp.size(); k++) {
+            for (size_t k = i; k < embd_inp.size(); k++) {
                 embd.push_back(embd_inp[k]);
                 if (embd.size() > params.n_batch) {
                     break;
@@ -792,12 +1078,12 @@ int main(int argc, char ** argv) {
 
         // display text
         for (auto id : embd) {
-            printf("%s", vocab.id_to_token[id].c_str());
+            printf("%s", vocab.id_to_token[id].c_str()  );
         }
         fflush(stdout);
 
         // end of text token
-        if (embd.back() == eos_token_id) {
+        if (vocab.special_have_eos && embd.back() == vocab.special_eos_id) {
             break;
         }
     }
