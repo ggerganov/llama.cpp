@@ -11,12 +11,15 @@
 #include <queue>
 #include <cstring>
 
+//-----
+// Unicode GPT2 Byte Pair Encoding Tokenizer
+// Adapted from https://github.com/cmp-nct/ggllm.cpp
+//-----
 
-/**
- * https://github.com/cmp-nct/ggllm.cpp
- * Minimal library for high performance handling and categorization of UTF8 strings and characters
- * Using std::string
- */
+// Unicode library (from cmpnct_unicode.cpp)
+
+// Minimal library for high performance handling and categorization of UTF8 strings and characters
+// Using std::string
 
 enum CNCTCharType {
     DIGIT,          // a numerical char in any language
@@ -367,7 +370,7 @@ bool CNCTUnicode::string_test(const std::string &str, CNCTCharType chartype)
     return true;
 }
 
-// Ported from libfalcon.cpp (https://github.com/cmp-nct/ggllm.cpp)
+// llama.cpp GPT2 vocab (from libfalcon.cpp)
 
 std::string replaceAll(std::string str, const std::string& from, const std::string& to) {
     size_t start_pos = 0;
