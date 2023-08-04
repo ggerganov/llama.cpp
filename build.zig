@@ -55,6 +55,12 @@ const Maker = struct {
         e.linkLibCpp();
         e.addConfigHeader(m.config_header);
         m.builder.installArtifact(e);
+
+        // Currently a bug is preventing correct linking for optimized builds for Windows:
+        // https://github.com/ziglang/zig/issues/15958
+        if (e.target.isWindows()) {
+            e.want_lto = false;
+        }
         return e;
     }
 };
