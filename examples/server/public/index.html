@@ -282,8 +282,9 @@
 
       useEffect(() => {
         // scroll to bottom (if needed)
-        if (container.current && container.current.scrollHeight <= container.current.scrollTop + container.current.offsetHeight + 300) {
-          container.current.scrollTo(0, container.current.scrollHeight)
+        const parent = container.current.parentElement;
+        if (parent && parent.scrollHeight <= parent.scrollTop + parent.offsetHeight + 300) {
+          parent.scrollTo(0, parent.scrollHeight)
         }
       }, [messages])
 

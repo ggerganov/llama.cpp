@@ -123,7 +123,7 @@ int main(int argc, char ** argv)
         // Evaluate the tokens :
         //---------------------------------
 
-        if ( llama_eval( ctx , tokens_list.data() , tokens_list.size() , llama_get_kv_cache_token_count( ctx ) , params.n_threads ) )
+        if ( llama_eval( ctx , tokens_list.data() , int(tokens_list.size()) , llama_get_kv_cache_token_count( ctx ) , params.n_threads ) )
         {
             fprintf( stderr,  "%s : failed to eval\n" , __func__ );
             return 1;

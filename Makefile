@@ -349,6 +349,8 @@ llama.o: llama.cpp ggml.h ggml-alloc.h ggml-cuda.h ggml-metal.h llama.h llama-ut
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 common.o: examples/common.cpp examples/common.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
+console.o: examples/console.cpp examples/console.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 grammar-parser.o: examples/grammar-parser.cpp examples/grammar-parser.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 expose.o: expose.cpp expose.h
@@ -368,7 +370,7 @@ gpttype_adapter_cublas.o: $(GPTTYPE_ADAPTER)
 clean:
 	rm -vf *.o main quantize_llama quantize_gpt2 quantize_gptj quantize_neox quantize_mpt quantize-stats perplexity embedding benchmark-matmult save-load-state main.exe quantize_llama.exe quantize_gptj.exe quantize_gpt2.exe quantize_neox.exe quantize_mpt.exe koboldcpp.dll koboldcpp_openblas.dll koboldcpp_failsafe.dll koboldcpp_noavx2.dll koboldcpp_clblast.dll koboldcpp_cublas.dll koboldcpp.so koboldcpp_openblas.so koboldcpp_failsafe.so koboldcpp_noavx2.so koboldcpp_clblast.so koboldcpp_cublas.so
 
-main: examples/main/main.cpp build-info.h ggml.o k_quants.o ggml-alloc.o llama.o common.o grammar-parser.o $(OBJS)
+main: examples/main/main.cpp build-info.h ggml.o k_quants.o ggml-alloc.o llama.o common.o console.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
