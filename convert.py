@@ -267,8 +267,6 @@ class SentencePieceVocab:
           byte_encoder = tokenization_gpt2.bytes_to_unicode()
           byte_decoder = {v: k for k, v in byte_encoder.items()}
           for i, item in enumerate(tokenizer):
-            # text: bytes
-            # text = b''.join([x.to_bytes(1, byteorder='big') for x in [byte_decoder[y] for y in item]])
             text: bytes = item.encode("utf-8")
             score: float = -i
             yield text, score
