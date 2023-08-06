@@ -94,6 +94,7 @@ extern "C" {
         float    rms_norm_eps; // rms norm epsilon (TEMP - will be moved to model hparams)
         int32_t  n_gpu_layers; // number of layers to store in VRAM
         int32_t  main_gpu;     // the GPU that is used for scratch and small tensors
+        int32_t  pp_threads;   // number of threads used for prompt processing only
 
         const float * tensor_split; // how to split layers across multiple GPUs (size: LLAMA_MAX_DEVICES)
 
@@ -291,7 +292,8 @@ extern "C" {
                const llama_token * tokens,
                              int   n_tokens,
                              int   n_past,
-                             int   n_threads);
+                             int   n_threads,
+                             int   pp_threads);
 
     // Same as llama_eval, but use float matrix input directly.
     LLAMA_API int llama_eval_embd(
@@ -299,7 +301,8 @@ extern "C" {
                      const float * embd,
                              int   n_tokens,
                              int   n_past,
-                             int   n_threads);
+                             int   n_threads,
+                             int   pp_threads);
 
     // Export a static computation graph for context of 511 and batch size of 1
     // NOTE: since this functionality is mostly for debugging and demonstration purposes, we hardcode these

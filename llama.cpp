@@ -895,6 +895,7 @@ struct llama_context_params llama_context_default_params() {
         /*.rms_norm_eps                =*/ LLAMA_DEFAULT_RMS_EPS,
         /*.gpu_layers                  =*/ 0,
         /*.main_gpu                    =*/ 0,
+        /*.pp_threads                  =*/ GGML_DEFAULT_N_THREADS,
         /*.tensor_split                =*/ nullptr,
         /*.rope_freq_base              =*/ 10000.0f,
         /*.rope_freq_scale             =*/ 1.0f,
@@ -1772,6 +1773,7 @@ static struct ggml_cgraph * llama_build_graph(
 //   - n_tokens   number of tokens
 //   - n_past:    the context size so far
 //   - n_threads: number of threads to use
+//   - pp_threads: number of threads to use for prompt processing
 //
 static bool llama_eval_internal(
          llama_context & lctx,
@@ -1780,6 +1782,7 @@ static bool llama_eval_internal(
                    int   n_tokens,
                    int   n_past,
                    int   n_threads,
+   		           int   pp_threads,
             const char * cgraph_fname) {
 
     LLAMA_ASSERT((!tokens && embd) || (tokens && !embd));
@@ -1813,8 +1816,6 @@ static bool llama_eval_internal(
 #endif
 
     // fprintf(stderr, "graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
-
-    int32_t pp_threads = 3;
 
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
@@ -3365,7 +3366,7 @@ struct llama_context * llama_new_context_with_model(
     if (ggml_mpi_rank(ctx->ctx_mpi) > 0) {
         // Enter a blocking eval loop with dummy input, letting rank=0 drive the process
         const std::vector<llama_token> tmp(ctx->model.hparams.n_ctx, llama_token_bos());
-        while (!llama_eval(ctx, tmp.data(), tmp.size(), 0, 0)) {};
+        while (!llama_eval(ctx, tmp.data(), tmp.size(), 0, 0, 0)) {};
         llama_backend_free();
         exit(1);
     }
@@ -4057,8 +4058,9 @@ int llama_eval(
            const llama_token * tokens,
                          int   n_tokens,
                          int   n_past,
-                         int   n_threads) {
-    if (!llama_eval_internal(*ctx, tokens, nullptr, n_tokens, n_past, n_threads, nullptr)) {
+                         int   n_threads,
+                         int   pp_threads) {
+    if (!llama_eval_internal(*ctx, tokens, nullptr, n_tokens, n_past, n_threads, pp_threads, nullptr)) {
         fprintf(stderr, "%s: failed to eval\n", __func__);
         return 1;
     }
@@ -4079,8 +4081,9 @@ int llama_eval_embd(
                      const float * embd,
                              int   n_tokens,
                              int   n_past,
-                             int   n_threads) {
-    if (!llama_eval_internal(*ctx, nullptr, embd, n_tokens, n_past, n_threads, nullptr)) {
+                             int   n_threads,
+                             int   pp_threads) {
+    if (!llama_eval_internal(*ctx, nullptr, embd, n_tokens, n_past, n_threads, pp_threads, nullptr)) {
         fprintf(stderr, "%s: failed to eval\n", __func__);
         return 1;
     }
@@ -4101,7 +4104,7 @@ int llama_eval_export(struct llama_context * ctx, const char * fname) {
 
     const std::vector<llama_token> tmp(n_batch, llama_token_bos());
 
-    if (!llama_eval_internal(*ctx, tmp.data(), nullptr, tmp.size(), n_ctx, 1, fname)) {
+    if (!llama_eval_internal(*ctx, tmp.data(), nullptr, tmp.size(), n_ctx, 1, 1, fname)) {
         fprintf(stderr, "%s: failed to eval\n", __func__);
         return 1;
     }

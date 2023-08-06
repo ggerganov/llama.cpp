@@ -119,6 +119,15 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             if (params.n_threads <= 0) {
                 params.n_threads = std::thread::hardware_concurrency();
             }
+        } else if (arg == "-ppt" || arg == "--pp-threads") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.pp_threads = std::stoi(argv[i]);
+            if (params.pp_threads <= 0) {
+                params.pp_threads = params.n_threads;
+            }
         } else if (arg == "-p" || arg == "--prompt") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -524,6 +533,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "  --color               colorise output to distinguish prompt and user input from generations\n");
     fprintf(stdout, "  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)\n");
     fprintf(stdout, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
+    fprintf(stdout, "  -ppt N, --pp-threads N\n");
+    fprintf(stdout, "                        number of threads to use during prompt processing (default is equal to --threads)\n");
     fprintf(stdout, "  -p PROMPT, --prompt PROMPT\n");
     fprintf(stdout, "                        prompt to start generation with (default: empty)\n");
     fprintf(stdout, "  -e                    process prompt escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)\n");
@@ -657,6 +668,7 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     lparams.embedding       = params.embedding;
     lparams.rope_freq_base  = params.rope_freq_base;
     lparams.rope_freq_scale = params.rope_freq_scale;
+    lparams.pp_threads      = params.pp_threads;
 
     return lparams;
 }
