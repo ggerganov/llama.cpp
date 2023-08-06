@@ -69,6 +69,7 @@ extern "C" {
 
     struct llama_model;
     struct llama_context;
+    struct llama_layer;
 
     typedef int llama_token;
 
@@ -329,10 +330,12 @@ extern "C" {
     LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
     LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
     LLAMA_API int llama_n_embd (const struct llama_context * ctx);
+    LLAMA_API int llama_n_layer(const struct llama_context * ctx);
 
     LLAMA_API int llama_n_vocab_from_model(const struct llama_model * model);
     LLAMA_API int llama_n_ctx_from_model  (const struct llama_model * model);
     LLAMA_API int llama_n_embd_from_model (const struct llama_model * model);
+    LLAMA_API int llama_n_layer_from_model(const struct llama_model * model);
 
     // Get the vocabulary as output parameters.
     // Returns number of results.
@@ -347,6 +350,29 @@ extern "C" {
                           const char * * strings,
                                  float * scores,
                                    int   capacity);
+
+    // Get a llama layer
+    LLAMA_API struct llama_layer * llama_get_layer(
+            const struct llama_context * ctx,
+                                     int layer);
+
+    LLAMA_API struct llama_layer * llama_get_layer_from_model(
+              const struct llama_model * model,
+                                     int layer);
+    
+    LLAMA_API struct ggml_tensor * llama_get_model_tok_embeddings(const struct llama_model * model);
+    LLAMA_API struct ggml_tensor * llama_get_model_norm          (const struct llama_model * model);
+    LLAMA_API struct ggml_tensor * llama_get_model_output        (const struct llama_model * model);
+
+    LLAMA_API struct ggml_tensor * llama_get_layer_attention_norm(const struct llama_layer * layer);
+    LLAMA_API struct ggml_tensor * llama_get_layer_wq            (const struct llama_layer * layer);
+    LLAMA_API struct ggml_tensor * llama_get_layer_wk            (const struct llama_layer * layer);
+    LLAMA_API struct ggml_tensor * llama_get_layer_wv            (const struct llama_layer * layer);
+    LLAMA_API struct ggml_tensor * llama_get_layer_wo            (const struct llama_layer * layer);
+    LLAMA_API struct ggml_tensor * llama_get_layer_ffn_norm      (const struct llama_layer * layer);
+    LLAMA_API struct ggml_tensor * llama_get_layer_w1            (const struct llama_layer * layer);
+    LLAMA_API struct ggml_tensor * llama_get_layer_w2            (const struct llama_layer * layer);
+    LLAMA_API struct ggml_tensor * llama_get_layer_w3            (const struct llama_layer * layer);
 
     // Token logits obtained from the last call to llama_eval()
     // The logits for the last token are stored in the last row

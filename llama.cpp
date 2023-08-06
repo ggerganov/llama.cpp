@@ -4147,6 +4147,10 @@ int llama_n_embd_from_model(const struct llama_model * model) {
     return model->hparams.n_embd;
 }
 
+int llama_n_layer_from_model(const struct llama_model * model) {
+    return model->hparams.n_layer;
+}
+
 int llama_n_vocab(const struct llama_context * ctx) {
     return ctx->model.vocab.id_to_token.size();
 }
@@ -4157,6 +4161,10 @@ int llama_n_ctx(const struct llama_context * ctx) {
 
 int llama_n_embd(const struct llama_context * ctx) {
     return ctx->model.hparams.n_embd;
+}
+
+int llama_n_layer(const struct llama_context * ctx) {
+    return ctx->model.hparams.n_layer;
 }
 
 int llama_get_vocab_from_model(
@@ -4178,6 +4186,70 @@ int llama_get_vocab(
         float  * scores,
         int capacity) {
     return llama_get_vocab_from_model(&ctx->model, strings, scores, capacity);
+}
+
+struct llama_layer * llama_get_layer_from_model(
+        const struct llama_model * model,
+        int layer_idx) {
+    if (layer_idx < 0 || layer_idx >= model->hparams.n_layer) {
+        return NULL;
+    } else {
+        return &model->layers[layer_idx];
+    }
+}
+
+struct llama_layer * llama_get_layer(
+        const struct llama_context * ctx,
+        int layer_idx) {
+    return llama_get_layer_from_model(&ctx->model, layer_idx);
+}
+
+struct ggml_tensor * llama_get_model_tok_embeddings(const struct llama_model * model) {
+    return model->tok_embeddings;
+}
+
+struct ggml_tensor * llama_get_model_norm(const struct llama_model * model) {
+    return model->norm;
+}
+
+struct ggml_tensor * llama_get_model_output(const struct llama_model * model) {
+    return model->output;
+}
+
+struct ggml_tensor * llama_get_layer_attention_norm(const struct llama_layer * layer) {
+    return layer->attention_norm;
+}
+
+struct ggml_tensor * llama_get_layer_wq(const struct llama_layer * layer) {
+    return layer->wq;
+}
+
+struct ggml_tensor * llama_get_layer_wk(const struct llama_layer * layer) {
+    return layer->wk;
+}
+
+struct ggml_tensor * llama_get_layer_wv(const struct llama_layer * layer) {
+    return layer->wv;
+}
+
+struct ggml_tensor * llama_get_layer_wo(const struct llama_layer * layer) {
+    return layer->wo;
+}
+
+struct ggml_tensor * llama_get_layer_ffn_norm(const struct llama_layer * layer) {
+    return layer->ffn_norm;
+}
+
+struct ggml_tensor * llama_get_layer_w1(const struct llama_layer * layer) {
+    return layer->w1;
+}
+
+struct ggml_tensor * llama_get_layer_w2(const struct llama_layer * layer) {
+    return layer->w2;
+}
+
+struct ggml_tensor * llama_get_layer_w3(const struct llama_layer * layer) {
+    return layer->w3;
 }
 
 float * llama_get_logits(struct llama_context * ctx) {
