@@ -126,7 +126,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             }
             params.pp_threads = std::stoi(argv[i]);
             if (params.pp_threads <= 0) {
-                params.pp_threads = params.n_threads;
+                params.pp_threads = std::thread::hardware_concurrency();
             }
         } else if (arg == "-p" || arg == "--prompt") {
             if (++i >= argc) {
