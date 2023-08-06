@@ -133,8 +133,8 @@ int main(int argc, char ** argv) {
     // print system information
     {
         fprintf(stderr, "\n");
-        fprintf(stderr, "system_info: n_threads = %d / %d | %s\n",
-                params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
+        fprintf(stderr, "system_info: n_threads = %d / %d | pp_threads = %d / %d | %s\n",
+                params.n_threads, std::thread::hardware_concurrency(), params.pp_threads, std::thread::hardware_concurrency(), llama_print_system_info());
     }
 
     // determine the maximum memory usage needed to do inference for the given n_batch and n_ctx parameters

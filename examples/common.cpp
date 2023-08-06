@@ -534,7 +534,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)\n");
     fprintf(stdout, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
     fprintf(stdout, "  -ppt N, --pp-threads N\n");
-    fprintf(stdout, "                        number of threads to use during prompt processing (default is equal to --threads)\n");
+    fprintf(stdout, "                        number of threads to use during prompt processing (default: %d)\n", params.pp_threads);
     fprintf(stdout, "  -p PROMPT, --prompt PROMPT\n");
     fprintf(stdout, "                        prompt to start generation with (default: empty)\n");
     fprintf(stdout, "  -e                    process prompt escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)\n");

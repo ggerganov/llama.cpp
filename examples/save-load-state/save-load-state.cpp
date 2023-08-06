@@ -56,7 +56,7 @@ int main(int argc, char ** argv) {
     }
 
     // evaluate prompt
-    llama_eval(ctx, tokens.data(), n_prompt_tokens, n_past, params.n_threads);
+    llama_eval(ctx, tokens.data(), n_prompt_tokens, n_past, params.n_threads, params.pp_threads);
 
     last_n_tokens_data.insert(last_n_tokens_data.end(), tokens.data(), tokens.data() + n_prompt_tokens);
     n_past += n_prompt_tokens;
@@ -93,7 +93,7 @@ int main(int argc, char ** argv) {
         last_n_tokens_data.push_back(next_token);
 
         printf("%s", next_token_str);
-        if (llama_eval(ctx, &next_token, 1, n_past, params.n_threads)) {
+        if (llama_eval(ctx, &next_token, 1, n_past, params.n_threads, params.pp_threads)) {
             fprintf(stderr, "\n%s : failed to evaluate\n", __func__);
             llama_free(ctx);
             llama_free_model(model);
@@ -153,7 +153,7 @@ int main(int argc, char ** argv) {
         last_n_tokens_data.push_back(next_token);
 
         printf("%s", next_token_str);
-        if (llama_eval(ctx2, &next_token, 1, n_past, params.n_threads)) {
+        if (llama_eval(ctx2, &next_token, 1, n_past, params.n_threads, params.pp_threads)) {
             fprintf(stderr, "\n%s : failed to evaluate\n", __func__);
             llama_free(ctx2);
             llama_free_model(model);
