@@ -130,9 +130,30 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         NSError * error = nil;
 
         //NSString * path = [[NSBundle mainBundle] pathForResource:@"../../examples/metal/metal" ofType:@"metal"];
-        NSBundle * bundle = [NSBundle bundleForClass:[GGMLMetalClass class]];
-        NSString * path = [bundle pathForResource:@"ggml-metal" ofType:@"metal"];
-        fprintf(stderr, "%s: loading '%s'\n", __func__, [path UTF8String]);
+        const char* v = getenv("GGML_METAL_PATH");
+        NSString * path;
+        if (v) {
+          path = [NSString stringWithCString: v encoding: NSUTF8StringEncoding];
+          NSFileManager *fileManager = [NSFileManager defaultManager];
+          if ([fileManager fileExistsAtPath:path]) { 
+            fprintf(stderr, "%s: loading '%s'\n", __func__, [path UTF8String]);
+          } else {
+            path = [path stringByAppendingString: @"/ggml-metal.metal"];
+            if ([fileManager fileExistsAtPath:path]) { 
+              fprintf(stderr, "%s: loading '%s'\n", __func__, [path UTF8String]);
+            } else {
+              // Use original code
+              NSBundle * bundle = [NSBundle bundleForClass:[GGMLMetalClass class]];
+              path = [bundle pathForResource:@"ggml-metal" ofType:@"metal"];
+              fprintf(stderr, "%s: loading '%s'\n", __func__, [path UTF8String]);
+            }
+          }
+
+        } else {
+          NSBundle * bundle = [NSBundle bundleForClass:[GGMLMetalClass class]];
+          path = [bundle pathForResource:@"ggml-metal" ofType:@"metal"];
+          fprintf(stderr, "%s: loading '%s'\n", __func__, [path UTF8String]);
+        }
 
         NSString * src  = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
         if (error) {
