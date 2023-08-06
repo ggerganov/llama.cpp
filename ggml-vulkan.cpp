@@ -2346,6 +2346,7 @@ static void ggml_vk_mul_f32(const ggml_tensor * src0, const ggml_tensor * src1, 
                 ggml_vk_sync_buffers(s.buffer, { ggml_vk_subbuffer(d_X), ggml_vk_subbuffer(d_Y) }, vk_device.compute_queue, vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, true);
                 ggml_vk_sync_buffers(s.buffer, { ggml_vk_subbuffer(d_D) }, vk_device.compute_queue, vk::AccessFlagBits::eTransferRead, vk::AccessFlagBits::eShaderWrite, false);
                 ggml_vk_dispatch_pipeline(s, vk_pipeline_mul_f32, { { d_X, 0, buf_sz }, { d_Y, 0, (uint32_t) d_Y.size }, { d_D, 0, buf_sz } }, sizeof(int) * pc.size(), pc.data(), { (uint32_t)ne00, (uint32_t)ne01, 1});
+                ggml_vk_sync_buffers(s.buffer, { ggml_vk_subbuffer(d_D) }, vk_device.compute_queue, vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eTransferRead, true);
 
                 // copy dst to host
                 float * d = (float *) ((char *) dst->data + i02*nb2 + i03*nb3);
