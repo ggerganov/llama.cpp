@@ -1782,7 +1782,7 @@ static bool llama_eval_internal(
                    int   n_tokens,
                    int   n_past,
                    int   n_threads,
-   		           int   pp_threads,
+                   int   pp_threads,
             const char * cgraph_fname) {
 
     LLAMA_ASSERT((!tokens && embd) || (tokens && !embd));
