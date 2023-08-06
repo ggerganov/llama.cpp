@@ -1042,7 +1042,7 @@ static void llama_model_load_internal(
         void * progress_callback_user_data) {
 
     model.t_start_us = ggml_time_us();
-    size_t blasbatchmul = (n_batch>512?2:1);
+    size_t blasbatchmul = (n_batch>512?(n_batch>1024?4:2):1);
 
     std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, use_mmap));
 

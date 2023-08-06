@@ -347,6 +347,10 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     debugmode = inputs.debugmode;
     unbanTokens = inputs.unban_tokens;
     blasbatchsize = inputs.blasbatchsize;
+    if(blasbatchsize<=0)
+    {
+        blasbatchsize = 8;
+    }
     params.memory_f16 = inputs.f16_kv;
     params.n_ctx = inputs.max_context_length;
 
