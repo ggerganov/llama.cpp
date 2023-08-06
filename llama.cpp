@@ -747,12 +747,12 @@ struct llama_model_loader {
 
     void load_all_data(llama_progress_callback progress_callback, void *  progress_callback_user_data, llama_mlock * lmlock) {
         size_t data_size = 0;
-        size_t prefetch_size = 0;
+        size_t prefetch_size = file_loader->file.size;
         size_t lock_size = 0;
         for (const llama_load_tensor & lt : tensors_map.tensors) {
             data_size += lt.size;
-            if (lt.ggml_tensor->backend == GGML_BACKEND_CPU) {
-                prefetch_size += lt.size;
+            if (lt.ggml_tensor->backend != GGML_BACKEND_CPU) {
+                prefetch_size -= lt.size;
             }
         }
 
