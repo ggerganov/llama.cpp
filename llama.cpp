@@ -4096,7 +4096,8 @@ int llama_tokenize_with_model(
                  llama_token * tokens,
                          int   n_max_tokens,
                         bool   add_bos) {
-    auto res = llama_tokenize(model->vocab, text, add_bos, llama_vocab_type(model->vocab) == "spm");
+    auto escape = llama_vocab_type(model->vocab) == "spm";
+    auto res = llama_tokenize(model->vocab, text, add_bos, escape);
 
     if (n_max_tokens < (int) res.size()) {
         return -((int) res.size());
