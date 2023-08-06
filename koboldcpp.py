@@ -923,7 +923,7 @@ def show_new_gui():
     makelabelentry(quick_tab, "Threads:" , threads_var, 8, 50)
 
     # blas batch size
-    makeslider(quick_tab, "BLAS Batch Size:", blasbatchsize_text, blas_size_var, 0, 6, 12, set=5)
+    makeslider(quick_tab, "BLAS Batch Size:", blasbatchsize_text, blas_size_var, 0, 7, 12, set=5)
 
     # quick boxes
     quick_boxes = {"Launch Browser": launchbrowser , "High Priority" : highpriority, "Streaming Mode":stream, "Use SmartContext":smartcontext, "Unban Tokens":unbantokens, "Disable MMAP":disablemmap,}
@@ -969,7 +969,7 @@ def show_new_gui():
     # blas thread specifier
     makelabelentry(hardware_tab, "BLAS threads:" , blas_threads_var, 11, 50)
     # blas batch size
-    makeslider(hardware_tab, "BLAS Batch Size:", blasbatchsize_text, blas_size_var, 0, 6, 12, set=5)
+    makeslider(hardware_tab, "BLAS Batch Size:", blasbatchsize_text, blas_size_var, 0, 7, 12, set=5)
     # force version
     makelabelentry(hardware_tab, "Force Version:" , version_var, 100, 50)
 
