@@ -237,12 +237,12 @@ class SentencePieceVocab:
     def __init__(self, fname_tokenizer: Path, fname_added_tokens: Optional[Path], vocabtype: Optional[str]) -> None:
         self.vocabtype = vocabtype
         if self.vocabtype == "bpe":
-          self.sentencepiece_tokenizer = json.loads(open(str(fname_tokenizer)).read())
+            self.sentencepiece_tokenizer = json.loads(open(str(fname_tokenizer), encoding="utf-8").read())
         else:
-          self.sentencepiece_tokenizer = SentencePieceProcessor(str(fname_tokenizer))
+            self.sentencepiece_tokenizer = SentencePieceProcessor(str(fname_tokenizer))
         added_tokens: Dict[str, int]
         if fname_added_tokens is not None:
-            added_tokens = json.load(open(fname_added_tokens))
+            added_tokens = json.load(open(fname_added_tokens, encoding="utf-8"))
         else:
             added_tokens = {}
         if self.vocabtype == "bpe":
@@ -267,8 +267,9 @@ class SentencePieceVocab:
           byte_encoder = tokenization_gpt2.bytes_to_unicode()
           byte_decoder = {v: k for k, v in byte_encoder.items()}
           for i, item in enumerate(tokenizer):
-            text: bytes
-            text = b''.join([x.to_bytes(1, byteorder='big') for x in [byte_decoder[y] for y in item]])
+            # text: bytes
+            # text = b''.join([x.to_bytes(1, byteorder='big') for x in [byte_decoder[y] for y in item]])
+            text: bytes = item.encode("utf-8")
             score: float = -i
             yield text, score
         else:

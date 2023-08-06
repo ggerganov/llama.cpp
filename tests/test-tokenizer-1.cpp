@@ -9,6 +9,10 @@
 #include <map>
 #include <vector>
 
+static std::string vocab_type(llama_context* ctx) {
+    return llama_n_vocab(ctx) == 32000 ? "spm": "bpe";
+}
+
 static std::string escape_whitespace(const std::string& text) {
     std::string result;
     bool escaping = false;
@@ -75,13 +79,6 @@ int main(int argc, char **argv) {
 
     const int n_vocab = llama_n_vocab(ctx);
 
-    if (n_vocab != 32000) {
-        fprintf(stderr, "%s : expected 32000 tokens, got %d\n", __func__, n_vocab);
-        llama_free_model(model);
-        llama_free(ctx);
-        return 2;
-    }
-
     for (int i = 0; i < n_vocab; ++i) {
         std::string forward = llama_token_to_str_bpe(ctx, i);
         std::vector<llama_token> tokens = llama_tokenize_bpe(ctx, forward, false);
@@ -90,16 +87,17 @@ int main(int argc, char **argv) {
                 std::string backward = llama_token_to_str(ctx, tokens[0]);
                 fprintf(stderr, "%s : error: token %d is string %s but bpe returns token %d %s\n", 
                     __func__, i, llama_token_to_str(ctx, i).c_str(), tokens[0], backward.c_str());
-                return 3;
+                return 2;
             }
         } else {
-            if (i <= 258) {
+            if ((vocab_type(ctx) == "spm" && i <= 258) || 
+                (vocab_type(ctx) == "bpe" && (i == 0 || i >= 100000))) {
                 fprintf(stderr, "%s : info: token %d is string %s and bpe returns tokens %s\n", 
                     __func__, i, llama_token_to_str(ctx, i).c_str(), unescape_whitespace(ctx, tokens).c_str());
             } else {
                 fprintf(stderr, "%s : error: token %d is string %s but bpe returns tokens %s\n", 
                     __func__, i, llama_token_to_str(ctx, i).c_str(), unescape_whitespace(ctx, tokens).c_str());
-                return 3;
+                return 2;
             }
         }
     }
