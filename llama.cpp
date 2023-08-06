@@ -895,7 +895,6 @@ struct llama_context_params llama_context_default_params() {
         /*.rms_norm_eps                =*/ LLAMA_DEFAULT_RMS_EPS,
         /*.gpu_layers                  =*/ 0,
         /*.main_gpu                    =*/ 0,
-        /*.pp_threads                  =*/ GGML_DEFAULT_N_THREADS,
         /*.tensor_split                =*/ nullptr,
         /*.rope_freq_base              =*/ 10000.0f,
         /*.rope_freq_scale             =*/ 1.0f,

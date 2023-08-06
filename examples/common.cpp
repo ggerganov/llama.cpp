@@ -668,7 +668,6 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     lparams.embedding       = params.embedding;
     lparams.rope_freq_base  = params.rope_freq_base;
     lparams.rope_freq_scale = params.rope_freq_scale;
-    lparams.pp_threads      = params.pp_threads;
 
     return lparams;
 }
