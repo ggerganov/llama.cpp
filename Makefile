@@ -142,6 +142,28 @@ ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
 	#CXXFLAGS += -mssse3
 endif
 
+ifneq ($(filter aarch64%,$(UNAME_M)),)
+	# Apple M1, M2, etc.
+	# Raspberry Pi 3, 4, Zero 2 (64-bit)
+	CFLAGS   += -mcpu=native
+	CXXFLAGS += -mcpu=native
+endif
+
+ifneq ($(filter armv6%,$(UNAME_M)),)
+	# Raspberry Pi 1, Zero
+	CFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access
+endif
+
+ifneq ($(filter armv7%,$(UNAME_M)),)
+	# Raspberry Pi 2
+	CFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access -funsafe-math-optimizations
+endif
+
+ifneq ($(filter armv8%,$(UNAME_M)),)
+	# Raspberry Pi 3, 4, Zero 2 (32-bit)
+	CFLAGS += -mfp16-format=ieee -mno-unaligned-access
+endif
+
 ifneq ($(filter ppc64%,$(UNAME_M)),)
 	POWER9_M := $(shell grep "POWER9" /proc/cpuinfo)
 	ifneq (,$(findstring POWER9,$(POWER9_M)))
@@ -269,28 +291,6 @@ ifdef LLAMA_METAL
 	LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit -framework MetalPerformanceShaders
 	OBJS     += ggml-metal.o
 endif # LLAMA_METAL
-
-ifneq ($(filter aarch64%,$(UNAME_M)),)
-	# Apple M1, M2, etc.
-	# Raspberry Pi 3, 4, Zero 2 (64-bit)
-	CFLAGS   += -mcpu=native
-	CXXFLAGS += -mcpu=native
-endif
-
-ifneq ($(filter armv6%,$(UNAME_M)),)
-	# Raspberry Pi 1, Zero
-	CFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access
-endif
-
-ifneq ($(filter armv7%,$(UNAME_M)),)
-	# Raspberry Pi 2
-	CFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access -funsafe-math-optimizations
-endif
-
-ifneq ($(filter armv8%,$(UNAME_M)),)
-	# Raspberry Pi 3, 4, Zero 2 (32-bit)
-	CFLAGS += -mfp16-format=ieee -mno-unaligned-access
-endif
 
 ifdef LLAMA_METAL
 ggml-metal.o: ggml-metal.m ggml-metal.h
