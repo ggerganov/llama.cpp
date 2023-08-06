@@ -7,6 +7,7 @@
 #endif
 
 #include "llama-util.h"
+#define LLAMA_API_CPP // TODO: eliminate me
 #include "llama.h"
 
 #include "ggml.h"
@@ -2624,25 +2625,6 @@ void llama_sample_frequency_and_presence_penalties(struct llama_context * ctx, l
     }
 }
 
-// TODO: reorder functions?
-std::string llama_token_to_str(
-        const struct llama_context * ctx,
-                       llama_token   token) {
-    std::string result;
-    int length = 8;
-    result.resize(length);
-    length = llama_token_to_str(ctx, token, (char *)result.data(), result.length());
-    if (length < 0) {
-        result.resize(-length);
-        int check = llama_token_to_str(ctx, token, (char *)result.data(), result.length());
-        assert(check == -length);
-        GGML_UNUSED(check);
-    } else {
-        result.resize(length);
-    }
-    return result;
-}
-
 void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * candidates, const struct llama_grammar * grammar) {
     assert(ctx);
     const int64_t t_start_sample_us = ggml_time_us();
@@ -4199,6 +4181,24 @@ int llama_token_to_str_with_model(const struct llama_model * model, llama_token 
 
 int llama_token_to_str(const struct llama_context * ctx, llama_token token, char * str, int length) {
     return llama_token_to_str_with_model(&ctx->model, token, str, length);
+}
+
+std::string llama_token_to_str(
+        const struct llama_context * ctx,
+                       llama_token   token) {
+    std::string result;
+    int length = 8;
+    result.resize(length);
+    length = llama_token_to_str(ctx, token, (char *)result.data(), result.length());
+    if (length < 0) {
+        result.resize(-length);
+        int check = llama_token_to_str(ctx, token, (char *)result.data(), result.length());
+        assert(check == -length);
+        GGML_UNUSED(check);
+    } else {
+        result.resize(length);
+    }
+    return result;
 }
 
 int llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token, char * str, int length) {
