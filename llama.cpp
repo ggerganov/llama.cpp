@@ -4057,7 +4057,6 @@ int llama_tokenize_with_model(
     auto res = llama_tokenize(model->vocab, text, add_bos, true);
 
     if (n_max_tokens < (int) res.size()) {
-        fprintf(stderr, "%s: too many tokens\n", __func__);
         return -((int) res.size());
     }
 
@@ -4077,6 +4076,24 @@ int llama_tokenize(
     return llama_tokenize_with_model(&ctx->model, text, tokens, n_max_tokens, add_bos);
 }
 
+std::vector<llama_token> llama_tokenize(
+        struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_bos) {
+    int length = text.length() + add_bos;
+    std::vector<llama_token> result(length);
+    length = llama_tokenize(ctx, text.c_str(), result.data(), result.size(), add_bos);
+    if (length < 0) {
+        result.resize(-length);
+        int check = llama_tokenize(ctx, text.c_str(), result.data(), result.size(), add_bos);
+        assert(check == -length);
+        GGML_UNUSED(check);
+    } else {
+        result.resize(length);
+    }
+    return result;
+}
+
 int llama_tokenize_bpe(
         struct llama_context * ctx,
                   const char * text,
@@ -4086,7 +4103,6 @@ int llama_tokenize_bpe(
     auto res = llama_tokenize(ctx->model.vocab, text, add_bos, false);
 
     if (n_max_tokens < (int) res.size()) {
-        fprintf(stderr, "%s: too many tokens\n", __func__);
         return -((int) res.size());
     }
 
@@ -4095,6 +4111,24 @@ int llama_tokenize_bpe(
     }
 
     return res.size();
+}
+
+std::vector<llama_token> llama_tokenize_bpe(
+        struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_bos) {
+    int length = text.length() + add_bos;
+    std::vector<llama_token> result(length);
+    length = llama_tokenize_bpe(ctx, text.c_str(), result.data(), result.size(), add_bos);
+    if (length < 0) {
+        result.resize(-length);
+        int check = llama_tokenize_bpe(ctx, text.c_str(), result.data(), result.size(), add_bos);
+        assert(check == -length);
+        GGML_UNUSED(check);
+    } else {
+        result.resize(length);
+    }
+    return result;
 }
 
 int llama_n_vocab_from_model(const struct llama_model * model) {

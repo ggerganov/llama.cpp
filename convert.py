@@ -276,6 +276,7 @@ class SentencePieceVocab:
               piece = tokenizer.id_to_piece(i)
               text: bytes = piece.encode("utf-8")
               score: float = tokenizer.get_score(i)
+              yield text, score
 
     def added_tokens(self) -> Iterable[Tuple[bytes, float]]:
         for text in self.added_tokens_list:

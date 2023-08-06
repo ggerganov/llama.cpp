@@ -28,9 +28,9 @@ static std::string escape_whitespace(const std::string& text) {
     return result;
 }
 
-static std::string unescape_whitespace(llama_context* ctx, const llama_token* tokens, int count) {
+static std::string unescape_whitespace(llama_context* ctx, const std::vector<llama_token>& tokens) {
     std::string result;
-    for (int i = 0; i < count; ++i) {
+    for (int i = 0; i < tokens.size(); ++i) {
         result += llama_token_to_str(ctx, tokens[i]);
     }
     return result;
@@ -84,9 +84,8 @@ int main(int argc, char **argv) {
 
     for (int i = 0; i < n_vocab; ++i) {
         std::string forward = llama_token_to_str_bpe(ctx, i);
-        std::vector<llama_token> tokens(forward.length());
-        int n = llama_tokenize_bpe(ctx, forward.c_str(), tokens.data(), forward.length(), false);
-        if (n == 1) {
+        std::vector<llama_token> tokens = llama_tokenize_bpe(ctx, forward, false);
+        if (tokens.size() == 1) {
             if (i != tokens[0]) {
                 std::string backward = llama_token_to_str(ctx, tokens[0]);
                 fprintf(stderr, "%s : error: token %d is string %s but bpe returns token %d %s\n", 
@@ -96,10 +95,10 @@ int main(int argc, char **argv) {
         } else {
             if (i <= 258) {
                 fprintf(stderr, "%s : info: token %d is string %s and bpe returns tokens %s\n", 
-                    __func__, i, llama_token_to_str(ctx, i).c_str(), unescape_whitespace(ctx, tokens.data(), n).c_str());
+                    __func__, i, llama_token_to_str(ctx, i).c_str(), unescape_whitespace(ctx, tokens).c_str());
             } else {
                 fprintf(stderr, "%s : error: token %d is string %s but bpe returns tokens %s\n", 
-                    __func__, i, llama_token_to_str(ctx, i).c_str(), unescape_whitespace(ctx, tokens.data(), n).c_str());
+                    __func__, i, llama_token_to_str(ctx, i).c_str(), unescape_whitespace(ctx, tokens).c_str());
                 return 3;
             }
         }
@@ -109,9 +108,8 @@ int main(int argc, char **argv) {
     for (wchar_t ch = 0x0000; ch < 0xffff; ++ch) {
         std::wstring wstr(1, ch);
         std::string str = converter.to_bytes(wstr);
-        std::vector<llama_token> tokens(str.length() + 1);
-        auto n = llama_tokenize(ctx, escape_whitespace(str).c_str(), tokens.data(), str.length() + 1, false);
-        if (n == 1) {
+        std::vector<llama_token> tokens = llama_tokenize(ctx, escape_whitespace(str).c_str(), false);
+        if (tokens.size() == 1) {
             fprintf(stderr, "%s : info: %s tokenized to %d \n", 
                 __func__, str.c_str(), tokens[0]);
         }

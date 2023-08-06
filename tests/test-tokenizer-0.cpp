@@ -6,9 +6,9 @@
 #include <map>
 #include <vector>
 
-static std::string unescape_whitespace(llama_context* ctx, const llama_token* tokens, int count) {
+static std::string unescape_whitespace(llama_context* ctx, const std::vector<llama_token>& tokens) {
     std::string result;
-    for (int i = 0; i < count; ++i) {
+    for (int i = 0; i < tokens.size(); ++i) {
         result += llama_token_to_str(ctx, tokens[i]);
     }
     return result;
@@ -90,11 +90,9 @@ int main(int argc, char **argv) {
     }
 
     for (const auto & test_kv : k_tests()) {
-        std::vector<llama_token> res(test_kv.first.size() + 2);
-        const int n = llama_tokenize(ctx, test_kv.first.c_str(), res.data(), int(res.size()), true);
+        std::vector<llama_token> res = llama_tokenize(ctx, test_kv.first.c_str(), true);
         fprintf(stderr, "%s : '%s' tokenized to '%s'\n", 
-            __func__, test_kv.first.c_str(), unescape_whitespace(ctx, res.data(), n).c_str());
-        res.resize(n);
+            __func__, test_kv.first.c_str(), unescape_whitespace(ctx, res).c_str());
 
         bool correct = res.size() == test_kv.second.size();
 

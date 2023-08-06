@@ -44,9 +44,8 @@ int main(int argc, char ** argv) {
         llama_free_model(model);
         return 1;
     }
-    auto tokens = std::vector<llama_token>(params.n_ctx);
-    auto n_prompt_tokens = llama_tokenize(ctx, params.prompt.c_str(), tokens.data(), int(tokens.size()), true);
-
+    auto tokens = llama_tokenize(ctx, params.prompt.c_str(), true);
+    auto n_prompt_tokens = tokens.size();
     if (n_prompt_tokens < 1) {
         fprintf(stderr, "%s : failed to tokenize prompt\n", __func__);
         llama_free(ctx);
