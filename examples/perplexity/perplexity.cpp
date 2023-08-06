@@ -153,7 +153,7 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
     }
 
     size_t hs_task_count = prompt_lines.size()/6;
-    fprintf(stderr, "%s : loaded %lu tasks from prompt.\n", __func__, hs_task_count);
+    fprintf(stderr, "%s : loaded %zu tasks from prompt.\n", __func__, hs_task_count);
 
     // This is needed as usual for LLaMA models
     bool prepend_bos = true;
@@ -178,7 +178,7 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
         double ending_logprob[4];
     };
 
-    fprintf(stderr, "%s : selecting %lu %s tasks.\n", __func__, hs_task_count, (randomize_tasks?"randomized":"the first")  );
+    fprintf(stderr, "%s : selecting %zu %s tasks.\n", __func__, hs_task_count, (randomize_tasks?"randomized":"the first")  );
 
     // Select and read data from prompt lines
     hs_data_t *hs_data = new hs_data_t[hs_task_count];
@@ -223,7 +223,7 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
 
             // Stop if query wont fit the ctx window
             if (query_size > (size_t)params.n_ctx) {
-                fprintf(stderr, "%s : number of tokens in query %lu > n_ctxl\n", __func__, query_size);
+                fprintf(stderr, "%s : number of tokens in query %zu > n_ctxl\n", __func__, query_size);
                 return;
             }
 
@@ -284,7 +284,7 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
         }
 
         // Print the accumulated accuracy mean x 100
-        printf("%li\t%.8lf\n",task_idx+1, acc/double(task_idx+1)*100.0);
+        printf("%zu\t%.8lf\n",task_idx+1, acc/double(task_idx+1)*100.0);
         fflush(stdout);
     }
 

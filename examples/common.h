@@ -11,11 +11,6 @@
 #include <unordered_map>
 #include <tuple>
 
-#if !defined (_WIN32)
-#include <stdio.h>
-#include <termios.h>
-#endif
-
 //
 // CLI argument parsing
 //
@@ -74,6 +69,7 @@ struct gpt_params {
     size_t hellaswag_tasks = 400;   // number of tasks to use when computing the HellaSwag score
 
     bool low_vram          = false; // if true, reduce VRAM usage at the cost of performance
+    bool mul_mat_q         = false; // if true, use experimental mul_mat_q kernels
     bool memory_f16        = true;  // use f16 instead of f32 for memory kv
     bool random_prompt     = false; // do not randomize prompt if none provided
     bool use_color         = false; // use color to distinguish generations and inputs
@@ -84,6 +80,7 @@ struct gpt_params {
     bool embedding         = false; // get only sentence embedding
     bool interactive_first = false; // wait for user input immediately
     bool multiline_input   = false; // reverse the usage of `\`
+    bool simple_io         = false; // improves compatibility with subprocesses and limited consoles
 
     bool input_prefix_bos  = false; // prefix BOS to user inputs, preceding input_prefix
     bool instruct          = false; // instruction mode (used for Alpaca models)
@@ -115,42 +112,3 @@ std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::s
 
 std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(const gpt_params & params);
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
-
-//
-// Console utils
-//
-
-#define ANSI_COLOR_RED     "\x1b[31m"
-#define ANSI_COLOR_GREEN   "\x1b[32m"
-#define ANSI_COLOR_YELLOW  "\x1b[33m"
-#define ANSI_COLOR_BLUE    "\x1b[34m"
-#define ANSI_COLOR_MAGENTA "\x1b[35m"
-#define ANSI_COLOR_CYAN    "\x1b[36m"
-#define ANSI_COLOR_RESET   "\x1b[0m"
-#define ANSI_BOLD          "\x1b[1m"
-
-enum console_color_t {
-    CONSOLE_COLOR_DEFAULT=0,
-    CONSOLE_COLOR_PROMPT,
-    CONSOLE_COLOR_USER_INPUT,
-    CONSOLE_COLOR_ERROR
-};
-
-struct console_state {
-    bool multiline_input = false;
-    bool use_color = false;
-    console_color_t color = CONSOLE_COLOR_DEFAULT;
-
-    FILE* out = stdout;
-#if defined (_WIN32)
-    void* hConsole;
-#else
-    FILE* tty = nullptr;
-    termios prev_state;
-#endif
-};
-
-void console_init(console_state & con_st);
-void console_cleanup(console_state & con_st);
-void console_set_color(console_state & con_st, console_color_t color);
-bool console_readline(console_state & con_st, std::string & line);
