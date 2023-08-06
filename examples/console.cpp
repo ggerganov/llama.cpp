@@ -80,8 +80,10 @@ namespace console {
             // Set console input codepage to UTF16
             _setmode(_fileno(stdin), _O_WTEXT);
 
-            if (!simple_io) {
-                // Turn off ICANON (ENABLE_LINE_INPUT) and ECHO (ENABLE_ECHO_INPUT)
+            // Set ICANON (ENABLE_LINE_INPUT) and ECHO (ENABLE_ECHO_INPUT)
+            if (simple_io) {
+                dwMode |= ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT;
+            } else {
                 dwMode &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
             }
             if (!SetConsoleMode(hConIn, dwMode)) {
