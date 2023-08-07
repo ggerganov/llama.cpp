@@ -140,6 +140,12 @@ The `--ctx-size` option allows you to set the size of the prompt context used by
 
 -   `-c N, --ctx-size N`: Set the size of the prompt context (default: 512). The LLaMA models were built with a context of 2048, which will yield the best results on longer input/inference. However, increasing the context size beyond 2048 may lead to unpredictable results.
 
+### Extended Context Size
+
+Some fine-tuned models have extened the context length by scaling RoPE. For example, if the original pretrained model have a context length (max sequence length) of 4096 (4k) and the fine-tuned model have 32k. That is a scaling factor of 8, and should work by setting the above `--ctx-size` to 32768 (32k) and `--rope-scale` to 8.
+
+- `--rope-scale N`: Where N is the linear scaling factor used by the fine-tuned model.
+
 ### Keep Prompt
 
 The `--keep` option allows users to retain the original prompt when the model runs out of context, ensuring a connection to the initial instruction or conversation topic is maintained.
