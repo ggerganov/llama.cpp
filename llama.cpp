@@ -56,8 +56,14 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+#if !defined(GGML_USE_CUBLAS) && !defined(GGML_USE_METAL)
+#include "ggml-alloc.h"
+#define LLAMA_USE_ALLOCATOR
+#else
 #define LLAMA_USE_SCRATCH
 #define LLAMA_MAX_SCRATCH_BUFFERS 16
+#endif
+
 
 // available llama models
 enum e_model {
@@ -327,13 +333,22 @@ struct llama_model {
 
 struct llama_context {
     llama_context(const llama_model & model) : model(model), t_load_us(model.t_load_us), t_start_us(model.t_start_us) {}
-#ifdef GGML_USE_METAL
     ~llama_context() {
+        if (model_owner) {
+            delete &model;
+        }
+#ifdef GGML_USE_METAL
         if (ctx_metal) {
             ggml_metal_free(ctx_metal);
         }
-    }
 #endif
+#ifdef LLAMA_USE_ALLOCATOR
+        if (alloc) {
+            ggml_allocr_free(alloc);
+        }
+#endif
+    }
+
     std::mt19937 rng;
 
     bool has_evaluated_once = false;
@@ -371,7 +386,17 @@ struct llama_context {
     // memory buffers used to evaluate the model
     // TODO: move in llama_state
     llama_ctx_buffer buf_compute;
+
+#ifdef LLAMA_USE_ALLOCATOR
+    llama_ctx_buffer buf_alloc;
+    ggml_allocr * alloc = NULL;
+#endif
+
+#ifdef LLAMA_USE_SCRATCH
     llama_ctx_buffer buf_scratch[LLAMA_MAX_SCRATCH_BUFFERS];
+    int    buf_last = 0;
+    size_t buf_max_size[LLAMA_MAX_SCRATCH_BUFFERS] = { 0 };
+#endif
 
 #ifdef GGML_USE_METAL
     ggml_metal_context * ctx_metal = NULL;
@@ -380,9 +405,6 @@ struct llama_context {
 #ifdef GGML_USE_MPI
     ggml_mpi_context * ctx_mpi = NULL;
 #endif
-
-    int    buf_last = 0;
-    size_t buf_max_size[LLAMA_MAX_SCRATCH_BUFFERS] = { 0 };
 
     void use_buf(struct ggml_context * ctx, int i) {
 #if defined(LLAMA_USE_SCRATCH)
@@ -725,12 +747,12 @@ struct llama_model_loader {
 
     void load_all_data(llama_progress_callback progress_callback, void *  progress_callback_user_data, llama_mlock * lmlock) {
         size_t data_size = 0;
-        size_t prefetch_size = 0;
+        size_t prefetch_size = file_loader->file.size;
         size_t lock_size = 0;
         for (const llama_load_tensor & lt : tensors_map.tensors) {
             data_size += lt.size;
-            if (lt.ggml_tensor->backend == GGML_BACKEND_CPU) {
-                prefetch_size += lt.size;
+            if (lt.ggml_tensor->backend != GGML_BACKEND_CPU) {
+                prefetch_size -= lt.size;
             }
         }
 
@@ -879,6 +901,7 @@ struct llama_context_params llama_context_default_params() {
         /*.progress_callback           =*/ nullptr,
         /*.progress_callback_user_data =*/ nullptr,
         /*.low_vram                    =*/ false,
+        /*.mul_mat_q                   =*/ false,
         /*.f16_kv                      =*/ true,
         /*.logits_all                  =*/ false,
         /*.vocab_only                  =*/ false,
@@ -1006,6 +1029,7 @@ static void llama_model_load_internal(
         int n_gpu_layers,
         int main_gpu,
         const float * tensor_split,
+        const bool mul_mat_q,
         float rope_freq_base,
         float rope_freq_scale,
         bool low_vram,
@@ -1134,9 +1158,11 @@ static void llama_model_load_internal(
     }
 
     (void) main_gpu;
+    (void) mul_mat_q;
 #if defined(GGML_USE_CUBLAS)
     fprintf(stderr, "%s: using CUDA for GPU acceleration\n", __func__);
     ggml_cuda_set_main_device(main_gpu);
+    ggml_cuda_set_mul_mat_q(mul_mat_q);
 #define LLAMA_BACKEND_OFFLOAD       GGML_BACKEND_GPU
 #define LLAMA_BACKEND_OFFLOAD_SPLIT GGML_BACKEND_GPU_SPLIT
 #elif defined(GGML_USE_CLBLAST)
@@ -1230,12 +1256,16 @@ static void llama_model_load_internal(
         const size_t scale = memory_type == GGML_TYPE_F32 ? 2 : 1;
 
         // this is the total memory required to run the inference
-        const size_t mem_required =
+        size_t mem_required =
             ctx_size +
-            mmapped_size - vram_weights + // weights in VRAM not in memory
+            mmapped_size - vram_weights; // weights in VRAM not in memory
+
+#ifndef LLAMA_USE_ALLOCATOR
+        mem_required +=
             MEM_REQ_SCRATCH0(hparams.n_ctx).at(model.type) +
             MEM_REQ_SCRATCH1().at(model.type) +
             MEM_REQ_EVAL().at(model.type);
+#endif
 
         // this is the memory required by one llama_state
         const size_t mem_required_state =
@@ -1341,6 +1371,7 @@ static bool llama_model_load(
         int n_gpu_layers,
         int main_gpu,
         const float * tensor_split,
+        const bool mul_mat_q,
         float rope_freq_base,
         float rope_freq_scale,
         bool low_vram,
@@ -1351,7 +1382,8 @@ static bool llama_model_load(
         llama_progress_callback progress_callback,
         void *progress_callback_user_data) {
     try {
-        llama_model_load_internal(fname, model, vocab, n_ctx, n_batch, n_gqa, rms_norm_eps, n_gpu_layers, main_gpu, tensor_split, rope_freq_base, rope_freq_scale, low_vram, memory_type,
+        llama_model_load_internal(fname, model, vocab, n_ctx, n_batch, n_gqa, rms_norm_eps, n_gpu_layers,
+                                  main_gpu, tensor_split, mul_mat_q, rope_freq_base, rope_freq_scale, low_vram, memory_type,
                                   use_mmap, use_mlock, vocab_only, progress_callback, progress_callback_user_data);
         return true;
     } catch (const std::exception & err) {
@@ -1360,31 +1392,14 @@ static bool llama_model_load(
     }
 }
 
-// evaluate the transformer
-//
-//   - lctx:      llama context
-//   - tokens:    new batch of tokens to process
-//   - embd       embeddings input
-//   - n_tokens   number of tokens
-//   - n_past:    the context size so far
-//   - n_threads: number of threads to use
-//
-static bool llama_eval_internal(
+static struct ggml_cgraph * llama_build_graph(
          llama_context & lctx,
      const llama_token * tokens,
            const float * embd,
                    int   n_tokens,
-                   int   n_past,
-                   int   n_threads,
-            const char * cgraph_fname) {
+                   int   n_past) {
 
     LLAMA_ASSERT((!tokens && embd) || (tokens && !embd));
-
-#ifdef GGML_USE_MPI
-    ggml_mpi_eval_init(lctx.ctx_mpi, &n_tokens, &n_past, &n_threads);
-#endif
-
-    const int64_t t_start_us = ggml_time_us();
 
     const int N = n_tokens;
 
@@ -1401,9 +1416,7 @@ static bool llama_eval_internal(
     const int64_t n_head      = hparams.n_head;
     const int64_t n_head_kv   = hparams.n_head_kv;
     const int64_t n_embd_head = hparams.n_embd_head();
-    const int64_t n_vocab     = hparams.n_vocab;
     const int64_t n_embd_gqa  = hparams.n_embd_gqa();
-
 
     LLAMA_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -1416,26 +1429,35 @@ static bool llama_eval_internal(
     auto & mem_per_token = lctx.mem_per_token;
     auto & buf_compute   = lctx.buf_compute;
 
+
     struct ggml_init_params params = {
         /*.mem_size   =*/ buf_compute.size,
         /*.mem_buffer =*/ buf_compute.addr,
         /*.no_alloc   =*/ false,
     };
 
+#ifdef LLAMA_USE_ALLOCATOR
+    params.no_alloc = true;
+#endif
+
     struct ggml_context * ctx0 = ggml_init(params);
 
     ggml_cgraph * gf = ggml_new_graph(ctx0);
-
-    // for big prompts, if BLAS is enabled, it is better to use only one thread
-    // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
-    n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
 
     struct ggml_tensor * cur;
     struct ggml_tensor * inpL;
 
     if (tokens) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
+
+#ifdef LLAMA_USE_ALLOCATOR
+        ggml_allocr_alloc(lctx.alloc, inp_tokens);
+        if (!ggml_allocr_is_measure(lctx.alloc)) {
+            memcpy(inp_tokens->data, tokens, N*ggml_element_size(inp_tokens));
+        }
+#else
         memcpy(inp_tokens->data, tokens, N*ggml_element_size(inp_tokens));
+#endif
         ggml_set_name(inp_tokens, "inp_tokens");
 
         inpL = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
@@ -1445,7 +1467,15 @@ static bool llama_eval_internal(
 #endif
 
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N);
+
+#ifdef LLAMA_USE_ALLOCATOR
+        ggml_allocr_alloc(lctx.alloc, inpL);
+        if (!ggml_allocr_is_measure(lctx.alloc)) {
+            memcpy(inpL->data, embd, N * n_embd * ggml_element_size(inpL));
+        }
+#else
         memcpy(inpL->data, embd, N * n_embd * ggml_element_size(inpL));
+#endif
     }
 
     const int i_gpu_start = n_layer - n_gpu_layers;
@@ -1471,6 +1501,17 @@ static bool llama_eval_internal(
         offload_func_kq = ggml_cuda_assign_buffers;
     }
 #endif // GGML_USE_CUBLAS
+
+    struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+#ifdef LLAMA_USE_ALLOCATOR
+    ggml_allocr_alloc(lctx.alloc, KQ_scale);
+    if (!ggml_allocr_is_measure(lctx.alloc)) {
+        ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd)/n_head));
+    }
+#else
+    ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd)/n_head));
+#endif
+    ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
 
     for (int il = 0; il < n_layer; ++il) {
         ggml_format_name(inpL, "layer_inp_%d", il);
@@ -1567,9 +1608,6 @@ static bool llama_eval_internal(
             ggml_set_name(KQ, "KQ");
 
             // KQ_scaled = KQ / sqrt(n_embd_head)
-            struct ggml_tensor * KQ_scale = ggml_new_f32(ctx0, 1.0f/sqrtf(float(n_embd)/n_head));
-            ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
-
             // KQ_scaled shape [n_past + N, N, n_head, 1]
             struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx0, KQ, KQ_scale);
             offload_func_kq(KQ_scaled);
@@ -1685,9 +1723,6 @@ static bool llama_eval_internal(
 
     lctx.use_buf(ctx0, 0);
 
-    // used at the end to optionally extract the embeddings
-    struct ggml_tensor * embeddings = NULL;
-
     // norm
     {
         cur = ggml_rms_norm(ctx0, inpL, rms_norm_eps);
@@ -1698,8 +1733,6 @@ static bool llama_eval_internal(
         cur = ggml_mul(ctx0, cur, model.norm);
         // offload_func_nr(cur); // TODO CPU + GPU mirrored backend
         ggml_set_name(cur, "result_norm");
-
-        embeddings = cur;
     }
 
     // lm_head
@@ -1711,23 +1744,103 @@ static bool llama_eval_internal(
     // logits -> probs
     //cur = ggml_soft_max_inplace(ctx0, cur);
 
-    // run the computation
     ggml_build_forward_expand(gf, cur);
 
-    // fprintf(stderr, "graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf.n_nodes, gf.n_leafs);
+    if (mem_per_token == 0) {
+        mem_per_token = ggml_used_mem(ctx0)/N;
+    }
+
+#if 0
+    printf("\n%s: used_mem: eval ctx %.3f MB, scratch %.3f MB %.3f MB, work buf %.3f MB, n_past = %d, N = %d\n", __func__,
+            ggml_used_mem(ctx0)/1024.0/1024.0,
+            lctx.get_buf_max_mem(0)/1024.0/1024.0,
+            lctx.get_buf_max_mem(1)/1024.0/1024.0,
+            lctx.work_buffer.size()/1024.0/1024.0,
+            n_past, N);
+#endif
+
+    ggml_free(ctx0);
+
+    return gf;
+}
+
+// evaluate the transformer
+//
+//   - lctx:      llama context
+//   - tokens:    new batch of tokens to process
+//   - embd       embeddings input
+//   - n_tokens   number of tokens
+//   - n_past:    the context size so far
+//   - n_threads: number of threads to use
+//
+static bool llama_eval_internal(
+         llama_context & lctx,
+     const llama_token * tokens,
+           const float * embd,
+                   int   n_tokens,
+                   int   n_past,
+                   int   n_threads,
+            const char * cgraph_fname) {
+
+    LLAMA_ASSERT((!tokens && embd) || (tokens && !embd));
+
+    const int64_t t_start_us = ggml_time_us();
+
+#ifdef GGML_USE_MPI
+    ggml_mpi_eval_init(lctx.ctx_mpi, &n_tokens, &n_past, &n_threads);
+#endif
+
+    const int N = n_tokens;
+
+    const auto & model   = lctx.model;
+    const auto & hparams = model.hparams;
+
+    const auto & kv_self = lctx.kv_self;
+
+    LLAMA_ASSERT(!!kv_self.ctx);
+
+    const int64_t n_embd      = hparams.n_embd;
+    const int64_t n_vocab     = hparams.n_vocab;
+
+#ifdef LLAMA_USE_ALLOCATOR
+    ggml_allocr_reset(lctx.alloc);
+#endif
+
+    ggml_cgraph * gf = llama_build_graph(lctx, tokens, embd, n_tokens, n_past);
+
+#ifdef LLAMA_USE_ALLOCATOR
+    ggml_allocr_alloc_graph(lctx.alloc, gf);
+#endif
+
+    // fprintf(stderr, "graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
+
+    // for big prompts, if BLAS is enabled, it is better to use only one thread
+    // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
+    n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
+
+    struct ggml_tensor * res = gf->nodes[gf->n_nodes - 1];
+    struct ggml_tensor * embeddings = gf->nodes[gf->n_nodes - 2];
+
+    LLAMA_ASSERT(strcmp(res->name, "result_output") == 0);
+    LLAMA_ASSERT(strcmp(embeddings->name, "result_norm") == 0);
 
 #if GGML_USE_MPI
+    const int64_t n_layer = hparams.n_layer;
     ggml_mpi_graph_compute_pre(lctx.ctx_mpi, gf, n_layer);
 #endif
 
 #ifdef GGML_USE_METAL
     if (lctx.ctx_metal && N == 1) {
-        if (!ggml_metal_if_optimized(lctx.ctx_metal)) {
-            ggml_metal_graph_find_concurrency(lctx.ctx_metal, gf);
-        }
+        // TODO: disabled until #2413 is resolved
+        //if (!ggml_metal_if_optimized(lctx.ctx_metal)) {
+        //    ggml_metal_graph_find_concurrency(lctx.ctx_metal, gf);
+        //}
         ggml_metal_set_n_cb     (lctx.ctx_metal, n_threads);
         ggml_metal_graph_compute(lctx.ctx_metal, gf);
-        ggml_metal_get_tensor   (lctx.ctx_metal, cur);
+        ggml_metal_get_tensor   (lctx.ctx_metal, res);
+        if (!lctx.embedding.empty()) {
+            ggml_metal_get_tensor(lctx.ctx_metal, embeddings);
+        }
     } else {
         // IMPORTANT:
         // Since we don't have efficient Matrix x Matrix Metal multiplication yet, we fallback to vanilla
@@ -1757,8 +1870,6 @@ static bool llama_eval_internal(
 
     // update kv token count
     lctx.kv_self.n = n_past + N;
-
-    struct ggml_tensor * res = gf->nodes[gf->n_nodes - 1];
 
     if (cgraph_fname) {
         ggml_graph_export(gf, cgraph_fname);
@@ -1796,21 +1907,6 @@ static bool llama_eval_internal(
         embedding_out.resize(n_embd);
         memcpy(embedding_out.data(), (float *) ggml_get_data(embeddings) + (n_embd*(N - 1)), sizeof(float)*n_embd);
     }
-
-    if (mem_per_token == 0) {
-        mem_per_token = ggml_used_mem(ctx0)/N;
-    }
-
-#if 0
-    printf("\n%s: used_mem: eval ctx %.3f MB, scratch %.3f MB %.3f MB, work buf %.3f MB, n_past = %d, N = %d\n", __func__,
-            ggml_used_mem(ctx0)/1024.0/1024.0,
-            lctx.get_buf_max_mem(0)/1024.0/1024.0,
-            lctx.get_buf_max_mem(1)/1024.0/1024.0,
-            lctx.work_buffer.size()/1024.0/1024.0,
-            n_past, N);
-#endif
-
-    ggml_free(ctx0);
 
     // measure the performance only for the single-token evals
     if (N == 1) {
@@ -1923,7 +2019,9 @@ struct llama_tokenizer {
             if (token == vocab_.token_to_id.end()) {
                 // output any symbols that did not form tokens as bytes.
                 for (int j = 0; j < (int) symbol.n; ++j) {
-                    llama_vocab::id token_id = static_cast<uint8_t>(symbol.text[j]) + 3;
+                    // NOTE: old version, before #2420 - not sure what are the implications of this
+                    //llama_vocab::id token_id = static_cast<uint8_t>(symbol.text[j]) + 3;
+                    llama_vocab::id token_id = vocab_.token_to_id.at(std::string(1, symbol.text[j]));
                     output.push_back(token_id);
                 }
             } else {
@@ -3100,7 +3198,7 @@ struct llama_model * llama_load_model_from_file(
     ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
     if (!llama_model_load(path_model, *model, model->vocab, params.n_ctx, params.n_batch, params.n_gqa, params.rms_norm_eps, params.n_gpu_layers,
-                params.main_gpu, params.tensor_split, params.rope_freq_base, params.rope_freq_scale,params.low_vram,
+                params.main_gpu, params.tensor_split, params.mul_mat_q, params.rope_freq_base, params.rope_freq_scale,params.low_vram,
                 memory_type, params.use_mmap, params.use_mlock, params.vocab_only, params.progress_callback,
                 params.progress_callback_user_data)) {
         delete model;
@@ -3177,10 +3275,47 @@ struct llama_context * llama_new_context_with_model(
             ctx->embedding.resize(hparams.n_embd);
         }
 
-        ctx->buf_compute.resize(MEM_REQ_EVAL().at(ctx->model.type) + ggml_graph_overhead());
+#ifdef LLAMA_USE_ALLOCATOR
+        {
+            static const size_t tensor_alignment = 32;
+            // the compute buffer is used to store the tensor and graph structs, while the allocator buffer is used for the tensor data
+            ctx->buf_compute.resize(ggml_tensor_overhead()*GGML_MAX_NODES + ggml_graph_overhead());
 
+            // create measure allocator
+            ctx->alloc = ggml_allocr_new_measure(tensor_alignment);
+
+            // build worst-case graph
+            int n_tokens = std::min((int)hparams.n_ctx, params.n_batch);
+            int n_past = hparams.n_ctx - n_tokens;
+            llama_token token = llama_token_bos(); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
+            ggml_cgraph * gf = llama_build_graph(*ctx, &token, NULL, n_tokens, n_past);
+
+            // measure memory requirements for the graph
+            size_t alloc_size = ggml_allocr_alloc_graph(ctx->alloc, gf) + tensor_alignment;
+
+            fprintf(stderr, "%s: compute buffer total size = %7.2f MB\n", __func__, (ctx->buf_compute.size + alloc_size) / 1024.0 / 1024.0);
+
+            // debug - for comparison with scratch buffer
+            //size_t prev_req =
+            //    MEM_REQ_SCRATCH0(hparams.n_ctx).at(ctx->model.type) +
+            //    MEM_REQ_SCRATCH1().at(ctx->model.type) +
+            //    MEM_REQ_EVAL().at(ctx->model.type);
+            //fprintf(stderr, "%s: (debug) equivalent with scratch buffer = %7.2f MB\n", __func__, prev_req / 1024.0 / 1024.0);
+
+            // recreate allocator with exact memory requirements
+            ggml_allocr_free(ctx->alloc);
+
+            ctx->buf_alloc.resize(alloc_size);
+            ctx->alloc = ggml_allocr_new(ctx->buf_alloc.addr, ctx->buf_alloc.size, tensor_alignment);
+        }
+#else
+        ctx->buf_compute.resize(MEM_REQ_EVAL().at(ctx->model.type) + ggml_graph_overhead());
+#endif
+
+#ifdef LLAMA_USE_SCRATCH
         ctx->buf_scratch[0].resize(MEM_REQ_SCRATCH0(hparams.n_ctx).at(ctx->model.type));
         ctx->buf_scratch[1].resize(MEM_REQ_SCRATCH1().at(ctx->model.type));
+#endif
     }
 
 #ifdef GGML_USE_METAL
@@ -3250,9 +3385,6 @@ struct llama_context * llama_init_from_file(
 }
 
 void llama_free(struct llama_context * ctx) {
-    if (ctx->model_owner) {
-        delete &ctx->model;
-    }
     delete ctx;
 }
 
@@ -3611,10 +3743,20 @@ size_t llama_get_state_size(const struct llama_context * ctx) {
     return s_total;
 }
 
-// Copies the state to the specified destination address
-size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
-    uint8_t * out = dst;
-
+/** copy state data into either a buffer or file depending on the passed in context
+ *
+ * file context:
+ * llama_file file("/path", "wb");
+ * llama_data_file_context data_ctx(&file);
+ * llama_copy_state_data(ctx, &data_ctx);
+ *
+ * buffer context:
+ * std::vector<uint8_t> buf(max_size, 0);
+ * llama_data_buffer_context data_ctx(&buf.data());
+ * llama_copy_state_data(ctx, &data_ctx);
+ *
+*/
+void llama_copy_state_data_internal(struct llama_context * ctx, llama_data_context * data_ctx) {
     // copy rng
     {
         std::stringstream rng_ss;
@@ -3626,8 +3768,8 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
         memset(&rng_buf[0], 0, LLAMA_MAX_RNG_STATE);
         memcpy(&rng_buf[0], rng_ss.str().data(), rng_ss.str().size());
 
-        memcpy(out, &rng_size,   sizeof(rng_size));    out += sizeof(rng_size);
-        memcpy(out, &rng_buf[0], LLAMA_MAX_RNG_STATE); out += LLAMA_MAX_RNG_STATE;
+        data_ctx->write(&rng_size,   sizeof(rng_size));
+        data_ctx->write(&rng_buf[0], LLAMA_MAX_RNG_STATE);
     }
 
     // copy logits
@@ -3635,25 +3777,29 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
         const size_t logits_cap  = ctx->logits.capacity();
         const size_t logits_size = ctx->logits.size();
 
-        memcpy(out, &logits_cap,  sizeof(logits_cap));  out += sizeof(logits_cap);
-        memcpy(out, &logits_size, sizeof(logits_size)); out += sizeof(logits_size);
+        data_ctx->write(&logits_cap,  sizeof(logits_cap));
+        data_ctx->write(&logits_size, sizeof(logits_size));
 
         if (logits_size) {
-            memcpy(out, ctx->logits.data(), logits_size * sizeof(float));
+            data_ctx->write(ctx->logits.data(), logits_size * sizeof(float));
         }
 
-        out += logits_cap * sizeof(float);
+        // If there is a gap between the size and the capacity, write padding
+        size_t padding_size = (logits_cap - logits_size) * sizeof(float);
+        if (padding_size > 0) {
+            std::vector<uint8_t> padding(padding_size, 0); // Create a buffer filled with zeros
+            data_ctx->write(padding.data(), padding_size);
+        }
     }
 
     // copy embeddings
     {
         const size_t embedding_size = ctx->embedding.size();
 
-        memcpy(out, &embedding_size, sizeof(embedding_size)); out += sizeof(embedding_size);
+        data_ctx->write(&embedding_size, sizeof(embedding_size));
 
         if (embedding_size) {
-            memcpy(out, ctx->embedding.data(), embedding_size * sizeof(float));
-            out += embedding_size * sizeof(float);
+            data_ctx->write(ctx->embedding.data(), embedding_size * sizeof(float));
         }
     }
 
@@ -3662,14 +3808,14 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
         const auto & kv_self = ctx->kv_self;
         const auto & hparams = ctx->model.hparams;
         const int    n_layer = hparams.n_layer;
-        const int    n_embd  = hparams.n_embd;
+        const int    n_embd  = hparams.n_embd_gqa();
         const int    n_ctx   = hparams.n_ctx;
 
         const size_t kv_size = kv_self.buf.size;
         const int    kv_ntok = llama_get_kv_cache_token_count(ctx);
 
-        memcpy(out, &kv_size, sizeof(kv_size)); out += sizeof(kv_size);
-        memcpy(out, &kv_ntok, sizeof(kv_ntok)); out += sizeof(kv_ntok);
+        data_ctx->write(&kv_size, sizeof(kv_size));
+        data_ctx->write(&kv_ntok, sizeof(kv_ntok));
 
         if (kv_size) {
             const size_t elt_size = ggml_element_size(kv_self.k);
@@ -3678,12 +3824,12 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
             ggml_cgraph gf{};
 
             ggml_tensor * kout3d = ggml_new_tensor_3d(cpy_ctx, kv_self.k->type, n_embd, kv_ntok, n_layer);
-            kout3d->data = out;
-            out += ggml_nbytes(kout3d);
+            std::vector<uint8_t> kout3d_data(ggml_nbytes(kout3d), 0);
+            kout3d->data = kout3d_data.data();
 
             ggml_tensor * vout3d = ggml_new_tensor_3d(cpy_ctx, kv_self.v->type, kv_ntok, n_embd, n_layer);
-            vout3d->data = out;
-            out += ggml_nbytes(vout3d);
+            std::vector<uint8_t> vout3d_data(ggml_nbytes(vout3d), 0);
+            vout3d->data = vout3d_data.data();
 
             ggml_tensor * k3d = ggml_view_3d(cpy_ctx, kv_self.k,
                 n_embd, kv_ntok, n_layer,
@@ -3698,15 +3844,20 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
             ggml_graph_compute_helper(ctx->work_buffer, &gf, /*n_threads*/ 1);
 
             ggml_free(cpy_ctx);
+
+            // our data is now in the kout3d_data and vout3d_data buffers
+            // write them to file
+            data_ctx->write(kout3d_data.data(), kout3d_data.size());
+            data_ctx->write(vout3d_data.data(), vout3d_data.size());
         }
     }
+}
 
-    const size_t written  = out - dst;
-    const size_t max_size = llama_get_state_size(ctx);
+size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
+    llama_data_buffer_context data_ctx(dst);
+    llama_copy_state_data_internal(ctx, &data_ctx);
 
-    LLAMA_ASSERT(written <= max_size);
-
-    return written;
+    return data_ctx.get_size_written();
 }
 
 // Sets the state reading from the specified source address
@@ -3765,7 +3916,7 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
         const auto & kv_self = ctx->kv_self;
         const auto & hparams = ctx->model.hparams;
         const int    n_layer = hparams.n_layer;
-        const int    n_embd  = hparams.n_embd;
+        const int    n_embd  = hparams.n_embd_gqa();
         const int    n_ctx   = hparams.n_ctx;
 
         size_t kv_size;
@@ -3891,15 +4042,9 @@ bool llama_save_session_file(struct llama_context * ctx, const char * path_sessi
     file.write_u32((uint32_t) n_token_count);
     file.write_raw(tokens, sizeof(llama_token) * n_token_count);
 
-    // save the context state
-    {
-        const size_t n_state_size_max = llama_get_state_size(ctx);
-
-        std::vector<uint8_t> state_data(n_state_size_max);
-        const size_t n_state_size_cur = llama_copy_state_data(ctx, state_data.data());
-
-        file.write_raw(state_data.data(), n_state_size_cur);
-    }
+    // save the context state using stream saving
+    llama_data_file_context data_ctx(&file);
+    llama_copy_state_data_internal(ctx, &data_ctx);
 
     return true;
 }
