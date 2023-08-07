@@ -443,9 +443,6 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt2
 
     // load vocab
     {
-
-        // TODO: implement a better bpe tokenizer, utilizing merges and handles unicode
-
         auto & hparams = model.hparams;
 
         int keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.model");
@@ -483,11 +480,6 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt2
 
         for (size_t i = 0; i < hparams.n_vocab; i++) {
             std::string word = gguf_get_arr_str(ggufctx, tokens_keyidx, i);
-
-
-            // TEMP until a better bpe tokenizer is implemented
-//            word = replace(word, "Ġ", " ");
-//            word = replace(word, "Ċ", "\n");
 
 //            printf("token %d = '%s'\n",i,word.c_str() );
 
@@ -1054,7 +1046,6 @@ int main(int argc, char ** argv) {
             {
                 const int64_t t_start_sample_us = ggml_time_us();
 
-//                id = sample_top_k_top_p(vocab, logits.data() + (logits.size() - n_vocab), top_k, top_p, temp, repeat_last_n, repeat_penalty, rng);
                 id = sample_top_k_top_p_repeat(vocab, logits.data() + (logits.size() - n_vocab), last_n_tokens.data(), last_n_tokens.size(), top_k, top_p, temp, repeat_last_n, repeat_penalty, rng);
 
                 last_n_tokens.erase(last_n_tokens.begin());
