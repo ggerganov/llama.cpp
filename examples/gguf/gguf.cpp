@@ -256,10 +256,9 @@ bool gguf_ex_read_0(const std::string & fname) {
 
     // find kv string
     {
-        char findkey[32];
-        sprintf(findkey, "some.parameter.string");
+        const char * findkey = "some.parameter.string";
 
-        int keyidx = gguf_find_key(ctx, findkey);
+        const int keyidx = gguf_find_key(ctx, findkey);
         if (keyidx == -1) {
             fprintf(stdout, "%s: find key: %s not found.\n", __func__, findkey);
         } else {
@@ -297,7 +296,7 @@ bool gguf_ex_read_1(const std::string & fname) {
     };
 
     struct gguf_context * ctx = gguf_init_from_file(fname.c_str(), params);
-    
+
     fprintf(stdout, "%s: version:      %d\n", __func__, gguf_get_version(ctx));
     fprintf(stdout, "%s: alignment:   %zu\n", __func__, gguf_get_alignment(ctx));
     fprintf(stdout, "%s: data offset: %zu\n", __func__, gguf_get_data_offset(ctx));
@@ -388,7 +387,7 @@ bool gguf_ex_read_2(const std::string & fname) {
 
         // print first 10 elements
     const float * data = (const float *) cur->data;
-                
+
         printf("%s data[:10] : ", name);
 
         for (int j = 0; j < 10; ++j) {
@@ -402,7 +401,7 @@ fprintf(stdout, "%s: ctx_data size: %zu\n", __func__, ggml_get_mem_size(ctx_data
 
     ggml_free(ctx_data);
     gguf_free(ctx);
-    
+
     return true;
 }
 
