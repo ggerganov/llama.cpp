@@ -3,12 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="color-scheme" content="light dark">
   <title>llama.cpp - chat</title>
 
   <style>
     body {
-      background-color: #fff;
-      color: #000;
       font-family: system-ui;
       font-size: 90%;
     }
@@ -283,8 +282,9 @@
 
       useEffect(() => {
         // scroll to bottom (if needed)
-        if (container.current && container.current.scrollHeight <= container.current.scrollTop + container.current.offsetHeight + 300) {
-          container.current.scrollTo(0, container.current.scrollHeight)
+        const parent = container.current.parentElement;
+        if (parent && parent.scrollHeight <= parent.scrollTop + parent.offsetHeight + 300) {
+          parent.scrollTo(0, parent.scrollHeight)
         }
       }, [messages])
 
