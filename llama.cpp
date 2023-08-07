@@ -555,7 +555,7 @@ struct llama_file_loader {
         // LLaMAv2
         // TODO: read from header
         hparams.n_head_kv = hparams.n_head;
-=======
+    }
     void read_vocab() {
         vocab.id_to_token.resize(hparams.n_vocab);
 
@@ -1442,7 +1442,7 @@ static struct ggml_cgraph * llama_build_graph(
     const int64_t n_embd_head = hparams.n_embd_head();
     const int64_t n_embd_gqa  = hparams.n_embd_gqa();
 
-    LLAMA_ASSERT(n_embd_head == hparams.n_rot);
+    LLAMA_ASSERT(n_embd_head == hparams.n_embd/hparams.n_head);
 
     const float freq_base  = hparams.rope_freq_base;
     const float freq_scale = hparams.rope_freq_scale;

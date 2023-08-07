@@ -1124,13 +1124,8 @@ class OutputFile:
             params.n_mult,
             params.n_head,
             params.n_layer,
-<<<<<<< HEAD
-            params.n_embd // params.n_head,  # rot (obsolete)
-            file_type.value,
-=======
             params.n_vocab_base | 0xF0000000, # reuse obsolete rot value to store vocab_base
-            params.file_type.value,
->>>>>>> bfccc62 (Use some tricks to eliminate the necessity for a new format)
+            file_type.value,
         ]
         self.fout.write(struct.pack("I" * len(values), *values))
 
