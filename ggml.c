@@ -4602,7 +4602,7 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         /*.ne           =*/ { 1, 1, 1, 1 },
         /*.nb           =*/ { 0, 0, 0, 0 },
         /*.op           =*/ GGML_OP_NONE,
-        /*.op_params    =*/ {0},
+        /*.op_params    =*/ { 0 },
         /*.is_param     =*/ false,
         /*.grad         =*/ NULL,
         /*.src          =*/ { NULL },
@@ -4634,6 +4634,7 @@ static struct ggml_tensor * ggml_new_tensor_impl(
 }
 
 static void ggml_set_op_params(struct ggml_tensor * tensor, const void * params, size_t params_size) {
+    GGML_ASSERT(tensor != NULL); // silence -Warray-bounds warnings
     assert(params_size <= GGML_MAX_OP_PARAMS);
     memcpy(tensor->op_params, params, params_size);
 }
@@ -6439,7 +6440,7 @@ struct ggml_tensor * ggml_permute(
     result->src[0] = a;
 
     int32_t params[] = { axis0, axis1, axis2, axis3 };
-    ggml_set_op_params(result, &params, sizeof(params));
+    ggml_set_op_params(result, params, sizeof(params));
 
     return result;
 }
@@ -6565,7 +6566,7 @@ static struct ggml_tensor * ggml_diag_mask_inf_impl(
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
 
     int32_t params[] = { n_past, inplace ? 1 : 0 };
-    ggml_set_op_params(result, &params, sizeof(params));
+    ggml_set_op_params(result, params, sizeof(params));
 
     result->op   = GGML_OP_DIAG_MASK_INF;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6605,7 +6606,7 @@ static struct ggml_tensor * ggml_diag_mask_zero_impl(
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
 
     int32_t params[] = { n_past, inplace ? 1 : 0 };
-    ggml_set_op_params(result, &params, sizeof(params));
+    ggml_set_op_params(result, params, sizeof(params));
 
     result->op   = GGML_OP_DIAG_MASK_ZERO;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6721,9 +6722,9 @@ static struct ggml_tensor * ggml_rope_impl(
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
 
     int32_t params[6] = { n_past, n_dims, mode, n_ctx };
-    memcpy(params + 4, &freq_base, sizeof(float));
+    memcpy(params + 4, &freq_base,  sizeof(float));
     memcpy(params + 5, &freq_scale, sizeof(float));
-    ggml_set_op_params(result, &params, sizeof(params));
+    ggml_set_op_params(result, params, sizeof(params));
 
     result->op   = GGML_OP_ROPE;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6797,7 +6798,7 @@ struct ggml_tensor * ggml_rope_back(
     struct ggml_tensor * result = ggml_dup_tensor(ctx, a);
 
     int32_t params[] = { n_past, n_dims, mode, n_ctx };
-    ggml_set_op_params(result, &params, sizeof(params));
+    ggml_set_op_params(result, params, sizeof(params));
 
     result->op   = GGML_OP_ROPE_BACK;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6828,7 +6829,7 @@ struct ggml_tensor * ggml_alibi(
 
     int32_t op_params[3] = { n_past, n_head };
     memcpy(op_params + 2, &bias_max, sizeof(float));
-    ggml_set_op_params(result, &op_params, sizeof(op_params));
+    ggml_set_op_params(result, op_params, sizeof(op_params));
 
     result->op   = GGML_OP_ALIBI;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6855,7 +6856,7 @@ struct ggml_tensor * ggml_clamp(
     struct ggml_tensor * result = ggml_view_tensor(ctx, a);
 
     float params[] = { min, max };
-    ggml_set_op_params(result, &params, sizeof(params));
+    ggml_set_op_params(result, params, sizeof(params));
 
     result->op   = GGML_OP_CLAMP;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6893,7 +6894,7 @@ GGML_API struct ggml_tensor * ggml_conv_1d(
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 2, ne);
 
     int32_t params[] = { s0, p0, d0 };
-    ggml_set_op_params(result, &params, sizeof(params));
+    ggml_set_op_params(result, params, sizeof(params));
 
     result->op = GGML_OP_CONV_1D;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6932,7 +6933,7 @@ struct ggml_tensor * ggml_conv_2d(
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 4, ne);
 
     int32_t params[] = { s0, s1, p0, p1, d0, d1 };
-    ggml_set_op_params(result, &params, sizeof(params));
+    ggml_set_op_params(result, params, sizeof(params));
 
     result->op = GGML_OP_CONV_2D;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6985,7 +6986,7 @@ struct ggml_tensor * ggml_pool_1d(
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 2, ne);
 
     int32_t params[] = { op, k0, s0, p0 };
-    ggml_set_op_params(result, &params, sizeof(params));
+    ggml_set_op_params(result, params, sizeof(params));
 
     result->op = GGML_OP_POOL_1D;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -7022,7 +7023,7 @@ struct ggml_tensor * ggml_pool_2d(
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 3, ne);
 
     int32_t params[] = { op, k0, k1, s0, s1, p0, p1 };
-    ggml_set_op_params(result, &params, sizeof(params));
+    ggml_set_op_params(result, params, sizeof(params));
 
     result->op = GGML_OP_POOL_2D;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -7190,7 +7191,7 @@ struct ggml_tensor * ggml_win_part(
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 4, ne);
 
     int32_t params[] = { npx, npy, w };
-    ggml_set_op_params(result, &params, sizeof(params));
+    ggml_set_op_params(result, params, sizeof(params));
 
     result->op   = GGML_OP_WIN_PART;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -7220,7 +7221,7 @@ struct ggml_tensor * ggml_win_unpart(
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 3, ne);
 
     int32_t params[] = { w };
-    ggml_set_op_params(result, &params, sizeof(params));
+    ggml_set_op_params(result, params, sizeof(params));
 
     result->op   = GGML_OP_WIN_UNPART;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
