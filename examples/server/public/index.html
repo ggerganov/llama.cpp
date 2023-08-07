@@ -319,10 +319,8 @@
         const isArrayMessage = Array.isArray(data)
         if (
           isArrayMessage &&
-          data.every(msg =>
-            msg.completion_probabilities &&
-            msg.completion_probabilities.length > 0
-          )
+          params.value.n_probs > 0 &&
+          data.every(msg => Array.isArray(msg.completion_probabilities))
         ) {
           message = html`<${Probabilites} data=${data} />`
         } else {
