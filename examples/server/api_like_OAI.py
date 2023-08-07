@@ -103,7 +103,7 @@ def make_postData(body, chat=False, stream=False):
         postData["stop"] = [stop_token]
     else:
         postData["stop"] = []
-    if(is_present(body, "stop")): postData["stop"] += body["stop"]
+    if(is_present(body, "stop")): postData["stop"] += body["stop"] or []
     postData["n_keep"] = -1
     postData["stream"] = stream
 
