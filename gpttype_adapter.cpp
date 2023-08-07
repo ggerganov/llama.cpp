@@ -243,7 +243,7 @@ void sample_temperature(llama_token_data_array * candidates_p, float temp)
     if (temp <= 0)
     {
         // Imitate greedy sampling
-        temp = 0.01f; //cannot be zero else div0
+        temp = 0.00390625f; //cannot be zero else div0, this is 1/256
         llama_sample_temperature(nullptr, candidates_p, temp);
         llama_sample_top_k(nullptr, candidates_p, 1, 1); //only want first candidate
     }
