@@ -937,6 +937,11 @@ bool llama_mlock_supported() {
     return llama_mlock::SUPPORTED;
 }
 
+int get_blas_batch_mul(int batch)
+{
+    return (batch>512?(batch>1024?4:2):1);
+}
+
 void llama_backend_init(bool numa) {
     ggml_time_init();
 
@@ -1042,7 +1047,7 @@ static void llama_model_load_internal(
         void * progress_callback_user_data) {
 
     model.t_start_us = ggml_time_us();
-    size_t blasbatchmul = (n_batch>512?(n_batch>1024?4:2):1);
+    size_t blasbatchmul = get_blas_batch_mul(n_batch);
 
     std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, use_mmap));
 
@@ -3234,7 +3239,7 @@ struct llama_context * llama_new_context_with_model(
         params.seed = time(NULL);
     }
 
-    size_t blasbatchmul = (n_batch>512?(n_batch>1024?4:2):1);
+    size_t blasbatchmul = get_blas_batch_mul(params.n_batch);
 
     unsigned cur_percentage = 0;
     if (params.progress_callback == NULL) {
