@@ -3234,7 +3234,7 @@ struct llama_context * llama_new_context_with_model(
         params.seed = time(NULL);
     }
 
-    size_t blasbatchmul = (params.n_batch>512?2:1);
+    size_t blasbatchmul = (n_batch>512?(n_batch>1024?4:2):1);
 
     unsigned cur_percentage = 0;
     if (params.progress_callback == NULL) {
