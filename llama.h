@@ -373,6 +373,11 @@ extern "C" {
     LLAMA_API llama_token llama_token_eos();  // end-of-sentence
     LLAMA_API llama_token llama_token_nl();   // next-line
 
+    LLAMA_API void llama_add_special_token(
+              struct llama_model * model,
+                      const char * token,
+                      llama_token token_id);
+
     // Grammar
     //
     LLAMA_API struct llama_grammar * llama_grammar_init(

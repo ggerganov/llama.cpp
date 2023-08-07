@@ -281,6 +281,15 @@ struct llama_vocab {
     llama_trie special_token_trie;
     std::unordered_map<token, id> special_token_to_id;
     size_t max_special_token_length = 0;
+
+    void add_special_token(const token & word, id token_id) {
+        special_token_trie.add(word);
+        special_token_to_id[word] = token_id;
+
+        if (max_special_token_length < word.size()) {
+            max_special_token_length = word.size();
+        }
+    }
 };
 
 struct llama_model {
@@ -624,15 +633,8 @@ struct llama_file_loader {
         for (uint32_t i = 0; i < vocab_sp; i++) {
             llama_vocab::id token_id = i > 2 ? hparams.n_vocab_base + i : i;
             const auto & word = vocab.id_to_token[token_id].tok;
-            if (word.empty()) {
-                continue;
-            }
-
-            vocab.special_token_trie.add(word);
-            vocab.special_token_to_id[word] = token_id;
-
-            if (vocab.max_special_token_length < word.size()) {
-                vocab.max_special_token_length = word.size();
+            if (!word.empty()) {
+                vocab.add_special_token(word, token_id);
             }
         }
     }
@@ -4261,6 +4263,10 @@ llama_token llama_token_eos() {
 
 llama_token llama_token_nl() {
     return 13;
+}
+
+void llama_add_special_token(struct llama_model * model, const char * token, llama_token token_id) {
+    model->vocab.add_special_token(token, token_id);
 }
 
 struct llama_timings llama_get_timings(struct llama_context * ctx) {
