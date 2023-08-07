@@ -1274,7 +1274,11 @@ int main(int argc, char **argv)
                 sink.done();
                 return true;
             };
-            res.set_chunked_content_provider("text/event-stream", chunked_content_provider);
+            const auto on_complete = [&](bool) {
+                llama.mutex.unlock();
+            };
+            lock.release();
+            res.set_chunked_content_provider("text/event-stream", chunked_content_provider, on_complete);
         } });
 
     svr.Get("/model.json", [&llama](const Request &, Response &res)

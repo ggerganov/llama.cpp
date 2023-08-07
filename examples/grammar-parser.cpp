@@ -405,7 +405,7 @@ namespace grammar_parser {
             for (size_t i = 0, end = state.rules.size(); i < end; i++) {
                 // fprintf(file, "%zu: ", i);
                 // print_rule_binary(file, state.rules[i]);
-                print_rule(file, i, state.rules[i], symbol_id_names);
+                print_rule(file, uint32_t(i), state.rules[i], symbol_id_names);
                 // fprintf(file, "\n");
             }
         } catch (const std::exception & err) {
