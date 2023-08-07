@@ -3,6 +3,8 @@
 " Then start with either :call llama#doLlamaGen(),
 " or add a keybind to your vimrc such as
 " nnoremap Z :call llama#doLlamaGen()<CR>
+" Similarly, you could add an insert mode keybind with
+" inoremap <C-B> <Cmd>call llama#doLlamaGen()<CR>
 "
 " g:llama_api_url and g:llama_overrides can be configured in your .vimrc
 " let g:llama_api_url = "192.168.1.10:8080"
@@ -41,7 +43,7 @@ func s:callbackHandler(bufn, channel, msg)
    let l:decoded_msg = json_decode(l:msg)
    let l:newtext = split(l:decoded_msg['content'], "\n", 1)
    if len(l:newtext) > 0
-      call setbufline(a:bufn, s:linedict[a:bufn], getbufoneline(a:bufn, s:linedict[a:bufn]) .. newtext[0])
+      call setbufline(a:bufn, s:linedict[a:bufn], getbufline(a:bufn, s:linedict[a:bufn])[0] .. newtext[0])
    else
       echo "nothing genned"
    endif
