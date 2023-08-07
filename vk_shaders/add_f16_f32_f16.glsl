@@ -1,10 +1,12 @@
 #version 450
 
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+
 layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 
-layout (binding = 0) buffer X { float data_x[]; };
+layout (binding = 0) buffer X { float16_t data_x[]; };
 layout (binding = 1) buffer Y { float data_y[]; };
-layout (binding = 2) buffer D { float data_d[]; };
+layout (binding = 2) buffer D { float16_t data_d[]; };
 
 layout (push_constant) uniform parameter
 {
@@ -27,5 +29,5 @@ void main() {
         return;
     }
 
-    data_d[p.d_offset + y * p.stride_d + x] = data_x[p.x_offset + y * p.stride_x + x] * data_y[p.y_offset + x];
+    data_d[p.d_offset + y * p.stride_d + x] = data_x[p.x_offset + y * p.stride_x + x] + float16_t(data_y[p.y_offset + x]);
 }

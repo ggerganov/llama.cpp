@@ -27,5 +27,5 @@ void main() {
         return;
     }
 
-    data_d[p.d_offset + y * p.stride_d + x] = data_x[p.x_offset + y * p.stride_x + x] * data_y[p.y_offset + x];
+    data_d[p.d_offset + y * p.stride_d + x] = data_x[p.x_offset + y * p.stride_x + x] + data_y[p.y_offset + x];
 }
