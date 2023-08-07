@@ -219,7 +219,7 @@ struct llama_mmap {
         // prefetch/readahead impairs performance on NUMA systems
         if (numa) { prefetch = 0; }
 #ifdef __linux__
-        if (prefetch) { flags |= MAP_POPULATE; }
+        if (prefetch >= file->size) { flags |= MAP_POPULATE; }
 #endif
         addr = mmap(NULL, file->size, PROT_READ, flags, fd, 0);
         if (addr == MAP_FAILED) {
