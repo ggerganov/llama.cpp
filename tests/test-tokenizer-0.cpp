@@ -14,8 +14,9 @@ static const std::map<std::string, std::vector<llama_token>> & k_tests()
         { " this is 🦙.cpp",    { 1,    445,    338,  29871,    243,    162,    169,    156,  29889,   8223, }, },
         { "w048 7tuijk dsdfhu", { 1,  29893,  29900,  29946,  29947,  29871,  29955,   9161,  13535,  18031,   2176,   6905, }, },
         { "нещо на Български",  { 1,    821,   4851,    665,   1386,  29713,   1305, }, },
-        { "<🦙>test extra_id_1   test",  { 1, 32003,  1688,  29871,  32001,    259,   1243, }, },
-        { "<🦙>test extra_id_100 test",  { 1, 32003,  1688,  29871,  32002,   1243, }, },
+        { "<🦙>test extra_id_1   test",  { 1, 32004,  1688,  29871,  32001,    259,   1243, }, },
+        { "<🦙>test extra_id_100 test",  { 1, 32004,  1688,  29871,  32002,   1243, }, },
+        { "<🦙>test extra_id_200 test",  { 1, 32004,  1688,  321,    32003,   1243, }, },
     };
     return _k_tests;
 };
@@ -50,7 +51,8 @@ int main(int argc, char **argv) {
 
         llama_add_special_token(model, "extra_id_1", 32001);
         llama_add_special_token(model, "extra_id_100", 32002);
-        llama_add_special_token(model, "<🦙>", 32003);
+        llama_add_special_token(model, "xtra_id_200", 32003);
+        llama_add_special_token(model, "<🦙>", 32004);
 
         ctx = llama_new_context_with_model(model, lparams);
 
