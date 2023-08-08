@@ -137,6 +137,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.prompt_cache_all = true;
         } else if (arg == "--prompt-cache-ro") {
             params.prompt_cache_ro = true;
+        } else if (arg == "--prompt-cache-clobber") {
+            params.prompt_cache_clobber = true;
         } else if (arg == "-f" || arg == "--file") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -537,6 +539,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "  --prompt-cache-all    if specified, saves user input and generations to cache as well.\n");
     fprintf(stdout, "                        not supported with --interactive or other interactive options\n");
     fprintf(stdout, "  --prompt-cache-ro     if specified, uses the prompt cache but does not update it.\n");
+    fprintf(stdout, "  --prompt-cache-clobber\n");
+    fprintf(stdout, "                        if error on loading prompt cache, treat as new file\n");
     fprintf(stdout, "  --random-prompt       start with a randomized prompt.\n");
     fprintf(stdout, "  --in-prefix-bos       prefix BOS to user inputs, preceding the `--in-prefix` string\n");
     fprintf(stdout, "  --in-prefix STRING    string to prefix user inputs with (default: empty)\n");

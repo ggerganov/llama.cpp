@@ -68,14 +68,15 @@ struct gpt_params {
     bool hellaswag         = false; // compute HellaSwag score over random tasks from datafile supplied in prompt
     size_t hellaswag_tasks = 400;   // number of tasks to use when computing the HellaSwag score
 
-    bool low_vram          = false; // if true, reduce VRAM usage at the cost of performance
-    bool mul_mat_q         = false; // if true, use experimental mul_mat_q kernels
-    bool memory_f16        = true;  // use f16 instead of f32 for memory kv
-    bool random_prompt     = false; // do not randomize prompt if none provided
-    bool use_color         = false; // use color to distinguish generations and inputs
-    bool interactive       = false; // interactive mode
-    bool prompt_cache_all  = false; // save user input and generations to prompt cache
-    bool prompt_cache_ro   = false; // open the prompt cache read-only and do not update it
+    bool low_vram             = false; // if true, reduce VRAM usage at the cost of performance
+    bool mul_mat_q            = false; // if true, use experimental mul_mat_q kernels
+    bool memory_f16           = true;  // use f16 instead of f32 for memory kv
+    bool random_prompt        = false; // do not randomize prompt if none provided
+    bool use_color            = false; // use color to distinguish generations and inputs
+    bool interactive          = false; // interactive mode
+    bool prompt_cache_all     = false; // save user input and generations to prompt cache
+    bool prompt_cache_ro      = false; // open the prompt cache read-only and do not update it
+    bool prompt_cache_clobber = false; // if error on loading prompt cache, treat as new file
 
     bool embedding         = false; // get only sentence embedding
     bool interactive_first = false; // wait for user input immediately

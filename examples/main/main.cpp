@@ -167,26 +167,35 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> session_tokens;
 
     if (!path_session.empty()) {
-        fprintf(stderr, "%s: attempting to load saved session from '%s'\n", __func__, path_session.c_str());
+        auto load_session = [&ctx, &params, &path_session, &session_tokens]() {
+            fprintf(stderr, "load_session: attempting to load saved session from '%s'\n" , path_session.c_str());
 
-        // fopen to check for existing session
-        FILE * fp = std::fopen(path_session.c_str(), "rb");
-        if (fp != NULL) {
+            // fopen to check for existing session
+            FILE * fp = std::fopen(path_session.c_str(), "rb");
+            if (fp == NULL) {
+                fprintf(stderr, "load_session: session file does not exist, will create\n");
+                return;
+            }
             std::fclose(fp);
 
             session_tokens.resize(params.n_ctx);
             size_t n_token_count_out = 0;
-            if (!llama_load_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.capacity(), &n_token_count_out)) {
-                fprintf(stderr, "%s: error: failed to load session file '%s'\n", __func__, path_session.c_str());
-                return 1;
+            if (llama_load_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.capacity(), &n_token_count_out)) {
+                session_tokens.resize(n_token_count_out);
+                llama_set_rng_seed(ctx, params.seed);
+                fprintf(stderr, "load_session: loaded a session with prompt size of %d tokens\n", (int)session_tokens.size());
+                return;
             }
-            session_tokens.resize(n_token_count_out);
-            llama_set_rng_seed(ctx, params.seed);
 
-            fprintf(stderr, "%s: loaded a session with prompt size of %d tokens\n", __func__, (int) session_tokens.size());
-        } else {
-            fprintf(stderr, "%s: session file does not exist, will create\n", __func__);
-        }
+            fprintf(stderr, "load_session: error: failed to load session file '%s'\n", path_session.c_str());
+            if (params.prompt_cache_clobber) {
+                fprintf(stderr, "load_session: attempting to clobber session file\n");
+            } else {
+                fprintf(stderr, "load_session: use --prompt-cache-clobber to overwrite this file\n");
+                std::exit(1);
+            }
+        };
+        load_session();
     }
 
     // tokenize the prompt
