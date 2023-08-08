@@ -549,56 +549,58 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt2
 
         model.layers.resize(n_layer);
 
-        model.wte    = ggml_get_tensor(ctx, "gpt_neox.embed_in.weight");
-        model.ln_f_g = ggml_get_tensor(ctx, "gpt_neox.final_layer_norm.weight");
-        model.ln_f_b = ggml_get_tensor(ctx, "gpt_neox.final_layer_norm.bias");
-        model.lmh_g  = ggml_get_tensor(ctx, "embed_out.weight");
+        model.wte    = ggml_get_tensor(ctx, "transformer.token_embd.weight");
+        model.ln_f_g = ggml_get_tensor(ctx, "transformer.output_norm.weight");
+        model.ln_f_b = ggml_get_tensor(ctx, "transformer.output_norm.bias");
+        model.lmh_g  = ggml_get_tensor(ctx, "transformer.output.weight");
 
         // map by name
-        model.tensors["gpt_neox.embed_in.weight"] = model.wte;
-        model.tensors["gpt_neox.final_layer_norm.weight"] = model.ln_f_g;
-        model.tensors["gpt_neox.final_layer_norm.bias"]   = model.ln_f_b;
-        model.tensors["embed_out.weight"] = model.lmh_g;
+        model.tensors["transformer.token_embd.weight"] = model.wte;
+        model.tensors["transformer.output_norm.weight"] = model.ln_f_g;
+        model.tensors["transformer.output_norm.bias"]   = model.ln_f_b;
+        model.tensors["transformer.output.weight"] = model.lmh_g;
 
         for (int i = 0; i < n_layer; ++i) {
             auto & layer = model.layers[i];
 
-            layer.ln_1_g          = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".input_layernorm.weight" );
-            layer.ln_1_b          = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".input_layernorm.bias" );
+            std::string blocknamestart = "transformer.blocks." + std::to_string(i) + ".";
 
-            layer.c_attn_attn_w   = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".attention.query_key_value.weight" );
-            layer.c_attn_attn_b   = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".attention.query_key_value.bias" );
+            layer.ln_1_g          = get_tensor_ex(ctx, blocknamestart + "attn_norm_1.weight" );
+            layer.ln_1_b          = get_tensor_ex(ctx, blocknamestart + "attn_norm_1.bias" );
 
-            layer.c_attn_proj_w   = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".attention.dense.weight" );
-            layer.c_attn_proj_b   = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".attention.dense.bias" );
+            layer.c_attn_attn_w   = get_tensor_ex(ctx, blocknamestart + "attn_qkv.weight" );
+            layer.c_attn_attn_b   = get_tensor_ex(ctx ,blocknamestart + "attn_qkv.bias" );
 
-            layer.ln_2_g          = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".post_attention_layernorm.weight" );
-            layer.ln_2_b          = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".post_attention_layernorm.bias");
+            layer.c_attn_proj_w   = get_tensor_ex(ctx, blocknamestart + "attn_output.weight" );
+            layer.c_attn_proj_b   = get_tensor_ex(ctx, blocknamestart + "attn_output.bias" );
 
-            layer.c_mlp_fc_w      = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".mlp.dense_h_to_4h.weight" );
-            layer.c_mlp_fc_b      = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".mlp.dense_h_to_4h.bias" );
+            layer.ln_2_g          = get_tensor_ex(ctx, blocknamestart + "ffn_norm.weight" );
+            layer.ln_2_b          = get_tensor_ex(ctx, blocknamestart + "ffn_norm.bias");
 
-            layer.c_mlp_proj_w    = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".mlp.dense_4h_to_h.weight" );
-            layer.c_mlp_proj_b    = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".mlp.dense_4h_to_h.bias" );
+            layer.c_mlp_fc_w      = get_tensor_ex(ctx, blocknamestart + "ffn_up.weight" );
+            layer.c_mlp_fc_b      = get_tensor_ex(ctx, blocknamestart + "ffn_up.bias" );
+
+            layer.c_mlp_proj_w    = get_tensor_ex(ctx, blocknamestart + "ffn_down.weight" );
+            layer.c_mlp_proj_b    = get_tensor_ex(ctx, blocknamestart + "ffn_down.bias" );
 
             // map by name
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".input_layernorm.weight"] = layer.ln_1_g;
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".input_layernorm.bias"]   = layer.ln_1_b;
+            model.tensors[blocknamestart + "attn_norm_1.weight"] = layer.ln_1_g;
+            model.tensors[blocknamestart + "attn_norm_1.bias"]   = layer.ln_1_b;
 
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".attention.query_key_value.weight"] = layer.c_attn_attn_w;
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".attention.query_key_value.bias"]   = layer.c_attn_attn_b;
+            model.tensors[blocknamestart + "attn_qkv.weight"] = layer.c_attn_attn_w;
+            model.tensors[blocknamestart + "attn_qkv.bias"]   = layer.c_attn_attn_b;
 
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".attention.dense.weight"] = layer.c_attn_proj_w;
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".attention.dense.bias"]   = layer.c_attn_proj_b;
+            model.tensors[blocknamestart + "attn_output.weight"] = layer.c_attn_proj_w;
+            model.tensors[blocknamestart + "attn_output.bias"]   = layer.c_attn_proj_b;
 
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".post_attention_layernorm.weight"] = layer.ln_2_g;
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".post_attention_layernorm.bias"]   = layer.ln_2_b;
+            model.tensors[blocknamestart + "ffn_norm.weight"] = layer.ln_2_g;
+            model.tensors[blocknamestart + "ffn_norm.bias"]   = layer.ln_2_b;
 
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".mlp.dense_h_to_4h.weight"] = layer.c_mlp_fc_w;
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".mlp.dense_h_to_4h.bias"]   = layer.c_mlp_fc_b;
+            model.tensors[blocknamestart + "ffn_up.weight"] = layer.c_mlp_fc_w;
+            model.tensors[blocknamestart + "ffn_up.bias"]   = layer.c_mlp_fc_b;
 
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".mlp.dense_4h_to_h.weight"] = layer.c_mlp_proj_w;
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".mlp.dense_4h_to_h.bias"]   = layer.c_mlp_proj_b;
+            model.tensors[blocknamestart + "ffn_down.weight"] = layer.c_mlp_proj_w;
+            model.tensors[blocknamestart + "ffn_down.bias"]   = layer.c_mlp_proj_b;
         }
     }
 
