@@ -3,12 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="color-scheme" content="light dark">
   <title>llama.cpp - chat</title>
 
   <style>
     body {
-      background-color: #fff;
-      color: #000;
       font-family: system-ui;
       font-size: 90%;
       max-width: 600px;
@@ -103,6 +102,36 @@
       margin: 0;
     }
 
+    fieldset.two {
+      display: grid;
+      grid-template: "a a";
+      gap: 1em;
+    }
+
+    fieldset.three {
+      display: grid;
+      grid-template: "a a a";
+      gap: 1em;
+    }
+
+    details {
+      border: 1px solid #aaa;
+      border-radius: 4px;
+      padding: 0.5em 0.5em 0;
+      margin-top: 0.5em;
+    }
+
+    summary {
+      font-weight: bold;
+      margin: -0.5em -0.5em 0;
+      padding: 0.5em;
+      cursor: pointer;
+    }
+
+    details[open] {
+      padding: 0.5em;
+    }
+
     textarea {
       padding: 5px;
       flex-grow: 1;
@@ -122,7 +151,7 @@
 
     fieldset label {
       margin: 0.5em 0;
-      /*display: block;*/
+      display: block;
     }
 
     header, footer {
@@ -152,21 +181,21 @@
     })
 
     const params = signal({
-      n_predict: 400,
-      top_k: 40,
-      top_p: 0.95,
-      tfs_z: 1.0,
-      typical_p: 1.0,
-      temperature: 0.7,
-      repeat_penalty: 1.18,
-      frequency_penalty: 0.0,
-      presence_penalty: 0.0,
-      repeat_last_n: 256,
-      mirostat: 0,
-      mirostat_tau: 5.0,
-      mirostat_eta: 0.1,
       cfg_scale: 4.0,
+      frequency_penalty: 0.0, // 0.0 = disabled
+      mirostat_eta: 0.1, // learning rate
+      mirostat_tau: 5, // target entropy
+      mirostat: 0, // 0/1/2
+      n_predict: 400,
       penalize_nl: true,
+      presence_penalty: 0.0, // 0.0 = disabled
+      repeat_last_n: 256, // 0 = disable penalty, -1 = context size
+      repeat_penalty: 1.18, // 1.0 = disabled
+      temperature: 0.7,
+      tfs_z: 1.0, // 1.0 = disabled
+      top_k: 40, // <= 0 to use vocab size
+      top_p: 0.5, // 1.0 = disabled
+      typical_p: 1.0, // 1.0 = disabled
     })
 
     const llamaStats = signal(null)
@@ -305,29 +334,48 @@
       `
     }
 
+    const updateSession = (el) => session.value = { ...session.value, [el.target.name]: el.target.value }
+    const updateParams = (el) => params.value = { ...params.value, [el.target.name]: el.target.value }
+    const updateParamsFloat = (el) => params.value = { ...params.value, [el.target.name]: parseFloat(el.target.value) }
+    const updateParamsInt = (el) => params.value = { ...params.value, [el.target.name]: Math.floor(parseFloat(el.target.value)) }
+    const updateArray = (el) => {
+        const [name, index] = el.target.name.split(".")
+        const newarr = session.value[name].map((v, i) => i == index ? el.target.value : v).filter(x => x !== "")
+        session.value = { ...session.value, [name]: newarr }
+    }
+    const appendArray = () => session.value = { ...session.value, stop: [...session.value.stop, ""] }
+
     const ParamSlider = ({param, min, max, step, children}) => {
-      const updateParamsFloat = (el) => params.value = { ...params.value, [param]: parseFloat(el.target.value) }
       return html`
         <div>
-          <label for="${param}"><code>${param}</code></label>
+          <label for="${param}">${children}</label>
           <input type="range" id="${param}" min="${min}" max="${max}" step="${step}" name="${param}" value="${params.value[param]}" oninput=${updateParamsFloat} />
           <span>${params.value[param]}</span>
-          <span>${children}</span>
         </div>
       `
     }
 
-    const ConfigForm = (props) => {
-      const updateSession = (el) => session.value = { ...session.value, [el.target.name]: el.target.value }
-      const updateParams = (el) => params.value = { ...params.value, [el.target.name]: el.target.value }
-      const updateParamsFloat = (el) => params.value = { ...params.value, [el.target.name]: parseFloat(el.target.value) }
-      const appendArray = () => session.value = { ...session.value, stop: [...session.value.stop, ""] }
-      const updateArray = (el) => {
-        const [name, index] = el.target.name.split(".")
-        const newarr = session.value[name].map((v, i) => i == index ? el.target.value : v).filter(x => x !== "")
-        session.value = { ...session.value, [name]: newarr }
-      }
+    const FloatField = ({label, max, min, name, step, value}) => {
+      return html`
+        <div>
+          <label for="${name}">${label}</label>
+          <input type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsFloat} />
+          <span>${value}</span>
+        </div>
+      `
+    };
 
+    const IntField = ({label, max, min, name, value}) => {
+      return html`
+        <div>
+          <label for="${name}">${label}</label>
+          <input type="range" id="${name}" min="${min}" max="${max}" name="${name}" value="${value}" oninput=${updateParamsInt} />
+          <span>${value}</span>
+        </div>
+      `
+    };
+
+    const ConfigForm = (props) => {
       return html`
         <form>
           <fieldset>
@@ -356,7 +404,9 @@
                 <textarea type="text" name="system_cfg" value="${session.value.system_cfg}" rows=4 oninput=${updateSession}/>
               </div>
             `}
+          </fieldset>
 
+          <fieldset class="two">
             <${ParamSlider} min=1 max=1000 step=1 param=n_predict>Predict N tokens<//>
             <${ParamSlider} min=0 max=1000 step=1 param=repeat_last_n>Penalize last N tokens<//>
             ${params.value.repeat_last_n > 0 && html`
@@ -365,18 +415,26 @@
               <${ParamSlider} min=0 max=4 step=0.01 param=presence_penalty>Penalize tokens not present in prompt<//>
             `}
             <${ParamSlider} min=0 max=2 step=0.01 param=temperature>Temperature<//>
-            ${params.value.temperature > 0 && html`
-              <div>
-                <input id=mirostat_0 type=radio name=mirostat checked=${params.value.mirostat == 0} value=0 oninput=${updateParamsFloat} />
-                <label for=mirostat_0>Temperature</label>
+          </fieldset>
 
-                <input id=mirostat_1 type=radio name=mirostat checked=${params.value.mirostat == 1} value=1 oninput=${updateParamsFloat} />
-                <label for=mirostat_1>Mirostat v1</label>
+          ${params.value.temperature > 0 && html`
+            <fieldset class="three">
+              <label>
+                <input type=radio name=mirostat checked=${params.value.mirostat == 0} value=0 oninput=${updateParamsFloat} />
+                Temperature
+              </label>
 
-                <input id=mirostat_2 type=radio name=mirostat checked=${params.value.mirostat == 2} value=2 oninput=${updateParamsFloat} />
-                <label for=mirostat_2>Mirostat v2</label>
-              </div>
+              <label><input type=radio name=mirostat checked=${params.value.mirostat == 1} value=1 oninput=${updateParamsFloat} />
+                Mirostat v1
+              </label>
 
+              <label>
+                <input type=radio name=mirostat checked=${params.value.mirostat == 2} value=2 oninput=${updateParamsFloat} />
+                Mirostat v2
+              </label>
+            </fieldset>
+
+            <fieldset class="two">
               ${params.value.mirostat == 0 && html`
                 <${ParamSlider} min=1 max=1000 step=1 param=top_k>Top K<//>
                 <${ParamSlider} min=0 max=1 step=0.01 param=tfs_z>Tail free sampling<//>
@@ -387,14 +445,17 @@
                 <${ParamSlider} min=0 max=1 step=0.01 param=mirostat_eta>Mirostat eta, learning rate<//>
                 <${ParamSlider} min=0 max=1000 step=1 param=mirostat_tau>Mirostat tau, target entropy<//>
               `}
+              </fieldset>
             `}
-          </fieldset>
         </form>
       `
     }
     // poor mans markdown replacement
     const Markdownish = (params) => {
       const md = params.text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
         .replace(/^#{1,6} (.*)$/gim, '<h3>$1</h3>')
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/__(.*?)__/g, '<strong>$1</strong>')

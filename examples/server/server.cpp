@@ -613,6 +613,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     fprintf(stdout, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
     fprintf(stdout, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
     fprintf(stdout, "  -gqa N, --gqa N       grouped-query attention factor (TEMP!!! use 8 for LLaMAv2 70B) (default: %d)\n", params.n_gqa);
+    fprintf(stdout, "  -eps N, --rms-norm-eps N rms norm eps (TEMP!!! use 1e-5 for LLaMAv2) (default: %.1e)\n", params.rms_norm_eps);
     fprintf(stdout, "  --rope-freq-base N    RoPE base frequency (default: %.1f)\n", params.rope_freq_base);
     fprintf(stdout, "  --rope-freq-scale N   RoPE frequency scaling factor (default: %g)\n", params.rope_freq_scale);
     fprintf(stdout, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
@@ -632,6 +633,9 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     fprintf(stdout, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
     fprintf(stdout, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
     fprintf(stdout, "  -lv, --low-vram don't allocate VRAM scratch buffer\n");
+    fprintf(stdout, "  -mmq, --mul-mat-q     use experimental mul_mat_q CUDA kernels instead of cuBLAS. TEMP!!!\n" );
+    fprintf(stdout, "                        Reduces VRAM usage by 700/970/1430 MiB for 7b/13b/33b but prompt processing speed\n" );
+    fprintf(stdout, "                        is still suboptimal, especially q2_K, q3_K, q5_K, and q6_K.\n" );
 #endif
     fprintf(stdout, "  -m FNAME, --model FNAME\n");
     fprintf(stdout, "                        model path (default: %s)\n", params.model.c_str());
@@ -708,6 +712,12 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 break;
             }
             params.n_gqa = std::stoi(argv[i]);
+        } else if (arg == "-eps" || arg == "--rms-norm-eps") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.rms_norm_eps = std::stof(argv[i]);
         } else if (arg == "--rope-freq-base") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -769,13 +779,19 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 }
             }
 #else
-            LOG_WARNING("llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.", {});
+            LOG_WARNING("llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.\n", {});
 #endif // GGML_USE_CUBLAS
         } else if (arg == "--low-vram" || arg == "-lv") {
 #ifdef GGML_USE_CUBLAS
             params.low_vram = true;
 #else
-            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n");
+            LOG_WARNING("warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n", {});
+#endif // GGML_USE_CUBLAS
+        } else if (arg == "--mul-mat-q" || arg == "-mmq") {
+#ifdef GGML_USE_CUBLAS
+            params.mul_mat_q = true;
+#else
+            LOG_WARNING("warning: llama.cpp was compiled without cuBLAS. It is not possible to use mul_mat_q kernels.\n", {});
 #endif // GGML_USE_CUBLAS
         } else if (arg == "--main-gpu" || arg == "-mg") {
             if (++i >= argc) {

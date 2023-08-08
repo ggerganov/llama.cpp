@@ -177,6 +177,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.n_gqa = std::stoi(argv[i]);
+        } else if (arg == "-eps" || arg == "--rms-norm-eps") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.rms_norm_eps = std::stof(argv[i]);
         } else if (arg == "--rope-freq-base") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -346,7 +352,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 #ifdef GGML_USE_CUBLAS
             params.main_gpu = std::stoi(argv[i]);
 #else
-      fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a main GPU.\n");
+            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a main GPU.\n");
 #endif
         } else if (arg == "--tensor-split" || arg == "-ts") {
             if (++i >= argc) {
@@ -370,13 +376,19 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 }
             }
 #else
-      fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.\n");
+            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.\n");
+#endif // GGML_USE_CUBLAS
+        } else if (arg == "--mul-mat-q" || arg == "-mmq") {
+#ifdef GGML_USE_CUBLAS
+            params.mul_mat_q = true;
+#else
+            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to use mul_mat_q kernels.\n");
 #endif // GGML_USE_CUBLAS
         } else if (arg == "--low-vram" || arg == "-lv") {
 #ifdef GGML_USE_CUBLAS
             params.low_vram = true;
 #else
-      fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n");
+            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n");
 #endif // GGML_USE_CUBLAS
         } else if (arg == "--no-mmap") {
             params.use_mmap = false;
@@ -396,8 +408,14 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.antiprompt.push_back(argv[i]);
         } else if (arg == "--perplexity") {
             params.perplexity = true;
-        } else if (arg == "--perplexity-lines") {
-            params.perplexity_lines = true;
+        } else if (arg == "--hellaswag") {
+            params.hellaswag = true;
+        } else if (arg == "--hellaswag-tasks") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.hellaswag_tasks = std::stoi(argv[i]);
         } else if (arg == "--ignore-eos") {
             params.logit_bias[llama_token_eos()] = -INFINITY;
         } else if (arg == "--no-penalize-nl") {
@@ -426,6 +444,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             exit(0);
         } else if (arg == "--random-prompt") {
             params.random_prompt = true;
+        } else if (arg == "--in-prefix-bos") {
+            params.input_prefix_bos = true;
         } else if (arg == "--in-prefix") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -511,6 +531,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "                        not supported with --interactive or other interactive options\n");
     fprintf(stdout, "  --prompt-cache-ro     if specified, uses the prompt cache but does not update it.\n");
     fprintf(stdout, "  --random-prompt       start with a randomized prompt.\n");
+    fprintf(stdout, "  --in-prefix-bos       prefix BOS to user inputs, preceding the `--in-prefix` string\n");
     fprintf(stdout, "  --in-prefix STRING    string to prefix user inputs with (default: empty)\n");
     fprintf(stdout, "  --in-suffix STRING    string to suffix after user inputs with (default: empty)\n");
     fprintf(stdout, "  -f FNAME, --file FNAME\n");
@@ -519,6 +540,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
     fprintf(stdout, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     fprintf(stdout, "  -gqa N, --gqa N       grouped-query attention factor (TEMP!!! use 8 for LLaMAv2 70B) (default: %d)\n", params.n_gqa);
+    fprintf(stdout, "  -eps N, --rms-norm-eps N rms norm eps (TEMP!!! use 1e-5 for LLaMAv2) (default: %.1e)\n", params.rms_norm_eps);
     fprintf(stdout, "  --top-k N             top-k sampling (default: %d, 0 = disabled)\n", params.top_k);
     fprintf(stdout, "  --top-p N             top-p sampling (default: %.1f, 1.0 = disabled)\n", (double)params.top_p);
     fprintf(stdout, "  --tfs N               tail free sampling, parameter z (default: %.1f, 1.0 = disabled)\n", (double)params.tfs_z);
@@ -549,8 +571,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "                        not recommended: doubles context memory required and no measurable increase in quality\n");
     fprintf(stdout, "  --temp N              temperature (default: %.1f)\n", (double)params.temp);
     fprintf(stdout, "  --perplexity          compute perplexity over each ctx window of the prompt\n");
-    fprintf(stdout, "  --perplexity-lines    compute perplexity over each line of the prompt\n");
-    fprintf(stdout, "  --keep                number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
+    fprintf(stdout, "  --hellaswag           compute HellaSwag score over random tasks from datafile supplied with -f\n");
+    fprintf(stdout, "  --hellaswag-tasks N   number of tasks to use when computing the HellaSwag score (default: %zu)\n", params.hellaswag_tasks);
+    fprintf(stdout, "  --keep N              number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
     fprintf(stdout, "  --chunks N            max number of chunks to process (default: %d, -1 = all)\n", params.n_chunks);
     if (llama_mlock_supported()) {
         fprintf(stdout, "  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
@@ -568,6 +591,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
     fprintf(stdout, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n" );
     fprintf(stdout, "  -lv, --low-vram       don't allocate VRAM scratch buffer\n" );
+    fprintf(stdout, "  -mmq, --mul-mat-q     use experimental mul_mat_q CUDA kernels instead of cuBLAS. TEMP!!!\n" );
+    fprintf(stdout, "                        Reduces VRAM usage by 700/970/1430 MiB for 7b/13b/33b but prompt processing speed\n" );
+    fprintf(stdout, "                        is still suboptimal, especially q2_K, q3_K, q5_K, and q6_K.\n" );
 #endif
     fprintf(stdout, "  --mtest               compute maximum memory usage\n");
     fprintf(stdout, "  --export              export the computation graph to 'llama.ggml'\n");
@@ -615,10 +641,12 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     lparams.n_ctx           = params.n_ctx;
     lparams.n_batch         = params.n_batch;
     lparams.n_gqa           = params.n_gqa;
+    lparams.rms_norm_eps    = params.rms_norm_eps;
     lparams.n_gpu_layers    = params.n_gpu_layers;
     lparams.main_gpu        = params.main_gpu;
     lparams.tensor_split    = params.tensor_split;
     lparams.low_vram        = params.low_vram;
+    lparams.mul_mat_q       = params.mul_mat_q;
     lparams.seed            = params.seed;
     lparams.f16_kv          = params.memory_f16;
     lparams.use_mmap        = params.use_mmap;
