@@ -278,12 +278,10 @@ struct llama_vocab {
     std::unordered_map<token, id> token_to_id;
     std::vector<token_score> id_to_token;
 
-    llama_trie special_token_trie;
     std::unordered_map<token, id> special_token_to_id;
     size_t max_special_token_length = 0;
 
     void add_special_token(const token & word, id token_id) {
-        special_token_trie.add(word);
         special_token_to_id[word] = token_id;
 
         if (max_special_token_length < word.size()) {
@@ -2090,6 +2088,38 @@ private:
     llama_sp_bigram::queue work_queue_;
 };
 
+static std::vector<size_t> llama_split_special_tokens(const llama_vocab & vocab, const std::string & text) {
+    std::vector<size_t> offsets{0};
+    size_t start = 0;
+
+    while (start < text.size()) {
+        size_t max_end = start;
+        const std::string * max_delimiter = nullptr;
+
+        for (const auto & mit : vocab.special_token_to_id) {
+            const std::string & delimiter = mit.first;
+            size_t end = start + delimiter.size();
+            if (end <= text.size() && text.compare(start, delimiter.size(), delimiter) == 0) {
+                if (max_delimiter == nullptr || delimiter.size() > max_delimiter->size()) {
+                    max_end = end;
+                    max_delimiter = &delimiter;
+                }
+            }
+        }
+
+        if (max_delimiter != nullptr) {
+            offsets.push_back(start);
+            offsets.push_back(max_end);
+            start = max_end;
+        } else {
+            start++;
+        }
+    }
+
+    offsets.push_back(text.size());
+    return offsets;
+}
+
 static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, const std::string & text, bool bos) {
     llama_tokenizer tokenizer(vocab);
     std::vector<llama_vocab::id> output;
@@ -2107,7 +2137,7 @@ static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, co
         return output;
     }
 
-    std::vector<size_t> offsets = vocab.special_token_trie.split(text);
+    std::vector<size_t> offsets = llama_split_special_tokens(vocab, text);
     size_t start = 0;
     for (size_t end : offsets) {
         if (start >= end) {
