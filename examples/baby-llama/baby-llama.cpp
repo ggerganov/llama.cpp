@@ -8,7 +8,11 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-static const float rms_norm_eps = 1e-6f;
+#ifdef LLAMA_DEFAULT_RMS_EPS
+static const float rms_norm_eps = LLAMA_DEFAULT_RMS_EPS;
+#else
+static const float rms_norm_eps = 5e-6f;
+#endif
 
 float frand() {
     return (float)rand()/(float)RAND_MAX;

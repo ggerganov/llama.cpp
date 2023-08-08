@@ -53,6 +53,10 @@
 #define LLAMA_SUPPORTS_GPU_OFFLOAD
 #endif
 
+#ifndef LLAMA_DEFAULT_RMS_EPS
+#define LLAMA_DEFAULT_RMS_EPS 5e-6f
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -104,6 +108,7 @@ extern "C" {
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool low_vram;   // if true, reduce VRAM usage at the cost of performance
+        bool mul_mat_q;  // if true, use experimental mul_mat_q kernels
         bool f16_kv;     // use fp16 for KV cache
         bool logits_all; // the llama_eval() call computes all logits, not just the last one
         bool vocab_only; // only load the vocabulary, no weights

@@ -151,6 +151,8 @@ node .
 
     `mirostat_eta`: Set the Mirostat learning rate, parameter eta (default: 0.1).
 
+    `grammar`: Set grammar for grammar-based sampling (default: no grammar)
+
     `seed`: Set the random number generator (RNG) seed (default: -1, -1 = random seed).
 
     `ignore_eos`: Ignore end of stream token and continue generating (default: false).
@@ -163,7 +165,7 @@ node .
 
     `content`: Set the text to tokenize.
 
-    Note that the special `BOS` token is not added in fron of the text and also a space character is not inserted automatically as it is for `/completion`.
+    Note that the special `BOS` token is not added in front of the text and also a space character is not inserted automatically as it is for `/completion`.
 
 -   **POST** `/embedding`: Generate embedding of a given text just as [the embedding example](../embedding) does.
 
