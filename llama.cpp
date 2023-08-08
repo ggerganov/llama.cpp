@@ -150,7 +150,7 @@ static const std::map<e_model, size_t> & MEM_REQ_EVAL()
 }
 
 // amount of VRAM needed per batch size to hold temporary results
-// the values for 3b and 65b are not derived from testing but instead chosen conservatively
+// the values for 3b are not derived from testing but instead chosen conservatively
 static const std::map<e_model, size_t> & VRAM_REQ_SCRATCH_BASE()
 {
     static std::map<e_model, size_t> k_sizes = {
@@ -158,14 +158,14 @@ static const std::map<e_model, size_t> & VRAM_REQ_SCRATCH_BASE()
         { MODEL_7B,   512ull * kB },
         { MODEL_13B,  640ull * kB },
         { MODEL_30B,  768ull * kB },
-        { MODEL_65B, 1536ull * kB },
-        { MODEL_70B, 1536ull * kB }, // TODO (likely can be reduced)
+        { MODEL_65B, 1360ull * kB },
+        { MODEL_70B, 1360ull * kB },
     };
     return k_sizes;
 }
 
 // amount of VRAM needed per batch size and context to hold temporary results
-// the values for 3b and 65b are not derived from testing but instead chosen conservatively
+// the values for 3b are not derived from testing but instead chosen conservatively
 static const std::map<e_model, size_t> & VRAM_REQ_SCRATCH_PER_CONTEXT()
 {
     static std::map<e_model, size_t> k_sizes = {
@@ -173,8 +173,8 @@ static const std::map<e_model, size_t> & VRAM_REQ_SCRATCH_PER_CONTEXT()
         { MODEL_7B,  128ull },
         { MODEL_13B, 160ull },
         { MODEL_30B, 208ull },
-        { MODEL_65B, 416ull },
-        { MODEL_70B, 416ull }, // TODO (likely can be reduced)
+        { MODEL_65B, 320ull },
+        { MODEL_70B, 320ull },
     };
     return k_sizes;
 }

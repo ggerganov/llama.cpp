@@ -151,6 +151,8 @@ node .
 
     `mirostat_eta`: Set the Mirostat learning rate, parameter eta (default: 0.1).
 
+    `grammar`: Set grammar for grammar-based sampling (default: no grammar)
+
     `seed`: Set the random number generator (RNG) seed (default: -1, -1 = random seed).
 
     `ignore_eos`: Ignore end of stream token and continue generating (default: false).
