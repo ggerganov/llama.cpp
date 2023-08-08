@@ -153,15 +153,15 @@ int main(int argc, char ** argv)  {
     printf("Creating new tensors\n");
     // printf("Creating new tensor m1\n");
     struct ggml_tensor * m11 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, sizex, sizey);
-    ggml_set_f32(m11, 1.0f);
+    ggml_set_f32(m11, 1.2f);
 
     // printf("Creating new tensor m1\n");
     struct ggml_tensor * m12 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, sizex, sizey);
-    ggml_set_f32(m12, 1.5f);
+    ggml_set_f32(m12, 1.0f);
 
     // printf("Creating new tensor m2\n");
     struct ggml_tensor * m2 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, sizex, sizez);
-    ggml_set_f32(m2, 2.0f);
+    ggml_set_f32(m2, 0.8f);
 
     printf("\n------ Test 1 - Matrix Mult via F32 code ------------------------------------------------------------------------------\n");
     // printf("Creating new tensor m11xm2\n");
@@ -244,7 +244,7 @@ int main(int argc, char ** argv)  {
             usec,gflops);
 
 #ifdef VERBOSE_DEBUGGING
-        TENSOR_DUMP("res",gf31.nodes[0])
+        TENSOR_DUMP(gf31.nodes[0]);
 #endif
 
         // Check that the matrix multiplication result is in the right ballpark
