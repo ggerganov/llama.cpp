@@ -4243,6 +4243,15 @@ void llama_print_timings(struct llama_context * ctx) {
     fprintf(stderr, "%s:       total time = %8.2f ms\n", __func__, (timings.t_end_ms - timings.t_start_ms));
 }
 
+void llama_sqlite_append_timings(struct llama_context * ctx, std::ostringstream & sql_insert_values) {
+    sql_insert_values << ctx->t_sample_us << ",";
+    sql_insert_values << ctx->t_eval_us   << ",";
+    sql_insert_values << ctx->t_p_eval_us << ",";
+    sql_insert_values << ctx->n_sample    << ",";
+    sql_insert_values << ctx->n_eval      << ",";
+    sql_insert_values << ctx->n_p_eval    << ");";
+}
+
 void llama_reset_timings(struct llama_context * ctx) {
     ctx->t_start_us = ggml_time_us();
     ctx->t_sample_us = ctx->n_sample = 0;

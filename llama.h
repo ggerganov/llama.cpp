@@ -8,6 +8,7 @@
 #else
 #define LLAMA_MAX_DEVICES 1
 #endif // GGML_USE_CUBLAS
+#include <sstream>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -446,6 +447,7 @@ extern "C" {
     // Performance information
     LLAMA_API struct llama_timings llama_get_timings(struct llama_context * ctx);
     LLAMA_API void llama_print_timings(struct llama_context * ctx);
+    LLAMA_API void llama_sqlite_append_timings(struct llama_context * ctx, std::ostringstream & sql_insert_values);
     LLAMA_API void llama_reset_timings(struct llama_context * ctx);
 
     // Print system information

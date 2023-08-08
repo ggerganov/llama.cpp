@@ -47,7 +47,7 @@ OPT = -O3
 endif
 CFLAGS   = -I.              $(OPT) -std=c11   -fPIC
 CXXFLAGS = -I. -I./examples $(OPT) -std=c++11 -fPIC
-LDFLAGS  =
+LDFLAGS  = -lsqlite3
 
 ifdef LLAMA_DEBUG
 	CFLAGS   += -O0 -g

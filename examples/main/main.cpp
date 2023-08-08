@@ -17,8 +17,10 @@
 #include <ctime>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
+#include <sqlite3.h>
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 #include <signal.h>
@@ -162,6 +164,30 @@ int main(int argc, char ** argv) {
 
         return 0;
     }
+
+    sqlite3 * db = NULL;
+    int return_code;
+    const int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
+    return_code = sqlite3_open_v2("llama.sqlite", &db, flags, NULL);
+    fprintf(stderr, "\nsqlite open: %d %s\n\n", return_code, sqlite3_errmsg(db));
+
+    const std::string sql_create_table ="CREATE TABLE IF NOT EXISTS llama_runs("
+        "id           INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "build_number INTEGER NOT NULL,"
+        "build_commit TEXT NOT NULL,"
+
+        "n_gpu_layers BIGINT NOT NULL,"
+
+        "t_sample_us  BIGINT NOT NULL,"
+        "t_eval_us    BIGINT NOT NULL,"
+        "t_p_eval_us  BIGINT NOT NULL,"
+        "n_sample     BIGINT NOT NULL,"
+        "n_eval       BIGINT NOT NULL,"
+        "n_p_eval     BIGINT NOT NULL);";
+
+    char * errmsg;
+    return_code = sqlite3_exec(db, sql_create_table.c_str(), NULL, NULL, &errmsg);
+    fprintf(stderr, "\nsqlite create table: %d %s\n\n", return_code, errmsg);
 
     std::string path_session = params.path_prompt_cache;
     std::vector<llama_token> session_tokens;
@@ -808,6 +834,17 @@ int main(int argc, char ** argv) {
     }
 
     llama_print_timings(ctx);
+
+    std::ostringstream sql_insert_values;
+    sql_insert_values << "INSERT INTO llama_runs(build_number, build_commit, n_gpu_layers, "
+        "t_sample_us, t_eval_us, t_p_eval_us, n_sample, n_eval, n_p_eval) VALUES (";
+    sql_insert_values << BUILD_NUMBER << ",";
+    sql_insert_values << "'" << BUILD_COMMIT << "',";
+    sql_insert_values << params.n_gpu_layers << ",";
+    llama_sqlite_append_timings(ctx, sql_insert_values);
+    return_code = sqlite3_exec(db, sql_insert_values.str().c_str(), NULL, NULL, &errmsg);
+    fprintf(stderr, "\nsqlite insert data: %d %s\n\n", return_code, errmsg);
+
     if (ctx_guidance) { llama_free(ctx_guidance); }
     llama_free(ctx);
     llama_free_model(model);
