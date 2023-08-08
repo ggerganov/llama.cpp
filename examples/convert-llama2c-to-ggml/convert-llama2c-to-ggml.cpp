@@ -16,7 +16,7 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-//////////////////////////////////////// llama.c model structs and functions to load models, alloc memory etc.
+//////////////////////////////////////// llama2.c model structs and functions to load models, alloc memory etc.
 typedef struct {
     int dim; // transformer dimension
     int hidden_dim; // for ffn layers
@@ -582,9 +582,7 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
         stuff_karpathy_weights_into_gg(layer.wo            , &w->wo[i*row_length*row_length]);
         
         stuff_karpathy_weights_into_gg(layer.w1            , &w->w1[i*row_length*n_ff]);
-        
         stuff_karpathy_weights_into_gg(layer.w2            , &w->w2[i*n_ff*row_length]);
-        
         stuff_karpathy_weights_into_gg(layer.w3            , &w->w3[i*row_length*n_ff]);
     }
     // write tensors
