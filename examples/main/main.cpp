@@ -38,6 +38,7 @@
 
 static llama_context ** g_ctx;
 static bool is_interacting = false;
+static int tokens_displayed = 0; // used to trim leading whitespace from first tokens
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
 void sigint_handler(int signo) {
@@ -659,7 +660,11 @@ int main(int argc, char ** argv) {
         // display text
         if (input_echo) {
             for (auto id : embd) {
-                printf("%s", llama_token_to_str(ctx, id));
+                std::string token = llama_token_to_str(ctx, id);
+                if (tokens_displayed++ < 2) {
+                    token.erase(0, token.find_first_not_of(' ')); // remove leading whitespaces
+                }
+                printf("%s", token.c_str());
             }
             fflush(stdout);
         }
