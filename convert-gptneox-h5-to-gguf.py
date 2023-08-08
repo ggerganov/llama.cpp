@@ -1,6 +1,7 @@
 # Quick and dirty HF gptneox--> gguf conversion
 
 import gguf
+import gguf_tensor_map as tmap
 import os
 import sys
 import struct
@@ -31,6 +32,7 @@ def bytes_to_unicode():
             n += 1
     cs = [chr(n) for n in cs]
     return dict(zip(bs, cs))
+
 
 if len(sys.argv) < 3:
     print("Usage: convert-h5-to-ggml.py dir-model ftype\n")
@@ -74,16 +76,17 @@ list_vars = model.state_dict()
 
 gguf_writer = gguf.GGUFWriter.open(fname_out)
 
-print("gguf: add metadata")
+print("gguf: get model metadata")
 
-llm_arch = "gptneox"
+llm_arch    = "gptneox"
+block_count = hparams["num_hidden_layers"]
 
 gguf_writer.add_name(last_dir)
 gguf_writer.add_description("gguf test model")
 gguf_writer.add_architecture(llm_arch)
 gguf_writer.add_context_length(llm_arch, hparams["max_position_embeddings"])
 gguf_writer.add_embedding_length(llm_arch, hparams["hidden_size"])
-gguf_writer.add_layer_count(llm_arch, hparams["num_hidden_layers"])
+gguf_writer.add_layer_count(llm_arch, block_count)
 gguf_writer.add_feed_forward_length(llm_arch, hparams["intermediate_size"])
 gguf_writer.add_rope_dimension_count(llm_arch, int( hparams["rotary_pct"]*(hparams["hidden_size"]//hparams["num_attention_heads"])) )
 gguf_writer.add_head_count(llm_arch, hparams["num_attention_heads"])
@@ -92,7 +95,7 @@ gguf_writer.add_layer_norm_eps(llm_arch, hparams["layer_norm_eps"])
 
 # TOKENIZATION
 
-print("gguf: add tokenizer")
+print("gguf: get tokenizer metadata")
 
 tokens: List[str] = []
 merges: List[str] = []
@@ -102,7 +105,7 @@ if Path(dir_model + "/tokenizer.json").is_file():
     # gpt2 tokenizer
     gguf_writer.add_tokenizer_model("gpt2")
 
-    print("gguf: adding gpt2 tokenizer merges")
+    print("gguf: get gpt2 tokenizer merges")
 
     with open(dir_model + "/tokenizer.json", "r", encoding="utf-8") as f:
         tokenizer_json = json.load(f)
@@ -110,7 +113,7 @@ if Path(dir_model + "/tokenizer.json").is_file():
 
     gguf_writer.add_token_merges(merges)
 
-    print("gguf: adding gpt2 tokenizer vocab")
+    print("gguf: get gpt2 tokenizer vocab")
 
     vocab_size = len( tokenizer_json["model"]["vocab"] )
 
@@ -141,7 +144,7 @@ if Path(dir_model + "/tokenizer.json").is_file():
     gguf_writer.add_token_list(tokens)
 
     if "added_tokens" in tokenizer_json and Path(dir_model + "/tokenizer_config.json").is_file():
-        print("gguf: adding special token ids")
+        print("gguf: get special token ids")
 
         with open(dir_model + "/tokenizer_config.json", "r", encoding="utf-8") as f:
             tokenizer_config = json.load(f)
@@ -176,8 +179,10 @@ if Path(dir_model + "/tokenizer.json").is_file():
 
 # TENSORS
 
+tensor_map = tmap.get_tensor_map(block_count)
+
 # tensor info
-print("gguf: add gguf tensor info")
+print("gguf: get tensor metadata")
 
 for name in list_vars.keys():
     data = list_vars[name].squeeze().numpy()
@@ -185,6 +190,15 @@ for name in list_vars.keys():
     # we don't need these
     if name.endswith(".attention.masked_bias") or name.endswith(".attention.bias") or name.endswith(".attention.rotary_emb.inv_freq"):
         continue
+
+    # map tensor names
+    if name.endswith(".weight") and name[:-7] in tensor_map:
+        name = tensor_map[name[:-7]] + ".weight"
+    elif name.endswith(".bias") and name[:-5] in tensor_map:
+        name = tensor_map[name[:-5]] + ".bias"
+    else:
+        print( "Can not map tensor '" + name + "'" )
+        sys.exit()
 
     n_dims = len(data.shape)
 
@@ -206,9 +220,9 @@ for name in list_vars.keys():
 
 print("gguf: write header")
 gguf_writer.write_header_to_file()
-print("gguf: write key-values")
+print("gguf: write metadata")
 gguf_writer.write_kv_data_to_file()
-print("gguf: write tensor info")
+print("gguf: write tensor metadata")
 gguf_writer.write_ti_data_to_file()
 
 # tensor data
@@ -242,5 +256,5 @@ for name in list_vars.keys():
 gguf_writer.close()
 
 
-print("gguf: conversion done, output file: " + fname_out)
+print("gguf: model successfully exported to '" + fname_out + "'" )
 print("")
