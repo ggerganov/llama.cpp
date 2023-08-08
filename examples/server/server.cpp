@@ -1383,7 +1383,7 @@ int main(int argc, char **argv)
             res.set_content("Invalid request", "text/plain");
         } else {
             res.set_content("File Not Found", "text/plain");
-            res.status = 404; 
+            res.status = 404;
         } });
 
     // set timeouts and change hostname and port
