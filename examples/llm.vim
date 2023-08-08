@@ -18,8 +18,10 @@ function! Llm()
   " Extract the content field from the response
   let content = json_decode(response).content
 
+  let split_newlines = split(content, '\n', 1)
+
   " Insert the content at the cursor position
-  call setline(line('.'), getline('.') . content)
+  call setline(line('.'), [ getline('.') . split_newlines[0] ] + split_newlines[1:])
 endfunction
 
 command! Llm call Llm()
