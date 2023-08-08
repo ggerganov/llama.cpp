@@ -74,7 +74,7 @@ struct ggml_allocr {
 };
 
 #ifdef GGML_ALLOCATOR_DEBUG
-static void add_allocated_tensor(struct ggml_allocator * alloc, struct ggml_tensor * tensor) {
+static void add_allocated_tensor(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
     for (int i = 0; i < 1024; i++) {
         if (alloc->allocated_tensors[i] == NULL) {
             alloc->allocated_tensors[i] = tensor;
@@ -83,7 +83,7 @@ static void add_allocated_tensor(struct ggml_allocator * alloc, struct ggml_tens
     }
     GGML_ASSERT(!"out of allocated_tensors");
 }
-static void remove_allocated_tensor(struct ggml_allocator * alloc, struct ggml_tensor * tensor) {
+static void remove_allocated_tensor(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
     for (int i = 0; i < 1024; i++) {
         if (alloc->allocated_tensors[i] == tensor ||
             (alloc->allocated_tensors[i] != NULL && alloc->allocated_tensors[i]->data == tensor->data)) {
@@ -249,7 +249,7 @@ struct ggml_allocr * ggml_allocr_new(void * data, size_t size, size_t alignment)
         /*.max_size      = */ 0,
         /*.measure       = */ false,
 #ifdef GGML_ALLOCATOR_DEBUG
-        /*.allocated_tensors = */ = {0},
+        /* .allocated_tensors = */ {0},
 #endif
     };
 
@@ -276,7 +276,7 @@ struct ggml_allocr * ggml_allocr_new_measure(size_t alignment) {
         /*.max_size      = */ 0,
         /*.measure       = */ true,
 #ifdef GGML_ALLOCATOR_DEBUG
-        /*.allocated_tensors = */ = {0},
+        /*.allocated_tensors = */ {0},
 #endif
     };
 
