@@ -1689,6 +1689,7 @@ def main(args):
 
     if args.hordeconfig and len(args.hordeconfig)>4:
         horde_thread = threading.Thread(target=run_horde_worker,args=(args,args.hordeconfig[3],args.hordeconfig[4]))
+        horde_thread.setDaemon(True)
         horde_thread.start()
 
     print(f"Please connect to custom endpoint at {epurl}")
