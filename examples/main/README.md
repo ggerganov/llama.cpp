@@ -259,6 +259,7 @@ These options help improve the performance and memory usage of the LLaMA models.
 ### Number of Threads
 
 -   `-t N, --threads N`: Set the number of threads to use during computation. For optimal performance, it is recommended to set this value to the number of physical CPU cores your system has (as opposed to the logical number of cores). Using the correct number of threads can greatly improve performance.
+-   `-ppt N, --pp-threads N`: Set the number of threads to use during prompt processing only.
 
 ### Mlock
 
