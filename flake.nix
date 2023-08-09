@@ -27,7 +27,7 @@
             with pkgs; [ openblas ]
         );
         pkgs = import nixpkgs { inherit system; };
-        nativeBuildInputs = with pkgs; [ cmake pkgconfig ];
+        nativeBuildInputs = with pkgs; [ cmake git pkgconfig ];
         llama-python =
           pkgs.python3.withPackages (ps: with ps; [ numpy sentencepiece ]);
         postPatch = ''
