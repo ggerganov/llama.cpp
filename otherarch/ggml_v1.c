@@ -154,7 +154,9 @@ typedef double ggml_v1_float;
 #undef bool
 #define bool _Bool
 #else
+#if !defined(__riscv)
 #include <immintrin.h>
+#endif
 #endif
 #endif
 
