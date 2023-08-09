@@ -4563,7 +4563,6 @@ struct cuda_buffer {
 
 static cuda_buffer g_cuda_buffer_pool[GGML_CUDA_MAX_DEVICES][MAX_CUDA_BUFFERS];
 static std::atomic_flag g_cuda_pool_lock = ATOMIC_FLAG_INIT;
-static bool g_mul_mat_q = false;
 
 static void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
     scoped_spin_lock lock(g_cuda_pool_lock);
