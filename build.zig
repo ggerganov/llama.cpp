@@ -11,23 +11,31 @@ const Maker = struct {
     target: CrossTarget,
     optimize: Mode,
     config_header: *ConfigHeader,
+    enable_lto: bool,
 
+    include_dirs: ArrayList([]const u8),
     cflags: ArrayList([]const u8),
     cxxflags: ArrayList([]const u8),
     objs: ArrayList(*Compile),
 
-    fn addCFlag(m: *Maker, flag: []const u8) void {
-        m.cflags.append(flag) catch @panic("OOM");
+    fn addInclude(m: *Maker, dir: []const u8) !void {
+        try m.include_dirs.append(dir);
     }
-    fn addCxxFlag(m: *Maker, flag: []const u8) void {
-        m.cxxflags.append(flag) catch @panic("OOM");
+    fn addProjectInclude(m: *Maker, path: []const []const u8) !void {
+        try m.addInclude(try m.builder.build_root.join(m.builder.allocator, path));
     }
-    fn addFlag(m: *Maker, flag: []const u8) void {
-        m.addCFlag(flag);
-        m.addCxxFlag(flag);
+    fn addCFlag(m: *Maker, flag: []const u8) !void {
+        try m.cflags.append(flag);
+    }
+    fn addCxxFlag(m: *Maker, flag: []const u8) !void {
+        try m.cxxflags.append(flag);
+    }
+    fn addFlag(m: *Maker, flag: []const u8) !void {
+        try m.addCFlag(flag);
+        try m.addCxxFlag(flag);
     }
 
-    fn init(builder: *std.build.Builder) Maker {
+    fn init(builder: *std.build.Builder) !Maker {
         const commit_hash = @embedFile(".git/refs/heads/master");
         const config_header = builder.addConfigHeader(
             .{ .style = .blank, .include_path = "build-info.h" },
@@ -41,12 +49,16 @@ const Maker = struct {
             .target = builder.standardTargetOptions(.{}),
             .optimize = builder.standardOptimizeOption(.{}),
             .config_header = config_header,
+            .enable_lto = false,
+            .include_dirs = ArrayList([]const u8).init(builder.allocator),
             .cflags = ArrayList([]const u8).init(builder.allocator),
             .cxxflags = ArrayList([]const u8).init(builder.allocator),
             .objs = ArrayList(*Compile).init(builder.allocator),
         };
-        m.addCFlag("-std=c11");
-        m.addCxxFlag("-std=c++11");
+        try m.addCFlag("-std=c11");
+        try m.addCxxFlag("-std=c++11");
+        try m.addProjectInclude(&.{});
+        try m.addProjectInclude(&.{"examples"});
         return m;
     }
 
@@ -59,39 +71,34 @@ const Maker = struct {
             o.addCSourceFiles(&.{src}, m.cxxflags.items);
             o.linkLibCpp();
         }
-        o.addIncludePath(.{ .path = "." });
-        o.addIncludePath(.{ .path = "./examples" });
-        if (o.target.isWindows()) {
-            o.want_lto = false; // https://github.com/ziglang/zig/issues/15958
-        }
+        for (m.include_dirs.items) |i| o.addIncludePath(.{ .path = i });
+        o.want_lto = m.enable_lto;
         return o;
     }
 
     fn exe(m: *const Maker, name: []const u8, src: []const u8, deps: []const *Compile) *Compile {
         const e = m.builder.addExecutable(.{ .name = name, .target = m.target, .optimize = m.optimize });
-        e.addIncludePath(.{ .path = "." });
-        e.addIncludePath(.{ .path = "./examples" });
         e.addCSourceFiles(&.{src}, m.cxxflags.items);
         for (deps) |d| e.addObject(d);
         for (m.objs.items) |o| e.addObject(o);
+        for (m.include_dirs.items) |i| e.addIncludePath(.{ .path = i });
         e.linkLibC();
         e.linkLibCpp();
         e.addConfigHeader(m.config_header);
         m.builder.installArtifact(e);
-        if (e.target.isWindows()) {
-            e.want_lto = false; // https://github.com/ziglang/zig/issues/15958
-        }
+        e.want_lto = m.enable_lto;
         return e;
     }
 };
 
-pub fn build(b: *std.build.Builder) void {
-    var make = Maker.init(b);
+pub fn build(b: *std.build.Builder) !void {
+    var make = try Maker.init(b);
+    make.enable_lto = b.option(bool, "lto", "Enable LTO optimization, (default: false)") orelse false;
 
     if (b.option(bool, "k-quants", "Enable K-quants, (default: true)") orelse true) {
-        make.addFlag("-DGGML_USE_K_QUANTS");
+        try make.addFlag("-DGGML_USE_K_QUANTS");
         const k_quants = make.obj("k_quants", "k_quants.c");
-        make.objs.append(k_quants) catch @panic("OOM");
+        try make.objs.append(k_quants);
     }
 
     const ggml = make.obj("ggml", "ggml.c");
