@@ -3617,9 +3617,10 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
             GGML_ASSERT(loraB->type == GGML_TYPE_F32);
             ggml_set_name(loraB, "loraB");
 
+            // base indim = loraA transposed indim, base outdim = loraB outdim
             if (base_t->ne[0] != loraA->ne[1] || base_t->ne[1] != loraB->ne[1]) {
-                fprintf(stderr, "%s: incompatible tensor dimensions (%" PRId64 " and %" PRId64 ");"
-                               " are you sure that this adapter is for this model?\n", __func__, base_t->ne[0], loraA->ne[1]);
+                fprintf(stderr, "%s: incompatible tensor dimensions (outdim: %" PRId64 ", %" PRId64 ", indim: %" PRId64 ", %" PRId64 ");"
+                               " are you sure that this adapter is for this model?\n", __func__, base_t->ne[1], loraB->ne[1], base_t->ne[0], loraA->ne[1]);
                 return 1;
             }
 
