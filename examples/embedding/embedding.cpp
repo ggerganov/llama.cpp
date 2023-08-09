@@ -50,8 +50,8 @@ int main(int argc, char ** argv) {
     // print system information
     {
         fprintf(stderr, "\n");
-        fprintf(stderr, "system_info: n_threads = %d / %d | %s\n",
-                params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
+        fprintf(stderr, "system_info: n_threads = %d / %d | pp_threads = %d / %d | %s\n",
+                params.n_threads, std::thread::hardware_concurrency(), params.pp_threads, std::thread::hardware_concurrency(), llama_print_system_info());
     }
 
     int n_past = 0;
@@ -74,7 +74,7 @@ int main(int argc, char ** argv) {
 
     if (params.embedding){
         if (embd_inp.size() > 0) {
-            if (llama_eval(ctx, embd_inp.data(), embd_inp.size(), n_past, params.n_threads, params.n_threads)) {
+            if (llama_eval(ctx, embd_inp.data(), embd_inp.size(), n_past, params.n_threads, params.pp_threads)) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return 1;
             }
