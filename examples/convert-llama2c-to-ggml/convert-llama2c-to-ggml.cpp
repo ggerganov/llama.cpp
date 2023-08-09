@@ -55,17 +55,17 @@ void malloc_weights(TransformerWeights* w, Config* p) {
     // we calloc instead of malloc to keep valgrind happy
     w->token_embedding_table = new float[p->vocab_size * p->dim]();
     printf("[%s:AK] Allocating [%d] x [%d] = [%d] float space for w->token_embedding_table\n",__func__,p->vocab_size , p->dim, p->vocab_size * p->dim);
-    
+
     w->rms_att_weight = new float[p->n_layers * p->dim]();
     printf("[%s:AK] Allocating [%d] x [%d] = [%d] float space for w->rms_att_weight\n",__func__,p->n_layers, p->dim, p->n_layers * p->dim);
 
     w->rms_ffn_weight = new float[p->n_layers * p->dim]();
     printf("[%s:AK] Allocating [%d] x [%d] = [%d] float space for w->rms_ffn_weight\n",__func__,p->n_layers , p->dim, p->n_layers * p->dim);
 
-    w->wq = new float[p->n_layers * p->dim * p->dim](); 
+    w->wq = new float[p->n_layers * p->dim * p->dim]();
     printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->wq\n",__func__,p->n_layers, p->dim, p->dim, p->n_layers * p->dim * p->dim);
 
-    w->wk = new float[p->n_layers * p->dim * p->dim](); 
+    w->wk = new float[p->n_layers * p->dim * p->dim]();
     printf("[%s:AK] Allocating [%d] x [%d] x [%d] = [%d] float space for w->wk\n",__func__,p->n_layers, p->dim, p->dim, p->n_layers * p->dim * p->dim);
 
     w->wv = new float[p->n_layers * p->dim * p->dim]();
@@ -200,7 +200,7 @@ struct my_llama_model {
 struct train_params {
     const char * fn_vocab_model;
     const char * fn_llama2c_model;
-    const char * fn_llama2c_output_model;    
+    const char * fn_llama2c_output_model;
     const char * fn_train_data;
     const char * fn_checkpoint_in;
     const char * fn_checkpoint_out;
@@ -295,7 +295,6 @@ void init_model(struct my_llama_model * model) {
     printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for layer.w1 for [%d] layers\n",__func__, n_ff, n_embd, n_embd * n_ff, n_layer);
     printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for layer.w2 for [%d] layers\n",__func__, n_embd, n_ff, n_ff * n_embd, n_layer);
     printf("[%s:GG] Allocating [%d] x[%d] = [%d] float space for layer.w3 for [%d] layers\n",__func__, n_ff, n_embd, n_embd * n_ff, n_layer);
-    
 
     ggml_set_name(model->tok_embeddings, "tok_embeddings.weight");
     ggml_set_name(model->norm,           "norm.weight");
@@ -506,7 +505,7 @@ void stuff_karpathy_weights_into_gg(struct ggml_tensor * gg_weights, float * kar
         case 2:
             ct = 0;
             for (int i1 = 0; i1 < gg_weights->ne[1]; i1++) {
-                for (int i0 = 0; i0 < gg_weights->ne[0]; i0++) {                    
+                for (int i0 = 0; i0 < gg_weights->ne[0]; i0++) {
                     float * ptr = (float *) ((char *) gg_weights->data + i0*gg_weights->nb[0] + i1*gg_weights->nb[1]);
                     *ptr = karpathy_weights[ct];
                     ct++;
@@ -517,14 +516,14 @@ void stuff_karpathy_weights_into_gg(struct ggml_tensor * gg_weights, float * kar
             ct = 0;
             for (int i2 = 0; i2 < gg_weights->ne[2]; i2++) {
                 for (int i1 = 0; i1 < gg_weights->ne[1]; i1++) {
-                    for (int i0 = 0; i0 < gg_weights->ne[0]; i0++) {                        
+                    for (int i0 = 0; i0 < gg_weights->ne[0]; i0++) {
                         float * ptr = (float *) ((char *) gg_weights->data + i0*gg_weights->nb[0] + i1*gg_weights->nb[1] + i2*gg_weights->nb[2]);
                         *ptr = karpathy_weights[ct];
                         ct++;
                     }
                 }
             }
-            break;    
+            break;
     }
 }
 
@@ -559,8 +558,8 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     // float*                   -> struct ggml_tensor
     stuff_karpathy_weights_into_gg(model->tok_embeddings, w->token_embedding_table);
     stuff_karpathy_weights_into_gg(model->output, w->token_embedding_table);
-    
-    stuff_karpathy_weights_into_gg(model->norm, w->rms_final_weight);         
+
+    stuff_karpathy_weights_into_gg(model->norm, w->rms_final_weight);
     //print_row(model->norm, 0);
 
     // for rms-att-weight 
@@ -568,7 +567,7 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     const auto & hparams = model->hparams;
     //int n_ff = model->hparams.n_embd;
     int n_ff = get_n_ff(&hparams);
-    
+
     for (uint32_t i = 0; i < model->hparams.n_layer; ++i){
         auto & layer = model->layers[i];
         // 1d
@@ -580,7 +579,7 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
         stuff_karpathy_weights_into_gg(layer.wk            , &w->wk[i*row_length*row_length]);
         stuff_karpathy_weights_into_gg(layer.wv            , &w->wv[i*row_length*row_length]);
         stuff_karpathy_weights_into_gg(layer.wo            , &w->wo[i*row_length*row_length]);
-        
+
         stuff_karpathy_weights_into_gg(layer.w1            , &w->w1[i*row_length*n_ff]);
         stuff_karpathy_weights_into_gg(layer.w2            , &w->w2[i*n_ff*row_length]);
         stuff_karpathy_weights_into_gg(layer.w3            , &w->w3[i*row_length*n_ff]);
@@ -589,7 +588,7 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     write_tensor(&file, model->tok_embeddings);
     write_tensor(&file, model->norm);
     write_tensor(&file, model->output); // ?
-    for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {        
+    for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {
         auto & layer = model->layers[i];
 
         write_tensor(&file, layer.attention_norm);
@@ -660,8 +659,8 @@ void print_usage(int /*argc*/, char ** argv, const struct train_params * params)
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -h, --help                       show this help message and exit\n");
     fprintf(stderr, "  --vocab-model FNAME              model path from which to load vocab (default '%s')\n", params->fn_vocab_model);
-    fprintf(stderr, "  --llama2c-model FNAME            model path from which to load Karpathy's llama2.c model\n");   
-    fprintf(stderr, "  --llama2c-output-model FNAME     model path to save the converted llama2.c model (default %s')\n", params->fn_llama2c_output_model);   
+    fprintf(stderr, "  --llama2c-model FNAME            model path from which to load Karpathy's llama2.c model\n");
+    fprintf(stderr, "  --llama2c-output-model FNAME     model path to save the converted llama2.c model (default %s')\n", params->fn_llama2c_output_model);
     fprintf(stderr, "\n");
 }
 
@@ -688,13 +687,13 @@ bool params_parse(int argc, char ** argv, struct train_params * params) {
                 invalid_param = true;
                 break;
             }
-            params->fn_llama2c_model = argv[i]; 
+            params->fn_llama2c_model = argv[i];
         } else if (arg == "--llama2c-output-model") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params->fn_llama2c_output_model = argv[i]; 
+            params->fn_llama2c_output_model = argv[i];
         } else if (arg == "-h" || arg == "--help") {
             print_usage(argc, argv, &default_params);
             exit(0);
@@ -720,7 +719,7 @@ int main(int argc, char ** argv) {
     }
     Config config;
     TransformerWeights weights;
-    {        
+    {
         FILE *file = fopen(params.fn_llama2c_model, "rb");
         if (!file) { printf("Unable to open the checkpoint file %s!\n", params.fn_llama2c_model); return 1; }
         // read in the config header
@@ -741,7 +740,7 @@ int main(int argc, char ** argv) {
     {
         std::vector<const char *> strings;
         std::vector<float> scores;
-        int n_vocab = llama_n_vocab(lctx);        
+        int n_vocab = llama_n_vocab(lctx);
         strings.resize(n_vocab, NULL);
         scores.resize(n_vocab, 0);
         n_vocab = llama_get_vocab(lctx, strings.data(), scores.data(), n_vocab);
@@ -749,7 +748,7 @@ int main(int argc, char ** argv) {
         vocab.id_to_token.resize(n_vocab);
         for (int i=0; i<n_vocab; ++i) {
             std::string tok   = std::string(strings[i]);
-            float       score = scores[i];            
+            float       score = scores[i];
             vocab.id_to_token[i].tok   = tok;
             vocab.id_to_token[i].score = score;
             vocab.token_to_id.emplace(tok, i);
@@ -759,7 +758,7 @@ int main(int argc, char ** argv) {
     model.hparams.n_vocab = config.vocab_size; //llama_n_vocab(lctx);
     model.hparams.n_ctx   = params.n_ctx;
     model.hparams.n_embd  = config.dim; //params.n_embd;
-    model.hparams.n_mult  = 32;//params.n_mult; 
+    model.hparams.n_mult  = 32;//params.n_mult;
     model.hparams.n_head  = config.n_heads; //params.n_head;
     model.hparams.n_layer = config.n_layers; //params.n_layer;
     model.hparams.n_rot   = std::min((uint32_t)params.n_rotmax, model.hparams.n_embd / model.hparams.n_head);
