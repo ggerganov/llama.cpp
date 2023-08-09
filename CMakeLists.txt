@@ -3,9 +3,9 @@
 # IT WILL NOT BE UPDATED OR MAINTAINED !!!
 
 message(STATUS "============== ============== ==============")
-message(STATUS "WARNING! Do NOT use this file. It is UNSUPPORTED for normal users. Use MAKE instead.")
-message(STATUS "It is ONLY for CUBLAS build testing on windows visual studio. IT WILL NOT BE UPDATED OR MAINTAINED !!!")
-message(STATUS "IF YOU ARE SEEING THIS, you MUST ONLY be building AN EXPERIMENAL WINDOWS CUBLAS BUILD! NOTHING ELSE WILL BE SUPPORTED !!!")
+message(STATUS "WARNING! Recommend NOT to use this file. It is UNSUPPORTED for normal users. Use MAKE instead.")
+message(STATUS "It is ONLY for CUBLAS builds on windows visual studio. IT WILL OVERWRITE YOUR EXISTING MAKEFILE !!!")
+message(STATUS "IF YOU ARE SEEING THIS, you MUST ONLY be building CUBLAS BUILDS! NOTHING ELSE WILL BE SUPPORTED !!!")
 message(STATUS "============== ============== ==============")
 
 cmake_minimum_required(VERSION 3.12) # Don't bump this version for no reason
@@ -106,8 +106,8 @@ if (LLAMA_CUBLAS)
         if (LLAMA_CUDA_F16 OR LLAMA_CUDA_DMMV_F16)
             set(CMAKE_CUDA_ARCHITECTURES "60;61;70") # needed for f16 CUDA intrinsics
         else()
-            message("CUDA version: ${CUDA_VERSION_MAJOR}")
-            if(CUDA_VERSION_MAJOR GREATER_EQUAL 12)
+            message("CUDA Toolkit Version: ${CUDAToolkit_VERSION}")
+            if(CUDAToolkit_VERSION VERSION_GREATER 12)
                  set(CMAKE_CUDA_ARCHITECTURES "52;61;70") # lowest CUDA 12 standard + lowest for integer intrinsics
             else()
                  set(CMAKE_CUDA_ARCHITECTURES "37;52;61;70") # lowest CUDA 12 standard + lowest for integer intrinsics
