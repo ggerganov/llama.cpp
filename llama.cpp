@@ -1771,7 +1771,7 @@ static struct ggml_cgraph * llama_build_graph(
 //   - embd       embeddings input
 //   - n_tokens   number of tokens
 //   - n_past:    the context size so far
-//   - n_threads: number of threads to use
+//   - n_threads: number of threads to use for inference
 //   - pp_threads: number of threads to use for prompt processing
 //
 static bool llama_eval_internal(
