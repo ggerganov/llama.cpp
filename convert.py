@@ -465,6 +465,13 @@ class GGMLQuantizedTensor(Tensor):
     def permute(self, n_head: int, n_kv_head: Optional[int] = None) -> 'GGMLQuantizedTensor':
         return GGMLQuantizedTensor(permute(self.ndarray, n_head, n_kv_head), self.shape, self.data_type)
 
+    def permute_part(self, n_part: int, n_head: int) -> 'UnquantizedTensor':
+        r = self.ndarray.shape[0] // 3
+        return UnquantizedTensor(permute(self.ndarray[r * n_part : r * n_part + r, ...], n_head))
+
+    def part(self, n_part: int) -> 'UnquantizedTensor':
+        r = self.ndarray.shape[0] // 3
+        return UnquantizedTensor(self.ndarray[r * n_part : r * n_part + r, ...])
 
 GGMLCompatibleTensor = Union[UnquantizedTensor, GGMLQuantizedTensor]
 

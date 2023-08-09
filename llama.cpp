@@ -149,7 +149,7 @@ static const std::map<e_model, size_t> & MEM_REQ_EVAL()
 }
 
 // amount of VRAM needed per batch size to hold temporary results
-// the values for 3b and 65b are not derived from testing but instead chosen conservatively
+// the values for 3b are not derived from testing but instead chosen conservatively
 static const std::map<e_model, size_t> & VRAM_REQ_SCRATCH_BASE()
 {
     static std::map<e_model, size_t> k_sizes = {
@@ -157,14 +157,14 @@ static const std::map<e_model, size_t> & VRAM_REQ_SCRATCH_BASE()
         { MODEL_7B,   512ull * kB },
         { MODEL_13B,  640ull * kB },
         { MODEL_30B,  768ull * kB },
-        { MODEL_65B, 1536ull * kB },
-        { MODEL_70B, 1536ull * kB }, // TODO (likely can be reduced)
+        { MODEL_65B, 1280ull * kB },
+        { MODEL_70B, 1280ull * kB },
     };
     return k_sizes;
 }
 
 // amount of VRAM needed per batch size and context to hold temporary results
-// the values for 3b and 65b are not derived from testing but instead chosen conservatively
+// the values for 3b are not derived from testing but instead chosen conservatively
 static const std::map<e_model, size_t> & VRAM_REQ_SCRATCH_PER_CONTEXT()
 {
     static std::map<e_model, size_t> k_sizes = {
@@ -172,8 +172,8 @@ static const std::map<e_model, size_t> & VRAM_REQ_SCRATCH_PER_CONTEXT()
         { MODEL_7B,  128ull },
         { MODEL_13B, 160ull },
         { MODEL_30B, 208ull },
-        { MODEL_65B, 416ull },
-        { MODEL_70B, 416ull }, // TODO (likely can be reduced)
+        { MODEL_65B, 256ull },
+        { MODEL_70B, 256ull },
     };
     return k_sizes;
 }
@@ -747,12 +747,12 @@ struct llama_model_loader {
 
     void load_all_data(llama_progress_callback progress_callback, void *  progress_callback_user_data, llama_mlock * lmlock) {
         size_t data_size = 0;
-        size_t prefetch_size = 0;
+        size_t prefetch_size = file_loader->file.size;
         size_t lock_size = 0;
         for (const llama_load_tensor & lt : tensors_map.tensors) {
             data_size += lt.size;
-            if (lt.ggml_tensor->backend == GGML_BACKEND_CPU) {
-                prefetch_size += lt.size;
+            if (lt.ggml_tensor->backend != GGML_BACKEND_CPU) {
+                prefetch_size -= lt.size;
             }
         }
 

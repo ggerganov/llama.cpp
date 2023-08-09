@@ -142,6 +142,28 @@ ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
 	#CXXFLAGS += -mssse3
 endif
 
+ifneq ($(filter aarch64%,$(UNAME_M)),)
+	# Apple M1, M2, etc.
+	# Raspberry Pi 3, 4, Zero 2 (64-bit)
+	CFLAGS   += -mcpu=native
+	CXXFLAGS += -mcpu=native
+endif
+
+ifneq ($(filter armv6%,$(UNAME_M)),)
+	# Raspberry Pi 1, Zero
+	CFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access
+endif
+
+ifneq ($(filter armv7%,$(UNAME_M)),)
+	# Raspberry Pi 2
+	CFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access -funsafe-math-optimizations
+endif
+
+ifneq ($(filter armv8%,$(UNAME_M)),)
+	# Raspberry Pi 3, 4, Zero 2 (32-bit)
+	CFLAGS += -mfp16-format=ieee -mno-unaligned-access
+endif
+
 ifneq ($(filter ppc64%,$(UNAME_M)),)
 	POWER9_M := $(shell grep "POWER9" /proc/cpuinfo)
 	ifneq (,$(findstring POWER9,$(POWER9_M)))
@@ -270,28 +292,6 @@ ifdef LLAMA_METAL
 	OBJS     += ggml-metal.o
 endif # LLAMA_METAL
 
-ifneq ($(filter aarch64%,$(UNAME_M)),)
-	# Apple M1, M2, etc.
-	# Raspberry Pi 3, 4, Zero 2 (64-bit)
-	CFLAGS   += -mcpu=native
-	CXXFLAGS += -mcpu=native
-endif
-
-ifneq ($(filter armv6%,$(UNAME_M)),)
-	# Raspberry Pi 1, Zero
-	CFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access
-endif
-
-ifneq ($(filter armv7%,$(UNAME_M)),)
-	# Raspberry Pi 2
-	CFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access -funsafe-math-optimizations
-endif
-
-ifneq ($(filter armv8%,$(UNAME_M)),)
-	# Raspberry Pi 3, 4, Zero 2 (32-bit)
-	CFLAGS += -mfp16-format=ieee -mno-unaligned-access
-endif
-
 ifdef LLAMA_METAL
 ggml-metal.o: ggml-metal.m ggml-metal.h
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -380,7 +380,7 @@ embedding: examples/embedding/embedding.cpp                   build-info.h ggml.
 save-load-state: examples/save-load-state/save-load-state.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-server: examples/server/server.cpp examples/server/httplib.h examples/server/json.hpp examples/server/index.html.hpp examples/server/index.js.hpp examples/server/completion.js.hpp build-info.h ggml.o llama.o common.o $(OBJS)
+server: examples/server/server.cpp examples/server/httplib.h examples/server/json.hpp examples/server/index.html.hpp examples/server/index.js.hpp examples/server/completion.js.hpp build-info.h ggml.o llama.o common.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -Iexamples/server $(filter-out %.h,$(filter-out %.hpp,$^)) -o $@ $(LDFLAGS) $(LWINSOCK2)
 
 $(LIB_PRE)embdinput$(DSO_EXT): examples/embd-input/embd-input.h examples/embd-input/embd-input-lib.cpp build-info.h ggml.o llama.o common.o $(OBJS)
