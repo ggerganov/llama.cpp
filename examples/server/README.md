@@ -5,6 +5,7 @@ This example demonstrates a simple HTTP API server and a simple web front end to
 Command line options:
 
 -   `--threads N`, `-t N`: Set the number of threads to use during computation.
+-   `-ppt N`, `--pp-threads N`: Set the number of threads to use during prompt processing only.
 -   `-m FNAME`, `--model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.bin`).
 -   `-m ALIAS`, `--alias ALIAS`: Set an alias for the model. The alias will be returned in API responses.
 -   `-c N`, `--ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference. The size may differ in other models, for example, baichuan models were build with a context of 4096.
