@@ -397,7 +397,7 @@ static void allocate_node(struct ggml_allocr * alloc, struct ggml_tensor * node)
 
                     // if the node's data is external, then we cannot re-use it
                     if ((char *) parent->data < (char *) alloc->data ||
-                        (char *) parent->data > ((char *) alloc->data + alloc->size)) {
+                        (char *) parent->data >= ((char *) alloc->data + alloc->size)) {
                         AT_PRINTF("not reusing parent %s for %s as %p is external\n", parent->name, node->name, parent->data);
                         continue;
                     }
