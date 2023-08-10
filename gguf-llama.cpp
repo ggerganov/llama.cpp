@@ -565,7 +565,10 @@ struct ggml_context * ctx_data = NULL;
             uint32_t n_dims = cur->n_dims;
             tensor.type = cur->type;
             tensor.ne.resize(n_dims);
-            memcpy(tensor.ne.data(), &cur->ne[0], sizeof(tensor.ne[0]) * n_dims);
+            for (uint32_t j = 0; j < n_dims; ++j) {
+            tensor.ne[j] = cur->ne[j];
+            }
+            
             if (n_dims < 1 || n_dims > 2) {
                 throw std::runtime_error(format("llama.cpp: tensor '%s' should not be %u-dimensional", name, n_dims));
             }
