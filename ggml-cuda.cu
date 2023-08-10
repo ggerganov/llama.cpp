@@ -94,7 +94,7 @@ static __device__ __forceinline__ int __dp4a(const int a, const int b, int c) {
     int ashift;
     int bshift;
     int aext;
-    int bext;  
+    int bext;
     asm("\n \
         v_pk_ashrrev_i16 %1, 0x80008, %5 \n \
         v_pk_ashrrev_i16 %2, 0x80008, %6 \n \
