@@ -334,6 +334,13 @@ static std::string FileFormatTokenizeID(int id, FileFormat file_format)
     }
 }
 
+static std::string RemoveBell(const std::string & input) //removes the bell character
+{
+    std::string word2;
+    std::remove_copy(input.begin(), input.end(), std::back_inserter(word2), '\a');
+    return word2;
+}
+
 ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in_file_format)
 {
     ggml_time_init();
@@ -1183,7 +1190,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
         }
         ::utreplace(tmp, "\n", "\\n");
         outstr += tmp;
-        printf("%s\n\n", outstr.c_str());
+        printf("%s\n\n", RemoveBell(outstr).c_str());
     }
 
     while (remaining_tokens > 0)
@@ -1446,7 +1453,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                     firstloop = false;
                     std::string tokenizedstr = FileFormatTokenizeID(pick.id, file_format);
                     ::utreplace(tokenizedstr, "\n", "\\n");
-                    printf("(%s %.2f%%)", tokenizedstr.c_str(), pick.p*100);
+                    printf("(%s %.2f%%)", RemoveBell(tokenizedstr).c_str(), pick.p*100);
                 }
                 printf("]\n");
             }
