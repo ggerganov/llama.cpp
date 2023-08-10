@@ -160,9 +160,13 @@ The following options allow you to control the text generation process and fine-
 
 ### Number of Tokens to Predict
 
--   `-n N, --n-predict N`: Set the number of tokens to predict when generating text (default: 128, -1 = infinity).
+-   `-n N, --n-predict N`: Set the number of tokens to predict when generating text (default: 128, -1 = infinity, -2 = until context filled)
 
-The `--n-predict` option controls the number of tokens the model generates in response to the input prompt. By adjusting this value, you can influence the length of the generated text. A higher value will result in longer text, while a lower value will produce shorter text. A value of -1 will cause text to be generated without limit.
+The `--n-predict` option controls the number of tokens the model generates in response to the input prompt. By adjusting this value, you can influence the length of the generated text. A higher value will result in longer text, while a lower value will produce shorter text.
+
+A value of -1 will enable infinite text generation, even though we have a finite context window. When the context window is full, some of the earlier tokens (half of the tokens after `--n-keep`) will be discarded. The context must then be re-evaluated before generation can resume. On large models and/or large context windows, this will result in significant pause in output.
+
+If the pause is undesirable, a value of -2 will stop generation immediately when the context is filled.
 
 It is important to note that the generated text may be shorter than the specified number of tokens if an End-of-Sequence (EOS) token or a reverse prompt is encountered. In interactive mode text generation will pause and control will be returned to the user. In non-interactive mode, the program will end. In both cases, the text generation may stop before reaching the specified `n-predict` value. If you want the model to keep going without ever producing End-of-Sequence on its own, you can use the `--ignore-eos` parameter.
 

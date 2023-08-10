@@ -196,6 +196,7 @@ struct llama_server_context
     llama_context *ctx = nullptr;
     gpt_params params;
 
+    grammar_parser::parse_state parsed_grammar;
     llama_grammar *grammar = nullptr;
 
     bool truncated = false;
@@ -241,10 +242,13 @@ struct llama_server_context
         stopped_limit = false;
         stopping_word = "";
         multibyte_pending = 0;
-        grammar = nullptr;
-
         n_remain = 0;
         n_past = 0;
+
+        if (grammar != nullptr) {
+            llama_grammar_free(grammar);
+            grammar = nullptr;
+        }
     }
 
     bool loadModel(const gpt_params &params_)
@@ -265,8 +269,6 @@ struct llama_server_context
     bool loadGrammar()
     {
         if (!params.grammar.empty()) {
-            grammar_parser::parse_state parsed_grammar;
-
             parsed_grammar = grammar_parser::parse(params.grammar.c_str());
             // will be empty (default) if there are parse errors
             if (parsed_grammar.rules.empty()) {
