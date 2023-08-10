@@ -90,6 +90,26 @@ static __device__ __forceinline__ int __vsubss4(const int a, const int b) {
 static __device__ __forceinline__ int __dp4a(const int a, const int b, int c) {
 #if defined(__gfx906__) || defined(__gfx908__) || defined(__gfx90a__) || defined(__gfx1030__)
     c = __builtin_amdgcn_sdot4(a, b, c, false);
+#elif defined(__gfx1010__)// || defined(__gfx900__)
+    int ashift;
+    int bshift;
+    int aext;
+    int bext;  
+    asm("\n \
+        v_pk_ashrrev_i16 %1, 0x80008, %5 \n \
+        v_pk_ashrrev_i16 %2, 0x80008, %6 \n \
+        v_mov_b32_sdwa %3, sext(%5) dst_sel:WORD_1 src0_sel:BYTE_2 \n \
+        v_mov_b32_sdwa %3, sext(%5) dst_sel:WORD_0 dst_unused:UNUSED_PRESERVE src0_sel:BYTE_0 \n \
+        v_mov_b32_sdwa %4, sext(%6) dst_sel:WORD_1 src0_sel:BYTE_2 \n \
+        v_mov_b32_sdwa %4, sext(%6) dst_sel:WORD_0 dst_unused:UNUSED_PRESERVE src0_sel:BYTE_0 \n \
+        v_mad_i32_i16 %0, %1, %2, %0 op_sel:[0, 0, 0, 0] \n \
+        v_mad_i32_i16 %0, %1, %2, %0 op_sel:[1, 1, 0, 0] \n \
+        v_mad_i32_i16 %0, %3, %4, %0 op_sel:[0, 0, 0, 0] \n \
+        v_mad_i32_i16 %0, %3, %4, %0 op_sel:[1, 1, 0, 0] \n \
+        "
+        : "+v"(c), "=&v"(ashift), "=&v"(bshift), "=&v"(aext), "=&v"(bext)
+        : "v"(a), "v"(b)
+    );
 #else
     const int8x4_t va = reinterpret_cast<const int8x4_t&>(a);
     const int8x4_t vb = reinterpret_cast<const int8x4_t&>(b);
