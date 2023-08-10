@@ -438,6 +438,11 @@ struct llama_file {
         read_raw(&ret, sizeof(ret));
         return ret;
     }
+    std::float_t read_f32() {
+        std::float_t ret;
+        read_raw(&ret, sizeof(ret));
+        return ret;
+    }
 
     std::string read_string(std::uint32_t len) {
         std::vector<char> chars(len);
@@ -489,6 +494,59 @@ void write_tensor(struct llama_file * file, struct ggml_tensor * tensor) {
     file->write_raw(name, name_len);
     file->seek((0-file->tell()) & 31, SEEK_CUR);
     file->write_raw(tensor->data, ggml_nbytes(tensor));
+}
+
+bool is_ggml_file(const char *filename) {
+    llama_file file(filename, "rb");
+    if (file.size < 4) {
+        return false;
+    }
+    uint32_t magic = file.read_u32();
+    return magic == LLAMA_FILE_MAGIC;
+}
+
+void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab) {
+    // heuristic to infer whether vocab is from ggml or from llama2.c vocabulary
+    if (is_ggml_file(filename)) {
+
+        struct llama_context_params llama_params = llama_context_default_params();
+        llama_params.vocab_only = true;
+
+        struct llama_model * lmodel = llama_load_model_from_file(filename, llama_params);
+        struct llama_context * lctx = llama_new_context_with_model(lmodel, llama_params);
+
+        std::vector<const char *> strings;
+        std::vector<float> scores;
+        int n_vocab = llama_n_vocab(lctx);
+        strings.resize(n_vocab, NULL);
+        scores.resize(n_vocab, 0);
+        n_vocab = llama_get_vocab(lctx, strings.data(), scores.data(), n_vocab);
+        GGML_ASSERT(n_vocab == llama_n_vocab(lctx));
+        vocab->id_to_token.resize(n_vocab);
+        for (int i=0; i<n_vocab; ++i) {
+            std::string tok   = std::string(strings[i]);
+            float       score = scores[i];
+            vocab->id_to_token[i].tok   = tok;
+            vocab->id_to_token[i].score = score;
+            vocab->token_to_id.emplace(tok, i);
+        }
+        llama_free(lctx);
+        llama_free_model(lmodel);
+    } else { // assume llama2.c vocabulary
+        printf("Assuming llama2.c vocabulary since %s is not a ggml file\n", filename);
+        llama_file file(filename, "rb");
+        uint32_t n_vocab = config->vocab_size;
+        /* uint32_t max_token_length =  */ file.read_u32(); // unused
+        vocab->id_to_token.resize(n_vocab);
+        for (uint32_t i=0; i<n_vocab; ++i) {
+            float_t score = file.read_f32();
+            uint32_t len = file.read_u32();
+            std::string tok = file.read_string(len);
+            vocab->id_to_token[i].tok = tok;
+            vocab->id_to_token[i].score = score;
+            vocab->token_to_id.emplace(tok, i);
+        }
+    }
 }
 
 void stuff_karpathy_weights_into_gg(struct ggml_tensor * gg_weights, float * karpathy_weights){
@@ -658,7 +716,7 @@ void print_usage(int /*argc*/, char ** argv, const struct train_params * params)
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -h, --help                       show this help message and exit\n");
-    fprintf(stderr, "  --copy-vocab-from-model FNAME    model path from which to copy vocab (default '%s')\n", params->fn_vocab_model);
+    fprintf(stderr, "  --copy-vocab-from-model FNAME    llama2.c vocabulary or ggml model path from which to copy vocab (default '%s')\n", params->fn_vocab_model);
     fprintf(stderr, "  --llama2c-model FNAME            [REQUIRED] model path from which to load Karpathy's llama2.c model\n");
     fprintf(stderr, "  --llama2c-output-model FNAME     model path to save the converted llama2.c model (default %s')\n", params->fn_llama2c_output_model);
     fprintf(stderr, "\n");
@@ -737,30 +795,9 @@ int main(int argc, char ** argv) {
         fclose(file);
     }
 
-    struct llama_context_params llama_params = llama_context_default_params();
-    llama_params.vocab_only = true;
-
-    struct llama_model * lmodel = llama_load_model_from_file(params.fn_vocab_model, llama_params);
-    struct llama_context * lctx = llama_new_context_with_model(lmodel, llama_params);
-
     struct llama_vocab vocab;
-    {
-        std::vector<const char *> strings;
-        std::vector<float> scores;
-        int n_vocab = llama_n_vocab(lctx);
-        strings.resize(n_vocab, NULL);
-        scores.resize(n_vocab, 0);
-        n_vocab = llama_get_vocab(lctx, strings.data(), scores.data(), n_vocab);
-        GGML_ASSERT(n_vocab == llama_n_vocab(lctx));
-        vocab.id_to_token.resize(n_vocab);
-        for (int i=0; i<n_vocab; ++i) {
-            std::string tok   = std::string(strings[i]);
-            float       score = scores[i];
-            vocab.id_to_token[i].tok   = tok;
-            vocab.id_to_token[i].score = score;
-            vocab.token_to_id.emplace(tok, i);
-        }
-    }
+    load_vocab(params.fn_vocab_model, &config, &vocab);
+
     struct my_llama_model model;
     model.hparams.n_vocab = config.vocab_size; //llama_n_vocab(lctx);
     model.hparams.n_ctx   = params.n_ctx;
@@ -782,8 +819,6 @@ int main(int argc, char ** argv) {
 
     printf("Saving llama.c model file %s in ggml format at %s\n", params.fn_llama2c_model, params.fn_llama2c_output_model);
 
-    llama_free(lctx);
-    llama_free_model(lmodel);
     ggml_free(model.ctx);
     free_weights(&weights);
     return 0;
