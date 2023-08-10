@@ -605,7 +605,7 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
 
 struct train_params get_default_train_params() {
     struct train_params params;
-    params.fn_vocab_model    = "ggml-vic7b-uncensored-q4_0.bin";
+    params.fn_vocab_model    = "models/ggml-vocab.bin";
     params.fn_llama2c_output_model = "ak_llama_model.bin";
     params.fn_train_data     = "shakespeare.txt";
     params.fn_checkpoint_in  = "checkpoint.bin";
@@ -658,14 +658,15 @@ void print_usage(int /*argc*/, char ** argv, const struct train_params * params)
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -h, --help                       show this help message and exit\n");
-    fprintf(stderr, "  --vocab-model FNAME              model path from which to load vocab (default '%s')\n", params->fn_vocab_model);
-    fprintf(stderr, "  --llama2c-model FNAME            model path from which to load Karpathy's llama2.c model\n");
+    fprintf(stderr, "  --copy-vocab-from-model FNAME    model path from which to copy vocab (default '%s')\n", params->fn_vocab_model);
+    fprintf(stderr, "  --llama2c-model FNAME            [REQUIRED] model path from which to load Karpathy's llama2.c model\n");
     fprintf(stderr, "  --llama2c-output-model FNAME     model path to save the converted llama2.c model (default %s')\n", params->fn_llama2c_output_model);
     fprintf(stderr, "\n");
 }
 
 bool params_parse(int argc, char ** argv, struct train_params * params) {
     bool invalid_param = false;
+    bool reqd_param_found = false;
     std::string arg;
     struct train_params default_params = get_default_train_params();
     const std::string arg_prefix = "--";
@@ -676,7 +677,7 @@ bool params_parse(int argc, char ** argv, struct train_params * params) {
             std::replace(arg.begin(), arg.end(), '_', '-');
         }
 
-        if (arg == "--vocab-model") {
+        if (arg == "--copy-vocab-from-model") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -687,6 +688,7 @@ bool params_parse(int argc, char ** argv, struct train_params * params) {
                 invalid_param = true;
                 break;
             }
+            reqd_param_found = true;
             params->fn_llama2c_model = argv[i];
         } else if (arg == "--llama2c-output-model") {
             if (++i >= argc) {
@@ -705,6 +707,11 @@ bool params_parse(int argc, char ** argv, struct train_params * params) {
     }
     if (invalid_param) {
         fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
+        print_usage(argc, argv, &default_params);
+        exit(1);
+    }
+    if (!reqd_param_found){
+        fprintf(stderr, "error: please specify a llama2.c .bin file to be converted with argument --llama2c-model\n");
         print_usage(argc, argv, &default_params);
         exit(1);
     }
