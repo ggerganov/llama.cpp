@@ -1037,7 +1037,6 @@ static json format_final_response(llama_server_context &llama, const std::string
         {"stopped_limit", llama.stopped_limit},
         {"stopping_word", llama.stopping_word},
         {"tokens_cached", llama.n_past},
-        {"tokens_predicted", llama.num_tokens_predicted},
         {"timings", format_timings(llama)},
     };
 
