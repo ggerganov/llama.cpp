@@ -493,6 +493,8 @@ struct ggml_context * ctx_data = NULL;
 
     gguf_ctx = gguf_init_from_file(fname, params);
 
+    read_hparams();
+    read_vocab();
         read_tensor_metadata(tensors_map);
     }
 
@@ -523,7 +525,7 @@ struct ggml_context * ctx_data = NULL;
             }
         }
 
-        throw std::runtime_error(format("failed to find n_mult for n_ff = %d and n_emb = %d\n", n_ff, n_embd));
+        throw std::runtime_error(format("failed to find n_mult for n_ff = %d and n_embd = %d\n", n_ff, n_embd));
     }
 
     void read_hparams() {
@@ -534,14 +536,14 @@ struct ggml_context * ctx_data = NULL;
         hparams.n_ctx   = read_u32("llama.context_length");
         hparams.n_embd  = read_u32("llama.embedding_length");
         uint32_t n_ff    = read_u32("llama.feed_forward_length");
-        hparams.n_mult  = find_n_mult(n_ff, hparams.n_embd);
+        //hparams.n_mult  = find_n_mult(n_ff, hparams.n_embd);
         hparams.n_head  = read_u32("llama.attention.head_count");
         hparams.n_layer = read_u32("llama.layer_count");
         hparams.n_rot   = hparams.n_embd / hparams.n_head;
         //hparams.ftype   = (enum llama_ftype) file.read_u32();
 
         // LLaMAv2
-        hparams.n_head_kv = read_u32("llama.attention.head_count_kv");
+        // hparams.n_head_kv = read_u32("llama.attention.head_count_kv");
     }
 
     void read_vocab() {
