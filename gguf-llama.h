@@ -222,13 +222,6 @@ extern "C" {
                      struct llama_model * model,
             struct llama_context_params   params);
 
-    // Various functions for loading a ggml llama model.
-    // Allocate (almost) all memory needed for the model.
-    // Return NULL on failure
-    LLAMA_API DEPRECATED(struct llama_context * llama_init_from_file(
-                             const char * path_model,
-            struct llama_context_params   params),
-            "please use llama_load_model_from_file combined with llama_new_context_with_model instead");
 
     // Frees all allocated memory
     LLAMA_API void llama_free(struct llama_context * ctx);
