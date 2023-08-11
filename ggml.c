@@ -19031,7 +19031,7 @@ const char * gguf_get_key(struct gguf_context * ctx, int i) {
     return ctx->header.kv[i].key.data;
 }
 
-const enum gguf_type gguf_get_kv_type(struct gguf_context * ctx, int i) {
+enum gguf_type gguf_get_kv_type(struct gguf_context * ctx, int i) {
     return ctx->header.kv[i].type;
 }
 
