@@ -531,7 +531,7 @@ static vk_buffer ggml_vk_create_buffer(size_t size, vk::MemoryPropertyFlags req_
     buf.sb_write = nullptr;
     buf.sb_read = nullptr;
 
-    buf.qf_owner = vk::QueueFamilyIgnored;
+    buf.qf_owner = VK_QUEUE_FAMILY_IGNORED;
 
     return buf;
 }
@@ -550,14 +550,14 @@ static void ggml_vk_sync_buffers(vk::CommandBuffer& cmd_buffer, std::vector<vk_s
     uint32_t dfi;
 
     for (auto& buf : buffers) {
-        if (buf.buffer.qf_owner != vk::QueueFamilyIgnored && buf.buffer.qf_owner != q.queue_family_index) {
+        if (buf.buffer.qf_owner != VK_QUEUE_FAMILY_IGNORED && buf.buffer.qf_owner != q.queue_family_index) {
             sfi = buf.buffer.qf_owner;
             dfi = q.queue_family_index;
             buf.buffer.qf_owner = dfi;
             bmem_barriers.push_back({ src_mask, dst_mask, sfi, dfi, buf.buffer.buffer, buf.offset, buf.size });
         } else if (force_sync) {
-            sfi = vk::QueueFamilyIgnored;
-            dfi = vk::QueueFamilyIgnored;
+            sfi = VK_QUEUE_FAMILY_IGNORED;
+            dfi = VK_QUEUE_FAMILY_IGNORED;
             bmem_barriers.push_back({ src_mask, dst_mask, sfi, dfi, buf.buffer.buffer, buf.offset, buf.size });
         }
     }
@@ -1230,7 +1230,7 @@ static vk_sequence ggml_vk_buffer_write_2d_async_zeropad(vk_buffer* dst, size_t 
             {},
             {},
             {
-                { vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryWrite, vk::QueueFamilyIgnored, vk::QueueFamilyIgnored, dst->buffer, 0, VK_WHOLE_SIZE }
+                { vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryWrite, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, dst->buffer, 0, VK_WHOLE_SIZE }
             },
             {}
         );
