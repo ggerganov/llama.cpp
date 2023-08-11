@@ -655,11 +655,29 @@ struct gguf_file_saver {
                 file.write_val<uint32_t>("general.quantization_version", GGUF_TYPE_UINT32, new_ftype);
             } else {
                 const gguf_type vtype = gguf_get_kv_type(any_file_loader->gguf_ctx, i);
+
+                bool bool_val;
+                float f32_val;
+                int16_t i16_val;
+                int32_t i32_val;
+
                 switch(vtype) {
                     case GGUF_TYPE_BOOL:
+                    bool_val = gguf_get_val_bool(any_file_loader->gguf_ctx, i);
+                    file.write_val<bool>(key, GGUF_TYPE_BOOL, bool_val);
+                    break;
                     case GGUF_TYPE_FLOAT32:
+                    f32_val = gguf_get_val_f32(any_file_loader->gguf_ctx, i);
+                    file.write_val<float>(key, GGUF_TYPE_FLOAT32, f32_val);
+                    break;
                     case GGUF_TYPE_INT16:
+                    i16_val = gguf_get_val_i16(any_file_loader->gguf_ctx, i);
+                    file.write_val<int16_t>(key, GGUF_TYPE_INT16, i16_val);
+                    break;
                     case GGUF_TYPE_INT32:
+                    i32_val = gguf_get_val_i32(any_file_loader->gguf_ctx, i);
+                    file.write_val<int32_t>(key, GGUF_TYPE_INT32, i32_val);
+                    break;
                     case GGUF_TYPE_INT8:
                     case GGUF_TYPE_STRING:
                     case GGUF_TYPE_UINT16:
