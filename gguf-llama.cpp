@@ -620,9 +620,9 @@ struct ggml_context * ctx_data = NULL;
 
 struct gguf_file_saver {
     gguf_file file;
-    gguf_file_loader * any_file_loader;
-    gguf_file_saver(const char * fname, gguf_file_loader * any_file_loader, enum llama_ftype new_ftype)
-        : file(fname, "wb"), any_file_loader(any_file_loader) {
+    gguf_file_loader * fl;
+    gguf_file_saver(const char * fname, gguf_file_loader * fl, enum llama_ftype new_ftype)
+        : file(fname, "wb"), fl(fl) {
         fprintf(stderr, "llama.cpp: saving model to %s\n", fname);
         write_header();
         write_hparams(new_ftype);
@@ -638,10 +638,10 @@ struct gguf_file_saver {
             const int32_t version = GGUF_VERSION;
             file.write_i32(version);
 
-            const int32_t n_tensors = gguf_get_n_tensors(any_file_loader->gguf_ctx);
+            const int32_t n_tensors = gguf_get_n_tensors(fl->gguf_ctx);
             file.write_i32(n_tensors);
 
-            const int32_t n_kv = gguf_get_n_kv(any_file_loader->gguf_ctx);
+            const int32_t n_kv = gguf_get_n_kv(fl->gguf_ctx);
             file.write_i32(n_kv);
         }
 
@@ -649,7 +649,7 @@ struct gguf_file_saver {
             std::vector<std::string> data(n_arr);
 
             for (int j = 0; j < n_arr; ++j) {
-                std::string val = gguf_get_arr_str(any_file_loader->gguf_ctx, i, j);
+                std::string val = gguf_get_arr_str(fl->gguf_ctx, i, j);
                 data[j] = val;
                 }
                             
@@ -660,7 +660,7 @@ struct gguf_file_saver {
             std::vector<float> data(n_arr);
 
             for (int j = 0; j < n_arr; ++j) {
-                float val = gguf_get_arr_f32(any_file_loader->gguf_ctx, i, j);
+                float val = gguf_get_arr_f32(fl->gguf_ctx, i, j);
                 data[j] = val;
                 }
                             
@@ -668,13 +668,13 @@ struct gguf_file_saver {
         }
 
     void write_hparams(enum llama_ftype new_ftype) {
-        const int32_t n_kv = gguf_get_n_kv(any_file_loader->gguf_ctx);
+        const int32_t n_kv = gguf_get_n_kv(fl->gguf_ctx);
         for (int i = 0; i < n_kv; ++i) {
-            const char * key = gguf_get_key(any_file_loader->gguf_ctx, i);
+            const char * key = gguf_get_key(fl->gguf_ctx, i);
             if (strcmp(key, "general.quantization_version") == 0) {
                 file.write_val<uint32_t>("general.quantization_version", GGUF_TYPE_UINT32, new_ftype);
             } else {
-                const gguf_type vtype = gguf_get_kv_type(any_file_loader->gguf_ctx, i);
+                const gguf_type vtype = gguf_get_kv_type(fl->gguf_ctx, i);
 
                 bool bool_val;
                 float f32_val;
@@ -690,44 +690,44 @@ struct gguf_file_saver {
 
                 switch(vtype) {
                     case GGUF_TYPE_BOOL:
-                    bool_val = gguf_get_val_bool(any_file_loader->gguf_ctx, i);
+                    bool_val = gguf_get_val_bool(fl->gguf_ctx, i);
                     file.write_val<bool>(key, GGUF_TYPE_BOOL, bool_val);
                     break;
                     case GGUF_TYPE_FLOAT32:
-                    f32_val = gguf_get_val_f32(any_file_loader->gguf_ctx, i);
+                    f32_val = gguf_get_val_f32(fl->gguf_ctx, i);
                     file.write_val<float>(key, GGUF_TYPE_FLOAT32, f32_val);
                     break;
                     case GGUF_TYPE_INT16:
-                    i16_val = gguf_get_val_i16(any_file_loader->gguf_ctx, i);
+                    i16_val = gguf_get_val_i16(fl->gguf_ctx, i);
                     file.write_val<int16_t>(key, GGUF_TYPE_INT16, i16_val);
                     break;
                     case GGUF_TYPE_INT32:
-                    i32_val = gguf_get_val_i32(any_file_loader->gguf_ctx, i);
+                    i32_val = gguf_get_val_i32(fl->gguf_ctx, i);
                     file.write_val<int32_t>(key, GGUF_TYPE_INT32, i32_val);
                     break;
                     case GGUF_TYPE_INT8:
-                    i8_val = gguf_get_val_i8(any_file_loader->gguf_ctx, i);
+                    i8_val = gguf_get_val_i8(fl->gguf_ctx, i);
                     file.write_val<int8_t>(key, GGUF_TYPE_INT8, i8_val);
                     break;
                     case GGUF_TYPE_STRING:
-                    str_val = gguf_get_val_str(any_file_loader->gguf_ctx, i);
+                    str_val = gguf_get_val_str(fl->gguf_ctx, i);
                     file.write_val<std::string>(key, GGUF_TYPE_STRING, str_val);
                     break;
                     case GGUF_TYPE_UINT16:
-                    u16_val = gguf_get_val_u16(any_file_loader->gguf_ctx, i);
+                    u16_val = gguf_get_val_u16(fl->gguf_ctx, i);
                     file.write_val<uint16_t>(key, GGUF_TYPE_UINT16, u16_val);
                     break;
                     case GGUF_TYPE_UINT32:
-                    u32_val = gguf_get_val_u32(any_file_loader->gguf_ctx, i);
+                    u32_val = gguf_get_val_u32(fl->gguf_ctx, i);
                     file.write_val<uint32_t>(key, GGUF_TYPE_UINT32, u32_val);
                     break;
                     case GGUF_TYPE_UINT8:
-                    u8_val = gguf_get_val_u8(any_file_loader->gguf_ctx, i);
+                    u8_val = gguf_get_val_u8(fl->gguf_ctx, i);
                     file.write_val<uint8_t>(key, GGUF_TYPE_UINT8, u8_val);
                     break;
                     case GGUF_TYPE_ARRAY:
-                    arr_type = gguf_get_arr_type(any_file_loader->gguf_ctx, i);
-                    n_arr    = gguf_get_arr_n(any_file_loader->gguf_ctx, i);
+                    arr_type = gguf_get_arr_type(fl->gguf_ctx, i);
+                    n_arr    = gguf_get_arr_n(fl->gguf_ctx, i);
                     if (arr_type == GGUF_TYPE_FLOAT32) {
                         write_hparam_arr_f32(key, arr_type, i, n_arr);
                         } else if (arr_type == GGUF_TYPE_STRING) {
@@ -745,7 +745,7 @@ struct gguf_file_saver {
     }
 
     void write_vocab() {
-        uint32_t n_vocab = any_file_loader->hparams.n_vocab;
+        uint32_t n_vocab = fl->hparams.n_vocab;
         GGML_UNUSED(n_vocab);
     }
 
