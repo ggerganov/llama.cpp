@@ -625,20 +625,25 @@ struct gguf_file_saver {
     gguf_file_saver(const char * fname, gguf_file_loader * any_file_loader, enum llama_ftype new_ftype)
         : file(fname, "wb"), any_file_loader(any_file_loader) {
         fprintf(stderr, "llama.cpp: saving model to %s\n", fname);
-        write_magic();
-        write_version();
+        write_header();
         write_hparams(new_ftype);
         write_vocab();
     }
 
-    void write_magic() {
+    // TODO: probably it's better to move these to gguf_file
+
+    void write_header() {
         const int32_t magic = GGUF_MAGIC;
         file.write_i32(magic);
-        }
-
-        void write_version() {
+    
             const int32_t version = GGUF_VERSION;
             file.write_i32(version);
+
+            const int32_t n_tensors = gguf_get_n_tensors(any_file_loader->gguf_ctx);
+            file.write_i32(n_tensors);
+
+            const int32_t n_kv = gguf_get_n_kv(any_file_loader->gguf_ctx);
+            file.write_i32(n_kv);
         }
 
     void write_hparams(enum llama_ftype new_ftype) {
@@ -651,7 +656,7 @@ struct gguf_file_saver {
         uint32_t n_vocab = any_file_loader->hparams.n_vocab;
         GGML_UNUSED(n_vocab);
     }
-    
+
     void write_tensor(llama_load_tensor & tensor, enum ggml_type new_type, const void * new_data, size_t new_size) {
         switch (new_type) {
             case GGML_TYPE_F32:
