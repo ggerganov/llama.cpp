@@ -1663,8 +1663,8 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q8_1_q8_1_imp
 #else
     const float2 dm8f = __half22float2(dm8);
     const float2 ds8f = __half22float2(ds8);
-    const float d8d8 = __low2float(dm8) * __low2float(ds8);
-    const float m8s8 = __high2float(dm8) * __high2float(ds8);
+    const float d8d8 = dm8f.x * ds8f.x;
+    const float m8s8 = dm8f.y * ds8f.y;
 #endif // GGML_CUDA_F16
 
     // scale second part of sum by QI8_1/ vdr to compensate for multiple threads adding it
