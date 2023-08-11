@@ -19031,6 +19031,10 @@ const char * gguf_get_key(struct gguf_context * ctx, int i) {
     return ctx->header.kv[i].key.data;
 }
 
+const enum gguf_type gguf_get_kv_type(struct gguf_context * ctx, int i) {
+    return ctx->header.kv[i].type;
+}
+
 const char * gguf_get_arr_str(struct gguf_context * ctx, int key_id, int i) {
     struct gguf_kv * kv = &ctx->header.kv[key_id];
     struct gguf_str * str = &((struct gguf_str *) kv->value.arr.data)[i];

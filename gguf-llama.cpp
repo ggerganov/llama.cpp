@@ -652,6 +652,9 @@ struct gguf_file_saver {
             const char * key = gguf_get_key(any_file_loader->gguf_ctx, i);
             if (strcmp(key, "general.quantization_version") == 0) {
                 file.write_val<uint32_t>("general.quantization_version", GGUF_TYPE_UINT32, new_ftype);
+            } else {
+                const gguf_type vtype = gguf_get_kv_type(any_file_loader->gguf_ctx, i);
+                GGML_UNUSED(vtype);
             }
         }
 

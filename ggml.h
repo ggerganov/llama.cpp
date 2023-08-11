@@ -1744,10 +1744,11 @@ extern "C" {
     GGML_API size_t gguf_get_data_offset(struct gguf_context * ctx);
     GGML_API void * gguf_get_data       (struct gguf_context * ctx);
 
-    GGML_API int          gguf_get_n_kv(struct gguf_context * ctx);
-    GGML_API int          gguf_find_key(struct gguf_context * ctx, const char * key);
-    GGML_API const char * gguf_get_key (struct gguf_context * ctx, int i);
-    GGML_API void         gguf_get_val (struct gguf_context * ctx, int i, void * val);
+    GGML_API int                  gguf_get_n_kv(struct gguf_context * ctx);
+    GGML_API int                  gguf_find_key(struct gguf_context * ctx, const char * key);
+    GGML_API const char *         gguf_get_key (struct gguf_context * ctx, int i);
+    GGML_API const enum gguf_type gguf_get_kv_type (struct gguf_context * ctx, int i);
+    GGML_API void                 gguf_get_val (struct gguf_context * ctx, int i, void * val);
 
     GGML_API const char * gguf_get_arr_str(struct gguf_context * ctx, int key_id, int i);
     GGML_API float        gguf_get_arr_f32(struct gguf_context * ctx, int key_id, int i);
