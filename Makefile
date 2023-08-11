@@ -19,6 +19,14 @@ ifndef UNAME_M
 UNAME_M := $(shell uname -m)
 endif
 
+ifdef RISCV_CROSS_COMPILE
+CC	:= riscv64-unknown-linux-gnu-gcc
+	CXX	:= riscv64-unknown-linux-gnu-g++
+endif
+
+CCV := $(shell $(CC) --version | head -n 1)
+CXXV := $(shell $(CXX) --version | head -n 1)
+
 # Mac OS + Arm can report x86_64
 # ref: https://github.com/ggerganov/whisper.cpp/issues/66#issuecomment-1282546789
 ifeq ($(UNAME_S),Darwin)
@@ -286,8 +294,8 @@ ifneq ($(filter ppc64%,$(UNAME_M)),)
 endif
 
 else
-	MK_CFLAGS   += -march=rv64gcv -mabi=lp64d
-	MK_CXXFLAGS += -march=rv64gcv -mabi=lp64d
+	CFLAGS += -march=rv64gcv -mabi=lp64d
+	CXXFLAGS +=  -march=rv64gcv -mabi=lp64d
 endif
 
 ifndef LLAMA_NO_K_QUANTS
