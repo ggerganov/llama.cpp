@@ -1,5 +1,5 @@
 set(TEMPLATE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.h.in")
-set(HEADER_FILE "${CMAKE_CURRENT_BINARY_DIR}/build-info.h")
+set(HEADER_FILE "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h")
 set(BUILD_NUMBER 0)
 set(BUILD_COMMIT "unknown")
 

@@ -45,7 +45,7 @@
           cp $src/llama-util.h $out/include
           cp $src/ggml.h $out/include
           cp $src/ggml-alloc.h $out/include
-          cp $out/build-info.h $out/include
+          cp $cmakeDir/build-info.h $out/include
 
           cp $src/k_quants.h $out/include
           cp $src/ggml-mpi.h $out/include
