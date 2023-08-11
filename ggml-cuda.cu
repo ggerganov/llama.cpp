@@ -74,7 +74,9 @@
 #include "ggml.h"
 
 #define MIN_CC_DP4A 610 // minimum compute capability for __dp4a, an intrinsic for byte-wise dot products
-#define CC_TURING   1000000000
+#ifndef CC_TURING
+#define CC_TURING   700
+#endif
 
 #if defined(GGML_USE_HIPBLAS)
 #define __CUDA_ARCH__ 1300
