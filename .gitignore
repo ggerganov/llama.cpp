@@ -78,12 +78,12 @@ tests/test-quantize-perf
 tests/test-sampling
 tests/test-tokenizer-0
 
-koboldcpp.so
+koboldcpp_default.so
 koboldcpp_failsafe.so
 koboldcpp_openblas.so
 koboldcpp_noavx2.so
 koboldcpp_clblast.so
-koboldcpp.dll
+koboldcpp_default.dll
 koboldcpp_failsafe.dll
 koboldcpp_openblas.dll
 koboldcpp_noavx2.dll

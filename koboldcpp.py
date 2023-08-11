@@ -87,7 +87,7 @@ def pick_existant_file(ntoption,nonntoption):
             return ntoption
         return nonntoption
 
-lib_default = pick_existant_file("koboldcpp.dll","koboldcpp.so")
+lib_default = pick_existant_file("koboldcpp_default.dll","koboldcpp_default.so")
 lib_failsafe = pick_existant_file("koboldcpp_failsafe.dll","koboldcpp_failsafe.so")
 lib_openblas = pick_existant_file("koboldcpp_openblas.dll","koboldcpp_openblas.so")
 lib_noavx2 = pick_existant_file("koboldcpp_noavx2.dll","koboldcpp_noavx2.so")
