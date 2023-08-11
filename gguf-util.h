@@ -140,6 +140,33 @@ struct gguf_file {
         fwrite((const char *) &n, sizeof(n), 1, fp);
         fwrite(val.data(), sizeof(T), n, fp);
     }
+    template<>
+    void write_val<std::string>(const std::string & key, enum gguf_type type, const std::string & val) {
+        write_str(key);
+        fwrite((const char *) &type, sizeof(type), 1, fp);
+
+        const int32_t n = val.size();
+        fwrite((const char *) &n, sizeof(n), 1, fp);
+        fwrite(val.c_str(), n, 1, fp);
+    }
+
+    template<>
+    void write_arr<std::string>(const std::string & key, enum gguf_type type, const std::vector<std::string> & val) {
+        write_str(key);
+        {
+            const enum gguf_type tarr = GGUF_TYPE_ARRAY;
+            fwrite((const char *) &tarr, sizeof(tarr), 1, fp);
+        }
+
+        const int32_t n = val.size();
+        fwrite((const char *) &type, sizeof(type), 1, fp);
+        fwrite((const char *) &n, sizeof(n), 1, fp);
+        for (int i = 0; i < n; ++i) {
+            const int32_t nstr = val[i].size();
+            fwrite((const char *) &nstr, sizeof(nstr), 1, fp);
+            fwrite(val[i].c_str(), nstr, 1, fp);
+        }
+    }
 };
 
 #if defined(_WIN32)

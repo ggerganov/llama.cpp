@@ -660,6 +660,12 @@ struct gguf_file_saver {
                 float f32_val;
                 int16_t i16_val;
                 int32_t i32_val;
+                int8_t i8_val;
+                std::string str_val;
+                uint16_t u16_val;
+                uint32_t u32_val;
+                uint8_t u8_val;
+
 
                 switch(vtype) {
                     case GGUF_TYPE_BOOL:
@@ -679,10 +685,25 @@ struct gguf_file_saver {
                     file.write_val<int32_t>(key, GGUF_TYPE_INT32, i32_val);
                     break;
                     case GGUF_TYPE_INT8:
+                    i8_val = gguf_get_val_i8(any_file_loader->gguf_ctx, i);
+                    file.write_val<int8_t>(key, GGUF_TYPE_INT8, i8_val);
+                    break;
                     case GGUF_TYPE_STRING:
+                    str_val = gguf_get_val_str(any_file_loader->gguf_ctx, i);
+                    file.write_val<std::string>(key, GGUF_TYPE_STRING, str_val);
+                    break;
                     case GGUF_TYPE_UINT16:
+                    u16_val = gguf_get_val_u16(any_file_loader->gguf_ctx, i);
+                    file.write_val<uint16_t>(key, GGUF_TYPE_UINT16, u16_val);
+                    break;
                     case GGUF_TYPE_UINT32:
+                    u32_val = gguf_get_val_u32(any_file_loader->gguf_ctx, i);
+                    file.write_val<uint32_t>(key, GGUF_TYPE_UINT32, u32_val);
+                    break;
                     case GGUF_TYPE_UINT8:
+                    u8_val = gguf_get_val_u8(any_file_loader->gguf_ctx, i);
+                    file.write_val<uint8_t>(key, GGUF_TYPE_UINT8, u8_val);
+                    break;
                     case GGUF_TYPE_ARRAY:
                     break;
                     default:
