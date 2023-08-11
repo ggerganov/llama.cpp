@@ -647,9 +647,14 @@ struct gguf_file_saver {
         }
 
     void write_hparams(enum llama_ftype new_ftype) {
-        const llama_hparams & hparams = any_file_loader->hparams;
-        GGML_UNUSED(hparams);
-        GGML_UNUSED(new_ftype);
+        const int32_t n_kv = gguf_get_n_kv(any_file_loader->gguf_ctx);
+        for (int i = 0; i < n_kv; ++i) {
+            const char * key = gguf_get_key(any_file_loader->gguf_ctx, i);
+            if (strcmp(key, "general.quantization_version") == 0) {
+                file.write_val<uint32_t>("general.quantization_version", GGUF_TYPE_UINT32, new_ftype);
+            }
+        }
+
     }
 
     void write_vocab() {
@@ -658,6 +663,10 @@ struct gguf_file_saver {
     }
 
     void write_tensor(llama_load_tensor & tensor, enum ggml_type new_type, const void * new_data, size_t new_size) {
+        GGML_UNUSED(tensor);
+        GGML_UNUSED(new_data);
+        GGML_UNUSED(new_size);
+
         switch (new_type) {
             case GGML_TYPE_F32:
             case GGML_TYPE_F16:
