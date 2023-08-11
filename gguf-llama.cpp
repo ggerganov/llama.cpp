@@ -626,7 +626,6 @@ struct gguf_file_saver {
         fprintf(stderr, "llama.cpp: saving model to %s\n", fname);
         write_header();
         write_hparams(new_ftype);
-        write_vocab();
     }
 
     // TODO: probably it's better to move these to gguf_file
@@ -744,10 +743,6 @@ struct gguf_file_saver {
 
     }
 
-    void write_vocab() {
-        uint32_t n_vocab = fl->hparams.n_vocab;
-        GGML_UNUSED(n_vocab);
-    }
 
     void write_tensor(llama_load_tensor & tensor, enum ggml_type new_type, const void * new_data, size_t new_size) {
         GGML_UNUSED(tensor);
