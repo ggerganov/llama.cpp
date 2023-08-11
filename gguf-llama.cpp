@@ -626,20 +626,32 @@ struct gguf_file_saver {
         : file(fname, "wb"), any_file_loader(any_file_loader) {
         fprintf(stderr, "llama.cpp: saving model to %s\n", fname);
         write_magic();
+        write_version();
         write_hparams(new_ftype);
         write_vocab();
     }
+
     void write_magic() {
+        const int32_t magic = GGUF_MAGIC;
+        file.write_i32(magic);
         }
+
+        void write_version() {
+            const int32_t version = GGUF_VERSION;
+            file.write_i32(version);
+        }
+
     void write_hparams(enum llama_ftype new_ftype) {
         const llama_hparams & hparams = any_file_loader->hparams;
         GGML_UNUSED(hparams);
         GGML_UNUSED(new_ftype);
     }
+
     void write_vocab() {
         uint32_t n_vocab = any_file_loader->hparams.n_vocab;
         GGML_UNUSED(n_vocab);
     }
+    
     void write_tensor(llama_load_tensor & tensor, enum ggml_type new_type, const void * new_data, size_t new_size) {
         switch (new_type) {
             case GGML_TYPE_F32:

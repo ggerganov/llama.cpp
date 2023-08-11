@@ -15,6 +15,7 @@
 #include <climits>
 
 #include <string>
+#include <sstream>
 #include <vector>
 #include <stdexcept>
 
@@ -61,6 +62,14 @@ static std::string format(const char * fmt, ...) {
     return std::string(buf.data(), size);
 }
 
+
+template<typename T>
+static std::string to_string(const T & val) {
+    std::stringstream ss;
+    ss << val;
+    return ss.str();
+}
+
 // TODO: can we merge this one and gguf_context?
 struct gguf_file {
     // use FILE * so we don't have to re-open the file to mmap
@@ -94,6 +103,42 @@ struct gguf_file {
         int ret = std::fseek(fp, (long) offset, whence);
 #endif
         GGML_ASSERT(ret == 0); // same
+    }
+
+    
+    void write_str(const std::string & val) {
+        const int32_t n = val.size();
+        fwrite((const char *) &n, sizeof(n), 1, fp);
+        fwrite(val.c_str(), n, 1, fp);
+    }
+
+    void write_i32(int32_t val) {
+        fwrite((const char *) &val, sizeof(val), 1, fp);
+    }
+
+    void write_u64(size_t val) {
+        fwrite((const char *) &val, sizeof(val), 1, fp);
+    }
+
+    template<typename T>
+    void write_val(const std::string & key, enum gguf_type type, const T & val) {
+        write_str(key);
+        fwrite((const char *) &type, sizeof(type), 1, fp);
+        fwrite((const char *) &val, sizeof(val), 1, fp);
+    }
+
+    template<typename T>
+    void write_arr(const std::string & key, enum gguf_type type, const std::vector<T> & val) {
+        write_str(key);
+        {
+            const enum gguf_type tarr = GGUF_TYPE_ARRAY;
+            fwrite((const char *) &tarr, sizeof(tarr), 1, fp);
+        }
+
+        const int32_t n = val.size();
+        fwrite((const char *) &type, sizeof(type), 1, fp);
+        fwrite((const char *) &n, sizeof(n), 1, fp);
+        fwrite(val.data(), sizeof(T), n, fp);
     }
 };
 
