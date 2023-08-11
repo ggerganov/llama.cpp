@@ -26,15 +26,15 @@ def get_tensor_map( n_blocks : int):
     tensor_map["output"] = mapped_to    # llama-pth
     # Attention and fee-forward layer blocks
     for i in range(0,n_blocks):
-        # Attention norm 1
-        mapped_to = "transformer.blocks."+str(i)+".attn_norm_1"
+        # Attention norm
+        mapped_to = "transformer.blocks."+str(i)+".attn_norm"
         tensor_map["gpt_neox.layers."+str(i)+".input_layernorm"] = mapped_to # gptneox
-        tensor_map["transformer.h."+str(i)+".ln_1"] = mapped_to             # gpt2
-        tensor_map["transformer.blocks."+str(i)+".norm_1"] = mapped_to      # mpt
-        tensor_map["transformer.h."+str(i)+".input_layernorm"] = mapped_to  # falcon7b
-        tensor_map["transformer.h."+str(i)+".ln_attn"] = mapped_to          # falcon40b
-        tensor_map["model.layers."+str(i)+".input_layernorm"] = mapped_to   # llama-hf
-        tensor_map["layers."+str(i)+".attention_norm"] = mapped_to          # llama-pth
+        tensor_map["transformer.h."+str(i)+".ln_1"] = mapped_to              # gpt2
+        tensor_map["transformer.blocks."+str(i)+".norm_1"] = mapped_to       # mpt
+        tensor_map["transformer.h."+str(i)+".input_layernorm"] = mapped_to   # falcon7b
+        tensor_map["transformer.h."+str(i)+".ln_attn"] = mapped_to           # falcon40b
+        tensor_map["model.layers."+str(i)+".input_layernorm"] = mapped_to    # llama-hf
+        tensor_map["layers."+str(i)+".attention_norm"] = mapped_to           # llama-pth
         # Attention norm 2
         mapped_to = "transformer.blocks."+str(i)+".attn_norm_2"
         tensor_map["transformer.h."+str(i)+".ln_mlp"] = mapped_to # falcon40b
