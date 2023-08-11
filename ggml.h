@@ -1748,6 +1748,7 @@ extern "C" {
     GGML_API int            gguf_find_key(struct gguf_context * ctx, const char * key);
     GGML_API const char *   gguf_get_key (struct gguf_context * ctx, int i);
     GGML_API enum gguf_type gguf_get_kv_type (struct gguf_context * ctx, int i);
+    GGML_API enum gguf_type gguf_get_arr_type (struct gguf_context * ctx, int i);
     GGML_API void           gguf_get_val (struct gguf_context * ctx, int i, void * val);
 
     GGML_API const char * gguf_get_arr_str(struct gguf_context * ctx, int key_id, int i);
