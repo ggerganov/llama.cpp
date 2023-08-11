@@ -1008,7 +1008,7 @@ static json format_timings(llama_server_context &llama)
     assert(timings.n_eval == llama.num_tokens_predicted);
 
     return json{
-        {"prompt_n", timings.n_eval},
+        {"prompt_n", timings.n_p_eval},
         {"prompt_ms", timings.t_p_eval_ms},
         {"prompt_per_token_ms", timings.t_p_eval_ms / timings.n_p_eval},
         {"prompt_per_second", 1e3 / timings.t_p_eval_ms * timings.n_p_eval},
@@ -1037,7 +1037,6 @@ static json format_final_response(llama_server_context &llama, const std::string
         {"stopped_limit", llama.stopped_limit},
         {"stopping_word", llama.stopping_word},
         {"tokens_cached", llama.n_past},
-        {"tokens_predicted", llama.num_tokens_predicted},
         {"timings", format_timings(llama)},
     };
 
