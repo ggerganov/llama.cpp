@@ -271,19 +271,17 @@ struct llama_mmap {
             throw std::runtime_error(format("MapViewOfFile failed: %s", llama_format_win_err(error).c_str()));
         }
 
-        #if _WIN32_WINNT >= _WIN32_WINNT_WIN8
         if (prefetch) {
             // The PrefetchVirtualMemory API is only present on Windows 8 and above, so we
             // will dynamically load it using GetProcAddress.
-			typedef BOOL (WINAPI *PPREFETCHVIRTUALMEMORY) (HANDLE, ULONG_PTR, PWIN32_MEMORY_RANGE_ENTRY, ULONG);
-            PPREFETCHVIRTUALMEMORY pPrefetchVirtualMemory;
+            BOOL (WINAPI *pPrefetchVirtualMemory) (HANDLE, ULONG_PTR, PWIN32_MEMORY_RANGE_ENTRY, ULONG);
             HMODULE hKernel32;
 
             // This call is guaranteed to succeed.
             hKernel32 = GetModuleHandleW(L"kernel32.dll");
 
             // This call may fail if on a pre-Win8 system.
-            pPrefetchVirtualMemory = (PPREFETCHVIRTUALMEMORY) GetProcAddress(hKernel32, "PrefetchVirtualMemory");
+            pPrefetchVirtualMemory = reinterpret_cast<decltype(pPrefetchVirtualMemory)> GetProcAddress(hKernel32, "PrefetchVirtualMemory");
 
             if (pPrefetchVirtualMemory) {
                 // Advise the kernel to preload the mapped memory.
@@ -296,9 +294,6 @@ struct llama_mmap {
                 }
             }
         }
-        #else
-        #pragma message("warning: You are building for pre-Windows 8; prefetch not supported")
-        #endif // _WIN32_WINNT >= _WIN32_WINNT_WIN8
     }
 
     ~llama_mmap() {
