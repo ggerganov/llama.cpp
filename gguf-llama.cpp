@@ -614,6 +614,7 @@ struct ggml_context * ctx_data = NULL;
 struct gguf_file_saver {
     gguf_file file;
     gguf_file_loader * fl;
+    size_t info_offset;
     gguf_file_saver(const char * fname, gguf_file_loader * fl, enum llama_ftype new_ftype)
         : file(fname, "wb"), fl(fl) {
         fprintf(stderr, "llama.cpp: saving model to %s\n", fname);
@@ -734,6 +735,9 @@ struct gguf_file_saver {
             }
         }
 
+        info_offset  = file.tell();
+        size_t count = gguf_get_data_offset(fl->gguf_ctx) - info_offset;
+        file.write_zeros(count);
     }
 
 

@@ -106,18 +106,21 @@ struct gguf_file {
     }
 
     
-    void write_str(const std::string & val) {
+    size_t write_str(const std::string & val) {
+        size_t total_written = 0;
         const int32_t n = val.size();
-        fwrite((const char *) &n, sizeof(n), 1, fp);
-        fwrite(val.c_str(), n, 1, fp);
+        total_written += fwrite((const char *) &n, sizeof(n), 1, fp);
+        total_written += fwrite(val.c_str(), n, 1, fp);
+
+        return total_written;
     }
 
-    void write_i32(int32_t val) {
-        fwrite((const char *) &val, sizeof(val), 1, fp);
+    size_t write_i32(int32_t val) {
+        return fwrite((const char *) &val, sizeof(val), 1, fp);
     }
 
-    void write_u64(size_t val) {
-        fwrite((const char *) &val, sizeof(val), 1, fp);
+    size_t write_u64(size_t val) {
+        return fwrite((const char *) &val, sizeof(val), 1, fp);
     }
 
     template<typename T>
@@ -165,6 +168,12 @@ struct gguf_file {
             const int32_t nstr = val[i].size();
             fwrite((const char *) &nstr, sizeof(nstr), 1, fp);
             fwrite(val[i].c_str(), nstr, 1, fp);
+        }
+    }
+
+    void write_zeros(size_t count) {
+        for (size_t i = 0; i < count; ++i) {
+            fputc(0, fp);
         }
     }
 };
