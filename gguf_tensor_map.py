@@ -68,7 +68,7 @@ def get_tensor_map( n_blocks : int):
         mapped_to = "transformer.blocks."+str(i)+".ffn_norm"
         tensor_map["gpt_neox.layers."+str(i)+".post_attention_layernorm"] = mapped_to # gptneox
         tensor_map["transformer.h."+str(i)+".ln_2"] = mapped_to                       # gpt2
-        tensor_map[" transformer.blocks."+str(i)+".norm_2"] = mapped_to               # mpt
+        tensor_map["transformer.blocks."+str(i)+".norm_2"] = mapped_to               # mpt
         tensor_map["model.layers."+str(i)+".post_attention_layernorm"] = mapped_to    # llama-hf
         tensor_map["layers."+str(i)+".ffn_norm"] = mapped_to                          # llama-pth
         # Feed-forward up
