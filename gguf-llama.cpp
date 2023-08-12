@@ -738,15 +738,19 @@ struct gguf_file_saver {
         info_offset  = file.tell();
         size_t count = gguf_get_data_offset(fl->gguf_ctx) - info_offset;
         file.write_zeros(count);
+        printf("info_offset = %zu\n", info_offset);
+        file.seek(info_offset, SEEK_SET);
+        GGML_ASSERT(info_offset == file.tell());
     }
 
     size_t write_tensor_info(llama_load_tensor & tensor) {
         size_t total_written = 0;
-        file.seek(0, info_offset);
+        file.seek(info_offset, SEEK_SET);
+        GGML_ASSERT(info_offset == file.tell());
         total_written += file.write_str(tensor.name);
 
         int32_t n_dims = tensor.ne.size();
-        file.write_i32(n_dims);
+        total_written += file.write_i32(n_dims);
         for (int32_t i = 0; i < n_dims; ++i) {
             total_written += file.write_i32(i);
         }

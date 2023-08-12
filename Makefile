@@ -393,7 +393,7 @@ $(LIB_PRE)embdinput$(DSO_EXT): examples/embd-input/embd-input.h examples/embd-in
 embd-input-test: $(LIB_PRE)embdinput$(DSO_EXT) examples/embd-input/embd-input-test.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %$(DSO_EXT),$(filter-out %.h,$(filter-out %.hpp,$^))) -o $@ $(LDFLAGS) -L. -lembdinput
 
-gguf: examples/gguf/gguf.cpp                                  build-info.h ggml.o $(OBJS)
+gguf: examples/gguf/gguf.cpp                                  build-info.h ggml.o gguf-llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 gguf-llama-simple: examples/gguf/gguf-llama-simple.cpp                            build-info.h ggml.o gguf-llama.o common.o $(OBJS)

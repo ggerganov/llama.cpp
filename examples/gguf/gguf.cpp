@@ -1,5 +1,6 @@
 #include "ggml.h"
 #include "gguf-util.h"
+#include "gguf-llama.h"
 
 #include <cstdio>
 #include <cinttypes>
@@ -7,14 +8,14 @@
 #include <sstream>
 #include <fstream>
 #include <vector>
-
+/*
 template<typename T>
 static std::string to_string(const T & val) {
     std::stringstream ss;
     ss << val;
     return ss.str();
 }
-
+*/
 void gguf_ex_write_str(std::ofstream & fout, const std::string & val) {
     const int32_t n = val.size();
     fout.write((const char *) &n, sizeof(n));
@@ -414,7 +415,7 @@ int main(int argc, char ** argv) {
     const std::string fname(argv[1]);
     const std::string mode (argv[2]);
 
-    GGML_ASSERT((mode == "r" || mode == "w") && "mode must be r or w");
+    GGML_ASSERT((mode == "r" || mode == "w" || mode == "q") && "mode must be r, w or q");
 
     if (mode == "w") {
         GGML_ASSERT(gguf_ex_write(fname) && "failed to write gguf file");
@@ -422,6 +423,9 @@ int main(int argc, char ** argv) {
         GGML_ASSERT(gguf_ex_read_0(fname) && "failed to read gguf file");
         GGML_ASSERT(gguf_ex_read_1(fname) && "failed to read gguf file");
         GGML_ASSERT(gguf_ex_read_2(fname) && "failed to read gguf file");
+    } else if (mode == "q") {
+        llama_model_quantize_params params = llama_model_quantize_default_params();
+        llama_model_quantize(fname.c_str(), "quant.gguf", &params);
     }
 
     return 0;
