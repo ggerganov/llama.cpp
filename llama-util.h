@@ -275,16 +275,15 @@ struct llama_mmap {
         if (prefetch) {
             // The PrefetchVirtualMemory API is only present on Windows 8 and above, so we
             // will dynamically load it using GetProcAddress.
-            BOOL (WINAPI *pPrefetchVirtualMemory) (HANDLE, ULONG_PTR, PWIN32_MEMORY_RANGE_ENTRY, ULONG);
+			typedef BOOL (WINAPI *PPREFETCHVIRTUALMEMORY) (HANDLE, ULONG_PTR, PWIN32_MEMORY_RANGE_ENTRY, ULONG);
+            PPREFETCHVIRTUALMEMORY pPrefetchVirtualMemory;
             HMODULE hKernel32;
 
             // This call is guaranteed to succeed.
             hKernel32 = GetModuleHandleW(L"kernel32.dll");
 
             // This call may fail if on a pre-Win8 system.
-            pPrefetchVirtualMemory = 
-                (BOOL (WINAPI *) (HANDLE, ULONG_PTR, PWIN32_MEMORY_RANGE_ENTRY, ULONG))
-                GetProcAddress(hKernel32, "PrefetchVirtualMemory");
+            pPrefetchVirtualMemory = (PPREFETCHVIRTUALMEMORY) GetProcAddress(hKernel32, "PrefetchVirtualMemory");
 
             if (pPrefetchVirtualMemory) {
                 // Advise the kernel to preload the mapped memory.
