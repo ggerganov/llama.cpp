@@ -752,7 +752,6 @@ struct gguf_file_saver {
         file.seek(info_offset, SEEK_SET);
         GGML_ASSERT(info_offset == file.tell());
         total_written += file.write_str(tensor.name);
-printf("total_written = %zu, name = %s\n", total_written, tensor.name.c_str());
 
         int32_t n_dims = tensor.ne.size();
         total_written += file.write_i32(n_dims);
@@ -765,8 +764,7 @@ printf("total_written = %zu, name = %s\n", total_written, tensor.name.c_str());
         info_offset   += total_written;
 
         file.seek(0, SEEK_END);
-        printf("total_written = %zu\n", total_written);
-
+        
         return total_written;
     }
 
@@ -936,8 +934,7 @@ struct llama_model_loader {
         } else {
             gguf_file & file = file_loader->file;
             file.seek(lt.file_off, SEEK_SET);
-            // TODO
-            //file.read_raw(lt.data, lt.size);
+            file.read_raw(lt.data, lt.size);
         }
 
         if (0) {

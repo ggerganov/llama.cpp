@@ -421,7 +421,7 @@ int main(int argc, char ** argv) {
         GGML_ASSERT(gguf_ex_write(fname) && "failed to write gguf file");
     } else if (mode == "r") {
         GGML_ASSERT(gguf_ex_read_0(fname) && "failed to read gguf file");
-        //GGML_ASSERT(gguf_ex_read_1(fname) && "failed to read gguf file");
+        GGML_ASSERT(gguf_ex_read_1(fname) && "failed to read gguf file");
         GGML_ASSERT(gguf_ex_read_2(fname) && "failed to read gguf file");
     } else if (mode == "q") {
         llama_model_quantize_params params = llama_model_quantize_default_params();

@@ -131,6 +131,10 @@ struct gguf_file {
         fwrite(data, size, 1, fp);
     }
 
+    void read_raw(void * data, size_t size) {
+        fread(data, size, 1, fp);
+    }
+
     template<typename T>
     void write_val(const std::string & key, enum gguf_type type, const T & val) {
         write_str(key);
