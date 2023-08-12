@@ -1028,8 +1028,8 @@ static void ggml_vk_dispatch_pipeline(vk_submission& s, vk_pipeline& pipeline, s
 #endif
     std::vector<vk::DescriptorBufferInfo> descriptor_buffer_infos;
     std::vector<vk::WriteDescriptorSet> write_descriptor_sets;
+    GGML_ASSERT(pipeline.descriptor_set_index < pipeline.descriptor_sets.size());
     vk::DescriptorSet& descriptor_set = pipeline.descriptor_sets[pipeline.descriptor_set_index++];
-    GGML_ASSERT(descriptor_set != nullptr);
     for (uint32_t i = 0; i < pipeline.parameter_count; i++) {
         descriptor_buffer_infos.push_back({buffers[i].buffer.buffer, buffers[i].offset, buffers[i].size});
     }
