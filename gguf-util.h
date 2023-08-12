@@ -105,7 +105,6 @@ struct gguf_file {
         GGML_ASSERT(ret == 0); // same
     }
 
-    
     size_t write_str(const std::string & val) {
         size_t total_written = 0;
         const int32_t n = val.size();
@@ -125,14 +124,6 @@ struct gguf_file {
     size_t write_u64(size_t val) {
         fwrite((const char *) &val, sizeof(val), 1, fp);
         return sizeof(val);
-    }
-
-    void write_raw(const void * data, size_t size) {
-        fwrite(data, size, 1, fp);
-    }
-
-    void read_raw(void * data, size_t size) {
-        fread(data, size, 1, fp);
     }
 
     template<typename T>
@@ -155,6 +146,7 @@ struct gguf_file {
         fwrite((const char *) &n, sizeof(n), 1, fp);
         fwrite(val.data(), sizeof(T), n, fp);
     }
+    
     template<>
     void write_val<std::string>(const std::string & key, enum gguf_type type, const std::string & val) {
         write_str(key);
@@ -186,6 +178,37 @@ struct gguf_file {
     void write_zeros(size_t count) {
         for (size_t i = 0; i < count; ++i) {
             fputc(0, fp);
+        }
+    }
+    
+    void read_raw(void * ptr, size_t len) const {
+        if (len == 0) {
+            return;
+        }
+        errno = 0;
+        std::size_t ret = std::fread(ptr, len, 1, fp);
+        if (ferror(fp)) {
+            throw std::runtime_error(format("read error: %s", strerror(errno)));
+        }
+        if (ret != 1) {
+            throw std::runtime_error(std::string("unexpectedly reached end of file"));
+        }
+    }
+
+    void write_raw(const void * ptr, size_t len) const {
+        if (len == 0) {
+            return;
+        }
+        errno = 0;
+        size_t ret = std::fwrite(ptr, len, 1, fp);
+        if (ret != 1) {
+            throw std::runtime_error(format("write error: %s", strerror(errno)));
+        }
+    }
+
+    ~gguf_file() {
+        if (fp) {
+            std::fclose(fp);
         }
     }
 };
