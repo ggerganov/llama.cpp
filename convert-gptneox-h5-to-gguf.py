@@ -85,7 +85,7 @@ gguf_writer.add_name(last_dir)
 gguf_writer.add_architecture(llm_arch)
 gguf_writer.add_context_length(llm_arch, hparams["max_position_embeddings"])
 gguf_writer.add_embedding_length(llm_arch, hparams["hidden_size"])
-gguf_writer.add_layer_count(llm_arch, block_count)
+gguf_writer.add_block_count(llm_arch, block_count)
 gguf_writer.add_feed_forward_length(llm_arch, hparams["intermediate_size"])
 gguf_writer.add_rope_dimension_count(llm_arch, int( hparams["rotary_pct"]*(hparams["hidden_size"]//hparams["num_attention_heads"])) )
 gguf_writer.add_head_count(llm_arch, hparams["num_attention_heads"])
@@ -116,7 +116,7 @@ if Path(dir_model + "/tokenizer.json").is_file():
 
     vocab_size = len( tokenizer_json["model"]["vocab"] )
 
-    # from ggllm.cpp falcon_convert.py
+    # ref: https://github.com/cmp-nct/ggllm.cpp/blob/master/falcon_convert.py
     tokenizer = AutoTokenizer.from_pretrained(dir_model)
 
     reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.vocab.items()}
