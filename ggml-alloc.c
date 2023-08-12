@@ -394,6 +394,14 @@ static void allocate_node(struct ggml_allocr * alloc, struct ggml_tensor * node)
                     if (parent == NULL) {
                         break;
                     }
+
+                    // if the node's data is external, then we cannot re-use it
+                    if ((char *) parent->data < (char *) alloc->data ||
+                        (char *) parent->data >= ((char *) alloc->data + alloc->size)) {
+                        AT_PRINTF("not reusing parent %s for %s as %p is external\n", parent->name, node->name, parent->data);
+                        continue;
+                    }
+
                     struct hash_node * p_hn = hash_get(ht, parent);
                     if (parent->data != NULL && p_hn->n_children == 1 && p_hn->n_views == 0 && ggml_are_same_layout(node, parent)) {
                         if (ggml_is_view(parent)) {
