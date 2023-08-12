@@ -414,7 +414,7 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt2
         if (ok) { keyidx = gguf_find_key(ggufctx, "gptneox.attention.head_count");
                   if (keyidx != -1) { hparams.n_head = gguf_get_val_u32(ggufctx, keyidx); } else { ok = false; }  }
 
-        if (ok) { keyidx = gguf_find_key(ggufctx, "gptneox.layer_count");
+        if (ok) { keyidx = gguf_find_key(ggufctx, "gptneox.block_count");
                   if (keyidx != -1) { hparams.n_block = gguf_get_val_u32(ggufctx, keyidx); } else { ok = false; }  }
 
         if (ok) { keyidx = gguf_find_key(ggufctx, "gptneox.rope.dimension_count");
