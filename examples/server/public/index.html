@@ -441,12 +441,12 @@
       return params.data.map(msg => {
         const { completion_probabilities } = msg;
 
-        let pColor = 'transparent';
-        if (completion_probabilities.length === 1) {
-          const { probs } = completion_probabilities[0]
-          const found = probs.find(p => p.tok_str === msg.content)
-          pColor = probColor(found ? found.prob : 0)
-        }
+        // Skip byte pair
+        if (completion_probabilities.length > 1) return msg.content
+
+        const { probs } = completion_probabilities[0]
+        const found = probs.find(p => p.tok_str === msg.content)
+        const pColor = probColor(found ? found.prob : 0)
 
         const popoverChildren = html`
           <div>
