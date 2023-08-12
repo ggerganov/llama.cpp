@@ -179,20 +179,20 @@ class GGUFWriter:
     def ggml_pad(x: int, n: int) -> int:
         return ((x + n - 1) // n) * n
 
-    def add_tensor_info(self, name: str, tensor: np.ndarray):
+    def add_tensor_info(self, name: str, tensor_shape: np.ndarray, tensor_dtype: np.dtype, tensor_nbytes: int):
         encoded_name = name.encode("utf8")
         self.ti_data += struct.pack("<I", len(encoded_name))
         self.ti_data += encoded_name
-        n_dims = len(tensor.shape)
+        n_dims = len(tensor_shape)
         self.ti_data += struct.pack("<I", n_dims)
         for i in range(n_dims):
-            self.ti_data += struct.pack("<I", tensor.shape[n_dims - 1 - i])
+            self.ti_data += struct.pack("<I", tensor_shape[n_dims - 1 - i])
 
-        assert tensor.dtype in (np.float32, np.float16), "Only F32 and F16 tensors are supported for now"
-        dtype = GGMLQuantizationType.F32 if tensor.dtype == np.float32 else GGMLQuantizationType.F16
+        assert tensor_dtype in (np.float32, np.float16), "Only F32 and F16 tensors are supported for now"
+        dtype = GGMLQuantizationType.F32 if tensor_dtype == np.float32 else GGMLQuantizationType.F16
         self.ti_data += struct.pack("<I", dtype)
         self.ti_data += struct.pack("<Q", self.offset_tensor)
-        self.offset_tensor += GGUFWriter.ggml_pad(tensor.nbytes, self.data_alignment)
+        self.offset_tensor += GGUFWriter.ggml_pad(tensor_nbytes, self.data_alignment)
         self.ti_data_count += 1
 
     def write_tensor_to_file(self, tensor: np.ndarray):
