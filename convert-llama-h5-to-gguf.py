@@ -196,17 +196,7 @@ for name in list_vars.keys():
         # if f16 desired, convert any float32 2-dim weight tensors to float16
         data_dtype = np.float16
 
-    nelements = 1
-
-    for i in range(n_dims):
-        nelements *= data.shape[n_dims - 1 - i]
-
-    data_nbytes = 0
-    if data_dtype == np.float16:
-        data_nbytes = nelements * 2
-    elif data_dtype == np.float32:
-        data_nbytes = nelements * 4
-
+    data_nbytes = data.size * 2 if data_dtype == np.float16 else data.size * 4
 
     gguf_writer.add_tensor_info(name, data.shape, data_dtype, data_nbytes)
 
