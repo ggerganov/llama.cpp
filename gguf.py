@@ -253,9 +253,9 @@ class GGUFWriter:
         self.add_uint32(
             constants.KEY_LLM_EMBEDDING_LENGTH.format(llm=llm), length)
 
-    def add_layer_count(self, llm: str, length: int):
+    def add_block_count(self, llm: str, length: int):
         self.add_uint32(
-            constants.KEY_LLM_LAYER_COUNT.format(llm=llm), length)
+            constants.KEY_LLM_BLOCK_COUNT.format(llm=llm), length)
 
     def add_feed_forward_length(self, llm: str, length: int):
         self.add_uint32(
