@@ -317,11 +317,7 @@
       const chatLine = ([user, data], index) => {
         let message
         const isArrayMessage = Array.isArray(data)
-        if (
-          isArrayMessage &&
-          params.value.n_probs > 0 &&
-          data.every(msg => Array.isArray(msg.completion_probabilities))
-        ) {
+        if (params.value.n_probs > 0 && isArrayMessage) {
           message = html`<${Probabilites} data=${data} />`
         } else {
           const text = isArrayMessage ?
@@ -440,9 +436,10 @@
     const Probabilites = (params) => {
       return params.data.map(msg => {
         const { completion_probabilities } = msg;
-
-        // Skip byte pair
-        if (completion_probabilities.length > 1) return msg.content
+        if (
+          !completion_probabilities ||
+          completion_probabilities.length > 1 // Skip byte pair
+        ) return msg.content
 
         const { probs } = completion_probabilities[0]
         const found = probs.find(p => p.tok_str === msg.content)
