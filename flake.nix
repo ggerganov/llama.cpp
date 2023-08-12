@@ -38,7 +38,7 @@
         postInstall = ''
           mv $out/bin/main $out/bin/llama
           mv $out/bin/server $out/bin/llama-server
-
+          
           mkdir $out/include
 
           cp $src/llama.h $out/include
@@ -67,7 +67,11 @@
               "-DLLAMA_BLAS_VENDOR=OpenBLAS"
           ]);
           postInstall = (if isAarch64 && isDarwin then
-            nixpkgs.lib.concatLines [postInstall "cp $src/ggml-metal.h $out/include"] else postInstall);
+            nixpkgs.lib.concatLines [
+              postInstall 
+              "cp $src/ggml-metal.h $out/include" 
+              "cp $src/ggml-metal.metal $out/bin"
+            ] else postInstall);
           meta.mainProgram = "llama";
         };
         packages.opencl = pkgs.stdenv.mkDerivation {
