@@ -34,18 +34,6 @@
 #    define DEPRECATED(func, hint) func
 #endif
 
-#define LLAMA_FILE_MAGIC_GGJT        0x67676a74u // 'ggjt'
-#define LLAMA_FILE_MAGIC_GGLA        0x67676c61u // 'ggla'
-#define LLAMA_FILE_MAGIC_GGMF        0x67676d66u // 'ggmf'
-#define LLAMA_FILE_MAGIC_GGML        0x67676d6cu // 'ggml'
-#define LLAMA_FILE_MAGIC_GGSN        0x6767736eu // 'ggsn'
-
-#define LLAMA_FILE_VERSION           3
-#define LLAMA_FILE_MAGIC             LLAMA_FILE_MAGIC_GGJT
-#define LLAMA_FILE_MAGIC_UNVERSIONED LLAMA_FILE_MAGIC_GGML
-#define LLAMA_SESSION_MAGIC          LLAMA_FILE_MAGIC_GGSN
-#define LLAMA_SESSION_VERSION        1
-
 #define LLAMA_DEFAULT_SEED           0xFFFFFFFF
 
 #if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL)

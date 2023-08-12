@@ -3367,10 +3367,6 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
     {
         uint32_t magic;
         fin.read((char *) &magic, sizeof(magic));
-        if (magic != LLAMA_FILE_MAGIC_GGLA) {
-            fprintf(stderr, "%s: bad file magic\n", __func__);
-            return 1;
-        }
         uint32_t format_version;
         fin.read((char *) &format_version, sizeof(format_version));
 
