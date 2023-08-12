@@ -228,7 +228,7 @@ endif # LLAMA_METAL
 ifdef LLAMA_VULKAN
 	CFLAGS  += -DGGML_USE_VULKAN
 	CXXFLAGS  += -DGGML_USE_VULKAN
-	LDFLAGS += -lvulkan -lopenblas -lcblas
+	LDFLAGS += -lvulkan -lopenblas
 	OBJS    += ggml-vulkan.o
 ggml-vulkan.o: ggml-vulkan.cpp ggml-vulkan.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
