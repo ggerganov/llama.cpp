@@ -281,7 +281,7 @@ struct llama_mmap {
             hKernel32 = GetModuleHandleW(L"kernel32.dll");
 
             // This call may fail if on a pre-Win8 system.
-            pPrefetchVirtualMemory = reinterpret_cast<decltype(pPrefetchVirtualMemory)> GetProcAddress(hKernel32, "PrefetchVirtualMemory");
+            pPrefetchVirtualMemory = reinterpret_cast<decltype(pPrefetchVirtualMemory)> (GetProcAddress(hKernel32, "PrefetchVirtualMemory"));
 
             if (pPrefetchVirtualMemory) {
                 // Advise the kernel to preload the mapped memory.
