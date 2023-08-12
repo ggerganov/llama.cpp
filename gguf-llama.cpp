@@ -778,8 +778,7 @@ struct gguf_file_saver {
         }
         
         write_tensor_info(tensor);
-        // file.write_raw(new_data);
-        GGML_UNUSED(new_data);
+        file.write_raw(new_data, new_size);
         size_t padded_size = GGML_PAD(new_size, GGUF_DEFAULT_ALIGNMENT); // TODO: handle custom alignment
         size_t pad = padded_size - new_size;
         file.write_zeros(pad);

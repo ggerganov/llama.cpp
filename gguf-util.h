@@ -123,6 +123,10 @@ struct gguf_file {
         return fwrite((const char *) &val, sizeof(val), 1, fp);
     }
 
+    void write_raw(const void * data, size_t size) {
+        fwrite(data, size, 1, fp);
+    }
+
     template<typename T>
     void write_val(const std::string & key, enum gguf_type type, const T & val) {
         write_str(key);
