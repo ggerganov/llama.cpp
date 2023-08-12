@@ -527,7 +527,7 @@ struct ggml_context * ctx_data = NULL;
         // TODO: read all hparams from file
         int q_ver_idx = gguf_find_key (gguf_ctx, "general.quantization_version");
         if (q_ver_idx != -1) {
-            hparams.ftype = gguf_get_val_u32(gguf_ctx, q_ver_idx);
+            hparams.ftype = (enum llama_ftype) gguf_get_val_u32(gguf_ctx, q_ver_idx);
         }
 
         hparams.n_vocab = read_n_vocab();
