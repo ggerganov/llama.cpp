@@ -615,14 +615,14 @@ struct gguf_file_saver {
     gguf_file file;
     gguf_file_loader * fl;
     size_t info_offset;
+    size_t tensor_offset = 0;
+
     gguf_file_saver(const char * fname, gguf_file_loader * fl, enum llama_ftype new_ftype)
         : file(fname, "wb"), fl(fl) {
         fprintf(stderr, "llama.cpp: saving model to %s\n", fname);
         write_header();
         write_hparams(new_ftype);
     }
-
-    // TODO: probably it's better to move these to gguf_file
 
     void write_header() {
         const int32_t magic = GGUF_MAGIC;
@@ -740,12 +740,26 @@ struct gguf_file_saver {
         file.write_zeros(count);
     }
 
+    size_t write_tensor_info(llama_load_tensor & tensor) {
+        size_t total_written = 0;
+        file.seek(0, info_offset);
+        total_written += file.write_str(tensor.name);
+
+        int32_t n_dims = tensor.ne.size();
+        file.write_i32(n_dims);
+        for (int32_t i = 0; i < n_dims; ++i) {
+            total_written += file.write_i32(i);
+        }
+
+        total_written += file.write_u64(tensor_offset);
+        info_offset   += total_written;
+
+        file.seek(0, SEEK_END);
+
+        return total_written;
+    }
 
     void write_tensor(llama_load_tensor & tensor, enum ggml_type new_type, const void * new_data, size_t new_size) {
-        GGML_UNUSED(tensor);
-        GGML_UNUSED(new_data);
-        GGML_UNUSED(new_size);
-
         switch (new_type) {
             case GGML_TYPE_F32:
             case GGML_TYPE_F16:
@@ -763,6 +777,13 @@ struct gguf_file_saver {
             default: GGML_ASSERT(false);
         }
         
+        write_tensor_info(tensor);
+        // file.write_raw(new_data);
+        GGML_UNUSED(new_data);
+        size_t padded_size = GGML_PAD(new_size, GGUF_DEFAULT_ALIGNMENT); // TODO: handle custom alignment
+        size_t pad = padded_size - new_size;
+        file.write_zeros(pad);
+        tensor_offset += padded_size;
     }
 };
 
