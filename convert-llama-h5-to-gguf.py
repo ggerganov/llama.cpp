@@ -32,7 +32,6 @@ if len(sys.argv) < 3:
 
 # output in the same directory as the model
 dir_model = sys.argv[1]
-fname_out = sys.argv[1] + "/ggml-model.bin"
 last_dir = os.path.basename(os.path.normpath(dir_model))
 
 
@@ -49,7 +48,8 @@ if len(sys.argv) > 2:
     if ftype < 0 or ftype > 1:
         print("Invalid ftype: " + str(ftype))
         sys.exit(1)
-    fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".gguf"
+
+fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".gguf"
 
 print("gguf: loading model "+last_dir)
     
@@ -72,8 +72,7 @@ llm_arch    = "llama"
 head_count  = hparams["num_attention_heads"]
 block_count = hparams["num_hidden_layers"]
 
-gguf_writer.add_name("llama2-7b")
-gguf_writer.add_description("gguf test model")
+gguf_writer.add_name(last_dir)
 gguf_writer.add_architecture(llm_arch)
 gguf_writer.add_context_length(llm_arch, hparams["max_position_embeddings"])
 gguf_writer.add_embedding_length(llm_arch, hparams["hidden_size"])
@@ -186,22 +185,30 @@ for name in list_vars.keys():
         sys.exit()
 
     n_dims = len(data.shape)
+    data_dtype = data.dtype 
 
-    # ftype == 0 -> float32, ftype == 1 -> float16
-    ftype_cur = 0
-    if ftype != 0:
-        if name.endswith(".weight") and n_dims == 2:
-            data = data.astype(np.float16)
-            ftype_cur = 1
-        else:
-            data = data.astype(np.float32)
-            ftype_cur = 0
-    else:
-        if data.dtype != np.float32:
-            data = data.astype(np.float32)
-            ftype_cur = 0
+#    print( name + " dims " + str(n_dims) + " dtype " + str(data.dtype) )
 
-    gguf_writer.add_tensor_info(name, data)
+    if data.dtype != np.float16 and data.dtype != np.float32:
+        # convert any unsupported data types to float32
+        data_dtype = np.float32
+    elif ftype == 1 and data.dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+        # if f16 desired, convert any float32 2-dim weight tensors to float16
+        data_dtype = np.float16
+
+    nelements = 1
+
+    for i in range(n_dims):
+        nelements *= data.shape[n_dims - 1 - i]
+
+    data_nbytes = 0
+    if data_dtype == np.float16:
+        data_nbytes = nelements * 2
+    elif data_dtype == np.float32:
+        data_nbytes = nelements * 4
+
+
+    gguf_writer.add_tensor_info(name, data.shape, data_dtype, data_nbytes)
 
 
 print("gguf: write header")
@@ -212,7 +219,7 @@ print("gguf: write tensor metadata")
 gguf_writer.write_ti_data_to_file()
 
 # tensor data
-print("gguf: write tensor data")
+print("gguf: convert and write tensor data")
 
 for name in list_vars.keys():
     data = list_vars[name].squeeze().numpy()
@@ -226,20 +233,14 @@ for name in list_vars.keys():
         data = permute(data, head_count)
 
     n_dims = len(data.shape)
+    data_dtype = data.dtype 
 
-    # ftype == 0 -> float32, ftype == 1 -> float16
-    ftype_cur = 0
-    if ftype != 0:
-        if name.endswith(".weight") and n_dims == 2:
-            data = data.astype(np.float16)
-            ftype_cur = 1
-        else:
-            data = data.astype(np.float32)
-            ftype_cur = 0
-    else:
-        if data.dtype != np.float32:
-            data = data.astype(np.float32)
-            ftype_cur = 0
+    if data_dtype != np.float16 and data_dtype != np.float32:
+        # convert any unsupported data types to float32
+        data = data.astype(np.float32)
+    elif ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+        # if f16 desired, convert any float32 2-dim weight tensors to float16
+        data = data.astype(np.float16)
 
     gguf_writer.write_tensor_to_file(data)
 
