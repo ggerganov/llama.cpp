@@ -54,6 +54,12 @@ add_library(${TARGET} STATIC
     train.cpp
     )
 
+if (LLAMA_SEQREP_SAMPLER)
+    target_sources(${TARGET} PRIVATE seqrep-sampler.h seqrep-sampler.cpp)
+else()
+    add_compile_definitions(LLAMA_NO_SEQREP_SAMPLER)
+endif()
+
 if (BUILD_SHARED_LIBS)
     set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()

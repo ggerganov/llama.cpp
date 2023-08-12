@@ -4,6 +4,10 @@
 
 #include "grammar-parser.h"
 
+#ifndef LLAMA_NO_SEQREP_SAMPLER
+#include "seqrep-sampler.h"
+#endif
+
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -35,6 +39,11 @@ typedef struct llama_sampling_params {
     float       cfg_scale     = 1.f; // how strong is guidance
 
     std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
+
+#ifndef LLAMA_NO_SEQREP_SAMPLER
+    std::vector<llama_sampler_seqrep_params> seqrep_params;
+#endif
+
 } llama_sampling_params;
 
 // general sampler context
@@ -101,7 +110,8 @@ llama_token llama_sampling_sample(
         struct llama_sampling_context * ctx_sampling,
         struct llama_context * ctx_main,
         struct llama_context * ctx_cfg,
-        int idx = 0);
+        int idx = 0,
+        const std::vector<llama_token> & all_last_tokens = {});
 
 void llama_sampling_accept(
         struct llama_sampling_context * ctx_sampling,

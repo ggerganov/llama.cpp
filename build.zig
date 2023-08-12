@@ -111,6 +111,8 @@ pub fn build(b: *std.build.Builder) !void {
     var make = try Maker.init(b);
     make.enable_lto = b.option(bool, "lto", "Enable LTO optimization, (default: false)") orelse false;
 
+    try make.addFlag("-DLLAMA_NO_SEQREP_SAMPLER");
+
     const ggml = make.obj("ggml", "ggml.c");
     const ggml_alloc = make.obj("ggml-alloc", "ggml-alloc.c");
     const ggml_backend = make.obj("ggml-backend", "ggml-backend.c");

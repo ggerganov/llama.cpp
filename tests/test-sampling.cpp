@@ -1,10 +1,14 @@
 #include "ggml.h"
 #include "llama.h"
+#ifndef LLAMA_NO_SEQREP_SAMPLER
+#include "common/seqrep-sampler.h"
+#endif
 
 #ifdef NDEBUG
 #undef NDEBUG
 #endif
 
+#include <cstring>
 #include <cmath>
 #include <numeric>
 #include <cassert>
@@ -128,6 +132,79 @@ static void test_repetition_penalties(
     }
 }
 
+// FIXME: This should probably just be moved to a separate test executable.
+#ifndef LLAMA_NO_SEQREP_SAMPLER
+// NOTE: Compares expected_probs at id position, not sorted position like the other
+//       test functions.
+static void test_seqrep_penalty(
+                const std::vector<float> & probs,
+                const std::vector<llama_token> & last_tokens,
+                const std::vector<float> & expected_probs,
+                const llama_sampler_seqrep_params * params) {
+    assert(probs.size() == expected_probs.size());
+
+    size_t n_vocab = probs.size();
+    std::vector<llama_token_data> candidates;
+    candidates.reserve(n_vocab);
+    for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
+        float logit = log(probs[token_id]);
+        candidates.emplace_back(llama_token_data{token_id, logit, 0.0f});
+    }
+
+    llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
+    llama_sample_softmax(nullptr, &candidates_p);
+    DUMP(&candidates_p);
+    llama_sample_seqrep_penalty(nullptr, &candidates_p, last_tokens, params);
+    llama_sample_softmax(nullptr, &candidates_p);
+    DUMP(&candidates_p);
+
+    assert(candidates_p.size == expected_probs.size());
+    for (size_t i = 0; i < candidates_p.size; i++) {
+        assert(fabs(candidates_p.data[i].p - expected_probs[candidates_p.data[i].id]) < 1e-3);
+    }
+}
+
+static void run_seqrep_tests(void) {
+    llama_sampler_seqrep_params params;
+
+    // Compatible with frequency/presence penalty
+    memset(&params, 0, sizeof(llama_sampler_seqrep_params));
+    params.last_n = 1024;
+    params.min_length = 1;
+    params.mid_word_scale = 1.0f;
+    params.presence_penalty = 5.0f;
+    params.length_penalty = 5.0f;
+    params.flags |= LLAMA_SEQREP_ABSOLUTE_PENALTY;
+    test_seqrep_penalty({0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, {0},             {0.000011f, 0.249997f, 0.249997f, 0.249997f, 0.249997f}, &params);
+    test_seqrep_penalty({0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, {0, 1, 2},       {0.000023f, 0.000023f, 0.000023f, 0.499966f, 0.499966f}, &params);
+    test_seqrep_penalty({0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, {0, 1, 2, 0, 0}, {0.000000f, 0.000023f, 0.000023f, 0.499977f, 0.499977f}, &params);
+
+    // Compatible with repetition penalty
+    memset(&params, 0, sizeof(llama_sampler_seqrep_params));
+    params.last_n = 1024;
+    params.min_length = 1;
+    params.mid_word_scale = 1.0f;
+    params.presence_penalty = 50.0f;
+    params.length_penalty = 1.0f;
+    test_seqrep_penalty({0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, {0},             {0, 0.25f, 0.25f, 0.25f, 0.25f}, &params);
+    test_seqrep_penalty({0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, {0, 1, 2},       {0, 0,     0,     0.5f,  0.5f}, &params);
+    test_seqrep_penalty({0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, {0, 1, 2, 0, 0}, {0, 0,     0,     0.5f,  0.5f}, &params);
+
+    // Seqrep mode
+    // memset(&params, 0, sizeof(llama_sampler_seqrep_params));
+    // params.last_n = 1024;
+    // params.min_length = 3;
+    // params.mid_word_scale = 1.0f;
+    // params.presence_penalty = 50.0f;
+    // params.length_penalty = 1.0f;
+    // test_seqrep_penalty({0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, {0, 1, 2, 3, 0, 1, 2}, {0.25f, 0.25f, 0.25f, 0,     0.25f}, &params);
+    // test_seqrep_penalty({0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, {0, 2, 2, 3, 0, 1, 2}, {0.20f, 0.20f, 0.20f, 0.20f, 0.20f}, &params);
+    // params.tolerance = 1.0f;
+    // test_seqrep_penalty({0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, {0, 2, 2, 3, 0, 1, 2}, {0.25f, 0.25f, 0.25f, 0,     0.25f}, &params);
+}
+#endif
+
+
 int main(void) {
     ggml_time_init();
 
@@ -153,6 +230,10 @@ int main(void) {
     test_repetition_penalties({0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, {0},             {0.249997f, 0.249997f, 0.249997f, 0.249997f, 0.000011f}, 1.0f, 5.0f, 5.0f);
     test_repetition_penalties({0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, {0, 1, 2},       {0.499966f, 0.499966f, 0.000023f, 0.000023f, 0.000023f}, 1.0f, 5.0f, 5.0f);
     test_repetition_penalties({0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, {0, 1, 2, 0, 0}, {0.499977f, 0.499977f, 0.000023f, 0.000023f, 0.000000f}, 1.0f, 5.0f, 5.0f);
+
+#ifndef LLAMA_NO_SEQREP_SAMPLER
+    run_seqrep_tests();
+#endif
 
     printf("OK\n");
 

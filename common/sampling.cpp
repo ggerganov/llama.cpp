@@ -103,7 +103,8 @@ llama_token llama_sampling_sample(
                   struct llama_sampling_context * ctx_sampling,
                   struct llama_context * ctx_main,
                   struct llama_context * ctx_cfg,
-                  const int idx) {
+                  const int idx,
+                  const std::vector<llama_token> & all_last_tokens) {
     const llama_sampling_params & params = ctx_sampling->params;
 
     const int n_vocab = llama_n_vocab(llama_get_model(ctx_main));
@@ -154,6 +155,13 @@ llama_token llama_sampling_sample(
         llama_sample_repetition_penalties(ctx_main, &cur_p,
                 prev.data() + prev.size() - penalty_last_n,
                 penalty_last_n, penalty_repeat, penalty_freq, penalty_present);
+
+#ifndef LLAMA_NO_SEQREP_SAMPLER
+        for (auto & sr_params : params.seqrep_params) {
+            if ((sr_params.flags & LLAMA_SEQREP_REWIND_MODE) != 0) continue;
+            llama_sample_seqrep_penalty(ctx_main, &cur_p, all_last_tokens, &sr_params);
+        }
+#endif
 
         if (!penalize_nl) {
             for (size_t idx = 0; idx < cur_p.size; idx++) {

@@ -1,6 +1,10 @@
 #include "common.h"
 #include "llama.h"
 
+#ifndef LLAMA_NO_SEQREP_SAMPLER
+#include "seqrep-sampler.h"
+#endif
+
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -335,6 +339,24 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             sparams.penalty_present = std::stof(argv[i]);
+#ifndef LLAMA_NO_SEQREP_SAMPLER
+        } else if (arg == "-seqrep" || arg == "--seqrep-penalty") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            if (std::strcmp(argv[i], "help") == 0) {
+                seqrep_sampler_help();
+                exit(0);
+            }
+            llama_sampler_seqrep_params sr_params;
+            seqrep_sampler_params_init(&sr_params);
+            if (!seqrep_sampler_params_parse(argv[i], &sr_params)) {
+                seqrep_sampler_help();
+                exit(1);
+            }
+            sparams.seqrep_params.push_back(sr_params);
+#endif
         } else if (arg == "--mirostat") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -764,6 +786,10 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --repeat-penalty N    penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)\n", (double)sparams.penalty_repeat);
     printf("  --presence-penalty N  repeat alpha presence penalty (default: %.1f, 0.0 = disabled)\n", (double)sparams.penalty_present);
     printf("  --frequency-penalty N repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)\n", (double)sparams.penalty_freq);
+#ifndef LLAMA_NO_SEQREP_SAMPLER
+    printf("  -seqrep CFG, --seqrep-penalty CFG\n");
+    printf("                        add a copy of the sequence repetition penalty sampler. may be specified multiple times. for help: -seqrep help\n");
+#endif
     printf("  --mirostat N          use Mirostat sampling.\n");
     printf("                        Top K, Nucleus, Tail Free and Locally Typical samplers are ignored if used.\n");
     printf("                        (default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)\n", sparams.mirostat);

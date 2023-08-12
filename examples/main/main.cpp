@@ -415,6 +415,11 @@ int main(int argc, char ** argv) {
         }
     }
     LOG_TEE("sampling: \n%s\n", llama_sampling_print(sparams).c_str());
+#ifndef LLAMA_NO_SEQREP_SAMPLER
+    for (auto & sr_params : sparams.seqrep_params) {
+        seqrep_sampler_params_dump(&sr_params);
+    }
+#endif
     LOG_TEE("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
     LOG_TEE("\n\n");
 
