@@ -109,18 +109,22 @@ struct gguf_file {
     size_t write_str(const std::string & val) {
         size_t total_written = 0;
         const int32_t n = val.size();
-        total_written += fwrite((const char *) &n, sizeof(n), 1, fp);
-        total_written += fwrite(val.c_str(), n, 1, fp);
+        fwrite((const char *) &n, sizeof(n), 1, fp);
+        total_written += sizeof(n);
+        fwrite(val.c_str(), n, 1, fp);
+        total_written += n;
 
         return total_written;
     }
 
     size_t write_i32(int32_t val) {
-        return fwrite((const char *) &val, sizeof(val), 1, fp);
+        fwrite((const char *) &val, sizeof(val), 1, fp);
+        return sizeof(val);
     }
 
     size_t write_u64(size_t val) {
-        return fwrite((const char *) &val, sizeof(val), 1, fp);
+        fwrite((const char *) &val, sizeof(val), 1, fp);
+        return sizeof(val);
     }
 
     void write_raw(const void * data, size_t size) {

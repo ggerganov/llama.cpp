@@ -525,6 +525,11 @@ struct ggml_context * ctx_data = NULL;
 
         // TODO make keysconstants in header
         // TODO: read all hparams from file
+        int q_ver_idx = gguf_find_key (gguf_ctx, "general.quantization_version");
+        if (q_ver_idx != -1) {
+            hparams.ftype = gguf_get_val_u32(gguf_ctx, q_ver_idx);
+        }
+
         hparams.n_vocab = read_n_vocab();
         hparams.n_ctx   = read_u32("llama.context_length");
         hparams.n_embd  = read_u32("llama.embedding_length");
@@ -738,27 +743,29 @@ struct gguf_file_saver {
         info_offset  = file.tell();
         size_t count = gguf_get_data_offset(fl->gguf_ctx) - info_offset;
         file.write_zeros(count);
-        printf("info_offset = %zu\n", info_offset);
         file.seek(info_offset, SEEK_SET);
         GGML_ASSERT(info_offset == file.tell());
     }
 
-    size_t write_tensor_info(llama_load_tensor & tensor) {
+    size_t write_tensor_info(llama_load_tensor & tensor, enum ggml_type type) {
         size_t total_written = 0;
         file.seek(info_offset, SEEK_SET);
         GGML_ASSERT(info_offset == file.tell());
         total_written += file.write_str(tensor.name);
+printf("total_written = %zu, name = %s\n", total_written, tensor.name.c_str());
 
         int32_t n_dims = tensor.ne.size();
         total_written += file.write_i32(n_dims);
         for (int32_t i = 0; i < n_dims; ++i) {
-            total_written += file.write_i32(i);
+            total_written += file.write_i32(tensor.ne[i]);
         }
 
+        total_written += file.write_i32(type);
         total_written += file.write_u64(tensor_offset);
         info_offset   += total_written;
 
         file.seek(0, SEEK_END);
+        printf("total_written = %zu\n", total_written);
 
         return total_written;
     }
@@ -781,7 +788,7 @@ struct gguf_file_saver {
             default: GGML_ASSERT(false);
         }
         
-        write_tensor_info(tensor);
+        write_tensor_info(tensor, new_type);
         file.write_raw(new_data, new_size);
         size_t padded_size = GGML_PAD(new_size, GGUF_DEFAULT_ALIGNMENT); // TODO: handle custom alignment
         size_t pad = padded_size - new_size;
