@@ -565,8 +565,8 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt2
 
             std::string blocknamestart = "transformer.blocks." + std::to_string(i) + ".";
 
-            layer.ln_1_g          = get_tensor_ex(ctx, blocknamestart + "attn_norm_1.weight" );
-            layer.ln_1_b          = get_tensor_ex(ctx, blocknamestart + "attn_norm_1.bias" );
+            layer.ln_1_g          = get_tensor_ex(ctx, blocknamestart + "attn_norm.weight" );
+            layer.ln_1_b          = get_tensor_ex(ctx, blocknamestart + "attn_norm.bias" );
 
             layer.c_attn_attn_w   = get_tensor_ex(ctx, blocknamestart + "attn_qkv.weight" );
             layer.c_attn_attn_b   = get_tensor_ex(ctx ,blocknamestart + "attn_qkv.bias" );
@@ -584,8 +584,8 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt2
             layer.c_mlp_proj_b    = get_tensor_ex(ctx, blocknamestart + "ffn_down.bias" );
 
             // map by name
-            model.tensors[blocknamestart + "attn_norm_1.weight"] = layer.ln_1_g;
-            model.tensors[blocknamestart + "attn_norm_1.bias"]   = layer.ln_1_b;
+            model.tensors[blocknamestart + "attn_norm.weight"] = layer.ln_1_g;
+            model.tensors[blocknamestart + "attn_norm.bias"]   = layer.ln_1_b;
 
             model.tensors[blocknamestart + "attn_qkv.weight"] = layer.c_attn_attn_w;
             model.tensors[blocknamestart + "attn_qkv.bias"]   = layer.c_attn_attn_b;
