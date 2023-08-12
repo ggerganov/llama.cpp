@@ -70,6 +70,7 @@ poetry.lock
 poetry.toml
 
 # Test binaries
+tests/test-grammar-parser
 tests/test-double-float
 tests/test-grad0
 tests/test-opt
