@@ -5,7 +5,7 @@ const PRIMITIVE_RULES = {
   number: '("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space',
   integer: '("-"? ([0-9] | [1-9] [0-9]*)) space',
   string: ` "\\"" (
-        [^"\\\\] | 
+        [^"\\\\] |
         "\\\\" (["\\\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
       )* "\\"" space`,
   null: '"null" space',
@@ -33,19 +33,19 @@ export class SchemaConverter {
   _addRule(name, rule) {
     let escName = name.replace(INVALID_RULE_CHARS_RE, '-');
     let key = escName;
-  
+
     if (this._rules.has(escName)) {
       if (this._rules.get(escName) === rule) {
         return key;
       }
-  
+
       let i = 0;
       while (this._rules.has(`${escName}${i}`)) {
         i += 1;
       }
       key = `${escName}${i}`;
     }
-  
+
     this._rules.set(key, rule);
     return key;
   }
@@ -53,12 +53,12 @@ export class SchemaConverter {
   visit(schema, name) {
     const schemaType = schema.type;
     const ruleName = name || 'root';
-  
+
     if (schema.oneOf || schema.anyOf) {
-      const rule = (schema.oneOf || schema.anyOf).map((altSchema, i) => 
+      const rule = (schema.oneOf || schema.anyOf).map((altSchema, i) =>
         this.visit(altSchema, `${name}${name ? "-" : ""}${i}`)
       ).join(' | ');
-  
+
       return this._addRule(ruleName, rule);
     } else if ('const' in schema) {
       return this._addRule(ruleName, this._formatLiteral(schema.const));
@@ -74,7 +74,7 @@ export class SchemaConverter {
         const orderB = propOrder.hasOwnProperty(b[0]) ? propOrder[b[0]] : propOrder.length;
         return orderA - orderB || a[0].localeCompare(b[0]);
       });
-  
+
       let rule = '"{" space';
       for (let i = 0; i < propPairs.length; i++) {
         const [propName, propSchema] = propPairs[i];
@@ -85,7 +85,7 @@ export class SchemaConverter {
         rule += ` ${this._formatLiteral(propName)} space ":" space ${propRuleName}`;
       }
       rule += ' "}" space';
-  
+
       return this._addRule(ruleName, rule);
     } else if (schemaType === 'array' && 'items' in schema) {
       // TODO `prefixItems` keyword (from python implementation)
@@ -102,7 +102,7 @@ export class SchemaConverter {
       );
     }
   }
-  
+
   formatGrammar() {
     let grammar = '';
     this._rules.forEach((rule, name) => {
