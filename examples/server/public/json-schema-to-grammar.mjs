@@ -70,8 +70,8 @@ export class SchemaConverter {
       const propOrder = this._propOrder;
       const propPairs = Object.entries(schema.properties).sort((a, b) => {
         // sort by position in prop_order (if specified) then by key
-        const orderA = propOrder.hasOwnProperty(a[0]) ? propOrder[a[0]] : propOrder.length;
-        const orderB = propOrder.hasOwnProperty(b[0]) ? propOrder[b[0]] : propOrder.length;
+        const orderA = typeof propOrder[a[0]] === 'number' ? propOrder[a[0]] : Infinity;
+        const orderB = typeof propOrder[b[0]] === 'number' ? propOrder[b[0]] : Infinity;
         return orderA - orderB || a[0].localeCompare(b[0]);
       });
 
