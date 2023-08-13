@@ -221,7 +221,8 @@ static float make_q3_quants(int n, int nmax, const float * restrict x, int8_t * 
     return 1/iscale;
 }
 
-static float make_qkx1_quants(int n, int nmax, const float * restrict x, uint8_t * restrict L, float * restrict the_min, int ntry) {
+static float make_qkx1_quants(int n, int nmax, const float * restrict x, uint8_t * restrict L, float * restrict the_min,
+        int ntry, float alpha) {
     float min = x[0];
     float max = x[0];
     for (int i = 1; i < n; ++i) {
@@ -254,7 +255,7 @@ static float make_qkx1_quants(int n, int nmax, const float * restrict x, uint8_t
         for (int i = 0; i < n; ++i) {
             sum += x[i] - scale*L[i];
         }
-        min = sum/n;
+        min = alpha*min + (1 - alpha)*sum/n;
         if (min > 0) min = 0;
         iscale = 1/scale;
         if (!did_change) break;
@@ -291,7 +292,7 @@ void quantize_row_q2_K_reference(const float * restrict x, block_q2_K * restrict
         float max_scale = 0; // as we are deducting the min, scales are always positive
         float max_min = 0;
         for (int j = 0; j < QK_K/16; ++j) {
-            scales[j] = make_qkx1_quants(16, 3, x + 16*j, L + 16*j, &mins[j], 5);
+            scales[j] = make_qkx1_quants(16, 3, x + 16*j, L + 16*j, &mins[j], 5, 0.f);
             float scale = scales[j];
             if (scale > max_scale) {
                 max_scale = scale;
@@ -645,7 +646,7 @@ void quantize_row_q4_K_reference(const float * restrict x, block_q4_K * restrict
         float max_scale = 0; // as we are deducting the min, scales are always positive
         float max_min = 0;
         for (int j = 0; j < QK_K/32; ++j) {
-            scales[j] = make_qkx1_quants(32, 15, x + 32*j, L + 32*j, &mins[j], 5);
+            scales[j] = make_qkx1_quants(32, 15, x + 32*j, L + 32*j, &mins[j], 9, 0.5f);
             float scale = scales[j];
             if (scale > max_scale) {
                 max_scale = scale;
@@ -810,7 +811,7 @@ void quantize_row_q5_K_reference(const float * restrict x, block_q5_K * restrict
         float max_scale = 0; // as we are deducting the min, scales are always positive
         float max_min = 0;
         for (int j = 0; j < QK_K/32; ++j) {
-            scales[j] = make_qkx1_quants(32, 31, x + 32*j, L + 32*j, &mins[j], 5);
+            scales[j] = make_qkx1_quants(32, 31, x + 32*j, L + 32*j, &mins[j], 5, 0.f);
             float scale = scales[j];
             if (scale > max_scale) {
                 max_scale = scale;
