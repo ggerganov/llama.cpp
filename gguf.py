@@ -12,23 +12,10 @@ from typing import Any, IO, List
 import numpy as np
 import sys
 
+
 class GGMLQuantizationType(IntEnum):
     F32 = 0
     F16 = 1
-    Q4_0 = 2
-    Q4_1 = 3
-    # Q4_2 = 4 # support has been removed
-    # Q4_3 = 5 # support has been removed
-    Q5_0 = 6
-    Q5_1 = 7
-    Q8_0 = 8
-    Q8_1 = 9
-    Q2_K = 10
-    Q3_K = 11
-    Q4_K = 12
-    Q5_K = 13
-    Q6_K = 14
-    Q8_K = 15
 
 
 class GGUFValueType(IntEnum):
@@ -143,7 +130,7 @@ class GGUFWriter:
 
         if add_vtype:
             self.kv_data += struct.pack("<I", vtype)
-            self.kv_data_count += 1;
+            self.kv_data_count += 1
 
         if vtype == GGUFValueType.UINT8:
             self.kv_data += struct.pack("<B", val)
@@ -201,7 +188,7 @@ class GGUFWriter:
             self.fout.write(bytes([0] * pad))
 
         tensor.tofile(self.fout)
-        
+
         pad = GGUFWriter.ggml_pad(tensor.nbytes, self.data_alignment) - tensor.nbytes
         if pad != 0:
             self.fout.write(bytes([0] * pad))
@@ -214,7 +201,7 @@ class GGUFWriter:
 
     def add_architecture(self, architecture: str):
         self.add_string(constants.KEY_GENERAL_ARCHITECTURE,
-                          architecture)
+                        architecture)
 
     def add_author(self, author: str):
         self.add_string(constants.KEY_GENERAL_AUTHOR, author)
@@ -311,7 +298,7 @@ class GGUFWriter:
 
     def add_token_scores(self, scores: List[float]):
         self.add_array(constants.KEY_TOKENIZER_SCORES, scores)
-    
+
     def add_bos_token_id(self, id: int):
         self.add_uint32(constants.KEY_TOKENIZER_BOS_ID, id)
 

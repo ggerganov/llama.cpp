@@ -17,6 +17,7 @@ from sentencepiece import SentencePieceProcessor
 # compatible with python < 3.9
 NDArray: 'TypeAlias' = 'np.ndarray[Any, Any]'
 
+
 def permute(weights: NDArray, n_head: int) -> NDArray:
     return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
                    .swapaxes(1, 2)
@@ -52,12 +53,12 @@ if len(sys.argv) > 2:
 fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".gguf"
 
 print("gguf: loading model "+last_dir)
-    
+
 with open(dir_model + "/config.json", "r", encoding="utf-8") as f:
     hparams = json.load(f)
 
 if hparams["architectures"][0] != "LlamaForCausalLM":
-    print("Model architecture not supported: " + hparams["architectures"][0] )
+    print("Model architecture not supported: " + hparams["architectures"][0])
     sys.exit()
 
 model = AutoModelForCausalLM.from_pretrained(dir_model, low_cpu_mem_usage=True, trust_remote_code=True)
@@ -68,18 +69,23 @@ gguf_writer = gguf.GGUFWriter.open(fname_out)
 
 print("gguf: get model metadata")
 
-llm_arch    = "llama"
-head_count  = hparams["num_attention_heads"]
+llm_arch = "llama"
+hf_repo = hparams["_name_or_path"]
+head_count = hparams["num_attention_heads"]
+head_count_kv = hparams["num_key_value_heads"]
 block_count = hparams["num_hidden_layers"]
 
 gguf_writer.add_name(last_dir)
 gguf_writer.add_architecture(llm_arch)
+gguf_writer.add_quantization_version(ftype)
+guff_writer.add_source_hf_repo(hf_repo)
 gguf_writer.add_context_length(llm_arch, hparams["max_position_embeddings"])
 gguf_writer.add_embedding_length(llm_arch, hparams["hidden_size"])
 gguf_writer.add_block_count(llm_arch, block_count)
 gguf_writer.add_feed_forward_length(llm_arch, hparams["intermediate_size"])
 gguf_writer.add_rope_dimension_count(llm_arch, hparams["hidden_size"] // hparams["num_attention_heads"])
 gguf_writer.add_head_count(llm_arch, head_count)
+gguf_writer.add_head_count_kv(llm_arch, head_count_kv)
 gguf_writer.add_layer_norm_rms_eps(llm_arch, hparams["rms_norm_eps"])
 
 
@@ -173,7 +179,7 @@ for name in list_vars.keys():
 
     # permute these
     if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
-        data = permute(data,head_count)
+        data = permute(data, head_count)
 
     # map tensor names
     if name.endswith(".weight") and name[:-7] in tensor_map:
@@ -181,11 +187,11 @@ for name in list_vars.keys():
     elif name.endswith(".bias") and name[:-5] in tensor_map:
         name = tensor_map[name[:-5]] + ".bias"
     else:
-        print( "Can not map tensor '" + name + "'" )
+        print("Can not map tensor '" + name + "'")
         sys.exit()
 
     n_dims = len(data.shape)
-    data_dtype = data.dtype 
+    data_dtype = data.dtype
 
 #    print( name + " dims " + str(n_dims) + " dtype " + str(data.dtype) )
 
@@ -223,7 +229,7 @@ for name in list_vars.keys():
         data = permute(data, head_count)
 
     n_dims = len(data.shape)
-    data_dtype = data.dtype 
+    data_dtype = data.dtype
 
     if data_dtype != np.float16 and data_dtype != np.float32:
         # convert any unsupported data types to float32
@@ -237,5 +243,5 @@ for name in list_vars.keys():
 gguf_writer.close()
 
 
-print("gguf: model successfully exported to '" + fname_out + "'" )
+print("gguf: model successfully exported to '" + fname_out + "'")
 print("")
