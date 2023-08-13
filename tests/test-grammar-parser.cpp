@@ -4,6 +4,7 @@
 
 #include "llama.h"
 #include "examples/grammar-parser.cpp"
+#include <cassert>
 
 int main()
 {
