@@ -23,6 +23,7 @@ def permute(weights: NDArray, n_head: int) -> NDArray:
                    .swapaxes(1, 2)
                    .reshape(weights.shape))
 
+
 def count_model_parts(dir_model: str) -> int:
     num_parts = 0
     for filename in os.listdir(dir_model):
@@ -32,6 +33,7 @@ def count_model_parts(dir_model: str) -> int:
     if num_parts > 0:
         print("gguf: found " + str(num_parts) + " model parts")
     return num_parts
+
 
 if len(sys.argv) < 3:
     print("Usage: convert-h5-to-ggml.py dir-model ftype\n")
@@ -86,7 +88,6 @@ block_count = hparams["num_hidden_layers"]
 
 gguf_writer.add_name(last_dir)
 gguf_writer.add_architecture(llm_arch)
-gguf_writer.add_quantization_version(ftype)
 guff_writer.add_source_hf_repo(hf_repo)
 gguf_writer.add_context_length(llm_arch, hparams["max_position_embeddings"])
 gguf_writer.add_embedding_length(llm_arch, hparams["hidden_size"])
@@ -187,7 +188,7 @@ else:
     )
 
 for part_name in part_names:
-    print("gguf: loading model part '"+ part_name + "'")
+    print("gguf: loading model part '" + part_name + "'")
     model_part = torch.load(f"{dir_model}/{part_name}", map_location="cpu")
 
     for name in model_part.keys():
@@ -205,7 +206,7 @@ for part_name in part_names:
 
         # permute these
         if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
-            data = permute(data,head_count)
+            data = permute(data, head_count)
 
         # map tensor names
         if name.endswith(".weight") and name[:-7] in tensor_map:
@@ -213,11 +214,11 @@ for part_name in part_names:
         elif name.endswith(".bias") and name[:-5] in tensor_map:
             name = tensor_map[name[:-5]] + ".bias"
         else:
-            print( "Can not map tensor '" + name + "'" )
+            print("Can not map tensor '" + name + "'")
             sys.exit()
 
         n_dims = len(data.shape)
-        data_dtype = data.dtype 
+        data_dtype = data.dtype
 
         # if f32 desired, convert any float16 to float32
         if ftype == 0 and data.dtype == np.float16:
@@ -254,60 +255,60 @@ else:
     )
 
 for part_name in part_names:
-    print("gguf: loading model part '"+ part_name + "'")
+    print("gguf: loading model part '" + part_name + "'")
     model_part = torch.load(f"{dir_model}/{part_name}", map_location="cpu")
 
     for name in model_part.keys():
         data = model_part[name]
 
-<<<<<<< HEAD
+<< << << < HEAD
+   n_dims = len(data.shape)
+    data_dtype = data.dtype
+== == == =
+   old_dtype = data.dtype
+
+    # we don't need these
+    if name.endswith(".rotary_emb.inv_freq"):
+        continue
+>>>>>> > 17800cd80fec468411481dc34a51d42a936442f1
+
+   # convert any unsupported data types to float32
+   if data.dtype != torch.float16 and data.dtype != torch.float32:
+        data = data.to(torch.float32)
+
+    data = data.squeeze().numpy()
+
+    # permute these
+    if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
+        data = permute(data, head_count)
+
+    # map tensor names
+    if name.endswith(".weight") and name[:-7] in tensor_map:
+        name = tensor_map[name[:-7]] + ".weight"
+    elif name.endswith(".bias") and name[:-5] in tensor_map:
+        name = tensor_map[name[:-5]] + ".bias"
+    else:
+        print("Can not map tensor '" + name + "'" )
+        sys.exit()
+
     n_dims = len(data.shape)
     data_dtype = data.dtype
-=======
-        old_dtype = data.dtype
 
-        # we don't need these
-        if name.endswith(".rotary_emb.inv_freq"):
-            continue
->>>>>>> 17800cd80fec468411481dc34a51d42a936442f1
+    # if f32 desired, convert any float16 to float32
+    if ftype == 0 and data.dtype == np.float16:
+        data = data.astype(np.float32)
 
-        # convert any unsupported data types to float32
-        if data.dtype != torch.float16 and data.dtype != torch.float32:
-            data = data.to(torch.float32)
+    # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
+    if ftype == 1 and data_dtype == np.float16 and n_dims == 1:
+        data = data.astype(np.float32)
 
-        data = data.squeeze().numpy()
+    # if f16 desired, convert any float32 2-dim weight tensors to float16
+    if ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+        data = data.astype(np.float16)
 
-        # permute these
-        if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
-            data = permute(data, head_count)
+    print(name + ", shape " + str(len(data.shape)) + ", " + str(old_dtype) + " --> " + str(data.dtype))
 
-        # map tensor names
-        if name.endswith(".weight") and name[:-7] in tensor_map:
-            name = tensor_map[name[:-7]] + ".weight"
-        elif name.endswith(".bias") and name[:-5] in tensor_map:
-            name = tensor_map[name[:-5]] + ".bias"
-        else:
-            print( "Can not map tensor '" + name + "'" )
-            sys.exit()
-
-        n_dims = len(data.shape)
-        data_dtype = data.dtype 
-
-        # if f32 desired, convert any float16 to float32
-        if ftype == 0 and data.dtype == np.float16:
-            data = data.astype(np.float32)
-
-        # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
-        if ftype == 1 and data_dtype == np.float16 and n_dims == 1:
-            data = data.astype(np.float32)
-
-        # if f16 desired, convert any float32 2-dim weight tensors to float16
-        if ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
-            data = data.astype(np.float16)
-
-        print( name + ", shape " + str(len(data.shape)) + ", " + str(old_dtype) + " --> " + str(data.dtype))
-
-        gguf_writer.write_tensor_to_file(data)
+    gguf_writer.write_tensor_to_file(data)
 
 gguf_writer.close()
 
