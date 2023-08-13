@@ -90,8 +90,9 @@ print("gguf: get model metadata")
 llm_arch    = "gptneox"
 block_count = hparams["num_hidden_layers"]
 
-gguf_writer.add_name(last_dir)
 gguf_writer.add_architecture(llm_arch)
+gguf_writer.add_name(last_dir)
+gguf_writer.add_file_type( "All tensors F32" if ftype == 0 else "Most tensors F16, some F32")
 gguf_writer.add_context_length(llm_arch, hparams["max_position_embeddings"])
 gguf_writer.add_embedding_length(llm_arch, hparams["hidden_size"])
 gguf_writer.add_block_count(llm_arch, block_count)
