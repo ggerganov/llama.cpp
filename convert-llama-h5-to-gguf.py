@@ -1,4 +1,4 @@
-# Quick and dirty HF llama --> gguf conversion, GQA/70b wont work
+# HF llama --> gguf conversion, GQA/70b not supported
 
 import gguf
 import gguf_tensor_map as tmap
@@ -9,7 +9,7 @@ import json
 import numpy as np
 from typing import Any, List
 from pathlib import Path
-from transformers import AutoModelForCausalLM
+import torch
 from sentencepiece import SentencePieceProcessor
 
 
@@ -23,6 +23,15 @@ def permute(weights: NDArray, n_head: int) -> NDArray:
                    .swapaxes(1, 2)
                    .reshape(weights.shape))
 
+def count_model_parts(dir_model: str) -> int:
+    num_parts = 0
+    for filename in os.listdir(dir_model):
+        if filename.startswith("pytorch_model-"):
+            num_parts += 1
+
+    if num_parts > 0:
+        print("gguf: found " + str(num_parts) + " model parts")
+    return num_parts
 
 if len(sys.argv) < 3:
     print("Usage: convert-h5-to-ggml.py dir-model ftype\n")
@@ -61,8 +70,8 @@ if hparams["architectures"][0] != "LlamaForCausalLM":
     print("Model architecture not supported: " + hparams["architectures"][0])
     sys.exit()
 
-model = AutoModelForCausalLM.from_pretrained(dir_model, low_cpu_mem_usage=True, trust_remote_code=True)
-list_vars = model.state_dict()
+# get number of model parts
+num_parts = count_model_parts(dir_model)
 
 gguf_writer = gguf.GGUFWriter.open(fname_out)
 
@@ -170,41 +179,61 @@ tensor_map = tmap.get_tensor_map(block_count)
 # tensor info
 print("gguf: get tensor metadata")
 
-for name in list_vars.keys():
-    data = list_vars[name].squeeze().numpy()
+if num_parts == 0:
+    part_names = ("pytorch_model.bin",)
+else:
+    part_names = (
+        f"pytorch_model-{n:05}-of-{num_parts:05}.bin" for n in range(1, num_parts + 1)
+    )
 
-    # we don't need these
-    if name.endswith(".rotary_emb.inv_freq"):
-        continue
+for part_name in part_names:
+    print("gguf: loading model part '"+ part_name + "'")
+    model_part = torch.load(f"{dir_model}/{part_name}", map_location="cpu")
 
-    # permute these
-    if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
-        data = permute(data, head_count)
+    for name in model_part.keys():
+        data = model_part[name]
 
-    # map tensor names
-    if name.endswith(".weight") and name[:-7] in tensor_map:
-        name = tensor_map[name[:-7]] + ".weight"
-    elif name.endswith(".bias") and name[:-5] in tensor_map:
-        name = tensor_map[name[:-5]] + ".bias"
-    else:
-        print("Can not map tensor '" + name + "'")
-        sys.exit()
+        # we don't need these
+        if name.endswith(".rotary_emb.inv_freq"):
+            continue
 
-    n_dims = len(data.shape)
-    data_dtype = data.dtype
-
-#    print( name + " dims " + str(n_dims) + " dtype " + str(data.dtype) )
-
-    if data.dtype != np.float16 and data.dtype != np.float32:
         # convert any unsupported data types to float32
-        data_dtype = np.float32
-    elif ftype == 1 and data.dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+        if data.dtype != torch.float16 and data.dtype != torch.float32:
+            data = data.to(torch.float32)
+
+        data = data.squeeze().numpy()
+
+        # permute these
+        if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
+            data = permute(data,head_count)
+
+        # map tensor names
+        if name.endswith(".weight") and name[:-7] in tensor_map:
+            name = tensor_map[name[:-7]] + ".weight"
+        elif name.endswith(".bias") and name[:-5] in tensor_map:
+            name = tensor_map[name[:-5]] + ".bias"
+        else:
+            print( "Can not map tensor '" + name + "'" )
+            sys.exit()
+
+        n_dims = len(data.shape)
+        data_dtype = data.dtype 
+
+        # if f32 desired, convert any float16 to float32
+        if ftype == 0 and data.dtype == np.float16:
+            data_dtype = np.float32
+
+        # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
+        if ftype == 1 and data_dtype == np.float16 and n_dims == 1:
+            data_dtype = np.float32
+
         # if f16 desired, convert any float32 2-dim weight tensors to float16
-        data_dtype = np.float16
+        if ftype == 1 and data.dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+            data_dtype = np.float16
 
-    data_nbytes = data.size * 2 if data_dtype == np.float16 else data.size * 4
+        data_nbytes = data.size * 2 if data_dtype == np.float16 else data.size * 4
 
-    gguf_writer.add_tensor_info(name, data.shape, data_dtype, data_nbytes)
+        gguf_writer.add_tensor_info(name, data.shape, data_dtype, data_nbytes)
 
 
 print("gguf: write header")
@@ -217,28 +246,68 @@ gguf_writer.write_ti_data_to_file()
 # tensor data
 print("gguf: convert and write tensor data")
 
-for name in list_vars.keys():
-    data = list_vars[name].squeeze().numpy()
+if num_parts == 0:
+    part_names = ("pytorch_model.bin",)
+else:
+    part_names = (
+        f"pytorch_model-{n:05}-of-{num_parts:05}.bin" for n in range(1, num_parts + 1)
+    )
 
-    # we don't need these
-    if name.endswith(".rotary_emb.inv_freq"):
-        continue
+for part_name in part_names:
+    print("gguf: loading model part '"+ part_name + "'")
+    model_part = torch.load(f"{dir_model}/{part_name}", map_location="cpu")
 
-    # permute these
-    if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
-        data = permute(data, head_count)
+    for name in model_part.keys():
+        data = model_part[name]
 
+<<<<<<< HEAD
     n_dims = len(data.shape)
     data_dtype = data.dtype
+=======
+        old_dtype = data.dtype
 
-    if data_dtype != np.float16 and data_dtype != np.float32:
+        # we don't need these
+        if name.endswith(".rotary_emb.inv_freq"):
+            continue
+>>>>>>> 17800cd80fec468411481dc34a51d42a936442f1
+
         # convert any unsupported data types to float32
-        data = data.astype(np.float32)
-    elif ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
-        # if f16 desired, convert any float32 2-dim weight tensors to float16
-        data = data.astype(np.float16)
+        if data.dtype != torch.float16 and data.dtype != torch.float32:
+            data = data.to(torch.float32)
 
-    gguf_writer.write_tensor_to_file(data)
+        data = data.squeeze().numpy()
+
+        # permute these
+        if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
+            data = permute(data, head_count)
+
+        # map tensor names
+        if name.endswith(".weight") and name[:-7] in tensor_map:
+            name = tensor_map[name[:-7]] + ".weight"
+        elif name.endswith(".bias") and name[:-5] in tensor_map:
+            name = tensor_map[name[:-5]] + ".bias"
+        else:
+            print( "Can not map tensor '" + name + "'" )
+            sys.exit()
+
+        n_dims = len(data.shape)
+        data_dtype = data.dtype 
+
+        # if f32 desired, convert any float16 to float32
+        if ftype == 0 and data.dtype == np.float16:
+            data = data.astype(np.float32)
+
+        # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
+        if ftype == 1 and data_dtype == np.float16 and n_dims == 1:
+            data = data.astype(np.float32)
+
+        # if f16 desired, convert any float32 2-dim weight tensors to float16
+        if ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+            data = data.astype(np.float16)
+
+        print( name + ", shape " + str(len(data.shape)) + ", " + str(old_dtype) + " --> " + str(data.dtype))
+
+        gguf_writer.write_tensor_to_file(data)
 
 gguf_writer.close()
 
