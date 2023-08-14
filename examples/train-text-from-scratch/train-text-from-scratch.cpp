@@ -2934,7 +2934,7 @@ int main(int argc, char ** argv) {
             gf, gb, gb_tmp,
             &logits, tokens_input, target_probs,
             n_tokens, n_batch,
-            params.use_flash, 
+            params.use_flash,
             params.use_checkpointing
         );
 
