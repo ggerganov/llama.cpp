@@ -1264,7 +1264,8 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn(
             assert_shape_2d(cur, n_embd, N*n_batch);
         }
 
-        struct ggml_tensor * inpFF = ggml_add_inplace(ctx0, cur, inpSA);
+        // struct ggml_tensor * inpFF = ggml_add_inplace(ctx0, cur, inpSA);
+        struct ggml_tensor * inpFF = ggml_add(ctx0, cur, inpSA);
         assert_shape_2d(inpFF, n_embd, N*n_batch);
 
         // feed-forward network
@@ -1304,7 +1305,8 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn(
             assert_shape_2d(cur, n_embd, N*n_batch);
         }
 
-        cur = ggml_add_inplace(ctx0, cur, inpFF);
+        // cur = ggml_add_inplace(ctx0, cur, inpFF);
+        cur = ggml_add(ctx0, cur, inpFF);
         assert_shape_2d(cur, n_embd, N*n_batch);
 
         // input for next layer
