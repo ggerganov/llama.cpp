@@ -54,7 +54,7 @@ int main(int argc, char ** argv) {
     const int max_context_size     = llama_n_ctx(ctx);
     const int max_tokens_list_size = max_context_size - 4;
 
-    if ((int)tokens_list.size() > max_tokens_list_size) {
+    if ((int) tokens_list.size() > max_tokens_list_size) {
         fprintf(stderr, "%s: error: prompt too long (%d tokens, max %d)\n", __func__, (int) tokens_list.size(), max_tokens_list_size);
         return 1;
     }
