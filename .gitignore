@@ -50,6 +50,7 @@ models-mnt
 /embd-input-test
 /gguf
 /gguf-llama-simple
+/gptneox-main
 /libllama.so
 build-info.h
 arm_neon.h
@@ -66,7 +67,6 @@ qnt-*.txt
 perf-*.txt
 
 examples/jeopardy/results.txt
-
 
 pyproject.toml
 poetry.lock
