@@ -4641,9 +4641,7 @@ int main(int argc, char ** argv) {
             };
             struct ggml_context * ctx0 = ggml_init(cparams);
 
-            struct ggml_tensor * gfbuf = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, sizeof(struct ggml_cgraph) / ggml_type_size(GGML_TYPE_I32) + (sizeof(struct ggml_cgraph) % ggml_type_size(GGML_TYPE_I32) ? 1 : 0));
-            memset(gfbuf->data, 0, ggml_nbytes(gfbuf));
-            struct ggml_cgraph * gf = (struct ggml_cgraph *) gfbuf->data;
+            struct ggml_cgraph * gf = ggml_new_graph(ctx0);
 
             int n_past = 0;
             struct ggml_tensor * logits = forward(&model, &kv_self, ctx0, gf, tokens_input, sample_ctx, n_past);
