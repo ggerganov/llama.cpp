@@ -1,9 +1,9 @@
 #include "ggml.h"
 
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <assert.h>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cassert>
 
 #define MAX_NARGS 2
 
@@ -119,15 +119,16 @@ void set_element(struct ggml_tensor * t, int idx, float value) {
 
 int main(void) {
     struct ggml_init_params params = {
-        .mem_size   = 1024*1024*1024,
-        .mem_buffer = NULL,
-        .no_alloc   = false,
+        /* .mem_size   = */ 1024*1024*1024,
+        /* .mem_buffer = */ NULL,
+        /* .no_alloc   = */ false,
     };
+
     struct ggml_context * ctx = ggml_init(params);
 
-    int64_t ne1[4] = {4, 1024, 1, 1};
-    int64_t ne2[4] = {4, 2048, 1, 1};;
-    int64_t ne3[4] = {1024, 2048, 1, 1};
+    int64_t ne1[4] = {4, 128, 1, 1};
+    int64_t ne2[4] = {4, 256, 1, 1};;
+    int64_t ne3[4] = {128, 256, 1, 1};
 
     struct ggml_tensor * a = get_random_tensor(ctx, 2, ne1, -1, +1);
     struct ggml_tensor * b = get_random_tensor(ctx, 2, ne2, -1, +1);

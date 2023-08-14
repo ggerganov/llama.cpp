@@ -1,6 +1,7 @@
 #include "common.h"
 #include "llama.h"
 #include "build-info.h"
+#include "grammar-parser.h"
 
 #ifndef NDEBUG
 // crash the server in debug mode, otherwise send an http 500 error
@@ -195,6 +196,9 @@ struct llama_server_context
     llama_context *ctx = nullptr;
     gpt_params params;
 
+    grammar_parser::parse_state parsed_grammar;
+    llama_grammar *grammar = nullptr;
+
     bool truncated = false;
     bool stopped_eos = false;
     bool stopped_word = false;
@@ -226,6 +230,7 @@ struct llama_server_context
     void rewind()
     {
         params.antiprompt.clear();
+        params.grammar.clear();
         num_prompt_tokens = 0;
         num_tokens_predicted = 0;
         generated_text = "";
@@ -237,9 +242,13 @@ struct llama_server_context
         stopped_limit = false;
         stopping_word = "";
         multibyte_pending = 0;
-
         n_remain = 0;
         n_past = 0;
+
+        if (grammar != nullptr) {
+            llama_grammar_free(grammar);
+            grammar = nullptr;
+        }
     }
 
     bool loadModel(const gpt_params &params_)
@@ -254,6 +263,31 @@ struct llama_server_context
 
         last_n_tokens.resize(params.n_ctx);
         std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
+        return true;
+    }
+
+    bool loadGrammar()
+    {
+        if (!params.grammar.empty()) {
+            parsed_grammar = grammar_parser::parse(params.grammar.c_str());
+            // will be empty (default) if there are parse errors
+            if (parsed_grammar.rules.empty()) {
+                LOG_ERROR("grammar parse error", {{"grammar", params.grammar}});
+                return false;
+            }
+            grammar_parser::print_grammar(stderr, parsed_grammar);
+
+            {
+                auto it = params.logit_bias.find(llama_token_eos());
+                if (it != params.logit_bias.end() && it->second == -INFINITY) {
+                    LOG_WARNING("EOS token is disabled, which will cause most grammars to fail", {});
+                }
+            }
+
+            std::vector<const llama_grammar_element *> grammar_rules(parsed_grammar.c_rules());
+            grammar = llama_grammar_init(
+                grammar_rules.data(), grammar_rules.size(), parsed_grammar.symbol_ids.at("root"));
+        }
         return true;
     }
 
@@ -420,6 +454,10 @@ struct llama_server_context
                 logits[llama_token_nl()] = nl_logit;
             }
 
+            if (grammar != nullptr) {
+                llama_sample_grammar(ctx, &candidates_p, grammar);
+            }
+
             if (temp <= 0)
             {
                 // Greedy sampling
@@ -457,10 +495,15 @@ struct llama_server_context
                 }
             }
 
+            if (grammar != nullptr) {
+                llama_grammar_accept_token(ctx, grammar, result.tok);
+            }
+
             for (size_t i = 0; i < std::min(candidates_p.size, (size_t)n_probs); ++i)
             {
                 result.probs.push_back({candidates_p.data[i].id, candidates_p.data[i].p});
             }
+
             last_n_tokens.erase(last_n_tokens.begin());
             last_n_tokens.push_back(result.tok);
             num_tokens_predicted++;
@@ -601,47 +644,52 @@ struct llama_server_context
 static void server_print_usage(const char *argv0, const gpt_params &params,
                                const server_params &sparams)
 {
-    fprintf(stderr, "usage: %s [options]\n", argv0);
-    fprintf(stderr, "\n");
-    fprintf(stderr, "options:\n");
-    fprintf(stderr, "  -h, --help            show this help message and exit\n");
-    fprintf(stderr, "  -v, --verbose         verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
-    fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
-    fprintf(stderr, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
-    fprintf(stderr, "  --rope-freq-base N    RoPE base frequency (default: %.1f)\n", params.rope_freq_base);
-    fprintf(stderr, "  --rope-freq-scale N   RoPE frequency scaling factor (default: %g)\n", params.rope_freq_scale);
-    fprintf(stderr, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
-    fprintf(stderr, "  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
-    fprintf(stderr, "                        not recommended: doubles context memory required and no measurable increase in quality\n");
+    fprintf(stdout, "usage: %s [options]\n", argv0);
+    fprintf(stdout, "\n");
+    fprintf(stdout, "options:\n");
+    fprintf(stdout, "  -h, --help            show this help message and exit\n");
+    fprintf(stdout, "  -v, --verbose         verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
+    fprintf(stdout, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
+    fprintf(stdout, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
+    fprintf(stdout, "  -gqa N, --gqa N       grouped-query attention factor (TEMP!!! use 8 for LLaMAv2 70B) (default: %d)\n", params.n_gqa);
+    fprintf(stdout, "  -eps N, --rms-norm-eps N rms norm eps (TEMP!!! use 1e-5 for LLaMAv2) (default: %.1e)\n", params.rms_norm_eps);
+    fprintf(stdout, "  --rope-freq-base N    RoPE base frequency (default: %.1f)\n", params.rope_freq_base);
+    fprintf(stdout, "  --rope-freq-scale N   RoPE frequency scaling factor (default: %g)\n", params.rope_freq_scale);
+    fprintf(stdout, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
+    fprintf(stdout, "  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
+    fprintf(stdout, "                        not recommended: doubles context memory required and no measurable increase in quality\n");
     if (llama_mlock_supported())
     {
-        fprintf(stderr, "  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
+        fprintf(stdout, "  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
     }
     if (llama_mmap_supported())
     {
-        fprintf(stderr, "  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
+        fprintf(stdout, "  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
     }
 #ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
-    fprintf(stderr, "  -ngl N, --n-gpu-layers N\n");
-    fprintf(stderr, "                        number of layers to store in VRAM\n");
-    fprintf(stderr, "  -ts SPLIT --tensor-split SPLIT\n");
-    fprintf(stderr, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
-    fprintf(stderr, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
-    fprintf(stderr, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
-    fprintf(stderr, "  -lv, --low-vram don't allocate VRAM scratch buffer\n");
+    fprintf(stdout, "  -ngl N, --n-gpu-layers N\n");
+    fprintf(stdout, "                        number of layers to store in VRAM\n");
+    fprintf(stdout, "  -ts SPLIT --tensor-split SPLIT\n");
+    fprintf(stdout, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
+    fprintf(stdout, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
+    fprintf(stdout, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
+    fprintf(stdout, "  -lv, --low-vram don't allocate VRAM scratch buffer\n");
+    fprintf(stdout, "  -mmq, --mul-mat-q     use experimental mul_mat_q CUDA kernels instead of cuBLAS. TEMP!!!\n" );
+    fprintf(stdout, "                        Reduces VRAM usage by 700/970/1430 MiB for 7b/13b/33b but prompt processing speed\n" );
+    fprintf(stdout, "                        is still suboptimal, especially q2_K, q3_K, q5_K, and q6_K.\n" );
 #endif
-    fprintf(stderr, "  -m FNAME, --model FNAME\n");
-    fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
-    fprintf(stderr, "  -a ALIAS, --alias ALIAS\n");
-    fprintf(stderr, "                        set an alias for the model, will be added as `model` field in completion response\n");
-    fprintf(stderr, "  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
-    fprintf(stderr, "  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
-    fprintf(stderr, "  --host                ip address to listen (default  (default: %s)\n", sparams.hostname.c_str());
-    fprintf(stderr, "  --port PORT           port to listen (default  (default: %d)\n", sparams.port);
-    fprintf(stderr, "  --path PUBLIC_PATH    path from which to serve static files (default %s)\n", sparams.public_path.c_str());
-    fprintf(stderr, "  -to N, --timeout N    server read/write timeout in seconds (default: %d)\n", sparams.read_timeout);
-    fprintf(stderr, "  --embedding           enable embedding vector output (default: %s)\n", params.embedding ? "enabled" : "disabled");
-    fprintf(stderr, "\n");
+    fprintf(stdout, "  -m FNAME, --model FNAME\n");
+    fprintf(stdout, "                        model path (default: %s)\n", params.model.c_str());
+    fprintf(stdout, "  -a ALIAS, --alias ALIAS\n");
+    fprintf(stdout, "                        set an alias for the model, will be added as `model` field in completion response\n");
+    fprintf(stdout, "  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
+    fprintf(stdout, "  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
+    fprintf(stdout, "  --host                ip address to listen (default  (default: %s)\n", sparams.hostname.c_str());
+    fprintf(stdout, "  --port PORT           port to listen (default  (default: %d)\n", sparams.port);
+    fprintf(stdout, "  --path PUBLIC_PATH    path from which to serve static files (default %s)\n", sparams.public_path.c_str());
+    fprintf(stdout, "  -to N, --timeout N    server read/write timeout in seconds (default: %d)\n", sparams.read_timeout);
+    fprintf(stdout, "  --embedding           enable embedding vector output (default: %s)\n", params.embedding ? "enabled" : "disabled");
+    fprintf(stdout, "\n");
 }
 
 static void server_params_parse(int argc, char **argv, server_params &sparams,
@@ -724,9 +772,27 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             }
             params.n_ctx = std::stoi(argv[i]);
         }
+        else if (arg == "-gqa" || arg == "--gqa")
+        {
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            params.n_gqa = std::stoi(argv[i]);
+        }
+        else if (arg == "-eps" || arg == "--rms-norm-eps") {
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            params.rms_norm_eps = std::stof(argv[i]);
+        }
         else if (arg == "--rope-freq-base")
         {
-            if (++i >= argc) {
+            if (++i >= argc)
+            {
                 invalid_param = true;
                 break;
             }
@@ -734,7 +800,8 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
         }
         else if (arg == "--rope-freq-scale")
         {
-            if (++i >= argc) {
+            if (++i >= argc)
+            {
                 invalid_param = true;
                 break;
             }
@@ -806,7 +873,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 }
             }
 #else
-            LOG_WARNING("llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.", {});
+            LOG_WARNING("llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.\n", {});
 #endif // GGML_USE_CUBLAS
         }
         else if (arg == "--low-vram" || arg == "-lv")
@@ -814,7 +881,15 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
 #ifdef GGML_USE_CUBLAS
             params.low_vram = true;
 #else
-            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n");
+            LOG_WARNING("warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n", {});
+#endif // GGML_USE_CUBLAS
+        }
+        else if (arg == "--mul-mat-q" || arg == "-mmq")
+        {
+#ifdef GGML_USE_CUBLAS
+            params.mul_mat_q = true;
+#else
+            LOG_WARNING("warning: llama.cpp was compiled without cuBLAS. It is not possible to use mul_mat_q kernels.\n", {});
 #endif // GGML_USE_CUBLAS
         }
         else if (arg == "--main-gpu" || arg == "-mg")
@@ -915,6 +990,7 @@ static json format_generation_settings(llama_server_context &llama)
         {"stream", llama.stream},
         {"logit_bias", llama.params.logit_bias},
         {"n_probs", llama.params.n_probs},
+        {"grammar", llama.params.grammar},
     };
 }
 
@@ -932,7 +1008,7 @@ static json format_timings(llama_server_context &llama)
     assert(timings.n_eval == llama.num_tokens_predicted);
 
     return json{
-        {"prompt_n", timings.n_eval},
+        {"prompt_n", timings.n_p_eval},
         {"prompt_ms", timings.t_p_eval_ms},
         {"prompt_per_token_ms", timings.t_p_eval_ms / timings.n_p_eval},
         {"prompt_per_second", 1e3 / timings.t_p_eval_ms * timings.n_p_eval},
@@ -961,7 +1037,6 @@ static json format_final_response(llama_server_context &llama, const std::string
         {"stopped_limit", llama.stopped_limit},
         {"stopping_word", llama.stopping_word},
         {"tokens_cached", llama.n_past},
-        {"tokens_predicted", llama.num_tokens_predicted},
         {"timings", format_timings(llama)},
     };
 
@@ -1016,6 +1091,7 @@ static void parse_options_completion(const json &body, llama_server_context &lla
     llama.params.n_keep = body.value("n_keep", default_params.n_keep);
     llama.params.seed = body.value("seed", default_params.seed);
     llama.params.prompt = body.value("prompt", default_params.prompt);
+    llama.params.grammar = body.value("grammar", default_params.grammar);
     llama.params.n_probs = body.value("n_probs", default_params.n_probs);
 
     llama.params.logit_bias.clear();
@@ -1147,6 +1223,12 @@ int main(int argc, char **argv)
 
         parse_options_completion(json::parse(req.body), llama);
 
+        if (!llama.loadGrammar())
+        {
+            res.status = 400;
+            return;
+        }
+
         llama.loadPrompt();
         llama.beginCompletion();
 
@@ -1242,7 +1324,11 @@ int main(int argc, char **argv)
                 sink.done();
                 return true;
             };
-            res.set_chunked_content_provider("text/event-stream", chunked_content_provider);
+            const auto on_complete = [&](bool) {
+                llama.mutex.unlock();
+            };
+            lock.release();
+            res.set_chunked_content_provider("text/event-stream", chunked_content_provider, on_complete);
         } });
 
     svr.Get("/model.json", [&llama](const Request &, Response &res)
@@ -1298,8 +1384,12 @@ int main(int argc, char **argv)
 
     svr.set_error_handler([](const Request &, Response &res)
                           {
-        res.set_content("File Not Found", "text/plain");
-        res.status = 404; });
+        if (res.status == 400) {
+            res.set_content("Invalid request", "text/plain");
+        } else {
+            res.set_content("File Not Found", "text/plain");
+            res.status = 404;
+        } });
 
     // set timeouts and change hostname and port
     svr.set_read_timeout(sparams.read_timeout);
@@ -1327,6 +1417,9 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    if (llama.grammar != nullptr) {
+        llama_grammar_free(llama.grammar);
+    }
     llama_backend_free();
 
     return 0;

@@ -25,7 +25,6 @@
 #else
 #include <sys/ioctl.h>
 #include <unistd.h>
-#include <wchar.h>
 #endif
 
 #if defined(_MSC_VER)
@@ -117,6 +116,9 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.n_threads = std::stoi(argv[i]);
+            if (params.n_threads <= 0) {
+                params.n_threads = std::thread::hardware_concurrency();
+            }
         } else if (arg == "-p" || arg == "--prompt") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -168,6 +170,18 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.n_ctx = std::stoi(argv[i]);
+        } else if (arg == "-gqa" || arg == "--gqa") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_gqa = std::stoi(argv[i]);
+        } else if (arg == "-eps" || arg == "--rms-norm-eps") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.rms_norm_eps = std::stof(argv[i]);
         } else if (arg == "--rope-freq-base") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -180,6 +194,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.rope_freq_scale = std::stof(argv[i]);
+        } else if (arg == "--rope-scale") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.rope_freq_scale = 1.0f/std::stof(argv[i]);
         } else if (arg == "--memory-f32") {
             params.memory_f16 = false;
         } else if (arg == "--top-p") {
@@ -260,12 +280,6 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.cfg_scale = std::stof(argv[i]);
-        } else if (arg == "--cfg-smooth-factor") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.cfg_smooth_factor = std::stof(argv[i]);
         } else if (arg == "-b" || arg == "--batch-size") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -279,6 +293,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.n_keep = std::stoi(argv[i]);
+        } else if (arg == "--chunks") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_chunks = std::stoi(argv[i]);
         } else if (arg == "-m" || arg == "--model") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -314,6 +334,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.instruct = true;
         } else if (arg == "--multiline-input") {
             params.multiline_input = true;
+        } else if (arg == "--simple-io") {
+            params.simple_io = true;
         } else if (arg == "--color") {
             params.use_color = true;
         } else if (arg == "--mlock") {
@@ -337,7 +359,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 #ifdef GGML_USE_CUBLAS
             params.main_gpu = std::stoi(argv[i]);
 #else
-      fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a main GPU.\n");
+            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a main GPU.\n");
 #endif
         } else if (arg == "--tensor-split" || arg == "-ts") {
             if (++i >= argc) {
@@ -361,13 +383,19 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 }
             }
 #else
-      fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.\n");
+            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.\n");
+#endif // GGML_USE_CUBLAS
+        } else if (arg == "--mul-mat-q" || arg == "-mmq") {
+#ifdef GGML_USE_CUBLAS
+            params.mul_mat_q = true;
+#else
+            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to use mul_mat_q kernels.\n");
 #endif // GGML_USE_CUBLAS
         } else if (arg == "--low-vram" || arg == "-lv") {
 #ifdef GGML_USE_CUBLAS
             params.low_vram = true;
 #else
-      fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n");
+            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n");
 #endif // GGML_USE_CUBLAS
         } else if (arg == "--no-mmap") {
             params.use_mmap = false;
@@ -387,6 +415,14 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.antiprompt.push_back(argv[i]);
         } else if (arg == "--perplexity") {
             params.perplexity = true;
+        } else if (arg == "--hellaswag") {
+            params.hellaswag = true;
+        } else if (arg == "--hellaswag-tasks") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.hellaswag_tasks = std::stoi(argv[i]);
         } else if (arg == "--ignore-eos") {
             params.logit_bias[llama_token_eos()] = -INFINITY;
         } else if (arg == "--no-penalize-nl") {
@@ -415,6 +451,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             exit(0);
         } else if (arg == "--random-prompt") {
             params.random_prompt = true;
+        } else if (arg == "--in-prefix-bos") {
+            params.input_prefix_bos = true;
         } else if (arg == "--in-prefix") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -427,6 +465,28 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.input_suffix = argv[i];
+        } else if (arg == "--grammar") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.grammar = argv[i];
+        } else if (arg == "--grammar-file") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            std::ifstream file(argv[i]);
+            if (!file) {
+                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+                invalid_param = true;
+                break;
+            }
+            std::copy(
+                std::istreambuf_iterator<char>(file),
+                std::istreambuf_iterator<char>(),
+                std::back_inserter(params.grammar)
+            );
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             gpt_print_usage(argc, argv, default_params);
@@ -456,90 +516,102 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 }
 
 void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
-    fprintf(stderr, "usage: %s [options]\n", argv[0]);
-    fprintf(stderr, "\n");
-    fprintf(stderr, "options:\n");
-    fprintf(stderr, "  -h, --help            show this help message and exit\n");
-    fprintf(stderr, "  -i, --interactive     run in interactive mode\n");
-    fprintf(stderr, "  --interactive-first   run in interactive mode and wait for input right away\n");
-    fprintf(stderr, "  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
-    fprintf(stderr, "  --multiline-input     allows you to write or paste multiple lines without ending each in '\\'\n");
-    fprintf(stderr, "  -r PROMPT, --reverse-prompt PROMPT\n");
-    fprintf(stderr, "                        halt generation at PROMPT, return control in interactive mode\n");
-    fprintf(stderr, "                        (can be specified more than once for multiple prompts).\n");
-    fprintf(stderr, "  --color               colorise output to distinguish prompt and user input from generations\n");
-    fprintf(stderr, "  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)\n");
-    fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
-    fprintf(stderr, "  -p PROMPT, --prompt PROMPT\n");
-    fprintf(stderr, "                        prompt to start generation with (default: empty)\n");
-    fprintf(stderr, "  -e                    process prompt escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)\n");
-    fprintf(stderr, "  --prompt-cache FNAME  file to cache prompt state for faster startup (default: none)\n");
-    fprintf(stderr, "  --prompt-cache-all    if specified, saves user input and generations to cache as well.\n");
-    fprintf(stderr, "                        not supported with --interactive or other interactive options\n");
-    fprintf(stderr, "  --prompt-cache-ro     if specified, uses the prompt cache but does not update it.\n");
-    fprintf(stderr, "  --random-prompt       start with a randomized prompt.\n");
-    fprintf(stderr, "  --in-prefix STRING    string to prefix user inputs with (default: empty)\n");
-    fprintf(stderr, "  --in-suffix STRING    string to suffix after user inputs with (default: empty)\n");
-    fprintf(stderr, "  -f FNAME, --file FNAME\n");
-    fprintf(stderr, "                        prompt file to start generation.\n");
-    fprintf(stderr, "  -n N, --n-predict N   number of tokens to predict (default: %d, -1 = infinity)\n", params.n_predict);
-    fprintf(stderr, "  --top-k N             top-k sampling (default: %d, 0 = disabled)\n", params.top_k);
-    fprintf(stderr, "  --top-p N             top-p sampling (default: %.1f, 1.0 = disabled)\n", (double)params.top_p);
-    fprintf(stderr, "  --tfs N               tail free sampling, parameter z (default: %.1f, 1.0 = disabled)\n", (double)params.tfs_z);
-    fprintf(stderr, "  --typical N           locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)\n", (double)params.typical_p);
-    fprintf(stderr, "  --repeat-last-n N     last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)\n", params.repeat_last_n);
-    fprintf(stderr, "  --repeat-penalty N    penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)\n", (double)params.repeat_penalty);
-    fprintf(stderr, "  --presence-penalty N  repeat alpha presence penalty (default: %.1f, 0.0 = disabled)\n", (double)params.presence_penalty);
-    fprintf(stderr, "  --frequency-penalty N repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)\n", (double)params.frequency_penalty);
-    fprintf(stderr, "  --mirostat N          use Mirostat sampling.\n");
-    fprintf(stderr, "                        Top K, Nucleus, Tail Free and Locally Typical samplers are ignored if used.\n");
-    fprintf(stderr, "                        (default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)\n", params.mirostat);
-    fprintf(stderr, "  --mirostat-lr N       Mirostat learning rate, parameter eta (default: %.1f)\n", (double)params.mirostat_eta);
-    fprintf(stderr, "  --mirostat-ent N      Mirostat target entropy, parameter tau (default: %.1f)\n", (double)params.mirostat_tau);
-    fprintf(stderr, "  -l TOKEN_ID(+/-)BIAS, --logit-bias TOKEN_ID(+/-)BIAS\n");
-    fprintf(stderr, "                        modifies the likelihood of token appearing in the completion,\n");
-    fprintf(stderr, "                        i.e. `--logit-bias 15043+1` to increase likelihood of token ' Hello',\n");
-    fprintf(stderr, "                        or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'\n");
-    fprintf(stderr, "  --cfg-negative-prompt PROMPT \n");
-    fprintf(stderr, "                        negative prompt to use for guidance. (default: empty)\n");
-    fprintf(stderr, "  --cfg-scale N         strength of guidance (default: %f, 1.0 = disable)\n", params.cfg_scale);
-    fprintf(stderr, "  --cfg-smooth-factor N smooth factor between old and new logits (default: %f, 1.0 = no smoothing)\n", params.cfg_smooth_factor);
-    fprintf(stderr, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
-    fprintf(stderr, "  --rope-freq-base N    RoPE base frequency (default: %.1f)\n", params.rope_freq_base);
-    fprintf(stderr, "  --rope-freq-scale N   RoPE frequency scaling factor (default: %g)\n", params.rope_freq_scale);
-    fprintf(stderr, "  --ignore-eos          ignore end of stream token and continue generating (implies --logit-bias 2-inf)\n");
-    fprintf(stderr, "  --no-penalize-nl      do not penalize newline token\n");
-    fprintf(stderr, "  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
-    fprintf(stderr, "                        not recommended: doubles context memory required and no measurable increase in quality\n");
-    fprintf(stderr, "  --temp N              temperature (default: %.1f)\n", (double)params.temp);
-    fprintf(stderr, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
-    fprintf(stderr, "  --perplexity          compute perplexity over the prompt\n");
-    fprintf(stderr, "  --keep                number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
+    fprintf(stdout, "usage: %s [options]\n", argv[0]);
+    fprintf(stdout, "\n");
+    fprintf(stdout, "options:\n");
+    fprintf(stdout, "  -h, --help            show this help message and exit\n");
+    fprintf(stdout, "  -i, --interactive     run in interactive mode\n");
+    fprintf(stdout, "  --interactive-first   run in interactive mode and wait for input right away\n");
+    fprintf(stdout, "  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
+    fprintf(stdout, "  --multiline-input     allows you to write or paste multiple lines without ending each in '\\'\n");
+    fprintf(stdout, "  -r PROMPT, --reverse-prompt PROMPT\n");
+    fprintf(stdout, "                        halt generation at PROMPT, return control in interactive mode\n");
+    fprintf(stdout, "                        (can be specified more than once for multiple prompts).\n");
+    fprintf(stdout, "  --color               colorise output to distinguish prompt and user input from generations\n");
+    fprintf(stdout, "  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)\n");
+    fprintf(stdout, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
+    fprintf(stdout, "  -p PROMPT, --prompt PROMPT\n");
+    fprintf(stdout, "                        prompt to start generation with (default: empty)\n");
+    fprintf(stdout, "  -e                    process prompt escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)\n");
+    fprintf(stdout, "  --prompt-cache FNAME  file to cache prompt state for faster startup (default: none)\n");
+    fprintf(stdout, "  --prompt-cache-all    if specified, saves user input and generations to cache as well.\n");
+    fprintf(stdout, "                        not supported with --interactive or other interactive options\n");
+    fprintf(stdout, "  --prompt-cache-ro     if specified, uses the prompt cache but does not update it.\n");
+    fprintf(stdout, "  --random-prompt       start with a randomized prompt.\n");
+    fprintf(stdout, "  --in-prefix-bos       prefix BOS to user inputs, preceding the `--in-prefix` string\n");
+    fprintf(stdout, "  --in-prefix STRING    string to prefix user inputs with (default: empty)\n");
+    fprintf(stdout, "  --in-suffix STRING    string to suffix after user inputs with (default: empty)\n");
+    fprintf(stdout, "  -f FNAME, --file FNAME\n");
+    fprintf(stdout, "                        prompt file to start generation.\n");
+    fprintf(stdout, "  -n N, --n-predict N   number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)\n", params.n_predict);
+    fprintf(stdout, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
+    fprintf(stdout, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
+    fprintf(stdout, "  -gqa N, --gqa N       grouped-query attention factor (TEMP!!! use 8 for LLaMAv2 70B) (default: %d)\n", params.n_gqa);
+    fprintf(stdout, "  -eps N, --rms-norm-eps N rms norm eps (TEMP!!! use 1e-5 for LLaMAv2) (default: %.1e)\n", params.rms_norm_eps);
+    fprintf(stdout, "  --top-k N             top-k sampling (default: %d, 0 = disabled)\n", params.top_k);
+    fprintf(stdout, "  --top-p N             top-p sampling (default: %.1f, 1.0 = disabled)\n", (double)params.top_p);
+    fprintf(stdout, "  --tfs N               tail free sampling, parameter z (default: %.1f, 1.0 = disabled)\n", (double)params.tfs_z);
+    fprintf(stdout, "  --typical N           locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)\n", (double)params.typical_p);
+    fprintf(stdout, "  --repeat-last-n N     last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)\n", params.repeat_last_n);
+    fprintf(stdout, "  --repeat-penalty N    penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)\n", (double)params.repeat_penalty);
+    fprintf(stdout, "  --presence-penalty N  repeat alpha presence penalty (default: %.1f, 0.0 = disabled)\n", (double)params.presence_penalty);
+    fprintf(stdout, "  --frequency-penalty N repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)\n", (double)params.frequency_penalty);
+    fprintf(stdout, "  --mirostat N          use Mirostat sampling.\n");
+    fprintf(stdout, "                        Top K, Nucleus, Tail Free and Locally Typical samplers are ignored if used.\n");
+    fprintf(stdout, "                        (default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)\n", params.mirostat);
+    fprintf(stdout, "  --mirostat-lr N       Mirostat learning rate, parameter eta (default: %.1f)\n", (double)params.mirostat_eta);
+    fprintf(stdout, "  --mirostat-ent N      Mirostat target entropy, parameter tau (default: %.1f)\n", (double)params.mirostat_tau);
+    fprintf(stdout, "  -l TOKEN_ID(+/-)BIAS, --logit-bias TOKEN_ID(+/-)BIAS\n");
+    fprintf(stdout, "                        modifies the likelihood of token appearing in the completion,\n");
+    fprintf(stdout, "                        i.e. `--logit-bias 15043+1` to increase likelihood of token ' Hello',\n");
+    fprintf(stdout, "                        or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'\n");
+    fprintf(stdout, "  --grammar GRAMMAR     BNF-like grammar to constrain generations (see samples in grammars/ dir)\n");
+    fprintf(stdout, "  --grammar-file FNAME  file to read grammar from\n");
+    fprintf(stdout, "  --cfg-negative-prompt PROMPT \n");
+    fprintf(stdout, "                        negative prompt to use for guidance. (default: empty)\n");
+    fprintf(stdout, "  --cfg-scale N         strength of guidance (default: %f, 1.0 = disable)\n", params.cfg_scale);
+    fprintf(stdout, "  --rope-scale N        RoPE context linear scaling factor, inverse of --rope-freq-scale (default: %g)\n", 1.0f/params.rope_freq_scale);
+    fprintf(stdout, "  --rope-freq-base N    RoPE base frequency, used by NTK-aware scaling (default: %.1f)\n", params.rope_freq_base);
+    fprintf(stdout, "  --rope-freq-scale N   RoPE frequency linear scaling factor, inverse of --rope-scale (default: %g)\n", params.rope_freq_scale);
+    fprintf(stdout, "  --ignore-eos          ignore end of stream token and continue generating (implies --logit-bias 2-inf)\n");
+    fprintf(stdout, "  --no-penalize-nl      do not penalize newline token\n");
+    fprintf(stdout, "  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
+    fprintf(stdout, "                        not recommended: doubles context memory required and no measurable increase in quality\n");
+    fprintf(stdout, "  --temp N              temperature (default: %.1f)\n", (double)params.temp);
+    fprintf(stdout, "  --perplexity          compute perplexity over each ctx window of the prompt\n");
+    fprintf(stdout, "  --hellaswag           compute HellaSwag score over random tasks from datafile supplied with -f\n");
+    fprintf(stdout, "  --hellaswag-tasks N   number of tasks to use when computing the HellaSwag score (default: %zu)\n", params.hellaswag_tasks);
+    fprintf(stdout, "  --keep N              number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
+    fprintf(stdout, "  --chunks N            max number of chunks to process (default: %d, -1 = all)\n", params.n_chunks);
     if (llama_mlock_supported()) {
-        fprintf(stderr, "  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
+        fprintf(stdout, "  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
     }
     if (llama_mmap_supported()) {
-        fprintf(stderr, "  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
+        fprintf(stdout, "  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
     }
-    fprintf(stderr, "  --numa                attempt optimizations that help on some NUMA systems\n");
-    fprintf(stderr, "                        if run without this previously, it is recommended to drop the system page cache before using this\n");
-    fprintf(stderr, "                        see https://github.com/ggerganov/llama.cpp/issues/1437\n");
+    fprintf(stdout, "  --numa                attempt optimizations that help on some NUMA systems\n");
+    fprintf(stdout, "                        if run without this previously, it is recommended to drop the system page cache before using this\n");
+    fprintf(stdout, "                        see https://github.com/ggerganov/llama.cpp/issues/1437\n");
 #ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
-    fprintf(stderr, "  -ngl N, --n-gpu-layers N\n");
-    fprintf(stderr, "                        number of layers to store in VRAM\n");
-    fprintf(stderr, "  -ts SPLIT --tensor-split SPLIT\n");
-    fprintf(stderr, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
-    fprintf(stderr, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n" );
-    fprintf(stderr, "  -lv, --low-vram       don't allocate VRAM scratch buffer\n" );
+    fprintf(stdout, "  -ngl N, --n-gpu-layers N\n");
+    fprintf(stdout, "                        number of layers to store in VRAM\n");
+    fprintf(stdout, "  -ts SPLIT --tensor-split SPLIT\n");
+    fprintf(stdout, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
+    fprintf(stdout, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n" );
+    fprintf(stdout, "  -lv, --low-vram       don't allocate VRAM scratch buffer\n" );
+    fprintf(stdout, "  -mmq, --mul-mat-q     use experimental mul_mat_q CUDA kernels instead of cuBLAS. TEMP!!!\n" );
+    fprintf(stdout, "                        Reduces VRAM usage by 700/970/1430 MiB for 7b/13b/33b but prompt processing speed\n" );
+    fprintf(stdout, "                        is still suboptimal, especially q2_K, q3_K, q5_K, and q6_K.\n" );
 #endif
-    fprintf(stderr, "  --mtest               compute maximum memory usage\n");
-    fprintf(stderr, "  --export              export the computation graph to 'llama.ggml'\n");
-    fprintf(stderr, "  --verbose-prompt      print prompt before generation\n");
-    fprintf(stderr, "  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
-    fprintf(stderr, "  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
-    fprintf(stderr, "  -m FNAME, --model FNAME\n");
-    fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
-    fprintf(stderr, "\n");
+    fprintf(stdout, "  --mtest               compute maximum memory usage\n");
+    fprintf(stdout, "  --export              export the computation graph to 'llama.ggml'\n");
+    fprintf(stdout, "  --verbose-prompt      print prompt before generation\n");
+    fprintf(stderr, "  --simple-io           use basic IO for better compatibility in subprocesses and limited consoles\n");
+    fprintf(stdout, "  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
+    fprintf(stdout, "  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
+    fprintf(stdout, "  -m FNAME, --model FNAME\n");
+    fprintf(stdout, "                        model path (default: %s)\n", params.model.c_str());
+    fprintf(stdout, "\n");
 }
 
 std::string gpt_random_prompt(std::mt19937 & rng) {
@@ -575,18 +647,21 @@ std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::s
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params) {
     auto lparams = llama_context_default_params();
 
-    lparams.n_ctx        = params.n_ctx;
-    lparams.n_batch      = params.n_batch;
-    lparams.n_gpu_layers = params.n_gpu_layers;
-    lparams.main_gpu     = params.main_gpu;
-    memcpy(lparams.tensor_split, params.tensor_split, LLAMA_MAX_DEVICES*sizeof(float));
-    lparams.low_vram     = params.low_vram;
-    lparams.seed         = params.seed;
-    lparams.f16_kv       = params.memory_f16;
-    lparams.use_mmap     = params.use_mmap;
-    lparams.use_mlock    = params.use_mlock;
-    lparams.logits_all   = params.perplexity;
-    lparams.embedding    = params.embedding;
+    lparams.n_ctx           = params.n_ctx;
+    lparams.n_batch         = params.n_batch;
+    lparams.n_gqa           = params.n_gqa;
+    lparams.rms_norm_eps    = params.rms_norm_eps;
+    lparams.n_gpu_layers    = params.n_gpu_layers;
+    lparams.main_gpu        = params.main_gpu;
+    lparams.tensor_split    = params.tensor_split;
+    lparams.low_vram        = params.low_vram;
+    lparams.mul_mat_q       = params.mul_mat_q;
+    lparams.seed            = params.seed;
+    lparams.f16_kv          = params.memory_f16;
+    lparams.use_mmap        = params.use_mmap;
+    lparams.use_mlock       = params.use_mlock;
+    lparams.logits_all      = params.perplexity;
+    lparams.embedding       = params.embedding;
     lparams.rope_freq_base  = params.rope_freq_base;
     lparams.rope_freq_scale = params.rope_freq_scale;
 
@@ -623,377 +698,4 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
     }
 
     return std::make_tuple(model, lctx);
-}
-
-void console_init(console_state & con_st) {
-#if defined(_WIN32)
-    // Windows-specific console initialization
-    DWORD dwMode = 0;
-    con_st.hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-    if (con_st.hConsole == INVALID_HANDLE_VALUE || !GetConsoleMode(con_st.hConsole, &dwMode)) {
-        con_st.hConsole = GetStdHandle(STD_ERROR_HANDLE);
-        if (con_st.hConsole != INVALID_HANDLE_VALUE && (!GetConsoleMode(con_st.hConsole, &dwMode))) {
-            con_st.hConsole = NULL;
-        }
-    }
-    if (con_st.hConsole) {
-        // Enable ANSI colors on Windows 10+
-        if (con_st.use_color && !(dwMode & ENABLE_VIRTUAL_TERMINAL_PROCESSING)) {
-            SetConsoleMode(con_st.hConsole, dwMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
-        }
-        // Set console output codepage to UTF8
-        SetConsoleOutputCP(CP_UTF8);
-    }
-    HANDLE hConIn = GetStdHandle(STD_INPUT_HANDLE);
-    if (hConIn != INVALID_HANDLE_VALUE && GetConsoleMode(hConIn, &dwMode)) {
-        // Set console input codepage to UTF16
-        _setmode(_fileno(stdin), _O_WTEXT);
-
-        // Turn off ICANON (ENABLE_LINE_INPUT) and ECHO (ENABLE_ECHO_INPUT)
-        dwMode &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
-        SetConsoleMode(hConIn, dwMode);
-    }
-#else
-    // POSIX-specific console initialization
-    struct termios new_termios;
-    tcgetattr(STDIN_FILENO, &con_st.prev_state);
-    new_termios = con_st.prev_state;
-    new_termios.c_lflag &= ~(ICANON | ECHO);
-    new_termios.c_cc[VMIN] = 1;
-    new_termios.c_cc[VTIME] = 0;
-    tcsetattr(STDIN_FILENO, TCSANOW, &new_termios);
-
-    con_st.tty = fopen("/dev/tty", "w+");
-    if (con_st.tty != nullptr) {
-        con_st.out = con_st.tty;
-    }
-
-    setlocale(LC_ALL, "");
-#endif
-}
-
-void console_cleanup(console_state & con_st) {
-    // Reset console color
-    console_set_color(con_st, CONSOLE_COLOR_DEFAULT);
-
-#if !defined(_WIN32)
-    if (con_st.tty != nullptr) {
-        con_st.out = stdout;
-        fclose(con_st.tty);
-        con_st.tty = nullptr;
-    }
-    // Restore the terminal settings on POSIX systems
-    tcsetattr(STDIN_FILENO, TCSANOW, &con_st.prev_state);
-#endif
-}
-
-/* Keep track of current color of output, and emit ANSI code if it changes. */
-void console_set_color(console_state & con_st, console_color_t color) {
-    if (con_st.use_color && con_st.color != color) {
-        fflush(stdout);
-        switch(color) {
-            case CONSOLE_COLOR_DEFAULT:
-                fprintf(con_st.out, ANSI_COLOR_RESET);
-                break;
-            case CONSOLE_COLOR_PROMPT:
-                fprintf(con_st.out, ANSI_COLOR_YELLOW);
-                break;
-            case CONSOLE_COLOR_USER_INPUT:
-                fprintf(con_st.out, ANSI_BOLD ANSI_COLOR_GREEN);
-                break;
-            case CONSOLE_COLOR_ERROR:
-                fprintf(con_st.out, ANSI_BOLD ANSI_COLOR_RED);
-                break;
-        }
-        con_st.color = color;
-        fflush(con_st.out);
-    }
-}
-
-char32_t getchar32() {
-#if defined(_WIN32)
-    HANDLE hConsole = GetStdHandle(STD_INPUT_HANDLE);
-    wchar_t high_surrogate = 0;
-
-    while (true) {
-        INPUT_RECORD record;
-        DWORD count;
-        if (!ReadConsoleInputW(hConsole, &record, 1, &count) || count == 0) {
-            return WEOF;
-        }
-
-        if (record.EventType == KEY_EVENT && record.Event.KeyEvent.bKeyDown) {
-            wchar_t wc = record.Event.KeyEvent.uChar.UnicodeChar;
-            if (wc == 0) {
-                continue;
-            }
-
-            if ((wc >= 0xD800) && (wc <= 0xDBFF)) { // Check if wc is a high surrogate
-                high_surrogate = wc;
-                continue;
-            } else if ((wc >= 0xDC00) && (wc <= 0xDFFF)) { // Check if wc is a low surrogate
-                if (high_surrogate != 0) { // Check if we have a high surrogate
-                    return ((high_surrogate - 0xD800) << 10) + (wc - 0xDC00) + 0x10000;
-                }
-            }
-
-            high_surrogate = 0; // Reset the high surrogate
-            return static_cast<char32_t>(wc);
-        }
-    }
-#else
-    wchar_t wc = getwchar();
-    if (static_cast<wint_t>(wc) == WEOF) {
-        return WEOF;
-    }
-
-#if WCHAR_MAX == 0xFFFF
-    if ((wc >= 0xD800) && (wc <= 0xDBFF)) { // Check if wc is a high surrogate
-        wchar_t low_surrogate = getwchar();
-        if ((low_surrogate >= 0xDC00) && (low_surrogate <= 0xDFFF)) { // Check if the next wchar is a low surrogate
-            return (static_cast<char32_t>(wc & 0x03FF) << 10) + (low_surrogate & 0x03FF) + 0x10000;
-        }
-    }
-    if ((wc >= 0xD800) && (wc <= 0xDFFF)) { // Invalid surrogate pair
-        return 0xFFFD; // Return the replacement character U+FFFD
-    }
-#endif
-
-    return static_cast<char32_t>(wc);
-#endif
-}
-
-void pop_cursor(console_state & con_st) {
-#if defined(_WIN32)
-    if (con_st.hConsole != NULL) {
-        CONSOLE_SCREEN_BUFFER_INFO bufferInfo;
-        GetConsoleScreenBufferInfo(con_st.hConsole, &bufferInfo);
-
-        COORD newCursorPosition = bufferInfo.dwCursorPosition;
-        if (newCursorPosition.X == 0) {
-            newCursorPosition.X = bufferInfo.dwSize.X - 1;
-            newCursorPosition.Y -= 1;
-        } else {
-            newCursorPosition.X -= 1;
-        }
-
-        SetConsoleCursorPosition(con_st.hConsole, newCursorPosition);
-        return;
-    }
-#endif
-    putc('\b', con_st.out);
-}
-
-int estimateWidth(char32_t codepoint) {
-#if defined(_WIN32)
-    return 1;
-#else
-    return wcwidth(codepoint);
-#endif
-}
-
-int put_codepoint(console_state & con_st, const char* utf8_codepoint, size_t length, int expectedWidth) {
-#if defined(_WIN32)
-    CONSOLE_SCREEN_BUFFER_INFO bufferInfo;
-    if (!GetConsoleScreenBufferInfo(con_st.hConsole, &bufferInfo)) {
-        // go with the default
-        return expectedWidth;
-    }
-    COORD initialPosition = bufferInfo.dwCursorPosition;
-    DWORD nNumberOfChars = length;
-    WriteConsole(con_st.hConsole, utf8_codepoint, nNumberOfChars, &nNumberOfChars, NULL);
-
-    CONSOLE_SCREEN_BUFFER_INFO newBufferInfo;
-    GetConsoleScreenBufferInfo(con_st.hConsole, &newBufferInfo);
-
-    // Figure out our real position if we're in the last column
-    if (utf8_codepoint[0] != 0x09 && initialPosition.X == newBufferInfo.dwSize.X - 1) {
-        DWORD nNumberOfChars;
-        WriteConsole(con_st.hConsole, &" \b", 2, &nNumberOfChars, NULL);
-        GetConsoleScreenBufferInfo(con_st.hConsole, &newBufferInfo);
-    }
-
-    int width = newBufferInfo.dwCursorPosition.X - initialPosition.X;
-    if (width < 0) {
-        width += newBufferInfo.dwSize.X;
-    }
-    return width;
-#else
-    // we can trust expectedWidth if we've got one
-    if (expectedWidth >= 0 || con_st.tty == nullptr) {
-        fwrite(utf8_codepoint, length, 1, con_st.out);
-        return expectedWidth;
-    }
-
-    fputs("\033[6n", con_st.tty); // Query cursor position
-    int x1, x2, y1, y2;
-    int results = 0;
-    results = fscanf(con_st.tty, "\033[%d;%dR", &y1, &x1);
-
-    fwrite(utf8_codepoint, length, 1, con_st.tty);
-
-    fputs("\033[6n", con_st.tty); // Query cursor position
-    results += fscanf(con_st.tty, "\033[%d;%dR", &y2, &x2);
-
-    if (results != 4) {
-        return expectedWidth;
-    }
-
-    int width = x2 - x1;
-    if (width < 0) {
-        // Calculate the width considering text wrapping
-        struct winsize w;
-        ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-        width += w.ws_col;
-    }
-    return width;
-#endif
-}
-
-void replace_last(console_state & con_st, char ch) {
-#if defined(_WIN32)
-    pop_cursor(con_st);
-    put_codepoint(con_st, &ch, 1, 1);
-#else
-    fprintf(con_st.out, "\b%c", ch);
-#endif
-}
-
-void append_utf8(char32_t ch, std::string & out) {
-    if (ch <= 0x7F) {
-        out.push_back(static_cast<unsigned char>(ch));
-    } else if (ch <= 0x7FF) {
-        out.push_back(static_cast<unsigned char>(0xC0 | ((ch >> 6) & 0x1F)));
-        out.push_back(static_cast<unsigned char>(0x80 | (ch & 0x3F)));
-    } else if (ch <= 0xFFFF) {
-        out.push_back(static_cast<unsigned char>(0xE0 | ((ch >> 12) & 0x0F)));
-        out.push_back(static_cast<unsigned char>(0x80 | ((ch >> 6) & 0x3F)));
-        out.push_back(static_cast<unsigned char>(0x80 | (ch & 0x3F)));
-    } else if (ch <= 0x10FFFF) {
-        out.push_back(static_cast<unsigned char>(0xF0 | ((ch >> 18) & 0x07)));
-        out.push_back(static_cast<unsigned char>(0x80 | ((ch >> 12) & 0x3F)));
-        out.push_back(static_cast<unsigned char>(0x80 | ((ch >> 6) & 0x3F)));
-        out.push_back(static_cast<unsigned char>(0x80 | (ch & 0x3F)));
-    } else {
-        // Invalid Unicode code point
-    }
-}
-
-// Helper function to remove the last UTF-8 character from a string
-void pop_back_utf8_char(std::string & line) {
-    if (line.empty()) {
-        return;
-    }
-
-    size_t pos = line.length() - 1;
-
-    // Find the start of the last UTF-8 character (checking up to 4 bytes back)
-    for (size_t i = 0; i < 3 && pos > 0; ++i, --pos) {
-        if ((line[pos] & 0xC0) != 0x80) break; // Found the start of the character
-    }
-    line.erase(pos);
-}
-
-bool console_readline(console_state & con_st, std::string & line) {
-    console_set_color(con_st, CONSOLE_COLOR_USER_INPUT);
-    if (con_st.out != stdout) {
-        fflush(stdout);
-    }
-
-    line.clear();
-    std::vector<int> widths;
-    bool is_special_char = false;
-    bool end_of_stream = false;
-
-    char32_t input_char;
-    while (true) {
-        fflush(con_st.out); // Ensure all output is displayed before waiting for input
-        input_char = getchar32();
-
-        if (input_char == '\r' || input_char == '\n') {
-            break;
-        }
-
-        if (input_char == (char32_t) WEOF || input_char == 0x04 /* Ctrl+D*/) {
-            end_of_stream = true;
-            break;
-        }
-
-        if (is_special_char) {
-            console_set_color(con_st, CONSOLE_COLOR_USER_INPUT);
-            replace_last(con_st, line.back());
-            is_special_char = false;
-        }
-
-        if (input_char == '\033') { // Escape sequence
-            char32_t code = getchar32();
-            if (code == '[' || code == 0x1B) {
-                // Discard the rest of the escape sequence
-                while ((code = getchar32()) != (char32_t) WEOF) {
-                    if ((code >= 'A' && code <= 'Z') || (code >= 'a' && code <= 'z') || code == '~') {
-                        break;
-                    }
-                }
-            }
-        } else if (input_char == 0x08 || input_char == 0x7F) { // Backspace
-            if (!widths.empty()) {
-                int count;
-                do {
-                    count = widths.back();
-                    widths.pop_back();
-                    // Move cursor back, print space, and move cursor back again
-                    for (int i = 0; i < count; i++) {
-                        replace_last(con_st, ' ');
-                        pop_cursor(con_st);
-                    }
-                    pop_back_utf8_char(line);
-                } while (count == 0 && !widths.empty());
-            }
-        } else {
-            int offset = line.length();
-            append_utf8(input_char, line);
-            int width = put_codepoint(con_st, line.c_str() + offset, line.length() - offset, estimateWidth(input_char));
-            if (width < 0) {
-                width = 0;
-            }
-            widths.push_back(width);
-        }
-
-        if (!line.empty() && (line.back() == '\\' || line.back() == '/')) {
-            console_set_color(con_st, CONSOLE_COLOR_PROMPT);
-            replace_last(con_st, line.back());
-            is_special_char = true;
-        }
-    }
-
-    bool has_more = con_st.multiline_input;
-    if (is_special_char) {
-        replace_last(con_st, ' ');
-        pop_cursor(con_st);
-
-        char last = line.back();
-        line.pop_back();
-        if (last == '\\') {
-            line += '\n';
-            fputc('\n', con_st.out);
-            has_more = !has_more;
-        } else {
-            // llama will just eat the single space, it won't act as a space
-            if (line.length() == 1 && line.back() == ' ') {
-                line.clear();
-                pop_cursor(con_st);
-            }
-            has_more = false;
-        }
-    } else {
-        if (end_of_stream) {
-            has_more = false;
-        } else {
-            line += '\n';
-            fputc('\n', con_st.out);
-        }
-    }
-
-    fflush(con_st.out);
-    return has_more;
 }
