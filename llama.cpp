@@ -3740,7 +3740,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) &&
                          use_more_bits(i_feed_forward_w2, n_feed_forward_w2)) new_type = GGML_TYPE_Q6_K;
                 else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S && i_feed_forward_w2 < 4) new_type = GGML_TYPE_Q5_K;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_S && i_feed_forward_w2 < 4) new_type = GGML_TYPE_Q5_K;
+                //else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_S && i_feed_forward_w2 < 4) new_type = GGML_TYPE_Q5_K;
                 ++i_feed_forward_w2;
             } else if (name.find("attn_output.weight") != std::string::npos) {
                 if      (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q4_K;
