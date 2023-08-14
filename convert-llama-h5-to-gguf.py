@@ -122,19 +122,11 @@ if Path(dir_model + "/tokenizer.model").is_file():
 
     for i in range(tokenizer.vocab_size()):
         text: bytes
-        if tokenizer.is_unknown(i):
-            text = " \u2047 ".encode("utf-8")
-        elif tokenizer.is_control(i):
-            text = b""
-        if tokenizer.is_byte(i):
-            piece = tokenizer.id_to_piece(i)
-            if len(piece) != 6:
-                raise Exception(f"Invalid token: {piece}")
-            byte_value = int(piece[3:-1], 16)
-            text = struct.pack("B", byte_value)
-        else:
-            text = tokenizer.id_to_piece(i).replace("\u2581", " ").encode("utf-8")
-        score: float = tokenizer.get_score(i)
+        score: float
+
+        piece = tokenizer.id_to_piece(i)
+        text  = piece.encode("utf-8")
+        score = tokenizer.get_score(i)
 
         tokens.append(text)
         scores.append(score)
