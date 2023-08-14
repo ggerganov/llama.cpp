@@ -5,7 +5,9 @@
 
 #ifndef GGUF_UTIL_H
 #define GGUF_UTIL_H
+
 #include "ggml.h"
+
 #include <cstdio>
 #include <cstdint>
 #include <cerrno>
@@ -61,7 +63,6 @@ static std::string format(const char * fmt, ...) {
     va_end(ap);
     return std::string(buf.data(), size);
 }
-
 
 template<typename T>
 static std::string to_string(const T & val) {
