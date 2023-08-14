@@ -2217,9 +2217,6 @@ struct train_params {
     int mem_model_gb;
     int mem_compute_gb;
     int mem_compute0_gb;
-    int mem_compute1_gb;
-    int mem_compute2_gb;
-    int mem_compute3_gb;
 };
 
 struct train_params get_default_train_params() {
@@ -2278,8 +2275,6 @@ struct train_params get_default_train_params() {
     params.mem_model_gb   =  2;
     params.mem_compute_gb = 24;
     params.mem_compute0_gb = 8;
-    params.mem_compute1_gb = 1;
-    params.mem_compute2_gb = 2;
     return params;
 }
 
@@ -2336,9 +2331,7 @@ void train_print_usage(int /*argc*/, char ** argv, const struct train_params * p
     fprintf(stderr, "  --lbfgs-iter N             Maximum number of LBFGS optimization iterations for each batch (default %d)\n", params->lbfgs_n_iter);
     fprintf(stderr, "  --mem-model N              Memory to allocate for model and cache in gigabytes. (default %d)\n", params->mem_model_gb);
     fprintf(stderr, "  --mem-compute N            Memory to allocate for compute in gigabytes. (default %d)\n", params->mem_compute_gb);
-    fprintf(stderr, "  --mem-compute0 N           Memory to allocate for compute in gigabytes. (default %d)\n", params->mem_compute0_gb);
-    fprintf(stderr, "  --mem-compute1 N           Memory to allocate for compute in gigabytes. (default %d)\n", params->mem_compute1_gb);
-    fprintf(stderr, "  --mem-compute2 N           Memory to allocate for compute in gigabytes. (default %d)\n", params->mem_compute2_gb);
+    fprintf(stderr, "  --mem-compute0 N           Memory to allocate for automatic memory allocator in gigabytes. (default %d)\n", params->mem_compute0_gb);
     fprintf(stderr, "\n");
 }
 
@@ -2604,18 +2597,6 @@ bool train_params_parse(int argc, char ** argv, struct train_params * params) {
                 break;
             }
             params->mem_compute0_gb = std::stoi(argv[i]);
-        } else if (arg == "--mem-compute1") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params->mem_compute1_gb = std::stoi(argv[i]);
-        } else if (arg == "--mem-compute2") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params->mem_compute2_gb = std::stoi(argv[i]);
         } else if (arg == "-h" || arg == "--help") {
             train_print_usage(argc, argv, &default_params);
             exit(0);
@@ -2839,11 +2820,7 @@ int main(int argc, char ** argv) {
     uint8_t * compute_addr = new uint8_t[compute_size];
 
     size_t size_buf_0 = 1024ll*1024ll*1024ll*((size_t) params.mem_compute0_gb);
-    size_t size_buf_1 = 1024ll*1024ll*1024ll*((size_t) params.mem_compute1_gb);
-    size_t size_buf_2 = 1024ll*1024ll*1024ll*((size_t) params.mem_compute2_gb);
     uint8_t * compute_buf_0 = new uint8_t[size_buf_0];
-    uint8_t * compute_buf_1 = new uint8_t[size_buf_1];
-    uint8_t * compute_buf_2 = new uint8_t[size_buf_2];
 
     ggml_allocr * alloc = NULL;
     if (params.use_alloc) {
@@ -3090,7 +3067,6 @@ int main(int argc, char ** argv) {
 
     delete[] compute_addr;
     delete[] compute_buf_0;
-    delete[] compute_buf_1;
     ggml_free(model.ctx);
     llama_free(lctx);
     llama_free_model(lmodel);
