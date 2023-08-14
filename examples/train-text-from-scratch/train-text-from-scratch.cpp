@@ -1585,8 +1585,8 @@ struct ggml_tensor * llama_build_train_graphs(
     checkpoints.push_back(t01);
 
     struct ggml_tensor * kv_scale;
-    if (flash_attn) {
-        kv_scale = ggml_new_f32(ctx, 1.0f/sqrtf(float(n_embd)/n_head)));
+    if (!enable_flash_attn) {
+        kv_scale = ggml_new_f32(ctx, 1.0f/sqrtf(float(n_embd)/n_head));
     }
 
     for (int il = 0; il < n_layer; ++il) {
