@@ -111,12 +111,13 @@ gguf_writer.add_layer_norm_rms_eps(llm_arch, hparams["rms_norm_eps"])
 
 print("gguf: get tokenizer metadata")
 
-tokens: List[str] = []
+tokens: List[bytes] = []
 scores: List[float] = []
+toktypes: List[int] = []
 
 if Path(dir_model + "/tokenizer.model").is_file():
     # vocab type sentencepiece
-    print("gguf: get sentencepiece tokenizer vocab and scores")
+    print("gguf: get sentencepiece tokenizer vocab, scores and token types")
 
     tokenizer = SentencePieceProcessor(dir_model + "/tokenizer.model")
 
@@ -128,12 +129,25 @@ if Path(dir_model + "/tokenizer.model").is_file():
         text  = piece.encode("utf-8")
         score = tokenizer.get_score(i)
 
+        toktype = 1 # defualt to normal token type
+        if tokenizer.is_unknown(i): toktype = 2
+        if tokenizer.is_control(i): toktype = 3
+ 
+        # TODO: How to determinate if a token is user defined?
+        # ref: https://github.com/google/sentencepiece/blob/master/src/sentencepiece_model.proto
+        # if tokenizer.is_user_defined(i): toktype = 4
+
+        if tokenizer.is_unused(i):  toktype = 5
+        if tokenizer.is_byte(i):    toktype = 6
+
         tokens.append(text)
         scores.append(score)
+        toktypes.append(toktype)
 
     gguf_writer.add_tokenizer_model("llama")
     gguf_writer.add_token_list(tokens)
     gguf_writer.add_token_scores(scores)
+    gguf_writer.add_token_types(toktypes)
 
 if Path(dir_model + "/tokenizer.json").is_file():
     with open(dir_model + "/tokenizer.json", "r", encoding="utf-8") as f:
