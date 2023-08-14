@@ -297,6 +297,9 @@ class GGUFWriter:
     def add_token_merges(self, merges: List):
         self.add_array(constants.KEY_TOKENIZER_MERGES, merges)
 
+    def add_token_types(self, types: List[int]):
+        self.add_array(constants.KEY_TOKENIZER_TOKEN_TYPE, types)
+
     def add_token_scores(self, scores: List[float]):
         self.add_array(constants.KEY_TOKENIZER_SCORES, scores)
 
