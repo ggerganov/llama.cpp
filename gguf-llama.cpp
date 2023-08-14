@@ -7,6 +7,7 @@
 #endif
 
 #include "gguf-util.h"
+#define LLAMA_API_CPP // TODO: eliminate me
 #include "gguf-llama.h"
 
 #include "ggml.h"
@@ -76,7 +77,7 @@ static std::string to_string(const T & val) {
 #define LLAMA_MAX_SCRATCH_BUFFERS 16
 #endif
 
-typedef void (*offload_func_t)(struct ggml_tensor * tensor);
+#define UNUSED GGML_UNUSED
 
 #ifdef GGML_USE_CUBLAS
 #define llama_host_malloc(n)  ggml_cuda_host_malloc(n)
@@ -124,6 +125,8 @@ struct llama_buffer {
         data = NULL;
     }
 };
+
+typedef void (*offload_func_t)(struct ggml_tensor * tensor);
 
 void llama_nop(struct ggml_tensor * tensor) { // don't offload by default
     (void) tensor;
@@ -623,7 +626,7 @@ struct gguf_file_loader {
         hparams.n_embd         = read_u32("llama.embedding_length");
         hparams.n_ff           = read_u32("llama.feed_forward_length");
         hparams.n_head         = read_u32("llama.attention.head_count");
-        hparams.n_layer        = read_u32("llama.layer_count");
+        hparams.n_layer        = read_u32("llama.block_count");
         hparams.n_rot          = read_u32("llama.rope.dimension_count");
         hparams.f_rms_norm_eps = read_f32("llama.attention.layer_norm_rms_epsilon");
 
@@ -1081,7 +1084,7 @@ static bool kv_cache_init(
     cache.ctx = ggml_init(params);
 
     if (!cache.ctx) {
-        fprintf(stderr, "%s: failed to allocate memory for kv cache\n", __func__);
+        LLAMA_LOG_ERROR("%s: failed to allocate memory for kv cache\n", __func__);
         return false;
     }
 
@@ -1370,7 +1373,7 @@ static void llama_model_load_internal(
 
         ml->ggml_ctx = ctx;
 
-        model.tok_embeddings = ml->get_tensor("tok_embeddings.weight", {n_embd, n_vocab}, GGML_BACKEND_CPU);
+        model.tok_embeddings = ml->get_tensor("token_embd.weight", {n_embd, n_vocab}, GGML_BACKEND_CPU);
 
         // "output" tensor
         {
@@ -1391,8 +1394,8 @@ static void llama_model_load_internal(
                 backend_output = GGML_BACKEND_CPU;
             }
 
-            model.norm   = ml->get_tensor("norm.weight",   {n_embd},          backend_norm);
-            model.output = ml->get_tensor("output.weight", {n_embd, n_vocab}, backend_output);
+            model.norm   = ml->get_tensor("output_norm.weight", {n_embd},          backend_norm);
+            model.output = ml->get_tensor("output.weight",      {n_embd, n_vocab}, backend_output);
             if (backend_norm == GGML_BACKEND_GPU) {
                 vram_weights += ggml_nbytes(model.norm);
             }
@@ -1410,20 +1413,20 @@ static void llama_model_load_internal(
 
             auto & layer = model.layers[i];
 
-            std::string layers_i = "layers." + std::to_string(i);
+            std::string layers_i = "blk." + std::to_string(i);
 
-            layer.attention_norm = ml->get_tensor(layers_i + ".attention_norm.weight", {n_embd}, backend);
+            layer.attention_norm = ml->get_tensor(layers_i + ".attn_norm.weight", {n_embd}, backend);
 
-            layer.wq = ml->get_tensor(layers_i + ".attention.wq.weight", {n_embd, n_embd},     backend_split);
-            layer.wk = ml->get_tensor(layers_i + ".attention.wk.weight", {n_embd, n_embd_gqa}, backend_split);
-            layer.wv = ml->get_tensor(layers_i + ".attention.wv.weight", {n_embd, n_embd_gqa}, backend_split);
-            layer.wo = ml->get_tensor(layers_i + ".attention.wo.weight", {n_embd, n_embd},     backend_split);
+            layer.wq = ml->get_tensor(layers_i + ".attn_q.weight",      {n_embd, n_embd},     backend_split);
+            layer.wk = ml->get_tensor(layers_i + ".attn_k.weight",      {n_embd, n_embd_gqa}, backend_split);
+            layer.wv = ml->get_tensor(layers_i + ".attn_v.weight",      {n_embd, n_embd_gqa}, backend_split);
+            layer.wo = ml->get_tensor(layers_i + ".attn_output.weight", {n_embd, n_embd},     backend_split);
 
             layer.ffn_norm = ml->get_tensor(layers_i + ".ffn_norm.weight", {n_embd}, backend);
 
-            layer.w1 = ml->get_tensor(layers_i + ".feed_forward.w1.weight", {n_embd,   n_ff}, backend_split);
-            layer.w2 = ml->get_tensor(layers_i + ".feed_forward.w2.weight", {  n_ff, n_embd}, backend_split);
-            layer.w3 = ml->get_tensor(layers_i + ".feed_forward.w3.weight", {n_embd,   n_ff}, backend_split);
+            layer.w1 = ml->get_tensor(layers_i + ".ffn_gate.weight", {n_embd,   n_ff}, backend_split);
+            layer.w2 = ml->get_tensor(layers_i + ".ffn_down.weight", {  n_ff, n_embd}, backend_split);
+            layer.w3 = ml->get_tensor(layers_i + ".ffn_up.weight",   {n_embd,   n_ff}, backend_split);
 
             if (backend == GGML_BACKEND_GPU) {
                 vram_weights +=
@@ -2109,6 +2112,109 @@ static bool llama_eval_internal(
 // tokenizer
 //
 
+static std::string llama_vocab_type(const llama_vocab& vocab) {
+    return vocab.token_to_id.size() == 32000 ? "spm": "bpe";
+}
+
+static bool llama_is_normal_token(const llama_vocab& vocab, llama_token token) {
+    if(llama_vocab_type(vocab) == "spm")
+        return token >= 259;
+    else if(llama_vocab_type(vocab) == "bpe")
+        return token >= 95;
+    else
+        return false;
+}
+
+static bool llama_is_unknown_token(const llama_vocab& vocab, llama_token token) {
+    if(llama_vocab_type(vocab) == "spm")
+        return token == 0;
+    else
+        // TODO: improve?
+        return false;
+}
+
+static bool llama_is_control_token(const llama_vocab& vocab, llama_token token) {
+    if(llama_vocab_type(vocab) == "spm")
+        return token == 1 || token == 2;
+    else
+        // TODO: improve?
+        return false;
+}
+
+static bool llama_is_bos_token(const llama_vocab& vocab, llama_token token) {
+    if(llama_vocab_type(vocab) == "spm")
+        return token == 1;
+    else
+        // TODO: improve?
+        return false;
+}
+
+static bool llama_is_eos_token(const llama_vocab& vocab, llama_token token) {
+    if(llama_vocab_type(vocab) == "spm")
+        return token == 2;
+    else
+        // TODO: improve?
+        return false;
+}
+
+static bool llama_is_user_defined_token(const llama_vocab & vocab, llama_token token) {
+    UNUSED(vocab);
+    UNUSED(token);
+    // TODO: improve?
+    return false;
+}
+
+static bool llama_is_unused_token(const llama_vocab& vocab, llama_token token) {
+    UNUSED(vocab);
+    UNUSED(token);
+    // TODO: improve?
+    return false;
+}
+
+static bool llama_is_byte_token(const llama_vocab& vocab, llama_token token) {
+    if(llama_vocab_type(vocab) == "spm")
+        return 3 <= token && token < 259;
+    else if(llama_vocab_type(vocab) == "bpe")
+        return 1 <= token && token < 95;
+    else
+        return false;
+}
+
+static uint8_t llama_byte_to_char(const llama_vocab& vocab, uint8_t byte) {
+    if(llama_vocab_type(vocab) == "spm")
+        return byte + 3;
+    else if(llama_vocab_type(vocab) == "bpe")
+        return byte + 32;
+    else
+        return false;
+}
+
+static std::string llama_escape_whitespace(const std::string& text) {
+    std::string result;
+    bool escaping = false;
+    result += "\xe2\x96\x81";
+    for (size_t offs = 0; offs < text.length(); ++offs) {
+        if (text[offs] == ' ') {
+            if (!escaping) {
+                result += "\xe2\x96\x81";
+                escaping = true;
+            }
+        }
+        else {
+            escaping = false;
+            result += text[offs];
+        }
+    }
+    return result;
+}
+
+static std::string llama_unescape_whitespace(const std::string& word) {
+    if (word.length() >= 3 && word.substr(0, 3) == "\xe2\x96\x81") {
+        return std::string(" ") + word.substr(3);
+    }
+    return word;
+}
+
 static size_t utf8_len(char src) {
     const size_t lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4 };
     uint8_t highbits = static_cast<uint8_t>(src) >> 4;
@@ -2150,10 +2256,11 @@ struct llama_tokenizer {
         size_t offs = 0;
         while (offs < text.size()) {
             llama_sp_symbol sym;
-            size_t char_len = std::min(text.size() - offs, utf8_len(text[offs]));
+            size_t len = utf8_len(text[offs]);
+            GGML_ASSERT(offs + len <= text.size());
             sym.text = text.c_str() + offs;
-            sym.n = char_len;
-            offs += char_len;
+            sym.n = len;
+            offs += len;
             sym.prev = index - 1;
             sym.next = offs == text.size() ? -1 : index + 1;
             index++;
@@ -2198,23 +2305,36 @@ struct llama_tokenizer {
 
         for (int i = 0; i != -1; i = symbols_[i].next) {
             auto & symbol = symbols_[i];
-            auto token = vocab_.token_to_id.find(std::string(symbol.text, symbol.n));
-
-            if (token == vocab_.token_to_id.end()) {
-                // output any symbols that did not form tokens as bytes.
-                for (int j = 0; j < (int) symbol.n; ++j) {
-                    // NOTE: old version, before #2420 - not sure what are the implications of this
-                    //llama_vocab::id token_id = static_cast<uint8_t>(symbol.text[j]) + 3;
-                    llama_vocab::id token_id = vocab_.token_to_id.at(std::string(1, symbol.text[j]));
-                    output.push_back(token_id);
-                }
-            } else {
-                output.push_back((*token).second);
-            }
+            resegment(symbol, output);
         }
     }
 
 private:
+    void resegment(llama_sp_symbol &symbol, std::vector<llama_vocab::id> &output) {
+        auto text = std::string(symbol.text, symbol.n);
+        auto token = vocab_.token_to_id.find(text);
+
+        // Do we need to support is_unused?
+        if (token != vocab_.token_to_id.end()) {
+            output.push_back((*token).second);
+            return;
+        }
+
+        const auto p = rev_merge.find(text);
+
+        if (p == rev_merge.end()) {
+            // output any symbols that did not form tokens as bytes.
+            for (int j = 0; j < (int)symbol.n; ++j) {
+                llama_vocab::id token_id = llama_byte_to_char(vocab_, symbol.text[j]);
+                output.push_back(token_id);
+            }
+            return;
+        }
+
+        resegment(symbols_[p->second.first], output);
+        resegment(symbols_[p->second.second], output);
+    }
+
     void try_add_bigram(int left, int right) {
         if (left == -1 || right == -1) {
             return;
@@ -2239,23 +2359,34 @@ private:
         bigram.score = tok_score.score;
         bigram.size = text.size();
         work_queue_.push(bigram);
+
+        // Do we need to support is_unused?
+        rev_merge[text] = std::make_pair(left, right);
     }
 
     const llama_vocab & vocab_;
     std::vector<llama_sp_symbol> symbols_;
     llama_sp_bigram::queue work_queue_;
+    std::map<std::string, std::pair<int, int> > rev_merge;
 };
 
-static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, const std::string & text, bool bos) {
+static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, const std::string & raw_text, bool bos, bool escape) {
     llama_tokenizer tokenizer(vocab);
     std::vector<llama_vocab::id> output;
 
-    if (text.empty()) {
+    if (raw_text.empty()) {
         return output;
     }
 
     if (bos) {
         output.push_back(llama_token_bos());
+    }
+
+    std::string text;
+    if (escape) {
+        text = llama_escape_whitespace(raw_text);
+    } else {
+        text = raw_text;
     }
 
     tokenizer.tokenize(text, output);
@@ -2839,15 +2970,15 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
 
     for (size_t i = 0; i < candidates->size; ++i) {
         const llama_token id  = candidates->data[i].id;
-        const char *      str = llama_token_to_str(ctx, id);
+        std::string       str = llama_token_to_str(ctx, id);
         if (id == eos) {
             if (!allow_eos) {
                 candidates->data[i].logit = -INFINITY;
             }
-        } else if (*str == 0) {
+        } else if (str.empty()) {
             candidates->data[i].logit = -INFINITY;
         } else {
-            candidates_decoded.push_back(decode_utf8(str));
+            candidates_decoded.push_back(decode_utf8(str.c_str()));
             candidates_grammar.push_back({ i, candidates_decoded.back().data() });
         }
     }
@@ -3048,9 +3179,9 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
         GGML_ASSERT(false);
     }
 
-    const char * str = llama_token_to_str(ctx, token);
+    std::string str = llama_token_to_str(ctx, token);
     // Note terminating 0 in decoded string
-    auto code_points = decode_utf8(str);
+    auto code_points = decode_utf8(str.c_str());
     for (auto it = code_points.begin(), end = code_points.end() - 1; it != end; ++it) {
         grammar->stacks = llama_grammar_accept(grammar->rules, grammar->stacks, *it);
     }
@@ -3506,6 +3637,12 @@ struct llama_context * llama_new_context_with_model(
     if (params.n_gpu_layers > 0) {
         // this allocates all Metal resources and memory buffers
         ctx->ctx_metal = ggml_metal_init(1);
+
+        if (!ctx->ctx_metal) {
+            LLAMA_LOG_ERROR("%s: ggml_metal_init() failed\n", __func__);
+            llama_free(ctx);
+            return NULL;
+        }
 
         void * data_ptr  = NULL;
         size_t data_size = 0;
@@ -4281,7 +4418,8 @@ int llama_tokenize_with_model(
                  llama_token * tokens,
                          int   n_max_tokens,
                         bool   add_bos) {
-    auto res = llama_tokenize(model->vocab, text, add_bos);
+    auto escape = llama_vocab_type(model->vocab) == "spm";
+    auto res = llama_tokenize(model->vocab, text, add_bos, escape);
 
     if (n_max_tokens < (int) res.size()) {
         LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
@@ -4302,6 +4440,62 @@ int llama_tokenize(
                          int   n_max_tokens,
                         bool   add_bos) {
     return llama_tokenize_with_model(&ctx->model, text, tokens, n_max_tokens, add_bos);
+}
+
+std::vector<llama_token> llama_tokenize(
+        struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_bos) {
+    int length = text.length() + add_bos;
+    std::vector<llama_token> result(length);
+    length = llama_tokenize(ctx, text.c_str(), result.data(), result.size(), add_bos);
+    if (length < 0) {
+        result.resize(-length);
+        int check = llama_tokenize(ctx, text.c_str(), result.data(), result.size(), add_bos);
+        assert(check == -length);
+        GGML_UNUSED(check);
+    } else {
+        result.resize(length);
+    }
+    return result;
+}
+
+int llama_tokenize_bpe(
+        struct llama_context * ctx,
+                  const char * text,
+                 llama_token * tokens,
+                         int   n_max_tokens,
+                        bool   add_bos) {
+    auto res = llama_tokenize(ctx->model.vocab, text, add_bos, false);
+
+    if (n_max_tokens < (int) res.size()) {
+        LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
+        return -((int) res.size());
+    }
+
+    for (size_t i = 0; i < res.size(); i++) {
+        tokens[i] = res[i];
+    }
+
+    return res.size();
+}
+
+std::vector<llama_token> llama_tokenize_bpe(
+        struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_bos) {
+    int length = text.length() + add_bos;
+    std::vector<llama_token> result(length);
+    length = llama_tokenize_bpe(ctx, text.c_str(), result.data(), result.size(), add_bos);
+    if (length < 0) {
+        result.resize(-length);
+        int check = llama_tokenize_bpe(ctx, text.c_str(), result.data(), result.size(), add_bos);
+        assert(check == -length);
+        GGML_UNUSED(check);
+    } else {
+        result.resize(length);
+    }
+    return result;
 }
 
 int llama_n_vocab_from_model(const struct llama_model * model) {
@@ -4357,16 +4551,80 @@ float * llama_get_embeddings(struct llama_context * ctx) {
     return ctx->embedding.data();
 }
 
-const char * llama_token_to_str_with_model(const struct llama_model * model, llama_token token) {
-    if (token >= llama_n_vocab_from_model(model)) {
-        return nullptr;
+int llama_token_to_str_with_model(const struct llama_model * model, llama_token token, char * str, int length) {
+    if (0 <= token && token < llama_n_vocab_from_model(model)) {
+        if (llama_is_normal_token(model->vocab, token)) {
+            std::string result = model->vocab.id_to_token[token].tok;
+            if(llama_vocab_type(model->vocab) == "spm") {
+                result = llama_unescape_whitespace(result);
+            }
+            if (length < (int) result.length()) {
+                return -result.length();
+            }
+            strncpy(str, result.c_str(), result.length());
+            return result.length();
+        } else if (llama_is_unknown_token(model->vocab, token)) {
+            if (length < 3) {
+                return -3;
+            }
+            strncpy(str, "\xe2\x96\x85", 3);
+            return 3;
+        } else if (llama_is_control_token(model->vocab, token)) {
+            ;
+        } else if (llama_is_byte_token(model->vocab, token)) {
+            if (length < 1) {
+                return -1;
+            }
+            str[0] = llama_byte_to_char(model->vocab, token);
+            str[1] = 0x00;
+            return 1;
+        }
     }
-
-    return model->vocab.id_to_token[token].tok.c_str();
+    return 0;
 }
 
-const char * llama_token_to_str(const struct llama_context * ctx, llama_token token) {
-    return llama_token_to_str_with_model(&ctx->model, token);
+int llama_token_to_str(const struct llama_context * ctx, llama_token token, char * str, int length) {
+    return llama_token_to_str_with_model(&ctx->model, token, str, length);
+}
+
+std::string llama_token_to_str(const struct llama_context * ctx, llama_token token) {
+    std::vector<char> result(8, 0);
+    const int length = llama_token_to_str(ctx, token, result.data(), result.size());
+    if (length < 0) {
+        result.resize(-length);
+        int check = llama_token_to_str(ctx, token, result.data(), result.size());
+        GGML_ASSERT(check == -length);
+    } else {
+        result.resize(length);
+    }
+
+    return std::string(result.data(), result.size());
+}
+
+int llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token, char * str, int length) {
+    if (0 <= token && token < llama_n_vocab_from_model(&ctx->model)) {
+        std::string result = ctx->model.vocab.id_to_token[token].tok;
+        if (length < (int) result.length()) {
+            return -result.length();
+        }
+        strncpy(str, result.c_str(), result.length());
+        return result.length();
+    }
+    return 0;
+}
+
+std::string llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token) {
+    std::vector<char> result(8, 0);
+    const int length = llama_token_to_str_bpe(ctx, token, result.data(), result.size());
+    if (length < 0) {
+        result.resize(-length);
+        const int check = llama_token_to_str_bpe(ctx, token, result.data(), result.size());
+        GGML_ASSERT(check == -length);
+    } else {
+        result.resize(length);
+    }
+
+    return std::string(result.data(), result.size());
 }
 
 llama_token llama_token_bos() {
