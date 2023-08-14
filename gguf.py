@@ -114,6 +114,7 @@ class GGUFWriter:
         self.add_val(val, GGUFValueType.BOOL)
 
     def add_string(self, key: str, val: str):
+        if len(val) == 0: return
         self.add_key(key)
         self.add_val(val, GGUFValueType.STRING)
 
