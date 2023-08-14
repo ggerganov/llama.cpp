@@ -146,9 +146,8 @@ struct gguf_file {
         fwrite((const char *) &n, sizeof(n), 1, fp);
         fwrite(val.data(), sizeof(T), n, fp);
     }
-    
-    template<>
-    void write_val<std::string>(const std::string & key, enum gguf_type type, const std::string & val) {
+
+    void write_str(const std::string & key, enum gguf_type type, const std::string & val) {
         write_str(key);
         fwrite((const char *) &type, sizeof(type), 1, fp);
 
@@ -157,8 +156,7 @@ struct gguf_file {
         fwrite(val.c_str(), n, 1, fp);
     }
 
-    template<>
-    void write_arr<std::string>(const std::string & key, enum gguf_type type, const std::vector<std::string> & val) {
+    void write_str(const std::string & key, enum gguf_type type, const std::vector<std::string> & val) {
         write_str(key);
         {
             const enum gguf_type tarr = GGUF_TYPE_ARRAY;
@@ -180,7 +178,7 @@ struct gguf_file {
             fputc(0, fp);
         }
     }
-    
+
     void read_raw(void * ptr, size_t len) const {
         if (len == 0) {
             return;

@@ -470,7 +470,7 @@ struct gguf_load_tensors_map {
 
 enum gguf_file_version {
     GGUF_FILE_VERSION_V1 = 1,
-    
+
 };
 
 
@@ -485,7 +485,7 @@ struct ggml_context * ctx_data = NULL;
     gguf_file_loader(const char * fname, gguf_load_tensors_map & tensors_map)
         : file(fname, "rb") {
         fprintf(stderr, "llama.cpp: loading model from %s\n", fname);
-        
+
     struct gguf_init_params params = {
         /*.no_alloc = */ true,
         /*.ctx      = */ &ctx_data,
@@ -530,7 +530,7 @@ struct ggml_context * ctx_data = NULL;
 
         // TODO define keys as constants in header
         // TODO: read all hparams from file
-            
+
         hparams.n_vocab = read_n_vocab();
         hparams.n_ctx   = read_u32("llama.context_length");
         hparams.n_embd  = read_u32("llama.embedding_length");
@@ -539,7 +539,7 @@ struct ggml_context * ctx_data = NULL;
         hparams.n_layer = read_u32("llama.layer_count");
         hparams.n_rot   = read_u32("llama.rope.dimension_count");
         hparams.f_rms_norm_eps = read_f32("llama.attention.layer_norm_rms_epsilon");
-        
+
         // LLaMAv2
         // hparams.n_head_kv = read_u32("llama.attention.head_count_kv");
     }
@@ -559,7 +559,7 @@ struct ggml_context * ctx_data = NULL;
         for (uint32_t i = 0; i < hparams.n_vocab; i++) {
 
             std::string word = gguf_get_arr_str(gguf_ctx, token_idx, i);
-            
+
             vocab.token_to_id[word] = i;
 
             auto & tok_score = vocab.id_to_token[i];
@@ -607,10 +607,10 @@ struct ggml_context * ctx_data = NULL;
 
 
             tensor.file_off = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, i);
-        
+
             tensor.name = name;
             tensor.size = llama_calc_tensor_size(tensor.ne, tensor.type);
-            
+
             tensors_map.tensors.push_back(tensor);
             tensors_map.name_to_idx[name] = tensors_map.tensors.size() - 1;
         }
@@ -624,7 +624,7 @@ struct gguf_file_saver {
     // this may not be true when we add quantization version and change ftype description (currently it's string according to the specs,
     // but better to have it as uint32).
     // we need to calculate the delta in number of bytes written with a counter as a struct member.
-    
+
     gguf_file file;
     gguf_file_loader * fl;
     size_t info_offset;
@@ -640,7 +640,7 @@ struct gguf_file_saver {
     void write_header() {
         const int32_t magic = GGUF_MAGIC;
         file.write_i32(magic);
-    
+
             const int32_t version = GGUF_VERSION;
             file.write_i32(version);
 
@@ -658,7 +658,7 @@ struct gguf_file_saver {
                 std::string val = gguf_get_arr_str(fl->gguf_ctx, i, j);
                 data[j] = val;
                 }
-                            
+
                             file.write_arr<std::string>(key, type, data);
         }
 
@@ -669,7 +669,7 @@ struct gguf_file_saver {
                 float val = gguf_get_arr_f32(fl->gguf_ctx, i, j);
                 data[j] = val;
                 }
-                            
+
                             file.write_arr<float>(key, type, data);
         }
 
@@ -772,7 +772,7 @@ struct gguf_file_saver {
         info_offset   += total_written; // position to write info of the next tensor
 
         file.seek(0, SEEK_END);
-        
+
         return total_written;
     }
 
@@ -793,7 +793,7 @@ struct gguf_file_saver {
                 break;
             default: GGML_ASSERT(false);
         }
-        
+
         write_tensor_info(tensor, new_type);
         file.write_raw(new_data, new_size);
         size_t padded_size = GGML_PAD(new_size, GGUF_DEFAULT_ALIGNMENT); // TODO: handle custom alignment
@@ -1200,7 +1200,7 @@ static void llama_model_load_internal(
     }
 
     const uint32_t n_ff = hparams.n_ff;
-    
+
     {
         fprintf(stderr, "%s: format     = %s\n",   __func__, gguf_file_version_name(file_version));
         fprintf(stderr, "%s: n_vocab    = %u\n",   __func__, hparams.n_vocab);
@@ -1224,7 +1224,7 @@ static void llama_model_load_internal(
         hparams.ftype == LLAMA_FTYPE_MOSTLY_Q8_0) {
         throw std::runtime_error(format("this format is no longer supported (see https://github.com/ggerganov/llama.cpp/pull/1508)"));
     }
-    
+
     if (vocab_only) {
         return;
     }
