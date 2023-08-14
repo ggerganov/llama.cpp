@@ -1423,6 +1423,17 @@ struct ggml_tensor * ggml_recompute_graph_node(
         return node;
     }
 
+    int count_children = 0;
+    for (int k = 0; k < GGML_MAX_SRC; ++k) {
+        if (node->src[k]) {
+            ++count_children;
+        }
+    }
+
+    if (count_children == 0) {
+        return node;
+    }
+
     size_t i = hash_find(replacements->keys, node);
     GGML_ASSERT(i < GGML_GRAPH_HASHTABLE_SIZE); // assert that not full
     if (replacements->keys[i] == node) {
