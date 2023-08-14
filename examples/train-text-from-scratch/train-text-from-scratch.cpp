@@ -1579,7 +1579,10 @@ struct ggml_tensor * llama_build_train_graphs(
     struct ggml_tensor * cur = t01;
 
     std::vector<struct ggml_tensor *> checkpoints;
-    checkpoints.push_back(cur);
+    checkpoints.push_back(tokens_input);
+    checkpoints.push_back(targets);
+    checkpoints.push_back(t00);
+    checkpoints.push_back(t01);
 
     struct ggml_tensor * kv_scale;
     if (flash_attn) {
