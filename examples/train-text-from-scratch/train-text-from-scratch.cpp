@@ -1493,7 +1493,7 @@ struct ggml_tensor * ggml_recompute_graph_node(
     GGML_ASSERT(sizeof(node->op_params) == sizeof(int32_t) * (GGML_MAX_OP_PARAMS / sizeof(int32_t)));
     GGML_ASSERT(sizeof(node->name)      == GGML_MAX_NAME);
     memcpy(clone->op_params, node->op_params, sizeof(node->op_params));
-    memcpy(clone->name,      node->name,      sizeof(node->name));
+    ggml_format_name(clone, "%s (clone)", ggml_get_name(node));
 
     return clone;
 };
