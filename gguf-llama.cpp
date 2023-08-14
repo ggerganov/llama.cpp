@@ -630,8 +630,9 @@ struct gguf_file_loader {
         hparams.n_rot          = read_u32("llama.rope.dimension_count");
         hparams.f_rms_norm_eps = read_f32("llama.attention.layer_norm_rms_epsilon");
 
-        // LLaMAv2
-        // hparams.n_head_kv = read_u32("llama.attention.head_count_kv");
+        // n_head_kv default to n_head
+        hparams.n_head_kv = gguf_find_key(gguf_ctx, "llama.attention.head_count_kv") == -1 ?  hparams.n_head : read_u32("llama.attention.head_count_kv");
+
     }
 
     void read_vocab() {
