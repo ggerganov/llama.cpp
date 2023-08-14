@@ -15,6 +15,7 @@
 #include "index.html.hpp"
 #include "index.js.hpp"
 #include "completion.js.hpp"
+#include "json-schema-to-grammar.mjs.hpp"
 
 #ifndef SERVER_VERBOSE
 #define SERVER_VERBOSE 1
@@ -1216,6 +1217,12 @@ int main(int argc, char **argv)
     svr.Get("/completion.js", [](const Request &, Response &res)
             {
         res.set_content(reinterpret_cast<const char*>(&completion_js), completion_js_len, "application/javascript");
+        return false; });
+
+    // this is only called if no index.html is found in the public --path
+    svr.Get("/json-schema-to-grammar.mjs", [](const Request &, Response &res)
+            {
+        res.set_content(reinterpret_cast<const char*>(&json_schema_to_grammar_mjs), json_schema_to_grammar_mjs_len, "application/javascript");
         return false; });
 
     svr.Post("/completion", [&llama](const Request &req, Response &res)
