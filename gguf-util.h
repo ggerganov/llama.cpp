@@ -64,13 +64,6 @@ static std::string format(const char * fmt, ...) {
     return std::string(buf.data(), size);
 }
 
-template<typename T>
-static std::string to_string(const T & val) {
-    std::stringstream ss;
-    ss << val;
-    return ss.str();
-}
-
 // TODO: can we merge this one and gguf_context?
 struct gguf_file {
     // use FILE * so we don't have to re-open the file to mmap

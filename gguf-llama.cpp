@@ -61,6 +61,12 @@ static void llama_log_callback_default(llama_log_level level, const char * text,
 #define LLAMA_LOG_WARN(...)  llama_log_internal(LLAMA_LOG_LEVEL_WARN , __VA_ARGS__)
 #define LLAMA_LOG_ERROR(...) llama_log_internal(LLAMA_LOG_LEVEL_ERROR, __VA_ARGS__)
 
+template<typename T>
+static std::string to_string(const T & val) {
+    std::stringstream ss;
+    ss << val;
+    return ss.str();
+}
 
 #if !defined(GGML_USE_CUBLAS) && !defined(GGML_USE_METAL)
 #include "ggml-alloc.h"
@@ -69,25 +75,6 @@ static void llama_log_callback_default(llama_log_level level, const char * text,
 #define LLAMA_USE_SCRATCH
 #define LLAMA_MAX_SCRATCH_BUFFERS 16
 #endif
-
-
-// available llama models
-enum e_model {
-    MODEL_UNKNOWN,
-    MODEL_3B,
-    MODEL_7B,
-    MODEL_13B,
-    MODEL_30B,
-    MODEL_65B,
-    MODEL_70B,
-};
-
-static const size_t kB = 1024;
-static const size_t MB = 1024*1024;
-
-// computed for n_ctx == 2048
-// TODO: dynamically determine these sizes
-//       needs modifications in ggml
 
 typedef void (*offload_func_t)(struct ggml_tensor * tensor);
 
@@ -160,6 +147,24 @@ static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * 
 //
 // memory sizes (calculated for n_batch == 512)
 //
+
+// computed for n_ctx == 2048
+// TODO: dynamically determine these sizes
+//       needs modifications in ggml
+
+// available llama models
+enum e_model {
+    MODEL_UNKNOWN,
+    MODEL_3B,
+    MODEL_7B,
+    MODEL_13B,
+    MODEL_30B,
+    MODEL_65B,
+    MODEL_70B,
+};
+
+static const size_t kB = 1024;
+static const size_t MB = 1024*1024;
 
 static const std::map<e_model, size_t> & MEM_REQ_SCRATCH0(int n_ctx)
 {

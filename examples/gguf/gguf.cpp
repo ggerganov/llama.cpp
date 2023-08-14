@@ -14,14 +14,12 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
-/*
 template<typename T>
 static std::string to_string(const T & val) {
     std::stringstream ss;
     ss << val;
     return ss.str();
 }
-*/
 
 void gguf_ex_write_str(std::ofstream & fout, const std::string & val) {
     const int32_t n = val.size();
