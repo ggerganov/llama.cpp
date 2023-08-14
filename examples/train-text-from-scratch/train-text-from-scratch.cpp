@@ -2611,7 +2611,7 @@ int main(int argc, char ** argv) {
 
         struct ggml_cgraph * gf = ggml_new_graph(ctx0);
         struct ggml_cgraph * gb = ggml_new_graph(ctx0);
-        struct ggml_cgraph * gb_tmp = params.use_alloc
+        struct ggml_cgraph * gb_tmp = params.use_checkpointing
             ? ggml_new_graph(ctx0)
             : NULL;
 
