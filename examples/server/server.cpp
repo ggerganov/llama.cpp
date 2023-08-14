@@ -666,6 +666,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     {
         fprintf(stdout, "  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
     }
+    fprintf(stdout, "  --numa                attempt optimizations that help on some NUMA systems\n");
 #ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
     fprintf(stdout, "  -ngl N, --n-gpu-layers N\n");
     fprintf(stdout, "                        number of layers to store in VRAM\n");
@@ -939,6 +940,10 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
         else if (arg == "--no-mmap")
         {
             params.use_mmap = false;
+        }
+        else if (arg == "--numa")
+        {
+            params.numa = true;
         }
         else if (arg == "--embedding")
         {
