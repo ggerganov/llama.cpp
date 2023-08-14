@@ -38,6 +38,9 @@ struct ggml_metal_context;
 struct ggml_metal_context * ggml_metal_init(int n_cb);
 void ggml_metal_free(struct ggml_metal_context * ctx);
 
+void * ggml_metal_host_malloc(size_t n);
+void   ggml_metal_host_free  (void * data);
+
 // set the number of command buffers to use
 void ggml_metal_set_n_cb(struct ggml_metal_context * ctx, int n_cb);
 

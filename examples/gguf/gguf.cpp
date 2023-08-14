@@ -8,14 +8,19 @@
 #include <sstream>
 #include <fstream>
 #include <vector>
-/*
+
+#undef MIN
+#undef MAX
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
 template<typename T>
 static std::string to_string(const T & val) {
     std::stringstream ss;
     ss << val;
     return ss.str();
 }
-*/
+
 void gguf_ex_write_str(std::ofstream & fout, const std::string & val) {
     const int32_t n = val.size();
     fout.write((const char *) &n, sizeof(n));
@@ -377,28 +382,28 @@ bool gguf_ex_read_2(const std::string & fname) {
 
     struct gguf_file file(fname.c_str(), "rb");
     gguf_mmap data_mmap(&file, 0, false);
+
     const int n_tensors = gguf_get_n_tensors(ctx);
 
     for (int i = 0; i < n_tensors; ++i) {
-        const char * name             = gguf_get_tensor_name(ctx, i);
-        const size_t offset      = gguf_get_data_offset(ctx) + gguf_get_tensor_offset(ctx, i);
+        const char * name   = gguf_get_tensor_name(ctx, i);
+        const size_t offset = gguf_get_data_offset(ctx) + gguf_get_tensor_offset(ctx, i);
+
         struct ggml_tensor * cur = ggml_get_tensor(ctx_data, name);
 
         cur->data = static_cast<char *>(data_mmap.addr) + offset;
 
         // print first 10 elements
-    const float * data = (const float *) cur->data;
+        const float * data = (const float *) cur->data;
 
         printf("%s data[:10] : ", name);
-
-        for (int j = 0; j < 10; ++j) {
+        for (int j = 0; j < MIN(10, ggml_nelements(cur)); ++j) {
             printf("%f ", data[j]);
         }
-
         printf("\n\n");
     }
 
-fprintf(stdout, "%s: ctx_data size: %zu\n", __func__, ggml_get_mem_size(ctx_data));
+    fprintf(stdout, "%s: ctx_data size: %zu\n", __func__, ggml_get_mem_size(ctx_data));
 
     ggml_free(ctx_data);
     gguf_free(ctx);

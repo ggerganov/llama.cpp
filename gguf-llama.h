@@ -41,10 +41,6 @@
 #define LLAMA_SUPPORTS_GPU_OFFLOAD
 #endif
 
-#ifndef LLAMA_DEFAULT_RMS_EPS
-#define LLAMA_DEFAULT_RMS_EPS 5e-6f
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -74,12 +70,23 @@ extern "C" {
 
     typedef void (*llama_progress_callback)(float progress, void *ctx);
 
-   struct llama_context_params {
+    enum llama_log_level {
+        LLAMA_LOG_LEVEL_ERROR = 2,
+        LLAMA_LOG_LEVEL_WARN  = 3,
+        LLAMA_LOG_LEVEL_INFO  = 4
+    };
+
+    // Signature for logging events
+    // Note that text includes the new line character at the end for most events.
+    // If your logging mechanism cannot handle that, check if the last character is '\n' and strip it
+    // if it exists.
+    // It might not exist for progress report where '.' is output repeatedly.
+    typedef void (*llama_log_callback)(enum llama_log_level level, const char * text, void * user_data);
+
+    struct llama_context_params {
         uint32_t seed;         // RNG seed, -1 for random
         int32_t  n_ctx;        // text context
         int32_t  n_batch;      // prompt processing batch size
-        int32_t  n_gqa;        // grouped-query attention (TEMP - will be moved to model hparams)
-        float    rms_norm_eps; // rms norm epsilon (TEMP - will be moved to model hparams)
         int32_t  n_gpu_layers; // number of layers to store in VRAM
         int32_t  main_gpu;     // the GPU that is used for scratch and small tensors
 
@@ -96,6 +103,7 @@ extern "C" {
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool low_vram;   // if true, reduce VRAM usage at the cost of performance
+        bool mul_mat_q;  // if true, use experimental mul_mat_q kernels
         bool f16_kv;     // use fp16 for KV cache
         bool logits_all; // the llama_eval() call computes all logits, not just the last one
         bool vocab_only; // only load the vocabulary, no weights
@@ -129,7 +137,7 @@ extern "C" {
     // model quantization parameters
     typedef struct llama_model_quantize_params {
         int nthread;                 // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
-        enum llama_ftype   ftype;    // quantize to this llama_ftype
+        enum llama_ftype ftype;      // quantize to this llama_ftype
         bool allow_requantize;       // allow quantizing non-f32/f16 tensors
         bool quantize_output_tensor; // quantize output.weight
     } llama_model_quantize_params;
@@ -181,6 +189,10 @@ extern "C" {
         int32_t n_p_eval;
         int32_t n_eval;
     };
+
+    // Set callback for all future logging events.
+    // If this is not called, or NULL is supplied, everything is output on stderr.
+    LLAMA_API void llama_log_set(llama_log_callback log_callback, void * user_data);
 
     LLAMA_API int llama_max_devices();
 

@@ -64,13 +64,6 @@ static std::string format(const char * fmt, ...) {
     return std::string(buf.data(), size);
 }
 
-template<typename T>
-static std::string to_string(const T & val) {
-    std::stringstream ss;
-    ss << val;
-    return ss.str();
-}
-
 // TODO: can we merge this one and gguf_context?
 struct gguf_file {
     // use FILE * so we don't have to re-open the file to mmap
@@ -473,95 +466,5 @@ struct gguf_mlock {
     void raw_unlock(const void * addr, size_t len) {}
 #endif
 };
-
-// Replacement for std::vector<uint8_t> that doesn't require zero-initialization.
-struct gguf_buffer {
-    uint8_t * addr = NULL;
-    size_t size = 0;
-
-    gguf_buffer() = default;
-
-    void resize(size_t len) {
-#ifdef GGML_USE_METAL
-        free(addr);
-        int result = posix_memalign((void **) &addr, getpagesize(), len);
-        if (result == 0) {
-            memset(addr, 0, len);
-        }
-        else {
-            addr = NULL;
-        }
-#else
-        delete[] addr;
-        addr = new uint8_t[len];
-#endif
-        size = len;
-    }
-
-    ~gguf_buffer() {
-#ifdef GGML_USE_METAL
-        free(addr);
-#else
-        delete[] addr;
-#endif
-        addr = NULL;
-    }
-
-    // disable copy and move
-    gguf_buffer(const gguf_buffer&) = delete;
-    gguf_buffer(gguf_buffer&&) = delete;
-    gguf_buffer& operator=(const gguf_buffer&) = delete;
-    gguf_buffer& operator=(gguf_buffer&&) = delete;
-};
-
-#ifdef GGML_USE_CUBLAS
-#include "ggml-cuda.h"
-struct gguf_ctx_buffer {
-    uint8_t * addr = NULL;
-    bool is_cuda;
-    size_t size = 0;
-
-    gguf_ctx_buffer() = default;
-
-    void resize(size_t size) {
-        free();
-
-        addr = (uint8_t *) ggml_cuda_host_malloc(size);
-        if (addr) {
-            is_cuda = true;
-        }
-        else {
-            // fall back to pageable memory
-            addr = new uint8_t[size];
-            is_cuda = false;
-        }
-        this->size = size;
-    }
-
-    void free() {
-        if (addr) {
-            if (is_cuda) {
-                ggml_cuda_host_free(addr);
-            }
-            else {
-                delete[] addr;
-            }
-        }
-        addr = NULL;
-    }
-
-    ~gguf_ctx_buffer() {
-        free();
-    }
-
-    // disable copy and move
-    gguf_ctx_buffer(const gguf_ctx_buffer&) = delete;
-    gguf_ctx_buffer(gguf_ctx_buffer&&) = delete;
-    gguf_ctx_buffer& operator=(const gguf_ctx_buffer&) = delete;
-    gguf_ctx_buffer& operator=(gguf_ctx_buffer&&) = delete;
-};
-#else
-typedef gguf_buffer gguf_ctx_buffer;
-#endif
 
 #endif
