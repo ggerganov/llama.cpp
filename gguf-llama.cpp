@@ -626,7 +626,7 @@ struct gguf_file_loader {
         hparams.n_embd         = read_u32("llama.embedding_length");
         hparams.n_ff           = read_u32("llama.feed_forward_length");
         hparams.n_head         = read_u32("llama.attention.head_count");
-        hparams.n_layer        = read_u32("llama.layer_count");
+        hparams.n_layer        = read_u32("llama.block_count");
         hparams.n_rot          = read_u32("llama.rope.dimension_count");
         hparams.f_rms_norm_eps = read_f32("llama.attention.layer_norm_rms_epsilon");
 
@@ -1373,7 +1373,7 @@ static void llama_model_load_internal(
 
         ml->ggml_ctx = ctx;
 
-        model.tok_embeddings = ml->get_tensor("tok_embeddings.weight", {n_embd, n_vocab}, GGML_BACKEND_CPU);
+        model.tok_embeddings = ml->get_tensor("token_embd.weight", {n_embd, n_vocab}, GGML_BACKEND_CPU);
 
         // "output" tensor
         {
@@ -1394,8 +1394,8 @@ static void llama_model_load_internal(
                 backend_output = GGML_BACKEND_CPU;
             }
 
-            model.norm   = ml->get_tensor("norm.weight",   {n_embd},          backend_norm);
-            model.output = ml->get_tensor("output.weight", {n_embd, n_vocab}, backend_output);
+            model.norm   = ml->get_tensor("output_norm.weight", {n_embd},          backend_norm);
+            model.output = ml->get_tensor("output.weight",      {n_embd, n_vocab}, backend_output);
             if (backend_norm == GGML_BACKEND_GPU) {
                 vram_weights += ggml_nbytes(model.norm);
             }
@@ -1413,20 +1413,20 @@ static void llama_model_load_internal(
 
             auto & layer = model.layers[i];
 
-            std::string layers_i = "layers." + std::to_string(i);
+            std::string layers_i = "blk." + std::to_string(i);
 
-            layer.attention_norm = ml->get_tensor(layers_i + ".attention_norm.weight", {n_embd}, backend);
+            layer.attention_norm = ml->get_tensor(layers_i + ".attn_norm.weight", {n_embd}, backend);
 
-            layer.wq = ml->get_tensor(layers_i + ".attention.wq.weight", {n_embd, n_embd},     backend_split);
-            layer.wk = ml->get_tensor(layers_i + ".attention.wk.weight", {n_embd, n_embd_gqa}, backend_split);
-            layer.wv = ml->get_tensor(layers_i + ".attention.wv.weight", {n_embd, n_embd_gqa}, backend_split);
-            layer.wo = ml->get_tensor(layers_i + ".attention.wo.weight", {n_embd, n_embd},     backend_split);
+            layer.wq = ml->get_tensor(layers_i + ".attn_q.weight",      {n_embd, n_embd},     backend_split);
+            layer.wk = ml->get_tensor(layers_i + ".attn_k.weight",      {n_embd, n_embd_gqa}, backend_split);
+            layer.wv = ml->get_tensor(layers_i + ".attn_v.weight",      {n_embd, n_embd_gqa}, backend_split);
+            layer.wo = ml->get_tensor(layers_i + ".attn_output.weight", {n_embd, n_embd},     backend_split);
 
             layer.ffn_norm = ml->get_tensor(layers_i + ".ffn_norm.weight", {n_embd}, backend);
 
-            layer.w1 = ml->get_tensor(layers_i + ".feed_forward.w1.weight", {n_embd,   n_ff}, backend_split);
-            layer.w2 = ml->get_tensor(layers_i + ".feed_forward.w2.weight", {  n_ff, n_embd}, backend_split);
-            layer.w3 = ml->get_tensor(layers_i + ".feed_forward.w3.weight", {n_embd,   n_ff}, backend_split);
+            layer.w1 = ml->get_tensor(layers_i + ".ffn_gate.weight", {n_embd,   n_ff}, backend_split);
+            layer.w2 = ml->get_tensor(layers_i + ".ffn_down.weight", {  n_ff, n_embd}, backend_split);
+            layer.w3 = ml->get_tensor(layers_i + ".ffn_up.weight",   {n_embd,   n_ff}, backend_split);
 
             if (backend == GGML_BACKEND_GPU) {
                 vram_weights +=
