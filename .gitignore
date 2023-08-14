@@ -1,6 +1,7 @@
 *.o
 *.a
 *.so
+*.bin
 .DS_Store
 .build/
 .cache/
@@ -39,6 +40,7 @@ models-mnt
 /perplexity
 /embedding
 /train-text-from-scratch
+/convert-llama2c-to-ggml
 /simple
 /benchmark-matmult
 /vdot
@@ -68,6 +70,7 @@ poetry.lock
 poetry.toml
 
 # Test binaries
+tests/test-grammar-parser
 tests/test-double-float
 tests/test-grad0
 tests/test-opt
