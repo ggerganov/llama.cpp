@@ -901,6 +901,13 @@ static bool kv_cache_init(
     return true;
 }
 
+struct llama_context_params * llama_context_default_params_by_ref() {
+    struct llama_context_params params = llama_context_default_params();
+    struct llama_context_params* result = new llama_context_params();
+    *result = params;
+    return result;
+}
+
 struct llama_context_params llama_context_default_params() {
     struct llama_context_params result = {
         /*.seed                        =*/ LLAMA_DEFAULT_SEED,
