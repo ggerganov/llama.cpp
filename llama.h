@@ -336,6 +336,13 @@ extern "C" {
                              int   n_max_tokens,
                             bool   add_bos);
 
+    LLAMA_API int llama_tokenize_bpe(
+            struct llama_context * ctx,
+                      const char * text,
+                     llama_token * tokens,
+                             int   n_max_tokens,
+                            bool   add_bos);
+
     LLAMA_API int llama_tokenize_with_model(
         const struct llama_model * model,
                       const char * text,
@@ -377,14 +384,23 @@ extern "C" {
     LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 
     // Token Id -> String. Uses the vocabulary in the provided context
-    LLAMA_API const char * llama_token_to_str(
+    LLAMA_API int llama_token_to_str(
             const struct llama_context * ctx,
-                           llama_token   token);
+                           llama_token   token,
+                                  char * str,
+                                  int    length);
 
-    LLAMA_API const char * llama_token_to_str_with_model(
+    LLAMA_API int llama_token_to_str_bpe(
+            const struct llama_context * ctx,
+                           llama_token   token,
+                                  char * str,
+                                  int    length);
+
+    LLAMA_API int llama_token_to_str_with_model(
               const struct llama_model * model,
-                           llama_token   token);
-
+                           llama_token   token,
+                                  char * str,
+                                  int    length);
     // Special tokens
     LLAMA_API llama_token llama_token_bos();  // beginning-of-sentence
     LLAMA_API llama_token llama_token_eos();  // end-of-sentence
@@ -472,15 +488,43 @@ extern "C" {
 }
 #endif
 
-// Internal API to be implemented by llama.cpp and used by tests/benchmarks only
-#ifdef LLAMA_API_INTERNAL
+// C++ API, will be moving to common.h soon (TM)
+#ifdef LLAMA_API_CPP
 
 #include <vector>
 #include <string>
+
+//
+// Vocab utils
+//
+
+std::vector<llama_token> llama_tokenize(
+        struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_bos);
+
+std::vector<llama_token> llama_tokenize_bpe(
+        struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_bos);
+
+std::string llama_token_to_str(
+        const struct llama_context * ctx,
+                       llama_token   token);
+
+std::string llama_token_to_str_bpe(
+    const struct llama_context * ctx,
+                   llama_token   token);
+
+// Internal API to be implemented by llama.cpp and used by tests/benchmarks only
+#ifdef LLAMA_API_INTERNAL
+
 struct ggml_tensor;
 
 const std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx);
 
-#endif
+#endif // LLAMA_API_CPP
+
+#endif // LLAMA_API_INTERNAL
 
 #endif // LLAMA_H

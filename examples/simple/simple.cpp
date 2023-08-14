@@ -62,7 +62,7 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "\n\n");
 
     for (auto id : tokens_list) {
-        fprintf(stderr, "%s", llama_token_to_str(ctx, id));
+        fprintf(stderr, "%s", llama_token_to_str(ctx, id).c_str());
     }
 
     fflush(stderr);
@@ -109,7 +109,7 @@ int main(int argc, char ** argv) {
         }
 
         // print the new token :
-        printf("%s", llama_token_to_str(ctx, new_token_id));
+        printf("%s", llama_token_to_str(ctx, new_token_id).c_str());
         fflush(stdout);
 
         // push this new token for next evaluation
