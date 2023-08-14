@@ -1440,6 +1440,9 @@ struct ggml_tensor * ggml_recompute_graph_node(
     clone->grad     = node->grad;
     clone->is_param = node->is_param;
     clone->extra    = node->extra;
+    for (int k = 0; k < GGML_MAX_DIMS; ++k) {
+        clone->nb[k] = node->nb[k];
+    }
     for (int k = 0; k < GGML_MAX_SRC; ++k) {
         clone->src[k] = ggml_recompute_graph_node(ctx, graph, replacements, node->src[k]);
     }
