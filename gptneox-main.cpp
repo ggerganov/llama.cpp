@@ -24,13 +24,13 @@ struct gpt_neox_hparams {
     uint32_t n_ctx    = 0;
     uint32_t n_embd   = 0;
     uint32_t n_head   = 0;
-    uint32_t n_layer  = 0;
+    uint32_t n_block  = 0;
     uint32_t n_rot    = 0; // rotary_pct * (n_embd / n_head)
     bool par_res = true;
     float norm_eps = 1e-5;
 };
 
-struct gpt_neox_layer {
+struct gpt_neox_block {
     // pre normalization
     struct ggml_tensor * ln_1_g;
     struct ggml_tensor * ln_1_b;
@@ -65,7 +65,7 @@ struct gpt_neox_model {
 
     struct ggml_tensor * lmh_g; // language model head
 
-    std::vector<gpt_neox_layer> layers;
+    std::vector<gpt_neox_block> blocks;
 
     // key + value memory
     struct ggml_tensor * memory_k;
@@ -370,15 +370,19 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt2
         int keyidx;
 
         keyidx = gguf_find_key(ggufctx, "general.name");
-        if (keyidx != -1) { fprintf(stdout, "%s: model name         = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
+        if (keyidx != -1) { fprintf(stdout, "%s: model name           = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
         keyidx = gguf_find_key(ggufctx, "general.description");
-        if (keyidx != -1) { fprintf(stdout, "%s: model description  = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
+        if (keyidx != -1) { fprintf(stdout, "%s: model description    = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
         keyidx = gguf_find_key(ggufctx, "general.author");
-        if (keyidx != -1) { fprintf(stdout, "%s: model author       = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
+        if (keyidx != -1) { fprintf(stdout, "%s: model author         = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
         keyidx = gguf_find_key(ggufctx, "general.license");
-        if (keyidx != -1) { fprintf(stdout, "%s: model license      = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
+        if (keyidx != -1) { fprintf(stdout, "%s: model license        = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
         keyidx = gguf_find_key(ggufctx, "general.architecture");
-        if (keyidx != -1) { fprintf(stdout, "%s: model architecture = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
+        if (keyidx != -1) { fprintf(stdout, "%s: model architecture   = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
+        keyidx = gguf_find_key(ggufctx, "general.file_type");
+        if (keyidx != -1) { fprintf(stdout, "%s: model file type      = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
+        keyidx = gguf_find_key(ggufctx, "general.source.hugginface.repository");
+        if (keyidx != -1) { fprintf(stdout, "%s: model source HF repo = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
     }
 
     // check required metadata
@@ -414,8 +418,8 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt2
         if (ok) { keyidx = gguf_find_key(ggufctx, "gptneox.attention.head_count");
                   if (keyidx != -1) { hparams.n_head = gguf_get_val_u32(ggufctx, keyidx); } else { ok = false; }  }
 
-        if (ok) { keyidx = gguf_find_key(ggufctx, "gptneox.layer_count");
-                  if (keyidx != -1) { hparams.n_layer = gguf_get_val_u32(ggufctx, keyidx); } else { ok = false; }  }
+        if (ok) { keyidx = gguf_find_key(ggufctx, "gptneox.block_count");
+                  if (keyidx != -1) { hparams.n_block = gguf_get_val_u32(ggufctx, keyidx); } else { ok = false; }  }
 
         if (ok) { keyidx = gguf_find_key(ggufctx, "gptneox.rope.dimension_count");
                   if (keyidx != -1) { hparams.n_rot = gguf_get_val_u32(ggufctx, keyidx); } else { ok = false; }  }
@@ -434,7 +438,7 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt2
         printf("%s: n_ctx    = %d\n", __func__, hparams.n_ctx);
         printf("%s: n_embd   = %d\n", __func__, hparams.n_embd);
         printf("%s: n_head   = %d\n", __func__, hparams.n_head);
-        printf("%s: n_layer  = %d\n", __func__, hparams.n_layer);
+        printf("%s: n_block  = %d\n", __func__, hparams.n_block);
         printf("%s: n_rot    = %d\n", __func__, hparams.n_rot);
         printf("%s: par_res  = %d\n", __func__, hparams.par_res);
         printf("%s: norm_eps = %g\n", __func__, hparams.norm_eps);
@@ -545,60 +549,62 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt2
 
     // prepare memory for the weights
     {
-        const int n_layer = model.hparams.n_layer;
+        const int n_block = model.hparams.n_block;
 
-        model.layers.resize(n_layer);
+        model.blocks.resize(n_block);
 
-        model.wte    = ggml_get_tensor(ctx, "gpt_neox.embed_in.weight");
-        model.ln_f_g = ggml_get_tensor(ctx, "gpt_neox.final_layer_norm.weight");
-        model.ln_f_b = ggml_get_tensor(ctx, "gpt_neox.final_layer_norm.bias");
-        model.lmh_g  = ggml_get_tensor(ctx, "embed_out.weight");
+        model.wte    = ggml_get_tensor(ctx, "token_embd.weight");
+        model.ln_f_g = ggml_get_tensor(ctx, "output_norm.weight");
+        model.ln_f_b = ggml_get_tensor(ctx, "output_norm.bias");
+        model.lmh_g  = ggml_get_tensor(ctx, "output.weight");
 
         // map by name
-        model.tensors["gpt_neox.embed_in.weight"] = model.wte;
-        model.tensors["gpt_neox.final_layer_norm.weight"] = model.ln_f_g;
-        model.tensors["gpt_neox.final_layer_norm.bias"]   = model.ln_f_b;
-        model.tensors["embed_out.weight"] = model.lmh_g;
+        model.tensors["token_embd.weight"] = model.wte;
+        model.tensors["output_norm.weight"] = model.ln_f_g;
+        model.tensors["output_norm.bias"]   = model.ln_f_b;
+        model.tensors["output.weight"] = model.lmh_g;
 
-        for (int i = 0; i < n_layer; ++i) {
-            auto & layer = model.layers[i];
+        for (int i = 0; i < n_block; ++i) {
+            auto & block = model.blocks[i];
 
-            layer.ln_1_g          = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".input_layernorm.weight" );
-            layer.ln_1_b          = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".input_layernorm.bias" );
+            std::string blocknamestart = "blk." + std::to_string(i) + ".";
 
-            layer.c_attn_attn_w   = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".attention.query_key_value.weight" );
-            layer.c_attn_attn_b   = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".attention.query_key_value.bias" );
+            block.ln_1_g          = get_tensor_ex(ctx, blocknamestart + "attn_norm.weight" );
+            block.ln_1_b          = get_tensor_ex(ctx, blocknamestart + "attn_norm.bias" );
 
-            layer.c_attn_proj_w   = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".attention.dense.weight" );
-            layer.c_attn_proj_b   = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".attention.dense.bias" );
+            block.c_attn_attn_w   = get_tensor_ex(ctx, blocknamestart + "attn_qkv.weight" );
+            block.c_attn_attn_b   = get_tensor_ex(ctx ,blocknamestart + "attn_qkv.bias" );
 
-            layer.ln_2_g          = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".post_attention_layernorm.weight" );
-            layer.ln_2_b          = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".post_attention_layernorm.bias");
+            block.c_attn_proj_w   = get_tensor_ex(ctx, blocknamestart + "attn_output.weight" );
+            block.c_attn_proj_b   = get_tensor_ex(ctx, blocknamestart + "attn_output.bias" );
 
-            layer.c_mlp_fc_w      = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".mlp.dense_h_to_4h.weight" );
-            layer.c_mlp_fc_b      = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".mlp.dense_h_to_4h.bias" );
+            block.ln_2_g          = get_tensor_ex(ctx, blocknamestart + "ffn_norm.weight" );
+            block.ln_2_b          = get_tensor_ex(ctx, blocknamestart + "ffn_norm.bias");
 
-            layer.c_mlp_proj_w    = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".mlp.dense_4h_to_h.weight" );
-            layer.c_mlp_proj_b    = get_tensor_ex(ctx, "gpt_neox.layers." + std::to_string(i) + ".mlp.dense_4h_to_h.bias" );
+            block.c_mlp_fc_w      = get_tensor_ex(ctx, blocknamestart + "ffn_up.weight" );
+            block.c_mlp_fc_b      = get_tensor_ex(ctx, blocknamestart + "ffn_up.bias" );
+
+            block.c_mlp_proj_w    = get_tensor_ex(ctx, blocknamestart + "ffn_down.weight" );
+            block.c_mlp_proj_b    = get_tensor_ex(ctx, blocknamestart + "ffn_down.bias" );
 
             // map by name
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".input_layernorm.weight"] = layer.ln_1_g;
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".input_layernorm.bias"]   = layer.ln_1_b;
+            model.tensors[blocknamestart + "attn_norm.weight"] = block.ln_1_g;
+            model.tensors[blocknamestart + "attn_norm.bias"]   = block.ln_1_b;
 
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".attention.query_key_value.weight"] = layer.c_attn_attn_w;
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".attention.query_key_value.bias"]   = layer.c_attn_attn_b;
+            model.tensors[blocknamestart + "attn_qkv.weight"] = block.c_attn_attn_w;
+            model.tensors[blocknamestart + "attn_qkv.bias"]   = block.c_attn_attn_b;
 
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".attention.dense.weight"] = layer.c_attn_proj_w;
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".attention.dense.bias"]   = layer.c_attn_proj_b;
+            model.tensors[blocknamestart + "attn_output.weight"] = block.c_attn_proj_w;
+            model.tensors[blocknamestart + "attn_output.bias"]   = block.c_attn_proj_b;
 
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".post_attention_layernorm.weight"] = layer.ln_2_g;
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".post_attention_layernorm.bias"]   = layer.ln_2_b;
+            model.tensors[blocknamestart + "ffn_norm.weight"] = block.ln_2_g;
+            model.tensors[blocknamestart + "ffn_norm.bias"]   = block.ln_2_b;
 
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".mlp.dense_h_to_4h.weight"] = layer.c_mlp_fc_w;
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".mlp.dense_h_to_4h.bias"]   = layer.c_mlp_fc_b;
+            model.tensors[blocknamestart + "ffn_up.weight"] = block.c_mlp_fc_w;
+            model.tensors[blocknamestart + "ffn_up.bias"]   = block.c_mlp_fc_b;
 
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".mlp.dense_4h_to_h.weight"] = layer.c_mlp_proj_w;
-            model.tensors["gpt_neox.layers." + std::to_string(i) + ".mlp.dense_4h_to_h.bias"]   = layer.c_mlp_proj_b;
+            model.tensors[blocknamestart + "ffn_down.weight"] = block.c_mlp_proj_w;
+            model.tensors[blocknamestart + "ffn_down.bias"]   = block.c_mlp_proj_b;
         }
     }
 
@@ -608,10 +614,10 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt2
         const auto & hparams = model.hparams;
 
         const int n_embd  = hparams.n_embd;
-        const int n_layer = hparams.n_layer;
+        const int n_block = hparams.n_block;
         const int n_ctx   = hparams.n_ctx;
 
-        const int64_t n_mem      = n_layer*n_ctx;
+        const int64_t n_mem      = n_block*n_ctx;
         const int64_t n_elements = n_embd*n_mem;
 
         // create the ggml context
@@ -645,37 +651,23 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt2
 
 // feed-forward network
 ggml_tensor * gpt_neox_ff(
-        const gpt_neox_layer &layer,
+        const gpt_neox_block &block,
         ggml_context * ctx0,
         ggml_tensor * inp) {
     ggml_tensor * cur = ggml_norm(ctx0, inp);
 
-    cur = ggml_add(ctx0,
-        ggml_mul(ctx0,
-            ggml_repeat(ctx0, layer.ln_2_g, cur),
-            cur),
-        ggml_repeat(ctx0, layer.ln_2_b, cur));
-
-    cur = ggml_mul_mat(ctx0,
-            layer.c_mlp_fc_w,
-            cur);
-
-    cur = ggml_add(ctx0,
-            ggml_repeat(ctx0, layer.c_mlp_fc_b, cur),
-            cur);
+    cur = ggml_add(ctx0, ggml_mul(ctx0, ggml_repeat(ctx0, block.ln_2_g, cur), cur), ggml_repeat(ctx0, block.ln_2_b, cur));
+    cur = ggml_mul_mat(ctx0, block.c_mlp_fc_w, cur);
+    cur = ggml_add(ctx0, ggml_repeat(ctx0, block.c_mlp_fc_b, cur), cur);
 
     // GELU activation
     cur = ggml_gelu(ctx0, cur);
 
     // projection
     // cur = proj_w*cur + proj_b
-    cur = ggml_mul_mat(ctx0,
-            layer.c_mlp_proj_w,
-            cur);
+    cur = ggml_mul_mat(ctx0, block.c_mlp_proj_w, cur);
 
-    cur = ggml_add(ctx0,
-            ggml_repeat(ctx0, layer.c_mlp_proj_b, cur),
-            cur);
+    cur = ggml_add(ctx0, ggml_repeat(ctx0, block.c_mlp_proj_b, cur), cur);
     return cur;
 }
 
@@ -699,7 +691,7 @@ bool gpt_neox_eval(
     const auto & hparams = model.hparams;
 
     const int n_embd  = hparams.n_embd;
-    const int n_layer = hparams.n_layer;
+    const int n_block = hparams.n_block;
     const int n_ctx   = hparams.n_ctx;
     const int n_head  = hparams.n_head;
     const int n_vocab = hparams.n_vocab;
@@ -745,7 +737,7 @@ bool gpt_neox_eval(
     // wte
     struct ggml_tensor * inpL = ggml_get_rows(ctx0, model.wte, embd);
 
-    for (int il = 0; il < n_layer; ++il) {
+    for (int il = 0; il < n_block; ++il) {
         struct ggml_tensor * cur;
 
         ggml_set_scratch(ctx0, { 0, scr0_size, scr0, });
@@ -756,22 +748,15 @@ bool gpt_neox_eval(
                 cur = ggml_norm(ctx0, inpL);
 
                 cur = ggml_add(ctx0,
-                        ggml_mul(ctx0,
-                            ggml_repeat(ctx0, model.layers[il].ln_1_g, cur),
-                            cur),
-                        ggml_repeat(ctx0, model.layers[il].ln_1_b, cur));
+                        ggml_mul(ctx0, ggml_repeat(ctx0, model.blocks[il].ln_1_g, cur), cur),
+                        ggml_repeat(ctx0, model.blocks[il].ln_1_b, cur));
             }
 
             // compute QKV
             {
 
-                cur = ggml_mul_mat(ctx0,
-                        model.layers[il].c_attn_attn_w,
-                        cur);
-
-                cur = ggml_add(ctx0,
-                        ggml_repeat(ctx0, model.layers[il].c_attn_attn_b, cur),
-                        cur);
+                cur = ggml_mul_mat(ctx0, model.blocks[il].c_attn_attn_w, cur);
+                cur = ggml_add(ctx0, ggml_repeat(ctx0, model.blocks[il].c_attn_attn_b, cur), cur);
             }
 
             struct ggml_tensor * Qcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd/n_head, n_head, N, cur->nb[1]/n_head, cur->nb[1], 0*sizeof(float)*n_embd/n_head));
@@ -796,10 +781,7 @@ bool gpt_neox_eval(
             }
 
             // Q = Qcur.contiguous().view(n_embd/n_head, n_head, N).permute(0, 2, 1, 3)
-            struct ggml_tensor * Q =
-                ggml_permute(ctx0,
-                        Qcur,
-                        0, 2, 1, 3);
+            struct ggml_tensor * Q = ggml_permute(ctx0, Qcur, 0, 2, 1, 3);
 
             // K = Kmem.view(n_embd/n_head, n_head, n_past + N).permute(0, 2, 1, 3)
             struct ggml_tensor * K =
@@ -840,17 +822,12 @@ bool gpt_neox_eval(
             struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
 
             // cur = KQV_merged.contiguous().view(n_embd, N)
-            cur = ggml_cpy(ctx0,
-                    KQV_merged,
-                    ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N));
+            cur = ggml_cpy(ctx0, KQV_merged, ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N));
 
             // projection
             {
-                cur = ggml_mul_mat(ctx0,
-                        model.layers[il].c_attn_proj_w,
-                        cur);
-
-                cur = ggml_add(ctx0, ggml_repeat(ctx0, model.layers[il].c_attn_proj_b, cur), cur);
+                cur = ggml_mul_mat(ctx0, model.blocks[il].c_attn_proj_w, cur);
+                cur = ggml_add(ctx0, ggml_repeat(ctx0, model.blocks[il].c_attn_proj_b, cur), cur);
             }
         }
 
@@ -859,7 +836,7 @@ bool gpt_neox_eval(
         if (hparams.par_res == 0) {
             struct ggml_tensor * inpFF = ggml_add(ctx0, cur, inpL);
 
-            cur = gpt_neox_ff(model.layers[il], ctx0, inpFF);
+            cur = gpt_neox_ff(model.blocks[il], ctx0, inpFF);
 
             // input for next layer
             inpL = ggml_add(ctx0, cur, inpFF);
@@ -868,7 +845,7 @@ bool gpt_neox_eval(
 
             // this is independent of the self-attention result, so it could be done in parallel to the self-attention
             // note here we pass inpL instead of cur
-            cur = gpt_neox_ff(model.layers[il], ctx0, inpL);
+            cur = gpt_neox_ff(model.blocks[il], ctx0, inpL);
 
             // layer input + FF
             cur  = ggml_add(ctx0, cur, inpFF);

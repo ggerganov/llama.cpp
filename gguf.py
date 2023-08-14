@@ -12,23 +12,10 @@ from typing import Any, IO, List
 import numpy as np
 import sys
 
+
 class GGMLQuantizationType(IntEnum):
     F32 = 0
     F16 = 1
-    Q4_0 = 2
-    Q4_1 = 3
-    # Q4_2 = 4 # support has been removed
-    # Q4_3 = 5 # support has been removed
-    Q5_0 = 6
-    Q5_1 = 7
-    Q8_0 = 8
-    Q8_1 = 9
-    Q2_K = 10
-    Q3_K = 11
-    Q4_K = 12
-    Q5_K = 13
-    Q6_K = 14
-    Q8_K = 15
 
 
 class GGUFValueType(IntEnum):
@@ -127,6 +114,7 @@ class GGUFWriter:
         self.add_val(val, GGUFValueType.BOOL)
 
     def add_string(self, key: str, val: str):
+        if len(val) == 0: return
         self.add_key(key)
         self.add_val(val, GGUFValueType.STRING)
 
@@ -143,7 +131,7 @@ class GGUFWriter:
 
         if add_vtype:
             self.kv_data += struct.pack("<I", vtype)
-            self.kv_data_count += 1;
+            self.kv_data_count += 1
 
         if vtype == GGUFValueType.UINT8:
             self.kv_data += struct.pack("<B", val)
@@ -179,20 +167,20 @@ class GGUFWriter:
     def ggml_pad(x: int, n: int) -> int:
         return ((x + n - 1) // n) * n
 
-    def add_tensor_info(self, name: str, tensor: np.ndarray):
+    def add_tensor_info(self, name: str, tensor_shape: np.ndarray, tensor_dtype: np.dtype, tensor_nbytes: int):
         encoded_name = name.encode("utf8")
         self.ti_data += struct.pack("<I", len(encoded_name))
         self.ti_data += encoded_name
-        n_dims = len(tensor.shape)
+        n_dims = len(tensor_shape)
         self.ti_data += struct.pack("<I", n_dims)
         for i in range(n_dims):
-            self.ti_data += struct.pack("<I", tensor.shape[n_dims - 1 - i])
+            self.ti_data += struct.pack("<I", tensor_shape[n_dims - 1 - i])
 
-        assert tensor.dtype in (np.float32, np.float16), "Only F32 and F16 tensors are supported for now"
-        dtype = GGMLQuantizationType.F32 if tensor.dtype == np.float32 else GGMLQuantizationType.F16
+        assert tensor_dtype in (np.float32, np.float16), "Only F32 and F16 tensors are supported for now"
+        dtype = GGMLQuantizationType.F32 if tensor_dtype == np.float32 else GGMLQuantizationType.F16
         self.ti_data += struct.pack("<I", dtype)
         self.ti_data += struct.pack("<Q", self.offset_tensor)
-        self.offset_tensor += GGUFWriter.ggml_pad(tensor.nbytes, self.data_alignment)
+        self.offset_tensor += GGUFWriter.ggml_pad(tensor_nbytes, self.data_alignment)
         self.ti_data_count += 1
 
     def write_tensor_to_file(self, tensor: np.ndarray):
@@ -201,7 +189,7 @@ class GGUFWriter:
             self.fout.write(bytes([0] * pad))
 
         tensor.tofile(self.fout)
-        
+
         pad = GGUFWriter.ggml_pad(tensor.nbytes, self.data_alignment) - tensor.nbytes
         if pad != 0:
             self.fout.write(bytes([0] * pad))
@@ -214,7 +202,7 @@ class GGUFWriter:
 
     def add_architecture(self, architecture: str):
         self.add_string(constants.KEY_GENERAL_ARCHITECTURE,
-                          architecture)
+                        architecture)
 
     def add_author(self, author: str):
         self.add_string(constants.KEY_GENERAL_AUTHOR, author)
@@ -253,9 +241,9 @@ class GGUFWriter:
         self.add_uint32(
             constants.KEY_LLM_EMBEDDING_LENGTH.format(llm=llm), length)
 
-    def add_layer_count(self, llm: str, length: int):
+    def add_block_count(self, llm: str, length: int):
         self.add_uint32(
-            constants.KEY_LLM_LAYER_COUNT.format(llm=llm), length)
+            constants.KEY_LLM_BLOCK_COUNT.format(llm=llm), length)
 
     def add_feed_forward_length(self, llm: str, length: int):
         self.add_uint32(
@@ -311,7 +299,7 @@ class GGUFWriter:
 
     def add_token_scores(self, scores: List[float]):
         self.add_array(constants.KEY_TOKENIZER_SCORES, scores)
-    
+
     def add_bos_token_id(self, id: int):
         self.add_uint32(constants.KEY_TOKENIZER_BOS_ID, id)
 

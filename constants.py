@@ -18,7 +18,7 @@ KEY_GENERAL_SOURCE_HF_REPO       = "general.source.hugginface.repository"
 # LLM
 KEY_LLM_CONTEXT_LENGTH           = "{llm}.context_length"
 KEY_LLM_EMBEDDING_LENGTH         = "{llm}.embedding_length"
-KEY_LLM_LAYER_COUNT              = "{llm}.layer_count"
+KEY_LLM_BLOCK_COUNT              = "{llm}.block_count"
 KEY_LLM_FEED_FORWARD_LENGTH      = "{llm}.feed_forward_length"
 KEY_LLM_USE_PARALLEL_RESIDUAL    = "{llm}.use_parallel_residual"
 KEY_LLM_TENSOR_DATA_LAYOUT       = "{llm}.tensor_data_layout"
