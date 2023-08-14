@@ -2806,7 +2806,7 @@ struct ggml_tensor * forward_batch_wo_cache_flash_attn_train_grad_checkpointing(
         layer.w3->grad             = expand(gb, add_or_set(layer.w3->grad,             ggml_out_prod(ctx0, t24, t25->grad)));                       assert_shape_2d(layer.w3->grad,             n_embd, n_ff);
     }
     // printf("%s: chk_idx=%d avail_begin=%d avail_end=%d\n", __func__, chk_idx, avail_begin, avail_end);
-    GGML_ASSERT(chk_idx == -2);
+    GGML_ASSERT(n_check == 0 || chk_idx == -2);
     GGML_ASSERT(avail_begin == 0);
     clr_buf(0);
     use_buf(0);
