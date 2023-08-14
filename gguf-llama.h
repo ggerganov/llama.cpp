@@ -137,7 +137,7 @@ extern "C" {
     // model quantization parameters
     typedef struct llama_model_quantize_params {
         int nthread;                 // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
-        enum llama_ftype   ftype;    // quantize to this llama_ftype
+        enum llama_ftype ftype;      // quantize to this llama_ftype
         bool allow_requantize;       // allow quantizing non-f32/f16 tensors
         bool quantize_output_tensor; // quantize output.weight
     } llama_model_quantize_params;

@@ -508,9 +508,7 @@ struct gguf_load_tensors_map {
 
 enum gguf_file_version {
     GGUF_FILE_VERSION_V1 = 1,
-
 };
-
 
 struct gguf_file_loader {
     gguf_file file;
@@ -518,7 +516,8 @@ struct gguf_file_loader {
     gguf_file_version file_version;
     llama_hparams hparams;
     llama_vocab vocab;
-struct ggml_context * ctx_data = NULL;
+
+    struct ggml_context * ctx_data = NULL;
 
     gguf_file_loader(const char * fname, gguf_load_tensors_map & tensors_map)
         : file(fname, "rb") {
@@ -537,7 +536,7 @@ struct ggml_context * ctx_data = NULL;
         read_tensor_metadata(tensors_map);
     }
 
-    uint32_t read_u32(const char * key) {
+    uint32_t read_u32(const char * key) const {
         int i = gguf_find_key(gguf_ctx, key);
         if (i == -1) {
             throw std::runtime_error(format("cannot find param with key %s\n", key));
@@ -546,7 +545,7 @@ struct ggml_context * ctx_data = NULL;
         return gguf_get_val_u32(gguf_ctx, i);
     }
 
-    float read_f32(const char * key) {
+    float read_f32(const char * key) const {
         int i = gguf_find_key(gguf_ctx, key);
         if (i == -1) {
             throw std::runtime_error(format("cannot find param with key %s\n", key));
@@ -555,27 +554,26 @@ struct ggml_context * ctx_data = NULL;
         return gguf_get_val_f32(gguf_ctx, i);
     }
 
-    int read_n_vocab() {
+    int read_n_vocab() const {
         int i = gguf_find_key(gguf_ctx, "tokenizer.ggml.tokens");
-    if (i == -1) {
-        throw std::runtime_error("cannot find token list in GGUF file\n");
-    }
+        if (i == -1) {
+            throw std::runtime_error("cannot find token list in GGUF file\n");
+        }
 
-    return gguf_get_arr_n(gguf_ctx, i);
+        return gguf_get_arr_n(gguf_ctx, i);
     }
 
     void read_hparams() {
-
         // TODO define keys as constants in header
         // TODO: read all hparams from file
 
-        hparams.n_vocab = read_n_vocab();
-        hparams.n_ctx   = read_u32("llama.context_length");
-        hparams.n_embd  = read_u32("llama.embedding_length");
-        hparams.n_ff    = read_u32("llama.feed_forward_length");
-        hparams.n_head  = read_u32("llama.attention.head_count");
-        hparams.n_layer = read_u32("llama.layer_count");
-        hparams.n_rot   = read_u32("llama.rope.dimension_count");
+        hparams.n_vocab        = read_n_vocab();
+        hparams.n_ctx          = read_u32("llama.context_length");
+        hparams.n_embd         = read_u32("llama.embedding_length");
+        hparams.n_ff           = read_u32("llama.feed_forward_length");
+        hparams.n_head         = read_u32("llama.attention.head_count");
+        hparams.n_layer        = read_u32("llama.layer_count");
+        hparams.n_rot          = read_u32("llama.rope.dimension_count");
         hparams.f_rms_norm_eps = read_f32("llama.attention.layer_norm_rms_epsilon");
 
         // LLaMAv2
@@ -606,7 +604,7 @@ struct ggml_context * ctx_data = NULL;
         }
     }
 
-    void read_tensor_metadata(gguf_load_tensors_map & tensors_map) {
+    void read_tensor_metadata(gguf_load_tensors_map & tensors_map) const {
         const int n_tensors = gguf_get_n_tensors(gguf_ctx);
 
         for (int i = 0; i < n_tensors; ++i) {
@@ -614,16 +612,19 @@ struct ggml_context * ctx_data = NULL;
             const char * name = gguf_get_tensor_name(gguf_ctx, i);
 
             struct ggml_tensor * cur = ggml_get_tensor(ctx_data, name);
-            uint32_t n_dims = cur->n_dims;
+
+            const uint32_t n_dims = cur->n_dims;
             tensor.type = cur->type;
             tensor.ne.resize(n_dims);
+
             for (uint32_t j = 0; j < n_dims; ++j) {
-            tensor.ne[j] = cur->ne[j];
+                tensor.ne[j] = cur->ne[j];
             }
 
             if (n_dims < 1 || n_dims > 2) {
                 throw std::runtime_error(format("llama.cpp: tensor '%s' should not be %u-dimensional", name, n_dims));
             }
+
             switch (tensor.type) {
                 case GGML_TYPE_F32:
                 case GGML_TYPE_F16:
@@ -642,7 +643,6 @@ struct ggml_context * ctx_data = NULL;
                     throw std::runtime_error(format("unrecognized tensor type %u\n", tensor.type));
                 }
             }
-
 
             tensor.file_off = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, i);
 
@@ -670,46 +670,46 @@ struct gguf_file_saver {
 
     gguf_file_saver(const char * fname, gguf_file_loader * fl, enum llama_ftype new_ftype)
         : file(fname, "wb"), fl(fl) {
-        fprintf(stderr, "llama.cpp: saving model to %s\n", fname);
-        write_header();
-        write_hparams(new_ftype);
-    }
+            fprintf(stderr, "llama.cpp: saving model to %s\n", fname);
+            write_header();
+            write_hparams(new_ftype);
+        }
 
     void write_header() {
         const int32_t magic = GGUF_MAGIC;
         file.write_i32(magic);
 
-            const int32_t version = GGUF_VERSION;
-            file.write_i32(version);
+        const int32_t version = GGUF_VERSION;
+        file.write_i32(version);
 
-            const int32_t n_tensors = gguf_get_n_tensors(fl->gguf_ctx);
-            file.write_i32(n_tensors);
+        const int32_t n_tensors = gguf_get_n_tensors(fl->gguf_ctx);
+        file.write_i32(n_tensors);
 
-            const int32_t n_kv = gguf_get_n_kv(fl->gguf_ctx);
-            file.write_i32(n_kv);
+        const int32_t n_kv = gguf_get_n_kv(fl->gguf_ctx);
+        file.write_i32(n_kv);
+    }
+
+    void write_hparam_arr_str(const std::string & key, enum gguf_type type, int i, int n_arr) {
+        std::vector<std::string> data(n_arr);
+
+        for (int j = 0; j < n_arr; ++j) {
+            std::string val = gguf_get_arr_str(fl->gguf_ctx, i, j);
+            data[j] = val;
         }
 
-        void write_hparam_arr_str(const std::string & key, enum gguf_type type, int i, int n_arr) {
-            std::vector<std::string> data(n_arr);
+        file.write_arr<std::string>(key, type, data);
+    }
 
-            for (int j = 0; j < n_arr; ++j) {
-                std::string val = gguf_get_arr_str(fl->gguf_ctx, i, j);
-                data[j] = val;
-                }
+    void write_hparam_arr_f32(const std::string & key, enum gguf_type type, int i, int n_arr) {
+        std::vector<float> data(n_arr);
 
-                            file.write_arr<std::string>(key, type, data);
+        for (int j = 0; j < n_arr; ++j) {
+            float val = gguf_get_arr_f32(fl->gguf_ctx, i, j);
+            data[j] = val;
         }
 
-        void write_hparam_arr_f32(const std::string & key, enum gguf_type type, int i, int n_arr) {
-            std::vector<float> data(n_arr);
-
-            for (int j = 0; j < n_arr; ++j) {
-                float val = gguf_get_arr_f32(fl->gguf_ctx, i, j);
-                data[j] = val;
-                }
-
-                            file.write_arr<float>(key, type, data);
-        }
+        file.write_arr<float>(key, type, data);
+    }
 
     void write_hparams(enum llama_ftype new_ftype) {
         const int32_t n_kv = gguf_get_n_kv(fl->gguf_ctx);
@@ -734,59 +734,62 @@ struct gguf_file_saver {
 
                 switch(vtype) {
                     case GGUF_TYPE_BOOL:
-                    bool_val = gguf_get_val_bool(fl->gguf_ctx, i);
-                    file.write_val<bool>(key, GGUF_TYPE_BOOL, bool_val);
-                    break;
+                        bool_val = gguf_get_val_bool(fl->gguf_ctx, i);
+                        file.write_val<bool>(key, GGUF_TYPE_BOOL, bool_val);
+                        break;
                     case GGUF_TYPE_FLOAT32:
-                    f32_val = gguf_get_val_f32(fl->gguf_ctx, i);
-                    file.write_val<float>(key, GGUF_TYPE_FLOAT32, f32_val);
-                    break;
+                        f32_val = gguf_get_val_f32(fl->gguf_ctx, i);
+                        file.write_val<float>(key, GGUF_TYPE_FLOAT32, f32_val);
+                        break;
                     case GGUF_TYPE_INT16:
-                    i16_val = gguf_get_val_i16(fl->gguf_ctx, i);
-                    file.write_val<int16_t>(key, GGUF_TYPE_INT16, i16_val);
-                    break;
+                        i16_val = gguf_get_val_i16(fl->gguf_ctx, i);
+                        file.write_val<int16_t>(key, GGUF_TYPE_INT16, i16_val);
+                        break;
                     case GGUF_TYPE_INT32:
-                    i32_val = gguf_get_val_i32(fl->gguf_ctx, i);
-                    file.write_val<int32_t>(key, GGUF_TYPE_INT32, i32_val);
-                    break;
+                        i32_val = gguf_get_val_i32(fl->gguf_ctx, i);
+                        file.write_val<int32_t>(key, GGUF_TYPE_INT32, i32_val);
+                        break;
                     case GGUF_TYPE_INT8:
-                    i8_val = gguf_get_val_i8(fl->gguf_ctx, i);
-                    file.write_val<int8_t>(key, GGUF_TYPE_INT8, i8_val);
-                    break;
+                        i8_val = gguf_get_val_i8(fl->gguf_ctx, i);
+                        file.write_val<int8_t>(key, GGUF_TYPE_INT8, i8_val);
+                        break;
                     case GGUF_TYPE_STRING:
-                    str_val = gguf_get_val_str(fl->gguf_ctx, i);
-                    file.write_val<std::string>(key, GGUF_TYPE_STRING, str_val);
-                    break;
+                        str_val = gguf_get_val_str(fl->gguf_ctx, i);
+                        file.write_val<std::string>(key, GGUF_TYPE_STRING, str_val);
+                        break;
                     case GGUF_TYPE_UINT16:
-                    u16_val = gguf_get_val_u16(fl->gguf_ctx, i);
-                    file.write_val<uint16_t>(key, GGUF_TYPE_UINT16, u16_val);
-                    break;
+                        u16_val = gguf_get_val_u16(fl->gguf_ctx, i);
+                        file.write_val<uint16_t>(key, GGUF_TYPE_UINT16, u16_val);
+                        break;
                     case GGUF_TYPE_UINT32:
-                    u32_val = gguf_get_val_u32(fl->gguf_ctx, i);
-                    file.write_val<uint32_t>(key, GGUF_TYPE_UINT32, u32_val);
-                    break;
+                        u32_val = gguf_get_val_u32(fl->gguf_ctx, i);
+                        file.write_val<uint32_t>(key, GGUF_TYPE_UINT32, u32_val);
+                        break;
                     case GGUF_TYPE_UINT8:
-                    u8_val = gguf_get_val_u8(fl->gguf_ctx, i);
-                    file.write_val<uint8_t>(key, GGUF_TYPE_UINT8, u8_val);
-                    break;
+                        u8_val = gguf_get_val_u8(fl->gguf_ctx, i);
+                        file.write_val<uint8_t>(key, GGUF_TYPE_UINT8, u8_val);
+                        break;
                     case GGUF_TYPE_ARRAY:
-                    arr_type = gguf_get_arr_type(fl->gguf_ctx, i);
-                    n_arr    = gguf_get_arr_n(fl->gguf_ctx, i);
-                    if (arr_type == GGUF_TYPE_FLOAT32) {
-                        write_hparam_arr_f32(key, arr_type, i, n_arr);
+                        arr_type = gguf_get_arr_type(fl->gguf_ctx, i);
+                        n_arr    = gguf_get_arr_n(fl->gguf_ctx, i);
+                        if (arr_type == GGUF_TYPE_FLOAT32) {
+                            write_hparam_arr_f32(key, arr_type, i, n_arr);
                         } else if (arr_type == GGUF_TYPE_STRING) {
                             write_hparam_arr_str(key, GGUF_TYPE_STRING, i, n_arr);
                         } else {
                             throw std::runtime_error("not implemented");
                         }
-                    break;
+                        break;
                     default:
-                    throw std::runtime_error(format("cannot recognize value type for key %s\n", key));
+                        throw std::runtime_error(format("cannot recognize value type for key %s\n", key));
                 }
             }
         }
 
-        info_offset  = file.tell();
+        info_offset = file.tell();
+
+        GGML_ASSERT(gguf_get_data_offset(fl->gguf_ctx) >= info_offset);
+
         size_t count = gguf_get_data_offset(fl->gguf_ctx) - info_offset;
         file.write_zeros(count);
         file.seek(info_offset, SEEK_SET);
