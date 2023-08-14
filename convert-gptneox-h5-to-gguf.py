@@ -1,7 +1,7 @@
 # HF gptneox--> gguf conversion
 
 import gguf
-import gguf_tensor_map as tmap
+import gguf_namemap as tmap
 import os
 import sys
 import struct
@@ -188,7 +188,7 @@ if Path(dir_model + "/tokenizer.json").is_file():
 
 # TENSORS
 
-tensor_map = tmap.get_tensor_map(block_count)
+tensor_map = tmap.get_tensor_namemap(block_count)
 
 # tensor info
 print("gguf: get tensor metadata")
