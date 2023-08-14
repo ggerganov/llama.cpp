@@ -11,38 +11,27 @@ const std::string shader_f16 = R"(
 const std::string shader_int8_ext = R"(
 #extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 )";
-const std::string shader_output_f16 = R"(
-#define OUT_TYPE float16_t
-)";
-const std::string shader_output_f32 = R"(
-#define OUT_TYPE float
-)";
 
 // MULMAT
 
 const std::string mulmat_head = R"(
 #version 450
 
+#extension GL_EXT_control_flow_attributes : enable
+#extension GL_EXT_shader_16bit_storage : require
+
 #define WARP 32
 
-#extension GL_EXT_control_flow_attributes : enable
+#ifndef LOAD_VEC
+#define LOAD_VEC 1
+#endif
 )";
 
 const std::string mulmat_body = R"(
 layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 
-#ifdef ALIGNED_INPUT
-#define LOAD_VEC 8
 layout (binding = 0) readonly buffer A { A_TYPE data_a[]; };
 layout (binding = 1) readonly buffer B { B_TYPE data_b[]; };
-
-#else
-
-#define LOAD_VEC 1
-layout (binding = 0) readonly buffer A { A_TYPE data_a[]; };
-layout (binding = 1) readonly buffer B { B_TYPE data_b[]; };
-#endif
-
 layout (binding = 2) writeonly buffer D { D_TYPE data_d[]; };
 
 layout (push_constant) uniform parameter
@@ -107,16 +96,22 @@ void main() {
 
     [[unroll]] for (int block = start_k; block < end_k; block += BK) {
         [[unroll]] for (int l = 0; l < BM; l += loadstride) {
-#ifdef ALIGNED_INPUT
-            A_TYPE tmp = data_a[pos_a + (loadc + l) * p.stride_a / LOAD_VEC + loadr];
-            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 0] = FLOAT_TYPE(tmp[0].x);
-            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 1] = FLOAT_TYPE(tmp[0].y);
-            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 2] = FLOAT_TYPE(tmp[0].z);
-            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 3] = FLOAT_TYPE(tmp[0].w);
-            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 4] = FLOAT_TYPE(tmp[1].x);
-            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 5] = FLOAT_TYPE(tmp[1].y);
-            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 6] = FLOAT_TYPE(tmp[1].z);
-            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 7] = FLOAT_TYPE(tmp[1].w);
+#if LOAD_VEC == 8
+            const int idx = pos_a + (loadc + l) * p.stride_a / LOAD_VEC + loadr;
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 0] = FLOAT_TYPE(data_a[idx][0].x);
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 1] = FLOAT_TYPE(data_a[idx][0].y);
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 2] = FLOAT_TYPE(data_a[idx][0].z);
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 3] = FLOAT_TYPE(data_a[idx][0].w);
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 4] = FLOAT_TYPE(data_a[idx][1].x);
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 5] = FLOAT_TYPE(data_a[idx][1].y);
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 6] = FLOAT_TYPE(data_a[idx][1].z);
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 7] = FLOAT_TYPE(data_a[idx][1].w);
+#elif LOAD_VEC == 4
+            const int idx = pos_a + (loadc + l) * p.stride_a / LOAD_VEC + loadr;
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 0] = FLOAT_TYPE(data_a[idx].x);
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 1] = FLOAT_TYPE(data_a[idx].y);
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 2] = FLOAT_TYPE(data_a[idx].z);
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 3] = FLOAT_TYPE(data_a[idx].w);
 #else
             if (ir * BM + loadc + l < p.M && block + loadr < p.K) {
                 buf_a[(loadc + l) * (BK+1) + loadr] = FLOAT_TYPE(data_a[pos_a + (loadc + l) * p.stride_a + loadr]);
@@ -126,16 +121,22 @@ void main() {
 #endif
         }
         [[unroll]] for (int l = 0; l < BN; l += loadstride) {
-#ifdef ALIGNED_INPUT
-            B_TYPE tmp = data_b[pos_b + (loadc + l) * p.stride_b / LOAD_VEC + loadr];
-            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 0] = FLOAT_TYPE(tmp[0].x);
-            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 1] = FLOAT_TYPE(tmp[0].y);
-            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 2] = FLOAT_TYPE(tmp[0].z);
-            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 3] = FLOAT_TYPE(tmp[0].w);
-            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 4] = FLOAT_TYPE(tmp[1].x);
-            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 5] = FLOAT_TYPE(tmp[1].y);
-            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 6] = FLOAT_TYPE(tmp[1].z);
-            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 7] = FLOAT_TYPE(tmp[1].w);
+#if LOAD_VEC == 8
+            const int idx = pos_b + (loadc + l) * p.stride_b / LOAD_VEC + loadr;
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 0] = FLOAT_TYPE(data_b[idx][0].x);
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 1] = FLOAT_TYPE(data_b[idx][0].y);
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 2] = FLOAT_TYPE(data_b[idx][0].z);
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 3] = FLOAT_TYPE(data_b[idx][0].w);
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 4] = FLOAT_TYPE(data_b[idx][1].x);
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 5] = FLOAT_TYPE(data_b[idx][1].y);
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 6] = FLOAT_TYPE(data_b[idx][1].z);
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 7] = FLOAT_TYPE(data_b[idx][1].w);
+#elif LOAD_VEC == 4
+            const int idx = pos_b + (loadc + l) * p.stride_b / LOAD_VEC + loadr;
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 0] = FLOAT_TYPE(data_b[idx].x);
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 1] = FLOAT_TYPE(data_b[idx].y);
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 2] = FLOAT_TYPE(data_b[idx].z);
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 3] = FLOAT_TYPE(data_b[idx].w);
 #else
             if (ic * BN + loadc + l < p.N && block + loadr < p.K) {
                 buf_b[(loadc + l) * (BK+1) + loadr] = FLOAT_TYPE(data_b[pos_b + (loadc + l) * p.stride_b + loadr]);
@@ -259,7 +260,7 @@ const std::string dequant_body = R"(
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
 layout (binding = 0) readonly buffer A { A_TYPE x[]; };
-layout (binding = 1) writeonly buffer D { OUT_TYPE y[]; };
+layout (binding = 1) writeonly buffer D { D_TYPE y[]; };
 
 layout (push_constant) uniform parameter
 {
@@ -282,15 +283,15 @@ void main() {
 
     const int stride_a = p.stride_a / QUANT_K;
 
-    const A_TYPE blk = x[col * stride_a + row];
-    const OUT_TYPE d = blk.d;
+    const int idx = col * stride_a + row;
+    const FLOAT_TYPE d = FLOAT_TYPE(x[idx].d);
 
     [[unroll]] for (int j = 0; j < QUANT_K/2; ++j) {
-        const OUT_TYPE x0 = OUT_TYPE((blk.qs[j] & 0x0F) - 8);
-        const OUT_TYPE x1 = OUT_TYPE((blk.qs[j] >>   4) - 8);
+        const FLOAT_TYPE x0 = FLOAT_TYPE((x[idx].qs[j] & 0x0F) - 8);
+        const FLOAT_TYPE x1 = FLOAT_TYPE((x[idx].qs[j] >>   4) - 8);
 
-        y[col * p.stride_b + row*QUANT_K + j + 0   ] = x0*d;
-        y[col * p.stride_b + row*QUANT_K + j + QUANT_K/2] = x1*d;
+        y[col * p.stride_b + row*QUANT_K + j + 0   ] = D_TYPE(x0*d);
+        y[col * p.stride_b + row*QUANT_K + j + QUANT_K/2] = D_TYPE(x1*d);
     }
 }
 )";
@@ -304,23 +305,22 @@ const std::string mul_mat_vec_head = R"(
 #extension GL_EXT_shader_8bit_storage : require
 )";
 
-const std::string mul_mat_vec_b_type_f32 = R"(
-#define B_TYPE float
-)";
-
-const std::string mul_mat_vec_b_type_f16 = R"(
-#define B_TYPE float16_t
-)";
-
 const std::string mul_mat_vec_f16_defines = R"(
 #define QUANT_K 32
 #define QUANT_R 2
 #define BLOCK_SIZE 32
 
 #define A_TYPE float16_t
+)";
 
+const std::string mul_mat_vec_f16_dequant_func = R"(
 #define DEQUANT_FUNC float16_t v0 = x[ib + 0]; \
 float16_t v1 = x[ib + 1];
+)";
+
+const std::string mul_mat_vec_f16_dequant_func_compat = R"(
+#define DEQUANT_FUNC float v0 = float(x[ib + 0]); \
+float v1 = float(x[ib + 1]);
 )";
 
 const std::string mul_mat_vec_q4_0_defines = R"(
@@ -334,7 +334,9 @@ struct block_q4_0
     uint8_t qs[16];
 };
 #define A_TYPE block_q4_0
+)";
 
+const std::string mul_mat_vec_q4_0_dequant_func = R"(
 #define DEQUANT_FUNC const float16_t d = x[ib].d; \
 const uint8_t vui = x[ib].qs[iqs]; \
 const int8_t vi0 = int8_t(vui & 0xF); \
@@ -343,12 +345,21 @@ float16_t v0 = float16_t(vi0 - 8)*d; \
 float16_t v1 = float16_t(vi1 - 8)*d;
 )";
 
+const std::string mul_mat_vec_q4_0_dequant_func_compat = R"(
+#define DEQUANT_FUNC const float d = float(x[ib].d); \
+const uint vui = uint(x[ib].qs[iqs]); \
+const int vi0 = int(vui) & 0xF; \
+const int vi1 = int(vui) >> 4; \
+float v0 = float(vi0 - 8)*d; \
+float v1 = float(vi1 - 8)*d;
+)";
+
 const std::string mul_mat_vec_body = R"(
 layout(local_size_x = BLOCK_SIZE, local_size_y = 1, local_size_z = 1) in;
 
 layout (binding = 0) readonly buffer A { A_TYPE x[]; };
 layout (binding = 1) readonly buffer B { B_TYPE y[]; };
-layout (binding = 2) writeonly buffer D { OUT_TYPE dst[]; };
+layout (binding = 2) writeonly buffer D { D_TYPE dst[]; };
 
 layout (push_constant) uniform parameter
 {
@@ -364,7 +375,7 @@ void main() {
 
     const int y_offset = QUANT_K/2;
 
-    tmp[tid] = 0.0hf;
+    tmp[tid] = FLOAT_TYPE(0.0f);
 
     [[unroll]] for (int i = 0; i < p.ncols/block_size; i += 2) {
         const int col = i*block_size + 2*tid;
@@ -375,8 +386,8 @@ void main() {
         DEQUANT_FUNC
 
         // matrix multiplication
-        tmp[tid] += FLOAT_TYPE(v0 * y[iybs + iqs + 0]);
-        tmp[tid] += FLOAT_TYPE(v1 * y[iybs + iqs + y_offset]);
+        tmp[tid] += FLOAT_TYPE(v0) * FLOAT_TYPE(y[iybs + iqs + 0]);
+        tmp[tid] += FLOAT_TYPE(v1) * FLOAT_TYPE(y[iybs + iqs + y_offset]);
     }
 
     // sum up partial sums and write back result
@@ -388,7 +399,7 @@ void main() {
         barrier();
     }
     if (tid == 0) {
-        dst[row] = OUT_TYPE(tmp[0]);
+        dst[row] = D_TYPE(tmp[0]);
     }
 }
 )";
@@ -460,6 +471,8 @@ void main() {
 // ADD
 const std::string add_head = R"(
 #version 450
+
+#extension GL_EXT_shader_16bit_storage : require
 )";
 
 const std::string add_body = R"(
@@ -489,7 +502,7 @@ void main() {
         return;
     }
 
-    data_d[p.d_offset + y * p.stride_d + x] = D_TYPE(data_x[p.x_offset + y * p.stride_x + x]) + D_TYPE(data_y[p.y_offset + x]);
+    data_d[p.d_offset + y * p.stride_d + x] = D_TYPE(FLOAT_TYPE(data_x[p.x_offset + y * p.stride_x + x]) + FLOAT_TYPE(data_y[p.y_offset + x]));
 }
 )";
 
