@@ -1425,8 +1425,8 @@ struct ggml_tensor * ggml_recompute_graph_node(
 
     size_t i = hash_find(replacements->keys, node);
     GGML_ASSERT(i < GGML_GRAPH_HASHTABLE_SIZE); // assert that not full
-    if (replacements->keys[i] == p) {
-        return replacements->vals[i];
+    if (replacements->keys[i] == node) {
+        return (struct ggml_tensor *) replacements->vals[i];
     }
 
     struct ggml_tensor * clone = ggml_new_tensor(ctx, node->type, node->n_dims, node->ne);
