@@ -1,33 +1,28 @@
-# HF llama --> gguf conversion, GQA/70b not supported
+# 7b pth llama --> gguf conversion, GQA/70b not supported
+# Only models with a single datafile are supported, like 7B
+# HF files required in the model dir: config.json tokenizer_config.json tokenizer.json tokenizer.model
 
 import gguf
 import gguf_namemap as tmap
-
 import os
 import sys
 import struct
 import json
 import numpy as np
 import torch
-
 from typing import Any, List
 from pathlib import Path
 from sentencepiece import SentencePieceProcessor
+
 
 #NDArray = np.ndarray[Any, Any]
 # compatible with python < 3.9
 NDArray: 'TypeAlias' = 'np.ndarray[Any, Any]'
 
-
-def permute(weights: NDArray, n_head: int) -> NDArray:
-    return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
-                   .swapaxes(1, 2)
-                   .reshape(weights.shape))
-
 def count_model_parts(dir_model: str) -> int:
     num_parts = 0
     for filename in os.listdir(dir_model):
-        if filename.startswith("pytorch_model-"):
+        if filename.startswith("consolidated."):
             num_parts += 1
 
     if num_parts > 0:
@@ -73,6 +68,10 @@ if hparams["architectures"][0] != "LlamaForCausalLM":
 
 # get number of model parts
 num_parts = count_model_parts(dir_model)
+
+if num_parts > 1:
+    print("gguf: Only models with a single datafile are supported.")
+    sys.exit()
 
 gguf_writer = gguf.GGUFWriter.open(fname_out)
 
@@ -188,12 +187,7 @@ tensor_map = tmap.get_tensor_namemap(block_count)
 # tensor info
 print("gguf: get tensor metadata")
 
-if num_parts == 0:
-    part_names = ("pytorch_model.bin",)
-else:
-    part_names = (
-        f"pytorch_model-{n:05}-of-{num_parts:05}.bin" for n in range(1, num_parts + 1)
-    )
+part_names = ( f"consolidated.{n:02}.pth" for n in range(0, num_parts) )
 
 for part_name in part_names:
     print("gguf: loading model part '"+ part_name + "'")
@@ -203,7 +197,7 @@ for part_name in part_names:
         data = model_part[name]
 
         # we don't need these
-        if name.endswith(".rotary_emb.inv_freq"):
+        if name == "rope.freqs":
             continue
 
         # convert any unsupported data types to float32
@@ -211,10 +205,6 @@ for part_name in part_names:
             data = data.to(torch.float32)
 
         data = data.squeeze().numpy()
-
-        # permute these
-        if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
-            data = permute(data,head_count)
 
         # map tensor names
         if name.endswith(".weight") and name[:-7] in tensor_map:
@@ -226,7 +216,7 @@ for part_name in part_names:
             sys.exit()
 
         n_dims = len(data.shape)
-        data_dtype = data.dtype
+        data_dtype = data.dtype 
 
         # if f32 desired, convert any float16 to float32
         if ftype == 0 and data.dtype == np.float16:
@@ -255,12 +245,7 @@ gguf_writer.write_ti_data_to_file()
 # tensor data
 print("gguf: convert and write tensor data")
 
-if num_parts == 0:
-    part_names = ("pytorch_model.bin",)
-else:
-    part_names = (
-        f"pytorch_model-{n:05}-of-{num_parts:05}.bin" for n in range(1, num_parts + 1)
-    )
+part_names = ( f"consolidated.{n:02}.pth" for n in range(0, num_parts) )
 
 for part_name in part_names:
     print("gguf: loading model part '"+ part_name + "'")
@@ -269,10 +254,11 @@ for part_name in part_names:
     for name in model_part.keys():
         data = model_part[name]
 
+    
         old_dtype = data.dtype
 
         # we don't need these
-        if name.endswith(".rotary_emb.inv_freq"):
+        if name == "rope.freqs":
             continue
 
         # convert any unsupported data types to float32
@@ -280,10 +266,6 @@ for part_name in part_names:
             data = data.to(torch.float32)
 
         data = data.squeeze().numpy()
-
-        # permute these
-        if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
-            data = permute(data, head_count)
 
         # map tensor names
         if name.endswith(".weight") and name[:-7] in tensor_map:
@@ -295,7 +277,7 @@ for part_name in part_names:
             sys.exit()
 
         n_dims = len(data.shape)
-        data_dtype = data.dtype
+        data_dtype = data.dtype 
 
         # if f32 desired, convert any float16 to float32
         if ftype == 0 and data.dtype == np.float16:

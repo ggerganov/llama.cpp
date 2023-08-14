@@ -1,5 +1,34 @@
 import * as readline from 'node:readline'
 import { stdin, stdout } from 'node:process'
+import { readFileSync } from 'node:fs'
+import { SchemaConverter }  from './public/json-schema-to-grammar.mjs'
+
+const args = process.argv.slice(2);
+const grammarJsonSchemaFile = args.find(
+    (_, index) => args[index - 1] === "--grammar-json-schema"
+);
+const grammarFile = args.find((_, index) => args[index - 1] === "--grammar");
+
+// Example usage: function,arguments
+const grammarJsonSchemaPropOrder = args.find(
+    (_, index) => args[index - 1] === "--grammar-json-schema-prop-order"
+);
+const propOrder = grammarJsonSchemaPropOrder
+    ? grammarJsonSchemaPropOrder
+          .split(",")
+          .reduce((acc, cur, index) => ({ ...acc, [cur]: index }), {})
+    : {};
+
+let grammar = null
+if (grammarJsonSchemaFile) {
+    const schema = JSON.parse(readFileSync(grammarJsonSchemaFile, 'utf-8'))
+    const converter = new SchemaConverter(propOrder)
+    converter.visit(schema, '')
+    grammar = converter.formatGrammar()
+}
+if (grammarFile) {
+    grammar = readFileSync(grammarFile, 'utf-8')
+}
 
 const API_URL = 'http://127.0.0.1:8080'
 
@@ -48,6 +77,7 @@ async function chat_completion(question) {
             n_keep: n_keep,
             n_predict: 256,
             stop: ["\n### Human:"], // stop completion after generating this
+            grammar,
             stream: true,
         })
     })

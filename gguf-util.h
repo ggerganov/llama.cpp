@@ -5,7 +5,9 @@
 
 #ifndef GGUF_UTIL_H
 #define GGUF_UTIL_H
+
 #include "ggml.h"
+
 #include <cstdio>
 #include <cstdint>
 #include <cerrno>
@@ -15,6 +17,7 @@
 #include <climits>
 
 #include <string>
+#include <sstream>
 #include <vector>
 #include <stdexcept>
 
@@ -94,6 +97,111 @@ struct gguf_file {
         int ret = std::fseek(fp, (long) offset, whence);
 #endif
         GGML_ASSERT(ret == 0); // same
+    }
+
+    size_t write_str(const std::string & val) {
+        size_t total_written = 0;
+        const int32_t n = val.size();
+        fwrite((const char *) &n, sizeof(n), 1, fp);
+        total_written += sizeof(n);
+        fwrite(val.c_str(), n, 1, fp);
+        total_written += n;
+
+        return total_written;
+    }
+
+    size_t write_i32(int32_t val) {
+        fwrite((const char *) &val, sizeof(val), 1, fp);
+        return sizeof(val);
+    }
+
+    size_t write_u64(size_t val) {
+        fwrite((const char *) &val, sizeof(val), 1, fp);
+        return sizeof(val);
+    }
+
+    template<typename T>
+    void write_val(const std::string & key, enum gguf_type type, const T & val) {
+        write_str(key);
+        fwrite((const char *) &type, sizeof(type), 1, fp);
+        fwrite((const char *) &val, sizeof(val), 1, fp);
+    }
+
+    template<typename T>
+    void write_arr(const std::string & key, enum gguf_type type, const std::vector<T> & val) {
+        write_str(key);
+        {
+            const enum gguf_type tarr = GGUF_TYPE_ARRAY;
+            fwrite((const char *) &tarr, sizeof(tarr), 1, fp);
+        }
+
+        const int32_t n = val.size();
+        fwrite((const char *) &type, sizeof(type), 1, fp);
+        fwrite((const char *) &n, sizeof(n), 1, fp);
+        fwrite(val.data(), sizeof(T), n, fp);
+    }
+
+    void write_str(const std::string & key, enum gguf_type type, const std::string & val) {
+        write_str(key);
+        fwrite((const char *) &type, sizeof(type), 1, fp);
+
+        const int32_t n = val.size();
+        fwrite((const char *) &n, sizeof(n), 1, fp);
+        fwrite(val.c_str(), n, 1, fp);
+    }
+
+    void write_str(const std::string & key, enum gguf_type type, const std::vector<std::string> & val) {
+        write_str(key);
+        {
+            const enum gguf_type tarr = GGUF_TYPE_ARRAY;
+            fwrite((const char *) &tarr, sizeof(tarr), 1, fp);
+        }
+
+        const int32_t n = val.size();
+        fwrite((const char *) &type, sizeof(type), 1, fp);
+        fwrite((const char *) &n, sizeof(n), 1, fp);
+        for (int i = 0; i < n; ++i) {
+            const int32_t nstr = val[i].size();
+            fwrite((const char *) &nstr, sizeof(nstr), 1, fp);
+            fwrite(val[i].c_str(), nstr, 1, fp);
+        }
+    }
+
+    void write_zeros(size_t count) {
+        for (size_t i = 0; i < count; ++i) {
+            fputc(0, fp);
+        }
+    }
+
+    void read_raw(void * ptr, size_t len) const {
+        if (len == 0) {
+            return;
+        }
+        errno = 0;
+        std::size_t ret = std::fread(ptr, len, 1, fp);
+        if (ferror(fp)) {
+            throw std::runtime_error(format("read error: %s", strerror(errno)));
+        }
+        if (ret != 1) {
+            throw std::runtime_error(std::string("unexpectedly reached end of file"));
+        }
+    }
+
+    void write_raw(const void * ptr, size_t len) const {
+        if (len == 0) {
+            return;
+        }
+        errno = 0;
+        size_t ret = std::fwrite(ptr, len, 1, fp);
+        if (ret != 1) {
+            throw std::runtime_error(format("write error: %s", strerror(errno)));
+        }
+    }
+
+    ~gguf_file() {
+        if (fp) {
+            std::fclose(fp);
+        }
     }
 };
 
@@ -358,95 +466,5 @@ struct gguf_mlock {
     void raw_unlock(const void * addr, size_t len) {}
 #endif
 };
-
-// Replacement for std::vector<uint8_t> that doesn't require zero-initialization.
-struct gguf_buffer {
-    uint8_t * addr = NULL;
-    size_t size = 0;
-
-    gguf_buffer() = default;
-
-    void resize(size_t len) {
-#ifdef GGML_USE_METAL
-        free(addr);
-        int result = posix_memalign((void **) &addr, getpagesize(), len);
-        if (result == 0) {
-            memset(addr, 0, len);
-        }
-        else {
-            addr = NULL;
-        }
-#else
-        delete[] addr;
-        addr = new uint8_t[len];
-#endif
-        size = len;
-    }
-
-    ~gguf_buffer() {
-#ifdef GGML_USE_METAL
-        free(addr);
-#else
-        delete[] addr;
-#endif
-        addr = NULL;
-    }
-
-    // disable copy and move
-    gguf_buffer(const gguf_buffer&) = delete;
-    gguf_buffer(gguf_buffer&&) = delete;
-    gguf_buffer& operator=(const gguf_buffer&) = delete;
-    gguf_buffer& operator=(gguf_buffer&&) = delete;
-};
-
-#ifdef GGML_USE_CUBLAS
-#include "ggml-cuda.h"
-struct gguf_ctx_buffer {
-    uint8_t * addr = NULL;
-    bool is_cuda;
-    size_t size = 0;
-
-    gguf_ctx_buffer() = default;
-
-    void resize(size_t size) {
-        free();
-
-        addr = (uint8_t *) ggml_cuda_host_malloc(size);
-        if (addr) {
-            is_cuda = true;
-        }
-        else {
-            // fall back to pageable memory
-            addr = new uint8_t[size];
-            is_cuda = false;
-        }
-        this->size = size;
-    }
-
-    void free() {
-        if (addr) {
-            if (is_cuda) {
-                ggml_cuda_host_free(addr);
-            }
-            else {
-                delete[] addr;
-            }
-        }
-        addr = NULL;
-    }
-
-    ~gguf_ctx_buffer() {
-        free();
-    }
-
-    // disable copy and move
-    gguf_ctx_buffer(const gguf_ctx_buffer&) = delete;
-    gguf_ctx_buffer(gguf_ctx_buffer&&) = delete;
-    gguf_ctx_buffer& operator=(const gguf_ctx_buffer&) = delete;
-    gguf_ctx_buffer& operator=(gguf_ctx_buffer&&) = delete;
-};
-#else
-typedef gguf_buffer gguf_ctx_buffer;
-#endif
 
 #endif

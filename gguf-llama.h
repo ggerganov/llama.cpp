@@ -34,27 +34,11 @@
 #    define DEPRECATED(func, hint) func
 #endif
 
-#define LLAMA_FILE_MAGIC_GGJT        0x67676a74u // 'ggjt'
-#define LLAMA_FILE_MAGIC_GGLA        0x67676c61u // 'ggla'
-#define LLAMA_FILE_MAGIC_GGMF        0x67676d66u // 'ggmf'
-#define LLAMA_FILE_MAGIC_GGML        0x67676d6cu // 'ggml'
-#define LLAMA_FILE_MAGIC_GGSN        0x6767736eu // 'ggsn'
-
-#define LLAMA_FILE_VERSION           3
-#define LLAMA_FILE_MAGIC             LLAMA_FILE_MAGIC_GGJT
-#define LLAMA_FILE_MAGIC_UNVERSIONED LLAMA_FILE_MAGIC_GGML
-#define LLAMA_SESSION_MAGIC          LLAMA_FILE_MAGIC_GGSN
-#define LLAMA_SESSION_VERSION        1
-
 #define LLAMA_DEFAULT_SEED           0xFFFFFFFF
 
 #if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL)
 // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
 #define LLAMA_SUPPORTS_GPU_OFFLOAD
-#endif
-
-#ifndef LLAMA_DEFAULT_RMS_EPS
-#define LLAMA_DEFAULT_RMS_EPS 5e-6f
 #endif
 
 #ifdef __cplusplus
@@ -103,8 +87,6 @@ extern "C" {
         uint32_t seed;         // RNG seed, -1 for random
         int32_t  n_ctx;        // text context
         int32_t  n_batch;      // prompt processing batch size
-        int32_t  n_gqa;        // grouped-query attention (TEMP - will be moved to model hparams)
-        float    rms_norm_eps; // rms norm epsilon (TEMP - will be moved to model hparams)
         int32_t  n_gpu_layers; // number of layers to store in VRAM
         int32_t  main_gpu;     // the GPU that is used for scratch and small tensors
 
@@ -155,7 +137,7 @@ extern "C" {
     // model quantization parameters
     typedef struct llama_model_quantize_params {
         int nthread;                 // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
-        enum llama_ftype   ftype;    // quantize to this llama_ftype
+        enum llama_ftype ftype;      // quantize to this llama_ftype
         bool allow_requantize;       // allow quantizing non-f32/f16 tensors
         bool quantize_output_tensor; // quantize output.weight
     } llama_model_quantize_params;
@@ -240,13 +222,6 @@ extern "C" {
                      struct llama_model * model,
             struct llama_context_params   params);
 
-    // Various functions for loading a ggml llama model.
-    // Allocate (almost) all memory needed for the model.
-    // Return NULL on failure
-    LLAMA_API DEPRECATED(struct llama_context * llama_init_from_file(
-                             const char * path_model,
-            struct llama_context_params   params),
-            "please use llama_load_model_from_file combined with llama_new_context_with_model instead");
 
     // Frees all allocated memory
     LLAMA_API void llama_free(struct llama_context * ctx);
@@ -336,13 +311,6 @@ extern "C" {
                              int   n_max_tokens,
                             bool   add_bos);
 
-    LLAMA_API int llama_tokenize_bpe(
-            struct llama_context * ctx,
-                      const char * text,
-                     llama_token * tokens,
-                             int   n_max_tokens,
-                            bool   add_bos);
-
     LLAMA_API int llama_tokenize_with_model(
         const struct llama_model * model,
                       const char * text,
@@ -384,23 +352,14 @@ extern "C" {
     LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 
     // Token Id -> String. Uses the vocabulary in the provided context
-    LLAMA_API int llama_token_to_str(
+    LLAMA_API const char * llama_token_to_str(
             const struct llama_context * ctx,
-                           llama_token   token,
-                                  char * str,
-                                  int    length);
+                           llama_token   token);
 
-    LLAMA_API int llama_token_to_str_bpe(
-            const struct llama_context * ctx,
-                           llama_token   token,
-                                  char * str,
-                                  int    length);
-
-    LLAMA_API int llama_token_to_str_with_model(
+    LLAMA_API const char * llama_token_to_str_with_model(
               const struct llama_model * model,
-                           llama_token   token,
-                                  char * str,
-                                  int    length);
+                           llama_token   token);
+
     // Special tokens
     LLAMA_API llama_token llama_token_bos();  // beginning-of-sentence
     LLAMA_API llama_token llama_token_eos();  // end-of-sentence
@@ -488,43 +447,15 @@ extern "C" {
 }
 #endif
 
-// C++ API, will be moving to common.h soon (TM)
-#ifdef LLAMA_API_CPP
-
-#include <vector>
-#include <string>
-
-//
-// Vocab utils
-//
-
-std::vector<llama_token> llama_tokenize(
-        struct llama_context * ctx,
-           const std::string & text,
-                        bool   add_bos);
-
-std::vector<llama_token> llama_tokenize_bpe(
-        struct llama_context * ctx,
-           const std::string & text,
-                        bool   add_bos);
-
-std::string llama_token_to_str(
-        const struct llama_context * ctx,
-                       llama_token   token);
-
-std::string llama_token_to_str_bpe(
-    const struct llama_context * ctx,
-                   llama_token   token);
-
 // Internal API to be implemented by llama.cpp and used by tests/benchmarks only
 #ifdef LLAMA_API_INTERNAL
 
+#include <vector>
+#include <string>
 struct ggml_tensor;
 
 const std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx);
 
-#endif // LLAMA_API_CPP
-
-#endif // LLAMA_API_INTERNAL
+#endif
 
 #endif // LLAMA_H

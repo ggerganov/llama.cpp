@@ -126,7 +126,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         ctx->library = [ctx->device newLibraryWithSource:msl_library_source options:nil error:&error];
         if (error) {
             fprintf(stderr, "%s: error: %s\n", __func__, [[error description] UTF8String]);
-            exit(1);
+            return NULL;
         }
     }
 #else
@@ -144,7 +144,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         NSString * src  = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
         if (error) {
             fprintf(stderr, "%s: error: %s\n", __func__, [[error description] UTF8String]);
-            exit(1);
+            return NULL;
         }
 
 #ifdef GGML_QKK_64
@@ -156,7 +156,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 #endif
         if (error) {
             fprintf(stderr, "%s: error: %s\n", __func__, [[error description] UTF8String]);
-            exit(1);
+            return NULL;
         }
     }
 #endif
@@ -222,6 +222,21 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
         [ctx->buffers[i].metal release];
     }
     free(ctx);
+}
+
+void * ggml_metal_host_malloc(size_t n) {
+    void * data = NULL;
+    const int result = posix_memalign((void **) &data, getpagesize(), n);
+    if (result != 0) {
+        fprintf(stderr, "%s: error: posix_memalign failed\n", __func__);
+        return NULL;
+    }
+
+    return data;
+}
+
+void ggml_metal_host_free(void * data) {
+    free(data);
 }
 
 void ggml_metal_set_n_cb(struct ggml_metal_context * ctx, int n_cb) {
