@@ -15809,7 +15809,7 @@ void ggml_build_backward_expand(struct ggml_context * ctx, struct ggml_cgraph * 
         }
     }
 
-    for (int i = gf->n_nodes - 1; i >= 0; i--) {
+    for (int i = 0; i < gf->n_nodes; i++) {
         struct ggml_tensor * node = gf->nodes[i];
 
         if (node->is_param) {
