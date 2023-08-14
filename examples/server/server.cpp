@@ -15,6 +15,7 @@
 #include "index.html.hpp"
 #include "index.js.hpp"
 #include "completion.js.hpp"
+#include "json-schema-to-grammar.mjs.hpp"
 
 #ifndef SERVER_VERBOSE
 #define SERVER_VERBOSE 1
@@ -666,6 +667,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     {
         fprintf(stdout, "  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
     }
+    fprintf(stdout, "  --numa                attempt optimizations that help on some NUMA systems\n");
 #ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
     fprintf(stdout, "  -ngl N, --n-gpu-layers N\n");
     fprintf(stdout, "                        number of layers to store in VRAM\n");
@@ -940,6 +942,10 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
         {
             params.use_mmap = false;
         }
+        else if (arg == "--numa")
+        {
+            params.numa = true;
+        }
         else if (arg == "--embedding")
         {
             params.embedding = true;
@@ -1211,6 +1217,12 @@ int main(int argc, char **argv)
     svr.Get("/completion.js", [](const Request &, Response &res)
             {
         res.set_content(reinterpret_cast<const char*>(&completion_js), completion_js_len, "application/javascript");
+        return false; });
+
+    // this is only called if no index.html is found in the public --path
+    svr.Get("/json-schema-to-grammar.mjs", [](const Request &, Response &res)
+            {
+        res.set_content(reinterpret_cast<const char*>(&json_schema_to_grammar_mjs), json_schema_to_grammar_mjs_len, "application/javascript");
         return false; });
 
     svr.Post("/completion", [&llama](const Request &req, Response &res)

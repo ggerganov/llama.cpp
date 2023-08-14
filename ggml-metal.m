@@ -126,7 +126,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         ctx->library = [ctx->device newLibraryWithSource:msl_library_source options:nil error:&error];
         if (error) {
             fprintf(stderr, "%s: error: %s\n", __func__, [[error description] UTF8String]);
-            exit(1);
+            return NULL;
         }
     }
 #else
@@ -144,7 +144,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         NSString * src  = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
         if (error) {
             fprintf(stderr, "%s: error: %s\n", __func__, [[error description] UTF8String]);
-            exit(1);
+            return NULL;
         }
 
 #ifdef GGML_QKK_64
@@ -156,7 +156,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 #endif
         if (error) {
             fprintf(stderr, "%s: error: %s\n", __func__, [[error description] UTF8String]);
-            exit(1);
+            return NULL;
         }
     }
 #endif
