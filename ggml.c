@@ -17368,7 +17368,10 @@ static enum ggml_opt_result ggml_opt_adam(
     ggml_graph_reset  (gf);
     ggml_set_f32      (f->grad, 1.0f);
 
-    ggml_graph_compute_with_ctx(ctx, gb, params.n_threads);
+    struct ggml_cplan cplan = ggml_graph_plan(gb, params.n_threads);
+    struct ggml_object * obj = ggml_new_object(ctx, GGML_OBJECT_WORK_BUFFER, cplan.work_size);
+    cplan.work_data = (uint8_t *)ctx->mem_buffer + obj->offs;
+    ggml_graph_compute(gb, &cplan);
 
     opt->adam.fx_prev = ggml_get_f32_1d(f, 0);
     opt->adam.fx_best = opt->adam.fx_prev;
@@ -17455,7 +17458,7 @@ static enum ggml_opt_result ggml_opt_adam(
         ggml_graph_reset  (gf);
         ggml_set_f32      (f->grad, 1.0f);
 
-        ggml_graph_compute_with_ctx(ctx, gb, params.n_threads);
+        ggml_graph_compute(gb, &cplan);
 
         const float fx = ggml_get_f32_1d(f, 0);
         opt->loss_after = fx;
@@ -17528,7 +17531,6 @@ struct ggml_lbfgs_iteration_data {
 };
 
 static enum ggml_opt_result linesearch_backtracking(
-        struct ggml_context * ctx,
         const struct ggml_opt_params * params,
         int nx,
         float * x,
@@ -17540,6 +17542,7 @@ static enum ggml_opt_result linesearch_backtracking(
         struct ggml_tensor * f,
         struct ggml_cgraph * gf,
         struct ggml_cgraph * gb,
+        struct ggml_cplan  * cplan,
         const int np,
         struct ggml_tensor * ps[],
         ggml_opt_callback callback,
@@ -17588,7 +17591,7 @@ static enum ggml_opt_result linesearch_backtracking(
             ggml_graph_reset  (gf);
             ggml_set_f32      (f->grad, 1.0f);
 
-            ggml_graph_compute_with_ctx(ctx, gb, params->n_threads);
+            ggml_graph_compute(gb, cplan);
 
             ggml_opt_get_grad(np, ps, g);
 
@@ -17682,6 +17685,10 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         opt->iter = iter;
     }
 
+    struct ggml_cplan cplan = ggml_graph_plan(gb, params.n_threads);
+    struct ggml_object * obj = ggml_new_object(ctx, GGML_OBJECT_WORK_BUFFER, cplan.work_size);
+    cplan.work_data = (uint8_t *)ctx->mem_buffer + obj->offs;
+
     float * x  = opt->lbfgs.x->data;  // current parameters
     float * xp = opt->lbfgs.xp->data; // previous parameters
     float * g  = opt->lbfgs.g->data;  // current gradient
@@ -17716,7 +17723,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         ggml_graph_reset  (gf);
         ggml_set_f32      (f->grad, 1.0f);
 
-        ggml_graph_compute_with_ctx(ctx, gb, params.n_threads);
+        ggml_graph_compute(gb, &cplan);
 
         ggml_opt_get_grad(np, ps, g);
 
@@ -17778,7 +17785,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         ggml_vec_cpy_f32(nx, xp, x);
         ggml_vec_cpy_f32(nx, gp, g);
 
-        ls = linesearch_backtracking(ctx, &params, nx, x, &fx, g, d, step, xp, f, gf, gb, np, ps, callback, callback_data);
+        ls = linesearch_backtracking(&params, nx, x, &fx, g, d, step, xp, f, gf, gb, &cplan, np, ps, callback, callback_data);
 
         if (ls < 0) {
             // linesearch failed - go back to the previous point and return
