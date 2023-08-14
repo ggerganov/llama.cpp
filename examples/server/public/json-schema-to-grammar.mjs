@@ -11,8 +11,8 @@ const PRIMITIVE_RULES = {
   null: '"null" space',
 };
 
-const INVALID_RULE_CHARS_RE = /[^a-zA-Z0-9-]+/g;
-const GRAMMAR_LITERAL_ESCAPE_RE = /[\r\n"]/g;
+const INVALID_RULE_CHARS_RE = /[^\dA-Za-z-]+/g;
+const GRAMMAR_LITERAL_ESCAPE_RE = /[\n\r"]/g;
 const GRAMMAR_LITERAL_ESCAPES = {'\r': '\\r', '\n': '\\n', '"': '\\"'};
 
 export class SchemaConverter {
@@ -76,14 +76,13 @@ export class SchemaConverter {
       });
 
       let rule = '"{" space';
-      for (let i = 0; i < propPairs.length; i++) {
-        const [propName, propSchema] = propPairs[i];
+      propPairs.forEach(([propName, propSchema], i) => {
         const propRuleName = this.visit(propSchema, `${name}${name ? "-" : ""}${propName}`);
         if (i > 0) {
           rule += ' "," space';
         }
         rule += ` ${this._formatLiteral(propName)} space ":" space ${propRuleName}`;
-      }
+      });
       rule += ' "}" space';
 
       return this._addRule(ruleName, rule);
