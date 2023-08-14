@@ -1,5 +1,238 @@
 #include <string>
 
+// Generic
+const std::string shader_f32 = R"(
+#define FLOAT_TYPE float
+)";
+const std::string shader_f16 = R"(
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+#define FLOAT_TYPE float16_t
+)";
+const std::string shader_int8_ext = R"(
+#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
+)";
+const std::string shader_output_f16 = R"(
+#define OUT_TYPE float16_t
+)";
+const std::string shader_output_f32 = R"(
+#define OUT_TYPE float
+)";
+
+// MULMAT
+
+const std::string mulmat_head = R"(
+#version 450
+
+#define WARP 32
+
+#extension GL_EXT_control_flow_attributes : enable
+)";
+
+const std::string mulmat_body = R"(
+layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
+
+#ifdef ALIGNED_INPUT
+#define LOAD_VEC 8
+layout (binding = 0) readonly buffer A { A_TYPE data_a[]; };
+layout (binding = 1) readonly buffer B { B_TYPE data_b[]; };
+
+#else
+
+#define LOAD_VEC 1
+layout (binding = 0) readonly buffer A { A_TYPE data_a[]; };
+layout (binding = 1) readonly buffer B { B_TYPE data_b[]; };
+#endif
+
+layout (binding = 2) writeonly buffer D { D_TYPE data_d[]; };
+
+layout (push_constant) uniform parameter
+{
+    int M;
+    int N;
+    int K;
+    int stride_a;
+    int stride_b;
+    int stride_d;
+    int k_split;
+} p;
+
+layout (constant_id = 1) const int BM = 64;
+layout (constant_id = 2) const int BN = 64;
+layout (constant_id = 3) const int BK = 16;
+layout (constant_id = 4) const int WM = 32;
+layout (constant_id = 5) const int WN = 32;
+layout (constant_id = 6) const int WMITER = 2;
+layout (constant_id = 7) const int TM = 4;
+layout (constant_id = 8) const int TN = 2;
+
+shared FLOAT_TYPE buf_a[BM * (BK+1)];
+shared FLOAT_TYPE buf_b[BN * (BK+1)];
+
+void main() {
+    const int blocks_x = (p.M + BM - 1) / BM;
+    const int ir = int(gl_WorkGroupID.x) % blocks_x;
+    const int ik = int(gl_WorkGroupID.x) / blocks_x;
+    const int ic = int(gl_WorkGroupID.y);
+
+    const int warp_i = int(gl_LocalInvocationID.x / WARP);
+    const int warp_r = warp_i % (BM / WM);
+    const int warp_c = warp_i / (BM / WM);
+
+    const int WNITER = (WM * WN) / (WARP * TM * TN * WMITER);
+    const int WSUBM = WM / WMITER;
+    const int WSUBN = WN / WNITER;
+
+    const int tiw = int(gl_LocalInvocationID.x % WARP);
+    const int tiwr = tiw % (WSUBM / TM);
+    const int tiwc = tiw / (WSUBM / TM);
+
+    const int loadr = int(gl_LocalInvocationID.x % (BK / LOAD_VEC));
+    const int loadc = int(gl_LocalInvocationID.x / (BK / LOAD_VEC));
+
+    const int loadstride = int(gl_WorkGroupSize.x * LOAD_VEC) / BK;
+
+    const int start_k = ik * p.k_split;
+    const int end_k = (ik + 1) * p.k_split;
+
+    int pos_a = ir * BM * p.stride_a / LOAD_VEC + start_k / LOAD_VEC;
+    int pos_b = ic * BN * p.stride_b / LOAD_VEC + start_k / LOAD_VEC;
+
+    D_TYPE sums[WMITER * TM * WNITER * TN];
+    FLOAT_TYPE cache_a[WMITER * TM];
+    FLOAT_TYPE cache_b[WNITER * TN];
+
+    [[unroll]] for (int i = 0; i < WMITER*TM*WNITER*TN; i++) {
+        sums[i] = 0.0f;
+    }
+
+    [[unroll]] for (int block = start_k; block < end_k; block += BK) {
+        [[unroll]] for (int l = 0; l < BM; l += loadstride) {
+#ifdef ALIGNED_INPUT
+            A_TYPE tmp = data_a[pos_a + (loadc + l) * p.stride_a / LOAD_VEC + loadr];
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 0] = FLOAT_TYPE(tmp[0].x);
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 1] = FLOAT_TYPE(tmp[0].y);
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 2] = FLOAT_TYPE(tmp[0].z);
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 3] = FLOAT_TYPE(tmp[0].w);
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 4] = FLOAT_TYPE(tmp[1].x);
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 5] = FLOAT_TYPE(tmp[1].y);
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 6] = FLOAT_TYPE(tmp[1].z);
+            buf_a[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 7] = FLOAT_TYPE(tmp[1].w);
+#else
+            if (ir * BM + loadc + l < p.M && block + loadr < p.K) {
+                buf_a[(loadc + l) * (BK+1) + loadr] = FLOAT_TYPE(data_a[pos_a + (loadc + l) * p.stride_a + loadr]);
+            } else {
+                buf_a[(loadc + l) * (BK+1) + loadr] = FLOAT_TYPE(0.0f);
+            }
+#endif
+        }
+        [[unroll]] for (int l = 0; l < BN; l += loadstride) {
+#ifdef ALIGNED_INPUT
+            B_TYPE tmp = data_b[pos_b + (loadc + l) * p.stride_b / LOAD_VEC + loadr];
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 0] = FLOAT_TYPE(tmp[0].x);
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 1] = FLOAT_TYPE(tmp[0].y);
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 2] = FLOAT_TYPE(tmp[0].z);
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 3] = FLOAT_TYPE(tmp[0].w);
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 4] = FLOAT_TYPE(tmp[1].x);
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 5] = FLOAT_TYPE(tmp[1].y);
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 6] = FLOAT_TYPE(tmp[1].z);
+            buf_b[(loadc + l) * (BK+1) + loadr * LOAD_VEC + 7] = FLOAT_TYPE(tmp[1].w);
+#else
+            if (ic * BN + loadc + l < p.N && block + loadr < p.K) {
+                buf_b[(loadc + l) * (BK+1) + loadr] = FLOAT_TYPE(data_b[pos_b + (loadc + l) * p.stride_b + loadr]);
+            } else {
+                buf_b[(loadc + l) * (BK+1) + loadr] = FLOAT_TYPE(0.0f);
+            }
+#endif
+        }
+
+        barrier();
+
+        pos_a += BK / LOAD_VEC;
+        pos_b += BK / LOAD_VEC;
+
+        for (int i = 0; i < min(BK, p.K - block); i++) {
+            // Load from shared into cache
+            [[unroll]] for (int wsir = 0; wsir < WMITER; wsir++) {
+                [[unroll]] for (int j = 0; j < TM; j++) {
+                    cache_a[wsir * TM + j] = buf_a[(warp_r * WM + wsir * WSUBM + tiwr * TM + j) * (BK+1) + i];
+                }
+            }
+            [[unroll]] for (int wsic = 0; wsic < WNITER; wsic++) {
+                [[unroll]] for (int j = 0; j < TN; j++) {
+                    cache_b[wsic * TN + j] = buf_b[(warp_c * WN + wsic * WSUBN + tiwc * TN + j) * (BK+1) + i];
+                }
+            }
+
+            [[unroll]] for (int wsic = 0; wsic < WNITER; wsic++) {
+                [[unroll]] for (int wsir = 0; wsir < WMITER; wsir++) {
+                    [[unroll]] for (int cc = 0; cc < TN; cc++) {
+                        [[unroll]] for (int cr = 0; cr < TM; cr++) {
+                            sums[(wsic * TN + cc) * (WMITER * TM) + wsir * TM + cr] += D_TYPE(cache_a[wsir * TM + cr]) * D_TYPE(cache_b[wsic * TN + cc]);
+                        }
+                    }
+                }
+            }
+        }
+
+        barrier();
+    }
+
+    const int dr = ir * BM + warp_r * WM;
+    const int dc = ic * BN + warp_c * WN;
+
+    const int k_split_offset = ik * p.M * p.N;
+
+    [[unroll]] for (int wsic = 0; wsic < WNITER; wsic++) {
+        [[unroll]] for (int wsir = 0; wsir < WMITER; wsir++) {
+
+            const int dr_warp = dr + wsir * WSUBM + tiwr * TM;
+            const int dc_warp = dc + wsic * WSUBN + tiwc * TN;
+            [[unroll]] for (int cc = 0; cc < TN; cc++) {
+                [[unroll]] for (int cr = 0; cr < TM; cr++) {
+                    if (dr_warp + cr < p.M && dc_warp + cc < p.N) {
+                        data_d[k_split_offset + (dc_warp + cc) * p.stride_d + dr_warp + cr] = sums[(wsic * TN + cc) * (WMITER * TM) + wsir * TM + cr];
+                    }
+                }
+            }
+        }
+    }
+}
+)";
+
+const std::string mulmat_split_k_reduce_src = R"(
+#version 450
+
+layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+
+layout (binding = 0) buffer A { float data[]; };
+
+layout (push_constant) uniform parameter
+{
+    int M;
+    int N;
+    int k_num;
+} p;
+
+void main() {
+    const int glr = int(gl_GlobalInvocationID.x);
+    const int glc = int(gl_GlobalInvocationID.y);
+
+    if (glr >= p.M || glc >= p.N) {
+        return;
+    }
+
+    const int idx = glc * p.M + glr;
+
+    float result = 0.0f;
+
+    for (int i = 0; i < p.k_num; i++) {
+        result += data[i * p.M * p.N + idx];
+    }
+
+    data[idx] = result;
+}
+)";
+
 // DEQUANT SHADER
 const std::string dequant_head = R"(
 #version 450
@@ -7,18 +240,6 @@ const std::string dequant_head = R"(
 #extension GL_EXT_control_flow_attributes : require
 #extension GL_EXT_shader_16bit_storage : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
-)";
-
-const std::string dequant_glsl_fp16_ext = R"(
-#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
-)";
-
-const std::string dequant_output_fp16 = R"(
-#define OUT_TYPE float16_t
-)";
-
-const std::string dequant_output_fp32 = R"(
-#define OUT_TYPE float
 )";
 
 const std::string dequant_q4_0_defines = R"(
@@ -83,9 +304,23 @@ const std::string mul_mat_vec_head = R"(
 #extension GL_EXT_shader_8bit_storage : require
 )";
 
-const std::string mul_mat_vec_fp16 = R"(
-#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
-#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
+const std::string mul_mat_vec_b_type_f32 = R"(
+#define B_TYPE float
+)";
+
+const std::string mul_mat_vec_b_type_f16 = R"(
+#define B_TYPE float16_t
+)";
+
+const std::string mul_mat_vec_f16_defines = R"(
+#define QUANT_K 32
+#define QUANT_R 2
+#define BLOCK_SIZE 32
+
+#define A_TYPE float16_t
+
+#define DEQUANT_FUNC float16_t v0 = x[ib + 0]; \
+float16_t v1 = x[ib + 1];
 )";
 
 const std::string mul_mat_vec_q4_0_defines = R"(
@@ -99,8 +334,6 @@ struct block_q4_0
     uint8_t qs[16];
 };
 #define A_TYPE block_q4_0
-#define B_TYPE float16_t
-#define OUT_TYPE float
 
 #define DEQUANT_FUNC const float16_t d = x[ib].d; \
 const uint8_t vui = x[ib].qs[iqs]; \
@@ -122,7 +355,7 @@ layout (push_constant) uniform parameter
     int ncols;
 } p;
 
-shared float16_t tmp[BLOCK_SIZE];
+shared FLOAT_TYPE tmp[BLOCK_SIZE];
 
 void main() {
     const int block_size = int(gl_WorkGroupSize.x);
@@ -142,20 +375,20 @@ void main() {
         DEQUANT_FUNC
 
         // matrix multiplication
-        tmp[tid] += v0 * y[iybs + iqs + 0];
-        tmp[tid] += v1 * y[iybs + iqs + y_offset];
+        tmp[tid] += FLOAT_TYPE(v0 * y[iybs + iqs + 0]);
+        tmp[tid] += FLOAT_TYPE(v1 * y[iybs + iqs + y_offset]);
     }
 
     // sum up partial sums and write back result
     barrier();
-    [[unroll]] for (int s=block_size/2; s>0; s>>=1) {
+    [[unroll]] for (int s = block_size/2; s > 0; s >>= 1) {
         if (tid < s) {
             tmp[tid] += tmp[tid + s];
         }
         barrier();
     }
     if (tid == 0) {
-        dst[row] = float(tmp[0]);
+        dst[row] = OUT_TYPE(tmp[0]);
     }
 }
 )";
@@ -195,9 +428,9 @@ const std::string mul_f32_src = R"(
 
 layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 
-layout (binding = 0) buffer X { float data_x[]; };
-layout (binding = 1) buffer Y { float data_y[]; };
-layout (binding = 2) buffer D { float data_d[]; };
+layout (binding = 0) buffer X { X_TYPE data_x[]; };
+layout (binding = 1) buffer Y { Y_TYPE data_y[]; };
+layout (binding = 2) buffer D { D_TYPE data_d[]; };
 
 layout (push_constant) uniform parameter
 {
@@ -220,6 +453,76 @@ void main() {
         return;
     }
 
-    data_d[p.d_offset + y * p.stride_d + x] = data_x[p.x_offset + y * p.stride_x + x] * data_y[p.y_offset + x];
+    data_d[p.d_offset + y * p.stride_d + x] = D_TYPE(data_x[p.x_offset + y * p.stride_x + x]) * D_TYPE(data_y[p.y_offset + x]);
+}
+)";
+
+// ADD
+const std::string add_head = R"(
+#version 450
+)";
+
+const std::string add_body = R"(
+layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+layout (binding = 0) buffer X { X_TYPE data_x[]; };
+layout (binding = 1) buffer Y { Y_TYPE data_y[]; };
+layout (binding = 2) buffer D { D_TYPE data_d[]; };
+
+layout (push_constant) uniform parameter
+{
+    int M;
+    int N;
+    int stride_x;
+    int stride_y;
+    int stride_d;
+    int x_offset;
+    int y_offset;
+    int d_offset;
+    float scale;
+} p;
+
+void main() {
+    const int x = int(gl_GlobalInvocationID.x);
+    const int y = int(gl_GlobalInvocationID.y);
+
+    if (x >= p.M || y >= p.N) {
+        return;
+    }
+
+    data_d[p.d_offset + y * p.stride_d + x] = D_TYPE(data_x[p.x_offset + y * p.stride_x + x]) + D_TYPE(data_y[p.y_offset + x]);
+}
+)";
+
+// SCALE
+const std::string scale_src = R"(
+#version 450
+
+layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+
+layout (binding = 0) buffer X { X_TYPE data_x[]; };
+layout (binding = 1) buffer D { D_TYPE data_d[]; };
+
+layout (push_constant) uniform parameter
+{
+    int M;
+    int N;
+    int stride_x;
+    int stride_y;
+    int stride_d;
+    int x_offset;
+    int y_offset;
+    int d_offset;
+    float scale;
+} p;
+
+void main() {
+    const int x = int(gl_GlobalInvocationID.x);
+    const int y = int(gl_GlobalInvocationID.y);
+
+    if (x >= p.M || y >= p.N) {
+        return;
+    }
+
+    data_d[p.d_offset + y * p.stride_d + x] = D_TYPE(data_x[p.x_offset + y * p.stride_x + x]) * D_TYPE(p.scale);
 }
 )";
