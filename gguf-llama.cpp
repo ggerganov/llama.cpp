@@ -258,6 +258,11 @@ struct llama_kv_cache {
 };
 
 struct llama_vocab {
+    // TODO: convert to this gguf_vocab
+    // add a vector of merges
+    // add members for bos/eos/pad/sep tokens
+    // so that we can pass it to different types of tokenizers with a common interface
+
     using id    = int32_t;
     using token = std::string;
 
@@ -447,7 +452,7 @@ static size_t llama_calc_tensor_size(const std::vector<uint32_t> & ne, enum ggml
     return size / ggml_blck_size(type);
 }
 
-struct llama_load_tensor {
+struct gguf_load_tensor {
     std::string name;
     enum ggml_type type = GGML_TYPE_F32;
     std::vector<uint32_t> ne;
@@ -457,9 +462,9 @@ struct llama_load_tensor {
     uint8_t * data;
 };
 
-struct llama_load_tensors_map {
+struct gguf_load_tensors_map {
     // tensors is kept in a separate vector to preserve file order
-    std::vector<llama_load_tensor> tensors;
+    std::vector<gguf_load_tensor> tensors;
     std::unordered_map<std::string, size_t> name_to_idx;
 };
 
@@ -477,7 +482,7 @@ struct gguf_file_loader {
     llama_vocab vocab;
 struct ggml_context * ctx_data = NULL;
 
-    gguf_file_loader(const char * fname, llama_load_tensors_map & tensors_map)
+    gguf_file_loader(const char * fname, gguf_load_tensors_map & tensors_map)
         : file(fname, "rb") {
         fprintf(stderr, "llama.cpp: loading model from %s\n", fname);
         
@@ -523,13 +528,9 @@ struct ggml_context * ctx_data = NULL;
 
     void read_hparams() {
 
-        // TODO make keysconstants in header
+        // TODO define keys as constants in header
         // TODO: read all hparams from file
-        int q_ver_idx = gguf_find_key (gguf_ctx, "general.quantization_version");
-        if (q_ver_idx != -1) {
-            hparams.ftype = (enum llama_ftype) gguf_get_val_u32(gguf_ctx, q_ver_idx);
-        }
-
+            
         hparams.n_vocab = read_n_vocab();
         hparams.n_ctx   = read_u32("llama.context_length");
         hparams.n_embd  = read_u32("llama.embedding_length");
@@ -567,11 +568,11 @@ struct ggml_context * ctx_data = NULL;
         }
     }
 
-    void read_tensor_metadata(llama_load_tensors_map & tensors_map) {
+    void read_tensor_metadata(gguf_load_tensors_map & tensors_map) {
         const int n_tensors = gguf_get_n_tensors(gguf_ctx);
 
         for (int i = 0; i < n_tensors; ++i) {
-            llama_load_tensor tensor;
+            gguf_load_tensor tensor;
             const char * name = gguf_get_tensor_name(gguf_ctx, i);
 
             struct ggml_tensor * cur = ggml_get_tensor(ctx_data, name);
@@ -617,6 +618,13 @@ struct ggml_context * ctx_data = NULL;
 };
 
 struct gguf_file_saver {
+    // TODO
+    // this implementation now assumes that the data section is of the same length as the unquantized model.
+    // this is needed to write tensor metadata and weights in a single pass by seeking to appropriate positions in the file.
+    // this may not be true when we add quantization version and change ftype description (currently it's string according to the specs,
+    // but better to have it as uint32).
+    // we need to calculate the delta in number of bytes written with a counter as a struct member.
+    
     gguf_file file;
     gguf_file_loader * fl;
     size_t info_offset;
@@ -747,7 +755,7 @@ struct gguf_file_saver {
         GGML_ASSERT(info_offset == file.tell());
     }
 
-    size_t write_tensor_info(llama_load_tensor & tensor, enum ggml_type type) {
+    size_t write_tensor_info(gguf_load_tensor & tensor, enum ggml_type type) {
         size_t total_written = 0;
         file.seek(info_offset, SEEK_SET);
         GGML_ASSERT(info_offset == file.tell());
@@ -761,14 +769,14 @@ struct gguf_file_saver {
 
         total_written += file.write_i32(type);
         total_written += file.write_u64(tensor_offset);
-        info_offset   += total_written;
+        info_offset   += total_written; // position to write info of the next tensor
 
         file.seek(0, SEEK_END);
         
         return total_written;
     }
 
-    void write_tensor(llama_load_tensor & tensor, enum ggml_type new_type, const void * new_data, size_t new_size) {
+    void write_tensor(gguf_load_tensor & tensor, enum ggml_type new_type, const void * new_data, size_t new_size) {
         switch (new_type) {
             case GGML_TYPE_F32:
             case GGML_TYPE_F16:
@@ -791,13 +799,13 @@ struct gguf_file_saver {
         size_t padded_size = GGML_PAD(new_size, GGUF_DEFAULT_ALIGNMENT); // TODO: handle custom alignment
         size_t pad = padded_size - new_size;
         file.write_zeros(pad);
-        tensor_offset += padded_size;
+        tensor_offset += padded_size; // offset of the next tensor
     }
 };
 
 struct llama_model_loader {
     std::unique_ptr<gguf_file_loader> file_loader;
-    llama_load_tensors_map tensors_map;
+    gguf_load_tensors_map tensors_map;
     bool use_mmap;
     size_t num_ggml_tensors_created = 0;
     struct ggml_context * ggml_ctx = NULL;
@@ -813,7 +821,7 @@ struct llama_model_loader {
 
     void calc_sizes(size_t * ctx_size_p, size_t * mmapped_size_p) const {
         *ctx_size_p = *mmapped_size_p = 0;
-        for (const llama_load_tensor & lt : tensors_map.tensors) {
+        for (const gguf_load_tensor & lt : tensors_map.tensors) {
             *ctx_size_p += sizeof(struct ggml_tensor) + GGML_OBJECT_SIZE;
             *(use_mmap ? mmapped_size_p : ctx_size_p) += lt.size + 16;
         }
@@ -824,7 +832,7 @@ struct llama_model_loader {
         if (it == tensors_map.name_to_idx.end()) {
             throw std::runtime_error(std::runtime_error(format("llama.cpp: tensor '%s' is missing from model", name.c_str())));
         }
-        llama_load_tensor & lt = tensors_map.tensors.at(it->second);
+        gguf_load_tensor & lt = tensors_map.tensors.at(it->second);
         if (lt.ne != ne) {
             throw std::runtime_error(format("llama.cpp: tensor '%s' has wrong shape; expected %s, got %s",
                          name.c_str(), llama_format_tensor_shape(ne).c_str(), llama_format_tensor_shape(lt.ne).c_str()));
@@ -833,7 +841,7 @@ struct llama_model_loader {
         return get_tensor_for(lt, backend);
     }
 
-    struct ggml_tensor * get_tensor_for(llama_load_tensor & lt, ggml_backend backend) {
+    struct ggml_tensor * get_tensor_for(gguf_load_tensor & lt, ggml_backend backend) {
         struct ggml_tensor * tensor;
         if (backend != GGML_BACKEND_CPU) {
             ggml_set_no_alloc(ggml_ctx, true);
@@ -866,7 +874,7 @@ struct llama_model_loader {
         size_t data_size = 0;
         size_t prefetch_size = 0;
         size_t lock_size = 0;
-        for (const llama_load_tensor & lt : tensors_map.tensors) {
+        for (const gguf_load_tensor & lt : tensors_map.tensors) {
             data_size += lt.size;
             if (lt.ggml_tensor->backend == GGML_BACKEND_CPU) {
                 prefetch_size += lt.size;
@@ -881,7 +889,7 @@ struct llama_model_loader {
         }
 
         size_t done_size = 0;
-        for (llama_load_tensor & lt : tensors_map.tensors) {
+        for (gguf_load_tensor & lt : tensors_map.tensors) {
             if (progress_callback) {
                 progress_callback((float) done_size / data_size, progress_callback_user_data);
             }
@@ -928,7 +936,7 @@ struct llama_model_loader {
         }
     }
 
-    void load_data_for(llama_load_tensor & lt) {
+    void load_data_for(gguf_load_tensor & lt) {
         if (use_mmap) {
             lt.data = (uint8_t *) mapping->addr + lt.file_off;
         } else {
@@ -942,7 +950,7 @@ struct llama_model_loader {
         }
     }
 
-    static void print_checksum(llama_load_tensor & lt) {
+    static void print_checksum(gguf_load_tensor & lt) {
         uint32_t sum = 0;
         for (size_t i = 0; i < lt.size; i++) {
             uint8_t byte = lt.data[i];
@@ -1421,7 +1429,7 @@ static void llama_model_load_internal(
     }
 
     // populate `tensors_by_name`
-    for (llama_load_tensor & lt : ml->tensors_map.tensors) {
+    for (gguf_load_tensor & lt : ml->tensors_map.tensors) {
         model.tensors_by_name.emplace_back(lt.name, lt.ggml_tensor);
     }
 
@@ -2896,7 +2904,7 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
 // quantization
 //
 
-static void llama_convert_tensor_internal(const llama_load_tensor & tensor, gguf_buffer & output, const int nelements, const int nthread) {
+static void llama_convert_tensor_internal(const gguf_load_tensor & tensor, gguf_buffer & output, const int nelements, const int nthread) {
     if (output.size < nelements * sizeof(float)) {
         output.resize(nelements * sizeof(float));
     }
@@ -3018,7 +3026,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     };
 
     size_t idx = 0;
-    for (llama_load_tensor & tensor : model_loader->tensors_map.tensors) {
+    for (gguf_load_tensor & tensor : model_loader->tensors_map.tensors) {
         gguf_buffer read_data;
         read_data.resize(tensor.size);
         tensor.data = read_data.addr;
@@ -3570,7 +3578,7 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
                     return 1;
                 }
                 size_t idx = model_loader->tensors_map.name_to_idx[base_name];
-                llama_load_tensor & lt = model_loader->tensors_map.tensors[idx];
+                gguf_load_tensor & lt = model_loader->tensors_map.tensors[idx];
                 base_t = model_loader->get_tensor(base_name, { (uint32_t)dest_t->ne[0], (uint32_t)dest_t->ne[1] }, GGML_BACKEND_CPU);
                 lt.data = (uint8_t *) lt.ggml_tensor->data;
                 model_loader->load_data_for(lt);
