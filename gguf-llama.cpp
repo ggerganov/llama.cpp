@@ -47,7 +47,6 @@
 #include <algorithm>
 #include <initializer_list>
 #include <thread>
-#include <atomic>
 #include <mutex>
 #include <sstream>
 #include <numeric>
@@ -91,6 +90,53 @@ static const size_t MB = 1024*1024;
 //       needs modifications in ggml
 
 typedef void (*offload_func_t)(struct ggml_tensor * tensor);
+
+#ifdef GGML_USE_CUBLAS
+#define llama_host_malloc(n)  ggml_cuda_host_malloc(n)
+#define llama_host_free(data) ggml_cuda_host_free(data)
+#elif GGML_USE_METAL
+#define llama_host_malloc(n)  ggml_metal_host_malloc(n)
+#define llama_host_free(data) ggml_metal_host_free(data)
+#else
+#define llama_host_malloc(n)  malloc(n)
+#define llama_host_free(data) free(data)
+#endif
+
+struct llama_buffer {
+    void * data = NULL;
+    size_t size = 0;
+
+    // fallback to malloc / free
+    // useful in cases where CUDA can try to allocate PINNED memory
+    bool fallback = false;
+
+    void resize(size_t n) {
+        llama_host_free(data);
+
+        data = llama_host_malloc(n);
+        if (!data) {
+            fallback = true;
+            data = malloc(n);
+        } else {
+            fallback = false;
+        }
+
+        GGML_ASSERT(data);
+        size = n;
+    }
+
+    ~llama_buffer() {
+        if (data) {
+            if (fallback) { // NOLINT
+                free(data);
+            } else {
+                llama_host_free(data);
+            }
+        }
+
+        data = NULL;
+    }
+};
 
 void llama_nop(struct ggml_tensor * tensor) { // don't offload by default
     (void) tensor;
@@ -254,7 +300,7 @@ struct llama_kv_cache {
 
     struct ggml_context * ctx = NULL;
 
-    gguf_ctx_buffer buf;
+    llama_buffer buf;
 
     int n; // number of tokens currently in the cache
 
@@ -305,7 +351,7 @@ struct llama_model {
     struct ggml_context * ctx = NULL;
 
     // the model memory buffer
-    gguf_ctx_buffer buf;
+    llama_buffer buf;
 
     // model memory mapped file
     std::unique_ptr<gguf_mmap> mapping;
@@ -394,15 +440,15 @@ struct llama_context {
 
     // memory buffers used to evaluate the model
     // TODO: move in llama_state
-    gguf_ctx_buffer buf_compute;
+    llama_buffer buf_compute;
 
 #ifdef LLAMA_USE_ALLOCATOR
-    gguf_ctx_buffer buf_alloc;
+    llama_buffer buf_alloc;
     ggml_allocr * alloc = NULL;
 #endif
 
 #ifdef LLAMA_USE_SCRATCH
-    gguf_ctx_buffer buf_scratch[LLAMA_MAX_SCRATCH_BUFFERS];
+    llama_buffer buf_scratch[LLAMA_MAX_SCRATCH_BUFFERS];
 
     int    buf_last = 0;
     size_t buf_max_size[LLAMA_MAX_SCRATCH_BUFFERS] = { 0 };
@@ -416,7 +462,7 @@ struct llama_context {
     ggml_mpi_context * ctx_mpi = NULL;
 #endif
 
-    void use_buf(struct ggml_context * ctx, int i) {
+    static void use_buf(struct ggml_context * ctx, int i) {
 #if defined(LLAMA_USE_SCRATCH)
         size_t last_size = 0;
 
@@ -424,7 +470,7 @@ struct llama_context {
             last_size = ggml_set_scratch(ctx, { 0, 0, nullptr, });
         } else {
             auto & buf = buf_scratch[i];
-            last_size = ggml_set_scratch(ctx, { 0, buf.size, buf.addr, });
+            last_size = ggml_set_scratch(ctx, { 0, buf.size, buf.data, });
         }
 
         if (buf_last >= 0) {
@@ -438,7 +484,7 @@ struct llama_context {
 #endif
     }
 
-    size_t get_buf_max_mem(int i) const {
+    static size_t get_buf_max_mem(int i) {
 #if defined(LLAMA_USE_SCRATCH)
         return buf_max_size[i];
 #else
@@ -1024,7 +1070,7 @@ static bool kv_cache_init(
 
     struct ggml_init_params params;
     params.mem_size   = cache.buf.size;
-    params.mem_buffer = cache.buf.addr;
+    params.mem_buffer = cache.buf.data;
     params.no_alloc   = false;
 
     cache.ctx = ggml_init(params);
@@ -1275,13 +1321,13 @@ static void llama_model_load_internal(
     {
         model.buf.resize(ctx_size);
         if (use_mlock) {
-            model.mlock_buf.init   (model.buf.addr);
+            model.mlock_buf.init   (model.buf.data);
             model.mlock_buf.grow_to(model.buf.size);
         }
 
         struct ggml_init_params params = {
             /*.mem_size   =*/ model.buf.size,
-            /*.mem_buffer =*/ model.buf.addr,
+            /*.mem_buffer =*/ model.buf.data,
             /*.no_alloc   =*/ ml->use_mmap,
         };
 
@@ -1565,7 +1611,7 @@ static struct ggml_cgraph * llama_build_graph(
 
     struct ggml_init_params params = {
         /*.mem_size   =*/ buf_compute.size,
-        /*.mem_buffer =*/ buf_compute.addr,
+        /*.mem_buffer =*/ buf_compute.data,
         /*.no_alloc   =*/ false,
     };
 
@@ -3012,11 +3058,11 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
 // quantization
 //
 
-static void llama_convert_tensor_internal(const gguf_load_tensor & tensor, gguf_buffer & output, const int nelements, const int nthread) {
-    if (output.size < nelements * sizeof(float)) {
-        output.resize(nelements * sizeof(float));
+static void llama_convert_tensor_internal(const gguf_load_tensor & tensor, std::vector<float> & output, const size_t nelements, const int nthread) {
+    if (output.size() < nelements) {
+        output.resize(nelements);
     }
-    float * f32_output = (float *) output.addr;
+    float * f32_output = (float *) output.data();
 
     ggml_type_traits_t qtype;
     if (ggml_is_quantized(tensor.type)) {
@@ -3134,10 +3180,13 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     };
 
     size_t idx = 0;
+
+    std::vector<uint8_t> read_data;
+    std::vector<uint8_t> work;
+
     for (gguf_load_tensor & tensor : model_loader->tensors_map.tensors) {
-        gguf_buffer read_data;
         read_data.resize(tensor.size);
-        tensor.data = read_data.addr;
+        tensor.data = read_data.data();
         model_loader->load_data_for(tensor);
 
         LLAMA_LOG_INFO("[%4zu/%4zu] %36s - %16s, type = %6s, ",
@@ -3156,7 +3205,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         enum ggml_type new_type;
         void * new_data;
         size_t new_size;
-        gguf_buffer work;
 
         if (!quantize) {
             new_type = tensor.type;
@@ -3214,9 +3262,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             }
 #endif
 
+            const size_t nelements = tensor.ne.at(0) * tensor.ne.at(1);
+
             float * f32_data;
-            size_t nelements = tensor.ne.at(0) * tensor.ne.at(1);
-            gguf_buffer f32_conv_buf;
+            std::vector<float> f32_conv_buf;
 
             if (tensor.type == GGML_TYPE_F32) {
                 f32_data = (float *) tensor.data;
@@ -3224,17 +3273,17 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 throw std::runtime_error(format("requantizing from type %s is disabled", ggml_type_name(tensor.type)));
             } else {
                 llama_convert_tensor_internal(tensor, f32_conv_buf, nelements, nthread);
-                f32_data = (float *) f32_conv_buf.addr;
+                f32_data = (float *) f32_conv_buf.data();
             }
 
             LLAMA_LOG_INFO("quantizing to %s .. ", ggml_type_name(new_type));
             fflush(stdout);
 
             work.resize(nelements * 4); // upper bound on size
-            new_data = work.addr;
+            new_data = work.data();
             std::vector<int64_t> hist_cur(1 << 4, 0);
 
-            int chunk_size = 32 * 512;
+            const int chunk_size = 32 * 512;
             const int nchunk = (nelements + chunk_size - 1)/chunk_size;
             const int nthread_use = nthread > 1 ? std::max(1, std::min(nthread, nchunk)) : 1;
             if (nthread_use < 2) {
@@ -3242,7 +3291,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             } else {
                 size_t counter = 0;
                 new_size = 0;
-                auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, nelements, chunk_size] () {
+                auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, nelements] () {
                     std::vector<int64_t> local_hist;
                     size_t local_size = 0;
                     while (true) {
@@ -3314,8 +3363,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         }
     }
 }
-
-
 
 //
 // interface implementation
@@ -3438,7 +3485,7 @@ struct llama_context * llama_new_context_with_model(
             ggml_allocr_free(ctx->alloc);
 
             ctx->buf_alloc.resize(alloc_size);
-            ctx->alloc = ggml_allocr_new(ctx->buf_alloc.addr, ctx->buf_alloc.size, tensor_alignment);
+            ctx->alloc = ggml_allocr_new(ctx->buf_alloc.data, ctx->buf_alloc.size, tensor_alignment);
         }
 #else
         ctx->buf_compute.resize(MEM_REQ_EVAL().at(ctx->model.type) + ggml_graph_overhead());
@@ -3479,11 +3526,11 @@ struct llama_context * llama_new_context_with_model(
 
         LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "data", data_ptr, data_size, max_size));
 
-        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "eval", ctx->buf_compute.addr, ctx->buf_compute.size, 0));
-        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "kv",   ctx->kv_self.buf.addr, ctx->kv_self.buf.size, 0));
+        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "eval", ctx->buf_compute.data, ctx->buf_compute.size, 0));
+        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "kv",   ctx->kv_self.buf.data, ctx->kv_self.buf.size, 0));
 
-        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "scr0", ctx->buf_scratch[0].addr, ctx->buf_scratch[0].size, 0));
-        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "scr1", ctx->buf_scratch[1].addr, ctx->buf_scratch[1].size, 0));
+        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "scr0", ctx->buf_scratch[0].data, ctx->buf_scratch[0].size, 0));
+        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "scr1", ctx->buf_scratch[1].data, ctx->buf_scratch[1].size, 0));
 #undef LLAMA_METAL_CHECK_BUF
     }
 #endif
@@ -3565,7 +3612,6 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
 
     LLAMA_LOG_INFO("%s: r = %d, alpha = %d, scaling = %.2f\n", __func__, lora_r, lora_alpha, scaling);
 
-
     // create a temporary ggml context to store the lora tensors
     // todo: calculate size from biggest possible tensor
     std::vector<uint8_t> lora_buf(1024ull * 1024ull * 1024ull);
@@ -3583,11 +3629,10 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
         model_tensors.insert(kv);
     }
 
-
     // load base model
     std::unique_ptr<llama_model_loader> model_loader;
     ggml_context * base_ctx = NULL;
-    gguf_buffer base_buf;
+    std::vector<uint8_t> base_buf;
     if (path_base_model) {
         LLAMA_LOG_INFO("%s: loading base model from '%s'\n", __func__, path_base_model);
         model_loader.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true));
@@ -3598,8 +3643,8 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
         base_buf.resize(ctx_size);
 
         ggml_init_params base_params;
-        base_params.mem_size   = base_buf.size;
-        base_params.mem_buffer = base_buf.addr;
+        base_params.mem_size   = base_buf.size();
+        base_params.mem_buffer = base_buf.data();
         base_params.no_alloc   = model_loader->use_mmap;
 
         base_ctx = ggml_init(base_params);
