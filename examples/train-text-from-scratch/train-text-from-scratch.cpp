@@ -986,11 +986,15 @@ struct ggml_tensor * llama_build_train_graphs(
         // gradient tensors (will be set to zero by ggml_graph_reset)
         for (int i = 0; i < gf->n_nodes; ++i) {
             if (!gf->grads[i]) continue;
-            ggml_allocr_alloc(alloc, gf->grads[i]);
+            if (gf->grads[i]->data == NULL && !ggml_is_view(gf->grads[i])) {
+                ggml_allocr_alloc(alloc, gf->grads[i]);
+            }
             ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, gf->grads[i], one));
         }
         for (int i = 0; i < checkpoints.size(); ++i) {
-            ggml_allocr_alloc(alloc, checkpoints[i]);
+            if (checkpoints[i]->data == NULL && !ggml_is_view(checkpoints[i])) {
+                ggml_allocr_alloc(alloc, checkpoints[i]);
+            }
         }
 
         int n_leafs_after = gb->n_leafs;
