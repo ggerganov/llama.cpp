@@ -122,9 +122,10 @@ struct gguf_file {
 
     template<typename T>
     void write_val(const std::string & key, enum gguf_type type, const T & val) {
+        static_assert(std::is_fundamental<T>::value, "T must be a primitive type");
         write_str(key);
         fwrite((const char *) &type, sizeof(type), 1, fp);
-        fwrite((const char *) &val, sizeof(val), 1, fp);
+        fwrite((const char *) &val,  sizeof(val), 1, fp);
     }
 
     template<typename T>
@@ -137,7 +138,7 @@ struct gguf_file {
 
         const int32_t n = val.size();
         fwrite((const char *) &type, sizeof(type), 1, fp);
-        fwrite((const char *) &n, sizeof(n), 1, fp);
+        fwrite((const char *) &n,    sizeof(n), 1, fp);
         fwrite(val.data(), sizeof(T), n, fp);
     }
 
@@ -159,7 +160,7 @@ struct gguf_file {
 
         const int32_t n = val.size();
         fwrite((const char *) &type, sizeof(type), 1, fp);
-        fwrite((const char *) &n, sizeof(n), 1, fp);
+        fwrite((const char *) &n,    sizeof(n), 1, fp);
         for (int i = 0; i < n; ++i) {
             const int32_t nstr = val[i].size();
             fwrite((const char *) &nstr, sizeof(nstr), 1, fp);
@@ -265,7 +266,7 @@ struct gguf_mmap {
 #elif defined(_WIN32)
     static constexpr bool SUPPORTED = true;
 
-    gguf_mmap(struct llama_file * file, bool prefetch = true, bool numa = false) {
+    gguf_mmap(struct gguf_file * file, bool prefetch = true, bool numa = false) {
         (void) numa;
 
         size = file->size;
@@ -312,7 +313,8 @@ struct gguf_mmap {
 #else
     static constexpr bool SUPPORTED = false;
 
-    gguf_mmap(struct llama_file *, bool prefetch = true, bool numa = false) {
+    gguf_mmap(struct gguf_file * file, bool prefetch = true, bool numa = false) {
+        (void) file;
         (void) prefetch;
         (void) numa;
 
