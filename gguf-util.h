@@ -130,6 +130,7 @@ struct gguf_file {
 
     template<typename T>
     void write_arr(const std::string & key, enum gguf_type type, const std::vector<T> & val) {
+        static_assert(std::is_fundamental<T>::value, "T must be a primitive type");
         write_str(key);
         {
             const enum gguf_type tarr = GGUF_TYPE_ARRAY;
@@ -151,7 +152,7 @@ struct gguf_file {
         fwrite(val.c_str(), n, 1, fp);
     }
 
-    void write_str(const std::string & key, enum gguf_type type, const std::vector<std::string> & val) {
+    void write_arr(const std::string & key, enum gguf_type type, const std::vector<std::string> & val) {
         write_str(key);
         {
             const enum gguf_type tarr = GGUF_TYPE_ARRAY;

@@ -730,7 +730,7 @@ struct gguf_file_saver {
             data[j] = val;
         }
 
-        file.write_arr<std::string>(key, type, data);
+        file.write_arr(key, type, data);
     }
 
     void write_hparam_arr_f32(const std::string & key, enum gguf_type type, int i, int n_arr) {
