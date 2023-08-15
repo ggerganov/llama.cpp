@@ -19303,7 +19303,10 @@ void gguf_write_to_file(struct gguf_context * ctx, const char * fname) {
     }
 
     // write header
-    fwrite(&ctx->header, sizeof(struct gguf_header), 1, file);
+    gguf_fwrite_el(file, &ctx->header.magic,     sizeof(ctx->header.magic));
+    gguf_fwrite_el(file, &ctx->header.version,   sizeof(ctx->header.version));
+    gguf_fwrite_el(file, &ctx->header.n_kv,      sizeof(ctx->header.n_kv));
+    gguf_fwrite_el(file, &ctx->header.n_tensors, sizeof(ctx->header.n_tensors));
 
     // write key-value pairs
     for (uint32_t i = 0; i < ctx->header.n_kv; ++i) {
