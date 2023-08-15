@@ -19065,14 +19065,6 @@ enum gguf_type gguf_get_arr_type(struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.arr.type;
 }
 
-int32_t gguf_get_arr_i32(struct gguf_context * ctx, int key_id, int i) {
-    return ((int32_t *) ctx->kv[key_id].value.arr.data)[i];
-}
-
-float gguf_get_arr_f32(struct gguf_context * ctx, int key_id, int i) {
-    return ((float *) ctx->kv[key_id].value.arr.data)[i];
-}
-
 const void * gguf_get_arr_data(struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.arr.data;
 }
