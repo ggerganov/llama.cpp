@@ -1735,6 +1735,7 @@ extern "C" {
         struct ggml_context ** ctx;
     };
 
+    GGML_API struct gguf_context * gguf_init_empty(void);
     GGML_API struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_params params);
     //GGML_API struct gguf_context * gguf_init_from_buffer(..);
     GGML_API void                  gguf_free(struct gguf_context * ctx);
@@ -1751,9 +1752,8 @@ extern "C" {
     GGML_API enum gguf_type gguf_get_kv_type (struct gguf_context * ctx, int i);
     GGML_API enum gguf_type gguf_get_arr_type(struct gguf_context * ctx, int i);
 
-    GGML_API float        gguf_get_arr_f32(struct gguf_context * ctx, int key_id, int i);
-    GGML_API int32_t      gguf_get_arr_i32(struct gguf_context * ctx, int key_id, int i);
-    GGML_API const char * gguf_get_arr_str(struct gguf_context * ctx, int key_id, int i);
+    GGML_API int32_t      gguf_get_arr_i32(struct gguf_context * ctx, int key_id, int i); // TODO: remove
+    GGML_API float        gguf_get_arr_f32(struct gguf_context * ctx, int key_id, int i); // TODO: remove
 
     GGML_API uint8_t      gguf_get_val_u8  (struct gguf_context * ctx, int i);
     GGML_API int8_t       gguf_get_val_i8  (struct gguf_context * ctx, int i);
@@ -1766,10 +1766,29 @@ extern "C" {
     GGML_API const char * gguf_get_val_str (struct gguf_context * ctx, int i);
     GGML_API int          gguf_get_arr_n   (struct gguf_context * ctx, int i);
     GGML_API void         gguf_get_arr_data(struct gguf_context * ctx, int i, void * data);
+    GGML_API const char * gguf_get_arr_str (struct gguf_context * ctx, int key_id, int i);
 
     GGML_API int    gguf_get_n_tensors    (struct gguf_context * ctx);
     GGML_API size_t gguf_get_tensor_offset(struct gguf_context * ctx, int i);
     GGML_API char * gguf_get_tensor_name  (struct gguf_context * ctx, int i);
+
+    // overrides existing values or adds a new one
+    GGML_API void gguf_set_val_u8  (struct gguf_context * ctx, const char * key, uint8_t  val);
+    GGML_API void gguf_set_val_i8  (struct gguf_context * ctx, const char * key, int8_t   val);
+    GGML_API void gguf_set_val_u16 (struct gguf_context * ctx, const char * key, uint16_t val);
+    GGML_API void gguf_set_val_i16 (struct gguf_context * ctx, const char * key, int16_t  val);
+    GGML_API void gguf_set_val_u32 (struct gguf_context * ctx, const char * key, uint32_t val);
+    GGML_API void gguf_set_val_i32 (struct gguf_context * ctx, const char * key, int32_t  val);
+    GGML_API void gguf_set_val_f32 (struct gguf_context * ctx, const char * key, float    val);
+    GGML_API void gguf_set_val_bool(struct gguf_context * ctx, const char * key, bool     val);
+    GGML_API void gguf_set_val_str (struct gguf_context * ctx, const char * key, const char * val);
+    GGML_API void gguf_set_arr_data(struct gguf_context * ctx, const char * key, enum gguf_type type, const void * data, int n);
+    GGML_API void gguf_set_arr_str (struct gguf_context * ctx, const char * key, const char ** data, int n);
+
+    // set or add KV pairs from another context
+    GGML_API void gguf_set_kv(struct gguf_context * ctx, struct gguf_context * src);
+
+    GGML_API void gguf_add_tensor(struct gguf_context * ctx, const struct ggml_tensor * tensor);
 
     //
     // system info

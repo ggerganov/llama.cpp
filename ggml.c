@@ -18613,8 +18613,6 @@ struct gguf_header {
     uint32_t version;
     uint32_t n_tensors;
     uint32_t n_kv;
-
-    struct gguf_kv * kv;
 };
 
 struct gguf_tensor_info {
@@ -18630,7 +18628,9 @@ struct gguf_tensor_info {
 };
 
 struct gguf_context {
-    struct gguf_header        header;
+    struct gguf_header header;
+
+    struct gguf_kv          * kv;
     struct gguf_tensor_info * infos;
 
     size_t alignment;
@@ -18658,6 +18658,26 @@ static bool gguf_fread_str(struct gguf_str * p, FILE * file, size_t * offset) {
     ok = ok && gguf_fread_el( p->data, p->n,         file, offset);
 
     return ok;
+}
+
+struct gguf_context * gguf_init_empty(void) {
+    struct gguf_context * ctx = GGML_ALIGNED_MALLOC(sizeof(struct gguf_context));
+
+    ctx->header.magic     = GGUF_MAGIC;
+    ctx->header.version   = GGUF_VERSION;
+    ctx->header.n_tensors = 0;
+    ctx->header.n_kv      = 0;
+
+    ctx->kv    = NULL;
+    ctx->infos = NULL;
+
+    ctx->alignment = GGUF_DEFAULT_ALIGNMENT;
+    ctx->offset    = 0;
+    ctx->size_data = 0;
+
+    ctx->data = NULL;
+
+    return ctx;
 }
 
 struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_params params) {
@@ -18689,8 +18709,8 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
     // read the header
     {
         ctx->header.magic = magic;
-        ctx->header.kv    = NULL;
 
+        ctx->kv    = NULL;
         ctx->infos = NULL;
         ctx->data  = NULL;
 
@@ -18708,10 +18728,10 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
     // read the kv pairs
     {
-        ctx->header.kv = GGML_ALIGNED_MALLOC(ctx->header.n_kv * sizeof(struct gguf_kv));
+        ctx->kv = GGML_ALIGNED_MALLOC(ctx->header.n_kv * sizeof(struct gguf_kv));
 
         for (uint32_t i = 0; i < ctx->header.n_kv; ++i) {
-            struct gguf_kv * kv = &ctx->header.kv[i];
+            struct gguf_kv * kv = &ctx->kv[i];
 
             //fprintf(stderr, "%s: reading kv %d\n", __func__, i);
 
@@ -18757,7 +18777,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                                     }
                                 } break;
                             case GGUF_TYPE_ARRAY:
-                            case GGUF_TYPE_COUNT: GGML_ASSERT(false && "invalid type");
+                            case GGUF_TYPE_COUNT: GGML_ASSERT(false && "invalid type"); break;
                         };
                     } break;
                 case GGUF_TYPE_COUNT: GGML_ASSERT(false && "invalid type");
@@ -18827,7 +18847,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
     // compute the total size of the data section, taking into account the alignment
     {
-
         ctx->size_data = 0;
         for (uint32_t i = 0; i < ctx->header.n_tensors; ++i) {
             struct gguf_tensor_info * info = &ctx->infos[i];
@@ -18944,10 +18963,10 @@ void gguf_free(struct gguf_context * ctx) {
         return;
     }
 
-    if (ctx->header.kv) {
+    if (ctx->kv) {
         // free string memory - not great..
         for (uint32_t i = 0; i < ctx->header.n_kv; ++i) {
-            struct gguf_kv * kv = &ctx->header.kv[i];
+            struct gguf_kv * kv = &ctx->kv[i];
 
             if (kv->key.data) {
                 free(kv->key.data);
@@ -18974,7 +18993,7 @@ void gguf_free(struct gguf_context * ctx) {
             }
         }
 
-        GGML_ALIGNED_FREE(ctx->header.kv);
+        GGML_ALIGNED_FREE(ctx->kv);
     }
 
     if (ctx->infos) {
@@ -19014,8 +19033,9 @@ int gguf_get_n_kv(struct gguf_context * ctx) {
 
 int gguf_find_key(struct gguf_context * ctx, const char * key) {
     // return -1 if key not found
+    int keyfound = -1;
+
     const int n_kv = gguf_get_n_kv(ctx);
-    int keyfound   = -1;
 
     for (int i = 0; i < n_kv; ++i) {
         if (strcmp(key, gguf_get_key(ctx, i)) == 0) {
@@ -19028,69 +19048,69 @@ int gguf_find_key(struct gguf_context * ctx, const char * key) {
 }
 
 const char * gguf_get_key(struct gguf_context * ctx, int i) {
-    return ctx->header.kv[i].key.data;
+    return ctx->kv[i].key.data;
 }
 
 enum gguf_type gguf_get_kv_type(struct gguf_context * ctx, int i) {
-    return ctx->header.kv[i].type;
+    return ctx->kv[i].type;
 }
 
 enum gguf_type gguf_get_arr_type(struct gguf_context * ctx, int i) {
-    return ctx->header.kv[i].value.arr.type;
+    return ctx->kv[i].value.arr.type;
 }
 
 int32_t gguf_get_arr_i32(struct gguf_context * ctx, int key_id, int i) {
-    return ((int32_t *) ctx->header.kv[key_id].value.arr.data)[i];
+    return ((int32_t *) ctx->kv[key_id].value.arr.data)[i];
 }
 
 float gguf_get_arr_f32(struct gguf_context * ctx, int key_id, int i) {
-    return ((float *) ctx->header.kv[key_id].value.arr.data)[i];
+    return ((float *) ctx->kv[key_id].value.arr.data)[i];
 }
 
 const char * gguf_get_arr_str(struct gguf_context * ctx, int key_id, int i) {
-    struct gguf_kv * kv = &ctx->header.kv[key_id];
+    struct gguf_kv * kv = &ctx->kv[key_id];
     struct gguf_str * str = &((struct gguf_str *) kv->value.arr.data)[i];
     return str->data;
 }
 
 int gguf_get_arr_n(struct gguf_context * ctx, int i) {
-    return ctx->header.kv[i].value.arr.n;
+    return ctx->kv[i].value.arr.n;
 }
 
 uint8_t gguf_get_val_u8(struct gguf_context * ctx, int i) {
-    return ctx->header.kv[i].value.uint8;
+    return ctx->kv[i].value.uint8;
 }
 
 int8_t gguf_get_val_i8(struct gguf_context * ctx, int i) {
-    return ctx->header.kv[i].value.int8;
+    return ctx->kv[i].value.int8;
 }
 
 uint16_t gguf_get_val_u16(struct gguf_context * ctx, int i) {
-    return ctx->header.kv[i].value.uint16;
+    return ctx->kv[i].value.uint16;
 }
 
 int16_t gguf_get_val_i16(struct gguf_context * ctx, int i) {
-    return ctx->header.kv[i].value.int16;
+    return ctx->kv[i].value.int16;
 }
 
 uint32_t gguf_get_val_u32(struct gguf_context * ctx, int i) {
-    return ctx->header.kv[i].value.uint32;
+    return ctx->kv[i].value.uint32;
 }
 
 int32_t gguf_get_val_i32(struct gguf_context * ctx, int i) {
-    return ctx->header.kv[i].value.int32;
+    return ctx->kv[i].value.int32;
 }
 
 float gguf_get_val_f32(struct gguf_context * ctx, int i) {
-    return ctx->header.kv[i].value.float32;
+    return ctx->kv[i].value.float32;
 }
 
 bool gguf_get_val_bool(struct gguf_context * ctx, int i) {
-    return ctx->header.kv[i].value.bool_;
+    return ctx->kv[i].value.bool_;
 }
 
 const char * gguf_get_val_str (struct gguf_context * ctx, int i) {
-    return ctx->header.kv[i].value.str.data;
+    return ctx->kv[i].value.str.data;
 }
 
 int gguf_get_n_tensors(struct gguf_context * ctx) {
@@ -19103,6 +19123,164 @@ size_t gguf_get_tensor_offset(struct gguf_context * ctx, int i) {
 
 char * gguf_get_tensor_name(struct gguf_context * ctx, int i) {
     return ctx->infos[i].name.data;
+}
+
+// returns the index
+static int gguf_get_or_add_key(struct gguf_context * ctx, const char * key) {
+    const int idx = gguf_find_key(ctx, key);
+    if (idx >= 0) {
+        return idx;
+    }
+
+    const int n_kv = gguf_get_n_kv(ctx);
+
+    ctx->kv = realloc(ctx->kv, (n_kv + 1) * sizeof(struct gguf_kv));
+    ctx->kv[n_kv].key.n    = strlen(key) + 1;
+    ctx->kv[n_kv].key.data = strdup(key);
+    ctx->header.n_kv++;
+
+    return n_kv;
+}
+
+void gguf_set_val_u8(struct gguf_context * ctx, const char * key, uint8_t val) {
+    const int idx = gguf_get_or_add_key(ctx, key);
+
+    ctx->kv[idx].type        = GGUF_TYPE_UINT8;
+    ctx->kv[idx].value.uint8 = val;
+}
+
+void gguf_set_val_i8(struct gguf_context * ctx, const char * key, int8_t val) {
+    const int idx = gguf_get_or_add_key(ctx, key);
+
+    ctx->kv[idx].type       = GGUF_TYPE_INT8;
+    ctx->kv[idx].value.int8 = val;
+}
+
+void gguf_set_val_u16(struct gguf_context * ctx, const char * key, uint16_t val) {
+    const int idx = gguf_get_or_add_key(ctx, key);
+
+    ctx->kv[idx].type         = GGUF_TYPE_UINT16;
+    ctx->kv[idx].value.uint16 = val;
+}
+
+void gguf_set_val_i16(struct gguf_context * ctx, const char * key, int16_t val) {
+    const int idx = gguf_get_or_add_key(ctx, key);
+
+    ctx->kv[idx].type        = GGUF_TYPE_INT16;
+    ctx->kv[idx].value.int16 = val;
+}
+
+void gguf_set_val_u32(struct gguf_context * ctx, const char * key, uint32_t val) {
+    const int idx = gguf_get_or_add_key(ctx, key);
+
+    ctx->kv[idx].type         = GGUF_TYPE_UINT32;
+    ctx->kv[idx].value.uint32 = val;
+}
+
+void gguf_set_val_i32(struct gguf_context * ctx, const char * key, int32_t val) {
+    const int idx = gguf_get_or_add_key(ctx, key);
+
+    ctx->kv[idx].type        = GGUF_TYPE_INT32;
+    ctx->kv[idx].value.int32 = val;
+}
+
+void gguf_set_val_f32(struct gguf_context * ctx, const char * key, float val) {
+    const int idx = gguf_get_or_add_key(ctx, key);
+
+    ctx->kv[idx].type          = GGUF_TYPE_FLOAT32;
+    ctx->kv[idx].value.float32 = val;
+}
+
+void gguf_set_val_bool(struct gguf_context * ctx, const char * key, bool val) {
+    const int idx = gguf_get_or_add_key(ctx, key);
+
+    ctx->kv[idx].type        = GGUF_TYPE_BOOL;
+    ctx->kv[idx].value.bool_ = val;
+}
+
+void gguf_set_val_str(struct gguf_context * ctx, const char * key, const char * val) {
+    const int idx = gguf_get_or_add_key(ctx, key);
+
+    ctx->kv[idx].type           = GGUF_TYPE_STRING;
+    ctx->kv[idx].value.str.n    = strlen(val) + 1;
+    ctx->kv[idx].value.str.data = strdup(val);
+}
+
+void gguf_set_arr_data(struct gguf_context * ctx, const char * key, enum gguf_type type, const void * data, int n) {
+    const int idx = gguf_get_or_add_key(ctx, key);
+
+    ctx->kv[idx].type           = GGUF_TYPE_ARRAY;
+    ctx->kv[idx].value.arr.type = type;
+    ctx->kv[idx].value.arr.n    = n;
+    ctx->kv[idx].value.arr.data = malloc(n*GGUF_TYPE_SIZE[type]);
+    memcpy(ctx->kv[idx].value.arr.data, data, n*GGUF_TYPE_SIZE[type]);
+}
+
+void gguf_set_arr_str(struct gguf_context * ctx, const char * key, const char ** data, int n) {
+    const int idx = gguf_get_or_add_key(ctx, key);
+
+    ctx->kv[idx].type           = GGUF_TYPE_ARRAY;
+    ctx->kv[idx].value.arr.type = GGUF_TYPE_STRING;
+    ctx->kv[idx].value.arr.n    = n;
+    ctx->kv[idx].value.arr.data = malloc(n*sizeof(struct gguf_str));
+    for (int i = 0; i < n; i++) {
+        struct gguf_str * str = &((struct gguf_str *)ctx->kv[idx].value.arr.data)[i];
+        str->n    = strlen(data[i]) + 1;
+        str->data = strdup(data[i]);
+    }
+}
+
+// set or add KV pairs from another context
+void gguf_set_kv(struct gguf_context * ctx, struct gguf_context * src) {
+    for (uint32_t i = 0; i < src->header.n_kv; i++) {
+        switch (src->kv[i].type) {
+            case GGUF_TYPE_UINT8:   gguf_set_val_u8  (ctx, src->kv[i].key.data, src->kv[i].value.uint8);    break;
+            case GGUF_TYPE_INT8:    gguf_set_val_i8  (ctx, src->kv[i].key.data, src->kv[i].value.int8);     break;
+            case GGUF_TYPE_UINT16:  gguf_set_val_u16 (ctx, src->kv[i].key.data, src->kv[i].value.uint16);   break;
+            case GGUF_TYPE_INT16:   gguf_set_val_i16 (ctx, src->kv[i].key.data, src->kv[i].value.int16);    break;
+            case GGUF_TYPE_UINT32:  gguf_set_val_u32 (ctx, src->kv[i].key.data, src->kv[i].value.uint32);   break;
+            case GGUF_TYPE_INT32:   gguf_set_val_i32 (ctx, src->kv[i].key.data, src->kv[i].value.int32);    break;
+            case GGUF_TYPE_FLOAT32: gguf_set_val_f32 (ctx, src->kv[i].key.data, src->kv[i].value.float32);  break;
+            case GGUF_TYPE_BOOL:    gguf_set_val_bool(ctx, src->kv[i].key.data, src->kv[i].value.bool_);    break;
+            case GGUF_TYPE_STRING:  gguf_set_val_str (ctx, src->kv[i].key.data, src->kv[i].value.str.data); break;
+            case GGUF_TYPE_ARRAY:
+                {
+                    if (src->kv[i].value.arr.type == GGUF_TYPE_STRING) {
+                        const char ** data = malloc(src->kv[i].value.arr.n*sizeof(char *));
+                        for (uint32_t j = 0; j < src->kv[i].value.arr.n; j++) {
+                            data[j] = ((struct gguf_str *)src->kv[i].value.arr.data)[j].data;
+                        }
+                        gguf_set_arr_str(ctx, src->kv[i].key.data, data, src->kv[i].value.arr.n);
+                        free(data);
+                    } if (src->kv[i].value.arr.type == GGUF_TYPE_ARRAY) {
+                        GGML_ASSERT(false && "nested arrays not supported");
+                    } else {
+                        gguf_set_arr_data(ctx, src->kv[i].key.data, src->kv[i].value.arr.type, src->kv[i].value.arr.data, src->kv[i].value.arr.n);
+                    }
+                } break;
+            case GGUF_TYPE_COUNT:  GGML_ASSERT(false && "invalid type"); break;
+        }
+    }
+}
+
+void gguf_add_tensor(struct gguf_context * ctx, const struct ggml_tensor * tensor) {
+    const int idx = ctx->header.n_tensors;
+    ctx->infos = realloc(ctx->infos, (idx + 1)*sizeof(struct gguf_tensor_info));
+
+    ctx->infos[idx].name.n    = strlen(tensor->name) + 1;
+    ctx->infos[idx].name.data = strdup(tensor->name);
+
+    ctx->infos[idx].n_dims = tensor->n_dims;
+    for (int i = 0; i < tensor->n_dims; i++) {
+        ctx->infos[idx].ne[i] = tensor->ne[i];
+    }
+    //ctx->infos[idx].n_elms = tensor->n_elms;
+
+    ctx->infos[idx].type = tensor->type;
+
+    ctx->infos[idx].offset = -1; // set later;
+
+    ctx->header.n_tensors++;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

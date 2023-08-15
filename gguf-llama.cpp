@@ -710,17 +710,18 @@ struct gguf_file_saver {
     // but better to have it as uint32).
     // we need to calculate the delta in number of bytes written with a counter as a struct member.
 
-    gguf_file file;
     gguf_context * ctx; // loaded gguf context (used to re-write the KV section (good enough for now))
-    size_t info_offset;
-    size_t tensor_offset = 0;
 
-    gguf_file_saver(const char * fname, gguf_context * ctx)
-        : file(fname, "wb"), ctx(ctx) {
-            fprintf(stderr, "llama.cpp: saving model to %s\n", fname);
-            write_header();
-            write_kv();
-        }
+    gguf_file file;
+    size_t info_offset;
+    size_t tensor_offset;
+
+    gguf_file_saver(const char * fname, gguf_context * ctx) : ctx(ctx), file(fname, "wb") {
+        LLAMA_LOG_INFO("%s: saving model to %s\n", __func__, fname);
+
+        write_header();
+        write_kv();
+    }
 
     void write_header() {
         file.write_i32(GGUF_MAGIC);
@@ -729,15 +730,15 @@ struct gguf_file_saver {
         file.write_i32(gguf_get_n_kv     (ctx));
     }
 
-    void write_kv_arr_str(const std::string & key, enum gguf_type type, int i, int n_arr) {
-        std::vector<std::string> data(n_arr);
+    void write_kv_arr_i32(const std::string & key, enum gguf_type type, int i, int n_arr) {
+        std::vector<int32_t> data(n_arr);
 
         for (int j = 0; j < n_arr; ++j) {
-            std::string val = gguf_get_arr_str(ctx, i, j);
+            int32_t val = gguf_get_arr_i32(ctx, i, j);
             data[j] = val;
         }
 
-        file.write_arr(key, type, data);
+        file.write_arr<int32_t>(key, type, data);
     }
 
     void write_kv_arr_f32(const std::string & key, enum gguf_type type, int i, int n_arr) {
@@ -751,15 +752,15 @@ struct gguf_file_saver {
         file.write_arr<float>(key, type, data);
     }
 
-    void write_kv_arr_i32(const std::string & key, enum gguf_type type, int i, int n_arr) {
-        std::vector<int32_t> data(n_arr);
+    void write_kv_arr_str(const std::string & key, enum gguf_type type, int i, int n_arr) {
+        std::vector<std::string> data(n_arr);
 
         for (int j = 0; j < n_arr; ++j) {
-            int32_t val = gguf_get_arr_i32(ctx, i, j);
+            std::string val = gguf_get_arr_str(ctx, i, j);
             data[j] = val;
         }
 
-        file.write_arr<int32_t>(key, type, data);
+        file.write_arr(key, type, data);
     }
 
     // re-write the key-value section from the loaded file
@@ -807,16 +808,15 @@ struct gguf_file_saver {
 
         GGML_ASSERT(gguf_get_data_offset(ctx) >= info_offset);
 
-        size_t count = gguf_get_data_offset(ctx) - info_offset;
+        const size_t count = gguf_get_data_offset(ctx) - info_offset;
+
         file.write_zeros(count);
         file.seek(info_offset, SEEK_SET);
-        GGML_ASSERT(info_offset == file.tell());
     }
 
     size_t write_tensor_info(gguf_load_tensor & tensor, enum ggml_type type) {
         size_t total_written = 0;
         file.seek(info_offset, SEEK_SET);
-        GGML_ASSERT(info_offset == file.tell());
         total_written += file.write_str(tensor.name);
 
         int32_t n_dims = tensor.ne.size();
