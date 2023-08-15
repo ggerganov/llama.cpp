@@ -52,6 +52,8 @@
 
 #define VK_SUBMIT_BATCH 3
 
+#define VK_NUM_TYPES 16
+
 typedef void (*ggml_vk_func_t)(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst);
 
 struct vk_buffer {
@@ -157,12 +159,12 @@ vk_pipeline vk_pipeline_matmul_f16_aligned_l, vk_pipeline_matmul_f16_aligned_m, 
 vk_pipeline vk_pipeline_matmul_f16_f32_l, vk_pipeline_matmul_f16_f32_m, vk_pipeline_matmul_f16_f32_s;
 vk_pipeline vk_pipeline_matmul_f16_f32_aligned_l, vk_pipeline_matmul_f16_f32_aligned_m, vk_pipeline_matmul_f16_f32_aligned_s;
 vk_pipeline vk_pipeline_matmul_split_k_reduce;
-vk_pipeline vk_pipeline_dequant_mul_mat_vec_f16, vk_pipeline_dequant_mul_mat_vec_q4_0;
-vk_pipeline vk_pipeline_dequant_mul_mat_vec_f16_f32, vk_pipeline_dequant_mul_mat_vec_q4_0_f32;
+vk_pipeline vk_pipeline_dequant[VK_NUM_TYPES];
+vk_pipeline vk_pipeline_dequant_mul_mat_vec[VK_NUM_TYPES];
+vk_pipeline vk_pipeline_dequant_mul_mat_vec_f32[VK_NUM_TYPES];
 vk_pipeline vk_pipeline_mul_f32;
 vk_pipeline vk_pipeline_add_f32, vk_pipeline_add_f16_f32_f16;
 vk_pipeline vk_pipeline_scale_f32;
-vk_pipeline vk_pipeline_f32_to_f16, vk_pipeline_dequant_q4_0;
 
 static std::vector<std::tuple<void*, size_t, vk_buffer>> vk_pinned_memory;
 
@@ -651,6 +653,31 @@ static void ggml_vk_destroy_buffer(vk_buffer& buf) {
     }
 }
 
+static inline bool ggml_vk_build_shader_type_defines(std::stringstream& stream, ggml_type type, bool compat) {
+    switch(type) {
+    case GGML_TYPE_F16:
+        stream << shader_f16_defines << (compat ? shader_f16_dequant_func_compat : shader_f16_dequant_func);
+        return true;
+    case GGML_TYPE_Q4_0:
+        stream << shader_q4_0_defines << (compat ? shader_q4_0_dequant_func_compat : shader_q4_0_dequant_func);
+        return true;
+    case GGML_TYPE_Q4_1:
+        stream << shader_q4_1_defines << (compat ? shader_q4_1_dequant_func_compat : shader_q4_1_dequant_func);
+        return true;
+    case GGML_TYPE_Q5_0:
+        stream << shader_q5_0_defines << (compat ? shader_q5_0_dequant_func_compat : shader_q5_0_dequant_func);
+        return true;
+    case GGML_TYPE_Q5_1:
+        stream << shader_q5_1_defines << (compat ? shader_q5_1_dequant_func_compat : shader_q5_1_dequant_func);
+        return true;
+    case GGML_TYPE_Q8_0:
+        stream << shader_q8_0_defines << (compat ? shader_q8_0_dequant_func_compat : shader_q8_0_dequant_func);
+        return true;
+    default:
+        return false;
+    }
+}
+
 static void ggml_vk_generate_shaders() {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_generate_shaders()" << std::endl;
@@ -705,65 +732,46 @@ static void ggml_vk_generate_shaders() {
     vk_pipeline_matmul_f16_f32_aligned_m = ggml_vk_create_pipeline_from_string("matmul_f16_f32_aligned_m", stream.str(), { "LOAD_VEC", load_vec, "A_TYPE", vec_type_f16, "B_TYPE", vec_type, "D_TYPE", "float" }, "main", 3, 7 * sizeof(int), { 64,  64, 1}, warptile_m, 64);
     vk_pipeline_matmul_f16_f32_aligned_s = ggml_vk_create_pipeline_from_string("matmul_f16_f32_aligned_s", stream.str(), { "LOAD_VEC", load_vec, "A_TYPE", vec_type_f16, "B_TYPE", vec_type, "D_TYPE", "float" }, "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
 
-    // Build dequant q4_0
-    stream.str("");
-    stream.clear();
+    // Build dequant shaders
+    vk_pipeline_dequant[GGML_TYPE_F32] = ggml_vk_create_pipeline_from_string("f32_to_f16", f32_to_f16_src, {}, "main", 2, 4 * sizeof(int), {64, 1, 1}, {}, 1);
 
-    stream << dequant_head << shader_float_type << dequant_q4_0_defines << dequant_body;
+    for (int i = 0; i < VK_NUM_TYPES; i++) {
+        stream.str("");
+        stream.clear();
 
-    vk_pipeline_dequant_q4_0 = ggml_vk_create_pipeline_from_string("dequant_q4_0", stream.str(), { "D_TYPE", "float16_t" }, "main", 2, 4 * sizeof(int), {256*32, 1, 1}, {}, 1);
+        stream << dequant_head << shader_float_type;
+        if (vk_device.fp16) {
+            stream << shader_int8_ext;
+        }
+
+        if (!ggml_vk_build_shader_type_defines(stream, (ggml_type)i, !vk_device.fp16)) {
+            continue;
+        }
+
+        stream << dequant_body;
+
+        vk_pipeline_dequant[i] = ggml_vk_create_pipeline_from_string("dequant_" + std::string(ggml_type_name((ggml_type)i)), stream.str(), { "D_TYPE", "float16_t" }, "main", 2, 4 * sizeof(int), {256*32, 1, 1}, {}, 1);
+    }
 
     // mul mat vec
-    stream.str("");
-    stream.clear();
+    for (int i = 0; i < VK_NUM_TYPES; i++) {
+        stream.str("");
+        stream.clear();
 
-    stream << mul_mat_vec_head << shader_float_type;
-    if (vk_device.fp16) {
-        stream << shader_int8_ext << mul_mat_vec_q4_0_dequant_func;
-    } else {
-        stream << mul_mat_vec_q4_0_dequant_func_compat;
+        stream << mul_mat_vec_head << shader_float_type;
+        if (vk_device.fp16) {
+            stream << shader_int8_ext;
+        }
+
+        if (!ggml_vk_build_shader_type_defines(stream, (ggml_type)i, !vk_device.fp16)) {
+            continue;
+        }
+
+        stream << mul_mat_vec_body;
+
+        vk_pipeline_dequant_mul_mat_vec[i] = ggml_vk_create_pipeline_from_string("mul_mat_vec_" + std::string(ggml_type_name((ggml_type)i)), stream.str(), { "B_TYPE", "float", "D_TYPE", "float16_t" }, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[i] = ggml_vk_create_pipeline_from_string("mul_mat_vec_" + std::string(ggml_type_name((ggml_type)i)) + "_f32", stream.str(), { "B_TYPE", "float", "D_TYPE", "float" }, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
     }
-    stream << mul_mat_vec_q4_0_defines << mul_mat_vec_body;
-
-    vk_pipeline_dequant_mul_mat_vec_q4_0 = ggml_vk_create_pipeline_from_string("mul_mat_vec_q4_0", stream.str(), { "D_TYPE", "float", "B_TYPE", "float16_t" }, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
-
-    stream.str("");
-    stream.clear();
-
-    stream << mul_mat_vec_head << shader_float_type;
-    if (vk_device.fp16) {
-        stream << shader_int8_ext << mul_mat_vec_q4_0_dequant_func;
-    } else {
-        stream << mul_mat_vec_q4_0_dequant_func_compat;
-    }
-    stream << mul_mat_vec_q4_0_defines << mul_mat_vec_body;
-
-    vk_pipeline_dequant_mul_mat_vec_q4_0_f32 = ggml_vk_create_pipeline_from_string("mul_mat_vec_q4_0_f32", stream.str(), { "D_TYPE", "float", "B_TYPE", "float" }, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
-
-    stream.str("");
-    stream.clear();
-
-    stream << mul_mat_vec_head << shader_float_type;
-    if (vk_device.fp16) {
-        stream << shader_int8_ext << mul_mat_vec_f16_dequant_func;
-    } else {
-        stream << mul_mat_vec_f16_dequant_func_compat;
-    }
-    stream << mul_mat_vec_f16_defines << mul_mat_vec_body;
-
-    vk_pipeline_dequant_mul_mat_vec_f16 = ggml_vk_create_pipeline_from_string("mul_mat_vec_f16", stream.str(), { "D_TYPE", "float", "B_TYPE", "float16_t" }, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
-
-    stream.str("");
-    stream.clear();
-
-    stream << mul_mat_vec_head << shader_float_type;
-    if (vk_device.fp16) {
-        stream << shader_int8_ext << mul_mat_vec_f16_dequant_func;
-    } else {
-        stream << mul_mat_vec_f16_dequant_func_compat;
-    }
-    stream << mul_mat_vec_f16_defines << mul_mat_vec_body;
-    vk_pipeline_dequant_mul_mat_vec_f16_f32 = ggml_vk_create_pipeline_from_string("mul_mat_vec_f16_f32", stream.str(), { "D_TYPE", "float", "B_TYPE", "float" }, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
 
     // add
     stream.str("");
@@ -779,7 +787,6 @@ static void ggml_vk_generate_shaders() {
 
     // Static shaders
     vk_pipeline_matmul_split_k_reduce = ggml_vk_create_pipeline_from_string("split_k_reduce", mulmat_split_k_reduce_src, {}, "main", 1, 3 * sizeof(int), {32, 32, 1}, {}, 1);
-    vk_pipeline_f32_to_f16 = ggml_vk_create_pipeline_from_string("f32_to_f16", f32_to_f16_src, {}, "main", 2, 4 * sizeof(int), {64, 1, 1}, {}, 1);
     vk_pipeline_mul_f32 = ggml_vk_create_pipeline_from_string("mul_f32", mul_f32_src, { "X_TYPE", "float", "Y_TYPE", "float", "D_TYPE", "float" }, "main", 3, sizeof(vk_op_push_constants), {32, 32, 1}, {}, 1);
 
     vk_pipeline_scale_f32 = ggml_vk_create_pipeline_from_string("scale_f32", scale_src, { "X_TYPE", "float", "D_TYPE", "float" }, "main", 3, sizeof(vk_op_push_constants), {32, 32, 1}, {}, 1);
@@ -994,32 +1001,42 @@ void ggml_vk_init(void) {
 #endif
 }
 
-static vk_pipeline* ggml_vk_get_to_fp16(ggml_type type) {
+static inline vk_pipeline* ggml_vk_get_to_fp16(ggml_type type) {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_get_to_fp16()" << std::endl;
 #endif
     switch (type) {
-        case GGML_TYPE_Q4_0:
-            return &vk_pipeline_dequant_q4_0;
         case GGML_TYPE_F32:
-            return &vk_pipeline_f32_to_f16;
+        case GGML_TYPE_Q4_0:
+        case GGML_TYPE_Q4_1:
+        case GGML_TYPE_Q5_0:
+        case GGML_TYPE_Q5_1:
+        case GGML_TYPE_Q8_0:
+            break;
         default:
             return nullptr;
     }
+
+    return &vk_pipeline_dequant[type];
 }
 
-static vk_pipeline* ggml_vk_get_dequantize_mul_mat_vec(ggml_type type, bool f16_y) {
+static inline vk_pipeline* ggml_vk_get_dequantize_mul_mat_vec(ggml_type type, bool f16_y) {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_get_dequantize_mul_mat_vec()" << std::endl;
 #endif
     switch (type) {
-        case GGML_TYPE_Q4_0:
-            return f16_y ? &vk_pipeline_dequant_mul_mat_vec_q4_0 : &vk_pipeline_dequant_mul_mat_vec_q4_0_f32;
         case GGML_TYPE_F16:
-            return f16_y ? &vk_pipeline_dequant_mul_mat_vec_f16 : &vk_pipeline_dequant_mul_mat_vec_f16_f32;
+        case GGML_TYPE_Q4_0:
+        case GGML_TYPE_Q4_1:
+        case GGML_TYPE_Q5_0:
+        case GGML_TYPE_Q5_1:
+        case GGML_TYPE_Q8_0:
+            break;
         default:
             return nullptr;
     }
+
+    return f16_y ? &vk_pipeline_dequant_mul_mat_vec[type] : &vk_pipeline_dequant_mul_mat_vec_f32[type];
 }
 
 // buffer pool for vulkan

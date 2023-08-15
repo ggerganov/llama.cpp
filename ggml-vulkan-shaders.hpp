@@ -12,11 +12,166 @@ const std::string shader_int8_ext = R"(
 #extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 )";
 
+// Type-specific defines
+const std::string shader_f16_defines = R"(
+#define QUANT_K 32
+#define QUANT_R 2
+
+#define A_TYPE float16_t
+)";
+const std::string shader_q4_0_defines = R"(
+#define QUANT_K 32
+#define QUANT_R 2
+
+struct block_q4_0
+{
+    float16_t d;
+    uint8_t qs[16];
+};
+
+#define A_TYPE block_q4_0
+)";
+const std::string shader_q4_1_defines = R"(
+#define QUANT_K 32
+#define QUANT_R 2
+
+struct block_q4_1
+{
+    float16_t d;
+    float16_t m;
+    uint8_t qs[16];
+};
+
+#define A_TYPE block_q4_1
+)";
+const std::string shader_q5_0_defines = R"(
+#extension GL_EXT_shader_explicit_arithmetic_types_int16 : require
+#define QUANT_K 32
+#define QUANT_R 2
+
+struct block_q5_0
+{
+    float16_t d;
+    uint16_t qh[2];
+    uint8_t qs[16];
+};
+
+#define A_TYPE block_q5_0
+)";
+const std::string shader_q5_1_defines = R"(
+#define QUANT_K 32
+#define QUANT_R 2
+
+struct block_q5_1
+{
+    float16_t d;
+    float16_t m;
+    uint qh;
+    uint8_t qs[16];
+};
+
+#define A_TYPE block_q5_1
+)";
+const std::string shader_q8_0_defines = R"(
+#define QUANT_K 32
+#define QUANT_R 1
+
+struct block_q8_0
+{
+    float16_t d;
+    int8_t qs[32];
+};
+
+#define A_TYPE block_q8_0
+)";
+
+// Dequant functions
+const std::string shader_f16_dequant_func = R"(
+#define DEQUANT_FUNC f16vec2 v = f16vec2(x[ib + 0], x[ib + 1]);
+)";
+const std::string shader_f16_dequant_func_compat = R"(
+#define DEQUANT_FUNC vec2 v = vec2(x[ib + 0], x[ib + 1]);
+)";
+
+const std::string shader_q4_0_dequant_func = R"(
+#define DEQUANT_FUNC const float16_t d = x[ib].d; \
+const uint8_t vui = x[ib].qs[iqs]; \
+f16vec2 v = f16vec2(vui & 0xF, vui >> 4); \
+v = (v - 8.0hf)*d;
+)";
+const std::string shader_q4_0_dequant_func_compat = R"(
+#define DEQUANT_FUNC const float d = float(x[ib].d); \
+const uint vui = uint(x[ib].qs[iqs]); \
+vec2 v = vec2(vui & 0xF, vui >> 4); \
+v = (v - 8.0f)*d;
+)";
+
+const std::string shader_q4_1_dequant_func = R"(
+#define DEQUANT_FUNC const float16_t d = x[ib].d; \
+const float16_t m = x[ib].m; \
+const uint8_t vui = x[ib].qs[iqs]; \
+f16vec2 v = f16vec2(vui & 0xF, vui >> 4); \
+v = v*d + m;
+)";
+const std::string shader_q4_1_dequant_func_compat = R"(
+#define DEQUANT_FUNC const float d = float(x[ib].d); \
+const float m = float(x[ib].m); \
+const uint vui = uint(x[ib].qs[iqs]); \
+vec2 v = vec2(vui & 0xF, vui >> 4); \
+v = v*d + m;
+)";
+
+const std::string shader_q5_0_dequant_func = R"(
+#define DEQUANT_FUNC const float16_t d = x[ib].d; \
+const uint uint_qh = uint(x[ib].qh[1]) << 16 | x[ib].qh[0]; \
+const ivec2 qh = ivec2(((uint_qh >> iqs) << 4) & 0x10, (uint_qh >> (iqs + 12)) & 0x10); \
+const uint8_t vui = x[ib].qs[iqs]; \
+f16vec2 v = f16vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y); \
+v = (v - 16.0hf) * d;
+)";
+const std::string shader_q5_0_dequant_func_compat = R"(
+#define DEQUANT_FUNC const float d = float(x[ib].d); \
+const uint uint_qh = uint(x[ib].qh[1]) << 16 | x[ib].qh[0]; \
+const ivec2 qh = ivec2(((uint_qh >> iqs) << 4) & 0x10, (uint_qh >> (iqs + 12)) & 0x10); \
+const uint vui = uint(x[ib].qs[iqs]); \
+vec2 v = vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y); \
+v = (v - 16.0f) * d;
+)";
+
+const std::string shader_q5_1_dequant_func = R"(
+#define DEQUANT_FUNC const float16_t d = x[ib].d; \
+const float16_t m = x[ib].m; \
+const ivec2 qh = ivec2(((x[ib].qh >> iqs) << 4) & 0x10, (x[ib].qh >> (iqs + 12)) & 0x10); \
+const uint8_t vui = x[ib].qs[iqs]; \
+f16vec2 v = f16vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y); \
+v = v*d + m;
+)";
+const std::string shader_q5_1_dequant_func_compat = R"(
+#define DEQUANT_FUNC const float d = float(x[ib].d); \
+const float m = float(x[ib].m); \
+const ivec2 qh = ivec2(((x[ib].qh >> iqs) << 4) & 0x10, (x[ib].qh >> (iqs + 12)) & 0x10); \
+const uint vui = uint(x[ib].qs[iqs]); \
+vec2 v = vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y); \
+v = v*d + m;
+)";
+
+const std::string shader_q8_0_dequant_func = R"(
+#define DEQUANT_FUNC const float16_t d = x[ib].d; \
+f16vec2 v = f16vec2(x[ib].qs[iqs], x[ib].qs[iqs + 1]); \
+v = v * d;
+)";
+const std::string shader_q8_0_dequant_func_compat = R"(
+#define DEQUANT_FUNC const float d = float(x[ib].d); \
+vec2 v = vec2(int(x[ib].qs[iqs]), int(x[ib].qs[iqs + 1])); \
+v = v * d;
+)";
+
 // MULMAT
 
 const std::string mulmat_head = R"(
 #version 450
 
+#extension GL_EXT_scalar_block_layout : require
 #extension GL_EXT_control_flow_attributes : enable
 #extension GL_EXT_shader_16bit_storage : require
 
@@ -30,7 +185,7 @@ const std::string mulmat_head = R"(
 const std::string mulmat_body = R"(
 layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A { A_TYPE data_a[]; };
+layout (binding = 0, scalar) readonly buffer A { A_TYPE data_a[]; };
 layout (binding = 1) readonly buffer B { B_TYPE data_b[]; };
 layout (binding = 2) writeonly buffer D { D_TYPE data_d[]; };
 
@@ -238,28 +393,16 @@ void main() {
 const std::string dequant_head = R"(
 #version 450
 
+#extension GL_EXT_scalar_block_layout : require
 #extension GL_EXT_control_flow_attributes : require
 #extension GL_EXT_shader_16bit_storage : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 )";
 
-const std::string dequant_q4_0_defines = R"(
-#define QUANT_K 32
-#define QUANT_R 2
-
-struct block_q4_0
-{
-    float16_t d;
-    uint8_t qs[16];
-};
-
-#define A_TYPE block_q4_0
-)";
-
 const std::string dequant_body = R"(
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A { A_TYPE x[]; };
+layout (binding = 0, scalar) readonly buffer A { A_TYPE x[]; };
 layout (binding = 1) writeonly buffer D { D_TYPE y[]; };
 
 layout (push_constant) uniform parameter
@@ -283,15 +426,16 @@ void main() {
 
     const int stride_a = p.stride_a / QUANT_K;
 
-    const int idx = col * stride_a + row;
-    const FLOAT_TYPE d = FLOAT_TYPE(x[idx].d);
+    const int ib = col * stride_a + row;
 
-    [[unroll]] for (int j = 0; j < QUANT_K/2; ++j) {
-        const FLOAT_TYPE x0 = FLOAT_TYPE((x[idx].qs[j] & 0x0F) - 8);
-        const FLOAT_TYPE x1 = FLOAT_TYPE((x[idx].qs[j] >>   4) - 8);
+    const int y_offset = QUANT_R == 1 ? 1 : QUANT_K/2;
+    const int step = QUANT_R == 1 ? 2 : 1;
 
-        y[col * p.stride_b + row*QUANT_K + j + 0   ] = D_TYPE(x0*d);
-        y[col * p.stride_b + row*QUANT_K + j + QUANT_K/2] = D_TYPE(x1*d);
+    [[unroll]] for (int iqs = 0; iqs < QUANT_K/QUANT_R; iqs += step) {
+        DEQUANT_FUNC
+
+        y[col * p.stride_b + row*QUANT_K + iqs + 0       ] = D_TYPE(v.x);
+        y[col * p.stride_b + row*QUANT_K + iqs + y_offset] = D_TYPE(v.y);
     }
 }
 )";
@@ -300,64 +444,16 @@ void main() {
 const std::string mul_mat_vec_head = R"(
 #version 450
 
+#extension GL_EXT_scalar_block_layout : require
 #extension GL_EXT_control_flow_attributes : enable
 #extension GL_EXT_shader_16bit_storage : require
 #extension GL_EXT_shader_8bit_storage : require
 )";
 
-const std::string mul_mat_vec_f16_defines = R"(
-#define QUANT_K 32
-#define QUANT_R 2
-#define BLOCK_SIZE 32
-
-#define A_TYPE float16_t
-)";
-
-const std::string mul_mat_vec_f16_dequant_func = R"(
-#define DEQUANT_FUNC float16_t v0 = x[ib + 0]; \
-float16_t v1 = x[ib + 1];
-)";
-
-const std::string mul_mat_vec_f16_dequant_func_compat = R"(
-#define DEQUANT_FUNC float v0 = float(x[ib + 0]); \
-float v1 = float(x[ib + 1]);
-)";
-
-const std::string mul_mat_vec_q4_0_defines = R"(
-#define QUANT_K 32
-#define QUANT_R 2
-#define BLOCK_SIZE 32
-
-struct block_q4_0
-{
-    float16_t d;
-    uint8_t qs[16];
-};
-#define A_TYPE block_q4_0
-)";
-
-const std::string mul_mat_vec_q4_0_dequant_func = R"(
-#define DEQUANT_FUNC const float16_t d = x[ib].d; \
-const uint8_t vui = x[ib].qs[iqs]; \
-const int8_t vi0 = int8_t(vui & 0xF); \
-const int8_t vi1 = int8_t(vui >> 4); \
-float16_t v0 = float16_t(vi0 - 8)*d; \
-float16_t v1 = float16_t(vi1 - 8)*d;
-)";
-
-const std::string mul_mat_vec_q4_0_dequant_func_compat = R"(
-#define DEQUANT_FUNC const float d = float(x[ib].d); \
-const uint vui = uint(x[ib].qs[iqs]); \
-const int vi0 = int(vui) & 0xF; \
-const int vi1 = int(vui) >> 4; \
-float v0 = float(vi0 - 8)*d; \
-float v1 = float(vi1 - 8)*d;
-)";
-
 const std::string mul_mat_vec_body = R"(
-layout(local_size_x = BLOCK_SIZE, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = QUANT_K, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A { A_TYPE x[]; };
+layout (binding = 0, scalar) readonly buffer A { A_TYPE x[]; };
 layout (binding = 1) readonly buffer B { B_TYPE y[]; };
 layout (binding = 2) writeonly buffer D { D_TYPE dst[]; };
 
@@ -366,14 +462,14 @@ layout (push_constant) uniform parameter
     int ncols;
 } p;
 
-shared FLOAT_TYPE tmp[BLOCK_SIZE];
+shared FLOAT_TYPE tmp[QUANT_K];
 
 void main() {
     const int block_size = int(gl_WorkGroupSize.x);
     const int row = int(gl_WorkGroupID.x);
     const int tid = int(gl_LocalInvocationID.x);
 
-    const int y_offset = QUANT_K/2;
+    const int y_offset = QUANT_R == 1 ? 1 : QUANT_K/2;
 
     tmp[tid] = FLOAT_TYPE(0.0f);
 
@@ -386,8 +482,8 @@ void main() {
         DEQUANT_FUNC
 
         // matrix multiplication
-        tmp[tid] += FLOAT_TYPE(v0) * FLOAT_TYPE(y[iybs + iqs + 0]);
-        tmp[tid] += FLOAT_TYPE(v1) * FLOAT_TYPE(y[iybs + iqs + y_offset]);
+        tmp[tid] += FLOAT_TYPE(v.x) * FLOAT_TYPE(y[iybs + iqs + 0]);
+        tmp[tid] += FLOAT_TYPE(v.y) * FLOAT_TYPE(y[iybs + iqs + y_offset]);
     }
 
     // sum up partial sums and write back result
