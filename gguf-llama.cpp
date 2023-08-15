@@ -3240,10 +3240,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     int n_attention_wv    = 0;
     int n_feed_forward_w2 = 0;
     for (auto& tensor : model_loader->tensors_map.tensors) {
-        if (tensor.name.find("attention.wv.weight") != std::string::npos) {
+        if (tensor.name.find("attn_v.weight") != std::string::npos) {
             ++n_attention_wv;
         }
-        else if (tensor.name.find("feed_forward.w2.weight") != std::string::npos) {
+        else if (tensor.name.find("ffn_down.weight") != std::string::npos) {
             ++n_feed_forward_w2;
         }
     }
@@ -3304,7 +3304,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 if (nx % QK_K == 0 && ny % QK_K == 0) {
                     new_type = GGML_TYPE_Q6_K;
                 }
-            } else if (tensor.name.find("attention.wv.weight") != std::string::npos) {
+            } else if (tensor.name.find("attn_v.weight") != std::string::npos) {
                 if      (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q4_K;
                 else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
                 else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) &&
@@ -3319,7 +3319,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                          use_more_bits(i_feed_forward_w2, n_feed_forward_w2)) new_type = GGML_TYPE_Q6_K;
                 //else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S && i_feed_forward_w2 < n_feed_forward_w2/8) new_type = GGML_TYPE_Q6_K;
                 ++i_feed_forward_w2;
-            } else if (tensor.name.find("attention.wo.weight") != std::string::npos) {
+            } else if (tensor.name.find("attn_output.weight") != std::string::npos) {
                 if      (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q4_K;
                 else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
             }
@@ -3337,7 +3337,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 if (tensor.name == "output.weight") {
                     new_type = GGML_TYPE_F16; //fall back to F16 instead of just failing.
                     LLAMA_LOG_WARN("F16 will be used for this tensor instead.\n");
-                } else if (tensor.name == "tok_embeddings.weight") {
+                } else if (tensor.name == "token_embd.weight") {
                     new_type = GGML_TYPE_Q4_0; //fall back to Q4_0 instead of just failing.
                     LLAMA_LOG_WARN("Q4_0 will be used for this tensor instead.\n");
                 } else {
