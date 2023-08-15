@@ -24,21 +24,19 @@ static std::string to_string(const T & val) {
 bool gguf_ex_write(const std::string & fname) {
     struct gguf_context * ctx = gguf_init_empty();
 
-    {
-        gguf_set_val_u8  (ctx, "some.parameter.uint8",    0x12);
-        gguf_set_val_i8  (ctx, "some.parameter.int8",    -0x13);
-        gguf_set_val_u16 (ctx, "some.parameter.uint16",   0x1234);
-        gguf_set_val_i16 (ctx, "some.parameter.int16",   -0x1235);
-        gguf_set_val_u32 (ctx, "some.parameter.uint32",   0x12345678);
-        gguf_set_val_i32 (ctx, "some.parameter.int32",   -0x12345679);
-        gguf_set_val_f32 (ctx, "some.parameter.float32",  0.123456789f);
-        gguf_set_val_bool(ctx, "some.parameter.bool",     true);
-        gguf_set_val_str (ctx, "some.parameter.string",   "hello world");
+    gguf_set_val_u8  (ctx, "some.parameter.uint8",    0x12);
+    gguf_set_val_i8  (ctx, "some.parameter.int8",    -0x13);
+    gguf_set_val_u16 (ctx, "some.parameter.uint16",   0x1234);
+    gguf_set_val_i16 (ctx, "some.parameter.int16",   -0x1235);
+    gguf_set_val_u32 (ctx, "some.parameter.uint32",   0x12345678);
+    gguf_set_val_i32 (ctx, "some.parameter.int32",   -0x12345679);
+    gguf_set_val_f32 (ctx, "some.parameter.float32",  0.123456789f);
+    gguf_set_val_bool(ctx, "some.parameter.bool",     true);
+    gguf_set_val_str (ctx, "some.parameter.string",   "hello world");
 
-        gguf_set_arr_data(ctx, "some.parameter.arr.i16", GGUF_TYPE_INT16,   std::vector<int16_t>{ 1, 2, 3, 4, }.data(), 4);
-        gguf_set_arr_data(ctx, "some.parameter.arr.f32", GGUF_TYPE_FLOAT32, std::vector<float>{ 3.145f, 2.718f, 1.414f, }.data(), 3);
-        gguf_set_arr_str (ctx, "some.parameter.arr.str",                    std::vector<const char *>{ "hello", "world", "!" }.data(), 3);
-    }
+    gguf_set_arr_data(ctx, "some.parameter.arr.i16", GGUF_TYPE_INT16,   std::vector<int16_t>{ 1, 2, 3, 4, }.data(), 4);
+    gguf_set_arr_data(ctx, "some.parameter.arr.f32", GGUF_TYPE_FLOAT32, std::vector<float>{ 3.145f, 2.718f, 1.414f, }.data(), 3);
+    gguf_set_arr_str (ctx, "some.parameter.arr.str",                    std::vector<const char *>{ "hello", "world", "!" }.data(), 3);
 
     struct ggml_init_params params = {
         /*.mem_size   =*/ 128ull*1024ull*1024ull,
