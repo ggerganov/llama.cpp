@@ -107,47 +107,23 @@ void gguf_ex_write_arr<std::string>(std::ofstream & fout, const std::string & ke
 }
 
 bool gguf_ex_write(const std::string & fname) {
-    std::ofstream fout(fname.c_str(), std::ios::binary);
+    struct gguf_context * ctx = gguf_init_empty();
 
     {
-        const int32_t magic = GGUF_MAGIC;
-        fout.write((const char *) &magic, sizeof(magic));
+        gguf_set_val_u8  (ctx, "some.parameter.uint8",    0x12);
+        gguf_set_val_i8  (ctx, "some.parameter.int8",    -0x13);
+        gguf_set_val_u16 (ctx, "some.parameter.uint16",   0x1234);
+        gguf_set_val_i16 (ctx, "some.parameter.int16",   -0x1235);
+        gguf_set_val_u32 (ctx, "some.parameter.uint32",   0x12345678);
+        gguf_set_val_i32 (ctx, "some.parameter.int32",   -0x12345679);
+        gguf_set_val_f32 (ctx, "some.parameter.float32",  0.123456789f);
+        gguf_set_val_bool(ctx, "some.parameter.bool",     true);
+        gguf_set_val_str (ctx, "some.parameter.string", "hello world");
+
+        //gguf_set_arr_data(ctx, "some.parameter.arr.i16", GGUF_TYPE_INT16, std::vector<int16_t>{ 1, 2, 3, 4, }.data(), 4);
+        //gguf_set_arr_data(ctx, "some.parameter.arr.f32", GGUF_TYPE_FLOAT32, std::vector<float>{ 3.145f, 2.718f, 1.414f, }.data(), 3);
+        //gguf_ex_write_arr<std::string>(fout, "some.parameter.arr.str", GGUF_TYPE_STRING,  { "hello", "world", "!" });
     }
-
-    {
-        const int32_t version = GGUF_VERSION;
-        fout.write((const char *) &version, sizeof(version));
-    }
-
-    // NOTE: these have to match the output below!
-    const int n_tensors = 10;
-    const int n_kv      = 12;
-
-    fout.write((const char*) &n_tensors, sizeof(n_tensors));
-    fout.write((const char*) &n_kv, sizeof(n_kv));
-
-    fprintf(stdout, "%s: write header\n", __func__);
-
-    // kv data
-    {
-        gguf_ex_write_val< uint8_t>(fout, "some.parameter.uint8",   GGUF_TYPE_UINT8,   0x12);
-        gguf_ex_write_val<  int8_t>(fout, "some.parameter.int8",    GGUF_TYPE_INT8,   -0x13);
-        gguf_ex_write_val<uint16_t>(fout, "some.parameter.uint16",  GGUF_TYPE_UINT16,  0x1234);
-        gguf_ex_write_val< int16_t>(fout, "some.parameter.int16",   GGUF_TYPE_INT16,  -0x1235);
-        gguf_ex_write_val<uint32_t>(fout, "some.parameter.uint32",  GGUF_TYPE_UINT32,  0x12345678);
-        gguf_ex_write_val< int32_t>(fout, "some.parameter.int32",   GGUF_TYPE_INT32,  -0x12345679);
-
-        gguf_ex_write_val<float>   (fout, "some.parameter.float32", GGUF_TYPE_FLOAT32, 0.123456789f);
-        gguf_ex_write_val<bool>    (fout, "some.parameter.bool",    GGUF_TYPE_BOOL,    true);
-
-        gguf_ex_write_val<std::string>(fout, "some.parameter.string",  GGUF_TYPE_STRING,  "hello world");
-
-        gguf_ex_write_arr<int16_t>    (fout, "some.parameter.arr.i16", GGUF_TYPE_INT16,   { 1, 2, 3, 4, });
-        gguf_ex_write_arr<float>      (fout, "some.parameter.arr.f32", GGUF_TYPE_FLOAT32, { 3.145f, 2.718f, 1.414f, });
-        gguf_ex_write_arr<std::string>(fout, "some.parameter.arr.str", GGUF_TYPE_STRING,  { "hello", "world", "!" });
-    }
-
-    uint64_t offset_tensor = 0;
 
     struct ggml_init_params params = {
         /*.mem_size   =*/ 128ull*1024ull*1024ull,
@@ -156,6 +132,8 @@ bool gguf_ex_write(const std::string & fname) {
     };
 
     struct ggml_context * ctx_data = ggml_init(params);
+
+    const int n_tensors = 10;
 
     // tensor infos
     for (int i = 0; i < n_tensors; ++i) {
@@ -178,58 +156,15 @@ bool gguf_ex_write(const std::string & fname) {
             }
         }
 
-        fprintf(stdout, "%s: tensor: %s, %d dims, ne = [", __func__, name.c_str(), n_dims);
-        for (int j = 0; j < 4; ++j) {
-            fprintf(stdout, "%s%3d", j == 0 ? "" : ", ", (int) cur->ne[j]);
-        }
-        fprintf(stdout, "], offset_tensor = %6" PRIu64 "\n", offset_tensor);
-
-        gguf_ex_write_str(fout, name);
-        gguf_ex_write_i32(fout, n_dims);
-        for (int j = 0; j < n_dims; ++j) {
-            gguf_ex_write_i32(fout, cur->ne[j]);
-        }
-        gguf_ex_write_i32(fout, cur->type);
-        gguf_ex_write_u64(fout, offset_tensor);
-
-        offset_tensor += GGML_PAD(ggml_nbytes(cur), GGUF_DEFAULT_ALIGNMENT);
+        gguf_add_tensor(ctx, cur);
     }
 
-    const uint64_t offset_data = GGML_PAD((uint64_t) fout.tellp(), GGUF_DEFAULT_ALIGNMENT);
-
-    fprintf(stdout, "%s: data offset = %" PRIu64 "\n", __func__, offset_data);
-
-    {
-        const size_t pad = offset_data - fout.tellp();
-
-        for (size_t j = 0; j < pad; ++j) {
-            fout.put(0);
-        }
-    }
-
-    for (int i = 0; i < n_tensors; ++i) {
-        fprintf(stdout, "%s: writing tensor %d data\n", __func__, i);
-
-        const std::string name = "tensor_" + to_string(i);
-
-        struct ggml_tensor * cur = ggml_get_tensor(ctx_data, name.c_str());
-
-        fout.write((const char *) cur->data, ggml_nbytes(cur));
-
-        {
-            const size_t pad = GGML_PAD(ggml_nbytes(cur), GGUF_DEFAULT_ALIGNMENT) - ggml_nbytes(cur);
-
-            for (size_t j = 0; j < pad; ++j) {
-                fout.put(0);
-            }
-        }
-    }
-
-    fout.close();
+    gguf_write_to_file(ctx, fname.c_str());
 
     fprintf(stdout, "%s: wrote file '%s;\n", __func__, fname.c_str());
 
     ggml_free(ctx_data);
+    gguf_free(ctx);
 
     return true;
 }

@@ -19281,7 +19281,7 @@ void gguf_add_tensor(struct gguf_context * ctx, const struct ggml_tensor * tenso
     ctx->infos[idx].tensor = tensor;
 
     if (ctx->header.n_tensors > 0) {
-        ctx->infos[idx].offset = ctx->infos[idx - 1].offset + GGML_PAD(ggml_nbytes(tensor), ctx->alignment);
+        ctx->infos[idx].offset = ctx->infos[idx - 1].offset + GGML_PAD(ggml_nbytes(ctx->infos[idx - 1].tensor), ctx->alignment);
     }
 
     ctx->header.n_tensors++;
