@@ -709,17 +709,10 @@ struct gguf_file_saver {
         }
 
     void write_header() {
-        const int32_t magic = GGUF_MAGIC;
-        file.write_i32(magic);
-
-        const int32_t version = GGUF_VERSION;
-        file.write_i32(version);
-
-        const int32_t n_tensors = gguf_get_n_tensors(fl->gguf_ctx);
-        file.write_i32(n_tensors);
-
-        const int32_t n_kv = gguf_get_n_kv(fl->gguf_ctx);
-        file.write_i32(n_kv);
+        file.write_i32(GGUF_MAGIC);
+        file.write_i32(GGUF_VERSION);
+        file.write_i32(gguf_get_n_tensors(fl->gguf_ctx));
+        file.write_i32(gguf_get_n_kv     (fl->gguf_ctx));
     }
 
     void write_kv_arr_str(const std::string & key, enum gguf_type type, int i, int n_arr) {
