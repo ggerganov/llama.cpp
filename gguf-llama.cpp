@@ -367,6 +367,7 @@ struct llama_model {
     e_model type = MODEL_UNKNOWN;
 
     llama_hparams hparams;
+    llama_vocab   vocab;
 
     struct ggml_tensor * tok_embeddings;
 
@@ -394,8 +395,6 @@ struct llama_model {
 
     int64_t t_load_us = 0;
     int64_t t_start_us = 0;
-
-    llama_vocab vocab;
 
     ~llama_model() {
         if (ctx) {
@@ -567,10 +566,8 @@ enum gguf_file_version {
 
 struct gguf_file_loader {
     gguf_file file;
-    gguf_context * gguf_ctx;
+    gguf_context * ctx_gguf;
     gguf_file_version file_version;
-    llama_hparams hparams;
-    llama_vocab vocab;
 
     struct ggml_context * ctx_data = NULL;
 
@@ -582,78 +579,18 @@ struct gguf_file_loader {
             /*.ctx      = */ &ctx_data,
         };
 
-        gguf_ctx = gguf_init_from_file(fname, params);
-        file_version = (enum gguf_file_version) gguf_get_version(gguf_ctx);
+        ctx_gguf = gguf_init_from_file(fname, params);
+        file_version = (enum gguf_file_version) gguf_get_version(ctx_gguf);
 
-        read_hparams();
-        read_vocab();
         read_tensor_metadata(tensors_map);
     }
 
-    int read_n_vocab() const {
-        int i = gguf_find_key(gguf_ctx, "tokenizer.ggml.tokens");
-        if (i == -1) {
-            throw std::runtime_error("cannot find token list in GGUF file\n");
-        }
-
-        return gguf_get_arr_n(gguf_ctx, i);
-    }
-
-    void read_hparams() {
-        // TODO define keys as constants in header
-        // TODO: read all hparams from file
-
-        hparams.n_vocab        = read_n_vocab();
-        hparams.n_ctx          = gguf_get_val_u32(gguf_ctx, gguf_find_key(gguf_ctx, "llama.context_length"));
-        hparams.n_embd         = gguf_get_val_u32(gguf_ctx, gguf_find_key(gguf_ctx, "llama.embedding_length"));
-        hparams.n_ff           = gguf_get_val_u32(gguf_ctx, gguf_find_key(gguf_ctx, "llama.feed_forward_length"));
-        hparams.n_head         = gguf_get_val_u32(gguf_ctx, gguf_find_key(gguf_ctx, "llama.attention.head_count"));
-        hparams.n_layer        = gguf_get_val_u32(gguf_ctx, gguf_find_key(gguf_ctx, "llama.block_count"));
-        hparams.n_rot          = gguf_get_val_u32(gguf_ctx, gguf_find_key(gguf_ctx, "llama.rope.dimension_count"));
-        hparams.f_rms_norm_eps = gguf_get_val_f32(gguf_ctx, gguf_find_key(gguf_ctx, "llama.rms_norm_epsilon"));
-
-        // n_head_kv default to n_head
-        hparams.n_head_kv = hparams.n_head;
-        {
-            const int idx = gguf_find_key(gguf_ctx, "llama.attention.head_count_kv");
-            if (idx >= 0) {
-                hparams.n_head_kv = gguf_get_val_u32(gguf_ctx, idx);
-            }
-        }
-    }
-
-    void read_vocab() {
-        vocab.id_to_token.resize(hparams.n_vocab);
-
-        const int token_idx = gguf_find_key(gguf_ctx, "tokenizer.ggml.tokens");
-        if (token_idx == -1) {
-            throw std::runtime_error("cannot find token list in GGUF file\n");
-        }
-
-        const int score_idx = gguf_find_key(gguf_ctx, "tokenizer.ggml.scores");
-        if (score_idx == -1) {
-            throw std::runtime_error("cannot find token scores list in GGUF file\n");
-        }
-
-        const float * scores = (const float * ) gguf_get_arr_data(gguf_ctx, score_idx);
-
-        for (uint32_t i = 0; i < hparams.n_vocab; i++) {
-            std::string word = gguf_get_arr_str(gguf_ctx, token_idx, i);
-
-            vocab.token_to_id[word] = i;
-
-            auto & tok_score = vocab.id_to_token[i];
-            tok_score.tok = std::move(word);
-            tok_score.score = scores[i];
-        }
-    }
-
     void read_tensor_metadata(gguf_load_tensors_map & tensors_map) const {
-        const int n_tensors = gguf_get_n_tensors(gguf_ctx);
+        const int n_tensors = gguf_get_n_tensors(ctx_gguf);
 
         for (int i = 0; i < n_tensors; ++i) {
             gguf_load_tensor tensor;
-            const char * name = gguf_get_tensor_name(gguf_ctx, i);
+            const char * name = gguf_get_tensor_name(ctx_gguf, i);
 
             struct ggml_tensor * cur = ggml_get_tensor(ctx_data, name);
 
@@ -688,7 +625,7 @@ struct gguf_file_loader {
                 }
             }
 
-            tensor.file_off = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, i);
+            tensor.file_off = gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, i);
 
             tensor.name = name;
             tensor.size = ggml_nbytes(cur);
@@ -929,15 +866,15 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
     return result;
 }
 
-int llama_max_devices() {
+int llama_max_devices(void) {
     return LLAMA_MAX_DEVICES;
 }
 
-bool llama_mmap_supported() {
+bool llama_mmap_supported(void) {
     return gguf_mmap::SUPPORTED;
 }
 
-bool llama_mlock_supported() {
+bool llama_mlock_supported(void) {
     return gguf_mlock::SUPPORTED;
 }
 
@@ -960,13 +897,13 @@ void llama_backend_init(bool numa) {
 #endif
 }
 
-void llama_backend_free() {
+void llama_backend_free(void) {
 #ifdef GGML_USE_MPI
     ggml_mpi_backend_free();
 #endif
 }
 
-int64_t llama_time_us() {
+int64_t llama_time_us(void) {
     return ggml_time_us();
 }
 
@@ -1044,14 +981,33 @@ static void llama_model_load_internal(
 
     std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, use_mmap));
 
-    vocab = std::move(ml->file_loader->vocab);
-    model.hparams = ml->file_loader->hparams;
     model.n_gpu_layers = n_gpu_layers;
     gguf_file_version file_version = ml->file_loader->file_version;
 
     auto & hparams = model.hparams;
 
+    // read hparams
     {
+        struct gguf_context * ctx = ml->file_loader->ctx_gguf;
+
+        hparams.n_vocab        = gguf_get_arr_n  (ctx, gguf_find_key(ctx, "tokenizer.ggml.tokens"));
+        hparams.n_ctx          = gguf_get_val_u32(ctx, gguf_find_key(ctx, "llama.context_length"));
+        hparams.n_embd         = gguf_get_val_u32(ctx, gguf_find_key(ctx, "llama.embedding_length"));
+        hparams.n_ff           = gguf_get_val_u32(ctx, gguf_find_key(ctx, "llama.feed_forward_length"));
+        hparams.n_head         = gguf_get_val_u32(ctx, gguf_find_key(ctx, "llama.attention.head_count"));
+        hparams.n_layer        = gguf_get_val_u32(ctx, gguf_find_key(ctx, "llama.block_count"));
+        hparams.n_rot          = gguf_get_val_u32(ctx, gguf_find_key(ctx, "llama.rope.dimension_count"));
+        hparams.f_rms_norm_eps = gguf_get_val_f32(ctx, gguf_find_key(ctx, "llama.rms_norm_epsilon"));
+
+        // n_head_kv default to n_head
+        hparams.n_head_kv = hparams.n_head;
+        {
+            const int idx = gguf_find_key(ctx, "llama.attention.head_count_kv");
+            if (idx >= 0) {
+                hparams.n_head_kv = gguf_get_val_u32(ctx, idx);
+            }
+        }
+
         switch (hparams.n_layer) {
             case 26: model.type = e_model::MODEL_3B; break;
             case 32: model.type = e_model::MODEL_7B; break;
@@ -1083,7 +1039,34 @@ static void llama_model_load_internal(
         hparams.rope_freq_scale = rope_freq_scale;
     }
 
-    const uint32_t n_ff = hparams.n_ff;
+    // read vocab
+    {
+        struct gguf_context * ctx = ml->file_loader->ctx_gguf;
+
+        vocab.id_to_token.resize(hparams.n_vocab);
+
+        const int token_idx = gguf_find_key(ctx, "tokenizer.ggml.tokens");
+        if (token_idx == -1) {
+            throw std::runtime_error("cannot find token list in GGUF file\n");
+        }
+
+        const int score_idx = gguf_find_key(ctx, "tokenizer.ggml.scores");
+        if (score_idx == -1) {
+            throw std::runtime_error("cannot find token scores list in GGUF file\n");
+        }
+
+        const float * scores = (const float * ) gguf_get_arr_data(ctx, score_idx);
+
+        for (uint32_t i = 0; i < hparams.n_vocab; i++) {
+            std::string word = gguf_get_arr_str(ctx, token_idx, i);
+
+            vocab.token_to_id[word] = i;
+
+            auto & tok_score = vocab.id_to_token[i];
+            tok_score.tok = std::move(word);
+            tok_score.score = scores[i];
+        }
+    }
 
     {
         LLAMA_LOG_INFO("%s: format     = %s\n",   __func__, gguf_file_version_name(file_version));
@@ -1096,7 +1079,7 @@ static void llama_model_load_internal(
         LLAMA_LOG_INFO("%s: n_rot      = %u\n",   __func__, hparams.n_rot); // a.k.a. n_embd_head, n_head_dim
         LLAMA_LOG_INFO("%s: n_gqa      = %u\n",   __func__, hparams.n_gqa());
         LLAMA_LOG_INFO("%s: rnorm_eps  = %.1e\n", __func__, hparams.f_rms_norm_eps);
-        LLAMA_LOG_INFO("%s: n_ff       = %u\n",   __func__, n_ff);
+        LLAMA_LOG_INFO("%s: n_ff       = %u\n",   __func__, hparams.n_ff);
         LLAMA_LOG_INFO("%s: freq_base  = %.1f\n", __func__, hparams.rope_freq_base);
         LLAMA_LOG_INFO("%s: freq_scale = %g\n",   __func__, hparams.rope_freq_scale);
         LLAMA_LOG_INFO("%s: ftype      = %u (%s)\n", __func__, hparams.ftype, llama_ftype_name(hparams.ftype));
@@ -1192,6 +1175,8 @@ static void llama_model_load_internal(
                 vram_weights += ggml_nbytes(model.output);
             }
         }
+
+        const uint32_t n_ff = hparams.n_ff;
 
         const int i_gpu_start = n_layer - n_gpu_layers;
 
@@ -3087,7 +3072,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     struct gguf_context * ctx_out = gguf_init_empty();
 
     // copy the KV pairs from the input file
-    gguf_set_kv(ctx_out, model_loader->file_loader->gguf_ctx);
+    gguf_set_kv(ctx_out, model_loader->file_loader->ctx_gguf);
     gguf_set_val_u32(ctx_out, "general.quantization_version", GGML_QNT_VERSION);
 
 #ifdef GGML_USE_K_QUANTS
@@ -4460,15 +4445,15 @@ std::string llama_token_to_str_bpe(const struct llama_context * ctx, llama_token
     return std::string(result.data(), result.size());
 }
 
-llama_token llama_token_bos() {
+llama_token llama_token_bos(void) {
     return 1;
 }
 
-llama_token llama_token_eos() {
+llama_token llama_token_eos(void) {
     return 2;
 }
 
-llama_token llama_token_nl() {
+llama_token llama_token_nl(void) {
     return 13;
 }
 
