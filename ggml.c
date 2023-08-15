@@ -213,10 +213,10 @@ inline static void * ggml_aligned_malloc(size_t size) {
                 error_desc = "insufficient memory";
                 break;
         }
-        GGML_PRINT("%s: %s (attempted to allocate %6.2f MB)\n",
-            __func__, error_desc, size/(1024.0*1024.0));
+        GGML_PRINT("%s: %s (attempted to allocate %6.2f MB)\n", __func__, error_desc, size/(1024.0*1024.0));
         return NULL;
     }
+
     return aligned_memory;
 }
 #define GGML_ALIGNED_MALLOC(size)  ggml_aligned_malloc(size)
@@ -4109,7 +4109,11 @@ size_t ggml_nbytes(const struct ggml_tensor * tensor) {
     //
     // is enough, but just in case, adding the second part
 
-    return GGML_PAD(MAX(tensor->ne[3]*tensor->nb[3], (ggml_nelements(tensor)*GGML_TYPE_SIZE[tensor->type])/GGML_BLCK_SIZE[tensor->type]), GGML_MEM_ALIGN);
+    return MAX(tensor->ne[3]*tensor->nb[3], (ggml_nelements(tensor)*GGML_TYPE_SIZE[tensor->type])/GGML_BLCK_SIZE[tensor->type]);
+}
+
+size_t ggml_nbytes_pad(const struct ggml_tensor * tensor) {
+    return GGML_PAD(ggml_nbytes(tensor), GGML_MEM_ALIGN);
 }
 
 size_t ggml_nbytes_split(const struct ggml_tensor * tensor, int nrows_split) {
@@ -19271,6 +19275,10 @@ void gguf_add_tensor(struct gguf_context * ctx, const struct ggml_tensor * tenso
     ctx->infos[idx].name.n    = strlen(tensor->name) + 1;
     ctx->infos[idx].name.data = strdup(tensor->name);
 
+    for (int i = 0; i < GGML_MAX_DIMS; ++i) {
+        ctx->infos[idx].ne[i] = 1;
+    }
+
     ctx->infos[idx].n_dims = tensor->n_dims;
     for (int i = 0; i < tensor->n_dims; i++) {
         ctx->infos[idx].ne[i] = tensor->ne[i];
@@ -19305,8 +19313,8 @@ void gguf_write_to_file(struct gguf_context * ctx, const char * fname) {
     // write header
     gguf_fwrite_el(file, &ctx->header.magic,     sizeof(ctx->header.magic));
     gguf_fwrite_el(file, &ctx->header.version,   sizeof(ctx->header.version));
-    gguf_fwrite_el(file, &ctx->header.n_kv,      sizeof(ctx->header.n_kv));
     gguf_fwrite_el(file, &ctx->header.n_tensors, sizeof(ctx->header.n_tensors));
+    gguf_fwrite_el(file, &ctx->header.n_kv,      sizeof(ctx->header.n_kv));
 
     // write key-value pairs
     for (uint32_t i = 0; i < ctx->header.n_kv; ++i) {

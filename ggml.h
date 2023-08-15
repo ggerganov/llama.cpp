@@ -566,6 +566,7 @@ extern "C" {
     GGML_API int64_t ggml_nelements   (const struct ggml_tensor * tensor);
     GGML_API int64_t ggml_nrows       (const struct ggml_tensor * tensor);
     GGML_API size_t  ggml_nbytes      (const struct ggml_tensor * tensor);
+    GGML_API size_t  ggml_nbytes_pad  (const struct ggml_tensor * tensor); // same as ggml_nbytes() but padded to GGML_MEM_ALIGN
     GGML_API size_t  ggml_nbytes_split(const struct ggml_tensor * tensor, int nrows_split);
 
     GGML_API int     ggml_blck_size (enum ggml_type type);

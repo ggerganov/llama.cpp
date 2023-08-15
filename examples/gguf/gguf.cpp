@@ -21,91 +21,6 @@ static std::string to_string(const T & val) {
     return ss.str();
 }
 
-void gguf_ex_write_str(std::ofstream & fout, const std::string & val) {
-    const int32_t n = val.size();
-    fout.write((const char *) &n, sizeof(n));
-    fout.write(val.c_str(), n);
-}
-
-void gguf_ex_write_i32(std::ofstream & fout, int32_t val) {
-    fout.write((const char *) &val, sizeof(val));
-}
-
-void gguf_ex_write_u64(std::ofstream & fout, size_t val) {
-    fout.write((const char *) &val, sizeof(val));
-}
-
-template<typename T>
-void gguf_ex_write_val(std::ofstream & fout, const std::string & key, enum gguf_type type, const T & val) {
-    gguf_ex_write_str(fout, key);
-    fout.write((const char *) &type, sizeof(type));
-    fout.write((const char *) &val,  sizeof(val));
-
-    fprintf(stdout, "%s: write param: %s = %s\n", __func__, key.c_str(), to_string(val).c_str());
-}
-
-template<>
-void gguf_ex_write_val<std::string>(std::ofstream & fout, const std::string & key, enum gguf_type type, const std::string & val) {
-    gguf_ex_write_str(fout, key);
-    fout.write((const char *) &type, sizeof(type));
-
-    const int32_t n = val.size();
-    fout.write((const char *) &n, sizeof(n));
-    fout.write(val.c_str(), n);
-
-    fprintf(stdout, "%s: write param: %s = %s\n", __func__, key.c_str(), val.c_str());
-}
-
-template<typename T>
-void gguf_ex_write_arr(std::ofstream & fout, const std::string & key, enum gguf_type type, const std::vector<T> & val) {
-    gguf_ex_write_str(fout, key);
-    {
-        const enum gguf_type tarr = GGUF_TYPE_ARRAY;
-        fout.write((const char *) &tarr, sizeof(tarr));
-    }
-
-    const int32_t n = val.size();
-    fout.write((const char *) &type, sizeof(type));
-    fout.write((const char *) &n,    sizeof(n));
-    fout.write((const char *) val.data(), n * sizeof(T));
-
-    fprintf(stdout, "%s: write param: %s = [", __func__, key.c_str());
-    for (int i = 0; i < n; ++i) {
-        fprintf(stdout, "%s", to_string(val[i]).c_str());
-        if (i < n - 1) {
-            fprintf(stdout, ", ");
-        }
-    }
-    fprintf(stdout, "]\n");
-}
-
-template<>
-void gguf_ex_write_arr<std::string>(std::ofstream & fout, const std::string & key, enum gguf_type type, const std::vector<std::string> & val) {
-    gguf_ex_write_str(fout, key);
-    {
-        const enum gguf_type tarr = GGUF_TYPE_ARRAY;
-        fout.write((const char *) &tarr, sizeof(tarr));
-    }
-
-    const int32_t n = val.size();
-    fout.write((const char *) &type, sizeof(type));
-    fout.write((const char *) &n,    sizeof(n));
-    for (int i = 0; i < n; ++i) {
-        const int32_t nstr = val[i].size();
-        fout.write((const char *) &nstr, sizeof(nstr));
-        fout.write(val[i].c_str(), nstr);
-    }
-
-    fprintf(stdout, "%s: write param: %s = [", __func__, key.c_str());
-    for (int i = 0; i < n; ++i) {
-        fprintf(stdout, "%s", val[i].c_str());
-        if (i < n - 1) {
-            fprintf(stdout, ", ");
-        }
-    }
-    fprintf(stdout, "]\n");
-}
-
 bool gguf_ex_write(const std::string & fname) {
     struct gguf_context * ctx = gguf_init_empty();
 
@@ -118,11 +33,11 @@ bool gguf_ex_write(const std::string & fname) {
         gguf_set_val_i32 (ctx, "some.parameter.int32",   -0x12345679);
         gguf_set_val_f32 (ctx, "some.parameter.float32",  0.123456789f);
         gguf_set_val_bool(ctx, "some.parameter.bool",     true);
-        gguf_set_val_str (ctx, "some.parameter.string", "hello world");
+        gguf_set_val_str (ctx, "some.parameter.string",   "hello world");
 
-        //gguf_set_arr_data(ctx, "some.parameter.arr.i16", GGUF_TYPE_INT16, std::vector<int16_t>{ 1, 2, 3, 4, }.data(), 4);
-        //gguf_set_arr_data(ctx, "some.parameter.arr.f32", GGUF_TYPE_FLOAT32, std::vector<float>{ 3.145f, 2.718f, 1.414f, }.data(), 3);
-        //gguf_ex_write_arr<std::string>(fout, "some.parameter.arr.str", GGUF_TYPE_STRING,  { "hello", "world", "!" });
+        gguf_set_arr_data(ctx, "some.parameter.arr.i16", GGUF_TYPE_INT16,   std::vector<int16_t>{ 1, 2, 3, 4, }.data(), 4);
+        gguf_set_arr_data(ctx, "some.parameter.arr.f32", GGUF_TYPE_FLOAT32, std::vector<float>{ 3.145f, 2.718f, 1.414f, }.data(), 3);
+        gguf_set_arr_str (ctx, "some.parameter.arr.str",                    std::vector<const char *>{ "hello", "world", "!" }.data(), 3);
     }
 
     struct ggml_init_params params = {
