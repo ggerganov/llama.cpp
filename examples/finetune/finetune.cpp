@@ -167,6 +167,17 @@ struct ggml_tensor * randomize_tensor_uniform(struct ggml_tensor * tensor, struc
     return tensor;
 }
 
+struct my_llama_kv_cache {
+    struct ggml_context * ctx = NULL;
+
+    struct ggml_tensor * k;
+    struct ggml_tensor * v;
+
+    // llama_ctx_buffer buf;
+
+    int n; // number of tokens currently in the cache
+};
+
 struct llama_vocab {
     using id    = int32_t;
     using token = std::string;
@@ -211,17 +222,6 @@ struct my_llama_layer {
     struct ggml_tensor * w1;
     struct ggml_tensor * w2;
     struct ggml_tensor * w3;
-};
-
-struct my_llama_kv_cache {
-    struct ggml_context * ctx = NULL;
-
-    struct ggml_tensor * k;
-    struct ggml_tensor * v;
-
-    // llama_ctx_buffer buf;
-
-    int n; // number of tokens currently in the cache
 };
 
 struct my_llama_model {
@@ -1163,14 +1163,6 @@ void lshift_examples(struct ggml_tensor * tokens_input, struct ggml_tensor * tar
             ggml_set_f32_1d(target_probs, i*n_vocab + k,  ggml_get_f32_1d(target_probs,  (i + n_shift)*n_vocab + k));
         }
     }
-}
-
-struct ggml_tensor * square_error_loss(struct ggml_context * ctx, struct ggml_tensor * a, struct ggml_tensor * target) {
-    return ggml_sum(ctx, ggml_sqr(ctx, ggml_sub(ctx, target, a)));
-}
-
-struct ggml_tensor * cross_entropy_loss(struct ggml_context * ctx, struct ggml_tensor * a, struct ggml_tensor * probs) {
-    return ggml_cross_entropy_loss(ctx, a, probs);
 }
 
 #ifdef __GNUC__
