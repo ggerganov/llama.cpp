@@ -372,11 +372,11 @@ static bool ggml_cpu_has_metal() {
 struct backend_params {
     std::string build_commit = BUILD_COMMIT;
     int build_number = BUILD_NUMBER;
-    bool cuda = ggml_cpu_has_cublas();
-    bool opencl = ggml_cpu_has_clblast();
-    bool metal = ggml_cpu_has_metal();
-    bool gpu_blas = ggml_cpu_has_gpublas();
-    bool blas = ggml_cpu_has_blas();
+    bool cuda = !!ggml_cpu_has_cublas();
+    bool opencl = !!ggml_cpu_has_clblast();
+    bool metal = !!ggml_cpu_has_metal();
+    bool gpu_blas = !!ggml_cpu_has_gpublas();
+    bool blas = !!ggml_cpu_has_blas();
     int n_batch;
     int n_threads;
     int n_gpu_layers;
