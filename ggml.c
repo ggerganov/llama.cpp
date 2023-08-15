@@ -16903,7 +16903,7 @@ void ggml_graph_export(const struct ggml_cgraph * cgraph, const char * fname) {
     // compute size of intermediate results
     // TODO: does not take into account scratch buffers !!!!
     for (int i = 0; i < cgraph->n_nodes; ++i) {
-        size_eval += ggml_nbytes(cgraph->nodes[i]);
+        size_eval += ggml_nbytes_pad(cgraph->nodes[i]);
     }
 
     // print
@@ -18629,8 +18629,9 @@ struct gguf_tensor_info {
 
     uint64_t offset; // offset from start of `data`, must be a multiple of `ALIGNMENT`
 
-    // for writing
-    const struct ggml_tensor * tensor;
+    // for writing API
+    const void * data;
+    size_t size;
 };
 
 struct gguf_context {
@@ -19268,7 +19269,12 @@ void gguf_set_kv(struct gguf_context * ctx, struct gguf_context * src) {
     }
 }
 
-void gguf_add_tensor(struct gguf_context * ctx, const struct ggml_tensor * tensor) {
+void gguf_add_tensor_ex(
+             struct gguf_context * ctx,
+        const struct ggml_tensor * tensor,
+                  enum ggml_type   type,
+                      const void * data,
+                          size_t   size) {
     const int idx = ctx->header.n_tensors;
     ctx->infos = realloc(ctx->infos, (idx + 1)*sizeof(struct gguf_tensor_info));
 
@@ -19284,15 +19290,20 @@ void gguf_add_tensor(struct gguf_context * ctx, const struct ggml_tensor * tenso
         ctx->infos[idx].ne[i] = tensor->ne[i];
     }
 
-    ctx->infos[idx].type   = tensor->type;
+    ctx->infos[idx].type   = type;
     ctx->infos[idx].offset = 0;
-    ctx->infos[idx].tensor = tensor;
+    ctx->infos[idx].data   = data;
+    ctx->infos[idx].size   = size;
 
     if (ctx->header.n_tensors > 0) {
-        ctx->infos[idx].offset = ctx->infos[idx - 1].offset + GGML_PAD(ggml_nbytes(ctx->infos[idx - 1].tensor), ctx->alignment);
+        ctx->infos[idx].offset = ctx->infos[idx - 1].offset + GGML_PAD(ctx->infos[idx - 1].size, ctx->alignment);
     }
 
     ctx->header.n_tensors++;
+}
+
+void gguf_add_tensor(struct gguf_context * ctx, const struct ggml_tensor * tensor) {
+    gguf_add_tensor_ex(ctx, tensor, tensor->type, tensor->data, ggml_nbytes(tensor));
 }
 
 static void gguf_fwrite_str(FILE * file, const struct gguf_str * val) {
@@ -19396,10 +19407,10 @@ void gguf_write_to_file(struct gguf_context * ctx, const char * fname) {
     for (uint32_t i = 0; i < ctx->header.n_tensors; ++i) {
         struct gguf_tensor_info * info = &ctx->infos[i];
 
-        const size_t size     = ggml_nbytes(info->tensor);
+        const size_t size     = info->size;
         const size_t size_pad = GGML_PAD(size, ctx->alignment);
 
-        gguf_fwrite_el(file, info->tensor->data, size);
+        gguf_fwrite_el(file, info->data, size);
 
         if (size_pad != size) {
             uint8_t pad = 0;

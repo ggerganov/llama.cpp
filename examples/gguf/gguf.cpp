@@ -193,8 +193,7 @@ bool gguf_ex_read_1(const std::string & fname) {
 
             struct ggml_tensor * cur = ggml_get_tensor(ctx_data, name);
 
-            fprintf(stdout, "%s: tensor[%d]: n_dims = %d, name = %s, data = %p\n",
-                    __func__, i, cur->n_dims, cur->name, cur->data);
+            fprintf(stdout, "%s: tensor[%d]: n_dims = %d, name = %s, data = %p\n", __func__, i, cur->n_dims, cur->name, cur->data);
 
             // check data
             {

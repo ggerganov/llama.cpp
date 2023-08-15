@@ -695,169 +695,11 @@ struct gguf_file_loader {
 
             tensor.name = name;
             tensor.size = ggml_nbytes(cur);
+            tensor.ggml_tensor = cur;
 
             tensors_map.tensors.push_back(tensor);
             tensors_map.name_to_idx[name] = tensors_map.tensors.size() - 1;
         }
-    }
-};
-
-struct gguf_file_saver {
-    // TODO
-    // this implementation now assumes that the data section is of the same length as the unquantized model.
-    // this is needed to write tensor metadata and weights in a single pass by seeking to appropriate positions in the file.
-    // this may not be true when we add quantization version and change ftype description (currently it's string according to the specs,
-    // but better to have it as uint32).
-    // we need to calculate the delta in number of bytes written with a counter as a struct member.
-
-    gguf_context * ctx; // loaded gguf context (used to re-write the KV section (good enough for now))
-
-    gguf_file file;
-    size_t info_offset;
-    size_t tensor_offset;
-
-    gguf_file_saver(const char * fname, gguf_context * ctx) : ctx(ctx), file(fname, "wb") {
-        LLAMA_LOG_INFO("%s: saving model to %s\n", __func__, fname);
-
-        write_header();
-        write_kv();
-    }
-
-    void write_header() {
-        file.write_i32(GGUF_MAGIC);
-        file.write_i32(GGUF_VERSION);
-        file.write_i32(gguf_get_n_tensors(ctx));
-        file.write_i32(gguf_get_n_kv     (ctx));
-    }
-
-    void write_kv_arr_i32(const std::string & key, enum gguf_type type, int i, int n_arr) {
-        std::vector<int32_t> data(n_arr);
-
-        for (int j = 0; j < n_arr; ++j) {
-            int32_t val = gguf_get_arr_i32(ctx, i, j);
-            data[j] = val;
-        }
-
-        file.write_arr<int32_t>(key, type, data);
-    }
-
-    void write_kv_arr_f32(const std::string & key, enum gguf_type type, int i, int n_arr) {
-        std::vector<float> data(n_arr);
-
-        for (int j = 0; j < n_arr; ++j) {
-            float val = gguf_get_arr_f32(ctx, i, j);
-            data[j] = val;
-        }
-
-        file.write_arr<float>(key, type, data);
-    }
-
-    void write_kv_arr_str(const std::string & key, enum gguf_type type, int i, int n_arr) {
-        std::vector<std::string> data(n_arr);
-
-        for (int j = 0; j < n_arr; ++j) {
-            std::string val = gguf_get_arr_str(ctx, i, j);
-            data[j] = val;
-        }
-
-        file.write_arr(key, type, data);
-    }
-
-    // re-write the key-value section from the loaded file
-    void write_kv() {
-        const int32_t n_kv = gguf_get_n_kv(ctx);
-        for (int i = 0; i < n_kv; ++i) {
-            const char * key = gguf_get_key(ctx, i);
-            LLAMA_LOG_INFO("%s: writing key '%s'\n", __func__, key);
-
-            if (strcmp(key, "general.quantization_version") == 0) {
-                file.write_val<uint32_t>("general.quantization_version", GGUF_TYPE_UINT32, GGML_QNT_VERSION);
-            } else {
-                const gguf_type vtype = gguf_get_kv_type(ctx, i);
-
-                switch (vtype) {
-                    case GGUF_TYPE_BOOL:    file.write_val<bool>    (key, GGUF_TYPE_BOOL,    gguf_get_val_bool(ctx, i)); break;
-                    case GGUF_TYPE_FLOAT32: file.write_val<float>   (key, GGUF_TYPE_FLOAT32, gguf_get_val_f32 (ctx, i)); break;
-                    case GGUF_TYPE_INT16:   file.write_val<int16_t> (key, GGUF_TYPE_INT16,   gguf_get_val_i16 (ctx, i)); break;
-                    case GGUF_TYPE_INT32:   file.write_val<int32_t> (key, GGUF_TYPE_INT32,   gguf_get_val_i32 (ctx, i)); break;
-                    case GGUF_TYPE_INT8:    file.write_val<int8_t>  (key, GGUF_TYPE_INT8,    gguf_get_val_i8  (ctx, i)); break;
-                    case GGUF_TYPE_STRING:  file.write_str          (key, GGUF_TYPE_STRING,  gguf_get_val_str (ctx, i)); break;
-                    case GGUF_TYPE_UINT16:  file.write_val<uint16_t>(key, GGUF_TYPE_UINT16,  gguf_get_val_u16 (ctx, i)); break;
-                    case GGUF_TYPE_UINT32:  file.write_val<uint32_t>(key, GGUF_TYPE_UINT32,  gguf_get_val_u32 (ctx, i)); break;
-                    case GGUF_TYPE_UINT8:   file.write_val<uint8_t> (key, GGUF_TYPE_UINT8,   gguf_get_val_u8  (ctx, i)); break;
-                    case GGUF_TYPE_ARRAY:
-                        {
-                            const gguf_type arr_type = gguf_get_arr_type(ctx, i);
-                            const int       n_arr    = gguf_get_arr_n   (ctx, i);
-
-                            switch (arr_type) {
-                                case GGUF_TYPE_FLOAT32: write_kv_arr_f32(key, arr_type, i, n_arr); break;
-                                case GGUF_TYPE_INT32:   write_kv_arr_i32(key, arr_type, i, n_arr); break;
-                                case GGUF_TYPE_STRING:  write_kv_arr_str(key, arr_type, i, n_arr); break;
-                                default:
-                                    throw std::runtime_error(format("cannot recognize array type for key %s\n", key));
-                            }
-                        } break;
-                    default:
-                        throw std::runtime_error(format("cannot recognize value type for key %s\n", key));
-                }
-            }
-        }
-
-        info_offset = file.tell();
-
-        GGML_ASSERT(gguf_get_data_offset(ctx) >= info_offset);
-
-        const size_t count = gguf_get_data_offset(ctx) - info_offset;
-
-        file.write_zeros(count);
-        file.seek(info_offset, SEEK_SET);
-    }
-
-    size_t write_tensor_info(gguf_load_tensor & tensor, enum ggml_type type) {
-        size_t total_written = 0;
-        file.seek(info_offset, SEEK_SET);
-        total_written += file.write_str(tensor.name);
-
-        int32_t n_dims = tensor.ne.size();
-        total_written += file.write_i32(n_dims);
-        for (int32_t i = 0; i < n_dims; ++i) {
-            total_written += file.write_i32(tensor.ne[i]);
-        }
-
-        total_written += file.write_i32(type);
-        total_written += file.write_u64(tensor_offset);
-        info_offset   += total_written; // position to write info of the next tensor
-
-        file.seek(0, SEEK_END);
-
-        return total_written;
-    }
-
-    void write_tensor(gguf_load_tensor & tensor, enum ggml_type new_type, const void * new_data, size_t new_size) {
-        switch (new_type) {
-            case GGML_TYPE_F32:
-            case GGML_TYPE_F16:
-            case GGML_TYPE_Q4_0:
-            case GGML_TYPE_Q4_1:
-            case GGML_TYPE_Q5_0:
-            case GGML_TYPE_Q5_1:
-            case GGML_TYPE_Q8_0:
-            case GGML_TYPE_Q2_K:
-            case GGML_TYPE_Q3_K:
-            case GGML_TYPE_Q4_K:
-            case GGML_TYPE_Q5_K:
-            case GGML_TYPE_Q6_K:
-                break;
-            default: GGML_ASSERT(false);
-        }
-
-        write_tensor_info(tensor, new_type);
-        file.write_raw(new_data, new_size);
-        size_t padded_size = GGML_PAD(new_size, GGUF_DEFAULT_ALIGNMENT); // TODO: handle custom alignment
-        size_t pad = padded_size - new_size;
-        file.write_zeros(pad);
-        tensor_offset += padded_size; // offset of the next tensor
     }
 };
 
@@ -897,7 +739,6 @@ struct llama_model_loader {
             tensor = ggml_new_tensor_1d(ggml_ctx, lt.type, lt.ne.at(0));
         }
         ggml_set_name(tensor, lt.name.c_str());
-        GGML_ASSERT(lt.ggml_tensor == NULL); // if this fails, we called get_tensor twice on the same tensor
 
         if (backend != GGML_BACKEND_CPU) {
             ggml_set_no_alloc(ggml_ctx, use_mmap);
@@ -3245,7 +3086,12 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     }
 
     std::unique_ptr<llama_model_loader> model_loader(new llama_model_loader(fname_inp, /*use_mmap*/ false));
-    gguf_file_saver file_saver(fname_out.c_str(), model_loader->file_loader->gguf_ctx);
+
+    struct gguf_context * ctx_out = gguf_init_empty();
+
+    // copy the KV pairs from the input file
+    gguf_set_kv(ctx_out, model_loader->file_loader->gguf_ctx);
+    gguf_set_val_u32(ctx_out, "general.quantization_version", GGML_QNT_VERSION);
 
 #ifdef GGML_USE_K_QUANTS
     int n_attention_wv    = 0;
@@ -3278,6 +3124,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
     std::vector<uint8_t> read_data;
     std::vector<uint8_t> work;
+
+    std::vector<std::vector<uint8_t>> work_map(model_loader->tensors_map.tensors.size());
 
     for (gguf_load_tensor & tensor : model_loader->tensors_map.tensors) {
         read_data.resize(tensor.size);
@@ -3437,12 +3285,20 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         }
         total_size_org += tensor.size;
         total_size_new += new_size;
-        file_saver.write_tensor(tensor, new_type, new_data, new_size);
+
+        // TODO: temp fix until we have stream support in gguf
+        work_map[idx - 1] = std::vector<uint8_t>((char *) new_data, (char *) new_data + new_size);
+
+        gguf_add_tensor_ex(ctx_out, tensor.ggml_tensor, new_type, work_map[idx - 1].data(), new_size);
     }
+
+    gguf_write_to_file(ctx_out, fname_out.c_str());
+    gguf_free(ctx_out);
 
     LLAMA_LOG_INFO("%s: model size  = %8.2f MB\n", __func__, total_size_org/1024.0/1024.0);
     LLAMA_LOG_INFO("%s: quant size  = %8.2f MB\n", __func__, total_size_new/1024.0/1024.0);
 
+    // print histogram for all tensors
     {
         int64_t sum_all = 0;
         for (size_t i = 0; i < hist_all.size(); i++) {
