@@ -111,6 +111,7 @@ extern "C" {
         bool use_mlock;  // force system to keep model in RAM
         bool embedding;  // embedding mode only
     };
+
     // model file types
     enum llama_ftype {
         LLAMA_FTYPE_ALL_F32              = 0,
@@ -189,10 +190,6 @@ extern "C" {
         int32_t n_p_eval;
         int32_t n_eval;
     };
-
-    // Set callback for all future logging events.
-    // If this is not called, or NULL is supplied, everything is output on stderr.
-    LLAMA_API void llama_log_set(llama_log_callback log_callback, void * user_data);
 
     LLAMA_API struct llama_context_params llama_context_default_params(void);
     LLAMA_API struct llama_model_quantize_params llama_model_quantize_default_params(void);
@@ -457,6 +454,10 @@ extern "C" {
 
     // Print system information
     LLAMA_API const char * llama_print_system_info(void);
+
+    // Set callback for all future logging events.
+    // If this is not called, or NULL is supplied, everything is output on stderr.
+    LLAMA_API void llama_log_set(llama_log_callback log_callback, void * user_data);
 
 #ifdef __cplusplus
 }
