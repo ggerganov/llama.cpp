@@ -9,6 +9,7 @@
 #include <vector>
 #include <sstream>
 #include <iterator>
+#include <numeric>
 #include "ggml.h"
 #include "llama.h"
 #include "common.h"
