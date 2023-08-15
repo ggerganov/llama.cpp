@@ -207,6 +207,9 @@ class GGUFWriter:
     def add_author(self, author: str):
         self.add_string(constants.KEY_GENERAL_AUTHOR, author)
 
+    def add_tensor_data_layout(self, layout: str):
+        self.add_string(constants.KEY_LLM_TENSOR_DATA_LAYOUT , layout)
+
     def add_url(self, url: str):
         self.add_string(constants.KEY_GENERAL_URL, url)
 
