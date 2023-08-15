@@ -722,7 +722,7 @@ struct gguf_file_saver {
         file.write_i32(n_kv);
     }
 
-    void write_hparam_arr_str(const std::string & key, enum gguf_type type, int i, int n_arr) {
+    void write_kv_arr_str(const std::string & key, enum gguf_type type, int i, int n_arr) {
         std::vector<std::string> data(n_arr);
 
         for (int j = 0; j < n_arr; ++j) {
@@ -733,7 +733,7 @@ struct gguf_file_saver {
         file.write_arr(key, type, data);
     }
 
-    void write_hparam_arr_f32(const std::string & key, enum gguf_type type, int i, int n_arr) {
+    void write_kv_arr_f32(const std::string & key, enum gguf_type type, int i, int n_arr) {
         std::vector<float> data(n_arr);
 
         for (int j = 0; j < n_arr; ++j) {
@@ -769,9 +769,9 @@ struct gguf_file_saver {
                             const gguf_type arr_type = gguf_get_arr_type(fl->gguf_ctx, i);
                             const int       n_arr    = gguf_get_arr_n   (fl->gguf_ctx, i);
                             if (arr_type == GGUF_TYPE_FLOAT32) {
-                                write_hparam_arr_f32(key, arr_type, i, n_arr);
+                                write_kv_arr_f32(key, arr_type, i, n_arr);
                             } else if (arr_type == GGUF_TYPE_STRING) {
-                                write_hparam_arr_str(key, arr_type, i, n_arr);
+                                write_kv_arr_str(key, arr_type, i, n_arr);
                             } else {
                                 throw std::runtime_error("not implemented");
                             }
