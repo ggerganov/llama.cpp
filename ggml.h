@@ -1790,6 +1790,8 @@ extern "C" {
 
     GGML_API void gguf_add_tensor(struct gguf_context * ctx, const struct ggml_tensor * tensor);
 
+    GGML_API void gguf_write_to_file(struct gguf_context * ctx, const char * fname);
+
     //
     // system info
     //
