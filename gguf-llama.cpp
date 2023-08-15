@@ -56,6 +56,20 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+// tensor names
+#define TN_TOKEN_EMBD  "token_embd.weight"
+#define TN_OUTPUT_NORM "output_norm.weight"
+#define TN_OUTPUT      "output.weight"
+#define TN_ATTN_NORM   "blk.%d.attn_norm.weight"
+#define TN_ATTN_Q      "blk.%d.attn_q.weight"
+#define TN_ATTN_K      "blk.%d.attn_k.weight"
+#define TN_ATTN_V      "blk.%d.attn_v.weight"
+#define TN_ATTN_OUTPUT "blk.%d.attn_output.weight"
+#define TN_FFN_NORM    "blk.%d.ffn_norm.weight"
+#define TN_FFN_GATE    "blk.%d.ffn_gate.weight"
+#define TN_FFN_DOWN    "blk.%d.ffn_down.weight"
+#define TN_FFN_UP    "blk.%d.ffn_up.weight"
+
 static void llama_log_internal(llama_log_level level, const char* format, ...);
 static void llama_log_callback_default(llama_log_level level, const char * text, void * user_data);
 #define LLAMA_LOG_INFO(...)  llama_log_internal(LLAMA_LOG_LEVEL_INFO , __VA_ARGS__)
@@ -1310,7 +1324,7 @@ static void llama_model_load_internal(
 
         ml->ggml_ctx = ctx;
 
-        model.tok_embeddings = ml->get_tensor("token_embd.weight", {n_embd, n_vocab}, GGML_BACKEND_CPU);
+        model.tok_embeddings = ml->get_tensor(TN_TOKEN_EMBD, {n_embd, n_vocab}, GGML_BACKEND_CPU);
 
         // "output" tensor
         {
@@ -1331,8 +1345,8 @@ static void llama_model_load_internal(
                 backend_output = GGML_BACKEND_CPU;
             }
 
-            model.norm   = ml->get_tensor("output_norm.weight", {n_embd},          backend_norm);
-            model.output = ml->get_tensor("output.weight",      {n_embd, n_vocab}, backend_output);
+            model.norm   = ml->get_tensor(TN_OUTPUT_NORM, {n_embd},          backend_norm);
+            model.output = ml->get_tensor(TN_OUTPUT,      {n_embd, n_vocab}, backend_output);
             if (backend_norm == GGML_BACKEND_GPU) {
                 vram_weights += ggml_nbytes(model.norm);
             }
@@ -1349,21 +1363,18 @@ static void llama_model_load_internal(
             const ggml_backend backend_split = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD_SPLIT; // NOLINT
 
             auto & layer = model.layers[i];
+            layer.attention_norm = ml->get_tensor(format(TN_ATTN_NORM, i), {n_embd}, backend);
 
-            std::string layers_i = "blk." + std::to_string(i);
+            layer.wq = ml->get_tensor(format(TN_ATTN_Q, i),      {n_embd, n_embd},     backend_split);
+            layer.wk = ml->get_tensor(format(TN_ATTN_K, i),      {n_embd, n_embd_gqa}, backend_split);
+            layer.wv = ml->get_tensor(format(TN_ATTN_V, i),      {n_embd, n_embd_gqa}, backend_split);
+            layer.wo = ml->get_tensor(format(TN_ATTN_OUTPUT, i), {n_embd, n_embd},     backend_split);
 
-            layer.attention_norm = ml->get_tensor(layers_i + ".attn_norm.weight", {n_embd}, backend);
+            layer.ffn_norm = ml->get_tensor(format(TN_FFN_NORM, i), {n_embd}, backend);
 
-            layer.wq = ml->get_tensor(layers_i + ".attn_q.weight",      {n_embd, n_embd},     backend_split);
-            layer.wk = ml->get_tensor(layers_i + ".attn_k.weight",      {n_embd, n_embd_gqa}, backend_split);
-            layer.wv = ml->get_tensor(layers_i + ".attn_v.weight",      {n_embd, n_embd_gqa}, backend_split);
-            layer.wo = ml->get_tensor(layers_i + ".attn_output.weight", {n_embd, n_embd},     backend_split);
-
-            layer.ffn_norm = ml->get_tensor(layers_i + ".ffn_norm.weight", {n_embd}, backend);
-
-            layer.w1 = ml->get_tensor(layers_i + ".ffn_gate.weight", {n_embd,   n_ff}, backend_split);
-            layer.w2 = ml->get_tensor(layers_i + ".ffn_down.weight", {  n_ff, n_embd}, backend_split);
-            layer.w3 = ml->get_tensor(layers_i + ".ffn_up.weight",   {n_embd,   n_ff}, backend_split);
+            layer.w1 = ml->get_tensor(format(TN_FFN_GATE, i), {n_embd,   n_ff}, backend_split);
+            layer.w2 = ml->get_tensor(format(TN_FFN_DOWN, i), {  n_ff, n_embd}, backend_split);
+            layer.w3 = ml->get_tensor(format(TN_FFN_UP, i),   {n_embd,   n_ff}, backend_split);
 
             if (backend == GGML_BACKEND_GPU) {
                 vram_weights +=
@@ -3240,10 +3251,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     int n_attention_wv    = 0;
     int n_feed_forward_w2 = 0;
     for (auto& tensor : model_loader->tensors_map.tensors) {
-        if (tensor.name.find("attention.wv.weight") != std::string::npos) {
+        if (tensor.name.find("attn_v.weight") != std::string::npos) {
             ++n_attention_wv;
         }
-        else if (tensor.name.find("feed_forward.w2.weight") != std::string::npos) {
+        else if (tensor.name.find("ffn_down.weight") != std::string::npos) {
             ++n_feed_forward_w2;
         }
     }
@@ -3298,13 +3309,13 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         } else {
             new_type = quantized_type;
 #ifdef GGML_USE_K_QUANTS
-            if (tensor.name == "output.weight") {
+            if (tensor.name == TN_OUTPUT) {
                 int nx = tensor.ne.at(0);
                 int ny = tensor.ne.at(1);
                 if (nx % QK_K == 0 && ny % QK_K == 0) {
                     new_type = GGML_TYPE_Q6_K;
                 }
-            } else if (tensor.name.find("attention.wv.weight") != std::string::npos) {
+            } else if (tensor.name.find("attn_v.weight") != std::string::npos) {
                 if      (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q4_K;
                 else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
                 else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) &&
@@ -3319,7 +3330,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                          use_more_bits(i_feed_forward_w2, n_feed_forward_w2)) new_type = GGML_TYPE_Q6_K;
                 //else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S && i_feed_forward_w2 < n_feed_forward_w2/8) new_type = GGML_TYPE_Q6_K;
                 ++i_feed_forward_w2;
-            } else if (tensor.name.find("attention.wo.weight") != std::string::npos) {
+            } else if (tensor.name.find("attn_output.weight") != std::string::npos) {
                 if      (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q4_K;
                 else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
             }
@@ -3334,10 +3345,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 }
             }
             if (convert_incompatible_tensor) {
-                if (tensor.name == "output.weight") {
+                if (tensor.name == TN_OUTPUT) {
                     new_type = GGML_TYPE_F16; //fall back to F16 instead of just failing.
                     LLAMA_LOG_WARN("F16 will be used for this tensor instead.\n");
-                } else if (tensor.name == "tok_embeddings.weight") {
+                } else if (tensor.name == TN_TOKEN_EMBD) {
                     new_type = GGML_TYPE_Q4_0; //fall back to Q4_0 instead of just failing.
                     LLAMA_LOG_WARN("Q4_0 will be used for this tensor instead.\n");
                 } else {
