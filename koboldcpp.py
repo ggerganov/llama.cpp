@@ -76,13 +76,20 @@ def file_exists(filename):
     return os.path.exists(os.path.join(getdirpath(), filename))
 
 def pick_existant_file(ntoption,nonntoption):
+    precompiled_prefix = "precompiled_"
     ntexist = file_exists(ntoption)
     nonntexist = file_exists(nonntoption)
+    precompiled_ntexist = file_exists(precompiled_prefix+ntoption)
+    precompiled_nonntexist = file_exists(precompiled_prefix+nonntoption)
     if os.name == 'nt':
+        if not ntexist and precompiled_ntexist:
+            return (precompiled_prefix+ntoption)
         if nonntexist and not ntexist:
             return nonntoption
         return ntoption
     else:
+        if not nonntexist and precompiled_nonntexist:
+            return (precompiled_prefix+nonntoption)
         if ntexist and not nonntexist:
             return ntoption
         return nonntoption
