@@ -737,11 +737,24 @@ struct gguf_file_saver {
         file.write_arr<float>(key, type, data);
     }
 
+    void write_kv_arr_i32(const std::string & key, enum gguf_type type, int i, int n_arr) {
+        std::vector<int32_t> data(n_arr);
+
+        for (int j = 0; j < n_arr; ++j) {
+            int32_t val = gguf_get_arr_i32(ctx, i, j);
+            data[j] = val;
+        }
+
+        file.write_arr<int32_t>(key, type, data);
+    }
+
     // re-write the key-value section from the loaded file
     void write_kv() {
         const int32_t n_kv = gguf_get_n_kv(ctx);
         for (int i = 0; i < n_kv; ++i) {
             const char * key = gguf_get_key(ctx, i);
+            LLAMA_LOG_INFO("%s: writing key '%s'\n", __func__, key);
+
             if (strcmp(key, "general.quantization_version") == 0) {
                 file.write_val<uint32_t>("general.quantization_version", GGUF_TYPE_UINT32, GGML_QNT_VERSION);
             } else {
@@ -761,12 +774,13 @@ struct gguf_file_saver {
                         {
                             const gguf_type arr_type = gguf_get_arr_type(ctx, i);
                             const int       n_arr    = gguf_get_arr_n   (ctx, i);
-                            if (arr_type == GGUF_TYPE_FLOAT32) {
-                                write_kv_arr_f32(key, arr_type, i, n_arr);
-                            } else if (arr_type == GGUF_TYPE_STRING) {
-                                write_kv_arr_str(key, arr_type, i, n_arr);
-                            } else {
-                                throw std::runtime_error("not implemented");
+
+                            switch (arr_type) {
+                                case GGUF_TYPE_FLOAT32: write_kv_arr_f32(key, arr_type, i, n_arr); break;
+                                case GGUF_TYPE_INT32:   write_kv_arr_i32(key, arr_type, i, n_arr); break;
+                                case GGUF_TYPE_STRING:  write_kv_arr_str(key, arr_type, i, n_arr); break;
+                                default:
+                                    throw std::runtime_error(format("cannot recognize array type for key %s\n", key));
                             }
                         } break;
                     default:
