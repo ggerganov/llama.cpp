@@ -712,6 +712,7 @@ void ggml_metal_graph_compute(
 
                             GGML_ASSERT(ne00 == ne10);
                             // GGML_ASSERT(ne02 == ne12); // Should be checked on individual data types until broadcast is implemented everywhere
+                            uint gqa = ne12/ne02;
                             GGML_ASSERT(ne03 == ne13);
 
                             // for now the matrix-matrix multiplication kernel only works on A14+/M1+ SoCs
@@ -743,6 +744,7 @@ void ggml_metal_graph_compute(
                                     [encoder setBytes:&ne12 length:sizeof(ne12) atIndex:7];
                                     [encoder setBytes:&ne0 length:sizeof(ne0) atIndex:8];
                                     [encoder setBytes:&ne1 length:sizeof(ne1) atIndex:9];
+                                    [encoder setBytes:&gqa length:sizeof(gqa) atIndex:10];
                                     [encoder setThreadgroupMemoryLength:8192 atIndex:0];
                                     [encoder dispatchThreadgroups:MTLSizeMake( (ne11+31)/32, (ne01+63) / 64, ne12) threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
                                 }
@@ -845,6 +847,7 @@ void ggml_metal_graph_compute(
                                 [encoder setBytes:&nb12 length:sizeof(nb12) atIndex:14];
                                 [encoder setBytes:&ne0  length:sizeof(ne0)  atIndex:15];
                                 [encoder setBytes:&ne1  length:sizeof(ne1)  atIndex:16];
+                                [encoder setBytes:&gqa length:sizeof(gqa) atIndex:17];
 
                                 if (src0t == GGML_TYPE_Q4_0 || src0t == GGML_TYPE_Q4_1 ||
                                     src0t == GGML_TYPE_Q2_K || src0t == GGML_TYPE_Q4_K) {
