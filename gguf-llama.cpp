@@ -1098,11 +1098,11 @@ struct llama_model_loader {
         this->use_mmap = use_mmap;
     }
 
-    void calc_sizes(size_t * ctx_size_p, size_t * mmapped_size_p) const {
-        *ctx_size_p = *mmapped_size_p = 0;
+    void calc_sizes(size_t & ctx_size_p, size_t & mmapped_size_p) const {
+        ctx_size_p = mmapped_size_p = 0;
         for (const llama_load_tensor & lt : tensors_map.tensors) {
-            *ctx_size_p += sizeof(struct ggml_tensor) + GGML_OBJECT_SIZE;
-            *(use_mmap ? mmapped_size_p : ctx_size_p) += lt.size + 16;
+            ctx_size_p += sizeof(struct ggml_tensor) + GGML_OBJECT_SIZE;
+            (use_mmap ? mmapped_size_p : ctx_size_p) += ggml_nbytes_pad(lt.ggml_tensor);
         }
     }
 
@@ -1159,19 +1159,19 @@ struct llama_model_loader {
     }
 
     void load_all_data(llama_progress_callback progress_callback, void * progress_callback_user_data, llama_mlock * lmlock) {
-        size_t data_size     = 0;
-        size_t prefetch_size = 0;
-        size_t lock_size     = 0;
+        size_t data_size = 0;
+        size_t lock_size = 0;
+        size_t pref_size = 0; // prefetch
 
         for (const llama_load_tensor & lt : tensors_map.tensors) {
             data_size += lt.size;
             if (lt.ggml_tensor->backend == GGML_BACKEND_CPU) {
-                prefetch_size += lt.size;
+                pref_size += lt.size;
             }
         }
 
         if (use_mmap) {
-            mapping.reset(new llama_mmap(&file_loader->file, prefetch_size, ggml_is_numa()));
+            mapping.reset(new llama_mmap(&file_loader->file, pref_size, ggml_is_numa()));
             if (lmlock) {
                 lmlock->init(mapping->addr);
             }
@@ -1404,7 +1404,7 @@ static void llama_model_load_internal(
 
     size_t ctx_size;
     size_t mmapped_size;
-    ml->calc_sizes(&ctx_size, &mmapped_size);
+    ml->calc_sizes(ctx_size, mmapped_size);
     LLAMA_LOG_INFO("%s: ggml ctx size = %7.2f MB\n", __func__, ctx_size/1024.0/1024.0);
 
     // create the ggml context
@@ -3688,7 +3688,7 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
 
         size_t ctx_size;
         size_t mmapped_size;
-        model_loader->calc_sizes(&ctx_size, &mmapped_size);
+        model_loader->calc_sizes(ctx_size, mmapped_size);
         base_buf.resize(ctx_size);
 
         ggml_init_params base_params;
