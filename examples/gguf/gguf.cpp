@@ -1,5 +1,4 @@
 #include "ggml.h"
-#include "gguf-util.h"
 #include "gguf-llama.h"
 
 #include <cstdio>
@@ -195,6 +194,15 @@ bool gguf_ex_read_1(const std::string & fname) {
 
             fprintf(stdout, "%s: tensor[%d]: n_dims = %d, name = %s, data = %p\n", __func__, i, cur->n_dims, cur->name, cur->data);
 
+            // print first 10 elements
+            const float * data = (const float *) cur->data;
+
+            printf("%s data[:10] : ", name);
+            for (int j = 0; j < MIN(10, ggml_nelements(cur)); ++j) {
+                printf("%f ", data[j]);
+            }
+            printf("\n\n");
+
             // check data
             {
                 const float * data = (const float *) cur->data;
@@ -206,48 +214,6 @@ bool gguf_ex_read_1(const std::string & fname) {
                 }
             }
         }
-    }
-
-    fprintf(stdout, "%s: ctx_data size: %zu\n", __func__, ggml_get_mem_size(ctx_data));
-
-    ggml_free(ctx_data);
-    gguf_free(ctx);
-
-    return true;
-}
-
-// read just the tensor info and mmap the data in user code
-bool gguf_ex_read_2(const std::string & fname) {
-    struct ggml_context * ctx_data = NULL;
-
-    struct gguf_init_params params = {
-        /*.no_alloc = */ true,
-        /*.ctx      = */ &ctx_data,
-    };
-
-    struct gguf_context * ctx = gguf_init_from_file(fname.c_str(), params);
-
-    struct gguf_file file(fname.c_str(), "rb");
-    gguf_mmap data_mmap(&file, 0, false);
-
-    const int n_tensors = gguf_get_n_tensors(ctx);
-
-    for (int i = 0; i < n_tensors; ++i) {
-        const char * name   = gguf_get_tensor_name(ctx, i);
-        const size_t offset = gguf_get_data_offset(ctx) + gguf_get_tensor_offset(ctx, i);
-
-        struct ggml_tensor * cur = ggml_get_tensor(ctx_data, name);
-
-        cur->data = static_cast<char *>(data_mmap.addr) + offset;
-
-        // print first 10 elements
-        const float * data = (const float *) cur->data;
-
-        printf("%s data[:10] : ", name);
-        for (int j = 0; j < MIN(10, ggml_nelements(cur)); ++j) {
-            printf("%f ", data[j]);
-        }
-        printf("\n\n");
     }
 
     fprintf(stdout, "%s: ctx_data size: %zu\n", __func__, ggml_get_mem_size(ctx_data));
@@ -274,7 +240,6 @@ int main(int argc, char ** argv) {
     } else if (mode == "r") {
         GGML_ASSERT(gguf_ex_read_0(fname) && "failed to read gguf file");
         GGML_ASSERT(gguf_ex_read_1(fname) && "failed to read gguf file");
-        GGML_ASSERT(gguf_ex_read_2(fname) && "failed to read gguf file");
     } else if (mode == "q") {
         llama_model_quantize_params params = llama_model_quantize_default_params();
         llama_model_quantize(fname.c_str(), "quant.gguf", &params);

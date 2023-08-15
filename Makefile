@@ -332,7 +332,7 @@ OBJS += ggml-alloc.o
 llama.o: llama.cpp ggml.h ggml-alloc.h ggml-cuda.h ggml-metal.h llama.h llama-util.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-gguf-llama.o: gguf-llama.cpp ggml.h ggml-alloc.h ggml-cuda.h ggml-metal.h gguf-llama.h gguf-util.h
+gguf-llama.o: gguf-llama.cpp ggml.h ggml-alloc.h ggml-cuda.h ggml-metal.h gguf-llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common.o: examples/common.cpp examples/common.h
