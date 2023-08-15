@@ -8,8 +8,9 @@
 #include <codecvt>
 #include <map>
 #include <vector>
+#include <locale>
 
-static std::string vocab_type(llama_context* ctx) {
+static std::string vocab_type(llama_context * ctx) {
     return llama_n_vocab(ctx) == 32000 ? "spm": "bpe";
 }
 
@@ -32,9 +33,9 @@ static std::string escape_whitespace(const std::string& text) {
     return result;
 }
 
-static std::string unescape_whitespace(llama_context* ctx, const std::vector<llama_token>& tokens) {
+static std::string unescape_whitespace(llama_context * ctx, const std::vector<llama_token> & tokens) {
     std::string result;
-    for (int i = 0; i < tokens.size(); ++i) {
+    for (size_t i = 0; i < tokens.size(); ++i) {
         result += llama_token_to_str(ctx, tokens[i]);
     }
     return result;
@@ -85,17 +86,17 @@ int main(int argc, char **argv) {
         if (tokens.size() == 1) {
             if (i != tokens[0]) {
                 std::string backward = llama_token_to_str(ctx, tokens[0]);
-                fprintf(stderr, "%s : error: token %d is string %s but bpe returns token %d %s\n", 
+                fprintf(stderr, "%s : error: token %d is string %s but bpe returns token %d %s\n",
                     __func__, i, llama_token_to_str(ctx, i).c_str(), tokens[0], backward.c_str());
                 return 2;
             }
         } else {
-            if ((vocab_type(ctx) == "spm" && i <= 258) || 
+            if ((vocab_type(ctx) == "spm" && i <= 258) ||
                 (vocab_type(ctx) == "bpe" && (i == 0 || i >= 100000))) {
-                fprintf(stderr, "%s : info: token %d is string %s and bpe returns tokens %s\n", 
+                fprintf(stderr, "%s : info: token %d is string %s and bpe returns tokens %s\n",
                     __func__, i, llama_token_to_str(ctx, i).c_str(), unescape_whitespace(ctx, tokens).c_str());
             } else {
-                fprintf(stderr, "%s : error: token %d is string %s but bpe returns tokens %s\n", 
+                fprintf(stderr, "%s : error: token %d is string %s but bpe returns tokens %s\n",
                     __func__, i, llama_token_to_str(ctx, i).c_str(), unescape_whitespace(ctx, tokens).c_str());
                 return 2;
             }
@@ -108,7 +109,7 @@ int main(int argc, char **argv) {
         std::string str = u16converter.to_bytes(u16str);
         std::vector<llama_token> tokens = llama_tokenize(ctx, escape_whitespace(str).c_str(), false);
         if (tokens.size() == 1) {
-            fprintf(stderr, "%s : info: %s tokenized to %d \n", 
+            fprintf(stderr, "%s : info: %s tokenized to %d \n",
                 __func__, str.c_str(), tokens[0]);
         }
     }
@@ -119,7 +120,7 @@ int main(int argc, char **argv) {
         std::string str = u32converter.to_bytes(u32str);
         std::vector<llama_token> tokens = llama_tokenize(ctx, escape_whitespace(str).c_str(), false);
         if (tokens.size() == 1) {
-            fprintf(stderr, "%s : info: %s tokenized to %d \n", 
+            fprintf(stderr, "%s : info: %s tokenized to %d \n",
                 __func__, str.c_str(), tokens[0]);
         }
     }

@@ -1,4 +1,4 @@
-# HF llama --> gguf conversion, GQA/70b not supported
+# HF llama --> gguf conversion
 
 import gguf
 import gguf_namemap as tmap
@@ -10,7 +10,7 @@ import json
 import numpy as np
 import torch
 
-from typing import Any, List
+from typing import Any, List, Optional
 from pathlib import Path
 from sentencepiece import SentencePieceProcessor
 
@@ -18,11 +18,11 @@ from sentencepiece import SentencePieceProcessor
 # compatible with python < 3.9
 NDArray: 'TypeAlias' = 'np.ndarray[Any, Any]'
 
-
-def permute(weights: NDArray, n_head: int) -> NDArray:
+def permute(weights: NDArray, n_head: int, n_kv_head: Optional[int] = None) -> NDArray:
+    if n_kv_head is not None and n_head != n_kv_head: n_head //= n_kv_head
     return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
-                   .swapaxes(1, 2)
-                   .reshape(weights.shape))
+                .swapaxes(1, 2)
+                .reshape(weights.shape))
 
 def count_model_parts(dir_model: str) -> int:
     num_parts = 0
@@ -95,7 +95,7 @@ else:
 
 gguf_writer.add_architecture(llm_arch)
 gguf_writer.add_name(last_dir)
-gguf_writer.add_file_type( "All tensors F32" if ftype == 0 else "Most tensors F16, some F32")
+gguf_writer.add_file_type("All tensors F32" if ftype == 0 else "Most tensors F16, some F32")
 gguf_writer.add_source_hf_repo(hf_repo)
 gguf_writer.add_context_length(llm_arch, hparams["max_position_embeddings"])
 gguf_writer.add_embedding_length(llm_arch, hparams["hidden_size"])
@@ -111,37 +111,43 @@ gguf_writer.add_layer_norm_rms_eps(llm_arch, hparams["rms_norm_eps"])
 
 print("gguf: get tokenizer metadata")
 
-tokens: List[str] = []
+tokens: List[bytes] = []
 scores: List[float] = []
+toktypes: List[int] = []
 
 if Path(dir_model + "/tokenizer.model").is_file():
     # vocab type sentencepiece
-    print("gguf: get sentencepiece tokenizer vocab and scores")
+    print("gguf: get sentencepiece tokenizer vocab, scores and token types")
 
     tokenizer = SentencePieceProcessor(dir_model + "/tokenizer.model")
 
     for i in range(tokenizer.vocab_size()):
         text: bytes
-        if tokenizer.is_unknown(i):
-            text = " \u2047 ".encode("utf-8")
-        elif tokenizer.is_control(i):
-            text = b""
-        if tokenizer.is_byte(i):
-            piece = tokenizer.id_to_piece(i)
-            if len(piece) != 6:
-                raise Exception(f"Invalid token: {piece}")
-            byte_value = int(piece[3:-1], 16)
-            text = struct.pack("B", byte_value)
-        else:
-            text = tokenizer.id_to_piece(i).replace("\u2581", " ").encode("utf-8")
-        score: float = tokenizer.get_score(i)
+        score: float
+
+        piece = tokenizer.id_to_piece(i)
+        text  = piece.encode("utf-8")
+        score = tokenizer.get_score(i)
+
+        toktype = 1 # defualt to normal token type
+        if tokenizer.is_unknown(i): toktype = 2
+        if tokenizer.is_control(i): toktype = 3
+ 
+        # TODO: How to determinate if a token is user defined?
+        # ref: https://github.com/google/sentencepiece/blob/master/src/sentencepiece_model.proto
+        # if tokenizer.is_user_defined(i): toktype = 4
+
+        if tokenizer.is_unused(i):  toktype = 5
+        if tokenizer.is_byte(i):    toktype = 6
 
         tokens.append(text)
         scores.append(score)
+        toktypes.append(toktype)
 
     gguf_writer.add_tokenizer_model("llama")
     gguf_writer.add_token_list(tokens)
     gguf_writer.add_token_scores(scores)
+    gguf_writer.add_token_types(toktypes)
 
 if Path(dir_model + "/tokenizer.json").is_file():
     with open(dir_model + "/tokenizer.json", "r", encoding="utf-8") as f:
@@ -214,7 +220,7 @@ for part_name in part_names:
 
         # permute these
         if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
-            data = permute(data,head_count)
+            data = permute(data, head_count, head_count_kv)
 
         # map tensor names
         if name.endswith(".weight") and name[:-7] in tensor_map:
@@ -283,7 +289,7 @@ for part_name in part_names:
 
         # permute these
         if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
-            data = permute(data, head_count)
+            data = permute(data, head_count, head_count_kv)
 
         # map tensor names
         if name.endswith(".weight") and name[:-7] in tensor_map:
