@@ -102,10 +102,21 @@ int main(int argc, char **argv) {
         }
     }
 
-    std::wstring_convert<typename std::codecvt_utf8<wchar_t>, wchar_t> converter;
-    for (wchar_t ch = 0x0000; ch < 0xffff; ++ch) {
-        std::wstring wstr(1, ch);
-        std::string str = converter.to_bytes(wstr);
+    std::wstring_convert<typename std::codecvt_utf8<char16_t>, char16_t> u16converter;
+    for (char16_t ch = 0x0000; ch < 0xffff; ++ch) {
+        std::u16string u16str(1, ch);
+        std::string str = u16converter.to_bytes(u16str);
+        std::vector<llama_token> tokens = llama_tokenize(ctx, escape_whitespace(str).c_str(), false);
+        if (tokens.size() == 1) {
+            fprintf(stderr, "%s : info: %s tokenized to %d \n", 
+                __func__, str.c_str(), tokens[0]);
+        }
+    }
+
+    std::wstring_convert<typename std::codecvt_utf8<char32_t>, char32_t> u32converter;
+    for (char32_t ch = 0x0000; ch < 0x0010ffff; ++ch) {
+        std::u32string u32str(1, ch);
+        std::string str = u32converter.to_bytes(u32str);
         std::vector<llama_token> tokens = llama_tokenize(ctx, escape_whitespace(str).c_str(), false);
         if (tokens.size() == 1) {
             fprintf(stderr, "%s : info: %s tokenized to %d \n", 
