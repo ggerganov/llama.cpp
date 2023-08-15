@@ -10,6 +10,7 @@
 #endif // GGML_USE_CUBLAS
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdbool.h>
 
 #ifdef LLAMA_SHARED
@@ -519,6 +520,8 @@ extern "C" {
     // Set callback for all future logging events.
     // If this is not called, or NULL is supplied, everything is output on stderr.
     LLAMA_API void llama_log_set(llama_log_callback log_callback, void * user_data);
+
+    LLAMA_API void llama_dump_timing_info_yaml(FILE * stream, const llama_context * ctx);
 
 #ifdef __cplusplus
 }
