@@ -528,6 +528,7 @@ struct llama_state {
     llama_log_callback log_callback = llama_log_callback_default;
     void * log_callback_user_data = nullptr;
 };
+
 // global state
 static llama_state g_state;
 
@@ -647,6 +648,8 @@ struct gguf_file_loader {
             throw std::runtime_error("cannot find token scores list in GGUF file\n");
         }
 
+        const float * scores = (const float * ) gguf_get_arr_data(gguf_ctx, score_idx);
+
         for (uint32_t i = 0; i < hparams.n_vocab; i++) {
             std::string word = gguf_get_arr_str(gguf_ctx, token_idx, i);
 
@@ -654,7 +657,7 @@ struct gguf_file_loader {
 
             auto & tok_score = vocab.id_to_token[i];
             tok_score.tok = std::move(word);
-            tok_score.score = gguf_get_arr_f32(gguf_ctx, score_idx, i);
+            tok_score.score = scores[i];
         }
     }
 

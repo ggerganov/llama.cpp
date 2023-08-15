@@ -19073,6 +19073,10 @@ float gguf_get_arr_f32(struct gguf_context * ctx, int key_id, int i) {
     return ((float *) ctx->kv[key_id].value.arr.data)[i];
 }
 
+const void * gguf_get_arr_data(struct gguf_context * ctx, int i) {
+    return ctx->kv[i].value.arr.data;
+}
+
 const char * gguf_get_arr_str(struct gguf_context * ctx, int key_id, int i) {
     struct gguf_kv * kv = &ctx->kv[key_id];
     struct gguf_str * str = &((struct gguf_str *) kv->value.arr.data)[i];
