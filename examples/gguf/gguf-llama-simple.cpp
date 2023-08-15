@@ -74,7 +74,9 @@ int main(int argc, char ** argv) {
     // tokens (see "infinite text generation via context swapping" in the main example), but in this minimalist
     // example, we will just stop the loop once this cache is full or once an end of stream is detected.
 
-    while (llama_get_kv_cache_token_count(ctx) < max_context_size) {
+    const int n_gen = std::min(32, max_context_size);
+
+    while (llama_get_kv_cache_token_count(ctx) < n_gen) {
         // evaluate the transformer
 
         if (llama_eval(ctx, tokens_list.data(), int(tokens_list.size()), llama_get_kv_cache_token_count(ctx), params.n_threads)) {
@@ -114,13 +116,14 @@ int main(int argc, char ** argv) {
 
         // push this new token for next evaluation
         tokens_list.push_back(new_token_id);
-
     }
 
     llama_free(ctx);
     llama_free_model(model);
 
     llama_backend_free();
+
+    fprintf(stderr, "\n\n");
 
     return 0;
 }
