@@ -1712,7 +1712,6 @@ extern "C" {
     // gguf
     //
 
-    // TODO: can be removed if the API is extended for writing
     enum gguf_type {
         GGUF_TYPE_UINT8   = 0,
         GGUF_TYPE_INT8    = 1,
@@ -1739,7 +1738,8 @@ extern "C" {
     GGML_API struct gguf_context * gguf_init_empty(void);
     GGML_API struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_params params);
     //GGML_API struct gguf_context * gguf_init_from_buffer(..);
-    GGML_API void                  gguf_free(struct gguf_context * ctx);
+
+    GGML_API void gguf_free(struct gguf_context * ctx);
 
     GGML_API int    gguf_get_version    (struct gguf_context * ctx);
     GGML_API size_t gguf_get_alignment  (struct gguf_context * ctx);
@@ -1770,6 +1770,7 @@ extern "C" {
     GGML_API const char * gguf_get_arr_str (struct gguf_context * ctx, int key_id, int i);
 
     GGML_API int    gguf_get_n_tensors    (struct gguf_context * ctx);
+    GGML_API int    gguf_find_tensor      (struct gguf_context * ctx, const char * name);
     GGML_API size_t gguf_get_tensor_offset(struct gguf_context * ctx, int i);
     GGML_API char * gguf_get_tensor_name  (struct gguf_context * ctx, int i);
 
@@ -1789,17 +1790,35 @@ extern "C" {
     // set or add KV pairs from another context
     GGML_API void gguf_set_kv(struct gguf_context * ctx, struct gguf_context * src);
 
+    // manage tensor info
     GGML_API void gguf_add_tensor(struct gguf_context * ctx, const struct ggml_tensor * tensor);
+    GGML_API void gguf_set_tensor_type(struct gguf_context * ctx, const char * name, enum ggml_type type);
+    GGML_API void gguf_set_tensor_data(struct gguf_context * ctx, const char * name, const void * data, size_t size);
 
-    // same as gguf_add_tensor, but allows to override tensor data
-    GGML_API void gguf_add_tensor_ex(
-                 struct gguf_context * ctx,
-            const struct ggml_tensor * tensor,
-                      enum ggml_type   type,
-                          const void * data,
-                              size_t   size);
+    // writing gguf files can be done in 2 ways:
+    //
+    // - write the entire gguf_context to a binary file in a single pass:
+    //
+    //   gguf_write_to_file(ctx, fname);
+    //
+    // - first prepare a file with a placeholder for the meta data, write the tensor data, then write the meta data:
+    //
+    //   FILE * f = fopen(fname, "wb");
+    //   fseek(f, gguf_get_meta_size(ctx), SEEK_SET);
+    //   fwrite(f, ...);
+    //   void * data = gguf_meta_get_meta_data(ctx);
+    //   fseek(f, 0, SEEK_SET);
+    //   fwrite(f, data, gguf_get_meta_size(ctx));
+    //   free(data);
+    //   fclose(f);
+    //
 
-    GGML_API void gguf_write_to_file(struct gguf_context * ctx, const char * fname);
+    // write the entire context to a binary file
+    GGML_API void gguf_write_to_file(struct gguf_context * ctx, const char * fname, bool only_meta);
+
+    // get the size in bytes of the meta data (header, kv pairs, tensor info) including padding
+    GGML_API size_t gguf_get_meta_size(struct gguf_context * ctx);
+    GGML_API void   gguf_get_meta_data(struct gguf_context * ctx, void * data);
 
     //
     // system info

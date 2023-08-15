@@ -72,7 +72,7 @@ bool gguf_ex_write(const std::string & fname) {
         gguf_add_tensor(ctx, cur);
     }
 
-    gguf_write_to_file(ctx, fname.c_str());
+    gguf_write_to_file(ctx, fname.c_str(), false);
 
     fprintf(stdout, "%s: wrote file '%s;\n", __func__, fname.c_str());
 

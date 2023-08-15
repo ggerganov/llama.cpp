@@ -83,6 +83,13 @@ static std::string to_string(const T & val) {
     return ss.str();
 }
 
+static void zeros(std::ofstream & file, size_t n) {
+    char zero = 0;
+    for (size_t i = 0; i < n; ++i) {
+        file.write(&zero, 1);
+    }
+}
+
 #if !defined(GGML_USE_CUBLAS) && !defined(GGML_USE_METAL)
 #include "ggml-alloc.h"
 #define LLAMA_USE_ALLOCATOR
@@ -3049,7 +3056,6 @@ static void llama_convert_tensor_internal(const gguf_load_tensor & tensor, std::
     for (auto & worker : workers) {
         worker.join();
     }
-
 }
 
 static void llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, const llama_model_quantize_params * params) {
@@ -3087,6 +3093,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
     std::unique_ptr<llama_model_loader> model_loader(new llama_model_loader(fname_inp, /*use_mmap*/ false));
 
+    const size_t align = GGUF_DEFAULT_ALIGNMENT;
     struct gguf_context * ctx_out = gguf_init_empty();
 
     // copy the KV pairs from the input file
@@ -3125,7 +3132,18 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     std::vector<uint8_t> read_data;
     std::vector<uint8_t> work;
 
-    std::vector<std::vector<uint8_t>> work_map(model_loader->tensors_map.tensors.size());
+    for (gguf_load_tensor & tensor : model_loader->tensors_map.tensors) {
+        gguf_add_tensor(ctx_out, tensor.ggml_tensor);
+    }
+
+    std::ofstream fout(fname_out, std::ios::binary);
+
+    const size_t meta_size = gguf_get_meta_size(ctx_out);
+
+    LLAMA_LOG_INFO("%s: meta size = %zu bytes\n", __func__, meta_size);
+
+    // placeholder for the meta data
+    ::zeros(fout, meta_size);
 
     for (gguf_load_tensor & tensor : model_loader->tensors_map.tensors) {
         read_data.resize(tensor.size);
@@ -3286,13 +3304,25 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         total_size_org += tensor.size;
         total_size_new += new_size;
 
-        // TODO: temp fix until we have stream support in gguf
-        work_map[idx - 1] = std::vector<uint8_t>((char *) new_data, (char *) new_data + new_size);
+        // update the gguf meta data as we go
+        gguf_set_tensor_type(ctx_out, tensor.name.c_str(), new_type);
+        gguf_set_tensor_data(ctx_out, tensor.name.c_str(), new_data, new_size);
 
-        gguf_add_tensor_ex(ctx_out, tensor.ggml_tensor, new_type, work_map[idx - 1].data(), new_size);
+        // write tensor data + padding
+        fout.write((const char *) new_data, new_size);
+        zeros(fout, GGML_PAD(new_size, align) - new_size);
     }
 
-    gguf_write_to_file(ctx_out, fname_out.c_str());
+    // go back to beginning of file and write the updated meta data
+    {
+        fout.seekp(0);
+        std::vector<uint8_t> data(gguf_get_meta_size(ctx_out));
+        gguf_get_meta_data(ctx_out, data.data());
+        fout.write((const char *) data.data(), data.size());
+    }
+
+    fout.close();
+
     gguf_free(ctx_out);
 
     LLAMA_LOG_INFO("%s: model size  = %8.2f MB\n", __func__, total_size_org/1024.0/1024.0);
