@@ -447,12 +447,12 @@ void init_lora(const struct my_llama_model * model, struct my_llama_lora * lora)
         ggml_format_name(layer.ffn_norm_a, "%s.ffn_norm.weight.loraA", layers_i.c_str());
         ggml_format_name(layer.ffn_norm_b, "%s.ffn_norm.weight.loraB", layers_i.c_str());
 
-        ggml_format_name(layer.w1_a, "%s.feed_forward.w1_a.weight", layers_i.c_str());
-        ggml_format_name(layer.w1_b, "%s.feed_forward.w1_b.weight", layers_i.c_str());
-        ggml_format_name(layer.w2_a, "%s.feed_forward.w2_a.weight", layers_i.c_str());
-        ggml_format_name(layer.w2_b, "%s.feed_forward.w2_b.weight", layers_i.c_str());
-        ggml_format_name(layer.w3_a, "%s.feed_forward.w3_a.weight", layers_i.c_str());
-        ggml_format_name(layer.w3_b, "%s.feed_forward.w3_b.weight", layers_i.c_str());
+        ggml_format_name(layer.w1_a, "%s.feed_forward.w1.weight.loraA", layers_i.c_str());
+        ggml_format_name(layer.w1_b, "%s.feed_forward.w1.weight.loraB", layers_i.c_str());
+        ggml_format_name(layer.w2_a, "%s.feed_forward.w2.weight.loraA", layers_i.c_str());
+        ggml_format_name(layer.w2_b, "%s.feed_forward.w2.weight.loraB", layers_i.c_str());
+        ggml_format_name(layer.w3_a, "%s.feed_forward.w3.weight.loraA", layers_i.c_str());
+        ggml_format_name(layer.w3_b, "%s.feed_forward.w3.weight.loraB", layers_i.c_str());
     }
 }
 
