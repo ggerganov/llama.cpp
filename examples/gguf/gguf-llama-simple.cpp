@@ -3,7 +3,7 @@
 #endif
 
 #include "common.h"
-#include "gguf-llama.h"
+#include "llama.h"
 #include "build-info.h"
 
 #include <cmath>

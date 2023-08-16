@@ -17,7 +17,7 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-static const float rms_norm_eps = LLAMA_DEFAULT_RMS_EPS;
+static const float rms_norm_eps = 1e-5f;
 
 struct random_normal_distribution {
     std::mt19937 gen;
@@ -2612,42 +2612,45 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
         return;
     }
 
-    // write_magic
-    file.write_u32(LLAMA_FILE_MAGIC);   // magic
-    file.write_u32(LLAMA_FILE_VERSION); // version
-    // write_hparams
-    file.write_u32(model->hparams.n_vocab);
-    file.write_u32(model->hparams.n_embd);
-    file.write_u32(model->hparams.n_mult);
-    file.write_u32(model->hparams.n_head);
-    file.write_u32(model->hparams.n_layer);
-    file.write_u32(model->hparams.n_rot);
-    file.write_u32(LLAMA_FTYPE_ALL_F32);
-    // write_vocab
-    uint32_t n_vocab = model->hparams.n_vocab;
-    for (uint32_t i = 0; i < n_vocab; i++) {
-        const auto & token_score = vocab->id_to_token.at(i);
-        file.write_u32((uint32_t) token_score.tok.size());
-        file.write_raw(token_score.tok.data(), token_score.tok.size());
-        file.write_raw(&token_score.score, sizeof(token_score.score));
-    }
-    // write tensors
-    write_tensor(&file, model->tok_embeddings);
-    write_tensor(&file, model->norm);
-    write_tensor(&file, model->output);
-    for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {
-        auto & layer = model->layers[i];
-
-        write_tensor(&file, layer.attention_norm);
-        write_tensor(&file, layer.wq);
-        write_tensor(&file, layer.wk);
-        write_tensor(&file, layer.wv);
-        write_tensor(&file, layer.wo);
-        write_tensor(&file, layer.ffn_norm);
-        write_tensor(&file, layer.w1);
-        write_tensor(&file, layer.w2);
-        write_tensor(&file, layer.w3);
-    }
+#pragma message("TODO: implement file saving using gguf")
+    (void) vocab;
+    (void) model;
+//    // write_magic
+//    file.write_u32(LLAMA_FILE_MAGIC);   // magic
+//    file.write_u32(LLAMA_FILE_VERSION); // version
+//    // write_hparams
+//    file.write_u32(model->hparams.n_vocab);
+//    file.write_u32(model->hparams.n_embd);
+//    file.write_u32(model->hparams.n_mult);
+//    file.write_u32(model->hparams.n_head);
+//    file.write_u32(model->hparams.n_layer);
+//    file.write_u32(model->hparams.n_rot);
+//    file.write_u32(LLAMA_FTYPE_ALL_F32);
+//    // write_vocab
+//    uint32_t n_vocab = model->hparams.n_vocab;
+//    for (uint32_t i = 0; i < n_vocab; i++) {
+//        const auto & token_score = vocab->id_to_token.at(i);
+//        file.write_u32((uint32_t) token_score.tok.size());
+//        file.write_raw(token_score.tok.data(), token_score.tok.size());
+//        file.write_raw(&token_score.score, sizeof(token_score.score));
+//    }
+//    // write tensors
+//    write_tensor(&file, model->tok_embeddings);
+//    write_tensor(&file, model->norm);
+//    write_tensor(&file, model->output);
+//    for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {
+//        auto & layer = model->layers[i];
+//
+//        write_tensor(&file, layer.attention_norm);
+//        write_tensor(&file, layer.wq);
+//        write_tensor(&file, layer.wk);
+//        write_tensor(&file, layer.wv);
+//        write_tensor(&file, layer.wo);
+//        write_tensor(&file, layer.ffn_norm);
+//        write_tensor(&file, layer.w1);
+//        write_tensor(&file, layer.w2);
+//        write_tensor(&file, layer.w3);
+//    }
 }
 
 float cosine_decay(const int decay_steps, const float alpha, int step) {

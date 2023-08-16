@@ -329,10 +329,7 @@ ggml-alloc.o: ggml-alloc.c ggml.h ggml-alloc.h
 
 OBJS += ggml-alloc.o
 
-llama.o: llama.cpp ggml.h ggml-alloc.h ggml-cuda.h ggml-metal.h llama.h llama-util.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-gguf-llama.o: gguf-llama.cpp ggml.h ggml-alloc.h ggml-cuda.h ggml-metal.h gguf-llama.h
+llama.o: llama.cpp ggml.h ggml-alloc.h ggml-cuda.h ggml-metal.h llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common.o: examples/common.cpp examples/common.h
@@ -388,10 +385,10 @@ $(LIB_PRE)embdinput$(DSO_EXT): examples/embd-input/embd-input.h examples/embd-in
 embd-input-test: $(LIB_PRE)embdinput$(DSO_EXT) examples/embd-input/embd-input-test.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %$(DSO_EXT),$(filter-out %.h,$(filter-out %.hpp,$^))) -o $@ $(LDFLAGS) -L. -lembdinput
 
-gguf: examples/gguf/gguf.cpp                                  build-info.h ggml.o gguf-llama.o $(OBJS)
+gguf: examples/gguf/gguf.cpp                                  build-info.h ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-gguf-llama-simple: examples/gguf/gguf-llama-simple.cpp                            build-info.h ggml.o gguf-llama.o common.o $(OBJS)
+gguf-llama-simple: examples/gguf/gguf-llama-simple.cpp        build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 gptneox-main: gptneox-main.cpp ggml.o $(OBJS)

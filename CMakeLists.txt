@@ -529,7 +529,6 @@ endif()
 add_library(llama
             llama.cpp
             llama.h
-            llama-util.h
             )
 
 target_include_directories(llama PUBLIC .)
