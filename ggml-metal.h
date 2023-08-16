@@ -63,10 +63,13 @@ void ggml_metal_get_tensor(struct ggml_metal_context * ctx, struct ggml_tensor *
 
 // try to find operations that can be run concurrently in the graph
 // you should run it again if the topology of your graph changes
-void ggml_metal_graph_find_concurrency(struct ggml_metal_context * ctx, struct ggml_cgraph * gf);
+void ggml_metal_graph_find_concurrency(struct ggml_metal_context * ctx, struct ggml_cgraph * gf, bool check_mem);
 
-// if the graph has been optimized for concurrently dispatch
-bool ggml_metal_if_optimized(struct ggml_metal_context * ctx);
+// if the graph has been optimized for concurrently dispatch, return length of the concur_list if optimized
+int ggml_metal_if_optimized(struct ggml_metal_context * ctx);
+
+// output the concur_list for ggml_alloc
+int * ggml_metal_get_concur_list(struct ggml_metal_context * ctx);
 
 // same as ggml_graph_compute but uses Metal
 // creates gf->n_threads command buffers in parallel
