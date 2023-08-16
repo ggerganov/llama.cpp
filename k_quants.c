@@ -268,16 +268,19 @@ static float make_qkx1_quants(int n, int nmax, const float * restrict x, uint8_t
     return scale;
 }
 
-static float make_qkx2_quants(int n, int nmax, const float * restrict x, uint8_t * restrict L, float * restrict the_min,
-        uint8_t * restrict Laux, bool use_mad) {
+static float make_qkx2_quants(int n, int nmax, const float * restrict x, const float * restrict weights,
+        uint8_t * restrict L, float * restrict the_min, uint8_t * restrict Laux,
+        float rmin, float rdelta, int nstep, bool use_mad) {
     float min = x[0];
     float max = x[0];
-    float sum_x = 0, sum_x2 = 0;
+    float sum_w = weights[0];
+    float sum_x = sum_w * x[0];
     for (int i = 1; i < n; ++i) {
         if (x[i] < min) min = x[i];
         if (x[i] > max) max = x[i];
-        sum_x  += x[i];
-        sum_x2 += x[i] * x[i];
+        float w = weights[i];
+        sum_w += w;
+        sum_x += w * x[i];
     }
     if (min > 0) min = 0;
     if (max == min) {
@@ -285,7 +288,6 @@ static float make_qkx2_quants(int n, int nmax, const float * restrict x, uint8_t
         *the_min = -min;
         return 0.f;
     }
-    float num = sum_x2 * n - sum_x * sum_x * n / (n-1);
     float iscale = nmax/(max - min);
     float scale = 1/iscale;
     float best_mad = 0;
@@ -293,44 +295,40 @@ static float make_qkx2_quants(int n, int nmax, const float * restrict x, uint8_t
         int l = nearest_int(iscale*(x[i] - min));
         L[i] = MAX(0, MIN(nmax, l));
         float diff = scale * L[i] + min - x[i];
-        float w = x[i] * x[i];
-        if (use_mad) {
-            best_mad += w * fabsf(diff);
-        } else {
-            best_mad += w * diff * diff;
-        }
+        diff = use_mad ? fabsf(diff) : diff * diff;
+        float w = weights[i];
+        best_mad += w * diff;
     }
-    if (num <= 0) {
+    if (nstep < 1) {
         *the_min = -min;
         return scale;
     }
-    for (int is = -5; is <= 10; ++is) {
-        iscale = (0.1f*is + nmax)/(max - min);
-        int sum_l = 0, sum_l2 = 0;
+    for (int is = 0; is <= nstep; ++is) {
+        iscale = (rmin + rdelta*is + nmax)/(max - min);
+        float sum_l = 0, sum_l2 = 0, sum_xl = 0;
         for (int i = 0; i < n; ++i) {
             int l = nearest_int(iscale*(x[i] - min));
             l = MAX(0, MIN(nmax, l));
             Laux[i] = l;
-            sum_l += l;
-            sum_l2 += l*l;
+            float w = weights[i];
+            sum_l += w*l;
+            sum_l2 += w*l*l;
+            sum_xl += w*l*x[i];
         }
-        int den = sum_l2 * n - sum_l * sum_l;
-        if (den > 0) {
-            float this_scale = sqrtf(num / den);
-            float this_min = (sum_x - this_scale * sum_l)/n;
+        float D = sum_w * sum_l2 - sum_l * sum_l;
+        if (D > 0) {
+            float this_scale = (sum_w * sum_xl - sum_x * sum_l)/D;
+            float this_min   = (sum_l2 * sum_x - sum_l * sum_xl)/D;
             if (this_min > 0) {
                 this_min = 0;
-                this_scale = sqrtf(sum_x2 / sum_l2);
+                this_scale = sum_xl / sum_l2;
             }
             float mad = 0;
             for (int i = 0; i < n; ++i) {
                 float diff = this_scale * Laux[i] + this_min - x[i];
-                float w = x[i] * x[i];
-                if (use_mad) {
-                    mad += w * fabsf(diff);
-                } else {
-                    mad += w * diff * diff;
-                }
+                diff = use_mad ? fabsf(diff) : diff * diff;
+                float w = weights[i];
+                mad += w * diff;
             }
             if (mad < best_mad) {
                 for (int i = 0; i < n; ++i) {
@@ -365,6 +363,7 @@ void quantize_row_q2_K_reference(const float * restrict x, block_q2_K * restrict
 
     uint8_t L[QK_K];
     uint8_t Laux[16];
+    float   weights[16];
     float mins[QK_K/16];
     float scales[QK_K/16];
 
@@ -375,8 +374,8 @@ void quantize_row_q2_K_reference(const float * restrict x, block_q2_K * restrict
         float max_scale = 0; // as we are deducting the min, scales are always positive
         float max_min = 0;
         for (int j = 0; j < QK_K/16; ++j) {
-            //scales[j] = make_qkx1_quants(16, 3, x + 16*j, L + 16*j, &mins[j], 5, 0.f);
-            scales[j] = make_qkx2_quants(16, 3, x + 16*j, L + 16*j, &mins[j], Laux, false);
+            for (int l = 0; l < 16; ++l) weights[l] = fabsf(x[16*j + l]);
+            scales[j] = make_qkx2_quants(16, 3, x + 16*j, weights, L + 16*j, &mins[j], Laux, -0.5f, 0.1f, 15, true);
             float scale = scales[j];
             if (scale > max_scale) {
                 max_scale = scale;
@@ -723,6 +722,7 @@ void quantize_row_q4_K_reference(const float * restrict x, block_q4_K * restrict
 
     uint8_t L[QK_K];
     uint8_t Laux[32];
+    float   weights[32];
     float mins[QK_K/32];
     float scales[QK_K/32];
 
@@ -731,8 +731,11 @@ void quantize_row_q4_K_reference(const float * restrict x, block_q4_K * restrict
         float max_scale = 0; // as we are deducting the min, scales are always positive
         float max_min = 0;
         for (int j = 0; j < QK_K/32; ++j) {
-            //scales[j] = make_qkx1_quants(32, 15, x + 32*j, L + 32*j, &mins[j], 9, 0.5f);
-            scales[j] = make_qkx2_quants(32, 15, x + 32*j, L + 32*j, &mins[j], Laux, true);
+            float sum_x2 = 0;
+            for (int l = 0; l < 32; ++l) sum_x2 += x[32*j + l] * x[32*j + l];
+            float av_x = sqrtf(sum_x2/32);
+            for (int l = 0; l < 32; ++l) weights[l] = av_x + fabsf(x[32*j + l]);
+            scales[j] = make_qkx2_quants(32, 15, x + 32*j, weights, L + 32*j, &mins[j], Laux, -1.f, 0.1f, 20, false);
             float scale = scales[j];
             if (scale > max_scale) {
                 max_scale = scale;
@@ -885,6 +888,8 @@ void quantize_row_q5_K_reference(const float * restrict x, block_q5_K * restrict
     uint8_t L[QK_K];
     float mins[QK_K/32];
     float scales[QK_K/32];
+    float weights[32];
+    uint8_t Laux[32];
 #else
     int8_t L[QK_K];
     float scales[QK_K/16];
@@ -897,7 +902,12 @@ void quantize_row_q5_K_reference(const float * restrict x, block_q5_K * restrict
         float max_scale = 0; // as we are deducting the min, scales are always positive
         float max_min = 0;
         for (int j = 0; j < QK_K/32; ++j) {
-            scales[j] = make_qkx1_quants(32, 31, x + 32*j, L + 32*j, &mins[j], 9, 0.5f);
+            //scales[j] = make_qkx1_quants(32, 31, x + 32*j, L + 32*j, &mins[j], 9, 0.5f);
+            float sum_x2 = 0;
+            for (int l = 0; l < 32; ++l) sum_x2 += x[32*j + l] * x[32*j + l];
+            float av_x = sqrtf(sum_x2/32);
+            for (int l = 0; l < 32; ++l) weights[l] = av_x + fabsf(x[32*j + l]);
+            scales[j] = make_qkx2_quants(32, 31, x + 32*j, weights, L + 32*j, &mins[j], Laux, -0.5f, 0.1f, 15, false);
             float scale = scales[j];
             if (scale > max_scale) {
                 max_scale = scale;

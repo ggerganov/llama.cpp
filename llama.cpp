@@ -3750,9 +3750,14 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M) new_type = GGML_TYPE_Q4_K;
                 else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
             }
-            else if (tensor.name.find("feed_forward.w") != std::string::npos && ftype == LLAMA_FTYPE_MOSTLY_Q2_K) {
-                new_type = GGML_TYPE_Q3_K;
+            else if (tensor.name.find("feed_forward.w") != std::string::npos) {
+                if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
             }
+            // This can be used to reduce the size of the Q5_K_S model.
+            // The associated PPL increase is fully in line with the size reduction
+            //else {
+            //    if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_S) new_type = GGML_TYPE_Q4_K;
+            //}
             bool convert_incompatible_tensor = false;
             if (new_type == GGML_TYPE_Q2_K || new_type == GGML_TYPE_Q3_K || new_type == GGML_TYPE_Q4_K ||
                 new_type == GGML_TYPE_Q5_K || new_type == GGML_TYPE_Q6_K) {
