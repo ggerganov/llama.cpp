@@ -1752,6 +1752,7 @@ extern "C" {
     GGML_API enum gguf_type gguf_get_kv_type (struct gguf_context * ctx, int i);
     GGML_API enum gguf_type gguf_get_arr_type(struct gguf_context * ctx, int i);
 
+    // results are undefined if the wrong type is used for the key
     GGML_API uint8_t      gguf_get_val_u8  (struct gguf_context * ctx, int i);
     GGML_API int8_t       gguf_get_val_i8  (struct gguf_context * ctx, int i);
     GGML_API uint16_t     gguf_get_val_u16 (struct gguf_context * ctx, int i);
