@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import gguf
 import argparse
 import concurrent.futures
 import copy
@@ -118,6 +119,7 @@ class Params:
     n_mult:    int
     n_head:    int
     n_layer:   int
+    n_ctx:     int
     n_kv_head: Optional[int]  # This parameter is only used for Llama 2
 
     @staticmethod
@@ -145,6 +147,7 @@ class Params:
             n_mult    = 256,
             n_head    = n_head,
             n_layer   = n_layer,
+            n_ctx     = -1,
             n_kv_head = None,
         )
 
@@ -161,12 +164,21 @@ class Params:
 
         n_mult = find_n_mult(n_ff, n_embd);
 
+        if "max_sequence_length" in hparams:
+            n_ctx = hparams["max_sequence_length"]
+        elif "max_position_embeddings" in hparams:
+            n_ctx = hparams["max_position_embeddings"]
+        else:
+            raise Exception("failed to guess 'n_ctx'. This model is unknown or unsupported.\n"
+                            "Suggestion: provide 'config.json' of the model in the same directory containing model files.")
+
         return Params(
             n_vocab   = n_vocab,
             n_embd    = n_embd,
             n_mult    = n_mult,
             n_head    = n_head,
             n_layer   = n_layer,
+            n_ctx     = n_ctx,
             n_kv_head = n_kv_head,
         )
 
@@ -191,6 +203,7 @@ class Params:
             n_mult    = n_mult,
             n_head    = n_head,
             n_layer   = n_layer,
+            n_ctx     = -1,
             n_kv_head = None,
         )
 
@@ -206,7 +219,6 @@ class Params:
         else:
             params = Params.guessed(model_plus.model)
 
-        print(f'params: n_vocab:{params.n_vocab} n_embd:{params.n_embd} n_mult:{params.n_mult} n_head:{params.n_head} n_layer:{params.n_layer}')
         return params
 
 
@@ -715,21 +727,14 @@ def check_vocab_size(params: Params, vocab: Vocab) -> None:
 
 class OutputFile:
     def __init__(self, fname_out: Path) -> None:
-        self.fout = open(fname_out, "wb")
+        self.gguf = gguf.GGUFWriter.open(fname_out)
 
     def write_file_header(self, params: Params, file_type: GGMLFileType) -> None:
-        self.fout.write(b"ggjt"[::-1])  # magic
-        values = [
-            1,  # file version
-            params.n_vocab,
-            params.n_embd,
-            params.n_mult,
-            params.n_head,
-            params.n_layer,
-            params.n_embd // params.n_head,  # rot (obsolete)
-            file_type.value,
-        ]
-        self.fout.write(struct.pack("i" * len(values), *values))
+        llm_arch = "llama"
+
+        self.gguf.add_architecture(llm_arch)
+        self.gguf.add_context_length(llm_arch, params.n_ctx)
+        self.gguf.add_embedding_length(llm_arch, params.n_embd)
 
     def write_tensor_header(self, name: str, shape: Sequence[int], data_type: DataType) -> None:
         sname = name.encode('utf-8')
@@ -873,7 +878,6 @@ def filter_and_sort_tensors(model: LazyModel) -> LazyModel:
 
 
 def load_vocab(path: Path, vocabtype: Optional[str]) -> Union[BpeVocab, SentencePieceVocab]:
-    print(f"vocabtype: {vocabtype}")
     # Be extra-friendly and accept either a file or a directory.  Also, if it's
     # a directory, it might be the model directory, and tokenizer.model might
     # be in the parent of that.
@@ -893,7 +897,7 @@ def load_vocab(path: Path, vocabtype: Optional[str]) -> Union[BpeVocab, Sentence
                 f"Could not find tokenizer.model in {path} or its parent; "
                 "if it's in another directory, pass the directory as --vocab-dir")
     added_tokens_path = path.parent / "added_tokens.json"
-    print(f"Loading vocab file {path}")
+    print(f"Loading vocab file '{path}', type '{vocabtype}'")
     if vocabtype == "bpe":
         return BpeVocab(path, added_tokens_path if added_tokens_path.exists() else None)
     elif vocabtype == "spm":
@@ -933,21 +937,34 @@ def main(args_in: Optional[List[str]] = None) -> None:
     parser.add_argument("--vocab-dir",   type=Path,              help="directory containing tokenizer.model, if separate from model file")
     parser.add_argument("--outfile",     type=Path,              help="path to write to; default: based on input")
     parser.add_argument("model",         type=Path,              help="directory containing model file, or model file itself (*.pth, *.pt, *.bin)")
-    parser.add_argument("--vocabtype",   choices=["spm", "bpe"], help="vocab format (default: spm)")
+    parser.add_argument("--vocabtype",   choices=["spm", "bpe"], help="vocab format (default: spm)", default="spm")
+    parser.add_argument("--ctx",         type=int,               help="model training context (default: based on input)")
     args = parser.parse_args(args_in)
 
     vocab: Vocab
     if args.dump_single:
         model_plus = lazy_load_file(args.model)
         do_dump_model(model_plus)
-    elif args.vocab_only:
+
+    model_plus = load_some_model(args.model)
+    params = Params.load(model_plus)
+    if params.n_ctx == -1:
+        if args.ctx is None:
+            raise Exception("The model doesn't have a context size, and you didn't specify one with --ctx\n"
+                            "Please specify one with --ctx:\n"
+                            " - LLaMA v1: --ctx 2048\n"
+                            " - LLaMA v2: --ctx 4096\n")
+        params.n_ctx = args.ctx
+
+    print(f"params = {params}")
+
+    if args.vocab_only:
         vocab = load_vocab(args.vocab_dir or args.model, args.vocabtype)
         assert args.outfile, "need --outfile if using --vocab-only"
         outfile = args.outfile
         OutputFile.write_vocab_only(outfile, vocab)
         print(f"Wrote {outfile}")
     else:
-        model_plus = load_some_model(args.model)
         if args.dump:
             do_dump_model(model_plus)
             return
@@ -957,7 +974,6 @@ def main(args_in: Optional[List[str]] = None) -> None:
             vocab_dir = args.vocab_dir if args.vocab_dir else model_plus.paths[0].parent
             vocab = load_vocab(vocab_dir, args.vocabtype)
 
-        params      = Params.load(model_plus)
         model       = model_plus.model
         model       = do_necessary_conversions(model, params)
         output_type = pick_output_type(model, args.outtype)
