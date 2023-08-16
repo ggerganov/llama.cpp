@@ -115,9 +115,9 @@ static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * 
 // memory sizes (calculated for n_batch == 512)
 //
 
-static const std::map<e_model, size_t> & MEM_REQ_SCRATCH0(int n_ctx)
+static std::map<e_model, size_t> MEM_REQ_SCRATCH0(int n_ctx)
 {
-    static std::map<e_model, size_t> k_sizes = {
+    std::map<e_model, size_t> k_sizes = {
         { MODEL_3B,   ((size_t) n_ctx / 16ull +  92ull) * MB },
         { MODEL_7B,   ((size_t) n_ctx / 16ull + 100ull) * MB },
         { MODEL_13B,  ((size_t) n_ctx / 12ull + 120ull) * MB },

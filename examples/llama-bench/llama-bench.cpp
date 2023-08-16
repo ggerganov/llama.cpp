@@ -477,7 +477,7 @@ const bool backend_params::blas     = !!ggml_cpu_has_blas();
 
 // benchmark params
 struct bench_params {
-    int n_prompt ;
+    int n_prompt;
     int n_gen;
 
     static const std::vector<std::string> & get_fields() {
@@ -630,17 +630,18 @@ struct markdown_printer : public printer {
 
     virtual void print_header(const cmd_params & params) {
         fields = { "model", "backend" };
-        if (backend_params::get_backend() != "CPU") {
+        bool is_cpu_backend = backend_params::get_backend() == "CPU" || backend_params::get_backend() == "BLAS";
+        if (!is_cpu_backend) {
             fields.push_back("n_gpu_layers");
+        }
+        if (params.n_threads.size() > 1 || is_cpu_backend) {
+            fields.push_back("n_threads");
         }
         if (params.n_batch.size() > 1) {
             fields.push_back("n_batch");
         }
-        if (params.n_threads.size() > 1 || backend_params::get_backend() == "CPU") {
-            fields.push_back("n_threads");
-        }
         if (params.f32_kv.size() > 1) {
-            fields.push_back("f32_kv");
+            fields.push_back("f16_kv");
         }
         if (params.main_gpu.size() > 1) {
             fields.push_back("main_gpu");
@@ -723,9 +724,9 @@ void test_prompt(llama_context * ctx, int n_prompt, int n_past, int n_batch, int
     std::vector<llama_token> tokens(n_batch, llama_token_bos());
     int n_processed = 0;
     while (n_processed < n_prompt) {
-        int n = std::min(n_prompt - n_processed, n_batch);
-        llama_eval(ctx, tokens.data(), n, n_past + n_processed, n_threads);
-        n_processed += n;
+        int n_tokens = std::min(n_prompt - n_processed, n_batch);
+        llama_eval(ctx, tokens.data(), n_tokens, n_past + n_processed, n_threads);
+        n_processed += n_tokens;
     }
 }
 
