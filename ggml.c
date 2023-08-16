@@ -9140,6 +9140,8 @@ static void ggml_compute_forward_mul(
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
         struct ggml_tensor * dst) {
+    GGML_ASSERT(src1->type == GGML_TYPE_F32 && "only f32 src1 supported for now");
+
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
