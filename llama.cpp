@@ -676,21 +676,20 @@ static const std::map<e_model, size_t> & VRAM_REQ_SCRATCH_PER_CONTEXT()
 
 // default hparams (LLaMA 7B)
 struct llama_hparams {
-    uint32_t n_vocab   = 32000;
-    uint32_t n_ctx     = 512;
-    uint32_t n_embd    = 4096;
-    uint32_t n_head    = 32;
-    uint32_t n_head_kv = 32;
-    uint32_t n_layer   = 32;
-    uint32_t n_rot     = 64;
-    uint32_t n_ff      = 11008;
+    uint32_t n_vocab     = 32000;
+    uint32_t n_ctx_train = 2048;  // the context size used during training
+    uint32_t n_ctx       = 512;   // the context size used during inference
+    uint32_t n_embd      = 4096;
+    uint32_t n_head      = 32;
+    uint32_t n_head_kv   = 32;
+    uint32_t n_layer     = 32;
+    uint32_t n_rot       = 64;
+    uint32_t n_ff        = 11008;
 
     float f_norm_rms_eps = 1e-5;
 
     float rope_freq_base  = 10000.0f;
     float rope_freq_scale = 1.0f;
-
-    enum llama_ftype ftype = LLAMA_FTYPE_MOSTLY_F16;
 
     bool operator!=(const llama_hparams & other) const {
         return static_cast<bool>(memcmp(this, &other, sizeof(llama_hparams))); // NOLINT
@@ -1325,7 +1324,7 @@ static void llama_model_load_internal(
         }
 
         GGUF_GET(hparams.n_vocab,        gguf_get_arr_n,   GGUF_TYPE_ARRAY,   true, "tokenizer.ggml.tokens");
-        GGUF_GET(hparams.n_ctx,          gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.context_length");
+        GGUF_GET(hparams.n_ctx_train,    gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.context_length");
         GGUF_GET(hparams.n_embd,         gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.embedding_length");
         GGUF_GET(hparams.n_ff,           gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.feed_forward_length");
         GGUF_GET(hparams.n_head,         gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.attention.head_count");
@@ -1399,21 +1398,23 @@ static void llama_model_load_internal(
     }
 
     {
-        LLAMA_LOG_INFO("%s: format     = %s\n",   __func__, llama_file_version_name(ml->file_version));
-        LLAMA_LOG_INFO("%s: n_vocab    = %u\n",   __func__, hparams.n_vocab);
-        LLAMA_LOG_INFO("%s: n_ctx      = %u\n",   __func__, hparams.n_ctx);
-        LLAMA_LOG_INFO("%s: n_embd     = %u\n",   __func__, hparams.n_embd);
-        LLAMA_LOG_INFO("%s: n_head     = %u\n",   __func__, hparams.n_head);
-        LLAMA_LOG_INFO("%s: n_head_kv  = %u\n",   __func__, hparams.n_head_kv);
-        LLAMA_LOG_INFO("%s: n_layer    = %u\n",   __func__, hparams.n_layer);
-        LLAMA_LOG_INFO("%s: n_rot      = %u\n",   __func__, hparams.n_rot); // a.k.a. n_embd_head, n_head_dim
-        LLAMA_LOG_INFO("%s: n_gqa      = %u\n",   __func__, hparams.n_gqa());
-        LLAMA_LOG_INFO("%s: f_norm_eps = %.1e\n", __func__, hparams.f_norm_rms_eps);
-        LLAMA_LOG_INFO("%s: n_ff       = %u\n",   __func__, hparams.n_ff);
-        LLAMA_LOG_INFO("%s: freq_base  = %.1f\n", __func__, hparams.rope_freq_base);
-        LLAMA_LOG_INFO("%s: freq_scale = %g\n",   __func__, hparams.rope_freq_scale);
-        LLAMA_LOG_INFO("%s: ftype      = %u (%s)\n", __func__, hparams.ftype, llama_ftype_name(hparams.ftype));
-        LLAMA_LOG_INFO("%s: model size = %s\n",   __func__, llama_model_type_name(model.type));
+        LLAMA_LOG_INFO("%s: format      = %s\n",   __func__, llama_file_version_name(ml->file_version));
+        LLAMA_LOG_INFO("%s: n_vocab     = %u\n",   __func__, hparams.n_vocab);
+        LLAMA_LOG_INFO("%s: n_ctx_train = %u\n",   __func__, hparams.n_ctx_train);
+        LLAMA_LOG_INFO("%s: n_ctx       = %u\n",   __func__, hparams.n_ctx);
+        LLAMA_LOG_INFO("%s: n_embd      = %u\n",   __func__, hparams.n_embd);
+        LLAMA_LOG_INFO("%s: n_head      = %u\n",   __func__, hparams.n_head);
+        LLAMA_LOG_INFO("%s: n_head_kv   = %u\n",   __func__, hparams.n_head_kv);
+        LLAMA_LOG_INFO("%s: n_layer     = %u\n",   __func__, hparams.n_layer);
+        LLAMA_LOG_INFO("%s: n_rot       = %u\n",   __func__, hparams.n_rot); // a.k.a. n_embd_head, n_head_dim
+        LLAMA_LOG_INFO("%s: n_gqa       = %u\n",   __func__, hparams.n_gqa());
+        LLAMA_LOG_INFO("%s: f_norm_eps  = %.1e\n", __func__, hparams.f_norm_rms_eps);
+        LLAMA_LOG_INFO("%s: n_ff        = %u\n",   __func__, hparams.n_ff);
+        LLAMA_LOG_INFO("%s: freq_base   = %.1f\n", __func__, hparams.rope_freq_base);
+        LLAMA_LOG_INFO("%s: freq_scale  = %g\n",   __func__, hparams.rope_freq_scale);
+        LLAMA_LOG_INFO("%s: model size  = %s\n",   __func__, llama_model_type_name(model.type));
+
+        // TODO: print number of tensors for each quantization
     }
 
     if (vocab_only) {
@@ -3365,7 +3366,6 @@ static void llama_convert_tensor_internal(struct ggml_tensor * tensor, std::vect
 static void llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, const llama_model_quantize_params * params) {
     ggml_type quantized_type;
     llama_ftype ftype = params->ftype;
-    int nthread = params->nthread;
 
     switch (params->ftype) {
         case LLAMA_FTYPE_MOSTLY_Q4_0: quantized_type = GGML_TYPE_Q4_0; break;
@@ -3390,6 +3390,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 #endif
         default: throw std::runtime_error(format("invalid output file type %d\n", ftype));
     }
+
+    int nthread = params->nthread;
 
     if (nthread <= 0) {
         nthread = std::thread::hardware_concurrency();
@@ -3661,6 +3663,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     }
 }
 
+// TODO: after the GGUF PR, this likely won't work and needs to be updated
 int llama_apply_lora_from_file_internal(const struct llama_model & model, const char * path_lora, const char * path_base_model, int n_threads) {
     LLAMA_LOG_INFO("%s: applying lora adapter from '%s' - please wait ...\n", __func__, path_lora);
 
