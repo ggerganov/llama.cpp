@@ -163,10 +163,15 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 
     // load kernels
     {
+        NSError * error = nil;
 #define GGML_METAL_ADD_KERNEL(name) \
         ctx->function_##name = [ctx->library newFunctionWithName:@"kernel_"#name]; \
-        ctx->pipeline_##name = [ctx->device newComputePipelineStateWithFunction:ctx->function_##name error:nil]; \
-        fprintf(stderr, "%s: loaded %-32s %16p\n", __func__, "kernel_"#name, (void *) ctx->pipeline_##name);
+        ctx->pipeline_##name = [ctx->device newComputePipelineStateWithFunction:ctx->function_##name error:&error]; \
+        fprintf(stderr, "%s: loaded %-32s %16p\n", __func__, "kernel_"#name, (void *) ctx->pipeline_##name); \
+        if (error) { \
+            fprintf(stderr, "%s: load pipeline error: %s\n", __func__, [[error description] UTF8String]); \
+            return NULL; \
+        }
 
         GGML_METAL_ADD_KERNEL(add);
         GGML_METAL_ADD_KERNEL(add_row);
