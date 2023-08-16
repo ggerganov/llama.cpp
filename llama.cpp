@@ -4213,62 +4213,8 @@ int llama_get_vocab(
     return llama_get_vocab_from_model(&ctx->model, strings, scores, capacity);
 }
 
-struct llama_layer * llama_get_layer_from_model(
-        struct llama_model * model,
-        int layer_idx) {
-    if (layer_idx < 0 || layer_idx >= model->hparams.n_layer) {
-        return NULL;
-    } else {
-        return &model->layers[layer_idx];
-    }
-}
-
-struct ggml_tensor * llama_get_model_tok_embeddings(struct llama_model * model) {
-    return model->tok_embeddings;
-}
-
-struct ggml_tensor * llama_get_model_norm(struct llama_model * model) {
-    return model->norm;
-}
-
-struct ggml_tensor * llama_get_model_output(struct llama_model * model) {
-    return model->output;
-}
-
-struct ggml_tensor * llama_get_layer_attention_norm(struct llama_layer * layer) {
-    return layer->attention_norm;
-}
-
-struct ggml_tensor * llama_get_layer_wq(struct llama_layer * layer) {
-    return layer->wq;
-}
-
-struct ggml_tensor * llama_get_layer_wk(struct llama_layer * layer) {
-    return layer->wk;
-}
-
-struct ggml_tensor * llama_get_layer_wv(struct llama_layer * layer) {
-    return layer->wv;
-}
-
-struct ggml_tensor * llama_get_layer_wo(struct llama_layer * layer) {
-    return layer->wo;
-}
-
-struct ggml_tensor * llama_get_layer_ffn_norm(struct llama_layer * layer) {
-    return layer->ffn_norm;
-}
-
-struct ggml_tensor * llama_get_layer_w1(struct llama_layer * layer) {
-    return layer->w1;
-}
-
-struct ggml_tensor * llama_get_layer_w2(struct llama_layer * layer) {
-    return layer->w2;
-}
-
-struct ggml_tensor * llama_get_layer_w3(struct llama_layer * layer) {
-    return layer->w3;
+struct ggml_tensor * llama_get_model_tensor(struct llama_model * model, const char * name) {
+    return ggml_get_tensor(model->ctx, name);
 }
 
 float * llama_get_logits(struct llama_context * ctx) {

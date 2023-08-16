@@ -339,12 +339,12 @@ void init_model(struct llama_model * input, struct my_llama_model * model, uint3
     auto & hparams = model->hparams;
 
     hparams.n_vocab = llama_n_vocab_from_model(input);
-    hparams.n_ctx = n_ctx;
-    hparams.n_embd = llama_n_embd_from_model(input);
-    hparams.n_mult = llama_n_mult_from_model(input);
-    hparams.n_head = llama_n_head_from_model(input);
+    hparams.n_ctx   = n_ctx;
+    hparams.n_embd  = llama_n_embd_from_model(input);
+    hparams.n_mult  = llama_n_mult_from_model(input);
+    hparams.n_head  = llama_n_head_from_model(input);
     hparams.n_layer = llama_n_layer_from_model(input);
-    hparams.n_rot = llama_n_rot_from_model(input);
+    hparams.n_rot   = llama_n_rot_from_model(input);
 
     const uint32_t n_embd  = hparams.n_embd;
     const uint32_t n_layer = hparams.n_layer;
@@ -352,27 +352,44 @@ void init_model(struct llama_model * input, struct my_llama_model * model, uint3
 
     const uint32_t n_ff = get_n_ff(&hparams);
 
-    model->tok_embeddings = llama_get_model_tok_embeddings(input);
-    model->norm           = llama_get_model_norm(input);
-    model->output         = llama_get_model_output(input);
+    model->tok_embeddings = llama_get_model_tensor(input, "tok_embeddings.weight");
+    model->norm           = llama_get_model_tensor(input, "norm.weight");
+    model->output         = llama_get_model_tensor(input, "output.weight");
 
     model->layers.resize(n_layer);
+
+    char name[GGML_MAX_NAME];
+
     for (uint32_t i = 0; i < n_layer; ++i) {
         struct llama_layer * ilayer = llama_get_layer_from_model(input, i);
         auto & layer = model->layers[i];
 
-        layer.attention_norm = llama_get_layer_attention_norm(ilayer);
+        snprintf(name, GGML_MAX_NAME, "layers.%d.attention_norm.weight", i);
+        layer.attention_norm = llama_get_model_tensor(input, name);
 
-        layer.wq = llama_get_layer_wq(ilayer);
-        layer.wk = llama_get_layer_wk(ilayer);
-        layer.wv = llama_get_layer_wv(ilayer);
-        layer.wo = llama_get_layer_wo(ilayer);
+        snprintf(name, GGML_MAX_NAME, "layers.%d.attention.wq.weight", i);
+        layer.wq = llama_get_model_tensor(input, name);
 
-        layer.ffn_norm = llama_get_layer_ffn_norm(ilayer);
+        snprintf(name, GGML_MAX_NAME, "layers.%d.attention.wk.weight", i);
+        layer.wk = llama_get_model_tensor(input, name);
 
-        layer.w1 = llama_get_layer_w1(ilayer);
-        layer.w2 = llama_get_layer_w2(ilayer);
-        layer.w3 = llama_get_layer_w3(ilayer);
+        snprintf(name, GGML_MAX_NAME, "layers.%d.attention.wv.weight", i);
+        layer.wv = llama_get_model_tensor(input, name);
+
+        snprintf(name, GGML_MAX_NAME, "layers.%d.attention.wo.weight", i);
+        layer.wo = llama_get_model_tensor(input, name);
+
+        snprintf(name, GGML_MAX_NAME, "layers.%d.ffn_norm.weight", i);
+        layer.ffn_norm = llama_get_model_tensor(input, name);
+
+        snprintf(name, GGML_MAX_NAME, "layers.%d.feed_forward.w1.weight", i);
+        layer.w1 = llama_get_model_tensor(input, name);
+
+        snprintf(name, GGML_MAX_NAME, "layers.%d.feed_forward.w2.weight", i);
+        layer.w2 = llama_get_model_tensor(input, name);
+        
+        snprintf(name, GGML_MAX_NAME, "layers.%d.feed_forward.w3.weight", i);
+        layer.w3 = llama_get_model_tensor(input, name);
     }
 }
 
