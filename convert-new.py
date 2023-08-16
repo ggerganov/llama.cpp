@@ -142,7 +142,7 @@ class Params:
                             "Suggestion: provide 'config.json' of the model in the same directory containing model files.")
 
         n_head = n_embd // 128 # guessed
-        n_mult = 255           # guessed
+        n_mult = 256           # guessed
 
         # TODO: verify this
         n_ff = int(2 * (4 * n_embd) / 3)
@@ -151,7 +151,7 @@ class Params:
         return Params(
             n_vocab    = n_vocab,
             n_embd     = n_embd,
-            n_mult     = 256,
+            n_mult     = n_mult,
             n_layer    = n_layer,
             n_ctx      = -1,
             n_ff       = n_ff,
@@ -174,10 +174,10 @@ class Params:
 
         n_mult = find_n_mult(n_ff, n_embd);
 
-        if "max_sequence_length" in hparams:
-            n_ctx = hparams["max_sequence_length"]
-        elif "max_position_embeddings" in hparams:
-            n_ctx = hparams["max_position_embeddings"]
+        if "max_sequence_length" in config:
+            n_ctx = config["max_sequence_length"]
+        elif "max_position_embeddings" in config:
+            n_ctx = config["max_position_embeddings"]
         else:
             raise Exception("failed to guess 'n_ctx'. This model is unknown or unsupported.\n"
                             "Suggestion: provide 'config.json' of the model in the same directory containing model files.")
@@ -541,7 +541,7 @@ def convert_transformers_to_orig(model: LazyModel, params: Params) -> LazyModel:
 
     for i in itertools.count():
         if f"model.layers.{i}.self_attn.q_proj.weight" in model:
-            out[f"layers.{i}.attention.wq.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.q_proj.weight"], params.n_head)
+            out[f"layers.{i}.attention.wq.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.q_proj.weight"], params.n_head, params.n_head_kv)
             out[f"layers.{i}.attention.wk.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.k_proj.weight"], params.n_head, params.n_head_kv)
             out[f"layers.{i}.attention.wv.weight"] = model[f"model.layers.{i}.self_attn.v_proj.weight"]
         elif f"model.layers.{i}.self_attn.W_pack.weight" in model:
@@ -1011,7 +1011,7 @@ def main(args_in: Optional[List[str]] = None) -> None:
             vocab = load_vocab(vocab_dir, args.vocabtype)
 
         model       = model_plus.model
-        model       = do_necessary_conversions(model, params)
+        model       = do_necessary_conversions(model, params) # TODO: utilize gguf.get_tensor_name_map
         output_type = pick_output_type(model, args.outtype)
         model       = convert_to_output_type(model, output_type)
         outfile     = args.outfile or default_outfile(model_plus.paths, output_type)
