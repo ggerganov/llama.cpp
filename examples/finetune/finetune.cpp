@@ -1099,10 +1099,19 @@ struct ggml_tensor * llama_build_lora_finetune_graphs(
 
     GGML_ASSERT(tokens_input->type == GGML_TYPE_I32);
 
+    auto add_to_f32 = [] (struct ggml_context * ctx, struct ggml_tensor * a, struct ggml_tensor * b) {
+        if (ggml_is_quantized(a->type)) {
+            // todo make sure that ggml-alloc.c cannot make it inplace (of tensor a)
+            return ggml_add_cast(ctx, a, b, GGML_TYPE_F32);
+        } else {
+            GGML_ASSERT(a->type == GGML_TYPE_F32);
+            return ggml_add(ctx, a, b);
+        }
+    };
 
-    struct ggml_tensor * tok_embeddings = ggml_add(ctx, model->tok_embeddings, ggml_mul_mat(ctx, lora->tok_embeddings_a, lora->tok_embeddings_b));
-    struct ggml_tensor * norm           = ggml_add(ctx, model->norm, ggml_mul_mat(ctx, lora->norm_a, lora->norm_b));
-    struct ggml_tensor * output         = ggml_add(ctx, model->output, ggml_mul_mat(ctx, lora->output_a, lora->output_b));
+    struct ggml_tensor * tok_embeddings = add_to_f32(ctx, model->tok_embeddings, ggml_mul_mat(ctx, lora->tok_embeddings_a, lora->tok_embeddings_b));
+    struct ggml_tensor * norm           = add_to_f32(ctx, model->norm, ggml_mul_mat(ctx, lora->norm_a, lora->norm_b));
+    struct ggml_tensor * output         = add_to_f32(ctx, model->output, ggml_mul_mat(ctx, lora->output_a, lora->output_b));
 
     struct ggml_tensor * t00 = ggml_reshape_1d(ctx, tokens_input, N*n_batch);  set_name(t00, "t00"); assert_shape_1d(t00, N*n_batch);
     struct ggml_tensor * t01 = ggml_get_rows(ctx, tok_embeddings, t00);        set_name(t01, "t01"); assert_shape_2d(t01, n_embd, N*n_batch);
@@ -1124,15 +1133,15 @@ struct ggml_tensor * llama_build_lora_finetune_graphs(
         struct my_llama_layer & layer = model->layers[il];
         struct my_llama_lora_layer & llayer = lora->layers[il];
 
-        struct ggml_tensor * attention_norm = ggml_add(ctx, layer.attention_norm, ggml_mul_mat(ctx, llayer.attention_norm_a, llayer.attention_norm_b));
-        struct ggml_tensor * ffn_norm = ggml_add(ctx, layer.ffn_norm, ggml_mul_mat(ctx, llayer.ffn_norm_a, llayer.ffn_norm_b));
-        struct ggml_tensor * wq = ggml_add(ctx, layer.wq, ggml_mul_mat(ctx, llayer.wq_a, llayer.wq_b));
-        struct ggml_tensor * wk = ggml_add(ctx, layer.wk, ggml_mul_mat(ctx, llayer.wk_a, llayer.wk_b));
-        struct ggml_tensor * wv = ggml_add(ctx, layer.wv, ggml_mul_mat(ctx, llayer.wv_a, llayer.wv_b));
-        struct ggml_tensor * wo = ggml_add(ctx, layer.wo, ggml_mul_mat(ctx, llayer.wo_a, llayer.wo_b));
-        struct ggml_tensor * w1 = ggml_add(ctx, layer.w1, ggml_mul_mat(ctx, llayer.w1_a, llayer.w1_b));
-        struct ggml_tensor * w2 = ggml_add(ctx, layer.w2, ggml_mul_mat(ctx, llayer.w2_a, llayer.w2_b));
-        struct ggml_tensor * w3 = ggml_add(ctx, layer.w3, ggml_mul_mat(ctx, llayer.w3_a, llayer.w3_b));
+        struct ggml_tensor * attention_norm = add_to_f32(ctx, layer.attention_norm, ggml_mul_mat(ctx, llayer.attention_norm_a, llayer.attention_norm_b));
+        struct ggml_tensor * ffn_norm = add_to_f32(ctx, layer.ffn_norm, ggml_mul_mat(ctx, llayer.ffn_norm_a, llayer.ffn_norm_b));
+        struct ggml_tensor * wq = add_to_f32(ctx, layer.wq, ggml_mul_mat(ctx, llayer.wq_a, llayer.wq_b));
+        struct ggml_tensor * wk = add_to_f32(ctx, layer.wk, ggml_mul_mat(ctx, llayer.wk_a, llayer.wk_b));
+        struct ggml_tensor * wv = add_to_f32(ctx, layer.wv, ggml_mul_mat(ctx, llayer.wv_a, llayer.wv_b));
+        struct ggml_tensor * wo = add_to_f32(ctx, layer.wo, ggml_mul_mat(ctx, llayer.wo_a, llayer.wo_b));
+        struct ggml_tensor * w1 = add_to_f32(ctx, layer.w1, ggml_mul_mat(ctx, llayer.w1_a, llayer.w1_b));
+        struct ggml_tensor * w2 = add_to_f32(ctx, layer.w2, ggml_mul_mat(ctx, llayer.w2_a, llayer.w2_b));
+        struct ggml_tensor * w3 = add_to_f32(ctx, layer.w3, ggml_mul_mat(ctx, llayer.w3_a, llayer.w3_b));
 
         struct ggml_tensor * t02 = ggml_rms_norm     (ctx, cur, rms_norm_eps);                      set_name(t02, "t02");     assert_shape_2d(t02, n_embd, N*n_batch);
         struct ggml_tensor * t03 = ggml_repeat       (ctx, attention_norm, t02);                    set_name(t03, "t03");     assert_shape_2d(t03, n_embd, N*n_batch);
