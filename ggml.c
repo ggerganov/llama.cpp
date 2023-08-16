@@ -19396,17 +19396,23 @@ static void gguf_buf_grow(struct gguf_buf * buf, size_t size) {
 static void gguf_bwrite_str(struct gguf_buf * buf, const struct gguf_str * val) {
     gguf_buf_grow(buf, sizeof(val->n) + val->n);
 
-    buf->data && memcpy((char *) buf->data + buf->offset, &val->n, sizeof(val->n));
+    if (buf->data) {
+        memcpy((char *) buf->data + buf->offset, &val->n, sizeof(val->n));
+    }
     buf->offset += sizeof(val->n);
 
-    buf->data && memcpy((char *) buf->data + buf->offset, val->data, val->n);
+    if (buf->data) {
+        memcpy((char *) buf->data + buf->offset, val->data, val->n);
+    }
     buf->offset += val->n;
 }
 
 static void gguf_bwrite_el(struct gguf_buf * buf, const void * val, size_t el_size) {
     gguf_buf_grow(buf, el_size);
 
-    buf->data && memcpy((char *) buf->data + buf->offset, val, el_size);
+    if (buf->data) {
+        memcpy((char *) buf->data + buf->offset, val, el_size);
+    }
     buf->offset += el_size;
 }
 
