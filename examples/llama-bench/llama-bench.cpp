@@ -22,7 +22,7 @@ static uint64_t get_time_ns() {
 }
 
 template<class T>
-static std::string join(const std::vector<T>& values, const std::string& delim) {
+static std::string join(const std::vector<T> & values, const std::string & delim) {
     std::ostringstream str;
     for (size_t i = 0; i < values.size(); i++) {
         str << values[i];
@@ -34,7 +34,7 @@ static std::string join(const std::vector<T>& values, const std::string& delim) 
 }
 
 template<class T>
-static std::vector<T> split(const std::string& str, char delim) {
+static std::vector<T> split(const std::string & str, char delim) {
     std::vector<T> values;
     std::istringstream str_stream(str);
     std::string token;
@@ -48,7 +48,7 @@ static std::vector<T> split(const std::string& str, char delim) {
 }
 
 template<typename T>
-T avg(const std::vector<T>& v) {
+T avg(const std::vector<T> & v) {
     if (v.empty()) {
         return 0;
     }
@@ -57,7 +57,7 @@ T avg(const std::vector<T>& v) {
 }
 
 template<typename T>
-T stddev(const std::vector<T>& v) {
+T stdev(const std::vector<T> & v) {
     if (v.size() <= 1) {
         return 0;
     }
@@ -110,7 +110,7 @@ static void print_usage(int /* argc */, char ** argv) {
     fprintf(stdout, "options:\n");
     fprintf(stdout, "  -h, --help\n");
     fprintf(stdout, "  -m, --model <filename>            (default: %s)\n", join(cmd_params_defaults.model, ",").c_str());
-    fprintf(stdout, "  -np, --n-prompt <n>               (default: %s)\n", join(cmd_params_defaults.n_prompt, ",").c_str());
+    fprintf(stdout, "  -p, --n-prompt <n>               (default: %s)\n", join(cmd_params_defaults.n_prompt, ",").c_str());
     fprintf(stdout, "  -n, --n-gen <n>                   (default: %s)\n", join(cmd_params_defaults.n_gen, ",").c_str());
     fprintf(stdout, "  -b, --batch-size <n>              (default: %s)\n", join(cmd_params_defaults.n_batch, ",").c_str());
     fprintf(stdout, "  --memory-f32 <0|1>                (default: %s)\n", join(cmd_params_defaults.f32_kv, ",").c_str());
@@ -155,42 +155,48 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             }
             auto p = split<std::string>(argv[i], split_delim);
             params.model.insert(params.model.end(), p.begin(), p.end());
-        } else if (arg == "-np" || arg == "--n-prompt") {
+        } else if (arg == "-p" || arg == "--n-prompt") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params.n_prompt = split<int>(argv[i], split_delim);
+            auto p = split<int>(argv[i], split_delim);
+            params.n_prompt.insert(params.n_prompt.end(), p.begin(), p.end());
         } else if (arg == "-n" || arg == "--n-gen") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params.n_gen = split<int>(argv[i], split_delim);
+            auto p = split<int>(argv[i], split_delim);
+            params.n_gen.insert(params.n_gen.end(), p.begin(), p.end());
         } else if (arg == "-b" || arg == "--batch-size") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params.n_batch = split<int>(argv[i], split_delim);
+            auto p = split<int>(argv[i], split_delim);
+            params.n_batch.insert(params.n_batch.end(), p.begin(), p.end());
         } else if (arg == "--memory-f32") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params.f32_kv = split<bool>(argv[i], split_delim);
+            auto p = split<int>(argv[i], split_delim);
+            params.f32_kv.insert(params.f32_kv.end(), p.begin(), p.end());
         } else if (arg == "-t" || arg == "--threads") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params.n_threads = split<int>(argv[i], split_delim);
+            auto p = split<int>(argv[i], split_delim);
+            params.n_threads.insert(params.n_threads.end(), p.begin(), p.end());
         } else if (arg == "-ngl" || arg == "--n-gpu-layers") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params.n_gpu_layers = split<int>(argv[i], split_delim);
+            auto p = split<int>(argv[i], split_delim);
+            params.n_gpu_layers.insert(params.n_gpu_layers.end(), p.begin(), p.end());
         } else if (arg == "-mg" || arg == "--main-gpu") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -202,21 +208,23 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 invalid_param = true;
                 break;
             }
-            params.low_vram = split<bool>(argv[i], split_delim);
+            auto p = split<bool>(argv[i], split_delim);
+            params.low_vram.insert(params.low_vram.end(), p.begin(), p.end());
         } else if (arg == "-mmq" || arg == "--mul-mat-q") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params.mul_mat_q = split<bool>(argv[i], split_delim);
+            auto p = split<bool>(argv[i], split_delim);
+            params.mul_mat_q.insert(params.mul_mat_q.end(), p.begin(), p.end());
         } else if (arg == "-ts" || arg == "--tensor-split") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             for (auto ts : split<std::string>(argv[i], split_delim)) {
-                // split string by , and /
-                const std::regex regex{R"([,/]+)"};
+                // split string by ; and /
+                const std::regex regex{R"([;/]+)"};
                 std::sregex_token_iterator it{ts.begin(), ts.end(), regex, -1};
                 std::vector<std::string> split_arg{it, {}};
                 GGML_ASSERT(split_arg.size() <= LLAMA_MAX_DEVICES);
@@ -310,20 +318,20 @@ struct cmd_params_instance {
     }
 };
 
-static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_params& params) {
+static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_params & params) {
     std::vector<cmd_params_instance> instances;
 
-    for (const auto& m : params.model)
-    for (const auto& nb : params.n_batch)
-    for (const auto& fk : params.f32_kv)
-    for (const auto& nl : params.n_gpu_layers)
-    for (const auto& mg : params.main_gpu)
-    for (const auto& mmq : params.mul_mat_q)
-    for (const auto& lv : params.low_vram)
-    for (const auto& ts : params.tensor_split)
-    for (const auto& nt : params.n_threads)
-    for (const auto& ng : params.n_gen)
-    for (const auto& np : params.n_prompt) {
+    for (const auto & m : params.model)
+    for (const auto & nb : params.n_batch)
+    for (const auto & fk : params.f32_kv)
+    for (const auto & nl : params.n_gpu_layers)
+    for (const auto & mg : params.main_gpu)
+    for (const auto & mmq : params.mul_mat_q)
+    for (const auto & lv : params.low_vram)
+    for (const auto & ts : params.tensor_split)
+    for (const auto & nt : params.n_threads)
+    for (const auto & ng : params.n_gen)
+    for (const auto & np : params.n_prompt) {
         if (np == 0 && ng == 0) continue; // no prompt and no generation
 
         cmd_params_instance instance;
@@ -350,7 +358,7 @@ struct model_params {
     std::string filename;
     std::string type;
 
-    static const std::vector<std::string>& get_fields() {
+    static const std::vector<std::string> & get_fields() {
         static const std::vector<std::string> fields = {"filename", "type"};
         return fields;
     }
@@ -371,22 +379,23 @@ static bool ggml_cpu_has_metal() {
 
 // backend params
 struct backend_params {
-    std::string build_commit = BUILD_COMMIT;
-    int build_number = BUILD_NUMBER;
-    bool cuda = !!ggml_cpu_has_cublas();
-    bool opencl = !!ggml_cpu_has_clblast();
-    bool metal = !!ggml_cpu_has_metal();
-    bool gpu_blas = !!ggml_cpu_has_gpublas();
-    bool blas = !!ggml_cpu_has_blas();
+    static const std::string build_commit;
+    static const int build_number;
+    static const bool cuda;
+    static const bool opencl;
+    static const bool metal;
+    static const bool gpu_blas;
+    static const bool blas;
     int n_batch;
     int n_threads;
+    bool f32_kv;
     int n_gpu_layers;
     int main_gpu;
     bool mul_mat_q;
     bool low_vram;
     std::array<float, LLAMA_MAX_DEVICES> tensor_split;
 
-    std::string get_backend() const {
+    static std::string get_backend() {
         if (cuda) {
             return "CUDA";
         }
@@ -405,8 +414,13 @@ struct backend_params {
         return "CPU";
     }
 
-    static const std::vector<std::string>& get_fields() {
-        static const std::vector<std::string> fields = {"build_number", "build_commit", "cuda", "opencl", "metal", "gpu_blas", "blas", "n_batch", "n_threads", "n_gpu_layers", "main_gpu", "mul_mat_q", "low_vram", "tensor_split"};
+    static const std::vector<std::string> & get_fields() {
+        static const std::vector<std::string> fields = {
+            "build_number", "build_commit",
+            "cuda", "opencl", "metal", "gpu_blas", "blas",
+            "n_batch", "n_threads", "f16_kv",
+            "n_gpu_layers", "main_gpu", "mul_mat_q", "low_vram", "tensor_split"
+        };
         return fields;
     }
 
@@ -427,27 +441,33 @@ struct backend_params {
         std::vector<std::string> values = {
             std::to_string(build_number), build_commit,
             std::to_string(cuda), std::to_string(opencl), std::to_string(metal), std::to_string(gpu_blas), std::to_string(blas),
-            std::to_string(n_batch), std::to_string(n_threads),
+            std::to_string(n_batch), std::to_string(n_threads), std::to_string(!f32_kv),
             std::to_string(n_gpu_layers), std::to_string(main_gpu), std::to_string(mul_mat_q), std::to_string(low_vram), tensor_split_str
         };
         return values;
     }
 };
 
+const std::string backend_params::build_commit = BUILD_COMMIT;
+const int backend_params::build_number = BUILD_NUMBER;
+const bool backend_params::cuda = !!ggml_cpu_has_cublas();
+const bool backend_params::opencl = !!ggml_cpu_has_clblast();
+const bool backend_params::metal = !!ggml_cpu_has_metal();
+const bool backend_params::gpu_blas = !!ggml_cpu_has_gpublas();
+const bool backend_params::blas = !!ggml_cpu_has_blas();
+
 // benchmark params
 struct bench_params {
-    int n_prompt = 512;
-    int n_gen = 128;
-    int n_batch = 512;
-    bool f32_kv = true;
+    int n_prompt ;
+    int n_gen;
 
-    static const std::vector<std::string>& get_fields() {
-        static const std::vector<std::string> fields = {"n_prompt", "n_gen", "n_batch", "f16_kv"};
+    static const std::vector<std::string> & get_fields() {
+        static const std::vector<std::string> fields = {"n_prompt", "n_gen"};
         return fields;
     }
 
     std::vector<std::string> get_values() const {
-        return {std::to_string(n_prompt), std::to_string(n_gen), std::to_string(n_batch), std::to_string(f32_kv)};
+        return {std::to_string(n_prompt), std::to_string(n_gen)};
     }
 };
 
@@ -459,8 +479,8 @@ struct timing_samples {
         return ::avg(t_ns);
     }
 
-    uint64_t stddev() const {
-        return ::stddev(t_ns);
+    uint64_t stdev() const {
+        return ::stdev(t_ns);
     }
 
     std::vector<double> get_ts(int n) const {
@@ -474,10 +494,10 @@ struct timing_samples {
     }
 
     double stddev_ts(uint64_t n) const {
-        return ::stddev(get_ts(n));
+        return ::stdev(get_ts(n));
     }
 
-    static const std::vector<std::string>& get_fields() {
+    static const std::vector<std::string> & get_fields() {
         static const std::vector<std::string> fields = {"t_ns"};
         return fields;
     }
@@ -489,7 +509,7 @@ struct test {
     backend_params bkparams = {};
     timing_samples tsamples = {};
 
-    test(const cmd_params_instance& inst, const llama_model* lmodel, const llama_context* ctx) {
+    test(const cmd_params_instance & inst, const llama_model * lmodel, const llama_context * ctx) {
         mparams.filename = inst.model;
         char buf[128];
         llama_model_type(lmodel, buf, sizeof(buf));
@@ -497,10 +517,9 @@ struct test {
 
         bparams.n_prompt = inst.n_prompt;
         bparams.n_gen = inst.n_gen;
-        bparams.n_batch = inst.n_batch;
-        bparams.f32_kv = inst.f32_kv;
 
         bkparams.n_batch = inst.n_batch;
+        bkparams.f32_kv = inst.f32_kv;
         bkparams.n_threads = inst.n_threads;
         bkparams.n_gpu_layers = inst.n_gpu_layers;
         bkparams.main_gpu = inst.main_gpu;
@@ -514,13 +533,13 @@ struct test {
 
 struct printer {
     FILE * fout;
-    virtual void print_header(const cmd_params& params) { (void)params; };
+    virtual void print_header(const cmd_params & params) { (void)params; };
     virtual void print_test(const test & t) = 0;
     virtual void print_footer() {};
 };
 
 struct csv_printer : public printer {
-    virtual void print_header(const cmd_params& params) {
+    virtual void print_header(const cmd_params & params) {
         std::vector<std::string> fields;
         fields.insert(fields.end(), model_params::get_fields().begin(), model_params::get_fields().end());
         fields.insert(fields.end(), bench_params::get_fields().begin(), bench_params::get_fields().end());
@@ -530,7 +549,7 @@ struct csv_printer : public printer {
         (void) params;
     }
 
-    void print_values(const std::vector<std::string>& values) {
+    void print_values(const std::vector<std::string> & values) {
         fprintf(fout, "%s", join(values, ",").c_str());
     }
 
@@ -546,7 +565,7 @@ struct csv_printer : public printer {
 };
 
 struct json_printer : public printer {
-    void print_fields(const std::vector<std::string>& fields, const std::vector<std::string>& values) {
+    void print_fields(const std::vector<std::string> & fields, const std::vector<std::string> & values) {
         assert(fields.size() == values.size());
         for (size_t i = 0; i < fields.size(); i++) {
             fprintf(fout, "    \"%s\": \"%s\",\n", fields.at(i).c_str(), values.at(i).c_str());
@@ -567,7 +586,7 @@ struct json_printer : public printer {
         fprintf(fout, "  \"samples\": {\n");
         fprintf(fout, "    \"ns\": [ %s ],\n", join(t.tsamples.t_ns, ", ").c_str());
         fprintf(fout, "    \"avg\": %" PRIu64 ",\n", t.tsamples.avg());
-        fprintf(fout, "    \"stddev\": %" PRIu64 "\n", t.tsamples.stddev());
+        fprintf(fout, "    \"stddev\": %" PRIu64 "\n", t.tsamples.stdev());
         fprintf(fout, "  }\n");
         fprintf(fout, "}\n");
     }
@@ -576,20 +595,102 @@ struct json_printer : public printer {
 struct markdown_printer : public printer {
     std::vector<std::string> fields;
 
-    virtual void print_header(const cmd_params& params) {
-        // TODO: print all params that have multiple values
-        fprintf(fout, "| model | backend | n_gpu_layers | n_prompt | n_gen | t/s |\n");
-        fprintf(fout, "| ----- | ------- | ------------ | -------- | ----- | --- |\n");
+    static int get_field_width(const std::string & field) {
+        if (field == "model") {
+            return -30;
+        }
+        if (field == "t/s") {
+            return 15;
+        }
+        int width = std::max((int)field.length(), 10);
+        if (field == "backend") {
+            return -width;
+        }
+        return width;
+    }
+
+    virtual void print_header(const cmd_params & params) {
+        fields = { "model", "backend" };
+        if (backend_params::get_backend() != "CPU") {
+            fields.push_back("n_gpu_layers");
+        }
+        if (params.n_batch.size() > 1) {
+            fields.push_back("n_batch");
+        }
+        if (params.n_threads.size() > 1 || backend_params::get_backend() == "CPU") {
+            fields.push_back("n_threads");
+        }
+        if (params.f32_kv.size() > 1) {
+            fields.push_back("f32_kv");
+        }
+        if (params.main_gpu.size() > 1) {
+            fields.push_back("main_gpu");
+        }
+        if (params.mul_mat_q.size() > 1) {
+            fields.push_back("mul_mat_q");
+        }
+        if (params.low_vram.size() > 1) {
+            fields.push_back("low_vram");
+        }
+        if (params.n_prompt.size() > 1 || (params.n_prompt.size() == 1 && params.n_prompt.at(0) != 0)) {
+            fields.push_back("n_prompt");
+        }
+        if (params.n_gen.size() > 1 || (params.n_gen.size() == 1 && params.n_gen.at(0) != 0)) {
+            fields.push_back("n_gen");
+        }
+        fields.push_back("t/s");
+
+        fprintf(fout, "|");
+        for (const auto & field : fields) {
+            fprintf(fout, " %*s |", get_field_width(field), field.c_str());
+        }
+        fprintf(fout, "\n");
+        fprintf(fout, "|");
+        for (const auto & field: fields) {
+            int width = get_field_width(field);
+            fprintf(fout, " %s%s%s |", width < 0 ? ":" : "", std::string(std::abs(width) - 1, '-').c_str(), width > 0 ? ":" : "");
+        }
+        fprintf(fout, "\n");
         (void) params;
     }
 
     virtual void print_test(const test & t) {
         int n_tokens = t.bparams.n_prompt + t.bparams.n_gen;
-        fprintf(fout, "| %s | %s | %i | %i | %i | %.2f ± %.2f |\n",
-            t.mparams.type.c_str(), t.bkparams.get_backend().c_str(), t.bkparams.n_gpu_layers,
-            t.bparams.n_prompt, t.bparams.n_gen,
-            t.tsamples.avg_ts(n_tokens),
-            t.tsamples.stddev_ts(n_tokens));
+
+        std::map<std::string, std::string> vmap;
+        std::transform(model_params::get_fields().begin(), model_params::get_fields().end(), t.mparams.get_values().begin(),
+            std::inserter(vmap, vmap.end()), std::make_pair<const std::string&, const std::string&>);
+        std::transform(bench_params::get_fields().begin(), bench_params::get_fields().end(), t.bparams.get_values().begin(),
+            std::inserter(vmap, vmap.end()), std::make_pair<const std::string&, const std::string&>);
+        std::transform(backend_params::get_fields().begin(), backend_params::get_fields().end(), t.bkparams.get_values().begin(),
+            std::inserter(vmap, vmap.end()), std::make_pair<const std::string&, const std::string&>);
+
+        fprintf(fout, "|");
+        for (const auto & field : fields) {
+            std::string value;
+            if (field == "model") {
+                value = t.mparams.type;
+            } else if (field == "backend") {
+                value = backend_params::get_backend();
+            } else if (field == "t/s") {
+                char buf[128];
+                snprintf(buf, sizeof(buf), "%.2f ± %.2f", t.tsamples.avg_ts(n_tokens), t.tsamples.stddev_ts(n_tokens));
+                value = buf;
+            } else if (vmap.find(field) != vmap.end()) {
+                value = vmap.at(field);
+            } else {
+                assert(false);
+                exit(1);
+            }
+
+            int width = get_field_width(field);
+            if (field == "t/s") {
+                // HACK: the utf-8 character is 2 bytes
+                width += 1;
+            }
+            fprintf(fout, " %*s |", width, value.c_str());
+        }
+        fprintf(fout, "\n");
     }
 };
 
@@ -679,7 +780,6 @@ int main(int argc, char ** argv) {
         }
 
         p->print_test(t);
-
 
         llama_print_timings(ctx);
 
