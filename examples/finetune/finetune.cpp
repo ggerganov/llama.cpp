@@ -386,7 +386,7 @@ void init_model(struct llama_model * input, struct my_llama_model * model, uint3
 
         snprintf(name, GGML_MAX_NAME, "layers.%d.feed_forward.w2.weight", i);
         layer.w2 = llama_get_model_tensor(input, name);
-        
+
         snprintf(name, GGML_MAX_NAME, "layers.%d.feed_forward.w3.weight", i);
         layer.w3 = llama_get_model_tensor(input, name);
     }

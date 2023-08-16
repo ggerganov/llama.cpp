@@ -10815,7 +10815,7 @@ static void ggml_compute_forward_out_prod_q_f32(
             float * s0 = (float *) ((char *) src0->data + (          i01*nb01 + i02*nb02 + i03*nb03));
             float * s1 = (float *) ((char *) src1->data + (i1*nb10 + i11*nb11 + i12*nb12 + i13*nb13));
             float * d  = (float *) ((char *)  dst->data + (          i1*nb1 + i2*nb2 + i3*nb3));
-    
+
             dequantize_row_q(s0, wdata, ne0);
             ggml_vec_mad_f32(ne0, d, wdata, *s1);
         }
