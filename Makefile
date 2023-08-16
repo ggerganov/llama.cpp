@@ -281,24 +281,27 @@ ggml-opencl.o: ggml-opencl.cpp ggml-opencl.h
 endif # LLAMA_CLBLAST
 
 ifdef LLAMA_HIPBLAS
-	ROCM_PATH   ?= /opt/rocm
-	CC          := $(ROCM_PATH)/llvm/bin/clang
-	CXX         := $(ROCM_PATH)/llvm/bin/clang++
-	GPU_TARGETS ?= gfx803 gfx900 gfx906 gfx908 gfx90a gfx1030 gfx1100
+	ROCM_PATH	?= /opt/rocm
+	HIPCC	    ?= $(ROCM_PATH)/bin/hipcc
+	GPU_TARGETS ?= $(shell $(ROCM_PATH)/llvm/bin/amdgpu-arch)
 	LLAMA_CUDA_DMMV_X       ?= 32
 	LLAMA_CUDA_MMV_Y        ?= 1
 	LLAMA_CUDA_KQUANTS_ITER ?= 2
-	CFLAGS     += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS $(shell $(ROCM_PATH)/bin/hipconfig -C)
-	CXXFLAGS   += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS $(shell $(ROCM_PATH)/bin/hipconfig -C)
-	LDFLAGS    += -L$(ROCM_PATH)/lib -Wl,-rpath=$(ROCM_PATH)/lib -lhipblas -lamdhip64 -lrocblas
-	OBJS       += ggml-cuda.o
-ggml-cuda.o: CXXFLAGS += $(addprefix --offload-arch=,$(GPU_TARGETS))
-ggml-cuda.o: CXXFLAGS += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
-ggml-cuda.o: CXXFLAGS += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_MMV_Y)
-ggml-cuda.o: CXXFLAGS += -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
-ggml-cuda.o: CXXFLAGS += -DCC_TURING=1000000000
+	CFLAGS      += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS
+	CXXFLAGS    += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS
+	LDFLAGS     += -L$(ROCM_PATH)/lib -Wl,-rpath=$(ROCM_PATH)/lib -fuse-ld=lld
+	LDFLAGS		+= -lhipblas -lamdhip64 -lrocblas
+	HIPFLAGS    += $(addprefix --offload-arch=,$(GPU_TARGETS))
+	HIPFLAGS    += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
+	HIPFLAGS    += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_MMV_Y)
+	HIPFLAGS    += -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
+	HIPFLAGS    += -DCC_TURING=1000000000
+ifdef LLAMA_CUDA_FORCE_DMMV
+	HIPFLAGS 	+= -DGGML_CUDA_FORCE_DMMV
+endif # LLAMA_CUDA_FORCE_DMMV
+	OBJS        += ggml-cuda.o
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
-	$(CXX) $(CXXFLAGS) -x hip -c -o $@ $<
+	$(HIPCC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
 endif # LLAMA_HIPBLAS
 
 ifdef LLAMA_METAL
