@@ -330,11 +330,17 @@ extern "C" {
     LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
     LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
     LLAMA_API int llama_n_embd (const struct llama_context * ctx);
+    LLAMA_API int llama_n_mult (const struct llama_context * ctx);
+    LLAMA_API int llama_n_head (const struct llama_context * ctx);
+    LLAMA_API int llama_n_rot  (const struct llama_context * ctx);
     LLAMA_API int llama_n_layer(const struct llama_context * ctx);
 
     LLAMA_API int llama_n_vocab_from_model(const struct llama_model * model);
     LLAMA_API int llama_n_ctx_from_model  (const struct llama_model * model);
     LLAMA_API int llama_n_embd_from_model (const struct llama_model * model);
+    LLAMA_API int llama_n_mult_from_model (const struct llama_model * model);
+    LLAMA_API int llama_n_head_from_model (const struct llama_model * model);
+    LLAMA_API int llama_n_rot_from_model  (const struct llama_model * model);
     LLAMA_API int llama_n_layer_from_model(const struct llama_model * model);
 
     // Get the vocabulary as output parameters.

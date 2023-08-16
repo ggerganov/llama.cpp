@@ -4147,6 +4147,18 @@ int llama_n_embd_from_model(const struct llama_model * model) {
     return model->hparams.n_embd;
 }
 
+int llama_n_mult_from_model(const struct llama_model * model) {
+    return model->hparams.n_mult;
+}
+
+int llama_n_head_from_model(const struct llama_model * model) {
+    return model->hparams.n_head;
+}
+
+int llama_n_rot_from_model(const struct llama_model * model) {
+    return model->hparams.n_rot;
+}
+
 int llama_n_layer_from_model(const struct llama_model * model) {
     return model->hparams.n_layer;
 }
@@ -4161,6 +4173,18 @@ int llama_n_ctx(const struct llama_context * ctx) {
 
 int llama_n_embd(const struct llama_context * ctx) {
     return ctx->model.hparams.n_embd;
+}
+
+int llama_n_mult(const struct llama_context * ctx) {
+    return ctx->model.hparams.n_mult;
+}
+
+int llama_n_head(const struct llama_context * ctx) {
+    return ctx->model.hparams.n_head;
+}
+
+int llama_n_rot(const struct llama_context * ctx) {
+    return ctx->model.hparams.n_rot;
 }
 
 int llama_n_layer(const struct llama_context * ctx) {
