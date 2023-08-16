@@ -111,7 +111,7 @@ static void print_usage(int /* argc */, char ** argv) {
     fprintf(stdout, "options:\n");
     fprintf(stdout, "  -h, --help\n");
     fprintf(stdout, "  -m, --model <filename>            (default: %s)\n", join(cmd_params_defaults.model, ",").c_str());
-    fprintf(stdout, "  -p, --n-prompt <n>               (default: %s)\n", join(cmd_params_defaults.n_prompt, ",").c_str());
+    fprintf(stdout, "  -p, --n-prompt <n>                (default: %s)\n", join(cmd_params_defaults.n_prompt, ",").c_str());
     fprintf(stdout, "  -n, --n-gen <n>                   (default: %s)\n", join(cmd_params_defaults.n_gen, ",").c_str());
     fprintf(stdout, "  -b, --batch-size <n>              (default: %s)\n", join(cmd_params_defaults.n_batch, ",").c_str());
     fprintf(stdout, "  --memory-f32 <0|1>                (default: %s)\n", join(cmd_params_defaults.f32_kv, ",").c_str());
@@ -450,12 +450,12 @@ struct backend_params {
 };
 
 const std::string backend_params::build_commit = BUILD_COMMIT;
-const int backend_params::build_number = BUILD_NUMBER;
-const bool backend_params::cuda = !!ggml_cpu_has_cublas();
-const bool backend_params::opencl = !!ggml_cpu_has_clblast();
-const bool backend_params::metal = !!ggml_cpu_has_metal();
+const int backend_params::build_number         = BUILD_NUMBER;
+const bool backend_params::cuda     = !!ggml_cpu_has_cublas();
+const bool backend_params::opencl   = !!ggml_cpu_has_clblast();
+const bool backend_params::metal    = !!ggml_cpu_has_metal();
 const bool backend_params::gpu_blas = !!ggml_cpu_has_gpublas();
-const bool backend_params::blas = !!ggml_cpu_has_blas();
+const bool backend_params::blas     = !!ggml_cpu_has_blas();
 
 // benchmark params
 struct bench_params {
@@ -719,6 +719,10 @@ void llama_null_log_callback(enum llama_log_level level, const char * text, void
 }
 
 int main(int argc, char ** argv) {
+#ifndef NDEBUG
+    fprintf(stderr, "warning: NDEBUG is not defined, performance may be affected\n");
+#endif
+
     cmd_params params = parse_cmd_params(argc, argv);
 
     // initialize llama.cpp
