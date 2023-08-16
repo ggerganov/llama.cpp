@@ -16,6 +16,7 @@ Command line options:
 -   `--memory-f32`: Use 32-bit floats instead of 16-bit floats for memory key+value. Not recommended.
 -   `--mlock`: Lock the model in memory, preventing it from being swapped out when memory-mapped.
 -   `--no-mmap`: Do not memory-map the model. By default, models are mapped into memory, which allows the system to load only the necessary parts of the model as needed.
+-   `--numa`: Attempt optimizations that help on some NUMA systems.
 -   `--lora FNAME`: Apply a LoRA (Low-Rank Adaptation) adapter to the model (implies --no-mmap). This allows you to adapt the pretrained model to specific tasks or domains.
 -   `--lora-base FNAME`: Optional model to use as a base for the layers modified by the LoRA adapter. This flag is used in conjunction with the `--lora` flag, and specifies the base model for the adaptation.
 -   `-to N`, `--timeout N`: Server read/write timeout in seconds. Default `600`.

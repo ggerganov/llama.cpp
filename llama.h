@@ -97,7 +97,7 @@ extern "C" {
     // If your logging mechanism cannot handle that, check if the last character is '\n' and strip it
     // if it exists.
     // It might not exist for progress report where '.' is output repeatedly.
-    typedef void (*llama_log_callback)(llama_log_level level, const char * text, void * user_data);
+    typedef void (*llama_log_callback)(enum llama_log_level level, const char * text, void * user_data);
 
     struct llama_context_params {
         uint32_t seed;         // RNG seed, -1 for random
