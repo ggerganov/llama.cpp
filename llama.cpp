@@ -3653,9 +3653,10 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
                 ggml_set_name(r, "r_cpy");
             }
 
-            struct ggml_cgraph gf = ggml_build_forward(r);
+            struct ggml_cgraph * gf = ggml_new_graph(lora_ctx);
+            ggml_build_forward_expand(gf, r);
 
-            ggml_graph_compute_helper(work_buffer, &gf, n_threads);
+            ggml_graph_compute_helper(work_buffer, gf, n_threads);
 
             // we won't need these tensors again, reset the context to save memory
             ggml_free(lora_ctx);
