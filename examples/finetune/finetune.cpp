@@ -236,6 +236,8 @@ struct my_llama_model {
 };
 
 struct my_llama_lora_hparams {
+    uint32_t lora_r = 1;
+    uint32_t lora_alpha = 1;
     uint32_t n_rank_attention_norm = 1;
     uint32_t n_rank_wq = 4;
     uint32_t n_rank_wk = 4;
@@ -333,7 +335,7 @@ void print_lora_params(struct my_llama_lora_hparams * params) {
     printf("%s: n_rank_output         : %u\n", __func__, params->n_rank_output);
 }
 
-void init_model(const struct llama_model * input, struct my_llama_model * model, uint32_t n_ctx) {
+void init_model(struct llama_model * input, struct my_llama_model * model, uint32_t n_ctx) {
     auto & hparams = model->hparams;
 
     hparams.n_vocab = llama_n_vocab_from_model(input);
@@ -349,10 +351,6 @@ void init_model(const struct llama_model * input, struct my_llama_model * model,
     const uint32_t n_vocab = hparams.n_vocab;
 
     const uint32_t n_ff = get_n_ff(&hparams);
-
-    model->train_its = 0;
-    model->train_samples = 0;
-    model->train_tokens = 0;
 
     model->tok_embeddings = llama_get_model_tok_embeddings(input);
     model->norm           = llama_get_model_norm(input);
@@ -589,7 +587,7 @@ struct ggml_tensor * forward(
     const int n_head  = hparams.n_head;
     const int n_rot   = hparams.n_rot;
 
-    GGML_ASSERT(n_layer == lora.layers.size());
+    GGML_ASSERT(n_layer == lora->layers.size());
 
     struct ggml_tensor * tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
     memcpy(tokens->data, tokens_input->data, N*ggml_element_size(tokens));
@@ -801,9 +799,7 @@ struct ggml_tensor * forward(
         // inpL shape [n_embd,N,1,1]
         inpL = ggml_mul(ctx0,
                     ggml_repeat(ctx0,
-                        ggml_add(ctx0,
-                            model->norm,
-                            lora->norm),
+                        norm,
                         inpL),
                     inpL);
 
@@ -1073,7 +1069,7 @@ struct ggml_tensor * llama_build_lora_finetune_graphs(
     const int n_ff       = get_n_ff(&hparams);
     const int rope_mode  = 0;
 
-    GGML_ASSERT(n_layer == lora.layers.size());
+    GGML_ASSERT(n_layer == lora->layers.size());
 
     auto set_name = [](struct ggml_tensor * t, const char * n) {
         ggml_set_name(t, n);
@@ -1117,6 +1113,7 @@ struct ggml_tensor * llama_build_lora_finetune_graphs(
         struct ggml_tensor * wq = ggml_add(ctx, layer.wq, ggml_mul_mat(ctx, llayer.wq_a, llayer.wq_b));
         struct ggml_tensor * wk = ggml_add(ctx, layer.wk, ggml_mul_mat(ctx, llayer.wk_a, llayer.wk_b));
         struct ggml_tensor * wv = ggml_add(ctx, layer.wv, ggml_mul_mat(ctx, llayer.wv_a, llayer.wv_b));
+        struct ggml_tensor * wo = ggml_add(ctx, layer.wo, ggml_mul_mat(ctx, llayer.wo_a, llayer.wo_b));
         struct ggml_tensor * w1 = ggml_add(ctx, layer.w1, ggml_mul_mat(ctx, llayer.w1_a, llayer.w1_b));
         struct ggml_tensor * w2 = ggml_add(ctx, layer.w2, ggml_mul_mat(ctx, llayer.w2_a, llayer.w2_b));
         struct ggml_tensor * w3 = ggml_add(ctx, layer.w3, ggml_mul_mat(ctx, llayer.w3_a, llayer.w3_b));
@@ -1878,7 +1875,7 @@ void save_checkpoint(struct my_llama_model * model, struct my_llama_lora * lora,
     write_opt_context(&file, opt);
 }
 
-bool load_checkpoint(struct my_llama_lora * model, struct my_llama_lora * lora, struct ggml_opt_context * opt, const char * filename, bool init) {
+bool load_checkpoint(struct my_llama_model * model, struct my_llama_lora * lora, struct ggml_opt_context * opt, const char * filename, bool init) {
     struct llama_file file(filename, "rb");
 
     uint32_t magic;
@@ -1971,7 +1968,7 @@ bool load_checkpoint(struct my_llama_lora * model, struct my_llama_lora * lora, 
             read_tensor(&file, layer.w3_b);
         }
 
-        read_opt_context(&file, model->ctx, opt);
+        read_opt_context(&file, lora->ctx, opt);
     }
 
     return (file.fp != NULL);
@@ -2638,6 +2635,7 @@ int main(int argc, char ** argv) {
     struct llama_context_params llama_params = llama_context_default_params();
     llama_params.vocab_only = false;
 
+    printf("%s: model base = '%s'\n", __func__, params.fn_model_base);
     struct llama_model * lmodel = llama_load_model_from_file(params.fn_model_base, llama_params);
     struct llama_context * lctx = llama_new_context_with_model(lmodel, llama_params);
 
@@ -2670,7 +2668,9 @@ int main(int argc, char ** argv) {
     struct my_llama_model model;
     init_model(lmodel, &model, params.n_ctx);
 
-    struct my_llama_model lora;
+    struct my_llama_lora lora;
+    lora.hparams.lora_r                = params.lora_r;
+    lora.hparams.lora_alpha            = params.lora_alpha;
     lora.hparams.n_rank_attention_norm = params.n_rank_attention_norm;
     lora.hparams.n_rank_wq             = params.n_rank_wq;
     lora.hparams.n_rank_wk             = params.n_rank_wk;
@@ -2753,17 +2753,17 @@ int main(int argc, char ** argv) {
     opt->params = params.use_adam ? opt_params_adam : opt_params_lbfgs;
 
     printf("%s: init model\n", __func__);
-    bool existed = load_checkpoint(&model, opt, params.fn_checkpoint_in, true);
+    bool existed = load_checkpoint(&model, &lora, opt, params.fn_checkpoint_in, true);
     set_param_lora(&lora);
 
     opt->params = params.use_adam ? opt_params_adam : opt_params_lbfgs;
 
-    opt->iter = model.train_its;
+    opt->iter = lora.train_its;
     printf("%s: opt iter %d\n", __func__, opt->iter);
 
     bool from_scratch = !existed;
     if (from_scratch) {
-        randomize_model(&model, params.seed, 0.0f, 1.0f, -1.0f, +1.0f);
+        randomize_lora(&lora, params.seed, 0.0f, 1.0f, -1.0f, +1.0f);
     }
 
     init_kv_cache(&kv_self, &model, 1);
@@ -2894,9 +2894,9 @@ int main(int argc, char ** argv) {
         size_t used_mem_after_opt = ggml_used_mem(ctx0);
 
         int n_iter = params.use_adam ? params.adam_n_iter : params.lbfgs_n_iter;
-        model.train_its = opt->iter;
-        model.train_samples += n_batch * n_iter;
-        model.train_tokens  += n_batch * n_tokens * n_iter;
+        lora.train_its = opt->iter;
+        lora.train_samples += n_batch * n_iter;
+        lora.train_tokens  += n_batch * n_tokens * n_iter;
 
         if (params.print_info_interval > 0 && ex % params.print_info_interval == 0) {
             printf("Example %d, opt iter %d\n", ex, opt->iter);
@@ -2993,7 +2993,7 @@ int main(int argc, char ** argv) {
             struct ggml_cgraph * gf = ggml_new_graph(ctx0);
 
             int n_past = 0;
-            struct ggml_tensor * logits = forward(&model, &kv_self, ctx0, gf, tokens_input, sample_ctx, n_past);
+            struct ggml_tensor * logits = forward(&model, &lora, &kv_self, ctx0, gf, tokens_input, sample_ctx, n_past);
 
             ggml_build_forward_expand(gf, logits);
             ggml_graph_compute_helper(work_buffer, gf, params.n_threads);
