@@ -88,7 +88,7 @@ struct cmd_params {
     output_formats output_format;
 };
 
-static cmd_params cmd_params_defaults = {
+static const cmd_params cmd_params_defaults = {
     /* model         */ {"models/7B/ggml-model-q4_0.bin"},
     /* n_prompt      */ {512},
     /* n_gen         */ {128},
@@ -688,9 +688,9 @@ struct markdown_printer : public printer {
                 value = backend_params::get_backend();
             } else if (field == "test") {
                 char buf[128];
-                if (t.bparams.n_prompt > 0) {
+                if (t.bparams.n_prompt > 0 && t.bparams.n_gen == 0) {
                     snprintf(buf, sizeof(buf), "pp %d", t.bparams.n_prompt);
-                } else if (t.bparams.n_gen > 0) {
+                } else if (t.bparams.n_gen > 0 && t.bparams.n_prompt == 0) {
                     snprintf(buf, sizeof(buf), "tg %d", t.bparams.n_gen);
                 } else {
                     assert(false);
@@ -743,8 +743,16 @@ void llama_null_log_callback(enum llama_log_level level, const char * text, void
 }
 
 int main(int argc, char ** argv) {
-#ifndef NDEBUG
-    fprintf(stderr, "warning: NDEBUG is not defined, performance may be affected\n");
+#if !defined(NDEBUG)
+    fprintf(stderr, "warning: asserts enabled, performance may be affected\n");
+#endif
+
+#if (defined(_MSC_VER) && defined(_DEBUG)) || (!defined(_MSC_VER) && !defined(__OPTIMIZE__))
+    fprintf(stderr, "warning: debug build, performance may be affected\n");
+#endif
+
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+    fprintf(stderr, "warning: sanitizer enabled, performance may be affected\n");
 #endif
 
     cmd_params params = parse_cmd_params(argc, argv);
