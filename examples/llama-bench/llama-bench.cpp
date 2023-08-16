@@ -584,30 +584,51 @@ struct csv_printer : public printer {
 };
 
 struct json_printer : public printer {
+    bool first = true;
+
     void print_fields(const std::vector<std::string> & fields, const std::vector<std::string> & values) {
         assert(fields.size() == values.size());
         for (size_t i = 0; i < fields.size(); i++) {
-            fprintf(fout, "    \"%s\": \"%s\",\n", fields.at(i).c_str(), values.at(i).c_str());
+            fprintf(fout, "      \"%s\": \"%s\"", fields.at(i).c_str(), values.at(i).c_str());
+            if (i < fields.size() - 1) {
+                fprintf(fout, ",\n");
+            } else {
+                fprintf(fout, "\n");
+            }
         }
     }
 
+    virtual void print_header(const cmd_params & params) {
+        fprintf(fout, "[\n");
+        (void) params;
+    }
+
+    virtual void print_footer() {
+        fprintf(fout, "\n]\n");
+    }
+
     virtual void print_test(const test & t) {
-        fprintf(fout, "{\n");
-        fprintf(fout, "  \"model\": {\n");
+        if (first) {
+            first = false;
+        } else {
+            fprintf(fout, ",\n");
+        }
+        fprintf(fout, "  {\n");
+        fprintf(fout, "    \"model\": {\n");
         print_fields(model_params::get_fields(), t.mparams.get_values());
-        fprintf(fout, "  },\n");
-        fprintf(fout, "  \"benchmark\": {\n");
+        fprintf(fout, "    },\n");
+        fprintf(fout, "    \"benchmark\": {\n");
         print_fields(bench_params::get_fields(), t.bparams.get_values());
-        fprintf(fout, "  },\n");
-        fprintf(fout, "  \"backend\": {\n");
+        fprintf(fout, "    },\n");
+        fprintf(fout, "    \"backend\": {\n");
         print_fields(backend_params::get_fields(), t.bkparams.get_values());
-        fprintf(fout, "  },\n");
-        fprintf(fout, "  \"samples\": {\n");
-        fprintf(fout, "    \"ns\": [ %s ],\n", join(t.tsamples.t_ns, ", ").c_str());
-        fprintf(fout, "    \"avg\": %" PRIu64 ",\n", t.tsamples.avg());
-        fprintf(fout, "    \"stddev\": %" PRIu64 "\n", t.tsamples.stdev());
-        fprintf(fout, "  }\n");
-        fprintf(fout, "}\n");
+        fprintf(fout, "    },\n");
+        fprintf(fout, "    \"samples\": {\n");
+        fprintf(fout, "      \"ns\": [ %s ],\n", join(t.tsamples.t_ns, ", ").c_str());
+        fprintf(fout, "      \"avg\": %" PRIu64 ",\n", t.tsamples.avg());
+        fprintf(fout, "      \"stddev\": %" PRIu64 "\n", t.tsamples.stdev());
+        fprintf(fout, "    }\n");
+        fprintf(fout, "  }");
     }
 };
 
