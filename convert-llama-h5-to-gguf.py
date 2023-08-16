@@ -135,7 +135,7 @@ if Path(dir_model + "/tokenizer.model").is_file():
         toktype = 1 # defualt to normal token type
         if tokenizer.is_unknown(i): toktype = 2
         if tokenizer.is_control(i): toktype = 3
- 
+
         # TODO: How to determinate if a token is user defined?
         # ref: https://github.com/google/sentencepiece/blob/master/src/sentencepiece_model.proto
         # if tokenizer.is_user_defined(i): toktype = 4
