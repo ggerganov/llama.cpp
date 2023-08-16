@@ -3337,6 +3337,12 @@ struct llama_context * llama_new_context_with_model(
         // this allocates all Metal resources and memory buffers
         ctx->ctx_metal = ggml_metal_init(1);
 
+        if (!ctx->ctx_metal) {
+            LLAMA_LOG_ERROR("%s: ggml_metal_init() failed\n", __func__);
+            llama_free(ctx);
+            return NULL;
+        }
+
         void * data_ptr  = NULL;
         size_t data_size = 0;
 
