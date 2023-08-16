@@ -414,9 +414,9 @@
 
       useEffect(() => {
         // scroll to bottom (if needed)
-        let scrollable = document.querySelector('#content');
-        if (scrollable && scrollable.scrollHeight <= scrollable.scrollTop + scrollable.offsetHeight + 300) {
-          scrollable.scrollTo(0, scrollable.scrollHeight)
+        const parent = container.current.parentElement;
+        if (parent && parent.scrollHeight <= parent.scrollTop + parent.offsetHeight + 300) {
+          parent.scrollTo(0, parent.scrollHeight)
         }
       }, [messages])
 
