@@ -14,8 +14,6 @@
             with pkgs.darwin.apple_sdk_11_0.frameworks; [
               Accelerate
               MetalKit
-              MetalPerformanceShaders
-              MetalPerformanceShadersGraph
             ]
           else if isAarch32 && isDarwin then
             with pkgs.darwin.apple_sdk.frameworks; [

@@ -1845,7 +1845,7 @@ static bool llama_eval_internal(
 #endif
 
 #ifdef GGML_USE_METAL
-    if (lctx.ctx_metal && N == 1) {
+    if (lctx.ctx_metal) {
         // TODO: disabled until #2413 is resolved
         //if (!ggml_metal_if_optimized(lctx.ctx_metal)) {
         //    ggml_metal_graph_find_concurrency(lctx.ctx_metal, gf);
@@ -1857,22 +1857,6 @@ static bool llama_eval_internal(
             ggml_metal_get_tensor(lctx.ctx_metal, embeddings);
         }
     } else {
-        // IMPORTANT:
-        // Since we don't have efficient Matrix x Matrix Metal multiplication yet, we fallback to vanilla
-        // ggml_graph_compute(). It uses Apple's Accelerate CBLAS API which takes advantage of the ANE or the AMX
-        // coprocessor.
-        //
-        // When we implement Matrix x Matrix Metal multiplication, we can avoid this branch.
-        // But for now, we have focused only on Matrix x Vector Metal multiplication.
-        //
-        // TODO: avoid these syncs via shared memory (ref #1696)
-        //
-        if (lctx.ctx_metal) {
-            // We need to sync the GPU KV cache with the CPU KV cache
-            ggml_metal_get_tensor(lctx.ctx_metal, kv_self.k);
-            ggml_metal_get_tensor(lctx.ctx_metal, kv_self.v);
-        }
-
         ggml_graph_compute_helper(lctx.work_buffer, gf, n_threads);
     }
 #else
