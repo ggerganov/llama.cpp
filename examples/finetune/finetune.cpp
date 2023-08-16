@@ -361,7 +361,6 @@ void init_model(struct llama_model * input, struct my_llama_model * model, uint3
     char name[GGML_MAX_NAME];
 
     for (uint32_t i = 0; i < n_layer; ++i) {
-        struct llama_layer * ilayer = llama_get_layer_from_model(input, i);
         auto & layer = model->layers[i];
 
         snprintf(name, GGML_MAX_NAME, "layers.%d.attention_norm.weight", i);
