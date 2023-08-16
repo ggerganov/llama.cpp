@@ -569,6 +569,16 @@ install(
         WORLD_READ
         WORLD_EXECUTE
     DESTINATION ${CMAKE_INSTALL_BINDIR})
+if (LLAMA_METAL)
+    install(
+        FILES ggml-metal.metal
+        PERMISSIONS
+            OWNER_READ
+            OWNER_WRITE
+            GROUP_READ
+            WORLD_READ
+        DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
 
 #
 # programs, examples and tests
