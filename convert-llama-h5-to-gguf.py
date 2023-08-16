@@ -95,12 +95,21 @@ if "_name_or_path" in hparams:
 else:
     hf_repo=""
 
+if "max_sequence_length" in hparams:
+    ctx_length = hparams["max_sequence_length"]
+elif "max_position_embeddings" in hparams:
+    ctx_length = hparams["max_position_embeddings"]
+else:
+    print("gguf: can not find ctx length parameter.")
+    sys.exit()
+
+
 gguf_writer.add_architecture(llm_arch)
 gguf_writer.add_name(last_dir)
 gguf_writer.add_file_type("All tensors F32" if ftype == 0 else "Most tensors F16, some F32")
 gguf_writer.add_source_hf_repo(hf_repo)
 gguf_writer.add_tensor_data_layout(llm_arch, "Meta AI original pth")
-gguf_writer.add_context_length(llm_arch, hparams["max_position_embeddings"])
+gguf_writer.add_context_length(llm_arch, ctx_length)
 gguf_writer.add_embedding_length(llm_arch, hparams["hidden_size"])
 gguf_writer.add_block_count(llm_arch, block_count)
 gguf_writer.add_feed_forward_length(llm_arch, hparams["intermediate_size"])
@@ -318,7 +327,7 @@ for part_name in part_names:
         if ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
             data = data.astype(np.float16)
 
-        print( name + ", shape " + str(len(data.shape)) + ", " + str(old_dtype) + " --> " + str(data.dtype))
+        print(name + ", shape " + str(len(data.shape)) + ", " + str(old_dtype) + " --> " + str(data.dtype))
 
         gguf_writer.write_tensor_to_file(data)
 

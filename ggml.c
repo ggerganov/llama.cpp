@@ -9140,6 +9140,8 @@ static void ggml_compute_forward_mul(
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
         struct ggml_tensor * dst) {
+    GGML_ASSERT(src1->type == GGML_TYPE_F32 && "only f32 src1 supported for now");
+
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -18584,17 +18586,18 @@ static const size_t GGUF_TYPE_SIZE[GGUF_TYPE_COUNT] = {
 static_assert(GGUF_TYPE_COUNT == 10, "GGUF_TYPE_COUNT != 10");
 
 static const char * GGUF_TYPE_NAME[GGUF_TYPE_COUNT] = {
-    [GGUF_TYPE_UINT8]   = "uint8",
-    [GGUF_TYPE_INT8]    = "int8",
-    [GGUF_TYPE_UINT16]  = "uint16",
-    [GGUF_TYPE_INT16]   = "int16",
-    [GGUF_TYPE_UINT32]  = "uint32",
-    [GGUF_TYPE_INT32]   = "int32",
-    [GGUF_TYPE_FLOAT32] = "float32",
+    [GGUF_TYPE_UINT8]   = "u8",
+    [GGUF_TYPE_INT8]    = "i8",
+    [GGUF_TYPE_UINT16]  = "u16",
+    [GGUF_TYPE_INT16]   = "i16",
+    [GGUF_TYPE_UINT32]  = "u32",
+    [GGUF_TYPE_INT32]   = "i32",
+    [GGUF_TYPE_FLOAT32] = "f32",
     [GGUF_TYPE_BOOL]    = "bool",
-    [GGUF_TYPE_STRING]  = "string",
-    [GGUF_TYPE_ARRAY]   = "array",
+    [GGUF_TYPE_STRING]  = "str",
+    [GGUF_TYPE_ARRAY]   = "arr",
 };
+static_assert(GGUF_TYPE_COUNT == 10, "GGUF_TYPE_COUNT != 10");
 
 union gguf_value {
     uint8_t  uint8;
@@ -19395,17 +19398,23 @@ static void gguf_buf_grow(struct gguf_buf * buf, size_t size) {
 static void gguf_bwrite_str(struct gguf_buf * buf, const struct gguf_str * val) {
     gguf_buf_grow(buf, sizeof(val->n) + val->n);
 
-    buf->data && memcpy((char *) buf->data + buf->offset, &val->n, sizeof(val->n));
+    if (buf->data) {
+        memcpy((char *) buf->data + buf->offset, &val->n, sizeof(val->n));
+    }
     buf->offset += sizeof(val->n);
 
-    buf->data && memcpy((char *) buf->data + buf->offset, val->data, val->n);
+    if (buf->data) {
+        memcpy((char *) buf->data + buf->offset, val->data, val->n);
+    }
     buf->offset += val->n;
 }
 
 static void gguf_bwrite_el(struct gguf_buf * buf, const void * val, size_t el_size) {
     gguf_buf_grow(buf, el_size);
 
-    buf->data && memcpy((char *) buf->data + buf->offset, val, el_size);
+    if (buf->data) {
+        memcpy((char *) buf->data + buf->offset, val, el_size);
+    }
     buf->offset += el_size;
 }
 

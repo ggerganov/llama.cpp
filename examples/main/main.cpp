@@ -266,9 +266,6 @@ int main(int argc, char ** argv) {
         params.interactive = true;
     }
 
-    // determine newline token
-    auto llama_token_newline = ::llama_tokenize(ctx, "\n", false);
-
     if (params.verbose_prompt) {
         fprintf(stderr, "\n");
         fprintf(stderr, "%s: prompt: '%s'\n", __func__, params.prompt.c_str());
@@ -778,8 +775,7 @@ int main(int argc, char ** argv) {
                     if (grammar != NULL) {
                         llama_grammar_free(grammar);
 
-                        std::vector<const llama_grammar_element *> grammar_rules(
-                            parsed_grammar.c_rules());
+                        std::vector<const llama_grammar_element *> grammar_rules( parsed_grammar.c_rules());
                         grammar = llama_grammar_init(
                             grammar_rules.data(), grammar_rules.size(),
                             parsed_grammar.symbol_ids.at("root"));
