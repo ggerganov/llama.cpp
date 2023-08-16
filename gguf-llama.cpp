@@ -101,11 +101,21 @@
 #define TN_FFN_DOWN    "blk.%d.ffn_down.weight"
 #define TN_FFN_UP      "blk.%d.ffn_up.weight"
 
+#ifdef __GNUC__
+#ifdef __MINGW32__
+#define LLAMA_ATTRIBUTE_FORMAT(...) __attribute__((format(gnu_printf, __VA_ARGS__)))
+#else
+#define LLAMA_ATTRIBUTE_FORMAT(...) __attribute__((format(printf, __VA_ARGS__)))
+#endif
+#else
+#define LLAMA_ATTRIBUTE_FORMAT(...)
+#endif
+
 //
 // logging
 //
-
-static void llama_log_internal(llama_log_level level, const char* format, ...);
+LLAMA_ATTRIBUTE_FORMAT(2, 3)
+static void llama_log_internal        (llama_log_level level, const char* format, ...);
 static void llama_log_callback_default(llama_log_level level, const char * text, void * user_data);
 
 #define LLAMA_LOG_INFO(...)  llama_log_internal(LLAMA_LOG_LEVEL_INFO , __VA_ARGS__)
@@ -130,13 +140,7 @@ static void zeros(std::ofstream & file, size_t n) {
     }
 }
 
-#ifdef __GNUC__
-#ifdef __MINGW32__
-__attribute__((format(gnu_printf, 1, 2)))
-#else
-__attribute__((format(printf, 1, 2)))
-#endif
-#endif
+LLAMA_ATTRIBUTE_FORMAT(1, 2)
 static std::string format(const char * fmt, ...) {
     va_list ap;
     va_list ap2;
@@ -991,7 +995,7 @@ static std::string llama_format_tensor_shape(const std::vector<uint32_t> & ne) {
     char buf[256];
     snprintf(buf, sizeof(buf), "%5u", ne.at(0));
     for (size_t i = 1; i < ne.size(); i++) {
-        snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), " x %5u", ne.at(i));
+        snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), ", %5u", ne.at(i));
     }
     return buf;
 }
@@ -999,13 +1003,14 @@ static std::string llama_format_tensor_shape(const std::vector<uint32_t> & ne) {
 static std::string llama_format_tensor_shape(const struct ggml_tensor * t) {
     char buf[256];
     snprintf(buf, sizeof(buf), "%5" PRId64, t->ne[0]);
-    for (int i = 1; i < t->n_dims; i++) {
-        snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), " x %5" PRId64, t->ne[i]);
+    for (int i = 1; i < GGML_MAX_DIMS; i++) {
+        snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), ", %5" PRId64, t->ne[i]);
     }
     return buf;
 }
 
 struct llama_model_loader {
+    int n_kv      = 0;
     int n_tensors = 0;
     int n_created = 0;
 
@@ -1027,11 +1032,31 @@ struct llama_model_loader {
 
         ctx_gguf = gguf_init_from_file(fname.c_str(), params);
 
+        n_kv      = gguf_get_n_kv(ctx_gguf);
         n_tensors = gguf_get_n_tensors(ctx_gguf);
+
         file_version = (enum llama_file_version) gguf_get_version(ctx_gguf);
 
-        LLAMA_LOG_INFO("%s: loaded %d tensors from %s (version %s)\n",
-                __func__, n_tensors, fname.c_str(), llama_file_version_name(file_version));
+        // print meta data
+        // TODO: make optional
+        {
+            LLAMA_LOG_INFO("%s: loaded meta data with %d key-value paris and %d tensors from %s (version %s)\n",
+                    __func__, n_kv, n_tensors, fname.c_str(), llama_file_version_name(file_version));
+
+            for (int i = 0; i < n_kv; i++) {
+                const char * name         = gguf_get_key(ctx_gguf, i);
+                const enum gguf_type type = gguf_get_kv_type(ctx_gguf, i);
+
+                LLAMA_LOG_INFO("%s: - %3d: %42s %-8s\n", __func__, i, name, gguf_type_name(type));
+            }
+
+            for (int i = 0; i < n_tensors; i++) {
+                const char * name = gguf_get_tensor_name(ctx_gguf, i);
+                struct ggml_tensor * meta = ggml_get_tensor(ctx_meta, name);
+
+                LLAMA_LOG_INFO("%s: - %3d: %32s %-8s [ %s ]\n", __func__, i, name, ggml_type_name(meta->type), llama_format_tensor_shape(meta).c_str());
+            }
+        }
 
         if (!llama_mmap::SUPPORTED) {
             LLAMA_LOG_WARN("%s: mmap is not supported on this platform\n", __func__);
@@ -1281,7 +1306,7 @@ static void llama_model_load_internal(
             if (kid >= 0) { \
                 enum gguf_type ktype = gguf_get_kv_type(ctx, kid); \
                 if (ktype != (type)) { \
-                    throw std::runtime_error(format("key %s has wrong type: %d", key, ktype)); \
+                    throw std::runtime_error(format("key %s has wrong type: %s", key, gguf_type_name(ktype))); \
                 } \
                 (dst) = func(ctx, kid); \
             } else if (req) { \
@@ -1325,7 +1350,7 @@ static void llama_model_load_internal(
             const auto n_gqa = hparams.n_gqa();
 
             if (model.type == e_model::MODEL_65B && n_gqa == 8) {
-                fprintf(stderr, "%s: warning: assuming 70B model based on GQA == %d\n", __func__, n_gqa);
+                LLAMA_LOG_WARN("%s: assuming 70B model based on GQA == %d\n", __func__, n_gqa);
                 model.type = e_model::MODEL_70B;
             }
         }
@@ -3399,7 +3424,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         return i_layer < num_layers/8 || i_layer >= 7*num_layers/8 || (i_layer - num_layers/8)%3 == 2;
     };
 
-    size_t idx = 0;
+    int idx = 0;
 
     std::vector<uint8_t> read_data;
     std::vector<uint8_t> work;
@@ -3428,7 +3453,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         tensor->data = read_data.data();
         model_loader->load_data_for(tensor);
 
-        LLAMA_LOG_INFO("[%4zu/%4zu] %36s - [%s], type = %6s, ",
+        LLAMA_LOG_INFO("[%4d/%4d] %36s - [%s], type = %6s, ",
                ++idx, model_loader->n_tensors,
                ggml_get_name(tensor),
                llama_format_tensor_shape(tensor).c_str(),

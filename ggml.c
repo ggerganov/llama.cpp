@@ -18583,6 +18583,19 @@ static const size_t GGUF_TYPE_SIZE[GGUF_TYPE_COUNT] = {
 };
 static_assert(GGUF_TYPE_COUNT == 10, "GGUF_TYPE_COUNT != 10");
 
+static const char * GGUF_TYPE_NAME[GGUF_TYPE_COUNT] = {
+    [GGUF_TYPE_UINT8]   = "uint8",
+    [GGUF_TYPE_INT8]    = "int8",
+    [GGUF_TYPE_UINT16]  = "uint16",
+    [GGUF_TYPE_INT16]   = "int16",
+    [GGUF_TYPE_UINT32]  = "uint32",
+    [GGUF_TYPE_INT32]   = "int32",
+    [GGUF_TYPE_FLOAT32] = "float32",
+    [GGUF_TYPE_BOOL]    = "bool",
+    [GGUF_TYPE_STRING]  = "string",
+    [GGUF_TYPE_ARRAY]   = "array",
+};
+
 union gguf_value {
     uint8_t  uint8;
     int8_t   int8;
@@ -19015,6 +19028,10 @@ void gguf_free(struct gguf_context * ctx) {
     }
 
     GGML_ALIGNED_FREE(ctx);
+}
+
+const char * gguf_type_name(enum gguf_type type) {
+    return GGUF_TYPE_NAME[type];
 }
 
 int gguf_get_version(struct gguf_context * ctx) {

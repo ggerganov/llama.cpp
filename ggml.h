@@ -1740,6 +1740,8 @@ extern "C" {
 
     GGML_API void gguf_free(struct gguf_context * ctx);
 
+    GGML_API const char * gguf_type_name(enum gguf_type type);
+
     GGML_API int    gguf_get_version    (struct gguf_context * ctx);
     GGML_API size_t gguf_get_alignment  (struct gguf_context * ctx);
     GGML_API size_t gguf_get_data_offset(struct gguf_context * ctx);
