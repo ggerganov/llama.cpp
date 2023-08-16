@@ -1047,7 +1047,7 @@ struct llama_model_loader {
                 const char * name = gguf_get_tensor_name(ctx_gguf, i);
                 struct ggml_tensor * meta = ggml_get_tensor(ctx_meta, name);
 
-                LLAMA_LOG_INFO("%s: - tensor %3d: %32s %-8s [ %s ]\n", __func__, i, name, ggml_type_name(meta->type), llama_format_tensor_shape(meta).c_str());
+                LLAMA_LOG_INFO("%s: - tensor %4d: %32s %-8s [ %s ]\n", __func__, i, name, ggml_type_name(meta->type), llama_format_tensor_shape(meta).c_str());
             }
 
             for (int i = 0; i < n_kv; i++) {
