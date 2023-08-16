@@ -289,7 +289,7 @@ ifdef LLAMA_HIPBLAS
 	LLAMA_CUDA_KQUANTS_ITER ?= 2
 	CFLAGS      += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS
 	CXXFLAGS    += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS
-	LDFLAGS     += -L$(ROCM_PATH)/lib -Wl,-rpath=$(ROCM_PATH)/lib -fuse-ld=lld
+	LDFLAGS     += -L$(ROCM_PATH)/lib -Wl,-rpath=$(ROCM_PATH)/lib
 	LDFLAGS		+= -lhipblas -lamdhip64 -lrocblas
 	HIPFLAGS    += $(addprefix --offload-arch=,$(GPU_TARGETS))
 	HIPFLAGS    += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
