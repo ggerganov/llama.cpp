@@ -355,22 +355,23 @@ extern "C" {
     LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 
     // Token Id -> String. Uses the vocabulary in the provided context
+    // Does not write null terminator to the buffer
     LLAMA_API int llama_token_to_str(
             const struct llama_context * ctx,
                            llama_token   token,
-                                  char * str,
+                                  char * buf,
                                   int    length);
 
     LLAMA_API int llama_token_to_str_bpe(
             const struct llama_context * ctx,
                            llama_token   token,
-                                  char * str,
+                                  char * buf,
                                   int    length);
 
     LLAMA_API int llama_token_to_str_with_model(
               const struct llama_model * model,
                            llama_token   token,
-                                  char * str,
+                                  char * buf,
                                   int    length);
     // Special tokens
     LLAMA_API llama_token llama_token_bos(void);  // beginning-of-sentence

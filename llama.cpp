@@ -4774,23 +4774,26 @@ float * llama_get_embeddings(struct llama_context * ctx) {
     return ctx->embedding.data();
 }
 
-int llama_token_to_str_with_model(const struct llama_model * model, llama_token token, char * str, int length) {
+// does not write null-terminator to str
+int llama_token_to_str_with_model(const struct llama_model * model, llama_token token, char * buf, int length) {
     if (0 <= token && token < llama_n_vocab_from_model(model)) {
         if (llama_is_normal_token(model->vocab, token)) {
             std::string result = model->vocab.id_to_token[token].tok;
-            if(llama_vocab_type(model->vocab) == "spm") {
+            if (llama_vocab_type(model->vocab) == "spm") {
                 result = llama_unescape_whitespace(result);
             }
             if (length < (int) result.length()) {
                 return -result.length();
             }
-            strncpy(str, result.c_str(), result.length());
+            memcpy(buf, result.c_str(), result.length());
             return result.length();
         } else if (llama_is_unknown_token(model->vocab, token)) { // NOLINT
             if (length < 3) {
                 return -3;
             }
-            strncpy(str, "\xe2\x96\x85", 4);
+            buf[0] = '\xe2';
+            buf[1] = '\x96';
+            buf[2] = '\x85';
             return 3;
         } else if (llama_is_control_token(model->vocab, token)) {
             ;
@@ -4798,8 +4801,7 @@ int llama_token_to_str_with_model(const struct llama_model * model, llama_token 
             if (length < 1) {
                 return -1;
             }
-            str[0] = llama_byte_to_char(model->vocab, token);
-            str[1] = 0x00;
+            buf[0] = llama_byte_to_char(model->vocab, token);
             return 1;
         }
     }
@@ -4830,7 +4832,7 @@ int llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token, 
         if (length < (int) result.length()) {
             return -result.length();
         }
-        strncpy(str, result.c_str(), result.length());
+        memcpy(str, result.c_str(), result.length());
         return result.length();
     }
     return 0;

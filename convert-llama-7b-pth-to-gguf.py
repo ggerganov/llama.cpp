@@ -132,7 +132,7 @@ if Path(dir_model + "/tokenizer.model").is_file():
         toktype = 1 # defualt to normal token type
         if tokenizer.is_unknown(i): toktype = 2
         if tokenizer.is_control(i): toktype = 3
- 
+
         # TODO: How to determinate if a token is user defined?
         # ref: https://github.com/google/sentencepiece/blob/master/src/sentencepiece_model.proto
         # if tokenizer.is_user_defined(i): toktype = 4
@@ -223,7 +223,7 @@ for part_name in part_names:
             sys.exit()
 
         n_dims = len(data.shape)
-        data_dtype = data.dtype 
+        data_dtype = data.dtype
 
         # if f32 desired, convert any float16 to float32
         if ftype == 0 and data.dtype == np.float16:
@@ -261,7 +261,6 @@ for part_name in part_names:
     for name in model_part.keys():
         data = model_part[name]
 
-    
         old_dtype = data.dtype
 
         # we don't need these
@@ -284,7 +283,7 @@ for part_name in part_names:
             sys.exit()
 
         n_dims = len(data.shape)
-        data_dtype = data.dtype 
+        data_dtype = data.dtype
 
         # if f32 desired, convert any float16 to float32
         if ftype == 0 and data.dtype == np.float16:
