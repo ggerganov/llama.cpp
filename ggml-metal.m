@@ -236,11 +236,12 @@ void ggml_metal_set_n_cb(struct ggml_metal_context * ctx, int n_cb) {
     ctx->n_cb = n_cb;
 }
 
-bool ggml_metal_if_optimized(struct ggml_metal_context * ctx) {
-    if (ctx->concur_list_len) {
-        return true;
-    }
-    return false;
+int ggml_metal_if_optimized(struct ggml_metal_context * ctx) {
+    return ctx->concur_list_len;
+}
+
+int * ggml_metal_get_concur_list(struct ggml_metal_context * ctx) {
+    return ctx->concur_list;
 }
 
 // finds the Metal buffer that contains the tensor data on the GPU device
@@ -383,7 +384,7 @@ void ggml_metal_get_tensor(
 
 void ggml_metal_graph_find_concurrency(
         struct ggml_metal_context * ctx,
-        struct ggml_cgraph * gf) {
+        struct ggml_cgraph * gf, bool check_mem) {
     int search_depth = gf->n_nodes; //we only find concurrency in this range to avoid wasting too much time
     int nodes_unused[GGML_MAX_CONCUR];
 
@@ -430,7 +431,7 @@ void ggml_metal_graph_find_concurrency(
                         }
                     }
                 }
-                if (exe_flag) {
+                if (exe_flag && check_mem) {
                     // check if nodes[i]'s data will be overwritten by a node before nodes[i].
                     // if node[5] and node[3] write to the same memory region, then we can't issue node[5] before node[3]
                     int64_t data_start = (int64_t) gf->nodes[i]->data;
