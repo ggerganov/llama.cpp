@@ -2282,7 +2282,7 @@ static bool llama_is_byte_token(const llama_vocab & vocab, llama_token token) {
 
 static uint8_t llama_byte_to_char(const llama_vocab & vocab, uint8_t byte) {
     if (llama_vocab_type(vocab) == "spm") {
-        return byte + 3;
+        return byte - 3;
     }
 
     if (llama_vocab_type(vocab) == "bpe") {
@@ -4790,7 +4790,7 @@ int llama_token_to_str_with_model(const struct llama_model * model, llama_token 
             if (length < 3) {
                 return -3;
             }
-            strncpy(str, "\xe2\x96\x85", 3);
+            strncpy(str, "\xe2\x96\x85", 4);
             return 3;
         } else if (llama_is_control_token(model->vocab, token)) {
             ;
