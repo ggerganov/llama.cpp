@@ -3,17 +3,16 @@
 # HF files required in the model dir: config.json tokenizer_config.json tokenizer.json tokenizer.model
 
 import gguf
-import gguf_namemap as tmap
 import os
 import sys
 import struct
 import json
 import numpy as np
 import torch
+
 from typing import Any, List
 from pathlib import Path
 from sentencepiece import SentencePieceProcessor
-
 
 #NDArray = np.ndarray[Any, Any]
 # compatible with python < 3.9
@@ -189,7 +188,7 @@ if Path(dir_model + "/tokenizer.json").is_file():
 
 # TENSORS
 
-tensor_map = tmap.get_tensor_namemap(block_count)
+tensor_map = gguf.get_tensor_name_map(block_count)
 
 # tensor info
 print("gguf: get tensor metadata")
