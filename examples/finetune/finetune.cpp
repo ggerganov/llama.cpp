@@ -1143,7 +1143,16 @@ struct ggml_tensor * llama_build_lora_finetune_graphs(
         struct ggml_tensor * t08 = ggml_mul_mat      (ctx, wk, t04);                                set_name(t08, "t08");     assert_shape_2d(t08, n_embd, N*n_batch);
         struct ggml_tensor * t09 = ggml_reshape_4d   (ctx, t08, n_embd/n_head, n_head, N, n_batch); set_name(t09, "t09");     assert_shape_4d(t09, n_embd/n_head, n_head, N, n_batch);
         struct ggml_tensor * t10 = ggml_rope_inplace (ctx, t09, n_past, n_rot, rope_mode, n_ctx);   set_name(t10, "t10");     assert_shape_4d(t10, n_embd/n_head, n_head, N, n_batch);
-        struct ggml_tensor * t11 = ggml_mul_mat      (ctx, t04, wv);                                set_name(t11, "t11");     assert_shape_2d(t11, N*n_batch, n_embd);
+
+        struct ggml_tensor * t11;
+        if (ggml_is_quantized(wv->type)) {
+            struct ggml_tensor * t11_1 = ggml_mul_mat  (ctx, wv, t04);                              set_name(t11_1, "t11_1"); assert_shape_2d(t11_1, n_embd, N*n_batch);
+            struct ggml_tensor * t11_2 = ggml_transpose(ctx, t11_1);                                set_name(t11_2, "t11_2"); assert_shape_2d(t11_2, N*n_batch, n_embd);
+                                 t11   = ggml_cont     (ctx, t11_2);                                set_name(t11, "t11");     assert_shape_2d(t11, N*n_batch, n_embd);
+        } else {
+                                 t11   = ggml_mul_mat  (ctx, t04, wv);                              set_name(t11, "t11");     assert_shape_2d(t11, N*n_batch, n_embd);
+        }
+
         struct ggml_tensor * t12 = ggml_reshape_4d   (ctx, t11, N, n_batch, n_embd/n_head, n_head); set_name(t12, "t12");     assert_shape_4d(t12, N, n_batch, n_embd/n_head, n_head);
         struct ggml_tensor * t13 = ggml_permute      (ctx, t07, 0, 2, 1, 3);                        set_name(t13, "t13");     assert_shape_4d(t13, n_embd/n_head, N, n_head, n_batch);
         struct ggml_tensor * t14 = ggml_permute      (ctx, t10, 0, 2, 1, 3);                        set_name(t14, "t14");     assert_shape_4d(t14, n_embd/n_head, N, n_head, n_batch);
