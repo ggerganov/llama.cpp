@@ -10,6 +10,7 @@
 #include <sstream>
 #include <iterator>
 #include <numeric>
+#include <map>
 #include "ggml.h"
 #include "llama.h"
 #include "common.h"
