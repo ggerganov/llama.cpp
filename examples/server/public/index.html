@@ -473,7 +473,12 @@
           `
       };
 
-      let output = html`
+      useEffect(() => {
+        // autosave template on every change
+        userTemplateAutosave()
+      }, [session.value, params.value])
+
+      return html`
         <form>
           <fieldset>
             <${UserTemplateResetButton}/>
@@ -539,10 +544,6 @@
           </details>
         </form>
       `
-
-      userTemplateAutosave();
-
-      return output
     }
     // poor mans markdown replacement
     const Markdownish = (params) => {
