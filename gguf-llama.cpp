@@ -1043,18 +1043,18 @@ struct llama_model_loader {
             LLAMA_LOG_INFO("%s: loaded meta data with %d key-value paris and %d tensors from %s (version %s)\n",
                     __func__, n_kv, n_tensors, fname.c_str(), llama_file_version_name(file_version));
 
-            for (int i = 0; i < n_kv; i++) {
-                const char * name         = gguf_get_key(ctx_gguf, i);
-                const enum gguf_type type = gguf_get_kv_type(ctx_gguf, i);
-
-                LLAMA_LOG_INFO("%s: - %3d: %42s %-8s\n", __func__, i, name, gguf_type_name(type));
-            }
-
             for (int i = 0; i < n_tensors; i++) {
                 const char * name = gguf_get_tensor_name(ctx_gguf, i);
                 struct ggml_tensor * meta = ggml_get_tensor(ctx_meta, name);
 
-                LLAMA_LOG_INFO("%s: - %3d: %32s %-8s [ %s ]\n", __func__, i, name, ggml_type_name(meta->type), llama_format_tensor_shape(meta).c_str());
+                LLAMA_LOG_INFO("%s: - tensor %3d: %32s %-8s [ %s ]\n", __func__, i, name, ggml_type_name(meta->type), llama_format_tensor_shape(meta).c_str());
+            }
+
+            for (int i = 0; i < n_kv; i++) {
+                const char * name         = gguf_get_key(ctx_gguf, i);
+                const enum gguf_type type = gguf_get_kv_type(ctx_gguf, i);
+
+                LLAMA_LOG_INFO("%s: - kv %3d: %42s %-8s\n", __func__, i, name, gguf_type_name(type));
             }
         }
 
@@ -1414,7 +1414,9 @@ static void llama_model_load_internal(
 
     size_t ctx_size;
     size_t mmapped_size;
+
     ml->calc_sizes(ctx_size, mmapped_size);
+
     LLAMA_LOG_INFO("%s: ggml ctx size = %7.2f MB\n", __func__, ctx_size/1024.0/1024.0);
 
     // create the ggml context
