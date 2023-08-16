@@ -18,7 +18,9 @@ from sentencepiece import SentencePieceProcessor
 # compatible with python < 3.9
 NDArray: 'TypeAlias' = 'np.ndarray[Any, Any]'
 
-def permute(weights: NDArray, n_head: int, n_kv_head: Optional[int] = None) -> NDArray:
+# reverse HF permute back to original pth layout
+# https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/convert_llama_weights_to_hf.py
+def reverse_hf_permute(weights: NDArray, n_head: int, n_kv_head: Optional[int] = None) -> NDArray:
     if n_kv_head is not None and n_head != n_kv_head: n_head //= n_kv_head
     return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
                 .swapaxes(1, 2)
@@ -219,9 +221,9 @@ for part_name in part_names:
 
         data = data.squeeze().numpy()
 
-        # permute these
+        # reverse permute these
         if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
-            data = permute(data, head_count, head_count_kv)
+            data = reverse_hf_permute(data, head_count, head_count_kv)
 
         # map tensor names
         if name.endswith(".weight") and name[:-7] in tensor_map:
@@ -288,9 +290,9 @@ for part_name in part_names:
 
         data = data.squeeze().numpy()
 
-        # permute these
+        # reverse permute these
         if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
-            data = permute(data, head_count, head_count_kv)
+            data = reverse_hf_permute(data, head_count, head_count_kv)
 
         # map tensor names
         if name.endswith(".weight") and name[:-7] in tensor_map:
