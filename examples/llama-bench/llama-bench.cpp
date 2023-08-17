@@ -1,21 +1,26 @@
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <chrono>
-#include <array>
 #include <cinttypes>
+#include <cstring>
+#include <ctime>
+#include <iterator>
+#include <map>
+#include <numeric>
 #include <regex>
+#include <sstream>
 #include <stdio.h>
 #include <string>
 #include <vector>
-#include <sstream>
-#include <iterator>
-#include <numeric>
-#include <map>
-#include <ctime>
+
 #include "ggml.h"
 #include "llama.h"
 #include "common.h"
 #include "build-info.h"
+#ifdef GGML_USE_CUBLAS
+#include "ggml-cuda.h"
+#endif
 
 // utils
 static uint64_t get_time_ns() {
@@ -50,7 +55,7 @@ static std::vector<T> split(const std::string & str, char delim) {
 }
 
 template<typename T>
-T avg(const std::vector<T> & v) {
+static T avg(const std::vector<T> & v) {
     if (v.empty()) {
         return 0;
     }
@@ -59,7 +64,7 @@ T avg(const std::vector<T> & v) {
 }
 
 template<typename T>
-T stdev(const std::vector<T> & v) {
+static T stdev(const std::vector<T> & v) {
     if (v.size() <= 1) {
         return 0;
     }
@@ -77,6 +82,50 @@ static bool ggml_cpu_has_metal() {
 #endif
 }
 
+static std::string get_cpu_info() {
+    std::string id;
+#ifdef __linux__
+    FILE * f = fopen("/proc/cpuinfo", "r");
+    if (f) {
+        char buf[1024];
+        while (fgets(buf, sizeof(buf), f)) {
+            if (strncmp(buf, "model name", 10) == 0) {
+                char * p = strchr(buf, ':');
+                if (p) {
+                    p++;
+                    while (std::isspace(*p)) {
+                        p++;
+                    }
+                    while (std::isspace(p[strlen(p) - 1])) {
+                        p[strlen(p) - 1] = '\0';
+                    }
+                    id = p;
+                    break;
+                }
+            }
+        }
+    }
+#endif
+    // TODO: other platforms
+    return id;
+}
+
+static std::string get_gpu_info(void) {
+    std::string id;
+#ifdef GGML_USE_CUBLAS
+    int count = ggml_cuda_get_device_count();
+    for (int i = 0; i < count; i++) {
+        char buf[128];
+        ggml_cuda_get_device_description(i, buf, sizeof(buf));
+        id += buf;
+        if (i < count - 1) {
+            id += "/";
+        }
+    }
+#endif
+    // TODO: other backends
+    return id;
+}
 
 // command line params
 enum output_formats {CSV, JSON, MARKDOWN, SQL};
@@ -392,6 +441,8 @@ struct test {
     static const bool metal;
     static const bool gpu_blas;
     static const bool blas;
+    static const std::string cpu_info;
+    static const std::string gpu_info;
     std::string model_filename;
     std::string model_type;
     int n_batch;
@@ -476,6 +527,7 @@ struct test {
         static const std::vector<std::string> fields = {
             "build_commit", "build_number",
             "cuda", "opencl", "metal", "gpu_blas", "blas",
+            "cpu_info", "gpu_info",
             "model_filename", "model_type",
             "n_batch", "n_threads", "f16_kv",
             "n_gpu_layers", "main_gpu", "mul_mat_q", "low_vram", "tensor_split",
@@ -503,6 +555,7 @@ struct test {
         std::vector<std::string> values = {
             build_commit, std::to_string(build_number),
             std::to_string(cuda), std::to_string(opencl), std::to_string(metal), std::to_string(gpu_blas), std::to_string(blas),
+            cpu_info, gpu_info,
             model_filename, model_type,
             std::to_string(n_batch), std::to_string(n_threads), std::to_string(!f32_kv),
             std::to_string(n_gpu_layers), std::to_string(main_gpu), std::to_string(mul_mat_q), std::to_string(low_vram), tensor_split_str,
@@ -530,7 +583,8 @@ const bool test::opencl   = !!ggml_cpu_has_clblast();
 const bool test::metal    = !!ggml_cpu_has_metal();
 const bool test::gpu_blas = !!ggml_cpu_has_gpublas();
 const bool test::blas     = !!ggml_cpu_has_blas();
-
+const std::string test::cpu_info = get_cpu_info();
+const std::string test::gpu_info = get_gpu_info();
 
 struct printer {
     FILE * fout;
@@ -691,29 +745,17 @@ struct markdown_printer : public printer {
 
 struct sql_printer : public printer {
     static std::string get_field_type(const std::string & field) {
-        if (field == "build_commit") {
-            return "TEXT";
-        }
         if (field == "build_number") {
             return "INTEGER";
         }
         if (field == "cuda" || field == "opencl" || field == "metal" || field == "gpu_blas" || field == "blas") {
             return "INTEGER";
         }
-        if (field == "model_filename" || field == "model_type") {
-            return "TEXT";
-        }
         if (field == "n_batch" || field == "n_threads" || field == "f16_kv" || field == "n_gpu_layers" || field == "main_gpu" || field == "mul_mat_q" || field == "low_vram") {
             return "INTEGER";
         }
-        if (field == "tensor_split") {
-            return "TEXT";
-        }
         if (field == "n_prompt" || field == "n_gen") {
             return "INTEGER";
-        }
-        if (field == "test_time") {
-            return "TEXT";
         }
         if (field == "avg_ns" || field == "stddev_ns" || field == "avg_ts" || field == "stddev_ts") {
             return "REAL";
@@ -743,7 +785,7 @@ struct sql_printer : public printer {
     }
 };
 
-void test_prompt(llama_context * ctx, int n_prompt, int n_past, int n_batch, int n_threads) {
+static void test_prompt(llama_context * ctx, int n_prompt, int n_past, int n_batch, int n_threads) {
     std::vector<llama_token> tokens(n_batch, llama_token_bos());
     int n_processed = 0;
     while (n_processed < n_prompt) {
@@ -753,14 +795,14 @@ void test_prompt(llama_context * ctx, int n_prompt, int n_past, int n_batch, int
     }
 }
 
-void test_gen(llama_context * ctx, int n_gen, int n_past, int n_threads) {
+static void test_gen(llama_context * ctx, int n_gen, int n_past, int n_threads) {
     llama_token token = llama_token_bos();
     for (int i = 0; i < n_gen; i++) {
         llama_eval(ctx, &token, 1, n_past + i, n_threads);
     }
 }
 
-void llama_null_log_callback(enum llama_log_level level, const char * text, void * user_data) {
+static void llama_null_log_callback(enum llama_log_level level, const char * text, void * user_data) {
     (void)level;
     (void)text;
     (void)user_data;
