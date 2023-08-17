@@ -2303,6 +2303,18 @@ static uint8_t llama_byte_to_char(const llama_vocab & vocab, uint8_t byte) {
     return false;
 }
 
+static uint8_t llama_char_to_byte(const llama_vocab & vocab, uint8_t ch) {
+    if (llama_vocab_type(vocab) == "spm") {
+        return ch + 3;
+    }
+
+    if (llama_vocab_type(vocab) == "bpe") {
+        return ch - 32;
+    }
+
+    return false;
+}
+
 static std::string llama_escape_whitespace(const std::string& text) {
     std::string result;
     bool escaping = false;
@@ -2439,7 +2451,7 @@ private:
         if (p == rev_merge.end()) {
             // output any symbols that did not form tokens as bytes.
             for (int j = 0; j < (int)symbol.n; ++j) {
-                llama_vocab::id token_id = llama_byte_to_char(vocab_, symbol.text[j]);
+                llama_vocab::id token_id = llama_char_to_byte(vocab_, symbol.text[j]);
                 output.push_back(token_id);
             }
             return;
@@ -4871,8 +4883,8 @@ int llama_token_to_str_with_model(const struct llama_model * model, llama_token 
     return 0;
 }
 
-int llama_token_to_str(const struct llama_context * ctx, llama_token token, char * str, int length) {
-    return llama_token_to_str_with_model(&ctx->model, token, str, length);
+int llama_token_to_str(const struct llama_context * ctx, llama_token token, char * buf, int length) {
+    return llama_token_to_str_with_model(&ctx->model, token, buf, length);
 }
 
 std::string llama_token_to_str(const struct llama_context * ctx, llama_token token) {
@@ -4889,13 +4901,13 @@ std::string llama_token_to_str(const struct llama_context * ctx, llama_token tok
     return std::string(result.data(), result.size());
 }
 
-int llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token, char * str, int length) {
+int llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token, char * buf, int length) {
     if (0 <= token && token < llama_n_vocab_from_model(&ctx->model)) {
         std::string result = ctx->model.vocab.id_to_token[token].tok;
         if (length < (int) result.length()) {
             return -result.length();
         }
-        memcpy(str, result.c_str(), result.length());
+        memcpy(buf, result.c_str(), result.length());
         return result.length();
     }
     return 0;
