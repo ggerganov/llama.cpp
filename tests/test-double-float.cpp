@@ -3,10 +3,11 @@
 // This is done by checking all finite (non-NaN, non-infinite) floats.
 
 #undef NDEBUG
-#include <assert.h>
+#include <cassert>
 #include <immintrin.h>
-#include <math.h>
-#include <stdint.h>
+#include <cmath>
+#include <cstdint>
+#include <cstring>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdouble-promotion"
@@ -32,8 +33,9 @@ inline static float silu_float(float x) {
 int main(void) {
     uint32_t x = UINT32_MAX;
     do {
-        float f = *(float *)&x;
-        assert(!isfinite(f) || (round_orig(f) == round_float(f)));
+        float f;
+        memcpy(&f, &x, sizeof(x));
+        assert(!std::isfinite(f) || (round_orig(f) == round_float(f)));
     } while (x--);
 
 #ifdef __F16C__

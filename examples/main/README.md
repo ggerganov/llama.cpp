@@ -140,6 +140,12 @@ The `--ctx-size` option allows you to set the size of the prompt context used by
 
 -   `-c N, --ctx-size N`: Set the size of the prompt context (default: 512). The LLaMA models were built with a context of 2048, which will yield the best results on longer input/inference. However, increasing the context size beyond 2048 may lead to unpredictable results.
 
+### Extended Context Size
+
+Some fine-tuned models have extened the context length by scaling RoPE. For example, if the original pretrained model have a context length (max sequence length) of 4096 (4k) and the fine-tuned model have 32k. That is a scaling factor of 8, and should work by setting the above `--ctx-size` to 32768 (32k) and `--rope-scale` to 8.
+
+- `--rope-scale N`: Where N is the linear scaling factor used by the fine-tuned model.
+
 ### Keep Prompt
 
 The `--keep` option allows users to retain the original prompt when the model runs out of context, ensuring a connection to the initial instruction or conversation topic is maintained.
@@ -154,9 +160,13 @@ The following options allow you to control the text generation process and fine-
 
 ### Number of Tokens to Predict
 
--   `-n N, --n-predict N`: Set the number of tokens to predict when generating text (default: 128, -1 = infinity).
+-   `-n N, --n-predict N`: Set the number of tokens to predict when generating text (default: 128, -1 = infinity, -2 = until context filled)
 
-The `--n-predict` option controls the number of tokens the model generates in response to the input prompt. By adjusting this value, you can influence the length of the generated text. A higher value will result in longer text, while a lower value will produce shorter text. A value of -1 will cause text to be generated without limit.
+The `--n-predict` option controls the number of tokens the model generates in response to the input prompt. By adjusting this value, you can influence the length of the generated text. A higher value will result in longer text, while a lower value will produce shorter text.
+
+A value of -1 will enable infinite text generation, even though we have a finite context window. When the context window is full, some of the earlier tokens (half of the tokens after `--n-keep`) will be discarded. The context must then be re-evaluated before generation can resume. On large models and/or large context windows, this will result in significant pause in output.
+
+If the pause is undesirable, a value of -2 will stop generation immediately when the context is filled.
 
 It is important to note that the generated text may be shorter than the specified number of tokens if an End-of-Sequence (EOS) token or a reverse prompt is encountered. In interactive mode text generation will pause and control will be returned to the user. In non-interactive mode, the program will end. In both cases, the text generation may stop before reaching the specified `n-predict` value. If you want the model to keep going without ever producing End-of-Sequence on its own, you can use the `--ignore-eos` parameter.
 

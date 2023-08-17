@@ -69,7 +69,6 @@ option(LLAMA_BLAS                            "llama: use BLAS"                  
 set(LLAMA_BLAS_VENDOR "Generic" CACHE STRING "llama: BLAS library vendor")
 option(LLAMA_CUBLAS                          "llama: use CUDA"                                  OFF)
 #option(LLAMA_CUDA_CUBLAS                     "llama: use cuBLAS for prompt processing"          OFF)
-set(LLAMA_CUDA_MMQ_Y       "64" CACHE STRING "llama: y tile size for mmq CUDA kernels")
 option(LLAMA_CUDA_FORCE_DMMV                 "llama: use dmmv instead of mmvq CUDA kernels"     OFF)
 set(LLAMA_CUDA_DMMV_X      "32" CACHE STRING "llama: x stride for dmmv CUDA kernels")
 set(LLAMA_CUDA_MMV_Y        "1" CACHE STRING "llama: y block size for mmv CUDA kernels")
@@ -256,7 +255,6 @@ if (LLAMA_CUBLAS)
 #        if (LLAMA_CUDA_CUBLAS)
 #            add_compile_definitions(GGML_CUDA_CUBLAS)
 #        endif()
-        add_compile_definitions(GGML_CUDA_MMQ_Y=${LLAMA_CUDA_MMQ_Y})
         if (LLAMA_CUDA_FORCE_DMMV)
             add_compile_definitions(GGML_CUDA_FORCE_DMMV)
         endif()
@@ -280,8 +278,8 @@ if (LLAMA_CUBLAS)
         # 52 == lowest CUDA 12 standard
         # 60 == f16 CUDA intrinsics
         # 61 == integer CUDA intrinsics
-        # 70 == (assumed) compute capability at which unrolling a loop in mul_mat_q kernels is faster
-        if (LLAMA_CUDA_DMMV_F16)
+        # 70 == compute capability at which unrolling a loop in mul_mat_q kernels is faster
+        if (LLAMA_CUDA_F16 OR LLAMA_CUDA_DMMV_F16)
             set(CMAKE_CUDA_ARCHITECTURES "60;61;70") # needed for f16 CUDA intrinsics
         else()
             set(CMAKE_CUDA_ARCHITECTURES "52;61;70") # lowest CUDA 12 standard + lowest for integer intrinsics
@@ -298,7 +296,6 @@ if (LLAMA_METAL)
     find_library(FOUNDATION_LIBRARY         Foundation              REQUIRED)
     find_library(METAL_FRAMEWORK            Metal                   REQUIRED)
     find_library(METALKIT_FRAMEWORK         MetalKit                REQUIRED)
-    find_library(METALPERFORMANCE_FRAMEWORK MetalPerformanceShaders REQUIRED)
 
     set(GGML_SOURCES_METAL ggml-metal.m ggml-metal.h)
 
@@ -315,7 +312,6 @@ if (LLAMA_METAL)
         ${FOUNDATION_LIBRARY}
         ${METAL_FRAMEWORK}
         ${METALKIT_FRAMEWORK}
-        ${METALPERFORMANCE_FRAMEWORK}
         )
 endif()
 
@@ -573,6 +569,16 @@ install(
         WORLD_READ
         WORLD_EXECUTE
     DESTINATION ${CMAKE_INSTALL_BINDIR})
+if (LLAMA_METAL)
+    install(
+        FILES ggml-metal.metal
+        PERMISSIONS
+            OWNER_READ
+            OWNER_WRITE
+            GROUP_READ
+            WORLD_READ
+        DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
 
 #
 # programs, examples and tests
