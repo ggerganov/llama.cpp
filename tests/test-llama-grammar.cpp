@@ -196,8 +196,9 @@ int main()
 
     for (size_t i = 0; i < 24; ++i)
     {
-        uint32_t *cp = new uint32_t[1]; // dynamically allocate memory for code_point
-        *cp = 37 + i;
+        uint32_t *cp = new uint32_t[2]; // dynamically allocate memory for code_point
+        cp[0] = 37 + i;
+        cp[1] = 0;
         next_candidates[i] = {i, cp};
     }
 
