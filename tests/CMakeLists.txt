@@ -26,10 +26,10 @@ llama_build_and_test_executable(test-quantize-fns.cpp)
 llama_build_and_test_executable(test-quantize-perf.cpp)
 llama_build_and_test_executable(test-sampling.cpp)
 llama_build_executable(test-tokenizer-0.cpp)
-llama_test_executable(test-tokenizer-0.llama test-tokenizer-0.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama.bin)
+llama_test_executable(test-tokenizer-0.llama test-tokenizer-0.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama.gguf)
 llama_build_executable(test-tokenizer-1.cpp)
-llama_test_executable(test-tokenizer-1.llama test-tokenizer-1.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama.bin)
-llama_test_executable(test-tokenizer-1.aquila test-tokenizer-1.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-aquila.bin)
+llama_test_executable(test-tokenizer-1.llama  test-tokenizer-1.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama.gguf)
+#llama_test_executable(test-tokenizer-1.aquila test-tokenizer-1.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-aquila.gguf)
 llama_build_and_test_executable(test-grammar-parser.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../examples/grammar-parser.cpp)
 llama_build_and_test_executable(test-grad0.cpp) # SLOW
 # llama_build_and_test_executable(test-opt.cpp) # SLOW

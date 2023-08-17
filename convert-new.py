@@ -750,7 +750,7 @@ class OutputFile:
     def __init__(self, fname_out: Path) -> None:
         self.gguf = gguf.GGUFWriter.open(fname_out)
 
-    def write_file_header(self, params: Params, file_type: GGMLFileType) -> None:
+    def add_meta_arch(self, params: Params, file_type: GGMLFileType) -> None:
         llm_arch = "llama"
 
         self.gguf.add_architecture        (llm_arch)
@@ -763,14 +763,14 @@ class OutputFile:
         self.gguf.add_head_count_kv       (llm_arch, params.n_head_kv)
         self.gguf.add_layer_norm_rms_eps  (llm_arch, params.f_norm_eps)
 
-    def write_tensor_header(self, name: str, shape: Sequence[int], data_type: DataType) -> None:
-        sname = name.encode('utf-8')
-        self.fout.write(struct.pack("iii", len(shape), len(sname), DATA_TYPE_TO_FTYPE[data_type]))
-        self.fout.write(struct.pack("i" * len(shape), *shape[::-1]))
-        self.fout.write(sname)
-        self.fout.seek((self.fout.tell() + 31) & -32)
+    #def write_tensor_header(self, name: str, shape: Sequence[int], data_type: DataType) -> None:
+    #    sname = name.encode('utf-8')
+    #    self.fout.write(struct.pack("iii", len(shape), len(sname), DATA_TYPE_TO_FTYPE[data_type]))
+    #    self.fout.write(struct.pack("i" * len(shape), *shape[::-1]))
+    #    self.fout.write(sname)
+    #    self.fout.seek((self.fout.tell() + 31) & -32)
 
-    def write_vocab(self, vocab: Vocab) -> None:
+    def add_meta_vocab(self, vocab: Vocab) -> None:
         tokens = []
         scores = []
         for text, score in vocab.all_tokens():
@@ -784,21 +784,28 @@ class OutputFile:
 
         # TODO: added / special tokens
 
+    def write_meta(self) -> None:
+        self.gguf.write_header_to_file()
+        self.gguf.write_kv_data_to_file()
+
+    def close(self) -> None:
+        self.gguf.close()
+
     @staticmethod
     def write_vocab_only(fname_out: Path, params: Params, vocab: Vocab) -> None:
         of = OutputFile(fname_out)
-        of = OutputFile(fname_out)
-        of.write_file_header(params, file_type=GGMLFileType.AllF32)
-        of.write_vocab(vocab)
-        of.fout.close()
+        of.add_meta_arch(params, file_type=GGMLFileType.AllF32)
+        of.add_meta_vocab(vocab)
+        of.write_meta()
+        of.close()
 
     @staticmethod
     def write_all(fname_out: Path, params: Params, file_type: GGMLFileType, model: LazyModel, vocab: Vocab) -> None:
         check_vocab_size(params, vocab)
+
         of = OutputFile(fname_out)
-        of.write_file_header(params, file_type)
-        print("Writing vocab...")
-        of.write_vocab(vocab)
+        of.add_meta_arch(params, file_type)
+        of.add_meta_vocab(vocab)
 
         def do_item(item: Tuple[str, LazyTensor]) -> NDArray:
             name, lazy_tensor = item
@@ -809,7 +816,7 @@ class OutputFile:
             size = ' x '.join(f"{dim:6d}" for dim in lazy_tensor.shape)
             padi = len(str(len(model)))
             print(f"[{i+1:{padi}d}/{len(model)}] Writing tensor {name:38s} | size {size:16} | type {lazy_tensor.data_type}")
-            of.write_tensor_header(name, lazy_tensor.shape, lazy_tensor.data_type)
+            #of.write_tensor_header(name, lazy_tensor.shape, lazy_tensor.data_type)
             ndarray.tofile(of.fout)
         of.fout.close()
 
@@ -997,7 +1004,7 @@ def main(args_in: Optional[List[str]] = None) -> None:
         vocab = load_vocab(args.vocab_dir or args.model, args.vocabtype)
         assert args.outfile, "need --outfile if using --vocab-only"
         outfile = args.outfile
-        OutputFile.write_vocab_only(outfile, vocab)
+        OutputFile.write_vocab_only(outfile, params, vocab)
         print(f"Wrote {outfile}")
     else:
         if args.dump:
