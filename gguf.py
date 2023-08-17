@@ -67,32 +67,32 @@ KEY_TOKENIZER_RWKV       = "tokenizer.rwkv.world"
 
 
 class MODEL_ARCH(IntEnum):
-    LLAMA = auto()
-    FALCON = auto()
-    GPT2 = auto()
-    GPTJ = auto()
+    LLAMA   = auto()
+    FALCON  = auto()
+    GPT2    = auto()
+    GPTJ    = auto()
     GPTNEOX = auto()
-    MPT = auto()
+    MPT     = auto()
 
 
 class MODEL_TENSOR(IntEnum):
-    TOKEN_EMBD = auto()
-    POS_EMBD = auto()
-    OUTPUT = auto()
-    OUTPUT_NORM = auto()
-    ROPE_FREQS = auto()
-    ATTN_Q = auto()
-    ATTN_K = auto()
-    ATTN_V = auto()
-    ATTN_QKV = auto()
-    ATTN_OUT = auto()
-    ATTN_NORM = auto()
-    ATTN_NORM_2 = auto()
+    TOKEN_EMBD    = auto()
+    POS_EMBD      = auto()
+    OUTPUT        = auto()
+    OUTPUT_NORM   = auto()
+    ROPE_FREQS    = auto()
+    ATTN_Q        = auto()
+    ATTN_K        = auto()
+    ATTN_V        = auto()
+    ATTN_QKV      = auto()
+    ATTN_OUT      = auto()
+    ATTN_NORM     = auto()
+    ATTN_NORM_2   = auto()
     ATTN_ROT_EMBD = auto()
-    FFN_GATE = auto()
-    FFN_DOWN = auto()
-    FFN_UP = auto()
-    FFN_NORM = auto()
+    FFN_GATE      = auto()
+    FFN_DOWN      = auto()
+    FFN_UP        = auto()
+    FFN_NORM      = auto()
 
 
 MODEL_ARCH_NAMES = {
