@@ -285,10 +285,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 invalid_param = true;
                 break;
             }
-            std::copy(
-                std::istreambuf_iterator<char>(file),
-                std::istreambuf_iterator<char>(),
-                back_inserter(params.cfg_negative_prompt));
+            std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(params.cfg_negative_prompt));
             if (params.cfg_negative_prompt.back() == '\n') {
                 params.cfg_negative_prompt.pop_back();
             }
