@@ -5150,7 +5150,7 @@ struct ggml_tensor * ggml_add_cast(
         struct ggml_tensor * a,
         struct ggml_tensor * b,
         enum   ggml_type     type) {
-    return ggml_add_impl(ctx, a, b, false);
+    return ggml_add_cast_impl(ctx, a, b, type);
 }
 
 // ggml_add1
@@ -8369,7 +8369,6 @@ static void ggml_compute_forward_add_q_f32(
     GGML_ASSERT(nb2 <= nb3);
 
     GGML_ASSERT(ggml_is_quantized(src0->type));
-    GGML_ASSERT(dst->type == src0->type);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
 
     // rows per thread
