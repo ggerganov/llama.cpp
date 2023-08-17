@@ -11,7 +11,7 @@ from typing import Any, IO, List
 # constants
 #
 
-GGUF_MAGIC             = 0x47475546
+GGUF_MAGIC             = 0x46554747
 GGUF_VERSION           = 1
 GGUF_DEFAULT_ALIGNMENT = 32
 
