@@ -141,6 +141,7 @@
     } from '/index.js';
 
     import { llama } from '/completion.js';
+    import { SchemaConverter } from '/json-schema-to-grammar.mjs';
 
     const session = signal({
       prompt: "This is a conversation between user and llama, a friendly chatbot. respond in simple markdown.",
@@ -166,6 +167,7 @@
       mirostat: 0, // 0/1/2
       mirostat_tau: 5, // target entropy
       mirostat_eta: 0.1, // learning rate
+      grammar: '',
     })
 
     const llamaStats = signal(null)
@@ -304,6 +306,26 @@
       const updateParamsFloat = (el) => params.value = { ...params.value, [el.target.name]: parseFloat(el.target.value) }
       const updateParamsInt = (el) => params.value = { ...params.value, [el.target.name]: Math.floor(parseFloat(el.target.value)) }
 
+      const grammarJsonSchemaPropOrder = signal('')
+      const updateGrammarJsonSchemaPropOrder = (el) => grammarJsonSchemaPropOrder.value = el.target.value
+      const convertJSONSchemaGrammar = () => {
+        try {
+          const schema = JSON.parse(params.value.grammar)
+          const converter = new SchemaConverter(
+            grammarJsonSchemaPropOrder.value
+              .split(',')
+              .reduce((acc, cur, i) => ({...acc, [cur.trim()]: i}), {})
+          )
+          converter.visit(schema, '')
+          params.value = {
+            ...params.value,
+            grammar: converter.formatGrammar(),
+          }
+        } catch (e) {
+          alert(`Convert failed: ${e.message}`)
+        }
+      }
+
       const FloatField = ({label, max, min, name, step, value}) => {
         return html`
           <div>
@@ -354,6 +376,13 @@
             <div>
               <label for="template">Chat history template</label>
               <textarea id="template" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
+            </div>
+
+            <div>
+              <label for="template">Grammar</label>
+              <textarea id="grammar" name="grammar" placeholder="Use gbnf or JSON Schema+convert" value="${params.value.grammar}" rows=4 oninput=${updateParams}/>
+              <input type="text" name="prop-order" placeholder="order: prop1,prop2,prop3" oninput=${updateGrammarJsonSchemaPropOrder} />
+              <button type="button" onclick=${convertJSONSchemaGrammar}>Convert JSON Schema</button>
             </div>
           </fieldset>
 

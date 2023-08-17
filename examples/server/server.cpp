@@ -1,6 +1,7 @@
 #include "common.h"
 #include "llama.h"
 #include "build-info.h"
+#include "grammar-parser.h"
 
 #ifndef NDEBUG
 // crash the server in debug mode, otherwise send an http 500 error
@@ -14,6 +15,7 @@
 #include "index.html.hpp"
 #include "index.js.hpp"
 #include "completion.js.hpp"
+#include "json-schema-to-grammar.mjs.hpp"
 
 #ifndef SERVER_VERBOSE
 #define SERVER_VERBOSE 1
@@ -195,6 +197,9 @@ struct llama_server_context
     llama_context *ctx = nullptr;
     gpt_params params;
 
+    grammar_parser::parse_state parsed_grammar;
+    llama_grammar *grammar = nullptr;
+
     bool truncated = false;
     bool stopped_eos = false;
     bool stopped_word = false;
@@ -226,6 +231,7 @@ struct llama_server_context
     void rewind()
     {
         params.antiprompt.clear();
+        params.grammar.clear();
         num_prompt_tokens = 0;
         num_tokens_predicted = 0;
         generated_text = "";
@@ -237,9 +243,13 @@ struct llama_server_context
         stopped_limit = false;
         stopping_word = "";
         multibyte_pending = 0;
-
         n_remain = 0;
         n_past = 0;
+
+        if (grammar != nullptr) {
+            llama_grammar_free(grammar);
+            grammar = nullptr;
+        }
     }
 
     bool loadModel(const gpt_params &params_)
@@ -254,6 +264,31 @@ struct llama_server_context
 
         last_n_tokens.resize(params.n_ctx);
         std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
+        return true;
+    }
+
+    bool loadGrammar()
+    {
+        if (!params.grammar.empty()) {
+            parsed_grammar = grammar_parser::parse(params.grammar.c_str());
+            // will be empty (default) if there are parse errors
+            if (parsed_grammar.rules.empty()) {
+                LOG_ERROR("grammar parse error", {{"grammar", params.grammar}});
+                return false;
+            }
+            grammar_parser::print_grammar(stderr, parsed_grammar);
+
+            {
+                auto it = params.logit_bias.find(llama_token_eos());
+                if (it != params.logit_bias.end() && it->second == -INFINITY) {
+                    LOG_WARNING("EOS token is disabled, which will cause most grammars to fail", {});
+                }
+            }
+
+            std::vector<const llama_grammar_element *> grammar_rules(parsed_grammar.c_rules());
+            grammar = llama_grammar_init(
+                grammar_rules.data(), grammar_rules.size(), parsed_grammar.symbol_ids.at("root"));
+        }
         return true;
     }
 
@@ -420,6 +455,10 @@ struct llama_server_context
                 logits[llama_token_nl()] = nl_logit;
             }
 
+            if (grammar != nullptr) {
+                llama_sample_grammar(ctx, &candidates_p, grammar);
+            }
+
             if (temp <= 0)
             {
                 // Greedy sampling
@@ -457,10 +496,15 @@ struct llama_server_context
                 }
             }
 
+            if (grammar != nullptr) {
+                llama_grammar_accept_token(ctx, grammar, result.tok);
+            }
+
             for (size_t i = 0; i < std::min(candidates_p.size, (size_t)n_probs); ++i)
             {
                 result.probs.push_back({candidates_p.data[i].id, candidates_p.data[i].p});
             }
+
             last_n_tokens.erase(last_n_tokens.begin());
             last_n_tokens.push_back(result.tok);
             num_tokens_predicted++;
@@ -623,6 +667,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     {
         fprintf(stdout, "  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
     }
+    fprintf(stdout, "  --numa                attempt optimizations that help on some NUMA systems\n");
 #ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
     fprintf(stdout, "  -ngl N, --n-gpu-layers N\n");
     fprintf(stdout, "                        number of layers to store in VRAM\n");
@@ -897,6 +942,10 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
         {
             params.use_mmap = false;
         }
+        else if (arg == "--numa")
+        {
+            params.numa = true;
+        }
         else if (arg == "--embedding")
         {
             params.embedding = true;
@@ -947,6 +996,7 @@ static json format_generation_settings(llama_server_context &llama)
         {"stream", llama.stream},
         {"logit_bias", llama.params.logit_bias},
         {"n_probs", llama.params.n_probs},
+        {"grammar", llama.params.grammar},
     };
 }
 
@@ -964,7 +1014,7 @@ static json format_timings(llama_server_context &llama)
     assert(timings.n_eval == llama.num_tokens_predicted);
 
     return json{
-        {"prompt_n", timings.n_eval},
+        {"prompt_n", timings.n_p_eval},
         {"prompt_ms", timings.t_p_eval_ms},
         {"prompt_per_token_ms", timings.t_p_eval_ms / timings.n_p_eval},
         {"prompt_per_second", 1e3 / timings.t_p_eval_ms * timings.n_p_eval},
@@ -993,7 +1043,6 @@ static json format_final_response(llama_server_context &llama, const std::string
         {"stopped_limit", llama.stopped_limit},
         {"stopping_word", llama.stopping_word},
         {"tokens_cached", llama.n_past},
-        {"tokens_predicted", llama.num_tokens_predicted},
         {"timings", format_timings(llama)},
     };
 
@@ -1048,6 +1097,7 @@ static void parse_options_completion(const json &body, llama_server_context &lla
     llama.params.n_keep = body.value("n_keep", default_params.n_keep);
     llama.params.seed = body.value("seed", default_params.seed);
     llama.params.prompt = body.value("prompt", default_params.prompt);
+    llama.params.grammar = body.value("grammar", default_params.grammar);
     llama.params.n_probs = body.value("n_probs", default_params.n_probs);
 
     llama.params.logit_bias.clear();
@@ -1169,6 +1219,12 @@ int main(int argc, char **argv)
         res.set_content(reinterpret_cast<const char*>(&completion_js), completion_js_len, "application/javascript");
         return false; });
 
+    // this is only called if no index.html is found in the public --path
+    svr.Get("/json-schema-to-grammar.mjs", [](const Request &, Response &res)
+            {
+        res.set_content(reinterpret_cast<const char*>(&json_schema_to_grammar_mjs), json_schema_to_grammar_mjs_len, "application/javascript");
+        return false; });
+
     svr.Post("/completion", [&llama](const Request &req, Response &res)
              {
         auto lock = llama.lock();
@@ -1178,6 +1234,12 @@ int main(int argc, char **argv)
         llama_reset_timings(llama.ctx);
 
         parse_options_completion(json::parse(req.body), llama);
+
+        if (!llama.loadGrammar())
+        {
+            res.status = 400;
+            return;
+        }
 
         llama.loadPrompt();
         llama.beginCompletion();
@@ -1334,8 +1396,12 @@ int main(int argc, char **argv)
 
     svr.set_error_handler([](const Request &, Response &res)
                           {
-        res.set_content("File Not Found", "text/plain");
-        res.status = 404; });
+        if (res.status == 400) {
+            res.set_content("Invalid request", "text/plain");
+        } else {
+            res.set_content("File Not Found", "text/plain");
+            res.status = 404;
+        } });
 
     // set timeouts and change hostname and port
     svr.set_read_timeout(sparams.read_timeout);
@@ -1363,6 +1429,9 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    if (llama.grammar != nullptr) {
+        llama_grammar_free(llama.grammar);
+    }
     llama_backend_free();
 
     return 0;

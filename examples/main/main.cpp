@@ -431,8 +431,12 @@ int main(int argc, char ** argv) {
             // - take the n_keep first tokens from the original prompt (via n_past)
             // - take half of the last (n_ctx - n_keep) tokens and recompute the logits in batches
             if (n_past + (int) embd.size() + std::max<int>(0, guidance_offset) > n_ctx) {
-                const int n_left = n_past - params.n_keep;
+                if (params.n_predict == -2) {
+                    fprintf(stderr, "\n\n%s: context full, stopping generation\n", __func__);
+                    break;
+                }
 
+                const int n_left = n_past - params.n_keep;
                 // always keep the first token - BOS
                 n_past = std::max(1, params.n_keep);
                 n_past_guidance = std::max(1, params.n_keep + guidance_offset);
