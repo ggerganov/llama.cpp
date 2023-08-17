@@ -1115,6 +1115,10 @@ struct llama_model_loader {
     struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::vector<uint32_t> & ne, ggml_backend backend) {
         struct ggml_tensor * cur = ggml_get_tensor(ctx_meta, name.c_str());
 
+        if (cur == NULL) {
+            throw std::runtime_error(format("%s: tensor '%s' not found", __func__, name.c_str()));
+        }
+
         {
             bool is_ok = true;
             for (size_t i = 0; i < ne.size(); ++i) {

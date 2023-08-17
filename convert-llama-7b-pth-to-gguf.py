@@ -298,7 +298,7 @@ for part_name in part_names:
 
         print( name + ", shape " + str(len(data.shape)) + ", " + str(old_dtype) + " --> " + str(data.dtype))
 
-        gguf_writer.write_tensor_to_file(data)
+        gguf_writer.write_tensor_data(data)
 
 gguf_writer.close()
 

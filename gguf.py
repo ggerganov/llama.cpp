@@ -70,23 +70,6 @@ KEY_TOKENIZER_RWKV       = "tokenizer.rwkv.world"
 # recommended mapping of model tensor names for storage in gguf
 #
 
-#LLAMA_TOKEN_EMBD  = "token_embd"
-#LLAMA_OUTPUT_NORM = "output_norm"
-#LLAMA_OUTPUT      = "output"
-#LLAMA_ATTN_NORM   = "blk.{bid}.attn_norm"
-#LLAMA_ATTN_Q      = "blk.{bid}.attn_q"
-#LLAMA_ATTN_K      = "blk.{bid}.attn_k"
-#LLAMA_ATTN_V      = "blk.{bid}.attn_v"
-#LLAMA_ATTN_OUTPUT = "blk.{bid}.attn_output"
-#LLAMA_FFN_NORM    = "blk.{bid}.ffn_norm"
-#LLAMA_FFN_GATE    = "blk.{bid}.ffn_gate"
-#LLAMA_FFN_DOWN    = "blk.{bid}.ffn_down"
-#LLAMA_FFN_UP      = "blk.{bid}.ffn_up"
-#
-#GPT_POS_EMBD = "pos_embd"
-#
-#FALCON_ATTN_NORM_2 = "blk.{bid}.attn_norm_2"
-
 class MODEL_ARCH(IntEnum):
     LLAMA   = auto()
     FALCON  = auto()
@@ -117,15 +100,15 @@ class MODEL_TENSOR(IntEnum):
 MODEL_ARCH_NAMES = {
     MODEL_ARCH.LLAMA   : "llama",
     MODEL_ARCH.FALCON  : "falcon",
-    MODEL_ARCH.GPT2    : "gpt-2",
-    MODEL_ARCH.GPTJ    : "gpt-j",
-    MODEL_ARCH.GPTNEOX : "gpt-neox",
+    MODEL_ARCH.GPT2    : "gpt2",
+    MODEL_ARCH.GPTJ    : "gptj",
+    MODEL_ARCH.GPTNEOX : "gptneox",
     MODEL_ARCH.MPT     : "mpt",
     }
 
 MODEL_TENSOR_NAMES = {
     MODEL_ARCH.LLAMA  : {
-        MODEL_TENSOR.TOKEN_EMBD        : "tok_embd",
+        MODEL_TENSOR.TOKEN_EMBD        : "token_embd",
         MODEL_TENSOR.OUTPUT_NORM       : "output_norm",
         MODEL_TENSOR.OUTPUT            : "output",
         MODEL_TENSOR.ROPE_FREQS        : "rope_freqs",
@@ -141,7 +124,7 @@ MODEL_TENSOR_NAMES = {
         MODEL_TENSOR.FFN_UP            : "blk.{bid}.ffn_up",
         },
     MODEL_ARCH.FALCON : {
-        MODEL_TENSOR.TOKEN_EMBD  : "tok_embd",
+        MODEL_TENSOR.TOKEN_EMBD  : "token_embd",
         MODEL_TENSOR.OUTPUT_NORM : "output_norm",
         MODEL_TENSOR.OUTPUT      : "output",
         MODEL_TENSOR.ATTN_NORM   : "blk.{bid}.attn_norm",
@@ -495,7 +478,7 @@ class GGUFWriter:
         self.offset_tensor += GGUFWriter.ggml_pad(tensor_nbytes, self.data_alignment)
         self.ti_data_count += 1
 
-    def write_tensor_to_file(self, tensor: np.ndarray):
+    def write_tensor_data(self, tensor: np.ndarray):
         pad = GGUFWriter.ggml_pad(self.fout.tell(), self.data_alignment) - self.fout.tell()
         if pad != 0:
             self.fout.write(bytes([0] * pad))
@@ -650,7 +633,7 @@ if __name__ == "__main__":
     gguf_writer.write_header_to_file()
     gguf_writer.write_kv_data_to_file()
     gguf_writer.write_ti_data_to_file()
-    gguf_writer.write_tensor_to_file(tensor1)
-    gguf_writer.write_tensor_to_file(tensor2)
+    gguf_writer.write_tensor_data(tensor1)
+    gguf_writer.write_tensor_data(tensor2)
 
     gguf_writer.close()

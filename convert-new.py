@@ -669,7 +669,6 @@ def lazy_load_file(path: Path) -> ModelPlus:
 In = TypeVar('In')
 Out = TypeVar('Out')
 
-
 def bounded_parallel_map(func: Callable[[In], Out], iterable: Iterable[In], concurrency: int) -> Iterable[Out]:
     '''Parallel map, but with backpressure.  If the caller doesn't call `next`
     fast enough, this will stop calling `func` at some point rather than
@@ -734,19 +733,35 @@ class OutputFile:
 
         # TODO: added / special tokens
 
+    def add_tensor_info(self, name: str, tensor: LazyTensor) -> None:
+        n_elements = 1
+        for dim in tensor.shape:
+            n_elements *= dim
+        data_type = DATA_TYPE_TO_NUMPY[tensor.data_type]
+        data_nbytes = n_elements * data_type.itemsize
+        self.gguf.add_tensor_info(name, tensor.shape, data_type, data_nbytes)
+
     def write_meta(self) -> None:
         self.gguf.write_header_to_file()
         self.gguf.write_kv_data_to_file()
+
+    def write_tensor_info(self) -> None:
+        self.gguf.write_ti_data_to_file()
 
     def close(self) -> None:
         self.gguf.close()
 
     @staticmethod
     def write_vocab_only(fname_out: Path, params: Params, vocab: Vocab) -> None:
+        check_vocab_size(params, vocab)
+
         of = OutputFile(fname_out)
+
+        # meta data
         of.add_meta_arch(params)
         of.add_meta_vocab(vocab)
         of.write_meta()
+
         of.close()
 
     @staticmethod
@@ -754,22 +769,31 @@ class OutputFile:
         check_vocab_size(params, vocab)
 
         of = OutputFile(fname_out)
+
+        # meta data
         of.add_meta_arch(params)
         of.add_meta_vocab(vocab)
+
+        # tensor info
+        for name, lazy_tensor in model.items():
+            of.add_tensor_info(name, lazy_tensor)
+
+        of.write_meta()
+        of.write_tensor_info()
 
         def do_item(item: Tuple[str, LazyTensor]) -> NDArray:
             name, lazy_tensor = item
             return lazy_tensor.load().to_ggml().ndarray
 
+        # tensor data
         ndarrays = bounded_parallel_map(do_item, model.items(), concurrency=8)
         for i, ((name, lazy_tensor), ndarray) in enumerate(zip(model.items(), ndarrays)):
             size = ' x '.join(f"{dim:6d}" for dim in lazy_tensor.shape)
             padi = len(str(len(model)))
             print(f"[{i+1:{padi}d}/{len(model)}] Writing tensor {name:38s} | size {size:16} | type {lazy_tensor.data_type}")
-            #of.write_tensor_header(name, lazy_tensor.shape, lazy_tensor.data_type)
-            ndarray.tofile(of.fout)
-        of.fout.close()
+            of.gguf.write_tensor_data(ndarray)
 
+        of.close()
 
 def pick_output_type(model: LazyModel, output_type_str: Optional[str]) -> GGMLFileType:
     wq_type = model[NAMES[gguf.MODEL_TENSOR.ATTN_Q].format(bid=0)+".weight"].data_type
@@ -783,6 +807,9 @@ def pick_output_type(model: LazyModel, output_type_str: Optional[str]) -> GGMLFi
 
     raise Exception(f"Unexpected combination of types: {name_to_type}")
 
+def convert_to_output_type(model: LazyModel, output_type: GGMLFileType) -> LazyModel:
+    return {name: tensor.astype(output_type.type_for_tensor(name, tensor))
+            for (name, tensor) in model.items()}
 
 def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
     tmap = gguf.get_tensor_name_map(ARCH, params.n_layer)
@@ -807,12 +834,6 @@ def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
             out[name_new] = lazy_tensor
 
     return out
-
-
-def convert_to_output_type(model: LazyModel, output_type: GGMLFileType) -> LazyModel:
-    return {name: tensor.astype(output_type.type_for_tensor(name, tensor))
-            for (name, tensor) in model.items()}
-
 
 def nth_multifile_path(path: Path, n: int) -> Optional[Path]:
     '''Given any path belonging to a multi-file model (e.g. foo.bin.1), return
