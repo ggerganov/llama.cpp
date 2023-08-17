@@ -18,6 +18,7 @@ from sentencepiece import SentencePieceProcessor
 # compatible with python < 3.9
 NDArray: 'TypeAlias' = 'np.ndarray[Any, Any]'
 
+
 def count_model_parts(dir_model: str) -> int:
     num_parts = 0
     for filename in os.listdir(dir_model):
@@ -28,10 +29,12 @@ def count_model_parts(dir_model: str) -> int:
         print("gguf: found " + str(num_parts) + " model parts")
     return num_parts
 
+
 if len(sys.argv) < 3:
     print("Usage: convert-h5-to-ggml.py dir-model ftype\n")
     print("  ftype == 0 -> float32")
     print("  ftype == 1 -> float16")
+
     sys.exit(1)
 
 
@@ -43,7 +46,7 @@ last_dir = os.path.basename(os.path.normpath(dir_model))
 # possible tensor data types
 #   ftype == 0 -> float32
 #   ftype == 1 -> float16
-#
+
 # map from ftype to string
 ftype_str = ["f32", "f16"]
 
@@ -52,6 +55,7 @@ if len(sys.argv) > 2:
     ftype = int(sys.argv[2])
     if ftype < 0 or ftype > 1:
         print("Invalid ftype: " + str(ftype))
+
         sys.exit(1)
 
 fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".gguf"
@@ -70,14 +74,14 @@ num_parts = count_model_parts(dir_model)
 
 if num_parts > 1:
     print("gguf: Only models with a single datafile are supported.")
-    sys.exit()
 
-gguf_writer = gguf.GGUFWriter.open(fname_out)
+    sys.exit()
+llm_arch = "llama"
+gguf_writer = gguf.GGUFWriter(fname_out, arch=llm_arch)
 
 
 print("gguf: get model metadata")
 
-llm_arch = "llama"
 block_count = hparams["num_hidden_layers"]
 head_count = hparams["num_attention_heads"]
 
@@ -89,21 +93,20 @@ else:
 if "_name_or_path" in hparams:
     hf_repo = hparams["_name_or_path"]
 else:
-    hf_repo=""
+    hf_repo = ""
 
-gguf_writer.add_architecture(llm_arch)
+gguf_writer.add_architecture()
 gguf_writer.add_name(last_dir)
-gguf_writer.add_file_type( "All tensors F32" if ftype == 0 else "Most tensors F16, some F32")
 gguf_writer.add_source_hf_repo(hf_repo)
-gguf_writer.add_tensor_data_layout(llm_arch, "Meta AI original pth")
-gguf_writer.add_context_length(llm_arch, hparams["max_position_embeddings"])
-gguf_writer.add_embedding_length(llm_arch, hparams["hidden_size"])
-gguf_writer.add_block_count(llm_arch, block_count)
-gguf_writer.add_feed_forward_length(llm_arch, hparams["intermediate_size"])
-gguf_writer.add_rope_dimension_count(llm_arch, hparams["hidden_size"] // hparams["num_attention_heads"])
-gguf_writer.add_head_count(llm_arch, head_count)
-gguf_writer.add_head_count_kv(llm_arch, head_count_kv)
-gguf_writer.add_layer_norm_rms_eps(llm_arch, hparams["rms_norm_eps"])
+gguf_writer.add_tensor_data_layout("Meta AI original pth")
+gguf_writer.add_context_length(hparams["max_position_embeddings"])
+gguf_writer.add_embedding_length(hparams["hidden_size"])
+gguf_writer.add_block_count(block_count)
+gguf_writer.add_feed_forward_length(hparams["intermediate_size"])
+gguf_writer.add_rope_dimension_count(hparams["hidden_size"] // hparams["num_attention_heads"])
+gguf_writer.add_head_count(head_count)
+gguf_writer.add_head_count_kv(head_count_kv)
+gguf_writer.add_layer_norm_rms_eps(hparams["rms_norm_eps"])
 
 
 # TOKENIZATION
@@ -125,19 +128,23 @@ if Path(dir_model + "/tokenizer.model").is_file():
         score: float
 
         piece = tokenizer.id_to_piece(i)
-        text  = piece.encode("utf-8")
+        text = piece.encode("utf-8")
         score = tokenizer.get_score(i)
 
-        toktype = 1 # defualt to normal token type
-        if tokenizer.is_unknown(i): toktype = 2
-        if tokenizer.is_control(i): toktype = 3
+        toktype = 1  # defualt to normal token type
+        if tokenizer.is_unknown(i):
+            toktype = 2
+        if tokenizer.is_control(i):
+            toktype = 3
 
         # TODO: How to determinate if a token is user defined?
         # ref: https://github.com/google/sentencepiece/blob/master/src/sentencepiece_model.proto
         # if tokenizer.is_user_defined(i): toktype = 4
 
-        if tokenizer.is_unused(i):  toktype = 5
-        if tokenizer.is_byte(i):    toktype = 6
+        if tokenizer.is_unused(i):
+            toktype = 5
+        if tokenizer.is_byte(i):
+            toktype = 6
 
         tokens.append(text)
         scores.append(score)
@@ -193,10 +200,10 @@ tensor_map = gguf.get_tensor_name_map(block_count)
 # tensor info
 print("gguf: get tensor metadata")
 
-part_names = ( f"consolidated.{n:02}.pth" for n in range(0, num_parts) )
+part_names = (f"consolidated.{n:02}.pth" for n in range(0, num_parts))
 
 for part_name in part_names:
-    print("gguf: loading model part '"+ part_name + "'")
+    print("gguf: loading model part '" + part_name + "'")
     model_part = torch.load(f"{dir_model}/{part_name}", map_location="cpu")
 
     for name in model_part.keys():
@@ -218,11 +225,12 @@ for part_name in part_names:
         elif name.endswith(".bias") and name[:-5] in tensor_map:
             name = tensor_map[name[:-5]] + ".bias"
         else:
-            print( "Can not map tensor '" + name + "'" )
+            print("Can not map tensor '" + name + "'")
             sys.exit()
 
         n_dims = len(data.shape)
         data_dtype = data.dtype
+        old_dtype = data_dtype
 
         # if f32 desired, convert any float16 to float32
         if ftype == 0 and data.dtype == np.float16:
@@ -236,69 +244,19 @@ for part_name in part_names:
         if ftype == 1 and data.dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
             data_dtype = np.float16
 
-        data_nbytes = data.size * 2 if data_dtype == np.float16 else data.size * 4
+        print(name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data_dtype))
 
-        gguf_writer.add_tensor_info(name, data.shape, data_dtype, data_nbytes)
+        data = data.astype(data_dtype)
+
+        gguf_writer.add_tensor(name, data)
 
 
 print("gguf: write header")
 gguf_writer.write_header_to_file()
 print("gguf: write metadata")
 gguf_writer.write_kv_data_to_file()
-print("gguf: write tensor metadata")
-gguf_writer.write_ti_data_to_file()
-
-# tensor data
-print("gguf: convert and write tensor data")
-
-part_names = ( f"consolidated.{n:02}.pth" for n in range(0, num_parts) )
-
-for part_name in part_names:
-    print("gguf: loading model part '"+ part_name + "'")
-    model_part = torch.load(f"{dir_model}/{part_name}", map_location="cpu")
-
-    for name in model_part.keys():
-        data = model_part[name]
-
-        old_dtype = data.dtype
-
-        # we don't need these
-        if name == "rope.freqs":
-            continue
-
-        # convert any unsupported data types to float32
-        if data.dtype != torch.float16 and data.dtype != torch.float32:
-            data = data.to(torch.float32)
-
-        data = data.squeeze().numpy()
-
-        # map tensor names
-        if name.endswith(".weight") and name[:-7] in tensor_map:
-            name = tensor_map[name[:-7]] + ".weight"
-        elif name.endswith(".bias") and name[:-5] in tensor_map:
-            name = tensor_map[name[:-5]] + ".bias"
-        else:
-            print( "Can not map tensor '" + name + "'" )
-            sys.exit()
-
-        n_dims = len(data.shape)
-        data_dtype = data.dtype
-
-        # if f32 desired, convert any float16 to float32
-        if ftype == 0 and data.dtype == np.float16:
-            data = data.astype(np.float32)
-
-        # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
-        if ftype == 1 and data_dtype == np.float16 and n_dims == 1:
-            data = data.astype(np.float32)
-
-        # if f16 desired, convert any float32 2-dim weight tensors to float16
-        if ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
-            data = data.astype(np.float16)
-
-        print( name + ", shape " + str(len(data.shape)) + ", " + str(old_dtype) + " --> " + str(data.dtype))
-
-        gguf_writer.write_tensor_data(data)
+print("gguf: write tensors")
+gguf_writer.write_tensors_to_file()
 
 gguf_writer.close()
 
