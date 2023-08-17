@@ -12,17 +12,12 @@ if [ "$1" != "--no-download" ]; then
 fi
 
 FILES=$(ls $PUBLIC)
-UNAME_S=$(uname -s)
 
+cd $PUBLIC
 for FILE in $FILES; do
   func=$(echo $FILE | tr '.' '_')
   echo "generate $FILE.hpp ($func)"
 
-  if [ "$UNAME_S" == "Darwin" ]; then
-    xxd -n $func -i $PUBLIC/$FILE > $DIR/$FILE.hpp
-  elif [ "$UNAME_S" == "Linux" ]; then
-    xxd -i $PUBLIC/$FILE > $DIR/$FILE.hpp
-    replace_prefix="$(echo $PUBLIC | tr '/' '_')_"
-    sed -i "s/$replace_prefix//g" $DIR/$FILE.hpp
-  fi
+  # use simple flag for working on Linux and Mac
+  xxd -i $FILE > $DIR/$FILE.hpp
 done
