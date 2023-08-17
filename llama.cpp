@@ -676,21 +676,20 @@ static const std::map<e_model, size_t> & VRAM_REQ_SCRATCH_PER_CONTEXT()
 
 // default hparams (LLaMA 7B)
 struct llama_hparams {
-    uint32_t n_vocab   = 32000;
-    uint32_t n_ctx     = 512;
-    uint32_t n_embd    = 4096;
-    uint32_t n_head    = 32;
-    uint32_t n_head_kv = 32;
-    uint32_t n_layer   = 32;
-    uint32_t n_rot     = 64;
-    uint32_t n_ff      = 11008;
+    uint32_t n_vocab     = 32000;
+    uint32_t n_ctx_train = 2048;  // the context size used during training
+    uint32_t n_ctx       = 512;   // the context size used during inference
+    uint32_t n_embd      = 4096;
+    uint32_t n_head      = 32;
+    uint32_t n_head_kv   = 32;
+    uint32_t n_layer     = 32;
+    uint32_t n_rot       = 64;
+    uint32_t n_ff        = 11008;
 
     float f_norm_rms_eps = 1e-5;
 
     float rope_freq_base  = 10000.0f;
     float rope_freq_scale = 1.0f;
-
-    enum llama_ftype ftype = LLAMA_FTYPE_MOSTLY_F16;
 
     bool operator!=(const llama_hparams & other) const {
         return static_cast<bool>(memcmp(this, &other, sizeof(llama_hparams))); // NOLINT
@@ -1023,7 +1022,8 @@ struct llama_model_loader {
     int n_kv      = 0;
     int n_tensors = 0;
     int n_created = 0;
-    size_t n_tot_elements = 0;
+
+    int64_t n_elements = 0;
 
     bool use_mmap = false;
 
@@ -1051,9 +1051,9 @@ struct llama_model_loader {
         for (int i = 0; i < n_tensors; i++) {
             const char * name = gguf_get_tensor_name(ctx_gguf, i);
             struct ggml_tensor * t = ggml_get_tensor(ctx_meta, name);
-            n_tot_elements += ggml_nelements(t);
+            n_elements += ggml_nelements(t);
         }
-        
+
         // print meta data
         // TODO: make optional
         {
@@ -1122,6 +1122,10 @@ struct llama_model_loader {
 
     struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::vector<uint32_t> & ne, ggml_backend backend) {
         struct ggml_tensor * cur = ggml_get_tensor(ctx_meta, name.c_str());
+
+        if (cur == NULL) {
+            throw std::runtime_error(format("%s: tensor '%s' not found", __func__, name.c_str()));
+        }
 
         {
             bool is_ok = true;
@@ -1332,7 +1336,7 @@ static void llama_model_load_internal(
         }
 
         GGUF_GET(hparams.n_vocab,        gguf_get_arr_n,   GGUF_TYPE_ARRAY,   true, "tokenizer.ggml.tokens");
-        GGUF_GET(hparams.n_ctx,          gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.context_length");
+        GGUF_GET(hparams.n_ctx_train,    gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.context_length");
         GGUF_GET(hparams.n_embd,         gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.embedding_length");
         GGUF_GET(hparams.n_ff,           gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.feed_forward_length");
         GGUF_GET(hparams.n_head,         gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.attention.head_count");
@@ -1406,22 +1410,24 @@ static void llama_model_load_internal(
     }
 
     {
-        LLAMA_LOG_INFO("%s: format     = %s\n",   __func__, llama_file_version_name(ml->file_version));
-        LLAMA_LOG_INFO("%s: n_vocab    = %u\n",   __func__, hparams.n_vocab);
-        LLAMA_LOG_INFO("%s: n_ctx      = %u\n",   __func__, hparams.n_ctx);
-        LLAMA_LOG_INFO("%s: n_embd     = %u\n",   __func__, hparams.n_embd);
-        LLAMA_LOG_INFO("%s: n_head     = %u\n",   __func__, hparams.n_head);
-        LLAMA_LOG_INFO("%s: n_head_kv  = %u\n",   __func__, hparams.n_head_kv);
-        LLAMA_LOG_INFO("%s: n_layer    = %u\n",   __func__, hparams.n_layer);
-        LLAMA_LOG_INFO("%s: n_rot      = %u\n",   __func__, hparams.n_rot); // a.k.a. n_embd_head, n_head_dim
-        LLAMA_LOG_INFO("%s: n_gqa      = %u\n",   __func__, hparams.n_gqa());
-        LLAMA_LOG_INFO("%s: f_norm_eps = %.1e\n", __func__, hparams.f_norm_rms_eps);
-        LLAMA_LOG_INFO("%s: n_ff       = %u\n",   __func__, hparams.n_ff);
-        LLAMA_LOG_INFO("%s: freq_base  = %.1f\n", __func__, hparams.rope_freq_base);
-        LLAMA_LOG_INFO("%s: freq_scale = %g\n",   __func__, hparams.rope_freq_scale);
-        LLAMA_LOG_INFO("%s: ftype      = %u (%s)\n", __func__, hparams.ftype, llama_ftype_name(hparams.ftype));
-        LLAMA_LOG_INFO("%s: model size = %.2f B\n",   __func__, ml->n_tot_elements*1e-9);
+        LLAMA_LOG_INFO("%s: format      = %s\n",    __func__, llama_file_version_name(ml->file_version));
+        LLAMA_LOG_INFO("%s: n_vocab     = %u\n",    __func__, hparams.n_vocab);
+        LLAMA_LOG_INFO("%s: n_ctx_train = %u\n",    __func__, hparams.n_ctx_train);
+        LLAMA_LOG_INFO("%s: n_ctx       = %u\n",    __func__, hparams.n_ctx);
+        LLAMA_LOG_INFO("%s: n_embd      = %u\n",    __func__, hparams.n_embd);
+        LLAMA_LOG_INFO("%s: n_head      = %u\n",    __func__, hparams.n_head);
+        LLAMA_LOG_INFO("%s: n_head_kv   = %u\n",    __func__, hparams.n_head_kv);
+        LLAMA_LOG_INFO("%s: n_layer     = %u\n",    __func__, hparams.n_layer);
+        LLAMA_LOG_INFO("%s: n_rot       = %u\n",    __func__, hparams.n_rot); // a.k.a. n_embd_head, n_head_dim
+        LLAMA_LOG_INFO("%s: n_gqa       = %u\n",    __func__, hparams.n_gqa());
+        LLAMA_LOG_INFO("%s: f_norm_eps  = %.1e\n",  __func__, hparams.f_norm_rms_eps);
+        LLAMA_LOG_INFO("%s: n_ff        = %u\n",    __func__, hparams.n_ff);
+        LLAMA_LOG_INFO("%s: freq_base   = %.1f\n",  __func__, hparams.rope_freq_base);
+        LLAMA_LOG_INFO("%s: freq_scale  = %g\n",    __func__, hparams.rope_freq_scale);
+        LLAMA_LOG_INFO("%s: model type  = %s\n",    __func__, llama_model_type_name(model.type));
+        LLAMA_LOG_INFO("%s: model size  = %.2fB\n", __func__, ml->n_elements*1e-9);
 
+        // TODO: print number of tensors for each quantization
     }
 
     if (vocab_only) {
@@ -2310,6 +2316,18 @@ static uint8_t llama_byte_to_char(const llama_vocab & vocab, uint8_t byte) {
     return false;
 }
 
+static uint8_t llama_char_to_byte(const llama_vocab & vocab, uint8_t ch) {
+    if (llama_vocab_type(vocab) == "spm") {
+        return ch + 3;
+    }
+
+    if (llama_vocab_type(vocab) == "bpe") {
+        return ch - 32;
+    }
+
+    return false;
+}
+
 static std::string llama_escape_whitespace(const std::string& text) {
     std::string result;
     bool escaping = false;
@@ -2446,7 +2464,7 @@ private:
         if (p == rev_merge.end()) {
             // output any symbols that did not form tokens as bytes.
             for (int j = 0; j < (int)symbol.n; ++j) {
-                llama_vocab::id token_id = llama_byte_to_char(vocab_, symbol.text[j]);
+                llama_vocab::id token_id = llama_char_to_byte(vocab_, symbol.text[j]);
                 output.push_back(token_id);
             }
             return;
@@ -3373,7 +3391,6 @@ static void llama_convert_tensor_internal(struct ggml_tensor * tensor, std::vect
 static void llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, const llama_model_quantize_params * params) {
     ggml_type quantized_type;
     llama_ftype ftype = params->ftype;
-    int nthread = params->nthread;
 
     switch (params->ftype) {
         case LLAMA_FTYPE_MOSTLY_Q4_0: quantized_type = GGML_TYPE_Q4_0; break;
@@ -3398,6 +3415,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 #endif
         default: throw std::runtime_error(format("invalid output file type %d\n", ftype));
     }
+
+    int nthread = params->nthread;
 
     if (nthread <= 0) {
         nthread = std::thread::hardware_concurrency();
@@ -3669,6 +3688,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     }
 }
 
+// TODO: after the GGUF PR, this likely won't work and needs to be updated
 int llama_apply_lora_from_file_internal(const struct llama_model & model, const char * path_lora, const char * path_base_model, int n_threads) {
     LLAMA_LOG_INFO("%s: applying lora adapter from '%s' - please wait ...\n", __func__, path_lora);
 
@@ -4876,8 +4896,8 @@ int llama_token_to_str_with_model(const struct llama_model * model, llama_token 
     return 0;
 }
 
-int llama_token_to_str(const struct llama_context * ctx, llama_token token, char * str, int length) {
-    return llama_token_to_str_with_model(&ctx->model, token, str, length);
+int llama_token_to_str(const struct llama_context * ctx, llama_token token, char * buf, int length) {
+    return llama_token_to_str_with_model(&ctx->model, token, buf, length);
 }
 
 std::string llama_token_to_str(const struct llama_context * ctx, llama_token token) {
@@ -4894,13 +4914,13 @@ std::string llama_token_to_str(const struct llama_context * ctx, llama_token tok
     return std::string(result.data(), result.size());
 }
 
-int llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token, char * str, int length) {
+int llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token, char * buf, int length) {
     if (0 <= token && token < llama_n_vocab_from_model(&ctx->model)) {
         std::string result = ctx->model.vocab.id_to_token[token].tok;
         if (length < (int) result.length()) {
             return -result.length();
         }
-        memcpy(str, result.c_str(), result.length());
+        memcpy(buf, result.c_str(), result.length());
         return result.length();
     }
     return 0;
