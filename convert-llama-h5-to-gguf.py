@@ -267,7 +267,7 @@ for part_name in part_names:
 
         data = data.astype(data_dtype)
 
-        print(name + ", n_dims = " + n_dims + ", " + str(old_dtype) + " --> " + str(data.dtype))
+        print(name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
 
         gguf_writer.add_tensor(name, data)
 
