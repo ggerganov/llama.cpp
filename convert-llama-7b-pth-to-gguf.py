@@ -76,8 +76,9 @@ if num_parts > 1:
     print("gguf: Only models with a single datafile are supported.")
 
     sys.exit()
-llm_arch = "llama"
-gguf_writer = gguf.GGUFWriter(fname_out, arch=llm_arch)
+
+ARCH=gguf.MODEL_ARCH.LLAMA
+gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH])
 
 
 print("gguf: get model metadata")
@@ -195,7 +196,7 @@ if Path(dir_model + "/tokenizer.json").is_file():
 
 # TENSORS
 
-tensor_map = gguf.get_tensor_name_map(block_count)
+tensor_map = gguf.get_tensor_name_map(ARCH,block_count)
 
 # tensor info
 print("gguf: get tensor metadata")
@@ -213,6 +214,8 @@ for part_name in part_names:
         if name == "rope.freqs":
             continue
 
+        old_dtype = data.dtype
+
         # convert any unsupported data types to float32
         if data.dtype != torch.float16 and data.dtype != torch.float32:
             data = data.to(torch.float32)
@@ -229,24 +232,21 @@ for part_name in part_names:
             sys.exit()
 
         n_dims = len(data.shape)
-        data_dtype = data.dtype
-        old_dtype = data_dtype
+        data_dtype = data.dtype 
 
         # if f32 desired, convert any float16 to float32
-        if ftype == 0 and data.dtype == np.float16:
-            data_dtype = np.float32
+        if ftype == 0 and data_dtype == np.float16:
+            data = data.astype(np.float32)
 
         # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
         if ftype == 1 and data_dtype == np.float16 and n_dims == 1:
-            data_dtype = np.float32
+            data = data.astype(np.float32)
 
         # if f16 desired, convert any float32 2-dim weight tensors to float16
-        if ftype == 1 and data.dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
-            data_dtype = np.float16
+        if ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+            data = data.astype(np.float16)
 
-        print(name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data_dtype))
-
-        data = data.astype(data_dtype)
+        print(name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
 
         gguf_writer.add_tensor(name, data)
 
