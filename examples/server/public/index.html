@@ -222,8 +222,7 @@
       //override default template
       savedUserTemplates.value.default = { session: session.value, params: params.value }
       local_storage_setDataFromObject('user_templates', savedUserTemplates.value)
-    }
-    else {
+    } else {
       // no saved templates detected.
 
       console.log('Initializing LocalStorage and saving default template')
@@ -289,8 +288,7 @@
 
         // and load it back and apply
         userTemplateLoadAndApplyAutosaved()
-      }
-      else {
+      } else {
         local_storage_setDataFromObject('user_templates_last', { 'name': selectedUserTemplate.value.name, 'data': { 'session': session.value, 'params': params.value } })
       }
     }
@@ -469,8 +467,8 @@
         }
 
         return html`
-            <button onclick=${userTemplateReset}>Reset all to default</button>
-          `
+          <button onclick=${userTemplateReset}>Reset all to default</button>
+        `
       };
 
       useEffect(() => {
