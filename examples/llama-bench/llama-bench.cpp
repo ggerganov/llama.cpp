@@ -11,6 +11,7 @@
 #include <iterator>
 #include <numeric>
 #include <map>
+#include <ctime>
 #include "ggml.h"
 #include "llama.h"
 #include "common.h"
@@ -68,8 +69,17 @@ T stdev(const std::vector<T> & v) {
     return stdev;
 }
 
+static bool ggml_cpu_has_metal() {
+#if defined(GGML_USE_METAL)
+    return true;
+#else
+    return false;
+#endif
+}
+
+
 // command line params
-enum output_formats {CSV, JSON, MARKDOWN};
+enum output_formats {CSV, JSON, MARKDOWN, SQL};
 
 struct cmd_params {
     std::vector<std::string> model;
@@ -122,7 +132,7 @@ static void print_usage(int /* argc */, char ** argv) {
     fprintf(stdout, "  -mmq, --mul-mat-q <0|1>           (default: %s)\n", join(cmd_params_defaults.mul_mat_q, ",").c_str());
     fprintf(stdout, "  -ts, --tensor_split <ts>                       \n");
     fprintf(stdout, "  -r, --repetitions <n>             (default: %d)\n", cmd_params_defaults.reps);
-    fprintf(stdout, "  -o, --output <csv|json|md>        (default: %s)\n", cmd_params_defaults.output_format == CSV ? "csv" : cmd_params_defaults.output_format == JSON ? "json" : "md");
+    fprintf(stdout, "  -o, --output <csv|json|md|sql>    (default: %s)\n", cmd_params_defaults.output_format == CSV ? "csv" : cmd_params_defaults.output_format == JSON ? "json" : "md");
     fprintf(stdout, "  -v, --verbose                     (default: %s)\n", cmd_params_defaults.verbose ? "1" : "0");
     fprintf(stdout, "\n");
     fprintf(stdout, "Multiple values can be given for each parameter by separating them with ',' or by repeating the parameter.\n");
@@ -257,6 +267,8 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 params.output_format = JSON;
             } else if (argv[i] == std::string("md")) {
                 params.output_format = MARKDOWN;
+            } else if (argv[i] == std::string("sql")) {
+                params.output_format = SQL;
             } else {
                 invalid_param = true;
                 break;
@@ -372,32 +384,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
     return instances;
 }
 
-// models params
-struct model_params {
-    std::string filename;
-    std::string type;
-
-    static const std::vector<std::string> & get_fields() {
-        static const std::vector<std::string> fields = {"filename", "type"};
-        return fields;
-    }
-
-    // TODO: use a map instead
-    std::vector<std::string> get_values() const {
-        return {filename, type};
-    }
-};
-
-static bool ggml_cpu_has_metal() {
-#if defined(GGML_USE_METAL)
-    return true;
-#else
-    return false;
-#endif
-}
-
-// backend params
-struct backend_params {
+struct test {
     static const std::string build_commit;
     static const int build_number;
     static const bool cuda;
@@ -405,6 +392,8 @@ struct backend_params {
     static const bool metal;
     static const bool gpu_blas;
     static const bool blas;
+    std::string model_filename;
+    std::string model_type;
     int n_batch;
     int n_threads;
     bool f32_kv;
@@ -413,6 +402,56 @@ struct backend_params {
     bool mul_mat_q;
     bool low_vram;
     std::array<float, LLAMA_MAX_DEVICES> tensor_split;
+    int n_prompt;
+    int n_gen;
+    std::string test_time;
+    std::vector<uint64_t> samples_ns;
+
+    test(const cmd_params_instance & inst, const llama_model * lmodel, const llama_context * ctx) {
+        model_filename = inst.model;
+        char buf[128];
+        llama_model_type(lmodel, buf, sizeof(buf));
+        model_type = buf;
+        n_batch = inst.n_batch;
+        n_threads = inst.n_threads;
+        f32_kv = inst.f32_kv;
+        n_gpu_layers = inst.n_gpu_layers;
+        main_gpu = inst.main_gpu;
+        mul_mat_q = inst.mul_mat_q;
+        low_vram = inst.low_vram;
+        tensor_split = inst.tensor_split;
+        n_prompt = inst.n_prompt;
+        n_gen = inst.n_gen;
+        // RFC 3339 date-time format
+        time_t t = time(NULL);
+        std::strftime(buf, sizeof(buf), "%FT%TZ", gmtime(&t));
+        test_time = buf;
+
+        (void) ctx;
+    }
+
+    uint64_t avg_ns() const {
+        return ::avg(samples_ns);
+    }
+
+    uint64_t stdev_ns() const {
+        return ::stdev(samples_ns);
+    }
+
+    std::vector<double> get_ts() const {
+        int n_tokens = n_prompt + n_gen;
+        std::vector<double> ts;
+        std::transform(samples_ns.begin(), samples_ns.end(), std::back_inserter(ts), [n_tokens](uint64_t t) { return 1e9 * n_tokens / t; });
+        return ts;
+    }
+
+    double avg_ts() const {
+        return ::avg(get_ts());
+    }
+
+    double stdev_ts() const {
+        return ::stdev(get_ts());
+    }
 
     static std::string get_backend() {
         if (cuda) {
@@ -435,10 +474,14 @@ struct backend_params {
 
     static const std::vector<std::string> & get_fields() {
         static const std::vector<std::string> fields = {
-            "build_number", "build_commit",
+            "build_commit", "build_number",
             "cuda", "opencl", "metal", "gpu_blas", "blas",
+            "model_filename", "model_type",
             "n_batch", "n_threads", "f16_kv",
-            "n_gpu_layers", "main_gpu", "mul_mat_q", "low_vram", "tensor_split"
+            "n_gpu_layers", "main_gpu", "mul_mat_q", "low_vram", "tensor_split",
+            "n_prompt", "n_gen", "test_time",
+            "avg_ns", "stddev_ns",
+            "avg_ts", "stddev_ts"
         };
         return fields;
     }
@@ -458,97 +501,36 @@ struct backend_params {
             }
         }
         std::vector<std::string> values = {
-            std::to_string(build_number), build_commit,
+            build_commit, std::to_string(build_number),
             std::to_string(cuda), std::to_string(opencl), std::to_string(metal), std::to_string(gpu_blas), std::to_string(blas),
+            model_filename, model_type,
             std::to_string(n_batch), std::to_string(n_threads), std::to_string(!f32_kv),
-            std::to_string(n_gpu_layers), std::to_string(main_gpu), std::to_string(mul_mat_q), std::to_string(low_vram), tensor_split_str
+            std::to_string(n_gpu_layers), std::to_string(main_gpu), std::to_string(mul_mat_q), std::to_string(low_vram), tensor_split_str,
+            std::to_string(n_prompt), std::to_string(n_gen), test_time,
+            std::to_string(avg_ns()), std::to_string(stdev_ns()),
+            std::to_string(avg_ts()), std::to_string(stdev_ts())
         };
         return values;
     }
-};
 
-const std::string backend_params::build_commit = BUILD_COMMIT;
-const int backend_params::build_number         = BUILD_NUMBER;
-const bool backend_params::cuda     = !!ggml_cpu_has_cublas();
-const bool backend_params::opencl   = !!ggml_cpu_has_clblast();
-const bool backend_params::metal    = !!ggml_cpu_has_metal();
-const bool backend_params::gpu_blas = !!ggml_cpu_has_gpublas();
-const bool backend_params::blas     = !!ggml_cpu_has_blas();
-
-// benchmark params
-struct bench_params {
-    int n_prompt;
-    int n_gen;
-
-    static const std::vector<std::string> & get_fields() {
-        static const std::vector<std::string> fields = {"n_prompt", "n_gen"};
-        return fields;
-    }
-
-    std::vector<std::string> get_values() const {
-        return {std::to_string(n_prompt), std::to_string(n_gen)};
+    std::map<std::string, std::string> get_map() const {
+        std::map<std::string, std::string> map;
+        auto fields = get_fields();
+        auto values = get_values();
+        std::transform(fields.begin(), fields.end(), values.begin(),
+                std::inserter(map, map.end()), std::make_pair<const std::string &, const std::string &>);
+        return map;
     }
 };
 
-// timing results
-struct timing_samples {
-    std::vector<uint64_t> t_ns;
+const std::string test::build_commit = BUILD_COMMIT;
+const int  test::build_number        = BUILD_NUMBER;
+const bool test::cuda     = !!ggml_cpu_has_cublas();
+const bool test::opencl   = !!ggml_cpu_has_clblast();
+const bool test::metal    = !!ggml_cpu_has_metal();
+const bool test::gpu_blas = !!ggml_cpu_has_gpublas();
+const bool test::blas     = !!ggml_cpu_has_blas();
 
-    uint64_t avg() const {
-        return ::avg(t_ns);
-    }
-
-    uint64_t stdev() const {
-        return ::stdev(t_ns);
-    }
-
-    std::vector<double> get_ts(int n) const {
-        std::vector<double> ts;
-        std::transform(t_ns.begin(), t_ns.end(), std::back_inserter(ts), [n](uint64_t t) { return 1e9 * n / t; });
-        return ts;
-    }
-
-    double avg_ts(uint64_t n) const {
-        return ::avg(get_ts(n));
-    }
-
-    double stddev_ts(uint64_t n) const {
-        return ::stdev(get_ts(n));
-    }
-
-    static const std::vector<std::string> & get_fields() {
-        static const std::vector<std::string> fields = {"t_ns"};
-        return fields;
-    }
-};
-
-struct test {
-    model_params mparams = {};
-    bench_params bparams = {};
-    backend_params bkparams = {};
-    timing_samples tsamples = {};
-
-    test(const cmd_params_instance & inst, const llama_model * lmodel, const llama_context * ctx) {
-        mparams.filename = inst.model;
-        char buf[128];
-        llama_model_type(lmodel, buf, sizeof(buf));
-        mparams.type = buf;
-
-        bparams.n_prompt = inst.n_prompt;
-        bparams.n_gen = inst.n_gen;
-
-        bkparams.n_batch = inst.n_batch;
-        bkparams.f32_kv = inst.f32_kv;
-        bkparams.n_threads = inst.n_threads;
-        bkparams.n_gpu_layers = inst.n_gpu_layers;
-        bkparams.main_gpu = inst.main_gpu;
-        bkparams.mul_mat_q = inst.mul_mat_q;
-        bkparams.low_vram = inst.low_vram;
-        bkparams.tensor_split = inst.tensor_split;
-
-        (void) ctx;
-    }
-};
 
 struct printer {
     FILE * fout;
@@ -559,11 +541,7 @@ struct printer {
 
 struct csv_printer : public printer {
     virtual void print_header(const cmd_params & params) {
-        std::vector<std::string> fields;
-        fields.insert(fields.end(), model_params::get_fields().begin(), model_params::get_fields().end());
-        fields.insert(fields.end(), bench_params::get_fields().begin(), bench_params::get_fields().end());
-        fields.insert(fields.end(), backend_params::get_fields().begin(), backend_params::get_fields().end());
-        fields.insert(fields.end(), timing_samples::get_fields().begin(), timing_samples::get_fields().end());
+        std::vector<std::string> fields = test::get_fields();
         fprintf(fout, "%s\n", join(fields, ",").c_str());
         (void) params;
     }
@@ -573,13 +551,7 @@ struct csv_printer : public printer {
     }
 
     virtual void print_test(const test & t) {
-        for (auto t_ns : t.tsamples.t_ns) {
-            print_values(t.mparams.get_values());
-            print_values(t.bparams.get_values());
-            print_values(t.bkparams.get_values());
-            print_values({std::to_string(t_ns)});
-            fprintf(fout, "\n");
-        }
+        print_values(t.get_values());
     }
 };
 
@@ -589,12 +561,7 @@ struct json_printer : public printer {
     void print_fields(const std::vector<std::string> & fields, const std::vector<std::string> & values) {
         assert(fields.size() == values.size());
         for (size_t i = 0; i < fields.size(); i++) {
-            fprintf(fout, "      \"%s\": \"%s\"", fields.at(i).c_str(), values.at(i).c_str());
-            if (i < fields.size() - 1) {
-                fprintf(fout, ",\n");
-            } else {
-                fprintf(fout, "\n");
-            }
+            fprintf(fout, "    \"%s\": \"%s\",\n", fields.at(i).c_str(), values.at(i).c_str());
         }
     }
 
@@ -614,20 +581,9 @@ struct json_printer : public printer {
             fprintf(fout, ",\n");
         }
         fprintf(fout, "  {\n");
-        fprintf(fout, "    \"model\": {\n");
-        print_fields(model_params::get_fields(), t.mparams.get_values());
-        fprintf(fout, "    },\n");
-        fprintf(fout, "    \"benchmark\": {\n");
-        print_fields(bench_params::get_fields(), t.bparams.get_values());
-        fprintf(fout, "    },\n");
-        fprintf(fout, "    \"backend\": {\n");
-        print_fields(backend_params::get_fields(), t.bkparams.get_values());
-        fprintf(fout, "    },\n");
-        fprintf(fout, "    \"samples\": {\n");
-        fprintf(fout, "      \"ns\": [ %s ],\n", join(t.tsamples.t_ns, ", ").c_str());
-        fprintf(fout, "      \"avg\": %" PRIu64 ",\n", t.tsamples.avg());
-        fprintf(fout, "      \"stddev\": %" PRIu64 "\n", t.tsamples.stdev());
-        fprintf(fout, "    }\n");
+        print_fields(test::get_fields(), t.get_values());
+        fprintf(fout, "    \"samples_ns\": [ %s ],\n", join(t.samples_ns, ", ").c_str());
+        fprintf(fout, "    \"samples_ts\": [ %s ]\n", join(t.get_ts(), ", ").c_str());
         fprintf(fout, "  }");
     }
 };
@@ -651,7 +607,7 @@ struct markdown_printer : public printer {
 
     virtual void print_header(const cmd_params & params) {
         fields = { "model", "backend" };
-        bool is_cpu_backend = backend_params::get_backend() == "CPU" || backend_params::get_backend() == "BLAS";
+        bool is_cpu_backend = test::get_backend() == "CPU" || test::get_backend() == "BLAS";
         if (!is_cpu_backend) {
             fields.push_back("n_gpu_layers");
         }
@@ -691,29 +647,21 @@ struct markdown_printer : public printer {
     }
 
     virtual void print_test(const test & t) {
-        int n_tokens = t.bparams.n_prompt + t.bparams.n_gen;
-
-        std::map<std::string, std::string> vmap;
-        std::transform(model_params::get_fields().begin(), model_params::get_fields().end(), t.mparams.get_values().begin(),
-            std::inserter(vmap, vmap.end()), std::make_pair<const std::string&, const std::string&>);
-        std::transform(bench_params::get_fields().begin(), bench_params::get_fields().end(), t.bparams.get_values().begin(),
-            std::inserter(vmap, vmap.end()), std::make_pair<const std::string&, const std::string&>);
-        std::transform(backend_params::get_fields().begin(), backend_params::get_fields().end(), t.bkparams.get_values().begin(),
-            std::inserter(vmap, vmap.end()), std::make_pair<const std::string&, const std::string&>);
+        std::map<std::string, std::string> vmap = t.get_map();
 
         fprintf(fout, "|");
         for (const auto & field : fields) {
             std::string value;
             if (field == "model") {
-                value = t.mparams.type;
+                value = t.model_type;
             } else if (field == "backend") {
-                value = backend_params::get_backend();
+                value = test::get_backend();
             } else if (field == "test") {
                 char buf[128];
-                if (t.bparams.n_prompt > 0 && t.bparams.n_gen == 0) {
-                    snprintf(buf, sizeof(buf), "pp %d", t.bparams.n_prompt);
-                } else if (t.bparams.n_gen > 0 && t.bparams.n_prompt == 0) {
-                    snprintf(buf, sizeof(buf), "tg %d", t.bparams.n_gen);
+                if (t.n_prompt > 0 && t.n_gen == 0) {
+                    snprintf(buf, sizeof(buf), "pp %d", t.n_prompt);
+                } else if (t.n_gen > 0 && t.n_prompt == 0) {
+                    snprintf(buf, sizeof(buf), "tg %d", t.n_gen);
                 } else {
                     assert(false);
                     exit(1);
@@ -721,7 +669,7 @@ struct markdown_printer : public printer {
                 value = buf;
             } else if (field == "t/s") {
                 char buf[128];
-                snprintf(buf, sizeof(buf), "%.2f ± %.2f", t.tsamples.avg_ts(n_tokens), t.tsamples.stddev_ts(n_tokens));
+                snprintf(buf, sizeof(buf), "%.2f ± %.2f", t.avg_ts(), t.stdev_ts());
                 value = buf;
             } else if (vmap.find(field) != vmap.end()) {
                 value = vmap.at(field);
@@ -738,6 +686,60 @@ struct markdown_printer : public printer {
             fprintf(fout, " %*s |", width, value.c_str());
         }
         fprintf(fout, "\n");
+    }
+};
+
+struct sql_printer : public printer {
+    static std::string get_field_type(const std::string & field) {
+        if (field == "build_commit") {
+            return "TEXT";
+        }
+        if (field == "build_number") {
+            return "INTEGER";
+        }
+        if (field == "cuda" || field == "opencl" || field == "metal" || field == "gpu_blas" || field == "blas") {
+            return "INTEGER";
+        }
+        if (field == "model_filename" || field == "model_type") {
+            return "TEXT";
+        }
+        if (field == "n_batch" || field == "n_threads" || field == "f16_kv" || field == "n_gpu_layers" || field == "main_gpu" || field == "mul_mat_q" || field == "low_vram") {
+            return "INTEGER";
+        }
+        if (field == "tensor_split") {
+            return "TEXT";
+        }
+        if (field == "n_prompt" || field == "n_gen") {
+            return "INTEGER";
+        }
+        if (field == "test_time") {
+            return "TEXT";
+        }
+        if (field == "avg_ns" || field == "stddev_ns" || field == "avg_ts" || field == "stddev_ts") {
+            return "REAL";
+        }
+        return "TEXT";
+    }
+
+    virtual void print_header(const cmd_params & params) {
+        std::vector<std::string> fields = test::get_fields();
+        fprintf(fout, "CREATE TABLE IF NOT EXISTS test (\n");
+        for (size_t i = 0; i < fields.size(); i++) {
+            fprintf(fout, "  %s %s%s\n", fields.at(i).c_str(), get_field_type(fields.at(i)).c_str(),  i < fields.size() - 1 ? "," : "");
+        }
+        fprintf(fout, ");\n");
+        fprintf(fout, "\n");
+        (void) params;
+    }
+
+    virtual void print_test(const test & t) {
+        fprintf(fout, "INSERT INTO test (%s) ", join(test::get_fields(), ", ").c_str());
+        fprintf(fout, "VALUES (");
+        std::vector<std::string> values = t.get_values();
+        for (size_t i = 0; i < values.size(); i++) {
+            fprintf(fout, "'%s'%s", values.at(i).c_str(), i < values.size() - 1 ? ", " : "");
+        }
+        fprintf(fout, ");\n");
     }
 };
 
@@ -798,6 +800,12 @@ int main(int argc, char ** argv) {
         case MARKDOWN:
             p.reset(new markdown_printer());
             break;
+        case SQL:
+            p.reset(new sql_printer());
+            break;
+        default:
+            assert(false);
+            exit(1);
     }
     p->fout = stdout;
     p->print_header(params);
@@ -824,18 +832,18 @@ int main(int argc, char ** argv) {
         test t(inst, lmodel, ctx);
 
         // warmup run
-        test_gen(ctx, 1, 0, t.bkparams.n_threads);
+        test_gen(ctx, 1, 0, t.n_threads);
 
         for (int i = 0; i < params.reps; i++) {
             uint64_t t_start = get_time_ns();
-            if (t.bparams.n_prompt > 0) {
-                test_prompt(ctx, t.bparams.n_prompt, 0, t.bkparams.n_batch, t.bkparams.n_threads);
+            if (t.n_prompt > 0) {
+                test_prompt(ctx, t.n_prompt, 0, t.n_batch, t.n_threads);
             }
-            if (t.bparams.n_gen > 0) {
-                test_gen(ctx, t.bparams.n_gen, t.bparams.n_prompt, t.bkparams.n_threads);
+            if (t.n_gen > 0) {
+                test_gen(ctx, t.n_gen, t.n_prompt, t.n_threads);
             }
             uint64_t t_ns = get_time_ns() - t_start;
-            t.tsamples.t_ns.push_back(t_ns);
+            t.samples_ns.push_back(t_ns);
         }
 
         p->print_test(t);
