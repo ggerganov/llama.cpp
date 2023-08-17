@@ -396,6 +396,7 @@ int main()
     for (auto &candidate : next_candidates)
     {
         delete[] candidate.code_points;
+        candidate.code_points = nullptr;
     }
     return 0;
 }
