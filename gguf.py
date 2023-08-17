@@ -23,7 +23,6 @@ KEY_GENERAL_NAME = "general.name"
 KEY_GENERAL_AUTHOR = "general.author"
 KEY_GENERAL_URL = "general.url"
 KEY_GENERAL_DESCRIPTION = "general.description"
-KEY_GENERAL_FILE_TYPE = "general.file_type"
 KEY_GENERAL_LICENSE = "general.license"
 KEY_GENERAL_SOURCE_URL = "general.source.url"
 KEY_GENERAL_SOURCE_HF_REPO = "general.source.hugginface.repository"
@@ -536,9 +535,6 @@ class GGUFWriter:
 
     def add_description(self, description: str):
         self.add_string(KEY_GENERAL_DESCRIPTION, description)
-
-    def add_file_type(self, file_type: str):
-        self.add_string(KEY_GENERAL_FILE_TYPE, file_type)
 
     def add_source_url(self, url: str):
         self.add_string(KEY_GENERAL_SOURCE_URL, url)
