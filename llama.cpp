@@ -1022,6 +1022,7 @@ struct llama_model_loader {
     int n_kv      = 0;
     int n_tensors = 0;
     int n_created = 0;
+    size_t n_tot_elements = 0;
 
     bool use_mmap = false;
 
@@ -1046,6 +1047,12 @@ struct llama_model_loader {
 
         file_version = (enum llama_file_version) gguf_get_version(ctx_gguf);
 
+        for (int i = 0; i < n_tensors; i++) {
+            const char * name = gguf_get_tensor_name(ctx_gguf, i);
+            struct ggml_tensor * t = ggml_get_tensor(ctx_meta, name);
+            n_tot_elements += ggml_nelements(t);
+        }
+        
         // print meta data
         // TODO: make optional
         {
@@ -1416,7 +1423,8 @@ static void llama_model_load_internal(
         LLAMA_LOG_INFO("%s: n_ff        = %u\n",   __func__, hparams.n_ff);
         LLAMA_LOG_INFO("%s: freq_base   = %.1f\n", __func__, hparams.rope_freq_base);
         LLAMA_LOG_INFO("%s: freq_scale  = %g\n",   __func__, hparams.rope_freq_scale);
-        LLAMA_LOG_INFO("%s: model size  = %s\n",   __func__, llama_model_type_name(model.type));
+        LLAMA_LOG_INFO("%s: model type  = %s\n",   __func__, llama_model_type_name(model.type));
+        LLAMA_LOG_INFO("%s: model size = %.2f B\n",   __func__, ml->n_tot_elements*1e-9);
 
         // TODO: print number of tensors for each quantization
     }
