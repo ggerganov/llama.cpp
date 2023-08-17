@@ -238,11 +238,16 @@ In order to build llama.cpp you have three different options.
     cmake --build . --config Release
     ```
 
-- Using `Zig`:
+- Using `Zig` (version 0.11 or later):
+
+    Building for optimization levels and CPU features can be accomplished using standard build arguments, for example AVX2, FMA, F16C,
+    it's also possible to cross compile for other operating systems and architectures:
 
     ```bash
-    zig build -Doptimize=ReleaseFast
+    zig build -Doptimize=ReleaseFast -Dtarget=x86_64-windows-gnu -Dcpu=x86_64+avx2+fma+f16c
     ```
+
+    The `zig targets` command will give you valid options to use.
 
 -   Using `gmake` (FreeBSD):
 
