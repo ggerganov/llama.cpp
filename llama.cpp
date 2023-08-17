@@ -1042,6 +1042,9 @@ struct llama_model_loader {
         };
 
         ctx_gguf = gguf_init_from_file(fname.c_str(), params);
+        if (!ctx_gguf) {
+            throw std::runtime_error(format("%s: failed to load model from %s\n", __func__, fname.c_str()));
+        }
 
         n_kv      = gguf_get_n_kv(ctx_gguf);
         n_tensors = gguf_get_n_tensors(ctx_gguf);
