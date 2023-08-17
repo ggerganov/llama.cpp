@@ -1593,20 +1593,6 @@ static struct ggml_cgraph * llama_build_graph(
             offload_func_kq(Q);
             ggml_set_name(Q, "Q");
 
-            //struct ggml_tensor * K =
-            //    ggml_permute(ctx0,
-            //            ggml_reshape_3d(ctx0,
-            //                ggml_view_1d(ctx0, kv_self.k, (n_past + N)*n_embd_gqa, il*n_ctx*ggml_element_size(kv_self.k)*n_embd_gqa),
-            //                n_embd_head, n_head_kv, n_past + N),
-            //            0, 2, 1, 3);
-            //struct ggml_tensor * K =
-            //    ggml_permute(ctx0,
-            //            ggml_view_3d(ctx0, kv_self.k,
-            //                n_embd_head, n_head_kv, n_past + N,
-            //                ggml_element_size(kv_self.k)*n_embd_head,
-            //                ggml_element_size(kv_self.k)*n_embd_gqa,
-            //                ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
-            //            0, 2, 1, 3);
             struct ggml_tensor * K =
                 ggml_view_3d(ctx0, kv_self.k,
                         n_embd_head, n_past + N, n_head_kv,
