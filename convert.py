@@ -155,12 +155,7 @@ class Params:
         n_layer    = config["num_hidden_layers"]
         n_ff       = config["intermediate_size"]
         n_head     = config["num_attention_heads"]
-
-        if "num_key_value_heads" in config:
-            n_head_kv  = config["num_key_value_heads"]
-        else:
-            n_head_kv = None
-
+        n_head_kv  = config["num_key_value_heads"] if "num_key_value_heads" in config else n_head
         f_norm_eps = config["rms_norm_eps"]
 
         n_mult = Params.find_n_mult(n_ff, n_embd)
@@ -719,7 +714,7 @@ class OutputFile:
         self.gguf.add_feed_forward_length (params.n_ff)
         self.gguf.add_rope_dimension_count(params.n_embd // params.n_head)
         self.gguf.add_head_count          (params.n_head)
-        if params.n_head_kv is not None: self.gguf.add_head_count_kv(params.n_head_kv)
+        self.gguf.add_head_count_kv       (params.n_head_kv)
         self.gguf.add_layer_norm_rms_eps  (params.f_norm_eps)
 
     def add_meta_vocab(self, vocab: Vocab) -> None:
@@ -817,6 +812,23 @@ def convert_to_output_type(model: LazyModel, output_type: GGMLFileType) -> LazyM
 def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
     tmap = gguf.get_tensor_name_map(ARCH, params.n_layer)
 
+    tmp = model
+
+    # HF models permut or pack some of the tensors, so we need to undo that
+    for i in itertools.count():
+        if f"model.layers.{i}.self_attn.q_proj.weight" in model:
+            print(f"Permuting layer {i}")
+            tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.q_proj.weight"], params.n_head, params.n_head_kv)
+            tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.k_proj.weight"], params.n_head, params.n_head_kv)
+           #tmp[f"model.layers.{i}.self_attn.v_proj.weight"] =              model[f"model.layers.{i}.self_attn.v_proj.weight"]
+        elif f"model.layers.{i}.self_attn.W_pack.weight" in model:
+            print(f"Unpacking and permuting layer {i}")
+            tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 0, params.n_head, params.n_head_kv)
+            tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 1, params.n_head, params.n_head_kv)
+            tmp[f"model.layers.{i}.self_attn.v_proj.weight"] = part_lazy        (model[f"model.layers.{i}.self_attn.W_pack.weight"], 2)
+        else:
+            break
+
     out: LazyModel = {}
     for name, lazy_tensor in model.items():
         name_new = name
@@ -830,8 +842,9 @@ def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
         else:
             raise Exception(f"Unexpected tensor name: {name}")
 
-        if gguf.should_skip_tensor(ARCH, params.n_layer, name_new):
+        if gguf.should_skip_tensor_TMP(ARCH, params.n_layer, name_new):
             print(f"skipping tensor {name_new}")
+            continue
         else:
             print(f"{name:48s} -> {name_new:40s} | {lazy_tensor.data_type} | {lazy_tensor.shape}")
             out[name_new] = lazy_tensor

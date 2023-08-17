@@ -11,7 +11,7 @@
 
 #include "ggml.h"
 
-#if !defined(GGML_USE_CUBLAS) && !defined(GGML_USE_METAL)
+#if !defined(GGML_USE_CUBLAS)
 #  include "ggml-alloc.h"
 #  define LLAMA_USE_ALLOCATOR
 #else
@@ -1042,6 +1042,9 @@ struct llama_model_loader {
         };
 
         ctx_gguf = gguf_init_from_file(fname.c_str(), params);
+        if (!ctx_gguf) {
+            throw std::runtime_error(format("%s: failed to load model from %s\n", __func__, fname.c_str()));
+        }
 
         n_kv      = gguf_get_n_kv(ctx_gguf);
         n_tensors = gguf_get_n_tensors(ctx_gguf);
@@ -1057,7 +1060,7 @@ struct llama_model_loader {
         // print meta data
         // TODO: make optional
         {
-            LLAMA_LOG_INFO("%s: loaded meta data with %d key-value paris and %d tensors from %s (version %s)\n",
+            LLAMA_LOG_INFO("%s: loaded meta data with %d key-value pairs and %d tensors from %s (version %s)\n",
                     __func__, n_kv, n_tensors, fname.c_str(), llama_file_version_name(file_version));
 
             for (int i = 0; i < n_tensors; i++) {
@@ -1081,6 +1084,15 @@ struct llama_model_loader {
         }
 
         this->use_mmap = use_mmap;
+    }
+
+    ~llama_model_loader() {
+        if (ctx_gguf) {
+            gguf_free(ctx_gguf);
+        }
+        if (ctx_meta) {
+            ggml_free(ctx_meta);
+        }
     }
 
     const char * get_tensor_name(int i) const {
@@ -1895,11 +1907,11 @@ static struct ggml_cgraph * llama_build_graph(
             ggml_set_name(Q, "Q");
 
             struct ggml_tensor * K =
-                ggml_permute(ctx0,
-                        ggml_reshape_3d(ctx0,
-                            ggml_view_1d(ctx0, kv_self.k, (n_past + N)*n_embd_gqa, il*n_ctx*ggml_element_size(kv_self.k)*n_embd_gqa),
-                            n_embd_head, n_head_kv, n_past + N),
-                        0, 2, 1, 3);
+                ggml_view_3d(ctx0, kv_self.k,
+                        n_embd_head, n_past + N, n_head_kv,
+                        ggml_element_size(kv_self.k)*n_embd_gqa,
+                        ggml_element_size(kv_self.k)*n_embd_head,
+                        ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il);
             offload_func_kq(K);
             ggml_set_name(K, "K");
 
@@ -1928,9 +1940,9 @@ static struct ggml_cgraph * llama_build_graph(
             struct ggml_tensor * V =
                 ggml_view_3d(ctx0, kv_self.v,
                         n_past + N, n_embd_head, n_head_kv,
-                        n_ctx*ggml_element_size(kv_self.v),
-                        n_ctx*ggml_element_size(kv_self.v)*n_embd_head,
-                        n_ctx*ggml_element_size(kv_self.v)*n_embd_gqa*il);
+                        ggml_element_size(kv_self.v)*n_ctx,
+                        ggml_element_size(kv_self.v)*n_ctx*n_embd_head,
+                        ggml_element_size(kv_self.v)*n_ctx*n_embd_gqa*il);
             offload_func_v(V);
             ggml_set_name(V, "V");
 
@@ -2131,11 +2143,7 @@ static bool llama_eval_internal(
 #endif
 
 #ifdef GGML_USE_METAL
-    if (lctx.ctx_metal && N == 1) {
-        // TODO: disabled until #2413 is resolved
-        //if (!ggml_metal_if_optimized(lctx.ctx_metal)) {
-        //    ggml_metal_graph_find_concurrency(lctx.ctx_metal, gf);
-        //}
+    if (lctx.ctx_metal) {
         ggml_metal_set_n_cb     (lctx.ctx_metal, n_threads);
         ggml_metal_graph_compute(lctx.ctx_metal, gf);
         ggml_metal_get_tensor   (lctx.ctx_metal, res);
@@ -2143,22 +2151,6 @@ static bool llama_eval_internal(
             ggml_metal_get_tensor(lctx.ctx_metal, embeddings);
         }
     } else {
-        // IMPORTANT:
-        // Since we don't have efficient Matrix x Matrix Metal multiplication yet, we fallback to vanilla
-        // ggml_graph_compute(). It uses Apple's Accelerate CBLAS API which takes advantage of the ANE or the AMX
-        // coprocessor.
-        //
-        // When we implement Matrix x Matrix Metal multiplication, we can avoid this branch.
-        // But for now, we have focused only on Matrix x Vector Metal multiplication.
-        //
-        // TODO: avoid these syncs via shared memory (ref #1696)
-        //
-        if (lctx.ctx_metal) {
-            // We need to sync the GPU KV cache with the CPU KV cache
-            ggml_metal_get_tensor(lctx.ctx_metal, kv_self.k);
-            ggml_metal_get_tensor(lctx.ctx_metal, kv_self.v);
-        }
-
         ggml_graph_compute_helper(lctx.work_buffer, gf, n_threads);
     }
 #else
@@ -3440,6 +3432,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
         const std::string name = ggml_get_name(meta);
 
+        // TODO: avoid hardcoded tensor names - use the TN_* constants
         if (name.find("attn_v.weight") != std::string::npos) {
             ++n_attention_wv;
         }
@@ -3518,6 +3511,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         } else {
             new_type = quantized_type;
 #ifdef GGML_USE_K_QUANTS
+            // TODO: avoid hardcoded tensor names - use the TN_* constants
             if (name == TN_OUTPUT) {
                 int nx = tensor->ne[0];
                 int ny = tensor->ne[1];
@@ -3532,7 +3526,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 else if (QK_K == 64 && (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_S) &&
                         (i_attention_wv < n_attention_wv/8 || i_attention_wv >= 7*n_attention_wv/8)) new_type = GGML_TYPE_Q6_K;
                 ++i_attention_wv;
-            } else if (name.find("feed_forward.w2.weight") != std::string::npos) {
+            } else if (name.find("ffn_down.weight") != std::string::npos) {
                 if      (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q4_K;
                 else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
                 else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) &&
@@ -3587,7 +3581,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             new_data = work.data();
             std::vector<int64_t> hist_cur(1 << 4, 0);
 
-            const int chunk_size = 32 * 512;
+            static const int chunk_size = 32 * 512;
             const int nchunk = (nelements + chunk_size - 1)/chunk_size;
             const int nthread_use = nthread > 1 ? std::max(1, std::min(nthread, nchunk)) : 1;
             if (nthread_use < 2) {
@@ -3595,7 +3589,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             } else {
                 size_t counter = 0;
                 new_size = 0;
-                auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, nelements] () {
+                auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, nelements]() {
                     std::vector<int64_t> local_hist;
                     size_t local_size = 0;
                     while (true) {
@@ -4141,7 +4135,18 @@ struct llama_context * llama_new_context_with_model(
             int n_past = hparams.n_ctx - n_tokens;
             llama_token token = llama_token_bos(); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
             ggml_cgraph * gf = llama_build_graph(*ctx, &token, NULL, n_tokens, n_past);
-
+#ifdef GGML_USE_METAL
+            if (params.n_gpu_layers > 0) {
+                ctx->ctx_metal = ggml_metal_init(1);
+                if (!ctx->ctx_metal) {
+                    LLAMA_LOG_ERROR("%s: ggml_metal_init() failed\n", __func__);
+                    llama_free(ctx);
+                    return NULL;
+                }
+                ggml_metal_graph_find_concurrency(ctx->ctx_metal, gf, false);
+                ggml_allocr_set_parse_seq(ctx->alloc, ggml_metal_get_concur_list(ctx->ctx_metal), ggml_metal_if_optimized(ctx->ctx_metal));
+            }
+#endif
             // measure memory requirements for the graph
             size_t alloc_size = ggml_allocr_alloc_graph(ctx->alloc, gf) + tensor_alignment;
 
@@ -4159,6 +4164,11 @@ struct llama_context * llama_new_context_with_model(
 
             ctx->buf_alloc.resize(alloc_size);
             ctx->alloc = ggml_allocr_new(ctx->buf_alloc.data, ctx->buf_alloc.size, tensor_alignment);
+#ifdef GGML_USE_METAL
+            if (ctx->ctx_metal) {
+                ggml_allocr_set_parse_seq(ctx->alloc, ggml_metal_get_concur_list(ctx->ctx_metal), ggml_metal_if_optimized(ctx->ctx_metal));
+            }
+#endif
         }
 #else
         ctx->buf_compute.resize(MEM_REQ_EVAL().at(ctx->model.type) + ggml_graph_overhead());
@@ -4173,13 +4183,6 @@ struct llama_context * llama_new_context_with_model(
 #ifdef GGML_USE_METAL
     if (params.n_gpu_layers > 0) {
         // this allocates all Metal resources and memory buffers
-        ctx->ctx_metal = ggml_metal_init(1);
-
-        if (!ctx->ctx_metal) {
-            LLAMA_LOG_ERROR("%s: ggml_metal_init() failed\n", __func__);
-            llama_free(ctx);
-            return NULL;
-        }
 
         void * data_ptr  = NULL;
         size_t data_size = 0;
@@ -4208,8 +4211,7 @@ struct llama_context * llama_new_context_with_model(
         LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "eval", ctx->buf_compute.data, ctx->buf_compute.size, 0));
         LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "kv",   ctx->kv_self.buf.data, ctx->kv_self.buf.size, 0));
 
-        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "scr0", ctx->buf_scratch[0].data, ctx->buf_scratch[0].size, 0));
-        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "scr1", ctx->buf_scratch[1].data, ctx->buf_scratch[1].size, 0));
+        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "alloc", ctx->buf_alloc.data, ctx->buf_alloc.size, 0));
 #undef LLAMA_METAL_CHECK_BUF
     }
 #endif

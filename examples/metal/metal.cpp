@@ -2,7 +2,7 @@
 //
 // - First, export a LLaMA graph:
 //
-//  $ ./bin/main -m ../models/7B/ggml-model-q4_0.bin --export
+//  $ ./bin/main -m ../models/7B/ggml-model-q4_0.gguf --export
 //
 // - Run this tool to evaluate the exported graph:
 //
