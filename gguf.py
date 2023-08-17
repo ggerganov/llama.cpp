@@ -159,11 +159,19 @@ MODEL_TENSOR_NAMES = {
 
 # tensors that will not be serialized
 MODEL_TENSOR_SKIP = {
-    MODEL_ARCH.LLAMA : {
+    MODEL_ARCH.LLAMA : [
         MODEL_TENSOR.ROPE_FREQS,
         MODEL_TENSOR.ATTN_ROT_EMBD,
-        },
-    },
+        ],
+    }
+
+def should_skip_tensor(arch : MODEL_ARCH, n_blocks : int, name : str) -> bool:
+    for skip in MODEL_TENSOR_SKIP.get(arch, []):
+        for i in range(n_blocks):
+            if name == MODEL_TENSOR_NAMES[arch][skip].format(bid=i):
+                return True
+
+    return False
 
 def get_tensor_name_map(arch : MODEL_ARCH, n_blocks : int) -> dict:
     tensor_map = {}
