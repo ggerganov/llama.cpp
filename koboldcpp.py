@@ -722,8 +722,8 @@ def show_new_gui():
     blasbatchsize_values = ["-1", "32", "64", "128", "256", "512", "1024", "2048"]
     blasbatchsize_text = ["Don't Batch BLAS","32","64","128","256","512","1024","2048"]
     contextsize_text = ["512", "1024", "2048", "3072", "4096", "6144", "8192", "12288", "16384"]
-    runopts = [opt for lib, opt in lib_option_pairs if file_exists(lib) or os.name == 'nt' and file_exists(opt + ".dll")]
-    antirunopts = [opt.replace("Use ", "") for lib, opt in lib_option_pairs if not file_exists(lib) or os.name == 'nt' and not file_exists(opt + ".dll")]
+    runopts = [opt for lib, opt in lib_option_pairs if file_exists(lib)]
+    antirunopts = [opt.replace("Use ", "") for lib, opt in lib_option_pairs if not (opt in runopts)]
     if not any(runopts):
         show_gui_warning("No Backend Available")
     def tabbuttonaction(name):
