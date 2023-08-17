@@ -33,24 +33,24 @@ KEY_GENERAL_SOURCE_URL           = "general.source.url"
 KEY_GENERAL_SOURCE_HF_REPO       = "general.source.hugginface.repository"
 
 # LLM
-KEY_LLM_CONTEXT_LENGTH           = "{llm}.context_length"
-KEY_LLM_EMBEDDING_LENGTH         = "{llm}.embedding_length"
-KEY_LLM_BLOCK_COUNT              = "{llm}.block_count"
-KEY_LLM_FEED_FORWARD_LENGTH      = "{llm}.feed_forward_length"
-KEY_LLM_USE_PARALLEL_RESIDUAL    = "{llm}.use_parallel_residual"
-KEY_LLM_TENSOR_DATA_LAYOUT       = "{llm}.tensor_data_layout"
+KEY_LLM_CONTEXT_LENGTH           = "{arch}.context_length"
+KEY_LLM_EMBEDDING_LENGTH         = "{arch}.embedding_length"
+KEY_LLM_BLOCK_COUNT              = "{arch}.block_count"
+KEY_LLM_FEED_FORWARD_LENGTH      = "{arch}.feed_forward_length"
+KEY_LLM_USE_PARALLEL_RESIDUAL    = "{arch}.use_parallel_residual"
+KEY_LLM_TENSOR_DATA_LAYOUT       = "{arch}.tensor_data_layout"
 
 # attention
-KEY_ATTENTION_HEAD_COUNT         = "{llm}.attention.head_count"
-KEY_ATTENTION_HEAD_COUNT_KV      = "{llm}.attention.head_count_kv"
-KEY_ATTENTION_MAX_ALIBI_BIAS     = "{llm}.attention.max_alibi_bias"
-KEY_ATTENTION_CLAMP_KQV          = "{llm}.attention.clamp_kqv"
-KEY_ATTENTION_LAYERNORM_EPS      = "{llm}.attention.layer_norm_epsilon"
-KEY_ATTENTION_LAYERNORM_RMS_EPS  = "{llm}.attention.layer_norm_rms_epsilon"
+KEY_ATTENTION_HEAD_COUNT         = "{arch}.attention.head_count"
+KEY_ATTENTION_HEAD_COUNT_KV      = "{arch}.attention.head_count_kv"
+KEY_ATTENTION_MAX_ALIBI_BIAS     = "{arch}.attention.max_alibi_bias"
+KEY_ATTENTION_CLAMP_KQV          = "{arch}.attention.clamp_kqv"
+KEY_ATTENTION_LAYERNORM_EPS      = "{arch}.attention.layer_norm_epsilon"
+KEY_ATTENTION_LAYERNORM_RMS_EPS  = "{arch}.attention.layer_norm_rms_epsilon"
 
 # RoPE
-KEY_ROPE_DIMENSION_COUNT         = "{llm}.rope.dimension_count"
-KEY_ROPE_SCALE                   = "{llm}.rope.scale"
+KEY_ROPE_DIMENSION_COUNT         = "{arch}.rope.dimension_count"
+KEY_ROPE_SCALE                   = "{arch}.rope.scale"
 
 # tokenization
 KEY_TOKENIZER_MODEL      = "tokenizer.ggml.model"
@@ -343,14 +343,16 @@ class GGUFValueType(IntEnum):
 
 
 class GGUFWriter:
-    def __init__(self, fout: IO):
-        self.fout = fout
+    def __init__(self, path: str, arch: str):
+        self.fout = open(path, "wb")
+        self.arch = arch
         self.offset_tensor = 0
         self.data_alignment = GGUF_DEFAULT_ALIGNMENT
         self.kv_data = b""
         self.kv_data_count = 0
         self.ti_data = b""
         self.ti_data_count = 0
+        self.add_architecture()
 
     def write_header_to_file(self):
         self.fout.write(struct.pack("<I", GGUF_MAGIC))
@@ -367,11 +369,6 @@ class GGUFWriter:
     def write_ti_data_to_file(self):
         self.fout.write(self.ti_data)
         self.flush()
-
-    @classmethod
-    def open(cls, path: str) -> "GGUFWriter":
-        f = open(path, "wb")
-        return cls(f)
 
     def add_key(self, key: str):
         self.add_val(key, GGUFValueType.STRING, add_vtype=False)
@@ -409,7 +406,8 @@ class GGUFWriter:
         self.add_val(val, GGUFValueType.BOOL)
 
     def add_string(self, key: str, val: str):
-        if len(val) == 0: return
+        if len(val) == 0:
+            return
         self.add_key(key)
         self.add_val(val, GGUFValueType.STRING)
 
@@ -463,6 +461,8 @@ class GGUFWriter:
         return ((x + n - 1) // n) * n
 
     def add_tensor_info(self, name: str, tensor_shape: np.ndarray, tensor_dtype: np.dtype, tensor_nbytes: int):
+        assert tensor_dtype in (np.float32, np.float16), "Only F32 and F16 tensors are supported for now"
+
         encoded_name = name.encode("utf8")
         self.ti_data += struct.pack("<I", len(encoded_name))
         self.ti_data += encoded_name
@@ -471,7 +471,6 @@ class GGUFWriter:
         for i in range(n_dims):
             self.ti_data += struct.pack("<I", tensor_shape[n_dims - 1 - i])
 
-        assert tensor_dtype in (np.float32, np.float16), "Only F32 and F16 tensors are supported for now"
         dtype = GGMLQuantizationType.F32 if tensor_dtype == np.float32 else GGMLQuantizationType.F16
         self.ti_data += struct.pack("<I", dtype)
         self.ti_data += struct.pack("<Q", self.offset_tensor)
@@ -495,15 +494,14 @@ class GGUFWriter:
     def close(self):
         self.fout.close()
 
-    def add_architecture(self, architecture: str):
-        self.add_string(KEY_GENERAL_ARCHITECTURE,
-                        architecture)
+    def add_architecture(self):
+        self.add_string(KEY_GENERAL_ARCHITECTURE, self.arch)
 
     def add_author(self, author: str):
         self.add_string(KEY_GENERAL_AUTHOR, author)
 
     def add_tensor_data_layout(self, layout: str):
-        self.add_string(KEY_LLM_TENSOR_DATA_LAYOUT , layout)
+        self.add_string(KEY_LLM_TENSOR_DATA_LAYOUT.format(arch=self.arch), layout)
 
     def add_url(self, url: str):
         self.add_string(KEY_GENERAL_URL, url)
@@ -531,60 +529,60 @@ class GGUFWriter:
         self.data_alignment = alignment
         self.add_uint32(KEY_GENERAL_ALIGNMENT, alignment)
 
-    def add_context_length(self, llm: str, length: int):
+    def add_context_length(self, length: int):
         self.add_uint32(
-            KEY_LLM_CONTEXT_LENGTH.format(llm=llm), length)
+            KEY_LLM_CONTEXT_LENGTH.format(arch=self.arch), length)
 
-    def add_embedding_length(self, llm: str, length: int):
+    def add_embedding_length(self, length: int):
         self.add_uint32(
-            KEY_LLM_EMBEDDING_LENGTH.format(llm=llm), length)
+            KEY_LLM_EMBEDDING_LENGTH.format(arch=self.arch), length)
 
-    def add_block_count(self, llm: str, length: int):
+    def add_block_count(self, length: int):
         self.add_uint32(
-            KEY_LLM_BLOCK_COUNT.format(llm=llm), length)
+            KEY_LLM_BLOCK_COUNT.format(arch=self.arch), length)
 
-    def add_feed_forward_length(self, llm: str, length: int):
+    def add_feed_forward_length(self, length: int):
         self.add_uint32(
-            KEY_LLM_FEED_FORWARD_LENGTH.format(llm=llm), length)
+            KEY_LLM_FEED_FORWARD_LENGTH.format(arch=self.arch), length)
 
-    def add_parallel_residual(self, llm: str, use: bool):
+    def add_parallel_residual(self, use: bool):
         self.add_bool(
-            KEY_LLM_USE_PARALLEL_RESIDUAL.format(llm=llm), use)
+            KEY_LLM_USE_PARALLEL_RESIDUAL.format(arch=self.arch), use)
 
-    def add_tensor_data_layout(self, llm: str, layout: str):
+    def add_tensor_data_layout(self, layout: str):
         self.add_string(
-            KEY_LLM_TENSOR_DATA_LAYOUT.format(llm=llm), layout)
+            KEY_LLM_TENSOR_DATA_LAYOUT.format(arch=self.arch), layout)
 
-    def add_head_count(self, llm: str, count: int):
+    def add_head_count(self, count: int):
         self.add_uint32(
-            KEY_ATTENTION_HEAD_COUNT.format(llm=llm), count)
+            KEY_ATTENTION_HEAD_COUNT.format(arch=self.arch), count)
 
-    def add_head_count_kv(self, llm: str, count: int):
+    def add_head_count_kv(self, count: int):
         self.add_uint32(
-            KEY_ATTENTION_HEAD_COUNT_KV.format(llm=llm), count)
+            KEY_ATTENTION_HEAD_COUNT_KV.format(arch=self.arch), count)
 
-    def add_max_alibi_bias(self, llm: str, bias: float):
+    def add_max_alibi_bias(self, bias: float):
         self.add_float32(
-            KEY_ATTENTION_MAX_ALIBI_BIAS.format(llm=llm), bias)
+            KEY_ATTENTION_MAX_ALIBI_BIAS.format(arch=self.arch), bias)
 
-    def add_clamp_kqv(self, llm: str, value: float):
+    def add_clamp_kqv(self, value: float):
         self.add_float32(
-            KEY_ATTENTION_CLAMP_KQV.format(llm=llm), value)
+            KEY_ATTENTION_CLAMP_KQV.format(arch=self.arch), value)
 
-    def add_layer_norm_eps(self, llm: str, value: float):
+    def add_layer_norm_eps(self, value: float):
         self.add_float32(
-            KEY_ATTENTION_LAYERNORM_EPS.format(llm=llm), value)
+            KEY_ATTENTION_LAYERNORM_EPS.format(arch=self.arch), value)
 
-    def add_layer_norm_rms_eps(self, llm: str, value: float):
+    def add_layer_norm_rms_eps(self, value: float):
         self.add_float32(
-            KEY_ATTENTION_LAYERNORM_RMS_EPS.format(llm=llm), value)
+            KEY_ATTENTION_LAYERNORM_RMS_EPS.format(arch=self.arch), value)
 
-    def add_rope_dimension_count(self, llm: str, count: int):
+    def add_rope_dimension_count(self, count: int):
         self.add_uint32(
-            KEY_ROPE_DIMENSION_COUNT.format(llm=llm), count)
+            KEY_ROPE_DIMENSION_COUNT.format(arch=self.arch), count)
 
-    def add_rope_scale(self, llm: str, value:  float):
-        self.add_float32(KEY_ROPE_SCALE.format(llm=llm), value)
+    def add_rope_scale(self, value:  float):
+        self.add_float32(KEY_ROPE_SCALE.format(arch=self.arch), value)
 
     def add_tokenizer_model(self, model: str):
         self.add_string(KEY_TOKENIZER_MODEL, model)
@@ -619,9 +617,8 @@ class GGUFWriter:
 # Example usage:
 if __name__ == "__main__":
     # Example usage with a file
-    gguf_writer = GGUFWriter.open("example.gguf")
+    gguf_writer = GGUFWriter("example.gguf", "llama")
 
-    gguf_writer.add_architecture("llama")
     gguf_writer.add_uint32("answer", 42)  # Write a 32-bit integer
     gguf_writer.add_float32("answer_in_float", 42.0)  # Write a 32-bit float
     gguf_writer.add_custom_alignment(64)

@@ -705,19 +705,17 @@ def check_vocab_size(params: Params, vocab: Vocab) -> None:
 
 class OutputFile:
     def __init__(self, fname_out: Path) -> None:
-        self.gguf = gguf.GGUFWriter.open(fname_out)
+        self.gguf = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH])
 
     def add_meta_arch(self, params: Params) -> None:
-        arch = gguf.MODEL_ARCH_NAMES[ARCH]
-        self.gguf.add_architecture        (arch)
-        self.gguf.add_context_length      (arch, params.n_ctx)
-        self.gguf.add_embedding_length    (arch, params.n_embd)
-        self.gguf.add_block_count         (arch, params.n_layer)
-        self.gguf.add_feed_forward_length (arch, params.n_ff)
-        self.gguf.add_rope_dimension_count(arch, params.n_embd // params.n_head)
-        self.gguf.add_head_count          (arch, params.n_head)
-        self.gguf.add_head_count_kv       (arch, params.n_head_kv)
-        self.gguf.add_layer_norm_rms_eps  (arch, params.f_norm_eps)
+        self.gguf.add_context_length      (params.n_ctx)
+        self.gguf.add_embedding_length    (params.n_embd)
+        self.gguf.add_block_count         (params.n_layer)
+        self.gguf.add_feed_forward_length (params.n_ff)
+        self.gguf.add_rope_dimension_count(params.n_embd // params.n_head)
+        self.gguf.add_head_count          (params.n_head)
+        self.gguf.add_head_count_kv       (params.n_head_kv)
+        self.gguf.add_layer_norm_rms_eps  (params.f_norm_eps)
 
     def add_meta_vocab(self, vocab: Vocab) -> None:
         tokens = []
