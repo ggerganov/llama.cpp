@@ -1083,6 +1083,15 @@ struct llama_model_loader {
         this->use_mmap = use_mmap;
     }
 
+    ~llama_model_loader() {
+        if (ctx_gguf) {
+            gguf_free(ctx_gguf);
+        }
+        if (ctx_meta) {
+            ggml_free(ctx_meta);
+        }
+    }
+
     const char * get_tensor_name(int i) const {
         return gguf_get_tensor_name(ctx_gguf, i);
     }
