@@ -1051,11 +1051,7 @@ struct llama_model_loader {
         for (int i = 0; i < n_tensors; i++) {
             const char * name = gguf_get_tensor_name(ctx_gguf, i);
             struct ggml_tensor * t = ggml_get_tensor(ctx_meta, name);
-            size_t elem = 1;
-            for (int j = 0; j < t->n_dims; j++) {
-                elem *= t->ne[j];
-            }
-            n_tot_elements += elem;
+            n_tot_elements += ggml_nelements(t);
         }
         
         // print meta data
