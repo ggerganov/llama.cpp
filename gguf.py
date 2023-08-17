@@ -148,7 +148,11 @@ MODEL_TENSOR_SKIP = {
         ],
     }
 
-def should_skip_tensor(arch : MODEL_ARCH, n_blocks : int, name : str) -> bool:
+# TODO: the following helper functions should be removed
+#       instead, get_tensor_name_map should return tuples of (name, MODEL_TENSOR)
+#       however, my Python is very bad, and I couldn't figure out how to do this, hence these functions
+# REMOVE
+def should_skip_tensor_TMP(arch : MODEL_ARCH, n_blocks : int, name : str) -> bool:
     for skip in MODEL_TENSOR_SKIP.get(arch, []):
         for i in range(n_blocks):
             if name == MODEL_TENSOR_NAMES[arch][skip].format(bid=i):
