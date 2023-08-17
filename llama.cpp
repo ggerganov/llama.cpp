@@ -1057,7 +1057,7 @@ struct llama_model_loader {
         // print meta data
         // TODO: make optional
         {
-            LLAMA_LOG_INFO("%s: loaded meta data with %d key-value paris and %d tensors from %s (version %s)\n",
+            LLAMA_LOG_INFO("%s: loaded meta data with %d key-value pairs and %d tensors from %s (version %s)\n",
                     __func__, n_kv, n_tensors, fname.c_str(), llama_file_version_name(file_version));
 
             for (int i = 0; i < n_tensors; i++) {
