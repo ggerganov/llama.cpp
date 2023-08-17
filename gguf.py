@@ -4,7 +4,7 @@ import struct
 import tempfile
 import numpy as np
 
-from enum import IntEnum
+from enum import IntEnum, auto
 from typing import Any, IO, List
 
 #
@@ -29,24 +29,24 @@ KEY_GENERAL_SOURCE_URL = "general.source.url"
 KEY_GENERAL_SOURCE_HF_REPO = "general.source.hugginface.repository"
 
 # LLM
-KEY_LLM_CONTEXT_LENGTH = "{llm}.context_length"
-KEY_LLM_EMBEDDING_LENGTH = "{llm}.embedding_length"
-KEY_LLM_BLOCK_COUNT = "{llm}.block_count"
-KEY_LLM_FEED_FORWARD_LENGTH = "{llm}.feed_forward_length"
-KEY_LLM_USE_PARALLEL_RESIDUAL = "{llm}.use_parallel_residual"
-KEY_LLM_TENSOR_DATA_LAYOUT = "{llm}.tensor_data_layout"
+KEY_LLM_CONTEXT_LENGTH = "{arch}.context_length"
+KEY_LLM_EMBEDDING_LENGTH = "{arch}.embedding_length"
+KEY_LLM_BLOCK_COUNT = "{arch}.block_count"
+KEY_LLM_FEED_FORWARD_LENGTH = "{arch}.feed_forward_length"
+KEY_LLM_USE_PARALLEL_RESIDUAL = "{arch}.use_parallel_residual"
+KEY_LLM_TENSOR_DATA_LAYOUT = "{arch}.tensor_data_layout"
 
 # attention
-KEY_ATTENTION_HEAD_COUNT = "{llm}.attention.head_count"
-KEY_ATTENTION_HEAD_COUNT_KV = "{llm}.attention.head_count_kv"
-KEY_ATTENTION_MAX_ALIBI_BIAS = "{llm}.attention.max_alibi_bias"
-KEY_ATTENTION_CLAMP_KQV = "{llm}.attention.clamp_kqv"
-KEY_ATTENTION_LAYERNORM_EPS = "{llm}.attention.layer_norm_epsilon"
-KEY_ATTENTION_LAYERNORM_RMS_EPS = "{llm}.attention.layer_norm_rms_epsilon"
+KEY_ATTENTION_HEAD_COUNT = "{arch}.attention.head_count"
+KEY_ATTENTION_HEAD_COUNT_KV = "{arch}.attention.head_count_kv"
+KEY_ATTENTION_MAX_ALIBI_BIAS = "{arch}.attention.max_alibi_bias"
+KEY_ATTENTION_CLAMP_KQV = "{arch}.attention.clamp_kqv"
+KEY_ATTENTION_LAYERNORM_EPS = "{arch}.attention.layer_norm_epsilon"
+KEY_ATTENTION_LAYERNORM_RMS_EPS = "{arch}.attention.layer_norm_rms_epsilon"
 
 # RoPE
-KEY_ROPE_DIMENSION_COUNT = "{llm}.rope.dimension_count"
-KEY_ROPE_SCALE = "{llm}.rope.scale"
+KEY_ROPE_DIMENSION_COUNT = "{arch}.rope.dimension_count"
+KEY_ROPE_SCALE = "{arch}.rope.scale"
 
 # tokenization
 KEY_TOKENIZER_MODEL = "tokenizer.ggml.model"
@@ -67,34 +67,141 @@ KEY_TOKENIZER_RWKV = "tokenizer.rwkv.world"
 #
 
 
-def get_tensor_name_map(n_blocks: int):
+class MODEL_ARCH(IntEnum):
+    LLAMA = auto()
+    FALCON = auto()
+    GPT2 = auto()
+    GPTJ = auto()
+    GPTNEOX = auto()
+    MPT = auto()
+
+
+class MODEL_TENSOR(IntEnum):
+    TOKEN_EMBD = auto()
+    POS_EMBD = auto()
+    OUTPUT = auto()
+    OUTPUT_NORM = auto()
+    ROPE_FREQS = auto()
+    ATTN_Q = auto()
+    ATTN_K = auto()
+    ATTN_V = auto()
+    ATTN_QKV = auto()
+    ATTN_OUT = auto()
+    ATTN_NORM = auto()
+    ATTN_NORM_2 = auto()
+    ATTN_ROT_EMBD = auto()
+    FFN_GATE = auto()
+    FFN_DOWN = auto()
+    FFN_UP = auto()
+    FFN_NORM = auto()
+
+
+MODEL_ARCH_NAMES = {
+    MODEL_ARCH.LLAMA: "llama",
+    MODEL_ARCH.FALCON: "falcon",
+    MODEL_ARCH.GPT2: "gpt2",
+    MODEL_ARCH.GPTJ: "gptj",
+    MODEL_ARCH.GPTNEOX: "gptneox",
+    MODEL_ARCH.MPT: "mpt",
+}
+
+MODEL_TENSOR_NAMES = {
+    MODEL_ARCH.LLAMA: {
+        MODEL_TENSOR.TOKEN_EMBD: "token_embd",
+        MODEL_TENSOR.OUTPUT_NORM: "output_norm",
+        MODEL_TENSOR.OUTPUT: "output",
+        MODEL_TENSOR.ROPE_FREQS: "rope_freqs",
+        MODEL_TENSOR.ATTN_NORM: "blk.{bid}.attn_norm",
+        MODEL_TENSOR.ATTN_Q: "blk.{bid}.attn_q",
+        MODEL_TENSOR.ATTN_K: "blk.{bid}.attn_k",
+        MODEL_TENSOR.ATTN_V: "blk.{bid}.attn_v",
+        MODEL_TENSOR.ATTN_OUT: "blk.{bid}.attn_output",
+        MODEL_TENSOR.ATTN_ROT_EMBD: "blk.{bid}.attn_rot_embd",
+        MODEL_TENSOR.FFN_NORM: "blk.{bid}.ffn_norm",
+        MODEL_TENSOR.FFN_GATE: "blk.{bid}.ffn_gate",
+        MODEL_TENSOR.FFN_DOWN: "blk.{bid}.ffn_down",
+        MODEL_TENSOR.FFN_UP: "blk.{bid}.ffn_up",
+    },
+    MODEL_ARCH.FALCON: {
+        MODEL_TENSOR.TOKEN_EMBD: "token_embd",
+        MODEL_TENSOR.OUTPUT_NORM: "output_norm",
+        MODEL_TENSOR.OUTPUT: "output",
+        MODEL_TENSOR.ATTN_NORM: "blk.{bid}.attn_norm",
+        MODEL_TENSOR.ATTN_NORM_2: "blk.{bid}.attn_norm_2",
+        MODEL_TENSOR.ATTN_QKV: "blk.{bid}.attn_qkv",
+        MODEL_TENSOR.ATTN_OUT: "blk.{bid}.attn_output",
+        MODEL_TENSOR.FFN_DOWN: "blk.{bid}.ffn_down",
+        MODEL_TENSOR.FFN_UP: "blk.{bid}.ffn_up",
+    },
+    MODEL_ARCH.GPT2: {
+        # TODO
+    },
+    # TODO
+}
+
+# tensors that will not be serialized
+MODEL_TENSOR_SKIP = {
+    MODEL_ARCH.LLAMA: [
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+    ],
+}
+
+
+def should_skip_tensor(arch: MODEL_ARCH, n_blocks: int, name: str) -> bool:
+    for skip in MODEL_TENSOR_SKIP.get(arch, []):
+        for i in range(n_blocks):
+            if name == MODEL_TENSOR_NAMES[arch][skip].format(bid=i):
+                return True
+
+    return False
+
+
+def get_tensor_name_map(arch: MODEL_ARCH, n_blocks: int) -> dict:
     tensor_map = {}
+
     # Token embeddings
-    mapped_to = "token_embd"
+    mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.TOKEN_EMBD, None)
+
     tensor_map["gpt_neox.embed_in"] = mapped_to  # gptneox
     tensor_map["transformer.wte"] = mapped_to  # gpt2 mpt
     tensor_map["transformer.word_embeddings"] = mapped_to  # falcon
     tensor_map["model.embed_tokens"] = mapped_to  # llama-hf
     tensor_map["tok_embeddings"] = mapped_to  # llama-pth
+
     # Position embeddings
-    mapped_to = "pos_embd"
+    mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.POS_EMBD, None)
+
     tensor_map["transformer.wpe"] = mapped_to  # gpt2
+
+    # Output
+    mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.OUTPUT, None)
+
+    tensor_map["embed_out"] = mapped_to  # gptneox
+    tensor_map["lm_head"] = mapped_to  # gpt2 mpt falcon llama-hf
+    tensor_map["output"] = mapped_to  # llama-pth
+
     # Output norm
-    mapped_to = "output_norm"
+    mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.OUTPUT_NORM, None)
+
     tensor_map["gpt_neox.final_layer_norm"] = mapped_to  # gptneox
     tensor_map["transformer.ln_f"] = mapped_to  # gpt2 falcon
     tensor_map["transformer.norm_f"] = mapped_to  # mpt
     tensor_map["model.norm"] = mapped_to  # llama-hf
     tensor_map["norm"] = mapped_to  # llama-pth
-    # Output
-    mapped_to = "output"
-    tensor_map["embed_out"] = mapped_to  # gptneox
-    tensor_map["lm_head"] = mapped_to  # gpt2 mpt falcon llama-hf
-    tensor_map["output"] = mapped_to  # llama-pth
-    # Attention and fee-forward layer blocks
+
+    # Rope frequencies
+    mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ROPE_FREQS, None)
+
+    tensor_map["rope.freqs"] = mapped_to  # llama-pth
+
+    # Attention and feed-forward blocks
     for i in range(0, n_blocks):
         # Attention norm
-        mapped_to = "blk."+str(i)+".attn_norm"
+        # TODO: is there are simpler way to write these 2 lines in Python?
+        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ATTN_NORM, None)
+        mapped_to = mapped_to.format(bid=i) if mapped_to else None
+
         tensor_map["gpt_neox.layers."+str(i)+".input_layernorm"] = mapped_to  # gptneox
         tensor_map["transformer.h."+str(i)+".ln_1"] = mapped_to  # gpt2
         tensor_map["transformer.blocks."+str(i)+".norm_1"] = mapped_to  # mpt
@@ -102,56 +209,93 @@ def get_tensor_name_map(n_blocks: int):
         tensor_map["transformer.h."+str(i)+".ln_attn"] = mapped_to  # falcon40b
         tensor_map["model.layers."+str(i)+".input_layernorm"] = mapped_to  # llama-hf
         tensor_map["layers."+str(i)+".attention_norm"] = mapped_to  # llama-pth
+
         # Attention norm 2
-        mapped_to = "blk."+str(i)+".attn_norm_2"
+        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ATTN_NORM_2, None)
+        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
+
         tensor_map["transformer.h."+str(i)+".ln_mlp"] = mapped_to  # falcon40b
+
         # Attention query-key-value
-        mapped_to = "blk."+str(i)+".attn_qkv"
+        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ATTN_QKV, None)
+        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
+
         tensor_map["gpt_neox.layers."+str(i)+".attention.query_key_value"] = mapped_to  # gptneox
         tensor_map["transformer.h."+str(i)+".attn.c_attn"] = mapped_to  # gpt2
         tensor_map["transformer.blocks."+str(i)+".attn.Wqkv"] = mapped_to  # mpt
         tensor_map["transformer.h."+str(i)+".self_attention.query_key_value"] = mapped_to  # falcon
+
         # Attention query
-        mapped_to = "blk."+str(i)+".attn_q"
+        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ATTN_Q, None)
+        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
+
         tensor_map["model.layers."+str(i)+".self_attn.q_proj"] = mapped_to  # llama-hf
         tensor_map["layers."+str(i)+".attention.wq"] = mapped_to  # llama-pth
+
         # Attention key
-        mapped_to = "blk."+str(i)+".attn_k"
+        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ATTN_K, None)
+        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
+
         tensor_map["model.layers."+str(i)+".self_attn.k_proj"] = mapped_to  # llama-hf
         tensor_map["layers."+str(i)+".attention.wk"] = mapped_to  # llama-pth
+
         # Attention value
-        mapped_to = "blk."+str(i)+".attn_v"
+        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ATTN_V, None)
+        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
+
         tensor_map["model.layers."+str(i)+".self_attn.v_proj"] = mapped_to  # llama-hf
         tensor_map["layers."+str(i)+".attention.wv"] = mapped_to  # llama-pth
+
         # Attention output
-        mapped_to = "blk."+str(i)+".attn_output"
+        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ATTN_OUT, None)
+        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
+
         tensor_map["gpt_neox.layers."+str(i)+".attention.dense"] = mapped_to  # gptneox
         tensor_map["transformer.h."+str(i)+".attn.c_proj"] = mapped_to  # gpt2
         tensor_map["transformer.blocks."+str(i)+".attn.out_proj"] = mapped_to  # mpt
         tensor_map["transformer.h."+str(i)+".self_attention.dense"] = mapped_to  # falcon
         tensor_map["model.layers."+str(i)+".self_attn.o_proj"] = mapped_to  # llama-hf
         tensor_map["layers."+str(i)+".attention.wo"] = mapped_to  # llama-pth
+
+        # Rotary embeddings
+        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ATTN_ROT_EMBD, None)
+        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
+
+        tensor_map["model.layers."+str(i)+".self_attn.rotary_emb.inv_freq"] = mapped_to  # llama-hf
+        tensor_map["layers."+str(i)+".attention.inner_attention.rope.freqs"] = mapped_to  # llama-pth
+
         # Feed-forward norm
-        mapped_to = "blk."+str(i)+".ffn_norm"
+        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.FFN_NORM, None)
+        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
+
         tensor_map["gpt_neox.layers."+str(i)+".post_attention_layernorm"] = mapped_to  # gptneox
         tensor_map["transformer.h."+str(i)+".ln_2"] = mapped_to  # gpt2
         tensor_map["transformer.blocks."+str(i)+".norm_2"] = mapped_to  # mpt
         tensor_map["model.layers."+str(i)+".post_attention_layernorm"] = mapped_to  # llama-hf
         tensor_map["layers."+str(i)+".ffn_norm"] = mapped_to  # llama-pth
+
         # Feed-forward up
-        mapped_to = "blk."+str(i)+".ffn_up"
+        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.FFN_UP, None)
+        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
+
         tensor_map["gpt_neox.layers."+str(i)+".mlp.dense_h_to_4h"] = mapped_to  # gptneox
         tensor_map["transformer.h."+str(i)+".mlp.c_fc"] = mapped_to  # gpt2
         tensor_map["transformer.blocks."+str(i)+".ffn.up_proj"] = mapped_to  # mpt
         tensor_map["transformer.h."+str(i)+".mlp.dense_h_to_4h"] = mapped_to  # falcon
         tensor_map["model.layers."+str(i)+".mlp.up_proj"] = mapped_to  # llama-hf
         tensor_map["layers."+str(i)+".feed_forward.w3"] = mapped_to  # llama-pth
+
         # Feed-forward gate
-        mapped_to = "blk."+str(i)+".ffn_gate"
+        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.FFN_GATE, None)
+        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
+
         tensor_map["model.layers."+str(i)+".mlp.gate_proj"] = mapped_to  # llama-hf
         tensor_map["layers."+str(i)+".feed_forward.w1"] = mapped_to  # llama-pth
+
         # Feed-forward down
-        mapped_to = "blk."+str(i)+".ffn_down"
+        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.FFN_DOWN, None)
+        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
+
         tensor_map["gpt_neox.layers."+str(i)+".mlp.dense_4h_to_h"] = mapped_to  # gptneox
         tensor_map["transformer.h."+str(i)+".mlp.c_proj"] = mapped_to  # gpt2
         tensor_map["transformer.blocks."+str(i)+".ffn.down_proj"] = mapped_to  # mpt
@@ -201,15 +345,16 @@ class GGUFValueType(IntEnum):
 
 
 class GGUFWriter:
-    def __init__(self, path: str, architecture: str):
+    def __init__(self, path: str, arch: str):
         self.fout = open(path, "wb")
-        self.arch = architecture
+        self.arch = arch
         self.offset_tensor = 0
         self.data_alignment = GGUF_DEFAULT_ALIGNMENT
         self.kv_data = b""
         self.kv_data_count = 0
         self.ti_data = b""
         self.ti_data_count = 0
+        self.add_architecture()
 
     def write_header_to_file(self):
         self.fout.write(struct.pack("<I", GGUF_MAGIC))
@@ -347,7 +492,7 @@ class GGUFWriter:
         if pad != 0:
             self.temp_file.write(bytes([0] * pad))
 
-    def write_tensor_to_file(self, tensor: np.ndarray):
+    def write_tensor_data(self, tensor: np.ndarray):
         pad = GGUFWriter.ggml_pad(self.fout.tell(), self.data_alignment) - self.fout.tell()
         if pad != 0:
             self.fout.write(bytes([0] * pad))
@@ -384,7 +529,7 @@ class GGUFWriter:
         self.add_string(KEY_GENERAL_AUTHOR, author)
 
     def add_tensor_data_layout(self, layout: str):
-        self.add_string(KEY_LLM_TENSOR_DATA_LAYOUT.format(llm=self.arch), layout)
+        self.add_string(KEY_LLM_TENSOR_DATA_LAYOUT.format(arch=self.arch), layout)
 
     def add_url(self, url: str):
         self.add_string(KEY_GENERAL_URL, url)
@@ -414,58 +559,58 @@ class GGUFWriter:
 
     def add_context_length(self, length: int):
         self.add_uint32(
-            KEY_LLM_CONTEXT_LENGTH.format(llm=self.arch), length)
+            KEY_LLM_CONTEXT_LENGTH.format(arch=self.arch), length)
 
     def add_embedding_length(self, length: int):
         self.add_uint32(
-            KEY_LLM_EMBEDDING_LENGTH.format(llm=self.arch), length)
+            KEY_LLM_EMBEDDING_LENGTH.format(arch=self.arch), length)
 
     def add_block_count(self, length: int):
         self.add_uint32(
-            KEY_LLM_BLOCK_COUNT.format(llm=self.arch), length)
+            KEY_LLM_BLOCK_COUNT.format(arch=self.arch), length)
 
     def add_feed_forward_length(self, length: int):
         self.add_uint32(
-            KEY_LLM_FEED_FORWARD_LENGTH.format(llm=self.arch), length)
+            KEY_LLM_FEED_FORWARD_LENGTH.format(arch=self.arch), length)
 
     def add_parallel_residual(self, use: bool):
         self.add_bool(
-            KEY_LLM_USE_PARALLEL_RESIDUAL.format(llm=self.arch), use)
+            KEY_LLM_USE_PARALLEL_RESIDUAL.format(arch=self.arch), use)
 
     def add_tensor_data_layout(self, layout: str):
         self.add_string(
-            KEY_LLM_TENSOR_DATA_LAYOUT.format(llm=self.arch), layout)
+            KEY_LLM_TENSOR_DATA_LAYOUT.format(arch=self.arch), layout)
 
     def add_head_count(self, count: int):
         self.add_uint32(
-            KEY_ATTENTION_HEAD_COUNT.format(llm=self.arch), count)
+            KEY_ATTENTION_HEAD_COUNT.format(arch=self.arch), count)
 
     def add_head_count_kv(self, count: int):
         self.add_uint32(
-            KEY_ATTENTION_HEAD_COUNT_KV.format(llm=self.arch), count)
+            KEY_ATTENTION_HEAD_COUNT_KV.format(arch=self.arch), count)
 
     def add_max_alibi_bias(self, bias: float):
         self.add_float32(
-            KEY_ATTENTION_MAX_ALIBI_BIAS.format(llm=self.arch), bias)
+            KEY_ATTENTION_MAX_ALIBI_BIAS.format(arch=self.arch), bias)
 
     def add_clamp_kqv(self, value: float):
         self.add_float32(
-            KEY_ATTENTION_CLAMP_KQV.format(llm=self.arch), value)
+            KEY_ATTENTION_CLAMP_KQV.format(arch=self.arch), value)
 
     def add_layer_norm_eps(self, value: float):
         self.add_float32(
-            KEY_ATTENTION_LAYERNORM_EPS.format(llm=self.arch), value)
+            KEY_ATTENTION_LAYERNORM_EPS.format(arch=self.arch), value)
 
     def add_layer_norm_rms_eps(self, value: float):
         self.add_float32(
-            KEY_ATTENTION_LAYERNORM_RMS_EPS.format(llm=self.arch), value)
+            KEY_ATTENTION_LAYERNORM_RMS_EPS.format(arch=self.arch), value)
 
     def add_rope_dimension_count(self, count: int):
         self.add_uint32(
-            KEY_ROPE_DIMENSION_COUNT.format(llm=self.arch), count)
+            KEY_ROPE_DIMENSION_COUNT.format(arch=self.arch), count)
 
     def add_rope_scale(self, value:  float):
-        self.add_float32(KEY_ROPE_SCALE.format(llm=self.arch), value)
+        self.add_float32(KEY_ROPE_SCALE.format(arch=self.arch), value)
 
     def add_tokenizer_model(self, model: str):
         self.add_string(KEY_TOKENIZER_MODEL, model)
@@ -508,6 +653,7 @@ if __name__ == "__main__":
     gguf_writer.add_uint32("answer", 42)  # Write a 32-bit integer
     gguf_writer.add_float32("answer_in_float", 42.0)  # Write a 32-bit float
     gguf_writer.add_custom_alignment(64)
+
     tensor1 = np.ones((32,), dtype=np.float32) * 100.0
     tensor2 = np.ones((64,), dtype=np.float32) * 101.0
     tensor3 = np.ones((96,), dtype=np.float32) * 102.0
