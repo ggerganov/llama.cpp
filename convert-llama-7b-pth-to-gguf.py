@@ -3,17 +3,16 @@
 # HF files required in the model dir: config.json tokenizer_config.json tokenizer.json tokenizer.model
 
 import gguf
-import gguf_namemap as tmap
 import os
 import sys
 import struct
 import json
 import numpy as np
 import torch
+
 from typing import Any, List
 from pathlib import Path
 from sentencepiece import SentencePieceProcessor
-
 
 #NDArray = np.ndarray[Any, Any]
 # compatible with python < 3.9
@@ -96,6 +95,7 @@ gguf_writer.add_architecture(llm_arch)
 gguf_writer.add_name(last_dir)
 gguf_writer.add_file_type( "All tensors F32" if ftype == 0 else "Most tensors F16, some F32")
 gguf_writer.add_source_hf_repo(hf_repo)
+gguf_writer.add_tensor_data_layout(llm_arch, "Meta AI original pth")
 gguf_writer.add_context_length(llm_arch, hparams["max_position_embeddings"])
 gguf_writer.add_embedding_length(llm_arch, hparams["hidden_size"])
 gguf_writer.add_block_count(llm_arch, block_count)
@@ -131,7 +131,7 @@ if Path(dir_model + "/tokenizer.model").is_file():
         toktype = 1 # defualt to normal token type
         if tokenizer.is_unknown(i): toktype = 2
         if tokenizer.is_control(i): toktype = 3
- 
+
         # TODO: How to determinate if a token is user defined?
         # ref: https://github.com/google/sentencepiece/blob/master/src/sentencepiece_model.proto
         # if tokenizer.is_user_defined(i): toktype = 4
@@ -188,7 +188,7 @@ if Path(dir_model + "/tokenizer.json").is_file():
 
 # TENSORS
 
-tensor_map = tmap.get_tensor_namemap(block_count)
+tensor_map = gguf.get_tensor_name_map(block_count)
 
 # tensor info
 print("gguf: get tensor metadata")
@@ -222,7 +222,7 @@ for part_name in part_names:
             sys.exit()
 
         n_dims = len(data.shape)
-        data_dtype = data.dtype 
+        data_dtype = data.dtype
 
         # if f32 desired, convert any float16 to float32
         if ftype == 0 and data.dtype == np.float16:
@@ -260,7 +260,6 @@ for part_name in part_names:
     for name in model_part.keys():
         data = model_part[name]
 
-    
         old_dtype = data.dtype
 
         # we don't need these
@@ -283,7 +282,7 @@ for part_name in part_names:
             sys.exit()
 
         n_dims = len(data.shape)
-        data_dtype = data.dtype 
+        data_dtype = data.dtype
 
         # if f32 desired, convert any float16 to float32
         if ftype == 0 and data.dtype == np.float16:

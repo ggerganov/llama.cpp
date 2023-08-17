@@ -1,15 +1,15 @@
 # HF gptneox--> gguf conversion
 
 import gguf
-import gguf_namemap as tmap
 import os
 import sys
 import struct
 import json
 import numpy as np
+import torch
+
 from typing import Any, List
 from pathlib import Path
-import torch
 from transformers import AutoTokenizer
 
 # ref: https://github.com/openai/gpt-2/blob/master/src/encoder.py
@@ -188,7 +188,7 @@ if Path(dir_model + "/tokenizer.json").is_file():
 
 # TENSORS
 
-tensor_map = tmap.get_tensor_namemap(block_count)
+tensor_map = gguf.get_tensor_name_map(block_count)
 
 # tensor info
 print("gguf: get tensor metadata")
@@ -227,7 +227,7 @@ for part_name in part_names:
             sys.exit()
 
         n_dims = len(data.shape)
-        data_dtype = data.dtype 
+        data_dtype = data.dtype
 
         # if f32 desired, convert any float16 to float32
         if ftype == 0 and data.dtype == np.float16:
@@ -292,7 +292,7 @@ for part_name in part_names:
             sys.exit()
 
         n_dims = len(data.shape)
-        data_dtype = data.dtype 
+        data_dtype = data.dtype
 
         # if f32 desired, convert any float16 to float32
         if ftype == 0 and data.dtype == np.float16:

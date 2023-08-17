@@ -34,27 +34,16 @@
 #    define DEPRECATED(func, hint) func
 #endif
 
-#define LLAMA_FILE_MAGIC_GGJT        0x67676a74u // 'ggjt'
-#define LLAMA_FILE_MAGIC_GGLA        0x67676c61u // 'ggla'
-#define LLAMA_FILE_MAGIC_GGMF        0x67676d66u // 'ggmf'
-#define LLAMA_FILE_MAGIC_GGML        0x67676d6cu // 'ggml'
-#define LLAMA_FILE_MAGIC_GGSN        0x6767736eu // 'ggsn'
+#define LLAMA_DEFAULT_SEED 0xFFFFFFFF
 
-#define LLAMA_FILE_VERSION           3
-#define LLAMA_FILE_MAGIC             LLAMA_FILE_MAGIC_GGJT
-#define LLAMA_FILE_MAGIC_UNVERSIONED LLAMA_FILE_MAGIC_GGML
-#define LLAMA_SESSION_MAGIC          LLAMA_FILE_MAGIC_GGSN
-#define LLAMA_SESSION_VERSION        1
+#define LLAMA_FILE_MAGIC_GGSN 0x6767736eu // 'ggsn'
 
-#define LLAMA_DEFAULT_SEED           0xFFFFFFFF
+#define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
+#define LLAMA_SESSION_VERSION 1
 
 #if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL)
 // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
 #define LLAMA_SUPPORTS_GPU_OFFLOAD
-#endif
-
-#ifndef LLAMA_DEFAULT_RMS_EPS
-#define LLAMA_DEFAULT_RMS_EPS 5e-6f
 #endif
 
 #ifdef __cplusplus
@@ -103,8 +92,6 @@ extern "C" {
         uint32_t seed;         // RNG seed, -1 for random
         int32_t  n_ctx;        // text context
         int32_t  n_batch;      // prompt processing batch size
-        int32_t  n_gqa;        // grouped-query attention (TEMP - will be moved to model hparams)
-        float    rms_norm_eps; // rms norm epsilon (TEMP - will be moved to model hparams)
         int32_t  n_gpu_layers; // number of layers to store in VRAM
         int32_t  main_gpu;     // the GPU that is used for scratch and small tensors
 
@@ -129,6 +116,7 @@ extern "C" {
         bool use_mlock;  // force system to keep model in RAM
         bool embedding;  // embedding mode only
     };
+
     // model file types
     enum llama_ftype {
         LLAMA_FTYPE_ALL_F32              = 0,
@@ -155,7 +143,7 @@ extern "C" {
     // model quantization parameters
     typedef struct llama_model_quantize_params {
         int nthread;                 // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
-        enum llama_ftype   ftype;    // quantize to this llama_ftype
+        enum llama_ftype ftype;      // quantize to this llama_ftype
         bool allow_requantize;       // allow quantizing non-f32/f16 tensors
         bool quantize_output_tensor; // quantize output.weight
     } llama_model_quantize_params;
@@ -208,17 +196,12 @@ extern "C" {
         int32_t n_eval;
     };
 
-    // Set callback for all future logging events.
-    // If this is not called, or NULL is supplied, everything is output on stderr.
-    LLAMA_API void llama_log_set(llama_log_callback log_callback, void * user_data);
+    LLAMA_API struct llama_context_params llama_context_default_params(void);
+    LLAMA_API struct llama_model_quantize_params llama_model_quantize_default_params(void);
 
-    LLAMA_API int llama_max_devices();
-
-    LLAMA_API struct llama_context_params llama_context_default_params();
-    LLAMA_API struct llama_model_quantize_params llama_model_quantize_default_params();
-
-    LLAMA_API bool llama_mmap_supported();
-    LLAMA_API bool llama_mlock_supported();
+    LLAMA_API int  llama_max_devices(void);
+    LLAMA_API bool llama_mmap_supported(void);
+    LLAMA_API bool llama_mlock_supported(void);
 
     // TODO: not great API - very likely to change
     // Initialize the llama + ggml backend
@@ -226,9 +209,9 @@ extern "C" {
     // Call once at the start of the program
     LLAMA_API void llama_backend_init(bool numa);
     // Call once at the end of the program - currently only used for MPI
-    LLAMA_API void llama_backend_free();
+    LLAMA_API void llama_backend_free(void);
 
-    LLAMA_API int64_t llama_time_us();
+    LLAMA_API int64_t llama_time_us(void);
 
     LLAMA_API struct llama_model * llama_load_model_from_file(
                              const char * path_model,
@@ -240,13 +223,6 @@ extern "C" {
                      struct llama_model * model,
             struct llama_context_params   params);
 
-    // Various functions for loading a ggml llama model.
-    // Allocate (almost) all memory needed for the model.
-    // Return NULL on failure
-    LLAMA_API DEPRECATED(struct llama_context * llama_init_from_file(
-                             const char * path_model,
-            struct llama_context_params   params),
-            "please use llama_load_model_from_file combined with llama_new_context_with_model instead");
 
     // Frees all allocated memory
     LLAMA_API void llama_free(struct llama_context * ctx);
@@ -384,27 +360,28 @@ extern "C" {
     LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 
     // Token Id -> String. Uses the vocabulary in the provided context
+    // Does not write null terminator to the buffer
     LLAMA_API int llama_token_to_str(
             const struct llama_context * ctx,
                            llama_token   token,
-                                  char * str,
+                                  char * buf,
                                   int    length);
 
     LLAMA_API int llama_token_to_str_bpe(
             const struct llama_context * ctx,
                            llama_token   token,
-                                  char * str,
+                                  char * buf,
                                   int    length);
 
     LLAMA_API int llama_token_to_str_with_model(
               const struct llama_model * model,
                            llama_token   token,
-                                  char * str,
+                                  char * buf,
                                   int    length);
     // Special tokens
-    LLAMA_API llama_token llama_token_bos();  // beginning-of-sentence
-    LLAMA_API llama_token llama_token_eos();  // end-of-sentence
-    LLAMA_API llama_token llama_token_nl();   // next-line
+    LLAMA_API llama_token llama_token_bos(void);  // beginning-of-sentence
+    LLAMA_API llama_token llama_token_eos(void);  // end-of-sentence
+    LLAMA_API llama_token llama_token_nl(void);   // next-line
 
     // Grammar
     //
@@ -483,6 +460,10 @@ extern "C" {
 
     // Print system information
     LLAMA_API const char * llama_print_system_info(void);
+
+    // Set callback for all future logging events.
+    // If this is not called, or NULL is supplied, everything is output on stderr.
+    LLAMA_API void llama_log_set(llama_log_callback log_callback, void * user_data);
 
 #ifdef __cplusplus
 }

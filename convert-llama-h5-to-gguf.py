@@ -1,8 +1,6 @@
 # HF llama --> gguf conversion
 
 import gguf
-import gguf_namemap as tmap
-
 import os
 import sys
 import struct
@@ -18,7 +16,9 @@ from sentencepiece import SentencePieceProcessor
 # compatible with python < 3.9
 NDArray: 'TypeAlias' = 'np.ndarray[Any, Any]'
 
-def permute(weights: NDArray, n_head: int, n_kv_head: Optional[int] = None) -> NDArray:
+# reverse HF permute back to original pth layout
+# https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/convert_llama_weights_to_hf.py
+def reverse_hf_permute(weights: NDArray, n_head: int, n_kv_head: Optional[int] = None) -> NDArray:
     if n_kv_head is not None and n_head != n_kv_head: n_head //= n_kv_head
     return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
                 .swapaxes(1, 2)
@@ -93,11 +93,21 @@ if "_name_or_path" in hparams:
 else:
     hf_repo=""
 
+if "max_sequence_length" in hparams:
+    ctx_length = hparams["max_sequence_length"]
+elif "max_position_embeddings" in hparams:
+    ctx_length = hparams["max_position_embeddings"]
+else:
+    print("gguf: can not find ctx length parameter.")
+    sys.exit()
+
+
 gguf_writer.add_architecture(llm_arch)
 gguf_writer.add_name(last_dir)
 gguf_writer.add_file_type("All tensors F32" if ftype == 0 else "Most tensors F16, some F32")
 gguf_writer.add_source_hf_repo(hf_repo)
-gguf_writer.add_context_length(llm_arch, hparams["max_position_embeddings"])
+gguf_writer.add_tensor_data_layout(llm_arch, "Meta AI original pth")
+gguf_writer.add_context_length(llm_arch, ctx_length)
 gguf_writer.add_embedding_length(llm_arch, hparams["hidden_size"])
 gguf_writer.add_block_count(llm_arch, block_count)
 gguf_writer.add_feed_forward_length(llm_arch, hparams["intermediate_size"])
@@ -132,7 +142,7 @@ if Path(dir_model + "/tokenizer.model").is_file():
         toktype = 1 # defualt to normal token type
         if tokenizer.is_unknown(i): toktype = 2
         if tokenizer.is_control(i): toktype = 3
- 
+
         # TODO: How to determinate if a token is user defined?
         # ref: https://github.com/google/sentencepiece/blob/master/src/sentencepiece_model.proto
         # if tokenizer.is_user_defined(i): toktype = 4
@@ -189,7 +199,7 @@ if Path(dir_model + "/tokenizer.json").is_file():
 
 # TENSORS
 
-tensor_map = tmap.get_tensor_namemap(block_count)
+tensor_map = gguf.get_tensor_name_map(block_count)
 
 # tensor info
 print("gguf: get tensor metadata")
@@ -218,9 +228,9 @@ for part_name in part_names:
 
         data = data.squeeze().numpy()
 
-        # permute these
+        # reverse permute these
         if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
-            data = permute(data, head_count, head_count_kv)
+            data = reverse_hf_permute(data, head_count, head_count_kv)
 
         # map tensor names
         if name.endswith(".weight") and name[:-7] in tensor_map:
@@ -287,9 +297,9 @@ for part_name in part_names:
 
         data = data.squeeze().numpy()
 
-        # permute these
+        # reverse permute these
         if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
-            data = permute(data, head_count, head_count_kv)
+            data = reverse_hf_permute(data, head_count, head_count_kv)
 
         # map tensor names
         if name.endswith(".weight") and name[:-7] in tensor_map:
@@ -315,7 +325,7 @@ for part_name in part_names:
         if ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
             data = data.astype(np.float16)
 
-        print( name + ", shape " + str(len(data.shape)) + ", " + str(old_dtype) + " --> " + str(data.dtype))
+        print(name + ", shape " + str(len(data.shape)) + ", " + str(old_dtype) + " --> " + str(data.dtype))
 
         gguf_writer.write_tensor_to_file(data)
 
