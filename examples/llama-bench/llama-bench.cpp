@@ -391,20 +391,19 @@ static std::vector<cmd_params_instance> get_cmd_params_instances_int(const cmd_p
     for (const auto & lv : params.low_vram)
     for (const auto & ts : params.tensor_split)
     for (const auto & nt : params.n_threads) {
-        cmd_params_instance instance;
-
-        instance.model = m;
-        instance.n_prompt = n_prompt;
-        instance.n_gen = n_gen;
-        instance.n_batch = nb;
-        instance.f32_kv = fk;
-        instance.n_gpu_layers = nl;
-        instance.main_gpu = mg;
-        instance.mul_mat_q = mmq;
-        instance.low_vram = lv;
-        std::copy(std::begin(ts), std::end(ts), std::begin(instance.tensor_split));
-        instance.n_threads = nt;
-
+        cmd_params_instance instance = {
+            /* .model        = */ m,
+            /* .n_prompt     = */ n_prompt,
+            /* .n_gen        = */ n_gen,
+            /* .n_batch      = */ nb,
+            /* .f32_kv       = */ fk,
+            /* .n_threads    = */ nt,
+            /* .n_gpu_layers = */ nl,
+            /* .main_gpu     = */ mg,
+            /* .mul_mat_q    = */ mmq,
+            /* .low_vram     = */ lv,
+            /* .tensor_split = */ ts,
+        };
         instances.push_back(instance);
     }
     return instances;
@@ -597,14 +596,14 @@ struct test {
 };
 
 const std::string test::build_commit = BUILD_COMMIT;
-const int  test::build_number        = BUILD_NUMBER;
-const bool test::cuda     = !!ggml_cpu_has_cublas();
-const bool test::opencl   = !!ggml_cpu_has_clblast();
-const bool test::metal    = !!ggml_cpu_has_metal();
-const bool test::gpu_blas = !!ggml_cpu_has_gpublas();
-const bool test::blas     = !!ggml_cpu_has_blas();
-const std::string test::cpu_info = get_cpu_info();
-const std::string test::gpu_info = get_gpu_info();
+const int         test::build_number = BUILD_NUMBER;
+const bool        test::cuda         = !!ggml_cpu_has_cublas();
+const bool        test::opencl       = !!ggml_cpu_has_clblast();
+const bool        test::metal        = !!ggml_cpu_has_metal();
+const bool        test::gpu_blas     = !!ggml_cpu_has_gpublas();
+const bool        test::blas         = !!ggml_cpu_has_blas();
+const std::string test::cpu_info     = get_cpu_info();
+const std::string test::gpu_info     = get_gpu_info();
 
 struct printer {
     FILE * fout;
@@ -721,6 +720,7 @@ struct markdown_printer : public printer {
     }
 
     void print_header(const cmd_params & params) override {
+        // select fields to print
         fields = { "model", "backend" };
         bool is_cpu_backend = test::get_backend() == "CPU" || test::get_backend() == "BLAS";
         if (!is_cpu_backend) {
@@ -756,12 +756,11 @@ struct markdown_printer : public printer {
         }
         fprintf(fout, "\n");
         fprintf(fout, "|");
-        for (const auto & field: fields) {
+        for (const auto & field : fields) {
             int width = get_field_width(field);
             fprintf(fout, " %s%s |", std::string(std::abs(width) - 1, '-').c_str(), width > 0 ? ":" : "-");
         }
         fprintf(fout, "\n");
-        (void) params;
     }
 
     void print_test(const test & t) override {
