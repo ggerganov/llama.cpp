@@ -398,5 +398,6 @@ int main()
         delete[] candidate.code_points;
         candidate.code_points = nullptr;
     }
+    delete grammar;
     return 0;
 }
