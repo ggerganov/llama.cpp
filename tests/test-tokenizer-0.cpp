@@ -41,7 +41,7 @@ static const std::map<std::string, std::vector<llama_token>> & k_tests() {
     };
 
     return _k_tests;
-};
+}
 
 int main(int argc, char **argv) {
     if (argc < 2) {
