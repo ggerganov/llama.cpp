@@ -279,65 +279,6 @@ gguf_writer.write_kv_data_to_file()
 print("gguf: write tensors")
 gguf_writer.write_tensors_to_file()
 
-# tensor data
-print("gguf: convert and write tensor data")
-
-if num_parts == 0:
-    part_names = ("pytorch_model.bin",)
-else:
-    part_names = (
-        f"pytorch_model-{n:05}-of-{num_parts:05}.bin" for n in range(1, num_parts + 1)
-    )
-
-for part_name in part_names:
-    print("gguf: loading model part '" + part_name + "'")
-    model_part = torch.load(f"{dir_model}/{part_name}", map_location="cpu")
-
-    for name in model_part.keys():
-        data = model_part[name]
-
-        old_dtype = data.dtype
-
-        # we don't need these
-        if name.endswith(".rotary_emb.inv_freq"):
-            continue
-
-        # convert any unsupported data types to float32
-        if data.dtype != torch.float16 and data.dtype != torch.float32:
-            data = data.to(torch.float32)
-
-        data = data.squeeze().numpy()
-
-        # reverse permute these
-        if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
-            data = reverse_hf_permute(data, head_count, head_count_kv)
-
-        # map tensor names
-        if name.endswith(".weight") and name[:-7] in tensor_map:
-            name = tensor_map[name[:-7]] + ".weight"
-        elif name.endswith(".bias") and name[:-5] in tensor_map:
-            name = tensor_map[name[:-5]] + ".bias"
-        else:
-            print("Can not map tensor '" + name + "'")
-            sys.exit()
-
-        n_dims = len(data.shape)
-        data_dtype = data.dtype
-
-        # if f32 desired, convert any float16 to float32
-        if ftype == 0 and data.dtype == np.float16:
-            data = data.astype(np.float32)
-
-        # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
-        if ftype == 1 and data_dtype == np.float16 and n_dims == 1:
-            data = data.astype(np.float32)
-
-        # if f16 desired, convert any float32 2-dim weight tensors to float16
-        if ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
-            data = data.astype(np.float16)
-
-        gguf_writer.write_tensor_to_file(data)
-
 gguf_writer.close()
 
 
