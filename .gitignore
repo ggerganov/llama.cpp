@@ -50,7 +50,6 @@ models-mnt
 /embd-input-test
 /gguf
 /gguf-llama-simple
-/gptneox-main
 /libllama.so
 build-info.h
 arm_neon.h
