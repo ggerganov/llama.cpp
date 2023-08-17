@@ -746,6 +746,10 @@ struct markdown_printer : public printer {
         }
         fprintf(fout, "\n");
     }
+
+    virtual void print_footer() {
+        fprintf(fout, "\nbuild: %s (%d)\n", test::build_commit.c_str(), test::build_number);
+    }
 };
 
 struct sql_printer : public printer {
