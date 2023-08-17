@@ -193,7 +193,7 @@ class Params:
         n_ctx      = 2048 if config["norm_eps"] == 1e-06 else 4096 # hack to determine LLaMA v1 vs v2
         n_ff       = -1;
         n_head     = config["n_heads"];
-        n_head_kv  = config["n_kv_head"] if "n_kv_head" in config else n_head;
+        n_head_kv  = config["n_kv_heads"] if "n_kv_heads" in config else n_head;
         f_norm_eps = config["norm_eps"];
 
         if n_vocab == -1:
@@ -796,9 +796,9 @@ class OutputFile:
 def pick_output_type(model: LazyModel, output_type_str: Optional[str]) -> GGMLFileType:
     wq_type = model[NAMES[gguf.MODEL_TENSOR.ATTN_Q].format(bid=0)+".weight"].data_type
 
-    if output_type_str == "f32" or (output_type_str is None and wq_type in (DT_F32, DT_BF16)):
+    if output_type_str == "f32" or (output_type_str is None and wq_type == DT_F32):
         return GGMLFileType.AllF32
-    if output_type_str == "f16" or (output_type_str is None and wq_type == DT_F16):
+    if output_type_str == "f16" or (output_type_str is None and wq_type in (DT_F16, DT_BF16)):
         return GGMLFileType.MostlyF16
 
     name_to_type = {name: lazy_tensor.data_type for (name, lazy_tensor) in model.items()}
