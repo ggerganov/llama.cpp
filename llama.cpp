@@ -1022,7 +1022,8 @@ struct llama_model_loader {
     int n_kv      = 0;
     int n_tensors = 0;
     int n_created = 0;
-    size_t n_tot_elements = 0;
+
+    int64_t n_elements = 0;
 
     bool use_mmap = false;
 
@@ -1050,9 +1051,9 @@ struct llama_model_loader {
         for (int i = 0; i < n_tensors; i++) {
             const char * name = gguf_get_tensor_name(ctx_gguf, i);
             struct ggml_tensor * t = ggml_get_tensor(ctx_meta, name);
-            n_tot_elements += ggml_nelements(t);
+            n_elements += ggml_nelements(t);
         }
-        
+
         // print meta data
         // TODO: make optional
         {
@@ -1409,22 +1410,22 @@ static void llama_model_load_internal(
     }
 
     {
-        LLAMA_LOG_INFO("%s: format      = %s\n",   __func__, llama_file_version_name(ml->file_version));
-        LLAMA_LOG_INFO("%s: n_vocab     = %u\n",   __func__, hparams.n_vocab);
-        LLAMA_LOG_INFO("%s: n_ctx_train = %u\n",   __func__, hparams.n_ctx_train);
-        LLAMA_LOG_INFO("%s: n_ctx       = %u\n",   __func__, hparams.n_ctx);
-        LLAMA_LOG_INFO("%s: n_embd      = %u\n",   __func__, hparams.n_embd);
-        LLAMA_LOG_INFO("%s: n_head      = %u\n",   __func__, hparams.n_head);
-        LLAMA_LOG_INFO("%s: n_head_kv   = %u\n",   __func__, hparams.n_head_kv);
-        LLAMA_LOG_INFO("%s: n_layer     = %u\n",   __func__, hparams.n_layer);
-        LLAMA_LOG_INFO("%s: n_rot       = %u\n",   __func__, hparams.n_rot); // a.k.a. n_embd_head, n_head_dim
-        LLAMA_LOG_INFO("%s: n_gqa       = %u\n",   __func__, hparams.n_gqa());
-        LLAMA_LOG_INFO("%s: f_norm_eps  = %.1e\n", __func__, hparams.f_norm_rms_eps);
-        LLAMA_LOG_INFO("%s: n_ff        = %u\n",   __func__, hparams.n_ff);
-        LLAMA_LOG_INFO("%s: freq_base   = %.1f\n", __func__, hparams.rope_freq_base);
-        LLAMA_LOG_INFO("%s: freq_scale  = %g\n",   __func__, hparams.rope_freq_scale);
-        LLAMA_LOG_INFO("%s: model type  = %s\n",   __func__, llama_model_type_name(model.type));
-        LLAMA_LOG_INFO("%s: model size = %.2f B\n",   __func__, ml->n_tot_elements*1e-9);
+        LLAMA_LOG_INFO("%s: format      = %s\n",    __func__, llama_file_version_name(ml->file_version));
+        LLAMA_LOG_INFO("%s: n_vocab     = %u\n",    __func__, hparams.n_vocab);
+        LLAMA_LOG_INFO("%s: n_ctx_train = %u\n",    __func__, hparams.n_ctx_train);
+        LLAMA_LOG_INFO("%s: n_ctx       = %u\n",    __func__, hparams.n_ctx);
+        LLAMA_LOG_INFO("%s: n_embd      = %u\n",    __func__, hparams.n_embd);
+        LLAMA_LOG_INFO("%s: n_head      = %u\n",    __func__, hparams.n_head);
+        LLAMA_LOG_INFO("%s: n_head_kv   = %u\n",    __func__, hparams.n_head_kv);
+        LLAMA_LOG_INFO("%s: n_layer     = %u\n",    __func__, hparams.n_layer);
+        LLAMA_LOG_INFO("%s: n_rot       = %u\n",    __func__, hparams.n_rot); // a.k.a. n_embd_head, n_head_dim
+        LLAMA_LOG_INFO("%s: n_gqa       = %u\n",    __func__, hparams.n_gqa());
+        LLAMA_LOG_INFO("%s: f_norm_eps  = %.1e\n",  __func__, hparams.f_norm_rms_eps);
+        LLAMA_LOG_INFO("%s: n_ff        = %u\n",    __func__, hparams.n_ff);
+        LLAMA_LOG_INFO("%s: freq_base   = %.1f\n",  __func__, hparams.rope_freq_base);
+        LLAMA_LOG_INFO("%s: freq_scale  = %g\n",    __func__, hparams.rope_freq_scale);
+        LLAMA_LOG_INFO("%s: model type  = %s\n",    __func__, llama_model_type_name(model.type));
+        LLAMA_LOG_INFO("%s: model size  = %.2fB\n", __func__, ml->n_elements*1e-9);
 
         // TODO: print number of tensors for each quantization
     }
