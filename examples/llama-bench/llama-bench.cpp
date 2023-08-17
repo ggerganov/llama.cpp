@@ -357,13 +357,12 @@ struct cmd_params_instance {
     int n_gen;
     int n_batch;
     bool f32_kv;
+    int n_threads;
     int n_gpu_layers;
     int main_gpu;
     bool mul_mat_q;
     bool low_vram;
     std::array<float, LLAMA_MAX_DEVICES> tensor_split;
-
-    int n_threads;
 
     llama_context_params to_llama_params() const {
         llama_context_params lparams = llama_context_default_params();
@@ -546,9 +545,11 @@ struct test {
                 max_nonzero = i;
             }
         }
-        for (int i = 0; i < max_nonzero; i++) {
-            tensor_split_str += std::to_string(tensor_split[i]);
-            if (i < max_nonzero - 1) {
+        for (int i = 0; i <= max_nonzero; i++) {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%.2f", tensor_split[i]);
+            tensor_split_str += buf;
+            if (i < max_nonzero) {
                 tensor_split_str += "/";
             }
         }
@@ -593,6 +594,7 @@ struct printer {
     virtual void print_footer() {};
 };
 
+// TODO: escape strings
 struct csv_printer : public printer {
     virtual void print_header(const cmd_params & params) {
         std::vector<std::string> fields = test::get_fields();
@@ -665,23 +667,26 @@ struct markdown_printer : public printer {
         if (!is_cpu_backend) {
             fields.push_back("n_gpu_layers");
         }
-        if (params.n_threads.size() > 1 || is_cpu_backend) {
+        if (params.n_batch.size() > 1 || params.n_threads != cmd_params_defaults.n_threads || is_cpu_backend) {
             fields.push_back("n_threads");
         }
-        if (params.n_batch.size() > 1) {
+        if (params.n_batch.size() > 1 || params.n_batch != cmd_params_defaults.n_batch) {
             fields.push_back("n_batch");
         }
-        if (params.f32_kv.size() > 1) {
+        if (params.f32_kv.size() > 1 || params.f32_kv != cmd_params_defaults.f32_kv) {
             fields.push_back("f16_kv");
         }
-        if (params.main_gpu.size() > 1) {
+        if (params.main_gpu.size() > 1 || params.main_gpu != cmd_params_defaults.main_gpu) {
             fields.push_back("main_gpu");
         }
-        if (params.mul_mat_q.size() > 1) {
+        if (params.mul_mat_q.size() > 1 || params.mul_mat_q != cmd_params_defaults.mul_mat_q) {
             fields.push_back("mul_mat_q");
         }
-        if (params.low_vram.size() > 1) {
+        if (params.low_vram.size() > 1 || params.low_vram != cmd_params_defaults.low_vram) {
             fields.push_back("low_vram");
+        }
+        if (params.tensor_split.size() > 1 || params.tensor_split != cmd_params_defaults.tensor_split) {
+            fields.push_back("tensor_split");
         }
         fields.push_back("test");
         fields.push_back("t/s");
