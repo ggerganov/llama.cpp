@@ -121,6 +121,17 @@ MODEL_TENSOR_NAMES = {
         MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
         MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
     },
+    MODEL_ARCH.GPTNEOX: {
+        MODEL_TENSOR.TOKEN_EMBD:    "token_embd",
+        MODEL_TENSOR.OUTPUT_NORM:   "output_norm",
+        MODEL_TENSOR.OUTPUT:        "output",
+        MODEL_TENSOR.ATTN_NORM:     "blk.{bid}.attn_norm",
+        MODEL_TENSOR.ATTN_QKV:      "blk.{bid}.attn_qkv",
+        MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn_output",
+        MODEL_TENSOR.FFN_NORM:      "blk.{bid}.ffn_norm",
+        MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
+        MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
+    },
     MODEL_ARCH.FALCON: {
         MODEL_TENSOR.TOKEN_EMBD:  "token_embd",
         MODEL_TENSOR.OUTPUT_NORM: "output_norm",
