@@ -115,9 +115,9 @@ static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * 
 // memory sizes (calculated for n_batch == 512)
 //
 
-static const std::map<e_model, size_t> & MEM_REQ_SCRATCH0(int n_ctx)
+static std::map<e_model, size_t> MEM_REQ_SCRATCH0(int n_ctx)
 {
-    static std::map<e_model, size_t> k_sizes = {
+    std::map<e_model, size_t> k_sizes = {
         { MODEL_3B,   ((size_t) n_ctx / 16ull +  92ull) * MB },
         { MODEL_7B,   ((size_t) n_ctx / 16ull + 100ull) * MB },
         { MODEL_13B,  ((size_t) n_ctx / 12ull + 120ull) * MB },
@@ -984,7 +984,7 @@ int64_t llama_time_us() {
 // model loading
 //
 
-static const char *llama_file_version_name(llama_file_version version) {
+static const char * llama_file_version_name(llama_file_version version) {
     switch (version) {
         case LLAMA_FILE_VERSION_GGML: return "'ggml' (old version with low tokenizer quality and no mmap support)";
         case LLAMA_FILE_VERSION_GGMF_V1: return "ggmf v1 (old version with no mmap support)";
@@ -996,7 +996,7 @@ static const char *llama_file_version_name(llama_file_version version) {
     return "unknown";
 }
 
-static const char *llama_ftype_name(enum llama_ftype ftype) {
+const char * llama_ftype_name(enum llama_ftype ftype) {
     switch (ftype) {
         case LLAMA_FTYPE_ALL_F32:     return "all F32";
         case LLAMA_FTYPE_MOSTLY_F16:  return "mostly F16";
@@ -1021,7 +1021,7 @@ static const char *llama_ftype_name(enum llama_ftype ftype) {
     }
 }
 
-static const char *llama_model_type_name(e_model type) {
+static const char * llama_model_type_name(e_model type) {
     switch (type) {
         case MODEL_3B: return "3B";
         case MODEL_7B: return "7B";
@@ -1798,6 +1798,13 @@ static bool llama_eval_internal(
             const char * cgraph_fname) {
 
     LLAMA_ASSERT((!tokens && embd) || (tokens && !embd));
+
+    LLAMA_ASSERT(n_tokens > 0);
+    LLAMA_ASSERT(n_past >= 0);
+    LLAMA_ASSERT(n_threads > 0);
+    // TODO: keep the values of n_batch and n_ctx
+    // LLAMA_ASSERT(n_tokens <= n_batch);
+    // LLAMA_ASSERT(n_past + n_tokens <= n_ctx);
 
     const int64_t t_start_us = ggml_time_us();
 
@@ -4272,6 +4279,10 @@ int llama_n_ctx(const struct llama_context * ctx) {
 
 int llama_n_embd(const struct llama_context * ctx) {
     return ctx->model.hparams.n_embd;
+}
+
+int llama_model_type(const struct llama_model * model, char * buf, size_t buf_size) {
+    return snprintf(buf, buf_size, "LLaMA %s %s", llama_model_type_name(model->type), llama_ftype_name(model->hparams.ftype));
 }
 
 int llama_get_vocab_from_model(
