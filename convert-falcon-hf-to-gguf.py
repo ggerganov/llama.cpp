@@ -193,11 +193,8 @@ if Path(dir_model + "/tokenizer.json").is_file():
 tensor_map = gguf.get_tensor_name_map(ARCH,block_count)
 
 # params for qkv transform
-if "n_head_kv" in hparams:
-    n_head_kv = hparams["n_head_kv"]
-else:
-    n_head_kv = 1
 n_head = hparams["n_head"]
+n_head_kv = hparams["n_head_kv"] if "n_head_kv" in hparams else 1
 head_dim = hparams["hidden_size"] // n_head
 
 # tensor info
@@ -231,7 +228,7 @@ for part_name in part_names:
         # So we rearrange them here,, so that we have n_head query weights
         # followed by n_head_kv key weights followed by n_head_kv value weights,
         # in contiguous fashion.
-        # ref: https://github.com/jploski/ggml/blob/d5295b477fb36c69468c3fecb0393a8d7980b7c8/examples/falcon/convert-hf-to-ggml.py#L107-L123
+        # ref: https://github.com/jploski/ggml/blob/falcon40b/examples/falcon/convert-hf-to-ggml.py
 
         if "query_key_value" in name:
             qkv = data.view(n_head_kv, n_head // n_head_kv + 2, head_dim, head_dim * n_head)
