@@ -97,7 +97,7 @@ extern "C" {
     // If your logging mechanism cannot handle that, check if the last character is '\n' and strip it
     // if it exists.
     // It might not exist for progress report where '.' is output repeatedly.
-    typedef void (*llama_log_callback)(llama_log_level level, const char * text, void * user_data);
+    typedef void (*llama_log_callback)(enum llama_log_level level, const char * text, void * user_data);
 
     struct llama_context_params {
         uint32_t seed;         // RNG seed, -1 for random
@@ -352,6 +352,8 @@ extern "C" {
     LLAMA_API int llama_n_vocab_from_model(const struct llama_model * model);
     LLAMA_API int llama_n_ctx_from_model  (const struct llama_model * model);
     LLAMA_API int llama_n_embd_from_model (const struct llama_model * model);
+
+    LLAMA_API int llama_model_type(const struct llama_model * model, char * buf, size_t buf_size);
 
     // Get the vocabulary as output parameters.
     // Returns number of results.
