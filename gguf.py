@@ -220,7 +220,7 @@ def get_tensor_name_map(arch: MODEL_ARCH, n_blocks: int) -> dict:
         tensor_map["transformer.h."+str(i)+".ln_1"]              = mapped_to  # gpt2
         tensor_map["transformer.blocks."+str(i)+".norm_1"]       = mapped_to  # mpt
         tensor_map["transformer.h."+str(i)+".input_layernorm"]   = mapped_to  # falcon7b
-        tensor_map["transformer.h."+str(i)+".ln_attn"]           = mapped_to  # falcon40b
+        tensor_map["transformer.h."+str(i)+".ln_mlp"]            = mapped_to  # falcon40b
         tensor_map["model.layers."+str(i)+".input_layernorm"]    = mapped_to  # llama-hf
         tensor_map["layers."+str(i)+".attention_norm"]           = mapped_to  # llama-pth
 
@@ -228,7 +228,7 @@ def get_tensor_name_map(arch: MODEL_ARCH, n_blocks: int) -> dict:
         mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ATTN_NORM_2, None)
         mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
 
-        tensor_map["transformer.h."+str(i)+".ln_mlp"] = mapped_to  # falcon40b
+        tensor_map["transformer.h."+str(i)+".ln_attn"] = mapped_to  # falcon40b
 
         # Attention query-key-value
         mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ATTN_QKV, None)
