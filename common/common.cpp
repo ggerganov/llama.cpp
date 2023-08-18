@@ -427,7 +427,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             }
             params.hellaswag_tasks = std::stoi(argv[i]);
         } else if (arg == "--ignore-eos") {
-            params.logit_bias[llama_token_eos()] = -INFINITY;
+            params.ignore_eos = true;
         } else if (arg == "--no-penalize-nl") {
             params.penalize_nl = false;
         } else if (arg == "-l" || arg == "--logit-bias") {
@@ -662,7 +662,7 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     return lparams;
 }
 
-std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(const gpt_params & params) {
+std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params) {
     auto lparams = llama_context_params_from_gpt_params(params);
 
     llama_model * model  = llama_load_model_from_file(params.model.c_str(), lparams);
@@ -689,6 +689,10 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
             llama_free_model(model);
             return std::make_tuple(nullptr, nullptr);
         }
+    }
+
+    if (params.ignore_eos) {
+        params.logit_bias[llama_token_eos(lctx)] = -INFINITY;
     }
 
     return std::make_tuple(model, lctx);

@@ -32,7 +32,6 @@ struct gpt_params {
     float   rope_freq_scale                 = 1.0f;     // RoPE frequency scaling factor
 
     // sampling parameters
-    std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
     int32_t top_k             = 40;    // <= 0 to use vocab size
     float   top_p             = 0.95f; // 1.0 = disabled
     float   tfs_z             = 1.00f; // 1.0 = disabled
@@ -45,6 +44,8 @@ struct gpt_params {
     int32_t mirostat          = 0;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
     float   mirostat_tau      = 5.00f; // target entropy
     float   mirostat_eta      = 0.10f; // learning rate
+
+    std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
 
     // Classifier-Free Guidance
     // https://arxiv.org/abs/2306.17806
@@ -81,6 +82,7 @@ struct gpt_params {
     bool simple_io         = false; // improves compatibility with subprocesses and limited consoles
 
     bool input_prefix_bos  = false; // prefix BOS to user inputs, preceding input_prefix
+    bool ignore_eos        = false; // ignore generated EOS tokens
     bool instruct          = false; // instruction mode (used for Alpaca models)
     bool penalize_nl       = true;  // consider newlines as a repeatable token
     bool perplexity        = false; // compute perplexity over the prompt
@@ -102,7 +104,7 @@ std::string gpt_random_prompt(std::mt19937 & rng);
 // Model utils
 //
 
-std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(const gpt_params & params);
+std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params);
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
 
 //

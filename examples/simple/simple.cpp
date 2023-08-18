@@ -106,7 +106,7 @@ int main(int argc, char ** argv) {
         new_token_id = llama_sample_token_greedy(ctx , &candidates_p);
 
         // is it an end of stream ?
-        if (new_token_id == llama_token_eos()) {
+        if (new_token_id == llama_token_eos(ctx)) {
             fprintf(stderr, " [end of text]\n");
             break;
         }

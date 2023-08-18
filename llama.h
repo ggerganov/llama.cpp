@@ -340,9 +340,9 @@ extern "C" {
                                    int   capacity);
 
     // Special tokens
-    LLAMA_API llama_token llama_token_bos(/*struct llama_model * model*/ void);  // beginning-of-sentence
-    LLAMA_API llama_token llama_token_eos(/*struct llama_model * model*/ void);  // end-of-sentence
-    LLAMA_API llama_token llama_token_nl (/*struct llama_model * model*/ void);  // next-line
+    LLAMA_API llama_token llama_token_bos(const struct llama_context * ctx);  // beginning-of-sentence
+    LLAMA_API llama_token llama_token_eos(const struct llama_context * ctx);  // end-of-sentence
+    LLAMA_API llama_token llama_token_nl (const struct llama_context * ctx);  // next-line
 
     //
     // Tokenization

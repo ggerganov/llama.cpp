@@ -780,13 +780,14 @@ struct llama_vocab {
     std::unordered_map<token, id> token_to_id;
     std::vector<token_score> id_to_token;
 
-    id special_bos_id = -1;
-    id special_eos_id = -1;
+    // default LLaMA special tokens
+    id special_bos_id = 1;
+    id special_eos_id = 2;
     id special_unk_id = -1;
     id special_sep_id = -1;
     id special_pad_id = -1;
 
-    id linefeed_id = -1;
+    id linefeed_id = 13;
 };
 
 struct llama_model {
@@ -2351,21 +2352,11 @@ static bool llama_is_control_token(const llama_vocab & vocab, llama_token token)
 }
 
 static bool llama_is_bos_token(const llama_vocab & vocab, llama_token token) {
-    if (llama_vocab_type(vocab) == "spm") {
-        return token == 1;
-    }
-
-    // TODO: improve?
-    return false;
+    return token == vocab.special_bos_id;
 }
 
 static bool llama_is_eos_token(const llama_vocab & vocab, llama_token token) {
-    if (llama_vocab_type(vocab) == "spm") {
-        return token == 2;
-    }
-
-    // TODO: improve?
-    return false;
+    return token == vocab.special_eos_id;
 }
 
 static bool llama_is_user_defined_token(const llama_vocab & vocab, llama_token token) {
@@ -2608,7 +2599,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
     }
 
     if (bos) {
-        output.push_back(llama_token_bos());
+        output.push_back(vocab.special_bos_id);
     }
 
     std::string text;
@@ -3293,7 +3284,7 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
         }
     }
 
-    const llama_token eos = llama_token_eos();
+    const llama_token eos = llama_token_eos(ctx);
 
     std::vector<std::pair<std::vector<uint32_t>, llama_partial_utf8>> candidates_decoded;
     std::vector<llama_grammar_candidate>                              candidates_grammar;
@@ -3503,7 +3494,7 @@ llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_arra
 void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar * grammar, llama_token token) {
     const int64_t t_start_sample_us = ggml_time_us();
 
-    if (token == llama_token_eos()) {
+    if (token == llama_token_eos(ctx)) {
         for (const auto & stack : grammar->stacks) {
             if (stack.empty()) {
                 return;
@@ -4340,7 +4331,7 @@ struct llama_context * llama_new_context_with_model(
             // build worst-case graph
             int n_tokens = std::min((int)hparams.n_ctx, params.n_batch);
             int n_past = hparams.n_ctx - n_tokens;
-            llama_token token = llama_token_bos(); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
+            llama_token token = llama_token_bos(ctx); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
             ggml_cgraph * gf = llama_build_graph(*ctx, &token, NULL, n_tokens, n_past);
 #ifdef GGML_USE_METAL
             if (params.n_gpu_layers > 0) {
@@ -4950,7 +4941,7 @@ int llama_eval_export(struct llama_context * ctx, const char * fname) {
     const int n_batch = 1;
     const int n_ctx   = 512 - n_batch;
 
-    const std::vector<llama_token> tmp(n_batch, llama_token_bos());
+    const std::vector<llama_token> tmp(n_batch, llama_token_bos(ctx));
 
     if (!llama_eval_internal(*ctx, tmp.data(), nullptr, tmp.size(), n_ctx, 1, fname)) {
         LLAMA_LOG_ERROR("%s: failed to eval\n", __func__);
@@ -4989,16 +4980,16 @@ int llama_model_get_vocab(
     return n;
 }
 
-llama_token llama_token_bos(void) {
-    return 1;
+llama_token llama_token_bos(const struct llama_context * ctx) {
+    return ctx->model.vocab.special_bos_id;
 }
 
-llama_token llama_token_eos(void) {
-    return 2;
+llama_token llama_token_eos(const struct llama_context * ctx) {
+    return ctx->model.vocab.special_eos_id;
 }
 
-llama_token llama_token_nl(void) {
-    return 13;
+llama_token llama_token_nl(const struct llama_context * ctx) {
+    return ctx->model.vocab.linefeed_id;
 }
 
 int llama_tokenize(
