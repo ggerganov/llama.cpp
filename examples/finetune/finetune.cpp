@@ -1101,7 +1101,6 @@ struct ggml_tensor * llama_build_lora_finetune_graphs(
 
     auto add_to_f32 = [] (struct ggml_context * ctx, struct ggml_tensor * a, struct ggml_tensor * b) {
         if (ggml_is_quantized(a->type)) {
-            // todo make sure that ggml-alloc.c cannot make it inplace (of tensor a)
             return ggml_add_cast(ctx, a, b, GGML_TYPE_F32);
         } else {
             GGML_ASSERT(a->type == GGML_TYPE_F32);
