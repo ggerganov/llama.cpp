@@ -3002,7 +3002,7 @@ void llama_grammar_free(struct llama_grammar * grammar) {
 //
 
 void llama_sample_softmax(struct llama_context * ctx, llama_token_data_array * candidates) {
-    assert(candidates->size > 0);
+    GGML_ASSERT(candidates->size > 0);
 
     const int64_t t_start_sample_us = ggml_time_us();
 
@@ -3282,7 +3282,7 @@ void llama_sample_frequency_and_presence_penalties(struct llama_context * ctx, l
 }
 
 void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * candidates, const struct llama_grammar * grammar) {
-    assert(ctx);
+    GGML_ASSERT(ctx);
     const int64_t t_start_sample_us = ggml_time_us();
 
     bool allow_eos = false;
@@ -3342,10 +3342,12 @@ void llama_sample_classifier_free_guidance(
                          float   scale) {
     int64_t t_start_sample_us = ggml_time_us();
 
-    assert(ctx);
+    GGML_ASSERT(ctx);
+
     auto n_vocab = llama_n_vocab(ctx);
-    assert(n_vocab == (int)candidates->size);
-    assert(!candidates->sorted);
+
+    GGML_ASSERT(n_vocab == (int)candidates->size);
+    GGML_ASSERT(!candidates->sorted);
 
     std::vector<float> logits_base;
     logits_base.reserve(candidates->size);
@@ -3369,7 +3371,8 @@ void llama_sample_classifier_free_guidance(
 }
 
 llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, int m, float * mu) {
-    assert(ctx);
+    GGML_ASSERT(ctx);
+
     auto N = float(llama_n_vocab(ctx));
     int64_t t_start_sample_us;
     t_start_sample_us = ggml_time_us();
@@ -3475,7 +3478,8 @@ llama_token llama_sample_token_greedy(struct llama_context * ctx, llama_token_da
 }
 
 llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_array * candidates) {
-    assert(ctx);
+    GGML_ASSERT(ctx);
+
     const int64_t t_start_sample_us = ggml_time_us();
     llama_sample_softmax(nullptr, candidates);
 
@@ -4463,16 +4467,20 @@ int llama_n_embd(const struct llama_context * ctx) {
     return ctx->model.hparams.n_embd;
 }
 
-int llama_n_vocab_from_model(const struct llama_model * model) {
+int llama_model_n_vocab(const struct llama_model * model) {
     return model->vocab.id_to_token.size();
 }
 
-int llama_n_ctx_from_model(const struct llama_model * model) {
+int llama_model_n_ctx(const struct llama_model * model) {
     return model->hparams.n_ctx;
 }
 
-int llama_n_embd_from_model(const struct llama_model * model) {
+int llama_model_n_embd(const struct llama_model * model) {
     return model->hparams.n_embd;
+}
+
+int llama_model_type(const struct llama_model * model, char * buf, size_t buf_size) {
+    return snprintf(buf, buf_size, "LLaMA %s %s", llama_model_type_name(model->type), llama_model_ftype_name(model->ftype));
 }
 
 int llama_model_quantize(
@@ -4965,14 +4973,10 @@ int llama_get_vocab(
         const char * * strings,
         float  * scores,
         int capacity) {
-    return llama_get_vocab_from_model(&ctx->model, strings, scores, capacity);
+    return llama_model_get_vocab(&ctx->model, strings, scores, capacity);
 }
 
-int llama_model_type(const struct llama_model * model, char * buf, size_t buf_size) {
-    return snprintf(buf, buf_size, "LLaMA %s %s", llama_model_type_name(model->type), llama_model_ftype_name(model->ftype));
-}
-
-int llama_get_vocab_from_model(
+int llama_model_get_vocab(
         const struct llama_model * model,
         const char * * strings,
         float  * scores,
@@ -4983,6 +4987,18 @@ int llama_get_vocab_from_model(
         scores[i]  = model->vocab.id_to_token[i].score;
     }
     return n;
+}
+
+llama_token llama_token_bos(void) {
+    return 1;
+}
+
+llama_token llama_token_eos(void) {
+    return 2;
+}
+
+llama_token llama_token_nl(void) {
+    return 13;
 }
 
 int llama_tokenize(
@@ -5040,7 +5056,7 @@ int llama_token_to_str(const struct llama_context * ctx, llama_token token, char
 }
 
 int llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token, char * buf, int length) {
-    if (0 <= token && token < llama_n_vocab_from_model(&ctx->model)) {
+    if (0 <= token && token < llama_model_n_vocab(&ctx->model)) {
         std::string result = ctx->model.vocab.id_to_token[token].tok;
         if (length < (int) result.length()) {
             return -result.length();
@@ -5053,7 +5069,7 @@ int llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token, 
 
 // does not write null-terminator to str
 int llama_token_to_str_with_model(const struct llama_model * model, llama_token token, char * buf, int length) {
-    if (0 <= token && token < llama_n_vocab_from_model(model)) {
+    if (0 <= token && token < llama_model_n_vocab(model)) {
         if (llama_is_normal_token(model->vocab, token)) {
             std::string result = model->vocab.id_to_token[token].tok;
             if (llama_vocab_type(model->vocab) == "spm") {
@@ -5083,18 +5099,6 @@ int llama_token_to_str_with_model(const struct llama_model * model, llama_token 
         }
     }
     return 0;
-}
-
-llama_token llama_token_bos(void) {
-    return 1;
-}
-
-llama_token llama_token_eos(void) {
-    return 2;
-}
-
-llama_token llama_token_nl(void) {
-    return 13;
 }
 
 struct llama_timings llama_get_timings(struct llama_context * ctx) {

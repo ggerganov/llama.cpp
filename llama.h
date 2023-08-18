@@ -199,7 +199,6 @@ extern "C" {
     LLAMA_API struct llama_context_params llama_context_default_params(void);
     LLAMA_API struct llama_model_quantize_params llama_model_quantize_default_params(void);
 
-    // TODO: not great API - very likely to change
     // Initialize the llama + ggml backend
     // If numa is true, use NUMA optimizations
     // Call once at the start of the program
@@ -231,9 +230,9 @@ extern "C" {
     LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
     LLAMA_API int llama_n_embd (const struct llama_context * ctx);
 
-    LLAMA_API int llama_n_vocab_from_model(const struct llama_model * model);
-    LLAMA_API int llama_n_ctx_from_model  (const struct llama_model * model);
-    LLAMA_API int llama_n_embd_from_model (const struct llama_model * model);
+    LLAMA_API int llama_model_n_vocab(const struct llama_model * model);
+    LLAMA_API int llama_model_n_ctx  (const struct llama_model * model);
+    LLAMA_API int llama_model_n_embd (const struct llama_model * model);
 
     // Get a string describing the model type
     LLAMA_API int llama_model_type(const struct llama_model * model, char * buf, size_t buf_size);
@@ -259,9 +258,9 @@ extern "C" {
 
     LLAMA_API int llama_model_apply_lora_from_file(
             const struct llama_model * model,
-                      const char * path_lora,
-                      const char * path_base_model,
-                             int   n_threads);
+                          const char * path_lora,
+                          const char * path_base_model,
+                                 int   n_threads);
 
     // Returns the number of tokens in the KV cache
     LLAMA_API int llama_get_kv_cache_token_count(const struct llama_context * ctx);
@@ -322,6 +321,10 @@ extern "C" {
     // shape: [n_embd] (1-dimensional)
     LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 
+    //
+    // Vocab
+    //
+
     // Get the vocabulary as output parameters.
     // Returns number of results.
     LLAMA_API int llama_get_vocab(
@@ -330,17 +333,25 @@ extern "C" {
                                  float * scores,
                                    int   capacity);
 
-    LLAMA_API int llama_get_vocab_from_model(
+    LLAMA_API int llama_model_get_vocab(
               const struct llama_model * model,
                           const char * * strings,
                                  float * scores,
                                    int   capacity);
 
+    // Special tokens
+    LLAMA_API llama_token llama_token_bos(/*struct llama_model * model*/ void);  // beginning-of-sentence
+    LLAMA_API llama_token llama_token_eos(/*struct llama_model * model*/ void);  // end-of-sentence
+    LLAMA_API llama_token llama_token_nl (/*struct llama_model * model*/ void);  // next-line
+
+    //
+    // Tokenization
+    //
+
     // Convert the provided text into tokens.
     // The tokens pointer must be large enough to hold the resulting tokens.
     // Returns the number of tokens on success, no more than n_max_tokens
     // Returns a negative number on failure - the number of tokens that would have been returned
-    // TODO: not sure if correct
     LLAMA_API int llama_tokenize(
             struct llama_context * ctx,
                       const char * text,
@@ -381,13 +392,11 @@ extern "C" {
                            llama_token   token,
                                   char * buf,
                                   int    length);
-    // Special tokens
-    LLAMA_API llama_token llama_token_bos(/*struct llama_model * model*/ void);  // beginning-of-sentence
-    LLAMA_API llama_token llama_token_eos(/*struct llama_model * model*/ void);  // end-of-sentence
-    LLAMA_API llama_token llama_token_nl (/*struct llama_model * model*/ void);  // next-line
 
+    //
     // Grammar
     //
+
     LLAMA_API struct llama_grammar * llama_grammar_init(
             const llama_grammar_element ** rules,
                                  size_t    n_rules,
@@ -395,7 +404,9 @@ extern "C" {
 
     LLAMA_API void llama_grammar_free(struct llama_grammar * grammar);
 
+    //
     // Sampling functions
+    //
 
     /// @details Repetition penalty described in CTRL academic paper https://arxiv.org/abs/1909.05858, with negative logit fix.
     LLAMA_API void llama_sample_repetition_penalty(struct llama_context * ctx, llama_token_data_array * candidates, const llama_token * last_tokens, size_t last_tokens_size, float penalty);
