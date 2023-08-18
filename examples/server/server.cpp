@@ -385,7 +385,7 @@ struct llama_server_context
             {
                 n_eval = params.n_batch;
             }
-            if (llama_eval(ctx, &embd[n_past], n_eval, n_past, params.n_threads))
+            if (llama_eval(ctx, &embd[n_past], n_eval, n_past, params.n_threads, params.pp_threads))
             {
                 LOG_ERROR("failed to eval", {
                                                 {"n_eval", n_eval},
@@ -651,6 +651,8 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     fprintf(stdout, "  -h, --help            show this help message and exit\n");
     fprintf(stdout, "  -v, --verbose         verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
     fprintf(stdout, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
+    fprintf(stdout, "  -ppt N, --pp-threads N\n");
+    fprintf(stdout, "                        number of threads to use during prompt processing (default: %d)\n", params.pp_threads);
     fprintf(stdout, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
     fprintf(stdout, "  -gqa N, --gqa N       grouped-query attention factor (TEMP!!! use 8 for LLaMAv2 70B) (default: %d)\n", params.n_gqa);
     fprintf(stdout, "  -eps N, --rms-norm-eps N rms norm eps (TEMP!!! use 1e-5 for LLaMAv2) (default: %.1e)\n", params.rms_norm_eps);
@@ -821,6 +823,15 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
             params.n_threads = std::stoi(argv[i]);
+        }
+        else if (arg == "-ppt" || arg == "--pp-threads")
+        {
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            params.pp_threads = std::stoi(argv[i]);
         }
         else if (arg == "-b" || arg == "--batch-size")
         {
@@ -1185,6 +1196,7 @@ int main(int argc, char **argv)
                             {"commit", BUILD_COMMIT}});
     LOG_INFO("system info", {
                                 {"n_threads", params.n_threads},
+                                {"pp_threads", params.pp_threads},
                                 {"total_threads", std::thread::hardware_concurrency()},
                                 {"system_info", llama_print_system_info()},
                             });

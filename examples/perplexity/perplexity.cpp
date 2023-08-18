@@ -66,7 +66,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
                 tokens[batch_start] = llama_token_bos();
             }
 
-            if (llama_eval(ctx, tokens.data() + batch_start, batch_size, j * n_batch, params.n_threads)) {
+            if (llama_eval(ctx, tokens.data() + batch_start, batch_size, j * n_batch, params.n_threads, params.pp_threads)) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return;
             }
@@ -233,7 +233,7 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
             }
 
             // Evaluate the query
-            if (llama_eval(ctx, query_embd.data(), query_embd.size(), 0, params.n_threads)) {
+            if (llama_eval(ctx, query_embd.data(), query_embd.size(), 0, params.n_threads, params.n_threads)) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return;
             }
@@ -337,8 +337,8 @@ int main(int argc, char ** argv) {
     // print system information
     {
         fprintf(stderr, "\n");
-        fprintf(stderr, "system_info: n_threads = %d / %d | %s\n",
-                params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
+        fprintf(stderr, "system_info: pp_threads = %d / %d | %s\n",
+                params.pp_threads, std::thread::hardware_concurrency(), llama_print_system_info());
     }
 
     if (params.hellaswag) {
