@@ -597,9 +597,9 @@ enum e_model {
 static const size_t kB = 1024;
 static const size_t MB = 1024*1024;
 
-static const std::map<e_model, size_t> & MEM_REQ_SCRATCH0(int n_ctx)
+static std::map<e_model, size_t> MEM_REQ_SCRATCH0(int n_ctx)
 {
-    static std::map<e_model, size_t> k_sizes = {
+    std::map<e_model, size_t> k_sizes = {
         { MODEL_3B,   ((size_t) n_ctx / 16ull +  92ull) * MB },
         { MODEL_7B,   ((size_t) n_ctx / 16ull + 100ull) * MB },
         { MODEL_13B,  ((size_t) n_ctx / 12ull + 120ull) * MB },
@@ -777,7 +777,8 @@ struct llama_vocab {
 };
 
 struct llama_model {
-    e_model type = MODEL_UNKNOWN;
+    e_model     type  = MODEL_UNKNOWN;
+    llama_ftype ftype = LLAMA_FTYPE_ALL_F32;
 
     llama_hparams hparams;
     llama_vocab   vocab;
@@ -1027,7 +1028,8 @@ struct llama_model_loader {
     bool use_mmap = false;
 
     llama_file file;
-    llama_file_version file_version;
+    llama_ftype ftype;
+    llama_file_version fver;
 
     std::unique_ptr<llama_mmap> mapping;
 
@@ -1048,7 +1050,7 @@ struct llama_model_loader {
         n_kv      = gguf_get_n_kv(ctx_gguf);
         n_tensors = gguf_get_n_tensors(ctx_gguf);
 
-        file_version = (enum llama_file_version) gguf_get_version(ctx_gguf);
+        fver = (enum llama_file_version) gguf_get_version(ctx_gguf);
 
         for (int i = 0; i < n_tensors; i++) {
             const char * name = gguf_get_tensor_name(ctx_gguf, i);
@@ -1056,13 +1058,16 @@ struct llama_model_loader {
             n_elements += ggml_nelements(t);
         }
 
-        // print meta data
+        LLAMA_LOG_INFO("%s: loaded meta data with %d key-value pairs and %d tensors from %s (version %s)\n",
+                __func__, n_kv, n_tensors, fname.c_str(), llama_file_version_name(fver));
+
+        // determine file type based on the number of tensors for each quantization and print meta data
         // TODO: make optional
         {
-            LLAMA_LOG_INFO("%s: loaded meta data with %d key-value pairs and %d tensors from %s (version %s)\n",
-                    __func__, n_kv, n_tensors, fname.c_str(), llama_file_version_name(file_version));
-
             std::map<enum ggml_type, uint32_t> n_type;
+
+            uint32_t n_type_max = 0;
+            enum ggml_type type_max = GGML_TYPE_F32;
 
             for (int i = 0; i < n_tensors; i++) {
                 const char * name = gguf_get_tensor_name(ctx_gguf, i);
@@ -1070,7 +1075,32 @@ struct llama_model_loader {
 
                 n_type[meta->type]++;
 
+                if (n_type_max < n_type[meta->type]) {
+                    n_type_max = n_type[meta->type];
+                    type_max   = meta->type;
+                }
+
                 LLAMA_LOG_INFO("%s: - tensor %4d: %32s %-8s [ %s ]\n", __func__, i, name, ggml_type_name(meta->type), llama_format_tensor_shape(meta).c_str());
+            }
+
+            switch (type_max) {
+                case GGML_TYPE_F32:  ftype = LLAMA_FTYPE_ALL_F32;       break;
+                case GGML_TYPE_F16:  ftype = LLAMA_FTYPE_MOSTLY_F16;    break;
+                case GGML_TYPE_Q4_0: ftype = LLAMA_FTYPE_MOSTLY_Q4_0;   break;
+                case GGML_TYPE_Q4_1: ftype = LLAMA_FTYPE_MOSTLY_Q4_1;   break;
+                case GGML_TYPE_Q5_0: ftype = LLAMA_FTYPE_MOSTLY_Q5_0;   break;
+                case GGML_TYPE_Q5_1: ftype = LLAMA_FTYPE_MOSTLY_Q5_1;   break;
+                case GGML_TYPE_Q8_0: ftype = LLAMA_FTYPE_MOSTLY_Q8_0;   break;
+                case GGML_TYPE_Q2_K: ftype = LLAMA_FTYPE_MOSTLY_Q2_K;   break;
+                case GGML_TYPE_Q3_K: ftype = LLAMA_FTYPE_MOSTLY_Q3_K_M; break;
+                case GGML_TYPE_Q4_K: ftype = LLAMA_FTYPE_MOSTLY_Q4_K_M; break;
+                case GGML_TYPE_Q5_K: ftype = LLAMA_FTYPE_MOSTLY_Q5_K_M; break;
+                case GGML_TYPE_Q6_K: ftype = LLAMA_FTYPE_MOSTLY_Q6_K;   break;
+                default:
+                     {
+                         LLAMA_LOG_WARN("%s: unknown type %s\n", __func__, ggml_type_name(type_max));
+                         ftype = LLAMA_FTYPE_ALL_F32;
+                     } break;
             }
 
             for (int i = 0; i < n_kv; i++) {
@@ -1275,7 +1305,7 @@ struct llama_model_loader {
 // load LLaMA models
 //
 
-static const char * llama_ftype_name(enum llama_ftype ftype) {
+const char * llama_model_ftype_name(enum llama_ftype ftype) {
     switch (ftype) {
         case LLAMA_FTYPE_ALL_F32:     return "all F32";
         case LLAMA_FTYPE_MOSTLY_F16:  return "mostly F16";
@@ -1403,6 +1433,8 @@ static void llama_model_load_internal(
                 } break;
         }
 
+        model.ftype = ml->ftype;
+
         hparams.n_ctx = n_ctx;
 
         // LLaMAv2
@@ -1456,7 +1488,7 @@ static void llama_model_load_internal(
 
     {
         // hparams
-        LLAMA_LOG_INFO("%s: format       = %s\n",     __func__, llama_file_version_name(ml->file_version));
+        LLAMA_LOG_INFO("%s: format       = %s\n",     __func__, llama_file_version_name(ml->fver));
         LLAMA_LOG_INFO("%s: arch         = %s\n",     __func__, general_arch.c_str());
         LLAMA_LOG_INFO("%s: n_vocab      = %u\n",     __func__, hparams.n_vocab);
         LLAMA_LOG_INFO("%s: n_ctx_train  = %u\n",     __func__, hparams.n_ctx_train);
@@ -1472,6 +1504,7 @@ static void llama_model_load_internal(
         LLAMA_LOG_INFO("%s: freq_base    = %.1f\n",   __func__, hparams.rope_freq_base);
         LLAMA_LOG_INFO("%s: freq_scale   = %g\n",     __func__, hparams.rope_freq_scale);
         LLAMA_LOG_INFO("%s: model type   = %s\n",     __func__, llama_model_type_name(model.type));
+        LLAMA_LOG_INFO("%s: model ftype  = %s\n",     __func__, llama_model_ftype_name(model.ftype));
         LLAMA_LOG_INFO("%s: model size   = %.2f B\n", __func__, ml->n_elements*1e-9);
 
         // general kv
@@ -2141,6 +2174,13 @@ static bool llama_eval_internal(
             const char * cgraph_fname) {
 
     GGML_ASSERT((!tokens && embd) || (tokens && !embd)); // NOLINT
+
+    GGML_ASSERT(n_tokens > 0);
+    GGML_ASSERT(n_past >= 0);
+    GGML_ASSERT(n_threads > 0);
+    // TODO: keep the values of n_batch and n_ctx
+    // GGML_ASSERT(n_tokens <= n_batch);
+    // GGML_ASSERT(n_past + n_tokens <= n_ctx);
 
     const int64_t t_start_us = ggml_time_us();
 
@@ -4913,6 +4953,10 @@ int llama_get_vocab(
         float  * scores,
         int capacity) {
     return llama_get_vocab_from_model(&ctx->model, strings, scores, capacity);
+}
+
+int llama_model_type(const struct llama_model * model, char * buf, size_t buf_size) {
+    return snprintf(buf, buf_size, "LLaMA %s %s", llama_model_type_name(model->type), llama_model_ftype_name(model->ftype));
 }
 
 int llama_get_vocab_from_model(

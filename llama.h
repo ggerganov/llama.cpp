@@ -235,6 +235,9 @@ extern "C" {
     LLAMA_API int llama_n_ctx_from_model  (const struct llama_model * model);
     LLAMA_API int llama_n_embd_from_model (const struct llama_model * model);
 
+    // Get a string describing the model type
+    LLAMA_API int llama_model_type(const struct llama_model * model, char * buf, size_t buf_size);
+
     // Returns 0 on success
     LLAMA_API int llama_model_quantize(
             const char * fname_inp,

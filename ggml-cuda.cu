@@ -6469,3 +6469,15 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
     func(tensor->src[0], tensor->src[1], tensor);
     return true;
 }
+
+int ggml_cuda_get_device_count() {
+    int device_count;
+    CUDA_CHECK(cudaGetDeviceCount(&device_count));
+    return device_count;
+}
+
+void ggml_cuda_get_device_description(int device, char * description, size_t description_size) {
+    cudaDeviceProp prop;
+    CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+    snprintf(description, description_size, "%s", prop.name);
+}
