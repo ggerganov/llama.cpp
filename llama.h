@@ -61,6 +61,40 @@ extern "C" {
 
     typedef int llama_token;
 
+    enum llama_log_level {
+        LLAMA_LOG_LEVEL_ERROR = 2,
+        LLAMA_LOG_LEVEL_WARN  = 3,
+        LLAMA_LOG_LEVEL_INFO  = 4
+    };
+
+    enum llama_vocab_type {
+        LLAMA_VOCAB_TYPE_SPM = 0, // SentencePiece
+        LLAMA_VOCAB_TYPE_BPE = 1, // Byte Pair Encoding
+    };
+
+    // model file types
+    enum llama_ftype {
+        LLAMA_FTYPE_ALL_F32              = 0,
+        LLAMA_FTYPE_MOSTLY_F16           = 1, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_0          = 2, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_1          = 3, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4, // tok_embeddings.weight and output.weight are F16
+        // LLAMA_FTYPE_MOSTLY_Q4_2       = 5, // support has been removed
+        // LLAMA_FTYPE_MOSTLY_Q4_3       = 6, // support has been removed
+        LLAMA_FTYPE_MOSTLY_Q8_0          = 7, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q5_0          = 8, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q5_1          = 9, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q2_K          = 10,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q3_K_S        = 11,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q3_K_M        = 12,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q3_K_L        = 13,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_K_S        = 14,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_K_M        = 15,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q5_K_S        = 16,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q5_K_M        = 17,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q6_K          = 18,// except 1d tensors
+    };
+
     typedef struct llama_token_data {
         llama_token id; // token id
         float logit;    // log-odds of the token
@@ -74,19 +108,6 @@ extern "C" {
     } llama_token_data_array;
 
     typedef void (*llama_progress_callback)(float progress, void *ctx);
-
-    enum llama_log_level {
-        LLAMA_LOG_LEVEL_ERROR = 2,
-        LLAMA_LOG_LEVEL_WARN  = 3,
-        LLAMA_LOG_LEVEL_INFO  = 4
-    };
-
-    // Signature for logging events
-    // Note that text includes the new line character at the end for most events.
-    // If your logging mechanism cannot handle that, check if the last character is '\n' and strip it
-    // if it exists.
-    // It might not exist for progress report where '.' is output repeatedly.
-    typedef void (*llama_log_callback)(enum llama_log_level level, const char * text, void * user_data);
 
     struct llama_context_params {
         uint32_t seed;         // RNG seed, -1 for random
@@ -117,28 +138,12 @@ extern "C" {
         bool embedding;  // embedding mode only
     };
 
-    // model file types
-    enum llama_ftype {
-        LLAMA_FTYPE_ALL_F32              = 0,
-        LLAMA_FTYPE_MOSTLY_F16           = 1, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_0          = 2, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_1          = 3, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4, // tok_embeddings.weight and output.weight are F16
-        // LLAMA_FTYPE_MOSTLY_Q4_2       = 5, // support has been removed
-        // LLAMA_FTYPE_MOSTLY_Q4_3       = 6, // support has been removed
-        LLAMA_FTYPE_MOSTLY_Q8_0          = 7, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q5_0          = 8, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q5_1          = 9, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q2_K          = 10,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q3_K_S        = 11,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q3_K_M        = 12,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q3_K_L        = 13,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_K_S        = 14,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_K_M        = 15,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q5_K_S        = 16,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q5_K_M        = 17,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q6_K          = 18,// except 1d tensors
-    };
+    // Signature for logging events
+    // Note that text includes the new line character at the end for most events.
+    // If your logging mechanism cannot handle that, check if the last character is '\n' and strip it
+    // if it exists.
+    // It might not exist for progress report where '.' is output repeatedly.
+    typedef void (*llama_log_callback)(enum llama_log_level level, const char * text, void * user_data);
 
     // model quantization parameters
     typedef struct llama_model_quantize_params {
