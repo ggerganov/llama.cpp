@@ -170,6 +170,136 @@
       grammar: '',
     })
 
+    /* START: Support for storing prompt templates and parameters in borwser LocalStorage */
+
+    const local_storage_storageKey = "llamacpp_server_local_storage";
+
+    function local_storage_setDataFromObject(tag, content) {
+      localStorage.setItem(local_storage_storageKey + '/' + tag, JSON.stringify(content));
+    }
+
+    function local_storage_setDataFromRawText(tag, content) {
+      localStorage.setItem(local_storage_storageKey + '/' + tag, content);
+    }
+
+    function local_storage_getDataAsObject(tag) {
+      const item = localStorage.getItem(local_storage_storageKey + '/' + tag);
+      if (!item) {
+        return null;
+      } else {
+        return JSON.parse(item);
+      }
+    }
+
+    function local_storage_getDataAsRawText(tag) {
+      const item = localStorage.getItem(local_storage_storageKey + '/' + tag);
+      if (!item) {
+        return null;
+      } else {
+        return item;
+      }
+    }
+
+    // create a container for user templates and settings
+
+    const savedUserTemplates = signal({})
+    const selectedUserTemplate = signal({ name: '', template: { session: {}, params: {} } })
+
+    // let's import locally saved templates and settings if there are any
+    // user templates and settings are stored in one object
+    // in form of { "templatename": "templatedata" } and { "settingstemplatename":"settingsdata" }
+
+    console.log('Importing saved templates')
+
+    let importedTemplates = local_storage_getDataAsObject('user_templates')
+
+    if (importedTemplates) {
+      // saved templates were successfuly imported.
+
+      console.log('Processing saved templates and updating default template')
+
+      //console.log(importedTemplates);
+      savedUserTemplates.value = importedTemplates;
+
+      //override default template
+      savedUserTemplates.value.default = { session: session.value, params: params.value }
+      local_storage_setDataFromObject('user_templates', savedUserTemplates.value)
+    } else {
+      // no saved templates detected.
+
+      console.log('Initializing LocalStorage and saving default template')
+
+      savedUserTemplates.value = { "default": { session: session.value, params: params.value } }
+      local_storage_setDataFromObject('user_templates', savedUserTemplates.value)
+    }
+
+    function userTemplateResetToDefault() {
+      console.log('Reseting themplate to default')
+      selectedUserTemplate.value.name = 'default';
+      selectedUserTemplate.value.data = savedUserTemplates.value['default'];
+    }
+
+    function userTemplateApply(t) {
+      session.value = t.data.session;
+      params.value = t.data.params;
+    }
+
+    function userTemplateResetToDefaultAndApply() {
+      userTemplateResetToDefault()
+      userTemplateApply(selectedUserTemplate.value)
+    }
+
+    function userTemplateLoadAndApplyAutosaved() {
+      // get autosaved last used template
+      let lastUsedTemplate = local_storage_getDataAsObject('user_templates_last')
+
+      if (lastUsedTemplate) {
+
+        console.log('Autosaved template found, restoring')
+
+        selectedUserTemplate.value = lastUsedTemplate
+      }
+      else {
+
+        console.log('No autosaved template found, using default template')
+        // no autosaved last used template was found, so load from default.
+
+        userTemplateResetToDefault()
+      }
+
+      console.log('Applying template')
+      // and update internal data from templates
+
+      userTemplateApply(selectedUserTemplate.value)
+    }
+
+    //console.log(savedUserTemplates.value)
+    //console.log(selectedUserTemplate.value)
+
+    function userTemplateAutosave() {
+      console.log('Template Autosave...')
+      if (selectedUserTemplate.value.name == 'default') {
+        // we don't want to save over default template, so let's create a new one
+        let newTemplateName = 'UserTemplate-' + Date.now().toString()
+        let newTemplate = { 'name': newTemplateName, 'data': { 'session': session.value, 'params': params.value } }
+
+        console.log('Saving as ' + newTemplateName)
+
+        // save in the autosave slot
+        local_storage_setDataFromObject('user_templates_last', newTemplate)
+
+        // and load it back and apply
+        userTemplateLoadAndApplyAutosaved()
+      } else {
+        local_storage_setDataFromObject('user_templates_last', { 'name': selectedUserTemplate.value.name, 'data': { 'session': session.value, 'params': params.value } })
+      }
+    }
+
+    console.log('Checking for autosaved last used template')
+    userTemplateLoadAndApplyAutosaved()
+
+    /* END: Support for storing prompt templates and parameters in browsers LocalStorage */
+
     const llamaStats = signal(null)
     const controller = signal(null)
 
@@ -346,8 +476,34 @@
         `
       };
 
+      const userTemplateReset = (e) => {
+        e.preventDefault();
+        userTemplateResetToDefaultAndApply()
+      }
+
+      const UserTemplateResetButton = () => {
+        if (selectedUserTemplate.value.name == 'default') {
+          return html`
+            <button disabled>Using default template</button>
+          `
+        }
+
+        return html`
+          <button onclick=${userTemplateReset}>Reset all to default</button>
+        `
+      };
+
+      useEffect(() => {
+        // autosave template on every change
+        userTemplateAutosave()
+      }, [session.value, params.value])
+
       return html`
         <form>
+          <fieldset>
+            <${UserTemplateResetButton}/>
+          </fieldset>
+
           <fieldset>
             <div>
               <label for="prompt">Prompt</label>
