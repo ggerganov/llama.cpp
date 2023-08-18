@@ -761,7 +761,6 @@ struct llama_kv_cache {
 struct llama_vocab {
     // TODO:
     // - add a vector of merges
-    // - add members for bos/eos/pad/sep tokens
     //   so that we can pass it to different types of tokenizers with a common interface
 
     using id    = int32_t;
@@ -774,6 +773,14 @@ struct llama_vocab {
 
     std::unordered_map<token, id> token_to_id;
     std::vector<token_score> id_to_token;
+
+    id special_bos_id = -1;
+    id special_eos_id = -1;
+    id special_unk_id = -1;
+    id special_sep_id = -1;
+    id special_pad_id = -1;
+
+    id linefeed_id = -1;
 };
 
 struct llama_model {
@@ -1349,9 +1356,6 @@ static void llama_model_load_internal(
             } \
         }
 
-        // get general kv
-        GGUF_GET(general_name, gguf_get_val_str, GGUF_TYPE_STRING, false, "general.name");
-
         // get hparams kv
         GGUF_GET(hparams.n_vocab,        gguf_get_arr_n,   GGUF_TYPE_ARRAY,   true, "tokenizer.ggml.tokens");
         GGUF_GET(hparams.n_ctx_train,    gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.context_length");
@@ -1365,6 +1369,16 @@ static void llama_model_load_internal(
         // n_head_kv is optional, default to n_head
         hparams.n_head_kv = hparams.n_head;
         GGUF_GET(hparams.n_head_kv, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "llama.attention.head_count_kv");
+
+        // get general kv
+        GGUF_GET(general_name, gguf_get_val_str, GGUF_TYPE_STRING, false, "general.name");
+
+        // special tokens
+        GGUF_GET(vocab.special_bos_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "tokenizer.ggml.bos_token_id");
+        GGUF_GET(vocab.special_eos_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "tokenizer.ggml.eos_token_id");
+        GGUF_GET(vocab.special_unk_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "tokenizer.ggml.unknown_token_id");
+        GGUF_GET(vocab.special_sep_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "tokenizer.ggml.separator_token_id");
+        GGUF_GET(vocab.special_pad_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "tokenizer.ggml.padding_token_id");
 
 #undef GGUF_GET
 
@@ -1407,12 +1421,12 @@ static void llama_model_load_internal(
 
         const int token_idx = gguf_find_key(ctx, "tokenizer.ggml.tokens");
         if (token_idx == -1) {
-            throw std::runtime_error("cannot find token list in GGUF file\n");
+            throw std::runtime_error("cannot find tokenizer vocab in model file\n");
         }
 
         const int score_idx = gguf_find_key(ctx, "tokenizer.ggml.scores");
         if (score_idx == -1) {
-            throw std::runtime_error("cannot find token scores list in GGUF file\n");
+            throw std::runtime_error("cannot find tokenizer scores in model file\n");
         }
 
         const float * scores = (const float * ) gguf_get_arr_data(ctx, score_idx);
@@ -1425,12 +1439,16 @@ static void llama_model_load_internal(
             auto & tok_score = vocab.id_to_token[i];
             tok_score.tok = std::move(word);
             tok_score.score = scores[i];
+
+            if( tok_score.tok == "<0x0A>" ) {
+                vocab.linefeed_id = i;
+            }
         }
+
     }
 
     {
-        LLAMA_LOG_INFO("%s: general.name = %s\n",    __func__, general_name.c_str());
-
+        // hparams
         LLAMA_LOG_INFO("%s: format       = %s\n",    __func__, llama_file_version_name(ml->file_version));
         LLAMA_LOG_INFO("%s: n_vocab      = %u\n",    __func__, hparams.n_vocab);
         LLAMA_LOG_INFO("%s: n_ctx_train  = %u\n",    __func__, hparams.n_ctx_train);
@@ -1449,6 +1467,17 @@ static void llama_model_load_internal(
         LLAMA_LOG_INFO("%s: model size   = %.2f B\n", __func__, ml->n_elements*1e-9);
 
         // TODO: print number of tensors for each quantization
+
+        // general kv
+        LLAMA_LOG_INFO("%s: general.name = %s\n",    __func__, general_name.c_str());
+
+        // special tokens
+        if( vocab.special_bos_id != -1 ) { LLAMA_LOG_INFO( "%s: BOS token = %d '%s'\n", __func__, vocab.special_bos_id, vocab.id_to_token[vocab.special_bos_id].tok.c_str() ); }
+        if( vocab.special_eos_id != -1 ) { LLAMA_LOG_INFO( "%s: EOS token = %d '%s'\n", __func__, vocab.special_eos_id, vocab.id_to_token[vocab.special_eos_id].tok.c_str() ); }
+        if( vocab.special_unk_id != -1 ) { LLAMA_LOG_INFO( "%s: UNK token = %d '%s'\n", __func__, vocab.special_unk_id, vocab.id_to_token[vocab.special_unk_id].tok.c_str() ); }
+        if( vocab.special_sep_id != -1 ) { LLAMA_LOG_INFO( "%s: SEP token = %d '%s'\n", __func__, vocab.special_sep_id, vocab.id_to_token[vocab.special_sep_id].tok.c_str() ); }
+        if( vocab.special_pad_id != -1 ) { LLAMA_LOG_INFO( "%s: PAD token = %d '%s'\n", __func__, vocab.special_pad_id, vocab.id_to_token[vocab.special_pad_id].tok.c_str() ); }
+        if( vocab.linefeed_id    != -1 ) { LLAMA_LOG_INFO( "%s: LF token  = %d '%s'\n", __func__, vocab.linefeed_id,    vocab.id_to_token[vocab.linefeed_id].tok.c_str() ); }
     }
 
     if (vocab_only) {
