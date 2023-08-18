@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # Compatibility stub
 
 import argparse
