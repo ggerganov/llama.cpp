@@ -99,6 +99,7 @@ as the main playground for developing new features for the [ggml](https://github
 - Rust: [mdrokz/rust-llama.cpp](https://github.com/mdrokz/rust-llama.cpp)
 - C#/.NET: [SciSharp/LLamaSharp](https://github.com/SciSharp/LLamaSharp)
 - Scala 3: [donderom/llm4s](https://github.com/donderom/llm4s)
+- Clojure: [phronmophobic/llama.clj](https://github.com/phronmophobic/llama.clj)
 
 **UI:**
 
