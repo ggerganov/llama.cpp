@@ -94,7 +94,6 @@ print("gguf: get model metadata")
 
 block_count = hparams["n_layer"]
 
-gguf_writer.add_architecture()
 gguf_writer.add_name(last_dir)
 gguf_writer.add_context_length(2048)
 gguf_writer.add_embedding_length(hparams["hidden_size"])
