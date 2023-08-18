@@ -880,7 +880,6 @@ struct llama_context {
     std::vector<uint8_t> work_buffer;
 
     // memory buffers used to evaluate the model
-    // TODO: move in llama_state
     llama_buffer buf_compute;
 
 #ifdef LLAMA_USE_ALLOCATOR
@@ -2547,7 +2546,7 @@ private:
     std::map<std::string, std::pair<int, int> > rev_merge;
 };
 
-static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, const std::string & raw_text, bool bos, bool escape) {
+static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, const std::string & raw_text, bool bos, bool escape) {
     llama_tokenizer tokenizer(vocab);
     std::vector<llama_vocab::id> output;
 
@@ -4399,6 +4398,30 @@ void llama_free(struct llama_context * ctx) {
     delete ctx;
 }
 
+int llama_n_vocab(const struct llama_context * ctx) {
+    return ctx->model.vocab.id_to_token.size();
+}
+
+int llama_n_ctx(const struct llama_context * ctx) {
+    return ctx->model.hparams.n_ctx;
+}
+
+int llama_n_embd(const struct llama_context * ctx) {
+    return ctx->model.hparams.n_embd;
+}
+
+int llama_n_vocab_from_model(const struct llama_model * model) {
+    return model->vocab.id_to_token.size();
+}
+
+int llama_n_ctx_from_model(const struct llama_model * model) {
+    return model->hparams.n_ctx;
+}
+
+int llama_n_embd_from_model(const struct llama_model * model) {
+    return model->hparams.n_embd;
+}
+
 int llama_model_quantize(
         const char * fname_inp,
         const char * fname_out,
@@ -4876,114 +4899,20 @@ int llama_eval_export(struct llama_context * ctx, const char * fname) {
     return 0;
 }
 
-int llama_tokenize_with_model(
-    const struct llama_model * model,
-                  const char * text,
-                 llama_token * tokens,
-                         int   n_max_tokens,
-                        bool   add_bos) {
-    auto escape = llama_vocab_type(model->vocab) == "spm";
-    auto res = llama_tokenize(model->vocab, text, add_bos, escape);
-
-    if (n_max_tokens < (int) res.size()) {
-        LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
-        return -((int) res.size());
-    }
-
-    for (size_t i = 0; i < res.size(); i++) {
-        tokens[i] = res[i];
-    }
-
-    return res.size();
+float * llama_get_logits(struct llama_context * ctx) {
+    return ctx->logits.data();
 }
 
-int llama_tokenize(
-        struct llama_context * ctx,
-                  const char * text,
-                 llama_token * tokens,
-                         int   n_max_tokens,
-                        bool   add_bos) {
-    return llama_tokenize_with_model(&ctx->model, text, tokens, n_max_tokens, add_bos);
+float * llama_get_embeddings(struct llama_context * ctx) {
+    return ctx->embedding.data();
 }
 
-std::vector<llama_token> llama_tokenize(
-        struct llama_context * ctx,
-           const std::string & text,
-                        bool   add_bos) {
-    int length = text.length() + add_bos;
-    std::vector<llama_token> result(length);
-    length = llama_tokenize(ctx, text.c_str(), result.data(), result.size(), add_bos);
-    if (length < 0) {
-        result.resize(-length);
-        int check = llama_tokenize(ctx, text.c_str(), result.data(), result.size(), add_bos);
-        assert(check == -length);
-        GGML_UNUSED(check);
-    } else {
-        result.resize(length);
-    }
-    return result;
-}
-
-int llama_tokenize_bpe(
-        struct llama_context * ctx,
-                  const char * text,
-                 llama_token * tokens,
-                         int   n_max_tokens,
-                        bool   add_bos) {
-    auto res = llama_tokenize(ctx->model.vocab, text, add_bos, false);
-
-    if (n_max_tokens < (int) res.size()) {
-        LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
-        return -((int) res.size());
-    }
-
-    for (size_t i = 0; i < res.size(); i++) {
-        tokens[i] = res[i];
-    }
-
-    return res.size();
-}
-
-std::vector<llama_token> llama_tokenize_bpe(
-        struct llama_context * ctx,
-           const std::string & text,
-                        bool   add_bos) {
-    int length = text.length() + add_bos;
-    std::vector<llama_token> result(length);
-    length = llama_tokenize_bpe(ctx, text.c_str(), result.data(), result.size(), add_bos);
-    if (length < 0) {
-        result.resize(-length);
-        int check = llama_tokenize_bpe(ctx, text.c_str(), result.data(), result.size(), add_bos);
-        assert(check == -length);
-        GGML_UNUSED(check);
-    } else {
-        result.resize(length);
-    }
-    return result;
-}
-
-int llama_n_vocab_from_model(const struct llama_model * model) {
-    return model->vocab.id_to_token.size();
-}
-
-int llama_n_ctx_from_model(const struct llama_model * model) {
-    return model->hparams.n_ctx;
-}
-
-int llama_n_embd_from_model(const struct llama_model * model) {
-    return model->hparams.n_embd;
-}
-
-int llama_n_vocab(const struct llama_context * ctx) {
-    return ctx->model.vocab.id_to_token.size();
-}
-
-int llama_n_ctx(const struct llama_context * ctx) {
-    return ctx->model.hparams.n_ctx;
-}
-
-int llama_n_embd(const struct llama_context * ctx) {
-    return ctx->model.hparams.n_embd;
+int llama_get_vocab(
+        const struct llama_context * ctx,
+        const char * * strings,
+        float  * scores,
+        int capacity) {
+    return llama_get_vocab_from_model(&ctx->model, strings, scores, capacity);
 }
 
 int llama_get_vocab_from_model(
@@ -4999,20 +4928,70 @@ int llama_get_vocab_from_model(
     return n;
 }
 
-int llama_get_vocab(
-        const struct llama_context * ctx,
-        const char * * strings,
-        float  * scores,
-        int capacity) {
-    return llama_get_vocab_from_model(&ctx->model, strings, scores, capacity);
+int llama_tokenize(
+        struct llama_context * ctx,
+                  const char * text,
+                 llama_token * tokens,
+                         int   n_max_tokens,
+                        bool   add_bos) {
+    return llama_tokenize_with_model(&ctx->model, text, tokens, n_max_tokens, add_bos);
 }
 
-float * llama_get_logits(struct llama_context * ctx) {
-    return ctx->logits.data();
+int llama_tokenize_bpe(
+        struct llama_context * ctx,
+                  const char * text,
+                 llama_token * tokens,
+                         int   n_max_tokens,
+                        bool   add_bos) {
+    auto res = llama_tokenize_internal(ctx->model.vocab, text, add_bos, false);
+
+    if (n_max_tokens < (int) res.size()) {
+        LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
+        return -((int) res.size());
+    }
+
+    for (size_t i = 0; i < res.size(); i++) {
+        tokens[i] = res[i];
+    }
+
+    return res.size();
 }
 
-float * llama_get_embeddings(struct llama_context * ctx) {
-    return ctx->embedding.data();
+int llama_tokenize_with_model(
+    const struct llama_model * model,
+                  const char * text,
+                 llama_token * tokens,
+                         int   n_max_tokens,
+                        bool   add_bos) {
+    auto escape = llama_vocab_type(model->vocab) == "spm";
+    auto res = llama_tokenize_internal(model->vocab, text, add_bos, escape);
+
+    if (n_max_tokens < (int) res.size()) {
+        LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
+        return -((int) res.size());
+    }
+
+    for (size_t i = 0; i < res.size(); i++) {
+        tokens[i] = res[i];
+    }
+
+    return res.size();
+}
+
+int llama_token_to_str(const struct llama_context * ctx, llama_token token, char * buf, int length) {
+    return llama_token_to_str_with_model(&ctx->model, token, buf, length);
+}
+
+int llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token, char * buf, int length) {
+    if (0 <= token && token < llama_n_vocab_from_model(&ctx->model)) {
+        std::string result = ctx->model.vocab.id_to_token[token].tok;
+        if (length < (int) result.length()) {
+            return -result.length();
+        }
+        memcpy(buf, result.c_str(), result.length());
+        return result.length();
+    }
+    return 0;
 }
 
 // does not write null-terminator to str
@@ -5047,50 +5026,6 @@ int llama_token_to_str_with_model(const struct llama_model * model, llama_token 
         }
     }
     return 0;
-}
-
-int llama_token_to_str(const struct llama_context * ctx, llama_token token, char * buf, int length) {
-    return llama_token_to_str_with_model(&ctx->model, token, buf, length);
-}
-
-std::string llama_token_to_str(const struct llama_context * ctx, llama_token token) {
-    std::vector<char> result(8, 0);
-    const int length = llama_token_to_str(ctx, token, result.data(), result.size());
-    if (length < 0) {
-        result.resize(-length);
-        int check = llama_token_to_str(ctx, token, result.data(), result.size());
-        GGML_ASSERT(check == -length);
-    } else {
-        result.resize(length);
-    }
-
-    return std::string(result.data(), result.size());
-}
-
-int llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token, char * buf, int length) {
-    if (0 <= token && token < llama_n_vocab_from_model(&ctx->model)) {
-        std::string result = ctx->model.vocab.id_to_token[token].tok;
-        if (length < (int) result.length()) {
-            return -result.length();
-        }
-        memcpy(buf, result.c_str(), result.length());
-        return result.length();
-    }
-    return 0;
-}
-
-std::string llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token) {
-    std::vector<char> result(8, 0);
-    const int length = llama_token_to_str_bpe(ctx, token, result.data(), result.size());
-    if (length < 0) {
-        result.resize(-length);
-        const int check = llama_token_to_str_bpe(ctx, token, result.data(), result.size());
-        GGML_ASSERT(check == -length);
-    } else {
-        result.resize(length);
-    }
-
-    return std::string(result.data(), result.size());
 }
 
 llama_token llama_token_bos(void) {
@@ -5164,6 +5099,73 @@ const char * llama_print_system_info(void) {
 
     return s.c_str();
 }
+
+
+std::vector<llama_token> llama_tokenize(
+        struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_bos) {
+    // upper limit for the number of tokens
+    int n_tokens = text.length() + add_bos;
+    std::vector<llama_token> result(n_tokens);
+    n_tokens = llama_tokenize(ctx, text.c_str(), result.data(), result.size(), add_bos);
+    if (n_tokens < 0) {
+        result.resize(-n_tokens);
+        int check = llama_tokenize(ctx, text.c_str(), result.data(), result.size(), add_bos);
+        assert(check == -n_tokens);
+        GGML_UNUSED(check);
+    } else {
+        result.resize(n_tokens);
+    }
+    return result;
+}
+
+std::vector<llama_token> llama_tokenize_bpe(
+        struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_bos) {
+    int length = text.length() + add_bos;
+    std::vector<llama_token> result(length);
+    length = llama_tokenize_bpe(ctx, text.c_str(), result.data(), result.size(), add_bos);
+    if (length < 0) {
+        result.resize(-length);
+        int check = llama_tokenize_bpe(ctx, text.c_str(), result.data(), result.size(), add_bos);
+        assert(check == -length);
+        GGML_UNUSED(check);
+    } else {
+        result.resize(length);
+    }
+    return result;
+}
+
+std::string llama_token_to_str(const struct llama_context * ctx, llama_token token) {
+    std::vector<char> result(8, 0);
+    const int length = llama_token_to_str(ctx, token, result.data(), result.size());
+    if (length < 0) {
+        result.resize(-length);
+        int check = llama_token_to_str(ctx, token, result.data(), result.size());
+        GGML_ASSERT(check == -length);
+    } else {
+        result.resize(length);
+    }
+
+    return std::string(result.data(), result.size());
+}
+
+std::string llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token) {
+    std::vector<char> result(8, 0);
+    const int length = llama_token_to_str_bpe(ctx, token, result.data(), result.size());
+    if (length < 0) {
+        result.resize(-length);
+        const int check = llama_token_to_str_bpe(ctx, token, result.data(), result.size());
+        GGML_ASSERT(check == -length);
+    } else {
+        result.resize(length);
+    }
+
+    return std::string(result.data(), result.size());
+}
+
 
 // For internal test use
 const std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx) {

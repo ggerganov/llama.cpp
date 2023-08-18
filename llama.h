@@ -199,19 +199,14 @@ extern "C" {
     LLAMA_API struct llama_context_params llama_context_default_params(void);
     LLAMA_API struct llama_model_quantize_params llama_model_quantize_default_params(void);
 
-    LLAMA_API int  llama_max_devices(void);
-    LLAMA_API bool llama_mmap_supported(void);
-    LLAMA_API bool llama_mlock_supported(void);
-
     // TODO: not great API - very likely to change
     // Initialize the llama + ggml backend
     // If numa is true, use NUMA optimizations
     // Call once at the start of the program
     LLAMA_API void llama_backend_init(bool numa);
+
     // Call once at the end of the program - currently only used for MPI
     LLAMA_API void llama_backend_free(void);
-
-    LLAMA_API int64_t llama_time_us(void);
 
     LLAMA_API struct llama_model * llama_load_model_from_file(
                              const char * path_model,
@@ -223,9 +218,22 @@ extern "C" {
                      struct llama_model * model,
             struct llama_context_params   params);
 
-
     // Frees all allocated memory
     LLAMA_API void llama_free(struct llama_context * ctx);
+
+    LLAMA_API int64_t llama_time_us(void);
+
+    LLAMA_API int  llama_max_devices    (void);
+    LLAMA_API bool llama_mmap_supported (void);
+    LLAMA_API bool llama_mlock_supported(void);
+
+    LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
+    LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
+    LLAMA_API int llama_n_embd (const struct llama_context * ctx);
+
+    LLAMA_API int llama_n_vocab_from_model(const struct llama_model * model);
+    LLAMA_API int llama_n_ctx_from_model  (const struct llama_model * model);
+    LLAMA_API int llama_n_embd_from_model (const struct llama_model * model);
 
     // Returns 0 on success
     LLAMA_API int llama_model_quantize(
@@ -300,6 +308,31 @@ extern "C" {
     // IMPORTANT: do not use for anything else other than debugging and testing!
     LLAMA_API int llama_eval_export(struct llama_context * ctx, const char * fname);
 
+    // Token logits obtained from the last call to llama_eval()
+    // The logits for the last token are stored in the last row
+    // Can be mutated in order to change the probabilities of the next token
+    // Rows: n_tokens
+    // Cols: n_vocab
+    LLAMA_API float * llama_get_logits(struct llama_context * ctx);
+
+    // Get the embeddings for the input
+    // shape: [n_embd] (1-dimensional)
+    LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
+
+    // Get the vocabulary as output parameters.
+    // Returns number of results.
+    LLAMA_API int llama_get_vocab(
+            const struct llama_context * ctx,
+                          const char * * strings,
+                                 float * scores,
+                                   int   capacity);
+
+    LLAMA_API int llama_get_vocab_from_model(
+              const struct llama_model * model,
+                          const char * * strings,
+                                 float * scores,
+                                   int   capacity);
+
     // Convert the provided text into tokens.
     // The tokens pointer must be large enough to hold the resulting tokens.
     // Returns the number of tokens on success, no more than n_max_tokens
@@ -326,39 +359,6 @@ extern "C" {
                              int   n_max_tokens,
                             bool   add_bos);
 
-    LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
-    LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
-    LLAMA_API int llama_n_embd (const struct llama_context * ctx);
-
-    LLAMA_API int llama_n_vocab_from_model(const struct llama_model * model);
-    LLAMA_API int llama_n_ctx_from_model  (const struct llama_model * model);
-    LLAMA_API int llama_n_embd_from_model (const struct llama_model * model);
-
-    // Get the vocabulary as output parameters.
-    // Returns number of results.
-    LLAMA_API int llama_get_vocab(
-            const struct llama_context * ctx,
-                          const char * * strings,
-                                 float * scores,
-                                   int   capacity);
-
-    LLAMA_API int llama_get_vocab_from_model(
-              const struct llama_model * model,
-                          const char * * strings,
-                                 float * scores,
-                                   int   capacity);
-
-    // Token logits obtained from the last call to llama_eval()
-    // The logits for the last token are stored in the last row
-    // Can be mutated in order to change the probabilities of the next token
-    // Rows: n_tokens
-    // Cols: n_vocab
-    LLAMA_API float * llama_get_logits(struct llama_context * ctx);
-
-    // Get the embeddings for the input
-    // shape: [n_embd] (1-dimensional)
-    LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
-
     // Token Id -> String. Uses the vocabulary in the provided context
     // Does not write null terminator to the buffer
     LLAMA_API int llama_token_to_str(
@@ -379,9 +379,9 @@ extern "C" {
                                   char * buf,
                                   int    length);
     // Special tokens
-    LLAMA_API llama_token llama_token_bos(void);  // beginning-of-sentence
-    LLAMA_API llama_token llama_token_eos(void);  // end-of-sentence
-    LLAMA_API llama_token llama_token_nl(void);   // next-line
+    LLAMA_API llama_token llama_token_bos(/*struct llama_model * model*/ void);  // beginning-of-sentence
+    LLAMA_API llama_token llama_token_eos(/*struct llama_model * model*/ void);  // end-of-sentence
+    LLAMA_API llama_token llama_token_nl (/*struct llama_model * model*/ void);  // next-line
 
     // Grammar
     //

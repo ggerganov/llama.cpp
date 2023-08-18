@@ -114,8 +114,7 @@ int main(int argc, char **argv) {
         }
         std::vector<llama_token> tokens = llama_tokenize(ctx, escape_whitespace(str), false);
         if (tokens.size() == 1) {
-            fprintf(stderr, "%s : info: %s tokenized to %d \n",
-                __func__, str.c_str(), tokens[0]);
+            fprintf(stderr, "%s : info: %s tokenized to %d \n", __func__, str.c_str(), tokens[0]);
         }
     }
 
