@@ -1224,6 +1224,10 @@ struct ggml_tensor * llama_build_lora_finetune_graphs(
         // output tensors
         ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t35, one));
         ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36, one));
+        // input gradient
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36->grad, one));
+        GGML_ASSERT(t36->grad->data == NULL && !ggml_is_view(t36->grad));
+        ggml_allocr_alloc(alloc, t36->grad);
 
         // make sure base model tensors data cannot be used in viewable operations
         ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, model->tok_embeddings, one));
