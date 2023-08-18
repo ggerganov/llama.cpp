@@ -1242,14 +1242,6 @@ struct ggml_tensor * llama_build_lora_finetune_graphs(
             ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.w3, one));
         }
 
-        // gradient tensors (will be set to zero by ggml_graph_reset)
-        for (int i = 0; i < gf->n_nodes; ++i) {
-            if (!gf->grads[i]) continue;
-            if (gf->grads[i]->data == NULL && !ggml_is_view(gf->grads[i])) {
-                ggml_allocr_alloc(alloc, gf->grads[i]);
-            }
-            ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, gf->grads[i], one));
-        }
         for (int i = 0; i < checkpoints.size(); ++i) {
             if (checkpoints[i]->data == NULL && !ggml_is_view(checkpoints[i])) {
                 ggml_allocr_alloc(alloc, checkpoints[i]);
