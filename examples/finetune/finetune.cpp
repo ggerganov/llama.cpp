@@ -2639,6 +2639,7 @@ void opt_callback(void * vdata, float * sched) {
     *sched = min_sched + *sched * (1.0f - min_sched);
 
     int impr_plot = -(int)(1 + (opt->loss_before - opt->loss_after) * 10.0f + 0.5f);
+    if (impr_plot > 0) impr_plot = 0;
     printf("%s: iter=%*d, sched=%f loss0=%f loss=%f | improvement: %*d>\n", __func__, 6, opt->iter, *sched, opt->loss_before, opt->loss_after, impr_plot, (int)0);
 
     if (data->shuffle_countdown < n_batch) {
