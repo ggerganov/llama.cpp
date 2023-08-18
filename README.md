@@ -9,13 +9,13 @@
 
 Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
-**Hot topics:**
+### 🚧 Incoming breaking change + refactoring:
 
-- Simple web chat example: https://github.com/ggerganov/llama.cpp/pull/1998
-- k-quants now support super-block size of 64: https://github.com/ggerganov/llama.cpp/pull/2001
-- New roadmap: https://github.com/users/ggerganov/projects/7
-- Azure CI brainstorming: https://github.com/ggerganov/llama.cpp/discussions/1985
-- p1 : LLM-based code completion engine at the edge : https://github.com/ggml-org/p1/discussions/1
+See PR https://github.com/ggerganov/llama.cpp/pull/2398 for more info.
+
+To devs: avoid making big changes to `llama.h` / `llama.cpp` until merged
+
+----
 
 <details>
   <summary>Table of Contents</summary>
