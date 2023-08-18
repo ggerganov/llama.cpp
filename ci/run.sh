@@ -233,6 +233,38 @@ function gg_run_open_llama_3b_v2 {
     check_ppl "q5_k" "$(cat $OUT/${ci}-tg-q5_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q6_k" "$(cat $OUT/${ci}-tg-q6_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
 
+    # lora
+    function compare_ppl {
+        qnt="$1"
+        ppl1=$(echo "$2" | grep -oE "[0-9]+\.[0-9]+" | tail -n 1)
+        ppl2=$(echo "$3" | grep -oE "[0-9]+\.[0-9]+" | tail -n 1)
+
+        if [ $(echo "$ppl1 < $ppl2" | bc) -eq 1 ]; then
+            printf '  - %s @ %s (FAIL: %s > %s)\n' "$qnt" "$ppl" "$ppl1" "$ppl2"
+            return 20
+        fi
+
+        printf '  - %s @ %s %s OK\n' "$qnt" "$ppl1" "$ppl2"
+        return 0
+    }
+
+    path_lora="../models-mnt/open-llama/3B-v2/lora"
+    path_shakespeare="../models-mnt/shakespeare"
+
+    shakespeare="${path_shakespeare}/shakespeare.txt"
+    lora_shakespeare="${path_lora}/ggml-adapter-model.bin"
+
+    gg_wget ${path_lora} https://huggingface.co/slaren/open_llama_3b_v2_shakespeare_lora/resolve/main/adapter_config.json
+    gg_wget ${path_lora} https://huggingface.co/slaren/open_llama_3b_v2_shakespeare_lora/resolve/main/adapter_model.bin
+    gg_wget ${path_shakespeare} https://huggingface.co/slaren/open_llama_3b_v2_shakespeare_lora/resolve/main/shakespeare.txt
+
+    python3 ../convert-lora-to-ggml.py ${path_lora}
+
+    (time ./bin/perplexity --model ${model_f16} -f ${shakespeare} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-ppl-shakespeare-f16.log
+    (time ./bin/perplexity --model ${model_f16} -f ${shakespeare} --lora ${lora_shakespeare} -c 128 -b 128 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-ppl-shakespeare-lora-f16.log
+
+    compare_ppl "shakespeare" "$(cat $OUT/${ci}-ppl-shakespeare-f16.log | grep "^\[1\]")" "$(cat $OUT/${ci}-ppl-shakespeare-lora-f16.log | grep "^\[1\]")" | tee -a $OUT/${ci}-lora-ppl.log
+
     set +e
 }
 
@@ -253,6 +285,7 @@ function gg_sum_open_llama_3b_v2 {
     gg_printf '- q4_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_k.log)"
     gg_printf '- q5_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_k.log)"
     gg_printf '- q6_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q6_k.log)"
+    gg_printf '- lora:\n%s\n' "$(cat $OUT/${ci}-lora-ppl.log)"
 }
 
 # open_llama_7b_v2
