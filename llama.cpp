@@ -126,13 +126,6 @@ static void llama_log_callback_default(llama_log_level level, const char * text,
 // helpers
 //
 
-template<typename T>
-static std::string to_string(const T & val) {
-    std::stringstream ss;
-    ss << val;
-    return ss.str();
-}
-
 static void zeros(std::ofstream & file, size_t n) {
     char zero = 0;
     for (size_t i = 0; i < n; ++i) {
@@ -1070,9 +1063,13 @@ struct llama_model_loader {
             LLAMA_LOG_INFO("%s: loaded meta data with %d key-value pairs and %d tensors from %s (version %s)\n",
                     __func__, n_kv, n_tensors, fname.c_str(), llama_file_version_name(file_version));
 
+            std::map<enum ggml_type, uint32_t> n_type;
+
             for (int i = 0; i < n_tensors; i++) {
                 const char * name = gguf_get_tensor_name(ctx_gguf, i);
                 struct ggml_tensor * meta = ggml_get_tensor(ctx_meta, name);
+
+                n_type[meta->type]++;
 
                 LLAMA_LOG_INFO("%s: - tensor %4d: %32s %-8s [ %s ]\n", __func__, i, name, ggml_type_name(meta->type), llama_format_tensor_shape(meta).c_str());
             }
@@ -1082,6 +1079,15 @@ struct llama_model_loader {
                 const enum gguf_type type = gguf_get_kv_type(ctx_gguf, i);
 
                 LLAMA_LOG_INFO("%s: - kv %3d: %42s %-8s\n", __func__, i, name, gguf_type_name(type));
+            }
+
+            // print type counts
+            for (auto & kv : n_type) {
+                if (kv.second == 0) {
+                    continue;
+                }
+
+                LLAMA_LOG_INFO("%s: - type %4s: %4d tensors\n", __func__, ggml_type_name(kv.first), kv.second);
             }
         }
 
@@ -1337,6 +1343,7 @@ static void llama_model_load_internal(
     auto & hparams = model.hparams;
 
     std::string general_name = "n/a";
+    std::string general_arch = "n/a";
 
     // read hparams
     {
@@ -1372,6 +1379,7 @@ static void llama_model_load_internal(
 
         // get general kv
         GGUF_GET(general_name, gguf_get_val_str, GGUF_TYPE_STRING, false, "general.name");
+        GGUF_GET(general_arch, gguf_get_val_str, GGUF_TYPE_STRING, false, "general.architecture");
 
         // special tokens
         GGUF_GET(vocab.special_bos_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "tokenizer.ggml.bos_token_id");
@@ -1440,47 +1448,47 @@ static void llama_model_load_internal(
             tok_score.tok = std::move(word);
             tok_score.score = scores[i];
 
-            if( tok_score.tok == "<0x0A>" ) {
+            // determine the newline token: 0x0A == 10 == '\n'
+            if (tok_score.tok == "<0x0A>") {
                 vocab.linefeed_id = i;
             }
         }
-
     }
 
     {
         // hparams
-        LLAMA_LOG_INFO("%s: format       = %s\n",    __func__, llama_file_version_name(ml->file_version));
-        LLAMA_LOG_INFO("%s: n_vocab      = %u\n",    __func__, hparams.n_vocab);
-        LLAMA_LOG_INFO("%s: n_ctx_train  = %u\n",    __func__, hparams.n_ctx_train);
-        LLAMA_LOG_INFO("%s: n_ctx        = %u\n",    __func__, hparams.n_ctx);
-        LLAMA_LOG_INFO("%s: n_embd       = %u\n",    __func__, hparams.n_embd);
-        LLAMA_LOG_INFO("%s: n_head       = %u\n",    __func__, hparams.n_head);
-        LLAMA_LOG_INFO("%s: n_head_kv    = %u\n",    __func__, hparams.n_head_kv);
-        LLAMA_LOG_INFO("%s: n_layer      = %u\n",    __func__, hparams.n_layer);
-        LLAMA_LOG_INFO("%s: n_rot        = %u\n",    __func__, hparams.n_rot); // a.k.a. n_embd_head, n_head_dim
-        LLAMA_LOG_INFO("%s: n_gqa        = %u\n",    __func__, hparams.n_gqa());
-        LLAMA_LOG_INFO("%s: f_norm_eps   = %.1e\n",  __func__, hparams.f_norm_rms_eps);
-        LLAMA_LOG_INFO("%s: n_ff         = %u\n",    __func__, hparams.n_ff);
-        LLAMA_LOG_INFO("%s: freq_base    = %.1f\n",  __func__, hparams.rope_freq_base);
-        LLAMA_LOG_INFO("%s: freq_scale   = %g\n",    __func__, hparams.rope_freq_scale);
-        LLAMA_LOG_INFO("%s: model type   = %s\n",    __func__, llama_model_type_name(model.type));
+        LLAMA_LOG_INFO("%s: format       = %s\n",     __func__, llama_file_version_name(ml->file_version));
+        LLAMA_LOG_INFO("%s: arch         = %s\n",     __func__, general_arch.c_str());
+        LLAMA_LOG_INFO("%s: n_vocab      = %u\n",     __func__, hparams.n_vocab);
+        LLAMA_LOG_INFO("%s: n_ctx_train  = %u\n",     __func__, hparams.n_ctx_train);
+        LLAMA_LOG_INFO("%s: n_ctx        = %u\n",     __func__, hparams.n_ctx);
+        LLAMA_LOG_INFO("%s: n_embd       = %u\n",     __func__, hparams.n_embd);
+        LLAMA_LOG_INFO("%s: n_head       = %u\n",     __func__, hparams.n_head);
+        LLAMA_LOG_INFO("%s: n_head_kv    = %u\n",     __func__, hparams.n_head_kv);
+        LLAMA_LOG_INFO("%s: n_layer      = %u\n",     __func__, hparams.n_layer);
+        LLAMA_LOG_INFO("%s: n_rot        = %u\n",     __func__, hparams.n_rot); // a.k.a. n_embd_head, n_head_dim
+        LLAMA_LOG_INFO("%s: n_gqa        = %u\n",     __func__, hparams.n_gqa());
+        LLAMA_LOG_INFO("%s: f_norm_eps   = %.1e\n",   __func__, hparams.f_norm_rms_eps);
+        LLAMA_LOG_INFO("%s: n_ff         = %u\n",     __func__, hparams.n_ff);
+        LLAMA_LOG_INFO("%s: freq_base    = %.1f\n",   __func__, hparams.rope_freq_base);
+        LLAMA_LOG_INFO("%s: freq_scale   = %g\n",     __func__, hparams.rope_freq_scale);
+        LLAMA_LOG_INFO("%s: model type   = %s\n",     __func__, llama_model_type_name(model.type));
         LLAMA_LOG_INFO("%s: model size   = %.2f B\n", __func__, ml->n_elements*1e-9);
-
-        // TODO: print number of tensors for each quantization
 
         // general kv
         LLAMA_LOG_INFO("%s: general.name = %s\n",    __func__, general_name.c_str());
 
         // special tokens
-        if( vocab.special_bos_id != -1 ) { LLAMA_LOG_INFO( "%s: BOS token = %d '%s'\n", __func__, vocab.special_bos_id, vocab.id_to_token[vocab.special_bos_id].tok.c_str() ); }
-        if( vocab.special_eos_id != -1 ) { LLAMA_LOG_INFO( "%s: EOS token = %d '%s'\n", __func__, vocab.special_eos_id, vocab.id_to_token[vocab.special_eos_id].tok.c_str() ); }
-        if( vocab.special_unk_id != -1 ) { LLAMA_LOG_INFO( "%s: UNK token = %d '%s'\n", __func__, vocab.special_unk_id, vocab.id_to_token[vocab.special_unk_id].tok.c_str() ); }
-        if( vocab.special_sep_id != -1 ) { LLAMA_LOG_INFO( "%s: SEP token = %d '%s'\n", __func__, vocab.special_sep_id, vocab.id_to_token[vocab.special_sep_id].tok.c_str() ); }
-        if( vocab.special_pad_id != -1 ) { LLAMA_LOG_INFO( "%s: PAD token = %d '%s'\n", __func__, vocab.special_pad_id, vocab.id_to_token[vocab.special_pad_id].tok.c_str() ); }
-        if( vocab.linefeed_id    != -1 ) { LLAMA_LOG_INFO( "%s: LF token  = %d '%s'\n", __func__, vocab.linefeed_id,    vocab.id_to_token[vocab.linefeed_id].tok.c_str() ); }
+        if (vocab.special_bos_id != -1) { LLAMA_LOG_INFO( "%s: BOS token = %d '%s'\n", __func__, vocab.special_bos_id, vocab.id_to_token[vocab.special_bos_id].tok.c_str() ); }
+        if (vocab.special_eos_id != -1) { LLAMA_LOG_INFO( "%s: EOS token = %d '%s'\n", __func__, vocab.special_eos_id, vocab.id_to_token[vocab.special_eos_id].tok.c_str() ); }
+        if (vocab.special_unk_id != -1) { LLAMA_LOG_INFO( "%s: UNK token = %d '%s'\n", __func__, vocab.special_unk_id, vocab.id_to_token[vocab.special_unk_id].tok.c_str() ); }
+        if (vocab.special_sep_id != -1) { LLAMA_LOG_INFO( "%s: SEP token = %d '%s'\n", __func__, vocab.special_sep_id, vocab.id_to_token[vocab.special_sep_id].tok.c_str() ); }
+        if (vocab.special_pad_id != -1) { LLAMA_LOG_INFO( "%s: PAD token = %d '%s'\n", __func__, vocab.special_pad_id, vocab.id_to_token[vocab.special_pad_id].tok.c_str() ); }
+        if (vocab.linefeed_id    != -1) { LLAMA_LOG_INFO( "%s: LF token  = %d '%s'\n", __func__, vocab.linefeed_id,    vocab.id_to_token[vocab.linefeed_id].tok.c_str() );    }
     }
 
     if (vocab_only) {
+        LLAMA_LOG_INFO("%s: vocab only - skipping tensors\n", __func__);
         return;
     }
 
