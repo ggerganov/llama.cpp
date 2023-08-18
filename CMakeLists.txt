@@ -497,8 +497,10 @@ else()
 endif()
 
 #
-# Build libraries
+# libraries
 #
+
+# ggml
 
 add_library(ggml OBJECT
             ggml.c
@@ -524,6 +526,8 @@ if (BUILD_SHARED_LIBS)
     install(TARGETS ggml_shared LIBRARY)
 endif()
 
+# llama
+
 add_library(llama
             llama.cpp
             llama.h
@@ -544,6 +548,10 @@ if (BUILD_SHARED_LIBS)
     endif()
     install(TARGETS llama LIBRARY)
 endif()
+
+#
+# install
+#
 
 include(GNUInstallDirs)
 install(
@@ -582,6 +590,8 @@ endif()
 #
 # programs, examples and tests
 #
+
+add_subdirectory(common)
 
 if (LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
     include(CTest)

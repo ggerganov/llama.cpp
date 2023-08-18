@@ -1,5 +1,5 @@
-#define LLAMA_API_CPP // TODO: eliminate me
 #include "llama.h"
+#include "common.h"
 
 #include <cstdio>
 #include <string>

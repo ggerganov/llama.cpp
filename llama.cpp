@@ -6,7 +6,6 @@
 #include <cstdio>
 #endif
 
-#define LLAMA_API_CPP // TODO: eliminate me
 #include "llama.h"
 
 #include "ggml.h"
@@ -277,7 +276,7 @@ struct llama_file {
         }
     }
 
-    uint32_t read_u32() {
+    uint32_t read_u32() const {
         uint32_t ret;
         read_raw(&ret, sizeof(ret));
         return ret;
@@ -559,8 +558,22 @@ struct llama_mlock {
 
 typedef void (*offload_func_t)(struct ggml_tensor * tensor);
 
-void llama_nop(struct ggml_tensor * tensor) { // don't offload by default
+static void llama_nop(struct ggml_tensor * tensor) { // don't offload by default
     (void) tensor;
+}
+
+static std::string llama_token_to_text(const struct llama_context * ctx, llama_token token) {
+    std::vector<char> result(8, 0);
+    const int n_tokens = llama_token_to_str(ctx, token, result.data(), result.size());
+    if (n_tokens < 0) {
+        result.resize(-n_tokens);
+        int check = llama_token_to_str(ctx, token, result.data(), result.size());
+        GGML_ASSERT(check == -n_tokens);
+    } else {
+        result.resize(n_tokens);
+    }
+
+    return std::string(result.data(), result.size());
 }
 
 //
@@ -3286,16 +3299,16 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
     std::vector<llama_grammar_candidate>                              candidates_grammar;
 
     for (size_t i = 0; i < candidates->size; ++i) {
-        const llama_token id  = candidates->data[i].id;
-        std::string       str = llama_token_to_str(ctx, id);
+        const llama_token id   = candidates->data[i].id;
+        const std::string text = llama_token_to_text(ctx, id);
         if (id == eos) {
             if (!allow_eos) {
                 candidates->data[i].logit = -INFINITY;
             }
-        } else if (str.empty()) {
+        } else if (text.empty()) {
             candidates->data[i].logit = -INFINITY;
         } else {
-            candidates_decoded.push_back(decode_utf8(str.c_str(), grammar->partial_utf8));
+            candidates_decoded.push_back(decode_utf8(text.c_str(), grammar->partial_utf8));
             candidates_grammar.push_back({ i, candidates_decoded.back().first.data(), candidates_decoded.back().second });
         }
     }
@@ -3495,10 +3508,10 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
         GGML_ASSERT(false);
     }
 
-    const std::string str = llama_token_to_str(ctx, token);
+    const std::string text = llama_token_to_text(ctx, token);
 
     // Note terminating 0 in decoded string
-    const auto   decoded     = decode_utf8(str.c_str(), grammar->partial_utf8);
+    const auto   decoded     = decode_utf8(text.c_str(), grammar->partial_utf8);
     const auto & code_points = decoded.first;
     for (auto it = code_points.begin(), end = code_points.end() - 1; it != end; ++it) {
         grammar->stacks = llama_grammar_accept(grammar->rules, grammar->stacks, *it);
@@ -5143,73 +5156,6 @@ const char * llama_print_system_info(void) {
 
     return s.c_str();
 }
-
-
-std::vector<llama_token> llama_tokenize(
-        struct llama_context * ctx,
-           const std::string & text,
-                        bool   add_bos) {
-    // upper limit for the number of tokens
-    int n_tokens = text.length() + add_bos;
-    std::vector<llama_token> result(n_tokens);
-    n_tokens = llama_tokenize(ctx, text.c_str(), result.data(), result.size(), add_bos);
-    if (n_tokens < 0) {
-        result.resize(-n_tokens);
-        int check = llama_tokenize(ctx, text.c_str(), result.data(), result.size(), add_bos);
-        assert(check == -n_tokens);
-        GGML_UNUSED(check);
-    } else {
-        result.resize(n_tokens);
-    }
-    return result;
-}
-
-std::vector<llama_token> llama_tokenize_bpe(
-        struct llama_context * ctx,
-           const std::string & text,
-                        bool   add_bos) {
-    int length = text.length() + add_bos;
-    std::vector<llama_token> result(length);
-    length = llama_tokenize_bpe(ctx, text.c_str(), result.data(), result.size(), add_bos);
-    if (length < 0) {
-        result.resize(-length);
-        int check = llama_tokenize_bpe(ctx, text.c_str(), result.data(), result.size(), add_bos);
-        assert(check == -length);
-        GGML_UNUSED(check);
-    } else {
-        result.resize(length);
-    }
-    return result;
-}
-
-std::string llama_token_to_str(const struct llama_context * ctx, llama_token token) {
-    std::vector<char> result(8, 0);
-    const int length = llama_token_to_str(ctx, token, result.data(), result.size());
-    if (length < 0) {
-        result.resize(-length);
-        int check = llama_token_to_str(ctx, token, result.data(), result.size());
-        GGML_ASSERT(check == -length);
-    } else {
-        result.resize(length);
-    }
-
-    return std::string(result.data(), result.size());
-}
-
-std::string llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token) {
-    std::vector<char> result(8, 0);
-    const int length = llama_token_to_str_bpe(ctx, token, result.data(), result.size());
-    if (length < 0) {
-        result.resize(-length);
-        const int check = llama_token_to_str_bpe(ctx, token, result.data(), result.size());
-        GGML_ASSERT(check == -length);
-    } else {
-        result.resize(length);
-    }
-
-    return std::string(result.data(), result.size());
-}
-
 
 // For internal test use
 const std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx) {
