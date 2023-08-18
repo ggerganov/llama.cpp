@@ -13,8 +13,7 @@ FILES=$(ls $PUBLIC)
 
 cd $PUBLIC
 for FILE in $FILES; do
-  func=$(echo $FILE | tr '.' '_')
-  echo "generate $FILE.hpp ($func)"
+  echo "generate $FILE.hpp"
 
   # use simple flag for old version of xxd
   xxd -i $FILE > $DIR/$FILE.hpp
