@@ -17548,48 +17548,6 @@ static void ggml_opt_get_grad(int np, struct ggml_tensor * const ps[], float * g
 //   ref: https://arxiv.org/pdf/1412.6980.pdf
 //
 
-uint32_t compute_data_checksum(struct ggml_tensor * tensor) {
-    const int n3 = (tensor->n_dims >= 3) ? tensor->ne[3] : 1;
-    const int n2 = (tensor->n_dims >= 2) ? tensor->ne[2] : 1;
-    const int n1 = (tensor->n_dims >= 1) ? tensor->ne[1] : 1;
-    const int n0 = (tensor->n_dims >= 0) ? tensor->ne[0] : 1;
-    const size_t nb0 = tensor->nb[0];
-    const size_t nb1 = tensor->nb[1];
-    const size_t nb2 = tensor->nb[2];
-    const size_t nb3 = tensor->nb[3];
-    const size_t nb  = ggml_element_size(tensor);
-    uint32_t result = 0;
-    for (int i3 = 0; i3 < n3; ++i3) {
-        for (int i2 = 0; i2 < n2; ++i2) {
-            for (int i1 = 0; i1 < n1; ++i1) {
-                for (int i0 = 0; i0 < n0; ++i0) {
-                    char * ptr = ((char *) tensor->data + i0*nb0 + i1*nb1 + i2*nb2 + i3*nb3);
-                    uint32_t val;
-                    memcpy(&val, ptr, nb);
-                    result = result ^ val;
-                    result = (((result << 1u) | ((result >> 31u) & 0x1u)) + 1u) & 0xffffffffu;
-                }
-            }
-        }
-    }
-    return result;
-}
-
-void print_data_checksums(struct ggml_cgraph * g) {
-    for (int i = 0; i < g->n_nodes; ++i) {
-        struct ggml_tensor * node = g->nodes[i];
-        for (int j = 0; j<GGML_MAX_SRC; ++j) {
-            if (node->src[j]) {
-                struct ggml_tensor * src = node->src[j];
-                uint32_t chk = compute_data_checksum(src);
-                printf("%s: node[%3d]->src[%d] chk=[%08x] data=[%p] op=%s name=%s\n", __func__, i, j, chk, src->data, ggml_op_name(src->op), ggml_get_name(src));
-            }
-        }
-        uint32_t chk = compute_data_checksum(node);
-        printf("%s: node[%3d]         chk=[%08x] data=[%p] op=%s name=%s\n", __func__, i, chk, node->data, ggml_op_name(node->op), ggml_get_name(node));
-    }
-}
-
 static enum ggml_opt_result ggml_opt_adam(
         struct ggml_context * ctx,
         struct ggml_opt_context * opt,
@@ -17650,8 +17608,6 @@ static enum ggml_opt_result ggml_opt_adam(
     struct ggml_object * obj = ggml_new_object(ctx, GGML_OBJECT_WORK_BUFFER, cplan.work_size);
     cplan.work_data = (uint8_t *)ctx->mem_buffer + obj->offs;
     ggml_graph_compute(gb, &cplan);
-
-    print_data_checksums(gb);
 
     opt->adam.fx_prev = ggml_get_f32_1d(f, 0);
     opt->adam.fx_best = opt->adam.fx_prev;
@@ -17714,8 +17670,6 @@ static enum ggml_opt_result ggml_opt_adam(
             const float beta2h =        1.0f/(1.0f - powf(beta2, opt->iter));
             int64_t i = 0;
             for (int p = 0; p < np; ++p) {
-                printf("%s: para[%3d]          chk=[%08x] op=%s name=%s\n", __func__, p, compute_data_checksum(ps[p]), ggml_op_name(ps[p]->op), ggml_get_name(ps[p]));
-                printf("%s: para[%3d]->grad    chk=[%08x] op=%s name=%s\n", __func__, p, compute_data_checksum(ps[p]->grad), ggml_op_name(ps[p]->grad->op), ggml_get_name(ps[p]->grad));
                 const int64_t ne = ggml_nelements(ps[p]);
                 const float p_decay = ((ps[p]->n_dims >= decay_min_ndim) ? decay : 0.0) * sched;
                 for (int64_t j = 0; j < ne; ++j) {
@@ -17794,11 +17748,6 @@ static enum ggml_opt_result ggml_opt_adam(
         }
     }
 
-    print_data_checksums(gb);
-    for (int p = 0; p < np; ++p) {
-        printf("%s: para[%3d]          chk=[%08x] op=%s name=%s\n", __func__, p, compute_data_checksum(ps[p]), ggml_op_name(ps[p]->op), ggml_get_name(ps[p]));
-        printf("%s: para[%3d]->grad    chk=[%08x] op=%s name=%s\n", __func__, p, compute_data_checksum(ps[p]->grad), ggml_op_name(ps[p]->grad->op), ggml_get_name(ps[p]->grad));
-    }
     return GGML_OPT_DID_NOT_CONVERGE;
 }
 

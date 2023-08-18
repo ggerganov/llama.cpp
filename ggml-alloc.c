@@ -162,22 +162,12 @@ void ggml_allocr_alloc(struct ggml_allocr * alloc, struct ggml_tensor * tensor) 
         printf("\n");
     }
 #endif
-    if ((char*)addr - (char*)alloc->data + size > alloc->max_size) {
-        printf("%s: op=%s name=%s max_size=%zu\n", __func__, ggml_op_name(tensor->op), ggml_get_name(tensor), (char*)addr - (char*)alloc->data + size);
-    }
+
     alloc->max_size = MAX(alloc->max_size, (char*)addr - (char*)alloc->data + size);
 }
 
 // this is a very naive implementation, but for our case the number of free blocks should be very small
 static void ggml_allocator_free_tensor(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
-    // static int counter = 0;
-    // counter++;
-    // if (counter > 2) {
-    //     printf("%s: counter=%d OMIT\n", __func__, counter);
-    //     return;
-    // } else {
-    //     printf("%s: counter=%d\n", __func__, counter);
-    // }
     void * ptr = tensor->data;
 
     if (ptr < alloc->data || (char*)ptr >= (char*)alloc->data + alloc->max_size) {
@@ -189,7 +179,6 @@ static void ggml_allocator_free_tensor(struct ggml_allocr * alloc, struct ggml_t
 
     size_t size = ggml_allocator_get_alloc_size(alloc, tensor);
     size = aligned_offset(NULL, size, alloc->alignment);
-    // printf("%s:          free            data=[%p..%p] op=%s name=%s n_free_blocks=%d\n", __func__, tensor->data, (char*) tensor->data + size, ggml_op_name(tensor->op), ggml_get_name(tensor), alloc->n_free_blocks);
     AT_PRINTF("%s: freeing %s (%zu bytes) - n_free_blocks = %d\n", __func__, tensor->name, size, alloc->n_free_blocks);
 
 #ifdef GGML_ALLOCATOR_DEBUG
@@ -489,23 +478,11 @@ static size_t ggml_allocator_alloc_graph_tensors_n(
                 if (parent == NULL) {
                     break;
                 }
-                bool was_null = parent->data == NULL;
                 allocate_node(alloc, parent);
-                // if (was_null) {
-                //     printf("%s: alloc n[%02d]  %d data=[%p..%p] %s %s\n", __func__, i, j, parent->data, (char*) parent->data + ggml_nbytes(parent), ggml_op_name(parent->op), ggml_get_name(parent));
-                // } else {
-                //     printf("%s: exist n[%02d]  %d data=[%p..%p] %s %s\n", __func__, i, j, parent->data, (char*) parent->data + ggml_nbytes(parent), ggml_op_name(parent->op), ggml_get_name(parent));
-                // }
             }
 
             // allocate node
-            bool was_null = node->data == NULL;
             allocate_node(alloc, node);
-            // if (was_null) {
-            //     printf("%s: alloc node[%02d] data=[%p..%p] %s %s\n", __func__, i, node->data, (char*) node->data + ggml_nbytes(node), ggml_op_name(node->op), ggml_get_name(node));
-            // } else {
-            //     printf("%s: exist node[%02d] data=[%p..%p] %s %s\n", __func__, i, node->data, (char*) node->data + ggml_nbytes(node), ggml_op_name(node->op), ggml_get_name(node));
-            // }
 
             AT_PRINTF("exec: %s (%s) <= ", ggml_op_name(node->op), node->name);
             for (int j = 0; j < GGML_MAX_SRC; j++) {
