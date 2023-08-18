@@ -15446,9 +15446,9 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 if (src0->grad) {
                     src0->grad =
                         ggml_add_or_set(ctx, src0->grad,
-                            ggml_reshape(ctx, 
+                            ggml_reshape(ctx,
                                 ggml_is_contiguous(tensor->grad)
-                                    ? tensor->grad 
+                                    ? tensor->grad
                                     : ggml_cont(ctx, tensor->grad),
                                 src0->grad),
                         zero_table);
