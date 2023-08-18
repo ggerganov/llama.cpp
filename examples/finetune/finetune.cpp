@@ -2162,8 +2162,8 @@ struct train_params get_default_train_params() {
     params.n_examples =    1;
     params.n_predict  = 1024;
 
-    params.lora_alpha  =  100;
-    params.lora_r      =  100;
+    params.lora_alpha  = 4;
+    params.lora_r      = 4;
 
     params.n_rank_attention_norm = 1;
     params.n_rank_wq             = 4;
