@@ -114,7 +114,6 @@ else:
     sys.exit()
 
 
-gguf_writer.add_architecture()
 gguf_writer.add_name(last_dir)
 gguf_writer.add_source_hf_repo(hf_repo)
 gguf_writer.add_tensor_data_layout("Meta AI original pth")
