@@ -262,6 +262,21 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.cfg_negative_prompt = argv[i];
+        } else if (arg == "--cfg-negative-prompt-file") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            std::ifstream file(argv[i]);
+            if (!file) {
+                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+                invalid_param = true;
+                break;
+            }
+            std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(params.cfg_negative_prompt));
+            if (params.cfg_negative_prompt.back() == '\n') {
+                params.cfg_negative_prompt.pop_back();
+            }
         } else if (arg == "--cfg-scale") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -412,7 +427,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             }
             params.hellaswag_tasks = std::stoi(argv[i]);
         } else if (arg == "--ignore-eos") {
-            params.logit_bias[llama_token_eos()] = -INFINITY;
+            params.ignore_eos = true;
         } else if (arg == "--no-penalize-nl") {
             params.penalize_nl = false;
         } else if (arg == "-l" || arg == "--logit-bias") {
@@ -553,8 +568,10 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "                        or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'\n");
     fprintf(stdout, "  --grammar GRAMMAR     BNF-like grammar to constrain generations (see samples in grammars/ dir)\n");
     fprintf(stdout, "  --grammar-file FNAME  file to read grammar from\n");
-    fprintf(stdout, "  --cfg-negative-prompt PROMPT \n");
+    fprintf(stdout, "  --cfg-negative-prompt PROMPT\n");
     fprintf(stdout, "                        negative prompt to use for guidance. (default: empty)\n");
+    fprintf(stdout, "  --cfg-negative-prompt-file FNAME\n");
+    fprintf(stdout, "                        negative prompt file to use for guidance. (default: empty)\n");
     fprintf(stdout, "  --cfg-scale N         strength of guidance (default: %f, 1.0 = disable)\n", params.cfg_scale);
     fprintf(stdout, "  --rope-scale N        RoPE context linear scaling factor, inverse of --rope-freq-scale (default: %g)\n", 1.0f/params.rope_freq_scale);
     fprintf(stdout, "  --rope-freq-base N    RoPE base frequency, used by NTK-aware scaling (default: %.1f)\n", params.rope_freq_base);
@@ -619,6 +636,10 @@ std::string gpt_random_prompt(std::mt19937 & rng) {
     return "The";
 }
 
+//
+// Model utils
+//
+
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params) {
     auto lparams = llama_context_default_params();
 
@@ -641,7 +662,7 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     return lparams;
 }
 
-std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(const gpt_params & params) {
+std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params) {
     auto lparams = llama_context_params_from_gpt_params(params);
 
     llama_model * model  = llama_load_model_from_file(params.model.c_str(), lparams);
@@ -670,5 +691,77 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         }
     }
 
+    if (params.ignore_eos) {
+        params.logit_bias[llama_token_eos(lctx)] = -INFINITY;
+    }
+
     return std::make_tuple(model, lctx);
 }
+
+//
+// Vocab utils
+//
+
+std::vector<llama_token> llama_tokenize(
+        struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_bos) {
+    // upper limit for the number of tokens
+    int n_tokens = text.length() + add_bos;
+    std::vector<llama_token> result(n_tokens);
+    n_tokens = llama_tokenize(ctx, text.c_str(), result.data(), result.size(), add_bos);
+    if (n_tokens < 0) {
+        result.resize(-n_tokens);
+        int check = llama_tokenize(ctx, text.c_str(), result.data(), result.size(), add_bos);
+        GGML_ASSERT(check == -n_tokens);
+    } else {
+        result.resize(n_tokens);
+    }
+    return result;
+}
+
+std::string llama_token_to_str(const struct llama_context * ctx, llama_token token) {
+    std::vector<char> result(8, 0);
+    const int n_tokens = llama_token_to_str(ctx, token, result.data(), result.size());
+    if (n_tokens < 0) {
+        result.resize(-n_tokens);
+        int check = llama_token_to_str(ctx, token, result.data(), result.size());
+        GGML_ASSERT(check == -n_tokens);
+    } else {
+        result.resize(n_tokens);
+    }
+
+    return std::string(result.data(), result.size());
+}
+
+std::vector<llama_token> llama_tokenize_bpe(
+        struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_bos) {
+    int n_tokens = text.length() + add_bos;
+    std::vector<llama_token> result(n_tokens);
+    n_tokens = llama_tokenize_bpe(ctx, text.c_str(), result.data(), result.size(), add_bos);
+    if (n_tokens < 0) {
+        result.resize(-n_tokens);
+        int check = llama_tokenize_bpe(ctx, text.c_str(), result.data(), result.size(), add_bos);
+        GGML_ASSERT(check == -n_tokens);
+    } else {
+        result.resize(n_tokens);
+    }
+    return result;
+}
+
+std::string llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token) {
+    std::vector<char> result(8, 0);
+    const int n_tokens = llama_token_to_str_bpe(ctx, token, result.data(), result.size());
+    if (n_tokens < 0) {
+        result.resize(-n_tokens);
+        const int check = llama_token_to_str_bpe(ctx, token, result.data(), result.size());
+        GGML_ASSERT(check == -n_tokens);
+    } else {
+        result.resize(n_tokens);
+    }
+
+    return std::string(result.data(), result.size());
+}
+

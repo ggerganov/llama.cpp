@@ -1,5 +1,5 @@
-#define LLAMA_API_CPP // TODO: eliminate me
 #include "llama.h"
+#include "common.h"
 
 #include <cstdio>
 #include <string>
@@ -41,7 +41,7 @@ static const std::map<std::string, std::vector<llama_token>> & k_tests() {
     };
 
     return _k_tests;
-};
+}
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -89,6 +89,8 @@ int main(int argc, char **argv) {
         return 2;
     }
 
+    bool success = true;
+
     for (const auto & test_kv : k_tests()) {
         std::vector<llama_token> res = llama_tokenize(ctx, test_kv.first, true);
         fprintf(stderr, "%s : '%s' tokenized to '%s'\n",
@@ -103,7 +105,8 @@ int main(int argc, char **argv) {
         }
 
         if (!correct) {
-            fprintf(stderr, "%s : failed test: '%s'\n", __func__, test_kv.first.c_str());
+            fprintf(stderr, "%s : failed test:    '%s'\n", __func__, test_kv.first.c_str());
+            fprintf(stderr, "%s : detokenized to: '%s'\n", __func__, unescape_whitespace(ctx, test_kv.second).c_str());
             fprintf(stderr, "%s : expected tokens: ", __func__);
             for (const auto & t : test_kv.second) {
                 fprintf(stderr, "%6d, ", t);
@@ -115,9 +118,7 @@ int main(int argc, char **argv) {
             }
             fprintf(stderr, "\n");
 
-            llama_free_model(model);
-            llama_free(ctx);
-            return 3;
+            success = false;
         }
     }
 
@@ -126,5 +127,5 @@ int main(int argc, char **argv) {
 
     llama_backend_free();
 
-    return 0;
+    return success ? 0 : 3;
 }

@@ -233,16 +233,13 @@ int main(int argc, char ** argv) {
     const std::string fname(argv[1]);
     const std::string mode (argv[2]);
 
-    GGML_ASSERT((mode == "r" || mode == "w" || mode == "q") && "mode must be r, w or q");
+    GGML_ASSERT((mode == "r" || mode == "w") && "mode must be r or w");
 
     if (mode == "w") {
         GGML_ASSERT(gguf_ex_write(fname) && "failed to write gguf file");
     } else if (mode == "r") {
         GGML_ASSERT(gguf_ex_read_0(fname) && "failed to read gguf file");
         GGML_ASSERT(gguf_ex_read_1(fname) && "failed to read gguf file");
-    } else if (mode == "q") {
-        llama_model_quantize_params params = llama_model_quantize_default_params();
-        llama_model_quantize(fname.c_str(), "quant.gguf", &params);
     }
 
     return 0;

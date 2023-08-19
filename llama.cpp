@@ -6,12 +6,11 @@
 #include <cstdio>
 #endif
 
-#define LLAMA_API_CPP // TODO: eliminate me
 #include "llama.h"
 
 #include "ggml.h"
 
-#if !defined(GGML_USE_CUBLAS) && !defined(GGML_USE_METAL)
+#if !defined(GGML_USE_CUBLAS)
 #  include "ggml-alloc.h"
 #  define LLAMA_USE_ALLOCATOR
 #else
@@ -125,13 +124,6 @@ static void llama_log_callback_default(llama_log_level level, const char * text,
 //
 // helpers
 //
-
-template<typename T>
-static std::string to_string(const T & val) {
-    std::stringstream ss;
-    ss << val;
-    return ss.str();
-}
 
 static void zeros(std::ofstream & file, size_t n) {
     char zero = 0;
@@ -284,7 +276,7 @@ struct llama_file {
         }
     }
 
-    uint32_t read_u32() {
+    uint32_t read_u32() const {
         uint32_t ret;
         read_raw(&ret, sizeof(ret));
         return ret;
@@ -566,8 +558,22 @@ struct llama_mlock {
 
 typedef void (*offload_func_t)(struct ggml_tensor * tensor);
 
-void llama_nop(struct ggml_tensor * tensor) { // don't offload by default
+static void llama_nop(struct ggml_tensor * tensor) { // don't offload by default
     (void) tensor;
+}
+
+static std::string llama_token_to_text(const struct llama_context * ctx, llama_token token) {
+    std::vector<char> result(8, 0);
+    const int n_tokens = llama_token_to_str(ctx, token, result.data(), result.size());
+    if (n_tokens < 0) {
+        result.resize(-n_tokens);
+        int check = llama_token_to_str(ctx, token, result.data(), result.size());
+        GGML_ASSERT(check == -n_tokens);
+    } else {
+        result.resize(n_tokens);
+    }
+
+    return std::string(result.data(), result.size());
 }
 
 //
@@ -604,9 +610,9 @@ enum e_model {
 static const size_t kB = 1024;
 static const size_t MB = 1024*1024;
 
-static const std::map<e_model, size_t> & MEM_REQ_SCRATCH0(int n_ctx)
+static std::map<e_model, size_t> MEM_REQ_SCRATCH0(int n_ctx)
 {
-    static std::map<e_model, size_t> k_sizes = {
+    std::map<e_model, size_t> k_sizes = {
         { MODEL_3B,   ((size_t) n_ctx / 16ull +  92ull) * MB },
         { MODEL_7B,   ((size_t) n_ctx / 16ull + 100ull) * MB },
         { MODEL_13B,  ((size_t) n_ctx / 12ull + 120ull) * MB },
@@ -676,21 +682,20 @@ static const std::map<e_model, size_t> & VRAM_REQ_SCRATCH_PER_CONTEXT()
 
 // default hparams (LLaMA 7B)
 struct llama_hparams {
-    uint32_t n_vocab   = 32000;
-    uint32_t n_ctx     = 512;
-    uint32_t n_embd    = 4096;
-    uint32_t n_head    = 32;
-    uint32_t n_head_kv = 32;
-    uint32_t n_layer   = 32;
-    uint32_t n_rot     = 64;
-    uint32_t n_ff      = 11008;
+    uint32_t n_vocab     = 32000;
+    uint32_t n_ctx_train = 2048;  // the context size used during training
+    uint32_t n_ctx       = 512;   // the context size used during inference
+    uint32_t n_embd      = 4096;
+    uint32_t n_head      = 32;
+    uint32_t n_head_kv   = 32;
+    uint32_t n_layer     = 32;
+    uint32_t n_rot       = 64;
+    uint32_t n_ff        = 11008;
 
     float f_norm_rms_eps = 1e-5;
 
     float rope_freq_base  = 10000.0f;
     float rope_freq_scale = 1.0f;
-
-    enum llama_ftype ftype = LLAMA_FTYPE_MOSTLY_F16;
 
     bool operator!=(const llama_hparams & other) const {
         return static_cast<bool>(memcmp(this, &other, sizeof(llama_hparams))); // NOLINT
@@ -762,7 +767,6 @@ struct llama_kv_cache {
 struct llama_vocab {
     // TODO:
     // - add a vector of merges
-    // - add members for bos/eos/pad/sep tokens
     //   so that we can pass it to different types of tokenizers with a common interface
 
     using id    = int32_t;
@@ -773,12 +777,24 @@ struct llama_vocab {
         float score;
     };
 
+    llama_vocab_type type = LLAMA_VOCAB_TYPE_SPM;
+
     std::unordered_map<token, id> token_to_id;
-    std::vector<token_score> id_to_token;
+    std::vector<token_score>      id_to_token;
+
+    // default LLaMA special tokens
+    id special_bos_id = 1;
+    id special_eos_id = 2;
+    id special_unk_id = -1;
+    id special_sep_id = -1;
+    id special_pad_id = -1;
+
+    id linefeed_id = 13;
 };
 
 struct llama_model {
-    e_model type = MODEL_UNKNOWN;
+    e_model     type  = MODEL_UNKNOWN;
+    llama_ftype ftype = LLAMA_FTYPE_ALL_F32;
 
     llama_hparams hparams;
     llama_vocab   vocab;
@@ -881,7 +897,6 @@ struct llama_context {
     std::vector<uint8_t> work_buffer;
 
     // memory buffers used to evaluate the model
-    // TODO: move in llama_state
     llama_buffer buf_compute;
 
 #ifdef LLAMA_USE_ALLOCATOR
@@ -1024,10 +1039,13 @@ struct llama_model_loader {
     int n_tensors = 0;
     int n_created = 0;
 
+    int64_t n_elements = 0;
+
     bool use_mmap = false;
 
     llama_file file;
-    llama_file_version file_version;
+    llama_ftype ftype;
+    llama_file_version fver;
 
     std::unique_ptr<llama_mmap> mapping;
 
@@ -1041,23 +1059,64 @@ struct llama_model_loader {
         };
 
         ctx_gguf = gguf_init_from_file(fname.c_str(), params);
+        if (!ctx_gguf) {
+            throw std::runtime_error(format("%s: failed to load model from %s\n", __func__, fname.c_str()));
+        }
 
         n_kv      = gguf_get_n_kv(ctx_gguf);
         n_tensors = gguf_get_n_tensors(ctx_gguf);
 
-        file_version = (enum llama_file_version) gguf_get_version(ctx_gguf);
+        fver = (enum llama_file_version) gguf_get_version(ctx_gguf);
 
-        // print meta data
+        for (int i = 0; i < n_tensors; i++) {
+            const char * name = gguf_get_tensor_name(ctx_gguf, i);
+            struct ggml_tensor * t = ggml_get_tensor(ctx_meta, name);
+            n_elements += ggml_nelements(t);
+        }
+
+        LLAMA_LOG_INFO("%s: loaded meta data with %d key-value pairs and %d tensors from %s (version %s)\n",
+                __func__, n_kv, n_tensors, fname.c_str(), llama_file_version_name(fver));
+
+        // determine file type based on the number of tensors for each quantization and print meta data
         // TODO: make optional
         {
-            LLAMA_LOG_INFO("%s: loaded meta data with %d key-value paris and %d tensors from %s (version %s)\n",
-                    __func__, n_kv, n_tensors, fname.c_str(), llama_file_version_name(file_version));
+            std::map<enum ggml_type, uint32_t> n_type;
+
+            uint32_t n_type_max = 0;
+            enum ggml_type type_max = GGML_TYPE_F32;
 
             for (int i = 0; i < n_tensors; i++) {
                 const char * name = gguf_get_tensor_name(ctx_gguf, i);
                 struct ggml_tensor * meta = ggml_get_tensor(ctx_meta, name);
 
+                n_type[meta->type]++;
+
+                if (n_type_max < n_type[meta->type]) {
+                    n_type_max = n_type[meta->type];
+                    type_max   = meta->type;
+                }
+
                 LLAMA_LOG_INFO("%s: - tensor %4d: %32s %-8s [ %s ]\n", __func__, i, name, ggml_type_name(meta->type), llama_format_tensor_shape(meta).c_str());
+            }
+
+            switch (type_max) {
+                case GGML_TYPE_F32:  ftype = LLAMA_FTYPE_ALL_F32;       break;
+                case GGML_TYPE_F16:  ftype = LLAMA_FTYPE_MOSTLY_F16;    break;
+                case GGML_TYPE_Q4_0: ftype = LLAMA_FTYPE_MOSTLY_Q4_0;   break;
+                case GGML_TYPE_Q4_1: ftype = LLAMA_FTYPE_MOSTLY_Q4_1;   break;
+                case GGML_TYPE_Q5_0: ftype = LLAMA_FTYPE_MOSTLY_Q5_0;   break;
+                case GGML_TYPE_Q5_1: ftype = LLAMA_FTYPE_MOSTLY_Q5_1;   break;
+                case GGML_TYPE_Q8_0: ftype = LLAMA_FTYPE_MOSTLY_Q8_0;   break;
+                case GGML_TYPE_Q2_K: ftype = LLAMA_FTYPE_MOSTLY_Q2_K;   break;
+                case GGML_TYPE_Q3_K: ftype = LLAMA_FTYPE_MOSTLY_Q3_K_M; break;
+                case GGML_TYPE_Q4_K: ftype = LLAMA_FTYPE_MOSTLY_Q4_K_M; break;
+                case GGML_TYPE_Q5_K: ftype = LLAMA_FTYPE_MOSTLY_Q5_K_M; break;
+                case GGML_TYPE_Q6_K: ftype = LLAMA_FTYPE_MOSTLY_Q6_K;   break;
+                default:
+                     {
+                         LLAMA_LOG_WARN("%s: unknown type %s\n", __func__, ggml_type_name(type_max));
+                         ftype = LLAMA_FTYPE_ALL_F32;
+                     } break;
             }
 
             for (int i = 0; i < n_kv; i++) {
@@ -1065,6 +1124,15 @@ struct llama_model_loader {
                 const enum gguf_type type = gguf_get_kv_type(ctx_gguf, i);
 
                 LLAMA_LOG_INFO("%s: - kv %3d: %42s %-8s\n", __func__, i, name, gguf_type_name(type));
+            }
+
+            // print type counts
+            for (auto & kv : n_type) {
+                if (kv.second == 0) {
+                    continue;
+                }
+
+                LLAMA_LOG_INFO("%s: - type %4s: %4d tensors\n", __func__, ggml_type_name(kv.first), kv.second);
             }
         }
 
@@ -1074,6 +1142,15 @@ struct llama_model_loader {
         }
 
         this->use_mmap = use_mmap;
+    }
+
+    ~llama_model_loader() {
+        if (ctx_gguf) {
+            gguf_free(ctx_gguf);
+        }
+        if (ctx_meta) {
+            ggml_free(ctx_meta);
+        }
     }
 
     const char * get_tensor_name(int i) const {
@@ -1115,6 +1192,10 @@ struct llama_model_loader {
 
     struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::vector<uint32_t> & ne, ggml_backend backend) {
         struct ggml_tensor * cur = ggml_get_tensor(ctx_meta, name.c_str());
+
+        if (cur == NULL) {
+            throw std::runtime_error(format("%s: tensor '%s' not found", __func__, name.c_str()));
+        }
 
         {
             bool is_ok = true;
@@ -1240,7 +1321,7 @@ struct llama_model_loader {
 // load LLaMA models
 //
 
-static const char * llama_ftype_name(enum llama_ftype ftype) {
+const char * llama_model_ftype_name(enum llama_ftype ftype) {
     switch (ftype) {
         case LLAMA_FTYPE_ALL_F32:     return "all F32";
         case LLAMA_FTYPE_MOSTLY_F16:  return "mostly F16";
@@ -1306,6 +1387,9 @@ static void llama_model_load_internal(
 
     auto & hparams = model.hparams;
 
+    std::string general_name = "n/a";
+    std::string general_arch = "n/a";
+
     // read hparams
     {
         struct gguf_context * ctx = ml->ctx_gguf;
@@ -1324,8 +1408,22 @@ static void llama_model_load_internal(
             } \
         }
 
+        std::string tokenizer_name;
+        GGUF_GET(tokenizer_name, gguf_get_val_str, GGUF_TYPE_STRING, true, "tokenizer.ggml.model");
+
+        if (tokenizer_name == "llama") {
+            vocab.type = LLAMA_VOCAB_TYPE_SPM;
+        } else if (tokenizer_name == "gpt2") {
+            vocab.type = LLAMA_VOCAB_TYPE_BPE;
+        } else {
+            LLAMA_LOG_WARN("%s: unknown tokenizer: '%s'", __func__, tokenizer_name.c_str());
+            LLAMA_LOG_WARN("%s: using default tokenizer: 'llama'", __func__);
+            vocab.type = LLAMA_VOCAB_TYPE_SPM;
+        }
+
+        // get hparams kv
         GGUF_GET(hparams.n_vocab,        gguf_get_arr_n,   GGUF_TYPE_ARRAY,   true, "tokenizer.ggml.tokens");
-        GGUF_GET(hparams.n_ctx,          gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.context_length");
+        GGUF_GET(hparams.n_ctx_train,    gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.context_length");
         GGUF_GET(hparams.n_embd,         gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.embedding_length");
         GGUF_GET(hparams.n_ff,           gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.feed_forward_length");
         GGUF_GET(hparams.n_head,         gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.attention.head_count");
@@ -1336,6 +1434,18 @@ static void llama_model_load_internal(
         // n_head_kv is optional, default to n_head
         hparams.n_head_kv = hparams.n_head;
         GGUF_GET(hparams.n_head_kv, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "llama.attention.head_count_kv");
+
+        // get general kv
+        GGUF_GET(general_name, gguf_get_val_str, GGUF_TYPE_STRING, false, "general.name");
+        GGUF_GET(general_arch, gguf_get_val_str, GGUF_TYPE_STRING, false, "general.architecture");
+
+        // special tokens
+        GGUF_GET(vocab.special_bos_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "tokenizer.ggml.bos_token_id");
+        GGUF_GET(vocab.special_eos_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "tokenizer.ggml.eos_token_id");
+        GGUF_GET(vocab.special_unk_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "tokenizer.ggml.unknown_token_id");
+        GGUF_GET(vocab.special_sep_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "tokenizer.ggml.separator_token_id");
+        GGUF_GET(vocab.special_pad_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "tokenizer.ggml.padding_token_id");
+
 #undef GGUF_GET
 
         switch (hparams.n_layer) {
@@ -1351,6 +1461,8 @@ static void llama_model_load_internal(
                     }
                 } break;
         }
+
+        model.ftype = ml->ftype;
 
         hparams.n_ctx = n_ctx;
 
@@ -1377,12 +1489,12 @@ static void llama_model_load_internal(
 
         const int token_idx = gguf_find_key(ctx, "tokenizer.ggml.tokens");
         if (token_idx == -1) {
-            throw std::runtime_error("cannot find token list in GGUF file\n");
+            throw std::runtime_error("cannot find tokenizer vocab in model file\n");
         }
 
         const int score_idx = gguf_find_key(ctx, "tokenizer.ggml.scores");
         if (score_idx == -1) {
-            throw std::runtime_error("cannot find token scores list in GGUF file\n");
+            throw std::runtime_error("cannot find tokenizer scores in model file\n");
         }
 
         const float * scores = (const float * ) gguf_get_arr_data(ctx, score_idx);
@@ -1395,28 +1507,50 @@ static void llama_model_load_internal(
             auto & tok_score = vocab.id_to_token[i];
             tok_score.tok = std::move(word);
             tok_score.score = scores[i];
+
+            // determine the newline token: 0x0A == 10 == '\n'
+            if (tok_score.tok == "<0x0A>") {
+                vocab.linefeed_id = i;
+            }
         }
     }
 
     {
-        LLAMA_LOG_INFO("%s: format     = %s\n",   __func__, llama_file_version_name(ml->file_version));
-        LLAMA_LOG_INFO("%s: n_vocab    = %u\n",   __func__, hparams.n_vocab);
-        LLAMA_LOG_INFO("%s: n_ctx      = %u\n",   __func__, hparams.n_ctx);
-        LLAMA_LOG_INFO("%s: n_embd     = %u\n",   __func__, hparams.n_embd);
-        LLAMA_LOG_INFO("%s: n_head     = %u\n",   __func__, hparams.n_head);
-        LLAMA_LOG_INFO("%s: n_head_kv  = %u\n",   __func__, hparams.n_head_kv);
-        LLAMA_LOG_INFO("%s: n_layer    = %u\n",   __func__, hparams.n_layer);
-        LLAMA_LOG_INFO("%s: n_rot      = %u\n",   __func__, hparams.n_rot); // a.k.a. n_embd_head, n_head_dim
-        LLAMA_LOG_INFO("%s: n_gqa      = %u\n",   __func__, hparams.n_gqa());
-        LLAMA_LOG_INFO("%s: f_norm_eps = %.1e\n", __func__, hparams.f_norm_rms_eps);
-        LLAMA_LOG_INFO("%s: n_ff       = %u\n",   __func__, hparams.n_ff);
-        LLAMA_LOG_INFO("%s: freq_base  = %.1f\n", __func__, hparams.rope_freq_base);
-        LLAMA_LOG_INFO("%s: freq_scale = %g\n",   __func__, hparams.rope_freq_scale);
-        LLAMA_LOG_INFO("%s: ftype      = %u (%s)\n", __func__, hparams.ftype, llama_ftype_name(hparams.ftype));
-        LLAMA_LOG_INFO("%s: model size = %s\n",   __func__, llama_model_type_name(model.type));
+        // hparams
+        LLAMA_LOG_INFO("%s: format       = %s\n",     __func__, llama_file_version_name(ml->fver));
+        LLAMA_LOG_INFO("%s: arch         = %s\n",     __func__, general_arch.c_str());
+        LLAMA_LOG_INFO("%s: vocab type   = %s\n",     __func__, vocab.type == LLAMA_VOCAB_TYPE_SPM ? "SPM" : "BPE"); // TODO: fix
+        LLAMA_LOG_INFO("%s: n_vocab      = %u\n",     __func__, hparams.n_vocab);
+        LLAMA_LOG_INFO("%s: n_ctx_train  = %u\n",     __func__, hparams.n_ctx_train);
+        LLAMA_LOG_INFO("%s: n_ctx        = %u\n",     __func__, hparams.n_ctx);
+        LLAMA_LOG_INFO("%s: n_embd       = %u\n",     __func__, hparams.n_embd);
+        LLAMA_LOG_INFO("%s: n_head       = %u\n",     __func__, hparams.n_head);
+        LLAMA_LOG_INFO("%s: n_head_kv    = %u\n",     __func__, hparams.n_head_kv);
+        LLAMA_LOG_INFO("%s: n_layer      = %u\n",     __func__, hparams.n_layer);
+        LLAMA_LOG_INFO("%s: n_rot        = %u\n",     __func__, hparams.n_rot); // a.k.a. n_embd_head, n_head_dim
+        LLAMA_LOG_INFO("%s: n_gqa        = %u\n",     __func__, hparams.n_gqa());
+        LLAMA_LOG_INFO("%s: f_norm_eps   = %.1e\n",   __func__, hparams.f_norm_rms_eps);
+        LLAMA_LOG_INFO("%s: n_ff         = %u\n",     __func__, hparams.n_ff);
+        LLAMA_LOG_INFO("%s: freq_base    = %.1f\n",   __func__, hparams.rope_freq_base);
+        LLAMA_LOG_INFO("%s: freq_scale   = %g\n",     __func__, hparams.rope_freq_scale);
+        LLAMA_LOG_INFO("%s: model type   = %s\n",     __func__, llama_model_type_name(model.type));
+        LLAMA_LOG_INFO("%s: model ftype  = %s\n",     __func__, llama_model_ftype_name(model.ftype));
+        LLAMA_LOG_INFO("%s: model size   = %.2f B\n", __func__, ml->n_elements*1e-9);
+
+        // general kv
+        LLAMA_LOG_INFO("%s: general.name = %s\n",    __func__, general_name.c_str());
+
+        // special tokens
+        if (vocab.special_bos_id != -1) { LLAMA_LOG_INFO( "%s: BOS token = %d '%s'\n", __func__, vocab.special_bos_id, vocab.id_to_token[vocab.special_bos_id].tok.c_str() ); }
+        if (vocab.special_eos_id != -1) { LLAMA_LOG_INFO( "%s: EOS token = %d '%s'\n", __func__, vocab.special_eos_id, vocab.id_to_token[vocab.special_eos_id].tok.c_str() ); }
+        if (vocab.special_unk_id != -1) { LLAMA_LOG_INFO( "%s: UNK token = %d '%s'\n", __func__, vocab.special_unk_id, vocab.id_to_token[vocab.special_unk_id].tok.c_str() ); }
+        if (vocab.special_sep_id != -1) { LLAMA_LOG_INFO( "%s: SEP token = %d '%s'\n", __func__, vocab.special_sep_id, vocab.id_to_token[vocab.special_sep_id].tok.c_str() ); }
+        if (vocab.special_pad_id != -1) { LLAMA_LOG_INFO( "%s: PAD token = %d '%s'\n", __func__, vocab.special_pad_id, vocab.id_to_token[vocab.special_pad_id].tok.c_str() ); }
+        if (vocab.linefeed_id    != -1) { LLAMA_LOG_INFO( "%s: LF token  = %d '%s'\n", __func__, vocab.linefeed_id,    vocab.id_to_token[vocab.linefeed_id].tok.c_str() );    }
     }
 
     if (vocab_only) {
+        LLAMA_LOG_INFO("%s: vocab only - skipping tensors\n", __func__);
         return;
     }
 
@@ -1881,11 +2015,11 @@ static struct ggml_cgraph * llama_build_graph(
             ggml_set_name(Q, "Q");
 
             struct ggml_tensor * K =
-                ggml_permute(ctx0,
-                        ggml_reshape_3d(ctx0,
-                            ggml_view_1d(ctx0, kv_self.k, (n_past + N)*n_embd_gqa, il*n_ctx*ggml_element_size(kv_self.k)*n_embd_gqa),
-                            n_embd_head, n_head_kv, n_past + N),
-                        0, 2, 1, 3);
+                ggml_view_3d(ctx0, kv_self.k,
+                        n_embd_head, n_past + N, n_head_kv,
+                        ggml_element_size(kv_self.k)*n_embd_gqa,
+                        ggml_element_size(kv_self.k)*n_embd_head,
+                        ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il);
             offload_func_kq(K);
             ggml_set_name(K, "K");
 
@@ -1914,9 +2048,9 @@ static struct ggml_cgraph * llama_build_graph(
             struct ggml_tensor * V =
                 ggml_view_3d(ctx0, kv_self.v,
                         n_past + N, n_embd_head, n_head_kv,
-                        n_ctx*ggml_element_size(kv_self.v),
-                        n_ctx*ggml_element_size(kv_self.v)*n_embd_head,
-                        n_ctx*ggml_element_size(kv_self.v)*n_embd_gqa*il);
+                        ggml_element_size(kv_self.v)*n_ctx,
+                        ggml_element_size(kv_self.v)*n_ctx*n_embd_head,
+                        ggml_element_size(kv_self.v)*n_ctx*n_embd_gqa*il);
             offload_func_v(V);
             ggml_set_name(V, "V");
 
@@ -2071,6 +2205,13 @@ static bool llama_eval_internal(
 
     GGML_ASSERT((!tokens && embd) || (tokens && !embd)); // NOLINT
 
+    GGML_ASSERT(n_tokens > 0);
+    GGML_ASSERT(n_past >= 0);
+    GGML_ASSERT(n_threads > 0);
+    // TODO: keep the values of n_batch and n_ctx
+    // GGML_ASSERT(n_tokens <= n_batch);
+    // GGML_ASSERT(n_past + n_tokens <= n_ctx);
+
     const int64_t t_start_us = ggml_time_us();
 
 #ifdef GGML_USE_MPI
@@ -2117,11 +2258,7 @@ static bool llama_eval_internal(
 #endif
 
 #ifdef GGML_USE_METAL
-    if (lctx.ctx_metal && N == 1) {
-        // TODO: disabled until #2413 is resolved
-        //if (!ggml_metal_if_optimized(lctx.ctx_metal)) {
-        //    ggml_metal_graph_find_concurrency(lctx.ctx_metal, gf);
-        //}
+    if (lctx.ctx_metal) {
         ggml_metal_set_n_cb     (lctx.ctx_metal, n_threads);
         ggml_metal_graph_compute(lctx.ctx_metal, gf);
         ggml_metal_get_tensor   (lctx.ctx_metal, res);
@@ -2129,22 +2266,6 @@ static bool llama_eval_internal(
             ggml_metal_get_tensor(lctx.ctx_metal, embeddings);
         }
     } else {
-        // IMPORTANT:
-        // Since we don't have efficient Matrix x Matrix Metal multiplication yet, we fallback to vanilla
-        // ggml_graph_compute(). It uses Apple's Accelerate CBLAS API which takes advantage of the ANE or the AMX
-        // coprocessor.
-        //
-        // When we implement Matrix x Matrix Metal multiplication, we can avoid this branch.
-        // But for now, we have focused only on Matrix x Vector Metal multiplication.
-        //
-        // TODO: avoid these syncs via shared memory (ref #1696)
-        //
-        if (lctx.ctx_metal) {
-            // We need to sync the GPU KV cache with the CPU KV cache
-            ggml_metal_get_tensor(lctx.ctx_metal, kv_self.k);
-            ggml_metal_get_tensor(lctx.ctx_metal, kv_self.v);
-        }
-
         ggml_graph_compute_helper(lctx.work_buffer, gf, n_threads);
     }
 #else
@@ -2212,52 +2333,42 @@ static bool llama_eval_internal(
 // tokenizer
 //
 
-static std::string llama_vocab_type(const llama_vocab & vocab) {
-    return vocab.token_to_id.size() == 32000 ? "spm": "bpe";
+static enum llama_vocab_type llama_vocab_get_type(const llama_vocab & vocab) {
+    return vocab.type;
 }
 
 static bool llama_is_normal_token(const llama_vocab & vocab, llama_token token) {
-    if (llama_vocab_type(vocab) == "spm") {
+    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_SPM) {
         return token >= 259;
     }
 
-    if (llama_vocab_type(vocab) == "bpe") {
+    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_BPE) {
         return token >= 95;
     }
 
     return false;
 }
 
-static bool llama_is_unknown_token(const llama_vocab & vocab, llama_token token) {
-    if (llama_vocab_type(vocab) == "spm") {
-        return token == 0;
-    }
-
-    // TODO: improve?
-    return false;
-}
-
-static bool llama_is_control_token(const llama_vocab & vocab, llama_token token) {
-    if (llama_vocab_type(vocab) == "spm") {
-        return token == 1 || token == 2;
-    }
-
-    // TODO: improve?
-    return false;
-}
-
 static bool llama_is_bos_token(const llama_vocab & vocab, llama_token token) {
-    if (llama_vocab_type(vocab) == "spm") {
-        return token == 1;
-    }
-
-    // TODO: improve?
-    return false;
+    return token == vocab.special_bos_id;
 }
 
 static bool llama_is_eos_token(const llama_vocab & vocab, llama_token token) {
-    if (llama_vocab_type(vocab) == "spm") {
-        return token == 2;
+    return token == vocab.special_eos_id;
+}
+
+static bool llama_is_control_token(const llama_vocab & vocab, llama_token token) {
+    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_SPM) {
+        return token == llama_is_bos_token(vocab, token) || token == llama_is_eos_token(vocab, token);
+    }
+
+    // TODO: improve?
+    return false;
+}
+
+static bool llama_is_unknown_token(const llama_vocab & vocab, llama_token token) {
+    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_SPM) {
+        return token == 0;
     }
 
     // TODO: improve?
@@ -2279,11 +2390,11 @@ static bool llama_is_unused_token(const llama_vocab & vocab, llama_token token) 
 }
 
 static bool llama_is_byte_token(const llama_vocab & vocab, llama_token token) {
-    if (llama_vocab_type(vocab) == "spm") {
+    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_SPM) {
         return 3 <= token && token < 259;
     }
 
-    if (llama_vocab_type(vocab) == "bpe") {
+    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_BPE) {
         return 1 <= token && token < 95;
     }
 
@@ -2291,12 +2402,24 @@ static bool llama_is_byte_token(const llama_vocab & vocab, llama_token token) {
 }
 
 static uint8_t llama_byte_to_char(const llama_vocab & vocab, uint8_t byte) {
-    if (llama_vocab_type(vocab) == "spm") {
+    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_SPM) {
         return byte - 3;
     }
 
-    if (llama_vocab_type(vocab) == "bpe") {
+    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_BPE) {
         return byte + 32;
+    }
+
+    return false;
+}
+
+static uint8_t llama_char_to_byte(const llama_vocab & vocab, uint8_t ch) {
+    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_SPM) {
+        return ch + 3;
+    }
+
+    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_BPE) {
+        return ch - 32;
     }
 
     return false;
@@ -2438,7 +2561,7 @@ private:
         if (p == rev_merge.end()) {
             // output any symbols that did not form tokens as bytes.
             for (int j = 0; j < (int)symbol.n; ++j) {
-                llama_vocab::id token_id = llama_byte_to_char(vocab_, symbol.text[j]);
+                llama_vocab::id token_id = llama_char_to_byte(vocab_, symbol.text[j]);
                 output.push_back(token_id);
             }
             return;
@@ -2483,7 +2606,7 @@ private:
     std::map<std::string, std::pair<int, int> > rev_merge;
 };
 
-static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, const std::string & raw_text, bool bos, bool escape) {
+static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, const std::string & raw_text, bool bos, bool escape) {
     llama_tokenizer tokenizer(vocab);
     std::vector<llama_vocab::id> output;
 
@@ -2492,7 +2615,7 @@ static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, co
     }
 
     if (bos) {
-        output.push_back(llama_token_bos());
+        output.push_back(vocab.special_bos_id);
     }
 
     std::string text;
@@ -2510,37 +2633,81 @@ static std::vector<llama_vocab::id> llama_tokenize(const llama_vocab & vocab, co
 // grammar - internal
 //
 
+struct llama_partial_utf8 {
+    uint32_t value;    // bit value so far (unshifted)
+    int      n_remain; // num bytes remaining; -1 indicates invalid sequence
+};
+
 struct llama_grammar {
     const std::vector<std::vector<llama_grammar_element>>   rules;
     std::vector<std::vector<const llama_grammar_element *>> stacks;
+
+    // buffer for partially generated UTF-8 sequence from accepted tokens
+    llama_partial_utf8                                      partial_utf8;
 };
 
 struct llama_grammar_candidate {
-    size_t           index;
-    const uint32_t * code_points;
+    size_t               index;
+    const uint32_t     * code_points;
+    llama_partial_utf8   partial_utf8;
 };
 
-// NOTE: assumes valid utf8 (but checks for overrun)
-// adds a terminating 0 for use as pointer
-std::vector<uint32_t> decode_utf8(const char * src) {
-    static const int      lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4 };
+// Decodes a UTF-8 string which may end in an incomplete sequence. Adds a terminating 0 for use as
+// pointer. If an invalid sequence is encountered, returns `llama_partial_utf8.n_remain == -1`.
+std::pair<std::vector<uint32_t>, llama_partial_utf8> decode_utf8(
+        const char         * src,
+        llama_partial_utf8   partial_start) {
+    static const int      lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 2, 2, 3, 4 };
     const char          * pos      = src;
     std::vector<uint32_t> code_points;
+    uint32_t              value    = partial_start.value;
+    int                   n_remain = partial_start.n_remain;
+
+    // continue previous decode, if applicable
+    while (*pos != 0 && n_remain > 0) {
+        uint8_t next_byte = static_cast<uint8_t>(*pos);
+        if ((next_byte >> 6) != 2) {
+            // invalid sequence, abort
+            code_points.push_back(0);
+            return std::make_pair(std::move(code_points), llama_partial_utf8{ 0, -1 });
+        }
+        value = (value << 6) + (next_byte & 0x3F);
+        ++pos;
+        --n_remain;
+    }
+
+    if (partial_start.n_remain > 0 && n_remain == 0) {
+        code_points.push_back(value);
+    }
+
+    // decode any subsequent utf-8 sequences, which may end in an incomplete one
     while (*pos != 0) {
         uint8_t  first_byte = static_cast<uint8_t>(*pos);
         uint8_t  highbits   = first_byte >> 4;
-        int      len        = lookup[highbits];
-        uint8_t  mask       = (1 << (8 - len)) - 1;
-        uint32_t value      = first_byte & mask;
-        const char * end    = pos + len; // may overrun!
-        ++pos;
-        for ( ; pos < end && *pos != 0; ++pos) {
-            value = (value << 6) + (static_cast<uint8_t>(*pos) & 0x3F);
+                 n_remain   = lookup[highbits] - 1;
+
+        if (n_remain < 0) {
+            // invalid sequence, abort
+            code_points.clear();
+            code_points.push_back(0);
+            return std::make_pair(std::move(code_points), llama_partial_utf8{ 0, n_remain });
         }
-        code_points.push_back(value);
+
+        uint8_t  mask       = (1 << (7 - n_remain)) - 1;
+                 value      = first_byte & mask;
+        ++pos;
+        while (*pos != 0 && n_remain > 0) {
+            value = (value << 6) + (static_cast<uint8_t>(*pos) & 0x3F);
+            ++pos;
+            --n_remain;
+        }
+        if (n_remain == 0) {
+            code_points.push_back(value);
+        }
     }
     code_points.push_back(0);
-    return code_points;
+
+    return std::make_pair(std::move(code_points), llama_partial_utf8{ value, n_remain });
 }
 
 // returns true iff pos points to the end of one of the definitions of a rule
@@ -2576,6 +2743,56 @@ static std::pair<bool, const llama_grammar_element *> llama_grammar_match_char(
 
     return std::make_pair(found == is_positive_char, pos);
 }
+
+// returns true iff some continuation of the given partial UTF-8 sequence could satisfy the char
+// range at pos (regular or inverse range)
+// asserts that pos is pointing to a char range element
+static bool llama_grammar_match_partial_char(
+        const llama_grammar_element * pos,
+        const llama_partial_utf8      partial_utf8) {
+
+    bool is_positive_char = pos->type == LLAMA_GRETYPE_CHAR;
+    GGML_ASSERT(is_positive_char || pos->type == LLAMA_GRETYPE_CHAR_NOT);
+
+    uint32_t partial_value = partial_utf8.value;
+    int      n_remain      = partial_utf8.n_remain;
+
+    // invalid sequence or 7-bit char split across 2 bytes (overlong)
+    if (n_remain < 0 || (n_remain == 1 && partial_value < 2)) {
+        return false;
+    }
+
+    // range of possible code points this partial UTF-8 sequence could complete to
+    uint32_t low  = partial_value << (n_remain * 6);
+    uint32_t high = low | ((1 << (n_remain * 6)) - 1);
+
+    if (low == 0) {
+        if (n_remain == 2) {
+            low = 1 << 11;
+        } else if (n_remain == 3) {
+            low = 1 << 16;
+        }
+    }
+
+    do {
+        if (pos[1].type == LLAMA_GRETYPE_CHAR_RNG_UPPER) {
+            // inclusive range, e.g. [a-z]
+            if (pos->value <= high && low <= pos[1].value) {
+                return is_positive_char;
+            }
+            pos += 2;
+        } else {
+            // exact char match, e.g. [a] or "a"
+            if (low <= pos->value && pos->value <= high) {
+                return is_positive_char;
+            }
+            pos += 1;
+        }
+    } while (pos->type == LLAMA_GRETYPE_CHAR_ALT);
+
+    return !is_positive_char;
+}
+
 
 // transforms a grammar pushdown stack into N possible stacks, all ending
 // at a character range (terminal element)
@@ -2677,8 +2894,11 @@ static std::vector<llama_grammar_candidate> llama_grammar_reject_candidates_for_
     std::vector<llama_grammar_candidate> rejects;
 
     if (stack.empty()) {
-        // accept nothing; EOS is handled elsewhere
-        rejects.insert(rejects.end(), candidates.begin(), candidates.end());
+        for (auto tok : candidates) {
+            if (*tok.code_points != 0 || tok.partial_utf8.n_remain != 0) {
+                rejects.push_back(tok);
+            }
+        }
         return rejects;
     }
 
@@ -2686,10 +2906,15 @@ static std::vector<llama_grammar_candidate> llama_grammar_reject_candidates_for_
 
     std::vector<llama_grammar_candidate> next_candidates;
     for (auto tok : candidates) {
-        if (llama_grammar_match_char(stack_pos, tok.code_points[0]).first) {
-            if (tok.code_points[1] != 0) {
-                next_candidates.push_back({ tok.index, tok.code_points + 1 });
+        if (*tok.code_points == 0) {
+            // reached end of full codepoints in token, reject iff it ended in a partial sequence
+            // that cannot satisfy this position in grammar
+            if (tok.partial_utf8.n_remain != 0 &&
+                    !llama_grammar_match_partial_char(stack_pos, tok.partial_utf8)) {
+                rejects.push_back(tok);
             }
+        } else if (llama_grammar_match_char(stack_pos, *tok.code_points).first) {
+            next_candidates.push_back({ tok.index, tok.code_points + 1, tok.partial_utf8 });
         } else {
             rejects.push_back(tok);
         }
@@ -2707,7 +2932,7 @@ static std::vector<llama_grammar_candidate> llama_grammar_reject_candidates_for_
 
     auto next_rejects = llama_grammar_reject_candidates(rules, next_stacks, next_candidates);
     for (auto tok : next_rejects) {
-        rejects.push_back({ tok.index, tok.code_points - 1 });
+        rejects.push_back({ tok.index, tok.code_points - 1, tok.partial_utf8 });
     }
 
     return rejects;
@@ -2772,7 +2997,7 @@ struct llama_grammar * llama_grammar_init(
         }
     } while (true);
 
-    return new llama_grammar{ std::move(vec_rules), std::move(stacks) };
+    return new llama_grammar{ std::move(vec_rules), std::move(stacks), {} };
 }
 
 void llama_grammar_free(struct llama_grammar * grammar) {
@@ -2784,7 +3009,7 @@ void llama_grammar_free(struct llama_grammar * grammar) {
 //
 
 void llama_sample_softmax(struct llama_context * ctx, llama_token_data_array * candidates) {
-    assert(candidates->size > 0);
+    GGML_ASSERT(candidates->size > 0);
 
     const int64_t t_start_sample_us = ggml_time_us();
 
@@ -3064,7 +3289,7 @@ void llama_sample_frequency_and_presence_penalties(struct llama_context * ctx, l
 }
 
 void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * candidates, const struct llama_grammar * grammar) {
-    assert(ctx);
+    GGML_ASSERT(ctx);
     const int64_t t_start_sample_us = ggml_time_us();
 
     bool allow_eos = false;
@@ -3075,23 +3300,23 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
         }
     }
 
-    const llama_token eos = llama_token_eos();
+    const llama_token eos = llama_token_eos(ctx);
 
-    std::vector<std::vector<uint32_t>>   candidates_decoded;
-    std::vector<llama_grammar_candidate> candidates_grammar;
+    std::vector<std::pair<std::vector<uint32_t>, llama_partial_utf8>> candidates_decoded;
+    std::vector<llama_grammar_candidate>                              candidates_grammar;
 
     for (size_t i = 0; i < candidates->size; ++i) {
-        const llama_token id  = candidates->data[i].id;
-        std::string       str = llama_token_to_str(ctx, id);
+        const llama_token id   = candidates->data[i].id;
+        const std::string text = llama_token_to_text(ctx, id);
         if (id == eos) {
             if (!allow_eos) {
                 candidates->data[i].logit = -INFINITY;
             }
-        } else if (str.empty()) {
+        } else if (text.empty()) {
             candidates->data[i].logit = -INFINITY;
         } else {
-            candidates_decoded.push_back(decode_utf8(str.c_str()));
-            candidates_grammar.push_back({ i, candidates_decoded.back().data() });
+            candidates_decoded.push_back(decode_utf8(text.c_str(), grammar->partial_utf8));
+            candidates_grammar.push_back({ i, candidates_decoded.back().first.data(), candidates_decoded.back().second });
         }
     }
 
@@ -3124,10 +3349,12 @@ void llama_sample_classifier_free_guidance(
                          float   scale) {
     int64_t t_start_sample_us = ggml_time_us();
 
-    assert(ctx);
+    GGML_ASSERT(ctx);
+
     auto n_vocab = llama_n_vocab(ctx);
-    assert(n_vocab == (int)candidates->size);
-    assert(!candidates->sorted);
+
+    GGML_ASSERT(n_vocab == (int)candidates->size);
+    GGML_ASSERT(!candidates->sorted);
 
     std::vector<float> logits_base;
     logits_base.reserve(candidates->size);
@@ -3151,7 +3378,8 @@ void llama_sample_classifier_free_guidance(
 }
 
 llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, int m, float * mu) {
-    assert(ctx);
+    GGML_ASSERT(ctx);
+
     auto N = float(llama_n_vocab(ctx));
     int64_t t_start_sample_us;
     t_start_sample_us = ggml_time_us();
@@ -3257,7 +3485,8 @@ llama_token llama_sample_token_greedy(struct llama_context * ctx, llama_token_da
 }
 
 llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_array * candidates) {
-    assert(ctx);
+    GGML_ASSERT(ctx);
+
     const int64_t t_start_sample_us = ggml_time_us();
     llama_sample_softmax(nullptr, candidates);
 
@@ -3281,7 +3510,7 @@ llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_arra
 void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar * grammar, llama_token token) {
     const int64_t t_start_sample_us = ggml_time_us();
 
-    if (token == llama_token_eos()) {
+    if (token == llama_token_eos(ctx)) {
         for (const auto & stack : grammar->stacks) {
             if (stack.empty()) {
                 return;
@@ -3290,12 +3519,15 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
         GGML_ASSERT(false);
     }
 
-    std::string str = llama_token_to_str(ctx, token);
+    const std::string text = llama_token_to_text(ctx, token);
+
     // Note terminating 0 in decoded string
-    auto code_points = decode_utf8(str.c_str());
+    const auto   decoded     = decode_utf8(text.c_str(), grammar->partial_utf8);
+    const auto & code_points = decoded.first;
     for (auto it = code_points.begin(), end = code_points.end() - 1; it != end; ++it) {
         grammar->stacks = llama_grammar_accept(grammar->rules, grammar->stacks, *it);
     }
+    grammar->partial_utf8 = decoded.second;
     GGML_ASSERT(!grammar->stacks.empty());
 
     ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
@@ -3365,7 +3597,6 @@ static void llama_convert_tensor_internal(struct ggml_tensor * tensor, std::vect
 static void llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, const llama_model_quantize_params * params) {
     ggml_type quantized_type;
     llama_ftype ftype = params->ftype;
-    int nthread = params->nthread;
 
     switch (params->ftype) {
         case LLAMA_FTYPE_MOSTLY_Q4_0: quantized_type = GGML_TYPE_Q4_0; break;
@@ -3391,6 +3622,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         default: throw std::runtime_error(format("invalid output file type %d\n", ftype));
     }
 
+    int nthread = params->nthread;
+
     if (nthread <= 0) {
         nthread = std::thread::hardware_concurrency();
     }
@@ -3413,6 +3646,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
         const std::string name = ggml_get_name(meta);
 
+        // TODO: avoid hardcoded tensor names - use the TN_* constants
         if (name.find("attn_v.weight") != std::string::npos) {
             ++n_attention_wv;
         }
@@ -3491,6 +3725,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         } else {
             new_type = quantized_type;
 #ifdef GGML_USE_K_QUANTS
+            // TODO: avoid hardcoded tensor names - use the TN_* constants
             if (name == TN_OUTPUT) {
                 int nx = tensor->ne[0];
                 int ny = tensor->ne[1];
@@ -3505,7 +3740,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 else if (QK_K == 64 && (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_S) &&
                         (i_attention_wv < n_attention_wv/8 || i_attention_wv >= 7*n_attention_wv/8)) new_type = GGML_TYPE_Q6_K;
                 ++i_attention_wv;
-            } else if (name.find("feed_forward.w2.weight") != std::string::npos) {
+            } else if (name.find("ffn_down.weight") != std::string::npos) {
                 if      (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q4_K;
                 else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
                 else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) &&
@@ -3560,7 +3795,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             new_data = work.data();
             std::vector<int64_t> hist_cur(1 << 4, 0);
 
-            const int chunk_size = 32 * 512;
+            static const int chunk_size = 32 * 512;
             const int nchunk = (nelements + chunk_size - 1)/chunk_size;
             const int nthread_use = nthread > 1 ? std::max(1, std::min(nthread, nchunk)) : 1;
             if (nthread_use < 2) {
@@ -3568,7 +3803,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             } else {
                 size_t counter = 0;
                 new_size = 0;
-                auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, nelements] () {
+                auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, nelements]() {
                     std::vector<int64_t> local_hist;
                     size_t local_size = 0;
                     while (true) {
@@ -3661,6 +3896,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     }
 }
 
+// TODO: after the GGUF PR, this likely won't work and needs to be updated
 int llama_apply_lora_from_file_internal(const struct llama_model & model, const char * path_lora, const char * path_base_model, int n_threads) {
     LLAMA_LOG_INFO("%s: applying lora adapter from '%s' - please wait ...\n", __func__, path_lora);
 
@@ -4111,9 +4347,20 @@ struct llama_context * llama_new_context_with_model(
             // build worst-case graph
             int n_tokens = std::min((int)hparams.n_ctx, params.n_batch);
             int n_past = hparams.n_ctx - n_tokens;
-            llama_token token = llama_token_bos(); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
+            llama_token token = llama_token_bos(ctx); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
             ggml_cgraph * gf = llama_build_graph(*ctx, &token, NULL, n_tokens, n_past);
-
+#ifdef GGML_USE_METAL
+            if (params.n_gpu_layers > 0) {
+                ctx->ctx_metal = ggml_metal_init(1);
+                if (!ctx->ctx_metal) {
+                    LLAMA_LOG_ERROR("%s: ggml_metal_init() failed\n", __func__);
+                    llama_free(ctx);
+                    return NULL;
+                }
+                ggml_metal_graph_find_concurrency(ctx->ctx_metal, gf, false);
+                ggml_allocr_set_parse_seq(ctx->alloc, ggml_metal_get_concur_list(ctx->ctx_metal), ggml_metal_if_optimized(ctx->ctx_metal));
+            }
+#endif
             // measure memory requirements for the graph
             size_t alloc_size = ggml_allocr_alloc_graph(ctx->alloc, gf) + tensor_alignment;
 
@@ -4131,6 +4378,11 @@ struct llama_context * llama_new_context_with_model(
 
             ctx->buf_alloc.resize(alloc_size);
             ctx->alloc = ggml_allocr_new(ctx->buf_alloc.data, ctx->buf_alloc.size, tensor_alignment);
+#ifdef GGML_USE_METAL
+            if (ctx->ctx_metal) {
+                ggml_allocr_set_parse_seq(ctx->alloc, ggml_metal_get_concur_list(ctx->ctx_metal), ggml_metal_if_optimized(ctx->ctx_metal));
+            }
+#endif
         }
 #else
         ctx->buf_compute.resize(MEM_REQ_EVAL().at(ctx->model.type) + ggml_graph_overhead());
@@ -4145,13 +4397,6 @@ struct llama_context * llama_new_context_with_model(
 #ifdef GGML_USE_METAL
     if (params.n_gpu_layers > 0) {
         // this allocates all Metal resources and memory buffers
-        ctx->ctx_metal = ggml_metal_init(1);
-
-        if (!ctx->ctx_metal) {
-            LLAMA_LOG_ERROR("%s: ggml_metal_init() failed\n", __func__);
-            llama_free(ctx);
-            return NULL;
-        }
 
         void * data_ptr  = NULL;
         size_t data_size = 0;
@@ -4180,8 +4425,7 @@ struct llama_context * llama_new_context_with_model(
         LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "eval", ctx->buf_compute.data, ctx->buf_compute.size, 0));
         LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "kv",   ctx->kv_self.buf.data, ctx->kv_self.buf.size, 0));
 
-        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "scr0", ctx->buf_scratch[0].data, ctx->buf_scratch[0].size, 0));
-        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "scr1", ctx->buf_scratch[1].data, ctx->buf_scratch[1].size, 0));
+        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "alloc", ctx->buf_alloc.data, ctx->buf_alloc.size, 0));
 #undef LLAMA_METAL_CHECK_BUF
     }
 #endif
@@ -4191,7 +4435,7 @@ struct llama_context * llama_new_context_with_model(
 
     if (ggml_mpi_rank(ctx->ctx_mpi) > 0) {
         // Enter a blocking eval loop with dummy input, letting rank=0 drive the process
-        const std::vector<llama_token> tmp(ctx->model.hparams.n_ctx, llama_token_bos());
+        const std::vector<llama_token> tmp(ctx->model.hparams.n_ctx, llama_token_bos(ctx));
         while (!llama_eval(ctx, tmp.data(), tmp.size(), 0, 0)) {};
         llama_backend_free();
         exit(1);
@@ -4216,6 +4460,34 @@ struct llama_context * llama_init_from_file(
 
 void llama_free(struct llama_context * ctx) {
     delete ctx;
+}
+
+int llama_n_vocab(const struct llama_context * ctx) {
+    return ctx->model.vocab.id_to_token.size();
+}
+
+int llama_n_ctx(const struct llama_context * ctx) {
+    return ctx->model.hparams.n_ctx;
+}
+
+int llama_n_embd(const struct llama_context * ctx) {
+    return ctx->model.hparams.n_embd;
+}
+
+int llama_model_n_vocab(const struct llama_model * model) {
+    return model->vocab.id_to_token.size();
+}
+
+int llama_model_n_ctx(const struct llama_model * model) {
+    return model->hparams.n_ctx;
+}
+
+int llama_model_n_embd(const struct llama_model * model) {
+    return model->hparams.n_embd;
+}
+
+int llama_model_type(const struct llama_model * model, char * buf, size_t buf_size) {
+    return snprintf(buf, buf_size, "LLaMA %s %s", llama_model_type_name(model->type), llama_model_ftype_name(model->ftype));
 }
 
 int llama_model_quantize(
@@ -4685,7 +4957,7 @@ int llama_eval_export(struct llama_context * ctx, const char * fname) {
     const int n_batch = 1;
     const int n_ctx   = 512 - n_batch;
 
-    const std::vector<llama_token> tmp(n_batch, llama_token_bos());
+    const std::vector<llama_token> tmp(n_batch, llama_token_bos(ctx));
 
     if (!llama_eval_internal(*ctx, tmp.data(), nullptr, tmp.size(), n_ctx, 1, fname)) {
         LLAMA_LOG_ERROR("%s: failed to eval\n", __func__);
@@ -4695,117 +4967,23 @@ int llama_eval_export(struct llama_context * ctx, const char * fname) {
     return 0;
 }
 
-int llama_tokenize_with_model(
-    const struct llama_model * model,
-                  const char * text,
-                 llama_token * tokens,
-                         int   n_max_tokens,
-                        bool   add_bos) {
-    auto escape = llama_vocab_type(model->vocab) == "spm";
-    auto res = llama_tokenize(model->vocab, text, add_bos, escape);
-
-    if (n_max_tokens < (int) res.size()) {
-        LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
-        return -((int) res.size());
-    }
-
-    for (size_t i = 0; i < res.size(); i++) {
-        tokens[i] = res[i];
-    }
-
-    return res.size();
+float * llama_get_logits(struct llama_context * ctx) {
+    return ctx->logits.data();
 }
 
-int llama_tokenize(
-        struct llama_context * ctx,
-                  const char * text,
-                 llama_token * tokens,
-                         int   n_max_tokens,
-                        bool   add_bos) {
-    return llama_tokenize_with_model(&ctx->model, text, tokens, n_max_tokens, add_bos);
+float * llama_get_embeddings(struct llama_context * ctx) {
+    return ctx->embedding.data();
 }
 
-std::vector<llama_token> llama_tokenize(
-        struct llama_context * ctx,
-           const std::string & text,
-                        bool   add_bos) {
-    int length = text.length() + add_bos;
-    std::vector<llama_token> result(length);
-    length = llama_tokenize(ctx, text.c_str(), result.data(), result.size(), add_bos);
-    if (length < 0) {
-        result.resize(-length);
-        int check = llama_tokenize(ctx, text.c_str(), result.data(), result.size(), add_bos);
-        assert(check == -length);
-        GGML_UNUSED(check);
-    } else {
-        result.resize(length);
-    }
-    return result;
+int llama_get_vocab(
+        const struct llama_context * ctx,
+        const char * * strings,
+        float  * scores,
+        int capacity) {
+    return llama_model_get_vocab(&ctx->model, strings, scores, capacity);
 }
 
-int llama_tokenize_bpe(
-        struct llama_context * ctx,
-                  const char * text,
-                 llama_token * tokens,
-                         int   n_max_tokens,
-                        bool   add_bos) {
-    auto res = llama_tokenize(ctx->model.vocab, text, add_bos, false);
-
-    if (n_max_tokens < (int) res.size()) {
-        LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
-        return -((int) res.size());
-    }
-
-    for (size_t i = 0; i < res.size(); i++) {
-        tokens[i] = res[i];
-    }
-
-    return res.size();
-}
-
-std::vector<llama_token> llama_tokenize_bpe(
-        struct llama_context * ctx,
-           const std::string & text,
-                        bool   add_bos) {
-    int length = text.length() + add_bos;
-    std::vector<llama_token> result(length);
-    length = llama_tokenize_bpe(ctx, text.c_str(), result.data(), result.size(), add_bos);
-    if (length < 0) {
-        result.resize(-length);
-        int check = llama_tokenize_bpe(ctx, text.c_str(), result.data(), result.size(), add_bos);
-        assert(check == -length);
-        GGML_UNUSED(check);
-    } else {
-        result.resize(length);
-    }
-    return result;
-}
-
-int llama_n_vocab_from_model(const struct llama_model * model) {
-    return model->vocab.id_to_token.size();
-}
-
-int llama_n_ctx_from_model(const struct llama_model * model) {
-    return model->hparams.n_ctx;
-}
-
-int llama_n_embd_from_model(const struct llama_model * model) {
-    return model->hparams.n_embd;
-}
-
-int llama_n_vocab(const struct llama_context * ctx) {
-    return ctx->model.vocab.id_to_token.size();
-}
-
-int llama_n_ctx(const struct llama_context * ctx) {
-    return ctx->model.hparams.n_ctx;
-}
-
-int llama_n_embd(const struct llama_context * ctx) {
-    return ctx->model.hparams.n_embd;
-}
-
-int llama_get_vocab_from_model(
+int llama_model_get_vocab(
         const struct llama_model * model,
         const char * * strings,
         float  * scores,
@@ -4818,28 +4996,90 @@ int llama_get_vocab_from_model(
     return n;
 }
 
-int llama_get_vocab(
-        const struct llama_context * ctx,
-        const char * * strings,
-        float  * scores,
-        int capacity) {
-    return llama_get_vocab_from_model(&ctx->model, strings, scores, capacity);
+llama_token llama_token_bos(const struct llama_context * ctx) {
+    return ctx->model.vocab.special_bos_id;
 }
 
-float * llama_get_logits(struct llama_context * ctx) {
-    return ctx->logits.data();
+llama_token llama_token_eos(const struct llama_context * ctx) {
+    return ctx->model.vocab.special_eos_id;
 }
 
-float * llama_get_embeddings(struct llama_context * ctx) {
-    return ctx->embedding.data();
+llama_token llama_token_nl(const struct llama_context * ctx) {
+    return ctx->model.vocab.linefeed_id;
+}
+
+int llama_tokenize(
+        struct llama_context * ctx,
+                  const char * text,
+                 llama_token * tokens,
+                         int   n_max_tokens,
+                        bool   add_bos) {
+    return llama_tokenize_with_model(&ctx->model, text, tokens, n_max_tokens, add_bos);
+}
+
+int llama_tokenize_bpe(
+        struct llama_context * ctx,
+                  const char * text,
+                 llama_token * tokens,
+                         int   n_max_tokens,
+                        bool   add_bos) {
+    auto res = llama_tokenize_internal(ctx->model.vocab, text, add_bos, false);
+
+    if (n_max_tokens < (int) res.size()) {
+        LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
+        return -((int) res.size());
+    }
+
+    for (size_t i = 0; i < res.size(); i++) {
+        tokens[i] = res[i];
+    }
+
+    return res.size();
+}
+
+int llama_tokenize_with_model(
+    const struct llama_model * model,
+                  const char * text,
+                 llama_token * tokens,
+                         int   n_max_tokens,
+                        bool   add_bos) {
+    auto escape = llama_vocab_get_type(model->vocab) == LLAMA_VOCAB_TYPE_SPM;
+    auto res = llama_tokenize_internal(model->vocab, text, add_bos, escape);
+
+    if (n_max_tokens < (int) res.size()) {
+        LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
+        return -((int) res.size());
+    }
+
+    for (size_t i = 0; i < res.size(); i++) {
+        tokens[i] = res[i];
+    }
+
+    return res.size();
+}
+
+int llama_token_to_str(const struct llama_context * ctx, llama_token token, char * buf, int length) {
+    return llama_token_to_str_with_model(&ctx->model, token, buf, length);
+}
+
+int llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token, char * buf, int length) {
+    if (0 <= token && token < llama_model_n_vocab(&ctx->model)) {
+        std::string result = ctx->model.vocab.id_to_token[token].tok;
+        if (length < (int) result.length()) {
+            return -result.length();
+        }
+        memcpy(buf, result.c_str(), result.length());
+        return result.length();
+    }
+    return 0;
 }
 
 // does not write null-terminator to str
 int llama_token_to_str_with_model(const struct llama_model * model, llama_token token, char * buf, int length) {
-    if (0 <= token && token < llama_n_vocab_from_model(model)) {
+    if (0 <= token && token < llama_model_n_vocab(model)) {
         if (llama_is_normal_token(model->vocab, token)) {
             std::string result = model->vocab.id_to_token[token].tok;
-            if (llama_vocab_type(model->vocab) == "spm") {
+            if (llama_vocab_get_type(model->vocab) == LLAMA_VOCAB_TYPE_SPM) {
                 result = llama_unescape_whitespace(result);
             }
             if (length < (int) result.length()) {
@@ -4866,62 +5106,6 @@ int llama_token_to_str_with_model(const struct llama_model * model, llama_token 
         }
     }
     return 0;
-}
-
-int llama_token_to_str(const struct llama_context * ctx, llama_token token, char * str, int length) {
-    return llama_token_to_str_with_model(&ctx->model, token, str, length);
-}
-
-std::string llama_token_to_str(const struct llama_context * ctx, llama_token token) {
-    std::vector<char> result(8, 0);
-    const int length = llama_token_to_str(ctx, token, result.data(), result.size());
-    if (length < 0) {
-        result.resize(-length);
-        int check = llama_token_to_str(ctx, token, result.data(), result.size());
-        GGML_ASSERT(check == -length);
-    } else {
-        result.resize(length);
-    }
-
-    return std::string(result.data(), result.size());
-}
-
-int llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token, char * str, int length) {
-    if (0 <= token && token < llama_n_vocab_from_model(&ctx->model)) {
-        std::string result = ctx->model.vocab.id_to_token[token].tok;
-        if (length < (int) result.length()) {
-            return -result.length();
-        }
-        memcpy(str, result.c_str(), result.length());
-        return result.length();
-    }
-    return 0;
-}
-
-std::string llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token) {
-    std::vector<char> result(8, 0);
-    const int length = llama_token_to_str_bpe(ctx, token, result.data(), result.size());
-    if (length < 0) {
-        result.resize(-length);
-        const int check = llama_token_to_str_bpe(ctx, token, result.data(), result.size());
-        GGML_ASSERT(check == -length);
-    } else {
-        result.resize(length);
-    }
-
-    return std::string(result.data(), result.size());
-}
-
-llama_token llama_token_bos(void) {
-    return 1;
-}
-
-llama_token llama_token_eos(void) {
-    return 2;
-}
-
-llama_token llama_token_nl(void) {
-    return 13;
 }
 
 struct llama_timings llama_get_timings(struct llama_context * ctx) {

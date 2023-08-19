@@ -1,0 +1,632 @@
+name: CI
+
+on:
+  workflow_dispatch: # allows manual triggering
+    inputs:
+      create_release:
+        description: 'Create new release'
+        required: true
+        type: boolean
+  push:
+    branches:
+      - master
+    paths: ['.github/workflows/**', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu']
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu']
+
+env:
+  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+  GGML_NLOOP: 3
+  GGML_NITER: 1
+  GGML_N_THREADS: 1
+
+jobs:
+  ubuntu-focal-make:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v1
+
+      - name: Dependencies
+        id: depends
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential gcc-8
+
+      - name: Build
+        id: make_build
+        run: |
+          CC=gcc-8 make
+
+  ubuntu-latest-cmake:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v1
+
+      - name: Dependencies
+        id: depends
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential
+
+      - name: Build
+        id: cmake_build
+        run: |
+          mkdir build
+          cd build
+          cmake ..
+          cmake --build . --config Release
+
+      - name: Test
+        id: cmake_test
+        run: |
+          cd build
+          ctest --verbose --timeout 900
+
+  ubuntu-latest-cmake-sanitizer:
+    runs-on: ubuntu-latest
+
+    continue-on-error: true
+
+    strategy:
+      matrix:
+        sanitizer: [ADDRESS, THREAD, UNDEFINED]
+        build_type: [Debug, Release]
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v1
+
+      - name: Dependencies
+        id: depends
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential
+
+      - name: Build
+        id: cmake_build
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake --build . --config ${{ matrix.build_type }}
+
+      - name: Test
+        id: cmake_test
+        run: |
+          cd build
+          ctest --verbose --timeout 900
+
+  ubuntu-latest-cmake-mpi:
+    runs-on: ubuntu-latest
+
+    continue-on-error: true
+
+    strategy:
+      matrix:
+        mpi_library: [mpich, libopenmpi-dev]
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v1
+
+      - name: Dependencies
+        id: depends
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential ${{ matrix.mpi_library }}
+
+      - name: Build
+        id: cmake_build
+        run: |
+          mkdir build
+          cd build
+          cmake -DLLAMA_MPI=ON ..
+          cmake --build . --config Release
+
+      - name: Test
+        id: cmake_test
+        run: |
+          cd build
+          ctest --verbose
+
+  macOS-latest-make:
+    runs-on: macos-latest
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v1
+
+      - name: Dependencies
+        id: depends
+        continue-on-error: true
+        run: |
+          brew update
+
+      - name: Build
+        id: make_build
+        run: |
+          make
+
+  macOS-latest-cmake:
+    runs-on: macos-latest
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v1
+
+      - name: Dependencies
+        id: depends
+        continue-on-error: true
+        run: |
+          brew update
+
+      - name: Build
+        id: cmake_build
+        run: |
+          sysctl -a
+          mkdir build
+          cd build
+          cmake -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF ..
+          cmake --build . --config Release
+
+      - name: Test
+        id: cmake_test
+        run: |
+          cd build
+          ctest --verbose --timeout 900
+
+  windows-latest-cmake:
+    runs-on: windows-latest
+
+    env:
+      OPENBLAS_VERSION: 0.3.23
+      OPENCL_VERSION: 2023.04.17
+      CLBLAST_VERSION: 1.6.0
+
+    strategy:
+      matrix:
+        include:
+          - build: 'noavx'
+            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX=OFF -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF'
+          - build: 'avx2'
+            defines: '-DLLAMA_BUILD_SERVER=ON'
+          - build: 'avx'
+            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX2=OFF'
+          - build: 'avx512'
+            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX512=ON -DBUILD_SHARED_LIBS=ON'
+          - build: 'clblast'
+            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH="$env:RUNNER_TEMP/clblast"'
+          - build: 'openblas'
+            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DBLAS_INCLUDE_DIRS="$env:RUNNER_TEMP/openblas/include" -DBLAS_LIBRARIES="$env:RUNNER_TEMP/openblas/lib/openblas.lib"'
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v1
+
+      - name: Download OpenCL SDK
+        id: get_opencl
+        if: ${{ matrix.build == 'clblast' }}
+        run: |
+          curl.exe -o $env:RUNNER_TEMP/opencl.zip -L "https://github.com/KhronosGroup/OpenCL-SDK/releases/download/v${env:OPENCL_VERSION}/OpenCL-SDK-v${env:OPENCL_VERSION}-Win-x64.zip"
+          mkdir $env:RUNNER_TEMP/opencl
+          tar.exe -xvf $env:RUNNER_TEMP/opencl.zip --strip-components=1 -C $env:RUNNER_TEMP/opencl
+
+      - name: Download CLBlast
+        id: get_clblast
+        if: ${{ matrix.build == 'clblast' }}
+        run: |
+          curl.exe -o $env:RUNNER_TEMP/clblast.7z -L "https://github.com/CNugteren/CLBlast/releases/download/${env:CLBLAST_VERSION}/CLBlast-${env:CLBLAST_VERSION}-windows-x64.7z"
+          curl.exe -o $env:RUNNER_TEMP/CLBlast.LICENSE.txt -L "https://github.com/CNugteren/CLBlast/raw/${env:CLBLAST_VERSION}/LICENSE"
+          7z x "-o${env:RUNNER_TEMP}" $env:RUNNER_TEMP/clblast.7z
+          rename-item $env:RUNNER_TEMP/CLBlast-${env:CLBLAST_VERSION}-windows-x64 clblast
+          foreach ($f in (gci -Recurse -Path "$env:RUNNER_TEMP/clblast" -Filter '*.cmake')) {
+            $txt = Get-Content -Path $f -Raw
+            $txt.Replace('C:/vcpkg/packages/opencl_x64-windows/', "$($env:RUNNER_TEMP.Replace('\','/'))/opencl/") | Set-Content -Path $f -Encoding UTF8
+          }
+
+      - name: Download OpenBLAS
+        id: get_openblas
+        if: ${{ matrix.build == 'openblas' }}
+        run: |
+          curl.exe -o $env:RUNNER_TEMP/openblas.zip -L "https://github.com/xianyi/OpenBLAS/releases/download/v${env:OPENBLAS_VERSION}/OpenBLAS-${env:OPENBLAS_VERSION}-x64.zip"
+          curl.exe -o $env:RUNNER_TEMP/OpenBLAS.LICENSE.txt -L "https://github.com/xianyi/OpenBLAS/raw/v${env:OPENBLAS_VERSION}/LICENSE"
+          mkdir $env:RUNNER_TEMP/openblas
+          tar.exe -xvf $env:RUNNER_TEMP/openblas.zip -C $env:RUNNER_TEMP/openblas
+          $vcdir = $(vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
+          $msvc = $(join-path $vcdir $('VC\Tools\MSVC\'+$(gc -raw $(join-path $vcdir 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt')).Trim()))
+          $lib =  $(join-path $msvc 'bin\Hostx64\x64\lib.exe')
+          & $lib /machine:x64 "/def:${env:RUNNER_TEMP}/openblas/lib/libopenblas.def" "/out:${env:RUNNER_TEMP}/openblas/lib/openblas.lib" /name:openblas.dll
+
+      - name: Build
+        id: cmake_build
+        run: |
+          mkdir build
+          cd build
+          cmake .. ${{ matrix.defines }}
+          cmake --build . --config Release
+
+      - name: Add clblast.dll
+        id: add_clblast_dll
+        if: ${{ matrix.build == 'clblast' }}
+        run: |
+          cp $env:RUNNER_TEMP/clblast/lib/clblast.dll ./build/bin/Release
+          cp $env:RUNNER_TEMP/CLBlast.LICENSE.txt ./build/bin/Release/CLBlast-${env:CLBLAST_VERSION}.txt
+
+      - name: Add libopenblas.dll
+        id: add_libopenblas_dll
+        if: ${{ matrix.build == 'openblas' }}
+        run: |
+          cp $env:RUNNER_TEMP/openblas/bin/libopenblas.dll ./build/bin/Release/openblas.dll
+          cp $env:RUNNER_TEMP/OpenBLAS.LICENSE.txt ./build/bin/Release/OpenBLAS-${env:OPENBLAS_VERSION}.txt
+
+      - name: Check AVX512F support
+        id: check_avx512f
+        if: ${{ matrix.build == 'avx512' }}
+        continue-on-error: true
+        run: |
+          cd build
+          $vcdir = $(vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
+          $msvc = $(join-path $vcdir $('VC\Tools\MSVC\'+$(gc -raw $(join-path $vcdir 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt')).Trim()))
+          $cl =  $(join-path $msvc 'bin\Hostx64\x64\cl.exe')
+          echo 'int main(void){unsigned int a[4];__cpuid(a,7);return !(a[1]&65536);}' >> avx512f.c
+          & $cl /O2 /GS- /kernel avx512f.c /link /nodefaultlib /entry:main
+          .\avx512f.exe && echo "AVX512F: YES" && ( echo HAS_AVX512F=1 >> $env:GITHUB_ENV ) || echo "AVX512F: NO"
+
+      - name: Test
+        id: cmake_test
+        if: ${{ matrix.build != 'clblast' && (matrix.build != 'avx512' || env.HAS_AVX512F == '1') }} # Test AVX-512 only when possible
+        run: |
+          cd build
+          ctest -C Release --verbose --timeout 900
+
+      - name: Get commit hash
+        id: commit
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: pr-mpt/actions-commit-hash@v2
+
+      - name: Pack artifacts
+        id: pack_artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        run: |
+          Copy-Item LICENSE .\build\bin\Release\llama.cpp.txt
+          7z a llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-${{ matrix.build }}-x64.zip .\build\bin\Release\*
+
+      - name: Upload artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: actions/upload-artifact@v3
+        with:
+          path: |
+            llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-${{ matrix.build }}-x64.zip
+
+  windows-latest-cmake-cublas:
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        cuda: ['12.1.0', '11.7.1']
+        build: ['cublas']
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v1
+
+      - uses: Jimver/cuda-toolkit@v0.2.10
+        id: cuda-toolkit
+        with:
+          cuda: ${{ matrix.cuda }}
+          # TODO(green-sky): _dev seems to fail, and non dev are not enought
+          #sub-packages: '["nvcc", "cudart", "cublas", "cudart_dev", "cublas_dev"]'
+
+      - name: Build
+        id: cmake_build
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON
+          cmake --build . --config Release
+
+      - name: Get commit hash
+        id: commit
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: pr-mpt/actions-commit-hash@v2
+
+      - name: Pack artifacts
+        id: pack_artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        run: |
+          7z a llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip .\build\bin\Release\*
+
+      - name: Upload artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: actions/upload-artifact@v3
+        with:
+          path: |
+            llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip
+
+      - name: Copy and pack Cuda runtime
+        if: ${{ matrix.cuda == '12.1.0' }}
+        # TODO(green-sky): paths are cuda 12 specific
+        run: |
+          echo "Cuda install location: ${{steps.cuda-toolkit.outputs.CUDA_PATH}}"
+          mkdir '.\build\bin\cudart\'
+          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cudart64_12.dll" '.\build\bin\cudart\'
+          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublas64_12.dll" '.\build\bin\cudart\'
+          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublasLt64_12.dll" '.\build\bin\cudart\'
+          7z a cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip .\build\bin\cudart\*
+
+      - name: Copy and pack Cuda runtime
+        if: ${{ matrix.cuda == '11.7.1' }}
+        # TODO(green-sky): paths are cuda 11 specific
+        run: |
+          echo "Cuda install location: ${{steps.cuda-toolkit.outputs.CUDA_PATH}}"
+          mkdir '.\build\bin\cudart\'
+          ls "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin"
+          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cudart64_110.dll" '.\build\bin\cudart\'
+          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublas64_11.dll" '.\build\bin\cudart\'
+          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublasLt64_11.dll" '.\build\bin\cudart\'
+          7z a cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip .\build\bin\cudart\*
+
+      - name: Upload Cuda runtime
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: actions/upload-artifact@v3
+        with:
+          path: |
+            cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip
+
+  release:
+    if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+
+    runs-on: ubuntu-latest
+
+    needs:
+      - ubuntu-focal-make
+      - ubuntu-latest-cmake
+      - macOS-latest-make
+      - macOS-latest-cmake
+      - windows-latest-cmake
+      - windows-latest-cmake-cublas
+
+    steps:
+      - name: Download artifacts
+        id: download-artifact
+        uses: actions/download-artifact@v3
+
+      - name: Get commit hash
+        id: commit
+        uses: pr-mpt/actions-commit-hash@v2
+
+      - name: Create release
+        id: create_release
+        uses: anzz1/action-create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}
+
+      - name: Upload release
+        id: upload_release
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const path = require('path');
+            const fs = require('fs');
+            const release_id = '${{ steps.create_release.outputs.id }}';
+            for (let file of await fs.readdirSync('./artifact')) {
+              if (path.extname(file) === '.zip') {
+                console.log('uploadReleaseAsset', file);
+                await github.repos.uploadReleaseAsset({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: release_id,
+                  name: file,
+                  data: await fs.readFileSync(`./artifact/${file}`)
+                });
+              }
+            }
+
+#  ubuntu-latest-gcc:
+#    runs-on: ubuntu-latest
+#
+#    strategy:
+#      matrix:
+#        build: [Debug, Release]
+#
+#    steps:
+#      - name: Clone
+#        uses: actions/checkout@v1
+#
+#      - name: Dependencies
+#        run: |
+#          sudo apt-get update
+#          sudo apt-get install build-essential
+#          sudo apt-get install cmake
+#
+#      - name: Configure
+#        run: cmake . -DCMAKE_BUILD_TYPE=${{ matrix.build }}
+#
+#      - name: Build
+#        run: |
+#          make
+#
+#  ubuntu-latest-clang:
+#    runs-on: ubuntu-latest
+#
+#    strategy:
+#      matrix:
+#        build: [Debug, Release]
+#
+#    steps:
+#      - name: Clone
+#        uses: actions/checkout@v1
+#
+#      - name: Dependencies
+#        run: |
+#          sudo apt-get update
+#          sudo apt-get install build-essential
+#          sudo apt-get install cmake
+#
+#      - name: Configure
+#        run: cmake . -DCMAKE_BUILD_TYPE=${{ matrix.build }} -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang
+#
+#      - name: Build
+#        run: |
+#          make
+#
+#  ubuntu-latest-gcc-sanitized:
+#    runs-on: ubuntu-latest
+#
+#    strategy:
+#      matrix:
+#        sanitizer: [ADDRESS, THREAD, UNDEFINED]
+#
+#    steps:
+#      - name: Clone
+#        uses: actions/checkout@v1
+#
+#      - name: Dependencies
+#        run: |
+#          sudo apt-get update
+#          sudo apt-get install build-essential
+#          sudo apt-get install cmake
+#
+#      - name: Configure
+#        run: cmake . -DCMAKE_BUILD_TYPE=Debug -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON
+#
+#      - name: Build
+#        run: |
+#          make
+#
+#  windows:
+#    runs-on: windows-latest
+#
+#    strategy:
+#      matrix:
+#        build: [Release]
+#        arch: [Win32, x64]
+#        include:
+#          - arch: Win32
+#            s2arc: x86
+#          - arch: x64
+#            s2arc: x64
+#
+#    steps:
+#      - name: Clone
+#        uses: actions/checkout@v1
+#
+#      - name: Add msbuild to PATH
+#        uses: microsoft/setup-msbuild@v1
+#
+#      - name: Configure
+#        run: >
+#          cmake -S . -B ./build -A ${{ matrix.arch }}
+#          -DCMAKE_BUILD_TYPE=${{ matrix.build }}
+#
+#      - name: Build
+#        run: |
+#          cd ./build
+#          msbuild ALL_BUILD.vcxproj -t:build -p:configuration=${{ matrix.build }} -p:platform=${{ matrix.arch }}
+#
+#      - name: Upload binaries
+#        uses: actions/upload-artifact@v1
+#        with:
+#          name: llama-bin-${{ matrix.arch }}
+#          path: build/bin/${{ matrix.build }}
+#
+#  windows-blas:
+#    runs-on: windows-latest
+#
+#    strategy:
+#      matrix:
+#        build: [Release]
+#        arch: [Win32, x64]
+#        blas: [ON]
+#        include:
+#          - arch: Win32
+#            obzip: https://github.com/xianyi/OpenBLAS/releases/download/v0.3.21/OpenBLAS-0.3.21-x86.zip
+#            s2arc: x86
+#          - arch: x64
+#            obzip: https://github.com/xianyi/OpenBLAS/releases/download/v0.3.21/OpenBLAS-0.3.21-x64.zip
+#            s2arc: x64
+#
+#    steps:
+#      - name: Clone
+#        uses: actions/checkout@v1
+#
+#      - name: Add msbuild to PATH
+#        uses: microsoft/setup-msbuild@v1
+#
+#      - name: Fetch OpenBLAS
+#        if: matrix.blas == 'ON'
+#        run: |
+#          C:/msys64/usr/bin/wget.exe -qO blas.zip ${{ matrix.obzip }}
+#          7z x blas.zip -oblas -y
+#          copy blas/include/cblas.h .
+#          copy blas/include/openblas_config.h .
+#          echo "blasdir=$env:GITHUB_WORKSPACE/blas" >> $env:GITHUB_ENV
+#
+#      - name: Configure
+#        run: >
+#          cmake -S . -B ./build -A ${{ matrix.arch }}
+#          -DCMAKE_BUILD_TYPE=${{ matrix.build }}
+#          -DLLAMA_SUPPORT_OPENBLAS=${{ matrix.blas }}
+#          -DCMAKE_LIBRARY_PATH="$env:blasdir/lib"
+#
+#      - name: Build
+#        run: |
+#          cd ./build
+#          msbuild ALL_BUILD.vcxproj -t:build -p:configuration=${{ matrix.build }} -p:platform=${{ matrix.arch }}
+#
+#      - name: Copy libopenblas.dll
+#        if: matrix.blas == 'ON'
+#        run: copy "$env:blasdir/bin/libopenblas.dll" build/bin/${{ matrix.build }}
+#
+#      - name: Upload binaries
+#        if: matrix.blas == 'ON'
+#        uses: actions/upload-artifact@v1
+#        with:
+#          name: llama-blas-bin-${{ matrix.arch }}
+#          path: build/bin/${{ matrix.build }}
+#
+#  emscripten:
+#    runs-on: ubuntu-latest
+#
+#    strategy:
+#      matrix:
+#        build: [Release]
+#
+#    steps:
+#      - name: Clone
+#        uses: actions/checkout@v1
+#
+#      - name: Dependencies
+#        run: |
+#          wget -q https://github.com/emscripten-core/emsdk/archive/master.tar.gz
+#          tar -xvf master.tar.gz
+#          emsdk-master/emsdk update
+#          emsdk-master/emsdk install latest
+#          emsdk-master/emsdk activate latest
+#
+#      - name: Configure
+#        run: echo "tmp"
+#
+#      - name: Build
+#        run: |
+#          pushd emsdk-master
+#          source ./emsdk_env.sh
+#          popd
+#          emcmake cmake . -DCMAKE_BUILD_TYPE=${{ matrix.build }}
+#          make

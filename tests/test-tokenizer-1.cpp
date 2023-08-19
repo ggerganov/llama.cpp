@@ -1,5 +1,5 @@
-#define LLAMA_API_CPP // TODO: eliminate me
 #include "llama.h"
+#include "common.h"
 
 #include <cassert>
 #include <cstdio>
@@ -120,8 +120,7 @@ int main(int argc, char **argv) {
         std::string str = u32converter.to_bytes(u32str);
         std::vector<llama_token> tokens = llama_tokenize(ctx, escape_whitespace(str).c_str(), false);
         if (tokens.size() == 1) {
-            fprintf(stderr, "%s : info: %s tokenized to %d \n",
-                __func__, str.c_str(), tokens[0]);
+            fprintf(stderr, "%s : info: %s tokenized to %d \n", __func__, str.c_str(), tokens[0]);
         }
     }
 

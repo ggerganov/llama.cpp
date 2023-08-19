@@ -19290,7 +19290,7 @@ void gguf_set_kv(struct gguf_context * ctx, struct gguf_context * src) {
                         }
                         gguf_set_arr_str(ctx, src->kv[i].key.data, data, src->kv[i].value.arr.n);
                         free(data);
-                    } if (src->kv[i].value.arr.type == GGUF_TYPE_ARRAY) {
+                    } else if (src->kv[i].value.arr.type == GGUF_TYPE_ARRAY) {
                         GGML_ASSERT(false && "nested arrays not supported");
                     } else {
                         gguf_set_arr_data(ctx, src->kv[i].key.data, src->kv[i].value.arr.type, src->kv[i].value.arr.data, src->kv[i].value.arr.n);

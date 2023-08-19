@@ -96,6 +96,7 @@ as the main playground for developing new features for the [ggml](https://github
 - Go: [go-skynet/go-llama.cpp](https://github.com/go-skynet/go-llama.cpp)
 - Node.js: [hlhr202/llama-node](https://github.com/hlhr202/llama-node)
 - Ruby: [yoshoku/llama_cpp.rb](https://github.com/yoshoku/llama_cpp.rb)
+- Rust: [mdrokz/rust-llama.cpp](https://github.com/mdrokz/rust-llama.cpp)
 - C#/.NET: [SciSharp/LLamaSharp](https://github.com/SciSharp/LLamaSharp)
 - Scala 3: [donderom/llm4s](https://github.com/donderom/llm4s)
 
@@ -238,11 +239,16 @@ In order to build llama.cpp you have three different options.
     cmake --build . --config Release
     ```
 
-- Using `Zig`:
+- Using `Zig` (version 0.11 or later):
+
+    Building for optimization levels and CPU features can be accomplished using standard build arguments, for example AVX2, FMA, F16C,
+    it's also possible to cross compile for other operating systems and architectures:
 
     ```bash
-    zig build -Doptimize=ReleaseFast
+    zig build -Doptimize=ReleaseFast -Dtarget=x86_64-windows-gnu -Dcpu=x86_64+avx2+fma+f16c
     ```
+
+    The `zig targets` command will give you valid options to use.
 
 -   Using `gmake` (FreeBSD):
 
@@ -284,7 +290,7 @@ When built with Metal support, you can enable GPU inference with the `--gpu-laye
 Any value larger than 0 will offload the computation to the GPU. For example:
 
 ```bash
-./main -m ./models/7B/ggml-model-q4_0.bin -n 128 -ngl 1
+./main -m ./models/7B/ggml-model-q4_0.gguf -n 128 -ngl 1
 ```
 
 ### MPI Build
@@ -323,7 +329,7 @@ The above will distribute the computation across 2 processes on the first host a
 Finally, you're ready to run a computation using `mpirun`:
 
 ```bash
-mpirun -hostfile hostfile -n 3 ./main -m ./models/7B/ggml-model-q4_0.bin -n 128
+mpirun -hostfile hostfile -n 3 ./main -m ./models/7B/ggml-model-q4_0.gguf -n 128
 ```
 
 ### BLAS Build
@@ -408,7 +414,7 @@ Building the program with BLAS support may lead to some performance improvements
   |-------------------------|------------------------|---------|-------------|
   | LLAMA_CUDA_FORCE_DMMV   | Boolean                |   false | Force the use of dequantization + matrix vector multiplication kernels instead of using kernels that do matrix vector multiplication on quantized data. By default the decision is made based on compute capability (MMVQ for 6.1/Pascal/GTX 1000 or higher). Does not affect k-quants. |
   | LLAMA_CUDA_DMMV_X       | Positive integer >= 32 |      32 | Number of values in x direction processed by the CUDA dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants. |
-  | LLAMA_CUDA_MMV_Y        | Positive integer       |       1 | Block size in y direction for the CUDA mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. Does not affect k-quants. |
+  | LLAMA_CUDA_MMV_Y        | Positive integer       |       1 | Block size in y direction for the CUDA mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. |
   | LLAMA_CUDA_F16          | Boolean                |   false | If enabled, use half-precision floating point arithmetic for the CUDA dequantization + mul mat vec kernels and for the q4_1 and q5_1 matrix matrix multiplication kernels. Can improve performance on relatively recent GPUs. |
   | LLAMA_CUDA_KQUANTS_ITER | 1 or 2                 |       2 | Number of values processed per iteration and per CUDA thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs. |
 
@@ -506,10 +512,10 @@ python3 convert.py models/7B/
   python convert.py models/7B/ --vocabtype bpe
 
 # quantize the model to 4-bits (using q4_0 method)
-./quantize ./models/7B/ggml-model-f16.bin ./models/7B/ggml-model-q4_0.bin q4_0
+./quantize ./models/7B/ggml-model-f16.gguf ./models/7B/ggml-model-q4_0.gguf q4_0
 
 # run the inference
-./main -m ./models/7B/ggml-model-q4_0.bin -n 128
+./main -m ./models/7B/ggml-model-q4_0.gguf -n 128
 ```
 
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
@@ -565,7 +571,7 @@ Here is an example of a few-shot interaction, invoked with the command
 ./examples/chat-13B.sh
 
 # custom arguments using a 13B model
-./main -m ./models/13B/ggml-model-q4_0.bin -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
+./main -m ./models/13B/ggml-model-q4_0.gguf -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
 ```
 
 Note the use of `--color` to distinguish between user input and generated text. Other parameters are explained in more detail in the [README](examples/main/README.md) for the `main` example program.
@@ -627,6 +633,8 @@ OpenLLaMA is an openly licensed reproduction of Meta's original LLaMA model. It 
 - Convert the model to ggml FP16 format using `python convert.py <path to OpenLLaMA directory>`
 
 ### Using [GPT4All](https://github.com/nomic-ai/gpt4all)
+
+*Note: these instructions are likely obsoleted by the GGUF update*
 
 - Obtain the `tokenizer.model` file from LLaMA model and put it to `models`
 - Obtain the `added_tokens.json` file from Alpaca model and put it to `models`
@@ -703,7 +711,7 @@ If your issue is with model generation quality, then please at least scan the fo
 #### How to run
 
 1. Download/extract: https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip?ref=salesforce-research
-2. Run `./perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
+2. Run `./perplexity -m models/7B/ggml-model-q4_0.gguf -f wiki.test.raw`
 3. Output:
 ```
 perplexity : calculating perplexity over 655 chunks
@@ -802,13 +810,13 @@ docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:full --all-in-
 On completion, you are ready to play!
 
 ```bash
-docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:full --run -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
+docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:full --run -m /models/7B/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 512
 ```
 
 or with a light image:
 
 ```bash
-docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
+docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 512
 ```
 
 ### Docker With CUDA
@@ -839,8 +847,8 @@ The resulting images, are essentially the same as the non-CUDA images:
 After building locally, Usage is similar to the non-CUDA examples, but you'll need to add the `--gpus` flag. You will also want to use the `--n-gpu-layers` flag.
 
 ```bash
-docker run --gpus all -v /path/to/models:/models local/llama.cpp:full-cuda --run -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512 --n-gpu-layers 1
-docker run --gpus all -v /path/to/models:/models local/llama.cpp:light-cuda -m /models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512 --n-gpu-layers 1
+docker run --gpus all -v /path/to/models:/models local/llama.cpp:full-cuda --run -m /models/7B/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 512 --n-gpu-layers 1
+docker run --gpus all -v /path/to/models:/models local/llama.cpp:light-cuda -m /models/7B/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 512 --n-gpu-layers 1
 ```
 
 ### Contributing
