@@ -103,6 +103,7 @@ int main(int argc, char **argv) {
         }
     }
 
+#ifdef _WIN32
     std::wstring_convert<typename std::codecvt_utf8<char16_t>, char16_t> u16converter;
     for (char16_t ch = 0x0000; ch < 0xffff; ++ch) {
         std::u16string u16str(1, ch);
@@ -123,6 +124,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "%s : info: %s tokenized to %d \n", __func__, str.c_str(), tokens[0]);
         }
     }
+#endif
 
     llama_free_model(model);
     llama_free(ctx);
