@@ -445,17 +445,13 @@ struct gpt2bpe_vocab {
     std::vector<std::pair<std::string, std::string>> bpe_merges;
     std::map<std::string, int> special_tokens;
 
-    id special_bos_id = 0;
-    id special_eos_id = 0;
-    id special_unk_id = 0;
-    id special_sep_id = 0;
-    id special_pad_id = 0;
+    id special_bos_id = -1;
+    id special_eos_id = -1;
+    id special_unk_id = -1;
+    id special_sep_id = -1;
+    id special_pad_id = -1;
 
-    bool special_have_bos = false;
-    bool special_have_eos = false;
-    bool special_have_unk = false;
-    bool special_have_sep = false;
-    bool special_have_pad = false;
+    id linefeed_id = -1;
 
     std::unordered_map<token, id> token_to_id;
     std::unordered_map<id, token> id_to_token;
@@ -1002,7 +998,7 @@ static std::vector<gpt2bpe_vocab::id> gpt2bpe_tokenize(const gpt2bpe_vocab & voc
         return output;
     }
 
-    if (bos && vocab.special_have_bos) {
+    if (bos && vocab.special_bos_id != -1) {
         output.push_back(vocab.special_bos_id);
     }
 
