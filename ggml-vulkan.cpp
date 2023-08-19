@@ -796,7 +796,6 @@ void ggml_vk_test_transfer(size_t ne);
 void ggml_vk_test_matmul_f32(size_t m, size_t n, size_t k, size_t num_it, int split_k, int shader_size);
 void ggml_vk_test_matmul_f16(size_t m, size_t n, size_t k, size_t num_it, int split_k, int shader_size);
 void ggml_vk_test_buffer_write_zeropad(size_t m, size_t k, size_t align);
-void ggml_vk_test_f32_to_f16(size_t m, size_t k);
 
 void ggml_vk_init(void) {
 #ifdef VK_DEBUG
@@ -952,11 +951,6 @@ void ggml_vk_init(void) {
     ggml_vk_test_buffer_write_zeropad(233, 97, 128);
     ggml_vk_test_buffer_write_zeropad(233, 97, 1);
     ggml_vk_test_buffer_write_zeropad(256, 128, 1);
-
-    ggml_vk_test_f32_to_f16(214, 256);
-    ggml_vk_test_f32_to_f16(256, 2048);
-    ggml_vk_test_f32_to_f16(24, 1000);
-    ggml_vk_test_f32_to_f16(24, 24);
 
     int step = 16;
     for (size_t m = step; m < 64; m += step) {
@@ -2636,76 +2630,6 @@ void ggml_vk_test_transfer(size_t ne) {
     std::cerr << "TEST TRANSFER " << kb << " KB to_gpu " << ms_to_gpu << "ms (" << kb / ms_to_gpu * 1000.0 / 1024.0 << " MB/s) from_gpu " << ms_from_gpu << "ms (" << kb / ms_from_gpu * 1000.0 / 1024.0 << " MB/s) avg_err=" << avg_err / ne << std::endl;
 
     ggml_vk_destroy_buffer(buffer);
-
-    free(x);
-    free(y);
-}
-void ggml_vk_test_f32_to_f16(size_t m, size_t k) {
-#ifdef VK_DEBUG
-    std::cerr << "ggml_vk_test_transfer(" << ne << ")" << std::endl;
-#endif
-    // Check transfers are correct
-    const uint32_t ne = m * k;
-    vk_buffer d_X = ggml_vk_create_buffer(sizeof(float) * ne, vk::MemoryPropertyFlagBits::eDeviceLocal);
-    vk_buffer d_Y = ggml_vk_create_buffer(sizeof(ggml_fp16_t) * ne, vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-    float* x = (float *) malloc(sizeof(float) * ne);
-    ggml_fp16_t* y = (ggml_fp16_t *) malloc(sizeof(ggml_fp16_t) * ne);
-
-    for (size_t i = 0; i < ne; i++) {
-        x[i] = rand() / (float)RAND_MAX;
-    }
-
-    ggml_vk_pipeline_allocate_descriptor_sets(vk_pipeline_f32_to_f16, 1);
-
-    auto begin = std::chrono::high_resolution_clock::now();
-
-    ggml_vk_buffer_write(&d_X, 0, x, sizeof(float) * ne, vk_device.transfer_queues[0]);
-
-    vk_device.transfer_queues[0].queue.waitIdle();
-
-    auto end = std::chrono::high_resolution_clock::now();
-
-    double ms_to_gpu = std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count() / 1000.0;
-
-    begin = std::chrono::high_resolution_clock::now();
-
-    std::vector<vk_sequence> seqs;
-    vk_submission s = ggml_vk_begin_submission(vk_device.compute_queue);
-    const std::vector<int> pc = { (int)m, (int)k, (int)k, (int)k };
-    ggml_vk_sync_buffers(s.buffer, { { d_X, 0, (uint32_t)sizeof(float) * ne } }, vk_device.compute_queue, vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, false);
-    ggml_vk_sync_buffers(s.buffer, { { d_Y, 0, (uint32_t)sizeof(ggml_fp16_t) * ne} }, vk_device.compute_queue, vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eShaderWrite, false);
-    ggml_vk_dispatch_pipeline(s, vk_pipeline_f32_to_f16, { { d_X, 0, (uint32_t)sizeof(float) * ne }, { d_Y, 0, (uint32_t)sizeof(ggml_fp16_t) * ne } }, pc.size() * sizeof(int), pc.data(), { (uint32_t)ne, 1, 1});
-    ggml_vk_end_submission(s, {}, {});
-    seqs.push_back({ s });
-
-    ggml_vk_submit(vk_device.compute_queue, seqs, VK_NULL_HANDLE);
-
-    vk_device.compute_queue.queue.waitIdle();
-
-    end = std::chrono::high_resolution_clock::now();
-
-    double ms_convert = std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count() / 1000.0;
-
-    begin = std::chrono::high_resolution_clock::now();
-
-    ggml_vk_buffer_read(&d_Y, 0, y, sizeof(ggml_fp16_t) * ne, vk_device.transfer_queues[1]);
-
-    end = std::chrono::high_resolution_clock::now();
-
-    double ms_from_gpu = std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count() / 1000.0;
-
-    double avg_err = 0.0;
-    for (size_t i = 0; i < ne; i++) {
-        avg_err += std::fabs(x[i] - ggml_fp16_to_fp32(y[i]));
-    }
-
-    std::cerr << "TEST F32 TO F16 " << ms_to_gpu << "ms to_gpu " << ms_convert << "ms convert " << ms_from_gpu << "ms from gpu avg_err=" << avg_err / ne << std::endl;
-
-    ggml_vk_destroy_buffer(d_X);
-    ggml_vk_destroy_buffer(d_Y);
-
-    ggml_vk_pipeline_cleanup(vk_pipeline_f32_to_f16);
 
     free(x);
     free(y);

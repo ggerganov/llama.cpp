@@ -171,7 +171,6 @@ v = v * d;
 const std::string mulmat_head = R"(
 #version 450
 
-#extension GL_EXT_scalar_block_layout : require
 #extension GL_EXT_control_flow_attributes : enable
 #extension GL_EXT_shader_16bit_storage : require
 
@@ -185,7 +184,7 @@ const std::string mulmat_head = R"(
 const std::string mulmat_body = R"(
 layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0, scalar) readonly buffer A { A_TYPE data_a[]; };
+layout (binding = 0) readonly buffer A { A_TYPE data_a[]; };
 layout (binding = 1) readonly buffer B { B_TYPE data_b[]; };
 layout (binding = 2) writeonly buffer D { D_TYPE data_d[]; };
 
@@ -393,7 +392,6 @@ void main() {
 const std::string dequant_head = R"(
 #version 450
 
-#extension GL_EXT_scalar_block_layout : require
 #extension GL_EXT_control_flow_attributes : require
 #extension GL_EXT_shader_16bit_storage : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
@@ -402,7 +400,7 @@ const std::string dequant_head = R"(
 const std::string dequant_body = R"(
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0, scalar) readonly buffer A { A_TYPE x[]; };
+layout (binding = 0) readonly buffer A { A_TYPE x[]; };
 layout (binding = 1) writeonly buffer D { D_TYPE y[]; };
 
 layout (push_constant) uniform parameter
@@ -444,7 +442,6 @@ void main() {
 const std::string mul_mat_vec_head = R"(
 #version 450
 
-#extension GL_EXT_scalar_block_layout : require
 #extension GL_EXT_control_flow_attributes : enable
 #extension GL_EXT_shader_16bit_storage : require
 #extension GL_EXT_shader_8bit_storage : require
@@ -453,7 +450,7 @@ const std::string mul_mat_vec_head = R"(
 const std::string mul_mat_vec_body = R"(
 layout(local_size_x = QUANT_K, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0, scalar) readonly buffer A { A_TYPE x[]; };
+layout (binding = 0) readonly buffer A { A_TYPE x[]; };
 layout (binding = 1) readonly buffer B { B_TYPE y[]; };
 layout (binding = 2) writeonly buffer D { D_TYPE dst[]; };
 
