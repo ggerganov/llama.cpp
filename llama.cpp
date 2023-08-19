@@ -2368,6 +2368,11 @@ static bool llama_is_eos_token(const llama_vocab & vocab, llama_token id ) {
     return id == vocab.special_eos_id;
 }
 
+static bool llama_is_pad_token(const llama_vocab & vocab, llama_token id ) {
+    GGML_ASSERT(id < 0 || llama_is_control_token(vocab, id));
+    return id == vocab.special_pad_id;
+}
+
 static bool llama_is_user_defined_token(const llama_vocab & vocab, llama_token id) {
     return vocab.id_to_token[id].toktype == 4;
 }
@@ -2380,28 +2385,18 @@ static bool llama_is_byte_token(const llama_vocab & vocab, llama_token id) {
     return vocab.id_to_token[id].toktype == 6;
 }
 
-static uint8_t llama_byte_to_char(const llama_vocab & vocab, uint8_t byte) {
-    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_SPM) {
-        return byte - 3;
-    }
-
-    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_BPE) {
-        return byte + 32;
-    }
-
-    return false;
+static uint8_t llama_token_to_byte(const llama_vocab & vocab, llama_token id) {
+    GGML_ASSERT(llama_is_byte_token(vocab, id));
+    const auto& token_data = vocab.id_to_token.at(id);
+    auto buf = token_data.tok.substr(3, 2);
+    return strtol(buf.c_str(), NULL, 16);
 }
 
-static uint8_t llama_char_to_byte(const llama_vocab & vocab, uint8_t ch) {
-    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_SPM) {
-        return ch + 3;
-    }
-
-    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_BPE) {
-        return ch - 32;
-    }
-
-    return false;
+static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
+    char buf[7];
+    int result = snprintf(buf, sizeof(buf), "<0x%02X>", ch);
+    GGML_ASSERT(0 <= result && result < 7);
+    return vocab.token_to_id.at(buf);
 }
 
 static std::string llama_escape_whitespace(const std::string& text) {
@@ -2540,7 +2535,7 @@ private:
         if (p == rev_merge.end()) {
             // output any symbols that did not form tokens as bytes.
             for (int j = 0; j < (int)symbol.n; ++j) {
-                llama_vocab::id token_id = llama_char_to_byte(vocab_, symbol.text[j]);
+                llama_vocab::id token_id = llama_byte_to_token(vocab_, symbol.text[j]);
                 output.push_back(token_id);
             }
             return;
@@ -5080,7 +5075,7 @@ int llama_token_to_str_with_model(const struct llama_model * model, llama_token 
             if (length < 1) {
                 return -1;
             }
-            buf[0] = llama_byte_to_char(model->vocab, token);
+            buf[0] = llama_token_to_byte(model->vocab, token);
             return 1;
         }
     }

@@ -10,10 +10,6 @@
 #include <vector>
 #include <locale>
 
-static std::string vocab_type(llama_context * ctx) {
-    return llama_n_vocab(ctx) == 32000 ? "spm": "bpe";
-}
-
 static std::string escape_whitespace(const std::string& text) {
     std::string result;
     bool escaping = false;
@@ -91,8 +87,8 @@ int main(int argc, char **argv) {
                 return 2;
             }
         } else {
-            if ((vocab_type(ctx) == "spm" && i <= 258) ||
-                (vocab_type(ctx) == "bpe" && (i == 0 || i >= 100000))) {
+            // TODO: needs access to token types
+            if (0 <= i && i < 259) {
                 fprintf(stderr, "%s : info: token %d is string %s and bpe returns tokens %s\n",
                     __func__, i, llama_token_to_str(ctx, i).c_str(), unescape_whitespace(ctx, tokens).c_str());
             } else {
