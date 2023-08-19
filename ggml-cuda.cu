@@ -51,7 +51,14 @@ static_assert(sizeof(half) == sizeof(ggml_fp16_t), "wrong fp16 size");
             exit(1);                                                                    \
         }                                                                               \
     } while (0)
-#endif // CUDART_VERSION >= 11
+#endif // CUDART_VERSION >= 12000
+
+// define nop for old CUDA versions to fix compilation issues
+#if CUDART_VERSION < 11020
+__device__ void __builtin_assume(bool exp) {
+    (void) exp;
+}
+#endif // CUDART_VERSION < 11020
 
 #ifdef GGML_CUDA_F16
 typedef half dfloat; // dequantize float
