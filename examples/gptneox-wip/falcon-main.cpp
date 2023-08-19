@@ -378,6 +378,7 @@ bool falcon_model_load(const std::string & fname, falcon_model & model, gpt2bpe_
     {
         int keyidx;
 
+        // check model architecture kv
         keyidx = gguf_find_key(ggufctx, "general.architecture");
         if (keyidx != -1) {
             if ( strcmp(gguf_get_val_str(ggufctx, keyidx), "falcon") != 0) {
@@ -386,6 +387,18 @@ bool falcon_model_load(const std::string & fname, falcon_model & model, gpt2bpe_
             }
         } else {
             fprintf(stdout, "%s: gguf model architecture not found!\n", __func__);
+            return false;
+        }
+
+        // check model tensor data layout kv
+        keyidx = gguf_find_key(ggufctx, "falcon.tensor_data_layout");
+        if (keyidx != -1) {
+            if ( strcmp(gguf_get_val_str(ggufctx, keyidx), "jploski") != 0) {
+                fprintf(stdout, "%s: model tensor data layout not supported!\n", __func__);
+                return false;
+            }
+        } else {
+            fprintf(stdout, "%s: gguf model tensor data layout not found!\n", __func__);
             return false;
         }
 
@@ -479,6 +492,9 @@ bool falcon_model_load(const std::string & fname, falcon_model & model, gpt2bpe_
             vocab.token_to_id[word] = i;
             vocab.id_to_token[i] = word;
 
+            if( vocab.id_to_token[i] == "\n" ) {
+                vocab.linefeed_id = i;
+            }
         }
 
         std::vector<std::pair<std::string, std::string>> bpe_merges;
@@ -501,17 +517,19 @@ bool falcon_model_load(const std::string & fname, falcon_model & model, gpt2bpe_
         vocab.populate_bpe_ranks(bpe_merges);
 
 
-        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.bos_token_id"); if( keyidx != -1 ) {       vocab.special_bos_id = (int32_t)gguf_get_val_u32(ggufctx, keyidx); vocab.special_have_bos=true; }
-        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.eos_token_id"); if( keyidx != -1 ) {       vocab.special_eos_id = (int32_t)gguf_get_val_u32(ggufctx, keyidx); vocab.special_have_eos=true; }
-        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.unknown_token_id"); if( keyidx != -1 ) {   vocab.special_unk_id = (int32_t)gguf_get_val_u32(ggufctx, keyidx); vocab.special_have_unk=true; }
-        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.separator_token_id"); if( keyidx != -1 ) { vocab.special_sep_id = (int32_t)gguf_get_val_u32(ggufctx, keyidx); vocab.special_have_sep=true; }
-        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.padding_token_id"); if( keyidx != -1 ) {   vocab.special_pad_id = (int32_t)gguf_get_val_u32(ggufctx, keyidx); vocab.special_have_pad=true; }
+        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.bos_token_id"); if( keyidx != -1 ) {       vocab.special_bos_id = (int32_t)gguf_get_val_u32(ggufctx, keyidx); }
+        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.eos_token_id"); if( keyidx != -1 ) {       vocab.special_eos_id = (int32_t)gguf_get_val_u32(ggufctx, keyidx); }
+        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.unknown_token_id"); if( keyidx != -1 ) {   vocab.special_unk_id = (int32_t)gguf_get_val_u32(ggufctx, keyidx); }
+        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.separator_token_id"); if( keyidx != -1 ) { vocab.special_sep_id = (int32_t)gguf_get_val_u32(ggufctx, keyidx); }
+        keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.padding_token_id"); if( keyidx != -1 ) {   vocab.special_pad_id = (int32_t)gguf_get_val_u32(ggufctx, keyidx); }
 
-        if( vocab.special_have_bos ) { fprintf(stdout, "%s: bos token = %d '%s'\n", __func__, vocab.special_bos_id, vocab.id_to_token[vocab.special_bos_id].c_str() ); }
-        if( vocab.special_have_eos ) { fprintf(stdout, "%s: eos token = %d '%s'\n", __func__, vocab.special_eos_id, vocab.id_to_token[vocab.special_eos_id].c_str() ); }
-        if( vocab.special_have_unk ) { fprintf(stdout, "%s: unk token = %d '%s'\n", __func__, vocab.special_unk_id, vocab.id_to_token[vocab.special_unk_id].c_str() ); }
-        if( vocab.special_have_sep ) { fprintf(stdout, "%s: sep token = %d '%s'\n", __func__, vocab.special_sep_id, vocab.id_to_token[vocab.special_sep_id].c_str() ); }
-        if( vocab.special_have_pad ) { fprintf(stdout, "%s: pad token = %d '%s'\n", __func__, vocab.special_pad_id, vocab.id_to_token[vocab.special_pad_id].c_str() ); }
+        if( vocab.special_bos_id != -1 ) { fprintf(stdout, "%s: BOS token = %d '%s'\n", __func__, vocab.special_bos_id, vocab.id_to_token[vocab.special_bos_id].c_str() ); }
+        if( vocab.special_eos_id != -1 ) { fprintf(stdout, "%s: EOS token = %d '%s'\n", __func__, vocab.special_eos_id, vocab.id_to_token[vocab.special_eos_id].c_str() ); }
+        if( vocab.special_unk_id != -1 ) { fprintf(stdout, "%s: UNK token = %d '%s'\n", __func__, vocab.special_unk_id, vocab.id_to_token[vocab.special_unk_id].c_str() ); }
+        if( vocab.special_sep_id != -1 ) { fprintf(stdout, "%s: SEP token = %d '%s'\n", __func__, vocab.special_sep_id, vocab.id_to_token[vocab.special_sep_id].c_str() ); }
+        if( vocab.special_pad_id != -1 ) { fprintf(stdout, "%s: PAD token = %d '%s'\n", __func__, vocab.special_pad_id, vocab.id_to_token[vocab.special_pad_id].c_str() ); }
+        if( vocab.linefeed_id    != -1 ) { fprintf(stdout, "%s: LF token  = %d\n",      __func__, vocab.linefeed_id ); }
+
     }
 
 
@@ -1070,7 +1088,7 @@ int main(int argc, char ** argv) {
         fflush(stdout);
 
         // end of text token
-        if (vocab.special_have_eos && embd.back() == vocab.special_eos_id) {
+        if (vocab.special_eos_id != -1 && embd.back() == vocab.special_eos_id) {
             break;
         }
     }
