@@ -261,12 +261,12 @@ class BpeVocab:
         for i, item in enumerate(tokenizer):
             text: bytes = item.encode("utf-8")
             score: float = -i
-            yield text, score
+            yield text, score, 4
 
     def added_tokens(self) -> Iterable[Tuple[bytes, float]]:
         for text in self.added_tokens_list:
             score = -1000.0
-            yield text.encode("utf-8"), score
+            yield text.encode("utf-8"), score, 4
 
     def all_tokens(self) -> Iterable[Tuple[bytes, float]]:
         yield from self.bpe_tokens()
@@ -303,12 +303,28 @@ class SentencePieceVocab:
             piece = tokenizer.id_to_piece(i)
             text: bytes = piece.encode("utf-8")
             score: float = tokenizer.get_score(i)
-            yield text, score
+
+            toktype = 1  # defualt to normal token type
+            if tokenizer.is_unknown(i):
+                toktype = 2
+            if tokenizer.is_control(i):
+                toktype = 3
+
+            # NOTE: I think added_tokens are user defined.
+            # ref: https://github.com/google/sentencepiece/blob/master/src/sentencepiece_model.proto
+            # if tokenizer.is_user_defined(i): toktype = 4
+
+            if tokenizer.is_unused(i):
+                toktype = 5
+            if tokenizer.is_byte(i):
+                toktype = 6
+
+            yield text, score, toktype
 
     def added_tokens(self) -> Iterable[Tuple[bytes, float]]:
         for text in self.added_tokens_list:
             score = -1000.0
-            yield text.encode("utf-8"), score
+            yield text.encode("utf-8"), score, 4
 
     def all_tokens(self) -> Iterable[Tuple[bytes, float]]:
         yield from self.sentencepiece_tokens()
@@ -720,16 +736,16 @@ class OutputFile:
     def add_meta_vocab(self, vocab: Vocab) -> None:
         tokens = []
         scores = []
-        for text, score in vocab.all_tokens():
+        toktypes = []
+        for text, score, toktype in vocab.all_tokens():
             tokens.append(text)
             scores.append(score)
+            toktypes.append(toktype)
 
         self.gguf.add_tokenizer_model("llama")
         self.gguf.add_token_list(tokens)
         self.gguf.add_token_scores(scores)
-        #self.gguf.add_token_types(toktypes) # TODO: add this
-
-        # TODO: added / special tokens
+        self.gguf.add_token_types(toktypes)
 
     def add_tensor_info(self, name: str, tensor: LazyTensor) -> None:
         n_elements = 1
