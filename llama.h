@@ -61,6 +61,40 @@ extern "C" {
 
     typedef int llama_token;
 
+    enum llama_log_level {
+        LLAMA_LOG_LEVEL_ERROR = 2,
+        LLAMA_LOG_LEVEL_WARN  = 3,
+        LLAMA_LOG_LEVEL_INFO  = 4
+    };
+
+    enum llama_vocab_type {
+        LLAMA_VOCAB_TYPE_SPM = 0, // SentencePiece
+        LLAMA_VOCAB_TYPE_BPE = 1, // Byte Pair Encoding
+    };
+
+    // model file types
+    enum llama_ftype {
+        LLAMA_FTYPE_ALL_F32              = 0,
+        LLAMA_FTYPE_MOSTLY_F16           = 1, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_0          = 2, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_1          = 3, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4, // tok_embeddings.weight and output.weight are F16
+        // LLAMA_FTYPE_MOSTLY_Q4_2       = 5, // support has been removed
+        // LLAMA_FTYPE_MOSTLY_Q4_3       = 6, // support has been removed
+        LLAMA_FTYPE_MOSTLY_Q8_0          = 7, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q5_0          = 8, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q5_1          = 9, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q2_K          = 10,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q3_K_S        = 11,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q3_K_M        = 12,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q3_K_L        = 13,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_K_S        = 14,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_K_M        = 15,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q5_K_S        = 16,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q5_K_M        = 17,// except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q6_K          = 18,// except 1d tensors
+    };
+
     typedef struct llama_token_data {
         llama_token id; // token id
         float logit;    // log-odds of the token
@@ -74,19 +108,6 @@ extern "C" {
     } llama_token_data_array;
 
     typedef void (*llama_progress_callback)(float progress, void *ctx);
-
-    enum llama_log_level {
-        LLAMA_LOG_LEVEL_ERROR = 2,
-        LLAMA_LOG_LEVEL_WARN  = 3,
-        LLAMA_LOG_LEVEL_INFO  = 4
-    };
-
-    // Signature for logging events
-    // Note that text includes the new line character at the end for most events.
-    // If your logging mechanism cannot handle that, check if the last character is '\n' and strip it
-    // if it exists.
-    // It might not exist for progress report where '.' is output repeatedly.
-    typedef void (*llama_log_callback)(enum llama_log_level level, const char * text, void * user_data);
 
     struct llama_context_params {
         uint32_t seed;         // RNG seed, -1 for random
@@ -117,28 +138,12 @@ extern "C" {
         bool embedding;  // embedding mode only
     };
 
-    // model file types
-    enum llama_ftype {
-        LLAMA_FTYPE_ALL_F32              = 0,
-        LLAMA_FTYPE_MOSTLY_F16           = 1, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_0          = 2, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_1          = 3, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4, // tok_embeddings.weight and output.weight are F16
-        // LLAMA_FTYPE_MOSTLY_Q4_2       = 5, // support has been removed
-        // LLAMA_FTYPE_MOSTLY_Q4_3       = 6, // support has been removed
-        LLAMA_FTYPE_MOSTLY_Q8_0          = 7, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q5_0          = 8, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q5_1          = 9, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q2_K          = 10,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q3_K_S        = 11,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q3_K_M        = 12,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q3_K_L        = 13,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_K_S        = 14,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_K_M        = 15,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q5_K_S        = 16,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q5_K_M        = 17,// except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q6_K          = 18,// except 1d tensors
-    };
+    // Signature for logging events
+    // Note that text includes the new line character at the end for most events.
+    // If your logging mechanism cannot handle that, check if the last character is '\n' and strip it
+    // if it exists.
+    // It might not exist for progress report where '.' is output repeatedly.
+    typedef void (*llama_log_callback)(enum llama_log_level level, const char * text, void * user_data);
 
     // model quantization parameters
     typedef struct llama_model_quantize_params {
@@ -199,19 +204,13 @@ extern "C" {
     LLAMA_API struct llama_context_params llama_context_default_params(void);
     LLAMA_API struct llama_model_quantize_params llama_model_quantize_default_params(void);
 
-    LLAMA_API int  llama_max_devices(void);
-    LLAMA_API bool llama_mmap_supported(void);
-    LLAMA_API bool llama_mlock_supported(void);
-
-    // TODO: not great API - very likely to change
     // Initialize the llama + ggml backend
     // If numa is true, use NUMA optimizations
     // Call once at the start of the program
     LLAMA_API void llama_backend_init(bool numa);
+
     // Call once at the end of the program - currently only used for MPI
     LLAMA_API void llama_backend_free(void);
-
-    LLAMA_API int64_t llama_time_us(void);
 
     LLAMA_API struct llama_model * llama_load_model_from_file(
                              const char * path_model,
@@ -223,9 +222,25 @@ extern "C" {
                      struct llama_model * model,
             struct llama_context_params   params);
 
-
     // Frees all allocated memory
     LLAMA_API void llama_free(struct llama_context * ctx);
+
+    LLAMA_API int64_t llama_time_us(void);
+
+    LLAMA_API int  llama_max_devices    (void);
+    LLAMA_API bool llama_mmap_supported (void);
+    LLAMA_API bool llama_mlock_supported(void);
+
+    LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
+    LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
+    LLAMA_API int llama_n_embd (const struct llama_context * ctx);
+
+    LLAMA_API int llama_model_n_vocab(const struct llama_model * model);
+    LLAMA_API int llama_model_n_ctx  (const struct llama_model * model);
+    LLAMA_API int llama_model_n_embd (const struct llama_model * model);
+
+    // Get a string describing the model type
+    LLAMA_API int llama_model_type(const struct llama_model * model, char * buf, size_t buf_size);
 
     // Returns 0 on success
     LLAMA_API int llama_model_quantize(
@@ -248,9 +263,9 @@ extern "C" {
 
     LLAMA_API int llama_model_apply_lora_from_file(
             const struct llama_model * model,
-                      const char * path_lora,
-                      const char * path_base_model,
-                             int   n_threads);
+                          const char * path_lora,
+                          const char * path_base_model,
+                                 int   n_threads);
 
     // Returns the number of tokens in the KV cache
     LLAMA_API int llama_get_kv_cache_token_count(const struct llama_context * ctx);
@@ -300,11 +315,48 @@ extern "C" {
     // IMPORTANT: do not use for anything else other than debugging and testing!
     LLAMA_API int llama_eval_export(struct llama_context * ctx, const char * fname);
 
+    // Token logits obtained from the last call to llama_eval()
+    // The logits for the last token are stored in the last row
+    // Can be mutated in order to change the probabilities of the next token
+    // Rows: n_tokens
+    // Cols: n_vocab
+    LLAMA_API float * llama_get_logits(struct llama_context * ctx);
+
+    // Get the embeddings for the input
+    // shape: [n_embd] (1-dimensional)
+    LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
+
+    //
+    // Vocab
+    //
+
+    // Get the vocabulary as output parameters.
+    // Returns number of results.
+    LLAMA_API int llama_get_vocab(
+            const struct llama_context * ctx,
+                          const char * * strings,
+                                 float * scores,
+                                   int   capacity);
+
+    LLAMA_API int llama_model_get_vocab(
+              const struct llama_model * model,
+                          const char * * strings,
+                                 float * scores,
+                                   int   capacity);
+
+    // Special tokens
+    LLAMA_API llama_token llama_token_bos(const struct llama_context * ctx);  // beginning-of-sentence
+    LLAMA_API llama_token llama_token_eos(const struct llama_context * ctx);  // end-of-sentence
+    LLAMA_API llama_token llama_token_nl (const struct llama_context * ctx);  // next-line
+
+    //
+    // Tokenization
+    //
+
     // Convert the provided text into tokens.
     // The tokens pointer must be large enough to hold the resulting tokens.
     // Returns the number of tokens on success, no more than n_max_tokens
     // Returns a negative number on failure - the number of tokens that would have been returned
-    // TODO: not sure if correct
     LLAMA_API int llama_tokenize(
             struct llama_context * ctx,
                       const char * text,
@@ -326,39 +378,6 @@ extern "C" {
                              int   n_max_tokens,
                             bool   add_bos);
 
-    LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
-    LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
-    LLAMA_API int llama_n_embd (const struct llama_context * ctx);
-
-    LLAMA_API int llama_n_vocab_from_model(const struct llama_model * model);
-    LLAMA_API int llama_n_ctx_from_model  (const struct llama_model * model);
-    LLAMA_API int llama_n_embd_from_model (const struct llama_model * model);
-
-    // Get the vocabulary as output parameters.
-    // Returns number of results.
-    LLAMA_API int llama_get_vocab(
-            const struct llama_context * ctx,
-                          const char * * strings,
-                                 float * scores,
-                                   int   capacity);
-
-    LLAMA_API int llama_get_vocab_from_model(
-              const struct llama_model * model,
-                          const char * * strings,
-                                 float * scores,
-                                   int   capacity);
-
-    // Token logits obtained from the last call to llama_eval()
-    // The logits for the last token are stored in the last row
-    // Can be mutated in order to change the probabilities of the next token
-    // Rows: n_tokens
-    // Cols: n_vocab
-    LLAMA_API float * llama_get_logits(struct llama_context * ctx);
-
-    // Get the embeddings for the input
-    // shape: [n_embd] (1-dimensional)
-    LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
-
     // Token Id -> String. Uses the vocabulary in the provided context
     // Does not write null terminator to the buffer
     LLAMA_API int llama_token_to_str(
@@ -378,13 +397,11 @@ extern "C" {
                            llama_token   token,
                                   char * buf,
                                   int    length);
-    // Special tokens
-    LLAMA_API llama_token llama_token_bos(void);  // beginning-of-sentence
-    LLAMA_API llama_token llama_token_eos(void);  // end-of-sentence
-    LLAMA_API llama_token llama_token_nl(void);   // next-line
 
+    //
     // Grammar
     //
+
     LLAMA_API struct llama_grammar * llama_grammar_init(
             const llama_grammar_element ** rules,
                                  size_t    n_rules,
@@ -392,7 +409,9 @@ extern "C" {
 
     LLAMA_API void llama_grammar_free(struct llama_grammar * grammar);
 
+    //
     // Sampling functions
+    //
 
     /// @details Repetition penalty described in CTRL academic paper https://arxiv.org/abs/1909.05858, with negative logit fix.
     LLAMA_API void llama_sample_repetition_penalty(struct llama_context * ctx, llama_token_data_array * candidates, const llama_token * last_tokens, size_t last_tokens_size, float penalty);
@@ -469,42 +488,15 @@ extern "C" {
 }
 #endif
 
-// C++ API, will be moving to common.h soon (TM)
-#ifdef LLAMA_API_CPP
+// Internal API to be implemented by llama.cpp and used by tests/benchmarks only
+#ifdef LLAMA_API_INTERNAL
 
 #include <vector>
 #include <string>
 
-//
-// Vocab utils
-//
-
-std::vector<llama_token> llama_tokenize(
-        struct llama_context * ctx,
-           const std::string & text,
-                        bool   add_bos);
-
-std::vector<llama_token> llama_tokenize_bpe(
-        struct llama_context * ctx,
-           const std::string & text,
-                        bool   add_bos);
-
-std::string llama_token_to_str(
-        const struct llama_context * ctx,
-                       llama_token   token);
-
-std::string llama_token_to_str_bpe(
-    const struct llama_context * ctx,
-                   llama_token   token);
-
-// Internal API to be implemented by llama.cpp and used by tests/benchmarks only
-#ifdef LLAMA_API_INTERNAL
-
 struct ggml_tensor;
 
 const std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx);
-
-#endif // LLAMA_API_CPP
 
 #endif // LLAMA_API_INTERNAL
 

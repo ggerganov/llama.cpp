@@ -63,7 +63,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
 
             // add BOS token for the first batch of each chunk
             if (j == 0) {
-                tokens[batch_start] = llama_token_bos();
+                tokens[batch_start] = llama_token_bos(ctx);
             }
 
             if (llama_eval(ctx, tokens.data() + batch_start, batch_size, j * n_batch, params.n_threads)) {
@@ -88,7 +88,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
                 fprintf(stderr, "%d hours ", total_seconds / (60*60));
                 total_seconds = total_seconds % (60*60);
             }
-            fprintf(stderr, "%d minutes\n", total_seconds / 60);
+            fprintf(stderr, "%.2f minutes\n", total_seconds / 60.0);
         }
 
         // We get the logits for all the tokens in the context window (params.n_ctx)
