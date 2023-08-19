@@ -54,7 +54,8 @@ To get started right away, run the following command, making sure to use the cor
 ### Windows:
 
 ```powershell
-
+server.exe -m models\7B\ggml-model.gguf -c 2048
+```
 The above command will start a server that by default listens on `127.0.0.1:8080`.
 You can consume the endpoints with Postman or NodeJS with axios library. You can visit the web front end at the same url.
 
