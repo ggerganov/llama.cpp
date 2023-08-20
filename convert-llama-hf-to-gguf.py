@@ -173,17 +173,19 @@ if Path(dir_model + "/tokenizer.model").is_file():
     gguf_writer.add_token_scores(scores)
     gguf_writer.add_token_types(toktypes)
 
+
+print("gguf: get special token ids")
+
 if Path(dir_model + "/tokenizer.json").is_file():
+    # Look for special tokens in tokenizer.json if it exists
+
     with open(dir_model + "/tokenizer.json", "r", encoding="utf-8") as f:
         tokenizer = json.load(f)
 
     if "added_tokens" in tokenizer and Path(dir_model + "/tokenizer_config.json").is_file():
-        print("gguf: get special token ids")
 
         with open(dir_model + "/tokenizer_config.json", "r", encoding="utf-8") as f:
             tokenizer_config = json.load(f)
-
-        # find special token ids
 
         if "bos_token" in tokenizer_config and tokenizer_config["bos_token"] != None:
             for key in tokenizer["added_tokens"]:
@@ -209,6 +211,23 @@ if Path(dir_model + "/tokenizer.json").is_file():
             for key in tokenizer["added_tokens"]:
                 if key["content"] == tokenizer_config["pad_token"]["content"]:
                     gguf_writer.add_pad_token_id(key["id"])
+else:
+    # If no tokenizer.json: Look for special tokens in config.json
+
+    if "bos_token_id" in hparams and hparams["bos_token_id"] != None:
+        gguf_writer.add_bos_token_id(hparams["bos_token_id"])
+
+    if "eos_token_id" in hparams and hparams["eos_token_id"] != None:
+        gguf_writer.add_eos_token_id(hparams["eos_token_id"])
+
+    if "unk_token_id" in hparams and hparams["unk_token_id"] != None:
+        gguf_writer.add_unk_token_id(hparams["unk_token_id"])
+
+    if "sep_token_id" in hparams and hparams["sep_token_id"] != None:
+        gguf_writer.add_sep_token_id(hparams["sep_token_id"])
+
+    if "pad_token_id" in hparams and hparams["pad_token_id"] != None:
+        gguf_writer.add_pad_token_id(hparams["pad_token_id"])
 
 
 # TENSORS
@@ -258,7 +277,7 @@ for part_name in part_names:
             sys.exit()
 
         n_dims = len(data.shape)
-        data_dtype = data.dtype
+        data_dtype = data.dtype 
 
         # if f32 desired, convert any float16 to float32
         if ftype == 0 and data_dtype == np.float16:
