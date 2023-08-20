@@ -164,6 +164,7 @@ class GGMLToGGUF:
         hp = self.model.hyperparameters
         cfg = self.cfg
         print('* Adding model parameters and KV items')
+        gguf_writer.add_description('converted from legacy GGJTv3 format')
         gguf_writer.add_context_length(cfg.context_length)
         gguf_writer.add_embedding_length(hp.n_embd)
         gguf_writer.add_block_count(hp.n_layer)
