@@ -737,6 +737,8 @@ class OutputFile:
         tokens = []
         scores = []
         toktypes = []
+        # NOTE: `all_tokens` returns the the base vocabulary and added tokens
+        # TODO: add special tokens?
         for text, score, toktype in vocab.all_tokens():
             tokens.append(text)
             scores.append(score)
@@ -746,8 +748,6 @@ class OutputFile:
         self.gguf.add_token_list(tokens)
         self.gguf.add_token_scores(scores)
         self.gguf.add_token_types(toktypes)
-
-        # TODO: added / special tokens
 
     def add_tensor_info(self, name: str, tensor: LazyTensor) -> None:
         n_elements = 1
