@@ -249,6 +249,7 @@ extern "C" {
     LLAMA_API DEPRECATED(int llama_apply_lora_from_file(
             struct llama_context * ctx,
                       const char * path_lora,
+                           float   scale,
                       const char * path_base_model,
                              int   n_threads),
             "please use llama_model_apply_lora_from_file instead");
@@ -256,6 +257,7 @@ extern "C" {
     LLAMA_API int llama_model_apply_lora_from_file(
             const struct llama_model * model,
                       const char * path_lora,
+                           float   scale,
                       const char * path_base_model,
                              int   n_threads);
 
