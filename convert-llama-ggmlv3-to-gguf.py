@@ -123,83 +123,103 @@ class GGMLV3Model:
         self.tensor_map = tensor_map
         return offset
 
-def save_gguf(ggml_model, data, cfg):
-    hp = ggml_model.hyperparameters
-    ff_tensor_idx = ggml_model.tensor_map.get(b'layers.0.feed_forward.w1.weight')
-    assert ff_tensor_idx is not None, 'Missing layer 0 FF tensor'
-    ff_tensor = ggml_model.tensors[ff_tensor_idx]
-    if cfg.gqa == 1:
-        n_kv_head = hp.n_head
-    else:
-        gqa = float(cfg.gqa)
-        n_kv_head = None
-        for x in range(1, 256):
-            if float(hp.n_head) / float(x) == gqa:
-                n_kv_head = x
-        assert n_kv_head is not None, "Couldn't determine n_kv_head from GQA param"
-        print(f'- Guessed n_kv_head = {n_kv_head} based on GQA {cfg.gqa}')
-    nm = gguf.get_tensor_name_map(gguf.MODEL_ARCH.LLAMA, hp.n_layer)
-    gguf_writer = gguf.GGUFWriter(cfg.output, gguf.MODEL_ARCH_NAMES[gguf.MODEL_ARCH.LLAMA], use_temp_file = False)
-    #gguf_writer.add_name('meep')
-    #gguf_writer.add_source_hf_repo('merp')
-    # gguf_writer.add_tensor_data_layout("Meta AI original pth")
-    gguf_writer.add_context_length(cfg.context_length)
-    gguf_writer.add_embedding_length(hp.n_embd)
-    gguf_writer.add_block_count(hp.n_layer)
-    gguf_writer.add_feed_forward_length(ff_tensor.dims[1])
-    print('FF dim', ff_tensor.dims[1])
-    gguf_writer.add_rope_dimension_count(hp.n_embd // hp.n_head)
-    gguf_writer.add_head_count(hp.n_head)
-    gguf_writer.add_head_count_kv(n_kv_head)
-    gguf_writer.add_layer_norm_rms_eps(float(cfg.eps))
-    gguf_writer.add_tokenizer_model('llama')
-    tokens = []
-    scores = []
-    print(f'* Adding {hp.n_vocab} vocab item(s)')
-    toktypes = []
-    for (tokid, (vbytes, vscore)) in enumerate(ggml_model.vocab.items):
-        if len(vbytes) > 1 and vbytes[0] == 32:
-            vbytes = vbytes.replace(b' ', b'\xe2\x96\x81')
-        tt = 1
-        if len(vbytes) == 0:
-            tt = 3
-        elif tokid >= 3 and tokid <= 258 and len(vbytes) == 1:
-            hv = hex(vbytes[0])[2:].upper()
-            vbytes = bytes(f'<0x{hv}>', encoding = 'UTF-8')
-            tt = 6
-        toktypes.append(tt)
-        tokens.append(vbytes)
-        scores.append(vscore)
-    gguf_writer.add_token_list(tokens)
-    gguf_writer.add_token_scores(scores)
-    gguf_writer.add_token_types(toktypes)
-    print('* Adding tensors')
-    for tensor in ggml_model.tensors:
-        name = str(tensor.name, 'UTF-8')
-        if name.endswith('.weight'):
-            name = name[:-7]
-            suffix = '.weight'
-        elif name.endswith('.bias'):
-            name = name[:-5]
-            suffix = '.bias'
-        mapped_name = nm.get(name)
-        assert mapped_name is not None, f'Bad name {name}'
-        mapped_name += suffix
-        tempdims = list(tensor.dims[:])
-        if len(tempdims) > 1:
-            temp = tempdims[1]
-            tempdims[1] = tempdims[0]
-            tempdims[0] = temp
-        print(f'+ {tensor.name} | {mapped_name} {tensor.dims} :: {tempdims}')
-        gguf_writer.add_tensor(mapped_name, data[tensor.start_offset:tensor.start_offset + tensor.len_bytes], raw_shape = tempdims, raw_dtype = tensor.dtype)
-    print("gguf: write header")
-    gguf_writer.write_header_to_file()
-    print("gguf: write metadata")
-    gguf_writer.write_kv_data_to_file()
-    print("gguf: write tensors")
-    gguf_writer.write_tensors_to_file()
+class GGMLToGGUF:
+    def __init__(self, ggml_model, data, cfg):
+        hp = ggml_model.hyperparameters
+        self.model = ggml_model
+        self.data = data
+        self.cfg = cfg
+        ff_tensor_idx = ggml_model.tensor_map.get(b'layers.0.feed_forward.w1.weight')
+        assert ff_tensor_idx is not None, 'Missing layer 0 FF tensor'
+        ff_tensor = ggml_model.tensors[ff_tensor_idx]
+        self.ff_length = ff_tensor.dims[1]
+        if cfg.gqa == 1:
+            n_kv_head = hp.n_head
+        else:
+            gqa = float(cfg.gqa)
+            n_kv_head = None
+            for x in range(1, 256):
+                if float(hp.n_head) / float(x) == gqa:
+                    n_kv_head = x
+            assert n_kv_head is not None, "Couldn't determine n_kv_head from GQA param"
+            print(f'- Guessed n_kv_head = {n_kv_head} based on GQA {cfg.gqa}')
+        self.n_kv_head = n_kv_head
+        self.name_map = gguf.get_tensor_name_map(gguf.MODEL_ARCH.LLAMA, ggml_model.hyperparameters.n_layer)
 
-    gguf_writer.close()
+    def save(self):
+        print('* Preparing to save GGUF file')
+        gguf_writer = gguf.GGUFWriter(self.cfg.output, gguf.MODEL_ARCH_NAMES[gguf.MODEL_ARCH.LLAMA], use_temp_file = False)
+        self.add_params(gguf_writer)
+        self.add_vocab(gguf_writer)
+        self.add_tensors(gguf_writer)
+        print("    gguf: write header")
+        gguf_writer.write_header_to_file()
+        print("    gguf: write metadata")
+        gguf_writer.write_kv_data_to_file()
+        print("    gguf: write tensors")
+        gguf_writer.write_tensors_to_file()
+        gguf_writer.close()
+
+    def add_params(self, gguf_writer):
+        hp = self.model.hyperparameters
+        cfg = self.cfg
+        print('* Adding model parameters and KV items')
+        gguf_writer.add_context_length(cfg.context_length)
+        gguf_writer.add_embedding_length(hp.n_embd)
+        gguf_writer.add_block_count(hp.n_layer)
+        gguf_writer.add_feed_forward_length(self.ff_length)
+        gguf_writer.add_rope_dimension_count(hp.n_embd // hp.n_head)
+        gguf_writer.add_head_count(hp.n_head)
+        gguf_writer.add_head_count_kv(self.n_kv_head)
+        gguf_writer.add_layer_norm_rms_eps(float(cfg.eps))
+        gguf_writer.add_tokenizer_model('llama')
+
+    def add_vocab(self, gguf_writer):
+        hp = self.model.hyperparameters
+        tokens = []
+        scores = []
+        print(f'* Adding {hp.n_vocab} vocab item(s)')
+        toktypes = []
+        for (tokid, (vbytes, vscore)) in enumerate(self.model.vocab.items):
+            tt = 1
+            if len(vbytes) > 1 and vbytes[0] == 32:
+                vbytes = vbytes.replace(b' ', b'\xe2\x96\x81')
+            elif len(vbytes) == 0:
+                tt = 3
+            elif tokid >= 3 and tokid <= 258 and len(vbytes) == 1:
+                hv = hex(vbytes[0])[2:].upper()
+                vbytes = bytes(f'<0x{hv}>', encoding = 'UTF-8')
+                tt = 6
+            toktypes.append(tt)
+            tokens.append(vbytes)
+            scores.append(vscore)
+        gguf_writer.add_token_list(tokens)
+        gguf_writer.add_token_scores(scores)
+        gguf_writer.add_token_types(toktypes)
+
+    def add_tensors(self, gguf_writer):
+        nm = self.name_map
+        data = self.data
+        print(f'* Adding {len(self.model.tensors)} tensor(s)')
+        for tensor in self.model.tensors:
+            name = str(tensor.name, 'UTF-8')
+            if name.endswith('.weight'):
+                name = name[:-7]
+                suffix = '.weight'
+            elif name.endswith('.bias'):
+                name = name[:-5]
+                suffix = '.bias'
+            mapped_name = nm.get(name)
+            assert mapped_name is not None, f'Bad name {name}'
+            mapped_name += suffix
+            tempdims = list(tensor.dims[:])
+            if len(tempdims) > 1:
+                temp = tempdims[1]
+                tempdims[1] = tempdims[0]
+                tempdims[0] = temp
+            # print(f'+ {tensor.name} | {mapped_name} {tensor.dims} :: {tempdims}')
+            gguf_writer.add_tensor(mapped_name, data[tensor.start_offset:tensor.start_offset + tensor.len_bytes], raw_shape = tempdims, raw_dtype = tensor.dtype)
+
 
 def handle_args():
     parser = argparse.ArgumentParser(description = 'Convert GGMLv3 models to GGUF')
@@ -212,12 +232,15 @@ def handle_args():
 
 def main():
     cfg = handle_args()
+    print(f'* Using config: {cfg}')
+    print('\n=== WARNING === Be aware that this conversion script is best-effort. Use a native GGUF model if possible. === WARNING ===\n')
     data = np.memmap(cfg.input, mode = 'r')
     model = GGMLV3Model()
+    print('* Scanning GGML input file')
     offset = model.load(data, 0)
     print(model.hyperparameters)
-    # print(model.vocab.items)
-    # return
-    save_gguf(model, data, cfg)
+    converter = GGMLToGGUF(model, data, cfg)
+    converter.save()
+    print(f'* Successful completion. Output saved to: {cfg.output}')
 
 main()
