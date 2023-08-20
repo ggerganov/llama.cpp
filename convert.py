@@ -747,6 +747,8 @@ class OutputFile:
         self.gguf.add_token_scores(scores)
         self.gguf.add_token_types(toktypes)
 
+        # TODO: added / special tokens
+
     def add_tensor_info(self, name: str, tensor: LazyTensor) -> None:
         n_elements = 1
         for dim in tensor.shape:
