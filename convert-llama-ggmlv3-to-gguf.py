@@ -182,7 +182,7 @@ class GGMLToGGUF:
         toktypes = []
         for (tokid, (vbytes, vscore)) in enumerate(self.model.vocab.items):
             tt = 1
-            if len(vbytes) > 1 and vbytes[0] == 32:
+            if len(vbytes) > 0 and vbytes[0] == 32:
                 vbytes = vbytes.replace(b' ', b'\xe2\x96\x81')
             elif len(vbytes) == 0:
                 tt = 3
