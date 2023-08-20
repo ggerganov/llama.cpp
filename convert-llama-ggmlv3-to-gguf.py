@@ -1,4 +1,5 @@
 import sys, struct, math, argparse
+from pathlib import Path
 
 import numpy as np
 
@@ -163,8 +164,16 @@ class GGMLToGGUF:
     def add_params(self, gguf_writer):
         hp = self.model.hyperparameters
         cfg = self.cfg
+        desc = cfg.desc if cfg.desc is not None else 'converted from legacy GGJTv3 format'
+        try:
+            # Filenames aren't necessarily valid UTF8.
+            name = cfg.name if cfg.name is not None else cfg.input.name
+        except UnicodeDecodeError:
+            name = None
         print('* Adding model parameters and KV items')
-        gguf_writer.add_description('converted from legacy GGJTv3 format')
+        if name is not None:
+            gguf_writer.add_name(name)
+        gguf_writer.add_description(desc)
         gguf_writer.add_context_length(cfg.context_length)
         gguf_writer.add_embedding_length(hp.n_embd)
         gguf_writer.add_block_count(hp.n_layer)
@@ -224,8 +233,10 @@ class GGMLToGGUF:
 
 def handle_args():
     parser = argparse.ArgumentParser(description = 'Convert GGMLv3 models to GGUF')
-    parser.add_argument('--input', '-i', help = 'Input GGMLv3 filename')
-    parser.add_argument('--output', '-o', help ='Output GGUF filename')
+    parser.add_argument('--input', '-i', type = Path, help = 'Input GGMLv3 filename')
+    parser.add_argument('--output', '-o', type = Path, help ='Output GGUF filename')
+    parser.add_argument('--name', help = 'Set model name')
+    parser.add_argument('--desc', help = 'Set model description')
     parser.add_argument('--gqa', type = int, default = 1, help = 'grouped-query attention factor (use 8 for LLaMA2 70B)')
     parser.add_argument('--eps', default = '5.0e-06', help = 'RMS norm eps: Use 1e-6 for LLaMA1 and OpenLLaMA, use 1e-5 for LLaMA2')
     parser.add_argument('--context-length', '-c', type=int, default = 2048, help = 'Default max context length: LLaMA1 is typically 2048, LLaMA2 is typically 4096')
