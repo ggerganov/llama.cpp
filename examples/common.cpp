@@ -301,7 +301,6 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.n_batch = std::stoi(argv[i]);
-            params.n_batch = std::min(512, params.n_batch);
         } else if (arg == "--keep") {
             if (++i >= argc) {
                 invalid_param = true;
