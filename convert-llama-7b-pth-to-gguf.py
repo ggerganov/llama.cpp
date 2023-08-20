@@ -1,4 +1,4 @@
-# 7b pth llama --> gguf conversion, GQA/70b not supported
+# 7b pth llama --> gguf conversion
 # Only models with a single datafile are supported, like 7B
 # HF files required in the model dir: config.json tokenizer_config.json tokenizer.json tokenizer.model
 
@@ -96,10 +96,20 @@ if "_name_or_path" in hparams:
 else:
     hf_repo = ""
 
+if "max_sequence_length" in hparams:
+    ctx_length = hparams["max_sequence_length"]
+elif "max_position_embeddings" in hparams:
+    ctx_length = hparams["max_position_embeddings"]
+else:
+    print("gguf: can not find ctx length parameter.")
+
+    sys.exit()
+
+
 gguf_writer.add_name(last_dir)
 gguf_writer.add_source_hf_repo(hf_repo)
 gguf_writer.add_tensor_data_layout("Meta AI original pth")
-gguf_writer.add_context_length(hparams["max_position_embeddings"])
+gguf_writer.add_context_length(ctx_length)
 gguf_writer.add_embedding_length(hparams["hidden_size"])
 gguf_writer.add_block_count(block_count)
 gguf_writer.add_feed_forward_length(hparams["intermediate_size"])
@@ -155,17 +165,19 @@ if Path(dir_model + "/tokenizer.model").is_file():
     gguf_writer.add_token_scores(scores)
     gguf_writer.add_token_types(toktypes)
 
+
+print("gguf: get special token ids")
+
 if Path(dir_model + "/tokenizer.json").is_file():
+    # Look for special tokens in tokenizer.json if it exists
+
     with open(dir_model + "/tokenizer.json", "r", encoding="utf-8") as f:
         tokenizer = json.load(f)
 
     if "added_tokens" in tokenizer and Path(dir_model + "/tokenizer_config.json").is_file():
-        print("gguf: get special token ids")
 
         with open(dir_model + "/tokenizer_config.json", "r", encoding="utf-8") as f:
             tokenizer_config = json.load(f)
-
-        # find special token ids
 
         if "bos_token" in tokenizer_config and tokenizer_config["bos_token"] != None:
             for key in tokenizer["added_tokens"]:
@@ -191,6 +203,23 @@ if Path(dir_model + "/tokenizer.json").is_file():
             for key in tokenizer["added_tokens"]:
                 if key["content"] == tokenizer_config["pad_token"]["content"]:
                     gguf_writer.add_pad_token_id(key["id"])
+else:
+    # If no tokenizer.json: Look for special tokens in config.json
+
+    if "bos_token_id" in hparams and hparams["bos_token_id"] != None:
+        gguf_writer.add_bos_token_id(hparams["bos_token_id"])
+
+    if "eos_token_id" in hparams and hparams["eos_token_id"] != None:
+        gguf_writer.add_eos_token_id(hparams["eos_token_id"])
+
+    if "unk_token_id" in hparams and hparams["unk_token_id"] != None:
+        gguf_writer.add_unk_token_id(hparams["unk_token_id"])
+
+    if "sep_token_id" in hparams and hparams["sep_token_id"] != None:
+        gguf_writer.add_sep_token_id(hparams["sep_token_id"])
+
+    if "pad_token_id" in hparams and hparams["pad_token_id"] != None:
+        gguf_writer.add_pad_token_id(hparams["pad_token_id"])
 
 
 # TENSORS
