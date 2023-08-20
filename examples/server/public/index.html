@@ -623,7 +623,8 @@
         const { completion_probabilities } = msg;
         if (
           !completion_probabilities ||
-          completion_probabilities.length > 1 // Skip byte pair
+          // Skip empty array or byte pair (> 1)
+          completion_probabilities.length !== 1
         ) return msg.content
 
         const { probs } = completion_probabilities[0]
