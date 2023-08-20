@@ -304,9 +304,10 @@ def main():
     print(f'* Using config: {cfg}')
     print('\n=== WARNING === Be aware that this conversion script is best-effort. Use a native GGUF model if possible. === WARNING ===\n')
     vocab_override = None
-    metadata_override = None
+    params_override = None
     if cfg.model_metadata_dir is not None:
         (params_override, vocab_override) = handle_metadata(cfg)
+        print('!! Note: When overriding params the --gqa, --eps and --context-length options are ignored.')
         print(f'* Overriding params: {params_override}')
         print(f'* Overriding vocab: {vocab_override}')
     else:
