@@ -125,25 +125,30 @@ class GGMLV3Model:
         return offset
 
 class GGMLToGGUF:
-    def __init__(self, ggml_model, data, cfg):
+    def __init__(self, ggml_model, data, cfg, params_override = None, vocab_override = None):
         hp = ggml_model.hyperparameters
         self.model = ggml_model
         self.data = data
         self.cfg = cfg
+        self.params_override = params_override
+        self.vocab_override = vocab_override
         ff_tensor_idx = ggml_model.tensor_map.get(b'layers.0.feed_forward.w1.weight')
         assert ff_tensor_idx is not None, 'Missing layer 0 FF tensor'
         ff_tensor = ggml_model.tensors[ff_tensor_idx]
         self.ff_length = ff_tensor.dims[1]
-        if cfg.gqa == 1:
-            n_kv_head = hp.n_head
+        if params_override is not None:
+            n_kv_head = params_override.n_head_kv
         else:
-            gqa = float(cfg.gqa)
-            n_kv_head = None
-            for x in range(1, 256):
-                if float(hp.n_head) / float(x) == gqa:
-                    n_kv_head = x
-            assert n_kv_head is not None, "Couldn't determine n_kv_head from GQA param"
-            print(f'- Guessed n_kv_head = {n_kv_head} based on GQA {cfg.gqa}')
+            if cfg.gqa == 1:
+                n_kv_head = hp.n_head
+            else:
+                gqa = float(cfg.gqa)
+                n_kv_head = None
+                for x in range(1, 256):
+                    if float(hp.n_head) / float(x) == gqa:
+                        n_kv_head = x
+                assert n_kv_head is not None, "Couldn't determine n_kv_head from GQA param"
+                print(f'- Guessed n_kv_head = {n_kv_head} based on GQA {cfg.gqa}')
         self.n_kv_head = n_kv_head
         self.name_map = gguf.get_tensor_name_map(gguf.MODEL_ARCH.LLAMA, ggml_model.hyperparameters.n_layer)
 
@@ -174,6 +179,20 @@ class GGMLToGGUF:
         if name is not None:
             gguf_writer.add_name(name)
         gguf_writer.add_description(desc)
+        if self.params_override is not None:
+            po = self.params_override
+            assert po.n_embd == hp.n_embd, 'Model hyperparams mismatch'
+            assert po.n_layer == hp.n_layer, 'Model hyperparams mismatch'
+            assert po.n_head == hp.n_head, 'Model hyperparams mismatch'
+            gguf_writer.add_context_length      (po.n_ctx)
+            gguf_writer.add_embedding_length    (po.n_embd)
+            gguf_writer.add_block_count         (po.n_layer)
+            gguf_writer.add_feed_forward_length (po.n_ff)
+            gguf_writer.add_rope_dimension_count(po.n_embd // po.n_head)
+            gguf_writer.add_head_count          (po.n_head)
+            gguf_writer.add_head_count_kv       (po.n_head_kv)
+            gguf_writer.add_layer_norm_rms_eps  (po.f_norm_eps)
+            return
         gguf_writer.add_context_length(cfg.context_length)
         gguf_writer.add_embedding_length(hp.n_embd)
         gguf_writer.add_block_count(hp.n_layer)
@@ -182,14 +201,32 @@ class GGMLToGGUF:
         gguf_writer.add_head_count(hp.n_head)
         gguf_writer.add_head_count_kv(self.n_kv_head)
         gguf_writer.add_layer_norm_rms_eps(float(cfg.eps))
-        gguf_writer.add_tokenizer_model('llama')
 
     def add_vocab(self, gguf_writer):
         hp = self.model.hyperparameters
+        gguf_writer.add_tokenizer_model('llama')
         tokens = []
         scores = []
-        print(f'* Adding {hp.n_vocab} vocab item(s)')
         toktypes = []
+        if self.vocab_override is not None:
+            vo = self.vocab_override
+            print('* Adding vocab item(s)')
+            for (idx, vitem) in enumerate(vo.all_tokens()):
+                if len(vitem) == 3:
+                    tokens.append(vitem[0])
+                    scores.append(vitem[1])
+                    toktypes.append(vitem[2])
+                else:
+                    # Maybe try to guess the token type here?
+                    tokens.append(vitem[0])
+                    scores.append(vitem[1])
+            assert len(tokens) == hp.n_vocab, f'Override vocab has a different number of items than hyperparameters - override = {len(tokens)} but n_vocab={hp.n_vocab}'
+            gguf_writer.add_token_list(tokens)
+            gguf_writer.add_token_scores(scores)
+            if len(toktypes) > 0:
+                gguf_writer.add_token_types(toktypes)
+            return
+        print(f'* Adding {hp.n_vocab} vocab item(s)')
         for (tokid, (vbytes, vscore)) in enumerate(self.model.vocab.items):
             tt = 1 # Normal
             if len(vbytes) == 0:
@@ -230,6 +267,23 @@ class GGMLToGGUF:
             # print(f'+ {tensor.name} | {mapped_name} {tensor.dims} :: {tempdims}')
             gguf_writer.add_tensor(mapped_name, data[tensor.start_offset:tensor.start_offset + tensor.len_bytes], raw_shape = tempdims, raw_dtype = tensor.dtype)
 
+def handle_metadata(cfg):
+    import convert
+    assert cfg.model_metadata_dir.is_dir(), 'Metadata dir is not a directory'
+    hf_config_path   = cfg.model_metadata_dir / "config.json"
+    orig_config_path = cfg.model_metadata_dir / "params.json"
+    # Passing None to these load functions is not kosher but it should
+    # currently work for HF and only fail for original mode if
+    # n_vocab or n_ff is missing in params.json
+    if hf_config_path.exists():
+        params = convert.Params.loadHFTransformerJson(None, hf_config_path)
+    elif orig_config_path.exists():
+        params = convert.Params.loadOriginalParamsJson(None, orig_config_path)
+    else:
+        raise ValueError('Unable to load metadata')
+    vocab = convert.load_vocab(cfg.vocab_dir if cfg.vocab_dir is not None else cfg.model_metadata_dir, cfg.vocabtype)
+    convert.check_vocab_size(params, vocab)
+    return (params, vocab)
 
 def handle_args():
     parser = argparse.ArgumentParser(description = 'Convert GGMLv3 models to GGUF')
@@ -240,18 +294,29 @@ def handle_args():
     parser.add_argument('--gqa', type = int, default = 1, help = 'grouped-query attention factor (use 8 for LLaMA2 70B)')
     parser.add_argument('--eps', default = '5.0e-06', help = 'RMS norm eps: Use 1e-6 for LLaMA1 and OpenLLaMA, use 1e-5 for LLaMA2')
     parser.add_argument('--context-length', '-c', type=int, default = 2048, help = 'Default max context length: LLaMA1 is typically 2048, LLaMA2 is typically 4096')
+    parser.add_argument('--model-metadata-dir', '-m', type = Path, help ='Load HuggingFace/.pth vocab and metadata from the specified directory')
+    parser.add_argument("--vocab-dir", type=Path, help="directory containing tokenizer.model, if separate from model file - only meaningful with --model-metadata-dir")
+    parser.add_argument("--vocabtype", choices=["spm", "bpe"], help="vocab format - only meaningful with --model-metadata-dir and/or --vocab-dir (default: spm)", default="spm")
     return parser.parse_args()
 
 def main():
     cfg = handle_args()
     print(f'* Using config: {cfg}')
-    print('\n=== WARNING === Be aware that this conversion script is best-effort. Special tokens may not be converted correctly. Use a native GGUF model if possible. === WARNING ===\n')
+    print('\n=== WARNING === Be aware that this conversion script is best-effort. Use a native GGUF model if possible. === WARNING ===\n')
+    vocab_override = None
+    metadata_override = None
+    if cfg.model_metadata_dir is not None:
+        (params_override, vocab_override) = handle_metadata(cfg)
+        print(f'* Overriding params: {params_override}')
+        print(f'* Overriding vocab: {vocab_override}')
+    else:
+        print('\n=== WARNING === Special tokens may not be converted correctly. Use --model-metadata-dir if possible === WARNING ===\n')
     data = np.memmap(cfg.input, mode = 'r')
     model = GGMLV3Model()
     print('* Scanning GGML input file')
     offset = model.load(data, 0)
     print(f'* GGML model hyperparameters: {model.hyperparameters}')
-    converter = GGMLToGGUF(model, data, cfg)
+    converter = GGMLToGGUF(model, data, cfg, params_override = params_override, vocab_override = vocab_override)
     converter.save()
     print(f'* Successful completion. Output saved to: {cfg.output}')
 
