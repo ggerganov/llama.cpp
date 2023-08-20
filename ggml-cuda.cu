@@ -287,7 +287,7 @@ static int g_device_count = -1;
 static int g_main_device = 0;
 static int g_compute_capabilities[GGML_CUDA_MAX_DEVICES];
 static float g_tensor_split[GGML_CUDA_MAX_DEVICES] = {0};
-static bool g_mul_mat_q = false;
+static bool g_mul_mat_q = true;
 
 static void * g_scratch_buffer = nullptr;
 static size_t g_scratch_size = 1024*1024*1024; // 1 GB by default
