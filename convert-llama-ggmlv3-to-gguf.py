@@ -181,15 +181,15 @@ class GGMLToGGUF:
         print(f'* Adding {hp.n_vocab} vocab item(s)')
         toktypes = []
         for (tokid, (vbytes, vscore)) in enumerate(self.model.vocab.items):
-            tt = 1
-            if len(vbytes) > 0 and vbytes[0] == 32:
-                vbytes = vbytes.replace(b' ', b'\xe2\x96\x81')
-            elif len(vbytes) == 0:
-                tt = 3
+            tt = 1 # Normal
+            if len(vbytes) == 0:
+                tt = 3 # Control
             elif tokid >= 3 and tokid <= 258 and len(vbytes) == 1:
                 hv = hex(vbytes[0])[2:].upper()
                 vbytes = bytes(f'<0x{hv}>', encoding = 'UTF-8')
-                tt = 6
+                tt = 6 # Byte
+            else:
+                vbytes = vbytes.replace(b' ', b'\xe2\x96\x81')
             toktypes.append(tt)
             tokens.append(vbytes)
             scores.append(vscore)
