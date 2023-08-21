@@ -340,6 +340,12 @@
       return String(str).replaceAll(/\{\{(.*?)\}\}/g, (_, key) => template(settings[key]));
     }
 
+    const parseByteChar = (str) => {
+      const c = str.split('byte: ')[1];
+      if (!c) return null;
+      return parseInt(`0${c.replace('\\', '')}`, 16);
+    }
+
     // send message to server
     const chat = async (msg) => {
       if (controller.value) {
@@ -378,10 +384,61 @@
         const data = chunk.data;
         currentMessages.push(data);
 
-        transcriptUpdate([...history, ["{{char}}", currentMessages]])
+        let messages = currentMessages
+        if (data.stop && params.value.n_probs > 0) {
+          messages = []
+          let i = 0;
+          while (i < data.completion_probabilities.length) {
+            let prob = data.completion_probabilities[i]
+            prob = {
+              ...prob,
+              completion_probabilities: [{ content: prob.content, probs: prob.probs }]
+            }
+
+            // Merge byte characters
+            if (prob.content.startsWith('byte: ')) {
+              const c = parseByteChar(prob.content)
+              if (!c) {
+                i++;
+                continue;
+              }
+
+              let multibytePending = 0;
+              if ((c & 0xE0) == 0xC0) {
+                // 2-byte characters: 110xxxxx 10xxxxxx
+                multibytePending = 1;
+              } else if ((c & 0xF0) == 0xE0) {
+                // 3-byte characters: 1110xxxx 10xxxxxx 10xxxxxx
+                multibytePending = 2;
+              } else if ((c & 0xF8) == 0xF0) {
+                // 4-byte characters: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+                multibytePending = 3;
+              }
+              prob.content = String.fromCharCode(c);
+
+              // Forward index to the end of the multibyte character
+              if (multibytePending > 0) {
+                for (let j = 0; j < multibytePending; j++) {
+                  i++;
+                  const nextProb = data.completion_probabilities[i]
+                  if (!nextProb) break;
+                  const next = parseByteChar(nextProb.content);
+                  prob.content = prob.content + String.fromCharCode(next);
+                  prob.completion_probabilities.push(nextProb);
+                }
+                prob.content = decodeURIComponent(escape(prob.content));
+              }
+            }
+            messages.push(prob);
+            i++;
+          }
+          console.log('Processed completion probabilities to messages: ', messages)
+        }
+
+        transcriptUpdate([...history, ["{{char}}", messages]])
 
         if (data.stop) {
-          console.log("Completion finished: '", currentMessages.map(msg => msg.content).join(''), "', summary: ", data);
+          console.log("Completion finished: '", messages.map(msg => msg.content).join(''), "', summary: ", data);
         }
 
         if (data.timings) {
