@@ -501,7 +501,6 @@ struct llama_server_context
                 llama_grammar_accept_token(ctx, grammar, result.tok);
             }
 
-            printf("candidates_p.size = %zu\n", candidates_p.size);
             for (size_t i = 0; i < std::min(candidates_p.size, (size_t)n_probs); ++i)
             {
                 result.probs.push_back({candidates_p.data[i].id, candidates_p.data[i].p});
