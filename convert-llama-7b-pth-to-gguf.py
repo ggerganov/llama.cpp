@@ -170,7 +170,7 @@ if Path(dir_model + "/tokenizer.model").is_file():
             print("gguf: get added tokens")
 
             for key in addtokens_json:
-                tokens.append( key.encode("utf-8") ) 
+                tokens.append( key.encode("utf-8") )
                 scores.append(-1000.0)
                 toktypes.append(4) # user-defined token type
 

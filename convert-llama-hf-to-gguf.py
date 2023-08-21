@@ -178,7 +178,7 @@ if Path(dir_model + "/tokenizer.model").is_file():
             print("gguf: get added tokens")
 
             for key in addtokens_json:
-                tokens.append( key.encode("utf-8") ) 
+                tokens.append( key.encode("utf-8") )
                 scores.append(-1000.0)
                 toktypes.append(4) # user-defined token type
 
@@ -294,7 +294,7 @@ for part_name in part_names:
             sys.exit()
 
         n_dims = len(data.shape)
-        data_dtype = data.dtype 
+        data_dtype = data.dtype
 
         # if f32 desired, convert any float16 to float32
         if ftype == 0 and data_dtype == np.float16:
