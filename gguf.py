@@ -509,7 +509,7 @@ class GGUFWriter:
         self.offset_tensor += GGUFWriter.ggml_pad(tensor_nbytes, self.data_alignment)
         self.ti_data_count += 1
 
-    def add_tensor(self, name: str, tensor: np.ndarray, raw_shape: Optional[np.ndarray], raw_dtype: Optional[GGMLQuantizationType] = None):
+    def add_tensor(self, name: str, tensor: np.ndarray, raw_shape: Optional[np.ndarray] = None, raw_dtype: Optional[GGMLQuantizationType] = None):
         if self.use_temp_file and not hasattr(self, "temp_file"):
             self.temp_file = tempfile.SpooledTemporaryFile(mode="w+b", max_size=256*1024*1024)
             self.temp_file.seek(0)
