@@ -255,7 +255,7 @@ class BpeVocab:
         self.fname_tokenizer      = fname_tokenizer
         self.fname_added_tokens   = fname_added_tokens
 
-    def bpe_tokens(self) -> Iterable[Tuple[bytes, float]]:
+    def bpe_tokens(self) -> Iterable[Tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.bpe_tokenizer
         from transformers.models.gpt2 import tokenization_gpt2
         byte_encoder = tokenization_gpt2.bytes_to_unicode()
@@ -265,12 +265,12 @@ class BpeVocab:
             score: float = -i
             yield text, score, gguf.TokenType.USER_DEFINED
 
-    def added_tokens(self) -> Iterable[Tuple[bytes, float]]:
+    def added_tokens(self) -> Iterable[Tuple[bytes, float, gguf.TokenType]]:
         for text in self.added_tokens_list:
             score = -1000.0
             yield text.encode("utf-8"), score, gguf.TokenType.USER_DEFINED
 
-    def all_tokens(self) -> Iterable[Tuple[bytes, float]]:
+    def all_tokens(self) -> Iterable[Tuple[bytes, float, gguf.TokenType]]:
         yield from self.bpe_tokens()
         yield from self.added_tokens()
 
@@ -286,6 +286,7 @@ class SentencePieceVocab:
             added_tokens = json.load(open(fname_added_tokens, encoding="utf-8"))
         else:
             added_tokens = {}
+
         vocab_size: int = self.sentencepiece_tokenizer.vocab_size()
         expected_ids = list(range(vocab_size, vocab_size + len(added_tokens)))
         actual_ids   = sorted(added_tokens.values())
@@ -299,7 +300,7 @@ class SentencePieceVocab:
         self.fname_tokenizer = fname_tokenizer
         self.fname_added_tokens = fname_added_tokens
 
-    def sentencepiece_tokens(self) -> Iterable[Tuple[bytes, float]]:
+    def sentencepiece_tokens(self) -> Iterable[Tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.sentencepiece_tokenizer
         for i in range(tokenizer.vocab_size()):
             piece = tokenizer.id_to_piece(i)
@@ -323,12 +324,12 @@ class SentencePieceVocab:
 
             yield text, score, toktype
 
-    def added_tokens(self) -> Iterable[Tuple[bytes, float]]:
+    def added_tokens(self) -> Iterable[Tuple[bytes, float, gguf.TokenType]]:
         for text in self.added_tokens_list:
             score = -1000.0
             yield text.encode("utf-8"), score, gguf.TokenType.USER_DEFINED
 
-    def all_tokens(self) -> Iterable[Tuple[bytes, float]]:
+    def all_tokens(self) -> Iterable[Tuple[bytes, float, gguf.TokenType]]:
         yield from self.sentencepiece_tokens()
         yield from self.added_tokens()
 
@@ -727,7 +728,7 @@ class OutputFile:
         self.gguf = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH])
 
     def add_meta_arch(self, params: Params) -> None:
-        self.gguf.add_name                ("llama")
+        self.gguf.add_name                ("LLaMA")
         self.gguf.add_context_length      (params.n_ctx)
         self.gguf.add_embedding_length    (params.n_embd)
         self.gguf.add_block_count         (params.n_layer)
