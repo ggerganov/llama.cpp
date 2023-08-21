@@ -77,6 +77,11 @@ static float make_qx_quants(int n, int nmax, const float * restrict x, int8_t * 
         }
         return 1/iscale;
     }
+    bool return_early = false;
+    if (rmse_type < 0) {
+        rmse_type = -rmse_type;
+        return_early = true;
+    }
     int weight_type = rmse_type%2;
     float sumlx = 0;
     float suml2 = 0;
@@ -89,56 +94,9 @@ static float make_qx_quants(int n, int nmax, const float * restrict x, int8_t * 
         suml2 += w*l*l;
     }
     float scale = sumlx/suml2;
+    if (return_early) return suml2 > 0 ? 0.5f*(scale + 1/iscale) : 1/iscale;
     float best = scale * sumlx;
-    for (int itry = 0; itry < 3; ++itry) {
-        iscale = 1/scale;
-        float slx = 0;
-        float sl2 = 0;
-        bool changed = false;
-        for (int i = 0; i < n; ++i) {
-            int l = nearest_int(iscale * x[i]);
-            l = MAX(-nmax, MIN(nmax-1, l));
-            if (l + nmax != L[i]) { changed = true; }
-            float w = weight_type == 1 ? x[i] * x[i] : 1.f;
-            slx += w*x[i]*l;
-            sl2 += w*l*l;
-        }
-        if (!changed || sl2 == 0 || slx*slx <= best*sl2) { break; }
-        for (int i = 0; i < n; ++i) {
-            int l = nearest_int(iscale * x[i]);
-            L[i] = nmax + MAX(-nmax, MIN(nmax-1, l));
-        }
-        sumlx = slx; suml2 = sl2;
-        scale = sumlx/suml2;
-        best = scale * sumlx;
-    }
-    for (int itry = 0; itry < 5; ++itry) {
-        int n_changed = 0;
-        for (int i = 0; i < n; ++i) {
-            float w = weight_type == 1 ? x[i]*x[i] : 1;
-            int l = L[i] - nmax;
-            float slx = sumlx - w*x[i]*l;
-            if (slx > 0) {
-                float sl2 = suml2 - w*l*l;
-                int new_l = nearest_int(x[i] * sl2 / slx);
-                new_l = MAX(-nmax, MIN(nmax-1, new_l));
-                if (new_l != l) {
-                    slx += w*x[i]*new_l;
-                    sl2 += w*new_l*new_l;
-                    if (sl2 > 0 && slx*slx*suml2 > sumlx*sumlx*sl2) {
-                        L[i] = nmax + new_l; sumlx = slx; suml2 = sl2;
-                        scale = sumlx / suml2; best = scale * sumlx;
-                        ++n_changed;
-                    }
-                }
-            }
-        }
-        if (!n_changed) { break; }
-    }
-    if (rmse_type < 3) {
-        return scale;
-    }
-    for (int is = -4; is <= 4; ++is) {
+    for (int is = -9; is <= 9; ++is) {
         if (is == 0) {
             continue;
         }
