@@ -237,6 +237,21 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     free(ctx);
 }
 
+void * ggml_metal_host_malloc(size_t n) {
+    void * data = NULL;
+    const int result = posix_memalign((void **) &data, getpagesize(), n);
+    if (result != 0) {
+        fprintf(stderr, "%s: error: posix_memalign failed\n", __func__);
+        return NULL;
+    }
+
+    return data;
+}
+
+void ggml_metal_host_free(void * data) {
+    free(data);
+}
+
 void ggml_metal_set_n_cb(struct ggml_metal_context * ctx, int n_cb) {
     ctx->n_cb = n_cb;
 }

@@ -1,5 +1,5 @@
 # Define the default target now so that it is always the first target
-BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-text-from-scratch convert-llama2c-to-ggml simple server embd-input-test llama-bench
+BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-text-from-scratch convert-llama2c-to-ggml simple server embd-input-test gguf llama-bench
 
 # Binaries only useful for tests
 TEST_TARGETS = tests/test-llama-grammar tests/test-grammar-parser tests/test-double-float tests/test-grad0 tests/test-opt tests/test-quantize-fns tests/test-quantize-perf tests/test-sampling tests/test-tokenizer-0
@@ -45,8 +45,8 @@ OPT = -Ofast
 else
 OPT = -O3
 endif
-CFLAGS   = -I.              $(OPT) -std=c11   -fPIC
-CXXFLAGS = -I. -I./examples $(OPT) -std=c++11 -fPIC
+CFLAGS   = -I.            $(OPT) -std=c11   -fPIC
+CXXFLAGS = -I. -I./common $(OPT) -std=c++11 -fPIC
 LDFLAGS  =
 
 ifdef LLAMA_DEBUG
@@ -329,23 +329,23 @@ ggml-alloc.o: ggml-alloc.c ggml.h ggml-alloc.h
 
 OBJS += ggml-alloc.o
 
-llama.o: llama.cpp ggml.h ggml-alloc.h ggml-cuda.h ggml-metal.h llama.h llama-util.h
+llama.o: llama.cpp ggml.h ggml-alloc.h ggml-cuda.h ggml-metal.h llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-common.o: examples/common.cpp examples/common.h
+common.o: common/common.cpp common/common.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-console.o: examples/console.cpp examples/console.h
+console.o: common/console.cpp common/console.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-grammar-parser.o: examples/grammar-parser.cpp examples/grammar-parser.h
+grammar-parser.o: common/grammar-parser.cpp common/grammar-parser.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 libllama.so: llama.o ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
 clean:
-	rm -vf *.o *.so *.dll main quantize quantize-stats perplexity embedding benchmark-matmult save-load-state server simple vdot train-text-from-scratch convert-llama2c-to-ggml embd-input-test llama-bench build-info.h $(TEST_TARGETS)
+	rm -vf *.o *.so *.dll main quantize quantize-stats perplexity embedding benchmark-matmult save-load-state server simple vdot train-text-from-scratch convert-llama2c-to-ggml embd-input-test gguf llama-bench build-info.h $(TEST_TARGETS)
 
 #
 # Examples
@@ -385,7 +385,10 @@ $(LIB_PRE)embdinput$(DSO_EXT): examples/embd-input/embd-input.h examples/embd-in
 embd-input-test: $(LIB_PRE)embdinput$(DSO_EXT) examples/embd-input/embd-input-test.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %$(DSO_EXT),$(filter-out %.h,$(filter-out %.hpp,$^))) -o $@ $(LDFLAGS) -L. -lembdinput
 
-train-text-from-scratch: examples/train-text-from-scratch/train-text-from-scratch.cpp    build-info.h ggml.o llama.o $(OBJS)
+gguf: examples/gguf/gguf.cpp                                  build-info.h ggml.o llama.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
+
+train-text-from-scratch: examples/train-text-from-scratch/train-text-from-scratch.cpp    build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 convert-llama2c-to-ggml: examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp    build-info.h ggml.o llama.o $(OBJS)
@@ -418,7 +421,7 @@ vdot: pocs/vdot/vdot.cpp ggml.o $(OBJS)
 tests/test-llama-grammar: tests/test-llama-grammar.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
 
-tests/test-grammar-parser: tests/test-grammar-parser.cpp examples/grammar-parser.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+tests/test-grammar-parser: tests/test-grammar-parser.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
 
 tests/test-double-float: tests/test-double-float.cpp build-info.h ggml.o llama.o common.o $(OBJS)

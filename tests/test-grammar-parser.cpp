@@ -3,7 +3,8 @@
 #endif
 
 #include "llama.h"
-#include "examples/grammar-parser.cpp"
+#include "grammar-parser.h"
+
 #include <cassert>
 
 int main()

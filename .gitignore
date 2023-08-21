@@ -1,6 +1,7 @@
 *.o
 *.a
 *.so
+*.gguf
 *.bin
 .DS_Store
 .build/
@@ -47,6 +48,8 @@ models-mnt
 /server
 /Pipfile
 /embd-input-test
+/gguf
+/gguf-llama-simple
 /libllama.so
 /llama-bench
 build-info.h
@@ -64,7 +67,6 @@ qnt-*.txt
 perf-*.txt
 
 examples/jeopardy/results.txt
-
 
 pyproject.toml
 poetry.lock
