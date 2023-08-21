@@ -573,6 +573,10 @@ Here is an example of a few-shot interaction, invoked with the command
 
 # custom arguments using a 13B model
 ./main -m ./models/13B/ggml-model-q4_0.bin -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
+
+# chat with LlaMa-2 chat models (handles special system and instruction tokens)
+# second argument is system prompt and third one is first user prompt
+./examples/chat-llama-2.sh models/llama-2-13b-chat.ggmlv3.q4_0.bin ./prompts/pirate.txt "Hello there"
 ```
 
 Note the use of `--color` to distinguish between user input and generated text. Other parameters are explained in more detail in the [README](examples/main/README.md) for the `main` example program.
