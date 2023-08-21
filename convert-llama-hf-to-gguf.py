@@ -264,7 +264,9 @@ for part_name in part_names:
         data = data.squeeze().numpy()
 
         # reverse permute these
-        if name.endswith(".q_proj.weight") or name.endswith(".k_proj.weight"):
+        if name.endswith(".q_proj.weight"):
+            data = reverse_hf_permute(data, head_count)
+        if name.endswith(".k_proj.weight"):
             data = reverse_hf_permute(data, head_count, head_count_kv)
 
         # map tensor names
