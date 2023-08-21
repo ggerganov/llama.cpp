@@ -22,19 +22,16 @@ struct gpt_params {
     int32_t n_predict                       = -1;   // new tokens to predict
     int32_t n_ctx                           = 512;  // context size
     int32_t n_batch                         = 512;  // batch size for prompt processing (must be >=32 to use BLAS)
-    int32_t n_gqa                           = 1;    // grouped-query attention factor (TODO: move to hparams)
     int32_t n_keep                          = 0;    // number of tokens to keep from initial prompt
     int32_t n_chunks                        = -1;   // max number of chunks to process (-1 = unlimited)
     int32_t n_gpu_layers                    = 0;    // number of layers to store in VRAM
     int32_t main_gpu                        = 0;    // the GPU that is used for scratch and small tensors
     float   tensor_split[LLAMA_MAX_DEVICES] = {0};  // how split tensors should be distributed across GPUs
     int32_t n_probs                         = 0;    // if greater than 0, output the probabilities of top n_probs tokens.
-    float   rms_norm_eps                    = LLAMA_DEFAULT_RMS_EPS; // rms norm epsilon
     float   rope_freq_base                  = 10000.0f; // RoPE base frequency
     float   rope_freq_scale                 = 1.0f;     // RoPE frequency scaling factor
 
     // sampling parameters
-    std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
     int32_t top_k             = 40;    // <= 0 to use vocab size
     float   top_p             = 0.95f; // 1.0 = disabled
     float   tfs_z             = 1.00f; // 1.0 = disabled
@@ -48,12 +45,14 @@ struct gpt_params {
     float   mirostat_tau      = 5.00f; // target entropy
     float   mirostat_eta      = 0.10f; // learning rate
 
+    std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
+
     // Classifier-Free Guidance
     // https://arxiv.org/abs/2306.17806
     std::string cfg_negative_prompt;       // string to help guidance
     float       cfg_scale         = 1.f;   // How strong is guidance
 
-    std::string model             = "models/7B/ggml-model.bin"; // model path
+    std::string model             = "models/7B/ggml-model-f16.gguf"; // model path
     std::string model_alias       = "unknown"; // model alias
     std::string prompt            = "";
     std::string path_prompt_cache = "";  // path to file for saving/loading prompt eval state
@@ -83,6 +82,7 @@ struct gpt_params {
     bool simple_io         = false; // improves compatibility with subprocesses and limited consoles
 
     bool input_prefix_bos  = false; // prefix BOS to user inputs, preceding input_prefix
+    bool ignore_eos        = false; // ignore generated EOS tokens
     bool instruct          = false; // instruction mode (used for Alpaca models)
     bool penalize_nl       = true;  // consider newlines as a repeatable token
     bool perplexity        = false; // compute perplexity over the prompt
@@ -101,14 +101,30 @@ void gpt_print_usage(int argc, char ** argv, const gpt_params & params);
 std::string gpt_random_prompt(std::mt19937 & rng);
 
 //
-// Vocab utils
-//
-
-std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::string & text, bool add_bos);
-
-//
 // Model utils
 //
 
-std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(const gpt_params & params);
+std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params);
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
+
+//
+// Vocab utils
+//
+
+std::vector<llama_token> llama_tokenize(
+        struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_bos);
+
+std::vector<llama_token> llama_tokenize_bpe(
+        struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_bos);
+
+std::string llama_token_to_str(
+        const struct llama_context * ctx,
+                       llama_token   token);
+
+std::string llama_token_to_str_bpe(
+    const struct llama_context * ctx,
+                   llama_token   token);
