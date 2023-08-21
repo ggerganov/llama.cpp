@@ -87,8 +87,8 @@ int main(int argc, char **argv) {
                 return 2;
             }
         } else {
-            // TODO: needs access to token types
-            if (0 <= i && i < 259) {
+            llama_token_type type = llama_token_get_type(ctx, i);
+            if (type == LLAMA_TOKEN_TYPE_UNKNOWN || type == LLAMA_TOKEN_TYPE_CONTROL || type == LLAMA_TOKEN_TYPE_BYTE) {
                 fprintf(stderr, "%s : info: token %d is string %s and bpe returns tokens %s\n",
                     __func__, i, llama_token_to_str(ctx, i).c_str(), unescape_whitespace(ctx, tokens).c_str());
             } else {
