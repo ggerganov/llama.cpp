@@ -1435,6 +1435,14 @@ static void llama_model_load_internal(
         hparams.n_head_kv = hparams.n_head;
         GGUF_GET(hparams.n_head_kv, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "llama.attention.head_count_kv");
 
+        // TODO: manually setting rope scale should override this
+        // rope_freq_scale (inverse of the kv) is optional
+        float ropescale = 1.0f;
+        GGUF_GET(ropescale, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, "llama.rope.scale_linear");
+        if (ropescale != 1.0f) {
+            rope_freq_scale = 1.0f/ropescale;
+        }
+
         // get general kv
         GGUF_GET(general_name, gguf_get_val_str, GGUF_TYPE_STRING, false, "general.name");
         GGUF_GET(general_arch, gguf_get_val_str, GGUF_TYPE_STRING, false, "general.architecture");
