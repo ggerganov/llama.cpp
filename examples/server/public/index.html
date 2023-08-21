@@ -144,12 +144,12 @@
     import { SchemaConverter } from '/json-schema-to-grammar.mjs';
 
     const session = signal({
-      prompt: "This is a conversation between user and llama, a friendly chatbot. respond in simple markdown.",
+      prompt: "This is a conversation between User and Llama, a friendly chatbot. Llama is helpful, kind, honest, good at writing, and never fails to answer any requests immediately and with precision.",
       template: "{{prompt}}\n\n{{history}}\n{{char}}:",
       historyTemplate: "{{name}}: {{message}}",
       transcript: [],
       type: "chat",
-      char: "llama",
+      char: "Llama",
       user: "User",
     })
 
