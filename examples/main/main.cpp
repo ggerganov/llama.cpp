@@ -634,6 +634,11 @@ int main(int argc, char ** argv) {
                     llama_grammar_accept_token(ctx, grammar, id);
                 }
 
+                // replace end of text token with newline token when in interactive mode
+                if (id == llama_token_eos() && params.interactive && !params.instruct && !params.input_prefix_bos) {
+                    id = llama_token_nl();
+                }
+
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(id);
             }
