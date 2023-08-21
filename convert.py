@@ -241,17 +241,19 @@ class BpeVocab:
             added_tokens = json.load(open(fname_added_tokens, encoding="utf-8"))
         else:
             added_tokens = {}
+
         vocab_size: int = len(self.bpe_tokenizer)
-        expected_ids = list(range(vocab_size, vocab_size + len(added_tokens)))
-        actual_ids = sorted(added_tokens.values())
+        expected_ids    = list(range(vocab_size, vocab_size + len(added_tokens)))
+        actual_ids      = sorted(added_tokens.values())
         if expected_ids != actual_ids:
             raise Exception(f"Expected added token IDs to be sequential and start at {len(added_tokens)}; got {actual_ids}")
+
         items = sorted(added_tokens.items(), key=lambda text_idx: text_idx[1])
-        self.added_tokens_list = [text for (text, idx) in items]
+        self.added_tokens_list    = [text for (text, idx) in items]
         self.vocab_size_base: int = vocab_size
-        self.vocab_size: int = self.vocab_size_base + len(self.added_tokens_list)
-        self.fname_tokenizer = fname_tokenizer
-        self.fname_added_tokens = fname_added_tokens
+        self.vocab_size: int      = self.vocab_size_base + len(self.added_tokens_list)
+        self.fname_tokenizer      = fname_tokenizer
+        self.fname_added_tokens   = fname_added_tokens
 
     def bpe_tokens(self) -> Iterable[Tuple[bytes, float]]:
         tokenizer = self.bpe_tokenizer
@@ -261,12 +263,12 @@ class BpeVocab:
         for i, item in enumerate(tokenizer):
             text: bytes = item.encode("utf-8")
             score: float = -i
-            yield text, score, 4
+            yield text, score, gguf.TokenType.USER_DEFINED
 
     def added_tokens(self) -> Iterable[Tuple[bytes, float]]:
         for text in self.added_tokens_list:
             score = -1000.0
-            yield text.encode("utf-8"), score, 4
+            yield text.encode("utf-8"), score, gguf.TokenType.USER_DEFINED
 
     def all_tokens(self) -> Iterable[Tuple[bytes, float]]:
         yield from self.bpe_tokens()
@@ -304,27 +306,27 @@ class SentencePieceVocab:
             text: bytes = piece.encode("utf-8")
             score: float = tokenizer.get_score(i)
 
-            toktype = 1  # defualt to normal token type
+            toktype = gguf.TokenType.NORMAL
             if tokenizer.is_unknown(i):
-                toktype = 2
+                toktype = gguf.TokenType.UNKNOWN
             if tokenizer.is_control(i):
-                toktype = 3
+                toktype = gguf.TokenType.CONTROL
 
             # NOTE: I think added_tokens are user defined.
             # ref: https://github.com/google/sentencepiece/blob/master/src/sentencepiece_model.proto
-            # if tokenizer.is_user_defined(i): toktype = 4
+            # if tokenizer.is_user_defined(i): toktype = gguf.TokenType.USER_DEFINED
 
             if tokenizer.is_unused(i):
-                toktype = 5
+                toktype = gguf.TokenType.UNUSED
             if tokenizer.is_byte(i):
-                toktype = 6
+                toktype = gguf.TokenType.BYTE
 
             yield text, score, toktype
 
     def added_tokens(self) -> Iterable[Tuple[bytes, float]]:
         for text in self.added_tokens_list:
             score = -1000.0
-            yield text.encode("utf-8"), score, 4
+            yield text.encode("utf-8"), score, gguf.TokenType.USER_DEFINED
 
     def all_tokens(self) -> Iterable[Tuple[bytes, float]]:
         yield from self.sentencepiece_tokens()
@@ -342,6 +344,7 @@ Vocab = Union[BpeVocab, SentencePieceVocab]
 #
 
 def permute(weights: NDArray, n_head: int, n_head_kv: int) -> NDArray:
+    #print( "permute debug " + str(weights.shape[0]) + " x " + str(weights.shape[1]) + " nhead " + str(n_head) + " nheadkv " + str(n_kv_head) )
     if n_head_kv is not None and n_head != n_head_kv:
         n_head //= n_head_kv
     return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
@@ -724,6 +727,7 @@ class OutputFile:
         self.gguf = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH])
 
     def add_meta_arch(self, params: Params) -> None:
+        self.gguf.add_name                ("llama")
         self.gguf.add_context_length      (params.n_ctx)
         self.gguf.add_embedding_length    (params.n_embd)
         self.gguf.add_block_count         (params.n_layer)
@@ -836,12 +840,12 @@ def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
     for i in itertools.count():
         if f"model.layers.{i}.self_attn.q_proj.weight" in model:
             print(f"Permuting layer {i}")
-            tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.q_proj.weight"], params.n_head, params.n_head_kv)
+            tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.q_proj.weight"], params.n_head, params.n_head)
             tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.k_proj.weight"], params.n_head, params.n_head_kv)
            #tmp[f"model.layers.{i}.self_attn.v_proj.weight"] =              model[f"model.layers.{i}.self_attn.v_proj.weight"]
         elif f"model.layers.{i}.self_attn.W_pack.weight" in model:
             print(f"Unpacking and permuting layer {i}")
-            tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 0, params.n_head, params.n_head_kv)
+            tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 0, params.n_head, params.n_head)
             tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 1, params.n_head, params.n_head_kv)
             tmp[f"model.layers.{i}.self_attn.v_proj.weight"] = part_lazy        (model[f"model.layers.{i}.self_attn.W_pack.weight"], 2)
         else:

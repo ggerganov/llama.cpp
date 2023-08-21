@@ -118,6 +118,11 @@ gguf_writer.add_head_count(head_count)
 gguf_writer.add_head_count_kv(head_count_kv)
 gguf_writer.add_layer_norm_rms_eps(hparams["rms_norm_eps"])
 
+if "rope_scaling" in hparams and hparams["rope_scaling"] != None and "factor" in hparams["rope_scaling"]:
+    if "type" in hparams["rope_scaling"]:
+        if hparams["rope_scaling"]["type"] == "linear":
+            gguf_writer.add_rope_scale_linear(hparams["rope_scaling"]["factor"])
+
 
 # TOKENIZATION
 
@@ -147,9 +152,7 @@ if Path(dir_model + "/tokenizer.model").is_file():
         if tokenizer.is_control(i):
             toktype = 3
 
-        # TODO: How to determinate if a token is user defined?
-        # ref: https://github.com/google/sentencepiece/blob/master/src/sentencepiece_model.proto
-        # if tokenizer.is_user_defined(i): toktype = 4
+        # toktype = 4 is user-defined = tokens from added_tokens.json
 
         if tokenizer.is_unused(i):
             toktype = 5
@@ -159,6 +162,17 @@ if Path(dir_model + "/tokenizer.model").is_file():
         tokens.append(text)
         scores.append(score)
         toktypes.append(toktype)
+
+    if Path(dir_model + "/added_tokens.json").is_file():
+        with open(dir_model + "/added_tokens.json", "r", encoding="utf-8") as f:
+            addtokens_json = json.load(f)
+
+            print("gguf: get added tokens")
+
+            for key in addtokens_json:
+                tokens.append( key.encode("utf-8") )
+                scores.append(-1000.0)
+                toktypes.append(4) # user-defined token type
 
     gguf_writer.add_tokenizer_model("llama")
     gguf_writer.add_token_list(tokens)

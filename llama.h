@@ -72,6 +72,16 @@ extern "C" {
         LLAMA_VOCAB_TYPE_BPE = 1, // Byte Pair Encoding
     };
 
+    enum llama_token_type {
+        LLAMA_TOKEN_TYPE_UNDEFINED    = 0,
+        LLAMA_TOKEN_TYPE_NORMAL       = 1,
+        LLAMA_TOKEN_TYPE_UNKNOWN      = 2,
+        LLAMA_TOKEN_TYPE_CONTROL      = 3,
+        LLAMA_TOKEN_TYPE_USER_DEFINED = 4,
+        LLAMA_TOKEN_TYPE_UNUSED       = 5,
+        LLAMA_TOKEN_TYPE_BYTE         = 6,
+    };
+
     // model file types
     enum llama_ftype {
         LLAMA_FTYPE_ALL_F32              = 0,
@@ -330,19 +340,11 @@ extern "C" {
     // Vocab
     //
 
-    // Get the vocabulary as output parameters.
-    // Returns number of results.
-    LLAMA_API int llama_get_vocab(
-            const struct llama_context * ctx,
-                          const char * * strings,
-                                 float * scores,
-                                   int   capacity);
+    LLAMA_API const char * llama_token_get_text(const struct llama_context * ctx, llama_token token);
 
-    LLAMA_API int llama_model_get_vocab(
-              const struct llama_model * model,
-                          const char * * strings,
-                                 float * scores,
-                                   int   capacity);
+    LLAMA_API float llama_token_get_score(const struct llama_context * ctx, llama_token token);
+
+    LLAMA_API llama_token_type llama_token_get_type(const struct llama_context * ctx, llama_token token);
 
     // Special tokens
     LLAMA_API llama_token llama_token_bos(const struct llama_context * ctx);  // beginning-of-sentence

@@ -170,14 +170,16 @@ struct ggml_tensor * randomize_tensor_uniform(struct ggml_tensor * tensor, struc
 struct llama_vocab {
     using id    = int32_t;
     using token = std::string;
+    using ttype = llama_token_type;
 
-    struct token_score {
-        token tok;
+    struct token_data {
+        token text;
         float score;
+        ttype type;
     };
 
     std::unordered_map<token, id> token_to_id;
-    std::vector<token_score> id_to_token;
+    std::vector<token_data> id_to_token;
 };
 
 struct my_llama_hparams {
@@ -2629,10 +2631,10 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
 //    // write_vocab
 //    uint32_t n_vocab = model->hparams.n_vocab;
 //    for (uint32_t i = 0; i < n_vocab; i++) {
-//        const auto & token_score = vocab->id_to_token.at(i);
-//        file.write_u32((uint32_t) token_score.tok.size());
-//        file.write_raw(token_score.tok.data(), token_score.tok.size());
-//        file.write_raw(&token_score.score, sizeof(token_score.score));
+//        const auto & token_data = vocab->id_to_token.at(i);
+//        file.write_u32((uint32_t) token_data.tok.size());
+//        file.write_raw(token_data.tok.data(), token_data.tok.size());
+//        file.write_raw(&token_data.score, sizeof(token_data.score));
 //    }
 //    // write tensors
 //    write_tensor(&file, model->tok_embeddings);
@@ -3055,20 +3057,13 @@ int main(int argc, char ** argv) {
 
     struct llama_vocab vocab;
     {
-        std::vector<const char *> strings;
-        std::vector<float> scores;
-        int n_vocab = llama_n_vocab(lctx);
-        strings.resize(n_vocab, NULL);
-        scores.resize(n_vocab, 0);
-        n_vocab = llama_get_vocab(lctx, strings.data(), scores.data(), n_vocab);
-        GGML_ASSERT(n_vocab == llama_n_vocab(lctx));
+        const int n_vocab = llama_n_vocab(lctx);
         vocab.id_to_token.resize(n_vocab);
         for (int i=0; i<n_vocab; ++i) {
-            std::string tok   = std::string(strings[i]);
-            float       score = scores[i];
-            vocab.id_to_token[i].tok   = tok;
-            vocab.id_to_token[i].score = score;
-            vocab.token_to_id.emplace(tok, i);
+            vocab.id_to_token[i].text  = llama_token_get_text(lctx, i);
+            vocab.id_to_token[i].score = llama_token_get_score(lctx, i);
+            vocab.id_to_token[i].type  = llama_token_get_type(lctx, i);
+            vocab.token_to_id.emplace(vocab.id_to_token[i].text, i);
         }
     }
 

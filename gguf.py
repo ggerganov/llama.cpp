@@ -5,7 +5,7 @@ import tempfile
 import numpy as np
 
 from enum import IntEnum, auto
-from typing import Any, IO, List
+from typing import Any, IO, List, Optional
 
 #
 # constants
@@ -45,7 +45,7 @@ KEY_ATTENTION_LAYERNORM_RMS_EPS = "{arch}.attention.layer_norm_rms_epsilon"
 
 # RoPE
 KEY_ROPE_DIMENSION_COUNT = "{arch}.rope.dimension_count"
-KEY_ROPE_SCALE           = "{arch}.rope.scale"
+KEY_ROPE_SCALE_LINEAR    = "{arch}.rope.scale_linear"
 
 # tokenization
 KEY_TOKENIZER_MODEL      = "tokenizer.ggml.model"
@@ -60,6 +60,7 @@ KEY_TOKENIZER_SEP_ID     = "tokenizer.ggml.seperator_token_id"
 KEY_TOKENIZER_PAD_ID     = "tokenizer.ggml.padding_token_id"
 KEY_TOKENIZER_HF_JSON    = "tokenizer.huggingface.json"
 KEY_TOKENIZER_RWKV       = "tokenizer.rwkv.world"
+
 
 #
 # recommended mapping of model tensor names for storage in gguf
@@ -319,14 +320,35 @@ def get_tensor_name_map(arch: MODEL_ARCH, n_blocks: int) -> dict:
 
     return tensor_map
 
+
+class TokenType(IntEnum):
+    NORMAL       = 1
+    UNKNOWN      = 2
+    CONTROL      = 3
+    USER_DEFINED = 4
+    UNUSED       = 5
+    BYTE         = 6
+
 #
 # implementation
 #
 
 
 class GGMLQuantizationType(IntEnum):
-    F32 = 0
-    F16 = 1
+    F32  = 0
+    F16  = 1
+    Q4_0 = 2
+    Q4_1 = 3
+    Q5_0 = 6
+    Q5_1 = 7
+    Q8_0 = 8
+    Q8_1 = 9
+    Q2_K = 10
+    Q3_K = 11
+    Q4_K = 12
+    Q5_K = 13
+    Q6_K = 14
+    Q8_K = 15
 
 
 class GGUFValueType(IntEnum):
@@ -359,7 +381,7 @@ class GGUFValueType(IntEnum):
 
 
 class GGUFWriter:
-    def __init__(self, path: str, arch: str):
+    def __init__(self, path: str, arch: str, use_temp_file = True):
         self.fout = open(path, "wb")
         self.arch = arch
         self.offset_tensor = 0
@@ -369,6 +391,8 @@ class GGUFWriter:
         self.ti_data = b""
         self.ti_data_count = 0
         self.add_architecture()
+        self.use_temp_file = use_temp_file
+        self.tensors = []
 
     def write_header_to_file(self):
         self.fout.write(struct.pack("<I", GGUF_MAGIC))
@@ -476,8 +500,8 @@ class GGUFWriter:
     def ggml_pad(x: int, n: int) -> int:
         return ((x + n - 1) // n) * n
 
-    def add_tensor_info(self, name: str, tensor_shape: np.ndarray, tensor_dtype: np.dtype, tensor_nbytes: int):
-        assert tensor_dtype in (np.float32, np.float16), "Only F32 and F16 tensors are supported for now"
+    def add_tensor_info(self, name: str, tensor_shape: np.ndarray, tensor_dtype: np.dtype, tensor_nbytes: int, raw_dtype: Optional[GGMLQuantizationType] = None):
+        assert raw_dtype is not None or tensor_dtype in (np.float32, np.float16), "Only F32 and F16 tensors are supported for now"
 
         encoded_name = name.encode("utf8")
         self.ti_data += struct.pack("<I", len(encoded_name))
@@ -486,23 +510,30 @@ class GGUFWriter:
         self.ti_data += struct.pack("<I", n_dims)
         for i in range(n_dims):
             self.ti_data += struct.pack("<I", tensor_shape[n_dims - 1 - i])
-
-        dtype = GGMLQuantizationType.F32 if tensor_dtype == np.float32 else GGMLQuantizationType.F16
+        if raw_dtype is None:
+            dtype = GGMLQuantizationType.F32 if tensor_dtype == np.float32 else GGMLQuantizationType.F16
+        else:
+            dtype = raw_dtype
         self.ti_data += struct.pack("<I", dtype)
         self.ti_data += struct.pack("<Q", self.offset_tensor)
         self.offset_tensor += GGUFWriter.ggml_pad(tensor_nbytes, self.data_alignment)
         self.ti_data_count += 1
 
-    def add_tensor(self, name: str, tensor: np.ndarray):
-        if not hasattr(self, "temp_file"):
+    def add_tensor(self, name: str, tensor: np.ndarray, raw_shape: Optional[np.ndarray] = None, raw_dtype: Optional[GGMLQuantizationType] = None):
+        if self.use_temp_file and not hasattr(self, "temp_file"):
             self.temp_file = tempfile.SpooledTemporaryFile(mode="w+b", max_size=256*1024*1024)
             self.temp_file.seek(0)
 
-        self.add_tensor_info(name, tensor.shape, tensor.dtype, tensor.nbytes)
+        self.add_tensor_info(name, raw_shape if raw_shape is not None else tensor.shape, tensor.dtype, tensor.nbytes, raw_dtype = raw_dtype)
+
+        pad = GGUFWriter.ggml_pad(tensor.nbytes, self.data_alignment) - tensor.nbytes
+
+        if not self.use_temp_file:
+            self.tensors.append((tensor, pad))
+            return
 
         tensor.tofile(self.temp_file)
 
-        pad = GGUFWriter.ggml_pad(tensor.nbytes, self.data_alignment) - tensor.nbytes
         if pad != 0:
             self.temp_file.write(bytes([0] * pad))
 
@@ -523,6 +554,13 @@ class GGUFWriter:
         pad = GGUFWriter.ggml_pad(self.fout.tell(), self.data_alignment) - self.fout.tell()
         if pad != 0:
             self.fout.write(bytes([0] * pad))
+
+        if not self.use_temp_file:
+            for (currtensor, currpad) in self.tensors:
+                currtensor.tofile(self.fout)
+                if currpad != 0:
+                    self.fout.write(bytes([0] * currpad))
+            return
 
         self.temp_file.seek(0)
 
@@ -620,8 +658,8 @@ class GGUFWriter:
         self.add_uint32(
             KEY_ROPE_DIMENSION_COUNT.format(arch=self.arch), count)
 
-    def add_rope_scale(self, value:  float):
-        self.add_float32(KEY_ROPE_SCALE.format(arch=self.arch), value)
+    def add_rope_scale_linear(self, value:  float):
+        self.add_float32(KEY_ROPE_SCALE_LINEAR.format(arch=self.arch), value)
 
     def add_tokenizer_model(self, model: str):
         self.add_string(KEY_TOKENIZER_MODEL, model)
