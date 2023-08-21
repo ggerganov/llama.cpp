@@ -1407,7 +1407,7 @@ int main(int argc, char **argv)
                           {
         if (res.status == 400) {
             res.set_content("Invalid request", "text/plain");
-        } else {
+        } else if (res.status != 500) {
             res.set_content("File Not Found", "text/plain");
             res.status = 404;
         } });
