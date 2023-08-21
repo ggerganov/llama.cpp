@@ -1031,7 +1031,7 @@ static json format_final_response(llama_server_context &llama, const std::string
 {
 
     json res = json{
-        {"content", content},
+        {"content", ""},
         {"stop", true},
         {"model", llama.params.model_alias},
         {"tokens_predicted", llama.num_tokens_predicted},
@@ -1312,24 +1312,45 @@ int main(int argc, char **argv)
                         sent_token_probs_index = probs_stop_pos;
                     }
 
-                    const json data = llama.has_next_token
-                                          ? format_partial_response(llama, to_send, probs_output)
-                                          // Generation is done, send extra information.
-                                          : format_final_response(llama, to_send, llama.generated_token_probs);
+                    {
+                        // Always send partial response
+                        // so we can get the correct partial response of the last to_send in the client
+                        const json data = format_partial_response(llama, to_send, probs_output);
 
-                    const std::string str =
-                        "data: " +
-                        data.dump(-1, ' ', false, json::error_handler_t::replace) +
-                        "\n\n";
+                        const std::string str =
+                            "data: " +
+                            data.dump(-1, ' ', false, json::error_handler_t::replace) +
+                            "\n\n";
 
-                    LOG_VERBOSE("data stream", {
-                        { "to_send", str }
-                    });
+                        LOG_VERBOSE("data stream", {
+                            { "to_send", str }
+                        });
 
-                    if (!sink.write(str.data(), str.size())) {
-                        LOG_VERBOSE("stream closed", {});
-                        llama_print_timings(llama.ctx);
-                        return false;
+                        if (!sink.write(str.data(), str.size())) {
+                            LOG_VERBOSE("stream closed", {});
+                            llama_print_timings(llama.ctx);
+                            return false;
+                        }
+                    }
+                    
+                    if (!llama.has_next_token) {
+                        // Generation is done, send extra information.
+                        const json data = format_final_response(llama, to_send, llama.generated_token_probs);
+
+                        const std::string str =
+                            "data: " +
+                            data.dump(-1, ' ', false, json::error_handler_t::replace) +
+                            "\n\n";
+
+                        LOG_VERBOSE("data stream", {
+                            { "to_send", str }
+                        });
+
+                        if (!sink.write(str.data(), str.size())) {
+                            LOG_VERBOSE("stream closed", {});
+                            llama_print_timings(llama.ctx);
+                            return false;
+                        }
                     }
                 }
 
