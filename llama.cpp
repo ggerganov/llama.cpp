@@ -772,15 +772,16 @@ struct llama_vocab {
     using id    = int32_t;
     using token = std::string;
 
-    struct token_score {
+    struct token_data {
         token tok;
         float score;
+        int toktype;
     };
 
     llama_vocab_type type = LLAMA_VOCAB_TYPE_SPM;
 
     std::unordered_map<token, id> token_to_id;
-    std::vector<token_score>      id_to_token;
+    std::vector<token_data>       id_to_token;
 
     // default LLaMA special tokens
     id special_bos_id = 1;
@@ -1507,17 +1508,25 @@ static void llama_model_load_internal(
 
         const float * scores = (const float * ) gguf_get_arr_data(ctx, score_idx);
 
+        const int toktype_idx = gguf_find_key(ctx, "tokenizer.ggml.token_type");
+        if (toktype_idx == -1) {
+            throw std::runtime_error("cannot find token type list in GGUF file\n");
+        }
+
+        const int * toktypes = (const int * ) gguf_get_arr_data(ctx, toktype_idx);
+
         for (uint32_t i = 0; i < hparams.n_vocab; i++) {
             std::string word = gguf_get_arr_str(ctx, token_idx, i);
 
             vocab.token_to_id[word] = i;
 
-            auto & tok_score = vocab.id_to_token[i];
-            tok_score.tok = std::move(word);
-            tok_score.score = scores[i];
+            auto & token_data = vocab.id_to_token[i];
+            token_data.tok = std::move(word);
+            token_data.score = scores[i];
+            token_data.toktype = toktypes[i];
 
             // determine the newline token: 0x0A == 10 == '\n'
-            if (tok_score.tok == "<0x0A>") {
+            if (token_data.tok == "<0x0A>") {
                 vocab.linefeed_id = i;
             }
         }
@@ -2345,92 +2354,57 @@ static enum llama_vocab_type llama_vocab_get_type(const llama_vocab & vocab) {
     return vocab.type;
 }
 
-static bool llama_is_normal_token(const llama_vocab & vocab, llama_token token) {
-    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_SPM) {
-        return token >= 259;
-    }
-
-    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_BPE) {
-        return token >= 95;
-    }
-
-    return false;
+static bool llama_is_normal_token(const llama_vocab & vocab, llama_token id) {
+    return vocab.id_to_token[id].toktype == 1;
 }
 
-static bool llama_is_bos_token(const llama_vocab & vocab, llama_token token) {
-    return token == vocab.special_bos_id;
+static bool llama_is_unknown_token(const llama_vocab & vocab, llama_token id) {
+    return vocab.id_to_token[id].toktype == 2;
 }
 
-static bool llama_is_eos_token(const llama_vocab & vocab, llama_token token) {
-    return token == vocab.special_eos_id;
+static bool llama_is_control_token(const llama_vocab & vocab, llama_token id) {
+    return vocab.id_to_token[id].toktype == 3;
 }
 
-static bool llama_is_control_token(const llama_vocab & vocab, llama_token token) {
-    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_SPM) {
-        return token == llama_is_bos_token(vocab, token) || token == llama_is_eos_token(vocab, token);
-    }
-
-    // TODO: improve?
-    return false;
+static bool llama_is_bos_token(const llama_vocab & vocab, llama_token id) {
+    GGML_ASSERT(llama_is_control_token(vocab, id));
+    return id == vocab.special_bos_id;
 }
 
-static bool llama_is_unknown_token(const llama_vocab & vocab, llama_token token) {
-    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_SPM) {
-        return token == 0;
-    }
-
-    // TODO: improve?
-    return false;
+static bool llama_is_eos_token(const llama_vocab & vocab, llama_token id ) {
+    GGML_ASSERT(llama_is_control_token(vocab, id));
+    return id == vocab.special_eos_id;
 }
 
-static bool llama_is_user_defined_token(const llama_vocab & vocab, llama_token token) {
-    GGML_UNUSED(vocab);
-    GGML_UNUSED(token);
-    // TODO: improve?
-    return false;
+static bool llama_is_pad_token(const llama_vocab & vocab, llama_token id ) {
+    GGML_ASSERT(id < 0 || llama_is_control_token(vocab, id));
+    return id == vocab.special_pad_id;
 }
 
-static bool llama_is_unused_token(const llama_vocab & vocab, llama_token token) {
-    GGML_UNUSED(vocab);
-    GGML_UNUSED(token);
-    // TODO: improve?
-    return false;
+static bool llama_is_user_defined_token(const llama_vocab & vocab, llama_token id) {
+    return vocab.id_to_token[id].toktype == 4;
 }
 
-static bool llama_is_byte_token(const llama_vocab & vocab, llama_token token) {
-    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_SPM) {
-        return 3 <= token && token < 259;
-    }
-
-    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_BPE) {
-        return 1 <= token && token < 95;
-    }
-
-    return false;
+static bool llama_is_unused_token(const llama_vocab & vocab, llama_token id) {
+    return vocab.id_to_token[id].toktype == 5;
 }
 
-static uint8_t llama_byte_to_char(const llama_vocab & vocab, uint8_t byte) {
-    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_SPM) {
-        return byte - 3;
-    }
-
-    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_BPE) {
-        return byte + 32;
-    }
-
-    return false;
+static bool llama_is_byte_token(const llama_vocab & vocab, llama_token id) {
+    return vocab.id_to_token[id].toktype == 6;
 }
 
-static uint8_t llama_char_to_byte(const llama_vocab & vocab, uint8_t ch) {
-    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_SPM) {
-        return ch + 3;
-    }
+static uint8_t llama_token_to_byte(const llama_vocab & vocab, llama_token id) {
+    GGML_ASSERT(llama_is_byte_token(vocab, id));
+    const auto& token_data = vocab.id_to_token.at(id);
+    auto buf = token_data.tok.substr(3, 2);
+    return strtol(buf.c_str(), NULL, 16);
+}
 
-    if (llama_vocab_get_type(vocab) == LLAMA_VOCAB_TYPE_BPE) {
-        return ch - 32;
-    }
-
-    return false;
+static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
+    char buf[7];
+    int result = snprintf(buf, sizeof(buf), "<0x%02X>", ch);
+    GGML_ASSERT(0 <= result && result < 7);
+    return vocab.token_to_id.at(buf);
 }
 
 static std::string llama_escape_whitespace(const std::string& text) {
@@ -2569,7 +2543,7 @@ private:
         if (p == rev_merge.end()) {
             // output any symbols that did not form tokens as bytes.
             for (int j = 0; j < (int)symbol.n; ++j) {
-                llama_vocab::id token_id = llama_char_to_byte(vocab_, symbol.text[j]);
+                llama_vocab::id token_id = llama_byte_to_token(vocab_, symbol.text[j]);
                 output.push_back(token_id);
             }
             return;
@@ -2595,12 +2569,12 @@ private:
             return;
         }
 
-        const auto &tok_score = vocab_.id_to_token[(*token).second];
+        const auto &tok_data = vocab_.id_to_token[(*token).second];
 
         llama_sp_bigram bigram;
         bigram.left = left;
         bigram.right = right;
-        bigram.score = tok_score.score;
+        bigram.score = tok_data.score;
         bigram.size = text.size();
         work_queue_.push(bigram);
 
@@ -5109,7 +5083,7 @@ int llama_token_to_str_with_model(const struct llama_model * model, llama_token 
             if (length < 1) {
                 return -1;
             }
-            buf[0] = llama_byte_to_char(model->vocab, token);
+            buf[0] = llama_token_to_byte(model->vocab, token);
             return 1;
         }
     }
