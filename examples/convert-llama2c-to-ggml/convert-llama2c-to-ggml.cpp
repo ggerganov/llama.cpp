@@ -1,5 +1,6 @@
 #include "ggml.h"
 #include "llama.h"
+
 #include <unordered_map>
 #include <vector>
 #include <cassert>
@@ -138,14 +139,16 @@ void print_sample_weights(TransformerWeights *w){
 struct llama_vocab {
     using id    = int32_t;
     using token = std::string;
+    using ttype = llama_token_type;
 
-    struct token_score {
-        token tok;
+    struct token_data {
+        token text;
         float score;
+        ttype type;
     };
 
     std::unordered_map<token, id> token_to_id;
-    std::vector<token_score> id_to_token;
+    std::vector<token_data> id_to_token;
 };
 
 struct my_llama_hparams {
@@ -502,7 +505,7 @@ bool is_ggml_file(const char *filename) {
         return false;
     }
     uint32_t magic = file.read_u32();
-    return magic == LLAMA_FILE_MAGIC;
+    return magic == GGUF_MAGIC;
 }
 
 void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab) {
@@ -515,36 +518,30 @@ void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab)
         struct llama_model * lmodel = llama_load_model_from_file(filename, llama_params);
         struct llama_context * lctx = llama_new_context_with_model(lmodel, llama_params);
 
-        std::vector<const char *> strings;
-        std::vector<float> scores;
-        int n_vocab = llama_n_vocab(lctx);
-        strings.resize(n_vocab, NULL);
-        scores.resize(n_vocab, 0);
-        n_vocab = llama_get_vocab(lctx, strings.data(), scores.data(), n_vocab);
-        GGML_ASSERT(n_vocab == llama_n_vocab(lctx));
+        const int n_vocab = llama_n_vocab(lctx);
         vocab->id_to_token.resize(n_vocab);
         for (int i=0; i<n_vocab; ++i) {
-            std::string tok   = std::string(strings[i]);
-            float       score = scores[i];
-            vocab->id_to_token[i].tok   = tok;
-            vocab->id_to_token[i].score = score;
-            vocab->token_to_id.emplace(tok, i);
+            vocab->id_to_token[i].text  = llama_token_get_text(lctx, i);
+            vocab->id_to_token[i].score = llama_token_get_score(lctx, i);
+            vocab->id_to_token[i].type  = llama_token_get_type(lctx, i);
+            vocab->token_to_id.emplace(vocab->id_to_token[i].text, i);
         }
         llama_free(lctx);
         llama_free_model(lmodel);
     } else { // assume llama2.c vocabulary
         printf("Assuming llama2.c vocabulary since %s is not a ggml file\n", filename);
         llama_file file(filename, "rb");
-        uint32_t n_vocab = config->vocab_size;
+        const int  n_vocab = config->vocab_size;
         /* uint32_t max_token_length =  */ file.read_u32(); // unused
         vocab->id_to_token.resize(n_vocab);
-        for (uint32_t i=0; i<n_vocab; ++i) {
+        for (int i=0; i<n_vocab; ++i) {
             float_t score = file.read_f32();
             uint32_t len = file.read_u32();
-            std::string tok = file.read_string(len);
-            vocab->id_to_token[i].tok = tok;
+            std::string text = file.read_string(len);
+            vocab->id_to_token[i].text = text;
             vocab->id_to_token[i].score = score;
-            vocab->token_to_id.emplace(tok, i);
+            vocab->id_to_token[i].type = LLAMA_TOKEN_TYPE_UNDEFINED;
+            vocab->token_to_id.emplace(text, i);
         }
     }
 }
@@ -590,75 +587,80 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     if (file.fp == NULL) {
         return;
     }
-    // write_magic
-    file.write_u32(LLAMA_FILE_MAGIC);   // magic
-    file.write_u32(LLAMA_FILE_VERSION); // version
-    // write_hparams
-    file.write_u32(model->hparams.n_vocab);
-    file.write_u32(model->hparams.n_embd);
-    file.write_u32(model->hparams.n_mult);
-    file.write_u32(model->hparams.n_head);
-    file.write_u32(model->hparams.n_layer);
-    file.write_u32(model->hparams.n_rot);
-    file.write_u32(LLAMA_FTYPE_ALL_F32);
 
-    // write_vocab - for now we are just writing the existing BPE voc. assuming karpathy's vocabulary is the same. idk.
-    uint32_t n_vocab = model->hparams.n_vocab;
-    for (uint32_t i = 0; i < n_vocab; i++) {
-        const auto & token_score = vocab->id_to_token.at(i);
-        file.write_u32((uint32_t) token_score.tok.size());
-        file.write_raw(token_score.tok.data(), token_score.tok.size());
-        file.write_raw(&token_score.score, sizeof(token_score.score));
-    }
-
-    // stuff AK weights into GG weights one by one.
-    // w->token_embedding_table -> model->tok_embeddings
-    // float*                   -> struct ggml_tensor
-    stuff_karpathy_weights_into_gg(model->tok_embeddings, w->token_embedding_table);
-    stuff_karpathy_weights_into_gg(model->output, w->token_embedding_table);
-
-    stuff_karpathy_weights_into_gg(model->norm, w->rms_final_weight);
-    //print_row(model->norm, 0);
-
-    // for rms-att-weight
-    int row_length = model->hparams.n_embd;
-    const auto & hparams = model->hparams;
-    //int n_ff = model->hparams.n_embd;
-    int n_ff = get_n_ff(&hparams);
-
-    for (uint32_t i = 0; i < model->hparams.n_layer; ++i){
-        auto & layer = model->layers[i];
-        // 1d
-        stuff_karpathy_weights_into_gg(layer.attention_norm, &w->rms_att_weight[i*row_length]);
-        stuff_karpathy_weights_into_gg(layer.ffn_norm      , &w->rms_ffn_weight[i*row_length]);
-
-        // from 3d matrix layer x dim x dim to 2d matrix dim x dim
-        stuff_karpathy_weights_into_gg(layer.wq            , &w->wq[i*row_length*row_length]);
-        stuff_karpathy_weights_into_gg(layer.wk            , &w->wk[i*row_length*row_length]);
-        stuff_karpathy_weights_into_gg(layer.wv            , &w->wv[i*row_length*row_length]);
-        stuff_karpathy_weights_into_gg(layer.wo            , &w->wo[i*row_length*row_length]);
-
-        stuff_karpathy_weights_into_gg(layer.w1            , &w->w1[i*row_length*n_ff]);
-        stuff_karpathy_weights_into_gg(layer.w2            , &w->w2[i*n_ff*row_length]);
-        stuff_karpathy_weights_into_gg(layer.w3            , &w->w3[i*row_length*n_ff]);
-    }
-    // write tensors
-    write_tensor(&file, model->tok_embeddings);
-    write_tensor(&file, model->norm);
-    write_tensor(&file, model->output); // ?
-    for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {
-        auto & layer = model->layers[i];
-
-        write_tensor(&file, layer.attention_norm);
-        write_tensor(&file, layer.wq);
-        write_tensor(&file, layer.wk);
-        write_tensor(&file, layer.wv);
-        write_tensor(&file, layer.wo);
-        write_tensor(&file, layer.ffn_norm);
-        write_tensor(&file, layer.w1);
-        write_tensor(&file, layer.w2);
-        write_tensor(&file, layer.w3);
-    }
+#pragma message("TODO: implement file saving using gguf")
+    (void) vocab;
+    (void) model;
+    (void) w;
+//    // write_magic
+//    file.write_u32(LLAMA_FILE_MAGIC);   // magic
+//    file.write_u32(LLAMA_FILE_VERSION); // version
+//    // write_hparams
+//    file.write_u32(model->hparams.n_vocab);
+//    file.write_u32(model->hparams.n_embd);
+//    file.write_u32(model->hparams.n_mult);
+//    file.write_u32(model->hparams.n_head);
+//    file.write_u32(model->hparams.n_layer);
+//    file.write_u32(model->hparams.n_rot);
+//    file.write_u32(LLAMA_FTYPE_ALL_F32);
+//
+//    // write_vocab - for now we are just writing the existing BPE voc. assuming karpathy's vocabulary is the same. idk.
+//    uint32_t n_vocab = model->hparams.n_vocab;
+//    for (uint32_t i = 0; i < n_vocab; i++) {
+//        const auto & token_data = vocab->id_to_token.at(i);
+//        file.write_u32((uint32_t) token_data.tok.size());
+//        file.write_raw(token_data.tok.data(), token_data.tok.size());
+//        file.write_raw(&token_data.score, sizeof(token_data.score));
+//    }
+//
+//    // stuff AK weights into GG weights one by one.
+//    // w->token_embedding_table -> model->tok_embeddings
+//    // float*                   -> struct ggml_tensor
+//    stuff_karpathy_weights_into_gg(model->tok_embeddings, w->token_embedding_table);
+//    stuff_karpathy_weights_into_gg(model->output, w->token_embedding_table);
+//
+//    stuff_karpathy_weights_into_gg(model->norm, w->rms_final_weight);
+//    //print_row(model->norm, 0);
+//
+//    // for rms-att-weight
+//    int row_length = model->hparams.n_embd;
+//    const auto & hparams = model->hparams;
+//    //int n_ff = model->hparams.n_embd;
+//    int n_ff = get_n_ff(&hparams);
+//
+//    for (uint32_t i = 0; i < model->hparams.n_layer; ++i){
+//        auto & layer = model->layers[i];
+//        // 1d
+//        stuff_karpathy_weights_into_gg(layer.attention_norm, &w->rms_att_weight[i*row_length]);
+//        stuff_karpathy_weights_into_gg(layer.ffn_norm      , &w->rms_ffn_weight[i*row_length]);
+//
+//        // from 3d matrix layer x dim x dim to 2d matrix dim x dim
+//        stuff_karpathy_weights_into_gg(layer.wq            , &w->wq[i*row_length*row_length]);
+//        stuff_karpathy_weights_into_gg(layer.wk            , &w->wk[i*row_length*row_length]);
+//        stuff_karpathy_weights_into_gg(layer.wv            , &w->wv[i*row_length*row_length]);
+//        stuff_karpathy_weights_into_gg(layer.wo            , &w->wo[i*row_length*row_length]);
+//
+//        stuff_karpathy_weights_into_gg(layer.w1            , &w->w1[i*row_length*n_ff]);
+//        stuff_karpathy_weights_into_gg(layer.w2            , &w->w2[i*n_ff*row_length]);
+//        stuff_karpathy_weights_into_gg(layer.w3            , &w->w3[i*row_length*n_ff]);
+//    }
+//    // write tensors
+//    write_tensor(&file, model->tok_embeddings);
+//    write_tensor(&file, model->norm);
+//    write_tensor(&file, model->output); // ?
+//    for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {
+//        auto & layer = model->layers[i];
+//
+//        write_tensor(&file, layer.attention_norm);
+//        write_tensor(&file, layer.wq);
+//        write_tensor(&file, layer.wk);
+//        write_tensor(&file, layer.wv);
+//        write_tensor(&file, layer.wo);
+//        write_tensor(&file, layer.ffn_norm);
+//        write_tensor(&file, layer.w1);
+//        write_tensor(&file, layer.w2);
+//        write_tensor(&file, layer.w3);
+//    }
 }
 
 struct train_params get_default_train_params() {
