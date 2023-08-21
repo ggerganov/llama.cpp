@@ -5,7 +5,7 @@ This example demonstrates a simple HTTP API server and a simple web front end to
 Command line options:
 
 -   `--threads N`, `-t N`: Set the number of threads to use during computation.
--   `-m FNAME`, `--model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.bin`).
+-   `-m FNAME`, `--model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.gguf`).
 -   `-m ALIAS`, `--alias ALIAS`: Set an alias for the model. The alias will be returned in API responses.
 -   `-c N`, `--ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference. The size may differ in other models, for example, baichuan models were build with a context of 4096.
 -   `-ngl N`, `--n-gpu-layers N`: When compiled with appropriate support (currently CLBlast or cuBLAS), this option allows offloading some layers to the GPU for computation. Generally results in increased performance.
@@ -48,15 +48,14 @@ To get started right away, run the following command, making sure to use the cor
 ### Unix-based systems (Linux, macOS, etc.):
 
 ```bash
-./server -m models/7B/ggml-model.bin -c 2048
+./server -m models/7B/ggml-model.gguf -c 2048
 ```
 
 ### Windows:
 
 ```powershell
-server.exe -m models\7B\ggml-model.bin -c 2048
+server.exe -m models\7B\ggml-model.gguf -c 2048
 ```
-
 The above command will start a server that by default listens on `127.0.0.1:8080`.
 You can consume the endpoints with Postman or NodeJS with axios library. You can visit the web front end at the same url.
 
