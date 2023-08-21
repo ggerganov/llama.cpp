@@ -61,6 +61,7 @@ KEY_TOKENIZER_PAD_ID     = "tokenizer.ggml.padding_token_id"
 KEY_TOKENIZER_HF_JSON    = "tokenizer.huggingface.json"
 KEY_TOKENIZER_RWKV       = "tokenizer.rwkv.world"
 
+
 #
 # recommended mapping of model tensor names for storage in gguf
 #
@@ -318,6 +319,15 @@ def get_tensor_name_map(arch: MODEL_ARCH, n_blocks: int) -> dict:
         tensor_map["layers."+str(i)+".feed_forward.w2"]            = mapped_to  # llama-pth
 
     return tensor_map
+
+
+class TokenType(IntEnum):
+    NORMAL       = 1
+    UNKNOWN      = 2
+    CONTROL      = 3
+    USER_DEFINED = 4
+    UNUSED       = 5
+    BYTE         = 6
 
 #
 # implementation
