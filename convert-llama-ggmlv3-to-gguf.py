@@ -236,8 +236,7 @@ class GGMLToGGUF:
             if len(vbytes) == 0:
                 tt = 3 # Control
             elif tokid >= 3 and tokid <= 258 and len(vbytes) == 1:
-                hv = hex(vbytes[0])[2:].upper()
-                vbytes = bytes(f'<0x{hv}>', encoding = 'UTF-8')
+                vbytes = bytes(f'<0x{vbytes[0]:02X}>', encoding = 'UTF-8')
                 tt = 6 # Byte
             else:
                 vbytes = vbytes.replace(b' ', b'\xe2\x96\x81')
