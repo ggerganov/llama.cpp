@@ -637,30 +637,24 @@
           return html`<${Probabilities} data=${splitData} />`
         }
 
-        const { probs } = completion_probabilities[0]
+        const { probs, content } = completion_probabilities[0]
         const found = probs.find(p => p.tok_str === msg.content)
-        const pColor = probColor(found ? found.prob : 0)
+        const pColor = found ? probColor(found.prob) : 'transparent'
 
         const popoverChildren = html`
-          <div>
-            ${completion_probabilities.map((cp, i) => {
+          <div class="prob-set">
+            ${probs.map((p, index) => {
               return html`
-                <div key={i} class="prob-set">
-                  ${cp.probs.map((p, j) => {
-                    return html`
-                      <div
-                        key=${`${i}-${j}`}
-                        title=${`prob: ${p.prob}`}
-                        style=${{
-                          padding: '0.3em',
-                          backgroundColor: p.tok_str === cp.content ? probColor(p.prob) : 'transparent'
-                        }}
-                      >
-                        <span>${p.tok_str}: </span>
-                        <span>${Math.floor(p.prob * 100)}%</span>
-                      </div>
-                    `
-                  })}
+                <div
+                  key=${index}
+                  title=${`prob: ${p.prob}`}
+                  style=${{
+                    padding: '0.3em',
+                    backgroundColor: p.tok_str === content ? probColor(p.prob) : 'transparent'
+                  }}
+                >
+                  <span>${p.tok_str}: </span>
+                  <span>${Math.floor(p.prob * 100)}%</span>
                 </div>
               `
             })}
