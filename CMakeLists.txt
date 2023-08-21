@@ -297,7 +297,6 @@ if (LLAMA_METAL)
     find_library(FOUNDATION_LIBRARY         Foundation              REQUIRED)
     find_library(METAL_FRAMEWORK            Metal                   REQUIRED)
     find_library(METALKIT_FRAMEWORK         MetalKit                REQUIRED)
-    find_library(METALPERFORMANCE_FRAMEWORK MetalPerformanceShaders REQUIRED)
 
     set(GGML_SOURCES_METAL ggml-metal.m ggml-metal.h)
 
@@ -314,7 +313,6 @@ if (LLAMA_METAL)
         ${FOUNDATION_LIBRARY}
         ${METAL_FRAMEWORK}
         ${METALKIT_FRAMEWORK}
-        ${METALPERFORMANCE_FRAMEWORK}
         )
 endif()
 
@@ -537,8 +535,10 @@ else()
 endif()
 
 #
-# Build libraries
+# libraries
 #
+
+# ggml
 
 add_library(ggml OBJECT
             ggml.c
@@ -564,10 +564,11 @@ if (BUILD_SHARED_LIBS)
     install(TARGETS ggml_shared LIBRARY)
 endif()
 
+# llama
+
 add_library(llama
             llama.cpp
             llama.h
-            llama-util.h
             )
 
 target_include_directories(llama PUBLIC .)
@@ -585,6 +586,10 @@ if (BUILD_SHARED_LIBS)
     endif()
     install(TARGETS llama LIBRARY)
 endif()
+
+#
+# install
+#
 
 include(GNUInstallDirs)
 install(
@@ -609,10 +614,22 @@ install(
         WORLD_READ
         WORLD_EXECUTE
     DESTINATION ${CMAKE_INSTALL_BINDIR})
+if (LLAMA_METAL)
+    install(
+        FILES ggml-metal.metal
+        PERMISSIONS
+            OWNER_READ
+            OWNER_WRITE
+            GROUP_READ
+            WORLD_READ
+        DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
 
 #
 # programs, examples and tests
 #
+
+add_subdirectory(common)
 
 if (LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
     include(CTest)

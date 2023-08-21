@@ -159,17 +159,17 @@ function gg_run_open_llama_3b_v2 {
 
     python3 ../convert.py ${path_models}
 
-    model_f16="${path_models}/ggml-model-f16.bin"
-    model_q8_0="${path_models}/ggml-model-q8_0.bin"
-    model_q4_0="${path_models}/ggml-model-q4_0.bin"
-    model_q4_1="${path_models}/ggml-model-q4_1.bin"
-    model_q5_0="${path_models}/ggml-model-q5_0.bin"
-    model_q5_1="${path_models}/ggml-model-q5_1.bin"
-    model_q2_k="${path_models}/ggml-model-q2_k.bin"
-    model_q3_k="${path_models}/ggml-model-q3_k.bin"
-    model_q4_k="${path_models}/ggml-model-q4_k.bin"
-    model_q5_k="${path_models}/ggml-model-q5_k.bin"
-    model_q6_k="${path_models}/ggml-model-q6_k.bin"
+    model_f16="${path_models}/ggml-model-f16.gguf"
+    model_q8_0="${path_models}/ggml-model-q8_0.gguf"
+    model_q4_0="${path_models}/ggml-model-q4_0.gguf"
+    model_q4_1="${path_models}/ggml-model-q4_1.gguf"
+    model_q5_0="${path_models}/ggml-model-q5_0.gguf"
+    model_q5_1="${path_models}/ggml-model-q5_1.gguf"
+    model_q2_k="${path_models}/ggml-model-q2_k.gguf"
+    model_q3_k="${path_models}/ggml-model-q3_k.gguf"
+    model_q4_k="${path_models}/ggml-model-q4_k.gguf"
+    model_q5_k="${path_models}/ggml-model-q5_k.gguf"
+    model_q6_k="${path_models}/ggml-model-q6_k.gguf"
 
     wiki_test_60="${path_wiki}/wiki.test-60.raw"
 
@@ -285,17 +285,17 @@ function gg_run_open_llama_7b_v2 {
 
     python3 ../convert.py ${path_models}
 
-    model_f16="${path_models}/ggml-model-f16.bin"
-    model_q8_0="${path_models}/ggml-model-q8_0.bin"
-    model_q4_0="${path_models}/ggml-model-q4_0.bin"
-    model_q4_1="${path_models}/ggml-model-q4_1.bin"
-    model_q5_0="${path_models}/ggml-model-q5_0.bin"
-    model_q5_1="${path_models}/ggml-model-q5_1.bin"
-    model_q2_k="${path_models}/ggml-model-q2_k.bin"
-    model_q3_k="${path_models}/ggml-model-q3_k.bin"
-    model_q4_k="${path_models}/ggml-model-q4_k.bin"
-    model_q5_k="${path_models}/ggml-model-q5_k.bin"
-    model_q6_k="${path_models}/ggml-model-q6_k.bin"
+    model_f16="${path_models}/ggml-model-f16.gguf"
+    model_q8_0="${path_models}/ggml-model-q8_0.gguf"
+    model_q4_0="${path_models}/ggml-model-q4_0.gguf"
+    model_q4_1="${path_models}/ggml-model-q4_1.gguf"
+    model_q5_0="${path_models}/ggml-model-q5_0.gguf"
+    model_q5_1="${path_models}/ggml-model-q5_1.gguf"
+    model_q2_k="${path_models}/ggml-model-q2_k.gguf"
+    model_q3_k="${path_models}/ggml-model-q3_k.gguf"
+    model_q4_k="${path_models}/ggml-model-q4_k.gguf"
+    model_q5_k="${path_models}/ggml-model-q5_k.gguf"
+    model_q6_k="${path_models}/ggml-model-q6_k.gguf"
 
     wiki_test="${path_wiki}/wiki.test.raw"
 

@@ -26,7 +26,6 @@ int main(int argc, char ** argv) {
     auto lparams = llama_context_default_params();
 
     lparams.n_ctx     = params.n_ctx;
-    lparams.n_gqa     = params.n_gqa;
     lparams.seed      = params.seed;
     lparams.f16_kv    = params.memory_f16;
     lparams.use_mmap  = params.use_mmap;
@@ -45,9 +44,8 @@ int main(int argc, char ** argv) {
         llama_free_model(model);
         return 1;
     }
-    auto tokens = std::vector<llama_token>(params.n_ctx);
-    auto n_prompt_tokens = llama_tokenize(ctx, params.prompt.c_str(), tokens.data(), int(tokens.size()), true);
-
+    auto tokens = llama_tokenize(ctx, params.prompt.c_str(), true);
+    auto n_prompt_tokens = tokens.size();
     if (n_prompt_tokens < 1) {
         fprintf(stderr, "%s : failed to tokenize prompt\n", __func__);
         llama_free(ctx);
@@ -92,7 +90,7 @@ int main(int argc, char ** argv) {
         auto next_token_str = llama_token_to_str(ctx, next_token);
         last_n_tokens_data.push_back(next_token);
 
-        printf("%s", next_token_str);
+        printf("%s", next_token_str.c_str());
         if (llama_eval(ctx, &next_token, 1, n_past, params.n_threads)) {
             fprintf(stderr, "\n%s : failed to evaluate\n", __func__);
             llama_free(ctx);
@@ -152,7 +150,7 @@ int main(int argc, char ** argv) {
         auto next_token_str = llama_token_to_str(ctx2, next_token);
         last_n_tokens_data.push_back(next_token);
 
-        printf("%s", next_token_str);
+        printf("%s", next_token_str.c_str());
         if (llama_eval(ctx2, &next_token, 1, n_past, params.n_threads)) {
             fprintf(stderr, "\n%s : failed to evaluate\n", __func__);
             llama_free(ctx2);
