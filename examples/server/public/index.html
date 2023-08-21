@@ -340,12 +340,6 @@
       return String(str).replaceAll(/\{\{(.*?)\}\}/g, (_, key) => template(settings[key]));
     }
 
-    const parseByteChar = (str) => {
-      const c = str.split('byte: ')[1];
-      if (!c) return null;
-      return parseInt(`0${c.replace('\\', '')}`, 16);
-    }
-
     // send message to server
     const chat = async (msg) => {
       if (controller.value) {
