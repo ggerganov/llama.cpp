@@ -450,7 +450,7 @@
         let message
         const isArrayMessage = Array.isArray(data)
         if (params.value.n_probs > 0 && isArrayMessage) {
-          message = html`<${Probabilites} data=${data} />`
+          message = html`<${Probabilities} data=${data} />`
         } else {
           const text = isArrayMessage ?
             data.map(msg => msg.content).join('').replace(/^\s+/, '') :
@@ -618,7 +618,7 @@
       return `rgba(${r},${g},0,0.3)`;
     }
 
-    const Probabilites = (params) => {
+    const Probabilities = (params) => {
       return params.data.map(msg => {
         const { completion_probabilities } = msg;
         if (
@@ -634,7 +634,7 @@
             content: prob.content,
             completion_probabilities: [prob]
           }))
-          return html`<${Probabilites} data=${splitData} />`
+          return html`<${Probabilities} data=${splitData} />`
         }
 
         const { probs } = completion_probabilities[0]
