@@ -9,11 +9,17 @@
 
 Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
-### 🚧 Incoming breaking change + refactoring:
+### Hot topics
 
-See PR https://github.com/ggerganov/llama.cpp/pull/2398 for more info.
+A new file format has been introduced: [GGUF](https://github.com/ggerganov/llama.cpp/pull/2398)
 
-To devs: avoid making big changes to `llama.h` / `llama.cpp` until merged
+Last revision compatible with the old format: [dadbed9](https://github.com/ggerganov/llama.cpp/commit/dadbed99e65252d79f81101a392d0d6497b86caa)
+
+### Current `master` should be considered in Beta - expect some issues for a few days!
+
+### Be prepared to re-convert and / or re-quantize your GGUF models while this notice is up!
+
+### Issues with non-GGUF models will be considered with low priority!
 
 ----
 
