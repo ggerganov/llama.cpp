@@ -1031,7 +1031,7 @@ static json format_final_response(llama_server_context &llama, const std::string
 {
 
     json res = json{
-        {"content", ""},
+        {"content", content},
         {"stop", true},
         {"model", llama.params.model_alias},
         {"tokens_predicted", llama.num_tokens_predicted},
@@ -1332,10 +1332,10 @@ int main(int argc, char **argv)
                             return false;
                         }
                     }
-                    
+
                     if (!llama.has_next_token) {
                         // Generation is done, send extra information.
-                        const json data = format_final_response(llama, to_send, llama.generated_token_probs);
+                        const json data = format_final_response(llama, "", llama.generated_token_probs);
 
                         const std::string str =
                             "data: " +
