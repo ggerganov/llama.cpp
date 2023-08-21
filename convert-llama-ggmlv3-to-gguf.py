@@ -22,12 +22,19 @@ GGML_QUANT_SIZES = {
     gguf.GGMLQuantizationType.Q4_K : (256, 2 + 2 + QK_K // 2 + 12),
     gguf.GGMLQuantizationType.Q5_K : (256, 2 + 2 + QK_K // 2 + QK_K // 8 + 12),
     gguf.GGMLQuantizationType.Q6_K : (256, 2 + QK_K // 2 + QK_K // 4 + QK_K // 16),
-    gguf.GGMLQuantizationType.Q8_K : (256, 2 + QK_K + QK_K // 8),
+    gguf.GGMLQuantizationType.Q8_K : (256, 4 + QK_K + QK_K // 8),
 }
 
 class Hyperparameters:
     def __init__(self):
         self.n_vocab = self.n_embd = self.n_mult = self.n_head = self.n_layer = self.n_rot = self.ftype = 0
+        self.n_ff = 0
+
+    def set_n_ff(self, model):
+        ff_tensor_idx = model.tensor_map.get(b'layers.0.feed_forward.w1.weight')
+        assert ff_tensor_idx is not None, 'Missing layer 0 FF tensor'
+        ff_tensor = model.tensors[ff_tensor_idx]
+        self.n_ff = ff_tensor.dims[1]
 
     def load(self, data, offset):
         (
@@ -42,7 +49,7 @@ class Hyperparameters:
         return 4 * 7
 
     def __str__(self):
-        return f'<Hyperparameters: n_vocab={self.n_vocab}, n_embd={self.n_embd}, n_mult={self.n_mult}, n_head={self.n_head}, n_layer={self.n_layer}, n_rot={self.n_rot}, ftype={self.ftype}>'
+        return f'<Hyperparameters: n_vocab={self.n_vocab}, n_embd={self.n_embd}, n_mult={self.n_mult}, n_head={self.n_head}, n_layer={self.n_layer}, n_rot={self.n_rot}, n_ff={self.n_ff}, ftype={self.ftype}>'
 
 class Vocab:
     def __init__(self):
@@ -122,6 +129,7 @@ class GGMLV3Model:
         self.vocab = vocab
         self.tensors = tensors
         self.tensor_map = tensor_map
+        hp.set_n_ff(self)
         return offset
 
 class GGMLToGGUF:
@@ -132,10 +140,6 @@ class GGMLToGGUF:
         self.cfg = cfg
         self.params_override = params_override
         self.vocab_override = vocab_override
-        ff_tensor_idx = ggml_model.tensor_map.get(b'layers.0.feed_forward.w1.weight')
-        assert ff_tensor_idx is not None, 'Missing layer 0 FF tensor'
-        ff_tensor = ggml_model.tensors[ff_tensor_idx]
-        self.ff_length = ff_tensor.dims[1]
         if params_override is not None:
             n_kv_head = params_override.n_head_kv
         else:
@@ -196,7 +200,7 @@ class GGMLToGGUF:
         gguf_writer.add_context_length(cfg.context_length)
         gguf_writer.add_embedding_length(hp.n_embd)
         gguf_writer.add_block_count(hp.n_layer)
-        gguf_writer.add_feed_forward_length(self.ff_length)
+        gguf_writer.add_feed_forward_length(hp.n_ff)
         gguf_writer.add_rope_dimension_count(hp.n_embd // hp.n_head)
         gguf_writer.add_head_count(hp.n_head)
         gguf_writer.add_head_count_kv(self.n_kv_head)
@@ -267,18 +271,24 @@ class GGMLToGGUF:
             # print(f'+ {tensor.name} | {mapped_name} {tensor.dims} :: {tempdims}')
             gguf_writer.add_tensor(mapped_name, data[tensor.start_offset:tensor.start_offset + tensor.len_bytes], raw_shape = tempdims, raw_dtype = tensor.dtype)
 
-def handle_metadata(cfg):
+def handle_metadata(cfg, hp):
     import convert
     assert cfg.model_metadata_dir.is_dir(), 'Metadata dir is not a directory'
     hf_config_path   = cfg.model_metadata_dir / "config.json"
     orig_config_path = cfg.model_metadata_dir / "params.json"
-    # Passing None to these load functions is not kosher but it should
-    # currently work for HF and only fail for original mode if
-    # n_vocab or n_ff is missing in params.json
+    # We pass a fake model here. "original" mode will check the shapes of some
+    # tensors if information is missing in the .json file: other than that, the
+    # model data isn't used so this should be safe (at least for now).
+    fakemodel = {
+        'tok_embeddings.weight': convert.LazyTensor.__new__(convert.LazyTensor),
+        'layers.0.feed_forward.w1.weight': convert.LazyTensor.__new__(convert.LazyTensor),
+    }
+    fakemodel['tok_embeddings.weight'].shape = [hp.n_vocab]
+    fakemodel['layers.0.feed_forward.w1.weight'].shape = [hp.n_ff]
     if hf_config_path.exists():
-        params = convert.Params.loadHFTransformerJson(None, hf_config_path)
+        params = convert.Params.loadHFTransformerJson(fakemodel, hf_config_path)
     elif orig_config_path.exists():
-        params = convert.Params.loadOriginalParamsJson(None, orig_config_path)
+        params = convert.Params.loadOriginalParamsJson(fakemodel, orig_config_path)
     else:
         raise ValueError('Unable to load metadata')
     vocab = convert.load_vocab(cfg.vocab_dir if cfg.vocab_dir is not None else cfg.model_metadata_dir, cfg.vocabtype)
@@ -303,20 +313,20 @@ def main():
     cfg = handle_args()
     print(f'* Using config: {cfg}')
     print('\n=== WARNING === Be aware that this conversion script is best-effort. Use a native GGUF model if possible. === WARNING ===\n')
-    vocab_override = None
-    params_override = None
-    if cfg.model_metadata_dir is not None:
-        (params_override, vocab_override) = handle_metadata(cfg)
-        print('!! Note: When overriding params the --gqa, --eps and --context-length options are ignored.')
-        print(f'* Overriding params: {params_override}')
-        print(f'* Overriding vocab: {vocab_override}')
-    else:
-        print('\n=== WARNING === Special tokens may not be converted correctly. Use --model-metadata-dir if possible === WARNING ===\n')
     data = np.memmap(cfg.input, mode = 'r')
     model = GGMLV3Model()
     print('* Scanning GGML input file')
     offset = model.load(data, 0)
     print(f'* GGML model hyperparameters: {model.hyperparameters}')
+    vocab_override = None
+    params_override = None
+    if cfg.model_metadata_dir is not None:
+        (params_override, vocab_override) = handle_metadata(cfg, model.hyperparameters)
+        print('!! Note: When overriding params the --gqa, --eps and --context-length options are ignored.')
+        print(f'* Overriding params: {params_override}')
+        print(f'* Overriding vocab: {vocab_override}')
+    else:
+        print('\n=== WARNING === Special tokens may not be converted correctly. Use --model-metadata-dir if possible === WARNING ===\n')
     converter = GGMLToGGUF(model, data, cfg, params_override = params_override, vocab_override = vocab_override)
     converter.save()
     print(f'* Successful completion. Output saved to: {cfg.output}')
