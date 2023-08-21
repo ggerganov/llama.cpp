@@ -118,7 +118,7 @@ gguf_writer.add_head_count(head_count)
 gguf_writer.add_head_count_kv(head_count_kv)
 gguf_writer.add_layer_norm_rms_eps(hparams["rms_norm_eps"])
 
-if "rope_scaling" in hparams and "factor" in hparams["rope_scaling"]:
+if "rope_scaling" in hparams and hparams["rope_scaling"] != None and "factor" in hparams["rope_scaling"]:
     if "type" in hparams["rope_scaling"]:
         if hparams["rope_scaling"]["type"] == "linear":
             gguf_writer.add_rope_scale_linear(hparams["rope_scaling"]["factor"])
