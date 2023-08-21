@@ -725,8 +725,8 @@ int main(int argc, char ** argv) {
 
                     is_interacting = true;
                     printf("\n");
-                    console::set_display(console::user_input);
                     fflush(stdout);
+                    console::set_display(console::user_input);
                 } else if (params.instruct) {
                     is_interacting = true;
                 }
@@ -735,6 +735,7 @@ int main(int argc, char ** argv) {
             if (n_past > 0 && is_interacting) {
                 if (params.instruct) {
                     printf("\n> ");
+                    fflush(stdout);
                 }
 
                 if (params.input_prefix_bos) {
@@ -745,6 +746,7 @@ int main(int argc, char ** argv) {
                 if (!params.input_prefix.empty()) {
                     buffer += params.input_prefix;
                     printf("%s", buffer.c_str());
+                    fflush(stdout);
                 }
 
                 std::string line;
@@ -764,6 +766,7 @@ int main(int argc, char ** argv) {
                     if (!params.input_suffix.empty()) {
                         buffer += params.input_suffix;
                         printf("%s", params.input_suffix.c_str());
+                        fflush(stdout);
                     }
 
                     // instruct mode: insert instruction prefix
