@@ -1287,7 +1287,10 @@ int main(int argc, char **argv)
                             STOP_PARTIAL);
                     }
 
-                    const std::string to_send = llama.generated_text.substr(pos, stop_pos);
+                    const std::string to_send = stop_pos == std::string::npos
+                        ? llama.generated_text.substr(pos, std::string::npos)
+                        : ""; // just don't send anything if we're not done
+
                     sent_count += to_send.size();
 
                     std::vector<completion_token_output> probs_output = {};
