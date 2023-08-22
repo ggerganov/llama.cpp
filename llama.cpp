@@ -1109,11 +1109,11 @@ static bool llama_kv_cache_init(
 // model loading and saving
 //
 
-enum llama_file_version {
+enum llama_fver {
     GGUF_FILE_VERSION_V1 = 1,
 };
 
-static const char * llama_file_version_name(llama_file_version version) {
+static const char * llama_file_version_name(llama_fver version) {
     switch (version) {
         case GGUF_FILE_VERSION_V1: return "GGUF V1 (latest)";
     }
@@ -1148,9 +1148,9 @@ struct llama_model_loader {
 
     bool use_mmap = false;
 
-    llama_file file;
+    llama_file  file;
     llama_ftype ftype;
-    llama_file_version fver;
+    llama_fver  fver;
 
     std::unique_ptr<llama_mmap> mapping;
 
@@ -1171,7 +1171,7 @@ struct llama_model_loader {
         n_kv      = gguf_get_n_kv(ctx_gguf);
         n_tensors = gguf_get_n_tensors(ctx_gguf);
 
-        fver = (enum llama_file_version) gguf_get_version(ctx_gguf);
+        fver = (enum llama_fver ) gguf_get_version(ctx_gguf);
 
         for (int i = 0; i < n_tensors; i++) {
             const char * name = gguf_get_tensor_name(ctx_gguf, i);
@@ -1266,6 +1266,21 @@ struct llama_model_loader {
         if (ctx_meta) {
             ggml_free(ctx_meta);
         }
+    }
+
+    std::string get_arch_name() const {
+        const auto kv = LLM_KV(LLM_ARCH_UNKNOWN);
+
+        std::string arch_name;
+        GGUF_GET_KEY(ctx_gguf, arch_name, gguf_get_val_str, GGUF_TYPE_STRING, false, kv(LLM_KV_GENERAL_ARCHITECTURE));
+
+        return arch_name;
+    }
+
+    enum llm_arch get_arch() const {
+        const std::string arch_name = get_arch_name();
+
+        return llm_arch_from_string(arch_name);
     }
 
     const char * get_tensor_name(int i) const {
@@ -1480,16 +1495,9 @@ static const char * llama_model_type_name(e_model type) {
 }
 
 static void llm_load_arch(llama_model_loader & ml, llama_model & model) {
-    struct gguf_context * ctx = ml.ctx_gguf;
-
-    const auto kv = LLM_KV(LLM_ARCH_UNKNOWN);
-
-    std::string arch_name;
-    GGUF_GET_KEY(ctx, arch_name, gguf_get_val_str, GGUF_TYPE_STRING, true, kv(LLM_KV_GENERAL_ARCHITECTURE));
-
-    model.arch = llm_arch_from_string(arch_name);
+    model.arch = ml.get_arch();
     if (model.arch == LLM_ARCH_UNKNOWN) {
-        throw std::runtime_error("unknown model architecture: '" + arch_name + "'");
+        throw std::runtime_error("unknown model architecture: '" + ml.get_arch_name() + "'");
     }
 }
 
@@ -4048,13 +4056,13 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         nthread = std::thread::hardware_concurrency();
     }
 
-    std::unique_ptr<llama_model_loader> model_loader(new llama_model_loader(fname_inp, /*use_mmap*/ false));
+    std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname_inp, /*use_mmap*/ false));
 
     const size_t align = GGUF_DEFAULT_ALIGNMENT;
     struct gguf_context * ctx_out = gguf_init_empty();
 
     // copy the KV pairs from the input file
-    gguf_set_kv     (ctx_out, model_loader->ctx_gguf);
+    gguf_set_kv     (ctx_out, ml->ctx_gguf);
     gguf_set_val_u32(ctx_out, "general.quantization_version", GGML_QNT_VERSION);
     gguf_set_val_u32(ctx_out, "general.file_type", ftype);
 
@@ -4062,8 +4070,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     int n_attention_wv    = 0;
     int n_feed_forward_w2 = 0;
 
-    for (int i = 0; i < model_loader->n_tensors; ++i) {
-        struct ggml_tensor * meta = model_loader->get_tensor_meta(i);
+    for (int i = 0; i < ml->n_tensors; ++i) {
+        struct ggml_tensor * meta = ml->get_tensor_meta(i);
 
         const std::string name = ggml_get_name(meta);
 
@@ -4097,8 +4105,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     std::vector<uint8_t> work;
 
     // populate the original tensors so we get an initial meta data
-    for (int i = 0; i < model_loader->n_tensors; ++i) {
-        struct ggml_tensor * meta = model_loader->get_tensor_meta(i);
+    for (int i = 0; i < ml->n_tensors; ++i) {
+        struct ggml_tensor * meta = ml->get_tensor_meta(i);
         gguf_add_tensor(ctx_out, meta);
     }
 
@@ -4111,17 +4119,17 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     // placeholder for the meta data
     ::zeros(fout, meta_size);
 
-    for (int i = 0; i < model_loader->n_tensors; ++i) {
-        struct ggml_tensor * tensor = model_loader->get_tensor_meta(i);
+    for (int i = 0; i < ml->n_tensors; ++i) {
+        struct ggml_tensor * tensor = ml->get_tensor_meta(i);
 
         const std::string name = ggml_get_name(tensor);
 
         read_data.resize(ggml_nbytes(tensor));
         tensor->data = read_data.data();
-        model_loader->load_data_for(tensor);
+        ml->load_data_for(tensor);
 
         LLAMA_LOG_INFO("[%4d/%4d] %36s - [%s], type = %6s, ",
-               ++idx, model_loader->n_tensors,
+               ++idx, ml->n_tensors,
                ggml_get_name(tensor),
                llama_format_tensor_shape(tensor).c_str(),
                ggml_type_name(tensor->type));
@@ -4147,7 +4155,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             new_type = quantized_type;
 #ifdef GGML_USE_K_QUANTS
             // TODO: avoid hardcoded tensor names - use the TN_* constants
-            const auto tn = LLM_TN(LLM_ARCH_LLAMA);
+            const auto tn = LLM_TN(ml->get_arch());
 
             if (name == tn(LLM_TENSOR_OUTPUT, "weight")) {
                 int nx = tensor->ne[0];
@@ -4386,28 +4394,28 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
     }
 
     // load base model
-    std::unique_ptr<llama_model_loader> model_loader;
+    std::unique_ptr<llama_model_loader> ml;
     ggml_context * base_ctx = NULL;
     std::vector<uint8_t> base_buf;
     if (path_base_model) {
         LLAMA_LOG_INFO("%s: loading base model from '%s'\n", __func__, path_base_model);
-        model_loader.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true));
+        ml.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true));
 
         size_t ctx_size;
         size_t mmapped_size;
-        model_loader->calc_sizes(ctx_size, mmapped_size);
+        ml->calc_sizes(ctx_size, mmapped_size);
         base_buf.resize(ctx_size);
 
         ggml_init_params base_params;
         base_params.mem_size   = base_buf.size();
         base_params.mem_buffer = base_buf.data();
-        base_params.no_alloc   = model_loader->use_mmap;
+        base_params.no_alloc   = ml->use_mmap;
 
         base_ctx = ggml_init(base_params);
 
         // maybe this should in llama_model_loader
-        if (model_loader->use_mmap) {
-            model_loader->mapping.reset(new llama_mmap(&model_loader->file, /* prefetch */ 0, ggml_is_numa()));
+        if (ml->use_mmap) {
+            ml->mapping.reset(new llama_mmap(&ml->file, /* prefetch */ 0, ggml_is_numa()));
         }
     }
 
@@ -4511,8 +4519,8 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
 #endif // GGML_USE_CUBLAS
 
             ggml_tensor * base_t;
-            if (model_loader) {
-                struct gguf_context * ctx_gguf = model_loader->ctx_gguf;
+            if (ml) {
+                struct gguf_context * ctx_gguf = ml->ctx_gguf;
 
                 // load from base model
                 if (gguf_find_tensor(ctx_gguf, base_name.c_str()) < 0) {
@@ -4522,8 +4530,8 @@ int llama_apply_lora_from_file_internal(const struct llama_model & model, const 
                 }
 
                 // TODO: not tested!! maybe not working!
-                base_t = model_loader->create_tensor(base_ctx, base_name, { (uint32_t)dest_t->ne[0], (uint32_t)dest_t->ne[1] }, GGML_BACKEND_CPU);
-                model_loader->load_data_for(base_t);
+                base_t = ml->create_tensor(base_ctx, base_name, { (uint32_t)dest_t->ne[0], (uint32_t)dest_t->ne[1] }, GGML_BACKEND_CPU);
+                ml->load_data_for(base_t);
             } else {
                 base_t = dest_t;
             }
