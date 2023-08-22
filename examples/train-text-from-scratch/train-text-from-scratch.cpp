@@ -1,4 +1,5 @@
 #include "ggml.h"
+#include "common.h"
 #include "llama.h"
 #include <unordered_map>
 #include <vector>
@@ -16,7 +17,7 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-static const float rms_norm_eps = LLAMA_DEFAULT_RMS_EPS;
+static const float rms_norm_eps = 1e-5f;
 
 struct random_normal_distribution {
     std::mt19937 gen;
@@ -169,14 +170,16 @@ struct ggml_tensor * randomize_tensor_uniform(struct ggml_tensor * tensor, struc
 struct llama_vocab {
     using id    = int32_t;
     using token = std::string;
+    using ttype = llama_token_type;
 
-    struct token_score {
-        token tok;
+    struct token_data {
+        token text;
         float score;
+        ttype type;
     };
 
     std::unordered_map<token, id> token_to_id;
-    std::vector<token_score> id_to_token;
+    std::vector<token_data> id_to_token;
 };
 
 struct my_llama_hparams {
@@ -1961,7 +1964,7 @@ void print_matrix(struct ggml_tensor * probs) {
 
 
 void print_token(struct llama_context * ctx, llama_token token) {
-    printf("%s", llama_token_to_str(ctx, token));
+    printf("%s", llama_token_to_str(ctx, token).c_str());
 }
 
 void print_tokens(struct llama_context* ctx, struct ggml_tensor * tokens) {
@@ -1995,7 +1998,7 @@ void print_tokens_batch(struct llama_context* ctx, struct ggml_tensor * tokens) 
     }
 }
 
-void get_example_targets(const int * train_samples, size_t n_train_samples, const llama_token * train_data, size_t n_train_data, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * target_logits, struct ggml_tensor * target_probs) {
+void get_example_targets(struct llama_context * lctx, const int * train_samples, size_t n_train_samples, const llama_token * train_data, size_t n_train_data, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * target_logits, struct ggml_tensor * target_probs) {
     int n_tokens = tokens_input->ne[0];
     int n_vocab  = target_logits->ne[0];
 
@@ -2004,7 +2007,7 @@ void get_example_targets(const int * train_samples, size_t n_train_samples, cons
 
     ggml_set_f32(target_logits, -1.0f/n_vocab);
     ggml_set_f32(target_probs, 0.0f);
-    ggml_set_i32_1d(tokens_input, 0, llama_token_bos());
+    ggml_set_i32_1d(tokens_input, 0, llama_token_bos(lctx));
     for (int i=1; i<n_tokens+1; ++i) {
         int token = clamp(train_data[sample+i-1], 0, n_vocab-1);
         set_f32_2d(target_logits, token, i-1, +1.0f);
@@ -2015,7 +2018,7 @@ void get_example_targets(const int * train_samples, size_t n_train_samples, cons
     }
 }
 
-void get_example_targets_batch(struct llama_context * /*lctx*/, const int * train_samples, size_t n_train_samples, const llama_token * train_data, size_t n_train_data, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * target_logits, struct ggml_tensor * target_probs) {
+void get_example_targets_batch(struct llama_context * lctx, const int * train_samples, size_t n_train_samples, const llama_token * train_data, size_t n_train_data, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * target_logits, struct ggml_tensor * target_probs) {
     GGML_ASSERT(tokens_input->n_dims  == 2);
     GGML_ASSERT(target_logits->n_dims == 3);
     GGML_ASSERT(target_probs->n_dims  == 3);
@@ -2035,7 +2038,7 @@ void get_example_targets_batch(struct llama_context * /*lctx*/, const int * trai
         size_t sample = train_samples[(example_id*n_batch + k) % n_train_samples];
         GGML_ASSERT(sample+n_tokens-1 < n_train_data);
 
-        set_i32_2d(tokens_input, 0, k, llama_token_bos());
+        set_i32_2d(tokens_input, 0, k, llama_token_bos(lctx));
         for (int i=1; i<n_tokens+1; ++i) {
             int token = clamp(train_data[sample+i-1], 0, n_vocab-1);
             // print_token(lctx, token);
@@ -2188,11 +2191,10 @@ int tokenize_file(struct llama_context * lctx, const char * filename, std::vecto
     f.read_raw(buf.data(), f.size);
     buf[f.size] = '\0';
 
-    out.resize(buf.size());
-
-    int n_tokens = llama_tokenize(lctx, buf.data(), out.data(), buf.size(), false);
-    if (n_tokens >= 0) {
-        out.resize(n_tokens);
+    int n_tokens = llama_tokenize(lctx, buf.data(), out.data(), out.size(), false);
+    if (n_tokens < 0) {
+        out.resize(-n_tokens);
+        llama_tokenize(lctx, buf.data(), out.data(), out.size(), false);
     }
 
     bool verify = false;
@@ -2200,17 +2202,17 @@ int tokenize_file(struct llama_context * lctx, const char * filename, std::vecto
         const char * in  = buf.data();
         const char * end = buf.data() + buf.size();
         for (int i = 0; i < (int) out.size(); ++i) {
-            const char * s = llama_token_to_str(lctx, out[i]);
-            int len = strlen(s);
+            std::string s = llama_token_to_str(lctx, out[i]);
+            int len = s.length();
             if (in >= end) {
                 printf("%s: unexpected end of original text.\n", __func__);
                 break;
             }
-            const bool matches = (strncmp(in, s, len) == 0);
+            const bool matches = (strncmp(in, s.c_str(), len) == 0);
             if (matches) {
                 in += len;
             } else {
-                printf("%s: mismatch: expected '%s', but got '%s'\n", __func__, std::string(in, len).c_str(), s);
+                printf("%s: mismatch: expected '%s', but got '%s'\n", __func__, std::string(in, len).c_str(), s.c_str());
             }
         }
     }
@@ -2294,7 +2296,7 @@ llama_token sample(struct my_llama_sampler * sampler, float * logits, const llam
     const auto params = sampler->params;
 
     // Apply penalties
-    const float nl_logit = logits[llama_token_nl()];
+    const float nl_logit = logits[llama_token_nl(ctx)];
 
     const int n_last = std::min(std::min(n_last_tokens, params.repeat_last_n), sampler->n_ctx);
 
@@ -2313,7 +2315,7 @@ llama_token sample(struct my_llama_sampler * sampler, float * logits, const llam
         params.alpha_presence);
 
     if (!params.penalize_nl) {
-        logits[llama_token_nl()] = nl_logit;
+        logits[llama_token_nl(ctx)] = nl_logit;
     }
 
     llama_token token = 0;
@@ -2612,42 +2614,45 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
         return;
     }
 
-    // write_magic
-    file.write_u32(LLAMA_FILE_MAGIC);   // magic
-    file.write_u32(LLAMA_FILE_VERSION); // version
-    // write_hparams
-    file.write_u32(model->hparams.n_vocab);
-    file.write_u32(model->hparams.n_embd);
-    file.write_u32(model->hparams.n_mult);
-    file.write_u32(model->hparams.n_head);
-    file.write_u32(model->hparams.n_layer);
-    file.write_u32(model->hparams.n_rot);
-    file.write_u32(LLAMA_FTYPE_ALL_F32);
-    // write_vocab
-    uint32_t n_vocab = model->hparams.n_vocab;
-    for (uint32_t i = 0; i < n_vocab; i++) {
-        const auto & token_score = vocab->id_to_token.at(i);
-        file.write_u32((uint32_t) token_score.tok.size());
-        file.write_raw(token_score.tok.data(), token_score.tok.size());
-        file.write_raw(&token_score.score, sizeof(token_score.score));
-    }
-    // write tensors
-    write_tensor(&file, model->tok_embeddings);
-    write_tensor(&file, model->norm);
-    write_tensor(&file, model->output);
-    for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {
-        auto & layer = model->layers[i];
-
-        write_tensor(&file, layer.attention_norm);
-        write_tensor(&file, layer.wq);
-        write_tensor(&file, layer.wk);
-        write_tensor(&file, layer.wv);
-        write_tensor(&file, layer.wo);
-        write_tensor(&file, layer.ffn_norm);
-        write_tensor(&file, layer.w1);
-        write_tensor(&file, layer.w2);
-        write_tensor(&file, layer.w3);
-    }
+#pragma message("TODO: implement file saving using gguf")
+    (void) vocab;
+    (void) model;
+//    // write_magic
+//    file.write_u32(LLAMA_FILE_MAGIC);   // magic
+//    file.write_u32(LLAMA_FILE_VERSION); // version
+//    // write_hparams
+//    file.write_u32(model->hparams.n_vocab);
+//    file.write_u32(model->hparams.n_embd);
+//    file.write_u32(model->hparams.n_mult);
+//    file.write_u32(model->hparams.n_head);
+//    file.write_u32(model->hparams.n_layer);
+//    file.write_u32(model->hparams.n_rot);
+//    file.write_u32(LLAMA_FTYPE_ALL_F32);
+//    // write_vocab
+//    uint32_t n_vocab = model->hparams.n_vocab;
+//    for (uint32_t i = 0; i < n_vocab; i++) {
+//        const auto & token_data = vocab->id_to_token.at(i);
+//        file.write_u32((uint32_t) token_data.tok.size());
+//        file.write_raw(token_data.tok.data(), token_data.tok.size());
+//        file.write_raw(&token_data.score, sizeof(token_data.score));
+//    }
+//    // write tensors
+//    write_tensor(&file, model->tok_embeddings);
+//    write_tensor(&file, model->norm);
+//    write_tensor(&file, model->output);
+//    for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {
+//        auto & layer = model->layers[i];
+//
+//        write_tensor(&file, layer.attention_norm);
+//        write_tensor(&file, layer.wq);
+//        write_tensor(&file, layer.wk);
+//        write_tensor(&file, layer.wv);
+//        write_tensor(&file, layer.wo);
+//        write_tensor(&file, layer.ffn_norm);
+//        write_tensor(&file, layer.w1);
+//        write_tensor(&file, layer.w2);
+//        write_tensor(&file, layer.w3);
+//    }
 }
 
 float cosine_decay(const int decay_steps, const float alpha, int step) {
@@ -3052,20 +3057,13 @@ int main(int argc, char ** argv) {
 
     struct llama_vocab vocab;
     {
-        std::vector<const char *> strings;
-        std::vector<float> scores;
-        int n_vocab = llama_n_vocab(lctx);
-        strings.resize(n_vocab, NULL);
-        scores.resize(n_vocab, 0);
-        n_vocab = llama_get_vocab(lctx, strings.data(), scores.data(), n_vocab);
-        GGML_ASSERT(n_vocab == llama_n_vocab(lctx));
+        const int n_vocab = llama_n_vocab(lctx);
         vocab.id_to_token.resize(n_vocab);
         for (int i=0; i<n_vocab; ++i) {
-            std::string tok   = std::string(strings[i]);
-            float       score = scores[i];
-            vocab.id_to_token[i].tok   = tok;
-            vocab.id_to_token[i].score = score;
-            vocab.token_to_id.emplace(tok, i);
+            vocab.id_to_token[i].text  = llama_token_get_text(lctx, i);
+            vocab.id_to_token[i].score = llama_token_get_score(lctx, i);
+            vocab.id_to_token[i].type  = llama_token_get_type(lctx, i);
+            vocab.token_to_id.emplace(vocab.id_to_token[i].text, i);
         }
     }
 
@@ -3178,7 +3176,7 @@ int main(int argc, char ** argv) {
     std::vector<int> train_samples;
     train_samples.push_back(0);
     for (int i = 1; i < (int) train_tokens.size() - n_tokens; ++i) {
-        if (!params.samples_start_after_nl || (train_tokens[i-1] == llama_token_nl())) {
+        if (!params.samples_start_after_nl || (train_tokens[i-1] == llama_token_nl(lctx))) {
             train_samples.push_back(i);
         }
     }
@@ -3338,7 +3336,7 @@ int main(int argc, char ** argv) {
         struct ggml_tensor * target_logits = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, n_vocab,  n_tokens);
         struct ggml_tensor * target_probs  = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, n_vocab,  n_tokens);
 
-        get_example_targets(train_samples.data(), train_samples.size(), train_tokens.data(), train_tokens.size(), rand()%train_samples.size(), tokens_input, target_logits, target_probs);
+        get_example_targets(lctx, train_samples.data(), train_samples.size(), train_tokens.data(), train_tokens.size(), rand()%train_samples.size(), tokens_input, target_logits, target_probs);
         for (int i=sample_ctx; i<n_tokens; ++i) {
             ggml_set_i32_1d(tokens_input, i, n_vocab/2);
         }

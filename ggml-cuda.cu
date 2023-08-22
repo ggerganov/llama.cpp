@@ -1399,6 +1399,7 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q4_0_q8_1_imp
     // second part effectively subtracts 8 from each quant value
     return d4 * (sumi * ds8f.x - (8*vdr/QI4_0) * ds8f.y);
 #else
+    assert(false);
     return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
@@ -1436,6 +1437,7 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q4_1_q8_1_imp
     // scale second part of sum by QI8_1/(vdr * QR4_1) to compensate for multiple threads adding it
     return sumi * d4d8 + m4s8 / (QI8_1 / (vdr * QR4_1));
 #else
+    assert(false);
     return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
@@ -1471,6 +1473,7 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q5_0_q8_1_imp
     // second part effectively subtracts 16 from each quant value
     return d5 * (sumi * ds8f.x - (16*vdr/QI5_0) * ds8f.y);
 #else
+    assert(false);
     return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
@@ -1516,6 +1519,7 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q5_1_q8_1_imp
     return sumi*d5d8 + m5s8 / (QI5_1 / vdr);
 
 #else
+    assert(false);
     return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
@@ -1537,6 +1541,7 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q8_0_q8_1_imp
 
     return d8_0*d8_1 * sumi;
 #else
+    assert(false);
     return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
@@ -1567,6 +1572,7 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q8_1_q8_1_imp
     // scale second part of sum by QI8_1/ vdr to compensate for multiple threads adding it
     return sumi*d8d8 + m8s8 / (QI8_1 / vdr);
 #else
+    assert(false);
     return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
@@ -1602,6 +1608,7 @@ static __device__ __forceinline__ float vec_dot_q2_K_q8_1_impl_mmvq(
 
     return dm2f.x*sumf_d - dm2f.y*sumf_m;
 #else
+    assert(false);
     return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
@@ -1639,6 +1646,7 @@ static __device__ __forceinline__ float vec_dot_q2_K_q8_1_impl_mmq(
 
     return d8 * (dm2f.x*sumi_d - dm2f.y*sumi_m);
 #else
+    assert(false);
     return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
@@ -1679,6 +1687,7 @@ static __device__ __forceinline__ float vec_dot_q3_K_q8_1_impl_mmvq(
 
     return d3 * sumf;
 #else
+    assert(false);
     return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
@@ -1704,6 +1713,7 @@ static __device__ __forceinline__ float vec_dot_q3_K_q8_1_impl_mmq(
 
     return d3*d8 * sumi;
 #else
+    assert(false);
     return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
@@ -1737,12 +1747,12 @@ static __device__ __forceinline__ float vec_dot_q4_K_q8_1_impl_vmmq(
     return dm4f.x*sumf_d - dm4f.y*sumf_m;
 
 #else
+    assert(false);
     return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 // contiguous u/y values
-// also used for q5_K
 static __device__ __forceinline__ float vec_dot_q4_K_q8_1_impl_mmq(
     const int * __restrict__ v, const int * __restrict__ u, const uint8_t * __restrict__ sc,
     const uint8_t * __restrict__ m, const half2 & dm4, const half2 * __restrict__ ds8) {
@@ -1752,19 +1762,18 @@ static __device__ __forceinline__ float vec_dot_q4_K_q8_1_impl_mmq(
     float sumf_m = 0.0f;
 
 #pragma unroll
-    for (int i0 = 0; i0 < VDR_Q4_K_Q8_1_MMQ; i0 += (QI8_1/QR4_K)) {
+    for (int i = 0; i < QR4_K*VDR_Q4_K_Q8_1_MMQ/QI8_1; ++i) {
         int sumi_d = 0;
 
 #pragma unroll
-        for (int i = i0; i < i0 + (QI8_1/QR4_K); ++i) {
-            sumi_d = __dp4a(v[2*i+0], u[2*i+0], sumi_d); // SIMD dot product
-            sumi_d = __dp4a(v[2*i+1], u[2*i+1], sumi_d); // SIMD dot product
+        for (int j = 0; j < QI8_1; ++j) {
+            sumi_d = __dp4a((v[j] >> (4*i)) & 0x0F0F0F0F, u[i*QI8_1 + j], sumi_d); // SIMD dot product
         }
 
-        const float2 ds8f = __half22float2(ds8[i0 / 4]);
+        const float2 ds8f = __half22float2(ds8[i]);
 
-        sumf_d += ds8f.x * (sc[i0/4] * sumi_d);
-        sumf_m += ds8f.y *   m[i0/4]; // sum of q8_1 block * q4_K min val
+        sumf_d += ds8f.x * (sc[i] * sumi_d);
+        sumf_m += ds8f.y *   m[i]; // sum of q8_1 block * q4_K min val
     }
 
     const float2 dm4f = __half22float2(dm4);
@@ -1772,6 +1781,7 @@ static __device__ __forceinline__ float vec_dot_q4_K_q8_1_impl_mmq(
     return dm4f.x*sumf_d - dm4f.y*sumf_m;
 
 #else
+    assert(false);
     return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
@@ -1780,7 +1790,7 @@ static __device__ __forceinline__ float vec_dot_q4_K_q8_1_impl_mmq(
 #define VDR_Q5_K_Q8_1_MMQ  8
 
 // contiguous v/x values
-static __device__ __forceinline__ float vec_dot_q5_K_q8_1_impl(
+static __device__ __forceinline__ float vec_dot_q5_K_q8_1_impl_vmmq(
     const int * __restrict__ vl, const int * __restrict__ vh, const int * __restrict__ u, const uint8_t * __restrict__ sc,
     const uint8_t * __restrict__ m, const half2 & dm5, const float * __restrict__ d8) {
 
@@ -1812,6 +1822,41 @@ static __device__ __forceinline__ float vec_dot_q5_K_q8_1_impl(
     return dm5f.x*sumf_d - dm5f.y*sumf_m;
 
 #else
+    assert(false);
+    return 0.0f; // only to satisfy the compiler
+#endif // __CUDA_ARCH__ >= MIN_CC_DP4A
+}
+
+// contiguous u/y values
+static __device__ __forceinline__ float vec_dot_q5_K_q8_1_impl_mmq(
+    const int * __restrict__ v, const int * __restrict__ u, const uint8_t * __restrict__ sc,
+    const uint8_t * __restrict__ m, const half2 & dm4, const half2 * __restrict__ ds8) {
+
+#if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
+    float sumf_d = 0.0f;
+    float sumf_m = 0.0f;
+
+#pragma unroll
+    for (int i = 0; i < QR5_K*VDR_Q5_K_Q8_1_MMQ/QI8_1; ++i) {
+        int sumi_d = 0;
+
+#pragma unroll
+        for (int j = 0; j < QI8_1; ++j) {
+            sumi_d = __dp4a(v[i*QI8_1 + j], u[i*QI8_1 + j], sumi_d); // SIMD dot product
+        }
+
+        const float2 ds8f = __half22float2(ds8[i]);
+
+        sumf_d += ds8f.x * (sc[i] * sumi_d);
+        sumf_m += ds8f.y *   m[i]; // sum of q8_1 block * q4_K min val
+    }
+
+    const float2 dm4f = __half22float2(dm4);
+
+    return dm4f.x*sumf_d - dm4f.y*sumf_m;
+
+#else
+    assert(false);
     return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
@@ -1842,6 +1887,7 @@ static __device__ __forceinline__ float vec_dot_q6_K_q8_1_impl_mmvq(
 
     return d*sumf;
 #else
+    assert(false);
     return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
@@ -1873,6 +1919,7 @@ static __device__ __forceinline__ float vec_dot_q6_K_q8_1_impl_mmq(
     return d6 * sumf_d;
 
 #else
+    assert(false);
     return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
@@ -2722,6 +2769,7 @@ static __device__ __forceinline__ float vec_dot_q4_K_q8_1(
     return dall * sumf_d - dmin * sumf_m;
 
 #else
+    assert(false);
     return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 
@@ -2808,18 +2856,11 @@ static __device__ __forceinline__ float vec_dot_q4_K_q8_1_mul_mat(
     const int * __restrict__ x_ql, const half2 * __restrict__ x_dm, const int * __restrict__ x_qh, const int * __restrict__ x_sc,
     const int * __restrict__ y_qs, const half2 * __restrict__ y_ds, const int & i, const int & j, const int & k) {
 
-    int v[QR4_K*VDR_Q4_K_Q8_1_MMQ];
-
-#pragma unroll
-    for (int l = 0; l < VDR_Q4_K_Q8_1_MMQ; ++l) {
-        v[l + 0]         = (x_ql[i * (WARP_SIZE + 1) + k + l] >> 0) & 0x0F0F0F0F;
-        v[l + (QI4_K/4)] = (x_ql[i * (WARP_SIZE + 1) + k + l] >> 4) & 0x0F0F0F0F;
-    }
-
     const uint8_t * sc = ((const uint8_t *) &x_sc[i * (WARP_SIZE/8) + i/8 + k/16]) + 2*((k % 16) / 8);
 
     const int index_y = j * WARP_SIZE + (QR4_K*k) % WARP_SIZE;
-    return vec_dot_q4_K_q8_1_impl_mmq(v, &y_qs[index_y], sc, sc+8, x_dm[i * (WARP_SIZE/QI4_K) + i/QI4_K], &y_ds[index_y/QI8_1]);
+    return vec_dot_q4_K_q8_1_impl_mmq(&x_ql[i * (WARP_SIZE + 1) + k], &y_qs[index_y], sc, sc+8,
+                                      x_dm[i * (WARP_SIZE/QI4_K) + i/QI4_K], &y_ds[index_y/QI8_1]);
 }
 
 static __device__ __forceinline__ float vec_dot_q5_K_q8_1(
@@ -2866,7 +2907,7 @@ static __device__ __forceinline__ float vec_dot_q5_K_q8_1(
         u[2*i+1] = q8[4];
     }
 
-    return vec_dot_q5_K_q8_1_impl(vl, vh, u, sc, m, bq5_K->dm, d8);
+    return vec_dot_q5_K_q8_1_impl_vmmq(vl, vh, u, sc, m, bq5_K->dm, d8);
 
 #else
 
@@ -2905,6 +2946,7 @@ static __device__ __forceinline__ float vec_dot_q5_K_q8_1(
     return d * sumf_d;
 
 #else
+    assert(false);
     return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 
@@ -3008,7 +3050,8 @@ static __device__ __forceinline__ float vec_dot_q5_K_q8_1_mul_mat(
 
     const int index_x = i * (QR5_K*WARP_SIZE + 1) +  QR5_K*k;
     const int index_y = j * WARP_SIZE             + (QR5_K*k) % WARP_SIZE;
-    return vec_dot_q4_K_q8_1_impl_mmq(&x_ql[index_x], &y_qs[index_y], sc, sc+8, x_dm[i * (WARP_SIZE/QI5_K) + i/QI5_K], &y_ds[index_y/QI8_1]);
+    return vec_dot_q5_K_q8_1_impl_mmq(&x_ql[index_x], &y_qs[index_y], sc, sc+8,
+                                      x_dm[i * (WARP_SIZE/QI5_K) + i/QI5_K], &y_ds[index_y/QI8_1]);
 }
 
 static __device__ __forceinline__ float vec_dot_q6_K_q8_1(
@@ -3135,7 +3178,7 @@ static __device__ __forceinline__ float vec_dot_q6_K_q8_1_mul_mat(
 
 template <int qk, int qr, int qi, bool need_sum, typename block_q_t, int mmq_x, int mmq_y, int nwarps,
               allocate_tiles_cuda_t allocate_tiles, load_tiles_cuda_t load_tiles, int vdr, vec_dot_q_mul_mat_cuda_t vec_dot>
-static __global__ void mul_mat_q(
+static __device__ __forceinline__ void mul_mat_q(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst) {
 
@@ -3150,7 +3193,6 @@ static __global__ void mul_mat_q(
 
     const int row_dst_0 = blockIdx.x*mmq_y;
     const int & row_x_0 = row_dst_0;
-    const int row_dst = row_dst_0 + threadIdx.x;
 
     const int col_dst_0 = blockIdx.y*mmq_x;
     const int & col_y_0 = col_dst_0;
@@ -3223,11 +3265,7 @@ static __global__ void mul_mat_q(
         }
     }
 
-
-    if (row_dst >= nrows_dst) {
-        return;
-    }
-
+#pragma unroll
     for (int j = 0; j < mmq_x; j += nwarps) {
         const int col_dst = col_dst_0 + j + threadIdx.y;
 
@@ -3235,10 +3273,373 @@ static __global__ void mul_mat_q(
             return;
         }
 
+#pragma unroll
         for (int i = 0; i < mmq_y; i += WARP_SIZE) {
-            dst[col_dst*nrows_dst + row_dst + i] = sum[i/WARP_SIZE][j/nwarps];
+            const int row_dst = row_dst_0 + threadIdx.x + i;
+
+            if (row_dst >= nrows_dst) {
+                continue;
+            }
+
+            dst[col_dst*nrows_dst + row_dst] = sum[i/WARP_SIZE][j/nwarps];
         }
     }
+}
+
+#define  MMQ_X_Q4_0_AMPERE 64
+#define  MMQ_Y_Q4_0_AMPERE 128
+#define NWARPS_Q4_0_AMPERE 4
+#define  MMQ_X_Q4_0_PASCAL 64
+#define  MMQ_Y_Q4_0_PASCAL 64
+#define NWARPS_Q4_0_PASCAL 8
+
+template <bool need_check> static __global__ void mul_mat_q4_0(
+    const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
+    const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst) {
+
+#if __CUDA_ARCH__ >= CC_TURING
+    const int mmq_x  =  MMQ_X_Q4_0_AMPERE;
+    const int mmq_y  =  MMQ_Y_Q4_0_AMPERE;
+    const int nwarps = NWARPS_Q4_0_AMPERE;
+
+    mul_mat_q<QK4_0, QR4_0, QI4_0, true, block_q4_0, mmq_x, mmq_y, nwarps, allocate_tiles_q4_0<mmq_y>,
+        load_tiles_q4_0<mmq_y, nwarps, need_check>, VDR_Q4_0_Q8_1_MMQ, vec_dot_q4_0_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+
+#elif __CUDA_ARCH__ >= MIN_CC_DP4A
+    const int mmq_x  =  MMQ_X_Q4_0_PASCAL;
+    const int mmq_y  =  MMQ_Y_Q4_0_PASCAL;
+    const int nwarps = NWARPS_Q4_0_PASCAL;
+
+    mul_mat_q<QK4_0, QR4_0, QI4_0, true, block_q4_0, mmq_x, mmq_y, nwarps, allocate_tiles_q4_0<mmq_y>,
+        load_tiles_q4_0<mmq_y, nwarps, need_check>, VDR_Q4_0_Q8_1_MMQ, vec_dot_q4_0_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+#else
+    (void) vec_dot_q4_0_q8_1_mul_mat;
+    assert(false);
+#endif // __CUDA_ARCH__ >= CC_TURING
+}
+
+#define  MMQ_X_Q4_1_AMPERE 64
+#define  MMQ_Y_Q4_1_AMPERE 128
+#define NWARPS_Q4_1_AMPERE 4
+#define  MMQ_X_Q4_1_PASCAL 64
+#define  MMQ_Y_Q4_1_PASCAL 64
+#define NWARPS_Q4_1_PASCAL 8
+
+template <bool need_check> static __global__ void
+#if __CUDA_ARCH__ < CC_TURING
+    __launch_bounds__(WARP_SIZE*NWARPS_Q4_1_PASCAL, 2)
+#endif // __CUDA_ARCH__ < CC_TURING
+    mul_mat_q4_1(
+    const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
+    const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst) {
+
+#if __CUDA_ARCH__ >= CC_TURING
+    const int mmq_x  =  MMQ_X_Q4_1_AMPERE;
+    const int mmq_y  =  MMQ_Y_Q4_1_AMPERE;
+    const int nwarps = NWARPS_Q4_1_AMPERE;
+
+    mul_mat_q<QK4_1, QR4_1, QI4_1, true, block_q4_1, mmq_x, mmq_y, nwarps, allocate_tiles_q4_1<mmq_y>,
+        load_tiles_q4_1<mmq_y, nwarps, need_check>, VDR_Q4_1_Q8_1_MMQ, vec_dot_q4_1_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+
+#elif __CUDA_ARCH__ >= MIN_CC_DP4A
+    const int mmq_x  =  MMQ_X_Q4_1_PASCAL;
+    const int mmq_y  =  MMQ_Y_Q4_1_PASCAL;
+    const int nwarps = NWARPS_Q4_1_PASCAL;
+
+    mul_mat_q<QK4_1, QR4_1, QI4_1, true, block_q4_1, mmq_x, mmq_y, nwarps, allocate_tiles_q4_1<mmq_y>,
+        load_tiles_q4_1<mmq_y, nwarps, need_check>, VDR_Q4_1_Q8_1_MMQ, vec_dot_q4_1_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+#else
+    (void) vec_dot_q4_1_q8_1_mul_mat;
+    assert(false);
+#endif // __CUDA_ARCH__ >= CC_TURING
+}
+
+#define  MMQ_X_Q5_0_AMPERE 128
+#define  MMQ_Y_Q5_0_AMPERE 64
+#define NWARPS_Q5_0_AMPERE 4
+#define  MMQ_X_Q5_0_PASCAL 64
+#define  MMQ_Y_Q5_0_PASCAL 64
+#define NWARPS_Q5_0_PASCAL 8
+
+template <bool need_check> static __global__ void mul_mat_q5_0(
+    const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
+    const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst) {
+
+#if __CUDA_ARCH__ >= CC_TURING
+    const int mmq_x  =  MMQ_X_Q5_0_AMPERE;
+    const int mmq_y  =  MMQ_Y_Q5_0_AMPERE;
+    const int nwarps = NWARPS_Q5_0_AMPERE;
+
+    mul_mat_q<QK5_0, QR5_0, QI5_0, false, block_q5_0, mmq_x, mmq_y, nwarps, allocate_tiles_q5_0<mmq_y>,
+        load_tiles_q5_0<mmq_y, nwarps, need_check>, VDR_Q5_0_Q8_1_MMQ, vec_dot_q5_0_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+
+#elif __CUDA_ARCH__ >= MIN_CC_DP4A
+    const int mmq_x  =  MMQ_X_Q5_0_PASCAL;
+    const int mmq_y  =  MMQ_Y_Q5_0_PASCAL;
+    const int nwarps = NWARPS_Q5_0_PASCAL;
+
+    mul_mat_q<QK5_0, QR5_0, QI5_0, false, block_q5_0, mmq_x, mmq_y, nwarps, allocate_tiles_q5_0<mmq_y>,
+        load_tiles_q5_0<mmq_y, nwarps, need_check>, VDR_Q5_0_Q8_1_MMQ, vec_dot_q5_0_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+#else
+    (void) vec_dot_q5_0_q8_1_mul_mat;
+    assert(false);
+#endif // __CUDA_ARCH__ >= CC_TURING
+}
+
+#define  MMQ_X_Q5_1_AMPERE 128
+#define  MMQ_Y_Q5_1_AMPERE 64
+#define NWARPS_Q5_1_AMPERE 4
+#define  MMQ_X_Q5_1_PASCAL 64
+#define  MMQ_Y_Q5_1_PASCAL 64
+#define NWARPS_Q5_1_PASCAL 8
+
+template <bool need_check> static __global__ void mul_mat_q5_1(
+    const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
+    const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst) {
+
+#if __CUDA_ARCH__ >= CC_TURING
+    const int mmq_x  =  MMQ_X_Q5_1_AMPERE;
+    const int mmq_y  =  MMQ_Y_Q5_1_AMPERE;
+    const int nwarps = NWARPS_Q5_1_AMPERE;
+
+    mul_mat_q<QK5_1, QR5_1, QI5_1, true, block_q5_1, mmq_x, mmq_y, nwarps, allocate_tiles_q5_1<mmq_y>,
+        load_tiles_q5_1<mmq_y, nwarps, need_check>, VDR_Q5_1_Q8_1_MMQ, vec_dot_q5_1_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+
+#elif __CUDA_ARCH__ >= MIN_CC_DP4A
+    const int mmq_x  =  MMQ_X_Q5_1_PASCAL;
+    const int mmq_y  =  MMQ_Y_Q5_1_PASCAL;
+    const int nwarps = NWARPS_Q5_1_PASCAL;
+
+    mul_mat_q<QK5_1, QR5_1, QI5_1, true, block_q5_1, mmq_x, mmq_y, nwarps, allocate_tiles_q5_1<mmq_y>,
+        load_tiles_q5_1<mmq_y, nwarps, need_check>, VDR_Q5_1_Q8_1_MMQ, vec_dot_q5_1_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+#else
+    (void) vec_dot_q5_1_q8_1_mul_mat;
+    assert(false);
+#endif // __CUDA_ARCH__ >= CC_TURING
+}
+
+#define  MMQ_X_Q8_0_AMPERE 128
+#define  MMQ_Y_Q8_0_AMPERE 64
+#define NWARPS_Q8_0_AMPERE 4
+#define  MMQ_X_Q8_0_PASCAL 64
+#define  MMQ_Y_Q8_0_PASCAL 64
+#define NWARPS_Q8_0_PASCAL 8
+
+template <bool need_check> static __global__ void mul_mat_q8_0(
+    const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
+    const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst) {
+
+#if __CUDA_ARCH__ >= CC_TURING
+    const int mmq_x  =  MMQ_X_Q8_0_AMPERE;
+    const int mmq_y  =  MMQ_Y_Q8_0_AMPERE;
+    const int nwarps = NWARPS_Q8_0_AMPERE;
+
+    mul_mat_q<QK8_0, QR8_0, QI8_0, false, block_q8_0, mmq_x, mmq_y, nwarps, allocate_tiles_q8_0<mmq_y>,
+        load_tiles_q8_0<mmq_y, nwarps, need_check>, VDR_Q8_0_Q8_1_MMQ, vec_dot_q8_0_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+
+#elif __CUDA_ARCH__ >= MIN_CC_DP4A
+    const int mmq_x  =  MMQ_X_Q8_0_PASCAL;
+    const int mmq_y  =  MMQ_Y_Q8_0_PASCAL;
+    const int nwarps = NWARPS_Q8_0_PASCAL;
+
+    mul_mat_q<QK8_0, QR8_0, QI8_0, false, block_q8_0, mmq_x, mmq_y, nwarps, allocate_tiles_q8_0<mmq_y>,
+        load_tiles_q8_0<mmq_y, nwarps, need_check>, VDR_Q8_0_Q8_1_MMQ, vec_dot_q8_0_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+#else
+    (void) vec_dot_q8_0_q8_1_mul_mat;
+    assert(false);
+#endif // __CUDA_ARCH__ >= CC_TURING
+}
+
+#define  MMQ_X_Q2_K_AMPERE 64
+#define  MMQ_Y_Q2_K_AMPERE 128
+#define NWARPS_Q2_K_AMPERE 4
+#define  MMQ_X_Q2_K_PASCAL 64
+#define  MMQ_Y_Q2_K_PASCAL 64
+#define NWARPS_Q2_K_PASCAL 8
+
+template <bool need_check> static __global__ void mul_mat_q2_K(
+    const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
+    const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst) {
+
+#if __CUDA_ARCH__ >= CC_TURING
+    const int mmq_x  =  MMQ_X_Q2_K_AMPERE;
+    const int mmq_y  =  MMQ_Y_Q2_K_AMPERE;
+    const int nwarps = NWARPS_Q2_K_AMPERE;
+
+    mul_mat_q<QK_K, QR2_K, QI2_K, false, block_q2_K, mmq_x, mmq_y, nwarps, allocate_tiles_q2_K<mmq_y>,
+        load_tiles_q2_K<mmq_y, nwarps, need_check>, VDR_Q2_K_Q8_1_MMQ, vec_dot_q2_K_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+
+#elif __CUDA_ARCH__ >= MIN_CC_DP4A
+    const int mmq_x  =  MMQ_X_Q2_K_PASCAL;
+    const int mmq_y  =  MMQ_Y_Q2_K_PASCAL;
+    const int nwarps = NWARPS_Q2_K_PASCAL;
+
+    mul_mat_q<QK_K, QR2_K, QI2_K, false, block_q2_K, mmq_x, mmq_y, nwarps, allocate_tiles_q2_K<mmq_y>,
+        load_tiles_q2_K<mmq_y, nwarps, need_check>, VDR_Q2_K_Q8_1_MMQ, vec_dot_q2_K_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+#else
+    (void) vec_dot_q2_K_q8_1_mul_mat;
+    assert(false);
+#endif // __CUDA_ARCH__ >= CC_TURING
+}
+
+#define  MMQ_X_Q3_K_AMPERE 128
+#define  MMQ_Y_Q3_K_AMPERE 128
+#define NWARPS_Q3_K_AMPERE 4
+#define  MMQ_X_Q3_K_PASCAL 64
+#define  MMQ_Y_Q3_K_PASCAL 64
+#define NWARPS_Q3_K_PASCAL 8
+
+template <bool need_check> static __global__ void
+#if __CUDA_ARCH__ < CC_TURING
+    __launch_bounds__(WARP_SIZE*NWARPS_Q3_K_PASCAL, 2)
+#endif // __CUDA_ARCH__ < CC_TURING
+    mul_mat_q3_K(
+    const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
+    const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst) {
+
+#if __CUDA_ARCH__ >= CC_TURING
+    const int mmq_x  =  MMQ_X_Q3_K_AMPERE;
+    const int mmq_y  =  MMQ_Y_Q3_K_AMPERE;
+    const int nwarps = NWARPS_Q3_K_AMPERE;
+
+    mul_mat_q<QK_K, QR3_K, QI3_K, false, block_q3_K, mmq_x, mmq_y, nwarps, allocate_tiles_q3_K<mmq_y>,
+        load_tiles_q3_K<mmq_y, nwarps, need_check>, VDR_Q3_K_Q8_1_MMQ, vec_dot_q3_K_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+
+#elif __CUDA_ARCH__ >= MIN_CC_DP4A
+    const int mmq_x  =  MMQ_X_Q3_K_PASCAL;
+    const int mmq_y  =  MMQ_Y_Q3_K_PASCAL;
+    const int nwarps = NWARPS_Q3_K_PASCAL;
+
+    mul_mat_q<QK_K, QR3_K, QI3_K, false, block_q3_K, mmq_x, mmq_y, nwarps, allocate_tiles_q3_K<mmq_y>,
+        load_tiles_q3_K<mmq_y, nwarps, need_check>, VDR_Q3_K_Q8_1_MMQ, vec_dot_q3_K_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+#else
+    (void) vec_dot_q3_K_q8_1_mul_mat;
+    assert(false);
+#endif // __CUDA_ARCH__ >= CC_TURING
+}
+
+#define  MMQ_X_Q4_K_AMPERE 64
+#define  MMQ_Y_Q4_K_AMPERE 128
+#define NWARPS_Q4_K_AMPERE 4
+#define  MMQ_X_Q4_K_PASCAL 64
+#define  MMQ_Y_Q4_K_PASCAL 64
+#define NWARPS_Q4_K_PASCAL 8
+
+template <bool need_check> static __global__ void
+#if __CUDA_ARCH__ < CC_TURING
+    __launch_bounds__(WARP_SIZE*NWARPS_Q4_K_PASCAL, 2)
+#endif // __CUDA_ARCH__ < CC_TURING
+    mul_mat_q4_K(
+    const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
+    const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst) {
+
+#if __CUDA_ARCH__ >= CC_TURING
+    const int mmq_x  =  MMQ_X_Q4_K_AMPERE;
+    const int mmq_y  =  MMQ_Y_Q4_K_AMPERE;
+    const int nwarps = NWARPS_Q4_K_AMPERE;
+
+    mul_mat_q<QK_K, QR4_K, QI4_K, true, block_q4_K, mmq_x, mmq_y, nwarps, allocate_tiles_q4_K<mmq_y>,
+        load_tiles_q4_K<mmq_y, nwarps, need_check>, VDR_Q4_K_Q8_1_MMQ, vec_dot_q4_K_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+
+#elif __CUDA_ARCH__ >= MIN_CC_DP4A
+    const int mmq_x  =  MMQ_X_Q4_K_PASCAL;
+    const int mmq_y  =  MMQ_Y_Q4_K_PASCAL;
+    const int nwarps = NWARPS_Q4_K_PASCAL;
+
+    mul_mat_q<QK_K, QR4_K, QI4_K, true, block_q4_K, mmq_x, mmq_y, nwarps, allocate_tiles_q4_K<mmq_y>,
+        load_tiles_q4_K<mmq_y, nwarps, need_check>, VDR_Q4_K_Q8_1_MMQ, vec_dot_q4_K_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+#else
+    (void) vec_dot_q4_K_q8_1_mul_mat;
+    assert(false);
+#endif // __CUDA_ARCH__ >= CC_TURING
+}
+
+#define  MMQ_X_Q5_K_AMPERE 64
+#define  MMQ_Y_Q5_K_AMPERE 128
+#define NWARPS_Q5_K_AMPERE 4
+#define  MMQ_X_Q5_K_PASCAL 64
+#define  MMQ_Y_Q5_K_PASCAL 64
+#define NWARPS_Q5_K_PASCAL 8
+
+template <bool need_check> static __global__ void mul_mat_q5_K(
+    const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
+    const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst) {
+
+#if __CUDA_ARCH__ >= CC_TURING
+    const int mmq_x  =  MMQ_X_Q5_K_AMPERE;
+    const int mmq_y  =  MMQ_Y_Q5_K_AMPERE;
+    const int nwarps = NWARPS_Q5_K_AMPERE;
+
+    mul_mat_q<QK_K, QR5_K, QI5_K, true, block_q5_K, mmq_x, mmq_y, nwarps, allocate_tiles_q5_K<mmq_y>,
+        load_tiles_q5_K<mmq_y, nwarps, need_check>, VDR_Q5_K_Q8_1_MMQ, vec_dot_q5_K_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+
+#elif __CUDA_ARCH__ >= MIN_CC_DP4A
+    const int mmq_x  =  MMQ_X_Q5_K_PASCAL;
+    const int mmq_y  =  MMQ_Y_Q5_K_PASCAL;
+    const int nwarps = NWARPS_Q5_K_PASCAL;
+
+    mul_mat_q<QK_K, QR5_K, QI5_K, true, block_q5_K, mmq_x, mmq_y, nwarps, allocate_tiles_q5_K<mmq_y>,
+        load_tiles_q5_K<mmq_y, nwarps, need_check>, VDR_Q5_K_Q8_1_MMQ, vec_dot_q5_K_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+#else
+    (void) vec_dot_q5_K_q8_1_mul_mat;
+    assert(false);
+#endif // __CUDA_ARCH__ >= CC_TURING
+}
+
+#define  MMQ_X_Q6_K_AMPERE 64
+#define  MMQ_Y_Q6_K_AMPERE 64
+#define NWARPS_Q6_K_AMPERE 4
+#define  MMQ_X_Q6_K_PASCAL 64
+#define  MMQ_Y_Q6_K_PASCAL 64
+#define NWARPS_Q6_K_PASCAL 8
+
+template <bool need_check> static __global__ void
+#if __CUDA_ARCH__ < CC_TURING
+    __launch_bounds__(WARP_SIZE*NWARPS_Q6_K_PASCAL, 2)
+#endif // __CUDA_ARCH__ < CC_TURING
+    mul_mat_q6_K(
+    const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
+    const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst) {
+
+#if __CUDA_ARCH__ >= CC_TURING
+    const int mmq_x  =  MMQ_X_Q6_K_AMPERE;
+    const int mmq_y  =  MMQ_Y_Q6_K_AMPERE;
+    const int nwarps = NWARPS_Q6_K_AMPERE;
+
+    mul_mat_q<QK_K, QR6_K, QI6_K, false, block_q6_K, mmq_x, mmq_y, nwarps, allocate_tiles_q6_K<mmq_y>,
+        load_tiles_q6_K<mmq_y, nwarps, need_check>, VDR_Q6_K_Q8_1_MMQ, vec_dot_q6_K_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+
+#elif __CUDA_ARCH__ >= MIN_CC_DP4A
+    const int mmq_x  =  MMQ_X_Q6_K_PASCAL;
+    const int mmq_y  =  MMQ_Y_Q6_K_PASCAL;
+    const int nwarps = NWARPS_Q6_K_PASCAL;
+
+    mul_mat_q<QK_K, QR6_K, QI6_K, false, block_q6_K, mmq_x, mmq_y, nwarps, allocate_tiles_q6_K<mmq_y>,
+        load_tiles_q6_K<mmq_y, nwarps, need_check>, VDR_Q6_K_Q8_1_MMQ, vec_dot_q6_K_q8_1_mul_mat>
+        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+#else
+    (void) vec_dot_q6_K_q8_1_mul_mat;
+    assert(false);
+#endif // __CUDA_ARCH__ >= CC_TURING
 }
 
 template <int qk, int qi, typename block_q_t, int vdr, vec_dot_q_cuda_t vec_dot_q_cuda>
@@ -3942,48 +4343,32 @@ static void ggml_mul_mat_q4_0_q8_1_cuda(
     CUDA_CHECK(cudaGetDevice(&id));
     const int compute_capability = g_compute_capabilities[id];
 
+    int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_TURING) {
-        const int mmq_x  = 64;
-        const int mmq_y  = 128;
-        const int nwarps = 4;
-
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
-
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK4_0, QR4_0, QI4_0, true, block_q4_0, mmq_x, mmq_y, nwarps, allocate_tiles_q4_0<mmq_y>,
-                load_tiles_q4_0<mmq_y, nwarps, need_check>, VDR_Q4_0_Q8_1_MMQ, vec_dot_q4_0_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK4_0, QR4_0, QI4_0, true, block_q4_0, mmq_x, mmq_y, nwarps, allocate_tiles_q4_0<mmq_y>,
-                load_tiles_q4_0<mmq_y, nwarps, need_check>, VDR_Q4_0_Q8_1_MMQ, vec_dot_q4_0_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+        mmq_x  =  MMQ_X_Q4_0_AMPERE;
+        mmq_y  =  MMQ_Y_Q4_0_AMPERE;
+        nwarps = NWARPS_Q4_0_AMPERE;
+    } else if (compute_capability >= MIN_CC_DP4A) {
+        mmq_x  =  MMQ_X_Q4_0_PASCAL;
+        mmq_y  =  MMQ_Y_Q4_0_PASCAL;
+        nwarps = NWARPS_Q4_0_PASCAL;
     } else {
-        const int mmq_x  = 64;
-        const int mmq_y  = 64;
-        const int nwarps = 4;
+        GGML_ASSERT(false);
+    }
 
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
+    const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
+    const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
+    const dim3 block_nums(block_num_x, block_num_y, 1);
+    const dim3 block_dims(WARP_SIZE, nwarps, 1);
 
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK4_0, QR4_0, QI4_0, true, block_q4_0, mmq_x, mmq_y, nwarps, allocate_tiles_q4_0<mmq_y>,
-                load_tiles_q4_0<mmq_y, nwarps, need_check>, VDR_Q4_0_Q8_1_MMQ, vec_dot_q4_0_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK4_0, QR4_0, QI4_0, true, block_q4_0, mmq_x, mmq_y, nwarps, allocate_tiles_q4_0<mmq_y>,
-                load_tiles_q4_0<mmq_y, nwarps, need_check>, VDR_Q4_0_Q8_1_MMQ, vec_dot_q4_0_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+    if (nrows_x % mmq_y == 0) {
+        const bool need_check = false;
+        mul_mat_q4_0<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    } else {
+        const bool need_check = true;
+        mul_mat_q4_0<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
     }
 }
 
@@ -3995,49 +4380,32 @@ static void ggml_mul_mat_q4_1_q8_1_cuda(
     CUDA_CHECK(cudaGetDevice(&id));
     const int compute_capability = g_compute_capabilities[id];
 
+    int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_TURING) {
-        const int mmq_x  = 64;
-        const int mmq_y  = 128;
-        const int nwarps = 4;
-
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
-
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK4_1, QR4_1, QI4_1, true, block_q4_1, mmq_x, mmq_y, nwarps, allocate_tiles_q4_1<mmq_y>,
-                load_tiles_q4_1<mmq_y, nwarps, need_check>, VDR_Q4_1_Q8_1_MMQ, vec_dot_q4_1_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK4_1, QR4_1, QI4_1, true, block_q4_1, mmq_x, mmq_y, nwarps, allocate_tiles_q4_1<mmq_y>,
-                load_tiles_q4_1<mmq_y, nwarps, need_check>, VDR_Q4_1_Q8_1_MMQ, vec_dot_q4_1_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+        mmq_x  =  MMQ_X_Q4_1_AMPERE;
+        mmq_y  =  MMQ_Y_Q4_1_AMPERE;
+        nwarps = NWARPS_Q4_1_AMPERE;
+    } else if (compute_capability >= MIN_CC_DP4A) {
+        mmq_x  =  MMQ_X_Q4_1_PASCAL;
+        mmq_y  =  MMQ_Y_Q4_1_PASCAL;
+        nwarps = NWARPS_Q4_1_PASCAL;
     } else {
-        const int mmq_x  = 64;
-        const int mmq_y  = 64;
-        const int nwarps = 8;
+        GGML_ASSERT(false);
+    }
 
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
+    const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
+    const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
+    const dim3 block_nums(block_num_x, block_num_y, 1);
+    const dim3 block_dims(WARP_SIZE, nwarps, 1);
 
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK4_1, QR4_1, QI4_1, true, block_q4_1, mmq_x, mmq_y, nwarps, allocate_tiles_q4_1<mmq_y>,
-                load_tiles_q4_1<mmq_y, nwarps, need_check>, VDR_Q4_1_Q8_1_MMQ, vec_dot_q4_1_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK4_1, QR4_1, QI4_1, true, block_q4_1, mmq_x, mmq_y, nwarps, allocate_tiles_q4_1<mmq_y>,
-                load_tiles_q4_1<mmq_y, nwarps, need_check>, VDR_Q4_1_Q8_1_MMQ, vec_dot_q4_1_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
-
+    if (nrows_x % mmq_y == 0) {
+        const bool need_check = false;
+        mul_mat_q4_1<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    } else {
+        const bool need_check = true;
+        mul_mat_q4_1<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
     }
 }
 
@@ -4049,48 +4417,32 @@ static void ggml_mul_mat_q5_0_q8_1_cuda(
     CUDA_CHECK(cudaGetDevice(&id));
     const int compute_capability = g_compute_capabilities[id];
 
+    int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_TURING) {
-        const int mmq_x  = 128;
-        const int mmq_y  = 64;
-        const int nwarps = 4;
-
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
-
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK5_0, QR5_0, QI5_0, false, block_q5_0, mmq_x, mmq_y, nwarps, allocate_tiles_q5_0<mmq_y>,
-                load_tiles_q5_0<mmq_y, nwarps, need_check>, VDR_Q5_0_Q8_1_MMQ, vec_dot_q5_0_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK5_0, QR5_0, QI5_0, false, block_q5_0, mmq_x, mmq_y, nwarps, allocate_tiles_q5_0<mmq_y>,
-                load_tiles_q5_0<mmq_y, nwarps, need_check>, VDR_Q5_0_Q8_1_MMQ, vec_dot_q5_0_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+        mmq_x  =  MMQ_X_Q5_0_AMPERE;
+        mmq_y  =  MMQ_Y_Q5_0_AMPERE;
+        nwarps = NWARPS_Q5_0_AMPERE;
+    } else if (compute_capability >= MIN_CC_DP4A) {
+        mmq_x  =  MMQ_X_Q5_0_PASCAL;
+        mmq_y  =  MMQ_Y_Q5_0_PASCAL;
+        nwarps = NWARPS_Q5_0_PASCAL;
     } else {
-        const int mmq_x  = 64;
-        const int mmq_y  = 64;
-        const int nwarps = 8;
+        GGML_ASSERT(false);
+    }
 
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
+    const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
+    const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
+    const dim3 block_nums(block_num_x, block_num_y, 1);
+    const dim3 block_dims(WARP_SIZE, nwarps, 1);
 
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK5_0, QR5_0, QI5_0, false, block_q5_0, mmq_x, mmq_y, nwarps, allocate_tiles_q5_0<mmq_y>,
-                load_tiles_q5_0<mmq_y, nwarps, need_check>, VDR_Q5_0_Q8_1_MMQ, vec_dot_q5_0_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK5_0, QR5_0, QI5_0, false, block_q5_0, mmq_x, mmq_y, nwarps, allocate_tiles_q5_0<mmq_y>,
-                load_tiles_q5_0<mmq_y, nwarps, need_check>, VDR_Q5_0_Q8_1_MMQ, vec_dot_q5_0_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+    if (nrows_x % mmq_y == 0) {
+        const bool need_check = false;
+        mul_mat_q5_0<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    } else {
+        const bool need_check = true;
+        mul_mat_q5_0<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
     }
 }
 
@@ -4102,48 +4454,32 @@ static void ggml_mul_mat_q5_1_q8_1_cuda(
     CUDA_CHECK(cudaGetDevice(&id));
     const int compute_capability = g_compute_capabilities[id];
 
+    int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_TURING) {
-        const int mmq_x  = 128;
-        const int mmq_y  = 64;
-        const int nwarps = 8;
-
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
-
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK5_1, QR5_1, QI5_1, true, block_q5_1, mmq_x, mmq_y, nwarps, allocate_tiles_q5_1<mmq_y>,
-                load_tiles_q5_1<mmq_y, nwarps, need_check>, VDR_Q5_1_Q8_1_MMQ, vec_dot_q5_1_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK5_1, QR5_1, QI5_1, true, block_q5_1, mmq_x, mmq_y, nwarps, allocate_tiles_q5_1<mmq_y>,
-                load_tiles_q5_1<mmq_y, nwarps, need_check>, VDR_Q5_1_Q8_1_MMQ, vec_dot_q5_1_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+        mmq_x  =  MMQ_X_Q5_1_AMPERE;
+        mmq_y  =  MMQ_Y_Q5_1_AMPERE;
+        nwarps = NWARPS_Q5_1_AMPERE;
+    } else if (compute_capability >= MIN_CC_DP4A) {
+        mmq_x  =  MMQ_X_Q5_1_PASCAL;
+        mmq_y  =  MMQ_Y_Q5_1_PASCAL;
+        nwarps = NWARPS_Q5_1_PASCAL;
     } else {
-        const int mmq_x  = 64;
-        const int mmq_y  = 64;
-        const int nwarps = 8;
+        GGML_ASSERT(false);
+    }
 
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
+    const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
+    const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
+    const dim3 block_nums(block_num_x, block_num_y, 1);
+    const dim3 block_dims(WARP_SIZE, nwarps, 1);
 
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK5_1, QR5_1, QI5_1, true, block_q5_1, mmq_x, mmq_y, nwarps, allocate_tiles_q5_1<mmq_y>,
-                load_tiles_q5_1<mmq_y, nwarps, need_check>, VDR_Q5_1_Q8_1_MMQ, vec_dot_q5_1_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK5_1, QR5_1, QI5_1, true, block_q5_1, mmq_x, mmq_y, nwarps, allocate_tiles_q5_1<mmq_y>,
-                load_tiles_q5_1<mmq_y, nwarps, need_check>, VDR_Q5_1_Q8_1_MMQ, vec_dot_q5_1_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+    if (nrows_x % mmq_y == 0) {
+        const bool need_check = false;
+        mul_mat_q5_1<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    } else {
+        const bool need_check = true;
+        mul_mat_q5_1<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
     }
 }
 
@@ -4155,48 +4491,32 @@ static void ggml_mul_mat_q8_0_q8_1_cuda(
     CUDA_CHECK(cudaGetDevice(&id));
     const int compute_capability = g_compute_capabilities[id];
 
+    int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_TURING) {
-        const int mmq_x  = 128;
-        const int mmq_y  = 64;
-        const int nwarps = 4;
-
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
-
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK8_0, QR8_0, QI8_0, false, block_q8_0, mmq_x, mmq_y, nwarps, allocate_tiles_q8_0<mmq_y>,
-                load_tiles_q8_0<mmq_y, nwarps, need_check>, VDR_Q8_0_Q8_1_MMQ, vec_dot_q8_0_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK8_0, QR8_0, QI8_0, false, block_q8_0, mmq_x, mmq_y, nwarps, allocate_tiles_q8_0<mmq_y>,
-                load_tiles_q8_0<mmq_y, nwarps, need_check>, VDR_Q8_0_Q8_1_MMQ, vec_dot_q8_0_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+        mmq_x  =  MMQ_X_Q8_0_AMPERE;
+        mmq_y  =  MMQ_Y_Q8_0_AMPERE;
+        nwarps = NWARPS_Q8_0_AMPERE;
+    } else if (compute_capability >= MIN_CC_DP4A) {
+        mmq_x  =  MMQ_X_Q8_0_PASCAL;
+        mmq_y  =  MMQ_Y_Q8_0_PASCAL;
+        nwarps = NWARPS_Q8_0_PASCAL;
     } else {
-        const int mmq_x  = 64;
-        const int mmq_y  = 64;
-        const int nwarps = 8;
+        GGML_ASSERT(false);
+    }
 
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
+    const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
+    const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
+    const dim3 block_nums(block_num_x, block_num_y, 1);
+    const dim3 block_dims(WARP_SIZE, nwarps, 1);
 
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK8_0, QR8_0, QI8_0, false, block_q8_0, mmq_x, mmq_y, nwarps, allocate_tiles_q8_0<mmq_y>,
-                load_tiles_q8_0<mmq_y, nwarps, need_check>, VDR_Q8_0_Q8_1_MMQ, vec_dot_q8_0_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK8_0, QR8_0, QI8_0, false, block_q8_0, mmq_x, mmq_y, nwarps, allocate_tiles_q8_0<mmq_y>,
-                load_tiles_q8_0<mmq_y, nwarps, need_check>, VDR_Q8_0_Q8_1_MMQ, vec_dot_q8_0_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+    if (nrows_x % mmq_y == 0) {
+        const bool need_check = false;
+        mul_mat_q8_0<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    } else {
+        const bool need_check = true;
+        mul_mat_q8_0<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
     }
 }
 
@@ -4208,48 +4528,32 @@ static void ggml_mul_mat_q2_K_q8_1_cuda(
     CUDA_CHECK(cudaGetDevice(&id));
     const int compute_capability = g_compute_capabilities[id];
 
+    int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_TURING) {
-        const int mmq_x  = 64;
-        const int mmq_y  = 128;
-        const int nwarps = 4;
-
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
-
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK_K, QR2_K, QI2_K, false, block_q2_K, mmq_x, mmq_y, nwarps, allocate_tiles_q2_K<mmq_y>,
-                load_tiles_q2_K<mmq_y, nwarps, need_check>, VDR_Q2_K_Q8_1_MMQ, vec_dot_q2_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK_K, QR2_K, QI2_K, false, block_q2_K, mmq_x, mmq_y, nwarps, allocate_tiles_q2_K<mmq_y>,
-                load_tiles_q2_K<mmq_y, nwarps, need_check>, VDR_Q2_K_Q8_1_MMQ, vec_dot_q2_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+        mmq_x  =  MMQ_X_Q2_K_AMPERE;
+        mmq_y  =  MMQ_Y_Q2_K_AMPERE;
+        nwarps = NWARPS_Q2_K_AMPERE;
+    } else if (compute_capability >= MIN_CC_DP4A) {
+        mmq_x  =  MMQ_X_Q2_K_PASCAL;
+        mmq_y  =  MMQ_Y_Q2_K_PASCAL;
+        nwarps = NWARPS_Q2_K_PASCAL;
     } else {
-        const int mmq_x  = 64;
-        const int mmq_y  = 64;
-        const int nwarps = 8;
+        GGML_ASSERT(false);
+    }
 
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
+    const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
+    const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
+    const dim3 block_nums(block_num_x, block_num_y, 1);
+    const dim3 block_dims(WARP_SIZE, nwarps, 1);
 
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK_K, QR2_K, QI2_K, false, block_q2_K, mmq_x, mmq_y, nwarps, allocate_tiles_q2_K<mmq_y>,
-                load_tiles_q2_K<mmq_y, nwarps, need_check>, VDR_Q2_K_Q8_1_MMQ, vec_dot_q2_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK_K, QR2_K, QI2_K, false, block_q2_K, mmq_x, mmq_y, nwarps, allocate_tiles_q2_K<mmq_y>,
-                load_tiles_q2_K<mmq_y, nwarps, need_check>, VDR_Q2_K_Q8_1_MMQ, vec_dot_q2_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+    if (nrows_x % mmq_y == 0) {
+        const bool need_check = false;
+        mul_mat_q2_K<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    } else {
+        const bool need_check = true;
+        mul_mat_q2_K<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
     }
 }
 
@@ -4261,48 +4565,32 @@ static void ggml_mul_mat_q3_K_q8_1_cuda(
     CUDA_CHECK(cudaGetDevice(&id));
     const int compute_capability = g_compute_capabilities[id];
 
+    int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_TURING) {
-        const int mmq_x  = 128;
-        const int mmq_y  = 128;
-        const int nwarps = 4;
-
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
-
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK_K, QR3_K, QI3_K, false, block_q3_K, mmq_x, mmq_y, nwarps, allocate_tiles_q3_K<mmq_y>,
-                load_tiles_q3_K<mmq_y, nwarps, need_check>, VDR_Q3_K_Q8_1_MMQ, vec_dot_q3_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK_K, QR3_K, QI3_K, false, block_q3_K, mmq_x, mmq_y, nwarps, allocate_tiles_q3_K<mmq_y>,
-                load_tiles_q3_K<mmq_y, nwarps, need_check>, VDR_Q3_K_Q8_1_MMQ, vec_dot_q3_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+        mmq_x  =  MMQ_X_Q3_K_AMPERE;
+        mmq_y  =  MMQ_Y_Q3_K_AMPERE;
+        nwarps = NWARPS_Q3_K_AMPERE;
+    } else if (compute_capability >= MIN_CC_DP4A) {
+        mmq_x  =  MMQ_X_Q3_K_PASCAL;
+        mmq_y  =  MMQ_Y_Q3_K_PASCAL;
+        nwarps = NWARPS_Q3_K_PASCAL;
     } else {
-        const int mmq_x  = 64;
-        const int mmq_y  = 64;
-        const int nwarps = 8;
+        GGML_ASSERT(false);
+    }
 
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
+    const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
+    const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
+    const dim3 block_nums(block_num_x, block_num_y, 1);
+    const dim3 block_dims(WARP_SIZE, nwarps, 1);
 
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK_K, QR3_K, QI3_K, false, block_q3_K, mmq_x, mmq_y, nwarps, allocate_tiles_q3_K<mmq_y>,
-                load_tiles_q3_K<mmq_y, nwarps, need_check>, VDR_Q3_K_Q8_1_MMQ, vec_dot_q3_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK_K, QR3_K, QI3_K, false, block_q3_K, mmq_x, mmq_y, nwarps, allocate_tiles_q3_K<mmq_y>,
-                load_tiles_q3_K<mmq_y, nwarps, need_check>, VDR_Q3_K_Q8_1_MMQ, vec_dot_q3_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+    if (nrows_x % mmq_y == 0) {
+        const bool need_check = false;
+        mul_mat_q3_K<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    } else {
+        const bool need_check = true;
+        mul_mat_q3_K<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
     }
 }
 
@@ -4314,48 +4602,32 @@ static void ggml_mul_mat_q4_K_q8_1_cuda(
     CUDA_CHECK(cudaGetDevice(&id));
     const int compute_capability = g_compute_capabilities[id];
 
+    int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_TURING) {
-        const int mmq_x  = 64;
-        const int mmq_y  = 128;
-        const int nwarps = 4;
-
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
-
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK_K, QR4_K, QI4_K, true, block_q4_K, mmq_x, mmq_y, nwarps, allocate_tiles_q4_K<mmq_y>,
-                load_tiles_q4_K<mmq_y, nwarps, need_check>, VDR_Q4_K_Q8_1_MMQ, vec_dot_q4_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK_K, QR4_K, QI4_K, true, block_q4_K, mmq_x, mmq_y, nwarps, allocate_tiles_q4_K<mmq_y>,
-                load_tiles_q4_K<mmq_y, nwarps, need_check>, VDR_Q4_K_Q8_1_MMQ, vec_dot_q4_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+        mmq_x  =  MMQ_X_Q4_K_AMPERE;
+        mmq_y  =  MMQ_Y_Q4_K_AMPERE;
+        nwarps = NWARPS_Q4_K_AMPERE;
+    } else if (compute_capability >= MIN_CC_DP4A) {
+        mmq_x  =  MMQ_X_Q4_K_PASCAL;
+        mmq_y  =  MMQ_Y_Q4_K_PASCAL;
+        nwarps = NWARPS_Q4_K_PASCAL;
     } else {
-        const int mmq_x  = 32;
-        const int mmq_y  = 64;
-        const int nwarps = 8;
+        GGML_ASSERT(false);
+    }
 
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
+    const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
+    const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
+    const dim3 block_nums(block_num_x, block_num_y, 1);
+    const dim3 block_dims(WARP_SIZE, nwarps, 1);
 
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK_K, QR4_K, QI4_K, true, block_q4_K, mmq_x, mmq_y, nwarps, allocate_tiles_q4_K<mmq_y>,
-                load_tiles_q4_K<mmq_y, nwarps, need_check>, VDR_Q4_K_Q8_1_MMQ, vec_dot_q4_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK_K, QR4_K, QI4_K, true, block_q4_K, mmq_x, mmq_y, nwarps, allocate_tiles_q4_K<mmq_y>,
-                load_tiles_q4_K<mmq_y, nwarps, need_check>, VDR_Q4_K_Q8_1_MMQ, vec_dot_q4_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+    if (nrows_x % mmq_y == 0) {
+        const bool need_check = false;
+        mul_mat_q4_K<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    } else {
+        const bool need_check = true;
+        mul_mat_q4_K<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
     }
 }
 
@@ -4367,48 +4639,32 @@ static void ggml_mul_mat_q5_K_q8_1_cuda(
     CUDA_CHECK(cudaGetDevice(&id));
     const int compute_capability = g_compute_capabilities[id];
 
+    int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_TURING) {
-        const int mmq_x  = 64;
-        const int mmq_y  = 128;
-        const int nwarps = 4;
-
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
-
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK_K, QR5_K, QI5_K, true, block_q5_K, mmq_x, mmq_y, nwarps, allocate_tiles_q5_K<mmq_y>,
-                load_tiles_q5_K<mmq_y, nwarps, need_check>, VDR_Q5_K_Q8_1_MMQ, vec_dot_q5_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK_K, QR5_K, QI5_K, true, block_q5_K, mmq_x, mmq_y, nwarps, allocate_tiles_q5_K<mmq_y>,
-                load_tiles_q5_K<mmq_y, nwarps, need_check>, VDR_Q5_K_Q8_1_MMQ, vec_dot_q5_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+        mmq_x  =  MMQ_X_Q5_K_AMPERE;
+        mmq_y  =  MMQ_Y_Q5_K_AMPERE;
+        nwarps = NWARPS_Q5_K_AMPERE;
+    } else if (compute_capability >= MIN_CC_DP4A) {
+        mmq_x  =  MMQ_X_Q5_K_PASCAL;
+        mmq_y  =  MMQ_Y_Q5_K_PASCAL;
+        nwarps = NWARPS_Q5_K_PASCAL;
     } else {
-        const int mmq_x  = 64;
-        const int mmq_y  = 64;
-        const int nwarps = 8;
+        GGML_ASSERT(false);
+    }
 
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
+    const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
+    const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
+    const dim3 block_nums(block_num_x, block_num_y, 1);
+    const dim3 block_dims(WARP_SIZE, nwarps, 1);
 
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK_K, QR5_K, QI5_K, true, block_q5_K, mmq_x, mmq_y, nwarps, allocate_tiles_q5_K<mmq_y>,
-                load_tiles_q5_K<mmq_y, nwarps, need_check>, VDR_Q5_K_Q8_1_MMQ, vec_dot_q5_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK_K, QR5_K, QI5_K, true, block_q5_K, mmq_x, mmq_y, nwarps, allocate_tiles_q5_K<mmq_y>,
-                load_tiles_q5_K<mmq_y, nwarps, need_check>, VDR_Q5_K_Q8_1_MMQ, vec_dot_q5_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+    if (nrows_x % mmq_y == 0) {
+        const bool need_check = false;
+        mul_mat_q5_K<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    } else {
+        const bool need_check = true;
+        mul_mat_q5_K<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
     }
 }
 
@@ -4420,48 +4676,32 @@ static void ggml_mul_mat_q6_K_q8_1_cuda(
     CUDA_CHECK(cudaGetDevice(&id));
     const int compute_capability = g_compute_capabilities[id];
 
+    int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_TURING) {
-        const int mmq_x  = 64;
-        const int mmq_y  = 64;
-        const int nwarps = 4;
-
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
-
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK_K, QR6_K, QI6_K, false, block_q6_K, mmq_x, mmq_y, nwarps, allocate_tiles_q6_K<mmq_y>,
-                load_tiles_q6_K<mmq_y, nwarps, need_check>, VDR_Q6_K_Q8_1_MMQ, vec_dot_q6_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK_K, QR6_K, QI6_K, false, block_q6_K, mmq_x, mmq_y, nwarps, allocate_tiles_q6_K<mmq_y>,
-                load_tiles_q6_K<mmq_y, nwarps, need_check>, VDR_Q6_K_Q8_1_MMQ, vec_dot_q6_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+        mmq_x  =  MMQ_X_Q6_K_AMPERE;
+        mmq_y  =  MMQ_Y_Q6_K_AMPERE;
+        nwarps = NWARPS_Q6_K_AMPERE;
+    } else if (compute_capability >= MIN_CC_DP4A) {
+        mmq_x  =  MMQ_X_Q6_K_PASCAL;
+        mmq_y  =  MMQ_Y_Q6_K_PASCAL;
+        nwarps = NWARPS_Q6_K_PASCAL;
     } else {
-        const int mmq_x  = 32;
-        const int mmq_y  = 64;
-        const int nwarps = 8;
+        GGML_ASSERT(false);
+    }
 
-        const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
-        const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
-        const dim3 block_nums(block_num_x, block_num_y, 1);
-        const dim3 block_dims(WARP_SIZE, nwarps, 1);
+    const int block_num_x = (nrows_x + mmq_y - 1) / mmq_y;
+    const int block_num_y = (ncols_y + mmq_x - 1) / mmq_x;
+    const dim3 block_nums(block_num_x, block_num_y, 1);
+    const dim3 block_dims(WARP_SIZE, nwarps, 1);
 
-        if (nrows_x % mmq_y == 0) {
-            const bool need_check = false;
-            mul_mat_q<QK_K, QR6_K, QI6_K, false, block_q6_K, mmq_x, mmq_y, nwarps, allocate_tiles_q6_K<mmq_y>,
-                load_tiles_q6_K<mmq_y, nwarps, need_check>, VDR_Q6_K_Q8_1_MMQ, vec_dot_q6_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        } else {
-            const bool need_check = true;
-            mul_mat_q<QK_K, QR6_K, QI6_K, false, block_q6_K, mmq_x, mmq_y, nwarps, allocate_tiles_q6_K<mmq_y>,
-                load_tiles_q6_K<mmq_y, nwarps, need_check>, VDR_Q6_K_Q8_1_MMQ, vec_dot_q6_K_q8_1_mul_mat>
-                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
-        }
+    if (nrows_x % mmq_y == 0) {
+        const bool need_check = false;
+        mul_mat_q6_K<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    } else {
+        const bool need_check = true;
+        mul_mat_q6_K<need_check><<<block_nums, block_dims, 0, stream>>>
+            (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
     }
 }
 
@@ -6228,4 +6468,16 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
     }
     func(tensor->src[0], tensor->src[1], tensor);
     return true;
+}
+
+int ggml_cuda_get_device_count() {
+    int device_count;
+    CUDA_CHECK(cudaGetDeviceCount(&device_count));
+    return device_count;
+}
+
+void ggml_cuda_get_device_description(int device, char * description, size_t description_size) {
+    cudaDeviceProp prop;
+    CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+    snprintf(description, description_size, "%s", prop.name);
 }
