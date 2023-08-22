@@ -2839,6 +2839,13 @@ static bool llama_is_pad_token(const llama_vocab & vocab, llama_token id ) {
 }
 
 static uint8_t llama_token_to_byte(const llama_vocab & vocab, llama_token id) {
+    GGML_ASSERT(llama_is_byte_token(vocab, id));
+    const auto& token_data = vocab.id_to_token.at(id);
+    auto buf = token_data.text.substr(3, 2);
+    return strtol(buf.c_str(), NULL, 16);
+}
+
+static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
     if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
         char buf[7];
         int result = snprintf(buf, sizeof(buf), "<0x%02X>", ch);
@@ -2847,13 +2854,6 @@ static uint8_t llama_token_to_byte(const llama_vocab & vocab, llama_token id) {
     }
     // vocab.type == LLAMA_VOCAB_TYPE_BPE
     return vocab.token_to_id.at(std::string(1, ch));
-}
-
-static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
-    char buf[7];
-    int result = snprintf(buf, sizeof(buf), "<0x%02X>", ch);
-    GGML_ASSERT(0 <= result && result < 7);
-    return vocab.token_to_id.at(buf);
 }
 
 static std::string llama_escape_whitespace(const std::string& text) {
