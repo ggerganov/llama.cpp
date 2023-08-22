@@ -16354,10 +16354,10 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                     float freq_scale;
                     float xpos_base;
                     bool  xpos_down;
-					memcpy(&freq_base,  (int32_t *) tensor->op_params + 4, sizeof(float));
-					memcpy(&freq_scale, (int32_t *) tensor->op_params + 5, sizeof(float));
-					memcpy(&xpos_base,  (int32_t *) tensor->op_params + 6, sizeof(float));
-					memcpy(&xpos_down,  (int32_t *) tensor->op_params + 7, sizeof(bool));
+                    memcpy(&freq_base,  (int32_t *) tensor->op_params + 4, sizeof(float));
+                    memcpy(&freq_scale, (int32_t *) tensor->op_params + 5, sizeof(float));
+                    memcpy(&xpos_base,  (int32_t *) tensor->op_params + 6, sizeof(float));
+                    memcpy(&xpos_down,  (int32_t *) tensor->op_params + 7, sizeof(bool));
 
                     src0->grad = ggml_add_impl(ctx,
                             src0->grad,
@@ -16385,10 +16385,10 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                     float freq_scale;
                     float xpos_base;
                     bool  xpos_down;
-					memcpy(&freq_base,  (int32_t *) tensor->op_params + 4, sizeof(float));
-					memcpy(&freq_scale, (int32_t *) tensor->op_params + 5, sizeof(float));
-					memcpy(&xpos_base,  (int32_t *) tensor->op_params + 6, sizeof(float));
-					memcpy(&xpos_down,  (int32_t *) tensor->op_params + 7, sizeof(bool));
+                    memcpy(&freq_base,  (int32_t *) tensor->op_params + 4, sizeof(float));
+                    memcpy(&freq_scale, (int32_t *) tensor->op_params + 5, sizeof(float));
+                    memcpy(&xpos_base,  (int32_t *) tensor->op_params + 6, sizeof(float));
+                    memcpy(&xpos_down,  (int32_t *) tensor->op_params + 7, sizeof(bool));
 
                     src0->grad = ggml_add_impl(ctx,
                             src0->grad,
