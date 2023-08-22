@@ -423,6 +423,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.ppl_stride = std::stoi(argv[i]);
+        } else if (arg == "--ppl-output-type") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.ppl_output_type = std::stoi(argv[i]);
         } else if (arg == "--hellaswag") {
             params.hellaswag = true;
         } else if (arg == "--hellaswag-tasks") {

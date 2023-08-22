@@ -125,7 +125,11 @@ void perplexity_v2(llama_context * ctx, const gpt_params & params) {
             ++count;
         }
         // perplexity is e^(average negative log-likelihood)
-        printf("[%d]%.4lf,", i + 1, std::exp(nll / count));
+        if (params.ppl_output_type == 0) {
+            printf("[%d]%.4lf,", i + 1, std::exp(nll / count));
+        } else {
+            printf("%8d  %.4lf\n", i*params.ppl_stride, std::exp(nll / count));
+        }
         fflush(stdout);
     }
     printf("\n");
@@ -226,7 +230,11 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
             ++count;
         }
         // perplexity is e^(average negative log-likelihood)
-        printf("[%d]%.4lf,", i + 1, std::exp(nll / count));
+        if (params.ppl_output_type == 0) {
+            printf("[%d]%.4lf,", i + 1, std::exp(nll / count));
+        } else {
+            printf("%8d  %.4lf\n", i*params.n_ctx, std::exp(nll / count));
+        }
         fflush(stdout);
     }
     printf("\n");
