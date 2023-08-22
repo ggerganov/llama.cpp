@@ -2436,7 +2436,7 @@ static struct ggml_cgraph * llm_build_falcon(
                         attn_norm),
                     ggml_repeat(ctx0, model.layers[il].attn_norm_b, attn_norm));
 
-            if (hparams.n_head_kv == 8) { // Falcon-40B
+            if (model.layers[il].attn_norm_2) { // Falcon-40B
                 cur = ggml_norm(ctx0, inpL);
 
                 cur = ggml_add(ctx0,
@@ -2461,23 +2461,25 @@ static struct ggml_cgraph * llm_build_falcon(
             // trickery when trying to accurately dump these views for
             // debugging.
 
+            const size_t wsize = ggml_type_size(cur->type);
+
             struct ggml_tensor * Qcur = ggml_view_3d(
                 ctx0, cur, n_embd_head, n_head, N,
-                n_embd_head * ggml_type_size(GGML_TYPE_F32),
-                n_embd_head * (n_head + 2 * n_head_kv) * ggml_type_size(GGML_TYPE_F32),
+                wsize * n_embd_head,
+                wsize * n_embd_head * (n_head + 2 * n_head_kv),
                 0);
 
             struct ggml_tensor * Kcur = ggml_view_3d(
                 ctx0, cur, n_embd_head, n_head_kv, N,
-                n_embd_head * ggml_type_size(GGML_TYPE_F32),
-                n_embd_head * (n_head + 2 * n_head_kv) * ggml_type_size(GGML_TYPE_F32),
-                n_embd_head * n_head * ggml_type_size(GGML_TYPE_F32));
+                wsize * n_embd_head,
+                wsize * n_embd_head * (n_head + 2 * n_head_kv),
+                wsize * n_embd_head * n_head);
 
             struct ggml_tensor * Vcur = ggml_view_3d(
                 ctx0, cur, n_embd_head, n_head_kv, N,
-                n_embd_head * ggml_type_size(GGML_TYPE_F32),
-                n_embd_head * (n_head + 2 * n_head_kv) * ggml_type_size(GGML_TYPE_F32),
-                n_embd_head * (n_head + n_head_kv) * ggml_type_size(GGML_TYPE_F32));
+                wsize * n_embd_head,
+                wsize * n_embd_head * (n_head + 2 * n_head_kv),
+                wsize * n_embd_head * (n_head +     n_head_kv));
 
             // using mode = 2 for neox mode
             Qcur = ggml_rope_inplace(ctx0, Qcur, n_past, n_embd_head, 2, 0);
@@ -2518,11 +2520,7 @@ static struct ggml_cgraph * llm_build_falcon(
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
 
             // KQ_scaled = KQ / sqrt(n_embd/n_head)
-            struct ggml_tensor * KQ_scaled =
-                ggml_scale_inplace(ctx0,
-                        KQ,
-                        ggml_new_f32(ctx0, 1.0f/sqrt(float(n_embd_head)))
-                        );
+            struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx0, KQ, KQ_scale);
 
             // KQ_masked = mask_past(KQ_scaled)
             struct ggml_tensor * KQ_masked = ggml_diag_mask_inf_inplace(ctx0, KQ_scaled, n_past);
