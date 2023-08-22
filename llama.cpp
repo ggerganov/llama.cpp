@@ -143,6 +143,111 @@ enum llm_arch {
     LLM_ARCH_UNKNOWN,
 };
 
+static std::map<llm_arch, std::string> LLM_ARCH_NAMES = {
+    { LLM_ARCH_LLAMA,   "llama"   },
+    { LLM_ARCH_FALCON,  "falcon"  },
+    { LLM_ARCH_GPT2,    "gpt2"    },
+    { LLM_ARCH_GPTJ,    "gptj"    },
+    { LLM_ARCH_GPTNEOX, "gptneox" },
+    { LLM_ARCH_MPT,     "mpt"     },
+};
+
+enum llm_kv {
+    LLM_KV_GENERAL_ARCHITECTURE,
+    LLM_KV_GENERAL_QUANTIZATION_VERSION,
+    LLM_KV_GENERAL_ALIGNMENT,
+    LLM_KV_GENERAL_NAME,
+    LLM_KV_GENERAL_AUTHOR,
+    LLM_KV_GENERAL_URL,
+    LLM_KV_GENERAL_DESCRIPTION,
+    LLM_KV_GENERAL_LICENSE,
+    LLM_KV_GENERAL_SOURCE_URL,
+    LLM_KV_GENERAL_SOURCE_HF_REPO,
+
+    LLM_KV_CONTEXT_LENGTH,
+    LLM_KV_EMBEDDING_LENGTH,
+    LLM_KV_BLOCK_COUNT,
+    LLM_KV_FEED_FORWARD_LENGTH,
+    LLM_KV_USE_PARALLEL_RESIDUAL,
+    LLM_KV_TENSOR_DATA_LAYOUT,
+
+    LLM_KV_ATTENTION_HEAD_COUNT,
+    LLM_KV_ATTENTION_HEAD_COUNT_KV,
+    LLM_KV_ATTENTION_MAX_ALIBI_BIAS,
+    LLM_KV_ATTENTION_CLAMP_KQV,
+    LLM_KV_ATTENTION_LAYERNORM_EPS,
+    LLM_KV_ATTENTION_LAYERNORM_RMS_EPS,
+
+    LLM_KV_ROPE_DIMENSION_COUNT,
+    LLM_KV_ROPE_SCALE_LINEAR,
+
+    LLM_KV_TOKENIZER_MODEL,
+    LLM_KV_TOKENIZER_LIST,
+    LLM_KV_TOKENIZER_TOKEN_TYPE,
+    LLM_KV_TOKENIZER_SCORES,
+    LLM_KV_TOKENIZER_MERGES,
+    LLM_KV_TOKENIZER_BOS_ID,
+    LLM_KV_TOKENIZER_EOS_ID,
+    LLM_KV_TOKENIZER_UNK_ID,
+    LLM_KV_TOKENIZER_SEP_ID,
+    LLM_KV_TOKENIZER_PAD_ID,
+    LLM_KV_TOKENIZER_HF_JSON,
+    LLM_KV_TOKENIZER_RWKV,
+};
+
+static std::map<llm_kv, std::string> LLM_KV_NAMES = {
+    { LLM_KV_GENERAL_ARCHITECTURE,          "general.architecture"         },
+    { LLM_KV_GENERAL_QUANTIZATION_VERSION,  "general.quantization_version" },
+    { LLM_KV_GENERAL_ALIGNMENT,             "general.alignment"            },
+    { LLM_KV_GENERAL_NAME,                  "general.name"                 },
+    { LLM_KV_GENERAL_AUTHOR,                "general.author"               },
+    { LLM_KV_GENERAL_URL,                   "general.url"                  },
+    { LLM_KV_GENERAL_DESCRIPTION,           "general.description"          },
+    { LLM_KV_GENERAL_LICENSE,               "general.license"              },
+    { LLM_KV_GENERAL_SOURCE_URL,            "general.source_url"           },
+    { LLM_KV_GENERAL_SOURCE_HF_REPO,        "general.source_hf_repo"       },
+
+    { LLM_KV_CONTEXT_LENGTH,                "%s.context_length"        },
+    { LLM_KV_EMBEDDING_LENGTH,              "%s.embedding_length"      },
+    { LLM_KV_BLOCK_COUNT,                   "%s.block_count"           },
+    { LLM_KV_FEED_FORWARD_LENGTH,           "%s.feed_forward_length"   },
+    { LLM_KV_USE_PARALLEL_RESIDUAL,         "%s.use_parallel_residual" },
+    { LLM_KV_TENSOR_DATA_LAYOUT,            "%s.tensor_data_layout"    },
+
+    { LLM_KV_ATTENTION_HEAD_COUNT,          "%s.attention.head_count"             },
+    { LLM_KV_ATTENTION_HEAD_COUNT_KV,       "%s.attention.head_count_kv"          },
+    { LLM_KV_ATTENTION_MAX_ALIBI_BIAS,      "%s.attention.max_alibi_bias"         },
+    { LLM_KV_ATTENTION_CLAMP_KQV,           "%s.attention.clamp_kqv"              },
+    { LLM_KV_ATTENTION_LAYERNORM_EPS,       "%s.attention.layer_norm_epsilon"     },
+    { LLM_KV_ATTENTION_LAYERNORM_RMS_EPS,   "%s.attention.layer_norm_rms_epsilon" },
+
+    { LLM_KV_ROPE_DIMENSION_COUNT,          "%s.rope.dimension_count" },
+    { LLM_KV_ROPE_SCALE_LINEAR,             "%s.rope.scale_linear"    },
+
+    { LLM_KV_TOKENIZER_MODEL,               "tokenizer.ggml.model"              },
+    { LLM_KV_TOKENIZER_LIST,                "tokenizer.ggml.tokens"             },
+    { LLM_KV_TOKENIZER_TOKEN_TYPE,          "tokenizer.ggml.token_type"         },
+    { LLM_KV_TOKENIZER_SCORES,              "tokenizer.ggml.scores"             },
+    { LLM_KV_TOKENIZER_MERGES,              "tokenizer.ggml.merges"             },
+    { LLM_KV_TOKENIZER_BOS_ID,              "tokenizer.ggml.bos_token_id"       },
+    { LLM_KV_TOKENIZER_EOS_ID,              "tokenizer.ggml.eos_token_id"       },
+    { LLM_KV_TOKENIZER_UNK_ID,              "tokenizer.ggml.unknown_token_id"   },
+    { LLM_KV_TOKENIZER_SEP_ID,              "tokenizer.ggml.seperator_token_id" },
+    { LLM_KV_TOKENIZER_PAD_ID,              "tokenizer.ggml.padding_token_id"   },
+    { LLM_KV_TOKENIZER_HF_JSON,             "tokenizer.huggingface.json"        },
+    { LLM_KV_TOKENIZER_RWKV,                "tokenizer.rwkv.world"              },
+};
+
+struct LLM_KV {
+    LLM_KV(llm_arch arch) : arch(arch) {}
+
+    llm_arch arch;
+
+    std::string operator()(llm_kv kv) const {
+        return ::format(LLM_KV_NAMES[kv].c_str(), LLM_ARCH_NAMES[arch].c_str());
+    }
+};
+
 enum llm_tensor {
     LLM_TENSOR_TOKEN_EMBD,
     LLM_TENSOR_POS_EMBD,
@@ -163,16 +268,7 @@ enum llm_tensor {
     LLM_TENSOR_FFN_NORM,
 };
 
-static std::map<llm_arch, std::string> LLM_ARCH_NAMES = {
-    { LLM_ARCH_LLAMA,   "llama"   },
-    { LLM_ARCH_FALCON,  "falcon"  },
-    { LLM_ARCH_GPT2,    "gpt2"    },
-    { LLM_ARCH_GPTJ,    "gptj"    },
-    { LLM_ARCH_GPTNEOX, "gptneox" },
-    { LLM_ARCH_MPT,     "mpt"     },
-};
-
-static std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES_BASE = {
+static std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = {
     {
         LLM_ARCH_LLAMA,
         {
@@ -221,46 +317,49 @@ static llm_arch llm_arch_from_string(const std::string & name) {
 // helper to handle gguf constants
 // usage:
 //
-//   const auto llm = LLM<LLM_ARCH_LLAMA>();
+//   const auto tn = LLM_TN(LLM_ARCH_LLAMA);
 //
-//   std::string name = LLM(LLM_TENSOR_OUTPUT);                     -> "output"
-//   std::string name = LLM(LLM_TENSOR_TOKEN_EMBD, "bias");         -> "token_embd.bias"
-//   std::string name = LLM(LLM_TENSOR_ATTN_NORM, "weight", 3);     -> "blk.3.attn_norm.weight"
+//   std::string name = tn(LLM_TENSOR_OUTPUT);                     -> "output"
+//   std::string name = tn(LLM_TENSOR_TOKEN_EMBD, "bias");         -> "token_embd.bias"
+//   std::string name = tn(LLM_TENSOR_ATTN_NORM, "weight", 3);     -> "blk.3.attn_norm.weight"
 //
-template <enum llm_arch T>
-struct LLM {
+struct LLM_TN {
+    LLM_TN(llm_arch arch) : arch(arch) {}
+
+    llm_arch arch;
+
     std::string operator()(llm_tensor tensor) const {
-        return LLM_TENSOR_NAMES_BASE[T].at(tensor);
+        return LLM_TENSOR_NAMES[arch].at(tensor);
     }
 
     std::string operator()(llm_tensor tensor, const std::string & suffix) const {
-        return LLM_TENSOR_NAMES_BASE[T].at(tensor) + "." + suffix;
+        return LLM_TENSOR_NAMES[arch].at(tensor) + "." + suffix;
     }
 
     std::string operator()(llm_tensor tensor, int bid) const {
-        return format(LLM_TENSOR_NAMES_BASE[T].at(tensor).c_str(), bid);
+        return ::format(LLM_TENSOR_NAMES[arch].at(tensor).c_str(), bid);
     }
 
     std::string operator()(llm_tensor tensor, const std::string & suffix, int bid) const {
-        return format(LLM_TENSOR_NAMES_BASE[T].at(tensor).c_str(), bid) + "." + suffix;
+        return ::format(LLM_TENSOR_NAMES[arch].at(tensor).c_str(), bid) + "." + suffix;
     }
 };
-
 //
 // gguf helpers
 //
 
 #define GGUF_GET_KEY(ctx, dst, func, type, req, key) \
 { \
-    const int kid = gguf_find_key(ctx, key); \
+    const std::string skey(key); \
+    const int kid = gguf_find_key(ctx, skey.c_str()); \
     if (kid >= 0) { \
         enum gguf_type ktype = gguf_get_kv_type(ctx, kid); \
         if (ktype != (type)) { \
-            throw std::runtime_error(format("key %s has wrong type: %s", key, gguf_type_name(ktype))); \
+            throw std::runtime_error(format("key %s has wrong type: %s", skey.c_str(), gguf_type_name(ktype))); \
         } \
         (dst) = func(ctx, kid); \
     } else if (req) { \
-        throw std::runtime_error(format("key not found in model: %s", key)); \
+        throw std::runtime_error(format("key not found in model: %s", skey.c_str())); \
     } \
 }
 
@@ -1361,26 +1460,117 @@ static const char * llama_model_type_name(e_model type) {
     }
 }
 
+static llm_arch llm_load_arch(llama_model_loader & ml) {
+    struct gguf_context * ctx = ml.ctx_gguf;
+
+    const auto kv = LLM_KV(LLM_ARCH_UNKNOWN);
+
+    std::string arch_name;
+    GGUF_GET_KEY(ctx, arch_name, gguf_get_val_str, GGUF_TYPE_STRING, true, kv(LLM_KV_GENERAL_ARCHITECTURE));
+
+    const llm_arch arch = llm_arch_from_string(arch_name);
+    if (arch == LLM_ARCH_UNKNOWN) {
+        throw std::runtime_error("unknown model architecture: '" + arch_name + "'");
+    }
+
+    return arch;
+}
+
+static void llm_load_hparams(
+        llm_arch arch,
+        llama_model_loader & ml,
+        llama_model & model,
+        int n_ctx,
+        float rope_freq_base,
+        float rope_freq_scale) {
+    auto & hparams = model.hparams;
+
+    struct gguf_context * ctx = ml.ctx_gguf;
+
+    const auto kv = LLM_KV(arch);
+
+    // get general kv
+    GGUF_GET_KEY(ctx, model.name, gguf_get_val_str, GGUF_TYPE_STRING, false, kv(LLM_KV_GENERAL_NAME));
+    GGUF_GET_KEY(ctx, model.arch, gguf_get_val_str, GGUF_TYPE_STRING, false, kv(LLM_KV_GENERAL_ARCHITECTURE));
+
+    // get hparams kv
+    GGUF_GET_KEY(ctx, hparams.n_vocab,        gguf_get_arr_n,   GGUF_TYPE_ARRAY,   true, kv(LLM_KV_TOKENIZER_LIST));
+    GGUF_GET_KEY(ctx, hparams.n_ctx_train,    gguf_get_val_u32, GGUF_TYPE_UINT32,  true, kv(LLM_KV_CONTEXT_LENGTH));
+    GGUF_GET_KEY(ctx, hparams.n_embd,         gguf_get_val_u32, GGUF_TYPE_UINT32,  true, kv(LLM_KV_EMBEDDING_LENGTH));
+    GGUF_GET_KEY(ctx, hparams.n_ff,           gguf_get_val_u32, GGUF_TYPE_UINT32,  true, kv(LLM_KV_FEED_FORWARD_LENGTH));
+    GGUF_GET_KEY(ctx, hparams.n_head,         gguf_get_val_u32, GGUF_TYPE_UINT32,  true, kv(LLM_KV_ATTENTION_HEAD_COUNT));
+    GGUF_GET_KEY(ctx, hparams.n_layer,        gguf_get_val_u32, GGUF_TYPE_UINT32,  true, kv(LLM_KV_BLOCK_COUNT));
+    GGUF_GET_KEY(ctx, hparams.n_rot,          gguf_get_val_u32, GGUF_TYPE_UINT32,  true, kv(LLM_KV_ROPE_DIMENSION_COUNT));
+    GGUF_GET_KEY(ctx, hparams.f_norm_rms_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS));
+
+    // n_head_kv is optional, default to n_head
+    hparams.n_head_kv = hparams.n_head;
+    GGUF_GET_KEY(ctx, hparams.n_head_kv, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_ATTENTION_HEAD_COUNT_KV));
+
+    // TODO: manually setting rope scale should override this
+    // rope_freq_scale (inverse of the kv) is optional
+    float ropescale = 1.0f;
+    GGUF_GET_KEY(ctx, ropescale, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_SCALE_LINEAR));
+    if (ropescale != 1.0f) {
+        rope_freq_scale = 1.0f/ropescale;
+    }
+
+    // TODO: generalize to non-LLaMA models
+    switch (hparams.n_layer) {
+        case 26: model.type = e_model::MODEL_3B; break;
+        case 32: model.type = e_model::MODEL_7B; break;
+        case 40: model.type = e_model::MODEL_13B; break;
+        case 60: model.type = e_model::MODEL_30B; break;
+        case 80: model.type = e_model::MODEL_65B; break;
+        default:
+                 {
+                     if (hparams.n_layer < 32) {
+                         model.type = e_model::MODEL_7B;
+                     }
+                 } break;
+    }
+
+    // LLaMAv2
+    // TODO: probably not needed
+    {
+        const auto n_gqa = hparams.n_gqa();
+
+        if (model.type == e_model::MODEL_65B && n_gqa == 8) {
+            LLAMA_LOG_WARN("%s: assuming 70B model based on GQA == %d\n", __func__, n_gqa);
+            model.type = e_model::MODEL_70B;
+        }
+    }
+
+    model.ftype = ml.ftype;
+
+    hparams.n_ctx           = n_ctx;
+    hparams.rope_freq_base  = rope_freq_base;
+    hparams.rope_freq_scale = rope_freq_scale;
+}
+
 static void llm_load_vocab(
+        llm_arch arch,
         llama_model_loader & ml,
         llama_model & model) {
     auto & vocab = model.vocab;
 
     struct gguf_context * ctx = ml.ctx_gguf;
 
-    const int token_idx = gguf_find_key(ctx, "tokenizer.ggml.tokens");
+    const auto kv = LLM_KV(arch);
+
+    const int token_idx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_LIST).c_str());
     if (token_idx == -1) {
         throw std::runtime_error("cannot find tokenizer vocab in model file\n");
     }
 
-    const int score_idx = gguf_find_key(ctx, "tokenizer.ggml.scores");
+    const int score_idx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_SCORES).c_str());
     if (score_idx == -1) {
         throw std::runtime_error("cannot find tokenizer scores in model file\n");
     }
 
     const float * scores = (const float * ) gguf_get_arr_data(ctx, score_idx);
 
-    const int toktype_idx = gguf_find_key(ctx, "tokenizer.ggml.token_type");
+    const int toktype_idx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_TOKEN_TYPE).c_str());
     if (toktype_idx == -1) {
         throw std::runtime_error("cannot find token type list in GGUF file\n");
     }
@@ -1390,7 +1580,7 @@ static void llm_load_vocab(
     // determine vocab type
     {
         std::string tokenizer_name;
-        GGUF_GET_KEY(ctx, tokenizer_name, gguf_get_val_str, GGUF_TYPE_STRING, true, "tokenizer.ggml.model");
+        GGUF_GET_KEY(ctx, tokenizer_name, gguf_get_val_str, GGUF_TYPE_STRING, true, kv(LLM_KV_TOKENIZER_MODEL));
 
         if (tokenizer_name == "llama") {
             vocab.type = LLAMA_VOCAB_TYPE_SPM;
@@ -1424,80 +1614,11 @@ static void llm_load_vocab(
     }
 
     // special tokens
-    GGUF_GET_KEY(ctx, vocab.special_bos_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "tokenizer.ggml.bos_token_id");
-    GGUF_GET_KEY(ctx, vocab.special_eos_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "tokenizer.ggml.eos_token_id");
-    GGUF_GET_KEY(ctx, vocab.special_unk_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "tokenizer.ggml.unknown_token_id");
-    GGUF_GET_KEY(ctx, vocab.special_sep_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "tokenizer.ggml.separator_token_id");
-    GGUF_GET_KEY(ctx, vocab.special_pad_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "tokenizer.ggml.padding_token_id");
-}
-
-static void llm_load_hparams(
-        llama_model_loader & ml,
-        llama_model & model,
-        int n_ctx,
-        float rope_freq_base,
-        float rope_freq_scale) {
-    auto & hparams = model.hparams;
-
-    struct gguf_context * ctx = ml.ctx_gguf;
-
-    // get hparams kv
-    GGUF_GET_KEY(ctx, hparams.n_vocab,        gguf_get_arr_n,   GGUF_TYPE_ARRAY,   true, "tokenizer.ggml.tokens");
-    GGUF_GET_KEY(ctx, hparams.n_ctx_train,    gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.context_length");
-    GGUF_GET_KEY(ctx, hparams.n_embd,         gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.embedding_length");
-    GGUF_GET_KEY(ctx, hparams.n_ff,           gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.feed_forward_length");
-    GGUF_GET_KEY(ctx, hparams.n_head,         gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.attention.head_count");
-    GGUF_GET_KEY(ctx, hparams.n_layer,        gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.block_count");
-    GGUF_GET_KEY(ctx, hparams.n_rot,          gguf_get_val_u32, GGUF_TYPE_UINT32,  true, "llama.rope.dimension_count");
-    GGUF_GET_KEY(ctx, hparams.f_norm_rms_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, "llama.attention.layer_norm_rms_epsilon");
-
-    // n_head_kv is optional, default to n_head
-    hparams.n_head_kv = hparams.n_head;
-    GGUF_GET_KEY(ctx, hparams.n_head_kv, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "llama.attention.head_count_kv");
-
-    // TODO: manually setting rope scale should override this
-    // rope_freq_scale (inverse of the kv) is optional
-    float ropescale = 1.0f;
-    GGUF_GET_KEY(ctx, ropescale, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, "llama.rope.scale_linear");
-    if (ropescale != 1.0f) {
-        rope_freq_scale = 1.0f/ropescale;
-    }
-
-    // get general kv
-    GGUF_GET_KEY(ctx, model.name, gguf_get_val_str, GGUF_TYPE_STRING, false, "general.name");
-    GGUF_GET_KEY(ctx, model.arch, gguf_get_val_str, GGUF_TYPE_STRING, false, "general.architecture");
-
-    switch (hparams.n_layer) {
-        case 26: model.type = e_model::MODEL_3B; break;
-        case 32: model.type = e_model::MODEL_7B; break;
-        case 40: model.type = e_model::MODEL_13B; break;
-        case 60: model.type = e_model::MODEL_30B; break;
-        case 80: model.type = e_model::MODEL_65B; break;
-        default:
-                 {
-                     if (hparams.n_layer < 32) {
-                         model.type = e_model::MODEL_7B;
-                     }
-                 } break;
-    }
-
-    model.ftype = ml.ftype;
-
-    hparams.n_ctx = n_ctx;
-
-    // LLaMAv2
-    // TODO: probably not needed
-    {
-        const auto n_gqa = hparams.n_gqa();
-
-        if (model.type == e_model::MODEL_65B && n_gqa == 8) {
-            LLAMA_LOG_WARN("%s: assuming 70B model based on GQA == %d\n", __func__, n_gqa);
-            model.type = e_model::MODEL_70B;
-        }
-    }
-
-    hparams.rope_freq_base  = rope_freq_base;
-    hparams.rope_freq_scale = rope_freq_scale;
+    GGUF_GET_KEY(ctx, vocab.special_bos_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_TOKENIZER_BOS_ID));
+    GGUF_GET_KEY(ctx, vocab.special_eos_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_TOKENIZER_EOS_ID));
+    GGUF_GET_KEY(ctx, vocab.special_unk_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_TOKENIZER_UNK_ID));
+    GGUF_GET_KEY(ctx, vocab.special_sep_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_TOKENIZER_SEP_ID));
+    GGUF_GET_KEY(ctx, vocab.special_pad_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_TOKENIZER_PAD_ID));
 }
 
 static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
@@ -1537,7 +1658,7 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     if (vocab.linefeed_id    != -1) { LLAMA_LOG_INFO( "%s: LF token  = %d '%s'\n", __func__, vocab.linefeed_id,    vocab.id_to_token[vocab.linefeed_id].text.c_str() );    }
 }
 
-static void llama_model_load_internal(
+static void llm_load_llama(
         llama_model_loader & ml,
         llama_model & model,
         int n_batch,
@@ -1609,9 +1730,9 @@ static void llama_model_load_internal(
         const uint32_t n_layer    = hparams.n_layer;
         const uint32_t n_vocab    = hparams.n_vocab;
 
-        const auto llm = LLM<LLM_ARCH_LLAMA>();
+        const auto tn = LLM_TN(LLM_ARCH_LLAMA);
 
-        model.tok_embeddings = ml.create_tensor(ctx, llm(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, GGML_BACKEND_CPU);
+        model.tok_embeddings = ml.create_tensor(ctx, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, GGML_BACKEND_CPU);
 
         // "output" tensor
         {
@@ -1632,8 +1753,8 @@ static void llama_model_load_internal(
                 backend_output = GGML_BACKEND_CPU;
             }
 
-            model.norm   = ml.create_tensor(ctx, llm(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd},          backend_norm);
-            model.output = ml.create_tensor(ctx, llm(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, backend_output);
+            model.norm   = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd},          backend_norm);
+            model.output = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, backend_output);
             if (backend_norm == GGML_BACKEND_GPU) {
                 vram_weights += ggml_nbytes(model.norm);
             }
@@ -1652,18 +1773,18 @@ static void llama_model_load_internal(
             const ggml_backend backend_split = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD_SPLIT; // NOLINT
 
             auto & layer = model.layers[i];
-            layer.attention_norm = ml.create_tensor(ctx, llm(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd}, backend);
+            layer.attention_norm = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd}, backend);
 
-            layer.wq = ml.create_tensor(ctx, llm(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd},     backend_split);
-            layer.wk = ml.create_tensor(ctx, llm(LLM_TENSOR_ATTN_K,   "weight", i), {n_embd, n_embd_gqa}, backend_split);
-            layer.wv = ml.create_tensor(ctx, llm(LLM_TENSOR_ATTN_V,   "weight", i), {n_embd, n_embd_gqa}, backend_split);
-            layer.wo = ml.create_tensor(ctx, llm(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd},     backend_split);
+            layer.wq = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd},     backend_split);
+            layer.wk = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_K,   "weight", i), {n_embd, n_embd_gqa}, backend_split);
+            layer.wv = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_V,   "weight", i), {n_embd, n_embd_gqa}, backend_split);
+            layer.wo = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd},     backend_split);
 
-            layer.ffn_norm = ml.create_tensor(ctx, llm(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd}, backend);
+            layer.ffn_norm = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd}, backend);
 
-            layer.w1 = ml.create_tensor(ctx, llm(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd,   n_ff}, backend_split);
-            layer.w2 = ml.create_tensor(ctx, llm(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd}, backend_split);
-            layer.w3 = ml.create_tensor(ctx, llm(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
+            layer.w1 = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd,   n_ff}, backend_split);
+            layer.w2 = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd}, backend_split);
+            layer.w3 = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
 
             if (backend == GGML_BACKEND_GPU) {
                 vram_weights +=
@@ -1783,16 +1904,10 @@ static bool llama_model_load(
     try {
         std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, use_mmap));
 
-        std::string arch_name;
-        GGUF_GET_KEY(ml->ctx_gguf, arch_name, gguf_get_val_str, GGUF_TYPE_STRING, true, "general.architecture");
+        const llm_arch arch = llm_load_arch(*ml);
 
-        const llm_arch arch = llm_arch_from_string(arch_name);
-        if (arch == LLM_ARCH_UNKNOWN) {
-            throw std::runtime_error("unknown model architecture: '" + arch_name + "'");
-        }
-
-        llm_load_hparams(*ml, model, n_ctx, rope_freq_base, rope_freq_scale);
-        llm_load_vocab(*ml, model);
+        llm_load_hparams(arch, *ml, model, n_ctx, rope_freq_base, rope_freq_scale);
+        llm_load_vocab  (arch, *ml, model);
 
         llm_load_print_meta(*ml, model);
 
@@ -1805,14 +1920,25 @@ static bool llama_model_load(
             return true;
         }
 
-        llama_model_load_internal(*ml, model, n_batch, n_gpu_layers,
-                                  main_gpu, tensor_split, mul_mat_q, low_vram, memory_type,
-                                  use_mlock, progress_callback, progress_callback_user_data);
-        return true;
+        switch (arch) {
+            case LLM_ARCH_LLAMA:
+                {
+                    llm_load_llama(*ml, model, n_batch, n_gpu_layers,
+                            main_gpu, tensor_split, mul_mat_q, low_vram, memory_type,
+                            use_mlock, progress_callback, progress_callback_user_data);
+                } break;
+            case LLM_ARCH_FALCON:
+                {
+                }
+            default:
+                throw std::runtime_error("unsupported architecture");
+        };
     } catch (const std::exception & err) {
         LLAMA_LOG_ERROR("error loading model: %s\n", err.what());
         return false;
     }
+
+    return true;
 }
 
 static struct ggml_cgraph * llama_build_graph(
@@ -3674,9 +3800,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             new_type = quantized_type;
 #ifdef GGML_USE_K_QUANTS
             // TODO: avoid hardcoded tensor names - use the TN_* constants
-            const auto llm = LLM<LLM_ARCH_LLAMA>();
+            const auto tn = LLM_TN(LLM_ARCH_LLAMA);
 
-            if (name == llm(LLM_TENSOR_OUTPUT, "weight")) {
+            if (name == tn(LLM_TENSOR_OUTPUT, "weight")) {
                 int nx = tensor->ne[0];
                 int ny = tensor->ne[1];
                 if (nx % QK_K == 0 && ny % QK_K == 0) {
@@ -3712,10 +3838,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 }
             }
             if (convert_incompatible_tensor) {
-                if (name == llm(LLM_TENSOR_OUTPUT, "weight")) {
+                if (name == tn(LLM_TENSOR_OUTPUT, "weight")) {
                     new_type = GGML_TYPE_F16; //fall back to F16 instead of just failing.
                     LLAMA_LOG_WARN("F16 will be used for this tensor instead.\n");
-                } else if (name == llm(LLM_TENSOR_TOKEN_EMBD, "weight")) {
+                } else if (name == tn(LLM_TENSOR_TOKEN_EMBD, "weight")) {
                     new_type = GGML_TYPE_Q4_0; //fall back to Q4_0 instead of just failing.
                     LLAMA_LOG_WARN("Q4_0 will be used for this tensor instead.\n");
                 } else {
