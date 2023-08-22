@@ -200,8 +200,9 @@ if Path(dir_model + "/tokenizer.json").is_file():
 tensor_map = gguf.get_tensor_name_map(ARCH,block_count)
 
 # params for qkv transform
-n_head = hparams["n_head"]
-n_head_kv = hparams["n_head_kv"] if "n_head_kv" in hparams else 1
+n_head    = hparams["n_head"]
+n_head_kv = hparams["n_head_kv"] if "n_head_kv" in hparams else n_head
+
 head_dim = hparams["hidden_size"] // n_head
 
 # tensor info
