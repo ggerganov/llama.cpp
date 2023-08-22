@@ -1359,7 +1359,7 @@ static const char * llama_model_type_name(e_model type) {
 }
 
 static void llama_model_load_internal(
-        const std::string & fname,
+        llama_model_loader & ml,
         llama_model & model,
         llama_vocab & vocab,
         int n_ctx,
@@ -1379,8 +1379,6 @@ static void llama_model_load_internal(
         void * progress_callback_user_data) {
     model.t_start_us = ggml_time_us();
 
-    std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, use_mmap));
-
     model.n_gpu_layers = n_gpu_layers;
 
     auto & hparams = model.hparams;
@@ -1390,7 +1388,7 @@ static void llama_model_load_internal(
 
     // read hparams
     {
-        struct gguf_context * ctx = ml->ctx_gguf;
+        struct gguf_context * ctx = ml.ctx_gguf;
 
         std::string tokenizer_name;
         GGUF_GET_KEY(ctx, tokenizer_name, gguf_get_val_str, GGUF_TYPE_STRING, true, "tokenizer.ggml.model");
@@ -1452,7 +1450,7 @@ static void llama_model_load_internal(
                 } break;
         }
 
-        model.ftype = ml->ftype;
+        model.ftype = ml.ftype;
 
         hparams.n_ctx = n_ctx;
 
@@ -1473,7 +1471,7 @@ static void llama_model_load_internal(
 
     // read vocab
     {
-        struct gguf_context * ctx = ml->ctx_gguf;
+        struct gguf_context * ctx = ml.ctx_gguf;
 
         vocab.id_to_token.resize(hparams.n_vocab);
 
@@ -1515,7 +1513,7 @@ static void llama_model_load_internal(
 
     {
         // hparams
-        LLAMA_LOG_INFO("%s: format       = %s\n",     __func__, llama_file_version_name(ml->fver));
+        LLAMA_LOG_INFO("%s: format       = %s\n",     __func__, llama_file_version_name(ml.fver));
         LLAMA_LOG_INFO("%s: arch         = %s\n",     __func__, general_arch.c_str());
         LLAMA_LOG_INFO("%s: vocab type   = %s\n",     __func__, vocab.type == LLAMA_VOCAB_TYPE_SPM ? "SPM" : "BPE"); // TODO: fix
         LLAMA_LOG_INFO("%s: n_vocab      = %u\n",     __func__, hparams.n_vocab);
@@ -1533,7 +1531,7 @@ static void llama_model_load_internal(
         LLAMA_LOG_INFO("%s: freq_scale   = %g\n",     __func__, hparams.rope_freq_scale);
         LLAMA_LOG_INFO("%s: model type   = %s\n",     __func__, llama_model_type_name(model.type));
         LLAMA_LOG_INFO("%s: model ftype  = %s\n",     __func__, llama_model_ftype_name(model.ftype));
-        LLAMA_LOG_INFO("%s: model size   = %.2f B\n", __func__, ml->n_elements*1e-9);
+        LLAMA_LOG_INFO("%s: model size   = %.2f B\n", __func__, ml.n_elements*1e-9);
 
         // general kv
         LLAMA_LOG_INFO("%s: general.name = %s\n",    __func__, general_name.c_str());
@@ -1557,7 +1555,7 @@ static void llama_model_load_internal(
     size_t ctx_size;
     size_t mmapped_size;
 
-    ml->calc_sizes(ctx_size, mmapped_size);
+    ml.calc_sizes(ctx_size, mmapped_size);
 
     LLAMA_LOG_INFO("%s: ggml ctx size = %7.2f MB\n", __func__, ctx_size/1024.0/1024.0);
 
@@ -1572,7 +1570,7 @@ static void llama_model_load_internal(
         struct ggml_init_params params = {
             /*.mem_size   =*/ model.buf.size,
             /*.mem_buffer =*/ model.buf.data,
-            /*.no_alloc   =*/ ml->use_mmap,
+            /*.no_alloc   =*/ ml.use_mmap,
         };
 
         model.ctx = ggml_init(params);
@@ -1608,7 +1606,7 @@ static void llama_model_load_internal(
 
         const auto llm = LLM<LLM_ARCH_LLAMA>();
 
-        model.tok_embeddings = ml->create_tensor(ctx, llm(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, GGML_BACKEND_CPU);
+        model.tok_embeddings = ml.create_tensor(ctx, llm(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, GGML_BACKEND_CPU);
 
         // "output" tensor
         {
@@ -1629,8 +1627,8 @@ static void llama_model_load_internal(
                 backend_output = GGML_BACKEND_CPU;
             }
 
-            model.norm   = ml->create_tensor(ctx, llm(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd},          backend_norm);
-            model.output = ml->create_tensor(ctx, llm(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, backend_output);
+            model.norm   = ml.create_tensor(ctx, llm(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd},          backend_norm);
+            model.output = ml.create_tensor(ctx, llm(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, backend_output);
             if (backend_norm == GGML_BACKEND_GPU) {
                 vram_weights += ggml_nbytes(model.norm);
             }
@@ -1649,18 +1647,18 @@ static void llama_model_load_internal(
             const ggml_backend backend_split = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD_SPLIT; // NOLINT
 
             auto & layer = model.layers[i];
-            layer.attention_norm = ml->create_tensor(ctx, llm(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd}, backend);
+            layer.attention_norm = ml.create_tensor(ctx, llm(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd}, backend);
 
-            layer.wq = ml->create_tensor(ctx, llm(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd},     backend_split);
-            layer.wk = ml->create_tensor(ctx, llm(LLM_TENSOR_ATTN_K,   "weight", i), {n_embd, n_embd_gqa}, backend_split);
-            layer.wv = ml->create_tensor(ctx, llm(LLM_TENSOR_ATTN_V,   "weight", i), {n_embd, n_embd_gqa}, backend_split);
-            layer.wo = ml->create_tensor(ctx, llm(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd},     backend_split);
+            layer.wq = ml.create_tensor(ctx, llm(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd},     backend_split);
+            layer.wk = ml.create_tensor(ctx, llm(LLM_TENSOR_ATTN_K,   "weight", i), {n_embd, n_embd_gqa}, backend_split);
+            layer.wv = ml.create_tensor(ctx, llm(LLM_TENSOR_ATTN_V,   "weight", i), {n_embd, n_embd_gqa}, backend_split);
+            layer.wo = ml.create_tensor(ctx, llm(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd},     backend_split);
 
-            layer.ffn_norm = ml->create_tensor(ctx, llm(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd}, backend);
+            layer.ffn_norm = ml.create_tensor(ctx, llm(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd}, backend);
 
-            layer.w1 = ml->create_tensor(ctx, llm(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd,   n_ff}, backend_split);
-            layer.w2 = ml->create_tensor(ctx, llm(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd}, backend_split);
-            layer.w3 = ml->create_tensor(ctx, llm(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
+            layer.w1 = ml.create_tensor(ctx, llm(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd,   n_ff}, backend_split);
+            layer.w2 = ml.create_tensor(ctx, llm(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd}, backend_split);
+            layer.w3 = ml.create_tensor(ctx, llm(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
 
             if (backend == GGML_BACKEND_GPU) {
                 vram_weights +=
@@ -1671,7 +1669,7 @@ static void llama_model_load_internal(
         }
     }
 
-    ml->done_getting_tensors();
+    ml.done_getting_tensors();
 
     // print memory requirements
     {
@@ -1734,8 +1732,8 @@ static void llama_model_load_internal(
     }
 
     // populate `tensors_by_name`
-    for (int i = 0; i < ml->n_tensors; ++i) {
-        struct ggml_tensor * cur = ggml_get_tensor(ctx, ml->get_tensor_name(i));
+    for (int i = 0; i < ml.n_tensors; ++i) {
+        struct ggml_tensor * cur = ggml_get_tensor(ctx, ml.get_tensor_name(i));
         model.tensors_by_name.emplace_back(ggml_get_name(cur), cur);
     }
 
@@ -1746,13 +1744,13 @@ static void llama_model_load_internal(
     }
 #endif
 
-    ml->load_all_data(ctx, progress_callback, progress_callback_user_data, use_mlock ? &model.mlock_mmap : NULL);
+    ml.load_all_data(ctx, progress_callback, progress_callback_user_data, use_mlock ? &model.mlock_mmap : NULL);
 
     if (progress_callback) {
         progress_callback(1.0f, progress_callback_user_data);
     }
 
-    model.mapping = std::move(ml->mapping);
+    model.mapping = std::move(ml.mapping);
 
     // loading time will be recalculate after the first eval, so
     // we take page faults deferred by mmap() into consideration
@@ -1786,10 +1784,10 @@ static bool llama_model_load(
 
         const llm_arch arch = llama_arch_from_string(arch_name);
         if (arch == LLM_ARCH_UNKNOWN) {
-            throw std::runtime_error("unknown architecture: " + arch_name);
+            throw std::runtime_error("unknown model architecture: '" + arch_name + "'");
         }
 
-        llama_model_load_internal(fname, model, vocab, n_ctx, n_batch, n_gpu_layers,
+        llama_model_load_internal(*ml, model, vocab, n_ctx, n_batch, n_gpu_layers,
                                   main_gpu, tensor_split, mul_mat_q, rope_freq_base, rope_freq_scale, low_vram, memory_type,
                                   use_mmap, use_mlock, vocab_only, progress_callback, progress_callback_user_data);
         return true;
