@@ -279,7 +279,7 @@ struct llama_server_context
             grammar_parser::print_grammar(stderr, parsed_grammar);
 
             {
-                auto it = params.logit_bias.find(llama_token_eos());
+                auto it = params.logit_bias.find(llama_token_eos(ctx));
                 if (it != params.logit_bias.end() && it->second == -INFINITY) {
                     LOG_WARNING("EOS token is disabled, which will cause most grammars to fail", {});
                 }
@@ -402,7 +402,7 @@ struct llama_server_context
         if (params.n_predict == 0)
         {
             has_next_token = false;
-            result.tok = llama_token_eos();
+            result.tok = llama_token_eos(ctx);
             return result;
         }
 
@@ -442,7 +442,7 @@ struct llama_server_context
             llama_token_data_array candidates_p = {candidates.data(), candidates.size(), false};
 
             // Apply penalties
-            float nl_logit = logits[llama_token_nl()];
+            float nl_logit = logits[llama_token_nl(ctx)];
             auto last_n_repeat = std::min(std::min((int)last_n_tokens.size(), repeat_last_n), params.n_ctx);
             llama_sample_repetition_penalty(ctx, &candidates_p,
                                             last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
@@ -452,7 +452,7 @@ struct llama_server_context
                                                           last_n_repeat, alpha_frequency, alpha_presence);
             if (!penalize_nl)
             {
-                logits[llama_token_nl()] = nl_logit;
+                logits[llama_token_nl(ctx)] = nl_logit;
             }
 
             if (grammar != nullptr) {
@@ -515,7 +515,7 @@ struct llama_server_context
         // decrement remaining sampling budget
         --n_remain;
 
-        if (!embd.empty() && embd.back() == llama_token_eos())
+        if (!embd.empty() && embd.back() == llama_token_eos(ctx))
         {
             // stopping_word = llama_token_to_str(ctx, embd.back());
             has_next_token = false;
@@ -652,8 +652,6 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     fprintf(stdout, "  -v, --verbose         verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
     fprintf(stdout, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
     fprintf(stdout, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
-    fprintf(stdout, "  -gqa N, --gqa N       grouped-query attention factor (TEMP!!! use 8 for LLaMAv2 70B) (default: %d)\n", params.n_gqa);
-    fprintf(stdout, "  -eps N, --rms-norm-eps N rms norm eps (TEMP!!! use 1e-5 for LLaMAv2) (default: %.1e)\n", params.rms_norm_eps);
     fprintf(stdout, "  --rope-freq-base N    RoPE base frequency (default: %.1f)\n", params.rope_freq_base);
     fprintf(stdout, "  --rope-freq-scale N   RoPE frequency scaling factor (default: %g)\n", params.rope_freq_scale);
     fprintf(stdout, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
@@ -773,23 +771,6 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
             params.n_ctx = std::stoi(argv[i]);
-        }
-        else if (arg == "-gqa" || arg == "--gqa")
-        {
-            if (++i >= argc)
-            {
-                invalid_param = true;
-                break;
-            }
-            params.n_gqa = std::stoi(argv[i]);
-        }
-        else if (arg == "-eps" || arg == "--rms-norm-eps") {
-            if (++i >= argc)
-            {
-                invalid_param = true;
-                break;
-            }
-            params.rms_norm_eps = std::stof(argv[i]);
         }
         else if (arg == "--rope-freq-base")
         {
@@ -968,7 +949,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
 
 static json format_generation_settings(llama_server_context &llama)
 {
-    const auto eos_bias = llama.params.logit_bias.find(llama_token_eos());
+    const auto eos_bias = llama.params.logit_bias.find(llama_token_eos(llama.ctx));
     const bool ignore_eos = eos_bias != llama.params.logit_bias.end() &&
                             eos_bias->second < 0.0f && std::isinf(eos_bias->second);
 
@@ -1075,35 +1056,44 @@ static json format_tokenizer_response(const std::vector<llama_token> &tokens)
         {"tokens", tokens}};
 }
 
+template <typename T>
+static T json_value(const json &body, const std::string &key, const T &default_value)
+{
+    // Fallback null to default value
+    return body.contains(key) && !body.at(key).is_null()
+        ? body.value(key, default_value)
+        : default_value;
+}
+
 static void parse_options_completion(const json &body, llama_server_context &llama)
 {
     gpt_params default_params;
 
-    llama.stream = body.value("stream", false);
-    llama.params.n_predict = body.value("n_predict", default_params.n_predict);
-    llama.params.top_k = body.value("top_k", default_params.top_k);
-    llama.params.top_p = body.value("top_p", default_params.top_p);
-    llama.params.tfs_z = body.value("tfs_z", default_params.tfs_z);
-    llama.params.typical_p = body.value("typical_p", default_params.typical_p);
-    llama.params.repeat_last_n = body.value("repeat_last_n", default_params.repeat_last_n);
-    llama.params.temp = body.value("temperature", default_params.temp);
-    llama.params.repeat_penalty = body.value("repeat_penalty", default_params.repeat_penalty);
-    llama.params.presence_penalty = body.value("presence_penalty", default_params.presence_penalty);
-    llama.params.frequency_penalty = body.value("frequency_penalty", default_params.frequency_penalty);
-    llama.params.mirostat = body.value("mirostat", default_params.mirostat);
-    llama.params.mirostat_tau = body.value("mirostat_tau", default_params.mirostat_tau);
-    llama.params.mirostat_eta = body.value("mirostat_eta", default_params.mirostat_eta);
-    llama.params.penalize_nl = body.value("penalize_nl", default_params.penalize_nl);
-    llama.params.n_keep = body.value("n_keep", default_params.n_keep);
-    llama.params.seed = body.value("seed", default_params.seed);
-    llama.params.prompt = body.value("prompt", default_params.prompt);
-    llama.params.grammar = body.value("grammar", default_params.grammar);
-    llama.params.n_probs = body.value("n_probs", default_params.n_probs);
+    llama.stream = json_value(body, "stream", false);
+    llama.params.n_predict = json_value(body, "n_predict", default_params.n_predict);
+    llama.params.top_k = json_value(body, "top_k", default_params.top_k);
+    llama.params.top_p = json_value(body, "top_p", default_params.top_p);
+    llama.params.tfs_z = json_value(body, "tfs_z", default_params.tfs_z);
+    llama.params.typical_p = json_value(body, "typical_p", default_params.typical_p);
+    llama.params.repeat_last_n = json_value(body, "repeat_last_n", default_params.repeat_last_n);
+    llama.params.temp = json_value(body, "temperature", default_params.temp);
+    llama.params.repeat_penalty = json_value(body, "repeat_penalty", default_params.repeat_penalty);
+    llama.params.presence_penalty = json_value(body, "presence_penalty", default_params.presence_penalty);
+    llama.params.frequency_penalty = json_value(body, "frequency_penalty", default_params.frequency_penalty);
+    llama.params.mirostat = json_value(body, "mirostat", default_params.mirostat);
+    llama.params.mirostat_tau = json_value(body, "mirostat_tau", default_params.mirostat_tau);
+    llama.params.mirostat_eta = json_value(body, "mirostat_eta", default_params.mirostat_eta);
+    llama.params.penalize_nl = json_value(body, "penalize_nl", default_params.penalize_nl);
+    llama.params.n_keep = json_value(body, "n_keep", default_params.n_keep);
+    llama.params.seed = json_value(body, "seed", default_params.seed);
+    llama.params.prompt = json_value(body, "prompt", default_params.prompt);
+    llama.params.grammar = json_value(body, "grammar", default_params.grammar);
+    llama.params.n_probs = json_value(body, "n_probs", default_params.n_probs);
 
     llama.params.logit_bias.clear();
-    if (body.value("ignore_eos", false))
+    if (json_value(body, "ignore_eos", false))
     {
-        llama.params.logit_bias[llama_token_eos()] = -INFINITY;
+        llama.params.logit_bias[llama_token_eos(llama.ctx)] = -INFINITY;
     }
 
     const auto &logit_bias = body.find("logit_bias");
@@ -1356,7 +1346,7 @@ int main(int argc, char **argv)
         auto lock = llama.lock();
 
         const json body = json::parse(req.body);
-        const std::string content = body.value("content", "");
+        const std::string content = json_value<std::string>(body, "content", "");
         const std::vector<llama_token> tokens = llama_tokenize(llama.ctx, content, false);
         const json data = format_tokenizer_response(tokens);
         return res.set_content(data.dump(), "application/json"); });
@@ -1369,7 +1359,7 @@ int main(int argc, char **argv)
 
         llama.rewind();
         llama_reset_timings(llama.ctx);
-        llama.params.prompt = body.value("content", "");
+        llama.params.prompt = json_value<std::string>(body, "content", "");
         llama.params.n_predict = 0;
         llama.loadPrompt();
         llama.beginCompletion();
@@ -1398,7 +1388,7 @@ int main(int argc, char **argv)
                           {
         if (res.status == 400) {
             res.set_content("Invalid request", "text/plain");
-        } else {
+        } else if (res.status != 500) {
             res.set_content("File Not Found", "text/plain");
             res.status = 404;
         } });

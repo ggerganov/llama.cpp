@@ -259,6 +259,7 @@ static_assert(sizeof(block_q6_K) == sizeof(ggml_fp16_t) + 13*QK_K/16, "wrong q6_
 #define CUDA_CPY_BLOCK_SIZE 32
 #define CUDA_SCALE_BLOCK_SIZE 256
 #define CUDA_ROPE_BLOCK_SIZE 256
+#define CUDA_ALIBI_BLOCK_SIZE 32
 #define CUDA_DIAG_MASK_INF_BLOCK_SIZE 32
 #define CUDA_QUANTIZE_BLOCK_SIZE 256
 #define CUDA_DEQUANTIZE_BLOCK_SIZE 256
@@ -3886,13 +3887,13 @@ static __global__ void cpy_f32_f16(const char * cx, char * cdst, const int ne,
 // rope == RoPE == rotary positional embedding
 static __global__ void rope_f32(const float * x, float * dst, const int ncols, const float p0,
                                 const float p_delta, const int p_delta_rows, const float theta_scale) {
-    const int col = 2*(blockDim.x*blockIdx.x + threadIdx.x);
+    const int col = 2*(blockDim.y*blockIdx.y + threadIdx.y);
 
     if (col >= ncols) {
         return;
     }
 
-    const int row = blockDim.y*blockIdx.y + threadIdx.y;
+    const int row = blockDim.x*blockIdx.x + threadIdx.x;
     const int i = row*ncols + col;
 
     const float theta = (p0 + p_delta * (row/p_delta_rows))*powf(theta_scale, col/2);
@@ -3940,9 +3941,32 @@ static __global__ void rope_glm_f32(const float * x, float * dst, const int ncol
     dst[i + half_n_dims * 3] = x2*sin_block_theta + x3*cos_block_theta;
 }
 
-static __global__ void diag_mask_inf_f32(const float * x, float * dst, const int ncols, const int rows_per_channel, const int n_past) {
+static __global__ void alibi_f32(const float * x, float * dst, const int ncols, const int k_rows,
+                                 const int n_heads_log2_floor, const float m0, const float m1) {
     const int col = blockDim.x*blockIdx.x + threadIdx.x;
+
+    if (col >= ncols) {
+        return;
+    }
+
     const int row = blockDim.y*blockIdx.y + threadIdx.y;
+    const int i = row*ncols + col;
+
+    const int k = row/k_rows;
+
+    float m_k;
+    if (k < n_heads_log2_floor) {
+        m_k = powf(m0, k + 1);
+    } else {
+        m_k = powf(m1, 2 * (k - n_heads_log2_floor) + 1);
+    }
+
+    dst[i] = col * m_k + x[i];
+}
+
+static __global__ void diag_mask_inf_f32(const float * x, float * dst, const int ncols, const int rows_per_channel, const int n_past) {
+    const int col = blockDim.y*blockIdx.y + threadIdx.y;
+    const int row = blockDim.x*blockIdx.x + threadIdx.x;
 
     if (col >= ncols) {
         return;
@@ -3955,24 +3979,29 @@ static __global__ void diag_mask_inf_f32(const float * x, float * dst, const int
 
 // the CUDA soft max implementation differs from the CPU implementation
 // instead of doubles floats are used
-// values are also not normalized to the maximum value by subtracting it in the exponential function
-// theoretically these changes could cause problems with rounding error and arithmetic overflow but for LLaMa it seems to be fine
 static __global__ void soft_max_f32(const float * x, float * dst, const int ncols) {
-    const int row = blockDim.y*blockIdx.y + threadIdx.y;
-    const int block_size = blockDim.x;
-    const int tid = threadIdx.x;
+    const int row = blockDim.x*blockIdx.x + threadIdx.x;
+    const int block_size = blockDim.y;
+    const int tid = threadIdx.y;
 
-    float tmp = 0.0;
+    float max_val = -INFINITY;
 
-    for (int block_start = 0; block_start < ncols; block_start += block_size) {
-        const int col = block_start + tid;
-
-        if (col >= ncols) {
-            break;
-        }
-
+    for (int col = tid; col < ncols; col += block_size) {
         const int i = row*ncols + col;
-        const float val = expf(x[i]);
+        max_val = max(max_val, x[i]);
+    }
+
+    // find the max value in the block
+#pragma unroll
+    for (int mask = 16; mask > 0; mask >>= 1) {
+        max_val = max(max_val, __shfl_xor_sync(0xffffffff, max_val, mask, 32));
+    }
+
+    float tmp = 0.f;
+
+    for (int col = tid; col < ncols; col += block_size) {
+        const int i = row*ncols + col;
+        const float val = expf(x[i] - max_val);
         tmp += val;
         dst[i] = val;
     }
@@ -3983,15 +4012,11 @@ static __global__ void soft_max_f32(const float * x, float * dst, const int ncol
         tmp += __shfl_xor_sync(0xffffffff, tmp, mask, 32);
     }
 
-    for (int block_start = 0; block_start < ncols; block_start += block_size) {
-        const int col = block_start + tid;
+    const float inv_tmp = 1.f / tmp;
 
-        if (col >= ncols) {
-            break;
-        }
-
+    for (int col = tid; col < ncols; col += block_size) {
         const int i = row*ncols + col;
-        dst[i] /= tmp;
+        dst[i] *= inv_tmp;
     }
 }
 
@@ -4752,9 +4777,9 @@ static void scale_f32_cuda(const float * x, float * dst, const float scale, cons
 static void rope_f32_cuda(const float * x, float * dst, const int ncols, const int nrows, const float p0,
                           const float p_delta, const int p_delta_rows, const float theta_scale, cudaStream_t stream) {
     GGML_ASSERT(nrows % 2 == 0);
-    const dim3 block_dims(2*CUDA_ROPE_BLOCK_SIZE, 1, 1);
+    const dim3 block_dims(1, 2*CUDA_ROPE_BLOCK_SIZE, 1);
     const int num_blocks_x = (ncols + 2*CUDA_ROPE_BLOCK_SIZE - 1) / (2*CUDA_ROPE_BLOCK_SIZE);
-    const dim3 block_nums(num_blocks_x, nrows, 1);
+    const dim3 block_nums(nrows, num_blocks_x, 1);
     rope_f32<<<block_nums, block_dims, 0, stream>>>(x, dst, ncols, p0, p_delta, p_delta_rows, theta_scale);
 }
 
@@ -4766,16 +4791,25 @@ static void rope_glm_f32_cuda(const float * x, float * dst, const int ncols, con
     rope_glm_f32<<<block_nums, block_dims, 0, stream>>>(x, dst, ncols, p, block_p, theta_scale);
 }
 
+static void alibi_f32_cuda(const float * x, float * dst, const int ncols, const int nrows,
+                           const int k_rows, const int n_heads_log2_floor, const float m0,
+                           const float m1, cudaStream_t stream) {
+    const dim3 block_dims(CUDA_ALIBI_BLOCK_SIZE, 1, 1);
+    const int num_blocks_x = (ncols + CUDA_ALIBI_BLOCK_SIZE - 1) / (CUDA_ALIBI_BLOCK_SIZE);
+    const dim3 block_nums(num_blocks_x, nrows, 1);
+    alibi_f32<<<block_nums, block_dims, 0, stream>>>(x, dst, ncols, k_rows, n_heads_log2_floor, m0, m1);
+}
+
 static void diag_mask_inf_f32_cuda(const float * x, float * dst, const int ncols_x, const int nrows_x, const int rows_per_channel, const int n_past, cudaStream_t stream) {
-    const dim3 block_dims(CUDA_DIAG_MASK_INF_BLOCK_SIZE, 1, 1);
+    const dim3 block_dims(1, CUDA_DIAG_MASK_INF_BLOCK_SIZE, 1);
     const int block_num_x = (ncols_x + CUDA_DIAG_MASK_INF_BLOCK_SIZE - 1) / CUDA_DIAG_MASK_INF_BLOCK_SIZE;
-    const dim3 block_nums(block_num_x, nrows_x, 1);
+    const dim3 block_nums(nrows_x, block_num_x, 1);
     diag_mask_inf_f32<<<block_nums, block_dims, 0, stream>>>(x, dst, ncols_x, rows_per_channel, n_past);
 }
 
 static void soft_max_f32_cuda(const float * x, float * dst, const int ncols_x, const int nrows_x, cudaStream_t stream) {
-    const dim3 block_dims(WARP_SIZE, 1, 1);
-    const dim3 block_nums(1, nrows_x, 1);
+    const dim3 block_dims(1, WARP_SIZE, 1);
+    const dim3 block_nums(nrows_x, 1, 1);
     soft_max_f32<<<block_nums, block_dims, 0, stream>>>(x, dst, ncols_x);
 }
 
@@ -5501,6 +5535,41 @@ inline void ggml_cuda_op_rope(
     (void) i1;
 }
 
+inline void ggml_cuda_op_alibi(
+    const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, char * src0_ddq_i,
+    float * src0_ddf_i, float * src1_ddf_i, float * dst_ddf_i, int64_t i02, int64_t i01_low, int64_t i01_high, int i1,
+    cudaStream_t & cudaStream_main){
+
+    GGML_ASSERT(src0_ddf_i != nullptr);
+    GGML_ASSERT(dst_ddf_i != nullptr);
+
+    const int64_t ne00 = src0->ne[0];
+    const int64_t ne01 = src0->ne[1];
+    const int64_t ne02 = src0->ne[2];
+    const int64_t i01_diff = i01_high - i01_low;
+
+    const int n_past = ((int32_t *) dst->op_params)[0];
+    const int n_head = ((int32_t *) dst->op_params)[1];
+    float max_bias;
+    memcpy(&max_bias, (int32_t *) dst->op_params + 2, sizeof(float));
+
+    GGML_ASSERT(ne01 + n_past == ne00);
+    GGML_ASSERT(n_head == ne02);
+
+    const int n_heads_log2_floor = 1 << (int) floor(log2(n_head));
+
+    const float m0 = powf(2.0f, -(max_bias) / n_heads_log2_floor);
+    const float m1 = powf(2.0f, -(max_bias / 2.0f) / n_heads_log2_floor);
+
+    // compute
+    alibi_f32_cuda(src0_ddf_i, dst_ddf_i, ne00, i01_diff, ne01, n_heads_log2_floor, m0, m1, cudaStream_main);
+
+    (void) src1;
+    (void) src0_ddq_i;
+    (void) src1_ddf_i;
+    (void) i1;
+}
+
 inline void ggml_cuda_op_diag_mask_inf(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, char * src0_ddq_i,
     float * src0_ddf_i, float * src1_ddf_i, float * dst_ddf_i, int64_t i02, int64_t i01_low, int64_t i01_high, int i1,
@@ -6121,6 +6190,11 @@ void ggml_cuda_rope(const ggml_tensor * src0, const ggml_tensor * src1, ggml_ten
     ggml_cuda_op(src0, src1, dst, ggml_cuda_op_rope, true, !is_glm); // flatten support not implemented for glm
 }
 
+void ggml_cuda_alibi(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_ASSERT(src0->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32);
+    ggml_cuda_op(src0, src1, dst, ggml_cuda_op_alibi, true, true);
+}
+
 void ggml_cuda_nop(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     (void) src0;
     (void) src1;
@@ -6240,7 +6314,7 @@ static struct ggml_tensor_extra_gpu * ggml_cuda_alloc_temp_tensor_extra() {
     return extra;
 }
 
-void ggml_cuda_assign_buffers_impl(struct ggml_tensor * tensor, bool scratch, bool force_inplace) {
+void ggml_cuda_assign_buffers_impl(struct ggml_tensor * tensor, bool scratch, bool force_inplace, bool no_alloc) {
     if (scratch && g_scratch_size == 0) {
         return;
     }
@@ -6249,14 +6323,19 @@ void ggml_cuda_assign_buffers_impl(struct ggml_tensor * tensor, bool scratch, bo
     if (tensor->src[0] != nullptr && tensor->src[0]->backend == GGML_BACKEND_CPU) {
         const ggml_op src0_op = tensor->src[0]->op;
         if (src0_op == GGML_OP_RESHAPE || src0_op == GGML_OP_TRANSPOSE || src0_op == GGML_OP_VIEW || src0_op == GGML_OP_PERMUTE) {
-            ggml_cuda_assign_buffers_impl(tensor->src[0], scratch, force_inplace);
+            ggml_cuda_assign_buffers_impl(tensor->src[0], scratch, force_inplace, no_alloc);
         }
     }
     if (tensor->op == GGML_OP_CPY && tensor->src[1]->backend == GGML_BACKEND_CPU) {
-        ggml_cuda_assign_buffers_impl(tensor->src[1], scratch, force_inplace);
+        ggml_cuda_assign_buffers_impl(tensor->src[1], scratch, force_inplace, no_alloc);
     }
 
     tensor->backend = GGML_BACKEND_GPU;
+
+    if (scratch && no_alloc) {
+        return;
+    }
+
     struct ggml_tensor_extra_gpu * extra;
 
     const bool inplace = (tensor->src[0] != nullptr && tensor->src[0]->data == tensor->data) ||
@@ -6308,16 +6387,48 @@ void ggml_cuda_assign_buffers_impl(struct ggml_tensor * tensor, bool scratch, bo
     tensor->extra = extra;
 }
 
+void ggml_cuda_assign_scratch_offset(struct ggml_tensor * tensor, size_t offset) {
+    if (g_scratch_size == 0) {
+        return;
+    }
+    if (g_scratch_buffer == nullptr) {
+        CUDA_CHECK(cudaMalloc(&g_scratch_buffer, g_scratch_size));
+    }
+
+    struct ggml_tensor_extra_gpu * extra = ggml_cuda_alloc_temp_tensor_extra();
+
+    const bool inplace = (tensor->src[0] != nullptr && tensor->src[0]->data == tensor->data) ||
+        tensor->op == GGML_OP_VIEW;
+
+    if (inplace && (tensor->src[0]->backend == GGML_BACKEND_GPU || tensor->src[0]->backend == GGML_BACKEND_GPU_SPLIT)) {
+        struct ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu * ) tensor->src[0]->extra;
+        char * src0_ddc = (char *) src0_extra->data_device[g_main_device];
+        size_t view_offset = 0;
+        if (tensor->op == GGML_OP_VIEW) {
+            memcpy(&view_offset, tensor->op_params, sizeof(size_t));
+        }
+        extra->data_device[g_main_device] = src0_ddc + view_offset;
+    } else {
+        extra->data_device[g_main_device] = (char *) g_scratch_buffer + offset;
+    }
+
+    tensor->extra = extra;
+}
+
 void ggml_cuda_assign_buffers(struct ggml_tensor * tensor) {
-    ggml_cuda_assign_buffers_impl(tensor, true, false);
+    ggml_cuda_assign_buffers_impl(tensor, true, false, false);
+}
+
+void ggml_cuda_assign_buffers_no_alloc(struct ggml_tensor * tensor) {
+    ggml_cuda_assign_buffers_impl(tensor, true, false, true);
 }
 
 void ggml_cuda_assign_buffers_no_scratch(struct ggml_tensor * tensor) {
-    ggml_cuda_assign_buffers_impl(tensor, false, false);
+    ggml_cuda_assign_buffers_impl(tensor, false, false, false);
 }
 
 void ggml_cuda_assign_buffers_force_inplace(struct ggml_tensor * tensor) {
-    ggml_cuda_assign_buffers_impl(tensor, false, true);
+    ggml_cuda_assign_buffers_impl(tensor, false, true, false);
 }
 
 void ggml_cuda_set_main_device(int main_device) {
@@ -6455,6 +6566,12 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
                 return false;
             }
             func = ggml_cuda_rope;
+            break;
+        case GGML_OP_ALIBI:
+            if (!any_on_device) {
+                return false;
+            }
+            func = ggml_cuda_alibi;
             break;
         default:
             return false;

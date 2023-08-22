@@ -64,7 +64,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
 
             // add BOS token for the first batch of each chunk
             if (j == 0) {
-                tokens[batch_start] = llama_token_bos();
+                tokens[batch_start] = llama_token_bos(ctx);
             }
 
             if (llama_eval(ctx, tokens.data() + batch_start, batch_size, j * n_batch, params.n_threads)) {
