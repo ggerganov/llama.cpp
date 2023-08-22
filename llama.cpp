@@ -995,6 +995,16 @@ struct llama_model_loader {
                      } break;
             }
 
+            // this is a way to mark that we have "guessed" the file type
+            ftype = (llama_ftype) (ftype | LLAMA_FTYPE_GUESSED);
+
+            {
+                const int kid = gguf_find_key(ctx_gguf, "general.file_type");
+                if (kid >= 0) {
+                    ftype = (llama_ftype) gguf_get_val_u32(ctx_gguf, kid);
+                }
+            }
+
             for (int i = 0; i < n_kv; i++) {
                 const char * name         = gguf_get_key(ctx_gguf, i);
                 const enum gguf_type type = gguf_get_kv_type(ctx_gguf, i);
@@ -1197,7 +1207,11 @@ struct llama_model_loader {
 // load LLaMA models
 //
 
-const char * llama_model_ftype_name(enum llama_ftype ftype) {
+std::string llama_model_ftype_name(enum llama_ftype ftype) {
+    if (ftype & LLAMA_FTYPE_GUESSED) {
+        return llama_model_ftype_name((enum llama_ftype) (ftype & ~LLAMA_FTYPE_GUESSED)) + " (guessed)";
+    }
+
     switch (ftype) {
         case LLAMA_FTYPE_ALL_F32:     return "all F32";
         case LLAMA_FTYPE_MOSTLY_F16:  return "mostly F16";
@@ -1426,7 +1440,7 @@ static void llama_model_load_internal(
         LLAMA_LOG_INFO("%s: freq_base    = %.1f\n",   __func__, hparams.rope_freq_base);
         LLAMA_LOG_INFO("%s: freq_scale   = %g\n",     __func__, hparams.rope_freq_scale);
         LLAMA_LOG_INFO("%s: model type   = %s\n",     __func__, llama_model_type_name(model.type));
-        LLAMA_LOG_INFO("%s: model ftype  = %s\n",     __func__, llama_model_ftype_name(model.ftype));
+        LLAMA_LOG_INFO("%s: model ftype  = %s\n",     __func__, llama_model_ftype_name(model.ftype).c_str());
         LLAMA_LOG_INFO("%s: model size   = %.2f B\n", __func__, ml->n_elements*1e-9);
 
         // general kv
@@ -3450,6 +3464,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     // copy the KV pairs from the input file
     gguf_set_kv     (ctx_out, model_loader->ctx_gguf);
     gguf_set_val_u32(ctx_out, "general.quantization_version", GGML_QNT_VERSION);
+    gguf_set_val_u32(ctx_out, "general.file_type", ftype);
 
 #ifdef GGML_USE_K_QUANTS
     int n_attention_wv    = 0;
@@ -4310,7 +4325,7 @@ int llama_model_n_embd(const struct llama_model * model) {
 }
 
 int llama_model_type(const struct llama_model * model, char * buf, size_t buf_size) {
-    return snprintf(buf, buf_size, "LLaMA %s %s", llama_model_type_name(model->type), llama_model_ftype_name(model->ftype));
+    return snprintf(buf, buf_size, "LLaMA %s %s", llama_model_type_name(model->type), llama_model_ftype_name(model->ftype).c_str());
 }
 
 int llama_model_quantize(
