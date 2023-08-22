@@ -964,7 +964,7 @@ def load_vocab(path: Path, vocabtype: Optional[str]) -> Union[BpeVocab, Sentence
             path = path3
         else:
             raise FileNotFoundError(
-                f"Could not find tokenizer.model in {path} or its parent; "
+                f"Could not find {vocab_file} in {path} or its parent; "
                 "if it's in another directory, pass the directory as --vocab-dir")
 
     print(f"Loading vocab file '{path}', type '{vocabtype}'")
