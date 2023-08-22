@@ -1703,7 +1703,7 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     if (vocab.linefeed_id    != -1) { LLAMA_LOG_INFO( "%s: LF token  = %d '%s'\n", __func__, vocab.linefeed_id,    vocab.id_to_token[vocab.linefeed_id].text.c_str() );    }
 }
 
-static void llm_load_llama(
+static void llm_load_tensors(
         llm_arch arch,
         llama_model_loader & ml,
         llama_model & model,
@@ -2009,24 +2009,10 @@ static bool llama_model_load(
             return true;
         }
 
-        switch (arch) {
-            case LLM_ARCH_LLAMA:
-                {
-                    llm_load_llama(
-                            arch, *ml, model, n_batch, n_gpu_layers,
-                            main_gpu, tensor_split, mul_mat_q, low_vram, memory_type,
-                            use_mlock, progress_callback, progress_callback_user_data);
-                } break;
-            case LLM_ARCH_FALCON:
-                {
-                    llm_load_llama(
-                            arch, *ml, model, n_batch, n_gpu_layers,
-                            main_gpu, tensor_split, mul_mat_q, low_vram, memory_type,
-                            use_mlock, progress_callback, progress_callback_user_data);
-                } break;
-            default:
-                throw std::runtime_error("unsupported architecture");
-        };
+        llm_load_tensors(
+                arch, *ml, model, n_batch, n_gpu_layers,
+                main_gpu, tensor_split, mul_mat_q, low_vram, memory_type,
+                use_mlock, progress_callback, progress_callback_user_data);
     } catch (const std::exception & err) {
         LLAMA_LOG_ERROR("error loading model: %s\n", err.what());
         return false;
@@ -4446,6 +4432,22 @@ struct llama_model * llama_load_model_from_file(
 
     ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
+    unsigned cur_percentage = 0;
+    if (params.progress_callback == NULL) {
+        params.progress_callback_user_data = &cur_percentage;
+        params.progress_callback = [](float progress, void * ctx) {
+            unsigned * cur_percentage_p = (unsigned *) ctx;
+            unsigned percentage = (unsigned) (100 * progress);
+            while (percentage > *cur_percentage_p) {
+                *cur_percentage_p = percentage;
+                LLAMA_LOG_INFO(".");
+                if (percentage >= 100) {
+                    LLAMA_LOG_INFO("\n");
+                }
+            }
+        };
+    }
+
     if (!llama_model_load(path_model, *model, params.n_ctx, params.n_batch, params.n_gpu_layers,
                 params.main_gpu, params.tensor_split, params.mul_mat_q, params.rope_freq_base, params.rope_freq_scale,
                 params.low_vram, memory_type, params.use_mmap, params.use_mlock, params.vocab_only,
@@ -4474,22 +4476,6 @@ struct llama_context * llama_new_context_with_model(
 
     if (params.seed == LLAMA_DEFAULT_SEED) {
         params.seed = time(NULL);
-    }
-
-    unsigned cur_percentage = 0;
-    if (params.progress_callback == NULL) {
-        params.progress_callback_user_data = &cur_percentage;
-        params.progress_callback = [](float progress, void * ctx) {
-            unsigned * cur_percentage_p = (unsigned *) ctx;
-            unsigned percentage = (unsigned) (100 * progress);
-            while (percentage > *cur_percentage_p) {
-                *cur_percentage_p = percentage;
-                LLAMA_LOG_INFO(".");
-                if (percentage >= 100) {
-                    LLAMA_LOG_INFO("\n");
-                }
-            }
-        };
     }
 
     ctx->rng = std::mt19937(params.seed);
@@ -4629,13 +4615,14 @@ struct llama_context * llama_new_context_with_model(
 struct llama_context * llama_init_from_file(
                              const char * path_model,
             struct llama_context_params   params) {
-
     struct llama_model * model = llama_load_model_from_file(path_model, params);
     if (!model) {
         return nullptr;
     }
+
     struct llama_context * ctx = llama_new_context_with_model(model, params);
     ctx->model_owner = true;
+
     return ctx;
 }
 
