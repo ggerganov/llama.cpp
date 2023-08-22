@@ -45,6 +45,9 @@ enum FileFormat
     NEOX_7=406, //using 16bit scalar redpajama
 
     MPT_1=500, //first supported mpt version
+
+
+    GGUF_LLAMA=1000, //GGUF (llama newest ver)
 };
 
 enum ModelLoadResult

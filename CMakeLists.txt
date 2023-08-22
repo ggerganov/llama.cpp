@@ -301,16 +301,16 @@ target_link_libraries(ggml_v2 PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
 set_target_properties(ggml_v2 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_library(common2
-            examples/common.cpp
-            examples/common.h)
-target_include_directories(common2 PUBLIC . ./otherarch ./otherarch/tools ./examples)
+            common/common.cpp
+            common/common.h)
+target_include_directories(common2 PUBLIC . ./otherarch ./otherarch/tools ./examples ./common)
 target_compile_features(common2 PUBLIC cxx_std_11) # don't bump
 target_link_libraries(common2 PRIVATE ggml ${LLAMA_EXTRA_LIBS})
 set_target_properties(common2 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_library(gpttype_adapter
             gpttype_adapter.cpp)
-target_include_directories(gpttype_adapter PUBLIC . ./otherarch ./otherarch/tools ./examples)
+target_include_directories(gpttype_adapter PUBLIC . ./otherarch ./otherarch/tools ./examples ./common)
 target_compile_features(gpttype_adapter PUBLIC cxx_std_11) # don't bump
 target_link_libraries(gpttype_adapter PRIVATE common2 ggml ${LLAMA_EXTRA_LIBS})
 set_target_properties(gpttype_adapter PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -318,7 +318,7 @@ set_target_properties(gpttype_adapter PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 set(TARGET koboldcpp_cublas)
 add_library(${TARGET} SHARED expose.cpp expose.h)
-target_include_directories(${TARGET} PUBLIC . ./otherarch ./otherarch/tools ./examples)
+target_include_directories(${TARGET} PUBLIC . ./otherarch ./otherarch/tools ./examples ./common)
 target_compile_features(${TARGET} PUBLIC cxx_std_11) # don't bump
 set_target_properties(${TARGET} PROPERTIES PREFIX "")
 set_target_properties(${TARGET} PROPERTIES OUTPUT_NAME "koboldcpp_cublas")
@@ -328,10 +328,10 @@ target_compile_features(${TARGET} PRIVATE cxx_std_11)
 
 
 if (MAKE_MISC_FILES)
+add_subdirectory(common)
 add_library(llama
         llama.cpp
         llama.h
-        llama-util.h
         )
 target_include_directories(llama PUBLIC .)
 target_compile_features(llama PUBLIC cxx_std_11) # don't bump

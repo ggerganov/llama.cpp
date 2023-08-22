@@ -282,7 +282,7 @@ template <typename T>
 static T checked_mul2(T a, T b) {
     T ret = a * b;
     if (a != 0 && ret / a != b) {
-        throw format("overflow multiplying %llu * %llu",
+        throw format_old("overflow multiplying %llu * %llu",
                      (unsigned long long) a, (unsigned long long) b);
     }
     return ret;
@@ -290,7 +290,7 @@ static T checked_mul2(T a, T b) {
 
 static size_t checked_div2(size_t a, size_t b) {
     if (b == 0 || a % b != 0) {
-        throw format("error dividing %zu / %zu", a, b);
+        throw format_old("error dividing %zu / %zu", a, b);
     }
     return a / b;
 }
@@ -354,7 +354,7 @@ struct llama_v2_load_tensor {
         const auto & first_shard = shards.at(0);
         for (const auto & shard : shards) {
             if (shard.type != first_shard.type) {
-                throw format("inconsistent tensor shard type in '%s'", name.c_str());
+                throw format_old("inconsistent tensor shard type in '%s'", name.c_str());
             }
         }
         type = first_shard.type;
@@ -377,7 +377,7 @@ struct llama_v2_load_tensor {
         const auto & first_shard = shards.at(0);
         for (const auto & shard : shards) {
             if (shard.ne != first_shard.ne) {
-                throw format("inconsistent tensor shard shape in '%s': first was %s, other was %s",
+                throw format_old("inconsistent tensor shard shape in '%s': first was %s, other was %s",
                              name.c_str(), llama_v2_format_tensor_shape(first_shard.ne).c_str(), llama_v2_format_tensor_shape(shard.ne).c_str());
             }
         }
@@ -451,7 +451,7 @@ struct llama_v2_file_loader {
         } else if (magic == 'ggjt' && version == 3) {
             file_version = LLAMA_V2_FILE_VERSION_GGJT_V3;
         } else {
-            throw format("unknown (magic, version) combination: %08x, %08x; is this really a GGML file?",
+            throw format_old("unknown (magic, version) combination: %08x, %08x; is this really a GGML file?",
                          magic, version);
         }
     }
@@ -500,7 +500,7 @@ struct llama_v2_file_loader {
             file.read_raw(shard.ne.data(), sizeof(shard.ne[0]) * n_dims);
             std::string name = file.read_string(name_len);
             if (n_dims < 1 || n_dims > 2) {
-                throw format("llama.cpp: tensor '%s' should not be %u-dimensional", name.c_str(), n_dims);
+                throw format_old("llama.cpp: tensor '%s' should not be %u-dimensional", name.c_str(), n_dims);
             }
             switch (shard.type) {
                 case GGML_V2_TYPE_F32:
@@ -514,7 +514,7 @@ struct llama_v2_file_loader {
                 case GGML_V2_TYPE_Q8_0:
                     break;
                 default: {
-                    throw format("unrecognized tensor type %u\n", shard.type);
+                    throw format_old("unrecognized tensor type %u\n", shard.type);
                 }
             }
 
@@ -620,7 +620,7 @@ struct llama_v2_model_loader {
             auto * ith_file = new llama_v2_file_loader(fname.c_str(), i, tensors_map);
             file_loaders.emplace_back(ith_file);
             if (ith_file->hparams != first_file->hparams) {
-                throw format("llama.cpp: hparams inconsistent between files");
+                throw format_old("llama.cpp: hparams inconsistent between files");
             }
         }
         if (!llama_v2_mmap::SUPPORTED) {
@@ -667,11 +667,11 @@ struct llama_v2_model_loader {
     struct ggml_v2_tensor * get_tensor(const std::string & name, const std::vector<uint32_t> & ne) {
         auto it = tensors_map.name_to_idx.find(name);
         if (it == tensors_map.name_to_idx.end()) {
-            throw format("llama.cpp: tensor '%s' is missing from model", name.c_str());
+            throw format_old("llama.cpp: tensor '%s' is missing from model", name.c_str());
         }
         llama_v2_load_tensor & lt = tensors_map.tensors.at(it->second);
         if (lt.ne != ne) {
-            throw format("llama.cpp: tensor '%s' has wrong shape; expected %s, got %s",
+            throw format_old("llama.cpp: tensor '%s' has wrong shape; expected %s, got %s",
                          name.c_str(), llama_v2_format_tensor_shape(ne).c_str(), llama_v2_format_tensor_shape(lt.ne).c_str());
         }
 
@@ -1016,7 +1016,7 @@ static void llama_v2_model_load_internal(
 
         model.ctx = ggml_v2_init(params);
         if (!model.ctx) {
-            throw format("ggml_v2_init() failed");
+            throw format_old("ggml_v2_init() failed");
         }
     }
 
@@ -2042,7 +2042,7 @@ static void llama_v2_model_quantize_internal(const std::string & fname_inp, cons
         case LLAMA_V2_FTYPE_MOSTLY_Q5_0: quantized_type = GGML_V2_TYPE_Q5_0; break;
         case LLAMA_V2_FTYPE_MOSTLY_Q5_1: quantized_type = GGML_V2_TYPE_Q5_1; break;
         case LLAMA_V2_FTYPE_MOSTLY_Q8_0: quantized_type = GGML_V2_TYPE_Q8_0; break;
-        default: throw format("invalid output file type %d\n", ftype);
+        default: throw format_old("invalid output file type %d\n", ftype);
     };
 
     if (nthread <= 0) {
@@ -2108,7 +2108,7 @@ static void llama_v2_model_quantize_internal(const std::string & fname_inp, cons
                     f32_data[i] = ggml_v2_fp16_to_fp32(f16_data[i]);
                 }
             } else {
-                throw format("type %s unsupported for integer quantization", ggml_v2_type_name(tensor.type));
+                throw format_old("type %s unsupported for integer quantization", ggml_v2_type_name(tensor.type));
             }
 
             printf("quantizing .. ");

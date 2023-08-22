@@ -324,7 +324,7 @@ static std::string FileFormatTokenizeID(int id, FileFormat file_format)
     {
         return std::string(llama_v2_token_to_str(llama_ctx_v2, id));
     }
-    else if (file_format == FileFormat::GGJT_3)
+    else if (file_format == FileFormat::GGJT_3 || file_format == FileFormat::GGUF_LLAMA)
     {
         return std::string(llama_token_to_str(llama_ctx_v3, id));
     }
@@ -470,7 +470,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         llama_v2_eval(llama_ctx_v2, tmp.data(), tmp.size(), 0, params.n_threads);
         return ModelLoadResult::SUCCESS;
     }
-    else if(file_format == FileFormat::GGJT_3)
+    else if(file_format == FileFormat::GGJT_3 || file_format==FileFormat::GGUF_LLAMA)
     {
         llama_ctx_params = llama_context_default_params();
         llama_ctx_params.n_ctx = inputs.max_context_length;
@@ -947,7 +947,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     // tokenize the prompt
     std::vector<int> embd_inp;
 
-    if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2  || file_format == FileFormat::GGJT_3)
+    if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2  || file_format == FileFormat::GGJT_3 || file_format == FileFormat::GGUF_LLAMA)
     {
         params.prompt.insert(0, 1, ' ');
         if(file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2 )
@@ -1011,7 +1011,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     {
         //for non llama, limit to 256
         int bbs = blasbatchsize;
-        if (file_format != FileFormat::GGML && file_format != FileFormat::GGHF && file_format != FileFormat::GGJT && file_format != FileFormat::GGJT_2 && file_format != FileFormat::GGJT_3)
+        if (file_format != FileFormat::GGML && file_format != FileFormat::GGHF && file_format != FileFormat::GGJT && file_format != FileFormat::GGJT_2 && file_format != FileFormat::GGJT_3 && file_format != FileFormat::GGUF_LLAMA)
         {
             bbs = (blasbatchsize > 256 ? 256 : blasbatchsize);
         }
@@ -1067,7 +1067,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     {
         n_vocab = llama_v2_n_vocab(llama_ctx_v2);
     }
-    else if(file_format == FileFormat::GGJT_3)
+    else if(file_format == FileFormat::GGJT_3 || file_format == FileFormat::GGUF_LLAMA)
     {
         n_vocab = llama_n_vocab(llama_ctx_v3);
     }
@@ -1214,7 +1214,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             {
                 evalres = (llama_v2_eval(llama_ctx_v2, embd.data(), embdsize, n_past, params.n_threads)==0);
             }
-            else if(file_format == FileFormat::GGJT_3)
+            else if(file_format == FileFormat::GGJT_3 || file_format == FileFormat::GGUF_LLAMA)
             {
                 evalres = (llama_eval(llama_ctx_v3, embd.data(), embdsize, n_past, params.n_threads)==0);
             }
@@ -1322,9 +1322,9 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             unsigned int eosID = 0;
             float * logitsPtr;
             int btsize = banned_token_ids.size();
-            if(file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2 || file_format == FileFormat::GGJT_3)
+            if(file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2 || file_format == FileFormat::GGJT_3 || file_format == FileFormat::GGUF_LLAMA)
             {
-                if(file_format == FileFormat::GGJT_3)
+                if(file_format == FileFormat::GGJT_3 || file_format == FileFormat::GGUF_LLAMA)
                 {
                     logitsPtr = llama_get_logits(llama_ctx_v3);
                 }
@@ -1333,7 +1333,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                     logitsPtr = llama_v2_get_logits(llama_ctx_v2);
                 }
 
-                eosID = llama_token_eos();
+                eosID = llama_token_eos(llama_ctx_v3);
 
                 if (!unbanTokens)
                 {

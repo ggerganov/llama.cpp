@@ -251,6 +251,10 @@ void print_tok_vec(std::vector<float> &embd)
             fileformat = FileFormat::GGJT_2;
         }
     }
+    else if(magic == 0x46554747)
+    {
+         fileformat = FileFormat::GGUF_LLAMA;
+    }
     fin.close();
 
     return fileformat;

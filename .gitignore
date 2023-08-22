@@ -46,6 +46,8 @@ models-mnt
 /server
 /Pipfile
 /embd-input-test
+/gguf
+/gguf-llama-simple
 /libllama.so
 /llama-bench
 build-info.h

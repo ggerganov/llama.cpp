@@ -3,7 +3,7 @@
 ## Verifying that the model is running on the GPU with cuBLAS
 Make sure you compiled llama with the correct env variables according to [this guide](../README.md#cublas), so that llama accepts the `-ngl N` (or `--n-gpu-layers N`) flag. When running llama, you may configure `N` to be very large, and llama will offload the maximum possible number of layers to the GPU, even if it's less than the number you configured. For example:
 ```shell
-./main -m "path/to/model.bin" -ngl 200000 -p "Please sir, may I have some "
+./main -m "path/to/model.gguf" -ngl 200000 -p "Please sir, may I have some "
 ```
 
 When running llama, before it starts the inference work, it will output diagnostic information that shows whether cuBLAS is offloading work to the GPU. Look for these lines:
@@ -25,9 +25,9 @@ GPU: A6000 (48GB VRAM)
 CPU: 7 physical cores
 RAM: 32GB
 
-Model: `TheBloke_Wizard-Vicuna-30B-Uncensored-GGML/Wizard-Vicuna-30B-Uncensored.ggmlv3.q4_0.bin` (30B parameters, 4bit quantization, GGML)
+Model: `TheBloke_Wizard-Vicuna-30B-Uncensored-GGML/Wizard-Vicuna-30B-Uncensored.q4_0.gguf` (30B parameters, 4bit quantization, GGML)
 
-Run command: `./main -m "path/to/model.bin" -p "-p "An extremely detailed description of the 10 best ethnic dishes will follow, with recipes: " -n 1000 [additional benchmark flags]`
+Run command: `./main -m "path/to/model.gguf" -p "An extremely detailed description of the 10 best ethnic dishes will follow, with recipes: " -n 1000 [additional benchmark flags]`
 
 Result:
 
