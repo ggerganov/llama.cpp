@@ -537,26 +537,28 @@ bool is_ggml_file(const char *filename) {
 }
 
 void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab) {
-    // heuristic to infer whether vocab is from ggml or from llama2.c vocabulary
-    if (is_ggml_file(filename)) {
-
-        struct llama_context_params llama_params = llama_context_default_params();
-        llama_params.vocab_only = true;
-
-        struct llama_model * lmodel = llama_load_model_from_file(filename, llama_params);
-        struct llama_context * lctx = llama_new_context_with_model(lmodel, llama_params);
-
-        const int n_vocab = llama_n_vocab(lctx);
-        vocab->id_to_token.resize(n_vocab);
-        for (int i=0; i<n_vocab; ++i) {
-            vocab->id_to_token[i].text  = llama_token_get_text(lctx, i);
-            vocab->id_to_token[i].score = llama_token_get_score(lctx, i);
-            vocab->id_to_token[i].type  = llama_token_get_type(lctx, i);
-            vocab->token_to_id.emplace(vocab->id_to_token[i].text, i);
-        }
-        llama_free(lctx);
-        llama_free_model(lmodel);
-    } else { // assume llama2.c vocabulary
+#pragma message("TODO: implement reading vocabulary using gguf")
+//    // heuristic to infer whether vocab is from ggml or from llama2.c vocabulary
+//    if (is_ggml_file(filename)) {
+//
+//        struct llama_context_params llama_params = llama_context_default_params();
+//        llama_params.vocab_only = true;
+//
+//        struct llama_model * lmodel = llama_load_model_from_file(filename, llama_params);
+//        struct llama_context * lctx = llama_new_context_with_model(lmodel, llama_params);
+//
+//        const int n_vocab = llama_n_vocab(lctx);
+//        vocab->id_to_token.resize(n_vocab);
+//        for (int i=0; i<n_vocab; ++i) {
+//            vocab->id_to_token[i].text  = llama_token_get_text(lctx, i);
+//            vocab->id_to_token[i].score = llama_token_get_score(lctx, i);
+//            vocab->id_to_token[i].type  = llama_token_get_type(lctx, i);
+//            vocab->token_to_id.emplace(vocab->id_to_token[i].text, i);
+//        }
+//        llama_free(lctx);
+//        llama_free_model(lmodel);
+//    } else 
+    { // assume llama2.c vocabulary
         printf("Assuming llama2.c vocabulary since %s is not a ggml file\n", filename);
         llama_file file(filename, "rb");
         const int  n_vocab = config->vocab_size;
