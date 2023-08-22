@@ -8,7 +8,7 @@ GBNF (GGML BNF) is a format for defining [formal grammars](https://en.wikipedia.
 
 ## Basics
 
-In GBNF, we define *production rules* that specify how a non-terminal (rule name) can be replaced with sequences of terminals (characters, specifically Unicode [code points](https://en.wikipedia.org/wiki/Code_point)) and other non-terminals. The basic format of a production rule is `nonterminal ::= sequence...`.
+In GBNF, we define *production rules* that specify how a *non-terminal* (rule name) can be replaced with sequences of *terminals* (characters, specifically Unicode [code points](https://en.wikipedia.org/wiki/Code_point)) and other non-terminals. The basic format of a production rule is `nonterminal ::= sequence...`.
 
 ## Examples
 
@@ -43,9 +43,9 @@ Parentheses `()` can be used to group sequences, which allows for embedding alte
 
 ## Repetition and Optional Symbols
 
-`*` after a symbol or sequence means that it can be repeated zero or more times.
-`+` denotes that the symbol or sequence should appear one or more times.
-`?` makes the preceding symbol or sequence optional.
+- `*` after a symbol or sequence means that it can be repeated zero or more times.
+- `+` denotes that the symbol or sequence should appear one or more times.
+- `?` makes the preceding symbol or sequence optional.
 
 ## Comments and newlines
 
@@ -56,6 +56,16 @@ ws ::= [ \t\n]+
 ```
 
 Newlines are allowed between rules and between symbols or sequences nested inside parentheses. Additionally, a newline after an alternate marker `|` will continue the current rule, even outside of parentheses.
+
+## The root rule
+
+In a full grammar, the `root` rule always defines the starting point of the grammar. In other words, it specifies what the entire output must match.
+
+```
+# a grammar for lists
+root ::= ("- " item)+
+item ::= [^\n]+ "\n"
+```
 
 ## Next steps
 
