@@ -17,6 +17,9 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+#define LLAMA_FILE_MAGIC_GGJT        0x67676a74u // 'ggjt'
+#define LLAMA_FILE_VERSION_GGJT_V3   3
+
 //////////////////////////////////////// llama2.c model structs and functions to load models, alloc memory etc.
 typedef struct {
     int dim; // transformer dimension
@@ -614,83 +617,80 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     }
 
 #pragma message("TODO: implement file saving using gguf")
-    (void) vocab;
-    (void) model;
-    (void) w;
-//    // write_magic
-//    file.write_u32(LLAMA_FILE_MAGIC);   // magic
-//    file.write_u32(LLAMA_FILE_VERSION); // version
-//    // write_hparams
-//    file.write_u32(model->hparams.n_vocab);
-//    file.write_u32(model->hparams.n_embd);
-//    file.write_u32(model->hparams.n_mult);
-//    file.write_u32(model->hparams.n_head);
-//    file.write_u32(model->hparams.n_layer);
-//    file.write_u32(model->hparams.n_rot);
-//    file.write_u32(LLAMA_FTYPE_ALL_F32);
-//
-//    // write_vocab - for now we are just writing the existing BPE voc. assuming karpathy's vocabulary is the same. idk.
-//    uint32_t n_vocab = model->hparams.n_vocab;
-//    for (uint32_t i = 0; i < n_vocab; i++) {
-//        const auto & token_data = vocab->id_to_token.at(i);
-//        file.write_u32((uint32_t) token_data.tok.size());
-//        file.write_raw(token_data.tok.data(), token_data.tok.size());
-//        file.write_raw(&token_data.score, sizeof(token_data.score));
-//    }
-//
-//    // stuff AK weights into GG weights one by one.
-//    // w->token_embedding_table -> model->tok_embeddings
-//    // float*                   -> struct ggml_tensor
-//    stuff_karpathy_weights_into_gg(model->tok_embeddings, w->token_embedding_table);
-//    stuff_karpathy_weights_into_gg(model->output, w->wcls ? w->wcls : w->token_embedding_table);
-//
-//    stuff_karpathy_weights_into_gg(model->norm, w->rms_final_weight);
-//    //print_row(model->norm, 0);
-//
-//    // for rms-att-weight
-//    int row_length = model->hparams.n_embd;
-//    const auto & hparams = model->hparams;
-//    //int n_ff = model->hparams.n_embd;
-//    int n_ff = get_n_ff(&hparams);
-//
-//    for (uint32_t i = 0; i < model->hparams.n_layer; ++i){
-//        auto & layer = model->layers[i];
-//        // 1d
-//        stuff_karpathy_weights_into_gg(layer.attention_norm, &w->rms_att_weight[i*row_length]);
-//        stuff_karpathy_weights_into_gg(layer.ffn_norm      , &w->rms_ffn_weight[i*row_length]);
-//
-//        // from 3d matrix layer x dim x dim to 2d matrix dim x dim
-//        stuff_karpathy_weights_into_gg(layer.wq            , &w->wq[i*row_length*row_length]);
-//        stuff_karpathy_weights_into_gg(layer.wk            , &w->wk[i*row_length*row_length]);
-//        stuff_karpathy_weights_into_gg(layer.wv            , &w->wv[i*row_length*row_length]);
-//        stuff_karpathy_weights_into_gg(layer.wo            , &w->wo[i*row_length*row_length]);
-//
-//        stuff_karpathy_weights_into_gg(layer.w1            , &w->w1[i*row_length*n_ff]);
-//        stuff_karpathy_weights_into_gg(layer.w2            , &w->w2[i*n_ff*row_length]);
-//        stuff_karpathy_weights_into_gg(layer.w3            , &w->w3[i*row_length*n_ff]);
-//    }
-//    // write tensors
-//    write_tensor(&file, model->tok_embeddings);
-//    write_tensor(&file, model->norm);
-//    write_tensor(&file, model->output); // ?
-//    for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {
-//        auto & layer = model->layers[i];
-//
-//        write_tensor(&file, layer.attention_norm);
-//        write_tensor(&file, layer.wq);
-//        write_tensor(&file, layer.wk);
-//        write_tensor(&file, layer.wv);
-//        write_tensor(&file, layer.wo);
-//        write_tensor(&file, layer.ffn_norm);
-//        write_tensor(&file, layer.w1);
-//        write_tensor(&file, layer.w2);
-//        write_tensor(&file, layer.w3);
-//    }
+    // write_magic
+    file.write_u32(LLAMA_FILE_MAGIC_GGJT);   // magic
+    file.write_u32(LLAMA_FILE_VERSION_GGJT_V3); // version
+    // write_hparams
+    file.write_u32(model->hparams.n_vocab);
+    file.write_u32(model->hparams.n_embd);
+    file.write_u32(model->hparams.n_mult);
+    file.write_u32(model->hparams.n_head);
+    file.write_u32(model->hparams.n_layer);
+    file.write_u32(model->hparams.n_rot);
+    file.write_u32(LLAMA_FTYPE_ALL_F32);
+
+    // write_vocab - for now we are just writing the existing BPE voc. assuming karpathy's vocabulary is the same. idk.
+    uint32_t n_vocab = model->hparams.n_vocab;
+    for (uint32_t i = 0; i < n_vocab; i++) {
+        const auto & token_data = vocab->id_to_token.at(i);
+        file.write_u32((uint32_t) token_data.text.size());
+        file.write_raw(token_data.text.data(), token_data.text.size());
+        file.write_raw(&token_data.score, sizeof(token_data.score));
+    }
+
+    // stuff AK weights into GG weights one by one.
+    // w->token_embedding_table -> model->tok_embeddings
+    // float*                   -> struct ggml_tensor
+    stuff_karpathy_weights_into_gg(model->tok_embeddings, w->token_embedding_table);
+    stuff_karpathy_weights_into_gg(model->output, w->wcls ? w->wcls : w->token_embedding_table);
+
+    stuff_karpathy_weights_into_gg(model->norm, w->rms_final_weight);
+    //print_row(model->norm, 0);
+
+    // for rms-att-weight
+    int row_length = model->hparams.n_embd;
+    const auto & hparams = model->hparams;
+    //int n_ff = model->hparams.n_embd;
+    int n_ff = get_n_ff(&hparams);
+
+    for (uint32_t i = 0; i < model->hparams.n_layer; ++i){
+        auto & layer = model->layers[i];
+        // 1d
+        stuff_karpathy_weights_into_gg(layer.attention_norm, &w->rms_att_weight[i*row_length]);
+        stuff_karpathy_weights_into_gg(layer.ffn_norm      , &w->rms_ffn_weight[i*row_length]);
+
+        // from 3d matrix layer x dim x dim to 2d matrix dim x dim
+        stuff_karpathy_weights_into_gg(layer.wq            , &w->wq[i*row_length*row_length]);
+        stuff_karpathy_weights_into_gg(layer.wk            , &w->wk[i*row_length*row_length]);
+        stuff_karpathy_weights_into_gg(layer.wv            , &w->wv[i*row_length*row_length]);
+        stuff_karpathy_weights_into_gg(layer.wo            , &w->wo[i*row_length*row_length]);
+
+        stuff_karpathy_weights_into_gg(layer.w1            , &w->w1[i*row_length*n_ff]);
+        stuff_karpathy_weights_into_gg(layer.w2            , &w->w2[i*n_ff*row_length]);
+        stuff_karpathy_weights_into_gg(layer.w3            , &w->w3[i*row_length*n_ff]);
+    }
+    // write tensors
+    write_tensor(&file, model->tok_embeddings);
+    write_tensor(&file, model->norm);
+    write_tensor(&file, model->output); // ?
+    for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {
+        auto & layer = model->layers[i];
+
+        write_tensor(&file, layer.attention_norm);
+        write_tensor(&file, layer.wq);
+        write_tensor(&file, layer.wk);
+        write_tensor(&file, layer.wv);
+        write_tensor(&file, layer.wo);
+        write_tensor(&file, layer.ffn_norm);
+        write_tensor(&file, layer.w1);
+        write_tensor(&file, layer.w2);
+        write_tensor(&file, layer.w3);
+    }
 }
 
 struct train_params get_default_train_params() {
     struct train_params params;
-    params.fn_vocab_model    = "models/ggml-vocab.bin";
+    params.fn_vocab_model    = "tokenizer.bin";
     params.fn_llama2c_output_model = "ak_llama_model.bin";
     params.fn_train_data     = "shakespeare.txt";
     params.fn_checkpoint_in  = "checkpoint.bin";
@@ -743,7 +743,7 @@ void print_usage(int /*argc*/, char ** argv, const struct train_params * params)
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -h, --help                       show this help message and exit\n");
-    fprintf(stderr, "  --copy-vocab-from-model FNAME    llama2.c vocabulary or ggml model path from which to copy vocab (default '%s')\n", params->fn_vocab_model);
+    fprintf(stderr, "  --copy-vocab-from-model FNAME    llama2.c vocabulary or ggmlv3 model path from which to copy vocab (default '%s')\n", params->fn_vocab_model);
     fprintf(stderr, "  --llama2c-model FNAME            [REQUIRED] model path from which to load Karpathy's llama2.c model\n");
     fprintf(stderr, "  --llama2c-output-model FNAME     model path to save the converted llama2.c model (default %s')\n", params->fn_llama2c_output_model);
     fprintf(stderr, "\n");
