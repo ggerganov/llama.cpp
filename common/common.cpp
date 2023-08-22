@@ -601,7 +601,11 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
     fprintf(stdout, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n" );
     fprintf(stdout, "  -lv, --low-vram       don't allocate VRAM scratch buffer\n" );
+#if defined(GGML_USE_HIPBLAS)
+    fprintf(stdout, "  -mmq, --mul-mat-q     use experimental mul_mat_q HIP kernels instead of hipBLAS. TEMP!!!\n" );
+#else
     fprintf(stdout, "  -mmq, --mul-mat-q     use experimental mul_mat_q CUDA kernels instead of cuBLAS. TEMP!!!\n" );
+#endif
     fprintf(stdout, "                        Reduces VRAM usage by 700/970/1430 MiB for 7b/13b/33b but prompt processing speed\n" );
     fprintf(stdout, "                        is still suboptimal, especially q2_K, q3_K, q5_K, and q6_K.\n" );
 #endif

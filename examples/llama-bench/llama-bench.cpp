@@ -504,7 +504,7 @@ struct test {
 
     static std::string get_backend() {
         if (cuda) {
-            return "CUDA";
+            return GGML_CUDA_NAME;
         }
         if (opencl) {
             return "OpenCL";

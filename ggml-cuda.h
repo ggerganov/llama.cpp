@@ -2,6 +2,12 @@
 
 #include "ggml.h"
 
+#ifdef GGML_USE_HIPBLAS
+#define GGML_CUDA_NAME "ROCm"
+#else
+#define GGML_CUDA_NAME "CUDA"
+#endif
+
 #ifdef  __cplusplus
 extern "C" {
 #endif
