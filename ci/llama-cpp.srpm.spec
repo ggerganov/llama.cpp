@@ -12,17 +12,13 @@
 # 4. OpenCL/CLBLAST support simply requires the ICD loader and basic opencl libraries.
 #    It is up to the user to install the correct vendor-specific support.
 
-Name:           llamacpp
+Name:           llama.cpp
 Version:        master
 Release:        1%{?dist}
 Summary:        CPU Inference of LLaMA model in pure C/C++ (no CUDA/OpenCL)
 License:        MIT
 Source0:        https://github.com/ggerganov/llama.cpp/archive/refs/heads/master.tar.gz
 BuildRequires:  coreutils make gcc-c++ git
-Requires(pre):  shadow-utils
-Requires(post): 
-Requires(preun):
-Requires(postun):
 URL:            https://github.com/ggerganov/llama.cpp
 
 %define debug_package %{nil}
@@ -35,6 +31,7 @@ CPU inference for Meta's Lllama2 models using default options.
 %autosetup
 
 %build
+tree
 make -j
 
 %install
@@ -48,7 +45,9 @@ rm -rf %{buildroot}
 rm -rf %{_builddir}/*
 
 %files
-%{_bindir}/%{name}
+%{_bindir}/llamacpp
+%{_bindir}/llamacppserver
+%{_bindir}/llamacppsimple
 
 %pre
 
