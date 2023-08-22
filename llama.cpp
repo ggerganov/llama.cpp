@@ -2253,18 +2253,11 @@ static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
 }
 
 static std::string llama_escape_whitespace(const std::string& text) {
-    std::string result;
-    bool escaping = false;
-    result += "\xe2\x96\x81";
+    std::string result = "\xe2\x96\x81";
     for (size_t offs = 0; offs < text.length(); ++offs) {
         if (text[offs] == ' ') {
-            if (!escaping) {
-                result += "\xe2\x96\x81";
-                escaping = true;
-            }
-        }
-        else {
-            escaping = false;
+            result += "\xe2\x96\x81";
+        } else {
             result += text[offs];
         }
     }
